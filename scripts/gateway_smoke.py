@@ -21,6 +21,9 @@ if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
 PROMPT = "Reply with the single word OK."
+# The second call is the production seam in JSON mode (F27): an endpoint
+# that rejects `response_format` fails here, not on the first module call.
+JSON_PROMPT = 'Reply with exactly this JSON object: {"ok": true}'
 
 
 def main() -> int:
@@ -36,19 +39,24 @@ def main() -> int:
         return 2
     message = chat.invoke([HumanMessage(content=PROMPT)])
     usage: dict[str, object] = dict(message.usage_metadata or {})
-    charge = provider.complete(PROMPT).charge
+    completion = provider.complete(JSON_PROMPT, json_object=True)
+    charge = completion.charge
+    json_mode = "accepted" if completion.refusal is None else completion.refusal.name
     print(
         "gateway_smoke: endpoint={endpoint} model={kind} response_id={rid} "
-        "input_tokens={i} output_tokens={o} charge={charge}".format(
+        "input_tokens={i} output_tokens={o} charge={charge} "
+        "json_mode={json_mode}".format(
             endpoint=provider.model,
             kind=kind,
             rid=message.id or message.response_metadata.get("id"),
             i=usage.get("input_tokens"),
             o=usage.get("output_tokens"),
             charge=charge if isinstance(charge, Decimal) else "unknown",
+            json_mode=json_mode,
         )
     )
-    return 0 if isinstance(message.content, str | list) else 1
+    answered = isinstance(message.content, str | list)
+    return 0 if answered and completion.refusal is None else 1
 
 
 if __name__ == "__main__":

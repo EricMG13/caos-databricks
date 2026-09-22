@@ -66,3 +66,15 @@ Health must answer 200 with `python_version` starting `3.13` and `status: ready`
 - Secrets: the app reads none. Model calls use the service principal's OAuth; Lakebase credentials are minted per connection and never logged.
 - Logs never carry document text: refusals are typed codes (`caos/refusals.py`).
 - To rotate the model: change `model_endpoint` and `model_price` together and redeploy; runs pinned under the old price finish under it.
+
+## 7. Before the workspace exists: the loopback stand-in
+
+`tests/workspace_stub.py` (D28) answers, on `127.0.0.1`, every workspace path this repository's code and the CLI use, so the whole chain can be exercised with no profile:
+
+```bash
+uv run python tests/workspace_stub.py -- databricks bundle validate -t dev \
+  --var uc_catalog=main --var uc_schema=caos --var lakebase_instance=caos-lb
+CAOS_REQUIRE_POSTGRES=1 uv run pytest --no-cov tests/test_workspace_stub.py
+```
+
+The first prints `Validation OK!` and the paths the CLI asked for; the second runs the gateway smoke, `scripts/preflight.py`, SCIM identity, the volume backend and a LITE route through `ChatDatabricks` over HTTP. What the stand-in cannot tell you: whether the workspace grants what the bundle asks for, how the Apps proxy treats the event stream (C42), what the Lakebase major version is (D17), or what a real model answers. Those are the enterprise steps in `docs/rebuild/ENTERPRISE_HANDOFF.md`.

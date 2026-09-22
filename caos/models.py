@@ -117,8 +117,14 @@ class ChatCompletions:
             len(self.request_bytes(prompt, json_object=json_object)) > MAX_REQUEST_BYTES
         ):
             raise Refusal(RefusalCode.PROVIDER_CALL_INVALID)
+        # JSON mode travels on the wire (F27): the legacy request carried it,
+        # `request_bytes` already budgets for it, and the canonical executor
+        # asks for it on every module call.
+        options: dict[str, Any] = {}
+        if json_object:
+            options["response_format"] = {"type": "json_object"}
         try:
-            message = self.chat.invoke([HumanMessage(content=prompt)])
+            message = self.chat.invoke([HumanMessage(content=prompt)], **options)
         except OpenAIError as failed:
             return Completion(None, None, None, _status_refusal(failed))
         except (OSError, ValueError, RuntimeError, LangChainException):
