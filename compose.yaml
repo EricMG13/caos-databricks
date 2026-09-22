@@ -1,0 +1,39 @@
+name: caos-workbench-dev
+
+services:
+  dev-postgres:
+    image: postgres@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
+    environment:
+      POSTGRES_DB: caos_dev
+      POSTGRES_USER: caos_dev_admin
+      POSTGRES_PASSWORD: local-dev-admin-only
+    ports:
+      - "127.0.0.1:55436:5432"
+    volumes:
+      - caos-workbench-dev-postgres:/var/lib/postgresql/data
+      - ./scripts/dev-init.sql:/docker-entrypoint-initdb.d/10-app.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U caos_dev_admin -d caos_dev"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+
+  test-postgres:
+    image: postgres@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: local-test-admin-only
+    ports:
+      - "127.0.0.1:55437:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+
+volumes:
+  caos-workbench-dev-postgres:
+    name: caos-workbench-dev-postgres

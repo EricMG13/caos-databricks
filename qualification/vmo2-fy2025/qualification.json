@@ -1,0 +1,63 @@
+{
+  "cases": [
+    {
+      "label": "vmo2-fy2025-lite-credit-22",
+      "profile_id": "LITE_CREDIT_22",
+      "selection_id": "LITE_EARNINGS_UPDATE",
+      "subject": {
+        "issuer_id": "VMO2",
+        "issuer_name": "Virgin Media O2",
+        "reporting_period": "FY2025",
+        "analysis_date": "2026-09-15"
+      },
+      "documents": [
+        "documents/Virgin-Media-O2-Q3-2025-Earnings-Release.pdf",
+        "documents/Virgin-Media-O2-Q4-2025-Earnings-Release.pdf"
+      ],
+      "expects": [
+        {
+          "module_id": "CP-L10",
+          "document_sha256": "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+          "matched_text": "In Q4 2025, we recorded a non-cash goodwill impairment of £1,021.7 million primarily related to the impacts of the UK market and"
+        }
+      ],
+      "expects_ready": [
+        "CP-L10",
+        "CP-5"
+      ],
+      "expects_projection": [
+        {
+          "module_id": "CP-L10",
+          "field": "qa_status",
+          "value": "Restricted"
+        },
+        {
+          "module_id": "CP-L10",
+          "field": "decision_scope",
+          "value": "SCREENING_ONLY"
+        },
+        {
+          "module_id": "CP-0",
+          "field": "qa_status",
+          "value": "Restricted"
+        },
+        {
+          "module_id": "CP-5",
+          "field": "qa_status",
+          "value": "Restricted"
+        }
+      ],
+      "expects_register": [
+        {
+          "module_id": "CP-L10",
+          "register_id": "TL10.2",
+          "row_key": {
+            "topic_id": "LIQUIDITY_MATURITIES"
+          },
+          "column": "evidence_status",
+          "expected": "PARTIAL"
+        }
+      ]
+    }
+  ]
+}

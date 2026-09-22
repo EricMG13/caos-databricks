@@ -1,0 +1,84 @@
+[project]
+name = "caos"
+version = "0.1.0"
+description = "Governed source documents to committee-ready credit conclusions, as a Databricks App."
+requires-python = ">=3.13,<3.14"
+dependencies = [
+  # The store's driver (legacy docs/DECISIONS.md section 20); pool for Lakebase credentials.
+  "psycopg[binary,pool]==3.2.12",
+  # PDF text with a rectangle, region and line per character (legacy section 21).
+  "pdfminer.six==20260107",
+  # The HTTP surface and its named wire models (legacy section 22).
+  "fastapi==0.141.1",
+  "uvicorn==0.52.4",
+  "python-multipart==0.0.32",
+  # Runtime orchestration and its Lakebase checkpointer (spec section 3, D6).
+  "langgraph>=1.1",
+  "langgraph-checkpoint-postgres>=2.0.5",
+  "databricks-langchain[memory]>=0.20.0",
+  "databricks-sdk>=0.89.0",
+]
+
+[dependency-groups]
+dev = [
+  "ruff==0.14.0",
+  "mypy==1.18.2",
+  "pytest==9.0.3",
+  "pytest-cov==7.0.0",
+  "pytest-xdist==3.8.0",
+  "pre-commit==4.6.2",
+  "httpx2>=2.13",
+  "bandit>=1.8.6",
+  "pip-audit==2.9.0",
+  "complexipy>=3.0",
+  # Test-only OpenRouter adapter (spec section 3.4); never imported outside tests/.
+  "langchain-openai>=1.0",
+]
+
+# Virtual project: nothing here is built or installed, so every distribution
+# uv installs is a wheel (`no-build`). The app runs as `python -m caos.api.serve`.
+[tool.uv]
+package = false
+no-build = true
+
+[tool.ruff]
+target-version = "py313"
+line-length = 88
+extend-exclude = [".venv", "vendor", ".claude/worktrees"]
+
+[tool.ruff.lint]
+# One rule family per measured failure mode (legacy docs/AI_CODE_QUALITY.md section 1).
+select = [
+  "E", "F", "W",                        # baseline
+  "I",                                  # import order
+  "UP",                                 # pyupgrade
+  "B",                                  # bugbear
+  "ANN",                                # annotations -- typed refusals need typed code
+  "BLE",                                # no blind except
+  "TRY",                                # no str(exc) on the wire, no raise-vanilla
+  "C901",                               # complexity ceiling
+  "PLR0912", "PLR0913", "PLR0915",      # branch, argument, statement ceilings
+  "RUF",
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+mypy_path = "stubs"
+exclude = ["^\\.venv/", "^vendor/"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers --cov --cov-branch --cov-report=xml --cov-report=term:skip-covered --cov-fail-under=80"
+markers = [
+  "live_provider: makes a paid call through the test-only OpenRouter adapter",
+]
+
+[tool.coverage.run]
+branch = true
+# One root: every filename stays repo-relative for scan_floors.py.
+source = ["."]
+omit = ["tests/*", "vendor/*", ".venv*/*"]

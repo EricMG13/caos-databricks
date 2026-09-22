@@ -1,0 +1,6 @@
+[
+  { "id": "0.1", "event": "run_progress" },
+  { "id": "0.2", "event": "run_progress" },
+  { "id": "0.3", "event": "handoff_accepted" },
+  { "id": "0.4", "event": "run_terminal" }
+]

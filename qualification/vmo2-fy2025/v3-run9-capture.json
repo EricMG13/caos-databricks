@@ -1,0 +1,118 @@
+{
+  "adapter_version": "canonical-markdown-v3",
+  "attempts": [
+    {
+      "charge": "0.24363175",
+      "diagnostic_sha256": "4ef6de44a2daf856c8f69368ffa19960e9360a7f6bdba47b81080e16c1e0150a",
+      "generation_id": "gen-1789578894-gmOZFNfxqOM1K9ELF2W7",
+      "model": "openai/gpt-5.6-terra",
+      "ordinal": 1,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_EARNINGS_UPDATE-01-CP-0"
+    },
+    {
+      "charge": "0.279424",
+      "diagnostic_sha256": "ee1f20b78cc3edfe6bda67851a8e00c5e7e2f5c0dfa28513fc3edb2641edf98b",
+      "generation_id": "gen-1789578984-RHqvrp95jfGhWh5kFd2B",
+      "model": "openai/gpt-5.6-terra",
+      "ordinal": 1,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_EARNINGS_UPDATE-02-CP-L10"
+    },
+    {
+      "charge": "0.277212",
+      "diagnostic_sha256": "4c20d4ab965f76aa1deabd7d65928a87abd3aabd014768dde5dec7756b86d7a4",
+      "generation_id": "gen-1789579143-e5pM1I21JfSyun2n8EiR",
+      "model": "openai/gpt-5.6-terra",
+      "ordinal": 1,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_EARNINGS_UPDATE-03-CP-5"
+    }
+  ],
+  "complete": false,
+  "evidence_sha256": "50ef7c77355891775d7f1da9ea7d6320afbba1dcc2b27781d883dbead1902b08",
+  "matrix": [
+    {
+      "case_label": "vmo2-fy2025-lite-credit-22",
+      "expected_refusal_met": null,
+      "forecast_met": null,
+      "met": 0,
+      "missed": 1,
+      "missed_keys": [
+        {
+          "document_sha256": "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+          "matched_text": "In Q4 2025, we recorded a non-cash goodwill impairment of \u00a31,021.7 million primarily related to the impacts of the UK market and",
+          "module_id": "CP-L10"
+        }
+      ],
+      "projections_met": true,
+      "proven": true,
+      "ready_met": true,
+      "refusal": null
+    }
+  ],
+  "model": "openai/gpt-5.6-terra",
+  "performed_sha256": "2d0c05429a450222cea3b54f7eb8b11720eaf3978576ed8898d1afcccbab0450",
+  "provider": "openrouter/openai/flex/high/65536",
+  "result": [
+    {
+      "case_label": "vmo2-fy2025-lite-credit-22",
+      "proof": {
+        "anchored": [
+          [
+            "CP-0",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "The information provided in this release includes the financial information of VMED O2 UK Limited, a holding"
+          ],
+          [
+            "CP-0",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "The preliminary unaudited selected financial results are set forth below:"
+          ],
+          [
+            "CP-0",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "company that is not included as a restricted subsidiary for purposes of the facilities agreement and bond"
+          ],
+          [
+            "CP-5",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "The information provided in this release includes the financial information of VMED O2 UK Limited, a holding"
+          ],
+          [
+            "CP-5",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "The preliminary unaudited selected financial results are set forth below:"
+          ],
+          [
+            "CP-5",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "company that is not included as a restricted subsidiary for purposes of the facilities agreement and bond"
+          ],
+          [
+            "CP-L10",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "The preliminary unaudited selected financial results are set forth below:"
+          ],
+          [
+            "CP-L10",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "company that is not included as a restricted subsidiary for purposes of the facilities agreement and bond"
+          ],
+          [
+            "CP-L10",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "\u00a31,645.5 million. This was primarily driven by the impact of an agreement with Cellnex UK resulting in a"
+          ]
+        ],
+        "artifacts": 3,
+        "build_id": "30222a494a5a1035c7955cb1ccfbe0b3b0fbbfa7d6426930f5dcf4d35aa1fc18",
+        "citations": 9,
+        "route_digest": "3f020d6f45d19ecf7adeff39bc5b3ba42aaa73d940d94211b7b9ea131a45da30",
+        "run_id": "54ec3752-38f6-4771-a2d9-5ed5d9d97d66"
+      },
+      "refusal": null,
+      "status": "COMPLETE",
+      "stopped": null
+    }
+  ],
+  "run_id": "54ec3752-38f6-4771-a2d9-5ed5d9d97d66",
+  "set_sha256": "0863964bb4dbad8dc8772654311d7b59dfc2810cd08cf6cfdeda6a940ed0db74"
+}

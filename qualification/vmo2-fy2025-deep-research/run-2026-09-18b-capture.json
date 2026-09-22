@@ -1,0 +1,95 @@
+{
+  "adapter_version": "canonical-markdown-v3",
+  "attempts": [
+    {
+      "charge": "0.14204925",
+      "diagnostic_sha256": "f863af242ccc6fbc5f4eb0b047022c07c57eab914a0f41781a0685f213e2a4f4",
+      "generation_id": "gen-1789749312-NtSpGGTE5MDwwyB9NGIA",
+      "model": "openai/gpt-5.6-terra",
+      "ordinal": 1,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_DEEP_RESEARCH-01-CP-0"
+    },
+    {
+      "charge": "0.1178595",
+      "diagnostic_sha256": "dc91eec3d4853977405e08c5cbaf3f01320601d8075e80446eaa869ef96e74fb",
+      "generation_id": "gen-1789749409-QSM74J1F5VGmK1RynEt3",
+      "model": "openai/gpt-5.6-terra",
+      "ordinal": 1,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_DEEP_RESEARCH-02-CP-DR"
+    }
+  ],
+  "complete": false,
+  "evidence_sha256": "af4bdf5af6cd1cfef5dccb82765edf4b755dabbc3390750888c8a73939941e66",
+  "matrix": [
+    {
+      "blocked_met": null,
+      "case_label": "vmo2-fy2025-lite-deep-research",
+      "expected_refusal_met": null,
+      "forecast_met": null,
+      "met": 2,
+      "missed": 0,
+      "missed_keys": [],
+      "projections_met": true,
+      "proven": true,
+      "ready_met": true,
+      "refusal": null
+    }
+  ],
+  "model": "openai/gpt-5.6-terra",
+  "performed_sha256": "d2a30ba51c87dcccc214f46d5685365fe39f0fe96b6127934888cae7b36eeb62",
+  "provider": "openrouter/openai/flex/high/65536",
+  "result": [
+    {
+      "case_label": "vmo2-fy2025-lite-deep-research",
+      "proof": {
+        "anchored": [
+          [
+            "CP-0",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "The information provided in this release includes the financial information of VMED O2 UK Limited, a holding"
+          ],
+          [
+            "CP-0",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "Third-Party Debt, Lease Obligations and Cash and Cash Equivalents"
+          ],
+          [
+            "CP-0",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "Virgin Media O21 publishes Q4 and full year results to 31 December 2025"
+          ],
+          [
+            "CP-DR",
+            "505bf1a0f4181c9cdffeeac7e6af3253d1883788e9cd1a81e65952e008aa17a1",
+            "At 30 September 2025, the company had maximum undrawn commitments of \u00a31,378.0 million"
+          ],
+          [
+            "CP-DR",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "At 31 December 2025, the company had maximum undrawn commitments of \u00a31,378.0 million"
+          ],
+          [
+            "CP-DR",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "In Q4 2025, we recorded a non-cash goodwill impairment of \u00a31,021.7 million primarily related to the impacts of the UK market and"
+          ],
+          [
+            "CP-DR",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "When compliance reporting requirements have been completed and assuming no change from 31"
+          ]
+        ],
+        "artifacts": 2,
+        "build_id": "78c24be4483612e75d9a0809fcb1cb7c2dd5617e669491de13be9c0123e3ff93",
+        "citations": 7,
+        "route_digest": "e31ae27c0bdc923c49ad0ded8aeb6abda634feecc177668b6ed710069189fdef",
+        "run_id": "de27f93c-be52-4c6c-9a45-2ab75286dbe0"
+      },
+      "refusal": null,
+      "status": "COMPLETE",
+      "stopped": null
+    }
+  ],
+  "run_id": "de27f93c-be52-4c6c-9a45-2ab75286dbe0",
+  "set_sha256": "09807efb1a3d5d40680d1a9d0e054333537781d7bb4013ecd7670323f817fd9b"
+}

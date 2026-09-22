@@ -1,0 +1,98 @@
+{
+  "adapter_version": "canonical-markdown-v3",
+  "attempts": [
+    {
+      "charge": "0.13946575",
+      "diagnostic_sha256": "94760a03cea20812483d5fa1f7c69db2aa24e3ef42e57a3481d162bfb3f06c76",
+      "generation_id": "gen-1789739208-aDN4O6QXn8rlGMxpLofF",
+      "model": "openai/gpt-5.6-terra",
+      "ordinal": 1,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_PORTFOLIO_DECISION-01-CP-0"
+    },
+    {
+      "charge": "0.1660905",
+      "diagnostic_sha256": "8106fc6f7d78a6361de52cbc218a58f3c9f308e8b25475fca231e9f247cb25dd",
+      "generation_id": "gen-1789739294-yzJRf97vWGSR92kfyTrG",
+      "model": "openai/gpt-5.6-terra",
+      "ordinal": 1,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_PORTFOLIO_DECISION-02-CP-L10"
+    },
+    {
+      "charge": "0.16364625",
+      "diagnostic_sha256": "4ea417b1e23da3e01a66ad20bdbdd7e6899e9a7aeb1e0008d62955ea27cd1183",
+      "generation_id": "gen-1789739380-itImuBnpOuA7KMMNOI9W",
+      "model": "openai/gpt-5.6-terra",
+      "ordinal": 2,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_PORTFOLIO_DECISION-02-CP-L10"
+    }
+  ],
+  "complete": false,
+  "evidence_sha256": "1b9df866631eb3d82f3513e25cadc039b13b796ef6c59494a4401d6dcc529049",
+  "matrix": [
+    {
+      "case_label": "vmo2-fy2025-lite-portfolio-decision",
+      "expected_refusal_met": null,
+      "forecast_met": null,
+      "met": 0,
+      "missed": 1,
+      "missed_keys": [
+        {
+          "document_sha256": "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+          "matched_text": "we recorded a non-cash goodwill impairment of \u00a31,021.7 million",
+          "module_id": "CP-L10"
+        }
+      ],
+      "projections_met": true,
+      "proven": true,
+      "ready_met": true,
+      "refusal": null
+    }
+  ],
+  "model": "openai/gpt-5.6-terra",
+  "performed_sha256": "65701fdf5f8863c98f2726b6c5b13ed62bba75d85a6b170689d8776400319b2b",
+  "provider": "openrouter/openai/flex/high/65536",
+  "result": [
+    {
+      "case_label": "vmo2-fy2025-lite-portfolio-decision",
+      "proof": {
+        "anchored": [
+          [
+            "CP-0",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "Adjusted Free Cash Flow: Adjusted FCF was \u00a3393.1 million for the year ended 31 December 2025, with an inflow of \u00a3750.4 million in Q4."
+          ],
+          [
+            "CP-0",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "The preliminary unaudited selected financial results are set forth below:"
+          ],
+          [
+            "CP-L10",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "Adjusted EBITDA decline of 3 to 5% year-over-year, adjusted for the Daisy Transaction."
+          ],
+          [
+            "CP-L10",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "Adjusted Free Cash Flow: Adjusted FCF was \u00a3393.1 million for the year ended 31 December 2025, with an inflow of \u00a3750.4 million in Q4."
+          ],
+          [
+            "CP-L10",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "At 31 December 2025, the company had maximum undrawn commitments of \u00a31,378.0 million equivalent."
+          ]
+        ],
+        "artifacts": 2,
+        "build_id": "62a94ccd0ef6439f797d60ebb72e6a44e1d42db16cd8af217fc41b7f1d6ea72c",
+        "citations": 5,
+        "route_digest": "83964757ee89199c5c6592326650d539b87cef404d5ace07c4d0eced826040e3",
+        "run_id": "2ab8b2e2-b577-45ca-87bd-8c45e3f7b9f2"
+      },
+      "refusal": null,
+      "status": "COMPLETE",
+      "stopped": null
+    }
+  ],
+  "run_id": "2ab8b2e2-b577-45ca-87bd-8c45e3f7b9f2",
+  "set_sha256": "a46a1b4f597885e8f6937b47f9da7eba5ec266f4a43818d5f9fa1d42337b87ea"
+}

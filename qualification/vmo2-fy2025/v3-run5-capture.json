@@ -1,0 +1,127 @@
+{
+  "adapter_version": "canonical-markdown-v3",
+  "attempts": [
+    {
+      "charge": "0.24055425",
+      "diagnostic_sha256": "7bc1bb15da59dbfacb6a85a4af48ec68654feeb7cb2bc853280e356d5fae98e5",
+      "generation_id": "gen-1789562187-lwtunZHG99agjjnTB4NS",
+      "model": "openai/gpt-5.6-terra",
+      "ordinal": 1,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_EARNINGS_UPDATE-01-CP-0"
+    },
+    {
+      "charge": "0.26801425",
+      "diagnostic_sha256": "cc4952f15d3f70eae3745f9482479df6c077bf0105fa2264d786cf3e62c57077",
+      "generation_id": "gen-1789562270-iclxOg8OJbpyvhEEeTvC",
+      "model": "openai/gpt-5.6-terra",
+      "ordinal": 1,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_EARNINGS_UPDATE-02-CP-L10"
+    },
+    {
+      "charge": "0.2664025",
+      "diagnostic_sha256": "a7ed6a6e1c1f47acb7bab52de058ed6eb4ac1ab1cac204c3a084ecfc0c9df617",
+      "generation_id": "gen-1789562334-cShnYj2LNYchR0WWFJ3g",
+      "model": "openai/gpt-5.6-terra",
+      "ordinal": 1,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_EARNINGS_UPDATE-03-CP-5"
+    }
+  ],
+  "complete": false,
+  "evidence_sha256": "a8004cc1c7d0eee3a6ace22af57c2bab2dfe58000097444f84bd7752f7e98b10",
+  "matrix": [
+    {
+      "case_label": "vmo2-fy2025-lite-credit-22",
+      "expected_refusal_met": null,
+      "forecast_met": null,
+      "met": 1,
+      "missed": 2,
+      "missed_keys": [
+        {
+          "document_sha256": "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+          "matched_text": "December 2025 borrowing levels, it is anticipated that the full borrowing capacity will continue to",
+          "module_id": "CP-L10"
+        },
+        {
+          "document_sha256": "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+          "matched_text": "In Q4 2025, we recorded a non-cash goodwill impairment of \u00a31,021.7 million primarily related to the impacts of the UK market and",
+          "module_id": "CP-L10"
+        }
+      ],
+      "proven": true,
+      "ready_met": true,
+      "refusal": null
+    }
+  ],
+  "model": "openai/gpt-5.6-terra",
+  "performed_sha256": "6336fa8ca5ab52af23a38b352db5e9d1a03908515e019c20e86f875cf022437d",
+  "provider": "openrouter/openai/flex/high/65536",
+  "result": [
+    {
+      "case_label": "vmo2-fy2025-lite-credit-22",
+      "proof": {
+        "anchored": [
+          [
+            "CP-0",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "The information provided in this release includes the financial information of VMED O2 UK Limited, a holding"
+          ],
+          [
+            "CP-0",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "The preliminary unaudited selected financial results are set forth below:"
+          ],
+          [
+            "CP-5",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "The information provided in this release includes the financial information of VMED O2 UK Limited, a holding"
+          ],
+          [
+            "CP-5",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "The preliminary unaudited selected financial results are set forth below:"
+          ],
+          [
+            "CP-5",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "amount. Investors should view Adjusted Free Cash Flow as a supplement to, and not a substitute for, IFRS measures of liquidity included in our"
+          ],
+          [
+            "CP-L10",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "6. 2026 guidance includes the following metrics: \u2018Total service revenue year-over-year, as adjusted for the Daisy"
+          ],
+          [
+            "CP-L10",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "The information provided in this release includes the financial information of VMED O2 UK Limited, a holding"
+          ],
+          [
+            "CP-L10",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "The preliminary unaudited selected financial results are set forth below:"
+          ],
+          [
+            "CP-L10",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "amount. Investors should view Adjusted Free Cash Flow as a supplement to, and not a substitute for, IFRS measures of liquidity included in our"
+          ],
+          [
+            "CP-L10",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "\u00a31,645.5 million. This was primarily driven by the impact of an agreement with Cellnex UK resulting in a"
+          ]
+        ],
+        "artifacts": 3,
+        "build_id": "a43cb903ca2751f79e77b6da71f6ea131b8462a32e1b549d65fd0f67389d185f",
+        "citations": 10,
+        "route_digest": "3f020d6f45d19ecf7adeff39bc5b3ba42aaa73d940d94211b7b9ea131a45da30",
+        "run_id": "729b0682-1076-4f7d-8371-2793bf43f3cd"
+      },
+      "refusal": null,
+      "status": "COMPLETE",
+      "stopped": null
+    }
+  ],
+  "run_id": "729b0682-1076-4f7d-8371-2793bf43f3cd",
+  "set_sha256": "a1a70f04ab0aa1b4f46940d6b17131a50909a14521b9a773210bd839695d2bbf"
+}

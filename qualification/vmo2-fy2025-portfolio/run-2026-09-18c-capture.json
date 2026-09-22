@@ -1,0 +1,91 @@
+{
+  "adapter_version": "canonical-markdown-v3",
+  "attempts": [
+    {
+      "charge": "0.129597",
+      "diagnostic_sha256": "b27668daf2c0fdc004a94edacdc177fe49068e4492182111e2473ba760e6e290",
+      "generation_id": "gen-1789748982-7xtJQqjG8WU7x3Rf4S1N",
+      "model": "openai/gpt-5.6-terra",
+      "ordinal": 1,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_PORTFOLIO_DECISION-01-CP-0"
+    },
+    {
+      "charge": "0.17191075",
+      "diagnostic_sha256": "89cdc81ee46c90e675bb0a9e3e10572d283e64c8aa528707d476801f30e0f49b",
+      "generation_id": "gen-1789749059-9wQNNe4JFOqe2uiGdc1m",
+      "model": "openai/gpt-5.6-terra",
+      "ordinal": 1,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_PORTFOLIO_DECISION-02-CP-L10"
+    }
+  ],
+  "complete": false,
+  "evidence_sha256": "d407f44d1f598f777e72637176bd9d1a88973c1fc668c7b8a26d3b686059ded9",
+  "matrix": [
+    {
+      "blocked_met": null,
+      "case_label": "vmo2-fy2025-lite-portfolio-decision",
+      "expected_refusal_met": null,
+      "forecast_met": null,
+      "met": 0,
+      "missed": 1,
+      "missed_keys": [
+        {
+          "document_sha256": "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+          "matched_text": "we recorded a non-cash goodwill impairment of \u00a31,021.7 million",
+          "module_id": "CP-L10"
+        }
+      ],
+      "projections_met": true,
+      "proven": true,
+      "ready_met": true,
+      "refusal": null
+    }
+  ],
+  "model": "openai/gpt-5.6-terra",
+  "performed_sha256": "d9ce10d5e3ed9fef7e3d1f54c717bd258882f33e8d03bb941291e32b658ce6c9",
+  "provider": "openrouter/openai/flex/high/65536",
+  "result": [
+    {
+      "case_label": "vmo2-fy2025-lite-portfolio-decision",
+      "proof": {
+        "anchored": [
+          [
+            "CP-0",
+            "505bf1a0f4181c9cdffeeac7e6af3253d1883788e9cd1a81e65952e008aa17a1",
+            "Virgin Media O21 publishes Q3 results to 30 September 2025"
+          ],
+          [
+            "CP-0",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "Virgin Media O21 publishes Q4 and full year results to 31 December 2025"
+          ],
+          [
+            "CP-L10",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "2025 guidance metrics achieved"
+          ],
+          [
+            "CP-L10",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "Strong capital structure supported by refinancing activity"
+          ],
+          [
+            "CP-L10",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "Virgin Media O21 publishes Q4 and full year results to 31 December 2025"
+          ]
+        ],
+        "artifacts": 2,
+        "build_id": "78c24be4483612e75d9a0809fcb1cb7c2dd5617e669491de13be9c0123e3ff93",
+        "citations": 5,
+        "route_digest": "83964757ee89199c5c6592326650d539b87cef404d5ace07c4d0eced826040e3",
+        "run_id": "98ebf917-8546-4ca2-a1b3-596a8970460e"
+      },
+      "refusal": null,
+      "status": "COMPLETE",
+      "stopped": null
+    }
+  ],
+  "run_id": "98ebf917-8546-4ca2-a1b3-596a8970460e",
+  "set_sha256": "a46a1b4f597885e8f6937b47f9da7eba5ec266f4a43818d5f9fa1d42337b87ea"
+}

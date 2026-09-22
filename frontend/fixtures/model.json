@@ -1,0 +1,49 @@
+{
+  "chrome": {
+    "subject": { "case_id": "00000000-0000-4000-8000-000000000001", "title": "Carvana Co." },
+    "served_role": { "global_role": "READER", "standing": "READER" },
+    "actions": []
+  },
+  "body": {
+    "case_id": "00000000-0000-4000-8000-000000000001",
+    "latest_run_id": "00000000-0000-4000-8000-0000000000a1",
+    "displayed_run_id": "00000000-0000-4000-8000-0000000000a1",
+    "subject": null,
+    "displayed_run_status": "COMPLETE",
+    "blocked_by": null,
+    "forecast": {
+      "route_node_id": "CP-CF",
+      "artifact_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "record_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "accepted_at": "2026-09-14T10:00:00Z",
+      "qa_status": "ACCEPTED",
+      "limitation_flags": ["LIMITED_HISTORY"],
+      "validation_warnings": [],
+      "currency": "USD",
+      "scale": "millions",
+      "perimeter": "Consolidated",
+      "periods": [
+        {
+          "case": "Base",
+          "period_id": "Q1",
+          "fiscal_year": "2026",
+          "days": "90",
+          "values": [
+            { "name": "cash", "value": "123.45", "unavailable_reason": null },
+            {
+              "name": "coverage",
+              "value": null,
+              "unavailable_reason": "ZERO_OR_NEGATIVE_DENOMINATOR"
+            }
+          ],
+          "unavailable_reason": null
+        }
+      ]
+    },
+    "unavailable_reason": null
+  },
+  "observed_at": "2026-09-14T10:00:00Z",
+  "observed_empty": false,
+  "status": "complete",
+  "notes": []
+}

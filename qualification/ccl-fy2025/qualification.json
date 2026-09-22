@@ -1,0 +1,35 @@
+{
+  "cases": [
+    {
+      "label": "ccl-fy2025-lite-credit-22",
+      "profile_id": "LITE_CREDIT_22",
+      "selection_id": "LITE_EARNINGS_UPDATE",
+      "subject": {
+        "issuer_id": "CCL",
+        "issuer_name": "Carnival Corporation & plc",
+        "reporting_period": "FY2025",
+        "analysis_date": "2026-07-19"
+      },
+      "documents": [
+        "documents/CCL_FY2025_10K.txt"
+      ],
+      "expects": [
+        {
+          "module_id": "CP-0",
+          "document_sha256": "8fa7fceda34be50b3b9b5406e0c9269b5269870d1cd8c2bdafb682755a1c88e6",
+          "matched_text": "Total Revenues | 26,622 | 25,021 | 21,593 |"
+        },
+        {
+          "module_id": "CP-L10",
+          "document_sha256": "8fa7fceda34be50b3b9b5406e0c9269b5269870d1cd8c2bdafb682755a1c88e6",
+          "matched_text": "Operating Income | 4,483 | 3,574 | 1,956 |"
+        },
+        {
+          "module_id": "CP-5",
+          "document_sha256": "8fa7fceda34be50b3b9b5406e0c9269b5269870d1cd8c2bdafb682755a1c88e6",
+          "matched_text": "Total Debt, net of unamortized debt issuance costs and discounts | 26,640 | 27,475 |"
+        }
+      ]
+    }
+  ]
+}

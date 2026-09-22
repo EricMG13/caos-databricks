@@ -1,0 +1,35 @@
+{
+  "cases": [
+    {
+      "label": "f-fy2025-lite-credit-22",
+      "profile_id": "LITE_CREDIT_22",
+      "selection_id": "LITE_EARNINGS_UPDATE",
+      "subject": {
+        "issuer_id": "F",
+        "issuer_name": "Ford Motor Company",
+        "reporting_period": "FY2025",
+        "analysis_date": "2026-07-19"
+      },
+      "documents": [
+        "documents/F_FY2025_10K.txt"
+      ],
+      "expects": [
+        {
+          "module_id": "CP-0",
+          "document_sha256": "97a38bc17e505cd1c000aa833d55e4dcfdbaedc5a75ce03a39474b9467fe4b43",
+          "matched_text": "Net cash provided by/(used in) operating activities | 14,918 | | | 15,423 | | | 21,282 |"
+        },
+        {
+          "module_id": "CP-L10",
+          "document_sha256": "97a38bc17e505cd1c000aa833d55e4dcfdbaedc5a75ce03a39474b9467fe4b43",
+          "matched_text": "Net cash provided by/(used in) operating activities | $ | 8,351 | | | $ | 12,931 |"
+        },
+        {
+          "module_id": "CP-5",
+          "document_sha256": "97a38bc17e505cd1c000aa833d55e4dcfdbaedc5a75ce03a39474b9467fe4b43",
+          "matched_text": "Total Ford Credit | $ | 137,868 | | | $ | 141,417 |"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,262 @@
+{
+  "chrome": {
+    "subject": {
+      "case_id": "00000000-0000-4000-8000-000000000001",
+      "title": "Carvana Co. (NYSE: CVNA)"
+    },
+    "served_role": {
+      "global_role": "ANALYST",
+      "standing": "APPROVER"
+    },
+    "actions": []
+  },
+  "body": {
+    "case_id": "00000000-0000-4000-8000-000000000001",
+    "latest_run_id": "00000000-0000-4000-8000-0000000000a1",
+    "displayed_run_id": "00000000-0000-4000-8000-0000000000a1",
+    "subject": {
+      "issuer_id": "CVNA",
+      "issuer_name": "Carvana Co. (NYSE: CVNA)",
+      "reporting_period": "Q1 2026",
+      "analysis_date": "2026-09-08"
+    },
+    "displayed_run_status": "COMPLETE",
+    "blocked_by": null,
+    "handoffs": [
+      {
+        "route_node_id": "rn-cp-0",
+        "module_id": "CP-0",
+        "artifact_sha256": "11111111111111111111111111111111111111111111111111111111111111a1",
+        "record_sha256": "22222222222222222222222222222222222222222222222222222222222222a1",
+        "accepted_at": "2026-09-08T13:05:00Z",
+        "qa_status": "Passed",
+        "committee_status": "Committee Ready",
+        "confidence_score": 96,
+        "confidence_band": "HIGH",
+        "limitation_flags": [],
+        "validation_warnings": [],
+        "decision_scope": "FULL_COMMITTEE",
+        "screening_only": false,
+        "source_facts": [
+          {
+            "document_sha256": "0b582ff0c768f09ab1d75724a56c52ae1a1847074f43dd36183884a8fcdd30df",
+            "source_id": "f9b54532-f1d3-48b8-bca2-5e29b9d3b16b",
+            "filename": "CVNA_10K_Annual_Report_FY2025.htm",
+            "page": 1,
+            "matched_text": "Carvana Co. is an e-commerce platform for buying and selling used cars.",
+            "rects": [
+              {
+                "x0": 72.0,
+                "y0": 120.5,
+                "x1": 460.2,
+                "y1": 134.0
+              }
+            ],
+            "withdrawn_at": null
+          }
+        ],
+        "model_analysis": "# Source register\n\nSix sources are pinned to set version 4. The **10-K** and **10-Q** anchor the reporting perimeter; the *8-K senior secured notes indenture* documents the 2028 tranche.\n\n- No restatement is carried across intakes.\n- Every source resolves to a document digest the host has re-verified.\n",
+        "host_calculation": "NONE"
+      },
+      {
+        "route_node_id": "rn-cp-1",
+        "module_id": "CP-1",
+        "artifact_sha256": "11111111111111111111111111111111111111111111111111111111111111b1",
+        "record_sha256": "22222222222222222222222222222222222222222222222222222222222222b1",
+        "accepted_at": "2026-09-08T13:06:00Z",
+        "qa_status": "Passed",
+        "committee_status": "Committee Ready",
+        "confidence_score": 91,
+        "confidence_band": "HIGH",
+        "limitation_flags": [],
+        "validation_warnings": [],
+        "decision_scope": "FULL_COMMITTEE",
+        "screening_only": false,
+        "source_facts": [
+          {
+            "document_sha256": "8d36a602b39984bae8c201b8c2b53b014cd04a98c1bd75f68a59046747c8ef70",
+            "source_id": "8c9241f9-25c9-4642-9e0d-e734e10fe4b9",
+            "filename": "CVNA_10Q_Quarterly_Report_Q2_2026.htm",
+            "page": 4,
+            "matched_text": "Adjusted EBITDA was $769 million for the three months ended June 30, 2026.",
+            "rects": [
+              {
+                "x0": 72.0,
+                "y0": 300.0,
+                "x1": 480.4,
+                "y1": 313.5
+              }
+            ],
+            "withdrawn_at": null
+          },
+          {
+            "document_sha256": "d7d81c81a40ad4d7bdbb26189f6b1fc8b7e57b447b62208e4b7b71037f905cef",
+            "source_id": "a8fd32d4-ba90-41f3-a284-305cd9235abd",
+            "filename": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm",
+            "page": 1,
+            "matched_text": "Retail units sold of 197,325 and GPU of $7,125.",
+            "rects": [
+              {
+                "x0": 72.0,
+                "y0": 210.0,
+                "x1": 410.0,
+                "y1": 224.0
+              }
+            ],
+            "withdrawn_at": null
+          }
+        ],
+        "model_analysis": "## Normalised financials\n\nQ2 2026 Adjusted EBITDA reached **$769M** (10.4% margin) on 197,325 retail units sold ($7,125 GPU). Cash balance stands at $2,630M.\n\n1. Revenue growth is unit-driven, not price-driven.\n2. GPU expansion carries most of the EBITDA improvement.\n\n`net_leverage = (total_debt - cash) / ltm_adjusted_ebitda`\n",
+        "host_calculation": "NONE"
+      },
+      {
+        "route_node_id": "rn-cp-1c",
+        "module_id": "CP-1C",
+        "artifact_sha256": "11111111111111111111111111111111111111111111111111111111111111c1",
+        "record_sha256": "22222222222222222222222222222222222222222222222222222222222222c1",
+        "accepted_at": "2026-09-08T13:09:00Z",
+        "qa_status": "Restricted",
+        "committee_status": "Screen Only",
+        "confidence_score": 68,
+        "confidence_band": "MEDIUM",
+        "limitation_flags": ["PEER_SET_INCOMPLETE"],
+        "validation_warnings": ["one peer's most recent filing is more than 200 days old"],
+        "decision_scope": "FULL_COMMITTEE",
+        "screening_only": false,
+        "source_facts": [],
+        "model_analysis": "### Peer benchmark\n\nThe peer set carries a gap: one comparable has not filed in over 200 days. The benchmark is offered with that limitation attached, never silently dropped.\n",
+        "host_calculation": "NONE"
+      },
+      {
+        "route_node_id": "rn-cp-4",
+        "module_id": "CP-4",
+        "artifact_sha256": "11111111111111111111111111111111111111111111111111111111111111d1",
+        "record_sha256": "22222222222222222222222222222222222222222222222222222222222222d1",
+        "accepted_at": "2026-09-08T13:23:00Z",
+        "qa_status": "Passed",
+        "committee_status": "Committee Ready",
+        "confidence_score": 88,
+        "confidence_band": "HIGH",
+        "limitation_flags": [],
+        "validation_warnings": [],
+        "decision_scope": "FULL_COMMITTEE",
+        "screening_only": false,
+        "source_facts": [
+          {
+            "document_sha256": "4f5e6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f",
+            "source_id": "216ec234-c70c-4a5f-8ae6-f4a0262bbe84",
+            "filename": "CVNA_8K_Ally_FloorPlan_Credit_Agreement_Amendment.htm",
+            "page": 12,
+            "matched_text": "the Issuer shall not permit the Consolidated Net Leverage Ratio to exceed 3.50 to 1.00",
+            "rects": [
+              {
+                "x0": 60.0,
+                "y0": 410.0,
+                "x1": 520.0,
+                "y1": 424.0
+              }
+            ],
+            "withdrawn_at": "2026-09-09T09:41:00Z"
+          }
+        ],
+        "model_analysis": "#### Covenants\n\nThe floor-plan facility carries a 3.50x net leverage covenant. The source naming it has since been withdrawn from the pinned set; the citation stays so this conclusion stays explicable.\n",
+        "host_calculation": "NONE"
+      },
+      {
+        "route_node_id": "rn-cp-5",
+        "module_id": "CP-5",
+        "artifact_sha256": "11111111111111111111111111111111111111111111111111111111111111e1",
+        "record_sha256": "22222222222222222222222222222222222222222222222222222222222222e1",
+        "accepted_at": "2026-09-08T13:27:00Z",
+        "qa_status": "Passed",
+        "committee_status": "Committee Ready",
+        "confidence_score": 93,
+        "confidence_band": "HIGH",
+        "limitation_flags": [],
+        "validation_warnings": [],
+        "decision_scope": "FULL_COMMITTEE",
+        "screening_only": false,
+        "source_facts": [],
+        "model_analysis": "##### QA audit\n\nEvery citation anchored on this route re-located under the pinned build. Nothing here is a claim about the two modules audited; it is a claim about the anchoring.\n",
+        "host_calculation": "NONE"
+      },
+      {
+        "route_node_id": "rn-cp-6",
+        "module_id": "CP-6",
+        "artifact_sha256": "11111111111111111111111111111111111111111111111111111111111111f1",
+        "record_sha256": "22222222222222222222222222222222222222222222222222222222222222f1",
+        "accepted_at": "2026-09-08T13:32:00Z",
+        "qa_status": "Passed",
+        "committee_status": "Committee Ready",
+        "confidence_score": 90,
+        "confidence_band": "HIGH",
+        "limitation_flags": [],
+        "validation_warnings": [],
+        "decision_scope": "FULL_COMMITTEE",
+        "screening_only": false,
+        "source_facts": [],
+        "model_analysis": "###### Committee memo\n\nAffirm rating upgrade to B3 with positive outlook; monitor the 2028 Senior Secured Notes maturity ($1,005M tranche).\n",
+        "host_calculation": "NONE"
+      },
+      {
+        "route_node_id": "rn-cp-6a",
+        "module_id": "CP-6A",
+        "artifact_sha256": "11111111111111111111111111111111111111111111111111111111111111f2",
+        "record_sha256": "22222222222222222222222222222222222222222222222222222222222222f2",
+        "accepted_at": "2026-09-08T13:40:00Z",
+        "qa_status": "Passed",
+        "committee_status": "Committee Ready",
+        "confidence_score": 82,
+        "confidence_band": "HIGH",
+        "limitation_flags": [],
+        "validation_warnings": [],
+        "decision_scope": "FULL_COMMITTEE",
+        "screening_only": false,
+        "source_facts": [],
+        "model_analysis": "**BULL:** organic FCF is now positive on a trailing basis.\n\n**BEAR:** the covenant cushion depends on a withdrawn source.\n\n**CHAIR:** affirm with the covenant limitation carried forward.\n",
+        "host_calculation": "NONE"
+      },
+      {
+        "route_node_id": "rn-cp-7",
+        "module_id": "CP-7",
+        "artifact_sha256": "11111111111111111111111111111111111111111111111111111111111111f3",
+        "record_sha256": "22222222222222222222222222222222222222222222222222222222222222f3",
+        "accepted_at": "2026-09-08T13:44:00Z",
+        "qa_status": "Passed",
+        "committee_status": "Committee Ready",
+        "confidence_score": 85,
+        "confidence_band": "HIGH",
+        "limitation_flags": [],
+        "validation_warnings": [],
+        "decision_scope": "FULL_COMMITTEE",
+        "screening_only": false,
+        "source_facts": [],
+        "model_analysis": "Capital structure is unchanged since the last filed opinion; no new tranche has priced.\n",
+        "host_calculation": "NONE"
+      },
+      {
+        "route_node_id": "rn-cp-cf",
+        "module_id": "CP-CF",
+        "artifact_sha256": "11111111111111111111111111111111111111111111111111111111111111f4",
+        "record_sha256": "22222222222222222222222222222222222222222222222222222222222222f4",
+        "accepted_at": "2026-09-08T13:36:00Z",
+        "qa_status": "Passed",
+        "committee_status": "Committee Ready",
+        "confidence_score": 79,
+        "confidence_band": "MEDIUM",
+        "limitation_flags": [],
+        "validation_warnings": [],
+        "decision_scope": "FULL_COMMITTEE",
+        "screening_only": false,
+        "source_facts": [],
+        "model_analysis": "Cash flow forecast reconciles within tolerance across every driver row.\n",
+        "host_calculation": "NONE"
+      }
+    ],
+    "pending": []
+  },
+  "observed_at": "2026-09-08T14:00:00Z",
+  "observed_empty": false,
+  "status": "complete",
+  "notes": []
+}

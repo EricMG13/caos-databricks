@@ -1,0 +1,71 @@
+{
+  "chrome": {
+    "subject": null,
+    "ribbon": {
+      "chips": [
+        { "label": "ADMIN · THE DEPLOYMENT", "tone": "neutral" },
+        { "label": "UNAVAILABLE CAPABILITY", "tone": "warn" },
+        { "label": "HEALTH · SERVED", "tone": "neutral" },
+        { "label": "BUILD a43cb903", "tone": "neutral" }
+      ],
+      "execution": "IDLE",
+      "persistence": "SAVED 14:30Z",
+      "approval": "UNRATIFIED",
+      "actions": [
+        {
+          "label": "Request capability",
+          "primary": true,
+          "refusal": {
+            "code": "CAPABILITY_UNAVAILABLE",
+            "clears": "the deployment serves an administration route"
+          }
+        }
+      ]
+    },
+    "brief": {
+      "change": "Nothing · this section has never served a route in this deployment",
+      "impact": "Membership, roles and deployment settings are changed outside the workspace",
+      "action": "None here · the four capabilities below name where each one lives",
+      "evidence": "observed at 2026-09-09 14:30Z · a 404 from the deployment, not a guess",
+      "headline": "0 ROUTES SERVED"
+    },
+    "tabs": [{ "id": "capability", "label": "Capability", "cp": "UNAVAILABLE" }],
+    "verdict": {
+      "severity": "WARNING",
+      "conclusion": "Unavailable or not permitted.",
+      "blocked_on": "an administration route in this deployment"
+    },
+    "rail": [
+      { "section": "directory", "count": 4, "state": "4 CASES · 1 INTAKE OPEN" },
+      { "section": "upload", "count": 6, "state": "SET-v4 · 6 ADMITTED" },
+      { "section": "analysis", "count": 32, "state": "snp_cvna_q2_2026 · 32 ACCEPTED" },
+      { "section": "book", "count": 4, "state": "4 CREDITS · 2 COMPARED" },
+      { "section": "run", "count": 32, "state": "run_2642 · ACTIVE · CP-6 OF 32" },
+      { "section": "model", "count": null, "state": "CP-CF · ACCEPTED" },
+      { "section": "report", "count": 4, "state": "rev_4 · DRAFT · FREEZE REFUSED" },
+      { "section": "committee", "count": null, "state": "rev_3 · FROZEN · NOT FILED" },
+      { "section": "admin", "count": null, "state": "UNAVAILABLE" }
+    ],
+    "rail_local": null,
+    "served_role": { "role": "Analyst", "standing": "APPROVER" }
+  },
+  "body": {
+    "capability": "admin",
+    "missing": [
+      {
+        "name": "Membership and case standing · who may read, write, approve",
+        "code": "OIDC GROUPS"
+      },
+      {
+        "name": "Global role · derived from the identity provider, never from a header",
+        "code": "OIDC GROUPS"
+      },
+      {
+        "name": "Deployment inventory · store, blob store, bundle build",
+        "code": "GET /api/health · SERVED, NO PANEL"
+      },
+      { "name": "Budget ceilings · per case and per run", "code": "ENVIRONMENT" }
+    ]
+  },
+  "observed_at": "2026-09-09T14:30:00Z"
+}

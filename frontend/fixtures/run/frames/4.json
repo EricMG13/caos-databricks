@@ -1,0 +1,295 @@
+{
+  "chrome": {
+    "subject": {
+      "case_id": "00000000-0000-4000-8000-000000000001",
+      "title": "Carvana Co. (NYSE: CVNA)"
+    },
+    "served_role": {
+      "global_role": "ANALYST",
+      "standing": "APPROVER"
+    },
+    "actions": []
+  },
+  "body": {
+    "case_id": "00000000-0000-4000-8000-000000000001",
+    "latest_run_id": "00000000-0000-4000-8000-0000000000b2",
+    "displayed_run_id": "00000000-0000-4000-8000-0000000000b2",
+    "runs": [
+      {
+        "run_id": "00000000-0000-4000-8000-0000000000a1",
+        "status": "COMPLETE",
+        "created_at": "2026-09-08T13:00:00Z",
+        "profile_id": "FULL_CREDIT_32",
+        "selection_id": "SET-v4"
+      },
+      {
+        "run_id": "00000000-0000-4000-8000-0000000000b2",
+        "status": "RUNNING",
+        "created_at": "2026-09-09T13:00:00Z",
+        "profile_id": "FULL_CREDIT_32",
+        "selection_id": "SET-v4"
+      }
+    ],
+    "run": {
+      "run_id": "00000000-0000-4000-8000-0000000000b2",
+      "status": "RUNNING",
+      "created_at": "2026-09-09T13:00:00Z",
+      "route_digest": "57f3143559eafa7f8af1c642df88b25b8d663a8c422ff7f44e91fa040bebf272",
+      "build_id": "a43cb903",
+      "source_set_version": 4,
+      "subject": {
+        "issuer_id": "CVNA",
+        "issuer_name": "Carvana Co. (NYSE: CVNA)",
+        "reporting_period": "Q2 2026",
+        "analysis_date": "2026-09-09"
+      },
+      "gates": [
+        {
+          "gate": "SOURCE_SET",
+          "state": "RELEASED"
+        },
+        {
+          "gate": "RESEARCH_PLAN",
+          "state": "RELEASED"
+        }
+      ],
+      "nodes": [
+        {
+          "route_node_id": "rn-cp-0",
+          "module_id": "CP-0",
+          "stage": 0,
+          "state": "COMPLETE",
+          "waiting_on": [],
+          "awaiting_gate": false,
+          "gate_verdict": null,
+          "gate_reason": null
+        },
+        {
+          "route_node_id": "rn-cp-1",
+          "module_id": "CP-1",
+          "stage": 1,
+          "state": "COMPLETE",
+          "waiting_on": [
+            {
+              "source": "rn-cp-0",
+              "type": "REQUIRED"
+            }
+          ],
+          "awaiting_gate": false,
+          "gate_verdict": null,
+          "gate_reason": null
+        },
+        {
+          "route_node_id": "rn-cp-1c",
+          "module_id": "CP-1C",
+          "stage": 1,
+          "state": "RESTRICTED",
+          "waiting_on": [
+            {
+              "source": "rn-cp-1",
+              "type": "OPTIONAL"
+            }
+          ],
+          "awaiting_gate": false,
+          "gate_verdict": "READY_WITH_LIMITATIONS",
+          "gate_reason": null
+        },
+        {
+          "route_node_id": "rn-cp-2",
+          "module_id": "CP-2",
+          "stage": 2,
+          "state": "COMPLETE",
+          "waiting_on": [
+            {
+              "source": "rn-cp-1",
+              "type": "REQUIRED"
+            },
+            {
+              "source": "rn-cp-1c",
+              "type": "ADVISORY"
+            }
+          ],
+          "awaiting_gate": false,
+          "gate_verdict": null,
+          "gate_reason": null
+        },
+        {
+          "route_node_id": "rn-cp-4",
+          "module_id": "CP-4",
+          "stage": 3,
+          "state": "COMPLETE",
+          "waiting_on": [
+            {
+              "source": "rn-cp-1",
+              "type": "CONDITIONAL"
+            }
+          ],
+          "awaiting_gate": false,
+          "gate_verdict": null,
+          "gate_reason": null
+        },
+        {
+          "route_node_id": "rn-cp-5",
+          "module_id": "CP-5",
+          "stage": 4,
+          "state": "COMPLETE",
+          "waiting_on": [
+            {
+              "source": "rn-cp-2",
+              "type": "REQUIRED"
+            },
+            {
+              "source": "rn-cp-4",
+              "type": "REQUIRED"
+            }
+          ],
+          "awaiting_gate": false,
+          "gate_verdict": null,
+          "gate_reason": null
+        },
+        {
+          "route_node_id": "rn-cp-6",
+          "module_id": "CP-6",
+          "stage": 5,
+          "state": "COMPLETE",
+          "waiting_on": [
+            {
+              "source": "rn-cp-5",
+              "type": "QA_GATE"
+            },
+            {
+              "source": "rn-cp-2",
+              "type": "REQUIRED"
+            }
+          ],
+          "awaiting_gate": false,
+          "gate_verdict": null,
+          "gate_reason": null
+        },
+        {
+          "route_node_id": "rn-cp-6a",
+          "module_id": "CP-6A",
+          "stage": 5,
+          "state": "RUNNABLE",
+          "waiting_on": [
+            {
+              "source": "rn-cp-6",
+              "type": "REQUIRED"
+            }
+          ],
+          "awaiting_gate": false,
+          "gate_verdict": null,
+          "gate_reason": null
+        },
+        {
+          "route_node_id": "rn-cp-7",
+          "module_id": "CP-7",
+          "stage": 5,
+          "state": "RUNNABLE",
+          "waiting_on": [
+            {
+              "source": "rn-cp-6",
+              "type": "REQUIRED"
+            },
+            {
+              "source": "rn-cp-4",
+              "type": "REQUIRED"
+            }
+          ],
+          "awaiting_gate": false,
+          "gate_verdict": null,
+          "gate_reason": null
+        },
+        {
+          "route_node_id": "rn-cp-cf",
+          "module_id": "CP-CF",
+          "stage": 100,
+          "state": "COMPLETE",
+          "waiting_on": [
+            {
+              "source": "rn-cp-1",
+              "type": "REQUIRED"
+            }
+          ],
+          "awaiting_gate": false,
+          "gate_verdict": null,
+          "gate_reason": null
+        }
+      ],
+      "attempts": [
+        {
+          "attempt_id": "b93c3016-284e-4717-811a-170273448048",
+          "route_node_id": "rn-cp-0",
+          "ordinal": 1,
+          "started_at": "2026-09-09T13:05:00Z",
+          "accepted": true
+        },
+        {
+          "attempt_id": "a15f0280-10e7-4251-83b6-09703cfe59cc",
+          "route_node_id": "rn-cp-1",
+          "ordinal": 1,
+          "started_at": "2026-09-09T13:06:00Z",
+          "accepted": true
+        },
+        {
+          "attempt_id": "7aa950e6-b5a5-44f3-823f-8681a2415e58",
+          "route_node_id": "rn-cp-1c",
+          "ordinal": 1,
+          "started_at": "2026-09-09T13:09:00Z",
+          "accepted": true
+        },
+        {
+          "attempt_id": "0e826de9-8cae-4ec3-8857-cb57d06995b8",
+          "route_node_id": "rn-cp-2",
+          "ordinal": 1,
+          "started_at": "2026-09-09T13:11:00Z",
+          "accepted": true
+        },
+        {
+          "attempt_id": "0350e870-ccab-4c61-8d83-261c71951e7a",
+          "route_node_id": "rn-cp-4",
+          "ordinal": 1,
+          "started_at": "2026-09-09T13:23:00Z",
+          "accepted": true
+        },
+        {
+          "attempt_id": "91e51858-fed2-4d46-876c-a6b3bc0db304",
+          "route_node_id": "rn-cp-5",
+          "ordinal": 1,
+          "started_at": "2026-09-09T13:27:00Z",
+          "accepted": true
+        },
+        {
+          "attempt_id": "c2a9da96-d9e2-4630-8396-7bfe317b8e29",
+          "route_node_id": "rn-cp-cf",
+          "ordinal": 1,
+          "started_at": "2026-09-09T13:36:00Z",
+          "accepted": true
+        },
+        {
+          "attempt_id": "013a3ca3-a61a-4908-87ed-6e715526899b",
+          "route_node_id": "rn-cp-6",
+          "ordinal": 1,
+          "started_at": "2026-09-09T14:31:10Z",
+          "accepted": false
+        },
+        {
+          "attempt_id": "862a6451-121d-427c-8dd1-e7ad8e0736ca",
+          "route_node_id": "rn-cp-6",
+          "ordinal": null,
+          "started_at": "2026-09-09T14:33:52Z",
+          "accepted": true
+        }
+      ],
+      "work": null,
+      "blocked_by": null,
+      "supersedes": null,
+      "superseded_by": null
+    },
+    "route_choices": []
+  },
+  "observed_at": "2026-09-09T14:34:40Z",
+  "observed_empty": false,
+  "status": "complete",
+  "notes": []
+}

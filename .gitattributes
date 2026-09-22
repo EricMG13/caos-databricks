@@ -1,0 +1,7 @@
+# Qualification inputs are frozen evidence; formatters must not change their bytes.
+qualification/*/documents/* -text whitespace=-trailing-space
+
+# The feature-status record is a dated inventory written CRLF. A tool that
+# rewrote all 249 line endings while changing six rows (`fa6bbfe`) made the
+# diff unreadable and the commit message untrue; this pins the bytes instead.
+docs/feature-status.csv -text whitespace=cr-at-eol

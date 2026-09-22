@@ -15,3 +15,5 @@ Entries record a missing external resource with the exact command and error. A f
 ## Build run
 
 (the builder appends here; each entry quotes the command and the exact error)
+- B8 — OpenRouter key. `[ -n "${OPENROUTER_API_KEY:-}" ]` → not set in the build session; no `.env` on disk carries it (B4). Consequence: `tests/openrouter_adapter.py` and the `live_provider` tests in `tests/graph/` are written and collected but cannot be executed here; A26 runs `tests/parity` plus the fake-model graph tests and the live ones are reported as blocked, not skipped silently. Fix (user): export `OPENROUTER_API_KEY` and run `CAOS_REQUIRE_PROVIDER=1 uv run pytest --no-cov -m live_provider tests/graph`.
+- B9 — Gateway path unverified: no Databricks workspace (owner directive, D23). Command that would verify it: `databricks bundle deploy -t dev && databricks bundle run caos && uv run python scripts/gateway_smoke.py`; error today: `Error: cannot parse config file: no configuration file found at /Users/ericguei/.databrickscfg`.

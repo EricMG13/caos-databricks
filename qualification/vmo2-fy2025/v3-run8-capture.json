@@ -1,0 +1,101 @@
+{
+  "adapter_version": "canonical-markdown-v3",
+  "attempts": [
+    {
+      "charge": "0.23647875",
+      "diagnostic_sha256": "f29509dd5e38dccb2e2715a670752943f85077665122c842be245bab4345c3c4",
+      "generation_id": "gen-1789578487-gcdWMiacboskeonVCoRw",
+      "model": "openai/gpt-5.6-terra",
+      "ordinal": 1,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_EARNINGS_UPDATE-01-CP-0"
+    },
+    {
+      "charge": "0.270873",
+      "diagnostic_sha256": "6b2cdcd8aba46ca2532f4c9b0678a863f6d0fe25039c5312a60946ad7bac3a38",
+      "generation_id": "gen-1789578570-4Y80q6liPNjOQFDxN8H1",
+      "model": "openai/gpt-5.6-terra",
+      "ordinal": 1,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_EARNINGS_UPDATE-02-CP-L10"
+    },
+    {
+      "charge": "0.268471",
+      "diagnostic_sha256": "6496045663e7adc49a0a49bae834faa76e1a380e3aef453726c03d0bc5585cc0",
+      "generation_id": "gen-1789578657-qOi7lOwufLuQBfTb42qL",
+      "model": "openai/gpt-5.6-terra",
+      "ordinal": 1,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_EARNINGS_UPDATE-03-CP-5"
+    },
+    {
+      "charge": "0.2673775",
+      "diagnostic_sha256": "a11e8a4135af7e34fb788f7deaa02ccb519dabc2f624aeb7930fc544cebc4a67",
+      "generation_id": "gen-1789578757-PbMxzXHmDqQITNAwKUh7",
+      "model": "openai/gpt-5.6-terra",
+      "ordinal": 2,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_EARNINGS_UPDATE-03-CP-5"
+    }
+  ],
+  "complete": false,
+  "evidence_sha256": "0cc016cadf263badd2cb78770760cb7ec0fa96a08aba6bebba8f58802ebe9403",
+  "matrix": [
+    {
+      "case_label": "vmo2-fy2025-lite-credit-22",
+      "expected_refusal_met": null,
+      "forecast_met": null,
+      "met": 0,
+      "missed": 1,
+      "missed_keys": [
+        {
+          "document_sha256": "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+          "matched_text": "In Q4 2025, we recorded a non-cash goodwill impairment of \u00a31,021.7 million primarily related to the impacts of the UK market and",
+          "module_id": "CP-L10"
+        }
+      ],
+      "projections_met": true,
+      "proven": true,
+      "ready_met": true,
+      "refusal": null
+    }
+  ],
+  "model": "openai/gpt-5.6-terra",
+  "performed_sha256": "0276130095658caff2f16a63374af46847f7d8fc871b74dd5c69d4baff6c7c4f",
+  "provider": "openrouter/openai/flex/high/65536",
+  "result": [
+    {
+      "case_label": "vmo2-fy2025-lite-credit-22",
+      "proof": {
+        "anchored": [
+          [
+            "CP-0",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "The preliminary unaudited selected financial results are set forth below:"
+          ],
+          [
+            "CP-5",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "The preliminary unaudited selected financial results are set forth below:"
+          ],
+          [
+            "CP-L10",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "7. Effective with Q1 2026 reporting, KPI reporting will be revised into the below structure:"
+          ],
+          [
+            "CP-L10",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "The preliminary unaudited selected financial results are set forth below:"
+          ]
+        ],
+        "artifacts": 3,
+        "build_id": "30222a494a5a1035c7955cb1ccfbe0b3b0fbbfa7d6426930f5dcf4d35aa1fc18",
+        "citations": 4,
+        "route_digest": "3f020d6f45d19ecf7adeff39bc5b3ba42aaa73d940d94211b7b9ea131a45da30",
+        "run_id": "c5da2040-e87a-49f9-a639-91425b36a56d"
+      },
+      "refusal": null,
+      "status": "COMPLETE",
+      "stopped": null
+    }
+  ],
+  "run_id": "c5da2040-e87a-49f9-a639-91425b36a56d",
+  "set_sha256": "0863964bb4dbad8dc8772654311d7b59dfc2810cd08cf6cfdeda6a940ed0db74"
+}

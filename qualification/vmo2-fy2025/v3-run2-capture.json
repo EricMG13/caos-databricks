@@ -1,0 +1,56 @@
+{
+  "adapter_version": "canonical-markdown-v3",
+  "attempts": [
+    {
+      "charge": "0.23739675",
+      "diagnostic_sha256": "fb86ad89be76f922800218fe0a99e06261a641b837fa5f51433ab7c5f4699dfb",
+      "generation_id": "gen-1789549465-MXQUHrpcP2T48S2IX1Mz",
+      "model": "openai/gpt-5.6-terra",
+      "ordinal": 1,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_EARNINGS_UPDATE-01-CP-0"
+    },
+    {
+      "charge": "0.27101725",
+      "diagnostic_sha256": "e8729b59cef6556429052b179c52131390b1359d1b6088c3af81908b8865ee89",
+      "generation_id": "gen-1789549556-8VIE1bEmZIDvHoqhWke8",
+      "model": "openai/gpt-5.6-terra",
+      "ordinal": 1,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_EARNINGS_UPDATE-02-CP-L10"
+    }
+  ],
+  "complete": false,
+  "evidence_sha256": "25c217625faa4063e0876f6d98866aa82b428ba32179eaeff86268f815b4d350",
+  "matrix": null,
+  "model": "openai/gpt-5.6-terra",
+  "performed_sha256": "627ead04d7c91a206c8fa1e55aad39c297cd714b838117cc2abe27b1a1827b12",
+  "provider": "openrouter/openai/flex/high/65536",
+  "result": [
+    {
+      "case_label": "vmo2-fy2025-lite-credit-22",
+      "proof": {
+        "anchored": [
+          [
+            "CP-0",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "The borrowing currency and pound sterling equivalent of the nominal amounts of VMED O2\u2019s consolidated third-party debt,"
+          ],
+          [
+            "CP-0",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "The preliminary unaudited selected financial results are set forth below:"
+          ]
+        ],
+        "artifacts": 1,
+        "build_id": "a43cb903ca2751f79e77b6da71f6ea131b8462a32e1b549d65fd0f67389d185f",
+        "citations": 2,
+        "route_digest": "3f020d6f45d19ecf7adeff39bc5b3ba42aaa73d940d94211b7b9ea131a45da30",
+        "run_id": "33ca320e-ef8e-4ca8-bdba-1e4d31355d1d"
+      },
+      "refusal": null,
+      "status": "RUNNING",
+      "stopped": "HANDOFF_MALFORMED"
+    }
+  ],
+  "run_id": "33ca320e-ef8e-4ca8-bdba-1e4d31355d1d",
+  "set_sha256": "ec84bf8bbb1b45fd715d52466b9142778b4346ab13b252951db0b589209d07d1"
+}

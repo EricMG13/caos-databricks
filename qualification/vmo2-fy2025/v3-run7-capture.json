@@ -1,0 +1,100 @@
+{
+  "adapter_version": "canonical-markdown-v3",
+  "attempts": [
+    {
+      "charge": "0.24881325",
+      "diagnostic_sha256": "16b411aa03b2beaf59dfebca7ce1cd99f03b7d11f88bd28b511f64aec0bbe62d",
+      "generation_id": "gen-1789571279-x9SNVRBrNCxUK0nvo4r6",
+      "model": "openai/gpt-5.6-terra",
+      "ordinal": 1,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_EARNINGS_UPDATE-01-CP-0"
+    },
+    {
+      "charge": "0.27359275",
+      "diagnostic_sha256": "3a8a92457d335a90834b3592773dcb604cafb42df5c49d75d4135fdc3e4efa26",
+      "generation_id": "gen-1789571365-EWeCSFocqBB9OmLWIwbZ",
+      "model": "openai/gpt-5.6-terra",
+      "ordinal": 1,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_EARNINGS_UPDATE-02-CP-L10"
+    },
+    {
+      "charge": "0.288437",
+      "diagnostic_sha256": "ea8cbd88ab52d709d8ffda077c620d104993ae1ab32c5709f4add4b260428250",
+      "generation_id": "gen-1789571433-3uVsFMSFv8bEhHmxPMBZ",
+      "model": "openai/gpt-5.6-terra",
+      "ordinal": 1,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_EARNINGS_UPDATE-03-CP-5"
+    },
+    {
+      "charge": "0.29529725",
+      "diagnostic_sha256": "d272ef02270448b762b355113e1980ccdd1048c9fc8eeae6e5c4ec1aacd9d6bc",
+      "generation_id": "gen-1789571541-Tj3meXEfYFwCKduIdNFx",
+      "model": "openai/gpt-5.6-terra",
+      "ordinal": 2,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_EARNINGS_UPDATE-03-CP-5"
+    },
+    {
+      "charge": "0.272314",
+      "diagnostic_sha256": "b951e002347f8bfc728dad4bb9727c0be1001b24ac3fc76f81669be4433556fb",
+      "generation_id": "gen-1789571668-BAeyF6nfOJlj3whkDI6s",
+      "model": "openai/gpt-5.6-terra",
+      "ordinal": 3,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_EARNINGS_UPDATE-03-CP-5"
+    }
+  ],
+  "complete": false,
+  "evidence_sha256": "1892a112073e1ab0a1f9b90394ee51d6a1e62ca07605c2cb5d93787deb5b595b",
+  "matrix": null,
+  "model": "openai/gpt-5.6-terra",
+  "performed_sha256": "5f27e54b6c92ddc7869bb3d04ffe5408a1864f2806f877272397080985c9d989",
+  "provider": "openrouter/openai/flex/high/65536",
+  "result": [
+    {
+      "case_label": "vmo2-fy2025-lite-credit-22",
+      "proof": {
+        "anchored": [
+          [
+            "CP-0",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "The information provided in this release includes the financial information of VMED O2 UK Limited, a holding"
+          ],
+          [
+            "CP-0",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "arrangements. This release includes the actual IFRS results for Virgin Media O2 for the three months and year"
+          ],
+          [
+            "CP-0",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "company that is not included as a restricted subsidiary for purposes of the facilities agreement and bond"
+          ],
+          [
+            "CP-L10",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "The information provided in this release includes the financial information of VMED O2 UK Limited, a holding"
+          ],
+          [
+            "CP-L10",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "The preliminary unaudited selected financial results are set forth below:"
+          ],
+          [
+            "CP-L10",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "\u00a31,645.5 million. This was primarily driven by the impact of an agreement with Cellnex UK resulting in a"
+          ]
+        ],
+        "artifacts": 2,
+        "build_id": "cdea0c9fbb046321fdd6d0fb526b6bc74cf4c9e9e2ea4b381f1c4a61081e9d22",
+        "citations": 6,
+        "route_digest": "3f020d6f45d19ecf7adeff39bc5b3ba42aaa73d940d94211b7b9ea131a45da30",
+        "run_id": "36d87283-ef92-49a2-a2b1-ef5928aaa5d2"
+      },
+      "refusal": null,
+      "status": "RUNNING",
+      "stopped": "HANDOFF_INCOMPLETE"
+    }
+  ],
+  "run_id": "36d87283-ef92-49a2-a2b1-ef5928aaa5d2",
+  "set_sha256": "0863964bb4dbad8dc8772654311d7b59dfc2810cd08cf6cfdeda6a940ed0db74"
+}

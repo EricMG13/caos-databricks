@@ -1,0 +1,30 @@
+{
+  "body": {
+    "case_id": "00000000-0000-4000-8000-000000000001",
+    "run_id": "00000000-0000-4000-8000-0000000000a1",
+    "source_id": "f9b54532-f1d3-48b8-bca2-5e29b9d3b16b",
+    "document_sha256": "0b582ff0c768f09ab1d75724a56c52ae1a1847074f43dd36183884a8fcdd30df",
+    "page": 1,
+    "frame": { "x0": 0.0, "y0": 0.0, "x1": 612.0, "y1": 792.0, "y_axis": "down" },
+    "lines": [
+      { "text": "PART I", "x0": 72.0, "y0": 90.0, "x1": 118.0, "y1": 103.5 },
+      {
+        "text": "Carvana Co. is an e-commerce platform for buying and selling used cars.",
+        "x0": 72.0,
+        "y0": 120.5,
+        "x1": 460.2,
+        "y1": 134.0
+      },
+      {
+        "text": "We are transforming the used car buying and selling experience.",
+        "x0": 72.0,
+        "y0": 140.0,
+        "x1": 430.0,
+        "y1": 153.5
+      }
+    ]
+  },
+  "observed_at": "2026-09-08T14:00:00Z",
+  "status": "complete",
+  "notes": []
+}

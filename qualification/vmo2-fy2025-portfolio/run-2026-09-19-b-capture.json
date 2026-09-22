@@ -1,0 +1,121 @@
+{
+  "adapter_version": "canonical-markdown-v3",
+  "attempts": [
+    {
+      "charge": "0.4218235",
+      "diagnostic_sha256": "7b9157f04c67c2375a56e4a4381bcc1f71005c92bc43625aa748945df22cdd6b",
+      "generation_id": "gen-1789858327-RLESWpEROVCCInbvy6Ql",
+      "model": "openai/gpt-5.6-sol",
+      "ordinal": 1,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_PORTFOLIO_DECISION-01-CP-0"
+    },
+    {
+      "charge": "0.4381285",
+      "diagnostic_sha256": "0a96da399eac043a6f98fb1fc32dba63926a25d938013d88ba6f1d6591367f85",
+      "generation_id": "gen-1789858683-JNuNx4rGdqaoKAlR96FM",
+      "model": "openai/gpt-5.6-sol",
+      "ordinal": 1,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_PORTFOLIO_DECISION-02-CP-L10"
+    }
+  ],
+  "complete": false,
+  "evidence_sha256": "5aff20e9bcde08f4ae3dcf0c409150afeb764191edc8152f3e2cf6f183418bef",
+  "matrix": [
+    {
+      "blocked_met": null,
+      "case_label": "vmo2-fy2025-lite-portfolio-decision",
+      "expected_refusal_met": null,
+      "forecast_met": null,
+      "met": 0,
+      "missed": 1,
+      "missed_keys": [
+        {
+          "document_sha256": "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+          "matched_text": "we recorded a non-cash goodwill impairment of \u00a31,021.7 million",
+          "module_id": "CP-L10"
+        }
+      ],
+      "projections_met": true,
+      "proven": true,
+      "ready_met": true,
+      "refusal": null
+    }
+  ],
+  "model": "openai/gpt-5.6-sol",
+  "performed_sha256": "27fe9ca5706ca2188138e96967e4b9c9402e32b42eb3afe1742d6d58ad7b0fb9",
+  "provider": "openrouter/openai/xhigh/65536",
+  "result": [
+    {
+      "case_label": "vmo2-fy2025-lite-portfolio-decision",
+      "proof": {
+        "anchored": [
+          [
+            "CP-0",
+            "505bf1a0f4181c9cdffeeac7e6af3253d1883788e9cd1a81e65952e008aa17a1",
+            "Total Net Debt to Annualised Adjusted EBITDA of 5.31x"
+          ],
+          [
+            "CP-0",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "At 31 December 2025, the company had maximum undrawn commitments of \u00a31,378.0 million"
+          ],
+          [
+            "CP-0",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "In January 2026, Virgin Media O2 issued a EUR 920 million term loan (Term Loan AF), maturing on 15"
+          ],
+          [
+            "CP-0",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "Total Net Debt to Annualised Adjusted EBITDA of 5.39x"
+          ],
+          [
+            "CP-0",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "Total service revenue decline of 3 to 5% year-over-year, adjusted for the Daisy Transaction."
+          ],
+          [
+            "CP-0",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "VMED O2 UK Limited (Virgin Media O2) is an integrated communications provider of broadband internet, video,"
+          ],
+          [
+            "CP-0",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "indentures governing Virgin Media O2. Disclosures may differ from reporting required under debt covenant"
+          ],
+          [
+            "CP-L10",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "At 31 December 2025, the company had maximum undrawn commitments of \u00a31,378.0 million"
+          ],
+          [
+            "CP-L10",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "Disclosures may differ from reporting required under debt covenant"
+          ],
+          [
+            "CP-L10",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "Total Net Debt to Annualised Adjusted EBITDA of 5.39x"
+          ],
+          [
+            "CP-L10",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "Total service revenue decline of 3 to 5% year-over-year, adjusted for the Daisy Transaction."
+          ]
+        ],
+        "artifacts": 2,
+        "build_id": "78c24be4483612e75d9a0809fcb1cb7c2dd5617e669491de13be9c0123e3ff93",
+        "citations": 11,
+        "route_digest": "83964757ee89199c5c6592326650d539b87cef404d5ace07c4d0eced826040e3",
+        "run_id": "802ae485-54a8-4f4c-96c8-2f1cd9f80d2d"
+      },
+      "refusal": null,
+      "status": "COMPLETE",
+      "stopped": null
+    }
+  ],
+  "run_id": "802ae485-54a8-4f4c-96c8-2f1cd9f80d2d",
+  "set_sha256": "a46a1b4f597885e8f6937b47f9da7eba5ec266f4a43818d5f9fa1d42337b87ea"
+}

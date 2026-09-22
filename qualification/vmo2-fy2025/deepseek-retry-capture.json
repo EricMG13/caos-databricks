@@ -1,0 +1,51 @@
+{
+  "adapter_version": "canonical-markdown-v3",
+  "attempts": [
+    {
+      "charge": "0.15272064",
+      "diagnostic_sha256": "769c8eadd9f36c3163b3051be9a99310cb102eb987801f4bbfd08d8737fa2f86",
+      "generation_id": "gen-1789553912-RdBuPalTTeHdOv3y9BUQ",
+      "model": "deepseek/deepseek-v4-pro-0813",
+      "ordinal": 1,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_EARNINGS_UPDATE-01-CP-0"
+    },
+    {
+      "charge": "0.18099744",
+      "diagnostic_sha256": "73e80f83f39d53b0d56dd0dfb80c547a9443dfb02a21733e3c041a5688c23fc2",
+      "generation_id": "gen-1789554073-lTnh78UKrwgiwFjPlfC6",
+      "model": "deepseek/deepseek-v4-pro-0813",
+      "ordinal": 1,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_EARNINGS_UPDATE-02-CP-L10"
+    }
+  ],
+  "complete": false,
+  "evidence_sha256": "6e80b590fde6910fde1a5598863dae93033971ebc56cabc7ef9e4e27d3c31054",
+  "matrix": null,
+  "model": "deepseek/deepseek-v4-pro-0813",
+  "performed_sha256": "0a468407450b8c71eb276c1161f8d2b6c433d0d5d7b3052a812af2e5c585ff00",
+  "provider": "openrouter/ionstream/default/65536",
+  "result": [
+    {
+      "case_label": "vmo2-fy2025-lite-credit-22",
+      "proof": {
+        "anchored": [
+          [
+            "CP-0",
+            "505bf1a0f4181c9cdffeeac7e6af3253d1883788e9cd1a81e65952e008aa17a1",
+            "P&E additions of \u00a32.0 to \u00a32.2 billion"
+          ]
+        ],
+        "artifacts": 1,
+        "build_id": "a43cb903ca2751f79e77b6da71f6ea131b8462a32e1b549d65fd0f67389d185f",
+        "citations": 1,
+        "route_digest": "3f020d6f45d19ecf7adeff39bc5b3ba42aaa73d940d94211b7b9ea131a45da30",
+        "run_id": "ff71c457-70b8-44bd-b6ef-2099927b8936"
+      },
+      "refusal": null,
+      "status": "RUNNING",
+      "stopped": "HANDOFF_MALFORMED"
+    }
+  ],
+  "run_id": "ff71c457-70b8-44bd-b6ef-2099927b8936",
+  "set_sha256": "ae70850d27d1860155ec772ac27e95d7747dd2e9ab944f87034e0215dde407d8"
+}

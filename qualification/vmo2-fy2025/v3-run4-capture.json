@@ -1,0 +1,91 @@
+{
+  "adapter_version": "canonical-markdown-v3",
+  "attempts": [
+    {
+      "charge": "0.2511",
+      "diagnostic_sha256": "6b0acecdf787dcdbe1b4ebe8405b4dc7e4d67823101e9993da007f29b0fff3f3",
+      "generation_id": "gen-1789556866-JI89uVlivKuGSvROMAKV",
+      "model": "openai/gpt-5.6-terra",
+      "ordinal": 1,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_EARNINGS_UPDATE-01-CP-0"
+    },
+    {
+      "charge": "0.2650795",
+      "diagnostic_sha256": "336dafeb835823a4a6c11f490c9022c2f0f0579fb39310822e2071dfa9cdf9ae",
+      "generation_id": "gen-1789556968-nloNsgZIUbZdiBQtFRPV",
+      "model": "openai/gpt-5.6-terra",
+      "ordinal": 1,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_EARNINGS_UPDATE-02-CP-L10"
+    }
+  ],
+  "complete": false,
+  "evidence_sha256": "6d54bf281f3fe7846d20fe0a6b0826a17a1fb9d20e814bb5712705095ddb6bfa",
+  "matrix": [
+    {
+      "case_label": "vmo2-fy2025-lite-credit-22",
+      "met": 0,
+      "missed": 3,
+      "missed_keys": [
+        {
+          "document_sha256": "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+          "matched_text": "December 2025 borrowing levels, it is anticipated that the full borrowing capacity will continue to",
+          "module_id": "CP-5"
+        },
+        {
+          "document_sha256": "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+          "matched_text": "In Q4 2025, we recorded a non-cash goodwill impairment of \u00a31,021.7 million primarily related to the impacts of the UK market and",
+          "module_id": "CP-L10"
+        },
+        {
+          "document_sha256": "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+          "matched_text": "amount. Investors should view Adjusted Free Cash Flow as a supplement to, and not a substitute for, IFRS measures of liquidity included in our",
+          "module_id": "CP-5"
+        }
+      ],
+      "proven": true,
+      "refusal": null
+    }
+  ],
+  "model": "openai/gpt-5.6-terra",
+  "performed_sha256": "d8157a40cc50e2b8c8345fb6f35711e24bb8e8e5cc23bbfb3e98f91de7803238",
+  "provider": "openrouter/openai/flex/high/65536",
+  "result": [
+    {
+      "case_label": "vmo2-fy2025-lite-credit-22",
+      "proof": {
+        "anchored": [
+          [
+            "CP-0",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "The preliminary unaudited selected financial results are set forth below:"
+          ],
+          [
+            "CP-0",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "company that is not included as a restricted subsidiary for purposes of the facilities agreement and bond"
+          ],
+          [
+            "CP-L10",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "The preliminary unaudited selected financial results are set forth below:"
+          ],
+          [
+            "CP-L10",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "company that is not included as a restricted subsidiary for purposes of the facilities agreement and bond"
+          ]
+        ],
+        "artifacts": 2,
+        "build_id": "a43cb903ca2751f79e77b6da71f6ea131b8462a32e1b549d65fd0f67389d185f",
+        "citations": 4,
+        "route_digest": "3f020d6f45d19ecf7adeff39bc5b3ba42aaa73d940d94211b7b9ea131a45da30",
+        "run_id": "62698a60-c777-4153-9d21-d2dae189cf6c"
+      },
+      "refusal": null,
+      "status": "BLOCKED",
+      "stopped": null
+    }
+  ],
+  "run_id": "62698a60-c777-4153-9d21-d2dae189cf6c",
+  "set_sha256": "746ee12d82703d9c04399708be8f1ef4996023cd9cb4dfa844a7687ed3428cc6"
+}

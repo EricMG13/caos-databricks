@@ -1,0 +1,77 @@
+{
+  "cases": [
+    {
+      "label": "ccl-fy2025-covenant-refinancing",
+      "profile_id": "FULL_CREDIT_32",
+      "selection_id": "COVENANT_REFINANCING",
+      "subject": {
+        "issuer_id": "CCL",
+        "issuer_name": "Carnival Corporation & plc",
+        "reporting_period": "FY2025",
+        "analysis_date": "2026-09-19"
+      },
+      "documents": [
+        "documents/CCL_FY2025_10K.txt",
+        "documents/CCL_2025_Revolving_Credit_Agreement.txt",
+        "documents/CCL_2025_575_Notes_2030_Indenture.txt"
+      ],
+      "expects": [
+        {
+          "module_id": "CP-1",
+          "document_sha256": "8fa7fceda34be50b3b9b5406e0c9269b5269870d1cd8c2bdafb682755a1c88e6",
+          "matched_text": "Cash and cash equivalents | $ | 1,928 | $ | 1,210 |"
+        },
+        {
+          "module_id": "CP-2",
+          "document_sha256": "8fa7fceda34be50b3b9b5406e0c9269b5269870d1cd8c2bdafb682755a1c88e6",
+          "matched_text": "Net cash provided by operating activities | 6,218 | 5,923 | 4,281 |"
+        },
+        {
+          "module_id": "CP-2D",
+          "document_sha256": "8fa7fceda34be50b3b9b5406e0c9269b5269870d1cd8c2bdafb682755a1c88e6",
+          "matched_text": "2026 (a) | $ | 2,615 |"
+        },
+        {
+          "module_id": "CP-4",
+          "document_sha256": "0f5a7510e20cbf7182108e4a48ea1c8e7e85800d06205518f79ec049da169c49",
+          "matched_text": "The aggregate amount of the Lenders’ Revolving Facility Commitments is $4,500,000,000 on the Effective Date."
+        },
+        {
+          "module_id": "CP-4",
+          "document_sha256": "2340549fd4f215dfeadada890658195a30456d68031f73387dc9c98b6ba498d1",
+          "matched_text": "providing for the issuance of 5.750% Senior Unsecured Notes due 2030 of the Issuer initially in the aggregate principal amount of $1,000,000,000"
+        },
+        {
+          "module_id": "CP-3C",
+          "document_sha256": "8fa7fceda34be50b3b9b5406e0c9269b5269870d1cd8c2bdafb682755a1c88e6",
+          "matched_text": "As of November 30, 2025, the scheduled maturities of our debt are as follows:"
+        },
+        {
+          "module_id": "CP-5",
+          "document_sha256": "8fa7fceda34be50b3b9b5406e0c9269b5269870d1cd8c2bdafb682755a1c88e6",
+          "matched_text": "Total Debt, net of unamortized debt issuance costs and discounts | 26,640 | 27,475 |"
+        }
+      ],
+      "expects_ready": [
+        "CP-1",
+        "CP-4",
+        "CP-2",
+        "CP-2D",
+        "CP-3C",
+        "CP-5"
+      ],
+      "expects_projection": [
+        {
+          "module_id": "CP-4",
+          "field": "decision_scope",
+          "value": "FULL"
+        },
+        {
+          "module_id": "CP-3C",
+          "field": "decision_scope",
+          "value": "FULL"
+        }
+      ]
+    }
+  ]
+}

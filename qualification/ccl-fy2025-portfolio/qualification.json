@@ -1,0 +1,22 @@
+{
+  "cases": [
+    {
+      "label": "ccl-fy2025-lite-portfolio-decision",
+      "profile_id": "LITE_CREDIT_22",
+      "selection_id": "LITE_PORTFOLIO_DECISION",
+      "subject": {
+        "issuer_id": "CCL",
+        "issuer_name": "Carnival Corporation & plc",
+        "reporting_period": "FY2025",
+        "analysis_date": "2026-09-17"
+      },
+      "documents": [
+        "documents/CCL_FY2025_10K.txt"
+      ],
+      "expects": [],
+      "expects_blocked": [
+        "CP-L10"
+      ]
+    }
+  ]
+}

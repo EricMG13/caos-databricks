@@ -1,0 +1,493 @@
+"""§55: bounded, portable consistency checking and exclusive package creation."""
+
+from __future__ import annotations
+
+import ast
+import errno
+import hashlib
+import json
+import os
+import struct
+import subprocess
+import sys
+import zipfile
+from concurrent.futures import ThreadPoolExecutor
+from io import BytesIO
+from pathlib import Path
+from threading import Barrier
+from uuid import uuid4
+
+import pytest
+from test_deliverable_render import PAYLOAD_DATA
+
+from caos.deliverable.package import (
+    Verification,
+    build_package,
+    verify_package,
+    write_package,
+)
+from caos.deliverable.render import render
+
+ROOT = Path(__file__).resolve().parents[1]
+NAMES = {
+    "payload.json",
+    "receipt.json",
+    "deliverable.html",
+    "render.py",
+    "verify_package.py",
+}
+
+
+def _package(**changes: bytes) -> bytes:
+    payload = changes.get("payload", json.dumps(PAYLOAD_DATA).encode())
+    receipt = json.dumps(
+        {
+            "payload_sha256": hashlib.sha256(payload).hexdigest(),
+            "signed_by": "analyst",
+            "frozen_by": "freezer",
+            "filed_by": "filer",
+        }
+    ).encode()
+    return build_package(
+        payload,
+        changes.get("receipt", receipt),
+        changes.get("export", render(PAYLOAD_DATA)),
+    )
+
+
+def _members(data: bytes) -> dict[str, bytes]:
+    with zipfile.ZipFile(BytesIO(data)) as archive:
+        return {name: archive.read(name) for name in archive.namelist()}
+
+
+def _archive(
+    members: list[tuple[str, bytes]], compression: int = zipfile.ZIP_STORED
+) -> bytes:
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=compression) as archive:
+        for name, body in members:
+            archive.writestr(name, body)
+    return buffer.getvalue()
+
+
+def _central(data: bytes, offset: int, value: int, fmt: str = "<I") -> bytes:
+    changed = bytearray(data)
+    start = changed.index(b"PK\x01\x02")
+    struct.pack_into(fmt, changed, start + offset, value)
+    return bytes(changed)
+
+
+def test_a_package_verifies_with_a_fresh_interpreter_outside_the_repository(
+    tmp_path: Path,
+) -> None:
+    data = _package()
+    package = tmp_path / "package.zip"
+    package.write_bytes(data)
+    script = _members(data)["verify_package.py"]
+    # Only the archive is copied; isolated stdin execution installs/imports nothing.
+    result = subprocess.run(
+        [sys.executable, "-I", "-S", "-", str(package)],
+        input=script,
+        cwd=tmp_path,
+        env={},
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == {"verified": True, "reason": None}
+    assert list(tmp_path.iterdir()) == [package]
+
+
+def test_render_and_verifier_import_only_the_standard_library() -> None:
+    for filename in ("render.py", "verify_package.py"):
+        tree = ast.parse((ROOT / "caos/deliverable" / filename).read_text())
+        imports: set[str] = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                imports.update(alias.name.split(".")[0] for alias in node.names)
+            elif isinstance(node, ast.ImportFrom):
+                assert node.level == 0 and node.module
+                imports.add(node.module.split(".")[0])
+        assert imports and imports <= sys.stdlib_module_names
+
+
+def test_oversized_archive_or_member_is_refused_without_reading_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from caos.deliverable import verify_package as standalone
+
+    good = _package()
+    oversized_member = _central(good, 24, 65 * 1024 * 1024)
+    reads: list[str] = []
+    original = zipfile.ZipFile.open
+
+    def observed(
+        self: zipfile.ZipFile, name: object, *args: object, **kwargs: object
+    ) -> object:
+        reads.append(str(name))
+        return original(self, name, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(zipfile.ZipFile, "open", observed)
+    assert not standalone.verify(oversized_member)[0]
+    assert reads == []
+    monkeypatch.setattr(standalone, "MAX_ARCHIVE_BYTES", len(good) - 1)
+    assert not standalone.verify(good)[0]
+    assert reads == []
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        "duplicate",
+        "extra",
+        "missing",
+        "../payload.json",
+        "/payload.json",
+        "a\\payload.json",
+        "folder/",
+    ],
+)
+def test_duplicate_extra_missing_or_traversal_members_are_refused(change: str) -> None:
+    members = list(_members(_package()).items())
+    if change == "missing":
+        members.pop()
+    else:
+        members.append(members[0] if change == "duplicate" else (change, b"unexpected"))
+    if change == "duplicate":
+        with pytest.warns(UserWarning, match="Duplicate name"):
+            data = _archive(members)
+    else:
+        data = _archive(members)
+    assert not verify_package(data).verified
+
+
+@pytest.mark.parametrize(
+    ("offset", "value"), [(8, 1), (10, 99), (10, zipfile.ZIP_BZIP2)]
+)
+def test_encrypted_or_unsupported_compression_is_refused(
+    offset: int, value: int
+) -> None:
+    assert not verify_package(_central(_package(), offset, value, "<H")).verified
+
+
+def test_a_highly_compressible_valid_package_round_trips(tmp_path: Path) -> None:
+    payload_data = json.loads(json.dumps(PAYLOAD_DATA))
+    payload_data["narrative"] = "Risk disclosure. " * 20_000
+    payload = json.dumps(payload_data).encode()
+    receipt = json.dumps(
+        {
+            "payload_sha256": hashlib.sha256(payload).hexdigest(),
+            "signed_by": "analyst",
+            "frozen_by": "freezer",
+            "filed_by": "filer",
+        }
+    ).encode()
+
+    package = build_package(payload, receipt, render(payload_data))
+
+    assert verify_package(package).verified
+    with zipfile.ZipFile(BytesIO(package)) as archive:
+        assert archive.getinfo("payload.json").compress_type == zipfile.ZIP_STORED
+        assert archive.getinfo("deliverable.html").compress_type == zipfile.ZIP_STORED
+        script = archive.read("verify_package.py")
+    path = tmp_path / "repetitive-package.zip"
+    path.write_bytes(package)
+    result = subprocess.run(
+        [sys.executable, "-I", "-S", "-", str(path)],
+        input=script,
+        cwd=tmp_path,
+        env={},
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_a_current_receipt_identity_must_match_its_payload() -> None:
+    payload_data = json.loads(json.dumps(PAYLOAD_DATA))
+    payload_data.update(
+        case_id=str(uuid4()), run_id=str(uuid4()), revision_id=str(uuid4())
+    )
+    payload = json.dumps(payload_data).encode()
+    receipt = {
+        "payload_sha256": hashlib.sha256(payload).hexdigest(),
+        "signed_by": "analyst",
+        "frozen_by": "freezer",
+        "filed_by": "filer",
+        **{key: payload_data[key] for key in ("case_id", "run_id", "revision_id")},
+    }
+    export = render(payload_data)
+
+    package = build_package(payload, json.dumps(receipt).encode(), export)
+    assert verify_package(package).verified
+    receipt["case_id"] = str(uuid4())
+    package = build_package(payload, json.dumps(receipt).encode(), export)
+    result = verify_package(package)
+    assert not result.verified
+    assert result.reason == "the receipt does not identify this payload"
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        "not zip",
+        "truncated",
+        "list receipt",
+        "null receipt",
+        "bad payload",
+        "list payload",
+        "changed export",
+    ],
+)
+def test_malformed_input_never_raises(change: str) -> None:
+    data = _package()
+    if change == "not zip":
+        data = b"not zip"
+    elif change == "truncated":
+        data = data[:-10]
+    elif change in {"list receipt", "null receipt"}:
+        data = _package(receipt=b"[]" if change == "list receipt" else b"null")
+    elif change in {"bad payload", "list payload"}:
+        data = _package(payload=b"{" if change == "bad payload" else b"[]")
+    else:
+        data = _package(export=render(PAYLOAD_DATA) + b" ")
+    result = verify_package(data)
+    assert not result.verified and result.reason
+
+
+def test_write_package_never_overwrites_under_concurrent_writers(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / "package.zip"
+    barrier = Barrier(2)
+    checked = Barrier(2)
+    exists = Path.exists
+
+    def synchronized_exists(self: Path) -> bool:
+        result = exists(self)
+        if self == path:
+            checked.wait(timeout=5)
+        return result
+
+    # Deterministically exposes the old exists-then-write race. Exclusive open
+    # does not consult exists, so the new implementation never uses this seam.
+    monkeypatch.setattr(Path, "exists", synchronized_exists)
+    packages = [_package(), _package(export=b"different complete bytes")]
+
+    def write(data: bytes) -> bool:
+        barrier.wait(timeout=5)
+        try:
+            write_package(path, data)
+        except FileExistsError:
+            return False
+        return True
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        winners = list(pool.map(write, packages))
+    assert winners.count(True) == 1
+    assert path.read_bytes() == packages[winners.index(True)]
+    with pytest.raises(FileExistsError):
+        write_package(path, b"replacement")
+    assert path.read_bytes() == packages[winners.index(True)]
+
+
+def test_the_same_inputs_build_the_same_package_bytes() -> None:
+    data = _package()
+    assert data == _package()
+    with zipfile.ZipFile(BytesIO(data)) as archive:
+        assert archive.namelist() == sorted(NAMES)
+        assert all(
+            info.date_time == (1980, 1, 1, 0, 0, 0) for info in archive.infolist()
+        )
+        for filename in ("render.py", "verify_package.py"):
+            assert (
+                archive.read(filename)
+                == (ROOT / "caos/deliverable" / filename).read_bytes()
+            )
+
+
+def test_archived_renderer_is_used_and_receipt_renderer_hash_is_checked(
+    tmp_path: Path,
+) -> None:
+    members = _members(_package())
+    receipt = json.loads(members["receipt.json"])
+    receipt["renderer_sha256"] = hashlib.sha256(members["render.py"]).hexdigest()
+    members["receipt.json"] = json.dumps(receipt).encode()
+    assert verify_package(_archive(list(members.items()))).verified
+    receipt["renderer_sha256"] = "0" * 64
+    members["receipt.json"] = json.dumps(receipt).encode()
+    assert not verify_package(_archive(list(members.items()))).verified
+    marker = tmp_path / "must-not-exist"
+    members["render.py"] = f"open({str(marker)!r}, 'w').close()".encode()
+    assert not verify_package(_archive(list(members.items()))).verified
+    assert not marker.exists()
+
+
+@pytest.mark.parametrize("compression", [zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED])
+def test_declared_and_actual_member_sizes_must_match(compression: int) -> None:
+    members = list(_members(_package()).items())
+    data = _archive(members, compression)
+    assert verify_package(data).verified
+    assert not verify_package(_central(data, 24, len(members[0][1]) + 1)).verified
+    assert not verify_package(_central(data, 24, len(members[0][1]) - 1)).verified
+
+
+def test_an_underdeclared_deflate_body_with_a_matching_prefix_crc_is_refused() -> None:
+    members = _members(_package())
+    original = members["deliverable.html"]
+    members["deliverable.html"] += b"hidden trailing output"
+    data = _archive(list(members.items()), zipfile.ZIP_DEFLATED)
+    import zlib
+
+    data = _central(data, 24, len(original))
+    data = _central(data, 16, zlib.crc32(original))
+    # zipfile silently truncates this valid deflate stream to the declared size.
+    with zipfile.ZipFile(BytesIO(data)) as opened:
+        assert opened.read("deliverable.html") == original
+    assert not verify_package(data).verified
+
+
+def test_decompression_uses_a_hard_output_cap_even_when_metadata_lies(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import zlib
+    from unittest.mock import Mock
+
+    from caos.deliverable import verify_package as standalone
+
+    members = _members(_package())
+    members["deliverable.html"] = b"x" * 100000
+    data = _central(_archive(list(members.items()), zipfile.ZIP_DEFLATED), 24, 1)
+    inflater = Mock(wraps=zlib.decompressobj(-15))
+    monkeypatch.setitem(standalone.LIMITS, "deliverable.html", 32)
+    monkeypatch.setattr(zlib, "decompressobj", lambda _: inflater)
+    assert not standalone.verify(data)[0]
+    assert inflater.decompress.call_args.args[1] == 33
+
+
+def test_a_forged_central_entry_count_refuses_before_zipfile_parses_members(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data = bytearray(_archive([*_members(_package()).items(), ("extra", b"")]))
+    end = data.rfind(b"PK\x05\x06")
+    struct.pack_into("<2H", data, end + 8, 5, 5)
+    opened: list[bool] = []
+    original = zipfile.ZipFile
+
+    def observed(source: BytesIO) -> zipfile.ZipFile:
+        opened.append(True)
+        return original(source)
+
+    monkeypatch.setattr(zipfile, "ZipFile", observed)
+    assert not verify_package(bytes(data)).verified
+    assert not opened
+
+
+def test_a_member_name_containing_a_null_is_not_the_exact_package_name() -> None:
+    members = _members(_package())
+    members["payload.jsonXignored"] = members.pop("payload.json")
+    data = _archive(list(members.items())).replace(
+        b"payload.jsonXignored", b"payload.json\x00ignored"
+    )
+    assert not verify_package(data).verified
+
+
+def test_verify_package_without_an_argument_prints_usage_and_exits_2() -> None:
+    """The verifier states its one argument instead of exiting on an IndexError."""
+    verifier = ROOT / "caos/deliverable/verify_package.py"
+    done = subprocess.run(
+        [sys.executable, "-I", "-S", str(verifier)],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+
+    assert done.returncode == 2, done.stderr
+    assert "usage:" in done.stderr
+
+
+def test_a_refused_archive_says_why_and_a_verified_one_has_nothing_to_say() -> None:
+    """`Verification` carries two fields and the suite asserted one of them.
+
+    Every test above reads `.verified` alone, so a verifier that always
+    returned `reason=None` would pass all of them while telling a reader
+    holding a bad archive nothing about what is wrong with it -- and the
+    archived verifier this type wraps exists precisely so that a reader
+    without this repository can find out. The `reason` is the half a person
+    actually acts on, and it is asserted here as one.
+    """
+    good = verify_package(_package())
+    assert isinstance(good, Verification)
+    assert (good.verified, good.reason) == (True, None)
+
+    truncated = verify_package(_package()[:-1])
+    assert truncated.verified is False
+    assert truncated.reason
+    assert isinstance(truncated.reason, str)
+
+
+def test_a_package_is_published_whole_or_not_at_all(tmp_path: Path) -> None:
+    """The ledger entry this closes: `write_package` used `xb`, so two writers
+    could not overwrite one another, but a crash or an I/O failure part-way
+    could leave a short file at the destination that every later write then
+    refuses -- a path that is permanently poisoned by a package nobody can
+    verify.
+
+    Staged and renamed instead: the bytes are written and fsynced to a
+    temporary name in the *same directory* (a rename is only atomic within a
+    filesystem), then linked into place. A reader therefore sees the whole
+    archive or no file, never a prefix of one.
+    """
+    package, data = tmp_path / "filing.zip", _package()
+    write_package(package, data)
+
+    assert package.read_bytes() == data
+    assert verify_package(package.read_bytes()).verified
+    # Nothing is left behind: a staging file that survived would be the same
+    # litter the entry complains about, one name along.
+    assert [p.name for p in tmp_path.iterdir()] == ["filing.zip"]
+
+
+def test_a_failed_write_leaves_no_file_at_the_destination(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The half that matters. A publication that dies after the bytes are
+    written and before they are in place must leave *nothing* at the published
+    path -- `xb` would otherwise refuse every correct write that followed a
+    truncated one, poisoning the path permanently.
+
+    The failure is injected at the fsync, which is exactly the window the old
+    code had no answer for: the bytes exist somewhere, and the question is
+    whether they exist under the name a reader will open.
+    """
+    package = tmp_path / "filing.zip"
+
+    def dying(_fd: int) -> None:
+        raise OSError(errno.EIO, os.strerror(errno.EIO))
+
+    monkeypatch.setattr(os, "fsync", dying)
+    with pytest.raises(OSError) as caught:
+        write_package(package, _package())
+    assert caught.value.errno == errno.EIO
+    monkeypatch.undo()
+
+    assert not package.exists()
+    assert list(tmp_path.iterdir()) == [], "a staging file was left behind"
+
+    # And the path is still usable, which is the whole point of the change.
+    write_package(package, _package())
+    assert verify_package(package.read_bytes()).verified
+
+
+def test_two_writers_still_cannot_overwrite_one_another(tmp_path: Path) -> None:
+    """The property the old `xb` had and the staged write must keep: a second
+    publication to a live path is refused, never silently replaced."""
+    package = tmp_path / "filing.zip"
+    write_package(package, _package())
+
+    with pytest.raises(FileExistsError):
+        write_package(package, _package())

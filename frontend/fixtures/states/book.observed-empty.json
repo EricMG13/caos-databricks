@@ -1,0 +1,48 @@
+{
+  "chrome": {
+    "subject": null,
+    "served_role": {
+      "global_role": "READER",
+      "standing": null
+    },
+    "actions": []
+  },
+  "body": {
+    "basis": {
+      "period": "EVERY_ACCEPTED_PERIOD",
+      "scenario": "EVERY_ACCEPTED_CASE",
+      "accepted_only": true
+    },
+    "columns": [
+      {
+        "key": "operating.revenue",
+        "label": "Revenue"
+      },
+      {
+        "key": "operating.ebitda",
+        "label": "EBITDA"
+      },
+      {
+        "key": "operating.cfo",
+        "label": "Cash flow from operations"
+      },
+      {
+        "key": "investing.capex",
+        "label": "Capital expenditure"
+      },
+      {
+        "key": "financing.cash_interest",
+        "label": "Cash interest"
+      },
+      {
+        "key": "operating.margin",
+        "label": "EBITDA margin"
+      }
+    ],
+    "rows": []
+  },
+  "observed_at": "2026-09-14T10:05:00Z",
+  "observed_empty": true,
+  "status": "complete",
+  "notes": []
+}

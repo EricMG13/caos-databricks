@@ -1,0 +1,494 @@
+false 0001498710 0001498710 2024-11-12 2024-11-12 iso4217:USD xbrli:shares iso4217:USD xbrli:shares
+
+ 
+
+ 
+
+ 
+
+UNITED STATES
+SECURITIES AND EXCHANGE COMMISSION
+WASHINGTON, D.C. 20549
+
+ 
+
+____________________________
+
+ 
+
+FORM 8-K
+
+ ____________________________
+
+ 
+
+CURRENT REPORT
+Pursuant to Section 13 or 15(d)
+of the Securities Exchange Act of 1934
+
+ 
+
+Date of Report (Date of earliest event reported): November 18, 2024 (November 12, 2024)
+
+ 
+
+____________________________
+
+ 
+
+Spirit Airlines, Inc.
+(Exact name of registrant as specified in its charter)
+
+ ____________________________
+
+ 
+
+  ------------------------------ -------------- ---------------------
+             Delaware              001-35186         38-1747023
+   (State or other jurisdiction   (Commission       (IRS Employer
+        of incorporation)         File Number)   Identification No.)
+  ------------------------------ -------------- ---------------------
+
+ 
+
+1731 Radiant Drive
+
+Dania Beach, Florida 33004
+
+(Address of principal executive offices, including zip code)
+
+ 
+
+(954) 447-7920
+
+(Registrant’s telephone number, including area code)
+
+ 
+
+N/A
+(Former name or former address, if changed since last report)
+
+ 
+
+Check the appropriate box below if the Form 8-K filing is intended to simultaneously satisfy the filing obligation of the registrant under any of the following provisions:
+
+ 
+
+  -- --- ---------------------------------------------------------------------------------------
+     ☐   Written communications pursuant to Rule 425 under the Securities Act (17 CFR 230.425)
+  -- --- ---------------------------------------------------------------------------------------
+
+ 
+
+  -- --- ----------------------------------------------------------------------------------------
+     ☐   Soliciting material pursuant to Rule 14a-12 under the Exchange Act (17 CFR 240.14a-12)
+  -- --- ----------------------------------------------------------------------------------------
+
+ 
+
+  -- --- --------------------------------------------------------------------------------------------------------
+     ☐   Pre-commencement communications pursuant to Rule 14d-2(b) under the Exchange Act (17 CFR 240.14d-2(b))
+  -- --- --------------------------------------------------------------------------------------------------------
+
+ 
+
+  -- --- --------------------------------------------------------------------------------------------------------
+     ☐   Pre-commencement communications pursuant to Rule 13e-4(c) under the Exchange Act (17 CFR 240.13e-4(c))
+  -- --- --------------------------------------------------------------------------------------------------------
+
+ 
+
+Securities registered pursuant to Section 12(b) of the Act:
+
+ 
+
++---------------------------------+-----------------------+-------------------------+
+| Class                           | Trading               | Name of each exchange   |
+|                                 | symbol(s)             | on which registered     |
++---------------------------------+-----------------------+-------------------------+
+| Common Stock, $0.0001 par value | SAVE                  | New York Stock Exchange |
++---------------------------------+-----------------------+-------------------------+
+
+ 
+
+Indicate by check mark whether the registrant is an emerging growth company as defined in Rule 405 of the Securities Act of 1933 (§230.405 of this chapter) or Rule 12b-2 of the Securities Exchange Act of 1934 (§240.12b-2 of this chapter).
+
+ 
+
+Emerging growth company ☐
+
+ 
+
+If an emerging growth company, indicate by check mark if the registrant has elected not to use the extended transition period for complying with any new or revised financial accounting standards provided pursuant to Section 13(a) of the Exchange Act. ☐
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+  -- ----------- ---------------------------------------------
+     Item 1.01   Entry into a Material Definitive Agreement.
+  -- ----------- ---------------------------------------------
+
+ 
+
+Restructuring Support Agreement
+
+ 
+
+On November 18, 2024, Spirit Airlines, Inc. (the "Spirit”, and together with its direct and indirect subsidiaries, “the Company”) entered into a Restructuring Support Agreement (the "Restructuring Support Agreement" and the holders parties thereto, the “Supporting Stakeholders”) with (i) holders in the aggregate of approximately 78.6% of the Company's 8.00% Senior Secured Notes due 2025 issued by Spirit IP Cayman Ltd. and Spirit Loyalty Cayman Ltd. (the “Senior Secured Notes,” and the holders, the “Senior Secured Noteholders”) and (ii) holders in the aggregate of approximately 84.1% of the Company’s 4.75% Convertible Senior Notes due 2025 (the “2025 Convertible Notes”) and 1.00% Convertible Senior Notes due 2026 issued by Spirit Airlines, Inc. (together, with the 2025 Convertible Notes, the “Convertible Notes,” and the holders, the “Convertible Noteholders”). The transactions contemplated in the Restructuring Support Agreement are expected to be implemented through a pre-arranged chapter 11 process (the "Chapter 11 Cases") in the United States Bankruptcy Court for the Southern District of New York (the "Bankruptcy Court").
+
+ 
+
+The Restructuring Support Agreement and the proposed pre-arranged plan of reorganization (the “Plan”) attached thereto contemplate the equitization of $410 million of outstanding Senior Secured Notes and $385 million of outstanding Convertible Notes, as well as a backstopped $350 million new money equity raise upon emergence from the Chapter 11 Cases, as described in greater detail below. Specifically, the Restructuring Support Agreement and the Plan provide, in pertinent part, as follows:
+
+ 
+
+  -- --- --------------------------------------------------------------------------------------------------------------------------------------------------
+     ·   Vendors, aircraft lessors and holders of secured aircraft indebtedness will continue to be paid in the ordinary course and will not be impaired;
+  -- --- --------------------------------------------------------------------------------------------------------------------------------------------------
+
+ 
+
+  -- --- --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+     ·   The Supporting Stakeholders have committed to provide a $300 million new money senior secured superpriority debtor-in-possession facility (the “DIP Facility”), as further described under “Debtor-in-Possession Financing”. The DIP Facility is expected to be repaid in full in cash on the effective date of the Plan (the “Effective Date”).
+  -- --- --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+ 
+
+  -- --- ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+     ·   On the Effective Date, the Company (as reorganized, “Reorganized Spirit”) will issue a single class of common equity interests (the “New Common Equity”) to certain of its creditors as follows: (a) 76% pro rata to the Senior Secured Noteholders and (b) 24% pro rata to the Convertible Noteholders, subject to dilution on account of the Management Incentive Plan (as defined in the Plan), the $350 million Equity Rights Offering (as defined hereafter), as further described under “Backstop Commitment Agreement, and certain adjustments set forth in the Plan.
+  -- --- ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+ 
+
+  -- --- -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+     ·   On the Effective Date, Reorganized Spirit will issue $840 million of senior secured notes (the “Exit Secured Notes”), the material terms of which are described in the Exit Secured Notes Facility Term Sheet attached as Exhibit G to the Restructuring Support Agreement, to certain of its creditors as follows: (a) $700 million in the aggregate, pro rata, to the Senior Secured Noteholders and (b) $140 million in the aggregate, pro rata, to the Convertible Noteholders, subject to certain adjustments set forth in the Plan.
+  -- --- -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+ 
+
+  -- --- ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+     ·   All of the Company’s existing common stock and other equity interests will be cancelled without any distributions to the holders of such common stock and other equity interests on account thereof.
+  -- --- ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+ 
+
+The Restructuring Support Agreement includes certain milestones for the progress of the Chapter 11 Cases, which include the dates by which Spirit is required to, among other things, obtain certain court orders and consummate the transactions contemplated therein. Failure to meet these milestones allows the Restructuring Support Agreement to be terminated by the non-Spirit signatories thereto. In addition, the signatories to the Restructuring Support Agreement have the right to terminate the Restructuring Support Agreement under certain circumstances, including if the board of directors of Spirit (the "Board") determines in good faith that performance under the Restructuring Support Agreement would be inconsistent with its fiduciary duties as set forth therein. The Plan remains subject to
+
+ 
+
+ 
+
+ 
+
+Bankruptcy Court approval and the satisfaction of certain conditions precedent. Accordingly, no assurance can be given that the transactions described in the Restructuring Support Agreement or the Plan will be consummated.
+
+ 
+
+The foregoing description of the Restructuring Support Agreement does not purport to be complete and is qualified in its entirety by reference to its full text, a copy of which is filed as Exhibit 10.1 to this Current Report on Form 8-K and is incorporated by reference in this Item 1.01.
+
+ 
+
+Backstop Commitment Agreement
+
+ 
+
+On November 18, 2024, Spirit entered into a Backstop Commitment Agreement (the “Backstop Commitment Agreement”) with the backstop commitment parties named therein (the “Backstop Commitment Parties”). The terms of the Backstop Agreement are, in pertinent part, as follows:
+
+ 
+
+  -- --- ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+     ·   Pursuant to the Backstop Commitment Agreement, the Backstop Commitment Parties have agreed to backstop an equity rights offering of New Common Equity (the “Equity Rights Offering”) for an aggregate purchase price of $350 million at 70% of Plan Equity Value (as defined in the Backstop Agreement) (such New Common Equity, the “Offering Shares”), as contemplated by the Restructuring Support Agreement.
+  -- --- ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+ 
+
+  -- --- ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+     ·   Subject to adjustments described below, the Backstop Commitment Agreement provides that $175 million of the Offering Shares will be raised by soliciting commitments from certain of the Company’s creditors as follows: (a) $137.81 million from Senior Secured Noteholders (the “Senior Secured Notes Subscription Rights”) and (b) $37.19 million from Convertible Noteholders (the “Convertible Notes Subscription Rights”).
+  -- --- ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+ 
+
+  -- --- ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+     ·   Subject to adjustments described below, the Backstop Commitment Agreement provides that $175 million of the Offering Shares will be reserved for purchase by the Backstop Commitment Parties as follows: $137.81 million by the Senior Secured Backstop Commitment Parties (as defined in the Backstop Commitment Agreement) (the “Senior Secured Direct Allocation”) and $37.19 million by the Convertible Backstop Commitment Parties (as defined in the Backstop Commitment Agreement) (the “Convertible Direct Allocation”).
+  -- --- ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+ 
+
+  -- --- ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+     ·   If Senior Secured Noteholders holding, in the aggregate, at least 90.00% of the aggregate principal amount of the Senior Secured Notes claims shall have executed the Restructuring Support Agreement by 11:59 p.m., New York City time, on November 25, 2024 (or as such time may be extended pursuant to the Backstop Commitment Agreement), then the amount of the Senior Secured Notes Subscription Rights will be increased to $248.06 million and the Senior Secured Direct Allocation will be reduced to $27.56 million.
+  -- --- ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+ 
+
+  -- --- -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+     ·   If Convertible Noteholders holding, in the aggregate, at least 90.00% of the aggregate principal amount of the Convertible Notes claims shall have executed the Restructuring Support Agreement by 11:59 p.m., New York City time, on November 25, 2024 (or as such time may be extended pursuant to the Backstop Commitment Agreement), then the amount of the Convertible Notes Subscription Rights will be increased to $66.94 million and the Convertible Direct Allocation will be reduced to $7.44 million.
+  -- --- -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+ 
+
+  -- --- ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+     ·   As consideration for the commitment by the Backstop Commitment Parties, and subject to approval by the Bankruptcy Court: (i) a “Backstop Premium” will be paid to the Backstop Commitment Parties by the Company in an aggregate number of shares of New Common Equity equal to 10% of the total number of shares of New Common Equity issued by the Company upon emergence from bankruptcy as distributions under the Plan. If the Backstop Commitment Agreement is terminated under certain circumstances as set forth therein, the Backstop Commitment Agreement provides for a cash payment of $35 million to the Backstop Commitment Parties.
+  -- --- ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+ 
+
+The transactions contemplated by the Backstop Commitment Agreement are conditioned upon the satisfaction or waiver of customary conditions for transactions of this nature, including, among other things. that (i) the Bankruptcy Court shall have confirmed the Plan, (ii) the Effective Date shall have occurred, and (iii) the Restructuring Support Agreement remains in full force and effect.
+
+ 
+
+ 
+
+ 
+
+The foregoing description of the Backstop Commitment Agreement is not complete and is qualified in its entirety by reference to the Backstop Commitment Agreement, a copy of which is attached to this Current Report on Form 8-K as Exhibit 10.2 and is hereby incorporated by reference into this Item 1.01.
+
+ 
+
+Debtor-in-Possession Financing
+
+The information set forth under the heading "Debtor-in-Possession Financing" in Item 1.03 below is hereby incorporated by reference into this Item 1.01. 
+
+  -- ----------- -----------------------------
+     Item 1.03   Bankruptcy or Receivership.
+  -- ----------- -----------------------------
+
+ 
+
+Voluntary Petition for Reorganization
+
+ 
+
+On November 18, 2024, Spirit filed a petition under chapter 11 of title 11 of the United States Code (the “Bankruptcy Code”) in the Bankruptcy Court. Concurrently, Spirit filed a pre-arranged chapter 11 plan of reorganization (the “Plan”) with the Bankruptcy Court.
+
+ 
+
+Spirit will continue to operate its business as a “debtor-in-possession” under the jurisdiction of the Bankruptcy Court and in accordance with the applicable provisions of the Bankruptcy Code and the orders of the Bankruptcy Court. The Plan and requested first day relief anticipate that trade claimants and other unsecured creditors who continue to work with Spirit on existing terms will be paid in full and in the ordinary course of business. Vendors, aircraft lessors and holders of secured aircraft indebtedness will continue to be paid in the ordinary course and will not be impaired.
+
+ 
+
+Additional information about the Chapter 11 Cases may be obtained at https://dm.epiq11.com/SpiritGoForward.
+
+ 
+
+Debtor-in-Possession Financing
+
+ 
+
+Spirit has secured a commitment from certain of its prepetition debtholders (collectively, the “DIP Lenders”), to provide approximately $300 million in financing in the form of a senior secured debtor-in-possession facility (the “DIP Facility”). The DIP Facility is comprised of (i) new money term loans and (ii) new money notes (collectively, the “DIP Commitments”). Upon entry of the DIP Order by the Bankruptcy Court, the DIP Commitments shall be available to Spirit to draw upon. Spirit’s uses for the payment shall include, among other items, (i) prepetition obligations, (ii) adequate protection payments, (iii) the fees, costs, and expenses of administering the Chapter 11 Cases and (iv) working capital and other general corporate needs of Spirit in the ordinary course of business.
+
+ 
+
+Spirit’s obligations under the proposed DIP Facility will be guaranteed by each subsidiary of Spirit. In addition, upon entry and subject to the terms of the DIP Order approving the DIP Facility, the claims of the DIP Lenders will be (i) entitled to superpriority administrative expense claim status, subject to certain customary exclusions in the credit documentation and (ii) secured by perfected senior security interests and liens on certain property of the Company, subject to a certain exclusions and exceptions carve out.
+
+ 
+
+Subject to certain exceptions and conditions, Spirit will be obligated to prepay the obligations thereunder with the net cash proceeds of certain asset sales, with casualty insurance proceeds, extraordinary receipts and the proceeds of certain indebtedness. The DIP Facility will bear an interest rate equal to Spirit’s choice of (a) SOFR plus 7.00% per annum or (b) Alternate Base Rate plus 6.00% per annum.
+
+ 
+
+The foregoing descriptions of the DIP Facility and DIP Commitments do not purport to be complete and are qualified in their entirety by reference to the DIP Term Sheet filed hereto as Exhibit 10.3.
+
+ 
+
+  -- ----------- --------------------------------------------------------------------------------------------------------------------------------------
+     Item 2.04   Triggering Events that Accelerate or Increase a Direct Financial Obligation or an Obligation under an Off-Balance Sheet Arrangement.
+  -- ----------- --------------------------------------------------------------------------------------------------------------------------------------
+
+ 
+
+The filing of the Chapter 11 Cases described above in Item 1.03 constitutes an event of default that accelerated the Company’s obligations under the following debt instruments (the "Debt Instruments"):
+
+ 
+
+  -- --- ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+     ·   Approximately $300.0 million of borrowings (plus any accrued but unpaid interest in respect thereof) under the Credit and Guaranty Agreement (the “Revolving Credit Agreement), dated as of March 30, 2020, by and among the Company, the lenders party thereto from time to time, Wilmington Trust, National Association (“Wilmington”), as collateral agent, and Citibank, N.A., as administrative agent, as amended, waived,
+  -- --- ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+ 
+
+ 
+
+ 
+
+supplemented or otherwise modified, relating to our Revolving Loans (as defined in the Revolving Credit Agreement).
+
+ 
+
+  -- --- -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+     ·   Approximately $525.1 million of borrowings (plus any accrued but unpaid interest in respect thereof) under the Indenture dated May 12, 2020, among the Company, as issuer, and Wilmington as trustee, as amended and supplemented, relating to our Convertible Notes.
+  -- --- -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+ 
+
+  -- --- ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+     ·   Approximately $505.0 million of borrowings (plus any accrued but unpaid interest in respect thereof) under certain enhanced equipment trust certificates ("EETCs") debt agreements between the Company and Wilmington, as trustee.
+  -- --- ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+ 
+
+The Debt Instruments provide that, as a result of the Chapter 11 Cases, the principal and interest due thereunder shall be immediately due and payable. Any efforts to enforce such payment obligations under the Debt Instruments are automatically stayed as a result of the commencement of the Chapter 11 Cases, and the creditors’ rights of enforcement in respect of the Debt Instruments are subject to the applicable provisions of the Bankruptcy Code.
+
+ 
+
+  -- ----------- ----------------------------------------------------------------------------------------------------------------------------------------------------
+     Item 5.02   Departure of Directors or Certain Officers; Election of Directors; Appointment of Certain Officers; Compensatory Arrangements of Certain Officers.
+  -- ----------- ----------------------------------------------------------------------------------------------------------------------------------------------------
+
+ 
+
+On November 12, 2024, the Board of Directors of Spirit approved the payment of one-time cash retention awards (“Retention Awards”) to Spirit’s named executive officers in the amounts set forth in the table below, which were paid pursuant to the terms of a retention award agreement (the “Retention Agreement”). Pursuant to the terms of the Retention Agreement, if the named executive officer ceases to be actively employed by Spirit in good standing prior to the earlier of (i) the one-year anniversary of the effective date of the Retention Agreement and (ii) the date that is 60 days following the date of a “change in control” (as defined in the Retention Agreement), then the executive is required to repay to Spirit the gross amount of the Retention Award within 10 days, except if the executive’s employment terminates due to death or “disability”, by Spirit without “cause” or due to the executive’s resignation for “good reason” (each as defined in the Retention Agreement).
+
+ 
+
+In addition, each of Spirit’s named executive officers received their earned cash bonus under Spirit’s Short-Term Cash Incentive Program (the “2024 STIP”) for (i) the cash bonus earned under the individual component of the 2024 STIP for the first measurement period of 2024 (the “2024 H1 STIP Bonus”) and (ii) the second measurement period of 2024 (the “2024 H2 STIP Bonus”), in each case in the amounts set forth in the table below, which were paid pursuant to the terms of the Retention Agreement. Pursuant to the terms of the Retention Agreement, if the named executive officer ceases to be actively employed by Spirit in good standing prior to the earlier of (i) January 31, 2025 and (B) the date that is 60 days following the date of a “change in control”, then the executive is required to repay to Spirit the gross amount of the 2024 H1 STIP Bonus and the 2024 H2 STIP Bonus within 10 days, except if the executive’s employment terminates due to death or “disability”, by Spirit without “cause” or due to the executive’s resignation for “good reason” (each as defined in the Retention Agreement).
+
+ 
+
+As set forth in the Retention Agreement, each of the named executive officers’ unpaid time-based or performance-based long-term cash incentive awards and any payment under Spirit’s short-term incentive plan for 2024 (except as set forth below) were forfeited in their entirety.
+
+ 
+
+The foregoing description of the Retention Agreements does not purport to be complete and is qualified in its entirety by reference to the Retention Agreements, the form of which is filed herewith as Exhibit 10.4 and is incorporated herein by reference.
+
+ 
+
+  ------------------------------------------------------------------------- ----------------- -----------------
+                           Named Executive Officer                           Retention Award   2024 STIP Bonus
+         Edward M. Christie III, President & Chief Executive Officer           $3,800,000         $419,866
+   Frederick A. Cromer, Executive Vice President & Chief Financial Officer      $175,000          $277,508
+  ------------------------------------------------------------------------- ----------------- -----------------
+
+ 
+
+ 
+
+  ----------------------------------------------------------------------- ---------- ----------
+  John Bendoraitis, Executive Vice President & Chief Operating Officer     $850,000   $400,275
+  Matthew H. Klein, Executive Vice President & Chief Commercial Officer    $250,000   $266,063
+  Rocky B. Wiggins, Senior Vice President & Chief Information Officer      $300,000   $276,581
+  ----------------------------------------------------------------------- ---------- ----------
+
+ 
+
+  -- ----------- ---------------------------
+     Item 7.01   Regulation FD Disclosure.
+  -- ----------- ---------------------------
+
+ 
+
+Press Release
+
+ 
+
+On November 18, 2024, Spirit issued a press release announcing the filing of the Chapter 11 Cases. A copy of the press release is attached hereto as Exhibit 99.1 and is incorporated by reference herein.
+
+ 
+
+Cleansing Material
+
+ 
+
+Prior to the filing of the Chapter 11 Cases, the Company entered into confidentiality agreements (collectively, the "NDAs") with certain Senior Secured Noteholders and Convertible Noteholders (the “NDA Parties”). The Company engaged in negotiations with the NDA Parties relating to the Restructuring Support Agreement, the Plan, the Backstop Commitment Agreement and the DIP Commitments. Pursuant to the NDAs, the Company provided the NDA Parties with confidential information and agreed to publicly disclose certain information (the "Cleansing Material") upon the occurrence of certain events set forth in the NDAs. A copy of the Cleansing Material is attached to this Current Report on Form 8-K as Exhibit 99.2. The Cleansing Material was prepared by the Company solely to facilitate a discussion with the parties to the NDAs and was not prepared with a view toward public disclosure and should not be relied upon to make an investment decision with respect to the Company. The Cleansing Material should not be regarded as an indication that the Company or any third party considers the Cleansing Material to be a reliable prediction of future events, and the Cleansing Material should not be relied upon as such. The Cleansing Material includes certain values for illustrative purposes only and such values are not the result of, and do not represent, actual valuations, estimates, forecasts or projections of the Company or any third party and should not be relied upon as such. Neither the Company nor any third party has made or makes any representation to any person regarding the accuracy of any Cleansing Material or undertakes any obligation to publicly update the Cleansing Material to reflect circumstances existing after the date when the Cleansing Material was prepared or conveyed or to reflect the occurrence of future events, even in the event that any or all of the assumptions underlying the Cleansing Material are shown to be in error.
+
+ 
+
+The information contained in this Item 7.01, including in Exhibits 99.1 and 99.2 shall not be deemed to be “filed” for purposes of Section 18 of the Securities and Exchange Act of 1934, as amended (“the Exchange Act”), or otherwise subject to the liabilities of that section, and shall not be deemed to be incorporated by reference into any of the Company’s filings under the Securities Act or the Exchange Act, whether made before or after the date hereof and regardless of any general incorporation language in such filings, except to the extent expressly set forth by specific reference in such a filing. The filing of this Current Report on Form 8-K (including any exhibit hereto or any information included herein or therein) shall not be deemed an admission to the materiality of any information herein that is required to be disclosed solely by reason of Regulation FD.
+
+ 
+
+Cautionary Note Regarding the Chapter 11 Cases
+
+ 
+
+The Company cautions that trading in the Company’s common stock during the pendency of the Chapter 11 Cases is highly speculative and poses substantial risks. Trading prices for the Company’s common stock may bear little or no relationship to the actual recovery, if any, by holders of the Company’s common stock in the Chapter 11 Cases. The Company expects that holders of the Company’s common stock will not receive distributions in the Chapter 11 Cases, and that the equity will be canceled under the Plan.
+
+ 
+
+Cautionary Statement Regarding Forward Looking Statements
+
+ 
+
+ 
+
+ 
+
+This Current Report on Form 8-K (this “Current Report”) contains various forward-looking statements within the meaning of Section 27A of the Securities Act of 1933, as amended (the “Securities Act”), and Section 21E of the Securities Exchange Act of 1934, as amended (the “Exchange Act”) which are subject to the “safe harbor” created by those sections. Forward-looking statements are based on our management's beliefs and assumptions and on information currently available to our management. All statements other than statements of historical facts are “forward-looking statements” for purposes of these provisions. In some cases, you can identify forward-looking statements by terms such as “may,” “will,” “should,” “could,” “would,” “expect,” “plan,” “anticipate,” “believe,” “estimate,” “project,” “predict,” “potential,” and similar expressions intended to identify forward-looking statements. Forward-looking statements include, but are not limited to, statements regarding Spirit’s expectations with respect to operating in the normal course, the Chapter 11 process, the DIP and potential delisting of Spirit’s common stock by the New York Stock Exchange. Forward-looking statements are subject to risks, uncertainties and other important factors that could cause actual results and the timing of certain events to differ materially from future results expressed or implied by such forward-looking statements. Factors include, among others, risks attendant to the bankruptcy process, including the Company's ability to obtain court approval from the Court with respect to motions or other requests made to the Court throughout the course of Chapter 11, including with respect the DIP; the effects of Chapter 11, including increased legal and other professional costs necessary to execute the Company's restructuring process, on the Company's liquidity (including the availability of operating capital during the pendency of Chapter 11); the effects of Chapter 11 on the interests of various constituents and financial stakeholders; the length of time that the Company will operate under Chapter 11 protection and the continued availability of operating capital during the pendency of Chapter 11; objections to the Company's restructuring process, the DIP, or other pleadings filed that could protract Chapter 11; risks associated with third-party motions in Chapter 11; Court rulings in the Chapter 11 and the outcome of Chapter 11 in general; the Company's ability to comply with the restrictions imposed by the terms and conditions of the DIP and other financing arrangements; employee attrition and the Company's ability to retain senior management and other key personnel due to the distractions and uncertainties; risks associated with the potential delisting or the suspension of trading in its common stock by the New York Stock Exchange, the impact of litigation and regulatory proceedings; and other factors discussed in the Company's Annual Report on Form 10-K and subsequent quarterly reports on Form 10-Q filed with the SEC and other factors, as described in the Company's filings with the Securities and Exchange Commission, including the detailed factors discussed under the heading "Risk Factors" in the Company's Annual Report on Form 10-K for the fiscal year ended December 31, 2023, as supplemented in the Company's Quarterly Report on Form 10-Q for the fiscal quarters ended March 31, 2024 and June 30, 2024. Furthermore, such forward-looking statements speak only as of the date of this Current Report. Except as required by law, we undertake no obligation to update any forward-looking statements to reflect events or circumstances after the date of such statements. Risks or uncertainties (i) that are not currently known to us, (ii) that we currently deem to be immaterial, or (iii) that could apply to any company, could also materially adversely affect our business, financial condition, or future results.
+
+ 
+
+ 
+
+ 
+
+  -- ------------ ------------------------------------
+     Item 9.01.   Financial Statements and Exhibits.
+  -- ------------ ------------------------------------
+
+ 
+
+(d) Exhibits
+
+ 
+
+ 
+
+  ------------- --- -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  Exhibit No.       Description
+                     
+  10.1              Restructuring Support Agreement, dated as of November 18, 2024, by and among Spirit Airlines, Inc., certain of its subsidiaries and the Consenting Stakeholders (as defined therein).
+                     
+  10.2              Backstop Commitment Agreement, dated as of November 18, 2024, by and among Spirit Airlines, Inc., certain of its subsidiaries and the Backstop Commitment Parties (as defined therein).
+                     
+  10.3              Debtor-in-Possession Term Sheet
+                     
+  10.4              Form of Retention Agreement, dated as of November 12, 2024, by and among Spirit Airlines, Inc. and a named executive officer of the Company.
+                     
+  99.1              Press Release, dated as of November 18, 2024, issued by Spirit Airlines, Inc.
+                     
+  99.2              Cleansing Material, dated as of November 18, 2024.
+                     
+  104               Cover Page Interactive Data File (embedded within the Inline XBRL Document)
+  ------------- --- -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+ 
+
+ 
+
+ 
+
+SIGNATURES
+
+ 
+
+Pursuant to the requirements of the Securities Exchange Act of 1934, the registrant has duly caused this report to be signed on its behalf by the undersigned hereunto duly authorized.
+
+ 
+
++--------------+--------------+---------+----------------------------+----------------------------+
+|              |              | SPIRIT AIRLINES, INC.                                             |
++--------------+--------------+---------+----------------------------+----------------------------+
+|                             |         |                            |                            |
++-----------------------------+---------+----------------------------+----------------------------+
+| Date:  November 18, 2024    | By:     | /s/ Thomas Canfield                                     |
++--------------+--------------+---------+---------------------------------------------------------+
+|              |              |         | Thomas Canfield                                         |
++--------------+--------------+---------+---------------------------------------------------------+
+|              |              |         | Senior Vice President - General Counsel & Secretary     |
++--------------+--------------+---------+----------------------------+----------------------------+
+|              |              |         |                            |                            |
++--------------+--------------+---------+----------------------------+----------------------------+
+
+  
+
+ 
+
+ 

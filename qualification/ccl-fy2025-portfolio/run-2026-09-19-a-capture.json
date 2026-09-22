@@ -1,0 +1,38 @@
+{
+  "adapter_version": "canonical-markdown-v3",
+  "attempts": [
+    {
+      "charge": "0.3985535",
+      "diagnostic_sha256": "fb35f3746681d7ecb81a57d860241ced38fc81a610fffe1e34604cb807131cd9",
+      "generation_id": "gen-1789853877-mzkW72qTWcG6sq6XVuqX",
+      "model": "openai/gpt-5.6-sol",
+      "ordinal": 1,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_PORTFOLIO_DECISION-01-CP-0"
+    },
+    {
+      "charge": "0.393221",
+      "diagnostic_sha256": "175e418d87fda5c8f7a327f443ad84b888c739808e7a2f03b20b400e8332c74f",
+      "generation_id": "gen-1789854031-ICnTxEv6gsqnpzOpRTAb",
+      "model": "openai/gpt-5.6-sol",
+      "ordinal": 2,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_PORTFOLIO_DECISION-01-CP-0"
+    }
+  ],
+  "complete": false,
+  "evidence_sha256": "29a832bfaf31d07785626849871b61a5605b9d5b41582280924729d6aabfc665",
+  "matrix": null,
+  "model": "openai/gpt-5.6-sol",
+  "performed_sha256": "e014f5f74bf342381671ae1b54f35e86d242ab11a2a7ec082608d6760f49ccc4",
+  "provider": "openrouter/openai/high/65536",
+  "result": [
+    {
+      "case_label": "ccl-fy2025-lite-portfolio-decision",
+      "proof": null,
+      "refusal": "ORCHESTRATION_NOTHING_TO_PROVE",
+      "status": "RUNNING",
+      "stopped": "HANDOFF_MALFORMED"
+    }
+  ],
+  "run_id": "f6fbf50c-454b-477a-a479-a098d16bb9f4",
+  "set_sha256": "7dcfa84602ff94a38fcc2627d15b7922acb08c23a871f7280e16bfe4a92d6a6c"
+}

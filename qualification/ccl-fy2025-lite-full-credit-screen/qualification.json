@@ -1,0 +1,126 @@
+{
+  "cases": [
+    {
+      "label": "ccl-fy2025-lite-full-credit-screen",
+      "profile_id": "LITE_CREDIT_22",
+      "selection_id": "LITE_FULL_CREDIT_SCREEN",
+      "subject": {
+        "issuer_id": "CCL",
+        "issuer_name": "Carnival Corporation & plc",
+        "reporting_period": "FY2025",
+        "analysis_date": "2026-09-19"
+      },
+      "documents": [
+        "documents/CCL_FY2025_10K.txt",
+        "documents/CCL_2025_Revolving_Credit_Agreement.txt",
+        "documents/CCL_2025_575_Notes_2030_Indenture.txt",
+        "documents/CCL_2025_Fitch_Rating_Action.pdf",
+        "documents/RCL_Q4_2025_Earnings_Release.txt",
+        "documents/NCLH_Q4_2025_Earnings_Release.txt"
+      ],
+      "expects": [
+        {
+          "module_id": "CP-L10",
+          "document_sha256": "8fa7fceda34be50b3b9b5406e0c9269b5269870d1cd8c2bdafb682755a1c88e6",
+          "matched_text": "As of November 30, 2025, we had $6.4 billion of liquidity including $1.9 billion of cash and cash equivalents and $4.5 billion available for borrowing under our multicurrency revolving credit facility. In addition, we had $7.8 billion of undrawn export credit facilities to fund future ship deliveries."
+        },
+        {
+          "module_id": "CP-1C",
+          "document_sha256": "dd9a0eb7211c111b8180ea10f95416066c3e714a7390e0424799b6f522981b88",
+          "matched_text": "Total Debt was $14.6 billion. Net Debt was $14.4 billion. Net Leverage was 5.3x at December 31, 2025."
+        },
+        {
+          "module_id": "CP-2H",
+          "document_sha256": "33863f60a0f6c94529538b535076e0d287f24183746dbd202b2b86c434d879ae",
+          "matched_text": "USD 1 bln 5.75% bond/note 15-Mar-2030 143658BY7"
+        },
+        {
+          "module_id": "CP-3C",
+          "document_sha256": "8fa7fceda34be50b3b9b5406e0c9269b5269870d1cd8c2bdafb682755a1c88e6",
+          "matched_text": "As of November 30, 2025, the scheduled maturities of our debt are as follows:"
+        },
+        {
+          "module_id": "CP-4C",
+          "document_sha256": "8fa7fceda34be50b3b9b5406e0c9269b5269870d1cd8c2bdafb682755a1c88e6",
+          "matched_text": "At November 30, 2025, we were in compliance with the applicable covenants under our debt agreements."
+        },
+        {
+          "module_id": "CP-5",
+          "document_sha256": "8fa7fceda34be50b3b9b5406e0c9269b5269870d1cd8c2bdafb682755a1c88e6",
+          "matched_text": "Total Debt, net of unamortized debt issuance costs and discounts | 26,640 | 27,475 |"
+        }
+      ],
+      "expects_ready": [
+        "CP-L10",
+        "CP-1A",
+        "CP-1C",
+        "CP-2A",
+        "CP-2H",
+        "CP-3C",
+        "CP-4C",
+        "CP-5"
+      ],
+      "expects_projection": [
+        {
+          "module_id": "CP-L10",
+          "field": "decision_scope",
+          "value": "SCREENING_ONLY"
+        },
+        {
+          "module_id": "CP-1A",
+          "field": "qa_status",
+          "value": "Restricted"
+        },
+        {
+          "module_id": "CP-2H",
+          "field": "qa_status",
+          "value": "Restricted"
+        },
+        {
+          "module_id": "CP-3C",
+          "field": "qa_status",
+          "value": "Restricted"
+        },
+        {
+          "module_id": "CP-4C",
+          "field": "qa_status",
+          "value": "Restricted"
+        },
+        {
+          "module_id": "CP-5",
+          "field": "qa_status",
+          "value": "Restricted"
+        }
+      ],
+      "expects_register": [
+        {
+          "module_id": "CP-L10",
+          "register_id": "TL10.2",
+          "row_key": {
+            "topic_id": "LIQUIDITY_MATURITIES"
+          },
+          "column": "evidence_status",
+          "expected": "SUFFICIENT"
+        },
+        {
+          "module_id": "CP-1C",
+          "register_id": "T4.5",
+          "row_key": {
+            "Entity": "Norwegian Cruise Line Holdings Ltd."
+          },
+          "column": "Total/Net/Sr Sec Leverage",
+          "expected": "[Calculated] 5.35x / 5.3x (reported)"
+        },
+        {
+          "module_id": "CP-4C",
+          "register_id": "T4E.1",
+          "row_key": {
+            "trigger": "No documented distress trigger"
+          },
+          "column": "status",
+          "expected": "Not Applicable"
+        }
+      ]
+    }
+  ]
+}

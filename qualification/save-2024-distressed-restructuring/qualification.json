@@ -1,0 +1,23 @@
+{
+  "cases": [
+    {
+      "label": "save-2024-distressed-restructuring",
+      "profile_id": "FULL_CREDIT_32",
+      "selection_id": "DISTRESSED_RESTRUCTURING",
+      "subject": {
+        "issuer_id": "SAVE",
+        "issuer_name": "Spirit Airlines, Inc.",
+        "reporting_period": "FY2024",
+        "analysis_date": "2024-11-18"
+      },
+      "documents": [
+        "documents/SAVE_2024_Chapter_11_8K.txt",
+        "documents/SAVE_2024_RSA_with_Chapter_11_Plan.txt"
+      ],
+      "expects": [],
+      "expects_blocked": [
+        "CP-1"
+      ]
+    }
+  ]
+}

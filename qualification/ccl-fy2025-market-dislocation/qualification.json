@@ -1,0 +1,41 @@
+{
+  "cases": [
+    {
+      "label": "ccl-fy2025-market-dislocation",
+      "profile_id": "FULL_CREDIT_32",
+      "selection_id": "MARKET_DISLOCATION",
+      "subject": {
+        "issuer_id": "CCL",
+        "issuer_name": "Carnival Corporation & plc",
+        "reporting_period": "FY2025",
+        "analysis_date": "2026-09-19"
+      },
+      "documents": [
+        "documents/CCL_FY2025_10K.txt",
+        "documents/CCL_FINRA_TRACE_143658BY7_2026-09-19.txt"
+      ],
+      "expects": [
+        {
+          "module_id": "CP-3D",
+          "document_sha256": "28f9289818978608ad48ed744f0483c8d3385d84cd7980402b5366545e00ae36",
+          "matched_text": "Last trade price: $99.34"
+        }
+      ],
+      "expects_ready": [
+        "CP-3D"
+      ],
+      "expects_projection": [
+        {
+          "module_id": "CP-3D",
+          "field": "decision_scope",
+          "value": "FULL"
+        },
+        {
+          "module_id": "CP-3D",
+          "field": "qa_status",
+          "value": "Restricted"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "adapter_version": "canonical-markdown-v3",
+  "attempts": [
+    {
+      "charge": "0.2278985",
+      "diagnostic_sha256": "461b2178c36042896f96a0ebede62b3a93c019b2cfbff60c6880df97e927895b",
+      "generation_id": "gen-1789746984-OpEPoKiGgw7lqZZRBAk5",
+      "model": "openai/gpt-5.6-terra",
+      "ordinal": 1,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_RELATIVE_VALUE-01-CP-0"
+    },
+    {
+      "charge": "0.22095525",
+      "diagnostic_sha256": "b479e52a180aebc85fd2141562c89d7db56cdab439c74c9964a1b73da30f1ae6",
+      "generation_id": "gen-1789747069-c0nZlQgrGPYymqUc9EVd",
+      "model": "openai/gpt-5.6-terra",
+      "ordinal": 2,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_RELATIVE_VALUE-01-CP-0"
+    }
+  ],
+  "complete": false,
+  "evidence_sha256": "f43f0a6804020e852ea24c895a3f5d53a1460c04ec9dd3eb8a6645c977c681ae",
+  "matrix": null,
+  "model": "openai/gpt-5.6-terra",
+  "performed_sha256": "987e51c39f951fa706329fd842ee275c9cc08a55f7d05928bf1736b297632200",
+  "provider": "openrouter/openai/flex/high/65536",
+  "result": [
+    {
+      "case_label": "ccl-fy2025-lite-relative-value",
+      "proof": null,
+      "refusal": "ORCHESTRATION_NOTHING_TO_PROVE",
+      "status": "RUNNING",
+      "stopped": "HANDOFF_MALFORMED"
+    }
+  ],
+  "run_id": "95dd27e1-31a4-4a3f-a3f0-3c25fc4c8e17",
+  "set_sha256": "a8df0ccf6d8fd735886c584951f7ca82e460f483a4f235a5ad31143fd3f60ac8"
+}

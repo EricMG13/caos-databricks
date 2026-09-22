@@ -1,0 +1,115 @@
+"""The one ASGI entry the image serves: the edge, the API and the static export.
+
+Phase 4 Task 4.5, decision 7 (recorded in `docs/DECISIONS.md` §53).
+
+`application` is `EdgeGuard` outermost, so every response -- a static file, a
+refusal, an API document -- carries the security headers and policy, and no
+request reaches a file or a route before the edge has admitted it. Behind it:
+
+- `/api` and `/api/*` go to `caos.api.app:app`, lifespan included, so routing's
+  own 404 and 405 there stay `ENDPOINT_NOT_FOUND` and a file under the export
+  never shadows an API path. The app installs `EdgeGuard` too; the scope marker
+  the outer guard sets makes the inner one pass through.
+- Every other path is a GET/HEAD-only read of `CAOS_SITE_ROOT`. `/` and each
+  section's `/<section>/` (with or without its slash, with any query) serve the
+  exported `index.html`, which routes on the client; anything else is a file
+  under the root or 404. A directory is never listed, a path that normalises
+  outside the root and a symlink resolving outside it are 404, and any other
+  method is 405. Both carry no body.
+
+The root is read from the environment on every use, like the edge's mode. With
+it unset every non-API path is 404; set without an `index.html`, boot refuses
+`EDGE_CONFIG_INVALID` before the app's own lifespan runs.
+"""
+
+from __future__ import annotations
+
+import os
+import re
+from pathlib import Path
+
+from starlette.exceptions import HTTPException
+from starlette.staticfiles import StaticFiles
+from starlette.types import ASGIApp, Receive, Scope, Send
+
+from caos.api.app import app
+from caos.api.edge import EdgeGuard, is_api_path, startup_failed
+from caos.refusals import Refusal, RefusalCode
+
+# The dispatcher reads the environment and the export's files, never the store.
+IO_BUDGET = 0
+
+SITE_ROOT_ENV = "CAOS_SITE_ROOT"
+# The nine sections of `frontend/src/app/sections.ts` (IA_SPEC.md 1). A disabled
+# section still loads the workspace, which renders it unavailable.
+SECTIONS = (
+    "directory",
+    "upload",
+    "analysis",
+    "book",
+    "run",
+    "model",
+    "report",
+    "committee",
+    "admin",
+)
+_WORKSPACE = re.compile(r"^/(?:(?:" + "|".join(SECTIONS) + r")/?)?$")
+_SAFE = frozenset({"GET", "HEAD"})
+
+
+def _site_root() -> Path | None:
+    root = os.environ.get(SITE_ROOT_ENV)
+    return Path(root) if root else None
+
+
+def _exported(root: Path) -> bool:
+    return (root / "index.html").is_file()
+
+
+async def _bare(send: Send, status: int) -> None:
+    await send(
+        {
+            "type": "http.response.start",
+            "status": status,
+            "headers": [(b"content-length", b"0")],
+        }
+    )
+    await send({"type": "http.response.body", "body": b""})
+
+
+async def _static(scope: Scope, receive: Receive, send: Send) -> None:
+    if scope.get("method") not in _SAFE:
+        await _bare(send, 405)
+        return
+    root = _site_root()
+    if root is None or not _exported(root):
+        await _bare(send, 404)
+        return
+    path = scope.get("path", "")
+    if _WORKSPACE.match(path):
+        scope = {**scope, "path": "/", "raw_path": b"/", "root_path": ""}
+    files = StaticFiles(directory=root, html=True, follow_symlink=False)
+    try:
+        await files(scope, receive, send)
+    except HTTPException as refused:
+        await _bare(send, refused.status_code)
+
+
+async def dispatch(scope: Scope, receive: Receive, send: Send) -> None:
+    """`/api` to the app, lifespan to the app, everything else to the export."""
+    if scope["type"] == "lifespan":
+        root = _site_root()
+        if root is not None and not _exported(root):
+            await startup_failed(receive, send)
+            raise Refusal(RefusalCode.EDGE_CONFIG_INVALID)
+        await app(scope, receive, send)
+        return
+    path = scope.get("path", "")
+    if is_api_path(path):
+        await app(scope, receive, send)
+        return
+    if scope["type"] == "http":
+        await _static(scope, receive, send)
+
+
+application: ASGIApp = EdgeGuard(dispatch)

@@ -1,0 +1,130 @@
+{
+  "cases": [
+    {
+      "label": "ccl-fy2025-earnings-update",
+      "profile_id": "FULL_CREDIT_32",
+      "selection_id": "EARNINGS_UPDATE",
+      "subject": {
+        "issuer_id": "CCL",
+        "issuer_name": "Carnival Corporation & plc",
+        "reporting_period": "FY2025",
+        "analysis_date": "2026-09-19"
+      },
+      "documents": [
+        "documents/CCL_FY2025_10K.txt"
+      ],
+      "expects": [
+        {
+          "module_id": "CP-1",
+          "document_sha256": "8fa7fceda34be50b3b9b5406e0c9269b5269870d1cd8c2bdafb682755a1c88e6",
+          "matched_text": "Total Revenues | 26,622 | 25,021 | 21,593 |"
+        },
+        {
+          "module_id": "CP-1B",
+          "document_sha256": "8fa7fceda34be50b3b9b5406e0c9269b5269870d1cd8c2bdafb682755a1c88e6",
+          "matched_text": "Operating Income | 4,483 | 3,574 | 1,956 |"
+        },
+        {
+          "module_id": "CP-2",
+          "document_sha256": "8fa7fceda34be50b3b9b5406e0c9269b5269870d1cd8c2bdafb682755a1c88e6",
+          "matched_text": "Net cash provided by operating activities | 6,218 | 5,923 | 4,281 |"
+        },
+        {
+          "module_id": "CP-2",
+          "document_sha256": "8fa7fceda34be50b3b9b5406e0c9269b5269870d1cd8c2bdafb682755a1c88e6",
+          "matched_text": "Purchases of property and equipment | ( 3,611 ) | ( 4,626 ) | ( 3,284 ) |"
+        },
+        {
+          "module_id": "CP-5",
+          "document_sha256": "8fa7fceda34be50b3b9b5406e0c9269b5269870d1cd8c2bdafb682755a1c88e6",
+          "matched_text": "Total Debt, net of unamortized debt issuance costs and discounts | 26,640 | 27,475 |"
+        }
+      ],
+      "expects_ready": [
+        "CP-1",
+        "CP-1B",
+        "CP-2",
+        "CP-5"
+      ],
+      "expects_projection": [
+        {
+          "module_id": "CP-5",
+          "field": "decision_scope",
+          "value": "FULL"
+        }
+      ],
+      "expects_register": [
+        {
+          "module_id": "CP-1B",
+          "register_id": "T4.12",
+          "row_key": {"metric_id": "revenue"},
+          "column": "values",
+          "expected": "26622/25021"
+        },
+        {
+          "module_id": "CP-1B",
+          "register_id": "T4.12",
+          "row_key": {"metric_id": "revenue"},
+          "column": "changes",
+          "expected": "1601"
+        },
+        {
+          "module_id": "CP-1B",
+          "register_id": "T4.12",
+          "row_key": {"metric_id": "ebit"},
+          "column": "values",
+          "expected": "4483/3574"
+        },
+        {
+          "module_id": "CP-1B",
+          "register_id": "T4.12",
+          "row_key": {"metric_id": "ebit"},
+          "column": "changes",
+          "expected": "909"
+        },
+        {
+          "module_id": "CP-1B",
+          "register_id": "T4.12",
+          "row_key": {"metric_id": "cfo_ncfo"},
+          "column": "values",
+          "expected": "6218/5923"
+        },
+        {
+          "module_id": "CP-1B",
+          "register_id": "T4.12",
+          "row_key": {"metric_id": "cfo_ncfo"},
+          "column": "changes",
+          "expected": "295"
+        },
+        {
+          "module_id": "CP-1B",
+          "register_id": "T4.12",
+          "row_key": {"metric_id": "capex_and_intangible_investment"},
+          "column": "values",
+          "expected": "-3611/-4626"
+        },
+        {
+          "module_id": "CP-1B",
+          "register_id": "T4.12",
+          "row_key": {"metric_id": "capex_and_intangible_investment"},
+          "column": "changes",
+          "expected": "1015"
+        },
+        {
+          "module_id": "CP-1B",
+          "register_id": "T4.12",
+          "row_key": {"metric_id": "total_debt"},
+          "column": "values",
+          "expected": "26640/27475"
+        },
+        {
+          "module_id": "CP-1B",
+          "register_id": "T4.12",
+          "row_key": {"metric_id": "total_debt"},
+          "column": "changes",
+          "expected": "-835"
+        }
+      ]
+    }
+  ]
+}

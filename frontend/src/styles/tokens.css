@@ -1,0 +1,178 @@
+/* Tokens: the bound CAOS design system's values, unchanged (DESIGN.md;
+   docs/DECISIONS.md 18). The bundle declares --caos-* but not the font
+   families, so the app declares those first. System stacks only: no web font. */
+@import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-display: "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --font-mono:
+    ui-monospace, "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
+    monospace;
+
+  --caos-bg: #0a0a0f;
+  --caos-panel: #12121a;
+  --caos-elevated: #1a1a24;
+  --caos-border: #262633;
+  --caos-text: #e6e6ef;
+  --caos-muted: #8a8a9a;
+  --caos-accent: #4f8cff;
+  --caos-success: #22c55e;
+  --caos-warning: #f5a524;
+  --caos-critical: #ef4444;
+  --caos-idle: #3f3f46;
+
+  /* On-dark text tints for status copy, derived from the semantic hues. Signal
+     only: status text and chips, never decoration. */
+  --caos-success-bright: #7ee2a8;
+  --caos-warning-bright: #fbbf24;
+  --caos-critical-bright: #f87171;
+  --caos-accent-bright: #a8c5ff;
+
+  --tranche-1l: #2dd4bf;
+  --tranche-2l: #4f8cff;
+  --tranche-unsec: #f5a524;
+  --tranche-sub: #a855f7;
+  --tranche-eq: #64748b;
+
+  /* Paper: ink on cream, inside filed output only (DESIGN.md). */
+  --paper-bg: #f7f5ee;
+  --paper-ink: #16161e;
+  --paper-meta: #45454f;
+  --paper-note: #55555f;
+  --paper-rule: #9c998e;
+  --paper-gutter: #141420;
+  --paper-cite: #1f4fa0;
+  --paper-stamp: #1f6b3a;
+  --paper-line: #c9c5b8;
+  --paper-line-soft: #d8d5c9;
+
+  --shadow-modal: 0 24px 80px -24px rgba(0, 0, 0, 0.9);
+  --paper-shadow: 0 24px 70px -24px rgba(0, 0, 0, 0.85);
+  --caos-rail-width: 216px;
+  --radius-sm: 2px;
+  --radius-md: 6px;
+}
+
+@theme {
+  --color-caos-bg: var(--caos-bg);
+  --color-caos-panel: var(--caos-panel);
+  --color-caos-elevated: var(--caos-elevated);
+  --color-caos-border: var(--caos-border);
+  --color-caos-text: var(--caos-text);
+  --color-caos-muted: var(--caos-muted);
+  --color-caos-accent: var(--caos-accent);
+  --color-caos-success: var(--caos-success);
+  --color-caos-warning: var(--caos-warning);
+  --color-caos-critical: var(--caos-critical);
+  --color-caos-idle: var(--caos-idle);
+  --color-tranche-1l: var(--tranche-1l);
+  --color-tranche-2l: var(--tranche-2l);
+  --color-tranche-unsec: var(--tranche-unsec);
+  --color-tranche-sub: var(--tranche-sub);
+  --color-tranche-eq: var(--tranche-eq);
+  --color-paper-bg: var(--paper-bg);
+  --color-paper-ink: var(--paper-ink);
+  --color-paper-meta: var(--paper-meta);
+  --color-paper-rule: var(--paper-rule);
+
+  --text-caos-3xs: 8px;
+  --text-caos-2xs: 8.5px;
+  --text-caos-xs: 9px;
+  --text-caos-sm: 9.5px;
+  --text-caos-md: 10px;
+  --text-caos-lg: 10.5px;
+  --text-caos-xl: 11px;
+  --text-caos-2xl: 12px;
+  --text-caos-metric: 16px;
+  --text-caos-hero: 22px;
+
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-display: var(--font-display);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background: var(--caos-bg);
+  color: var(--caos-text);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  overflow-x: hidden;
+}
+
+/* Monospaced numerics with aligned decimals. */
+.tabular {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+.transition-caos {
+  transition:
+    background-color 160ms ease-out,
+    border-color 160ms ease-out,
+    color 160ms ease-out,
+    box-shadow 160ms ease-out;
+}
+
+/* Motion only for live state (DESIGN.md). */
+@keyframes caos-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+.caos-running {
+  animation: caos-pulse 1.6s ease-in-out infinite;
+}
+@keyframes caos-flash {
+  from {
+    background: color-mix(in srgb, var(--caos-accent) 32%, transparent);
+  }
+  to {
+    background: transparent;
+  }
+}
+.caos-flash {
+  animation: caos-flash 0.6s ease-out;
+  border-radius: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .caos-running,
+  .caos-flash {
+    animation: none;
+  }
+}
+
+.caos-selected {
+  box-shadow:
+    0 0 0 1px var(--caos-accent),
+    inset 0 0 0 1px var(--caos-accent);
+}
+
+/* Keyboard focus ring, inset so a scrolling panel cannot clip it. */
+.focus-ring:focus-visible {
+  outline: 2px solid var(--caos-accent);
+  outline-offset: -2px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

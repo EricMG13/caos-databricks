@@ -1,0 +1,80 @@
+{
+  "cases": [
+    {
+      "label": "ccl-fy2025-lite-covenant-refinancing",
+      "profile_id": "LITE_CREDIT_22",
+      "selection_id": "LITE_COVENANT_REFINANCING",
+      "subject": {
+        "issuer_id": "CCL",
+        "issuer_name": "Carnival Corporation & plc",
+        "reporting_period": "FY2025",
+        "analysis_date": "2026-09-19"
+      },
+      "documents": [
+        "documents/CCL_FY2025_10K.txt",
+        "documents/CCL_2025_Revolving_Credit_Agreement.txt",
+        "documents/CCL_2025_575_Notes_2030_Indenture.txt"
+      ],
+      "expects": [
+        {
+          "module_id": "CP-L10",
+          "document_sha256": "8fa7fceda34be50b3b9b5406e0c9269b5269870d1cd8c2bdafb682755a1c88e6",
+          "matched_text": "As of November 30, 2025, we had $6.4 billion of liquidity including $1.9 billion of cash and cash equivalents and $4.5 billion available for borrowing under our multicurrency revolving credit facility. In addition, we had $7.8 billion of undrawn export credit facilities to fund future ship deliveries."
+        },
+        {
+          "module_id": "CP-3C",
+          "document_sha256": "8fa7fceda34be50b3b9b5406e0c9269b5269870d1cd8c2bdafb682755a1c88e6",
+          "matched_text": "As of November 30, 2025, the scheduled maturities of our debt are as follows:"
+        },
+        {
+          "module_id": "CP-3C",
+          "document_sha256": "0f5a7510e20cbf7182108e4a48ea1c8e7e85800d06205518f79ec049da169c49",
+          "matched_text": "The aggregate amount of the Lenders’ Revolving Facility Commitments is $4,500,000,000 on the Effective Date."
+        },
+        {
+          "module_id": "CP-5",
+          "document_sha256": "8fa7fceda34be50b3b9b5406e0c9269b5269870d1cd8c2bdafb682755a1c88e6",
+          "matched_text": "Total Debt, net of unamortized debt issuance costs and discounts | 26,640 | 27,475 |"
+        }
+      ],
+      "expects_ready": [
+        "CP-L10",
+        "CP-3C",
+        "CP-5"
+      ],
+      "expects_projection": [
+        {
+          "module_id": "CP-L10",
+          "field": "decision_scope",
+          "value": "SCREENING_ONLY"
+        },
+        {
+          "module_id": "CP-3C",
+          "field": "decision_scope",
+          "value": "SCREENING_ONLY"
+        },
+        {
+          "module_id": "CP-3C",
+          "field": "qa_status",
+          "value": "Restricted"
+        },
+        {
+          "module_id": "CP-5",
+          "field": "qa_status",
+          "value": "Restricted"
+        }
+      ],
+      "expects_register": [
+        {
+          "module_id": "CP-L10",
+          "register_id": "TL10.2",
+          "row_key": {
+            "topic_id": "LIQUIDITY_MATURITIES"
+          },
+          "column": "evidence_status",
+          "expected": "SUFFICIENT"
+        }
+      ]
+    }
+  ]
+}

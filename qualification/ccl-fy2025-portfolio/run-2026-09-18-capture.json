@@ -1,0 +1,67 @@
+{
+  "adapter_version": "canonical-markdown-v3",
+  "attempts": [
+    {
+      "charge": "0.17845375",
+      "diagnostic_sha256": "5e8b96def54b3e60cbe74edfdaac5d20fb508a96fb288dbd28896b173a3f7dc9",
+      "generation_id": "gen-1789739485-olAkS5AfXxvS3mbTWjgV",
+      "model": "openai/gpt-5.6-terra",
+      "ordinal": 1,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_PORTFOLIO_DECISION-01-CP-0"
+    }
+  ],
+  "complete": false,
+  "evidence_sha256": "9b9868e0e3bae78420536c03ea6389c75558dc58658fa293c653ee7908d08619",
+  "matrix": [
+    {
+      "case_label": "ccl-fy2025-lite-portfolio-decision",
+      "expected_refusal_met": null,
+      "forecast_met": null,
+      "met": 0,
+      "missed": 1,
+      "missed_keys": [
+        {
+          "document_sha256": "8fa7fceda34be50b3b9b5406e0c9269b5269870d1cd8c2bdafb682755a1c88e6",
+          "matched_text": "Debt extinguishment and modification costs | ( 409 ) | ( 79 ) | ( 111 ) |",
+          "module_id": "CP-L10"
+        }
+      ],
+      "projections_met": false,
+      "proven": true,
+      "ready_met": false,
+      "refusal": null
+    }
+  ],
+  "model": "openai/gpt-5.6-terra",
+  "performed_sha256": "a3da30d4b8cc3ec449158cd1c1b66f57e1149e62b9cb6e9b852d6e2461c8134d",
+  "provider": "openrouter/openai/flex/high/65536",
+  "result": [
+    {
+      "case_label": "ccl-fy2025-lite-portfolio-decision",
+      "proof": {
+        "anchored": [
+          [
+            "CP-0",
+            "8fa7fceda34be50b3b9b5406e0c9269b5269870d1cd8c2bdafb682755a1c88e6",
+            "As of November 30, 2025, we had $ 4.5 billion available for borrowing under the Revolving Facility."
+          ],
+          [
+            "CP-0",
+            "8fa7fceda34be50b3b9b5406e0c9269b5269870d1cd8c2bdafb682755a1c88e6",
+            "For the fiscal year ended November 30 , 2025 or"
+          ]
+        ],
+        "artifacts": 1,
+        "build_id": "62a94ccd0ef6439f797d60ebb72e6a44e1d42db16cd8af217fc41b7f1d6ea72c",
+        "citations": 2,
+        "route_digest": "83964757ee89199c5c6592326650d539b87cef404d5ace07c4d0eced826040e3",
+        "run_id": "ef040775-7c99-4645-b681-a11405308854"
+      },
+      "refusal": null,
+      "status": "BLOCKED",
+      "stopped": null
+    }
+  ],
+  "run_id": "ef040775-7c99-4645-b681-a11405308854",
+  "set_sha256": "5d50d1e7b9d39b0318d730ea98c795518c72e8f8644fe321b6f96acbc4bb2f29"
+}

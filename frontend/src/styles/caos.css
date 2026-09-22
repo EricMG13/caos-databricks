@@ -1,0 +1,484 @@
+/* The workspace shell, ported from the design project's caos-shell.css, caos-shell.additions.css and caos-evidence.css (docs/design/DESIGN_HANDOFF.md). One stylesheet so no two sections drift. Colour is bound to tokens.css: every tint below is a color-mix of a token, never a literal. */
+:root{--ok: var(--caos-success);--warn: var(--caos-warning);--crit: var(--caos-critical);--acc: var(--caos-accent);--ok-t: var(--caos-success-bright);--warn-t: var(--caos-warning-bright);--crit-t: var(--caos-critical-bright);--acc-t: var(--caos-accent-bright);--hairline: color-mix(in srgb, var(--caos-border) 50%, transparent);--ok-bg: color-mix(in srgb, var(--ok) 10%, transparent);--warn-bg: color-mix(in srgb, var(--warn) 10%, transparent);--crit-bg: color-mix(in srgb, var(--crit) 10%, transparent);--acc-bg: color-mix(in srgb, var(--acc) 12%, transparent);--ok-bd: color-mix(in srgb, var(--ok) 40%, transparent);--warn-bd: color-mix(in srgb, var(--warn) 42%, transparent);--crit-bd: color-mix(in srgb, var(--crit) 45%, transparent);--acc-bd: color-mix(in srgb, var(--acc) 48%, transparent)}
+/* ================= shell ================= */
+.ap{min-height: 100%;display: flex;flex-direction: column;background: var(--caos-bg);color: var(--caos-text);font-family: var(--font-sans);font-size: 11px}
+.demo-banner{position: sticky;top: 0;z-index: 50;padding: 7px 12px;border-bottom: 2px solid var(--crit);background: var(--crit-bg);color: var(--crit-t);font: 700 10px var(--font-mono);letter-spacing: .1em;text-align: center}
+.lbl{font-family: var(--font-mono);font-size: 8px;font-weight: 600;letter-spacing: 0.12em;text-transform: uppercase;color: var(--caos-muted)}
+/* band 1: ribbon */
+.ribbon{display: flex;flex-wrap: wrap;align-items: center;gap: 4px 8px;min-height: 34px;padding: 0 12px;border-bottom: 1px solid var(--caos-border);background: var(--caos-panel);flex: none}
+.ribbon .state{display: flex;align-items: center;gap: 8px;margin-left: auto;padding: 3px 0}
+.brand{display: flex;align-items: center;gap: 7px;padding-right: 11px;margin-right: 3px;border-right: 1px solid var(--caos-border);height: 34px}
+.mark{width: 18px;height: 18px;border-radius: 3px;background: var(--caos-text);color: var(--caos-bg);display: grid;place-items: center;font: 700 8.5px var(--font-mono)}
+.wordmark{font: 600 11.5px var(--font-display);letter-spacing: -0.01em}
+.rb{display: inline-flex;align-items: center;gap: 5px;height: 19px;padding: 0 8px;border-radius: 3px;font: 600 8.5px var(--font-mono);letter-spacing: 0.07em;white-space: nowrap;border: 1px solid var(--caos-border);background: var(--caos-elevated);color: var(--caos-muted)}
+button.rb{cursor: pointer}
+.rb.ok{color: var(--ok-t);border-color: var(--ok-bd);background: var(--ok-bg)}
+.rb.warn{color: var(--warn-t);border-color: var(--warn-bd);background: var(--warn-bg)}
+.rb.crit{color: var(--crit-t);border-color: var(--crit-bd);background: var(--crit-bg)}
+.rb.acc{color: var(--acc-t);border-color: var(--acc-bd);background: var(--acc-bg)}
+.rb.solid{background: var(--caos-accent);border-color: var(--caos-accent);color: var(--caos-bg);font-weight: 700}
+.rb.ghost{background: none}
+.rb.refused,.rb[aria-disabled="true"]{background: none;border-style: dashed;border-color: var(--crit-bd);color: var(--crit-t);cursor: not-allowed}
+/* band 2: decision brief. The four cells shrink and wrap; the headline figure keeps its intrinsic width, so the band never overflows. */
+.brief{display: flex;align-items: stretch;border-bottom: 1px solid var(--caos-border);background: var(--caos-bg);flex: none}
+.brief .bc{padding: 7px 13px;border-right: 1px solid var(--caos-border);min-width: 0;display: flex;gap: 8px;align-items: baseline;flex: 1 1 0}
+.brief .bc:last-child{border-right: 0;margin-left: auto;white-space: nowrap;flex: none}
+.brief .k{font: 700 8px var(--font-mono);letter-spacing: 0.12em;color: var(--caos-muted);flex: none}
+.brief .t{font-size: 10.5px;color: var(--caos-text);line-height: 1.45;min-width: 0}
+.brief .t em{font-style: normal;font-family: var(--font-mono);font-weight: 600}
+.brief .headline{font: 700 16px var(--font-mono);letter-spacing: -0.01em}
+/* band 3: tabs, the section's own views */
+.tabs{display: flex;align-items: center;border-bottom: 1px solid var(--caos-border);background: var(--caos-panel);padding: 0 12px;height: 31px;flex: none}
+.tabs .tl{font: 700 8px var(--font-mono);letter-spacing: 0.12em;color: var(--caos-muted);margin: 0 14px 0 0}
+.tabs [role="tablist"]{display: flex;align-items: center;height: 31px;min-width: 0;overflow-x: auto}
+.tab{height: 31px;display: inline-flex;align-items: center;gap: 7px;padding: 0 13px;font-size: 10.5px;color: var(--caos-muted);border: 0;border-bottom: 2px solid transparent;background: none;cursor: pointer;font-family: inherit}
+.tab .cp{font: 600 8.5px var(--font-mono)}
+.tab.on,.tab[aria-selected="true"]{color: var(--caos-text);border-bottom-color: var(--caos-accent);background: var(--caos-elevated)}
+/* band 4: verdict strip. Severity is shape (the glyph) and hue. */
+.verdict{display: flex;align-items: center;gap: 10px;padding: 7px 12px;border-bottom: 1px solid var(--caos-border);flex: none}
+.verdict.warn{background: linear-gradient(90deg, var(--warn-bg), transparent 62%)}
+.verdict.ok{background: linear-gradient(90deg, var(--ok-bg), transparent 62%)}
+.verdict.crit{background: linear-gradient(90deg, var(--crit-bg), transparent 62%)}
+.verdict.run{background: linear-gradient(90deg, var(--acc-bg), transparent 62%)}
+.verdict .sig{display: inline-flex;align-items: center;gap: 6px;font: 700 9px var(--font-mono);letter-spacing: 0.14em;border: 1px solid var(--caos-border);border-radius: 3px;padding: 2px 7px;color: var(--caos-muted)}
+.verdict.warn .sig{color: var(--warn-t);border-color: color-mix(in srgb, var(--warn) 50%, transparent)}
+.verdict.ok .sig{color: var(--ok-t);border-color: color-mix(in srgb, var(--ok) 50%, transparent)}
+.verdict.crit .sig{color: var(--crit-t);border-color: color-mix(in srgb, var(--crit) 50%, transparent)}
+.verdict.run .sig{color: var(--acc-t);border-color: color-mix(in srgb, var(--acc) 50%, transparent)}
+.verdict .txt{font-size: 11.5px;color: var(--caos-text);font-weight: 600;letter-spacing: -0.005em;min-width: 0}
+.verdict .txt span{color: var(--caos-muted);font-weight: 400}
+/* the frame below the bands: rail, body, right column */
+.frame{display: flex;flex: 1 1 auto;min-height: 0}
+.body{flex: 1 1 auto;min-width: 0;padding: 10px;display: flex;flex-direction: column;gap: 10px}
+.cols{display: grid;gap: 10px;min-width: 0}
+.cols.three{grid-template-columns: 268px minmax(0, 1fr) 292px}
+.cols.two{grid-template-columns: minmax(0, 1fr) 292px}
+.cols.two-left{grid-template-columns: 268px minmax(0, 1fr)}
+.col{display: flex;flex-direction: column;gap: 10px;min-width: 0}
+@media (max-width: 1080px){
+  .cols.three{grid-template-columns: 268px minmax(0, 1fr)}
+  .cols.two{grid-template-columns: minmax(0, 1fr)}
+  .cols > .col.right{grid-column: 1 / -1}
+}
+/* rail: nine sections, IA_SPEC.md 1 and 3 */
+.rail{width: var(--caos-rail-width);border-right: 1px solid var(--caos-border);background: var(--caos-panel);flex: none;display: flex;flex-direction: column}
+.rail .grp{padding: 11px 12px 5px;font: 700 8px var(--font-mono);letter-spacing: 0.13em;text-transform: uppercase;color: var(--caos-muted)}
+.sect{display: grid;grid-template-columns: 1fr auto auto;gap: 1px 7px;min-height: 28px;padding: 6px 12px;border-left: 2px solid transparent;text-decoration: none;align-items: center;color: inherit}
+.sect .nm{font-size: 11px;color: var(--caos-muted)}
+.sect .url{font: 500 8px var(--font-mono);color: var(--caos-muted)}
+.sect .ct{font: 600 8.5px var(--font-mono);color: var(--caos-muted)}
+.sect .sub{grid-column: 1/-1;font: 500 8px var(--font-mono);letter-spacing: 0.05em;color: var(--caos-muted)}
+.sect.on,.sect[aria-current="page"]{background: var(--caos-elevated);border-left-color: var(--caos-accent)}
+.sect.on .nm,.sect[aria-current="page"] .nm{color: var(--caos-text);font-weight: 600}
+.sect.on .ct,.sect.on .url,.sect[aria-current="page"] .ct,.sect[aria-current="page"] .url{color: var(--acc-t)}
+/* An entry with no state line yet is quieter by weight, never by contrast. */
+.sect.off .nm{font-weight: 300}
+.rail .local{border-top: 1px solid var(--caos-border);margin-top: 4px}
+.railrole{margin-top: auto;padding: 8px 12px;border-top: 1px solid var(--caos-border);display: flex;align-items: center;gap: 7px;font: 500 8.5px var(--font-mono);letter-spacing: 0.08em;color: var(--caos-muted)}
+.railrole .ro{border: 1px dashed var(--caos-border);border-radius: 4px;padding: 2px 7px}
+.railfoot{padding: 0 12px 10px;display: flex;gap: 6px}
+.btn{flex: 1;height: 26px;display: inline-flex;align-items: center;justify-content: center;gap: 6px;border-radius: 5px;border: 1px solid var(--caos-border);background: var(--caos-elevated);font: 600 9px var(--font-mono);letter-spacing: 0.07em;color: var(--caos-muted);cursor: pointer;padding: 0 9px}
+.btn.acc{border-color: var(--acc-bd);background: var(--acc-bg);color: var(--acc-t)}
+.btn.solid{background: var(--caos-accent);border-color: var(--caos-accent);color: var(--caos-bg)}
+.btn[aria-disabled="true"]{border-style: dashed;border-color: var(--crit-bd);color: var(--crit-t);background: none;cursor: not-allowed}
+/* 1024 px: the rail collapses to a strip */
+.sect .ab,.railfoot .btn .ab{display: none;font: 700 9px var(--font-mono);color: var(--caos-muted)}
+.railfoot .btn .ab{color: inherit}
+@media (max-width: 1024px){
+  .rail{width: 44px}
+  .rail .grp,.sect .nm,.sect .url,.sect .ct,.sect .sub,.rail .local,.railrole .ro,.railfoot .btn span{display: none}
+  .sect{grid-template-columns: 1fr;justify-items: center;padding: 9px 0}
+  .sect .ab,.railfoot .btn .ab{display: block}
+  .railfoot{flex-direction: column;padding: 0 6px 8px}
+  .railfoot .btn{flex: none;width: 100%;padding: 0}
+  .railrole{justify-content: center;padding: 8px 4px}
+}
+.sect[aria-current="page"] .ab{color: var(--acc-t)}
+/* ================= panels, tags, glyphs, chips ================= */
+.pnl{border: 1px solid var(--caos-border);border-radius: 6px;background: var(--caos-panel);display: flex;flex-direction: column;min-width: 0;overflow: hidden}
+.pnl > header{min-height: 29px;display: flex;align-items: center;gap: 8px;padding: 0 10px;border-bottom: 1px solid var(--caos-border);flex: none}
+.pnl > header h2,.pnl > header h3{margin: 0;font: 600 10px var(--font-sans);letter-spacing: -0.005em}
+.pnl > header .cp{font: 600 8px var(--font-mono);letter-spacing: 0.1em;color: var(--caos-muted)}
+.pnl > header .right{margin-left: auto;display: flex;gap: 6px;align-items: center}
+.pnl > .pb{padding: 9px 10px}
+.pnl > .pb.flush{padding: 0}
+.pnl > .pb.scroll{overflow: auto;min-height: 0}
+/* A wide table scrolls inside its panel; the page never scrolls sideways. */
+.tscroll{overflow-x: auto;min-width: 0}
+/* Report's saved artifact is a keyboard-focusable scroll region (WCAG 2.5.8);
+   its content is one text line, so nothing else gives it a 24px target. */
+.artifact-scroll{min-height:24px}
+/* Lists are lists; these carry no marker of their own. */
+.plain{list-style: none;margin: 0;padding: 0}
+.pnl.ok{border-color: var(--ok-bd)}
+.pnl.warn{border-color: var(--warn-bd)}
+.pnl.crit{border-color: var(--crit-bd)}
+.pnl.warn > header{background: var(--warn-bg)}
+.pnl.crit > header{background: var(--crit-bg)}
+.tag{display: inline-flex;align-items: center;gap: 4px;height: 16px;padding: 0 6px;border-radius: 3px;font: 600 8.5px var(--font-mono);letter-spacing: 0.06em;border: 1px solid var(--caos-border);color: var(--caos-muted);background: var(--caos-elevated);white-space: nowrap}
+.tag.ok{color: var(--ok-t);border-color: var(--ok-bd);background: var(--ok-bg)}
+.tag.warn{color: var(--warn-t);border-color: var(--warn-bd);background: var(--warn-bg)}
+.tag.crit{color: var(--crit-t);border-color: var(--crit-bd);background: var(--crit-bg)}
+.tag.acc{color: var(--acc-t);border-color: var(--acc-bd);background: var(--acc-bg)}
+/* severity glyphs: disc, triangle, rounded square, flat dot (DESIGN.md) */
+.glyph{display: inline-block;width: 7px;height: 7px;flex: none}
+.glyph.ok{border-radius: 50%;background: var(--caos-success)}
+.glyph.run{border-radius: 50%;background: var(--caos-accent)}
+.glyph.warn{width: 0;height: 0;background: none;border-left: 4px solid transparent;border-right: 4px solid transparent;border-bottom: 7px solid var(--caos-warning)}
+.glyph.crit{border-radius: 2px;background: var(--caos-critical)}
+.glyph.idle{width: 8px;height: 3px;background: var(--caos-idle)}
+.chip{display: inline-flex;align-items: center;gap: 5px;height: 18px;padding: 0 7px;border-radius: 999px;font: 500 8.5px var(--font-mono);color: var(--acc-t);background: color-mix(in srgb, var(--acc) 8%, transparent);border: 1px solid var(--acc-bd);white-space: nowrap;cursor: pointer}
+.chip .pg{color: var(--caos-muted);font-size: 8px}
+.chip.linked,.chip[aria-expanded="true"]{outline: 2px solid var(--caos-accent);outline-offset: -1px;background: color-mix(in srgb, var(--acc) 18%, transparent)}
+/* A citation of a withdrawn source: struck through and dashed, so the mark is shape as well as hue. */
+.chip.withdrawn{border-style: dashed;border-color: color-mix(in srgb, var(--warn) 55%, transparent);color: var(--warn-t);text-decoration: line-through}
+.sug{display: inline-flex;align-items: center;gap: 5px;height: 17px;padding: 0 6px;border-radius: 3px;font: 600 8px var(--font-mono);letter-spacing: 0.07em;border: 1px dashed color-mix(in srgb, var(--warn) 55%, transparent);color: var(--warn-t);background: color-mix(in srgb, var(--warn) 7%, transparent);white-space: nowrap}
+/* ================= tables ================= */
+table.fin,table.proj,table.cases,table.reg,table.prov{width: 100%;border-collapse: collapse}
+table.fin th,table.cases th,table.reg th,table.prov th{font: 600 8px var(--font-mono);letter-spacing: 0.07em;text-transform: uppercase;color: var(--caos-muted);text-align: right;padding: 5px 8px;border-bottom: 1px solid var(--caos-border);white-space: nowrap}
+table.fin th:first-child,table.fin th.l,table.cases th.l,table.reg th,table.prov th{text-align: left}
+table.reg th.r{text-align: right}
+table.fin td,table.cases td{font: 500 10.5px var(--font-mono);font-variant-numeric: tabular-nums;text-align: right;padding: 4px 8px;border-bottom: 1px solid var(--hairline);white-space: nowrap}
+table.fin td:first-child,table.fin td.l,table.cases td.l{text-align: left;font: 400 10.5px var(--font-sans);color: var(--caos-text)}
+table.fin tr:last-child td,table.reg tr:last-child td,table.prov tr:last-child td{border-bottom: 0}
+table.fin tr.tot td{font-weight: 700;border-top: 1px solid var(--caos-border)}
+td.sel,td.cellsel{background: color-mix(in srgb, var(--acc) 16%, transparent);box-shadow: inset 0 0 0 1px var(--caos-accent)}
+/* A label cell may wrap; the numbers never do. */
+table.cases td.wrap,table.fin td.wrap{white-space: normal;min-width: 150px;line-height: 1.35}
+table.cases tr.grp td,table.proj tr.grp td{background: var(--caos-elevated);font: 700 8px var(--font-mono);letter-spacing: 0.11em;text-transform: uppercase;color: var(--caos-muted);text-align: left}
+table.cases tr.cmp td{background: color-mix(in srgb, var(--acc) 7%, transparent)}
+table.reg td{font-size: 10.5px;color: var(--caos-text);padding: 6px 10px;border-bottom: 1px solid var(--hairline);white-space: nowrap}
+table.reg td.m{font: 500 9.5px var(--font-mono);font-variant-numeric: tabular-nums;color: var(--caos-muted)}
+table.reg td.r{text-align: right}
+table.reg tr.on td{background: var(--caos-elevated);box-shadow: inset 2px 0 0 var(--caos-accent)}
+table.reg tr.conflict td{background: color-mix(in srgb, var(--warn) 7%, transparent)}
+table.reg tr.wd td{color: var(--caos-muted)}
+table.prov td{font: 500 9.5px var(--font-mono);padding: 3.5px 8px;border-bottom: 1px solid var(--hairline);color: var(--caos-text)}
+table.prov td:first-child{font-family: var(--font-sans);font-size: 10px}
+.cellbtn{all: unset;display: block;width: 100%;cursor: pointer;text-align: inherit;font: inherit;color: inherit}
+.cellbtn:focus-visible{outline: 2px solid var(--caos-accent);outline-offset: -2px}
+.defmark{display: inline-block;width: 0;height: 0;border-left: 3px solid transparent;border-right: 3px solid transparent;border-bottom: 5px solid var(--caos-warning);margin-left: 5px;vertical-align: 1px}
+.stale{color: var(--caos-warning)}
+.rowact{font: 600 8.5px var(--font-mono);letter-spacing: 0.07em;color: var(--acc-t);border: 1px solid var(--acc-bd);border-radius: 3px;padding: 2px 7px;background: var(--acc-bg);white-space: nowrap;cursor: pointer}
+.rowact.q{color: var(--caos-muted);border-color: var(--caos-border);background: var(--caos-elevated)}
+/* projection, IA_SPEC.md 4.6: the residual is its own column */
+table.proj th{font: 600 7.5px var(--font-mono);letter-spacing: 0.06em;text-transform: uppercase;color: var(--caos-muted);text-align: right;padding: 5px 7px;border-bottom: 1px solid var(--caos-border);white-space: nowrap}
+table.proj th:first-child{text-align: left}
+table.proj th.resid{color: var(--acc-t)}
+table.proj td{font: 500 10px var(--font-mono);font-variant-numeric: tabular-nums;text-align: right;padding: 4px 7px;border-bottom: 1px solid var(--hairline);white-space: nowrap}
+table.proj td:first-child{text-align: left;font: 400 10px var(--font-sans)}
+table.proj td.resid{color: var(--ok-t);border-left: 1px solid var(--caos-border);border-right: 1px solid var(--caos-border)}
+table.proj tr.unav td{color: var(--caos-muted);background: color-mix(in srgb, var(--crit) 6%, transparent)}
+table.proj tr.unav td.resid{color: var(--crit-t)}
+table.proj tr.prop td{color: var(--caos-muted);background: color-mix(in srgb, var(--caos-border) 35%, transparent);font-style: italic}
+.formulabar{display: flex;align-items: center;gap: 9px;min-height: 28px;padding: 0 9px;border: 1px solid var(--caos-border);border-radius: 5px;background: var(--caos-elevated)}
+.formulabar .coord{font: 700 9px var(--font-mono);color: var(--acc-t);background: color-mix(in srgb, var(--acc) 14%, transparent);border: 1px solid var(--acc-bd);border-radius: 3px;padding: 2px 6px;white-space: nowrap}
+.formulabar code{flex: 1 1 auto;min-width: 0;font: 500 10px var(--font-mono);color: var(--caos-text);white-space: nowrap;overflow: hidden;text-overflow: ellipsis}
+.formulabar .lineage{margin-left: auto;display: flex;align-items: center;gap: 5px;flex: none}
+/* ================= rows and lists ================= */
+.srow{display: grid;grid-template-columns: 16px 1fr auto;gap: 8px;align-items: center;padding: 6px 10px;border-bottom: 1px solid var(--hairline)}
+.srow:last-child{border-bottom: 0}
+.srow.on{background: var(--caos-elevated);box-shadow: inset 2px 0 0 var(--caos-accent)}
+.srow .nm{font-size: 10.5px;color: var(--caos-text);overflow: hidden;text-overflow: ellipsis;white-space: nowrap}
+.srow .mt{font: 500 8px var(--font-mono);color: var(--caos-muted);margin-top: 1px}
+.srow .amt{text-align: right}
+/* One reading of a conflict: its source, its value, its chip. */
+.reading{padding: 4px 0;font-size: 10.5px;line-height: 1.5;color: var(--caos-text)}
+.gr,.grade{width: 16px;height: 16px;border-radius: 3px;display: inline-grid;place-items: center;font: 700 8.5px var(--font-mono)}
+.gr.a,.grade.a{background: color-mix(in srgb, var(--ok) 16%, transparent);color: var(--ok-t);border: 1px solid var(--ok-bd)}
+.gr.b,.grade.b{background: color-mix(in srgb, var(--acc) 14%, transparent);color: var(--acc-t);border: 1px solid var(--acc-bd)}
+.gr.c,.grade.c{background: color-mix(in srgb, var(--warn) 14%, transparent);color: var(--warn-t);border: 1px solid var(--warn-bd)}
+.ev,.driver{display: grid;grid-template-columns: 1fr auto;gap: 2px 8px;padding: 6px 10px;border-bottom: 1px solid var(--hairline)}
+.ev:last-child{border-bottom: 0}
+.ev .h,.driver .h{font-size: 10.5px;color: var(--caos-text)}
+.ev .m,.driver .m{grid-column: 1;font: 500 8px var(--font-mono);color: var(--caos-muted)}
+.conf{font: 700 8.5px var(--font-mono);align-self: center}
+.bars{display: flex;flex-direction: column;gap: 6px}
+.barrow{display: grid;grid-template-columns: 92px 1fr 52px;gap: 9px;align-items: center;font-size: 10px}
+.bartrack{height: 11px;background: var(--caos-elevated);border-radius: 2px;position: relative;overflow: hidden}
+.barfill{position: absolute;top: 0;bottom: 0;border-radius: 2px}
+.kv{display: grid;grid-template-columns: auto 1fr;gap: 3px 12px;font-size: 10px;margin: 0}
+.kv dt{color: var(--caos-muted);white-space: nowrap}
+.kv dd{margin: 0;font: 500 10px var(--font-mono);color: var(--caos-text);text-align: right}
+.note{font-size: 10px;line-height: 1.5;color: var(--caos-muted)}
+.note b{color: var(--caos-text);font-weight: 600}
+.trig{display: flex;align-items: flex-start;gap: 8px;font-size: 10px;line-height: 1.5;color: var(--caos-muted);padding: 5px 0}
+.trig b{color: var(--caos-text);font-weight: 600}
+.trig .sp{margin-left: auto}
+.steps{display: grid;grid-template-columns: 1fr 1fr;gap: 1px;background: var(--caos-border)}
+.stepcell{background: var(--caos-panel);padding: 5px 9px;display: flex;align-items: center;gap: 8px;font-size: 10px;color: var(--caos-text)}
+.stepcell .n{font: 600 8px var(--font-mono);color: var(--caos-muted);width: 26px;flex: none}
+.stepcell .st{margin-left: auto;font: 700 8px var(--font-mono);letter-spacing: 0.08em;color: var(--ok-t)}
+.stepcell .st.w{color: var(--warn-t)}
+.stepcell .st.c{color: var(--crit-t)}
+.stepcell .why{font: 500 8px var(--font-mono);color: var(--caos-muted)}
+/* A capital tranche carries its seniority as a hue swatch and as a word. */
+.sw{display: inline-block;width: 9px;height: 9px;border-radius: 2px;flex: none}
+.sw.first_lien{background: var(--tranche-1l)}
+.sw.second_lien{background: var(--tranche-2l)}
+.sw.senior_unsec{background: var(--tranche-unsec)}
+.sw.subordinated{background: var(--tranche-sub)}
+.sw.equity{background: var(--tranche-eq)}
+/* Debate turns: the role is a tag and the text wraps beneath it. */
+.turn{display: grid;grid-template-columns: 52px 1fr;gap: 4px 9px;padding: 7px 10px;border-bottom: 1px solid var(--hairline);font-size: 10.5px;line-height: 1.5;color: var(--caos-text)}
+.turn:last-child{border-bottom: 0}
+.turn .chips{grid-column: 2}
+.facet{border-bottom: 1px solid var(--caos-border);padding: 9px 10px}
+.facet:last-child{border-bottom: 0}
+.facet h4,.sec h3,.sec h5{margin: 0 0 6px;font: 700 8px var(--font-mono);letter-spacing: 0.12em;text-transform: uppercase;color: var(--caos-muted)}
+.fopt{display: flex;align-items: center;gap: 7px;padding: 2.5px 0;font-size: 10.5px;color: var(--caos-text)}
+.fopt .n{margin-left: auto;font: 500 9px var(--font-mono);color: var(--caos-muted)}
+/* A facet is a real checkbox group: fieldset + legend, rows tall enough to be targets (24 px) and a checkbox big enough to keep its offset from the next. */
+fieldset.facet{border: 0;margin: 0;min-width: 0}
+.facet legend{padding: 0;margin: 0 0 6px;font: 700 8px var(--font-mono);letter-spacing: 0.12em;text-transform: uppercase;color: var(--caos-muted)}
+label.fopt{min-height: 24px;cursor: pointer}
+.fopt input[type="checkbox"]{margin: 0;width: 16px;height: 16px;flex: none;accent-color: var(--caos-accent)}
+button.pill{height: 24px;font-family: var(--font-mono)}
+.pillrow{display: flex;flex-wrap: wrap;gap: 5px}
+.pill{height: 20px;padding: 0 8px;display: inline-flex;align-items: center;border-radius: 4px;border: 1px solid var(--caos-border);background: var(--caos-elevated);font: 500 9.5px var(--font-mono);color: var(--caos-muted);cursor: pointer}
+.pill.on,.pill[aria-pressed="true"]{border-color: var(--caos-accent);background: color-mix(in srgb, var(--acc) 14%, transparent);color: var(--acc-t)}
+.cmpgrid{display: grid;border-top: 1px solid var(--caos-border)}
+.cmpgrid > div,.cmpgrid > .contents > div{padding: 3px 9px;border-bottom: 1px solid var(--hairline);border-right: 1px solid var(--hairline);font: 500 10.5px var(--font-mono);text-align: right}
+/* A compared cell is a 24 px target in its own right. */
+.cmpgrid .cellbtn{min-height: 24px;display: flex;align-items: center;justify-content: flex-end}
+.cmpgrid > div.cellsel,.cmpgrid > .contents > div.cellsel{background: color-mix(in srgb, var(--acc) 16%, transparent);box-shadow: inset 0 0 0 1px var(--caos-accent)}
+.cmpgrid > div.lb,.cmpgrid > .contents > div.lb{text-align: left;font: 400 10.5px var(--font-sans);color: var(--caos-muted)}
+.cmpgrid .hdc{background: var(--caos-elevated);font: 600 9.5px var(--font-mono);color: var(--caos-text)}
+.cmpgrid .best{color: var(--ok-t)}
+.cmpgrid .worst{color: var(--crit-t)}
+.sec{padding: 9px 10px;border-bottom: 1px solid var(--caos-border)}
+.sec:last-child{border-bottom: 0}
+.secrow{display: flex;align-items: center;gap: 8px;padding: 5px 10px;border-bottom: 1px solid var(--hairline);font-size: 10.5px;color: var(--caos-muted)}
+.secrow:last-child{border-bottom: 0}
+.secrow .n{font: 600 8px var(--font-mono);width: 16px;flex: none}
+.secrow.on{background: var(--caos-elevated);color: var(--caos-text);box-shadow: inset 2px 0 0 var(--caos-accent)}
+.secrow .src{margin-left: auto;font: 600 8px var(--font-mono);letter-spacing: 0.08em;white-space: nowrap}
+.reslink{display: flex;gap: 7px;align-items: flex-start;padding: 5px 0;border-bottom: 1px solid var(--hairline);font-size: 10px;line-height: 1.4}
+.reslink:last-child{border-bottom: 0}
+.reslink .t{color: var(--acc-t)}
+.reslink .m{color: var(--caos-muted);font: 500 8px var(--font-mono);margin-top: 2px}
+.sugrow{display: grid;grid-template-columns: 104px 1fr auto;gap: 3px 9px;align-items: center;padding: 7px 10px;border-bottom: 1px solid var(--hairline)}
+.sugrow:last-child{border-bottom: 0}
+.sugrow .k{font: 600 8px var(--font-mono);letter-spacing: 0.09em;text-transform: uppercase;color: var(--caos-muted)}
+.sugrow .v{font-size: 10.5px;color: var(--caos-text)}
+.sugrow .why{grid-column: 2/-1;font: 500 8px var(--font-mono);color: var(--caos-muted);line-height: 1.5}
+.drop{border: 1px dashed var(--caos-border);border-radius: 6px;padding: 26px 14px;text-align: center;background: color-mix(in srgb, var(--caos-border) 25%, transparent)}
+.drop .big{font-size: 11.5px;color: var(--caos-text);font-weight: 600}
+.drop .sm{font-size: 10px;color: var(--caos-muted);margin-top: 5px;line-height: 1.55}
+.absent{padding: 9px 10px;border-top: 1px dashed var(--caos-border);font-size: 9.5px;line-height: 1.5;color: var(--caos-muted)}
+.absent b{color: var(--caos-text);font-weight: 600}
+/* ================= the filing ladder, refusals, receipt ================= */
+.ladder{display: flex;flex-direction: column}
+.step{display: grid;grid-template-columns: 18px 1fr;gap: 8px;padding: 8px 10px;border-bottom: 1px solid var(--hairline)}
+.step:last-child{border-bottom: 0}
+.step .n{width: 16px;height: 16px;border-radius: 50%;display: grid;place-items: center;font: 700 8px var(--font-mono);border: 1px solid var(--caos-border);color: var(--caos-muted);margin-top: 1px}
+.step.done .n{background: color-mix(in srgb, var(--ok) 16%, transparent);border-color: var(--ok-bd);color: var(--ok-t)}
+.step.cur .n{border-color: var(--caos-accent);color: var(--acc-t);background: var(--acc-bg)}
+.step.ref .n{border-color: var(--crit-bd);border-style: dashed;color: var(--crit-t)}
+.step.todo .n{opacity: 0.5}
+.step h4{margin: 0;font: 600 10.5px var(--font-sans);color: var(--caos-text);display: flex;align-items: center;gap: 7px}
+.step h4 .tag{margin-left: auto}
+.step .m{font: 500 8.5px var(--font-mono);color: var(--caos-muted);margin-top: 3px;line-height: 1.55}
+.step .m b{color: var(--caos-text);font-weight: 600}
+.refusal{margin-top: 6px;border: 1px dashed var(--crit-bd);border-radius: 4px;padding: 6px 8px;background: color-mix(in srgb, var(--crit) 6%, transparent)}
+.refusal code{font: 700 8.5px var(--font-mono);color: var(--crit-t);letter-spacing: 0.06em}
+.refusal .cl{font-size: 9.5px;color: var(--caos-text);margin-top: 4px;line-height: 1.5}
+.refusal .cl b{color: var(--acc-t);font-weight: 600}
+.receipt{font: 500 8.5px var(--font-mono);color: var(--caos-text);line-height: 1.7;overflow-wrap: anywhere;background: var(--caos-elevated);border: 1px solid var(--caos-border);border-radius: 4px;padding: 7px 9px;margin-top: 6px}
+.receipt .k{color: var(--caos-muted)}
+/* ================= paper: filed output only ================= */
+.papergutter{background: var(--paper-gutter);padding: 18px;display: grid;place-items: start center;overflow: auto}
+.rd-paper{position: relative;width: min(700px, 100%);background: var(--paper-bg);color: var(--paper-ink);padding: 28px 32px 18px;box-shadow: var(--paper-shadow);font-family: var(--font-sans)}
+.rd-mast{font: 500 8px var(--font-mono);letter-spacing: 0.12em;color: var(--paper-meta);text-transform: uppercase;border-bottom: 1px solid var(--paper-rule);padding-bottom: 6px}
+.rd-title{font-size: 16px;margin: 10px 0 3px;font-weight: 700}
+.rd-sub{font-size: 9.5px;color: var(--paper-note);margin: 0 0 12px}
+.rd-h{font: 700 8.5px var(--font-mono);letter-spacing: 0.1em;text-transform: uppercase;color: var(--paper-meta);margin: 14px 0 4px}
+.rd-p{font-size: 10.5px;line-height: 1.6;margin: 0 0 6px}
+.rd-wm{position: absolute;inset: 0;display: grid;place-items: start center;padding-top: 150px;pointer-events: none}
+.rd-wm span{font: 700 20px var(--font-mono);letter-spacing: 0.3em;color: color-mix(in srgb, var(--crit) 70%, var(--paper-ink));transform: rotate(-24deg);border: 3px solid color-mix(in srgb, var(--crit) 70%, var(--paper-ink));padding: 8px 18px;background: color-mix(in srgb, var(--paper-bg) 82%, transparent)}
+.rd-cite{font: 600 7.5px var(--font-mono);color: var(--paper-cite);border: 1px solid var(--paper-rule);border-radius: 3px;padding: 0 4px;margin-left: 5px;white-space: nowrap;vertical-align: 1px;background: none;cursor: pointer}
+.rd-stamp{position: absolute;right: 28px;top: 22px;border: 2px solid var(--paper-stamp);color: var(--paper-stamp);font: 700 9px var(--font-mono);letter-spacing: 0.22em;padding: 4px 9px;transform: rotate(-7deg);background: color-mix(in srgb, var(--paper-bg) 90%, transparent)}
+.rd-filed-line{margin-top: 10px;padding-top: 8px;border-top: 1px solid var(--paper-rule);font: 500 8.5px var(--font-mono);color: var(--paper-note)}
+.rd-table{width: 100%;border-collapse: collapse;font-size: 9.5px;margin: 4px 0 8px}
+.rd-table th,.rd-table td{border-bottom: 1px solid var(--paper-rule);padding: 3px 5px;text-align: right;font-family: var(--font-mono);font-variant-numeric: tabular-nums}
+.rd-table th:first-child,.rd-table td:first-child{text-align: left;font-family: var(--font-sans)}
+/* ================= passport, editor, unavailable ================= */
+.pp,.ppfull{display: grid;grid-template-columns: 118px 1fr;margin: 0}
+.pp dt,.ppfull dt{font: 600 8px var(--font-mono);letter-spacing: 0.09em;text-transform: uppercase;color: var(--caos-muted);padding: 6px 10px;border-bottom: 1px solid var(--hairline);border-right: 1px solid var(--hairline)}
+.pp dd,.ppfull dd{margin: 0;font-size: 10.5px;color: var(--caos-text);line-height: 1.5;padding: 6px 10px;border-bottom: 1px solid var(--hairline)}
+.pp dd code,.ppfull dd code{font: 500 9.5px var(--font-mono)}
+.pp dd .dev,.ppfull dd .dev{color: var(--caos-warning)}
+.ppval{padding: 11px;border-bottom: 1px solid var(--caos-border);background: var(--caos-elevated);display: flex;align-items: baseline;gap: 11px}
+.ppval .v{font: 700 24px var(--font-mono);letter-spacing: -0.01em;color: var(--caos-text)}
+.ppval .u{font: 500 10px var(--font-mono);color: var(--caos-muted)}
+.ppval .badge{margin-left: auto}
+.ed{border: 1px solid var(--caos-border);border-radius: 5px;background: var(--caos-bg);padding: 10px 12px;font-size: 10.5px;line-height: 1.7;color: var(--caos-text)}
+.ed p{margin: 0 0 9px}
+.ed p:last-child{margin-bottom: 0}
+.ed .figure{border-bottom: 1px dashed color-mix(in srgb, var(--crit) 70%, transparent);color: var(--crit-t)}
+.unavail{display: grid;place-items: center;gap: 9px;padding: 56px 24px;text-align: center}
+.unavail .h{font: 600 13px var(--font-sans);color: var(--caos-text)}
+.unavail .s{font-size: 10.5px;color: var(--caos-muted);line-height: 1.6;max-width: 520px}
+.missing{display: grid;gap: 1px;background: var(--caos-border);border: 1px solid var(--caos-border);border-radius: 5px;overflow: hidden;max-width: 520px;width: 100%}
+.missing div{background: var(--caos-panel);padding: 7px 10px;display: flex;align-items: center;gap: 9px;font-size: 10px;color: var(--caos-text)}
+.missing div .c{font: 600 8px var(--font-mono);letter-spacing: 0.08em;color: var(--caos-muted);margin-left: auto}
+/* ================= region and page states, IA_SPEC.md 6 ================= */
+.rs{border: 1px solid var(--caos-border);border-radius: 5px;background: color-mix(in srgb, var(--caos-bg) 45%, transparent);padding: 10px 12px}
+.rs .st{display: flex;align-items: center;gap: 6px;font: 600 8px var(--font-mono);letter-spacing: 0.12em;text-transform: uppercase;color: var(--caos-muted)}
+.rs.warn .st{color: var(--warn-t)}
+.rs.crit .st{color: var(--crit-t)}
+.rs.run .st{color: var(--acc-t)}
+.rs h3{margin: 5px 0 0;font: 600 11px var(--font-sans);color: var(--caos-text)}
+.rs p{margin: 4px 0 0;font-size: 10px;color: var(--caos-muted);line-height: 1.5}
+.rs .ts{font: 500 8.5px var(--font-mono)}
+.pagealert{padding: 7px 12px;border-bottom: 1px solid var(--crit-bd);background: color-mix(in srgb, var(--crit) 8%, transparent);color: var(--caos-text);font-size: 10.5px;display: flex;align-items: center;gap: 8px}
+/* ================= the evidence drawer ================= */
+.scrim{position: fixed;inset: 0;background: color-mix(in srgb, var(--caos-bg) 58%, transparent);z-index: 40}
+.drawer{position: fixed;top: 0;right: 0;bottom: 0;width: min(536px, 100%);background: var(--caos-panel);border-left: 1px solid var(--caos-border);box-shadow: var(--shadow-modal);display: flex;flex-direction: column;z-index: 50}
+.drawer > .dhead,.modal > .dhead{height: 34px;display: flex;align-items: center;gap: 9px;padding: 0 11px;border-bottom: 1px solid var(--caos-border);flex: none;background: var(--caos-elevated)}
+.drawer > .dhead h2,.modal > .dhead h2{margin: 0;font: 600 10.5px var(--font-sans)}
+.drawer .close,.modal .close{margin-left: auto;font: 700 9px var(--font-mono);color: var(--caos-muted);border: 1px solid var(--caos-border);border-radius: 3px;padding: 2px 7px;background: none;cursor: pointer}
+.drawer .db{padding: 11px;overflow: auto;display: flex;flex-direction: column;gap: 10px;flex: 1 1 auto}
+.pagerender{position: relative;background: var(--paper-bg);border: 1px solid var(--paper-rule);border-radius: 2px;overflow: hidden}
+.pagerender img,.pagerender svg{display: block;width: 100%;height: auto}
+.bbox{position: absolute;border: 2px solid var(--caos-accent);background: color-mix(in srgb, var(--acc) 16%, transparent);border-radius: 2px}
+.bbox .lb{position: absolute;top: -16px;left: -2px;font: 700 7px var(--font-mono);letter-spacing: 0.1em;color: var(--caos-bg);background: var(--caos-accent);border-radius: 2px;padding: 1px 5px;white-space: nowrap}
+.matched{border: 1px solid var(--caos-border);border-radius: 4px;background: var(--caos-elevated);padding: 8px 10px;font: 500 10px var(--font-mono);color: var(--caos-text);line-height: 1.6}
+.matched mark{background: color-mix(in srgb, var(--acc) 22%, transparent);color: var(--caos-text);border-radius: 2px;padding: 0 2px}
+.focusnote{display: flex;align-items: center;gap: 7px;font: 500 8.5px var(--font-mono);color: var(--caos-muted);border-top: 1px solid var(--caos-border);padding-top: 8px;margin-top: auto}
+.focusnote b{color: var(--caos-text);font-weight: 600}
+.modal{position: fixed;top: 10vh;left: 50%;transform: translateX(-50%);width: min(592px, 96vw);max-height: 80vh;overflow: auto;background: var(--caos-panel);border: 1px solid var(--caos-border);border-radius: 8px;box-shadow: var(--shadow-modal);z-index: 50}
+/* ================= the route as a DAG, IA_SPEC.md 4.5 ================= */
+.dag{position: relative;min-height: 368px;background: var(--caos-panel);border: 1px solid var(--caos-border);border-radius: 6px;overflow: auto}
+.dag svg.edges{position: absolute;inset: 0;width: 100%;height: 100%;pointer-events: none}
+.dag line{stroke: var(--caos-border);stroke-width: 1.5}
+.dag line.req{stroke: color-mix(in srgb, var(--acc) 75%, transparent)}
+.dag line.opt{stroke: color-mix(in srgb, var(--caos-muted) 80%, transparent);stroke-dasharray: 4 3}
+.dag line.adv{stroke: color-mix(in srgb, var(--caos-muted) 60%, transparent);stroke-dasharray: 2 3}
+.dag line.gate{stroke: var(--caos-warning);stroke-width: 2}
+.dag line.cond{stroke: color-mix(in srgb, var(--acc) 55%, transparent);stroke-dasharray: 6 3}
+/* One column wide (NODE_W, set by RouteGraph.tsx), wrapping to a second line above the nodes: a long stage name ran into the next column's. */
+.stagehdr{position: absolute;top: 8px;font: 700 7.5px var(--font-mono);line-height: 1.25;letter-spacing: 0.12em;color: var(--caos-muted);text-transform: uppercase;display: -webkit-box;-webkit-box-orient: vertical;-webkit-line-clamp: 2;overflow: hidden}
+.node{position: absolute;border: 1px solid var(--caos-border);border-radius: 5px;background: var(--caos-elevated);padding: 5px 8px 6px;box-sizing: border-box;text-align: left;color: inherit;font-family: inherit;cursor: pointer}
+.node .id{font: 700 9px var(--font-mono);color: var(--caos-text);display: flex;align-items: center;gap: 6px}
+.node .nm{font-size: 9px;color: var(--caos-muted);margin-top: 1px;white-space: nowrap;overflow: hidden;text-overflow: ellipsis}
+.node .st{font: 700 7.5px var(--font-mono);letter-spacing: 0.1em;margin-top: 4px;display: flex;align-items: center;gap: 5px}
+.node .why{font: 500 7.5px var(--font-mono);color: var(--caos-muted);margin-top: 2px;line-height: 1.4;white-space: normal}
+.node.complete .st{color: var(--ok-t)}
+.node.runnable{border-color: color-mix(in srgb, var(--acc) 60%, transparent)}
+.node.runnable .st{color: var(--acc-t)}
+.node.running{border-color: var(--caos-accent);box-shadow: 0 0 0 1px color-mix(in srgb, var(--acc) 35%, transparent)}
+.node.running .st{color: var(--acc-t)}
+.node.restricted{border-color: color-mix(in srgb, var(--warn) 60%, transparent)}
+.node.restricted .st{color: var(--warn-t)}
+.node.blocked{border-color: color-mix(in srgb, var(--crit) 55%, transparent);border-style: dashed}
+.node.blocked .st{color: var(--crit-t)}
+.node.sel,.node[aria-pressed="true"]{box-shadow: 0 0 0 2px var(--caos-accent)}
+.node.gate{border-color: var(--caos-warning);box-shadow: 0 0 0 1px color-mix(in srgb, var(--warn) 35%, transparent)}
+.gatebox{position: absolute;width: 18px;height: 18px;transform: rotate(45deg);border: 2px solid var(--caos-warning);background: color-mix(in srgb, var(--warn) 16%, transparent);box-sizing: border-box}
+.gatelbl{position: absolute;font: 700 7.5px var(--font-mono);letter-spacing: 0.1em;color: var(--warn-t);white-space: nowrap}
+.legend{display: flex;gap: 12px;align-items: center;padding: 6px 10px;border-top: 1px solid var(--caos-border);font: 500 8px var(--font-mono);color: var(--caos-muted);flex-wrap: wrap}
+.legend i{display: inline-block;width: 18px;height: 0;border-top: 2px solid var(--caos-border);vertical-align: middle;margin-right: 5px}
+.legend i.req{border-color: color-mix(in srgb, var(--acc) 75%, transparent)}
+.legend i.opt{border-top-style: dashed;border-color: var(--caos-muted)}
+.legend i.adv{border-top-style: dotted;border-color: var(--caos-muted)}
+.legend i.gate{border-color: var(--caos-warning)}
+.legend i.cond{border-top-style: dashed;border-color: color-mix(in srgb, var(--acc) 55%, transparent)}
+.frontier{display: grid;grid-template-columns: auto 1fr auto;gap: 4px 8px;align-items: center;padding: 6px 10px;border-bottom: 1px solid var(--hairline);font-size: 10px}
+.frontier:last-child{border-bottom: 0}
+.frontier .id{font: 700 9px var(--font-mono);color: var(--caos-text)}
+.frontier .why{grid-column: 1/-1;font: 500 8px var(--font-mono);color: var(--caos-muted)}
+.att{display: grid;grid-template-columns: auto 1fr auto;gap: 2px 8px;padding: 5px 10px;border-bottom: 1px solid var(--hairline);font: 500 9px var(--font-mono);color: var(--caos-muted)}
+.att .a{color: var(--caos-text)}
+a.att{min-height: 24px;align-items: center}
+/* inputs */
+.tin{background: var(--caos-bg);border: 1px solid var(--caos-border);border-radius: 4px;color: var(--caos-text);font: 500 10px var(--font-mono);padding: 4px 8px;height: 24px;min-width: 0}
+.tin::placeholder{color: var(--caos-muted)}
+.tin:focus{outline: none;border-color: color-mix(in srgb, var(--acc) 70%, transparent)}
+select.tin{color-scheme: dark}
+/* ================= Directory, Upload, Admin (cards 5a–5c, 6b) ================= */
+/* A register cell that may wrap — issuer and sector in Directory, the source and withdrawal cells in Upload — so nine columns fit at 1280 without clipping. */
+table.reg td.wrap,table.reg th.wrap{white-space: normal;overflow-wrap: break-word}
+/* A timestamp in a wrapping cell stays one token: '2026-09-' then '09 09:41Z' reads as two. */
+table.reg td[data-withdrawal] time{white-space: nowrap}
+/* Nine columns plus the action: the register trims its gutters so it fits at 1024. */
+table.reg[data-register] th,table.reg[data-register] td{padding-left: 7px;padding-right: 7px}
+table.reg td .sub{display: block;margin-top: 2px;font: 500 8.5px var(--font-mono);color: var(--caos-muted);/* a file name is one word;it may break anywhere so the row need not widen */
+  overflow-wrap: anywhere}
+/* The state cell is shape and word, never hue alone. */
+table.reg td .state{display: inline-flex;align-items: center;gap: 6px}
+/* A row action is a 24px target whether it is a link or a governed button. */
+a.rowact,button.rowact{display: inline-flex;align-items: center;min-height: 24px;text-decoration: none;font-family: var(--font-mono)}
+button.rowact[aria-disabled="true"]{border-style: dashed;border-color: var(--crit-bd);color: var(--crit-t);background: none;cursor: not-allowed}
+/* The refused reason RefusedControl renders beside its control. */
+.caos-action-reason{display: block;margin-top: 4px;font: 500 8px var(--font-mono);line-height: 1.5;color: var(--crit-t)}
+.caos-action-reason-pop{z-index: 20;padding: 4px 6px;border: 1px dashed var(--crit-bd);border-radius: 3px;background: var(--caos-panel)}
+/* A membership pill is a marker, not a toggle. */
+li.pill{cursor: default}
+.sugrow .act{display: inline-flex;align-items: center;gap: 6px}
+.drop label{display: block;cursor: pointer}
+.drop input[type="file"]{margin-top: 10px;max-width: 100%}
+/* Both readings of a restatement, each a 24px-pitched target row. */
+.readings{margin: 0;padding: 0;list-style: none}
+.readings li{display: flex;flex-wrap: wrap;align-items: center;gap: 4px 8px;padding: 5px 0}
+.readings li + li{border-top: 1px dashed var(--hairline)}
+.setrow{display: grid;grid-template-columns: 1fr auto;gap: 2px 8px;align-items: center;padding: 6px 10px;border-bottom: 1px solid var(--hairline)}
+.setrow:last-child{border-bottom: 0}
+.setrow.on{background: var(--caos-elevated);box-shadow: inset 2px 0 0 var(--caos-accent)}
+.setrow .nm{font: 600 10px var(--font-mono);color: var(--caos-text)}
+.setrow .mt{grid-column: 1;font: 500 8px var(--font-mono);color: var(--caos-muted)}
+/* ================= Run: the DAG scrolls inside its panel ================= */
+/* .dag is the overflow:auto wrapper; .dagbox is the positioned box sized to the layout, so the route scrolls horizontally in its panel and never widens the page. */
+.dag .dagbox{position: relative}
+/* Sized by NODE_W and NODE_H in RouteGraph.tsx. Fixed line heights, so the two reason lines fit on every engine's fonts. */
+.dag .node{overflow: hidden}
+.dag .node .id,.dag .node .nm,.dag .node .st{line-height: 12px}
+/* The state line stays one line: 'RUNNABLE · FRONTIER' wrapping pushed the reason out of the box. */
+.dag .node .st{white-space: nowrap;letter-spacing: 0.06em}
+.dag .node .nm{display: block}
+.dag .node .why{display: -webkit-box;-webkit-line-clamp: 2;-webkit-box-orient: vertical;overflow: hidden}
+.dag .gatemark{position: absolute;width: 0;height: 0}
+.dag .gatemark .gatebox{left: -9px;top: -9px}
+.dag .gatemark .gatelbl{left: -24px;top: 12px}
+/* Prose wraps between words; only an unbroken token (a digest) breaks anywhere. */
+.kv dd.wrap{white-space: normal;overflow-wrap: anywhere}
+.pb .actions{display: flex;flex-wrap: wrap;gap: 6px;align-items: center;margin-top: 8px}
+.att .t-ok{color: var(--ok-t)}
+.att .t-run{color: var(--acc-t)}
+.att .t-crit{color: var(--crit-t)}
+/* ================= Model: an unavailable period names its reason ================= */
+table.proj td .why{display: block;font: 500 8px var(--font-mono);color: var(--crit-t);white-space: normal;max-width: 220px}
+table.proj td.selc{outline: 1px solid var(--caos-accent);outline-offset: -1px}
+ul.pillrow,ul.attlist{margin: 0;padding: 0;list-style: none}
+/* An admitted file's name is one word; it wraps rather than leaving the column. */
+.attlist .att{grid-template-columns: minmax(0, 1fr) auto auto}
+.attlist .att .a{overflow-wrap: anywhere}
+.unavail .h,.unavail .s{margin: 0}
+.missing div > span:first-child{min-width: 0}
+/* A figure cell's button fills its cell, so every target is at least 24 px tall and no narrower than the cell (WCAG 2.2 target size). */
+table.proj td .cellbtn{box-sizing: border-box;width: calc(100% + 14px);margin: -4px -7px;padding: 0 7px;min-height: 24px;line-height: 24px}
+/* ================= report and committee ================= */
+/* A ladder step's title sits one level under its panel heading (heading order), drawn as the card's h4. */
+.step h3{margin: 0;font: 600 10.5px var(--font-sans);color: var(--caos-text);display: flex;align-items: center;gap: 7px}
+.step h3 .tag{margin-left: auto}
+/* Section-row numbers are read at 8 px: full ink, not 70 % (4.5:1). */
+.secrow .n{opacity: 1}
+/* The editor's line pitch holds a 24 px chip, so every citation in the draft is a full-size target without leaving its sentence. */
+.ed{font-size: 11px;line-height: 2.4}
+.ed .chip{height: 24px}
+/* A citation on paper is a 24 px target drawn as a small pill inside its sentence: the button carries the hit box, the inner span the ink. */
+.rd-paper button.rd-cite{display: inline-flex;align-items: center;min-height: 24px;min-width: 24px;border: 0;padding: 0 2px;margin: -7px 0 -7px 3px;vertical-align: middle}
+.rd-paper button.rd-cite > span{border: 1px solid var(--paper-rule);border-radius: 3px;padding: 0 4px;line-height: 1.5}
+.rd-paper button.rd-cite.withdrawn > span{border-style: dashed;text-decoration: line-through}
+.rd-paper button.rd-cite:focus-visible > span{outline: 2px solid var(--paper-cite);outline-offset: 1px}
+/* The provenance index on paper takes the paper's ink, not the terminal's. */
+.rd-paper table.prov th{color: var(--paper-meta);border-color: var(--paper-rule)}
+.rd-paper table.prov td{color: var(--paper-ink);border-color: var(--paper-rule)}
+/* The watermark is read, not decoration: printed-red ink at a contrast a low-vision reader can use (large bold text, well over 3:1 on the paper). */
+.rd-paper .rd-wm span{color: color-mix(in srgb, var(--crit) 80%, var(--paper-ink));border-color: currentColor}
+/* A long draft: the watermark follows the reader, never off screen while the deliverable is not filed. The window scrolls, so the gutter must not. */
+[data-committee] .papergutter{overflow: visible}
+.rd-paper .rd-wm{display: block;text-align: center;padding-top: 240px}
+.rd-paper .rd-wm span{position: sticky;top: 36vh;display: inline-block}
+/* The FILED stamp sits over the masthead's right end: leave it room. */
+.rd-paper[data-filed] .rd-mast{padding-right: 96px}

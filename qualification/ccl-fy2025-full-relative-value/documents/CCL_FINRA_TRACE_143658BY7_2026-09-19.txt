@@ -1,0 +1,32 @@
+FINRA Fixed Income Security Lookup — governed observation
+
+Observed at: 2026-09-19T16:51:57Z
+Source: https://www.finra.org/finra-data/fixed-income/bond?cusip=143658BY7&bondType=CA
+Publisher: Financial Industry Regulatory Authority (FINRA)
+Access: public web page after accepting the Fixed Income User Agreement
+
+Issuer: CARNIVAL CORP
+TRACE symbol: CCL6009651
+CUSIP: 143658BY7
+Bond type: CORP
+Offering status shown by FINRA: transactions effected pursuant to SEC Rule 144A
+Coupon rate: 5.7500000000000000000%
+Maturity date: 3/15/2030
+Callable: Y
+Next call date: 12/15/2029
+
+Last trade price: $99.34
+Last trade yield: 5.963232%
+Last trade date: 9/18/2026
+
+Moody's rating shown: Ba1
+Moody's last-rated date shown: 2026-05-28
+Standard & Poor's rating shown: BBB-
+Standard & Poor's last-rated date shown: 2026-06-25
+
+Observation limits
+
+- FINRA labels the price and yield as the last trade, not bid, mid, ask, or an evaluated price.
+- The page displayed an end-of-day price/yield chart covering 2025-02-18 through 2026-09-17, but this extract does not transcribe chart points.
+- No spread, benchmark curve, seniority, dealer quote, or intraday timestamp was displayed in the observed summary.
+- This record reports only page content visible at the observation time; it does not infer missing market fields.

@@ -1,0 +1,35 @@
+{
+  "cases": [
+    {
+      "label": "ba-fy2025-lite-credit-22",
+      "profile_id": "LITE_CREDIT_22",
+      "selection_id": "LITE_EARNINGS_UPDATE",
+      "subject": {
+        "issuer_id": "BA",
+        "issuer_name": "The Boeing Company",
+        "reporting_period": "FY2025",
+        "analysis_date": "2026-07-19"
+      },
+      "documents": [
+        "documents/BA_FY2025_10K.txt"
+      ],
+      "expects": [
+        {
+          "module_id": "CP-0",
+          "document_sha256": "0446b367110afddcc0d66bc531d70324091b5bd1a96be56b7494ccdb7472f719",
+          "matched_text": "Cash and cash equivalents | $10,921 | | | $13,801 |"
+        },
+        {
+          "module_id": "CP-L10",
+          "document_sha256": "0446b367110afddcc0d66bc531d70324091b5bd1a96be56b7494ccdb7472f719",
+          "matched_text": "Total revenues | 89,463 | | | 66,517 | | | 77,794 |"
+        },
+        {
+          "module_id": "CP-5",
+          "document_sha256": "0446b367110afddcc0d66bc531d70324091b5bd1a96be56b7494ccdb7472f719",
+          "matched_text": "Long-term debt | 45,637 | | | 52,586 |"
+        }
+      ]
+    }
+  ]
+}

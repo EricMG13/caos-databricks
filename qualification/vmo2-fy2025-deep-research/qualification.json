@@ -1,0 +1,113 @@
+{
+  "cases": [
+    {
+      "label": "vmo2-fy2025-lite-deep-research",
+      "profile_id": "LITE_CREDIT_22",
+      "selection_id": "LITE_DEEP_RESEARCH",
+      "subject": {
+        "issuer_id": "VMO2",
+        "issuer_name": "Virgin Media O2",
+        "reporting_period": "FY2025",
+        "analysis_date": "2026-09-18"
+      },
+      "documents": [
+        "documents/Virgin-Media-O2-Q3-2025-Earnings-Release.pdf",
+        "documents/Virgin-Media-O2-Q4-2025-Earnings-Release.pdf"
+      ],
+      "research_brief": {
+        "schema": "CP_DR_RESEARCH_BRIEF_V1",
+        "mode": "linked",
+        "scope_type": "issuer",
+        "scope_key": "VMO2",
+        "subject_name": "Virgin Media O2",
+        "decision_context": "Test the FY2025 liquidity and asset-value premises before a screening view",
+        "as_of_date": "2026-09-18",
+        "time_horizon": "Next 12 months",
+        "source_mode": "supplied_only",
+        "budget": "standard",
+        "authorization_basis": "The owner's Task 9.4 instruction to qualify the deep-research pathway on the VMO2 releases",
+        "exclusions": "No web or model-memory sources; no trade recommendation; no figure outside the two supplied releases",
+        "questions": [
+          {
+            "question_id": "RQ-impairment",
+            "question": "What cause did the issuer state for the non-cash goodwill impairment it recorded in Q4 2025?",
+            "decision_relevance": "Separates a market-driven write-down from an asset-specific one in the screening view",
+            "consumer_module_id": "NONE",
+            "after_module_id": "CP-0",
+            "evidence_needed": "The issuer's own statement of the impairment and its cause in the Q4 2025 release",
+            "completion_test": "The stated cause quoted from the release, with the amount and any contrary statement searched for"
+          },
+          {
+            "question_id": "RQ-undrawn",
+            "question": "What maximum undrawn commitments did the issuer report at 31 December 2025?",
+            "decision_relevance": "Sets the liquidity headroom the screening view assumes",
+            "consumer_module_id": "NONE",
+            "after_module_id": "CP-0",
+            "evidence_needed": "The issuer's own year-end undrawn-commitments disclosure",
+            "completion_test": "The reported amount and date quoted from the release, with the Q3 figure searched as contrary evidence"
+          },
+          {
+            "question_id": "RQ-rating",
+            "question": "What corporate family rating and outlook does Moody's currently assign the issuer?",
+            "decision_relevance": "Would set the rating-sensitivity assumption of the screening view",
+            "consumer_module_id": "NONE",
+            "after_module_id": "CP-0",
+            "evidence_needed": "A current rating agency publication or an issuer disclosure naming the rating",
+            "completion_test": "A dated rating and outlook from a named agency, or the question recorded UNRESOLVED"
+          }
+        ]
+      },
+      "expects": [
+        {
+          "module_id": "CP-DR",
+          "document_sha256": "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+          "matched_text": "In Q4 2025, we recorded a non-cash goodwill impairment of £1,021.7 million primarily related to the impacts of the UK market and"
+        },
+        {
+          "module_id": "CP-DR",
+          "document_sha256": "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+          "matched_text": "At 31 December 2025, the company had maximum undrawn commitments of £1,378.0 million"
+        }
+      ],
+      "expects_ready": [
+        "CP-DR"
+      ],
+      "expects_projection": [
+        {
+          "module_id": "CP-DR",
+          "field": "decision_scope",
+          "value": "SCREENING_ONLY"
+        }
+      ],
+      "expects_register": [
+        {
+          "module_id": "CP-DR",
+          "register_id": "TDR.3",
+          "row_key": {
+            "question_id": "RQ-impairment"
+          },
+          "column": "resolution_status",
+          "expected": "ANSWERED"
+        },
+        {
+          "module_id": "CP-DR",
+          "register_id": "TDR.3",
+          "row_key": {
+            "question_id": "RQ-undrawn"
+          },
+          "column": "resolution_status",
+          "expected": "ANSWERED"
+        },
+        {
+          "module_id": "CP-DR",
+          "register_id": "TDR.3",
+          "row_key": {
+            "question_id": "RQ-rating"
+          },
+          "column": "resolution_status",
+          "expected": "UNRESOLVED"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.0
+    hooks:
+      - id: ruff
+        args: [--fix]
+        exclude: ^vendor/
+      - id: ruff-format
+        exclude: ^vendor/
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-added-large-files
+        # Exact public-evidence paths only; their manifests remain checked.
+        exclude: ^(vendor/|qualification/ba-fy2025/documents/BA_FY2025_10K\.txt$|qualification/f-fy2025/documents/F_FY2025_10K\.txt$|qualification/ccl-fy2025-covenant-refinancing/documents/CCL_2025_Revolving_Credit_Agreement\.txt$|qualification/ccl-fy2025-full-relative-value/documents/CCL_2025_Revolving_Credit_Agreement\.txt$|qualification/ccl-fy2025-lite-covenant-refinancing/documents/CCL_2025_Revolving_Credit_Agreement\.txt$|qualification/ccl-fy2025-lite-full-credit-screen/documents/CCL_2025_Revolving_Credit_Agreement\.txt$|qualification/save-2024-distressed-restructuring/documents/SAVE_2024_RSA_with_Chapter_11_Plan\.txt$|qualification/save-2024-lite-distressed-restructuring/documents/SAVE_2024_RSA_with_Chapter_11_Plan\.txt$)
+      - id: check-merge-conflict
+        exclude: ^vendor/
+      - id: end-of-file-fixer
+        exclude: ^(vendor/|qualification/.*/documents/)
+      - id: trailing-whitespace
+        exclude: ^(vendor/|qualification/.*/documents/)
+  - repo: local
+    hooks:
+      - id: vocabulary
+        name: one term per concept (CONTEXT.md)
+        entry: uv run python scripts/check_vocabulary.py
+        language: system
+        pass_filenames: false
+      - id: tested
+        name: every public definition is named by a test
+        entry: uv run python scripts/check_tested.py
+        language: system
+        pass_filenames: false
+      - id: io-budget
+        name: every request path declares an I/O budget
+        entry: uv run python scripts/io_budget.py --assert
+        language: system
+        pass_filenames: false

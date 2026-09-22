@@ -1,0 +1,64 @@
+{
+  "adapter_version": "canonical-markdown-v3",
+  "attempts": [
+    {
+      "charge": "0.14397725",
+      "diagnostic_sha256": "b879cb2077037520b625bb0984cd8160c3347de5dd44252f21fed37a2be2a175",
+      "generation_id": "gen-1789747149-68hQHswGd7KQLCHaT7dO",
+      "model": "openai/gpt-5.6-terra",
+      "ordinal": 1,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_DEEP_RESEARCH-01-CP-0"
+    },
+    {
+      "charge": "0.11225975",
+      "diagnostic_sha256": "d2b29ac1d9a0b259b6080dceab21d9ae7dfdfc43120a73707ed075fb8265d0eb",
+      "generation_id": "gen-1789747247-Q6K856Jdx2gjt3wjXzrm",
+      "model": "openai/gpt-5.6-terra",
+      "ordinal": 1,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_DEEP_RESEARCH-02-CP-DR"
+    },
+    {
+      "charge": "0.11388875",
+      "diagnostic_sha256": "bd07f757f491830fc9d5f162871a4ad7bd11b1ab89e103652fa76e51256732cd",
+      "generation_id": "gen-1789747324-YBUTytuThYTO5EZkrYfr",
+      "model": "openai/gpt-5.6-terra",
+      "ordinal": 2,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_DEEP_RESEARCH-02-CP-DR"
+    }
+  ],
+  "complete": false,
+  "evidence_sha256": "19acbea58c75cba1a32e92032b612343faf02310ea0b53619a042f5b653971b5",
+  "matrix": null,
+  "model": "openai/gpt-5.6-terra",
+  "performed_sha256": "6f23f29052753908bfa9a8bb64362401fb5db244efee95f0aa97a7f157e46b76",
+  "provider": "openrouter/openai/flex/high/65536",
+  "result": [
+    {
+      "case_label": "vmo2-fy2025-lite-deep-research",
+      "proof": {
+        "anchored": [
+          [
+            "CP-0",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "At 31 December 2025, the company had maximum undrawn commitments of \u00a31,378.0 million"
+          ],
+          [
+            "CP-0",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "The preliminary unaudited selected financial results are set forth below:"
+          ]
+        ],
+        "artifacts": 1,
+        "build_id": "78c24be4483612e75d9a0809fcb1cb7c2dd5617e669491de13be9c0123e3ff93",
+        "citations": 2,
+        "route_digest": "e31ae27c0bdc923c49ad0ded8aeb6abda634feecc177668b6ed710069189fdef",
+        "run_id": "94590ea4-5153-4826-8bf7-55fbcb7de4d2"
+      },
+      "refusal": null,
+      "status": "RUNNING",
+      "stopped": "HANDOFF_INCOMPLETE"
+    }
+  ],
+  "run_id": "94590ea4-5153-4826-8bf7-55fbcb7de4d2",
+  "set_sha256": "09807efb1a3d5d40680d1a9d0e054333537781d7bb4013ecd7670323f817fd9b"
+}

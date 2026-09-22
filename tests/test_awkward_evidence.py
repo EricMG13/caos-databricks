@@ -1,0 +1,220 @@
+"""One deliberately awkward document, through the paths that admit and read it.
+
+Four of the six defects this file arrived with failed the same way: *the test
+wrote the fixture, so the test could not see the assumption the fixture
+encoded*. Every citation fixture in the suite used `page=1`, because every
+fixture document was under sixty lines. Every extraction fixture separated its
+words with spaces. Every ingestion fixture was short and clean.
+
+So this fixture is awkward on purpose -- a tab-separated table row, a
+non-breaking space, runs of spaces, a blank line, and enough lines that the
+quote a module is asked to find sits on page two. It is driven through the real
+`admit_pack`, the real `read_block` and the real `verify_citations`, and the
+property it asserts is the one the system actually promises: **text this
+repository delivered can be quoted back to it, and the rectangle comes back.**
+
+A unit test for each of those four steps would pass on a clean fixture and say
+nothing about this one. The value here is the whole round trip over input
+nobody would have chosen.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from uuid import UUID
+
+import pytest
+from conftest import every_block
+
+from caos.blobs import BlobStore
+from caos.boundary_text import BoundaryText
+from caos.evidence.citations import Citation, verify_citations
+from caos.evidence.extract import LINES_PER_PAGE
+from caos.evidence.ingest import (
+    Document,
+    admit_pack,
+    block_ids_by_line,
+    line_groups,
+)
+from caos.evidence.read import read_block
+from caos.refusals import Refusal
+from caos.store import StoreConnection
+
+# Sixty filler lines, a blank one to close the region, then the table. The
+# quote lands on page two, in a region of its own.
+AWKWARD = (
+    "\n".join(f"Section {n} of the annual report" for n in range(LINES_PER_PAGE - 1))
+    + "\n\n"
+    + "Facility\tDrawn\tUndrawn\n"
+    + "Term loan B\tUSD 1,240.0m\N{NO-BREAK SPACE}drawn\tUSD    0.0m\n"
+).encode()
+
+
+@pytest.fixture
+def admitted(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> tuple[StoreConnection, UUID]:
+    conn, case_id = case
+    [source_id] = admit_pack(
+        conn,
+        BlobStore(tmp_path / "blobs"),
+        case_id=case_id,
+        documents=[Document(filename=BoundaryText.of("facilities.txt"), data=AWKWARD)],
+    )
+    return conn, source_id
+
+
+def _block(conn: StoreConnection, source_id: UUID, needle: str) -> str:
+    row = conn.execute(
+        "SELECT block_id FROM source_blocks WHERE source_id = %s AND text LIKE %s",
+        (source_id, f"%{needle}%"),
+    ).fetchone()
+    assert row is not None, f"no block carries {needle!r}"
+    return str(row[0])
+
+
+def test_an_awkward_document_can_be_quoted_back_to_the_host(
+    admitted: tuple[StoreConnection, UUID],
+) -> None:
+    """Admit, read, cite. The whole promise in one pass."""
+    conn, source_id = admitted
+    block_id = _block(conn, source_id, "Term loan B")
+    block = read_block(conn, source_id=source_id, block_id=block_id)
+
+    # The host knows which page it read: a citation on it is exactly what a
+    # module would have been told to name, page two, not page one.
+    assert block.page == 2
+
+    # A module quoting the delivered line verbatim is anchored, not refused.
+    [anchored] = verify_citations(
+        conn,
+        delivered=every_block(conn, source_id),
+        citations=[
+            Citation(
+                source_id=source_id, page=block.page, matched_text=block.text.value
+            )
+        ],
+    )
+    assert anchored.page == 2
+    assert anchored.bboxes, "an anchored citation carries its rectangle"
+
+
+# Slice 3.2e: a source being delivered is not every line of it being delivered.
+# A citation anchors only in the exact blocks the node was handed; ambiguity is
+# still counted over the whole page (docs/DECISIONS.md section 44.5).
+
+
+def _blocks_on(conn: StoreConnection, source_id: UUID, page: int) -> frozenset[str]:
+    rows = conn.execute(
+        "SELECT block_id FROM source_blocks WHERE source_id = %s AND page = %s",
+        (source_id, page),
+    ).fetchall()
+    return frozenset(str(row[0]) for row in rows)
+
+
+def test_a_quote_on_an_undelivered_page_of_a_delivered_source_is_refused(
+    admitted: tuple[StoreConnection, UUID],
+) -> None:
+    conn, source_id = admitted
+    block_id = _block(conn, source_id, "Term loan B")
+    block = read_block(conn, source_id=source_id, block_id=block_id)
+    quote = Citation(source_id, block.page, block.text.value)
+    page_one = _blocks_on(conn, source_id, 1)
+    assert page_one and block_id not in page_one
+
+    with pytest.raises(Refusal, match=r"^CITATION_NOT_DELIVERED$") as caught:
+        verify_citations(conn, delivered={source_id: page_one}, citations=[quote])
+    assert caught.value.__cause__ is None and not caught.value.__context__
+    # The same quote anchors the moment its page is delivered.
+    everything = page_one | _blocks_on(conn, source_id, 2)
+    assert verify_citations(conn, delivered={source_id: everything}, citations=[quote])
+
+
+def test_a_quote_straddling_delivered_and_undelivered_lines_is_refused(
+    admitted: tuple[StoreConnection, UUID],
+) -> None:
+    conn, source_id = admitted
+    header = _block(conn, source_id, "Facility")
+    row = _block(conn, source_id, "Term loan B")
+    # One region, two lines: the quote wraps from the header onto the row.
+    quote = Citation(source_id, 2, "Undrawn Term loan")
+    assert verify_citations(
+        conn, delivered={source_id: frozenset({header, row})}, citations=[quote]
+    )
+
+    for only in (header, row):
+        with pytest.raises(Refusal, match=r"^CITATION_NOT_DELIVERED$"):
+            verify_citations(
+                conn, delivered={source_id: frozenset({only})}, citations=[quote]
+            )
+
+
+def test_a_repeated_quote_with_one_undelivered_copy_stays_ambiguous(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> None:
+    conn, case_id = case
+    [source_id] = admit_pack(
+        conn,
+        BlobStore(tmp_path / "blobs"),
+        case_id=case_id,
+        documents=[
+            Document(
+                filename=BoundaryText.of("twice.txt"),
+                data=b"Leverage is 3.4x\nLeverage is 3.4x\n",
+            )
+        ],
+    )
+    first, second = sorted(_blocks_on(conn, source_id, 1))
+    quote = Citation(source_id, 1, "Leverage is 3.4x")
+
+    for only in (first, second):
+        with pytest.raises(Refusal, match=r"^CITATION_AMBIGUOUS$"):
+            verify_citations(
+                conn, delivered={source_id: frozenset({only})}, citations=[quote]
+            )
+
+
+def test_admission_and_anchoring_share_one_line_to_block_numbering(
+    admitted: tuple[StoreConnection, UUID],
+) -> None:
+    """The block a quoted line belongs to is read back with admission's own
+    numbering (`block_ids_by_line`), not a second copy of it: every stored
+    block is exactly the line that numbering assigns it."""
+    conn, source_id = admitted
+    lines: dict[int, list[str]] = {}
+    for line_id, text in conn.execute(
+        "SELECT line_id, text FROM source_tokens WHERE source_id = %s"
+        " ORDER BY token_id",
+        (source_id,),
+    ).fetchall():
+        lines.setdefault(int(line_id), []).append(str(text))
+    stored = {
+        str(block_id): str(text)
+        for block_id, text in conn.execute(
+            "SELECT block_id, text FROM source_blocks WHERE source_id = %s",
+            (source_id,),
+        ).fetchall()
+    }
+    numbering = block_ids_by_line(
+        {line_id: len(line_groups(" ".join(words))) for line_id, words in lines.items()}
+    )
+    assert len(stored) == len(lines) > LINES_PER_PAGE
+    assert {
+        numbering[line_id][0]: " ".join(words) for line_id, words in lines.items()
+    } == stored
+
+
+def test_the_numbering_is_ascending_by_line_and_widens_past_six_digits() -> None:
+    assert block_ids_by_line(dict.fromkeys([7, 3, 11], 1)) == {
+        3: ("b000000",),
+        7: ("b000001",),
+        11: ("b000002",),
+    }
+    # A split line takes as many ordinals as it has blocks, and the next line
+    # starts after them: reading order and block id order still agree.
+    assert block_ids_by_line({3: 2, 7: 1}) == {
+        3: ("b000000", "b000001"),
+        7: ("b000002",),
+    }
+    wide = block_ids_by_line(dict.fromkeys(range(1_000_001), 1))
+    assert (wide[999_999], wide[1_000_000]) == (("b999999",), ("b1000000",))

@@ -1,0 +1,763 @@
+{
+  "chrome": {
+    "subject": {
+      "case_id": "CASE-2026-CVNA01",
+      "issuer": "Carvana Co. (NYSE: CVNA)"
+    },
+    "ribbon": {
+      "chips": [
+        {
+          "label": "FULL_CREDIT_32",
+          "tone": "acc"
+        },
+        {
+          "label": "SET-v4 · PINNED",
+          "tone": "ok"
+        },
+        {
+          "label": "rev_4 · DRAFT",
+          "tone": "warn"
+        }
+      ],
+      "execution": "IDLE",
+      "persistence": "SAVED 15:07Z",
+      "approval": "UNRATIFIED",
+      "actions": [
+        {
+          "label": "Sign opinion",
+          "primary": true,
+          "refusal": {
+            "code": "UNCITED_FIGURE_IN_JUDGMENT",
+            "clears": "the $95M figure in ¶5 (ANALYST_JUDGMENT) carries a citation to a delivered source or an accepted artifact, or the sentence no longer states a number"
+          }
+        }
+      ]
+    },
+    "brief": {
+      "change": "Revision rev_4 saved 15:07Z by A. Reyes · two paragraphs edited since rev_3",
+      "impact": "Signing binds this exact revision by digest · a later edit is rev_5, never an amendment",
+      "action": "Cite or remove $95M in ¶5 · it is asserted, not carried",
+      "evidence": "23 of 24 figures anchored · 1 uncited · D-04 p.68 ¶2",
+      "headline": "1.2x NET LEV"
+    },
+    "tabs": [
+      {
+        "id": "draft",
+        "label": "Draft",
+        "cp": "rev_4"
+      },
+      {
+        "id": "revisions",
+        "label": "Revisions",
+        "cp": "4"
+      },
+      {
+        "id": "figures",
+        "label": "Figures",
+        "cp": "1 UNCITED"
+      }
+    ],
+    "verdict": {
+      "severity": "WARNING",
+      "conclusion": "¶5 asserts $95M with no citation — an analyst-judgment narrative may reason, it may not originate a figure",
+      "blocked_on": "the $95M figure in ¶5"
+    },
+    "rail": [
+      {
+        "section": "directory",
+        "count": 4,
+        "state": "4 CASES · 1 INTAKE OPEN"
+      },
+      {
+        "section": "upload",
+        "count": 6,
+        "state": "SET-v4 · 6 ADMITTED"
+      },
+      {
+        "section": "analysis",
+        "count": 32,
+        "state": "snp_cvna_q2_2026 · 32 ACCEPTED"
+      },
+      {
+        "section": "book",
+        "count": 4,
+        "state": "4 CREDITS · 2 COMPARED"
+      },
+      {
+        "section": "run",
+        "count": 32,
+        "state": "run_2642 · ACTIVE · CP-6 OF 32"
+      },
+      {
+        "section": "model",
+        "count": null,
+        "state": "CP-CF · ACCEPTED"
+      },
+      {
+        "section": "report",
+        "count": 4,
+        "state": "rev_4 · DRAFT · FREEZE REFUSED"
+      },
+      {
+        "section": "committee",
+        "count": null,
+        "state": "rev_3 · FROZEN · NOT FILED"
+      },
+      {
+        "section": "admin",
+        "count": null,
+        "state": "UNAVAILABLE"
+      }
+    ],
+    "rail_local": {
+      "title": "Revisions",
+      "items": [
+        {
+          "label": "rev_4",
+          "meta": "DRAFT",
+          "on": true
+        },
+        {
+          "label": "rev_3",
+          "meta": "FROZEN",
+          "on": false
+        },
+        {
+          "label": "rev_2",
+          "meta": "—",
+          "on": false
+        },
+        {
+          "label": "rev_1",
+          "meta": "—",
+          "on": false
+        }
+      ]
+    },
+    "served_role": {
+      "role": "Analyst",
+      "standing": "APPROVER"
+    }
+  },
+  "body": {
+    "revision": {
+      "id": "rev_4",
+      "digest": "8f384d8e5bf6558546818db003f13f733f4768bf093269cffd2f9c404ee22ff4",
+      "saved_at": "2026-09-09T15:07:22Z",
+      "author": "A. Reyes"
+    },
+    "revisions": [
+      {
+        "id": "rev_1",
+        "digest": "3a4462d22aab2b9acbfb078749a1f7f08ccac571ac9b7bd46f167c89a81f173c",
+        "saved_at": "2026-09-08T09:20:14Z",
+        "author": "A. Reyes"
+      },
+      {
+        "id": "rev_2",
+        "digest": "01ce353a3ebdbff917e3a51df08f0f00e4ee3e8426c70496fa5b0098c4722831",
+        "saved_at": "2026-09-08T11:48:05Z",
+        "author": "A. Reyes"
+      },
+      {
+        "id": "rev_3",
+        "digest": "10a773b9063ccf2f290d2770b26b3e77cb36169612322c940d1e936978ef3b3a",
+        "saved_at": "2026-09-09T13:41:10Z",
+        "author": "A. Reyes"
+      },
+      {
+        "id": "rev_4",
+        "digest": "8f384d8e5bf6558546818db003f13f733f4768bf093269cffd2f9c404ee22ff4",
+        "saved_at": "2026-09-09T15:07:22Z",
+        "author": "A. Reyes"
+      }
+    ],
+    "paragraphs": [
+      {
+        "id": "p1",
+        "kind": "MODULE",
+        "module_id": "CP-2",
+        "text": "Carvana has completed an operational and balance-sheet turnaround. For the twelve months ended June 30, 2026 the company generated $21,356M of net revenue and $2,294M of Adjusted EBITDA, with Q2 2026 reaching a record $769M (10.4% margin) on 197,325 retail units.",
+        "figures": [
+          {
+            "text": "$21,356M",
+            "citation": {
+              "chip": "D-05 p.1 ¶3",
+              "document_sha256": "d7d81c81a40ad4d7bdbb26189f6b1fc8b7e57b447b62208e4b7b71037f905cef",
+              "source_label": "D-05 · Q2 2026 Shareholder Letter",
+              "page": 1,
+              "bboxes": [
+                [0.08, 0.27, 0.84, 0.05],
+                [0.08, 0.32, 0.82, 0.05],
+                [0.08, 0.37, 0.79, 0.05]
+              ],
+              "matched_text": "Retail units sold totaled 197,325, an increase of 38%; Revenue totaled $7.376 billion, an increase of 52%; Total Gross profit was $1.384 billion, an increase of 30%; Non-GAAP Total GPU was $7,125; Net income totaled $513 million; Adjusted EBITDA totaled $769 million.",
+              "observed_at": "2026-09-09T14:15:02Z",
+              "render_url": null
+            }
+          },
+          {
+            "text": "$2,294M",
+            "citation": {
+              "chip": "D-05 p.1 ¶3",
+              "document_sha256": "d7d81c81a40ad4d7bdbb26189f6b1fc8b7e57b447b62208e4b7b71037f905cef",
+              "source_label": "D-05 · Q2 2026 Shareholder Letter",
+              "page": 1,
+              "bboxes": [
+                [0.08, 0.27, 0.84, 0.05],
+                [0.08, 0.32, 0.82, 0.05],
+                [0.08, 0.37, 0.79, 0.05]
+              ],
+              "matched_text": "Retail units sold totaled 197,325, an increase of 38%; Revenue totaled $7.376 billion, an increase of 52%; Total Gross profit was $1.384 billion, an increase of 30%; Non-GAAP Total GPU was $7,125; Net income totaled $513 million; Adjusted EBITDA totaled $769 million.",
+              "observed_at": "2026-09-09T14:15:02Z",
+              "render_url": null
+            }
+          },
+          {
+            "text": "$769M",
+            "citation": {
+              "chip": "D-05 p.1 ¶3",
+              "document_sha256": "d7d81c81a40ad4d7bdbb26189f6b1fc8b7e57b447b62208e4b7b71037f905cef",
+              "source_label": "D-05 · Q2 2026 Shareholder Letter",
+              "page": 1,
+              "bboxes": [
+                [0.08, 0.27, 0.84, 0.05],
+                [0.08, 0.32, 0.82, 0.05],
+                [0.08, 0.37, 0.79, 0.05]
+              ],
+              "matched_text": "Retail units sold totaled 197,325, an increase of 38%; Revenue totaled $7.376 billion, an increase of 52%; Total Gross profit was $1.384 billion, an increase of 30%; Non-GAAP Total GPU was $7,125; Net income totaled $513 million; Adjusted EBITDA totaled $769 million.",
+              "observed_at": "2026-09-09T14:15:02Z",
+              "render_url": null
+            }
+          },
+          {
+            "text": "197,325",
+            "citation": {
+              "chip": "D-05 p.1 ¶3",
+              "document_sha256": "d7d81c81a40ad4d7bdbb26189f6b1fc8b7e57b447b62208e4b7b71037f905cef",
+              "source_label": "D-05 · Q2 2026 Shareholder Letter",
+              "page": 1,
+              "bboxes": [
+                [0.08, 0.27, 0.84, 0.05],
+                [0.08, 0.32, 0.82, 0.05],
+                [0.08, 0.37, 0.79, 0.05]
+              ],
+              "matched_text": "Retail units sold totaled 197,325, an increase of 38%; Revenue totaled $7.376 billion, an increase of 52%; Total Gross profit was $1.384 billion, an increase of 30%; Non-GAAP Total GPU was $7,125; Net income totaled $513 million; Adjusted EBITDA totaled $769 million.",
+              "observed_at": "2026-09-09T14:15:02Z",
+              "render_url": null
+            }
+          }
+        ]
+      },
+      {
+        "id": "p2",
+        "kind": "MODULE",
+        "module_id": "CP-1A",
+        "text": "Total consolidated funded debt of $4,976M against unrestricted cash of $2,630M puts net funded leverage at 1.2x. Three tranches of Senior Secured Notes — $1,005M due 2028, $1,480M due 2030 and $1,444M due 2031 — sit above the Ally floor plan, renewed at $1.5 billion through April 30, 2027.",
+        "figures": [
+          {
+            "text": "$4,976M",
+            "citation": {
+              "chip": "D-01 p.50 ¶2",
+              "document_sha256": "0b582ff0c768f09ab1d75724a56c52ae1a1847074f43dd36183884a8fcdd30df",
+              "source_label": "D-01 · 10-K FY2025",
+              "page": 50,
+              "bboxes": [
+                [0.09, 0.54, 0.83, 0.05],
+                [0.09, 0.59, 0.81, 0.05],
+                [0.09, 0.64, 0.76, 0.05]
+              ],
+              "matched_text": "Senior Secured Notes: $3,929 million as of December 31, 2025 and $4,358 million as of 2024. Senior Unsecured Notes: $107 million. Total debt: $4,976 million. Includes zero and $105 million of accrued paid-in-kind (\"PIK\") interest as of December 31, 2025 and 2024.",
+              "observed_at": "2026-09-09T14:15:02Z",
+              "render_url": null
+            }
+          },
+          {
+            "text": "$2,630M",
+            "citation": {
+              "chip": "D-02 p.18 ¶2",
+              "document_sha256": "af42744d1543530c24b3189989a819dab19b0495b3c1827cb623e1e05a774bf0",
+              "source_label": "D-02 · 10-Q Q2 2026",
+              "page": 18,
+              "bboxes": [[0.1, 0.42, 0.8, 0.05]],
+              "matched_text": "As of June 30, 2026, total cash and cash equivalents were $2,630 million. Available borrowing capacity under the Floor Plan Facility was $1,442 million based on qualifying vehicle inventory collateral.",
+              "observed_at": "2026-09-09T14:15:04Z",
+              "render_url": null
+            }
+          },
+          {
+            "text": "1.2x",
+            "citation": {
+              "chip": "D-05 p.1 ¶3",
+              "document_sha256": "d7d81c81a40ad4d7bdbb26189f6b1fc8b7e57b447b62208e4b7b71037f905cef",
+              "source_label": "D-05 · Q2 2026 Shareholder Letter",
+              "page": 1,
+              "bboxes": [
+                [0.08, 0.27, 0.84, 0.05],
+                [0.08, 0.32, 0.82, 0.05],
+                [0.08, 0.37, 0.79, 0.05]
+              ],
+              "matched_text": "Retail units sold totaled 197,325, an increase of 38%; Revenue totaled $7.376 billion, an increase of 52%; Total Gross profit was $1.384 billion, an increase of 30%; Non-GAAP Total GPU was $7,125; Net income totaled $513 million; Adjusted EBITDA totaled $769 million.",
+              "observed_at": "2026-09-09T14:15:02Z",
+              "render_url": null
+            }
+          },
+          {
+            "text": "$1,005M",
+            "citation": {
+              "chip": "D-04 p.68 ¶2",
+              "document_sha256": "8d36a602b39984bae8c201b8c2b53b014cd04a98c1bd75f68a59046747c8ef70",
+              "source_label": "D-04 · 8-K Senior Secured Notes Indenture",
+              "page": 68,
+              "bboxes": [[0.085, 0.41, 0.83, 0.06]],
+              "matched_text": "the Issuer issued $1,005 million aggregate principal amount of 9.0%/12.0% Cash/PIK Toggle Senior Secured Notes due 2028, $1,480 million aggregate principal amount of 9.0%/11.0%/13.0% Cash/PIK Toggle Senior Secured Notes due 2030 and $1,444 million aggregate principal amount of 9.0%/14.0% Cash/PIK Toggle Senior Secured Notes due 2031, each secured by a first-priority lien on the Collateral.",
+              "observed_at": "2026-09-09T14:15:03Z",
+              "render_url": "/api/pages/D-04-p68.svg"
+            }
+          },
+          {
+            "text": "$1,480M",
+            "citation": {
+              "chip": "D-04 p.68 ¶2",
+              "document_sha256": "8d36a602b39984bae8c201b8c2b53b014cd04a98c1bd75f68a59046747c8ef70",
+              "source_label": "D-04 · 8-K Senior Secured Notes Indenture",
+              "page": 68,
+              "bboxes": [[0.085, 0.41, 0.83, 0.06]],
+              "matched_text": "the Issuer issued $1,005 million aggregate principal amount of 9.0%/12.0% Cash/PIK Toggle Senior Secured Notes due 2028, $1,480 million aggregate principal amount of 9.0%/11.0%/13.0% Cash/PIK Toggle Senior Secured Notes due 2030 and $1,444 million aggregate principal amount of 9.0%/14.0% Cash/PIK Toggle Senior Secured Notes due 2031, each secured by a first-priority lien on the Collateral.",
+              "observed_at": "2026-09-09T14:15:03Z",
+              "render_url": "/api/pages/D-04-p68.svg"
+            }
+          },
+          {
+            "text": "$1,444M",
+            "citation": {
+              "chip": "D-04 p.68 ¶2",
+              "document_sha256": "8d36a602b39984bae8c201b8c2b53b014cd04a98c1bd75f68a59046747c8ef70",
+              "source_label": "D-04 · 8-K Senior Secured Notes Indenture",
+              "page": 68,
+              "bboxes": [[0.085, 0.41, 0.83, 0.06]],
+              "matched_text": "the Issuer issued $1,005 million aggregate principal amount of 9.0%/12.0% Cash/PIK Toggle Senior Secured Notes due 2028, $1,480 million aggregate principal amount of 9.0%/11.0%/13.0% Cash/PIK Toggle Senior Secured Notes due 2030 and $1,444 million aggregate principal amount of 9.0%/14.0% Cash/PIK Toggle Senior Secured Notes due 2031, each secured by a first-priority lien on the Collateral.",
+              "observed_at": "2026-09-09T14:15:03Z",
+              "render_url": "/api/pages/D-04-p68.svg"
+            }
+          },
+          {
+            "text": "$1.5 billion",
+            "citation": {
+              "chip": "D-06 p.1 ¶3",
+              "document_sha256": "1f6636a4396b5e3bea32983827804914273a02a8fafdeda29b3f79a32b3a2162",
+              "source_label": "D-06 · 8-K Ally Floor-Plan Amendment",
+              "page": 1,
+              "bboxes": [
+                [0.09, 0.6, 0.82, 0.05],
+                [0.09, 0.65, 0.77, 0.05]
+              ],
+              "matched_text": "The Company further amended the Floor Plan Facility to renew the line of credit at $1.5 billion until April 30, 2027. Under the amendment, the interest rate was reduced and secured by Carvana LLC vehicle inventory, general intangibles, and cash deposit accounts.",
+              "observed_at": "2026-09-09T14:15:00Z",
+              "render_url": null,
+              "withdrawn_at": "2026-09-09T09:41:00Z"
+            }
+          }
+        ]
+      },
+      {
+        "id": "p3",
+        "kind": "MODULE",
+        "module_id": "CP-4",
+        "text": "The notes carry a first-priority lien on Carvana Co. and its domestic restricted subsidiaries. Ally facility utilisation is 3.9% — $58M drawn against a $1.5 billion commitment — leaving $1,442M of undrawn collateralised liquidity; no maintenance financial covenants apply to the Senior Secured Notes.",
+        "figures": [
+          {
+            "text": "first-priority lien",
+            "citation": {
+              "chip": "D-04 p.68 ¶2",
+              "document_sha256": "8d36a602b39984bae8c201b8c2b53b014cd04a98c1bd75f68a59046747c8ef70",
+              "source_label": "D-04 · 8-K Senior Secured Notes Indenture",
+              "page": 68,
+              "bboxes": [[0.085, 0.41, 0.83, 0.06]],
+              "matched_text": "the Issuer issued $1,005 million aggregate principal amount of 9.0%/12.0% Cash/PIK Toggle Senior Secured Notes due 2028, $1,480 million aggregate principal amount of 9.0%/11.0%/13.0% Cash/PIK Toggle Senior Secured Notes due 2030 and $1,444 million aggregate principal amount of 9.0%/14.0% Cash/PIK Toggle Senior Secured Notes due 2031, each secured by a first-priority lien on the Collateral.",
+              "observed_at": "2026-09-09T14:15:03Z",
+              "render_url": "/api/pages/D-04-p68.svg"
+            }
+          },
+          {
+            "text": "$58M",
+            "citation": {
+              "chip": "D-01 p.50 ¶2",
+              "document_sha256": "0b582ff0c768f09ab1d75724a56c52ae1a1847074f43dd36183884a8fcdd30df",
+              "source_label": "D-01 · 10-K FY2025",
+              "page": 50,
+              "bboxes": [
+                [0.09, 0.54, 0.83, 0.05],
+                [0.09, 0.59, 0.81, 0.05],
+                [0.09, 0.64, 0.76, 0.05]
+              ],
+              "matched_text": "Senior Secured Notes: $3,929 million as of December 31, 2025 and $4,358 million as of 2024. Senior Unsecured Notes: $107 million. Total debt: $4,976 million. Includes zero and $105 million of accrued paid-in-kind (\"PIK\") interest as of December 31, 2025 and 2024.",
+              "observed_at": "2026-09-09T14:15:02Z",
+              "render_url": null
+            }
+          },
+          {
+            "text": "$1.5 billion",
+            "citation": {
+              "chip": "D-06 p.1 ¶3",
+              "document_sha256": "1f6636a4396b5e3bea32983827804914273a02a8fafdeda29b3f79a32b3a2162",
+              "source_label": "D-06 · 8-K Ally Floor-Plan Amendment",
+              "page": 1,
+              "bboxes": [
+                [0.09, 0.6, 0.82, 0.05],
+                [0.09, 0.65, 0.77, 0.05]
+              ],
+              "matched_text": "The Company further amended the Floor Plan Facility to renew the line of credit at $1.5 billion until April 30, 2027. Under the amendment, the interest rate was reduced and secured by Carvana LLC vehicle inventory, general intangibles, and cash deposit accounts.",
+              "observed_at": "2026-09-09T14:15:00Z",
+              "render_url": null,
+              "withdrawn_at": "2026-09-09T09:41:00Z"
+            }
+          },
+          {
+            "text": "$1,442M",
+            "citation": {
+              "chip": "D-02 p.18 ¶2",
+              "document_sha256": "af42744d1543530c24b3189989a819dab19b0495b3c1827cb623e1e05a774bf0",
+              "source_label": "D-02 · 10-Q Q2 2026",
+              "page": 18,
+              "bboxes": [[0.1, 0.42, 0.8, 0.05]],
+              "matched_text": "As of June 30, 2026, total cash and cash equivalents were $2,630 million. Available borrowing capacity under the Floor Plan Facility was $1,442 million based on qualifying vehicle inventory collateral.",
+              "observed_at": "2026-09-09T14:15:04Z",
+              "render_url": null
+            }
+          }
+        ]
+      },
+      {
+        "id": "p4",
+        "kind": "MODULE",
+        "module_id": "CP-CF",
+        "text": "Base-case FY2026 free cash flow exceeds $1,040M on operating cash flow of $1,250M against $210M of capital expenditure and $740M of cash interest; net funded leverage compresses below 0.5x by year-end and the residual reconciles in every period.",
+        "figures": [
+          {
+            "text": "$1,040M",
+            "citation": {
+              "chip": "D-05 p.3 ¶2",
+              "document_sha256": "d7d81c81a40ad4d7bdbb26189f6b1fc8b7e57b447b62208e4b7b71037f905cef",
+              "source_label": "D-05 · Q2 2026 Shareholder Letter",
+              "page": 3,
+              "bboxes": [
+                [0.08, 0.44, 0.84, 0.05],
+                [0.08, 0.49, 0.8, 0.05]
+              ],
+              "matched_text": "For the full year 2026 we expect free cash flow above $1,040 million on net revenue of approximately $23.5 billion, with operating cash flow of about $1,250 million against $210 million of capital expenditures and $740 million of cash interest.",
+              "observed_at": "2026-09-09T14:15:02Z",
+              "render_url": null
+            }
+          },
+          {
+            "text": "$1,250M",
+            "citation": {
+              "chip": "D-05 p.3 ¶2",
+              "document_sha256": "d7d81c81a40ad4d7bdbb26189f6b1fc8b7e57b447b62208e4b7b71037f905cef",
+              "source_label": "D-05 · Q2 2026 Shareholder Letter",
+              "page": 3,
+              "bboxes": [
+                [0.08, 0.44, 0.84, 0.05],
+                [0.08, 0.49, 0.8, 0.05]
+              ],
+              "matched_text": "For the full year 2026 we expect free cash flow above $1,040 million on net revenue of approximately $23.5 billion, with operating cash flow of about $1,250 million against $210 million of capital expenditures and $740 million of cash interest.",
+              "observed_at": "2026-09-09T14:15:02Z",
+              "render_url": null
+            }
+          },
+          {
+            "text": "$210M",
+            "citation": {
+              "chip": "D-05 p.3 ¶2",
+              "document_sha256": "d7d81c81a40ad4d7bdbb26189f6b1fc8b7e57b447b62208e4b7b71037f905cef",
+              "source_label": "D-05 · Q2 2026 Shareholder Letter",
+              "page": 3,
+              "bboxes": [
+                [0.08, 0.44, 0.84, 0.05],
+                [0.08, 0.49, 0.8, 0.05]
+              ],
+              "matched_text": "For the full year 2026 we expect free cash flow above $1,040 million on net revenue of approximately $23.5 billion, with operating cash flow of about $1,250 million against $210 million of capital expenditures and $740 million of cash interest.",
+              "observed_at": "2026-09-09T14:15:02Z",
+              "render_url": null
+            }
+          },
+          {
+            "text": "$740M",
+            "citation": {
+              "chip": "D-05 p.3 ¶2",
+              "document_sha256": "d7d81c81a40ad4d7bdbb26189f6b1fc8b7e57b447b62208e4b7b71037f905cef",
+              "source_label": "D-05 · Q2 2026 Shareholder Letter",
+              "page": 3,
+              "bboxes": [
+                [0.08, 0.44, 0.84, 0.05],
+                [0.08, 0.49, 0.8, 0.05]
+              ],
+              "matched_text": "For the full year 2026 we expect free cash flow above $1,040 million on net revenue of approximately $23.5 billion, with operating cash flow of about $1,250 million against $210 million of capital expenditures and $740 million of cash interest.",
+              "observed_at": "2026-09-09T14:15:02Z",
+              "render_url": null
+            }
+          }
+        ]
+      },
+      {
+        "id": "p5",
+        "kind": "ANALYST_JUDGMENT",
+        "module_id": null,
+        "text": "The bear case on earnings quality is the one that matters. The bridge from $513M of GAAP net income to $769M of Adjusted EBITDA is clean, but the run-rate leans on reconditioning and logistics savings that management presents as structural. I would haircut the add-back stack by $95M in the base case, which is the difference between a net-cash balance sheet by mid-2027 and one a year later.",
+        "figures": [
+          {
+            "text": "$513M",
+            "citation": {
+              "chip": "D-05 p.1 ¶3",
+              "document_sha256": "d7d81c81a40ad4d7bdbb26189f6b1fc8b7e57b447b62208e4b7b71037f905cef",
+              "source_label": "D-05 · Q2 2026 Shareholder Letter",
+              "page": 1,
+              "bboxes": [
+                [0.08, 0.27, 0.84, 0.05],
+                [0.08, 0.32, 0.82, 0.05],
+                [0.08, 0.37, 0.79, 0.05]
+              ],
+              "matched_text": "Retail units sold totaled 197,325, an increase of 38%; Revenue totaled $7.376 billion, an increase of 52%; Total Gross profit was $1.384 billion, an increase of 30%; Non-GAAP Total GPU was $7,125; Net income totaled $513 million; Adjusted EBITDA totaled $769 million.",
+              "observed_at": "2026-09-09T14:15:02Z",
+              "render_url": null
+            }
+          },
+          {
+            "text": "$769M",
+            "citation": {
+              "chip": "D-05 p.1 ¶3",
+              "document_sha256": "d7d81c81a40ad4d7bdbb26189f6b1fc8b7e57b447b62208e4b7b71037f905cef",
+              "source_label": "D-05 · Q2 2026 Shareholder Letter",
+              "page": 1,
+              "bboxes": [
+                [0.08, 0.27, 0.84, 0.05],
+                [0.08, 0.32, 0.82, 0.05],
+                [0.08, 0.37, 0.79, 0.05]
+              ],
+              "matched_text": "Retail units sold totaled 197,325, an increase of 38%; Revenue totaled $7.376 billion, an increase of 52%; Total Gross profit was $1.384 billion, an increase of 30%; Non-GAAP Total GPU was $7,125; Net income totaled $513 million; Adjusted EBITDA totaled $769 million.",
+              "observed_at": "2026-09-09T14:15:02Z",
+              "render_url": null
+            }
+          },
+          {
+            "text": "$95M",
+            "citation": null
+          }
+        ]
+      },
+      {
+        "id": "p6",
+        "kind": "ANALYST_JUDGMENT",
+        "module_id": null,
+        "text": "What would change my view: the step from PIK-toggle to full cash interest on the 2028 notes is the test. A quarter in which non-GAAP total GPU holds above $5,500/unit through that step-up settles it in the issuer's favour; a floor-plan balance that ends a quarter well above the $58M drawn at Q2 settles it the other way.",
+        "figures": [
+          {
+            "text": "$5,500/unit",
+            "citation": {
+              "chip": "D-05 p.1 ¶3",
+              "document_sha256": "d7d81c81a40ad4d7bdbb26189f6b1fc8b7e57b447b62208e4b7b71037f905cef",
+              "source_label": "D-05 · Q2 2026 Shareholder Letter",
+              "page": 1,
+              "bboxes": [
+                [0.08, 0.27, 0.84, 0.05],
+                [0.08, 0.32, 0.82, 0.05],
+                [0.08, 0.37, 0.79, 0.05]
+              ],
+              "matched_text": "Retail units sold totaled 197,325, an increase of 38%; Revenue totaled $7.376 billion, an increase of 52%; Total Gross profit was $1.384 billion, an increase of 30%; Non-GAAP Total GPU was $7,125; Net income totaled $513 million; Adjusted EBITDA totaled $769 million.",
+              "observed_at": "2026-09-09T14:15:02Z",
+              "render_url": null
+            }
+          },
+          {
+            "text": "$58M",
+            "citation": {
+              "chip": "D-01 p.50 ¶2",
+              "document_sha256": "0b582ff0c768f09ab1d75724a56c52ae1a1847074f43dd36183884a8fcdd30df",
+              "source_label": "D-01 · 10-K FY2025",
+              "page": 50,
+              "bboxes": [
+                [0.09, 0.54, 0.83, 0.05],
+                [0.09, 0.59, 0.81, 0.05],
+                [0.09, 0.64, 0.76, 0.05]
+              ],
+              "matched_text": "Senior Secured Notes: $3,929 million as of December 31, 2025 and $4,358 million as of 2024. Senior Unsecured Notes: $107 million. Total debt: $4,976 million. Includes zero and $105 million of accrued paid-in-kind (\"PIK\") interest as of December 31, 2025 and 2024.",
+              "observed_at": "2026-09-09T14:15:02Z",
+              "render_url": null
+            }
+          }
+        ]
+      }
+    ],
+    "opinion": null,
+    "prior_opinion": {
+      "signed_by": "A. Reyes",
+      "revision_id": "rev_3",
+      "digest": "10a773b9063ccf2f290d2770b26b3e77cb36169612322c940d1e936978ef3b3a",
+      "signed_at": "2026-09-09T13:48:31Z"
+    },
+    "freeze": {
+      "code": "UNCITED_FIGURE_IN_JUDGMENT",
+      "clears": "the $95M figure in ¶5 (ANALYST_JUDGMENT) carries a citation to a delivered source or an accepted artifact, or the sentence no longer states a number"
+    },
+    "lineage": [
+      {
+        "module_id": "CP-0",
+        "artifact_sha256": "4c1c85ddbbfae26c8c8aec16b5a03ba6837fa9962d10f17e0ac5ceda8a949b5e",
+        "state": "ACCEPTED"
+      },
+      {
+        "module_id": "CP-1",
+        "artifact_sha256": "b6d1166e96a3ec4c991687e88ce59a1be151dc1a97beb81bc081c61d1d69d744",
+        "state": "ACCEPTED"
+      },
+      {
+        "module_id": "CP-1A",
+        "artifact_sha256": "d3c16bbc4784e67a82b7bfde54aa4f7d8320a69e67978483928aff7d7badaf21",
+        "state": "ACCEPTED"
+      },
+      {
+        "module_id": "CP-1B",
+        "artifact_sha256": "79a531fbc3bfe2e7f8a48af00fda8d8c79f978b5f5844d5813f4380f33c9971b",
+        "state": "ACCEPTED"
+      },
+      {
+        "module_id": "CP-1C",
+        "artifact_sha256": "87fde7ee49984eabf0129f2ec128336ec0181e96dbd6af390687a25e3aeab43f",
+        "state": "RESTRICTED"
+      },
+      {
+        "module_id": "CP-1D",
+        "artifact_sha256": "a5b4d93c9e59b787760e85efff8a709dec74acf747aaa877897f2a0a0a2194c1",
+        "state": "ACCEPTED"
+      },
+      {
+        "module_id": "CP-4",
+        "artifact_sha256": "f52fc075778236c3a698ba9a0db086f082e6abd8b2697d6cbbc378ab7347462a",
+        "state": "ACCEPTED"
+      },
+      {
+        "module_id": "CP-5",
+        "artifact_sha256": "61719ff98a4889dfcb7c9bfec59e126b51d95b05152d5f33e4456cb8e4a8d70e",
+        "state": "ACCEPTED"
+      },
+      {
+        "module_id": "CP-6",
+        "artifact_sha256": "54758f1e5b27502852ee48fe0be898cc1126fd2ee25fd005e38f3288ff6111e5",
+        "state": "ACCEPTED"
+      },
+      {
+        "module_id": "CP-2",
+        "artifact_sha256": "131d1380948093b6258d27899ccff38f53b91b762018abe06249a59db105c866",
+        "state": "ACCEPTED"
+      },
+      {
+        "module_id": "CP-2A",
+        "artifact_sha256": "8720eaec5f26a711bb31d73a581879ebec6e6769754bebee2ffe294dd05a88dd",
+        "state": "ACCEPTED"
+      },
+      {
+        "module_id": "CP-2G",
+        "artifact_sha256": "3973b313e6743bd178b705e73730b56cfe09d87b5fcfecb2118606005a072f1e",
+        "state": "ACCEPTED"
+      },
+      {
+        "module_id": "CP-CF",
+        "artifact_sha256": "250c01653ae8cb3257ec637e27bb4468000d0e3a022b400ab10903a8306044ad",
+        "state": "ACCEPTED"
+      },
+      {
+        "module_id": "CP-3",
+        "artifact_sha256": "c1bfae4f8551dc2a22bb682594a8d3fd2c4a447d85e37c5ff3fbce12f6320915",
+        "state": "SCREENING_ONLY"
+      }
+    ],
+    "sections": [
+      {
+        "n": 1,
+        "title": "Source readiness",
+        "module_id": "CP-0",
+        "kind": "MODULE"
+      },
+      {
+        "n": 2,
+        "title": "Canonical SEC data foundation",
+        "module_id": "CP-1",
+        "kind": "MODULE"
+      },
+      {
+        "n": 3,
+        "title": "Corporate perimeter and debt hierarchy",
+        "module_id": "CP-1A",
+        "kind": "MODULE"
+      },
+      {
+        "n": 4,
+        "title": "Unit economics and GPU bridge",
+        "module_id": "CP-1B",
+        "kind": "MODULE"
+      },
+      {
+        "n": 5,
+        "title": "Peer benchmark",
+        "module_id": "CP-1C",
+        "kind": "MODULE"
+      },
+      {
+        "n": 6,
+        "title": "Earnings quality and Adjusted EBITDA",
+        "module_id": "CP-1D",
+        "kind": "MODULE"
+      },
+      {
+        "n": 7,
+        "title": "Covenants, collateral waterfall and baskets",
+        "module_id": "CP-4",
+        "kind": "MODULE"
+      },
+      {
+        "n": 8,
+        "title": "Committee deliberation and monitored triggers",
+        "module_id": "CP-6",
+        "kind": "MODULE"
+      },
+      {
+        "n": 9,
+        "title": "Fundamental credit synthesis",
+        "module_id": "CP-2",
+        "kind": "MODULE"
+      },
+      {
+        "n": 10,
+        "title": "Downside stress and margin sensitivity",
+        "module_id": "CP-2A",
+        "kind": "MODULE"
+      },
+      {
+        "n": 11,
+        "title": "Cash flow projection and deleveraging",
+        "module_id": "CP-CF",
+        "kind": "MODULE"
+      },
+      {
+        "n": 12,
+        "title": "Secondary trading and relative value",
+        "module_id": "CP-3",
+        "kind": "MODULE"
+      },
+      {
+        "n": 13,
+        "title": "Analyst narrative",
+        "module_id": null,
+        "kind": "NARRATIVE"
+      },
+      {
+        "n": 14,
+        "title": "Provenance index",
+        "module_id": null,
+        "kind": "PROVENANCE"
+      }
+    ]
+  },
+  "observed_at": "2026-09-09T15:07:30Z"
+}

@@ -1,0 +1,98 @@
+{
+  "cases": [
+    {
+      "label": "ccl-fy2025-full-relative-value",
+      "profile_id": "FULL_CREDIT_32",
+      "selection_id": "RELATIVE_VALUE",
+      "subject": {
+        "issuer_id": "CCL",
+        "issuer_name": "Carnival Corporation & plc",
+        "reporting_period": "FY2025",
+        "analysis_date": "2026-09-19"
+      },
+      "documents": [
+        "documents/CCL_FY2025_10K.txt",
+        "documents/CCL_2025_Revolving_Credit_Agreement.txt",
+        "documents/CCL_2025_575_Notes_2030_Indenture.txt",
+        "documents/CCL_FINRA_TRACE_143658BY7_2026-09-19.txt",
+        "documents/RCL_Q4_2025_Earnings_Release.txt",
+        "documents/NCLH_Q4_2025_Earnings_Release.txt"
+      ],
+      "expects": [
+        {
+          "module_id": "CP-1",
+          "document_sha256": "8fa7fceda34be50b3b9b5406e0c9269b5269870d1cd8c2bdafb682755a1c88e6",
+          "matched_text": "Cash and cash equivalents | $ | 1,928 | $ | 1,210 |"
+        },
+        {
+          "module_id": "CP-1C",
+          "document_sha256": "8fa7fceda34be50b3b9b5406e0c9269b5269870d1cd8c2bdafb682755a1c88e6",
+          "matched_text": "Total Debt, net of unamortized debt issuance costs and discounts | 26,640 | 27,475 |"
+        },
+        {
+          "module_id": "CP-1C",
+          "document_sha256": "dd9a0eb7211c111b8180ea10f95416066c3e714a7390e0424799b6f522981b88",
+          "matched_text": "Total Debt was $14.6 billion. Net Debt was $14.4 billion. Net Leverage was 5.3x at December 31, 2025."
+        },
+        {
+          "module_id": "CP-4",
+          "document_sha256": "0f5a7510e20cbf7182108e4a48ea1c8e7e85800d06205518f79ec049da169c49",
+          "matched_text": "The aggregate amount of the Lenders’ Revolving Facility Commitments is $4,500,000,000 on the Effective Date."
+        },
+        {
+          "module_id": "CP-2",
+          "document_sha256": "8fa7fceda34be50b3b9b5406e0c9269b5269870d1cd8c2bdafb682755a1c88e6",
+          "matched_text": "Net cash provided by operating activities | 6,218 | 5,923 | 4,281 |"
+        },
+        {
+          "module_id": "CP-3D",
+          "document_sha256": "28f9289818978608ad48ed744f0483c8d3385d84cd7980402b5366545e00ae36",
+          "matched_text": "Last trade price: $99.34"
+        },
+        {
+          "module_id": "CP-3",
+          "document_sha256": "43005bdbd3a05fd62ef4107dd7dd4e97977c135d1f5902b68d45996cb6e2c592",
+          "matched_text": "Total revenues were $17.9 billion, Net Income was $4.3 billion or $15.61 per share, Adjusted Net Income was $4.3 billion or $15.64 per share, and Adjusted EBITDA was $7.0 billion."
+        }
+      ],
+      "expects_ready": [
+        "CP-1",
+        "CP-1C",
+        "CP-2",
+        "CP-4",
+        "CP-3D",
+        "CP-2A",
+        "CP-2G",
+        "CP-3"
+      ],
+      "expects_projection": [
+        {
+          "module_id": "CP-3D",
+          "field": "qa_status",
+          "value": "Restricted"
+        },
+        {
+          "module_id": "CP-3",
+          "field": "decision_scope",
+          "value": "FULL"
+        },
+        {
+          "module_id": "CP-3",
+          "field": "qa_status",
+          "value": "Restricted"
+        }
+      ],
+      "expects_register": [
+        {
+          "module_id": "CP-1C",
+          "register_id": "T4.5",
+          "row_key": {
+            "Entity": "Carnival Corporation & plc"
+          },
+          "column": "Total/Net/Sr Sec Leverage",
+          "expected": "[Calculated] 3.66x / 3.40x"
+        }
+      ]
+    }
+  ]
+}

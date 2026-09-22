@@ -1,0 +1,50 @@
+{
+  "adapter_version": "canonical-markdown-v3",
+  "attempts": [
+    {
+      "charge": "0.134558",
+      "diagnostic_sha256": "2e4a07d8844a039b4104d9ff599cc072464fe64b7de9565ecd11350c67fb40e5",
+      "generation_id": "gen-1789746903-fjO69EJIfnkgn0ZQNPJ9",
+      "model": "openai/gpt-5.6-terra",
+      "ordinal": 1,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_PORTFOLIO_DECISION-01-CP-0"
+    }
+  ],
+  "complete": false,
+  "evidence_sha256": "34a66ebf10fbc4bbfa4cc9948d98fd4415669c7c1e09620ec97269780e5aaf4d",
+  "matrix": [
+    {
+      "blocked_met": null,
+      "case_label": "vmo2-fy2025-lite-portfolio-decision",
+      "expected_refusal_met": null,
+      "forecast_met": null,
+      "met": 0,
+      "missed": 1,
+      "missed_keys": [
+        {
+          "document_sha256": "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+          "matched_text": "we recorded a non-cash goodwill impairment of \u00a31,021.7 million",
+          "module_id": "CP-L10"
+        }
+      ],
+      "projections_met": false,
+      "proven": false,
+      "ready_met": false,
+      "refusal": "ORCHESTRATION_NOTHING_TO_PROVE"
+    }
+  ],
+  "model": "openai/gpt-5.6-terra",
+  "performed_sha256": "198d9c4f42eb9e6360ca9fdec00156a9a2a3c5a123120a5f70d74590b5ec6c50",
+  "provider": "openrouter/openai/flex/high/65536",
+  "result": [
+    {
+      "case_label": "vmo2-fy2025-lite-portfolio-decision",
+      "proof": null,
+      "refusal": "ORCHESTRATION_NOTHING_TO_PROVE",
+      "status": "BLOCKED",
+      "stopped": null
+    }
+  ],
+  "run_id": "cf5464dd-734c-436b-ad97-97a45f29943f",
+  "set_sha256": "a46a1b4f597885e8f6937b47f9da7eba5ec266f4a43818d5f9fa1d42337b87ea"
+}

@@ -1,0 +1,106 @@
+{
+  "adapter_version": "canonical-markdown-v3",
+  "attempts": [
+    {
+      "charge": "0.231761",
+      "diagnostic_sha256": "12e789989b0bfdcad4b5427ddd97e89a532a10f389c82eeb45f164712598c262",
+      "generation_id": "gen-1789567214-nYPvPzhT3g1IhMNiT8rG",
+      "model": "openai/gpt-5.6-terra",
+      "ordinal": 1,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_EARNINGS_UPDATE-01-CP-0"
+    },
+    {
+      "charge": "0.265523",
+      "diagnostic_sha256": "783e82a40893d3e9ed7248a1289f7f5eda662189c79a03b21d42cdd104cba300",
+      "generation_id": "gen-1789567293-J1hMdibkA2AbwroexSdb",
+      "model": "openai/gpt-5.6-terra",
+      "ordinal": 1,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_EARNINGS_UPDATE-02-CP-L10"
+    },
+    {
+      "charge": "0.27249875",
+      "diagnostic_sha256": "b714d89e67c5a078d6df2a4e9fef8dc1f8f67cf117e9d84ea23e0af2b0850438",
+      "generation_id": "gen-1789567376-dmuqTHxdmz7oknnmKu4F",
+      "model": "openai/gpt-5.6-terra",
+      "ordinal": 1,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_EARNINGS_UPDATE-03-CP-5"
+    }
+  ],
+  "complete": true,
+  "evidence_sha256": "99e528c11176dda36ec348042c761019bb68b4b215333df9c3ecee0cbbd5b194",
+  "matrix": [
+    {
+      "case_label": "vmo2-fy2025-lite-credit-22",
+      "expected_refusal_met": null,
+      "forecast_met": null,
+      "met": 1,
+      "missed": 0,
+      "missed_keys": [],
+      "proven": true,
+      "ready_met": true,
+      "refusal": null
+    }
+  ],
+  "model": "openai/gpt-5.6-terra",
+  "performed_sha256": "b5aa5c877872b78d14a46c450a73ac66744a91663c5693ee4c7927a2762af498",
+  "provider": "openrouter/openai/flex/high/65536",
+  "result": [
+    {
+      "case_label": "vmo2-fy2025-lite-credit-22",
+      "proof": {
+        "anchored": [
+          [
+            "CP-0",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "The preliminary unaudited selected financial results are set forth below:"
+          ],
+          [
+            "CP-0",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "company that is not included as a restricted subsidiary for purposes of the facilities agreement and bond"
+          ],
+          [
+            "CP-5",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "The preliminary unaudited selected financial results are set forth below:"
+          ],
+          [
+            "CP-5",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "When compliance reporting requirements have been completed and assuming no change from 31"
+          ],
+          [
+            "CP-5",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "company that is not included as a restricted subsidiary for purposes of the facilities agreement and bond"
+          ],
+          [
+            "CP-L10",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "In Q4 2025, we recorded a non-cash goodwill impairment of \u00a31,021.7 million primarily related to the impacts of the UK market and"
+          ],
+          [
+            "CP-L10",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "The preliminary unaudited selected financial results are set forth below:"
+          ],
+          [
+            "CP-L10",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "company that is not included as a restricted subsidiary for purposes of the facilities agreement and bond"
+          ]
+        ],
+        "artifacts": 3,
+        "build_id": "a43cb903ca2751f79e77b6da71f6ea131b8462a32e1b549d65fd0f67389d185f",
+        "citations": 8,
+        "route_digest": "3f020d6f45d19ecf7adeff39bc5b3ba42aaa73d940d94211b7b9ea131a45da30",
+        "run_id": "42e17048-8b50-48cc-94ff-833d894a68cb"
+      },
+      "refusal": null,
+      "status": "COMPLETE",
+      "stopped": null
+    }
+  ],
+  "run_id": "42e17048-8b50-48cc-94ff-833d894a68cb",
+  "set_sha256": "0863964bb4dbad8dc8772654311d7b59dfc2810cd08cf6cfdeda6a940ed0db74"
+}

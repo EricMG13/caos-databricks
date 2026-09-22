@@ -1,0 +1,101 @@
+{
+  "adapter_version": "canonical-markdown-v3",
+  "attempts": [
+    {
+      "charge": "0.23433475",
+      "diagnostic_sha256": "191e35dc00c78d691ac49cfa5bc9d811b7fa2b0e00f3cfe63a69e7ff88fbc187",
+      "generation_id": "gen-1789749145-ES07GLIUgB87DcNzho82",
+      "model": "openai/gpt-5.6-terra",
+      "ordinal": 1,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_RELATIVE_VALUE-01-CP-0"
+    },
+    {
+      "charge": "0.2157915",
+      "diagnostic_sha256": "fc9b49749e552f160f65788abef1f7ed7c690e4bed492735bff5ed28f95761ac",
+      "generation_id": "gen-1789749239-adYgheFSYvhZ4Zq4erHA",
+      "model": "openai/gpt-5.6-terra",
+      "ordinal": 2,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_RELATIVE_VALUE-01-CP-0"
+    }
+  ],
+  "complete": false,
+  "evidence_sha256": "9e445a9e27588aa5bbec4d60300719c5adf41c5523bc9aa983e87787a44a1ab4",
+  "matrix": [
+    {
+      "blocked_met": null,
+      "case_label": "ccl-fy2025-lite-relative-value",
+      "expected_refusal_met": null,
+      "forecast_met": null,
+      "met": 0,
+      "missed": 4,
+      "missed_keys": [
+        {
+          "document_sha256": "8fa7fceda34be50b3b9b5406e0c9269b5269870d1cd8c2bdafb682755a1c88e6",
+          "matched_text": "As of November 30, 2025, we had $6.4 billion of liquidity including $1.9 billion of cash and cash equivalents and $4.5 billion available for borrowing under our multicurrency revolving credit facility. In addition, we had $7.8 billion of undrawn export credit facilities to fund future ship deliveries.",
+          "module_id": "CP-L10"
+        },
+        {
+          "document_sha256": "8fa7fceda34be50b3b9b5406e0c9269b5269870d1cd8c2bdafb682755a1c88e6",
+          "matched_text": "Total Debt, net of unamortized debt issuance costs and discounts | 26,640 | 27,475 |",
+          "module_id": "CP-1C"
+        },
+        {
+          "document_sha256": "dd9a0eb7211c111b8180ea10f95416066c3e714a7390e0424799b6f522981b88",
+          "matched_text": "Total Debt was $14.6 billion. Net Debt was $14.4 billion. Net Leverage was 5.3x at December 31, 2025.",
+          "module_id": "CP-1C"
+        },
+        {
+          "document_sha256": "43005bdbd3a05fd62ef4107dd7dd4e97977c135d1f5902b68d45996cb6e2c592",
+          "matched_text": "Total revenues were $17.9 billion, Net Income was $4.3 billion or $15.61 per share, Adjusted Net Income was $4.3 billion or $15.64 per share, and Adjusted EBITDA was $7.0 billion.",
+          "module_id": "CP-1C"
+        }
+      ],
+      "projections_met": false,
+      "proven": true,
+      "ready_met": false,
+      "refusal": null
+    }
+  ],
+  "model": "openai/gpt-5.6-terra",
+  "performed_sha256": "1435fa5853cbc7c34e86c1bffb16c7337426f08fa209691e50afc31afb00bbf2",
+  "provider": "openrouter/openai/flex/high/65536",
+  "result": [
+    {
+      "case_label": "ccl-fy2025-lite-relative-value",
+      "proof": {
+        "anchored": [
+          [
+            "CP-0",
+            "43005bdbd3a05fd62ef4107dd7dd4e97977c135d1f5902b68d45996cb6e2c592",
+            "Total revenues were $17.9 billion, Net Income was $4.3 billion or $15.61 per share, Adjusted Net Income was $4.3 billion or $15.64 per share, and Adjusted EBITDA was $7.0 billion."
+          ],
+          [
+            "CP-0",
+            "8fa7fceda34be50b3b9b5406e0c9269b5269870d1cd8c2bdafb682755a1c88e6",
+            "As of November 30, 2025, we had $6.4 billion of liquidity including $1.9 billion of cash and cash equivalents and $4.5 billion available for borrowing under our multicurrency revolving credit facility."
+          ],
+          [
+            "CP-0",
+            "8fa7fceda34be50b3b9b5406e0c9269b5269870d1cd8c2bdafb682755a1c88e6",
+            "CARNIVAL CORPORATION & PLC FORM 10-K FOR THE FISCAL YEAR ENDED NOVEMBER 30, 2025"
+          ],
+          [
+            "CP-0",
+            "dd9a0eb7211c111b8180ea10f95416066c3e714a7390e0424799b6f522981b88",
+            "Grew total revenue 3.7% to $9.8 billion in 2025. GAAP net income was $423.2 million, with EPS of $0.92."
+          ]
+        ],
+        "artifacts": 1,
+        "build_id": "78c24be4483612e75d9a0809fcb1cb7c2dd5617e669491de13be9c0123e3ff93",
+        "citations": 4,
+        "route_digest": "e4f7f297e007b5721b14120ae468cc0377b6cab36fc4f0d1b88618f25d398923",
+        "run_id": "edf2b6e5-4e6c-44a2-9006-c370c508ceb3"
+      },
+      "refusal": null,
+      "status": "BLOCKED",
+      "stopped": null
+    }
+  ],
+  "run_id": "edf2b6e5-4e6c-44a2-9006-c370c508ceb3",
+  "set_sha256": "a8df0ccf6d8fd735886c584951f7ca82e460f483a4f235a5ad31143fd3f60ac8"
+}

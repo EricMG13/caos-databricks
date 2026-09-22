@@ -1,0 +1,34 @@
+{
+  "sections": [
+    "/directory/",
+    "/upload/",
+    "/analysis/",
+    "/book/",
+    "/run/",
+    "/model/",
+    "/report/",
+    "/committee/",
+    "/admin/"
+  ],
+  "forwards": {
+    "/issuers": "/directory/",
+    "/issuers/profile": "/analysis/",
+    "/deepdive": "/analysis/",
+    "/research": "/analysis/",
+    "/pipeline": "/run/",
+    "/command": "/book/",
+    "/portfolios": "/book/",
+    "/query": "/book/",
+    "/sector": "/book/",
+    "/sector-rv": "/book/",
+    "/sponsors": "/book/",
+    "/monitor": "/book/",
+    "/decisions": "/committee/",
+    "/reports": "/report/",
+    "/settings": "/admin/",
+    "/login": "/directory/"
+  },
+  "query_renames": {
+    "/issuers/profile": { "id": "case" }
+  }
+}

@@ -1,0 +1,753 @@
+{
+  "chrome": {
+    "subject": null,
+    "served_role": {
+      "global_role": "READER",
+      "standing": null
+    },
+    "actions": []
+  },
+  "body": {
+    "basis": {
+      "period": "EVERY_ACCEPTED_PERIOD",
+      "scenario": "EVERY_ACCEPTED_CASE",
+      "accepted_only": true
+    },
+    "columns": [
+      {
+        "key": "operating.revenue",
+        "label": "Revenue"
+      },
+      {
+        "key": "operating.ebitda",
+        "label": "EBITDA"
+      },
+      {
+        "key": "operating.cfo",
+        "label": "Cash flow from operations"
+      },
+      {
+        "key": "investing.capex",
+        "label": "Capital expenditure"
+      },
+      {
+        "key": "financing.cash_interest",
+        "label": "Cash interest"
+      },
+      {
+        "key": "operating.margin",
+        "label": "EBITDA margin"
+      }
+    ],
+    "rows": [
+      {
+        "case_id": "00000000-0000-4000-8000-000000000001",
+        "title": "Carvana Co.",
+        "standing": "READER",
+        "subject": {
+          "issuer_id": "CVNA",
+          "issuer_name": "Carvana Co.",
+          "reporting_period": "FY2025",
+          "analysis_date": "2026-09-14"
+        },
+        "displayed_run_id": "00000000-0000-4000-8000-0000000000a1",
+        "displayed_run_status": "COMPLETE",
+        "snapshot": "1111111111111111111111111111111111111111111111111111111111111111",
+        "currency": "USD",
+        "scale": "millions",
+        "periods": [
+          {
+            "case": "BASE",
+            "period_id": "FY2026",
+            "fiscal_year": "2026",
+            "days": "365",
+            "unavailable_reason": null,
+            "cells": [
+              {
+                "column": "operating.revenue",
+                "value": "500.000000",
+                "unavailable_reason": null,
+                "passport": {
+                  "definition": "Revenue, as the accepted driver row for the period states it (caos-forecast-v1).",
+                  "period": "FY2026 \u00b7 FY2026 \u00b7 365 days",
+                  "scenario": "BASE",
+                  "reporting_period": "FY2025",
+                  "computed_at": "2026-09-14T10:00:00Z",
+                  "snapshot": "1111111111111111111111111111111111111111111111111111111111111111",
+                  "method": "cash_flow_forecast \u00b7 VERIFIED",
+                  "derivation": "drivers[period].revenue \u2014 revenue = 500",
+                  "citations": [
+                    {
+                      "document_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                      "source_id": "00000000-0000-4000-8000-0000000000d1",
+                      "filename": "issuer-pack.txt",
+                      "page": 1,
+                      "matched_text": "/drivers/0/revenue = \"500\"",
+                      "rects": [
+                        {
+                          "x0": 72.0,
+                          "y0": 336.0,
+                          "x1": 244.8,
+                          "y1": 348.0
+                        }
+                      ],
+                      "withdrawn_at": null
+                    }
+                  ],
+                  "supporting_research": [
+                    {
+                      "route_node_id": "CP-1",
+                      "module_id": "CP-1",
+                      "qa_status": "Passed"
+                    },
+                    {
+                      "route_node_id": "CP-2G",
+                      "module_id": "CP-2G",
+                      "qa_status": "Passed"
+                    },
+                    {
+                      "route_node_id": "CP-CF",
+                      "module_id": "CP-CF",
+                      "qa_status": "Passed"
+                    }
+                  ]
+                }
+              },
+              {
+                "column": "operating.ebitda",
+                "value": "100.000000",
+                "unavailable_reason": null,
+                "passport": {
+                  "definition": "EBITDA, as the accepted driver row for the period states it (caos-forecast-v1).",
+                  "period": "FY2026 \u00b7 FY2026 \u00b7 365 days",
+                  "scenario": "BASE",
+                  "reporting_period": "FY2025",
+                  "computed_at": "2026-09-14T10:00:00Z",
+                  "snapshot": "1111111111111111111111111111111111111111111111111111111111111111",
+                  "method": "cash_flow_forecast \u00b7 VERIFIED",
+                  "derivation": "drivers[period].ebitda \u2014 ebitda = 100",
+                  "citations": [
+                    {
+                      "document_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                      "source_id": "00000000-0000-4000-8000-0000000000d1",
+                      "filename": "issuer-pack.txt",
+                      "page": 1,
+                      "matched_text": "/drivers/0/ebitda = \"100\"",
+                      "rects": [
+                        {
+                          "x0": 72.0,
+                          "y0": 348.0,
+                          "x1": 244.8,
+                          "y1": 360.0
+                        }
+                      ],
+                      "withdrawn_at": null
+                    }
+                  ],
+                  "supporting_research": [
+                    {
+                      "route_node_id": "CP-1",
+                      "module_id": "CP-1",
+                      "qa_status": "Passed"
+                    },
+                    {
+                      "route_node_id": "CP-2G",
+                      "module_id": "CP-2G",
+                      "qa_status": "Passed"
+                    },
+                    {
+                      "route_node_id": "CP-CF",
+                      "module_id": "CP-CF",
+                      "qa_status": "Passed"
+                    }
+                  ]
+                }
+              },
+              {
+                "column": "operating.cfo",
+                "value": "80.000000",
+                "unavailable_reason": null,
+                "passport": {
+                  "definition": "Cash flow from operations, as the accepted driver row for the period states it (caos-forecast-v1).",
+                  "period": "FY2026 \u00b7 FY2026 \u00b7 365 days",
+                  "scenario": "BASE",
+                  "reporting_period": "FY2025",
+                  "computed_at": "2026-09-14T10:00:00Z",
+                  "snapshot": "1111111111111111111111111111111111111111111111111111111111111111",
+                  "method": "cash_flow_forecast \u00b7 VERIFIED",
+                  "derivation": "drivers[period].cfo \u2014 cfo = 80",
+                  "citations": [
+                    {
+                      "document_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                      "source_id": "00000000-0000-4000-8000-0000000000d1",
+                      "filename": "issuer-pack.txt",
+                      "page": 1,
+                      "matched_text": "/drivers/0/cfo = \"80\"",
+                      "rects": [
+                        {
+                          "x0": 72.0,
+                          "y0": 360.0,
+                          "x1": 244.8,
+                          "y1": 372.0
+                        }
+                      ],
+                      "withdrawn_at": null
+                    }
+                  ],
+                  "supporting_research": [
+                    {
+                      "route_node_id": "CP-1",
+                      "module_id": "CP-1",
+                      "qa_status": "Passed"
+                    },
+                    {
+                      "route_node_id": "CP-2G",
+                      "module_id": "CP-2G",
+                      "qa_status": "Passed"
+                    },
+                    {
+                      "route_node_id": "CP-CF",
+                      "module_id": "CP-CF",
+                      "qa_status": "Passed"
+                    }
+                  ]
+                }
+              },
+              {
+                "column": "investing.capex",
+                "value": "20.000000",
+                "unavailable_reason": null,
+                "passport": {
+                  "definition": "Capital expenditure, as the accepted driver row for the period states it (caos-forecast-v1).",
+                  "period": "FY2026 \u00b7 FY2026 \u00b7 365 days",
+                  "scenario": "BASE",
+                  "reporting_period": "FY2025",
+                  "computed_at": "2026-09-14T10:00:00Z",
+                  "snapshot": "1111111111111111111111111111111111111111111111111111111111111111",
+                  "method": "cash_flow_forecast \u00b7 VERIFIED",
+                  "derivation": "drivers[period].capex \u2014 capex = 20",
+                  "citations": [
+                    {
+                      "document_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                      "source_id": "00000000-0000-4000-8000-0000000000d1",
+                      "filename": "issuer-pack.txt",
+                      "page": 1,
+                      "matched_text": "/drivers/0/capex = \"20\"",
+                      "rects": [
+                        {
+                          "x0": 72.0,
+                          "y0": 372.0,
+                          "x1": 244.8,
+                          "y1": 384.0
+                        }
+                      ],
+                      "withdrawn_at": null
+                    }
+                  ],
+                  "supporting_research": [
+                    {
+                      "route_node_id": "CP-1",
+                      "module_id": "CP-1",
+                      "qa_status": "Passed"
+                    },
+                    {
+                      "route_node_id": "CP-2G",
+                      "module_id": "CP-2G",
+                      "qa_status": "Passed"
+                    },
+                    {
+                      "route_node_id": "CP-CF",
+                      "module_id": "CP-CF",
+                      "qa_status": "Passed"
+                    }
+                  ]
+                }
+              },
+              {
+                "column": "financing.cash_interest",
+                "value": "10.000000",
+                "unavailable_reason": null,
+                "passport": {
+                  "definition": "Cash interest, as the accepted driver row for the period states it (caos-forecast-v1).",
+                  "period": "FY2026 \u00b7 FY2026 \u00b7 365 days",
+                  "scenario": "BASE",
+                  "reporting_period": "FY2025",
+                  "computed_at": "2026-09-14T10:00:00Z",
+                  "snapshot": "1111111111111111111111111111111111111111111111111111111111111111",
+                  "method": "cash_flow_forecast \u00b7 VERIFIED",
+                  "derivation": "drivers[period].cash_interest \u2014 cash_interest = 10",
+                  "citations": [
+                    {
+                      "document_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                      "source_id": "00000000-0000-4000-8000-0000000000d1",
+                      "filename": "issuer-pack.txt",
+                      "page": 1,
+                      "matched_text": "/drivers/0/cash_interest = \"10\"",
+                      "rects": [
+                        {
+                          "x0": 72.0,
+                          "y0": 384.0,
+                          "x1": 244.8,
+                          "y1": 396.0
+                        }
+                      ],
+                      "withdrawn_at": null
+                    }
+                  ],
+                  "supporting_research": [
+                    {
+                      "route_node_id": "CP-1",
+                      "module_id": "CP-1",
+                      "qa_status": "Passed"
+                    },
+                    {
+                      "route_node_id": "CP-2G",
+                      "module_id": "CP-2G",
+                      "qa_status": "Passed"
+                    },
+                    {
+                      "route_node_id": "CP-CF",
+                      "module_id": "CP-CF",
+                      "qa_status": "Passed"
+                    }
+                  ]
+                }
+              },
+              {
+                "column": "operating.margin",
+                "value": "0.2000",
+                "unavailable_reason": null,
+                "passport": {
+                  "definition": "EBITDA margin, as the accepted driver row for the period states it (caos-forecast-v1).",
+                  "period": "FY2026 \u00b7 FY2026 \u00b7 365 days",
+                  "scenario": "BASE",
+                  "reporting_period": "FY2025",
+                  "computed_at": "2026-09-14T10:00:00Z",
+                  "snapshot": "1111111111111111111111111111111111111111111111111111111111111111",
+                  "method": "cash_flow_forecast \u00b7 VERIFIED",
+                  "derivation": "operating.ebitda / operating.revenue \u2014 ebitda = 100, revenue = 500",
+                  "citations": [
+                    {
+                      "document_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                      "source_id": "00000000-0000-4000-8000-0000000000d1",
+                      "filename": "issuer-pack.txt",
+                      "page": 1,
+                      "matched_text": "/drivers/0/ebitda = \"100\"",
+                      "rects": [
+                        {
+                          "x0": 72.0,
+                          "y0": 348.0,
+                          "x1": 244.8,
+                          "y1": 360.0
+                        }
+                      ],
+                      "withdrawn_at": null
+                    },
+                    {
+                      "document_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                      "source_id": "00000000-0000-4000-8000-0000000000d1",
+                      "filename": "issuer-pack.txt",
+                      "page": 1,
+                      "matched_text": "/drivers/0/revenue = \"500\"",
+                      "rects": [
+                        {
+                          "x0": 72.0,
+                          "y0": 336.0,
+                          "x1": 244.8,
+                          "y1": 348.0
+                        }
+                      ],
+                      "withdrawn_at": null
+                    }
+                  ],
+                  "supporting_research": [
+                    {
+                      "route_node_id": "CP-1",
+                      "module_id": "CP-1",
+                      "qa_status": "Passed"
+                    },
+                    {
+                      "route_node_id": "CP-2G",
+                      "module_id": "CP-2G",
+                      "qa_status": "Passed"
+                    },
+                    {
+                      "route_node_id": "CP-CF",
+                      "module_id": "CP-CF",
+                      "qa_status": "Passed"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ],
+        "unavailable_reason": null,
+        "refusal": null
+      },
+      {
+        "case_id": "00000000-0000-4000-8000-000000000002",
+        "title": "Virgin Media O2",
+        "standing": "READER",
+        "subject": {
+          "issuer_id": "CVNA",
+          "issuer_name": "Virgin Media O2",
+          "reporting_period": "FY2025",
+          "analysis_date": "2026-09-14"
+        },
+        "displayed_run_id": "00000000-0000-4000-8000-0000000000a1",
+        "displayed_run_status": "COMPLETE",
+        "snapshot": "2222222222222222222222222222222222222222222222222222222222222222",
+        "currency": "USD",
+        "scale": "millions",
+        "periods": [
+          {
+            "case": "BASE",
+            "period_id": "FY2026",
+            "fiscal_year": "2026",
+            "days": "365",
+            "unavailable_reason": null,
+            "cells": [
+              {
+                "column": "operating.revenue",
+                "value": "1000.000000",
+                "unavailable_reason": null,
+                "passport": {
+                  "definition": "Revenue, as the accepted driver row for the period states it (caos-forecast-v1).",
+                  "period": "FY2026 \u00b7 FY2026 \u00b7 365 days",
+                  "scenario": "BASE",
+                  "reporting_period": "FY2025",
+                  "computed_at": "2026-09-14T10:00:00Z",
+                  "snapshot": "2222222222222222222222222222222222222222222222222222222222222222",
+                  "method": "cash_flow_forecast \u00b7 VERIFIED",
+                  "derivation": "drivers[period].revenue \u2014 revenue = 1000",
+                  "citations": [
+                    {
+                      "document_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                      "source_id": "00000000-0000-4000-8000-0000000000d1",
+                      "filename": "issuer-pack.txt",
+                      "page": 1,
+                      "matched_text": "/drivers/0/revenue = \"1000\"",
+                      "rects": [
+                        {
+                          "x0": 72.0,
+                          "y0": 336.0,
+                          "x1": 244.8,
+                          "y1": 348.0
+                        }
+                      ],
+                      "withdrawn_at": null
+                    }
+                  ],
+                  "supporting_research": [
+                    {
+                      "route_node_id": "CP-1",
+                      "module_id": "CP-1",
+                      "qa_status": "Passed"
+                    },
+                    {
+                      "route_node_id": "CP-2G",
+                      "module_id": "CP-2G",
+                      "qa_status": "Passed"
+                    },
+                    {
+                      "route_node_id": "CP-CF",
+                      "module_id": "CP-CF",
+                      "qa_status": "Passed"
+                    }
+                  ]
+                }
+              },
+              {
+                "column": "operating.ebitda",
+                "value": "200.000000",
+                "unavailable_reason": null,
+                "passport": {
+                  "definition": "EBITDA, as the accepted driver row for the period states it (caos-forecast-v1).",
+                  "period": "FY2026 \u00b7 FY2026 \u00b7 365 days",
+                  "scenario": "BASE",
+                  "reporting_period": "FY2025",
+                  "computed_at": "2026-09-14T10:00:00Z",
+                  "snapshot": "2222222222222222222222222222222222222222222222222222222222222222",
+                  "method": "cash_flow_forecast \u00b7 VERIFIED",
+                  "derivation": "drivers[period].ebitda \u2014 ebitda = 200",
+                  "citations": [
+                    {
+                      "document_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                      "source_id": "00000000-0000-4000-8000-0000000000d1",
+                      "filename": "issuer-pack.txt",
+                      "page": 1,
+                      "matched_text": "/drivers/0/ebitda = \"200\"",
+                      "rects": [
+                        {
+                          "x0": 72.0,
+                          "y0": 348.0,
+                          "x1": 244.8,
+                          "y1": 360.0
+                        }
+                      ],
+                      "withdrawn_at": null
+                    }
+                  ],
+                  "supporting_research": [
+                    {
+                      "route_node_id": "CP-1",
+                      "module_id": "CP-1",
+                      "qa_status": "Passed"
+                    },
+                    {
+                      "route_node_id": "CP-2G",
+                      "module_id": "CP-2G",
+                      "qa_status": "Passed"
+                    },
+                    {
+                      "route_node_id": "CP-CF",
+                      "module_id": "CP-CF",
+                      "qa_status": "Passed"
+                    }
+                  ]
+                }
+              },
+              {
+                "column": "operating.cfo",
+                "value": "160.000000",
+                "unavailable_reason": null,
+                "passport": {
+                  "definition": "Cash flow from operations, as the accepted driver row for the period states it (caos-forecast-v1).",
+                  "period": "FY2026 \u00b7 FY2026 \u00b7 365 days",
+                  "scenario": "BASE",
+                  "reporting_period": "FY2025",
+                  "computed_at": "2026-09-14T10:00:00Z",
+                  "snapshot": "2222222222222222222222222222222222222222222222222222222222222222",
+                  "method": "cash_flow_forecast \u00b7 VERIFIED",
+                  "derivation": "drivers[period].cfo \u2014 cfo = 160",
+                  "citations": [
+                    {
+                      "document_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                      "source_id": "00000000-0000-4000-8000-0000000000d1",
+                      "filename": "issuer-pack.txt",
+                      "page": 1,
+                      "matched_text": "/drivers/0/cfo = \"160\"",
+                      "rects": [
+                        {
+                          "x0": 72.0,
+                          "y0": 360.0,
+                          "x1": 244.8,
+                          "y1": 372.0
+                        }
+                      ],
+                      "withdrawn_at": null
+                    }
+                  ],
+                  "supporting_research": [
+                    {
+                      "route_node_id": "CP-1",
+                      "module_id": "CP-1",
+                      "qa_status": "Passed"
+                    },
+                    {
+                      "route_node_id": "CP-2G",
+                      "module_id": "CP-2G",
+                      "qa_status": "Passed"
+                    },
+                    {
+                      "route_node_id": "CP-CF",
+                      "module_id": "CP-CF",
+                      "qa_status": "Passed"
+                    }
+                  ]
+                }
+              },
+              {
+                "column": "investing.capex",
+                "value": "40.000000",
+                "unavailable_reason": null,
+                "passport": {
+                  "definition": "Capital expenditure, as the accepted driver row for the period states it (caos-forecast-v1).",
+                  "period": "FY2026 \u00b7 FY2026 \u00b7 365 days",
+                  "scenario": "BASE",
+                  "reporting_period": "FY2025",
+                  "computed_at": "2026-09-14T10:00:00Z",
+                  "snapshot": "2222222222222222222222222222222222222222222222222222222222222222",
+                  "method": "cash_flow_forecast \u00b7 VERIFIED",
+                  "derivation": "drivers[period].capex \u2014 capex = 40",
+                  "citations": [
+                    {
+                      "document_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                      "source_id": "00000000-0000-4000-8000-0000000000d1",
+                      "filename": "issuer-pack.txt",
+                      "page": 1,
+                      "matched_text": "/drivers/0/capex = \"40\"",
+                      "rects": [
+                        {
+                          "x0": 72.0,
+                          "y0": 372.0,
+                          "x1": 244.8,
+                          "y1": 384.0
+                        }
+                      ],
+                      "withdrawn_at": null
+                    }
+                  ],
+                  "supporting_research": [
+                    {
+                      "route_node_id": "CP-1",
+                      "module_id": "CP-1",
+                      "qa_status": "Passed"
+                    },
+                    {
+                      "route_node_id": "CP-2G",
+                      "module_id": "CP-2G",
+                      "qa_status": "Passed"
+                    },
+                    {
+                      "route_node_id": "CP-CF",
+                      "module_id": "CP-CF",
+                      "qa_status": "Passed"
+                    }
+                  ]
+                }
+              },
+              {
+                "column": "financing.cash_interest",
+                "value": "20.000000",
+                "unavailable_reason": null,
+                "passport": {
+                  "definition": "Cash interest, as the accepted driver row for the period states it (caos-forecast-v1).",
+                  "period": "FY2026 \u00b7 FY2026 \u00b7 365 days",
+                  "scenario": "BASE",
+                  "reporting_period": "FY2025",
+                  "computed_at": "2026-09-14T10:00:00Z",
+                  "snapshot": "2222222222222222222222222222222222222222222222222222222222222222",
+                  "method": "cash_flow_forecast \u00b7 VERIFIED",
+                  "derivation": "drivers[period].cash_interest \u2014 cash_interest = 20",
+                  "citations": [
+                    {
+                      "document_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                      "source_id": "00000000-0000-4000-8000-0000000000d1",
+                      "filename": "issuer-pack.txt",
+                      "page": 1,
+                      "matched_text": "/drivers/0/cash_interest = \"20\"",
+                      "rects": [
+                        {
+                          "x0": 72.0,
+                          "y0": 384.0,
+                          "x1": 244.8,
+                          "y1": 396.0
+                        }
+                      ],
+                      "withdrawn_at": null
+                    }
+                  ],
+                  "supporting_research": [
+                    {
+                      "route_node_id": "CP-1",
+                      "module_id": "CP-1",
+                      "qa_status": "Passed"
+                    },
+                    {
+                      "route_node_id": "CP-2G",
+                      "module_id": "CP-2G",
+                      "qa_status": "Passed"
+                    },
+                    {
+                      "route_node_id": "CP-CF",
+                      "module_id": "CP-CF",
+                      "qa_status": "Passed"
+                    }
+                  ]
+                }
+              },
+              {
+                "column": "operating.margin",
+                "value": "0.2000",
+                "unavailable_reason": null,
+                "passport": {
+                  "definition": "EBITDA margin, as the accepted driver row for the period states it (caos-forecast-v1).",
+                  "period": "FY2026 \u00b7 FY2026 \u00b7 365 days",
+                  "scenario": "BASE",
+                  "reporting_period": "FY2025",
+                  "computed_at": "2026-09-14T10:00:00Z",
+                  "snapshot": "2222222222222222222222222222222222222222222222222222222222222222",
+                  "method": "cash_flow_forecast \u00b7 VERIFIED",
+                  "derivation": "operating.ebitda / operating.revenue \u2014 ebitda = 200, revenue = 1000",
+                  "citations": [
+                    {
+                      "document_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                      "source_id": "00000000-0000-4000-8000-0000000000d1",
+                      "filename": "issuer-pack.txt",
+                      "page": 1,
+                      "matched_text": "/drivers/0/ebitda = \"200\"",
+                      "rects": [
+                        {
+                          "x0": 72.0,
+                          "y0": 348.0,
+                          "x1": 244.8,
+                          "y1": 360.0
+                        }
+                      ],
+                      "withdrawn_at": null
+                    },
+                    {
+                      "document_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                      "source_id": "00000000-0000-4000-8000-0000000000d1",
+                      "filename": "issuer-pack.txt",
+                      "page": 1,
+                      "matched_text": "/drivers/0/revenue = \"1000\"",
+                      "rects": [
+                        {
+                          "x0": 72.0,
+                          "y0": 336.0,
+                          "x1": 244.8,
+                          "y1": 348.0
+                        }
+                      ],
+                      "withdrawn_at": null
+                    }
+                  ],
+                  "supporting_research": [
+                    {
+                      "route_node_id": "CP-1",
+                      "module_id": "CP-1",
+                      "qa_status": "Passed"
+                    },
+                    {
+                      "route_node_id": "CP-2G",
+                      "module_id": "CP-2G",
+                      "qa_status": "Passed"
+                    },
+                    {
+                      "route_node_id": "CP-CF",
+                      "module_id": "CP-CF",
+                      "qa_status": "Passed"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ],
+        "unavailable_reason": null,
+        "refusal": null
+      },
+      {
+        "case_id": "00000000-0000-4000-8000-000000000003",
+        "title": "Terra Firma Holdings",
+        "standing": "READER",
+        "subject": null,
+        "displayed_run_id": "00000000-0000-4000-8000-0000000000a3",
+        "displayed_run_status": "BLOCKED",
+        "snapshot": null,
+        "currency": null,
+        "scale": null,
+        "periods": [],
+        "unavailable_reason": "NO_ACCEPTED_FORECAST",
+        "refusal": null
+      }
+    ]
+  },
+  "observed_at": "2026-09-14T10:05:00Z",
+  "observed_empty": false,
+  "status": "partial",
+  "notes": []
+}

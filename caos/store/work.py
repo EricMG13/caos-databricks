@@ -1,0 +1,315 @@
+"""The run work queue: one claim per run, fenced by a token (brief D1-D4).
+
+A run with no `run_work` row is driven by a direct caller (the harness, tests).
+Once enqueued, only the holder of its current lease may write to it. The token,
+not the clock, is the fence: every claim advances it, so a holder whose lease
+expired and was reclaimed carries a token no row still matches.
+
+Lock order is case, then run (`lock_run`), then `run_work`. `claim_run` takes
+only the work row and commits alone. Every other function here rides its
+caller's transaction and leaves the commit to it, so a command's governed write,
+its audit event and its queue effect commit together or not at all.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Literal, cast
+from uuid import UUID
+
+from caos.boundary_text import BoundaryText
+from caos.refusals import Refusal, RefusalCode
+from caos.store import RunStatus, StoreConnection, committed_unit
+from caos.store.events import RunEvent, append, lock_run
+from caos.store.outcomes import require_idle
+
+# Renewed by every fenced write; see brief D5 for why it outlives the provider
+# timeout.
+LEASE_SECONDS = 300
+MAX_WORKER_BYTES = 128
+
+
+@dataclass(frozen=True, slots=True)
+class Lease:
+    """The right to write to one run, for as long as `token` is its row's."""
+
+    run_id: UUID
+    token: int
+
+
+def enqueue_run(conn: StoreConnection, run_id: UUID) -> bool:
+    """Queue a RUNNING run once. Returns whether this call queued it."""
+    if lock_run(conn, run_id) is not RunStatus.RUNNING:
+        raise Refusal(RefusalCode.RUN_NOT_RUNNING)
+    return bool(
+        conn.execute(
+            "INSERT INTO run_work (run_id, state) VALUES (%s, 'QUEUED')"
+            " ON CONFLICT (run_id) DO NOTHING",
+            (run_id,),
+        ).rowcount
+    )
+
+
+def claim_run(
+    conn: StoreConnection, *, worker: BoundaryText, lease_seconds: int
+) -> Lease | None:
+    """Claim the oldest queued or expired run, committed alone, or None.
+
+    `SKIP LOCKED` lets two workers poll without waiting on each other; the outer
+    predicate re-checks expiry on the locked row, so a holder that renewed while
+    this claim waited keeps its lease.
+    """
+    if not isinstance(worker, BoundaryText) or (
+        len(worker.value.encode("utf-8")) > MAX_WORKER_BYTES or not worker.value
+    ):
+        raise Refusal(RefusalCode.BOUNDARY_TEXT_INVALID)
+    _require_seconds(lease_seconds)
+    require_idle(conn)
+    with committed_unit(conn):
+        row = conn.execute(
+            "UPDATE run_work w SET state = 'CLAIMED', lease_token = w.lease_token + 1,"
+            " worker = %s, stop_code = NULL,"
+            " lease_expires_at = clock_timestamp() + make_interval(secs => %s)"
+            " WHERE w.run_id = (SELECT run_id FROM run_work"
+            "   WHERE state = 'QUEUED'"
+            "      OR (state = 'CLAIMED' AND lease_expires_at <= clock_timestamp())"
+            "   ORDER BY requested_at, run_id LIMIT 1 FOR UPDATE SKIP LOCKED)"
+            " AND (w.state = 'QUEUED' OR (w.state = 'CLAIMED'"
+            "      AND w.lease_expires_at <= clock_timestamp()))"
+            " RETURNING w.run_id, w.lease_token",
+            (worker.value, lease_seconds),
+        ).fetchone()
+    return None if row is None else Lease(UUID(str(row[0])), int(row[1]))
+
+
+def require_running(conn: StoreConnection, run_id: UUID, lease: Lease | None) -> None:
+    """The fence for new spend, under the run row lock it takes: the run is
+    RUNNING, the lease is held and no cancel was requested (brief 4.3 D3)."""
+    if lock_run(conn, run_id) is not RunStatus.RUNNING:
+        raise Refusal(RefusalCode.RUN_NOT_RUNNING)
+    if require_lease(conn, run_id, lease):
+        raise Refusal(RefusalCode.RUN_CANCEL_REQUESTED)
+
+
+def require_lease(
+    conn: StoreConnection,
+    run_id: UUID,
+    lease: Lease | None,
+    *,
+    lease_seconds: int = LEASE_SECONDS,
+) -> bool:
+    """Fence one write under the caller's `lock_run`, renewing a live lease.
+
+    Returns whether a cancel was requested. `None` is the direct caller: it may
+    write only to a run that was never enqueued. Refuses `LEASE_NOT_HELD`.
+    """
+    _require_seconds(lease_seconds)
+    if lease is None:
+        queued = conn.execute(
+            "SELECT 1 FROM run_work WHERE run_id = %s FOR SHARE", (run_id,)
+        ).fetchone()
+        if queued is not None:
+            raise Refusal(RefusalCode.LEASE_NOT_HELD)
+        return False
+    if not isinstance(lease, Lease) or lease.run_id != run_id:
+        raise Refusal(RefusalCode.LEASE_NOT_HELD)
+    row = conn.execute(
+        "UPDATE run_work"
+        " SET lease_expires_at = clock_timestamp() + make_interval(secs => %s)"
+        " WHERE run_id = %s AND state = 'CLAIMED' AND lease_token = %s"
+        " RETURNING cancel_requested_at",
+        (lease_seconds, run_id, lease.token),
+    ).fetchone()
+    if row is None:
+        raise Refusal(RefusalCode.LEASE_NOT_HELD)
+    return row[0] is not None
+
+
+def holds_lease(conn: StoreConnection, run_id: UUID, lease: Lease | None) -> bool:
+    """Whether this caller still holds the run, without renewing or writing.
+
+    `lock_run` answers the same question by renewing, which a read block must
+    not do. This exists so a read-only check can put the lease refusal first:
+    a caller that lost the run is told that, before it is told anything about
+    what the run contains.
+    """
+    if lease is None:
+        return (
+            conn.execute(
+                "SELECT 1 FROM run_work WHERE run_id = %s", (run_id,)
+            ).fetchone()
+            is None
+        )
+    if not isinstance(lease, Lease) or lease.run_id != run_id:
+        return False
+    return (
+        conn.execute(
+            "SELECT 1 FROM run_work WHERE run_id = %s AND state = 'CLAIMED'"
+            " AND lease_token = %s",
+            (run_id, lease.token),
+        ).fetchone()
+        is not None
+    )
+
+
+def release(conn: StoreConnection, lease: Lease) -> bool:
+    """Give a held run back to the queue. False when the lease is not held."""
+    return bool(
+        conn.execute(
+            "UPDATE run_work SET state = 'QUEUED', worker = NULL,"
+            " lease_expires_at = NULL"
+            " WHERE run_id = %s AND state = 'CLAIMED' AND lease_token = %s",
+            (lease.run_id, lease.token),
+        ).rowcount
+    )
+
+
+def stop(conn: StoreConnection, lease: Lease, code: RefusalCode) -> bool:
+    """Park a held run with the refusal that stopped it, until a retry requeues
+    it. False when the lease is not held."""
+    if not isinstance(code, RefusalCode):
+        raise Refusal(RefusalCode.CALL_OUTCOME_INVALID)
+    return bool(
+        conn.execute(
+            "UPDATE run_work SET state = 'STOPPED', stop_code = %s, worker = NULL,"
+            " lease_expires_at = NULL"
+            " WHERE run_id = %s AND state = 'CLAIMED' AND lease_token = %s",
+            (code.value, lease.run_id, lease.token),
+        ).rowcount
+    )
+
+
+def requeue_run(conn: StoreConnection, run_id: UUID) -> bool:
+    """Retry a stopped RUNNING run with no cancel requested. Returns whether this
+    call requeued it."""
+    if lock_run(conn, run_id) is not RunStatus.RUNNING:
+        raise Refusal(RefusalCode.RUN_NOT_RUNNING)
+    return bool(
+        conn.execute(
+            "UPDATE run_work SET state = 'QUEUED', stop_code = NULL,"
+            " requested_at = now()"
+            " WHERE run_id = %s AND state = 'STOPPED'"
+            " AND cancel_requested_at IS NULL",
+            (run_id,),
+        ).rowcount
+    )
+
+
+def request_cancel(conn: StoreConnection, run_id: UUID) -> bool:
+    """Record a cancel once; end a run no worker holds CANCELLED in this unit.
+
+    A claimed run keeps running: its holder learns of the request from
+    `require_lease` and ends the run itself. Returns whether this call recorded
+    the request or ended the run.
+    """
+    if lock_run(conn, run_id) is not RunStatus.RUNNING:
+        return False
+    row = conn.execute(
+        "SELECT state, cancel_requested_at IS NULL FROM run_work"
+        " WHERE run_id = %s FOR UPDATE",
+        (run_id,),
+    ).fetchone()
+    if row is None or row[0] == "DONE":
+        return False
+    state, unrequested = row
+    if unrequested:
+        conn.execute(
+            "UPDATE run_work SET cancel_requested_at = now() WHERE run_id = %s",
+            (run_id,),
+        )
+    if state not in ("QUEUED", "STOPPED"):
+        return bool(unrequested)
+    changed = conn.execute(
+        "UPDATE runs SET status = %s WHERE run_id = %s AND status = %s",
+        (RunStatus.CANCELLED.value, run_id, RunStatus.RUNNING.value),
+    ).rowcount
+    if changed:
+        append(conn, run_id, RunEvent.RUN_CANCELLED)
+        mark_work_done(conn, run_id)
+    return bool(changed)
+
+
+def mark_work_done(conn: StoreConnection, run_id: UUID) -> None:
+    """Close a run's work row, if it has one, in the terminal transition's own
+    transaction; the caller holds `lock_run` and owns the commit."""
+    conn.execute(
+        "UPDATE run_work SET state = 'DONE', worker = NULL, lease_expires_at = NULL,"
+        " stop_code = NULL WHERE run_id = %s AND state <> 'DONE'",
+        (run_id,),
+    )
+
+
+def _require_seconds(seconds: int) -> None:
+    if type(seconds) is not int or not 0 < seconds <= 86_400:
+        raise Refusal(RefusalCode.CALL_OUTCOME_INVALID)
+
+
+# A beat older than this is not evidence that a worker is alive. Three times
+# the default poll interval, so an ordinary slow poll under load is not a
+# stall: what an operator is being told is "nobody has spoken recently", and
+# crying that once a minute would make the signal worthless.
+WORKER_STALE_AFTER = 30.0
+type WorkerState = Literal["POLLING", "WORKING", "BACKOFF"]
+
+
+@dataclass(frozen=True, slots=True)
+class WorkerBeat:
+    """One worker's last word about itself, and whether it is recent enough to
+    believe."""
+
+    worker_id: str
+    state: WorkerState
+    consecutive_faults: int
+    beat_at: datetime
+    fresh: bool
+
+
+def beat(
+    conn: StoreConnection,
+    *,
+    worker_id: str,
+    state: WorkerState,
+    faults: int,
+) -> None:
+    """Record that this worker is alive, and what it is doing.
+
+    One row per worker, overwritten: the table is the size of the fleet rather
+    than of the uptime. `beat_at` is the store's clock and never the worker's,
+    for the reason every other timestamp here is -- a worker with a skewed
+    clock would otherwise read as permanently stale or permanently fresh.
+
+    This is not a fenced write and grants nothing. A worker that beats while
+    holding no lease still cannot write a run, so the worst a wrong beat does
+    is mislead a person.
+    """
+    conn.execute(
+        "INSERT INTO worker_heartbeats (worker_id, beat_at, state,"
+        " consecutive_faults) VALUES (%s, now(), %s, %s)"
+        " ON CONFLICT (worker_id) DO UPDATE SET"
+        " beat_at = now(), state = EXCLUDED.state,"
+        " consecutive_faults = EXCLUDED.consecutive_faults",
+        (BoundaryText.of(worker_id).value, state, faults),
+    )
+
+
+def worker_states(conn: StoreConnection) -> list[WorkerBeat]:
+    """Every worker that has ever beaten, freshness decided by the store's clock.
+
+    A worker that exited leaves its last beat behind, and that row is more use
+    than no row: "worker-a last spoke nine minutes ago, in BACKOFF" names the
+    process to go and look at, where an empty table only says nobody is
+    working.
+    """
+    rows = conn.execute(
+        "SELECT worker_id, state, consecutive_faults, beat_at,"
+        " beat_at > now() - make_interval(secs => %s) FROM worker_heartbeats"
+        " ORDER BY worker_id",
+        (WORKER_STALE_AFTER,),
+    ).fetchall()
+    return [
+        WorkerBeat(
+            str(worker), cast("WorkerState", str(state)), int(faults), when, bool(fresh)
+        )
+        for worker, state, faults, when, fresh in rows
+    ]

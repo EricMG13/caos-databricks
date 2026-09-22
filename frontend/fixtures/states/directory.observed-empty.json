@@ -1,0 +1,17 @@
+{
+  "chrome": {
+    "subject": null,
+    "served_role": {
+      "global_role": "ANALYST",
+      "standing": "APPROVER"
+    },
+    "actions": []
+  },
+  "body": {
+    "cases": []
+  },
+  "observed_at": "2026-09-09T14:30:00Z",
+  "observed_empty": true,
+  "status": "complete",
+  "notes": []
+}

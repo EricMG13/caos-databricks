@@ -1,0 +1,7 @@
+# Actions only. Python is hash-locked by uv (docs/DECISIONS.md 10); a Dependabot
+# pip bump would edit a pinned line without its hashes and fail --require-hashes.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: {interval: weekly}

@@ -1,0 +1,122 @@
+{
+  "adapter_version": "canonical-markdown-v3",
+  "attempts": [
+    {
+      "charge": "0.24936575",
+      "diagnostic_sha256": "3d3445c37936192ddd1a3da79ad0e9229c441c07c6d536286ca19d74d7740bc8",
+      "generation_id": "gen-1789579361-eGLzI6kIOPVrzWjf874w",
+      "model": "openai/gpt-5.6-terra",
+      "ordinal": 1,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_EARNINGS_UPDATE-01-CP-0"
+    },
+    {
+      "charge": "0.26425125",
+      "diagnostic_sha256": "a721a47ac873076c8cec2ce4fdcea17e40e7ca40f41d0c2462b3123418ea8c92",
+      "generation_id": "gen-1789579465-8qZsCYiFOEAfntMcPCPI",
+      "model": "openai/gpt-5.6-terra",
+      "ordinal": 1,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_EARNINGS_UPDATE-02-CP-L10"
+    },
+    {
+      "charge": "0.28196375",
+      "diagnostic_sha256": "58271e52e0fd5310b63a3dc6050c5a6b53b9368428164986fa18f646eb67d9b5",
+      "generation_id": "gen-1789579540-qrVfqYNJsXHDP7Vr7kxx",
+      "model": "openai/gpt-5.6-terra",
+      "ordinal": 1,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_EARNINGS_UPDATE-03-CP-5"
+    }
+  ],
+  "complete": true,
+  "evidence_sha256": "bb09d8d0bcec1524eabdc426142ef9eae60890be52a58bbf973f321644cd4621",
+  "matrix": [
+    {
+      "case_label": "vmo2-fy2025-lite-credit-22",
+      "expected_refusal_met": null,
+      "forecast_met": null,
+      "met": 1,
+      "missed": 0,
+      "missed_keys": [],
+      "projections_met": true,
+      "proven": true,
+      "ready_met": true,
+      "refusal": null
+    }
+  ],
+  "model": "openai/gpt-5.6-terra",
+  "performed_sha256": "d758a253dba3aed1f88cd325a46c8984d2e0da9189a3027e8f8b4734eb78a7bd",
+  "provider": "openrouter/openai/flex/high/65536",
+  "result": [
+    {
+      "case_label": "vmo2-fy2025-lite-credit-22",
+      "proof": {
+        "anchored": [
+          [
+            "CP-0",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "In Q4 2025, we recorded a non-cash goodwill impairment of \u00a31,021.7 million primarily related to the impacts of the UK market and"
+          ],
+          [
+            "CP-0",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "The preliminary unaudited selected financial results are set forth below:"
+          ],
+          [
+            "CP-0",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "company that is not included as a restricted subsidiary for purposes of the facilities agreement and bond"
+          ],
+          [
+            "CP-5",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "In Q4 2025, we recorded a non-cash goodwill impairment of \u00a31,021.7 million primarily related to the impacts of the UK market and"
+          ],
+          [
+            "CP-5",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "The preliminary unaudited selected financial results are set forth below:"
+          ],
+          [
+            "CP-5",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "company that is not included as a restricted subsidiary for purposes of the facilities agreement and bond"
+          ],
+          [
+            "CP-5",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "\u00a31,645.5 million. This was primarily driven by the impact of an agreement with Cellnex UK resulting in a"
+          ],
+          [
+            "CP-L10",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "In Q4 2025, we recorded a non-cash goodwill impairment of \u00a31,021.7 million primarily related to the impacts of the UK market and"
+          ],
+          [
+            "CP-L10",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "The preliminary unaudited selected financial results are set forth below:"
+          ],
+          [
+            "CP-L10",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "company that is not included as a restricted subsidiary for purposes of the facilities agreement and bond"
+          ],
+          [
+            "CP-L10",
+            "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d",
+            "\u00a31,645.5 million. This was primarily driven by the impact of an agreement with Cellnex UK resulting in a"
+          ]
+        ],
+        "artifacts": 3,
+        "build_id": "30222a494a5a1035c7955cb1ccfbe0b3b0fbbfa7d6426930f5dcf4d35aa1fc18",
+        "citations": 11,
+        "route_digest": "3f020d6f45d19ecf7adeff39bc5b3ba42aaa73d940d94211b7b9ea131a45da30",
+        "run_id": "62308d4e-70b5-4793-abb0-7be62d2ceba6"
+      },
+      "refusal": null,
+      "status": "COMPLETE",
+      "stopped": null
+    }
+  ],
+  "run_id": "62308d4e-70b5-4793-abb0-7be62d2ceba6",
+  "set_sha256": "0863964bb4dbad8dc8772654311d7b59dfc2810cd08cf6cfdeda6a940ed0db74"
+}

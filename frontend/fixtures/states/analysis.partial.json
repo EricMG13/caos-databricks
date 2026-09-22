@@ -1,0 +1,175 @@
+{
+  "chrome": {
+    "subject": {
+      "case_id": "00000000-0000-4000-8000-000000000001",
+      "title": "Carvana Co. (NYSE: CVNA)"
+    },
+    "served_role": {
+      "global_role": "ANALYST",
+      "standing": "APPROVER"
+    },
+    "actions": []
+  },
+  "body": {
+    "case_id": "00000000-0000-4000-8000-000000000001",
+    "latest_run_id": "00000000-0000-4000-8000-0000000000b2",
+    "displayed_run_id": "00000000-0000-4000-8000-0000000000b2",
+    "subject": {
+      "issuer_id": "CVNA",
+      "issuer_name": "Carvana Co. (NYSE: CVNA)",
+      "reporting_period": "Q2 2026",
+      "analysis_date": "2026-09-09"
+    },
+    "displayed_run_status": "COMPLETE",
+    "blocked_by": null,
+    "handoffs": [
+      {
+        "route_node_id": "rn-cp-0",
+        "module_id": "CP-0",
+        "artifact_sha256": "11111111111111111111111111111111111111111111111111111111111111a1",
+        "record_sha256": "22222222222222222222222222222222222222222222222222222222222222a1",
+        "accepted_at": "2026-09-09T13:05:00Z",
+        "qa_status": "Passed",
+        "committee_status": "Committee Ready",
+        "confidence_score": 96,
+        "confidence_band": "HIGH",
+        "limitation_flags": [],
+        "validation_warnings": [],
+        "decision_scope": "FULL_COMMITTEE",
+        "screening_only": false,
+        "source_facts": [],
+        "model_analysis": "Source register carries six pinned sources at set version 4.\n",
+        "host_calculation": "NONE"
+      },
+      {
+        "route_node_id": "rn-cp-1",
+        "module_id": "CP-1",
+        "artifact_sha256": "11111111111111111111111111111111111111111111111111111111111111b1",
+        "record_sha256": "22222222222222222222222222222222222222222222222222222222222222b1",
+        "accepted_at": "2026-09-09T13:06:00Z",
+        "qa_status": "Passed",
+        "committee_status": "Committee Ready",
+        "confidence_score": 91,
+        "confidence_band": "HIGH",
+        "limitation_flags": [],
+        "validation_warnings": [],
+        "decision_scope": "FULL_COMMITTEE",
+        "screening_only": false,
+        "source_facts": [],
+        "model_analysis": "Adjusted EBITDA for Q2 2026 is $769M.\n",
+        "host_calculation": "NONE"
+      },
+      {
+        "route_node_id": "rn-cp-1c",
+        "module_id": "CP-1C",
+        "artifact_sha256": "11111111111111111111111111111111111111111111111111111111111111c1",
+        "record_sha256": "22222222222222222222222222222222222222222222222222222222222222c1",
+        "accepted_at": "2026-09-09T13:09:00Z",
+        "qa_status": "Restricted",
+        "committee_status": "Screen Only",
+        "confidence_score": 68,
+        "confidence_band": "MEDIUM",
+        "limitation_flags": ["PEER_SET_INCOMPLETE"],
+        "validation_warnings": [],
+        "decision_scope": "FULL_COMMITTEE",
+        "screening_only": false,
+        "source_facts": [],
+        "model_analysis": "Peer benchmark is restricted: one comparable is stale.\n",
+        "host_calculation": "NONE"
+      },
+      {
+        "route_node_id": "rn-cp-2",
+        "module_id": "CP-2",
+        "artifact_sha256": "11111111111111111111111111111111111111111111111111111111111111d2",
+        "record_sha256": "22222222222222222222222222222222222222222222222222222222222222d2",
+        "accepted_at": "2026-09-09T13:11:00Z",
+        "qa_status": "Passed",
+        "committee_status": "Committee Ready",
+        "confidence_score": 89,
+        "confidence_band": "HIGH",
+        "limitation_flags": [],
+        "validation_warnings": [],
+        "decision_scope": "FULL_COMMITTEE",
+        "screening_only": false,
+        "source_facts": [],
+        "model_analysis": "Perimeter and debt schedule accepted with no open item.\n",
+        "host_calculation": "NONE"
+      },
+      {
+        "route_node_id": "rn-cp-4",
+        "module_id": "CP-4",
+        "artifact_sha256": "11111111111111111111111111111111111111111111111111111111111111d1",
+        "record_sha256": "22222222222222222222222222222222222222222222222222222222222222d1",
+        "accepted_at": "2026-09-09T13:23:00Z",
+        "qa_status": "Passed",
+        "committee_status": "Committee Ready",
+        "confidence_score": 88,
+        "confidence_band": "HIGH",
+        "limitation_flags": [],
+        "validation_warnings": [],
+        "decision_scope": "FULL_COMMITTEE",
+        "screening_only": false,
+        "source_facts": [],
+        "model_analysis": "Covenants read at a 3.50x net leverage threshold.\n",
+        "host_calculation": "NONE"
+      },
+      {
+        "route_node_id": "rn-cp-5",
+        "module_id": "CP-5",
+        "artifact_sha256": "11111111111111111111111111111111111111111111111111111111111111e1",
+        "record_sha256": "22222222222222222222222222222222222222222222222222222222222222e1",
+        "accepted_at": "2026-09-09T13:27:00Z",
+        "qa_status": "Passed",
+        "committee_status": "Committee Ready",
+        "confidence_score": 93,
+        "confidence_band": "HIGH",
+        "limitation_flags": [],
+        "validation_warnings": [],
+        "decision_scope": "FULL_COMMITTEE",
+        "screening_only": false,
+        "source_facts": [],
+        "model_analysis": "QA audit passed clean on every citation anchored so far.\n",
+        "host_calculation": "NONE"
+      },
+      {
+        "route_node_id": "rn-cp-cf",
+        "module_id": "CP-CF",
+        "artifact_sha256": "11111111111111111111111111111111111111111111111111111111111111f4",
+        "record_sha256": "22222222222222222222222222222222222222222222222222222222222222f4",
+        "accepted_at": "2026-09-09T13:36:00Z",
+        "qa_status": "Passed",
+        "committee_status": "Committee Ready",
+        "confidence_score": 79,
+        "confidence_band": "MEDIUM",
+        "limitation_flags": [],
+        "validation_warnings": [],
+        "decision_scope": "FULL_COMMITTEE",
+        "screening_only": false,
+        "source_facts": [],
+        "model_analysis": "Cash flow forecast reconciles within tolerance.\n",
+        "host_calculation": "NONE"
+      }
+    ],
+    "pending": [
+      {
+        "route_node_id": "rn-cp-6",
+        "module_id": "CP-6",
+        "state": "RUNNABLE"
+      },
+      {
+        "route_node_id": "rn-cp-6a",
+        "module_id": "CP-6A",
+        "state": "BLOCKED"
+      },
+      {
+        "route_node_id": "rn-cp-7",
+        "module_id": "CP-7",
+        "state": "BLOCKED"
+      }
+    ]
+  },
+  "observed_at": "2026-09-09T14:30:00Z",
+  "observed_empty": false,
+  "status": "partial",
+  "notes": ["HANDOFFS_PENDING"]
+}

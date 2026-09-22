@@ -1,0 +1,40 @@
+{"database": "caos_qualify_f68731cc5b584def9975852b55cb0283", "blob_root": "/Users/ericguei/.codex/worktrees/gpt-model-routing/caos-workbench/.dev-data/qualification-blobs/caos-qualify-c_gsmhvk", "price_model": "openai/gpt-5.6-sol", "price_input_per_token": "0.000005", "price_output_per_token": "0.000015", "price_as_of": "2026-09-19", "price_worst_case_per_call": "6.225920"}
+{"resumed_after": "CITATION_NOT_LOCATED", "attempts_left": 1}
+{
+  "adapter_version": "canonical-markdown-v3",
+  "attempts": [
+    {
+      "charge": "0.3288035",
+      "diagnostic_sha256": "af8ab69b979242387dff183f44d9e57f07cd41845de8f4be67f182d877a75253",
+      "generation_id": "gen-1789854496-PU1YSVwG9DXlKzoZCthh",
+      "model": "openai/gpt-5.6-sol",
+      "ordinal": 1,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_PORTFOLIO_DECISION-01-CP-0"
+    },
+    {
+      "charge": "0.325751",
+      "diagnostic_sha256": "e406a0bfccbf2cfede389771979aa4c8a6f3900d88fc27bb58ad9305d0d5a57b",
+      "generation_id": "gen-1789854715-3zOx5bueimQw1ZTx2qey",
+      "model": "openai/gpt-5.6-sol",
+      "ordinal": 2,
+      "route_node_id": "RN-LITE_CREDIT_22-LITE_PORTFOLIO_DECISION-01-CP-0"
+    }
+  ],
+  "complete": false,
+  "evidence_sha256": "961940c10eabb9589d7a8aedf168a4ed7b4fbe3f749b1a6a6758c45273028dd8",
+  "matrix": null,
+  "model": "openai/gpt-5.6-sol",
+  "performed_sha256": "75e303228c1ab10a3be7e8f0de8368e634213d39a26c19fa841127e50620bf79",
+  "provider": "openrouter/openai/high/65536",
+  "result": [
+    {
+      "case_label": "vmo2-fy2025-lite-portfolio-decision",
+      "proof": null,
+      "refusal": "ORCHESTRATION_NOTHING_TO_PROVE",
+      "status": "RUNNING",
+      "stopped": "HANDOFF_MALFORMED"
+    }
+  ],
+  "run_id": "b54bc007-e6c8-4798-b266-e975aa143f5f",
+  "set_sha256": "a46a1b4f597885e8f6937b47f9da7eba5ec266f4a43818d5f9fa1d42337b87ea"
+}

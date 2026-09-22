@@ -1,0 +1,62 @@
+{
+  "chrome": {
+    "subject": { "case_id": "00000000-0000-4000-8000-000000000001", "title": "Acme Credit" },
+    "served_role": { "global_role": "READER", "standing": "READER" },
+    "actions": []
+  },
+  "body": {
+    "case_id": "00000000-0000-4000-8000-000000000001",
+    "displayed_run_id": "00000000-0000-4000-8000-0000000000b2",
+    "revision_id": "00000000-0000-4000-8000-0000000000c3",
+    "payload_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "case_title": "Acme Credit",
+    "artifacts": [
+      {
+        "route_node_id": "CP-1",
+        "artifact_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "record_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "markdown": "<img src=x onerror=\"window.pwned=1\">",
+        "record": "{\"coverage\":\"2.1x\"}",
+        "qa_status": "ACCEPTED",
+        "committee_status": "READY",
+        "decision_scope": "Credit review",
+        "limitation_flags": ["<script>limit</script>"],
+        "validation_warnings": ["<img src=x onerror=\"window.warned=1\">"]
+      }
+    ],
+    "narrative": [
+      [
+        { "text": "<svg onload=window.pwned=1>", "figure": null },
+        {
+          "text": null,
+          "figure": {
+            "route_node_id": "CP-1",
+            "citation_index": 0,
+            "document_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            "page": 7,
+            "matched_text": "Coverage 2.1x"
+          }
+        }
+      ]
+    ],
+    "state": "filed",
+    "signed_by": ["00000000-0000-4000-8000-0000000000d1", "00000000-0000-4000-8000-0000000000d2"],
+    "frozen_by": "00000000-0000-4000-8000-0000000000e1",
+    "filed_by": "00000000-0000-4000-8000-0000000000f1",
+    "receipt": {
+      "case_id": "00000000-0000-4000-8000-000000000001",
+      "run_id": "00000000-0000-4000-8000-0000000000b2",
+      "revision_id": "00000000-0000-4000-8000-0000000000c3",
+      "payload_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "signed_by": "00000000-0000-4000-8000-0000000000d1",
+      "frozen_by": "00000000-0000-4000-8000-0000000000e1",
+      "filed_by": "00000000-0000-4000-8000-0000000000f1",
+      "renderer_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "filed_event_sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    }
+  },
+  "observed_at": "2026-09-14T10:00:00Z",
+  "observed_empty": false,
+  "status": "complete",
+  "notes": []
+}
