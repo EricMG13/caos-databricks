@@ -1,0 +1,22 @@
+Rebuild CAOS v2 as a Databricks App. This run is unattended: nobody can answer, approve or unblock you, so never ask, never wait, never end a turn with a plan or a promise. First read docs/rebuild/2026-09-22-caos-databricks-spec.md in full and follow its section 1 Operating mode; it is the contract. The legacy snapshot is read-only.
+
+DONE means your final message contains an EVIDENCE table copied verbatim from tool output produced in that same final turn (never from earlier turns or memory), one row per acceptance command in spec section 11, each with its exit code and one summary line:
+- A1-A25: the gate commands G1-G25, each run exactly as written in spec section 5 (ruff check, ruff format --check, mypy strict, CAOS_REQUIRE_POSTGRES=1 pytest -n auto with the summary line showing 0 failed, 0 skipped, 0 xfailed and coverage >= 80%, scan_floors coverage, postgres races, check_vocabulary, check_tested, io_budget, bandit floor + bandit, pip-audit --require-hashes, gitleaks, uv lock --check + uv sync --locked, complexipy <= 15, jscpd <= 3%, check_gate_config, check_icm, pre-commit run --all-files, frontend lint, typecheck, unit, build with the nine section pages, demo build, a11y, workbench): exit 0 each.
+- A26: CAOS_REQUIRE_PROVIDER=1 CAOS_REQUIRE_POSTGRES=1 uv run pytest --no-cov tests/parity tests/graph: exit 0, passed count printed, and the eleven golden groups listed as present: cash_flow pricing budget forecast routes digest boundary_text extraction citations render prompt.
+- A27: uv run python -B vendor/deploy-v/verify_package.py: exit 0.
+- A28: grep -rniI openrouter caos icm .claude/skills databricks.yml app.yaml: no output, exit 1.
+- A29: uv run python -c "import sys; print(sys.version)" prints 3.13.x; pyproject requires-python is ">=3.13,<3.14"; .python-version is 3.13.
+- A30: databricks bundle validate: exit 0.
+- A31: with deploy access: bundle deploy, bundle run, apps get showing RUNNING, curl of /api/health returning 200 with python_version 3.13, and scripts/gateway_smoke.py printing the endpoint name, response id and token usage of one real AI Gateway call. Without deploy access: docs/rebuild/blockers.md contains "gateway path unverified" with the exact command and error.
+- A32: ls .claude/skills shows the six vendored databricks skills.
+- A33: git status --short is clean on rebuild/databricks; last commit hash printed.
+
+Then print the capability ledger C1-C77, the Deploy V ledger V1-V10 and the skills ledger, each row marked implemented or dropped with its reason (a KEEP or CHANGE row dropped without a blockers.md entry voids the result), followed by the full contents of docs/rebuild/blockers.md.
+
+A blocked finish also counts as done: every criterion either passes as above or has a blockers.md entry whose cause is a missing external resource (credential, host, CLI, permission) quoted with the exact command and error from this run, and every other criterion passes. A failing test, gate or parity check is never a blocker.
+
+The result is void if any of these slipped: a lowered threshold, a new noqa, type: ignore, nosec, pragma or skip, an excluded path or coverage omit beyond the spec's gate table, a removed or weakened test; OpenRouter imported or named anywhere outside tests/; Python below 3.13 in requires-python, .python-version, uv.lock, CI or the running app; a requirements.txt at the repo root; any key, token or password printed or written; OpenRouter tests presented as gateway evidence; a stubbed or mocked gateway; a subset of tests or paths presented as the whole; evidence reused from an earlier turn.
+
+Commit to rebuild/databricks at stable checkpoints and never push. Log fixed findings in docs/rebuild/decisions.md and out-of-scope items in docs/rebuild/next.md.
+
+Or stop after 300 turns, printing status against every criterion.

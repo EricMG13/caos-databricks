@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uv *)",
+      "Bash(git status *)", "Bash(git diff *)", "Bash(git log *)", "Bash(git show *)",
+      "Bash(git add *)", "Bash(git commit *)", "Bash(git switch *)", "Bash(git clone *)",
+      "Bash(git ls-files *)", "Bash(git rev-parse *)",
+      "Bash(databricks bundle validate *)", "Bash(databricks bundle deploy *)",
+      "Bash(databricks bundle run *)", "Bash(databricks bundle summary *)",
+      "Bash(databricks apps get *)", "Bash(databricks apps deploy *)", "Bash(databricks apps logs *)",
+      "Bash(databricks aitools list *)", "Bash(databricks current-user *)",
+      "Bash(databricks auth profiles *)", "Bash(databricks serving-endpoints get *)",
+      "Bash(npm *)", "Bash(node *)", "Bash(./frontend/node_modules/.bin/*)",
+      "Bash(gitleaks *)", "Bash(docker compose *)", "Bash(curl *)",
+      "Bash(grep *)", "Bash(wc *)", "Bash(ls *)", "Bash(find *)", "Bash(cat *)",
+      "Bash(head *)", "Bash(tail *)", "Bash(sed -n *)", "Bash(diff *)", "Bash(echo *)",
+      "Bash(mkdir *)", "Bash(cp *)", "Bash(mv *)", "Bash(shasum *)", "Bash(sha256sum *)"
+    ],
+    "deny": [
+      "Bash(git push *)",
+      "Bash(databricks bundle destroy *)",
+      "Bash(databricks apps delete *)",
+      "Read(./.env)",
+      "Read(./**/*.pem)"
+    ]
+  }
+}
