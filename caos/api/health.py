@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import platform
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -77,6 +78,9 @@ class HealthDocument(BaseModel):
     # Reported, never folded into `status` -- see `HealthCode`.
     workers: HealthCode
     checked_at: AwareDatetime | None
+    # What is running (spec section 3.1): the interpreter and the bundle build.
+    python_version: str
+    build_id: str | None
 
 
 def probe_store() -> HealthCode:
@@ -275,7 +279,21 @@ def _document(state: ProbeState | None) -> HealthDocument:
         blobs=codes[2],
         workers=codes[3],
         checked_at=checked_at,
+        python_version=platform.python_version(),
+        build_id=_held_build_id(),
     )
+
+
+def _held_build_id() -> str | None:
+    """The build the process verifies under, from the cached manifest snapshot.
+
+    No I/O: the bundle is built once per process (`_vendored_bundle`), and a
+    manifest that will not parse is the `bundle` probe's answer, not this one's.
+    """
+    try:
+        return _vendored_bundle().build_id
+    except Refusal:
+        return None
 
 
 router = APIRouter()

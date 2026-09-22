@@ -22,7 +22,7 @@ from fastapi.testclient import TestClient
 
 import caos.api.health as health
 from caos.api.app import app
-from caos.api.deps import BLOB_ROOT, DATABASE_URL, VENDORED_BUNDLE
+from caos.api.deps import BLOB_ROOT, DATABASE_URL, VENDORED_BUNDLE, _vendored_bundle
 from caos.methodology.bundle import MANIFEST_NAME, Bundle
 from caos.refusals import Refusal, RefusalCode
 from caos.store import apply_schema, connect, verify_schema
@@ -57,17 +57,20 @@ def test_health_is_200_only_when_store_bundle_and_blobs_hold(
     monkeypatch.setenv(DATABASE_URL, empty_database)
     monkeypatch.setenv(BLOB_ROOT, str(tmp_path))
 
-    assert _ask(None)[:2] == (
-        503,
-        {
-            "status": "not_ready",
-            "store": "PROBE_NOT_RUN",
-            "bundle": "PROBE_NOT_RUN",
-            "blobs": "PROBE_NOT_RUN",
-            "workers": "PROBE_NOT_RUN",
-            "checked_at": None,
-        },
-    )
+    status, body, _cache = _ask(None)
+    assert status == 503
+    assert str(body["python_version"]).startswith("3.13.")
+    assert body["build_id"] == _vendored_bundle().build_id
+    assert {
+        k: v for k, v in body.items() if k not in ("python_version", "build_id")
+    } == {
+        "status": "not_ready",
+        "store": "PROBE_NOT_RUN",
+        "bundle": "PROBE_NOT_RUN",
+        "blobs": "PROBE_NOT_RUN",
+        "workers": "PROBE_NOT_RUN",
+        "checked_at": None,
+    }
 
     state = health.ProbeState()
     _round(state)
