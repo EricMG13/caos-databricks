@@ -20,9 +20,11 @@ repos:
       - id: check-merge-conflict
         exclude: ^vendor/
       - id: end-of-file-fixer
-        exclude: ^(vendor/|qualification/.*/documents/)
+        # Vendored trees are never edited: the bundle, the public evidence, the
+        # pinned third-party skills (their provenance says "otherwise unchanged").
+        exclude: ^(vendor/|qualification/.*/documents/|\.claude/skills/)
       - id: trailing-whitespace
-        exclude: ^(vendor/|qualification/.*/documents/)
+        exclude: ^(vendor/|qualification/.*/documents/|\.claude/skills/)
   - repo: local
     hooks:
       - id: vocabulary
