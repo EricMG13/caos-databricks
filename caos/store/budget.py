@@ -25,9 +25,10 @@ the price of a provider with no idempotency key, paid knowingly.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING
 from uuid import UUID
 
@@ -43,6 +44,31 @@ if TYPE_CHECKING:
 # What a run may spend when its caller names no ceiling. A run with no ceiling
 # at all would be invariant 8 with the number left out.
 CEILING = Decimal("5.00")
+# The deployment's own default for a new run (F28): a priced policy the bundle
+# sets (`run_ceiling`), because `CEILING` is below one worst-case call at the
+# gateway's Claude prices and every run would refuse `BUDGET_CEILING_REACHED`.
+CEILING_ENV = "CAOS_RUN_CEILING"
+
+
+def configured_ceiling(value: str | None = None) -> Decimal | None:
+    """The ceiling the environment names for a new run, or None for `CEILING`.
+
+    Malformed or out of range refuses `PROVIDER_NOT_CONFIGURED`: the ceiling
+    is what the run may pay the provider, and a process that cannot state it
+    must not start runs.
+    """
+    raw = os.environ.get(CEILING_ENV) if value is None else value
+    if raw is None or not raw.strip():
+        return None
+    try:
+        ceiling = Decimal(raw.strip())
+    except InvalidOperation:
+        raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED) from None
+    try:
+        validate_spend(ceiling)
+    except Refusal:
+        raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED) from None
+    return ceiling
 
 
 def validate_spend(amount: Decimal) -> None:

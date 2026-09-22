@@ -9,6 +9,7 @@ import os
 import sys
 from collections.abc import Iterator
 from pathlib import Path
+from urllib.parse import urlparse
 from uuid import UUID
 
 import gateway_smoke
@@ -22,6 +23,8 @@ from workspace_stub import BEARER, ENDPOINT, WorkspaceStub, main
 from caos.api import edge, identity
 from caos.api.identity import GlobalRole, actor_from_token
 from caos.blobs import BlobStore
+from caos.graph.build import thread_config
+from caos.graph.checkpoint import SCHEMA, MintedConnection, checkpointer
 from caos.graph.route import ResolvedRoute
 from caos.graph.runtime import Execution, run_route
 from caos.methodology.bundle import Bundle
@@ -169,3 +172,27 @@ def test_main_runs_a_command_against_the_stub_and_lists_what_it_asked(
     assert "stub: GET /.well-known/x\n" in capsys.readouterr().out
     assert main([]) == 2
     assert "DATABRICKS_HOST" not in os.environ
+
+
+def test_the_lakebase_checkpointer_mints_each_connection_over_the_platform_values(
+    stub: WorkspaceStub, empty_database: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    parts = urlparse(empty_database)
+    stub.database_credential = parts.password or ""
+    monkeypatch.delenv("CAOS_DATABASE_URL", raising=False)
+    monkeypatch.setenv("CAOS_LAKEBASE_INSTANCE", "caos-lb")
+    monkeypatch.setenv("PGHOST", parts.hostname or "127.0.0.1")
+    monkeypatch.setenv("PGPORT", str(parts.port))
+    monkeypatch.setenv("PGDATABASE", parts.path.lstrip("/"))
+    monkeypatch.setenv("PGUSER", parts.username or "postgres")
+    monkeypatch.setenv("PGSSLMODE", "disable")
+    saver = checkpointer()
+    assert saver.get(thread_config("nobody")) is None
+    assert ("POST", "/api/2.0/database/credentials") in stub.requests
+    with MintedConnection.connect(autocommit=True) as conn:
+        [(schema,)] = conn.execute(
+            "SELECT schema_name FROM information_schema.schemata"
+            " WHERE schema_name = %s",
+            (SCHEMA,),
+        ).fetchall()
+    assert schema == SCHEMA

@@ -26,7 +26,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--lakebase-instance", required=True)
     parser.add_argument("--group-admin", default="caos-admins")
     parser.add_argument("--group-analyst", default="caos-analysts")
+    parser.add_argument("--price", help="the bundle's model_price value")
+    parser.add_argument("--run-ceiling", help="the bundle's run_ceiling value")
     args = parser.parse_args(argv)
+
+    if args.price is not None and not affordable(args.price, args.run_ceiling):
+        return 1
 
     from databricks.sdk import WorkspaceClient
 
@@ -74,6 +79,34 @@ def main(argv: list[str] | None = None) -> int:
             continue
         print(f"ok      {name}")
     return 1 if missing else 0
+
+
+def affordable(price: str, run_ceiling: str | None) -> bool:
+    """Whether `run_ceiling` covers one worst-case call at `price` (F28).
+
+    Pure and printed like the lookups: a run whose ceiling cannot pay for one
+    call is refused at start, so it is found here, before a deploy.
+    """
+    from caos.pricing import price_from_environment, worst_case
+    from caos.refusals import Refusal
+    from caos.store.budget import CEILING, configured_ceiling
+
+    endpoint = price.split(",", 1)[0]
+    try:
+        worst = worst_case(price_from_environment(endpoint, price))
+        ceiling = configured_ceiling(run_ceiling)
+    except Refusal as refused:
+        print(f"MISSING price or run ceiling ({refused.code.value}): fix model_price")
+        return False
+    ceiling = CEILING if ceiling is None else ceiling
+    if ceiling < worst:
+        print(
+            f"MISSING run ceiling {ceiling} covers no worst-case call ({worst}): "
+            f"set run_ceiling to at least {worst}"
+        )
+        return False
+    print(f"ok      run ceiling {ceiling} covers a worst-case call ({worst})")
+    return True
 
 
 def _group(client: WorkspaceClient, display: str) -> object:

@@ -46,6 +46,7 @@ from caos.methodology.vendor import catalog
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
 from caos.store.audit import GovernedAction
+from caos.store.budget import configured_ceiling
 from caos.store.gates import (
     Gate,
     GateApproval,
@@ -146,10 +147,13 @@ def create_run(  # noqa: PLR0913 -- identity, key, floor, body, path, store, bun
         extensions=RouteExtensions(model_extension=body.model_extension),
     )
     require_adapter_route(route)
+    ceiling = configured_ceiling()
     selection = body.model_dump(mode="json")
 
     def write(unit: StoreConnection) -> tuple[int, RunCreated]:
-        run_id = start_run(unit, case_id, supersedes=body.supersedes)
+        run_id = start_run(
+            unit, case_id, supersedes=body.supersedes, budget_ceiling=ceiling
+        )
         pinned = pin_route_in(unit, run_id, route)
         return 201, RunCreated(case_id=case_id, run_id=run_id, route_digest=pinned)
 

@@ -102,6 +102,30 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "false"
 
+  bundle:
+    # The bundle against the loopback workspace (D28): validate, deploy and
+    # run through the real CLI with nothing below HTTP injected. A profile is
+    # never needed here; the enterprise deploy is scripts/enterprise_deploy.py.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with: {version: "0.12.5", enable-cache: true}
+      - uses: databricks/setup-cli@d76f84cea9893ce68311a1f33fb0c95af6c963b7 # v1.17.0
+        with: {version: "1.17.0"}
+      - run: uv sync --locked --all-groups
+      - run: mkdir -p frontend/dist && touch frontend/dist/index.html
+      - run: >-
+          uv run python tests/workspace_stub.py -- databricks bundle validate -t dev
+          --var uc_catalog=main --var uc_schema=caos --var lakebase_instance=caos-lb
+      - run: >-
+          uv run python tests/workspace_stub.py -- databricks bundle deploy -t dev
+          --var uc_catalog=main --var uc_schema=caos --var lakebase_instance=caos-lb
+      - run: >-
+          uv run python tests/workspace_stub.py -- databricks bundle run caos -t dev
+          --var uc_catalog=main --var uc_schema=caos --var lakebase_instance=caos-lb
+
   size:
     # AI PRs carry ~1.7x the issues of human PRs, and density rises with size.
     runs-on: ubuntu-latest

@@ -25,6 +25,11 @@ variables:
   lakebase_database:
     description: The database on that instance.
     default: databricks_postgres
+  run_ceiling:
+    description: >-
+      What one run may spend at the endpoint's price, as a decimal amount; it
+      must cover at least one worst-case call (scripts/preflight.py checks).
+    default: "25.00"
   group_admin:
     description: The workspace group whose members are ADMIN.
     default: caos-admins
@@ -55,6 +60,8 @@ resources:
             value: ${var.model_endpoint}
           - name: CAOS_MODEL_PRICE
             value: ${var.model_price}
+          - name: CAOS_RUN_CEILING
+            value: ${var.run_ceiling}
           - name: CAOS_UC_SCHEMA
             value: ${var.uc_catalog}.${var.uc_schema}
           - name: CAOS_BLOB_ROOT
@@ -89,6 +96,32 @@ sync:
   # but it is part of the app, so it ships with the source.
   include:
     - frontend/dist/**
+  # What the process never reads (F29): the suite, the docs, the frontend's
+  # sources and toolchain, the gate configuration. A deploy against the
+  # loopback stub uploaded 1,522 files before this list; the App needs the
+  # package, the bundle authority, the agent definitions, the export and the
+  # lock.
+  exclude:
+    - tests/**
+    - docs/**
+    - stubs/**
+    - qualification/**
+    - .github/**
+    - .claude/**
+    - frontend/src/**
+    - frontend/tests/**
+    - frontend/scripts/**
+    - frontend/public/**
+    - frontend/*.ts
+    - frontend/*.mjs
+    - frontend/*.json
+    - frontend/*.html
+    - "*.md"
+    - compose.yaml
+    - complexipy-snapshot.json
+    - .pre-commit-config.yaml
+    - .gitleaks.toml
+    - .env.example
 
 targets:
   dev:

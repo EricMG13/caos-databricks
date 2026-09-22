@@ -11,6 +11,7 @@ This repository deploys as one Databricks App from an asset bundle. Nothing in t
 | A Unity Catalog schema and a volume `caos_blobs` in it | `uc_catalog`, `uc_schema` | `CREATE VOLUME <catalog>.<schema>.caos_blobs`. Sources and artifacts live there by digest; the app's service principal needs `WRITE_VOLUME` (granted by the bundle). |
 | A Lakebase (provisioned) instance | `lakebase_instance`, `lakebase_database` (default `databricks_postgres`) | The store's schema is applied on first start; LangGraph checkpoints go to schema `caos_graph` on the same database. The app's service principal needs `CAN_CONNECT_AND_CREATE` (granted by the bundle). |
 | Two workspace groups | `group_admin` (default `caos-admins`), `group_analyst` (default `caos-analysts`) | Members of the admin group act as ADMIN, of the analyst group as ANALYST; any other authenticated user is READER. |
+| What one run may spend | `run_ceiling` (default `25.00`) | Must cover one worst-case call at `model_price` (about 6.88 at the default price); preflight refuses less (F28). |
 
 Check them with the deployer's profile before the first deploy:
 
@@ -29,7 +30,16 @@ npm --prefix frontend ci --ignore-scripts && npm --prefix frontend run build
 
 `frontend/dist` is git-ignored but included by the bundle's `sync.include`, so the static export the app serves is the one built here.
 
-## 3. Validate and deploy
+## 3. One command
+
+```bash
+scripts/enterprise_deploy.sh <profile> <catalog> <schema> <lakebase-instance> \
+  [<endpoint>] [<endpoint>,<in>,<out>,<YYYY-MM-DD>] [<run-ceiling>]
+```
+
+It runs sections 1, 3 and 5 of this page in order and writes one evidence row per step to `docs/rebuild/runs/<today>/enterprise/evidence.tsv` (E1 preflight, E2–E4 the three bundle commands, E5 the app state and URL, E6 health, E7 the gateway smoke in JSON mode, E8 the Lakebase version for D17, E9 the event stream through the proxy for C42), stopping at the first failure. `TARGET`, `LAKEBASE_DATABASE`, `GROUP_ADMIN`, `GROUP_ANALYST` and `EVIDENCE` are read from the environment when set. The manual commands below are what it runs.
+
+## 3a. Validate and deploy by hand
 
 ```bash
 databricks bundle validate -t prod -p <profile> \
@@ -77,4 +87,4 @@ uv run python tests/workspace_stub.py -- databricks bundle validate -t dev \
 CAOS_REQUIRE_POSTGRES=1 uv run pytest --no-cov tests/test_workspace_stub.py
 ```
 
-The first prints `Validation OK!` and the paths the CLI asked for; the second runs the gateway smoke, `scripts/preflight.py`, SCIM identity, the volume backend and a LITE route through `ChatDatabricks` over HTTP. What the stand-in cannot tell you: whether the workspace grants what the bundle asks for, how the Apps proxy treats the event stream (C42), what the Lakebase major version is (D17), or what a real model answers. Those are the enterprise steps in `docs/rebuild/ENTERPRISE_HANDOFF.md`.
+The first prints `Validation OK!` and the paths the CLI asked for (`bundle deploy` and `bundle run caos` pass the same way); the second runs the gateway smoke, `scripts/preflight.py`, SCIM identity, the volume backend, the Lakebase checkpointer and a LITE route through `ChatDatabricks` over HTTP. `tests/test_platform_boot.py` goes further: it boots `python -m caos.serve` under the platform's own environment against the stub and the Docker Postgres and drives a governed run through the HTTP surface to COMPLETE; `tests/test_enterprise_deploy.py` runs the one command of section 3 against that. What the stand-in cannot tell you: whether the workspace grants what the bundle asks for, how its Apps proxy treats the event stream (C42), the Lakebase major version (D17), or what a real model answers. The one command reports each of those the first time it runs there; the instruction for that run is `docs/rebuild/ENTERPRISE_HANDOFF.md`.
