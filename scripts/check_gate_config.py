@@ -133,14 +133,27 @@ def configuration_problems(root: Path = REPO) -> list[str]:
     )
 
 
+SNAPSHOT = "complexipy-snapshot.json"
+
+
 def suppression_counts(root: Path = REPO) -> dict[str, int]:
-    """How many of each suppression the tracked Python files carry."""
+    """How many of each suppression the tracked Python files carry, and how
+    many functions the cognitive-complexity baseline (G14) still carries."""
     counts = dict.fromkeys(SUPPRESSIONS, 0)
     for path in tracked_python(root):
         text = path.read_text(encoding="utf-8")
         for name, pattern in SUPPRESSIONS.items():
             counts[name] += len(pattern.findall(text))
+    counts["complexity_baselined"] = _baselined_functions(root / SNAPSHOT)
     return counts
+
+
+def _baselined_functions(snapshot: Path) -> int:
+    try:
+        recorded = json.loads(snapshot.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return 0
+    return sum(len(entry.get("functions", [])) for entry in recorded)
 
 
 def suppression_problems(root: Path = REPO, baseline: Path = BASELINE) -> list[str]:

@@ -94,7 +94,7 @@ class ProviderResult:
 
 
 class Provider(Protocol):
-    """The seam Phase 5 fills with a real OpenRouter call.
+    """The seam the module provider fills with a real gateway call.
 
     `model` is the configured model identity the call is billed as; a run's price
     must be for exactly that model.

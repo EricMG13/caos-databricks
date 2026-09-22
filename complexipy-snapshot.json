@@ -1,0 +1,220 @@
+[
+  {
+    "path": "caos/api/reads/analysis.py",
+    "file_name": "analysis.py",
+    "functions": [
+      {
+        "name": "read_analysis",
+        "complexity": 20
+      }
+    ]
+  },
+  {
+    "path": "caos/api/reads/run.py",
+    "file_name": "run.py",
+    "functions": [
+      {
+        "name": "node_readiness",
+        "complexity": 17
+      }
+    ]
+  },
+  {
+    "path": "caos/api/stream.py",
+    "file_name": "stream.py",
+    "functions": [
+      {
+        "name": "case_tail",
+        "complexity": 22
+      }
+    ]
+  },
+  {
+    "path": "caos/deliverable/render.py",
+    "file_name": "render.py",
+    "functions": [
+      {
+        "name": "_list",
+        "complexity": 31
+      }
+    ]
+  },
+  {
+    "path": "caos/deliverable/revisions.py",
+    "file_name": "revisions.py",
+    "functions": [
+      {
+        "name": "_span",
+        "complexity": 16
+      }
+    ]
+  },
+  {
+    "path": "caos/evidence/ingest.py",
+    "file_name": "ingest.py",
+    "functions": [
+      {
+        "name": "_prepare",
+        "complexity": 16
+      }
+    ]
+  },
+  {
+    "path": "caos/evidence/pdf.py",
+    "file_name": "pdf.py",
+    "functions": [
+      {
+        "name": "walk_pages",
+        "complexity": 23
+      }
+    ]
+  },
+  {
+    "path": "caos/graph/route.py",
+    "file_name": "route.py",
+    "functions": [
+      {
+        "name": "dependency_order",
+        "complexity": 20
+      }
+    ]
+  },
+  {
+    "path": "caos/methodology/forecast.py",
+    "file_name": "forecast.py",
+    "functions": [
+      {
+        "name": "_mapped_rows",
+        "complexity": 27
+      }
+    ]
+  },
+  {
+    "path": "caos/methodology/handoff.py",
+    "file_name": "handoff.py",
+    "functions": [
+      {
+        "name": "stored_lineage",
+        "complexity": 30
+      }
+    ]
+  },
+  {
+    "path": "caos/methodology/invocation.py",
+    "file_name": "invocation.py",
+    "functions": [
+      {
+        "name": "lite_object_requirement",
+        "complexity": 16
+      },
+      {
+        "name": "named_objects",
+        "complexity": 16
+      },
+      {
+        "name": "_yaml",
+        "complexity": 17
+      },
+      {
+        "name": "allowed_uses",
+        "complexity": 19
+      }
+    ]
+  },
+  {
+    "path": "caos/methodology/selection.py",
+    "file_name": "selection.py",
+    "functions": [
+      {
+        "name": "select_sources",
+        "complexity": 17
+      }
+    ]
+  },
+  {
+    "path": "caos/methodology/vendor.py",
+    "file_name": "vendor.py",
+    "functions": [
+      {
+        "name": "_Loader::_import",
+        "complexity": 16
+      }
+    ]
+  },
+  {
+    "path": "caos/qualification/harness.py",
+    "file_name": "harness.py",
+    "functions": [
+      {
+        "name": "_consumers",
+        "complexity": 18
+      }
+    ]
+  },
+  {
+    "path": "caos/qualification/matrix.py",
+    "file_name": "matrix.py",
+    "functions": [
+      {
+        "name": "_forecast_met",
+        "complexity": 16
+      },
+      {
+        "name": "_projections_met",
+        "complexity": 16
+      },
+      {
+        "name": "_witnesses_contradict",
+        "complexity": 18
+      },
+      {
+        "name": "_digested",
+        "complexity": 20
+      },
+      {
+        "name": "_registers_met",
+        "complexity": 20
+      }
+    ]
+  },
+  {
+    "path": "caos/qualification/on_disk.py",
+    "file_name": "on_disk.py",
+    "functions": [
+      {
+        "name": "_registers",
+        "complexity": 18
+      }
+    ]
+  },
+  {
+    "path": "caos/qualification/proof.py",
+    "file_name": "proof.py",
+    "functions": [
+      {
+        "name": "assert_orchestration_proof",
+        "complexity": 18
+      }
+    ]
+  },
+  {
+    "path": "caos/store/run_inputs.py",
+    "file_name": "run_inputs.py",
+    "functions": [
+      {
+        "name": "_research",
+        "complexity": 20
+      }
+    ]
+  },
+  {
+    "path": "scripts/qualify.py",
+    "file_name": "qualify.py",
+    "functions": [
+      {
+        "name": "_capture",
+        "complexity": 22
+      }
+    ]
+  }
+]

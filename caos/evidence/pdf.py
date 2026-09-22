@@ -86,6 +86,9 @@ LAYOUT: _Layout = {
 COORDINATES = "crop-top-left-rotated-pt"
 # A token not wholly inside the crop is text no reader sees: dropped, not clipped.
 CROP_POLICY = "drop-outside"
+# pdfminer opens an unencrypted document with the empty password; the identity
+# record names the parameter as pdfminer does and carries that value.
+UNENCRYPTED = ""
 
 Frame = tuple[float, float, float, float]
 
@@ -111,7 +114,7 @@ class PdfExtractor:
                 "all_texts": LAYOUT["all_texts"],
                 "coordinates": COORDINATES,
                 "crop_policy": CROP_POLICY,
-                "password": "",
+                "password": UNENCRYPTED,
                 "page_numbers": "all",
                 "maxpages": 0,
                 "caching": True,

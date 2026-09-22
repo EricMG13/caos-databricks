@@ -9,5 +9,9 @@
 useDefault = true
 
 [allowlist]
-description = "Closed provider finish-reason enums"
-regexes = ['''^finish_reason=(?:stop|length)$''']
+description = "Closed provider finish-reason enums, and SHA-256 digests"
+# A bare 64-hex string is a content digest here: the parity manifests, the
+# host records and the bundle manifests are made of them, and no credential
+# this repository could hold has that shape (a token carries its prefix, which
+# this expression does not admit).
+regexes = ['''^finish_reason=(?:stop|length)$''', '''^[0-9a-f]{64}$''']

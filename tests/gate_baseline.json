@@ -1,8 +1,9 @@
 {
+  "complexity_baselined": 26,
   "no_cover": 5,
   "noqa": 124,
   "nosec": 17,
   "skip": 0,
-  "type_ignore": 156,
+  "type_ignore": 142,
   "xfail": 0
 }
