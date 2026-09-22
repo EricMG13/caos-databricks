@@ -1440,7 +1440,7 @@ def test_every_governed_write_goes_through_the_one_envelope() -> None:
     `qualification.py` is the stated exception and calls neither -- its write is
     `record_verdict` in its own transaction, which its docstring says out loud.
     """
-    commands = Path(__file__).resolve().parents[1] / "server" / "api" / "commands"
+    commands = Path(__file__).resolve().parents[1] / "caos" / "api" / "commands"
     callers = sorted(
         path.name
         for path in commands.rglob("*.py")

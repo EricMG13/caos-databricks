@@ -1,0 +1,98 @@
+# CAOS as a Databricks App, declared as an asset bundle (spec section 4, D23).
+#
+# Nothing workspace-specific is written here: every value an enterprise
+# deployment differs on is a variable, and the workspace host comes from the
+# CLI profile (`databricks bundle validate -t prod -p <profile>`). See
+# docs/DEPLOYMENT.md for the resources the workspace must hold first.
+bundle:
+  name: caos
+
+variables:
+  model_endpoint:
+    description: The AI Gateway serving endpoint every production model call goes through.
+    default: databricks-claude-opus-5
+  model_price:
+    description: >-
+      The dated per-token price for exactly that endpoint, as
+      endpoint,input_per_token,output_per_token,YYYY-MM-DD (budgets fail closed on it).
+    default: databricks-claude-opus-5,0.000005,0.000025,2026-09-22
+  uc_catalog:
+    description: The Unity Catalog catalog holding the caos schema and its blob volume.
+  uc_schema:
+    description: The schema under that catalog (the volume is <catalog>.<schema>.caos_blobs).
+  lakebase_instance:
+    description: The Lakebase (provisioned) instance name that holds the store and the graph checkpoints.
+  lakebase_database:
+    description: The database on that instance.
+    default: databricks_postgres
+  group_admin:
+    description: The workspace group whose members are ADMIN.
+    default: caos-admins
+  group_analyst:
+    description: The workspace group whose members are ANALYST.
+    default: caos-analysts
+
+resources:
+  apps:
+    caos:
+      name: caos
+      description: Governed source documents to committee-ready credit conclusions.
+      source_code_path: ./
+      # The caller's own token reaches the app (D10); SCIM Me names the caller.
+      forward_user_access_token: true
+      user_api_scopes:
+        - iam.current-user:read
+      config:
+        command: ["uv", "run", "python", "-m", "caos.serve"]
+        env:
+          - name: CAOS_BIND_HOST
+            value: "0.0.0.0"
+          - name: CAOS_WORKER_IN_PROCESS
+            value: "1"
+          - name: CAOS_SITE_ROOT
+            value: "frontend/dist"
+          - name: CAOS_MODEL_ENDPOINT
+            value: ${var.model_endpoint}
+          - name: CAOS_MODEL_PRICE
+            value: ${var.model_price}
+          - name: CAOS_UC_SCHEMA
+            value: ${var.uc_catalog}.${var.uc_schema}
+          - name: CAOS_BLOB_ROOT
+            value: volume:///Volumes/${var.uc_catalog}/${var.uc_schema}/caos_blobs
+          - name: CAOS_LAKEBASE_INSTANCE
+            value: ${var.lakebase_instance}
+          - name: CAOS_GROUP_ADMIN
+            value: ${var.group_admin}
+          - name: CAOS_GROUP_ANALYST
+            value: ${var.group_analyst}
+      resources:
+        - name: model
+          description: The gateway endpoint the model factory calls.
+          serving_endpoint:
+            name: ${var.model_endpoint}
+            permission: CAN_QUERY
+        - name: database
+          description: The store and the LangGraph checkpoint schema.
+          database:
+            instance_name: ${var.lakebase_instance}
+            database_name: ${var.lakebase_database}
+            permission: CAN_CONNECT_AND_CREATE
+        - name: blobs
+          description: Content-addressed sources and artifacts.
+          uc_securable:
+            securable_type: VOLUME
+            securable_full_name: ${var.uc_catalog}.${var.uc_schema}.caos_blobs
+            permission: WRITE_VOLUME
+
+sync:
+  # The static export is built locally (frontend gate G22) and git-ignored,
+  # but it is part of the app, so it ships with the source.
+  include:
+    - frontend/dist/**
+
+targets:
+  dev:
+    mode: development
+    default: true
+  prod:
+    mode: production

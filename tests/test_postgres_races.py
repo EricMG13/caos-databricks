@@ -24,7 +24,6 @@ from canonical_fixtures import (
     VENDORED,
     CanonicalCompletions,
 )
-from canonical_route_fixtures import RouteCompletions
 from conftest import priced
 from conftest import reserve_at as reserve
 from test_run_events import RECORD, accept_nodes, approved_nodes
@@ -1232,64 +1231,3 @@ def test_two_workers_on_a_queue_of_two_runs_take_one_each(
 
     assert None not in claimed, "a worker idled while there was work for it"
     assert set(claimed) == queued, "the two workers did not take one run each"
-
-
-def test_two_nodes_of_one_concurrent_pass_each_accept_exactly_once(
-    relative_harness: object,
-) -> None:
-    """The race Completion Phase 13.1 created, proven rather than argued.
-
-    A concurrent pass has two nodes of one run writing through two connections
-    under one lease at the same time. Every guard they meet -- the run row lock
-    the reservation takes, the case lock the pre-call unit takes, the
-    conditional update every event insert rides -- was written for one writer
-    at a time, and `docs/AI_CODE_QUALITY.md` puts concurrency at ~2x in
-    agent-written code with this file named as the control.
-
-    One artifact, one reservation and one ledger row per node is the claim. A
-    run that merely reached COMPLETE would not show it: a doubled reservation
-    is money, and it leaves the run's status untouched.
-    """
-    from caos.graph.runtime import Execution, run_route
-    from caos.methodology.runner import ModuleProvider
-
-    harness = relative_harness
-    answers = RouteCompletions(harness.source_id)  # type: ignore[attr-defined]
-
-    opened: list[int] = []
-
-    def per_node() -> tuple[StoreConnection, object]:
-        opened.append(1)
-        node_conn = connect(harness.url)  # type: ignore[attr-defined]
-        return node_conn, ModuleProvider(
-            node_conn,
-            harness.bundle,  # type: ignore[attr-defined]
-            harness.blobs,  # type: ignore[attr-defined]
-            answers,
-            harness.route,  # type: ignore[attr-defined]
-            harness.run_id,  # type: ignore[attr-defined]
-        )
-
-    run_route(
-        harness.conn,  # type: ignore[attr-defined]
-        harness.blobs,  # type: ignore[attr-defined]
-        run_id=harness.run_id,  # type: ignore[attr-defined]
-        route=harness.route,  # type: ignore[attr-defined]
-        execution=Execution(
-            _relative_provider(harness, answers),
-            priced(Decimal("0.10")),
-            harness.bundle,  # type: ignore[attr-defined]
-            per_node=per_node,  # type: ignore[arg-type]
-        ),
-    )
-
-    conn, run_id = harness.conn, harness.run_id  # type: ignore[attr-defined]
-    nodes = len(harness.route.nodes)  # type: ignore[attr-defined]
-    # Without this the assertions below would hold just as well over a
-    # sequential run, and this test would quietly stop being a race at all the
-    # day the batch narrowed. A factory call is one node of a concurrent pass.
-    assert len(opened) > 1, "the pass never ran two nodes at once"
-    assert run_status(conn, run_id) is RunStatus.COMPLETE
-    for table in ("artifacts", "run_attempts", "budget_reservations", "budget_ledger"):
-        assert _count(conn, table, run_id) == nodes, table
-    assert _events(conn, run_id, RunEvent.RUN_COMPLETE) == 1

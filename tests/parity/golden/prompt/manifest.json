@@ -1,0 +1,33 @@
+{
+  "cases": {
+    "ledger__CP-0": "5340fc39d4a70faabe7a4a88826709cbce7e5be7c0914afa9f1e153d2ef85e14",
+    "ledger__CP-8": "040460d743f8a11d28827a0faa7f201ec8705af83199d82fb5fb994faa180692",
+    "lite__CP-0": "c99b42800bfcf585dab08f06634cfd4b5021117d92fffc1cdcea2a406bf30b27",
+    "lite__CP-5": "0974b8af9ce836d0f1b260fbc5f9dc4fdee1e44e96d8c73dc98b648fbeac8c81",
+    "lite__CP-L10": "cff1e3d5bf8b2d723f47c5209aa79d18fddecb0c642887fe05f3bad993d557b1",
+    "model_owner__CP-1": "8653a218af3a5d4df399f456a8f6bfe2bb2cfab69a819e38b484c31c0261b7d6",
+    "model_owner__CP-2G": "d021e40e855a67056f6fb0ba1f40df3769e0c095eb9ced9ebc3d7aec860ab789",
+    "model_owner__CP-4": "86013f95eaf20a6981a4a3979ff2944c377984be354ddf8ecbb61121fa813225",
+    "placeholder_upstream__CP-1A": "9cdefed19de1eed16d86b9bec6e24b8c11ae45f7e4df9fc7e1f9e38c020b2053",
+    "placeholder_upstream__CP-1B": "d546de2473771d8a90ac7372dc7567e910339b8c99b0ea213726ce650392927e",
+    "placeholder_upstream__CP-1D": "1df1be36660131d414462870215189af7bc164ab4c285918db431753efa76254",
+    "placeholder_upstream__CP-2D": "66db6055924e19a43bfec4efed3e51ecf65f301987bf36ce4df85979e4f1a6a8",
+    "placeholder_upstream__CP-2E": "7cf7dd3c07d4072a5d00660de7da39443db93405cab9f32bf32d3c0abfc986e1",
+    "placeholder_upstream__CP-2H": "075233a4daf7b26dc3e01b9ea5abe87d6a40989417250003914e16408cde676b",
+    "placeholder_upstream__CP-3C": "d862bf75cede164eb0249c9018eef9e68479fb79b7fb02b4c545c82656da6657",
+    "placeholder_upstream__CP-4C": "61e03e854fbce269bd9e822dee3bb1f605ec0f9b1eafafc0343e33c04ee39fb4",
+    "placeholder_upstream__CP-6": "0d2b4cc901d0d49741978a2c5b8a14ef2a089709bdccdb54ef37721135f29a79",
+    "placeholder_upstream__CP-DR": "b3000707c681528f6cf383254fdfe145fab7fda69a06825ed7859c36bc577597",
+    "relative_value__CP-0": "88c22ff345eb217c3b5a813d8eccc9dfec35a699f7e1143202fc3dbb4de31f08",
+    "relative_value__CP-1": "4b257111de33660c0c8952a971d92cfd7dbe47dc54b1fbe89e58fdae1e673a47",
+    "relative_value__CP-1C": "5404f7fc31c5aba8c1bce44db92650c6b05c55437663ccf75fe122339d2bc518",
+    "relative_value__CP-2": "13b5cb2eb8703d41fc2ef078c6947b1a7b358c194d63667db0c943c06b3afe52",
+    "relative_value__CP-2A": "ed77919ba29921d8e3360c5dacc0f7e444244d25b6bfe1f41eb9fe0b411f8f72",
+    "relative_value__CP-2G": "be4b3fc67c192c1d5c0bfaa5b0157ab8cb5f94a6183d43996253fd2a9ef8e828",
+    "relative_value__CP-3": "8085d7335ef52af75777993b40c1ed43ccd528d45cd2260fd6e947b7db8c3fdf",
+    "relative_value__CP-3D": "949f2f35139c6492baa931ca68ab0fd7bb6fbbae6aa3b4f2c5656be99600d493",
+    "relative_value__CP-4": "ed833fdb27ba920b7e7c6fed9f92528b0d056fdf6103c35b9e0757a4eac9eba3"
+  },
+  "group": "prompt",
+  "package": "server"
+}

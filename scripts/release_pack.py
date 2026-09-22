@@ -69,12 +69,10 @@ UNVERIFIED = "UNVERIFIED"
 NOT_QUALIFIED = "NOT_QUALIFIED"
 QUALIFIED = "QUALIFIED"
 
-# Every lock the image, CI and the workspace install from, by repository path.
+# Every lock CI, the App and the workspace install from, by repository path.
 LOCK_FILES = (
     "frontend/package-lock.json",
-    "requirements-dev.txt",
-    "requirements-security.txt",
-    "requirements.txt",
+    "uv.lock",
 )
 
 _REASONS = {

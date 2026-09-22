@@ -338,7 +338,9 @@ def test_an_oversized_or_chunked_pack_is_refused_before_parsing(
     path = f"/api/v1/cases/{case_id}/sources"
     multipart = "multipart/form-data; boundary=x"
 
-    def post(headers: dict[str, str], content: object) -> tuple[int, str]:
+    def post(
+        headers: dict[str, str], content: str | bytes | Iterator[bytes]
+    ) -> tuple[int, str]:
         answer = command_client.post(
             path,
             headers={**command_headers(writer), **headers},

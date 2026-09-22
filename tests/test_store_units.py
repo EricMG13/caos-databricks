@@ -58,7 +58,7 @@ from caos.store.work import require_running
 __all__ = ["gated"]  # the fixture is used by name
 
 TEXT = b"Total debt at 31 December 2026 was USD 1,240.0m\n"
-STORE = Path(__file__).resolve().parents[1] / "server" / "store"
+STORE = Path(__file__).resolve().parents[1] / "caos" / "store"
 
 
 def _count(conn: StoreConnection, table: str) -> int:

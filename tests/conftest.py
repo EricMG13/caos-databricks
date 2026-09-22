@@ -68,7 +68,12 @@ LOOPBACK_BASE_URL = "http://127.0.0.1:8000"
 LOOPBACK_PEER = ("127.0.0.1", 50000)
 LOOPBACK_HEADERS = {"sec-fetch-site": "same-origin"}
 # The development shell exports the trust switch; a suite that needs it sets it.
-_AMBIENT_IDENTITY = ("CAOS_EDGE_TOKEN", "CAOS_PUBLIC_ORIGIN", "CAOS_TRUST_ROLE_HEADER")
+_AMBIENT_IDENTITY = (
+    "CAOS_EDGE_TOKEN",
+    "CAOS_PUBLIC_ORIGIN",
+    "CAOS_TRUST_ROLE_HEADER",
+    "DATABRICKS_APP_NAME",
+)
 
 
 def _loopback_test_client() -> None:

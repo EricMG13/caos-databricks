@@ -1,0 +1,58 @@
+{
+  "base": "http://localhost:4173",
+  "tags": [
+    "wcag2a",
+    "wcag2aa",
+    "wcag21a",
+    "wcag21aa",
+    "wcag22aa",
+    "best-practice"
+  ],
+  "engines": [
+    "chromium",
+    "firefox",
+    "webkit"
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 1024,
+      "height": 768
+    }
+  ],
+  "routes": [
+    "/directory/",
+    "/upload/?case=ff1fbf5a-e56f-4f84-a983-2f5a507675f0",
+    "/analysis/?case=00000000-0000-4000-8000-000000000001",
+    "/book/",
+    "/run/?case=00000000-0000-4000-8000-000000000001",
+    "/model/?case=00000000-0000-4000-8000-000000000001",
+    "/report/?case=00000000-0000-4000-8000-000000000001&run=00000000-0000-4000-8000-0000000000b2&revision=00000000-0000-4000-8000-0000000000c3",
+    "/committee/?case=00000000-0000-4000-8000-000000000001&run=00000000-0000-4000-8000-0000000000b2&revision=00000000-0000-4000-8000-0000000000c3",
+    "/admin/",
+    "/directory/?fixture=observed-empty",
+    "/book/?fixture=observed-empty",
+    "/upload/?case=ff1fbf5a-e56f-4f84-a983-2f5a507675f0&fixture=partial",
+    "/analysis/?case=00000000-0000-4000-8000-000000000001&fixture=partial",
+    "/analysis/?case=00000000-0000-4000-8000-000000000001&fixture=stale",
+    "/analysis/?case=00000000-0000-4000-8000-000000000001&fixture=offline",
+    "/analysis/?case=00000000-0000-4000-8000-000000000001&fixture=unavailable",
+    "/analysis/?case=00000000-0000-4000-8000-000000000001&fixture=error",
+    "/run/?case=00000000-0000-4000-8000-000000000001&fixture=gate",
+    "/analysis/",
+    "/nothing/"
+  ],
+  "entries": 180,
+  "expected_entries": 180,
+  "violation_nodes": 0,
+  "scan_errors": 0,
+  "layout_failures": 0,
+  "failing": {}
+}

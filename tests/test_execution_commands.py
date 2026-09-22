@@ -403,9 +403,7 @@ def test_command_modules_import_no_runtime_provider_or_transport() -> None:
             if name == forbidden or name.startswith(forbidden + ".")
         }
         assert not banned, (module.name, banned)
-    probe = _imported(
-        ast.parse("from caos.graph import runtime\nimport server.provider")
-    )
+    probe = _imported(ast.parse("from caos.graph import runtime\nimport caos.provider"))
     assert {"caos.graph.runtime", "caos.provider"} <= probe, "the scan sees both forms"
 
 

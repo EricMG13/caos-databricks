@@ -1,42 +1,24 @@
-# Every install is --require-hashes AND --only-binary :all:. Hashes pin which
-# bytes arrive; they do not stop those bytes being a source distribution, whose
-# setup.py runs at install time. Wheels-only is what makes a pinned dependency
-# something this workflow installs rather than something it executes.
-#
-# Jobs arrive with the phase whose code they can actually scan. A job that
-# passes because it found nothing is the failure mode docs/AI_CODE_QUALITY.md
-# section 4 exists to prevent, so none is scaffolded ahead of its subject:
-#   postgres  (two-connection races) ...... Phase 1
-#   provider  (one live OpenRouter call) .. Phase 5 (docs/DECISIONS.md 16)
-#   image     (Trivy) ..................... Phase 7, below
-#   frontend  (lint, tsc, unit, build, a11y, workbench) ... Phase 9, below
+# Every gate in docs/rebuild/2026-09-22-caos-databricks-spec.md section 5,
+# as one job per toolchain. Installs are locked (`uv sync --locked`) and
+# wheels-only (`tool.uv.no-build`), actions are SHA-pinned, and a superseded
+# run is cancelled. The gateway smoke (A31) is not here: it needs a workspace
+# profile and spends money, so it is run by a deployer (docs/DEPLOYMENT.md).
 name: ci
 on:
-  # The provider job runs on a schedule and on dispatch, never on a pull
-  # request: it spends money and needs a credential no fork has
-  # (docs/DECISIONS.md section 16).
-  schedule:
-    - cron: "17 3 * * *"
-  workflow_dispatch:
-  # main only: a branch with an open pull request is checked by its
-  # pull_request run, and a second push-triggered run of the same head would
-  # sit in a different concurrency group and never be cancelled.
   push:
-    branches: [main]
+    branches: [main, rebuild/databricks]
   pull_request:
-    # Declared, not defaulted: a draft pull request produced no run under the
-    # default set, and marking it ready would not have started one.
     types: [opened, synchronize, reopened, ready_for_review]
 
-# Read-only token unless a job widens it (security reads pull requests).
 permissions:
   contents: read
 
-# One run per ref. A push that supersedes a running check cancels it, so the
-# check on a branch is always the check of its head, never of a stale one.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
+
+env:
+  UV_VERSION: "0.12.5"
 
 jobs:
   lint:
@@ -44,49 +26,33 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with: {python-version: "3.14"}
+        with: {fetch-depth: 0}
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
-        with:
-          version: "0.12.5"
-          enable-cache: true
-          cache-dependency-glob: requirements-dev.txt
-      # --only-binary :all: — a source distribution runs its own setup code at
-      # install time, which is not code this repository reviewed (SonarQube
-      # githubactions:S8541). Every pinned dependency publishes a wheel; the
-      # other jobs below (including security's requirements-security.txt)
-      # carry the same flag on the same install.
-      - run: "uv pip install --system --require-hashes --only-binary :all: -r requirements-dev.txt"
-      - run: ruff check .
-      - run: ruff format --check .
-      - run: python scripts/check_vocabulary.py
-      - run: python scripts/check_tested.py
+        with: {version: "0.12.5", enable-cache: true}
+      - run: uv sync --locked --all-groups
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run python scripts/check_vocabulary.py
+      - run: uv run python scripts/check_tested.py
+      - run: uv run python scripts/io_budget.py --assert
+      - run: uv run python scripts/check_gate_config.py
+      - run: uv run python scripts/check_icm.py
+      - run: uv run complexipy caos scripts icm --max-complexity-allowed 15
+      - run: uv run pre-commit run --all-files --show-diff-on-failure
 
   types:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with: {python-version: "3.14"}
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
-        with:
-          version: "0.12.5"
-          enable-cache: true
-          cache-dependency-glob: requirements-dev.txt
-      - run: "uv pip install --system --require-hashes --only-binary :all: -r requirements-dev.txt"
-      # mypy re-validates every cached module against its source hash, so a
-      # stale cache costs time, never a missed error.
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: .mypy_cache
-          key: mypy-${{ hashFiles('requirements-dev.txt') }}-${{ github.sha }}
-          restore-keys: mypy-${{ hashFiles('requirements-dev.txt') }}-
-      - run: mypy scripts tests server
+        with: {version: "0.12.5", enable-cache: true}
+      - run: uv sync --locked --all-groups
+      - run: uv run mypy caos scripts tests
 
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     services:
       postgres:
         # Digest-pinned; a tag alone is not a pin. postgres:17-alpine.
@@ -98,291 +64,42 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: {fetch-depth: 0}
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with: {python-version: "3.14"}
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
-        with:
-          version: "0.12.5"
-          enable-cache: true
-          cache-dependency-glob: requirements-dev.txt
-      - run: "uv pip install --system --require-hashes --only-binary :all: -r requirements-dev.txt"
-      # Writes coverage.xml; the flags are in pyproject.toml so this and a
-      # local run produce the same report. -n auto: one worker per core, each
-      # minting its own databases (docs/DECISIONS.md section 43).
-      - run: pytest -n auto
+        with: {version: "0.12.5", enable-cache: true}
+      - run: uv sync --locked --all-groups
+      - run: uv run pytest -n auto -m "not live_provider"
         env:
           CAOS_TEST_POSTGRES_URL: postgresql://postgres:caos@localhost:5432/caos
           # A store suite that skipped is not a store suite that passed.
           CAOS_REQUIRE_POSTGRES: "1"
-      # A coverage report is a scanner report: one that measured nothing
-      # imports as a number rather than as an error, so it is refused here,
-      # before the sonarqube job reads it.
-      - run: python scripts/scan_floors.py coverage.xml --cobertura
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: coverage
-          path: coverage.xml
-          # The analysis runs in another job; a missing report there is silent.
-          if-no-files-found: error
-      - run: python scripts/io_budget.py --assert
-
-  postgres:
-    # Every governed race proven on two independent connections, in its own job
-    # so the coverage is visible rather than buried in the unit run
-    # (docs/AI_CODE_QUALITY.md section 1, concurrency).
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    services:
-      postgres:
-        # Digest-pinned; a tag alone is not a pin. postgres:17-alpine.
-        image: postgres@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
-        env: {POSTGRES_PASSWORD: caos, POSTGRES_DB: caos}
-        options: >-
-          --health-cmd pg_isready --health-interval 5s --health-retries 10
-        ports: ["5432:5432"]
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with: {python-version: "3.14"}
-      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
-        with:
-          version: "0.12.5"
-          enable-cache: true
-          cache-dependency-glob: requirements-dev.txt
-      # --only-binary :all: — see the lint job above.
-      - run: "uv pip install --system --require-hashes --only-binary :all: -r requirements-dev.txt"
-      - run: pytest tests/test_postgres_races.py
+      - run: uv run python scripts/scan_floors.py coverage.xml --cobertura
+      - run: uv run pytest --no-cov tests/test_postgres_races.py
         env:
           CAOS_TEST_POSTGRES_URL: postgresql://postgres:caos@localhost:5432/caos
-          # A race suite that skipped is not a race suite that passed.
           CAOS_REQUIRE_POSTGRES: "1"
-
-  sonarqube:
-    # The third reviewer, and the one job here that does not decide its own
-    # verdict: it submits the analysis, and `SonarCloud Code Analysis` --
-    # posted by SonarQube Cloud's GitHub App and required on `main` -- carries
-    # the quality gate's answer. It runs from CI rather than from SonarQube
-    # Cloud's own side because automatic analysis cannot import a coverage
-    # report, and this repository now has one.
-    needs: test
-    # A pull request is analysed as one; `main` is analysed as the branch new
-    # code is measured against; a branch push is neither -- two analyses of
-    # one commit would be two submissions to one project.
-    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      # Blame is what assigns a line to the new-code period the quality gate
-      # judges, and a depth-1 clone has no blame to read.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: {fetch-depth: 0}
-      # Lands coverage.xml at the root, where sonar-project.properties says it is.
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with: {name: coverage}
-      - name: Refuse an analysis with no credential
-        env: {SONAR_TOKEN: "${{ secrets.SONAR_TOKEN }}"}
-        run: |
-          if [ -z "$SONAR_TOKEN" ]; then
-            echo "::error::SONAR_TOKEN is empty: no repository secret of that name reached this job"
-            exit 1
-          fi
-          echo "SONAR_TOKEN received, ${#SONAR_TOKEN} characters"
-      - uses: SonarSource/sonarqube-scan-action@22918119ff8e1ca75a623e15c8296b6ea4fbe28f # v8.2.1
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: https://sonarcloud.io
-
-  provider:
-    # The live calls, nightly: one bare completion, CP-1 alone, and a whole run
-    # from admitted documents to a proven route (tests/test_live_run.py). A
-    # provider suite that never called the provider is the vacuous pass
-    # docs/AI_CODE_QUALITY.md section 4 forbids, so this job exists to make the
-    # skip impossible: CAOS_REQUIRE_PROVIDER=1 turns a missing credential into a
-    # failure rather than a green tick, and CAOS_REQUIRE_POSTGRES=1 does the
-    # same for the store the two runs need.
-    if: github.event_name != 'pull_request' && github.event_name != 'push'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    services:
-      postgres:
-        # Digest-pinned; a tag alone is not a pin. postgres:17-alpine.
-        image: postgres@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
-        env: {POSTGRES_PASSWORD: caos, POSTGRES_DB: caos}
-        options: >-
-          --health-cmd pg_isready --health-interval 5s --health-retries 10
-        ports: ["5432:5432"]
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with: {python-version: "3.14"}
-      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
-        with:
-          version: "0.12.5"
-          enable-cache: true
-          cache-dependency-glob: requirements-dev.txt
-      - run: "uv pip install --system --require-hashes --only-binary :all: -r requirements-dev.txt"
-      - run: pytest --live-provider -m live_provider
-        env:
-          # The key is a repository secret and the model id a repository
-          # variable. The dated rate and explicit live-run ceiling are also
-          # repository variables; none appears in a file this repository tracks.
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL }}
-          CAOS_MODEL_PRICE: ${{ vars.CAOS_MODEL_PRICE }}
-          CAOS_LIVE_BUDGET_CEILING: ${{ vars.CAOS_LIVE_BUDGET_CEILING }}
-          CAOS_REQUIRE_PROVIDER: "1"
-          CAOS_TEST_POSTGRES_URL: postgresql://postgres:caos@localhost:5432/caos
-          CAOS_REQUIRE_POSTGRES: "1"
-
-  image:
-    # Arrives with the Dockerfile it scans (docs/DECISIONS.md section 11). Until
-    # Phase 7 there was no image and `trivy fs` reported every target as *not
-    # scanned* -- a gate that passes because it found nothing.
-    #
-    # It has something to find now: the runtime carries psycopg, pdfminer and
-    # cryptography, and section 21 records cryptography as the real cost of
-    # reading a PDF. This job is where that cost is measured rather than assumed.
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # Layers are cached in GitHub's cache (docs/DECISIONS.md section 43): the
-      # apt and pip layers rebuild only when the base digest or the lock moves.
-      # load: the image stays local for Trivy and is never pushed.
-      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
-      - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
-        with:
-          context: .
-          tags: caos:ci
-          load: true
-          push: false
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-      # The action's own default (v0.64.1) fails to install -- its own
-      # install.sh exits 1 with no message, reproduced locally, on every run.
-      # Pinned to a release verified to install cleanly, for the same reason
-      # everything else here is pinned: an unpinned binary a security gate
-      # depends on is a gate that can start failing for a reason nobody wrote.
-      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          image-ref: caos:ci
-          format: json
-          output: trivy.json
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: "0"
-          version: v0.70.0
-      # The floor first: a scanner that scanned nothing is a failure, not a pass
-      # (docs/AI_CODE_QUALITY.md section 4). Only then does the finding count.
-      - run: python scripts/scan_floors.py trivy.json --trivy
-      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          image-ref: caos:ci
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: "1"
-          version: v0.70.0
-
-  smoke:
-    # `make smoke-production` in CI (docs/DECISIONS.md section 93, closing
-    # the ledger's "proven locally, not in CI"): the production image booted
-    # on its own database, the image suite, then the real-browser journey on
-    # chromium, firefox and webkit through the TLS test edge, each engine on
-    # a disposable stack. About 25 minutes, so it runs on a push to main, on
-    # the nightly schedule and on dispatch -- never per pull request. The two
-    # commands are the Makefile target's own, run here rather than through
-    # `make` so the image built once by buildx (and cached in GitHub's cache
-    # like the image job's) is the one booted, instead of a second build.
-    if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with: {python-version: "3.14"}
-      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
-        with:
-          version: "0.12.5"
-          enable-cache: true
-          cache-dependency-glob: requirements-dev.txt
-      # --only-binary :all: — see the lint job above.
-      - run: "uv pip install --system --require-hashes --only-binary :all: -r requirements-dev.txt"
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: "24"
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      # --ignore-scripts and the pinned Playwright binary, as the frontend job.
-      - run: npm ci --ignore-scripts
-        working-directory: frontend
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ hashFiles('frontend/package-lock.json') }}
-      - run: ./node_modules/.bin/playwright install --with-deps
-        working-directory: frontend
-      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
-      - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
-        with:
-          context: .
-          tags: caos:ci
-          load: true
-          push: false
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-      # The image suite: `CAOS_REQUIRE_IMAGE=1` makes a missing image a failure.
-      - run: pytest --no-cov -m production_image tests/test_production_image.py
-        env:
-          IMAGE: caos:ci
-          CAOS_REQUIRE_IMAGE: "1"
-      # The journey: each engine gets its own stack and its own crash-once
-      # worker; the TLS edge's certificate is minted into the run's temporary
-      # directory with the runner's own openssl. No provider credential is set.
-      - run: python tests/journey/run.py
-        env:
-          IMAGE: caos:ci
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: failure()
-        with:
-          name: journey-evidence
-          path: frontend/test-results/
-          if-no-files-found: ignore
+      - run: uv run python -B vendor/deploy-v/verify_package.py
 
   security:
-    # Python pinned deliberately. bandit 1.7.10 reaches for ast.Constant.s,
-    # which newer interpreters do not provide: under 3.14 it skips every file
-    # and exits 0. See docs/AI_CODE_QUALITY.md section 4.
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # gitleaks-action lists a pull request's commits; the default token cannot.
-    permissions: {contents: read, pull-requests: read}
     steps:
-      # gitleaks scans a commit range; a depth-1 clone has no range to scan.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: {fetch-depth: 0}
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with: {python-version: "3.12"}
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
-        with:
-          version: "0.12.5"
-          enable-cache: true
-          cache-dependency-glob: requirements-security.txt
-      - run: "uv pip install --system --require-hashes --only-binary :all: -r requirements-security.txt"
+        with: {version: "0.12.5", enable-cache: true}
+      - run: uv sync --locked --all-groups
       # `|| true` so the floor check, not bandit's exit code, is the verdict:
       # a report that parsed nothing must fail even when it found nothing.
-      - run: bandit -r scripts server -f json -o bandit.json || true
+      - run: uv run bandit -r caos scripts icm -f json -o bandit.json || true
       - run: |
-          python scripts/scan_floors.py bandit.json --no-parse-errors \
-                 --cover scripts server --unscanned tests
-      - run: bandit -r scripts server
-      - run: |
-          pip-audit --require-hashes -r requirements.txt \
-                    -r requirements-dev.txt -r requirements-security.txt
+          uv run python scripts/scan_floors.py bandit.json --no-parse-errors \
+                 --cover caos scripts icm --unscanned tests
+      - run: uv run bandit -r caos scripts icm
+      # The environment `uv sync --locked` built from the hashed lock is what runs.
+      - run: uv run pip-audit --strict
       - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # The scan result is the gate; the uploaded artifact is not. Uploading
-          # needs `actions: write`, which this job has no other use for.
           GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "false"
 
   size:
@@ -396,9 +113,6 @@ jobs:
       - run: python3 scripts/check_pr_size.py "origin/${{ github.base_ref }}"
 
   frontend:
-    # The workspace (Phase 9): the TypeScript vocabulary gate rides `npm run
-    # lint`; the a11y matrix and the workbench smoke run on three engines over
-    # the separate demo export, with explicit fixtures in preview middleware.
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
@@ -410,9 +124,6 @@ jobs:
           node-version: "24"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      # --ignore-scripts: a dependency's lifecycle script is code this repository
-      # did not review. Playwright's browsers are installed by its own pinned
-      # binary in an explicit step below.
       - run: npm ci --ignore-scripts
       - run: npm run lint
       - run: npm run typecheck
@@ -424,10 +135,7 @@ jobs:
             test -f "dist/$s/index.html" || { echo "missing dist/$s/index.html"; exit 1; }
           done
       - run: npm run build:demo
-      # The pinned binary from the lock, not `npx`, which resolves and may fetch
-      # a package at run time (SonarQube githubactions:S6505, S8543).
-      # The browsers are cached by the lock that pins Playwright; --with-deps
-      # still installs the OS libraries, which live outside the cache.
+      - run: npx --no-install jscpd --threshold 3 --min-lines 10 --ignore "**/node_modules/**,**/dist/**,**/dist-demo/**" ../caos ../scripts ../icm src
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
@@ -435,11 +143,3 @@ jobs:
       - run: ./node_modules/.bin/playwright install --with-deps
       - run: npm run a11y
       - run: npm run test:workbench
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: failure()
-        with:
-          name: frontend-evidence
-          path: |
-            frontend/a11y-results/
-            frontend/test-results/
-          if-no-files-found: ignore

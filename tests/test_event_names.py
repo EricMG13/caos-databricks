@@ -21,7 +21,7 @@ from caos.store.events import RunEvent
 from caos.store.gates import Gate
 from caos.store.members import Standing, grant
 
-SERVER = Path(__file__).resolve().parents[1] / "server"
+SERVER = Path(__file__).resolve().parents[1] / "caos"
 
 
 def _governed_actions() -> set[str]:

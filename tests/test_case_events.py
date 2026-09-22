@@ -11,7 +11,6 @@ the one each request opens.
 from __future__ import annotations
 
 import gc
-import re
 import socket
 import threading
 import time
@@ -701,7 +700,7 @@ def test_the_twenty_fifth_tail_is_refused_rather_than_the_next_ordinary_request(
     watchers' pressure lands on an unrelated reader, with a 503 that names
     nothing they can act on. Refused here, it names the streams.
 
-    The cap is asserted to sit *below* the image's limit, because a cap at or
+    The cap is asserted to sit *below* the process's limit, because a cap at or
     above it would leave no headroom and would change nothing.
     """
     slots = stream._Slots()
@@ -712,9 +711,9 @@ def test_the_twenty_fifth_tail_is_refused_rather_than_the_next_ordinary_request(
         take_stream_slot(slots)
 
     assert caught.value.code is RefusalCode.STREAM_LIMIT_REACHED
-    dockerfile = (REPO / "Dockerfile").read_text(encoding="utf-8")
-    [limit] = re.findall(r'"--limit-concurrency", "(\d+)"', dockerfile)
-    assert stream.STREAM_LIMIT < int(limit), "the cap leaves no headroom"
+    from caos import serve
+
+    assert stream.STREAM_LIMIT < serve.LIMIT_CONCURRENCY, "the cap leaves no headroom"
 
 
 def test_a_refused_tail_answers_503_with_a_retry_after_and_its_clearance() -> None:

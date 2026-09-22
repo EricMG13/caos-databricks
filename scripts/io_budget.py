@@ -64,7 +64,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--root", type=Path, default=REPO)
     args = parser.parse_args(argv)
 
-    api = args.root / "server" / "api"
+    api = args.root / "caos" / "api"
     if not api.is_dir():
         print("no request paths yet; nothing to budget")
         return 0

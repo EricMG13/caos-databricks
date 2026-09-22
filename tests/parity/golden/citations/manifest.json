@@ -1,0 +1,20 @@
+{
+  "cases": {
+    "ccl-fy2025-market-dislocation__CCL_FINRA_TRACE_143658BY7_2026-09-19.txt": "4dd0386618e198174f4d0b55e8cbf56a0419ef1175dbfca43efed094ace224f8",
+    "ccl-fy2025-relative-value__NCLH_Q4_2025_Earnings_Release.txt": "d509cca065aa408ddc5967be9132d942b2e94c9976a729cf0ec402c668ad4687",
+    "ccl-fy2025-relative-value__RCL_Q4_2025_Earnings_Release.txt": "7c99606ec1d45a4d0c679e56ebcc54cae959f8f895da6574c34daef56b7e7d1e",
+    "synthetic_ambiguous_word": "48d860ff85e82b5bfde98b45c6f06b570135e3a50410cea6658953edd7fd8259",
+    "synthetic_case_mismatch": "d5646a4eb86cb4756b589d471c6451e34e34ef82f46964e86c6c730c43a9276f",
+    "synthetic_crosses_region": "479252eb750db68e34a3a8471f548e3a916f19bc85686ba76ac06c3e8c33a883",
+    "synthetic_edge_punctuation": "a79969e1fe5a003177af1de49714cd70b72f7b53083f2f244fbb976958f5e577",
+    "synthetic_empty": "2e6733cf73d17455210aaaa81a43121463d480ffa08afe98c4ecd41d0f021919",
+    "synthetic_exact_line": "a87fb2400edc988b13fd4671216d05a99d3365d754997414f0b320facd041be7",
+    "synthetic_interior_punctuation_differs": "d90e5f4cd22be130a779c53a6ee124e2ad264ab25554934a1b5d8e8a378b15e3",
+    "synthetic_tracking_off_single_letters": "ce5bc0637d8f382d7fb8c7d652d0d532d96dfafc8684c6ff7aca7d3f6ea9ecb6",
+    "synthetic_tracking_on_single_letters": "5cbd89f12bbc003629dc4d2fcc42ce6bdb59911e85dc44add0d0184575442966",
+    "synthetic_whitespace_variants": "69573e0dcd22e1bfaae736ef5c9a039746c5e333a04344ab83d0da285eef3679",
+    "synthetic_wraps_within_region": "a1b997a119550245cb8ce4320e04bbb6fa255983b50a35e6658bf8c6dfab6cb4"
+  },
+  "group": "citations",
+  "package": "server"
+}

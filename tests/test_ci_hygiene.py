@@ -14,6 +14,7 @@ wheels-only, digest-pinned and unprivileged".
 from __future__ import annotations
 
 import re
+import tomllib
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -57,94 +58,20 @@ def test_the_size_job_delegates_to_the_canonical_script() -> None:
     assert "**/vendor/**" not in jobs["size"]
 
 
-def test_every_install_is_wheels_only() -> None:
-    """--require-hashes pins which bytes arrive. It does not stop those bytes
-    being a source distribution, and a source distribution's setup.py runs at
-    install time -- so a pinned dependency would still be something CI executes
-    rather than merely installs. `--only-binary :all:` is what closes that, and
-    this is what stops the next job being added without it."""
+def test_every_install_is_locked_and_wheels_only() -> None:
+    """A lock pins which bytes arrive; `uv sync --locked` refuses a lock that
+    drifted, and `tool.uv.no-build` is what stops those bytes being a source
+    distribution whose setup code runs at install time. This is what stops
+    the next job being added without either."""
     installs = [
         line.strip()
         for line in CI_YAML.read_text(encoding="utf-8").splitlines()
-        if "pip install" in line and "--require-hashes" in line
+        if "uv sync" in line
     ]
 
     assert installs, "CI installs something; this test found nothing"
     for install in installs:
-        assert "--only-binary :all:" in install, install
-
-
-def test_the_runtime_image_installs_the_way_ci_does() -> None:
-    """The Dockerfile is the other place this repository runs `pip install`,
-    and the only one whose result ships.
-
-    The test above reads `ci.yml` and stops there, so the image was outside
-    every gate that judges how a dependency arrives: `check_tested.py` reads
-    Python, and Trivy answers "are the installed packages known-vulnerable",
-    never "was this build hashed and wheels-only". Dropping either flag here
-    would be a source distribution executing its own `setup.py` inside the
-    artifact that runs in production, and nothing would have said so.
-    """
-    installs = [
-        line.strip()
-        for line in _dockerfile().splitlines()
-        if "pip install" in line and not line.lstrip().startswith("#")
-    ]
-
-    assert installs, "the image installs something; this test found nothing"
-    for install in installs:
-        assert "--require-hashes" in install, install
-        assert "--only-binary :all:" in install, install
-
-
-def test_the_runtime_image_pins_its_base_and_drops_its_privileges() -> None:
-    """Three facts about the shipped artifact, none of them Trivy's job.
-
-    A tag is not a pin, root is not a runtime, and `pip` is a build-time tool
-    that carries its own vendored msgpack and setuptools into every image that
-    keeps it -- CVEs in a tool this process never calls.
-    """
-    text = _dockerfile()
-
-    assert re.search(r"^FROM \S+@sha256:[0-9a-f]{64}$", text, re.MULTILINE), (
-        "the base image is named by a tag rather than pinned by digest"
-    )
-    assert re.search(r"^USER (?!root$)\S+$", text, re.MULTILINE), (
-        "the image runs as root"
-    )
-    # `site-packages/pip` and not `site-packages/pip-*.dist-info`: the loose
-    # form passed while the package directory itself was left in the image,
-    # matching the line beside it. A check that cannot fail is not a check.
-    assert re.search(r"site-packages/pip(?![-\w])", text), (
-        "pip's package directory is still in the shipped image"
-    )
-    assert "/usr/local/bin/pip" in text, "pip's executables are still on PATH"
-
-
-def test_the_runtime_image_pins_only_the_verified_os_security_updates() -> None:
-    text = _dockerfile()
-
-    for package in (
-        "gzip=1.13-1+deb13u1",
-        "libpcre2-8-0=10.46-1~deb13u2",
-        "libsqlite3-0=3.46.1-7+deb13u2",
-        "perl-base=5.40.1-6+deb13u1",
-    ):
-        assert package in text
-    assert "--only-upgrade" in text
-    assert "rm -rf /var/lib/apt/lists/" in text
-
-
-def test_make_image_runs_the_exact_ci_trivy_gate() -> None:
-    text = MAKEFILE.read_text(encoding="utf-8")
-
-    assert "IMAGE ?= caos-workbench:local" in text
-    # §90: the default is the project's own pinned install, not the PATH one.
-    assert "TRIVY ?= $(TRIVY_DIR)/trivy" in text
-    assert "TRIVY_VERSION := 0.70.0" in text
-    assert 'docker build -t "$(IMAGE)" .' in text
-    assert "--severity HIGH,CRITICAL --ignore-unfixed" in text
-    assert '--exit-code 0 "$(IMAGE)"' in text
-    floor = text.index("scripts/scan_floors.py trivy.json --trivy")
-    severity = text.index('--exit-code 1 "$(IMAGE)"')
-    assert floor < severity
+        assert "--locked" in install, install
+    project = tomllib.loads((REPO / "pyproject.toml").read_text(encoding="utf-8"))
+    assert project["tool"]["uv"]["no-build"] is True
+    assert not (REPO / "requirements.txt").exists(), "pip would take over the App"

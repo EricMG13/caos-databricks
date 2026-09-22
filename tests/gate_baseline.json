@@ -1,0 +1,8 @@
+{
+  "no_cover": 5,
+  "noqa": 124,
+  "nosec": 17,
+  "skip": 0,
+  "type_ignore": 156,
+  "xfail": 0
+}

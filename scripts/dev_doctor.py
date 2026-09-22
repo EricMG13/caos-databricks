@@ -22,24 +22,32 @@ REQUIRED_CONFIGURATION = frozenset(
 LIVE_CONFIGURATION = frozenset(
     {
         "CAOS_QUALIFY_POSTGRES_URL",
-        "OPENROUTER_API_KEY",
-        "OPENROUTER_MODEL",
-        "OPENROUTER_BASE_URL",
-        "OPENROUTER_PROVIDER",
-        "OPENROUTER_REASONING_EFFORT",
-        "CAOS_REQUIRE_PROVIDER",
-        # `make dev-worker` and `scripts/qualify.py` read the dated price (§49);
-        # absent, the worker refuses PROVIDER_NOT_CONFIGURED before it claims
-        # anything. The ceiling is read by the live suite alone, not by
-        # anything under `scripts/` or `server/`.
+        # The gateway endpoint and its dated price: the worker and
+        # `scripts/qualify.py` refuse PROVIDER_NOT_CONFIGURED without them.
+        "CAOS_MODEL_ENDPOINT",
         "CAOS_MODEL_PRICE",
+        "CAOS_REASONING_EFFORT",
+        "CAOS_REQUIRE_PROVIDER",
+        # Test-only: the OpenRouter adapter under tests/ reads the key.
+        "OPENROUTER_API_KEY",
+        # The ceiling is read by the live suite alone.
         "CAOS_LIVE_BUDGET_CEILING",
     }
 )
-# Read by the production image, the site dispatcher and the edge guard only
-# (`caos/api/site.py`, `caos/api/edge.py`); absent in local dev work.
+# Set by the bundle and the platform on Databricks Apps (docs/DEPLOYMENT.md);
+# absent in local dev work.
 DEPLOYMENT_CONFIGURATION = frozenset(
-    {"CAOS_SITE_ROOT", "CAOS_EDGE_TOKEN", "CAOS_PUBLIC_ORIGIN"}
+    {
+        "CAOS_SITE_ROOT",
+        "CAOS_BIND_HOST",
+        "CAOS_WORKER_IN_PROCESS",
+        "CAOS_PUBLIC_ORIGIN",
+        "CAOS_UC_SCHEMA",
+        "CAOS_LAKEBASE_INSTANCE",
+        "CAOS_GROUP_ADMIN",
+        "CAOS_GROUP_ANALYST",
+        "DATABRICKS_APP_NAME",
+    }
 )
 OPTIONAL_CONFIGURATION = LIVE_CONFIGURATION | DEPLOYMENT_CONFIGURATION
 DEV_ROLES = frozenset({"READER", "ANALYST", "ADMIN"})
@@ -96,16 +104,13 @@ def _tool_versions() -> list[tuple[str, str]]:
             .removeprefix("Docker Compose version ")
             .removeprefix("v"),
         ),
-        ("gitnexus", _version(["gitnexus", "--version"])),
-        (
-            "security Python",
-            _version([".venv-security/bin/python", "--version"]).removeprefix(
-                "Python "
-            ),
-        ),
         (
             "pre-commit",
             _version([".venv/bin/pre-commit", "--version"]).removeprefix("pre-commit "),
+        ),
+        (
+            "databricks",
+            _version(["databricks", "--version"]).removeprefix("Databricks CLI "),
         ),
     ]
 
@@ -114,8 +119,8 @@ def main() -> int:
     healthy = True
     found_python = ".".join(map(str, PYTHON_VERSION))
     print(f"Python: {found_python}")
-    if PYTHON_VERSION != (3, 14):
-        print(f"Python 3.14 required; found {found_python}", file=sys.stderr)
+    if PYTHON_VERSION != (3, 13):
+        print(f"Python 3.13 required; found {found_python}", file=sys.stderr)
         healthy = False
 
     tools = _tool_versions()
@@ -127,13 +132,6 @@ def main() -> int:
     node_version = versions.get("node", "missing")
     if not node_version.startswith("24."):
         print(f"Node 24 required; found {node_version}", file=sys.stderr)
-        healthy = False
-    security_python = versions.get("security Python", "missing")
-    if not security_python.startswith("3.12."):
-        print(
-            f"security Python 3.12 required; found {security_python}",
-            file=sys.stderr,
-        )
         healthy = False
 
     for name in sorted(REQUIRED_CONFIGURATION):

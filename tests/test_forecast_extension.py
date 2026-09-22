@@ -48,7 +48,7 @@ def test_forecast_extension_refuses_changed_host_bytes(tmp_path: Path) -> None:
 
     root = tmp_path / "host"
     shutil.copytree(HOST_ROOT, root)
-    (root / "cp-cf/SKILL.md").write_text("altered")
+    (root / "stages/cp-cf/references/SKILL.md").write_text("altered")
     with pytest.raises(Refusal) as caught:
         verified_host_bytes("SKILL.md", root=root)
     assert caught.value.code is RefusalCode.AUTHORITY_BYTES_MISMATCH

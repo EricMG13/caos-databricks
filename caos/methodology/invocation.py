@@ -33,7 +33,6 @@ from caos import methodology
 from caos.blobs import BlobStore
 from caos.digest import canonical_json
 from caos.evidence.citations import AnchoredCitation
-from caos.icm import prompt_block
 from caos.graph.route import (
     BLOCKING,
     MODEL_MODULE,
@@ -41,6 +40,7 @@ from caos.graph.route import (
     ResolvedRoute,
     RouteNode,
 )
+from caos.icm import prompt_block
 from caos.methodology.bundle import (
     Bundle,
     DeliveredAuthority,

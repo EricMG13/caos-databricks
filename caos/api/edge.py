@@ -82,6 +82,10 @@ from caos.refusals import Refusal, RefusalCode
 IO_BUDGET = 0
 
 PUBLIC_ORIGIN_ENV = "CAOS_PUBLIC_ORIGIN"
+# Platform mode (D10): Databricks Apps set this for every app process. The
+# platform's proxy authenticates the caller and forwards a user token; there is
+# no assertion to verify and no loopback rule, and no header is believed.
+PLATFORM_ENV = "DATABRICKS_APP_NAME"
 EDGE_ASSERTION_HEADER = "x-caos-edge-assertion"
 MIN_KEY_BYTES = 32
 
@@ -169,16 +173,27 @@ async def startup_failed(receive: Receive, send: Send) -> None:
 
 @dataclass(frozen=True, slots=True)
 class EdgeMode:
-    """Edge mode when `key` is set; dev mode when both are `None`."""
+    """Edge mode when `key` is set; platform mode behind a Databricks App;
+    dev mode when neither."""
 
     key: bytes | None
     public_origin: str | None
+    platform: bool = False
 
 
 def resolve_mode(environ: Mapping[str, str] | None = None) -> EdgeMode:
     """The mode this environment declares, or `EDGE_CONFIG_INVALID`."""
     env = os.environ if environ is None else environ
     key = env.get(EDGE_TOKEN_ENV)
+    if env.get(PLATFORM_ENV):
+        # A key or the trust switch beside the platform is a configuration
+        # that cannot mean anything: the platform is the edge.
+        origin = env.get(PUBLIC_ORIGIN_ENV)
+        if key is not None or TRUST_SWITCH in env:
+            raise Refusal(RefusalCode.EDGE_CONFIG_INVALID)
+        if origin is not None and not _bare_origin(origin):
+            raise Refusal(RefusalCode.EDGE_CONFIG_INVALID)
+        return EdgeMode(key=None, public_origin=origin, platform=True)
     if key is None:
         return EdgeMode(key=None, public_origin=None)
     encoded = key.encode()
@@ -428,7 +443,9 @@ class EdgeGuard:
         # The assertion is gone before any other code -- a refusal included --
         # runs, and in edge mode so is every identity header the request
         # carried: what the application reads is the verified assertion's.
-        scope["headers"] = _rewritten(scope.get("headers", []), asserted)
+        scope["headers"] = _rewritten(
+            scope.get("headers", []), asserted, platform=PLATFORM_ENV in os.environ
+        )
         scope["caos.edge_guarded"] = True
         guarded = _secured(send, path)
         if refusal is not None:
@@ -482,7 +499,7 @@ class EdgeGuard:
             asserted = self._asserted(mode.key, scope, method, headers)
             if asserted is None:
                 return RefusalCode.EDGE_NOT_TRUSTED, None
-        elif not _dev_peer(scope, headers):
+        elif not mode.platform and not _dev_peer(scope, headers):
             return RefusalCode.EDGE_NOT_TRUSTED, None
         if not _hygienic(headers):
             return RefusalCode.NOT_AUTHENTICATED, None
@@ -507,13 +524,16 @@ class EdgeGuard:
 
 
 def _rewritten(
-    headers: list[tuple[bytes, bytes]], asserted: Asserted | None
+    headers: list[tuple[bytes, bytes]],
+    asserted: Asserted | None,
+    *,
+    platform: bool = False,
 ) -> list[tuple[bytes, bytes]]:
-    """The scope's headers without the assertion, and -- when one verified --
-    without any identity header the request carried, the assertion's subject
-    and groups written in their place."""
+    """The scope's headers without the assertion, and -- when one verified, or
+    behind the platform -- without any identity header the request carried,
+    the assertion's subject and groups written in their place."""
     dropped = {EDGE_ASSERTION_HEADER.encode()}
-    if asserted is not None:
+    if asserted is not None or platform:
         dropped |= {name.encode() for name in _IDENTITY}
     kept = [(key, value) for key, value in headers if key.lower() not in dropped]
     if asserted is not None:
@@ -549,14 +569,23 @@ def _hygienic(headers: list[tuple[bytes, bytes]]) -> bool:
 def _origin_allowed(
     mode: EdgeMode, method: str, headers: list[tuple[bytes, bytes]]
 ) -> bool:
-    allowed = DEV_ORIGINS if mode.public_origin is None else {mode.public_origin}
+    # Behind the platform without a declared public origin, the browser's
+    # own `sec-fetch-site` is the whole cross-site rule: the app's URL is the
+    # platform's to choose, and it is not known here.
+    allowed: frozenset[str] | None = (
+        None
+        if mode.platform and mode.public_origin is None
+        else DEV_ORIGINS
+        if mode.public_origin is None
+        else frozenset({mode.public_origin})
+    )
     sites = _all(headers, "sec-fetch-site")
     origins = _all(headers, "origin")
     if len(sites) > 1 or len(origins) > 1:
         return False
     site = sites[0].decode("latin-1") if sites else None
     origin = origins[0].decode("latin-1") if origins else None
-    if origin is not None and origin not in allowed:
+    if allowed is not None and origin is not None and origin not in allowed:
         return False
     # `cross-site`, `same-site` and any unknown value fall through both rules.
     if method in _SAFE:

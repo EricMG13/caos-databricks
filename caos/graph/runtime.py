@@ -168,7 +168,7 @@ def run_route(
     route = _execution_route(conn, run_id, route, execution.bundle)
     # Read once from verified bundle bytes, handed to the pure engine (§46.1).
     named = named_objects(execution.bundle, route)
-    from caos.graph.build import build_graph, thread_config
+    from caos.graph.build import build_graph, initial_state, thread_config
 
     def one_node(route_node_id: str) -> str:
         return node_pass(
@@ -194,7 +194,7 @@ def run_route(
     )
     try:
         graph.invoke(
-            {"run_id": str(run_id), "passes": {}, "ended": ""},
+            initial_state(str(run_id)),
             config=thread_config(str(run_id)) if execution.checkpointer else None,
         )
     except Exception as failed:

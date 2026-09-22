@@ -1,0 +1,21 @@
+{
+  "cases": {
+    "decimal_object": "b2df0a617e9f6a88eae1e258a43c498c314c295d1d7ec39c28b415354607cb55",
+    "decimals_as_strings": "cea55fb054b2e4a06d72678d15bea06d2ed14fffcdc90075058d9ca21cead620",
+    "empty_containers": "84516cf23ca8c7c0b386ff9ad41c887e85754e9dec1c466e6905a6a38964c44a",
+    "infinity": "2abb22c9618850ddbc8283ffb6d7efcac7dfc187e0f0ceffb4fecd34a23a3931",
+    "key_order": "9535b09947bc6e096c281400974e1f39f8f51222f66341d18e873805e3c7edf8",
+    "key_sorting_by_code_point": "4428a5ed87580eb41bd3ec451d354053ee86aca9d24b11afb6251beea8c4b66f",
+    "nan": "2abb22c9618850ddbc8283ffb6d7efcac7dfc187e0f0ceffb4fecd34a23a3931",
+    "nested": "30054106d5801030921fa37e683d25964161fd95a44e75db339e513696a7d184",
+    "nested_lists": "f1285b921398177f8ce6ece529685a53e7fcecfbf2a239f715f6a6d440b1c575",
+    "non_ascii_kept": "3416ddba9bf7b7eed99a4580d660e06dc2942d7787e9dd50e23af4e0d31a0ffd",
+    "numbers": "a823f6434f41d7003392e8770e9ae709944e85839f327737718a6a1d015b8d39",
+    "scalar_none": "139e2808e9afad2edf239e81fb770c8873076b60f1fbb881bdb12e7c1f19e98c",
+    "scalar_string": "36f9deb1159171363867baa6d42c94e55462bf20f8714269cf3e8520c7ca2270",
+    "scalar_true": "23508079e7408b66f65c2e1c013be303ee3eb4bece19bfc913031d6d62941915",
+    "unicode_forms": "a4590c1bacad59d26bf26c8ee63dfa610b0d6acddfb49a4f2a1623113a95e652"
+  },
+  "group": "digest",
+  "package": "server"
+}

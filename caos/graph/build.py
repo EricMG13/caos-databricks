@@ -20,8 +20,10 @@ node at a time. Running independent nodes at once is future work (next.md N1).
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any, TypedDict
+from dataclasses import dataclass, field
+from typing import Any, Protocol
 
+from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
@@ -35,16 +37,24 @@ SKIPPED = "SKIPPED"
 ENDED = "ENDED"
 
 
-class RunState(TypedDict, total=False):
+@dataclass
+class RunState:
     """The graph's own view of a run: an audit trail, never an authority."""
 
     run_id: str
-    passes: dict[str, str]
-    ended: str
+    passes: dict[str, str] = field(default_factory=dict)
+    ended: str = ""
 
 
 NodePass = Callable[[str], str]
 Finish = Callable[[], str]
+Update = dict[str, Any]
+
+
+class Step(Protocol):
+    """A graph node: the state in, a partial update out (LangGraph's shape)."""
+
+    def __call__(self, state: RunState) -> Update: ...
 
 
 def build_graph(
@@ -52,7 +62,7 @@ def build_graph(
     *,
     node_pass: NodePass,
     finish: Finish,
-    checkpointer: BaseCheckpointSaver | None = None,
+    checkpointer: BaseCheckpointSaver[str] | None = None,
 ) -> CompiledStateGraph[RunState, None, RunState, RunState]:
     """Compile the run's graph: `node_pass` per route node, then `finish`."""
     graph: StateGraph[RunState, None, RunState, RunState] = StateGraph(RunState)
@@ -74,17 +84,15 @@ def build_graph(
 
 def _after(following: str) -> Callable[[RunState], str]:
     def route(state: RunState) -> str:
-        return END if state.get("ended") else following
+        return END if state.ended else following
 
     return route
 
 
-def _step(
-    route_node_id: str, node_pass: NodePass
-) -> Callable[[RunState], dict[str, Any]]:
-    def step(state: RunState) -> dict[str, Any]:
+def _step(route_node_id: str, node_pass: NodePass) -> Step:
+    def step(state: RunState) -> Update:
         outcome = node_pass(route_node_id)
-        passes = {**state.get("passes", {}), route_node_id: outcome}
+        passes = {**state.passes, route_node_id: outcome}
         if outcome == ENDED:
             # A validated Blocked handoff ended the run; nothing after it runs.
             return {"passes": passes, "ended": "BLOCKED"}
@@ -93,13 +101,18 @@ def _step(
     return step
 
 
-def _terminal(finish: Finish) -> Callable[[RunState], dict[str, Any]]:
-    def terminal(_state: RunState) -> dict[str, Any]:
+def _terminal(finish: Finish) -> Step:
+    def terminal(state: RunState) -> Update:  # the name is the protocol's
         return {"ended": finish()}
 
     return terminal
 
 
-def thread_config(run_id: str) -> dict[str, Any]:
+def thread_config(run_id: str) -> RunnableConfig:
     """The LangGraph config that names this run's checkpoint thread."""
     return {"configurable": {"thread_id": run_id}}
+
+
+def initial_state(run_id: str) -> RunState:
+    """The state a run starts from; every node adds its pass to it."""
+    return RunState(run_id=run_id)

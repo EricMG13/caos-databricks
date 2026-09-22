@@ -155,7 +155,7 @@ def test_io_budget_passes_while_no_request_paths_exist(tmp_path: Path) -> None:
 def test_io_budget_refuses_a_route_module_that_declares_no_budget(
     tmp_path: Path,
 ) -> None:
-    api = tmp_path / "server" / "api"
+    api = tmp_path / "caos" / "api"
     api.mkdir(parents=True)
     (api / "routes.py").write_text("def list_cases() -> None: ...\n", encoding="utf-8")
     result = _run("io_budget.py", "--assert", "--root", str(tmp_path))
@@ -165,7 +165,7 @@ def test_io_budget_refuses_a_route_module_that_declares_no_budget(
 
 def test_io_budget_ignores_a_server_with_no_request_paths(tmp_path: Path) -> None:
     # Phase 1 ships a store and no routes: there is nothing to budget yet.
-    store = tmp_path / "server" / "store"
+    store = tmp_path / "caos" / "store"
     store.mkdir(parents=True)
     (store / "runs.py").write_text("def start_run() -> None: ...\n", encoding="utf-8")
     assert _run("io_budget.py", "--assert", "--root", str(tmp_path)).returncode == 0
@@ -222,7 +222,7 @@ def test_scan_floor_refuses_a_file_under_cover_that_the_report_skipped() -> None
     docs/AI_CODE_QUALITY.md section 4, with a green tick on it."""
     report: dict[str, object] = {"metrics": {"caos/blobs.py": {}, "_totals": {}}}
     claims = scan_floors.Claims(
-        cover=("server",),
+        cover=("caos",),
         unscanned=("tests",),
         tracked=("caos/blobs.py", "caos/refusals.py"),
     )
@@ -239,7 +239,7 @@ def test_scan_floor_refuses_a_tracked_file_no_list_claims() -> None:
     and is scanned by nothing."""
     report: dict[str, object] = {"metrics": {"caos/blobs.py": {}, "_totals": {}}}
     claims = scan_floors.Claims(
-        cover=("server",),
+        cover=("caos",),
         unscanned=("tests",),
         tracked=("caos/blobs.py", "engine/route.py"),
     )
@@ -253,7 +253,7 @@ def test_scan_floor_refuses_a_tracked_file_no_list_claims() -> None:
 def test_scan_floor_accepts_a_report_that_covered_everything_it_claimed() -> None:
     report: dict[str, object] = {"metrics": {"caos/blobs.py": {}, "_totals": {}}}
     claims = scan_floors.Claims(
-        cover=("server",),
+        cover=("caos",),
         unscanned=("tests",),
         tracked=("caos/blobs.py", "tests/test_blob_store.py"),
     )
@@ -376,7 +376,7 @@ def test_tracked_python_keeps_a_path_containing_a_space(tmp_path: Path) -> None:
 
 
 def test_io_budget_reports_without_asserting(tmp_path: Path) -> None:
-    api = tmp_path / "server" / "api"
+    api = tmp_path / "caos" / "api"
     api.mkdir(parents=True)
     (api / "routes.py").write_text("def list_cases() -> None: ...\n", encoding="utf-8")
     assert _run("io_budget.py", "--root", str(tmp_path)).returncode == 0
@@ -449,7 +449,7 @@ def test_io_budget_main_passes_while_no_request_paths_exist_in_process(
 def test_io_budget_main_refuses_a_route_module_that_declares_no_budget_in_process(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    api = tmp_path / "server" / "api"
+    api = tmp_path / "caos" / "api"
     api.mkdir(parents=True)
     (api / "routes.py").write_text("def list_cases() -> None: ...\n", encoding="utf-8")
 
@@ -458,7 +458,7 @@ def test_io_budget_main_refuses_a_route_module_that_declares_no_budget_in_proces
 
 
 def test_io_budget_main_reports_without_asserting_in_process(tmp_path: Path) -> None:
-    api = tmp_path / "server" / "api"
+    api = tmp_path / "caos" / "api"
     api.mkdir(parents=True)
     (api / "routes.py").write_text("def list_cases() -> None: ...\n", encoding="utf-8")
 
@@ -468,7 +468,7 @@ def test_io_budget_main_reports_without_asserting_in_process(tmp_path: Path) -> 
 def test_io_budget_main_passes_when_a_module_declares_the_budget(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    api = tmp_path / "server" / "api"
+    api = tmp_path / "caos" / "api"
     api.mkdir(parents=True)
     (api / "routes.py").write_text("IO_BUDGET = 1\n", encoding="utf-8")
 
@@ -483,9 +483,9 @@ def test_main_builds_claims_from_the_cover_and_unscanned_flags(
     passing `--cover` is what makes `main` build a `Claims` from the repo's
     tracked files in the first place."""
     repo = tmp_path / "repo"
-    (repo / "server").mkdir(parents=True)
+    (repo / "caos").mkdir(parents=True)
     subprocess.run(["git", "init", "-q", str(repo)], check=True)
-    (repo / "server" / "api.py").write_text("x = 1\n", encoding="utf-8")
+    (repo / "caos" / "api.py").write_text("x = 1\n", encoding="utf-8")
     subprocess.run(["git", "-C", str(repo), "add", "-A"], check=True)
 
     report = repo / "bandit.json"
@@ -498,7 +498,7 @@ def test_main_builds_claims_from_the_cover_and_unscanned_flags(
         [
             str(report),
             "--cover",
-            "server",
+            "caos",
             "--unscanned",
             "tests",
             "--repo",
@@ -642,7 +642,7 @@ def test_io_budget_refuses_a_second_route_module_that_declares_no_budget(
     was measured on -- so a gate that stops asking after the first answer is a
     gate the next request path walks past.
     """
-    api = tmp_path / "server" / "api"
+    api = tmp_path / "caos" / "api"
     api.mkdir(parents=True)
     (api / "runs.py").write_text("IO_BUDGET = 4\n", encoding="utf-8")
     (api / "cases.py").write_text("def list_cases() -> None: ...\n", encoding="utf-8")
@@ -659,7 +659,7 @@ def test_io_budget_takes_zero_as_a_declared_cost(tmp_path: Path) -> None:
     gate resting on either is one a new request path can be written around.
     Zero is a cost, and stating it is cheaper than proving the exemption.
     """
-    api = tmp_path / "server" / "api"
+    api = tmp_path / "caos" / "api"
     api.mkdir(parents=True)
     (api / "identity.py").write_text("IO_BUDGET = 0\n", encoding="utf-8")
 
@@ -670,7 +670,7 @@ def test_io_budget_names_the_modules_that_did_not_declare_one(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """A refusal a reader can act on names the files, not just the count."""
-    api = tmp_path / "server" / "api"
+    api = tmp_path / "caos" / "api"
     api.mkdir(parents=True)
     (api / "cases.py").write_text("def list_cases() -> None: ...\n", encoding="utf-8")
 
@@ -713,31 +713,13 @@ def test_the_typescript_half_is_wired_into_the_workspace_lint() -> None:
     assert "scripts/check-tested.mjs" in json.loads(package)["scripts"]["lint"]
 
 
-def test_ledger_state_reports_and_refuses_a_contract_with_no_ledger(
-    tmp_path: Path,
-) -> None:
-    """The ledger reader is driven as a script, the way CI drives the others.
-
-    `tests/test_ledger.py` holds the rules; this is the entry point, and its two
-    exit codes are what a job would read: zero for a ledger it could read, two
-    for a contract whose ledger heading has moved or whose ledger is empty.
-    """
-    assert _run("ledger_state.py", "--report").returncode == 0
-
-    empty = tmp_path / "CLAUDE.md"
-    empty.write_text("# No ledger here\n\nnothing.\n", encoding="utf-8")
-    refused = _run("ledger_state.py", "--contract", str(empty))
-    assert refused.returncode == 2
-    assert "ledger" in refused.stderr.lower()
-
-
 def test_undeclared_names_the_module_a_refusal_must_be_acted_on(
     tmp_path: Path,
 ) -> None:
     """`io_budget --assert` prints a refusal; `undeclared` is the list behind
     it, named so an operator learns *which* module has no budget rather than
     that some module has none."""
-    api = tmp_path / "server" / "api"
+    api = tmp_path / "caos" / "api"
     api.mkdir(parents=True)
     (api / "budgeted.py").write_text(
         "IO_BUDGET = 3\ndef read_one() -> None: ...\n", encoding="utf-8"

@@ -165,11 +165,10 @@ def test_the_doctor_checks_the_dev_actor_without_printing_it(
         ("uv", "0.12.0"),
         ("docker", "29.0.0"),
         ("docker compose", "5.2.0"),
-        ("gitnexus", "1.6.9"),
-        ("security Python", "3.12.12"),
         ("pre-commit", "4.6.2"),
+        ("databricks", "v1.17.0"),
     ]
-    monkeypatch.setattr(doctor, "PYTHON_VERSION", (3, 14))
+    monkeypatch.setattr(doctor, "PYTHON_VERSION", (3, 13))
     monkeypatch.setattr(doctor, "_tool_versions", lambda: tools)
     for name in doctor.REQUIRED_CONFIGURATION:
         monkeypatch.setenv(name, "configured")
@@ -293,20 +292,6 @@ def test_fixture_browser_launchers_never_reuse_an_unrelated_server() -> None:
     assert "reuseExistingServer: false" in playwright
     assert '"--mode",' in axe and '"demo",' in axe
     assert '"--outDir",' in axe and '"dist-demo",' in axe
-
-
-def test_complete_local_gate_requires_database_image_frontend_and_base() -> None:
-    makefile = _read("Makefile")
-
-    assert "check-fast:" in makefile
-    assert "check-postgres:" in makefile
-    assert "test-postgres-races:" in makefile
-    assert "frontend-check:" in makefile
-    assert "check-size:" in makefile
-    assert "PR_BASE is required" in _read("scripts/check_pr_size.py")
-    assert "$(MAKE) --no-print-directory image" in makefile
-    check_recipe = makefile.split("\ncheck:\n", 1)[1].split("\ndoctor:", 1)[0]
-    assert "check-size" not in check_recipe
 
 
 def test_postgres_preflight_does_not_echo_the_connection_string() -> None:

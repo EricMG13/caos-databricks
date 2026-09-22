@@ -1,0 +1,22 @@
+{
+  "cases": {
+    "bindings_bound": "a270c5c602803143f7a65f7dcabc56886a1629a96ef99ae4341529b2c18bfadb",
+    "bindings_empty": "75338baffa5c993f965af293ed117a16b080c1508fd6fdcf2db753b2678d35ed",
+    "bindings_missing": "75338baffa5c993f965af293ed117a16b080c1508fd6fdcf2db753b2678d35ed",
+    "bindings_quote_not_upstream": "75338baffa5c993f965af293ed117a16b080c1508fd6fdcf2db753b2678d35ed",
+    "bindings_wrong_owner": "75338baffa5c993f965af293ed117a16b080c1508fd6fdcf2db753b2678d35ed",
+    "driver_mapping_changed_movement": "bca9fb9ad427ce30fc40e1c5a966dcd0a240154766b4d7f32b5f88fc5977e020",
+    "driver_mapping_vendor_rows": "882bf0c6bd34a5767bc7d0137a71449aa7a785f0ed0c163314780e4e8efa7220",
+    "driver_mapping_wrong_scale": "25c2e0d8bb8aff3869ce2f57291429aaed690572dbeefdd358425d72aeea4e91",
+    "projection_annual": "3d09377c21c0bf75fc2359f41d47efa7b0350ce62e5f4cef3113be5a547e56c0",
+    "projection_changed_result": "950d73dc705d889fa11c5f9ec5aa29274d5176f5a5cb4acf54d918325b1b9181",
+    "projection_code_selection": "43632e696bc228d7b226c6d581909a4d8a5ea8552f4926f434bb4b22e6695aef",
+    "projection_duplicate_keys": "43632e696bc228d7b226c6d581909a4d8a5ea8552f4926f434bb4b22e6695aef",
+    "projection_not_ready": "16f645e1f034cb6ce6da52aa797e7c9d0cc602af8c3a1c7d5893109db8c9ba8c",
+    "projection_quarterly": "5de0fbc8fe509c8b2966e7069841b9cb02111fa98f392e5abbcbb9e047c6328b",
+    "projection_route_request": "ed62be27a4caf748707ad6c0b967d888fb6706be4a7f0e5e30859def4b404204",
+    "projection_two_blocks": "43632e696bc228d7b226c6d581909a4d8a5ea8552f4926f434bb4b22e6695aef"
+  },
+  "group": "forecast",
+  "package": "server"
+}

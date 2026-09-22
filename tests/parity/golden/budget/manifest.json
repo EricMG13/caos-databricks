@@ -1,0 +1,28 @@
+{
+  "cases": {
+    "default_ceiling": "96db1c11be4f00e3d5e8429a68e8fb978cfb64e69b1be49c0ba0b1c2e878c67f",
+    "validate_spend_bool": "3159c4fe925e0aae78b0b228ef438a80438b1711bf0cf3ce55e1732a3e6a34e9",
+    "validate_spend_ceiling": "6b18227b6febdafa5c999cfa1f39eb97525964506decdcd656ae7c4a8b4ee7f9",
+    "validate_spend_exponent_131071": "6b18227b6febdafa5c999cfa1f39eb97525964506decdcd656ae7c4a8b4ee7f9",
+    "validate_spend_exponent_131072": "e20e2202d141ce02088fec4cd8df5da65bc31cde53779cf839464d563584b7b3",
+    "validate_spend_exponent_minus_16383": "6b18227b6febdafa5c999cfa1f39eb97525964506decdcd656ae7c4a8b4ee7f9",
+    "validate_spend_exponent_minus_16384": "e20e2202d141ce02088fec4cd8df5da65bc31cde53779cf839464d563584b7b3",
+    "validate_spend_float": "3159c4fe925e0aae78b0b228ef438a80438b1711bf0cf3ce55e1732a3e6a34e9",
+    "validate_spend_infinity": "e20e2202d141ce02088fec4cd8df5da65bc31cde53779cf839464d563584b7b3",
+    "validate_spend_int": "3159c4fe925e0aae78b0b228ef438a80438b1711bf0cf3ce55e1732a3e6a34e9",
+    "validate_spend_nan": "e20e2202d141ce02088fec4cd8df5da65bc31cde53779cf839464d563584b7b3",
+    "validate_spend_negative": "e20e2202d141ce02088fec4cd8df5da65bc31cde53779cf839464d563584b7b3",
+    "validate_spend_negative_infinity": "e20e2202d141ce02088fec4cd8df5da65bc31cde53779cf839464d563584b7b3",
+    "validate_spend_negative_zero": "6b18227b6febdafa5c999cfa1f39eb97525964506decdcd656ae7c4a8b4ee7f9",
+    "validate_spend_per_token": "6b18227b6febdafa5c999cfa1f39eb97525964506decdcd656ae7c4a8b4ee7f9",
+    "validate_spend_quarter": "6b18227b6febdafa5c999cfa1f39eb97525964506decdcd656ae7c4a8b4ee7f9",
+    "validate_spend_scaled_exponent_minus_16383": "e20e2202d141ce02088fec4cd8df5da65bc31cde53779cf839464d563584b7b3",
+    "validate_spend_snan": "e20e2202d141ce02088fec4cd8df5da65bc31cde53779cf839464d563584b7b3",
+    "validate_spend_str": "3159c4fe925e0aae78b0b228ef438a80438b1711bf0cf3ce55e1732a3e6a34e9",
+    "validate_spend_zero": "6b18227b6febdafa5c999cfa1f39eb97525964506decdcd656ae7c4a8b4ee7f9",
+    "validate_spend_zero_exponent_131072": "e20e2202d141ce02088fec4cd8df5da65bc31cde53779cf839464d563584b7b3",
+    "validate_spend_zero_exponent_minus_16384": "e20e2202d141ce02088fec4cd8df5da65bc31cde53779cf839464d563584b7b3"
+  },
+  "group": "budget",
+  "package": "server"
+}

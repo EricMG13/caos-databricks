@@ -30,6 +30,8 @@ dev = [
   "httpx2>=2.13",
   "bandit>=1.8.6",
   "pip-audit==2.9.0",
+  # pip-audit inspects the synced environment through pip (G11, F17).
+  "pip>=25",
   "complexipy>=3.0",
   # Test-only OpenRouter adapter (spec section 3.4); never imported outside tests/.
   "langchain-openai>=1.0",
@@ -40,6 +42,11 @@ dev = [
 [tool.uv]
 package = false
 no-build = true
+# `databricks-langchain` asks for `unitycatalog-ai[databricks]`, whose extra pulls
+# `databricks-connect` (Requires-Python ==3.12.*) for Unity Catalog function
+# tools this app never calls; without the extra the 3.13 closure is honest and
+# auditable (D26).
+override-dependencies = ["unitycatalog-ai>=0.3.2"]
 
 [tool.ruff]
 target-version = "py313"

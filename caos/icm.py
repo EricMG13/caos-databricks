@@ -165,11 +165,43 @@ def _front_matter_list(prompt: str, key: str) -> tuple[str, ...]:
     return tuple(item.strip() for item in match.group(1).split(",") if item.strip())
 
 
+def _contract_problems(
+    bundle: Bundle, module_id: str, slug: str, slugs: dict[str, str]
+) -> tuple[list[str], set[str]]:
+    """One stage folder's problems, and every file its contract names."""
+    try:
+        contract = load_contract(module_id, slug)
+    except Refusal:
+        return [f"{slug}: CONTEXT.md or prompt.md missing"], set()
+    problems: list[str] = []
+    named = {row.file for row in contract.inputs}
+    bundle_rows = tuple(
+        row.file for row in contract.inputs if row.source in ("bundle", "host")
+    )
+    if bundle_rows != expected_inputs(bundle, module_id, slugs):
+        problems.append(f"{slug}: Inputs table does not match the delivered authority")
+    always, conditional = expected_blocks(module_id)
+    if (contract.blocks, contract.conditional) != (always, conditional):
+        problems.append(f"{slug}: prompt.md blocks {contract.blocks} != {always}")
+    blocks = tuple(f"icm/shared/prompt/{b}.md" for b in (*always, *conditional))
+    prompt_rows = tuple(row.file for row in contract.inputs if row.source == "prompt")
+    if prompt_rows != blocks:
+        problems.append(f"{slug}: Inputs prompt rows do not match the blocks")
+    problems += [
+        f"{slug}: block {block} has no file"
+        for block in (*always, *conditional)
+        if not (PROMPTS / f"{block}.md").is_file()
+    ]
+    if not (contract.has_process and contract.has_outputs):
+        problems.append(f"{slug}: Process or Outputs section missing")
+    return problems, named | set(blocks)
+
+
 def verify(bundle: Bundle | None = None) -> list[str]:
     """Every problem with the workspace, or an empty list.
 
     Checks: a stage folder per module; each contract's bundle rows equal to
-    the delivered authority in order; each contract's host rows equal to the
+    the delivered authority in order; each contract's prompt rows equal to the
     blocks the host renders; Process and Outputs present; every file under
     `icm/shared/prompt/` and `icm/stages/*/references/` named by a contract.
     """
@@ -178,40 +210,12 @@ def verify(bundle: Bundle | None = None) -> list[str]:
     problems: list[str] = []
     named: set[str] = set()
     for module_id, slug in sorted(slugs.items()):
-        try:
-            contract = load_contract(module_id, slug)
-        except Refusal:
-            problems.append(f"{slug}: CONTEXT.md or prompt.md missing")
-            continue
-        named |= {row.file for row in contract.inputs}
-        bundle_rows = tuple(
-            row.file for row in contract.inputs if row.source in ("bundle", "host")
-        )
-        if bundle_rows != expected_inputs(bundle, module_id, slugs):
-            problems.append(
-                f"{slug}: Inputs table does not match the delivered authority"
-            )
-        always, conditional = expected_blocks(module_id)
-        if (contract.blocks, contract.conditional) != (always, conditional):
-            problems.append(f"{slug}: prompt.md blocks {contract.blocks} != {always}")
-        prompt_rows = tuple(
-            row.file for row in contract.inputs if row.source == "prompt"
-        )
-        if prompt_rows != tuple(
-            f"icm/shared/prompt/{b}.md" for b in (*always, *conditional)
-        ):
-            problems.append(f"{slug}: Inputs prompt rows do not match the blocks")
-        for block in (*always, *conditional):
-            if not (PROMPTS / f"{block}.md").is_file():
-                problems.append(f"{slug}: block {block} has no file")
-            named.add(f"icm/shared/prompt/{block}.md")
-        if not (contract.has_process and contract.has_outputs):
-            problems.append(f"{slug}: Process or Outputs section missing")
+        found, names = _contract_problems(bundle, module_id, slug, slugs)
+        problems += found
+        named |= names
     for path in sorted(ICM.rglob("*")):
         relative = path.relative_to(ROOT).as_posix()
-        if path.is_file() and (
-            "/references/" in relative or "/shared/prompt/" in relative
-        ):
-            if relative not in named:
-                problems.append(f"{relative}: named by no contract")
+        reference = "/references/" in relative or "/shared/prompt/" in relative
+        if path.is_file() and reference and relative not in named:
+            problems.append(f"{relative}: named by no contract")
     return problems

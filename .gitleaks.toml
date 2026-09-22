@@ -1,30 +1,13 @@
-# gitleaks' default rules, plus two exemptions.
+# gitleaks' default rules, plus one exemption.
 #
-# `generic-api-key` matches the word "key" followed by a high-entropy value,
-# and `sonar.projectKey=EricMG13_caos-v2` scores high enough to trip it. The
-# `security` gate would refuse the commit that adds sonar-project.properties
-# on that basis alone.
-#
-# It is answered by what the value is: a project key is a public identifier,
-# in the query string of every dashboard URL the check posts, authorising
-# nothing. The credential is SONAR_TOKEN, a repository secret, exempted
-# nowhere in this file. The closed provider finish reasons below are public enum
-# values rather than credentials.
+# The closed provider finish reasons below are public enum values rather than
+# credentials. Nothing else is allowlisted: every identifier this repository
+# tracks is public, and the credentials it uses (the app's service principal,
+# Lakebase credentials minted per connection, a test-only OpenRouter key read
+# from the environment) appear in no tracked file.
 [extend]
 useDefault = true
 
-# Scoped to the exact secret string gitleaks itself extracts ("Secret:" in
-# its finding), not to the file or the whole "key=value" line: a path
-# exemption would stop the scanner reading sonar-project.properties at all,
-# and a credential pasted into it later would be the one thing nothing here
-# reads.
-#
-# No `regexTarget`: that option targets the whole match on gitleaks >=8.24
-# but is not honoured by 8.21.2 -- the version `.pre-commit-config.yaml`
-# pins -- which falls back to matching the regex against the secret value
-# regardless. Tested against both the pinned pre-commit binary and the
-# system gitleaks (8.30.1): omitting it, matching the secret alone, passes
-# on both; setting it to "match" passes only on the newer one.
 [allowlist]
-description = "Public identifiers and closed provider finish-reason enums"
-regexes = ['''EricMG13_caos-v2''', '''^finish_reason=(?:stop|length)$''']
+description = "Closed provider finish-reason enums"
+regexes = ['''^finish_reason=(?:stop|length)$''']
