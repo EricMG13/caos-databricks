@@ -1088,7 +1088,12 @@ def test_the_declared_section_bound_leaves_the_widest_node_its_authority() -> No
             if cost > worst:
                 worst, worst_node = cost, node
     assert worst < MAX_REQUEST_BYTES, (worst_node, worst)
-    assert MAX_REQUEST_BYTES - worst > MAX_REQUEST_BYTES // 4, (worst_node, worst)
+    # A real Claude Opus 5 handoff over a six-line document ran to 36,544
+    # bytes (F110); the bound has to hold one of those with room, so the
+    # widest node's quarter for evidence is no longer promised: it fits, and
+    # a node whose sixteen upstreams all reach the bound fails closed at the
+    # request ceiling, typed (N31 lifts that ceiling).
+    assert MAX_UPSTREAM_HANDOFF_BYTES >= 36_544 + 8_192, MAX_UPSTREAM_HANDOFF_BYTES
 
 
 def test_section_markers_cannot_be_forged_by_evidence() -> None:

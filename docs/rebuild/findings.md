@@ -1,231 +1,279 @@
-# Adversarial review findings — 2026-09-23
+# Current audit findings — Astra max — 2026-09-23
 
-**Verdict: BLOCK.** **18 open findings: 10 CRITICAL after persona promotion, 8 WARNING.** All ten promoted findings have a base severity of WARNING; their concrete impact and conditions are stated below. Promotion follows the requested adversarial-reviewer rule when two or more personas identify the same issue.
+**Verdict: BLOCK under the requested Adversarial Reviewer rubric.** The current list contains **22 findings: 13 promoted CRITICAL and 9 WARNING, plus 3 notes**. Every promoted finding has base severity WARNING; the promotion records two reviewer personas identifying the same issue. It does not mean 13 security breaches or production outages were demonstrated. The reopened-run workflow in MAX-18 has a separate P1 priority from the skills review.
 
-**Scope:** the current working tree at base commit `6aef8509b30203af425afa7ce9666613c54ba275`, including existing uncommitted changes: API edge and identity; store and graph; model seam, methodology and evidence; deployment and stand-ins; deliverables, qualification, calculators and gate scripts. This is a system review, not only a diff review. Finding-source hashes and locations were rechecked on 2026-09-23 at 05:32 UTC.
+**Scope and revision:** API edge and identity; store and graph; model seam, methodology and evidence; deployment and platform stand-ins; deliverables, qualification, calculators and gate scripts. Reviewed HEAD 653dc9ce91a73137360c43b81f14284d324de58f plus the working tree. This is a system review across callers, rather than a diff-only review.
 
-**Method:** five separate `gpt-6-astra` agents at `xhigh`, with at most three sub-agents running concurrently because of the session limit. Four completed Saboteur → New Hire → Security Auditor passes. The model/methodology/evidence agent stopped when the service flagged content for possible cybersecurity risk; its confirmed correctness observations were independently checked by the coordinating reviewer. Its unfinished PDF decoder candidate is excluded. That scope has incomplete review coverage.
+**Method:** both requested passes were rerun as ten scoped assignments using gpt-6-astra at max, under standard safeguards. The first five used sequential Saboteur, New Hire and Security Auditor perspectives; the second five applied the relevant audit, design, specialist and Databricks skills. At most three child agents ran concurrently, four agents including the coordinator, within the user's maximum of five. Some completed agents were reused for a different scope. Duplicate findings were consolidated and unsupported leads excluded.
 
-**Changes:** this audit writes only this findings list. No code, tests, configuration or vendor files were edited by the reviewers. Another session modified source and tests during the audit; withdrawn observations are recorded separately rather than counted as open findings. Existing `decisions.md` entries F1–F31 describe fixed findings and are not relabeled as outstanding.
+**Replacement and changes:** MAX identifiers replace this reviewer's prior AR-01–25 and R2 findings. The separate historical FP review written by another session is preserved below and is not included in current counts. This audit changes only this findings document. Application code, tests, configuration and vendor files were not edited by the reviewers.
 
-## Critical findings
+## Critical findings under persona promotion
 
-### AR-01 — A dropped database connection can terminate the worker permanently
+### MAX-01 — A typed store refusal changes the retry key after an ambiguous commit
 
-**Base WARNING → CRITICAL; Saboteur + New Hire.** Location: [worker.py:271](/Users/ericguei/Documents/caos-databricks/caos/graph/worker.py:271), with recovery at line 304.
+**Base WARNING → CRITICAL; Saboteur + New Hire.** [controls.tsx:142](/Users/ericguei/Documents/caos-databricks/frontend/src/sections/run/controls.tsx:142), [store transaction:224](/Users/ericguei/Documents/caos-databricks/caos/store/__init__.py:224).
 
-`_beat()` catches a database failure and then calls `conn.rollback()` without protecting that call. The worker's recovery handler invokes `_beat()` again on the broken connection before closing it, so a second rollback error escapes the reconnect loop. A probe terminated only its own connection in a disposable UUID database: `worker_escaped=OperationalError`, `connections_opened=1`. The in-process worker stops while the API process remains alive.
+The browser retains an unchanged command's key for offline/invalid-response outcomes, but rotates it after a typed STORE_UNAVAILABLE. That refusal can follow a successful commit whose acknowledgement was lost. A disposable PostgreSQL probe injected failure after the real commit: the case and receipt existed, the same-key retry replayed them, and a fresh key created another case. A separate mounted production-hook probe confirmed that this typed 503 produces that fresh key. These are complementary database and React probes, not an end-to-end network fault test.
 
-**Repair direction:** use the existing `rollback_or_close()` and ensure the BACKOFF heartbeat cannot escape connection recovery. Cover a real dropped connection, not only an exception double.
+**Repair direction:** retain the command intent through commit-ambiguous refusals until its receipt is resolved. The previous unreadable-response defect is fixed; this typed-refusal variant remains.
 
-### AR-02 — Real connection authentication failures retain the rejected cached credential
+### MAX-02 — Health recovery forgets probes that are still running
 
-**Base WARNING → CRITICAL; Saboteur + Security Auditor.** Location: [lakebase.py:66](/Users/ericguei/Documents/caos-databricks/caos/store/lakebase.py:66); also the checkpoint connection path in [checkpoint.py](/Users/ericguei/Documents/caos-databricks/caos/graph/checkpoint.py).
+**Base WARNING → CRITICAL; Saboteur + New Hire.** [health.py:323](/Users/ericguei/Documents/caos-databricks/caos/api/health.py:323), completion accounting at [health.py:285](/Users/ericguei/Documents/caos-databricks/caos/api/health.py:285).
 
-`note_connect_failure()` invalidates only `InvalidPassword` and `InvalidAuthorizationSpecification` subclasses. A real local PostgreSQL connection with an invalid password produced `OperationalError`, `sqlstate=None`; passing it to this function left the cache populated. An early-invalidated Lakebase credential can consequently keep being reused until the 14-minute cache expiry. Checkpoint connection failures do not invoke this hook either. The existing test constructs the more specific exception subclasses and misses the actual driver behavior.
+After the inflight ceiling expires, recovery clears the counter although old threads may still run. Their later completion decrements the replacement round's counter. The ceiling is 10 seconds, below supported SDK HTTP/retry durations; the async deadline cannot cancel a running thread. A bounded event-controlled, simulated-clock probe started a second probe while the first remained active; the old completion then allowed a third without another ceiling interval. Three calls ran, with peak overlap two.
 
-**Repair direction:** perform bounded credential invalidation/remint/retry at the connection boundary, including the checkpoint pool, without depending on unavailable connection SQLSTATE. This is an availability finding; no authentication bypass was demonstrated. Actual Lakebase token revocation was not exercised.
+**Repair direction:** track actual jobs or generations through completion and distinguish a never-started cancellation from a running probe. The historical permanent stall is repaired; this demonstrates overlapping work, not measured pool exhaustion or an outage.
 
-### AR-03 — The capped retry delay overflows after a prolonged outage
+### MAX-03 — API and health reconnects retain a rejected Lakebase credential
 
-**Base WARNING → CRITICAL; Saboteur + New Hire.** Location: [worker.py:251](/Users/ericguei/Documents/caos-databricks/caos/graph/worker.py:251).
+**Base WARNING → CRITICAL; Saboteur + Security Auditor.** [deps.py:78](/Users/ericguei/Documents/caos-databricks/caos/api/deps.py:78), [health.py:113](/Users/ericguei/Documents/caos-databricks/caos/api/health.py:113), [shared connect:202](/Users/ericguei/Documents/caos-databricks/caos/store/__init__.py:202).
 
-`pause_seconds()` calculates `float(2 ** (failures - 1))` before applying its cap. Calling it with the default worker configuration and `failures=1025` raises `OverflowError`. `run_worker()` calls it outside the fault handler, so persistent immediate failures eventually kill the worker instead of remaining at the capped delay—roughly 8.5 hours at the default timing. The existing cap test checks only nine failures.
+Worker and checkpoint connections now invalidate rejected cached credentials, but API and health connections do not. Two real API connections and a health probe against a disposable database rejected an intentionally invalid cached password while retaining it and making zero mint calls. Explicit invalidation then allowed SELECT 1 using one mint. A rejected credential can therefore persist until the local refresh point, up to about 14 minutes, unless another caller refreshes it first. Existing sessions can remain active and need not trigger that recovery. [Lakebase authentication](https://docs.databricks.com/aws/en/oltp/projects/authentication).
 
-**Repair direction:** cap before exponentiation or bound the exponent, and verify a large consecutive-failure count.
+**Repair direction:** apply bounded invalidation/remint consistently at the shared connection boundary. This is an availability defect; actual cloud token revocation and an authorization bypass were not demonstrated.
 
-### AR-04 — Rejected identity tokens accumulate outside the cache bound
+### MAX-04 — Cancellation during a refused call leaves the run nonterminal
 
-**Base WARNING → CRITICAL; Saboteur + New Hire.** Location: [identity.py:229](/Users/ericguei/Documents/caos-databricks/caos/api/identity.py:229).
+**Base WARNING → CRITICAL; Saboteur + New Hire.** [worker.py:258](/Users/ericguei/Documents/caos-databricks/caos/graph/worker.py:258), [work.py:195](/Users/ericguei/Documents/caos-databricks/caos/store/work.py:195).
 
-The refusal path inserts into `_NEGATIVE` without enforcing `CACHE_CAPACITY` or removing expired entries. Cleanup happens only after a successful uncached lookup; continuing refusals and positive-cache hits do not clean it. A small isolated check with capacity 2 and time advanced beyond expiry between rejections retained 6 entries, including 5 expired entries. Memory therefore grows with distinct rejected tokens, and a later successful lookup must scan that accumulation.
+A Cancel accepted during a provider call remains pending if the answer then fails ordinary validation. The refusal path parks the queue without settling cancellation. A real worker/runtime/database probe produced CITATION_NOT_LOCATED, run RUNNING, queue STOPPED and cancellation requested. Subsequent claim returned nothing, Retry was disabled, and no terminal event existed. The outcome and charge remained durable, with no further model spend. A second Cancel completed cancellation; the UI permits that manual recovery.
 
-**Repair direction:** prune and bound negative entries on insertion under the existing lock. Remote exploitability was not established: the real Apps proxy's handling of caller-supplied forwarded-token headers was not tested.
+**Repair direction:** honor a pending cancellation under the existing fence when settling an ordinary refusal. The successful-final-call cancellation fix does not cover this branch.
 
-### AR-05 — Deployment E9 accepts closed HTML as proof of streaming
+### MAX-05 — SDK normalization hides malformed token usage before validation
 
-**Base WARNING → CRITICAL; Saboteur + New Hire.** Location: [enterprise_deploy.py:301](/Users/ericguei/Documents/caos-databricks/scripts/enterprise_deploy.py:301).
+**Base WARNING → CRITICAL; Saboteur + New Hire.** [models.py:170](/Users/ericguei/Documents/caos-databricks/caos/models.py:170), [charge validation:204](/Users/ericguei/Documents/caos-databricks/caos/models.py:204).
 
-After successful case creation, E9 accepts any nonempty first line from an HTTP 200 response. An actual loopback response with `Content-Type: text/html`, body `<html>not an event stream</html>`, then EOF produced exit 0 and `first frame '<html>not an event stream</html>' with the stream open`. The code checks neither SSE content type/frame syntax nor continued connection liveness. This cannot substantiate the C42 streaming assertion.
+The installed adapter defaults absent/null usage counts to zero, and its message model coerces other types before the application's integer checks. The real ChatDatabricks/OpenAI stack over an in-memory HTTP transport accepted usage={} and null counts as a known zero charge; booleans, numeric strings and integral floats also became accepted counts. Entire usage=null and negative counts correctly refused. Thus malformed upstream accounting can become a trusted charge and continue to artifact validation.
 
-**Repair direction:** validate an SSE response and complete frame, then establish continued streaming before recording the proxy as verified. Keep error-page and closed-response negative cases.
+**Repair direction:** validate original usage presence and types before lossy SDK normalization, or preserve sufficient raw metadata. Conservative reservations still hold; no released-budget or overspending bypass was demonstrated. Both model reviews independently reproduced this seam.
 
-### AR-06 — Preflight accepts an endpoint/price mismatch that stops the deployed worker
+### MAX-06 — Ambiguous citation matching retains every matching token slice
 
-**Base WARNING → CRITICAL; Saboteur + New Hire.** Location: [preflight.py:34](/Users/ericguei/Documents/caos-databricks/scripts/preflight.py:34), with the ineffective comparison at line 105.
+**Base WARNING → CRITICAL; Saboteur + Security Auditor.** [citations.py:207](/Users/ericguei/Documents/caos-databricks/caos/evidence/citations.py:207), [candidate collection:426](/Users/ericguei/Documents/caos-databricks/caos/evidence/citations.py:426).
 
-`affordable()` extracts the endpoint from the price string itself rather than validating against `args.endpoint`. Against the workspace stub, `--endpoint enterprise-claude` with a valid price for `databricks-claude-opus-5` passed every check and exited 0. Production `from_environment()` rejects that same configuration with `PROVIDER_NOT_CONFIGURED`. E1 thus permits the bundle deployment/restart before the invalid worker configuration is detected.
+Matching allocates quote-sized token slices and retains every successful match before refusing ambiguity. With only 24 repeated tokens and an eight-token quote, the bounded probe retained 17 slices/136 token references before CITATION_AMBIGUOUS. Current limits allow a 500,000-token page and a 6,000-token quote: source arithmetic implies 2,964,006,000 retained references, about 23.7 GB of pointers alone. That large workload was not executed. The second review checked that page tokenization survives block splitting and that a bounded CP-0 request fits the request limit; anchoring searches the whole page before delivered-block validation.
 
-**Repair direction:** validate the price against the requested endpoint before any deployment mutation.
+**Repair direction:** stop at the second match, avoid per-position slice allocation, and bound long near-match searches. This work runs in the application process, outside PDF child limits.
 
-### AR-07 — The gate-integrity checker misses effective gate weakening
+### MAX-07 — The documented standalone preflight command fails on import
 
-**Base WARNING → CRITICAL; Saboteur + Security Auditor.** Location: [check_gate_config.py:58](/Users/ericguei/Documents/caos-databricks/scripts/check_gate_config.py:58).
+**Base WARNING → CRITICAL; Saboteur + New Hire.** [preflight.py:125](/Users/ericguei/Documents/caos-databricks/scripts/preflight.py:125), [deployment instructions:22](/Users/ericguei/Documents/caos-databricks/docs/DEPLOYMENT.md:22).
 
-The checker tests positive rule selections and option substrings, without resolving overrides or requiring the intended coverage source. Three isolated configuration mutations each returned no problems:
+The documented uv run python scripts/preflight.py command, with a valid --price and without an ambient PYTHONPATH, raises ModuleNotFoundError for caos before performing its checks. The project is not installed as a package and direct script execution does not place the repository root on the import path. Imported tests conceal this entry-point failure. The enterprise wrapper explicitly sets up the root, so its one-command path works.
 
-- `lint.ignore=["F821"]`: installed Ruff changed an undefined-name check from exit 1 to exit 0.
-- Append `--cov-fail-under=0` after the existing threshold: installed pytest parsed an effective floor of 0.
-- Set coverage `source=["caos.boundary_text"]`: Coverage resolved that narrowed scope. CI's scanner floor requires only one measured file and does not restore whole-package coverage.
+**Repair direction:** make the documented direct entry point resolve its package consistently, or document an entry point that does. The endpoint/price mismatch check itself is now correct when imports succeed.
 
-**Repair direction:** check effective rules/options, conflicting overrides, exclusions and coverage source. This is a weakness in the guard against configuration regression; the current project was not changed to disable its gates. `ignore=["ALL"]` alone was counterchecked and rejected as an effective-disable example because the more specific selected families still won.
+### MAX-08 — Deployment E9 accepts two buffered frames from a closed stream
 
-### AR-08 — Rendered lists change the author's numbering
+**Base WARNING → CRITICAL; Saboteur + New Hire.** [enterprise_deploy.py:401](/Users/ericguei/Documents/caos-databricks/scripts/enterprise_deploy.py:401), timing setup at [enterprise_deploy.py:374](/Users/ericguei/Documents/caos-databricks/scripts/enterprise_deploy.py:374).
 
-**Base WARNING → CRITICAL; Saboteur + New Hire.** Location: [render.py:408](/Users/ericguei/Documents/caos-databricks/caos/deliverable/render.py:408).
+E9 validates frame shape but accepts the second frame without establishing the requested liveness interval. A real loopback HTTP server returned two SSE frames with Content-Length and Connection: close, then closed. E9 exited successfully in approximately 0.002–0.005 seconds despite LIVE_SECONDS=2. Both frames were already buffered. Closed HTML, single-frame EOF and inappropriate case-create responses are now rejected; those fixes do not establish continued streaming.
 
-The narrative `7. First`, `9. Second`, `10. Third` renders as an ordered list starting at 7 with items `First`, `9. Second`, `Third`. Browser counters remain 7, 8, 9: the second item gains an unauthored 8 and the third loses its authored 10. A transition from `- Bullet` to `7. Numbered` and `8. Next` stays inside an unordered list and drops the 8. Tests that strip HTML tags do not observe the generated counters.
+**Repair direction:** require observed stream liveness over the declared interval before recording verification. This is a false-positive deployment proof; real Databricks proxy buffering was not tested.
 
-**Repair direction:** preserve ordinals with native list-item values and reopen lists when their type changes; check the successor after a numbering gap.
+### MAX-09 — The deployment path cannot select Lakebase Autoscaling
 
-### AR-09 — Qualification loading allocates the whole document set before aggregate limits apply
+**Base WARNING → CRITICAL; Saboteur + New Hire.** [databricks.yml:25](/Users/ericguei/Documents/caos-databricks/databricks.yml:25), [database resource:92](/Users/ericguei/Documents/caos-databricks/databricks.yml:92), [enterprise_deploy.py:295](/Users/ericguei/Documents/caos-databricks/scripts/enterprise_deploy.py:295).
 
-**Base WARNING → CRITICAL; Saboteur + Security Auditor.** Location: [on_disk.py:193](/Users/ericguei/Documents/caos-databricks/caos/qualification/on_disk.py:193).
+The runtime supports an Autoscaling endpoint, but deployment requires a Provisioned instance, binds that resource, and uses its API in preflight/E8. CAOS_LAKEBASE_INSTANCE also takes precedence over the Autoscaling setting. The real installed SDK could fetch and mint for an Autoscaling endpoint against the loopback stand-in; passing the same endpoint through the deployment instance path failed. Existing Provisioned resources remain supported, while creation of new ones is unavailable after March 12, 2026. [Official Lakebase Apps resource documentation](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/lakebase).
 
-`_case()` eagerly reads and retains every listed document. Individual reads are bounded, but document count and aggregate bytes are not checked at this boundary. A scratch manifest listing one small file 51 times loaded 51 distinct byte objects successfully; only the later admission step refused the 50-document limit with `SOURCE_TOO_LARGE`. Larger repeated allowed files can consume substantial memory before rejection.
+**Repair direction:** carry the selected resource type consistently through bundle, credentials, preflight and verification. Preserve existing Provisioned bindings and role identity. No live deployment was attempted.
 
-**Repair direction:** enforce document counts and aggregate byte limits before/during reads, including a bound across the eagerly materialized qualification set. Exposure is an operator-loaded, potentially untrusted directory, not a remote API. No memory-exhaustion workload was run.
+### MAX-10 — A final matrix refusal loses the performed qualification snapshot
 
-### AR-10 — Concurrent identical qualification signatures do not replay idempotently
+**Base WARNING → CRITICAL; Saboteur + New Hire.** [harness.py:373](/Users/ericguei/Documents/caos-databricks/caos/qualification/harness.py:373), [matrix.py:475](/Users/ericguei/Documents/caos-databricks/caos/qualification/matrix.py:475).
 
-**Base WARNING → CRITICAL; Saboteur + New Hire.** Locations: [qualification.py:137](/Users/ericguei/Documents/caos-databricks/caos/api/commands/qualification.py:137) and [store.py:520](/Users/ericguei/Documents/caos-databricks/caos/qualification/store.py:520).
+Matrix construction runs before the harness persists its performed result. If the local methodology manifest changes after execution but before the final authority check, the refusal escapes that persistence boundary. In a scratch vendor copy, appending one space after the final record yielded AUTHORITY_BYTES_MISMATCH after three real harness calls with scripted responses: the run was COMPLETE, three call outcomes remained, and zero performed snapshots were added.
 
-Both requests can miss the initial receipt, but the later twin-receipt recovery is reachable only after inserting the verdict. Two real connections synchronized after those misses, with identical actor/key/document, returned one `201/replayed=False` and one `VERDICT_BINDING_INVALID` (HTTP 400). A later identical retry correctly returned `201/replayed=True`. The existing `(evidence_sha256, reviewer_id)` primary key collides first; only the newer evidence-only constraint is mapped as already recorded. Exactly one verdict and receipt persisted, so this is a false response and concurrent-idempotency failure, not duplicate state or data corruption.
+**Repair direction:** preserve a non-signable performed result when post-execution matrix construction refuses, while keeping the authority check. This requires privileged/concurrent local file mutation. The paid-call ledger and blobs survive; no false qualification or remote mutation capability was shown.
 
-**Repair direction:** serialize the idempotency scope before mutation or recover the committed receipt after the specific duplicate rollback, preserving different-request conflict checks.
+### MAX-11 — Multi-case qualification capture exports only the first run's attempts
+
+**Base WARNING → CRITICAL; Saboteur + New Hire.** [qualify.py:129](/Users/ericguei/Documents/caos-databricks/scripts/qualify.py:129), [first-run argument:400](/Users/ericguei/Documents/caos-databricks/scripts/qualify.py:400).
+
+The CLI now admits multi-case sets, but its attempt query still receives only prepared[0].input.run_id. A two-case LITE run completed six scripted calls. The durable ledger contained six attempts and total charge 0.0000246; the capture reported complete=true and two results, but only three attempts and charge 0.0000123. All second-run attempt identities and diagnostics were omitted. The database's performed snapshot correctly contained both cases.
+
+**Repair direction:** collect attempts for every prepared/performed run and preserve case/run association, including cases without a proof. This is incomplete exported evidence, not lost ledger entries or a budget bypass.
+
+### MAX-12 — The Markdown release pack omits qualification identity
+
+**Base WARNING → CRITICAL; New Hire + Security Auditor.** [release_pack.py:466](/Users/ericguei/Documents/caos-databricks/scripts/release_pack.py:466); compare the repaired [JSON projection:333](/Users/ericguei/Documents/caos-databricks/scripts/release_pack.py:333).
+
+The Markdown renderer shows QUALIFIED with a shortened evidence digest and expiry, but omits provider, model, reviewer and set. A real signed fixture preserved all four fields in JSON and none in Markdown. A reader sharing only the human artifact cannot tell which execution identity its qualification covers, particularly when it came from a test/OpenRouter provider. The underlying verdict binding and optional identity filter remain correct.
+
+**Repair direction:** display the qualification's execution identity and relevant signer/set bindings beside its status, or explicitly scope the entire artifact. The previous blanket claim about both JSON and Markdown is withdrawn.
+
+### MAX-13 — The gate-integrity checker accepts effective gate weakening
+
+**Base WARNING → CRITICAL; Saboteur + Security Auditor.** [check_gate_config.py:126](/Users/ericguei/Documents/caos-databricks/scripts/check_gate_config.py:126).
+
+The checker inspects positive rule selections and option substrings without resolving overriding configuration. Three isolated mutations each returned no problems: ignoring F821 made installed Ruff stop reporting an undefined name; appending --cov-fail-under=0 made installed pytest's effective coverage threshold zero; restricting coverage source to caos.boundary_text narrowed the measured package. These were scratch configurations. The current repository was not changed to disable its gates, and the current gate checks pass.
+
+**Repair direction:** validate effective rules, conflicting options, exclusions and the intended coverage source. The coordinator reproduced the tool behavior and the deliverable security perspective corroborated the guard failure. Generic scanner scores were not used as evidence.
 
 ## Warnings
 
-### AR-11 — A cancelled, queued health probe can block every future probe round
+### MAX-14 — EventSource reconnection leaves a disconnected view marked live
 
-**WARNING; Saboteur.** Location: [health.py:255](/Users/ericguei/Documents/caos-databricks/caos/api/health.py:255).
+**WARNING; Saboteur.** [sse.ts:75](/Users/ericguei/Documents/caos-databricks/frontend/src/app/sse.ts:75), [Workspace.tsx:195](/Users/ericguei/Documents/caos-databricks/frontend/src/app/Workspace.tsx:195).
 
-`inflight` is incremented before submitting the thread job, but only the thread body decrements it. If the executor is occupied until `wait_for` cancels a still-queued job, that body never runs. With a deliberately occupied one-worker executor and five healthy probes, `inflight` remained 5 after the executor recovered; three further rounds still reported `PROBE_TIMEOUT` without running. The process needs a restart to recover readiness in that condition.
+The error handler returns while EventSource is CONNECTING, before marking the view not live. A transport stand-in transitioned OPEN → CONNECTING and emitted an error; live changes remained [true]. During native reconnect attempts, stale content therefore retains its live indication. A later successful open resynchronizes it, and CLOSED handling already retries correctly.
 
-**Repair direction:** account for cancellation before execution, or retain/shield tasks and observe actual completion. This requires a small or saturated asyncio executor; ordinary Starlette sync routes use AnyIO's separate pool. Normal HTTP traffic was not shown to trigger it.
+**Repair direction:** mark loss of the open connection immediately while allowing the existing reconnection/resync path to restore freshness. This is separate from selecting the wrong stream in MAX-19.
 
-### AR-12 — Malformed SCIM groups escape the typed identity refusal
+### MAX-15 — Autoscaling credential expiry uses the wrong SDK field
 
-**WARNING; Saboteur.** Location: [identity.py:309](/Users/ericguei/Documents/caos-databricks/caos/api/identity.py:309).
+**WARNING; Saboteur.** [lakebase.py:188](/Users/ericguei/Documents/caos-databricks/caos/store/lakebase.py:188), fallback at [lakebase.py:202](/Users/ericguei/Documents/caos-databricks/caos/store/lakebase.py:202).
 
-`_scim_user(b'{"id":"42","groups":true}')` raises an unhandled `TypeError` while iterating groups. An upstream malformed response becomes `INTERNAL_FAULT` rather than the documented `IDENTITY_UNAVAILABLE` response. The same applies to an integer groups value.
+The Autoscaling API returns expire_time as a Timestamp, but the common path reads the Provisioned field expiration_time. A real installed SDK object with one hour remaining therefore retained only the synthetic 840-second deadline; its Provisioned equivalent retained 3,540 seconds. With refresh failing at simulated second 841, the real credential cache refused although the server token was still valid. Successful routine refreshes hide this availability gap. [Documented SDK credential fields](https://databricks-sdk-py.readthedocs.io/en/stable/dbdataclasses/postgres.html#databricks.sdk.service.postgres.DatabaseCredential).
 
-**Repair direction:** validate the groups container before iterating and map an invalid response to the typed refusal. This is an upstream-response condition, not a demonstrated authorization bypass.
+**Repair direction:** normalize the two response shapes and Timestamp representation before entering the common cache. No live endpoint or expired-token acceptance was tested.
 
-### AR-13 — Cancellation during the last provider call is acknowledged but finishes COMPLETE
+### MAX-16 — NaN Retry-After escapes the typed provider interface
 
-**WARNING; Saboteur.** Location: [runs.py:457](/Users/ericguei/Documents/caos-databricks/caos/store/runs.py:457); cancellation contract in [work.py:206](/Users/ericguei/Documents/caos-databricks/caos/store/work.py:206).
+**WARNING; Saboteur.** [models.py:233](/Users/ericguei/Documents/caos-databricks/caos/models.py:233), [retry handler:156](/Users/ericguei/Documents/caos-databricks/caos/models.py:156).
 
-`_transition()` discards the cancellation flag returned by `require_lease()`. If cancellation arrives during the final call, there is no subsequent attempt to notice it. A real three-node LITE run with deterministic completions and cancellation from another connection during call three returned `request_cancel=True`, then `status=COMPLETE`, queue `('DONE', True)`, and only `RUN_COMPLETE`. Existing coverage cancels the first call and relies on the next start to observe cancellation.
+A gateway 429 with Retry-After: NaN survives float parsing and clamping. Sleeping raises ValueError inside the exception handler, outside its sibling catch clauses. The real SDK over an in-memory transport raised after exactly one call. The traced worker path then parks the run as INTERNAL_FAULT before a typed outcome is recorded. Ordinary numeric, invalid-text and infinite headers were counterchecked and remained bounded.
 
-**Repair direction:** resolve pending cancellation under the existing terminal-transition locks while retaining the completed call's accepted artifact and bill.
+**Repair direction:** require a finite interval and use the existing invalid-header fallback. This requires a malformed upstream header; a case uploader cannot directly supply it. Other runs remain serviceable.
 
-### AR-14 — Negative token counts can produce an accepted zero charge
+### MAX-17 — Truncated HTTP bodies escape deployment evidence recording
 
-**WARNING; Saboteur, independently reproduced by the coordinator.** Location: [models.py:179](/Users/ericguei/Documents/caos-databricks/caos/models.py:179).
+**WARNING; Saboteur.** [enterprise_deploy.py:249](/Users/ericguei/Documents/caos-databricks/scripts/enterprise_deploy.py:249), [E9 reads:343](/Users/ericguei/Documents/caos-databricks/scripts/enterprise_deploy.py:343).
 
-`_charge()` converts each count with `int()` and validates only the combined monetary amount. A real `AIMessage` with input tokens -5, output tokens 1 and total tokens -4 at rates 0.000005/0.000025 yielded `Completion(charge=Decimal('0.000000'), refusal=None)` through `complete()`. Malformed upstream accounting therefore becomes an accepted response with an incorrect known charge. The store still retains the reservation via `max(reserved, charged)`; this probe did not demonstrate released capacity or overspending.
+The response-body catches omit http.client.IncompleteRead. A loopback response declaring 100 bytes and sending 10 raised it from the E6 health read and produced no evidence row. The same uncovered body-read boundary exists in E9. The command fails closed, so this is missing diagnostics/retry handling rather than false readiness.
 
-**Repair direction:** require nonnegative integral usage fields before pricing and reject invalid metadata through the existing unknown-charge/refusal path.
+**Repair direction:** map incomplete HTTP responses into the normal failed-attempt evidence and bounded polling behavior.
 
-### AR-15 — Qualification identity records reasoning effort that the model never receives
+### MAX-18 — Reopening an approved run leaves Start and Retry unusable
 
-**WARNING; New Hire, confirmed across the provider and qualification paths.** Locations: [models.py:104](/Users/ericguei/Documents/caos-databricks/caos/models.py:104) and [models.py:270](/Users/ericguei/Documents/caos-databricks/caos/models.py:270).
+**WARNING; skills review priority P1.** [controls.tsx:539](/Users/ericguei/Documents/caos-databricks/frontend/src/sections/run/controls.tsx:539), [RunSection.tsx:45](/Users/ericguei/Documents/caos-databricks/frontend/src/sections/run/RunSection.tsx:45).
 
-With `CAOS_REASONING_EFFORT=high`, the provider reports `databricks/audit-model/high/65536`. An isolated trace showed factory options `{'endpoint': 'audit-model'}` and invocation options containing only `response_format`; no reasoning parameter was sent. The qualification harness persists this identity and signed verdicts bind it. `next.md` N2 explicitly says the identity should record `none` when the parameter is not sent.
+The component's fingerprint starts null, ordinary Run reads omit it, and a successful gate preview deliberately does not retain it. If input is already pinned and both gates are RELEASED, the user cannot Pin again or use an Approve button to recover it. Mounted production components reproduced both Start and Retry remaining disabled with COMMAND_EXPECTATION_STALE after two valid previews returned the fingerprint; zero command POSTs occurred. Same-session pin/approval still works.
 
-**Repair direction:** reject or ignore the setting until supported passthrough is verified, and derive the qualification identity from parameters actually used.
+**Repair direction:** make the server-verified fingerprint recoverable after reload without discarding the reviewed preview. Preserve server checks and binding. This blocks normal authorized UI use; it is not a server authorization failure.
 
-### AR-16 — Explicit infinite PDF deadlines still raise an untyped exception
+### MAX-19 — Case-only navigation displays a run but subscribes only to case audit events
 
-**WARNING; Saboteur.** Locations: [pdf.py:163](/Users/ericguei/Documents/caos-databricks/caos/evidence/pdf.py:163) and [pdf.py:191](/Users/ericguei/Documents/caos-databricks/caos/evidence/pdf.py:191).
+**WARNING; skills review priority P2.** [Workspace.tsx:180](/Users/ericguei/Documents/caos-databricks/frontend/src/app/Workspace.tsx:180), [stream.py:278](/Users/ericguei/Documents/caos-databricks/caos/api/stream.py:278).
 
-The new `_finite()` helper replaces `None`, but passes `float('inf')` through. `_in_child()` then gives the infinite timeout to `Popen.communicate()`, which raises `OverflowError: cannot convert float infinity to integer` in the selector. The current existing test `test_page_frame_runs_in_the_killed_budgeted_child` reproduces this. The earlier default-`None` crash has been fixed concurrently and is not included as an open finding.
+Directory navigation omits the run query. Reads resolve the latest run, but Workspace opens its stream with the raw null selection. That server stream intentionally excludes run events. Mounted Run/Analysis views retained this URL after showing a run; a real database comparison yielded no run_progress event for the case-only tail and one for the named-run tail. A frontend test currently injects an event that this real URL cannot deliver.
 
-**Repair direction:** normalize or refuse non-finite deadlines before spawning the child, preserving typed refusal and bounded cleanup. Production ingestion supplies a finite deadline; ordinary PDF uploads were not shown to fail by this remaining case.
+**Repair direction:** scope events to the displayed run while retaining case events and the explicit-reload identity policy. Under healthy networking, the server's 300-second stream expiry/reopen limits the stale interval to about five minutes plus reconnect delay; manual refresh or relevant audit events can shorten it.
 
-### AR-17 — The JSON-mode smoke test passes on non-JSON output
+### MAX-20 — A transient startup failure permanently disables the in-process worker
 
-**WARNING; Saboteur.** Location: [gateway_smoke.py:42](/Users/ericguei/Documents/caos-databricks/scripts/gateway_smoke.py:42).
+**WARNING; skills review priority P2.** [worker.py:490](/Users/ericguei/Documents/caos-databricks/caos/graph/worker.py:490), [serve.py:65](/Users/ericguei/Documents/caos-databricks/caos/serve.py:65).
 
-Real `ChatDatabricks` against a loopback `WorkspaceStub` returning `definitely not JSON` produced `json_mode=accepted` and exit 0. The completion adapter leaves JSON parsing to the canonical executor, but the smoke script never performs that parsing. E7 proves parameter acceptance while leaving the required structured-output behavior unchecked.
+start_in_process is called once and returns None on transient configuration/database failures. The API then starts separately, with no worker-start retry. A probe followed the real serve ordering, injected one failed initial worker connection, then used real successful database connections and the API lifespan. Health returned ready/store OK/workers ABSENT while work stayed QUEUED. A subsequent manual worker configuration succeeded, establishing a temporary dependency failure. Reconnect logic inside an already-running worker cannot help when no thread was created.
 
-**Repair direction:** parse and verify the second completion's requested JSON object before reporting JSON-mode success.
+**Repair direction:** retry transient startup failures with bounded shutdown handling, or fail required-worker startup so the platform restarts it. API readiness remaining separate from worker health is an accepted design and is not itself the finding.
 
-### AR-18 — The qualification CLI cannot admit a multi-case set
+### MAX-21 — The provider retry sequence can outlast the lease and duplicate billing
 
-**WARNING; Saboteur.** Location: [qualify.py:279](/Users/ericguei/Documents/caos-databricks/scripts/qualify.py:279), checked by [harness.py:481](/Users/ericguei/Documents/caos-databricks/caos/qualification/harness.py:481).
+**WARNING; skills review priority P2.** [models.py:148](/Users/ericguei/Documents/caos-databricks/caos/models.py:148), [600-second lease:27](/Users/ericguei/Documents/caos-databricks/caos/store/work.py:27), [240-second call timeout:30](/Users/ericguei/Documents/caos-databricks/caos/provider.py:30).
 
-The CLI sets both the whole-set ceiling and each run's ceiling to `args.ceiling`. The harness correctly requires `run_ceiling × case_count ≤ set_ceiling`, so every positive-budget invocation with more than one case is impossible. A direct check passed one case with both ceilings 22 and refused two with `QUALIFICATION_SET_OVER_CEILING`. Raising the shared value cannot fix the inequality. CLI happy-path tests use one case.
+Three calls and two waits of up to 20 seconds can exceed the 600-second lease without renewal. A logical-time probe used two 230-second 429 responses plus waits, followed by a third call ending at second 730. A replacement worker claimed at simulated second 601 through real database/runtime code. Both CP-0 attempts were billed; only the replacement's artifact was accepted. Each call fit its individual timeout. No long wall-clock wait or paid invocation occurred.
 
-**Repair direction:** expose or derive a distinct run ceiling, and validate the set before creating persistent resources.
+**Repair direction:** bound the whole retry operation against the lease with settlement margin, or renew/revalidate ownership throughout it. This needs late 429s and overlapping workers. Exactly-once acceptance and conservative reservation accounting held; no budget bypass was shown.
 
-## Verification
+### MAX-22 — Deployment prerequisites omit the store schema's CREATE privilege
 
-All Python checks used the installed environment via `uv run --no-sync`, with `PYTHONDONTWRITEBYTECODE=1`. Pytest runs disabled coverage and its cache provider to avoid modifying repository reports. Database checks used the documented local test PostgreSQL and disposable UUID databases. No paid provider calls, enterprise deployment, or real workspace authorization tests were performed. The following runs overlap and must not be summed as unique coverage.
+**WARNING; conditional skills review priority P2.** [DEPLOYMENT.md:12](/Users/ericguei/Documents/caos-databricks/docs/DEPLOYMENT.md:12), [store bookkeeping:173](/Users/ericguei/Documents/caos-databricks/caos/store/__init__.py:173), [platform fixture:79](/Users/ericguei/Documents/caos-databricks/tests/platform_app.py:79).
 
-| Run | Result |
+Database CONNECT/CREATE does not grant CREATE within an existing public schema. If the app role has only the documented database grants and no writable default schema, startup's unqualified store table creation fails. A restricted temporary PostgreSQL 17 role reproduced SQLSTATE 42501; adding CREATE on public allowed all 27 migrations. The ordinary boot fixture uses an administrator and misses this condition. Current Apps docs describe database grants; the Autoscaling tutorial separately grants schema privileges. [Apps resource grants](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/lakebase), [custom-app schema setup](https://docs.databricks.com/aws/en/oltp/projects/tutorial-databricks-apps-autoscaling).
+
+**Repair direction:** arrange/document the writable store schema and check startup with the declared app-role privileges. Live Lakebase ACL defaults were not inspected; already-writable deployments are unaffected.
+
+## Notes
+
+### MAX-N01 — The UUID-parser guard scans a nonexistent directory
+
+**NOTE; New Hire.** [test_api_routes.py:1306](/Users/ericguei/Documents/caos-databricks/tests/test_api_routes.py:1306) searches server/api rather than caos/api. The scan visits zero files and passes vacuously. Point it at the current package and assert a nonempty scan. No current UUID authorization/parser bypass was established.
+
+### MAX-N02 — The manual bundle-run example omits required variable values
+
+**NOTE; New Hire.** [DEPLOYMENT.md:55](/Users/ericguei/Documents/caos-databricks/docs/DEPLOYMENT.md:55). Values supplied with --var during deployment are not persisted as defaults for the subsequent CLI invocation. The documented standalone bundle run lacks required values unless the operator separately supplies them through the environment or an override file. The enterprise wrapper works. State the manual command's variable prerequisites.
+
+### MAX-N03 — Provider charge precision differs from validated price precision
+
+**NOTE; skills model review.** [models.py:71](/Users/ericguei/Documents/caos-databricks/caos/models.py:71), [pricing.py:75](/Users/ericguei/Documents/caos-databricks/caos/pricing.py:75).
+
+Price validation permits precision up to 1,000 digits with inexact arithmetic trapped, while charge multiplication uses precision 60 without that trap. An accepted one-token input price of 1 + 10^-70 produced charge 1, losing 10^-70 units. This is a contrived 71-significant-digit input, not material rounding for ordinary configured prices or a demonstrated budget bypass. Align the supported precision contract or reject excess precision.
+
+## Skills and verification
+
+The adversarial pass used [Adversarial Reviewer](/Users/ericguei/.codex/skills/adversarial-reviewer/SKILL.md). The second pass applied [Codebase Design](/Users/ericguei/.codex/skills/codebase-design/SKILL.md), [Code Reviewer](/Users/ericguei/.codex/skills/code-reviewer/SKILL.md) and its applicable Python/TypeScript guidance, with [Senior Fullstack](/Users/ericguei/.codex/skills/senior-fullstack/SKILL.md), [Senior Backend](/Users/ericguei/.codex/skills/senior-backend/SKILL.md), [Senior ML Engineer](/Users/ericguei/.codex/skills/senior-ml-engineer/SKILL.md), [Senior DevOps](/Users/ericguei/.codex/skills/senior-devops/SKILL.md), and [Dimensional Analysis](/Users/ericguei/.codex/skills/dimensional-analysis/SKILL.md) where relevant.
+
+Databricks review used the repository's [Core](/Users/ericguei/Documents/caos-databricks/.claude/skills/databricks-core/SKILL.md), [Apps Python](/Users/ericguei/Documents/caos-databricks/.claude/skills/databricks-apps-python/SKILL.md), [Lakebase](/Users/ericguei/Documents/caos-databricks/.claude/skills/databricks-lakebase/SKILL.md), [Python SDK](/Users/ericguei/Documents/caos-databricks/.claude/skills/databricks-python-sdk/SKILL.md), [Model Serving](/Users/ericguei/Documents/caos-databricks/.claude/skills/databricks-model-serving/SKILL.md) and [DABs](/Users/ericguei/Documents/caos-databricks/.claude/skills/databricks-dabs/SKILL.md) skills and relevant references. Current official documentation and installed SDK shapes took precedence over stale examples. Python 3.13 with uv.lock, bundle app config.env, and support for existing Provisioned resources were counterchecked and excluded as findings. [Apps dependencies](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/dependencies), [bundle resources](https://docs.databricks.com/aws/en/dev-tools/bundles/resources).
+
+| Scoped assignment | Verification result |
 | --- | --- |
-| Store/graph: graph, worker, heartbeat, PostgreSQL races, budget, outcomes, idempotency and schema suites | **356 passed**, 1 live-provider test deselected; 92.45 s |
-| Deliverable, calculator, qualification and gate-script selection | **608 passed**; 247.99 s |
-| Initial deployment/boot/stub selection | 12 passed, 1 failed: outdated app-forwarding fixture; subsequently repaired outside this audit |
-| Initial model/evidence selection reported before the agent interruption | 186 passed, 31 failed on the then-current default-PDF-deadline regression; that regression was subsequently repaired |
-| Coordinator's intermediate model/PDF/API/health selection | 82 passed, 5 failed; subsequent external edits repaired the identity/health test fixtures |
-| **Final coordinator rerun:** identity platform, health, enterprise deploy and PDF page-frame suites | **34 passed, 1 failed** in 25.40 s; remaining failure is AR-16 |
-| Final focused mypy check of `caos/evidence/pdf.py` | **Passed**, no issues in 1 source file |
+| [Adversarial API/identity](/private/var/folders/81/bwblpst93lb6wb3lwrk8k6800000gn/T/caos-api-audit-max-kb3pcmcu/first-pass-api-report.md) | 54 existing cases completed successfully; 2 Python and 2 mounted frontend counterexamples passed. |
+| [Adversarial store/graph](/tmp/caos-store-audit-03tuWT/report.md) | 52 passed, 1 live-provider case deselected; bounded credential, cancellation and SDK-expiry probes. |
+| [Adversarial model/methodology/evidence](/tmp/caos-audit-model-3plulse7/report.md) | 72 passed; 1 explicitly excluded direct SDK-construction test after a stalled discovery attempt; bounded transport/citation probes. |
+| [Adversarial deployment/stand-ins](/var/folders/81/bwblpst93lb6wb3lwrk8k6800000gn/T/caos-deploy-astra-audit-bp_z3qfc/report.md) | 18 passed; real CLI 1.17.0 validate/deploy/run succeeded for both dev and prod against loopback. Each uploaded 572 files including 28 frontend distribution files; both shipping checks passed. |
+| [Adversarial deliverables/qualification/calculators/gates](/var/folders/81/bwblpst93lb6wb3lwrk8k6800000gn/T/caos-max-adversarial-deliverable-xl05s9gz/REPORT.md) | 243 pure/package/loader checks and 25 selected database cases passed; nine scripted harness calls in disposable-database counterexamples. |
+| [Skills API/identity/fullstack](/tmp/caos-api-skills-audit-VQqIe1/report.md) | 154 existing checks passed; 4 mounted workflow and 1 database stream counterexamples passed. |
+| [Skills store/graph](/tmp/caos-max-skills-store/report.md) | 49 passed, 1 deselected; real startup/retry-lease probes with simulated transport/time. |
+| [Skills model/methodology/evidence](/tmp/caos-max-skills-model/report.md) | 116 passed, 5 database-dependent skips, 1 explicit direct SDK-construction exclusion; independently corroborated all three model findings. |
+| [Skills deployment/stand-ins](/var/folders/81/bwblpst93lb6wb3lwrk8k6800000gn/T/caos-skills-deploy-audit-dsa0g1_u/report.md) | 21 passed; restricted-role schema probe failed then succeeded as described in MAX-22; temporary role/database cleanup verified. |
+| [Skills deliverables/qualification/calculators/gates](/tmp/caos-max-skills-deliverable/report.md) | 349 passed, zero failures/skips/deselections; four calculator scale transformations with 276 monetary comparisons passed, ratios unchanged and Decimal context isolated. No new finding beyond corroborating MAX-10/11/12. |
+| Coordinator | Ruff lint passed; formatting check passed for 341 files; mypy passed for 340 source files. Five read-only gate scripts passed. Focused gate tests: 75 passed, 39 database-dependent skips. |
 
-The final coordinator test command was:
+Key installed versions used for the reproductions: Databricks SDK 0.140.0, databricks-langchain 0.20.0, OpenAI client 3.18.0, langchain-core 1.6.4, Databricks CLI 1.17.0 and PostgreSQL 17.11.
 
-```sh
-PYTHONDONTWRITEBYTECODE=1 UV_NO_SYNC=1 \
-CAOS_TEST_POSTGRES_URL=postgresql://postgres:local-test-admin-only@127.0.0.1:55437/postgres \
-CAOS_REQUIRE_POSTGRES=1 uv run --no-sync pytest --no-cov -p no:cacheprovider --tb=short \
-  tests/test_identity_platform.py tests/test_health.py \
-  tests/test_enterprise_deploy.py tests/test_pdf_page_frame.py
-```
+Counts overlap across assignments and must not be added as unique coverage. Counterexample checks pass when they reproduce a defect. The five coordinator scripts were check_gate_config, check_tested, io_budget --assert, check_vocabulary and check_icm. Python checks used no coverage output, no pytest cache and no bytecode writes; database tests used disposable UUID databases on the existing local test server. CLI state and all probe files stayed outside the repository.
 
-The store/graph selection was:
+This was not a full CI or coverage run, a live workspace deployment, paid provider qualification, live grant/token-revocation test, or memory-exhaustion test. The direct SDK-construction discovery stall was not reported as a product failure or a passing check. Actual Apps proxy behavior, enterprise ACLs and live model quality remain unverified. Heuristic scanner alerts were investigated as leads; fixture credentials, parameterized SQL matches, scores and estimated coverage were not promoted to findings.
 
-```sh
-uv run --no-sync pytest --no-cov -p no:cacheprovider \
-  tests/graph/test_graph.py tests/test_worker.py tests/test_worker_heartbeat.py \
-  tests/test_postgres_races.py tests/test_budget.py tests/test_call_outcomes.py \
-  tests/test_command_idempotency.py tests/test_store_schema.py
-```
+The tree changed in another session during review. The second model pass checked the current 52 KiB invocation contract and credited its fail-closed tradeoff. Finding-bearing source was hash-checked by each scope. The coordinator rechecked all 33 linked repository files against the initial snapshot on 2026-09-23 at 11:38 UTC: none changed. The current invocation implementation and its tests also match the second model reviewer's recorded hashes. Concurrent OpenRouter qualification work was not treated as a completed live qualification or fully certified here.
 
-The deliverable/qualification/calculator/gate selection was:
+## Reconciliation with this reviewer's previous list
 
-```sh
-uv run --no-sync pytest --no-cov -p no:cacheprovider \
-  tests/test_deliverable_render.py tests/test_deliverable_package.py \
-  tests/test_deliverable_canonical.py tests/test_revisions.py tests/test_filing_chain.py \
-  tests/test_cash_flow_forecast.py tests/parity/test_cash_flow.py \
-  tests/test_qualification.py tests/test_qualification_store.py \
-  tests/test_qualification_matrix.py tests/test_qualification_on_disk.py \
-  tests/test_qualification_harness.py tests/test_qualification_execution.py \
-  tests/test_qualification_prepare.py tests/test_qualification_sign.py \
-  tests/test_check_gate_config.py tests/test_release_pack.py tests/test_qualify_script.py
-```
+Only the reported scenarios and inspected callers are classified below; a repaired historical scenario does not certify all neighboring behavior.
 
-The latter two commands used the same local test database and bytecode settings as the final coordinator run. These were focused review checks, not a full CI run. Passing existing tests does not cover the additional counterexamples described above.
+| Previous identifiers | Current disposition |
+| --- | --- |
+| AR-01, AR-03 | Broken-connection rollback/recovery and retry exponent overflow are repaired in current worker paths and regressions. MAX-20 concerns the separate pre-thread startup phase. |
+| AR-02 | Worker/checkpoint invalidation repaired; API/health omission remains as MAX-03. |
+| AR-04, AR-12 | Negative identity cache bounds and malformed SCIM group parsing repaired and tested. |
+| AR-05 | HTML/single-frame false success repaired; two already-buffered closed frames still pass as MAX-08. |
+| AR-06, AR-17 | Endpoint/price consistency and JSON smoke parsing repaired. MAX-07 concerns the standalone import path. |
+| AR-07 | Effective gate override gap revalidated as MAX-13. |
+| AR-08 | Renderer-numbering change explicitly declined in current decisions/parity contract; no production renderer caller found. Excluded from current open findings. |
+| AR-09, AR-23, AR-25 | Loader materialization/type bounds and contradictory scalar-key preflight checks repaired in reviewed paths. |
+| AR-10 | Current code recovers the winning receipt after a duplicate-verdict rollback. The historical two-connection race was not independently repeated by the coordinator. |
+| AR-11 | Never-started probe permanent stall repaired; MAX-02 covers the replacement generation's accounting. |
+| AR-13 | Successful final-call cancellation repaired; ordinary validation refusal remains MAX-04. |
+| AR-14 | Negative usage rejected; raw usage normalized before validation remains MAX-05. |
+| AR-15, AR-16 | Unsupported reasoning setting rejected; non-finite PDF deadline normalized. |
+| AR-18 | Multi-case ceilings/admission repaired; resulting capture still omits later attempts, MAX-11. |
+| AR-19 | Offline/unreadable-response key retention repaired; typed ambiguous-commit refusal remains MAX-01. |
+| AR-20 | Checkpoint setup serialization repaired; concurrent setup checks passed. |
+| AR-21 | Autoscaling deployment gap remains MAX-09. |
+| AR-22 | JSON identity repaired; Markdown residual remains MAX-12. |
+| AR-24 | Original single-call freshness threshold repaired; aggregate retry duration is part of MAX-21 rather than a duplicate finding. |
+| R2-E1 | Qualification/package shipping omission repaired; both real-CLI loopback uploaded trees passed current shipping checks. |
+| R2-N1 | Vacuous UUID test remains MAX-N01. |
+| R2-N2 | Register comparison fields now included through dataclass projection; distinct multi-run capture issue is MAX-11. |
 
-## Withdrawn observations and limits
+The first deliverable pass also counterchecked the repaired refusal scoring, release coverage, signed evidence re-derivation, filing proof, frozen receipt, subject binding and portable figure-verification paths. Latest-signer receipt semantics and legacy negative-CFO refusal are documented accepted choices and were not reopened. The final calculator review found no additional confirmed arithmetic or unit-scaling defect: annual/quarterly money values scaled consistently between millions, thousands and units, ratios stayed unchanged, and caller Decimal settings did not change canonical output. Dimensional Analysis was applied as a bounded manual audit with external probes; its repository-annotation pipeline was not run.
 
-- The default PDF `None` deadline caused 31 failures early in the audit. Concurrent edits added a finite default and repaired the resulting annotation error; only AR-16 remains open.
-- The original SCIM SDK discovery/authentication configuration concern was replaced by direct HTTP during the audit. The suspicion that ordinary SDK authentication errors escaped `except OSError` was separately disproved.
-- The original accumulation of timed-out health threads was replaced by `inflight` gating; AR-11 records the narrower remaining cancellation-before-start issue.
-- Deployment E9 originally treated every non-201 case response, including 500, as successful but unverified. Concurrent edits now fail non-201 responses other than the explicitly unverified 403 path.
-- The deployment test's missing `forward_user_access_token` fixture and the identity/health fixture expectations were repaired outside this audit. The final rerun passed those suites, so their earlier failures are not counted as open findings.
-- CLI validation disproved the suspicion that the dev target changes the actual app name from `caos`. The `ignore=["ALL"]` Ruff example was also disproved; AR-07 uses confirmed effective overrides.
-- Stand-ins do not establish actual enterprise grants, Apps proxy behavior, Lakebase token revocation or live model quality. The boot harness manually constructs its environment and starts working-tree source, rather than installing and starting the uploaded bundle snapshot. These coverage limits are not new production vulnerabilities.
-- No additional confirmed calculator or filing-authority defect was found. The portable package verifier explicitly proves internal consistency rather than external signer authenticity; that documented boundary was not reported as a bug.
-- Model/methodology/evidence coverage remains partial because the dedicated agent was interrupted. No conclusion is claimed for its unfinished PDF decoder investigation or for every methodology helper.
+The most direct normal-use blocker is reopening an already approved run (MAX-18). Worker startup recovery, aggregate retry/lease timing, citation-search bounds and the qualification/deployment evidence gaps warrant repair or explicit acceptance before release. This report records findings and repair directions; it applies no fixes.
 
-## Summary
-
-The first operational repair is the worker's broken-connection recovery: an ordinary disconnect can stop processing until restart. Qualification execution, identity/billing records and deployment evidence also contain reproducible gaps that existing passing tests do not catch. The list records findings and repair directions only; no fixes were applied by this audit.
 
 ---
+
+## Preserved independent historical review
+
+The following FP section was written by another session against an older tree. It is retained verbatim to preserve that independent work, including its historical counts and conclusions. It is not the current findings list or an assertion that all FP items remain open. The MAX list and reconciliation above state this rerun's verified results.
+
+<details>
+<summary>Independent focused pass from the earlier snapshot — historical record</summary>
 
 # Focused pass — deliverable chain, qualification, calculators and gate scripts — 2026-09-23
 
@@ -675,124 +723,5 @@ On the gate side, FP-10 and FP-11 share one root cause: take gate definitions an
 
 ---
 
-## Second pass — audit, architecture and Databricks skills
 
-**Verdict: BLOCK.** Added **7 new findings: 5 CRITICAL after persona promotion and 2 WARNING**, plus **1 material extension** to an externally reported finding and **2 notes**. All five new CRITICAL findings have base severity WARNING; promotion is the adversarial-reviewer rule, not a claim that each demonstrates a security breach. The first-pass counts above describe their earlier snapshot.
-
-**Scope and method:** five separate Astra xhigh scope assignments, at most three sub-agents concurrently. API/identity, store/graph, deployment/stand-ins and deliverables/qualification/calculators/gates completed sequential Saboteur → New Hire → Security Auditor passes. The model/methodology/evidence reviewer completed a focused test selection but was interrupted by the service's cybersecurity filter before completing its review. Its unfinished citation-performance observation is excluded. No code, tests, configuration, dependencies or vendor files were edited by this audit; only this report was appended. Another session continued editing the working tree. Finding-bearing source was re-read, with coordinating fingerprints taken on **2026-09-23 at 05:55 UTC**, against base commit 6aef8509b30203af425afa7ce9666613c54ba275.
-
-**Skills applied:** [Adversarial Reviewer](/Users/ericguei/.codex/skills/adversarial-reviewer/SKILL.md), [Codebase Design](/Users/ericguei/.codex/skills/codebase-design/SKILL.md), [Senior Fullstack](/Users/ericguei/.codex/skills/senior-fullstack/SKILL.md), [Code Reviewer](/Users/ericguei/.codex/skills/code-reviewer/SKILL.md), its universal/Python/TypeScript guidance where relevant, and the repository's [Databricks Core](/Users/ericguei/Documents/caos-databricks/.claude/skills/databricks-core/SKILL.md), [Apps Python](/Users/ericguei/Documents/caos-databricks/.claude/skills/databricks-apps-python/SKILL.md), [Lakebase](/Users/ericguei/Documents/caos-databricks/.claude/skills/databricks-lakebase/SKILL.md), [Python SDK](/Users/ericguei/Documents/caos-databricks/.claude/skills/databricks-python-sdk/SKILL.md), [Model Serving](/Users/ericguei/Documents/caos-databricks/.claude/skills/databricks-model-serving/SKILL.md) and [DABs](/Users/ericguei/Documents/caos-databricks/.claude/skills/databricks-dabs/SKILL.md) with relevant references. These informed contract, configuration, concurrency and evidence checks; generic architecture/style preferences were not reported as bugs.
-
-Deduplication covered AR-01–18 and the external store, model/evidence and deployment reports observed in the root findings.md. That file was replaced by another session during this review; external identifiers below name those observed reports, not necessarily the file's eventual contents.
-
-### New critical findings
-
-#### AR-19 — Losing a successful response body changes the retry's idempotency key
-
-**Base WARNING → CRITICAL; Saboteur + New Hire.** Locations: [transport.ts:123](/Users/ericguei/Documents/caos-databricks/frontend/src/app/transport.ts:123), [commands.ts:127](/Users/ericguei/Documents/caos-databricks/frontend/src/app/commands.ts:127), [controls.tsx:148](/Users/ericguei/Documents/caos-databricks/frontend/src/sections/run/controls.tsx:148).
-
-After a create command commits, the browser can receive HTTP 201 headers and then lose the response body. bodyOf() converts that transport failure to null; sendCommand() reports RESPONSE_INVALID; useCommand() reuses an intent only for offline. Retrying the unchanged request therefore sends a fresh key, permitting a second case or run.
-
-**Evidence:** a temporary Vitest test mounted the real hook and called real createCase(), with a genuine Response whose stream failed during consumption. A simulated server ledger keyed by the actual outgoing headers recorded two different keys: first=RESPONSE_INVALID, keyReused=false, committed=2. The test passed. Duplicate database writes were not separately reproduced; the backend's keyed receipt lookup and fresh case UUID establish the consequence of sending a different key.
-
-**Repair direction:** retain the intent for an unchanged request until a validated receipt or definitive refusal is received, including body-transfer and invalid-response outcomes. This is the Fullstack request/response contract and Codebase Design error-interface issue, not a defect in the server's same-key replay.
-
-#### AR-20 — Concurrent checkpoint setup can leave one process without a worker
-
-**Base WARNING → CRITICAL; Saboteur + New Hire.** Locations: [checkpoint.py:73](/Users/ericguei/Documents/caos-databricks/caos/graph/checkpoint.py:73), [checkpoint.py:79](/Users/ericguei/Documents/caos-databricks/caos/graph/checkpoint.py:79), [worker.py:446](/Users/ericguei/Documents/caos-databricks/caos/graph/worker.py:446).
-
-Two processes initializing the checkpoint schema can read the same migration version and both insert its successor. The factory calls PostgresSaver.setup() without cross-process serialization; the store's separate migration lock does not cover this schema. The losing process's start_in_process() catches the database error and returns None. Uvicorn starts anyway, with no worker-start retry.
-
-**Evidence:** two actual checkpointer(url) calls against one disposable database were synchronized immediately after the real migration-version query. Results were one UniqueViolation, SQLSTATE 23505, and one successful saver. SQL results were not mocked.
-
-**Impact and repair:** one process loses its worker; the other can continue, so this is not proof of a fleet-wide outage. Serialize the complete checkpoint initialization through a database advisory lock and clean up failed initialization. No persistent pool-resource leak was established. The skill basis is concurrency analysis and keeping initialization constraints inside the factory's interface.
-
-#### AR-21 — The deployment command cannot target Lakebase Autoscaling
-
-**Base WARNING → CRITICAL; Saboteur + New Hire.** Locations: [preflight.py:67](/Users/ericguei/Documents/caos-databricks/scripts/preflight.py:67), [databricks.yml:71](/Users/ericguei/Documents/caos-databricks/databricks.yml:71), [databricks.yml:92](/Users/ericguei/Documents/caos-databricks/databricks.yml:92), [enterprise_deploy.py:252](/Users/ericguei/Documents/caos-databricks/scripts/enterprise_deploy.py:252).
-
-Spec §4 permits Autoscaling endpoints, and the runtime supports LAKEBASE_AUTOSCALING_ENDPOINT. The deployment interface nevertheless requires an instance, uses the Provisioned lookup in preflight and E8, always declares a database resource, and sets CAOS_LAKEBASE_INSTANCE. That variable takes precedence over the runtime's Autoscaling setting.
-
-**Evidence:** the installed SDK successfully fetched an Autoscaling endpoint and minted its credential from a loopback stand-in. Supplying the same endpoint to preflight instead requested /api/2.0/database/instances/projects/... and failed with an instruction to create an instance. With the bundle-shaped instance environment, credential minting used /database/credentials and refused; with only LAKEBASE_AUTOSCALING_ENDPOINT it succeeded through /postgres/credentials.
-
-**Impact and repair:** valid new Autoscaling deployments cannot traverse the documented command. Databricks currently prohibits creation of new Provisioned databases after March 12, 2026, while supporting existing ones. Carry the selected resource type through deployment and verification; preserve existing Provisioned bindings, because changing an existing app's resource type changes its Postgres role. This is not a claim that existing Provisioned deployments fail. [Official Lakebase Apps documentation](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/lakebase).
-
-#### AR-22 — The release pack removes the provider/model scope of qualification
-
-**Base WARNING → CRITICAL; Saboteur + Security Auditor.** Locations: [release_pack.py:203](/Users/ericguei/Documents/caos-databricks/scripts/release_pack.py:203), [release_pack.py:216](/Users/ericguei/Documents/caos-databricks/scripts/release_pack.py:216), [release_pack.py:258](/Users/ericguei/Documents/caos-databricks/scripts/release_pack.py:258).
-
-qualified_pathways() selects by build and adapter, validates the supplied evidence, then drops its provider/model bindings from the emitted verdict. The pathway gets the general status QUALIFIED without showing which execution identity was qualified.
-
-**Evidence:** a valid signed fixture in a disposable database used provider openrouter/google-ai-studio/high/65536 and model google/gemini-3.8-flash. Its release-pack row marked FULL_CREDIT_32/COVENANT_REFINANCING QUALIFIED and included only evidence digest, reviewer and dates. Neither provider nor model survived. Spec §3.4 explicitly distinguishes OpenRouter tests from gateway coverage.
-
-**Impact and repair:** misleading release evidence, not an API qualification-binding bypass; current_verdict() still validates the exact evidence it receives. Preserve provider/model in the emitted verdict and status, and require the expected execution identity when claiming qualification for a deployment. This is distinct from AR-15's unsent reasoning-effort setting and follows the model-serving identity and interface-preservation checks.
-
-#### AR-23 — Contradictory scalar answer keys reach model execution
-
-**Base WARNING → CRITICAL; Saboteur + New Hire.** Locations: [matrix.py:1280](/Users/ericguei/Documents/caos-databricks/caos/qualification/matrix.py:1280), [on_disk.py:305](/Users/ericguei/Documents/caos-databricks/caos/qualification/on_disk.py:305), [harness.py:730](/Users/ericguei/Documents/caos-databricks/caos/qualification/harness.py:730).
-
-The ambiguity check covers register and readiness conflicts but ignores projection expectations. The loader rejects identical triples, yet accepts both CP-0 qa_status=Passed and CP-0 qa_status=Restricted. Those conjunctive scalar expectations are impossible to satisfy.
-
-**Evidence:** a valid one-case LITE fixture with that pair passed real prepare(), with zero calls so far, then real perform() made three scripted-provider calls and completed. Only the resulting matrix reported projections_met=False and signable=False. The database and gate approvals were real; no paid provider was contacted.
-
-**Impact and repair:** an authoring error consumes a route's model work before being exposed, contrary to the preflight promise. Reject different expected values for the same module/scalar-field pair at the shared preflight interface; preserve multiple membership expectations for tuple/list fields. Existing spend ceilings still apply, and the failed case does not become signable.
-
-### New warnings
-
-#### AR-24 — Healthy long-running nodes report stale workers
-
-**WARNING; Saboteur.** Locations: [work.py:259](/Users/ericguei/Documents/caos-databricks/caos/store/work.py:259), [worker.py:183](/Users/ericguei/Documents/caos-databricks/caos/graph/worker.py:183), [runtime.py:177](/Users/ericguei/Documents/caos-databricks/caos/graph/runtime.py:177), [health.py:183](/Users/ericguei/Documents/caos-databricks/caos/api/health.py:183).
-
-Heartbeats run before each node but not during its execution. They become stale after 30 seconds even though the provider timeout is 120 seconds and the normal lease lasts 300 seconds. In a disposable database, a WORKING beat aged to 31 seconds produced WORKERS_STALE while the run's lease remained live.
-
-This creates false operational alarms; E6 also requires the worker code to be OK. Worker status does not change API readiness, and no load-balancer outage was demonstrated. Align freshness with supported uninterrupted work or send independent bounded heartbeats using a separate connection. This is distinct from PID collisions and AR-11's queued-probe cancellation.
-
-#### AR-25 — Malformed forecast keys escape the loader's typed refusal
-
-**WARNING; Saboteur.** Locations: [on_disk.py:269](/Users/ericguei/Documents/caos-databricks/caos/qualification/on_disk.py:269), [matrix.py:1289](/Users/ericguei/Documents/caos-databricks/caos/qualification/matrix.py:1289).
-
-The forecast loader checks field names and constructs ForecastValue without validating the annotated string types. A small scratch manifest containing values=[{name: [], value: {}}] loaded successfully; the harness's first ambiguity check then raised TypeError because the list name is unhashable.
-
-Validate both fields at the loading interface and return QUALIFICATION_SET_FILE_INVALID. Exposure is an operator-loaded manifest, not a remote API; the failure needs no provider call. This is separate from AR-09's allocation problem.
-
-### Material extension to an existing finding
-
-#### R2-E1 — The shipping gate accepts the uploaded tree from external deployment C2
-
-**Base WARNING → CRITICAL; Saboteur + New Hire.** Locations: [check_gate_config.py:79](/Users/ericguei/Documents/caos-databricks/scripts/check_gate_config.py:79), [check_gate_config.py:171](/Users/ericguei/Documents/caos-databricks/scripts/check_gate_config.py:171), [check_gate_config.py:304](/Users/ericguei/Documents/caos-databricks/scripts/check_gate_config.py:304).
-
-External C2 already reports that sync exclusions remove caos/qualification and the uploaded app cannot import. This pass additionally tested the proposed protection: _bundle_problems() returned no problems, its matcher said qualification/** did not match caos/qualification/store.py, and SHIPPED contained no qualification-package path. The actual CLI v1.17.0 uploaded 450 files from a scratch checkout, including zero qualification-package files. The shipped-file gate still returned an empty problem list; importing caos.api.site from the reconstructed upload raised ModuleNotFoundError for caos.qualification.
-
-The protection therefore does not close C2. Validate the actual complete runtime file set and import from the uploaded tree, instead of relying on separately approximated CLI glob semantics and a small sentinel list. This applies Codebase Design's requirement that tests exercise the same interface as callers. It is counted as an extension, not a second copy of the missing-package finding.
-
-### Notes
-
-- **R2-N1 — The UUID-parser architecture guard scans a removed directory. NOTE; New Hire.** [test_api_routes.py:1274](/Users/ericguei/Documents/caos-databricks/tests/test_api_routes.py:1274) scans server/api, which does not exist. It inspected zero files while caos/api contained 29. Point it at the current package and require a nonempty scan. No current parser vulnerability was established.
-- **R2-N2 — Qualification capture omits register-key failures. NOTE; New Hire.** [qualify.py:165](/Users/ericguei/Documents/caos-databricks/scripts/qualify.py:165) emits the other comparison outcomes but omits registers_met. A probe whose only failed comparison was registers_met=False emitted complete=false and a proven row with no visible failed comparison. The persisted snapshot retains the field; add it to the CLI capture. This is lost diagnostics, not lost underlying evidence.
-
-### Prior findings and rejected leads
-
-- **Reconfirmed open:** AR-04 and AR-12 through isolated identity probes; AR-07, AR-08, AR-09 and AR-18 through bounded configuration/render/manifest/ceiling counterexamples. AR-16 produced four failing explicit-infinity PDF cases in the model review's focused suite.
-- **Relevant fault paths remain present:** AR-01, AR-02, AR-03 and AR-13 after current-source rechecks; AR-10's verdict-before-receipt ordering is unchanged, but its race was not rerun. AR-05, AR-06 and AR-17's relevant deployment code is unchanged. Other first-pass entries were not closed by this review.
-- **External deployment duplicates reproduced:** C1's comma-containing model_price fails real CLI parsing; C2's upload cannot import the app; C3's production stand-in deploy fails on the missing workspace/export lock route. These are existing findings, not added again to the new count.
-- **External reports resolved in current bytes:** model ME-C4's host calculator/manifest pin mismatch is repaired. ME-N1's missing decision entries is repaired: decisions.md now records F1–F70. Deployment N4 is partly repaired: its preflight example now includes price and run ceiling.
-- **Rejected stale skill assumptions:** uv.lock plus pyproject.toml supports the pinned Python interpreter without a root requirements.txt; DAB app.config.env is supported. Those patterns are not defects merely because older skill examples use another configuration. [Databricks dependency documentation](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/dependencies), [bundle resource reference](https://docs.databricks.com/aws/en/dev-tools/bundles/resources#app).
-- No additional confirmed calculator arithmetic or filing-authority defect was found. No new runtime access-control bypass was demonstrated. The unfinished model-review observation is excluded rather than presented as a completed security finding.
-
-### Verification and limits for this pass
-
-| Check | Result |
-| --- | --- |
-| API/identity/admission/idempotency/wire/site selection | 136 passed |
-| Store/graph/Lakebase/PostgreSQL race selection | 56 passed |
-| Deployment/workspace/platform selection | 15 passed |
-| Model/methodology/evidence selection reported before service interruption | 233 passed, 4 failed on existing AR-16 |
-| Isolated render/package rerun | 62 passed, 1 database-dependent test skipped |
-| Frontend response-body-loss counterexample | 1 passed, demonstrating the defect |
-| Checkpoint race, heartbeat and qualification counterexamples | Completed in disposable UUID databases before the test database outage |
-
-The larger deliverable/qualification/calculator/gate selection was interrupted when the shared local PostgreSQL entered recovery mode. It had an earlier untriaged failure and later cascading connection/setup failures; interruption and teardown produced no reliable final counts or first-failure traceback. It is not reported as passing. The shared database was not restarted. These infrastructure errors are not added as application findings.
-
-The coordinating reviewer ran Ruff without its cache and the read-only check_icm, check_gate_config, check_tested, check_vocabulary and io_budget --assert gates; all returned success at their check times. Counterexamples above show why those successes do not establish correctness of the shipping and architecture guards. The Fullstack analyzer scanned 453 files; its heuristic secret alerts were test fixtures, its production HTTP alert was loopback-only, and its SQL pattern flagged parameter placeholders. Its scores and alerts were used as leads, not accepted as findings or measured coverage.
-
-Python checks used PYTHONDONTWRITEBYTECODE=1, uv run --no-sync, and pytest --no-cov -p no:cacheprovider. Database probes used only disposable caos_test_<uuid> databases on the existing local test server. CLI deployment probes used a scratch checkout and loopback workspace, with CLI state outside this repository. No live workspace deployment, paid model call, package installation or code fix was performed. Actual enterprise grants, Apps proxy behavior and live model quality remain unverified. This was a focused audit, not a passing full-CI certification.
+</details>

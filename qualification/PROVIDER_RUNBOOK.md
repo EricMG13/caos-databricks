@@ -1,3 +1,67 @@
+# Qualification provider and spend pin — 23 September 2026 (rebuilt host)
+
+Status: **FIRST LIVE RUNS ON CLAUDE OPUS 5 — one LITE set launched once; CP-0 refused by the vendor's severity rule; NOT_QUALIFIED.**
+
+The owner supplied an OpenRouter key and a total budget of $14.00 for the day.
+The rebuilt host was driven through the test-only adapter (`tests/qualify_openrouter.py`
+over `tests/openrouter_adapter.py`), identity `openrouter/anthropic/claude-opus-5/none/65536`,
+price `anthropic/claude-opus-5,0.000005,0.000025,2026-09-23`, `--attempts 1`, a 14.00
+ceiling per set, the run database on the persistent dev server and the blobs under
+`.dev-data/qualification-blobs`. The key was read from the owner's file at call time and is
+not recorded anywhere.
+
+| Run | Set | Route | Outcome | Spend on the key after it |
+|---|---|---|---|---|
+| live smoke, `tests/test_live_run.py` | two synthetic documents | LITE_EARNINGS_UPDATE | CP-0 accepted (36,544-byte handoff); CP-L10 refused `UPSTREAM_SECTION_OVER_CEILING` at the legacy 32 KiB bound (F110) | $1.01 |
+| live smoke, bound lifted | same | same | CP-0 `Restricted`, `READY_WITH_LIMITATIONS`; route ended BLOCKED on a source-limited pack, the methodology's verdict | $2.09 |
+| `ccl-fy2025-market-dislocation`, Opus 5, database `caos_qualify_7e7bf95604d146e49078b0521d789a32` | Carnival FY2025, two documents | MARKET_DISLOCATION (CP-0, CP-3D) | The driver was stopped while CP-0's call was on the wire, to diagnose the run above before spending more; the endpoint billed the call, nothing was recorded (an abandoned attempt, reservation held), no artifact. | $4.02 |
+| `ccl-fy2025-market-dislocation`, **Opus 5.5**, run `76fcf302-0445-4c8f-b865-272efe22bea5`, database `caos_qualify_594429739df54eab99ce599b09146a4d` | same | same | CP-0 answered 28,785 bytes with 22 citations, 9 of them not quoting its own body verbatim; the vendor validator refused "a MATERIAL finding requires qa_status Restricted" against `qa_status: Passed`. `HANDOFF_MALFORMED`, no artifact, no CP-3D call. | see below |
+| `ccl-fy2025-liquidity`, **Opus 5.5**, run `1b1ec13d-09cd-43f4-9034-32cfc30daea1`, database `caos_qualify_203781a43b5c45fc8c0185d8ae54087c` | Carnival FY2025, one document | LIQUIDITY_REVIEW (CP-0, CP-1, CP-2, CP-2D) | CP-0 answered 32,154 bytes with 23 citations, all quoted; refused by the same rule against `qa_status: Passed`. `HANDOFF_MALFORMED`, no artifact, no CP-1 call. | $5.23 |
+| `ccl-fy2025`, run `65ae2607-fe24-42a6-8a23-4b9cad628baa`, database `caos_qualify_c1bc22c03b504716a44945815b8c11d7` | Carnival FY2025 10-K, one document | LITE_EARNINGS_UPDATE | CP-0 answered a well-formed 44,736-byte envelope with 18 citations, all quoted; the vendor validator refused it: "a MATERIAL finding requires qa_status Restricted" while the answer declared `qa_status: Passed`. Attempt refused `HANDOFF_MALFORMED`, no artifact accepted, no CP-L10 call, proof `ORCHESTRATION_NOTHING_TO_PROVE`, matrix incomplete, no verdict. | see the next row |
+
+The host held on every step that is the host's: transport, the text bounds, citation
+quoting, the typed refusal, the reservation and the record. The miss is the same
+model-contract miss the 19 September runs recorded for the OpenAI models: the module
+grades its own severity and then writes a `qa_status` the vendor's rule forbids for that
+severity. Nothing in the host may restate the vendor's rule in the prompt (invariant 4,
+prompt parity), so the next launch changes the model, not the host.
+
+The rule is in the authority every CP-0 call receives: `CANON_SHARED.md` line 373, "any
+MATERIAL, no CRITICAL → score ≤ 59, qa_status = Restricted", delivered whole beside the
+module's `SKILL.md`. Three model generations (OpenAI on 19 September, Claude Opus 5 and
+Claude Opus 5.5 today) each tagged a finding MATERIAL in their own body and still wrote
+`Passed`. That is the agent's contract miss, reproduced, and the reason no pathway has an
+accepted CP-0 artifact from a real model yet. Cheaper models are measured on the same
+two-call set below.
+
+## Cheaper models on the two-call set (`ccl-fy2025-market-dislocation`, `--attempts 1`)
+
+| Model (OpenRouter id) | Price in/out per million | CP-0 outcome | Measured cost |
+|---|---|---|---|
+| `anthropic/claude-sonnet-5` | $2 / $10 | Vendor contract met (`qa_status: Restricted`, no vendor error); refused by the host's quote rule: 8 of 10 citations' `matched_text` do not appear verbatim in the body although the final-check block asks for exactly that. `HANDOFF_MALFORMED`. | $1.36 |
+| `anthropic/claude-haiku-4.5` | $1 / $5 | Vendor error: `committee_status 'Committee Ready' is not permitted under decision_scope SCREENING_ONLY`; also 3 of 13 citations not quoted in the body. `HANDOFF_MALFORMED`. | $0.73 |
+| `google/gemini-2.5-flash` | $0.30 / $2.50 | Vendor contract met (no vendor error); refused by the host's quote rule: none of its 8 citations appears verbatim in the body. `HANDOFF_MALFORMED`. | $0.17 |
+| `deepseek/deepseek-v3.2` | $0.27 / $0.40 | The provider answered a 4xx before inference on both attempts (`PROVIDER_CALL_INVALID`, the message is not kept; the 164k-token context or the JSON response format are the likely causes). Nothing billed. | $0.05 over two runs |
+
+Two distinct misses, then. The Claude Opus generations grade a MATERIAL finding and write
+`Passed` (the vendor's rule); Sonnet 5 and Gemini 2.5 Flash meet the vendor's rules and
+break the host's, by citing evidence lines they did not reproduce verbatim in their own
+Evidence Trace, which the final-check block requires. The host refuses both typed, before
+any downstream call, and the reservation is retained as designed. Spend on the key after
+the four: $7.50.
+
+Retry on the cheapest model that met the vendor contract, `google/gemini-2.5-flash`, with
+`--attempts 2` (run database `caos_qualify_4d130dab70144e4a810bb200941e3fe2` was the first
+launch, abandoned on the wire; see below): two CP-0 attempts, both `HANDOFF_MALFORMED`.
+The first answered 12,439 bytes with 7 citations, vendor-clean, one citation not quoted in
+the body; the second was not a JSON object at all, so the transport refused it. Cost $0.05.
+Spend on the key at the close of the day: **$7.59 of the $14.00 authorised**.
+
+One host-side defect surfaced on the way and was fixed (F112): the test-only adapter built
+its client on the library's defaults, a 600 s timeout with two retries, so one hung call held
+the first Gemini retry launch on the wire for over half an hour before it was stopped; the
+adapter now carries the production deadline (240 s) and no retry below the seam.
+
 # Qualification provider and spend pin — 19 September 2026
 
 Status: **PAID BOUNDED RETRY COMPLETE — Sol/xhigh smoke sets ran once; Phase 4 remains stopped.**

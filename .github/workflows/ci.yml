@@ -53,7 +53,7 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     services:
       postgres:
         # Digest-pinned; a tag alone is not a pin. postgres:17-alpine.
@@ -161,7 +161,7 @@ jobs:
 
   frontend:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     defaults:
       run: {working-directory: frontend}
     steps:

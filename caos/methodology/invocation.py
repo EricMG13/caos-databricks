@@ -92,15 +92,19 @@ _CATALOG = "references/CREDIT_OS_V_MODULE_CATALOG_v2.json"
 # never gave: the request ceiling bounds the sum and names no part, so the
 # first wide pathway would refuse CONTEXT_OVER_CEILING with nothing said about
 # which section was large. Declared rather than derived from the ceiling, so a
-# reader sees the number: on the catalog's widest pathway CP-5 takes 16 direct
-# upstreams, and 16 sections at this bound beside CP-5's 165,548 bytes of
-# delivered authority still leave the ceiling more than a quarter of itself for
-# evidence (`test_the_declared_section_bound_leaves_the_widest_node_its_authority`).
-# Nothing is ever truncated, and this does not make a wide route fit: per-node
-# evidence selection (§95, `caos/methodology/selection.py`) narrows a node's
-# evidence to the members its gate row names, but a named member is delivered
-# whole and the upstream sections are bounded here, not selected.
-MAX_UPSTREAM_HANDOFF_BYTES = 32_768
+# reader sees the number. The legacy 32 KiB was sized for another model's
+# handoffs: the first live Claude Opus 5 answer, CP-0 over a six-line
+# document, ran to 36,544 bytes and the next node refused
+# UPSTREAM_SECTION_OVER_CEILING before any call (F110). 52 KiB is the most the
+# catalog's widest node can carry: CP-5 takes 16 direct upstreams, and 16
+# sections at this bound beside its 165,548 bytes of delivered authority still
+# fit the 1 MiB request (the widest-node test in `tests/test_handoff_invocation.py`);
+# a wide node whose upstreams all reach the bound fails closed at the request
+# ceiling, typed, and lifting that ceiling is N31. Nothing is ever truncated:
+# per-node evidence selection (§95, `caos/methodology/selection.py`) narrows a
+# node's evidence to the members its gate row names, but a named member is
+# delivered whole and the upstream sections are bounded here, not selected.
+MAX_UPSTREAM_HANDOFF_BYTES = 53_248
 
 
 def host_identity(  # noqa: PLR0913 -- the brief's keyword-only identity inputs

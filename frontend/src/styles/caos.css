@@ -2492,3 +2492,6 @@ table.tbl td .cellbtn {
 .rd-paper[data-filed] .rd-mast {
   padding-right: 96px;
 }
+
+/* WCAG 2.2 target size: a text field is a target, and a 19 px field at 320 px failed the gate on CI (F110). */
+.fld input:not([type=checkbox]):not([type=radio]),.fld select,.fld textarea{min-height: 24px;box-sizing: border-box}

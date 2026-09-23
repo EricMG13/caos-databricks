@@ -21,3 +21,7 @@ frontend/test-results/
 
 # Another session's live goal log at the repo root; the reviews it once held are docs/rebuild/findings-round2.md.
 /findings.md
+
+# Local blob caches and retained qualification runs (public documents by digest).
+.dev-data/
+.claude/launch.json
