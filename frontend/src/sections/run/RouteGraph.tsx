@@ -6,6 +6,7 @@ import { useLayoutEffect, useRef } from "react";
 import { RouteLegend } from "./RouteLegend";
 import { blockingOf, reasonOf, runningOf, stateWordOf } from "./reason";
 import { SeverityMark } from "@/chrome/SeverityMark";
+import { sentence } from "@/chrome/compose";
 import type { AttemptView, BlockedByView } from "./types";
 import type { EdgeType, NodeState, Severity } from "@/wire";
 import type { NodeView, RunView } from "@/wire/v1";
@@ -85,7 +86,7 @@ export function severityOf(
   const by: Record<NodeState, Severity> = {
     COMPLETE: "SUCCESS",
     RUNNABLE: running ? "RUNNING" : "IDLE",
-    RESTRICTED: "WARNING",
+    RESTRICTED: "RESTRICTED",
     BLOCKED: "CRITICAL",
   };
   return by[node.state];
@@ -251,7 +252,7 @@ export function RouteGraph({
                     pulse={running}
                     decorative
                   />
-                  {stateWordOf(node, status, running, blocking)}
+                  {sentence(stateWordOf(node, status, running, blocking))}
                 </span>
                 <span className="why">{reasonOf(node, status, blocking)}</span>
               </button>

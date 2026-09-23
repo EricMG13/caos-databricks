@@ -36,7 +36,7 @@ export function citationOf(fact: CitationView, observedAt: string): Citation {
     The passport carries the exact decimal. */
 export function shownValue(cell: BookCell): string {
   return cell.value === null
-    ? (cell.unavailable_reason ?? "NOT SERVED")
+    ? (cell.unavailable_reason ?? "Not served")
     : displayDecimal(cell.value);
 }
 

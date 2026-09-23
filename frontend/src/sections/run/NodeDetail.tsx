@@ -4,6 +4,8 @@
 import { severityOf } from "./RouteGraph";
 import { blockingOf, reasonOf, runningOf } from "./reason";
 import { SeverityMark, toneOf } from "@/chrome/SeverityMark";
+import { sentence } from "@/chrome/compose";
+import { stamp } from "@/ds/format";
 import type { AttemptView, BlockedByView } from "./types";
 import type { NodeView, RunView } from "@/wire/v1";
 
@@ -32,7 +34,7 @@ export function NodeDetail({
           </span>
           <span className={`tag ${toneOf(severity)} right`}>
             <SeverityMark severity={severity} pulse={running} />
-            {node.state}
+            {sentence(node.state)}
           </span>
         </header>
         <div className="pb">
@@ -86,18 +88,20 @@ export function NodeDetail({
               return (
                 <div
                   key={attempt.attempt_id}
-                  className="att"
+                  className="att attempt"
                   data-attempt={attempt.ordinal ?? "—"}
                   {...(verdict ? { "data-blocking-attempt": "" } : {})}
                 >
-                  <span className="a">attempt {attempt.ordinal ?? "unassigned"}</span>
-                  <span>started {attempt.started_at}</span>
+                  <span className="a">Attempt {attempt.ordinal ?? "unassigned"}</span>
+                  <span>
+                    started <time dateTime={attempt.started_at}>{stamp(attempt.started_at)}</time>
+                  </span>
                   <span className={attempt.accepted ? "t-ok" : verdict ? "t-crit" : "t-run"}>
                     {attempt.accepted
-                      ? "ACCEPTED"
+                      ? "Accepted"
                       : verdict
-                        ? "BLOCKED · NOT ACCEPTED"
-                        : "NOT ACCEPTED"}
+                        ? "Blocked · not accepted"
+                        : "Not accepted"}
                   </span>
                 </div>
               );

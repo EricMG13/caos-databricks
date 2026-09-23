@@ -169,7 +169,7 @@ export function ChartFrame({
         </ul>
         <button
           type="button"
-          className="chart-toggle focus-ring"
+          className="chart-toggle"
           aria-pressed={tabular}
           onClick={() => setTabular((on) => !on)}
         >

@@ -40,9 +40,9 @@ export function DirectorySection({
       <section className="pnl" aria-labelledby="directory-register-heading">
         <header>
           <h2 id="directory-register-heading">Case register</h2>
-          <span className="cp">ONE ISSUER ENGAGEMENT PER ROW</span>
+          <span className="cp">One issuer engagement per row</span>
           <span className="right">
-            <span className="tag">{cases.length} CASES</span>
+            <span className="tag">{cases.length} cases</span>
           </span>
         </header>
         <div className="pb flush">

@@ -170,7 +170,7 @@ export function BookSection({ document }: { document: BookDocument; tab: string 
                             {refusedLens[row.case_id]?.clears}{" "}
                             <button
                               type="button"
-                              className="focus-ring"
+                              className="rounded-sm"
                               onClick={() => switchLens(row)}
                             >
                               Switch the lens
@@ -193,7 +193,7 @@ export function BookSection({ document }: { document: BookDocument; tab: string 
                                 onSelect={(opener) => select(row, column, key, opener)}
                               />
                             ) : (
-                              <span className="tag">NOT SERVED</span>
+                              <span className="tag">Not served</span>
                             )}
                           </td>
                         );

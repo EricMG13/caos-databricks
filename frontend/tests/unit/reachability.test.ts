@@ -30,7 +30,7 @@ test("test_every_component_under_sections_is_reachable_from_main", () => {
 test("the graph follows `@/` and relative specifiers alike, and stops at a file it cannot resolve", () => {
   const graph = importGraph(resolve(SRC, "main.tsx"), SRC);
   expect(graph.has(resolve(SRC, "app/App.tsx"))).toBe(true);
-  expect(graph.has(resolve(SRC, "chrome/Rail.tsx"))).toBe(true);
+  expect(graph.has(resolve(SRC, "chrome/AppSidebar.tsx"))).toBe(true);
   expect(graph.has(resolve(SRC, "styles/caos.css"))).toBe(true);
   expect(importGraph(resolve(SRC, "does-not-exist.tsx"), SRC).size).toBe(0);
 });

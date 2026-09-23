@@ -2,7 +2,7 @@
 // typed code and what clears it. aria-disabled, never disabled, never hidden
 // (IA_SPEC.md 2; DESIGN.md "Rules with teeth").
 import type { ReactNode } from "react";
-import { ActionReason } from "@/ds/ActionReason";
+import { ActionReason, type ControlLook } from "@/ds/ActionReason";
 import type { Refusal } from "@/wire";
 
 /** A governed action this section's own document does not name is refused,
@@ -56,6 +56,8 @@ export function RefusedControl({
   className = "",
   reasonDisplay = "inline",
   busy = false,
+  variant,
+  size,
   children,
   ...rest
 }: {
@@ -67,7 +69,7 @@ export function RefusedControl({
   busy?: boolean;
   children: ReactNode;
   "aria-label"?: string;
-}) {
+} & ControlLook) {
   const effective = refusal ?? (onClick ? null : ACTION_UNPLACED);
   return (
     <ActionReason
@@ -76,7 +78,9 @@ export function RefusedControl({
       reasonDisplay={reasonDisplay}
       busy={busy}
       onClick={onClick}
-      className={`${className}${effective ? " refused" : ""}`}
+      variant={variant}
+      size={size}
+      className={className}
       data-refusal={effective?.code}
       {...rest}
     >

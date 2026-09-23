@@ -1,6 +1,6 @@
-// The four bands are on every section (IA_SPEC.md 3), including the states in
-// which there is no document to fill them. This chrome carries the state and
-// invents nothing: no subject, no actions, no role.
+// The header is on every section (IA_SPEC.md 3), including the states in which
+// there is no document to fill it. This chrome carries the state and invents
+// nothing: no subject, no actions, no role, and no run, revision or approval.
 import { OFFLINE_WORDING, UNAVAILABLE_WORDING, type RegionStatus } from "@/app/transport";
 import { regionSentence } from "@/states/RegionState";
 import type { Brief, Ribbon, Severity, Tone, Verdict } from "@/wire";
@@ -21,7 +21,7 @@ function describe(status: RegionStatus): {
   switch (status.kind) {
     case "offline":
       return {
-        label: "OFFLINE",
+        label: "Offline",
         sentence: OFFLINE_WORDING,
         clears: "the server answers",
         severity: "CRITICAL",
@@ -29,7 +29,7 @@ function describe(status: RegionStatus): {
       };
     case "unavailable":
       return {
-        label: "UNAVAILABLE",
+        label: "Unavailable",
         sentence: UNAVAILABLE_WORDING,
         clears: "the case exists and you are a member of it",
         severity: "WARNING",
@@ -38,14 +38,14 @@ function describe(status: RegionStatus): {
     case "choose":
       return status.need === "run"
         ? {
-            label: "CHOOSE A RUN",
+            label: "Choose a run",
             sentence: "Choose a run to open this section.",
             clears: "a run is chosen in Run",
             severity: "IDLE",
             tone: "neutral",
           }
         : {
-            label: "CHOOSE A REVISION",
+            label: "Choose a revision",
             sentence: "Choose a frozen revision to open Committee.",
             clears: "a frozen revision is chosen in Report",
             severity: "IDLE",
@@ -61,7 +61,7 @@ function describe(status: RegionStatus): {
       };
     default:
       return {
-        label: "LOADING",
+        label: "Loading",
         sentence: "Loading the section document.",
         clears: "the document lands",
         severity: "RUNNING",
@@ -87,9 +87,9 @@ export function fallbackChrome(status: RegionStatus): FallbackChrome {
   return {
     ribbon: {
       chips: [{ label: state.label, tone: state.tone }],
-      execution: "—",
-      persistence: "—",
-      approval: "—",
+      execution: null,
+      persistence: null,
+      approval: null,
       actions: [],
     },
     brief: {

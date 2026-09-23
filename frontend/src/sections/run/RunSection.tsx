@@ -17,7 +17,11 @@ import { NodeDetail } from "./NodeDetail";
 import { blockedByOf } from "./reason";
 import { RouteGraph } from "./RouteGraph";
 import type { GateView } from "./types";
-import { shortDigest } from "@/ds/format";
+import { SEVERITY_BADGE, SeverityMark } from "@/chrome/SeverityMark";
+import { sentence, words } from "@/chrome/compose";
+import { Badge } from "@/components/ui/badge";
+import { shortDigest, stamp } from "@/ds/format";
+import { NODE_SEVERITY } from "@/sections/analysis/tone";
 import { useAnnouncer } from "@/states/Announcer";
 import type { NodeState } from "@/wire";
 import type { RunSectionDocument } from "@/wire/v1";
@@ -108,9 +112,10 @@ export function RunSection({ document }: { document: RunSectionDocument; tab: st
     run.nodes[0]?.route_node_id ??
     null;
   const selected = run.nodes.find((node) => node.route_node_id === selectedId) ?? null;
-  const tally = STATES.map(
-    (state) => `${run.nodes.filter((node) => node.state === state).length} ${state}`,
-  ).join(" · ");
+  const tally = STATES.map((state) => ({
+    state,
+    count: run.nodes.filter((node) => node.state === state).length,
+  }));
   const blockedBy = blockedByOf(run);
 
   return (
@@ -128,10 +133,10 @@ export function RunSection({ document }: { document: RunSectionDocument; tab: st
                 const latest = summary.run_id === body.latest_run_id;
                 const label = displayed
                   ? latest
-                    ? "DISPLAYED · LATEST"
-                    : "DISPLAYED · NOT LATEST"
+                    ? "Displayed · latest"
+                    : "Displayed · not latest"
                   : latest
-                    ? "LATEST"
+                    ? "Latest"
                     : "";
                 return (
                   <Link
@@ -142,8 +147,8 @@ export function RunSection({ document }: { document: RunSectionDocument; tab: st
                     data-latest={latest}
                     to={runHref(body.case_id, summary.run_id)}
                   >
-                    <span className="a">{summary.status}</span>
-                    <span>{summary.created_at}</span>
+                    <span className="a">{sentence(summary.status)}</span>
+                    <time dateTime={summary.created_at}>{stamp(summary.created_at)}</time>
                     <span>{label}</span>
                   </Link>
                 );
@@ -164,8 +169,20 @@ export function RunSection({ document }: { document: RunSectionDocument; tab: st
               build {run.build_id ?? "not pinned"} · digest{" "}
               {shortDigest(run.route_digest, "not pinned")}
             </span>
-            <span className="tag right">{run.nodes.length} NODES</span>
-            <span className="tag acc">{tally}</span>
+            <span className="tag right">{run.nodes.length} nodes</span>
+            <span className="flex flex-wrap gap-1.5" data-tally>
+              {tally.map(({ state, count }) => (
+                <Badge
+                  key={state}
+                  variant={SEVERITY_BADGE[NODE_SEVERITY[state]]}
+                  className="gap-1.5"
+                  data-tally-state={state}
+                >
+                  <SeverityMark severity={NODE_SEVERITY[state]} decorative />
+                  {count} {words(state)}
+                </Badge>
+              ))}
+            </span>
           </header>
           {run.route_digest === null ? (
             <div className="note" data-route-not-pinned>
@@ -263,7 +280,7 @@ export function RunSection({ document }: { document: RunSectionDocument; tab: st
           <div className="pb">
             <dl className="kv">
               <dt>Status</dt>
-              <dd>{run.status}</dd>
+              <dd className="prose">{sentence(run.status)}</dd>
               {blockedBy !== null ? (
                 <>
                   <dt>Blocked by</dt>
@@ -290,7 +307,9 @@ export function RunSection({ document }: { document: RunSectionDocument; tab: st
                 </>
               ) : null}
               <dt>Created</dt>
-              <dd>{run.created_at}</dd>
+              <dd>
+                <time dateTime={run.created_at}>{stamp(run.created_at)}</time>
+              </dd>
               <dt>Route digest</dt>
               <dd className="wrap" title={run.route_digest ?? "not pinned"}>
                 {shortDigest(run.route_digest, "not pinned")}
@@ -302,7 +321,7 @@ export function RunSection({ document }: { document: RunSectionDocument; tab: st
               {run.subject ? (
                 <>
                   <dt>Subject</dt>
-                  <dd>
+                  <dd className="prose">
                     {run.subject.issuer_name} · {run.subject.reporting_period}
                   </dd>
                 </>
@@ -324,7 +343,9 @@ export function RunSection({ document }: { document: RunSectionDocument; tab: st
               run.gates.map((gate) => (
                 <div key={gate.gate} className="att" data-gate-row={gate.gate}>
                   <span className="a">{GATE_LABEL[gate.gate]}</span>
-                  <span className={gate.state === "RELEASED" ? "t-ok" : "t-run"}>{gate.state}</span>
+                  <span className={gate.state === "RELEASED" ? "t-ok" : "t-run"}>
+                    {sentence(gate.state)}
+                  </span>
                 </div>
               ))
             ) : (

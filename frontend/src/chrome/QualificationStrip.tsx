@@ -2,7 +2,9 @@
 // global performed-evidence identity, which the URL must name exactly.
 import { useEffect, useState } from "react";
 import { fetchQualification, type QualificationStatus } from "@/app/transport";
-import { SeverityMark, toneOf } from "./SeverityMark";
+import { SEVERITY_BADGE, SeverityMark, toneOf } from "./SeverityMark";
+import { sentence } from "./compose";
+import { Badge } from "@/components/ui/badge";
 import type { Severity } from "@/wire";
 
 const HASH = /^[0-9a-f]{64}$/;
@@ -79,12 +81,16 @@ export function QualificationStrip({ evidenceSha256 }: { evidenceSha256: string 
   if (!bound) return null;
   const view = display(status);
   return (
-    <section className={`verdict ${toneOf(view.severity)}`} aria-label="Qualification">
-      <span className="sig">
+    <section
+      className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-card px-4 py-3 text-sm ring-1 ring-foreground/10"
+      aria-label="Qualification"
+      data-tone={toneOf(view.severity)}
+    >
+      <Badge variant={SEVERITY_BADGE[view.severity]} className="gap-1.5">
         <SeverityMark severity={view.severity} pulse decorative />
-        {view.label}
-      </span>
-      <span className="txt">{view.sentence}</span>
+        {sentence(view.label)}
+      </Badge>
+      <span className="text-pretty">{view.sentence}</span>
     </section>
   );
 }

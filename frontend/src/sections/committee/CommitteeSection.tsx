@@ -1,3 +1,4 @@
+import { sentence } from "@/chrome/compose";
 import { scrollArtifact } from "@/controls/scroll";
 import { NoteList } from "@/ds/atoms";
 import type { CommitteeDocument } from "@/wire/v1";
@@ -10,7 +11,7 @@ function Artifact({ artifact }: { artifact: CommitteeDocument["body"]["artifacts
       <header>
         <h2>{artifact.route_node_id}</h2>
         <span className="cp">
-          {artifact.qa_status} · {artifact.committee_status}
+          {sentence(artifact.qa_status)} · {sentence(artifact.committee_status)}
         </span>
       </header>
       <div className="pb">
@@ -118,7 +119,7 @@ export function CommitteeSection({
       <section className="pnl">
         <header>
           <h2>{body.case_title}</h2>
-          <span className="cp">SAVED COMMITTEE</span>
+          <span className="cp">Saved committee</span>
         </header>
         <div className="pb">
           <dl className="kv">

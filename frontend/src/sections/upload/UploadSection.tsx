@@ -42,10 +42,10 @@ export function UploadSection({ document }: { document: UploadDocument; tab: str
         <section className="pnl" aria-labelledby="source-pack-heading">
           <header>
             <h2 id="source-pack-heading">Source pack</h2>
-            <span className="cp">ONE USER-PROVIDED DOCUMENT PER ROW</span>
+            <span className="cp">One user-provided document per row</span>
             <span className="right">
-              <span className="tag">{rows.length} SOURCES</span>
-              {withdrawn > 0 ? <span className="tag warn">{withdrawn} WITHDRAWN</span> : null}
+              <span className="tag">{rows.length} sources</span>
+              {withdrawn > 0 ? <span className="tag warn">{withdrawn} withdrawn</span> : null}
             </span>
           </header>
           <div className="pb flush">

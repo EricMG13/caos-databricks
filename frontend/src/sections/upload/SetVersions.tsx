@@ -12,9 +12,9 @@ export function SetVersions({ versions }: { versions: SetVersion[] }) {
     <section className="pnl" aria-labelledby="set-versions-heading" data-set-versions>
       <header>
         <h2 id="set-versions-heading">Set versions</h2>
-        <span className="cp">IMMUTABLE</span>
+        <span className="cp">Immutable</span>
         <span className="right">
-          <span className="tag">{versions.length} VERSIONS</span>
+          <span className="tag">{versions.length} versions</span>
         </span>
       </header>
       <div className="pb flush">

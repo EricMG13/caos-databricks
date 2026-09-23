@@ -4,6 +4,7 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { UNAVAILABLE_WORDING, type RegionStatus, type SelectionNeed } from "@/app/transport";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { refusalText } from "@/controls/RefusedControl";
 import type { Refusal } from "@/wire";
 import { SurfaceState } from "@/ds/SurfaceState";
@@ -12,13 +13,13 @@ const CHOICES: Record<SelectionNeed, { title: string; detail: string; link: stri
   run: {
     title: "Choose a run",
     detail: "Report and Committee each read one run of this case. Run lists them.",
-    link: "OPEN RUN",
+    link: "Open Run",
   },
   revision: {
     title: "Choose a frozen revision",
     detail:
       "Committee reads a revision once it is frozen. Report lists this run's revisions and how far each has gone.",
-    link: "OPEN REPORT",
+    link: "Open Report",
   },
 };
 
@@ -39,9 +40,9 @@ export function regionSentence(refusal: Refusal): string {
 /** Sends the section's read again, for a state that says nothing arrived. */
 function RetryButton({ onRetry }: { onRetry: () => void }) {
   return (
-    <button type="button" className="rb" onClick={onRetry}>
-      TRY AGAIN
-    </button>
+    <Button type="button" variant="outline" size="sm" onClick={onRetry}>
+      Try again
+    </Button>
   );
 }
 
@@ -111,7 +112,7 @@ export function RegionState<D>({
           title={choice.title}
           detail={choice.detail}
           supporting={
-            <Link className="rb acc" to={status.href}>
+            <Link className={buttonVariants({ size: "sm" })} to={status.href}>
               {choice.link}
             </Link>
           }
@@ -126,9 +127,9 @@ export function RegionState<D>({
             detail="The authority changed underneath this view. The lens moves only through an explicit reload."
             supporting={
               onReload ? (
-                <button type="button" className="rb acc" onClick={onReload}>
-                  RELOAD
-                </button>
+                <Button type="button" size="sm" onClick={onReload}>
+                  Reload
+                </Button>
               ) : null
             }
           />

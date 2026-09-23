@@ -24,33 +24,36 @@ function apiRequests(page: Page): string[] {
 
 for (const section of SECTIONS) {
   const disabled = DISABLED_SECTIONS.includes(section);
-  test(`${section}: the four bands sit above the body in order, one nav, served role read-only`, async ({
+  test(`${section}: the header names the section above the body, one nav, served role read-only`, async ({
     page,
   }) => {
     const requests = apiRequests(page);
     await page.goto(sectionRoute(section, disabled ? "reader" : null));
     await expect(page.locator("main#body [data-surface-state='loading']")).toHaveCount(0);
-    const bands = page.locator("header.ribbon, section.brief, section.tabs, section.verdict");
-    await expect(bands).toHaveCount(4);
-    const order = await bands.evaluateAll((nodes) =>
-      nodes.map((node) => node.className.split(" ")[0]),
-    );
-    expect(order).toEqual(["ribbon", "brief", "tabs", "verdict"]);
-    // The bands precede the frame in DOM order.
-    const framePreceded = await page.evaluate(() => {
-      const frame = document.querySelector(".frame");
-      const verdict = document.querySelector(".verdict");
+    // One banner, outside the body, whose heading is the section.
+    const banner = page.getByRole("banner");
+    await expect(banner).toHaveCount(1);
+    await expect(banner.getByRole("heading", { level: 1 })).toHaveCount(1);
+    const bannerPrecedes = await page.evaluate(() => {
+      const header = document.querySelector("header");
+      const body = document.querySelector("main#body");
       return Boolean(
-        frame &&
-        verdict &&
-        verdict.compareDocumentPosition(frame) & Node.DOCUMENT_POSITION_FOLLOWING,
+        header &&
+        body &&
+        !body.contains(header) &&
+        header.compareDocumentPosition(body) & Node.DOCUMENT_POSITION_FOLLOWING,
       );
     });
-    expect(framePreceded).toBe(true);
+    expect(bannerPrecedes).toBe(true);
+    // A section with a document summarises it at the top of the body; one with
+    // none says its state in the header and the region, and nothing else.
+    await expect(page.locator("main#body section[aria-label='Summary']")).toHaveCount(
+      disabled ? 0 : 1,
+    );
     await expect(page.locator("nav")).toHaveCount(1);
     const demo = page.getByRole("complementary", { name: "Demonstration mode" });
-    await expect(demo).toContainText("READ-ONLY DEMONSTRATION");
-    await expect(demo).toContainText("NOTHING IS PERSISTED");
+    await expect(demo).toContainText("Read-only demonstration");
+    await expect(demo).toContainText("nothing is persisted");
     for (const off of DISABLED_SECTIONS) {
       await expect(page.locator(`nav a[data-section='${off}']`)).toContainText("Unavailable");
     }
@@ -58,7 +61,7 @@ for (const section of SECTIONS) {
       // Disabled in every mode, demo included: no document, no request, no tail.
       await expect(page.locator("main#body [data-surface-state='unavailable']")).toHaveCount(1);
       await expect(page.locator("[data-served-role]")).toHaveCount(0);
-      await expect(page.locator("header.ribbon [data-primary]")).toHaveCount(0);
+      await expect(page.locator("header [data-primary]")).toHaveCount(0);
       expect(requests).toEqual([]);
       return;
     }
@@ -68,7 +71,7 @@ for (const section of SECTIONS) {
     // Every enabled section's composed ribbon offers no action (brief 4.1,
     // decision 5).
     expect(V1_SECTIONS).toContain(section);
-    await expect(page.locator("header.ribbon [data-primary]")).toHaveCount(0);
+    await expect(page.locator("header [data-primary]")).toHaveCount(0);
   });
 }
 

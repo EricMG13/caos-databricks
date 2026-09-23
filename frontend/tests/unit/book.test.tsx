@@ -88,7 +88,7 @@ describe("the book", () => {
         unavailable_reason: "ZERO_OR_NEGATIVE_DENOMINATOR",
       }),
     ).toBe("ZERO_OR_NEGATIVE_DENOMINATOR");
-    expect(shownValue({ ...cell, value: null })).toBe("NOT SERVED");
+    expect(shownValue({ ...cell, value: null })).toBe("Not served");
   });
 
   test("a passport citation names its document, page and quote and claims no rectangle", () => {

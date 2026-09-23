@@ -1,185 +1,366 @@
-/* Tokens: the bound CAOS design system's values, unchanged (DESIGN.md;
-   docs/DECISIONS.md 18). The bundle declares --caos-* but not the font
-   families, so the app declares those first. System stacks only: no web font. */
+/* The workspace theme (DESIGN.md; D35-D37): shadcn/ui's Nova style on Base UI,
+   light and dark, the reader's system choice unless they pick one. Geist and
+   Geist Mono are bundled with the app, so the production CSP's
+   `font-src 'self'` holds and no request leaves for a font host. Every colour
+   below was checked, not eyeballed: body text 4.5:1 on each surface it sits
+   on (tinted status chips included), a field's edge and every chart hue 3:1
+   (WCAG 1.4.11), the chart ramp through the dataviz validator. */
 @import "tailwindcss";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+
+/* Dark follows the system until the reader picks a theme; the pick sets
+   `.dark` or `.light` on <html> (src/app/theme.ts). Both halves live in the
+   variant, so a dark system is dark before any script has run. */
+@custom-variant dark {
+  &:where(.dark, .dark *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not(.light), :root:not(.light) *) {
+      @slot;
+    }
+  }
+}
+
+/* Base UI's state attributes, as shadcn's own stylesheet names them
+   (vendored from shadcn 4.21.0 `tailwind.css`, MIT; src/ds/VENDORED.md). */
+@custom-variant data-open {
+  &:where([data-state="open"]),
+  &:where([data-open]:not([data-open="false"])) {
+    @slot;
+  }
+}
+@custom-variant data-closed {
+  &:where([data-state="closed"]),
+  &:where([data-closed]:not([data-closed="false"])) {
+    @slot;
+  }
+}
+@custom-variant data-checked {
+  &:where([data-state="checked"]),
+  &:where([data-checked]:not([data-checked="false"])) {
+    @slot;
+  }
+}
+@custom-variant data-selected {
+  &:where([data-selected="true"]) {
+    @slot;
+  }
+}
+@custom-variant data-disabled {
+  &:where([data-disabled="true"]),
+  &:where([data-disabled]:not([data-disabled="false"])) {
+    @slot;
+  }
+}
+@custom-variant data-active {
+  &:where([data-state="active"]),
+  &:where([data-active]:not([data-active="false"])) {
+    @slot;
+  }
+}
+@custom-variant data-horizontal {
+  &:where([data-orientation="horizontal"]) {
+    @slot;
+  }
+}
+@custom-variant data-vertical {
+  &:where([data-orientation="vertical"]) {
+    @slot;
+  }
+}
+
+@utility no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
+  --radius: 0.625rem;
 
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-display: "Avenir Next", "Segoe UI", system-ui, sans-serif;
-  --font-mono:
-    ui-monospace, "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
-    monospace;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  /* 5.1:1 on muted, where shadcn's 0.556 reads 4.3:1. */
+  --muted-foreground: oklch(0.52 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --border: oklch(0.922 0 0);
+  /* A field's edge: 3:1 on the card it sits on (WCAG 1.4.11). */
+  --input: oklch(0.64 0 0);
+  --ring: oklch(0.52 0.23 263);
 
-  --caos-bg: #0a0a0f;
-  --caos-panel: #12121a;
-  --caos-elevated: #1a1a24;
-  --caos-border: #262633;
-  --caos-text: #e6e6ef;
-  --caos-muted: #8a8a9a;
-  --caos-accent: #4f8cff;
-  --caos-success: #22c55e;
-  --caos-warning: #f5a524;
-  --caos-critical: #ef4444;
-  --caos-idle: #3f3f46;
+  /* Status: text-safe at 4.5:1 on white and on their own 10% tint. The
+     severity mark carries the shape, so hue is never alone (DESIGN.md). */
+  --success: oklch(0.48 0.14 151);
+  --warning: oklch(0.5 0.14 50);
+  --destructive: oklch(0.52 0.21 27);
+  --info: oklch(0.52 0.23 263);
+  --idle: oklch(0.556 0 0);
+  /* How much of a status hue a tinted surface takes, and a field's fill. */
+  --tint: 10%;
+  --field-bg: transparent;
 
-  /* On-dark text tints for status copy, derived from the semantic hues. Signal
-     only: status text and chips, never decoration. */
-  --caos-success-bright: #7ee2a8;
-  --caos-warning-bright: #fbbf24;
-  --caos-critical-bright: #f87171;
-  --caos-accent-bright: #a8c5ff;
+  /* Seniority, 3:1 on the card. */
+  --tranche-1l: oklch(0.6 0.118 184.704);
+  --tranche-2l: oklch(0.546 0.245 262.881);
+  --tranche-unsec: oklch(0.666 0.179 58.318);
+  --tranche-sub: oklch(0.558 0.288 302.321);
+  --tranche-eq: oklch(0.554 0.046 257.417);
 
-  --tranche-1l: #2dd4bf;
-  --tranche-2l: #4f8cff;
-  --tranche-unsec: #f5a524;
-  --tranche-sub: #a855f7;
-  --tranche-eq: #64748b;
+  /* The categorical ramp, validated on #ffffff (dataviz validate_palette.js
+     "#0891b2,#b45700,#6a5bc6,#af3e7c,#9f9530" --mode light --pairs all). */
+  --chart-1: #0891b2;
+  --chart-2: #b45700;
+  --chart-3: #6a5bc6;
+  --chart-4: #af3e7c;
+  --chart-5: #9f9530;
+  --chart-neutral: #8a8f98;
+  --chart-zero: #8e8e97;
 
-  /* Paper: ink on cream, inside filed output only (DESIGN.md). */
-  /* A field's edge: 3:1 against the panel it sits on (WCAG 1.4.11), where
-     the hairline border is 1.35:1 and left a field an invisible box. */
-  --field-edge: #63636f;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.955 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.52 0.23 263);
+
+  /* Paper: ink on cream, inside filed output only, in either theme. */
   --paper-bg: #f7f5ee;
   --paper-ink: #16161e;
   --paper-meta: #45454f;
   --paper-note: #55555f;
   --paper-rule: #9c998e;
-  --paper-gutter: #141420;
+  --paper-gutter: #e9e6dc;
   --paper-cite: #1f4fa0;
   --paper-stamp: #1f6b3a;
   --paper-line: #c9c5b8;
   --paper-line-soft: #d8d5c9;
 
-  --shadow-modal: 0 24px 80px -24px rgba(0, 0, 0, 0.9);
-  --paper-shadow: 0 24px 70px -24px rgba(0, 0, 0, 0.85);
-  --caos-rail-width: 216px;
-  --radius-sm: 2px;
-  --radius-md: 6px;
+  @variant dark {
+    color-scheme: dark;
+    --background: oklch(0.145 0 0);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.205 0 0);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.205 0 0);
+    --popover-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.922 0 0);
+    --primary-foreground: oklch(0.205 0 0);
+    --secondary: oklch(0.269 0 0);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.269 0 0);
+    --muted-foreground: oklch(0.708 0 0);
+    --accent: oklch(0.269 0 0);
+    --accent-foreground: oklch(0.985 0 0);
+    --border: oklch(1 0 0 / 10%);
+    --input: oklch(0.52 0 0);
+    --ring: oklch(0.707 0.165 254.624);
+
+    --success: oklch(0.792 0.209 151.711);
+    --warning: oklch(0.828 0.189 84.429);
+    --destructive: oklch(0.704 0.191 22.216);
+    --info: oklch(0.707 0.165 254.624);
+    --idle: oklch(0.556 0 0);
+    --tint: 15%;
+    --field-bg: color-mix(in oklab, var(--input) 30%, transparent);
+
+    --tranche-1l: oklch(0.777 0.152 181.912);
+    --tranche-2l: oklch(0.707 0.165 254.624);
+    --tranche-unsec: oklch(0.828 0.189 84.429);
+    --tranche-sub: oklch(0.714 0.203 305.504);
+    --tranche-eq: oklch(0.704 0.04 256.788);
+
+    /* Validated on the dark card (#171717), all pairs. */
+    --chart-1: #09a3bf;
+    --chart-2: #b45700;
+    --chart-3: #6a5bc6;
+    --chart-4: #af3e7c;
+    --chart-5: #9f9530;
+    --chart-neutral: #b8beca;
+    --chart-zero: #686872;
+
+    --sidebar: oklch(0.205 0 0);
+    --sidebar-foreground: oklch(0.985 0 0);
+    --sidebar-primary: oklch(0.707 0.165 254.624);
+    --sidebar-primary-foreground: oklch(0.145 0 0);
+    --sidebar-accent: oklch(0.269 0 0);
+    --sidebar-accent-foreground: oklch(0.985 0 0);
+    --sidebar-border: oklch(1 0 0 / 10%);
+    --sidebar-ring: oklch(0.707 0.165 254.624);
+  }
 }
 
 @theme {
-  --color-caos-bg: var(--caos-bg);
-  --color-caos-panel: var(--caos-panel);
-  --color-caos-elevated: var(--caos-elevated);
-  --color-caos-border: var(--caos-border);
-  --color-caos-text: var(--caos-text);
-  --color-caos-muted: var(--caos-muted);
-  --color-caos-accent: var(--caos-accent);
-  --color-caos-success: var(--caos-success);
-  --color-caos-warning: var(--caos-warning);
-  --color-caos-critical: var(--caos-critical);
-  --color-caos-idle: var(--caos-idle);
+  /* Emil Kowalski's curves: a strong ease-out for anything entering or
+     answering a press, never ease-in (D37). */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@theme inline {
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-sans);
+  --font-mono: "Geist Mono Variable", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+  --color-idle: var(--idle);
   --color-tranche-1l: var(--tranche-1l);
   --color-tranche-2l: var(--tranche-2l);
   --color-tranche-unsec: var(--tranche-unsec);
   --color-tranche-sub: var(--tranche-sub);
   --color-tranche-eq: var(--tranche-eq);
-  --color-paper-bg: var(--paper-bg);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-paper: var(--paper-bg);
   --color-paper-ink: var(--paper-ink);
-  --color-paper-meta: var(--paper-meta);
-  --color-paper-rule: var(--paper-rule);
 
-  /* Floors (DESIGN.md): 10px labels, 11px tabular mono data, 12px body. */
-  --text-caos-3xs: 10px;
-  --text-caos-2xs: 10px;
-  --text-caos-xs: 11px;
-  --text-caos-sm: 11px;
-  --text-caos-md: 12px;
-  --text-caos-lg: 12.5px;
-  --text-caos-xl: 13px;
-  --text-caos-2xl: 14px;
-  --text-caos-metric: 18px;
-  --text-caos-hero: 24px;
-
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-mono);
-  --font-display: var(--font-display);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* No `overflow-x: hidden` here: it hid a page wider than its viewport rather
-   than letting the reader reach what was off it. What is wide now scrolls in
-   the panel that holds it, and anything that still is not reaches the page's
-   own scrollbar (WCAG 1.4.10, finding FE-5). */
-html,
-body,
-#root {
-  height: 100%;
-  margin: 0;
-  background: var(--caos-bg);
-  color: var(--caos-text);
-  font-family: var(--font-sans);
-  font-size: 12px;
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    /* The browser's own surfaces wear the palette too. */
+    scrollbar-color: color-mix(in oklab, var(--foreground) 22%, transparent) transparent;
+    accent-color: var(--primary);
+    caret-color: var(--info);
+  }
+  body {
+    @apply bg-background text-sm text-foreground;
+  }
+  ::selection {
+    background: color-mix(in oklab, var(--info) 22%, transparent);
+  }
+  /* A keyboard ring on what shadcn does not draw itself. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  a {
+    text-underline-offset: 3px;
+  }
+  /* Figures: mono, tabular, slashed zero off (DESIGN.md "Numeric truth"). */
+  .tabular,
+  .font-mono,
+  code,
+  kbd,
+  samp {
+    font-variant-numeric: tabular-nums;
+  }
+  .tabular {
+    font-family: var(--font-mono);
+  }
+  /* A theme change repaints at once rather than crossfading every surface. */
+  .theme-switching,
+  .theme-switching * {
+    transition: none !important;
+  }
 }
 
-/* Monospaced numerics with aligned decimals. */
-.tabular {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum" 1;
+/* How far a wide table's edge fades: all of it at the start of its scroll,
+   none at the end (caos.css `.tscroll`). */
+@property --tscroll-fade {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+@keyframes tscroll-fade {
+  from {
+    --tscroll-fade: 2.5rem;
+  }
+  to {
+    --tscroll-fade: 0px;
+  }
 }
 
-.transition-caos {
-  transition:
-    background-color 160ms ease-out,
-    border-color 160ms ease-out,
-    color 160ms ease-out,
-    box-shadow 160ms ease-out;
+/* Motion only for live state and for answering the reader (D37). */
+@layer components {
+  .caos-running {
+    animation: caos-pulse 1.6s var(--ease-in-out) infinite;
+  }
+  .caos-flash {
+    animation: caos-flash 0.6s var(--ease-out);
+    border-radius: var(--radius-sm);
+  }
 }
-
-/* Motion only for live state (DESIGN.md). */
 @keyframes caos-pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
   50% {
-    opacity: 0.4;
+    opacity: 0.45;
   }
-}
-.caos-running {
-  animation: caos-pulse 1.6s ease-in-out infinite;
 }
 @keyframes caos-flash {
   from {
-    background: color-mix(in srgb, var(--caos-accent) 32%, transparent);
+    background: color-mix(in oklab, var(--info) 22%, transparent);
   }
-  to {
-    background: transparent;
-  }
-}
-.caos-flash {
-  animation: caos-flash 0.6s ease-out;
-  border-radius: 2px;
 }
 @media (prefers-reduced-motion: reduce) {
   .caos-running,
   .caos-flash {
     animation: none;
   }
-}
-
-.caos-selected {
-  box-shadow:
-    0 0 0 1px var(--caos-accent),
-    inset 0 0 0 1px var(--caos-accent);
-}
-
-/* Keyboard focus ring, inset so a scrolling panel cannot clip it. */
-.focus-ring:focus-visible {
-  outline: 2px solid var(--caos-accent);
-  outline-offset: -2px;
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
+  *,
+  ::before,
+  ::after {
+    transition-property: opacity, color, background-color, border-color !important;
+  }
 }

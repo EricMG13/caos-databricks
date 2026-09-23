@@ -1,10 +1,13 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./app/App";
+import { applyTheme, storedTheme } from "./app/theme";
 import "./styles/tokens.css";
 import "./styles/caos.css";
 import "./styles/charts.css";
 
+// A reader's own theme pick, applied before the first paint of the app.
+applyTheme(storedTheme());
 const root = document.getElementById("root");
 if (!root) throw new Error("no root element");
 // A boundary that recovers re-renders the failing document, so a

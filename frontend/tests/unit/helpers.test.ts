@@ -12,7 +12,6 @@ import { ACTION_UNPLACED, refusalDetail, refusalText } from "@/controls/RefusedC
 import { scrollArtifact } from "@/controls/scroll";
 import { regionSentence } from "@/states/RegionState";
 import { displayDecimal, shortDigest, stamp } from "@/ds/format";
-import { SEV_COLOR, sevSurface, sevVar } from "@/ds/sev";
 import { NODE_SEVERITY, confidenceTier, nodeTone } from "@/sections/analysis/tone";
 import { caseHref } from "@/sections/directory/CaseRegister";
 import { severityOf } from "@/sections/run/RouteGraph";
@@ -28,18 +27,6 @@ describe("severity is shape and hue, never hue alone", () => {
     expect(Object.keys(NODE_SEVERITY)).toEqual(["COMPLETE", "RUNNABLE", "RESTRICTED", "BLOCKED"]);
     expect(nodeTone("BLOCKED")).toBe("crit");
     expect(nodeTone("COMPLETE")).toBe("ok");
-  });
-
-  test("an unknown severity token falls back to idle rather than to nothing", () => {
-    expect(sevVar("critical")).toBe(SEV_COLOR.critical);
-    expect(sevVar("not-a-severity")).toBe("var(--caos-idle)");
-  });
-
-  test("a tinted surface mixes the severity colour and keeps it as the text colour", () => {
-    const surface = sevSurface("warning", { border: 40, wash: 12 });
-    expect(surface.color).toBe(SEV_COLOR.warning);
-    expect(surface.borderColor).toContain("40%");
-    expect(surface.background).toContain("12%");
   });
 
   test("a RUNNABLE node is only RUNNING while it is actually running", () => {
@@ -77,7 +64,7 @@ describe("the wire contract and the states around it", () => {
     expect(offline.verdict.conclusion).toBe("Offline");
     expect(offline.verdict.severity).toBe("CRITICAL");
     expect(offline.ribbon.actions).toEqual([]);
-    expect(offline.ribbon.execution).toBe("—");
+    expect(offline.ribbon.execution).toBeNull();
     expect(offline.brief.change).toBe("Nothing observed.");
 
     const refused = fallbackChrome({

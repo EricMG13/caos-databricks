@@ -53,7 +53,7 @@ test("a stale view holds its figures until Reload", async ({ page }) => {
   const stale = page.locator("main#body [data-surface-state='stale']");
   await expect(stale).toBeVisible({ timeout: 10_000 });
   await expect(figure).toHaveText(/^96 /);
-  await stale.getByRole("button", { name: "RELOAD" }).click();
+  await stale.getByRole("button", { name: "Reload" }).click();
   await expect(stale).toHaveCount(0);
   await expect(figure).toHaveText(/^12 /);
 });

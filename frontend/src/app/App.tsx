@@ -3,7 +3,10 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-route
 import { focusSectionHeading, pageTitle } from "./heading";
 import { forward, sectionFromPath } from "./sections";
 import { Workspace } from "./Workspace";
-import { Rail } from "@/chrome/Rail";
+import { AppShell } from "@/chrome/AppShell";
+import { AppSidebar } from "@/chrome/AppSidebar";
+import { SiteHeader } from "@/chrome/SiteHeader";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { RegionState } from "@/states/RegionState";
 
 /** A private 404 and an absent route share one neutral wording. */
@@ -15,23 +18,37 @@ function Absent() {
     document.title = pageTitle("Unavailable", caseId);
   }, [caseId]);
   return (
-    <div className="ap" data-section="absent">
-      <div className="frame">
-        <Rail
+    <AppShell
+      section="absent"
+      label="Unavailable"
+      sidebar={
+        <AppSidebar
           section={null}
           entries={null}
           local={null}
           servedRole={null}
           searchFor={() => caseSearch}
+          subject={null}
+          caseId={caseId}
         />
-        <main className="body" id="body" aria-label="Unavailable">
-          <h1 className="sr-only" tabIndex={-1}>
-            Unavailable
-          </h1>
-          <RegionState status={{ kind: "unavailable" }}>{() => null}</RegionState>
-        </main>
-      </div>
-    </div>
+      }
+      header={
+        <SiteHeader
+          label="Unavailable"
+          crumb={null}
+          subject={null}
+          ribbon={{
+            chips: [],
+            execution: null,
+            persistence: null,
+            approval: null,
+            actions: [],
+          }}
+        />
+      }
+    >
+      <RegionState status={{ kind: "unavailable" }}>{() => null}</RegionState>
+    </AppShell>
   );
 }
 
@@ -74,12 +91,9 @@ function Shell() {
 export function App() {
   return (
     <BrowserRouter>
-      {import.meta.env.MODE === "demo" ? (
-        <aside className="demo-banner" aria-label="Demonstration mode">
-          READ-ONLY DEMONSTRATION · SAMPLE DECISIONS · NOTHING IS PERSISTED
-        </aside>
-      ) : null}
-      <Shell />
+      <TooltipProvider>
+        <Shell />
+      </TooltipProvider>
     </BrowserRouter>
   );
 }

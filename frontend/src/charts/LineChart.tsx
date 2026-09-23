@@ -26,8 +26,8 @@ const AXIS_BAND = 22;
 const EDGE = 8;
 const TOP = 8;
 const POINT = 4; // a point is 8px across
-const APART = 12; // end labels nearer than this would collide
-const STACKED_GAP = 14; // gap marks of several series at one period, stacked up
+const APART = VALUE_SIZE + 1; // end labels nearer than this would collide
+const STACKED_GAP = VALUE_SIZE + 3; // gap marks of several series at one period, stacked up
 
 interface LineSpec {
   categories: readonly string[];

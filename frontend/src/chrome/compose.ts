@@ -57,8 +57,16 @@ export function words(code: string): string {
   return code.replaceAll("_", " ").toLowerCase();
 }
 
+/** `FULL_COMMITTEE` reads "Full committee": a code shown as a label. */
+export function sentence(code: string): string {
+  const said = words(code);
+  return said.charAt(0).toUpperCase() + said.slice(1);
+}
+
 const plural = (count: number, one: string, many = `${one}s`) =>
   `${count} ${count === 1 ? one : many}`;
+/** The noun a count takes, without the count: a headline figure's label. */
+const noun = (count: number, one: string, many = `${one}s`) => (count === 1 ? one : many);
 
 /** What a section's own body says, before the partial and empty overlays. */
 interface Facts {
@@ -96,6 +104,7 @@ function directory(document: DirectoryDocument): Facts {
         : "Create a case, or ask an administrator for standing on one.",
       evidence: running ? `${plural(running, "run")} in progress.` : null,
       headline: String(cases.length),
+      headline_label: noun(cases.length, "case"),
     },
     verdict: verdict("IDLE", cases.length ? `${plural(cases.length, "case")}.` : "No cases yet."),
   };
@@ -109,7 +118,7 @@ function upload(document: UploadDocument): Facts {
   return {
     ribbon: {
       ...QUIET,
-      chips: withdrawn ? [{ label: `${withdrawn} WITHDRAWN`, tone: "warn" }] : [],
+      chips: withdrawn ? [{ label: `${withdrawn} withdrawn`, tone: "warn" }] : [],
     },
     brief: {
       change: pinned
@@ -119,6 +128,7 @@ function upload(document: UploadDocument): Facts {
       action: admitted ? null : "Admit the case's source documents.",
       evidence: `${admitted} admitted · ${withdrawn} withdrawn.`,
       headline: String(admitted),
+      headline_label: `${noun(admitted, "source")} admitted`,
     },
     verdict: withdrawn
       ? verdict(
@@ -139,7 +149,7 @@ const RUN_WORDS = {
   CANCELLED: "Cancelled",
 } as const;
 
-const RUN_SEVERITY = {
+export const RUN_SEVERITY = {
   RUNNING: "RUNNING",
   COMPLETE: "SUCCESS",
   FAILED: "CRITICAL",
@@ -191,6 +201,7 @@ function run(document: RunSectionDocument): Facts {
       action: open.length ? `Review the ${words(open[0]!.gate)} gate.` : null,
       evidence: null,
       headline: `${done}/${view.nodes.length}`,
+      headline_label: "modules complete",
     },
     verdict: {
       severity: open.length && view.status === "RUNNING" ? "WARNING" : RUN_SEVERITY[view.status],
@@ -248,6 +259,7 @@ function analysis(document: AnalysisDocument): Facts {
         ? `${plural(citations.length, "citation")} across ${plural(documents, "document")}${withdrawn ? `, ${withdrawn} withdrawn` : ""}.`
         : null,
       headline: `${handoffs.length}/${handoffs.length + pending.length}`,
+      headline_label: "modules accepted",
     },
     verdict: {
       severity,
@@ -274,6 +286,7 @@ function book(document: BookDocument): Facts {
       action: null,
       evidence: without ? `${without} without an accepted forecast.` : null,
       headline: String(rows.length),
+      headline_label: noun(rows.length, "credit"),
     },
     verdict: verdict("IDLE", `${plural(rows.length, "credit")}.`),
   };
@@ -303,6 +316,7 @@ function model(document: ModelDocument): Facts {
       action: null,
       evidence: flags ? `${plural(flags, "limitation")} stated.` : null,
       headline: String(forecast.periods.length),
+      headline_label: noun(forecast.periods.length, "period"),
     },
     verdict: verdict(flags ? "WARNING" : "SUCCESS", "Accepted CP-CF projection."),
   };
@@ -335,6 +349,7 @@ function report(document: ReportDocument): Facts {
       action: state ? NEXT_FILING[state] : "Save a revision to start the filing chain.",
       evidence: `${plural(artifacts.length, "module artifact")}.`,
       headline: String(revisions.length),
+      headline_label: noun(revisions.length, "revision"),
     },
     verdict:
       state === "filed"
@@ -355,6 +370,7 @@ function committee(document: CommitteeDocument): Facts {
       action: state === "filed" ? null : "Filing follows, by an independent approver.",
       evidence: receipt ? "Filing receipt verified." : null,
       headline: String(signers.length),
+      headline_label: noun(signers.length, "signature"),
     },
     verdict:
       state === "filed"
@@ -400,7 +416,7 @@ export function composeChrome(section: EnabledSection, document: SectionDocument
     ribbon: {
       ...facts.ribbon,
       chips: partial
-        ? [{ label: "PARTIAL", tone: "warn" }, ...facts.ribbon.chips]
+        ? [{ label: "Partial", tone: "warn" }, ...facts.ribbon.chips]
         : facts.ribbon.chips,
       actions: [],
     },

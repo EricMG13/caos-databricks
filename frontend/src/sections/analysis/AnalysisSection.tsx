@@ -14,12 +14,14 @@ import { conclusionOf, handoffSeverity, moduleName } from "./modules";
 import { NODE_SEVERITY, nodeTone } from "./tone";
 import { sectionPath } from "@/app/sections";
 import { SeverityMark } from "@/chrome/SeverityMark";
+import { words } from "@/chrome/compose";
 import { formatDecimal } from "@/charts";
+import { Button } from "@/components/ui/button";
 import { shortDigest, stamp } from "@/ds/format";
 import { useEvidence } from "@/evidence/EvidenceContext";
 import type { AnalysisDocument, CitationView, HandoffView, PendingNode } from "@/wire/v1";
 
-const SCREENING_NOTICE = "SCREENING ONLY: a screen, not committee clearance.";
+const SCREENING_NOTICE = "Screening only: a screen, not committee clearance.";
 /** Model prose beyond this many characters is shown on request: a handoff may
     carry 25 MB, and rendering all of it at once stalls the page. */
 export const PROSE_SHOWN = 20_000;
@@ -73,7 +75,7 @@ function SourceRegister({ handoffs }: { handoffs: Handoffs }) {
                 {entry.filename}
               </span>
               <span className="meta">
-                {entry.withdrawn ? <span className="tag warn">WITHDRAWN</span> : null}p.
+                {entry.withdrawn ? <span className="tag warn">Withdrawn</span> : null}p.
                 {entry.pages.join(", ")} · {entry.count}{" "}
                 {entry.count === 1 ? "citation" : "citations"}
               </span>
@@ -104,7 +106,7 @@ function SourceFacts({ record, facts }: { record: string; facts: readonly Citati
           {facts.map((fact, index) => (
             <li
               key={`${fact.document_sha256}-${index}`}
-              className="ev"
+              className="ev fact"
               data-citation
               data-withdrawn={fact.withdrawn_at !== null}
             >
@@ -132,8 +134,8 @@ function SourceFacts({ record, facts }: { record: string; facts: readonly Citati
               </blockquote>
               {fact.withdrawn_at !== null ? (
                 <div className="note limitation" data-withdrawn-at={fact.withdrawn_at}>
-                  <b>This source has been withdrawn</b> at {fact.withdrawn_at}. The citation stays
-                  so the conclusion that rests on it stays explicable.
+                  <b>This source has been withdrawn</b> at {stamp(fact.withdrawn_at)}. The citation
+                  stays so the conclusion that rests on it stays explicable.
                 </div>
               ) : null}
             </li>
@@ -157,9 +159,16 @@ function ModelAnalysis({ text }: { text: string }) {
       <div className="pb">
         <pre className="model-text">{cut ? text.slice(0, PROSE_SHOWN) : text}</pre>
         {cut ? (
-          <button type="button" className="rb" data-prose-rest onClick={() => setAll(true)}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="mt-3"
+            data-prose-rest
+            onClick={() => setAll(true)}
+          >
             Show the remaining {(text.length - PROSE_SHOWN).toLocaleString("en-US")} characters
-          </button>
+          </Button>
         ) : null}
       </div>
     </section>
@@ -207,12 +216,12 @@ function ModuleView({
       </header>
       <dl className="kv status">
         <dt>Committee status</dt>
-        <dd data-committee-status>
-          {handoff.committee_status} · {handoff.decision_scope}
+        <dd className="prose" data-committee-status>
+          {handoff.committee_status} · {words(handoff.decision_scope)}
         </dd>
         <dt>Confidence</dt>
-        <dd data-confidence>
-          {handoff.confidence_score} · {handoff.confidence_band}
+        <dd className="prose" data-confidence>
+          {handoff.confidence_score} · {words(handoff.confidence_band)}
         </dd>
         <dt>Accepted</dt>
         <dd>
@@ -292,7 +301,7 @@ function Provenance({ handoff }: { handoff: HandoffView }) {
           <time dateTime={handoff.accepted_at}>{stamp(handoff.accepted_at)}</time>
         </dd>
         <dt>Decision scope</dt>
-        <dd>{handoff.decision_scope}</dd>
+        <dd className="prose">{words(handoff.decision_scope)}</dd>
         <dt>Citations</dt>
         <dd>{handoff.source_facts.length}</dd>
       </dl>
