@@ -18,6 +18,7 @@ quote the document (invariant 2).
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import suppress
 from dataclasses import asdict, dataclass, fields
@@ -128,6 +129,17 @@ MAX_LINE_BYTES = 65_536
 # indent a conforming handoff's tables or code fences use, and far below the
 # 65,536-byte line bound that was the only thing above it.
 MAX_WHITESPACE_RUN = 256
+# The longest run of spaces or tabs, and of `#`, a heading's title may carry
+# (EV-2). The bound above holds one run; the heading expressions backtrack over
+# *every* run of a title, and the vendor's `_heading_text` (`[ \t]+#+[ \t]*$`)
+# over every `#` run after one, so a 64 KB heading of 256-space runs cost
+# 0.06 s per match and a conforming handoff of such lines seconds per
+# validation, GIL held, on every read. Held to eight, a title costs a few steps
+# a character whatever it is built of. Every heading the goldens, the fixtures
+# and the bundle carry has runs of one or two.
+MAX_HEADING_RUN = 8
+# A line those expressions read: up to three spaces, then `##`.
+_HEADING_LINE = re.compile(r"^ {0,3}##[^\n]*", re.MULTILINE)
 # One T8 `Why now / blocker` cell, which the vendor's own contract asks a module
 # to state "briefly". Bounded here because the cell reaches a pinned record and
 # the wire, and nothing upstream bounds it.
@@ -364,7 +376,8 @@ def _text(markdown: bytes) -> str:
     # One C-level substring search, whatever the document does. Tabs are read
     # as spaces so that a run mixing the two is one run, and `str.replace`
     # gives back the same object when there is no tab to replace.
-    if " " * (MAX_WHITESPACE_RUN + 1) in text.replace("\t", " "):
+    spaced = text.replace("\t", " ")
+    if " " * (MAX_WHITESPACE_RUN + 1) in spaced or _heading_backtracks(text, spaced):
         raise malformed
     try:
         clean = BoundaryText.of(text, limit=len(text)).value == text
@@ -381,6 +394,29 @@ def _text(markdown: bytes) -> str:
     ):
         raise malformed
     return text
+
+
+def _heading_backtracks(text: str, spaced: str) -> bool:
+    """Whether a heading's title carries a run the vendor's heading expressions
+    cannot read in linear time (EV-2): more than `MAX_HEADING_RUN` spaces and
+    tabs, or `#`.
+
+    The title is what follows the line's `#` marker, less its trailing spaces
+    and tabs, which `[ \\t]*$` reads once. `spaced` is `text` with its tabs
+    read as spaces. Two substring searches first, so a handoff with no such
+    run anywhere never reaches the loop over its headings.
+    """
+    long_space = " " * (MAX_HEADING_RUN + 1)
+    long_hash = "#" * (MAX_HEADING_RUN + 1)
+    if long_space not in spaced and long_hash not in text:
+        return False
+    for heading in _HEADING_LINE.finditer(text):
+        # `rstrip(" ")`, not `rstrip()`: the expressions forgive only spaces
+        # and tabs at the end, and a run before a no-break space is not there.
+        title = heading.group().lstrip(" ").lstrip("#").replace("\t", " ").rstrip(" ")
+        if long_space in title or long_hash in title:
+            return True
+    return False
 
 
 def _same(left: object, right: object) -> bool:

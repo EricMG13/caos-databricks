@@ -1,7 +1,7 @@
 // The minimal governed command wiring the journey needs (brief 4.2, decision
 // 12). One `crypto.randomUUID()` key per user intent: reused when the caller
-// retries the same intent after a network failure, and replaced by the
-// caller after any server answer (success or refusal) for the next intent.
+// retries the same intent after an answer that left the write in doubt, and
+// replaced once an answer settles it (`settles` in `@/sections/run/controls`).
 //
 // Every result is a discriminated union, never an exception the caller must
 // catch: `ok` (a validated receipt), `refused` (a typed refusal with its
@@ -59,8 +59,9 @@ type Gate = Infer<typeof V1_SHAPES.Gate>;
 type RunSubjectView = Infer<typeof V1_SHAPES.RunSubjectView>;
 type Standing = Infer<typeof V1_SHAPES.Standing>;
 
-/** One key per user intent. Reuse it to retry after `{ kind: "offline" }`;
-    draw a fresh one (`newIntent`) once any server answer has been seen. */
+/** One key per user intent. Reuse it to retry an answer that settled nothing
+    -- offline, unreadable, or a transient refusal such as STORE_UNAVAILABLE;
+    draw a fresh one (`newIntent`) once one has. */
 export interface Intent {
   readonly key: string;
 }

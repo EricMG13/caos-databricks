@@ -485,6 +485,98 @@ def test_the_remembered_frames_are_bounded_and_a_refusal_is_not_one(
     assert refused == [3, 3]
 
 
+def test_a_page_the_document_does_not_have_is_asked_of_the_child_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """EV-7: a missing page was refused and never remembered, so every read of
+    page 500 of a one-page PDF started an interpreter. The child's `null` is a
+    fact of the bytes -- the page is not there, or clips to nothing -- and is
+    remembered like a crop; a deadline or a budget still is not."""
+    asked: list[int] = []
+
+    def missing(data: bytes, page: int, **bounds: object) -> pdf_module.Frame:
+        asked.append(page)
+        raise Refusal(RefusalCode.PAGE_NOT_AVAILABLE)
+
+    monkeypatch.setattr(pdf_module, "page_frame", missing)
+    crop = page_module._Crop("e" * 64, b"", DEFAULT_LIMITS, float("inf"))
+    for _read in range(5):
+        assert page_module._page_crop(crop, 500) is None
+    assert asked == [500]
+    assert page_module._FRAMES[("e" * 64, 500)] is None
+
+
+def test_frame_children_never_run_past_their_process_bound(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """EV-7: nothing bounded how many interpreters concurrent page reads
+    started -- twelve reads of twelve missing pages ran twelve at once, each
+    ~250 MiB for a large PDF, at READER standing. They queue for
+    `FRAME_CHILDREN` slots now, each within its own read's deadline."""
+    import threading
+    import time
+
+    running = 0
+    peak = 0
+    lock = threading.Lock()
+
+    def slow(data: bytes, page: int, **bounds: object) -> pdf_module.Frame:
+        nonlocal running, peak
+        with lock:
+            running += 1
+            peak = max(peak, running)
+        time.sleep(0.05)
+        with lock:
+            running -= 1
+        return (0.0, 0.0, 1.0, float(page))
+
+    monkeypatch.setattr(pdf_module, "page_frame", slow)
+    deadline = time.monotonic() + 30.0
+    crop = page_module._Crop("d" * 64, b"", DEFAULT_LIMITS, deadline)
+    answers: dict[int, object] = {}
+
+    def read(page: int) -> None:
+        answers[page] = page_module._page_crop(crop, page)
+
+    threads = [threading.Thread(target=read, args=(page,)) for page in range(1, 13)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert peak <= page_module.FRAME_CHILDREN
+    assert answers == {page: (0.0, 0.0, 1.0, float(page)) for page in range(1, 13)}
+
+
+def test_a_read_whose_deadline_passes_waiting_for_a_slot_starts_no_child(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Waiting for a slot spends the read's own deadline, and a read that runs
+    out of it is refused like one whose child ran out -- and not remembered."""
+    import time
+
+    asked: list[int] = []
+
+    def answered(data: bytes, page: int, **bounds: object) -> pdf_module.Frame:
+        asked.append(page)
+        return (0.0, 0.0, 1.0, 1.0)
+
+    monkeypatch.setattr(pdf_module, "page_frame", answered)
+    held = [
+        page_module._CHILDREN.acquire(blocking=False)
+        for _slot in range(page_module.FRAME_CHILDREN)
+    ]
+    try:
+        assert all(held)
+        crop = page_module._Crop("c" * 64, b"", DEFAULT_LIMITS, time.monotonic() + 0.1)
+        assert page_module._page_crop(crop, 1) is None
+    finally:
+        for _slot in held:
+            page_module._CHILDREN.release()
+    assert asked == []
+    assert ("c" * 64, 1) not in page_module._FRAMES
+
+
 # The identity and frame helpers refuse before any store or extractor is
 # reached, so they are driven directly: every one is a fail-closed path whose
 # only observable is the typed code it raises (invariant 2).

@@ -61,7 +61,7 @@ function RevokeMember({
       >
         {pending ? "Revoking…" : "Revoke"}
       </ConfirmedControl>
-      <CommandOutcome result={result} success="" />
+      <CommandOutcome result={result} success="Standing revoked. Reading the register back." />
     </>
   );
 }
@@ -126,7 +126,7 @@ function GrantMember({
       >
         {pending ? "Granting…" : "Grant"}
       </RefusedControl>
-      <CommandOutcome result={result} success="" />
+      <CommandOutcome result={result} success="Standing granted. Reading the register back." />
     </div>
   );
 }

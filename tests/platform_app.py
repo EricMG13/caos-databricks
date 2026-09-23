@@ -65,7 +65,10 @@ class PlatformApp:
 def platform_environment(
     stub: WorkspaceStub, database_url: str, port: int, site_root: Path
 ) -> dict[str, str]:
-    """The environment the bundle and the platform give the process."""
+    """The environment the bundle and the platform give the process. When the
+    stub holds a deployment, its `env_vars` are the bundle's part, as the
+    platform would apply them (DF-12); only the bind address and the export
+    stay local, since a test binds loopback and serves the export it has."""
     parts = urlparse(database_url)
     env = {k: v for k, v in os.environ.items() if k not in LOCAL_ONLY}
     env.update(stub.environment())
@@ -82,10 +85,12 @@ def platform_environment(
         CAOS_BLOB_ROOT=f"volume://{VOLUME}",
         CAOS_RUN_CEILING="100.00",
         CAOS_WORKER_IN_PROCESS="1",
-        CAOS_SITE_ROOT=str(site_root),
-        CAOS_BIND_HOST="127.0.0.1",
+        CAOS_GROUP_ADMIN="caos-admins",
+        CAOS_GROUP_ANALYST="caos-analysts",
         MLFLOW_DISABLE_AGENT_HINT="1",
     )
+    env.update(stub.deployed_environment())
+    env.update(CAOS_SITE_ROOT=str(site_root), CAOS_BIND_HOST="127.0.0.1")
     return env
 
 

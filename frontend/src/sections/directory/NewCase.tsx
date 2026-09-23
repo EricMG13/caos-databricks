@@ -55,7 +55,8 @@ export function NewCase({
 }) {
   const [title, setTitle] = useState("");
   // The intent's key is reused only for a retry of the same title after an
-  // offline answer; every other outcome, or a changed title, draws a fresh one.
+  // answer that settled nothing (`useCommand`); a settled one, or a changed
+  // title, draws a fresh one.
   const { pending, result, run } = useCommand<CaseCreated>();
   const [refreshFailed, setRefreshFailed] = useState(false);
   const refusal = action?.refusal ?? null;
@@ -101,13 +102,11 @@ export function NewCase({
       >
         {pending ? "Creating…" : "Create case"}
       </RefusedControl>
-      {result?.kind === "ok" ? (
-        <p className="note ok" data-new-case-success>
-          Case {result.receipt.case_id} created.
-        </p>
-      ) : (
-        <CommandOutcome result={result} success="" />
-      )}
+      <CommandOutcome
+        result={result}
+        success={(receipt) => `Case ${receipt.case_id} created.`}
+        mark="new-case-success"
+      />
       {import.meta.env.MODE === "demo" ? (
         <p className="note" data-demo-command-note>
           <b>Available means the command would answer, not that it will succeed.</b> This

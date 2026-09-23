@@ -9,8 +9,9 @@ The bidi controls are the reason the type exists rather than a length check:
 U+202E makes an audit event render backwards while the bytes say something else,
 so the sentence a human approves and the sentence the store holds differ.
 
-`hides_text` states the neighbouring rule -- a format character that renders as
-nothing -- for the two callers that read untrusted text. It is deliberately not
+`hides_text` states the neighbouring rule -- a character that renders as
+nothing -- for the two callers that read untrusted text, and `visible` takes
+exactly those characters out of text the host shows. It is deliberately not
 part of `BoundaryText.of`, whose table is pinned by the parity goldens.
 """
 
@@ -50,11 +51,32 @@ FORMAT_RANGES = (
     "\U000110cd\U00013430-\U0001343f\U0001bca0-\U0001bca3\U0001d173-\U0001d17a"
     "\U000e0001\U000e0020-\U000e007f"
 )
-_HIDDEN = re.compile(f"[{FORMAT_RANGES}]")
+# The code points Unicode itself says render as nothing -- Default_Ignorable_
+# Code_Point in DerivedCoreProperties (15.1) -- that are not `Cf` and so not in
+# the table above, and the braille blank, which is drawn as an empty cell (EV-3).
+# The variation selectors carry a byte each past one visible character, and the
+# tag block, the Hangul fillers, the combining grapheme joiner and the reserved
+# ranges show nothing at all: an approver's preview cannot show what they say.
+IGNORABLE_RANGES = (
+    "\u034f\u115f-\u1160\u17b4-\u17b5\u180b-\u180d\u180f\u2065\u2800\u3164"
+    "\ufe00-\ufe0d\uffa0\ufff0-\ufff8\U000e0000-\U000e0fff"
+)
+# Text and emoji presentation, the two selectors ordinary text carries (the
+# warning sign drawn as an emoji is U+26A0 U+FE0F). Visible as a change to the
+# character before them, so one after a character that is drawn is kept, and
+# any other -- at the start, after a space, after another selector -- is hidden.
+PRESENTATION_SELECTORS = "\ufe0e\ufe0f"
+_HIDDEN_SET = f"{FORMAT_RANGES}{IGNORABLE_RANGES}"
+_NOT_DRAWN = f"{_HIDDEN_SET}{PRESENTATION_SELECTORS}\\s"
+_HIDDEN = re.compile(
+    f"[{_HIDDEN_SET}]"
+    f"|[{PRESENTATION_SELECTORS}](?<=[{_NOT_DRAWN}][{PRESENTATION_SELECTORS}])"
+    f"|\\A[{PRESENTATION_SELECTORS}]"
+)
 
 
 def hides_text(text: str) -> bool:
-    """Whether `text` carries a format character no reader can see.
+    """Whether `text` carries a character no reader can see.
 
     `BoundaryText` itself keeps them: its accept/refuse table is pinned by the
     `boundary_text` parity goldens (`tag_character`, `byte_order_mark`,
@@ -65,11 +87,27 @@ def hides_text(text: str) -> bool:
     -- evidence admission and the canonical handoff -- ask this instead, so the
     text a human approves is the text the model is given (AI-2).
 
-    ASCII carries no format character, so the common line costs one C call.
+    Every `Cf` but the three shaping characters, every other default-ignorable
+    code point and the braille blank (EV-3), and a presentation selector that
+    follows nothing drawn. ASCII carries none, so the common line costs one C
+    call.
     """
     if text.isascii():
         return False
     return _HIDDEN.search(text) is not None
+
+
+def visible(text: str) -> str:
+    """`text` without every character `hides_text` refuses in it.
+
+    One expression serves both, so the host never shows text its own reader
+    would refuse: `visible(text) == text` exactly when `hides_text(text)` is
+    false, and `hides_text(visible(text))` is always false -- a selector kept
+    follows a drawn character, which nothing here removes (EV-5).
+    """
+    if text.isascii():
+        return text
+    return _HIDDEN.sub("", text)
 
 
 def _is_refused(character: str) -> bool:

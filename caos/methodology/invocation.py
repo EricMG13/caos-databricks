@@ -31,6 +31,7 @@ from uuid import UUID
 
 from caos import methodology
 from caos.blobs import BlobStore
+from caos.boundary_text import visible
 from caos.digest import canonical_json
 from caos.evidence.citations import AnchoredCitation
 from caos.graph.route import (
@@ -881,8 +882,15 @@ def _printable(value: str) -> str:
     refused `HANDOFF_MALFORMED`: a host defect recorded as the model's answer.
     Dropping the characters is the narrow fix; the document keeps its name
     everywhere the host owns the comparison.
+
+    The handoff refuses `hides_text` as well (AI-2), so what is dropped is that
+    set too, through the one expression that states it (`boundary_text.visible`):
+    a zero-width space or a tag character in a filename was shown to CP-0 and
+    its answer quoting it refused (EV-5).
     """
-    return "".join(character for character in value if character not in INVISIBLE)
+    return visible(
+        "".join(character for character in value if character not in INVISIBLE)
+    )
 
 
 def _member_identity(stored: str) -> object:

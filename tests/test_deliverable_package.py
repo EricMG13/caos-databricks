@@ -11,6 +11,7 @@ import struct
 import subprocess
 import sys
 import zipfile
+import zlib
 from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from pathlib import Path
@@ -28,6 +29,7 @@ from caos.deliverable.package import (
     write_package,
 )
 from caos.deliverable.render import render
+from caos.deliverable.verify_package import UNREADABLE
 
 ROOT = Path(__file__).resolve().parents[1]
 NAMES = {
@@ -45,7 +47,14 @@ IDENTITY = {
     "run_id": "22222222-2222-4222-8222-222222222222",
     "revision_id": "33333333-3333-4333-8333-333333333333",
 }
-PAYLOAD_DATA = {**PAYLOAD_DATA, **IDENTITY}
+# The narrative as the save boundary writes it: paragraphs of spans. The render
+# suite's payload keeps the historical string, which `render` still draws and
+# the verifier refuses (DQ-15): no filed revision carries one.
+PAYLOAD_DATA = {
+    **PAYLOAD_DATA,
+    **IDENTITY,
+    "narrative": [[{"text": "Leverage is inside the covenant with limited headroom."}]],
+}
 
 
 def _package(**changes: bytes) -> bytes:
@@ -184,7 +193,7 @@ def test_encrypted_or_unsupported_compression_is_refused(
 
 def test_a_highly_compressible_valid_package_round_trips(tmp_path: Path) -> None:
     payload_data = json.loads(json.dumps(PAYLOAD_DATA))
-    payload_data["narrative"] = "Risk disclosure. " * 20_000
+    payload_data["narrative"] = [[{"text": "Risk disclosure. " * 20_000}]]
     payload = json.dumps(payload_data).encode()
     receipt = json.dumps(
         {
@@ -594,3 +603,122 @@ def test_a_narrative_figure_must_match_the_record_the_payload_binds() -> None:
     assert verify_package(_package_of(elsewhere)) == Verification(
         False, "a narrative figure names no citation of this payload"
     )
+
+
+FORGED_PAGE = b"<!doctype html><h1>APPROVED -- no limitations</h1>\n"
+
+
+def _local_entry(name: bytes, body: bytes) -> bytes:
+    """One stored local entry, as a sequential reader meets it."""
+    header = struct.pack(
+        "<4s5H3I2H",
+        b"PK\x03\x04",
+        20,
+        0,
+        0,
+        0,
+        0x21,
+        zlib.crc32(body),
+        len(body),
+        len(body),
+        len(name),
+        0,
+    )
+    return header + name + body
+
+
+def _before_the_directory(package: bytes, extra: bytes) -> bytes:
+    """`extra` inserted between the last member and the central directory, with
+    the end record moved to keep naming the directory."""
+    end = package.rfind(b"PK\x05\x06")
+    offset = struct.unpack_from("<I", package, end + 16)[0]
+    record = bytearray(package[end:])
+    struct.pack_into("<I", record, 16, offset + len(extra))
+    return package[:offset] + extra + package[offset:end] + bytes(record)
+
+
+def test_bytes_no_member_covers_do_not_verify() -> None:
+    """DQ-8: `_member` reads each member through its central entry, so a sixth
+    local entry -- a forged `deliverable.html` -- placed before the directory
+    was never read and the package verified, while a reader walking local
+    headers in file order (a streaming unzip, `tar` reading a pipe) extracted
+    the forged page. The five entries must cover the archive with no gap."""
+    genuine = _package()
+    assert verify_package(genuine) == Verification(True, None)
+    smuggled = _before_the_directory(
+        genuine, _local_entry(b"deliverable.html", FORGED_PAGE)
+    )
+    with zipfile.ZipFile(BytesIO(smuggled)) as archive:
+        assert len(archive.infolist()) == 5, "the directory still names five"
+    assert verify_package(smuggled) == Verification(False, UNREADABLE)
+    gap = _before_the_directory(genuine, b"\0" * 16)
+    assert verify_package(gap) == Verification(False, UNREADABLE)
+
+
+@pytest.mark.parametrize(
+    "narrative",
+    [
+        [[{"text": "Net leverage is 4.2x, headroom 45%."}]],
+        [[{"text": "Headroom is " + chr(0xFF14) + chr(0xFF15) + " per cent."}]],
+        [[{"text": "Leverage is below " + chr(0xBD) + " turn."}]],
+        "Leverage is inside the covenant with limited headroom.",
+    ],
+    ids=["ascii", "fullwidth", "fraction", "string"],
+)
+def test_the_portable_check_re_applies_the_figure_rule(narrative: object) -> None:
+    """DQ-15: a text span stating a quantity -- the uncited figure the save
+    boundary refuses (invariant 11) -- verified, and so did a narrative that
+    was one string. No filed revision carries a string (`prove_revision`
+    refuses one), so the reason F108 kept that shape does not hold."""
+    payload = _cross_referenced()
+    payload["narrative"] = narrative
+    reason = verify_package(_package_of(payload)).reason
+    assert reason in {
+        "a narrative states a figure no citation stands behind",
+        "the narrative is not a list of paragraphs",
+    }
+    assert (reason == "the narrative is not a list of paragraphs") == (
+        type(narrative) is str
+    )
+
+
+@pytest.mark.parametrize("page", [1.0, True])
+def test_a_figure_field_must_be_the_citations_own_type(page: object) -> None:
+    """DQ-15: `_figure_error` compared with `!=`, so page `1.0` and `True`
+    matched page 1 and only the archived renderer refused them -- reported as
+    "not a readable package", which is not what was wrong."""
+    from copy import deepcopy
+
+    payload = _cross_referenced()
+    forged = deepcopy(payload)
+    [[span]] = forged["narrative"]
+    assert span["figure"]["page"] == 1
+    span["figure"]["page"] = page
+    # The export is the genuine page: the host's renderer refuses the forged
+    # figure, and the verifier must say why before it ever re-renders.
+    data = json.dumps(forged).encode()
+    receipt = json.dumps(
+        {
+            "payload_sha256": hashlib.sha256(data).hexdigest(),
+            "signed_by": "analyst",
+            "frozen_by": "freezer",
+            "filed_by": "filer",
+            **IDENTITY,
+        }
+    ).encode()
+    package = build_package(data, receipt, render(payload))
+    assert verify_package(package) == Verification(
+        False, "a narrative figure does not match the citation it names"
+    )
+
+
+def test_a_filing_names_the_renderer_the_verifier_pins() -> None:
+    """`filing.renderer_sha256` is the digest a receipt carries, and the
+    archived verifier refuses a renderer that does not hash to its own pin, so
+    the two must name the same bytes: `render.py` as it is on disk."""
+    from caos.deliverable.filing import renderer_sha256
+    from caos.deliverable.verify_package import RENDERER_SHA256
+
+    render_py = ROOT / "caos" / "deliverable" / "render.py"
+    assert renderer_sha256() == hashlib.sha256(render_py.read_bytes()).hexdigest()
+    assert renderer_sha256() == RENDERER_SHA256

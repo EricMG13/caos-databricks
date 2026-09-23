@@ -9,16 +9,22 @@ path only reads what the last round left, so it does no I/O of its own.
 from __future__ import annotations
 
 import asyncio
+import itertools
 import shutil
+import threading
+import time
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Event
 
 import pytest
 from conftest import recorded_statements
+from fake_chat import fake_completions
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
+from langgraph.checkpoint.memory import MemorySaver
 
 import caos.api.health as health
 from caos.api.app import app
@@ -26,6 +32,7 @@ from caos.api.deps import BLOB_ROOT, DATABASE_URL, VENDORED_BUNDLE, _vendored_bu
 from caos.methodology.bundle import MANIFEST_NAME, Bundle
 from caos.refusals import Refusal, RefusalCode
 from caos.store import apply_schema, connect, verify_schema
+from caos.store.work import beat
 
 
 def _all(code: health.HealthCode) -> dict[str, Callable[[], health.HealthCode]]:
@@ -442,80 +449,155 @@ def test_the_identity_probe_asks_the_workspace_the_way_a_request_asks_it(
     assert health.probe_identity() == "IDENTITY_UNAVAILABLE"
 
 
-def test_a_probe_the_executor_never_started_does_not_stall_every_round() -> None:
-    """AR-11 / EI-W4. `inflight` is raised before the job is submitted and
-    given back only by the job's own body, so a job `wait_for` cancels while
-    it is still queued never gives it back. One such cancellation used to
-    close the gate for the life of the process: every later round returned
-    without probing, the document aged past `STALE_AFTER`, and the API read
-    `not_ready` until someone restarted it.
-
-    The count gate is a time gate as well now: it holds for
-    `inflight_ceiling`, which is longer than any probe that is really running,
-    and then a round goes ahead whatever the count says.
-    """
-    import asyncio
-    from concurrent.futures import ThreadPoolExecutor
-
-    occupied = Event()
-    state = health.ProbeState(probes=_all("OK"), deadline=0.05, inflight_ceiling=0.5)
-
-    async def scenario() -> None:
-        loop = asyncio.get_running_loop()
-        one = ThreadPoolExecutor(max_workers=1)
-        loop.set_default_executor(one)
-        one.submit(occupied.wait, 5)
-
-        await health.probe_once(state)
-        assert state.store == "PROBE_TIMEOUT"
-        assert state.inflight == len(health.PROBES), "every job queued, none ran"
-        occupied.set()
-        one.shutdown(wait=True)
-        assert state.inflight == len(health.PROBES), "cancelled before start"
-
-        before = state.checked
-        await health.probe_once(state)
-        assert state.checked == before, "inside the ceiling the gate still holds"
-
-        loop.set_default_executor(ThreadPoolExecutor(max_workers=4))
-        await asyncio.sleep(state.inflight_ceiling + 0.05)
-        await health.probe_once(state)
-
-        assert state.checked != before, "past the ceiling a round runs regardless"
-        assert (state.store, state.inflight) == ("OK", 0)
-
-    asyncio.run(scenario())
-    assert health.INFLIGHT_CEILING == health.PROBE_DEADLINE * 2
-    assert health.INFLIGHT_CEILING < health.STALE_AFTER, "a leak costs one round"
+def _racing_clock() -> Callable[[], float]:
+    """A monotonic clock that moves past every timer between two reads: a
+    gate that expires on a timer (AR-11's ceiling) expires before each round,
+    as it does at shipped values for a probe that really runs past it."""
+    ticks = itertools.count(0.0, 60.0)
+    return lambda: next(ticks)
 
 
-def test_no_round_starts_over_a_probe_thread_still_alive() -> None:
-    """F47: an abandoned probe keeps `inflight` up, and the next round waits."""
-    import asyncio
-
-    release = Event()
+def test_a_probe_still_running_is_never_started_twice() -> None:
+    """ED-4 / MAX-02. The round-level gate expired on a timer, twice the
+    deadline, so a probe that really ran longer -- a Lakebase mint abandoned
+    at 30 s, a SCIM lookup, the SDK's retry budget -- had a second and a
+    third copy started against a dependency already struggling, and a late
+    return counted the next round's probe out. A probe now keeps the thread
+    it runs on: while that thread lives it is not started again and answers
+    `PROBE_TIMEOUT`, and the other probes run every round."""
+    running: list[int] = []
+    runs = [0]
+    peak = [0]
+    lock = threading.Lock()
 
     def slow() -> health.HealthCode:
-        release.wait(5)
+        with lock:
+            running.append(1)
+            runs[0] += 1
+            peak[0] = max(peak[0], len(running))
+        time.sleep(0.25)  # five deadlines
+        with lock:
+            running.pop()
         return "OK"
 
     probes = _all("OK")
     probes["store"] = slow
-    state = health.ProbeState(probes=probes, deadline=0.05)
+    state = health.ProbeState(probes=probes, deadline=0.05, clock=_racing_clock())
 
-    async def scenario() -> None:
-        await health.probe_once(state)
-        assert state.store == "PROBE_TIMEOUT" and state.inflight == 1
-        before = state.checked
-        await health.probe_once(state)
-        assert state.checked == before, "no round over the one still running"
-        release.set()
-        for _ in range(50):
-            if state.inflight == 0:
-                break
+    async def rounds() -> list[health.HealthCode]:
+        seen = []
+        for _ in range(8):
+            await health.probe_once(state)
+            seen.append(state.store)
+            assert state.bundle == state.blobs == "OK"
             await asyncio.sleep(0.05)
-        assert state.inflight == 0
-        await health.probe_once(state)
-        assert state.checked != before
+        return seen
 
-    asyncio.run(scenario())
+    seen = asyncio.run(rounds())
+
+    assert peak[0] == 1, "a second copy of a probe still running"
+    assert set(seen) == {"PROBE_TIMEOUT"}
+    # Started again once the last copy returned, and only then.
+    assert 2 <= runs[0] < len(seen)
+
+
+def test_a_probe_that_never_returns_cannot_starve_the_others() -> None:
+    """ED-4. Every probe ran on the loop's shared executor, so one that never
+    returns -- the SDK's service-principal token POST carries no timeout --
+    left a thread behind per round until the pool was full, and then a
+    healthy store and bundle queued behind it into `PROBE_TIMEOUT` too. One
+    copy of it, never two, and the rest keep answering."""
+    never = Event()
+    calls = [0]
+
+    def hangs() -> health.HealthCode:
+        calls[0] += 1
+        never.wait(30)
+        return "OK"
+
+    probes = _all("OK")
+    probes["identity"] = hangs
+    state = health.ProbeState(probes=probes, deadline=0.05, clock=_racing_clock())
+
+    async def rounds() -> None:
+        asyncio.get_running_loop().set_default_executor(ThreadPoolExecutor(4))
+        try:
+            for _ in range(15):
+                await health.probe_once(state)
+                assert (state.store, state.bundle, state.blobs, state.workers) == (
+                    "OK",
+                    "OK",
+                    "OK",
+                    "OK",
+                )
+                assert state.identity == "PROBE_TIMEOUT"
+        finally:
+            never.set()
+
+    asyncio.run(rounds())
+    assert calls == [1], "a second copy of a probe that never returned"
+
+
+def test_an_in_process_worker_answers_for_itself_not_the_fleet(
+    empty_database: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """DF-1. Any fresh heartbeat answered `workers=OK`, so on a redeploy the
+    previous process's last beat -- fresh for `WORKER_STALE_AFTER` -- stood
+    in for a new process whose worker had refused to start, and the deploy's
+    health row passed. In-process, the worker is a fact about this process:
+    its thread alive, and its own row the only one read.
+
+    The worker is started by `start_in_process` and beats under the id
+    `_drive` gives it, so the thread name and the id are the worker's own.
+    """
+    from caos.graph import worker
+
+    assert health.WORKER_IN_PROCESS == worker.IN_PROCESS
+    monkeypatch.setenv(DATABASE_URL, empty_database)
+    monkeypatch.setenv(health.WORKER_IN_PROCESS, "1")
+    with connect(empty_database) as conn:
+        apply_schema(conn)
+        beat(conn, worker_id="worker-the-last-process", state="POLLING", faults=0)
+        conn.commit()
+    assert health.probe_workers() == "WORKERS_ABSENT", "another process's beat"
+
+    beaten = Event()
+    ids: list[str] = []
+
+    def run_worker(config: worker.WorkerConfig, **_: object) -> int:
+        ids.append(config.worker.value)
+        with connect(empty_database) as conn:
+            beat(conn, worker_id=config.worker.value, state="POLLING", faults=0)
+            conn.commit()
+        beaten.set()
+        stopping.wait(10)
+        return 0
+
+    def configured() -> worker.Configured:
+        return worker.Configured(
+            completions=fake_completions(),
+            url=empty_database,
+            root=str(tmp_path),
+            bundle=Bundle(VENDORED_BUNDLE),
+            saver=MemorySaver(),
+        )
+
+    monkeypatch.setattr(worker, "_configured", configured)
+    monkeypatch.setattr(worker, "module_execution", lambda *_: None)
+    monkeypatch.setattr(worker, "run_worker", run_worker)
+    stopping = Event()
+    thread = worker.start_in_process(stopping)
+    try:
+        assert thread is not None and thread.name == health.WORKER_THREAD
+        assert beaten.wait(10)
+        assert ids == [health._own_worker()]
+        assert health.probe_workers() == "OK"
+        with connect(empty_database) as conn:
+            beat(conn, worker_id=ids[0], state="BACKOFF", faults=3)
+            conn.commit()
+        assert health.probe_workers() == "WORKERS_BACKING_OFF", "its own row only"
+    finally:
+        stopping.set()
+        if thread is not None:
+            thread.join(10)
+    assert health.probe_workers() == "WORKERS_ABSENT", "its row outlives it"

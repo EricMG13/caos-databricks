@@ -35,7 +35,10 @@ def test_a_refused_configuration_is_printed_and_the_api_still_serves(
         raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
 
     monkeypatch.setattr(worker, "_configured", refused)
-    assert start_in_process(Event()) is None
+    thread = start_in_process(Event())
+    assert thread is not None
+    thread.join(timeout=5)
+    assert not thread.is_alive(), "a refused configuration is not asked again"
     assert capsys.readouterr().err.strip() == (
         "PROVIDER_NOT_CONFIGURED CAOS_MODEL_PRICE unset"
     )
@@ -70,3 +73,58 @@ def test_a_configured_worker_runs_on_a_daemon_thread_until_stopped(
     thread.join(timeout=5)
     assert not thread.is_alive()
     assert seen == ["postgresql://unused.invalid/none"]
+
+
+def test_a_store_that_cannot_answer_at_boot_is_asked_again_off_the_boot_path(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """MAX-20, ST-4: the worker was configured before uvicorn bound its port,
+    so a checkpoint set-up waiting on the store held the deploy, and a
+    transient failure returned None and left the process with no worker for
+    its whole life. The thread configures itself now, under back-off."""
+    import time
+
+    import psycopg
+
+    monkeypatch.setenv(worker.IN_PROCESS, "1")
+    monkeypatch.setenv(worker.MODEL_PRICE, "set, so only the code is printed")
+    monkeypatch.setattr(worker, "pause_seconds", lambda _config, _failures: 0.01)
+    gate = Event()
+    tries: list[str] = []
+
+    def flaky() -> Configured:
+        tries.append("try")
+        if len(tries) == 1:
+            gate.wait(5)  # the store is slow to answer at first boot
+            raise Refusal(RefusalCode.STORE_UNAVAILABLE)
+        if len(tries) == 2:
+            raise psycopg.OperationalError
+        return Configured(
+            completions=fake_completions(),
+            url="postgresql://unused.invalid/none",
+            root=str(tmp_path),
+            bundle=Bundle(VENDORED),
+            saver=MemorySaver(),
+        )
+
+    ran = Event()
+
+    def run(configured_worker: Configured, stopping: Event) -> int:
+        ran.set()
+        stopping.wait(5)
+        return 0
+
+    monkeypatch.setattr(worker, "_configured", flaky)
+    monkeypatch.setattr(worker, "_worker", run)
+    stopping = Event()
+    started = time.monotonic()
+    thread = start_in_process(stopping)
+    assert time.monotonic() - started < 1.0, "boot never waits on the store"
+    assert thread is not None
+    gate.set()
+    assert ran.wait(5), "configured on the third try"
+    assert tries == ["try", "try", "try"]
+    stopping.set()
+    thread.join(timeout=5)
+    assert not thread.is_alive()
+    assert capsys.readouterr().err.split() == ["STORE_UNAVAILABLE"] * 2

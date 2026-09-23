@@ -31,7 +31,9 @@ CLEAN = (
     "def summarise_case_blocks(rows: list[str]) -> list[str]:\n"
     "    return [r for r in rows]\n"
 )
+# Imported from its module: a reference names its module (DQ-11).
 CLEAN_TEST = (
+    "from src.clean import summarise_case_blocks\n\n\n"
     "def test_summarise_case_blocks() -> None:\n    summarise_case_blocks([])\n"
 )
 

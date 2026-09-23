@@ -288,3 +288,166 @@ def test_the_workspace_client_is_one_per_identity_and_refuses_typed(
     with pytest.raises(Refusal, match=r"^STORE_UNAVAILABLE$"):
         lakebase._mint()
     forget_clients()
+
+
+def test_a_live_token_is_handed_out_while_another_caller_mints(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ST-1: while one mint hangs, a caller holding a token the server still
+    accepts gets it at once; only a caller with no live token waits."""
+    import threading
+    import time
+
+    hang = threading.Event()
+    started = threading.Event()
+
+    def hung_mint() -> tuple[str, float]:
+        started.set()
+        hang.wait(10)
+        return "fresh", float("inf")
+
+    monkeypatch.setattr(lakebase, "_mint", hung_mint)
+    monkeypatch.setattr(lakebase, "MINT_SECONDS", 3.0)
+    now = time.monotonic()
+    monkeypatch.setattr(
+        lakebase, "_CACHED", lakebase._Credential("live", now - 1, now + 3600)
+    )
+    monkeypatch.setattr(lakebase, "_REFUSED_UNTIL", 0.0)
+    minter = threading.Thread(target=lakebase._credential)
+    minter.start()
+    assert started.wait(5), "one caller is minting"
+    waits: list[float] = []
+    answers: list[str] = []
+    lock = threading.Lock()
+
+    def one() -> None:
+        began = time.monotonic()
+        token = lakebase._credential()
+        with lock:
+            waits.append(time.monotonic() - began)
+            answers.append(token)
+
+    callers = [threading.Thread(target=one) for _ in range(5)]
+    for caller in callers:
+        caller.start()
+    for caller in callers:
+        caller.join(5)
+    assert answers == ["live"] * 5
+    assert max(waits) < 0.5, "nobody waited out the mint in flight"
+    hang.set()
+    minter.join(5)
+
+
+def test_the_autoscaling_credential_s_stated_expiry_is_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ST-3, MAX-15: the autoscaling form states its expiry as a protobuf
+    `Timestamp` named `expire_time`; only the provisioned `expiration_time`
+    was read, so the live-token fallback never applied on that path."""
+    import time
+    from datetime import UTC, datetime, timedelta
+    from types import SimpleNamespace
+
+    from databricks.sdk.service import postgres
+
+    import caos.workspace
+
+    # The SDK's own reading of the endpoint's answer: a protobuf `Timestamp`.
+    stated = (datetime.now(UTC) + timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    issued = postgres.DatabaseCredential.from_dict(
+        {"token": "autoscaling", "expire_time": stated}
+    )
+    assert not isinstance(issued.expire_time, str)
+    fake = SimpleNamespace(
+        postgres=SimpleNamespace(generate_database_credential=lambda endpoint: issued)
+    )
+    monkeypatch.setattr(caos.workspace, "workspace_client", lambda: fake)
+    monkeypatch.delenv(lakebase.LAKEBASE_INSTANCE, raising=False)
+    monkeypatch.setenv(lakebase.AUTOSCALING_ENDPOINT, "projects/p/branches/b/e")
+    token, expires_at = lakebase._mint()
+    left = expires_at - time.monotonic()
+    assert token == "autoscaling"
+    assert 3600 - lakebase.EXPIRY_MARGIN_SECONDS - 5 < left <= 3600
+    assert lakebase._stated_instant(object()) is None
+    assert lakebase._stated_instant("not a date") is None
+
+
+def test_a_short_lived_credential_is_refreshed_by_its_stated_expiry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ST-3: a token the server says dies before `TOKEN_SECONDS` was handed
+    out past that; and a mint that failed after another path dropped the
+    token handed the dropped token back."""
+    import threading
+    import time
+
+    lakebase.invalidate_credential()
+    minted: list[int] = []
+
+    def short_lived() -> tuple[str, float]:
+        minted.append(1)
+        return f"short-{len(minted)}", time.monotonic() + 0.2
+
+    monkeypatch.setattr(lakebase, "_mint", short_lived)
+    assert lakebase._credential() == "short-1"
+    held = lakebase._CACHED
+    assert held is not None and held.refresh_at <= held.expires_at
+    time.sleep(0.3)
+    assert lakebase._credential() == "short-2", "never handed out past its expiry"
+
+    # A mint that fails after the token was reported refused re-reads the
+    # cache and refuses; it does not hand the dropped token back.
+    started = threading.Event()
+
+    def slow_failure() -> tuple[str, float]:
+        started.set()
+        time.sleep(0.3)
+        raise Refusal(RefusalCode.STORE_UNAVAILABLE)
+
+    now = time.monotonic()
+    monkeypatch.setattr(
+        lakebase, "_CACHED", lakebase._Credential("refused", now - 1, now + 3600)
+    )
+    monkeypatch.setattr(lakebase, "_REFUSED_UNTIL", 0.0)
+    monkeypatch.setattr(lakebase, "_mint", slow_failure)
+    outcome: list[str] = []
+
+    def mint_once() -> None:
+        try:
+            outcome.append(lakebase._credential())
+        except Refusal as refused:
+            outcome.append(refused.code.value)
+
+    minter = threading.Thread(target=mint_once)
+    minter.start()
+    assert started.wait(5)
+    lakebase.invalidate_credential()  # another path's connect was refused
+    minter.join(5)
+    assert outcome == ["STORE_UNAVAILABLE"]
+
+
+def test_every_store_connection_drops_a_refused_credential_but_boundedly(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ST-2, MAX-03: `caos.store.connect` -- the API's, the health probes' and
+    the lifespan's connection -- drops the cached credential when the connect
+    fails, so the next one mints; a credential minted under
+    `FAILURE_SECONDS` ago is kept, so an outage costs one mint per window."""
+    import time
+
+    import psycopg
+
+    from caos.store import connect
+
+    unreachable = "postgresql://u:p@127.0.0.1:1/db"
+    now = time.monotonic()
+    old = lakebase._Credential("old", now + 600, now + 3600, now - 60)
+    monkeypatch.setattr(lakebase, "_CACHED", old)
+    with pytest.raises(psycopg.OperationalError):
+        connect(unreachable, connect_timeout=1)
+    assert lakebase._CACHED is None, "a refused connect mints anew (ST-2)"
+    fresh = lakebase._Credential("fresh", now + 600, now + 3600, time.monotonic())
+    monkeypatch.setattr(lakebase, "_CACHED", fresh)
+    with pytest.raises(psycopg.OperationalError):
+        connect(unreachable, connect_timeout=1)
+    assert lakebase._CACHED is fresh, "one mint per FAILURE_SECONDS (MAX-03)"

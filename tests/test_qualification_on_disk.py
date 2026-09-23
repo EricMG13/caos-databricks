@@ -1094,3 +1094,28 @@ def test_a_symlinked_document_is_recorded_under_its_declared_name(
 
     [case, _other] = load_qualification_set(root).cases
     assert case.documents[0].filename.value == "report.txt"
+
+
+@pytest.mark.parametrize("key", ["expects_ready", "expects_blocked"])
+def test_an_over_long_readiness_id_is_a_malformed_manifest(
+    tmp_path: Path, key: str
+) -> None:
+    """DQ-14: `_ready` called `BoundaryText.of` outside the retyping `_bounded`
+    applies, so a 200-character module id leaked `BOUNDARY_TEXT_TOO_LONG` where
+    every other string the loader bounds is the manifest's own refusal."""
+    manifest = _manifest()
+    _first(manifest)[key] = ["C" * 200]
+    with pytest.raises(Refusal) as refused:
+        load_qualification_set(_write(tmp_path, manifest))
+    assert refused.value.code is RefusalCode.QUALIFICATION_SET_FILE_INVALID
+
+
+def test_a_refusal_no_run_ends_in_is_refused_at_load(tmp_path: Path) -> None:
+    """DQ-2: a node refusal leaves its run RUNNING, so a declared
+    CITATION_NOT_LOCATED could never be met however the run went, and the set
+    was paid for anyway. The loader refuses it with the file's own code."""
+    manifest = _manifest()
+    _first(manifest)["expected_refusal"] = "CITATION_NOT_LOCATED"
+    with pytest.raises(Refusal) as refused:
+        load_qualification_set(_write(tmp_path, manifest))
+    assert refused.value.code is RefusalCode.QUALIFICATION_SET_FILE_INVALID

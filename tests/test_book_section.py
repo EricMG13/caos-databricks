@@ -19,6 +19,7 @@ from test_model_section import _complete, route
 
 from caos.api.app import app, store_connection
 from caos.api.identity import Actor, GlobalRole
+from caos.api.reads import analysis as analysis_read
 from caos.api.reads import book as book_read
 from caos.api.reads.analysis import read_analysis
 from caos.api.reads.model import accepted_forecast
@@ -152,9 +153,18 @@ def test_the_book_reads_within_its_declared_io_budget(
     harness.conn.rollback()
     assert response.status_code == 200, response.json()
     # Exact for the one credit served: a ceiling four times this size would
-    # pass whatever one credit cost.
-    assert counter.executed == book_read.FIXED_IO + book_read.PER_ROW_IO
+    # pass whatever one credit cost. The credit is the forecast route's ten
+    # handoffs, inside a per-credit share declared for the longest route
+    # (ED-7).
+    one_credit = (
+        analysis_read.FIXED_IO
+        + len(harness.route.nodes) * analysis_read.PER_HANDOFF_IO
+        + analysis_read.MODEL_PROOFS_IO
+    )
+    assert counter.executed == book_read.FIXED_IO + one_credit
+    assert one_credit <= book_read.PER_ROW_IO == analysis_read.IO_BUDGET
     assert book_read.IO_BUDGET == book_read.FIXED_IO + 4 * book_read.PER_ROW_IO
+    assert book_read.BLOB_BUDGET == 4 * analysis_read.BLOB_BUDGET
 
 
 @pytest.mark.parametrize("path", [PATH, f"{PATH}?case=x"])

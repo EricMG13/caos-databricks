@@ -15,6 +15,7 @@ from dataclasses import replace
 from uuid import UUID, uuid4
 
 import pytest
+from canonical_fixtures import CATALOG
 from conftest import priced
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
@@ -28,11 +29,13 @@ from caos.api.app import app, blob_store, methodology_bundle, store_connection
 from caos.api.identity import ROLE_HEADER, TRUST_SWITCH, TRUSTED
 from caos.api.reads import analysis as analysis_read
 from caos.api.wire import CLEARS, AnalysisDocument
+from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
+from caos.graph.route import RouteExtensions, resolve_route
 from caos.graph.runtime import Execution, run_route
 from caos.methodology.handoff import _decoded_record, record_bytes
 from caos.methodology.runner import ModuleProvider
-from caos.refusals import RefusalCode
+from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
 from caos.store.gates import withdraw_source
 from caos.store.members import Standing, grant, revoke
@@ -444,19 +447,69 @@ def test_an_anonymous_or_malformed_analysis_request_opens_no_store_connection(
 
 
 def test_the_analysis_request_path_declares_its_store_budget(
-    client: TestClient, harness: _Harness
+    client: TestClient, harness: _Harness, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """Linear in accepted handoffs, store and blobs alike, and declared for the
+    longest route a run can pin (ED-7): the budget once declared was this
+    three-node route's cost, and a ten-node route paid four times it. The
+    blobs are counted as downloads: the request's store remembers each blob
+    it verified, and the lineage and record readers asked for the same
+    record up to sixteen times."""
     _run(harness)
     reader = _reader(harness)
     counter = _CountingConnection(harness.conn)
     app.dependency_overrides[store_connection] = _serving(counter)
+    downloads = _downloads(monkeypatch)
 
     response = client.get(_analysis(harness.case_id), headers=_as(reader))
     harness.conn.rollback()
 
     assert response.status_code == 200
     assert len(AnalysisDocument.model_validate(response.json()).body.handoffs) == 3
-    assert 0 < counter.executed == analysis_read.IO_BUDGET
+    per_handoff = analysis_read.PER_HANDOFF_IO
+    assert counter.executed == analysis_read.FIXED_IO + 3 * per_handoff
+    assert len(downloads) == len(set(downloads)) == 3 * analysis_read.PER_HANDOFF_BLOBS
+    longest = max(
+        len(resolve_route(CATALOG, profile, pathway, extensions=extensions).nodes)
+        for profile, pathways in _pathways()
+        for pathway in pathways
+        for extensions in (None, RouteExtensions(model_extension=True))
+        if _resolves(profile, pathway, extensions)
+    )
+    assert longest == analysis_read.LONGEST_ROUTE_NODES
+    assert analysis_read.IO_BUDGET == (
+        analysis_read.FIXED_IO + longest * per_handoff + analysis_read.MODEL_PROOFS_IO
+    )
+    assert analysis_read.BLOB_BUDGET == longest * analysis_read.PER_HANDOFF_BLOBS
+
+
+def _downloads(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Every blob a request's store downloads: a `get` its memo cannot answer."""
+    downloaded: list[str] = []
+    real_get = BlobStore.get
+
+    def counted(store: BlobStore, digest: str) -> bytes:
+        if store.verified is None or digest not in store.verified:
+            downloaded.append(digest)
+        return real_get(store, digest)
+
+    monkeypatch.setattr(BlobStore, "get", counted)
+    return downloaded
+
+
+def _pathways() -> list[tuple[str, list[str]]]:
+    return [
+        (profile, list(declared["pathways"]))
+        for profile, declared in CATALOG["profiles"].items()
+    ]
+
+
+def _resolves(profile: str, pathway: str, extensions: RouteExtensions | None) -> bool:
+    try:
+        resolve_route(CATALOG, profile, pathway, extensions=extensions)
+    except Refusal:
+        return False
+    return True
 
 
 def test_the_analysis_route_is_read_analysis() -> None:

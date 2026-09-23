@@ -35,6 +35,7 @@ from caos.evidence.ingest import (
     admit_pack,
     admit_prepared,
     prepare_pack,
+    put_pack,
 )
 from caos.graph.route import resolve_route
 from caos.methodology.bundle import Bundle
@@ -184,8 +185,9 @@ def test_admit_prepared_is_whole_or_nothing_without_commit(
 ) -> None:
     conn, case_id = case
     pack = prepare_pack(_documents(TEXT, b"Credit memo\n"))
+    stored = put_pack(BlobStore(tmp_path), pack)
 
-    admitted = admit_prepared(conn, BlobStore(tmp_path), case_id, pack)
+    admitted = admit_prepared(conn, case_id, pack, stored)
     assert len(admitted) == 2
     assert conn.info.transaction_status is TransactionStatus.INTRANS
     conn.rollback()
@@ -200,13 +202,13 @@ def test_admit_prepared_is_whole_or_nothing_without_commit(
                 raise Refusal(RefusalCode.STORE_UNAVAILABLE)
             return super().put(data)
 
+    # The uploads come before any unit (ED-5): one that fails writes no row.
     with pytest.raises(Refusal, match=r"^STORE_UNAVAILABLE$"):
-        admit_prepared(conn, Failing(tmp_path), case_id, pack)
-    conn.rollback()
+        put_pack(Failing(tmp_path), pack)
     assert (_count(conn, "sources"), _count(conn, "source_tokens")) == (0, 0)
 
     with pytest.raises(Refusal, match=r"^CASE_NOT_FOUND$"):
-        admit_prepared(conn, BlobStore(tmp_path), uuid4(), pack)
+        admit_prepared(conn, uuid4(), pack, stored)
     conn.rollback()
     assert _count(conn, "sources") == 0
 

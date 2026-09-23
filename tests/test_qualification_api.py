@@ -9,7 +9,11 @@ from uuid import UUID, uuid4
 import pytest
 from fastapi.testclient import TestClient
 from httpx2 import Response
-from qualification_fixtures import qualification_performed, record_runs
+from qualification_fixtures import (
+    qualification_performed,
+    record_performed_earlier,
+    record_runs,
+)
 
 from caos.api import app as app_module
 from caos.api.app import app, store_connection
@@ -17,7 +21,6 @@ from caos.api.wire import QualificationState
 from caos.qualification.store import (
     Evidence,
     record_evidence,
-    record_performed,
     record_verdict,
 )
 from caos.qualification.verdict import read_verdict
@@ -52,7 +55,7 @@ def client(
 def _record(conn: StoreConnection, *, expires_at: datetime) -> Evidence:
     evidence = _evidence()
     performed = qualification_performed()
-    record_performed(conn, performed)
+    record_performed_earlier(conn, performed)
     # The runs behind the snapshot: `record_verdict` refuses a verdict naming
     # a model no accepted artifact of them recorded.
     record_runs(conn, performed)
@@ -167,7 +170,7 @@ def test_invalid_persisted_verdict_is_unavailable_not_unqualified(
 ) -> None:
     http, conn = client
     evidence = _evidence()
-    record_performed(conn, qualification_performed())
+    record_performed_earlier(conn, qualification_performed())
     record_evidence(conn, evidence)
     conn.commit()
 
@@ -195,3 +198,23 @@ def test_malformed_evidence_digest_is_a_typed_refusal(
         "code": "VERDICT_BINDING_INVALID",
         "clears": "Correct the verdict bindings.",
     }
+
+
+def test_a_qualified_read_costs_what_it_declares(
+    client: tuple[TestClient, StoreConnection],
+) -> None:
+    """N9 for this route, and DQ-3's price: the store's clock, the evidence,
+    the verdict, and the runs' status and models `assert_store_agrees` reads."""
+    from test_qualification_sign import _Counting
+
+    from caos.api.reads import qualification as qualification_read
+
+    http, conn = client
+    evidence = _record(conn, expires_at=datetime.now(UTC) + timedelta(days=1))
+    counted = _Counting(conn)
+    app.dependency_overrides[store_connection] = lambda: counted
+
+    response = _read(http, evidence, uuid4())
+
+    assert response.json()["state"] == QualificationState.QUALIFIED
+    assert counted.executed == qualification_read.IO_BUDGET == 5

@@ -38,7 +38,13 @@ from caos.evidence.extract import (
     PlainTextExtractor,
     Token,
 )
-from caos.evidence.ingest import Document, admit_pack, admit_prepared, prepare_pack
+from caos.evidence.ingest import (
+    Document,
+    admit_pack,
+    admit_prepared,
+    prepare_pack,
+    put_pack,
+)
 from caos.evidence.pdf import PdfExtractor, walk_pages
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
@@ -167,7 +173,8 @@ def test_every_document_reaches_the_volume_before_the_case_lock(
     monkeypatch.setattr(ingest_module, "lock_case", watched_lock)
     pack = prepare_pack([_document("one.txt", TEXT), _document("two.txt", b"gamma\n")])
 
-    admitted = admit_prepared(conn, _Watched(tmp_path), case_id, pack)
+    stored = put_pack(_Watched(tmp_path), pack)
+    admitted = admit_prepared(conn, case_id, pack, stored)
 
     assert len(admitted) == 2
     assert order == ["put", "put", "lock"]

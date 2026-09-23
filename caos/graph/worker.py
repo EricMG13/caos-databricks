@@ -6,9 +6,11 @@ this process is the run's only writer until its lease is lost, and every write
 it makes is fenced by the lease token (D3).
 
 `stopping` is checked between nodes -- before a node's context check, so before
-its attempt, reservation or call -- and between polls, never during a call: a
-SIGTERM lets the call in flight be billed and accepted, then gives the run back
-to the queue.
+its attempt, reservation or call -- between polls, and before a rate-limited
+call is sent again (ST-7), never during a call. A call in flight when SIGTERM
+arrives is billed and accepted only if it answers within the drain's join
+(`caos.serve.LIMIT_JOIN_SECONDS`); past that it is abandoned with its
+reservation held, and the run is reclaimed once its lease expires (ST-15).
 """
 
 from __future__ import annotations
@@ -39,7 +41,7 @@ from caos.methodology.runner import ModuleProvider
 from caos.models import ChatCompletions, from_environment
 from caos.pricing import ModelPrice
 from caos.pricing import price_from_environment as price_from_environment
-from caos.provider import CompletionProvider
+from caos.provider import CompletionProvider, resend_checked
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection, apply_schema, connect, rollback_or_close
 from caos.store.gates import execution_input
@@ -116,7 +118,13 @@ class _Stoppable:
     def execute(
         self, route_node_id: str, module_id: str, *, attempt_id: UUID
     ) -> ProviderResult:
-        return self.inner.execute(route_node_id, module_id, attempt_id=attempt_id)
+        # A rate-limited call is not sent again once stopping (ST-7).
+        with resend_checked(self._going_on):
+            return self.inner.execute(route_node_id, module_id, attempt_id=attempt_id)
+
+    def _going_on(self) -> None:
+        if self.stopping.is_set():
+            raise _Stopping
 
 
 def module_execution(
@@ -207,8 +215,8 @@ def work_once(
         frames = traceback.extract_tb(fault.__traceback__)
         where = f"{frames[-1].filename}:{frames[-1].lineno}" if frames else "?"
         print(f"{type(fault).__name__} at {where}", file=sys.stderr)
-        _settle(conn, lambda: stop(conn, lease, RefusalCode.INTERNAL_FAULT))
-        _forget(execution, lease.run_id)
+        if _settle(conn, lambda: stop(conn, lease, RefusalCode.INTERNAL_FAULT)):
+            _forget(execution, lease.run_id)
     return lease.run_id
 
 
@@ -216,7 +224,9 @@ def _forget(execution: Execution | None, run_id: UUID) -> None:
     """Drop the checkpoint thread of a run this worker just parked or ended
     (DL-8): the thread holds position only (D6), a requeued run re-derives
     its frontier from the ledger, and a thread nobody will resume is rows
-    nothing reads. Best effort: the run's status is already committed."""
+    nothing reads. Best effort: the run's status is already committed. Only
+    after this worker's own write moved the run (ST-5): a worker whose lease
+    was lost would otherwise delete the thread its successor is driving."""
     if execution is None or execution.checkpointer is None:
         return
     with suppress(psycopg.Error, OSError, Refusal):
@@ -224,7 +234,8 @@ def _forget(execution: Execution | None, run_id: UUID) -> None:
 
 
 def _refused(conn: StoreConnection, lease: Lease, refused: Refusal) -> bool:
-    """Settle the queue for a refused run; True when this worker ended it."""
+    """Settle the queue for a refused run; True when this worker's own write
+    parked or ended it (ST-5), never on the word of the refusal alone."""
     code = refused.code
     if code in (RefusalCode.LEASE_NOT_HELD, RefusalCode.RUN_NOT_RUNNING):
         _settle(conn, lambda: False)  # another holder or a terminal run owns it
@@ -232,7 +243,7 @@ def _refused(conn: StoreConnection, lease: Lease, refused: Refusal) -> bool:
     if code is RefusalCode.RUN_CANCEL_REQUESTED:
         _settle(conn, lambda: False)
         try:
-            cancel_run(conn, lease.run_id, lease=lease)  # commits its own unit
+            return cancel_run(conn, lease.run_id, lease=lease)  # its own unit
         except Refusal as lost:
             # `cancel_run` refuses three classes and no others: a store
             # fault (`STORE_UNAVAILABLE` or `STORE_NOT_TRANSACTIONAL`),
@@ -253,24 +264,29 @@ def _refused(conn: StoreConnection, lease: Lease, refused: Refusal) -> bool:
             if unmet is RefusalCode.LEASE_NOT_HELD:
                 return False
             print(unmet.value, file=sys.stderr)
-            _settle(conn, lambda: stop(conn, lease, unmet))
-        return True
+            return _settle(conn, lambda: stop(conn, lease, unmet))
     if code in STORE_FAULTS:
         _settle(conn, lambda: release(conn, lease))
         raise Refusal(code)
-    _settle(conn, lambda: stop(conn, lease, code))
-    return True
+    return _settle(conn, lambda: stop(conn, lease, code))
 
 
-def _settle(conn: StoreConnection, write: Callable[[], bool]) -> None:
-    """Discard any open unit, then commit one queue write; a store that cannot
-    take it leaves the lease to expire."""
+def _settle(conn: StoreConnection, write: Callable[[], bool]) -> bool:
+    """Discard any open unit, then commit one queue write; whether it moved
+    the row (ST-5). A store that cannot take it leaves the lease to expire."""
     try:
         conn.rollback()
-        write()
+        moved = write()
         conn.commit()
     except psycopg.Error:
         rollback_or_close(conn)
+        return False
+    except Refusal:
+        # The write's own refusal (a run row gone from under `lock_run`): the
+        # unit is ended and nothing moved; the worker must not die of it.
+        rollback_or_close(conn)
+        return False
+    return moved
 
 
 def pause_seconds(config: WorkerConfig, failures: int) -> float:
@@ -481,25 +497,56 @@ def main() -> int:
 
 def start_in_process(stopping: Event) -> threading.Thread | None:
     """The worker as a daemon thread beside the API (D11), when
-    `CAOS_WORKER_IN_PROCESS=1`; `None` -- and the reason on stderr -- when the
-    environment does not configure one. The API serves either way: a queued run
-    waits, and `/api/health` reports `WORKERS_ABSENT`."""
+    `CAOS_WORKER_IN_PROCESS=1`; `None` when the environment does not ask for
+    one. The API serves either way: a queued run waits, and `/api/health`
+    reports `WORKERS_ABSENT` until the worker beats.
+
+    The thread configures itself (ST-4, MAX-20): nothing here touches the
+    store, so the port binds without waiting on the checkpoint set-up, and a
+    store that cannot answer yet is asked again under the loop's back-off
+    rather than leaving the process with no worker for its whole life. A
+    configuration the environment refuses is printed with its code and the
+    thread ends: asking again would not change the answer.
+    """
     if os.environ.get(IN_PROCESS) != "1":
         return None
-    unset = _unset_price()
-    try:
-        configured = _configured()
-    except Refusal as refused:
-        _report(refused, unset)
-        return None
-    except psycopg.Error:
-        print(RefusalCode.STORE_UNAVAILABLE.value, file=sys.stderr)
-        return None
     thread = threading.Thread(
-        target=_worker, args=(configured, stopping), name="caos-worker", daemon=True
+        target=_boot, args=(stopping,), name="caos-worker", daemon=True
     )
     thread.start()
     return thread
+
+
+def _boot(stopping: Event) -> int:
+    """Configure, retrying a store fault with back-off, then work until stopped."""
+    config = WorkerConfig(BoundaryText.of(f"worker-{os.getpid()}"))
+    failures = 0
+    while not stopping.is_set():
+        configured = _configured_or_code(_unset_price())
+        if isinstance(configured, Configured):
+            return _worker(configured, stopping)
+        if configured is RefusalCode.STORE_UNAVAILABLE:
+            failures += 1
+            stopping.wait(pause_seconds(config, failures))
+            continue
+        return 2
+    return 0
+
+
+def _configured_or_code(unset: str) -> Configured | RefusalCode:
+    """The configured worker, or the code that refused it, printed once."""
+    try:
+        return _configured()
+    except Refusal as refused:
+        _report(refused, unset)
+        return (
+            RefusalCode.STORE_UNAVAILABLE
+            if refused.code in STORE_FAULTS
+            else refused.code
+        )
+    except psycopg.Error:
+        print(RefusalCode.STORE_UNAVAILABLE.value, file=sys.stderr)
+        return RefusalCode.STORE_UNAVAILABLE
 
 
 if __name__ == "__main__":

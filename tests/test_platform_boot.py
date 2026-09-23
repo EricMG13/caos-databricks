@@ -11,14 +11,16 @@ import time
 import urllib.error
 import urllib.request
 from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 from uuid import UUID, uuid4, uuid5
 
 import pytest
 from canonical_fixtures import CATALOG, LITE_PROFILE, LITE_SELECTION
-from platform_app import VOLUME, PlatformApp, platform_app
+from platform_app import VOLUME, PlatformApp, platform_app, platform_environment
 from test_loop_charges import REPORT, _Completions
 from test_workspace_stub import stub
 from workspace_stub import WorkspaceStub
@@ -140,6 +142,31 @@ def app(
         yield served
 
 
+def test_the_boot_environment_is_the_bundle_s_and_what_the_deploy_sent(
+    stub: WorkspaceStub, tmp_path: Path
+) -> None:
+    """DF-12: the harness sets every variable the bundle sets, and when the
+    stub holds a deployment, the values the CLI sent with it are the ones
+    the process boots with; only the bind address and the export stay local."""
+    from check_gate_config import APP_ENVIRONMENT
+
+    database = "postgresql://u:p@127.0.0.1:5432/db"
+    env = platform_environment(stub, database, 8000, tmp_path)
+    assert {name for name in env if name.startswith("CAOS_")} >= APP_ENVIRONMENT
+    sent = [
+        {"name": "CAOS_RUN_CEILING", "value": "30.00"},
+        {"name": "CAOS_BIND_HOST", "value": "0.0.0.0"},
+        {"name": "CAOS_SITE_ROOT", "value": "frontend/dist"},
+    ]
+    stub.deployment_bodies.append({"env_vars": sent})
+    env = platform_environment(stub, database, 8000, tmp_path)
+    assert env["CAOS_RUN_CEILING"] == "30.00"
+    assert (env["CAOS_BIND_HOST"], env["CAOS_SITE_ROOT"]) == (
+        "127.0.0.1",
+        str(tmp_path),
+    )
+
+
 def test_the_platform_process_boots_ready_on_minted_credentials_and_the_volume(
     app: PlatformApp, stub: WorkspaceStub
 ) -> None:
@@ -257,6 +284,66 @@ def _wait_for_end(
     return "TIMEOUT", view
 
 
+@contextmanager
+def _app_role(database_url: str, *, schema_create: bool) -> Iterator[str]:
+    """A login role holding only what the runbook grants the app's service
+    principal (MAX-22): CONNECT and CREATE on the database, which the bundle's
+    `CAN_CONNECT_AND_CREATE` gives, and, when `schema_create`, USAGE and
+    CREATE on the database's `public` schema, which PostgreSQL 15 and later
+    give nobody by default. Its URL; the role goes when the block ends."""
+    import psycopg
+
+    parts = urlparse(database_url)
+    database = parts.path.lstrip("/")
+    role, password = f"caos_app_{uuid4().hex[:12]}", uuid4().hex
+    with psycopg.connect(database_url, autocommit=True) as admin:
+        # Both names are this function's own hex, never caller input.
+        admin.execute(f"CREATE ROLE \"{role}\" LOGIN PASSWORD '{password}'")
+        admin.execute(f'GRANT CONNECT, CREATE ON DATABASE "{database}" TO "{role}"')
+        if schema_create:
+            admin.execute(f'GRANT USAGE, CREATE ON SCHEMA public TO "{role}"')
+    host = f"{parts.hostname}:{parts.port or 5432}"
+    try:
+        yield f"postgresql://{role}:{password}@{host}/{database}"
+    finally:
+        with psycopg.connect(database_url, autocommit=True) as admin:
+            admin.execute(f'DROP OWNED BY "{role}" CASCADE')
+            admin.execute(f'DROP ROLE "{role}"')
+
+
+def test_the_app_starts_on_the_grants_the_runbook_names(
+    stub: WorkspaceStub, empty_database: str, tmp_path: Path
+) -> None:
+    """MAX-22: every other boot here connects as an administrator. Holding
+    only the documented grants, the process applies the store's schema and
+    the checkpoint schema and answers ready."""
+    with (
+        _app_role(empty_database, schema_create=True) as url,
+        platform_app(stub, url, tmp_path / "caos.serve.log") as served,
+    ):
+        health = served.health()
+    assert health["status"] == "ready" and health["store"] == "OK", health
+
+
+def test_the_database_grants_alone_cannot_hold_the_store(
+    empty_database: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """MAX-22: CONNECT and CREATE on the database do not reach its `public`
+    schema, where the store's tables go; that grant is a prerequisite of its
+    own, and without it the schema is refused with the server's 42501."""
+    from caos.refusals import Refusal
+    from caos.store import apply_schema, connect
+
+    with _app_role(empty_database, schema_create=False) as url:
+        conn = connect(url)
+        try:
+            with pytest.raises(Refusal):
+                apply_schema(conn)
+        finally:
+            conn.close()
+    assert "schema: sqlstate 42501" in capsys.readouterr().err
+
+
 def test_the_platform_s_stop_signal_drains_the_worker_inside_the_grace(
     app: PlatformApp,
 ) -> None:
@@ -271,3 +358,34 @@ def test_the_platform_s_stop_signal_drains_the_worker_inside_the_grace(
     app.process.send_signal(signal.SIGTERM)
     app.process.wait(timeout=serve.GRACEFUL_SECONDS + serve.LIMIT_JOIN_SECONDS + 10)
     assert "worker stopped" in app.log_tail(), app.log_tail()
+
+
+def test_a_redeploy_whose_worker_refused_does_not_report_the_last_one_s(
+    stub: WorkspaceStub,
+    empty_database: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """DF-1. Every release after the first boots on a store whose previous
+    process's last beat is still fresh for five minutes, and any fresh beat
+    answered `workers=OK`: a release whose in-process worker refused to start
+    served `ready` with `workers=OK`, E6 recorded exit 0 and the deploy
+    printed its URL while runs queued and never ran. Booted twice on one
+    store, the second time with a configuration the worker refuses."""
+    import enterprise_deploy
+
+    with platform_app(stub, empty_database, tmp_path / "first.log") as first:
+        deadline = time.monotonic() + 30
+        while first.health()["workers"] != "OK" and time.monotonic() < deadline:
+            time.sleep(0.5)
+        assert first.health()["workers"] == "OK", first.log_tail()
+    # Stopped by the platform's signal; its last POLLING beat stays behind.
+    monkeypatch.setenv("CAOS_REASONING_EFFORT", "high")  # the worker refuses it
+    monkeypatch.setattr(enterprise_deploy, "_headers", dict)  # health needs none
+    with platform_app(stub, empty_database, tmp_path / "second.log") as second:
+        health = second.health()
+        assert "PROVIDER_NOT_CONFIGURED" in second.log_tail(), second.log_tail()
+        code, line = enterprise_deploy._health_once(second.url)
+    assert health["status"] == "ready", health
+    assert health["workers"] == "WORKERS_ABSENT", health
+    assert code == 1, line

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-
-# No request path serves anything yet, so no module here declares an IO_BUDGET.
-# The floor scripts/io_budget.py enforces keys on this directory; the first route
-# brings the first budget with it.
+# The package itself serves no request path, so it costs the store nothing;
+# `scripts/io_budget.py` reads every module of this directory, its packages'
+# own included (DQ-10).
+IO_BUDGET = 0

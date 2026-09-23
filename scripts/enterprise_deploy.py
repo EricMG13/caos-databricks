@@ -7,16 +7,21 @@ does everything that is not the CLI, in three stages, each recording rows
 in `<evidence>/<id>.log`:
 
     --stage before   E1 preflight: the resources exist, the ceiling covers a call
-    --stage record   one CLI step the wrapper ran: E2 validate, E3 deploy, E4 run
-    --stage after    E5 the app is RUNNING with a URL
+    --stage record   one CLI step the wrapper ran: E2 validate (its JSON form,
+                        whose resolved app name, endpoint, price and run
+                        ceiling must be the ones given: DF-4, DF-5), E3
+                        deploy (its deployment record must list every file
+                        the app reads: F48, DF-4), E4 run
+    --stage after    E5 the app E2 resolved is RUNNING with a URL
                      E6 /api/health answers ready on Python 3.13, polled until
                         the first probe round and the worker have reported (C4)
                      E7 the gateway smoke, JSON mode included (A31)
                      E8 Lakebase `SELECT version()` as the deployer, for D17
                         (the app's own access is E6's `store` code)
                      E9 the event stream delivers through the Apps proxy (C42):
-                        an event-stream content type, one complete frame, and
-                        the connection still open after it (AR-05)
+                        an event-stream content type, a first frame, then
+                        frames for `LIVE_SECONDS` with no silence longer than
+                        `FRAME_GAP_SECONDS` and no close (AR-05, DF-2, MAX-08)
 
 Every step ends in a row, never a traceback (N1): a failure is its class or
 its typed code. No secret is printed or written: the bearer the app calls
@@ -35,6 +40,7 @@ import http.client
 import io
 import json
 import os
+import queue
 import sys
 import threading
 import time
@@ -52,8 +58,12 @@ if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
 STREAM_SECONDS = 20.0
-# After the first frame, how long the stream must stay open to count as open.
-LIVE_SECONDS = 2.0
+# After the first frame, how long frames must keep coming to count as a live
+# stream, and the longest silence allowed while they do. The app beats every
+# `caos.api.app.POLL_INTERVAL` (0.5 s), so three beats may go missing and a
+# proxy that holds the stream after its first write, or cuts it, may not.
+LIVE_SECONDS = 3.0
+FRAME_GAP_SECONDS = 1.5
 # How long E6 waits for the first probe round and the worker's first beat.
 HEALTH_SECONDS = 90.0
 HEALTH_POLL_SECONDS = 3.0
@@ -61,12 +71,59 @@ FORWARD_CALLER_ENV = "CAOS_DEPLOY_FORWARD_CALLER"
 # What an event-stream frame's first line may start with.
 SSE_PREFIXES = ("id:", "event:", "data:", "retry:", ":")
 HEALTH_CODES = ("store", "bundle", "blobs", "identity", "workers")
+# The app's key under `resources.apps` in databricks.yml.
+APP_KEY = "caos"
+# How a wait for the next frame ends.
+FRAME, CLOSED, SILENT = "frame", "closed", "silent"
+# What a read of an answer can raise: the socket's errors, and http.client's
+# own for a body shorter than it declared or a status line that is not one
+# (MAX-17). Both are a row, never a traceback.
+READ_FAILURES = (OSError, http.client.HTTPException)
 
 
-def app_name(target: str) -> str:
-    """The app resource's name: `caos` in prod, `caos-<target>` elsewhere, so
-    a developer's deploy can never take over the production app (DP-6)."""
-    return "caos" if target == "prod" else f"caos-{target}"
+def resolved_app(document: object) -> tuple[str, dict[str, str]]:
+    """The app's name and environment as `bundle validate -o json` resolved
+    them, or `("", {})` when the document holds no app. E5 looks up this
+    name rather than recomputing it, so a target added without its own name
+    rule is found here, not after it deployed (DF-5)."""
+    resources = document.get("resources") if isinstance(document, dict) else None
+    apps = resources.get("apps") if isinstance(resources, dict) else None
+    app = apps.get(APP_KEY) if isinstance(apps, dict) else None
+    if not isinstance(app, dict):
+        return "", {}
+    config = app.get("config")
+    listed = config.get("env") if isinstance(config, dict) else None
+    items = listed if isinstance(listed, list) else []
+    env = {
+        str(item.get("name")): str(item.get("value"))
+        for item in items
+        if isinstance(item, dict)
+    }
+    name = app.get("name")
+    return (name if isinstance(name, str) else ""), env
+
+
+def resolution_problems(
+    document: object, *, target: str, endpoint: str, price: str, run_ceiling: str
+) -> list[str]:
+    """What the CLI resolved that is not what was given (DF-4, DF-5): a
+    misspelt `BUNDLE_VAR_model_price` validates on the default price, and a
+    target with no name rule of its own resolves to the production app."""
+    name, env = resolved_app(document)
+    problems = [] if name else ["no app resolved"]
+    if name == "caos" and target != "prod":
+        problems.append(f"target {target} resolves to the production app")
+    given = {
+        "CAOS_MODEL_ENDPOINT": endpoint,
+        "CAOS_MODEL_PRICE": price,
+        "CAOS_RUN_CEILING": run_ceiling,
+    }
+    problems += [
+        f"resolved {key} is not the value given"
+        for key, value in given.items()
+        if env.get(key) != value
+    ]
+    return problems
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,6 +177,10 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--command", default="", help="record: the command run")
     parser.add_argument("--code", type=int, default=0, help="record: its exit code")
     parser.add_argument("--log", default="", help="record: the file holding its output")
+    parser.add_argument(
+        "--bundle", default="", help="`bundle validate -o json` output: E2, E5"
+    )
+    parser.add_argument("--shipped", default="", help="the CLI's deployment.json: E3")
     return parser
 
 
@@ -133,9 +194,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.stage == "before":
         return _preflight(args, evidence)
     if args.stage == "record":
-        output = Path(args.log).read_text() if args.log else ""
-        return evidence.record(args.step, args.command, args.code, output)
-    url = _app_url(evidence, app_name(args.target))
+        return _record(args, evidence)
+    name, _ = resolved_app(_resolved(args.bundle))
+    if not name:
+        return evidence.record("E5", "apps get", 1, "no app name resolved by E2")
+    url = _app_url(evidence, name)
     if not url:
         return 1
     later: list[Callable[[], int]] = [
@@ -149,6 +212,61 @@ def main(argv: list[str] | None = None) -> int:
             return code
     print(f"deployed: {url}")
     return 0
+
+
+def _resolved(path: str) -> object:
+    """The CLI's resolved configuration, or None when there is none to read."""
+    try:
+        return json.loads(Path(path).read_text()) if path else None
+    except (OSError, ValueError):
+        return None
+
+
+def _record(args: argparse.Namespace, evidence: Evidence) -> int:
+    """One CLI step's row. With `--bundle`, a validate that passed is also
+    held to resolving the values given (DF-4, DF-5); with `--shipped`, a
+    deploy that passed is also held to its own record listing every file
+    the app reads (DF-4)."""
+    output = Path(args.log).read_text() if args.log else ""
+    code = args.code
+    for given, check in ((args.bundle, _resolution), (args.shipped, _shipped)):
+        if given and code == 0:
+            code, line = check(args)
+            output += line + "\n"
+    return evidence.record(args.step, args.command, code, output)
+
+
+def _resolution(args: argparse.Namespace) -> tuple[int, str]:
+    document = _resolved(args.bundle)
+    problems = resolution_problems(
+        document,
+        target=args.target,
+        endpoint=args.endpoint,
+        price=args.price,
+        run_ceiling=args.run_ceiling,
+    )
+    name, _ = resolved_app(document)
+    if problems:
+        return 1, "; ".join(problems)
+    return 0, f"resolved app {name}: endpoint, price and run ceiling as given"
+
+
+def _shipped(args: argparse.Namespace) -> tuple[int, str]:
+    """What the deploy synced, against every tracked file under the sync
+    roots and every file of the built export: an export reduced to its page
+    serves a blank workspace while health, E6 and E9 stay green."""
+    from check_gate_config import shipped_problems
+
+    try:
+        problems = shipped_problems(Path(args.shipped))
+    except (RuntimeError, OSError) as failed:
+        return (
+            1,
+            f"shipped: the tracked files could not be listed ({type(failed).__name__})",
+        )
+    if problems:
+        return 1, "\n".join(problems)
+    return 0, "every path the app needs was synced"
 
 
 def _preflight(args: argparse.Namespace, evidence: Evidence) -> int:
@@ -250,7 +368,7 @@ def _health_once(url: str) -> tuple[int, str]:
     try:
         status, response, _ = _open(url + "/api/health", "GET", _headers())
         body = _document(response.read())
-    except (OSError, ValueError) as failed:
+    except (*READ_FAILURES, ValueError) as failed:
         return 1, type(failed).__name__
     ready = status == 200 and body.get("status") == "ready"
     version = str(body.get("python_version", ""))
@@ -320,11 +438,12 @@ def _lakebase_version(args: argparse.Namespace, evidence: Evidence) -> int:
 
 
 def _stream(url: str, evidence: Evidence) -> int:
-    """A case, then its stream: an event-stream content type, one complete
-    frame (a heartbeat counts) within `STREAM_SECONDS`, and the connection
-    still open `LIVE_SECONDS` later mean the proxy passes frames as they
-    come (C42, AR-05). A case the deployer may not create is recorded as
-    unverified, and only for the one code that says so (W1)."""
+    """A case, then its stream: an event-stream content type, a first frame
+    within `STREAM_SECONDS`, then frames (heartbeats count) for
+    `LIVE_SECONDS`, none more than `FRAME_GAP_SECONDS` apart, mean the proxy
+    passes frames as they come (C42, AR-05, DF-2). A case the deployer may
+    not create is recorded as unverified, and only for the one code that
+    says so (W1)."""
     step, path = "E9", "GET /api/v1/cases/<id>/events"
     try:
         headers = _headers()
@@ -343,7 +462,7 @@ def _stream(url: str, evidence: Evidence) -> int:
     try:
         status, response, _ = _open(url + "/api/v1/cases", "POST", command, body=title)
         created = _document(response.read())
-    except OSError as failed:
+    except READ_FAILURES as failed:
         return evidence.record(step, "POST /api/v1/cases", 1, type(failed).__name__)
     if status == 403:
         code = str(created.get("code", "")) or "no code"
@@ -357,56 +476,86 @@ def _stream(url: str, evidence: Evidence) -> int:
         return evidence.record(step, "POST /api/v1/cases", 1, f"answered {status}")
     events = f"/api/v1/cases/{case_id}/events"
     try:
-        status, response, connection = _open(
+        status, response, _ = _open(
             url + events, "GET", forwarded, timeout=STREAM_SECONDS
         )
-        kind = response.getheader("content-type") or ""
-        frame, alive = _first_frame(response, connection)
-    except OSError as failed:
-        note = f"no frame within {STREAM_SECONDS}s ({type(failed).__name__}), C42"
+    except READ_FAILURES as failed:
+        note = f"no answer within {STREAM_SECONDS}s ({type(failed).__name__}), C42"
         return evidence.record(step, path, 1, note)
-    return evidence.record(step, path, *_streamed(status, kind, frame, alive))
+    kind = response.getheader("content-type") or ""
+    return evidence.record(step, path, *_streamed(status, kind, response))
 
 
-def _streamed(status: int, kind: str, frame: str, alive: bool) -> tuple[int, str]:
-    """The E9 verdict on what came back: an event stream, a frame, still open."""
+def _streamed(
+    status: int, kind: str, response: http.client.HTTPResponse
+) -> tuple[int, str]:
+    """The E9 verdict on what came back: an event stream, a first frame, then
+    frames that keep coming with the stream open."""
     if status != 200 or not kind.startswith("text/event-stream"):
         return 1, f"status {status}, content-type {kind!r}: not an event stream"
-    if not frame.startswith(SSE_PREFIXES):
+    lines = _lines(response)
+    ended, frame = _next_frame(lines, time.monotonic() + STREAM_SECONDS)
+    if ended == SILENT:
+        return 1, f"status 200, no frame within {STREAM_SECONDS}s, C42"
+    if ended == CLOSED or not frame.startswith(SSE_PREFIXES):
         return 1, "status 200, no event frame before close"
-    if not alive:
-        return 1, f"first frame {frame!r}, then the stream closed: buffered or cut, C42"
-    return 0, f"first frame {frame!r} with the stream open"
+    broken = _held_open(lines)
+    if broken:
+        return 1, f"first frame {frame!r}, then {broken}: buffered or cut, C42"
+    return 0, (
+        f"first frame {frame!r}, then frames for {LIVE_SECONDS}s with the stream open"
+    )
 
 
-def _first_frame(
-    response: http.client.HTTPResponse, connection: http.client.HTTPConnection
-) -> tuple[str, bool]:
-    """The first frame's lines, and whether the stream was still open
-    `LIVE_SECONDS` after it. The next read runs on its own thread: a read
-    still blocked after the wait is an open stream, a read that returned
-    `b""` is a closed one, and a read that returned bytes is more stream. A
-    socket timeout would not do: `http.client` hands a `Connection: close`
-    response its socket and forgets it, so there is none left to set."""
-    del connection  # the response owns the socket from here on
-    lines: list[str] = []
+def _lines(response: http.client.HTTPResponse) -> queue.Queue[bytes]:
+    """The stream's lines as they arrive, read on a thread of their own, then
+    `b""` once it ends or a read fails. The waits below are the queue's: a
+    socket timeout would not do, because `http.client` hands a `Connection:
+    close` response its socket and forgets it, so there is none left to set;
+    the connection's own timeout still bounds each read."""
+    lines: queue.Queue[bytes] = queue.Queue()
+
+    def read() -> None:
+        with contextlib.suppress(*READ_FAILURES):
+            while raw := response.readline():
+                lines.put(raw)
+        lines.put(b"")
+
+    threading.Thread(target=read, name="caos-deploy-stream", daemon=True).start()
+    return lines
+
+
+def _next_frame(lines: queue.Queue[bytes], until: float) -> tuple[str, str]:
+    """`(FRAME, its lines)` once a blank line ends a frame before `until` (a
+    monotonic instant), else `(CLOSED, ...)` or `(SILENT, ...)`."""
+    got: list[str] = []
     while True:
-        raw = response.readline()
+        try:
+            raw = lines.get(timeout=max(until - time.monotonic(), 0.0))
+        except queue.Empty:
+            return SILENT, "\n".join(got)
         if raw == b"":
-            return "\n".join(lines), False
+            return CLOSED, "\n".join(got)
         line = raw.decode(errors="replace").rstrip("\r\n")
         if not line:
-            break  # a blank line ends the frame
-        lines.append(line)
-    more: list[bytes] = []
-    reader = threading.Thread(
-        target=lambda: more.append(response.readline()), daemon=True
-    )
-    reader.start()
-    reader.join(LIVE_SECONDS)
-    if reader.is_alive():
-        return "\n".join(lines), True
-    return "\n".join(lines), more[0] != b""
+            return FRAME, "\n".join(got)  # a blank line ends the frame
+        got.append(line)
+
+
+def _held_open(lines: queue.Queue[bytes]) -> str:
+    """Empty when frames kept coming for `LIVE_SECONDS`, none more than
+    `FRAME_GAP_SECONDS` apart; else what happened instead. A read that is
+    merely still blocked proves nothing: frames already buffered before a
+    close, or a first write forwarded and the rest held, are not a stream
+    (DF-2, MAX-08)."""
+    end = time.monotonic() + LIVE_SECONDS
+    while (now := time.monotonic()) < end:
+        ended, _ = _next_frame(lines, min(end, now + FRAME_GAP_SECONDS))
+        if ended == CLOSED:
+            return "the stream closed"
+        if ended == SILENT and time.monotonic() < end:
+            return f"no frame for {FRAME_GAP_SECONDS}s"
+    return ""
 
 
 if __name__ == "__main__":

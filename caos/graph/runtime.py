@@ -19,7 +19,8 @@ lived to record it (`caos/store/budget.py`).
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import StrEnum
@@ -177,15 +178,16 @@ def run_route(
     def one_pass(route_node_id: str) -> str:
         if execution.heartbeat is not None:
             execution.heartbeat()
-        return node_pass(
-            conn,
-            blobs,
-            run_id=run_id,
-            route=route,
-            execution=execution,
-            named=named,
-            route_node_id=route_node_id,
-        ).value
+        with message_free():
+            return node_pass(
+                conn,
+                blobs,
+                run_id=run_id,
+                route=route,
+                execution=execution,
+                named=named,
+                route_node_id=route_node_id,
+            ).value
 
     def one_node(route_node_id: str) -> str:
         # An answer refused `HANDOFF_MALFORMED` earns the node one second
@@ -203,9 +205,15 @@ def run_route(
         return one_pass(route_node_id)
 
     def terminal() -> str:
-        return finish(
-            conn, blobs, run_id=run_id, route=route, execution=execution, named=named
-        )
+        with message_free():
+            return finish(
+                conn,
+                blobs,
+                run_id=run_id,
+                route=route,
+                execution=execution,
+                named=named,
+            )
 
     graph = build_graph(
         route,
@@ -226,6 +234,24 @@ def run_route(
         # Position only (D6): a thread that reached its end has nothing left
         # to resume from, and the store holds the verdict (F39).
         execution.checkpointer.delete_thread(thread)
+
+
+@contextmanager
+def message_free() -> Iterator[None]:
+    """Let a fault leave a graph node with its class but not its message.
+
+    LangGraph persists `repr(exc)` for a failed node in the checkpoint's
+    writes (ST-14), and a validator's message may quote a document; the
+    worker already writes only the class and the frame. A refusal is its
+    typed code alone and passes unchanged.
+    """
+    try:
+        yield
+    except Refusal:
+        raise
+    except Exception as fault:
+        fault.args = ()
+        raise
 
 
 # The note LangGraph attaches to an exception leaving a node names the task;

@@ -364,24 +364,37 @@ def test_a_dotted_path_in_a_string_is_a_reference_and_prose_is_not(
 
     referenced = check_tested.referenced_names(tests_dir)
 
-    assert "append" in referenced
-    assert "reconciler" not in referenced
+    assert "caos.store.runs.append" in referenced
+    assert not any(name.endswith("reconciler") for name in referenced)
 
 
-def test_referenced_names_reads_bare_names_attributes_and_imports(
+def test_referenced_names_resolves_imports_and_the_chains_from_them(
     tmp_path: Path,
 ) -> None:
+    """DQ-11: a reference is `module.name`, read through the test's imports. A
+    bare name nothing imported, or an attribute of one, names no module."""
     tests_dir = tmp_path / "tests"
     tests_dir.mkdir()
     (tests_dir / "test_m.py").write_text(
         "from caos.store import reserve\nimport server.evidence.pdf as pdf\n"
-        "widget.anchor_citation()\nfreeze\n",
+        "import caos.graph.runtime\n"
+        "widget.anchor_citation()\nfreeze\npdf.extract(reserve)\n"
+        "caos.graph.runtime.finish()\nsetattr(pdf, 'walk_pages', None)\n",
         encoding="utf-8",
     )
 
     referenced = check_tested.referenced_names(tests_dir)
 
-    assert {"reserve", "pdf", "anchor_citation", "freeze"} <= referenced
+    assert {
+        "caos.store.reserve",
+        "server.evidence.pdf",
+        "server.evidence.pdf.extract",
+        "caos.graph.runtime.finish",
+        "server.evidence.pdf.walk_pages",
+    } <= referenced
+    assert not any(
+        name.rpartition(".")[2] in {"anchor_citation", "freeze"} for name in referenced
+    )
 
 
 def test_a_route_handler_is_covered_by_its_path_not_its_name() -> None:
@@ -389,11 +402,12 @@ def test_a_route_handler_is_covered_by_its_path_not_its_name() -> None:
     reached by rendering -- `frontend/scripts/check-tested.mjs` states the same
     rule. Demanding a test name it buys an import and no coverage."""
     source = (
+        "router = APIRouter()\n"
         "@router.get('/api/v1/book')\ndef read_book(): ...\n"
         "@lru_cache\ndef cached_thing(): ...\n"
     )
 
-    assert check_tested.public_definitions(source, "m.py") == [(4, "cached_thing")]
+    assert check_tested.public_definitions(source, "m.py") == [(5, "cached_thing")]
 
 
 def test_a_suite_that_references_nothing_refuses_rather_than_clearing_everything(
@@ -479,7 +493,7 @@ def test_check_tested_main_passes_when_every_symbol_is_named(
     module.write_text("def foo() -> None: ...\n", encoding="utf-8")
     tests_dir = tmp_path / "tests"
     tests_dir.mkdir()
-    (tests_dir / "test_m.py").write_text("foo()\n", encoding="utf-8")
+    (tests_dir / "test_m.py").write_text("from m import foo\n\nfoo()\n")
 
     assert check_tested.main([str(module), "--tests", str(tests_dir)]) == 0
 
@@ -785,6 +799,7 @@ def test_a_name_a_test_only_binds_does_not_clear_a_public_definition(
     tests_dir.mkdir()
     bound = tests_dir / "test_bound.py"
     bound.write_text(
+        "import os\n\n"
         "def test_x(freeze_the_deliverable: int = 1) -> None:\n"
         "    del freeze_the_deliverable\n"
         "    for freeze_the_deliverable in ():\n"
@@ -797,3 +812,138 @@ def test_a_name_a_test_only_binds_does_not_clear_a_public_definition(
         "    assert freeze_the_deliverable() == 1\n"
     )
     assert check_tested.main([str(module), "--tests", str(tests_dir)]) == 0
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "import math\nIO_BUDGET = math.inf\n",
+        "IO_BUDGET = ~0\n",
+        "IO_BUDGET = 10 ** 100\n",
+        "FIXED = 3\nIO_BUDGET = FIXED - 4\n",
+        'IO_BUDGET = {"report": 45, "frozen": 2.5}\n',
+        "IO_BUDGET = 1 == 1\n",
+    ],
+    ids=["math-inf", "invert-zero", "googol", "negative", "float-in-map", "bool"],
+)
+def test_io_budget_refuses_a_value_that_is_not_a_bounded_count(
+    tmp_path: Path, source: str
+) -> None:
+    """DQ-10: FP-19 closed the spelling `float("inf")` and nothing else, so
+    `math.inf`, `~0` (which is -1) and `10 ** 100` each passed as a declared
+    budget. The value is read as Python evaluates it and must be a whole
+    number of round trips between 0 and `CEILING`."""
+    api = tmp_path / "caos" / "api"
+    api.mkdir(parents=True)
+    (api / "routes.py").write_text(source, encoding="utf-8")
+    assert io_budget.main(["--assert", "--root", str(tmp_path)]) == 1
+    assert not io_budget.within(io_budget.declared_value(api / "routes.py", tmp_path))
+
+
+def test_io_budget_reads_a_package_module_too(tmp_path: Path) -> None:
+    """DQ-10, FP-19's first bullet: `__init__.py` was skipped, so a route
+    declared in a package's own module was never read."""
+    reads = tmp_path / "caos" / "api" / "reads"
+    reads.mkdir(parents=True)
+    (tmp_path / "caos" / "api" / "__init__.py").write_text(
+        "IO_BUDGET = 0\n", encoding="utf-8"
+    )
+    (reads / "__init__.py").write_text(
+        "from fastapi import APIRouter\nrouter = APIRouter()\n\n"
+        "@router.get('/api/v1/unbudgeted')\ndef unbudgeted() -> None: ...\n",
+        encoding="utf-8",
+    )
+    assert io_budget.main(["--assert", "--root", str(tmp_path)]) == 1
+    (reads / "__init__.py").write_text("IO_BUDGET = 2\n", encoding="utf-8")
+    assert io_budget.main(["--assert", "--root", str(tmp_path)]) == 0
+
+
+def test_io_budget_evaluates_the_modules_own_arithmetic(tmp_path: Path) -> None:
+    """Arithmetic over the module's counts, a `max`, a length and a map are all
+    budgets once evaluated; the gate does not have to parse them, and the
+    repository's own modules pass the same reading."""
+    api = tmp_path / "caos" / "api"
+    api.mkdir(parents=True)
+    source = (
+        "import enum\n"
+        "class Gate(enum.Enum):\n    A = 1\n    B = 2\n"
+        "FIXED, PER = 2, 3\n"
+        "IO_BUDGET = max(FIXED + len(Gate) * PER, 1)\n"
+    )
+    (api / "routes.py").write_text(source, encoding="utf-8")
+    assert io_budget.declared_value(api / "routes.py", tmp_path) == 8
+    assert io_budget.within(8) and io_budget.within({"a": 0, "b": io_budget.CEILING})
+    assert not io_budget.within({}) and not io_budget.within(io_budget.CEILING + 1)
+    assert io_budget.main(["--assert", "--root", str(tmp_path)]) == 0
+    assert io_budget.main(["--assert"]) == 0
+
+
+def test_check_tested_sees_the_public_code_it_used_to_miss(tmp_path: Path) -> None:
+    """DQ-11 (FP-18): a module holding a public lambda, a `def` under `if`, a
+    function decorated `@cache.get(...)` and a `def verify` passed the gate with
+    no test calling any of them. The first three were invisible, and `verify`
+    was cleared by the suite's references to another module's `verify`."""
+    module = tmp_path / "untested.py"
+    module.write_text(
+        "normalise = lambda value: value.strip()\n"
+        "if True:\n    def guarded() -> int:\n        return 1\n"
+        "try:\n    def attempted() -> int:\n        return 2\n"
+        "except ImportError:\n    pass\n"
+        "class _Cache:\n    def get(self, key):\n        return lambda f: f\n"
+        "cache = _Cache()\n"
+        "@cache.get('key')\ndef cached() -> int:\n    return 2\n"
+        "def verify(archive: bytes) -> bool:\n    return True\n",
+        encoding="utf-8",
+    )
+    names = [
+        name
+        for _, name in check_tested.public_definitions(module.read_text(), str(module))
+    ]
+    assert names == ["normalise", "guarded", "attempted", "cached", "verify"]
+    referenced = check_tested.referenced_names(REPO / "tests")
+    assert "caos.deliverable.verify_package.verify" in referenced
+    found = check_tested.untested(module, referenced)
+    assert len(found) == 5 and all(line.startswith(str(module)) for line in found)
+
+
+def test_a_module_is_named_as_it_is_imported() -> None:
+    """A package is its directory, and `scripts/` and `tests/` are on the
+    import path themselves; a file outside the tree is its stem."""
+    assert check_tested.module_name(REPO / "caos/store/runs.py", REPO) == (
+        "caos.store.runs"
+    )
+    assert check_tested.module_name(REPO / "caos/api/__init__.py", REPO) == "caos.api"
+    assert check_tested.module_name(REPO / "scripts/qualify.py", REPO) == "qualify"
+    assert check_tested.module_name(REPO / "tests/conftest.py", REPO) == "conftest"
+    assert check_tested.module_name(Path("/elsewhere/m.py"), REPO) == "m"
+
+
+def test_a_reference_follows_the_imports_of_the_module_it_names(
+    tmp_path: Path,
+) -> None:
+    """A test importing a name from the module that re-exports it references the
+    definition, not the re-export -- and only that one."""
+    import ast
+
+    package = tmp_path / "pkg"
+    package.mkdir()
+    (package / "__init__.py").write_text("from pkg.core import run as run\n")
+    (package / "core.py").write_text(
+        "def run() -> None: ...\ndef idle() -> None: ...\n"
+    )
+    tests_dir = tmp_path / "tests"
+    tests_dir.mkdir()
+    (tests_dir / "test_pkg.py").write_text("from pkg import run\n\nrun()\n")
+
+    bound = check_tested.bindings(
+        ast.parse("import a.b as c\nfrom d import e as f\n").body
+    )
+    assert bound == {"c": "a.b", "f": "d.e"}
+    reexports = {"pkg": {"run": "pkg.core.run"}}
+    assert check_tested.canonical("pkg.run", reexports) == "pkg.core.run"
+    assert check_tested.canonical("pkg.core.idle", reexports) == "pkg.core.idle"
+    assert check_tested.main([str(package / "core.py"), "--tests", str(tests_dir)]) == 1
+    (tests_dir / "test_pkg.py").write_text(
+        "from pkg import run\nfrom pkg.core import idle\n\nrun()\nidle()\n"
+    )
+    assert check_tested.main([str(package / "core.py"), "--tests", str(tests_dir)]) == 0

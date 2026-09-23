@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import asyncio
 import weakref
-from collections.abc import AsyncIterator, Callable, Iterator
+from collections.abc import AsyncIterator, Callable, Generator
 from contextlib import asynccontextmanager, suppress
 from json import dumps
 from uuid import UUID
@@ -42,6 +42,7 @@ from fastapi.exception_handlers import (
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import StreamingResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.types import Receive, Scope, Send
 
 from caos.api import health
 from caos.api.commands import cases as cases_command
@@ -78,10 +79,10 @@ from caos.api.reads import qualification as qualification_read
 from caos.api.reads import reports as reports_read
 from caos.api.reads import run as run_read
 from caos.api.reads import upload as upload_read
+from caos.api.stream import IO_BUDGET as STREAM_IO
 from caos.api.stream import (
-    CONNECT_IO,
-    POLL_IO,
     StreamEvent,
+    StreamSlot,
     case_tail,
     take_stream_slot,
 )
@@ -89,11 +90,11 @@ from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection, apply_schema, connect
 
 # `GET /api/v1/cases/{case_id}/events`, the one path this module serves: the
-# caller's standing and the run's case, the heads, the cursor frame's recheck,
-# then the first poll -- after which each poll costs `POLL_IO` again and each
-# frame one recheck. Measured in `tests/test_case_events.py`. The section reads
-# declare their own budgets.
-EVENTS_IO_BUDGET = 2 + CONNECT_IO + 1 + POLL_IO
+# caller's standing and the run's case, then the stream's own connect, cursor
+# recheck and first poll (`stream.IO_BUDGET`) -- after which each poll costs
+# `POLL_IO` again and each named frame `FRAME_IO`. Measured in
+# `tests/test_case_events.py`. The section reads declare their own budgets.
+EVENTS_IO_BUDGET = 2 + STREAM_IO
 IO_BUDGET = EVENTS_IO_BUDGET
 
 # §9: a tail closes so the edge can reauthenticate. Five minutes, and it lives
@@ -535,10 +536,10 @@ def read_case_events(
     # ordinary refusal body with a status and a `Retry-After` -- a 503 the
     # client can read. Taken *after* the authority read, so a stranger still
     # learns nothing: a private 404 must not become "the case exists but we are
-    # busy". `stream_slot` releases on every way out of the generator,
-    # `GeneratorExit` included, which is how a browser going away returns its
-    # slot. Named with the actor, so the cap is a share of the fleet's tails
-    # rather than a race for all of them (MX-2).
+    # busy". The response gives it back when it ends, however it ends -- a
+    # browser going away included (`_TailResponse`, ED-1). Named with the
+    # actor, so the cap is a share of the fleet's tails rather than a race for
+    # all of them (MX-2).
     slot = take_stream_slot(actor_id=actor.user_id)
     events = case_tail(
         conn,
@@ -551,7 +552,7 @@ def read_case_events(
         heartbeat=True,
     )
 
-    def framed() -> Iterator[bytes]:
+    def framed() -> Generator[bytes]:
         try:
             for event in events:
                 yield _frame(event)
@@ -559,20 +560,48 @@ def read_case_events(
             slot.release()
 
     tail = framed()
-    # The safety net for the one case the `finally` above cannot reach: a
-    # generator that is never started never unwinds, so a response built and
-    # then never iterated would hold its slot until the process restarted.
-    # `StreamSlot.release` is one-shot, so whichever of the two runs first is
-    # the one that counts.
+    # The safety net for the one case neither the `finally` above nor the
+    # response can reach: a generator that is never started never unwinds, so
+    # a response built and then never sent would hold its slot until the
+    # process restarted. `StreamSlot.release` is one-shot, so whichever of the
+    # three runs first is the one that counts.
     weakref.finalize(tail, slot.release)
+    return _TailResponse(tail, slot)
 
-    return StreamingResponse(
-        tail,
-        media_type="text/event-stream",
-        # No store, and no proxy buffering: a tail that arrived in one block
-        # when the deadline passed would not be a tail.
-        headers={"cache-control": "no-store", "x-accel-buffering": "no"},
-    )
+
+class _TailResponse(StreamingResponse):
+    """A tail on the wire, which gives its slot back when the response ends.
+
+    The generator's own `finally` is not enough (ED-1). On a disconnect
+    Starlette cancels the task iterating the body; the cancellation's
+    traceback keeps `iterate_in_threadpool`'s frame alive in a reference
+    cycle, and that frame holds the sync generator -- so its `finally` ran
+    only at CPython's next *full* collection, minutes or hours away in a quiet
+    App, and four closed tabs spent an actor's whole share on dead tails.
+
+    Here the slot is released and the generator closed in `__call__`'s own
+    `finally`, which the disconnect unwinds at once. Closing it is safe: the
+    body is pulled with `anyio.to_thread.run_sync`, which shields the await
+    until the thread returns, so no thread is inside the generator by the
+    time the call has ended.
+    """
+
+    def __init__(self, tail: Generator[bytes], slot: StreamSlot) -> None:
+        super().__init__(
+            tail,
+            media_type="text/event-stream",
+            # No store, and no proxy buffering: a tail that arrived in one
+            # block when the deadline passed would not be a tail.
+            headers={"cache-control": "no-store", "x-accel-buffering": "no"},
+        )
+        self._tail, self._slot = tail, slot
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            self._slot.release()
+            self._tail.close()
 
 
 def _frame(event: StreamEvent | None) -> bytes:

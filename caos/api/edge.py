@@ -445,6 +445,36 @@ def _logged(fault: BaseException) -> None:
     print(f"{type(fault).__name__} at {where}", file=sys.stderr)
 
 
+async def _answering_faults(
+    app: ASGIApp, scope: Scope, receive: Receive, send: Send, *, log: bool
+) -> None:
+    """Run `app`, answering an unhandled fault `INTERNAL_FAULT` if nothing has
+    been sent yet, then re-raising it.
+
+    Starlette's error middleware sits outside the app's own guard, so its
+    plain-text 500 would skip both the policy and the typed body: whichever
+    guard is innermost answers first, and every layer above sees the response
+    started and sends nothing. Only the outermost guard logs (`log`), so one
+    fault is one line.
+    """
+    started = False
+
+    async def tracked(message: Message) -> None:
+        nonlocal started
+        if message["type"] == "http.response.start":
+            started = True
+        await send(message)
+
+    try:
+        await app(scope, receive, tracked)
+    except Exception as fault:
+        if not started:
+            await _refuse(send, RefusalCode.INTERNAL_FAULT)
+        if log:
+            _logged(fault)
+        raise
+
+
 def _loopback(address: object) -> bool:
     if not isinstance(address, (list, tuple)) or not address:
         return False
@@ -480,10 +510,15 @@ class EdgeGuard:
         if scope["type"] == "lifespan":
             await self._lifespan(scope, receive, send)
             return
-        if scope["type"] != "http" or scope.get("caos.edge_guarded"):
-            # Nothing here serves a websocket; the guard never wraps twice.
-            if scope["type"] == "http":
-                await self.app(scope, receive, send)
+        if scope["type"] != "http":
+            return  # nothing here serves a websocket
+        if scope.get("caos.edge_guarded"):
+            # The guard never wraps twice, but the inner one still answers a
+            # fault (ED-2). `caos.api.site:application` puts this app's guard
+            # behind the outer one and inside Starlette's error middleware,
+            # which answered `text/plain` first when this branch passed the
+            # fault straight through. The outer guard logs it.
+            await _answering_faults(self.app, scope, receive, send, log=False)
             return
         path = scope.get("path", "")
         refusal, asserted, mode = self._refusal(scope, path)
@@ -499,24 +534,7 @@ class EdgeGuard:
         if refusal is not None:
             await _refuse(guarded, refusal)
             return
-        started = False
-
-        async def tracked(message: Message) -> None:
-            nonlocal started
-            if message["type"] == "http.response.start":
-                started = True
-            await guarded(message)
-
-        try:
-            await self.app(scope, receive, tracked)
-        except Exception as fault:
-            # Starlette's error middleware sits outside this one, so its 500
-            # would skip the policy. Answer here first; it sees the response
-            # started and sends nothing.
-            if not started:
-                await _refuse(guarded, RefusalCode.INTERNAL_FAULT)
-            _logged(fault)
-            raise
+        await _answering_faults(self.app, scope, receive, guarded, log=True)
 
     async def _lifespan(self, scope: Scope, receive: Receive, send: Send) -> None:
         """Refuse to start under an invalid edge configuration."""

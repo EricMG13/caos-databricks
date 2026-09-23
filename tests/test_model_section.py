@@ -9,7 +9,14 @@ from uuid import UUID, uuid4
 import pytest
 from conftest import route_fault
 from fastapi.testclient import TestClient
-from test_analysis_section import _as, _CountingConnection, _reader, _serving, client
+from test_analysis_section import (
+    _as,
+    _CountingConnection,
+    _downloads,
+    _reader,
+    _serving,
+    client,
+)
 from test_canonical_runtime import _module_provider, _run_route
 from test_execution_freshness import _Harness
 from test_forecast_route import ForecastCompletions, harness
@@ -248,7 +255,7 @@ def test_model_preserves_an_accepted_unavailable_ratio_reason(
 
 
 def test_model_http_actor_matrix_and_declared_io(
-    client: TestClient, harness: _Harness
+    client: TestClient, harness: _Harness, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _complete(harness)
     reader = _reader(harness)
@@ -270,16 +277,29 @@ def test_model_http_actor_matrix_and_declared_io(
         assert response.status_code == 404
         assert response.json()["code"] == "CASE_NOT_FOUND"
         assert counter.executed == 1  # only live standing, no case data
-    from caos.api.reads.model import IO_BUDGET
+    from caos.api.reads import analysis, model
 
+    # The forecast route's ten handoffs, CP-CF's owner proofs among them, and
+    # the pin: under the budget declared for the longest route (ED-7), and
+    # every blob downloaded once however often its readers ask.
+    nodes = len(harness.route.nodes)
+    ten_nodes = (
+        analysis.FIXED_IO + nodes * analysis.PER_HANDOFF_IO + analysis.MODEL_PROOFS_IO
+    )
+    assert nodes == 10
+    downloads = _downloads(monkeypatch)
     for who in (reader, writer, harness.approver, admin):
         counter = _CountingConnection(harness.conn)
         app.dependency_overrides[store_connection] = _serving(counter)
+        downloads.clear()
         response = client.get(_path(harness), headers=_as(who))
         harness.conn.rollback()
         assert response.status_code == 200
-        assert counter.executed == IO_BUDGET
+        assert counter.executed == ten_nodes + model.PIN_IO <= model.IO_BUDGET
+        assert len(downloads) == nodes * analysis.PER_HANDOFF_BLOBS
+        assert len(downloads) <= model.BLOB_BUDGET
         assert response.json()["chrome"]["actions"] == []
+    assert model.IO_BUDGET == analysis.IO_BUDGET + model.PIN_IO
 
 
 def test_model_malformed_or_anonymous_opens_no_connection(

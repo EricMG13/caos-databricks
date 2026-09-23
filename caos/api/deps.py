@@ -91,6 +91,14 @@ def blob_store() -> BlobStore:
     return BlobStore.from_setting(root)
 
 
+def request_blobs(blobs: Annotated[BlobStore, Depends(blob_store)]) -> BlobStore:
+    """The blob store as one request uses it: every blob it verifies is
+    downloaded and hashed once, however many readers ask (ED-7). A layer over
+    `blob_store` rather than inside it, so a store a test substitutes there is
+    read the way a request reads the real one."""
+    return blobs.remembering()
+
+
 def actor_from_request(request: Request) -> Actor:
     """Who is asking. A dependency rather than a line in a route body.
 
@@ -139,7 +147,7 @@ IDENTITY_FIRST = Depends(actor_from_request)
 
 Caller = Annotated[Actor, Depends(actor_from_request)]
 Store = Annotated[StoreConnection, Depends(store_connection)]
-Blobs = Annotated[BlobStore, Depends(blob_store)]
+Blobs = Annotated[BlobStore, Depends(request_blobs)]
 Methodology = Annotated[Bundle, Depends(methodology_bundle)]
 
 

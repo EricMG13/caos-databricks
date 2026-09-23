@@ -27,15 +27,18 @@ import json
 import os
 import re
 import sys
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from uuid import UUID
 
+import psycopg
 import pytest
 from canonical_fixtures import LITE_PROFILE, LITE_SELECTION, QUOTE, CanonicalCompletions
 
 from caos.provider import Completion, encode_request
 from caos.qualification.on_disk import MANIFEST
+from caos.refusals import Refusal, RefusalCode
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
@@ -204,10 +207,42 @@ def _skip_without_postgres() -> None:
     pytest.skip(reason)
 
 
+@pytest.fixture
+def created(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[str]]:
+    """Every database `qualify.main` creates in the test, dropped after it.
+
+    The happy paths each left a `caos_qualify_<hex>` database on the shared
+    server, 25 of them during one review (DQ-12). The list is what a test
+    asserts on when the point is that nothing was created at all.
+    """
+    made: list[tuple[str, str]] = []
+    names: list[str] = []
+    create = qualify._create_database
+
+    def recorded(admin_url: str) -> tuple[str, str]:
+        database, run_url = create(admin_url)
+        made.append((admin_url, database))
+        names.append(database)
+        return database, run_url
+
+    monkeypatch.setattr(qualify, "_create_database", recorded)
+    try:
+        yield names
+    finally:
+        for admin_url, database in made:
+            with psycopg.connect(admin_url, autocommit=True) as admin:
+                admin.execute(
+                    psycopg.sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(
+                        psycopg.sql.Identifier(database)
+                    )
+                )
+
+
 def test_main_performs_a_full_qualification_set_against_a_real_database(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     tmp_path: Path,
+    created: list[str],
 ) -> None:
     """The whole happy path: `prepare`, every gate approved, `perform`,
     `_capture`, and the final JSON printed and written to `--capture`.
@@ -222,7 +257,9 @@ def test_main_performs_a_full_qualification_set_against_a_real_database(
     monkeypatch.setenv("CAOS_QUALIFY_POSTGRES_URL", test_server)
     monkeypatch.setenv("CAOS_QUALIFY_BLOB_ROOT", str(tmp_path / "blobs"))
     monkeypatch.setattr(qualify, "from_environment", _FakeProvider.from_environment)
-    monkeypatch.setenv("CAOS_MODEL_PRICE", "a-model/for-the-test,0,0.00001,2026-09-13")
+    monkeypatch.setenv(
+        "CAOS_MODEL_PRICE", "a-model/for-the-test,0.0000000001,0.00001,2026-09-13"
+    )
     set_root = _write_lite_set(tmp_path / "set")
     capture_path = tmp_path / "capture.json"
 
@@ -255,6 +292,7 @@ def test_main_performs_a_full_qualification_set_against_a_real_database(
     document = json.loads(body)
 
     assert code == 0
+    assert created == [preamble["database"]]
     assert document["complete"] is True
     assert document["provider"] == "test-fake-identity"
     assert document["model"] == "a-model/for-the-test"
@@ -289,6 +327,7 @@ def test_main_writes_no_capture_file_when_the_flag_is_omitted(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     tmp_path: Path,
+    created: list[str],
 ) -> None:
     """The other side of the `args.capture is not None` branch.
 
@@ -300,7 +339,9 @@ def test_main_writes_no_capture_file_when_the_flag_is_omitted(
     monkeypatch.setenv("CAOS_QUALIFY_POSTGRES_URL", test_server)
     monkeypatch.setenv("CAOS_QUALIFY_BLOB_ROOT", str(tmp_path / "blobs"))
     monkeypatch.setattr(qualify, "from_environment", _FakeProvider.from_environment)
-    monkeypatch.setenv("CAOS_MODEL_PRICE", "a-model/for-the-test,0,0.00001,2026-09-13")
+    monkeypatch.setenv(
+        "CAOS_MODEL_PRICE", "a-model/for-the-test,0.0000000001,0.00001,2026-09-13"
+    )
     set_root = _write_lite_set(tmp_path / "set")
 
     code = qualify.main(
@@ -337,7 +378,9 @@ def test_main_refuses_an_unnamed_blob_root(
     )
     monkeypatch.delenv("CAOS_QUALIFY_BLOB_ROOT", raising=False)
     monkeypatch.setattr(qualify, "from_environment", _FakeProvider.from_environment)
-    monkeypatch.setenv("CAOS_MODEL_PRICE", "a-model/for-the-test,0,0.00001,2026-09-13")
+    monkeypatch.setenv(
+        "CAOS_MODEL_PRICE", "a-model/for-the-test,0.0000000001,0.00001,2026-09-13"
+    )
     set_root = _write_lite_set(tmp_path / "set")
 
     code = qualify.main(
@@ -369,8 +412,22 @@ def test_main_refuses_a_missing_price_and_a_non_positive_attempt_count(
     assert "CAOS_MODEL_PRICE" in capsys.readouterr().err
 
 
+def _two_cases(root: Path) -> Path:
+    """The one-case LITE set with a second case under another label."""
+    _write_lite_set(root)
+    manifest = json.loads((root / MANIFEST).read_text(encoding="utf-8"))
+    second = dict(manifest["cases"][0])
+    second["label"] = "lite-borealis"
+    manifest["cases"].append(second)
+    (root / MANIFEST).write_text(json.dumps(manifest), encoding="utf-8")
+    return root
+
+
 def test_a_set_of_more_than_one_case_can_be_admitted(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
 ) -> None:
     """AR-18: the CLI set the whole-set ceiling and each run's to one number.
 
@@ -386,18 +443,147 @@ def test_a_set_of_more_than_one_case_can_be_admitted(
     )
     monkeypatch.setenv("CAOS_QUALIFY_BLOB_ROOT", str(tmp_path / "blobs"))
     monkeypatch.setattr(qualify, "from_environment", _FakeProvider.from_environment)
-    monkeypatch.setenv("CAOS_MODEL_PRICE", "a-model/for-the-test,0,0.00001,2026-09-13")
-    root = _write_lite_set(tmp_path / "set")
-    manifest = json.loads((root / MANIFEST).read_text(encoding="utf-8"))
-    second = dict(manifest["cases"][0])
-    second["label"] = "lite-borealis"
-    manifest["cases"].append(second)
-    (root / MANIFEST).write_text(json.dumps(manifest), encoding="utf-8")
+    monkeypatch.setenv(
+        "CAOS_MODEL_PRICE", "a-model/for-the-test,0.0000000001,0.00001,2026-09-13"
+    )
+    root = _two_cases(tmp_path / "set")
 
     code = qualify.main(
         [str(root), "--expect-identity", "test-fake-identity", "--ceiling", "10.00"]
     )
 
-    preamble = json.loads(capsys.readouterr().out.partition("\n")[0])
+    preamble_line, _, rest = capsys.readouterr().out.partition("\n")
+    preamble = json.loads(preamble_line)
     assert preamble["run_ceiling"] == "5.000000"
     assert code == 0
+    assert created == [preamble["database"]]
+    # DQ-6 (MAX-11): the capture read the first case's run alone, so the second
+    # run's three charged calls were missing from what reconciles the bill.
+    document = json.loads(rest.strip("\n"))
+    runs = [item["run_id"] for item in document["result"]]
+    assert document["run_ids"] == runs and len(set(runs)) == 2
+    with psycopg.connect(
+        _database_url(os.environ["CAOS_TEST_POSTGRES_URL"], preamble["database"])
+    ) as conn:
+        stored = conn.execute(
+            "SELECT t.run_id::text, t.route_node_id, t.ordinal FROM run_attempts t"
+        ).fetchall()
+    captured = [
+        (item["run_id"], item["route_node_id"], item["ordinal"])
+        for item in document["attempts"]
+    ]
+    assert sorted(captured) == sorted(stored)
+    assert {run_id for run_id, _, _ in captured} == set(runs)
+
+
+def _database_url(admin_url: str, database: str) -> str:
+    """The admin URL pointed at `database`, as `qualify.py` builds its own."""
+    from urllib.parse import urlsplit, urlunsplit
+
+    return urlunsplit(urlsplit(admin_url)._replace(path=f"/{database}"))
+
+
+def _refused_before_the_database(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, provider: _FakeProvider
+) -> None:
+    """The environment a spend would need, with nothing else in the way."""
+    _skip_without_postgres()
+    monkeypatch.setenv(
+        "CAOS_QUALIFY_POSTGRES_URL", os.environ["CAOS_TEST_POSTGRES_URL"]
+    )
+    monkeypatch.setenv("CAOS_QUALIFY_BLOB_ROOT", str(tmp_path / "blobs"))
+    monkeypatch.setenv(
+        "CAOS_MODEL_PRICE", "a-model/for-the-test,0.0000000001,0.00001,2026-09-13"
+    )
+    monkeypatch.setattr(qualify, "from_environment", lambda: provider)
+
+
+def test_a_run_ceiling_of_zero_is_the_operators_and_spends_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    """DQ-7: `args.run_ceiling or ceiling / cases` replaced a named zero -- falsy
+    -- with the derived share, so a run capped at nothing made three paid
+    calls. A named ceiling goes to the harness as given, which refuses a run
+    that cannot afford one call, before the database exists."""
+    provider = _FakeProvider()
+    _refused_before_the_database(monkeypatch, tmp_path, provider)
+    root = _write_lite_set(tmp_path / "set")
+
+    code = qualify.main(
+        [
+            str(root),
+            "--expect-identity",
+            "test-fake-identity",
+            "--ceiling",
+            "5.00",
+            "--run-ceiling",
+            "0",
+        ]
+    )
+
+    assert code == 2
+    err = capsys.readouterr().err
+    assert "QUALIFICATION_SET_OVER_CEILING" in err and "nothing was spent" in err
+    assert created == [] and provider.prompts == []
+
+
+def test_a_set_prepare_would_refuse_creates_no_database(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    """DQ-12: `CREATE DATABASE` ran before `prepare`, the first place a set's
+    ceilings were checked, so `--ceiling 10 --run-ceiling 9` over two cases left
+    an empty database on the operator's server and exited through a traceback.
+    The checks run first and a refusal exits 2, as every pre-spend one does."""
+    provider = _FakeProvider()
+    _refused_before_the_database(monkeypatch, tmp_path, provider)
+    root = _two_cases(tmp_path / "set")
+
+    code = qualify.main(
+        [
+            str(root),
+            "--expect-identity",
+            "test-fake-identity",
+            "--ceiling",
+            "10.00",
+            "--run-ceiling",
+            "9.00",
+        ]
+    )
+
+    assert code == 2
+    err = capsys.readouterr().err
+    assert "QUALIFICATION_SET_OVER_CEILING" in err and "nothing was spent" in err
+    assert created == [] and provider.prompts == []
+
+
+def test_a_refusal_after_the_database_exists_names_the_database(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+) -> None:
+    """DQ-5 at the driver: a set that stops on a refusal after its database
+    exists -- the matrix's own last check, say -- exits 2 naming the database
+    that keeps what it performed, never claiming that nothing was spent."""
+    provider = _FakeProvider()
+    _refused_before_the_database(monkeypatch, tmp_path, provider)
+    root = _write_lite_set(tmp_path / "set")
+
+    def refused(*_: object, **__: object) -> object:
+        raise Refusal(RefusalCode.AUTHORITY_BYTES_MISMATCH)
+
+    monkeypatch.setattr(qualify, "_perform_until", refused)
+    code = qualify.main(
+        [str(root), "--expect-identity", "test-fake-identity", "--ceiling", "5.00"]
+    )
+
+    assert code == 2
+    err = capsys.readouterr().err
+    assert "AUTHORITY_BYTES_MISMATCH" in err and created and created[0] in err
+    assert "nothing was spent" not in err

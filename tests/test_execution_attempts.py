@@ -171,7 +171,9 @@ def test_two_attempts_are_attributed_explicitly_and_transport_reads_are_idle(
 
     def reply(prompt: str) -> AIMessage:
         content = answers.complete(prompt, json_object=True).content or ""
-        return answer(content, finish="stop", tokens=(1, 0))
+        # An answer billed no output is a count never stated (ST-11); one
+        # output token at a zero output rate still bills exactly REPORTED.
+        return answer(content, finish="stop", tokens=(1, 1))
 
     def idle() -> None:
         assert conn.info.transaction_status is TransactionStatus.IDLE
@@ -520,15 +522,18 @@ def test_a_cancel_on_a_queued_run_ends_it_cancelled_once_with_its_event(
     conn.commit()
     assert events_of(conn, claimed) == []
     conn.rollback()
-    # A holder that stops instead leaves a row the cancel ends; retry cannot revive it.
+    # A holder that parks the run instead ends it CANCELLED there (MAX-04): the
+    # cancel was acknowledged, and a parked run needed a second cancel to end.
     assert stop(conn, lease, RefusalCode.CONTEXT_OVER_CEILING) is True
-    conn.commit()
-    assert requeue_run(conn, claimed) is False
-    assert request_cancel(conn, claimed) is True
-    assert request_cancel(conn, claimed) is False
     conn.commit()
     assert run_status(conn, claimed) is RunStatus.CANCELLED
     assert [e.name for e in events_of(conn, claimed)] == [RunEvent.RUN_CANCELLED.value]
+    assert _work(conn, claimed) == ("DONE", lease.token, None, None, True)
+    conn.rollback()
+    with pytest.raises(Refusal, match=r"^RUN_NOT_RUNNING$"):
+        requeue_run(conn, claimed)
+    conn.rollback()
+    assert request_cancel(conn, claimed) is False
     conn.rollback()
 
 

@@ -19,7 +19,7 @@ from conftest import priced
 from langgraph.checkpoint.postgres import PostgresSaver
 from openai import NotFoundError
 from test_loop_charges import ESTIMATE, _Completions, ready, route
-from workspace_stub import BEARER, ENDPOINT, WorkspaceStub, main
+from workspace_stub import BEARER, ENDPOINT, WorkspaceStub, fresh_state, main
 
 from caos.api import edge, identity
 from caos.api.identity import GlobalRole, actor_from_token
@@ -94,6 +94,37 @@ def test_preflight_names_each_resource_and_the_fix_for_a_missing_one(
     assert "MISSING lakebase instance absent: create a Lakebase instance" in out
     assert out.count("ok ") == 5
     assert stub.host not in out
+
+
+def test_the_documented_preflight_command_runs_as_its_own_process(
+    stub: WorkspaceStub,
+) -> None:
+    """MAX-07: `uv run python scripts/preflight.py ... --price ...`, as the
+    runbook gives it, with no PYTHONPATH: the price check imports `caos`, and
+    a script run by path has only its own directory on the import path."""
+    import subprocess
+
+    repo = Path(__file__).resolve().parents[1]
+    env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+    flags = ["--endpoint", ENDPOINT, "--catalog", "main", "--schema", "caos"]
+    flags += ["--lakebase-instance", "caos-lb", "--run-ceiling", "25.00"]
+    price = f"{ENDPOINT},0.000005,0.000025,2026-09-22"
+    done = subprocess.run(
+        [
+            sys.executable,
+            str(repo / "scripts" / "preflight.py"),
+            *flags,
+            "--price",
+            price,
+        ],
+        cwd=repo / "docs",  # not the root: nothing may rest on the working directory
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert done.stdout.startswith("ok      run ceiling 25.00 covers a worst-case call")
 
 
 def test_preflight_names_a_profile_nobody_logged_in_as(
@@ -307,6 +338,81 @@ def test_the_stub_serves_exports_and_refuses_a_duplicate_app(
     assert status == 409
 
 
+def test_the_stub_refuses_what_the_platform_refuses(stub: WorkspaceStub) -> None:
+    """DF-12: a write that keeps an existing file (the deploy lock another
+    deployer holds) is 409, an app name outside the Apps rule is 400, and a
+    deployment keeps the command and environment the CLI sent with it."""
+    import json as json_module
+    import urllib.error
+    import urllib.request
+
+    def call(method: str, path: str, body: bytes = b"") -> int:
+        request = urllib.request.Request(
+            stub.host + path,
+            data=body,
+            method=method,
+            headers={"Authorization": f"Bearer {BEARER}"},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=5) as answered:
+                return int(answered.status)
+        except urllib.error.HTTPError as refused:
+            return refused.code
+
+    lock = "/api/2.0/workspace-files/import-file/Workspace/b/state/deploy.lock"
+    assert call("POST", lock + "?overwrite=false", b"mine") == 200
+    assert call("POST", lock + "?overwrite=false", b"theirs") == 409
+    assert stub.workspace_files["/Workspace/b/state/deploy.lock"] == b"mine"
+    assert call("POST", lock + "?overwrite=true", b"again") == 200
+    for name in ("caos-qa_eu", "Caos", ""):
+        assert (
+            call("POST", "/api/2.0/apps", json_module.dumps({"name": name}).encode())
+            == 400
+        )
+    assert call("POST", "/api/2.0/apps", b'{"name": "caos-dev-42"}') == 200
+    sent = {
+        "source_code_path": "/Workspace/b/files",
+        "command": ["uv", "run", "python", "-m", "caos.serve"],
+        "env_vars": [{"name": "CAOS_RUN_CEILING", "value": "30.00"}],
+    }
+    body = json_module.dumps(sent).encode()
+    assert call("POST", "/api/2.0/apps/caos-dev-42/deployments", body) == 200
+    assert stub.deployed_environment() == {"CAOS_RUN_CEILING": "30.00"}
+    assert stub.deployment("caos-dev-42")["command"] == sent["command"]
+    stub.app_state, stub.deployment_state = "CRASHED", "FAILED"
+    assert stub.app("caos-dev-42")["app_status"]["state"] == "CRASHED"
+    assert stub.deployment("caos-dev-42")["status"]["state"] == "FAILED"
+
+
+def test_a_stand_in_run_starts_from_no_bundle_state_of_its_own(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """DF-13: each stand-in run is a new, empty workspace; a deploy planned on
+    the state an earlier one left made CLI 1.17.0 panic. That state is
+    cleared; a real workspace's state is kept, and a bundle command refuses
+    to run over it."""
+    state = tmp_path / ".databricks" / "bundle"
+
+    def target(name: str, snapshot: str | None) -> None:
+        (state / name / "sync-snapshots").mkdir(parents=True)
+        (state / name / "resources.json").write_text("{}")
+        if snapshot is not None:
+            (state / name / "sync-snapshots" / "s.json").write_text(snapshot)
+
+    target("dev", json.dumps({"host": "http://127.0.0.1:50123"}))
+    target("validated", None)
+    target("prod", json.dumps({"host": "https://adb-1.azuredatabricks.net"}))
+    target("torn", "{not json")
+    assert fresh_state(tmp_path) == ["prod", "torn"]
+    assert sorted(p.name for p in state.iterdir()) == ["prod", "torn"]
+    monkeypatch.chdir(tmp_path)
+    assert main(["--", "databricks", "bundle", "validate"]) == 2
+    assert ".databricks/bundle/prod holds a real workspace's state" in (
+        capsys.readouterr().err
+    )
+    assert fresh_state(tmp_path / "absent") == []
+
+
 def test_preflight_reads_the_gateway_posture_and_the_price_s_endpoint(
     stub: WorkspaceStub, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -336,6 +442,87 @@ def test_preflight_reads_the_gateway_posture_and_the_price_s_endpoint(
     out = capsys.readouterr().out
     assert out.startswith("MISSING price names other-endpoint, not endpoint")
     assert stub.host not in out
+
+
+ONE_ENTITY = {
+    "served_entities": [{"name": "claude", "foundation_model": {"name": "claude"}}],
+    "traffic_config": {
+        "routes": [{"served_entity_name": "claude", "traffic_percentage": 100}]
+    },
+}
+
+
+@pytest.mark.parametrize(
+    ("fields", "said"),
+    [
+        (
+            {
+                "telemetry_config": {
+                    "inference_table_config": {"sampling_fraction": 1.0}
+                }
+            },
+            "inference tables log every payload",
+        ),
+        (
+            {"telemetry_config": {"inference_table_config": {"name": "main.caos.p"}}},
+            "inference tables log every payload",
+        ),
+        (
+            {"telemetry_config": {"table_names": {"traces_table": "main.caos.t"}}},
+            "telemetry exports logs or traces",
+        ),
+        (
+            {
+                "telemetry_config": {
+                    "telemetry_profile_id": "profile-1",
+                    "enabled_telemetry_features": ["TELEMETRY_FEATURE_LOGS"],
+                }
+            },
+            "telemetry exports logs or traces",
+        ),
+        (
+            {"pending_config": {"auto_capture_config": {"enabled": True}}},
+            "a pending update: inference tables log every payload",
+        ),
+        (
+            {"pending_config": {"served_entities": [{"name": "a"}, {"name": "b"}]}},
+            "a pending update: more than one served entity",
+        ),
+    ],
+)
+def test_preflight_reads_the_endpoint_s_telemetry_and_its_pending_update(
+    stub: WorkspaceStub,
+    capsys: pytest.CaptureFixture[str],
+    fields: dict[str, object],
+    said: str,
+) -> None:
+    """DF-3: payload logging also lives in `telemetry_config`, and an update
+    still pending is the configuration the endpoint is about to serve under.
+    Each is refused, read through the SDK's own dataclasses."""
+    flags = ["--endpoint", ENDPOINT, "--catalog", "main", "--schema", "caos"]
+    stub.endpoint_fields = {"config": ONE_ENTITY, **fields}
+    assert preflight.main([*flags, "--lakebase-instance", "caos-lb"]) == 1
+    out = capsys.readouterr().out
+    assert f"MISSING serving endpoint {ENDPOINT}: " in out and said in out, out
+
+
+def test_preflight_passes_an_endpoint_that_exports_metrics_only(
+    stub: WorkspaceStub, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Metrics carry no document text; a table named with sampling off and
+    a pending update that changes nothing the host relies on are fit too."""
+    flags = ["--endpoint", ENDPOINT, "--catalog", "main", "--schema", "caos"]
+    stub.endpoint_fields = {
+        "config": ONE_ENTITY,
+        "telemetry_config": {
+            "enabled_telemetry_features": ["TELEMETRY_FEATURE_METRICS"],
+            "table_names": {"metrics_table": "main.caos.metrics"},
+            "inference_table_config": {"sampling_fraction": 0.0},
+        },
+        "pending_config": {"config_version": 2, **ONE_ENTITY},
+    }
+    assert preflight.main([*flags, "--lakebase-instance", "caos-lb"]) == 0
+    assert "ok      serving endpoint" in capsys.readouterr().out
 
 
 def test_preflight_does_not_stop_on_a_profile_that_cannot_list_groups(

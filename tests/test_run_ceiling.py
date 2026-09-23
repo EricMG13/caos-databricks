@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
@@ -122,3 +123,39 @@ def test_the_default_run_ceiling_finishes_the_widest_profile() -> None:
     deploy_py = (REPO / "scripts" / "enterprise_deploy.py").read_text(encoding="utf-8")
     assert f'CEILING="${{7:-{default}}}"' in deploy_sh
     assert f'"--run-ceiling", default="{default}"' in deploy_py
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "databricks-claude-opus-5,0,0.000025,2026-09-22",  # zero input
+        "databricks-claude-opus-5,-0,0.000025,2026-09-22",  # negative zero input
+        "databricks-claude-opus-5,0.000005,0,2026-09-22",  # zero output
+        "databricks-claude-opus-5,0.000005,0.000025,2099-12-31",  # future date
+        # Arabic-Indic and fullwidth digits, which `Decimal` reads at their value.
+        f"databricks-claude-opus-5,0.00000{chr(0x665)},"
+        f"0.0000{chr(0xFF12)}{chr(0xFF15)},2026-09-22",
+        "databricks-claude-opus-5,5e-6,0.000025,2026-09-22",  # an exponent
+        "databricks-claude-opus-5,+0.000005,0.000025,2026-09-22",  # a sign
+        "databricks-claude-opus-5,0.000005,0.000025,20260922",  # not YYYY-MM-DD
+    ],
+)
+def test_a_price_that_prices_nothing_or_is_not_in_force_is_refused(
+    value: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """DF-10: a zero or negative-zero half priced every reservation and every
+    charge at nothing for that half, a price dated 2099 was recorded as the
+    one in force, and another script's digits were taken at their value. The
+    worker's parser refuses each, and preflight, which reads the price through
+    it, refuses the same values before a deploy."""
+    from caos.pricing import price_from_environment
+
+    with pytest.raises(Refusal, match=r"^PROVIDER_NOT_CONFIGURED$"):
+        price_from_environment("databricks-claude-opus-5", value)
+    assert not preflight.affordable(value, "25.00")
+    assert "fix model_price" in capsys.readouterr().out
+    today = datetime.now(UTC).date().isoformat()
+    in_force = f"databricks-claude-opus-5,0.000005,0.000025,{today}"
+    assert price_from_environment("databricks-claude-opus-5", in_force).as_of == (
+        datetime.now(UTC).date()
+    )

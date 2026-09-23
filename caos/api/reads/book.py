@@ -26,6 +26,7 @@ from fastapi import APIRouter
 from caos.api.deps import IDENTITY_FIRST, Blobs, Caller, Methodology, Store
 from caos.api.identity import Actor
 from caos.api.reads.analysis import read_analysis
+from caos.api.reads.model import BLOB_BUDGET as MODEL_BLOBS
 from caos.api.reads.model import IO_BUDGET as MODEL_IO
 from caos.api.reads.model import accepted_forecast
 from caos.api.wire import (
@@ -67,6 +68,9 @@ from caos.store.members import CaseListing, cases_for_member
 FIXED_IO = 2
 PER_ROW_IO = MODEL_IO - 1
 IO_BUDGET = FIXED_IO + BOOK_CASES_MAX * PER_ROW_IO
+# Each credit's Analysis blobs, once each: the request's store remembers what
+# it verified, so no record is downloaded twice within a credit (ED-7).
+BLOB_BUDGET = BOOK_CASES_MAX * MODEL_BLOBS
 
 router = APIRouter()
 

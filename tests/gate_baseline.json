@@ -1,7 +1,10 @@
 {
-  "complexity_baselined": 26,
-  "no_cover": 6,
-  "noqa": 125,
+  "complexity_baselined": 25,
+  "complexity_total": 487,
+  "file_noqa": 7,
+  "mypy_directive": 0,
+  "no_cover": 5,
+  "noqa": 122,
   "nosec": 17,
   "skip": 7,
   "type_ignore": 142,

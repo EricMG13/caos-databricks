@@ -6,15 +6,23 @@ from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
-from qualification_fixtures import qualification_performed, record_runs
+from qualification_fixtures import (
+    qualification_performed,
+    record_performed_earlier,
+    record_runs,
+)
 
 import caos.store as store
-from caos.qualification.matrix import ExpectedCitation
+from caos.qualification.matrix import ROW_REFUSALS, ExpectedCitation, MatrixRow
 from caos.qualification.store import (
     ONE_VERDICT_PER_EVIDENCE,
     Evidence,
     PerformedEvidence,
+    _answered,
+    answered_document,
+    assert_store_agrees,
     current_verdict,
+    document_complete,
     evidence_at,
     performed_evidence,
     record_evidence,
@@ -22,7 +30,7 @@ from caos.qualification.store import (
     record_verdict,
 )
 from caos.qualification.verdict import Verdict, read_verdict
-from caos.refusals import Refusal
+from caos.refusals import Refusal, RefusalCode
 from caos.store import RunStatus, apply_schema, connect
 
 
@@ -110,7 +118,7 @@ def test_a_snapshot_with_different_identity_cannot_back_a_legacy_verdict(
     verdict = _verdict(now, evidence)
     with connect(empty_database) as conn:
         apply_schema(conn)
-        record_performed(conn, performed)
+        record_performed_earlier(conn, performed)
         conn.execute(
             "INSERT INTO qualification_evidence"
             " (evidence_sha256,qualification_set_sha256,performed_sha256,build_id,"
@@ -159,7 +167,7 @@ def test_an_incomplete_snapshot_cannot_receive_a_verdict(empty_database: str) ->
     )
     with connect(empty_database) as conn:
         apply_schema(conn)
-        record_performed(conn, incomplete)
+        record_performed_earlier(conn, incomplete)
         with pytest.raises(Refusal, match=r"^VERDICT_BINDING_INVALID$"):
             record_verdict(
                 conn,
@@ -207,7 +215,7 @@ def test_a_blocked_unproven_matrix_cannot_receive_a_verdict(
     assert blocked.complete is False
     with connect(empty_database) as conn:
         apply_schema(conn)
-        record_performed(conn, blocked)
+        record_performed_earlier(conn, blocked)
         with pytest.raises(Refusal, match=r"^VERDICT_BINDING_INVALID$"):
             record_verdict(
                 conn,
@@ -349,10 +357,12 @@ def test_a_case_that_met_the_refusal_it_declared_is_complete() -> None:
     matrix = original.performed.matrix
     assert matrix is not None
     [row] = matrix.rows
+    [record] = original.performed.performed
     refused = performed_evidence(
         prepared=original.prepared,
         performed=replace(
             original.performed,
+            performed=(replace(record, status=RunStatus.BLOCKED),),
             matrix=replace(
                 matrix,
                 rows=(replace(row, proven=False, expected_refusal_met=True),),
@@ -361,6 +371,29 @@ def test_a_case_that_met_the_refusal_it_declared_is_complete() -> None:
     )
 
     assert refused.complete is True
+    assert document_complete(refused.document) is True
+
+
+def test_a_met_refusal_over_a_run_that_completed_is_not_complete() -> None:
+    """DQ-3: the waiver held whatever the record said, and the same row over a
+    COMPLETE run is the shape pre-FP-01 code recorded for a run that finished
+    after a stale attempt refusal. Re-derivation re-read that flag, so the
+    stale snapshot signed, stayed current and qualified its pathway."""
+    original = _performed()
+    matrix = original.performed.matrix
+    assert matrix is not None
+    [row] = matrix.rows
+    stale = performed_evidence(
+        prepared=original.prepared,
+        performed=replace(
+            original.performed,
+            matrix=replace(matrix, rows=(replace(row, expected_refusal_met=True),)),
+        ),
+    )
+    [record] = stale.performed.performed
+    assert record.status is RunStatus.COMPLETE
+    assert stale.complete is False
+    assert document_complete(stale.document) is False
 
 
 def test_record_verdict_binds_the_reviewer_and_evidence(empty_database: str) -> None:
@@ -369,7 +402,7 @@ def test_record_verdict_binds_the_reviewer_and_evidence(empty_database: str) -> 
         apply_schema(conn)
         performed = _performed()
         evidence = performed.evidence
-        record_performed(conn, performed)
+        record_performed_earlier(conn, performed)
         record_runs(conn, performed)
         reviewer = uuid4()
         record_verdict(
@@ -392,7 +425,7 @@ def test_a_verdict_is_refused_unless_every_run_recorded_the_model_it_names(
         apply_schema(conn)
         performed = _performed()
         evidence = performed.evidence
-        record_performed(conn, performed)
+        record_performed_earlier(conn, performed)
         record_runs(conn, performed, model=recorded, outcome=recorded is not None)
         with pytest.raises(Refusal, match=r"^VERDICT_BINDING_INVALID$"):
             record_verdict(
@@ -414,7 +447,7 @@ def test_the_one_verdict_constraint_is_mapped_by_name_not_by_message(
         apply_schema(conn)
         performed = _performed()
         evidence = performed.evidence
-        record_performed(conn, performed)
+        record_performed_earlier(conn, performed)
         record_runs(conn, performed)
         record_verdict(
             conn,
@@ -465,7 +498,7 @@ def test_a_set_holding_a_case_that_accepted_nothing_is_still_signable(
         performed = qualification_performed(blocked_label="restricted")
         evidence = performed.evidence
         assert performed.complete is True, "the snapshot a reviewer is offered"
-        record_performed(conn, performed)
+        record_performed_earlier(conn, performed)
         record_runs(conn, performed, accepted_nothing="restricted")
 
         record_verdict(
@@ -635,7 +668,7 @@ def test_a_verdict_binds_provider_and_model_as_a_pair(empty_database: str) -> No
     with connect(empty_database) as conn:
         apply_schema(conn)
         performed = _performed()
-        record_performed(conn, performed)
+        record_performed_earlier(conn, performed)
         evidence = performed.evidence
         now = datetime.now(UTC)
         slid = read_verdict(
@@ -684,3 +717,142 @@ def test_a_signature_may_not_stand_for_longer_than_the_cap() -> None:
         read_verdict(document, now=now)
     document["expires_at"] = (now + MAX_VALIDITY).isoformat()
     assert read_verdict(document, now=now).expires_at == now + MAX_VALIDITY
+
+
+@pytest.mark.parametrize("code", sorted(code.value for code in ROW_REFUSALS))
+def test_a_row_a_reader_refused_is_not_answered_beside_a_met_refusal(
+    code: str,
+) -> None:
+    """DQ-1, for a snapshot already stored: a row written before a refused
+    reader answered `False` carries its declared key as `None`, which reads as
+    "not declared". None of the reader codes is a refusal a case may declare,
+    so a row carrying one is refused however its refusal key was met."""
+    row = {
+        "case_label": "case",
+        "proven": False,
+        "refusal": code,
+        "met": [],
+        "missed": [],
+        "forecast_met": None,
+        "expected_refusal_met": True,
+        "ready_met": None,
+        "projections_met": None,
+        "registers_met": None,
+    }
+    assert answered_document(row) is False
+    assert answered_document({**row, "refusal": None}) is True
+    matrix_row = MatrixRow(
+        case_label="case",
+        proven=False,
+        refusal=RefusalCode(code),
+        met=(),
+        missed=(),
+        forecast_met=None,
+        expected_refusal_met=True,
+    )
+    assert _answered(matrix_row) is False
+    assert _answered(replace(matrix_row, refusal=None)) is True
+
+
+def test_a_verdict_over_runs_the_store_does_not_hold_is_refused(
+    empty_database: str,
+) -> None:
+    """DQ-3 (FP-03's forged-row half): every reader re-derived the snapshot
+    from the snapshot. A self-consistent snapshot, evidence and verdict inserted
+    straight into the tables over a run the store holds RUNNING with no
+    artifact was current and relayed QUALIFIED. The runs' status and the
+    artifacts the proof counted are the store's facts, and both are compared."""
+    now = datetime(2026, 9, 15, tzinfo=UTC)
+    performed = _performed()
+    evidence = performed.evidence
+    [case] = performed.prepared
+    with connect(empty_database) as conn:
+        apply_schema(conn)
+        record_performed_earlier(conn, performed)
+        record_runs(conn, performed)
+        verdict = _verdict(now, evidence)
+        record_verdict(conn, evidence=evidence, reviewer_id=uuid4(), verdict=verdict)
+        conn.commit()
+        assert_store_agrees(conn, document=performed.document, model=evidence.model)
+        assert current_verdict(conn, evidence=evidence, now=now)
+        conn.execute(
+            "UPDATE runs SET status='RUNNING' WHERE run_id=%s", (case.input.run_id,)
+        )
+        with pytest.raises(Refusal, match=r"^VERDICT_BINDING_INVALID$"):
+            current_verdict(conn, evidence=evidence, now=now)
+        conn.rollback()
+        # One more accepted artifact than the proof in the snapshot counted.
+        attempt = uuid4()
+        conn.execute(
+            "INSERT INTO run_attempts (attempt_id,run_id,route_node_id)"
+            " VALUES (%s,%s,'CP-L10')",
+            (attempt, case.input.run_id),
+        )
+        conn.execute(
+            "INSERT INTO artifacts (attempt_id,run_id,case_id,artifact_sha256,"
+            "route_node_id,model,generation_id) VALUES (%s,%s,%s,%s,'CP-L10',%s,%s)",
+            (
+                attempt,
+                case.input.run_id,
+                case.input.case_id,
+                "2" * 64,
+                evidence.model,
+                "gen-2",
+            ),
+        )
+        with pytest.raises(Refusal, match=r"^VERDICT_BINDING_INVALID$"):
+            assert_store_agrees(conn, document=performed.document, model=evidence.model)
+        conn.rollback()
+
+
+def test_a_verdict_decided_before_its_snapshot_was_recorded_is_refused(
+    empty_database: str,
+) -> None:
+    """DQ-13 (FP-13's backdating half): `decided_at` had only to be at or
+    before now, so a decision dated 300 days before the snapshot it signs was
+    accepted, current and relayed with that date; and no row kept when a
+    verdict was written. Both readers refuse the first, and `recorded_at`
+    keeps the second."""
+    performed = _performed()
+    evidence = performed.evidence
+    with connect(empty_database) as conn:
+        apply_schema(conn)
+        record_performed(conn, performed)
+        record_runs(conn, performed)
+        conn.commit()
+        row = conn.execute("SELECT recorded_at FROM qualification_performed").fetchone()
+        assert row is not None
+        [recorded] = row
+        early = recorded - timedelta(days=300)
+        with pytest.raises(Refusal, match=r"^VERDICT_BINDING_INVALID$"):
+            record_verdict(
+                conn,
+                evidence=evidence,
+                reviewer_id=uuid4(),
+                verdict=_verdict(early, evidence),
+            )
+        conn.rollback()
+        # A row written before the rule, by any path, is not current either.
+        record_evidence(conn, evidence)
+        conn.execute(
+            "INSERT INTO qualification_verdicts"
+            " (evidence_sha256,reviewer_id,reviewer,decided_at,expires_at)"
+            " VALUES (%s,%s,'Reviewer',%s,%s)",
+            (evidence.sha256, uuid4(), early, early + timedelta(days=366)),
+        )
+        with pytest.raises(Refusal, match=r"^VERDICT_BINDING_INVALID$"):
+            current_verdict(conn, evidence=evidence, now=recorded)
+        conn.rollback()
+
+        record_verdict(
+            conn,
+            evidence=evidence,
+            reviewer_id=uuid4(),
+            verdict=_verdict(recorded, evidence),
+        )
+        assert current_verdict(conn, evidence=evidence, now=recorded)
+        kept = conn.execute(
+            "SELECT recorded_at >= %s FROM qualification_verdicts", (recorded,)
+        ).fetchone()
+        conn.rollback()
+        assert kept == (True,)

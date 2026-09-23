@@ -10,7 +10,6 @@ the one each request opens.
 
 from __future__ import annotations
 
-import gc
 import socket
 import threading
 import time
@@ -29,6 +28,8 @@ from caos.api.app import app, store_connection
 from caos.api.identity import ROLE_HEADER, TRUST_SWITCH, TRUSTED
 from caos.api.stream import (
     CONNECT_IO,
+    CURSOR_IO,
+    FRAME_IO,
     POLL_IO,
     case_tail,
     take_stream_slot,
@@ -635,8 +636,12 @@ def test_the_event_stream_costs_its_declared_budget(
     assert polls >= 1
     named = len(frames) - 1
     assert named == 2
-    assert len(log) == 2 + CONNECT_IO + 1 + polls * POLL_IO + named
-    assert app_module.EVENTS_IO_BUDGET == 2 + CONNECT_IO + 1 + POLL_IO
+    assert len(log) == 2 + CONNECT_IO + CURSOR_IO + polls * POLL_IO + named * FRAME_IO
+    # The stream's own connect, cursor recheck and first poll are what it
+    # declares; the cursor's recheck was once left out (ED-7).
+    first_poll = len(log) - 2 - (polls - 1) * POLL_IO - named * FRAME_IO
+    assert first_poll == stream.IO_BUDGET == CONNECT_IO + CURSOR_IO + POLL_IO
+    assert app_module.EVENTS_IO_BUDGET == 2 + stream.IO_BUDGET
     assert app_module.IO_BUDGET == app_module.EVENTS_IO_BUDGET
 
 
@@ -672,8 +677,9 @@ def test_a_tail_slot_is_returned_however_the_stream_ends() -> None:
             opened.close()
         elif ending == "run to the end":
             list(opened)
+        # No collection: the last reference going is what returns the slot,
+        # never a collector that may not run for hours (ED-1).
         del opened
-        gc.collect()
         assert slots.open == 0, ending
 
 

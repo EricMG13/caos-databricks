@@ -41,7 +41,7 @@ import os
 import re
 import sys
 from collections.abc import Mapping
-from datetime import datetime
+from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
 from typing import Any
@@ -282,7 +282,7 @@ def qualified_pathways(
     """
     rows = conn.execute(
         "SELECT q.evidence_sha256,q.reviewer,q.reviewer_id,q.decided_at,q.expires_at,"
-        " p.performed_json FROM qualification_verdicts q"
+        " p.performed_json,q.recorded_at FROM qualification_verdicts q"
         " JOIN qualification_evidence e USING (evidence_sha256)"
         " JOIN qualification_performed p ON p.performed_sha256=e.performed_sha256"
         " WHERE e.build_id=%s AND e.adapter_version=%s"
@@ -312,10 +312,15 @@ def _current(
     identity: tuple[str, str] | None,
 ) -> dict[str, str] | None:
     """One verdict row as the pack emits it, or None when it covers nothing."""
-    digest, reviewer, reviewer_id, decided_at, expires_at, _document = row
+    digest, reviewer, reviewer_id, decided_at, expires_at, _document, recorded = row
     evidence = evidence_at(conn, evidence_sha256=digest)
     if evidence is None:
-        return None
+        # The row was found by joining its evidence to a snapshot, so the
+        # evidence exists: `evidence_at` answering None means it contradicts
+        # the snapshot it names. That is the store contradicting itself, which
+        # is raised, not dropped as though the store held no verdict (FP-28,
+        # DQ-3).
+        raise Refusal(RefusalCode.VERDICT_BINDING_INVALID)
     if identity is not None and (evidence.provider, evidence.model) != identity:
         return None
     if decided_at > as_of:
@@ -339,21 +344,37 @@ def _current(
         "qualification_set_sha256": evidence.qualification_set_sha256,
         "provider": evidence.provider,
         "model": evidence.model,
-        "decided_at": decided_at.isoformat(),
-        "expires_at": expires_at.isoformat(),
+        # In UTC, whatever zone the session negotiated: the same store read
+        # under two `PGTZ` settings emitted two packs (DQ-4).
+        "decided_at": _utc(decided_at),
+        "expires_at": _utc(expires_at),
+        # When the row was written, which `decided_at` -- the reviewer's own
+        # word -- is not; None for a verdict signed before it was kept (DQ-13).
+        "recorded_at": None if recorded is None else _utc(recorded),
     }
+
+
+def _utc(moment: datetime) -> str:
+    """One moment as the pack prints it: ISO 8601 in UTC, never the session's."""
+    return moment.astimezone(UTC).isoformat()
 
 
 def pathways(
     verified: Mapping[str, Any],
     *,
     qualified: Mapping[tuple[str, str], list[dict[str, str]]] | None,
+    identity: tuple[str, str] | None = None,
 ) -> list[dict[str, Any]]:
     """One row per pathway the catalog advertises, sorted.
 
     `qualified` is `None` when no store was read. A disabled pathway stays
     `DISABLED` whatever was signed over it: the word is what the host will
     execute, and no signature changes that.
+
+    `identity` is the `(provider, model)` filter the store was read under, and
+    a store row's reason names it: a filtered pack over a store holding another
+    identity's verdict said "no current verdict for this build and adapter",
+    which was false for that pack (DQ-4).
     """
     rows = []
     for profile_id, profile in sorted(verified["profiles"].items()):
@@ -373,11 +394,22 @@ def pathways(
                     "selection_id": selection_id,
                     "enabled": enabled,
                     "status": status,
-                    "reason": _REASONS[status],
+                    "reason": _reason(status, identity),
                     "verdicts": verdicts,
                 }
             )
     return rows
+
+
+def _reason(status: str, identity: tuple[str, str] | None) -> str:
+    """The row's reason, naming the identity filter a store row was counted under."""
+    if identity is None or status not in {NOT_QUALIFIED, QUALIFIED}:
+        return _REASONS[status]
+    provider, model = identity
+    return (
+        f"{_REASONS[status]}; only verdicts measured under provider {provider}"
+        f" and model {model} were counted"
+    )
 
 
 def read_store(
@@ -405,9 +437,17 @@ def build_pack(
     *,
     bundle: Bundle,
     store: tuple[dict[tuple[str, str], list[dict[str, str]]], datetime] | None = None,
+    identity: tuple[str, str] | None = None,
 ) -> dict[str, Any]:
     """The whole pack as one document. `store` is what `read_store` found and
-    the moment it was judged at, or `None` when no store was read."""
+    the moment it was judged at, or `None` when no store was read; `identity`
+    is the `(provider, model)` it was read under, or `None` for any.
+
+    Both inputs that decide which verdicts count are recorded beside the moment:
+    the identity filter and the adapter revision. A pack filtered to an
+    identity the store held no verdict for was byte-identical to one over an
+    empty store (DQ-4).
+    """
     qualified, as_of = (None, None) if store is None else store
     return {
         "format": PACK_FORMAT,
@@ -418,8 +458,16 @@ def build_pack(
         "migrations": migration_head(),
         "locks": lock_digests(repo),
         "tests": suite_inventory(repo),
-        "pathways": pathways(catalog(bundle), qualified=qualified),
-        "store": None if as_of is None else {"as_of": as_of.isoformat()},
+        "pathways": pathways(catalog(bundle), qualified=qualified, identity=identity),
+        "store": None
+        if as_of is None
+        else {
+            "as_of": _utc(as_of),
+            "adapter_version": CANONICAL_ADAPTER_VERSION,
+            "identity": "any"
+            if identity is None
+            else {"provider": identity[0], "model": identity[1]},
+        },
     }
 
 
@@ -449,7 +497,8 @@ def render_markdown(pack: Mapping[str, Any]) -> str:
         + (
             "no store read; no pathway is claimed qualified"
             if store is None
-            else f"store read as of {store['as_of']}"
+            else f"store read as of {store['as_of']}, adapter"
+            f" `{store['adapter_version']}`, identity {_identity(store['identity'])}"
         ),
         "",
         "## Locks",
@@ -464,18 +513,40 @@ def render_markdown(pack: Mapping[str, Any]) -> str:
         "|---|---|---|---|---|",
     ]
     for row in pack["pathways"]:
-        verdicts = (
-            ", ".join(
-                f"`{verdict['evidence_sha256'][:16]}…` until {verdict['expires_at']}"
-                for verdict in row["verdicts"]
-            )
-            or "—"
-        )
+        verdicts = ", ".join(_verdict_cell(verdict) for verdict in row["verdicts"])
         lines.append(
             f"| `{row['profile_id']}` | `{row['selection_id']}` |"
-            f" {row['status']} | {row['reason']} | {verdicts} |"
+            f" {row['status']} | {_cell(row['reason'])} | {verdicts or '—'} |"
         )
     return "\n".join(lines) + "\n"
+
+
+def _verdict_cell(verdict: Mapping[str, Any]) -> str:
+    """One verdict as the reader's copy shows it: what it was measured under.
+
+    The provider, the model, the set and the signer beside the evidence and
+    the expiry. The reader's copy showed QUALIFIED with none of them, so a
+    reader handed only the Markdown could not tell which execution identity
+    -- a test adapter's, say -- the word covered (MAX-12, DQ-4).
+    """
+    return _cell(
+        f"`{verdict['evidence_sha256'][:16]}…` under `{verdict['provider']}`"
+        f" `{verdict['model']}`, set `{verdict['qualification_set_sha256'][:16]}…`,"
+        f" signed by {verdict['reviewer']} ({verdict['reviewer_id']})"
+        f" until {verdict['expires_at']}"
+    )
+
+
+def _identity(identity: object) -> str:
+    """The identity filter as the reader's copy prints it."""
+    if not isinstance(identity, Mapping):
+        return "any"
+    return f"`{identity['provider']}` `{identity['model']}`"
+
+
+def _cell(text: str) -> str:
+    """Text a Markdown table cell can hold: a pipe ends a cell, a newline a row."""
+    return " ".join(text.replace("|", "\\|").split())
 
 
 def write_pack(pack: Mapping[str, Any], out: Path) -> None:
@@ -543,7 +614,10 @@ def main(argv: list[str] | None = None) -> int:
     identity = None if args.provider is None else (args.provider, args.model)
     with connect(url) as conn:
         qualified = read_store(conn, bundle=bundle, as_of=as_of, identity=identity)
-    write_pack(build_pack(REPO, bundle=bundle, store=(qualified, as_of)), args.out)
+    write_pack(
+        build_pack(REPO, bundle=bundle, store=(qualified, as_of), identity=identity),
+        args.out,
+    )
     return 0
 
 

@@ -18,8 +18,9 @@ from caos.qualification.store import Evidence, current_verdict, evidence_at
 from caos.qualification.verdict import Verdict
 from caos.refusals import Refusal, RefusalCode
 
-# Database time and exact evidence lookup, then the current-verdict lookup.
-IO_BUDGET = 3
+# Database time and exact evidence lookup, then the current-verdict lookup and
+# the two store facts `assert_store_agrees` compares it with (DQ-3).
+IO_BUDGET = 5
 router = APIRouter()
 
 

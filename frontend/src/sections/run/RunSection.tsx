@@ -3,7 +3,7 @@
 // wire, no charge or generation id, no plan-gate approve/reserve and no
 // accept action: those arrive with commands (4.2). `displayed_run_id` and
 // `latest_run_id` are two identities and are never collapsed into one.
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import {
   CreateRunControl,
@@ -45,8 +45,18 @@ export function RunSection({ document }: { document: RunSectionDocument; tab: st
   // The fingerprint a start or retry must send. The document never re-serves
   // it (`RunView` carries no such field), so it is held from whichever of a
   // pin, a preview or an approval was last read in this session
-  // (`controls.tsx`, brief 4.2 decision 1).
-  const [fingerprint, setFingerprint] = useState<string | null>(null);
+  // (`controls.tsx`, brief 4.2 decision 1). Two holds of it: `pinned` keys the
+  // gate panels and moves only on a pin or an approval, and `known` is what
+  // start and retry send and moves on a preview too. A reload forgets both,
+  // and on a run whose subject is pinned and whose gates are released no pin
+  // or approval is left to press -- a preview is, and it must not remount the
+  // panel that read it (MAX-18).
+  const [pinned, setPinned] = useState<string | null>(null);
+  const [known, setKnown] = useState<string | null>(null);
+  const learn = useCallback((fingerprint: string) => {
+    setPinned(fingerprint);
+    setKnown(fingerprint);
+  }, []);
   // The run's status changes under the reader, driven by the event tail and
   // never by a press: a screen reader is told when it moves, terminal states
   // included, in the section's own live region (WCAG 4.1.3, finding FE-6).
@@ -272,7 +282,7 @@ export function RunSection({ document }: { document: RunSectionDocument; tab: st
           runId={run.run_id}
           action={actionOf(actions, "PIN_RUN_INPUT")}
           initial={run.subject}
-          onPinned={setFingerprint}
+          onPinned={learn}
           onRefetch={refetch}
         />
         {run.gates.map((gate) => (
@@ -281,7 +291,7 @@ export function RunSection({ document }: { document: RunSectionDocument; tab: st
           // that just changed rather than leaving a stale digest approvable
           // (brief 4.2 review finding 3).
           <GatePanelControl
-            key={`${gate.gate}:${fingerprint ?? "none"}`}
+            key={`${gate.gate}:${pinned ?? "none"}`}
             caseId={body.case_id}
             runId={run.run_id}
             gate={gate.gate}
@@ -290,14 +300,15 @@ export function RunSection({ document }: { document: RunSectionDocument; tab: st
               actions,
               gate.gate === "SOURCE_SET" ? "APPROVE_SOURCE_SET" : "APPROVE_RESEARCH_PLAN",
             )}
-            onFingerprint={setFingerprint}
+            onFingerprint={learn}
+            onPreviewed={setKnown}
             onRefetch={refetch}
           />
         ))}
         <WorkControls
           caseId={body.case_id}
           runId={run.run_id}
-          fingerprint={fingerprint}
+          fingerprint={known}
           work={run.work}
           actions={actions}
           onRefetch={refetch}

@@ -23,7 +23,11 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from conftest import reserve_at as reserve
-from qualification_fixtures import qualification_performed, record_runs
+from qualification_fixtures import (
+    qualification_performed,
+    record_performed_earlier,
+    record_runs,
+)
 from test_frozen_evidence import _insert
 from test_run_inputs import SUBJECT, _prepare, pin_version_one
 from test_store_schema import _catalog, _columns, _legacy, _populate, _records
@@ -36,7 +40,6 @@ from caos.graph.route import ResolvedRoute
 from caos.qualification.store import (
     Evidence,
     current_verdict,
-    record_performed,
     record_verdict,
 )
 from caos.qualification.verdict import read_verdict
@@ -131,7 +134,8 @@ def _record_qualification(conn: StoreConnection) -> tuple[Evidence, datetime]:
     now = datetime(2026, 9, 15, tzinfo=UTC)
     performed = qualification_performed()
     evidence = performed.evidence
-    record_performed(conn, performed)
+    # Recorded before the verdict decides on it (DQ-13).
+    record_performed_earlier(conn, performed)
     record_runs(conn, performed)
     verdict = read_verdict(
         {

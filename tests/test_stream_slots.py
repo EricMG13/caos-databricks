@@ -10,16 +10,23 @@ reader stopped. The per-actor cap is what makes the global one a share.
 
 from __future__ import annotations
 
+import gc
+import socket
+import threading
+import time
 from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
+import uvicorn
 from starlette.requests import Request
 
 from caos.api import stream
-from caos.api.identity import Actor, GlobalRole
+from caos.api.identity import TRUST_SWITCH, TRUSTED, Actor, GlobalRole
 from caos.api.stream import ACTOR_STREAM_LIMIT, STREAM_LIMIT, take_stream_slot
 from caos.refusals import Refusal, RefusalCode
+from caos.store import StoreConnection
+from caos.store.members import Standing, grant
 
 
 def test_one_actor_cannot_take_every_tail_while_another_waits() -> None:
@@ -119,3 +126,106 @@ def test_the_route_names_the_actor_it_takes_the_slot_for(
     )
 
     assert named == [actor.user_id]
+
+
+def _served_like_the_process() -> uvicorn.Server:
+    """`caos.api.site:application` as `caos.serve` starts it: the guard
+    outermost, the connection bound, the grace, no proxy headers and the log
+    filter installed. Lifespan is off: the test's database already carries the
+    schema, and the health loop is not this test's subject."""
+    from caos import serve
+    from caos.api.site import application
+
+    serve.install_log_filter()
+    return uvicorn.Server(
+        uvicorn.Config(
+            application,
+            lifespan="off",
+            log_level="warning",
+            limit_concurrency=serve.LIMIT_CONCURRENCY,
+            timeout_graceful_shutdown=serve.GRACEFUL_SECONDS,
+            proxy_headers=False,
+        )
+    )
+
+
+def _open_tail(port: int, path: str, user: UUID) -> socket.socket:
+    """One raw `GET` of the tail, read up to its first frame."""
+    sock = socket.create_connection(("127.0.0.1", port), timeout=10)
+    sock.sendall(
+        (
+            f"GET {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n"
+            f"x-caos-user: {user}\r\nsec-fetch-site: same-origin\r\n\r\n"
+        ).encode("latin-1")
+    )
+    got = b""
+    while b"id: " not in got:
+        received = sock.recv(65536)
+        if not received:
+            break
+        got += received
+    assert got.startswith(b"HTTP/1.1 200"), got[:200]
+    return sock
+
+
+def _held_by(user: UUID) -> int:
+    with stream.SLOTS.lock:
+        return stream.SLOTS.held.get(user, 0)
+
+
+def test_a_closed_tail_gives_its_slot_back_without_the_garbage_collector(
+    case: tuple[StoreConnection, UUID],
+    empty_database: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ED-1. A browser that closed its tail left the slot held until CPython's
+    next *full* collection: Starlette cancels the body on the disconnect, the
+    cancellation's traceback keeps `iterate_in_threadpool`'s frame alive in a
+    cycle, and that frame held the sync generator whose `finally` gives the
+    slot back. Four section changes spent an actor's share on dead tails, and
+    every later tail answered 503 for minutes or hours.
+
+    Served the way `caos.serve` serves it and with the collector off, so the
+    test cannot pass by a collection happening to run: the slot comes back
+    because the response ended, within the one poll the tail's thread may be
+    sleeping through.
+    """
+    from caos.api import app as app_module
+
+    conn, case_id = case
+    user = uuid4()
+    grant(conn, case_id=case_id, user_id=user, standing=Standing.READER)
+    conn.commit()
+    monkeypatch.setenv(app_module.DATABASE_URL, empty_database)
+    monkeypatch.setenv(TRUST_SWITCH, TRUSTED)
+    path = f"/api/v1/cases/{case_id}/events"
+    listener = socket.socket()
+    listener.bind(("127.0.0.1", 0))
+    port = listener.getsockname()[1]
+    server = _served_like_the_process()
+    thread = threading.Thread(
+        target=server.run, kwargs={"sockets": [listener]}, daemon=True
+    )
+    thread.start()
+    started = time.monotonic()
+    while not server.started:
+        assert time.monotonic() - started < 10, "the server did not start"
+        time.sleep(0.01)
+    gc.disable()
+    try:
+        tails = [_open_tail(port, path, user) for _ in range(ACTOR_STREAM_LIMIT)]
+        assert _held_by(user) == ACTOR_STREAM_LIMIT
+        for tail in tails:
+            tail.close()
+        closed = time.monotonic()
+        while _held_by(user) and time.monotonic() - closed < 1.0:
+            time.sleep(0.02)
+        assert _held_by(user) == 0, "a closed tail still holds its slot"
+        fifth = _open_tail(port, path, user)
+        assert time.monotonic() - closed < 1.0
+        fifth.close()
+    finally:
+        gc.enable()
+        server.should_exit = True
+        thread.join(10)
+        listener.close()

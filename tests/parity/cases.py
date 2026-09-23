@@ -1301,8 +1301,18 @@ _SYNTHETIC_QUOTES: tuple[tuple[str, str, bool], ...] = (
     ("whitespace_variants", "Total\tdebt   at\u00a031 December", False),
     ("tracking_off_single_letters", "Heading word", False),
     ("tracking_on_single_letters", "Heading word", True),
+    # EV-8: the normalised pass compares NFC and never NFKC. Each quote below
+    # is the page's words under compatibility folding (a superscript, a
+    # ligature, full-width digits), which no NFC comparison equates.
+    ("compatibility_superscript", "leverage x2 on", False),
+    ("compatibility_ligature", "on financing of", True),
+    ("compatibility_fullwidth_digits", "of 12 per", False),
+    ("compatibility_verbatim", "leverage x\u00b2 on \ufb01nancing of", False),
 )
 _TRACKING_TEXT = b"H e a d i n g word\nA B\n"
+_COMPATIBILITY_TEXT = (
+    "Net leverage x\u00b2 on \ufb01nancing of \uff11\uff12 per cent\n".encode()
+)
 
 
 def _matcher_tokens(target: Target, data: bytes) -> dict[int, list[object]]:
@@ -1351,6 +1361,8 @@ def _synthetic_citation_case(
     name: str, quote: str, tracking: bool, target: Target
 ) -> Json:
     data = _TRACKING_TEXT if name.startswith("tracking") else _TWO_PARAGRAPHS
+    if name.startswith("compatibility"):
+        data = _COMPATIBILITY_TEXT
     return _quote_case(target, _matcher_tokens(target, data), quote, tracking)
 
 

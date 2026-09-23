@@ -14,7 +14,13 @@ from caos.methodology.host import verified_host_bytes
 from caos.methodology.vendor import VendorContract
 from caos.refusals import Refusal, RefusalCode
 
-_BLOCK = re.compile(r"^```caos-forecast-v1\n(.*?)\n```$", re.MULTILINE | re.DOTALL)
+# A block is an opener line, then its body, then the first line after the
+# body that is exactly the closer. Found by two forward searches rather than
+# one lazy DOTALL expression, whose every opener with no closer after it
+# scanned to the end of the document: thousands of unclosed openers made one
+# read of the model analysis quadratic, GIL held (EV-6).
+_OPENER = re.compile(r"^```caos-forecast-v1\n", re.MULTILINE)
+_CLOSER = re.compile(r"\n```$", re.MULTILINE)
 _LIMIT = 1024 * 1024
 _OWNERS = {
     "opening": "CP-1",
@@ -27,11 +33,29 @@ _OWNERS = {
 }
 
 
+def _blocks(text: str) -> list[str]:
+    """Every block's body, in order, each searched for once.
+
+    An opener with no closer after it ends the search: every later opener
+    would have none either. The scan resumes after each closer, so a body is
+    never searched again for an opener.
+    """
+    bodies: list[str] = []
+    at = 0
+    while (opener := _OPENER.search(text, at)) is not None:
+        closer = _CLOSER.search(text, opener.end())
+        if closer is None:
+            break
+        bodies.append(text[opener.end() : closer.start()])
+        at = closer.end()
+    return bodies
+
+
 def _document(markdown: bytes) -> dict[str, Any]:
     from caos.methodology.handoff import strict_json
 
     try:
-        found = _BLOCK.findall(markdown.decode("utf-8"))
+        found = _blocks(markdown.decode("utf-8"))
         document = (
             strict_json(found[0])
             if len(found) == 1 and len(found[0].encode()) <= _LIMIT

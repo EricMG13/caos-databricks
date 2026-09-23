@@ -15,6 +15,8 @@ const CASE = "00000000-0000-4000-8000-000000000001";
 const OTHER = "00000000-0000-4000-8000-0000000000ff";
 const RUN = "00000000-0000-4000-8000-0000000000b2";
 const REVISION = "00000000-0000-4000-8000-0000000000c3";
+// The run `fixtures/analysis.json` displays.
+const DISPLAYED = "00000000-0000-4000-8000-0000000000a1";
 const analysis = () => json("../../fixtures/analysis.json");
 const otherCase = () => JSON.parse(text("../../fixtures/analysis.json").replaceAll(CASE, OTHER));
 const model = () => ({
@@ -265,7 +267,9 @@ describe("the workspace under its event tail", () => {
   });
 
   test("test_names_arriving_mid_flight_cause_exactly_one_more_fetch", async () => {
-    await mount("analysis", `/analysis/?case=${CASE}`);
+    // The address names the run, so the tail is open before the first read
+    // answers and names can arrive while it is in flight.
+    await mount("analysis", `/analysis/?case=${CASE}&run=${DISPLAYED}`);
     await fire("handoff_accepted");
     await fire("run_terminal");
     await fire("sources_changed");
@@ -288,6 +292,47 @@ describe("the workspace under its event tail", () => {
     await fire("error");
     await fire("open");
     expect(sent).toHaveLength(3);
+  });
+
+  // MAX-19: an address with no run is answered with the case's latest, but a
+  // tail opened on that bare address carries the case's audit actions only.
+  // The run on screen never moved until the stream expired.
+  test("test_a_view_whose_address_names_no_run_tails_the_run_it_displays", async () => {
+    const { container } = await mount("analysis", `/analysis/?case=${CASE}`);
+    // Nothing to follow yet: the first answer says which run is shown.
+    expect(FakeSource.all).toHaveLength(0);
+    await answer(0, analysis());
+    expect(FakeSource.all).toHaveLength(1);
+    expect(FakeSource.all[0]!.url).toBe(`/api/v1/cases/${CASE}/events?run=${DISPLAYED}`);
+    // A run event now reaches the view.
+    await fire("handoff_accepted");
+    expect(sent).toHaveLength(2);
+    // A newer run is held for Reload, and the tail stays on the run shown.
+    const next = changed(analysis(), (b) => {
+      b["displayed_run_id"] = RUN;
+      b["latest_run_id"] = RUN;
+    });
+    await answer(1, next);
+    expect(FakeSource.all).toHaveLength(1);
+    const stale = region(container).querySelector("[data-surface-state='stale']");
+    expect(stale).not.toBeNull();
+    // Reload moves the view onto it, and the tail with it.
+    act(() => fireEvent.click(stale!.querySelector("button")!));
+    await settle();
+    expect(FakeSource.all[0]!.closed).toBe(true);
+    expect(FakeSource.all.at(-1)!.url).toBe(`/api/v1/cases/${CASE}/events?run=${RUN}`);
+  });
+
+  test("a Run view whose address names no run refetches on that run's progress", async () => {
+    const frame = json("../../fixtures/run/frames/1.json");
+    const shown = ((frame["body"] as Record<string, unknown>)["run"] as Record<string, unknown>)[
+      "run_id"
+    ] as string;
+    await mount("run", `/run/?case=${CASE}`);
+    await answer(0, frame);
+    expect(FakeSource.all.at(-1)!.url).toBe(`/api/v1/cases/${CASE}/events?run=${shown}`);
+    await fire("run_progress");
+    expect(sent).toHaveLength(2);
   });
 
   test("test_a_refused_reconnect_closes_the_tail_and_the_region_is_unavailable", async () => {
@@ -317,18 +362,19 @@ describe("the workspace under its event tail", () => {
   });
 
   test("test_a_late_response_after_a_case_switch_is_discarded", async () => {
-    const { container } = await mount("analysis", `/analysis/?case=${CASE}`);
+    const { container } = await mount("analysis", `/analysis/?case=${CASE}&run=${DISPLAYED}`);
     const first = sent[0]!;
     const firstTail = FakeSource.all[0]!;
     act(() => fireEvent.click(container.querySelector("[data-switch]")!));
     await settle();
     expect(first.signal?.aborted).toBe(true);
     expect(firstTail.closed).toBe(true);
-    expect(FakeSource.all.at(-1)!.url).toBe(`/api/v1/cases/${OTHER}/events`);
     const other = otherCase();
     other.body.handoffs[0].confidence_score = 7;
     await answer(1, other);
     expect(confidence(container)).toMatch(/^7 /);
+    // The other case's address names no run: its tail follows the one shown.
+    expect(FakeSource.all.at(-1)!.url).toBe(`/api/v1/cases/${OTHER}/events?run=${DISPLAYED}`);
     // The left case answers late: discarded, never rendered.
     await answer(0, analysis());
     expect(confidence(container)).toMatch(/^7 /);

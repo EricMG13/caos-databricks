@@ -27,6 +27,7 @@ from starlette.requests import Request
 from caos.api.app import app
 from caos.api.commands import cases
 from caos.api.deps import store_connection
+from caos.blobs import BlobStore
 from caos.evidence import ingest
 from caos.evidence.extract import DEFAULT_LIMITS
 from caos.store import StoreConnection, connect
@@ -454,6 +455,64 @@ def test_extraction_holds_no_case_lock(
 
     assert _admit(command_client, case_id, writer, journey_pack()).status_code == 201
     assert observed == [(True, True)], "no open unit and the case lock is free"
+
+
+def _free(other: StoreConnection, statement: str, case_id: UUID) -> str:
+    try:
+        row = other.execute(statement, (case_id,)).fetchone()
+    except psycopg.errors.LockNotAvailable:
+        return "locked"
+    finally:
+        other.rollback()
+    return "free" if row is not None else "absent"
+
+
+def test_the_admission_route_uploads_before_it_holds_the_case_or_the_chain(
+    case: tuple[StoreConnection, UUID],
+    command_client: TestClient,
+    empty_database: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ED-5. F104 moved the puts ahead of `admit_prepared`'s own case lock,
+    but the route calls it from inside the governed unit, and
+    `governed_write` has taken the case row and the audit chain head by then:
+    every Files API upload of up to fifty documents held both, so every
+    fenced write of every run in the case and every governed command on it
+    waited behind the uploads. The route puts the pack before the unit opens.
+    """
+    conn, case_id = case
+    writer = member(conn, case_id)
+    # An earlier governed act, so the case has a chain head to hold.
+    assert _admit(command_client, case_id, writer, [("a.txt", TEXT)]).status_code == 201
+    seen: list[tuple[str, str]] = []
+    real_put = BlobStore.put
+
+    def probing(store: BlobStore, data: bytes) -> str:
+        with connect(empty_database) as other:
+            seen.append(
+                (
+                    _free(
+                        other,
+                        "SELECT 1 FROM cases WHERE case_id = %s FOR UPDATE NOWAIT",
+                        case_id,
+                    ),
+                    _free(
+                        other,
+                        "SELECT 1 FROM audit_chain_heads WHERE case_id = %s"
+                        " FOR UPDATE NOWAIT",
+                        case_id,
+                    ),
+                )
+            )
+        return real_put(store, data)
+
+    monkeypatch.setattr(BlobStore, "put", probing)
+
+    answer = _admit(command_client, case_id, writer, journey_pack())
+
+    assert answer.status_code == 201, answer.json()
+    assert seen == [("free", "free")] * 2, "an upload held the case or the chain"
+    assert _sources(conn, case_id) == 3
 
 
 class _Counting:

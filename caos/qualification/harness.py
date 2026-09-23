@@ -238,26 +238,10 @@ def prepare(
     Preparation never provisions actors, approves gates or executes a run.
     Existing helpers commit separately; earlier preparations survive later failure.
     """
-    assert_measurable(qualification)
-    assert_unambiguous(qualification)
-    if not isinstance(harness.bundle, Bundle):
-        raise Refusal(RefusalCode.RUN_INPUT_INVALID)
-    _answerable(harness.bundle, qualification)
-    routes = [
-        resolve_route(
-            harness.catalog,
-            case.profile_id,
-            case.selection_id,
-            extensions=RouteExtensions(model_extension=case.model_extension),
-        )
-        for case in qualification.cases
-    ]
+    routes = assert_admissible(harness, qualification=qualification)
     titles = [
         BoundaryText.of(case.label, limit=_LABEL_LIMIT) for case in qualification.cases
     ]
-    _consumers(qualification, routes)
-    _affordable(qualification, harness, routes)
-    _subjects(qualification)
     provider = _provider_identity(harness.completions)
     model = _model_identity(harness.completions)
     require_idle(conn)
@@ -302,6 +286,42 @@ def prepare(
     return tuple(prepared)
 
 
+def assert_admissible(
+    harness: Harness, *, qualification: QualificationSet
+) -> tuple[ResolvedRoute, ...]:
+    """Every check `prepare` makes before its first write, and the routes.
+
+    Public because `scripts/qualify.py` has to ask it before it creates the
+    database a set is prepared in: `prepare` was the first place the ceilings,
+    the keys and the subjects were checked, so a set it refused left an empty
+    database on the operator's persistent server and a traceback where every
+    other pre-spend refusal exits 2 (DQ-12). One function, so the script and
+    `prepare` cannot check two different lists.
+    """
+    assert_measurable(qualification)
+    assert_unambiguous(qualification)
+    if not isinstance(harness.bundle, Bundle):
+        raise Refusal(RefusalCode.RUN_INPUT_INVALID)
+    _answerable(harness.bundle, qualification)
+    routes = tuple(
+        resolve_route(
+            harness.catalog,
+            case.profile_id,
+            case.selection_id,
+            extensions=RouteExtensions(model_extension=case.model_extension),
+        )
+        for case in qualification.cases
+    )
+    for case in qualification.cases:
+        BoundaryText.of(case.label, limit=_LABEL_LIMIT)
+    _consumers(qualification, routes)
+    _affordable(qualification, harness, routes)
+    _subjects(qualification)
+    _provider_identity(harness.completions)
+    _model_identity(harness.completions)
+    return routes
+
+
 def perform(
     conn: StoreConnection,
     blobs: BlobStore,
@@ -310,7 +330,12 @@ def perform(
     qualification: QualificationSet,
     prepared: tuple[PreparedCase, ...] | None = None,
 ) -> PerformedSet:
-    """Execute externally approved prepared inputs, then report their runs."""
+    """Execute externally approved prepared inputs, then report their runs.
+
+    Once a case has run, what was performed is persisted before anything
+    leaves: a stopped set is returned with no matrix, and a matrix that refuses
+    after the runs is persisted the same way and then raised (DQ-5).
+    """
     if (
         prepared is None
         or type(prepared) is not tuple
@@ -370,14 +395,23 @@ def perform(
     if any(record.stopped is not None for record in performed):
         result = PerformedSet(tuple(performed), None)
     else:
-        with execution_reads(conn):
-            matrix = build_matrix(
-                conn,
-                blobs,
-                harness.bundle,
-                qualification=qualification,
-                runs={record.case_label: record.run_id for record in performed},
-            )
+        try:
+            with execution_reads(conn):
+                matrix = build_matrix(
+                    conn,
+                    blobs,
+                    harness.bundle,
+                    qualification=qualification,
+                    runs={record.case_label: record.run_id for record in performed},
+                )
+        except Refusal:
+            # The matrix's own last check -- the manifest re-read after every
+            # proof -- refused, and the runs behind it are already paid for.
+            # Kept as a stopped set is kept, with no matrix and so never
+            # signable, before the refusal goes on to the caller: raising
+            # first threw the snapshot away with it (FP-07, DQ-5, MAX-10).
+            _persist_performed(conn, prepared, PerformedSet(tuple(performed), None))
+            raise
         result = PerformedSet(tuple(performed), matrix)
     _persist_performed(conn, prepared, result)
     return result

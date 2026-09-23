@@ -15,7 +15,7 @@ from __future__ import annotations
 import io
 import os
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from hashlib import sha256
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -48,6 +48,16 @@ class FilesService(Protocol):
     def get_directory_metadata(self, directory_path: str) -> object: ...
 
 
+# What an SDK call raises when it cannot be answered: `OSError` for the
+# transport and the API's own errors, and -- because the service principal's
+# token is re-minted inside the call it expires under -- `ValueError` for a
+# token endpoint that answered non-2xx and `NotImplementedError` for one that
+# answered without a token (ED-6). F85 mapped the second pair only where the
+# client is built; each was an untyped 500 on every volume read once an
+# hourly re-mint met a failing endpoint.
+_SDK_FAULTS = (OSError, ValueError, NotImplementedError)
+
+
 @dataclass(frozen=True, slots=True)
 class VolumeBackend:
     """Bytes under a volume path through the SDK Files API (D9).
@@ -55,6 +65,8 @@ class VolumeBackend:
     `files` is the SDK's `files` service, built lazily from unified auth on
     first use so tests can hand in a double; the App's local disk is
     ephemeral, so on Databricks this is where every source and artifact lives.
+    Every fault of a call is the typed `STORE_UNAVAILABLE` (a missing file
+    `BLOB_NOT_FOUND`), raised from nothing, so no SDK message travels.
     """
 
     files: FilesService | None = field(default=None, repr=False)
@@ -71,7 +83,7 @@ class VolumeBackend:
     def upload(self, path: Path, data: bytes) -> None:
         try:
             self._service().upload(str(path), io.BytesIO(data), overwrite=True)
-        except OSError:
+        except _SDK_FAULTS:
             raise Refusal(RefusalCode.STORE_UNAVAILABLE) from None
 
     def download(self, path: Path) -> bytes:
@@ -79,8 +91,8 @@ class VolumeBackend:
             response = self._service().download(str(path))
             contents = getattr(response, "contents", None)
             data: bytes = contents.read() if contents is not None else b""
-        except OSError as failed:
-            if _not_found(failed):
+        except _SDK_FAULTS as failed:
+            if isinstance(failed, OSError) and _not_found(failed):
                 raise Refusal(RefusalCode.BLOB_NOT_FOUND) from None
             raise Refusal(RefusalCode.STORE_UNAVAILABLE) from None
         return data
@@ -88,7 +100,7 @@ class VolumeBackend:
     def probe(self, root: Path) -> None:
         try:
             self._service().get_directory_metadata(str(root))
-        except OSError:
+        except _SDK_FAULTS:
             raise Refusal(RefusalCode.STORE_UNAVAILABLE) from None
 
 
@@ -107,6 +119,21 @@ class BlobStore:
 
     root: Path
     volume: VolumeBackend | None = None
+    # What `get` has already verified, by digest, on a `remembering` copy.
+    verified: dict[str, bytes] | None = field(default=None, repr=False, compare=False)
+
+    def remembering(self) -> BlobStore:
+        """This store, keeping every blob `get` verifies for as long as the
+        copy lives -- one request's (ED-7).
+
+        Bytes proven against their own digest never change, so a second read
+        of one is the same bytes. Without it one Analysis read of a ten-node
+        route downloaded 91 blobs of which 20 were distinct -- a record up to
+        sixteen times -- each a Files API download and a SHA-256 on
+        Databricks, and the Book paid that per credit. Nothing but verified
+        bytes is kept: a refusal is raised again on the next read.
+        """
+        return replace(self, verified={})
 
     @classmethod
     def from_setting(
@@ -194,6 +221,9 @@ class BlobStore:
         refusal carries any of the bytes: the code travels, the content does not.
         """
         path = self.path_of(digest)
+        held = None if self.verified is None else self.verified.get(digest)
+        if held is not None:
+            return held
         if self.volume is not None:
             data = self.volume.download(path)
         else:
@@ -203,4 +233,6 @@ class BlobStore:
                 raise Refusal(RefusalCode.BLOB_NOT_FOUND) from None
         if sha256(data).hexdigest() != digest:
             raise Refusal(RefusalCode.BLOB_DIGEST_MISMATCH)
+        if self.verified is not None:
+            self.verified[digest] = data
         return data

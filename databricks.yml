@@ -44,7 +44,9 @@ variables:
 resources:
   apps:
     caos:
-      name: caos
+      # `caos` is the production app and only `prod` says so; any other
+      # target, one added later included, gets a name of its own (DP-6, DF-5).
+      name: caos-${bundle.target}
       description: Governed source documents to committee-ready credit conclusions.
       source_code_path: ./
       # The caller's own token reaches the app (D10); SCIM Me names the caller.
@@ -128,15 +130,20 @@ targets:
   dev:
     mode: development
     default: true
-    # A developer's copy is its own app (DP-6): development mode leaves app
-    # names alone, and one name for both targets let a dev deploy take over
-    # the production app.
+    # Each developer's copy is their own app (DP-6, DF-5): development mode
+    # gives each a bundle root of their own but leaves app names alone, and
+    # an app name is unique in the workspace. The numeric user id keeps to
+    # the Apps name rule (lowercase letters, digits and hyphens).
     resources:
       apps:
         caos:
-          name: caos-${bundle.target}
+          name: caos-${bundle.target}-${workspace.current_user.id}
   prod:
     mode: production
+    resources:
+      apps:
+        caos:
+          name: caos
     # One copy, in a path of its own rather than the deployer's home or the
     # world-writable Shared folder (F51); the deployer creates it.
     workspace:

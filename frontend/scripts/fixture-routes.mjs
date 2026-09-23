@@ -66,6 +66,15 @@ export function sectionRoute(section, fixture = null) {
   return `/${section}/${search ? `?${search}` : ""}`;
 }
 
+/** A section's `acts` fixture with the confirm step of `action` opened: the
+    a11y gate presses the act's control before it scans (`arm`), so the step
+    is measured as a reader sees it. The page itself ignores the parameter.
+    @param {string} section
+    @param {string} action */
+export function armedRoute(section, action) {
+  return `${sectionRoute(section, "acts")}&arm=${action}`;
+}
+
 export const STATE_ROUTES = [
   sectionRoute("directory", "observed-empty"),
   sectionRoute("book", "observed-empty"),
@@ -76,6 +85,16 @@ export const STATE_ROUTES = [
   sectionRoute("analysis", "unavailable"),
   sectionRoute("analysis", "error"),
   sectionRoute("run", "gate"),
+  // Every act the demo otherwise serves refused, offered: the filing acts,
+  // withdraw, revoke and cancel among them. Refused, a control carries its
+  // reason line and is spaced by it; offered, it is not, and until these
+  // states the gate had never measured one (DF-9).
+  sectionRoute("directory", "acts"),
+  sectionRoute("upload", "acts"),
+  sectionRoute("run", "acts"),
+  sectionRoute("report", "acts"),
+  armedRoute("report", "SIGN_OPINION"),
+  armedRoute("upload", "WITHDRAW_SOURCE"),
   "/analysis/",
   "/nothing/",
 ];

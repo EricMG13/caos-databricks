@@ -7,15 +7,20 @@ from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from hashlib import sha256
+from typing import Any
 from uuid import UUID
 
 import psycopg
 
 from caos.qualification.harness import Performed, PerformedSet, PreparedCase
-from caos.qualification.matrix import MatrixRow
+from caos.qualification.matrix import REFUSED_ENDINGS, ROW_REFUSALS, MatrixRow
 from caos.qualification.verdict import Verdict, read_verdict
 from caos.refusals import Refusal, RefusalCode
 from caos.store import RunStatus, StoreConnection, rollback_or_close
+
+# The same two sets as a stored document spells them.
+_UNMEASURED_CODES = frozenset(code.value for code in ROW_REFUSALS)
+_REFUSED_ENDINGS = frozenset(status.value for status in REFUSED_ENDINGS)
 
 # `0019_one_qualification_verdict.sql`. Named here so the refusal that maps
 # it and the migration that declares it cannot drift apart silently.
@@ -64,6 +69,12 @@ def _answered(row: MatrixRow) -> bool:
     comparison, so a case keyed only by one would otherwise have been signable
     with the cell wrong. A key the reviewer cannot see missed is a key that
     measures nothing.
+
+    Beside a met refusal `proven` is not read -- a run that stopped at its first
+    node proves nothing and says so -- but a row carrying a *reader's* refusal
+    is still refused: those codes are the host failing to measure a key, never
+    the refusal a case declared, and a snapshot recorded before a refused
+    reader answered `False` carries its declared key as `None` (DQ-1).
     """
     if (
         row.forecast_met is False
@@ -76,7 +87,11 @@ def _answered(row: MatrixRow) -> bool:
     if row.expected_refusal_met is not None:
         # A conjunct, not a short circuit (F64): keys declared beside an
         # expected refusal are measured too.
-        return row.expected_refusal_met and not row.missed
+        return (
+            row.expected_refusal_met
+            and not row.missed
+            and row.refusal not in ROW_REFUSALS
+        )
     return row.proven and not row.missed
 
 
@@ -99,7 +114,11 @@ def answered_document(row: object) -> bool:
     if not isinstance(missed, list):
         return False
     if row.get("expected_refusal_met") is not None:
-        return row["expected_refusal_met"] is True and not missed
+        return (
+            row["expected_refusal_met"] is True
+            and not missed
+            and row.get("refusal") not in _UNMEASURED_CODES
+        )
     return row.get("proven") is True and not missed
 
 
@@ -140,6 +159,12 @@ def _record_finished(record: object, rows: Mapping[object, object]) -> bool:
     refusal declared the run would not finish, and a case keyed `expects_blocked`
     declared CP-0 would refuse a consumer, which ends the run BLOCKED (§99).
     Anything else has to have reached COMPLETE.
+
+    The first waiver holds only over a run that ended refused. A row claiming a
+    met refusal over a COMPLETE run is the shape pre-FP-01 code recorded for a
+    run that finished after a stale attempt refusal, and it waived the record's
+    status wholesale: re-deriving from the snapshot re-read the old code's
+    flag (DQ-3).
     """
     if not isinstance(record, dict):
         return False
@@ -147,10 +172,29 @@ def _record_finished(record: object, rows: Mapping[object, object]) -> bool:
     if not isinstance(row, dict):
         return False
     if row.get("expected_refusal_met") is True:
-        return True
+        return record.get("status") in _REFUSED_ENDINGS
     if row.get("blocked_met") is True and record.get("status") == "BLOCKED":
         return True
     return record.get("status") == RunStatus.COMPLETE.value
+
+
+def _finished(record: Performed, row: MatrixRow | None) -> bool:
+    """`_record_finished`'s rule over a `Performed` and its `MatrixRow`."""
+    if row is None:
+        return False
+    # A case that declared its refusal declared that the run would not finish.
+    # Demanding COMPLETE of it as well made the key unanswerable by any run this
+    # system produces, which is what `docs/REPAIR_PLAN.md` Phase 6 asks for in
+    # a deliberately restricted case. Over a run that ended refused, and no
+    # other (DQ-3).
+    if row.expected_refusal_met:
+        return record.status in REFUSED_ENDINGS
+    # A case keyed `expects_blocked` declared that CP-0 would refuse a consumer,
+    # which ends the run BLOCKED (§99). Waived for that run only: one that
+    # failed or was cancelled is not the run declared.
+    if row.blocked_met and record.status is RunStatus.BLOCKED:
+        return True
+    return record.status is RunStatus.COMPLETE
 
 
 @dataclass(frozen=True, slots=True)
@@ -191,25 +235,10 @@ class PerformedEvidence:
         if matrix is None:
             return False
         rows = {row.case_label: row for row in matrix.rows}
-        for record in self.performed.performed:
-            row = rows.get(record.case_label)
-            if row is None:
-                return False
-            # A case that declared its refusal declared that the run would not
-            # finish. Demanding COMPLETE of it as well made the key
-            # unanswerable by any run this system produces, which is what
-            # `docs/REPAIR_PLAN.md` Phase 6 asks for in a deliberately
-            # restricted case.
-            if row.expected_refusal_met:
-                continue
-            # A case keyed `expects_blocked` declared that CP-0 would refuse a
-            # consumer, which ends the run BLOCKED (§99). Waived for that run
-            # only: one that failed or was cancelled is not the run declared.
-            if row.blocked_met and record.status is RunStatus.BLOCKED:
-                continue
-            if record.status is not RunStatus.COMPLETE:
-                return False
-        return all(_answered(row) for row in matrix.rows)
+        return all(
+            _finished(record, rows.get(record.case_label))
+            for record in self.performed.performed
+        ) and all(_answered(row) for row in matrix.rows)
 
     @property
     def evidence(self) -> Evidence:
@@ -501,8 +530,9 @@ def _digest(document: dict[str, object]) -> str:
     ).hexdigest()
 
 
-def _snapshot_runs(document: object) -> tuple[UUID, ...]:
-    """The run ids the stored snapshot names, or a refused binding.
+def _snapshot_records(document: object) -> tuple[tuple[UUID, dict[str, Any]], ...]:
+    """Each performed record the stored snapshot names, with its run id read,
+    or a refused binding.
 
     `qualification_performed.performed_json` is the only place an evidence row
     reaches its runs: no column joins `qualification_evidence` to `runs`, and
@@ -515,15 +545,58 @@ def _snapshot_runs(document: object) -> tuple[UUID, ...]:
     records = document.get("performed")
     if not isinstance(records, list) or not records:
         raise Refusal(RefusalCode.VERDICT_BINDING_INVALID)
-    runs: list[UUID] = []
+    runs: list[tuple[UUID, dict[str, Any]]] = []
     for record in records:
         if not isinstance(record, dict) or "run_id" not in record:
             raise Refusal(RefusalCode.VERDICT_BINDING_INVALID)
         try:
-            runs.append(UUID(str(record["run_id"])))
+            runs.append((UUID(str(record["run_id"])), record))
         except ValueError:
             raise Refusal(RefusalCode.VERDICT_BINDING_INVALID) from None
     return tuple(runs)
+
+
+def _proven_artifacts(record: Mapping[str, Any]) -> int | None:
+    """The artifact count the record's proof covered, or None with no proof."""
+    proof = record.get("proof")
+    if proof is None:
+        return None
+    if not isinstance(proof, dict) or type(proof.get("artifacts")) is not int:
+        raise Refusal(RefusalCode.VERDICT_BINDING_INVALID)
+    return int(proof["artifacts"])
+
+
+def assert_store_agrees(conn: StoreConnection, *, document: object, model: str) -> None:
+    """Refuse unless the store still holds the runs the snapshot says it does.
+
+    Everything else a reader re-derives comes from the snapshot itself -- its
+    digest, its rows, its flags -- so a self-consistent snapshot, evidence row
+    and verdict inserted straight into the tables over a run the store holds
+    RUNNING with no artifact was signed, current, and relayed QUALIFIED by the
+    release pack (DQ-3, FP-03's forged-row half). Each run's status and the
+    count of artifacts its proof covered are the store's facts, compared here,
+    and the models the runs called are `_models_recorded`'s. A keyed digest that
+    only the host can mint is what would refuse a forger who can also write
+    `runs` (`next.md`).
+    """
+    records = _snapshot_records(document)
+    held = {
+        UUID(str(run_id)): (str(status), int(artifacts))
+        for run_id, status, artifacts in conn.execute(
+            "SELECT r.run_id,r.status,"
+            " (SELECT count(*) FROM artifacts a WHERE a.run_id=r.run_id)"
+            " FROM runs r WHERE r.run_id = ANY(%s)",
+            ([run_id for run_id, _record in records],),
+        ).fetchall()
+    }
+    for run_id, record in records:
+        status, artifacts = held.get(run_id, (None, None))
+        proven = _proven_artifacts(record)
+        if status != record.get("status") or (
+            proven is not None and proven != artifacts
+        ):
+            raise Refusal(RefusalCode.VERDICT_BINDING_INVALID)
+    _models_recorded(conn, runs=tuple(run_id for run_id, _ in records), model=model)
 
 
 def _models_recorded(
@@ -583,7 +656,7 @@ def record_verdict(
     ):
         raise Refusal(RefusalCode.VERDICT_BINDING_INVALID)
     snapshot = conn.execute(
-        "SELECT complete,performed_json FROM qualification_performed"
+        "SELECT complete,performed_json,recorded_at FROM qualification_performed"
         " WHERE performed_sha256=%s",
         (evidence.performed_sha256,),
     ).fetchone()
@@ -597,7 +670,12 @@ def record_verdict(
         snapshot[1]
     ):
         raise Refusal(RefusalCode.VERDICT_BINDING_INVALID)
-    _models_recorded(conn, runs=_snapshot_runs(snapshot[1]), model=evidence.model)
+    # A decision cannot predate what it decides on: a verdict dated 300 days
+    # before its snapshot was recorded was accepted, current and relayed with
+    # that date (FP-13, DQ-13).
+    if verdict.decided_at < snapshot[2]:
+        raise Refusal(RefusalCode.VERDICT_BINDING_INVALID)
+    assert_store_agrees(conn, document=snapshot[1], model=evidence.model)
     digest = record_evidence(conn, evidence)
     try:
         conn.execute(
@@ -638,7 +716,8 @@ def current_verdict(
     """Read only the current verdict bound to the exact requested evidence."""
     row = conn.execute(
         "SELECT q.reviewer,q.decided_at,q.expires_at,e.qualification_set_sha256,"
-        " e.build_id,e.provider,e.model,p.performed_json FROM qualification_verdicts q"
+        " e.build_id,e.provider,e.model,p.performed_json,p.recorded_at"
+        " FROM qualification_verdicts q"
         " JOIN qualification_evidence e USING (evidence_sha256)"
         " JOIN qualification_performed p ON p.performed_sha256=e.performed_sha256"
         " AND (p.qualification_set_sha256,p.build_id,p.adapter_version,"
@@ -649,7 +728,8 @@ def current_verdict(
     ).fetchone()
     if row is None:
         raise Refusal(RefusalCode.VERDICT_INCOMPLETE)
-    reviewer, decided_at, expires_at, set_digest, build_id, provider, model, held = row
+    reviewer, decided_at, expires_at, set_digest, build_id, provider, model = row[:7]
+    held, performed_at = row[7:]
     # The snapshot re-digests to the key it is stored under, and re-derives as
     # one a reviewer could sign (FP-03). A document that does not re-digest is a
     # row nobody wrote through `record_performed`, which is a wrong binding; one
@@ -664,8 +744,11 @@ def current_verdict(
         evidence.build_id,
         evidence.provider,
         evidence.model,
-    ):
+    ) or decided_at < performed_at:
         raise Refusal(RefusalCode.VERDICT_BINDING_INVALID)
+    # Every reader of a verdict re-checks the store's facts, not only the
+    # signer (DQ-3): a row inserted without `record_verdict` meets them here.
+    assert_store_agrees(conn, document=held, model=model)
     return read_verdict(
         {
             "provider": provider + ":" + model,

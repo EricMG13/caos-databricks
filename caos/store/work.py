@@ -176,17 +176,57 @@ def release(conn: StoreConnection, lease: Lease) -> bool:
 
 def stop(conn: StoreConnection, lease: Lease, code: RefusalCode) -> bool:
     """Park a held run with the refusal that stopped it, until a retry requeues
-    it. False when the lease is not held."""
+    it. False when the lease is not held.
+
+    A run whose cancel was acknowledged while it was held ends CANCELLED here
+    instead (MAX-04): `requeue_run` refuses a run with a recorded cancel, so a
+    parked one would sit RUNNING with nothing left to end it. Takes `lock_run`
+    first, as every move of a run's status does.
+    """
     if not isinstance(code, RefusalCode):
         raise Refusal(RefusalCode.CALL_OUTCOME_INVALID)
-    return bool(
-        conn.execute(
-            "UPDATE run_work SET state = 'STOPPED', stop_code = %s, worker = NULL,"
-            " lease_expires_at = NULL"
-            " WHERE run_id = %s AND state = 'CLAIMED' AND lease_token = %s",
-            (code.value, lease.run_id, lease.token),
-        ).rowcount
-    )
+    running = lock_run(conn, lease.run_id) is RunStatus.RUNNING
+    row = conn.execute(
+        "UPDATE run_work SET state = 'STOPPED', stop_code = %s, worker = NULL,"
+        " lease_expires_at = NULL"
+        " WHERE run_id = %s AND state = 'CLAIMED' AND lease_token = %s"
+        " RETURNING cancel_requested_at IS NOT NULL",
+        (code.value, lease.run_id, lease.token),
+    ).fetchone()
+    if row is None:
+        return False
+    if running and row[0]:
+        _end_cancelled(conn, lease.run_id)
+    return True
+
+
+def require_resendable(
+    conn: StoreConnection, run_id: UUID, lease: Lease | None
+) -> None:
+    """Refuse `LEASE_NOT_HELD` or `RUN_CANCEL_REQUESTED`, reading only.
+
+    What a caller about to send a call again asks first (ST-7), in its own read
+    unit: a re-send after the lease was lost or a cancel was recorded is spend
+    nobody may still order. `require_lease` answers the same question by
+    renewing, which a read unit must not do. `None` is the direct caller, which
+    drives only a run that was never enqueued.
+    """
+    row = conn.execute(
+        "SELECT state, lease_token, cancel_requested_at IS NOT NULL"
+        " FROM run_work WHERE run_id = %s",
+        (run_id,),
+    ).fetchone()
+    if row is None and lease is None:
+        return
+    if (
+        lease is None
+        or row is None
+        or lease.run_id != run_id
+        or (row[0], row[1]) != ("CLAIMED", lease.token)
+    ):
+        raise Refusal(RefusalCode.LEASE_NOT_HELD)
+    if row[2]:
+        raise Refusal(RefusalCode.RUN_CANCEL_REQUESTED)
 
 
 def requeue_run(conn: StoreConnection, run_id: UUID) -> bool:
@@ -229,6 +269,12 @@ def request_cancel(conn: StoreConnection, run_id: UUID) -> bool:
         )
     if state not in ("QUEUED", "STOPPED"):
         return bool(unrequested)
+    return _end_cancelled(conn, run_id)
+
+
+def _end_cancelled(conn: StoreConnection, run_id: UUID) -> bool:
+    """End a RUNNING run no worker drives any more CANCELLED, with its event and
+    its work row closed, under the caller's `lock_run`."""
     changed = conn.execute(
         "UPDATE runs SET status = %s WHERE run_id = %s AND status = %s",
         (RunStatus.CANCELLED.value, run_id, RunStatus.RUNNING.value),

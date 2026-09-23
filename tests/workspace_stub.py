@@ -26,6 +26,8 @@ from __future__ import annotations
 import base64
 import json
 import os
+import re
+import shutil
 import subprocess
 import sys
 import threading
@@ -34,6 +36,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from functools import partial
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from socket import socket
 from socketserver import BaseServer
 from typing import Any
@@ -49,6 +52,11 @@ FILES = "/api/2.0/fs/files"
 DIRECTORIES = "/api/2.0/fs/directories"
 IMPORT = "/api/2.0/workspace-files/import-file"
 APPS = "/api/2.0/apps"
+# The Apps API's name rule: lowercase letters, digits and hyphens (DF-12).
+APP_NAME = re.compile(r"[a-z0-9-]+")
+# Where every stand-in workspace lives; bundle state naming any other host
+# came from a real workspace.
+LOOPBACK = "http://127.0.0.1:"
 
 Reply = Callable[[str, bool], str]
 Query = dict[str, list[str]]
@@ -66,8 +74,11 @@ class WorkspaceStub:
     groups: frozenset[str] = frozenset({"caos-admins", "caos-analysts"})
     # A profile that may not list groups is answered 403 (preflight's W5).
     groups_forbidden: bool = False
-    # What the serving endpoint's `ai_gateway` reads back (preflight's DP-3).
+    # What the serving endpoint's `ai_gateway` reads back (preflight's DP-3),
+    # and any other field its answer carries: `config`, `pending_config`,
+    # `telemetry_config` (DF-3).
     gateway: dict[str, Any] = field(default_factory=dict)
+    endpoint_fields: dict[str, Any] = field(default_factory=dict)
     # bearer -> (SCIM id, groups); a bearer not listed is `USER` in `groups`.
     identities: dict[str, tuple[str, frozenset[str]]] = field(default_factory=dict)
     user_name: str = str(USER["userName"])
@@ -87,10 +98,17 @@ class WorkspaceStub:
     app_bodies: dict[str, dict[str, Any]] = field(default_factory=dict)
     permissions: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     app_url: str = ""
+    # How every app and deployment settles; a crashed app or a failed
+    # deployment is one assignment away, so E5 meets those answers too (DF-12).
+    app_state: str = "RUNNING"
+    deployment_state: str = "SUCCEEDED"
     files: dict[str, bytes] = field(default_factory=dict)
     directories: set[str] = field(default_factory=set)
     workspace_files: dict[str, bytes] = field(default_factory=dict)
+    # Each deployment's source path, and each as the CLI sent it: the
+    # `command` and `env_vars` the platform starts the app with (DF-12).
     deployments: list[str] = field(default_factory=list)
+    deployment_bodies: list[dict[str, Any]] = field(default_factory=list)
     requests: list[tuple[str, str]] = field(default_factory=list)
     completions: int = 0
     json_completions: int = 0
@@ -160,7 +178,10 @@ class WorkspaceStub:
             "id": f"app-{name}",
             "url": url,
             "forward_user_access_token": body.get("forward_user_access_token"),
-            "app_status": {"state": "RUNNING", "message": "App is running"},
+            "app_status": {
+                "state": self.app_state,
+                "message": f"App is {self.app_state}",
+            },
             "compute_status": {"state": "ACTIVE", "message": ""},
             "service_principal_client_id": "sp-stub",
             "active_deployment": self.deployment(name) if self.deployments else None,
@@ -168,11 +189,26 @@ class WorkspaceStub:
 
     def deployment(self, name: str) -> dict[str, Any]:
         number = len(self.deployments)
+        sent = self.deployment_bodies[-1] if self.deployment_bodies else {}
         return {
             "deployment_id": f"deployment-{number}",
             "source_code_path": self.deployments[-1] if self.deployments else "",
             "mode": "SNAPSHOT",
-            "status": {"state": "SUCCEEDED", "message": "deployed"},
+            "command": sent.get("command", []),
+            "env_vars": sent.get("env_vars", []),
+            "status": {
+                "state": self.deployment_state,
+                "message": f"Deployment {self.deployment_state}",
+            },
+        }
+
+    def deployed_environment(self) -> dict[str, str]:
+        """The environment the last deployment asked the platform for."""
+        sent = self.deployment_bodies[-1] if self.deployment_bodies else {}
+        return {
+            str(item.get("name")): str(item.get("value", ""))
+            for item in sent.get("env_vars") or []
+            if isinstance(item, dict)
         }
 
     def known(self, path: str) -> str | None:
@@ -262,6 +298,11 @@ class _Handler(BaseHTTPRequestHandler):
 
     def _me(self, rest: str, query: Query, raw: bytes) -> None:
         scim_id, groups = self.stub.identity(self._bearer() or "")
+        if not scim_id:
+            # A token the workspace refuses is a 401, as the real one answers;
+            # a 200 naming nobody is a malformed answer, not a refusal (ED-9).
+            self._send(401, {"error_code": "UNAUTHENTICATED", "message": "no"})
+            return
         listed = [{"display": g, "value": g} for g in sorted(groups)]
         me = {**USER, "id": scim_id, "userName": self.stub.user_name, "groups": listed}
         self._send(200, me)
@@ -306,7 +347,8 @@ class _Handler(BaseHTTPRequestHandler):
             self._missing()
 
     def _endpoint_get(self, rest: str, query: Query, raw: bytes) -> None:
-        self._known(rest, self.stub.endpoints, partial(_endpoint, self.stub.gateway))
+        shape = partial(_endpoint, self.stub.gateway, self.stub.endpoint_fields)
+        self._known(rest, self.stub.endpoints, shape)
 
     def _schema_get(self, rest: str, query: Query, raw: bytes) -> None:
         self._known(rest, self.stub.schemas, _named)
@@ -372,7 +414,17 @@ class _Handler(BaseHTTPRequestHandler):
         self._send(200, {})
 
     def _import(self, rest: str, query: Query, raw: bytes) -> None:
-        self.stub.workspace_files["/" + rest.lstrip("/")] = raw
+        """A write that names `overwrite=false` over a file already there is
+        refused, as the platform refuses it: that is how a deploy lock held
+        by another deployer stops the next deploy (DF-12)."""
+        path = "/" + rest.lstrip("/")
+        kept = query.get("overwrite", [""])[0] == "false"
+        if kept and path in self.stub.workspace_files:
+            self._send(
+                409, {"error_code": "RESOURCE_ALREADY_EXISTS", "message": "exists"}
+            )
+            return
+        self.stub.workspace_files[path] = raw
         self._send(200, {})
 
     def _export(self, rest: str, query: Query, raw: bytes) -> None:
@@ -400,9 +452,9 @@ class _Handler(BaseHTTPRequestHandler):
         elif action == "" and self.command in ("GET", "PATCH"):
             self._send(200, stub.app(name))
         elif action == "deployments" and self.command == "POST":
-            stub.deployments.append(
-                json.loads(raw or b"{}").get("source_code_path", "")
-            )
+            sent = json.loads(raw or b"{}")
+            stub.deployments.append(sent.get("source_code_path", ""))
+            stub.deployment_bodies.append(sent)
             self._send(200, stub.deployment(name))
         elif action == "deployments" and self.command == "GET":
             listed = [stub.deployment(name)] if stub.deployments else []
@@ -428,6 +480,12 @@ class _Handler(BaseHTTPRequestHandler):
         stub = self.stub
         body = json.loads(raw or b"{}")
         created = body.get("name", "")
+        if not APP_NAME.fullmatch(created):
+            # As the Apps API answers a name outside its rule (DF-12).
+            self._send(
+                400, {"error_code": "INVALID_PARAMETER_VALUE", "message": "name"}
+            )
+            return
         if created in stub.apps:
             # As the platform answers a name already taken (DP-6).
             self._send(409, {"error_code": "ALREADY_EXISTS", "message": "taken"})
@@ -485,11 +543,14 @@ _ROUTES: list[tuple[str, str, bool, Route]] = [
 ]
 
 
-def _endpoint(gateway: dict[str, Any], name: str) -> dict[str, Any]:
+def _endpoint(
+    gateway: dict[str, Any], fields: dict[str, Any], name: str
+) -> dict[str, Any]:
     return {
         "name": name,
         "state": {"ready": "READY", "config_update": "NOT_UPDATING"},
         "ai_gateway": gateway,
+        **fields,
     }
 
 
@@ -506,12 +567,42 @@ def _instance(host: str, name: str) -> dict[str, Any]:
     }
 
 
+def fresh_state(root: Path) -> list[str]:
+    """Clear the bundle state earlier stand-in runs left under `root`, and
+    name each target whose state a real workspace wrote, which stays.
+
+    Each stand-in run is a new, empty workspace, while `.databricks/bundle`
+    outlives it: a deploy planned against the last run's state looks for an
+    app this workspace never had, and CLI 1.17.0 panics when that config has
+    changed (DF-13). State is the stand-in's when every sync snapshot in it
+    names a loopback host; state it cannot read is not assumed to be.
+    """
+    kept: list[str] = []
+    state = root / ".databricks" / "bundle"
+    targets = sorted(p for p in state.iterdir() if p.is_dir()) if state.is_dir() else []
+    for target in targets:
+        try:
+            hosts = {
+                str(json.loads(snapshot.read_text()).get("host", ""))
+                for snapshot in (target / "sync-snapshots").glob("*.json")
+            }
+        except (OSError, ValueError, AttributeError):
+            hosts = {"unreadable"}
+        if all(host.startswith(LOOPBACK) for host in hosts):
+            shutil.rmtree(target)
+        else:
+            kept.append(target.name)
+    return kept
+
+
 def main(argv: list[str] | None = None) -> int:
     """`workspace_stub.py -- <command...>`: run the command against the stub.
 
     The child inherits the environment with the stub as its workspace and no
     CLI profile; the exit code is the child's. Afterwards the paths the child
-    asked for are printed, one per line, so a run shows what it exercised.
+    asked for are printed, one per line, so a run shows what it exercised. A
+    `bundle` command starts from no bundle state but a real workspace's,
+    and refuses to run over that (`fresh_state`, DF-13).
     """
     args = sys.argv[1:] if argv is None else argv
     if args[:1] == ["--"]:
@@ -519,6 +610,15 @@ def main(argv: list[str] | None = None) -> int:
     if not args:
         print("usage: workspace_stub.py -- <command> [args...]", file=sys.stderr)
         return 2
+    if any(re.search(r"\bbundle\b", arg) for arg in args):
+        kept = fresh_state(Path.cwd())
+        if kept:
+            print(
+                f"stub: .databricks/bundle/{kept[0]} holds a real workspace's "
+                "state; move .databricks aside before a stand-in run",
+                file=sys.stderr,
+            )
+            return 2
     stub = WorkspaceStub()
     with stub.serving():
         env = {**os.environ, **stub.environment(), "DATABRICKS_BUNDLE_ENGINE": "direct"}

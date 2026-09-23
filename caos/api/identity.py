@@ -43,8 +43,10 @@ grants nothing, so it is not on the actor and cannot be mistaken for authority.
 from __future__ import annotations
 
 import http.client
+import ipaddress
 import json
 import os
+import re
 import threading
 import time
 from collections.abc import Container
@@ -224,14 +226,35 @@ _NEGATIVE: dict[str, float] = {}
 CACHE_CAPACITY = 4096
 NEGATIVE_SECONDS = 5.0
 SCIM_ME_PATH = "/api/2.0/preview/scim/v2/Me"
+# Each connect, send and receive. Not a bound on the lookup: a workspace that
+# sends one byte inside every timeout keeps a lookup open for as long as it
+# likes, and a resolver stall is outside the socket altogether (ED-8).
 SCIM_TIMEOUT_SECONDS = 10.0
+# The whole lookup, name resolution included: the round trip runs on a helper
+# thread and the asking thread stops waiting here, whatever the socket is
+# doing. The helper stops reading the body here too, so a trickle ends.
+SCIM_DEADLINE_SECONDS = 10.0
 SCIM_BODY_BYTES = 1_048_576
 # How long a request waits on the lookup another thread is already making for
-# the very same token before answering `IDENTITY_UNAVAILABLE`. Longer than one
-# round trip can take, so the wait ends because the lookup ended; bounded all
-# the same, because a thread waiting forever on another thread's socket is the
-# `LIMIT_CONCURRENCY` exhaustion the single flight exists to prevent.
-SHARED_WAIT_SECONDS = SCIM_TIMEOUT_SECONDS * 2
+# the very same token before answering `IDENTITY_UNAVAILABLE`. Longer than a
+# lookup may take (`SCIM_DEADLINE_SECONDS`), so the wait ends because the
+# lookup ended; bounded all the same, because a thread waiting forever on
+# another thread's socket is the exhaustion the single flight exists to prevent.
+SHARED_WAIT_SECONDS = SCIM_DEADLINE_SECONDS * 2
+# How many request threads may wait on the workspace at once, the lookups'
+# own and the requests sharing them together (ED-8). Every sync dependency
+# runs on one of AnyIO's forty threads, and a burst of cold requests during a
+# SCIM slowdown used to take all of them, so a caller whose identity was
+# already cached waited behind it: 0.06 s became 5.5 s. Past this the request
+# is answered `IDENTITY_UNAVAILABLE` at once, with its `Retry-After`, and
+# holds nothing.
+SCIM_WAITING_LIMIT = 16
+_WAITING = threading.BoundedSemaphore(SCIM_WAITING_LIMIT)
+# And how many helper threads may be talking to the workspace, an abandoned
+# one included: a resolver or a workspace that never answers holds its helper
+# past the deadline, and a lookup finding every helper held is refused rather
+# than adding another.
+_EXCHANGES = threading.BoundedSemaphore(SCIM_WAITING_LIMIT)
 _CACHE_LOCK = threading.Lock()
 
 
@@ -262,6 +285,8 @@ def actor_from_token(token: object) -> Actor:
     is `uuid5` over the workspace and the SCIM id, so the same person is the
     same subject on every request and no name reaches the store. Roles come
     from the two configured group names; any other group grants nothing.
+    A request that would wait on the workspace while `SCIM_WAITING_LIMIT`
+    others already do is refused at once rather than holding a thread (ED-8).
     """
     if not isinstance(token, str) or not token.strip():
         raise Refusal(RefusalCode.NOT_AUTHENTICATED)
@@ -269,6 +294,17 @@ def actor_from_token(token: object) -> Actor:
     remembered = _remembered(key)
     if remembered is not None:
         return remembered
+    if not _WAITING.acquire(blocking=False):
+        raise Refusal(RefusalCode.IDENTITY_UNAVAILABLE)
+    try:
+        return _resolved(key, token)
+    finally:
+        _WAITING.release()
+
+
+def _resolved(key: str, token: str) -> Actor:
+    """The actor a cold token names: this thread's own lookup, or the one
+    another thread is already making for the same digest."""
     flight, leading = _flight(key)
     if not leading:
         return _shared(flight)
@@ -391,11 +427,19 @@ LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
 
 @dataclass(frozen=True, slots=True)
 class WorkspaceAddress:
-    """Where SCIM is, as `DATABRICKS_HOST` names it."""
+    """Where SCIM is, as `DATABRICKS_HOST` names it. The port is always
+    explicit: `http.client` given none reads it off the host, which splits
+    an IPv6 literal at its last colon (ED-3)."""
 
     secure: bool
     host: str
-    port: int | None
+    port: int
+
+
+# A DNS name (a trailing root dot allowed), or an IP literal checked by
+# `ipaddress`: nothing `http.client` refuses with an untyped `InvalidURL` on
+# the first request -- a space, a control character -- gets past boot (ED-3).
+_HOSTNAME = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?\.?$")
 
 
 def workspace_address(value: str | None) -> WorkspaceAddress | None:
@@ -407,24 +451,38 @@ def workspace_address(value: str | None) -> WorkspaceAddress | None:
     `EDGE_CONFIG_INVALID`. Neither used to be reachable -- `DATABRICKS_HOST`
     with a non-numeric port raised an untyped `ValueError` out of
     `urlsplit(...).port` on the first request, which the edge answered 500
-    (EI-N2).
+    (EI-N2); and a host carrying a space, or an IPv6 literal, booted and then
+    failed or misdirected every lookup (ED-3).
     """
-    if not value:
+    if not value or any(character.isspace() for character in value):
         return None
     try:
         parts = urlsplit(value if "://" in value else f"https://{value}")
         port = parts.port
     except ValueError:
         return None
-    if parts.scheme not in ("http", "https") or not parts.hostname:
+    host = parts.hostname
+    if parts.scheme not in ("http", "https") or not host or not _named(host):
         return None
     if parts.username is not None or parts.password is not None:
         return None
-    if parts.scheme == "http" and parts.hostname not in LOOPBACK_HOSTS:
+    if parts.scheme == "http" and host not in LOOPBACK_HOSTS:
         return None
-    return WorkspaceAddress(
-        secure=parts.scheme == "https", host=parts.hostname, port=port
-    )
+    secure = parts.scheme == "https"
+    if port is None:
+        port = 443 if secure else 80
+    return WorkspaceAddress(secure=secure, host=host, port=port) if port else None
+
+
+def _named(host: str) -> bool:
+    """A DNS name or an IP address, and nothing else."""
+    if _HOSTNAME.match(host):
+        return True
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return True
 
 
 def _current_user(token: str) -> WorkspaceUser:
@@ -446,31 +504,98 @@ def scim_me(authorization: str) -> WorkspaceUser:
     probe can send the credentials the SDK minted for the process itself down
     this exact path, whatever scheme they carry (EI-W1): a host, a path or a
     scope requests would fail on then fails the probe too.
+
+    The round trip runs on a helper thread and this one waits at most
+    `SCIM_DEADLINE_SECONDS` for it (ED-8): the socket's timeout bounds each
+    operation, not the lookup, and a workspace trickling its answer or a
+    resolver that stalls held the lookup -- and every request sharing it --
+    open for as long as it lasted.
     """
     address = workspace_address(os.environ.get(HOST_ENV))
-    if address is None:
+    if address is None or not _EXCHANGES.acquire(blocking=False):
         raise Refusal(RefusalCode.IDENTITY_UNAVAILABLE)
-    opener: type[http.client.HTTPConnection] = (
-        http.client.HTTPSConnection if address.secure else http.client.HTTPConnection
+    exchange = _Exchange(
+        address, authorization, time.monotonic() + SCIM_DEADLINE_SECONDS
     )
-    connection = opener(address.host, address.port, timeout=SCIM_TIMEOUT_SECONDS)
-    try:
-        connection.request(
-            "GET",
-            SCIM_ME_PATH,
-            headers={"Authorization": authorization, "Accept": "application/json"},
-        )
-        response = connection.getresponse()
-        status, body = response.status, response.read(SCIM_BODY_BYTES + 1)
-    except (OSError, http.client.HTTPException):
-        raise Refusal(RefusalCode.IDENTITY_UNAVAILABLE) from None
-    finally:
-        connection.close()
+    threading.Thread(target=exchange.run, name="caos-scim", daemon=True).start()
+    exchange.done.wait(SCIM_DEADLINE_SECONDS)
+    answer = exchange.answer
+    if answer is None:
+        raise Refusal(RefusalCode.IDENTITY_UNAVAILABLE)
+    status, body = answer
     if status in (401, 403):
         raise Refusal(RefusalCode.NOT_AUTHENTICATED)
     if status != 200 or len(body) > SCIM_BODY_BYTES:
         raise Refusal(RefusalCode.IDENTITY_UNAVAILABLE)
     return _scim_user(body)
+
+
+@dataclass
+class _Exchange:
+    """One SCIM `Me` round trip on its helper thread, and what it answered:
+    the status and the body, or None for any transport fault or a body still
+    arriving at `deadline`."""
+
+    address: WorkspaceAddress
+    authorization: str
+    deadline: float
+    done: threading.Event = field(default_factory=threading.Event)
+    answer: tuple[int, bytes] | None = None
+
+    def run(self) -> None:
+        try:
+            self.answer = self._asked()
+        finally:
+            _EXCHANGES.release()
+            self.done.set()
+
+    def _asked(self) -> tuple[int, bytes] | None:
+        opener: type[http.client.HTTPConnection] = (
+            http.client.HTTPSConnection
+            if self.address.secure
+            else http.client.HTTPConnection
+        )
+        try:
+            # Inside the `try` (ED-3): `http.client` refuses a host it cannot
+            # use here, as `InvalidURL`, which is an `HTTPException`.
+            connection = opener(
+                self.address.host, self.address.port, timeout=SCIM_TIMEOUT_SECONDS
+            )
+        except http.client.HTTPException:
+            return None
+        try:
+            connection.request(
+                "GET",
+                SCIM_ME_PATH,
+                headers={
+                    "Authorization": self.authorization,
+                    "Accept": "application/json",
+                },
+            )
+            response = connection.getresponse()
+            return response.status, _body_by(response, self.deadline)
+        except (OSError, ValueError, http.client.HTTPException):
+            # `ValueError` too: `http.client` refuses a header value it will
+            # not send with a message quoting it, and on this thread nothing
+            # but the hook that prints tracebacks would catch it.
+            return None
+        finally:
+            connection.close()
+
+
+def _body_by(response: http.client.HTTPResponse, deadline: float) -> bytes:
+    """At most one byte past `SCIM_BODY_BYTES` of the body, read one receive at
+    a time and given up at `deadline`: a body trickling a byte inside every
+    socket timeout otherwise never ends (ED-8)."""
+    body = bytearray()
+    while len(body) <= SCIM_BODY_BYTES:
+        if time.monotonic() >= deadline:
+            raise TimeoutError
+        received = response.read1(SCIM_BODY_BYTES + 1 - len(body))
+        if not received:
+            break
+        body += received
+    return bytes(body)
 
 
 def _scim_user(body: bytes) -> WorkspaceUser:
@@ -489,7 +614,10 @@ def _scim_user(body: bytes) -> WorkspaceUser:
         raise Refusal(RefusalCode.IDENTITY_UNAVAILABLE)
     scim_id = current.get("id")
     if not isinstance(scim_id, str) or not scim_id:
-        raise Refusal(RefusalCode.NOT_AUTHENTICATED)
+        # A `200` naming nobody is a malformed answer, not a refused token
+        # (ED-9): only a 401 or 403 is "sign in", and only those are
+        # remembered as refusals.
+        raise Refusal(RefusalCode.IDENTITY_UNAVAILABLE)
     listed = current.get("groups") or []
     if not isinstance(listed, list) or not all(
         isinstance(group, dict) for group in listed

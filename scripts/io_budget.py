@@ -17,18 +17,32 @@ a module can stop being true of without anyone noticing, so a gate resting on
 either is one the next request path can be written around -- which is exactly
 what the weaker floor this replaces allowed. The floor is the route directory,
 not the whole server: a store module has no request path, and `caos/api/` is
-the one directory where every file is on one.
+the one directory where every file is on one -- its `__init__.py` files
+included, since a package can serve a route as well as any module can.
+
+And the value, not only the spelling. A declaration is read twice: as the
+source states it, which refuses `float("inf")` and `None` where they are
+written, and as Python evaluates it, which is the only reading that sees
+`math.inf`, `~0` or `10 ** 100` for what they are. The evaluated value must be
+a whole number of round trips between 0 and `CEILING`, or a map of them.
 """
 
 from __future__ import annotations
 
 import argparse
 import ast
+import importlib.util
 import sys
+from hashlib import sha256
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 DECLARATION = "IO_BUDGET"
+
+# The most store round trips one request may be declared to cost. The widest
+# declared today is the book's 598 (four credits' model reads); a number past
+# this is not a budget anybody measured, and `10 ** 100` read as one (DQ-10).
+CEILING = 1024
 
 # Builders of a value that is not a count of round trips. `float("inf")` was
 # accepted as a declared budget (FP-19), which is the declaration saying
@@ -78,11 +92,54 @@ def declares_budget(source: str, filename: str) -> bool:
     )
 
 
+def within(value: object) -> bool:
+    """Whether an evaluated budget is a count in `[0, CEILING]`, or a map of them.
+
+    `type(...) is int`, so neither `True` nor a float that happens to be whole
+    is a number of round trips.
+    """
+    if isinstance(value, dict):
+        return bool(value) and all(within(item) for item in value.values())
+    return type(value) is int and 0 <= value <= CEILING
+
+
+def declared_value(path: Path, root: Path) -> object:
+    """The module's `IO_BUDGET` as Python evaluates it; `None` if it has none.
+
+    Loaded from its file under a private name, with `root` first on the import
+    path for the imports it makes, so a synthetic tree and this repository are
+    read the same way and the module's own name is never shadowed. A module
+    that raises while loading raises here: the gate fails rather than passing
+    over a route it could not read.
+    """
+    name = "_io_budget_" + sha256(str(path).encode("utf-8")).hexdigest()[:16]
+    spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        return None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    sys.path.insert(0, str(root))
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.path.remove(str(root))
+        del sys.modules[name]
+    return getattr(module, DECLARATION, None)
+
+
 def _budgeted_modules(api: Path) -> tuple[list[Path], list[Path]]:
-    """Route modules split into those declaring a budget and those not."""
-    modules = sorted(p for p in api.rglob("*.py") if p.name != "__init__.py")
+    """Route modules split into those declaring a budget and those not.
+
+    `__init__.py` too: a route declared in a package's own module was never
+    read, which was FP-19's first bullet (DQ-10).
+    """
+    root = api.parents[1]
+    modules = sorted(api.rglob("*.py"))
     declared = [
-        p for p in modules if declares_budget(p.read_text(encoding="utf-8"), str(p))
+        p
+        for p in modules
+        if declares_budget(p.read_text(encoding="utf-8"), str(p))
+        and within(declared_value(p, root))
     ]
     return declared, modules
 
@@ -117,8 +174,9 @@ def main(argv: list[str] | None = None) -> int:
         names = ", ".join(str(module.relative_to(api)) for module in missing)
         print(
             f"{api}: {len(missing)} of {len(modules)} module(s) declare no "
-            f"{DECLARATION}: {names}; every request path needs a declared I/O "
-            "budget, and a path that makes no round trip declares 0",
+            f"{DECLARATION} between 0 and {CEILING}: {names}; every request path"
+            " needs a declared I/O budget, and a path that makes no round trip"
+            " declares 0",
             file=sys.stderr,
         )
         return 1 if args.assert_ else 0

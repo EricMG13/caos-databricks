@@ -19,7 +19,11 @@ import psycopg
 import pytest
 from fastapi.testclient import TestClient
 from httpx2 import Response
-from qualification_fixtures import qualification_performed, record_runs
+from qualification_fixtures import (
+    qualification_performed,
+    record_performed_earlier,
+    record_runs,
+)
 
 from caos.api import app as app_module
 from caos.api.app import _STATUS, app, store_connection
@@ -38,7 +42,6 @@ from caos.qualification.store import (
     Evidence,
     performed_evidence,
     record_evidence,
-    record_performed,
 )
 from caos.qualification.verdict import read_verdict
 from caos.refusals import Refusal, RefusalCode
@@ -107,7 +110,7 @@ def client(
     with connect(empty_database) as conn:
         apply_schema(conn)
         performed = qualification_performed()
-        record_performed(conn, performed)
+        record_performed_earlier(conn, performed)
         record_evidence(conn, performed.evidence)
         # The runs behind the snapshot, each accepted artifact recording the
         # model the harness configured: what `record_verdict` compares the
@@ -222,7 +225,7 @@ def test_a_verdict_naming_a_model_no_run_recorded_is_refused(
     with connect(empty_database) as conn:
         apply_schema(conn)
         performed = qualification_performed()
-        record_performed(conn, performed)
+        record_performed_earlier(conn, performed)
         record_evidence(conn, performed.evidence)
         record_runs(conn, performed, model=recorded, outcome=recorded is not None)
         conn.commit()
@@ -469,7 +472,7 @@ def test_a_snapshot_that_is_not_complete_cannot_be_signed(
         performed=replace(original.performed, matrix=None),
     )
     assert incomplete.complete is False
-    record_performed(conn, incomplete)
+    record_performed_earlier(conn, incomplete)
     record_evidence(conn, incomplete.evidence)
     conn.commit()
     evidence = incomplete.evidence

@@ -3,12 +3,19 @@
 from __future__ import annotations
 
 import http.client
+import json
+import socket
 import threading
-from collections.abc import Callable, Mapping
+import time
+from collections.abc import Callable, Iterator, Mapping
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 from uuid import UUID, uuid4, uuid5
 
+import anyio
+import httpx2 as httpx
 import pytest
+import uvicorn
 from fastapi.testclient import TestClient
 from starlette.types import Receive, Scope, Send
 
@@ -352,7 +359,7 @@ def test_refused_tokens_are_pruned_and_bounded_as_they_arrive(
 
 
 def test_a_malformed_scim_answer_is_a_typed_refusal_not_a_type_error(
-    platform: None,
+    platform: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """AR-12. `{"groups": true}` raised `TypeError` out of the comprehension
     that walked the groups, so an upstream answering nonsense read on the wire
@@ -369,9 +376,19 @@ def test_a_malformed_scim_answer_is_a_typed_refusal_not_a_type_error(
         with pytest.raises(Refusal, match=r"^IDENTITY_UNAVAILABLE$"):
             identity._scim_user(body)
 
+    # ED-9: a `200` naming nobody is a malformed answer too, not "sign in" --
+    # and it is not remembered as a refused token, so the workspace is asked
+    # again as soon as it answers properly.
     for nameless in (b"{}", b'{"id": ""}', b'{"id": 42}'):
-        with pytest.raises(Refusal, match=r"^NOT_AUTHENTICATED$"):
+        with pytest.raises(Refusal, match=r"^IDENTITY_UNAVAILABLE$"):
             identity._scim_user(nameless)
+    monkeypatch.setenv(identity.HOST_ENV, "caos.cloud.databricks.com")
+    scim = _Scim(body=b"{}")
+    scim.install(monkeypatch)
+    for _ in range(2):
+        with pytest.raises(Refusal, match=r"^IDENTITY_UNAVAILABLE$"):
+            actor_from_token("nameless")
+    assert (len(scim.sent), identity._NEGATIVE) == (2, {})
 
     read = identity._scim_user(
         b'{"id": "42", "groups": [{"display": "caos-admins"}, {"value": "x"}]}'
@@ -385,8 +402,9 @@ class _Answer:
     def __init__(self, status: int, body: bytes) -> None:
         self.status, self._body = status, body
 
-    def read(self, amount: int) -> bytes:
-        return self._body[:amount]
+    def read1(self, amount: int) -> bytes:
+        taken, self._body = self._body[:amount], self._body[amount:]
+        return taken
 
 
 class _Scim:
@@ -477,7 +495,7 @@ def test_a_workspace_is_asked_over_tls_and_the_header_is_passed_through(
     read = scim_me("Bearer minted-for-the-app")
 
     assert read.groups == frozenset({"caos-analysts"})
-    assert scim.opened == ["https://caos.cloud.databricks.com:None"]
+    assert scim.opened == ["https://caos.cloud.databricks.com:443"]
     assert scim.sent[0]["Authorization"] == "Bearer minted-for-the-app"
     assert scim.sent[0]["path"] == identity.SCIM_ME_PATH
     # And the token the platform forwards reaches it the same way.
@@ -499,7 +517,22 @@ def test_a_bearer_is_never_sent_in_clear_to_anything_but_this_machine() -> None:
         secure=False, host="localhost", port=8000
     )
     assert workspace_address("caos.cloud.databricks.com") == WorkspaceAddress(
-        secure=True, host="caos.cloud.databricks.com", port=None
+        secure=True, host="caos.cloud.databricks.com", port=443
+    )
+    # ED-3: the port is always explicit, because `http.client` given none
+    # reads it off the host and splits an IPv6 literal at its last colon --
+    # `[::1]` asked `:` on port 1, `[2001:db8::a]` raised `InvalidURL`.
+    assert workspace_address("http://[::1]") == WorkspaceAddress(
+        secure=False, host="::1", port=80
+    )
+    assert workspace_address("https://[2001:db8::1]") == WorkspaceAddress(
+        secure=True, host="2001:db8::1", port=443
+    )
+    assert workspace_address("https://[2001:db8::a]") == WorkspaceAddress(
+        secure=True, host="2001:db8::a", port=443
+    )
+    assert workspace_address("https://adb-1.azuredatabricks.net.") == WorkspaceAddress(
+        secure=True, host="adb-1.azuredatabricks.net.", port=443
     )
     for refused in (
         None,
@@ -511,6 +544,11 @@ def test_a_bearer_is_never_sent_in_clear_to_anything_but_this_machine() -> None:
         "ftp://workspace.example.com",
         "https://user:secret@workspace.example.com",
         "https://",
+        "https://adb-123.net ",  # ED-3: booted, then `InvalidURL` per lookup
+        "https://adb 123.net",
+        "https://adb-123.net\t",
+        "https://adb_123.net",
+        "https://adb-123.net:0",
     ):
         assert workspace_address(refused) is None, refused
 
@@ -524,7 +562,11 @@ def test_an_unreachable_workspace_is_refused_at_boot_and_at_the_request(
     monkeypatch.setenv(identity.HOST_ENV, "https://caos.cloud.databricks.com")
     assert resolve_mode().platform is True
 
-    for broken in ("https://caos.cloud.databricks.com:abc", "http://evil.example"):
+    for broken in (
+        "https://caos.cloud.databricks.com:abc",
+        "http://evil.example",
+        "https://localhost ",  # ED-3: booted, then answered 500 per request
+    ):
         monkeypatch.setenv(identity.HOST_ENV, broken)
         with pytest.raises(Refusal, match=r"^EDGE_CONFIG_INVALID$"):
             resolve_mode()
@@ -535,6 +577,205 @@ def test_an_unreachable_workspace_is_refused_at_boot_and_at_the_request(
     assert resolve_mode().platform is True, "an absent host is the request's answer"
     with pytest.raises(Refusal, match=r"^IDENTITY_UNAVAILABLE$"):
         scim_me("Bearer tok")
+
+
+def test_a_host_http_client_will_not_use_is_a_typed_refusal(
+    platform: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ED-3. The connection was built outside the `try`, so the `InvalidURL`
+    `http.client` raises for a host it cannot use escaped untyped and the
+    request answered 500 instead of 503 `IDENTITY_UNAVAILABLE`."""
+    monkeypatch.setenv(identity.HOST_ENV, "https://caos.cloud.databricks.com")
+
+    def refusing(*_args: object, **_kwargs: object) -> None:
+        raise http.client.InvalidURL
+
+    monkeypatch.setattr(http.client, "HTTPSConnection", refusing)
+    with pytest.raises(Refusal, match=r"^IDENTITY_UNAVAILABLE$"):
+        scim_me("Bearer tok")
+
+
+class _SlowWorkspace(BaseHTTPRequestHandler):
+    """SCIM `Me` on a real socket: `drip` trickles its body a byte at a time,
+    `slow` answers after a pause, anything else answers at once."""
+
+    protocol_version = "HTTP/1.1"
+    pause = 1.5
+
+    def log_message(self, *_: object) -> None:
+        return
+
+    def do_GET(self) -> None:
+        token = self.headers.get("Authorization", "").removeprefix("Bearer ")
+        body = json.dumps({"id": token, "groups": []}).encode()
+        if token == "slow":
+            time.sleep(self.pause)
+        self.send_response(200)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        if token != "drip":
+            self.wfile.write(body)
+            return
+        for byte in body:
+            self.wfile.write(bytes([byte]))
+            self.wfile.flush()
+            time.sleep(0.2)
+
+
+@pytest.fixture
+def workspace(platform: None, monkeypatch: pytest.MonkeyPatch) -> Iterator[str]:
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _SlowWorkspace)
+    server.daemon_threads = True
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    host = f"http://127.0.0.1:{server.server_address[1]}"
+    monkeypatch.setenv(identity.HOST_ENV, host)
+    try:
+        yield host
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_a_trickling_workspace_is_given_up_at_the_deadline(
+    workspace: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ED-8. The socket's timeout bounds each receive, so a body arriving a
+    byte inside every timeout held the lookup -- and every request sharing it
+    -- open for as long as it trickled. The lookup now ends at
+    `SCIM_DEADLINE_SECONDS`, its sharers with it, and the helper thread stops
+    reading too, so nothing is left talking to the workspace."""
+    monkeypatch.setattr(identity, "SCIM_DEADLINE_SECONDS", 1.0)
+    monkeypatch.setattr(identity, "SCIM_TIMEOUT_SECONDS", 1.0)
+    outcomes: list[tuple[str, float]] = []
+
+    def ask() -> None:
+        started = time.monotonic()
+        try:
+            actor_from_token("drip")
+            outcomes.append(("actor", time.monotonic() - started))
+        except Refusal as refused:
+            outcomes.append((refused.code.value, time.monotonic() - started))
+
+    askers = [threading.Thread(target=ask) for _ in range(3)]
+    for asker in askers:
+        asker.start()
+    for asker in askers:
+        asker.join(10)
+
+    assert [code for code, _ in outcomes] == ["IDENTITY_UNAVAILABLE"] * 3
+    assert max(took for _, took in outcomes) < 2.0
+    ended = time.monotonic()
+    while _helpers_alive() and time.monotonic() - ended < 2.0:
+        time.sleep(0.05)
+    assert not _helpers_alive(), "a helper is still reading the trickle"
+
+
+def _helpers_alive() -> bool:
+    return any(t.name == "caos-scim" and t.is_alive() for t in threading.enumerate())
+
+
+def test_requests_past_the_waiting_limit_are_refused_at_once(
+    workspace: str,
+) -> None:
+    """ED-8. Every request waiting on the workspace holds one of AnyIO's forty
+    threads, and a burst of cold requests during a slow lookup took all of
+    them: a caller already cached waited behind it. Past
+    `SCIM_WAITING_LIMIT` a request is refused at once and holds nothing, and
+    the limit leaves most of the pool to everyone else."""
+    total = anyio.run(_thread_limit)
+    assert identity.SCIM_WAITING_LIMIT <= total // 2
+    actor_from_token("cached")
+    burst = identity.SCIM_WAITING_LIMIT + 8
+    outcomes: list[tuple[str, float]] = []
+    lock = threading.Lock()
+
+    def ask() -> None:
+        started = time.monotonic()
+        try:
+            actor_from_token("slow")
+            code = "actor"
+        except Refusal as refused:
+            code = refused.code.value
+        with lock:
+            outcomes.append((code, time.monotonic() - started))
+
+    askers = [threading.Thread(target=ask) for _ in range(burst)]
+    for asker in askers:
+        asker.start()
+    time.sleep(0.3)
+    started = time.monotonic()
+    assert actor_from_token("cached").role is GlobalRole.READER
+    assert time.monotonic() - started < 0.1
+    for asker in askers:
+        asker.join(10)
+
+    served = [took for code, took in outcomes if code == "actor"]
+    refused = [took for code, took in outcomes if code == "IDENTITY_UNAVAILABLE"]
+    assert len(served) == identity.SCIM_WAITING_LIMIT
+    assert len(refused) == burst - identity.SCIM_WAITING_LIMIT
+    assert max(refused) < _SlowWorkspace.pause / 2, "a refused request waited"
+
+
+async def _thread_limit() -> int:
+    return int(anyio.to_thread.current_default_thread_limiter().total_tokens)
+
+
+def test_a_cached_caller_is_served_while_a_cold_burst_waits(
+    workspace: str, empty_database: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ED-8, over the socket the way the process serves it: forty-five
+    requests for one cold token while its lookup takes 1.5 s used to hold
+    every AnyIO thread, and a caller whose identity was already cached waited
+    behind them (0.06 s became 5.5 s in the review's probe)."""
+    from caos import serve
+    from caos.api import app as app_module
+
+    monkeypatch.setenv(app_module.DATABASE_URL, empty_database)
+    listener = socket.socket()
+    listener.bind(("127.0.0.1", 0))
+    base = f"http://127.0.0.1:{listener.getsockname()[1]}"
+    server = uvicorn.Server(
+        uvicorn.Config(
+            app_module.app,
+            lifespan="off",
+            log_level="warning",
+            limit_concurrency=serve.LIMIT_CONCURRENCY,
+        )
+    )
+    thread = threading.Thread(
+        target=server.run, kwargs={"sockets": [listener]}, daemon=True
+    )
+    thread.start()
+    while not server.started:
+        time.sleep(0.01)
+
+    def read(token: str) -> float:
+        started = time.monotonic()
+        with httpx.Client(base_url=base, timeout=30) as http:
+            http.get(
+                "/api/v1/directory",
+                headers={
+                    "x-forwarded-access-token": token,
+                    "sec-fetch-site": "same-origin",
+                },
+            )
+        return time.monotonic() - started
+
+    try:
+        read("cached")
+        burst = [threading.Thread(target=read, args=("slow",)) for _ in range(45)]
+        for one in burst:
+            one.start()
+        time.sleep(0.5)
+        during = read("cached")
+        for one in burst:
+            one.join(30)
+    finally:
+        server.should_exit = True
+        thread.join(10)
+        listener.close()
+
+    assert during < _SlowWorkspace.pause / 2, during
 
 
 def test_the_origin_rules_refuse_a_doubled_or_unparsable_header(

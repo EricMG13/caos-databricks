@@ -6,8 +6,8 @@ would re-answer it differently. Vendored trees are excluded: the methodology
 bundle is authority we never edit (DECISIONS.md 6), so a vocabulary or coverage
 finding inside it names something no PR is allowed to fix.
 
-The one subprocess call in this repository: fixed argv, resolved executable,
-no shell, and no caller-supplied argument.
+The one subprocess call in this repository: resolved executable, no shell,
+and pathspecs that are constants in the gates that call it.
 """
 
 from __future__ import annotations
@@ -20,23 +20,32 @@ from pathlib import Path
 VENDOR = "vendor"
 
 
-def tracked_python(repo: Path) -> list[Path]:
-    """Absolute paths of the .py files git tracks under `repo`."""
+def tracked_files(repo: Path, *pathspecs: str) -> list[str]:
+    """Repo-relative paths git tracks under `repo` that match `pathspecs`;
+    `RuntimeError` when git is missing or cannot list them."""
     git = shutil.which("git")
     if git is None:
         message = "git is not on PATH; the gate cannot determine what a PR carries"
         raise RuntimeError(message)
     listed = subprocess.run(  # nosec B603
-        [git, "ls-files", "-z", "*.py"],
+        [git, "ls-files", "-z", "--", *pathspecs],
         cwd=repo,
         capture_output=True,
         text=True,
-        check=True,
+        check=False,
     )
+    if listed.returncode != 0:
+        message = "git could not list the tracked files; the gate cannot judge them"
+        raise RuntimeError(message)
+    return [name for name in listed.stdout.split("\0") if name]
+
+
+def tracked_python(repo: Path) -> list[Path]:
+    """Absolute paths of the .py files git tracks under `repo`."""
     listed_paths = (
         repo / name
-        for name in listed.stdout.split("\0")
-        if name and not name.startswith(f"{VENDOR}/")
+        for name in tracked_files(repo, "*.py")
+        if not name.startswith(f"{VENDOR}/")
     )
     return [path for path in listed_paths if _present(path)]
 

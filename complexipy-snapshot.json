@@ -206,15 +206,5 @@
         "complexity": 20
       }
     ]
-  },
-  {
-    "path": "scripts/qualify.py",
-    "file_name": "qualify.py",
-    "functions": [
-      {
-        "name": "_capture",
-        "complexity": 16
-      }
-    ]
   }
 ]

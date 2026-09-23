@@ -15,6 +15,7 @@ import {
   useState,
   type ChangeEvent,
 } from "react";
+import { flushSync } from "react-dom";
 import { useSearchParams } from "react-router";
 import {
   approveGate,
@@ -139,21 +140,34 @@ export interface CommandState<R> {
   result: CommandResult<R> | null;
 }
 
+/** The server's transient refusals (`TRANSIENT` in `caos/api/app.py`): typed,
+    but they say "not now" rather than "no". STORE_UNAVAILABLE in particular is
+    what a store fault at commit answers, and a commit whose acknowledgement
+    was lost faults exactly there with the write already made (MAX-01). */
+const IN_DOUBT: ReadonlySet<string> = new Set([
+  "STORE_UNAVAILABLE",
+  "IDENTITY_UNAVAILABLE",
+  "PROVIDER_UNAVAILABLE",
+  "STREAM_LIMIT_REACHED",
+]);
+
 /** An answer that settled the intent: a validated receipt, or a typed refusal
-    the server composed. Anything else -- a request that never arrived, a
-    gateway page, a 201 whose body was lost in transfer -- leaves the write in
-    doubt, so the key is kept and a retry asks the same question again rather
-    than a second one (AR-19, finding FE-8). */
-function settles<R>(kind: CommandResult<R>["kind"]): boolean {
-  return kind === "ok" || kind === "refused";
+    the server composed that is not one of the transient ones above. Anything
+    else -- a request that never arrived, a gateway page, a 201 whose body was
+    lost in transfer, a store that could not say whether it committed -- leaves
+    the write in doubt, so the key is kept and a retry asks the same question
+    again rather than a second one (AR-19, findings FE-8 and MAX-01). */
+function settles<R>(result: CommandResult<R>): boolean {
+  if (result.kind === "ok") return true;
+  return result.kind === "refused" && !IN_DOUBT.has(result.refusal.code);
 }
 
 /** One `crypto.randomUUID()` key per user intent (brief 4.2, decision 12).
     `run` takes the request body alongside the sender: the key is kept while
     the identical body has yet to draw an answer that settles it (`settles`
-    above), which covers an offline retry and every unreadable answer; a body
-    that has changed since (the analyst edited the subject, picked a different
-    route, re-read a preview) draws a fresh one.
+    above), which covers an offline retry, every unreadable answer and a
+    transient refusal; a body that has changed since (the analyst edited the
+    subject, picked a different route, re-read a preview) draws a fresh one.
 
     A second activation while the first is still in flight is not a second
     intent and is refused here rather than by each of the fourteen controls:
@@ -170,7 +184,8 @@ function settles<R>(kind: CommandResult<R>["kind"]): boolean {
 export function useCommand<R>() {
   const intentRef = useRef<Intent>(newIntent());
   const lastBodyRef = useRef<string | null>(null);
-  const lastKindRef = useRef<CommandResult<R>["kind"] | null>(null);
+  // Nothing sent yet is nothing in doubt.
+  const settledRef = useRef(true);
   const inFlightRef = useRef(false);
   const [state, setState] = useState<CommandState<R>>({ pending: false, result: null });
   const run = useCallback(
@@ -179,14 +194,18 @@ export function useCommand<R>() {
       inFlightRef.current = true;
       try {
         const bodyKey = JSON.stringify(body);
-        const held = lastKindRef.current;
-        const retrySameBody = held !== null && !settles(held) && lastBodyRef.current === bodyKey;
+        const retrySameBody = !settledRef.current && lastBodyRef.current === bodyKey;
         if (!retrySameBody) intentRef.current = newIntent();
         lastBodyRef.current = bodyKey;
         setState({ pending: true, result: null });
         const result = await send(intentRef.current);
-        lastKindRef.current = result.kind;
-        setState({ pending: false, result });
+        settledRef.current = settles(result);
+        // The answer is on screen, and a success said, before anything it
+        // causes: a caller's re-read that takes this very control away (a
+        // withdrawn source, a revoked member, a remounted gate panel) would
+        // otherwise land in the same render and the outcome would never be
+        // shown or announced at all (DF-6).
+        flushSync(() => setState({ pending: false, result }));
         return result;
       } finally {
         inFlightRef.current = false;
@@ -200,27 +219,44 @@ export function useCommand<R>() {
 /** What the last attempt of a command answered, beside the advisory refusal
     already shown on the control itself: a visible success, a typed refusal,
     an unreadable answer, or a request that never reached the server. */
-export function CommandOutcome({
+export function CommandOutcome<R>({
   result,
   success,
+  mark,
 }: {
-  result: CommandResult<unknown> | null;
-  success: string;
+  result: CommandResult<R> | null;
+  /** What a success shows and says: one sentence, or one drawn from the
+      receipt where the receipt names what was made. Never empty -- a success
+      nobody hears is a form that silently did nothing (findings FE-6, DF-6). */
+  success: string | ((receipt: R) => string);
+  /** A name the success note also carries as `data-<mark>`, for a control
+      whose note is found by its own name. */
+  mark?: string;
 }) {
   const say = useAnnouncer();
-  const succeeded = result?.kind === "ok";
-  // Said once per success, in the section's own live region: the note below
+  const sentence =
+    result?.kind === "ok"
+      ? typeof success === "string"
+        ? success
+        : success(result.receipt)
+      : null;
+  // Said once per answer, in the section's own live region: the note below
   // carries role=status too, but a region inserted already populated is
-  // announced inconsistently and a success nobody hears is a form that
-  // silently did nothing (finding FE-6).
+  // announced inconsistently. Keyed on the answer rather than on whether it
+  // succeeded, so a second success of the same command is said again (DF-6).
   useEffect(() => {
-    if (succeeded && success) say(success);
-  }, [succeeded, success, say]);
+    if (sentence) say(sentence);
+  }, [result, sentence, say]);
   if (result === null) return null;
   if (result.kind === "ok") {
     return (
-      <div className="note" role="status" data-command-success>
-        {success}
+      <div
+        className="note"
+        role="status"
+        data-command-success
+        {...(mark ? { [`data-${mark}`]: "" } : {})}
+      >
+        {sentence}
       </div>
     );
   }
@@ -230,6 +266,11 @@ export function CommandOutcome({
     return (
       <div className="note crit" role="alert">
         <RefusalNote refusal={result.refusal} />
+        {IN_DOUBT.has(result.refusal.code) ? (
+          <p data-command-in-doubt>
+            Whether the command took effect is not known yet. Retrying sends the same key.
+          </p>
+        ) : null}
       </div>
     );
   }
@@ -509,6 +550,7 @@ export function GatePanelControl({
   state,
   action,
   onFingerprint,
+  onPreviewed,
   onRefetch,
 }: {
   caseId: string;
@@ -517,6 +559,10 @@ export function GatePanelControl({
   state: GateView["state"];
   action: ActionView | undefined;
   onFingerprint: (fingerprint: string) => void;
+  /** The fingerprint a preview was computed from: the pinned input's, as the
+      server read it. Start and retry may send it; the panel is not remounted
+      for it. */
+  onPreviewed: (fingerprint: string) => void;
   onRefetch: (runId: string | null) => void;
 }) {
   const preview = useCommand<GatePreviewDocument>();
@@ -537,11 +583,18 @@ export function GatePanelControl({
           data-action="PREVIEW"
           data-preview-gate={gate}
           onClick={() => {
-            // A preview grants nothing and does not seed the known
-            // fingerprint (`onFingerprint` is Pin's and Approve's alone) --
-            // doing so here would remount this very panel on its own
-            // success, at the moment the digest it just read matters most.
-            void preview.run(null, (intent) => fetchGatePreview(caseId, runId, gate, intent));
+            // A preview grants nothing and does not move the fingerprint the
+            // panels are keyed on (`onFingerprint` is Pin's and Approve's
+            // alone) -- doing so here would remount this very panel on its own
+            // success, at the moment the digest it just read matters most. It
+            // does tell start and retry what the pinned input is: after a
+            // reload, with both gates released and the subject already
+            // pinned, a preview is the one read left that says (MAX-18).
+            void preview
+              .run(null, (intent) => fetchGatePreview(caseId, runId, gate, intent))
+              .then((outcome) => {
+                if (outcome?.kind === "ok") onPreviewed(outcome.receipt.input_fingerprint);
+              });
           }}
         >
           {preview.pending ? "Loading…" : "Preview"}

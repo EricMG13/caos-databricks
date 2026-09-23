@@ -35,6 +35,9 @@ from caos.evidence.citations import (
     NORMALISATION_VERSION,
     TRACKING_EXTRACTORS,
     _extractor_name,
+    _match_at,
+    _Token,
+    _unique_run,
     anchor_citation,
 )
 from caos.evidence.ingest import Document, admit_pack
@@ -160,11 +163,6 @@ def test_the_exact_search_is_preferred_and_unchanged(
     assert len(spelled) == 1
 
 
-def test_the_declared_normalisations_carry_a_version() -> None:
-    """A reader asking which rule anchored a quote has one thing to name."""
-    assert NORMALISATION_VERSION == "1"
-
-
 def test_a_plain_text_document_never_joins_its_single_character_words(
     case: tuple[StoreConnection, UUID], tmp_path: Path
 ) -> None:
@@ -212,3 +210,165 @@ def test_a_readable_pdf_identity_is_the_one_that_tracks() -> None:
     """The other side of the test above: without this, the parametrisation
     would pass against a function that always returned the empty string."""
     assert _extractor_name('{"name": "caos.pdfminer"}') in TRACKING_EXTRACTORS
+
+
+def _line(*words: str, regions: tuple[int, ...] = ()) -> list[_Token]:
+    """One line of tokens, a point apart, in one region unless told otherwise."""
+    return [
+        _Token(word, regions[at] if regions else 0, 0, float(at), 0.0, at + 1.0, 1.0)
+        for at, word in enumerate(words)
+    ]
+
+
+def _located(tokens: list[_Token], quote: str, *, tracking: bool = False) -> str:
+    try:
+        run = _unique_run(tokens, quote, tracking=tracking)
+    except Refusal as refused:
+        return refused.code.value
+    return " ".join(token.text for token in run)
+
+
+@pytest.mark.parametrize(
+    ("page", "quote"),
+    [
+        (("Net", "income", "(5)"), "Net income 5"),  # a loss shown as a profit
+        (("Net", "income", "(5)."), "Net income 5"),
+        (("Margin", "of", ".5"), "Margin of 5"),  # a point moved
+        (("Covenant", "headroom", "12"), "Covenant headroom (12)"),
+        (("(5)", "net", "loss"), "5 net loss"),
+        (("(USD", "5)"), "USD 5"),  # the parenthesis on the figure's own word
+    ],
+)
+def test_a_figure_keeps_the_marks_that_change_what_it_says(
+    page: tuple[str, ...], quote: str
+) -> None:
+    """EV-4: accounting parentheses negate a figure and a leading point moves
+    it, yet both were stripped from a quote's edge, so a quote stating a
+    different number from the page anchored and was shown host-verified. A
+    word with a digit in it keeps them; quotation marks, brackets and a
+    sentence's closing punctuation are still forgiven."""
+    assert _located(_line(*page), quote) == "CITATION_NOT_LOCATED"
+
+
+@pytest.mark.parametrize(
+    ("page", "quote", "anchored"),
+    [
+        (("Net", "loss", "(5)"), "Net loss (5).", "Net loss (5)"),
+        (("Net", "loss", "(5)"), '"Net loss (5)"', "Net loss (5)"),
+        (("Total", "2026"), "Total 2026.", "Total 2026"),
+        (("was", "USD", "1,240.0m"), "was USD 1,240.0m.", "was USD 1,240.0m"),
+        (("Margin", "of", ".5"), "Margin of .5,", "Margin of .5"),
+        (("(see", "note", "the", "appendix)"), "see note the appendix", None),
+        (("footnote", "[5]"), "footnote 5", "footnote [5]"),
+    ],
+)
+def test_a_figure_still_forgives_what_a_sentence_puts_around_it(
+    page: tuple[str, ...], quote: str, anchored: str | None
+) -> None:
+    expected = " ".join(page) if anchored is None else anchored
+    assert _located(_line(*page), quote) == expected
+
+
+def test_single_digits_are_never_joined_into_a_number() -> None:
+    """EV-4's second half: the tracking join read two table cells `3` and `4`
+    on one line as the figure `34`. A tracked word is letters; digits a column
+    apart are two numbers."""
+    cells = _line("Leverage", "3", "4")
+    assert _located(cells, "Leverage 34", tracking=True) == "CITATION_NOT_LOCATED"
+    assert _located(cells, "Leverage 3 4", tracking=True) == "Leverage 3 4"
+    letters = _line("H", "e", "a", "d", "word")
+    assert _located(letters, "Head word", tracking=True) == "Head word"
+
+
+def test_the_declared_normalisations_moved_their_version() -> None:
+    """EV-4 narrowed two of them, so a quote anchored under the first version
+    may not anchor under this one; the version says which rule a reader met."""
+    assert NORMALISATION_VERSION == "2"
+
+
+def test_an_ambiguous_quote_stops_at_its_second_place() -> None:
+    """MAX-06: every match was kept, each a quote-sized slice, before the
+    count was read -- a repeated page and a long quote held millions of token
+    references to refuse once. The search stops at the second place."""
+    import tracemalloc
+
+    page = _line(*(["a"] * 5_000))
+    tracemalloc.start()
+    try:
+        with pytest.raises(Refusal, match=r"^CITATION_AMBIGUOUS$"):
+            _unique_run(page, " ".join(["a"] * 1_000))
+        _current, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert peak < 2_000_000, peak
+
+
+@pytest.mark.parametrize("normalised", ["last", "edges", "region"])
+def test_a_long_near_match_costs_no_more_than_the_page(normalised: str) -> None:
+    """MAX-06's other half: a quote that matches the page almost everywhere and
+    fails at its last word, or at a region, was compared word by word from
+    every start. The search is linear in the page and the quote now."""
+    import time
+
+    size, width = 50_000, 5_000
+    regions = tuple(at // (width - 1) for at in range(size))
+    page = _line(*(["a"] * size), regions=regions if normalised == "region" else ())
+    words = ["a"] * width
+    if normalised == "last":
+        words[-1] = "b"
+    elif normalised == "edges":
+        words[0], words[-1] = '"a', 'b."'
+    started = time.perf_counter()
+    with pytest.raises(Refusal, match=r"^CITATION_NOT_LOCATED$"):
+        _unique_run(page, " ".join(words))
+    assert time.perf_counter() - started < 1.0
+
+
+def _every_start(
+    tokens: list[_Token], words: list[str], *, normalised: bool
+) -> list[_Token] | str | None:
+    """The search as it was: `_match_at` asked at every start, every match
+    kept. The rule the new search must find, whatever it costs here."""
+    matches = [
+        run
+        for start in range(len(tokens))
+        if (run := _match_at(tokens, start, words, normalised=normalised))
+    ]
+    if len(matches) > 1:
+        return "CITATION_AMBIGUOUS"
+    return matches[0] if matches else None
+
+
+def test_the_linear_search_finds_what_every_start_found() -> None:
+    """MAX-06: the new search against the old one on pages built to collide --
+    a small vocabulary, repeats, regions a few tokens long, edge punctuation,
+    figures and decomposed words -- in both passes, over thousands of quotes."""
+    import random
+
+    from caos.evidence.citations import _one_match
+
+    rng = random.Random(20260923)
+    vocabulary = ["a", "b", "a.", '"a', "(5)", "5", ".5", "e\u0301", "\u00e9", "ab"]
+    for _page in range(300):
+        size = rng.randint(1, 30)
+        regions = sorted(rng.randint(0, 4) for _ in range(size))
+        page = _line(*rng.choices(vocabulary, k=size), regions=tuple(regions))
+        for _quote in range(12):
+            width = rng.randint(1, 5)
+            words = rng.choices(vocabulary, k=width)
+            for normalised in (False, True):
+                expected = _every_start(page, words, normalised=normalised)
+                try:
+                    found: object = _one_match(page, words, normalised=normalised)
+                except Refusal as refused:
+                    found = refused.code.value
+                assert found == expected, (page, words, normalised)
+
+
+def test_a_region_boundary_still_splits_a_run_found_by_the_new_search() -> None:
+    """The one match that crosses a region is no match, and the one that does
+    not is found, on a page that carries both."""
+    page = _line("x", "y", "z", "x", "y", "z", regions=(0, 0, 1, 1, 1, 1))
+    assert _located(page, "x y z") == "x y z"
+    run = _unique_run(page, "x y z")
+    assert run == page[3:6]

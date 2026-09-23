@@ -400,6 +400,55 @@ def test_an_unhandled_fault_answers_a_secured_constant_500() -> None:
         TestClient(faulty).get("/api/v1/fault")
 
 
+def test_the_process_entry_answers_an_unhandled_fault_in_the_typed_body(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """ED-2. `caos.serve` serves `caos.api.site:application`, where the app's
+    own guard sits behind the outer one and passed straight through: the fault
+    reached Starlette's `ServerErrorMiddleware`, which answered `text/plain`
+    "Internal Server Error" before the outer guard could, and the typed body
+    never arrived. The inner guard answers first now, and the fault is logged
+    once, as its class and frame."""
+    from caos.api import app as app_module
+    from caos.api.site import SITE_ROOT_ENV, application
+
+    def raising() -> Iterator[None]:
+        text = "secret document text"
+        raise RuntimeError(text)
+        yield
+
+    monkeypatch.setenv(TRUST_SWITCH, "1")
+    monkeypatch.delenv(SITE_ROOT_ENV, raising=False)
+    app.dependency_overrides[app_module.store_connection] = raising
+    try:
+        client = TestClient(
+            application,
+            base_url="http://127.0.0.1:8000",
+            client=("127.0.0.1", 50000),
+            raise_server_exceptions=False,
+        )
+        response = client.get(
+            "/api/v1/directory",
+            headers={"x-caos-user": str(uuid4()), "sec-fetch-site": "same-origin"},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 500
+    assert response.headers["content-type"] == "application/json"
+    assert response.json() == {
+        "code": "INTERNAL_FAULT",
+        "clears": CLEARS[RefusalCode.INTERNAL_FAULT],
+    }
+    assert "secret" not in response.text
+    for name, value in SECURITY_HEADERS.items():
+        assert response.headers.get(name) == value, name
+    logged = capsys.readouterr().err
+    [fault] = [line for line in logged.splitlines() if "RuntimeError" in line]
+    assert fault.startswith("RuntimeError at ")
+    assert "secret" not in logged
+
+
 def test_is_api_path_matches_the_root_and_everything_under_it() -> None:
     assert is_api_path("/api") is True
     assert is_api_path("/api/v1/cases") is True

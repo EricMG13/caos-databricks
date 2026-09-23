@@ -330,13 +330,11 @@ export function FilingControls({
           >
             {save.pending ? "Saving…" : "Save revision"}
           </RefusedControl>
-          {save.result?.kind === "ok" ? (
-            <p className="note ok" data-revision-saved>
-              Revision {save.result.receipt.revision_id} saved.
-            </p>
-          ) : (
-            <CommandOutcome result={save.result} success="" />
-          )}
+          <CommandOutcome
+            result={save.result}
+            success={(receipt) => `Revision ${receipt.revision_id} saved.`}
+            mark="revision-saved"
+          />
         </div>
         <FilingAct
           name="SIGN_OPINION"

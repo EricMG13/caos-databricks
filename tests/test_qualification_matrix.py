@@ -1369,3 +1369,22 @@ def test_one_module_field_expected_to_hold_two_values_is_ambiguous(ran: Ran) -> 
         ),
     )
     assert_unambiguous(QualificationSet(cases=(both,)))
+
+
+def test_a_case_label_is_the_label_the_digest_binds(ran: Ran) -> None:
+    """`case_label`: the digest strips and bounds a label, so `"A"` and `" A "`
+    are one case there, and `assert_unambiguous` compares the same form (FP-08).
+    """
+    from caos.qualification.matrix import case_label
+
+    case = _one_case(ran)
+    assert case_label(replace(case, label=" A ")) == case_label(
+        replace(case, label="A")
+    )
+    with pytest.raises(Refusal) as refused:
+        assert_unambiguous(
+            QualificationSet(
+                cases=(replace(case, label="A"), replace(case, label="A "))
+            )
+        )
+    assert refused.value.code is RefusalCode.QUALIFICATION_SET_AMBIGUOUS

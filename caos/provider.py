@@ -16,6 +16,9 @@ to prevent.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any, Protocol
@@ -23,10 +26,11 @@ from typing import Any, Protocol
 from caos.refusals import Refusal, RefusalCode
 from caos.store.budget import validate_spend
 
-# The most one non-streamed call may take to answer: nothing arrives until
-# generation ends, so this is the generation budget (MX-4), sized inside the
-# 300 s lease with room to bill and accept. `MAX_COMPLETION_TOKENS` is what
-# the reservation covers, not what this deadline promises to deliver.
+# The most one `complete` may take, every rate-limit re-send and wait included
+# (ST-9): nothing arrives until generation ends, so this is the generation
+# budget (MX-4), sized inside the 600 s lease (`caos.store.work.LEASE_SECONDS`)
+# with room to bill and accept. `MAX_COMPLETION_TOKENS` is what the
+# reservation covers, not what this deadline promises to deliver.
 TIMEOUT_SECONDS = 240.0
 # Host resource ceilings, not guarantees that every canonical handoff fits.
 # Oversized requests/responses refuse; no prefix is accepted as a whole answer.
@@ -137,3 +141,34 @@ def reported_charge(value: object) -> Decimal | None:
             return None
         return value
     return None
+
+
+# What must still hold before a call is sent again (ST-7): each check raises
+# the refusal that stops it. Scoped to the call that installs it, so a check
+# never outlives the attempt it guards.
+_RESEND_CHECKS: ContextVar[tuple[Callable[[], None], ...]] = ContextVar(
+    "caos_resend_checks", default=()
+)
+
+
+@contextmanager
+def resend_checked(check: Callable[[], None]) -> Iterator[None]:
+    """Run `check` before any re-send made inside this block.
+
+    A transport that asks again -- a rate limit reached no model and is asked
+    again under the same reservation (DP-5) -- first asks every check installed
+    around it, outermost first, and sends nothing when one raises: a cancel,
+    a lost lease or a process that is stopping ends the attempt instead.
+    """
+    installed = _RESEND_CHECKS.set((*_RESEND_CHECKS.get(), check))
+    try:
+        yield
+    finally:
+        _RESEND_CHECKS.reset(installed)
+
+
+def check_resend() -> None:
+    """Raise what the first failing check raises; a transport calls this
+    immediately before it sends a call again."""
+    for check in _RESEND_CHECKS.get():
+        check()

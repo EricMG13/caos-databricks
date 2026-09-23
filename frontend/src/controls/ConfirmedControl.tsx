@@ -5,8 +5,16 @@
 // thing it acts on and the short form of the digest the server will compare.
 // Confirm takes focus when the step opens; Cancel and Escape put it back on
 // the control that opened it (IA_SPEC.md 7, the opener rule).
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
 import { RefusedControl } from "./RefusedControl";
+import { focusSectionHeading } from "@/app/heading";
 import { shortDigest } from "@/ds/format";
 import type { Refusal } from "@/wire";
 
@@ -21,6 +29,23 @@ export interface ConfirmStep {
 export function confirmSentence(step: ConfirmStep): string {
   const digest = step.digest === null ? "" : ` · sha256:${shortDigest(step.digest)}`;
   return `${step.act} — ${step.subject}${digest}. This cannot be undone.`;
+}
+
+/** Focus for a reader whose control has just left the page: the heading of
+    the nearest panel or group around it that is still there, else the
+    section's own. `around` is the control's ancestors, nearest first, read
+    before it went. */
+function landNear(around: readonly HTMLElement[]): void {
+  const survivor = around.find((element) => element.isConnected);
+  const heading = survivor
+    ?.closest<HTMLElement>("[role='group'], section")
+    ?.querySelector<HTMLElement>("h2, h3");
+  if (!heading) {
+    focusSectionHeading();
+    return;
+  }
+  if (!heading.hasAttribute("tabindex")) heading.tabIndex = -1;
+  heading.focus();
 }
 
 export function ConfirmedControl({
@@ -57,6 +82,25 @@ export function ConfirmedControl({
     }
     wasArmed.current = armed;
   }, [armed]);
+  // An act whose success the re-read answers by taking this control away --
+  // a withdrawn source's row offers no second withdrawal, a revoked member's
+  // row is gone -- leaves focus on a node no longer in the document, and the
+  // browser drops it to <body>: the reader starts again at the top of the
+  // page (WCAG 2.4.3, DF-7). A layout cleanup runs while the node is still
+  // attached, so it can tell whether focus was in here; where focus lands is
+  // decided once the commit that removed it is done.
+  useLayoutEffect(() => {
+    const node = holder.current;
+    return () => {
+      if (!node?.contains(document.activeElement)) return;
+      const around: HTMLElement[] = [];
+      for (let at = node.parentElement; at; at = at.parentElement) around.push(at);
+      queueMicrotask(() => {
+        const active = document.activeElement;
+        if (active === null || active === document.body) landNear(around);
+      });
+    };
+  }, []);
   // Escape is handled on the step's own buttons, which are where focus is put
   // when it opens: a listener on the wrapper would be a keyboard handler on a
   // div, which is the shape the workspace does not write.

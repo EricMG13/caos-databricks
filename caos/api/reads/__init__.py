@@ -5,3 +5,6 @@ read touches only its own module; `caos/api/app.py` includes them all.
 """
 
 from __future__ import annotations
+
+# The package serves no request path of its own (`scripts/io_budget.py`).
+IO_BUDGET = 0

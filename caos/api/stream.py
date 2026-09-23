@@ -51,11 +51,16 @@ from caos.store.members import Standing, satisfies, standing_of
 
 # Once per connection: the heads and the run's terminal position, one query.
 CONNECT_IO = 1
+# And the standing recheck before the cursor frame, which the declared budget
+# left out: the generator's connect and first poll cost five, not four (ED-7).
+CURSOR_IO = 1
 # Per poll: the audit actions after the cursor, the run events after it (until
-# the terminal is delivered), and the standing recheck. Each frame then costs
-# one more recheck -- the N+1 §9 mandates, spread across the stream's life.
+# the terminal is delivered), and the standing recheck. Each named frame then
+# costs one more recheck -- the N+1 §9 mandates, spread across the stream's
+# life, and at most `ACTIONS_PAGE + RUN_PAGE` of them in one poll.
 POLL_IO = 3
-IO_BUDGET = CONNECT_IO + POLL_IO
+FRAME_IO = 1
+IO_BUDGET = CONNECT_IO + CURSOR_IO + POLL_IO
 
 # How many run events one poll reads; the next poll continues after the last.
 RUN_PAGE = 500
@@ -104,12 +109,15 @@ SLOTS = _Slots()
 class StreamSlot:
     """One held tail slot, given back exactly once however the stream ends.
 
-    One-shot because it is released from two places and neither may double
-    count. The ordinary path is the streaming generator's `finally`, which runs
-    when the tail is delivered, hits its deadline, loses standing, or is closed
-    because the browser went away. The second is a `weakref.finalize` on the
-    generator, for the one case a `finally` cannot reach: **a generator that is
-    never started never unwinds**, so a response built and then never iterated
+    One-shot because it is released from three places and none may double
+    count. The ordinary path is the route's response, whose `__call__` gives
+    it back in a `finally` when the tail is delivered, hits its deadline,
+    loses standing, or the browser goes away -- not the generator's own
+    `finally`, which a disconnect's cancellation used to leave waiting for a
+    full garbage collection (ED-1). The generator's `finally` still releases
+    for anyone iterating it directly. The third is a `weakref.finalize` on the
+    generator, for the one case neither can reach: **a generator that is
+    never started never unwinds**, so a response built and then never sent
     would hold its slot until the process restarted. Measured rather than
     assumed -- a generator dropped before its first `next()` leaves the counter
     raised, and that slot is capacity only a restart returns.

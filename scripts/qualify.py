@@ -55,6 +55,7 @@ from caos.qualification.harness import (
     Harness,
     PerformedSet,
     PreparedCase,
+    assert_admissible,
     perform,
     prepare,
 )
@@ -108,14 +109,15 @@ def _capture(
     conn: StoreConnection,
     prepared: tuple[PreparedCase, ...],
     performed: PerformedSet,
-    *,
-    run_id: UUID,
 ) -> dict[str, object]:
-    """Everything a reader needs to re-check the run, as one JSON document.
+    """Everything a reader needs to re-check the set, as one JSON document.
 
     The charge, model and generation id of every attempt come from the store
     rather than from the objects in hand: what reconciles a vendor bill is what
-    the host recorded, not what a caller remembers recording.
+    the host recorded, not what a caller remembers recording. Every prepared
+    run's attempts, each row naming its run: the capture read the first case's
+    run alone, so a two-case set's second run -- three charged calls -- was
+    missing from the document that reconciles the bill (DQ-6, MAX-11).
 
     The rows and the proofs are serialised from the dataclasses themselves
     (`dataclasses.asdict`) rather than field by field. The hand-written
@@ -126,19 +128,12 @@ def _capture(
     explicit, because a reader wants how many keys missed and then which.
     """
     snapshot = performed_evidence(prepared=prepared, performed=performed)
-    attempts = conn.execute(
-        "SELECT t.route_node_id,t.ordinal,l.amount,o.model,o.generation_id,"
-        " o.diagnostic_sha256 FROM run_attempts t"
-        " LEFT JOIN budget_ledger l USING(attempt_id)"
-        " LEFT JOIN call_outcomes o USING(attempt_id)"
-        " WHERE t.run_id=%s ORDER BY t.started_at,t.attempt_id",
-        (run_id,),
-    ).fetchall()
+    runs = [item.input.run_id for item in prepared]
     return {
         "adapter_version": CANONICAL_ADAPTER_VERSION,
         "provider": prepared[0].provider,
         "model": prepared[0].model,
-        "run_id": str(run_id),
+        "run_ids": [str(run_id) for run_id in runs],
         "set_sha256": prepared[0].qualification_set_sha256,
         "evidence_sha256": snapshot.evidence.sha256,
         "performed_sha256": snapshot.evidence.performed_sha256,
@@ -146,6 +141,7 @@ def _capture(
         "result": [
             {
                 "case_label": item.case_label,
+                "run_id": str(item.run_id),
                 "status": item.status.value,
                 "stopped": None if item.stopped is None else item.stopped.value,
                 "refusal": None if item.refusal is None else item.refusal.value,
@@ -153,17 +149,7 @@ def _capture(
             }
             for item in performed.performed
         ],
-        "attempts": [
-            {
-                "route_node_id": str(row[0]),
-                "ordinal": row[1],
-                "charge": None if row[2] is None else str(row[2]),
-                "model": row[3],
-                "generation_id": row[4],
-                "diagnostic_sha256": row[5],
-            }
-            for row in attempts
-        ],
+        "attempts": _attempts(conn, runs),
         "matrix": None
         if performed.matrix is None
         else [
@@ -178,6 +164,32 @@ def _capture(
             for row in performed.matrix.rows
         ],
     }
+
+
+def _attempts(conn: StoreConnection, runs: list[UUID]) -> list[dict[str, Plain]]:
+    """Every attempt of every prepared run, as the store recorded it, in case
+    order: the charge, model and generation id a vendor bill is reconciled
+    against, each row naming its run (DQ-6)."""
+    return [
+        {
+            "run_id": str(row[0]),
+            "route_node_id": str(row[1]),
+            "ordinal": row[2],
+            "charge": None if row[3] is None else str(row[3]),
+            "model": row[4],
+            "generation_id": row[5],
+            "diagnostic_sha256": row[6],
+        }
+        for row in conn.execute(
+            "SELECT t.run_id,t.route_node_id,t.ordinal,l.amount,o.model,"
+            " o.generation_id,o.diagnostic_sha256 FROM run_attempts t"
+            " LEFT JOIN budget_ledger l USING(attempt_id)"
+            " LEFT JOIN call_outcomes o USING(attempt_id)"
+            " WHERE t.run_id = ANY(%s)"
+            " ORDER BY array_position(%s::uuid[], t.run_id),t.started_at,t.attempt_id",
+            (runs, runs),
+        ).fetchall()
+    ]
 
 
 def _object(fields: dict[str, object]) -> dict[str, Plain]:
@@ -266,7 +278,7 @@ def _configured_provider(expect_identity: str) -> ChatCompletions | None:
     return provider
 
 
-def main(argv: list[str] | None = None) -> int:
+def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     # Path-traversal scanners flag `set_root`/`--capture` as a generic
     # "user request" source reaching a file sink -- the template does not
@@ -295,20 +307,12 @@ def main(argv: list[str] | None = None) -> int:
         default=1,
         help="times to enter perform; >1 retries the node that stopped the set",
     )
-    args = parser.parse_args(argv)
-    if args.attempts < 1:
-        print("--attempts must be at least 1; nothing was spent", file=sys.stderr)
-        return 2
+    return parser
 
-    bundle = Bundle(REPO / "vendor/deploy-v")
-    qualification = load_qualification_set(args.set_root)
-    # Both ceilings were `--ceiling`, and the harness requires
-    # `run_ceiling x cases <= ceiling`, so every positive-budget set of more
-    # than one case was impossible to admit and raising the shared value could
-    # not fix the inequality (AR-18). Derived per case when not named.
-    args.run_ceiling = args.run_ceiling or (
-        args.ceiling / len(qualification.cases)
-    ).quantize(Decimal("0.000001"), rounding=ROUND_DOWN)
+
+def _environment() -> tuple[str, str, str] | None:
+    """The persistent server, the dated price and the blob root, or None having
+    said which is missing and that nothing was spent."""
     # A paid run's database is its evidence, so it is kept on a server named
     # for that and never on the test server, whose data lives in memory: a
     # restart of that container erased every retained run of 18 September 2026.
@@ -319,7 +323,7 @@ def main(argv: list[str] | None = None) -> int:
             " run's database is kept on; nothing was spent",
             file=sys.stderr,
         )
-        return 2
+        return None
     model_price = os.environ.get("CAOS_MODEL_PRICE")
     if not model_price:
         print(
@@ -327,7 +331,7 @@ def main(argv: list[str] | None = None) -> int:
             " is computed from; nothing was spent",
             file=sys.stderr,
         )
-        return 2
+        return None
     blob_root = os.environ.get("CAOS_QUALIFY_BLOB_ROOT")
     if not blob_root:
         # A paid run's blobs are its evidence as much as its database is, and
@@ -340,10 +344,40 @@ def main(argv: list[str] | None = None) -> int:
             " run's blobs are kept in; nothing was spent",
             file=sys.stderr,
         )
-        return 2
+        return None
+    return admin_url, model_price, blob_root
+
+
+def _planned(
+    args: argparse.Namespace,
+) -> tuple[QualificationSet, Harness, str, str] | None:
+    """The set, its harness, the server and the blob root, checked whole.
+
+    Every check that makes no write runs here, before the database exists
+    (`assert_admissible`): `prepare` was the first place a set's ceilings,
+    keys and subjects were checked, so a set it refused left an empty
+    `caos_qualify_*` database on the operator's server (DQ-12).
+    """
+    bundle = Bundle(REPO / "vendor/deploy-v")
+    qualification = load_qualification_set(args.set_root)
+    # Both ceilings were `--ceiling`, and the harness requires
+    # `run_ceiling x cases <= ceiling`, so every positive-budget set of more
+    # than one case was impossible to admit and raising the shared value could
+    # not fix the inequality (AR-18). Derived per case only when not named: a
+    # named zero is falsy, and `or` replaced it with the derived share, so a run
+    # the operator capped at nothing spent (DQ-7). A named value goes to the
+    # harness as given, which refuses one it cannot afford a call under.
+    if args.run_ceiling is None:
+        args.run_ceiling = (args.ceiling / len(qualification.cases)).quantize(
+            Decimal("0.000001"), rounding=ROUND_DOWN
+        )
+    environment = _environment()
+    if environment is None:
+        return None
+    admin_url, model_price, blob_root = environment
     provider = _configured_provider(args.expect_identity)
     if provider is None:
-        return 2
+        return None
     price = price_from_environment(provider.model, model_price)
     bundle.verify_pinned()
     harness = Harness(
@@ -358,7 +392,12 @@ def main(argv: list[str] | None = None) -> int:
         ceiling=args.ceiling,
         run_ceiling=args.run_ceiling,
     )
+    assert_admissible(harness, qualification=qualification)
+    return qualification, harness, admin_url, blob_root
 
+
+def _create_database(admin_url: str) -> tuple[str, str]:
+    """A fresh database on the persistent server: its name and its URL."""
     database = f"caos_qualify_{uuid4().hex}"
     parts = urlsplit(admin_url)
     run_url = urlunsplit(parts._replace(path=f"/{database}"))
@@ -368,17 +407,62 @@ def main(argv: list[str] | None = None) -> int:
                 psycopg.sql.Identifier(database)
             )
         )
+    return database, run_url
+
+
+def _performed_capture(
+    run_url: str,
+    blob_root: str,
+    harness: Harness,
+    qualification: QualificationSet,
+    *,
+    attempts: int,
+) -> dict[str, object]:
+    """Prepare, approve and perform the set in its database; its capture."""
+    with connect(run_url) as conn:
+        apply_schema(conn)
+        blobs = BlobStore(Path(blob_root))
+        prepared = prepare(conn, blobs, harness, qualification=qualification)
+        _approve_every_gate(conn, prepared)
+        performed = _perform_until(
+            conn, blobs, harness, qualification, prepared, attempts=attempts
+        )
+        document = _capture(conn, prepared, performed)
+        snapshot = performed_evidence(prepared=prepared, performed=performed)
+        record_evidence(conn, snapshot.evidence)
+        conn.commit()
+    return document
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parser().parse_args(argv)
+    if args.attempts < 1:
+        print("--attempts must be at least 1; nothing was spent", file=sys.stderr)
+        return 2
+    try:
+        planned = _planned(args)
+    except Refusal as refused:
+        print(
+            f"{refused.code.value}: the set was refused; nothing was spent",
+            file=sys.stderr,
+        )
+        return 2
+    if planned is None:
+        return 2
+    qualification, harness, admin_url, blob_root = planned
+    database, run_url = _create_database(admin_url)
     # Printed before the call, not after: a driver that dies mid-run must still
     # leave the operator the two names that hold the evidence it paid for, and
     # the dated price every reservation it is about to take will be priced on
     # (Task 8.2) -- an operator reading the ceiling alone cannot tell whether a
     # set was affordable at the price the worker was configured with.
+    price = harness.price
     print(
         json.dumps(
             {
                 "database": database,
                 "blob_root": blob_root,
-                "run_ceiling": str(args.run_ceiling),
+                "run_ceiling": str(harness.run_ceiling),
                 "price_model": price.model,
                 "price_input_per_token": str(price.input_per_token),
                 "price_output_per_token": str(price.output_per_token),
@@ -388,20 +472,19 @@ def main(argv: list[str] | None = None) -> int:
         ),
         flush=True,
     )
-
-    with connect(run_url) as conn:
-        apply_schema(conn)
-        blobs = BlobStore(Path(blob_root))
-        prepared = prepare(conn, blobs, harness, qualification=qualification)
-        _approve_every_gate(conn, prepared)
-        performed = _perform_until(
-            conn, blobs, harness, qualification, prepared, attempts=args.attempts
+    try:
+        document = _performed_capture(
+            run_url, blob_root, harness, qualification, attempts=args.attempts
         )
-        run_id = prepared[0].input.run_id
-        document = _capture(conn, prepared, performed, run_id=run_id)
-        snapshot = performed_evidence(prepared=prepared, performed=performed)
-        record_evidence(conn, snapshot.evidence)
-        conn.commit()
+    except Refusal as refused:
+        # After the database exists, so not "nothing was spent": what was
+        # performed is kept there, the matrix's own refusal included (DQ-5).
+        print(
+            f"{refused.code.value}: the set stopped; {database} keeps what it"
+            " performed",
+            file=sys.stderr,
+        )
+        return 2
 
     body = json.dumps(document, indent=2, sort_keys=True)
     if args.capture is not None:

@@ -16,6 +16,7 @@ from caos.api.deps import (
     Store,
     VisibleCase,
 )
+from caos.api.reads import analysis
 from caos.api.reads.analysis import read_analysis
 from caos.api.wire import (
     AnalysisBody,
@@ -31,12 +32,15 @@ from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
 from caos.store.source_sets import pinned_live_sources
 
-# Analysis' ten-node forecast route, including CP-CF's four owner proofs,
-# plus the live source pin. Moves with Analysis' own budget, which this route
-# pays in full before adding to it. Measured by
-# test_model_http_actor_matrix_and_declared_io; 194 before each proof's
-# delivered blocks became one read instead of one per block.
-IO_BUDGET = 150
+# Analysis' own budget, which this route pays in full before adding to it,
+# plus the live source pin. Derived rather than written out: a literal 150 was
+# Analysis' ten-node forecast route, not the longest route a run can pin
+# (ED-7). Measured on that route by test_model_http_actor_matrix_and_declared_io
+# (194 before each proof's delivered blocks became one read instead of one per
+# block). The blobs are Analysis' and nothing more.
+PIN_IO = 1
+IO_BUDGET = analysis.IO_BUDGET + PIN_IO
+BLOB_BUDGET = analysis.BLOB_BUDGET
 router = APIRouter()
 
 

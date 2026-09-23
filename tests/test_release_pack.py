@@ -18,14 +18,18 @@ import json
 import os
 import subprocess
 import sys
-from dataclasses import replace
+from dataclasses import asdict, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import UUID, uuid4
 
 import pytest
 import release_pack
-from qualification_fixtures import qualification_performed, record_runs
+from qualification_fixtures import (
+    qualification_performed,
+    record_performed_earlier,
+    record_runs,
+)
 
 from caos.api.deps import VENDORED_BUNDLE
 from caos.graph.route import ResolvedRoute, resolve_route, route_digest
@@ -36,7 +40,7 @@ from caos.methodology.vendor import catalog
 from caos.qualification.store import (
     PerformedEvidence,
     performed_evidence,
-    record_performed,
+    record_evidence,
     record_verdict,
 )
 from caos.qualification.verdict import read_verdict
@@ -168,7 +172,7 @@ def _pin(
     """
     route = resolve_route(catalog(Bundle(VENDORED_BUNDLE)), profile_id, selection_id)
     performed = _on_route(route, performed)
-    record_performed(conn, performed)
+    record_performed_earlier(conn, performed)
     record_runs(conn, performed, accepted_nothing=accepted_nothing)
     # `pin_route_in`'s own row, written without its lock: the fixture's runs are
     # rows, not runs a worker drove, so they are not RUNNING.
@@ -315,7 +319,11 @@ def test_a_store_read_reports_enabled_pathways_qualified_or_not(
     )
     assert code == 0
     pack = json.loads((tmp_path / release_pack.JSON_NAME).read_text(encoding="utf-8"))
-    assert pack["store"] == {"as_of": NOW.isoformat()}
+    assert pack["store"] == {
+        "as_of": NOW.isoformat(),
+        "adapter_version": CANONICAL_ADAPTER_VERSION,
+        "identity": "any",
+    }
     statuses = {row["status"] for row in pack["pathways"] if row["enabled"] is True}
     assert statuses == {release_pack.NOT_QUALIFIED}
     markdown = (tmp_path / release_pack.MARKDOWN_NAME).read_text(encoding="utf-8")
@@ -439,7 +447,7 @@ def test_a_pin_the_store_cannot_read_names_no_pathway(empty_database: str) -> No
     performed = qualification_performed()
     with connect(empty_database) as conn:
         apply_schema(conn)
-        record_performed(conn, performed)
+        record_performed_earlier(conn, performed)
         record_runs(conn, performed)
         [case] = performed.prepared
         conn.execute(
@@ -454,3 +462,252 @@ def test_a_pin_the_store_cannot_read_names_no_pathway(empty_database: str) -> No
             )
             == {}
         )
+
+
+def _direct_verdict(conn: StoreConnection, performed: PerformedEvidence) -> None:
+    """A verdict row written straight into the table, as no `record_verdict`
+    would have written it: the snapshot and its evidence are self-consistent."""
+    record_evidence(conn, performed.evidence)
+    conn.execute(
+        "INSERT INTO qualification_verdicts"
+        " (evidence_sha256,reviewer_id,reviewer,decided_at,expires_at)"
+        " VALUES (%s,%s,%s,%s,%s)",
+        (performed.evidence.sha256, uuid4(), "nobody", NOW, NOW + timedelta(days=30)),
+    )
+
+
+def test_a_stale_refusal_snapshot_over_a_completed_run_qualifies_nothing(
+    empty_database: str,
+) -> None:
+    """DQ-3 (1): a row claiming a met refusal over a COMPLETE run, the shape
+    pre-FP-01 code recorded, re-derived as complete from its own flag, so it
+    signed and qualified its pathway. It re-derives as incomplete now: the
+    signer refuses it and the pack does not relay it."""
+    profile_id, selection_id = sorted(ADAPTER_ROUTES)[0]
+    base = qualification_performed()
+    matrix = base.performed.matrix
+    assert matrix is not None
+    [row] = matrix.rows
+    stale = performed_evidence(
+        prepared=base.prepared,
+        performed=replace(
+            base.performed,
+            matrix=replace(matrix, rows=(replace(row, expected_refusal_met=True),)),
+        ),
+    )
+    assert stale.complete is False
+    route = resolve_route(catalog(Bundle(VENDORED_BUNDLE)), profile_id, selection_id)
+    pinned = _on_route(route, stale)
+    evidence = pinned.evidence
+    with connect(empty_database) as conn:
+        apply_schema(conn)
+        # Stored as the code before DQ-3 stored it: flagged complete.
+        conn.execute(
+            "INSERT INTO qualification_performed (performed_sha256,"
+            " qualification_set_sha256,build_id,adapter_version,provider,model,"
+            " complete,performed_json,recorded_at)"
+            " VALUES (%s,%s,%s,%s,%s,%s,true,%s,%s)",
+            (
+                evidence.performed_sha256,
+                evidence.qualification_set_sha256,
+                evidence.build_id,
+                evidence.adapter_version,
+                evidence.provider,
+                evidence.model,
+                json.dumps(pinned.document, sort_keys=True, separators=(",", ":")),
+                NOW - timedelta(days=1),
+            ),
+        )
+        record_runs(conn, pinned)
+        for case in pinned.prepared:
+            conn.execute(
+                "INSERT INTO run_routes (run_id,profile_id,selection_id,route_digest,"
+                "resolved) VALUES (%s,%s,%s,%s,%s)",
+                (
+                    case.input.run_id,
+                    profile_id,
+                    selection_id,
+                    route_digest(route),
+                    _canonical(route),
+                ),
+            )
+        with pytest.raises(Refusal, match=r"^VERDICT_BINDING_INVALID$"):
+            _sign(conn, performed=pinned)
+        _direct_verdict(conn, pinned)
+        found = release_pack.qualified_pathways(
+            conn, build_id=FIXTURE_BUILD, as_of=NOW + timedelta(days=1)
+        )
+        conn.rollback()
+    assert found == {}
+
+
+def test_a_forged_snapshot_over_a_run_that_never_ran_refuses_the_pack(
+    empty_database: str,
+) -> None:
+    """DQ-3 (2): a self-consistent snapshot, evidence and verdict inserted over
+    a run the store holds RUNNING with no artifact was relayed QUALIFIED: the
+    pack took the run's status and proof from the document. The store's own
+    facts are compared, and a contradiction is raised (FP-28)."""
+    profile_id, selection_id = sorted(ADAPTER_ROUTES)[0]
+    with connect(empty_database) as conn:
+        apply_schema(conn)
+        performed = _pin(conn, profile_id, selection_id, accepted_nothing="case")
+        [case] = performed.prepared
+        conn.execute(
+            "UPDATE runs SET status='RUNNING' WHERE run_id=%s", (case.input.run_id,)
+        )
+        _direct_verdict(conn, performed)
+        with pytest.raises(Refusal, match=r"^VERDICT_BINDING_INVALID$"):
+            release_pack.qualified_pathways(
+                conn, build_id=FIXTURE_BUILD, as_of=NOW + timedelta(days=1)
+            )
+        conn.rollback()
+
+
+def test_evidence_contradicting_its_snapshot_is_raised_not_dropped(
+    empty_database: str,
+) -> None:
+    """DQ-3 (3): `evidence_at` answers None for an evidence row that
+    contradicts its snapshot, and the pack skipped the verdict without a word,
+    against its own rule that only "not current" is dropped (FP-28)."""
+    profile_id, selection_id = sorted(ADAPTER_ROUTES)[0]
+    with connect(empty_database) as conn:
+        apply_schema(conn)
+        performed = _pin(conn, profile_id, selection_id)
+        forged = replace(performed.evidence, provider="someone/else/high/65536")
+        conn.execute(
+            "INSERT INTO qualification_evidence (evidence_sha256,"
+            " qualification_set_sha256,performed_sha256,build_id,adapter_version,"
+            " provider,model) VALUES (%s,%s,%s,%s,%s,%s,%s)",
+            (forged.sha256, *asdict(forged).values()),
+        )
+        conn.execute(
+            "INSERT INTO qualification_verdicts"
+            " (evidence_sha256,reviewer_id,reviewer,decided_at,expires_at)"
+            " VALUES (%s,%s,%s,%s,%s)",
+            (forged.sha256, uuid4(), "nobody", NOW, NOW + timedelta(days=30)),
+        )
+        with pytest.raises(Refusal, match=r"^VERDICT_BINDING_INVALID$"):
+            release_pack.qualified_pathways(
+                conn, build_id=FIXTURE_BUILD, as_of=NOW + timedelta(days=1)
+            )
+        conn.rollback()
+
+
+def test_the_pack_records_the_identity_and_adapter_it_was_read_under(
+    empty_database: str,
+) -> None:
+    """DQ-4: a pack filtered to an identity the store held no verdict for was
+    byte-identical to a pack over an empty store, and its reason said "no
+    current verdict for this build and adapter" -- false for that pack. The
+    filter and the adapter revision are recorded, and the reason names both."""
+    profile_id, selection_id = sorted(ADAPTER_ROUTES)[0]
+    elsewhere = ("databricks/claude-endpoint/none/65536", "claude-endpoint")
+    as_of = NOW + timedelta(days=1)
+    bundle = Bundle(VENDORED_BUNDLE)
+    with connect(empty_database) as conn:
+        apply_schema(conn)
+        performed = _pin(conn, profile_id, selection_id)
+        _sign(conn, performed=performed)
+        filtered = release_pack.qualified_pathways(
+            conn, build_id=FIXTURE_BUILD, as_of=as_of, identity=elsewhere
+        )
+        conn.rollback()
+    assert filtered == {}
+    pack = release_pack.build_pack(
+        REPO, bundle=bundle, store=(filtered, as_of), identity=elsewhere
+    )
+    empty = release_pack.build_pack(REPO, bundle=bundle, store=({}, as_of))
+    assert pack != empty
+    assert pack["store"] == {
+        "as_of": as_of.isoformat(),
+        "adapter_version": CANONICAL_ADAPTER_VERSION,
+        "identity": {"provider": elsewhere[0], "model": elsewhere[1]},
+    }
+    assert empty["store"]["identity"] == "any"
+    row = next(
+        item
+        for item in pack["pathways"]
+        if (item["profile_id"], item["selection_id"]) == (profile_id, selection_id)
+    )
+    assert row["status"] == release_pack.NOT_QUALIFIED
+    assert elsewhere[0] in row["reason"] and elsewhere[1] in row["reason"]
+    unfiltered = release_pack.pathways(catalog(bundle), qualified=filtered)
+    assert all(elsewhere[0] not in item["reason"] for item in unfiltered)
+    assert f"`{elsewhere[0]}` `{elsewhere[1]}`" in release_pack.render_markdown(pack)
+
+
+def test_the_reader_copy_names_what_a_verdict_was_measured_under(
+    empty_database: str,
+) -> None:
+    """DQ-4, MAX-12: `RELEASE_PACK.md` showed QUALIFIED with an evidence prefix
+    and an expiry, and no provider, model, set or signer, so a reader handed
+    only the Markdown could not tell which identity -- a test adapter's, say
+    -- the word covered."""
+    profile_id, selection_id = sorted(ADAPTER_ROUTES)[0]
+    as_of = NOW + timedelta(days=1)
+    with connect(empty_database) as conn:
+        apply_schema(conn)
+        performed = _pin(conn, profile_id, selection_id)
+        _sign(conn, performed=performed)
+        found = release_pack.qualified_pathways(
+            conn, build_id=FIXTURE_BUILD, as_of=as_of
+        )
+        conn.rollback()
+    evidence = performed.evidence
+    pack = release_pack.build_pack(
+        REPO, bundle=Bundle(VENDORED_BUNDLE), store=(found, as_of)
+    )
+    line = next(
+        text
+        for text in release_pack.render_markdown(pack).splitlines()
+        if f"| `{selection_id}` | QUALIFIED |" in text
+    )
+    [verdict] = found[(profile_id, selection_id)]
+    for fact in (
+        evidence.provider,
+        evidence.model,
+        evidence.qualification_set_sha256[:16],
+        verdict["reviewer_id"],
+        "Reviewer",
+    ):
+        assert fact in line
+    assert line.count(" | ") == 4, "a cell's own pipes are escaped"
+
+
+def test_one_store_read_emits_one_pack_whatever_the_session_time_zone(
+    empty_database: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """DQ-4: `decided_at.isoformat()` rendered in the zone libpq negotiated, so
+    the same store read under `PGTZ=UTC` and `PGTZ=Asia/Tokyo` emitted two
+    packs. Every moment is printed in UTC. `recorded_at` (DQ-13) is when the
+    verdict row was written, which `decided_at` is not."""
+    profile_id, selection_id = sorted(ADAPTER_ROUTES)[0]
+    as_of = NOW + timedelta(days=1)
+    with connect(empty_database) as conn:
+        apply_schema(conn)
+        performed = _pin(conn, profile_id, selection_id)
+        _sign(conn, performed=performed)
+        conn.commit()
+    emitted = []
+    for zone in ("UTC", "Asia/Tokyo"):
+        monkeypatch.setenv("PGTZ", zone)
+        with connect(empty_database) as conn:
+            found = release_pack.qualified_pathways(
+                conn, build_id=FIXTURE_BUILD, as_of=as_of
+            )
+            conn.rollback()
+        [verdict] = found[(profile_id, selection_id)]
+        assert verdict["decided_at"] == NOW.isoformat()
+        assert verdict["recorded_at"] is not None
+        assert verdict["recorded_at"].endswith("+00:00")
+        pack = release_pack.build_pack(
+            REPO, bundle=Bundle(VENDORED_BUNDLE), store=(found, as_of)
+        )
+        emitted.append(
+            (
+                json.dumps(pack, sort_keys=True),
+                release_pack.render_markdown(pack),
+            )
+        )
+    assert emitted[0] == emitted[1]

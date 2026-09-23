@@ -18,20 +18,23 @@ tell, because an accepted artifact must be able to say what produced it
 
 from __future__ import annotations
 
+import contextvars
 import hashlib
+import math
 import os
+import threading
 import time
 from collections.abc import Mapping
+from contextlib import suppress
 from dataclasses import dataclass, field
-from decimal import Context, Decimal, DecimalException
+from decimal import Decimal, DecimalException
 from typing import Any
 
-from langchain_core.exceptions import LangChainException
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage
 from openai import OpenAIError
 
-from caos.pricing import ModelPrice, price_from_environment
+from caos.pricing import ModelPrice, exact_context, price_from_environment
 from caos.provider import (
     MAX_COMPLETION_TOKENS,
     MAX_REQUEST_BYTES,
@@ -40,6 +43,7 @@ from caos.provider import (
     TIMEOUT_SECONDS,
     TRANSIENT,
     Completion,
+    check_resend,
     encode_request,
     finish_refusal,
     reported_charge,
@@ -65,10 +69,7 @@ RATE_LIMIT_TRIES = 3
 RETRY_AFTER_SECONDS = 2.0
 RETRY_AFTER_CAP_SECONDS = 20.0
 _sleep = time.sleep
-
-# Exact arithmetic, no rounding: a charge is tokens times a per-token price and
-# both are decimals with a handful of digits, so the product is exact.
-_CHARGE_CONTEXT = Context(prec=60)
+_clock = time.monotonic
 
 
 def identity_of(model: str, reasoning_effort: str | None = None) -> str:
@@ -96,8 +97,8 @@ def chat_model(*, endpoint: str | None = None) -> BaseChatModel:
 
     from caos.workspace import workspace_client
 
-    # The socket deadline the lease is sized against (brief D5, F40), and no
-    # retry below the seam: a retry is the caller's reservation. The client
+    # A read deadline no longer than the whole call's (brief D5, F40, ST-9),
+    # and no retry below the seam: a retry is the caller's reservation. The client
     # is the process's bounded one (CR-6): the default the library would
     # build carries the SDK's five-minute discovery budget.
     return ChatDatabricks(
@@ -132,7 +133,8 @@ class ChatCompletions:
         return encode_request(self.model, prompt, json_object=json_object)
 
     def complete(self, prompt: str, *, json_object: bool = False) -> Completion:
-        """Ask once; never retry (a retry is the caller's reservation)."""
+        """Ask once; a rate limit alone is asked again, under the same
+        reservation and inside one deadline for the whole call (ST-9)."""
         if producer_identifier(self.model, limit=256) is None:
             raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
         if not isinstance(prompt, str) or (
@@ -145,31 +147,41 @@ class ChatCompletions:
         options: dict[str, Any] = {}
         if json_object:
             options["response_format"] = {"type": "json_object"}
-        for attempt in range(RATE_LIMIT_TRIES):
-            try:
-                message = self.chat.invoke([HumanMessage(content=prompt)], **options)
-            except OpenAIError as failed:
-                # A rate limit is the one answer that certainly reached no
-                # model (DP-5): the gateway refused before inference, so the
-                # same reservation covers the same request again, briefly.
-                # Every other status is answered by its class alone.
-                if _rate_limited(failed) and attempt + 1 < RATE_LIMIT_TRIES:
-                    _sleep(_retry_after(failed))
-                    continue
-                return Completion(None, None, None, _status_refusal(failed))
-            except (OSError, ValueError, RuntimeError, LangChainException):
+        # One deadline for every try and every wait (ST-9, MAX-21), so the
+        # worst case the lease and the stale threshold are sized against is
+        # `TIMEOUT_SECONDS`, not three of them and two waits.
+        deadline = _clock() + TIMEOUT_SECONDS
+        sent = 0
+        while True:
+            sent += 1
+            answer = _invoked(self.chat, prompt, options, deadline - _clock())
+            if isinstance(answer, OpenAIError):
+                if not _waited_out(answer, sent, deadline):
+                    return Completion(None, None, None, _status_refusal(answer))
+                # Nothing was billed yet; what the caller installed decides
+                # whether the call may still be made (ST-7), and raises if not.
+                check_resend()
+                continue
+            if answer is None:
                 # Indeterminate: the request may have been delivered and
                 # billed, so the attempt keeps its reservation. Nothing of
                 # the error travels.
                 return Completion(None, None, None, RefusalCode.PROVIDER_UNAVAILABLE)
-            break
-        if not isinstance(message, AIMessage):
-            return Completion(None, None, None, RefusalCode.PROVIDER_RESPONSE_INVALID)
-        return self._completion(prompt, message)
+            if not isinstance(answer, AIMessage):
+                return Completion(
+                    None, None, None, RefusalCode.PROVIDER_RESPONSE_INVALID
+                )
+            return self._completion(prompt, answer, json_object=json_object)
 
-    def _completion(self, prompt: str, message: AIMessage) -> Completion:
-        charge = self._charge(message.usage_metadata)
+    def _completion(
+        self, prompt: str, message: AIMessage, *, json_object: bool = False
+    ) -> Completion:
         content = _text(message.content)
+        charge = self._charge(
+            message.usage_metadata,
+            sent=len(self.request_bytes(prompt, json_object=json_object)),
+            answered=bool(content),
+        )
         generation = producer_identifier(_claimed_id(message), limit=512)
         if generation is None:
             generation = (
@@ -201,29 +213,89 @@ class ChatCompletions:
             )
         return Completion(content, charge, generation)
 
-    def _charge(self, usage: Mapping[str, Any] | None) -> Decimal | None:
-        """`tokens x price`, exact, or unknown when the response carried no usage."""
+    def _charge(
+        self, usage: Mapping[str, Any] | None, *, sent: int, answered: bool
+    ) -> Decimal | None:
+        """`tokens x price`, exact, or unknown when the usage is not accounting
+        the host understands.
+
+        Counts are whole and never negative (AR-14), and possible (ST-11,
+        MAX-05): the client reads an absent or null count as zero, so a
+        request billed no input, or an answer billed no output, is a count
+        the provider never stated; no request carries more tokens than bytes
+        (the premise `priced_request` reserves on) and no answer more than
+        `MAX_COMPLETION_TOKENS`. The product is computed in the reservation's
+        own exact context (MAX-N03), so it is refused rather than rounded.
+        """
         if usage is None:
             return None
         try:
-            # Counts are whole and never negative (AR-14): a usage block that
-            # says otherwise is accounting the host does not understand, and
-            # an unknown charge refuses the answer rather than billing zero.
-            input_tokens = Decimal(_count(usage["input_tokens"]))
-            output_tokens = Decimal(_count(usage["output_tokens"]))
-            amount = _CHARGE_CONTEXT.add(
-                _CHARGE_CONTEXT.multiply(input_tokens, self.price.input_per_token),
-                _CHARGE_CONTEXT.multiply(output_tokens, self.price.output_per_token),
+            input_tokens = _count(usage["input_tokens"], most=sent)
+            output_tokens = _count(usage["output_tokens"], most=MAX_COMPLETION_TOKENS)
+            if not input_tokens or (answered and not output_tokens):
+                return None
+            exact = exact_context()
+            amount = exact.add(
+                exact.multiply(Decimal(input_tokens), self.price.input_per_token),
+                exact.multiply(Decimal(output_tokens), self.price.output_per_token),
             )
         except (KeyError, TypeError, ValueError, DecimalException):
             return None
         return reported_charge(amount)
 
 
-def _count(value: object) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+def _count(value: object, *, most: int) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= most:
         raise ValueError
     return value
+
+
+def _invoked(
+    chat: BaseChatModel, prompt: str, options: dict[str, Any], seconds: float
+) -> object:
+    """One `invoke`: its answer, the vendor error it raised, or None when the
+    call is indeterminate.
+
+    Abandoned once `seconds` pass (ST-9): the client's timeout bounds each
+    read, not the call, so a server that sends a byte at a time would hold it
+    open with no limit, past the lease it was sized in. The call runs on a
+    helper thread; an answer that has not arrived by the deadline is None, as
+    a socket timeout is. An abandoned thread holds only its own socket and
+    never writes to the store.
+
+    Once the request may have been sent, whatever else the stack raises is
+    None too (ST-8): an empty `choices` is an `IndexError` from the client,
+    and no failure may escape untyped ahead of `record_outcome`.
+    """
+    answered: list[object] = []
+    context = contextvars.copy_context()
+
+    def send() -> None:
+        with suppress(Exception):  # indeterminate, never text (ST-8)
+            try:
+                answered.append(
+                    context.run(chat.invoke, [HumanMessage(content=prompt)], **options)
+                )
+            except OpenAIError as failed:
+                answered.append(failed)
+
+    sender = threading.Thread(target=send, name="caos-model-call", daemon=True)
+    sender.start()
+    sender.join(max(seconds, 0.0))
+    return answered[0] if answered else None
+
+
+def _waited_out(failed: OpenAIError, sent: int, deadline: float) -> bool:
+    """Whether a rate limit was waited out and the call may be sent again: a
+    429 reached no model (DP-5), within the tries, and the wait ends before
+    the call's one deadline (ST-9)."""
+    if not _rate_limited(failed) or sent >= RATE_LIMIT_TRIES:
+        return False
+    wait = _retry_after(failed)
+    if wait >= deadline - _clock():
+        return False
+    _sleep(wait)
+    return True
 
 
 def _rate_limited(failed: OpenAIError) -> bool:
@@ -237,6 +309,9 @@ def _retry_after(failed: OpenAIError) -> float:
     try:
         seconds = float(stated) if isinstance(stated, str) else RETRY_AFTER_SECONDS
     except ValueError:
+        seconds = RETRY_AFTER_SECONDS
+    if not math.isfinite(seconds):
+        # `nan` survives the clamp below and `sleep(nan)` raises (ST-8, MAX-16).
         seconds = RETRY_AFTER_SECONDS
     return min(max(seconds, 0.0), RETRY_AFTER_CAP_SECONDS)
 

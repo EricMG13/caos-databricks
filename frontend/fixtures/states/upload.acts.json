@@ -1,0 +1,107 @@
+{
+  "chrome": {
+    "subject": {
+      "case_id": "ff1fbf5a-e56f-4f84-a983-2f5a507675f0",
+      "title": "Carvana Co. (NYSE: CVNA)"
+    },
+    "served_role": {
+      "global_role": "ANALYST",
+      "standing": "APPROVER"
+    },
+    "actions": [
+      {
+        "action": "ADMIT_SOURCES",
+        "refusal": null
+      },
+      {
+        "action": "WITHDRAW_SOURCE",
+        "refusal": null
+      }
+    ]
+  },
+  "body": {
+    "case_id": "ff1fbf5a-e56f-4f84-a983-2f5a507675f0",
+    "sources": [
+      {
+        "source_id": "f9b54532-f1d3-48b8-bca2-5e29b9d3b16b",
+        "filename": "CVNA_10K_Annual_Report_FY2025.htm",
+        "document_sha256": "0b582ff0c768f09ab1d75724a56c52ae1a1847074f43dd36183884a8fcdd30df",
+        "admitted_at": "2026-02-18T16:04:00Z",
+        "withdrawn_at": null,
+        "extractor_identity": "caos.pdfminer/2",
+        "set_versions": [1, 2, 3, 4]
+      },
+      {
+        "source_id": "8c9241f9-25c9-4642-9e0d-e734e10fe4b9",
+        "filename": "CVNA_10Q_Quarterly_Report_Q2_2026.htm",
+        "document_sha256": "8d36a602b39984bae8c201b8c2b53b014cd04a98c1bd75f68a59046747c8ef70",
+        "admitted_at": "2026-07-29T16:20:00Z",
+        "withdrawn_at": null,
+        "extractor_identity": "caos.pdfminer/2",
+        "set_versions": [3, 4]
+      },
+      {
+        "source_id": "74f457b1-9a39-4d7a-8577-94ade445debc",
+        "filename": "CVNA_8K_Q2_2026_Earnings_Release.htm",
+        "document_sha256": "af42744d1543530c24b3189989a819dab19b0495b3c1827cb623e1e05a774bf0",
+        "admitted_at": "2026-09-09T11:02:00Z",
+        "withdrawn_at": null,
+        "extractor_identity": "caos.pdfminer/2",
+        "set_versions": [4]
+      },
+      {
+        "source_id": "24583505-e052-418d-a2f2-8d2bf82f8ced",
+        "filename": "CVNA_8K_Senior_Secured_Notes_Indenture_Closing.htm",
+        "document_sha256": "1f6636a4396b5e3bea32983827804914273a02a8fafdeda29b3f79a32b3a2162",
+        "admitted_at": "2026-02-18T16:04:00Z",
+        "withdrawn_at": null,
+        "extractor_identity": "caos.pdfminer/2",
+        "set_versions": [1, 2, 3, 4]
+      },
+      {
+        "source_id": "a8fd32d4-ba90-41f3-a284-305cd9235abd",
+        "filename": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm",
+        "document_sha256": "d7d81c81a40ad4d7bdbb26189f6b1fc8b7e57b447b62208e4b7b71037f905cef",
+        "admitted_at": "2026-07-29T16:20:00Z",
+        "withdrawn_at": null,
+        "extractor_identity": "caos.pdfminer/2",
+        "set_versions": [3, 4]
+      },
+      {
+        "source_id": "216ec234-c70c-4a5f-8ae6-f4a0262bbe84",
+        "filename": "CVNA_8K_Ally_FloorPlan_Credit_Agreement_Amendment.htm",
+        "document_sha256": "4f5e6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f",
+        "admitted_at": "2026-03-10T12:15:00Z",
+        "withdrawn_at": "2026-09-09T09:41:00Z",
+        "extractor_identity": null,
+        "set_versions": [2, 3, 4]
+      }
+    ],
+    "set_versions": [
+      {
+        "version": 4,
+        "fingerprint": "0b582ff0c768f09ab1d75724a56c52ae1a1847074f43dd36183884a8fcdd30df",
+        "member_count": 6
+      },
+      {
+        "version": 3,
+        "fingerprint": "8d36a602b39984bae8c201b8c2b53b014cd04a98c1bd75f68a59046747c8ef70",
+        "member_count": 5
+      },
+      {
+        "version": 2,
+        "fingerprint": "af42744d1543530c24b3189989a819dab19b0495b3c1827cb623e1e05a774bf0",
+        "member_count": 3
+      },
+      {
+        "version": 1,
+        "fingerprint": "1f6636a4396b5e3bea32983827804914273a02a8fafdeda29b3f79a32b3a2162",
+        "member_count": 2
+      }
+    ]
+  },
+  "observed_at": "2026-09-09T14:30:00Z",
+  "observed_empty": false,
+  "status": "complete",
+  "notes": []
+}

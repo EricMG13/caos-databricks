@@ -22,7 +22,9 @@ Read first if anything is unclear: `docs/DEPLOYMENT.md` (the runbook the command
 | AI Gateway serving endpoint that serves a Claude model | argument 5 (default `databricks-claude-opus-5`) |
 | That endpoint's dated per-token price from the enterprise contract | argument 6, as `<endpoint>,<input_per_token>,<output_per_token>,<YYYY-MM-DD>` |
 | What one run may spend | argument 7 (default `100.00`: the widest profile at its section bounds plus one worst-case call, D29; it must cover at least one worst-case call, about 22.61 at the default price; raise it for large packs, since evidence is on top) |
-| Lakebase database, the two groups, the target | environment: `LAKEBASE_DATABASE` (`databricks_postgres`), `GROUP_ADMIN` (`caos-admins`), `GROUP_ANALYST` (`caos-analysts`), `TARGET` (`prod`; the app is `caos` there and `caos-<target>` elsewhere, DP-6) |
+| Lakebase database, the two groups, the target | environment: `LAKEBASE_DATABASE` (`databricks_postgres`), `GROUP_ADMIN` (`caos-admins`), `GROUP_ANALYST` (`caos-analysts`), `TARGET` (`prod`; the app is `caos` there, `caos-dev-<your user id>` in `dev` and `caos-<target>` in any other, DP-6, DF-5) |
+
+Before the first deploy an administrator grants the app's service principal `USAGE` and `CREATE` on schema `public` of that database (`docs/DEPLOYMENT.md` section 1, MAX-22): the bundle's grant reaches the database, not the schema the store's tables go in.
 
 Substitute real values; drop the angle brackets.
 
@@ -34,19 +36,19 @@ npm --prefix frontend ci --ignore-scripts && npm --prefix frontend run build
 scripts/enterprise_deploy.sh <profile> <catalog> <schema> <lakebase-instance> <endpoint> <endpoint>,<in>,<out>,<date> 100.00
 ```
 
-It stops at the first step that fails and writes `docs/rebuild/runs/<today>/enterprise/evidence.tsv`, one row per step, with each step's output in `E<n>.log` beside it:
+It stops at the first step that fails and writes `docs/rebuild/runs/<today>/enterprise/<time>/evidence.tsv`, one row per step, with each step's output in `E<n>.log` beside it:
 
 | Row | What it proves | If it fails |
 |---|---|---|
 | E1 | The endpoint, schema, volume, instance and both groups exist; the ceiling covers one call | The log names the missing resource and the command an administrator runs to create it; the volume you may create yourself once the schema exists. |
-| E2 | `databricks bundle validate` | The bundle or a variable value; the log is the CLI's own message. |
-| E3 | `databricks bundle deploy` | Usually a grant the app's service principal lacks (`CAN_QUERY`, `CAN_CONNECT_AND_CREATE`, `WRITE_VOLUME`). Record it as a blocker; do not edit `databricks.yml` to drop a resource. |
+| E2 | `databricks bundle validate -o json` resolved the app's name, and the endpoint, price and run ceiling you gave (`bundle.json` beside the rows) | The bundle or a variable value; the log is the CLI's own message, or names the resolved value that is not the one given. |
+| E3 | `databricks bundle deploy` | Usually a grant the app's service principal lacks (`CAN_QUERY`, `CAN_CONNECT_AND_CREATE`, `WRITE_VOLUME`). Record it as a blocker; do not edit `databricks.yml` to drop a resource. A deploy lock held by another deployer, or a CLI panic after the app was deleted out of band, has its recovery in `docs/DEPLOYMENT.md` section 6; run it only after asking the owner. |
 | E4 | `databricks bundle run caos` | The app failed to start; `databricks apps logs caos -p <profile>` has the process output. |
 | E5 | The app is RUNNING, has a URL, and reports `forward_user_access_token=True` | Same as E4; `forward_user_access_token=False` means the workspace has not enabled the preview feature (F53): ask Databricks to enable it, then `databricks apps stop caos` and `start`. |
-| E6 | `/api/health` answers ready with `python_version` 3.13 and every code `OK`: store, bundle, blobs, identity, workers | A `python_version` that is not 3.13 means the platform did not install from `uv.lock`: check that no `requirements.txt` was added at the root. |
+| E6 | `/api/health` answers ready with `python_version` 3.13 and every code `OK`: store, bundle, blobs, identity, workers | A `python_version` that is not 3.13 means the platform did not install from `uv.lock`: check that no `requirements.txt` was added at the root. `store` not `OK` on a first deploy is most often the schema grant above. |
 | E7 | The gateway smoke, JSON mode included (A31) | `json_mode=` other than `accepted` means the endpoint rejects `response_format`; ask the owner which endpoint to use, do not remove the parameter. |
 | E8 | Lakebase `SELECT version()` as the deployer (the app's own access is E6's `store` code) | Copy the version line into `docs/rebuild/decisions.md` under D17 when it succeeds. |
-| E9 | The event stream's first frame arrives through the Apps proxy (C42) | `no frame within 20s` means the proxy buffers: record it as a finding (`Fn`) and log the polling fallback in `docs/rebuild/next.md`; do not build it unasked. `unverified` (a 403) means your profile has no writer standing in the app: ask to be added to the analyst or admin group and rerun; any other status is the app failing and the row says which. |
+| E9 | The event stream's first frame arrives through the Apps proxy, then frames keep arriving for 3 s, none more than 1.5 s apart, with the stream open (C42, DF-2) | `no frame within 20s`, `then no frame for 1.5s` or `then the stream closed` means the proxy buffers or cuts the stream: record it as a finding (`Fn`) and log the polling fallback in `docs/rebuild/next.md`; do not build it unasked. `unverified` (a 403) means your profile has no writer standing in the app: ask to be added to the analyst or admin group and rerun; any other status is the app failing and the row says which. |
 
 ## Afterwards
 

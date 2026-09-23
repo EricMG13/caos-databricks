@@ -176,6 +176,31 @@ def test_the_api_lifespan_runs_through_the_site_application(
     assert len(started) == 1
 
 
+def test_an_export_missing_a_file_its_index_names_refuses_boot(
+    site: Path, empty_database: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """DF-4: a sync that dropped the export's scripts or styles shipped an index
+    that served 200 and drew nothing while health answered `ready`. Boot now
+    holds the index to every file it names."""
+
+    async def idle(state: health.ProbeState) -> None:
+        del state
+
+    monkeypatch.setattr(health, "probe_loop", idle)
+    monkeypatch.setenv(DATABASE_URL, empty_database)
+    (site / "index.html").write_bytes(
+        b'<!doctype html><script type="module" src="/assets/app.js"></script>'
+        b'<link rel="stylesheet" href="/assets/app.css">'
+        b'<link rel="preconnect" href="//fonts.example">'
+    )
+    with pytest.raises(Refusal) as missing, TestClient(application):
+        pass
+    assert missing.value.code is RefusalCode.EDGE_CONFIG_INVALID
+    (site / "assets" / "app.css").write_bytes(b"")
+    with TestClient(application) as client:
+        _secured(client.get("/directory/"))
+
+
 def test_the_deep_link_sections_are_the_workspace_sections() -> None:
     """`site.SECTIONS` is copied from the workspace's list; a section added there
     and not here would deep-link to a 404 in the production image."""

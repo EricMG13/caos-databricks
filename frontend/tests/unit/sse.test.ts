@@ -107,16 +107,53 @@ describe("the case event tail", () => {
     });
   });
 
-  // FE-3: the wait is the server's where it named one, else 1 s doubling to
-  // a 60 s ceiling that neither the backoff nor a Retry-After passes.
+  // FE-3: 1 s doubling to a 60 s ceiling, or the server's wait where it named
+  // a longer one; neither the backoff nor a Retry-After passes the ceiling.
   test("test_the_reconnect_wait_doubles_from_a_second_to_a_minute_and_honours_retry_after", () => {
     expect(retryDelayMs(0, null)).toBe(FIRST_RETRY_MS);
     expect(retryDelayMs(1, null)).toBe(2_000);
     expect(retryDelayMs(3, null)).toBe(8_000);
     expect(retryDelayMs(20, null)).toBe(MAX_RETRY_MS);
     expect(retryDelayMs(0, 7)).toBe(7_000);
-    expect(retryDelayMs(5, 0)).toBe(0);
     expect(retryDelayMs(0, 86_400)).toBe(MAX_RETRY_MS);
+  });
+
+  // DF-8: `Retry-After: 0` is legal, and a proxy may send it mid-restart. It
+  // was taken as a wait of nothing, so every tab reopened the stream and
+  // re-read the document as fast as the network allowed. The backoff is the
+  // floor under the server's wait, and it keeps doubling while refusals repeat.
+  test("test_a_retry_after_shorter_than_the_backoff_waits_the_backoff", () => {
+    expect(retryDelayMs(0, 0)).toBe(FIRST_RETRY_MS);
+    expect(retryDelayMs(5, 0)).toBe(32_000);
+    expect(retryDelayMs(3, 2)).toBe(8_000);
+    expect(retryDelayMs(20, 0)).toBe(MAX_RETRY_MS);
+  });
+
+  test("test_a_tail_refused_with_retry_after_zero_waits_a_second_then_two", async () => {
+    vi.useFakeTimers();
+    try {
+      await withFake(async () => {
+        const h = handlers(async () => ({ stop: false, retryAfterSeconds: 0 }));
+        openTail("/x", h);
+        const refuse = async () => {
+          FakeSource.last!.readyState = FakeSource.CLOSED;
+          FakeSource.last!.fire("error");
+          await vi.advanceTimersByTimeAsync(0);
+        };
+        await refuse();
+        await vi.advanceTimersByTimeAsync(FIRST_RETRY_MS - 1);
+        expect(FakeSource.all).toHaveLength(1);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(FakeSource.all).toHaveLength(2);
+        await refuse();
+        await vi.advanceTimersByTimeAsync(2 * FIRST_RETRY_MS - 1);
+        expect(FakeSource.all).toHaveLength(2);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(FakeSource.all).toHaveLength(3);
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   test("test_a_refused_reconnect_reopens_the_tail_after_the_backoff", async () => {
@@ -206,6 +243,29 @@ describe("the case event tail", () => {
       expect(h.onRefused).not.toHaveBeenCalled();
       expect(source.closed).toBe(false);
       expect(FakeSource.all).toHaveLength(1);
+    });
+  });
+
+  // MAX-14: a dropped connection returned before saying anything, so a view
+  // receiving no events went on being marked live while the browser retried.
+  test("test_a_dropped_connection_marks_the_view_not_live_until_it_reopens", async () => {
+    await withFake(async () => {
+      const h = handlers(async () => KEEP);
+      openTail("/x", h);
+      const source = FakeSource.last!;
+      source.readyState = FakeSource.OPEN;
+      source.fire("open");
+      expect(h.onLive).toHaveBeenLastCalledWith(true);
+      source.readyState = FakeSource.CONNECTING;
+      source.fire("error");
+      expect(h.onLive).toHaveBeenLastCalledWith(false);
+      // The browser's own reconnect restores it, and that open resyncs.
+      source.readyState = FakeSource.OPEN;
+      source.fire("open");
+      expect(h.onLive).toHaveBeenLastCalledWith(true);
+      expect(h.onOpen).toHaveBeenCalledTimes(2);
+      await settled();
+      expect(h.onRefused).not.toHaveBeenCalled();
     });
   });
 });

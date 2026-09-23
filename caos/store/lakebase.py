@@ -7,12 +7,14 @@ the password is a short-lived credential the SDK mints for the app's service
 principal. Tokens live about an hour, so one is refreshed well before that and
 every new connection gets a fresh one after it ages out.
 
-Minting is single-flight and bounded (MX-3, DL-4): one caller mints while the
-others wait for its answer, a mint that has not answered within
-`MINT_SECONDS` is abandoned as `STORE_UNAVAILABLE`, a failed mint is not
-retried for `FAILURE_SECONDS`, and a token the server still accepts is used
-until its real expiry when a fresh one cannot be had. No lock is held across
-the network.
+Minting is single-flight and bounded (MX-3, DL-4): one caller mints; a caller
+that arrives while that mint is in flight is handed the held token when the
+server still accepts it (ST-1) and waits for the mint only when there is none;
+a mint that has not answered within `MINT_SECONDS` is abandoned as
+`STORE_UNAVAILABLE`, a failed mint is not retried for `FAILURE_SECONDS`, and a
+token the server still accepts is used until its real expiry when a fresh one
+cannot be had. A token is refreshed at `TOKEN_SECONDS` or at the server's
+stated expiry, whichever is sooner (ST-3). No lock is held across the network.
 
 No credential is ever printed, logged or written; the URL this returns is
 handed straight to the driver.
@@ -55,6 +57,7 @@ class _Credential:
     token: str
     refresh_at: float  # monotonic: mint a fresh one after this
     expires_at: float  # monotonic: the server stops accepting it here
+    minted_at: float = 0.0  # monotonic: when it was minted
 
 
 _LOCK = threading.Lock()  # guards `_CACHED` and `_REFUSED_UNTIL`; never held on I/O
@@ -99,9 +102,14 @@ def note_connect_failure(failed: psycopg.OperationalError) -> None:
     SQLSTATE, the same shape as an unreachable host, so no class narrows it: a
     re-mint after any connection failure costs one bounded SDK call, and a
     token revoked or rotated early would otherwise be handed to the driver
-    until the clock said otherwise.
+    until the clock said otherwise. Bounded (MAX-03): a credential minted
+    under `FAILURE_SECONDS` ago is kept, so a store that is down costs one
+    mint per `FAILURE_SECONDS` however many connections fail, not one each.
     """
     del failed
+    held = _held()
+    if held is not None and time.monotonic() - held.minted_at < FAILURE_SECONDS:
+        return
     invalidate_credential()
 
 
@@ -111,17 +119,33 @@ def _credential() -> str:
     now = time.monotonic()
     if held is not None and held.refresh_at > now:
         return held.token
-    with _MINTING:
+    # Only a caller with no live token waits on a mint in flight (ST-1): the
+    # rest are handed the token the server still accepts at once.
+    live = held is not None and held.expires_at > now
+    if not _MINTING.acquire(blocking=not live):
+        return _live_or_refused()
+    try:
         held = _held()  # the minter before us may have answered
         now = time.monotonic()
         if held is not None and held.refresh_at > now:
             return held.token
         try:
-            return _refreshed(held, now)
+            return _refreshed(now)
         except Refusal:
-            if held is not None and held.expires_at > time.monotonic():
-                return held.token  # the server still accepts it (DL-4)
-            raise
+            # Read afresh (ST-3): a credential another path reported refused
+            # while this mint was failing is gone, not handed back.
+            return _live_or_refused()
+    finally:
+        _MINTING.release()
+
+
+def _live_or_refused() -> str:
+    """The held token while the server still accepts it (DL-4), else the
+    typed refusal."""
+    held = _held()
+    if held is not None and held.expires_at > time.monotonic():
+        return held.token
+    raise Refusal(RefusalCode.STORE_UNAVAILABLE)
 
 
 def _held() -> _Credential | None:
@@ -129,10 +153,9 @@ def _held() -> _Credential | None:
         return _CACHED
 
 
-def _refreshed(held: _Credential | None, now: float) -> str:
+def _refreshed(now: float) -> str:
     """Mint under the failure cache and record the result."""
     global _CACHED, _REFUSED_UNTIL
-    del held  # the caller falls back to it; this only decides whether to mint
     with _LOCK:
         refused_until = _REFUSED_UNTIL
     if refused_until > now:
@@ -144,8 +167,11 @@ def _refreshed(held: _Credential | None, now: float) -> str:
             _REFUSED_UNTIL = time.monotonic() + FAILURE_SECONDS
         raise
     minted = time.monotonic()
+    # Refreshed before the server's stated expiry when that comes first (ST-3):
+    # a short-lived credential is never handed out past it.
+    refresh_at = min(minted + TOKEN_SECONDS, expires_at)
     with _LOCK:
-        _CACHED = _Credential(token, minted + TOKEN_SECONDS, expires_at)
+        _CACHED = _Credential(token, refresh_at, expires_at, minted)
     return token
 
 
@@ -196,19 +222,38 @@ def _mint() -> tuple[str, float]:
     token = getattr(issued, "token", None)
     if not isinstance(token, str) or not token:
         raise Refusal(RefusalCode.STORE_UNAVAILABLE)
-    return token, _expires_at(getattr(issued, "expiration_time", None))
+    # The provisioned form states `expiration_time` as text; the autoscaling
+    # form states `expire_time` as a protobuf `Timestamp` (ST-3, MAX-15).
+    stated = getattr(issued, "expiration_time", None)
+    if stated is None:
+        stated = getattr(issued, "expire_time", None)
+    return token, _expires_at(stated)
 
 
 def _expires_at(stated: object) -> float:
     """The server's expiry as a monotonic instant, less a margin; a missing or
     unreadable one gives the token no life beyond its refresh."""
-    if not isinstance(stated, str):
-        return time.monotonic() + TOKEN_SECONDS
-    try:
-        when = datetime.fromisoformat(stated.replace("Z", "+00:00"))
-    except ValueError:
+    when = _stated_instant(stated)
+    if when is None:
         return time.monotonic() + TOKEN_SECONDS
     if when.tzinfo is None:
         when = when.replace(tzinfo=UTC)
     left = (when - datetime.now(UTC)).total_seconds() - EXPIRY_MARGIN_SECONDS
     return time.monotonic() + max(left, 0.0)
+
+
+def _stated_instant(stated: object) -> datetime | None:
+    """An ISO-8601 string or a `Timestamp`-shaped value as a datetime, or None."""
+    if isinstance(stated, str):
+        try:
+            return datetime.fromisoformat(stated.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    to_datetime = getattr(stated, "ToDatetime", None)
+    if not callable(to_datetime):
+        return None
+    try:
+        when = to_datetime(tzinfo=UTC)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return when if isinstance(when, datetime) else None

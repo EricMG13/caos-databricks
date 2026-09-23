@@ -583,6 +583,45 @@ describe("Run", () => {
     }
   });
 
+  // MAX-01: a store fault at commit answers a typed STORE_UNAVAILABLE -- and a
+  // commit whose acknowledgement was lost faults exactly there, with the case
+  // or run already written. The typed code drew a fresh key, so the retry
+  // wrote a second one where the same key would have replayed the first.
+  test("test_a_store_refusal_after_a_possible_commit_keeps_the_key", async () => {
+    const caseId = routeNotPinned.body.case_id;
+    const storeDown = () =>
+      jsonResponse({ code: "STORE_UNAVAILABLE", clears: "the store answers again" }, 503);
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce(storeDown())
+      .mockResolvedValueOnce(
+        jsonResponse({ case_id: caseId, run_id: RUN_B, route_digest: "f".repeat(64) }, 201),
+      );
+    vi.stubGlobal("fetch", fetchSpy);
+    try {
+      const { container } = mountAt(EMPTY_RUN, `/run/?case=${caseId}`);
+      const create = container.querySelector('[data-action="CREATE_RUN"]')!;
+      fireEvent.click(create);
+      await waitFor(() =>
+        expect(container.querySelector("[data-refusal='STORE_UNAVAILABLE']")).not.toBeNull(),
+      );
+      // And it says what a retry would do.
+      expect(container.querySelector("[data-command-in-doubt]")).toHaveTextContent(
+        "Retrying sends the same key",
+      );
+      fireEvent.click(create);
+      await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(2));
+      const keyOf = (call: number): string =>
+        ((fetchSpy.mock.calls[call]![1] as RequestInit).headers as Record<string, string>)[
+          "Idempotency-Key"
+        ] ?? "";
+      expect(UUID.test(keyOf(0))).toBe(true);
+      expect(keyOf(1)).toBe(keyOf(0));
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   // FE-8's other half: a receipt that did arrive settles the intent, so the
   // next press is a plainly new one.
   test("a settled answer draws a fresh key for the next press", async () => {
@@ -811,6 +850,71 @@ describe("Run", () => {
     expect(retry).toHaveAttribute("aria-disabled", "true");
     const cancel = container.querySelector('[data-action="CANCEL_RUN"]')!;
     expect(cancel).not.toHaveAttribute("aria-disabled");
+  });
+
+  // MAX-18: the fingerprint start and retry send lives only in this session. A
+  // reload forgets it, and on a run whose subject is pinned and whose gates
+  // are both released there is no pin and no approval left to press -- Start
+  // and Retry stayed refused COMMAND_EXPECTATION_STALE however many previews
+  // were read. A preview carries the pinned input's fingerprint as the server
+  // computed it, so reading one is what recovers them.
+  test("test_a_preview_read_after_a_reload_makes_start_and_retry_usable", async () => {
+    const run = running.body.run!;
+    expect(run.gates.every((gate) => gate.state === "RELEASED")).toBe(true);
+    const fingerprint = "9".repeat(64);
+    const preview = {
+      run_id: run.run_id,
+      gate: "SOURCE_SET",
+      content: "SOURCE SET PREVIEW\n",
+      preview_sha256: "8".repeat(64),
+      input_fingerprint: fingerprint,
+      observed_at: "2026-09-14T10:00:00Z",
+    };
+    const doc = withActions(running, [
+      { action: "PIN_RUN_INPUT", refusal: { code: "RUN_ALREADY_STARTED", clears: "never" } },
+      { action: "START_RUN", refusal: null },
+      { action: "RETRY_RUN", refusal: null },
+    ]);
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(preview))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          run_id: run.run_id,
+          run_status: "RUNNING",
+          work: { state: "QUEUED", stop_code: null, cancel_requested: false },
+        }),
+      )
+      .mockResolvedValue(jsonResponse(doc));
+    vi.stubGlobal("fetch", fetchSpy);
+    try {
+      const { container } = mount(doc);
+      const start = () => container.querySelector('[data-action="START_RUN"]')!;
+      const retry = () => container.querySelector('[data-action="RETRY_RUN"]')!;
+      expect(start()).toHaveAttribute("data-refusal", "COMMAND_EXPECTATION_STALE");
+      expect(retry()).toHaveAttribute("data-refusal", "COMMAND_EXPECTATION_STALE");
+
+      fireEvent.click(
+        container.querySelector('[data-gate-panel="SOURCE_SET"] [data-action="PREVIEW"]')!,
+      );
+      await waitFor(() => expect(start()).not.toHaveAttribute("aria-disabled"));
+      expect(retry()).not.toHaveAttribute("aria-disabled");
+      // The preview that was read is still on screen: the panel that read it
+      // was not remounted for the fingerprint it carried.
+      expect(
+        container.querySelector('[data-gate-panel="SOURCE_SET"] [data-gate-preview-content]'),
+      ).toHaveTextContent("SOURCE SET PREVIEW");
+
+      fireEvent.click(start());
+      await waitFor(() => expect(fetchSpy.mock.calls.length).toBeGreaterThanOrEqual(2));
+      const [startUrl, startInit] = fetchSpy.mock.calls[1]!;
+      expect(startUrl).toBe(`/api/v1/cases/${running.body.case_id}/runs/${run.run_id}/start`);
+      expect(JSON.parse((startInit as RequestInit).body as string)).toEqual({
+        input_fingerprint: fingerprint,
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   // A parked run's stop code is the store's answer to "why is this stopped";

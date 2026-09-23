@@ -18,10 +18,18 @@ import argparse
 import os
 import sys
 from collections.abc import Callable
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from databricks.sdk import WorkspaceClient
+
+# Run by path (`uv run python scripts/preflight.py`, as the runbook gives
+# it), Python puts only `scripts/` on the import path; the price check
+# imports `caos` from the root (MAX-07).
+REPO = Path(__file__).resolve().parents[1]
+if str(REPO) not in sys.path:
+    sys.path.insert(0, str(REPO))
 
 # What `_group` answers when the profile cannot list groups: not missing.
 UNKNOWN = object()
@@ -156,31 +164,76 @@ def _fit_endpoint(client: WorkspaceClient, name: str) -> object:
     return endpoint
 
 
+PAYLOADS_LOGGED = (
+    "inference tables log every payload: turn payload logging off, "
+    "the prompts carry document text"
+)
+# Telemetry signals that carry no request or response text.
+TEXT_FREE_TELEMETRY = frozenset({"TELEMETRY_FEATURE_METRICS"})
+
+
 def gateway_problems(endpoint: object) -> list[str]:
-    """What the endpoint's AI Gateway settings would do to the host (DP-3)."""
-    problems: list[str] = []
+    """What the endpoint's AI Gateway and telemetry settings would do to the
+    host (DP-3), and what an update still pending would do once it lands
+    (DF-3): payload logging lives in `ai_gateway`, in the legacy
+    `auto_capture_config` and in `telemetry_config`."""
     gateway = getattr(endpoint, "ai_gateway", None)
-    config = getattr(endpoint, "config", None)
+    problems = _serving_problems(getattr(endpoint, "config", None))
     tables = getattr(gateway, "inference_table_config", None)
-    capture = getattr(config, "auto_capture_config", None)
-    if getattr(tables, "enabled", False) or getattr(capture, "enabled", False):
-        problems.append(
-            "inference tables log every payload: turn payload logging off, "
-            "the prompts carry document text"
-        )
+    if getattr(tables, "enabled", False):
+        problems.append(PAYLOADS_LOGGED)
+    problems += _telemetry_problems(getattr(endpoint, "telemetry_config", None))
+    pending = _serving_problems(getattr(endpoint, "pending_config", None))
+    problems += [f"a pending update: {problem}" for problem in pending]
     if getattr(getattr(gateway, "fallback_config", None), "enabled", False):
         problems.append("fallback is enabled: the host prices one model per endpoint")
-    served = getattr(config, "served_entities", None) or []
-    routes = getattr(getattr(config, "traffic_config", None), "routes", None) or []
-    if len(served) > 1 or len(routes) > 1:
-        problems.append(
-            "more than one served entity or route: the recorded model identity "
-            "and price would not describe every answer"
-        )
     if getattr(gateway, "guardrails", None) is not None:
         print(
             "note    guardrails are set on the endpoint: an output guardrail "
             "alters or refuses answers, which the host refuses as PROVIDER_REFUSED"
+        )
+    return list(dict.fromkeys(problems))
+
+
+def _serving_problems(config: object) -> list[str]:
+    """A served or pending configuration: its legacy payload capture, and more
+    than one entity, model or route to price."""
+    problems: list[str] = []
+    if getattr(getattr(config, "auto_capture_config", None), "enabled", False):
+        problems.append(PAYLOADS_LOGGED)
+    entities = getattr(config, "served_entities", None) or []
+    models = getattr(config, "served_models", None) or []
+    routes = getattr(getattr(config, "traffic_config", None), "routes", None) or []
+    if max(len(entities), len(models), len(routes)) > 1:
+        problems.append(
+            "more than one served entity or route: the recorded model identity "
+            "and price would not describe every answer"
+        )
+    return problems
+
+
+def _telemetry_problems(telemetry: object) -> list[str]:
+    """`telemetry_config`: an inference table named or sampling any request
+    copies payloads; an export destination for logs or traces (every signal
+    when none is listed) copies them too."""
+    if telemetry is None:
+        return []
+    problems: list[str] = []
+    table = getattr(telemetry, "inference_table_config", None)
+    sampled = getattr(table, "sampling_fraction", None) or 0
+    if getattr(table, "name", None) or sampled > 0:
+        problems.append(PAYLOADS_LOGGED)
+    names = getattr(telemetry, "table_names", None)
+    exported = bool(getattr(telemetry, "telemetry_profile_id", None)) or any(
+        getattr(names, field, None)
+        for field in ("logs_table", "traces_table", "annotations_table")
+    )
+    features = getattr(telemetry, "enabled_telemetry_features", None) or []
+    signals = {getattr(feature, "value", feature) for feature in features}
+    if exported and not (signals and signals <= TEXT_FREE_TELEMETRY):
+        problems.append(
+            "telemetry exports logs or traces to tables: export metrics only, "
+            "the prompts carry document text"
         )
     return problems
 

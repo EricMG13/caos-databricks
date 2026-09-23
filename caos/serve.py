@@ -22,7 +22,8 @@ from __future__ import annotations
 import logging
 import os
 import sys
-from threading import Event
+from collections.abc import Callable
+from threading import Event, Lock, Thread
 
 import uvicorn
 
@@ -62,12 +63,18 @@ def install_log_filter() -> None:
         logger.addFilter(_NoExceptionText())
 
 
-def main() -> int:
-    install_log_filter()
-    stopping = Event()
-    worker = start_in_process(stopping)
+def drain_once(stopping: Event, worker: Thread | None) -> Callable[[], None]:
+    """The worker drain, run at most once however many paths reach it.
+
+    SIGTERM reaches the lifespan's shutdown hook only, since uvicorn re-raises
+    it; SIGINT returns from `uvicorn.run` and reaches the `finally` too, which
+    joined a worker mid-call twice (ST-15).
+    """
+    once = Lock()
 
     def drain() -> None:
+        if not once.acquire(blocking=False):
+            return
         stopping.set()
         if worker is None:
             return
@@ -75,6 +82,13 @@ def main() -> int:
         word = "abandoned" if worker.is_alive() else "stopped"
         print(f"worker {word}", file=sys.stderr)
 
+    return drain
+
+
+def main() -> int:
+    install_log_filter()
+    stopping = Event()
+    drain = drain_once(stopping, start_in_process(stopping))
     on_shutdown(drain)
     try:
         uvicorn.run(

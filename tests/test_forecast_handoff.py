@@ -101,3 +101,54 @@ def test_validate_driver_mapping_refuses_changed_vendor_movements() -> None:
     with pytest.raises(Refusal) as caught:
         validate_driver_mapping(CONTRACT, markdown, changed)
     assert caught.value.code is RefusalCode.HANDOFF_INCOMPLETE
+
+
+def test_unclosed_block_openers_cost_no_more_than_their_length() -> None:
+    """EV-6: the block was found by a lazy DOTALL expression, and each opener
+    with no closer after it scanned to the end of the document: one real block
+    and 8,000 unclosed openers inside a `~~~` fence took about 6 s, GIL held,
+    on every read of the model analysis. Found by a forward scan now."""
+    import time
+
+    from caos.methodology.forecast import forecast_projection
+
+    tail = b"~~~\n" + b"```caos-forecast-v1\n" * 8_000 + b"~~~\n"
+    carried = b"## Analysis\n\n" + forecast_markdown() + b"\n## Next\n\n" + tail
+    started = time.perf_counter()
+    result = forecast_projection(carried)
+    spent = time.perf_counter() - started
+    assert result == cash_flow_forecast(forecast_request())
+    assert spent < 1.0, spent
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "```caos-forecast-v1\n{}\n```",
+        "```caos-forecast-v1\n{}\n```\n",
+        "```caos-forecast-v1\n\n```\n",
+        "```caos-forecast-v1\n```\n```\n",
+        "```caos-forecast-v1\n{}\n```x\n```\n",
+        "x```caos-forecast-v1\n{}\n```\n",
+        "```caos-forecast-v1 \n{}\n```\n",
+        "```caos-forecast-v1\na\n```caos-forecast-v1\nb\n```\n```\n",
+        "```caos-forecast-v1\na\n```\n```caos-forecast-v1\nb\n```\n",
+        "```caos-forecast-v1\na\n```\n\n```caos-forecast-v1\nb\n```",
+        "```caos-forecast-v1\r\na\r\n```\r\n",
+        "```caos-forecast-v1\na\n```\r\n```\n",
+        "```caos-forecast-v1\n" * 3,
+        "",
+    ],
+)
+def test_the_block_scan_finds_what_the_expression_found(text: str) -> None:
+    """The scan is the old expression's answer, block for block, on every edge
+    it had: a closer that is not alone on its line, an opener inside a body,
+    an empty body, a closer on the opener's next line, no final newline."""
+    import re
+
+    from caos.methodology.forecast import _blocks
+
+    expression = re.compile(
+        r"^```caos-forecast-v1\n(.*?)\n```$", re.MULTILINE | re.DOTALL
+    )
+    assert _blocks(text) == expression.findall(text)

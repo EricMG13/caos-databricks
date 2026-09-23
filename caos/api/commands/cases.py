@@ -16,8 +16,9 @@ single-actor release under invariant 5.
    the stream held to its declared length: only file parts named `document`,
    each filename `BoundaryText` of at most 255 characters and not blank.
 4. The receipt is looked up for the pack's digest and a replay answers without
-   extracting; otherwise `prepare_pack` extracts (the §47 child for a PDF) with
-   no transaction open and no case lock held.
+   extracting; otherwise `prepare_pack` extracts (the §47 child for a PDF) and
+   `put_pack` uploads the documents, with no transaction open and no case lock
+   or chain head held (ED-5).
 5. One governed unit: `admit_prepared`, `SOURCES_ADMITTED` and the receipt.
    A refusal there commits no row; blobs already put are content-addressed
    orphans (CLAUDE.md known gaps).
@@ -49,7 +50,7 @@ from caos.api.identity import Actor, GlobalRole
 from caos.api.wire import TITLE_CHARS, CaseCreated, CreateCase, SourcesAdmitted
 from caos.boundary_text import BoundaryText
 from caos.evidence.extract import DEFAULT_LIMITS
-from caos.evidence.ingest import Document, admit_prepared, prepare_pack
+from caos.evidence.ingest import Document, admit_prepared, prepare_pack, put_pack
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection, rollback_or_close
 from caos.store.audit import GovernedAction
@@ -219,6 +220,9 @@ def admit_sources(  # noqa: PLR0913 -- decision 2's dependency order, one per st
         return command_response(replay, SourcesAdmitted)
 
     pack = prepare_pack(documents)  # no unit open, no case lock held
+    # And the uploads, for the same reason (ED-5): inside `governed` the case
+    # row and the audit chain head are already held when `write` runs.
+    digests = put_pack(blobs, pack)
     return governed(
         conn,
         scope=case_id,
@@ -237,7 +241,8 @@ def admit_sources(  # noqa: PLR0913 -- decision 2's dependency order, one per st
         write=lambda unit: (
             201,
             SourcesAdmitted(
-                case_id=case_id, source_ids=admit_prepared(unit, blobs, case_id, pack)
+                case_id=case_id,
+                source_ids=admit_prepared(unit, case_id, pack, digests),
             ),
         ),
         model=SourcesAdmitted,

@@ -1,0 +1,154 @@
+{
+  "chrome": {
+    "subject": null,
+    "served_role": {
+      "global_role": "ANALYST",
+      "standing": "APPROVER"
+    },
+    "actions": [
+      {
+        "action": "CREATE_CASE",
+        "refusal": null
+      }
+    ]
+  },
+  "body": {
+    "cases": [
+      {
+        "case_id": "ff1fbf5a-e56f-4f84-a983-2f5a507675f0",
+        "title": "Carvana Co. (NYSE: CVNA)",
+        "created_at": "2026-02-18T16:04:00Z",
+        "standing": "ADMIN",
+        "live_sources": 6,
+        "latest_run": {
+          "run_id": "e5d5c2c4-e937-48af-ad74-ef805ad9c2f4",
+          "status": "RUNNING",
+          "created_at": "2026-09-09T11:02:00Z",
+          "profile_id": "FULL_CREDIT_32",
+          "selection_id": "snp_cvna_q2_2026"
+        },
+        "members": [
+          {
+            "user_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "standing": "ADMIN"
+          },
+          {
+            "user_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            "standing": "WRITER"
+          },
+          {
+            "user_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+            "standing": "APPROVER"
+          }
+        ],
+        "actions": [
+          {
+            "action": "GRANT_STANDING",
+            "refusal": null
+          },
+          {
+            "action": "REVOKE_STANDING",
+            "refusal": null
+          }
+        ]
+      },
+      {
+        "case_id": "02cf693b-2e67-43f1-98bb-d7f6dd9b1da8",
+        "title": "Hertz Global Holdings, Inc. (NASDAQ: HTZ)",
+        "created_at": "2026-03-02T09:00:00Z",
+        "standing": "READER",
+        "live_sources": 5,
+        "latest_run": {
+          "run_id": "29d0f763-6c1f-4153-b47a-d514f044764f",
+          "status": "BLOCKED",
+          "created_at": "2026-09-08T17:15:00Z",
+          "profile_id": "FULL_CREDIT_32",
+          "selection_id": "snp_htz_q2_2026"
+        },
+        "members": null,
+        "actions": [
+          {
+            "action": "GRANT_STANDING",
+            "refusal": {
+              "code": "NOT_AUTHORISED",
+              "clears": "Obtain the required standing on the case."
+            }
+          },
+          {
+            "action": "REVOKE_STANDING",
+            "refusal": {
+              "code": "NOT_AUTHORISED",
+              "clears": "Obtain the required standing on the case."
+            }
+          }
+        ]
+      },
+      {
+        "case_id": "1b43448e-d433-4110-a3a9-90667d05052f",
+        "title": "Charter Communications, Inc. (NASDAQ: CHTR)",
+        "created_at": "2026-01-11T13:45:00Z",
+        "standing": "WRITER",
+        "live_sources": 3,
+        "latest_run": {
+          "run_id": "7ac8e43a-16e2-442f-a27b-d76c16cec5fe",
+          "status": "COMPLETE",
+          "created_at": "2026-09-07T14:30:00Z",
+          "profile_id": "LITE_CREDIT_22",
+          "selection_id": "snp_chtr_q2_2026"
+        },
+        "members": null,
+        "actions": [
+          {
+            "action": "GRANT_STANDING",
+            "refusal": {
+              "code": "NOT_AUTHORISED",
+              "clears": "Obtain the required standing on the case."
+            }
+          },
+          {
+            "action": "REVOKE_STANDING",
+            "refusal": {
+              "code": "NOT_AUTHORISED",
+              "clears": "Obtain the required standing on the case."
+            }
+          }
+        ]
+      },
+      {
+        "case_id": "f737ddbb-5c22-48a6-a8fc-2324d86c4a2d",
+        "title": "Spirit Airlines, Inc. (OTC: FLYYQ)",
+        "created_at": "2025-12-05T10:20:00Z",
+        "standing": "READER",
+        "live_sources": 2,
+        "latest_run": {
+          "run_id": "79c9f395-1696-44bf-9196-e27b2392dbcf",
+          "status": "BLOCKED",
+          "created_at": "2026-09-09T08:20:00Z",
+          "profile_id": "FULL_CREDIT_32",
+          "selection_id": "snp_flyyq_q2_2026"
+        },
+        "members": null,
+        "actions": [
+          {
+            "action": "GRANT_STANDING",
+            "refusal": {
+              "code": "NOT_AUTHORISED",
+              "clears": "Obtain the required standing on the case."
+            }
+          },
+          {
+            "action": "REVOKE_STANDING",
+            "refusal": {
+              "code": "NOT_AUTHORISED",
+              "clears": "Obtain the required standing on the case."
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "observed_at": "2026-09-09T14:30:00Z",
+  "observed_empty": false,
+  "status": "complete",
+  "notes": []
+}

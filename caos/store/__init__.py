@@ -157,6 +157,12 @@ MIGRATIONS = (
         .with_name("0029_one_opinion_per_signer.sql")
         .read_text(encoding="utf-8"),
     ),
+    (
+        "0031_verdict_recorded_at",
+        Path(__file__)
+        .with_name("0031_verdict_recorded_at.sql")
+        .read_text(encoding="utf-8"),
+    ),
 )
 
 # One well-known lock, held for the applying transaction only, so two processes
@@ -207,10 +213,20 @@ def connect(url: str, *, connect_timeout: int | None = None) -> StoreConnection:
 
     `connect_timeout` (seconds) bounds the connection attempt, for a caller
     such as the health probe that must not wait on an unanswering host.
+
+    A connection that fails drops the cached Lakebase credential, so the next
+    one mints (ST-2): the API, the health probes and the lifespan open theirs
+    here, and a token revoked early would otherwise be sent until it aged out.
     """
-    if connect_timeout is None:
-        return psycopg.connect(url, autocommit=False)
-    return psycopg.connect(url, autocommit=False, connect_timeout=connect_timeout)
+    from caos.store.lakebase import note_connect_failure
+
+    try:
+        if connect_timeout is None:
+            return psycopg.connect(url, autocommit=False)
+        return psycopg.connect(url, autocommit=False, connect_timeout=connect_timeout)
+    except psycopg.OperationalError as failed:
+        note_connect_failure(failed)
+        raise
 
 
 def rollback_or_close(conn: StoreConnection) -> None:

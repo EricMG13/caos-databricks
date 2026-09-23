@@ -48,8 +48,8 @@ def test_the_serializer_never_imports_what_a_checkpoint_row_names(
             ormsgpack.packb(("os", "system", f"touch {marker}")),
         )
     )
-    loaded = serde.loads_typed(("msgpack", crafted))
-    assert not callable(loaded)
+    with pytest.raises(Refusal, match=r"^INTERNAL_FAULT$"):
+        serde.loads_typed(("msgpack", crafted))
     assert not marker.exists(), "the named callable never ran"
 
 
@@ -129,3 +129,122 @@ def test_the_platform_pool_checks_connections_and_a_refused_connect_drops_the_to
     with pytest.raises(psycopg.OperationalError):
         MintedConnection.connect(connect_timeout=1)
     assert lakebase._CACHED is None, "the failed connect dropped the credential"
+
+
+def test_a_set_up_held_by_an_old_snapshot_refuses_in_time_and_heals(
+    empty_database: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ST-4: LangGraph builds its indexes `CONCURRENTLY`, which waits on every
+    older snapshot in the database. One open REPEATABLE READ session held
+    set-up with no deadline, before uvicorn bound its port. The statement is
+    bounded now, the refusal is typed, and the index build it cancelled is
+    dropped and rebuilt valid by the next set-up."""
+    import time
+
+    monkeypatch.setattr(checkpoint, "SETUP_STATEMENT_SECONDS", 1.0)
+    reader = psycopg.connect(empty_database, autocommit=False)
+    try:
+        reader.execute("BEGIN ISOLATION LEVEL REPEATABLE READ")
+        reader.execute("SELECT 1")  # the snapshot is taken and held
+        started = time.monotonic()
+        with pytest.raises(Refusal, match=r"^STORE_UNAVAILABLE$"):
+            checkpointer(empty_database)
+        assert time.monotonic() - started < 10
+    finally:
+        reader.rollback()
+        reader.close()
+    with psycopg.connect(empty_database, autocommit=True) as conn:
+        held = conn.execute(
+            # `pg_locks` is the whole server's: under `-n auto` other tests'
+            # databases hold advisory locks of their own, so count this one's.
+            "SELECT count(*) FROM pg_locks WHERE locktype = 'advisory'"
+            " AND database = (SELECT oid FROM pg_database"
+            " WHERE datname = current_database())"
+        ).fetchone()
+        assert held == (0,), "the refusal released the set-up lock"
+    saver = checkpointer(empty_database)
+    close_checkpointer(saver)
+    with psycopg.connect(empty_database, autocommit=True) as conn:
+        indexes = conn.execute(
+            "SELECT c.relname, i.indisvalid FROM pg_index i"
+            " JOIN pg_class c ON c.oid = i.indexrelid"
+            " JOIN pg_namespace n ON n.oid = c.relnamespace"
+            " WHERE n.nspname = %s AND c.relname LIKE %s ORDER BY 1",
+            (checkpoint.SCHEMA, "%thread_id_idx"),
+        ).fetchall()
+    assert [valid for _name, valid in indexes] == [True, True, True]
+
+
+def test_the_local_checkpointer_replaces_a_connection_the_server_ended(
+    empty_database: str,
+) -> None:
+    """ST-13: off the platform the saver held one connection for the life of
+    the process, so one ended session failed every later claim. It is a
+    checked pool now, as on the platform."""
+    from caos.graph.build import thread_config
+
+    saver = checkpointer(empty_database)
+    try:
+        pool = getattr(saver, "conn", None)
+        assert isinstance(pool, ConnectionPool)
+        with psycopg.connect(empty_database, autocommit=True) as admin:
+            admin.execute(
+                "SELECT pg_terminate_backend(pid) FROM pg_stat_activity"
+                " WHERE datname = current_database() AND pid <> pg_backend_pid()"
+            )
+        assert saver.get(thread_config("nobody")) is None, "a fresh session answers"
+    finally:
+        close_checkpointer(saver)
+
+
+def test_a_checkpoint_row_the_host_never_writes_is_refused_not_loaded(
+    empty_database: str,
+) -> None:
+    """ST-14: the allowlisted serializer still built LangGraph's "safe" types
+    from a crafted row and LangChain objects from a `json` row; a row outside
+    what the graph writes refuses `INTERNAL_FAULT`. And a node's failure is
+    persisted as its class, never its message, which may quote a document."""
+    import re
+
+    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+
+    from caos.graph.build import RunState, build_graph, thread_config
+    from caos.graph.route import ResolvedRoute, RouteNode
+    from caos.graph.runtime import message_free
+
+    serde = serializer()
+    permissive = JsonPlusSerializer()
+    for crafted in (re.compile("x"), {1, 2}, frozenset({3})):
+        with pytest.raises(Refusal, match=r"^INTERNAL_FAULT$"):
+            serde.loads_typed(permissive.dumps_typed(crafted))
+    for kind in ("json", "pickle"):
+        with pytest.raises(Refusal, match=r"^INTERNAL_FAULT$"):
+            serde.loads_typed((kind, b"{}"))
+    kept: list[object] = [None, b"raw", "text", 7, ["a", {"b": "c"}]]
+    kept.append(RunState("r", {"n": "x"}))
+    for value in kept:
+        assert serde.loads_typed(serde.dumps_typed(value)) == value
+
+    saver = checkpointer(empty_database)
+    try:
+        route = ResolvedRoute("p", "s", (RouteNode("CP-0", "CP-0", 0),), ())
+        document = "EBITDA of USD 1,240.0m per page 3 of the borrower's accounts"
+
+        def failing(route_node_id: str) -> str:
+            with message_free():
+                raise ValueError(document, route_node_id)
+
+        graph = build_graph(
+            route, node_pass=failing, finish=lambda: "COMPLETE", checkpointer=saver
+        )
+        with pytest.raises(ValueError) as raised:
+            graph.invoke(RunState("run-1"), config=thread_config("run-1"))
+        assert raised.value.args == (), "the class travels, the message does not"
+        with psycopg.connect(empty_database, autocommit=True) as conn:
+            written = conn.execute(
+                f"SELECT blob FROM {checkpoint.SCHEMA}.checkpoint_writes"
+            ).fetchall()
+        assert written, "the failed node's write is there"
+        assert not [row for row in written if b"EBITDA" in bytes(row[0])]
+    finally:
+        close_checkpointer(saver)

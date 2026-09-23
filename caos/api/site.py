@@ -9,7 +9,9 @@ request reaches a file or a route before the edge has admitted it. Behind it:
 - `/api` and `/api/*` go to `caos.api.app:app`, lifespan included, so routing's
   own 404 and 405 there stay `ENDPOINT_NOT_FOUND` and a file under the export
   never shadows an API path. The app installs `EdgeGuard` too; the scope marker
-  the outer guard sets makes the inner one pass through.
+  the outer guard sets makes the inner one pass through, except that it still
+  answers an unhandled fault in the typed body before Starlette's error
+  middleware can answer it in plain text (ED-2).
 - Every other path is a GET/HEAD-only read of `CAOS_SITE_ROOT`. `/` and each
   section's `/<section>/` (with or without its slash, with any query) serve the
   exported `index.html`, which routes on the client; anything else is a file
@@ -66,6 +68,21 @@ def _exported(root: Path) -> bool:
     return (root / "index.html").is_file()
 
 
+# A root-relative `src` or `href` in the index: the export's own script,
+# stylesheet and icons, never an external or protocol-relative address.
+_NAMED = re.compile(rb'(?:src|href)="/(?!/)([^"?#]+)"')
+
+
+def _complete(root: Path) -> bool:
+    """The index and every file it names (DF-4). Asked once, at boot: an index
+    whose script or stylesheet did not ship would serve 200 and draw nothing,
+    while health answered `ready`."""
+    if not _exported(root):
+        return False
+    named = _NAMED.findall((root / "index.html").read_bytes())
+    return all((root / name.decode("utf-8", "replace")).is_file() for name in named)
+
+
 async def _bare(send: Send, status: int) -> None:
     await send(
         {
@@ -99,7 +116,7 @@ async def dispatch(scope: Scope, receive: Receive, send: Send) -> None:
     """`/api` to the app, lifespan to the app, everything else to the export."""
     if scope["type"] == "lifespan":
         root = _site_root()
-        if root is not None and not _exported(root):
+        if root is not None and not _complete(root):
             await startup_failed(receive, send)
             raise Refusal(RefusalCode.EDGE_CONFIG_INVALID)
         await app(scope, receive, send)

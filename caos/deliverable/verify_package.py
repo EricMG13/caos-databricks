@@ -47,11 +47,41 @@ def _directory(data: bytes) -> bool:
     if end + 22 + comment != len(data) or offset + size != end:
         return False
     cursor = offset
+    extents = []
     for _ in range(5):
         if data[cursor : cursor + 4] != b"PK\x01\x02" or cursor + 46 > end:
             return False
+        # Flags, compressed size and the local header's offset.
+        extents.append(
+            (
+                struct.unpack_from("<I", data, cursor + 42)[0],
+                struct.unpack_from("<I", data, cursor + 20)[0],
+                struct.unpack_from("<H", data, cursor + 8)[0],
+            )
+        )
         cursor += 46 + sum(struct.unpack_from("<3H", data, cursor + 28))
-    return bool(cursor == end)
+    return cursor == end and _tiled(data, extents, offset)
+
+
+def _tiled(data: bytes, extents: list[tuple[int, int, int]], directory: int) -> bool:
+    """Whether the five local entries cover every byte before the directory.
+
+    `_member` reads each member through the offset its central entry names, so
+    bytes no central entry names were never read -- and a sixth local entry put
+    there, a second `deliverable.html`, verified while a reader that walks local
+    headers in file order (a streaming unzip, `tar` reading a pipe) extracted it
+    (DQ-8). The entries must run from offset 0 to the directory with no gap and
+    no trailing data descriptor, so there is nowhere for a sixth entry to be.
+    """
+    cursor = 0
+    for local, size, flags in sorted(extents):
+        if local != cursor or flags & 8 or local + 30 > directory:
+            return False
+        if data[local : local + 4] != b"PK\x03\x04":
+            return False
+        name, extra = struct.unpack_from("<2H", data, local + 26)
+        cursor = local + 30 + name + extra + size
+    return cursor == directory
 
 
 def _metadata(infos: list[zipfile.ZipInfo]) -> str | None:
@@ -136,6 +166,12 @@ def _receipt_error(receipt: dict[str, Any], payload: bytes) -> str | None:
 _FIGURE_FIELDS = ("document_sha256", "page", "matched_text")
 
 
+def _same(left: object, right: object) -> bool:
+    """Equal and of one type: `1.0 == 1` and `True == 1` are Python's equality,
+    not the same page (DQ-15)."""
+    return type(left) is type(right) and left == right
+
+
 def _cited_by_node(artifacts: list[Any]) -> dict[str, list[Any]]:
     """Each bound handoff's citation list, by the route node the payload names."""
     found: dict[str, list[Any]] = {}
@@ -162,8 +198,8 @@ def _figure_error(figure: object, cited: dict[str, list[Any]]) -> str | None:
     ):
         return "a narrative figure names no citation of this payload"
     citation = citations[index]
-    if not isinstance(citation, dict) or any(
-        figure.get(field) != citation.get(field) for field in _FIGURE_FIELDS
+    if not isinstance(citation, dict) or not all(
+        _same(figure.get(field), citation.get(field)) for field in _FIGURE_FIELDS
     ):
         return "a narrative figure does not match the citation it names"
     return None
@@ -179,23 +215,37 @@ def _narrative_error(
     `citations[citation_index]` of the bound record -- so a package showing a
     forged quote on a page nobody cited was reported internally consistent, and
     this is the payload's one internal cross-reference (FP-17).
+
+    And the save boundary's own rule, re-applied: prose states no quantity a
+    figure does not cite (invariant 11), and the narrative is spans. A text span
+    reading "Net leverage is 4.2x", or a narrative that was one string, verified
+    with the uncited figure the save boundary refuses (DQ-15). No filed revision
+    carries a string: `prove_revision` refuses one, and filing re-proves.
     """
     narrative = decoded.get("narrative")
-    if not isinstance(narrative, list):
-        # A historical payload's narrative is one string, which `render` still
-        # draws and which carries no figure to resolve. FP-17 also asked for
-        # that shape to be refused here; it is not, because a package of a
-        # revision filed before spans existed would stop verifying, which is
-        # FP-05's failure in another place.
+    if narrative is None:
+        # A payload carrying no narrative states nothing to cite; `render`
+        # draws none. The save boundary always writes a list, empty or not.
         return None
+    if not isinstance(narrative, list):
+        return "the narrative is not a list of paragraphs"
     for paragraph in narrative:
         if not isinstance(paragraph, list):
             return "a narrative paragraph is not a list of spans"
         for span in paragraph:
-            if not isinstance(span, dict) or "figure" not in span:
-                continue
-            if error := _figure_error(span["figure"], cited):
+            if error := _span_error(span, cited):
                 return error
+    return None
+
+
+def _span_error(span: object, cited: dict[str, list[Any]]) -> str | None:
+    """One span: a figure resolved against its record, text carrying none."""
+    if isinstance(span, dict) and "figure" in span:
+        return _figure_error(span["figure"], cited)
+    text = span.get("text") if isinstance(span, dict) else None
+    if isinstance(text, str) and any(character.isnumeric() for character in text):
+        # `revisions._is_figure`, the whole numeric class and not only ASCII.
+        return "a narrative states a figure no citation stands behind"
     return None
 
 

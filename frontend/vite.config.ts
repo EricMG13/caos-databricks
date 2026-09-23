@@ -75,11 +75,16 @@ let runFrame = 0;
 // Whether the `stale` stream has announced a newer analytical identity; the
 // next fetch of /analysis answers for a different run.
 let staleAdvanced = false;
+// The `stale` stream that owns that state: the one the page now on screen
+// follows. Its close resets the fixture for the next page.
+let staleOwner: object | null = null;
+// The newer run the `stale` fixture announces.
+const STALE_NEXT_RUN = "00000000-0000-4000-8000-0000000000b2";
 
 /** The `stale` fixture's newer answer: another displayed run, other figures. */
 function advancedAnalysis(raw: string): string {
   const doc = JSON.parse(raw);
-  const next = "00000000-0000-4000-8000-0000000000b2";
+  const next = STALE_NEXT_RUN;
   doc.body.displayed_run_id = next;
   doc.body.latest_run_id = next;
   if (doc.body.handoffs[0]) doc.body.handoffs[0].confidence_score = 12;
@@ -142,8 +147,14 @@ function markerOf(value: string | string[] | undefined): Marker | null {
 // The v1 case stream (brief 4.4, decisions 1-3): a cursor frame, then
 // name-only frames `id: {audit_seq}.{run_seq}`, delivered strictly after a
 // Last-Event-ID. `drop` ends the first connection after its second frame, so
-// the browser resumes with its marker.
-async function serveEvents(fixture: string | null, req: IncomingMessage, res: ServerResponse) {
+// the browser resumes with its marker. `followed` is the run the stream is
+// scoped to, which the client takes from the run it displays.
+async function serveEvents(
+  fixture: string | null,
+  followed: string | null,
+  req: IncomingMessage,
+  res: ServerResponse,
+) {
   const named = fixture === "stale" ? "stale" : "events";
   const raw = await readJson(`run/${named}.json`);
   let events: { id: string; event: string }[] = [];
@@ -158,13 +169,18 @@ async function serveEvents(fixture: string | null, req: IncomingMessage, res: Se
   res.setHeader("content-type", "text/event-stream");
   res.setHeader("cache-control", "no-store");
   res.flushHeaders();
-  // A fresh stream starts the fixture over; a resumed one keeps its place.
+  // A fresh stream starts the fixture over; a resumed one keeps its place. A
+  // fresh `stale` stream that follows the newer run is a reader who has
+  // reloaded onto it: for them the fixture has already advanced, and starting
+  // it over would put the older run back under them.
   if (resumed === null) {
     runFrame = 0;
-    staleAdvanced = false;
+    staleAdvanced = named === "stale" && followed === STALE_NEXT_RUN;
   } else if (named === "events") {
     runFrame = run;
   }
+  const mine = {};
+  if (named === "stale") staleOwner = mine;
   res.write(`retry: 300\nid: ${audit}.${run}\n\n`);
   const pending = events.filter((event) => {
     const marker = markerOf(event.id);
@@ -189,9 +205,19 @@ async function serveEvents(fixture: string | null, req: IncomingMessage, res: Se
   setTimeout(tick, 250);
   // The frame is reset when a fresh stream opens, never when it closes: the
   // refetch an event triggers races the close, and must still see the last
-  // frame. The client opens its tail before its first fetch for the same reason.
+  // frame. The client opens its tail before its first fetch for the same reason
+  // where the address names the run. Where it names none, the tail opens after
+  // the first read, so the `stale` state is also reset when the stream that
+  // owns it closes -- unless a newer stream has taken it over: the page that
+  // follows starts from the older run, whatever the last one left.
   // ponytail: one process-wide frame; per-stream frames if two runs ever tail at once.
-  req.on("close", () => res.end());
+  req.on("close", () => {
+    if (staleOwner === mine) {
+      staleOwner = null;
+      staleAdvanced = false;
+    }
+    res.end();
+  });
 }
 
 const fixtureMiddleware: Connect.NextHandleFunction = (req, res, next) => {
@@ -224,7 +250,7 @@ const fixtureMiddleware: Connect.NextHandleFunction = (req, res, next) => {
     return;
   }
   if (/^\/api\/v1\/cases\/[^/]+\/events$/.test(pathname)) {
-    void serveEvents(fixture, req, res);
+    void serveEvents(fixture, url.searchParams.get("run"), req, res);
     return;
   }
   // An evidence page's text layer (brief 4.4, decision 7): a fixture per

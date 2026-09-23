@@ -45,7 +45,8 @@ export async function refetchUpload(caseId: string): Promise<UploadDocument | nu
 
 /** A stable key for the exact file set, order-sensitive, so two different
     selections of the same size never compare equal by accident. The intent's
-    key is reused only for a retry of the same set after an offline answer. */
+    key is reused only for a retry of the same set after an answer that
+    settled nothing (`useCommand`). */
 function fileSetKey(files: readonly File[]): string {
   return files.map((file) => `${file.name}:${file.size}:${file.lastModified}`).join("|");
 }
@@ -100,13 +101,11 @@ export function AdmitSources({
       >
         {pending ? "Admitting…" : `Admit${files.length ? ` ${files.length}` : ""}`}
       </RefusedControl>
-      {result?.kind === "ok" ? (
-        <p className="note ok" data-admit-sources-success>
-          {result.receipt.source_ids.length} source(s) admitted.
-        </p>
-      ) : (
-        <CommandOutcome result={result} success="" />
-      )}
+      <CommandOutcome
+        result={result}
+        success={(receipt) => `${receipt.source_ids.length} source(s) admitted.`}
+        mark="admit-sources-success"
+      />
       {refreshFailed ? (
         <p className="note warn" role="alert" data-admit-sources-refresh-failed>
           The sources were admitted, but the pack could not be refreshed. Reload to see them.

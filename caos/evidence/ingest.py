@@ -111,11 +111,12 @@ def admit_pack(  # noqa: PLR0913 -- one pack's store, blobs and policy, keyword-
 ) -> list[UUID]:
     """Admit every document or refuse the pack. Returns the new source ids.
 
-    `prepare_pack` then `admit_prepared`: extraction before the case lock, and
-    no commit -- the caller's transaction makes the pack whole or nothing.
+    `prepare_pack`, `put_pack`, then `admit_prepared`: extraction and uploads
+    before the case lock, and no commit -- the caller's transaction makes the
+    pack whole or nothing.
     """
     pack = prepare_pack(documents, dispatch=dispatch, limits=limits)
-    return admit_prepared(conn, blobs, case_id, pack)
+    return admit_prepared(conn, case_id, pack, put_pack(blobs, pack))
 
 
 def prepare_pack(
@@ -182,25 +183,32 @@ def prepare_pack(
     return PreparedPack(tuple(prepared))
 
 
+def put_pack(blobs: BlobStore, pack: PreparedPack) -> list[str]:
+    """Every document of a prepared pack in the blob store, in pack order: the
+    digests `admit_prepared` then inserts.
+
+    Called before any unit opens, the way `prepare_pack` extracts before one:
+    on Databricks each put is a Files API upload, and fifty of them inside
+    the unit held `cases ... FOR UPDATE` -- and so every fenced write of every
+    run in the case, which takes the case lock first -- and, behind the
+    admission route's governed write, the audit chain head, for as long as
+    the uploads took (DL-7, ED-5). The puts are content-addressed, so a
+    refused unit leaves harmless orphans and nothing else.
+    """
+    return [blobs.put(one.document.data) for one in pack.documents]
+
+
 def admit_prepared(
-    conn: StoreConnection, blobs: BlobStore, case_id: UUID, pack: PreparedPack
+    conn: StoreConnection, case_id: UUID, pack: PreparedPack, stored: Sequence[str]
 ) -> list[UUID]:
-    """Write a prepared pack under the case lock, in the caller's transaction.
+    """Write a prepared pack's rows under the case lock, in the caller's
+    transaction, naming the digests `put_pack` already stored.
 
     Never commits: a refusal part way leaves rows the caller rolls back, and the
-    blobs already put are harmless content-addressed orphans.
-
-    Every document is put in the volume *before* the case lock is taken, the
-    way `prepare_pack` extracts before it: on Databricks each put is a Files
-    API upload, and fifty of them inside the lock held `cases ... FOR UPDATE`
-    -- and so every fenced write of every run in the case, which takes the
-    case lock first -- for as long as the uploads took (DL-7). The puts are
-    content-addressed and the docstring above already says an orphan is
-    harmless, so moving them out of the lock costs nothing but the orphan a
-    refused insert leaves, which is what it left before.
+    blobs already put are harmless content-addressed orphans. It takes no
+    blob store, so no upload can happen under the lock it takes.
     """
     _require_case(conn, case_id)
-    stored = [blobs.put(one.document.data) for one in pack.documents]
     lock_case(conn, case_id)
     return [
         _admit_one(conn, case_id, one, digest)
@@ -350,7 +358,7 @@ def _admit_one(
     conn: StoreConnection, case_id: UUID, packed: _Packed, document_sha256: str
 ) -> UUID:
     """One source's rows, under the case lock. `document_sha256` is what the
-    volume answered when `admit_prepared` put the bytes, before the lock."""
+    volume answered when `put_pack` put the bytes, before the lock."""
     source_id = uuid4()
     conn.execute(
         "INSERT INTO sources (source_id, case_id, document_sha256, filename)"

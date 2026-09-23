@@ -44,14 +44,17 @@ export function eventsUrl(caseId: string, runId: string | null, fixture: string 
   return `/api/v1/cases/${encodeURIComponent(caseId)}/events${search ? `?${search}` : ""}`;
 }
 
-/** The wait before the next attempt: the server's `Retry-After` when it sent
-    one, else 1 s doubling to 60 s. Both are held to the ceiling, so a hostile
-    or mistaken header cannot park the tail for a day. */
+/** The wait before the next attempt: 1 s doubling to 60 s, or the server's
+    `Retry-After` where that is longer. The backoff is the floor, so a
+    `Retry-After: 0` -- legal, and what a proxy may send mid-restart -- cannot
+    turn a refusal into a reconnect loop as fast as the network allows (DF-8).
+    Both are held to the ceiling, so a hostile or mistaken header cannot park
+    the tail for a day. */
 export function retryDelayMs(attempt: number, retryAfterSeconds: number | null): number {
-  if (retryAfterSeconds !== null && retryAfterSeconds >= 0) {
-    return Math.min(retryAfterSeconds * 1_000, MAX_RETRY_MS);
-  }
-  return Math.min(FIRST_RETRY_MS * 2 ** attempt, MAX_RETRY_MS);
+  const backoff = FIRST_RETRY_MS * 2 ** attempt;
+  const asked =
+    retryAfterSeconds !== null && retryAfterSeconds >= 0 ? retryAfterSeconds * 1_000 : 0;
+  return Math.min(Math.max(backoff, asked), MAX_RETRY_MS);
 }
 
 export function openTail(url: string, handlers: TailHandlers): Tail {
@@ -76,10 +79,13 @@ export function openTail(url: string, handlers: TailHandlers): Tail {
     // a refused one (a non-200 answer) leaves it CLOSED, and it never retries.
     // That is the browser's last word, not this workspace's: the tail reopens
     // itself until the document read says there is nothing to reopen for.
+    // Either way nothing reaches the view from here until the next open, so it
+    // stops being marked live now; that open refetches and marks it again
+    // (MAX-14).
     current.addEventListener("error", () => {
+      handlers.onLive(false);
       if (current.readyState !== EventSource.CLOSED) return;
       current.close();
-      handlers.onLive(false);
       void handlers.onRefused().then((decision) => {
         if (done || decision.stop) return;
         const wait = retryDelayMs(attempt, decision.retryAfterSeconds);

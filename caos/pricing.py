@@ -21,8 +21,9 @@ so a row can be read back to the dated price that produced it.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import (
     MAX_EMAX,
     MIN_EMIN,
@@ -68,13 +69,7 @@ def priced_request(price: ModelPrice, request_bytes: int) -> Decimal:
         raise Refusal(RefusalCode.MONEY_INVALID)
     if request_bytes > MAX_REQUEST_BYTES:
         raise Refusal(RefusalCode.CONTEXT_OVER_CEILING)
-    # An explicit context, not the caller's: exact or refused, never rounded.
-    exact = Context(
-        prec=1000,
-        Emax=MAX_EMAX,
-        Emin=MIN_EMIN,
-        traps=[Inexact, Overflow, InvalidOperation],
-    )
+    exact = exact_context()
     try:
         amount = exact.add(
             exact.multiply(price.input_per_token, request_bytes),
@@ -90,6 +85,19 @@ def priced_request(price: ModelPrice, request_bytes: int) -> Decimal:
     return amount
 
 
+def exact_context() -> Context:
+    """The context money is computed in: an explicit one, not the caller's,
+    exact or refused and never rounded. A reservation and a charge are both
+    computed here, so the two agree on the precision a price may carry
+    (MAX-N03)."""
+    return Context(
+        prec=1000,
+        Emax=MAX_EMAX,
+        Emin=MIN_EMIN,
+        traps=[Inexact, Overflow, InvalidOperation],
+    )
+
+
 def worst_case(price: ModelPrice) -> Decimal:
     """The most any one call can cost at this price, exactly, or a refusal.
 
@@ -100,11 +108,22 @@ def worst_case(price: ModelPrice) -> Decimal:
     return priced_request(price, MAX_REQUEST_BYTES)
 
 
+# A per-token rate as written: ASCII digits, an optional fraction, no sign,
+# exponent or other script's digits (DF-10). A date is ISO `YYYY-MM-DD`.
+_RATE = re.compile(r"[0-9]+(?:\.[0-9]+)?")
+_DAY = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
+
+
 def price_from_environment(model: str, value: str) -> ModelPrice:
     """A dated price for exactly the configured model, or a typed refusal.
 
     `model,input_per_token,output_per_token,YYYY-MM-DD` (legacy section 49).
-    The value is never printed; the refusal names only the code.
+    The value is never printed; the refusal names only the code. Each rate is
+    plain ASCII digits and above zero, and the date is no later than today in
+    UTC (DF-10): a free half would price every reservation and every charge
+    at nothing for that half, and a price dated in the future is not the one
+    in force. `scripts/preflight.py` reads the price through this, so the app
+    and the deploy agree.
     """
     parts = value.split(",")
     try:
@@ -117,4 +136,13 @@ def price_from_environment(model: str, value: str) -> ModelPrice:
     if price.model != model:
         raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
     worst_case(price)
+    if not (
+        _RATE.fullmatch(given_input)
+        and _RATE.fullmatch(given_output)
+        and _DAY.fullmatch(as_of)
+        and price.input_per_token > 0
+        and price.output_per_token > 0
+        and price.as_of <= datetime.now(UTC).date()
+    ):
+        raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
     return price

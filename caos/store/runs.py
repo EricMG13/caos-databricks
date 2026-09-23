@@ -458,11 +458,11 @@ def _transition(  # noqa: PLR0913 -- one terminal move and its re-derived decisi
         changed = 0
         if lock_run(conn, run_id) is RunStatus.RUNNING:
             cancelled = require_lease(conn, run_id, lease)
-            if cancelled and into is RunStatus.COMPLETE:
-                # A cancel that landed during the last call (AR-13): the
-                # call's artifact and bill are already committed, and the
+            if cancelled and into is not RunStatus.CANCELLED:
+                # A cancel that landed during the last call (AR-13, ST-6):
+                # the call's artifact and bill are already committed, and the
                 # run ends CANCELLED through the holder's cancel path, not
-                # COMPLETE as if nobody had asked.
+                # COMPLETE, BLOCKED or FAILED as if nobody had asked.
                 raise Refusal(RefusalCode.RUN_CANCEL_REQUESTED)
             _require_terminal_decision(conn, run_id, into, accepted)
             changed = conn.execute(

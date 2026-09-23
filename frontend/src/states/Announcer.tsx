@@ -15,12 +15,19 @@ export function useAnnouncer(): (sentence: string) => void {
 }
 
 export function Announcer({ children }: { children: ReactNode }) {
-  const [sentence, setSentence] = useState("");
-  const say = useCallback((next: string) => setSentence(next), []);
+  // Each saying is its own node. A sentence equal to the one already there --
+  // the subject pinned a second time, a preview read again -- would otherwise
+  // leave the region untouched, and a region that does not change is not
+  // announced: the second success would be as silent as a failure (DF-6).
+  const [said, setSaid] = useState({ sentence: "", count: 0 });
+  const say = useCallback(
+    (sentence: string) => setSaid((current) => ({ sentence, count: current.count + 1 })),
+    [],
+  );
   return (
     <Context.Provider value={say}>
       <div className="sr-only" role="status" aria-live="polite" data-announcer>
-        {sentence}
+        {said.sentence ? <span key={said.count}>{said.sentence}</span> : null}
       </div>
       {children}
     </Context.Provider>

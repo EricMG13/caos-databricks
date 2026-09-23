@@ -74,39 +74,32 @@ from caos.store.source_sets import pinned_live_sources
 # in this set until the adversarial pass (FP-01) showed what that bought: a
 # retried node succeeds, the run finishes, and the first attempt's stale
 # `attempt_refusals` row still matched, so a concluded run could be signed as
-# the refusal its case declared.
-_REFUSED = frozenset({RunStatus.BLOCKED, RunStatus.FAILED})
+# the refusal its case declared. Public because a stored row claiming a met
+# refusal over a run that ended any other way is refused by the same rule
+# (`store.document_complete`, DQ-3).
+REFUSED_ENDINGS = frozenset({RunStatus.BLOCKED, RunStatus.FAILED})
 
 # A case label is authored and reaches a digest; it is a name, not prose.
 _LABEL_LIMIT = 128
 
 # The refusals a case may declare as its expected result. A qualification key
-# says what the *methodology* does with the evidence it was given -- a gate that
-# refuses a consumer, a handoff that cannot be validated, a quote that cannot be
-# anchored. `STORE_UNAVAILABLE`, `PROVIDER_UNAVAILABLE` and the orchestration
-# proof's own codes are the host or its infrastructure failing, and a set that
-# declared one would be qualifying an outage rather than a reading (FP-01).
-DECLARABLE_REFUSALS = frozenset(
-    {
-        RefusalCode.HANDOFF_BLOCKED,
-        RefusalCode.HANDOFF_MALFORMED,
-        RefusalCode.HANDOFF_INCOMPLETE,
-        RefusalCode.HANDOFF_IDENTITY_MISMATCH,
-        RefusalCode.HANDOFF_UNDECLARED_FIELD,
-        RefusalCode.ENVELOPE_INVALID,
-        RefusalCode.ENVELOPE_UNDECLARED_FIELD,
-        RefusalCode.ENVELOPE_UNCITED_CLAIM,
-        RefusalCode.READINESS_INVALID,
-        RefusalCode.READINESS_INCOMPLETE,
-        RefusalCode.CITATION_NOT_LOCATED,
-        RefusalCode.CITATION_AMBIGUOUS,
-        RefusalCode.CITATION_NOT_DELIVERED,
-        RefusalCode.METHODOLOGY_INPUT_INVALID,
-        RefusalCode.FORECAST_CHAIN_BROKEN,
-        RefusalCode.FORECAST_RESIDUAL_UNRECONCILED,
-        RefusalCode.FORECAST_DRIVER_NOT_READY,
-    }
-)
+# says what the *methodology* does with the evidence it was given, and a case
+# that declares a refusal declares how its run *ends*. `STORE_UNAVAILABLE`,
+# `PROVIDER_UNAVAILABLE` and the orchestration proof's own codes are the host or
+# its infrastructure failing, and a set that declared one would be qualifying an
+# outage rather than a reading (FP-01).
+#
+# One code, because it is the one a run the host produces can end in. A
+# validated Blocked handoff ends the run BLOCKED and records the verdict that
+# did it (`run_blocking_verdicts`). Every other methodology refusal -- a quote
+# that cannot be anchored, a handoff that will not validate -- is raised by a
+# node, explained against its attempt and leaves the run RUNNING for a retry:
+# nothing in production ends a run on it, so `_refusal_met` could never answer
+# the key, and a set declaring one was prepared and paid for and then stopped
+# with no matrix on every attempt `qualify.py` bought (DQ-2). A node refusal
+# that ends its run is a new outcome of the graph, logged in `next.md`; a code
+# joins this set when a run can end in it.
+DECLARABLE_REFUSALS = frozenset({RefusalCode.HANDOFF_BLOCKED})
 
 # The projection fields that carry one value. Two keys naming one of these on
 # one module with different values cannot both be met, whatever a run answers
@@ -477,10 +470,14 @@ def build_matrix(
     )
 
 
-def _guarded[T](read: Callable[[], T]) -> tuple[T | None, RefusalCode | None]:
-    """One reader's answer, or the row's own uncertainty in place of it.
+# What a declared key reads when its reader refused: not met (`_guarded`).
+_UNMEASURED: bool | None = False
 
-    A row survives its own failure, and `_ROW_REFUSALS` names the three ways a
+
+def _guarded[T](read: Callable[[], T], unmeasured: T) -> tuple[T, RefusalCode | None]:
+    """One reader's answer, or `unmeasured` and the row's own uncertainty.
+
+    A row survives its own failure, and `ROW_REFUSALS` names the three ways a
     reader can fail that are the *row's* uncertainty rather than a reason to end
     the matrix. Only `_cited` and the register reader were guarded, so a pin
     that stopped reading, or vendored bytes that moved, part-way through a set
@@ -488,16 +485,19 @@ def _guarded[T](read: Callable[[], T]) -> tuple[T | None, RefusalCode | None]:
     already paid for, with no snapshot (FP-07). Every reader is guarded here, in
     one place, so the list cannot fall out of step again.
 
-    `None` for a comparison that was not made: scoring it `False` would say the
-    module answered wrongly, and a reviewer went hunting the model for a
-    vendored-bytes fault.
+    A key reader answers `None` only for a kind the case did not declare, and
+    it does so before it reads anything, so a reader that refused was asked a
+    declared key. Its answer is `False`, not `None`: `_answered` reads `None` as
+    "not declared", and beside a met refusal a key the host could not measure
+    was waived and the snapshot signed (DQ-1). The row's `refusal` still names
+    the reader's code, so a reviewer is pointed at the fault, not at the model.
     """
     try:
         return read(), None
     except Refusal as unreadable:
-        if unreadable.code not in _ROW_REFUSALS:
+        if unreadable.code not in ROW_REFUSALS:
             raise
-        return None, unreadable.code
+        return unmeasured, unreadable.code
 
 
 def _row(
@@ -527,23 +527,30 @@ def _row(
     # vendored-bytes fault (FP-01).
     proof_refusal = refusal
 
-    cited, cited_refusal = _guarded(lambda: _cited(conn, run_id, proof=proof))
+    cited, cited_refusal = _guarded(
+        lambda: _cited(conn, run_id, proof=proof), set[tuple[str, str, str]]()
+    )
     registers_met, registers_refusal = _guarded(
-        lambda: _registers_met(conn, blobs, bundle, case=case, run_id=run_id)
+        lambda: _registers_met(conn, blobs, bundle, case=case, run_id=run_id),
+        _UNMEASURED,
     )
     forecast_met, forecast_refusal = _guarded(
         lambda: _forecast_met(
             conn, blobs, bundle, case=case, run_id=run_id, proof=proof
-        )
+        ),
+        _UNMEASURED,
     )
     ready_met, ready_refusal = _guarded(
-        lambda: _ready_met(conn, blobs, bundle, case=case, run_id=run_id)
+        lambda: _ready_met(conn, blobs, bundle, case=case, run_id=run_id),
+        _UNMEASURED,
     )
     blocked_met, blocked_refusal = _guarded(
-        lambda: _blocked_met(conn, blobs, bundle, case=case, run_id=run_id)
+        lambda: _blocked_met(conn, blobs, bundle, case=case, run_id=run_id),
+        _UNMEASURED,
     )
     projections_met, projections_refusal = _guarded(
-        lambda: _projections_met(conn, blobs, bundle, case=case, run_id=run_id)
+        lambda: _projections_met(conn, blobs, bundle, case=case, run_id=run_id),
+        _UNMEASURED,
     )
     for code in (
         cited_refusal,
@@ -555,8 +562,7 @@ def _row(
     ):
         if code is not None:
             refusal = code
-    found = cited or set()
-    met = tuple(expect for expect in case.expects if _matches(expect, found))
+    met = tuple(expect for expect in case.expects if _matches(expect, cited))
     return MatrixRow(
         case_label=case.label,
         proven=refusal is None,
@@ -608,9 +614,14 @@ def _refusal_met(
     - **A stored code must sit where the run stopped**: on the last attempt of a
       node that never produced an artifact. Any `attempt_refusals` row of any
       attempt matched before, so a node that refused once and succeeded on the
-      retry `qualify.py` buys still answered the key.
+      retry `qualify.py` buys still answered the key. "Last" is by `ordinal`,
+      the number the run lock assigns, not by `started_at` and a random id: a
+      retry whose clock read earlier let a stale refusal match (DQ-2).
+
+    Only `HANDOFF_BLOCKED` can be declared today (`DECLARABLE_REFUSALS`); the
+    other two branches answer a key `build_matrix` is handed directly.
     """
-    if run_status(conn, run_id) not in _REFUSED:
+    if run_status(conn, run_id) not in REFUSED_ENDINGS:
         return False
     if expected is RefusalCode.HANDOFF_BLOCKED:
         # A validated Blocked handoff is the route's own rule applied, so
@@ -633,7 +644,8 @@ def _refusal_met(
             "  WHERE n.run_id = t.run_id AND n.route_node_id = t.route_node_id)"
             " AND t.attempt_id = (SELECT l.attempt_id FROM run_attempts l"
             "  WHERE l.run_id = t.run_id AND l.route_node_id = t.route_node_id"
-            "  ORDER BY l.started_at DESC, l.attempt_id DESC LIMIT 1)",
+            "  ORDER BY l.ordinal DESC NULLS LAST, l.started_at DESC,"
+            "  l.attempt_id DESC LIMIT 1)",
             (run_id, expected.value),
         ).fetchone()
     )
@@ -1237,8 +1249,10 @@ def _matches(expect: ExpectedCitation, cited: set[tuple[str, str, str]]) -> bool
 # bytes that no longer match the manifest. The last one is here because the
 # register reader verifies the bundle where the cached validator does not, so it
 # is the one place a tampered vendor script surfaces during scoring -- and it
-# belongs in the row's refusal rather than in its comparison.
-_ROW_REFUSALS = frozenset(
+# belongs in the row's refusal rather than in its comparison. Public because a
+# row carrying one is unsignable even beside a met refusal (`store._answered`,
+# DQ-1): none of the three is a code a case may declare.
+ROW_REFUSALS = frozenset(
     {
         RefusalCode.ROUTE_IDENTITY_INVALID,
         RefusalCode.ORCHESTRATION_SOURCE_NOT_PINNED,

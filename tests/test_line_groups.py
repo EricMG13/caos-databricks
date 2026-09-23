@@ -15,6 +15,7 @@ already exist.
 
 from __future__ import annotations
 
+import unicodedata
 from pathlib import Path
 from uuid import UUID
 
@@ -22,8 +23,14 @@ import pytest
 
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
-from caos.evidence.citations import Citation, verify_citations
-from caos.evidence.ingest import GROUP_WIDTH, Document, admit_pack
+from caos.evidence.citations import Citation, _line_blocks, verify_citations
+from caos.evidence.ingest import (
+    GROUP_WIDTH,
+    Document,
+    admit_pack,
+    block_ids_by_line,
+    line_groups,
+)
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
 
@@ -200,3 +207,117 @@ def test_a_source_missing_a_block_still_reads_one_block_a_line(
         conn, delivered={source_id: delivered}, citations=[other]
     )
     assert anchored.matched_text == other.matched_text
+
+
+def _filler(first: str, length: int) -> str:
+    """`first`, then ten-letter words, exactly `length` code points long."""
+    words = [first]
+    size = len(first)
+    while length - size > 12:
+        words.append("abcdefghij")
+        size += 11
+    words.append("z" * (length - size - 1))
+    line = " ".join(words)
+    assert len(line) == length
+    return line
+
+
+def _admission_numbering(
+    conn: StoreConnection, source_id: UUID
+) -> dict[int, tuple[str, ...]]:
+    """What admission wrote, recomputed the way admission computes it: each
+    line's tokens joined and cut by `line_groups`, which measures NFC."""
+    lines: dict[int, list[str]] = {}
+    for line_id, text in conn.execute(
+        "SELECT line_id, text FROM source_tokens WHERE source_id = %s"
+        " ORDER BY token_id",
+        (source_id,),
+    ).fetchall():
+        lines.setdefault(int(line_id), []).append(str(text))
+    return block_ids_by_line(
+        {line_id: len(line_groups(" ".join(words))) for line_id, words in lines.items()}
+    )
+
+
+def test_a_decomposed_line_is_packed_and_anchored_by_the_same_measure(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> None:
+    """EV-1: admission cuts a line by its NFC length and anchoring read the
+    stored, un-normalised length back. A decomposed line (what macOS writes)
+    that fits one block in NFC and not raw made the totals disagree, and every
+    citation of the source -- a pure-ASCII line's too -- refused
+    `EVIDENCE_PACKING_MISMATCH`, for good: re-admission packs it the same way.
+    Both sides now measure NFC."""
+    conn, case_id = case
+    prefix = unicodedata.normalize("NFD", "\u00e9 " * 40)
+    decomposed = prefix + _filler("Report", 4100 - len(prefix))
+    assert len(decomposed) > GROUP_WIDTH
+    assert len(unicodedata.normalize("NFC", decomposed)) <= GROUP_WIDTH
+    wide = _filler("Leverage", 5000)
+    source_id = _admit(
+        conn, case_id, tmp_path, (decomposed + "\n" + wide + "\n").encode()
+    )
+
+    assert _line_blocks(conn, source_id) == _admission_numbering(conn, source_id)
+    every = frozenset(block_id for block_id, _ in _blocks(conn, source_id))
+    [anchored] = verify_citations(
+        conn,
+        delivered={source_id: every},
+        citations=[Citation(source_id, 1, "Leverage abcdefghij")],
+    )
+    assert anchored.bboxes
+
+
+def test_a_line_that_shrinks_and_one_that_grows_keep_their_own_blocks(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> None:
+    """EV-1's silent half: one line shrinks under NFC and the next grows (U+2ADC
+    is a composition exclusion, one code point NFC writes as two), so the
+    totals agreed, the guard passed, and each line was handed the other's
+    blocks -- a quote on an undelivered half of a line was accepted and a
+    quote on a delivered line refused."""
+    conn, case_id = case
+    shrinks = _filler("Cafe\u0301", 4097)  # NFC 4,096: one block
+    grows = _filler("\u2adc", 4096)  # NFC 4,097: two blocks
+    data = (shrinks + "\n" + grows + "\n").encode()
+    source_id = _admit(conn, case_id, tmp_path, data)
+
+    numbering = _line_blocks(conn, source_id)
+    assert numbering == _admission_numbering(conn, source_id)
+    assert sorted(numbering.values()) == [("b000000",), ("b000001", "b000002")]
+    with pytest.raises(Refusal, match=r"^CITATION_NOT_DELIVERED$"):
+        verify_citations(
+            conn,
+            delivered={source_id: frozenset({"b000002"})},
+            citations=[Citation(source_id, 1, "\u2adc abcdefghij")],
+        )
+    [anchored] = verify_citations(
+        conn,
+        delivered={source_id: frozenset({"b000000"})},
+        citations=[Citation(source_id, 1, "Caf\u00e9 abcdefghij")],
+    )
+    assert anchored.bboxes
+
+
+def test_the_store_and_the_host_agree_on_every_nfc_length(
+    case: tuple[StoreConnection, UUID],
+) -> None:
+    """Anchoring measures NFC in the database and admission in Python, so the
+    two Unicode tables must agree on what changes a length: a composition, a
+    composition exclusion, Hangul, a singleton, reordering, and the pairs
+    that compose without a combining mark."""
+    conn, _case_id = case
+    samples = (
+        "e\u0301",
+        "\u2adc",
+        "\u1100\u1161\u11a8",
+        "\u212b",
+        "a\u0323\u0302",
+        "\u0f73",
+        "\U0001d15e",
+        "\u0b47\u0b3e",
+    )
+    for sample in samples:
+        row = conn.execute("SELECT length(normalize(%s, NFC))", (sample,)).fetchone()
+        assert row is not None
+        assert row[0] == len(unicodedata.normalize("NFC", sample)), ascii(sample)

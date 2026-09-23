@@ -463,16 +463,14 @@ def _ready(item: object) -> tuple[str, ...]:
     Declared as a list of module ids; absent means the case asks nothing of
     readiness. Bounded and de-duplicated here, because this crosses into the
     set's digest and a key that differs only by repetition would digest twice.
+    Bounded by `_bounded`, whose refusal is the manifest's: a 200-character id
+    leaked the boundary's own `BOUNDARY_TEXT_TOO_LONG` (DQ-14).
     """
     if item is None:
         return ()
     if not isinstance(item, list) or not item:
         raise Refusal(RefusalCode.QUALIFICATION_SET_FILE_INVALID)
-    modules = []
-    for value in item:
-        if not isinstance(value, str) or not value.strip():
-            raise Refusal(RefusalCode.QUALIFICATION_SET_FILE_INVALID)
-        modules.append(BoundaryText.of(value.strip(), limit=_LABEL_LIMIT).value)
+    modules = [_bounded(value) for value in item]
     if len(set(modules)) != len(modules):
         raise Refusal(RefusalCode.QUALIFICATION_SET_FILE_INVALID)
     return tuple(modules)

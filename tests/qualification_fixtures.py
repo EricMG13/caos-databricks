@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from caos.qualification.harness import Performed, PerformedSet, PreparedCase
 from caos.qualification.matrix import Matrix, MatrixRow
 from caos.qualification.proof import OrchestrationProof
-from caos.qualification.store import PerformedEvidence, performed_evidence
-from caos.store import RunStatus
+from caos.qualification.store import (
+    PerformedEvidence,
+    performed_evidence,
+    record_performed,
+)
+from caos.store import RunStatus, StoreConnection
 from caos.store.run_inputs import RunInput
 
 
@@ -157,6 +162,12 @@ def record_runs(
     BLOCKED at its first node leaves behind.
     """
     execute = conn.execute  # type: ignore[attr-defined]
+    # Each run ends as its record says: `assert_store_agrees` compares the
+    # store's status with the snapshot's (DQ-3).
+    status = {
+        record.case_label: record.status.value
+        for record in performed.performed.performed
+    }
     for case in performed.prepared:
         pin = case.input
         execute(
@@ -166,8 +177,8 @@ def record_runs(
         )
         execute(
             "INSERT INTO runs (run_id,case_id,status,budget_ceiling)"
-            " VALUES (%s,%s,'COMPLETE',1) ON CONFLICT (run_id) DO NOTHING",
-            (pin.run_id, pin.case_id),
+            " VALUES (%s,%s,%s,1) ON CONFLICT (run_id) DO NOTHING",
+            (pin.run_id, pin.case_id, status.get(case.case_label, "COMPLETE")),
         )
         attempt = uuid4()
         execute(
@@ -194,3 +205,29 @@ def record_runs(
                 "INSERT INTO call_outcomes (attempt_id,run_id,model) VALUES (%s,%s,%s)",
                 (attempt, pin.run_id, model or case.model),
             )
+
+
+# Before every fixed moment these suites decide a verdict at (2026-09-11 is the
+# earliest), so a verdict they sign is decided after its snapshot existed.
+EARLIER = datetime(2026, 1, 1, tzinfo=UTC)
+
+
+def record_performed_earlier(
+    conn: StoreConnection, performed: PerformedEvidence, *, at: datetime = EARLIER
+) -> str:
+    """`record_performed`, as though the snapshot had been recorded at `at`.
+
+    A verdict decided before its snapshot was recorded is refused (DQ-13), and
+    these suites decide at fixed moments in the past, or a minute before the
+    request. The snapshot is written by `record_performed` itself and only its
+    `recorded_at` is moved, with the immutability trigger set aside for that one
+    statement -- which only the suite's superuser connection can do.
+    """
+    digest = record_performed(conn, performed)
+    conn.execute("SET LOCAL session_replication_role = replica")
+    conn.execute(
+        "UPDATE qualification_performed SET recorded_at=%s WHERE performed_sha256=%s",
+        (at, digest),
+    )
+    conn.execute("SET LOCAL session_replication_role = origin")
+    return digest

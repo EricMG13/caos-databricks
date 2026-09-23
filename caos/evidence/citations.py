@@ -24,9 +24,10 @@ single enclosing rectangle would cover text the quote does not contain.
 
 from __future__ import annotations
 
+import functools
 import json
 import unicodedata
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from itertools import groupby
 from uuid import UUID
@@ -84,7 +85,12 @@ class _Token:
 # anchored before this existed anchors to the same rectangles, every stored
 # record re-verifies, and a normalisation can never resolve an ambiguity --
 # an ambiguous exact match refuses before the normalised pass is reached.
-NORMALISATION_VERSION = "1"
+#
+# Version 2 narrowed them (EV-4): a word with a digit in it keeps its
+# parentheses and a leading point, and single digits are never joined. A quote
+# that anchored under version 1 only by losing one of those named a different
+# figure from the page, and no longer anchors.
+NORMALISATION_VERSION = "2"
 
 # What a quote may carry at its outer edges that the token does not, or the
 # other way round: a module writing a sentence ends it with a full stop and
@@ -92,6 +98,13 @@ NORMALISATION_VERSION = "1"
 # are stripped; an interior word must equal its token, or the quote names a
 # sentence the page does not carry.
 EDGE_PUNCTUATION = "\"'\u201c\u201d\u2018\u2019()[]{}.,;:!?"
+# What an edge word with a digit in it may lose on each side: everything above
+# but the marks that change the figure. Accounting parentheses negate it -- a
+# loss of `(5)` quoted as `5` is a profit -- and a leading point moves it:
+# `.5` quoted as `5` is ten times the page (EV-4). A trailing point is a
+# sentence's full stop and still goes.
+_FIGURE_LEFT = EDGE_PUNCTUATION.replace("(", "").replace(".", "")
+_FIGURE_RIGHT = EDGE_PUNCTUATION.replace(")", "")
 
 # Glyphs tracked past pdfminer's `word_margin` come back one token per letter
 # (section 44.5), so a heading tracked for display cannot be quoted as a word.
@@ -101,39 +114,56 @@ EDGE_PUNCTUATION = "\"'\u201c\u201d\u2018\u2019()[]{}.,;:!?"
 TRACKING_EXTRACTORS = frozenset({"caos.pdfminer"})
 
 
-def _nfc(text: str) -> str:
-    """The form the block was shown in: admission stores a token's own bytes
-    but renders the line NFC, so a quote of what was shown must compare NFC
-    (F33). Applied in the normalised pass alone, so a page carrying one word in
-    both forms still anchors the quote that equals one of them exactly (CR-4).
-    """
-    return unicodedata.normalize("NFC", text)
+# The form the block was shown in: admission stores a token's own bytes but
+# renders the line NFC, so a quote of what was shown must compare NFC (F33).
+# Applied in the normalised pass alone, so a page carrying one word in both
+# forms still anchors the quote that equals one of them exactly (CR-4). NFC and
+# never NFKC, which would anchor `x2` on a page's `x²` (EV-8). A partial of the
+# C function, so the search maps it over a page with no Python call per token.
+_nfc = functools.partial(unicodedata.normalize, "NFC")
 
 
 def _stripped(word: str) -> str:
-    return _nfc(word).strip(EDGE_PUNCTUATION)
+    """An edge word less the punctuation a sentence puts around it, NFC.
+
+    A word with a digit in it keeps what would change its figure: its
+    parentheses and a leading point (`_FIGURE_LEFT`, `_FIGURE_RIGHT`).
+    """
+    normalised = _nfc(word)
+    core = normalised.strip(EDGE_PUNCTUATION)
+    if not any(character.isdigit() for character in core):
+        return core
+    return normalised.lstrip(_FIGURE_LEFT).rstrip(_FIGURE_RIGHT)
 
 
 def _joined_tracking(tokens: list[_Token]) -> list[_Token]:
-    """Each maximal run of single-character tokens on one line of one region,
+    """Each maximal run of single-letter tokens on one line of one region,
     joined into the word a reader sees, with the union of their rectangles.
 
     The grouping key *is* the rule, which is why it is written as one: tokens
-    are consecutive, single-character, and share a line and a region. Maximal
-    follows from `groupby`, and so does the bound that matters -- any token
-    that is not a single character has a different key, so it ends the run and
-    is carried through untouched. `Alpha` and `Beta` kerned apart are tokens of
-    five and four characters, so `AlphaBeta` -- text on no rendered page -- is
-    out of this rule's reach, which is the axis that separates a tracked word
-    from two words and what
+    are consecutive, single-character, not a digit, and share a line and a
+    region. Maximal follows from `groupby`, and so does the bound that matters
+    -- any token that is not a single character has a different key, so it
+    ends the run and is carried through untouched. `Alpha` and `Beta` kerned
+    apart are tokens of five and four characters, so `AlphaBeta` -- text on no
+    rendered page -- is out of this rule's reach, which is the axis that
+    separates a tracked word from two words and what
     `test_two_widely_spaced_words_still_refuse_their_concatenation` holds.
+
+    A digit is never joined (EV-4): two table cells `3` and `4` on one line are
+    two figures, and joining them anchored a quote of `34`.
 
     A run of one is not a join, so it is carried through as itself rather than
     rebuilt: a single-character token is already the word it is.
     """
     joined: list[_Token] = []
     for (single, _line, _region), group in groupby(
-        tokens, key=lambda token: (len(token.text) == 1, token.line_id, token.region_id)
+        tokens,
+        key=lambda token: (
+            len(token.text) == 1 and not token.text.isdigit(),
+            token.line_id,
+            token.region_id,
+        ),
     ):
         run = list(group)
         if not single or len(run) == 1:
@@ -203,15 +233,122 @@ def _one_match(
     Ambiguity is counted over the whole page in both passes (section 44.5):
     highlighting one of two identical sentences asserts a precision the host
     does not have, whichever rule found them.
+
+    The rule is `_match_at`'s at every start; this finds its starts without
+    asking it at each (MAX-06). Every match used to be kept, each a slice the
+    length of the quote, before the count was read, and every start compared
+    the quote word by word: a repeated page and a long quote held millions of
+    token references, and a quote failing only at its last word cost the page
+    times the quote. `_starts` proposes the starts whose plainly compared
+    words match, in one pass over the page; each is then held to its region
+    and its edge words in constant time; and the search stops at the second.
     """
-    matches = [
-        run
-        for start in range(len(tokens))
-        if (run := _match_at(tokens, start, words, normalised=normalised))
+    width = len(words)
+    found: int | None = None
+    region_end = 0
+    for start in _starts(tokens, words, normalised=normalised):
+        if start >= region_end:
+            # Starts ascend, so one scan per region serves every start in it.
+            region_end = _region_end(tokens, start)
+        end = start + width - 1
+        if (
+            region_end <= end
+            or not _edge_equal(tokens[start].text, words[0], normalised=normalised)
+            or not _edge_equal(tokens[end].text, words[-1], normalised=normalised)
+        ):
+            continue
+        if found is not None:
+            raise Refusal(RefusalCode.CITATION_AMBIGUOUS)
+        found = start
+    return None if found is None else tokens[found : found + width]
+
+
+def _starts(
+    tokens: list[_Token], words: Sequence[str], *, normalised: bool
+) -> Iterable[int]:
+    """Every start, ascending, at which the words compared by equality alone
+    match: the whole quote in the exact pass, its interior in the normalised
+    one, whose edge words `_one_match` compares itself. With no interior every
+    start is a candidate."""
+    width = len(words)
+    last = len(tokens) - width
+    if last < 0:
+        return ()
+    inner = 1 if normalised else 0
+    pattern = [
+        _key(word, normalised=normalised) for word in words[inner : width - inner]
     ]
-    if len(matches) > 1:
-        raise Refusal(RefusalCode.CITATION_AMBIGUOUS)
-    return matches[0] if matches else None
+    if not pattern:
+        return range(last + 1)
+    # The page's keys in one comprehension each, not a call per token: on a
+    # long page this is most of what the search costs.
+    texts = [token.text for token in tokens]
+    keys = list(map(_nfc, texts)) if inner else texts
+    return (
+        at - inner for at in _occurrences(keys, pattern) if inner <= at <= last + inner
+    )
+
+
+def _key(text: str, *, normalised: bool) -> str:
+    """What an interior word is compared by: its bytes, or its NFC."""
+    return _nfc(text) if normalised else text
+
+
+def _occurrences(sequence: list[str], pattern: list[str]) -> Iterator[int]:
+    """Every index at which `pattern` begins in `sequence`, overlapping ones
+    too, in one pass over each (Knuth-Morris-Pratt). Where nothing is matched
+    yet, the next place the pattern could begin is found by `list.index`."""
+    border = _borders(pattern)
+    matched = 0
+    index = 0
+    while index < len(sequence):
+        if matched == 0:
+            index = _next_index(sequence, pattern[0], index)
+            if index == len(sequence):
+                return
+            matched = 1
+        else:
+            matched = _extended(matched, sequence[index], pattern, border)
+        if matched == len(pattern):
+            yield index - matched + 1
+            matched = border[matched - 1]
+        index += 1
+
+
+def _borders(pattern: list[str]) -> list[int]:
+    """For each prefix of `pattern`, the length of its longest proper prefix
+    that is also its suffix: where a partial match resumes after a mismatch."""
+    border = [0] * len(pattern)
+    matched = 0
+    for index in range(1, len(pattern)):
+        matched = _extended(matched, pattern[index], pattern, border)
+        border[index] = matched
+    return border
+
+
+def _extended(matched: int, item: str, pattern: list[str], border: list[int]) -> int:
+    """How much of `pattern` is matched once `item` follows `matched` of it:
+    fall back along the borders until `item` extends a prefix, or none does."""
+    while matched and item != pattern[matched]:
+        matched = border[matched - 1]
+    return matched + 1 if item == pattern[matched] else matched
+
+
+def _next_index(sequence: list[str], item: str, start: int) -> int:
+    """The first index at or after `start` holding `item`, else the length."""
+    try:
+        return sequence.index(item, start)
+    except ValueError:
+        return len(sequence)
+
+
+def _region_end(tokens: list[_Token], start: int) -> int:
+    """One past the last token of the region run `start` is in."""
+    region = tokens[start].region_id
+    end = start + 1
+    while end < len(tokens) and tokens[end].region_id == region:
+        end += 1
+    return end
 
 
 @dataclass(slots=True)
@@ -364,14 +501,18 @@ def _group_counts(conn: StoreConnection, source_id: UUID) -> dict[int, int]:
     see it: one round trip either way, while the work behind it was the whole
     token table. Found by the Completion Phase 12 adversarial audit.
 
-    `line_groups` normalises to NFC before it measures, and this counts the
-    stored characters instead. Where the two disagree the totals disagree, and
-    `_line_blocks`'s `sum(counts) != stored` guard refuses `EVIDENCE_PACKING_MISMATCH`
-    rather than handing out an id no row carries -- so a normalisation that
-    changes a length is loud, not silent.
+    `line_groups` measures the line NFC, so this measures each token NFC too
+    (EV-1). It counted the stored characters, which admission keeps in their
+    own form: a decomposed line that fits one block in NFC and not raw made the
+    totals disagree and refused every citation of the source, and one line
+    that shrank beside one that grew kept the totals equal and handed each
+    line the other's blocks. The tokens are joined by one space, and nothing
+    composes across a space, so the NFC length of the joined line is the sum
+    of the tokens' NFC lengths and the spaces between them. The guard in
+    `_line_blocks` stays for what it was written for, a changed `GROUP_WIDTH`.
     """
     rows = conn.execute(
-        "SELECT line_id, sum(length(text)) + count(*) - 1 AS width"
+        "SELECT line_id, sum(length(normalize(text, NFC))) + count(*) - 1 AS width"
         " FROM source_tokens WHERE source_id = %s GROUP BY line_id",
         (source_id,),
     ).fetchall()
@@ -420,21 +561,41 @@ def _match_at(
     decomposed answer `CITATION_AMBIGUOUS` for a quote that had anchored
     uniquely before, at every later re-verification of an accepted record
     (CR-4).
+
+    The search (`_one_match`) does not ask this at every start: it finds the
+    starts it would accept in one pass. This is the rule it finds them by,
+    stated at one start, and what `tests/test_quote_normalisation.py` holds
+    the search to.
     """
     if start + len(words) > len(tokens):
         return []
     run = tokens[start : start + len(words)]
     last = len(words) - 1
     for position, (token, word) in enumerate(zip(run, words, strict=True)):
-        if token.text == word or (normalised and _nfc(token.text) == _nfc(word)):
-            continue
-        edge = normalised and position in (0, last)
-        if edge and _stripped(word) and _stripped(token.text) == _stripped(word):
-            continue
-        return []
+        if position in (0, last):
+            if not _edge_equal(token.text, word, normalised=normalised):
+                return []
+        elif _key(token.text, normalised=normalised) != _key(
+            word, normalised=normalised
+        ):
+            return []
     if any(token.region_id != run[0].region_id for token in run):
         return []
     return run
+
+
+def _edge_equal(text: str, word: str, *, normalised: bool) -> bool:
+    """Whether a run's first or last token stands for the quote's word there:
+    the bytes, or -- in the normalised pass -- the NFC, or the two less the
+    edge punctuation `_stripped` forgives."""
+    if text == word:
+        return True
+    if not normalised:
+        return False
+    if _nfc(text) == _nfc(word):
+        return True
+    stripped = _stripped(word)
+    return bool(stripped) and _stripped(text) == stripped
 
 
 def _rectangles(run: list[_Token], page: int) -> list[Rect]:

@@ -54,10 +54,11 @@ from caos.store.commands import (
 )
 
 # The receipt lookup, the store's clock, the exact evidence lookup, then
-# `record_verdict` (the snapshot read, the recorded models, `record_evidence`'s
-# three statements and the insert) and the receipt.
+# `record_verdict` (the snapshot read, the runs' status and artifacts and the
+# recorded models `assert_store_agrees` compares, `record_evidence`'s three
+# statements and the insert) and the receipt.
 # Measured in `tests/test_qualification_sign.py`.
-SIGN_IO = 1 + 1 + 1 + 6 + 1
+SIGN_IO = 1 + 1 + 1 + 7 + 1
 REPLAY_IO = 1  # the receipt lookup alone; a replay writes nothing
 IO_BUDGET = SIGN_IO
 

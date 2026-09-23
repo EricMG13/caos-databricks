@@ -29,6 +29,7 @@ import pytest
 from canonical_fixtures import CanonicalCompletions
 from conftest import route_fault
 from fastapi import FastAPI, HTTPException
+from fastapi.dependencies.utils import get_dependant
 from fastapi.exceptions import RequestValidationError
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
@@ -1125,9 +1126,14 @@ def test_every_section_read_depends_on_the_shared_dependencies() -> None:
     assert calls["/api/v1/book"] == [
         actor_from_request,
         store_connection,
-        deps.blob_store,
+        deps.request_blobs,
         deps.methodology_bundle,
     ]
+    # The request's blobs are the process's store remembering what it
+    # verified (ED-7): a layer over `blob_store`, so overriding that reaches
+    # every route, and each request gets a memo of its own.
+    [layer] = get_dependant(path="/", call=deps.request_blobs).dependencies
+    assert layer.call is blob_store
     assert calls["/api/v1/cases/{case_id}/upload"] == [
         actor_from_request,
         deps.case_path,
@@ -1139,7 +1145,7 @@ def test_every_section_read_depends_on_the_shared_dependencies() -> None:
         deps.case_path,
         deps.run_query,
         store_connection,
-        blob_store,
+        deps.request_blobs,
         methodology_bundle,
     ]
     events = next(
@@ -1163,7 +1169,7 @@ def test_every_section_read_depends_on_the_shared_dependencies() -> None:
         deps.run_query,
         deps.visible_case,
         store_connection,
-        blob_store,
+        deps.request_blobs,
         methodology_bundle,
     ]
     assert (
@@ -1176,7 +1182,7 @@ def test_every_section_read_depends_on_the_shared_dependencies() -> None:
         deps.run_query,
         deps.revision_query,
         store_connection,
-        blob_store,
+        deps.request_blobs,
         methodology_bundle,
     ]
     assert calls["/api/v1/cases/{case_id}/committee"] == committee_dependencies
@@ -1302,11 +1308,18 @@ def test_no_route_module_parses_a_path_uuid_by_hand() -> None:
     one of `caos.api.deps`'s parsers, so the refusal a malformed id gets is
     decided in one place. `identity.py` is the boundary beneath `deps` (which
     imports it): its subject header refuses `NOT_AUTHENTICATED`, and it cannot
-    import the module that depends on it."""
-    api = Path(__file__).resolve().parents[1] / "server" / "api"
+    import the module that depends on it.
+
+    The scan names `caos/api` and asserts it read something (MAX-N01): it
+    named the retired `server/api`, visited no file and passed vacuously."""
+    api = Path(__file__).resolve().parents[1] / "caos" / "api"
+    scanned = sorted(api.rglob("*.py"))
+    assert {"app.py", "deps.py", "analysis.py", "cases.py"} <= {
+        path.name for path in scanned
+    }, "the scan did not reach the route modules"
     hand_rolled = sorted(
         str(path.relative_to(api))
-        for path in api.rglob("*.py")
+        for path in scanned
         if path.name not in ("deps.py", "identity.py")
         and "ValueError" in path.read_text(encoding="utf-8")
         and "UUID(" in path.read_text(encoding="utf-8")

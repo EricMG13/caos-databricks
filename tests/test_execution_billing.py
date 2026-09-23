@@ -88,7 +88,11 @@ def _bills(
         (StatusError(402), "PROVIDER_CALL_INVALID", None),
         (StatusError(503), "PROVIDER_UNAVAILABLE", None),
         (answer(finish="stop"), "HANDOFF_MALFORMED", Decimal("0.25")),
-        (answer(tokens=(0, 0)), "PROVIDER_OUTPUT_TRUNCATED", Decimal("0")),
+        # A request billed no input is a count the provider never stated: the
+        # client reads a null or absent one as zero (ST-11). Unknown.
+        (answer(tokens=(0, 0)), "PROVIDER_OUTPUT_TRUNCATED", None),
+        # An empty answer may bill no output; the input is still charged.
+        (answer("", tokens=(1000, 0)), "PROVIDER_OUTPUT_TRUNCATED", Decimal("0.1")),
         # No generation id: the host mints one and the bill still commits.
         (answer(generation=None), "PROVIDER_OUTPUT_TRUNCATED", Decimal("0.25")),
         # No usage: the charge is unknown, never zero.

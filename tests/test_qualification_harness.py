@@ -65,11 +65,14 @@ from caos.qualification.harness import (
 )
 from caos.qualification.matrix import (
     ExpectedCitation,
+    ExpectedProjection,
+    ExpectedRegister,
     QualificationCase,
     QualificationSet,
     assert_measurable,
     qualification_set_digest,
 )
+from caos.qualification.proof import OrchestrationProof
 from caos.refusals import Refusal, RefusalCode
 from caos.store import RunStatus, StoreConnection
 from caos.store.budget import CEILING
@@ -1111,3 +1114,307 @@ def test_a_blocked_qa_verdict_ends_the_case_blocked_and_the_matrix_still_scores(
         assert performed.matrix is not None
         [row] = performed.matrix.rows
         assert (row.proven, row.met, row.missed) == (True, keys[:1], keys[1:])
+
+
+# CP-0's T8 row for CP-5 says READY in every handoff `_Completions` writes, so a
+# key saying BLOCKED is one the run answers wrongly.
+_WRONG_T8 = ExpectedRegister(
+    module_id="CP-0",
+    register_id="T8",
+    row_key=(("Module", "CP-5"),),
+    column="Readiness",
+    expected="BLOCKED",
+)
+
+
+def _restricted(
+    conn: StoreConnection,
+    blobs: BlobStore,
+    root: Path,
+    label: str,
+    case: QualificationCase,
+) -> tuple[tuple[PreparedCase, ...], PerformedSet]:
+    """`case`, declaring HANDOFF_BLOCKED, performed under the bundle at `root`."""
+    qualification = QualificationSet(
+        cases=(
+            replace(
+                case,
+                label=label,
+                expects=(),
+                expected_refusal=RefusalCode.HANDOFF_BLOCKED,
+            ),
+        )
+    )
+    harness = Harness(
+        bundle=Bundle(root=root),
+        catalog=CATALOG,
+        completions=_Completions(qa_by_module={"CP-5": "Blocked"}),
+        price=priced(ESTIMATE),
+        ceiling=SET_CEILING,
+    )
+    prepared = prepare(conn, blobs, harness, qualification=qualification)
+    _approve(conn, prepared)
+    return prepared, perform(
+        conn, blobs, harness, qualification=qualification, prepared=prepared
+    )
+
+
+def test_a_declared_key_the_matrix_could_not_measure_blocks_signing(
+    empty_database: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """DQ-1: `_guarded` answered `None` for a key whose reader refused, and
+    `_answered` reads `None` as "not declared". Beside a met HANDOFF_BLOCKED a
+    wrong register key read as waived when a vendored file moved during
+    scoring, so the snapshot was recorded complete and could be signed.
+    The reader now answers `False`, the row keeps the reader's code, and the
+    stored document re-derives as incomplete."""
+    import shutil
+
+    from caos.qualification import matrix
+    from caos.qualification.store import document_complete, performed_evidence
+    from caos.store import apply_schema, connect
+
+    root = tmp_path / "bundle"
+    shutil.copytree(VENDORED, root)
+    target = root / "skills/cp-os-credit-os/scripts/credit_os_v/research.py"
+    wrong = replace(_case("wrong", REPORT), expects_register=(_WRONG_T8,))
+    with connect(empty_database) as conn:
+        apply_schema(conn)
+        conn.commit()
+        blobs = BlobStore(tmp_path / "blobs")
+        prepared, control = _restricted(conn, blobs, root, "control", wrong)
+        assert control.matrix is not None
+        [row] = control.matrix.rows
+        assert row.registers_met is False
+        assert not performed_evidence(prepared=prepared, performed=control).complete
+
+        original = matrix._cited
+
+        def cited_then_move(
+            conn_: StoreConnection, run_id: UUID, *, proof: OrchestrationProof | None
+        ) -> set[tuple[str, str, str]]:
+            cited = original(conn_, run_id, proof=proof)
+            target.write_bytes(target.read_bytes() + b"\n# moved\n")
+            return cited
+
+        monkeypatch.setattr(matrix, "_cited", cited_then_move)
+        prepared, faulted = _restricted(conn, blobs, root, "faulted", wrong)
+        assert faulted.matrix is not None
+        [row] = faulted.matrix.rows
+        assert row.expected_refusal_met is True
+        assert (row.refusal, row.registers_met) == (
+            RefusalCode.AUTHORITY_BYTES_MISMATCH,
+            False,
+        )
+        snapshot = performed_evidence(prepared=prepared, performed=faulted)
+        assert snapshot.complete is False
+        stored = conn.execute(
+            "SELECT complete, performed_json FROM qualification_performed"
+            " WHERE performed_sha256=%s",
+            (snapshot.evidence.performed_sha256,),
+        ).fetchone()
+        conn.rollback()
+        assert stored is not None
+        assert stored[0] is False
+        assert document_complete(stored[1]) is False
+
+
+def test_keys_whose_pin_stopped_reading_are_not_waived_beside_a_met_refusal(
+    empty_database: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """DQ-1's second shape: the readers round 3 newly guarded. A pin corrupted
+    after the proof read it made the projection and block readers refuse
+    ROUTE_IDENTITY_INVALID, and both wrong keys read as waived."""
+    from caos.qualification import matrix
+    from caos.qualification.store import performed_evidence
+    from caos.store import apply_schema, connect
+
+    wrong = replace(
+        _case("wrong", REPORT),
+        expects_projection=(ExpectedProjection("CP-0", "qa_status", "Restricted"),),
+        expects_blocked=("CP-5",),
+    )
+    with connect(empty_database) as conn:
+        apply_schema(conn)
+        conn.commit()
+        blobs = BlobStore(tmp_path / "blobs")
+        original = matrix._cited
+
+        def cited_then_unpin(
+            conn_: StoreConnection, run_id: UUID, *, proof: OrchestrationProof | None
+        ) -> set[tuple[str, str, str]]:
+            cited = original(conn_, run_id, proof=proof)
+            with connect(empty_database) as other, route_fault(other):
+                other.execute(
+                    "UPDATE run_routes SET resolved='{}' WHERE run_id=%s", (run_id,)
+                )
+            return cited
+
+        monkeypatch.setattr(matrix, "_cited", cited_then_unpin)
+        prepared, faulted = _restricted(conn, blobs, VENDORED, "unpinned", wrong)
+        assert faulted.matrix is not None
+        [row] = faulted.matrix.rows
+        assert row.refusal is RefusalCode.ROUTE_IDENTITY_INVALID
+        assert (row.projections_met, row.blocked_met) == (False, False)
+        assert not performed_evidence(prepared=prepared, performed=faulted).complete
+
+
+def test_a_refusal_no_run_can_end_in_is_not_declarable(
+    empty_database: str, tmp_path: Path
+) -> None:
+    """DQ-2: a node refusal is explained against its attempt and leaves the run
+    RUNNING, so a case declaring CITATION_NOT_LOCATED was prepared, paid for on
+    every retry and never answerable. Only HANDOFF_BLOCKED, the one refusal a
+    run ends in, is declarable, and the rest are refused before any write."""
+    from caos.qualification.matrix import DECLARABLE_REFUSALS
+    from caos.store import apply_schema, connect
+
+    assert frozenset({RefusalCode.HANDOFF_BLOCKED}) == DECLARABLE_REFUSALS
+    declared = replace(
+        _case("declared-refusal", REPORT),
+        expects=(),
+        expected_refusal=RefusalCode.CITATION_NOT_LOCATED,
+    )
+    harness = Harness(
+        bundle=Bundle(root=VENDORED),
+        catalog=CATALOG,
+        completions=_Completions(),
+        price=priced(ESTIMATE),
+        ceiling=SET_CEILING,
+    )
+    with connect(empty_database) as conn:
+        apply_schema(conn)
+        conn.commit()
+        with pytest.raises(Refusal, match=r"^QUALIFICATION_KEY_UNANSWERABLE$"):
+            prepare(
+                conn,
+                BlobStore(tmp_path / "blobs"),
+                harness,
+                qualification=QualificationSet(cases=(declared,)),
+            )
+        assert _count(conn, "SELECT count(*) FROM runs") == 0
+
+
+def test_the_last_attempt_is_the_last_by_ordinal_not_by_clock(
+    empty_database: str, tmp_path: Path
+) -> None:
+    """DQ-2's second half: `_refusal_met` chose the node's last attempt by
+    `started_at` and a random id, so a retry whose clock read earlier let the
+    stale refusal of an earlier attempt match. The run lock numbers attempts."""
+    from caos.qualification.matrix import _refusal_met
+    from caos.store import apply_schema, connect
+    from caos.store.runs import fail_run, start_attempt
+
+    no_quote = b"Acme Holdings plc annual report 2026\nRevenue grew in the year\n"
+    with connect(empty_database) as conn:
+        apply_schema(conn)
+        conn.commit()
+        performed = _perform(
+            conn,
+            BlobStore(tmp_path / "blobs"),
+            QualificationSet(cases=(_case("stale", no_quote),)),
+        )
+        [record] = performed.performed
+        assert record.stopped is RefusalCode.CITATION_NOT_LOCATED
+        row = conn.execute(
+            "SELECT route_node_id FROM run_attempts WHERE run_id=%s",
+            (record.run_id,),
+        ).fetchone()
+        assert row is not None
+        retry = start_attempt(conn, record.run_id, str(row[0]))
+        conn.execute(
+            "UPDATE run_attempts SET started_at = started_at - interval '1 hour'"
+            " WHERE attempt_id=%s",
+            (retry,),
+        )
+        assert fail_run(conn, record.run_id)
+        conn.commit()
+        met = _refusal_met(conn, record.run_id, RefusalCode.CITATION_NOT_LOCATED, None)
+        assert met is False
+
+
+def test_a_matrix_refused_after_the_runs_keeps_the_performed_snapshot(
+    empty_database: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """DQ-5 (MAX-10): the matrix re-reads the manifest after every proof, and a
+    manifest that moved then raised out of `perform` before `_persist_performed`
+    ran -- three paid calls, no snapshot. The set is kept as a stopped set is,
+    with no matrix and so never signable, and the refusal still reaches the
+    caller."""
+    import shutil
+
+    from caos.qualification import matrix
+    from caos.store import apply_schema, connect
+
+    root = tmp_path / "bundle"
+    shutil.copytree(VENDORED, root)
+    manifest = root / "DEPLOY_V_INTEGRITY_v1.json"
+    qualification = QualificationSet(cases=(_case("moved-manifest", REPORT),))
+    harness = Harness(
+        bundle=Bundle(root=root),
+        catalog=CATALOG,
+        completions=_Completions(),
+        price=priced(ESTIMATE),
+        ceiling=SET_CEILING,
+    )
+    with connect(empty_database) as conn:
+        apply_schema(conn)
+        conn.commit()
+        blobs = BlobStore(tmp_path / "blobs")
+        prepared = prepare(conn, blobs, harness, qualification=qualification)
+        _approve(conn, prepared)
+        original = matrix._cited
+
+        def cited_then_move(
+            conn_: StoreConnection, run_id: UUID, *, proof: OrchestrationProof | None
+        ) -> set[tuple[str, str, str]]:
+            cited = original(conn_, run_id, proof=proof)
+            manifest.write_bytes(manifest.read_bytes() + b" ")
+            return cited
+
+        monkeypatch.setattr(matrix, "_cited", cited_then_move)
+        with pytest.raises(Refusal, match=r"^AUTHORITY_BYTES_MISMATCH$"):
+            perform(
+                conn, blobs, harness, qualification=qualification, prepared=prepared
+            )
+        conn.rollback()
+        rows = conn.execute(
+            "SELECT complete, performed_json->'matrix' FROM qualification_performed"
+        ).fetchall()
+        conn.rollback()
+        assert rows == [(False, None)]
+
+
+def test_every_check_prepare_makes_before_writing_is_one_function(
+    empty_database: str, tmp_path: Path
+) -> None:
+    """DQ-12: `scripts/qualify.py` asks `assert_admissible` before it creates a
+    database, so it must refuse what `prepare` would, and write nothing."""
+    from caos.qualification.harness import assert_admissible
+    from caos.store import apply_schema, connect
+
+    two = QualificationSet(
+        cases=(_case("acme-2026", REPORT), _case("borealis-2026", OTHER))
+    )
+    unaffordable = Harness(
+        bundle=Bundle(root=VENDORED),
+        catalog=CATALOG,
+        completions=_Completions(),
+        price=priced(ESTIMATE),
+        ceiling=CEILING,
+    )
+    with pytest.raises(Refusal, match=r"^QUALIFICATION_SET_OVER_CEILING$"):
+        assert_admissible(unaffordable, qualification=two)
+    affordable = replace(unaffordable, ceiling=SET_CEILING)
+    routes = assert_admissible(affordable, qualification=two)
+    assert [(route.profile_id, route.selection_id) for route in routes] == [
+        (PROFILE, SELECTION),
+        (PROFILE, SELECTION),
+    ]
+    with connect(empty_database) as conn:
+        apply_schema(conn)
+        conn.commit()
+        blobs = BlobStore(tmp_path / "blobs")
+        with pytest.raises(Refusal, match=r"^QUALIFICATION_SET_OVER_CEILING$"):
+            prepare(conn, blobs, unaffordable, qualification=two)
+        assert _count(conn, "SELECT count(*) FROM cases") == 0

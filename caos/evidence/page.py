@@ -204,10 +204,21 @@ def _document(blobs: BlobStore, digest: str) -> bytes:
 # it is the same answer however often it is asked for, and the ceiling is what
 # stops a reader paging through many large documents from holding them all.
 FRAME_CACHE_SIZE = 256
-# `(document digest, page)` to that page's crop, most recently read last. Only
-# crops that were read: a refusal can be a deadline the load made, and a
+# `(document digest, page)` to that page's crop, most recently read last, or
+# `None` for a page the child said the document does not have (EV-7). Only
+# what the child answered: a refusal can be a deadline the load made, and a
 # transient failure is not a fact about a document (AS-5).
-_FRAMES: OrderedDict[tuple[str, int], tuple[float, float, float, float]] = OrderedDict()
+_FRAMES: OrderedDict[tuple[str, int], tuple[float, float, float, float] | None] = (
+    OrderedDict()
+)
+# How many frame children run at once in this process (EV-7). Each is an
+# interpreter reading a document up to the admission ceiling -- measured at
+# about 250 MiB resident and a second of CPU for an 18 MB PDF -- and a READER
+# could ask for as many distinct pages at once as the server has threads,
+# each starting its own. A read waits for a slot within its own deadline, the
+# bound its child would have run under, and is refused if none frees.
+FRAME_CHILDREN = 2
+_CHILDREN = threading.BoundedSemaphore(FRAME_CHILDREN)
 # Sync routes run in the threadpool, so two readers share this dictionary. The
 # lock covers the read-then-reorder and the write-then-evict, which are not one
 # operation: without it a key evicted between a `get` and its `move_to_end`
@@ -216,15 +227,20 @@ _FRAMES: OrderedDict[tuple[str, int], tuple[float, float, float, float]] = Order
 _FRAMES_LOCK = threading.Lock()
 
 
-def _remembered(key: tuple[str, int]) -> tuple[float, float, float, float] | None:
+def _remembered(
+    key: tuple[str, int],
+) -> tuple[bool, tuple[float, float, float, float] | None]:
+    """Whether the child already answered for `key`, and what."""
     with _FRAMES_LOCK:
-        frame = _FRAMES.get(key)
-        if frame is not None:
-            _FRAMES.move_to_end(key)
-        return frame
+        if key not in _FRAMES:
+            return False, None
+        _FRAMES.move_to_end(key)
+        return True, _FRAMES[key]
 
 
-def _remember(key: tuple[str, int], frame: tuple[float, float, float, float]) -> None:
+def _remember(
+    key: tuple[str, int], frame: tuple[float, float, float, float] | None
+) -> None:
     with _FRAMES_LOCK:
         _FRAMES[key] = frame
         _FRAMES.move_to_end(key)
@@ -251,21 +267,44 @@ def _page_crop(crop: _Crop, page: int) -> tuple[float, float, float, float] | No
     the page tree with a 60 s budget, at READER standing (AS-5). The crop is a
     pure function of the pinned document and the page, and `BlobStore.get` has
     already proven the bytes hash to `document_sha256`, so the digest and the
-    page are the whole key.
+    page are the whole key -- and a page the document does not have is as
+    much a fact of it as a crop (EV-7).
+
+    The child runs in one of `FRAME_CHILDREN` slots, waited for within the
+    read's deadline; the cache is asked again once a slot is held, because
+    the reader holding it before may have been answering the same page.
     """
     key = (crop.document_sha256, page)
-    remembered = _remembered(key)
-    if remembered is not None:
-        return remembered
+    known, frame = _remembered(key)
+    if known:
+        return frame
+    wait = min(max(0.0, crop.deadline - time.monotonic()), crop.limits.max_seconds)
+    if not _CHILDREN.acquire(timeout=wait):
+        return None
+    try:
+        known, frame = _remembered(key)
+        return frame if known else _child_crop(crop, page)
+    finally:
+        _CHILDREN.release()
+
+
+def _child_crop(crop: _Crop, page: int) -> tuple[float, float, float, float] | None:
+    """The §47 child's answer for one page, remembered when it is one."""
     # Imported here: plain-text pages should not pay for pdfminer.
     from caos.evidence.pdf import page_frame
 
+    code: RefusalCode | None = None
     try:
         frame = page_frame(crop.data, page, limits=crop.limits, deadline=crop.deadline)
-    except Refusal:
-        return None
-    _remember(key, frame)
-    return frame
+    except Refusal as refusal:
+        code = refusal.code
+    if code is None:
+        _remember((crop.document_sha256, page), frame)
+        return frame
+    if code is RefusalCode.PAGE_NOT_AVAILABLE:
+        # The child's `null`: no such page, or one that clips to nothing.
+        _remember((crop.document_sha256, page), None)
+    return None
 
 
 def _frame(

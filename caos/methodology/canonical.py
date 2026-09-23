@@ -17,12 +17,15 @@ what rests on it (§41.3).
 from __future__ import annotations
 
 import hashlib
+import time
 from collections.abc import Callable, Collection, Mapping, Sequence
 from contextlib import suppress
 from dataclasses import dataclass, replace
 from decimal import Decimal
 from enum import StrEnum
 from uuid import UUID
+
+import psycopg
 
 from caos import methodology
 from caos.blobs import BlobStore
@@ -86,10 +89,11 @@ from caos.methodology.verification import (
     verify_accepted,
     verify_owner_restrictions,
 )
-from caos.provider import CompletionProvider, reported_charge
+from caos.provider import CompletionProvider, reported_charge, resend_checked
 from caos.refusals import Refusal, RefusalCode
-from caos.store import StoreConnection
+from caos.store import StoreConnection, connect
 from caos.store.budget import reserved_for
+from caos.store.lakebase import store_url
 from caos.store.outcomes import (
     CallOutcome,
     NodeAttempt,
@@ -104,6 +108,15 @@ from caos.store.outcomes import (
 )
 from caos.store.run_inputs import load_run_input
 from caos.store.source_sets import SourceSet, load_source_set
+from caos.store.work import require_resendable
+
+# The bill of an answer already paid for is written this many times at most,
+# a pause apart, before the store fault is let through (ST-12): a failover
+# between the call and its one write would otherwise lose the only record that
+# the call was made, and the next claim would pay for the node again.
+BILL_TRIES = 3
+BILL_PAUSE_SECONDS = 1.0
+_pause = time.sleep
 
 
 @dataclass(frozen=True, slots=True)
@@ -220,7 +233,10 @@ def execute_handoff(
     if model is None:
         raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
     require_idle(conn)
-    completion = provider.complete(prompt, json_object=True)
+    # A transport that asks again after a rate limit re-reads the fence first
+    # (ST-7): a lost lease or a recorded cancel sends nothing more.
+    with resend_checked(lambda: _still_resendable(conn, assignment)):
+        completion = provider.complete(prompt, json_object=True)
     charge = reported_charge(
         completion.charge if isinstance(completion.charge, Decimal) else None
     )
@@ -228,11 +244,7 @@ def execute_handoff(
     content = completion.content if completion.refusal is None else None
     diagnostic, unstored = _diagnostic(blobs, content)
     require_idle(conn)
-    record_outcome(
-        conn,
-        attempt_id=attempt,
-        outcome=CallOutcome(charge, model, generation, diagnostic),
-    )
+    bill(conn, attempt, CallOutcome(charge, model, generation, diagnostic))
     if unstored:
         raise Refusal(RefusalCode.STORE_UNAVAILABLE)
     if completion.refusal is not None:
@@ -269,6 +281,48 @@ def execute_handoff(
         generation_id=generation,
         diagnostic_sha256=diagnostic,
     )
+
+
+def _still_resendable(conn: StoreConnection, assignment: Assignment) -> None:
+    """Refuse a re-send once the lease is lost or a cancel is recorded, in a
+    read unit of its own on the idle connection (ST-7)."""
+    with execution_reads(conn):
+        require_resendable(conn, assignment.run_id, assignment.lease)
+
+
+def bill(conn: StoreConnection, attempt_id: UUID, outcome: CallOutcome) -> None:
+    """Record a call's outcome, retried a bounded number of times (ST-12).
+
+    `record_outcome` replays an exact outcome as a no-op, so a write whose
+    commit landed but whose answer was lost is safe to repeat. A connection the
+    fault closed is replaced by a fresh one to the same store for the retry,
+    when this environment names one; a store that stays down still refuses
+    `STORE_UNAVAILABLE`, and the run is released as before. `BILL_TRIES`
+    writes a `BILL_PAUSE_SECONDS` apart sit well inside the lease the call
+    was made under.
+    """
+    for tries_left in range(BILL_TRIES - 1, -1, -1):
+        try:
+            _billed_once(conn, attempt_id, outcome)
+        except Refusal as refused:
+            if refused.code is not RefusalCode.STORE_UNAVAILABLE or not tries_left:
+                raise
+            _pause(BILL_PAUSE_SECONDS)
+            continue
+        return
+
+
+def _billed_once(conn: StoreConnection, attempt_id: UUID, outcome: CallOutcome) -> None:
+    if not conn.closed:
+        record_outcome(conn, attempt_id=attempt_id, outcome=outcome)
+        return
+    try:
+        fresh = connect(store_url())
+    except (psycopg.Error, Refusal):
+        # No store to retry against: the fault that closed it stands.
+        raise Refusal(RefusalCode.STORE_UNAVAILABLE) from None
+    with fresh:
+        record_outcome(fresh, attempt_id=attempt_id, outcome=outcome)
 
 
 def _answer(  # noqa: PLR0913 -- one recorded answer, keyword-only

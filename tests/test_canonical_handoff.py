@@ -286,6 +286,65 @@ def test_a_heading_padded_with_a_long_whitespace_run_is_refused_at_once() -> Non
     assert _validate(CP0, inside).module_id == "CP-0"
 
 
+def _headed(line: bytes, count: int) -> bytes:
+    """CP-0's conforming handoff with `count` copies of `line` opening its
+    Analysis section."""
+    padded = CP0_MD.replace(
+        b"## Analysis\n\n", b"## Analysis\n\n" + (line + b"\n\n") * count, 1
+    )
+    assert padded != CP0_MD
+    return padded
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        # Many runs, each inside the 256 bound, on one 64 KB heading line.
+        b"### Credit view" + (b"x" + b" " * 256) * 254 + b"y",
+        # The same shape with `#` between the runs.
+        b"### Credit view" + (b"#" + b" " * 256) * 254 + b"y",
+        # A long `#` run after the title, which `_heading_text` backtracks over.
+        b"### a" + b" " * 256 + b"#" * 65_000 + b"b",
+        b"### a" + b" " * 8 + b"#" * 65_000 + b"b",
+        # Runs a no-break space ends: whitespace to Python, not to `[ \t]*$`.
+        b"### Credit view" + (b" " * 256 + "\u00a0".encode()) * 250,
+    ],
+    ids=[
+        "whitespace-runs",
+        "hash-separated-runs",
+        "hash-run",
+        "short-gap-hash-run",
+        "no-break-space-separated-runs",
+    ],
+)
+def test_a_heading_built_of_many_short_runs_is_refused_at_once(line: bytes) -> None:
+    """EV-2: F99 bounded one whitespace run, and the vendor's heading
+    expressions backtrack over every run of a heading's title, and its
+    `_heading_text` over every `#` run after one. A conforming handoff of
+    about 1 MB of such headings cost several seconds per validation, GIL held,
+    on every read. The wall clock is the assertion again."""
+    padded = _headed(line, 12)
+    started = time.perf_counter()
+    refused = _refused(CP0, padded)
+    spent = time.perf_counter() - started
+    assert refused.code is RefusalCode.HANDOFF_MALFORMED
+    assert spent < 1.0, spent
+
+
+def test_a_heading_spelt_the_ordinary_ways_still_validates() -> None:
+    """The bound reads the title alone and forgives what costs nothing: a
+    double space, a closing `#` sequence, a banner of `#`, trailing spaces."""
+    for line in (
+        b"### Credit  view",
+        b"### Credit view ##",
+        b"### Issue #1: covenant C# headroom",
+        b"#" * 40,
+        b"### Credit view" + b" " * 200,
+        b"###\tCredit view",
+    ):
+        assert _validate(CP0, _headed(line, 1)).module_id == "CP-0", line
+
+
 def test_text_no_reader_can_see_is_refused_in_the_markdown() -> None:
     """AI-2. An accepted handoff becomes the UPSTREAM section of every
     downstream prompt and reaches the committee page, so a tag-encoded

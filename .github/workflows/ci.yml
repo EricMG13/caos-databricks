@@ -40,6 +40,18 @@ jobs:
       - run: uv run python scripts/document_register.py
       - run: uv run complexipy caos scripts icm --max-complexity-allowed 15
       - run: uv run pre-commit run --all-files --show-diff-on-failure
+      # A budget may only fall (F58, DF-11), on a push as on a pull request:
+      # the baseline an earlier commit holds is the ceiling. A push is held
+      # to the tip it replaced, a pull request to its base branch.
+      - name: the suppression baseline did not rise
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          base=HEAD^
+          if [ -n "$BASE_REF" ]; then base="origin/$BASE_REF"; elif git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then base="$BEFORE"; fi
+          git show "$base:tests/gate_baseline.json" > "$RUNNER_TEMP/base.json"
+          uv run python scripts/check_gate_config.py --against "$RUNNER_TEMP/base.json"
 
   types:
     runs-on: ubuntu-latest
@@ -68,7 +80,10 @@ jobs:
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with: {version: "0.12.5", enable-cache: true}
       - run: uv sync --locked --all-groups
-      - run: uv run pytest -n auto -m "not live_provider"
+      # A stuck test prints its stack after ten minutes, and a worker that dies
+      # fails the session rather than waiting on a replacement (the 60-minute
+      # hangs on 653dc9c and c37733e printed dots only).
+      - run: uv run pytest -n auto -m "not live_provider" --max-worker-restart=0 -o faulthandler_timeout=600 -ra --durations=25
         env:
           CAOS_TEST_POSTGRES_URL: postgresql://postgres:caos@localhost:5432/caos
           # A store suite that skipped is not a store suite that passed.
@@ -113,21 +128,46 @@ jobs:
     # run through the real CLI with nothing below HTTP injected. A profile is
     # never needed here; the enterprise deploy is scripts/enterprise_deploy.py.
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with: {version: "0.12.5", enable-cache: true}
       - uses: databricks/setup-cli@d76f84cea9893ce68311a1f33fb0c95af6c963b7 # v1.17.0
         with: {version: "1.17.0"}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
       - run: uv sync --locked --all-groups
-      - run: mkdir -p frontend/dist && touch frontend/dist/index.html
+      # The export the app serves, built as a deployer builds it (DF-4): a
+      # sync that drops its scripts or styles is a file missing from the
+      # deployment record below, not an empty page that passes.
+      - run: npm --prefix frontend ci --ignore-scripts
+      - run: npm --prefix frontend run build
       # A non-default price travels as `BUNDLE_VAR_model_price` (C1): the CLI
       # splits a `--var` value on commas.
       - run: >-
           BUNDLE_VAR_model_price=databricks-claude-opus-5,0.000007,0.000030,2026-09-23
           uv run python tests/workspace_stub.py -- databricks bundle validate -t dev
           --var uc_catalog=main --var uc_schema=caos --var lakebase_instance=caos-lb
+      # What the CLI resolved is what was given (DF-4, DF-5): the price
+      # reached the app's configuration, and only prod names the production
+      # app. The check is the one command's own E2.
+      - run: >-
+          BUNDLE_VAR_model_price=databricks-claude-opus-5,0.000007,0.000030,2026-09-23
+          uv run python tests/workspace_stub.py -- sh -c
+          "databricks bundle validate -t dev -o json --var uc_catalog=main --var uc_schema=caos --var lakebase_instance=caos-lb > $RUNNER_TEMP/dev.json
+          && databricks bundle validate -t prod -o json --var uc_catalog=main --var uc_schema=caos --var lakebase_instance=caos-lb > $RUNNER_TEMP/prod.json"
+      - run: >-
+          uv run python scripts/enterprise_deploy.py --stage record --evidence "$RUNNER_TEMP/resolved"
+          --step E2 --target dev --price databricks-claude-opus-5,0.000007,0.000030,2026-09-23
+          --bundle "$RUNNER_TEMP/dev.json"
+      - run: >-
+          uv run python scripts/enterprise_deploy.py --stage record --evidence "$RUNNER_TEMP/resolved"
+          --step E2 --target prod --price databricks-claude-opus-5,0.000007,0.000030,2026-09-23
+          --bundle "$RUNNER_TEMP/prod.json"
       # Deploy and run under one stub: the run starts the app the deploy created
       # (the stub seeds none, DP-6).
       - run: >-
@@ -155,9 +195,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: {fetch-depth: 0}
       - run: python3 scripts/check_pr_size.py "origin/${{ github.base_ref }}"
-      # A budget may only fall (F58): the base branch's baseline is the ceiling.
-      - run: git show "origin/${{ github.base_ref }}:tests/gate_baseline.json" > "$RUNNER_TEMP/base.json"
-      - run: python3 scripts/check_gate_config.py --against "$RUNNER_TEMP/base.json"
 
   frontend:
     runs-on: ubuntu-latest

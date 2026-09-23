@@ -35,6 +35,7 @@ from caos.evidence.ingest import (
     Document,
     admit_prepared,
     prepare_pack,
+    put_pack,
 )
 from caos.store import apply_schema, connect
 from caos.store.runs import create_case
@@ -81,7 +82,8 @@ def main() -> int:
             started = time.monotonic()
             pack = prepare_pack([document])
             extracted = time.monotonic()
-            admit_prepared(conn, BlobStore(Path(blob_root)), case_id, pack)
+            stored = put_pack(BlobStore(Path(blob_root)), pack)
+            admit_prepared(conn, case_id, pack, stored)
             conn.commit()
             done = time.monotonic()
 

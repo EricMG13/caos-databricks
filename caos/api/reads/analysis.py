@@ -65,15 +65,28 @@ from caos.store.routes import resolved_route
 # ownership in one row; the subject; the pinned route (`resolved_route`); the
 # accepted artifacts; the cited sources; the displayed run's own status, which
 # is what tells a run that stopped from one still working, and -- in the same
-# row -- the verdict that ended it. Then, per accepted
-# handoff, the host
-# identity `accepted_handoff` rebuilds (as app's `CANONICAL_READINESS_IO`).
-# Linear in handoffs, so declared for a LITE run of three; measured on one and
-# on three in `tests/test_analysis_section.py`.
+# row -- the verdict that ended it. Then, per accepted handoff, the host
+# identity `accepted_handoff` rebuilds (as app's `CANONICAL_READINESS_IO`), and
+# for CP-CF's the re-proof of its four owner inputs on top.
+#
+# Declared for the longest route a run can pin, not for a LITE run of three
+# (ED-7): the budget is a bound only if no pinned route exceeds it, and the
+# ten-node forecast route cost 149 against the 37 once declared here. The
+# longest is FULL_CREDIT_ASSESSMENT with the model extension, twenty nodes,
+# CP-CF among them (`tests/test_analysis_section.py` resolves every pathway to
+# check). Measured per handoff on one, three and ten handoffs, the forecast
+# route's CP-CF included (`tests/test_analysis_section.py`,
+# `tests/test_model_section.py`).
 FIXED_IO = 7
 PER_HANDOFF_IO = 10
-LITE_NODES = 3
-IO_BUDGET = FIXED_IO + LITE_NODES * PER_HANDOFF_IO
+MODEL_PROOFS_IO = 42
+LONGEST_ROUTE_NODES = 20
+IO_BUDGET = FIXED_IO + LONGEST_ROUTE_NODES * PER_HANDOFF_IO + MODEL_PROOFS_IO
+# Blob reads, which no store budget counted: the artifact and its record per
+# accepted handoff, each downloaded and hashed once per request however many
+# of the lineage and record readers ask for it (`BlobStore.remembering`).
+PER_HANDOFF_BLOBS = 2
+BLOB_BUDGET = LONGEST_ROUTE_NODES * PER_HANDOFF_BLOBS
 
 router = APIRouter()
 

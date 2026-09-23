@@ -52,7 +52,10 @@ export function WithdrawSource({
       >
         {pending ? "Withdrawing…" : "Withdraw"}
       </ConfirmedControl>
-      <CommandOutcome result={result} success="" />
+      <CommandOutcome
+        result={result}
+        success={`${row.filename} withdrawn. Reading the pack back.`}
+      />
     </>
   );
 }

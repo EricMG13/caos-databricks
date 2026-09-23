@@ -94,7 +94,7 @@ function interruption(status: RegionStatus): string {
 }
 
 const PAUSED_WORDING =
-  "Live updates paused. The event stream was refused; this view reconnects on its own.";
+  "Live updates paused. The event stream is not connected; this view reconnects on its own.";
 
 /** The displayed document, marked stale over a pending one and carrying that
     one's withdrawals, never its figures. */
@@ -135,6 +135,88 @@ export function Workspace({ section }: { section: Section }) {
   const [tail, setTail] = useState<Keyed<boolean> | null>(null);
   const authority = useRef<Authority>(INITIAL);
 
+  const reload = useCallback(() => {
+    setHeld((current) =>
+      current?.value.pending
+        ? {
+            key: current.key,
+            value: { displayed: current.value.pending, pending: null, interrupted: null },
+          }
+        : current,
+    );
+    // The button that was pressed is gone with the state it cleared, so focus
+    // lands on the heading of the region it just replaced (finding FE-4).
+    focusSectionHeading();
+  }, []);
+
+  const current = requested && held?.key === key ? held.value : null;
+  const status = useMemo(
+    () => (requested ? (current ? visible(current) : LOADING) : UNAVAILABLE),
+    [requested, current],
+  );
+  const latest = current?.pending ?? current?.displayed ?? null;
+  // The refetch that did not answer says the view is not live and replaces
+  // nothing (FE-2).
+  const interrupted = current?.interrupted ?? null;
+  const document = "document" in status ? status.document : null;
+  const displayedRunId = document ? displayedRunIdOf(section, document) : null;
+
+  // The read the tail drives. Set by the load below and read through a ref, so
+  // the tail can follow the run on screen without tearing the read down.
+  const loadRef = useRef<(() => Promise<RegionStatus | null>) | null>(null);
+  // The tail follows the run the reader is looking at. An address that names
+  // no run is answered with the case's latest, and a tail opened on the bare
+  // address carries the case's audit actions and no run's events: the run on
+  // screen would never move (MAX-19). So where the address names none, the
+  // tail waits for the first answer and opens on the run it displays -- a
+  // newer run is still announced by the case half and held for Reload, and
+  // Reload moves the tail with it (decision 6). A view the server says is
+  // gone has nothing to follow.
+  const tailRun = runId ?? displayedRunId;
+  const tailWanted =
+    requested &&
+    caseId !== null &&
+    tailed(section) &&
+    (runId !== null || current !== null) &&
+    status.kind !== "unavailable";
+
+  // A section no event refetches opens no stream -- Directory, and Book,
+  // which is portfolio-scoped and which no case event names. Declared before
+  // the load, so where the address names the run the tail still opens before
+  // the first fetch and a fixture stream's frame counter is reset before the
+  // document it drives.
+  useEffect(() => {
+    if (!tailWanted || caseId === null) return undefined;
+    let open = true;
+    const load = (): Promise<RegionStatus | null> =>
+      open && loadRef.current ? loadRef.current() : Promise.resolve(null);
+    const stream = openTail(eventsUrl(caseId, tailRun, fixture), {
+      onEvent: (name) => {
+        if (refetches(name, section)) void load();
+      },
+      // Every open, the first included: an event landing between the
+      // document read and the stream's head is not replayed, and the
+      // one-flight rule coalesces the read this doubles (finding FE-9).
+      onOpen: () => void load(),
+      // A closed stream is a refusal or, in Firefox, a connection that
+      // never opened: EventSource cannot tell them apart. The document
+      // read can, so it decides: a case that is gone stops the tail, and
+      // anything else is waited out and tried again.
+      onRefused: async () => {
+        const answer = await load();
+        return {
+          stop: answer?.kind === "unavailable",
+          retryAfterSeconds: answer?.kind === "error" ? (answer.retryAfterSeconds ?? null) : null,
+        };
+      },
+      onLive: (live) => setTail({ key, value: live }),
+    });
+    return () => {
+      open = false;
+      stream.close();
+    };
+  }, [tailWanted, section, caseId, tailRun, fixture, key]);
+
   useEffect(() => {
     if (!requested) return undefined;
     authority.current = navigate(authority.current, caseId);
@@ -173,68 +255,14 @@ export function Workspace({ section }: { section: Section }) {
       flight = null;
       authority.current = issue(authority.current);
     };
-
-    // A section no event refetches opens no stream -- Directory, and Book,
-    // which is portfolio-scoped and which no case event names. The tail opens
-    // before the first fetch so a fixture stream's frame counter is reset
-    // before the document it drives.
-    const stream =
-      caseId && tailed(section)
-        ? openTail(eventsUrl(caseId, runId, fixture), {
-            onEvent: (name) => {
-              if (refetches(name, section)) void load();
-            },
-            // Every open, the first included: an event landing between the
-            // document read and the stream's head is not replayed, and the
-            // one-flight rule coalesces the read this doubles (finding FE-9).
-            onOpen: () => void load(),
-            // A closed stream is a refusal or, in Firefox, a connection that
-            // never opened: EventSource cannot tell them apart. The document
-            // read can, so it decides: a case that is gone stops the tail, and
-            // anything else is waited out and tried again.
-            onRefused: async () => {
-              const answer = await load();
-              return {
-                stop: answer?.kind === "unavailable",
-                retryAfterSeconds:
-                  answer?.kind === "error" ? (answer.retryAfterSeconds ?? null) : null,
-              };
-            },
-            onLive: (live) => setTail({ key, value: live }),
-          })
-        : null;
+    loadRef.current = load;
     void load();
     return () => {
-      stream?.close();
+      if (loadRef.current === load) loadRef.current = null;
       cancel();
     };
   }, [requested, section, caseId, runId, revisionId, fixture, key]);
 
-  const reload = useCallback(() => {
-    setHeld((current) =>
-      current?.value.pending
-        ? {
-            key: current.key,
-            value: { displayed: current.value.pending, pending: null, interrupted: null },
-          }
-        : current,
-    );
-    // The button that was pressed is gone with the state it cleared, so focus
-    // lands on the heading of the region it just replaced (finding FE-4).
-    focusSectionHeading();
-  }, []);
-
-  const current = requested && held?.key === key ? held.value : null;
-  const status = useMemo(
-    () => (requested ? (current ? visible(current) : LOADING) : UNAVAILABLE),
-    [requested, current],
-  );
-  const latest = current?.pending ?? current?.displayed ?? null;
-  // The refetch that did not answer says the view is not live and replaces
-  // nothing (FE-2).
-  const interrupted = current?.interrupted ?? null;
-  const document = "document" in status ? status.document : null;
-  const displayedRunId = document ? displayedRunIdOf(section, document) : null;
   // The view is mounted under what it is about, never under `observed_at`, so
   // an ordinary refresh keeps its local selection (R5).
   const displayedRevisionId =

@@ -2,12 +2,12 @@
 
 The spec's §11 (`docs/rebuild/2026-09-22-caos-databricks-spec.md`). One
 background task, started in the app's lifespan, runs the probes every
-`PROBE_INTERVAL` seconds; each probe runs in a worker thread under
-`PROBE_DEADLINE`, and a round already in flight is never started twice. The
-route reads only what the last round left, so a request -- anonymous, unguarded,
-as often as anyone likes -- costs no store connection, no bundle read and no
-filesystem call. A round older than `STALE_AFTER` is not trusted, and before
-the first round nothing is.
+`PROBE_INTERVAL` seconds; each probe runs on a thread of its own under
+`PROBE_DEADLINE`, and a probe whose last run is still alive is never started
+again (F47, ED-4). The route reads only what the last round left, so a request
+-- anonymous, unguarded, as often as anyone likes -- costs no store connection,
+no bundle read and no filesystem call. A round older than `STALE_AFTER` is not
+trusted, and before the first round nothing is.
 
 The body is codes and a timestamp only: no path, no URL, no exception text.
 A probe that raises is its failure code, and nothing of what it raised.
@@ -18,7 +18,9 @@ from __future__ import annotations
 import asyncio
 import os
 import platform
+import threading
 from collections.abc import Callable, Mapping
+from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from os import environ
@@ -39,7 +41,7 @@ from caos.methodology.bundle import Bundle
 from caos.refusals import Refusal
 from caos.store import connect, verify_schema
 from caos.store.lakebase import store_url
-from caos.store.work import worker_states
+from caos.store.work import WorkerBeat, worker_states
 
 # The route reads a cached result; the probes' round trips are the loop's.
 IO_BUDGET = 0
@@ -49,15 +51,13 @@ PROBE_INTERVAL = 10.0
 # this; `PROBE_INTERVAL` stays above it so rounds never queue (F47).
 PROBE_DEADLINE = 5.0
 STALE_AFTER = 30.0
-# How long a probe still in flight may hold the next round back. A probe thread
-# the executor never started -- `wait_for` cancelled the job while it was still
-# queued -- never runs its own accounting, so `inflight` stayed raised and
-# every later round returned without probing anything until the process was
-# restarted (AR-11). The count gate is therefore a *time* gate as well: past
-# this, a round runs whatever `inflight` says. Twice the deadline is longer
-# than any probe that is really running and well inside `STALE_AFTER`, so a
-# leak costs one skipped round rather than readiness.
-INFLIGHT_CEILING = PROBE_DEADLINE * 2
+# The in-process worker (D11, DF-1): `caos.graph.worker.start_in_process`
+# starts it on a thread of this name when this variable is `1`, and it beats
+# as `worker-<pid>`. Spelled here rather than imported, because importing the
+# worker would load the model seam into every process that serves the API;
+# `tests/test_health.py` holds the three to the worker's own.
+WORKER_IN_PROCESS = "CAOS_WORKER_IN_PROCESS"
+WORKER_THREAD = "caos-worker"
 
 HealthCode = Literal[
     "OK",
@@ -172,7 +172,16 @@ def probe_workers() -> HealthCode:
     been driving the same long run for minutes: its run's liveness is the lease
     in `run_work`, which every fenced write renews, and duplicating that
     judgement here would put two clocks on one question.
+
+    A process that runs its worker in-process answers for that worker alone
+    (DF-1): its thread must be alive and its own row is the only one read. Any
+    fresh row used to do, so on a redeploy the previous process's last beat,
+    fresh for `WORKER_STALE_AFTER`, answered `OK` for a new process whose
+    worker had refused to start -- and the deployment's health row passed.
     """
+    in_process = os.environ.get(WORKER_IN_PROCESS) == "1"
+    if in_process and not _worker_thread_alive():
+        return "WORKERS_ABSENT"
     try:
         url = store_url()
     except Refusal:
@@ -188,6 +197,26 @@ def probe_workers() -> HealthCode:
         return "STORE_UNAVAILABLE"
     finally:
         conn.close()
+    if in_process:
+        states = [state for state in states if state.worker_id == _own_worker()]
+    return _fleet(states)
+
+
+def _worker_thread_alive() -> bool:
+    """Whether this process's in-process worker thread is running."""
+    return any(
+        thread.name == WORKER_THREAD and thread.is_alive()
+        for thread in threading.enumerate()
+    )
+
+
+def _own_worker() -> str:
+    """The id this process's in-process worker beats under."""
+    return f"worker-{os.getpid()}"
+
+
+def _fleet(states: list[WorkerBeat]) -> HealthCode:
+    """The code the workers' last words add up to (`probe_workers`)."""
     if not states:
         return "WORKERS_ABSENT"
     fresh = [state for state in states if state.fresh]
@@ -270,66 +299,61 @@ class ProbeState:
     checked_at: datetime | None = None
     checked: float | None = None
     running: bool = False
-    # Probe threads still alive, an abandoned one included: no new round
-    # starts over them, so a slow store cannot pile up connections (F47).
-    inflight: int = 0
-    # When the oldest of them was started, on `clock`, and how long that may
-    # hold the next round back (AR-11). None when nothing is in flight.
-    inflight_since: float | None = None
-    inflight_ceiling: float = INFLIGHT_CEILING
+    # The thread each probe last ran on. While one is alive -- an abandoned
+    # one included -- that probe is not started again, so a slow store never
+    # has two connections from here (F47), whatever the rounds do meanwhile.
+    threads: dict[str, threading.Thread] = field(default_factory=dict)
 
 
 async def _one(state: ProbeState, name: str) -> HealthCode:
+    """One probe on a daemon thread of its own, or `PROBE_TIMEOUT` past the
+    deadline or while its last run is still alive.
+
+    Its own thread rather than the loop's shared executor (ED-4, MAX-02). The
+    shared pool let a probe that never returns -- the SDK's token POST has no
+    timeout -- leave one thread per round behind until the pool was full and
+    every probe, a healthy store's included, queued behind it into
+    `PROBE_TIMEOUT`; and the count-and-ceiling gate over it forgot probes
+    still running, so copies piled up against a dependency already
+    struggling. A thread that exists is running, so there is no job queued
+    and never started to account for, and a daemon never holds the exit.
+    """
+    previous = state.threads.get(name)
+    if previous is not None and previous.is_alive():
+        return "PROBE_TIMEOUT"
+    loop = asyncio.get_running_loop()
+    answered: asyncio.Future[HealthCode] = loop.create_future()
     probe = state.probes[name]
 
-    def counted() -> HealthCode:
+    def run() -> None:
         try:
-            return probe()
-        finally:
-            state.inflight -= 1
-            if state.inflight <= 0:
-                # Clamped: a thread abandoned by an earlier round can return
-                # after a later round has already counted itself out.
-                state.inflight, state.inflight_since = 0, None
+            code = probe()
+        except Exception:  # noqa: BLE001 -- a probe's fault is its code, never text
+            code = _FAILED[name]
+        with suppress(RuntimeError):  # the loop closed while this probe ran
+            loop.call_soon_threadsafe(_settle, answered, code)
 
-    state.inflight += 1
-    if state.inflight_since is None:
-        state.inflight_since = state.clock()
+    thread = threading.Thread(target=run, name=f"caos-probe-{name}", daemon=True)
+    state.threads[name] = thread
+    thread.start()
     try:
-        return await asyncio.wait_for(asyncio.to_thread(counted), state.deadline)
+        return await asyncio.wait_for(answered, state.deadline)
     except TimeoutError:
-        # The thread is abandoned, not awaited: it cannot be interrupted, and
-        # the next round must not queue behind it; `inflight` says it lives.
+        # Abandoned, not awaited: a thread cannot be interrupted. It keeps
+        # its place in `threads`, which is what keeps it from a second copy.
         return "PROBE_TIMEOUT"
-    except Exception:  # noqa: BLE001 -- a probe's fault is its code, never text
-        return _FAILED[name]
 
 
-def _blocked(state: ProbeState) -> bool:
-    """Whether a probe still in flight holds the next round back.
-
-    It does, until it has been in flight longer than `inflight_ceiling`. A job
-    the executor never started because `wait_for` cancelled it while it was
-    still queued never runs `counted`, so its count is never given back: the
-    gate has to expire on its own, or one such cancellation stalls every
-    future round and only a restart returns readiness (AR-11).
-    """
-    if not state.inflight:
-        return False
-    since = state.inflight_since
-    return since is None or state.clock() - since < state.inflight_ceiling
+def _settle(answered: asyncio.Future[HealthCode], code: HealthCode) -> None:
+    """A probe's code, unless its round stopped waiting for it."""
+    if not answered.done():
+        answered.set_result(code)
 
 
 async def probe_once(state: ProbeState) -> None:
     """One round of every probe, unless a round is already in flight."""
-    if state.running or _blocked(state):
+    if state.running:
         return
-    if state.inflight:
-        # Past the ceiling with a count still raised: whatever it counts was
-        # abandoned or was never started. Forgotten here, so the gate holds
-        # again for this round's own probes rather than staying open for the
-        # life of the process.
-        state.inflight, state.inflight_since = 0, None
     state.running = True
     try:
         store, bundle, blobs, identity, workers = await asyncio.gather(

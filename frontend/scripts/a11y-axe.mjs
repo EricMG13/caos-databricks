@@ -184,6 +184,14 @@ async function scan(page, route, viewport) {
     await page.locator("main#body").waitFor({ state: "attached", timeout: 15_000 });
     await page.locator(LOADING).waitFor({ state: "detached", timeout: 15_000 });
     await page.locator(SETTLED).first().waitFor({ state: "attached", timeout: 15_000 });
+    // A route that names an act to arm has its confirm step opened first, so
+    // the step is scanned as a reader meets it. An act that cannot be armed
+    // is a scan error, never a quiet scan of the closed control.
+    const arm = new URL(route, BASE).searchParams.get("arm");
+    if (arm) {
+      await page.locator(`[data-action="${arm}"][data-confirm-open]`).first().click();
+      await page.locator(`[data-confirm="${arm}"]`).waitFor({ state: "visible", timeout: 15_000 });
+    }
   } catch (error) {
     return { url: route, viewport, scan_error: `not ready: ${error.message}`, violations: [] };
   }
