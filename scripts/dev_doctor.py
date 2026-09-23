@@ -31,7 +31,7 @@ LIVE_CONFIGURATION = frozenset(
         # Test-only: the OpenRouter adapter under tests/ reads the key.
         "OPENROUTER_API_KEY",
         # The ceiling is read by the live suite alone.
-        "CAOS_LIVE_BUDGET_CEILING",
+        "CAOS_RUN_CEILING",
     }
 )
 # Set by the bundle and the platform on Databricks Apps (docs/DEPLOYMENT.md);

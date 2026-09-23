@@ -120,7 +120,7 @@ def test_doctor_names_every_variable_the_worker_and_edge_read() -> None:
     for name in (
         "CAOS_MODEL_ENDPOINT",
         "CAOS_MODEL_PRICE",
-        "CAOS_LIVE_BUDGET_CEILING",
+        "CAOS_RUN_CEILING",
         "CAOS_SITE_ROOT",
         "CAOS_LAKEBASE_INSTANCE",
         "CAOS_PUBLIC_ORIGIN",

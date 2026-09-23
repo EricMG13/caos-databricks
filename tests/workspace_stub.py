@@ -382,7 +382,12 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(200, {"app_deployments": listed})
         elif action.startswith("deployments/") and self.command == "GET":
             self._send(200, stub.deployment(name))
-        elif action in ("start", "stop", "update") and self.command == "POST":
+        elif action == "update":
+            # The direct engine POSTs the update, then GETs it until its status
+            # settles; the SDK reads `status.state`.
+            settled = {"state": "SUCCEEDED", "message": "updated"}
+            self._send(200, {**stub.app(name), "status": settled})
+        elif action in ("start", "stop"):
             self._send(200, stub.app(name))
         else:
             self._missing()
