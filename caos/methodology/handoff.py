@@ -837,26 +837,30 @@ def retry_feedback(
     catalog: Mapping[str, Any],
     identity: HostIdentity,
     body: str,
+    *,
+    skill: bytes = b"",
 ) -> tuple[str, ...]:
     """The checks a refused answer failed, for the node's one second attempt (D30).
 
     Three sources, none of them the host restating a vendor rule (invariant
     4): why the answer is not the transport, in the JSON parser's fixed words
     (N50); which citations the body does not carry verbatim, by their place in
-    the list (N51); and the vendor's own `validate_handoff` messages on the
-    stored answer, as written. Each vendor line crosses `BoundaryText` after a
-    cut to `MAX_FEEDBACK_CHARS`; a line that will not is dropped, never
-    repaired. A vendor message may quote a line of the model's own answer back
-    to it. These lines go into that one request and nowhere else: never a
-    log, a refusal or a row.
+    the list (N51); and the vendor's own messages on the stored answer, as
+    written -- `validate_handoff`'s, the completeness checker's against the
+    module's `skill`, and CP-0's T8 parser's -- so the second attempt is told
+    every check it would meet, not only the first. Each vendor line crosses
+    `BoundaryText` after a cut to `MAX_FEEDBACK_CHARS`; a line that will not is
+    dropped, never repaired. A vendor message may quote a line of the model's
+    own answer back to it. These lines go into that one request and nowhere
+    else: never a log, a refusal or a row.
     """
     parsed, reason = _transport_or_reason(body)
     if parsed is None:
         return (reason,)
-    markdown, text, citations = parsed
+    _markdown, text, citations = parsed
     quote = _quote_line(text, citations)
     lines = [quote] if quote else []
-    lines += _vendor_lines(contract, catalog, identity, markdown, text)
+    lines += _vendor_lines(contract, catalog, identity, text, skill)
     return tuple(lines[:MAX_FEEDBACK_MESSAGES])
 
 
@@ -905,24 +909,47 @@ def _vendor_lines(
     contract: VendorContract,
     catalog: Mapping[str, Any],
     identity: HostIdentity,
-    markdown: bytes,
     text: str,
+    skill: bytes,
 ) -> list[str]:
-    """The vendor's own `validate_handoff` messages, bounded, as written."""
-    errors: list[object] = []
+    """The vendor's own messages on the answer, labelled, bounded, as written."""
+    found: list[tuple[str, object]] = []
     with suppress(Exception):  # the vendor's checker raising is nothing to report
-        _text(markdown)
+        _text(text.encode("utf-8"))
         scope = _decision_scope(catalog, identity)
-        found = contract.validate_handoff.validate_text(text, decision_scope=scope)
-        errors = list(found.errors or ())
-    lines: list[str] = []
-    for error in errors:
-        if not isinstance(error, str) or hides_text(error):
-            continue
-        with suppress(Refusal):
-            cut = BoundaryText.of(error[:MAX_FEEDBACK_CHARS], limit=MAX_FEEDBACK_CHARS)
-            lines.append(f"validate_handoff: {cut.value}")
-    return lines
+        checked = contract.validate_handoff.validate_text(text, decision_scope=scope)
+        found += [("validate_handoff", error) for error in checked.errors or ()]
+    if skill and identity.module_id != MODEL_MODULE:
+        with suppress(Exception):
+            violations = contract.completeness_check.check(
+                skill.decode("utf-8"), text, identity.module_id
+            )[0]
+            found += [("completeness_check", violation) for violation in violations]
+    if identity.module_id == GATE_MODULE:
+        found += _t8_messages(contract, catalog, text)
+    return [line for label, message in found if (line := _bounded(label, message))]
+
+
+def _t8_messages(
+    contract: VendorContract, catalog: Mapping[str, Any], text: str
+) -> list[tuple[str, object]]:
+    """The T8 parser's own refusal of CP-0's readiness table, if it refuses."""
+    nav = contract.navigation
+    try:
+        nav.parse_t8(text, nav.validate_catalog(catalog))
+    except ValueError as refused:  # the vendor's NavigationError
+        return [("navigation", str(refused))]
+    return []
+
+
+def _bounded(label: str, message: object) -> str | None:
+    """One vendor message across the boundary, cut and checked, or nothing."""
+    if not isinstance(message, str) or hides_text(message):
+        return None
+    with suppress(Refusal):
+        cut = BoundaryText.of(message[:MAX_FEEDBACK_CHARS], limit=MAX_FEEDBACK_CHARS)
+        return f"{label}: {cut.value}"
+    return None
 
 
 def record_bytes(record: CanonicalRecord) -> bytes:

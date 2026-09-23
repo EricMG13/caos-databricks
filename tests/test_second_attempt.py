@@ -28,6 +28,7 @@ from caos.methodology.handoff import (
     MAX_FEEDBACK_CHARS,
     MAX_FEEDBACK_CITATIONS,
     MAX_FEEDBACK_MESSAGES,
+    HostIdentity,
     retry_feedback,
 )
 from caos.methodology.runner import ModuleProvider
@@ -288,3 +289,51 @@ def test_retry_feedback_names_at_most_the_first_twenty_failed_citations(
     total = MAX_FEEDBACK_CITATIONS + 10
     assert f", {MAX_FEEDBACK_CITATIONS} and 10 more of {total}" in line
     assert "citations 1, 2, 3" in line
+
+
+def _skill(harness: _Harness) -> bytes:
+    from caos.methodology.bundle import assemble_authority
+    from caos.methodology.executor import SKILL
+
+    return assemble_authority(harness.bundle, "CP-0").files[SKILL]
+
+
+def test_retry_feedback_carries_the_completeness_and_t8_checks_too(
+    harness: _Harness,
+) -> None:
+    """A second attempt told only the first check it failed trips over the
+    next: the one live answer to clear every earlier check on 23 September
+    (GPT-5.6 luna) failed the vendor's completeness checker and its T8 parser.
+    Their own messages ride along, labelled by checker, as the validator's do."""
+    answers = CanonicalCompletions(harness.source_id)
+    assert _run(harness, answers) is None
+    wire = json.loads(answers.bodies[0])
+    markdown = wire["canonical_markdown"]
+    contract = cached_contract(harness.bundle)
+    header = "| " + " | ".join(contract.navigation.NEW_HEADERS) + " |"
+    start = markdown.index(header)
+    end = markdown.index("\n\n", start)
+    doubled = markdown[:end] + "\n\n" + markdown[start:end] + markdown[end:]
+    marked = doubled.replace(
+        "validation_warnings: []", 'validation_warnings: ["PRESENTATION_FIXTURE"]', 1
+    )
+    assert marked != doubled
+    wire["canonical_markdown"] = marked
+    lines = retry_feedback(
+        contract,
+        catalog(harness.bundle),
+        _identity_cp0(),
+        json.dumps(wire),
+        skill=_skill(harness),
+    )
+    assert any(line.startswith("navigation: ") for line in lines), lines
+    assert any(
+        line.startswith("completeness_check: ") and "PRESENTATION_FIXTURE" in line
+        for line in lines
+    ), lines
+
+
+def _identity_cp0() -> HostIdentity:
+    from canonical_fixtures import identity
+
+    return identity("CP-0")
