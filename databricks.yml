@@ -31,7 +31,9 @@ variables:
     description: >-
       What one run may spend at the endpoint's price, as a decimal amount; it
       must cover at least one worst-case call (scripts/preflight.py checks).
-    default: "25.00"
+      The default is the widest profile at its section bounds plus one
+      worst-case call at the default price (D29); evidence is on top of it.
+    default: "100.00"
   group_admin:
     description: The workspace group whose members are ADMIN.
     default: caos-admins

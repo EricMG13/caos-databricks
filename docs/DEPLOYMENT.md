@@ -11,7 +11,7 @@ This repository deploys as one Databricks App from an asset bundle. Nothing in t
 | A Unity Catalog schema and a volume `caos_blobs` in it | `uc_catalog`, `uc_schema` | `CREATE VOLUME <catalog>.<schema>.caos_blobs`. Sources and artifacts live there by digest; the app's service principal needs `WRITE_VOLUME` (granted by the bundle). |
 | A Lakebase (provisioned) instance | `lakebase_instance`, `lakebase_database` (default `databricks_postgres`) | The store's schema is applied on first start; LangGraph checkpoints go to schema `caos_graph` on the same database. The app's service principal needs `CAN_CONNECT_AND_CREATE` (granted by the bundle). |
 | Two workspace groups | `group_admin` (default `caos-admins`), `group_analyst` (default `caos-analysts`) | Members of the admin group act as ADMIN, of the analyst group as ANALYST; any other authenticated user is READER. |
-| What one run may spend | `run_ceiling` (default `25.00`) | Must cover one worst-case call at `model_price` (about 6.88 at the default price); preflight refuses less (F28). |
+| What one run may spend | `run_ceiling` (default `100.00`, D29) | Must cover one worst-case call at `model_price` (about 22.61 at the default price); preflight refuses less (F28). |
 | The forwarded-token preview | none | `forward_user_access_token` is a preview feature Databricks must enable for the workspace (F53); row E5 reads it back. Changing it on an existing app needs `databricks apps stop` then `start`. |
 | Who may open the app | `group_admin` → `CAN_USE`, `group_analyst` → `CAN_USE` | Granted by the bundle (F50); a user outside both groups is stopped at the proxy. Neither business group manages the app (W3): `CAN_MANAGE` deploys code as the app's principal, which writes the ledger, so only the deployer holds it. Members must be in the groups directly: SCIM `Me` does not expand nested groups. |
 | The app's Lakebase role | none | `CAN_CONNECT_AND_CREATE` is expected to provision the app's service principal as a Postgres role; row E6's `store` code says whether it did. |
@@ -22,7 +22,7 @@ Check them with the deployer's profile before the first deploy:
 DATABRICKS_CONFIG_PROFILE=<profile> uv run python scripts/preflight.py \
   --endpoint databricks-claude-opus-5 --catalog <catalog> --schema <schema> \
   --lakebase-instance <instance> \
-  --price databricks-claude-opus-5,0.000005,0.000025,2026-09-22 --run-ceiling 25.00
+  --price databricks-claude-opus-5,0.000005,0.000025,2026-09-22 --run-ceiling 100.00
 ```
 
 ## 2. Build the tree that ships

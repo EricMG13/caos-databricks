@@ -163,6 +163,21 @@ def _screen_outcome(harness: _Harness) -> tuple[str | None, int]:
     return (None if diagnostic is None else str(diagnostic)), int(owned)
 
 
+def _screen_outcomes(harness: _Harness) -> list[tuple[str | None, int]]:
+    """CP-L10's billed attempts, oldest first: (diagnostic digest, artifacts)."""
+    with connect(harness.url) as observer:
+        rows = observer.execute(
+            "SELECT o.diagnostic_sha256, count(a.attempt_id) FROM run_attempts t"
+            " JOIN call_outcomes o USING (attempt_id)"
+            " LEFT JOIN artifacts a USING (attempt_id)"
+            " WHERE t.route_node_id = %s"
+            " GROUP BY t.attempt_id, t.ordinal, o.diagnostic_sha256"
+            " ORDER BY t.ordinal",
+            (_node(harness, "CP-L10").route_node_id,),
+        ).fetchall()
+    return [(None if d is None else str(d), int(owned)) for d, owned in rows]
+
+
 def _only_cp0_is_proven(harness: _Harness) -> None:
     proof = _prove(harness)
     assert (proof.artifacts, proof.citations) == (1, 1)
@@ -209,13 +224,17 @@ def test_a_malformed_cp_l10_is_diagnostic_only_and_nothing_downstream_proves(
     """Characterisation (passed first): a malformed CP-L10 transport or
     Markdown is refused after its bill, its exact body is the attempt's
     diagnostic, nothing is accepted, CP-5 is never called, and neither the
-    proof nor the deliverable carries it."""
+    proof nor the deliverable carries it. Since D30 the node takes its one
+    second attempt first; refused again, the run stops exactly as before."""
     answers = _Lite(harness.source_id, screen=screen)
     code = _run_route(harness, _module_provider(harness, answers))
     assert code is RefusalCode.HANDOFF_MALFORMED
-    assert _modules_called(answers) == ["CP-0", "CP-L10"]
-    assert _counts(harness) == (2, [REPORTED] * 2, 1, 2, 2)
-    assert _screen_outcome(harness) == (_sha(answers.bodies[1]), 0)
+    assert _modules_called(answers) == ["CP-0", "CP-L10", "CP-L10"]
+    assert _counts(harness) == (3, [REPORTED] * 3, 1, 3, 3)
+    assert _screen_outcomes(harness) == [
+        (_sha(answers.bodies[1]), 0),
+        (_sha(answers.bodies[2]), 0),
+    ]
     assert (_status(harness), _events(harness, "RUN_BLOCKED")) == ("RUNNING", 0)
     _cp5_untouched(harness)
     _only_cp0_is_proven(harness)

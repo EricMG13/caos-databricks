@@ -27,6 +27,10 @@
     "tagged.md": {
       "bytes": 337,
       "sha256": "f30118f5698aa221558db733d60c1137ed6425857faaaac96599b99be2fb40a3"
+    },
+    "validator_feedback.md": {
+      "bytes": 272,
+      "sha256": "8c15841836a49185037cdcf3eb9c064aa96ec99d041401b361cb54357ea0653a"
     }
   },
   "module_id": "CP-CF",

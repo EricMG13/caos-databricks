@@ -76,6 +76,35 @@ def test_parse_args_defaults_to_every_group_and_the_golden_directory() -> None:
     args = generate_goldens.parse_args(["--package", "caos", "--root", "."])
     assert args.out == GOLDEN_DIR
     assert args.group is None
+    assert args.request_ceiling is None
+
+
+def test_the_committed_pricing_goldens_are_priced_at_the_d29_ceiling(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """D29: the legacy arithmetic at 4 MiB, reproduced by the new package at
+    the same ceiling through the option the regeneration used. The option
+    rebinds the loaded package's constant, so both bindings are restored after,
+    or every later test in the worker would read a rebound ceiling."""
+    import caos.pricing
+    import caos.provider
+
+    for module in (caos.provider, caos.pricing):
+        monkeypatch.setattr(module, "MAX_REQUEST_BYTES", module.MAX_REQUEST_BYTES)
+    argv = ["--package", "caos", "--root", str(REPO), "--out", str(tmp_path)]
+    ceiling = ["--request-ceiling", "4194304"]
+    assert generate_goldens.main([*argv, "--group", "pricing", *ceiling]) == 0
+    assert read_manifest("pricing", tmp_path, package="caos") == read_manifest(
+        "pricing"
+    )
+
+
+@pytest.mark.parametrize("ceiling", [0, -1, True])
+def test_set_request_ceiling_refuses_anything_but_a_positive_byte_count(
+    ceiling: int,
+) -> None:
+    with pytest.raises(ValueError, match="positive byte count"):
+        generate_goldens.set_request_ceiling(caos_target(), ceiling)
 
 
 def test_load_target_refuses_a_package_outside_the_root(

@@ -41,6 +41,13 @@ HOST_SLUGS = {PARSE_MODULE: "cp-parse", MODEL_MODULE: "cp-cf"}
 # route carries CP-CF (`caos/methodology/invocation.py`).
 FORECAST_OWNERS = frozenset({"CP-1", "CP-2G", "CP-4"})
 BASE_BLOCKS = ("instruction", "tagged", "host_steps", "final_check")
+# The block a node's one second attempt adds (D30), and when each conditional
+# block is rendered, as the stage contracts state it.
+RETRY_BLOCK = "validator_feedback"
+CONDITIONS = {
+    "forecast_extension": "when the route carries CP-CF",
+    RETRY_BLOCK: "on a node's one second attempt after a refused answer (D30)",
+}
 
 _NAME = re.compile(r"^[a-z0-9_]+$")
 _ROW = re.compile(
@@ -96,16 +103,18 @@ def stage_slugs(bundle: Bundle) -> dict[str, str]:
 
 
 def expected_blocks(module_id: str) -> tuple[tuple[str, ...], tuple[str, ...]]:
-    """The blocks the host renders for `module_id`: always, and when the route
-    carries CP-CF. Mirrors `build_handoff_prompt`; the contract restates it."""
+    """The blocks the host renders for `module_id`: always, and under the
+    condition `CONDITIONS` names for each of the rest. Mirrors
+    `build_handoff_prompt`; the contract restates it."""
     always: list[str] = [BASE_BLOCKS[0]]
     if module_id == GATE_MODULE:
         always.append("gate_instruction")
     always += BASE_BLOCKS[1:]
     if module_id == GATE_MODULE:
         always.append("cp0_final_check")
-    conditional = ("forecast_extension",) if module_id in FORECAST_OWNERS else ()
-    return tuple(always), conditional
+    forecast = ("forecast_extension",) if module_id in FORECAST_OWNERS else ()
+    # Every node's one second attempt after a refused answer (D30).
+    return tuple(always), (*forecast, RETRY_BLOCK)
 
 
 def expected_inputs(

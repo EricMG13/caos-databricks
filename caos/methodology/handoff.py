@@ -757,6 +757,65 @@ def parse_response(
     return markdown, citations
 
 
+# What a node's one second attempt may carry (D30): at most this many checks,
+# each cut to this many characters before it crosses the boundary.
+MAX_FEEDBACK_MESSAGES = 16
+MAX_FEEDBACK_CHARS = 512
+
+
+def retry_feedback(
+    contract: VendorContract,
+    catalog: Mapping[str, Any],
+    identity: HostIdentity,
+    body: str,
+) -> tuple[str, ...]:
+    """The checks a refused answer failed, for the node's one second attempt (D30).
+
+    Two sources, neither of them the host restating a vendor rule (invariant
+    4): the vendor's own `validate_handoff` messages on the stored answer, as
+    written, and the host's verbatim-quote check reported as a count. Each line
+    crosses `BoundaryText` after a cut to `MAX_FEEDBACK_CHARS`; a line that
+    will not is dropped, never repaired. A vendor message may quote a line of
+    the model's own answer back to it. These lines go into that one request and
+    nowhere else: never a log, a refusal or a row. An answer that is not a
+    transport at all yields nothing to say, and the retry is then a plain one.
+    """
+    parsed: tuple[bytes, str, tuple[Citation, ...]] | None = None
+    with suppress(Exception):  # not a transport: nothing specific to report
+        parsed = _transport(body)
+    if parsed is None:
+        return ()
+    markdown, text, citations = parsed
+    lines: list[str] = []
+    words = _body_words(text)
+    openings = _openings(words)
+    unquoted = sum(
+        1
+        for citation in citations
+        if not _quoted(words, openings, citation.matched_text)
+    )
+    if unquoted:
+        lines.append(
+            f"host citation check: {unquoted} of {len(citations)} citations quote "
+            "text that does not appear verbatim in the Markdown body"
+        )
+    errors: list[object] = []
+    with suppress(Exception):  # the vendor's checker raising is nothing to report
+        _text(markdown)
+        scope = _decision_scope(catalog, identity)
+        found = contract.validate_handoff.validate_text(text, decision_scope=scope)
+        errors = list(found.errors or ())
+    for error in errors:
+        if len(lines) >= MAX_FEEDBACK_MESSAGES:
+            break
+        if not isinstance(error, str) or hides_text(error):
+            continue
+        with suppress(Refusal):
+            cut = BoundaryText.of(error[:MAX_FEEDBACK_CHARS], limit=MAX_FEEDBACK_CHARS)
+            lines.append(f"validate_handoff: {cut.value}")
+    return tuple(lines)
+
+
 def record_bytes(record: CanonicalRecord) -> bytes:
     """The record's one canonical serialisation; its SHA-256 is `record_sha256`.
 

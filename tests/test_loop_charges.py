@@ -107,7 +107,9 @@ def ready(
         case_id=case_id,
         documents=[Document(filename=BoundaryText.of("report.txt"), data=REPORT)],
     )
-    run_id = start_run(conn, case_id)
+    # D29: a run is admitted only under a ceiling that covers one worst-case
+    # call, which at 4 MiB and TERRA's rates is above the legacy $5 default.
+    run_id = start_run(conn, case_id, budget_ceiling=max(CEILING, worst_case(TERRA)))
     conn.commit()
     approve_run(
         conn,

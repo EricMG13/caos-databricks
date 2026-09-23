@@ -95,6 +95,38 @@ def accepted_rows(
     ]
 
 
+@dataclass(frozen=True, slots=True)
+class NodeAttempt:
+    """One attempt at a run node: the refusal that explained it, if one did,
+    and the address of the answer it stored, if it stored one."""
+
+    attempt_id: UUID
+    refusal: str | None
+    diagnostic_sha256: str | None
+
+
+def node_attempts(
+    conn: StoreConnection, run_id: UUID, route_node_id: str
+) -> tuple[NodeAttempt, ...]:
+    """Every attempt at this run node, oldest first. Caller owns the read."""
+    rows = conn.execute(
+        "SELECT t.attempt_id, r.code, o.diagnostic_sha256 FROM run_attempts t"
+        " LEFT JOIN attempt_refusals r USING (attempt_id)"
+        " LEFT JOIN call_outcomes o USING (attempt_id)"
+        " WHERE t.run_id = %s AND t.route_node_id = %s"
+        " ORDER BY t.ordinal NULLS FIRST, t.started_at, t.attempt_id",
+        (run_id, route_node_id),
+    ).fetchall()
+    return tuple(
+        NodeAttempt(
+            UUID(str(attempt)),
+            None if code is None else str(code),
+            None if diagnostic is None else str(diagnostic),
+        )
+        for attempt, code, diagnostic in rows
+    )
+
+
 def check_attempt(
     conn: StoreConnection, *, attempt_id: UUID, run_id: UUID, route_node_id: str
 ) -> None:

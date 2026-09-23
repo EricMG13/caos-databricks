@@ -599,8 +599,11 @@ _REQUEST_SIZES: tuple[tuple[str, object], ...] = (
     ("4096", 4096),
     ("65536", 65_536),
     ("1000000", 1_000_000),
-    ("ceiling", 1_048_576),
-    ("over_ceiling", 1_048_577),
+    # The legacy ceiling, priced since D29 raised the transport ceiling.
+    ("1048576", 1_048_576),
+    ("1048577", 1_048_577),
+    ("ceiling", 4_194_304),
+    ("over_ceiling", 4_194_305),
     ("negative", -1),
     ("bool", True),
     ("float", 100.0),

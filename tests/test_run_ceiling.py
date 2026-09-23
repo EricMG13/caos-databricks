@@ -2,13 +2,27 @@
 
 from __future__ import annotations
 
+import re
 from decimal import Decimal
+from pathlib import Path
 
 import preflight
 import pytest
+from canonical_fixtures import BUNDLE, CATALOG
 
+from caos.methodology.bundle import delivered_authority
+from caos.methodology.invocation import (
+    _FINAL_CHECK,
+    _HOST_STEPS,
+    _INSTRUCTION,
+    MAX_UPSTREAM_HANDOFF_BYTES,
+)
+from caos.pricing import ModelPrice, price_from_environment, priced_request, worst_case
+from caos.provider import encode_request
 from caos.refusals import Refusal
 from caos.store.budget import CEILING, CEILING_ENV, configured_ceiling
+
+REPO = Path(__file__).resolve().parents[1]
 
 
 def test_the_environment_names_the_ceiling_or_the_store_default_stands(
@@ -56,3 +70,55 @@ def test_preflight_refuses_a_ceiling_below_one_worst_case_call(
         )
         == 1
     )
+
+
+def _bundle_default(name: str) -> str:
+    """A variable's default as `databricks.yml` declares it."""
+    text = (REPO / "databricks.yml").read_text(encoding="utf-8")
+    block = text[text.index(f"\n  {name}:\n") :]
+    found = re.search(r"\n    default: \"?([^\"\n]+)\"?\n", block)
+    assert found is not None, name
+    return found.group(1)
+
+
+def _widest_profile_spend(price: ModelPrice) -> Decimal:
+    """What the widest execution profile reserves when every node carries its
+    whole delivered authority and every upstream section at its bound: the
+    widest-node test's request, per node, priced. Evidence is excluded -- it is
+    the headroom the one worst-case call beside this pays for."""
+    spends = []
+    for profile in CATALOG["profiles"].values():
+        edges = profile["edges"]
+        nodes = {edge["target"] for edge in edges} | {edge["source"] for edge in edges}
+        total = Decimal(0)
+        for node in nodes:
+            upstreams = sum(1 for edge in edges if edge["target"] == node)
+            files = delivered_authority(BUNDLE, node).files
+            prompt = "\n".join(
+                [
+                    *(data.decode("utf-8", "replace") for _name, data in files),
+                    *("x" * MAX_UPSTREAM_HANDOFF_BYTES for _ in range(upstreams)),
+                    _HOST_STEPS,
+                    _INSTRUCTION,
+                    _FINAL_CHECK,
+                ]
+            )
+            total += priced_request(price, len(encode_request("m", prompt)))
+        spends.append(total)
+    return max(spends)
+
+
+def test_the_default_run_ceiling_finishes_the_widest_profile() -> None:
+    """D29 (CF-008): the bundle's default ceiling covers the widest profile at
+    its section bounds plus one worst-case call (the gate's evidence, or one
+    D30 second attempt) at the bundle's default price; 25.00 could not finish
+    a LITE_CREDIT_22 route. Every copy of the default is the bundle's."""
+    price = price_from_environment(
+        _bundle_default("model_endpoint"), _bundle_default("model_price")
+    )
+    default = Decimal(_bundle_default("run_ceiling"))
+    assert default >= _widest_profile_spend(price) + worst_case(price), default
+    deploy_sh = (REPO / "scripts" / "enterprise_deploy.sh").read_text(encoding="utf-8")
+    deploy_py = (REPO / "scripts" / "enterprise_deploy.py").read_text(encoding="utf-8")
+    assert f'CEILING="${{7:-{default}}}"' in deploy_sh
+    assert f'"--run-ceiling", default="{default}"' in deploy_py

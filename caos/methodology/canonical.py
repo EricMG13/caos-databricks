@@ -19,7 +19,7 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Callable, Collection, Mapping, Sequence
 from contextlib import suppress
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal
 from enum import StrEnum
 from uuid import UUID
@@ -56,6 +56,7 @@ from caos.methodology.handoff import (
     UpstreamRef,
     parse_response,
     record_bytes,
+    retry_feedback,
     stored_lineage,
     validate_markdown,
 )
@@ -91,10 +92,12 @@ from caos.store import StoreConnection
 from caos.store.budget import reserved_for
 from caos.store.outcomes import (
     CallOutcome,
+    NodeAttempt,
     accepted_rows,
     check_attempt,
     check_call,
     execution_reads,
+    node_attempts,
     producer_identifier,
     record_outcome,
     require_idle,
@@ -204,7 +207,7 @@ def execute_handoff(
         )
         _stored_identity(conn, assignment, bundle, adapter=adapter)
         identity = _identity(conn, bundle, assignment)
-        context = _context(conn, blobs, bundle, assignment, identity)
+        context = _prompt_context(conn, blobs, bundle, assignment, identity)
     # The record binds exactly the authority this prompt carries (§45.1).
     carried = delivered_authority(bundle, assignment.module_id)
     # Met before reservation by `check_context`; built again here so the call
@@ -361,7 +364,7 @@ def check_context(  # noqa: PLR0913 -- one node of one run, keyword-only
         identity = prospective_identity(
             conn, bundle, run_id=run_id, route=route, node=node
         )
-        context = _context(conn, blobs, bundle, assignment, identity)
+        context = _prompt_context(conn, blobs, bundle, assignment, identity)
     authority = delivered_authority(bundle, node.module_id)
     return request_size(
         provider, _prompt(bundle, assignment, identity, context, authority)
@@ -385,6 +388,8 @@ class _Context:
     source_set: SourceSet | None
     # Why `delivered` is what it is (§95); the gate's own is always the whole pin.
     selection: Selection
+    # What a node's one second attempt carries (D30); empty on every other.
+    feedback: tuple[str, ...] = ()
 
 
 def _source_preparation(
@@ -485,7 +490,8 @@ def _context(
     """The delivered evidence, the verified upstream, its whole accepted lineage
     and its citation register, read inside the caller's unit after it checked
     the stored pin. Only accepted rows reach any part: a Blocked or refused
-    attempt's diagnostic body is never read here."""
+    attempt's diagnostic body is never read here (a second attempt's lines are
+    read beside it, by the two prompt builders alone: `_prompt_context`)."""
     delivered = _delivered(conn, assignment.run_id)
     source_set = _source_preparation(conn, blobs, assignment, delivered)
     # Records first: what binds and re-validates is then read as context.
@@ -503,6 +509,73 @@ def _context(
         source_set=source_set,
         selection=selection,
     )
+
+
+def _prompt_context(
+    conn: StoreConnection,
+    blobs: BlobStore,
+    bundle: Bundle,
+    assignment: Assignment,
+    identity: HostIdentity,
+) -> _Context:
+    """`_context` for a prompt about to be priced or sent: with the lines a
+    node's one second attempt carries (D30). Replay and the readers never
+    build a prompt, so they never pay for the ledger read this adds."""
+    return replace(
+        _context(conn, blobs, bundle, assignment, identity),
+        feedback=_retry_feedback(conn, blobs, bundle, assignment, identity),
+    )
+
+
+def _feedback_source(attempts: Sequence[NodeAttempt]) -> NodeAttempt | None:
+    """The refused attempt a node's next attempt answers, when that next one is
+    its one second attempt (D30): the latest attempt, refused
+    `HANDOFF_MALFORMED`, and the node's only such refusal. Read from the ledger,
+    so a crash between the refusal and the second attempt changes nothing."""
+    refused = [a for a in attempts if a.refusal == RefusalCode.HANDOFF_MALFORMED]
+    if len(refused) != 1 or attempts[-1] != refused[0]:
+        return None
+    return refused[0]
+
+
+def second_attempt_due(
+    conn: StoreConnection, *, run_id: UUID, route_node_id: str
+) -> bool:
+    """Whether this node's next attempt is its one second attempt (D30)."""
+    with execution_reads(conn):
+        return _feedback_source(node_attempts(conn, run_id, route_node_id)) is not None
+
+
+def _retry_feedback(
+    conn: StoreConnection,
+    blobs: BlobStore,
+    bundle: Bundle,
+    assignment: Assignment,
+    identity: HostIdentity,
+) -> tuple[str, ...]:
+    """What this attempt carries: the checks its refused predecessor failed,
+    when it is the node's one second attempt (D30), else nothing.
+
+    Counted from the attempts before this one, so the prospective prompt that
+    is priced and the attempt's own rebuilt prompt carry the same lines. A body
+    that is lost or corrupt leaves the second attempt a plain one: the lines are
+    help, not a verdict, and parking the run over them would cost the attempt.
+    """
+    attempts = node_attempts(conn, assignment.run_id, assignment.node.route_node_id)
+    ids = [attempt.attempt_id for attempt in attempts]
+    before = ids.index(assignment.attempt_id) if assignment.attempt_id in ids else None
+    source = _feedback_source(attempts[:before])
+    if source is None or source.diagnostic_sha256 is None:
+        return ()
+    body: str | None = None
+    try:
+        body = _stored_body(blobs, source.diagnostic_sha256)
+    except Refusal as lost:
+        if lost.code not in _BLOB_LOST:
+            raise
+    if body is None:
+        return ()
+    return retry_feedback(_contract(bundle), catalog(bundle), identity, body)
 
 
 def _lineage_moved(
@@ -539,6 +612,7 @@ def _prompt(
         route=assignment.route,
         source_set=context.source_set,
         page_maps=context.selection.page_maps,
+        retry_feedback=context.feedback,
     )
 
 

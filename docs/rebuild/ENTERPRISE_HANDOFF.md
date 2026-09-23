@@ -21,7 +21,7 @@ Read first if anything is unclear: `docs/DEPLOYMENT.md` (the runbook the command
 | Lakebase provisioned instance name | argument 4 |
 | AI Gateway serving endpoint that serves a Claude model | argument 5 (default `databricks-claude-opus-5`) |
 | That endpoint's dated per-token price from the enterprise contract | argument 6, as `<endpoint>,<input_per_token>,<output_per_token>,<YYYY-MM-DD>` |
-| What one run may spend | argument 7 (default `25.00`; must cover one worst-case call, about 6.88 at the default price) |
+| What one run may spend | argument 7 (default `100.00`: the widest profile at its section bounds plus one worst-case call, D29; it must cover at least one worst-case call, about 22.61 at the default price; raise it for large packs, since evidence is on top) |
 | Lakebase database, the two groups, the target | environment: `LAKEBASE_DATABASE` (`databricks_postgres`), `GROUP_ADMIN` (`caos-admins`), `GROUP_ANALYST` (`caos-analysts`), `TARGET` (`prod`; the app is `caos` there and `caos-<target>` elsewhere, DP-6) |
 
 Substitute real values; drop the angle brackets.
@@ -31,7 +31,7 @@ Substitute real values; drop the angle brackets.
 ```bash
 uv sync --locked --all-groups
 npm --prefix frontend ci --ignore-scripts && npm --prefix frontend run build
-scripts/enterprise_deploy.sh <profile> <catalog> <schema> <lakebase-instance> <endpoint> <endpoint>,<in>,<out>,<date> 25.00
+scripts/enterprise_deploy.sh <profile> <catalog> <schema> <lakebase-instance> <endpoint> <endpoint>,<in>,<out>,<date> 100.00
 ```
 
 It stops at the first step that fails and writes `docs/rebuild/runs/<today>/enterprise/evidence.tsv`, one row per step, with each step's output in `E<n>.log` beside it:
@@ -50,7 +50,7 @@ It stops at the first step that fails and writes `docs/rebuild/runs/<today>/ente
 
 ## Afterwards
 
-1. Open the app URL (row E5), upload a small public document, approve the run's gates, watch the Run section reach COMPLETE, open the deliverable. That is the one thing no stand-in can do for you.
+1. Open the app URL (row E5), upload a small public document, approve the run's gates, watch the Run section reach COMPLETE, open the deliverable. That is the one thing no stand-in can do for you. Every model measured so far wrote CP-0 answers the vendor's validator refuses (F111); since D30 a refused node gets one second attempt carrying the validator's own messages, which no live model has been measured against yet. If CP-0 is refused twice, the Run section shows `HANDOFF_MALFORMED`: report it with the run id; do not retry more than once.
 2. Update `docs/rebuild/blockers.md` (B2 and B9 resolved, quoting the rows' last lines; the profile name is fine, the host and any token are not) and `docs/rebuild/decisions.md` (D17; any `Fn`), then:
 
 ```bash

@@ -1,5 +1,10 @@
 """The Boeing and Ford FY2025 10-K texts run by page (§98).
 
+Page mode is relative to the request ceiling, so it is proven here at the
+legacy 1 MiB ceiling these documents exceed (`legacy_ceiling`); under the 4 MiB
+ceiling D29 set, the gate is shown each whole and each fits a consumer whole,
+which the last test states.
+
 Each is one source larger than a request can carry whole. Measured through the
 real extractor, the real bundle and the real prompt builder on the LITE
 earnings route: the gate is shown each as its page map and its whole request
@@ -23,12 +28,18 @@ from test_canonical_execution import _accept, _node, _run, route
 from test_execution_freshness import _Harness
 from test_loop_charges import VENDORED
 
+import caos.methodology.invocation
+import caos.methodology.selection
+import caos.models
+import caos.pricing
+import caos.provider
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
 from caos.evidence.ingest import Document, admit_pack
 from caos.graph.route import ResolvedRoute
 from caos.methodology.bundle import Bundle
 from caos.methodology.canonical import check_context
+from caos.methodology.selection import GATE_SOURCE_BYTES
 from caos.provider import MAX_REQUEST_BYTES
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
@@ -37,6 +48,25 @@ from caos.store.runs import start_run
 __all__ = ["route"]
 
 REPO = Path(__file__).resolve().parents[1]
+# The ceiling these documents were measured against before D29.
+LEGACY_CEILING = 1_048_576
+
+
+@pytest.fixture
+def legacy_ceiling(monkeypatch: pytest.MonkeyPatch) -> int:
+    """The legacy 1 MiB ceiling, everywhere a module bound it by name."""
+    for module in (
+        caos.provider,
+        caos.pricing,
+        caos.models,
+        caos.methodology.invocation,
+        caos.methodology.selection,
+    ):
+        monkeypatch.setattr(module, "MAX_REQUEST_BYTES", LEGACY_CEILING)
+    monkeypatch.setattr(
+        caos.methodology.selection, "GATE_SOURCE_BYTES", 3 * LEGACY_CEILING // 8
+    )
+    return LEGACY_CEILING
 
 
 @dataclass(frozen=True, slots=True)
@@ -157,16 +187,16 @@ def _gate(harness: _Harness, ten_k: TenK, cell: str) -> CanonicalCompletions:
 
 
 def test_a_10k_runs_by_page_the_gate_on_its_map_the_screen_on_its_pages(
-    filed: _Harness, ten_k: TenK
+    legacy_ceiling: int, filed: _Harness, ten_k: TenK
 ) -> None:
-    assert _request(filed, "CP-0") <= MAX_REQUEST_BYTES
+    assert _request(filed, "CP-0") <= legacy_ceiling
     gate = _gate(filed, ten_k, f"{ten_k.path.name} {ten_k.pages}")
     [prompt] = gate.prompts
     assert '"evidence_delivery": "PAGE_MAP"' in prompt
     assert f'"leading_lines_per_page": {ten_k.leading}' in prompt
     assert f'"pages": {ten_k.page_count}' in prompt
 
-    assert _request(filed, "CP-L10") <= MAX_REQUEST_BYTES
+    assert _request(filed, "CP-L10") <= legacy_ceiling
     screen = CanonicalCompletions(
         filed.source_id,
         quotes=(),
@@ -177,10 +207,23 @@ def test_a_10k_runs_by_page_the_gate_on_its_map_the_screen_on_its_pages(
 
 
 def test_a_10k_named_whole_for_a_consumer_is_refused_before_any_attempt(
-    filed: _Harness, ten_k: TenK
+    legacy_ceiling: int, filed: _Harness, ten_k: TenK
 ) -> None:
     """What every run of these documents met before §98, and still must."""
     _gate(filed, ten_k, ten_k.path.name)
     with pytest.raises(Refusal) as refused:
         _request(filed, "CP-L10")
     assert refused.value.code is RefusalCode.CONTEXT_OVER_CEILING
+
+
+def test_under_the_d29_ceiling_a_10k_fits_a_consumer_whole(
+    filed: _Harness, ten_k: TenK
+) -> None:
+    """N31's point, on the committed documents: each 10-K's text is inside the
+    gate's share of the 4 MiB request, so the gate is shown it whole, and a
+    consumer handed it whole fits the request instead of refusing."""
+    assert GATE_SOURCE_BYTES == 3 * MAX_REQUEST_BYTES // 8
+    gate = _gate(filed, ten_k, ten_k.path.name)
+    [prompt] = gate.prompts
+    assert '"evidence_delivery": "PAGE_MAP"' not in prompt
+    assert _request(filed, "CP-L10") <= MAX_REQUEST_BYTES

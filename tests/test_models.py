@@ -18,7 +18,12 @@ from caos.models import (
     from_environment,
 )
 from caos.pricing import ModelPrice, price_from_environment
-from caos.provider import MAX_COMPLETION_TOKENS, finish_refusal, reported_charge
+from caos.provider import (
+    MAX_COMPLETION_TOKENS,
+    MAX_REQUEST_BYTES,
+    finish_refusal,
+    reported_charge,
+)
 from caos.refusals import Refusal, RefusalCode
 
 
@@ -99,7 +104,7 @@ def test_the_request_is_bounded_and_the_identity_is_the_endpoint() -> None:
     assert b'"max_completion_tokens": 65536' in provider.request_bytes("q")
     assert b"json_object" in provider.request_bytes("q", json_object=True)
     with pytest.raises(Refusal, match=r"^PROVIDER_CALL_INVALID$"):
-        provider.complete("x" * 1_048_577)
+        provider.complete("x" * (MAX_REQUEST_BYTES + 1))
     with pytest.raises(Refusal, match=r"^PROVIDER_NOT_CONFIGURED$"):
         ChatCompletions(ScriptedChat(answer=answer()), "bad model", PRICE).complete("q")
 

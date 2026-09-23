@@ -46,6 +46,7 @@ from caos.methodology.canonical import (
     accepted_projections,
     blocked_verdict,
     replay_billed,
+    second_attempt_due,
     unexplained_charge,
 )
 from caos.methodology.invocation import named_objects
@@ -294,7 +295,60 @@ def node_pass(  # noqa: PLR0913 -- one node of one run, keyword-only
     explanation did not (a crash in that gap) is settled from its stored body,
     never paid for twice (D7); a charge whose body was never stored parks the
     run instead of paying for the same node again with nobody choosing to.
+
+    An answer refused `HANDOFF_MALFORMED` earns the node one second attempt in
+    the same pass (D30, the owner's choice under N32): a new attempt, reserved
+    and priced like any other, carrying what the checks reported. The ledger
+    decides, not this frame: a second refusal, or any other code, is raised.
     """
+    try:
+        return _node_turn(
+            conn,
+            blobs,
+            run_id=run_id,
+            route=route,
+            execution=execution,
+            named=named,
+            route_node_id=route_node_id,
+        )
+    except Refusal as refused:
+        if refused.code is not RefusalCode.HANDOFF_MALFORMED or not _second_due(
+            conn, run_id, route_node_id
+        ):
+            raise
+    if execution.heartbeat is not None:
+        execution.heartbeat()
+    ran = _run_node(
+        conn,
+        blobs,
+        run_id=run_id,
+        route=route,
+        route_node_id=route_node_id,
+        execution=execution,
+    )
+    return Pass.ACCEPTED if ran else Pass.ENDED
+
+
+def _second_due(conn: StoreConnection, run_id: UUID, route_node_id: str) -> bool:
+    """Whether the ledger gives this node its one second attempt now (D30). A
+    store that cannot say leaves the original refusal standing."""
+    try:
+        return second_attempt_due(conn, run_id=run_id, route_node_id=route_node_id)
+    except Refusal:
+        return False
+
+
+def _node_turn(  # noqa: PLR0913 -- one node of one run, keyword-only
+    conn: StoreConnection,
+    blobs: BlobStore,
+    *,
+    run_id: UUID,
+    route: ResolvedRoute,
+    execution: Execution,
+    named: NamedObjects,
+    route_node_id: str,
+) -> Pass:
+    """`node_pass` up to its first answer: skip, settle, or one attempt."""
     bundle = execution.bundle
     with execution_reads(conn):
         accepted = accepted_artifacts(conn, blobs, route, run_id, bundle=bundle)

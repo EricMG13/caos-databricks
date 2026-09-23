@@ -28,6 +28,7 @@ Bundle folder `vendor/deploy-v/skills/cp-4-legal-covenant-interpreter/`, read th
 | prompt | icm/shared/prompt/host_steps.md | whole | prompt block |
 | prompt | icm/shared/prompt/final_check.md | whole | prompt block |
 | prompt | icm/shared/prompt/forecast_extension.md | whole | prompt block, when the route carries CP-CF |
+| prompt | icm/shared/prompt/validator_feedback.md | whole | prompt block, on a node's one second attempt after a refused answer (D30) |
 | store | accepted upstream handoffs | whole | context labelled by `allowed_use`; never citable |
 | store | delivered evidence blocks | CP-0's T8 selection for this module | the only citable text |
 

@@ -82,7 +82,13 @@ def _purpose(bundle: Bundle, module_id: str) -> str:
 
 def render_context(bundle: Bundle, module_id: str, slugs: dict[str, str]) -> str:
     """The `CONTEXT.md` for one module."""
-    from caos.icm import MODEL_MODULE, PARSE_MODULE, expected_blocks, expected_inputs
+    from caos.icm import (
+        CONDITIONS,
+        MODEL_MODULE,
+        PARSE_MODULE,
+        expected_blocks,
+        expected_inputs,
+    )
 
     slug = slugs[module_id]
     rows = [
@@ -102,7 +108,7 @@ def render_context(bundle: Bundle, module_id: str, slugs: dict[str, str]) -> str
     ]
     rows += [
         f"| prompt | icm/shared/prompt/{block}.md | whole | prompt block, "
-        "when the route carries CP-CF |"
+        f"{CONDITIONS[block]} |"
         for block in conditional
     ]
     rows += [
@@ -151,8 +157,9 @@ def render_prompt(module_id: str) -> str:
         "order, with the authority, upstream, citation-register, research-brief, "
         "source-preparation and evidence sections between them as "
         "`caos/methodology/invocation.py` assembles them. A conditional block is "
-        "rendered only when the pinned route carries CP-CF. The rendered bytes are "
-        "parity-tested against the legacy host.\n"
+        "rendered only under the condition the stage contract's Inputs table "
+        "names for it. A first attempt's rendered bytes are parity-tested against "
+        "the legacy host.\n"
     )
 
 

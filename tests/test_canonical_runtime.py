@@ -890,8 +890,11 @@ def test_a_reservation_never_falls_below_the_call_it_pays_for(
 
 # A real frontier model's rates, where the request size actually moves the
 # price: $3/M input, $15/M output.
+# Input is priced, so a request measured at a tenth reserves too little; low
+# enough that one worst-case call at the 4 MiB ceiling (D29) still fits the
+# harness's default run ceiling and the run is admitted.
 _PRICED_INPUT = ModelPrice(
-    MODEL, Decimal("0.000003"), Decimal("0.000015"), date(2026, 9, 17)
+    MODEL, Decimal("0.0000009"), Decimal("0.000015"), date(2026, 9, 17)
 )
 
 

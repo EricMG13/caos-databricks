@@ -111,7 +111,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--price", default="databricks-claude-opus-5,0.000005,0.000025,2026-09-22"
     )
-    parser.add_argument("--run-ceiling", default="25.00")
+    parser.add_argument("--run-ceiling", default="100.00")
     parser.add_argument("--group-admin", default="caos-admins")
     parser.add_argument("--group-analyst", default="caos-analysts")
     parser.add_argument("--pg-port", default="5432", help="Lakebase listens on 5432")

@@ -97,10 +97,10 @@ _CATALOG = "references/CREDIT_OS_V_MODULE_CATALOG_v2.json"
 # document, ran to 36,544 bytes and the next node refused
 # UPSTREAM_SECTION_OVER_CEILING before any call (F110). 52 KiB is the most the
 # catalog's widest node can carry: CP-5 takes 16 direct upstreams, and 16
-# sections at this bound beside its 165,548 bytes of delivered authority still
-# fit the 1 MiB request (the widest-node test in `tests/test_handoff_invocation.py`);
-# a wide node whose upstreams all reach the bound fails closed at the request
-# ceiling, typed, and lifting that ceiling is N31. Nothing is ever truncated:
+# sections at this bound beside its 165,548 bytes of delivered authority fit
+# the request (the widest-node test in `tests/test_handoff_invocation.py`),
+# with the 4 MiB ceiling (D29) leaving most of it for evidence; a node that
+# still reaches the ceiling fails closed there, typed. Nothing is ever truncated:
 # per-node evidence selection (§95, `caos/methodology/selection.py`) narrows a
 # node's evidence to the members its gate row names, but a named member is
 # delivered whole and the upstream sections are bounded here, not selected.
@@ -509,6 +509,10 @@ MODULE_AUTHORED_SCRIPTS = frozenset({"confidence_score.py"})
 _HOST_STEPS = prompt_block("host_steps")
 
 _GATE_INSTRUCTION = prompt_block("gate_instruction")
+
+# A node's one second attempt after a refused answer (D30): what the checks
+# reported, as written. The host adds no rule of its own here (invariant 4).
+_RETRY_FEEDBACK = prompt_block("validator_feedback")
 
 # An edge whose catalog entry declares no `allowed_use` says so, rather than
 # leaving the label out.
@@ -1015,6 +1019,7 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
     route: ResolvedRoute,
     source_set: SourceSet | None = None,
     page_maps: Mapping[UUID, Mapping[str, int]] | None = None,
+    retry_feedback: Sequence[str] = (),
 ) -> str:
     """The task, the host-owned front matter, the host's own steps, every
     delivered authority file, upstream, its citation register, evidence.
@@ -1037,7 +1042,10 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
     Evidence carries one header per `(source_id, page)` run of `delivered`
     (ordered by source then block) and nothing per line: the citation rule is
     stated once, in the final check, and it is the rule `verify_citations`
-    enforces.
+    enforces. `retry_feedback` is non-empty only on a node's one second
+    attempt (D30): the checks its refused answer failed, rendered last and
+    folded into the tag, so a first attempt's bytes are exactly what they were
+    and the refused answer could not have known the markers around them.
     """
     if identity.module_id not in ADAPTER_MODULES:
         raise Refusal(RefusalCode.HANDOFF_MODULE_UNSUPPORTED)
@@ -1085,7 +1093,8 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
     # Host-owned values join the derivation: none of them can pre-compute a tag.
     host_fields = invocation_fields(contract, identity)
     front_matter = _yaml(host_fields)
-    untagged = front_matter + sections
+    feedback = _feedback_lines(retry_feedback)
+    untagged = front_matter + sections + feedback
     tag = hashlib.sha256(untagged.encode("utf-8")).hexdigest()[:16]
     prompt = (
         _INSTRUCTION.format(
@@ -1140,7 +1149,17 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
     if identity.module_id == GATE_MODULE:
         t8_header = "| " + " | ".join(contract.navigation.NEW_HEADERS) + " |"
         prompt += _CP0_FINAL_CHECK.format(tag=tag, t8_header=t8_header)
-    return prompt
+    return prompt + _retry_section(tag, feedback)
+
+
+def _feedback_lines(lines: Sequence[str]) -> str:
+    """A second attempt's checks as the block lists them; empty on a first."""
+    return "".join(f"- {line}\n" for line in lines)
+
+
+def _retry_section(tag: str, feedback: str) -> str:
+    """The last section of a node's one second attempt (D30), or nothing."""
+    return _RETRY_FEEDBACK.format(tag=tag, messages=feedback) if feedback else ""
 
 
 def request_size(provider: CompletionProvider, prompt: str) -> int:

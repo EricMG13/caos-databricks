@@ -36,27 +36,48 @@ __all__ = ["provider", "ready", "route"]
 def _bill(
     dsn: str, run_id: UUID, charge: Decimal | None, *, status: str = "RUNNING"
 ) -> UUID:
+    [attempt] = _bills(dsn, run_id, charge, 1, status=status)
+    return attempt
+
+
+def _bills(
+    dsn: str,
+    run_id: UUID,
+    charge: Decimal | None,
+    calls: int,
+    *,
+    status: str = "RUNNING",
+) -> list[UUID]:
+    """`calls` billed attempts, oldest first, each exactly `charge` against its
+    own reservation, and nothing accepted. More than one is a node's one second
+    attempt (D30) after a `HANDOFF_MALFORMED` refusal."""
     with connect(dsn) as observer:
         rows = observer.execute(
             "SELECT o.attempt_id,o.run_id,l.amount,r.amount FROM call_outcomes o"
+            " JOIN run_attempts t USING (attempt_id,run_id)"
             " LEFT JOIN budget_ledger l USING (attempt_id,run_id)"
             " JOIN budget_reservations r USING (attempt_id,run_id)"
+            " ORDER BY t.ordinal"
         ).fetchall()
-        assert len(rows) == 1
-        attempt, run, amount, reserved = rows[0]
-        assert (run, amount, reserved) == (run_id, charge, ESTIMATE)
-        expected = 0 if charge is None else 1
+        assert len(rows) == calls
+        for _attempt, run, amount, reserved in rows:
+            assert (run, amount, reserved) == (run_id, charge, ESTIMATE)
+        expected = 0 if charge is None else calls
         assert observer.execute("SELECT count(*) FROM budget_ledger").fetchone() == (
             expected,
         )
         assert observer.execute("SELECT count(*) FROM artifacts").fetchone() == (0,)
         assert observer.execute("SELECT status FROM runs").fetchone() == (status,)
-        assert observer.execute(
-            "SELECT name FROM run_events WHERE name IN"
-            " ('CALL_OUTCOME_RECORDED','ATTEMPT_ACCEPTED','RUN_COMPLETE')"
-        ).fetchall() == [("CALL_OUTCOME_RECORDED",)]
-        assert isinstance(attempt, UUID)
-        return attempt
+        assert (
+            observer.execute(
+                "SELECT name FROM run_events WHERE name IN"
+                " ('CALL_OUTCOME_RECORDED','ATTEMPT_ACCEPTED','RUN_COMPLETE')"
+            ).fetchall()
+            == [("CALL_OUTCOME_RECORDED",)] * calls
+        )
+        attempts = [row[0] for row in rows]
+        assert all(isinstance(attempt, UUID) for attempt in attempts)
+        return attempts
 
 
 @pytest.mark.parametrize(
@@ -95,9 +116,11 @@ def test_native_refusal_records_only_independently_known_money(
         _invoke(provider, uuid4(), "runtime", provider.route.nodes[0])
     assert "private" not in str(caught.value) + repr(caught.value)
     assert caught.value.__cause__ is None
-    assert chat.calls == 1
+    # D30: a HANDOFF_MALFORMED answer earns its node one second attempt.
+    calls = 2 if code == "HANDOFF_MALFORMED" else 1
+    assert chat.calls == calls
     assert provider.conn.info.transaction_status is TransactionStatus.IDLE
-    _bill(_url_for(provider.conn.info.dbname), provider.run_id, charge)
+    _bills(_url_for(provider.conn.info.dbname), provider.run_id, charge, calls)
 
 
 @pytest.mark.parametrize("failure", ["envelope", "readiness", "citation", "blob"])
@@ -132,8 +155,12 @@ def test_analysis_failure_preserves_bill_and_exact_replay(
     assert str(caught.value) == codes[failure]
     assert provider.conn.info.transaction_status is TransactionStatus.IDLE
     dsn = _url_for(provider.conn.info.dbname)
-    attempt = _bill(dsn, provider.run_id, REPORTED)
-    [body] = completions.bodies
+    # D30: the malformed envelope earns one second attempt, refused the same way.
+    calls = 2 if failure == "envelope" else 1
+    attempts = _bills(dsn, provider.run_id, REPORTED, calls)
+    attempt = attempts[-1]
+    assert len(completions.bodies) == calls
+    body = completions.bodies[-1]
     diagnostic = (
         None if failure == "blob" else hashlib.sha256(body.encode()).hexdigest()
     )
@@ -146,8 +173,8 @@ def test_analysis_failure_preserves_bill_and_exact_replay(
     with pytest.raises(Refusal, match=r"^CALL_OUTCOME_CONFLICT$"):
         _invoke(provider, attempt, "module", provider.route.nodes[0])
     assert isinstance(provider.completions, _Completions)
-    assert len(provider.completions.prompts) == 1
-    assert _bill(dsn, provider.run_id, REPORTED) == attempt
+    assert len(provider.completions.prompts) == calls
+    assert _bills(dsn, provider.run_id, REPORTED, calls) == attempts
 
 
 @pytest.mark.parametrize("stored", ["markdown", "record"])

@@ -15,6 +15,14 @@ the fixture modules) before `--package` is imported, and the import is refused
 when the package found does not live under that root. The same command with
 `--package caos --root .` regenerates from the new package, which is what the
 group tests do case by case.
+
+`--request-ceiling BYTES` sets the transport ceiling on the loaded package
+before any case runs, so a ceiling decision (D29 raised it to 4 MiB) is priced
+by the legacy snapshot's own arithmetic rather than rewritten from the rebuilt
+package. D29 regenerated `pricing` with:
+
+    ... tests/parity/generate_goldens.py --package server --root "$LEGACY" \\
+        --out tests/parity/golden --group pricing --request-ceiling 4194304
 """
 
 from __future__ import annotations
@@ -39,7 +47,25 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--group", action="append", choices=GROUP_NAMES, help="one group; default all"
     )
+    parser.add_argument(
+        "--request-ceiling",
+        type=int,
+        help="the transport ceiling to price under (bytes); default the package's",
+    )
     return parser.parse_args(argv)
+
+
+def set_request_ceiling(target: Target, ceiling: int) -> None:
+    """Price every case under `ceiling`, in the loaded package's own modules.
+
+    `pricing` imports the constant by name from `provider`, so both bindings
+    are set; nothing else in the package is changed.
+    """
+    if isinstance(ceiling, bool) or not isinstance(ceiling, int) or ceiling < 1:
+        message = f"a request ceiling is a positive byte count, not {ceiling!r}"
+        raise ValueError(message)
+    for module in ("provider", "pricing"):
+        vars(target.module(module))["MAX_REQUEST_BYTES"] = ceiling
 
 
 def load_target(package: str, root: Path) -> Target:
@@ -71,6 +97,8 @@ def generate(
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     target = load_target(args.package, args.root)
+    if args.request_ceiling is not None:
+        set_request_ceiling(target, args.request_ceiling)
     generate(target, args.out, args.group or GROUP_NAMES)
     return 0
 

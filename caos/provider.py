@@ -30,7 +30,12 @@ from caos.store.budget import validate_spend
 TIMEOUT_SECONDS = 240.0
 # Host resource ceilings, not guarantees that every canonical handoff fits.
 # Oversized requests/responses refuse; no prefix is accepted as a whole answer.
-MAX_REQUEST_BYTES = 1_048_576
+# 4 MiB, not the legacy 1 MiB (D29, N31): the catalog's widest node carries
+# about 1 MiB of authority and upstream sections at their bound, so under the
+# legacy ceiling a FULL route with real handoffs refused at CP-5 by
+# construction. Claude on the gateway carries a 1M-token context, and the
+# one-token-per-byte reservation still over-counts, so the bound holds.
+MAX_REQUEST_BYTES = 4_194_304
 MAX_RESPONSE_BYTES = 4_194_304
 MAX_COMPLETION_TOKENS = 65_536
 

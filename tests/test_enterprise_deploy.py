@@ -83,7 +83,7 @@ def test_the_one_command_runs_the_cli_and_verifies_the_deployment(
         "bundle deploy",
         "bundle run caos",
     ]
-    assert all("--var run_ceiling=25.00" in line and "-p" not in line for line in seen)
+    assert all("--var run_ceiling=100.00" in line and "-p" not in line for line in seen)
     # The price travels whole in the environment (C1), never as a `--var`.
     assert all(f"price={PRICE}" in line and "model_price" not in line for line in seen)
     assert "answered 200 status=ready" in rows[5][3] and "workers=OK" in rows[5][3]
