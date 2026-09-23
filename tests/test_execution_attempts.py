@@ -537,6 +537,40 @@ def test_a_cancel_on_a_queued_run_ends_it_cancelled_once_with_its_event(
     conn.rollback()
 
 
+def test_a_cancel_on_an_abandoned_claimed_run_ends_it_cancelled_now(
+    work_run: tuple[StoreConnection, UUID, UUID],
+) -> None:
+    """CF-039: a CLAIMED row whose lease has expired is claimable again --
+    `claim_run` treats it exactly like QUEUED -- so nobody is coming back to
+    read `require_lease` and act on a recorded cancel. A cancel on it must end
+    the run now, the same as a QUEUED run, instead of recording a request an
+    abandoned holder will never see."""
+    conn, run_id, case_id = work_run
+    enqueue_run(conn, run_id)
+    conn.commit()
+    lease = claim_run(conn, worker=WORKER, lease_seconds=60)
+    assert lease is not None
+    _expire(conn, run_id)
+    assert request_cancel(conn, run_id) is True
+    conn.commit()
+    assert run_status(conn, run_id) is RunStatus.CANCELLED
+    assert [e.name for e in events_of(conn, run_id)] == [RunEvent.RUN_CANCELLED.value]
+    assert _work(conn, run_id) == ("DONE", lease.token, None, None, True)
+    assert request_cancel(conn, run_id) is False
+    conn.rollback()
+    # A live lease is untouched: only an expired one is treated as abandoned.
+    claimed = start_run(conn, case_id)
+    enqueue_run(conn, claimed)
+    conn.commit()
+    live = claim_run(conn, worker=WORKER, lease_seconds=60)
+    assert live is not None
+    assert request_cancel(conn, claimed) is True
+    conn.commit()
+    assert run_status(conn, claimed) is RunStatus.RUNNING
+    assert events_of(conn, claimed) == []
+    conn.rollback()
+
+
 def test_attempt_refusals_are_write_once_and_never_store_faults(
     work_run: tuple[StoreConnection, UUID, UUID],
 ) -> None:

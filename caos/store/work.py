@@ -248,26 +248,30 @@ def requeue_run(conn: StoreConnection, run_id: UUID) -> bool:
 def request_cancel(conn: StoreConnection, run_id: UUID) -> bool:
     """Record a cancel once; end a run no worker holds CANCELLED in this unit.
 
-    A claimed run keeps running: its holder learns of the request from
-    `require_lease` and ends the run itself. Returns whether this call recorded
-    the request or ended the run.
+    A claimed run whose lease is still live keeps running: its holder learns
+    of the request from `require_lease` and ends the run itself. A CLAIMED row
+    whose lease has expired (CF-039) is nobody's -- `claim_run` itself treats
+    it exactly like QUEUED -- so waiting for that holder to act would wait
+    forever; it is ended now instead. Returns whether this call recorded the
+    request or ended the run.
     """
     if lock_run(conn, run_id) is not RunStatus.RUNNING:
         return False
     row = conn.execute(
-        "SELECT state, cancel_requested_at IS NULL FROM run_work"
-        " WHERE run_id = %s FOR UPDATE",
+        "SELECT state, cancel_requested_at IS NULL,"
+        " state = 'CLAIMED' AND lease_expires_at <= clock_timestamp()"
+        " FROM run_work WHERE run_id = %s FOR UPDATE",
         (run_id,),
     ).fetchone()
     if row is None or row[0] == "DONE":
         return False
-    state, unrequested = row
+    state, unrequested, abandoned = row
     if unrequested:
         conn.execute(
             "UPDATE run_work SET cancel_requested_at = now() WHERE run_id = %s",
             (run_id,),
         )
-    if state not in ("QUEUED", "STOPPED"):
+    if state not in ("QUEUED", "STOPPED") and not abandoned:
         return bool(unrequested)
     return _end_cancelled(conn, run_id)
 
