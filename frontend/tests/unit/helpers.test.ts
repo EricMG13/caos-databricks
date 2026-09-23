@@ -8,9 +8,10 @@ import { sectionPath } from "@/app/sections";
 import { OFFLINE_WORDING, UNAVAILABLE_WORDING } from "@/app/transport";
 import { toneOf } from "@/chrome/SeverityMark";
 import { fallbackChrome } from "@/chrome/fallback";
-import { ACTION_UNPLACED, refusalText } from "@/controls/RefusedControl";
+import { ACTION_UNPLACED, refusalDetail, refusalText } from "@/controls/RefusedControl";
 import { scrollArtifact } from "@/controls/scroll";
-import { shortDigest, stamp } from "@/ds/format";
+import { regionSentence } from "@/states/RegionState";
+import { displayDecimal, shortDigest, stamp } from "@/ds/format";
 import { SEV_COLOR, sevSurface, sevVar } from "@/ds/sev";
 import { NODE_SEVERITY, confidenceTier, nodeTone } from "@/sections/analysis/tone";
 import { caseHref } from "@/sections/directory/CaseRegister";
@@ -61,10 +62,14 @@ describe("the wire contract and the states around it", () => {
     expect(OFFLINE_WORDING).not.toMatch(/error|exception|stack/i);
   });
 
-  test("a refusal reads as its code and what clears it", () => {
-    expect(refusalText({ code: "SOURCE_ALREADY_WITHDRAWN", clears: "it is re-admitted" })).toBe(
-      "SOURCE_ALREADY_WITHDRAWN — clears when it is re-admitted",
-    );
+  test("a refusal reads in plain words; its code and clearance stay in the detail", () => {
+    const refusal = { code: "SOURCE_ALREADY_WITHDRAWN", clears: "it is re-admitted" };
+    expect(refusalText(refusal)).toBe("Available once it is re-admitted.");
+    expect(refusalDetail(refusal)).toBe("SOURCE_ALREADY_WITHDRAWN — clears when it is re-admitted");
+    // The server writes its clearances as instructions, which read as they are.
+    expect(refusalText({ code: "NOT_AUTHENTICATED", clears: "Sign in." })).toBe("Sign in.");
+    // The workspace's own refusals have their sentence.
+    expect(refusalText(ACTION_UNPLACED)).toBe("Not offered on this page yet.");
   });
 
   test("fallback chrome carries the state and invents no subject, action or role", () => {
@@ -197,5 +202,31 @@ describe("why a command did not succeed", () => {
     expect(() =>
       failureMessage({ kind: "ok", status: 201, receipt: {}, replayed: false }),
     ).toThrow();
+  });
+});
+
+describe("displayDecimal", () => {
+  test("test_displayDecimal_rounds_on_the_digits_and_groups_thousands", () => {
+    expect(displayDecimal("500.000000")).toBe("500.00");
+    expect(displayDecimal("0.2000")).toBe("0.20");
+    expect(displayDecimal("1234567.891")).toBe("1,234,567.89");
+    // Half away from zero, on the digits: a float would round 1.005 down.
+    expect(displayDecimal("1.005")).toBe("1.01");
+    expect(displayDecimal("-2.345")).toBe("-2.35");
+    expect(displayDecimal("-0.001")).toBe("0.00");
+    expect(displayDecimal("999.995")).toBe("1,000.00");
+    expect(displayDecimal("7")).toBe("7.00");
+    expect(displayDecimal("12.6", 0)).toBe("13");
+    expect(displayDecimal("n/a")).toBe("n/a");
+  });
+});
+
+describe("regionSentence", () => {
+  test("test_regionSentence_says_what_a_refused_read_means", () => {
+    const clears = "the store answers";
+    expect(regionSentence({ code: "STORE_UNAVAILABLE", clears })).toBe("The store did not answer.");
+    expect(regionSentence({ code: "SOMETHING_NEW", clears })).toBe(
+      "This section could not be read.",
+    );
   });
 });

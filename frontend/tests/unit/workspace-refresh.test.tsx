@@ -52,6 +52,7 @@ const report = () => ({
     case_title: "Issuer",
     artifacts: [],
     narrative: [],
+    revisions: [],
   },
   observed_at: "2026-09-14T10:00:00Z",
   observed_empty: false,
@@ -134,7 +135,7 @@ async function fire(name: string) {
 function SwitchCase() {
   const go = useNavigate();
   return (
-    <button type="button" data-switch onClick={() => go(`/analysis/?case=${OTHER}`)}>
+    <button type="button" data-switch onClick={() => go(`/analysis/?case=${OTHER}&tab=rn-cp-0`)}>
       switch
     </button>
   );
@@ -148,7 +149,7 @@ function AddQualification() {
     <button
       type="button"
       data-qualify
-      onClick={() => go(`/analysis/?case=${CASE}&qualification=${QUALIFICATION}`)}
+      onClick={() => go(`/analysis/?case=${CASE}&qualification=${QUALIFICATION}&tab=rn-cp-0`)}
     >
       qualify
     </button>
@@ -201,7 +202,7 @@ describe("the workspace under its event tail", () => {
   });
 
   test("an analysis workspace ignores run progress and refetches on an accepted handoff", async () => {
-    await mount("analysis", `/analysis/?case=${CASE}`);
+    await mount("analysis", `/analysis/?case=${CASE}&tab=rn-cp-0`);
     await answer(0, analysis());
     await fire("run_progress");
     expect(sent).toHaveLength(1);
@@ -269,7 +270,7 @@ describe("the workspace under its event tail", () => {
   test("test_names_arriving_mid_flight_cause_exactly_one_more_fetch", async () => {
     // The address names the run, so the tail is open before the first read
     // answers and names can arrive while it is in flight.
-    await mount("analysis", `/analysis/?case=${CASE}&run=${DISPLAYED}`);
+    await mount("analysis", `/analysis/?case=${CASE}&run=${DISPLAYED}&tab=rn-cp-0`);
     await fire("handoff_accepted");
     await fire("run_terminal");
     await fire("sources_changed");
@@ -281,7 +282,7 @@ describe("the workspace under its event tail", () => {
   });
 
   test("test_a_reconnect_refetches_the_visible_documents", async () => {
-    await mount("analysis", `/analysis/?case=${CASE}`);
+    await mount("analysis", `/analysis/?case=${CASE}&tab=rn-cp-0`);
     await answer(0, analysis());
     // Every open refetches, the first included: an event landing between the
     // document read and the stream's head is not replayed (finding FE-9).
@@ -298,7 +299,7 @@ describe("the workspace under its event tail", () => {
   // tail opened on that bare address carries the case's audit actions only.
   // The run on screen never moved until the stream expired.
   test("test_a_view_whose_address_names_no_run_tails_the_run_it_displays", async () => {
-    const { container } = await mount("analysis", `/analysis/?case=${CASE}`);
+    const { container } = await mount("analysis", `/analysis/?case=${CASE}&tab=rn-cp-0`);
     // Nothing to follow yet: the first answer says which run is shown.
     expect(FakeSource.all).toHaveLength(0);
     await answer(0, analysis());
@@ -336,7 +337,7 @@ describe("the workspace under its event tail", () => {
   });
 
   test("test_a_refused_reconnect_closes_the_tail_and_the_region_is_unavailable", async () => {
-    const { container } = await mount("analysis", `/analysis/?case=${CASE}`);
+    const { container } = await mount("analysis", `/analysis/?case=${CASE}&tab=rn-cp-0`);
     await answer(0, analysis());
     expect(confidence(container)).not.toBeNull();
     FakeSource.all[0]!.readyState = FakeSource.CLOSED;
@@ -350,7 +351,7 @@ describe("the workspace under its event tail", () => {
   });
 
   test("a stream closed by a failed connection leaves the region offline, not unavailable", async () => {
-    const { container } = await mount("analysis", `/analysis/?case=${CASE}`);
+    const { container } = await mount("analysis", `/analysis/?case=${CASE}&tab=rn-cp-0`);
     await answer(0, analysis());
     FakeSource.all[0]!.readyState = FakeSource.CLOSED;
     await fire("error");
@@ -362,7 +363,10 @@ describe("the workspace under its event tail", () => {
   });
 
   test("test_a_late_response_after_a_case_switch_is_discarded", async () => {
-    const { container } = await mount("analysis", `/analysis/?case=${CASE}&run=${DISPLAYED}`);
+    const { container } = await mount(
+      "analysis",
+      `/analysis/?case=${CASE}&run=${DISPLAYED}&tab=rn-cp-0`,
+    );
     const first = sent[0]!;
     const firstTail = FakeSource.all[0]!;
     act(() => fireEvent.click(container.querySelector("[data-switch]")!));
@@ -382,7 +386,7 @@ describe("the workspace under its event tail", () => {
   });
 
   test("test_a_new_analytical_identity_is_held_until_reload", async () => {
-    const { container } = await mount("analysis", `/analysis/?case=${CASE}`);
+    const { container } = await mount("analysis", `/analysis/?case=${CASE}&tab=rn-cp-0`);
     await answer(0, analysis());
     expect(confidence(container)).toMatch(/^96 /);
     // Same identity, new figures: an ordinary refresh replaces.
@@ -417,7 +421,7 @@ describe("the workspace under its event tail", () => {
   });
 
   test("test_withdrawal_applies_to_a_stale_view_without_advancing_its_figures", async () => {
-    const { container } = await mount("analysis", `/analysis/?case=${CASE}`);
+    const { container } = await mount("analysis", `/analysis/?case=${CASE}&tab=rn-cp-0`);
     await answer(0, analysis());
     const cited = () => region(container).querySelector("[data-citation]");
     expect(cited()).toHaveAttribute("data-withdrawn", "false");
@@ -438,7 +442,7 @@ describe("the workspace under its event tail", () => {
   });
 
   test("a 404 on refetch makes the region unavailable at once, stale or not", async () => {
-    const { container } = await mount("analysis", `/analysis/?case=${CASE}`);
+    const { container } = await mount("analysis", `/analysis/?case=${CASE}&tab=rn-cp-0`);
     await answer(0, analysis());
     await fire("run_terminal");
     await answer(
@@ -473,7 +477,7 @@ describe("the workspace under its event tail", () => {
   // The strip binds a global evidence identity, not the section's document, so
   // naming one in the URL must not tear the section down and re-read it.
   test("test_changing_the_qualification_strip_does_not_remount_the_section", async () => {
-    const { container } = await mount("analysis", `/analysis/?case=${CASE}`);
+    const { container } = await mount("analysis", `/analysis/?case=${CASE}&tab=rn-cp-0`);
     await answer(0, analysis());
     const sections = () =>
       sent.filter((one) => one.url.startsWith(`/api/v1/cases/${CASE}/analysis`));

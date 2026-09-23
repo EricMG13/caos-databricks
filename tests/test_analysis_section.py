@@ -171,6 +171,8 @@ def test_analysis_labels_source_facts_model_analysis_and_no_host_calculation(
         # The exact Markdown the model wrote, decoded, not rendered or trimmed.
         assert handoff.model_analysis == answer.decode("utf-8")
         assert handoff.model_analysis.encode() == harness.blobs.get(artifact)
+        # No LITE module's contract names a tagged table, and none is invented.
+        assert (handoff.tables, handoff.tables_unavailable_reason) == ([], None)
         [fact] = handoff.source_facts
         assert fact.filename == "report.txt"
         # The pinned live source the page endpoint is addressed by (4.4a).

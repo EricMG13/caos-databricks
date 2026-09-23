@@ -7,6 +7,8 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
+from canonical_fixtures import CONTRACT, skill
+from canonical_route_fixtures import driver_schema, forecast_driver_rows
 from conftest import route_fault
 from fastapi.testclient import TestClient
 from test_analysis_section import (
@@ -25,6 +27,7 @@ from test_forecast_route import route as forecast_route
 from caos.api.app import app, store_connection
 from caos.boundary_text import BoundaryText
 from caos.graph.route import ResolvedRoute
+from caos.methodology import tables
 from caos.methodology.handoff import _decoded_record, record_bytes
 from caos.store.gates import withdraw_source
 from caos.store.members import Standing, grant, revoke
@@ -139,6 +142,54 @@ def test_analysis_labels_the_accepted_cp_cf_projection_as_host_calculation(
         h for h in response.json()["body"]["handoffs"] if h["module_id"] == "CP-CF"
     )
     assert handoff["host_calculation"] == "CP_CF_FORECAST"
+
+
+def test_analysis_serves_the_tagged_tables_each_owner_wrote(
+    client: TestClient, harness: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Read from the accepted Markdown by the bundle's reader, at request time:
+    CP-1's seven interface tables in its contract's order, CP-2G's forecast
+    drivers with each figure's exact `Decimal` and every other cell a string,
+    and none on CP-CF, whose Markdown tags none."""
+    _complete(harness)
+
+    def handoffs() -> dict[str, dict[str, Any]]:
+        response = client.get(
+            f"/api/v1/cases/{harness.case_id}/analysis", headers=_as(harness.approver)
+        )
+        harness.conn.rollback()
+        assert response.status_code == 200, response.json()
+        return {h["module_id"]: h for h in response.json()["body"]["handoffs"]}
+
+    served = handoffs()
+    rules = CONTRACT.completeness_check.load_contract(skill("CP-1").decode(), "CP-1")
+    cp1 = served["CP-1"]
+    assert [t["table_id"] for t in cp1["tables"]] == rules[
+        "unconditional_stable_tables"
+    ]
+    [drivers] = served["CP-2G"]["tables"]
+    assert drivers["table_id"] == "cp2g.cp_model_forecast_drivers"
+    assert drivers["columns"] == driver_schema()["required"]
+    written = forecast_driver_rows()
+    assert [[c["text"] for c in row] for row in drivers["rows"]] == written
+    value, driver = (drivers["columns"].index(c) for c in ("value", "driver_id"))
+    assert {row[value]["value"] for row in drivers["rows"]} == {"0.05", "-0.10", "0"}
+    assert {row[driver]["value"] for row in drivers["rows"]} == {None}
+    assert (
+        served["CP-CF"]["tables"],
+        served["CP-CF"]["tables_unavailable_reason"],
+    ) == (
+        [],
+        None,
+    )
+
+    # Past a bound, one handoff's tables are withheld with the reason, and
+    # every other handoff's are served as before.
+    monkeypatch.setattr(tables, "TABLE_ROWS_MAX", len(written) - 1)
+    bounded = handoffs()
+    assert bounded["CP-2G"]["tables"] == []
+    assert bounded["CP-2G"]["tables_unavailable_reason"] == "TABLES_TOO_LARGE"
+    assert bounded["CP-1"]["tables"] == cp1["tables"]
 
 
 @pytest.mark.parametrize("change", ["owner", "record", "pin", "source", "blob"])

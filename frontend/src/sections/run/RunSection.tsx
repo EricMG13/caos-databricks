@@ -183,13 +183,67 @@ export function RunSection({ document }: { document: RunSectionDocument; tab: st
             />
           </div>
         </section>
-        <div className="note">
-          <b>States are the bundle&apos;s, recomputed from accepted attempts — never stored.</b>{" "}
-          COMPLETE has an accepted artifact. RUNNABLE is in the frontier while the run is running,
-          and did not run once it has ended — unless it is the node whose Blocked verdict ended the
-          run, which is named as such. RESTRICTED runs and carries its limitation forward. BLOCKED
-          names the edge and the upstream it waits on.
-        </div>
+        <details className="help">
+          <summary>What the module states mean</summary>
+          COMPLETE has an accepted artifact. RUNNABLE is next in line while the run is running, and
+          did not run once it has ended, unless its Blocked verdict ended the run, which the node
+          says. RESTRICTED ran and carries its limitation forward. BLOCKED names what it waits on.
+          States are worked out from accepted attempts each time; they are never stored.
+        </details>
+        {/* The run's acts, in the order they happen, beside the route they act
+            on -- not stacked in the right column, which is always about the
+            selected thing (DESIGN.md; critique: a nine-panel second menu). */}
+        <section className="actgroup" aria-labelledby="run-acts-heading">
+          <h2 id="run-acts-heading" className="grouphead">
+            Act on this run
+          </h2>
+          <PinInputControl
+            caseId={body.case_id}
+            runId={run.run_id}
+            action={actionOf(actions, "PIN_RUN_INPUT")}
+            initial={run.subject}
+            onPinned={learn}
+            onRefetch={refetch}
+          />
+          {run.gates.map((gate) => (
+            // Keyed on the fingerprint: a pin (or an approval that moved it)
+            // remounts the panel, clearing any preview read under the input
+            // that just changed rather than leaving a stale digest approvable
+            // (brief 4.2 review finding 3).
+            <GatePanelControl
+              key={`${gate.gate}:${pinned ?? "none"}`}
+              caseId={body.case_id}
+              runId={run.run_id}
+              gate={gate.gate}
+              state={gate.state}
+              action={actionOf(
+                actions,
+                gate.gate === "SOURCE_SET" ? "APPROVE_SOURCE_SET" : "APPROVE_RESEARCH_PLAN",
+              )}
+              onFingerprint={learn}
+              onPreviewed={setKnown}
+              onRefetch={refetch}
+            />
+          ))}
+          <WorkControls
+            caseId={body.case_id}
+            runId={run.run_id}
+            fingerprint={known}
+            work={run.work}
+            actions={actions}
+            onRefetch={refetch}
+          />
+          <CreateRunControl
+            // A BLOCKED run nobody has answered is what a successor is for
+            // (§72): offer it pre-filled. Keyed on the run so the offer follows
+            // the displayed run rather than the first one this panel mounted for.
+            key={run.run_id}
+            caseId={body.case_id}
+            action={actionOf(actions, "CREATE_RUN")}
+            choices={body.route_choices}
+            supersedes={run.status === "BLOCKED" && run.superseded_by === null ? run.run_id : null}
+          />
+        </section>
       </div>
       <div className="col right">
         {refetchNote}
@@ -259,7 +313,11 @@ export function RunSection({ document }: { document: RunSectionDocument; tab: st
         <section className="pnl">
           <header>
             <h2>Gates</h2>
-            <span className="cp">{run.gates.length} of 2</span>
+            {/* "2 of 2" read as done while a gate was still open. */}
+            <span className="cp">
+              {run.gates.filter((gate) => gate.state === "RELEASED").length} of {run.gates.length}{" "}
+              released
+            </span>
           </header>
           <div className="pb flush">
             {run.gates.length ? (
@@ -277,52 +335,6 @@ export function RunSection({ document }: { document: RunSectionDocument; tab: st
             )}
           </div>
         </section>
-        <PinInputControl
-          caseId={body.case_id}
-          runId={run.run_id}
-          action={actionOf(actions, "PIN_RUN_INPUT")}
-          initial={run.subject}
-          onPinned={learn}
-          onRefetch={refetch}
-        />
-        {run.gates.map((gate) => (
-          // Keyed on the fingerprint: a pin (or an approval that moved it)
-          // remounts the panel, clearing any preview read under the input
-          // that just changed rather than leaving a stale digest approvable
-          // (brief 4.2 review finding 3).
-          <GatePanelControl
-            key={`${gate.gate}:${pinned ?? "none"}`}
-            caseId={body.case_id}
-            runId={run.run_id}
-            gate={gate.gate}
-            state={gate.state}
-            action={actionOf(
-              actions,
-              gate.gate === "SOURCE_SET" ? "APPROVE_SOURCE_SET" : "APPROVE_RESEARCH_PLAN",
-            )}
-            onFingerprint={learn}
-            onPreviewed={setKnown}
-            onRefetch={refetch}
-          />
-        ))}
-        <WorkControls
-          caseId={body.case_id}
-          runId={run.run_id}
-          fingerprint={known}
-          work={run.work}
-          actions={actions}
-          onRefetch={refetch}
-        />
-        <CreateRunControl
-          // A BLOCKED run nobody has answered is what a successor is for
-          // (§72): offer it pre-filled. Keyed on the run so the offer follows
-          // the displayed run rather than the first one this panel mounted for.
-          key={run.run_id}
-          caseId={body.case_id}
-          action={actionOf(actions, "CREATE_RUN")}
-          choices={body.route_choices}
-          supersedes={run.status === "BLOCKED" && run.superseded_by === null ? run.run_id : null}
-        />
       </div>
     </div>
   );

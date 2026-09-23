@@ -5,7 +5,14 @@ import type { Severity } from "@/wire";
 /** The seven states of IA_SPEC.md 6. `ready` is not a state of this component:
     a ready region renders its children with no marker. */
 export type SurfaceStateKind =
-  "loading" | "observed-empty" | "error" | "unavailable" | "stale" | "offline" | "partial";
+  | "loading"
+  | "observed-empty"
+  | "error"
+  | "unavailable"
+  | "stale"
+  | "offline"
+  | "partial"
+  | "choose";
 
 const PRESENTATION: Record<SurfaceStateKind, { label: string; severity: Severity; tone: string }> =
   {
@@ -16,6 +23,7 @@ const PRESENTATION: Record<SurfaceStateKind, { label: string; severity: Severity
     partial: { label: "Partial", severity: "WARNING", tone: "warn" },
     offline: { label: "Offline", severity: "CRITICAL", tone: "crit" },
     error: { label: "Refused", severity: "CRITICAL", tone: "crit" },
+    choose: { label: "Choose", severity: "IDLE", tone: "" },
   };
 
 type SurfaceStateProps = {
@@ -60,7 +68,7 @@ export function SurfaceState({
       data-surface-state={kind}
     >
       <div className="st">
-        <SeverityMark severity={presentation.severity} pulse={semantics.live} />
+        <SeverityMark severity={presentation.severity} pulse={semantics.live} decorative />
         <span>{presentation.label}</span>
       </div>
       {title ? <Heading>{title}</Heading> : null}

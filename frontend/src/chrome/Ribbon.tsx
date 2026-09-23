@@ -4,6 +4,14 @@
 import { RefusedControl } from "@/controls/RefusedControl";
 import type { Ribbon as RibbonWire, Subject } from "@/wire";
 
+/** Execution, persistence and approval: each drawn only when the document
+    says something about it. */
+const STATE_CELLS = [
+  { key: "execution", label: "exec" },
+  { key: "persistence", label: "saved" },
+  { key: "approval", label: "approval" },
+] as const;
+
 const TONE: Record<string, string> = {
   ok: "ok",
   warn: "warn",
@@ -36,9 +44,10 @@ export function Ribbon({
         </span>
         <span className="wordmark">CAOS</span>
       </div>
+      {/* The issuer is what a reader recognises; the case id stays reachable. */}
       {subject ? (
-        <span className="rb acc" title={subject.issuer}>
-          {subject.case_id}
+        <span className="rb acc subject" title={subject.case_id} data-case={subject.case_id}>
+          {subject.issuer}
         </span>
       ) : null}
       {ribbon.chips.map((chip, index) => (
@@ -47,18 +56,14 @@ export function Ribbon({
         </span>
       ))}
       <div className="state">
-        <span className="rb ghost">
-          <span className="lbl">exec</span>
-          {ribbon.execution}
-        </span>
-        <span className="rb ghost">
-          <span className="lbl">saved</span>
-          {ribbon.persistence}
-        </span>
-        <span className="rb ghost">
-          <span className="lbl">approval</span>
-          {ribbon.approval}
-        </span>
+        {STATE_CELLS.map(({ key, label }) =>
+          ribbon[key] === null ? null : (
+            <span key={key} className="rb ghost" data-state-cell={key}>
+              <span className="lbl">{label}</span>
+              {ribbon[key]}
+            </span>
+          ),
+        )}
         {actions.map((action, index) => {
           const tab = action.tab !== undefined && tabs?.includes(action.tab) ? action.tab : null;
           // A tab the section does not have is the reason, not a missing route.

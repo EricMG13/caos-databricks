@@ -29,7 +29,7 @@ from caos.api.deps import (
     readable,
     revision_query,
 )
-from caos.api.wire import CommitteeDocument, ReportDocument
+from caos.api.wire import REVISIONS_MAX, CommitteeDocument, ReportDocument
 from caos.boundary_text import BoundaryText
 from caos.deliverable.canonical import Revision, canonical_payload
 from caos.deliverable.filing import revision_signatures
@@ -63,7 +63,9 @@ from caos.store.outcomes import execution_reads
 # same LITE route: isolation and standing (2), the head (1), the run and its
 # title (1), and the payload derivation a first save would make (38) -- the
 # derivation the saved path proves, less the stored revision's own reads.
-IO_BUDGET = {"report": 45, "committee": 19, "frozen": 52, "unsaved": 42}
+# Every path that finds a revision lists the run's revisions too (1), so a
+# committee member can reach a frozen one from Report; "unsaved" has none.
+IO_BUDGET = {"report": 46, "committee": 20, "frozen": 53, "unsaved": 42}
 router = APIRouter()
 
 
@@ -181,7 +183,11 @@ def _read(  # noqa: PLR0913 -- both documents share one authorization/proof unit
                     _filing_facts(conn, case_id, revision, actor, head=head),
                 ),
             ),
-            body={**_body(payload, digest), **publication},
+            body={
+                **_body(payload, digest),
+                **publication,
+                "revisions": _revisions(conn, case_id, run),
+            },
             observed_at=observed_at,
             observed_empty=False,
             status="complete",
@@ -242,12 +248,32 @@ def _unsaved(  # noqa: PLR0913 -- the read's caller, selection and stores
             served_role=dict(global_role=actor.role, standing=standing),
             actions=report_actions(actor.role, standing, None, underivable),
         ),
-        body=_body(payload, None),
+        body={**_body(payload, None), "revisions": []},
         observed_at=observed_at,
         observed_empty=not artifacts,
         status="complete",
         notes=[],
     )
+
+
+def _revisions(conn: Store, case_id: UUID, run: UUID) -> list[dict[str, Any]]:
+    """The run's revisions, newest first, each with how far it has gone.
+
+    A publication row is the freeze and its `filed_at` the filing; the
+    Committee read proves both before it serves either.
+    """
+    rows = conn.execute(
+        "SELECT r.revision_id,r.payload_sha256,r.saved_at,"
+        " CASE WHEN p.filed_at IS NOT NULL THEN 'filed'"
+        " WHEN p.revision_id IS NOT NULL THEN 'frozen' ELSE 'saved' END"
+        " FROM deliverable_revisions r LEFT JOIN deliverable_publications p"
+        " ON p.case_id=r.case_id AND p.revision_id=r.revision_key"
+        " WHERE r.case_id=%s AND r.run_id=%s"
+        " ORDER BY r.saved_at DESC, r.revision_id DESC LIMIT %s",
+        (case_id, run, REVISIONS_MAX),
+    ).fetchall()
+    keys = ("revision_id", "payload_sha256", "saved_at", "state")
+    return [dict(zip(keys, row, strict=True)) for row in rows]
 
 
 def _filing_facts(

@@ -7,6 +7,7 @@
 import { WithdrawSource } from "./WithdrawSource";
 import { stamp } from "@/ds/format";
 import type { ActionView, SourceRow } from "@/wire/v1";
+import { ACTION_UNPLACED, refusalDetail, refusalText } from "@/controls/RefusedControl";
 
 /** The clock part alone: `14:30Z`. */
 export function clock(iso: string): string {
@@ -40,13 +41,19 @@ function WithdrawalCell({ row, observedAt }: { row: SourceRow; observedAt: strin
     command would answer `EVIDENCE_NOT_AVAILABLE` -- so the column is empty
     rather than carrying a refusal this file would have had to invent the
     clearance for. */
-function WithdrawCell({ row, action, caseId, onWithdrawn }: SourceLineProps) {
+function WithdrawCell({ row, action, caseId, onWithdrawn, reasonDisplay }: SourceLineProps) {
   return (
     <td data-withdraw-control>
       {row.withdrawn_at ? (
         <span className="m">—</span>
       ) : (
-        <WithdrawSource action={action} caseId={caseId} row={row} onWithdrawn={onWithdrawn} />
+        <WithdrawSource
+          action={action}
+          caseId={caseId}
+          row={row}
+          onWithdrawn={onWithdrawn}
+          reasonDisplay={reasonDisplay}
+        />
       )}
     </td>
   );
@@ -57,6 +64,7 @@ interface SourceLineProps {
   action: ActionView | undefined;
   caseId: string;
   onWithdrawn: () => void;
+  reasonDisplay: "inline" | "hidden";
 }
 
 function SourceLine({
@@ -65,6 +73,7 @@ function SourceLine({
   action,
   caseId,
   onWithdrawn,
+  reasonDisplay,
 }: SourceLineProps & { observedAt: string }) {
   return (
     <tr data-source={row.source_id} className={row.withdrawn_at ? "wd" : undefined}>
@@ -92,7 +101,13 @@ function SourceLine({
         )}
       </td>
       <WithdrawalCell row={row} observedAt={observedAt} />
-      <WithdrawCell row={row} action={action} caseId={caseId} onWithdrawn={onWithdrawn} />
+      <WithdrawCell
+        row={row}
+        action={action}
+        caseId={caseId}
+        onWithdrawn={onWithdrawn}
+        reasonDisplay={reasonDisplay}
+      />
     </tr>
   );
 }
@@ -110,35 +125,49 @@ export function SourcePack({
   caseId: string;
   onWithdrawn: () => void;
 }) {
+  // One section action judges every row, so a refusal is the same on each:
+  // it is said once above the pack, not repeated down the Withdraw column,
+  // where it clipped the column (critique). Each control keeps it as its
+  // accessible description.
+  const refused = action ? action.refusal : ACTION_UNPLACED;
+  const reasonDisplay = refused ? "hidden" : "inline";
   return (
-    <div className="tscroll" tabIndex={0} role="region" aria-label="Admitted source rows">
-      <table className="reg" data-source-pack>
-        <thead>
-          <tr>
-            <th scope="col">Filename</th>
-            <th scope="col">Digest</th>
-            <th scope="col" className="r">
-              Admitted
-            </th>
-            <th scope="col">Extractor identity</th>
-            <th scope="col">Set versions</th>
-            <th scope="col">Withdrawal</th>
-            <th scope="col">Withdraw</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <SourceLine
-              key={row.source_id}
-              row={row}
-              observedAt={observedAt}
-              action={action}
-              caseId={caseId}
-              onWithdrawn={onWithdrawn}
-            />
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <>
+      {refused && rows.some((row) => !row.withdrawn_at) ? (
+        <p className="note" data-shared-refusal={refused.code} title={refusalDetail(refused)}>
+          Withdraw: {refusalText(refused)}
+        </p>
+      ) : null}
+      <div className="tscroll" tabIndex={0} role="region" aria-label="Admitted source rows">
+        <table className="reg" data-source-pack>
+          <thead>
+            <tr>
+              <th scope="col">Filename</th>
+              <th scope="col">Digest</th>
+              <th scope="col" className="r">
+                Admitted
+              </th>
+              <th scope="col">Extractor identity</th>
+              <th scope="col">Set versions</th>
+              <th scope="col">Withdrawal</th>
+              <th scope="col">Withdraw</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <SourceLine
+                key={row.source_id}
+                row={row}
+                observedAt={observedAt}
+                action={action}
+                caseId={caseId}
+                onWithdrawn={onWithdrawn}
+                reasonDisplay={reasonDisplay}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }

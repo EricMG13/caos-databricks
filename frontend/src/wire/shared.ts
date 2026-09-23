@@ -70,18 +70,20 @@ export interface RibbonAction {
 }
 export interface Ribbon {
   chips: RibbonChip[];
-  execution: string;
-  persistence: string;
-  approval: string;
+  /** Null when the document says nothing about it: the cell is not drawn. */
+  execution: string | null;
+  persistence: string | null;
+  approval: string | null;
   /** At most three; exactly one primary (IA_SPEC.md 3). */
   actions: RibbonAction[];
 }
+/** A cell with nothing the document supports is null and is not drawn. */
 export interface Brief {
-  change: string;
-  impact: string;
-  action: string;
-  evidence: string;
-  headline: string;
+  change: string | null;
+  impact: string | null;
+  action: string | null;
+  evidence: string | null;
+  headline: string | null;
 }
 export interface Verdict {
   severity: Severity;
@@ -92,6 +94,10 @@ export interface Tab {
   id: string;
   label: string;
   cp: string | null;
+  /** The view's state as shape and hue (Analysis: a module's QA state). */
+  severity?: Severity;
+  /** The view a section opens on when the address names none. */
+  opens?: boolean;
 }
 export interface RailEntry {
   section: Section;

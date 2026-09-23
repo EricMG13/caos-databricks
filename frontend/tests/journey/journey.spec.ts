@@ -523,7 +523,7 @@ test.describe.serial("journey", () => {
   test("journey: start the run and the worker completes it after one kill and restart", async () => {
     await page.locator("[data-work-controls] [data-action='START_RUN']").click();
     await expect(page.locator("[data-work-controls] [data-command-success]")).toContainText(
-      "Run enqueued.",
+      "Run queued to start.",
     );
 
     if (process.env.JOURNEY_FAST === "1") {
@@ -592,23 +592,26 @@ test.describe.serial("journey", () => {
 
   test("journey: analysis shows labelled source facts, model analysis and limitations", async () => {
     await page.goto(`/analysis/?case=${caseId}&run=${runId}`);
-    await expect(page.locator("[data-handoff]")).toHaveCount(3);
+    // One module at a time: the modules are the section's tabs, and a
+    // module's citations sit in the evidence rail beside it.
+    await expect(page.getByRole("tab")).toHaveCount(3);
     for (const moduleId of ROUTE_NODES) {
+      await page.getByRole("tab", { name: new RegExp(`^${moduleId}\\b`) }).click();
       const card = page.locator(`[data-handoff='${moduleId}']`);
       await expect(card).toBeVisible();
       await expect(card.locator("[data-qa-status]")).toContainText("Passed");
       await expect(card.locator("[data-committee-status]")).not.toBeEmpty();
       await expect(card.locator("[data-limitation-flags]")).toBeVisible();
       await expect(card.locator("[data-model-analysis] .model-text")).not.toBeEmpty();
-      const facts = card.locator("[data-citation]");
+      const facts = page.locator(".pane.evidence [data-citation]");
       await expect(facts.first()).toBeVisible();
       await expect(facts.first().locator("blockquote.matched")).toContainText(QUOTE);
     }
   });
 
   test("the highlight covers the rendered words of the matched text", async () => {
-    const card = page.locator("[data-handoff='CP-0']");
-    await card.locator("[data-citation] [data-fact-chip]").first().click();
+    await page.getByRole("tab", { name: /^CP-0\b/ }).click();
+    await page.locator(".pane.evidence [data-citation] [data-fact-chip]").first().click();
     const drawer = page.locator("[data-evidence-drawer]");
     await expect(drawer).toContainText("Text layer from the token index");
     const line = drawer.locator("[data-page-line]", { hasText: QUOTE });
@@ -655,7 +658,7 @@ test.describe.serial("journey", () => {
   });
 
   test("Escape returns focus to the chip that opened the drawer", async () => {
-    const chip = page.locator("[data-handoff='CP-0'] [data-citation] [data-fact-chip]").first();
+    const chip = page.locator(".pane.evidence [data-citation] [data-fact-chip]").first();
     await expect(page.getByRole("dialog")).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -793,7 +796,7 @@ test.describe.serial("journey", () => {
     }
     await page.locator("[data-work-controls] [data-action='START_RUN']").click();
     await expect(page.locator("[data-work-controls] [data-command-success]")).toContainText(
-      "Run enqueued.",
+      "Run queued to start.",
     );
 
     // The worker has already exited once on the first case (decision 12) and
@@ -844,12 +847,15 @@ test.describe.serial("journey", () => {
     await expect(page.locator("[data-pending]")).toHaveAttribute("data-run-ended", "yes");
     await expect(page.locator("[data-pending]")).toContainText("did not run");
     await expect(page.locator("[data-pending]")).toContainText("the run ended BLOCKED");
-    await expect(page.locator("[data-handoff]")).toHaveCount(2);
-    await expect(page.locator("[data-handoff='CP-5']")).toHaveCount(0);
+    await expect(page.getByRole("tab")).toHaveCount(2);
+    await expect(page.getByRole("tab", { name: /^CP-5\b/ })).toHaveCount(0);
     for (const moduleId of ["CP-0", "CP-L10"]) {
+      await page.getByRole("tab", { name: new RegExp(`^${moduleId}\\b`) }).click();
       const card = page.locator(`[data-handoff='${moduleId}']`);
       await expect(card.locator("[data-qa-status]")).toContainText("Passed");
-      await expect(card.locator("[data-citation] blockquote.matched").first()).toContainText(QUOTE);
+      await expect(
+        page.locator(".pane.evidence [data-citation] blockquote.matched").first(),
+      ).toContainText(QUOTE);
     }
     await expect(page.locator("[data-pending-node='CP-5']")).toBeVisible();
     // And which of the three it is: CP-5 answered and ended the run, so it is
@@ -992,7 +998,7 @@ test.describe.serial("journey", () => {
     const completed = await prepareRun(page, withdrawalCase);
     await page.locator("[data-work-controls] [data-action='START_RUN']").click();
     await expect(page.locator("[data-work-controls] [data-command-success]")).toContainText(
-      "Run enqueued.",
+      "Run queued to start.",
     );
     // The worker has already exited once (decision 12) and holds no lease on
     // this run, so this is seconds rather than the 300 s of test 4.
@@ -1002,7 +1008,7 @@ test.describe.serial("journey", () => {
     await stopJourneyWorker();
     await page.locator("[data-work-controls] [data-action='START_RUN']").click();
     await expect(page.locator("[data-work-controls] [data-command-success]")).toContainText(
-      "Run enqueued.",
+      "Run queued to start.",
     );
 
     // The drawer, open on run 1's own citation of the PDF, and left open for

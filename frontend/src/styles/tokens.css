@@ -38,6 +38,9 @@
   --tranche-eq: #64748b;
 
   /* Paper: ink on cream, inside filed output only (DESIGN.md). */
+  /* A field's edge: 3:1 against the panel it sits on (WCAG 1.4.11), where
+     the hairline border is 1.35:1 and left a field an invisible box. */
+  --field-edge: #63636f;
   --paper-bg: #f7f5ee;
   --paper-ink: #16161e;
   --paper-meta: #45454f;
@@ -78,16 +81,17 @@
   --color-paper-meta: var(--paper-meta);
   --color-paper-rule: var(--paper-rule);
 
-  --text-caos-3xs: 8px;
-  --text-caos-2xs: 8.5px;
-  --text-caos-xs: 9px;
-  --text-caos-sm: 9.5px;
-  --text-caos-md: 10px;
-  --text-caos-lg: 10.5px;
-  --text-caos-xl: 11px;
-  --text-caos-2xl: 12px;
-  --text-caos-metric: 16px;
-  --text-caos-hero: 22px;
+  /* Floors (DESIGN.md): 10px labels, 11px tabular mono data, 12px body. */
+  --text-caos-3xs: 10px;
+  --text-caos-2xs: 10px;
+  --text-caos-xs: 11px;
+  --text-caos-sm: 11px;
+  --text-caos-md: 12px;
+  --text-caos-lg: 12.5px;
+  --text-caos-xl: 13px;
+  --text-caos-2xl: 14px;
+  --text-caos-metric: 18px;
+  --text-caos-hero: 24px;
 
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
@@ -106,7 +110,7 @@ body,
   background: var(--caos-bg);
   color: var(--caos-text);
   font-family: var(--font-sans);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 /* Monospaced numerics with aligned decimals. */

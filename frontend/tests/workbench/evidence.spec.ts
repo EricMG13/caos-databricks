@@ -13,7 +13,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("the highlight covers the rendered words of the matched text", async ({ page }) => {
-  await page.goto(`/analysis/?case=${CASE}`);
+  await page.goto(`/analysis/?case=${CASE}&tab=rn-cp-0`);
   await page.locator(`[data-fact-chip='${SOURCE}']`).click();
   const drawer = page.locator("[data-evidence-drawer]");
   await expect(drawer).toContainText("Text layer from the token index");
@@ -42,7 +42,7 @@ test("the highlight covers the rendered words of the matched text", async ({ pag
 });
 
 test("Escape returns focus to the chip that opened the drawer", async ({ page }) => {
-  await page.goto(`/analysis/?case=${CASE}`);
+  await page.goto(`/analysis/?case=${CASE}&tab=rn-cp-0`);
   const chip = page.locator(`[data-fact-chip='${SOURCE}']`);
   await chip.click();
   await expect(page.getByRole("dialog")).toBeVisible();

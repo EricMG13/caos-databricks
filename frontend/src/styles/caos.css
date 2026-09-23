@@ -26,7 +26,7 @@
   background: var(--caos-bg);
   color: var(--caos-text);
   font-family: var(--font-sans);
-  font-size: 11px;
+  font-size: 13px;
 }
 .demo-banner {
   position: sticky;
@@ -36,13 +36,13 @@
   border-bottom: 2px solid var(--crit);
   background: var(--crit-bg);
   color: var(--crit-t);
-  font: 700 10px var(--font-mono);
+  font: 700 11.5px var(--font-mono);
   letter-spacing: 0.1em;
   text-align: center;
 }
 .lbl {
   font-family: var(--font-mono);
-  font-size: 8px;
+  font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -84,10 +84,10 @@
   color: var(--caos-bg);
   display: grid;
   place-items: center;
-  font: 700 8.5px var(--font-mono);
+  font: 700 10px var(--font-mono);
 }
 .wordmark {
-  font: 600 11.5px var(--font-display);
+  font: 600 13.5px var(--font-display);
   letter-spacing: -0.01em;
 }
 .rb {
@@ -97,7 +97,7 @@
   height: 19px;
   padding: 0 8px;
   border-radius: 3px;
-  font: 600 8.5px var(--font-mono);
+  font: 600 10px var(--font-mono);
   letter-spacing: 0.07em;
   white-space: nowrap;
   border: 1px solid var(--caos-border);
@@ -139,12 +139,14 @@ button.rb {
 .rb.ghost {
   background: none;
 }
+/* Refused, never hidden -- and never alarming: a control the reader cannot
+   use yet is quiet, and red is kept for things that went wrong (critique P1). */
 .rb.refused,
 .rb[aria-disabled="true"] {
   background: none;
   border-style: dashed;
-  border-color: var(--crit-bd);
-  color: var(--crit-t);
+  border-color: var(--caos-idle);
+  color: var(--caos-muted);
   cursor: not-allowed;
 }
 /* band 2: decision brief. The four cells shrink and wrap; the headline figure keeps its intrinsic width, so the band never overflows. */
@@ -171,13 +173,13 @@ button.rb {
   flex: none;
 }
 .brief .k {
-  font: 700 8px var(--font-mono);
+  font: 700 10px var(--font-mono);
   letter-spacing: 0.12em;
   color: var(--caos-muted);
   flex: none;
 }
 .brief .t {
-  font-size: 10.5px;
+  font-size: 12.5px;
   color: var(--caos-text);
   line-height: 1.45;
   min-width: 0;
@@ -188,7 +190,7 @@ button.rb {
   font-weight: 600;
 }
 .brief .headline {
-  font: 700 16px var(--font-mono);
+  font: 700 18px var(--font-mono);
   letter-spacing: -0.01em;
 }
 /* Narrow viewports (400% zoom on a 1280 px display is 320 CSS px): the four
@@ -211,24 +213,46 @@ button.rb {
 .tabs {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   border-bottom: 1px solid var(--caos-border);
   background: var(--caos-panel);
   padding: 0 12px;
-  height: 31px;
+  min-height: 31px;
   flex: none;
 }
+/* On a phone the views are a native select: nine wrapped tabs were taller
+   than the screen and ran over the bands below. */
+.tabs .tabpick {
+  display: none;
+}
+
+/* The page heading: the section's name, in the body face at heading weight,
+   in text colour -- it was an 8px muted caption (critique). */
 .tabs .tl {
-  font: 700 8px var(--font-mono);
-  letter-spacing: 0.12em;
-  color: var(--caos-muted);
+  font: 600 15px var(--font-sans);
+  letter-spacing: 0;
+  color: var(--caos-text);
   margin: 0 14px 0 0;
 }
+/* Every view stays in sight: tabs wrap to a second row rather than scroll
+   out of view (the legacy module ticker hid modules past both edges). */
 .tabs [role="tablist"] {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  height: 31px;
+  min-height: 31px;
   min-width: 0;
-  overflow-x: auto;
+}
+.tab .glyph {
+  margin-right: 6px;
+}
+.tab .lb {
+  font-family: var(--font-mono);
+}
+.tab .cp {
+  margin-left: 6px;
+  color: var(--caos-muted);
+  font: 400 11.5px var(--font-sans);
 }
 .tab {
   height: 31px;
@@ -236,7 +260,7 @@ button.rb {
   align-items: center;
   gap: 7px;
   padding: 0 13px;
-  font-size: 10.5px;
+  font-size: 12.5px;
   color: var(--caos-muted);
   border: 0;
   border-bottom: 2px solid transparent;
@@ -245,7 +269,7 @@ button.rb {
   font-family: inherit;
 }
 .tab .cp {
-  font: 600 8.5px var(--font-mono);
+  font: 600 10px var(--font-mono);
 }
 .tab.on,
 .tab[aria-selected="true"] {
@@ -263,22 +287,22 @@ button.rb {
   flex: none;
 }
 .verdict.warn {
-  background: linear-gradient(90deg, var(--warn-bg), transparent 62%);
+  background: var(--warn-bg);
 }
 .verdict.ok {
-  background: linear-gradient(90deg, var(--ok-bg), transparent 62%);
+  background: var(--ok-bg);
 }
 .verdict.crit {
-  background: linear-gradient(90deg, var(--crit-bg), transparent 62%);
+  background: var(--crit-bg);
 }
 .verdict.run {
-  background: linear-gradient(90deg, var(--acc-bg), transparent 62%);
+  background: var(--acc-bg);
 }
 .verdict .sig {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font: 700 9px var(--font-mono);
+  font: 700 11px var(--font-mono);
   letter-spacing: 0.14em;
   border: 1px solid var(--caos-border);
   border-radius: 3px;
@@ -302,7 +326,7 @@ button.rb {
   border-color: color-mix(in srgb, var(--acc) 50%, transparent);
 }
 .verdict .txt {
-  font-size: 11.5px;
+  font-size: 13.5px;
   color: var(--caos-text);
   font-weight: 600;
   letter-spacing: -0.005em;
@@ -368,7 +392,7 @@ button.rb {
 }
 .rail .grp {
   padding: 11px 12px 5px;
-  font: 700 8px var(--font-mono);
+  font: 700 10px var(--font-mono);
   letter-spacing: 0.13em;
   text-transform: uppercase;
   color: var(--caos-muted);
@@ -385,20 +409,20 @@ button.rb {
   color: inherit;
 }
 .sect .nm {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--caos-muted);
 }
 .sect .url {
-  font: 500 8px var(--font-mono);
+  font: 500 10px var(--font-mono);
   color: var(--caos-muted);
 }
 .sect .ct {
-  font: 600 8.5px var(--font-mono);
+  font: 600 10px var(--font-mono);
   color: var(--caos-muted);
 }
 .sect .sub {
   grid-column: 1/-1;
-  font: 500 8px var(--font-mono);
+  font: 500 10px var(--font-mono);
   letter-spacing: 0.05em;
   color: var(--caos-muted);
 }
@@ -433,7 +457,7 @@ button.rb {
   display: flex;
   align-items: center;
   gap: 7px;
-  font: 500 8.5px var(--font-mono);
+  font: 500 10px var(--font-mono);
   letter-spacing: 0.08em;
   color: var(--caos-muted);
 }
@@ -457,7 +481,7 @@ button.rb {
   border-radius: 5px;
   border: 1px solid var(--caos-border);
   background: var(--caos-elevated);
-  font: 600 9px var(--font-mono);
+  font: 600 11px var(--font-mono);
   letter-spacing: 0.07em;
   color: var(--caos-muted);
   cursor: pointer;
@@ -473,10 +497,11 @@ button.rb {
   border-color: var(--caos-accent);
   color: var(--caos-bg);
 }
+/* Quiet, like every refused control: red is for things that went wrong. */
 .btn[aria-disabled="true"] {
   border-style: dashed;
-  border-color: var(--crit-bd);
-  color: var(--crit-t);
+  border-color: var(--caos-idle);
+  color: var(--caos-muted);
   background: none;
   cursor: not-allowed;
 }
@@ -484,7 +509,7 @@ button.rb {
 .sect .ab,
 .railfoot .btn .ab {
   display: none;
-  font: 700 9px var(--font-mono);
+  font: 700 11px var(--font-mono);
   color: var(--caos-muted);
 }
 .railfoot .btn .ab {
@@ -552,11 +577,11 @@ button.rb {
 .pnl > header h2,
 .pnl > header h3 {
   margin: 0;
-  font: 600 10px var(--font-sans);
+  font: 600 12px var(--font-sans);
   letter-spacing: -0.005em;
 }
 .pnl > header .cp {
-  font: 600 8px var(--font-mono);
+  font: 600 10px var(--font-mono);
   letter-spacing: 0.1em;
   color: var(--caos-muted);
 }
@@ -619,7 +644,7 @@ button.rb {
   height: 16px;
   padding: 0 6px;
   border-radius: 3px;
-  font: 600 8.5px var(--font-mono);
+  font: 600 10px var(--font-mono);
   letter-spacing: 0.06em;
   border: 1px solid var(--caos-border);
   color: var(--caos-muted);
@@ -685,7 +710,7 @@ button.rb {
   height: 18px;
   padding: 0 7px;
   border-radius: 999px;
-  font: 500 8.5px var(--font-mono);
+  font: 500 10px var(--font-mono);
   color: var(--acc-t);
   background: color-mix(in srgb, var(--acc) 8%, transparent);
   border: 1px solid var(--acc-bd);
@@ -694,7 +719,7 @@ button.rb {
 }
 .chip .pg {
   color: var(--caos-muted);
-  font-size: 8px;
+  font-size: 10px;
 }
 .chip.linked,
 .chip[aria-expanded="true"] {
@@ -716,7 +741,7 @@ button.rb {
   height: 17px;
   padding: 0 6px;
   border-radius: 3px;
-  font: 600 8px var(--font-mono);
+  font: 600 10px var(--font-mono);
   letter-spacing: 0.07em;
   border: 1px dashed color-mix(in srgb, var(--warn) 55%, transparent);
   color: var(--warn-t);
@@ -728,15 +753,19 @@ table.fin,
 table.proj,
 table.cases,
 table.reg,
-table.prov {
+table.prov,
+table.tbl,
+table.dense {
   width: 100%;
   border-collapse: collapse;
 }
 table.fin th,
 table.cases th,
 table.reg th,
-table.prov th {
-  font: 600 8px var(--font-mono);
+table.prov th,
+table.tbl th,
+table.dense th {
+  font: 600 10px var(--font-mono);
   letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--caos-muted);
@@ -748,6 +777,8 @@ table.prov th {
 table.fin th:first-child,
 table.fin th.l,
 table.cases th.l,
+table.tbl th.l,
+table.dense th.l,
 table.reg th,
 table.prov th {
   text-align: left;
@@ -755,9 +786,13 @@ table.prov th {
 table.reg th.r {
   text-align: right;
 }
+/* Numeric truth (DESIGN.md): every figure column is mono, tabular and right
+   aligned, so decimals line up down a column -- Book and Model included. */
 table.fin td,
-table.cases td {
-  font: 500 10.5px var(--font-mono);
+table.cases td,
+table.tbl td,
+table.dense td {
+  font: 500 11.5px var(--font-mono);
   font-variant-numeric: tabular-nums;
   text-align: right;
   padding: 4px 8px;
@@ -766,9 +801,11 @@ table.cases td {
 }
 table.fin td:first-child,
 table.fin td.l,
-table.cases td.l {
+table.cases td.l,
+table.tbl td.l,
+table.dense td.l {
   text-align: left;
-  font: 400 10.5px var(--font-sans);
+  font: 400 12.5px var(--font-sans);
   color: var(--caos-text);
 }
 table.fin tr:last-child td,
@@ -795,7 +832,7 @@ table.fin td.wrap {
 table.cases tr.grp td,
 table.proj tr.grp td {
   background: var(--caos-elevated);
-  font: 700 8px var(--font-mono);
+  font: 700 10px var(--font-mono);
   letter-spacing: 0.11em;
   text-transform: uppercase;
   color: var(--caos-muted);
@@ -805,14 +842,14 @@ table.cases tr.cmp td {
   background: color-mix(in srgb, var(--acc) 7%, transparent);
 }
 table.reg td {
-  font-size: 10.5px;
+  font-size: 12.5px;
   color: var(--caos-text);
   padding: 6px 10px;
   border-bottom: 1px solid var(--hairline);
   white-space: nowrap;
 }
 table.reg td.m {
-  font: 500 9.5px var(--font-mono);
+  font: 500 11px var(--font-mono);
   font-variant-numeric: tabular-nums;
   color: var(--caos-muted);
 }
@@ -830,14 +867,14 @@ table.reg tr.wd td {
   color: var(--caos-muted);
 }
 table.prov td {
-  font: 500 9.5px var(--font-mono);
+  font: 500 11px var(--font-mono);
   padding: 3.5px 8px;
   border-bottom: 1px solid var(--hairline);
   color: var(--caos-text);
 }
 table.prov td:first-child {
   font-family: var(--font-sans);
-  font-size: 10px;
+  font-size: 12px;
 }
 .cellbtn {
   all: unset;
@@ -866,7 +903,7 @@ table.prov td:first-child {
   color: var(--caos-warning);
 }
 .rowact {
-  font: 600 8.5px var(--font-mono);
+  font: 600 10px var(--font-mono);
   letter-spacing: 0.07em;
   color: var(--acc-t);
   border: 1px solid var(--acc-bd);
@@ -883,7 +920,7 @@ table.prov td:first-child {
 }
 /* projection, IA_SPEC.md 4.6: the residual is its own column */
 table.proj th {
-  font: 600 7.5px var(--font-mono);
+  font: 600 10px var(--font-mono);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--caos-muted);
@@ -899,7 +936,7 @@ table.proj th.resid {
   color: var(--acc-t);
 }
 table.proj td {
-  font: 500 10px var(--font-mono);
+  font: 500 11.5px var(--font-mono);
   font-variant-numeric: tabular-nums;
   text-align: right;
   padding: 4px 7px;
@@ -908,7 +945,7 @@ table.proj td {
 }
 table.proj td:first-child {
   text-align: left;
-  font: 400 10px var(--font-sans);
+  font: 400 12px var(--font-sans);
 }
 table.proj td.resid {
   color: var(--ok-t);
@@ -938,7 +975,7 @@ table.proj tr.prop td {
   background: var(--caos-elevated);
 }
 .formulabar .coord {
-  font: 700 9px var(--font-mono);
+  font: 700 11px var(--font-mono);
   color: var(--acc-t);
   background: color-mix(in srgb, var(--acc) 14%, transparent);
   border: 1px solid var(--acc-bd);
@@ -949,7 +986,7 @@ table.proj tr.prop td {
 .formulabar code {
   flex: 1 1 auto;
   min-width: 0;
-  font: 500 10px var(--font-mono);
+  font: 500 11.5px var(--font-mono);
   color: var(--caos-text);
   white-space: nowrap;
   overflow: hidden;
@@ -979,14 +1016,14 @@ table.proj tr.prop td {
   box-shadow: inset 2px 0 0 var(--caos-accent);
 }
 .srow .nm {
-  font-size: 10.5px;
+  font-size: 12.5px;
   color: var(--caos-text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .srow .mt {
-  font: 500 8px var(--font-mono);
+  font: 500 10px var(--font-mono);
   color: var(--caos-muted);
   margin-top: 1px;
 }
@@ -996,7 +1033,7 @@ table.proj tr.prop td {
 /* One reading of a conflict: its source, its value, its chip. */
 .reading {
   padding: 4px 0;
-  font-size: 10.5px;
+  font-size: 12.5px;
   line-height: 1.5;
   color: var(--caos-text);
 }
@@ -1007,7 +1044,7 @@ table.proj tr.prop td {
   border-radius: 3px;
   display: inline-grid;
   place-items: center;
-  font: 700 8.5px var(--font-mono);
+  font: 700 10px var(--font-mono);
 }
 .gr.a,
 .grade.a {
@@ -1040,17 +1077,17 @@ table.proj tr.prop td {
 }
 .ev .h,
 .driver .h {
-  font-size: 10.5px;
+  font-size: 12.5px;
   color: var(--caos-text);
 }
 .ev .m,
 .driver .m {
   grid-column: 1;
-  font: 500 8px var(--font-mono);
+  font: 500 10px var(--font-mono);
   color: var(--caos-muted);
 }
 .conf {
-  font: 700 8.5px var(--font-mono);
+  font: 700 10px var(--font-mono);
   align-self: center;
 }
 .bars {
@@ -1063,7 +1100,7 @@ table.proj tr.prop td {
   grid-template-columns: 92px 1fr 52px;
   gap: 9px;
   align-items: center;
-  font-size: 10px;
+  font-size: 12px;
 }
 .bartrack {
   height: 11px;
@@ -1082,7 +1119,7 @@ table.proj tr.prop td {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 3px 12px;
-  font-size: 10px;
+  font-size: 12px;
   margin: 0;
 }
 .kv dt {
@@ -1091,12 +1128,12 @@ table.proj tr.prop td {
 }
 .kv dd {
   margin: 0;
-  font: 500 10px var(--font-mono);
+  font: 500 11.5px var(--font-mono);
   color: var(--caos-text);
   text-align: right;
 }
 .note {
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.5;
   color: var(--caos-muted);
 }
@@ -1108,7 +1145,7 @@ table.proj tr.prop td {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.5;
   color: var(--caos-muted);
   padding: 5px 0;
@@ -1132,18 +1169,18 @@ table.proj tr.prop td {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 10px;
+  font-size: 12px;
   color: var(--caos-text);
 }
 .stepcell .n {
-  font: 600 8px var(--font-mono);
+  font: 600 10px var(--font-mono);
   color: var(--caos-muted);
   width: 26px;
   flex: none;
 }
 .stepcell .st {
   margin-left: auto;
-  font: 700 8px var(--font-mono);
+  font: 700 10px var(--font-mono);
   letter-spacing: 0.08em;
   color: var(--ok-t);
 }
@@ -1154,7 +1191,7 @@ table.proj tr.prop td {
   color: var(--crit-t);
 }
 .stepcell .why {
-  font: 500 8px var(--font-mono);
+  font: 500 10px var(--font-mono);
   color: var(--caos-muted);
 }
 /* A capital tranche carries its seniority as a hue swatch and as a word. */
@@ -1187,7 +1224,7 @@ table.proj tr.prop td {
   gap: 4px 9px;
   padding: 7px 10px;
   border-bottom: 1px solid var(--hairline);
-  font-size: 10.5px;
+  font-size: 12.5px;
   line-height: 1.5;
   color: var(--caos-text);
 }
@@ -1208,7 +1245,7 @@ table.proj tr.prop td {
 .sec h3,
 .sec h5 {
   margin: 0 0 6px;
-  font: 700 8px var(--font-mono);
+  font: 700 10px var(--font-mono);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--caos-muted);
@@ -1218,12 +1255,12 @@ table.proj tr.prop td {
   align-items: center;
   gap: 7px;
   padding: 2.5px 0;
-  font-size: 10.5px;
+  font-size: 12.5px;
   color: var(--caos-text);
 }
 .fopt .n {
   margin-left: auto;
-  font: 500 9px var(--font-mono);
+  font: 500 11px var(--font-mono);
   color: var(--caos-muted);
 }
 /* A facet is a real checkbox group: fieldset + legend, rows tall enough to be targets (24 px) and a checkbox big enough to keep its offset from the next. */
@@ -1235,7 +1272,7 @@ fieldset.facet {
 .facet legend {
   padding: 0;
   margin: 0 0 6px;
-  font: 700 8px var(--font-mono);
+  font: 700 10px var(--font-mono);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--caos-muted);
@@ -1268,7 +1305,7 @@ button.pill {
   border-radius: 4px;
   border: 1px solid var(--caos-border);
   background: var(--caos-elevated);
-  font: 500 9.5px var(--font-mono);
+  font: 500 11px var(--font-mono);
   color: var(--caos-muted);
   cursor: pointer;
 }
@@ -1287,7 +1324,7 @@ button.pill {
   padding: 3px 9px;
   border-bottom: 1px solid var(--hairline);
   border-right: 1px solid var(--hairline);
-  font: 500 10.5px var(--font-mono);
+  font: 500 11.5px var(--font-mono);
   text-align: right;
 }
 /* A compared cell is a 24 px target in its own right. */
@@ -1305,12 +1342,12 @@ button.pill {
 .cmpgrid > div.lb,
 .cmpgrid > .contents > div.lb {
   text-align: left;
-  font: 400 10.5px var(--font-sans);
+  font: 400 12.5px var(--font-sans);
   color: var(--caos-muted);
 }
 .cmpgrid .hdc {
   background: var(--caos-elevated);
-  font: 600 9.5px var(--font-mono);
+  font: 600 11px var(--font-mono);
   color: var(--caos-text);
 }
 .cmpgrid .best {
@@ -1332,14 +1369,14 @@ button.pill {
   gap: 8px;
   padding: 5px 10px;
   border-bottom: 1px solid var(--hairline);
-  font-size: 10.5px;
+  font-size: 12.5px;
   color: var(--caos-muted);
 }
 .secrow:last-child {
   border-bottom: 0;
 }
 .secrow .n {
-  font: 600 8px var(--font-mono);
+  font: 600 10px var(--font-mono);
   width: 16px;
   flex: none;
 }
@@ -1350,7 +1387,7 @@ button.pill {
 }
 .secrow .src {
   margin-left: auto;
-  font: 600 8px var(--font-mono);
+  font: 600 10px var(--font-mono);
   letter-spacing: 0.08em;
   white-space: nowrap;
 }
@@ -1360,7 +1397,7 @@ button.pill {
   align-items: flex-start;
   padding: 5px 0;
   border-bottom: 1px solid var(--hairline);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.4;
 }
 .reslink:last-child {
@@ -1371,7 +1408,7 @@ button.pill {
 }
 .reslink .m {
   color: var(--caos-muted);
-  font: 500 8px var(--font-mono);
+  font: 500 10px var(--font-mono);
   margin-top: 2px;
 }
 .sugrow {
@@ -1386,18 +1423,18 @@ button.pill {
   border-bottom: 0;
 }
 .sugrow .k {
-  font: 600 8px var(--font-mono);
+  font: 600 10px var(--font-mono);
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--caos-muted);
 }
 .sugrow .v {
-  font-size: 10.5px;
+  font-size: 12.5px;
   color: var(--caos-text);
 }
 .sugrow .why {
   grid-column: 2/-1;
-  font: 500 8px var(--font-mono);
+  font: 500 10px var(--font-mono);
   color: var(--caos-muted);
   line-height: 1.5;
 }
@@ -1409,12 +1446,12 @@ button.pill {
   background: color-mix(in srgb, var(--caos-border) 25%, transparent);
 }
 .drop .big {
-  font-size: 11.5px;
+  font-size: 13.5px;
   color: var(--caos-text);
   font-weight: 600;
 }
 .drop .sm {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--caos-muted);
   margin-top: 5px;
   line-height: 1.55;
@@ -1422,7 +1459,7 @@ button.pill {
 .absent {
   padding: 9px 10px;
   border-top: 1px dashed var(--caos-border);
-  font-size: 9.5px;
+  font-size: 11px;
   line-height: 1.5;
   color: var(--caos-muted);
 }
@@ -1451,7 +1488,7 @@ button.pill {
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font: 700 8px var(--font-mono);
+  font: 700 10px var(--font-mono);
   border: 1px solid var(--caos-border);
   color: var(--caos-muted);
   margin-top: 1px;
@@ -1476,7 +1513,7 @@ button.pill {
 }
 .step h4 {
   margin: 0;
-  font: 600 10.5px var(--font-sans);
+  font: 600 12.5px var(--font-sans);
   color: var(--caos-text);
   display: flex;
   align-items: center;
@@ -1486,7 +1523,7 @@ button.pill {
   margin-left: auto;
 }
 .step .m {
-  font: 500 8.5px var(--font-mono);
+  font: 500 10px var(--font-mono);
   color: var(--caos-muted);
   margin-top: 3px;
   line-height: 1.55;
@@ -1497,28 +1534,31 @@ button.pill {
 }
 .refusal {
   margin-top: 6px;
-  border: 1px dashed var(--crit-bd);
+  border: 1px dashed var(--caos-idle);
   border-radius: 4px;
   padding: 6px 8px;
-  background: color-mix(in srgb, var(--crit) 6%, transparent);
 }
 .refusal code {
-  font: 700 8.5px var(--font-mono);
-  color: var(--crit-t);
-  letter-spacing: 0.06em;
+  font: 500 10px var(--font-mono);
+  color: var(--caos-muted);
+  letter-spacing: 0.04em;
 }
 .refusal .cl {
-  font-size: 9.5px;
+  font-size: 12px;
   color: var(--caos-text);
-  margin-top: 4px;
   line-height: 1.5;
+}
+/* A refusal that answers a command the reader just sent is an outcome, not a
+   resting state: its note keeps the critical tone. */
+.note.crit .refusal {
+  border-color: var(--crit-bd);
 }
 .refusal .cl b {
   color: var(--acc-t);
   font-weight: 600;
 }
 .receipt {
-  font: 500 8.5px var(--font-mono);
+  font: 500 10px var(--font-mono);
   color: var(--caos-text);
   line-height: 1.7;
   overflow-wrap: anywhere;
@@ -1549,7 +1589,7 @@ button.pill {
   font-family: var(--font-sans);
 }
 .rd-mast {
-  font: 500 8px var(--font-mono);
+  font: 500 10px var(--font-mono);
   letter-spacing: 0.12em;
   color: var(--paper-meta);
   text-transform: uppercase;
@@ -1557,24 +1597,24 @@ button.pill {
   padding-bottom: 6px;
 }
 .rd-title {
-  font-size: 16px;
+  font-size: 18px;
   margin: 10px 0 3px;
   font-weight: 700;
 }
 .rd-sub {
-  font-size: 9.5px;
+  font-size: 11px;
   color: var(--paper-note);
   margin: 0 0 12px;
 }
 .rd-h {
-  font: 700 8.5px var(--font-mono);
+  font: 700 10px var(--font-mono);
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--paper-meta);
   margin: 14px 0 4px;
 }
 .rd-p {
-  font-size: 10.5px;
+  font-size: 12.5px;
   line-height: 1.6;
   margin: 0 0 6px;
 }
@@ -1587,7 +1627,7 @@ button.pill {
   pointer-events: none;
 }
 .rd-wm span {
-  font: 700 20px var(--font-mono);
+  font: 700 22px var(--font-mono);
   letter-spacing: 0.3em;
   color: color-mix(in srgb, var(--crit) 70%, var(--paper-ink));
   transform: rotate(-24deg);
@@ -1596,7 +1636,7 @@ button.pill {
   background: color-mix(in srgb, var(--paper-bg) 82%, transparent);
 }
 .rd-cite {
-  font: 600 7.5px var(--font-mono);
+  font: 600 10px var(--font-mono);
   color: var(--paper-cite);
   border: 1px solid var(--paper-rule);
   border-radius: 3px;
@@ -1613,7 +1653,7 @@ button.pill {
   top: 22px;
   border: 2px solid var(--paper-stamp);
   color: var(--paper-stamp);
-  font: 700 9px var(--font-mono);
+  font: 700 11px var(--font-mono);
   letter-spacing: 0.22em;
   padding: 4px 9px;
   transform: rotate(-7deg);
@@ -1623,13 +1663,13 @@ button.pill {
   margin-top: 10px;
   padding-top: 8px;
   border-top: 1px solid var(--paper-rule);
-  font: 500 8.5px var(--font-mono);
+  font: 500 10px var(--font-mono);
   color: var(--paper-note);
 }
 .rd-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 9.5px;
+  font-size: 11px;
   margin: 4px 0 8px;
 }
 .rd-table th,
@@ -1654,7 +1694,7 @@ button.pill {
 }
 .pp dt,
 .ppfull dt {
-  font: 600 8px var(--font-mono);
+  font: 600 10px var(--font-mono);
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--caos-muted);
@@ -1665,7 +1705,7 @@ button.pill {
 .pp dd,
 .ppfull dd {
   margin: 0;
-  font-size: 10.5px;
+  font-size: 12.5px;
   color: var(--caos-text);
   line-height: 1.5;
   padding: 6px 10px;
@@ -1673,7 +1713,7 @@ button.pill {
 }
 .pp dd code,
 .ppfull dd code {
-  font: 500 9.5px var(--font-mono);
+  font: 500 11px var(--font-mono);
 }
 .pp dd .dev,
 .ppfull dd .dev {
@@ -1688,12 +1728,12 @@ button.pill {
   gap: 11px;
 }
 .ppval .v {
-  font: 700 24px var(--font-mono);
+  font: 700 26px var(--font-mono);
   letter-spacing: -0.01em;
   color: var(--caos-text);
 }
 .ppval .u {
-  font: 500 10px var(--font-mono);
+  font: 500 11.5px var(--font-mono);
   color: var(--caos-muted);
 }
 .ppval .badge {
@@ -1704,7 +1744,7 @@ button.pill {
   border-radius: 5px;
   background: var(--caos-bg);
   padding: 10px 12px;
-  font-size: 10.5px;
+  font-size: 12.5px;
   line-height: 1.7;
   color: var(--caos-text);
 }
@@ -1726,11 +1766,11 @@ button.pill {
   text-align: center;
 }
 .unavail .h {
-  font: 600 13px var(--font-sans);
+  font: 600 15px var(--font-sans);
   color: var(--caos-text);
 }
 .unavail .s {
-  font-size: 10.5px;
+  font-size: 12.5px;
   color: var(--caos-muted);
   line-height: 1.6;
   max-width: 520px;
@@ -1751,11 +1791,11 @@ button.pill {
   display: flex;
   align-items: center;
   gap: 9px;
-  font-size: 10px;
+  font-size: 12px;
   color: var(--caos-text);
 }
 .missing div .c {
-  font: 600 8px var(--font-mono);
+  font: 600 10px var(--font-mono);
   letter-spacing: 0.08em;
   color: var(--caos-muted);
   margin-left: auto;
@@ -1771,7 +1811,7 @@ button.pill {
   display: flex;
   align-items: center;
   gap: 6px;
-  font: 600 8px var(--font-mono);
+  font: 600 10px var(--font-mono);
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--caos-muted);
@@ -1787,24 +1827,24 @@ button.pill {
 }
 .rs h3 {
   margin: 5px 0 0;
-  font: 600 11px var(--font-sans);
+  font: 600 13px var(--font-sans);
   color: var(--caos-text);
 }
 .rs p {
   margin: 4px 0 0;
-  font-size: 10px;
+  font-size: 12px;
   color: var(--caos-muted);
   line-height: 1.5;
 }
 .rs .ts {
-  font: 500 8.5px var(--font-mono);
+  font: 500 10px var(--font-mono);
 }
 .pagealert {
   padding: 7px 12px;
   border-bottom: 1px solid var(--crit-bd);
   background: color-mix(in srgb, var(--crit) 8%, transparent);
   color: var(--caos-text);
-  font-size: 10.5px;
+  font-size: 12.5px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1843,12 +1883,12 @@ button.pill {
 .drawer > .dhead h2,
 .modal > .dhead h2 {
   margin: 0;
-  font: 600 10.5px var(--font-sans);
+  font: 600 12.5px var(--font-sans);
 }
 .drawer .close,
 .modal .close {
   margin-left: auto;
-  font: 700 9px var(--font-mono);
+  font: 700 11px var(--font-mono);
   color: var(--caos-muted);
   border: 1px solid var(--caos-border);
   border-radius: 3px;
@@ -1866,6 +1906,9 @@ button.pill {
 }
 .pagerender {
   position: relative;
+  /* The text layer is the page: there is no image beneath it, so the lines
+     are ink on paper, never the terminal's light text (critique P0, 1.14:1). */
+  color: var(--paper-ink);
   background: var(--paper-bg);
   border: 1px solid var(--paper-rule);
   border-radius: 2px;
@@ -1887,7 +1930,7 @@ button.pill {
   position: absolute;
   top: -16px;
   left: -2px;
-  font: 700 7px var(--font-mono);
+  font: 700 10px var(--font-mono);
   letter-spacing: 0.1em;
   color: var(--caos-bg);
   background: var(--caos-accent);
@@ -1900,7 +1943,7 @@ button.pill {
   border-radius: 4px;
   background: var(--caos-elevated);
   padding: 8px 10px;
-  font: 500 10px var(--font-mono);
+  font: 500 11.5px var(--font-mono);
   color: var(--caos-text);
   line-height: 1.6;
 }
@@ -1914,7 +1957,7 @@ button.pill {
   display: flex;
   align-items: center;
   gap: 7px;
-  font: 500 8.5px var(--font-mono);
+  font: 500 10px var(--font-mono);
   color: var(--caos-muted);
   border-top: 1px solid var(--caos-border);
   padding-top: 8px;
@@ -1946,6 +1989,9 @@ button.pill {
   border: 1px solid var(--caos-border);
   border-radius: 6px;
   overflow: auto;
+  /* Overlay scrollbars hid that the route continues: keep the bar visible. */
+  scrollbar-color: var(--caos-idle) transparent;
+  scrollbar-gutter: stable;
 }
 .dag svg.edges {
   position: absolute;
@@ -1981,7 +2027,7 @@ button.pill {
 .stagehdr {
   position: absolute;
   top: 8px;
-  font: 700 7.5px var(--font-mono);
+  font: 700 10px var(--font-mono);
   line-height: 1.25;
   letter-spacing: 0.12em;
   color: var(--caos-muted);
@@ -2004,14 +2050,14 @@ button.pill {
   cursor: pointer;
 }
 .node .id {
-  font: 700 9px var(--font-mono);
+  font: 700 11px var(--font-mono);
   color: var(--caos-text);
   display: flex;
   align-items: center;
   gap: 6px;
 }
 .node .nm {
-  font-size: 9px;
+  font-size: 11px;
   color: var(--caos-muted);
   margin-top: 1px;
   white-space: nowrap;
@@ -2019,7 +2065,7 @@ button.pill {
   text-overflow: ellipsis;
 }
 .node .st {
-  font: 700 7.5px var(--font-mono);
+  font: 700 10px var(--font-mono);
   letter-spacing: 0.1em;
   margin-top: 4px;
   display: flex;
@@ -2027,7 +2073,7 @@ button.pill {
   gap: 5px;
 }
 .node .why {
-  font: 500 7.5px var(--font-mono);
+  font: 500 10px var(--font-mono);
   color: var(--caos-muted);
   margin-top: 2px;
   line-height: 1.4;
@@ -2081,7 +2127,7 @@ button.pill {
 }
 .gatelbl {
   position: absolute;
-  font: 700 7.5px var(--font-mono);
+  font: 700 10px var(--font-mono);
   letter-spacing: 0.1em;
   color: var(--warn-t);
   white-space: nowrap;
@@ -2092,7 +2138,7 @@ button.pill {
   align-items: center;
   padding: 6px 10px;
   border-top: 1px solid var(--caos-border);
-  font: 500 8px var(--font-mono);
+  font: 500 10px var(--font-mono);
   color: var(--caos-muted);
   flex-wrap: wrap;
 }
@@ -2129,18 +2175,18 @@ button.pill {
   align-items: center;
   padding: 6px 10px;
   border-bottom: 1px solid var(--hairline);
-  font-size: 10px;
+  font-size: 12px;
 }
 .frontier:last-child {
   border-bottom: 0;
 }
 .frontier .id {
-  font: 700 9px var(--font-mono);
+  font: 700 11px var(--font-mono);
   color: var(--caos-text);
 }
 .frontier .why {
   grid-column: 1/-1;
-  font: 500 8px var(--font-mono);
+  font: 500 10px var(--font-mono);
   color: var(--caos-muted);
 }
 .att {
@@ -2149,7 +2195,7 @@ button.pill {
   gap: 2px 8px;
   padding: 5px 10px;
   border-bottom: 1px solid var(--hairline);
-  font: 500 9px var(--font-mono);
+  font: 500 11px var(--font-mono);
   color: var(--caos-muted);
 }
 .att .a {
@@ -2162,10 +2208,10 @@ a.att {
 /* inputs */
 .tin {
   background: var(--caos-bg);
-  border: 1px solid var(--caos-border);
+  border: 1px solid var(--field-edge);
   border-radius: 4px;
   color: var(--caos-text);
-  font: 500 10px var(--font-mono);
+  font: 500 11.5px var(--font-mono);
   padding: 4px 8px;
   height: 24px;
   min-width: 0;
@@ -2200,7 +2246,7 @@ table.reg[data-register] td {
 table.reg td .sub {
   display: block;
   margin-top: 2px;
-  font: 500 8.5px var(--font-mono);
+  font: 500 10px var(--font-mono);
   color: var(
     --caos-muted
   ); /* a file name is one word;it may break anywhere so the row need not widen */
@@ -2232,14 +2278,14 @@ button.rowact[aria-disabled="true"] {
 .caos-action-reason {
   display: block;
   margin-top: 4px;
-  font: 500 8px var(--font-mono);
+  font: 400 11px var(--font-sans);
   line-height: 1.5;
-  color: var(--crit-t);
+  color: var(--caos-muted);
 }
 .caos-action-reason-pop {
   z-index: 20;
   padding: 4px 6px;
-  border: 1px dashed var(--crit-bd);
+  border: 1px dashed var(--caos-idle);
   border-radius: 3px;
   background: var(--caos-panel);
 }
@@ -2292,12 +2338,12 @@ li.pill {
   box-shadow: inset 2px 0 0 var(--caos-accent);
 }
 .setrow .nm {
-  font: 600 10px var(--font-mono);
+  font: 600 11.5px var(--font-mono);
   color: var(--caos-text);
 }
 .setrow .mt {
   grid-column: 1;
-  font: 500 8px var(--font-mono);
+  font: 500 10px var(--font-mono);
   color: var(--caos-muted);
 }
 /* ================= Run: the DAG scrolls inside its panel ================= */
@@ -2365,7 +2411,7 @@ li.pill {
 /* ================= Model: an unavailable period names its reason ================= */
 table.proj td .why {
   display: block;
-  font: 500 8px var(--font-mono);
+  font: 500 10px var(--font-mono);
   color: var(--crit-t);
   white-space: normal;
   max-width: 220px;
@@ -2414,7 +2460,7 @@ table.tbl td .cellbtn {
 /* A ladder step's title sits one level under its panel heading (heading order), drawn as the card's h4. */
 .step h3 {
   margin: 0;
-  font: 600 10.5px var(--font-sans);
+  font: 600 12.5px var(--font-sans);
   color: var(--caos-text);
   display: flex;
   align-items: center;
@@ -2429,7 +2475,7 @@ table.tbl td .cellbtn {
 }
 /* The editor's line pitch holds a 24 px chip, so every citation in the draft is a full-size target without leaving its sentence. */
 .ed {
-  font-size: 11px;
+  font-size: 13px;
   line-height: 2.4;
 }
 .ed .chip {
@@ -2494,7 +2540,295 @@ table.tbl td .cellbtn {
 }
 
 /* WCAG 2.2 target size: a text field is a target, and a 19 px field at 320 px failed the gate on CI (F110). */
-.fld input:not([type=checkbox]):not([type=radio]),.fld select,.fld textarea{min-height: 24px;box-sizing: border-box}
+/* One field idiom (the `.tin` chrome): a field inside a label draws its own
+   edge, so an input is never an invisible box (WCAG 1.4.11, critique P1). */
+.fld input:not([type="checkbox"]):not([type="radio"]),
+.fld select,
+.fld textarea {
+  min-height: 24px;
+  box-sizing: border-box;
+  background: var(--caos-bg);
+  border: 1px solid var(--field-edge);
+  border-radius: 4px;
+  color: var(--caos-text);
+  font: 400 12px var(--font-sans);
+  padding: 4px 8px;
+}
+.fld input::placeholder,
+.fld textarea::placeholder {
+  color: var(--caos-muted);
+}
+.fld input:focus,
+.fld select:focus,
+.fld textarea:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--acc) 70%, transparent);
+}
 
 /* WCAG 2.2 target size: an act that asks once more, and both buttons of the step it opens, are 24 px targets; the filing acts sat 19 px high and stacked (DF-9). */
 .confirm .rb{min-height: 24px}
+
+/* Model prose is text, never markup (AnalysisSection): wrapped at a reading
+   measure, so no line is clipped by its panel (critique P0). */
+pre.model-text {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-width: 72ch;
+  font-family: var(--font-sans);
+  line-height: 1.55;
+}
+
+/* The narrative draft is a field like any other: the `.tin` chrome, sized
+   for paragraphs, in the body face. */
+textarea.tin.tarea {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  height: auto;
+  min-height: 96px;
+  font: 400 12.5px var(--font-sans);
+  line-height: 1.5;
+  resize: vertical;
+}
+
+/* A book figure sits right, like every figure column. */
+table.tbl td.num .cellbtn {
+  justify-content: flex-end;
+  width: 100%;
+}
+
+/* How far a revision has gone: its mark and word on one line. */
+.revstate {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+table.tbl.revisions td.acts a + a {
+  margin-left: 12px;
+}
+
+/* How a page works, for whoever asks: closed by default, one line when closed. */
+details.help {
+  margin-top: 8px;
+  color: var(--caos-muted);
+  font-size: 12px;
+  line-height: 1.55;
+  max-width: 72ch;
+}
+details.help > summary {
+  cursor: pointer;
+  color: var(--caos-muted);
+  font: 500 11px var(--font-sans);
+}
+details.help > summary:hover {
+  color: var(--caos-text);
+}
+details.help[open] > summary {
+  margin-bottom: 4px;
+}
+
+/* One case's access: a line when closed, its members and forms when open. */
+details.access > summary {
+  cursor: pointer;
+  padding: 6px 0;
+  font: 600 12.5px var(--font-sans);
+  color: var(--caos-text);
+}
+details.access > summary .m {
+  font: 400 11.5px var(--font-mono);
+  color: var(--caos-muted);
+  margin-left: 6px;
+}
+details.access + details.access {
+  border-top: 1px solid var(--hairline);
+}
+
+/* ================= Analysis: evidence rail · module · selected ================= */
+/* The legacy desk's three panes, on DESIGN.md's frame: what the run rests on
+   and the module's citations to the left, the module in the middle, and the
+   right column always about the selected thing. */
+.analysis {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.analysis .panes {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr) minmax(240px, 300px);
+  gap: 12px;
+  align-items: start;
+}
+.analysis .pane {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+@media (max-width: 1279px) {
+  .analysis .panes {
+    grid-template-columns: minmax(200px, 260px) minmax(0, 1fr);
+  }
+  .analysis .pane.context {
+    grid-column: 2;
+  }
+}
+@media (max-width: 767px) {
+  .analysis .panes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* On a phone the module comes first; its evidence follows it. */
+  .analysis .pane.main {
+    order: -1;
+  }
+  .analysis .pane.context {
+    grid-column: auto;
+  }
+}
+.analysis .issuer {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--caos-muted);
+}
+.analysis .issuer b {
+  color: var(--caos-text);
+  font-weight: 600;
+}
+.analysis .module {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.analysis .modhead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.analysis .modhead h2 {
+  margin: 0;
+  font: 600 15px var(--font-sans);
+  color: var(--caos-text);
+}
+.analysis .modhead .code {
+  font: 500 11.5px var(--font-mono);
+  color: var(--caos-muted);
+}
+.analysis .modhead .right {
+  margin-left: auto;
+}
+.analysis .register li {
+  display: grid;
+  gap: 3px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--hairline);
+}
+.analysis .register li:last-child {
+  border-bottom: 0;
+}
+.analysis .register .nm {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.analysis .register .meta {
+  font: 400 11.5px var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--caos-muted);
+}
+.analysis .register .meta .tag {
+  margin-right: 6px;
+}
+/* A count, drawn: the text beside it says the number, so the bar only helps
+   the eye rank the documents. */
+.analysis .register .bar {
+  display: block;
+  height: 4px;
+  background: var(--caos-border);
+}
+.analysis .register .bar > span {
+  display: block;
+  height: 100%;
+  background: var(--caos-muted);
+}
+.analysis .register li[data-withdrawn="true"] .bar > span {
+  background: var(--caos-warning);
+}
+
+/* A section's acts, grouped in the order they happen. */
+.actgroup {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.actgroup > .grouphead {
+  margin: 4px 0 0;
+  font: 600 13px var(--font-sans);
+  color: var(--caos-text);
+}
+
+/* A module's figures: two across where there is room, one on a narrow page. */
+.analysis .figures {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.analysis .figures .grouphead {
+  margin: 0;
+  font: 600 13px var(--font-sans);
+  color: var(--caos-text);
+}
+.analysis .figures .grouphead .cp {
+  margin-left: 8px;
+  font: 400 11.5px var(--font-sans);
+  color: var(--caos-muted);
+}
+.analysis .figgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 12px;
+}
+.analysis .fig {
+  min-width: 0;
+  border: 1px solid var(--caos-border);
+  border-radius: 6px;
+  background: var(--caos-panel);
+  padding: 10px 12px;
+}
+.analysis details.tables table.raw {
+  margin-top: 8px;
+}
+.analysis details.tables caption {
+  text-align: left;
+  font: 500 11.5px var(--font-mono);
+  color: var(--caos-muted);
+  padding: 4px 0;
+}
+
+/* Last in the file, so it wins over the tablist's own rule above. */
+@media (max-width: 767px) {
+  .tabs [role="tablist"] {
+    display: none;
+  }
+  .tabs .tabpick {
+    display: block;
+    flex: 1;
+    min-width: 0;
+    margin: 4px 0;
+  }
+}
+
+/* 400% zoom (320 px): a native select sizes itself in WebKit unless given a
+   height, and a file input's intrinsic width follows its font; both are held
+   to their target and their container (WCAG 2.5.8, 1.4.10). */
+.fld select {
+  height: 24px;
+}
+.admitsources input[type="file"] {
+  max-width: 100%;
+  min-width: 0;
+}
+.newcase input {
+  min-height: 24px;
+  box-sizing: border-box;
+}

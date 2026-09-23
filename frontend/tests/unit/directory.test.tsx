@@ -56,7 +56,7 @@ describe("Directory", () => {
     const first = fixture.body.cases[0]!;
     const row = container.querySelector<HTMLElement>(`tr[data-case="${first.case_id}"]`);
     expect(row).not.toBeNull();
-    expect(within(row!).getByRole("link", { name: "Open case" })).toHaveAttribute(
+    expect(within(row!).getByRole("link", { name: /^Open / })).toHaveAttribute(
       "href",
       `/analysis/?case=${first.case_id}`,
     );
@@ -143,7 +143,7 @@ describe("Directory", () => {
     // Scoped to the create-case control: the Case access panel below carries
     // refusals of its own.
     const newCase = container.querySelector<HTMLElement>("[data-new-case]")!;
-    expect(within(newCase).getByText(/NOT_AUTHORISED/)).toBeInTheDocument();
+    expect(newCase.querySelector("[data-refusal='NOT_AUTHORISED']")).not.toBeNull();
     expect(within(newCase).getByText(/your global role is ANALYST or higher/)).toBeInTheDocument();
     fireEvent.click(control);
     await settle();

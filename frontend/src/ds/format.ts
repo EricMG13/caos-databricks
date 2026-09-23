@@ -15,3 +15,20 @@ export function shortDigest(digest: string | null, fallback = "—"): string {
   if (digest === null) return fallback;
   return digest.length > 16 ? `${digest.slice(0, 8)}…${digest.slice(-4)}` : digest;
 }
+
+/** A decimal string for reading: thousands grouped and `places` fraction
+    digits, rounded half away from zero on the digits themselves, never through
+    a float. `500.000000` reads `500.00`; the exact value stays in the passport.
+    Anything that is not a plain decimal is returned as it came. */
+export function displayDecimal(value: string, places = 2): string {
+  const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(value);
+  if (!match) return value;
+  const [, sign, whole, fraction = ""] = match;
+  const digits = fraction.padEnd(places + 1, "0");
+  let scaled = BigInt(`${whole}${digits.slice(0, places)}`);
+  if (digits[places]! >= "5") scaled += 1n;
+  const text = scaled.toString().padStart(places + 1, "0");
+  const integer = text.slice(0, text.length - places).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const shown = places ? `${integer}.${text.slice(text.length - places)}` : integer;
+  return scaled === 0n ? shown : `${sign}${shown}`;
+}

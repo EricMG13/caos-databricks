@@ -18,18 +18,21 @@ export function SeverityMark({
   severity,
   pulse = false,
   label,
+  decorative = false,
 }: {
   severity: Severity;
   pulse?: boolean;
   /** Accessible name; defaults to the severity word. */
   label?: string;
+  /** Set where a word beside the mark already says it, so a screen reader
+      hears the severity once, not twice (critique). */
+  decorative?: boolean;
 }) {
   const { cls, shape } = SHAPES[severity];
   return (
     <span
       className={`glyph ${cls}${pulse && severity === "RUNNING" ? " caos-running" : ""}`}
-      role="img"
-      aria-label={label ?? severity}
+      {...(decorative ? { "aria-hidden": true } : { role: "img", "aria-label": label ?? severity })}
       data-shape={shape}
       data-severity={severity}
     />

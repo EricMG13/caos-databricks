@@ -116,7 +116,7 @@ describe("every command says when it succeeded (DF-6)", () => {
     fireEvent.change(within(panel).getByLabelText("Member id"), { target: { value: newcomer } });
     fireEvent.click(within(panel).getByRole("button", { name: "Grant standing" }));
     await settled();
-    expect(said(container)).toHaveTextContent("Standing granted. Reading the register back.");
+    expect(said(container)).toHaveTextContent("Standing granted.");
   });
 
   test("test_admitting_sources_is_announced", async () => {
@@ -179,23 +179,23 @@ describe("every command says when it succeeded (DF-6)", () => {
     }
     const { container } = render(
       <Announcer>
-        <Say sentence="Subject pinned. Reading it back." />
+        <Say sentence="Subject pinned." />
       </Announcer>,
     );
     const button = screen.getByRole("button", { name: "say" });
     fireEvent.click(button);
     const first = said(container).firstChild;
-    expect(said(container)).toHaveTextContent("Subject pinned. Reading it back.");
+    expect(said(container)).toHaveTextContent("Subject pinned.");
     fireEvent.click(button);
     // A region that does not change is not announced: the words are the same,
     // the node is not.
     expect(said(container).firstChild).not.toBe(first);
-    expect(said(container)).toHaveTextContent("Subject pinned. Reading it back.");
+    expect(said(container)).toHaveTextContent("Subject pinned.");
   });
 
   test("test_a_second_success_of_the_same_command_is_announced_again", () => {
     const ok = () => ({ kind: "ok" as const, status: 200, receipt: {}, replayed: false });
-    const sentence = "Subject pinned. Reading it back.";
+    const sentence = "Subject pinned.";
     const { container, rerender } = render(
       <Announcer>
         <CommandOutcome result={null} success={sentence} />
@@ -263,9 +263,7 @@ describe("focus after a confirmed act takes its own control away (DF-7)", () => 
     const heading = screen.getByRole("heading", { name: "Source pack" });
     expect(document.activeElement).toBe(heading);
     expect(heading).toHaveAttribute("tabindex", "-1");
-    expect(said(container)).toHaveTextContent(
-      `${alive.filename} withdrawn. Reading the pack back.`,
-    );
+    expect(said(container)).toHaveTextContent(`${alive.filename} withdrawn.`);
   });
 
   test("test_a_confirmed_revocation_leaves_focus_on_the_cases_access_heading", async () => {
@@ -292,7 +290,7 @@ describe("focus after a confirmed act takes its own control away (DF-7)", () => 
     expect(panel.querySelector(`[data-member="${WRITER}"]`)).toBeNull();
     const heading = within(panel).getByRole("heading", { name: first.title });
     expect(document.activeElement).toBe(heading);
-    expect(said(container)).toHaveTextContent("Standing revoked. Reading the register back.");
+    expect(said(container)).toHaveTextContent("Standing revoked.");
   });
 
   test("a control that leaves while focus is elsewhere takes nothing with it", async () => {
@@ -341,7 +339,7 @@ describe("focus after a confirmed act takes its own control away (DF-7)", () => 
       await settle();
       expect(window.location.pathname).toBe("/directory/");
       const heading = screen.getByRole("heading", { level: 1 });
-      expect(heading).toHaveTextContent("DIRECTORY");
+      expect(heading).toHaveTextContent("Directory");
       expect(document.activeElement).toBe(heading);
     } finally {
       window.history.pushState({}, "", "/");

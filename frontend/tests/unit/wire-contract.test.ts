@@ -52,6 +52,7 @@ test("Report and Committee bind case/run/revision and exact receipt identity", (
     case_title: "Issuer",
     artifacts: [],
     narrative: [[{ text: "<script>plain text</script>", figure: null }]],
+    revisions: [{ revision_id: SOURCE, payload_sha256: SHA, saved_at: AT, state: "filed" }],
   };
   const expected = { caseId: CASE, runId: RUN, revisionId: SOURCE };
   const report = parseReportDocument(envelope(body, { case_id: CASE, title: "Issuer" }));
@@ -401,6 +402,19 @@ function analysis(): { [key: string]: Json } {
           ],
           model_analysis: "# CP-0",
           host_calculation: "NONE",
+          tables: [
+            {
+              table_id: "cp1.debt_facility_register",
+              columns: ["facility_id", "carrying_value"],
+              rows: [
+                [
+                  { text: "TERM", value: null },
+                  { text: "(1,245.50)", value: "-1245.50" },
+                ],
+              ],
+            },
+          ],
+          tables_unavailable_reason: null,
         },
       ],
       pending: [],
@@ -664,6 +678,24 @@ describe("the v1 wire contract", () => {
     const nulled = JSON.parse(JSON.stringify(analysis()));
     nulled.body.case_id = null;
     refuses(() => parseAnalysisDocument(nulled), "$.body.case_id");
+
+    // A table figure is the server's exact decimal string or null, never a
+    // number the browser would round.
+    const table = "$.body.handoffs[0].tables[0]";
+    for (const value of [1245.5, "1.2455e3", "+1245", "NaN"]) {
+      const figure = JSON.parse(JSON.stringify(analysis()));
+      figure.body.handoffs[0].tables[0].rows[0][1].value = value;
+      refuses(() => parseAnalysisDocument(figure), `${table}.rows[0][1].value`);
+    }
+    const wide = JSON.parse(JSON.stringify(analysis()));
+    wide.body.handoffs[0].tables[0].rows[0] = Array(33).fill({ text: "1", value: "1" });
+    refuses(() => parseAnalysisDocument(wide), `${table}.rows[0]`);
+    const tag = JSON.parse(JSON.stringify(analysis()));
+    tag.body.handoffs[0].tables[0].table_id = "cp1 debt";
+    refuses(() => parseAnalysisDocument(tag), `${table}.table_id`);
+    const reason = JSON.parse(JSON.stringify(analysis()));
+    reason.body.handoffs[0].tables_unavailable_reason = "PARSE_ERROR";
+    refuses(() => parseAnalysisDocument(reason), "$.body.handoffs[0].tables_unavailable_reason");
 
     refuses(() => parseDirectoryDocument([]), "$");
     refuses(() => parseDirectoryDocument(null), "$");

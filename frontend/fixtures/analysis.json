@@ -56,7 +56,9 @@
           }
         ],
         "model_analysis": "# Source register\n\nSix sources are pinned to set version 4. The **10-K** and **10-Q** anchor the reporting perimeter; the *8-K senior secured notes indenture* documents the 2028 tranche.\n\n- No restatement is carried across intakes.\n- Every source resolves to a document digest the host has re-verified.\n",
-        "host_calculation": "NONE"
+        "host_calculation": "NONE",
+        "tables": [],
+        "tables_unavailable_reason": null
       },
       {
         "route_node_id": "rn-cp-1",
@@ -106,8 +108,885 @@
             "withdrawn_at": null
           }
         ],
-        "model_analysis": "## Normalised financials\n\nQ2 2026 Adjusted EBITDA reached **$769M** (10.4% margin) on 197,325 retail units sold ($7,125 GPU). Cash balance stands at $2,630M.\n\n1. Revenue growth is unit-driven, not price-driven.\n2. GPU expansion carries most of the EBITDA improvement.\n\n`net_leverage = (total_debt - cash) / ltm_adjusted_ebitda`\n",
-        "host_calculation": "NONE"
+        "model_analysis": "## Normalised financials\n\nQ2 2026 Adjusted EBITDA reached **$769M** (10.4% margin) on 197,325 retail units sold ($7,125 GPU). Cash balance stands at $2,630M.\n\n1. Revenue growth is unit-driven, not price-driven.\n2. GPU expansion carries most of the EBITDA improvement.\n\n`net_leverage = (total_debt - cash) / ltm_adjusted_ebitda`\n\n### Model workbook interface\n\nEBITDA of $758M bridges to the $769M above through four identified add-backs (net $11M). Carrying debt of $5,790M against $2,630M of cash is net leverage of 1.2x on LTM Adjusted EBITDA of $2,576M.\n\n<!-- table-id: cp1.model_period_register -->\n| period_id | fiscal_year | fiscal_quarter | period_type | start_date | end_date | day_count | audit_status | currency | unit | accounting_basis | entity_perimeter | source_id | source_locator | component_period_ids |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n| FY2025 | 2025 | - | FY | 2025-01-01 | 2025-12-31 | 365 | AUDITED | USD | MILLIONS | US GAAP | Carvana Co. and consolidated subsidiaries | CVNA_10K_Annual_Report_FY2025.htm | Item 8, Consolidated Statements of Operations | - |\n| Q2-2025 | 2025 | 2 | QUARTER | 2025-04-01 | 2025-06-30 | 91 | UNAUDITED | USD | MILLIONS | US GAAP | Carvana Co. and consolidated subsidiaries | CVNA_10Q_Quarterly_Report_Q2_2026.htm | p.4, three months ended June 30, 2025 (comparative) | - |\n| Q3-2025 | 2025 | 3 | QUARTER | 2025-07-01 | 2025-09-30 | 92 | UNAUDITED | USD | MILLIONS | US GAAP | Carvana Co. and consolidated subsidiaries | CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm | p.14, trailing five-quarter financial tables | - |\n| Q4-2025 | 2025 | 4 | QUARTER | 2025-10-01 | 2025-12-31 | 92 | UNAUDITED | USD | MILLIONS | US GAAP | Carvana Co. and consolidated subsidiaries | CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm | p.14, trailing five-quarter financial tables | - |\n| Q1-2026 | 2026 | 1 | QUARTER | 2026-01-01 | 2026-03-31 | 90 | UNAUDITED | USD | MILLIONS | US GAAP | Carvana Co. and consolidated subsidiaries | CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm | p.14, trailing five-quarter financial tables | - |\n| Q2-2026 | 2026 | 2 | QUARTER | 2026-04-01 | 2026-06-30 | 91 | UNAUDITED | USD | MILLIONS | US GAAP | Carvana Co. and consolidated subsidiaries | CVNA_10Q_Quarterly_Report_Q2_2026.htm | p.4, three months ended June 30, 2026 | - |\n| H1-2025 | 2025 | - | YTD | 2025-01-01 | 2025-06-30 | 181 | UNAUDITED | USD | MILLIONS | US GAAP | Carvana Co. and consolidated subsidiaries | CVNA_10Q_Quarterly_Report_Q2_2026.htm | p.4, six months ended June 30, 2025 (comparative) | - |\n| H1-2026 | 2026 | - | YTD | 2026-01-01 | 2026-06-30 | 181 | UNAUDITED | USD | MILLIONS | US GAAP | Carvana Co. and consolidated subsidiaries | CVNA_10Q_Quarterly_Report_Q2_2026.htm | p.4, six months ended June 30, 2026 | - |\n| LTM-Q2-2026 | 2026 | - | LTM | 2025-07-01 | 2026-06-30 | 365 | CALCULATED | USD | MILLIONS | US GAAP | Carvana Co. and consolidated subsidiaries | CVNA_10K_Annual_Report_FY2025.htm; CVNA_10Q_Quarterly_Report_Q2_2026.htm | FY2025 plus H1-2026 less H1-2025 | FY2025; H1-2026; H1-2025 |\n\n<!-- table-id: cp1.segment_revenue_schedule -->\n| segment_id | segment_name | segment_type | display_priority | period_id | revenue | status | source_id | source_locator |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- |\n| RETAIL | Retail vehicle sales, net | OPERATING_SEGMENT | 1 | Q2-2025 | 3,842 | Verified | CVNA_10Q_Quarterly_Report_Q2_2026.htm | p.12, Note 3 Revenue Recognition (comparative) |\n| WHOLESALE | Wholesale sales and revenues | OPERATING_SEGMENT | 2 | Q2-2025 | 1,031 | Verified | CVNA_10Q_Quarterly_Report_Q2_2026.htm | p.12, Note 3 Revenue Recognition (comparative) |\n| OTHER | Other sales and revenues | OPERATING_SEGMENT | 3 | Q2-2025 | 421 | Verified | CVNA_10Q_Quarterly_Report_Q2_2026.htm | p.12, Note 3 Revenue Recognition (comparative) |\n| RETAIL | Retail vehicle sales, net | OPERATING_SEGMENT | 1 | Q3-2025 | 4,195 | Verified | CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm | p.14, trailing five-quarter financial tables |\n| WHOLESALE | Wholesale sales and revenues | OPERATING_SEGMENT | 2 | Q3-2025 | 1,126 | Verified | CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm | p.14, trailing five-quarter financial tables |\n| OTHER | Other sales and revenues | OPERATING_SEGMENT | 3 | Q3-2025 | 457 | Verified | CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm | p.14, trailing five-quarter financial tables |\n| RETAIL | Retail vehicle sales, net | OPERATING_SEGMENT | 1 | Q4-2025 | 4,398 | Verified | CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm | p.14, trailing five-quarter financial tables |\n| WHOLESALE | Wholesale sales and revenues | OPERATING_SEGMENT | 2 | Q4-2025 | 1,190 | Verified | CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm | p.14, trailing five-quarter financial tables |\n| OTHER | Other sales and revenues | OPERATING_SEGMENT | 3 | Q4-2025 | 482 | Verified | CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm | p.14, trailing five-quarter financial tables |\n| RETAIL | Retail vehicle sales, net | OPERATING_SEGMENT | 1 | Q1-2026 | 4,985 | Verified | CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm | p.14, trailing five-quarter financial tables |\n| WHOLESALE | Wholesale sales and revenues | OPERATING_SEGMENT | 2 | Q1-2026 | 1,337 | Verified | CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm | p.14, trailing five-quarter financial tables |\n| OTHER | Other sales and revenues | OPERATING_SEGMENT | 3 | Q1-2026 | 546 | Verified | CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm | p.14, trailing five-quarter financial tables |\n| RETAIL | Retail vehicle sales, net | OPERATING_SEGMENT | 1 | Q2-2026 | 5,369 | Verified | CVNA_10Q_Quarterly_Report_Q2_2026.htm | p.12, Note 3 Revenue Recognition |\n| WHOLESALE | Wholesale sales and revenues | OPERATING_SEGMENT | 2 | Q2-2026 | 1,437 | Verified | CVNA_10Q_Quarterly_Report_Q2_2026.htm | p.12, Note 3 Revenue Recognition |\n| OTHER | Other sales and revenues | OPERATING_SEGMENT | 3 | Q2-2026 | 588 | Verified | CVNA_10Q_Quarterly_Report_Q2_2026.htm | p.12, Note 3 Revenue Recognition |\n\n<!-- table-id: cp1.operating_kpi_schedule -->\n| kpi_id | kpi_label | business_unit | kpi_category | display_priority | period_id | value | unit | value_type | status | source_id | source_locator |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n| retail_units_sold | Retail vehicle unit sales | Retail | Volume | 1 | Q2-2025 | 143,280 | UNITS | PERIOD_FLOW | Verified | CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm | p.3, key operating metrics |\n| retail_units_sold | Retail vehicle unit sales | Retail | Volume | 1 | Q3-2025 | 155,941 | UNITS | PERIOD_FLOW | Verified | CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm | p.3, key operating metrics |\n| retail_units_sold | Retail vehicle unit sales | Retail | Volume | 1 | Q4-2025 | 163,522 | UNITS | PERIOD_FLOW | Verified | CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm | p.3, key operating metrics |\n| retail_units_sold | Retail vehicle unit sales | Retail | Volume | 1 | Q1-2026 | 184,114 | UNITS | PERIOD_FLOW | Verified | CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm | p.3, key operating metrics |\n| retail_units_sold | Retail vehicle unit sales | Retail | Volume | 1 | Q2-2026 | 197,325 | UNITS | PERIOD_FLOW | Verified | CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm | p.3, key operating metrics |\n| total_gpu | Total gross profit per retail unit | Retail | Unit economics | 2 | Q2-2025 | $6,480 | USD per retail unit | RATE | Verified | CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm | p.3, key operating metrics |\n| total_gpu | Total gross profit per retail unit | Retail | Unit economics | 2 | Q3-2025 | $6,655 | USD per retail unit | RATE | Verified | CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm | p.3, key operating metrics |\n| total_gpu | Total gross profit per retail unit | Retail | Unit economics | 2 | Q4-2025 | $6,790 | USD per retail unit | RATE | Verified | CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm | p.3, key operating metrics |\n| total_gpu | Total gross profit per retail unit | Retail | Unit economics | 2 | Q1-2026 | $6,960 | USD per retail unit | RATE | Verified | CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm | p.3, key operating metrics |\n| total_gpu | Total gross profit per retail unit | Retail | Unit economics | 2 | Q2-2026 | $7,125 | USD per retail unit | RATE | Verified | CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm | p.3, key operating metrics |\n| wholesale_units_sold | Wholesale vehicle unit sales | Wholesale | Volume | 1 | Q2-2025 | 21,904 | UNITS | PERIOD_FLOW | Verified | CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm | p.3, key operating metrics |\n| wholesale_units_sold | Wholesale vehicle unit sales | Wholesale | Volume | 1 | Q3-2025 | 23,660 | UNITS | PERIOD_FLOW | Verified | CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm | p.3, key operating metrics |\n| wholesale_units_sold | Wholesale vehicle unit sales | Wholesale | Volume | 1 | Q4-2025 | 24,815 | UNITS | PERIOD_FLOW | Verified | CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm | p.3, key operating metrics |\n| wholesale_units_sold | Wholesale vehicle unit sales | Wholesale | Volume | 1 | Q1-2026 | 27,390 | UNITS | PERIOD_FLOW | Verified | CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm | p.3, key operating metrics |\n| wholesale_units_sold | Wholesale vehicle unit sales | Wholesale | Volume | 1 | Q2-2026 | 29,108 | UNITS | PERIOD_FLOW | Verified | CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm | p.3, key operating metrics |\n\n<!-- table-id: cp1.adjusted_ebitda_bridge -->\n| addback_id | addback_label | addback_classification | realization_status | display_priority | period_id | value | status | source_definition | source_id | source_locator |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n| SBC | Share-based compensation expense | SBC | NOT_STATED | 1 | Q1-2026 | 25 | Verified | Non-cash share-based compensation, excluded by the issuer's Adjusted EBITDA definition | CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm | p.12, Reconciliation of Net Income to Adjusted EBITDA |\n| ROOT_WARRANTS | Change in fair value of Root warrants | OTHER_EXPLICIT | NOT_STATED | 2 | Q1-2026 | 7 | Verified | Unrealized change in the fair value of warrants to acquire Root, Inc. shares | CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm | p.12, Reconciliation of Net Income to Adjusted EBITDA |\n| RESTRUCTURING | Restructuring expense | RESTRUCTURING | NOT_STATED | 3 | Q1-2026 | 6 | Verified | Costs of the 2025 reconditioning-site consolidation, as the issuer defines them | CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm | p.12, Reconciliation of Net Income to Adjusted EBITDA |\n| OTHER_INCOME | Other (income) expense, net | OTHER_EXPLICIT | NOT_STATED | 4 | Q1-2026 | (4) | Verified | Non-operating other (income) expense, net, as reported below operating income | CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm | p.12, Reconciliation of Net Income to Adjusted EBITDA |\n| SBC | Share-based compensation expense | SBC | NOT_STATED | 1 | Q2-2026 | 27 | Verified | Non-cash share-based compensation, excluded by the issuer's Adjusted EBITDA definition | CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm | p.12, Reconciliation of Net Income to Adjusted EBITDA |\n| ROOT_WARRANTS | Change in fair value of Root warrants | OTHER_EXPLICIT | NOT_STATED | 2 | Q2-2026 | (14) | Verified | Unrealized change in the fair value of warrants to acquire Root, Inc. shares | CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm | p.12, Reconciliation of Net Income to Adjusted EBITDA |\n| RESTRUCTURING | Restructuring expense | RESTRUCTURING | NOT_STATED | 3 | Q2-2026 | 4 | Verified | Costs of the 2025 reconditioning-site consolidation, as the issuer defines them | CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm | p.12, Reconciliation of Net Income to Adjusted EBITDA |\n| OTHER_INCOME | Other (income) expense, net | OTHER_EXPLICIT | NOT_STATED | 4 | Q2-2026 | (6) | Verified | Non-operating other (income) expense, net, as reported below operating income | CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm | p.12, Reconciliation of Net Income to Adjusted EBITDA |\n\n<!-- table-id: cp1.debt_facility_register -->\n| facility_id | facility_name | period_id | facility_type | carrying_value | principal | drawn_amount | commitment | secured_status | seniority | currency | margin_or_coupon | maturity_date | lease_classification | source_id | source_locator |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n| FLOOR_PLAN | Floor Plan Facility (Ally Bank) | Q2-2026 | REVOLVING_FLOOR_PLAN | 1,245 | 1,245 | 1,245 | 2,200 | SECURED | SENIOR | USD | SOFR + 3.20% | 2028-03-31 | NOT_LEASE | CVNA_10Q_Quarterly_Report_Q2_2026.htm | p.21, Note 9 Debt Instruments |\n| SSN_2028 | 9.00%/12.00% Cash/PIK Toggle Senior Secured Notes due 2028 | Q2-2026 | SENIOR_SECURED_NOTES | 996 | 1,005 | 1,005 | Not applicable | SECURED | SENIOR | USD | 9.00% cash / 12.00% PIK | 2028-12-01 | NOT_LEASE | CVNA_10Q_Quarterly_Report_Q2_2026.htm | p.21, Note 9 Debt Instruments |\n| SSN_2030 | 11.00%/13.00% Cash/PIK Toggle Senior Secured Notes due 2030 | Q2-2026 | SENIOR_SECURED_NOTES | 1,462 | 1,480 | 1,480 | Not applicable | SECURED | SENIOR | USD | 11.00% cash / 13.00% PIK | 2030-06-01 | NOT_LEASE | CVNA_10Q_Quarterly_Report_Q2_2026.htm | p.21, Note 9 Debt Instruments |\n| SSN_2031 | 9.00%/14.00% Cash/PIK Toggle Senior Secured Notes due 2031 | Q2-2026 | SENIOR_SECURED_NOTES | 1,701 | 1,725 | 1,725 | Not applicable | SECURED | SENIOR | USD | 9.00% cash / 14.00% PIK | 2031-06-01 | NOT_LEASE | CVNA_10Q_Quarterly_Report_Q2_2026.htm | p.21, Note 9 Debt Instruments |\n| SUN_2027 | 5.50% Senior Notes due 2027 | Q2-2026 | SENIOR_UNSECURED_NOTES | 74 | 75 | 75 | Not applicable | UNSECURED | SENIOR | USD | 5.50% | 2027-04-15 | NOT_LEASE | CVNA_10Q_Quarterly_Report_Q2_2026.htm | p.21, Note 9 Debt Instruments |\n| FINANCE_LEASES | Finance lease liabilities | Q2-2026 | FINANCE_LEASE | 312 | Not applicable | Not applicable | Not applicable | NOT_STATED | NOT_STATED | USD | Not stated | Not stated | FINANCE_LEASE | CVNA_10Q_Quarterly_Report_Q2_2026.htm | p.23, Note 11 Leases |\n",
+        "host_calculation": "NONE",
+        "tables": [
+          {
+            "table_id": "cp1.model_period_register",
+            "columns": [
+              "period_id",
+              "fiscal_year",
+              "fiscal_quarter",
+              "period_type",
+              "start_date",
+              "end_date",
+              "day_count",
+              "audit_status",
+              "currency",
+              "unit",
+              "accounting_basis",
+              "entity_perimeter",
+              "source_id",
+              "source_locator",
+              "component_period_ids"
+            ],
+            "rows": [
+              [
+                { "text": "FY2025", "value": null },
+                { "text": "2025", "value": "2025" },
+                { "text": "-", "value": null },
+                { "text": "FY", "value": null },
+                { "text": "2025-01-01", "value": null },
+                { "text": "2025-12-31", "value": null },
+                { "text": "365", "value": "365" },
+                { "text": "AUDITED", "value": null },
+                { "text": "USD", "value": null },
+                { "text": "MILLIONS", "value": null },
+                { "text": "US GAAP", "value": null },
+                { "text": "Carvana Co. and consolidated subsidiaries", "value": null },
+                { "text": "CVNA_10K_Annual_Report_FY2025.htm", "value": null },
+                { "text": "Item 8, Consolidated Statements of Operations", "value": null },
+                { "text": "-", "value": null }
+              ],
+              [
+                { "text": "Q2-2025", "value": null },
+                { "text": "2025", "value": "2025" },
+                { "text": "2", "value": "2" },
+                { "text": "QUARTER", "value": null },
+                { "text": "2025-04-01", "value": null },
+                { "text": "2025-06-30", "value": null },
+                { "text": "91", "value": "91" },
+                { "text": "UNAUDITED", "value": null },
+                { "text": "USD", "value": null },
+                { "text": "MILLIONS", "value": null },
+                { "text": "US GAAP", "value": null },
+                { "text": "Carvana Co. and consolidated subsidiaries", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.4, three months ended June 30, 2025 (comparative)", "value": null },
+                { "text": "-", "value": null }
+              ],
+              [
+                { "text": "Q3-2025", "value": null },
+                { "text": "2025", "value": "2025" },
+                { "text": "3", "value": "3" },
+                { "text": "QUARTER", "value": null },
+                { "text": "2025-07-01", "value": null },
+                { "text": "2025-09-30", "value": null },
+                { "text": "92", "value": "92" },
+                { "text": "UNAUDITED", "value": null },
+                { "text": "USD", "value": null },
+                { "text": "MILLIONS", "value": null },
+                { "text": "US GAAP", "value": null },
+                { "text": "Carvana Co. and consolidated subsidiaries", "value": null },
+                { "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm", "value": null },
+                { "text": "p.14, trailing five-quarter financial tables", "value": null },
+                { "text": "-", "value": null }
+              ],
+              [
+                { "text": "Q4-2025", "value": null },
+                { "text": "2025", "value": "2025" },
+                { "text": "4", "value": "4" },
+                { "text": "QUARTER", "value": null },
+                { "text": "2025-10-01", "value": null },
+                { "text": "2025-12-31", "value": null },
+                { "text": "92", "value": "92" },
+                { "text": "UNAUDITED", "value": null },
+                { "text": "USD", "value": null },
+                { "text": "MILLIONS", "value": null },
+                { "text": "US GAAP", "value": null },
+                { "text": "Carvana Co. and consolidated subsidiaries", "value": null },
+                { "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm", "value": null },
+                { "text": "p.14, trailing five-quarter financial tables", "value": null },
+                { "text": "-", "value": null }
+              ],
+              [
+                { "text": "Q1-2026", "value": null },
+                { "text": "2026", "value": "2026" },
+                { "text": "1", "value": "1" },
+                { "text": "QUARTER", "value": null },
+                { "text": "2026-01-01", "value": null },
+                { "text": "2026-03-31", "value": null },
+                { "text": "90", "value": "90" },
+                { "text": "UNAUDITED", "value": null },
+                { "text": "USD", "value": null },
+                { "text": "MILLIONS", "value": null },
+                { "text": "US GAAP", "value": null },
+                { "text": "Carvana Co. and consolidated subsidiaries", "value": null },
+                { "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm", "value": null },
+                { "text": "p.14, trailing five-quarter financial tables", "value": null },
+                { "text": "-", "value": null }
+              ],
+              [
+                { "text": "Q2-2026", "value": null },
+                { "text": "2026", "value": "2026" },
+                { "text": "2", "value": "2" },
+                { "text": "QUARTER", "value": null },
+                { "text": "2026-04-01", "value": null },
+                { "text": "2026-06-30", "value": null },
+                { "text": "91", "value": "91" },
+                { "text": "UNAUDITED", "value": null },
+                { "text": "USD", "value": null },
+                { "text": "MILLIONS", "value": null },
+                { "text": "US GAAP", "value": null },
+                { "text": "Carvana Co. and consolidated subsidiaries", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.4, three months ended June 30, 2026", "value": null },
+                { "text": "-", "value": null }
+              ],
+              [
+                { "text": "H1-2025", "value": null },
+                { "text": "2025", "value": "2025" },
+                { "text": "-", "value": null },
+                { "text": "YTD", "value": null },
+                { "text": "2025-01-01", "value": null },
+                { "text": "2025-06-30", "value": null },
+                { "text": "181", "value": "181" },
+                { "text": "UNAUDITED", "value": null },
+                { "text": "USD", "value": null },
+                { "text": "MILLIONS", "value": null },
+                { "text": "US GAAP", "value": null },
+                { "text": "Carvana Co. and consolidated subsidiaries", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.4, six months ended June 30, 2025 (comparative)", "value": null },
+                { "text": "-", "value": null }
+              ],
+              [
+                { "text": "H1-2026", "value": null },
+                { "text": "2026", "value": "2026" },
+                { "text": "-", "value": null },
+                { "text": "YTD", "value": null },
+                { "text": "2026-01-01", "value": null },
+                { "text": "2026-06-30", "value": null },
+                { "text": "181", "value": "181" },
+                { "text": "UNAUDITED", "value": null },
+                { "text": "USD", "value": null },
+                { "text": "MILLIONS", "value": null },
+                { "text": "US GAAP", "value": null },
+                { "text": "Carvana Co. and consolidated subsidiaries", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.4, six months ended June 30, 2026", "value": null },
+                { "text": "-", "value": null }
+              ],
+              [
+                { "text": "LTM-Q2-2026", "value": null },
+                { "text": "2026", "value": "2026" },
+                { "text": "-", "value": null },
+                { "text": "LTM", "value": null },
+                { "text": "2025-07-01", "value": null },
+                { "text": "2026-06-30", "value": null },
+                { "text": "365", "value": "365" },
+                { "text": "CALCULATED", "value": null },
+                { "text": "USD", "value": null },
+                { "text": "MILLIONS", "value": null },
+                { "text": "US GAAP", "value": null },
+                { "text": "Carvana Co. and consolidated subsidiaries", "value": null },
+                {
+                  "text": "CVNA_10K_Annual_Report_FY2025.htm; CVNA_10Q_Quarterly_Report_Q2_2026.htm",
+                  "value": null
+                },
+                { "text": "FY2025 plus H1-2026 less H1-2025", "value": null },
+                { "text": "FY2025; H1-2026; H1-2025", "value": null }
+              ]
+            ]
+          },
+          {
+            "table_id": "cp1.segment_revenue_schedule",
+            "columns": [
+              "segment_id",
+              "segment_name",
+              "segment_type",
+              "display_priority",
+              "period_id",
+              "revenue",
+              "status",
+              "source_id",
+              "source_locator"
+            ],
+            "rows": [
+              [
+                { "text": "RETAIL", "value": null },
+                { "text": "Retail vehicle sales, net", "value": null },
+                { "text": "OPERATING_SEGMENT", "value": null },
+                { "text": "1", "value": "1" },
+                { "text": "Q2-2025", "value": null },
+                { "text": "3,842", "value": "3842" },
+                { "text": "Verified", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.12, Note 3 Revenue Recognition (comparative)", "value": null }
+              ],
+              [
+                { "text": "WHOLESALE", "value": null },
+                { "text": "Wholesale sales and revenues", "value": null },
+                { "text": "OPERATING_SEGMENT", "value": null },
+                { "text": "2", "value": "2" },
+                { "text": "Q2-2025", "value": null },
+                { "text": "1,031", "value": "1031" },
+                { "text": "Verified", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.12, Note 3 Revenue Recognition (comparative)", "value": null }
+              ],
+              [
+                { "text": "OTHER", "value": null },
+                { "text": "Other sales and revenues", "value": null },
+                { "text": "OPERATING_SEGMENT", "value": null },
+                { "text": "3", "value": "3" },
+                { "text": "Q2-2025", "value": null },
+                { "text": "421", "value": "421" },
+                { "text": "Verified", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.12, Note 3 Revenue Recognition (comparative)", "value": null }
+              ],
+              [
+                { "text": "RETAIL", "value": null },
+                { "text": "Retail vehicle sales, net", "value": null },
+                { "text": "OPERATING_SEGMENT", "value": null },
+                { "text": "1", "value": "1" },
+                { "text": "Q3-2025", "value": null },
+                { "text": "4,195", "value": "4195" },
+                { "text": "Verified", "value": null },
+                { "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm", "value": null },
+                { "text": "p.14, trailing five-quarter financial tables", "value": null }
+              ],
+              [
+                { "text": "WHOLESALE", "value": null },
+                { "text": "Wholesale sales and revenues", "value": null },
+                { "text": "OPERATING_SEGMENT", "value": null },
+                { "text": "2", "value": "2" },
+                { "text": "Q3-2025", "value": null },
+                { "text": "1,126", "value": "1126" },
+                { "text": "Verified", "value": null },
+                { "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm", "value": null },
+                { "text": "p.14, trailing five-quarter financial tables", "value": null }
+              ],
+              [
+                { "text": "OTHER", "value": null },
+                { "text": "Other sales and revenues", "value": null },
+                { "text": "OPERATING_SEGMENT", "value": null },
+                { "text": "3", "value": "3" },
+                { "text": "Q3-2025", "value": null },
+                { "text": "457", "value": "457" },
+                { "text": "Verified", "value": null },
+                { "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm", "value": null },
+                { "text": "p.14, trailing five-quarter financial tables", "value": null }
+              ],
+              [
+                { "text": "RETAIL", "value": null },
+                { "text": "Retail vehicle sales, net", "value": null },
+                { "text": "OPERATING_SEGMENT", "value": null },
+                { "text": "1", "value": "1" },
+                { "text": "Q4-2025", "value": null },
+                { "text": "4,398", "value": "4398" },
+                { "text": "Verified", "value": null },
+                { "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm", "value": null },
+                { "text": "p.14, trailing five-quarter financial tables", "value": null }
+              ],
+              [
+                { "text": "WHOLESALE", "value": null },
+                { "text": "Wholesale sales and revenues", "value": null },
+                { "text": "OPERATING_SEGMENT", "value": null },
+                { "text": "2", "value": "2" },
+                { "text": "Q4-2025", "value": null },
+                { "text": "1,190", "value": "1190" },
+                { "text": "Verified", "value": null },
+                { "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm", "value": null },
+                { "text": "p.14, trailing five-quarter financial tables", "value": null }
+              ],
+              [
+                { "text": "OTHER", "value": null },
+                { "text": "Other sales and revenues", "value": null },
+                { "text": "OPERATING_SEGMENT", "value": null },
+                { "text": "3", "value": "3" },
+                { "text": "Q4-2025", "value": null },
+                { "text": "482", "value": "482" },
+                { "text": "Verified", "value": null },
+                { "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm", "value": null },
+                { "text": "p.14, trailing five-quarter financial tables", "value": null }
+              ],
+              [
+                { "text": "RETAIL", "value": null },
+                { "text": "Retail vehicle sales, net", "value": null },
+                { "text": "OPERATING_SEGMENT", "value": null },
+                { "text": "1", "value": "1" },
+                { "text": "Q1-2026", "value": null },
+                { "text": "4,985", "value": "4985" },
+                { "text": "Verified", "value": null },
+                { "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm", "value": null },
+                { "text": "p.14, trailing five-quarter financial tables", "value": null }
+              ],
+              [
+                { "text": "WHOLESALE", "value": null },
+                { "text": "Wholesale sales and revenues", "value": null },
+                { "text": "OPERATING_SEGMENT", "value": null },
+                { "text": "2", "value": "2" },
+                { "text": "Q1-2026", "value": null },
+                { "text": "1,337", "value": "1337" },
+                { "text": "Verified", "value": null },
+                { "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm", "value": null },
+                { "text": "p.14, trailing five-quarter financial tables", "value": null }
+              ],
+              [
+                { "text": "OTHER", "value": null },
+                { "text": "Other sales and revenues", "value": null },
+                { "text": "OPERATING_SEGMENT", "value": null },
+                { "text": "3", "value": "3" },
+                { "text": "Q1-2026", "value": null },
+                { "text": "546", "value": "546" },
+                { "text": "Verified", "value": null },
+                { "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm", "value": null },
+                { "text": "p.14, trailing five-quarter financial tables", "value": null }
+              ],
+              [
+                { "text": "RETAIL", "value": null },
+                { "text": "Retail vehicle sales, net", "value": null },
+                { "text": "OPERATING_SEGMENT", "value": null },
+                { "text": "1", "value": "1" },
+                { "text": "Q2-2026", "value": null },
+                { "text": "5,369", "value": "5369" },
+                { "text": "Verified", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.12, Note 3 Revenue Recognition", "value": null }
+              ],
+              [
+                { "text": "WHOLESALE", "value": null },
+                { "text": "Wholesale sales and revenues", "value": null },
+                { "text": "OPERATING_SEGMENT", "value": null },
+                { "text": "2", "value": "2" },
+                { "text": "Q2-2026", "value": null },
+                { "text": "1,437", "value": "1437" },
+                { "text": "Verified", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.12, Note 3 Revenue Recognition", "value": null }
+              ],
+              [
+                { "text": "OTHER", "value": null },
+                { "text": "Other sales and revenues", "value": null },
+                { "text": "OPERATING_SEGMENT", "value": null },
+                { "text": "3", "value": "3" },
+                { "text": "Q2-2026", "value": null },
+                { "text": "588", "value": "588" },
+                { "text": "Verified", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.12, Note 3 Revenue Recognition", "value": null }
+              ]
+            ]
+          },
+          {
+            "table_id": "cp1.operating_kpi_schedule",
+            "columns": [
+              "kpi_id",
+              "kpi_label",
+              "business_unit",
+              "kpi_category",
+              "display_priority",
+              "period_id",
+              "value",
+              "unit",
+              "value_type",
+              "status",
+              "source_id",
+              "source_locator"
+            ],
+            "rows": [
+              [
+                { "text": "retail_units_sold", "value": null },
+                { "text": "Retail vehicle unit sales", "value": null },
+                { "text": "Retail", "value": null },
+                { "text": "Volume", "value": null },
+                { "text": "1", "value": "1" },
+                { "text": "Q2-2025", "value": null },
+                { "text": "143,280", "value": "143280" },
+                { "text": "UNITS", "value": null },
+                { "text": "PERIOD_FLOW", "value": null },
+                { "text": "Verified", "value": null },
+                { "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm", "value": null },
+                { "text": "p.3, key operating metrics", "value": null }
+              ],
+              [
+                { "text": "retail_units_sold", "value": null },
+                { "text": "Retail vehicle unit sales", "value": null },
+                { "text": "Retail", "value": null },
+                { "text": "Volume", "value": null },
+                { "text": "1", "value": "1" },
+                { "text": "Q3-2025", "value": null },
+                { "text": "155,941", "value": "155941" },
+                { "text": "UNITS", "value": null },
+                { "text": "PERIOD_FLOW", "value": null },
+                { "text": "Verified", "value": null },
+                { "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm", "value": null },
+                { "text": "p.3, key operating metrics", "value": null }
+              ],
+              [
+                { "text": "retail_units_sold", "value": null },
+                { "text": "Retail vehicle unit sales", "value": null },
+                { "text": "Retail", "value": null },
+                { "text": "Volume", "value": null },
+                { "text": "1", "value": "1" },
+                { "text": "Q4-2025", "value": null },
+                { "text": "163,522", "value": "163522" },
+                { "text": "UNITS", "value": null },
+                { "text": "PERIOD_FLOW", "value": null },
+                { "text": "Verified", "value": null },
+                { "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm", "value": null },
+                { "text": "p.3, key operating metrics", "value": null }
+              ],
+              [
+                { "text": "retail_units_sold", "value": null },
+                { "text": "Retail vehicle unit sales", "value": null },
+                { "text": "Retail", "value": null },
+                { "text": "Volume", "value": null },
+                { "text": "1", "value": "1" },
+                { "text": "Q1-2026", "value": null },
+                { "text": "184,114", "value": "184114" },
+                { "text": "UNITS", "value": null },
+                { "text": "PERIOD_FLOW", "value": null },
+                { "text": "Verified", "value": null },
+                { "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm", "value": null },
+                { "text": "p.3, key operating metrics", "value": null }
+              ],
+              [
+                { "text": "retail_units_sold", "value": null },
+                { "text": "Retail vehicle unit sales", "value": null },
+                { "text": "Retail", "value": null },
+                { "text": "Volume", "value": null },
+                { "text": "1", "value": "1" },
+                { "text": "Q2-2026", "value": null },
+                { "text": "197,325", "value": "197325" },
+                { "text": "UNITS", "value": null },
+                { "text": "PERIOD_FLOW", "value": null },
+                { "text": "Verified", "value": null },
+                { "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm", "value": null },
+                { "text": "p.3, key operating metrics", "value": null }
+              ],
+              [
+                { "text": "total_gpu", "value": null },
+                { "text": "Total gross profit per retail unit", "value": null },
+                { "text": "Retail", "value": null },
+                { "text": "Unit economics", "value": null },
+                { "text": "2", "value": "2" },
+                { "text": "Q2-2025", "value": null },
+                { "text": "$6,480", "value": "6480" },
+                { "text": "USD per retail unit", "value": null },
+                { "text": "RATE", "value": null },
+                { "text": "Verified", "value": null },
+                { "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm", "value": null },
+                { "text": "p.3, key operating metrics", "value": null }
+              ],
+              [
+                { "text": "total_gpu", "value": null },
+                { "text": "Total gross profit per retail unit", "value": null },
+                { "text": "Retail", "value": null },
+                { "text": "Unit economics", "value": null },
+                { "text": "2", "value": "2" },
+                { "text": "Q3-2025", "value": null },
+                { "text": "$6,655", "value": "6655" },
+                { "text": "USD per retail unit", "value": null },
+                { "text": "RATE", "value": null },
+                { "text": "Verified", "value": null },
+                { "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm", "value": null },
+                { "text": "p.3, key operating metrics", "value": null }
+              ],
+              [
+                { "text": "total_gpu", "value": null },
+                { "text": "Total gross profit per retail unit", "value": null },
+                { "text": "Retail", "value": null },
+                { "text": "Unit economics", "value": null },
+                { "text": "2", "value": "2" },
+                { "text": "Q4-2025", "value": null },
+                { "text": "$6,790", "value": "6790" },
+                { "text": "USD per retail unit", "value": null },
+                { "text": "RATE", "value": null },
+                { "text": "Verified", "value": null },
+                { "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm", "value": null },
+                { "text": "p.3, key operating metrics", "value": null }
+              ],
+              [
+                { "text": "total_gpu", "value": null },
+                { "text": "Total gross profit per retail unit", "value": null },
+                { "text": "Retail", "value": null },
+                { "text": "Unit economics", "value": null },
+                { "text": "2", "value": "2" },
+                { "text": "Q1-2026", "value": null },
+                { "text": "$6,960", "value": "6960" },
+                { "text": "USD per retail unit", "value": null },
+                { "text": "RATE", "value": null },
+                { "text": "Verified", "value": null },
+                { "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm", "value": null },
+                { "text": "p.3, key operating metrics", "value": null }
+              ],
+              [
+                { "text": "total_gpu", "value": null },
+                { "text": "Total gross profit per retail unit", "value": null },
+                { "text": "Retail", "value": null },
+                { "text": "Unit economics", "value": null },
+                { "text": "2", "value": "2" },
+                { "text": "Q2-2026", "value": null },
+                { "text": "$7,125", "value": "7125" },
+                { "text": "USD per retail unit", "value": null },
+                { "text": "RATE", "value": null },
+                { "text": "Verified", "value": null },
+                { "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm", "value": null },
+                { "text": "p.3, key operating metrics", "value": null }
+              ],
+              [
+                { "text": "wholesale_units_sold", "value": null },
+                { "text": "Wholesale vehicle unit sales", "value": null },
+                { "text": "Wholesale", "value": null },
+                { "text": "Volume", "value": null },
+                { "text": "1", "value": "1" },
+                { "text": "Q2-2025", "value": null },
+                { "text": "21,904", "value": "21904" },
+                { "text": "UNITS", "value": null },
+                { "text": "PERIOD_FLOW", "value": null },
+                { "text": "Verified", "value": null },
+                { "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm", "value": null },
+                { "text": "p.3, key operating metrics", "value": null }
+              ],
+              [
+                { "text": "wholesale_units_sold", "value": null },
+                { "text": "Wholesale vehicle unit sales", "value": null },
+                { "text": "Wholesale", "value": null },
+                { "text": "Volume", "value": null },
+                { "text": "1", "value": "1" },
+                { "text": "Q3-2025", "value": null },
+                { "text": "23,660", "value": "23660" },
+                { "text": "UNITS", "value": null },
+                { "text": "PERIOD_FLOW", "value": null },
+                { "text": "Verified", "value": null },
+                { "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm", "value": null },
+                { "text": "p.3, key operating metrics", "value": null }
+              ],
+              [
+                { "text": "wholesale_units_sold", "value": null },
+                { "text": "Wholesale vehicle unit sales", "value": null },
+                { "text": "Wholesale", "value": null },
+                { "text": "Volume", "value": null },
+                { "text": "1", "value": "1" },
+                { "text": "Q4-2025", "value": null },
+                { "text": "24,815", "value": "24815" },
+                { "text": "UNITS", "value": null },
+                { "text": "PERIOD_FLOW", "value": null },
+                { "text": "Verified", "value": null },
+                { "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm", "value": null },
+                { "text": "p.3, key operating metrics", "value": null }
+              ],
+              [
+                { "text": "wholesale_units_sold", "value": null },
+                { "text": "Wholesale vehicle unit sales", "value": null },
+                { "text": "Wholesale", "value": null },
+                { "text": "Volume", "value": null },
+                { "text": "1", "value": "1" },
+                { "text": "Q1-2026", "value": null },
+                { "text": "27,390", "value": "27390" },
+                { "text": "UNITS", "value": null },
+                { "text": "PERIOD_FLOW", "value": null },
+                { "text": "Verified", "value": null },
+                { "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm", "value": null },
+                { "text": "p.3, key operating metrics", "value": null }
+              ],
+              [
+                { "text": "wholesale_units_sold", "value": null },
+                { "text": "Wholesale vehicle unit sales", "value": null },
+                { "text": "Wholesale", "value": null },
+                { "text": "Volume", "value": null },
+                { "text": "1", "value": "1" },
+                { "text": "Q2-2026", "value": null },
+                { "text": "29,108", "value": "29108" },
+                { "text": "UNITS", "value": null },
+                { "text": "PERIOD_FLOW", "value": null },
+                { "text": "Verified", "value": null },
+                { "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm", "value": null },
+                { "text": "p.3, key operating metrics", "value": null }
+              ]
+            ]
+          },
+          {
+            "table_id": "cp1.adjusted_ebitda_bridge",
+            "columns": [
+              "addback_id",
+              "addback_label",
+              "addback_classification",
+              "realization_status",
+              "display_priority",
+              "period_id",
+              "value",
+              "status",
+              "source_definition",
+              "source_id",
+              "source_locator"
+            ],
+            "rows": [
+              [
+                { "text": "SBC", "value": null },
+                { "text": "Share-based compensation expense", "value": null },
+                { "text": "SBC", "value": null },
+                { "text": "NOT_STATED", "value": null },
+                { "text": "1", "value": "1" },
+                { "text": "Q1-2026", "value": null },
+                { "text": "25", "value": "25" },
+                { "text": "Verified", "value": null },
+                {
+                  "text": "Non-cash share-based compensation, excluded by the issuer's Adjusted EBITDA definition",
+                  "value": null
+                },
+                { "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm", "value": null },
+                { "text": "p.12, Reconciliation of Net Income to Adjusted EBITDA", "value": null }
+              ],
+              [
+                { "text": "ROOT_WARRANTS", "value": null },
+                { "text": "Change in fair value of Root warrants", "value": null },
+                { "text": "OTHER_EXPLICIT", "value": null },
+                { "text": "NOT_STATED", "value": null },
+                { "text": "2", "value": "2" },
+                { "text": "Q1-2026", "value": null },
+                { "text": "7", "value": "7" },
+                { "text": "Verified", "value": null },
+                {
+                  "text": "Unrealized change in the fair value of warrants to acquire Root, Inc. shares",
+                  "value": null
+                },
+                { "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm", "value": null },
+                { "text": "p.12, Reconciliation of Net Income to Adjusted EBITDA", "value": null }
+              ],
+              [
+                { "text": "RESTRUCTURING", "value": null },
+                { "text": "Restructuring expense", "value": null },
+                { "text": "RESTRUCTURING", "value": null },
+                { "text": "NOT_STATED", "value": null },
+                { "text": "3", "value": "3" },
+                { "text": "Q1-2026", "value": null },
+                { "text": "6", "value": "6" },
+                { "text": "Verified", "value": null },
+                {
+                  "text": "Costs of the 2025 reconditioning-site consolidation, as the issuer defines them",
+                  "value": null
+                },
+                { "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm", "value": null },
+                { "text": "p.12, Reconciliation of Net Income to Adjusted EBITDA", "value": null }
+              ],
+              [
+                { "text": "OTHER_INCOME", "value": null },
+                { "text": "Other (income) expense, net", "value": null },
+                { "text": "OTHER_EXPLICIT", "value": null },
+                { "text": "NOT_STATED", "value": null },
+                { "text": "4", "value": "4" },
+                { "text": "Q1-2026", "value": null },
+                { "text": "(4)", "value": "-4" },
+                { "text": "Verified", "value": null },
+                {
+                  "text": "Non-operating other (income) expense, net, as reported below operating income",
+                  "value": null
+                },
+                { "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm", "value": null },
+                { "text": "p.12, Reconciliation of Net Income to Adjusted EBITDA", "value": null }
+              ],
+              [
+                { "text": "SBC", "value": null },
+                { "text": "Share-based compensation expense", "value": null },
+                { "text": "SBC", "value": null },
+                { "text": "NOT_STATED", "value": null },
+                { "text": "1", "value": "1" },
+                { "text": "Q2-2026", "value": null },
+                { "text": "27", "value": "27" },
+                { "text": "Verified", "value": null },
+                {
+                  "text": "Non-cash share-based compensation, excluded by the issuer's Adjusted EBITDA definition",
+                  "value": null
+                },
+                { "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm", "value": null },
+                { "text": "p.12, Reconciliation of Net Income to Adjusted EBITDA", "value": null }
+              ],
+              [
+                { "text": "ROOT_WARRANTS", "value": null },
+                { "text": "Change in fair value of Root warrants", "value": null },
+                { "text": "OTHER_EXPLICIT", "value": null },
+                { "text": "NOT_STATED", "value": null },
+                { "text": "2", "value": "2" },
+                { "text": "Q2-2026", "value": null },
+                { "text": "(14)", "value": "-14" },
+                { "text": "Verified", "value": null },
+                {
+                  "text": "Unrealized change in the fair value of warrants to acquire Root, Inc. shares",
+                  "value": null
+                },
+                { "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm", "value": null },
+                { "text": "p.12, Reconciliation of Net Income to Adjusted EBITDA", "value": null }
+              ],
+              [
+                { "text": "RESTRUCTURING", "value": null },
+                { "text": "Restructuring expense", "value": null },
+                { "text": "RESTRUCTURING", "value": null },
+                { "text": "NOT_STATED", "value": null },
+                { "text": "3", "value": "3" },
+                { "text": "Q2-2026", "value": null },
+                { "text": "4", "value": "4" },
+                { "text": "Verified", "value": null },
+                {
+                  "text": "Costs of the 2025 reconditioning-site consolidation, as the issuer defines them",
+                  "value": null
+                },
+                { "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm", "value": null },
+                { "text": "p.12, Reconciliation of Net Income to Adjusted EBITDA", "value": null }
+              ],
+              [
+                { "text": "OTHER_INCOME", "value": null },
+                { "text": "Other (income) expense, net", "value": null },
+                { "text": "OTHER_EXPLICIT", "value": null },
+                { "text": "NOT_STATED", "value": null },
+                { "text": "4", "value": "4" },
+                { "text": "Q2-2026", "value": null },
+                { "text": "(6)", "value": "-6" },
+                { "text": "Verified", "value": null },
+                {
+                  "text": "Non-operating other (income) expense, net, as reported below operating income",
+                  "value": null
+                },
+                { "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm", "value": null },
+                { "text": "p.12, Reconciliation of Net Income to Adjusted EBITDA", "value": null }
+              ]
+            ]
+          },
+          {
+            "table_id": "cp1.debt_facility_register",
+            "columns": [
+              "facility_id",
+              "facility_name",
+              "period_id",
+              "facility_type",
+              "carrying_value",
+              "principal",
+              "drawn_amount",
+              "commitment",
+              "secured_status",
+              "seniority",
+              "currency",
+              "margin_or_coupon",
+              "maturity_date",
+              "lease_classification",
+              "source_id",
+              "source_locator"
+            ],
+            "rows": [
+              [
+                { "text": "FLOOR_PLAN", "value": null },
+                { "text": "Floor Plan Facility (Ally Bank)", "value": null },
+                { "text": "Q2-2026", "value": null },
+                { "text": "REVOLVING_FLOOR_PLAN", "value": null },
+                { "text": "1,245", "value": "1245" },
+                { "text": "1,245", "value": "1245" },
+                { "text": "1,245", "value": "1245" },
+                { "text": "2,200", "value": "2200" },
+                { "text": "SECURED", "value": null },
+                { "text": "SENIOR", "value": null },
+                { "text": "USD", "value": null },
+                { "text": "SOFR + 3.20%", "value": null },
+                { "text": "2028-03-31", "value": null },
+                { "text": "NOT_LEASE", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.21, Note 9 Debt Instruments", "value": null }
+              ],
+              [
+                { "text": "SSN_2028", "value": null },
+                {
+                  "text": "9.00%/12.00% Cash/PIK Toggle Senior Secured Notes due 2028",
+                  "value": null
+                },
+                { "text": "Q2-2026", "value": null },
+                { "text": "SENIOR_SECURED_NOTES", "value": null },
+                { "text": "996", "value": "996" },
+                { "text": "1,005", "value": "1005" },
+                { "text": "1,005", "value": "1005" },
+                { "text": "Not applicable", "value": null },
+                { "text": "SECURED", "value": null },
+                { "text": "SENIOR", "value": null },
+                { "text": "USD", "value": null },
+                { "text": "9.00% cash / 12.00% PIK", "value": null },
+                { "text": "2028-12-01", "value": null },
+                { "text": "NOT_LEASE", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.21, Note 9 Debt Instruments", "value": null }
+              ],
+              [
+                { "text": "SSN_2030", "value": null },
+                {
+                  "text": "11.00%/13.00% Cash/PIK Toggle Senior Secured Notes due 2030",
+                  "value": null
+                },
+                { "text": "Q2-2026", "value": null },
+                { "text": "SENIOR_SECURED_NOTES", "value": null },
+                { "text": "1,462", "value": "1462" },
+                { "text": "1,480", "value": "1480" },
+                { "text": "1,480", "value": "1480" },
+                { "text": "Not applicable", "value": null },
+                { "text": "SECURED", "value": null },
+                { "text": "SENIOR", "value": null },
+                { "text": "USD", "value": null },
+                { "text": "11.00% cash / 13.00% PIK", "value": null },
+                { "text": "2030-06-01", "value": null },
+                { "text": "NOT_LEASE", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.21, Note 9 Debt Instruments", "value": null }
+              ],
+              [
+                { "text": "SSN_2031", "value": null },
+                {
+                  "text": "9.00%/14.00% Cash/PIK Toggle Senior Secured Notes due 2031",
+                  "value": null
+                },
+                { "text": "Q2-2026", "value": null },
+                { "text": "SENIOR_SECURED_NOTES", "value": null },
+                { "text": "1,701", "value": "1701" },
+                { "text": "1,725", "value": "1725" },
+                { "text": "1,725", "value": "1725" },
+                { "text": "Not applicable", "value": null },
+                { "text": "SECURED", "value": null },
+                { "text": "SENIOR", "value": null },
+                { "text": "USD", "value": null },
+                { "text": "9.00% cash / 14.00% PIK", "value": null },
+                { "text": "2031-06-01", "value": null },
+                { "text": "NOT_LEASE", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.21, Note 9 Debt Instruments", "value": null }
+              ],
+              [
+                { "text": "SUN_2027", "value": null },
+                { "text": "5.50% Senior Notes due 2027", "value": null },
+                { "text": "Q2-2026", "value": null },
+                { "text": "SENIOR_UNSECURED_NOTES", "value": null },
+                { "text": "74", "value": "74" },
+                { "text": "75", "value": "75" },
+                { "text": "75", "value": "75" },
+                { "text": "Not applicable", "value": null },
+                { "text": "UNSECURED", "value": null },
+                { "text": "SENIOR", "value": null },
+                { "text": "USD", "value": null },
+                { "text": "5.50%", "value": "5.50" },
+                { "text": "2027-04-15", "value": null },
+                { "text": "NOT_LEASE", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.21, Note 9 Debt Instruments", "value": null }
+              ],
+              [
+                { "text": "FINANCE_LEASES", "value": null },
+                { "text": "Finance lease liabilities", "value": null },
+                { "text": "Q2-2026", "value": null },
+                { "text": "FINANCE_LEASE", "value": null },
+                { "text": "312", "value": "312" },
+                { "text": "Not applicable", "value": null },
+                { "text": "Not applicable", "value": null },
+                { "text": "Not applicable", "value": null },
+                { "text": "NOT_STATED", "value": null },
+                { "text": "NOT_STATED", "value": null },
+                { "text": "USD", "value": null },
+                { "text": "Not stated", "value": null },
+                { "text": "Not stated", "value": null },
+                { "text": "FINANCE_LEASE", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.23, Note 11 Leases", "value": null }
+              ]
+            ]
+          }
+        ],
+        "tables_unavailable_reason": null
       },
       {
         "route_node_id": "rn-cp-1c",
@@ -125,7 +1004,9 @@
         "screening_only": false,
         "source_facts": [],
         "model_analysis": "### Peer benchmark\n\nThe peer set carries a gap: one comparable has not filed in over 200 days. The benchmark is offered with that limitation attached, never silently dropped.\n",
-        "host_calculation": "NONE"
+        "host_calculation": "NONE",
+        "tables": [],
+        "tables_unavailable_reason": null
       },
       {
         "route_node_id": "rn-cp-4",
@@ -160,7 +1041,9 @@
           }
         ],
         "model_analysis": "#### Covenants\n\nThe floor-plan facility carries a 3.50x net leverage covenant. The source naming it has since been withdrawn from the pinned set; the citation stays so this conclusion stays explicable.\n",
-        "host_calculation": "NONE"
+        "host_calculation": "NONE",
+        "tables": [],
+        "tables_unavailable_reason": null
       },
       {
         "route_node_id": "rn-cp-5",
@@ -178,7 +1061,9 @@
         "screening_only": false,
         "source_facts": [],
         "model_analysis": "##### QA audit\n\nEvery citation anchored on this route re-located under the pinned build. Nothing here is a claim about the two modules audited; it is a claim about the anchoring.\n",
-        "host_calculation": "NONE"
+        "host_calculation": "NONE",
+        "tables": [],
+        "tables_unavailable_reason": null
       },
       {
         "route_node_id": "rn-cp-6",
@@ -196,7 +1081,9 @@
         "screening_only": false,
         "source_facts": [],
         "model_analysis": "###### Committee memo\n\nAffirm rating upgrade to B3 with positive outlook; monitor the 2028 Senior Secured Notes maturity ($1,005M tranche).\n",
-        "host_calculation": "NONE"
+        "host_calculation": "NONE",
+        "tables": [],
+        "tables_unavailable_reason": null
       },
       {
         "route_node_id": "rn-cp-6a",
@@ -214,7 +1101,9 @@
         "screening_only": false,
         "source_facts": [],
         "model_analysis": "**BULL:** organic FCF is now positive on a trailing basis.\n\n**BEAR:** the covenant cushion depends on a withdrawn source.\n\n**CHAIR:** affirm with the covenant limitation carried forward.\n",
-        "host_calculation": "NONE"
+        "host_calculation": "NONE",
+        "tables": [],
+        "tables_unavailable_reason": null
       },
       {
         "route_node_id": "rn-cp-7",
@@ -232,7 +1121,9 @@
         "screening_only": false,
         "source_facts": [],
         "model_analysis": "Capital structure is unchanged since the last filed opinion; no new tranche has priced.\n",
-        "host_calculation": "NONE"
+        "host_calculation": "NONE",
+        "tables": [],
+        "tables_unavailable_reason": null
       },
       {
         "route_node_id": "rn-cp-cf",
@@ -250,7 +1141,9 @@
         "screening_only": false,
         "source_facts": [],
         "model_analysis": "Cash flow forecast reconciles within tolerance across every driver row.\n",
-        "host_calculation": "NONE"
+        "host_calculation": "NONE",
+        "tables": [],
+        "tables_unavailable_reason": null
       }
     ],
     "pending": []

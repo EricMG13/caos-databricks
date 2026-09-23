@@ -32,6 +32,7 @@ from caos.api.wire import (
     CancelRun,
     CaseCreated,
     CaseRow,
+    CellView,
     Chrome,
     CitationView,
     CreateCase,
@@ -85,6 +86,7 @@ from caos.api.wire import (
     StandingRevoked,
     StartRun,
     Subject,
+    TableView,
     UploadBody,
     UploadDocument,
     VerdictRecorded,
@@ -122,8 +124,11 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
     wire.ReportBody: frozenset(
         (
             "case_id displayed_run_id revision_id payload_sha256 case_title "
-            "artifacts narrative"
+            "artifacts narrative revisions"
         ).split()
+    ),
+    wire.RevisionSummary: frozenset(
+        "revision_id payload_sha256 saved_at state".split()
     ),
     wire.FiledReceipt: frozenset(
         (
@@ -134,7 +139,7 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
     wire.CommitteeBody: frozenset(
         (
             "case_id displayed_run_id revision_id payload_sha256 case_title artifacts "
-            "narrative state signed_by frozen_by filed_by receipt"
+            "narrative revisions state signed_by frozen_by filed_by receipt"
         ).split()
     ),
     wire.ReportDocument: ENVELOPE,
@@ -308,8 +313,12 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
             "source_facts",
             "model_analysis",
             "host_calculation",
+            "tables",
+            "tables_unavailable_reason",
         }
     ),
+    TableView: frozenset({"table_id", "columns", "rows"}),
+    CellView: frozenset({"text", "value"}),
     PendingNode: frozenset({"route_node_id", "module_id", "state"}),
     AnalysisBody: frozenset(
         {
@@ -646,6 +655,25 @@ def test_citation_view_names_its_source_for_the_page_endpoint() -> None:
     assert CitationView.model_validate({**citation, "source_id": source}).source_id == (
         source
     )
+
+
+def test_a_table_cell_is_its_text_and_a_plain_decimal_string_or_null() -> None:
+    """Never a number on the wire: a float cannot hold what the cell said."""
+    cell = {"text": "$7,125.00", "value": "7125.00"}
+    assert CellView.model_validate(cell).value == "7125.00"
+    assert CellView.model_validate({**cell, "value": None}).value is None
+    for value in (7125, 7125.0, "7.125e3", "NaN", "+7125", "7125.", "1" * 65):
+        with pytest.raises(ValidationError):
+            CellView.model_validate({**cell, "value": value})
+    table = {"table_id": "cp1.debt_facility_register", "columns": ["x"], "rows": []}
+    assert TableView.model_validate(table).rows == []
+    for bad in (
+        {**table, "table_id": "cp1 debt"},
+        {**table, "rows": [[cell] * 33]},
+        {**table, "columns": ["x"] * 33},
+    ):
+        with pytest.raises(ValidationError):
+            TableView.model_validate(bad)
 
 
 def test_every_section_router_declares_its_store_budget() -> None:

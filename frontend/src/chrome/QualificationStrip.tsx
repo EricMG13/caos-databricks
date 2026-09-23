@@ -81,7 +81,7 @@ export function QualificationStrip({ evidenceSha256 }: { evidenceSha256: string 
   return (
     <section className={`verdict ${toneOf(view.severity)}`} aria-label="Qualification">
       <span className="sig">
-        <SeverityMark severity={view.severity} pulse label={view.label} />
+        <SeverityMark severity={view.severity} pulse decorative />
         {view.label}
       </span>
       <span className="txt">{view.sentence}</span>

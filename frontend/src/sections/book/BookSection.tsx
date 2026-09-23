@@ -184,7 +184,7 @@ export function BookSection({ document }: { document: BookDocument; tab: string 
                       {body.columns.map((column) => {
                         const cell = period?.cells.find((entry) => entry.column === column.key);
                         return (
-                          <td className="l" key={column.key}>
+                          <td className="num" key={column.key}>
                             {cell ? (
                               <MetricCell
                                 cell={cell}

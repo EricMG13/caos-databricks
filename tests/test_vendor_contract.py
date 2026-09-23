@@ -87,13 +87,22 @@ def test_authority_bundle_sha256_refuses_undeclared_or_malformed_digests(
     assert refused.value.code is RefusalCode.AUTHORITY_BYTES_MISMATCH
 
 
-def test_vendor_code_that_moved_refuses(tmp_path: Path) -> None:
+@pytest.mark.parametrize("script", ["validate_handoff.py", "cp_tables.py"])
+def test_vendor_code_that_moved_refuses(tmp_path: Path, script: str) -> None:
     import shutil
 
     root = tmp_path / "bundle"
     shutil.copytree(VENDORED, root)
-    target = root / "skills/cp-os-credit-os/scripts/validate_handoff.py"
+    target = root / "skills/cp-os-credit-os/scripts" / script
     target.write_bytes(target.read_bytes() + b"\n")
     with pytest.raises(Refusal) as refused:
         load_vendor_contract(Bundle(root))
     assert refused.value.code is RefusalCode.AUTHORITY_BYTES_MISMATCH
+
+
+def test_the_table_reader_is_the_one_the_completeness_checker_calls() -> None:
+    """One reader of tagged tables: what the checker accepted at acceptance is
+    what a section read derives its tables from."""
+    contract = load_vendor_contract(Bundle(VENDORED))
+    assert contract.cp_tables.parse_tables is contract.completeness_check.parse_tables
+    assert contract.cp_tables.parse_figure("(1,234)") == -1234.0

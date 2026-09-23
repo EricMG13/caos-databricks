@@ -23,6 +23,9 @@ interface ActionReasonProps extends Omit<
 > {
   /** Non-empty → the action is inert and this explains why. Null/undefined → live. */
   reason?: string | null;
+  /** The pointer's fuller detail for an inert action (the refusal code and what
+   * clears it); the reason stays what is shown and announced. */
+  reasonTitle?: string;
   /** Pointer explanation for a live action. An inert reason always takes precedence. */
   actionTitle?: string;
   /** "inline" renders the visible reason line; "hidden" keeps it sr-only for
@@ -101,6 +104,7 @@ function ActionReasonMessage({
 
 export function ActionReason({
   reason,
+  reasonTitle,
   actionTitle,
   reasonDisplay = "inline",
   busy = false,
@@ -128,7 +132,7 @@ export function ActionReason({
         aria-disabled={inert || busy || undefined}
         aria-busy={busy || undefined}
         aria-label={busy ? undefined : label}
-        title={reason || actionTitle || undefined}
+        title={(reason && (reasonTitle || reason)) || actionTitle || undefined}
         aria-describedby={inert ? reasonId : undefined}
         onClick={busy ? undefined : handleClick}
         {...attributes}

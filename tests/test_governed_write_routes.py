@@ -817,6 +817,46 @@ def test_a_signature_sent_over_http_is_provable_beside_one_the_store_made(
     assert answer.json()["body"]["state"] == "frozen"
 
 
+def test_report_lists_the_runs_revisions_so_committee_has_a_front_door(
+    filing_client: TestClient, lite: _Harness
+) -> None:
+    """A committee member reaches a frozen revision from Report: the read lists
+    the run's revisions newest first with how far each has gone, and a run with
+    none lists none."""
+    reader = member(lite.conn, lite.case_id, Standing.READER)
+    unsaved = filing_client.get(
+        f"{_case(lite)}/report?run={lite.run_id}", headers=command_headers(reader)
+    )
+    assert unsaved.status_code == 200, unsaved.text
+    assert unsaved.json()["body"]["revisions"] == []
+
+    first = _save(lite)
+    second = _save(lite)
+    sign_opinion(
+        lite.conn, case_id=lite.case_id, actor_id=_approver(lite), revision_id=second
+    )
+    lite.conn.commit()
+    frozen = _post(
+        filing_client,
+        f"{_case(lite)}/revisions/{second}/freeze",
+        _approver(lite),
+        {"payload_sha256": _digest(lite, second)},
+    )
+    assert frozen.status_code == 200, frozen.text
+
+    listed = filing_client.get(
+        f"{_case(lite)}/report?run={lite.run_id}&revision={first}",
+        headers=command_headers(reader),
+    ).json()["body"]["revisions"]
+    assert [(row["revision_id"], row["state"]) for row in listed] == [
+        (str(second), "frozen"),
+        (str(first), "saved"),
+    ]
+    assert listed[0]["payload_sha256"] == _digest(lite, second)
+    committee = _committee(filing_client, lite, second, reader).json()["body"]
+    assert committee["revisions"] == listed
+
+
 # The commands that can write the three filing actions, which is what bounds
 # `payload_digests`' receipt read. Not `_FILING` above: that is the four
 # *actions* the controls are drawn from.

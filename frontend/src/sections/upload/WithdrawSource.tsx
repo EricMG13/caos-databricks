@@ -15,11 +15,14 @@ export function WithdrawSource({
   caseId,
   row,
   onWithdrawn,
+  reasonDisplay = "inline",
 }: {
   action: ActionView | undefined;
   caseId: string;
   row: SourceRow;
   onWithdrawn: () => void;
+  /** Hidden when the pack states the one refusal every row shares. */
+  reasonDisplay?: "inline" | "hidden";
 }) {
   const { pending, result, run } = useCommand<SourceWithdrawn>();
   const refusal = action?.refusal ?? null;
@@ -47,15 +50,13 @@ export function WithdrawSource({
         }}
         onConfirm={action ? () => void submit() : undefined}
         className="rb"
+        reasonDisplay={reasonDisplay}
         action="WITHDRAW_SOURCE"
         aria-label={`Withdraw ${row.filename}`}
       >
         {pending ? "Withdrawing…" : "Withdraw"}
       </ConfirmedControl>
-      <CommandOutcome
-        result={result}
-        success={`${row.filename} withdrawn. Reading the pack back.`}
-      />
+      <CommandOutcome result={result} success={`${row.filename} withdrawn.`} />
     </>
   );
 }

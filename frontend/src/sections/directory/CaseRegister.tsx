@@ -78,7 +78,14 @@ export function CaseRegister({ rows }: { rows: CaseRow[] }) {
                 <LatestRunCell run={row.latest_run} />
               </td>
               <td className="r">
-                <Link className="rowact" to={caseHref(row.case_id)}>
+                {/* Four links all named "Open case" told a screen reader nothing. */}
+                <Link
+                  className="rowact"
+                  to={caseHref(row.case_id)}
+                  // The visible label leads the name, so speech input finds it
+                  // (WCAG 2.5.3); the case follows so a list of four is told apart.
+                  aria-label={`Open case ${row.title}`}
+                >
                   Open case
                 </Link>
               </td>

@@ -2,6 +2,7 @@
 // which there is no document to fill them. This chrome carries the state and
 // invents nothing: no subject, no actions, no role.
 import { OFFLINE_WORDING, UNAVAILABLE_WORDING, type RegionStatus } from "@/app/transport";
+import { regionSentence } from "@/states/RegionState";
 import type { Brief, Ribbon, Severity, Tone, Verdict } from "@/wire";
 
 export interface FallbackChrome {
@@ -30,14 +31,30 @@ function describe(status: RegionStatus): {
       return {
         label: "UNAVAILABLE",
         sentence: UNAVAILABLE_WORDING,
-        clears: "a case you are a member of, at a route that exists",
+        clears: "the case exists and you are a member of it",
         severity: "WARNING",
         tone: "warn",
       };
+    case "choose":
+      return status.need === "run"
+        ? {
+            label: "CHOOSE A RUN",
+            sentence: "Choose a run to open this section.",
+            clears: "a run is chosen in Run",
+            severity: "IDLE",
+            tone: "neutral",
+          }
+        : {
+            label: "CHOOSE A REVISION",
+            sentence: "Choose a frozen revision to open Committee.",
+            clears: "a frozen revision is chosen in Report",
+            severity: "IDLE",
+            tone: "neutral",
+          };
     case "error":
       return {
         label: status.refusal.code,
-        sentence: status.refusal.code,
+        sentence: regionSentence(status.refusal),
         clears: status.refusal.clears,
         severity: "CRITICAL",
         tone: "crit",
