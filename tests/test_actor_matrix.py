@@ -30,10 +30,10 @@ from test_execution_freshness import _Harness
 
 from caos.api.app import app, methodology_bundle
 from caos.api.identity import (
-    EDGE_TOKEN_ENV,
     TRUST_SWITCH,
     GlobalRole,
     actor_from_headers,
+    role_from_groups,
 )
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
@@ -54,30 +54,6 @@ USER = uuid4()
 
 def _headers(**extra: str) -> dict[str, str]:
     return {"x-caos-user": str(USER), **extra}
-
-
-def test_production_never_trusts_role_header(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A named test. The client says it is an administrator; production does not
-    care what the client says.
-
-    The role is derived from the groups the proxy asserts and from nothing the
-    caller can set. A role header that escalated would make every other authority
-    check in this system a formality.
-
-    Production is edge mode, so the token is set: without it the floor would be
-    READER whatever either header said, and this test would pass for a reason
-    that is not its name.
-    """
-    monkeypatch.delenv(TRUST_SWITCH, raising=False)
-    monkeypatch.setenv(EDGE_TOKEN_ENV, "x" * 32)
-
-    actor = actor_from_headers(
-        _headers(**{"x-caos-role": "ADMIN", "x-forwarded-groups": "caos-readers"})
-    )
-
-    assert actor.role is GlobalRole.READER, "the group decided, not the header"
 
 
 def test_the_role_header_is_trusted_only_when_explicitly_switched_on(
@@ -194,30 +170,23 @@ def test_the_refusal_carries_no_part_of_what_was_sent() -> None:
 @pytest.mark.parametrize(
     ("groups", "expected"),
     [
-        ("caos-admins", GlobalRole.ADMIN),
-        ("caos-analysts", GlobalRole.ANALYST),
-        ("caos-readers", GlobalRole.READER),
-        ("something-else", GlobalRole.READER),
-        ("caos-readers,caos-admins", GlobalRole.ADMIN),
-        ("caos-analysts,caos-readers", GlobalRole.ANALYST),
-        (" caos-admins , caos-readers ", GlobalRole.ADMIN),
+        ({"caos-admins"}, GlobalRole.ADMIN),
+        ({"caos-analysts"}, GlobalRole.ANALYST),
+        ({"caos-readers"}, GlobalRole.READER),
+        ({"something-else"}, GlobalRole.READER),
+        ({"caos-readers", "caos-admins"}, GlobalRole.ADMIN),
+        ({"caos-analysts", "caos-readers"}, GlobalRole.ANALYST),
     ],
 )
-def test_the_highest_group_wins(
-    monkeypatch: pytest.MonkeyPatch, groups: str, expected: GlobalRole
-) -> None:
+def test_the_highest_group_wins(groups: set[str], expected: GlobalRole) -> None:
     """Someone in two groups holds the greater of them, and a group this system
     does not know grants nothing.
 
-    In edge mode, which is the only mode that reads the header at all: an edge
-    stood between the client and this process and asserted the list.
+    `role_from_groups` is the pure mapping platform mode feeds the workspace's
+    SCIM group list through (D10): it is the only mode a group list ever
+    decides a role in, now that the HMAC edge assertion is gone.
     """
-    monkeypatch.delenv(TRUST_SWITCH, raising=False)
-    monkeypatch.setenv(EDGE_TOKEN_ENV, "x" * 32)
-
-    actor = actor_from_headers(_headers(**{"x-forwarded-groups": groups}))
-
-    assert actor.role is expected
+    assert role_from_groups(groups) is expected
 
 
 def test_an_actor_is_a_subject_and_a_role_and_nothing_else() -> None:
@@ -438,20 +407,15 @@ def test_a_commit_time_revocation_answers_the_private_404(
 def test_without_a_token_or_the_switch_groups_grant_nothing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """C3: a loopback peer cannot pick ADMIN by sending groups to a tokenless API."""
+    """C3: a loopback peer cannot pick ADMIN by sending groups to a tokenless API.
+
+    Dev mode never reads a groups header at all -- it is not even a header
+    `actor_from_headers` looks at outside platform mode (D10) -- so a client
+    sending one grants nothing whatever its value.
+    """
     monkeypatch.delenv(TRUST_SWITCH, raising=False)
-    monkeypatch.delenv("CAOS_EDGE_TOKEN", raising=False)
     actor = actor_from_headers(_headers(**{"x-forwarded-groups": "caos-admins"}))
     assert actor.role is GlobalRole.READER
-
-
-def test_in_edge_mode_groups_still_decide_the_role(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.delenv(TRUST_SWITCH, raising=False)
-    monkeypatch.setenv("CAOS_EDGE_TOKEN", "x" * 32)
-    actor = actor_from_headers(_headers(**{"x-forwarded-groups": "caos-analysts"}))
-    assert actor.role is GlobalRole.ANALYST
 
 
 # Task 12.1's other four commands, in the same table but not the same fixture:

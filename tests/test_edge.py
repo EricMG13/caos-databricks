@@ -8,9 +8,6 @@ answer before any store connection.
 
 from __future__ import annotations
 
-import logging
-import secrets
-import time
 from collections.abc import Iterator
 from uuid import uuid4
 
@@ -19,27 +16,19 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from starlette.types import Receive, Scope, Send
 
+from caos.api import edge, identity
 from caos.api.app import app
 from caos.api.edge import (
-    EDGE_ASSERTION_HEADER,
     PUBLIC_ORIGIN_ENV,
     SECURITY_HEADERS,
     EdgeGuard,
-    EdgeMode,
     is_api_path,
     refusal_body,
-    resolve_mode,
-    sign_assertion,
     startup_failed,
 )
-from caos.api.identity import (
-    EDGE_TOKEN_ENV,
-    TRUST_SWITCH,
-    GlobalRole,
-    actor_from_headers,
-)
+from caos.api.identity import TRUST_SWITCH
 from caos.api.wire import CLEARS
-from caos.refusals import Refusal, RefusalCode
+from caos.refusals import RefusalCode
 
 PUBLIC = "https://caos.example.test"
 
@@ -57,12 +46,13 @@ class Recorder:
 
 
 @pytest.fixture
-def token(monkeypatch: pytest.MonkeyPatch) -> Iterator[str]:
-    minted = secrets.token_urlsafe(32)
-    monkeypatch.setenv(EDGE_TOKEN_ENV, minted)
+def public_origin(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Platform mode with a declared public origin (D10): the only surviving
+    way to exercise `_origin_allowed`'s fixed-origin branch now that edge
+    mode, the other way a deployment used to declare one, is gone."""
+    monkeypatch.setenv(edge.PLATFORM_ENV, "caos")
+    monkeypatch.setenv(identity.WORKSPACE_ENV, "1234")
     monkeypatch.setenv(PUBLIC_ORIGIN_ENV, PUBLIC)
-    monkeypatch.delenv(TRUST_SWITCH, raising=False)
-    yield minted
 
 
 def _guarded() -> tuple[Recorder, TestClient]:
@@ -70,138 +60,7 @@ def _guarded() -> tuple[Recorder, TestClient]:
     return recorder, TestClient(EdgeGuard(recorder))
 
 
-def _names(seen: list[tuple[bytes, bytes]]) -> set[bytes]:
-    return {name for name, _ in seen}
-
-
-def _signed(key: str, method: str = "GET", target: str = "/api/v1/cases") -> str:
-    """One assertion under `key` for one request, as the edge would set it
-    (§93); every case here that reaches the app needs its own."""
-    return sign_assertion(
-        key.encode(),
-        subject=str(uuid4()),
-        groups=("caos-analysts",),
-        method=method,
-        target=target,
-        issued_at=int(time.time()),
-        nonce=secrets.token_hex(16),
-    )
-
-
-def test_edge_mode_refuses_a_request_without_an_assertion_before_routing(
-    token: str,
-) -> None:
-    recorder, client = _guarded()
-    wrong_key = _signed(token[:-1] + "x", "POST")
-    for headers in ({}, {EDGE_ASSERTION_HEADER: wrong_key}):
-        response = client.post("/api/v1/cases", headers=headers, json={})
-        assert response.status_code == 403
-        assert response.json()["code"] == RefusalCode.EDGE_NOT_TRUSTED
-    signed = _signed(token)
-    doubled = client.get(
-        "/api/v1/cases",
-        headers=[(EDGE_ASSERTION_HEADER, signed), (EDGE_ASSERTION_HEADER, signed)],
-    )
-    assert doubled.status_code == 403
-    assert recorder.seen == []
-    # A forged identity on the real app, directly, never reaches identity.
-    real = TestClient(app).get(
-        "/api/v1/cases", headers={"x-caos-user": str(uuid4()), "x-caos-role": "ADMIN"}
-    )
-    assert (real.status_code, real.json()["code"]) == (403, "EDGE_NOT_TRUSTED")
-
-    admitted = client.get(
-        "/api/v1/cases",
-        headers={EDGE_ASSERTION_HEADER: _signed(token), "sec-fetch-site": "none"},
-    )
-    assert admitted.status_code == 200
-    assert len(recorder.seen) == 1
-
-
-def test_the_edge_key_never_reaches_the_app_a_log_or_a_refusal(
-    token: str, caplog: pytest.LogCaptureFixture
-) -> None:
-    recorder, client = _guarded()
-    caplog.set_level(logging.DEBUG)
-    signed = _signed(token, target="/anything")
-    client.get("/anything", headers={EDGE_ASSERTION_HEADER: signed})
-    assert EDGE_ASSERTION_HEADER.encode() not in _names(recorder.seen[0])
-    wrong = client.get("/anything", headers={EDGE_ASSERTION_HEADER: signed + "!"})
-    for secret in (token, signed):
-        assert secret not in wrong.text and secret not in str(wrong.headers)
-        assert secret not in caplog.text
-
-
-def test_health_needs_no_edge_token_and_no_identity(token: str) -> None:
-    recorder, client = _guarded()
-    assert client.get("/api/health").status_code == 200
-    assert client.head("/api/health").status_code == 200
-    assert client.post("/api/health").status_code == 403
-    assert len(recorder.seen) == 2
-
-
-def test_boot_refuses_the_trust_switch_alongside_an_edge_token(
-    token: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    for value in ("1", "0", ""):
-        monkeypatch.setenv(TRUST_SWITCH, value)
-        with pytest.raises(Refusal) as caught:
-            resolve_mode()
-        assert caught.value.code is RefusalCode.EDGE_CONFIG_INVALID
-    with pytest.raises(Refusal) as booted, TestClient(EdgeGuard(Recorder())):
-        pass
-    assert booted.value.code is RefusalCode.EDGE_CONFIG_INVALID
-    # A request under a configuration that would not boot is not trusted.
-    response = TestClient(EdgeGuard(Recorder())).get(
-        "/api/v1/cases", headers={EDGE_ASSERTION_HEADER: _signed(token)}
-    )
-    assert response.status_code == 403
-
-
-def test_boot_refuses_a_short_token_or_a_missing_public_origin(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.delenv(TRUST_SWITCH, raising=False)
-    long = secrets.token_urlsafe(32)
-    for edge_token, origin in (
-        ("", PUBLIC),
-        ("x" * 31, PUBLIC),
-        (long, None),
-        (long, ""),
-        (long, "caos.example.test"),
-        (long, PUBLIC + "/"),
-        (long, "https://user@caos.example.test"),
-        (long, "ftp://caos.example.test"),
-    ):
-        monkeypatch.setenv(EDGE_TOKEN_ENV, edge_token)
-        if origin is None:
-            monkeypatch.delenv(PUBLIC_ORIGIN_ENV, raising=False)
-        else:
-            monkeypatch.setenv(PUBLIC_ORIGIN_ENV, origin)
-        with pytest.raises(Refusal) as caught:
-            resolve_mode()
-        assert caught.value.code is RefusalCode.EDGE_CONFIG_INVALID
-    monkeypatch.setenv(PUBLIC_ORIGIN_ENV, PUBLIC)
-    assert resolve_mode() == EdgeMode(key=long.encode(), public_origin=PUBLIC)
-    monkeypatch.delenv(EDGE_TOKEN_ENV)
-    assert resolve_mode() == EdgeMode(key=None, public_origin=None)
-
-
-def test_edge_mode_never_believes_the_role_header(
-    token: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    subject = str(uuid4())
-    monkeypatch.setenv(TRUST_SWITCH, "1")
-    claimed = {"x-caos-user": subject, "x-caos-role": "ADMIN"}
-    assert actor_from_headers(claimed).role is GlobalRole.READER
-    monkeypatch.delenv(EDGE_TOKEN_ENV)
-    assert actor_from_headers(claimed).role is GlobalRole.ADMIN
-
-
-def test_dev_mode_serves_only_loopback_peers_with_a_loopback_host(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.delenv(EDGE_TOKEN_ENV, raising=False)
+def test_dev_mode_serves_only_loopback_peers_with_a_loopback_host() -> None:
     recorder = Recorder()
     guard = EdgeGuard(recorder)
     for host in ("localhost:8000", "127.0.0.1", "[::1]:5173"):
@@ -264,42 +123,34 @@ def test_a_cross_site_or_same_site_api_request_is_origin_refused() -> None:
 
 
 def test_an_unsafe_api_request_needs_the_public_origin_or_a_same_origin_fetch(
-    token: str,
+    public_origin: None,
 ) -> None:
     recorder, client = _guarded()
     del client.headers["sec-fetch-site"]
 
-    def edge(method: str = "POST") -> dict[str, str]:
-        return {EDGE_ASSERTION_HEADER: _signed(token, method)}
-
     refused = [
-        client.post("/api/v1/cases", headers=edge()),
-        client.post("/api/v1/cases", headers={**edge(), "sec-fetch-site": "none"}),
-        client.post("/api/v1/cases", headers={**edge(), "origin": "https://evil.test"}),
-        client.post("/api/v1/cases", headers={**edge(), "origin": "null"}),
+        client.post("/api/v1/cases"),
+        client.post("/api/v1/cases", headers={"sec-fetch-site": "none"}),
+        client.post("/api/v1/cases", headers={"origin": "https://evil.test"}),
+        client.post("/api/v1/cases", headers={"origin": "null"}),
         client.post(
             "/api/v1/cases",
             headers={
-                **edge(),
                 "sec-fetch-site": "same-origin",
                 "origin": "http://127.0.0.1:8000",
             },
         ),
-        client.get(
-            "/api/v1/cases", headers={**edge("GET"), "origin": "https://evil.test"}
-        ),
+        client.get("/api/v1/cases", headers={"origin": "https://evil.test"}),
     ]
     assert [r.status_code for r in refused] == [403] * len(refused)
     assert {r.json()["code"] for r in refused} == {"ORIGIN_REFUSED"}
     assert recorder.seen == []
 
     admitted = [
-        client.post("/api/v1/cases", headers={**edge(), "origin": PUBLIC}),
-        client.post(
-            "/api/v1/cases", headers={**edge(), "sec-fetch-site": "same-origin"}
-        ),
-        client.get("/api/v1/cases", headers={**edge("GET"), "sec-fetch-site": "none"}),
-        client.get("/api/v1/cases", headers=edge("GET")),
+        client.post("/api/v1/cases", headers={"origin": PUBLIC}),
+        client.post("/api/v1/cases", headers={"sec-fetch-site": "same-origin"}),
+        client.get("/api/v1/cases", headers={"sec-fetch-site": "none"}),
+        client.get("/api/v1/cases"),
     ]
     assert all(r.status_code == 200 for r in admitted)
 
@@ -325,36 +176,20 @@ def test_no_response_sets_a_cookie_or_a_cors_header() -> None:
         assert not any(name.startswith("access-control-") for name in names)
 
 
-def test_every_response_carries_the_security_headers_and_the_policy(
-    token: str,
-) -> None:
+def test_every_response_carries_the_security_headers_and_the_policy() -> None:
     csp = SECURITY_HEADERS["content-security-policy"]
     assert "default-src 'none'" in csp and "trusted-types 'none'" in csp
     client = TestClient(app)
     events = f"/api/v1/cases/{uuid4()}/events"
-    # An assertion whose subject is no identifier: verified by the guard,
-    # refused by identity, so the app answers 401 without a store.
-    nobody = sign_assertion(
-        token.encode(),
-        subject="nobody",
-        groups=(),
-        method="GET",
-        target=events,
-        issued_at=int(time.time()),
-        nonce=secrets.token_hex(16),
-    )
     responses = {
         "refused": client.get("/api/v1/cases"),
         "health": client.get("/api/health"),
-        "unauthenticated": client.get(events, headers={EDGE_ASSERTION_HEADER: nobody}),
-        "not-found": client.get(
-            "/api/v2/nothing",
-            headers={EDGE_ASSERTION_HEADER: _signed(token, target="/api/v2/nothing")},
-        ),
-        "site": client.get(
-            "/index.html",
-            headers={EDGE_ASSERTION_HEADER: _signed(token, target="/index.html")},
-        ),
+        # No identifier at all: dev mode's own loopback rule admits the
+        # request, and identity refuses the subject, so the app answers 401
+        # without a store.
+        "unauthenticated": client.get(events, headers={"x-caos-user": "nobody"}),
+        "not-found": client.get("/api/v2/nothing"),
+        "site": client.get("/index.html"),
     }
     for label, response in responses.items():
         for name, value in SECURITY_HEADERS.items():
@@ -363,10 +198,7 @@ def test_every_response_carries_the_security_headers_and_the_policy(
         assert responses[label].headers["cache-control"] == "no-store", label
     assert responses["site"].headers["cache-control"] == "no-cache"
     _, recorder_client = _guarded()
-    asset = recorder_client.get(
-        "/assets/app.js",
-        headers={EDGE_ASSERTION_HEADER: _signed(token, target="/assets/app.js")},
-    )
+    asset = recorder_client.get("/assets/app.js")
     assert asset.headers["cache-control"] == "public, max-age=31536000, immutable"
 
 

@@ -10,7 +10,7 @@ import time
 from collections.abc import Callable, Iterator, Mapping
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
-from uuid import UUID, uuid4, uuid5
+from uuid import UUID, uuid5
 
 import anyio
 import httpx2 as httpx
@@ -20,7 +20,7 @@ from fastapi.testclient import TestClient
 from starlette.types import Receive, Scope, Send
 
 from caos.api import edge, identity
-from caos.api.edge import Asserted, EdgeMode, resolve_mode
+from caos.api.edge import EdgeMode, resolve_mode
 from caos.api.identity import (
     Actor,
     GlobalRole,
@@ -51,7 +51,7 @@ def platform(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_platform_mode_is_declared_by_the_app_name_and_excludes_the_others(
     platform: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    assert resolve_mode() == EdgeMode(key=None, public_origin=None, platform=True)
+    assert resolve_mode() == EdgeMode(public_origin=None, platform=True)
     monkeypatch.setenv(edge.PUBLIC_ORIGIN_ENV, "https://caos.example")
     assert resolve_mode().public_origin == "https://caos.example"
     monkeypatch.setenv(edge.PUBLIC_ORIGIN_ENV, "https://caos.example/path")
@@ -59,10 +59,6 @@ def test_platform_mode_is_declared_by_the_app_name_and_excludes_the_others(
         resolve_mode()
     monkeypatch.delenv(edge.PUBLIC_ORIGIN_ENV)
     monkeypatch.setenv(identity.TRUST_SWITCH, "1")
-    with pytest.raises(Refusal, match=r"^EDGE_CONFIG_INVALID$"):
-        resolve_mode()
-    monkeypatch.delenv(identity.TRUST_SWITCH)
-    monkeypatch.setenv(identity.EDGE_TOKEN_ENV, "k" * 40)
     with pytest.raises(Refusal, match=r"^EDGE_CONFIG_INVALID$"):
         resolve_mode()
 
@@ -141,10 +137,11 @@ def test_a_platform_request_from_any_peer_reaches_the_api_without_forged_headers
         "/api/v1/directory", headers={"sec-fetch-site": "same-origin"}
     )
     assert unsigned.json()["code"] == "NOT_AUTHENTICATED"
-    asserted = Asserted(subject="s", groups=("g",))
-    kept = edge._rewritten([(b"x-caos-user", b"u"), (b"host", b"h")], None, edged=True)
+    kept = edge._rewritten([(b"x-caos-user", b"u"), (b"host", b"h")], edged=True)
     assert kept == [(b"host", b"h")]
-    assert edge._rewritten([(b"x-caos-user", b"u")], asserted)[0][0] == b"x-caos-user"
+    assert edge._rewritten([(b"x-caos-user", b"u")], edged=False) == [
+        (b"x-caos-user", b"u")
+    ]
 
 
 def test_the_health_path_is_scrubbed_and_a_doubled_token_names_nobody(
@@ -212,28 +209,22 @@ def test_the_platform_refuses_to_boot_without_the_workspace_id(
 def test_the_configured_group_names_are_read_in_every_mode(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """EI-W2. Edge mode used to map the literal `caos-admins` to ADMIN and
-    never look at `CAOS_GROUP_ADMIN`, so the configured group granted nothing
-    while whatever IdP group happened to carry that spelling granted
-    everything. One reader of the two variables now answers both modes.
+    """EI-W2. A literal `caos-admins` used to be the only spelling any mode
+    read, so the configured `CAOS_GROUP_ADMIN` granted nothing while whatever
+    IdP group happened to carry that spelling granted everything. One reader
+    of the two variables (`role_from_groups`, the mapping platform mode feeds
+    SCIM's group list through -- the only mode a group list decides a role in
+    at all now that the HMAC edge assertion is gone, D10) now answers every
+    mode there is.
     """
-    monkeypatch.delenv(identity.TRUST_SWITCH, raising=False)
-    monkeypatch.setenv(identity.EDGE_TOKEN_ENV, "x" * 32)
     monkeypatch.setenv(identity.GROUP_ADMIN_ENV, "lf-credit-admins")
     monkeypatch.setenv(identity.GROUP_ANALYST_ENV, "lf-credit-analysts")
-    subject = {identity.SUBJECT_HEADER: str(uuid4())}
 
-    named = actor_from_headers({**subject, identity.GROUPS_HEADER: "lf-credit-admins"})
-    displaced = actor_from_headers({**subject, identity.GROUPS_HEADER: "caos-admins"})
-    analyst = actor_from_headers(
-        {**subject, identity.GROUPS_HEADER: "other,lf-credit-analysts"}
-    )
-
-    assert named.role is GlobalRole.ADMIN
-    assert displaced.role is GlobalRole.READER, "the displaced literal grants nothing"
-    assert analyst.role is GlobalRole.ANALYST
-    # The same reader, and the same defaults, whichever mode asks it.
     assert role_from_groups({"lf-credit-admins"}) is GlobalRole.ADMIN
+    assert role_from_groups({"caos-admins"}) is GlobalRole.READER, (
+        "the displaced literal grants nothing"
+    )
+    assert role_from_groups({"other", "lf-credit-analysts"}) is GlobalRole.ANALYST
     monkeypatch.delenv(identity.GROUP_ADMIN_ENV)
     monkeypatch.delenv(identity.GROUP_ANALYST_ENV)
     assert role_from_groups({identity.GROUP_ADMIN_DEFAULT}) is GlobalRole.ADMIN

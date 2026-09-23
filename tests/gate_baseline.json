@@ -4,8 +4,8 @@
   "file_noqa": 7,
   "mypy_directive": 0,
   "no_cover": 5,
-  "noqa": 122,
-  "nosec": 17,
+  "noqa": 118,
+  "nosec": 16,
   "skip": 7,
   "type_ignore": 142,
   "xfail": 0

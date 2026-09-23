@@ -21,7 +21,7 @@ because somebody widened a SELECT.
 FastAPI's own `/docs`, `/redoc` and `/openapi.json` are not served (Task 4.5
 decision 6): Swagger loads a script from a CDN the policy refuses, and a route
 map is nothing a browser of this workspace needs. Every request passes
-`caos/api/edge.py`'s guard first -- the edge token or the loopback rule, the
+`caos/api/edge.py`'s guard first -- the platform or the loopback rule, the
 identity-header hygiene, the Origin check -- before routing or identity.
 """
 
