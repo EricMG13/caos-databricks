@@ -98,6 +98,49 @@ def test_the_token_names_the_caller_and_the_groups_name_the_role(
     )
 
 
+def test_the_positive_and_negative_caches_expire_on_their_own_schedules(
+    platform: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CF-070. `CACHE_SECONDS` bounds a good token's cached actor and
+    `NEGATIVE_SECONDS` a refused one's; neither had a test that moved past
+    either bound, and both call `time.monotonic()` directly, so the clock
+    is replaced rather than actually waited on.
+    """
+    clock = [0.0]
+    monkeypatch.setattr(time, "monotonic", lambda: clock[0])
+    calls: list[str] = []
+
+    def current_user(token: str) -> WorkspaceUser:
+        calls.append(token)
+        if token == "revoked":
+            raise Refusal(RefusalCode.NOT_AUTHENTICATED)
+        return WorkspaceUser(scim_id="42", groups=frozenset())
+
+    monkeypatch.setattr(identity, "_current_user", current_user)
+
+    # A good lookup is remembered for CACHE_SECONDS, to the second: still
+    # cached at one second short of it, asked again once past it.
+    actor_from_token("good")
+    clock[0] += identity.CACHE_SECONDS - 1
+    actor_from_token("good")
+    assert calls == ["good"], "still within CACHE_SECONDS"
+    clock[0] += 2
+    actor_from_token("good")
+    assert calls == ["good", "good"], "past CACHE_SECONDS, asked again"
+
+    # A refused lookup is remembered for NEGATIVE_SECONDS the same way.
+    with pytest.raises(Refusal, match=r"^NOT_AUTHENTICATED$"):
+        actor_from_token("revoked")
+    clock[0] += identity.NEGATIVE_SECONDS - 1
+    with pytest.raises(Refusal, match=r"^NOT_AUTHENTICATED$"):
+        actor_from_token("revoked")
+    assert calls == ["good", "good", "revoked"], "still within NEGATIVE_SECONDS"
+    clock[0] += 2
+    with pytest.raises(Refusal, match=r"^NOT_AUTHENTICATED$"):
+        actor_from_token("revoked")
+    assert calls == ["good", "good", "revoked", "revoked"], "past it, asked again"
+
+
 def test_a_workspace_that_cannot_answer_is_not_authenticated(
     platform: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
