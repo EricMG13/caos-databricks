@@ -1285,7 +1285,7 @@ def test_a_malformed_database_url_refuses_to_start_without_the_password(
     )
 
     with pytest.raises(Refusal) as caught, TestClient(app):
-        pass  # pragma: no cover -- entering the client is what raises
+        pass
 
     assert caught.value.code is RefusalCode.STORE_UNAVAILABLE
     logged = capsys.readouterr().err
@@ -1306,7 +1306,7 @@ def test_a_malformed_run_ceiling_refuses_to_start(
     monkeypatch.setenv(CEILING_ENV, "not-a-number")
 
     with pytest.raises(Refusal) as caught, TestClient(app):
-        pass  # pragma: no cover -- entering the client is what raises
+        pass
 
     assert caught.value.code is RefusalCode.PROVIDER_NOT_CONFIGURED
     assert capsys.readouterr().err.strip() == "PROVIDER_NOT_CONFIGURED"
