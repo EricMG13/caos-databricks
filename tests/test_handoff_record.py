@@ -391,7 +391,24 @@ def test_a_quote_the_body_ends_a_sentence_with_is_still_quoted(marks: str) -> No
     assert citations[0].matched_text == QUOTE
 
 
-@pytest.mark.parametrize("marks", ["{}s", "x{}", "{}-1", "({}x)"])
+@pytest.mark.parametrize("marks", ['\\"{}\\".', "\\({}\\)", "\\[{}\\]:"])
+def test_a_quote_the_body_writes_with_markdown_escapes_is_still_quoted(
+    marks: str,
+) -> None:
+    """A backslash before punctuation is Markdown's own spelling of that mark
+    (CommonMark's backslash escape): `\\"Total debt\\"` reads `"Total debt"`.
+    One Claude Sonnet 5 CP-0 answer of 23 September 2026 wrote all eight of the
+    quotes it was refused for that way (F149)."""
+    body = wire(
+        f"---\nmodule_id: CP-0\n---\n\n## Evidence Trace\n\n- "
+        f"{marks.format(QUOTE)}\n".encode(),
+        [_citation()],
+    )
+    _markdown, citations = parse_response(body, delivered=DELIVERED)
+    assert citations[0].matched_text == QUOTE
+
+
+@pytest.mark.parametrize("marks", ["{}s", "x{}", "{}-1", "({}x)", "\\{}"])
 def test_a_quote_whose_edge_word_is_a_different_word_is_not_quoted(
     marks: str,
 ) -> None:

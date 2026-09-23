@@ -692,8 +692,15 @@ def _transport(body: str) -> tuple[bytes, str, tuple[Citation, ...]]:
     return text.encode("utf-8"), text, requested
 
 
+# CommonMark's backslash escape: a backslash before ASCII punctuation is how
+# Markdown writes that mark, so `\"` reads `"` (F149).
+# ponytail: code spans keep their backslashes literally; unescaped here too.
+_MARKDOWN_ESCAPE = re.compile(r"\\([!-/:-@\[-`{-~])")
+
+
 def _body_words(text: str) -> list[str]:
-    """The Markdown after its front matter, as whitespace tokens.
+    """The Markdown after its front matter, as whitespace tokens, with its
+    backslash escapes read as the marks they write.
 
     The front matter is host identity, not analysis, so no quote may rest on it;
     and a quote matches whole tokens, as anchoring in the evidence does.
@@ -701,14 +708,14 @@ def _body_words(text: str) -> list[str]:
     lines = text.split("\n")
     has_front = lines[:1] == ["---"] and "---" in lines[1:]
     closing = lines.index("---", 1) if has_front else 0
-    return "\n".join(lines[closing + 1 :]).split()
+    return _MARKDOWN_ESCAPE.sub(r"\1", "\n".join(lines[closing + 1 :])).split()
 
 
 # Marks a body may put around a quotation without making it a different quote.
 # The backtick is Markdown's code span, which a module uses the same way.
 _QUOTATION = "\"'`\u2018\u2019\u201c\u201d\u201e\u201f\u00ab\u00bb"
 # And what prose puts before and after one: an opening bracket; a closing
-# bracket or the sentence's own punctuation (F147).
+# bracket or the sentence's own punctuation (F148).
 _OPENING = _QUOTATION + "([{"
 _CLOSING = _QUOTATION + ".,;:!?)]}"
 
@@ -760,7 +767,7 @@ def _quoted(words: list[str], openings: dict[str, tuple[int, ...]], quote: str) 
 
     Only the two outer tokens may wear anything, and only typography --
     quotation marks, an opening bracket, a closing bracket or the sentence's
-    punctuation (F147) -- so the quote's own words and its internal
+    punctuation (F148) -- so the quote's own words and its internal
     punctuation still have to match exactly.
     Nothing here widens what may be *cited*: `verify_citations` anchors against
     the document's own tokens and is untouched. This decides only whether the
@@ -780,7 +787,7 @@ def _quoted(words: list[str], openings: dict[str, tuple[int, ...]], quote: str) 
 def _carried(window: list[str], wanted: list[str]) -> bool:
     """One run of the body carries the quote: its inner words exactly, and its
     edge words wearing only typography -- quotation marks, an opening bracket
-    before, a closing bracket or the sentence's punctuation after (F147)."""
+    before, a closing bracket or the sentence's punctuation after (F148)."""
     if window == wanted:
         return True
     if window[1:-1] != wanted[1:-1]:
