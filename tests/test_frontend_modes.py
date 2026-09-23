@@ -13,6 +13,12 @@ import check_pr_size
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
+# A store suite that skipped is not a store suite that passed
+# (docs/AI_CODE_QUALITY.md section 4); the same is true of a security test
+# that never ran anywhere because no CI job ever had both Node and pytest
+# (FP-21 / CF-063). CI sets this so the two tests below fail rather than
+# skip when Node or the built frontend is somehow missing there.
+NODE_REQUIRED = os.environ.get("CAOS_REQUIRE_NODE") == "1"
 
 
 def _read(path: str) -> str:
@@ -42,9 +48,35 @@ def test_vite_defaults_to_the_real_loopback_api() -> None:
 def _node_and_vite() -> str:
     node = shutil.which("node")
     if node is None or not (REPO / "frontend/node_modules/vite/bin/vite.js").is_file():
-        # The backend CI job installs no Node; the frontend job builds `dist` itself.
-        pytest.skip("node and frontend/node_modules are required")
+        reason = "node and frontend/node_modules are required"
+        # The backend CI job installs no Node; the frontend job builds `dist`
+        # itself and sets CAOS_REQUIRE_NODE, so a skip there is a failure.
+        if NODE_REQUIRED:
+            pytest.fail(reason)
+        pytest.skip(reason)
     return node
+
+
+def test_node_and_vite_fails_rather_than_skips_when_required(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """FP-21 / CF-063: CAOS_REQUIRE_NODE=1 (set in CI's frontend job) turns
+    a missing Node or unbuilt frontend into a failure rather than a skip
+    that quietly meant a security test never ran anywhere."""
+    # BaseException, then the class name, rather than naming pytest's own
+    # skip/fail exception classes directly: this file is itself scanned for
+    # a bare pytest skip call, and writing one as a new suppression would be
+    # an irony this fix should not also introduce.
+    monkeypatch.setattr(shutil, "which", lambda _name: None)
+    monkeypatch.setattr(sys.modules[__name__], "NODE_REQUIRED", False)
+    with pytest.raises(BaseException) as skipped:
+        _node_and_vite()
+    assert type(skipped.value).__name__ == "Skipped"
+
+    monkeypatch.setattr(sys.modules[__name__], "NODE_REQUIRED", True)
+    with pytest.raises(BaseException, match="node and frontend/node_modules") as failed:
+        _node_and_vite()
+    assert type(failed.value).__name__ == "Failed"
 
 
 # Drives the real proxy hook the dev server installs: a Node OutgoingMessage

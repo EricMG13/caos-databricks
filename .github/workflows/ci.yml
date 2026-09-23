@@ -228,6 +228,24 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      # FP-21 / CF-063: these two security tests (the dev proxy strips a
+      # forged client identity; a production build carries no fixture or
+      # demo route) skip without Node, the `test` job installs no Node,
+      # and this job never ran pytest -- so neither ever ran anywhere.
+      # CAOS_REQUIRE_NODE turns that skip into a failure (-rs also prints
+      # the reason if one somehow still fires), the same pattern
+      # CAOS_REQUIRE_POSTGRES already uses for the store suite.
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with: {version: "0.12.5", enable-cache: true}
+      - name: frontend security tests that need a real Node and build
+        working-directory: .
+        env:
+          CAOS_REQUIRE_NODE: "1"
+        run: |
+          uv sync --locked --all-groups
+          uv run pytest -rs --no-cov \
+            "tests/test_frontend_modes.py::test_the_dev_proxy_strips_client_identity_and_injects_the_local_actor" \
+            "tests/test_frontend_modes.py::test_production_build_contains_no_fixture_or_demo_route"
       - name: nine section routes in the export
         run: |
           for s in directory upload analysis book run model report committee admin; do

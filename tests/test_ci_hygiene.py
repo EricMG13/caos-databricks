@@ -71,6 +71,27 @@ def test_the_size_job_delegates_to_the_canonical_script() -> None:
     assert "**/vendor/**" not in jobs["size"]
 
 
+def test_the_frontend_job_runs_the_two_security_tests_that_need_a_real_build() -> None:
+    """FP-21 / CF-063: test_the_dev_proxy_strips_client_identity_and_injects_
+    the_local_actor and test_production_build_contains_no_fixture_or_demo_route
+    skip without Node; the backend `test` job installs no Node, and this job
+    never ran pytest, so neither test ever ran anywhere. CAOS_REQUIRE_NODE
+    turns a skip there into a failure."""
+    jobs = _jobs(CI_YAML.read_text(encoding="utf-8"))
+    frontend = jobs["frontend"]
+    assert "CAOS_REQUIRE_NODE" in frontend
+    assert (
+        "tests/test_frontend_modes.py::"
+        "test_the_dev_proxy_strips_client_identity_and_injects_the_local_actor"
+        in frontend
+    )
+    assert (
+        "tests/test_frontend_modes.py::"
+        "test_production_build_contains_no_fixture_or_demo_route" in frontend
+    )
+    assert "astral-sh/setup-uv" in frontend
+
+
 def test_every_install_is_locked_and_wheels_only() -> None:
     """A lock pins which bytes arrive; `uv sync --locked` refuses a lock that
     drifted, and `tool.uv.no-build` is what stops those bytes being a source
