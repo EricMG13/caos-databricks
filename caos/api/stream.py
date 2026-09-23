@@ -247,40 +247,55 @@ def case_tail(  # noqa: PLR0913 -- the stream's identity, then its lifetime
     here. A deadline of zero is one poll. Yields nothing at all to an actor
     who cannot read the case.
 
-    A store fault (CF-022) refuses `STORE_UNAVAILABLE` rather than escaping as
-    a bare `psycopg.Error`: the response has long since started by the time any
-    query here runs, so no fresh status reaches the wire either way, but a
-    typed refusal is safe wherever an unhandled exception is logged and a
-    driver's own message is not.
+    A store fault reaches a caller here as the bare `psycopg.Error` it is;
+    `guarded(case_tail(...))` is what every caller outside this module and
+    its own tests should hold instead (CF-022). Kept apart from this
+    function's own body -- rather than a `try` wrapped around it -- so the
+    fix costs this already-baselined function no added nesting (C901).
     """
-    try:
-        started = monotonic()
-        audit_head, run_head, terminal = _heads(conn, case_id, run_id)
-        at = parse_marker(after, Marker(audit_head, run_head))
-        run_open = run_id is not None and (terminal is None or at.run_seq < terminal)
+    started = monotonic()
+    audit_head, run_head, terminal = _heads(conn, case_id, run_id)
+    at = parse_marker(after, Marker(audit_head, run_head))
+    run_open = run_id is not None and (terminal is None or at.run_seq < terminal)
+
+    if not _may_watch(conn, case_id, actor_id):
+        return
+    yield StreamEvent(at, None)
+
+    while True:
+        for event, closes in _pending(conn, case_id, run_id if run_open else None, at):
+            at = event.id
+            if event.name is not None:
+                if not _may_watch(conn, case_id, actor_id):
+                    return
+                yield event
+            run_open = run_open and not closes
 
         if not _may_watch(conn, case_id, actor_id):
             return
-        yield StreamEvent(at, None)
+        if monotonic() - started >= deadline:
+            return
+        sleep(poll)
+        if heartbeat:
+            yield None
 
-        while True:
-            for event, closes in _pending(
-                conn, case_id, run_id if run_open else None, at
-            ):
-                at = event.id
-                if event.name is not None:
-                    if not _may_watch(conn, case_id, actor_id):
-                        return
-                    yield event
-                run_open = run_open and not closes
 
-            if not _may_watch(conn, case_id, actor_id):
-                return
-            if monotonic() - started >= deadline:
-                return
-            sleep(poll)
-            if heartbeat:
-                yield None
+def guarded(tail: Iterator[StreamEvent | None]) -> Iterator[StreamEvent | None]:
+    """Any `case_tail(...)`-shaped generator, with a store fault (CF-022)
+    refused `STORE_UNAVAILABLE` rather than left to escape as the bare
+    `psycopg.Error` an unhandled exception elsewhere would be logged with,
+    its own message included.
+
+    The response has long since started by the time any query `case_tail`
+    makes runs, so no fresh status reaches the wire either way; what changes
+    is what is safe to raise and to log. Generic over the generator rather
+    than over `case_tail`'s own eight parameters, so it adds no second copy
+    of its signature (and no second `PLR0913`) beside it -- every caller
+    outside this module's own tests of `case_tail` itself should hold this
+    wrapped around it.
+    """
+    try:
+        yield from tail
     except psycopg.Error:
         raise Refusal(RefusalCode.STORE_UNAVAILABLE) from None
 

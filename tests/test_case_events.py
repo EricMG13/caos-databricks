@@ -647,28 +647,33 @@ def test_the_event_stream_costs_its_declared_budget(
     assert app_module.IO_BUDGET == app_module.EVENTS_IO_BUDGET
 
 
-def test_case_tail_refuses_a_post_connect_fault_as_store_unavailable(
+def test_guarded_case_tail_refuses_a_post_connect_fault_as_store_unavailable(
     case: tuple[StoreConnection, UUID],
 ) -> None:
     """CF-022: a store fault mid-poll -- a dropped session, a statement
-    timeout -- refuses `STORE_UNAVAILABLE` rather than escaping `case_tail` as
-    the bare `psycopg.Error` an unhandled exception elsewhere would be logged
-    with, its own message included. The response has long since started by
-    the time any query here runs, so no fresh status reaches the wire either
-    way; what changes is what is safe to raise and to log.
+    timeout -- refuses `STORE_UNAVAILABLE` rather than escaping as the bare
+    `psycopg.Error` an unhandled exception elsewhere would be logged with,
+    its own message included. The response has long since started by the
+    time any query here runs, so no fresh status reaches the wire either
+    way; what changes is what is safe to raise and to log. `case_tail` itself
+    is left as the bare generator this same file's other tests drive
+    directly; `guarded(case_tail(...))` is what `app.py` and every other
+    caller hold instead.
     """
     conn, case_id = case
     reader = _reader(conn, case_id, Standing.READER)
     conn.commit()
-    tail = stream.case_tail(
-        conn,
-        case_id=case_id,
-        run_id=None,
-        actor_id=reader,
-        after=None,
-        deadline=5.0,
-        poll=0.01,
-        heartbeat=True,
+    tail = stream.guarded(
+        stream.case_tail(
+            conn,
+            case_id=case_id,
+            run_id=None,
+            actor_id=reader,
+            after=None,
+            deadline=5.0,
+            poll=0.01,
+            heartbeat=True,
+        )
     )
 
     assert next(tail) is not None  # the cursor frame

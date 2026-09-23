@@ -86,6 +86,7 @@ from caos.api.stream import (
     StreamEvent,
     StreamSlot,
     case_tail,
+    guarded,
     take_stream_slot,
 )
 from caos.refusals import Refusal, RefusalCode
@@ -576,15 +577,17 @@ def read_case_events(
     # actor, so the cap is a share of the fleet's tails rather than a race for
     # all of them (MX-2).
     slot = take_stream_slot(actor_id=actor.user_id)
-    events = case_tail(
-        conn,
-        case_id=case_id,
-        run_id=run,
-        actor_id=actor.user_id,
-        after=request.headers.get("last-event-id"),
-        deadline=TAIL_DEADLINE,
-        poll=POLL_INTERVAL,
-        heartbeat=True,
+    events = guarded(
+        case_tail(
+            conn,
+            case_id=case_id,
+            run_id=run,
+            actor_id=actor.user_id,
+            after=request.headers.get("last-event-id"),
+            deadline=TAIL_DEADLINE,
+            poll=POLL_INTERVAL,
+            heartbeat=True,
+        )
     )
 
     def framed() -> Generator[bytes]:
