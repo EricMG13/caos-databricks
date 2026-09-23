@@ -363,6 +363,34 @@ def test_a_gate_weakened_in_effect_is_named(tmp_path: Path) -> None:
     assert any("jscpd --threshold 3 " in p for p in problems), problems
 
 
+def test_a_template_expression_spliced_into_a_run_script_is_refused(
+    tmp_path: Path,
+) -> None:
+    """FP-40: a run: script is shell, and github.base_ref (or any other
+    attacker-influenced context) spliced straight into one is a template
+    expanded before the shell ever sees it -- script injection. Every such
+    value must cross an env: variable instead."""
+    root = _tree(tmp_path)
+    assert check_gate_config._ci_problems(root) == []
+    ci = root / ".github" / "workflows" / "ci.yml"
+    ci_text = ci.read_text(encoding="utf-8")
+    ci_text = ci_text.replace(
+        '      - run: python3 scripts/check_pr_size.py "origin/$BASE_REF"\n'
+        "        env:\n"
+        "          BASE_REF: ${{ github.base_ref }}\n",
+        "      - run: python3 scripts/check_pr_size.py "
+        '"origin/${{ github.base_ref }}"\n',
+    )
+    assert ci_text != ci.read_text(encoding="utf-8"), "the size job's shape changed"
+    ci.write_text(ci_text, encoding="utf-8")
+
+    problems = check_gate_config._ci_problems(root)
+
+    assert any(
+        p.startswith("ci: ") and "splices a template expression" in p for p in problems
+    ), problems
+
+
 def test_a_hook_s_own_body_weakened_in_effect_is_named(tmp_path: Path) -> None:
     """AR-07 and N46: the old check matched only `- id:`, so a hook kept
     naming itself present while its `entry` was swapped for a no-op, its

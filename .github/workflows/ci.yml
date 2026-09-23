@@ -202,7 +202,12 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: {fetch-depth: 0}
-      - run: python3 scripts/check_pr_size.py "origin/${{ github.base_ref }}"
+      # FP-40: github.base_ref is a PR's own base-branch name and travels
+      # through env:, not spliced into the run: script -- the other job's
+      # own pattern for the same value.
+      - run: python3 scripts/check_pr_size.py "origin/$BASE_REF"
+        env:
+          BASE_REF: ${{ github.base_ref }}
 
   frontend:
     runs-on: ubuntu-latest

@@ -634,6 +634,17 @@ def _ci_problems(root: Path) -> list[str]:
         for command in commands
         if SWALLOWED.search(command) and command != EXCUSED
     ]
+    # FP-40: a run: script is shell, and github.base_ref (or any other
+    # attacker-influenced context) spliced straight into one is a template
+    # expanded before the shell ever sees it -- script injection, not a
+    # gate that merely reads a bad value. Every such expression must cross
+    # an env: variable instead, as the suppression-baseline step already
+    # does.
+    problems += [
+        f"ci: {command!r} splices a template expression into a run: script"
+        for command in commands
+        if "${{" in command
+    ]
     for key in ("continue-on-error", "PYTEST_ADDOPTS"):
         if key in ci_text:
             problems.append(f"ci: {key} is set; a gate would pass whatever it finds")
