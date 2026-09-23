@@ -1,3 +1,55 @@
+# Downstream modules, and N52 measured — 23 September 2026, late
+
+Status: **one set qualifies end to end: `ccl-fy2025-market-dislocation` on GPT-6 Luna Pro with
+N52 (D2: every key, projection, readiness and proof check met). No other set completes; the
+stops are the gate's readiness verdicts and the models' misses of the vendor's register
+contract, none the host's. NOT_QUALIFIED overall.**
+
+Same $8.00 authorisation. Spend on the key: **$12.08** after, $4.44 of the $8.00 in all.
+`openai/gpt-5.6-luna` ($0.20/$1.20) for E1-E2 at `cp0/investigation`; `openai/gpt-6-luna-pro`
+($0.10/$0.50, reasoning mode pro, about $0.05 and three minutes a call) for G1
+at `cp0/investigation` and D1-D6 at branch `d30/widen` (N52). Evidence (git-ignored):
+`docs/rebuild/runs/live-2026-09-23/{E,G,D}*.{json,log}`.
+
+| Run | Set | Attempts (refusal, or OK) | End |
+|---|---|---|---|
+| E1 | earnings-update | CP-0 ×5: `Restricted` above the 59 cap ×4, MATERIAL under `Passed` ×1 | stopped, CP-0 |
+| E2 | earnings-update | CP-0 ×13: the cap ×11 (a second T8 table ×7), MATERIAL under `Passed` ×1, quotes ×2 | stopped, CP-0 |
+| G1 | earnings-update | CP-0 unanchored, **OK**; CP-1 ×6 incomplete/malformed | stopped, CP-1 |
+| D1 | earnings-update | CP-0 **OK**; CP-5 incomplete, then (N52) a valid `Blocked` | BLOCKED |
+| D2 | market-dislocation | CP-0 malformed, **OK**; CP-3D incomplete, then (N52) **OK** | **COMPLETE, qualified** |
+| D3 | relative-value | CP-0 **OK** | BLOCKED at the gate |
+| D4 | vmo2-fy2025 (PDF) | CP-0 unanchored, then (N52) **OK** | BLOCKED at the gate |
+| D5 | lite-full-credit-screen | CP-0 unanchored ×2, **OK**; CP-1A ×3 incomplete/malformed | stopped, CP-1A |
+| D6 | liquidity | CP-0 ×4: T8 readiness in backticks, unanchored, not the transport, unanchored | stopped, CP-0 |
+
+What it shows.
+
+- **N52 works where D30 alone did not.** Six nodes refused incomplete or unanchored got the
+  N52 second attempt; three answered it validly: D2's CP-3D (placeholder critical cells fixed,
+  accepted, and the set qualified), D1's CP-5 (a validated `Blocked`) and D4's CP-0 (the named
+  citation fixed, accepted). The other three missed again: D5's and D6's CP-0 fixed what they
+  were told and broke a different rule; D5's CP-1A fixed its placeholder cells but not the
+  eleven register IDs its message does not name (N55). Under D30 alone, G1's CP-1 second attempt fixed every
+  T4 column it was told of, the literal `Period 1…N` included, then broke an interface table;
+  its four unaided retries never fixed the headers.
+- **The gate is the commonest stop.** GPT-6 Luna Pro's CP-0 marks a consumer `CONDITIONAL`
+  for any source it lacks, as the vendor lets it: CP-L10 on every pack (for a "complete
+  debt-document set", although CP-L10's own skill runs with missing documents as
+  `COMPLETE_WITH_GAPS`), CP-1/CP-1B/CP-2 without the FY2026 10-Q (D1), and every consumer on a
+  PDF pack whose extraction the host's block does not attest (D4; N53). Two keys expect a
+  clearance the pack cannot support (N54).
+- **The modules' own contracts are the other stop.** CP-1 and CP-1A are refused for register
+  shape the vendor's checker matches literally: `Period 1…N` headers, register IDs in the
+  heading, one bad interface table voiding all seven (N55).
+- **GPT-5.6 luna does not clear CP-0 on this set**: 0 of 18 attempts in E1-E2, 15 of them the
+  `Restricted` score cap it is told of in `SKILL.md` and, on its second attempt, by the
+  validator.
+- Every refusal was replayed through the host's verdict (`canonical._replayed_answer`) and
+  traced to its rule; one host fault was found and fixed on `d30/widen`: the second attempt's
+  anchoring line said "not on its cited page" for a quote that is on the page across two
+  wrapped PDF lines; it now names the rule broken, "not one evidence line of its cited page".
+
 # CP-0 investigation — 23 September 2026, evening
 
 Status: **a real model's CP-0 answer accepted live (GPT-5.6 luna, anchored); two host
