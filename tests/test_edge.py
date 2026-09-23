@@ -22,13 +22,15 @@ from caos.api.edge import (
     PUBLIC_ORIGIN_ENV,
     SECURITY_HEADERS,
     EdgeGuard,
+    EdgeMode,
     is_api_path,
     refusal_body,
+    resolve_mode,
     startup_failed,
 )
 from caos.api.identity import TRUST_SWITCH
 from caos.api.wire import CLEARS
-from caos.refusals import RefusalCode
+from caos.refusals import Refusal, RefusalCode
 
 PUBLIC = "https://caos.example.test"
 
@@ -81,6 +83,35 @@ def test_dev_mode_serves_only_loopback_peers_with_a_loopback_host() -> None:
     # An image started without a token still answers health to anyone.
     far = TestClient(guard, client=("203.0.113.9", 4000))
     assert far.get("/api/health", headers={"host": "caos.example.test"}).is_success
+
+
+def test_dev_mode_honours_a_declared_public_origin_off_the_conventional_ports(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CF-056. `DEV_ORIGINS` names only the conventional vite-plus-loopback-API
+    pair (5173 and 8000); a developer whose ports differ could not make an
+    unsafe command of their own origin succeed. `CAOS_PUBLIC_ORIGIN`, already
+    read this way in platform mode, is honoured in dev mode too."""
+    monkeypatch.delenv(PUBLIC_ORIGIN_ENV, raising=False)
+    assert resolve_mode() == EdgeMode(public_origin=None)
+
+    other = "http://localhost:9000"
+    monkeypatch.setenv(PUBLIC_ORIGIN_ENV, other)
+    assert resolve_mode() == EdgeMode(public_origin=other)
+
+    recorder, client = _guarded()
+    del client.headers["sec-fetch-site"]
+    refused = client.post("/api/v1/cases", headers={"origin": PUBLIC})
+    assert refused.status_code == 403
+    assert refused.json()["code"] == "ORIGIN_REFUSED"
+    assert recorder.seen == []
+    admitted = client.post("/api/v1/cases", headers={"origin": other})
+    assert admitted.status_code == 200
+
+    monkeypatch.setenv(PUBLIC_ORIGIN_ENV, "not-an-origin")
+    with pytest.raises(Refusal) as caught:
+        resolve_mode()
+    assert caught.value.code is RefusalCode.EDGE_CONFIG_INVALID
 
 
 def test_a_repeated_identity_header_is_not_authenticated() -> None:

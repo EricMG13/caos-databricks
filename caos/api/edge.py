@@ -25,7 +25,11 @@ names with SCIM. It passes `origin`, `sec-fetch-*`, `idempotency-key`,
   published port on this image therefore answers health and nothing else, and
   a DNS rebinding page is refused by its `Host`. `caos/api/identity.py` reads
   `x-caos-user` and, only while `CAOS_TRUST_ROLE_HEADER` is on, `x-caos-role`;
-  a peer that passes the loopback check is otherwise READER.
+  a peer that passes the loopback check is otherwise READER. An unsafe `/api`
+  request's origin must be the conventional vite-plus-loopback-API pair
+  (`DEV_ORIGINS`: ports 5173 and 8000) unless `CAOS_PUBLIC_ORIGIN` declares a
+  different one (CF-056), which must be well-formed or boot refuses
+  `EDGE_CONFIG_INVALID`.
 
 In both modes a repeated or lookalike identity header is 401
 `NOT_AUTHENTICATED`; `/api` is checked for Origin and `Sec-Fetch-Site` (the
@@ -151,7 +155,25 @@ def resolve_mode(environ: Mapping[str, str] | None = None) -> EdgeMode:
     env = os.environ if environ is None else environ
     if env.get(PLATFORM_ENV):
         return _platform_mode(env)
-    return EdgeMode(public_origin=None)
+    return _dev_mode(env)
+
+
+def _dev_mode(env: Mapping[str, str]) -> EdgeMode:
+    """Dev mode, or `EDGE_CONFIG_INVALID` for a malformed declared origin
+    (CF-056).
+
+    `DEV_ORIGINS` names only the conventional pair of ports -- the vite dev
+    server proxying to the loopback API, or the API serving the built
+    export itself -- and is a convenience for that shape, not a ceiling on
+    it: a developer whose ports differ could otherwise never make an unsafe
+    command of their own origin succeed. `CAOS_PUBLIC_ORIGIN`, already read
+    this way in platform mode, is honoured here too, and replaces the
+    default pair rather than adding to it, exactly as it does there.
+    """
+    origin = env.get(PUBLIC_ORIGIN_ENV)
+    if origin is not None and not _bare_origin(origin):
+        raise Refusal(RefusalCode.EDGE_CONFIG_INVALID)
+    return EdgeMode(public_origin=origin)
 
 
 def _platform_mode(env: Mapping[str, str]) -> EdgeMode:
