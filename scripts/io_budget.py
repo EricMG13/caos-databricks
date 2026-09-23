@@ -30,17 +30,52 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 DECLARATION = "IO_BUDGET"
 
+# Builders of a value that is not a count of round trips. `float("inf")` was
+# accepted as a declared budget (FP-19), which is the declaration saying
+# nothing in the one spelling that reads as saying something.
+NOT_A_COUNT = frozenset({"float", "complex", "Decimal", "Fraction"})
+
+
+def is_budget(value: ast.expr) -> bool:
+    """Whether a declared value is a whole number of round trips, or a map of them.
+
+    Judged on what the source states. A value computed from other names --
+    `FIXED_IO + LITE_NODES * PER_HANDOFF_IO`, `max(SAVE_IO, ...)` -- is the
+    module's own arithmetic over its own counts and is left to it; what is
+    refused is a value stated here and now that is not a count.
+    """
+    if isinstance(value, ast.Constant):
+        return type(value.value) is int and value.value >= 0
+    if isinstance(value, ast.Dict):
+        return bool(value.values) and all(is_budget(item) for item in value.values)
+    if isinstance(value, ast.UnaryOp) and isinstance(value.op, ast.USub):
+        return False
+    if isinstance(value, ast.Call):
+        named = value.func
+        return not (isinstance(named, ast.Name) and named.id in NOT_A_COUNT)
+    return True
+
 
 def declares_budget(source: str, filename: str) -> bool:
-    """True when a module assigns `IO_BUDGET` at module level."""
+    """True when a module assigns `IO_BUDGET` a budget at module level.
+
+    The declaration, not the name. `IO_BUDGET: int` with no value at all,
+    `IO_BUDGET = None` and `IO_BUDGET = float("inf")` each satisfied a check
+    that looked only for the name being a target, and each declares nothing
+    (FP-19). Every assignment of the name has to be a budget: a module that
+    states one and then replaces it with `None` has replaced its declaration.
+    """
     tree = ast.parse(source, filename=filename)
-    targets = (
-        target
+    declared = [
+        node
         for node in tree.body
         if isinstance(node, ast.Assign | ast.AnnAssign)
         for target in (node.targets if isinstance(node, ast.Assign) else [node.target])
+        if isinstance(target, ast.Name) and target.id == DECLARATION
+    ]
+    return bool(declared) and all(
+        node.value is not None and is_budget(node.value) for node in declared
     )
-    return any(isinstance(t, ast.Name) and t.id == DECLARATION for t in targets)
 
 
 def _budgeted_modules(api: Path) -> tuple[list[Path], list[Path]]:
@@ -66,8 +101,15 @@ def main(argv: list[str] | None = None) -> int:
 
     api = args.root / "caos" / "api"
     if not api.is_dir():
-        print("no request paths yet; nothing to budget")
-        return 0
+        # Not "nothing to budget": the route directory is the floor this gate
+        # rests on, and a tree without one is a gate measuring nothing. That
+        # branch exited 0 and let every route move out from under the check
+        # (FP-19, SI-8).
+        print(
+            f"{api} is not a directory; there is no route floor to check",
+            file=sys.stderr,
+        )
+        return 2
 
     declared, modules = _budgeted_modules(api)
     missing = undeclared(api)

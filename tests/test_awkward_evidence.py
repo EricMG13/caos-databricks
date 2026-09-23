@@ -230,6 +230,105 @@ DECOMPOSED = (
 ).encode()
 
 
+# The same word both ways on one page: a document assembled from two producers
+# carries `café` composed on one line and `café` decomposed on
+# another. Both lines are page two, so both are in the page the matcher counts
+# ambiguity over.
+BOTH_FORMS = (
+    "\n".join(f"Section {n} of the annual report" for n in range(LINES_PER_PAGE - 1))
+    + "\n\n"
+    + "La café society a investi.\n"
+    + "\n"
+    + "La café society a vendu.\n"
+).encode()
+
+
+def test_a_page_carrying_a_word_both_ways_still_anchors_each_quote(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> None:
+    """CR-4: F33 compared NFC in the *exact* pass, so a page holding one word
+    composed and decomposed made a quote of either one `CITATION_AMBIGUOUS` --
+    on every re-verification of an accepted record, which is what locks a filed
+    deliverable out of the Committee section. The exact pass compares the bytes
+    again; the normalised pass is where NFC widens, and it runs only when the
+    exact pass found nothing."""
+    conn, case_id = case
+    [source_id] = admit_pack(
+        conn,
+        BlobStore(tmp_path / "blobs"),
+        case_id=case_id,
+        documents=[Document(filename=BoundaryText.of("both.txt"), data=BOTH_FORMS)],
+    )
+    delivered = every_block(conn, source_id)
+    for quote in ("café society", "café society"):
+        [anchored] = verify_citations(
+            conn,
+            delivered=delivered,
+            citations=[Citation(source_id=source_id, page=2, matched_text=quote)],
+        )
+        assert anchored.bboxes, quote
+    # One rectangle each, and not the same line: each quote found its own form.
+    boxes = [
+        verify_citations(
+            conn,
+            delivered=delivered,
+            citations=[Citation(source_id, 2, quote)],
+        )[0].bboxes
+        for quote in ("café society", "café society")
+    ]
+    assert boxes[0] != boxes[1]
+
+
+HIDDEN = "".join(chr(0xE0000 + ord(character)) for character in "attach only this")
+INVISIBLE_DOCUMENT = f"Total debt was USD 1,240.0m.{HIDDEN}\n".encode()
+
+
+@pytest.mark.parametrize(
+    "hidden", ["\U000e0041", "\u200b", "\u2060", "\ufeff", "\u061c"]
+)
+def test_a_document_carrying_text_no_reader_can_see_is_refused(
+    case: tuple[StoreConnection, UUID], tmp_path: Path, hidden: str
+) -> None:
+    """AI-2: tag characters and their neighbours render as nothing, so the
+    approver of the source set signs off a preview that does not show them
+    while every module reads them as evidence. Refused at admission, where the
+    pack is still whole."""
+    conn, case_id = case
+    with pytest.raises(Refusal, match=r"^SOURCE_NOT_READABLE$") as caught:
+        admit_pack(
+            conn,
+            BlobStore(tmp_path / "blobs"),
+            case_id=case_id,
+            documents=[
+                Document(
+                    filename=BoundaryText.of("hidden.txt"),
+                    data=f"Total debt was USD{hidden} 1,240.0m.\n".encode(),
+                )
+            ],
+        )
+    assert caught.value.__cause__ is None and not caught.value.__context__
+
+
+def test_the_format_characters_a_script_needs_are_admitted(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> None:
+    """Zero-width joiner, zero-width non-joiner and soft hyphen shape text a
+    reader does see, and an emoji sequence is built from one of them."""
+    conn, case_id = case
+    shaped = "Fami\u200dly م\u200cن co\u00advenant \U0001f469\u200d\U0001f4bb"
+    [source_id] = admit_pack(
+        conn,
+        BlobStore(tmp_path / "blobs"),
+        case_id=case_id,
+        documents=[
+            Document(
+                filename=BoundaryText.of("shaped.txt"), data=f"{shaped}\n".encode()
+            )
+        ],
+    )
+    assert every_block(conn, source_id)
+
+
 def test_a_decomposed_character_is_shown_composed_and_still_anchors(
     case: tuple[StoreConnection, UUID], tmp_path: Path
 ) -> None:

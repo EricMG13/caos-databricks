@@ -430,7 +430,11 @@ describe("Directory", () => {
     });
     expect(fetchSpy.mock.calls[1]![0]).toBe("/api/v1/directory");
 
+    // Revoking asks once more before it is sent (finding FE-7).
     fireEvent.click(within(panel).getByRole("button", { name: `Revoke ${writer}` }));
+    fireEvent.click(
+      within(panel).getAllByRole("button", { name: /^Confirm Revoke standing$/ })[0]!,
+    );
     await settle();
     await settle();
     expect(fetchSpy.mock.calls[2]![0]).toBe(`/api/v1/cases/${caseId}/members/${writer}/revocation`);

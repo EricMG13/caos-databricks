@@ -572,3 +572,115 @@ def test_a_refusal_met_beside_a_missed_key_is_not_complete(
         ),
     )
     assert both.complete is False
+
+
+def test_the_stored_complete_flag_is_re_derived_from_the_document(
+    empty_database: str,
+) -> None:
+    """FP-03: `complete` was computed once and trusted from then on.
+
+    The migrations block UPDATE and DELETE but not INSERT, so a snapshot
+    recorded complete by older code -- or written straight in with
+    self-consistent unkeyed digests -- stayed signable, stayed current and kept
+    appearing in the release pack. Both readers now re-derive the rule from the
+    document the reviewer signed.
+    """
+    import json as _json
+
+    from caos.qualification.store import answered_document, document_complete
+
+    original = _performed()
+    assert document_complete(original.document) is True
+    matrix = original.document["matrix"]
+    assert isinstance(matrix, dict)
+    assert answered_document(matrix["rows"][0]) is True
+
+    unfinished = _with(original, status=RunStatus.FAILED)
+    assert document_complete(unfinished.document) is False
+    forged = unfinished.evidence
+    with connect(empty_database) as conn:
+        apply_schema(conn)
+        conn.execute(
+            "INSERT INTO qualification_performed"
+            " (performed_sha256,qualification_set_sha256,build_id,adapter_version,"
+            " provider,model,complete,performed_json) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+            (
+                forged.performed_sha256,
+                forged.qualification_set_sha256,
+                forged.build_id,
+                forged.adapter_version,
+                forged.provider,
+                forged.model,
+                True,
+                _json.dumps(unfinished.document, sort_keys=True, separators=(",", ":")),
+            ),
+        )
+        assert conn.execute(
+            "SELECT complete FROM qualification_performed"
+        ).fetchone() == (True,)
+        now = datetime.now(UTC)
+        with pytest.raises(Refusal, match="VERDICT_BINDING_INVALID"):
+            record_verdict(
+                conn,
+                evidence=forged,
+                reviewer_id=uuid4(),
+                verdict=_verdict(now, forged),
+            )
+        conn.rollback()
+
+
+def test_a_verdict_binds_provider_and_model_as_a_pair(empty_database: str) -> None:
+    """FP-13: `provider + ":" + model` is not injective, so a document naming
+    `openrouter:x` and `m` satisfied evidence naming `openrouter` and `x:m`."""
+    with connect(empty_database) as conn:
+        apply_schema(conn)
+        performed = _performed()
+        record_performed(conn, performed)
+        evidence = performed.evidence
+        now = datetime.now(UTC)
+        slid = read_verdict(
+            {
+                "provider": evidence.provider.rsplit("/", 1)[0]
+                + "/"
+                + evidence.provider.rsplit("/", 1)[1]
+                + ":"
+                + evidence.model,
+                "qualification_set_sha256": evidence.qualification_set_sha256,
+                "build_id": evidence.build_id,
+                "decided_at": now.isoformat(),
+                "expires_at": (now + timedelta(days=1)).isoformat(),
+                "reviewer": "Reviewer",
+            },
+            now=now,
+        )
+        # The identity above is the right one, so it binds.
+        assert slid.provider.value == evidence.provider + ":" + evidence.model
+        moved = replace(
+            evidence,
+            provider=evidence.provider + ":" + evidence.model.split("/")[0],
+            model=evidence.model.split("/", 1)[1],
+        )
+        with pytest.raises(Refusal, match="VERDICT_BINDING_INVALID"):
+            record_verdict(conn, evidence=moved, reviewer_id=uuid4(), verdict=slid)
+        conn.rollback()
+
+
+def test_a_signature_may_not_stand_for_longer_than_the_cap() -> None:
+    """FP-13: `expires_at` had only to be after `decided_at`, so a verdict could
+    be written to be current for a century."""
+    from caos.qualification.verdict import MAX_VALIDITY
+
+    now = datetime.now(UTC)
+    evidence = _evidence()
+    document = {
+        "provider": evidence.provider + ":" + evidence.model,
+        "qualification_set_sha256": evidence.qualification_set_sha256,
+        "build_id": evidence.build_id,
+        "decided_at": now.isoformat(),
+        "expires_at": (now + MAX_VALIDITY + timedelta(seconds=1)).isoformat(),
+        "reviewer": "Reviewer",
+    }
+    with pytest.raises(Refusal, match="VERDICT_BINDING_INVALID"):
+        read_verdict(document, now=now)
+    document["expires_at"] = (now + MAX_VALIDITY).isoformat()
+    assert read_verdict(document, now=now).expires_at == now + MAX_VALIDITY

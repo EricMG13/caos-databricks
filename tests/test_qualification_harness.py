@@ -946,13 +946,18 @@ def test_a_late_invalid_pin_clears_proof_and_preserves_the_stopped_record(
             raise Refusal(RefusalCode.STORE_UNAVAILABLE)
 
         monkeypatch.setattr(subject, "_unrun", unavailable)
-        with pytest.raises(Refusal, match=r"^STORE_UNAVAILABLE$"):
-            _perform(
-                conn,
-                blobs,
-                QualificationSet(cases=(_case("store-down", REPORT),)),
-                completions=_Completions(refuses_call=2),
-            )
+        # A store fault mid-set no longer discards the paid runs before it
+        # (FP-07): with the connection still open the case is recorded as
+        # stopped by that fault, on a clean transaction.
+        [again] = _perform(
+            conn,
+            blobs,
+            QualificationSet(cases=(_case("store-down", REPORT),)),
+            completions=_Completions(refuses_call=2),
+        ).performed
+        assert again.stopped is RefusalCode.PROVIDER_UNAVAILABLE
+        assert again.refusal is RefusalCode.STORE_UNAVAILABLE
+        assert again.proof is None
 
 
 def test_a_performed_set_concludes_nothing() -> None:

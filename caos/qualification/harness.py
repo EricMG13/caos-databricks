@@ -81,6 +81,7 @@ from caos.methodology.runner import ModuleProvider
 from caos.pricing import ModelPrice, worst_case
 from caos.provider import CompletionProvider
 from caos.qualification.matrix import (
+    DECLARABLE_REFUSALS,
     Matrix,
     QualificationCase,
     QualificationSet,
@@ -469,6 +470,11 @@ def _eligible(
             != case.model_extension
         )
         or pin.research_json != case.research_brief
+        # Who and when the run is about. Every other input was compared and this
+        # one was not, so a real approved input pinned for another issuer and
+        # another reporting period executed under this case and bound this set's
+        # digest (FP-12).
+        or pin.subject != case.subject
         or sorted(members)
         != sorted(
             (d.filename.value, sha256(d.data).hexdigest()) for d in case.documents
@@ -631,8 +637,12 @@ def _record(
     try:
         unrun = _unrun(conn, blobs, harness.bundle, run_id)
     except Refusal as unattributed:
-        if unattributed.code is not RefusalCode.ROUTE_IDENTITY_INVALID:
-            raise
+        # Any refusal, not only an invalid pin. `_unrun` re-verifies the bundle
+        # through `named_objects`, so a vendored file moving under a running set
+        # raised `AUTHORITY_BYTES_MISMATCH` out of `perform` before
+        # `_persist_performed` could run -- four paid calls and no snapshot
+        # (FP-07). What this reader could not attribute is the record's refusal,
+        # which is what a `Performed` carries the field for.
         proof, refusal, unrun = None, unattributed.code, ()
 
     return Performed(
@@ -738,8 +748,15 @@ def _answerable(bundle: Bundle, qualification: QualificationSet) -> None:
     """
     for case in qualification.cases:
         carried = {sha256(document.data).hexdigest() for document in case.documents}
-        if any(expect.document_sha256 not in carried for expect in case.expects) or (
-            case.forecast is not None and not case.model_extension
+        if (
+            any(expect.document_sha256 not in carried for expect in case.expects)
+            or (case.forecast is not None and not case.model_extension)
+            # A refusal outside the methodology's own is a key about the host or
+            # its infrastructure, which no run can be measured against (FP-01).
+            or (
+                case.expected_refusal is not None
+                and case.expected_refusal not in DECLARABLE_REFUSALS
+            )
         ):
             raise Refusal(RefusalCode.QUALIFICATION_KEY_UNANSWERABLE)
     if any(case.expects_register for case in qualification.cases) and (

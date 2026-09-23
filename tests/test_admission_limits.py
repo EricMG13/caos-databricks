@@ -11,6 +11,9 @@ without finishing the rest of the walk that would have proven it.
 
 from __future__ import annotations
 
+import resource
+import subprocess
+import sys
 import time
 import zlib
 from dataclasses import replace
@@ -26,6 +29,7 @@ from test_pdf_extraction import LEFT_MARGIN, raw_pdf
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
 from caos.evidence import extract as extract_module
+from caos.evidence import ingest as ingest_module
 from caos.evidence import pdf as pdf_module
 from caos.evidence.extract import (
     DEFAULT_LIMITS,
@@ -34,10 +38,11 @@ from caos.evidence.extract import (
     PlainTextExtractor,
     Token,
 )
-from caos.evidence.ingest import Document, admit_pack, prepare_pack
+from caos.evidence.ingest import Document, admit_pack, admit_prepared, prepare_pack
 from caos.evidence.pdf import PdfExtractor, walk_pages
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
+from caos.store.cases import lock_case
 
 TEXT = b"alpha beta\ngamma delta\n"
 
@@ -55,6 +60,7 @@ def _limits(  # noqa: PLR0913 -- every field of AdmissionLimits, keyword-only
     max_tokens: int = DEFAULT_LIMITS.max_tokens,
     max_seconds: float = DEFAULT_LIMITS.max_seconds,
     max_decoded_bytes: int = DEFAULT_LIMITS.max_decoded_bytes,
+    max_pack_tokens: int = DEFAULT_LIMITS.max_pack_tokens,
 ) -> AdmissionLimits:
     return AdmissionLimits(
         max_documents=max_documents,
@@ -64,6 +70,7 @@ def _limits(  # noqa: PLR0913 -- every field of AdmissionLimits, keyword-only
         max_tokens=max_tokens,
         max_seconds=max_seconds,
         max_decoded_bytes=max_decoded_bytes,
+        max_pack_tokens=max_pack_tokens,
     )
 
 
@@ -136,17 +143,123 @@ def test_a_pack_over_the_document_or_byte_ceiling_is_refused(
     assert _rows(conn) == 0
 
 
-def multi_page_pdf(contents: list[bytes], *, flate: bool = False) -> bytes:
+def test_every_document_reaches_the_volume_before_the_case_lock(
+    case: tuple[StoreConnection, UUID], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """DL-7: each put is a Files API upload on Databricks, and fifty of them
+    ran inside the transaction holding `cases ... FOR UPDATE` -- so every
+    fenced write of every run in the case waited behind an admission, because
+    `lock_run` takes the case lock first. The uploads are content-addressed
+    and an orphan is harmless, so they happen before the lock is taken."""
+    conn, case_id = case
+    order: list[str] = []
+    real_lock = lock_case
+
+    def watched_lock(connection: StoreConnection, identifier: UUID) -> None:
+        order.append("lock")
+        real_lock(connection, identifier)
+
+    class _Watched(BlobStore):
+        def put(self, data: bytes) -> str:
+            order.append("put")
+            return super().put(data)
+
+    monkeypatch.setattr(ingest_module, "lock_case", watched_lock)
+    pack = prepare_pack([_document("one.txt", TEXT), _document("two.txt", b"gamma\n")])
+
+    admitted = admit_prepared(conn, _Watched(tmp_path), case_id, pack)
+
+    assert len(admitted) == 2
+    assert order == ["put", "put", "lock"]
+    digests = conn.execute(
+        "SELECT document_sha256 FROM sources WHERE case_id = %s ORDER BY filename",
+        (case_id,),
+    ).fetchall()
+    assert [row[0] for row in digests] == [
+        BlobStore(tmp_path).put(one.document.data) for one in pack.documents
+    ]
+    conn.rollback()
+
+
+def test_a_pack_over_the_token_ceiling_stops_at_the_document_that_crosses_it() -> None:
+    """AS-2: `max_tokens` bounds one document, so fifty documents each inside
+    it were 25M token objects -- and briefly two copies of them -- in the one
+    App process. The pack's own ceiling is checked as each document is
+    extracted, so the pack that crosses it never reaches the one after."""
+    extracted: list[str] = []
+
+    class _Counted:
+        identity = PlainTextExtractor().identity
+
+        def extract(
+            self, data: bytes, *, limits: AdmissionLimits, deadline: float
+        ) -> list[Token]:
+            extracted.append(data.decode())
+            return PlainTextExtractor().extract(data, limits=limits, deadline=deadline)
+
+    documents = [_document(f"{n}.txt", b"alpha beta gamma\n") for n in range(3)]
+
+    with pytest.raises(Refusal) as caught:
+        prepare_pack(
+            documents,
+            dispatch=lambda data: cast(Extractor, _Counted()),
+            limits=_limits(max_pack_tokens=5),
+        )
+
+    assert caught.value.code is RefusalCode.SOURCE_TOO_LARGE
+    assert len(extracted) == 2, "the third document was never extracted"
+    # Under the ceiling the same pack prepares whole.
+    pack = prepare_pack(documents, limits=_limits(max_pack_tokens=9))
+    assert len(pack.documents) == 3
+
+
+def _run_length(content: bytes) -> bytes:
+    """`content` as a PDF RunLengthDecode stream, run by run.
+
+    A length byte of 257 - n repeats the next byte n times, so two encoded
+    bytes become up to 128 decoded ones: the expansion pdfminer's `rldecode`
+    performs into a Python list with no bound of its own.
+    """
+    out = bytearray()
+    position = 0
+    while position < len(content):
+        run = content[position : position + 1]
+        length = 1
+        while (
+            length < 128
+            and position + length < len(content)
+            and content[position + length : position + length + 1] == run
+        ):
+            length += 1
+        if length > 1:
+            out += bytes([257 - length]) + run
+        else:
+            out += b"\x00" + run
+        position += length
+    return bytes(out + b"\x80")
+
+
+def multi_page_pdf(
+    contents: list[bytes], *, flate: bool = False, run_length: bool = False
+) -> bytes:
     """A PDF of `len(contents)` pages, each page's stream exactly one entry.
 
     Written the way `raw_pdf` is, object by object, so the fixture stays a
     plain byte string with no dependency of its own -- extended here to more
     than the one page `raw_pdf` builds. `flate` compresses each page's stream,
-    which is how a few kilobytes become megabytes once pdfminer decodes them.
+    which is how a few kilobytes become megabytes once pdfminer decodes them,
+    and `run_length` does the same through a filter pdfminer decodes with its
+    own function rather than through `zlib`.
     """
     if flate:
         contents = [zlib.compress(content, 9) for content in contents]
-    decode = b" /Filter /FlateDecode" if flate else b""
+    if run_length:
+        contents = [_run_length(content) for content in contents]
+    decode = b""
+    if flate:
+        decode = b" /Filter /FlateDecode"
+    if run_length:
+        decode = b" /Filter /RunLengthDecode"
     count = len(contents)
     font_object = 3 + 2 * count
     objects = [
@@ -331,6 +444,62 @@ def test_a_stream_that_inflates_past_the_ceiling_refuses(corrupt: bool) -> None:
     assert caught.value.__context__ is None and caught.value.__cause__ is None
 
 
+def test_a_non_flate_stream_past_the_ceiling_refuses() -> None:
+    """AS-1: the budget replaced `zlib` and nothing else, so a document whose
+    streams use `LZWDecode`, `RunLengthDecode` or either ASCII filter grew
+    past `max_decoded_bytes` with only the 60 s wall clock to stop it -- in
+    the App process that also runs the worker, up to 32 admissions at a time.
+    Every filter pdfminer decodes now draws on the one budget."""
+    data = multi_page_pdf([b" " * (16 * 1024 * 1024)], run_length=True)
+    limits = _limits(max_decoded_bytes=1024 * 1024)
+
+    with pytest.raises(Refusal) as caught:
+        PdfExtractor().extract(data, limits=limits, deadline=float("inf"))
+
+    assert caught.value.code is RefusalCode.SOURCE_TOO_LARGE
+    assert caught.value.__context__ is None and caught.value.__cause__ is None
+
+
+def test_every_filter_pdfminer_decodes_is_budgeted() -> None:
+    """The names the child rebinds are the ones `PDFStream.decode` looks up."""
+    import pdfminer.pdftypes
+
+    assert all(
+        callable(getattr(pdfminer.pdftypes, name))
+        for name in pdf_module.BUDGETED_FILTERS
+    )
+    inflater = pdf_module._Inflater(4)
+    bounded = pdf_module._budgeted(lambda data: data * 4, inflater)
+    assert bounded(b"x") == b"xxxx"
+    with pytest.raises(pdf_module._Inflated):
+        bounded(b"x")
+    assert inflater.exceeded is True
+
+
+def test_the_child_bounds_its_address_space_where_the_platform_has_one() -> None:
+    """`RLIMIT_AS` is the backstop under the budget, for a decoder still
+    inside its own loop. Run in a process of its own, because that is where
+    the limit belongs and macOS refuses it outright -- which the child
+    tolerates, keeping its deadline and its decoded-bytes budget."""
+    source = (
+        "import resource, sys;"
+        " sys.path.insert(0, sys.argv[1]);"
+        " from caos.evidence.pdf import _Inflater, _limit_address_space;"
+        " _limit_address_space(_Inflater(1024 * 1024));"
+        " print(resource.getrlimit(resource.RLIMIT_AS)[0])"
+    )
+    root = str(Path(__file__).resolve().parents[1])
+    done = subprocess.run(
+        [sys.executable, "-I", "-c", source, root],
+        capture_output=True,
+        check=True,
+        timeout=60,
+    )
+    reported = int(done.stdout.split()[-1])
+    ceiling = 1024 * 1024 + pdf_module.ADDRESS_SPACE_HEADROOM
+    assert reported in (ceiling, resource.RLIM_INFINITY)
+
+
 def test_an_ordinary_flate_page_still_extracts_in_the_child() -> None:
     """`child_main` answers the tokens `walk_pages` reads, through the budgeted
     inflater, and a child that names a code it may not answer is unreadable."""
@@ -493,11 +662,20 @@ def _child_answer(monkeypatch: pytest.MonkeyPatch, data: bytes) -> dict[str, obj
     out = BytesIO()
     monkeypatch.setattr(sys, "stdin", stdin)
     monkeypatch.setattr(sys, "stdout", SimpleNamespace(buffer=out))
+    # The child's entry point, run in *this* process: everything it rebinds in
+    # pdfminer is put back, and the address-space ceiling belongs to a real
+    # child (it would otherwise be set on the test runner for good).
+    monkeypatch.setattr(pdf_module, "_limit_address_space", lambda inflater: None)
     zlib_module = pdfminer.pdftypes.zlib  # type: ignore[attr-defined]
+    decoders = {
+        name: getattr(pdfminer.pdftypes, name) for name in pdf_module.BUDGETED_FILTERS
+    }
     try:
         pdf_module.child_main()
     finally:
         pdfminer.pdftypes.zlib = zlib_module  # type: ignore[attr-defined]
+        for name, decoder in decoders.items():
+            setattr(pdfminer.pdftypes, name, decoder)
     loaded = json.loads(out.getvalue())
     assert isinstance(loaded, dict)
     return cast(dict[str, object], loaded)

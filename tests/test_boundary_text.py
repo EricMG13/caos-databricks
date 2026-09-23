@@ -12,11 +12,14 @@ and what the store holds are different sentences.
 
 from __future__ import annotations
 
+import subprocess
+import sys
+import unicodedata
 from pathlib import Path
 
 import pytest
 
-from caos.boundary_text import BoundaryText
+from caos.boundary_text import SHAPING_FORMAT, BoundaryText, hides_text
 from caos.refusals import Refusal, RefusalCode
 
 REPO = Path(__file__).resolve().parents[1]
@@ -94,6 +97,60 @@ def test_boundary_text_rejects_a_lone_surrogate() -> None:
         BoundaryText.of("Acme\ud800Ltd")
 
 
+@pytest.mark.parametrize(
+    "hidden",
+    [
+        "\U000e0041",  # a tag character: ASCII, encoded invisibly
+        "\u200b",  # zero-width space
+        "\u2060",  # word joiner
+        "\ufeff",  # byte order mark
+        "\u061c",  # Arabic letter mark
+        "\u200f",  # right-to-left mark
+    ],
+)
+def test_hides_text_finds_a_format_character_no_reader_can_see(hidden: str) -> None:
+    """AI-2. `BoundaryText` keeps these -- its table is pinned by the
+    `boundary_text` parity goldens -- so the rule lives beside it for the two
+    callers that read untrusted text: evidence admission and the canonical
+    handoff, where hidden text is an instruction the next module obeys and the
+    approver never sees."""
+    assert hides_text(f"Total debt{hidden} was USD 1,240.0m")
+    assert BoundaryText.of(f"Acme{hidden}Ltd").value == f"Acme{hidden}Ltd"
+
+
+@pytest.mark.parametrize(
+    "shaping", ["\u200c", "\u200d", "\u00ad", "\U0001f469\u200d\U0001f4bb"]
+)
+def test_hides_text_keeps_the_format_characters_a_script_needs(shaping: str) -> None:
+    """Zero-width non-joiner, zero-width joiner and soft hyphen shape text a
+    reader does see; an emoji sequence is built from one of them."""
+    assert not hides_text(f"Acme{shaping}Ltd")
+    assert SHAPING_FORMAT == frozenset("\u200c\u200d\u00ad")
+
+
+def test_hides_text_reads_plain_ascii_without_asking_unicodedata() -> None:
+    assert not hides_text("Total debt was USD 1,240.0m\tdrawn\n")
+    assert not hides_text("")
+
+
+def test_hides_text_covers_every_format_character_this_python_knows() -> None:
+    """`FORMAT_RANGES` is written out because asking `unicodedata.category` per
+    character costs 2.7 s over 5 MB of non-ASCII text -- the very cost the rule
+    exists to refuse. The table is regenerated here from `unicodedata` itself,
+    so a Unicode upgrade that adds a format character fails this test instead of
+    letting the character through."""
+    hidden = [
+        chr(point)
+        for point in range(sys.maxunicode + 1)
+        if unicodedata.category(chr(point)) == "Cf" and chr(point) not in SHAPING_FORMAT
+    ]
+    # A scanner that scanned nothing is a failure, not a pass (`CLAUDE.md`).
+    assert len(hidden) > 100, len(hidden)
+    missed = [f"U+{ord(c):04X}" for c in hidden if not hides_text(f"Acme{c}Ltd")]
+    assert missed == [], missed
+    assert all(not hides_text(f"Acme{kept}Ltd") for kept in SHAPING_FORMAT)
+
+
 def test_no_file_this_repository_writes_carries_a_literal_bidi_control() -> None:
     """The rule `caos/boundary_text.py` states in a comment, enforced.
 
@@ -111,22 +168,39 @@ def test_no_file_this_repository_writes_carries_a_literal_bidi_control() -> None
     """
     offenders: list[str] = []
     scanned = 0
-    for root in WRITTEN:
-        for path in sorted((REPO / root).rglob("*")):
-            if not path.is_file():
-                continue
-            try:
-                text = path.read_text(encoding="utf-8")
-            except (UnicodeDecodeError, OSError):
-                continue  # not text this repository authored as text
-            scanned += 1
-            for control in BIDI_CONTROLS:
-                if control in text:
-                    line = text[: text.index(control)].count("\n") + 1
-                    offenders.append(
-                        f"{path.relative_to(REPO)}:{line}: "
-                        f"U+{ord(control):04X}, write it as an escape"
-                    )
+    # What the repository writes is what git tracks or would track: ignored
+    # trees (run evidence, another session's probes) are not this host's.
+    listed = subprocess.run(
+        [
+            "git",
+            "ls-files",
+            "-z",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+            "--",
+            *WRITTEN,
+        ],
+        cwd=REPO,
+        capture_output=True,
+        check=True,
+    ).stdout.decode()
+    for relative in sorted(filter(None, listed.split("\0"))):
+        path = REPO / relative
+        if not path.is_file():
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue  # not text this repository authored as text
+        scanned += 1
+        for control in BIDI_CONTROLS:
+            if control in text:
+                line = text[: text.index(control)].count("\n") + 1
+                offenders.append(
+                    f"{path.relative_to(REPO)}:{line}: "
+                    f"U+{ord(control):04X}, write it as an escape"
+                )
 
     # A scanner that scanned nothing is a failure, not a pass (`CLAUDE.md`).
     assert scanned > 100, f"only {scanned} files scanned; the roots moved"

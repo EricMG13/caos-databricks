@@ -60,7 +60,14 @@ export function ModelSection({ document }: { document: ModelDocument; tab: strin
           <h2>Periods</h2>
           <span className="tag">{forecast.periods.length}</span>
         </header>
-        <div className="pb flush scroll">
+        {/* A scroll region is reached by keyboard, so it is focusable and
+            named rather than a silent box only a pointer can move (FE-5). */}
+        <div
+          className="pb flush scroll"
+          tabIndex={0}
+          role="region"
+          aria-label="Projection period rows"
+        >
           <table className="dense" data-model-periods>
             <thead>
               <tr>

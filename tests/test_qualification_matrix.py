@@ -1293,3 +1293,79 @@ def test_the_blocked_key_moves_the_digest_and_is_told_apart_from_readiness(
     assert reordered == qualification_set_digest(
         QualificationSet(cases=(replace(base, expects_blocked=("CP-L10", "CP-5")),))
     )
+
+
+def test_a_completed_run_does_not_meet_a_refusal_a_stale_attempt_recorded(
+    ran: Ran,
+) -> None:
+    """FP-01's first branch: `_ENDED` held COMPLETE, and the query matched any
+    `attempt_refusals` row of any attempt of the run.
+
+    `qualify.py`'s `--attempts` loop re-enters `perform` after a node refuses,
+    the retry succeeds and the run finishes -- and the first attempt's refusal
+    still matched, so a run that concluded could be signed as the refusal its
+    case declared, because `PerformedEvidence.complete` waives its COMPLETE
+    requirement for whatever this answers.
+    """
+    row = ran.conn.execute(
+        "SELECT attempt_id FROM run_attempts WHERE run_id=%s"
+        " ORDER BY started_at, attempt_id LIMIT 1",
+        (ran.run_id,),
+    ).fetchone()
+    assert row is not None
+    ran.conn.execute(
+        "INSERT INTO attempt_refusals (attempt_id, code) VALUES (%s, %s)",
+        (row[0], RefusalCode.HANDOFF_MALFORMED.value),
+    )
+    assert run_status(ran.conn, ran.run_id) is RunStatus.COMPLETE
+    case = replace(_one_case(ran), expected_refusal=RefusalCode.HANDOFF_MALFORMED)
+    [scored] = _matrix(ran, QualificationSet(cases=(case,))).rows
+    assert scored.expected_refusal_met is False
+
+
+@BLOCKED_CP_L10
+def test_a_gate_block_does_not_meet_a_declared_handoff_blocked(ran: Ran) -> None:
+    """FP-01's third branch: the run status alone met `HANDOFF_BLOCKED`.
+
+    CP-0 refused CP-L10 here, which empties the frontier and ends the run
+    BLOCKED with no handoff having returned Blocked -- so
+    `run_blocking_verdicts` holds no row (`0021_blocking_verdicts.sql`). That is
+    a different outcome with the same status, and it used to answer the key.
+    """
+    assert run_status(ran.conn, ran.run_id) is RunStatus.BLOCKED
+    assert ran.conn.execute(
+        "SELECT count(*) FROM run_blocking_verdicts WHERE run_id=%s", (ran.run_id,)
+    ).fetchone() == (0,)
+    case = replace(_one_case(ran), expected_refusal=RefusalCode.HANDOFF_BLOCKED)
+    [scored] = _matrix(ran, QualificationSet(cases=(case,))).rows
+    assert scored.expected_refusal_met is False
+
+
+def test_one_module_field_expected_to_hold_two_values_is_ambiguous(ran: Ran) -> None:
+    """AR-23: `qa_status` is one word per handoff, so two values for one module
+    is a pair no run can satisfy -- and it reached execution, spent the route's
+    model work, and only then read as a miss."""
+    case = replace(
+        _one_case(ran),
+        expects_projection=(
+            ExpectedProjection(module_id="CP-0", field="qa_status", value="Passed"),
+            ExpectedProjection(module_id="CP-0", field="qa_status", value="Restricted"),
+        ),
+    )
+    with pytest.raises(Refusal) as refused:
+        assert_unambiguous(QualificationSet(cases=(case,)))
+    assert refused.value.code is RefusalCode.QUALIFICATION_SET_AMBIGUOUS
+    # A list-shaped field takes two memberships: they are two questions about
+    # one handoff, and both can be true.
+    both = replace(
+        _one_case(ran),
+        expects_projection=(
+            ExpectedProjection(
+                module_id="CP-0", field="limitation_flags", value="one source"
+            ),
+            ExpectedProjection(
+                module_id="CP-0", field="limitation_flags", value="no audit"
+            ),
+        ),
+    )
+    assert_unambiguous(QualificationSet(cases=(both,)))

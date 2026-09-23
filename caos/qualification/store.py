@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from hashlib import sha256
@@ -19,6 +20,13 @@ from caos.store import RunStatus, StoreConnection, rollback_or_close
 # `0019_one_qualification_verdict.sql`. Named here so the refusal that maps
 # it and the migration that declares it cannot drift apart silently.
 ONE_VERDICT_PER_EVIDENCE = "one_verdict_per_evidence"
+# `0018_qualification_verdicts.sql`'s primary key, `(evidence_sha256,
+# reviewer_id)`. A twin of an identical in-flight request collides here first,
+# and mapping it to a wrong binding answered one of two concurrent identical
+# signatures with HTTP 400 (AR-10). Both constraints say the same thing: this
+# evidence already carries a verdict.
+ONE_VERDICT_PER_REVIEWER = "qualification_verdicts_pkey"
+ALREADY_SIGNED = frozenset({ONE_VERDICT_PER_EVIDENCE, ONE_VERDICT_PER_REVIEWER})
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,6 +78,79 @@ def _answered(row: MatrixRow) -> bool:
         # expected refusal are measured too.
         return row.expected_refusal_met and not row.missed
     return row.proven and not row.missed
+
+
+def answered_document(row: object) -> bool:
+    """`_answered`'s rule, read from a stored row rather than a `MatrixRow`."""
+    if not isinstance(row, dict):
+        return False
+    if any(
+        row.get(key) is False
+        for key in (
+            "forecast_met",
+            "ready_met",
+            "blocked_met",
+            "projections_met",
+            "registers_met",
+        )
+    ):
+        return False
+    missed = row.get("missed")
+    if not isinstance(missed, list):
+        return False
+    if row.get("expected_refusal_met") is not None:
+        return row["expected_refusal_met"] is True and not missed
+    return row.get("proven") is True and not missed
+
+
+def document_complete(document: object) -> bool:
+    """Whether a stored snapshot is one a reviewer could still sign QUALIFIED.
+
+    `PerformedEvidence.complete` is computed once, by whatever code recorded the
+    row, and trusted from then on -- by `record_verdict`, by `current_verdict`
+    and by the release pack. So a snapshot recorded complete under a rule since
+    corrected (F64 made `_answered` a conjunct) stayed signable, stayed current
+    and kept appearing in the pack (FP-03). This re-derives the same rule from
+    the document the reviewer signed, so the stored flag is a claim every reader
+    checks rather than a fact every reader inherits.
+
+    The same rule as `complete`, over the same fields `_row_document` and
+    `_performed_document` write. A document this cannot read is not complete:
+    a snapshot nobody can re-derive is not one anybody may sign.
+    """
+    if not isinstance(document, dict):
+        return False
+    matrix = document.get("matrix")
+    records = document.get("performed")
+    if not isinstance(matrix, dict) or not isinstance(records, list) or not records:
+        return False
+    rows = matrix.get("rows")
+    if not isinstance(rows, list) or not rows:
+        return False
+    by_label = {row.get("case_label"): row for row in rows if isinstance(row, dict)}
+    return all(_record_finished(record, by_label) for record in records) and all(
+        answered_document(row) for row in rows
+    )
+
+
+def _record_finished(record: object, rows: Mapping[object, object]) -> bool:
+    """Whether one stored record ended the way its own row allows.
+
+    `complete`'s two waivers, over the document: a case that declared its
+    refusal declared the run would not finish, and a case keyed `expects_blocked`
+    declared CP-0 would refuse a consumer, which ends the run BLOCKED (§99).
+    Anything else has to have reached COMPLETE.
+    """
+    if not isinstance(record, dict):
+        return False
+    row = rows.get(record.get("case_label"))
+    if not isinstance(row, dict):
+        return False
+    if row.get("expected_refusal_met") is True:
+        return True
+    if row.get("blocked_met") is True and record.get("status") == "BLOCKED":
+        return True
+    return record.get("status") == RunStatus.COMPLETE.value
 
 
 @dataclass(frozen=True, slots=True)
@@ -491,9 +572,13 @@ def record_verdict(
     verdict: Verdict,
 ) -> None:
     """Store one reviewer decision over already-persisted exact evidence."""
+    # Split once, from the left, and compare the pair: `provider + ":" + model`
+    # is not injective, so `("openrouter:x", "m")` and `("openrouter", "x:m")`
+    # produced one string and each satisfied the other's binding (FP-13).
+    signed = verdict.provider.value.split(":", 1)
     if (
         verdict.qualification_set_sha256 != evidence.qualification_set_sha256
-        or (verdict.provider.value != evidence.provider + ":" + evidence.model)
+        or signed != [evidence.provider, evidence.model]
         or verdict.build_id != evidence.build_id
     ):
         raise Refusal(RefusalCode.VERDICT_BINDING_INVALID)
@@ -503,6 +588,14 @@ def record_verdict(
         (evidence.performed_sha256,),
     ).fetchone()
     if snapshot is None or snapshot[0] is not True:
+        raise Refusal(RefusalCode.VERDICT_BINDING_INVALID)
+    # The stored flag is a claim, and the digest is the key: both are re-derived
+    # from the document itself rather than inherited (FP-03). An inserted row
+    # with self-consistent unkeyed digests still has to re-digest to its own key
+    # and to re-derive as a signable snapshot.
+    if _digest(snapshot[1]) != evidence.performed_sha256 or not document_complete(
+        snapshot[1]
+    ):
         raise Refusal(RefusalCode.VERDICT_BINDING_INVALID)
     _models_recorded(conn, runs=_snapshot_runs(snapshot[1]), model=evidence.model)
     digest = record_evidence(conn, evidence)
@@ -526,7 +619,7 @@ def record_verdict(
         # locale and version, and a second unique index on this table must not
         # inherit this code by accident.
         rollback_or_close(conn)
-        if violation.diag.constraint_name == ONE_VERDICT_PER_EVIDENCE:
+        if violation.diag.constraint_name in ALREADY_SIGNED:
             raise Refusal(RefusalCode.VERDICT_ALREADY_RECORDED) from None
         raise Refusal(RefusalCode.VERDICT_BINDING_INVALID) from None
     except psycopg.Error:
@@ -545,7 +638,7 @@ def current_verdict(
     """Read only the current verdict bound to the exact requested evidence."""
     row = conn.execute(
         "SELECT q.reviewer,q.decided_at,q.expires_at,e.qualification_set_sha256,"
-        " e.build_id,e.provider,e.model FROM qualification_verdicts q"
+        " e.build_id,e.provider,e.model,p.performed_json FROM qualification_verdicts q"
         " JOIN qualification_evidence e USING (evidence_sha256)"
         " JOIN qualification_performed p ON p.performed_sha256=e.performed_sha256"
         " AND (p.qualification_set_sha256,p.build_id,p.adapter_version,"
@@ -556,7 +649,16 @@ def current_verdict(
     ).fetchone()
     if row is None:
         raise Refusal(RefusalCode.VERDICT_INCOMPLETE)
-    reviewer, decided_at, expires_at, set_digest, build_id, provider, model = row
+    reviewer, decided_at, expires_at, set_digest, build_id, provider, model, held = row
+    # The snapshot re-digests to the key it is stored under, and re-derives as
+    # one a reviewer could sign (FP-03). A document that does not re-digest is a
+    # row nobody wrote through `record_performed`, which is a wrong binding; one
+    # that re-digests and no longer re-derives is a snapshot recorded under a
+    # rule since corrected, which is exactly an incomplete one.
+    if _digest(held) != evidence.performed_sha256:
+        raise Refusal(RefusalCode.VERDICT_BINDING_INVALID)
+    if not document_complete(held):
+        raise Refusal(RefusalCode.VERDICT_INCOMPLETE)
     if (set_digest, build_id, provider, model) != (
         evidence.qualification_set_sha256,
         evidence.build_id,

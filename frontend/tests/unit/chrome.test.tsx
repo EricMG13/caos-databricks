@@ -4,6 +4,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { Rail } from "@/chrome/Rail";
 import { Ribbon } from "@/chrome/Ribbon";
+import { SectionPanel, SectionTabs } from "@/chrome/SectionTabs";
 import { SeverityMark } from "@/chrome/SeverityMark";
 import { VerdictStrip } from "@/chrome/VerdictStrip";
 import { isEnabledSection } from "@/app/sections";
@@ -174,6 +175,64 @@ describe("the chrome", () => {
       }
       unmount();
     }
+  });
+
+  // FE-11: a tab list of no tabs is announced on every page as an empty
+  // widget. A v1 document declares none, so none is rendered.
+  test("test_no_tablist_is_rendered_when_the_document_declares_no_tabs", () => {
+    const { container, rerender } = render(
+      <SectionTabs label="Analysis" tabs={[]} active={null} onSelect={() => {}} />,
+    );
+    expect(container.querySelector("[role='tablist']")).toBeNull();
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("ANALYSIS");
+    // With tabs, each one names the panel it controls, and that panel is
+    // labelled by the tab (FE-11).
+    rerender(
+      <SectionTabs
+        label="Analysis"
+        tabs={[
+          { id: "route", label: "Route", cp: null },
+          { id: "frontier", label: "Frontier", cp: null },
+        ]}
+        active="route"
+        onSelect={() => {}}
+      />,
+    );
+    const tab = screen.getByRole("tab", { name: "Route" });
+    expect(tab).toHaveAttribute("aria-controls", "tabpanel-route");
+    render(
+      <SectionPanel tab="route">
+        <p>panel body</p>
+      </SectionPanel>,
+    );
+    const panel = screen.getByRole("tabpanel");
+    expect(panel).toHaveAttribute("id", "tabpanel-route");
+    expect(panel).toHaveAttribute("aria-labelledby", "tab-route");
+  });
+
+  // FE-12: the count and the one-line state are the point of a rail entry,
+  // and at 1024 px and below they are the only text it renders.
+  test("test_a_rail_entry_reads_its_count_and_state_not_only_its_name", () => {
+    render(
+      <MemoryRouter>
+        <Rail
+          section="analysis"
+          entries={[
+            { section: "directory", count: 4, state: "Served" },
+            { section: "admin", count: null, state: "Unavailable" },
+          ]}
+          local={{ title: "This run", items: [{ label: "CP-6", meta: "RUNNABLE", on: true }] }}
+          servedRole={{ role: "READER", standing: "READER" }}
+          search=""
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole("link", { name: "Directory, 4, Served" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Admin, Unavailable" })).toBeInTheDocument();
+    // A section the document does not serve at all still says its name.
+    expect(screen.getByRole("link", { name: "Book" })).toBeInTheDocument();
+    // The section-local list is a named group, not an aria-label on nothing.
+    expect(screen.getByRole("group", { name: "This run" })).toBeInTheDocument();
   });
 
   test("test_severity_renders_shape_and_hue", () => {

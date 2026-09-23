@@ -65,7 +65,7 @@ export function NewCase({
     if (refusal || pending || trimmed.length === 0) return;
     setRefreshFailed(false);
     const outcome = await run(trimmed, (intent) => createCase(trimmed, intent));
-    if (outcome.kind !== "ok") return;
+    if (outcome?.kind !== "ok") return;
     setTitle("");
     const refreshed = await refetchDirectory();
     if (refreshed) onCreated(refreshed);
@@ -94,6 +94,7 @@ export function NewCase({
       <RefusedControl
         refusal={refusal}
         onClick={action ? () => void submit() : undefined}
+        busy={pending}
         className="rb solid"
         reasonDisplay="inline"
         aria-label="Create case"

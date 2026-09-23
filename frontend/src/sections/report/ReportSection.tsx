@@ -29,7 +29,7 @@ function Artifact({ artifact }: { artifact: ReportDocument["body"]["artifacts"][
         <pre
           className="tscroll artifact-scroll"
           data-report-artifact-text
-          aria-label="Saved artifact markdown"
+          aria-label={`${artifact.route_node_id} saved artifact markdown`}
           role="region"
           tabIndex={0} // NOSONAR typescript:S6845 -- role="region" above makes this
           // element a keyboard-scrollable landmark (WCAG 2.1.1), not the
@@ -41,7 +41,7 @@ function Artifact({ artifact }: { artifact: ReportDocument["body"]["artifacts"][
         <pre
           className="tscroll artifact-scroll"
           data-report-artifact-record
-          aria-label="Saved artifact record"
+          aria-label={`${artifact.route_node_id} saved artifact record`}
           role="region"
           tabIndex={0} // NOSONAR typescript:S6845 -- role="region" above makes this
           // element a keyboard-scrollable landmark (WCAG 2.1.1), not the

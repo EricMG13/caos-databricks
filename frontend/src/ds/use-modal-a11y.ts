@@ -20,10 +20,10 @@ function isTopOverlay(token: symbol): boolean {
 // Modal behavior in one place:
 //   • Escape closes (topmost overlay only).
 //   • Focus trap — Tab cycles within the dialog.
-//   • Focus restore — returns focus to the opener that was passed in. The
-//     opener is never inferred from document.activeElement: WebKit does not
-//     focus a button on click, and an inferred opener drops focus to the
-//     landmark on cancel (IA_SPEC.md 7).
+//   • Focus restore — returns focus to the opener that was passed in, and
+//     only while it is still on the page. The opener is never inferred from
+//     document.activeElement: WebKit does not focus a button on click, and an
+//     inferred opener drops focus to the landmark on cancel (IA_SPEC.md 7).
 //   • Body scroll-lock while open.
 // Attach the returned ref to the dialog panel and pair it with
 // role="dialog" aria-modal="true".
@@ -97,7 +97,10 @@ export function useModalA11y<T extends HTMLElement = HTMLDivElement>(
       if (i !== -1) overlayStack.splice(i, 1);
       scrollLockCount = Math.max(0, scrollLockCount - 1);
       if (scrollLockCount === 0) document.body.style.overflow = "";
-      restoreTo?.focus?.();
+      // An opener that has left the page cannot take focus: focusing it
+      // silently drops focus to <body>, so the caller's own fallback (or the
+      // section heading) is left to place it (finding FE-4).
+      if (restoreTo?.isConnected) restoreTo.focus?.();
     };
   }, []);
 

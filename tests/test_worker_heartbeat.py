@@ -103,6 +103,19 @@ def test_a_worker_that_stopped_beating_reads_as_stale_rather_than_absent(
     assert (state.worker_id, state.state) == ("worker-a", "BACKOFF")
 
 
+def test_the_staleness_threshold_covers_one_whole_provider_call() -> None:
+    """AR-24. A worker beats once per node and never during the node's model
+    call, so a threshold shorter than one call calls a healthy worker stale for
+    doing the one thing it exists to do -- while the run's lease, the real
+    liveness, stays held. The floor is the longest call the host supports plus
+    a minute of margin, and it is asserted rather than remembered so that
+    raising the provider deadline cannot silently uncover it again.
+    """
+    from caos.provider import TIMEOUT_SECONDS
+
+    assert WORKER_STALE_AFTER >= TIMEOUT_SECONDS + 60.0
+
+
 def test_a_beat_refuses_a_state_the_worker_does_not_have(
     migrated: StoreConnection,
 ) -> None:

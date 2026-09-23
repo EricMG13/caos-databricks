@@ -5,6 +5,11 @@ Run before the first deploy with a CLI profile in the environment
 (`DATABRICKS_CONFIG_PROFILE`) and the bundle variables as flags. Each named
 resource is looked up through the SDK; a missing one is printed with the
 command an administrator runs to create it. Nothing is created here.
+
+The serving endpoint is also checked for the AI Gateway posture the host
+relies on (DP-3, MX-5): no inference-table payload logging, because every
+prompt carries document text; no fallback and one served entity, because the
+host prices one model per endpoint. Guardrails are reported, not refused.
 """
 
 from __future__ import annotations
@@ -17,6 +22,13 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from databricks.sdk import WorkspaceClient
+
+# What `_group` answers when the profile cannot list groups: not missing.
+UNKNOWN = object()
+
+
+class Unfit(OSError):
+    """A resource that exists but is configured against the app's rules."""
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -31,7 +43,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--run-ceiling", help="the bundle's run_ceiling value")
     args = parser.parse_args(argv)
 
-    if args.price is not None and not affordable(args.price, args.run_ceiling):
+    if args.price is not None and not affordable(
+        args.price, args.run_ceiling, endpoint=args.endpoint
+    ):
         return 1
 
     from databricks.sdk import WorkspaceClient
@@ -50,7 +64,7 @@ def main(argv: list[str] | None = None) -> int:
     checks: list[tuple[str, Callable[[], object], str]] = [
         (
             f"serving endpoint {args.endpoint}",
-            lambda: client.serving_endpoints.get(args.endpoint),
+            lambda: _fit_endpoint(client, args.endpoint),
             "create or enable the endpoint under Serving > AI Gateway",
         ),
         (
@@ -82,29 +96,42 @@ def main(argv: list[str] | None = None) -> int:
     missing = 0
     for name, look, fix in checks:
         try:
-            look()
+            found = look()
+        except Unfit as unfit:
+            missing += 1
+            print(f"MISSING {name}: {unfit.args[0]}")
+            continue
         except OSError:
             # The SDK's errors are `IOError`s; their text may carry the host.
             missing += 1
             print(f"MISSING {name}: {fix}")
             continue
+        if found is UNKNOWN:
+            continue  # said already, and not a reason to stop (W5)
         print(f"ok      {name}")
     return 1 if missing else 0
 
 
-def affordable(price: str, run_ceiling: str | None) -> bool:
-    """Whether `run_ceiling` covers one worst-case call at `price` (F28).
+def affordable(
+    price: str, run_ceiling: str | None, *, endpoint: str | None = None
+) -> bool:
+    """Whether `run_ceiling` covers one worst-case call at `price` (F28), and
+    the price names `endpoint` when one is given (AR-06).
 
     Pure and printed like the lookups: a run whose ceiling cannot pay for one
-    call is refused at start, so it is found here, before a deploy.
+    call, or a price for some other endpoint, is refused at the app's start,
+    so it is found here, before a deploy.
     """
     from caos.pricing import price_from_environment, worst_case
     from caos.refusals import Refusal
     from caos.store.budget import CEILING, configured_ceiling
 
-    endpoint = price.split(",", 1)[0]
+    priced = price.split(",", 1)[0]
+    if endpoint is not None and priced != endpoint:
+        print(f"MISSING price names {priced}, not endpoint {endpoint}: fix model_price")
+        return False
     try:
-        worst = worst_case(price_from_environment(endpoint, price))
+        worst = worst_case(price_from_environment(priced, price))
         ceiling = configured_ceiling(run_ceiling)
     except Refusal as refused:
         print(f"MISSING price or run ceiling ({refused.code.value}): fix model_price")
@@ -120,15 +147,54 @@ def affordable(price: str, run_ceiling: str | None) -> bool:
     return True
 
 
+def _fit_endpoint(client: WorkspaceClient, name: str) -> object:
+    """The endpoint, or `Unfit` naming the gateway setting the host cannot run under."""
+    endpoint = client.serving_endpoints.get(name)
+    problems = gateway_problems(endpoint)
+    if problems:
+        raise Unfit("; ".join(problems))
+    return endpoint
+
+
+def gateway_problems(endpoint: object) -> list[str]:
+    """What the endpoint's AI Gateway settings would do to the host (DP-3)."""
+    problems: list[str] = []
+    gateway = getattr(endpoint, "ai_gateway", None)
+    config = getattr(endpoint, "config", None)
+    tables = getattr(gateway, "inference_table_config", None)
+    capture = getattr(config, "auto_capture_config", None)
+    if getattr(tables, "enabled", False) or getattr(capture, "enabled", False):
+        problems.append(
+            "inference tables log every payload: turn payload logging off, "
+            "the prompts carry document text"
+        )
+    if getattr(getattr(gateway, "fallback_config", None), "enabled", False):
+        problems.append("fallback is enabled: the host prices one model per endpoint")
+    served = getattr(config, "served_entities", None) or []
+    routes = getattr(getattr(config, "traffic_config", None), "routes", None) or []
+    if len(served) > 1 or len(routes) > 1:
+        problems.append(
+            "more than one served entity or route: the recorded model identity "
+            "and price would not describe every answer"
+        )
+    if getattr(gateway, "guardrails", None) is not None:
+        print(
+            "note    guardrails are set on the endpoint: an output guardrail "
+            "alters or refuses answers, which the host refuses as PROVIDER_REFUSED"
+        )
+    return problems
+
+
 def _group(client: WorkspaceClient, display: str) -> object:
     from databricks.sdk.errors import PermissionDenied
 
     try:
         found = list(client.groups.list(filter=f'displayName eq "{display}"'))
     except PermissionDenied:
-        # The profile may not list workspace groups: unknown, not missing.
+        # The profile may not list workspace groups: unknown, not missing,
+        # and not a reason to stop the deploy (W5).
         print(f"UNKNOWN group {display}: this profile may not list workspace groups")
-        raise
+        return UNKNOWN
     if not found:
         raise OSError(display)
     return found[0]

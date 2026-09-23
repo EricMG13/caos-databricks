@@ -8,13 +8,15 @@ driver from the handoff. A run that costs money and can be run once is exactly
 the thing that should not be reconstructed from memory, so the driver lives
 here, under the same gates as everything else it calls.
 
-It creates a database and a blob root of its own, so a performed set can be
-kept for re-checking without touching a developer's own store, and it prints
-where both are. Configuration is the caller's environment and nothing else:
+It creates a database of its own, so a performed set can be kept for
+re-checking without touching a developer's own store, and it prints where that
+and the blobs are. Configuration is the caller's environment and nothing else:
 `OPENROUTER_*` for the provider (§16), `CAOS_MODEL_PRICE` for the dated price
-the reservation is computed from, and `CAOS_QUALIFY_POSTGRES_URL` for the
+the reservation is computed from, `CAOS_QUALIFY_POSTGRES_URL` for the
 persistent server to keep the run database on -- never the in-memory test
-server, whose restart erases it.
+server, whose restart erases it -- and `CAOS_QUALIFY_BLOB_ROOT` for the
+directory the run's blobs are kept in, for the same reason: the proof re-reads
+them, and `$TMPDIR` is purged (FP-16).
 
     scripts/qualify.py qualification/vmo2-fy2025 \
         --expect-identity openrouter/openai/flex/high/65536 --ceiling 22.00
@@ -30,9 +32,10 @@ import argparse
 import json
 import os
 import sys
-from decimal import Decimal
+from dataclasses import asdict
+from decimal import ROUND_DOWN, Decimal
+from enum import Enum
 from pathlib import Path
-from tempfile import mkdtemp
 from urllib.parse import urlsplit, urlunsplit
 from uuid import UUID, uuid4
 
@@ -45,7 +48,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from caos.blobs import BlobStore
 from caos.methodology import CANONICAL_ADAPTER_VERSION
 from caos.methodology.bundle import Bundle
-from caos.models import from_environment
+from caos.methodology.vendor import catalog
+from caos.models import ChatCompletions, from_environment
 from caos.pricing import price_from_environment, worst_case
 from caos.qualification.harness import (
     Harness,
@@ -57,12 +61,15 @@ from caos.qualification.harness import (
 from caos.qualification.matrix import QualificationSet
 from caos.qualification.on_disk import load_qualification_set
 from caos.qualification.store import performed_evidence, record_evidence
+from caos.refusals import Refusal
 from caos.store import StoreConnection, apply_schema, connect
 from caos.store.gates import Gate, GateApproval, approve_gate, gate_preview
 from caos.store.members import Standing, grant
 
 REPO = Path(__file__).resolve().parents[1]
-CATALOG = "skills/cp-os-credit-os/references/CREDIT_OS_V_MODULE_CATALOG_v2.json"
+
+# What a capture may carry: the JSON `json.dumps` writes, and nothing else.
+type Plain = str | int | float | bool | None | list["Plain"] | dict[str, "Plain"]
 
 
 def _approve_every_gate(
@@ -109,6 +116,14 @@ def _capture(
     The charge, model and generation id of every attempt come from the store
     rather than from the objects in hand: what reconciles a vendor bill is what
     the host recorded, not what a caller remembers recording.
+
+    The rows and the proofs are serialised from the dataclasses themselves
+    (`dataclasses.asdict`) rather than field by field. The hand-written
+    projection had already lost one: `registers_met` joined `MatrixRow` and
+    nothing here named it, so a run whose only failed comparison was a register
+    key was captured as incomplete with no failed comparison visible (R2-N2,
+    SI-5), and the next field would have gone the same way. The two counts stay
+    explicit, because a reader wants how many keys missed and then which.
     """
     snapshot = performed_evidence(prepared=prepared, performed=performed)
     attempts = conn.execute(
@@ -134,16 +149,7 @@ def _capture(
                 "status": item.status.value,
                 "stopped": None if item.stopped is None else item.stopped.value,
                 "refusal": None if item.refusal is None else item.refusal.value,
-                "proof": None
-                if item.proof is None
-                else {
-                    "run_id": str(item.proof.run_id),
-                    "route_digest": item.proof.route_digest,
-                    "build_id": item.proof.build_id,
-                    "artifacts": item.proof.artifacts,
-                    "citations": item.proof.citations,
-                    "anchored": [list(value) for value in sorted(item.proof.anchored)],
-                },
+                "proof": None if item.proof is None else _object(asdict(item.proof)),
             }
             for item in performed.performed
         ],
@@ -162,28 +168,40 @@ def _capture(
         if performed.matrix is None
         else [
             {
-                "case_label": row.case_label,
-                "proven": row.proven,
-                "refusal": None if row.refusal is None else row.refusal.value,
+                **_object(asdict(row)),
+                # The counts, then the keys: "two missed" is the first thing a
+                # reader wants and the list is the second.
                 "met": len(row.met),
                 "missed": len(row.missed),
-                "ready_met": row.ready_met,
-                "blocked_met": row.blocked_met,
-                "projections_met": row.projections_met,
-                "forecast_met": row.forecast_met,
-                "expected_refusal_met": row.expected_refusal_met,
-                "missed_keys": [
-                    {
-                        "module_id": item.module_id,
-                        "document_sha256": item.document_sha256,
-                        "matched_text": item.matched_text,
-                    }
-                    for item in row.missed
-                ],
+                "missed_keys": [_object(asdict(item)) for item in row.missed],
             }
             for row in performed.matrix.rows
         ],
     }
+
+
+def _object(fields: dict[str, object]) -> dict[str, Plain]:
+    """One dataclass's `asdict` output, as JSON a reader can compare."""
+    return {key: _plain(value) for key, value in fields.items()}
+
+
+def _plain(value: object) -> Plain:
+    """One value as JSON: enums by their value, anything else by `str`.
+
+    Sets are sorted so two captures of one run compare, and tuples become lists
+    as `json.dumps` would make them anyway.
+    """
+    if isinstance(value, dict):
+        return {key: _plain(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_plain(item) for item in value]
+    if isinstance(value, (set, frozenset)):
+        return [_plain(item) for item in sorted(value)]
+    if isinstance(value, Enum):
+        return str(value.value)
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    return str(value)
 
 
 def _perform_until(  # noqa: PLR0913 -- one set, one loop, keyword-only tail
@@ -229,6 +247,25 @@ def _perform_until(  # noqa: PLR0913 -- one set, one loop, keyword-only tail
     return performed
 
 
+def _configured_provider(expect_identity: str) -> ChatCompletions | None:
+    """The provider, built last, after every check that needs no client; None
+    having said why nothing was spent: a workspace that cannot be reached, or
+    a profile the caller did not expect."""
+    try:
+        provider = from_environment()
+    except Refusal as refused:
+        print(f"{refused.code.value}: no provider; nothing was spent", file=sys.stderr)
+        return None
+    if provider.qualification_identity != expect_identity:
+        print(
+            f"identity is {provider.qualification_identity}, "
+            f"not {expect_identity}; nothing was spent",
+            file=sys.stderr,
+        )
+        return None
+    return provider
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     # Path-traversal scanners flag `set_root`/`--capture` as a generic
@@ -239,7 +276,18 @@ def main(argv: list[str] | None = None) -> int:
     # other argument to a command they typed themselves.
     parser.add_argument("set_root", type=Path, help="the on-disk qualification set")
     parser.add_argument("--expect-identity", required=True)
-    parser.add_argument("--ceiling", required=True, type=Decimal)
+    parser.add_argument(
+        "--ceiling", required=True, type=Decimal, help="what the whole set may spend"
+    )
+    parser.add_argument(
+        "--run-ceiling",
+        type=Decimal,
+        help=(
+            "what each case's run may spend; defaults to the set ceiling divided"
+            " by the number of cases, because the harness requires"
+            " run_ceiling x cases <= ceiling"
+        ),
+    )
     parser.add_argument("--capture", type=Path, help="where to write the JSON capture")
     parser.add_argument(
         "--attempts",
@@ -248,17 +296,19 @@ def main(argv: list[str] | None = None) -> int:
         help="times to enter perform; >1 retries the node that stopped the set",
     )
     args = parser.parse_args(argv)
+    if args.attempts < 1:
+        print("--attempts must be at least 1; nothing was spent", file=sys.stderr)
+        return 2
 
     bundle = Bundle(REPO / "vendor/deploy-v")
     qualification = load_qualification_set(args.set_root)
-    provider = from_environment()
-    if provider.qualification_identity != args.expect_identity:
-        print(
-            f"identity is {provider.qualification_identity}, "
-            f"not {args.expect_identity}; nothing was spent",
-            file=sys.stderr,
-        )
-        return 2
+    # Both ceilings were `--ceiling`, and the harness requires
+    # `run_ceiling x cases <= ceiling`, so every positive-budget set of more
+    # than one case was impossible to admit and raising the shared value could
+    # not fix the inequality (AR-18). Derived per case when not named.
+    args.run_ceiling = args.run_ceiling or (
+        args.ceiling / len(qualification.cases)
+    ).quantize(Decimal("0.000001"), rounding=ROUND_DOWN)
     # A paid run's database is its evidence, so it is kept on a server named
     # for that and never on the test server, whose data lives in memory: a
     # restart of that container erased every retained run of 18 September 2026.
@@ -270,20 +320,48 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 2
-    price = price_from_environment(provider.model, os.environ["CAOS_MODEL_PRICE"])
+    model_price = os.environ.get("CAOS_MODEL_PRICE")
+    if not model_price:
+        print(
+            "CAOS_MODEL_PRICE is unset: name the dated price every reservation"
+            " is computed from; nothing was spent",
+            file=sys.stderr,
+        )
+        return 2
+    blob_root = os.environ.get("CAOS_QUALIFY_BLOB_ROOT")
+    if not blob_root:
+        # A paid run's blobs are its evidence as much as its database is, and
+        # `assert_orchestration_proof` re-reads them. `mkdtemp` put them in
+        # `$TMPDIR`, which macOS purges, so the evidence could not be re-proven
+        # once it went (FP-16). Named for the same reason the database's server
+        # is, and refused for the same reason.
+        print(
+            "CAOS_QUALIFY_BLOB_ROOT is unset: name the persistent directory the"
+            " run's blobs are kept in; nothing was spent",
+            file=sys.stderr,
+        )
+        return 2
+    provider = _configured_provider(args.expect_identity)
+    if provider is None:
+        return 2
+    price = price_from_environment(provider.model, model_price)
+    bundle.verify_pinned()
     harness = Harness(
         bundle=bundle,
-        catalog=json.loads((bundle.root / CATALOG).read_text()),
+        # The verified reader, not a bare read of the file: the route every
+        # paid call follows is resolved from this, and reading the bytes
+        # directly accepted a tampered catalog that `verified_bytes` refuses
+        # (FP-15, invariant 4).
+        catalog=catalog(bundle),
         completions=provider,
         price=price,
         ceiling=args.ceiling,
-        run_ceiling=args.ceiling,
+        run_ceiling=args.run_ceiling,
     )
 
     database = f"caos_qualify_{uuid4().hex}"
     parts = urlsplit(admin_url)
     run_url = urlunsplit(parts._replace(path=f"/{database}"))
-    blob_root = Path(mkdtemp(prefix="caos-qualify-"))
     with psycopg.connect(admin_url, autocommit=True) as admin:
         admin.execute(
             psycopg.sql.SQL("CREATE DATABASE {}").format(
@@ -299,7 +377,8 @@ def main(argv: list[str] | None = None) -> int:
         json.dumps(
             {
                 "database": database,
-                "blob_root": str(blob_root),
+                "blob_root": blob_root,
+                "run_ceiling": str(args.run_ceiling),
                 "price_model": price.model,
                 "price_input_per_token": str(price.input_per_token),
                 "price_output_per_token": str(price.output_per_token),
@@ -312,7 +391,7 @@ def main(argv: list[str] | None = None) -> int:
 
     with connect(run_url) as conn:
         apply_schema(conn)
-        blobs = BlobStore(blob_root)
+        blobs = BlobStore(Path(blob_root))
         prepared = prepare(conn, blobs, harness, qualification=qualification)
         _approve_every_gate(conn, prepared)
         performed = _perform_until(

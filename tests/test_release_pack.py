@@ -21,13 +21,14 @@ import sys
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 import release_pack
 from qualification_fixtures import qualification_performed, record_runs
 
 from caos.api.deps import VENDORED_BUNDLE
+from caos.graph.route import ResolvedRoute, resolve_route, route_digest
 from caos.methodology import CANONICAL_ADAPTER_VERSION
 from caos.methodology.bundle import Bundle
 from caos.methodology.handoff import ADAPTER_ROUTES
@@ -41,6 +42,7 @@ from caos.qualification.store import (
 from caos.qualification.verdict import read_verdict
 from caos.refusals import Refusal
 from caos.store import StoreConnection, apply_schema, connect
+from caos.store.routes import _canonical
 
 REPO = Path(__file__).resolve().parents[1]
 NOW = datetime(2026, 9, 18, tzinfo=UTC)
@@ -153,17 +155,51 @@ def _pin(
     profile_id: str,
     selection_id: str,
     performed: PerformedEvidence | None = None,
-) -> None:
-    """The route pin behind the fixture snapshot's one run."""
-    performed = qualification_performed() if performed is None else performed
+    *,
+    accepted_nothing: str | None = None,
+) -> PerformedEvidence:
+    """The route pin behind the fixture snapshot's one run, written for real.
+
+    `run_routes` used to be written here with `resolved='{}'` -- a row
+    `route_pin` refuses `ROUTE_IDENTITY_INVALID` -- and the pack read the row
+    directly and named a pathway from it (FP-02). The pin goes through
+    `pin_route` now, and the snapshot carries the digest that route actually
+    has, because that join is what ties a verdict to a pathway.
+    """
+    route = resolve_route(catalog(Bundle(VENDORED_BUNDLE)), profile_id, selection_id)
+    performed = _on_route(route, performed)
     record_performed(conn, performed)
-    record_runs(conn, performed)
+    record_runs(conn, performed, accepted_nothing=accepted_nothing)
+    # `pin_route_in`'s own row, written without its lock: the fixture's runs are
+    # rows, not runs a worker drove, so they are not RUNNING.
     for case in performed.prepared:
         conn.execute(
             "INSERT INTO run_routes (run_id,profile_id,selection_id,route_digest,"
-            "resolved) VALUES (%s,%s,%s,%s,'{}')",
-            (case.input.run_id, profile_id, selection_id, case.input.route_digest),
+            "resolved) VALUES (%s,%s,%s,%s,%s)",
+            (
+                case.input.run_id,
+                route.profile_id,
+                route.selection_id,
+                route_digest(route),
+                _canonical(route),
+            ),
         )
+    return performed
+
+
+def _on_route(
+    route: ResolvedRoute, performed: PerformedEvidence | None = None
+) -> PerformedEvidence:
+    """The snapshot, with every prepared case pinned to this route's digest."""
+    digest = route_digest(route)
+    original = qualification_performed() if performed is None else performed
+    return performed_evidence(
+        prepared=tuple(
+            replace(case, input=replace(case.input, route_digest=digest))
+            for case in original.prepared
+        ),
+        performed=original.performed,
+    )
 
 
 def _sign(
@@ -198,14 +234,14 @@ def test_no_pathway_is_qualified_without_a_signed_verdict_row(
     profile_id, selection_id = sorted(ADAPTER_ROUTES)[0]
     with connect(empty_database) as conn:
         apply_schema(conn)
-        _pin(conn, profile_id, selection_id)
+        performed = _pin(conn, profile_id, selection_id)
         assert (
             release_pack.qualified_pathways(
                 conn, build_id=FIXTURE_BUILD, as_of=NOW + timedelta(days=1)
             )
             == {}
         )
-        _sign(conn)
+        _sign(conn, performed=performed)
         found = release_pack.qualified_pathways(
             conn, build_id=FIXTURE_BUILD, as_of=NOW + timedelta(days=1)
         )
@@ -229,8 +265,8 @@ def test_a_verdict_that_is_not_current_for_this_build_qualifies_nothing(
     profile_id, selection_id = sorted(ADAPTER_ROUTES)[0]
     with connect(empty_database) as conn:
         apply_schema(conn)
-        _pin(conn, profile_id, selection_id)
-        _sign(conn)
+        performed = _pin(conn, profile_id, selection_id)
+        _sign(conn, performed=performed)
         assert (
             release_pack.qualified_pathways(conn, build_id=build_id, as_of=as_of) == {}
         )
@@ -256,8 +292,8 @@ def test_a_verdict_from_an_old_adapter_revision_qualifies_nothing(
     )
     with connect(empty_database) as conn:
         apply_schema(conn)
-        _pin(conn, profile_id, selection_id, old_adapter)
-        _sign(conn, performed=old_adapter)
+        pinned = _pin(conn, profile_id, selection_id, old_adapter)
+        _sign(conn, performed=pinned)
         assert (
             release_pack.qualified_pathways(
                 conn, build_id=FIXTURE_BUILD, as_of=NOW + timedelta(days=1)
@@ -319,3 +355,102 @@ def test_the_written_pack_reads_back_as_the_pack_and_the_reader_copy_names_every
             in markdown
         )
     assert "no pathway is claimed qualified" in markdown
+
+
+def test_a_pathway_is_qualified_only_through_a_run_that_produced_output(
+    empty_database: str,
+) -> None:
+    """FP-02: a verdict covered every pathway any run in its snapshot was pinned
+    to.
+
+    A case that met the refusal it declared -- signable, and deliberately so --
+    made its own pathway QUALIFIED although no run on it produced an artifact.
+    """
+    profile_id, selection_id = sorted(ADAPTER_ROUTES)[0]
+    refused = qualification_performed(blocked_label="blocked")
+    with connect(empty_database) as conn:
+        apply_schema(conn)
+        performed = _pin(
+            conn, profile_id, selection_id, refused, accepted_nothing="blocked"
+        )
+        _sign(conn, performed=performed)
+        found = release_pack.qualified_pathways(
+            conn, build_id=FIXTURE_BUILD, as_of=NOW + timedelta(days=1)
+        )
+        # Both cases are pinned to the one pathway; only the one that finished
+        # and answered its keys is what the verdict covers.
+        assert list(found) == [(profile_id, selection_id)]
+        assert release_pack._snapshot_pins(performed.document) == [
+            (
+                performed.prepared[0].input.run_id,
+                performed.prepared[0].input.route_digest,
+            )
+        ]
+
+
+def test_a_verdict_entry_names_the_signer_the_identity_and_the_set(
+    empty_database: str,
+) -> None:
+    """FP-14 and AR-22: the entry carried free text an ADMIN typed and dates.
+
+    Production's model is set by environment (D7), so a pack's QUALIFIED said
+    nothing about which execution identity it covered, and `--provider/--model`
+    is how a deployment asks for its own.
+    """
+    profile_id, selection_id = sorted(ADAPTER_ROUTES)[0]
+    with connect(empty_database) as conn:
+        apply_schema(conn)
+        performed = _pin(conn, profile_id, selection_id)
+        _sign(conn, performed=performed)
+        evidence = performed.evidence
+        as_of = NOW + timedelta(days=1)
+        (verdict,) = release_pack.qualified_pathways(
+            conn, build_id=FIXTURE_BUILD, as_of=as_of
+        )[(profile_id, selection_id)]
+        assert verdict["provider"] == evidence.provider
+        assert verdict["model"] == evidence.model
+        assert verdict["qualification_set_sha256"] == evidence.qualification_set_sha256
+        assert UUID(verdict["reviewer_id"])
+        assert (
+            release_pack.qualified_pathways(
+                conn,
+                build_id=FIXTURE_BUILD,
+                as_of=as_of,
+                identity=(evidence.provider, evidence.model),
+            )
+            != {}
+        )
+        assert (
+            release_pack.qualified_pathways(
+                conn,
+                build_id=FIXTURE_BUILD,
+                as_of=as_of,
+                identity=(evidence.provider, "another/model"),
+            )
+            == {}
+        )
+
+
+def test_a_pin_the_store_cannot_read_names_no_pathway(empty_database: str) -> None:
+    """FP-02: `run_routes` was read by `(run_id, route_digest)` and never
+    validated, so a row whose `resolved` is `{}` named a pathway although
+    `route_pin` refuses it `ROUTE_IDENTITY_INVALID`."""
+    profile_id, selection_id = sorted(ADAPTER_ROUTES)[0]
+    performed = qualification_performed()
+    with connect(empty_database) as conn:
+        apply_schema(conn)
+        record_performed(conn, performed)
+        record_runs(conn, performed)
+        [case] = performed.prepared
+        conn.execute(
+            "INSERT INTO run_routes (run_id,profile_id,selection_id,route_digest,"
+            "resolved) VALUES (%s,%s,%s,%s,'{}')",
+            (case.input.run_id, profile_id, selection_id, case.input.route_digest),
+        )
+        _sign(conn, performed=performed)
+        assert (
+            release_pack.qualified_pathways(
+                conn, build_id=FIXTURE_BUILD, as_of=NOW + timedelta(days=1)
+            )
+            == {}
+        )

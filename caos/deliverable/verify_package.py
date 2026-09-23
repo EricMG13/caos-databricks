@@ -107,6 +107,11 @@ def _receipt_identity_matches(receipt: dict[str, Any], payload: object) -> bool:
 
 
 def _receipt_role_error(receipt: dict[str, Any]) -> str | None:
+    """The signer, the freezer and the filer, and no two of them the same.
+
+    One signer, because that is all the receipt names: FP-09 asks for the whole
+    list, which is a change to `FiledReceipt` in `caos/api/wire.py`.
+    """
     named = [receipt.get(role) for role in ("signed_by", "frozen_by", "filed_by")]
     if any(not isinstance(actor, str) or not actor.strip() for actor in named):
         return "the receipt does not name all three roles"
@@ -128,6 +133,88 @@ def _receipt_error(receipt: dict[str, Any], payload: bytes) -> str | None:
     return _receipt_role_error(receipt)
 
 
+_FIGURE_FIELDS = ("document_sha256", "page", "matched_text")
+
+
+def _cited_by_node(artifacts: list[Any]) -> dict[str, list[Any]]:
+    """Each bound handoff's citation list, by the route node the payload names."""
+    found: dict[str, list[Any]] = {}
+    for artifact in artifacts:
+        if not isinstance(artifact, dict):
+            return {}
+        citations = json.loads(str(artifact.get("record"))).get("citations")
+        found[str(artifact.get("route_node_id"))] = (
+            citations if isinstance(citations, list) else []
+        )
+    return found
+
+
+def _figure_error(figure: object, cited: dict[str, list[Any]]) -> str | None:
+    """One narrative figure against the citation of the record it names."""
+    if not isinstance(figure, dict):
+        return "a narrative figure is not an object"
+    index = figure.get("citation_index")
+    citations = cited.get(str(figure.get("route_node_id")), [])
+    if (
+        not isinstance(index, int)
+        or isinstance(index, bool)
+        or not 0 <= index < len(citations)
+    ):
+        return "a narrative figure names no citation of this payload"
+    citation = citations[index]
+    if not isinstance(citation, dict) or any(
+        figure.get(field) != citation.get(field) for field in _FIGURE_FIELDS
+    ):
+        return "a narrative figure does not match the citation it names"
+    return None
+
+
+def _narrative_error(
+    decoded: dict[str, Any], cited: dict[str, list[Any]]
+) -> str | None:
+    """Every narrative figure against the record the payload binds it to.
+
+    A figure carries its own copy of `document_sha256`, `page` and
+    `matched_text`, and nothing compared that copy with
+    `citations[citation_index]` of the bound record -- so a package showing a
+    forged quote on a page nobody cited was reported internally consistent, and
+    this is the payload's one internal cross-reference (FP-17).
+    """
+    narrative = decoded.get("narrative")
+    if not isinstance(narrative, list):
+        # A historical payload's narrative is one string, which `render` still
+        # draws and which carries no figure to resolve. FP-17 also asked for
+        # that shape to be refused here; it is not, because a package of a
+        # revision filed before spans existed would stop verifying, which is
+        # FP-05's failure in another place.
+        return None
+    for paragraph in narrative:
+        if not isinstance(paragraph, list):
+            return "a narrative paragraph is not a list of spans"
+        for span in paragraph:
+            if not isinstance(span, dict) or "figure" not in span:
+                continue
+            if error := _figure_error(span["figure"], cited):
+                return error
+    return None
+
+
+def _code_error(members: dict[str, bytes], receipt: dict[str, Any]) -> str | None:
+    """The two files the package carries that run, against their pins."""
+    # The verifier that travels with the package is this one (F59): the host
+    # never blesses a package whose verifier it did not write. A copy run from
+    # a pipe has no file to compare against and checks everything else.
+    running = _own_bytes()
+    if running is not None and members["verify_package.py"] != running:
+        return "the archived verifier is not this verifier"
+    digest = hashlib.sha256(members["render.py"]).hexdigest()
+    if digest != RENDERER_SHA256:
+        return "the renderer does not match this verifier's build"
+    if "renderer_sha256" in receipt and receipt["renderer_sha256"] != digest:
+        return "the renderer does not hash to what the receipt says"
+    return None
+
+
 def _contents(members: dict[str, bytes]) -> tuple[bool, str | None]:
     payload = members["payload.json"]
     receipt = json.loads(members["receipt.json"])
@@ -135,21 +222,13 @@ def _contents(members: dict[str, bytes]) -> tuple[bool, str | None]:
         return False, "the receipt is not a JSON object"
     if receipt_error := _receipt_error(receipt, payload):
         return False, receipt_error
-    # The verifier that travels with the package is this one (F59): the host
-    # never blesses a package whose verifier it did not write. A copy run from
-    # a pipe has no file to compare against and checks everything else.
-    running = _own_bytes()
-    if running is not None and members["verify_package.py"] != running:
-        return False, "the archived verifier is not this verifier"
-    renderer = members["render.py"]
-    digest = hashlib.sha256(renderer).hexdigest()
-    if digest != RENDERER_SHA256:
-        return False, "the renderer does not match this verifier's build"
-    if "renderer_sha256" in receipt and receipt["renderer_sha256"] != digest:
-        return False, "the renderer does not hash to what the receipt says"
+    if code_error := _code_error(members, receipt):
+        return False, code_error
     namespace: dict[str, Any] = {"__name__": "archived_render"}
     # §55: only exact, pinned build bytes execute, never arbitrary archive code.
-    exec(compile(renderer, "<archived render.py>", "exec"), namespace)  # nosec B102
+    exec(  # nosec B102
+        compile(members["render.py"], "<archived render.py>", "exec"), namespace
+    )
     decoded = json.loads(payload)
     if not _receipt_identity_matches(receipt, decoded):
         return False, "the receipt does not identify this payload"
@@ -158,6 +237,8 @@ def _contents(members: dict[str, bytes]) -> tuple[bool, str | None]:
         return False, "the payload has no canonical handoffs"
     if any(not namespace["canonical_bound"](artifact) for artifact in held):
         return False, "a handoff does not hash to the pair the payload binds"
+    if narrative_error := _narrative_error(decoded, _cited_by_node(held)):
+        return False, narrative_error
     if namespace["render"](decoded) != members["deliverable.html"]:
         return False, "the export does not re-render from the payload"
     return True, None

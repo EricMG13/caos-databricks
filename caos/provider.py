@@ -23,7 +23,11 @@ from typing import Any, Protocol
 from caos.refusals import Refusal, RefusalCode
 from caos.store.budget import validate_spend
 
-TIMEOUT_SECONDS = 120.0
+# The most one non-streamed call may take to answer: nothing arrives until
+# generation ends, so this is the generation budget (MX-4), sized inside the
+# 300 s lease with room to bill and accept. `MAX_COMPLETION_TOKENS` is what
+# the reservation covers, not what this deadline promises to deliver.
+TIMEOUT_SECONDS = 240.0
 # Host resource ceilings, not guarantees that every canonical handoff fits.
 # Oversized requests/responses refuse; no prefix is accepted as a whole answer.
 MAX_REQUEST_BYTES = 1_048_576

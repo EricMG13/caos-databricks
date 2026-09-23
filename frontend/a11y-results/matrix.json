@@ -25,6 +25,10 @@
     {
       "width": 1024,
       "height": 768
+    },
+    {
+      "width": 320,
+      "height": 640
     }
   ],
   "routes": [
@@ -49,8 +53,8 @@
     "/analysis/",
     "/nothing/"
   ],
-  "entries": 180,
-  "expected_entries": 180,
+  "entries": 240,
+  "expected_entries": 240,
   "violation_nodes": 0,
   "scan_errors": 0,
   "layout_failures": 0,

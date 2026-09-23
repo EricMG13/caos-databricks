@@ -255,3 +255,19 @@ def _wait_for_end(
             return status, view
         time.sleep(1.0)
     return "TIMEOUT", view
+
+
+def test_the_platform_s_stop_signal_drains_the_worker_inside_the_grace(
+    app: PlatformApp,
+) -> None:
+    """DP-4: uvicorn re-raises SIGTERM after its shutdown, so the drain lives
+    in the app's shutdown hook (`caos.api.app.on_shutdown`): the worker sees
+    `stopping`, is joined, and the process ends inside the platform's grace."""
+    import signal
+
+    from caos import serve
+
+    assert serve.GRACEFUL_SECONDS + serve.LIMIT_JOIN_SECONDS < 15
+    app.process.send_signal(signal.SIGTERM)
+    app.process.wait(timeout=serve.GRACEFUL_SECONDS + serve.LIMIT_JOIN_SECONDS + 10)
+    assert "worker stopped" in app.log_tail(), app.log_tail()

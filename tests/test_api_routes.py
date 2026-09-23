@@ -923,6 +923,38 @@ def test_every_code_the_edge_answers_carries_the_apps_status() -> None:
     assert len(answered) == 4
 
 
+def test_an_unhandled_fault_is_logged_as_its_class_and_frame_never_its_message(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """AS-6. The wire body was already a constant; the *log* was not. The
+    guard re-raised into the server's logger, which writes the whole traceback
+    including `str(exc)` -- and an exception that quotes its input (a pydantic
+    `ValidationError` carries `input_value=`, a driver error quotes a bound
+    parameter) would put source text into the App's log, which the refusal on
+    the wire is careful to put nothing of.
+
+    The class and the frame are host facts and say where to look, which is the
+    same pair `caos/graph/worker.py` writes for the same reason.
+    """
+    faulty = FastAPI()
+    faulty.add_middleware(edge_module.EdgeGuard)
+
+    quoted = "BORROWER CONFIDENTIAL: the covenant text"
+
+    @faulty.get("/api/v1/fault")
+    def fault() -> None:
+        raise RuntimeError(quoted)
+
+    response = TestClient(faulty, raise_server_exceptions=False).get("/api/v1/fault")
+
+    assert response.status_code == 500
+    assert response.json()["code"] == "INTERNAL_FAULT"
+    logged = capsys.readouterr().err
+    assert "RuntimeError at " in logged
+    assert "test_api_routes.py:" in logged, "the frame it was raised in"
+    assert "BORROWER" not in logged and "covenant" not in logged
+
+
 def test_a_permanent_fault_answers_500_and_carries_no_retry_after(
     client: TestClient, case: tuple[StoreConnection, UUID]
 ) -> None:

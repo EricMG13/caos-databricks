@@ -3,7 +3,7 @@
 // wire, no charge or generation id, no plan-gate approve/reserve and no
 // accept action: those arrive with commands (4.2). `displayed_run_id` and
 // `latest_run_id` are two identities and are never collapsed into one.
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import {
   CreateRunControl,
@@ -18,6 +18,7 @@ import { blockedByOf } from "./reason";
 import { RouteGraph } from "./RouteGraph";
 import type { GateView } from "./types";
 import { shortDigest } from "@/ds/format";
+import { useAnnouncer } from "@/states/Announcer";
 import type { NodeState } from "@/wire";
 import type { RunSectionDocument } from "@/wire/v1";
 
@@ -46,6 +47,17 @@ export function RunSection({ document }: { document: RunSectionDocument; tab: st
   // pin, a preview or an approval was last read in this session
   // (`controls.tsx`, brief 4.2 decision 1).
   const [fingerprint, setFingerprint] = useState<string | null>(null);
+  // The run's status changes under the reader, driven by the event tail and
+  // never by a press: a screen reader is told when it moves, terminal states
+  // included, in the section's own live region (WCAG 4.1.3, finding FE-6).
+  const say = useAnnouncer();
+  const status = body.run?.status ?? null;
+  const said = useRef<string | null>(null);
+  useEffect(() => {
+    if (status === null) return;
+    if (said.current !== null && said.current !== status) say(`Run ${status}.`);
+    said.current = status;
+  }, [status, say]);
 
   const refetchNote = refetchFailed ? (
     <div className="note" data-refetch-failed>

@@ -47,6 +47,9 @@ def test_main_refuses_a_profile_the_caller_did_not_expect(
 ) -> None:
     """A verdict binds its execution profile, so a surprise one spends nothing."""
     monkeypatch.setenv("CAOS_MODEL_ENDPOINT", "openai/gpt-5.6-terra")
+    # A provider that answers, so the refusal is the profile's and not the
+    # workspace's: the real one refuses first when no workspace is configured.
+    monkeypatch.setattr(qualify, "from_environment", _FakeProvider.from_environment)
     # No database is reachable under this name: reaching one would be the bug.
     monkeypatch.setenv("CAOS_TEST_POSTGRES_URL", "postgresql://nobody@127.0.0.1:1/none")
     monkeypatch.setenv(
@@ -217,6 +220,7 @@ def test_main_performs_a_full_qualification_set_against_a_real_database(
     _skip_without_postgres()
     test_server = os.environ["CAOS_TEST_POSTGRES_URL"]
     monkeypatch.setenv("CAOS_QUALIFY_POSTGRES_URL", test_server)
+    monkeypatch.setenv("CAOS_QUALIFY_BLOB_ROOT", str(tmp_path / "blobs"))
     monkeypatch.setattr(qualify, "from_environment", _FakeProvider.from_environment)
     monkeypatch.setenv("CAOS_MODEL_PRICE", "a-model/for-the-test,0,0.00001,2026-09-13")
     set_root = _write_lite_set(tmp_path / "set")
@@ -240,6 +244,7 @@ def test_main_performs_a_full_qualification_set_against_a_real_database(
     assert set(preamble) == {
         "database",
         "blob_root",
+        "run_ceiling",
         "price_model",
         "price_input_per_token",
         "price_output_per_token",
@@ -293,6 +298,7 @@ def test_main_writes_no_capture_file_when_the_flag_is_omitted(
     _skip_without_postgres()
     test_server = os.environ["CAOS_TEST_POSTGRES_URL"]
     monkeypatch.setenv("CAOS_QUALIFY_POSTGRES_URL", test_server)
+    monkeypatch.setenv("CAOS_QUALIFY_BLOB_ROOT", str(tmp_path / "blobs"))
     monkeypatch.setattr(qualify, "from_environment", _FakeProvider.from_environment)
     monkeypatch.setenv("CAOS_MODEL_PRICE", "a-model/for-the-test,0,0.00001,2026-09-13")
     set_root = _write_lite_set(tmp_path / "set")
@@ -314,3 +320,84 @@ def test_main_writes_no_capture_file_when_the_flag_is_omitted(
     assert code == 0
     assert document["complete"] is True
     assert not any(tmp_path.glob("**/capture.json"))
+
+
+def test_main_refuses_an_unnamed_blob_root(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    """FP-16: the blobs went to `$TMPDIR`, which macOS purges.
+
+    `assert_orchestration_proof` re-reads them, so the evidence a paid run
+    bought could not be re-proven once the purge ran. Named explicitly, exactly
+    as the persistent server the database is kept on already is.
+    """
+    _skip_without_postgres()
+    monkeypatch.setenv(
+        "CAOS_QUALIFY_POSTGRES_URL", os.environ["CAOS_TEST_POSTGRES_URL"]
+    )
+    monkeypatch.delenv("CAOS_QUALIFY_BLOB_ROOT", raising=False)
+    monkeypatch.setattr(qualify, "from_environment", _FakeProvider.from_environment)
+    monkeypatch.setenv("CAOS_MODEL_PRICE", "a-model/for-the-test,0,0.00001,2026-09-13")
+    set_root = _write_lite_set(tmp_path / "set")
+
+    code = qualify.main(
+        [str(set_root), "--expect-identity", "test-fake-identity", "--ceiling", "5.00"]
+    )
+
+    assert code == 2
+    assert "CAOS_QUALIFY_BLOB_ROOT" in capsys.readouterr().err
+
+
+def test_main_refuses_a_missing_price_and_a_non_positive_attempt_count(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    """FP-29: a missing `CAOS_MODEL_PRICE` was a `KeyError` traceback, and
+    `--attempts 0` or a negative number silently meant one."""
+    _skip_without_postgres()
+    monkeypatch.setenv(
+        "CAOS_QUALIFY_POSTGRES_URL", os.environ["CAOS_TEST_POSTGRES_URL"]
+    )
+    monkeypatch.setenv("CAOS_QUALIFY_BLOB_ROOT", str(tmp_path / "blobs"))
+    monkeypatch.setattr(qualify, "from_environment", _FakeProvider.from_environment)
+    monkeypatch.delenv("CAOS_MODEL_PRICE", raising=False)
+    set_root = _write_lite_set(tmp_path / "set")
+    common = [str(set_root), "--expect-identity", "test-fake-identity"]
+
+    assert qualify.main([*common, "--ceiling", "5.00", "--attempts", "0"]) == 2
+    assert "--attempts" in capsys.readouterr().err
+    assert qualify.main([*common, "--ceiling", "5.00"]) == 2
+    assert "CAOS_MODEL_PRICE" in capsys.readouterr().err
+
+
+def test_a_set_of_more_than_one_case_can_be_admitted(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    """AR-18: the CLI set the whole-set ceiling and each run's to one number.
+
+    `harness._affordable` requires `run_ceiling x cases <= ceiling`, so every
+    positive-budget invocation with more than one case was impossible to admit
+    and raising the shared value could not fix the inequality. The per-run
+    ceiling is derived from the set's when it is not named, and printed with the
+    database and the blob root so an operator can see what each run may spend.
+    """
+    _skip_without_postgres()
+    monkeypatch.setenv(
+        "CAOS_QUALIFY_POSTGRES_URL", os.environ["CAOS_TEST_POSTGRES_URL"]
+    )
+    monkeypatch.setenv("CAOS_QUALIFY_BLOB_ROOT", str(tmp_path / "blobs"))
+    monkeypatch.setattr(qualify, "from_environment", _FakeProvider.from_environment)
+    monkeypatch.setenv("CAOS_MODEL_PRICE", "a-model/for-the-test,0,0.00001,2026-09-13")
+    root = _write_lite_set(tmp_path / "set")
+    manifest = json.loads((root / MANIFEST).read_text(encoding="utf-8"))
+    second = dict(manifest["cases"][0])
+    second["label"] = "lite-borealis"
+    manifest["cases"].append(second)
+    (root / MANIFEST).write_text(json.dumps(manifest), encoding="utf-8")
+
+    code = qualify.main(
+        [str(root), "--expect-identity", "test-fake-identity", "--ceiling", "10.00"]
+    )
+
+    preamble = json.loads(capsys.readouterr().out.partition("\n")[0])
+    assert preamble["run_ceiling"] == "5.000000"
+    assert code == 0

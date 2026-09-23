@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import asyncio
 import weakref
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import asynccontextmanager, suppress
 from json import dumps
 from uuid import UUID
@@ -377,6 +377,14 @@ _STATUS = {
 }
 
 
+SHUTDOWN_HOOKS: list[Callable[[], None]] = []
+
+
+def on_shutdown(hook: Callable[[], None]) -> None:
+    """Run `hook` when the app shuts down; the process entry drains its worker."""
+    SHUTDOWN_HOOKS.append(hook)
+
+
 @asynccontextmanager
 async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """Apply the declared schema before the first request, and refuse to start
@@ -398,6 +406,10 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
         yield
     finally:
         probes.cancel()
+        # The process's own shutdown work (the worker drain, DP-4) runs here,
+        # inside uvicorn's shutdown, because the signal is re-raised after it.
+        for hook in list(SHUTDOWN_HOOKS):
+            hook()
         with suppress(asyncio.CancelledError):
             await probes
 
@@ -525,8 +537,9 @@ def read_case_events(
     # learns nothing: a private 404 must not become "the case exists but we are
     # busy". `stream_slot` releases on every way out of the generator,
     # `GeneratorExit` included, which is how a browser going away returns its
-    # slot.
-    slot = take_stream_slot()
+    # slot. Named with the actor, so the cap is a share of the fleet's tails
+    # rather than a race for all of them (MX-2).
+    slot = take_stream_slot(actor_id=actor.user_id)
     events = case_tail(
         conn,
         case_id=case_id,

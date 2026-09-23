@@ -74,6 +74,13 @@ class AdmissionLimits:
     # One deadline for the whole pack, capping each document's: fifty documents
     # must not take fifty times `max_seconds` in one request (Phase 4 audit).
     max_pack_seconds: float = 300.0
+    # What one pack may hold in tokens, across its documents. `max_tokens`
+    # bounds one document, so fifty documents at their own ceiling are 25M
+    # token objects -- each a `Token` and, while it is packed, a dict of its
+    # fields -- in the one App process that also runs the worker. The pack
+    # ceiling is the bound that actually fits the container, and it is checked
+    # as each document is extracted rather than after the pack is read.
+    max_pack_tokens: int = 2_000_000
 
 
 DEFAULT_LIMITS = AdmissionLimits(
@@ -85,6 +92,7 @@ DEFAULT_LIMITS = AdmissionLimits(
     max_seconds=60.0,
     max_decoded_bytes=256 * 1024 * 1024,
     max_pack_seconds=300.0,
+    max_pack_tokens=2_000_000,
 )
 
 

@@ -80,7 +80,6 @@ def platform_environment(
         PGSSLMODE="disable",  # the test Postgres speaks no TLS; Lakebase requires it
         CAOS_LAKEBASE_INSTANCE="caos-lb",
         CAOS_BLOB_ROOT=f"volume://{VOLUME}",
-        CAOS_UC_SCHEMA="main.caos",
         CAOS_RUN_CEILING="25.00",
         CAOS_WORKER_IN_PROCESS="1",
         CAOS_SITE_ROOT=str(site_root),

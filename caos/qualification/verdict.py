@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from caos.boundary_text import BoundaryText
@@ -51,6 +51,13 @@ _SHA256 = re.compile(r"\A[0-9a-f]{64}\Z")
 # Provider identity and reviewer are human-authored and reach a stored record,
 # so they cross the boundary. The bound is deliberately short: neither is prose.
 _TEXT_LIMIT = 256
+
+# The longest a signature may stand. `expires_at` had only to be after
+# `decided_at`, so a verdict could be written to be current for a century, which
+# is a verdict that never stops applying by another spelling (FP-13). A year is
+# the methodology's own cadence: a build moves, the answer keys move, and a
+# reviewer who still means it signs again over what is in front of them then.
+MAX_VALIDITY = timedelta(days=366)
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,9 +109,10 @@ def read_verdict(document: object, *, now: datetime) -> Verdict:
     decided_at = _moment(fields, "decided_at")
     expires_at = _moment(fields, "expires_at")
 
-    if expires_at <= decided_at:
-        # Never current for an instant. Refused as unreadable rather than as
-        # expired: "it has expired" would suggest it once was not.
+    if expires_at <= decided_at or expires_at - decided_at > MAX_VALIDITY:
+        # Never current for an instant, or current for longer than a signature
+        # may stand (FP-13). Refused as unreadable rather than as expired: "it
+        # has expired" would suggest it once was not.
         raise Refusal(RefusalCode.VERDICT_BINDING_INVALID)
     if decided_at > now:
         raise Refusal(RefusalCode.VERDICT_BINDING_INVALID)

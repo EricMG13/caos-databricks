@@ -22,7 +22,7 @@ Read first if anything is unclear: `docs/DEPLOYMENT.md` (the runbook the command
 | AI Gateway serving endpoint that serves a Claude model | argument 5 (default `databricks-claude-opus-5`) |
 | That endpoint's dated per-token price from the enterprise contract | argument 6, as `<endpoint>,<input_per_token>,<output_per_token>,<YYYY-MM-DD>` |
 | What one run may spend | argument 7 (default `25.00`; must cover one worst-case call, about 6.88 at the default price) |
-| Lakebase database, the two groups, the target | environment: `LAKEBASE_DATABASE` (`databricks_postgres`), `GROUP_ADMIN` (`caos-admins`), `GROUP_ANALYST` (`caos-analysts`), `TARGET` (`prod`) |
+| Lakebase database, the two groups, the target | environment: `LAKEBASE_DATABASE` (`databricks_postgres`), `GROUP_ADMIN` (`caos-admins`), `GROUP_ANALYST` (`caos-analysts`), `TARGET` (`prod`; the app is `caos` there and `caos-<target>` elsewhere, DP-6) |
 
 Substitute real values; drop the angle brackets.
 

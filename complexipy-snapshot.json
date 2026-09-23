@@ -213,7 +213,7 @@
     "functions": [
       {
         "name": "_capture",
-        "complexity": 22
+        "complexity": 16
       }
     ]
   }

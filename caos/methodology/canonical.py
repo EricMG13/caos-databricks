@@ -717,13 +717,27 @@ def blocked_verdict(  # noqa: PLR0913 -- one run's nodes, keyword-only
     return replayed.attempt_id
 
 
+_BLOB_LOST = frozenset({RefusalCode.BLOB_NOT_FOUND, RefusalCode.BLOB_DIGEST_MISMATCH})
+
+
 def _stored_body(blobs: BlobStore, diagnostic_sha256: str) -> str | None:
-    """A billed attempt's stored body. A blob that will not read is a store
-    fault, never a verdict: reading it as a refusal would pay again."""
+    """A billed attempt's stored body. A blob store that will not answer is a
+    store fault, never a verdict: reading it as a refusal would pay again. A
+    blob that is gone or corrupt (`BLOB_NOT_FOUND`, `BLOB_DIGEST_MISMATCH`)
+    is neither: it parks the run with that code (DL-5), where a store fault
+    would release it to the head of the queue and block every other run."""
+    lost: RefusalCode | None = None
+    data: bytes | None = None
     try:
         data = blobs.get(diagnostic_sha256)
-    except (OSError, Refusal):
-        data = None
+    except Refusal as refused:
+        lost = refused.code if refused.code in _BLOB_LOST else None
+    except OSError:
+        pass
+    # Raised outside the handler, so no driver or filesystem error rides
+    # along as context: the code is the whole of what travels.
+    if lost is not None:
+        raise Refusal(lost)
     if data is None:
         raise Refusal(RefusalCode.STORE_UNAVAILABLE)
     try:

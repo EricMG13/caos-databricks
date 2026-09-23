@@ -362,7 +362,11 @@ describe("Upload", () => {
     vi.stubGlobal("fetch", fetchSpy);
 
     const { container } = mount(live);
+    // Withdrawing asks once more before it is sent (finding FE-7).
     fireEvent.click(sourceRow(container, alive.source_id).querySelector("button")!);
+    fireEvent.click(
+      sourceRow(container, alive.source_id).querySelector("[data-confirm-yes]") as HTMLElement,
+    );
     await settle();
     await settle();
 

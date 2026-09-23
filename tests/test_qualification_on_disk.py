@@ -25,6 +25,7 @@ import json
 from dataclasses import replace
 from hashlib import sha256
 from pathlib import Path
+from typing import Any
 
 import pytest
 from canonical_fixtures import BUNDLE, CATALOG, research_brief
@@ -925,18 +926,16 @@ def test_an_undeclared_register_key_field_refuses(
 def test_a_register_key_carrying_a_bidi_control_is_refused_at_the_boundary(
     tmp_path: Path,
 ) -> None:
-    """A key is pinned state, so it crosses `BoundaryText` like a case label.
-
-    The code is the boundary's own, as it already is for a projection key: this
-    is not a manifest whose shape is wrong, it is a string that may not become
-    pinned state at all.
-    """
+    """A key is pinned state, so it crosses `BoundaryText` like a case label,
+    and what the boundary refuses reads as a malformed manifest (FP-08): the
+    loader is the one place that can name the file, so the code is its own,
+    never a boundary failure raised from nowhere."""
     # U+202E, one of the nine controls `BoundaryText` refuses.
     hostile = {**REGISTER_KEY, "column": "evidence\u202estatus"}
     with pytest.raises(Refusal) as refused:
         load_qualification_set(_write(tmp_path, _with_register([hostile])))
 
-    assert refused.value.code is RefusalCode.BOUNDARY_TEXT_INVALID
+    assert refused.value.code is RefusalCode.QUALIFICATION_SET_FILE_INVALID
 
 
 def test_the_vmo2_set_still_loads_with_its_register_key(tmp_path: Path) -> None:
@@ -981,3 +980,117 @@ def test_a_case_carries_its_research_brief_as_the_pins_canonical_text(
         with pytest.raises(Refusal) as refused:
             load_qualification_set(_write(tmp_path, manifest))
         assert refused.value.code is RefusalCode.QUALIFICATION_SET_FILE_INVALID
+
+
+def _first(manifest: dict[str, object]) -> dict[str, Any]:
+    """The manifest's first case, typed, so a test can amend one field of it."""
+    cases = manifest["cases"]
+    assert isinstance(cases, list)
+    case = cases[0]
+    assert isinstance(case, dict)
+    return case
+
+
+def test_a_forecast_value_that_is_not_two_strings_is_refused(tmp_path: Path) -> None:
+    """FP-08 and AR-25: `ForecastValue(**_closed(...))` took whatever JSON carried.
+
+    A float loaded as a float, so a key no host value could ever equal was paid
+    for and then read as a model miss; `NaN` made the digest raise an untyped
+    `ValueError`; and a list name reached the first ambiguity check unhashable.
+    The annotations say two strings, and the loader is where that becomes true.
+    """
+    malformed: tuple[dict[str, Any], ...] = (
+        {"name": "revenue.total", "value": 1240.0},
+        {"name": "revenue.total", "value": float("nan")},
+        {"name": [], "value": {}},
+        {"name": "revenue.total", "value": ""},
+    )
+    for value in malformed:
+        manifest = _manifest()
+        case = _first(manifest)
+        case["model_extension"] = True
+        case["forecast"] = {
+            "scenario": "BASE",
+            "period_id": "FY2027",
+            "values": [value],
+            "currency": "GBP",
+            "scale": "millions",
+            "perimeter": "GROUP",
+            "qa_status": "Passed",
+            "limitation_flags": [],
+            "readiness": [],
+        }
+        with pytest.raises(Refusal) as refused:
+            load_qualification_set(_write(tmp_path, manifest))
+        assert refused.value.code is RefusalCode.QUALIFICATION_SET_FILE_INVALID
+
+
+def test_a_quote_carrying_a_nul_is_refused_before_anything_is_spent(
+    tmp_path: Path,
+) -> None:
+    """FP-08: `matched_text` was unbounded and could carry a NUL.
+
+    The key passed `prepare`, the whole route was paid for, and then
+    `record_performed` failed with psycopg's `UntranslatableCharacter` --
+    surfacing as `STORE_UNAVAILABLE`, with the snapshot lost and no capture
+    written.
+    """
+    manifest = _manifest()
+    _first(manifest)["expects"][0]["matched_text"] = "Total debt\x00here"
+    with pytest.raises(Refusal) as refused:
+        load_qualification_set(_write(tmp_path, manifest))
+    assert refused.value.code is RefusalCode.QUALIFICATION_SET_FILE_INVALID
+
+
+def test_only_a_methodology_refusal_may_be_declared(tmp_path: Path) -> None:
+    """FP-01: the loader accepted any `RefusalCode` at all.
+
+    A set could declare `STORE_UNAVAILABLE` as its expected result and be signed
+    when one happened, which is qualifying an outage rather than a reading.
+    """
+    manifest = _manifest()
+    _first(manifest)["expected_refusal"] = "STORE_UNAVAILABLE"
+    with pytest.raises(Refusal) as refused:
+        load_qualification_set(_write(tmp_path, manifest))
+    assert refused.value.code is RefusalCode.QUALIFICATION_SET_FILE_INVALID
+
+    _first(manifest)["expected_refusal"] = "HANDOFF_BLOCKED"
+    [case, _other] = load_qualification_set(_write(tmp_path, manifest)).cases
+    assert case.expected_refusal is RefusalCode.HANDOFF_BLOCKED
+
+
+def test_the_set_is_bounded_before_its_documents_are_read(tmp_path: Path) -> None:
+    """AR-09: `_case` read and retained every listed document eagerly.
+
+    Each read was bounded on its own; the count and the total were not, so a
+    manifest listing one allowed file fifty-one times loaded fifty-one copies of
+    it before `admit_pack`'s ceiling refused the fifty-first.
+    """
+    from caos.evidence.extract import DEFAULT_LIMITS
+    from caos.qualification.on_disk import MAX_SET_BYTES, MAX_SET_DOCUMENTS
+
+    assert MAX_SET_DOCUMENTS >= DEFAULT_LIMITS.max_documents
+    assert MAX_SET_BYTES == DEFAULT_LIMITS.max_pack_bytes
+    manifest = _manifest()
+    _first(manifest)["documents"] = ["documents/acme-2026/report.txt"] * (
+        DEFAULT_LIMITS.max_documents + 1
+    )
+    with pytest.raises(Refusal) as refused:
+        load_qualification_set(_write(tmp_path, manifest))
+    assert refused.value.code is RefusalCode.QUALIFICATION_SET_FILE_INVALID
+
+
+def test_a_symlinked_document_is_recorded_under_its_declared_name(
+    tmp_path: Path,
+) -> None:
+    """FP-27: the filename came from the resolved target, and the digest covers
+    the filename -- so a set naming `report.txt` digested `other.txt`."""
+    root = _write(tmp_path, _manifest())
+    target = root / "documents" / "acme-2026" / "other.txt"
+    target.write_bytes(REPORT)
+    linked = root / "documents" / "acme-2026" / "report.txt"
+    linked.unlink()
+    linked.symlink_to(target)
+
+    [case, _other] = load_qualification_set(root).cases
+    assert case.documents[0].filename.value == "report.txt"

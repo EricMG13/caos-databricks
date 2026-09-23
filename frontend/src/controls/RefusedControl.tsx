@@ -29,6 +29,7 @@ export function RefusedControl({
   onClick,
   className = "",
   reasonDisplay = "inline",
+  busy = false,
   children,
   ...rest
 }: {
@@ -36,6 +37,8 @@ export function RefusedControl({
   onClick?: () => void;
   className?: string;
   reasonDisplay?: "inline" | "hidden";
+  /** A command this control sent has not answered yet. */
+  busy?: boolean;
   children: ReactNode;
   "aria-label"?: string;
 }) {
@@ -44,6 +47,7 @@ export function RefusedControl({
     <ActionReason
       reason={effective ? refusalText(effective) : null}
       reasonDisplay={reasonDisplay}
+      busy={busy}
       onClick={onClick}
       className={`${className}${effective ? " refused" : ""}`}
       data-refusal={effective?.code}

@@ -1,8 +1,10 @@
 """The edge guard: what a request must prove before anything else reads it.
 
-Phase 4 Task 4.5, decisions 2 to 6 (recorded in `docs/DECISIONS.md` §53), and
-Completion Phase 13 Task 13.4, which replaced the static shared secret with a
-signed per-request assertion (§93).
+The spec's §4 (`docs/rebuild/2026-09-22-caos-databricks-spec.md`) and D10 in
+`docs/rebuild/decisions.md`. The legacy host replaced its static shared secret
+with the signed per-request assertion described below; D10 then made the
+platform the edge, and SI-2 records that the assertion mode is still shipped
+here although the spec says it was removed.
 
 **The edge contract.** The operator's edge authenticates with OIDC and forwards
 only to a private API listener. It strips every inbound `x-caos-user`,
@@ -30,7 +32,7 @@ unbuffered with an idle timeout above 300 s.
   then reads are **the verified assertion's**: the guard removes every
   identity header the request arrived with and writes those two from the
   assertion, so a header a misconfigured proxy forwarded unsigned decides
-  nothing (`docs/COMPLETION_PLAN.md` Phase 13 exit check).
+  nothing.
 - *Dev mode* (no key): served only when both socket ends are loopback
   addresses and `Host` is `localhost`, `127.0.0.1` or `[::1]`. A published port
   on a keyless image therefore answers health and nothing else, and a DNS
@@ -45,9 +47,11 @@ identity header is 401 `NOT_AUTHENTICATED`; `/api` is checked for Origin and
 carries the security headers and policy, with no cookie and no CORS header.
 
 No header value is ever logged, formatted into a body or compared outside
-`hmac.compare_digest`: the refusal bodies are constants. The nonce register is
-one process's memory: the image runs one uvicorn worker, and a second process
-would hold a register of its own (recorded in `CLAUDE.md`'s ledger).
+`hmac.compare_digest`: the refusal bodies are constants, and an unhandled
+fault is logged as its class and the frame it was raised in, never its message
+(AS-6). The nonce register is one process's memory: the image runs one uvicorn
+worker, and a second process would hold a register of its own
+(`docs/rebuild/decisions.md`).
 """
 
 from __future__ import annotations
@@ -60,7 +64,9 @@ import ipaddress
 import json
 import os
 import re
+import sys
 import time
+import traceback
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
@@ -71,12 +77,15 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from caos.api.identity import (
     EDGE_TOKEN_ENV,
     GROUPS_HEADER,
+    HOST_ENV,
     PLATFORM_HEADER,
     ROLE_HEADER,
     SUBJECT_HEADER,
     TRUST_SWITCH,
     WORKSPACE_ENV,
+    workspace_address,
 )
+from caos.api.identity import PLATFORM_ENV as PLATFORM_ENV  # re-exported, see below
 from caos.api.wire import CLEARS, RefusalBody
 from caos.refusals import Refusal, RefusalCode
 
@@ -84,10 +93,12 @@ from caos.refusals import Refusal, RefusalCode
 IO_BUDGET = 0
 
 PUBLIC_ORIGIN_ENV = "CAOS_PUBLIC_ORIGIN"
-# Platform mode (D10): Databricks Apps set this for every app process. The
-# platform's proxy authenticates the caller and forwards a user token; there is
-# no assertion to verify and no loopback rule, and no header is believed.
-PLATFORM_ENV = "DATABRICKS_APP_NAME"
+# Platform mode (D10): Databricks Apps set `PLATFORM_ENV` for every app
+# process. The platform's proxy authenticates the caller and forwards a user
+# token; there is no assertion to verify and no loopback rule, and no header is
+# believed. The name is `caos/api/identity.py`'s, re-exported rather than
+# spelled a second time, so the mode the guard decides and the mode identity
+# decides can never be two different variables (EI-N5).
 EDGE_ASSERTION_HEADER = "x-caos-edge-assertion"
 MIN_KEY_BYTES = 32
 
@@ -188,18 +199,7 @@ def resolve_mode(environ: Mapping[str, str] | None = None) -> EdgeMode:
     env = os.environ if environ is None else environ
     key = env.get(EDGE_TOKEN_ENV)
     if env.get(PLATFORM_ENV):
-        # A key or the trust switch beside the platform is a configuration
-        # that cannot mean anything: the platform is the edge. And every
-        # subject is minted under the workspace id (F46): a process without
-        # one would name everybody under an empty workspace, so it refuses.
-        origin = env.get(PUBLIC_ORIGIN_ENV)
-        if key is not None or TRUST_SWITCH in env:
-            raise Refusal(RefusalCode.EDGE_CONFIG_INVALID)
-        if not env.get(WORKSPACE_ENV):
-            raise Refusal(RefusalCode.EDGE_CONFIG_INVALID)
-        if origin is not None and not _bare_origin(origin):
-            raise Refusal(RefusalCode.EDGE_CONFIG_INVALID)
-        return EdgeMode(key=None, public_origin=origin, platform=True)
+        return _platform_mode(env, key)
     if key is None:
         return EdgeMode(key=None, public_origin=None)
     encoded = key.encode()
@@ -212,6 +212,32 @@ def resolve_mode(environ: Mapping[str, str] | None = None) -> EdgeMode:
     ):
         raise Refusal(RefusalCode.EDGE_CONFIG_INVALID)
     return EdgeMode(key=encoded, public_origin=origin)
+
+
+def _platform_mode(env: Mapping[str, str], key: str | None) -> EdgeMode:
+    """Platform mode, or `EDGE_CONFIG_INVALID` for the four ways it is not one.
+
+    A key or the trust switch beside the platform is a configuration that
+    cannot mean anything: the platform is the edge. Every subject is minted
+    under the workspace id (F46), so a process without one would name
+    everybody under an empty workspace. And the workspace this process asks
+    about a caller's token has to be one it can reach: a `DATABRICKS_HOST`
+    with a non-numeric port, or an `http://` host that is not this machine,
+    used to be found on the first request -- the first as an untyped
+    `ValueError` answered 500, the second as a bearer sent in clear (EI-N2,
+    EI-N3). Boot is where a configuration is answered.
+    """
+    origin = env.get(PUBLIC_ORIGIN_ENV)
+    host = env.get(HOST_ENV)
+    if key is not None or TRUST_SWITCH in env:
+        raise Refusal(RefusalCode.EDGE_CONFIG_INVALID)
+    if not env.get(WORKSPACE_ENV):
+        raise Refusal(RefusalCode.EDGE_CONFIG_INVALID)
+    if origin is not None and not _bare_origin(origin):
+        raise Refusal(RefusalCode.EDGE_CONFIG_INVALID)
+    if host and workspace_address(host) is None:
+        raise Refusal(RefusalCode.EDGE_CONFIG_INVALID)
+    return EdgeMode(key=None, public_origin=origin, platform=True)
 
 
 def _bare_origin(value: str) -> bool:
@@ -404,6 +430,21 @@ def verify_assertion(  # noqa: PLR0913 -- the key, the header, the request and t
     return Asserted(subject=subject, groups=groups)
 
 
+def _logged(fault: BaseException) -> None:
+    """An unhandled fault, as its class and the frame it was raised in.
+
+    Never `str(fault)` (AS-6): an exception that quotes its input -- a
+    pydantic `ValidationError` carries `input_value=`, a driver error quotes a
+    parameter -- would put source text into the App's log, where the wire
+    refusal is careful to put nothing. The class and the frame are host facts,
+    which is exactly the pair `caos/graph/worker.py` writes for the same
+    reason. The wire body is `INTERNAL_FAULT` either way.
+    """
+    frames = traceback.extract_tb(fault.__traceback__)
+    where = f"{frames[-1].filename}:{frames[-1].lineno}" if frames else "?"
+    print(f"{type(fault).__name__} at {where}", file=sys.stderr)
+
+
 def _loopback(address: object) -> bool:
     if not isinstance(address, (list, tuple)) or not address:
         return False
@@ -452,9 +493,7 @@ class EdgeGuard:
         # carried, on the health path too (F44): what the application reads
         # is the verified assertion's, or nothing.
         edged = mode is None or mode.platform or mode.key is not None
-        scope["headers"] = _rewritten(
-            scope.get("headers", []), asserted, platform=edged
-        )
+        scope["headers"] = _rewritten(scope.get("headers", []), asserted, edged=edged)
         scope["caos.edge_guarded"] = True
         guarded = _secured(send, path)
         if refusal is not None:
@@ -470,12 +509,13 @@ class EdgeGuard:
 
         try:
             await self.app(scope, receive, tracked)
-        except Exception:
+        except Exception as fault:
             # Starlette's error middleware sits outside this one, so its 500
             # would skip the policy. Answer here first; it sees the response
-            # started, sends nothing, and still logs the fault.
+            # started and sends nothing.
             if not started:
                 await _refuse(guarded, RefusalCode.INTERNAL_FAULT)
+            _logged(fault)
             raise
 
     async def _lifespan(self, scope: Scope, receive: Receive, send: Send) -> None:
@@ -540,13 +580,18 @@ def _rewritten(
     headers: list[tuple[bytes, bytes]],
     asserted: Asserted | None,
     *,
-    platform: bool = False,
+    edged: bool = False,
 ) -> list[tuple[bytes, bytes]]:
     """The scope's headers without the assertion, and -- when one verified, or
-    behind the platform -- without any identity header the request carried,
-    the assertion's subject and groups written in their place."""
+    an edge exists at all -- without any identity header the request carried,
+    the assertion's subject and groups written in their place.
+
+    `edged` rather than `platform` (EI-N5): the caller passes True behind the
+    platform, in edge mode, *and* under a configuration that would not resolve,
+    so a name meaning only the first of the three misread the other two.
+    """
     dropped = {EDGE_ASSERTION_HEADER.encode()}
-    if asserted is not None or platform:
+    if asserted is not None or edged:
         dropped |= {name.encode() for name in _IDENTITY}
     kept = [(key, value) for key, value in headers if key.lower() not in dropped]
     if asserted is not None:

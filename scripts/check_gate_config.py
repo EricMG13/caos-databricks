@@ -80,6 +80,11 @@ SHIPPED = (
     "vendor/deploy-v/DEPLOY_V_INTEGRITY_v1.json",
     "vendor/deploy-v/CANON_SHARED.md",
     "vendor/deploy-v/skills/cp-0-source-readiness/SKILL.md",
+    # Nested `scripts/` and `tests/` directories, and a package directory
+    # that a denylist's `dir/**` once matched at every depth (C2).
+    "vendor/deploy-v/skills/cp-1-canonical-data-foundation/scripts/completeness_check.py",
+    "vendor/deploy-v/tests/test_regressions.py",
+    "caos/qualification/store.py",
     "icm/CONTEXT.md",
     "icm/HOST_INTEGRITY_v1.json",
     "icm/shared/prompt/instruction.md",
@@ -97,7 +102,7 @@ APP_ENVIRONMENT = frozenset(
     {
         "CAOS_BIND_HOST", "CAOS_WORKER_IN_PROCESS", "CAOS_SITE_ROOT",
         "CAOS_MODEL_ENDPOINT", "CAOS_MODEL_PRICE", "CAOS_RUN_CEILING",
-        "CAOS_UC_SCHEMA", "CAOS_BLOB_ROOT", "CAOS_LAKEBASE_INSTANCE",
+        "CAOS_BLOB_ROOT", "CAOS_LAKEBASE_INSTANCE",
         "CAOS_GROUP_ADMIN", "CAOS_GROUP_ANALYST",
     }
 )  # fmt: skip
@@ -180,6 +185,25 @@ def _matches(pattern: str, path: str) -> bool:
     return any(re.fullmatch(expression, part) for part in path.split("/"))
 
 
+def _sync_lists(sync: str) -> dict[str, list[str]]:
+    """The bundle's `sync` block as its lists: `paths`, `include`, `exclude`."""
+    lists: dict[str, list[str]] = {}
+    current: list[str] | None = None
+    for line in sync.splitlines():
+        if (key := re.fullmatch(r"  (\w+):\s*", line)) is not None:
+            current = lists.setdefault(key.group(1), [])
+        elif current is not None and (
+            item := re.fullmatch(r"\s+-\s*\"?([^\"\n#]+?)\"?\s*", line)
+        ):
+            current.append(item.group(1))
+    return lists
+
+
+def _under(path: str, listed: str) -> bool:
+    root = listed.rstrip("/")
+    return path == root or path.startswith(root + "/")
+
+
 def _read(root: Path, name: str) -> str | None:
     try:
         return (root / name).read_text(encoding="utf-8")
@@ -192,14 +216,20 @@ def _bundle_problems(root: Path) -> list[str]:
     bundle, app = _read(root, "databricks.yml"), _read(root, "app.yaml")
     if bundle is None or app is None:
         return ["bundle: databricks.yml or app.yaml missing"]
-    sync = bundle.partition("\nsync:")[2].partition("\ntargets:")[0]
-    excludes = re.findall(
-        r"^\s+-\s*\"?([^\"\n#]+?)\"?\s*$", sync.partition("exclude:")[2], re.M
-    )
-    for pattern in excludes:
-        for path in SHIPPED:
+    sync = _sync_lists(bundle.partition("\nsync:")[2].partition("\ntargets:")[0])
+    paths = sync.get("paths", [])
+    if not paths:
+        # A denylist shipped whatever a working tree held and dropped nested
+        # package directories (C2, TM-3); the allowlist is the rule.
+        problems.append("bundle: sync.paths is not set; the sync must be an allowlist")
+    for path in SHIPPED:
+        if paths and not any(_under(path, listed) for listed in paths):
+            problems.append(f"bundle: sync.paths does not carry {path}")
+        for pattern in sync.get("exclude", []):
             if _matches(pattern, path):
                 problems.append(f"bundle: sync.exclude {pattern!r} hides {path}")
+    if "frontend/dist/**" not in sync.get("include", []):
+        problems.append("bundle: sync.include lacks frontend/dist/** (git-ignored)")
     named = set(re.findall(r"^\s+-\s*name:\s*(CAOS_\w+)", bundle, re.M))
     for missing in sorted(APP_ENVIRONMENT - named):
         problems.append(f"bundle: env does not set {missing}")

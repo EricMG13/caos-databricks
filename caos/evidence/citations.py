@@ -104,7 +104,9 @@ TRACKING_EXTRACTORS = frozenset({"caos.pdfminer"})
 def _nfc(text: str) -> str:
     """The form the block was shown in: admission stores a token's own bytes
     but renders the line NFC, so a quote of what was shown must compare NFC
-    (F33). NFC is idempotent, so nothing that anchored before stops anchoring."""
+    (F33). Applied in the normalised pass alone, so a page carrying one word in
+    both forms still anchors the quote that equals one of them exactly (CR-4).
+    """
     return unicodedata.normalize("NFC", text)
 
 
@@ -409,13 +411,22 @@ def _match_at(
     `EDGE_PUNCTUATION` alone. The edges only: a word inside the run still has
     to equal its token, because forgiving punctuation there would let one quote
     stand for two different sentences of the page.
+
+    The exact pass compares the bytes and the normalised pass compares NFC.
+    F33's widening -- a quote of the NFC line the block showed against a token
+    stored in its own decomposed form -- belongs to the second pass, where the
+    ambiguity rule already runs only after an exact match has failed. Comparing
+    NFC in the *first* pass made a page that carries a word both composed and
+    decomposed answer `CITATION_AMBIGUOUS` for a quote that had anchored
+    uniquely before, at every later re-verification of an accepted record
+    (CR-4).
     """
     if start + len(words) > len(tokens):
         return []
     run = tokens[start : start + len(words)]
     last = len(words) - 1
     for position, (token, word) in enumerate(zip(run, words, strict=True)):
-        if _nfc(token.text) == _nfc(word):
+        if token.text == word or (normalised and _nfc(token.text) == _nfc(word)):
             continue
         edge = normalised and position in (0, last)
         if edge and _stripped(word) and _stripped(token.text) == _stripped(word):

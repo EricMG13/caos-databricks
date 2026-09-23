@@ -12,6 +12,7 @@ is read by this script and none is printed.
 
 from __future__ import annotations
 
+import json
 import sys
 from decimal import Decimal
 from pathlib import Path
@@ -41,7 +42,15 @@ def main() -> int:
     usage: dict[str, object] = dict(message.usage_metadata or {})
     completion = provider.complete(JSON_PROMPT, json_object=True)
     charge = completion.charge
-    json_mode = "accepted" if completion.refusal is None else completion.refusal.name
+    # The answer is parsed here, not only accepted (AR-17): JSON mode that
+    # the endpoint takes and ignores would otherwise pass the smoke and fail
+    # the first module call.
+    if completion.refusal is not None:
+        json_mode = completion.refusal.name
+    elif _json_object(completion.content):
+        json_mode = "accepted"
+    else:
+        json_mode = "not JSON"
     print(
         "gateway_smoke: endpoint={endpoint} model={kind} response_id={rid} "
         "input_tokens={i} output_tokens={o} charge={charge} "
@@ -56,7 +65,14 @@ def main() -> int:
         )
     )
     answered = isinstance(message.content, str | list)
-    return 0 if answered and completion.refusal is None else 1
+    return 0 if answered and json_mode == "accepted" else 1
+
+
+def _json_object(text: str | None) -> bool:
+    try:
+        return isinstance(json.loads(text or ""), dict)
+    except ValueError:
+        return False
 
 
 if __name__ == "__main__":

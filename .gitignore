@@ -18,3 +18,6 @@ frontend/test-results/
 
 # Another session's workflow worktrees, never part of the tree.
 .claude/worktrees/
+
+# Another session's live goal log at the repo root; the reviews it once held are docs/rebuild/findings-round2.md.
+/findings.md

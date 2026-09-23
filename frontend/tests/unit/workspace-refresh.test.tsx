@@ -279,12 +279,15 @@ describe("the workspace under its event tail", () => {
   test("test_a_reconnect_refetches_the_visible_documents", async () => {
     await mount("analysis", `/analysis/?case=${CASE}`);
     await answer(0, analysis());
+    // Every open refetches, the first included: an event landing between the
+    // document read and the stream's head is not replayed (finding FE-9).
     await fire("open");
-    expect(sent).toHaveLength(1);
+    expect(sent).toHaveLength(2);
+    await answer(1, analysis());
     FakeSource.all[0]!.readyState = FakeSource.CONNECTING;
     await fire("error");
     await fire("open");
-    expect(sent).toHaveLength(2);
+    expect(sent).toHaveLength(3);
   });
 
   test("test_a_refused_reconnect_closes_the_tail_and_the_region_is_unavailable", async () => {

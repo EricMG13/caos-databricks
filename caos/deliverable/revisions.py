@@ -16,6 +16,21 @@ from caos.store.audit import GovernedAction, governed_write
 from caos.store.members import Standing
 
 
+def _is_figure(character: str) -> bool:
+    """Whether this character states a quantity, in any script (invariant 11).
+
+    `"0" <= character <= "9"` saw ASCII and nothing else, while `BoundaryText`
+    applies NFC, which keeps every other spelling of a digit: fullwidth digits
+    pasted from a Japanese or Chinese statement, Arabic-Indic ones, and vulgar
+    fractions, Roman numerals and mathematical digits besides -- each stored as
+    an uncited figure in committee prose against invariant 11 (FP-06).
+    `str.isnumeric` is the whole class: every `isdigit` and `isdecimal`
+    character is numeric, and the fractions and numerals that are neither are
+    numeric too.
+    """
+    return character.isnumeric()
+
+
 def _narrative(value: object, artifacts: list[dict[str, Any]]) -> list[Any]:
     invalid = Refusal(RefusalCode.NARRATIVE_REFERENCE_INVALID)
     if not isinstance(value, list) or len(value) > 64:
@@ -38,7 +53,7 @@ def _span(span: object, records: dict[str, Any]) -> dict[str, Any]:
         text = BoundaryText.of(
             text.value if isinstance(text, BoundaryText) else text, limit=2000
         )
-        if any("0" <= character <= "9" for character in text.value):
+        if any(_is_figure(character) for character in text.value):
             raise Refusal(RefusalCode.NARRATIVE_FIGURE_UNREFERENCED)
         return {"text": text.value}
     if set(span) != {"figure"} or not isinstance(span["figure"], dict):

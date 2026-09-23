@@ -145,7 +145,26 @@ def _signed(  # noqa: PLR0913 -- one command's identity, key and document
     evidence = evidence_at(conn, evidence_sha256=evidence_sha256)
     if evidence is None:
         raise Refusal(RefusalCode.QUALIFICATION_EVIDENCE_NOT_FOUND)
-    record_verdict(conn, evidence=evidence, reviewer_id=reviewer_id, verdict=verdict)
+    try:
+        record_verdict(
+            conn, evidence=evidence, reviewer_id=reviewer_id, verdict=verdict
+        )
+    except Refusal as refused:
+        if refused.code is not RefusalCode.VERDICT_ALREADY_RECORDED:
+            raise
+        # A twin of this request took the verdict while it was in flight. Both
+        # missed the receipt above, one committed, and the loser's insert
+        # collided -- which was answered as a wrong binding although exactly one
+        # verdict and one receipt persisted (AR-10). The committed receipt is
+        # recovered after the duplicate's rollback, so an identical concurrent
+        # signature replays what won. A *different* request under this key, or
+        # the same reviewer signing this evidence again under a fresh key, finds
+        # no receipt and keeps the refusal: that one really is already recorded.
+        rollback_or_close(conn)
+        twin = find_receipt(conn, actor_id=reviewer_id, scope=NIL_SCOPE, key=key)
+        if twin is None:
+            raise
+        return _replayed(conn, twin, request_sha256)
     receipt = VerdictRecorded(
         evidence_sha256=evidence_sha256,
         reviewer_id=reviewer_id,

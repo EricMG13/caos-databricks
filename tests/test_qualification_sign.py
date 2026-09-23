@@ -589,3 +589,69 @@ def test_a_store_fault_while_signing_is_503_and_not_a_binding_error(
     assert answer.json()["code"] == "STORE_UNAVAILABLE"
     app.dependency_overrides[store_connection] = lambda: conn
     assert _rows(conn) == ([], 1)
+
+
+def test_the_same_reviewer_signing_again_under_a_new_key_is_already_recorded(
+    client: tuple[TestClient, StoreConnection],
+) -> None:
+    """AR-10's other side: the twin recovery must not swallow a real repeat.
+
+    The primary key `(evidence_sha256, reviewer_id)` collides before
+    `one_verdict_per_evidence` does, and both mean the same thing -- this
+    evidence already carries a verdict. A fresh key finds no receipt to replay,
+    so the refusal stands and the reviewer is told what happened.
+    """
+    http, conn = client
+    evidence = qualification_performed().evidence
+    reviewer = uuid4()
+    assert (
+        _sign(http, evidence.sha256, _document(evidence), reviewer).status_code == 201
+    )
+
+    again = _sign(http, evidence.sha256, _document(evidence), reviewer)
+
+    assert again.status_code == 409, again.text
+    assert again.json()["code"] == "VERDICT_ALREADY_RECORDED"
+    assert len(_rows(conn)[0]) == 1
+
+
+def test_a_twin_of_an_in_flight_signature_replays_the_commit_that_won(
+    client: tuple[TestClient, StoreConnection], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """AR-10: two concurrent identical signatures answered 201 and HTTP 400.
+
+    Both requests miss the receipt, one commits, and the loser's insert collides
+    on the primary key -- which was mapped to `VERDICT_BINDING_INVALID`, a false
+    answer about a request whose bindings were right and whose verdict and
+    receipt both persisted. The committed receipt is recovered after the
+    duplicate's rollback, so the twin replays it. The miss is simulated here
+    because it is exactly a race: the twin looked before the winner committed.
+    """
+    from caos.store.commands import StoredReceipt, find_receipt
+
+    http, conn = client
+    evidence = qualification_performed().evidence
+    reviewer, key = uuid4(), uuid4()
+    body = _document(evidence)
+    first = _sign(http, evidence.sha256, body, reviewer, key=key)
+    assert first.status_code == 201
+    assert REPLAYED_HEADER not in first.headers
+
+    original = find_receipt
+    misses = [True]
+
+    def missing_once(
+        conn: StoreConnection, *, actor_id: UUID, scope: UUID, key: UUID
+    ) -> StoredReceipt | None:
+        if misses:
+            misses.pop()
+            return None
+        return original(conn, actor_id=actor_id, scope=scope, key=key)
+
+    monkeypatch.setattr(sign_command, "find_receipt", missing_once)
+    twin = _sign(http, evidence.sha256, body, reviewer, key=key)
+
+    assert twin.status_code == 201, twin.text
+    assert twin.headers[REPLAYED_HEADER] == "true"
+    assert twin.json() == first.json()
+    assert len(_rows(conn)[0]) == 1

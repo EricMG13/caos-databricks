@@ -6,7 +6,7 @@
 #
 # Optional, by environment: TARGET (prod), LAKEBASE_DATABASE (databricks_postgres),
 # GROUP_ADMIN (caos-admins), GROUP_ANALYST (caos-analysts), PG_PORT (5432),
-# PG_SSLMODE (require), EVIDENCE (docs/rebuild/runs/<today>/enterprise).
+# PG_SSLMODE (require), EVIDENCE (docs/rebuild/runs/<today>/enterprise/<time>).
 # An empty profile means the SDK's ambient auth (DATABRICKS_HOST and a token).
 #
 # Steps E1..E9 are described in scripts/enterprise_deploy.py; the three
@@ -30,15 +30,21 @@ GROUP_ADMIN="${GROUP_ADMIN:-caos-admins}"
 GROUP_ANALYST="${GROUP_ANALYST:-caos-analysts}"
 PG_PORT="${PG_PORT:-5432}"
 PG_SSLMODE="${PG_SSLMODE:-require}"
-EVIDENCE="${EVIDENCE:-docs/rebuild/runs/$(date -u +%F)/enterprise}"
+# One directory per run (N2): a rerun after an unverified row never
+# interleaves its rows with the first run's.
+EVIDENCE="${EVIDENCE:-docs/rebuild/runs/$(date -u +%F)/enterprise/$(date -u +%H%M%S)}"
 mkdir -p "$EVIDENCE"
 
-VALUES=(--evidence "$EVIDENCE" --profile "$PROFILE" --catalog "$CATALOG" --schema "$SCHEMA"
+VALUES=(--evidence "$EVIDENCE" --profile "$PROFILE" --target "$TARGET"
+  --catalog "$CATALOG" --schema "$SCHEMA"
   --lakebase-instance "$INSTANCE" --lakebase-database "$LAKEBASE_DATABASE"
   --endpoint "$ENDPOINT" --price "$PRICE" --run-ceiling "$CEILING"
   --group-admin "$GROUP_ADMIN" --group-analyst "$GROUP_ANALYST"
   --pg-port "$PG_PORT" --pg-sslmode "$PG_SSLMODE")
-VARS=(--var "model_endpoint=$ENDPOINT" --var "model_price=$PRICE" --var "run_ceiling=$CEILING"
+# The price holds commas, and the CLI splits a `--var` value on commas (C1);
+# the environment form carries it whole.
+export BUNDLE_VAR_model_price="$PRICE"
+VARS=(--var "model_endpoint=$ENDPOINT" --var "run_ceiling=$CEILING"
   --var "uc_catalog=$CATALOG" --var "uc_schema=$SCHEMA" --var "lakebase_instance=$INSTANCE"
   --var "lakebase_database=$LAKEBASE_DATABASE" --var "group_admin=$GROUP_ADMIN"
   --var "group_analyst=$GROUP_ANALYST")
@@ -49,7 +55,7 @@ uv run python scripts/enterprise_deploy.py --stage before "${VALUES[@]}"
 
 bundle() {  # id, verb...
   local id="$1"; shift
-  local log="$EVIDENCE/$id.out" code=0
+  local log="$EVIDENCE/$id.log" code=0
   databricks bundle "$@" -t "$TARGET" ${PROFILE_FLAG[@]+"${PROFILE_FLAG[@]}"} "${VARS[@]}" > "$log" 2>&1 || code=$?
   uv run python scripts/enterprise_deploy.py --stage record --evidence "$EVIDENCE" \
     --step "$id" --command "databricks bundle $* -t $TARGET" --code "$code" --log "$log"

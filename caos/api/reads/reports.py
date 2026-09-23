@@ -63,7 +63,7 @@ from caos.store.outcomes import execution_reads
 # same LITE route: isolation and standing (2), the head (1), the run and its
 # title (1), and the payload derivation a first save would make (38) -- the
 # derivation the saved path proves, less the stored revision's own reads.
-IO_BUDGET = {"report": 45, "committee": 59, "frozen": 52, "unsaved": 42}
+IO_BUDGET = {"report": 45, "committee": 19, "frozen": 52, "unsaved": 42}
 router = APIRouter()
 
 
@@ -158,7 +158,6 @@ def _read(  # noqa: PLR0913 -- both documents share one authorization/proof unit
                 read_filed_receipt(
                     conn,
                     blobs,
-                    bundle,
                     case_id=case_id,
                     run_id=run,
                     revision_id=revision,

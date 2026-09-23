@@ -444,7 +444,7 @@ Locations:
   - `tracked.py` excludes all of `vendor/`;
   - ruff's `extend-exclude = ["vendor"]` matches at any depth;
   - mypy, coverage and the PR-size check exclude `vendor/`.
-  
+
   So a new `vendor/helpers/x.py` escapes every gate, and `caos/vendor/x.py` escapes ruff.
 - **Wiring checked for presence only:**
   - Hooks are matched by `id:` alone, so `entry: "true"`, `--exit-zero` or `stages: [manual]` all pass.

@@ -12,7 +12,10 @@ The frame says what those coordinates are, read from the digest-verified
 document under the stored extractor identity: a `caos.pdfminer` v2 row's
 rectangles are crop-relative with y down (§44.3), a v1 row's are pdfminer's
 layout space with y up (§44.4), and a `caos.plain-text` row's are the cells of
-its recorded fixed pitch. PDF frames come from the §47 child.
+its recorded fixed pitch. PDF frames come from the §47 child, and a crop that
+child has already answered for a document is remembered in process
+(`FRAME_CACHE_SIZE`): it is derived from a digest-addressed document and a page
+number, so it cannot go stale, and the child costs an interpreter each time.
 
 The store is read first and the read unit is ended before the document is
 read or the child is run, so an extraction that takes seconds holds no
@@ -36,7 +39,9 @@ from __future__ import annotations
 
 import json
 import math
+import threading
 import time
+from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Any, Literal
 from uuid import UUID
@@ -134,7 +139,8 @@ def read_page(  # noqa: PLR0913 -- the store, the blobs and one page's four ids
     name, version, config = _identity(identity)
     data = _document(blobs, document)
     deadline = time.monotonic() + limits.max_seconds
-    frame = _frame(name, version, config, data, page, limits, deadline)
+    crop = _Crop(document, data, limits, deadline)
+    frame = _frame(name, version, config, crop, page)
     lines = [row for row in rows if row[2] is not None]
     body = PageBody(
         case_id=case_id,
@@ -193,18 +199,85 @@ def _document(blobs: BlobStore, digest: str) -> bytes:
     return data
 
 
-def _frame(  # noqa: PLR0913 -- one identity, one document, one page and its bounds
+# How many page crops the process remembers. A crop is four floats derived
+# from immutable inputs -- a digest-addressed document and a page number -- so
+# it is the same answer however often it is asked for, and the ceiling is what
+# stops a reader paging through many large documents from holding them all.
+FRAME_CACHE_SIZE = 256
+# `(document digest, page)` to that page's crop, most recently read last. Only
+# crops that were read: a refusal can be a deadline the load made, and a
+# transient failure is not a fact about a document (AS-5).
+_FRAMES: OrderedDict[tuple[str, int], tuple[float, float, float, float]] = OrderedDict()
+# Sync routes run in the threadpool, so two readers share this dictionary. The
+# lock covers the read-then-reorder and the write-then-evict, which are not one
+# operation: without it a key evicted between a `get` and its `move_to_end`
+# raises `KeyError` past every typed refusal this module states. The child runs
+# outside the lock, so one slow extraction never blocks another page's read.
+_FRAMES_LOCK = threading.Lock()
+
+
+def _remembered(key: tuple[str, int]) -> tuple[float, float, float, float] | None:
+    with _FRAMES_LOCK:
+        frame = _FRAMES.get(key)
+        if frame is not None:
+            _FRAMES.move_to_end(key)
+        return frame
+
+
+def _remember(key: tuple[str, int], frame: tuple[float, float, float, float]) -> None:
+    with _FRAMES_LOCK:
+        _FRAMES[key] = frame
+        _FRAMES.move_to_end(key)
+        while len(_FRAMES) > FRAME_CACHE_SIZE:
+            _FRAMES.popitem(last=False)
+
+
+@dataclass(frozen=True, slots=True)
+class _Crop:
+    """One document's bytes with the digest they are addressed by, and the
+    bounds a crop read of them runs under."""
+
+    document_sha256: str
+    data: bytes
+    limits: AdmissionLimits
+    deadline: float
+
+
+def _page_crop(crop: _Crop, page: int) -> tuple[float, float, float, float] | None:
+    """Page `page`'s crop in pdfminer's layout space, from the §47 child or
+    from the cache of what that child already answered for these bytes.
+
+    Every evidence-page read of a PDF source starts an interpreter that walks
+    the page tree with a 60 s budget, at READER standing (AS-5). The crop is a
+    pure function of the pinned document and the page, and `BlobStore.get` has
+    already proven the bytes hash to `document_sha256`, so the digest and the
+    page are the whole key.
+    """
+    key = (crop.document_sha256, page)
+    remembered = _remembered(key)
+    if remembered is not None:
+        return remembered
+    # Imported here: plain-text pages should not pay for pdfminer.
+    from caos.evidence.pdf import page_frame
+
+    try:
+        frame = page_frame(crop.data, page, limits=crop.limits, deadline=crop.deadline)
+    except Refusal:
+        return None
+    _remember(key, frame)
+    return frame
+
+
+def _frame(
     name: str,
     version: str,
     config: dict[str, Any],
-    data: bytes,
+    crop: _Crop,
     page: int,
-    limits: AdmissionLimits,
-    deadline: float,
 ) -> FrameView:
     """The frame the stored identity's rectangles are drawn in (decision 8)."""
     if name == "caos.plain-text":
-        return _text_frame(config, data, page)
+        return _text_frame(config, crop.data, page)
     pdf_v1 = name == "caos.pdfminer" and version == "1"
     pdf_v2 = (
         name == "caos.pdfminer"
@@ -213,20 +286,13 @@ def _frame(  # noqa: PLR0913 -- one identity, one document, one page and its bou
     )
     if not (pdf_v1 or pdf_v2):
         raise Refusal(RefusalCode.SOURCE_IDENTITY_INVALID)
-    # Imported here: plain-text pages should not pay for pdfminer.
-    from caos.evidence.pdf import page_frame
-
-    crop: tuple[float, float, float, float] | None
-    try:
-        crop = page_frame(data, page, limits=limits, deadline=deadline)
-    except Refusal:
-        crop = None
-    if crop is None:
+    box = _page_crop(crop, page)
+    if box is None:
         raise Refusal(RefusalCode.PAGE_NOT_AVAILABLE)
-    (left, bottom, right, top) = crop
+    (left, bottom, right, top) = box
     if pdf_v2:
         return _view((0.0, 0.0, right - left, top - bottom), "down")
-    return _view(crop, "up")
+    return _view(box, "up")
 
 
 def _text_frame(config: dict[str, Any], data: bytes, page: int) -> FrameView:

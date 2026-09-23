@@ -1,4 +1,6 @@
+import { useEffect } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router";
+import { pageTitle } from "./heading";
 import { forward, sectionFromPath } from "./sections";
 import { Workspace } from "./Workspace";
 import { Rail } from "@/chrome/Rail";
@@ -9,12 +11,17 @@ function Absent() {
   const { search } = useLocation();
   const caseId = new URLSearchParams(search).get("case");
   const caseSearch = caseId ? `?case=${encodeURIComponent(caseId)}` : "";
+  useEffect(() => {
+    document.title = pageTitle("Unavailable", caseId);
+  }, [caseId]);
   return (
     <div className="ap" data-section="absent">
       <div className="frame">
         <Rail section={null} entries={null} local={null} servedRole={null} search={caseSearch} />
         <main className="body" id="body" aria-label="Unavailable">
-          <h1 className="sr-only">Unavailable</h1>
+          <h1 className="sr-only" tabIndex={-1}>
+            Unavailable
+          </h1>
           <RegionState status={{ kind: "unavailable" }}>{() => null}</RegionState>
         </main>
       </div>
@@ -28,7 +35,11 @@ function Resolve() {
   if (forwarded) return <Navigate to={forwarded.to} replace />;
   const section = sectionFromPath(pathname);
   if (!section) return <Absent />;
-  return <Workspace key={section} section={section} />;
+  // Not keyed on the section: the rail, which is the only navigation, must
+  // outlive a navigation so the link that was just activated keeps its place
+  // in the tab order (finding FE-4). Everything the reader sees is already
+  // keyed on the request that produced it, inside the workspace.
+  return <Workspace section={section} />;
 }
 
 /** The evidence surface lives in the Workspace, under the visible snapshot it

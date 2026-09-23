@@ -19,7 +19,7 @@ import {
 
 interface ActionReasonProps extends Omit<
   ButtonHTMLAttributes<HTMLButtonElement>,
-  "onClick" | "title" | "aria-disabled" | "aria-describedby"
+  "onClick" | "title" | "aria-disabled" | "aria-describedby" | "aria-busy"
 > {
   /** Non-empty → the action is inert and this explains why. Null/undefined → live. */
   reason?: string | null;
@@ -28,6 +28,9 @@ interface ActionReasonProps extends Omit<
   /** "inline" renders the visible reason line; "hidden" keeps it sr-only for
    * tight toolbars where title + screen-reader coverage must suffice. */
   reasonDisplay?: "inline" | "hidden";
+  /** A request this control started is still in flight: the control is inert
+   * until it answers, and says so rather than looking idle. */
+  busy?: boolean;
   onClick?: () => void;
   children: ReactNode;
 }
@@ -100,6 +103,7 @@ export function ActionReason({
   reason,
   actionTitle,
   reasonDisplay = "inline",
+  busy = false,
   onClick,
   children,
   type = "button",
@@ -112,16 +116,22 @@ export function ActionReason({
   // reason surfaces for a few seconds after the attempt (announced via
   // role=status).
   const handleClick = inert ? reveal : onClick;
+  // While a request is in flight the visible text is the state ("Creating…"),
+  // so a fixed aria-label would override the one thing that changed. The
+  // label returns with the idle text.
+  const { "aria-label": label, ...attributes } = rest;
   return (
     <>
       <button
         ref={buttonRef}
         type={type}
-        aria-disabled={inert || undefined}
+        aria-disabled={inert || busy || undefined}
+        aria-busy={busy || undefined}
+        aria-label={busy ? undefined : label}
         title={reason || actionTitle || undefined}
         aria-describedby={inert ? reasonId : undefined}
-        onClick={handleClick}
-        {...rest}
+        onClick={busy ? undefined : handleClick}
+        {...attributes}
       >
         {children}
       </button>

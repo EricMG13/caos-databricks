@@ -12,6 +12,7 @@ import dataclasses
 import hashlib
 import json
 import shutil
+import time
 from collections.abc import Callable
 from functools import partial
 from pathlib import Path
@@ -44,6 +45,7 @@ from caos.methodology.bundle import (
     delivered_authority_digest,
 )
 from caos.methodology.handoff import (
+    MAX_CITATIONS,
     RECORD_FORMAT,
     CanonicalRecord,
     LineageRef,
@@ -389,6 +391,39 @@ def test_an_unbounded_page_or_a_repeated_citation_refuses(
 def test_an_oversized_transport_refuses_before_parsing() -> None:
     body = " " * (2 * 26_214_400 + 1)
     assert _parse_refused(body) is RefusalCode.HANDOFF_MALFORMED
+
+
+def test_more_citations_than_a_handoff_may_carry_refuse() -> None:
+    """AI-5: nothing bounded the count, and each one was checked against the
+    body by a scan of the whole body. A few thousand of them spent about a
+    minute of worker time, on the attempt and again on every replay of it."""
+    quotes = [_citation(matched_text=f"word{n}") for n in range(MAX_CITATIONS + 1)]
+    assert _parse_refused(wire(CP0_MD, quotes)) is RefusalCode.HANDOFF_MALFORMED
+
+
+def test_the_body_is_indexed_once_rather_than_scanned_per_citation() -> None:
+    """The same answer as the scan, at the ceiling, in a time a worker can
+    spend: the body's words are indexed once and each quote looks only at the
+    positions its first word occupies."""
+    words = [f"w{n}" for n in range(40_000)]
+    body = "---\nmodule_id: CP-0\n---\n\n" + " ".join(words) + "\n"
+    quotes = [
+        _citation(matched_text=" ".join(words[-3 - n : -n or None]))
+        for n in range(MAX_CITATIONS)
+    ]
+    started = time.perf_counter()
+    markdown, citations = parse_response(
+        wire(body.encode(), quotes), delivered=DELIVERED
+    )
+    spent = time.perf_counter() - started
+    assert len(citations) == MAX_CITATIONS and markdown
+    assert spent < 2.0, spent
+    # A quote the body does not carry is still refused, index or no index.
+    missing = _citation(matched_text="w1 w0 w2")
+    assert (
+        _parse_refused(wire(body.encode(), [*quotes[:1], missing]))
+        is RefusalCode.HANDOFF_MALFORMED
+    )
 
 
 def test_a_record_contradicting_its_own_identity_refuses(tmp_path: Path) -> None:

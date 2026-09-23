@@ -22,7 +22,7 @@ from math import inf, isfinite
 from uuid import UUID, uuid4
 
 from caos.blobs import BlobStore
-from caos.boundary_text import DEFAULT_LIMIT, BoundaryText
+from caos.boundary_text import DEFAULT_LIMIT, BoundaryText, hides_text
 from caos.digest import canonical_digest
 from caos.evidence.extract import (
     DEFAULT_LIMITS,
@@ -133,9 +133,11 @@ def prepare_pack(
     JSON column on the source row, which is the ~8x read defect
     `docs/AI_CODE_QUALITY.md` section 1 measures.
 
-    `limits` bounds the pack (document count, pack bytes) and each document
-    (document bytes, then -- inside its extractor -- pages, tokens and
-    extraction time) before the expensive step each ceiling guards (§44.1).
+    `limits` bounds the pack (document count, pack bytes, and the tokens its
+    documents hold together) and each document (document bytes, then -- inside
+    its extractor -- pages, tokens and extraction time) before the expensive
+    step each ceiling guards (§44.1). Text no reader can see refuses the pack
+    here too, in `_prepare`.
     """
     if not documents:
         raise Refusal(RefusalCode.SOURCE_PACK_EMPTY)
@@ -144,9 +146,18 @@ def prepare_pack(
     # Extract everything first. A document that cannot be read must refuse the
     # pack before any of it is written, not after some of it is.
     pack_deadline = time.monotonic() + limits.max_pack_seconds
-    extracted = [
-        _extract(dispatch, document, limits, pack_deadline) for document in documents
-    ]
+    extracted: list[tuple[str, list[Token]]] = []
+    packed_tokens = 0
+    for document in documents:
+        identity, tokens = _extract(dispatch, document, limits, pack_deadline)
+        packed_tokens += len(tokens)
+        if packed_tokens > limits.max_pack_tokens:
+            # The pack's own ceiling, checked as each document arrives rather
+            # than after all of them are in memory: fifty documents each
+            # inside `max_tokens` are still one request the process cannot
+            # hold (Phase 12 adversarial audit).
+            raise Refusal(RefusalCode.SOURCE_TOO_LARGE)
+        extracted.append((identity, tokens))
     if any(not tokens for _identity, tokens in extracted):
         # Readable bytes, no text: a scanned page. Admitting it would put a
         # source in the pinned set that can never support a citation, and
@@ -158,12 +169,17 @@ def prepare_pack(
     # rather than at the write, for the same reason the check above is here:
     # a line the boundary refuses is a line `read_evidence` refuses, so
     # admitting it would pin a source no run can read.
-    return PreparedPack(
-        tuple(
-            _prepare(document, tokens, identity)
-            for document, (identity, tokens) in zip(documents, extracted, strict=True)
-        )
-    )
+    #
+    # One document at a time, dropping each raw token list as `_prepare`
+    # replaces it: `_prepare` builds a second `Token` per token, so holding
+    # every raw list would keep two copies of the whole pack rather than two
+    # copies of one document.
+    prepared: list[_Packed] = []
+    for position, document in enumerate(documents):
+        identity, tokens = extracted[position]
+        prepared.append(_prepare(document, tokens, identity))
+        extracted[position] = (identity, [])
+    return PreparedPack(tuple(prepared))
 
 
 def admit_prepared(
@@ -173,10 +189,23 @@ def admit_prepared(
 
     Never commits: a refusal part way leaves rows the caller rolls back, and the
     blobs already put are harmless content-addressed orphans.
+
+    Every document is put in the volume *before* the case lock is taken, the
+    way `prepare_pack` extracts before it: on Databricks each put is a Files
+    API upload, and fifty of them inside the lock held `cases ... FOR UPDATE`
+    -- and so every fenced write of every run in the case, which takes the
+    case lock first -- for as long as the uploads took (DL-7). The puts are
+    content-addressed and the docstring above already says an orphan is
+    harmless, so moving them out of the lock costs nothing but the orphan a
+    refused insert leaves, which is what it left before.
     """
     _require_case(conn, case_id)
+    stored = [blobs.put(one.document.data) for one in pack.documents]
     lock_case(conn, case_id)
-    return [_admit_one(conn, blobs, case_id, one) for one in pack.documents]
+    return [
+        _admit_one(conn, case_id, one, digest)
+        for one, digest in zip(pack.documents, stored, strict=True)
+    ]
 
 
 def _check_pack_limits(documents: Sequence[Document], limits: AdmissionLimits) -> None:
@@ -249,6 +278,25 @@ def _identity(reader: Extractor) -> str:
         raise Refusal(RefusalCode.SOURCE_IDENTITY_INVALID) from None
 
 
+def _refuse_hidden_text(blocks: list[_Block]) -> None:
+    """Refuse a document carrying text no reader of it can see (AI-2).
+
+    Tag characters, a zero-width space, a word joiner: the approver of the
+    source set signs off a preview that does not show them, and every module
+    reads them as evidence -- an instruction smuggled past the one human gate
+    on what a run is given. Read over the packed blocks, which carry every
+    token's text joined line by line, so it is one pass over the document
+    rather than one per token.
+
+    `SOURCE_NOT_READABLE` is what it is: a document no reader can read as it
+    is written. Refused here, where the pack is still whole and nothing has
+    been pinned, rather than at every later read of a source the case is
+    already carrying.
+    """
+    if any(hides_text(block.text.value) for block in blocks):
+        raise Refusal(RefusalCode.SOURCE_NOT_READABLE)
+
+
 def _prepare(document: Document, tokens: list[Token], identity: str) -> _Packed:
     prepared: list[Token] = []
     try:
@@ -269,6 +317,7 @@ def _prepare(document: Document, tokens: list[Token], identity: str) -> _Packed:
     except (AttributeError, TypeError, ValueError, OverflowError):
         raise Refusal(RefusalCode.SOURCE_IDENTITY_INVALID) from None
     blocks = _blocks(prepared)
+    _refuse_hidden_text(blocks)
     output = canonical_digest(
         {
             "format_version": 1,
@@ -298,8 +347,10 @@ def _require_case(conn: StoreConnection, case_id: UUID) -> None:
 
 
 def _admit_one(
-    conn: StoreConnection, blobs: BlobStore, case_id: UUID, packed: _Packed
+    conn: StoreConnection, case_id: UUID, packed: _Packed, document_sha256: str
 ) -> UUID:
+    """One source's rows, under the case lock. `document_sha256` is what the
+    volume answered when `admit_prepared` put the bytes, before the lock."""
     source_id = uuid4()
     conn.execute(
         "INSERT INTO sources (source_id, case_id, document_sha256, filename)"
@@ -307,7 +358,7 @@ def _admit_one(
         (
             source_id,
             case_id,
-            blobs.put(packed.document.data),
+            document_sha256,
             packed.document.filename.value,
         ),
     )

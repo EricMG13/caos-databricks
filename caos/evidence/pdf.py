@@ -24,9 +24,11 @@ already tested -- which is what a seam is for.
 The walk runs in a child interpreter (§47). One page of a few kilobytes can
 inflate to gigabytes or hold millions of operators, and neither is visible
 between pages, so the parent kills the child at the deadline and the child's
-inflater refuses past `max_decoded_bytes`: both bounds hold whatever pdfminer is
-doing. The child is `python -I` with an empty environment -- no credential, no
-caller's `__main__` re-run -- and speaks JSON, so nothing it prints is code.
+decoders -- every filter pdfminer can apply, not `zlib` alone -- refuse past
+`max_decoded_bytes`, under an address-space limit where the platform has one:
+the bounds hold whatever pdfminer is doing. The child is `python -I` with an
+empty environment -- no credential, no caller's `__main__` re-run -- and speaks
+JSON, so nothing it prints is code.
 """
 
 from __future__ import annotations
@@ -38,7 +40,7 @@ import subprocess  # nosec B404
 import sys
 import time
 import zlib
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import asdict, astuple, dataclass
 from importlib.metadata import version
 from io import BytesIO
@@ -161,9 +163,21 @@ def page_frame(
 
 
 def _finite(deadline: float | None, limits: AdmissionLimits) -> float:
-    """A caller that names no deadline gets the limits' own: an entry point
-    for untrusted bytes never waits forever on a child (F56)."""
-    return time.monotonic() + limits.max_seconds if deadline is None else deadline
+    """A caller that names no deadline gets the limits' own, and one that names
+    a deadline no clock reaches gets it too.
+
+    An entry point for untrusted bytes never waits forever on a child (F56),
+    and `float('inf')` is exactly that wait: `communicate(timeout=inf)` raises
+    `OverflowError` out of the selector, untyped, past every refusal this
+    module states (AR-16/CR-10). NaN is the same wait by another spelling --
+    every comparison against it is false -- so both are clamped to the limits'
+    own seconds rather than refused: a caller asking for no deadline gets the
+    host's, which is what `None` already means here.
+    """
+    own = time.monotonic() + limits.max_seconds
+    if deadline is None or not math.isfinite(deadline):
+        return own
+    return deadline
 
 
 def _in_child(
@@ -172,10 +186,10 @@ def _in_child(
     """The child's answer to `header` and `data` with its exit status, or
     `SOURCE_EXTRACTION_TIMEOUT` once `deadline` passes, with the child killed."""
     line = json.dumps({**header, "deadline": deadline}).encode()
-    # A caller may still choose no deadline explicitly; the entry points
-    # above default to the limits' own (F56).
-    wait = None if deadline == float("inf") else deadline - time.monotonic()
-    if wait is not None and wait <= 0.0:
+    # Always a finite wait: `_finite` is what both entry points pass through,
+    # and it clamps the deadlines a clock never reaches (F56, AR-16).
+    wait = deadline - time.monotonic()
+    if wait <= 0.0:
         # Before `Popen`: an interpreter started only to be killed unanswered is
         # a tenth of a second spent on a deadline that has already passed.
         raise Refusal(RefusalCode.SOURCE_EXTRACTION_TIMEOUT)
@@ -515,12 +529,76 @@ class _Stream:
         return self.inflater.take(self.stream, data)
 
 
+# The stream filters pdfminer decodes through its own unbudgeted functions.
+# `zlib` is replaced wholesale above; these four are module-level names in
+# `pdfminer.pdftypes` that `PDFStream.decode` looks up when it runs, so
+# rebinding them there is the same seam (AS-1). `ccittfaxdecode` is not among
+# them: it decodes an image, and its output is bounded by the /Columns and
+# /Rows the stream declares.
+BUDGETED_FILTERS = ("lzwdecode", "rldecode", "ascii85decode", "asciihexdecode")
+# What the child's address space may reach, over `max_decoded_bytes`: the
+# interpreter, pdfminer's tables and one document's decoded streams. A decoder
+# that grows past it gets `MemoryError`, which the child already answers
+# `SOURCE_TOO_LARGE` with, rather than growing until the container restarts.
+ADDRESS_SPACE_HEADROOM = 512 * 1024 * 1024
+
+
+def _budgeted(
+    decode: Callable[[bytes], bytes], inflater: _Inflater
+) -> Callable[[bytes], bytes]:
+    """`decode` with its output drawn from the same budget `zlib` draws on.
+
+    The output is measured after the decoder returns, so the budget is what
+    bounds the *total* a document decodes; `RLIMIT_AS` is what bounds the one
+    call, because only the operating system can stop a decoder that is still
+    inside its own loop.
+    """
+
+    def bounded(data: bytes) -> bytes:
+        out = decode(data)
+        inflater.left -= len(out)
+        if inflater.left < 0:
+            inflater.exceeded = True
+            raise _Inflated
+        return out
+
+    return bounded
+
+
+def _limit_address_space(inflater: _Inflater) -> None:
+    """Cap the child's address space where the platform has one to cap.
+
+    Linux is where the App runs and where `RLIMIT_AS` binds. macOS reserves a
+    very large address space for the shared cache before any of our code runs,
+    so a limit there either refuses or fails every later mapping; the try is
+    not decoration, and the child is still bounded by its deadline and by the
+    decoded-bytes budget wherever the limit does not apply.
+    """
+    import resource
+
+    ceiling = inflater.left + ADDRESS_SPACE_HEADROOM
+    try:
+        (_soft, hard) = resource.getrlimit(resource.RLIMIT_AS)
+        if hard != resource.RLIM_INFINITY:
+            ceiling = min(ceiling, hard)
+        resource.setrlimit(resource.RLIMIT_AS, (ceiling, hard))
+    except (OSError, ValueError, AttributeError):
+        return
+
+
 def child_main() -> None:
     """The extraction child: a header line and the document on stdin, one JSON
     answer on stdout -- the tokens, or with `frame` in the header that page's
     crop (`page_frame`). Its logs and its inflater are its own, and it never
     raises: a traceback would print the text pdfminer choked on (stderr is
     discarded by the parent as well).
+
+    Every filter pdfminer can decode draws on the one budget, not `zlib`
+    alone: `LZWDecode`, `RunLengthDecode` and the two ASCII filters build
+    their output with no bound of their own, so a document that uses them
+    would otherwise be held only by the wall clock (AS-1). The address-space
+    limit is the backstop under all of them, for the decoder that is still
+    inside its own loop when the budget would have stopped it.
     """
     import pdfminer.pdftypes
     from pdfminer.pdfdocument import PDFEncryptionError
@@ -535,6 +613,10 @@ def child_main() -> None:
         limits = AdmissionLimits(**header["limits"])
         inflater = _Inflater(limits.max_decoded_bytes)
         pdfminer.pdftypes.zlib = inflater  # type: ignore[assignment,attr-defined]
+        for name in BUDGETED_FILTERS:
+            decoder = _budgeted(getattr(pdfminer.pdftypes, name), inflater)
+            setattr(pdfminer.pdftypes, name, decoder)
+        _limit_address_space(inflater)
         (data, deadline) = (sys.stdin.buffer.read(), float(header["deadline"]))
         if "frame" in header:
             frame = _page_crop(data, int(header["frame"]), deadline=deadline)

@@ -25,6 +25,14 @@ const ASK_SCOPE: Record<Section, string> = {
   admin: "the deployment",
 };
 
+/** What a rail entry says: the section, what it holds, and its one-line
+    state. A section the document does not serve says only its name. */
+function railLabel(id: Section, entry: RailEntry | undefined): string {
+  if (!entry) return SECTION_LABELS[id];
+  const count = entry.count === null ? "" : `, ${entry.count}`;
+  return `${SECTION_LABELS[id]}${count}, ${entry.state}`;
+}
+
 export function Rail({
   section,
   entries,
@@ -49,8 +57,12 @@ export function Rail({
           <NavLink
             key={id}
             to={`${sectionPath(id)}${search}`}
+            // The count and the state are the point of the entry, and at
+            // 1024 px and below they are the only text there is: the strip
+            // rail hides the name, so the label carries all three rather than
+            // replacing them with the name alone (finding FE-12).
             className={`sect${entry ? "" : " off"}`}
-            aria-label={SECTION_LABELS[id]}
+            aria-label={railLabel(id, entry)}
             data-section={id}
           >
             <span className="nm">{SECTION_LABELS[id]}</span>
@@ -66,7 +78,7 @@ export function Rail({
         );
       })}
       {local ? (
-        <div className="local" aria-label={local.title}>
+        <div className="local" role="group" aria-label={local.title}>
           <div className="grp">{local.title}</div>
           {local.items.map((item) => (
             <div key={item.label} className={`sect${item.on ? " on" : ""}`}>

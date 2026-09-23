@@ -1,16 +1,24 @@
 """Who is asking. Derived from what the edge asserted, never from what the client
 claimed about itself.
 
-`SYSTEM_SPEC.md` §8, and `docs/DECISIONS.md` §22 and §93. The host sits behind
-a proxy that authenticates the caller and asserts the subject and its groups.
-Those two are the whole input. In edge mode they reach this module as the two
-headers `caos/api/edge.py`'s guard **wrote** from the request's verified
-per-request assertion, after removing every identity header the request
-arrived with -- so a proxy that forwarded a client-supplied
-`x-forwarded-groups` unsigned is not a misconfiguration this code cannot
-detect any more: the forwarded header is dropped and the assertion's groups
-are what is read. The group list is the *only* thing this reads in production
-and the role header is off by default.
+The spec's §8 (`docs/rebuild/2026-09-22-caos-databricks-spec.md`) and D10 in
+`docs/rebuild/decisions.md`. The host sits behind a proxy that authenticates
+the caller, and what that proxy hands over is the whole input.
+
+*Behind a Databricks App* (platform mode, the production deployment) the proxy
+forwards the caller's own access token, and this module asks the workspace who
+holds it: one bounded SCIM `Me` round trip per token digest, remembered for
+`CACHE_SECONDS`. So a group list is **not** the only thing read in production,
+and this module is not free: `IO_BUDGET` below counts store round trips and
+says so.
+
+*In edge mode* the proxy asserts the subject and its groups instead, and those
+two reach this module as the two headers `caos/api/edge.py`'s guard **wrote**
+from the request's verified per-request assertion, after removing every
+identity header the request arrived with -- so a proxy that forwarded a
+client-supplied `x-forwarded-groups` unsigned is not a misconfiguration this
+code cannot detect any more: the forwarded header is dropped and the
+assertion's groups are what is read. The role header is off by default.
 
 Which of the two carries the role is the deployment's mode, and the role is
 never a third thing. In edge mode (`CAOS_EDGE_TOKEN` set -- the assertion key)
@@ -39,7 +47,8 @@ import json
 import os
 import threading
 import time
-from dataclasses import dataclass
+from collections.abc import Container
+from dataclasses import dataclass, field
 from enum import StrEnum
 from hashlib import sha256
 from urllib.parse import urlsplit
@@ -47,11 +56,13 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 
 from caos.refusals import Refusal, RefusalCode
 
-# No round trips: the actor comes out of two headers and a closed group table,
-# and nothing here touches the store. Declared rather than exempted, because
-# `caos/api/` is where every module is on a request path and "it does no I/O"
-# is a fact worth stating rather than a rule a gate has to infer every time
-# (`scripts/io_budget.py`). The day this reads a user row, this number moves.
+# No *store* round trips: nothing here opens a connection or reads a row.
+# Platform mode does make one bounded SCIM call to the workspace per token
+# digest (`scim_me`), which is not what this number counts; it is stated here
+# so the two are never read as one. Declared rather than exempted, because
+# `caos/api/` is where every module is on a request path and "it does no store
+# I/O" is a fact worth stating rather than a rule a gate has to infer every
+# time (`scripts/io_budget.py`). The day this reads a user row, this moves.
 IO_BUDGET = 0
 
 # The development convenience, and it is opt-in. An environment variable that had
@@ -80,8 +91,13 @@ PLATFORM_HEADER = "x-forwarded-access-token"
 GROUP_ADMIN_ENV = "CAOS_GROUP_ADMIN"
 GROUP_ANALYST_ENV = "CAOS_GROUP_ANALYST"
 WORKSPACE_ENV = "DATABRICKS_WORKSPACE_ID"
+HOST_ENV = "DATABRICKS_HOST"
 # Subjects are minted from the workspace and the SCIM id, never from a name.
 NAMESPACE = uuid5(NAMESPACE_URL, "caos.databricks.identity")
+# F13. A role held on a token outlives the group membership that granted it by
+# up to this long, and there is no way to invalidate one entry: the cost the
+# TTL buys is one SCIM call per token per five minutes instead of one per
+# request. Recorded rather than changed (EI-N1).
 CACHE_SECONDS = 300.0
 
 
@@ -109,14 +125,30 @@ def at_least(role: GlobalRole, floor: GlobalRole) -> bool:
     return _RANK[role] >= _RANK[floor]
 
 
-# The identity provider's groups, mapped to this system's words. A group absent
-# from here grants nothing -- an unknown group is not an unknown *role*, it is a
-# group about some other system.
-_GROUPS = {
-    "caos-readers": GlobalRole.READER,
-    "caos-analysts": GlobalRole.ANALYST,
-    "caos-admins": GlobalRole.ADMIN,
-}
+# The identity provider's groups, mapped to this system's words. Both names are
+# the deployment's to choose, and they are read in **every** mode. A literal
+# only platform mode honoured meant `CAOS_GROUP_ADMIN` granted nothing in edge
+# mode while any IdP group that happened to be spelled `caos-admins` granted
+# ADMIN there (EI-W2); one reader of the two variables is the whole fix.
+# A group neither variable names grants nothing -- an unknown group is not an
+# unknown *role*, it is a group about some other system. READER needs no name:
+# it is what an authenticated caller holds before any group says otherwise.
+GROUP_ADMIN_DEFAULT = "caos-admins"
+GROUP_ANALYST_DEFAULT = "caos-analysts"
+
+
+def role_from_groups(groups: Container[str]) -> GlobalRole:
+    """The greatest role the configured group names carry, READER if neither.
+
+    Read at the request rather than at import, for the reason
+    `actor_from_headers` states: a process started against a wrong environment
+    starts behaving correctly the moment it is corrected.
+    """
+    if (os.environ.get(GROUP_ADMIN_ENV) or GROUP_ADMIN_DEFAULT) in groups:
+        return GlobalRole.ADMIN
+    if (os.environ.get(GROUP_ANALYST_ENV) or GROUP_ANALYST_DEFAULT) in groups:
+        return GlobalRole.ANALYST
+    return GlobalRole.READER
 
 
 @dataclass(frozen=True, slots=True)
@@ -159,15 +191,10 @@ def actor_from_headers(headers: object) -> Actor:
 
 
 def _from_groups(groups: object) -> GlobalRole:
-    """The greatest role any asserted group carries, READER if none does."""
+    """The greatest role the asserted group header carries, READER if none."""
     if not isinstance(groups, str):
         return GlobalRole.READER
-    held = [
-        _GROUPS[name]
-        for name in (part.strip() for part in groups.split(","))
-        if name in _GROUPS
-    ]
-    return max(held, key=_RANK.__getitem__, default=GlobalRole.READER)
+    return role_from_groups({part.strip() for part in groups.split(",")})
 
 
 def _claimed(role: object) -> GlobalRole:
@@ -199,7 +226,26 @@ NEGATIVE_SECONDS = 5.0
 SCIM_ME_PATH = "/api/2.0/preview/scim/v2/Me"
 SCIM_TIMEOUT_SECONDS = 10.0
 SCIM_BODY_BYTES = 1_048_576
+# How long a request waits on the lookup another thread is already making for
+# the very same token before answering `IDENTITY_UNAVAILABLE`. Longer than one
+# round trip can take, so the wait ends because the lookup ended; bounded all
+# the same, because a thread waiting forever on another thread's socket is the
+# `LIMIT_CONCURRENCY` exhaustion the single flight exists to prevent.
+SHARED_WAIT_SECONDS = SCIM_TIMEOUT_SECONDS * 2
 _CACHE_LOCK = threading.Lock()
+
+
+@dataclass
+class _Flight:
+    """One SCIM lookup in progress, and what it found. Shared by every request
+    that arrives for the same token digest while it is open."""
+
+    settled: threading.Event = field(default_factory=threading.Event)
+    actor: Actor | None = None
+    code: RefusalCode | None = None
+
+
+_INFLIGHT: dict[str, _Flight] = {}
 
 
 def actor_from_token(token: object) -> Actor:
@@ -208,15 +254,40 @@ def actor_from_token(token: object) -> Actor:
     One SCIM round trip per token, remembered for `CACHE_SECONDS` under the
     token's digest (never the token); a token the workspace refused is
     remembered for `NEGATIVE_SECONDS` so it costs one round trip, not one per
-    request (F43). The cache is bounded: expired entries go on every write
-    and nothing is added past `CACHE_CAPACITY`. The subject is `uuid5` over
-    the workspace and the SCIM id, so the same person is the same subject on
-    every request and no name reaches the store. Roles come from the two
-    configured group names; any other group grants nothing.
+    request (F43). One round trip *concurrently*, too: requests that arrive
+    for the same cold token while a lookup is open wait on that lookup instead
+    of opening their own (EI-W3), because each of those holds a thread out of
+    the process's `LIMIT_CONCURRENCY`. Both caches are bounded: expired entries
+    go on every write and nothing is added past `CACHE_CAPACITY`. The subject
+    is `uuid5` over the workspace and the SCIM id, so the same person is the
+    same subject on every request and no name reaches the store. Roles come
+    from the two configured group names; any other group grants nothing.
     """
     if not isinstance(token, str) or not token.strip():
         raise Refusal(RefusalCode.NOT_AUTHENTICATED)
     key = sha256(token.encode("utf-8")).hexdigest()
+    remembered = _remembered(key)
+    if remembered is not None:
+        return remembered
+    flight, leading = _flight(key)
+    if not leading:
+        return _shared(flight)
+    try:
+        actor = _looked_up(key, token)
+    except Refusal as refused:
+        flight.code = refused.code
+        raise
+    else:
+        flight.actor = actor
+        return actor
+    finally:
+        _settle(key, flight)
+
+
+def _remembered(key: str) -> Actor | None:
+    """What this process already knows about a token digest: the actor it
+    names, `NOT_AUTHENTICATED` when the workspace refused it inside
+    `NEGATIVE_SECONDS`, or None when the workspace has to be asked."""
     now = time.monotonic()
     with _CACHE_LOCK:
         cached = _CACHE.get(key)
@@ -224,18 +295,84 @@ def actor_from_token(token: object) -> Actor:
             return cached[0]
         if _NEGATIVE.get(key, 0.0) > now:
             raise Refusal(RefusalCode.NOT_AUTHENTICATED)
+    return None
+
+
+def _flight(key: str) -> tuple[_Flight, bool]:
+    """The lookup this token digest is on, and whether this thread is the one
+    that has to make it."""
+    with _CACHE_LOCK:
+        ongoing = _INFLIGHT.get(key)
+        if ongoing is not None:
+            return ongoing, False
+        opened = _Flight()
+        _INFLIGHT[key] = opened
+        return opened, True
+
+
+def _settle(key: str, flight: _Flight) -> None:
+    """Close a lookup: no later request joins it, and every request already
+    waiting on it is released. The identity is compared rather than the key,
+    so a lookup that has already been replaced cannot remove its successor."""
+    with _CACHE_LOCK:
+        if _INFLIGHT.get(key) is flight:
+            del _INFLIGHT[key]
+    flight.settled.set()
+
+
+def _shared(flight: _Flight) -> Actor:
+    """What the thread already asking about this token found.
+
+    A lookup that never settles, or settled with neither an actor nor a code,
+    is `IDENTITY_UNAVAILABLE` rather than a second call to a workspace that is
+    in no state to answer the first.
+    """
+    if not flight.settled.wait(SHARED_WAIT_SECONDS) or flight.actor is None:
+        raise Refusal(flight.code or RefusalCode.IDENTITY_UNAVAILABLE)
+    return flight.actor
+
+
+def _looked_up(key: str, token: str) -> Actor:
+    """One SCIM round trip, and what this process remembers of it.
+
+    The clock is read *after* the call returns or raises (CR-7). Read before,
+    a workspace that took longer than `NEGATIVE_SECONDS` to refuse a revoked
+    token wrote an entry that had already expired, and every retry paid the
+    same slow round trip again -- the cache failing exactly under the load it
+    exists for.
+    """
     try:
         user = _current_user(token)
     except Refusal as refused:
         if refused.code is RefusalCode.NOT_AUTHENTICATED:
-            with _CACHE_LOCK:
-                _NEGATIVE[key] = now + NEGATIVE_SECONDS
+            _deny(key, time.monotonic())
         raise
     workspace = os.environ.get(WORKSPACE_ENV, "")
     actor = Actor(
         user_id=uuid5(NAMESPACE, f"{workspace}:{user.scim_id}"),
-        role=_platform_role(user.groups),
+        role=role_from_groups(user.groups),
     )
+    _remember(key, actor, time.monotonic())
+    return actor
+
+
+def _deny(key: str, now: float) -> None:
+    """Remember a refused token digest, pruned and bounded on the way in.
+
+    Bounded here rather than only on the next successful lookup (AR-04): a
+    process being handed one distinct rejected token after another never
+    reaches that path, so the entries accumulated with nothing to sweep them
+    and a later lookup had to walk the accumulation.
+    """
+    with _CACHE_LOCK:
+        for stale in [k for k, until in _NEGATIVE.items() if until <= now]:
+            del _NEGATIVE[stale]
+        if len(_NEGATIVE) < CACHE_CAPACITY:
+            _NEGATIVE[key] = now + NEGATIVE_SECONDS
+
+
+def _remember(key: str, actor: Actor, now: float) -> None:
+    """Remember what the workspace said, pruned and bounded on the way in."""
     with _CACHE_LOCK:
         for stale in [k for k, (_, until) in _CACHE.items() if until <= now]:
             del _CACHE[stale]
@@ -243,47 +380,85 @@ def actor_from_token(token: object) -> Actor:
             del _NEGATIVE[stale]
         if len(_CACHE) < CACHE_CAPACITY:
             _CACHE[key] = (actor, now + CACHE_SECONDS)
-    return actor
 
 
-def _platform_role(groups: frozenset[str]) -> GlobalRole:
-    admin = os.environ.get(GROUP_ADMIN_ENV) or "caos-admins"
-    analyst = os.environ.get(GROUP_ANALYST_ENV) or "caos-analysts"
-    if admin in groups:
-        return GlobalRole.ADMIN
-    if analyst in groups:
-        return GlobalRole.ANALYST
-    return GlobalRole.READER
+# `http://` is the loopback stand-in's (`tests/workspace_stub.py`) and nothing
+# else. A platform-forwarded bearer is the caller's own credential, and sending
+# one in clear to a host that is not this machine is not a deployment this
+# process serves (EI-N3).
+LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
+
+
+@dataclass(frozen=True, slots=True)
+class WorkspaceAddress:
+    """Where SCIM is, as `DATABRICKS_HOST` names it."""
+
+    secure: bool
+    host: str
+    port: int | None
+
+
+def workspace_address(value: str | None) -> WorkspaceAddress | None:
+    """The workspace `DATABRICKS_HOST` names, or None when it names nothing
+    this process may send a bearer token to.
+
+    None rather than an exception, because the two callers answer it with
+    their own typed refusal: a request with `IDENTITY_UNAVAILABLE`, boot with
+    `EDGE_CONFIG_INVALID`. Neither used to be reachable -- `DATABRICKS_HOST`
+    with a non-numeric port raised an untyped `ValueError` out of
+    `urlsplit(...).port` on the first request, which the edge answered 500
+    (EI-N2).
+    """
+    if not value:
+        return None
+    try:
+        parts = urlsplit(value if "://" in value else f"https://{value}")
+        port = parts.port
+    except ValueError:
+        return None
+    if parts.scheme not in ("http", "https") or not parts.hostname:
+        return None
+    if parts.username is not None or parts.password is not None:
+        return None
+    if parts.scheme == "http" and parts.hostname not in LOOPBACK_HOSTS:
+        return None
+    return WorkspaceAddress(
+        secure=parts.scheme == "https", host=parts.hostname, port=port
+    )
 
 
 def _current_user(token: str) -> WorkspaceUser:
-    """SCIM `Me` for the token's holder, over one bounded HTTP request.
+    """SCIM `Me` for the token's holder. The one seam the suite substitutes."""
+    return scim_me(f"Bearer {token}")
+
+
+def scim_me(authorization: str) -> WorkspaceUser:
+    """SCIM `Me` for whoever `authorization` names, over one bounded request.
 
     Not through the SDK (F43): building its client performs an uncached
     discovery probe with a five-minute retry budget, and beside the app's own
     service-principal variables a forwarded token is refused as a second
-    authentication method. Nothing of the token or of a failure's text
+    authentication method. Nothing of the credential or of a failure's text
     travels past this boundary: the workspace's refusal is
     `NOT_AUTHENTICATED`, anything else `IDENTITY_UNAVAILABLE`.
+
+    The whole `Authorization` header rather than a token, so that the health
+    probe can send the credentials the SDK minted for the process itself down
+    this exact path, whatever scheme they carry (EI-W1): a host, a path or a
+    scope requests would fail on then fails the probe too.
     """
-    host = os.environ.get("DATABRICKS_HOST") or ""
-    parts = urlsplit(host if "://" in host else f"https://{host}")
-    if not parts.hostname:
+    address = workspace_address(os.environ.get(HOST_ENV))
+    if address is None:
         raise Refusal(RefusalCode.IDENTITY_UNAVAILABLE)
-    connection: http.client.HTTPConnection
-    if parts.scheme == "http":
-        connection = http.client.HTTPConnection(
-            parts.hostname, parts.port, timeout=SCIM_TIMEOUT_SECONDS
-        )
-    else:
-        connection = http.client.HTTPSConnection(
-            parts.hostname, parts.port, timeout=SCIM_TIMEOUT_SECONDS
-        )
+    opener: type[http.client.HTTPConnection] = (
+        http.client.HTTPSConnection if address.secure else http.client.HTTPConnection
+    )
+    connection = opener(address.host, address.port, timeout=SCIM_TIMEOUT_SECONDS)
     try:
         connection.request(
             "GET",
             SCIM_ME_PATH,
-            headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+            headers={"Authorization": authorization, "Accept": "application/json"},
         )
         response = connection.getresponse()
         status, body = response.status, response.read(SCIM_BODY_BYTES + 1)
@@ -299,17 +474,28 @@ def _current_user(token: str) -> WorkspaceUser:
 
 
 def _scim_user(body: bytes) -> WorkspaceUser:
+    """The id and the group names a SCIM `Me` body carries, or a refusal.
+
+    Every shape is checked before it is walked (AR-12). `{"groups": true}`
+    used to raise `TypeError` out of the comprehension below, and an upstream
+    that answered nonsense then read on the wire as `INTERNAL_FAULT` -- this
+    host's own fault -- rather than as the `IDENTITY_UNAVAILABLE` it is.
+    """
     try:
         current = json.loads(body)
     except ValueError:
         raise Refusal(RefusalCode.IDENTITY_UNAVAILABLE) from None
-    scim_id = current.get("id") if isinstance(current, dict) else None
+    if not isinstance(current, dict):
+        raise Refusal(RefusalCode.IDENTITY_UNAVAILABLE)
+    scim_id = current.get("id")
     if not isinstance(scim_id, str) or not scim_id:
         raise Refusal(RefusalCode.NOT_AUTHENTICATED)
     listed = current.get("groups") or []
+    if not isinstance(listed, list) or not all(
+        isinstance(group, dict) for group in listed
+    ):
+        raise Refusal(RefusalCode.IDENTITY_UNAVAILABLE)
     groups = frozenset(
-        str(group["display"])
-        for group in listed
-        if isinstance(group, dict) and isinstance(group.get("display"), str)
+        group["display"] for group in listed if isinstance(group.get("display"), str)
     )
     return WorkspaceUser(scim_id=scim_id, groups=groups)

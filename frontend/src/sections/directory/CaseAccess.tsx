@@ -8,6 +8,7 @@
 // document, which is what says the membership changed.
 import { useState } from "react";
 import { grantStanding, revokeStanding } from "@/app/commands";
+import { ConfirmedControl } from "@/controls/ConfirmedControl";
 import { RefusedControl } from "@/controls/RefusedControl";
 import { TextInput } from "@/ds/TextInput";
 import { CommandOutcome, useCommand } from "@/sections/run/controls";
@@ -38,21 +39,28 @@ function RevokeMember({
     const outcome = await run(member.user_id, (intent) =>
       revokeStanding(caseId, member.user_id, intent),
     );
-    if (outcome.kind === "ok") onChanged();
+    if (outcome?.kind === "ok") onChanged();
   }
 
   return (
     <>
-      <RefusedControl
+      {/* Ending a membership is a governed change with no reverse command on
+          the v1 wire, so it asks once more and names the member (FE-7). */}
+      <ConfirmedControl
         refusal={refusal}
-        onClick={action && member ? () => void submit() : undefined}
+        busy={pending}
+        step={{
+          act: "Revoke standing",
+          subject: member ? `${member.user_id} on case ${caseId}` : `case ${caseId}`,
+          digest: null,
+        }}
+        onConfirm={action && member ? () => void submit() : undefined}
         className="rb"
-        reasonDisplay="inline"
-        data-action="REVOKE_STANDING"
+        action="REVOKE_STANDING"
         aria-label={member ? `Revoke ${member.user_id}` : "Revoke standing"}
       >
         {pending ? "Revoking…" : "Revoke"}
-      </RefusedControl>
+      </ConfirmedControl>
       <CommandOutcome result={result} success="" />
     </>
   );
@@ -80,7 +88,7 @@ function GrantMember({
     const outcome = await run({ trimmed, standing }, (intent) =>
       grantStanding(caseId, trimmed, standing, intent),
     );
-    if (outcome.kind !== "ok") return;
+    if (outcome?.kind !== "ok") return;
     setUserId("");
     onChanged();
   }
@@ -110,6 +118,7 @@ function GrantMember({
       <RefusedControl
         refusal={refusal}
         onClick={action ? () => void submit() : undefined}
+        busy={pending}
         className="rb solid"
         reasonDisplay="inline"
         data-action="GRANT_STANDING"

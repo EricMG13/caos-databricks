@@ -18,8 +18,10 @@ import secrets
 import signal
 import sys
 import threading
+import time
 import traceback
 from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass, replace
 from pathlib import Path
 from threading import Event
@@ -74,6 +76,11 @@ STORE_FAULTS = frozenset(
 )
 
 ExecutionFor = Callable[[StoreConnection, UUID, Lease], Execution]
+
+
+# The idle heartbeat cadence (DL-10) and the most the backoff ever doubles.
+BEAT_SECONDS = 10.0
+MAX_DOUBLINGS = 30
 
 
 @dataclass(frozen=True, slots=True)
@@ -159,6 +166,7 @@ def work_once(
     # different thing for an operator than one that went quiet while idle.
     # `claim_run` commits alone, so this beat is its own unit too.
     _beat(conn, config, "WORKING", 0)
+    execution: Execution | None = None
     try:
         execution = execution_for(conn, lease.run_id, lease)
         with execution_reads(conn):
@@ -189,7 +197,8 @@ def work_once(
         _settle(conn, lambda: release(conn, lease))
         raise Refusal(RefusalCode.STORE_UNAVAILABLE) from None
     except Refusal as refused:
-        _refused(conn, lease, refused)
+        if _refused(conn, lease, refused):
+            _forget(execution, lease.run_id)
     except Exception as fault:  # noqa: BLE001 -- neither a refusal nor a store error
         # Parked, not raised: a worker that died holding the claim would find the
         # same run first after every lease expiry and never reach the rest of the
@@ -199,14 +208,28 @@ def work_once(
         where = f"{frames[-1].filename}:{frames[-1].lineno}" if frames else "?"
         print(f"{type(fault).__name__} at {where}", file=sys.stderr)
         _settle(conn, lambda: stop(conn, lease, RefusalCode.INTERNAL_FAULT))
+        _forget(execution, lease.run_id)
     return lease.run_id
 
 
-def _refused(conn: StoreConnection, lease: Lease, refused: Refusal) -> None:
+def _forget(execution: Execution | None, run_id: UUID) -> None:
+    """Drop the checkpoint thread of a run this worker just parked or ended
+    (DL-8): the thread holds position only (D6), a requeued run re-derives
+    its frontier from the ledger, and a thread nobody will resume is rows
+    nothing reads. Best effort: the run's status is already committed."""
+    if execution is None or execution.checkpointer is None:
+        return
+    with suppress(psycopg.Error, OSError, Refusal):
+        execution.checkpointer.delete_thread(str(run_id))
+
+
+def _refused(conn: StoreConnection, lease: Lease, refused: Refusal) -> bool:
+    """Settle the queue for a refused run; True when this worker ended it."""
     code = refused.code
     if code in (RefusalCode.LEASE_NOT_HELD, RefusalCode.RUN_NOT_RUNNING):
         _settle(conn, lambda: False)  # another holder or a terminal run owns it
-    elif code is RefusalCode.RUN_CANCEL_REQUESTED:
+        return False
+    if code is RefusalCode.RUN_CANCEL_REQUESTED:
         _settle(conn, lambda: False)
         try:
             cancel_run(conn, lease.run_id, lease=lease)  # commits its own unit
@@ -227,14 +250,16 @@ def _refused(conn: StoreConnection, lease: Lease, refused: Refusal) -> None:
             if unmet in STORE_FAULTS:
                 _settle(conn, lambda: release(conn, lease))
                 raise Refusal(unmet) from None
-            if unmet is not RefusalCode.LEASE_NOT_HELD:
-                print(unmet.value, file=sys.stderr)
-                _settle(conn, lambda: stop(conn, lease, unmet))
-    elif code in STORE_FAULTS:
+            if unmet is RefusalCode.LEASE_NOT_HELD:
+                return False
+            print(unmet.value, file=sys.stderr)
+            _settle(conn, lambda: stop(conn, lease, unmet))
+        return True
+    if code in STORE_FAULTS:
         _settle(conn, lambda: release(conn, lease))
         raise Refusal(code)
-    else:
-        _settle(conn, lambda: stop(conn, lease, code))
+    _settle(conn, lambda: stop(conn, lease, code))
+    return True
 
 
 def _settle(conn: StoreConnection, write: Callable[[], bool]) -> None:
@@ -251,7 +276,10 @@ def _settle(conn: StoreConnection, write: Callable[[], bool]) -> None:
 def pause_seconds(config: WorkerConfig, failures: int) -> float:
     """The next wait: the poll interval, doubled per consecutive store fault up
     to the cap, with +-20% jitter so workers do not poll in step."""
-    base = config.poll_seconds * float(2 ** max(failures - 1, 0))
+    # The exponent is bounded before it is raised (AR-03): an outage long
+    # enough to count a thousand faults would otherwise overflow the float
+    # and take the worker down at exactly the moment it should keep waiting.
+    base = config.poll_seconds * float(2 ** min(max(failures - 1, 0), MAX_DOUBLINGS))
     # Integer thousandths first: `0.8 + 400 / 1000` is 1.2000000000000002.
     jitter = (800 + secrets.randbelow(401)) / 1000
     return min(base, config.backoff_cap_seconds) * jitter
@@ -272,7 +300,9 @@ def _beat(
         beat(conn, worker_id=config.worker.value, state=state, faults=faults)
         conn.commit()
     except (psycopg.Error, Refusal):
-        conn.rollback()
+        # A session the server ended (a Lakebase failover, AR-01) fails the
+        # rollback too; that failure closes the connection and stops here.
+        rollback_or_close(conn)
 
 
 def _store_fault(fault: Refusal | psycopg.OperationalError) -> None:
@@ -296,13 +326,19 @@ def run_worker(
     """Poll until `stopping`; returns the process exit code."""
     conn: StoreConnection | None = None
     failures = 0
+    beaten = 0.0  # when POLLING was last said; an idle worker beats every
+    # `BEAT_SECONDS`, not every poll, so Lakebase can go idle (DL-10)
     try:
         while not stopping.is_set():
             claimed: UUID | None = None
             try:
                 if conn is None or conn.closed:
-                    conn = conn_factory()
-                _beat(conn, config, "POLLING", failures)
+                    conn = _connected(conn_factory)
+                    beaten = 0.0
+                now = time.monotonic()
+                if now - beaten >= BEAT_SECONDS:
+                    _beat(conn, config, "POLLING", failures)
+                    beaten = now
                 claimed = work_once(
                     conn,
                     blobs,
@@ -311,6 +347,8 @@ def run_worker(
                     stopping=stopping,
                 )
                 failures = 0
+                if claimed is not None:
+                    beaten = 0.0  # WORKING was said; say POLLING again at once
             except (Refusal, psycopg.OperationalError) as fault:
                 _store_fault(fault)
                 failures += 1
@@ -336,6 +374,17 @@ def run_worker(
 def _closed(conn: StoreConnection | None) -> None:
     if conn is not None:
         conn.close()
+
+
+def _connected(conn_factory: Callable[[], StoreConnection]) -> StoreConnection:
+    """One connection, or a store fault: the SDK behind `store_url` reports an
+    unreachable workspace or a refused token as `ValueError` (CR-1), and a
+    worker that let that escape died for good while health stayed ready."""
+    try:
+        return conn_factory()
+    except (OSError, ValueError) as fault:
+        print(type(fault).__name__, file=sys.stderr)
+        raise Refusal(RefusalCode.STORE_UNAVAILABLE) from None
 
 
 def _store_configuration() -> tuple[str, str]:

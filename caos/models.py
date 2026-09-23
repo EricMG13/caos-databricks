@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import time
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from decimal import Context, Decimal, DecimalException
@@ -52,14 +53,30 @@ ENDPOINT_ENV = "CAOS_MODEL_ENDPOINT"
 DEFAULT_ENDPOINT = "databricks-claude-opus-5"
 # `model,input_per_token,output_per_token,YYYY-MM-DD` for exactly that endpoint.
 MODEL_PRICE_ENV = "CAOS_MODEL_PRICE"
-# Reserved for the effort passthrough (next.md N2); recorded, never sent.
+# Reserved for the effort passthrough (next.md N2): refused while it is not
+# sent, so no identity ever names an effort the model did not receive (AR-15).
 REASONING_EFFORT_ENV = "CAOS_REASONING_EFFORT"
 PLATFORM = "databricks"
 HOST_MINTED = "host-"
+# A 429 reached no model, so it is asked again under the same reservation
+# (DP-5): this many tries in all, waiting `Retry-After` up to the cap.
+RATE_LIMITED = 429
+RATE_LIMIT_TRIES = 3
+RETRY_AFTER_SECONDS = 2.0
+RETRY_AFTER_CAP_SECONDS = 20.0
+_sleep = time.sleep
 
 # Exact arithmetic, no rounding: a charge is tokens times a per-token price and
 # both are decimals with a handful of digits, so the product is exact.
 _CHARGE_CONTEXT = Context(prec=60)
+
+
+def identity_of(model: str, reasoning_effort: str | None = None) -> str:
+    """The execution profile a verdict binds (D8), from the names alone, so a
+    caller can refuse an unexpected one before any client is built."""
+    return "/".join(
+        (PLATFORM, model, reasoning_effort or "none", str(MAX_COMPLETION_TOKENS))
+    )
 
 
 def configured_endpoint() -> str:
@@ -77,13 +94,18 @@ def chat_model(*, endpoint: str | None = None) -> BaseChatModel:
     """
     from databricks_langchain import ChatDatabricks
 
+    from caos.workspace import workspace_client
+
     # The socket deadline the lease is sized against (brief D5, F40), and no
-    # retry below the seam: a retry is the caller's reservation.
+    # retry below the seam: a retry is the caller's reservation. The client
+    # is the process's bounded one (CR-6): the default the library would
+    # build carries the SDK's five-minute discovery budget.
     return ChatDatabricks(
         endpoint=endpoint or configured_endpoint(),
         max_tokens=MAX_COMPLETION_TOKENS,
         timeout=TIMEOUT_SECONDS,
         max_retries=0,
+        workspace_client=workspace_client(),
     )
 
 
@@ -103,14 +125,7 @@ class ChatCompletions:
     @property
     def qualification_identity(self) -> str:
         """The execution profile a qualification verdict binds (D8)."""
-        return "/".join(
-            (
-                PLATFORM,
-                self.model,
-                self.reasoning_effort or "none",
-                str(MAX_COMPLETION_TOKENS),
-            )
-        )
+        return identity_of(self.model, self.reasoning_effort)
 
     def request_bytes(self, prompt: str, *, json_object: bool = False) -> bytes:
         """The request the call is priced on: model, prompt, ceiling, format."""
@@ -130,14 +145,24 @@ class ChatCompletions:
         options: dict[str, Any] = {}
         if json_object:
             options["response_format"] = {"type": "json_object"}
-        try:
-            message = self.chat.invoke([HumanMessage(content=prompt)], **options)
-        except OpenAIError as failed:
-            return Completion(None, None, None, _status_refusal(failed))
-        except (OSError, ValueError, RuntimeError, LangChainException):
-            # Indeterminate: the request may have been delivered and billed, so
-            # the attempt keeps its reservation. Nothing of the error travels.
-            return Completion(None, None, None, RefusalCode.PROVIDER_UNAVAILABLE)
+        for attempt in range(RATE_LIMIT_TRIES):
+            try:
+                message = self.chat.invoke([HumanMessage(content=prompt)], **options)
+            except OpenAIError as failed:
+                # A rate limit is the one answer that certainly reached no
+                # model (DP-5): the gateway refused before inference, so the
+                # same reservation covers the same request again, briefly.
+                # Every other status is answered by its class alone.
+                if _rate_limited(failed) and attempt + 1 < RATE_LIMIT_TRIES:
+                    _sleep(_retry_after(failed))
+                    continue
+                return Completion(None, None, None, _status_refusal(failed))
+            except (OSError, ValueError, RuntimeError, LangChainException):
+                # Indeterminate: the request may have been delivered and
+                # billed, so the attempt keeps its reservation. Nothing of
+                # the error travels.
+                return Completion(None, None, None, RefusalCode.PROVIDER_UNAVAILABLE)
+            break
         if not isinstance(message, AIMessage):
             return Completion(None, None, None, RefusalCode.PROVIDER_RESPONSE_INVALID)
         return self._completion(prompt, message)
@@ -181,8 +206,11 @@ class ChatCompletions:
         if usage is None:
             return None
         try:
-            input_tokens = Decimal(int(usage["input_tokens"]))
-            output_tokens = Decimal(int(usage["output_tokens"]))
+            # Counts are whole and never negative (AR-14): a usage block that
+            # says otherwise is accounting the host does not understand, and
+            # an unknown charge refuses the answer rather than billing zero.
+            input_tokens = Decimal(_count(usage["input_tokens"]))
+            output_tokens = Decimal(_count(usage["output_tokens"]))
             amount = _CHARGE_CONTEXT.add(
                 _CHARGE_CONTEXT.multiply(input_tokens, self.price.input_per_token),
                 _CHARGE_CONTEXT.multiply(output_tokens, self.price.output_per_token),
@@ -190,6 +218,27 @@ class ChatCompletions:
         except (KeyError, TypeError, ValueError, DecimalException):
             return None
         return reported_charge(amount)
+
+
+def _count(value: object) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError
+    return value
+
+
+def _rate_limited(failed: OpenAIError) -> bool:
+    return getattr(failed, "status_code", None) == RATE_LIMITED
+
+
+def _retry_after(failed: OpenAIError) -> float:
+    """The gateway's `Retry-After` in seconds, capped; the default otherwise."""
+    headers = getattr(getattr(failed, "response", None), "headers", None)
+    stated = headers.get("retry-after") if headers is not None else None
+    try:
+        seconds = float(stated) if isinstance(stated, str) else RETRY_AFTER_SECONDS
+    except ValueError:
+        seconds = RETRY_AFTER_SECONDS
+    return min(max(seconds, 0.0), RETRY_AFTER_CAP_SECONDS)
 
 
 # LangChain fills an id the response did not carry with its own run id, so a
@@ -275,5 +324,9 @@ def from_environment() -> ChatCompletions:
     """
     endpoint = configured_endpoint()
     price = price_from_environment(endpoint, os.environ.get(MODEL_PRICE_ENV, ""))
-    effort = os.environ.get(REASONING_EFFORT_ENV) or None
-    return completions(price, endpoint=endpoint, reasoning_effort=effort)
+    if os.environ.get(REASONING_EFFORT_ENV):
+        # Not sent to the endpoint (next.md N2), so not configurable: an
+        # identity naming an effort the model never received would bind
+        # qualification verdicts to a profile that was not run (AR-15).
+        raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
+    return completions(price, endpoint=endpoint)

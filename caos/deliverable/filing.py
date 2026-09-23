@@ -19,7 +19,15 @@ from caos.store.members import Standing
 
 @dataclass(frozen=True, slots=True)
 class Receipt:
-    """Detached identity of the revision, three actors, renderer and filing event."""
+    """Detached identity of the revision, three actors, renderer and filing event.
+
+    `signed_by` names the latest signer, and `one_opinion_per_signer` allows
+    several: a co-signer is therefore absent from the portable proof and from
+    the `DELIVERABLE_FILED` payload the audit chain binds, and the offline
+    verifier can prove the independence of one signer out of however many there
+    were. That is FP-09, and carrying the whole sorted list here is a change to
+    `FiledReceipt` in `caos/api/wire.py`, which this pass may not make.
+    """
 
     case_id: UUID
     run_id: UUID
@@ -197,6 +205,13 @@ def file_deliverable_in(
 
     Three actors, checked here: the filer is neither a signer nor the freezer,
     and the freezer is no signer either.
+
+    **Re-proving the revision is the route's** (`caos/api/commands/deliverable.py`
+    `file`), which derives it under this same governed unit before calling this.
+    FP-04 asked for it here, as `freeze_in` does it; the two extra arguments
+    `prove_revision` needs put this function over the argument ceiling and the
+    suppression budget may only fall, so it lives at the one caller that files
+    in production until `blobs` and `bundle` travel as one carrier.
     """
     run_id, digest = _revision(conn, case_id, revision_id)
     frozen = _frozen(conn, case_id, revision_id)
@@ -262,11 +277,16 @@ def persist_receipt(
     return filed
 
 
+def _wire(receipt: Receipt) -> dict[str, str]:
+    """Every receipt field as the one string both the event and the bytes carry."""
+    return {key: str(value) for key, value in asdict(receipt).items()}
+
+
 def filing_payload(receipt: Receipt) -> dict[str, str]:
     """The event binds every receipt field except its own resulting link."""
     return {
-        key: str(value)
-        for key, value in asdict(receipt).items()
+        key: value
+        for key, value in _wire(receipt).items()
         if key != "filed_event_sha256"
     }
 
@@ -274,7 +294,7 @@ def filing_payload(receipt: Receipt) -> dict[str, str]:
 def receipt_bytes(receipt: Receipt) -> bytes:
     """Canonical detached receipt bytes; UUIDs have one wire representation."""
     return json.dumps(
-        {key: str(value) for key, value in asdict(receipt).items()},
+        _wire(receipt),
         sort_keys=True,
         separators=(",", ":"),
         allow_nan=False,

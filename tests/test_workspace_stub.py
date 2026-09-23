@@ -241,6 +241,7 @@ def test_the_bounded_workspace_client_reaches_the_stub_with_its_budgets(
 ) -> None:
     from caos.workspace import HTTP_TIMEOUT_SECONDS, RETRY_TIMEOUT_SECONDS
 
+    stub.apps.add("caos")
     client = workspace_client()
     assert client.config.http_timeout_seconds == HTTP_TIMEOUT_SECONDS
     assert client.config.retry_timeout_seconds == RETRY_TIMEOUT_SECONDS
@@ -264,3 +265,95 @@ def test_a_workspace_that_does_not_answer_is_unavailable_not_unauthenticated(
     monkeypatch.delenv("DATABRICKS_HOST")
     with pytest.raises(Refusal, match=r"^IDENTITY_UNAVAILABLE$"):
         actor_from_token("a-token")
+
+
+def test_the_stub_serves_exports_and_refuses_a_duplicate_app(
+    stub: WorkspaceStub,
+) -> None:
+    """C3 and DP-6: a production deploy reads its lock and state back through
+    `workspace/export`, and the platform answers a taken app name with 409."""
+    import base64
+    import json as json_module
+    import urllib.error
+    import urllib.request
+
+    def call(method: str, path: str, body: bytes | None = None) -> tuple[int, bytes]:
+        request = urllib.request.Request(
+            stub.host + path,
+            data=body,
+            method=method,
+            headers={"Authorization": f"Bearer {BEARER}"},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=5) as answered:
+                return answered.status, answered.read()
+        except urllib.error.HTTPError as refused:
+            return refused.code, refused.read()
+
+    lock = "/Workspace/caos-bundle/prod/state/deploy.lock"
+    status, body = call("GET", f"/api/2.0/workspace/export?path={lock}")
+    assert status == 404 and b"RESOURCE_DOES_NOT_EXIST" in body
+    stub.workspace_files[lock] = b'{"id": "one"}'
+    status, body = call(
+        "GET", f"/api/2.0/workspace/export?path={lock}&direct_download=true"
+    )
+    assert (status, body) == (200, b'{"id": "one"}')
+    status, body = call("GET", f"/api/2.0/workspace/export?path={lock}")
+    assert base64.b64decode(json_module.loads(body)["content"]) == b'{"id": "one"}'
+    create = json_module.dumps({"name": "caos"}).encode()
+    status, _ = call("POST", "/api/2.0/apps", create)
+    assert status == 200 and "caos" in stub.apps
+    status, _ = call("POST", "/api/2.0/apps", create)
+    assert status == 409
+
+
+def test_preflight_reads_the_gateway_posture_and_the_price_s_endpoint(
+    stub: WorkspaceStub, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """DP-3 / MX-5 and AR-06: payload logging or a fallback on the endpoint is
+    a MISSING row with the fix, and a price for another endpoint is refused
+    before any deploy."""
+    flags = ["--endpoint", ENDPOINT, "--catalog", "main", "--schema", "caos"]
+    stub.gateway = {
+        "inference_table_config": {"enabled": True, "catalog_name": "main"},
+        "fallback_config": {"enabled": True},
+    }
+    assert preflight.main([*flags, "--lakebase-instance", "caos-lb"]) == 1
+    out = capsys.readouterr().out
+    assert "MISSING serving endpoint" in out
+    assert "inference tables log every payload" in out and "fallback is enabled" in out
+    assert issubclass(preflight.Unfit, OSError), "a MISSING row, with its own reason"
+    assert preflight.gateway_problems(object()) == [], "no gateway settings: fit"
+    stub.gateway = {"guardrails": {"input": {"pii": {"behavior": "BLOCK"}}}}
+    assert preflight.main([*flags, "--lakebase-instance", "caos-lb"]) == 0
+    out = capsys.readouterr().out
+    assert "note    guardrails are set" in out and "ok      serving endpoint" in out
+    price = "other-endpoint,0.000005,0.000025,2026-09-22"
+    assert (
+        preflight.main([*flags, "--lakebase-instance", "caos-lb", "--price", price])
+        == 1
+    )
+    out = capsys.readouterr().out
+    assert out.startswith("MISSING price names other-endpoint, not endpoint")
+    assert stub.host not in out
+
+
+def test_preflight_does_not_stop_on_a_profile_that_cannot_list_groups(
+    stub: WorkspaceStub, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """W5: unknown is not missing. The deployer is told, and the deploy goes on."""
+    stub.groups_forbidden = True
+    flags = ["--endpoint", ENDPOINT, "--catalog", "main", "--schema", "caos"]
+    assert preflight.main([*flags, "--lakebase-instance", "caos-lb"]) == 0
+    out = capsys.readouterr().out
+    assert out.count("UNKNOWN group") == 2 and "MISSING" not in out
+    assert out.count("ok ") == 4
+
+
+def test_the_smoke_parses_the_json_answer_it_asked_for(
+    stub: WorkspaceStub, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """AR-17: JSON mode that the endpoint takes and ignores fails the smoke."""
+    stub.reply = lambda prompt, json_object: "definitely not JSON"
+    assert gateway_smoke.main() == 1
+    assert capsys.readouterr().out.rstrip().endswith("json_mode=not JSON")

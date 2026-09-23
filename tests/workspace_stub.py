@@ -23,6 +23,7 @@ compared for authorisation or printed; `requests` holds methods and paths.
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import subprocess
@@ -63,6 +64,10 @@ class WorkspaceStub:
 
     reply: Reply = _ok
     groups: frozenset[str] = frozenset({"caos-admins", "caos-analysts"})
+    # A profile that may not list groups is answered 403 (preflight's W5).
+    groups_forbidden: bool = False
+    # What the serving endpoint's `ai_gateway` reads back (preflight's DP-3).
+    gateway: dict[str, Any] = field(default_factory=dict)
     # bearer -> (SCIM id, groups); a bearer not listed is `USER` in `groups`.
     identities: dict[str, tuple[str, frozenset[str]]] = field(default_factory=dict)
     user_name: str = str(USER["userName"])
@@ -74,7 +79,9 @@ class WorkspaceStub:
     # What `POST /api/2.0/database/credentials` mints: the local password in
     # a platform-mode boot, so `store_url()` reaches the Docker Postgres.
     database_credential: str = BEARER
-    apps: set[str] = field(default_factory=lambda: {"caos"})
+    # No app until a deploy creates one: a name already taken answers 409
+    # (DP-6), so a stand-in run creates the app the way the platform does.
+    apps: set[str] = field(default_factory=set)
     # What each app was created or updated with; `app()` echoes the fields a
     # deploy reads back (`forward_user_access_token`).
     app_bodies: dict[str, dict[str, Any]] = field(default_factory=dict)
@@ -260,6 +267,9 @@ class _Handler(BaseHTTPRequestHandler):
         self._send(200, me)
 
     def _groups(self, rest: str, query: Query, raw: bytes) -> None:
+        if self.stub.groups_forbidden:
+            self._send(403, {"error_code": "PERMISSION_DENIED", "message": "no"})
+            return
         # The SDK pages by `startIndex` until a page comes back empty.
         wanted = query.get("filter", [""])[0].partition('eq "')[2].rstrip('"')
         first = query.get("startIndex", ["1"])[0] == "1"
@@ -296,7 +306,7 @@ class _Handler(BaseHTTPRequestHandler):
             self._missing()
 
     def _endpoint_get(self, rest: str, query: Query, raw: bytes) -> None:
-        self._known(rest, self.stub.endpoints, _endpoint)
+        self._known(rest, self.stub.endpoints, partial(_endpoint, self.stub.gateway))
 
     def _schema_get(self, rest: str, query: Query, raw: bytes) -> None:
         self._known(rest, self.stub.schemas, _named)
@@ -365,17 +375,26 @@ class _Handler(BaseHTTPRequestHandler):
         self.stub.workspace_files["/" + rest.lstrip("/")] = raw
         self._send(200, {})
 
+    def _export(self, rest: str, query: Query, raw: bytes) -> None:
+        """`GET /api/2.0/workspace/export`: a production deploy reads its lock
+        and its state through this (C3); a path not there is the code the
+        CLI takes for "no lock yet"."""
+        wanted = query.get("path", [""])[0]
+        held = self.stub.workspace_files.get(wanted)
+        if held is None:
+            self._missing("RESOURCE_DOES_NOT_EXIST")
+        elif query.get("direct_download", ["false"])[0] == "true":
+            self._send(200, None, raw=held)
+        else:
+            self._send(200, {"content": base64.b64encode(held).decode()})
+
     # -- the Apps API ------------------------------------------------------
 
     def _apps(self, rest: str, query: Query, raw: bytes) -> None:
         stub = self.stub
         name, _, action = rest.strip("/").partition("/")
         if self.command == "POST" and not rest.strip("/"):
-            body = json.loads(raw or b"{}")
-            created = body.get("name", "")
-            stub.apps.add(created)
-            stub.app_bodies[created] = body
-            self._send(200, stub.app(created))
+            self._create_app(raw)
         elif name not in stub.apps:
             self._missing()
         elif action == "" and self.command in ("GET", "PATCH"):
@@ -404,6 +423,18 @@ class _Handler(BaseHTTPRequestHandler):
             self._send(200, stub.app(name))
         else:
             self._missing()
+
+    def _create_app(self, raw: bytes) -> None:
+        stub = self.stub
+        body = json.loads(raw or b"{}")
+        created = body.get("name", "")
+        if created in stub.apps:
+            # As the platform answers a name already taken (DP-6).
+            self._send(409, {"error_code": "ALREADY_EXISTS", "message": "taken"})
+            return
+        stub.apps.add(created)
+        stub.app_bodies[created] = body
+        self._send(200, stub.app(created))
 
     def _permissions(self, rest: str, query: Query, raw: bytes) -> None:
         """`PUT|GET /api/2.0/permissions/apps/<name>`: the grants as given."""
@@ -441,6 +472,7 @@ _ROUTES: list[tuple[str, str, bool, Route]] = [
     ("PUT", DIRECTORIES + "/", False, _Handler._directory_put),
     ("HEAD", DIRECTORIES + "/", False, _Handler._directory_head),
     ("GET", "/api/2.0/workspace/get-status", True, _Handler._status),
+    ("GET", "/api/2.0/workspace/export", True, _Handler._export),
     ("POST", "/api/2.0/workspace/mkdirs", True, _Handler._mkdirs),
     ("POST", "/api/2.0/workspace/delete", True, _Handler._delete),
     ("POST", IMPORT + "/", False, _Handler._import),
@@ -453,11 +485,11 @@ _ROUTES: list[tuple[str, str, bool, Route]] = [
 ]
 
 
-def _endpoint(name: str) -> dict[str, Any]:
+def _endpoint(gateway: dict[str, Any], name: str) -> dict[str, Any]:
     return {
         "name": name,
         "state": {"ready": "READY", "config_update": "NOT_UPDATING"},
-        "ai_gateway": {},
+        "ai_gateway": gateway,
     }
 
 

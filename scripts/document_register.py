@@ -22,17 +22,27 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+
+# Run as a script, not as a package module: the repository root is what makes
+# `caos` importable (the same line `scripts/qualify.py` carries).
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+# The ceiling on the whole encoded request, imported rather than copied: the
+# register judged documents against a second 1 MiB of its own, which would keep
+# its value after the provider's moved (SI-8).
+from caos.provider import MAX_REQUEST_BYTES as MAX_REQUEST_BYTES
 
 REPO = Path(__file__).resolve().parents[1]
 
 STATUSES = frozenset({"in_hand", "to_source", "to_author", "not_available"})
 
-# caos/provider.py's ceiling on the whole encoded request. A document larger
-# than this cannot reach a prompt whole, whatever else is true of it.
-MAX_REQUEST_BYTES = 1_048_576
+# Where a register row's bytes may live. The register is a table of documents
+# this repository holds, and nothing else is one.
+HELD = "qualification"
 
 
 class UnknownStatus(ValueError):
@@ -96,20 +106,51 @@ def load_register(path: Path) -> Register:
     )
 
 
+def held_path(repo: Path, declared: str) -> Path | None:
+    """The declared path as a real file inside `qualification/`, or None.
+
+    `relative_to` does not normalise `..`, and the containment test was
+    `startswith("qualification/")` on the string -- so
+    `qualification/set-a/../../../../../../etc/hosts` marked `in_hand` was
+    emitted as a register row carrying that file's size and digest, and the
+    script exited 0 (FP-20). `resolve()` answers where the path ends up and
+    `is_relative_to` answers whether that is inside the tree.
+
+    A symlink anywhere along it is refused, which is what the second comparison
+    is: `resolve()` follows links and `normpath` does not, so the two agree only
+    when no component was one. The register is a table of bytes this repository
+    holds, and a link is a claim about a machine.
+    """
+    root = (repo / HELD).resolve()
+    target = (repo / declared).resolve()
+    if target == root or not target.is_relative_to(root):
+        return None
+    if target != Path(os.path.normpath(repo / declared)) or not target.is_file():
+        return None
+    return target
+
+
 def set_documents(root: Path) -> dict[str, tuple[str, ...]]:
     """Every document the `qualification/*/qualification.json` sets name.
 
     Keyed by set name, with each path relative to the repository root, which is
-    the spelling a register row carries.
+    the spelling a register row carries. A path that leaves `qualification/`
+    keeps its declared spelling, so `unlisted` reports it as a set document no
+    register row claims rather than silently dropping it.
     """
     found: dict[str, tuple[str, ...]] = {}
     for manifest in sorted(root.glob("*/qualification.json")):
         payload = json.loads(manifest.read_text(encoding="utf-8"))
-        named = [
-            str((manifest.parent / document).relative_to(root.parent))
-            for case in payload.get("cases", ())
-            for document in case.get("documents", ())
-        ]
+        named = []
+        for case in payload.get("cases", ()):
+            for document in case.get("documents", ()):
+                declared = f"{HELD}/{manifest.parent.name}/{document}"
+                target = held_path(root.parent, declared)
+                named.append(
+                    declared
+                    if target is None
+                    else target.relative_to(root.parent).as_posix()
+                )
         found[manifest.parent.name] = tuple(dict.fromkeys(named))
     return found
 
@@ -122,8 +163,8 @@ def measured(document: Document, repo: Path) -> tuple[int, str] | None:
     belong in the row's `note`, dated."""
     if document.local_path is None:
         return None
-    path = repo / document.local_path
-    if not path.is_file():
+    path = held_path(repo, document.local_path)
+    if path is None:
         return None
     raw = path.read_bytes()
     return len(raw), hashlib.sha256(raw).hexdigest()
@@ -141,21 +182,24 @@ def unlisted(register: Register, sets: dict[str, tuple[str, ...]]) -> list[str]:
 
 
 def misplaced(register: Register, repo: Path) -> list[str]:
-    """One line per `in_hand` row that is not a file under `qualification/`."""
+    """One line per `in_hand` row that is not a real file under `qualification/`.
+
+    One question, asked once, by `held_path`: the two it was asked as -- "is it
+    a file" against the joined path and "does the string start with
+    `qualification/`" -- both answered yes for a row that escaped the tree
+    (FP-20).
+    """
     found = []
     for row in register.documents:
         if row.status != "in_hand":
             continue
         if row.local_path is None:
             found.append(f"{row.id}: claims in_hand with no local_path")
-            continue
-        path = repo / row.local_path
-        if not path.is_file():
+        elif held_path(repo, row.local_path) is None:
             found.append(
                 f"{row.id}: claims in_hand and {row.local_path!r} is not a file"
+                f" held under {HELD}/"
             )
-        elif not row.local_path.startswith("qualification/"):
-            found.append(f"{row.id}: claims in_hand outside qualification/")
     return found
 
 

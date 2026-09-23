@@ -138,7 +138,12 @@ export function BookSection({ document }: { document: BookDocument; tab: string 
           <header>
             <h2>{key}</h2>
           </header>
-          <div className="pb">
+          <div
+            className="pb tscroll"
+            tabIndex={0}
+            role="region"
+            aria-label={`Credits compared on ${key}`}
+          >
             <table className="tbl">
               <caption className="lbl">Credits compared on {key}</caption>
               <thead>

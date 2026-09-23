@@ -63,6 +63,13 @@ function Address() {
   return null;
 }
 
+/** An act with a confirm step (finding FE-7) takes two presses: the control
+    arms the step, and Confirm sends it. */
+function confirmed(container: HTMLElement, action: string) {
+  fireEvent.click(container.querySelector(`[data-action="${action}"]`)!);
+  fireEvent.click(container.querySelector(`[data-confirm="${action}"] [data-confirm-yes]`)!);
+}
+
 function mountAt(document: RunSectionDocument, path: string) {
   seenAddress = "";
   return render(
@@ -493,6 +500,121 @@ describe("Run", () => {
     }
   });
 
+  // FE-1: two clicks in one frame both read `pending: false`, because the
+  // state that renders it has not committed yet. The guard is a ref read and
+  // written in the same synchronous step as the send.
+  test("test_a_second_press_while_a_command_is_in_flight_sends_nothing", async () => {
+    const caseId = routeNotPinned.body.case_id;
+    const created = { case_id: caseId, run_id: RUN_B, route_digest: "f".repeat(64) };
+    let release!: (response: Response) => void;
+    const held = new Promise<Response>((resolve) => {
+      release = resolve;
+    });
+    const fetchSpy = vi.fn().mockImplementation(() => held);
+    vi.stubGlobal("fetch", fetchSpy);
+    try {
+      const { container } = mountAt(EMPTY_RUN, `/run/?case=${caseId}`);
+      const create = container.querySelector('[data-action="CREATE_RUN"]')!;
+      // Three activations inside one batch: none of them has seen the render
+      // that would show the first as pending, which is the double-click the
+      // audit reproduced. Only a ref read in the same step as the send can
+      // stop the second and third.
+      act(() => {
+        fireEvent.click(create);
+        fireEvent.click(create);
+        fireEvent.click(create);
+      });
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      // And it says so while it waits, rather than looking idle.
+      await waitFor(() => expect(create).toHaveAttribute("aria-busy", "true"));
+      expect(create).toHaveAttribute("aria-disabled", "true");
+      expect(create).toHaveTextContent("Creating…");
+      fireEvent.click(create);
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      await act(async () => {
+        release(jsonResponse(created, 201));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      await waitFor(() => expect(new URLSearchParams(address()).get("run")).toBe(RUN_B));
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  // FE-8 / AR-19: a proxy's HTML 504, a 5xx with no refusal body, and a 201
+  // whose body is lost in transfer all become RESPONSE_INVALID. None of them
+  // says whether the write committed, so the retry must ask the same question.
+  test("test_an_unreadable_answer_keeps_the_key_so_a_retry_cannot_write_twice", async () => {
+    const caseId = routeNotPinned.body.case_id;
+    const gateway = () =>
+      new Response("<html><body><h1>504 Gateway Time-out</h1></body></html>", {
+        status: 504,
+        headers: { "content-type": "text/html" },
+      });
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce(gateway())
+      .mockResolvedValueOnce(gateway())
+      .mockResolvedValueOnce(
+        jsonResponse({ case_id: caseId, run_id: RUN_B, route_digest: "f".repeat(64) }, 201),
+      );
+    vi.stubGlobal("fetch", fetchSpy);
+    try {
+      const { container } = mountAt(EMPTY_RUN, `/run/?case=${caseId}`);
+      const create = container.querySelector('[data-action="CREATE_RUN"]')!;
+      fireEvent.click(create);
+      await waitFor(() => expect(container.querySelector("[data-command-error]")).not.toBeNull());
+      // And it says what a retry would do.
+      expect(container.querySelector("[data-command-error]")).toHaveTextContent(
+        "Retrying sends the same key",
+      );
+      fireEvent.click(create);
+      await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(2));
+      fireEvent.click(create);
+      await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(3));
+      const keyOf = (call: number): string =>
+        ((fetchSpy.mock.calls[call]![1] as RequestInit).headers as Record<string, string>)[
+          "Idempotency-Key"
+        ] ?? "";
+      expect(UUID.test(keyOf(0))).toBe(true);
+      expect(new Set([keyOf(0), keyOf(1), keyOf(2)]).size).toBe(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  // FE-8's other half: a receipt that did arrive settles the intent, so the
+  // next press is a plainly new one.
+  test("a settled answer draws a fresh key for the next press", async () => {
+    const run = running.body.run!;
+    const fetchSpy = vi.fn().mockResolvedValue(
+      jsonResponse({
+        run_id: run.run_id,
+        source_set_version: run.source_set_version,
+        input_fingerprint: "e".repeat(64),
+      }),
+    );
+    vi.stubGlobal("fetch", fetchSpy);
+    try {
+      const doc = withActions(running, [{ action: "PIN_RUN_INPUT", refusal: null }]);
+      const { container } = mount(doc);
+      const pin = container.querySelector('[data-action="PIN_RUN_INPUT"]')!;
+      fireEvent.click(pin);
+      await waitFor(() => expect(container.querySelector("[data-command-success]")).not.toBeNull());
+      const first = fetchSpy.mock.calls[0]![1] as RequestInit;
+      fireEvent.click(pin);
+      await waitFor(() => expect(fetchSpy.mock.calls.length).toBeGreaterThan(2));
+      const second = fetchSpy.mock.calls.find(
+        ([url], index) => index > 0 && String(url).endsWith("/input"),
+      )![1] as RequestInit;
+      const keyOf = (init: RequestInit) =>
+        (init.headers as Record<string, string>)["Idempotency-Key"];
+      expect(keyOf(second)).not.toBe(keyOf(first));
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   test("test_the_idempotency_key_is_reused_for_a_retry_of_the_same_body", async () => {
     const fetchSpy = vi
       .fn()
@@ -639,7 +761,7 @@ describe("Run", () => {
       const { container, rerender } = mount(older);
       const cp6 = () => container.querySelector('button.node[data-node="CP-6"]');
       expect(cp6()).toHaveAttribute("data-state", "RUNNABLE");
-      fireEvent.click(container.querySelector('[data-action="CANCEL_RUN"]')!);
+      confirmed(container, "CANCEL_RUN");
       await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(2));
 
       // The workspace's own read lands while the command's refetch is still
@@ -829,6 +951,35 @@ describe("Run", () => {
     }
   });
 
+  // FE-10: the note says this view is behind the run. A document the
+  // workspace has since served is that view caught up.
+  test("test_a_fresh_document_clears_the_could_not_be_refreshed_note", async () => {
+    const older = withActions(frames[0]!, [{ action: "CANCEL_RUN", refusal: null }]);
+    const receipt = {
+      run_id: older.body.run!.run_id,
+      run_status: "RUNNING",
+      work: { state: "STOPPED", stop_code: null, cancel_requested: false },
+    };
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(receipt))
+      .mockResolvedValueOnce(jsonResponse({ code: "STORE_UNAVAILABLE", clears: "x" }, 503));
+    vi.stubGlobal("fetch", fetchSpy);
+    try {
+      const { container, rerender } = mount(older);
+      confirmed(container, "CANCEL_RUN");
+      await waitFor(() => expect(container.querySelector("[data-refetch-failed]")).not.toBeNull());
+      rerender(
+        <MemoryRouter>
+          <RunSection document={frames[2]!} tab={null} />
+        </MemoryRouter>,
+      );
+      expect(container.querySelector("[data-refetch-failed]")).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   test("test_start_retry_and_cancel_post_the_expected_url_body_and_idempotency_key", async () => {
     const run = running.body.run!;
     const caseId = running.body.case_id;
@@ -872,7 +1023,7 @@ describe("Run", () => {
       await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(4));
       fireEvent.click(container.querySelector('[data-action="RETRY_RUN"]')!);
       await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(6));
-      fireEvent.click(container.querySelector('[data-action="CANCEL_RUN"]')!);
+      confirmed(container, "CANCEL_RUN");
       await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(8));
 
       const [startUrl, startInit] = fetchSpy.mock.calls[2]!;

@@ -6,7 +6,15 @@
 // commit, so an advisory `null` refusal here is never trusted as the last
 // word. A success is shown, and the caller is handed one refetch to run
 // (`onRefetch`); the control never claims a write took effect on its own say.
-import { useCallback, useId, useLayoutEffect, useRef, useState, type ChangeEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+} from "react";
 import { useSearchParams } from "react-router";
 import {
   approveGate,
@@ -22,7 +30,9 @@ import {
 } from "@/app/commands";
 import { OFFLINE_WORDING } from "@/app/transport";
 import { fetchSection } from "@/app/transport";
+import { ConfirmedControl } from "@/controls/ConfirmedControl";
 import { RefusalNote, RefusedControl } from "@/controls/RefusedControl";
+import { useAnnouncer } from "@/states/Announcer";
 import type {
   ActionView,
   CreateRun,
@@ -74,6 +84,10 @@ export function useRunRefetch(initial: RunSectionDocument, caseId: string) {
   if (initial !== seenInitial) {
     setSeenInitial(initial);
     setLive(initial);
+    // The note said this view was behind the run. A document the workspace
+    // has since served is that view caught up, so the note goes with it
+    // rather than standing beside every later live update (finding FE-10).
+    setFailed(false);
   }
   // One sequence over both sources of a document: a refetch applies only while
   // it is still the latest. An earlier refetch that answers late, or one still
@@ -125,34 +139,58 @@ export interface CommandState<R> {
   result: CommandResult<R> | null;
 }
 
+/** An answer that settled the intent: a validated receipt, or a typed refusal
+    the server composed. Anything else -- a request that never arrived, a
+    gateway page, a 201 whose body was lost in transfer -- leaves the write in
+    doubt, so the key is kept and a retry asks the same question again rather
+    than a second one (AR-19, finding FE-8). */
+function settles<R>(kind: CommandResult<R>["kind"]): boolean {
+  return kind === "ok" || kind === "refused";
+}
+
 /** One `crypto.randomUUID()` key per user intent (brief 4.2, decision 12).
-    `run` takes the request body alongside the sender: the key is reused only
-    when the immediately preceding call carried the identical body and
-    answered `{ kind: "offline" }` (a network retry of the same intent, never
-    reaching the server); any other answer, or a body that has changed since
-    (the analyst edited the subject, picked a different route, re-read a
-    preview), draws a fresh one.
+    `run` takes the request body alongside the sender: the key is kept while
+    the identical body has yet to draw an answer that settles it (`settles`
+    above), which covers an offline retry and every unreadable answer; a body
+    that has changed since (the analyst edited the subject, picked a different
+    route, re-read a preview) draws a fresh one.
+
+    A second activation while the first is still in flight is not a second
+    intent and is refused here rather than by each of the fourteen controls:
+    the ref is read and written in the same synchronous step as the send, so
+    two clicks in one frame cannot both pass it the way a render-time
+    `pending` can. Such a press answers `null` -- nothing was sent, so there
+    is no outcome to act on.
 
     `useCommand`'s intent lifecycle is what
-    `test_the_idempotency_key_is_reused_for_a_retry_of_the_same_body` and
+    `test_the_idempotency_key_is_reused_for_a_retry_of_the_same_body`,
     `test_the_idempotency_key_is_replaced_when_the_body_changes_even_after_an_offline_answer`
+    and `test_a_second_press_while_a_command_is_in_flight_sends_nothing`
     exercise, by driving the mounted section's own controls. */
 export function useCommand<R>() {
   const intentRef = useRef<Intent>(newIntent());
   const lastBodyRef = useRef<string | null>(null);
   const lastKindRef = useRef<CommandResult<R>["kind"] | null>(null);
+  const inFlightRef = useRef(false);
   const [state, setState] = useState<CommandState<R>>({ pending: false, result: null });
   const run = useCallback(
     async (body: unknown, send: (intent: Intent) => Promise<CommandResult<R>>) => {
-      const bodyKey = JSON.stringify(body);
-      const retrySameBody = lastKindRef.current === "offline" && lastBodyRef.current === bodyKey;
-      if (!retrySameBody) intentRef.current = newIntent();
-      lastBodyRef.current = bodyKey;
-      setState({ pending: true, result: null });
-      const result = await send(intentRef.current);
-      lastKindRef.current = result.kind;
-      setState({ pending: false, result });
-      return result;
+      if (inFlightRef.current) return null;
+      inFlightRef.current = true;
+      try {
+        const bodyKey = JSON.stringify(body);
+        const held = lastKindRef.current;
+        const retrySameBody = held !== null && !settles(held) && lastBodyRef.current === bodyKey;
+        if (!retrySameBody) intentRef.current = newIntent();
+        lastBodyRef.current = bodyKey;
+        setState({ pending: true, result: null });
+        const result = await send(intentRef.current);
+        lastKindRef.current = result.kind;
+        setState({ pending: false, result });
+        return result;
+      } finally {
+        inFlightRef.current = false;
+      }
     },
     [],
   );
@@ -169,10 +207,19 @@ export function CommandOutcome({
   result: CommandResult<unknown> | null;
   success: string;
 }) {
+  const say = useAnnouncer();
+  const succeeded = result?.kind === "ok";
+  // Said once per success, in the section's own live region: the note below
+  // carries role=status too, but a region inserted already populated is
+  // announced inconsistently and a success nobody hears is a form that
+  // silently did nothing (finding FE-6).
+  useEffect(() => {
+    if (succeeded && success) say(success);
+  }, [succeeded, success, say]);
   if (result === null) return null;
   if (result.kind === "ok") {
     return (
-      <div className="note" data-command-success>
+      <div className="note" role="status" data-command-success>
         {success}
       </div>
     );
@@ -193,9 +240,13 @@ export function CommandOutcome({
       </div>
     );
   }
+  // Neither a receipt nor a typed refusal: the write may well have committed
+  // behind a gateway page or a body that never finished arriving, so the
+  // reader is told what a retry would do rather than left to guess (FE-8).
   return (
     <div className="note crit" role="alert" data-command-error>
-      RESPONSE_INVALID — the server&apos;s answer did not match the wire.
+      RESPONSE_INVALID — the server&apos;s answer did not match the wire, so whether the command
+      took effect is unknown. Retrying sends the same key.
     </div>
   );
 }
@@ -307,6 +358,7 @@ export function CreateRunControl({
             )}
             <RefusedControl
               refusal={action ? action.refusal : null}
+              busy={pending}
               className="rb acc"
               data-action="CREATE_RUN"
               onClick={
@@ -314,7 +366,7 @@ export function CreateRunControl({
                   ? () => {
                       void run(request, (intent) => createRun(caseId, request, intent)).then(
                         (outcome) => {
-                          if (outcome.kind !== "ok") return;
+                          if (outcome?.kind !== "ok") return;
                           // The address is corrected, not navigated: the
                           // analyst did not move, the run they are on gained
                           // a name. `replace` keeps Back at where they came
@@ -408,6 +460,7 @@ export function PinInputControl({
         </label>
         <RefusedControl
           refusal={action ? action.refusal : null}
+          busy={pending}
           className="rb acc"
           data-action="PIN_RUN_INPUT"
           onClick={
@@ -415,7 +468,7 @@ export function PinInputControl({
               ? () => {
                   void run(subject, (intent) => pinRunInput(caseId, runId, subject, intent)).then(
                     (outcome) => {
-                      if (outcome.kind === "ok") {
+                      if (outcome?.kind === "ok") {
                         onPinned(outcome.receipt.input_fingerprint);
                         onRefetch(runId);
                       }
@@ -479,6 +532,7 @@ export function GatePanelControl({
       <div className="pb">
         <RefusedControl
           refusal={null}
+          busy={preview.pending}
           className="rb"
           data-action="PREVIEW"
           data-preview-gate={gate}
@@ -502,6 +556,7 @@ export function GatePanelControl({
           <>
             <RefusedControl
               refusal={approveRefusal}
+              busy={approve.pending}
               className="rb acc"
               data-action={APPROVE_ACTION[gate]}
               onClick={
@@ -514,7 +569,7 @@ export function GatePanelControl({
                       void approve
                         .run(body, (intent) => approveGate(caseId, runId, gate, body, intent))
                         .then((outcome) => {
-                          if (outcome.kind === "ok") {
+                          if (outcome?.kind === "ok") {
                             onFingerprint(outcome.receipt.input_fingerprint);
                             onRefetch(runId);
                           }
@@ -597,6 +652,7 @@ export function WorkControls({
         {work?.stop_code ? <StopCode state={work.state} code={work.stop_code} /> : null}
         <RefusedControl
           refusal={startRefusal}
+          busy={start.pending}
           className="rb acc"
           data-action="START_RUN"
           onClick={
@@ -606,7 +662,7 @@ export function WorkControls({
                   void start
                     .run(body, (intent) => startRun(caseId, runId, body, intent))
                     .then((outcome) => {
-                      if (outcome.kind === "ok") onRefetch(runId);
+                      if (outcome?.kind === "ok") onRefetch(runId);
                     });
                 }
               : undefined
@@ -617,6 +673,7 @@ export function WorkControls({
         <CommandOutcome result={start.result} success="Run enqueued. Reading it back." />
         <RefusedControl
           refusal={retryRefusal}
+          busy={retry.pending}
           className="rb"
           data-action="RETRY_RUN"
           onClick={
@@ -626,7 +683,7 @@ export function WorkControls({
                   void retry
                     .run(body, (intent) => retryRun(caseId, runId, body, intent))
                     .then((outcome) => {
-                      if (outcome.kind === "ok") onRefetch(runId);
+                      if (outcome?.kind === "ok") onRefetch(runId);
                     });
                 }
               : undefined
@@ -635,24 +692,28 @@ export function WorkControls({
           {retry.pending ? "Retrying…" : "Retry run"}
         </RefusedControl>
         <CommandOutcome result={retry.result} success="Run requeued. Reading it back." />
-        <RefusedControl
+        {/* Cancelling a run ends work nothing on the v1 wire restarts, so it
+            asks once more and names the run it would end (finding FE-7). */}
+        <ConfirmedControl
           refusal={cancelRefusal}
+          busy={cancel.pending}
+          step={{ act: "Cancel run", subject: `run ${runId}`, digest: null }}
           className="rb crit"
-          data-action="CANCEL_RUN"
-          onClick={
+          action="CANCEL_RUN"
+          onConfirm={
             cancelAction
               ? () => {
                   void cancel
                     .run({}, (intent) => cancelRun(caseId, runId, intent))
                     .then((outcome) => {
-                      if (outcome.kind === "ok") onRefetch(runId);
+                      if (outcome?.kind === "ok") onRefetch(runId);
                     });
                 }
               : undefined
           }
         >
           {cancel.pending ? "Cancelling…" : "Cancel run"}
-        </RefusedControl>
+        </ConfirmedControl>
         <CommandOutcome result={cancel.result} success="Cancellation requested. Reading it back." />
       </div>
     </section>

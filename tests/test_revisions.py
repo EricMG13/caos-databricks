@@ -193,3 +193,35 @@ def test_invalid_or_over_ceiling_narrative_leaves_no_revision(
     assert lite.conn.execute(
         "SELECT count(*) FROM deliverable_revisions"
     ).fetchone() == (0,)
+
+
+# Code points rather than literals: a fullwidth digit in this file is the
+# confusable RUF001 refuses, and the point of the case is what it is.
+FIGURES_IN_OTHER_SCRIPTS = (
+    "Net leverage is " + chr(0xFF14) + "." + chr(0xFF12) + "x",  # fullwidth
+    "Headroom " + chr(0x0664) + chr(0x0665) + "%",  # Arabic-Indic
+    "About " + chr(0x00BD) + " of the facility",  # vulgar fraction
+    "Tranche " + chr(0x2163) + " matures first",  # Roman numeral
+    "Leverage " + chr(0x1D7D2) + "x",  # mathematical digit
+)
+
+
+@pytest.mark.parametrize("prose", FIGURES_IN_OTHER_SCRIPTS)
+def test_a_figure_in_any_script_is_still_an_uncited_figure(
+    lite: _Harness, prose: str
+) -> None:
+    """FP-06: `"0" <= character <= "9"` saw ASCII digits and nothing else.
+
+    `BoundaryText` applies NFC, which keeps fullwidth digits pasted from a
+    Japanese or Chinese statement, Arabic-Indic ones, and vulgar fractions,
+    Roman numerals and mathematical digits -- so each of these was stored as an
+    uncited figure in committee prose, against invariant 11.
+    """
+    with pytest.raises(Refusal, match="NARRATIVE_FIGURE_UNREFERENCED"):
+        _save(lite, [[{"text": prose}]])
+    lite.conn.rollback()
+
+
+def test_prose_carrying_no_quantity_still_saves(lite: _Harness) -> None:
+    """The rule is quantities, not non-ASCII: a letter is not a figure."""
+    assert _save(lite, [[{"text": "Le levier reste " + chr(0x00EE) + "ntact"}]])

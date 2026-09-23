@@ -1,8 +1,9 @@
 # Databricks Apps runtime configuration (spec section 4, R8, R12).
 #
 # The bundle (`databricks.yml`) is the one source of the app's environment:
-# nothing is set here, so a platform that ignored the bundle's `config` fails
-# visibly at boot rather than running on stale defaults (F52). With no
+# nothing is set here, so a platform that ignored the bundle's `config` boots
+# with no endpoint, price or blob root, prints the typed code and answers
+# `not_ready`, rather than running on stale defaults (F52). With no
 # `requirements.txt` in this tree the platform installs from `uv.lock` and
 # honours `requires-python` (3.13); `DATABRICKS_APP_PORT` is injected by the
 # platform. The lock and the runtime groups only: no dev toolchain (F49).

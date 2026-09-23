@@ -6,6 +6,8 @@
 # docs/DEPLOYMENT.md for the resources the workspace must hold first.
 bundle:
   name: caos
+  # The direct engine and the fields below exist from this CLI on (N5).
+  databricks_cli_version: ">= 1.17.0"
 
 variables:
   model_endpoint:
@@ -64,8 +66,6 @@ resources:
             value: ${var.model_price}
           - name: CAOS_RUN_CEILING
             value: ${var.run_ceiling}
-          - name: CAOS_UC_SCHEMA
-            value: ${var.uc_catalog}.${var.uc_schema}
           - name: CAOS_BLOB_ROOT
             value: volume:///Volumes/${var.uc_catalog}/${var.uc_schema}/caos_blobs
           - name: CAOS_LAKEBASE_INSTANCE
@@ -75,10 +75,12 @@ resources:
           - name: CAOS_GROUP_ANALYST
             value: ${var.group_analyst}
       # Who may open the app (F50): the proxy stops anyone without CAN_USE
-      # before the API sees them, whatever group standing they hold.
+      # before the API sees them, whatever group standing they hold. Neither
+      # business group may manage the app (W3): CAN_MANAGE deploys code as
+      # the app's principal, which writes the ledger; the deployer holds it.
       permissions:
         - group_name: ${var.group_admin}
-          level: CAN_MANAGE
+          level: CAN_USE
         - group_name: ${var.group_analyst}
           level: CAN_USE
       resources:
@@ -101,48 +103,36 @@ resources:
             permission: WRITE_VOLUME
 
 sync:
-  # The static export is built locally (frontend gate G22) and git-ignored,
-  # but it is part of the app, so it ships with the source.
+  # An allowlist of what the process reads, so nothing else in a working tree
+  # ever ships: the package, the agent definitions, the bundle authority, the
+  # static export (built locally, git-ignored) and the lock. A denylist dropped
+  # `caos/qualification` because the CLI matches `dir/**` at every depth (C2),
+  # and it uploaded untracked files such as a local blob cache (TM-3).
+  paths:
+    - caos
+    - icm
+    - vendor
+    - frontend/dist
+    - app.yaml
+    - pyproject.toml
+    - uv.lock
+    - .python-version
+  # The export is git-ignored, and the sync honours the ignore file, so it
+  # is named again here or it does not ship.
   include:
     - frontend/dist/**
-  # What the process never reads (F29): the suite, the docs, the frontend's
-  # sources and toolchain, the gate configuration. A deploy against the
-  # loopback stub uploaded 1,522 files before this list; the App needs the
-  # package, the bundle authority, the agent definitions, the export and the
-  # lock.
-  exclude:
-    - tests/**
-    - docs/**
-    - stubs/**
-    - qualification/**
-    - .github/**
-    - .claude/**
-    - frontend/src/**
-    - frontend/tests/**
-    - frontend/scripts/**
-    - frontend/.prettierrc
-    - frontend/.prettierignore
-    - frontend/a11y-results/**
-    - frontend/*.ts
-    - frontend/*.mjs
-    - frontend/*.json
-    - frontend/*.html
-    - scripts/**
-    # Never a bare `*.md` (F48): a slashless pattern matches at every depth and
-    # took every SKILL.md and prompt block out of the app while health stayed
-    # green. The root documents are named one by one.
-    - CLAUDE.md
-    - DESIGN.md
-    - compose.yaml
-    - complexipy-snapshot.json
-    - .pre-commit-config.yaml
-    - .gitleaks.toml
-    - .env.example
 
 targets:
   dev:
     mode: development
     default: true
+    # A developer's copy is its own app (DP-6): development mode leaves app
+    # names alone, and one name for both targets let a dev deploy take over
+    # the production app.
+    resources:
+      apps:
+        caos:
+          name: caos-${bundle.target}
   prod:
     mode: production
     # One copy, in a path of its own rather than the deployer's home or the

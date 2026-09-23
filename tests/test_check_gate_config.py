@@ -118,12 +118,25 @@ def test_a_sync_exclude_that_hides_the_methodology_is_named(tmp_path: Path) -> N
     root = _tree(tmp_path)
     bundle = root / "databricks.yml"
     assert check_gate_config._bundle_problems(root) == []
+    written = bundle.read_text()
     bundle.write_text(
-        bundle.read_text().replace("  exclude:\n", '  exclude:\n    - "*.md"\n')
+        written.replace("  include:\n", '  exclude:\n    - "*.md"\n  include:\n')
     )
     problems = check_gate_config._bundle_problems(root)
     assert any("'*.md' hides vendor/deploy-v/CANON_SHARED.md" in p for p in problems)
     assert any("hides icm/shared/prompt/instruction.md" in p for p in problems)
+    # The sync is an allowlist (C2, TM-3): a path the app needs that no listed
+    # root carries, or no allowlist at all, is named.
+    bundle.write_text(written.replace("    - caos\n", ""))
+    problems = check_gate_config._bundle_problems(root)
+    assert "bundle: sync.paths does not carry caos/serve.py" in problems
+    assert "bundle: sync.paths does not carry caos/qualification/store.py" in problems
+    bundle.write_text(written.replace("  paths:\n", "  roots:\n"))
+    problems = check_gate_config._bundle_problems(root)
+    assert any(p.startswith("bundle: sync.paths is not set") for p in problems)
+    bundle.write_text(written.replace("    - frontend/dist/**\n", ""))
+    problems = check_gate_config._bundle_problems(root)
+    assert "bundle: sync.include lacks frontend/dist/** (git-ignored)" in problems
     (root / "app.yaml").write_text("command: [x]\nenv:\n  - name: A\n    value: b\n")
     assert any(
         p.startswith("app.yaml: sets env")

@@ -70,7 +70,7 @@ export function AdmitSources({
     if (refusal || pending || files.length === 0) return;
     setRefreshFailed(false);
     const outcome = await run(fileSetKey(files), (intent) => admitSources(caseId, files, intent));
-    if (outcome.kind !== "ok") return;
+    if (outcome?.kind !== "ok") return;
     setFiles([]);
     if (inputRef.current) inputRef.current.value = "";
     const refreshed = await refetchUpload(caseId);
@@ -93,6 +93,7 @@ export function AdmitSources({
       <RefusedControl
         refusal={refusal}
         onClick={action ? () => void submit() : undefined}
+        busy={pending}
         className="rb solid"
         reasonDisplay="inline"
         aria-label="Admit sources"

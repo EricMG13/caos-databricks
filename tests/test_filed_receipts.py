@@ -55,7 +55,6 @@ def _read(lite: _Harness, receipt: Receipt) -> bytes:
     return read_filed_receipt(
         lite.conn,
         lite.blobs,
-        lite.bundle,
         case_id=receipt.case_id,
         run_id=receipt.run_id,
         revision_id=receipt.revision_id,
@@ -107,7 +106,6 @@ def test_unfiled_and_legacy_publications_are_not_receipts(lite: _Harness) -> Non
             read_filed_receipt(
                 lite.conn,
                 lite.blobs,
-                lite.bundle,
                 case_id=lite.case_id,
                 run_id=lite.run_id,
                 revision_id=revision,
@@ -396,13 +394,24 @@ def test_receipt_row_failure_rolls_back_even_after_blob_and_audit_writes(
 
 
 @pytest.mark.parametrize("change", ["source", "authority"])
-def test_filed_receipt_requires_live_saved_payload_proof(
+def test_a_filed_receipt_survives_live_state_moving_under_it(
     lite: _Harness, change: str
 ) -> None:
+    """A filed record is served from its own bytes, whatever moves after it.
+
+    This asserted the opposite until FP-05. Every Committee read of a filed
+    revision re-ran `prove_revision` against the current sources and the current
+    `vendor/deploy-v`, so a WRITER withdrawing a cited source or a routine
+    bundle upgrade -- two ordinary events -- locked every filed record out of
+    the section permanently, refusing with the codes tampering produces and
+    offering remediation for a record nobody can change. Filing re-proves under
+    the case lock; after that the bytes and the audit chain are the proof.
+    """
     from caos.methodology.bundle import MANIFEST_NAME
     from caos.store.gates import withdraw_source
 
     receipt = _file(lite)
+    expected = _read(lite, receipt)
     if change == "source":
         withdraw_source(
             lite.conn,
@@ -413,8 +422,7 @@ def test_filed_receipt_requires_live_saved_payload_proof(
     else:
         path = lite.bundle.root / MANIFEST_NAME
         path.write_bytes(path.read_bytes() + b"\nchanged\n")
-    with pytest.raises(Refusal):
-        _read(lite, receipt)
+    assert _read(lite, receipt) == expected
 
 
 def test_receipt_migration_preserves_legacy_filing_without_inventing_bytes(

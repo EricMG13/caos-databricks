@@ -94,6 +94,10 @@
   --font-display: var(--font-display);
 }
 
+/* No `overflow-x: hidden` here: it hid a page wider than its viewport rather
+   than letting the reader reach what was off it. What is wide now scrolls in
+   the panel that holds it, and anything that still is not reaches the page's
+   own scrollbar (WCAG 1.4.10, finding FE-5). */
 html,
 body,
 #root {
@@ -103,7 +107,6 @@ body,
   color: var(--caos-text);
   font-family: var(--font-sans);
   font-size: 11px;
-  overflow-x: hidden;
 }
 
 /* Monospaced numerics with aligned decimals. */

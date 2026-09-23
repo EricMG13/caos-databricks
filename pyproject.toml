@@ -38,7 +38,7 @@ dev = [
 ]
 
 # Virtual project: nothing here is built or installed, so every distribution
-# uv installs is a wheel (`no-build`). The app runs as `python -m caos.api.serve`.
+# uv installs is a wheel (`no-build`). The app runs as `python -m caos.serve`.
 [tool.uv]
 package = false
 no-build = true

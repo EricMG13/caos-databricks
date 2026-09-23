@@ -15,6 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from pathlib import Path
 from threading import Barrier
+from typing import Any
 from uuid import uuid4
 
 import pytest
@@ -528,3 +529,68 @@ def test_a_receipt_that_names_no_identity_verifies_nothing() -> None:
     result = verify_package(package)
     assert not result.verified
     assert result.reason == "the receipt does not identify this payload"
+
+
+def _cross_referenced() -> dict[str, Any]:
+    """A payload whose narrative names a citation of the record it binds."""
+    from copy import deepcopy
+
+    payload = deepcopy(PAYLOAD_DATA)
+    [artifact] = payload["artifacts"]
+    artifact["route_node_id"] = "1-CP-1"
+    [citation] = json.loads(artifact["record"])["citations"]
+    payload["narrative"] = [
+        [{"figure": {"route_node_id": "1-CP-1", "citation_index": 0, **citation}}]
+    ]
+    return payload
+
+
+def _package_of(payload: dict[str, Any]) -> bytes:
+    data = json.dumps(payload).encode()
+    receipt = json.dumps(
+        {
+            "payload_sha256": hashlib.sha256(data).hexdigest(),
+            "signed_by": "analyst",
+            "frozen_by": "freezer",
+            "filed_by": "filer",
+            **IDENTITY,
+        }
+    ).encode()
+    return build_package(data, receipt, render(payload))
+
+
+def test_a_narrative_figure_must_match_the_record_the_payload_binds() -> None:
+    """FP-17: the payload's one internal cross-reference went unchecked.
+
+    A figure carries its own copy of `document_sha256`, `page` and
+    `matched_text`, and the verifier never compared that copy with
+    `citations[citation_index]` of the record it binds -- so a package showing a
+    forged quote on a page nobody cited was reported internally consistent.
+    """
+    from copy import deepcopy
+
+    payload = _cross_referenced()
+    assert verify_package(_package_of(payload)) == Verification(True, None)
+
+    for field, forged in (
+        ("matched_text", "A quote nobody anchored"),
+        ("page", 99),
+        ("document_sha256", "f" * 64),
+    ):
+        moved = deepcopy(payload)
+        moved["narrative"][0][0]["figure"][field] = forged
+        assert verify_package(_package_of(moved)) == Verification(
+            False, "a narrative figure does not match the citation it names"
+        )
+
+    unresolvable = deepcopy(payload)
+    unresolvable["narrative"][0][0]["figure"]["citation_index"] = 7
+    assert verify_package(_package_of(unresolvable)) == Verification(
+        False, "a narrative figure names no citation of this payload"
+    )
+
+    elsewhere = deepcopy(payload)
+    elsewhere["narrative"][0][0]["figure"]["route_node_id"] = "2-CP-5"
+    assert verify_package(_package_of(elsewhere)) == Verification(
+        False, "a narrative figure names no citation of this payload"
+    )

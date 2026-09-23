@@ -37,7 +37,13 @@ export type RegionStatus<D = WorkspaceDocument> =
   | { kind: "loading" }
   | { kind: "ready"; document: D }
   | { kind: "observed-empty"; observed_at: string; document: D }
-  | { kind: "error"; refusal: Refusal }
+  | {
+      kind: "error";
+      refusal: Refusal;
+      /** The server's own `Retry-After`, where the refusal carried one. The
+          event tail waits it out rather than guessing (finding FE-3). */
+      retryAfterSeconds?: number;
+    }
   | { kind: "unavailable" }
   | { kind: "stale"; document: D }
   | { kind: "offline" }
@@ -118,6 +124,27 @@ function refusalOf(body: unknown): Refusal {
   }
 }
 
+/** A refusal's `Retry-After`, in seconds, or null where it carried none or
+    carried something that is not a count of seconds. An HTTP-date form is
+    read as absent rather than guessed at against a clock this workspace does
+    not trust. */
+export function retryAfterOf(response: Response): number | null {
+  const header = response.headers.get("Retry-After");
+  if (header === null) return null;
+  const seconds = Number(header.trim());
+  return Number.isInteger(seconds) && seconds >= 0 ? seconds : null;
+}
+
+/** The status a refused response becomes, carrying its wait where it named one. */
+function errorOf(response: Response, body: unknown): RegionStatus {
+  const seconds = retryAfterOf(response);
+  return {
+    kind: "error",
+    refusal: refusalOf(body),
+    ...(seconds === null ? {} : { retryAfterSeconds: seconds }),
+  };
+}
+
 /** The JSON a response carries, or null when it carries none that parses:
     a refusal is then typed from nothing rather than from an exception. */
 export async function bodyOf(response: Response): Promise<unknown> {
@@ -190,7 +217,7 @@ export async function fetchSection(
     return { kind: "offline" };
   }
   if (response.status === 404) return { kind: "unavailable" };
-  if (!response.ok) return { kind: "error", refusal: refusalOf(await bodyOf(response)) };
+  if (!response.ok) return errorOf(response, await bodyOf(response));
   const body = await bodyOf(response);
   return classifyV1(section, body, query);
 }

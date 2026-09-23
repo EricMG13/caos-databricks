@@ -25,6 +25,7 @@ not answer a replay with the body it first committed.
 from __future__ import annotations
 
 from collections.abc import Callable
+from hashlib import sha256
 from typing import Annotated, Any
 from uuid import UUID, uuid4
 
@@ -68,7 +69,7 @@ from caos.deliverable.filing import (
     persist_receipt,
     sign_opinion_in,
 )
-from caos.deliverable.revisions import save_revision_in
+from caos.deliverable.revisions import prove_revision, save_revision_in
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
 from caos.store.audit import GovernedAction
@@ -80,11 +81,13 @@ from caos.store.members import Standing
 # each re-derive the whole payload inside the unit -- the work
 # `caos/api/reads/reports.py` budgets at 45 for the same run -- so both are
 # stated for a route of that shape and a wider route is what first moves them.
-# Signature and filing read only the revision's chain rows, so they do not.
+# Signature reads only the revision's chain rows, so it does not. Filing
+# re-proves what it files (FP-04), so it now scales with the route as freeze
+# does; the difference between it and freeze is the filing chain's own rows.
 SAVE_IO = 52
 SIGN_IO = 14
 FREEZE_IO = 55
-FILE_IO = 16
+FILE_IO = 56
 IO_BUDGET = max(SAVE_IO, SIGN_IO, FREEZE_IO, FILE_IO)
 
 _REVISION = "/api/v1/cases/{case_id}/revisions/{revision_id}"
@@ -327,8 +330,9 @@ def file(  # noqa: PLR0913 -- decision 2's dependency order, keyword-only
     case_id: CasePath,
     conn: Store,
     blobs: Blobs,
+    bundle: Methodology,
 ) -> Response:
-    """File once, by someone who neither signed nor froze.
+    """File once, by someone who neither signed nor froze, over proven bytes.
 
     The detached receipt names the audit link this unit writes, so it is
     persisted in `after_event` -- after the command receipt, which therefore
@@ -339,6 +343,17 @@ def file(  # noqa: PLR0913 -- decision 2's dependency order, keyword-only
 
     def write(unit: StoreConnection) -> tuple[int, DeliverableFiled]:
         run_id = _reviewed(unit, case_id, revision_id, body.payload_sha256)
+        # Re-derived here as the freeze re-derives it, under the same case lock.
+        # Filing is the act that enters the permanent audit chain, and it was
+        # the one act of the three that compared rows only: a WRITER
+        # withdrawing a cited source reopens every gate bound to it, and
+        # `DELIVERABLE_FILED` was still written for a deliverable the host could
+        # no longer prove (FP-04).
+        proven = prove_revision(
+            unit, blobs, bundle, case_id=case_id, revision_id=revision_id
+        )
+        if sha256(proven).hexdigest() != body.payload_sha256:
+            raise Refusal(RefusalCode.DELIVERABLE_MOVED_SINCE_SIGNING)
         receipt = file_deliverable_in(
             unit, case_id=case_id, actor_id=actor.user_id, revision_id=revision_id
         )

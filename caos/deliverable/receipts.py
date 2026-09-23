@@ -12,32 +12,42 @@ from caos.deliverable.filing import (
     receipt_bytes,
     revision_signatures,
 )
-from caos.deliverable.revisions import prove_revision
-from caos.methodology.bundle import Bundle
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
 from caos.store.audit import audit_head, audit_trail, verify_chain
 from caos.store.commands import payload_digests
 
 
-def read_filed_receipt(  # noqa: PLR0913 -- proof authority and exact selection
+def read_filed_receipt(
     conn: StoreConnection,
     blobs: BlobStore,
-    bundle: Bundle,
     *,
     case_id: UUID,
     run_id: UUID,
     revision_id: UUID,
 ) -> bytes:
-    """Return proven canonical bytes in the caller's authorized read or write unit.
+    """Return the stored receipt in the caller's authorized read or write unit.
 
     The caller owns authorization, its own unit and transaction cleanup, as for
     `prove_revision`: a write caller holds the case lock, the filed Committee
     section read holds none, so the audit-head comparison below reads across
     snapshots and a governed write committing mid-read makes it refuse rather
-    than serve bytes it cannot prove. Historical renderer pins remain valid; live
-    source and saved-payload authority must still prove. Legacy filings without
-    bytes refuse.
+    than serve bytes it cannot prove. Historical renderer pins remain valid.
+    Legacy filings without bytes refuse.
+
+    **A filed record is served from its own bytes, never from live state.** This
+    re-ran `prove_revision` against the current sources, the current
+    `vendor/deploy-v` and the current narrative rules, and refused with the codes
+    tampering produces when any of the three moved -- so a WRITER withdrawing a
+    source, a routine bundle upgrade or a tightened narrative rule each locked
+    every filed record out of the Committee section permanently, with remediation
+    advice offered for a record that is immutable (FP-05). What is proven here is
+    what a filed record *is*: the frozen payload still hashes to the digest the
+    receipt names, the receipt bytes are the ones the host wrote, the three roles
+    are independent, and the `DELIVERABLE_FILED` link is in a verified audit
+    chain whose head has not moved. Filing itself re-proves the revision under
+    the case lock (`caos/api/commands/deliverable.py`), which is where a live
+    re-derivation belongs.
     """
     row = conn.execute(
         "SELECT r.payload_sha256,p.payload_sha256,p.frozen_by,p.filed_by,"
@@ -98,9 +108,9 @@ def read_filed_receipt(  # noqa: PLR0913 -- proof authority and exact selection
         or trail[-1].entry_sha256 != audit_head(conn, case_id)
     ):
         raise invalid
-    payload = prove_revision(
-        conn, blobs, bundle, case_id=case_id, revision_id=revision_id
-    )
-    if sha256(payload).hexdigest() != digest:
+    # The frozen payload's own bytes, from the store that addresses them by
+    # digest: a filed record is immutable, so what is checked is that the bytes
+    # the receipt names are still held and still hash to it.
+    if sha256(blobs.get(digest)).hexdigest() != digest:
         raise invalid
     return data

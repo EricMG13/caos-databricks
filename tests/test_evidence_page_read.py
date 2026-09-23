@@ -12,7 +12,7 @@ import json
 import subprocess  # nosec B404
 import time
 import zlib
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, cast
@@ -38,9 +38,11 @@ from caos.api.wire import PAGE_LINES_MAX
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
 from caos.evidence import page as page_module
+from caos.evidence import pdf as pdf_module
 from caos.evidence.citations import anchor_citation
 from caos.evidence.extract import (
     DEFAULT_LIMITS,
+    AdmissionLimits,
     Extractor,
     ExtractorDispatch,
     ExtractorIdentity,
@@ -98,6 +100,15 @@ def pin(
     pin_run_input(conn, run_id, snapshot.version, bundle, subject=SUBJECT)
     conn.commit()
     return Pinned(conn, case_id, run_id, sources, blobs)
+
+
+@pytest.fixture(autouse=True)
+def forget_frames() -> Iterator[None]:
+    """`page.py` remembers a document's page crops for the life of the process,
+    so a test that counts children starts and leaves it empty."""
+    page_module._FRAMES.clear()
+    yield
+    page_module._FRAMES.clear()
 
 
 @pytest.fixture
@@ -420,6 +431,58 @@ def test_the_page_read_declares_one_round_trip() -> None:
     """`page_frame` and its budgeted child are covered in
     `tests/test_pdf_page_frame.py`; what belongs here is the read's own budget."""
     assert page_module.IO_BUDGET == 1
+
+
+def test_a_pdf_page_frame_is_read_from_the_child_once_per_document_and_page(
+    report: Pinned, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """AS-5: every read of an evidence page started an interpreter with a 60 s
+    budget, at READER standing, for a crop that is a pure function of a
+    digest-addressed document and a page number. Paging through a document, or
+    reopening it, re-read it every time."""
+    asked: list[int] = []
+    real = page_frame
+
+    def counted(
+        data: bytes, page: int, *, limits: AdmissionLimits, deadline: float
+    ) -> pdf_module.Frame:
+        asked.append(page)
+        return real(data, page, limits=limits, deadline=deadline)
+
+    monkeypatch.setattr(pdf_module, "page_frame", counted)
+    first = page_of(report, report.sources[0])
+    again = page_of(report, report.sources[0])
+
+    assert asked == [1]
+    assert again.body.frame == first.body.frame
+    assert again.body.lines == first.body.lines
+
+
+def test_the_remembered_frames_are_bounded_and_a_refusal_is_not_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The cache is an LRU of `FRAME_CACHE_SIZE`, and only of what the child
+    answered: a deadline the load made is not a fact about a document."""
+    monkeypatch.setattr(
+        pdf_module, "page_frame", lambda data, page, **bounds: (0.0, 0.0, 1.0, 2.0)
+    )
+    for ordinal in range(page_module.FRAME_CACHE_SIZE + 5):
+        crop = page_module._Crop(f"{ordinal:064x}", b"", DEFAULT_LIMITS, float("inf"))
+        assert page_module._page_crop(crop, 1) == (0.0, 0.0, 1.0, 2.0)
+    assert len(page_module._FRAMES) == page_module.FRAME_CACHE_SIZE
+    assert ("0" * 64, 1) not in page_module._FRAMES, "the oldest was dropped"
+
+    refused: list[int] = []
+
+    def timed_out(data: bytes, page: int, **bounds: object) -> pdf_module.Frame:
+        refused.append(page)
+        raise Refusal(RefusalCode.SOURCE_EXTRACTION_TIMEOUT)
+
+    monkeypatch.setattr(pdf_module, "page_frame", timed_out)
+    crop = page_module._Crop("f" * 64, b"", DEFAULT_LIMITS, float("inf"))
+    assert page_module._page_crop(crop, 3) is None
+    assert page_module._page_crop(crop, 3) is None
+    assert refused == [3, 3]
 
 
 # The identity and frame helpers refuse before any store or extractor is

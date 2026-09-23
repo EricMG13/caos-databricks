@@ -27,6 +27,7 @@ import {
   type Intent,
 } from "@/app/commands";
 import { sectionUrl } from "@/app/transport";
+import { ConfirmedControl } from "@/controls/ConfirmedControl";
 import { RefusedControl } from "@/controls/RefusedControl";
 import { CommandOutcome, useCommand } from "@/sections/run/controls";
 import { citationsOf, figureToken, paragraphs, type CitationChoice } from "./figures";
@@ -172,9 +173,18 @@ function FilingAct({
   const verb = label.split(" ")[0]!;
   return (
     <div className="fld">
-      <RefusedControl
+      {/* Signing, freezing and filing bind an approver to exact bytes and the
+          v1 wire has no reverse command, so each asks once more and names the
+          revision and the digest it would bind (finding FE-7). */}
+      <ConfirmedControl
         refusal={refusal}
-        onClick={
+        busy={pending}
+        step={{
+          act: label,
+          subject: saved ? `revision ${saved.id}` : "no saved revision",
+          digest: saved?.digest ?? null,
+        }}
+        onConfirm={
           action
             ? () => {
                 if (refusal || pending || !saved) return;
@@ -190,18 +200,17 @@ function FilingAct({
                   payload_sha256: saved.digest,
                 };
                 void run(request, (intent) => send(saved, intent)).then((outcome) => {
-                  if (outcome.kind === "ok") onDone(saved);
+                  if (outcome?.kind === "ok") onDone(saved);
                 });
               }
             : undefined
         }
         className="rb"
-        reasonDisplay="inline"
-        data-action={name}
+        action={name}
         aria-label={label}
       >
         {pending ? `${verb}…` : label}
-      </RefusedControl>
+      </ConfirmedControl>
       <CommandOutcome result={result} success={`${label}: done. Re-reading the report.`} />
     </div>
   );
@@ -296,7 +305,7 @@ export function FilingControls({
                         saveRevision(body.case_id, body.displayed_run_id, request, intent),
                       )
                       .then((outcome) => {
-                        if (outcome.kind !== "ok") return;
+                        if (outcome?.kind !== "ok") return;
                         setDraft("");
                         // The address is corrected, not navigated: the reader
                         // did not move, the run gained a newer revision, and a
@@ -313,6 +322,7 @@ export function FilingControls({
                   }
                 : undefined
             }
+            busy={save.pending}
             className="rb solid"
             reasonDisplay="inline"
             data-action="SAVE_REVISION"

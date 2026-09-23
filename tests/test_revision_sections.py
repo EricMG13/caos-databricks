@@ -230,6 +230,11 @@ def test_financial_section_reads_fail_closed_before_returning_text(
     lite.conn.rollback()
     if section == "report" and damage in {"receipt", "actor"}:
         assert response.status_code == 200  # A saved report is not a filing claim.
+    elif section == "committee" and damage in {"record", "source"}:
+        # A filed deliverable reads from the snapshot proven at filing (FP-05):
+        # live state moving afterwards does not unfile it. Its own payload,
+        # receipt and signers still fail closed.
+        assert response.status_code == 200
     else:
         assert response.status_code != 200
         assert set(response.json()) == {"code", "clears"}

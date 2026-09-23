@@ -43,7 +43,7 @@ from __future__ import annotations
 
 import json
 import unicodedata
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from hashlib import sha256
 from typing import Any
@@ -68,12 +68,52 @@ from caos.store.run_inputs import RunSubject
 from caos.store.runs import run_status
 from caos.store.source_sets import pinned_live_sources
 
-# A run that declared its refusal must have ended on one. RUNNING and
-# RUNNABLE are not answers; CANCELLED did not answer the question asked.
-_ENDED = frozenset({RunStatus.BLOCKED, RunStatus.FAILED, RunStatus.COMPLETE})
+# A run that declared its refusal must have *ended on one*. RUNNING is a run
+# with more to do and CANCELLED did not answer the question asked, so neither is
+# an answer -- and COMPLETE is the run answering it the other way. COMPLETE was
+# in this set until the adversarial pass (FP-01) showed what that bought: a
+# retried node succeeds, the run finishes, and the first attempt's stale
+# `attempt_refusals` row still matched, so a concluded run could be signed as
+# the refusal its case declared.
+_REFUSED = frozenset({RunStatus.BLOCKED, RunStatus.FAILED})
 
 # A case label is authored and reaches a digest; it is a name, not prose.
 _LABEL_LIMIT = 128
+
+# The refusals a case may declare as its expected result. A qualification key
+# says what the *methodology* does with the evidence it was given -- a gate that
+# refuses a consumer, a handoff that cannot be validated, a quote that cannot be
+# anchored. `STORE_UNAVAILABLE`, `PROVIDER_UNAVAILABLE` and the orchestration
+# proof's own codes are the host or its infrastructure failing, and a set that
+# declared one would be qualifying an outage rather than a reading (FP-01).
+DECLARABLE_REFUSALS = frozenset(
+    {
+        RefusalCode.HANDOFF_BLOCKED,
+        RefusalCode.HANDOFF_MALFORMED,
+        RefusalCode.HANDOFF_INCOMPLETE,
+        RefusalCode.HANDOFF_IDENTITY_MISMATCH,
+        RefusalCode.HANDOFF_UNDECLARED_FIELD,
+        RefusalCode.ENVELOPE_INVALID,
+        RefusalCode.ENVELOPE_UNDECLARED_FIELD,
+        RefusalCode.ENVELOPE_UNCITED_CLAIM,
+        RefusalCode.READINESS_INVALID,
+        RefusalCode.READINESS_INCOMPLETE,
+        RefusalCode.CITATION_NOT_LOCATED,
+        RefusalCode.CITATION_AMBIGUOUS,
+        RefusalCode.CITATION_NOT_DELIVERED,
+        RefusalCode.METHODOLOGY_INPUT_INVALID,
+        RefusalCode.FORECAST_CHAIN_BROKEN,
+        RefusalCode.FORECAST_RESIDUAL_UNRECONCILED,
+        RefusalCode.FORECAST_DRIVER_NOT_READY,
+    }
+)
+
+# The projection fields that carry one value. Two keys naming one of these on
+# one module with different values cannot both be met, whatever a run answers
+# (AR-23); the remaining fields are lists, where two memberships are ordinary.
+SCALAR_PROJECTION_FIELDS = frozenset(
+    {"qa_status", "committee_status", "confidence_band", "decision_scope"}
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -293,7 +333,15 @@ def qualification_set_digest(qualification: QualificationSet) -> str:
     they become pinned state.
     """
     assert_measurable(qualification)
-    canonical = sorted(_digested(case) for case in qualification.cases)
+    # Sorted on each entry's own canonical JSON rather than on the list itself.
+    # An entry is a list of mixed shapes -- a subject is a list where an
+    # expected refusal is a string -- so two cases declaring different optional
+    # fields made Python compare a `list` with a `str` and raise a bare
+    # `TypeError` out of the digest (FP-08). Every committed set holds one case,
+    # where the two orders cannot differ.
+    canonical = sorted(
+        (_digested(case) for case in qualification.cases), key=_canonical_json
+    )
     return sha256(
         json.dumps(
             canonical, sort_keys=True, separators=(",", ":"), allow_nan=False
@@ -301,12 +349,26 @@ def qualification_set_digest(qualification: QualificationSet) -> str:
     ).hexdigest()
 
 
+def _canonical_json(entry: list[object]) -> str:
+    return json.dumps(entry, sort_keys=True, separators=(",", ":"), allow_nan=False)
+
+
+def case_label(case: QualificationCase) -> str:
+    """One case's label as the digest binds it.
+
+    Public because `assert_unambiguous` has to compare the labels the digest
+    will compare: it read the authored strings, so `"A"` and `"A "` were two
+    distinct cases there and one entry in the digest (FP-08).
+    """
+    return BoundaryText.of(case.label.strip(), limit=_LABEL_LIMIT).value
+
+
 def _digested(case: QualificationCase) -> list[object]:
     """One case's digested form. A subject is appended only when declared, so a
     set of subject-free cases binds exactly the digest it bound before cases
     could carry one."""
     entry: list[Any] = [
-        BoundaryText.of(case.label.strip(), limit=_LABEL_LIMIT).value,
+        case_label(case),
         [case.profile_id, case.selection_id],
         # The inputs, not only the answers. Two sets with identical keys
         # over different documents are different sets, and a verdict binding
@@ -415,6 +477,29 @@ def build_matrix(
     )
 
 
+def _guarded[T](read: Callable[[], T]) -> tuple[T | None, RefusalCode | None]:
+    """One reader's answer, or the row's own uncertainty in place of it.
+
+    A row survives its own failure, and `_ROW_REFUSALS` names the three ways a
+    reader can fail that are the *row's* uncertainty rather than a reason to end
+    the matrix. Only `_cited` and the register reader were guarded, so a pin
+    that stopped reading, or vendored bytes that moved, part-way through a set
+    raised out of `build_matrix` and `_persist_performed` never ran -- every run
+    already paid for, with no snapshot (FP-07). Every reader is guarded here, in
+    one place, so the list cannot fall out of step again.
+
+    `None` for a comparison that was not made: scoring it `False` would say the
+    module answered wrongly, and a reviewer went hunting the model for a
+    vendored-bytes fault.
+    """
+    try:
+        return read(), None
+    except Refusal as unreadable:
+        if unreadable.code not in _ROW_REFUSALS:
+            raise
+        return None, unreadable.code
+
+
 def _row(
     conn: StoreConnection,
     blobs: BlobStore,
@@ -435,43 +520,58 @@ def _row(
         proof = assert_orchestration_proof(conn, blobs, bundle, run_id=run_id)
     except Refusal as failed:
         refusal = failed.code
+    # The proof's own answer, kept apart from the reader refusals below. `refusal`
+    # is the row's uncertainty and a later reader may replace it; a declared
+    # refusal is a claim about how the *run* ended, and answering it from a
+    # register reader's `AUTHORITY_BYTES_MISMATCH` would meet a key with a
+    # vendored-bytes fault (FP-01).
+    proof_refusal = refusal
 
-    try:
-        cited = _cited(conn, run_id, proof=proof)
-    except Refusal as unattributed:
-        if unattributed.code not in _ROW_REFUSALS:
-            raise
-        refusal = unattributed.code
-        cited = set()
-    try:
-        registers_met = _registers_met(conn, blobs, bundle, case=case, run_id=run_id)
-    except Refusal as unreadable:
-        if unreadable.code not in _ROW_REFUSALS:
-            raise
-        # The bundle failing its own integrity check is this row's uncertainty,
-        # not the module's miss. Scoring it `False` said the module wrote the
-        # wrong cell, and a reviewer went hunting the model for a vendored-bytes
-        # fault; `None` says the comparison was not made, which is the truth.
-        refusal = unreadable.code
-        registers_met = None
-    met = tuple(expect for expect in case.expects if _matches(expect, cited))
+    cited, cited_refusal = _guarded(lambda: _cited(conn, run_id, proof=proof))
+    registers_met, registers_refusal = _guarded(
+        lambda: _registers_met(conn, blobs, bundle, case=case, run_id=run_id)
+    )
+    forecast_met, forecast_refusal = _guarded(
+        lambda: _forecast_met(
+            conn, blobs, bundle, case=case, run_id=run_id, proof=proof
+        )
+    )
+    ready_met, ready_refusal = _guarded(
+        lambda: _ready_met(conn, blobs, bundle, case=case, run_id=run_id)
+    )
+    blocked_met, blocked_refusal = _guarded(
+        lambda: _blocked_met(conn, blobs, bundle, case=case, run_id=run_id)
+    )
+    projections_met, projections_refusal = _guarded(
+        lambda: _projections_met(conn, blobs, bundle, case=case, run_id=run_id)
+    )
+    for code in (
+        cited_refusal,
+        registers_refusal,
+        forecast_refusal,
+        ready_refusal,
+        blocked_refusal,
+        projections_refusal,
+    ):
+        if code is not None:
+            refusal = code
+    found = cited or set()
+    met = tuple(expect for expect in case.expects if _matches(expect, found))
     return MatrixRow(
         case_label=case.label,
         proven=refusal is None,
         refusal=refusal,
         met=met,
         missed=tuple(expect for expect in case.expects if expect not in met),
-        forecast_met=_forecast_met(
-            conn, blobs, bundle, case=case, run_id=run_id, proof=proof
-        ),
+        forecast_met=forecast_met,
         expected_refusal_met=(
             None
             if case.expected_refusal is None
-            else _refusal_met(conn, run_id, case.expected_refusal, refusal)
+            else _refusal_met(conn, run_id, case.expected_refusal, proof_refusal)
         ),
-        ready_met=_ready_met(conn, blobs, bundle, case=case, run_id=run_id),
-        blocked_met=_blocked_met(conn, blobs, bundle, case=case, run_id=run_id),
-        projections_met=_projections_met(conn, blobs, bundle, case=case, run_id=run_id),
+        ready_met=ready_met,
+        blocked_met=blocked_met,
+        projections_met=projections_met,
         registers_met=registers_met,
     )
 
@@ -491,29 +591,49 @@ def _refusal_met(
     case (`docs/REPAIR_PLAN.md` Phase 6) stops with a refusal recorded and a
     sound proof over what it did accept, so the proof says nothing and the
     stored refusal says everything.
+
+    Three rules, all of them from the adversarial pass (FP-01), because
+    `PerformedEvidence.complete` waives its COMPLETE requirement for whatever
+    this answers -- so this one predicate decides whether an unfinished or
+    successful run can be signed as the refusal its case declared.
+
+    - **The run must have ended refused**, before any branch. BLOCKED or FAILED
+      and nothing else: COMPLETE is the run answering the other way, RUNNING has
+      more to do, CANCELLED was never asked to finish.
+    - **A declared `HANDOFF_BLOCKED` needs the verdict that blocked it.** The run
+      status alone met it for a run CP-0 blocked on readiness before any handoff
+      returned Blocked, which is a different outcome with the same status;
+      `run_blocking_verdicts` is the row the transition writes when a validated
+      Blocked answer is what ended the run (§68).
+    - **A stored code must sit where the run stopped**: on the last attempt of a
+      node that never produced an artifact. Any `attempt_refusals` row of any
+      attempt matched before, so a node that refused once and succeeded on the
+      retry `qualify.py` buys still answered the key.
     """
+    if run_status(conn, run_id) not in _REFUSED:
+        return False
+    if expected is RefusalCode.HANDOFF_BLOCKED:
+        # A validated Blocked handoff is the route's own rule applied, so
+        # `_settle` writes no `attempt_refusals` row for it -- the recorded
+        # verdict is where that outcome is.
+        return bool(
+            conn.execute(
+                "SELECT 1 FROM run_blocking_verdicts WHERE run_id = %s",
+                (run_id,),
+            ).fetchone()
+        )
     if proof_refusal is expected:
         return True
-    # A validated Blocked handoff is the route's own rule applied, so `_settle`
-    # writes no `attempt_refusals` row for it -- the run's own status is where
-    # that outcome is recorded.
-    if (
-        expected is RefusalCode.HANDOFF_BLOCKED
-        and run_status(conn, run_id) is RunStatus.BLOCKED
-    ):
-        return True
-    # The run has to have *ended*, not merely written the code somewhere. A
-    # recorded refusal on a run still RUNNING or RUNNABLE is a node that failed
-    # and a run that has more to do, and `complete` waives its COMPLETE check
-    # for a met refusal -- so without this, a case could declare a refusal, have
-    # one attempt produce it, and be signable over a run that simply stopped
-    # being driven.
-    if run_status(conn, run_id) not in _ENDED:
-        return False
     return bool(
         conn.execute(
             "SELECT 1 FROM attempt_refusals r JOIN run_attempts t"
-            " USING (attempt_id) WHERE t.run_id = %s AND r.code = %s",
+            " USING (attempt_id) WHERE t.run_id = %s AND r.code = %s"
+            " AND NOT EXISTS (SELECT 1 FROM artifacts a JOIN run_attempts n"
+            "  ON n.attempt_id = a.attempt_id"
+            "  WHERE n.run_id = t.run_id AND n.route_node_id = t.route_node_id)"
+            " AND t.attempt_id = (SELECT l.attempt_id FROM run_attempts l"
+            "  WHERE l.run_id = t.run_id AND l.route_node_id = t.route_node_id"
+            "  ORDER BY l.started_at DESC, l.attempt_id DESC LIMIT 1)",
             (run_id, expected.value),
         ).fetchone()
     )
@@ -1277,13 +1397,34 @@ def _registers_ambiguous(expects: tuple[ExpectedRegister, ...]) -> bool:
     return any(_witnesses_contradict(witnesses) for witnesses in groups.values())
 
 
+def _projections_ambiguous(expects: tuple[ExpectedProjection, ...]) -> bool:
+    """Whether one case expects two values of one module's single-valued field.
+
+    `qa_status` is one word per handoff, so "CP-0 said Passed" and "CP-0 said
+    Restricted" are a pair no run can satisfy -- and the ambiguity check covered
+    register and readiness conflicts while letting this one through to
+    execution, where it consumed a route's model work before reading as a miss
+    (AR-23). A list-shaped field is left alone: two memberships of
+    `limitation_flags` are two ordinary questions about one handoff.
+    """
+    seen: dict[tuple[str, str], str] = {}
+    for expect in expects:
+        if expect.field not in SCALAR_PROJECTION_FIELDS:
+            continue
+        key = (expect.module_id, expect.field)
+        if seen.setdefault(key, expect.value) != expect.value:
+            return True
+    return False
+
+
 def assert_unambiguous(qualification: QualificationSet) -> None:
     """Refuse duplicate case labels or answer keys before either can be scored."""
-    labels = [case.label for case in qualification.cases]
+    labels = [case_label(case) for case in qualification.cases]
     if len(set(labels)) != len(labels) or any(
         len(set(case.expects)) != len(case.expects)
         or len(set(case.expects_register)) != len(case.expects_register)
         or _registers_ambiguous(case.expects_register)
+        or _projections_ambiguous(case.expects_projection)
         or (
             case.forecast is not None
             and len({value.name for value in case.forecast.values})

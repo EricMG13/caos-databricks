@@ -19,6 +19,7 @@ from test_evidence_page_read import (
     Pinned,
     blobs,
     corrupt_extraction,
+    forget_frames,
     long_page,
     pin,
     report,
@@ -40,7 +41,7 @@ from caos.store.gates import withdraw_source
 from caos.store.members import Standing, grant, revoke
 from caos.store.runs import create_case, start_run
 
-__all__ = ["blobs", "report"]
+__all__ = ["blobs", "forget_frames", "report"]
 
 
 @pytest.fixture

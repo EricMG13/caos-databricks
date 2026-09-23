@@ -4,8 +4,15 @@ Spec section 4 (R11). Locally and in tests `CAOS_DATABASE_URL` is the whole
 answer. On Databricks Apps the platform injects `PGHOST`, `PGPORT`,
 `PGDATABASE`, `PGUSER` and `PGSSLMODE` for the app's database resource, and
 the password is a short-lived credential the SDK mints for the app's service
-principal. Tokens live about an hour, so one is cached for less than that and
+principal. Tokens live about an hour, so one is refreshed well before that and
 every new connection gets a fresh one after it ages out.
+
+Minting is single-flight and bounded (MX-3, DL-4): one caller mints while the
+others wait for its answer, a mint that has not answered within
+`MINT_SECONDS` is abandoned as `STORE_UNAVAILABLE`, a failed mint is not
+retried for `FAILURE_SECONDS`, and a token the server still accepts is used
+until its real expiry when a fresh one cannot be had. No lock is held across
+the network.
 
 No credential is ever printed, logged or written; the URL this returns is
 handed straight to the driver.
@@ -16,25 +23,44 @@ from __future__ import annotations
 import os
 import threading
 import time
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from urllib.parse import quote
 from uuid import uuid4
 
 import psycopg
-from psycopg import errors
 
 from caos.refusals import Refusal, RefusalCode
 
 DATABASE_URL = "CAOS_DATABASE_URL"
 LAKEBASE_INSTANCE = "CAOS_LAKEBASE_INSTANCE"
+AUTOSCALING_ENDPOINT = "LAKEBASE_AUTOSCALING_ENDPOINT"
 # Databricks Apps inject these for the first database resource (R11).
 PG_ENV = ("PGHOST", "PGPORT", "PGDATABASE", "PGUSER")
 # Below the credential life the vendor library plans for (a 15-minute cache
 # and a 14-minute pool recycle in `databricks_ai_bridge.lakebase`, the same
 # figure the build contract names), with room for a slow connect. F37.
 TOKEN_SECONDS = 14 * 60
+# The most any caller waits on a mint: the SDK's own retry budget.
+MINT_SECONDS = 30.0
+# A failed mint is not retried for this long, so a stalled token endpoint
+# costs one bounded wait, not one per request.
+FAILURE_SECONDS = 5.0
+# How long before the server's stated expiry a token stops being reused.
+EXPIRY_MARGIN_SECONDS = 60.0
 
-_LOCK = threading.Lock()
-_CACHED: tuple[str, float] | None = None
+
+@dataclass(frozen=True, slots=True)
+class _Credential:
+    token: str
+    refresh_at: float  # monotonic: mint a fresh one after this
+    expires_at: float  # monotonic: the server stops accepting it here
+
+
+_LOCK = threading.Lock()  # guards `_CACHED` and `_REFUSED_UNTIL`; never held on I/O
+_MINTING = threading.Lock()  # single-flight: one mint at a time
+_CACHED: _Credential | None = None
+_REFUSED_UNTIL = 0.0
 
 
 def store_url() -> str:
@@ -52,60 +78,137 @@ def store_url() -> str:
     password = quote(_credential(), safe="")
     host = quote(str(values["PGHOST"]), safe="")
     database = quote(str(values["PGDATABASE"]), safe="")
+    # `verify-full` with `PGSSLROOTCERT` authenticates the server (MX-7);
+    # libpq reads that variable itself, so only the mode travels here.
     sslmode = quote(os.environ.get("PGSSLMODE", "require"), safe="")
     return f"postgresql://{user}:{password}@{host}:{port}/{database}?sslmode={sslmode}"
 
 
 def invalidate_credential() -> None:
     """Forget the cached credential; the next connection mints a fresh one."""
-    global _CACHED
+    global _CACHED, _REFUSED_UNTIL
     with _LOCK:
         _CACHED = None
+        _REFUSED_UNTIL = 0.0
 
 
 def note_connect_failure(failed: psycopg.OperationalError) -> None:
-    """An authentication failure drops the cached credential (F37): a token
-    revoked or rotated early would otherwise be handed to the driver until the
-    clock said otherwise. Any other failure leaves the cache alone."""
-    if isinstance(
-        failed, (errors.InvalidPassword, errors.InvalidAuthorizationSpecification)
-    ):
-        invalidate_credential()
+    """A failed connection drops the cached credential (F37, AR-02).
+
+    The driver reports a refused password as a bare `OperationalError` with no
+    SQLSTATE, the same shape as an unreachable host, so no class narrows it: a
+    re-mint after any connection failure costs one bounded SDK call, and a
+    token revoked or rotated early would otherwise be handed to the driver
+    until the clock said otherwise.
+    """
+    del failed
+    invalidate_credential()
 
 
 def _credential() -> str:
     """A Lakebase credential for the app's service principal, cached briefly."""
-    global _CACHED
+    held = _held()
+    now = time.monotonic()
+    if held is not None and held.refresh_at > now:
+        return held.token
+    with _MINTING:
+        held = _held()  # the minter before us may have answered
+        now = time.monotonic()
+        if held is not None and held.refresh_at > now:
+            return held.token
+        try:
+            return _refreshed(held, now)
+        except Refusal:
+            if held is not None and held.expires_at > time.monotonic():
+                return held.token  # the server still accepts it (DL-4)
+            raise
+
+
+def _held() -> _Credential | None:
     with _LOCK:
-        if _CACHED is not None and _CACHED[1] > time.monotonic():
-            return _CACHED[0]
-        token = _mint()
-        _CACHED = (token, time.monotonic() + TOKEN_SECONDS)
-        return token
+        return _CACHED
 
 
-def _mint() -> str:
-    """One credential from the SDK's unified auth: instance or endpoint form."""
+def _refreshed(held: _Credential | None, now: float) -> str:
+    """Mint under the failure cache and record the result."""
+    global _CACHED, _REFUSED_UNTIL
+    del held  # the caller falls back to it; this only decides whether to mint
+    with _LOCK:
+        refused_until = _REFUSED_UNTIL
+    if refused_until > now:
+        raise Refusal(RefusalCode.STORE_UNAVAILABLE)
+    try:
+        token, expires_at = _mint_bounded()
+    except Refusal:
+        with _LOCK:
+            _REFUSED_UNTIL = time.monotonic() + FAILURE_SECONDS
+        raise
+    minted = time.monotonic()
+    with _LOCK:
+        _CACHED = _Credential(token, minted + TOKEN_SECONDS, expires_at)
+    return token
+
+
+def _mint_bounded() -> tuple[str, float]:
+    """`_mint` on a helper thread, abandoned past `MINT_SECONDS` (MX-3): the
+    SDK posts to the token endpoint with no timeout of its own."""
+    outcome: list[tuple[str, float] | Refusal] = []
+
+    def run() -> None:
+        try:
+            outcome.append(_mint())
+        except Refusal as refused:
+            outcome.append(refused)
+
+    minter = threading.Thread(target=run, name="caos-lakebase-mint", daemon=True)
+    minter.start()
+    minter.join(MINT_SECONDS)
+    if not outcome:
+        raise Refusal(RefusalCode.STORE_UNAVAILABLE)
+    answer = outcome[0]
+    if isinstance(answer, Refusal):
+        raise answer
+    return answer
+
+
+def _mint() -> tuple[str, float]:
+    """One credential from the SDK's unified auth: instance or endpoint form,
+    with the monotonic instant the server stops accepting it."""
     from caos.workspace import workspace_client
 
-    client = workspace_client()
     instance = os.environ.get(LAKEBASE_INSTANCE)
-    endpoint = os.environ.get("LAKEBASE_AUTOSCALING_ENDPOINT")
-    token: str | None = None
+    endpoint = os.environ.get(AUTOSCALING_ENDPOINT)
+    issued: object
     try:
+        client = workspace_client()
         if instance:
-            token = client.database.generate_database_credential(
+            issued = client.database.generate_database_credential(
                 request_id=str(uuid4()), instance_names=[instance]
-            ).token
+            )
         elif endpoint:
-            token = client.postgres.generate_database_credential(
-                endpoint=endpoint
-            ).token
+            issued = client.postgres.generate_database_credential(endpoint=endpoint)
         else:
             raise Refusal(RefusalCode.STORE_NOT_CONFIGURED)
-    except OSError:
-        # `DatabricksError` is an `IOError`; its message may name the host.
+    except (OSError, ValueError):
+        # `DatabricksError` is an `IOError` and the SDK's auth failures are
+        # `ValueError`s; either message may name the host (CR-1).
         raise Refusal(RefusalCode.STORE_UNAVAILABLE) from None
+    token = getattr(issued, "token", None)
     if not isinstance(token, str) or not token:
         raise Refusal(RefusalCode.STORE_UNAVAILABLE)
-    return token
+    return token, _expires_at(getattr(issued, "expiration_time", None))
+
+
+def _expires_at(stated: object) -> float:
+    """The server's expiry as a monotonic instant, less a margin; a missing or
+    unreadable one gives the token no life beyond its refresh."""
+    if not isinstance(stated, str):
+        return time.monotonic() + TOKEN_SECONDS
+    try:
+        when = datetime.fromisoformat(stated.replace("Z", "+00:00"))
+    except ValueError:
+        return time.monotonic() + TOKEN_SECONDS
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=UTC)
+    left = (when - datetime.now(UTC)).total_seconds() - EXPIRY_MARGIN_SECONDS
+    return time.monotonic() + max(left, 0.0)

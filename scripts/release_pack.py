@@ -55,9 +55,10 @@ from caos.methodology import CANONICAL_ADAPTER_VERSION
 from caos.methodology.bundle import Bundle
 from caos.methodology.handoff import ADAPTER_ROUTES
 from caos.methodology.vendor import catalog
-from caos.qualification.store import current_verdict, evidence_at
-from caos.refusals import Refusal
+from caos.qualification.store import answered_document, current_verdict, evidence_at
+from caos.refusals import Refusal, RefusalCode
 from caos.store import MIGRATIONS, StoreConnection, connect, verify_schema
+from caos.store.routes import route_pin
 
 REPO = Path(__file__).resolve().parents[1]
 JSON_NAME = "release-pack.json"
@@ -170,33 +171,117 @@ def migration_head() -> dict[str, Any]:
     }
 
 
+# A verdict that is not current at `--as-of` covers nothing, and saying so is
+# the pack's job. Every other refusal is the store contradicting itself, and a
+# pack that swallowed one would read as a store with no verdicts (FP-28).
+_NOT_CURRENT = frozenset({RefusalCode.VERDICT_EXPIRED, RefusalCode.VERDICT_INCOMPLETE})
+
+
 def _snapshot_pins(document: object) -> list[tuple[UUID, str]]:
-    """`(run_id, route_digest)` for each case a stored snapshot prepared."""
-    if not isinstance(document, dict) or not isinstance(document.get("prepared"), list):
-        return []
-    pins = []
-    for item in document["prepared"]:
-        if isinstance(item, dict):
-            pins.append((UUID(str(item["run_id"])), str(item["route_digest"])))
-    return pins
+    """`(run_id, route_digest)` for each case that produced an output.
+
+    Not every case the snapshot prepared. A verdict used to cover every pathway
+    any run in its snapshot was pinned to, so a case that met a declared
+    refusal, or one that never finished, made its own pathway QUALIFIED although
+    no run on it produced an artifact (FP-02). A case counts here only when its
+    run reached COMPLETE and its row answered every key the case declared --
+    `document_complete`'s per-case halves, asked per case.
+
+    A malformed item refuses rather than being skipped: a snapshot this cannot
+    read is one the pack may not relay (FP-28).
+    """
+    prepared, produced, rows = _snapshot_parts(document)
+    return [
+        _pin_of(item)
+        for item in prepared
+        if _covers(item, produced=produced, rows=rows)
+    ]
+
+
+def _snapshot_parts(
+    document: object,
+) -> tuple[list[Mapping[str, object]], set[object], dict[object, object]]:
+    """The three lists a snapshot's coverage is read from, or a typed refusal."""
+    if not isinstance(document, dict):
+        raise Refusal(RefusalCode.VERDICT_BINDING_INVALID)
+    prepared, records = document.get("prepared"), document.get("performed")
+    matrix = document.get("matrix")
+    if not isinstance(prepared, list) or not isinstance(records, list):
+        raise Refusal(RefusalCode.VERDICT_BINDING_INVALID)
+    if not isinstance(matrix, dict) or not isinstance(matrix.get("rows"), list):
+        raise Refusal(RefusalCode.VERDICT_BINDING_INVALID)
+    rows: dict[object, object] = {
+        row.get("case_label"): row for row in matrix["rows"] if isinstance(row, dict)
+    }
+    produced = {
+        record.get("case_label")
+        for record in records
+        if isinstance(record, dict) and record.get("status") == "COMPLETE"
+    }
+    return prepared, produced, rows
+
+
+def _covers(item: object, *, produced: set[object], rows: dict[object, object]) -> bool:
+    """Whether this prepared case is one the verdict's coverage may rest on."""
+    if not isinstance(item, dict) or "run_id" not in item or "route_digest" not in item:
+        raise Refusal(RefusalCode.VERDICT_BINDING_INVALID)
+    label = item.get("case_label")
+    return label in produced and answered_document(rows.get(label))
+
+
+def _pin_of(item: Mapping[str, object]) -> tuple[UUID, str]:
+    """One prepared case's `(run_id, route_digest)`, or a typed refusal."""
+    try:
+        return UUID(str(item["run_id"])), str(item["route_digest"])
+    except ValueError:
+        raise Refusal(RefusalCode.VERDICT_BINDING_INVALID) from None
+
+
+def _pathway(
+    conn: StoreConnection, run_id: UUID, route_digest: str
+) -> tuple[str, str] | None:
+    """The pathway a run was pinned to, read through the store's own pin.
+
+    `run_routes` was read by `(run_id, route_digest)` and never validated, so a
+    row whose `resolved` is `{}` -- which `route_pin` refuses
+    `ROUTE_IDENTITY_INVALID` -- named a pathway (FP-02). `resolved_route` is the
+    reader every other caller uses, and the digest it carries has to be the one
+    the snapshot named.
+    """
+    try:
+        pin = route_pin(conn, run_id)
+    except Refusal:
+        return None
+    if pin is None or pin[1] != route_digest:
+        return None
+    return pin[0].profile_id, pin[0].selection_id
 
 
 def qualified_pathways(
-    conn: StoreConnection, *, build_id: str, as_of: datetime
+    conn: StoreConnection,
+    *,
+    build_id: str,
+    as_of: datetime,
+    identity: tuple[str, str] | None = None,
 ) -> dict[tuple[str, str], list[dict[str, str]]]:
     """Each pathway a current verdict for this build and adapter covers.
 
-    A verdict covers the pathways its snapshot's runs were pinned to, joined on
-    the run and the route digest the snapshot names, so a pin the snapshot did
-    not prepare covers nothing. Currency is `current_verdict`'s, judged at
-    `as_of`: an expired verdict, one decided after it, or one over an
-    incomplete snapshot covers nothing. Evidence whose stored identity does not
-    re-digest to its key refuses from `evidence_at` rather than being skipped: a
-    pack that quietly dropped a tampered row would read as a store with no
-    verdicts.
+    A verdict covers the pathways the runs that *produced output* in its
+    snapshot were pinned to, read through `resolved_route` and joined on the
+    digest the snapshot names, so a pin the snapshot did not prepare, or one
+    whose stored route will not read, covers nothing. Currency is
+    `current_verdict`'s, judged at `as_of`: an expired verdict, one decided
+    after it, or one over a snapshot that no longer re-derives as complete
+    covers nothing. Any other refusal is raised: a pack that quietly dropped a
+    tampered row would read as a store with no verdicts.
+
+    `identity` is the deployed `(provider, model)` when the caller names one.
+    Qualification is measured under one execution identity and production's is
+    set by environment (D7), so a pack that relayed QUALIFIED without saying
+    which identity it covered said less than it appeared to (FP-14, AR-22).
     """
     rows = conn.execute(
-        "SELECT q.evidence_sha256,q.reviewer,q.decided_at,q.expires_at,"
+        "SELECT q.evidence_sha256,q.reviewer,q.reviewer_id,q.decided_at,q.expires_at,"
         " p.performed_json FROM qualification_verdicts q"
         " JOIN qualification_evidence e USING (evidence_sha256)"
         " JOIN qualification_performed p ON p.performed_sha256=e.performed_sha256"
@@ -205,32 +290,58 @@ def qualified_pathways(
         (build_id, CANONICAL_ADAPTER_VERSION),
     ).fetchall()
     found: dict[tuple[str, str], list[dict[str, str]]] = {}
-    for digest, reviewer, decided_at, expires_at, document in rows:
-        evidence = evidence_at(conn, evidence_sha256=digest)
-        if evidence is None:
+    for row in rows:
+        verdict = _current(conn, row, as_of=as_of, identity=identity)
+        if verdict is None:
             continue
-        try:
-            current_verdict(conn, evidence=evidence, now=as_of)
-        except Refusal:
-            continue
-        verdict = {
-            "evidence_sha256": digest,
-            "reviewer": reviewer,
-            "decided_at": decided_at.isoformat(),
-            "expires_at": expires_at.isoformat(),
-        }
-        for run_id, route_digest in _snapshot_pins(document):
-            pin = conn.execute(
-                "SELECT profile_id,selection_id FROM run_routes"
-                " WHERE run_id=%s AND route_digest=%s",
-                (run_id, route_digest),
-            ).fetchone()
-            if pin is None:
+        for run_id, route_digest in _snapshot_pins(row[5]):
+            key = _pathway(conn, run_id, route_digest)
+            if key is None:
                 continue
-            covered = found.setdefault((str(pin[0]), str(pin[1])), [])
+            covered = found.setdefault(key, [])
             if verdict not in covered:
                 covered.append(verdict)
     return found
+
+
+def _current(
+    conn: StoreConnection,
+    row: tuple[Any, ...],
+    *,
+    as_of: datetime,
+    identity: tuple[str, str] | None,
+) -> dict[str, str] | None:
+    """One verdict row as the pack emits it, or None when it covers nothing."""
+    digest, reviewer, reviewer_id, decided_at, expires_at, _document = row
+    evidence = evidence_at(conn, evidence_sha256=digest)
+    if evidence is None:
+        return None
+    if identity is not None and (evidence.provider, evidence.model) != identity:
+        return None
+    if decided_at > as_of:
+        # Not yet taken at the moment being reported on. `read_verdict` calls a
+        # document signed in the future a wrong binding; here it is a verdict
+        # this pack simply does not cover, and telling the two apart is what
+        # lets every other wrong binding be raised (FP-28).
+        return None
+    try:
+        current_verdict(conn, evidence=evidence, now=as_of)
+    except Refusal as refused:
+        if refused.code in _NOT_CURRENT:
+            return None
+        raise
+    return {
+        "evidence_sha256": digest,
+        "reviewer": reviewer,
+        # The authenticated signer beside the free text an ADMIN typed, and the
+        # execution identity and set the verdict was measured over.
+        "reviewer_id": str(reviewer_id),
+        "qualification_set_sha256": evidence.qualification_set_sha256,
+        "provider": evidence.provider,
+        "model": evidence.model,
+        "decided_at": decided_at.isoformat(),
+        "expires_at": expires_at.isoformat(),
+    }
 
 
 def pathways(
@@ -270,7 +381,11 @@ def pathways(
 
 
 def read_store(
-    conn: StoreConnection, *, bundle: Bundle, as_of: datetime
+    conn: StoreConnection,
+    *,
+    bundle: Bundle,
+    as_of: datetime,
+    identity: tuple[str, str] | None = None,
 ) -> dict[tuple[str, str], list[dict[str, str]]]:
     """Current-adapter verdicts for this build from its described store.
 
@@ -278,7 +393,9 @@ def read_store(
     """
     verify_schema(conn)
     try:
-        return qualified_pathways(conn, build_id=bundle.build_id, as_of=as_of)
+        return qualified_pathways(
+            conn, build_id=bundle.build_id, as_of=as_of, identity=identity
+        )
     finally:
         conn.rollback()
 
@@ -396,6 +513,15 @@ def main(argv: list[str] | None = None) -> int:
         type=datetime.fromisoformat,
         help="the ISO-8601 moment, with an offset, verdicts are judged current at",
     )
+    parser.add_argument(
+        "--provider",
+        help=(
+            "count only verdicts measured under this provider; qualification is"
+            " measured under one execution identity and production's is set by"
+            " environment (D7), so a pack that named none said less than it looked"
+        ),
+    )
+    parser.add_argument("--model", help="count only verdicts measured under this model")
     args = parser.parse_args(argv)
     bundle = Bundle(REPO / "vendor" / "deploy-v")
     if not args.store:
@@ -409,8 +535,14 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 2
+    if (args.provider is None) != (args.model is None):
+        print(
+            "--provider and --model are named together or not at all", file=sys.stderr
+        )
+        return 2
+    identity = None if args.provider is None else (args.provider, args.model)
     with connect(url) as conn:
-        qualified = read_store(conn, bundle=bundle, as_of=as_of)
+        qualified = read_store(conn, bundle=bundle, as_of=as_of, identity=identity)
     write_pack(build_pack(REPO, bundle=bundle, store=(qualified, as_of)), args.out)
     return 0
 

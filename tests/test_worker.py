@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import ast
 import signal
+import sys
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from threading import Event
@@ -40,7 +42,7 @@ from caos.provider import CompletionProvider
 from caos.refusals import Refusal, RefusalCode
 from caos.store import RunStatus, StoreConnection
 from caos.store.runs import run_status
-from caos.store.work import LEASE_SECONDS, enqueue_run, worker_states
+from caos.store.work import LEASE_SECONDS, Lease, enqueue_run, worker_states
 
 __all__ = ["blobs", "bundle", "route"]
 
@@ -635,3 +637,256 @@ def test_a_worker_drives_runs_one_node_at_a_time_without_a_checkpointer(
     [execution] = handed
     assert execution.checkpointer is None
     assert execution.lease is not None
+
+
+def test_the_backoff_stays_at_its_cap_after_any_number_of_faults() -> None:
+    """AR-03: the exponent is bounded before it is raised, so a worker that has
+    faulted for hours keeps waiting at the cap instead of overflowing."""
+    config = WorkerConfig(BoundaryText.of("worker-test"), poll_seconds=1.0)
+    assert worker.MAX_DOUBLINGS == 30
+    for failures in (1025, 100_000):
+        assert (
+            worker.pause_seconds(config, failures) <= config.backoff_cap_seconds * 1.2
+        )
+
+
+def test_a_session_the_server_ends_does_not_stop_the_worker(
+    blobs: BlobStore, empty_database: str
+) -> None:
+    """AR-01, SA-C4: Lakebase ends sessions on every failover, restart and
+    scale-to-zero. The worker's heartbeat on the dead session, its rollback
+    included, must not escape the reconnect; the loop opens a new session."""
+    import threading
+
+    opened: list[int] = []
+    name = "caos-worker-under-test"
+
+    def factory() -> StoreConnection:
+        conn = psycopg.connect(empty_database, autocommit=False, application_name=name)
+        opened.append(1)
+        return conn
+
+    def never(conn: StoreConnection, run_id: UUID, lease: Lease) -> Execution:
+        raise AssertionError(name)
+
+    stopping = Event()
+    config = WorkerConfig(BoundaryText.of("worker-test"), poll_seconds=0.1)
+    thread = threading.Thread(
+        target=run_worker,
+        kwargs={
+            "config": config,
+            "execution_for": never,
+            "stopping": stopping,
+            "conn_factory": factory,
+            "blobs": blobs,
+        },
+        daemon=True,
+    )
+    thread.start()
+    try:
+        deadline = time.monotonic() + 10
+        while not opened and time.monotonic() < deadline:
+            time.sleep(0.05)
+        ended: tuple[object, ...] | None = (0,)
+        with psycopg.connect(empty_database, autocommit=True) as admin:
+            # The backend shows in `pg_stat_activity` a moment after the
+            # client's connect returns; ask until it is there.
+            while ended == (0,) and time.monotonic() < deadline:
+                ended = admin.execute(
+                    "SELECT count(pg_terminate_backend(pid)) FROM pg_stat_activity"
+                    " WHERE application_name = %s",
+                    (name,),
+                ).fetchone()
+                time.sleep(0.05)
+        assert ended == (1,)
+        while len(opened) < 2 and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert len(opened) >= 2, "the loop reconnected"
+        assert thread.is_alive(), "and the worker went on"
+    finally:
+        stopping.set()
+        thread.join(5)
+    assert not thread.is_alive()
+
+
+def test_a_connection_factory_failing_in_the_sdk_s_shapes_is_a_store_fault(
+    blobs: BlobStore,
+) -> None:
+    """CR-1, SA-C3: the SDK behind `store_url` reports an unreachable workspace
+    or a refused token as `ValueError`; the loop rides it out as a store fault
+    and never exits with the API still serving."""
+
+    message = "the host, which must not be printed"
+
+    def unreachable() -> StoreConnection:
+        raise ValueError(message)
+
+    def never(conn: StoreConnection, run_id: UUID, lease: Lease) -> Execution:
+        raise AssertionError(message)
+
+    with pytest.raises(Refusal, match=r"^STORE_UNAVAILABLE$"):
+        worker._connected(unreachable)
+    clock = _Clock(limit=2)
+    assert (
+        run_worker(
+            CONFIG,
+            execution_for=never,
+            stopping=clock,
+            conn_factory=unreachable,
+            blobs=blobs,
+        )
+        == 0
+    )
+    assert len(clock.pauses) == 2, "backed off twice, then stopped as told"
+
+
+def test_a_cancel_during_the_last_call_ends_the_run_cancelled(
+    case: tuple[StoreConnection, UUID],
+    route: ResolvedRoute,
+    bundle: Bundle,
+    blobs: BlobStore,
+    empty_database: str,
+) -> None:
+    """AR-13: a cancel that lands during the last node's call is honoured at
+    the terminal move. The last call's artifact and bill stay committed; the
+    run ends CANCELLED through the holder's cancel path, not COMPLETE."""
+    from caos.store.work import request_cancel
+
+    run = queued_run(case, route, bundle, blobs)
+    calls: list[int] = []
+
+    def late_cancel() -> None:
+        calls.append(1)
+        if len(calls) == len(route.nodes):
+            with psycopg.connect(empty_database, autocommit=False) as other:
+                assert request_cancel(other, run.run_id) is True
+                other.commit()
+
+    completions = CanonicalCompletions(run.source_id, during=late_cancel)
+    assert drive(run, completions) == run.run_id
+    assert len(calls) == len(route.nodes), "every node was called once"
+    assert run_status(run.conn, run.run_id) is RunStatus.CANCELLED
+    run.conn.rollback()
+    assert count(run.conn, "artifacts", run.run_id) == len(route.nodes)
+    assert work_row(run.conn, run.run_id)[0] == "DONE"
+
+
+def test_a_parked_run_s_checkpoint_thread_is_forgotten(
+    case: tuple[StoreConnection, UUID],
+    route: ResolvedRoute,
+    bundle: Bundle,
+    blobs: BlobStore,
+    empty_database: str,
+) -> None:
+    """DL-8: the thread holds position only (D6); a run this worker parked
+    leaves no rows behind, and the requeued run re-derives its frontier."""
+    from caos.graph.build import thread_config
+    from caos.graph.checkpoint import checkpointer, close_checkpointer
+
+    run = queued_run(case, route, bundle, blobs)
+    saver = checkpointer(empty_database)
+    try:
+
+        def refuse() -> None:
+            raise Refusal(RefusalCode.PROVIDER_CALL_INVALID)
+
+        completions = CanonicalCompletions(run.source_id, during=refuse)
+        driven = work_once(
+            run.conn,
+            run.blobs,
+            execution_for=module_execution(
+                completions, priced(ESTIMATE), run.bundle, run.blobs, saver
+            ),
+            config=CONFIG,
+            stopping=Event(),
+        )
+        assert driven == run.run_id
+        assert work_row(run.conn, run.run_id)[:2] == (
+            "STOPPED",
+            "PROVIDER_CALL_INVALID",
+        )
+        assert saver.get(thread_config(str(run.run_id))) is None
+    finally:
+        close_checkpointer(saver)
+
+
+def test_a_lost_or_corrupt_stored_body_parks_the_run_with_its_own_code() -> None:
+    """DL-5: a blob that is gone or corrupt is not a store fault. As one it
+    released the run to the head of the queue, and every other run waited
+    behind it forever."""
+    from caos.methodology import canonical
+
+    class _Blobs:
+        def __init__(self, code: RefusalCode) -> None:
+            self.code = code
+
+        def get(self, digest: str) -> bytes:
+            raise Refusal(self.code)
+
+    def stored(code: RefusalCode) -> str | None:
+        return canonical._stored_body(cast("BlobStore", _Blobs(code)), "ab" * 32)
+
+    for lost in (RefusalCode.BLOB_NOT_FOUND, RefusalCode.BLOB_DIGEST_MISMATCH):
+        with pytest.raises(Refusal, match=f"^{lost.value}$"):
+            stored(lost)
+    with pytest.raises(Refusal, match=r"^STORE_UNAVAILABLE$"):
+        stored(RefusalCode.STORE_UNAVAILABLE)
+
+
+def test_the_app_s_shutdown_hooks_run_after_the_probes_stop(
+    empty_database: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """DP-4: what the process entry registers runs inside the lifespan's
+    shutdown, the only code that runs before uvicorn re-raises the platform's
+    signal; `caos.serve` registers the worker drain there."""
+    from fastapi.testclient import TestClient
+
+    from caos import serve
+    from caos.api import app as app_module
+    from caos.api import health
+
+    assert serve.GRACEFUL_SECONDS + serve.LIMIT_JOIN_SECONDS < 15
+    assert serve.LIMIT_CONCURRENCY > 24, "every stream slot and forty more (DP-7)"
+    monkeypatch.setenv("CAOS_DATABASE_URL", empty_database)
+    monkeypatch.setattr(health, "PROBES", dict.fromkeys(health.PROBES, lambda: "OK"))
+    ran: list[str] = []
+    app_module.on_shutdown(lambda: ran.append("drained"))
+    try:
+        with TestClient(app_module.app):
+            assert ran == []
+        assert ran == ["drained"]
+    finally:
+        app_module.SHUTDOWN_HOOKS.clear()
+
+
+def test_the_server_log_never_carries_an_exception_s_text() -> None:
+    """AS-6: uvicorn logs an unhandled fault with its traceback, and a
+    traceback carries `str(exc)`; the process entry's filter drops it."""
+    import logging
+
+    from caos import serve
+
+    serve.install_log_filter()
+    serve.install_log_filter()
+    logger = logging.getLogger(serve.SERVER_LOGGER)
+    assert sum(isinstance(f, serve._NoExceptionText) for f in logger.filters) == 1
+    message = "document text that must not be logged"
+
+    def fault() -> None:
+        raise RuntimeError(message)
+
+    try:
+        fault()
+    except RuntimeError:
+        record = logging.LogRecord(
+            serve.SERVER_LOGGER,
+            logging.ERROR,
+            __file__,
+            1,
+            "Exception in ASGI application",
+            None,
+            sys.exc_info(),
+        )
+    assert logger.filter(record), "the record still logs, without its text"
+    assert record.exc_info is None and record.exc_text is None
+    assert message not in logging.Formatter().format(record)

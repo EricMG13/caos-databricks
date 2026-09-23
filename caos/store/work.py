@@ -24,9 +24,9 @@ from caos.store import RunStatus, StoreConnection, committed_unit
 from caos.store.events import RunEvent, append, lock_run
 from caos.store.outcomes import require_idle
 
-# Renewed by every fenced write; see brief D5 for why it outlives the provider
-# timeout.
-LEASE_SECONDS = 300
+# Renewed by every fenced write; see brief D5 for why it outlives two provider
+# call deadlines (`caos.provider.TIMEOUT_SECONDS`, 240 s since MX-4).
+LEASE_SECONDS = 600
 MAX_WORKER_BYTES = 128
 
 
@@ -102,15 +102,17 @@ def require_lease(
     run_id: UUID,
     lease: Lease | None,
     *,
-    lease_seconds: int = LEASE_SECONDS,
+    lease_seconds: int | None = None,
 ) -> bool:
     """Fence one write under the caller's `lock_run`, renewing a live lease.
 
     Returns whether a cancel was requested. `None` is the direct caller: it may
     write only to a run that was never enqueued. Refuses `LEASE_NOT_HELD`.
+    The renewal is the lease's own length unless the caller names one
+    (CR-11: a default value is not a sentinel).
     """
-    if lease is not None and lease_seconds == LEASE_SECONDS:
-        lease_seconds = lease.seconds
+    if lease_seconds is None:
+        lease_seconds = lease.seconds if lease is not None else LEASE_SECONDS
     _require_seconds(lease_seconds)
     if lease is None:
         queued = conn.execute(
@@ -252,11 +254,17 @@ def _require_seconds(seconds: int) -> None:
         raise Refusal(RefusalCode.CALL_OUTCOME_INVALID)
 
 
-# A beat older than this is not evidence that a worker is alive. Three times
-# the default poll interval, so an ordinary slow poll under load is not a
-# stall: what an operator is being told is "nobody has spoken recently", and
-# crying that once a minute would make the signal worthless.
-WORKER_STALE_AFTER = 30.0
+# A beat older than this is not evidence that a worker is alive. One full
+# provider call plus a minute: `caos.provider.TIMEOUT_SECONDS` (240 s) plus 60.
+# A worker beats once per node and not during the node's model call, so at 30 s
+# -- three poll intervals -- every call longer than half a minute reported
+# `WORKERS_STALE` for a worker that was doing exactly what it is meant to do,
+# while its run's lease stayed live (AR-24). The threshold has to cover the
+# longest uninterrupted work the host supports, or it measures the work rather
+# than the worker. A literal rather than an import, because the store does not
+# depend on the provider seam; the rule it follows is named here instead, and
+# `tests/test_worker_heartbeat.py` asserts the two stay in that relation.
+WORKER_STALE_AFTER = 300.0
 type WorkerState = Literal["POLLING", "WORKING", "BACKOFF"]
 
 

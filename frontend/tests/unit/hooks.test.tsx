@@ -70,6 +70,28 @@ describe("modal a11y returns focus to the opener it was given", () => {
     expect(document.body.style.overflow).toBe("");
   });
 
+  // FE-4: an opener that has left the page cannot take focus. Calling focus()
+  // on it silently drops focus to <body>, which is what the caller's own
+  // fallback (SourceDrawer's section heading) exists to prevent -- so the
+  // hook must not call it at all.
+  test("test_focus_is_not_handed_to_an_opener_that_has_left_the_page", () => {
+    const gone = window.document.createElement("button");
+    const focused = vi.fn();
+    gone.focus = focused;
+    function Gone() {
+      const ref = useModalA11y<HTMLDivElement>(() => {}, gone);
+      return (
+        <div ref={ref} role="dialog" aria-modal="true">
+          <span>panel</span>
+        </div>
+      );
+    }
+    const dialog = render(<Gone />);
+    expect(gone.isConnected).toBe(false);
+    dialog.unmount();
+    expect(focused).not.toHaveBeenCalled();
+  });
+
   test("Escape closes the topmost overlay", () => {
     const closed = vi.fn();
     render(<Dialog onClose={closed} />);

@@ -288,3 +288,62 @@ def test_the_register_reads_back_as_its_two_declared_halves() -> None:
     assert isinstance(register, document_register.Register)
     assert register.documents and register.key_sources
     assert all(document.id for document in register.documents)
+
+
+def test_a_row_that_leaves_the_tree_is_never_measured_or_held(tmp_path: Path) -> None:
+    """FP-20: `relative_to` does not normalise `..` and the containment test was
+    a `startswith("qualification/")` on the string.
+
+    `qualification/set-a/../../../../etc/hosts` marked `in_hand` therefore
+    passed both, and was emitted as a register row carrying that file's size and
+    digest while the script exited 0.
+    """
+    (tmp_path / "qualification" / "set-a").mkdir(parents=True)
+    outside = tmp_path / "outside.txt"
+    outside.write_bytes(b"bytes nobody admitted")
+    escape = "qualification/set-a/../../outside.txt"
+    row = document_register.Document(
+        id="escaped",
+        issuer=None,
+        document="escaped",
+        modules=(),
+        pathways=(),
+        source=None,
+        status="in_hand",
+        local_path=escape,
+        external_path=None,
+        demand_verified=False,
+        note="",
+    )
+    assert (tmp_path / escape).is_file(), "the old test would have measured it"
+    assert document_register.held_path(tmp_path, escape) is None
+    assert document_register.measured(row, tmp_path) is None
+    register = document_register.Register(documents=(row,), key_sources=())
+    assert document_register.misplaced(register, tmp_path) == [
+        "escaped: claims in_hand and"
+        " 'qualification/set-a/../../outside.txt' is not a file held under"
+        " qualification/"
+    ]
+
+
+def test_a_symlinked_row_is_not_a_document_this_repository_holds(
+    tmp_path: Path,
+) -> None:
+    """A link is a claim about one machine; the register is a table of bytes."""
+    (tmp_path / "qualification").mkdir()
+    real = tmp_path / "elsewhere.txt"
+    real.write_bytes(b"linked bytes")
+    (tmp_path / "qualification" / "linked.txt").symlink_to(real)
+    assert document_register.held_path(tmp_path, "qualification/linked.txt") is None
+
+    held = tmp_path / "qualification" / "real.txt"
+    held.write_bytes(b"held bytes")
+    assert document_register.held_path(tmp_path, "qualification/real.txt") == held
+
+
+def test_the_request_ceiling_is_the_provider_s_own() -> None:
+    """SI-8: the register carried a second copy of 1 MiB that would have kept
+    its value after `caos/provider.py` moved."""
+    from caos.provider import MAX_REQUEST_BYTES
+
+    assert document_register.MAX_REQUEST_BYTES is MAX_REQUEST_BYTES

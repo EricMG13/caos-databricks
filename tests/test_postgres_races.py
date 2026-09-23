@@ -156,7 +156,6 @@ def test_concurrent_sign_freeze_and_file_across_two_cases_keep_one_chain_each(
             assert read_filed_receipt(
                 conn,
                 held.blobs,
-                held.bundle,
                 case_id=held.case_id,
                 run_id=held.run_id,
                 revision_id=revision,

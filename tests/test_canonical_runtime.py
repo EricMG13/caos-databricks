@@ -436,7 +436,10 @@ def test_an_unreadable_stored_verdict_is_a_fault_not_a_second_call(
     assert _run_route(harness, provider) is RefusalCode.STORE_UNAVAILABLE
     blocked = hashlib.sha256(answers.bodies[2].encode()).hexdigest()
     harness.blobs.path_of(blocked).unlink()
-    assert _run_route(harness, provider) is RefusalCode.STORE_UNAVAILABLE
+    # A stored body that is gone is its own code (DL-5): the worker parks the
+    # run with it, where a store fault would release it to the head of the
+    # queue and block every other run. Still never a second call.
+    assert _run_route(harness, provider) is RefusalCode.BLOB_NOT_FOUND
     assert len(answers.prompts) == 3
     _still_running(harness)
 

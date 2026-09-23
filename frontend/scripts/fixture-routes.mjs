@@ -82,7 +82,11 @@ export const STATE_ROUTES = [
 
 export const ROUTES = [...SECTIONS.map((section) => sectionRoute(section)), ...STATE_ROUTES];
 
-export const VIEWPORTS = ["1440x900", "1280x800", "1024x768"];
+// 320x640 is 400% zoom on a 1280 px display, which is what WCAG 1.4.10 asks
+// of reflow: without it the matrix never measured a narrow viewport and the
+// register, the book cells and the withdraw controls were clipped out of
+// reach with nothing to scroll them (finding FE-5).
+export const VIEWPORTS = ["1440x900", "1280x800", "1024x768", "320x640"];
 export const ENGINES = ["chromium", "firefox", "webkit"];
 
 /** The page has settled: the loading marker is gone and either the chrome

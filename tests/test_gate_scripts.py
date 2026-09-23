@@ -147,9 +147,16 @@ def test_cobertura_metrics_reads_every_filename_attribute() -> None:
     ]
 
 
-def test_io_budget_passes_while_no_request_paths_exist(tmp_path: Path) -> None:
+def test_io_budget_refuses_a_tree_with_no_route_directory(tmp_path: Path) -> None:
+    """FP-19: `caos/api` missing exited 0 with "nothing to budget".
+
+    The route directory is the floor this gate rests on, so a tree without one
+    is a gate measuring nothing -- and every route moving out from under it was
+    the one way past the check that needed no new declaration.
+    """
     result = _run("io_budget.py", "--assert", "--root", str(tmp_path))
-    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert "no route floor" in result.stdout + result.stderr
 
 
 def test_io_budget_refuses_a_route_module_that_declares_no_budget(
@@ -163,12 +170,12 @@ def test_io_budget_refuses_a_route_module_that_declares_no_budget(
     assert "IO_BUDGET" in result.stdout + result.stderr
 
 
-def test_io_budget_ignores_a_server_with_no_request_paths(tmp_path: Path) -> None:
-    # Phase 1 ships a store and no routes: there is nothing to budget yet.
+def test_io_budget_refuses_a_server_whose_routes_have_moved(tmp_path: Path) -> None:
+    """A store beside no `caos/api` is not a tree with nothing to budget."""
     store = tmp_path / "caos" / "store"
     store.mkdir(parents=True)
     (store / "runs.py").write_text("def start_run() -> None: ...\n", encoding="utf-8")
-    assert _run("io_budget.py", "--assert", "--root", str(tmp_path)).returncode == 0
+    assert _run("io_budget.py", "--assert", "--root", str(tmp_path)).returncode == 2
 
 
 def test_covered_files_excludes_the_totals_row() -> None:
@@ -265,6 +272,43 @@ def test_declares_budget_accepts_an_annotated_declaration() -> None:
     assert io_budget.declares_budget("IO_BUDGET: int = 3\n", "m.py")
     assert io_budget.declares_budget("IO_BUDGET = 3\n", "m.py")
     assert not io_budget.declares_budget("io_budget = 3\n", "m.py")
+
+
+def test_a_declaration_that_declares_nothing_is_not_a_budget() -> None:
+    """FP-19: the checker looked for the name being a target and nothing else,
+    so three spellings satisfied it while stating no number of round trips."""
+    for source in (
+        "IO_BUDGET: int\n",
+        "IO_BUDGET = None\n",
+        'IO_BUDGET = float("inf")\n',
+        "IO_BUDGET = -1\n",
+        'IO_BUDGET = "many"\n',
+        "IO_BUDGET = {}\n",
+        "IO_BUDGET = 1\nIO_BUDGET = None\n",
+    ):
+        assert not io_budget.declares_budget(source, "m.py"), source
+    # The module's own arithmetic over its own counts is left to it.
+    for source in (
+        "IO_BUDGET = 0\n",
+        "IO_BUDGET = FIXED + NODES * PER\n",
+        "IO_BUDGET = max(A, B)\n",
+        'IO_BUDGET = {"report": 45, "committee": 59}\n',
+    ):
+        assert io_budget.declares_budget(source, "m.py"), source
+
+
+def test_is_budget_reads_the_value_the_source_states() -> None:
+    import ast
+
+    def value(source: str) -> ast.expr:
+        node = ast.parse(source).body[0]
+        assert isinstance(node, ast.Assign) and node.value is not None
+        return node.value
+
+    assert io_budget.is_budget(value("x = 0"))
+    assert not io_budget.is_budget(value("x = 1.5"))
+    assert not io_budget.is_budget(value('x = float("inf")'))
+    assert not io_budget.is_budget(value("x = True"))
 
 
 def test_public_definitions_skips_private_names_and_entry_points() -> None:
@@ -440,10 +484,10 @@ def test_check_tested_main_passes_when_every_symbol_is_named(
     assert check_tested.main([str(module), "--tests", str(tests_dir)]) == 0
 
 
-def test_io_budget_main_passes_while_no_request_paths_exist_in_process(
+def test_io_budget_main_refuses_a_missing_route_directory_in_process(
     tmp_path: Path,
 ) -> None:
-    assert io_budget.main(["--assert", "--root", str(tmp_path)]) == 0
+    assert io_budget.main(["--assert", "--root", str(tmp_path)]) == 2
 
 
 def test_io_budget_main_refuses_a_route_module_that_declares_no_budget_in_process(

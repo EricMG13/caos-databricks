@@ -9,6 +9,7 @@ import {
   fetchQualification,
   fetchSection,
   qualificationUrl,
+  retryAfterOf,
   sectionUrl,
 } from "@/app/transport";
 import { ENABLED_SECTIONS, isEnabledSection } from "@/app/sections";
@@ -138,6 +139,38 @@ describe("the transport", () => {
   test("a body that is not JSON reads as null, so a refusal is typed from nothing", async () => {
     expect(await bodyOf(new Response("<html>", { status: 502 }))).toBeNull();
     expect(await bodyOf(new Response('{"code":"X"}', { status: 409 }))).toEqual({ code: "X" });
+  });
+
+  // FE-3: the event tail waits the server's own Retry-After where the refusal
+  // carried one. An HTTP-date form names a moment against a clock this
+  // workspace does not trust, so it reads as absent.
+  test("test_a_refusals_retry_after_is_carried_in_seconds_or_not_at_all", async () => {
+    expect(retryAfterOf(new Response("{}", { status: 503 }))).toBeNull();
+    expect(
+      retryAfterOf(new Response("{}", { status: 503, headers: { "Retry-After": "30" } })),
+    ).toBe(30);
+    expect(
+      retryAfterOf(
+        new Response("{}", {
+          status: 503,
+          headers: { "Retry-After": "Wed, 21 Oct 2026 07:28:00 GMT" },
+        }),
+      ),
+    ).toBeNull();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ code: "STREAM_LIMIT_REACHED", clears: "a slot frees" }), {
+          status: 503,
+          headers: { "Retry-After": "12" },
+        }),
+      ),
+    );
+    expect(await fetchSection("analysis", { case: CASE })).toEqual({
+      kind: "error",
+      refusal: { code: "STREAM_LIMIT_REACHED", clears: "a slot frees" },
+      retryAfterSeconds: 12,
+    });
   });
 
   test("an observed 404 is unavailable", async () => {

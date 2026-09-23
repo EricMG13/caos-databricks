@@ -75,14 +75,27 @@ RUN_PAGE = 500
 # find in the source.
 STREAM_LIMIT = 24
 
+# And how many of them any one actor may hold. The global cap alone is a cap on
+# the fleet, not a share of it: one authenticated reader with standing on one
+# case could open all 24 tails and reopen each as it closed, and every other
+# watcher in the tenant was refused `STREAM_LIMIT_REACHED` until that reader
+# stopped (MX-2, merging AS-3 and TM-4). Four is what a person plausibly
+# watches at once -- a case and a run in two tabs -- and six such people still
+# fit inside the global cap, which stays as the backstop the thread pool and
+# the connection count actually need.
+ACTOR_STREAM_LIMIT = 4
+
 
 @dataclass
 class _Slots:
-    """How many tails are open. Guarded, because uvicorn runs this route in a
-    thread pool and two watchers can arrive at once."""
+    """How many tails are open, in total and per actor. Guarded, because
+    uvicorn runs this route in a thread pool and two watchers can arrive at
+    once. `held` carries an entry only while an actor holds a tail, so it is
+    bounded by `open` and never by how many people have ever watched."""
 
     lock: Lock = field(default_factory=Lock)
     open: int = 0
+    held: dict[UUID, int] = field(default_factory=dict)
 
 
 SLOTS = _Slots()
@@ -102,20 +115,41 @@ class StreamSlot:
     raised, and that slot is capacity only a restart returns.
     """
 
-    __slots__ = ("_held", "_slots")
+    __slots__ = ("_actor_id", "_held", "_slots")
 
-    def __init__(self, slots: _Slots) -> None:
-        self._slots, self._held = slots, True
+    def __init__(self, slots: _Slots, actor_id: UUID | None = None) -> None:
+        self._slots, self._held, self._actor_id = slots, True, actor_id
 
     def release(self) -> None:
         with self._slots.lock:
-            if self._held:
-                self._slots.open -= 1
-                self._held = False
+            if not self._held:
+                return
+            self._slots.open -= 1
+            self._held = False
+            if self._actor_id is None:
+                return
+            remaining = self._slots.held.get(self._actor_id, 0) - 1
+            if remaining > 0:
+                self._slots.held[self._actor_id] = remaining
+            else:
+                self._slots.held.pop(self._actor_id, None)
 
 
-def take_stream_slot(slots: _Slots = SLOTS, limit: int = STREAM_LIMIT) -> StreamSlot:
+def take_stream_slot(
+    slots: _Slots = SLOTS,
+    limit: int = STREAM_LIMIT,
+    *,
+    actor_id: UUID | None = None,
+    actor_limit: int = ACTOR_STREAM_LIMIT,
+) -> StreamSlot:
     """Take one of the tail slots, or refuse `STREAM_LIMIT_REACHED`.
+
+    Two caps, one code. The global one is what the thread pool and the
+    unpooled connections need; the per-actor one is what keeps the global one
+    from being spent by a single caller. Both refuse the same way, because to
+    the refused watcher they are the same fact -- the stream is not available
+    now, try again -- and a code that distinguished them would tell a caller
+    how much of the fleet they had taken.
 
     Taken in the route rather than in the generator, because the response does
     not exist there yet and a refusal can still be an ordinary refusal body
@@ -125,8 +159,12 @@ def take_stream_slot(slots: _Slots = SLOTS, limit: int = STREAM_LIMIT) -> Stream
     with slots.lock:
         if slots.open >= limit:
             raise Refusal(RefusalCode.STREAM_LIMIT_REACHED)
+        if actor_id is not None and slots.held.get(actor_id, 0) >= actor_limit:
+            raise Refusal(RefusalCode.STREAM_LIMIT_REACHED)
         slots.open += 1
-    return StreamSlot(slots)
+        if actor_id is not None:
+            slots.held[actor_id] = slots.held.get(actor_id, 0) + 1
+    return StreamSlot(slots, actor_id)
 
 
 # The events that end the run half of a stream.

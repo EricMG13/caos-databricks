@@ -33,6 +33,10 @@ def test_preflight_refuses_a_ceiling_below_one_worst_case_call(
     assert not preflight.affordable(price, None), f"{CEILING} is below one call"
     assert "set run_ceiling to at least" in capsys.readouterr().out
     assert not preflight.affordable("not,a,price", "25.00")
+    # AR-06: a price for another endpoint is found here, not by the worker.
+    assert preflight.affordable(price, "25.00", endpoint="databricks-claude-opus-5")
+    assert not preflight.affordable(price, "25.00", endpoint="enterprise-claude")
+    assert "not endpoint enterprise-claude" in capsys.readouterr().out
     assert (
         preflight.main(
             [

@@ -380,6 +380,115 @@ def test_the_identity_probe_asks_nothing_off_the_platform_and_the_workspace_on_i
     )
 
 
+def test_the_identity_probe_asks_the_workspace_the_way_a_request_asks_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """EI-W1. The probe used to go through the SDK's client, which resolves
+    its own host and asks its own way. Requests go through `identity.scim_me`
+    with a hand-parsed `DATABRICKS_HOST`, so a host that parser rejects, a
+    SCIM path that moved, or a token scope the workspace refuses made every
+    request 401 or 503 while health still reported `ready`. Same path now, and
+    only the credential comes from the SDK.
+    """
+    import caos.workspace as workspace
+    from caos.api.edge import PLATFORM_ENV
+    from caos.api.identity import WorkspaceUser
+    from caos.api.identity import scim_me as identity_scim_me
+
+    minted: dict[str, str] = {"Authorization": "Bearer minted-for-the-app"}
+    unmintable = "the workspace would not mint one"
+
+    class _Config:
+        def authenticate(self) -> dict[str, str]:
+            if not minted:
+                raise OSError(unmintable)
+            return dict(minted)
+
+    class _Client:
+        config = _Config()
+
+    monkeypatch.setenv(PLATFORM_ENV, "caos")
+    monkeypatch.setenv("DATABRICKS_HOST", "https://caos.cloud.databricks.com")
+    monkeypatch.setattr(workspace, "workspace_client", _Client)
+    asked: list[str] = []
+
+    def answering(authorization: str) -> WorkspaceUser:
+        asked.append(authorization)
+        return WorkspaceUser(scim_id="42", groups=frozenset())
+
+    monkeypatch.setattr(health, "scim_me", answering)
+    assert health.probe_identity() == "OK"
+    assert asked == ["Bearer minted-for-the-app"], "the SDK's own credential"
+
+    # The scope failure EI-W1 names: SCIM refuses the process's own principal,
+    # every request is then 401, and health used to say `ready` regardless.
+    def refusing(authorization: str) -> WorkspaceUser:
+        raise Refusal(RefusalCode.NOT_AUTHENTICATED)
+
+    monkeypatch.setattr(health, "scim_me", refusing)
+    assert health.probe_identity() == "IDENTITY_UNAVAILABLE"
+
+    # A host the request path will not send a bearer to is not `ready` either,
+    # and it is the request path's own parser that says so.
+    monkeypatch.setenv("DATABRICKS_HOST", "http://workspace.example.com")
+    monkeypatch.setattr(health, "scim_me", identity_scim_me)
+    assert health.probe_identity() == "IDENTITY_UNAVAILABLE"
+
+    # And credentials the SDK cannot mint at all are the same answer.
+    monkeypatch.setattr(health, "scim_me", answering)
+    minted.clear()
+    assert health.probe_identity() == "IDENTITY_UNAVAILABLE"
+    minted["Authorization"] = ""
+    assert health.probe_identity() == "IDENTITY_UNAVAILABLE"
+
+
+def test_a_probe_the_executor_never_started_does_not_stall_every_round() -> None:
+    """AR-11 / EI-W4. `inflight` is raised before the job is submitted and
+    given back only by the job's own body, so a job `wait_for` cancels while
+    it is still queued never gives it back. One such cancellation used to
+    close the gate for the life of the process: every later round returned
+    without probing, the document aged past `STALE_AFTER`, and the API read
+    `not_ready` until someone restarted it.
+
+    The count gate is a time gate as well now: it holds for
+    `inflight_ceiling`, which is longer than any probe that is really running,
+    and then a round goes ahead whatever the count says.
+    """
+    import asyncio
+    from concurrent.futures import ThreadPoolExecutor
+
+    occupied = Event()
+    state = health.ProbeState(probes=_all("OK"), deadline=0.05, inflight_ceiling=0.5)
+
+    async def scenario() -> None:
+        loop = asyncio.get_running_loop()
+        one = ThreadPoolExecutor(max_workers=1)
+        loop.set_default_executor(one)
+        one.submit(occupied.wait, 5)
+
+        await health.probe_once(state)
+        assert state.store == "PROBE_TIMEOUT"
+        assert state.inflight == len(health.PROBES), "every job queued, none ran"
+        occupied.set()
+        one.shutdown(wait=True)
+        assert state.inflight == len(health.PROBES), "cancelled before start"
+
+        before = state.checked
+        await health.probe_once(state)
+        assert state.checked == before, "inside the ceiling the gate still holds"
+
+        loop.set_default_executor(ThreadPoolExecutor(max_workers=4))
+        await asyncio.sleep(state.inflight_ceiling + 0.05)
+        await health.probe_once(state)
+
+        assert state.checked != before, "past the ceiling a round runs regardless"
+        assert (state.store, state.inflight) == ("OK", 0)
+
+    asyncio.run(scenario())
+    assert health.INFLIGHT_CEILING == health.PROBE_DEADLINE * 2
+    assert health.INFLIGHT_CEILING < health.STALE_AFTER, "a leak costs one round"
+
+
 def test_no_round_starts_over_a_probe_thread_still_alive() -> None:
     """F47: an abandoned probe keeps `inflight` up, and the next round waits."""
     import asyncio

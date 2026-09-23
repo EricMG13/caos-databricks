@@ -6,7 +6,7 @@
 // control shows. On success the section refetches its own document once, and
 // it is that re-read pack, never this control, that says the source is gone.
 import { withdrawSource } from "@/app/commands";
-import { RefusedControl } from "@/controls/RefusedControl";
+import { ConfirmedControl } from "@/controls/ConfirmedControl";
 import { CommandOutcome, useCommand } from "@/sections/run/controls";
 import type { ActionView, SourceRow, SourceWithdrawn } from "@/wire/v1";
 
@@ -29,21 +29,29 @@ export function WithdrawSource({
     const outcome = await run(row.source_id, (intent) =>
       withdrawSource(caseId, row.source_id, intent),
     );
-    if (outcome.kind === "ok") onWithdrawn();
+    if (outcome?.kind === "ok") onWithdrawn();
   }
 
   return (
     <>
-      <RefusedControl
+      {/* A withdrawal takes a pinned source out of the live set and the v1
+          wire has no command that puts it back, so it asks once more and
+          names the file and its digest (finding FE-7). */}
+      <ConfirmedControl
         refusal={refusal}
-        onClick={action ? () => void submit() : undefined}
+        busy={pending}
+        step={{
+          act: "Withdraw source",
+          subject: row.filename,
+          digest: row.document_sha256,
+        }}
+        onConfirm={action ? () => void submit() : undefined}
         className="rb"
-        reasonDisplay="inline"
-        data-action="WITHDRAW_SOURCE"
+        action="WITHDRAW_SOURCE"
         aria-label={`Withdraw ${row.filename}`}
       >
         {pending ? "Withdrawing…" : "Withdraw"}
-      </RefusedControl>
+      </ConfirmedControl>
       <CommandOutcome result={result} success="" />
     </>
   );

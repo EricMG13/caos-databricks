@@ -44,13 +44,15 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from caos.boundary_text import BoundaryText
+from caos.boundary_text import DEFAULT_LIMIT, BoundaryText
 from caos.evidence.extract import DEFAULT_LIMITS
 from caos.evidence.ingest import Document
 from caos.qualification.matrix import (
+    DECLARABLE_REFUSALS,
     PROJECTION_FIELDS,
     ExpectedCitation,
     ExpectedForecast,
@@ -69,6 +71,17 @@ MANIFEST = "qualification.json"
 
 # A manifest names cases; it never carries a document's bytes.
 MAX_MANIFEST_BYTES = 1024 * 1024
+
+# What the whole set may hold in memory at once. `_case` reads every listed
+# document eagerly, and each read was bounded on its own while the count and the
+# total were not: a manifest listing one allowed file fifty-one times loaded
+# fifty-one copies of it before `admit_pack`'s own ceiling refused the
+# fifty-first (AR-09). Both bounds are `admit_pack`'s, applied one boundary
+# earlier -- per case, because a case is what is admitted -- and the set gets a
+# total of the same shape, because a set is admitted one case at a time but is
+# materialised whole.
+MAX_SET_BYTES = DEFAULT_LIMITS.max_pack_bytes
+MAX_SET_DOCUMENTS = 10 * DEFAULT_LIMITS.max_documents
 
 # The keys each declared object carries, and nothing else. Closed both ways for
 # the reason every wire model here is (`CLAUDE.md`, wire strictness): a key this
@@ -125,6 +138,24 @@ _REGISTER_KEYS = frozenset(
 )
 
 
+@dataclass(slots=True)
+class _Materialised:
+    """What the set has already read, against what it may read in total."""
+
+    documents: int = 0
+    data: int = 0
+
+    def remaining(self) -> int:
+        """The bytes one more document may take, never below zero."""
+        return max(0, MAX_SET_BYTES - self.data)
+
+    def spend(self, size: int) -> None:
+        self.documents += 1
+        self.data += size
+        if self.documents > MAX_SET_DOCUMENTS or self.data > MAX_SET_BYTES:
+            raise Refusal(RefusalCode.QUALIFICATION_SET_FILE_INVALID)
+
+
 def load_qualification_set(root: Path) -> QualificationSet:
     """Read the set at `root`, or refuse it.
 
@@ -133,8 +164,9 @@ def load_qualification_set(root: Path) -> QualificationSet:
     cannot tell the two apart, which is the whole point.
     """
     cases = _declared(_manifest(root), "cases")
+    held = _Materialised()
     return QualificationSet(
-        cases=tuple(_case(root, entry) for entry in cases),
+        cases=tuple(_case(root, entry, held) for entry in cases),
     )
 
 
@@ -170,7 +202,7 @@ def _manifest(root: Path) -> Mapping[str, Any]:
     return parsed
 
 
-def _case(root: Path, entry: object) -> QualificationCase:
+def _case(root: Path, entry: object, held: _Materialised) -> QualificationCase:
     """One declared case, with its documents read from beside the manifest."""
     declared = isinstance(entry, dict) and _SUBJECT_KEY in entry
     keys = _CASE_KEYS | {
@@ -180,6 +212,10 @@ def _case(root: Path, entry: object) -> QualificationCase:
         keys |= {_SUBJECT_KEY}
     fields = _closed(entry, keys)
     documents = _declared(fields, "documents")
+    if len(documents) > DEFAULT_LIMITS.max_documents:
+        # `admit_pack`'s own count, refused before the first read rather than
+        # after every one of them is in memory (AR-09).
+        raise Refusal(RefusalCode.QUALIFICATION_SET_FILE_INVALID)
     expects = _declared(fields, "expects")
     ready = _ready(fields.get("expects_ready"))
     blocked = _ready(fields.get("expects_blocked"))
@@ -187,8 +223,8 @@ def _case(root: Path, entry: object) -> QualificationCase:
         # One module cleared and refused at once: no run can meet the case.
         raise Refusal(RefusalCode.QUALIFICATION_SET_FILE_INVALID)
     return QualificationCase(
-        label=_text(fields, "label"),
-        documents=tuple(_document(root, path) for path in documents),
+        label=_bounded(fields.get("label")),
+        documents=tuple(_document(root, path, held) for path in documents),
         profile_id=_text(fields, "profile_id"),
         selection_id=_text(fields, "selection_id"),
         expects=tuple(_expect(item) for item in expects),
@@ -219,7 +255,7 @@ def _subject(item: object) -> RunSubject:
     return declared
 
 
-def _document(root: Path, declared: object) -> Document:
+def _document(root: Path, declared: object, held: _Materialised) -> Document:
     """One document, read from a path that cannot leave the set.
 
     Resolved and compared against the resolved root rather than inspected for
@@ -237,23 +273,55 @@ def _document(root: Path, declared: object) -> Document:
         raise Refusal(RefusalCode.QUALIFICATION_SET_PATH_ESCAPES)
 
     try:
-        data = _bounded_bytes(target, DEFAULT_LIMITS.max_document_bytes)
+        # The smaller of this document's own ceiling and what the set has left,
+        # so a repeated allowed file cannot be materialised without bound
+        # (AR-09). `_bounded_bytes` refuses on `st_size`, before any read.
+        data = _bounded_bytes(
+            target, min(DEFAULT_LIMITS.max_document_bytes, held.remaining())
+        )
     except OSError:
         # Named and not there. A set is its bytes; one document short is not a
         # smaller set, it is a set nobody can measure the same way twice.
         raise Refusal(RefusalCode.QUALIFICATION_SET_FILE_INVALID) from None
+    held.spend(len(data))
 
-    return Document(filename=_boundary(target.name), data=data)
+    # The declared path's own last segment, never a symlink target's (FP-27):
+    # the digest covers the filename, so a set that named `report.txt` and
+    # digested `other.txt` would admit bytes under a name it never bound.
+    return Document(filename=_boundary(Path(declared).name), data=data)
 
 
 def _expect(item: object) -> ExpectedCitation:
     """One expected citation from the answer key."""
     fields = _closed(item, _EXPECT_KEYS)
     return ExpectedCitation(
-        module_id=_text(fields, "module_id"),
-        document_sha256=_text(fields, "document_sha256"),
-        matched_text=_text(fields, "matched_text"),
+        module_id=_bounded(fields.get("module_id")),
+        document_sha256=_bounded(fields.get("document_sha256")),
+        matched_text=_quote(fields.get("matched_text")),
     )
+
+
+def _quote(value: object) -> str:
+    """One expected quote, checked but not rewritten.
+
+    Bounded and refused for a NUL or a bidi control, because the whole route is
+    paid for before `record_performed` writes this string and PostgreSQL refuses
+    a NUL in text -- which arrived as `STORE_UNAVAILABLE` after the spend, with
+    the snapshot lost (FP-08).
+
+    The author's own bytes are returned rather than `BoundaryText`'s NFC form: a
+    quote is met by occurring in the document, and normalising it here would
+    silently retarget a key at text the document may not carry.
+    """
+    if not isinstance(value, str) or not value.strip():
+        raise Refusal(RefusalCode.QUALIFICATION_SET_FILE_INVALID)
+    try:
+        BoundaryText.of(value, limit=DEFAULT_LIMIT)
+    except Refusal:
+        # Retyped as `_boundary` retypes it: a malformed manifest reads as a
+        # malformed manifest, not as a boundary failure with no file behind it.
+        raise Refusal(RefusalCode.QUALIFICATION_SET_FILE_INVALID) from None
+    return value
 
 
 def _forecast(item: object) -> ExpectedForecast | None:
@@ -265,15 +333,28 @@ def _forecast(item: object) -> ExpectedForecast | None:
     return ExpectedForecast(
         scenario=_text(fields, "scenario"),
         period_id=_text(fields, "period_id"),
-        values=tuple(
-            ForecastValue(**_closed(value, _FORECAST_VALUE_KEYS)) for value in values
-        ),
+        values=tuple(_forecast_value(value) for value in values),
         currency=_text(fields, "currency"),
         scale=_text(fields, "scale"),
         perimeter=_text(fields, "perimeter"),
         qa_status=_text(fields, "qa_status"),
         limitation_flags=_strings(fields, "limitation_flags"),
         readiness=tuple(_pair(value) for value in readiness),
+    )
+
+
+def _forecast_value(item: object) -> ForecastValue:
+    """One host-recomputed value a forecast key expects, both fields checked.
+
+    `ForecastValue(**_closed(...))` took whatever JSON carried: a float loaded
+    as a float, so a key no host value could ever equal was paid for and then
+    read as a model miss, `NaN` made the digest raise an untyped `ValueError`,
+    and a list name reached the ambiguity check unhashable (FP-08, AR-25). The
+    annotations say two strings, and this is where that is true.
+    """
+    fields = _closed(item, _FORECAST_VALUE_KEYS)
+    return ForecastValue(
+        name=_bounded(fields.get("name")), value=_bounded(fields.get("value"))
     )
 
 
@@ -359,10 +440,20 @@ def _registers(item: object) -> tuple[ExpectedRegister, ...]:
 
 
 def _bounded(value: object) -> str:
-    """One string from a declared key, bounded as pinned state must be."""
+    """One string from a declared key, bounded as pinned state must be.
+
+    Over-long or otherwise unacceptable reads as a malformed manifest here, not
+    as a boundary failure raised from a file the caller cannot place: a
+    200-character label loaded and was then refused `BOUNDARY_TEXT_TOO_LONG` by
+    the digest, although `_LABEL_LIMIT`'s comment says the loader bounds labels
+    (FP-08).
+    """
     if not isinstance(value, str) or not value.strip():
         raise Refusal(RefusalCode.QUALIFICATION_SET_FILE_INVALID)
-    return BoundaryText.of(value.strip(), limit=_LABEL_LIMIT).value
+    try:
+        return BoundaryText.of(value.strip(), limit=_LABEL_LIMIT).value
+    except Refusal:
+        raise Refusal(RefusalCode.QUALIFICATION_SET_FILE_INVALID) from None
 
 
 def _ready(item: object) -> tuple[str, ...]:
@@ -388,14 +479,23 @@ def _ready(item: object) -> tuple[str, ...]:
 
 
 def _refusal(item: object) -> RefusalCode | None:
+    """The refusal a case declares, from the codes a case may declare.
+
+    Any `RefusalCode` at all was accepted, `STORE_UNAVAILABLE` included, so a
+    set could declare an outage as its expected result and be signed when one
+    happened (FP-01). `DECLARABLE_REFUSALS` is the methodology's own.
+    """
     if item is None:
         return None
     if not isinstance(item, str):
         raise Refusal(RefusalCode.QUALIFICATION_SET_FILE_INVALID)
     try:
-        return RefusalCode(item)
+        code = RefusalCode(item)
     except ValueError:
         raise Refusal(RefusalCode.QUALIFICATION_SET_FILE_INVALID) from None
+    if code not in DECLARABLE_REFUSALS:
+        raise Refusal(RefusalCode.QUALIFICATION_SET_FILE_INVALID)
+    return code
 
 
 def _extension(item: object) -> bool:

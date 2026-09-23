@@ -140,9 +140,17 @@ def test_from_environment_reads_three_names_and_never_a_value(
         models.MODEL_PRICE_ENV, "databricks-z,0.000001,0.000004,2026-09-22"
     )
     monkeypatch.setenv(models.REASONING_EFFORT_ENV, "high")
+    with pytest.raises(Refusal, match=r"^PROVIDER_NOT_CONFIGURED$"):
+        # AR-15: an effort the endpoint never receives names no profile.
+        from_environment()
+    monkeypatch.delenv(models.REASONING_EFFORT_ENV)
     provider = from_environment()
     assert built == ["databricks-z"]
-    assert provider.qualification_identity == "databricks/databricks-z/high/65536"
+    assert provider.qualification_identity == "databricks/databricks-z/none/65536"
+    # The same profile from the names alone, so a caller can refuse an
+    # unexpected one before any client is built (`scripts/qualify.py`).
+    assert models.identity_of("databricks-z") == provider.qualification_identity
+    assert models.identity_of("m", "high") == "databricks/m/high/65536"
     assert (
         price_from_environment(
             "databricks-z", "databricks-z,0.000001,0.000004,2026-09-22"
@@ -159,22 +167,24 @@ def test_the_production_model_is_chat_databricks_on_the_endpoint(
     seen: dict[str, object] = {}
 
     class _ChatDatabricks(ScriptedChat):
-        def __init__(
-            self, *, endpoint: str, max_tokens: int, timeout: float, max_retries: int
-        ) -> None:
-            seen.update(endpoint=endpoint, max_tokens=max_tokens)
-            seen.update(timeout=timeout, max_retries=max_retries)
+        def __init__(self, **given: object) -> None:
+            seen.update(given)
             super().__init__(answer=answer())
 
     monkeypatch.setattr(databricks_langchain, "ChatDatabricks", _ChatDatabricks)
+    client = object()
+    monkeypatch.setattr("caos.workspace.workspace_client", lambda: client)
     monkeypatch.setenv(models.ENDPOINT_ENV, "databricks-claude-opus-5")
     model = chat_model()
     assert isinstance(model, _ChatDatabricks)
     assert seen == {
         "endpoint": "databricks-claude-opus-5",
         "max_tokens": 65536,
-        "timeout": 120.0,
+        "timeout": 240.0,
         "max_retries": 0,
+        # The process's bounded client (CR-6), not the library's default one
+        # with the SDK's five-minute discovery budget.
+        "workspace_client": client,
     }
     assert isinstance(chat_model(endpoint="other"), _ChatDatabricks)
     assert seen["endpoint"] == "other"
@@ -239,15 +249,85 @@ def test_a_langchain_run_id_is_never_recorded_as_the_provider_s() -> None:
     )
 
 
-def test_the_chat_model_carries_the_socket_deadline_and_never_retries() -> None:
+def test_the_chat_model_carries_the_socket_deadline_and_never_retries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """F40: the lease is sized against `TIMEOUT_SECONDS` (brief D5), so the
     transport must actually carry it, and a retry is the caller's reservation."""
+    from databricks.sdk import WorkspaceClient
+    from databricks.sdk.config import Config
     from databricks_langchain import ChatDatabricks
 
     from caos.models import chat_model
     from caos.provider import TIMEOUT_SECONDS
 
+    assert TIMEOUT_SECONDS == 240.0, "a generation budget inside the lease (MX-4)"
+    client = WorkspaceClient(config=Config(host="http://127.0.0.1:9", token="t"))
+    monkeypatch.setattr("caos.workspace.workspace_client", lambda: client)
     chat = chat_model(endpoint="databricks-x")
     assert isinstance(chat, ChatDatabricks)
     assert chat.timeout == TIMEOUT_SECONDS
     assert chat.max_retries == 0
+
+
+def test_a_rate_limit_is_asked_again_under_the_same_reservation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """DP-5: a 429 reached no model, so it is the one vendor failure that is
+    retried below the seam -- bounded, waiting the gateway's `Retry-After`."""
+    from types import SimpleNamespace
+
+    from caos.models import (
+        RATE_LIMIT_TRIES,
+        RATE_LIMITED,
+        RETRY_AFTER_CAP_SECONDS,
+        RETRY_AFTER_SECONDS,
+    )
+
+    slept: list[float] = []
+    monkeypatch.setattr(models, "_sleep", slept.append)
+    calls = {"n": 0}
+
+    def limited_twice(prompt: str) -> object:
+        calls["n"] += 1
+        if calls["n"] < 3:
+            return StatusError(RATE_LIMITED)
+        return answer(finish="stop")
+
+    provider = fake_completions(ScriptedChat(answer=limited_twice))
+    completion = provider.complete("q")
+    assert completion.refusal is None and calls["n"] == 3
+    assert slept == [RETRY_AFTER_SECONDS, RETRY_AFTER_SECONDS]
+
+    always = ScriptedChat(answer=StatusError(RATE_LIMITED))
+    completion = fake_completions(always).complete("q")
+    assert completion.refusal is RefusalCode.PROVIDER_UNAVAILABLE
+    assert always.calls == RATE_LIMIT_TRIES
+
+    class _Stated(StatusError):
+        def __init__(self, retry_after: str) -> None:
+            super().__init__(RATE_LIMITED)
+            self.response = SimpleNamespace(headers={"retry-after": retry_after})
+
+    assert models._retry_after(_Stated("7")) == 7.0
+    assert models._retry_after(_Stated("9999")) == RETRY_AFTER_CAP_SECONDS
+    assert models._retry_after(_Stated("soon")) == RETRY_AFTER_SECONDS
+    # Every other status is answered once, by its class (F40 stands).
+    once = ScriptedChat(answer=StatusError(503))
+    assert (
+        fake_completions(once).complete("q").refusal is RefusalCode.PROVIDER_UNAVAILABLE
+    )
+    assert once.calls == 1
+
+
+def test_a_usage_block_with_a_negative_or_fractional_count_is_not_billed() -> None:
+    """AR-14: malformed accounting is an answer the host does not understand,
+    refused with an unknown charge, never a zero bill."""
+    for tokens in ((-5, 1), (3, -1)):
+        provider = fake_completions(
+            ScriptedChat(answer=answer(finish="stop", tokens=tokens))
+        )
+        completion = provider.complete("q")
+        assert completion.charge is None
+        assert completion.refusal is RefusalCode.PROVIDER_RESPONSE_INVALID
+    assert models._count(0) == 0 and models._count(7) == 7

@@ -111,32 +111,34 @@ export function SourcePack({
   onWithdrawn: () => void;
 }) {
   return (
-    <table className="reg" data-source-pack>
-      <thead>
-        <tr>
-          <th scope="col">Filename</th>
-          <th scope="col">Digest</th>
-          <th scope="col" className="r">
-            Admitted
-          </th>
-          <th scope="col">Extractor identity</th>
-          <th scope="col">Set versions</th>
-          <th scope="col">Withdrawal</th>
-          <th scope="col">Withdraw</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((row) => (
-          <SourceLine
-            key={row.source_id}
-            row={row}
-            observedAt={observedAt}
-            action={action}
-            caseId={caseId}
-            onWithdrawn={onWithdrawn}
-          />
-        ))}
-      </tbody>
-    </table>
+    <div className="tscroll" tabIndex={0} role="region" aria-label="Admitted source rows">
+      <table className="reg" data-source-pack>
+        <thead>
+          <tr>
+            <th scope="col">Filename</th>
+            <th scope="col">Digest</th>
+            <th scope="col" className="r">
+              Admitted
+            </th>
+            <th scope="col">Extractor identity</th>
+            <th scope="col">Set versions</th>
+            <th scope="col">Withdrawal</th>
+            <th scope="col">Withdraw</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <SourceLine
+              key={row.source_id}
+              row={row}
+              observedAt={observedAt}
+              action={action}
+              caseId={caseId}
+              onWithdrawn={onWithdrawn}
+            />
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

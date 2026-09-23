@@ -73,6 +73,21 @@ describe("Report v1", () => {
     );
   });
 
+  // FE-12: two regions per artifact with the same two names between them is
+  // 2N identically named landmarks to a reader jumping by landmark.
+  test("test_each_artifact_region_is_named_by_the_route_node_it_is_about", () => {
+    const document = report();
+    const { container } = mount(document);
+    const named = Array.from(container.querySelectorAll("[role='region'][aria-label]")).map(
+      (region) => region.getAttribute("aria-label"),
+    );
+    expect(new Set(named).size).toBe(named.length);
+    for (const artifact of document.body.artifacts) {
+      expect(named).toContain(`${artifact.route_node_id} saved artifact markdown`);
+      expect(named).toContain(`${artifact.route_node_id} saved artifact record`);
+    }
+  });
+
   test("test_the_report_places_a_control_for_each_of_the_four_filing_commands", () => {
     const { container } = mount(withActions(AVAILABLE));
     const placed = Array.from(
@@ -252,7 +267,9 @@ describe("Report v1", () => {
     vi.stubGlobal("fetch", fetchSpy);
 
     const { container } = mount(document);
+    // The filing chain asks once more before each act (finding FE-7).
     fireEvent.click(screen.getByRole("button", { name: "Sign opinion" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm Sign opinion" }));
     await settle();
     await settle();
 
@@ -295,7 +312,9 @@ describe("Report v1", () => {
     vi.stubGlobal("fetch", fetchSpy);
 
     mount(document);
+    // The filing chain asks once more before each act (finding FE-7).
     fireEvent.click(screen.getByRole("button", { name: "Freeze deliverable" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm Freeze deliverable" }));
     await settle();
     await settle();
     expect(fetchSpy.mock.calls[0]![0]).toBe(
@@ -306,7 +325,9 @@ describe("Report v1", () => {
     });
 
     fetchSpy.mockResolvedValueOnce(jsonResponse(receipt));
+    // The filing chain asks once more before each act (finding FE-7).
     fireEvent.click(screen.getByRole("button", { name: "File deliverable" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm File deliverable" }));
     await settle();
     await settle();
     const filing = fetchSpy.mock.calls.find(([url]) => String(url).endsWith("/filing"))!;

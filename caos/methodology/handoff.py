@@ -27,7 +27,7 @@ from typing import Any, NoReturn
 from uuid import UUID
 
 from caos.blobs import BlobStore
-from caos.boundary_text import BoundaryText
+from caos.boundary_text import BoundaryText, hides_text
 from caos.digest import canonical_json
 from caos.evidence.citations import AnchoredCitation, Citation, Rect
 from caos.graph.route import MODEL_MODULE
@@ -115,6 +115,19 @@ ZERO_SHA256 = "0" * 64
 MAX_FILE_BYTES = 26_214_400
 MAX_FRONTMATTER_BYTES = 262_144
 MAX_LINE_BYTES = 65_536
+# The longest run of spaces or tabs any line of a handoff may carry.
+#
+# The vendor's heading expressions are `^ {0,3}##(?!#)[ \t]+(.+?)[ \t]*$` and
+# its sibling, which backtrack quadratically on a heading padded with a long
+# whitespace run: 60,000 spaces measured about 60 s per validation, with the
+# GIL held for about 40 s of it, and an accepted CP-0 is re-validated on every
+# node pass and every read of the Run section (AI-1/SA-C5). Invariant 4 forbids
+# editing the vendor file, so the line is refused here, before any vendor
+# validator sees the text -- on model output and on stored bytes alike, because
+# `validate_markdown` is the one door both go through. 256 is far past any
+# indent a conforming handoff's tables or code fences use, and far below the
+# 65,536-byte line bound that was the only thing above it.
+MAX_WHITESPACE_RUN = 256
 # One T8 `Why now / blocker` cell, which the vendor's own contract asks a module
 # to state "briefly". Bounded here because the cell reaches a pinned record and
 # the wire, and nothing upstream bounds it.
@@ -325,6 +338,14 @@ def _envelope_node(identity: HostIdentity) -> str:
 
 
 def _text(markdown: bytes) -> str:
+    """The handoff's text, or `HANDOFF_MALFORMED`: the bytes the vendor's
+    validators are allowed to meet.
+
+    Everything here is a bound on what the *host* will hand on -- size, LF-only
+    lines, the invisible separators, text no reader can see, and the whitespace
+    run the vendor's own expressions cannot read in linear time. It runs before
+    any vendor call and on stored bytes as well as model output.
+    """
     malformed = Refusal(RefusalCode.HANDOFF_MALFORMED)
     if len(markdown) > MAX_FILE_BYTES:
         raise malformed
@@ -335,6 +356,15 @@ def _text(markdown: bytes) -> str:
     # Canonical Markdown is LF-only; a CR would let the host and the vendor
     # disagree about where lines, and so the front matter, end.
     if text is None or "\r" in text or INVISIBLE.intersection(text):
+        raise malformed
+    # Tags, a zero-width space, a word joiner: text a reviewer of the committee
+    # page cannot see and the next module reads as an instruction (AI-2).
+    if hides_text(text):
+        raise malformed
+    # One C-level substring search, whatever the document does. Tabs are read
+    # as spaces so that a run mixing the two is one run, and `str.replace`
+    # gives back the same object when there is no tab to replace.
+    if " " * (MAX_WHITESPACE_RUN + 1) in text.replace("\t", " "):
         raise malformed
     try:
         clean = BoundaryText.of(text, limit=len(text)).value == text
@@ -540,6 +570,12 @@ RECORD_FORMAT = "caos-canonical-record-v2"
 # A body may carry the largest Markdown the vendor reads plus its citations.
 MAX_TRANSPORT_CHARS = 2 * MAX_FILE_BYTES
 MAX_PAGE = 2**31 - 1  # the store's integer page
+# How many citations one handoff may carry. Every citation is checked against
+# the body here and anchored in the token index by `verify_citations` later,
+# and both are re-done on every replay of the attempt: a few thousand of them
+# spent about a minute of worker time each time, which is what makes health
+# report `WORKERS_STALE` (AI-5). A real handoff's Evidence Trace carries tens.
+MAX_CITATIONS = 512
 
 
 @dataclass(frozen=True, slots=True)
@@ -611,6 +647,8 @@ def _transport(body: str) -> tuple[bytes, str, tuple[Citation, ...]]:
     text, citations = wire["canonical_markdown"], wire["citations"]
     if not isinstance(text, str) or not isinstance(citations, list) or not citations:
         raise ValueError
+    if len(citations) > MAX_CITATIONS:
+        raise ValueError
     # A lone surrogate survives `json.loads` and fails here, inside the guard.
     requested = tuple(_requested(c) for c in citations)
     if len(frozenset(requested)) != len(requested):
@@ -635,7 +673,28 @@ def _body_words(text: str) -> list[str]:
 _QUOTATION = "\"'`\u2018\u2019\u201c\u201d\u201e\u201f\u00ab\u00bb"
 
 
-def _quoted(words: list[str], quote: str) -> bool:
+def _openings(words: list[str]) -> dict[str, tuple[int, ...]]:
+    """Where in the body a quote's first word could begin.
+
+    A run matches at `start` only if `words[start]` is the quote's first word
+    as written, or is that word wearing an opening quotation mark, or -- for a
+    one-word quote -- wearing one at either end. So the three spellings of each
+    body word are the whole key, and the positions under them are a superset of
+    the starts `_quoted` has to look at: the predicate below is unchanged, it
+    is simply asked about a handful of positions rather than about every
+    position in the body once per citation (AI-5).
+
+    A word wearing no quotation mark has one spelling, so an ordinary body
+    holds one entry per distinct word and one integer per word.
+    """
+    found: dict[str, list[int]] = {}
+    for position, word in enumerate(words):
+        for key in {word, word.lstrip(_QUOTATION), word.strip(_QUOTATION)}:
+            found.setdefault(key, []).append(position)
+    return {key: tuple(positions) for key, positions in found.items()}
+
+
+def _quoted(words: list[str], openings: dict[str, tuple[int, ...]], quote: str) -> bool:
     """Whether the body quotes this text as whole tokens, typography aside.
 
     A module writes its Evidence Trace as prose, and prose puts quotation marks
@@ -650,12 +709,13 @@ def _quoted(words: list[str], quote: str) -> bool:
     the document's own tokens and is untouched. This decides only whether the
     module quoted, in its own narrative, what it says it quoted.
     """
-    # ponytail: linear scan per citation; an index when bodies grow large.
     wanted = quote.split()
     if not wanted:
         return False
     span = len(wanted)
-    for start in range(len(words) - span + 1):
+    for start in openings.get(wanted[0], ()):
+        if start + span > len(words):
+            continue
         window = words[start : start + span]
         if window == wanted:
             return True
@@ -677,9 +737,10 @@ def parse_response(
     """The exact Markdown bytes and the citation requests beside them, or a refusal.
 
     The transport is `{"canonical_markdown", "citations"}` and nothing else, at
-    either level, with duplicate keys refused. A citation must name delivered
-    evidence and quote the Markdown verbatim; one that does not refuses the whole
-    handoff, because the Markdown cannot be edited to drop what rests on it.
+    either level, with duplicate keys refused, and at most `MAX_CITATIONS` of
+    them. A citation must name delivered evidence and quote the Markdown
+    verbatim; one that does not refuses the whole handoff, because the Markdown
+    cannot be edited to drop what rests on it.
     Anchoring in the token index needs the store and is the executor's step.
     """
     markdown, text, citations = _or_refuse(
@@ -688,7 +749,10 @@ def parse_response(
     if any(citation.source_id not in delivered for citation in citations):
         raise Refusal(RefusalCode.CITATION_NOT_DELIVERED)
     words = _body_words(text)
-    if any(not _quoted(words, citation.matched_text) for citation in citations):
+    openings = _openings(words)
+    if any(
+        not _quoted(words, openings, citation.matched_text) for citation in citations
+    ):
         raise Refusal(RefusalCode.HANDOFF_MALFORMED)
     return markdown, citations
 

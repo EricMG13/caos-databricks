@@ -13,7 +13,7 @@ This repository deploys as one Databricks App from an asset bundle. Nothing in t
 | Two workspace groups | `group_admin` (default `caos-admins`), `group_analyst` (default `caos-analysts`) | Members of the admin group act as ADMIN, of the analyst group as ANALYST; any other authenticated user is READER. |
 | What one run may spend | `run_ceiling` (default `25.00`) | Must cover one worst-case call at `model_price` (about 6.88 at the default price); preflight refuses less (F28). |
 | The forwarded-token preview | none | `forward_user_access_token` is a preview feature Databricks must enable for the workspace (F53); row E5 reads it back. Changing it on an existing app needs `databricks apps stop` then `start`. |
-| Who may open the app | `group_admin` → `CAN_MANAGE`, `group_analyst` → `CAN_USE` | Granted by the bundle (F50); a user outside both groups is stopped at the proxy. Members must be in the groups directly: SCIM `Me` does not expand nested groups. |
+| Who may open the app | `group_admin` → `CAN_USE`, `group_analyst` → `CAN_USE` | Granted by the bundle (F50); a user outside both groups is stopped at the proxy. Neither business group manages the app (W3): `CAN_MANAGE` deploys code as the app's principal, which writes the ledger, so only the deployer holds it. Members must be in the groups directly: SCIM `Me` does not expand nested groups. |
 | The app's Lakebase role | none | `CAN_CONNECT_AND_CREATE` is expected to provision the app's service principal as a Postgres role; row E6's `store` code says whether it did. |
 
 Check them with the deployer's profile before the first deploy:
@@ -46,9 +46,11 @@ It runs sections 1, 3 and 5 of this page in order and writes one evidence row pe
 ## 3a. Validate and deploy by hand
 
 ```bash
+export DATABRICKS_BUNDLE_ENGINE=direct                    # the engine every stand-in run used
+export BUNDLE_VAR_model_price=<endpoint,in,out,date>      # commas: the CLI splits a --var on them (C1)
 databricks bundle validate -t prod -p <profile> \
   --var model_endpoint=<endpoint> --var uc_catalog=<catalog> --var uc_schema=<schema> \
-  --var lakebase_instance=<instance> --var model_price=<endpoint,in,out,date>
+  --var lakebase_instance=<instance>
 databricks bundle deploy -t prod -p <profile> --var ...   # same variables
 databricks bundle run caos -t prod -p <profile>           # starts, or restarts on new code
 databricks apps get caos -p <profile>                     # app_status.state RUNNING
@@ -58,9 +60,9 @@ The App installs from `uv.lock` on Python 3.13 (`requires-python`) with `uv run 
 
 ## 4. What the app expects at runtime
 
-Set by the platform: `DATABRICKS_HOST`, `DATABRICKS_APP_PORT`, `DATABRICKS_APP_NAME`, `DATABRICKS_CLIENT_ID`/`_SECRET`, `PGHOST`/`PGPORT`/`PGDATABASE`/`PGUSER`/`PGSSLMODE` (from the database resource) and `x-forwarded-access-token` on each request (`forward_user_access_token: true`, scope `iam.current-user:read`).
+Set by the platform: `DATABRICKS_HOST`, `DATABRICKS_WORKSPACE_ID` (boot refuses without it, F46), `DATABRICKS_APP_PORT`, `DATABRICKS_APP_NAME`, `DATABRICKS_CLIENT_ID`/`_SECRET`, `PGHOST`/`PGPORT`/`PGDATABASE`/`PGUSER`/`PGSSLMODE` (from the database resource) and `x-forwarded-access-token` on each request (`forward_user_access_token: true`, scope `iam.current-user:read`).
 
-Set by the bundle: `CAOS_BIND_HOST=0.0.0.0`, `CAOS_WORKER_IN_PROCESS=1`, `CAOS_SITE_ROOT=frontend/dist`, `CAOS_MODEL_ENDPOINT`, `CAOS_MODEL_PRICE`, `CAOS_UC_SCHEMA`, `CAOS_BLOB_ROOT=volume:///Volumes/<catalog>/<schema>/caos_blobs`, `CAOS_LAKEBASE_INSTANCE`, `CAOS_GROUP_ADMIN`, `CAOS_GROUP_ANALYST`.
+Set by the bundle: `CAOS_BIND_HOST=0.0.0.0`, `CAOS_WORKER_IN_PROCESS=1`, `CAOS_SITE_ROOT=frontend/dist`, `CAOS_MODEL_ENDPOINT`, `CAOS_MODEL_PRICE`, `CAOS_RUN_CEILING`, `CAOS_BLOB_ROOT=volume:///Volumes/<catalog>/<schema>/caos_blobs`, `CAOS_LAKEBASE_INSTANCE`, `CAOS_GROUP_ADMIN`, `CAOS_GROUP_ANALYST`.
 
 Identity: the platform proxy is the edge. The app reads the forwarded token, resolves the caller through SCIM `Me`, mints a stable subject from the workspace id and the SCIM id, and maps the two group names to roles. Every identity header a client could send is dropped before the API sees it.
 
@@ -75,6 +77,11 @@ DATABRICKS_CONFIG_PROFILE=<profile> CAOS_MODEL_ENDPOINT=<endpoint> \
 Health must answer 200 with `python_version` starting `3.13` and `status: ready`; the smoke script must print the endpoint, `model=ChatDatabricks`, a response id and token usage. Record the Lakebase `SELECT version()` on first connection in `docs/rebuild/decisions.md` (D17).
 
 ## 6. Operating notes
+
+- The app is `caos` in the `prod` target and `caos-<target>` in any other (DP-6), so a developer's `bundle deploy -t dev` never takes over the production app; the one command's E5 row reads the app by that rule.
+- Preflight refuses an endpoint whose AI Gateway logs payloads to inference tables, falls back to another model, or serves more than one entity (DP-3): every prompt carries document text, and the host prices one model per endpoint. Guardrails are reported, not refused.
+- `PGSSLMODE=require` encrypts but does not authenticate the Lakebase server (MX-7). Where the workspace publishes a CA bundle, set `PGSSLMODE=verify-full` and `PGSSLROOTCERT` in the bundle's `config.env`; libpq reads both.
+- The gateway smoke (E7) makes two paid calls outside the budget ledger (AI-8): a documented exception, once per deploy.
 
 - The worker runs inside the app process (one run at a time). A queued run waits while the app restarts; leases expire and the run is reclaimed.
 - Secrets: the app reads none. Model calls use the service principal's OAuth; Lakebase credentials are minted per connection and never logged.
@@ -91,4 +98,4 @@ uv run python tests/workspace_stub.py -- databricks bundle validate -t dev \
 CAOS_REQUIRE_POSTGRES=1 uv run pytest --no-cov tests/test_workspace_stub.py
 ```
 
-The first ends with `Validation OK!` and lists the paths the CLI asked for (`bundle deploy` and `bundle run caos` pass the same way, and `scripts/check_gate_config.py --shipped .databricks/bundle/dev/deployment.json` then checks that what the deploy synced holds everything the app needs); the second runs the gateway smoke, `scripts/preflight.py`, SCIM identity, the volume backend, the Lakebase checkpointer and a LITE route through `ChatDatabricks` over HTTP. `tests/test_platform_boot.py` goes further: it boots `python -m caos.serve` under the platform's own environment against the stub and the Docker Postgres and drives a governed run through the HTTP surface to COMPLETE; `tests/test_enterprise_deploy.py` runs the one command of section 3 against that. What the stand-in cannot tell you: whether the workspace grants what the bundle asks for, how its Apps proxy treats the event stream (C42), the Lakebase major version (D17), or what a real model answers. The one command reports each of those the first time it runs there; the instruction for that run is `docs/rebuild/ENTERPRISE_HANDOFF.md`.
+The first ends with `Validation OK!` and lists the paths the CLI asked for (`bundle deploy` and `bundle run caos` pass the same way; the `prod` target, deployment lock and all, runs its validate, deploy and run under one stub with `sh -c` (A37); the stub answers a taken app name with 409 and serves `workspace/export` as the platform does; and `scripts/check_gate_config.py --shipped .databricks/bundle/dev/deployment.json` then checks that what the deploy synced holds everything the app needs); the second runs the gateway smoke, `scripts/preflight.py`, SCIM identity, the volume backend, the Lakebase checkpointer and a LITE route through `ChatDatabricks` over HTTP. `tests/test_platform_boot.py` goes further: it boots `python -m caos.serve` under the platform's own environment against the stub and the Docker Postgres and drives a governed run through the HTTP surface to COMPLETE; `tests/test_enterprise_deploy.py` runs the one command of section 3 against that. What the stand-in cannot tell you: whether the workspace grants what the bundle asks for, how its Apps proxy treats the event stream (C42), the Lakebase major version (D17), or what a real model answers. The one command reports each of those the first time it runs there; the instruction for that run is `docs/rebuild/ENTERPRISE_HANDOFF.md`.

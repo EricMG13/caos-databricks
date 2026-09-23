@@ -1,7 +1,7 @@
 """`GET /api/health`: readiness over store, bundle and blobs, read from a cache.
 
-`SYSTEM_SPEC.md` §11 and the Phase 4 task 4.5 brief, slice 4.5b. One background
-task, started in the app's lifespan, runs the three probes every
+The spec's §11 (`docs/rebuild/2026-09-22-caos-databricks-spec.md`). One
+background task, started in the app's lifespan, runs the probes every
 `PROBE_INTERVAL` seconds; each probe runs in a worker thread under
 `PROBE_DEADLINE`, and a round already in flight is never started twice. The
 route reads only what the last round left, so a request -- anonymous, unguarded,
@@ -33,6 +33,7 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict
 
 from caos.api.deps import BLOB_ROOT, VENDORED_BUNDLE, _vendored_bundle
 from caos.api.edge import PLATFORM_ENV
+from caos.api.identity import scim_me
 from caos.blobs import VOLUME_SCHEME, BlobStore
 from caos.methodology.bundle import Bundle
 from caos.refusals import Refusal
@@ -48,6 +49,15 @@ PROBE_INTERVAL = 10.0
 # this; `PROBE_INTERVAL` stays above it so rounds never queue (F47).
 PROBE_DEADLINE = 5.0
 STALE_AFTER = 30.0
+# How long a probe still in flight may hold the next round back. A probe thread
+# the executor never started -- `wait_for` cancelled the job while it was still
+# queued -- never runs its own accounting, so `inflight` stayed raised and
+# every later round returned without probing anything until the process was
+# restarted (AR-11). The count gate is therefore a *time* gate as well: past
+# this, a round runs whatever `inflight` says. Twice the deadline is longer
+# than any probe that is really running and well inside `STALE_AFTER`, so a
+# leak costs one skipped round rather than readiness.
+INFLIGHT_CEILING = PROBE_DEADLINE * 2
 
 HealthCode = Literal[
     "OK",
@@ -189,17 +199,32 @@ def probe_workers() -> HealthCode:
 
 
 def probe_identity() -> HealthCode:
-    """Behind the platform, one SCIM `Me` as the app's own principal, through
-    the SDK with bounded budgets; anywhere else there is nothing to ask. A
-    process that cannot reach the workspace cannot name a caller, so this is
-    folded into `status` (F43)."""
+    """Behind the platform, one SCIM `Me` as the app's own principal; anywhere
+    else there is nothing to ask. A process that cannot reach the workspace
+    cannot name a caller, so this is folded into `status` (F43).
+
+    Down `identity.scim_me`, the very path a request takes, with the
+    credentials the SDK mints for this process. Through the SDK's own client
+    it was a *different* path (EI-W1): a `DATABRICKS_HOST` the hand-rolled
+    parser rejected, a SCIM path that had moved, or a token scope the
+    workspace refused made every request 401 or 503 while health still
+    reported `ready`, because the SDK resolved its own host and asked its own
+    way. The SDK is still what holds the credential -- nothing here reads one.
+    """
     if not os.environ.get(PLATFORM_ENV):
         return "OK"
     from caos.workspace import workspace_client
 
     try:
-        workspace_client().current_user.me()
+        minted = workspace_client().config.authenticate()
     except (OSError, ValueError):
+        return "IDENTITY_UNAVAILABLE"
+    authorization = minted.get("Authorization")
+    if not authorization:
+        return "IDENTITY_UNAVAILABLE"
+    try:
+        scim_me(authorization)
+    except Refusal:
         return "IDENTITY_UNAVAILABLE"
     return "OK"
 
@@ -248,6 +273,10 @@ class ProbeState:
     # Probe threads still alive, an abandoned one included: no new round
     # starts over them, so a slow store cannot pile up connections (F47).
     inflight: int = 0
+    # When the oldest of them was started, on `clock`, and how long that may
+    # hold the next round back (AR-11). None when nothing is in flight.
+    inflight_since: float | None = None
+    inflight_ceiling: float = INFLIGHT_CEILING
 
 
 async def _one(state: ProbeState, name: str) -> HealthCode:
@@ -258,8 +287,14 @@ async def _one(state: ProbeState, name: str) -> HealthCode:
             return probe()
         finally:
             state.inflight -= 1
+            if state.inflight <= 0:
+                # Clamped: a thread abandoned by an earlier round can return
+                # after a later round has already counted itself out.
+                state.inflight, state.inflight_since = 0, None
 
     state.inflight += 1
+    if state.inflight_since is None:
+        state.inflight_since = state.clock()
     try:
         return await asyncio.wait_for(asyncio.to_thread(counted), state.deadline)
     except TimeoutError:
@@ -270,10 +305,31 @@ async def _one(state: ProbeState, name: str) -> HealthCode:
         return _FAILED[name]
 
 
+def _blocked(state: ProbeState) -> bool:
+    """Whether a probe still in flight holds the next round back.
+
+    It does, until it has been in flight longer than `inflight_ceiling`. A job
+    the executor never started because `wait_for` cancelled it while it was
+    still queued never runs `counted`, so its count is never given back: the
+    gate has to expire on its own, or one such cancellation stalls every
+    future round and only a restart returns readiness (AR-11).
+    """
+    if not state.inflight:
+        return False
+    since = state.inflight_since
+    return since is None or state.clock() - since < state.inflight_ceiling
+
+
 async def probe_once(state: ProbeState) -> None:
-    """One round of all three probes, unless a round is already in flight."""
-    if state.running or state.inflight:
+    """One round of every probe, unless a round is already in flight."""
+    if state.running or _blocked(state):
         return
+    if state.inflight:
+        # Past the ceiling with a count still raised: whatever it counts was
+        # abandoned or was never started. Forgotten here, so the gate holds
+        # again for this round's own probes rather than staying open for the
+        # life of the process.
+        state.inflight, state.inflight_since = 0, None
     state.running = True
     try:
         store, bundle, blobs, identity, workers = await asyncio.gather(

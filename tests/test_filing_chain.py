@@ -431,3 +431,40 @@ def test_the_in_unit_writes_commit_nothing_of_their_own(
             " (SELECT count(*) FROM sources WHERE withdrawn_at IS NOT NULL)"
         ).fetchone()
     assert counts == (0, 0, 0, 0, 0)
+
+
+def test_the_receipt_names_only_the_latest_of_several_signers(
+    lite: _Harness,
+) -> None:
+    """FP-09, recorded where it bites rather than fixed.
+
+    `one_opinion_per_signer` allows several approvers to sign before the freeze,
+    and `revision_signatures` orders by `signed_at DESC`, so the detached
+    receipt and the `DELIVERABLE_FILED` payload each carry whoever signed last.
+    An earlier co-signer is absent from the portable proof, and the offline
+    verifier can prove the independence of one signer out of however many there
+    were. Carrying the sorted list is a change to `FiledReceipt` in
+    `caos/api/wire.py`, whose `signed_by` is one `UUID`; this test states the
+    gap so the fix has somewhere to land.
+    """
+    from caos.deliverable.filing import filing_payload
+
+    revision = _save(lite)
+    cosigner = _actor(lite)
+    _sign(lite, revision)
+    _sign(lite, revision, cosigner)
+    _freeze(lite, revision, _actor(lite))
+    receipt = file_deliverable(
+        lite.conn,
+        lite.blobs,
+        case_id=lite.case_id,
+        actor_id=_actor(lite),
+        revision_id=revision,
+    )
+    signers = {lite.approver, cosigner}
+    assert receipt.signed_by in signers
+    assert {
+        who for who, _ in revision_signatures(lite.conn, lite.case_id, revision)
+    } == (signers)
+    assert filing_payload(receipt)["signed_by"] == str(receipt.signed_by)
+    assert json.loads(receipt_bytes(receipt))["signed_by"] == str(receipt.signed_by)
