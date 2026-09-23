@@ -329,15 +329,17 @@ def test_cp0_block_prevents_every_downstream_attempt_and_reservation(
     assert _blocking_verdict(harness) is None
 
 
-def test_restricted_cp5_holds_cp6_without_an_attempt(harness: _Harness) -> None:
+def test_restricted_cp5_releases_cp6(harness: _Harness) -> None:
+    """D34: an accepted Restricted CP-5 meets the QA gate, as the vendor's
+    navigator meets it on acceptance; the route runs CP-6 and completes."""
     answers = PortfolioDecisionCompletions(
         harness.source_id, qa_by_module={"CP-5": "Restricted"}
     )
     assert _run_route(harness, _module_provider(harness, answers)) is None
-    assert _modules(answers) == list(MODULES[:-1])
-    assert (_status(harness), _events(harness, "RUN_BLOCKED")) == ("BLOCKED", 1)
+    assert _modules(answers) == list(MODULES)
+    assert (_status(harness), _events(harness, "RUN_BLOCKED")) == ("COMPLETE", 0)
     assert _record(harness, "CP-5").projections.qa_status == "Restricted"
-    assert _attempts(harness, "CP-6") == (0, 0)
+    assert _attempts(harness, "CP-6") == (1, 1)
     assert _blocking_verdict(harness) is None
 
 
@@ -377,9 +379,11 @@ def test_restricted_cp5_gate_is_reported_over_http(
     finally:
         app.dependency_overrides.clear()
     cp6 = next(node for node in body["nodes"] if node["module_id"] == "CP-6")
+    # D34: the Restricted verdict met the gate, so CP-6 ran; the verdict it
+    # ran under is still reported.
     assert (cp6["state"], cp6["awaiting_gate"], cp6["gate_verdict"]) == (
-        "BLOCKED",
+        "COMPLETE",
         False,
         "Restricted",
     )
-    assert cp6["waiting_on"] == [{"source": "CP-5", "type": "QA_GATE"}]
+    assert cp6["waiting_on"] == []

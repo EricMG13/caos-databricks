@@ -512,9 +512,10 @@ def validate_markdown(  # noqa: PLR0913 -- the brief's pure signature
     """Refuse anything but this invocation's conforming handoff; project the rest.
 
     Order is the contract: bytes, vendor structure, declared keys, host identity,
-    register completeness, gate readiness, then `qa_status`. A validated Blocked
-    handoff refuses `HANDOFF_BLOCKED` only once it is proven to be this
-    invocation's, so the caller can record it as a diagnostic outcome.
+    a Blocked `qa_status` (D34), register completeness, gate readiness. A
+    validated Blocked handoff refuses `HANDOFF_BLOCKED` only once it is proven
+    to be this invocation's, so the caller can record it as a diagnostic
+    outcome; it is not held to the registers of a run it says could not be done.
 
     `skill` is the module's verified `SKILL.md`. Since §92 the vendor's own
     checker enforces its `semantic_rules` and fixture markers, and its
@@ -545,6 +546,11 @@ def validate_markdown(  # noqa: PLR0913 -- the brief's pure signature
     ) or any(fields.get(key) is not None for key in _UPGRADE_KEYS):
         raise Refusal(RefusalCode.HANDOFF_IDENTITY_MISMATCH)
 
+    # A validated Blocked answer is the vendor's "blocked statement only": it
+    # is honoured before the completeness check it was never meant to meet
+    # (D34), and ends the run as before once its quotes anchor.
+    if fields["qa_status"] == "Blocked":
+        raise Refusal(RefusalCode.HANDOFF_BLOCKED)
     violations = (
         []
         if identity.module_id == MODEL_MODULE
@@ -568,8 +574,6 @@ def validate_markdown(  # noqa: PLR0913 -- the brief's pure signature
         if identity.module_id == GATE_MODULE
         else ((), ())
     )
-    if fields["qa_status"] == "Blocked":
-        raise Refusal(RefusalCode.HANDOFF_BLOCKED)
     if identity.module_id == RESEARCH_MODULE:
         # The vendor's research contract (§96): TDR.1 is the locked brief's
         # questions exactly, every finding cites its own question's evidence,

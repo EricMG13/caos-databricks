@@ -19,7 +19,7 @@ Use current command qualifiers, current conversation scope, then validated match
 1. Every run=full workflow+outputs+QA; no reduced mode.
 2. Markdown only→validate identity/contract, fail closed→Markdown completes run and is the sole analytical artifact/handoff. Chat is non-canonical.
 3. Filename=`[SubjectKey]_CP-2D_[YYYYMMDD].md` from front-matter `issuer_id`(CP-DR:`scope_key`)/`module_id`/`analysis_date`; never period/name/alias. Validate name pre-completion; cannot create→Blocked. YAML=`qa_status`, Confidence Score/band, six H2s. `## Analysis` leads conclusion-first with compact tables; complete registers lossless below `### Analytical appendix — complete canonical registers`. No DOCX/PDF/HTML/slide/JSON/dashboard.
-4. upstream re-anchor module/run/entity/period scope/values. Missing/Blocked/mismatch→`[Insufficient Information]`+stop/no inference. Figure=file+locator or null+gap; null≠zero; keep rows/`—`; never fabricate/reconcile.
+4. upstream re-anchor module/run/entity/period scope/values. Delivered but Blocked/mismatch→`[Insufficient Information] — ` reason+stop that step/no inference; an upstream the route does not include→named limitation, not a stop. Figure=file+locator or null+gap; null≠zero; keep rows/`—`; never fabricate/reconcile.
 5. Debt=BS carrying value(current+long-term, net issuance costs); log gross delta. finance-company/services/financing subsidiary: separate industrial vs finance cash/debt/CFO/capex/liquidity/FCF; matched-funding debt not industrial leverage; state perimeter/definition/conflicts.
 6. Multi-figure event: all figures+roles, one conflict row; never silently choose.
 7. Subsequent event: flag date; never blend into period figures.

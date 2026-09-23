@@ -152,3 +152,75 @@ def test_t8_accepts_a_readiness_written_in_backticks() -> None:
     nav = CONTRACT.navigation
     rows = nav.parse_t8(ticked, nav.validate_catalog(CATALOG))
     assert {row.readiness for row in rows} == {"READY"}
+
+
+def test_a_heading_binds_its_table_before_a_prose_mention() -> None:
+    """Fork r2: a takeaway line naming another register ("reconciles to the
+    T4.4 revenue base") under `### T4.5` no longer captures the table (G2-7)."""
+    text = (
+        "### T4.5 — Cash flow statement\n"
+        "This reconciles to the T4.4 revenue base.\n\n"
+        "| Line Item | FY2025 |\n|---|---|\n| CFO | 6,218 |\n"
+    )
+    assert set(CHECK.find_registers(text, ["T4.4", "T4.5"])) == {"T4.5"}
+
+
+def test_a_contract_column_inside_one_longer_header_cell_is_found() -> None:
+    """Fork r2: the method files spell `Source File Name` where the contract
+    says `File Name`; two candidate cells are ambiguous and match nothing."""
+    resolve = CHECK._resolve_columns
+    assert resolve(["File Name"], ["Source File Name", "Tier"]) == {
+        "File Name": ["Source File Name"]
+    }
+    assert resolve(["File Name"], ["Source File Name", "Target File Name"]) == {
+        "File Name": []
+    }
+
+
+def test_a_value_in_backticks_is_the_same_value() -> None:
+    """Fork r2: CP-L10's topic IDs are shown in backticks in its own examples."""
+    rule = {
+        "register_id": "TL10.2",
+        "rule_id": "r",
+        "rule": "required_values",
+        "column": "topic_id",
+        "values": ["SOURCE_BASIS"],
+    }
+    present = {"TL10.2": (["topic_id"], [{"topic_id": "`SOURCE_BASIS`"}])}
+    assert CHECK._semantic_violations([rule], present) == []
+
+
+def test_cp2e_ratchet_is_one_column() -> None:
+    """Fork r2: `Ratchet (direction; bps)` split on its `;` into two columns
+    every answer failed; the contract now names one (G3-5)."""
+    contract = CHECK.load_contract(skill("CP-2E").decode(), "CP-2E")
+    assert "Ratchet (direction, bps)" in contract["registers"]["T2G.5"]["columns"]
+
+
+def test_a_blocked_answer_is_honoured_before_the_completeness_check() -> None:
+    """D34: the vendor's Blocked answer is a blocked statement, not a full run;
+    it refused `HANDOFF_INCOMPLETE` for registers it was never meant to hold."""
+    import pytest
+
+    from caos.methodology.handoff import validate_markdown
+    from caos.refusals import Refusal, RefusalCode
+
+    markdown = handoff_markdown(
+        identity("CP-0"),
+        authored={
+            "qa_status": "Blocked",
+            "confidence_score": 30,
+            "confidence_band": "Insufficient Information",
+        },
+        omit_register="T5",
+    )
+    with pytest.raises(Refusal) as refused:
+        validate_markdown(
+            CONTRACT,
+            CATALOG,
+            skill("CP-0"),
+            markdown,
+            identity=identity("CP-0"),
+            gate_expects=frozenset({"CP-L10", "CP-5"}),
+        )
+    assert refused.value.code is RefusalCode.HANDOFF_BLOCKED

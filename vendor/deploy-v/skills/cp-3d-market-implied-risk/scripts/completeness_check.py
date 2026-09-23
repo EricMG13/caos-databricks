@@ -341,7 +341,11 @@ def find_registers(handoff_text, register_ids=None):
                 cells += [""] * (len(header) - len(cells))
                 rows.append(dict(zip(header, cells[:len(header)])))
                 j += 1
-            for label in reversed(recent):
+            # A heading binds before a prose line that merely mentions an ID
+            # ("reconciles to the T4.4 revenue base" under "### T4.5"), fork r2.
+            labels = [s for s in reversed(recent) if s.startswith("#")]
+            labels += [s for s in reversed(recent) if not s.startswith("#")]
+            for label in labels:
                 match = id_re.search(label)
                 if match:
                     out.setdefault(match.group(1), (header, rows))
@@ -384,6 +388,8 @@ def _resolve_columns(columns, header):
         if TEMPLATE_COLUMN_RE.search(column):
             continue
         cell = column if column in header else keys.get(_column_key(column))
+        if cell is None:
+            cell = _containing_cell(column, header, claimed)
         resolved[column] = [cell] if cell is not None else []
         claimed.update(resolved[column])
     extra = [cell for cell in header if cell not in claimed]
@@ -391,6 +397,22 @@ def _resolve_columns(columns, header):
         if TEMPLATE_COLUMN_RE.search(column):
             resolved[column] = extra
     return resolved
+
+
+def _containing_cell(column, header, claimed):
+    """The one unclaimed header cell whose words contain the contract column's
+    words in order ("Source File Name" for "File Name"), or None when none or
+    several do (fork r2): the method files spell many columns longer than the
+    contract does."""
+    words = _column_key(column).split()
+    found = []
+    for cell in header:
+        if cell in claimed:
+            continue
+        have = _column_key(cell).split()
+        if any(have[i:i + len(words)] == words for i in range(len(have) - len(words) + 1)):
+            found.append(cell)
+    return found[0] if len(found) == 1 else None
 
 
 def _cell_violations(contract, reg_id, n, col, value):
@@ -482,7 +504,8 @@ def _semantic_violations(rules, present, blocklist=frozenset()):
         if reg_id not in present:
             continue
         _, rows = present[reg_id]
-        fold = (lambda v: v.strip()) if rule.get("case_sensitive", True) else (lambda v: v.strip().casefold())
+        # A value written in backticks or bold is the same value (fork r2).
+        fold = (lambda v: v.strip().strip("`*").strip()) if rule.get("case_sensitive", True) else (lambda v: v.strip().strip("`*").strip().casefold())
         col = rule.get("column")
         values = [fold(v) for v in rule.get("values", [])]
         cells = [fold(_cell(row, col)) for row in rows] if col else []

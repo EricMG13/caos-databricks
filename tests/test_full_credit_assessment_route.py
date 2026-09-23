@@ -21,7 +21,7 @@ from full_assessment_route_fixtures import (
 )
 from test_canonical_execution import _node
 from test_canonical_runtime import _module_provider, _run_route, _status
-from test_execution_freshness import _counts, _events, _Harness
+from test_execution_freshness import _events, _Harness
 from test_gates import _approval
 from test_loop_charges import ESTIMATE
 
@@ -226,12 +226,12 @@ def test_full_credit_assessment_completes_and_proves(harness: _Harness) -> None:
     assert {module for module, _, _ in proof.anchored} == set(MODULES)
 
 
-def test_restricted_cp5_holds_cp6_without_work(harness: _Harness) -> None:
+def test_restricted_cp5_releases_cp6(harness: _Harness) -> None:
+    """D34: a Restricted CP-5 meets the QA gate; all nineteen nodes run."""
     answers = FullAssessmentCompletions(
         harness.source_id, qa_by_module={"CP-5": "Restricted"}
     )
     assert _run_route(harness, _module_provider(harness, answers)) is None
-    assert _modules(answers) == list(MODULES[:-1])
-    assert (_status(harness), _events(harness, "RUN_BLOCKED")) == ("BLOCKED", 1)
-    assert _attempts(harness, "CP-6") == (0, 0)
-    assert _counts(harness)[0] == 18
+    assert _modules(answers) == list(MODULES)
+    assert (_status(harness), _events(harness, "RUN_BLOCKED")) == ("COMPLETE", 0)
+    assert _attempts(harness, "CP-6") == (1, 1)
