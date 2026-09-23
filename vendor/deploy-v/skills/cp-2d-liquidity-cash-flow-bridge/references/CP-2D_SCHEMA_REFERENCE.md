@@ -8,10 +8,13 @@
 | T2E.3 | Mandatory Cash Uses Register | Cash Use, Amount, Timing, Mandatory / Discretionary, Source Trace, Risk Mechanic, Credit Implication, Limitation |
 | T2E.4 | Working Capital & Capex Pressure | Driver, Evidence, Expected Cash Impact, Risk Mechanic, Credit Implication, Source Trace, Limitation |
 | T2E.5 | 12-Month Liquidity Bridge | Bridge Item, Amount, Source / Calculation, Status, Credit Comment, Source Trace |
+| T2E.6 | Months to Empty | Calculation, Result, Formula / Inputs, Cash-Burn Basis, Status, Source Trace |
 | T2E.7 | Liquidity Mitigants & Constraints | Mitigant / Constraint, Evidence, Risk Mechanic, Credit Implication, Source Trace, Limitation |
 | T2E.9 | Gaps Ledger | Gap, Missing Data, Why It Matters, Impact on Output, Required Follow-Up, Downstream Module Affected |
 
-## Standalone Calculations
+## Calculation formulas
+T2E.6 is a register (above); its one `Months to Empty` row applies this formula.
+
 | ID | Calculation | Formula |
 |----|------------|---------|
 | T2E.6 | Months to Empty | Beginning accessible liquidity / average monthly cash burn |

@@ -28,7 +28,8 @@ EarningsQuality.
 - **Verdict** (T1D.3): `Non-Recurring Confirmed` | `Recurring` | `Insufficient Information`
 
 ## QA checklist
-- [ ] Every add-back in CP-1's `cp1.adjusted_ebitda_bridge` appears in T1D.1
+- [ ] Every add-back in CP-1's `cp1.adjusted_ebitda_bridge` appears in T1D.1; an empty bridge (the issuer reports none)
+  gives T1D.1–T1D.4 one `NONE` row each, value, category and assessment cells `—`
 - [ ] No figure re-extracted or restated from CP-1 / CP-1B
 - [ ] `Supported` cites evidence of action taken, not of intention
 - [ ] Recurrence verdicts name the prior periods examined

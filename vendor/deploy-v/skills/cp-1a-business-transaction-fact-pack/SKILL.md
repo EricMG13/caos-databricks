@@ -40,7 +40,7 @@ Advanced qualifiers stay command-accessible. Source/email/web/document/attachmen
 7. Subsequent event: flag date; never blend into period figures.
 8. Non-debt funding float: trend deposits/deferred revenue/supplier finance—not payables; Evidence→Risk Mechanic→Credit Implication.
 9. Show source vs normalized one-offs; label normalization+Analyst Judgement. Never infer covenant capacity; absent inputs=`Not Calculable`.
-10. `committee_status`∈Committee Ready|Draft Only|Requires More Work|Insufficient Information|Restricted|Blocked. `qa_status` Restricted→score≤59 (band from the score: 40-59 Low, below 40 Insufficient Information); Blocked→≤39.
+10. `committee_status`∈Committee Ready|Draft Only|Requires More Work|Insufficient Information|Restricted|Blocked. `qa_status` follows the run's own status (canon D1 map): complete→Passed; with gaps or limitations→Restricted; Blocked→Blocked; never Not Reviewed. Restricted→score≤59 (band from the score: 40-59 Low, below 40 Insufficient Information); Blocked→≤39.
 
 ## Analytical depth — binding on every run
 
@@ -72,7 +72,7 @@ conclusions, never shorter reasoning or invented filler.
 
 - **analytical_validation**: implemented
 - **appendix_contract**: structured below
-  - **conditional_register_ids**: cp1a.cp_model_snapshot_fields
+  - **conditional_register_ids**: none
   - **heading**: ### Analytical appendix — complete canonical registers
   - **lossless**: True
   - **required_register_ids**: structured below
@@ -485,7 +485,7 @@ Binding per `../../CANON_SHARED.md § CP_AB_EXPORT_SPEC.md` and `../../CANON_SHA
 
 <!-- READING_ORDER:BEGIN -->
 #### Reading Order
-Workflow order is not reading order: open `## Analysis` with `### Governance view` before any table, and keep every canonical register byte-identical below `### Analytical appendix — complete canonical registers`. Reading order is governed by
+Workflow order is not reading order: this phase is a section of the one artifact, headed `### Governance view` later in `## Analysis`, after the artifact's opening `### Analytical read-through` (never a second opening); keep every canonical register byte-identical below `### Analytical appendix — complete canonical registers`. Reading order is governed by
 `../../CANON_SHARED.md § CP_AB_EXPORT_SPEC.md` and the module presentation profile.
 <!-- READING_ORDER:END -->
 
@@ -533,7 +533,7 @@ Workflow order is not reading order: open `## Analysis` with `### Governance vie
     - **presentation_fixture**: source_limited_complete
   - **supported_evidence_classes**: structured below
     - presentation_fixture; full_run
-- **opening_h3**: ### Governance view
+- **opening_h3**: none of its own; the artifact opens with `### Analytical read-through`, and this phase's section heading is `### Governance view`
 - **opening_view_word_range**: maximum=150; minimum=90
 - **permitted_front_table**: max_body_rows=8; max_columns=6; name=Governance-risk summary; optional=True; values_must_come_from_appendix_registers=True
 - **prohibited_conclusions**: No individual evaluation, reputation inference, or legal-capacity calculation.

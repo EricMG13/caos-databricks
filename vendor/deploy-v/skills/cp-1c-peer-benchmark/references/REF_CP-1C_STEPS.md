@@ -90,7 +90,9 @@ T4.4: `Entity`|`FCF`|`FCF Conversion`|`Capex/Rev`|`Capex/EBITDA`|`WC/Rev`|`Perio
 Borrower-vs-peer leverage, coverage, liquidity. Same specs.
 
 ## Output
-T4.5: `Entity`|`Total Lev`|`Net Lev`|`Sr Sec Lev`|`Int Coverage`|`Adj Int Coverage`|`FFO/Debt`|`Liquidity`|`Period`|`Currency`|`Calc Status`|`Comp Status`
+T4.5: `Entity`|`Total/Net/Sr Sec Leverage`|`Int Coverage`|`Adj Int Coverage`|`FFO/Debt`|`Liquidity`|`Period`|`Currency`|`Calc Status`|`Comp Status`
+
+`Total/Net/Sr Sec Leverage` is one cell per entity: total, net and senior secured leverage in that order, separated by ` / `, each where the evidence supports it.
 </step_reference>
 
 <step_reference module="CP-1C" step="04D" name="Summary Statistics">

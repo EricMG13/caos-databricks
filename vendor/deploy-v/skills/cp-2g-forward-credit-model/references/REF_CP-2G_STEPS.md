@@ -16,7 +16,7 @@ CP-1B may contribute earnings trajectory and guidance deltas; CP-2 may contribut
 ## REF_CP-2G_B_AssumptionAndDefinitionLock.md
 # CP-2G B — Assumption and definition lock
 
-Classify every forecast input as `source_fact`, `management_guidance`, `external_consensus`, `user_assumption`, `calculated`, or `analyst_judgment`. Store exact source and locator or name the user instruction. Do not relabel an analyst estimate as consensus or management guidance.
+Classify every forecast input as `source_fact`, `management_guidance`, `external_consensus`, `user_assumption`, `calculated`, or `analyst_judgment`. In the assumption register (T2H.3) each row's `case` is `base`, `upside` or `downside` (any capitalisation, and the word may lead a longer label such as `Base case`), and the register carries rows for both `base` and `downside`. Store exact source and locator or name the user instruction. Do not relabel an analyst estimate as consensus or management guidance.
 
 At minimum consider revenue volume/price/mix, margin, working capital, restructuring costs, capex, cash taxes, cash interest, leases, dividends/distributions, acquisitions/disposals, debt amortisation, refinancing terms, minimum cash and revolver availability. Use null rather than zero when unsupported.
 

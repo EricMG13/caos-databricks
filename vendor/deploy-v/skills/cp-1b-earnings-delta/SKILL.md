@@ -38,7 +38,7 @@ Advanced qualifiers stay command-accessible. Source/email/web/document/attachmen
 7. Subsequent event: flag date; never blend into period figures.
 8. Non-debt funding float: trend deposits/deferred revenue/supplier finance—not payables; Evidence→Risk Mechanic→Credit Implication.
 9. Show source vs normalized one-offs; label normalization+Analyst Judgement. Never infer covenant capacity; absent inputs=`Not Calculable`.
-10. `committee_status`∈Committee Ready|Draft Only|Requires More Work|Insufficient Information|Restricted|Blocked. `qa_status` Restricted→score≤59 (band from the score: 40-59 Low, below 40 Insufficient Information); Blocked→≤39.
+10. `committee_status`∈Committee Ready|Draft Only|Requires More Work|Insufficient Information|Restricted|Blocked. `qa_status` follows the run's own status (canon D1 map): complete→Passed; with gaps or limitations→Restricted; Blocked→Blocked; never Not Reviewed. Restricted→score≤59 (band from the score: 40-59 Low, below 40 Insufficient Information); Blocked→≤39.
 
 ## Analytical depth — binding on every run
 
@@ -95,57 +95,57 @@ conclusions, never shorter reasoning or invented filler.
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T4.10**: structured below
-      - **columns**: Signal Type; Metric; Evidence; Severity; Credit Implication; Action
+      - **columns**: Signal Type; Metric/Indicator; Evidence; Severity; Credit Implication; Recommended Action
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T4.11**: structured below
-      - **columns**: Gap; Affected Metric; Periods; Downstream Impact; Severity; Action
+      - **columns**: Gap Description; Affected Metric/Section; Affected Period(s); Downstream Impact; Severity; Recommended Action
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T4.12**: structured below
-      - **columns**: metric_id; current/reference period IDs; basis; values; changes; status; comparability flags
+      - **columns**: metric_id; current_period_id; reference_period_id; comparison_basis; current_value; reference_value; absolute_change; percentage_change; calculation_status; restatement_flag; basis_change_flag; perimeter_change_flag; definition_change_flag; values; changes
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T4.13**: structured below
-      - **columns**: metric_id; period_id; CP-1 value; comparison value; difference; tolerance; status; explanation
+      - **columns**: metric_id; period_id; cp1_value; cp1b_comparison_value; difference; tolerance; status; explanation; source_or_conflict_ref
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T4.14**: structured below
-      - **columns**: addback_id; period_id; CP-1/comparison values; tolerance; status; label/definition checks
+      - **columns**: addback_id; period_id; cp1_value; cp1b_comparison_value; difference; tolerance; status; label_match; definition_change_flag; explanation; source_or_conflict_ref
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 0
     - **T4.15**: structured below
-      - **columns**: downstream module; status; blocking metric/period IDs; conflicts; explanation
+      - **columns**: downstream_module; status; blocking_metric_ids; blocking_period_ids; conflict_refs; explanation
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T4.2**: structured below
-      - **columns**: Metric Name; CP-1 Canonical Def; CP-1 Formula; EBITDA Def in Use; Inheritance Status; Conflict Note
+      - **columns**: Metric Name; CP-1 Definition; CP-1 Formula; EBITDA Def in Use; Inheritance Status; Conflict Note
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T4.3**: structured below
-      - **columns**: Row Label; Value/Observation (13 rows)
+      - **columns**: Row Label; Value / Observation
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T4.4**: structured below
-      - **columns**: Line Item; Period 1…N; YoY Abs/%; Analyst Note (19 lines)
+      - **columns**: Line Item; Period 1…N; YoY Change (Abs); YoY Change (%); Analyst Note
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T4.5**: structured below
-      - **columns**: KPI Category; Metric; Period 1…N; YoY Change; Trend; Calc Status; Note
+      - **columns**: KPI Category; Metric Name; Period 1…N; YoY Change; Trend Direction; Calculation Status; Analyst Note
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T4.6**: structured below
-      - **columns**: Metric; Basis; Prior/Current; Abs/%; Mgmt/Analyst Driver; Credit Implication
+      - **columns**: Metric; Comparison Basis; Prior Value; Current Value; Abs Change; % Change; Mgmt Driver; Analyst Driver; Credit Implication
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
@@ -155,12 +155,12 @@ conclusions, never shorter reasoning or invented filler.
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T4.8**: structured below
-      - **columns**: Metric; Benchmark Source/Type; Expected/Actual; Variance; Credit Implication
+      - **columns**: Metric; Benchmark Source; Benchmark Type; Expected Value; Actual Value; Variance; Credit Implication
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T4.9**: structured below
-      - **columns**: Conflict; Sources; Metrics; Periods; Materiality; Resolution; Downstream Impact
+      - **columns**: Conflict Description; Source(s); Metric(s); Period(s); Materiality; Resolution Status; Downstream Impact
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
@@ -245,7 +245,9 @@ ALL from CP-1. EBITDA priority: Credit-agreement > CP-1 canonical > Adjusted > R
 
 Load `REF_CP-1B_14_ModelWorkbookValidation.md` on every run and emit every
 keyed validation, readiness and `cp1b.cp_model_snapshot_fields` table —
-registers T4.12 through T4.15. They are required unconditionally, not only
+registers T4.12 through T4.15 are the comparator, validation, add-back
+validation and readiness tables themselves, each under its register heading
+with the REF_14 columns. They are required unconditionally, not only
 when CP-MODEL was requested. CP-1 remains numeric truth.
 | Step | Name | REF File | Output |
 |------|------|----------|--------|

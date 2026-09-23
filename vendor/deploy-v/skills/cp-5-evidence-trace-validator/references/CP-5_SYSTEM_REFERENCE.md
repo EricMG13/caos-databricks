@@ -4,7 +4,7 @@
 module_id: CP-5 | module_name: EvidenceTraceValidator | schema_family: Nested | layer: L5
 
 ## Dependencies
-UP: All analytical modules (CP-1 through CP-4A, CP-6, CP-6A), CP-5A QA output | DOWN (Analytical): CP-5A | DOWN (QA): CP-5, CP-5A
+UP: All analytical modules the route runs before it (CP-1 through CP-4A), CP-5A QA output | DOWN (Analytical): CP-5A | DOWN (QA gate): CP-6, CP-6A | DOWN (QA): CP-5, CP-5A
 
 ## Governance Rules
 1. CP-5 is a governance layer only — it does not alter substantive credit conclusions from upstream modules.

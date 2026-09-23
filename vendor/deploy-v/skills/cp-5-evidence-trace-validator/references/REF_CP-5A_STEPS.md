@@ -85,7 +85,7 @@ T5.4: `Severity`|`Module`|`Legal / Structural Claim`|`Required Legal Source`|`Ev
 ## REF_CP-5A_05_RelativeValueMarketClaimAudit.md
 <!-- REF_CP-5A_05 (T2) | 2026-06-03 -->
 <step_reference module="CP-5A" step="05" name="Relative Value / Market Claim Audit">
-<input>T5.1; all module outputs containing market/RV claims (especially CP-3, CP-6, CP-6A).</input>
+<input>T5.1; all module outputs containing market/RV claims (especially CP-3; CP-6 and CP-6A run after CP-5 and are not its input).</input>
 <gate>Step 4 complete.</gate>
 
 ## Instructions

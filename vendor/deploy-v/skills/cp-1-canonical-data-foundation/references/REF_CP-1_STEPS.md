@@ -307,13 +307,19 @@ Place each comment immediately before its Markdown table:
 - `<!-- table-id: cp1.model_period_register -->`
 - `<!-- table-id: cp1.model_account_register -->`
 - `<!-- table-id: cp1.segment_revenue_schedule -->`
-- `<!-- table-id: cp1.cp_model_segment_allocation -->` (required with CP-2G
-  when operating segments are present)
+- `<!-- table-id: cp1.cp_model_segment_allocation -->` (required whenever the
+  canonical segment schedule is non-empty; CP-MODEL reads it when CP-2G is supplied)
 - `<!-- table-id: cp1.operating_kpi_schedule -->` (optional when applicable)
 - `<!-- table-id: cp1.adjusted_ebitda_bridge -->`
 - `<!-- table-id: cp1.debt_facility_register -->`
 - `<!-- table-id: cp1.model_reconciliation_register -->`
 - `<!-- table-id: cp1.downstream_readiness -->`
+
+Registers T4.14–T4.19 are the period, account, segment, adjusted EBITDA,
+debt and reconciliation registers below, in that order: write each under its
+register heading, then its table-id comment, then the one table with exactly
+the columns below. The readiness table is the separate keyed CP-MODEL row;
+T4.13's Downstream Readiness Matrix (Step 12) covers every consumer.
 
 ## Period register
 
@@ -395,8 +401,9 @@ allocation has columns:
 
 `slot_id | slot_label | component_segment_ids`
 
-- emit this allocation only when CP-2G is supplied and the canonical segment
-  schedule is non-empty; map every stable `segment_id` exactly once to
+- emit this allocation whenever the canonical segment schedule is non-empty, a
+  condition on the evidence: CP-1 runs before any CP-2G, and CP-MODEL uses the
+  allocation only when CP-2G is supplied; map every stable `segment_id` exactly once to
   `DIVISION_1`, `DIVISION_2` or `DIVISION_3`;
 - use the allocation only to bind CP-2G division-growth drivers. It never
   changes presentation order, merges source segments or reduces the rendered

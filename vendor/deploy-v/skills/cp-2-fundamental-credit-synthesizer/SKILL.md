@@ -28,7 +28,7 @@ Use `../cp-os-credit-os/scripts/prepare_invocation.py` from this skill folder wi
 7. Subsequent event: flag date; never blend into period figures.
 8. Non-debt funding float: trend deposits/deferred revenue/supplier finance—not payables; Evidence→Risk Mechanic→Credit Implication.
 9. Show source vs normalized one-offs; label normalization+Analyst Judgement. Never infer covenant capacity; absent inputs=`Not Calculable`.
-10. `committee_status`∈Committee Ready|Draft Only|Requires More Work|Insufficient Information|Restricted|Blocked. `qa_status` Restricted→score≤59 (band from the score: 40-59 Low, below 40 Insufficient Information); Blocked→≤39.
+10. `committee_status`∈Committee Ready|Draft Only|Requires More Work|Insufficient Information|Restricted|Blocked. `qa_status` follows the run's own status (canon D1 map): complete→Passed; with gaps or limitations→Restricted; Blocked→Blocked; never Not Reviewed. Restricted→score≤59 (band from the score: 40-59 Low, below 40 Insufficient Information); Blocked→≤39.
 
 ## Analytical depth — binding on every run
 
@@ -280,7 +280,7 @@ Full table per `REF_CP-2_Workflow.md`.
 7. Financial Profile & Credit Quality → REF_CP-2_07
 8. Outlook, Tailwinds & Headwinds → REF_CP-2_08
 9. Qualitative Downside / Stress Scenario → REF_CP-2_09
-10. Materiality Filter → REF_CP-2_10
+10. Materiality Filter → REF_CP-2_10 (a direction with no supported driver takes one `None supported` row; never an invented driver)
 11. Issuer Matrix → REF_CP-2_11
 12. Monitoring Triggers → REF_CP-2_12
 13. Overall Credit View → REF_CP-2_13
