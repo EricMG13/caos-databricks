@@ -2,21 +2,23 @@
 
 The last local pass over `rebuild/databricks` before the app goes to the enterprise workspace (`docs/rebuild/ENTERPRISE_HANDOFF.md`). The condition that drives it is `docs/rebuild/final-sweep/goal.txt`; this file is what that condition points at.
 
-Written 2026-09-23 against `c37733e`. It adapts the loop-library prompt *"Refactor until you are happy with the architecture. After each significant step, live-test the system, run autoreview, and commit. Track progress in /tmp/refactor-{projectname}.md"* and gives it an end point. Only confirmed defects are repaired. Only measured problems are refactored. Both are proven. The tree handed over has fresh evidence for every claim.
+Written 2026-09-23 against `c37733e`; revised the same day against `e4e4e01`, after D29–D34 and F147–F158 landed (§0, §2). It adapts the loop-library prompt *"Refactor until you are happy with the architecture. After each significant step, live-test the system, run autoreview, and commit. Track progress in /tmp/refactor-{projectname}.md"* and gives it an end point. Only confirmed defects are repaired. Only measured problems are refactored. Both are proven. The tree handed over has fresh evidence for every claim.
 
 ## 0. Owner decisions
 
-The owner fills in the Choice column before launching. OD-1 and OD-2 were decided and implemented before the sweep (D29, D30): the sweep verifies them like any FIXED-AT-BASE row, and the live measurement D30 leaves open waits on OD-6. The sweep reads this table and may not edit it. A blank Choice means the Default. None of these is the sweep's to decide, because each one changes methodology bytes, parity, dependencies, design direction or spend.
+The owner fills in the Choice column before launching. OD-1, OD-2, OD-4, OD-8 and OD-9 were decided and implemented before the sweep (D29–D34), and OD-6 and OD-7 in part: the sweep verifies them like any FIXED-AT-BASE row. Live proof of the modules no real model reached waits on OD-6's account credit. The sweep reads this table and may not edit it. A blank Choice means the Default. None of these is the sweep's to decide, because each one changes methodology bytes, parity, dependencies, design direction or spend.
 
 | ID | Question | Choice | Default | Recommendation |
 |---|---|---|---|---|
-| OD-1 | **N32.** Every model tried writes CP-0 `qa_status: Passed` beside a MATERIAL finding, so the vendor validator refuses it (F111). No real run gets past CP-0. Options: (a) record only; (b) one bounded second attempt on that refusal code, with one extra reserved call and first-attempt prompt bytes unchanged; its `Dn` states what the retry carries, and no host text may restate a vendor rule; (c) a host final-check block naming the rule, which breaks prompt parity: a `Dn`, plus an exception to F57's legacy-only golden rule for the `prompt` group, with the procedure that re-baselines it. A vendor `SKILL.md` step is not an option, because it changes vendor bytes (invariant 4). | **(b), approved by the owner 2026-09-23; implemented pre-sweep as D30** | (a) | (b), measured on `ccl-fy2025-market-dislocation` under OD-6 before it is widened |
+| OD-1 | **N32.** Every model tried writes CP-0 `qa_status: Passed` beside a MATERIAL finding, so the vendor validator refuses it (F111). No real run gets past CP-0. Options: (a) record only; (b) one bounded second attempt on that refusal code, with one extra reserved call and first-attempt prompt bytes unchanged; its `Dn` states what the retry carries, and no host text may restate a vendor rule; (c) a host final-check block naming the rule, which breaks prompt parity: a `Dn`, plus an exception to F57's legacy-only golden rule for the `prompt` group, with the procedure that re-baselines it. A vendor `SKILL.md` step is not an option, because it changes vendor bytes (invariant 4). | **(b), approved by the owner 2026-09-23 as D30; widened by the owner to `HANDOFF_INCOMPLETE` and anchoring's refusals (N52, D30 third addendum), with the fourth and fifth addenda** | (a) | done; measured live: `ccl-fy2025-market-dislocation` qualified end to end on it |
 | OD-2 | **N31.** Under the 1 MiB request ceiling, a FULL route with real handoffs refuses `REQUEST_OVER_CEILING` at CP-5 by construction. Options: (a) record only; (b) raise `MAX_REQUEST_BYTES` to 4 MiB with a `Dn`, regenerate the pricing goldens from the legacy rule, and re-derive the default run ceiling (CF-008). | **(b), approved by the owner 2026-09-23; implemented pre-sweep as D29 (default ceiling 100.00)** | (a) | (b), if FULL routes are in the enterprise scope |
 | OD-3 | **N11.** Replace `databricks-langchain` with one SDK `POST`. This reverses D7 and also retires CF-034/N25 (completion id) and CF-047 (content normalisation). | | no | no for this sweep |
-| OD-4 | **Frontend design direction** (`.impeccable/critique/…frontend-src.md`, P1 items: hollow chrome bands, refusal copy, a type floor that changes `DESIGN.md`). Options: (a) defects only: the P0s and WCAG failures; (b) also the P1 redesign. | | (a) | (a) |
+| OD-4 | **Frontend design direction** (`.impeccable/critique/…frontend-src.md`, P1 items: hollow chrome bands, refusal copy, a type floor that changes `DESIGN.md`). Options: (a) defects only: the P0s and WCAG failures; (b) also the P1 redesign. | **(b), approved by the owner; implemented as D32 and D33 with F151–F158 (merge `0fa8a5e`)** | (a) | done |
 | OD-5 | **N16.** Refuse-mutation triggers, and a migration role separate from the runtime role. | | record for the enterprise DBA | record |
-| OD-6 | **Live provider spend** during the sweep, in USD. Only through `tests/` (the OpenRouter adapter, `tests/qualify_openrouter.py`), and never counted as gateway evidence. | | 0 | about three times the two-call set's cost if OD-1 is (b) |
-| OD-7 | **Record-shape and prompt-parity changes** (N10, N18, N19, N28). | | record only | record only |
+| OD-6 | **Live provider spend** during the sweep, in USD. Only through `tests/` (the OpenRouter adapter, `tests/qualify_openrouter.py`), and never counted as gateway evidence. | **$15.00 for all combined testing (owner, 2026-09-23), cheapest adequate model (`openai/gpt-6-luna-pro`); $5.35 spent against key baseline 7.6424595; the OpenRouter account's credit is exhausted (`blockers.md`, Live qualification), so no live call until the owner adds credit** | 0 | add credit if S6 or the modules never reached live are to be proven live |
+| OD-7 | **Record-shape and prompt-parity changes** (N10, N18, N19, N28). | **Host prompt text changed under D34 (N53 and the prompt review's host rows), goldens kept legacy-derived by mirroring the texts into a scratch copy of the legacy snapshot; N10, N18, N19, N28 still record only** | record only | record only |
+| OD-8 | **Vendor bundle edits** (invariant 4). | **Authorised per change: the deployment fork D31 (build `99ed0dc3`) and fork r2 in D34 (build `b160c75e`), re-pinned; none for this sweep** | no edit | the N55 remainder (CP-1, CP-1B, CP-1C column sets that differ in more than spelling) needs the bundle owner's choice of one set |
+| OD-9 | **N63.** A validated Blocked answer from a producer with only OPTIONAL or ADVISORY consumers ends the run. | **Kept failing closed (D34)** | keep | keep |
 
 ## 1. Operating mode
 
@@ -26,7 +28,7 @@ You are operating autonomously. Nobody can answer, approve or unblock you. Never
 - **Evidence.** Audit every claim against a tool result from this session. A failing command is reported with its output. The final message copies command, exit code and summary from tool output produced in that same final turn.
 - **Blockers.** A missing credential, host, permission or workspace goes in `docs/rebuild/blockers.md` with the exact command and error; then continue with everything else. A failing test, gate, parity check or review finding is never a blocker.
 - **Hard limits.**
-  - Never push. Never edit `vendor/deploy-v/`. Never print, log or persist a key, token, minted credential or password-bearing URL.
+  - Never push. Never edit `vendor/deploy-v/`: the owner's authorisations for D31 and D34 were per change and do not extend to this sweep (OD-8). Never print, log or persist a key, token, minted credential or password-bearing URL.
   - Never add a dependency without a `Dn`. Never write a root `requirements.txt`. Never name OpenRouter outside `tests/`. Never lower a threshold or add a suppression (`tests/gate_baseline.json` counts may only fall).
   - Never regenerate a parity golden except by the procedure an owner decision names.
   - Never contact a real workspace or a paid API beyond OD-6.
@@ -49,12 +51,13 @@ You are operating autonomously. Nobody can answer, approve or unblock you. Never
 | `findings.md` at the root (git-ignored). The 16-goal campaign is at the top between the `audit-campaign-2026-09-23` markers; the older reviews are below it. | CF-001–CF-106; C1, C2, W1–W7 and the other reviews' IDs |
 | `docs/rebuild/findings.md` | AR-*, FP-* |
 | `docs/rebuild/findings-round2.md` | DP-, SA-, MX-, MAX-, TM-, CR-, DL-, AS-, AI-, FE-, SI-, EI-, C, W |
-| `docs/rebuild/round3/findings-round3.md` and `round3/decisions-*.md` | R3-1–R3-5; N30 is the unreviewed remainder |
+| `docs/rebuild/round3/findings-round3.md` and `round3/decisions-*.md` | R3-1–R3-5 (N30, the remainder, was reviewed in round 4: F113–F146) |
 | `.impeccable/critique/2026-09-23T11-45-42Z__frontend-src.md` | P0, P1 |
-| `docs/rebuild/next.md` | N1–N32 |
-| `docs/rebuild/blockers.md` | B1–B9 |
+| `docs/rebuild/prompt-review-2026-09-23.md` | G1-1–G1-18, G2-1–G2-18, G3-1–G3-17 (status per row as of `e4e4e01`) |
+| `docs/rebuild/next.md` | N1–N63 |
+| `docs/rebuild/blockers.md` | B1–B9, and the Live qualification entry (OpenRouter account credit) |
 
-The `Fn` entries in `decisions.md` (F1–F112) record what was fixed.
+The `Fn` entries in `decisions.md` (F1–F158) record what was fixed; D29–D34 record the owner's decisions of 23 September. Live-run evidence: `qualification/PROVIDER_RUNBOOK.md` (the 23 September sections) and `docs/rebuild/runs/live-2026-09-23/` (git-ignored).
 
 **Evidence you may reuse** (git-ignored, under `docs/rebuild/runs/audit-2026-09-23/`):
 - The goal texts: `QUALITY_GOAL_PROMPTS.md`.
@@ -78,7 +81,7 @@ These are probes, not tests. Their paths and ports point at removed worktrees: a
 4. Record the baseline metrics:
    - passed test count and coverage;
    - each suppression count, as measured by `scripts/check_gate_config.py`;
-   - `complexity_baselined` (26 at `c37733e`) and the list of baselined functions;
+   - `complexity_baselined` (25 at `e4e4e01`; 26 at `c37733e`) and the list of baselined functions;
    - the jscpd percentage;
    - lines of code per package.
 
@@ -100,9 +103,9 @@ Classes:
 | NOT-A-DEFECT | With the reason. |
 | PLATFORM-ONLY | Names the E-row or B entry that will reveal it. |
 
-Rounds F71–F109 likely closed many CF rows: CF-001 by F72 and R3-3, CF-003 by F102, CF-005 by F93, CF-024 by F85, CF-050 by F97, CF-053 by F76. "Likely" is not evidence, so check each one.
+Rounds F71–F109 and round 4 (F113–F146) likely closed many CF rows: CF-001 by F72 and R3-3, CF-003 by F102, CF-005 by F93, CF-024 by F85, CF-050 by F97, CF-053 by F76. "Likely" is not evidence, so check each one.
 
-Complete **N30**. Run the adversarial review of `653dc9c` and `c37733e` over what round 3 did not reach after R3-5: store, worker, model seam, edge, evidence, deliverable and qualification. Use the `adversarial-reviewer` skill, or the `opus55-reviewer` agent, in a worktree at BASE. Its confirmed findings enter the register.
+N30 is done (round 4, F113–F146). Review instead what landed after `c37733e` that no review has covered: D29–D34 and F147–F158 (the second-attempt ledger and feedback, the vendor fork's checker and validator changes, the QA gate and Blocked order, the Analysis tables and charts). Use the `adversarial-reviewer` skill, or the `opus55-reviewer` agent, in a worktree at BASE. Its confirmed findings enter the register.
 
 **Exit:** every ID in every ledger is on a row, with counts per class and severity, and the OPEN rows are ranked by §5's order.
 
@@ -119,9 +122,10 @@ Work through the groups in this order. Within a group, higher severity goes firs
 | E | Durability and exactly-once (invariant 6) | CF-005–CF-007, CF-037–CF-044 |
 | F | Money and budgets (invariants 7, 8) | CF-008, CF-046, CF-048, CF-089–CF-091; OD-2 if chosen |
 | G | Availability and resource bounds | CF-003, CF-004, CF-049–CF-053, CF-075 |
-| H | The primary journey | Committee and Report reachable from the product (critique P0, CF-060); Start and Retry usable (CF-011); evidence text readable (critique P0: 1.14:1 on `.pagerender`); fields visible (WCAG 1.4.11); refusal text that is true (CF-056); CF-057–CF-059, CF-097, CF-098; within `DESIGN.md` as written unless OD-4 is (b) |
+| H | The primary journey | OD-4 (b) is implemented (D32, D33, F151–F158): verify its P0 and WCAG repairs at BASE rather than redo them, then Start and Retry usable (CF-011), refusal text that is true (CF-056, and the operator hints G2-17), CF-057–CF-059, CF-097, CF-098; within `DESIGN.md` as it now stands |
 | I | Gate and test credibility | CF-061–CF-071, CF-079, CF-092, CF-103–CF-106 |
-| J | Everything else LOW | Fix it if the change is small; otherwise an N entry with the reason |
+| J | The prompt review's OPEN host rows | G1-12 (CP-6 workbook delivery), G1-16's remainder, G2-17, G3-9 (`FORECAST_DRIVER_NOT_READY`, comma figures); its OPEN vendor rows are DECISION under OD-8 |
+| K | Everything else LOW | Fix it if the change is small; otherwise an N entry with the reason |
 
 **Every repair** follows §8. In addition:
 - Reproduce the defect at HEAD before editing anything.
@@ -190,7 +194,7 @@ Only the changes below are allowed. Each must be shown to preserve behaviour:
    - proxy buffering of the event stream (C42, E9).
 3. **`docs/rebuild/ENTERPRISE_HANDOFF.md`.** State:
    - what is proven locally and what only the workspace can prove;
-   - the state of OD-1/N32 and OD-2/N31, and therefore what "Afterwards 1" will show: under OD-1 (a), a real run is refused typed at CP-0, and that is expected;
+   - the state after D29–D34, and therefore what "Afterwards 1" will show: OD-1 is (b) widened by N52, the bundle is a re-pinned fork, and the live record (`qualification/PROVIDER_RUNBOOK.md`: one set qualified end to end on GPT-6 Luna Pro; CP-0, CP-3D and CP-5 accepted live; stored CP-1 and CP-1A answers pass under the fork) says a capable model is expected past CP-0, and names the modules no real model has yet reached;
    - the owner decisions still open;
    - the rollback path.
 4. **CI.** `.github/workflows/ci.yml` runs the same gates as `CLAUDE.md`, with no local-only or CI-only drift (CF-066, CF-067).
@@ -259,7 +263,11 @@ These are lessons from the 2026-09-23 runs.
   - Only the lead session edits and commits.
 - **Usage limits.** Commit every green step and update `progress.md` after every step. A resumed session starts from `progress.md`, `register.md` and `git log BASE..HEAD`. A resumed workflow replays its cache only if the script is unchanged, because the cache is an order prefix.
 - **/goal.** The evaluator reads only the transcript, and background subagents defer evaluation. Run the final acceptance commands in the main session, in the final turn.
-- **Live provider.** Use it only under OD-6, only through the test adapter, never as gateway evidence, and never print the key.
+- **Live provider.** Use it only under OD-6, only through the test adapter, never as gateway evidence, and never print the key. Check `GET https://openrouter.ai/api/v1/credits` first: an exhausted account answers `PROVIDER_CALL_INVALID` with nothing billed. The cheapest adequate model on 2026-09-23 was `openai/gpt-6-luna-pro`; a run's ceiling holds about six times its actual spend, because every billed attempt keeps its reservation (CF-008).
+- **Integrity regeneration.** `verify_package.py --refresh` and `scripts/host_manifest.py` rewrite pins; the permission classifier refuses them without the owner's authorisation in the session, and this sweep has none (OD-8).
+- **Prompt goldens.** `tests/parity/goldens.py` refuses any golden not written by the legacy package. A host prompt-text change re-baselines by mirroring the host's texts into a scratch copy of the legacy snapshot (D34); only an owner decision permits it.
+- **Other writers.** Other sessions share this checkout (the design session, a CI watcher). Before every commit check `git log -1`, `git status --short` and `.git/MERGE_HEAD`; a merge started from the app's terminal pane waits in vim for `:wq`.
+- **`rtk` wrapper.** Some commands are rewritten by the `rtk` hook (`grep -h`, `find -exec`, counts through pipes); prefer Python or plain invocations when an output looks wrong.
 
 ## 11. Launch
 
