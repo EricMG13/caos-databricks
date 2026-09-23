@@ -16,6 +16,7 @@ from __future__ import annotations
 import io
 import json
 import resource
+import unicodedata
 from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Literal, cast
@@ -30,6 +31,7 @@ from caos.evidence import pdf
 from caos.evidence.citations import anchor_citation
 from caos.evidence.extract import (
     DEFAULT_LIMITS,
+    MAX_TOKEN_CHARS,
     Extractor,
     ExtractorIdentity,
     Token,
@@ -67,7 +69,34 @@ def raw_pdf(
     builder in this file is a content-stream shorthand over this one, so a
     reviewer sees the same PDF object machinery once.
     """
-    objects = [
+    return _assemble(_objects(content, page=page, pages=pages, media=media), trailer)
+
+
+def encoded_pdf(content: bytes, differences: bytes) -> bytes:
+    """`raw_pdf`'s page with its font re-encoded: `differences` is a
+    `/Differences` array's body, so `120 /uni2ADC` draws every `x` as U+2ADC.
+    How a fixture reaches characters no standard encoding carries. Not a
+    standard-14 name, so pdfminer reads the glyph widths the font declares
+    (half an em each) instead of Helvetica's, which have no such glyph."""
+    widths = b" ".join([b"500"] * 95)
+    objects = _objects(content)
+    objects[-1] = (
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /CaosFixture /FirstChar 32"
+        b" /LastChar 126 /Widths [" + widths + b"] /Encoding << /Type /Encoding"
+        b" /Differences [" + differences + b"] >> >>"
+    )
+    return _assemble(objects)
+
+
+def _objects(
+    content: bytes,
+    *,
+    page: bytes = b"",
+    pages: bytes = b"",
+    media: bytes = b"0 0 612 792",
+) -> list[bytes]:
+    """The catalog, the page tree, the page, its content and its font."""
+    return [
         b"<< /Type /Catalog /Pages 2 0 R >>",
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 " + pages + b" >>",
         b"<< /Type /Page /Parent 2 0 R /MediaBox ["
@@ -82,6 +111,10 @@ def raw_pdf(
         + b"\nendstream",
         b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
     ]
+
+
+def _assemble(objects: list[bytes], trailer: bytes = b"") -> bytes:
+    """`objects`, numbered from one, with their cross-reference table."""
     out = bytearray(b"%PDF-1.4\n")
     offsets = []
     for number, body in enumerate(objects, start=1):
@@ -585,6 +618,67 @@ def test_a_crop_that_misses_the_mediabox_shows_nothing(
     assert PdfExtractor().extract(data) == []
 
 
+def _compressed_run(run: bytes) -> bytes:
+    """A content stream: `run` squeezed to a hundredth of its width (`1 Tz`),
+    so thousands of glyphs with no space between them sit inside the page,
+    then `SECOND_LINE` below it at full width."""
+    return (
+        b"BT\n/F1 12 Tf\n1 Tz\n1 0 0 1 72 700 Tm\n("
+        + run
+        + b") Tj\n100 Tz\n1 0 0 1 72 680 Tm\n("
+        + SECOND_LINE.encode("ascii")
+        + b") Tj\nET\n"
+    )
+
+
+def test_a_run_past_the_token_limit_is_cut_and_shares_its_rectangle() -> None:
+    """CF-072: a whitespace run was one token however long it was, so a PDF
+    carrying a 5,000-character run -- a rule of dashes, a base64 blob --
+    refused its whole pack `BOUNDARY_TEXT_TOO_LONG`. It is cut at
+    `MAX_TOKEN_CHARS`, the plain-text extractor's bound, and each piece takes
+    its share of the run's rectangle by character, abutting the next."""
+    [first, second, *rest] = PdfExtractor().extract(
+        raw_pdf(_compressed_run(b"x" * 5000))
+    )
+
+    assert (first.text, second.text) == ("x" * MAX_TOKEN_CHARS, "x" * 904)
+    assert first.x0 == pytest.approx(LEFT_MARGIN, abs=0.5)
+    assert first.x1 == second.x0
+    whole = second.x1 - first.x0
+    assert first.x1 - first.x0 == pytest.approx(whole * MAX_TOKEN_CHARS / 5000)
+    assert (first.y0, first.y1) == (second.y0, second.y1)
+    assert (first.line_id, first.region_id) == (second.line_id, second.region_id)
+    assert [token.text for token in rest] == SECOND_LINE.split()
+
+
+def test_a_run_whose_nfc_is_past_the_limit_is_cut_on_its_nfc_form() -> None:
+    """CF-073: a cut that measured the raw run let 3,000 U+2ADC through as one
+    token -- a composition exclusion, which NFC writes as two code points --
+    and `BoundaryText` refused the pack at 6,000. The cut points are chosen
+    on the NFC form, so no piece is past the limit it is measured against."""
+    data = encoded_pdf(_compressed_run(b"x" * 3000), b"120 /uni2ADC")
+
+    tokens = PdfExtractor().extract(data)
+
+    pieces = [token.text for token in tokens if not token.text.isascii()]
+    assert [len(piece) for piece in pieces] == [MAX_TOKEN_CHARS, 6000 - MAX_TOKEN_CHARS]
+    assert "".join(pieces) == unicodedata.normalize("NFC", "\u2adc" * 3000)
+    assert all(BoundaryText.of(piece).value == piece for piece in pieces)
+
+
+def test_a_pdf_with_a_long_run_admits_and_its_neighbours_stay_citable(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> None:
+    conn, case_id = case
+    source_id = _ingest_pdf(
+        conn, case_id, tmp_path, raw_pdf(_compressed_run(b"x" * 5000))
+    )
+
+    assert anchor_citation(
+        conn, source_id=source_id, page=1, matched_text="stood at USD 310.5m"
+    )
+
+
 def test_the_pdf_identity_records_effective_layout_and_convention() -> None:
     """Identity v2 predicts output: every layout scalar pdfminer is run with,
     and the coordinate convention and crop policy the tokens are given in."""
@@ -596,7 +690,8 @@ def test_the_pdf_identity_records_effective_layout_and_convention() -> None:
     identity = PdfExtractor().identity
     effective = LAParams(**LAYOUT)
 
-    assert (identity.name, identity.version) == ("caos.pdfminer", "2")
+    assert (identity.name, identity.version) == ("caos.pdfminer", "3")
+    assert identity.config["max_token_chars"] == MAX_TOKEN_CHARS
     assert "laparams" not in identity.config
     for field in (
         "line_overlap",
@@ -653,7 +748,7 @@ def test_v1_pdf_extractions_still_verify_and_reanchor_as_recorded(
         dispatch=lambda data: cast(Extractor, _V1Reader()),
     )
     conn.commit()
-    assert PdfExtractor().identity.version == "2"
+    assert PdfExtractor().identity.version == "3"
 
     [member] = snapshot_source_set(conn, case_id).members
     assert json.loads(member.extractor_identity)["version"] == "1"

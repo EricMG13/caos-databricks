@@ -17,6 +17,7 @@ extractor implements the same protocol and nothing above this module changes.
 from __future__ import annotations
 
 import time
+import unicodedata
 from collections.abc import Iterator
 from dataclasses import dataclass
 from itertools import islice
@@ -293,6 +294,28 @@ def _bounded(run: str, start: int) -> Iterator[tuple[str, int]]:
         return
     for offset in range(0, len(run), MAX_TOKEN_CHARS):
         yield run[offset : offset + MAX_TOKEN_CHARS], start + offset
+
+
+def nfc_pieces(run: str) -> list[tuple[str, int, int, int]]:
+    """One whitespace run as the tokens `BoundaryText` can hold, each with the
+    span of the run's NFC form it covers: `(text, start, end, of)`.
+
+    The PDF extractor's cut (CF-072, CF-073). A run whose NFC fits
+    `MAX_TOKEN_CHARS` is one token, its own text as drawn. Past it the cut
+    points are chosen on the NFC form -- the form `BoundaryText` measures --
+    so a piece is never past the limit it is measured against, as a raw cut
+    can be: 3,000 U+2ADC fit a raw bound and are 6,000 code points in NFC.
+    `_bounded` still measures the raw run for the plain-text extractor, whose
+    identity names that rule and whose extraction goldens pin it.
+    """
+    normal = unicodedata.normalize("NFC", run)
+    size = len(normal)
+    if size <= MAX_TOKEN_CHARS:
+        return [(run, 0, size, size)]
+    return [
+        (normal[at : at + MAX_TOKEN_CHARS], at, min(at + MAX_TOKEN_CHARS, size), size)
+        for at in range(0, size, MAX_TOKEN_CHARS)
+    ]
 
 
 def _words(line: str) -> Iterator[tuple[str, int]]:

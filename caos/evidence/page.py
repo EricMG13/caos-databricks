@@ -9,11 +9,11 @@ Its lines are the token index citations were anchored in, grouped by
 coordinates the tokens are stored in (invariant 11). No renderer draws the page.
 
 The frame says what those coordinates are, read from the digest-verified
-document under the stored extractor identity: a `caos.pdfminer` v2 row's
-rectangles are crop-relative with y down (§44.3), a v1 row's are pdfminer's
-layout space with y up (§44.4), and a `caos.plain-text` row's are the cells of
-its recorded fixed pitch. PDF frames come from the §47 child, and a crop that
-child has already answered for a document is remembered in process
+document under the stored extractor identity: a `caos.pdfminer` row's from v2
+on (`PDF_CROP_VERSIONS`) are crop-relative with y down (§44.3), a v1 row's are
+pdfminer's layout space with y up (§44.4), and a `caos.plain-text` row's are
+the cells of its recorded fixed pitch. PDF frames come from the §47 child, and
+a crop that child has already answered for a document is remembered in process
 (`FRAME_CACHE_SIZE`): it is derived from a digest-addressed document and a page
 number, so it cannot go stale, and the child costs an interpreter each time.
 
@@ -96,6 +96,9 @@ _PAGE_QUERY = (
     " ORDER BY line.first"
 )
 PDF_V2_COORDINATES = "crop-top-left-rotated-pt"
+# The `caos.pdfminer` versions whose rectangles are crop-relative with y down:
+# v2 introduced the convention and v3 cuts long runs within it (CF-072).
+PDF_CROP_VERSIONS = frozenset({"2", "3"})
 TEXT_COORDINATES = "cell-top-left-pt"
 
 
@@ -320,7 +323,7 @@ def _frame(
     pdf_v1 = name == "caos.pdfminer" and version == "1"
     pdf_v2 = (
         name == "caos.pdfminer"
-        and version == "2"
+        and version in PDF_CROP_VERSIONS
         and config.get("coordinates") == PDF_V2_COORDINATES
     )
     if not (pdf_v1 or pdf_v2):

@@ -15,7 +15,8 @@ a measurement rather than a reconstruction.
 Rectangles are given in one convention whatever the page (§44.3): points from
 the CropBox's top-left corner as the page is displayed, after `/Rotate`, with y
 growing downward. Identity version 2 declares it beside the layout parameters
-that decide where a word, a line and a region end.
+that decide where a word, a line and a region end; version 3 adds the width a
+token is cut at.
 
 Nothing above this module changes. It implements the same `Extractor` protocol,
 so ingestion, block packing, citation anchoring and every refusal are the ones
@@ -53,9 +54,11 @@ from pdfminer.utils import apply_matrix_rect
 
 from caos.evidence.extract import (
     DEFAULT_LIMITS,
+    MAX_TOKEN_CHARS,
     AdmissionLimits,
     ExtractorIdentity,
     Token,
+    nfc_pieces,
 )
 from caos.refusals import Refusal, RefusalCode
 
@@ -91,6 +94,9 @@ CROP_POLICY = "drop-outside"
 # pdfminer opens an unencrypted document with the empty password; the identity
 # record names the parameter as pdfminer does and carries that value.
 UNENCRYPTED = ""
+# How a run past `MAX_TOKEN_CHARS` is cut (`extract.nfc_pieces`): on its NFC
+# form, each piece's rectangle its share of the run's by character.
+TOKEN_CUT = "nfc-proportional"
 
 Frame = tuple[float, float, float, float]
 
@@ -104,7 +110,12 @@ class PdfExtractor:
         # Everything that decides the tokens: engine, layout, convention, crop.
         return ExtractorIdentity(
             "caos.pdfminer",
-            "2",
+            # v3: a run whose NFC is past `max_token_chars` is cut on its NFC
+            # form, each piece taking its share of the run's rectangle by
+            # character (CF-072, CF-073). v2 rows keep their stored identity
+            # and verify as recorded; readmission is how a source gains the
+            # new tokenisation (section 44.4's rule).
+            "3",
             {
                 "pdfminer_version": version("pdfminer.six"),
                 "line_overlap": LAYOUT["line_overlap"],
@@ -120,6 +131,8 @@ class PdfExtractor:
                 "page_numbers": "all",
                 "maxpages": 0,
                 "caching": True,
+                "max_token_chars": MAX_TOKEN_CHARS,
+                "token_cut": TOKEN_CUT,
             },
         )
 
@@ -417,33 +430,54 @@ def _line_tokens(
     characters' rectangles, measured from the crop's top-left corner.
 
     A run not wholly inside the crop is dropped: a clipped rectangle would
-    anchor a quote whose other half no reader can see. A page whose crop misses
+    anchor a quote whose other half no reader can see. A run past
+    `MAX_TOKEN_CHARS` is cut as `nfc_pieces` cuts it (CF-072), each piece
+    under its share of the run's rectangle. A page whose crop misses
     the MediaBox has no frame and never reaches here (`extract` skips it).
     Membership uses pdfminer's full glyph box, descent included, so a word
     whose baseline is inside the edge but whose box crosses it is dropped.
     """
     (left, bottom, right, top) = frame
-    tokens = []
+    tokens: list[Token] = []
     for run in _runs(line):
-        x0 = min(character.x0 for character in run)
-        y0 = min(character.y0 for character in run)
-        x1 = max(character.x1 for character in run)
-        y1 = max(character.y1 for character in run)
+        (x0, y0, x1, y1) = _box(run)
         if not (left <= x0 and x1 <= right and bottom <= y0 and y1 <= top):
             continue
-        tokens.append(
+        text = "".join(character.get_text() for character in run)
+        tokens.extend(
             Token(
-                text="".join(character.get_text() for character in run),
+                text=piece,
                 page=page,
                 region_id=region_id,
                 line_id=line_id,
-                x0=x0 - left,
+                x0=_along(x0, x1, start, of) - left,
                 y0=top - y1,
-                x1=x1 - left,
+                x1=_along(x0, x1, end, of) - left,
                 y1=top - y0,
             )
+            for piece, start, end, of in nfc_pieces(text)
         )
     return tokens
+
+
+def _box(run: list[LTChar]) -> Frame:
+    """The union of a run's glyph rectangles, in pdfminer's layout space."""
+    return (
+        min(character.x0 for character in run),
+        min(character.y0 for character in run),
+        max(character.x1 for character in run),
+        max(character.y1 for character in run),
+    )
+
+
+def _along(x0: float, x1: float, at: int, of: int) -> float:
+    """The point `at` characters of `of` along a run from `x0` to `x1`: its
+    share by character, and the run's own edges exactly at either end."""
+    if at == 0:
+        return x0
+    if at == of:
+        return x1
+    return x0 + (x1 - x0) * at / of
 
 
 def _runs(line: LTTextLine) -> list[list[LTChar]]:
