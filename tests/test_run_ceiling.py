@@ -41,7 +41,13 @@ def test_the_environment_names_the_ceiling_or_the_store_default_stands(
 
 def test_preflight_refuses_a_ceiling_below_one_worst_case_call(
     capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # CF-092: `None` here means "no ceiling named", which is only true when
+    # the ambient environment does not already name one -- an inherited
+    # CAOS_RUN_CEILING (a developer's shell, a CI runner) otherwise decides
+    # this assertion instead of the store default under test.
+    monkeypatch.delenv(CEILING_ENV, raising=False)
     price = "databricks-claude-opus-5,0.000005,0.000025,2026-09-22"
     assert preflight.affordable(price, "25.00")
     assert "ok      run ceiling 25.00" in capsys.readouterr().out
