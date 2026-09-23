@@ -707,6 +707,24 @@ def _body_words(text: str) -> list[str]:
 # Marks a body may put around a quotation without making it a different quote.
 # The backtick is Markdown's code span, which a module uses the same way.
 _QUOTATION = "\"'`\u2018\u2019\u201c\u201d\u201e\u201f\u00ab\u00bb"
+# And what prose puts before and after one: an opening bracket; a closing
+# bracket or the sentence's own punctuation (F147).
+_OPENING = _QUOTATION + "([{"
+_CLOSING = _QUOTATION + ".,;:!?)]}"
+
+
+def _wears(token: str, word: str, before: str, after: str) -> bool:
+    """Whether `token` is `word` with only `before` marks ahead of it and only
+    `after` marks behind it: typography, never another word."""
+    at = token.find(word)
+    while at != -1:
+        ahead, behind = token[:at], token[at + len(word) :]
+        if all(mark in before for mark in ahead) and all(
+            mark in after for mark in behind
+        ):
+            return True
+        at = token.find(word, at + 1)
+    return False
 
 
 def _openings(words: list[str]) -> dict[str, tuple[int, ...]]:
@@ -725,7 +743,8 @@ def _openings(words: list[str]) -> dict[str, tuple[int, ...]]:
     """
     found: dict[str, list[int]] = {}
     for position, word in enumerate(words):
-        for key in {word, word.lstrip(_QUOTATION), word.strip(_QUOTATION)}:
+        opened = word.lstrip(_OPENING)
+        for key in {word, opened, opened.rstrip(_CLOSING)}:
             found.setdefault(key, []).append(position)
     return {key: tuple(positions) for key, positions in found.items()}
 
@@ -739,8 +758,10 @@ def _quoted(words: list[str], openings: dict[str, tuple[int, ...]], quote: str) 
     recorded as the model's answer, which is what the CP-L10 attempt of the
     second paid Terra run died of.
 
-    Only the two outer tokens are stripped, and only of quotation marks, so the
-    quote's own words and its internal punctuation still have to match exactly.
+    Only the two outer tokens may wear anything, and only typography --
+    quotation marks, an opening bracket, a closing bracket or the sentence's
+    punctuation (F147) -- so the quote's own words and its internal
+    punctuation still have to match exactly.
     Nothing here widens what may be *cited*: `verify_citations` anchors against
     the document's own tokens and is untouched. This decides only whether the
     module quoted, in its own narrative, what it says it quoted.
@@ -749,22 +770,26 @@ def _quoted(words: list[str], openings: dict[str, tuple[int, ...]], quote: str) 
     if not wanted:
         return False
     span = len(wanted)
-    for start in openings.get(wanted[0], ()):
-        if start + span > len(words):
-            continue
-        window = words[start : start + span]
-        if window == wanted:
-            return True
-        if window[1:-1] != wanted[1:-1]:
-            continue
-        first = window[0].lstrip(_QUOTATION)
-        last = window[-1].rstrip(_QUOTATION)
-        if span == 1:
-            first = first.rstrip(_QUOTATION)
-            last = first
-        if first == wanted[0] and last == wanted[-1]:
-            return True
-    return False
+    return any(
+        _carried(words[start : start + span], wanted)
+        for start in openings.get(wanted[0], ())
+        if start + span <= len(words)
+    )
+
+
+def _carried(window: list[str], wanted: list[str]) -> bool:
+    """One run of the body carries the quote: its inner words exactly, and its
+    edge words wearing only typography -- quotation marks, an opening bracket
+    before, a closing bracket or the sentence's punctuation after (F147)."""
+    if window == wanted:
+        return True
+    if window[1:-1] != wanted[1:-1]:
+        return False
+    if len(wanted) == 1:
+        return _wears(window[0], wanted[0], _OPENING, _CLOSING)
+    return _wears(window[0], wanted[0], _OPENING, "") and _wears(
+        window[-1], wanted[-1], "", _CLOSING
+    )
 
 
 def parse_response(
@@ -794,9 +819,17 @@ def parse_response(
 
 
 # What a node's one second attempt may carry (D30): at most this many checks,
-# each cut to this many characters before it crosses the boundary.
+# each cut to this many characters before it crosses the boundary, naming at
+# most this many failed citations by their place in the list (N51).
 MAX_FEEDBACK_MESSAGES = 16
 MAX_FEEDBACK_CHARS = 512
+MAX_FEEDBACK_CITATIONS = 20
+_TRANSPORT_JSON = "host transport check: the answer is not one JSON object ({})"
+_TRANSPORT_SHAPE = (
+    "host transport check: the answer is not the JSON object with only"
+    " canonical_markdown and a non-empty list of citations"
+)
+_ESCAPES = "; a newline or tab inside a JSON string must be written \\n or \\t"
 
 
 def retry_feedback(
@@ -807,49 +840,89 @@ def retry_feedback(
 ) -> tuple[str, ...]:
     """The checks a refused answer failed, for the node's one second attempt (D30).
 
-    Two sources, neither of them the host restating a vendor rule (invariant
-    4): the vendor's own `validate_handoff` messages on the stored answer, as
-    written, and the host's verbatim-quote check reported as a count. Each line
-    crosses `BoundaryText` after a cut to `MAX_FEEDBACK_CHARS`; a line that
-    will not is dropped, never repaired. A vendor message may quote a line of
-    the model's own answer back to it. These lines go into that one request and
-    nowhere else: never a log, a refusal or a row. An answer that is not a
-    transport at all yields nothing to say, and the retry is then a plain one.
+    Three sources, none of them the host restating a vendor rule (invariant
+    4): why the answer is not the transport, in the JSON parser's fixed words
+    (N50); which citations the body does not carry verbatim, by their place in
+    the list (N51); and the vendor's own `validate_handoff` messages on the
+    stored answer, as written. Each vendor line crosses `BoundaryText` after a
+    cut to `MAX_FEEDBACK_CHARS`; a line that will not is dropped, never
+    repaired. A vendor message may quote a line of the model's own answer back
+    to it. These lines go into that one request and nowhere else: never a
+    log, a refusal or a row.
     """
-    parsed: tuple[bytes, str, tuple[Citation, ...]] | None = None
-    with suppress(Exception):  # not a transport: nothing specific to report
-        parsed = _transport(body)
+    parsed, reason = _transport_or_reason(body)
     if parsed is None:
-        return ()
+        return (reason,)
     markdown, text, citations = parsed
-    lines: list[str] = []
+    quote = _quote_line(text, citations)
+    lines = [quote] if quote else []
+    lines += _vendor_lines(contract, catalog, identity, markdown, text)
+    return tuple(lines[:MAX_FEEDBACK_MESSAGES])
+
+
+def _transport_or_reason(
+    body: str,
+) -> tuple[tuple[bytes, str, tuple[Citation, ...]] | None, str]:
+    """The transport, or the host's reason it is not one (N50)."""
+    with suppress(Exception):  # any failure is named below, never quoted
+        return _transport(body), ""
+    try:
+        json.loads(body)  # only to name why, in the parser's own words
+    except json.JSONDecodeError as bad:
+        hint = _ESCAPES if bad.msg.startswith("Invalid control character") else ""
+        return None, _TRANSPORT_JSON.format(bad.msg) + hint
+    except (RecursionError, ValueError):
+        pass
+    return None, _TRANSPORT_SHAPE
+
+
+def _quote_line(text: str, citations: Sequence[Citation]) -> str | None:
+    """Which citations the body does not quote verbatim, by number (N51)."""
     words = _body_words(text)
     openings = _openings(words)
-    unquoted = sum(
-        1
-        for citation in citations
+    failed = [
+        number
+        for number, citation in enumerate(citations, 1)
         if not _quoted(words, openings, citation.matched_text)
+    ]
+    if not failed:
+        return None
+    shown = [str(number) for number in failed[:MAX_FEEDBACK_CITATIONS]]
+    rest = len(failed) - len(shown)
+    named = ", ".join(shown) + (f" and {rest} more" if rest else "")
+    if not rest and len(shown) > 1:
+        named = ", ".join(shown[:-1]) + f" and {shown[-1]}"
+    subject = f"citation {named}" if len(failed) == 1 else f"citations {named}"
+    verb = "quotes" if len(failed) == 1 else "quote"
+    return (
+        f"host citation check: {subject} of {len(citations)} {verb} text that"
+        " does not appear verbatim in the Markdown body (numbered from 1 in the"
+        " order given)"
     )
-    if unquoted:
-        lines.append(
-            f"host citation check: {unquoted} of {len(citations)} citations quote "
-            "text that does not appear verbatim in the Markdown body"
-        )
+
+
+def _vendor_lines(
+    contract: VendorContract,
+    catalog: Mapping[str, Any],
+    identity: HostIdentity,
+    markdown: bytes,
+    text: str,
+) -> list[str]:
+    """The vendor's own `validate_handoff` messages, bounded, as written."""
     errors: list[object] = []
     with suppress(Exception):  # the vendor's checker raising is nothing to report
         _text(markdown)
         scope = _decision_scope(catalog, identity)
         found = contract.validate_handoff.validate_text(text, decision_scope=scope)
         errors = list(found.errors or ())
+    lines: list[str] = []
     for error in errors:
-        if len(lines) >= MAX_FEEDBACK_MESSAGES:
-            break
         if not isinstance(error, str) or hides_text(error):
             continue
         with suppress(Refusal):
             cut = BoundaryText.of(error[:MAX_FEEDBACK_CHARS], limit=MAX_FEEDBACK_CHARS)
             lines.append(f"validate_handoff: {cut.value}")
-    return tuple(lines)
+    return lines
 
 
 def record_bytes(record: CanonicalRecord) -> bytes:

@@ -26,6 +26,7 @@ from caos.graph.runtime import Execution, run_route
 from caos.methodology.canonical import second_attempt_due
 from caos.methodology.handoff import (
     MAX_FEEDBACK_CHARS,
+    MAX_FEEDBACK_CITATIONS,
     MAX_FEEDBACK_MESSAGES,
     retry_feedback,
 )
@@ -248,8 +249,9 @@ def test_retry_feedback_reports_the_vendors_message_and_the_quote_count(
         {"source_id": str(harness.source_id), "page": 1, "matched_text": "never said"}
     )
     lines = _feedback(harness, json.dumps(wire))
-    assert lines[0].startswith("host citation check: 1 of 2 citations")
-    assert QUOTE not in lines[0]
+    # N51: which ones, by their place in the list, never by their text.
+    assert lines[0].startswith("host citation check: citation 2 of 2 quotes text")
+    assert QUOTE not in lines[0] and "never said" not in lines[0]
     assert VENDOR_LINE in [line.split(";")[0] for line in lines[1:]]
     assert all(
         len(line) <= len("validate_handoff: ") + MAX_FEEDBACK_CHARS for line in lines
@@ -259,8 +261,30 @@ def test_retry_feedback_reports_the_vendors_message_and_the_quote_count(
     assert _feedback(harness, answers.bodies[0]) == ()
 
 
-def test_retry_feedback_says_nothing_about_a_body_that_is_not_a_transport(
+def test_retry_feedback_says_why_a_body_is_not_the_transport(
     harness: _Harness,
 ) -> None:
-    assert _feedback(harness, "not json") == ()
-    assert _feedback(harness, json.dumps({"canonical_markdown": "x"})) == ()
+    """N50: an answer that is not the JSON object gets the host's own reason,
+    in the parser's fixed words, never the answer's text."""
+    [line] = _feedback(harness, "not json")
+    assert line.startswith("host transport check: the answer is not one JSON object")
+    [raw] = _feedback(harness, '{"canonical_markdown": "---\nmodule_id: X\n"}')
+    assert "control character" in raw and "\\n" in raw and "module_id" not in raw
+    [shape] = _feedback(harness, json.dumps({"canonical_markdown": "x"}))
+    assert shape.startswith("host transport check: the answer is not the JSON object")
+
+
+def test_retry_feedback_names_at_most_the_first_twenty_failed_citations(
+    harness: _Harness,
+) -> None:
+    answers = CanonicalCompletions(harness.source_id)
+    assert _run(harness, answers) is None
+    wire = json.loads(answers.bodies[0])
+    wire["citations"] = [
+        {"source_id": str(harness.source_id), "page": 1, "matched_text": f"absent{n}"}
+        for n in range(MAX_FEEDBACK_CITATIONS + 10)
+    ]
+    [line] = _feedback(harness, json.dumps(wire))
+    total = MAX_FEEDBACK_CITATIONS + 10
+    assert f", {MAX_FEEDBACK_CITATIONS} and 10 more of {total}" in line
+    assert "citations 1, 2, 3" in line
