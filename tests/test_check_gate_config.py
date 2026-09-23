@@ -81,6 +81,39 @@ def test_every_loosening_is_named(tmp_path: Path) -> None:
         assert expected in problems, problems
 
 
+def test_a_complexipy_or_bandit_config_file_is_refused(tmp_path: Path) -> None:
+    """FP-10: complexipy reads either spelling of its own TOML file, and
+    bandit reads its legacy `.bandit` file, ahead of anything committed
+    here; neither was in `OVERRIDING`, so either appearing anywhere in the
+    tree silently overrode the gates' CLI flags."""
+    root = _tree(tmp_path)
+    assert check_gate_config._overriding_problems(root) == []
+    (root / "complexipy.toml").write_text("max-complexity-allowed = 999\n")
+    (root / ".bandit").write_text("[bandit]\nskips: B101\n")
+    _git(root, "add", "complexipy.toml", ".bandit")
+    problems = check_gate_config._overriding_problems(root)
+    assert "complexipy.toml: overrides the committed tool configuration" in problems
+    assert ".bandit: overrides the committed tool configuration" in problems
+
+
+def test_a_complexipy_table_in_pyproject_is_refused(tmp_path: Path) -> None:
+    """FP-10: `[tool.complexipy]` is read directly by the complexipy binary
+    and none of `_tool_problems`'s checks ever looked at it, so a
+    `max-complexity-allowed` set there would raise the ceiling with nothing
+    in this file the wiser."""
+    root = _tree(tmp_path)
+    assert check_gate_config.configuration_problems(root) == []
+    project = root / "pyproject.toml"
+    project.write_text(
+        project.read_text(encoding="utf-8")
+        + "\n[tool.complexipy]\nmax-complexity-allowed = 999\n"
+    )
+    assert (
+        "complexipy: [tool.complexipy] is set; it is read directly and unchecked"
+        in check_gate_config.configuration_problems(root)
+    )
+
+
 def test_the_suppression_count_is_a_ratchet(tmp_path: Path) -> None:
     """F58 and DF-11: a count above the baseline is a new suppression, and a
     count below it is room a later change could spend unseen; either fails

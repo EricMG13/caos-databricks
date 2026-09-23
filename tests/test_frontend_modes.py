@@ -456,6 +456,26 @@ def test_size_gate_rejects_over_limit_and_invalid_base(tmp_path: Path) -> None:
     assert "PR_BASE is required" in missing.stderr
 
 
+def test_a_binary_file_change_is_refused_rather_than_skipped(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """FP-10: `git diff --numstat` prints "-\\t-\\t<path>" for a binary file.
+    `added != "-" and removed != "-"` silently dropped that row from the
+    total rather than counting or refusing it, so a PR could add or change
+    an unbounded binary blob under no line-count ceiling at all."""
+    repo, base = _size_repo(tmp_path, 1)
+    (repo / "blob.bin").write_bytes(b"\x00\x01binary\xffcontent" * 100)
+    _git(repo, "add", "blob.bin")
+    _git(repo, "commit", "-qm", "add a binary file")
+    monkeypatch.chdir(repo)
+
+    with pytest.raises(ValueError, match="binary file"):
+        check_pr_size.changed_lines(base)
+
+    monkeypatch.setattr(sys, "argv", ["check_pr_size.py", base])
+    assert check_pr_size.main() == 2
+
+
 def test_the_vendored_bundle_is_not_counted(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

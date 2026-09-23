@@ -65,6 +65,11 @@ ADDOPTS_ALLOWED = frozenset(
 OVERRIDING = (
     "ruff.toml", ".ruff.toml", "mypy.ini", ".mypy.ini", "pytest.ini",
     ".pytest.ini", "tox.ini", "setup.cfg", ".coveragerc", "pyproject.toml",
+    # complexipy reads either spelling of its own TOML file, and bandit
+    # reads its legacy ini-style file, ahead of anything the gate table
+    # states (FP-10); neither is committed today, so either appearing at
+    # all overrides the CLI flags the gates invoke.
+    "complexipy.toml", ".complexipy.toml", ".bandit",
 )  # fmt: skip
 PRE_COMMIT_HOOKS = frozenset(
     {
@@ -230,7 +235,20 @@ def _tool_problems(tool: dict[str, object]) -> list[str]:
         + _mypy_problems(_table(tool, "mypy"))
         + _pytest_problems(_table(_table(tool, "pytest"), "ini_options"))
         + _coverage_problems(_table(tool, "coverage"))
+        + _complexipy_table_problems(tool)
     )
+
+
+def _complexipy_table_problems(tool: dict[str, object]) -> list[str]:
+    """`[tool.complexipy]` in pyproject.toml, read by the complexipy binary
+    itself and never validated here (FP-10): none is committed today, and a
+    `max-complexity-allowed` or `exclude` set there would override the
+    gate's own CLI flag with nothing in this file the wiser."""
+    if "complexipy" in tool:
+        return [
+            "complexipy: [tool.complexipy] is set; it is read directly and unchecked"
+        ]
+    return []
 
 
 def _ruff_problems(ruff: dict[str, object]) -> list[str]:
