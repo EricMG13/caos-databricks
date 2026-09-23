@@ -616,13 +616,14 @@ def test_the_one_qa_gate_reads_as_a_gate(
 
 
 @pytest.mark.parametrize(
-    ("qa_status", "held"), [("Blocked", True), ("Restricted", True), ("Passed", False)]
+    ("qa_status", "held"), [("Blocked", True), ("Restricted", False), ("Passed", False)]
 )
 def test_a_qa_verdict_other_than_passed_blocks_without_awaiting(
     catalog: dict[str, Any], qa_status: str, held: bool
 ) -> None:
-    """F03: CP-5 answered something other than `Passed`, so CP-6 is blocked by
-    that verdict and nothing is awaited -- not a wait for a person.
+    """F03, as D34 left it: CP-5 answered a verdict the gate does not accept
+    (`Blocked`), so CP-6 is blocked by that verdict and nothing is awaited --
+    not a wait for a person. `Restricted` and `Passed` meet the gate.
 
     The view is asked directly over the typed result the reader reduces any
     accepted record to; the enabled portfolio-decision route covers the same

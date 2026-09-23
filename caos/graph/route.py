@@ -103,9 +103,9 @@ class NodeResult:
     A node's presence in the accepted mapping is what makes it COMPLETE; this
     value carries the two facts some nodes' artifacts add. `readiness` is the
     gate's `(module_id, readiness_status)` rows, read only from the CP-0 node;
-    `qa_status` is the module's own QA verdict, which meets a QA_GATE edge only
-    when it is `Passed` (F03). A canonical record reduces to this, so the
-    engine never reads the Markdown.
+    `qa_status` is the module's own QA verdict, which meets a QA_GATE edge
+    when it is `Passed` or `Restricted` (`QA_GATE_MET`, D34). A canonical
+    record reduces to this, so the engine never reads the Markdown.
     """
 
     readiness: tuple[tuple[str, str], ...] = ()
@@ -548,7 +548,7 @@ def _unmet(
     route: ResolvedRoute, module_id: str, complete: set[str], passed: set[str]
 ) -> tuple[Edge, ...]:
     """Edges into this module not yet met. A QA_GATE edge is met by its
-    source's validated `Passed`, never by the source merely being accepted (F03).
+    source's accepted `Passed` or `Restricted` (`QA_GATE_MET`, D34).
     """
     return tuple(
         edge
@@ -577,13 +577,20 @@ def _named_object_met(
     )
 
 
+# The QA outcomes that meet a QA_GATE edge (D34): an accepted `Passed`, or an
+# accepted `Restricted` whose restriction the consumer carries -- the vendor's
+# own navigator meets the edge on acceptance (`credit_os_v/routing.py`). A
+# Blocked answer is never accepted, so it never meets one.
+QA_GATE_MET = frozenset({"Passed", "Restricted"})
+
+
 def _qa_passed(route: ResolvedRoute, accepted: Mapping[str, NodeResult]) -> set[str]:
-    """Modules whose accepted artifact carries the QA outcome `Passed`."""
+    """Modules whose accepted artifact carries a QA outcome in `QA_GATE_MET`."""
     return {
         node.module_id
         for node in route.nodes
         if (result := accepted.get(node.route_node_id)) is not None
-        and result.qa_status == "Passed"
+        and result.qa_status in QA_GATE_MET
     }
 
 

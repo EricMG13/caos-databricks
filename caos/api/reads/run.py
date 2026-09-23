@@ -493,9 +493,10 @@ def node_readiness(  # noqa: PLR0913 -- one node of one run document
     second caller cannot drift from it.
 
     The one QA_GATE in the catalog is `CP-5 -> CP-6`. `awaiting_gate` is true
-    while the node waits for the QA source's verdict. Once CP-5 answered
-    anything but `Passed`, nothing is awaited: the node is BLOCKED by that
-    verdict and the unmet edges still name it (F03).
+    while the node waits for the QA source's verdict. Once CP-5 answered a
+    verdict outside `QA_GATE_MET` (`Passed`, `Restricted`; D34), nothing is
+    awaited: the node is BLOCKED by that verdict and the unmet edges still
+    name it (F03).
     """
     done = states[node.route_node_id] is NodeState.COMPLETE
     unmet = () if done else waiting_on(route, accepted, node.route_node_id)

@@ -145,7 +145,7 @@ def test_both_ready_statuses_harden_a_soft_edge(
         (None, False),
         (NodeResult(), False),
         (NodeResult(qa_status="Not Reviewed"), False),
-        (NodeResult(qa_status="Restricted"), False),
+        (NodeResult(qa_status="Restricted"), True),
         (NodeResult(qa_status="Blocked"), False),
         (NodeResult(qa_status="passed"), False),
         (NodeResult(qa_status="Passed"), True),
@@ -154,11 +154,12 @@ def test_both_ready_statuses_harden_a_soft_edge(
 def test_qa_gate_blocks_cp6_until_cp5_accepted(
     catalog: dict[str, Any], cp5: NodeResult | None, released: bool
 ) -> None:
-    """F03, pure. The one QA_GATE in this build, CP-5 -> CP-6. Under the
-    predecessor it did not gate, because the untyped list it read had no QA_GATE
-    in it; and an accepted CP-5 is not clearance -- only a stored `Passed` is.
-    Restricted, Blocked, Not Reviewed, no verdict and no artifact all hold CP-6,
-    whichever format the verdict was read from."""
+    """F03, pure, as D34 left it. The one QA_GATE in this build, CP-5 -> CP-6.
+    Under the predecessor it did not gate, because the untyped list it read had
+    no QA_GATE in it. A stored `Passed` or `Restricted` clears it -- the vendor's
+    navigator meets the edge on acceptance, and a Restricted CP-5 is accepted
+    with its restriction carried; Blocked, Not Reviewed, a miscased verdict, no
+    verdict and no artifact all hold CP-6."""
     route = resolve_route(catalog, PROFILE, "FULL_CREDIT_ASSESSMENT")
     everything_but_cp5 = [
         node.module_id for node in route.nodes if node.module_id not in {"CP-5", "CP-6"}

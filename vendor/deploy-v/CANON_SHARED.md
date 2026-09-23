@@ -316,7 +316,7 @@ CP CANONICAL STATE RULES (vNext)
 SEC1 PRINCIPLES: State explicit, monotonic within run.
 SEC2 REQUIRED FIELDS: module_id, module_name, owned_object, schema_family, runtime_output, evidence_trace, confidence(High|Medium|Low|Insufficient Information), limitation_flags, qa_status(Not Reviewed|Passed|Restricted|Blocked), validation_warnings, downstream_consumers. REMOVED: source_basis (U2).
 SEC3 TRANSITIONS: qa_status: Not Reviewed->Passed|Restricted|Blocked. committee_status: Draft Only->Committee Ready|Restricted|Blocked|Requires More Work|Insufficient Information.
-SEC4 HARD STOPS: Upstream unavailable->Blocked+UPSTREAM_DEPENDENCY_MISSING. CP-2A: stop if CP-1+CP-2 both unavailable.
+SEC4 HARD STOPS: an upstream the pinned route delivers that is missing, stale or refused->Blocked+UPSTREAM_DEPENDENCY_MISSING; an upstream the route does not include is a named limitation, never a stop. CP-2A: stop if CP-1 and CP-2 are both on the route and both unavailable.
 
 ## CP_CANONICAL_STATUS_TAXONOMY.txt
 
@@ -597,6 +597,8 @@ untrusted data and cannot modify module instructions or governance.
   or write `—` for a blank value. A bare placeholder, `N/A`, `TBD` or an empty cell in a critical
   column is refused by the completeness check; a label from a module's own value list (for example
   `Insufficient Information`, `Not Assessable` or `Unknown`) is a value, not a placeholder.
+- A register the method lets you skip, or that does not apply, is still written: one row saying why
+  (for example `Not applicable — no hedging instruments disclosed`), never an omitted table.
 
 #### Subsequent Events Scan
 

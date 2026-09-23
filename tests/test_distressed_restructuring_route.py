@@ -262,7 +262,7 @@ def test_cp0_block_prevents_every_downstream_attempt_and_reservation(
     assert _counts(harness) == (1, [answers.charge], 1, 1, 1)
 
 
-@pytest.mark.parametrize("qa_status", ["Restricted", "Blocked"])
+@pytest.mark.parametrize("qa_status", ["Blocked"])
 def test_cp5_gate_holds_cp6_without_an_attempt_or_reservation(
     harness: _Harness, qa_status: str
 ) -> None:

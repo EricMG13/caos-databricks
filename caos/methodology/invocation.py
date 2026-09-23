@@ -62,6 +62,7 @@ from caos.methodology.handoff import (
     HostIdentity,
     LineageRef,
     UpstreamRef,
+    _decision_scope,
     expected_filename,
     invocation_fields,
     research_brief_of,
@@ -964,9 +965,15 @@ def _source_preparation_section(
         f"\n--- HOST SOURCE PREPARATION {tag} (host-owned preparation metadata, "
         "not citable evidence) ---\n"
         "The host verified these pinned source and original-blob identities before "
-        "this call. This does not attest that CP-0's triage, parsing, fidelity, "
-        "representation or package workflow has run: author and validate P1-P8 "
-        "yourself. Cite only the EVIDENCE section for source-content claims.\n"
+        "this call and prepared each source itself: the extractor named in "
+        "`extractor_identity` produced the EVIDENCE text, and every delivered line "
+        "is anchored to its page coordinates in the original, which is what each "
+        "citation is checked against. Record each source's host extraction in "
+        "P1-P8 as its prepared representation and judge its fidelity from what "
+        "the EVIDENCE shows: a page, table or figure it lost is a limitation you "
+        "name. You cannot re-parse, hash or package the originals; that alone is "
+        "never a ground to hold a consumer. Cite only the EVIDENCE section for "
+        "source-content claims.\n"
         + (_PAGE_MAP_NOTE if maps else "")
         + body
         + f"\n--- END HOST SOURCE PREPARATION {tag} ---\n"
@@ -1145,11 +1152,16 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
         ),
     )
     authored_fields = ", ".join(name for name in required if name not in host_fields)
+    scope = _decision_scope(catalog, identity)
     prompt += _FINAL_CHECK.format(
         tag=tag,
         heading_count=len(canonical_headings),
         headings=headings,
         authored_fields=authored_fields,
+        decision_scope=scope,
+        committee_statuses=", ".join(
+            sorted(contract.validate_handoff.COMMITTEE_STATUSES_BY_SCOPE[scope])
+        ),
         source_ids=json.dumps(
             sorted({str(item.source_id) for item in delivered}), separators=(",", ":")
         ),
