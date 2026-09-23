@@ -411,16 +411,19 @@ def test_a_hook_s_own_body_weakened_in_effect_is_named(tmp_path: Path) -> None:
     text = text.replace(
         "      - id: gitleaks\n",
         "      - id: gitleaks\n        stages: [manual]\n",
+        1,
     )
     config.write_text(text, encoding="utf-8")
     problems = check_gate_config._hook_problems(root)
     assert (
-        "pre-commit: vocabulary.entry is 'true', not 'uv run python "
+        "pre-commit: vocabulary[0].entry is 'true', not 'uv run python "
         "scripts/check_vocabulary.py'" in problems
     )
-    assert "pre-commit: ruff.exclude is '^(vendor/|caos/)', not '^vendor/'" in problems
     assert (
-        "pre-commit: gitleaks.stages is set; it can change what the hook runs on"
+        "pre-commit: ruff[0].exclude is '^(vendor/|caos/)', not '^vendor/'" in problems
+    )
+    assert (
+        "pre-commit: gitleaks[0].stages is set; it can change what the hook runs on"
         in problems
     )
 
@@ -439,6 +442,44 @@ def test_a_hook_removed_is_still_named_missing(tmp_path: Path) -> None:
     config.write_text(text, encoding="utf-8")
     assert (
         "pre-commit: hooks missing ['io-budget']"
+        in check_gate_config._hook_problems(root)
+    )
+
+
+def test_the_gitleaks_dir_scan_of_the_uncommitted_tree_is_required(
+    tmp_path: Path,
+) -> None:
+    """CF-064: the staged-scan gitleaks hook never sees an unstaged or
+    untracked file, so a second `gitleaks dir` invocation of the same
+    pinned hook covers the working tree as it sits on disk. Dropping it,
+    or weakening what it runs, is refused the same as any other hook."""
+    root = _tree(tmp_path)
+    assert check_gate_config._hook_problems(root) == []
+    config = root / ".pre-commit-config.yaml"
+    original = config.read_text(encoding="utf-8")
+
+    dropped = original.replace(
+        "      - id: gitleaks\n"
+        "        name: gitleaks (uncommitted tree)\n"
+        "        entry: gitleaks dir --no-banner --redact -v .\n",
+        "",
+    )
+    assert dropped != original
+    config.write_text(dropped, encoding="utf-8")
+    assert (
+        "pre-commit: gitleaks appears 1 time(s), expected 2"
+        in check_gate_config._hook_problems(root)
+    )
+
+    weakened = original.replace(
+        "entry: gitleaks dir --no-banner --redact -v .",
+        "entry: gitleaks dir --no-banner --redact -v . --no-git",
+    )
+    assert weakened != original
+    config.write_text(weakened, encoding="utf-8")
+    assert (
+        "pre-commit: gitleaks[1].entry is 'gitleaks dir --no-banner --redact "
+        "-v . --no-git', not 'gitleaks dir --no-banner --redact -v .'"
         in check_gate_config._hook_problems(root)
     )
 

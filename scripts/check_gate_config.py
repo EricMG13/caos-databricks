@@ -107,16 +107,23 @@ _VENDOR_QUAL_EXCLUDE = (
     r"^(vendor/|qualification/.*/documents/|\.claude/skills/|"
     r"complexipy-snapshot\.json$)"
 )
-PRE_COMMIT_HOOK_BODY: dict[str, dict[str, str]] = {
-    "ruff": {"args": "[--fix]", "exclude": "^vendor/"},
-    "ruff-format": {"exclude": "^vendor/"},
-    "check-added-large-files": {"exclude": _LARGE_FILES_EXCLUDE},
-    "check-merge-conflict": {"exclude": "^vendor/"},
-    "end-of-file-fixer": {"exclude": _VENDOR_QUAL_EXCLUDE},
-    "trailing-whitespace": {"exclude": _VENDOR_QUAL_EXCLUDE},
-    "vocabulary": {"entry": "uv run python scripts/check_vocabulary.py"},
-    "tested": {"entry": "uv run python scripts/check_tested.py"},
-    "io-budget": {"entry": "uv run python scripts/io_budget.py --assert"},
+# Each hook id's own body (or bodies, in file order, for an id repeated
+# with a different override -- gitleaks below, CF-064): a hook not listed
+# here must appear exactly once, carrying none of `HOOK_KEYS`.
+PRE_COMMIT_HOOK_BODY: dict[str, list[dict[str, str]]] = {
+    "ruff": [{"args": "[--fix]", "exclude": "^vendor/"}],
+    "ruff-format": [{"exclude": "^vendor/"}],
+    "check-added-large-files": [{"exclude": _LARGE_FILES_EXCLUDE}],
+    "check-merge-conflict": [{"exclude": "^vendor/"}],
+    "end-of-file-fixer": [{"exclude": _VENDOR_QUAL_EXCLUDE}],
+    "trailing-whitespace": [{"exclude": _VENDOR_QUAL_EXCLUDE}],
+    "vocabulary": [{"entry": "uv run python scripts/check_vocabulary.py"}],
+    "tested": [{"entry": "uv run python scripts/check_tested.py"}],
+    "io-budget": [{"entry": "uv run python scripts/io_budget.py --assert"}],
+    "gitleaks": [
+        {},
+        {"entry": "gitleaks dir --no-banner --redact -v ."},
+    ],
 }
 # A conftest.py can drop a test from the run with nothing in the output to
 # notice (N46): `collect_ignore`/`collect_ignore_glob` drop a file from
@@ -357,21 +364,25 @@ def _python_problems(root: Path, project: dict[str, object]) -> list[str]:
     return problems
 
 
-def _pre_commit_hooks(config: str) -> dict[str, dict[str, str]]:
-    """Every hook's own body, by id: whichever of `HOOK_KEYS` it sets.
+def _pre_commit_hooks(config: str) -> list[tuple[str, dict[str, str]]]:
+    """Every hook, in file order, as (id, body): whichever of `HOOK_KEYS` its
+    body sets. A repo-hosted id can appear more than once with a different
+    override each time (gitleaks's staged scan and its dir scan, CF-064),
+    so this is a list, not a dict keyed by id.
 
     A line-oriented reading, not a YAML parser (stdlib first): a hook starts
     at `- id: <name>`, and its own keys are every following line indented
     past that dash, up to the next `- id:` or a line indented no further.
     """
-    hooks: dict[str, dict[str, str]] = {}
+    hooks: list[tuple[str, dict[str, str]]] = []
     current: dict[str, str] | None = None
     indent = -1
     for line in config.splitlines():
         started = re.match(r"^(\s*)-\s*id:\s*(\S+)\s*$", line)
         if started is not None:
             indent = len(started.group(1))
-            current = hooks.setdefault(started.group(2), {})
+            current = {}
+            hooks.append((started.group(2), current))
             continue
         if not line.strip():
             continue
@@ -387,22 +398,37 @@ def _pre_commit_hooks(config: str) -> dict[str, dict[str, str]]:
 
 def _hook_problems(root: Path) -> list[str]:
     config = (root / ".pre-commit-config.yaml").read_text(encoding="utf-8")
-    hooks = _pre_commit_hooks(config)
-    missing = sorted(PRE_COMMIT_HOOKS - set(hooks))
+    occurrences = _pre_commit_hooks(config)
+    present = {hook_id for hook_id, _ in occurrences}
+    missing = sorted(PRE_COMMIT_HOOKS - present)
     problems = [f"pre-commit: hooks missing {missing}"] if missing else []
-    for name in sorted(PRE_COMMIT_HOOKS & set(hooks)):
-        expected = PRE_COMMIT_HOOK_BODY.get(name, {})
-        actual = hooks[name]
-        problems += [
-            f"pre-commit: {name}.{key} is {actual.get(key)!r}, not {value!r}"
-            for key, value in expected.items()
-            if actual.get(key) != value
-        ]
-        problems += [
-            f"pre-commit: {name}.{key} is set; it can change what the hook runs on"
-            for key in HOOK_KEYS
-            if key not in expected and key in actual
-        ]
+    by_id: dict[str, list[dict[str, str]]] = {}
+    for hook_id, body in occurrences:
+        by_id.setdefault(hook_id, []).append(body)
+    for name in sorted(PRE_COMMIT_HOOKS & present):
+        expected_list = PRE_COMMIT_HOOK_BODY.get(name, [{}])
+        actual_list = by_id[name]
+        if len(actual_list) != len(expected_list):
+            problems.append(
+                f"pre-commit: {name} appears {len(actual_list)} time(s), "
+                f"expected {len(expected_list)}"
+            )
+            continue
+        for index, (expected, actual) in enumerate(
+            zip(expected_list, actual_list, strict=True)
+        ):
+            problems += [
+                f"pre-commit: {name}[{index}].{key} is {actual.get(key)!r}, "
+                f"not {value!r}"
+                for key, value in expected.items()
+                if actual.get(key) != value
+            ]
+            problems += [
+                f"pre-commit: {name}[{index}].{key} is set; it can change "
+                "what the hook runs on"
+                for key in HOOK_KEYS
+                if key not in expected and key in actual
+            ]
     return problems
 
 
