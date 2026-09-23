@@ -35,6 +35,7 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
 from caos.graph.checkpoint import checkpointer, close_checkpointer
+from caos.graph.route import ResolvedRoute, route_digest
 from caos.graph.runtime import Execution, Provider, ProviderResult, run_route
 from caos.methodology.bundle import Bundle
 from caos.methodology.runner import ModuleProvider
@@ -183,6 +184,7 @@ def work_once(
     # `claim_run` commits alone, so this beat is its own unit too.
     _beat(conn, config, "WORKING", 0)
     execution: Execution | None = None
+    route: ResolvedRoute | None = None
     try:
         execution = execution_for(conn, lease.run_id, lease)
         with execution_reads(conn):
@@ -214,7 +216,7 @@ def work_once(
         raise Refusal(RefusalCode.STORE_UNAVAILABLE) from None
     except Refusal as refused:
         if _refused(conn, lease, refused):
-            _forget(execution, lease.run_id)
+            _forget(execution, lease.run_id, route)
     except Exception as fault:  # noqa: BLE001 -- neither a refusal nor a store error
         # Parked, not raised: a worker that died holding the claim would find the
         # same run first after every lease expiry and never reach the rest of the
@@ -224,21 +226,30 @@ def work_once(
         where = f"{frames[-1].filename}:{frames[-1].lineno}" if frames else "?"
         print(f"{type(fault).__name__} at {where}", file=sys.stderr)
         if _settle(conn, lambda: stop(conn, lease, RefusalCode.INTERNAL_FAULT)):
-            _forget(execution, lease.run_id)
+            _forget(execution, lease.run_id, route)
     return lease.run_id
 
 
-def _forget(execution: Execution | None, run_id: UUID) -> None:
+def _forget(
+    execution: Execution | None, run_id: UUID, route: ResolvedRoute | None
+) -> None:
     """Drop the checkpoint thread of a run this worker just parked or ended
     (DL-8): the thread holds position only (D6), a requeued run re-derives
     its frontier from the ledger, and a thread nobody will resume is rows
     nothing reads. Best effort: the run's status is already committed. Only
     after this worker's own write moved the run (ST-5): a worker whose lease
-    was lost would otherwise delete the thread its successor is driving."""
-    if execution is None or execution.checkpointer is None:
+    was lost would otherwise delete the thread its successor is driving.
+
+    `route` names the same pinned route `run_route` bound the thread to
+    (CF-037): a pass that never resolved one -- the claim's own read refused
+    before `run_route` was ever called -- opened no thread, so there is
+    nothing here to forget.
+    """
+    if execution is None or execution.checkpointer is None or route is None:
         return
+    thread = f"{run_id}:{route_digest(route)}"
     with suppress(psycopg.Error, OSError, Refusal):
-        execution.checkpointer.delete_thread(str(run_id))
+        execution.checkpointer.delete_thread(thread)
 
 
 def _refused(conn: StoreConnection, lease: Lease, refused: Refusal) -> bool:

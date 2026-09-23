@@ -818,8 +818,16 @@ def test_a_parked_run_s_checkpoint_thread_is_forgotten(
     empty_database: str,
 ) -> None:
     """DL-8: the thread holds position only (D6); a run this worker parked
-    leaves no rows behind, and the requeued run re-derives its frontier."""
-    from caos.graph.build import thread_config
+    leaves no rows behind, and the requeued run re-derives its frontier.
+
+    `_forget` must drop the exact thread `run_route` opened (CF-037): bound to
+    the run and the pinned route's own digest, not the run alone. Checked by
+    scanning every checkpoint table for a `thread_id` merely starting with the
+    run's id, whatever it is suffixed with, rather than asserting a specific
+    key is absent -- which nothing having ever written under a guessed key
+    would satisfy just as well as `_forget` actually working.
+    """
+    from caos.graph import checkpoint as checkpoint_module
     from caos.graph.checkpoint import checkpointer, close_checkpointer
 
     run = queued_run(case, route, bundle, blobs)
@@ -844,7 +852,14 @@ def test_a_parked_run_s_checkpoint_thread_is_forgotten(
             "STOPPED",
             "PROVIDER_CALL_INVALID",
         )
-        assert saver.get(thread_config(str(run.run_id))) is None
+        with psycopg.connect(empty_database, autocommit=True) as conn:
+            for table in ("checkpoints", "checkpoint_writes", "checkpoint_blobs"):
+                left = conn.execute(
+                    f"SELECT count(*) FROM {checkpoint_module.SCHEMA}.{table}"
+                    " WHERE thread_id LIKE %s",
+                    (f"{run.run_id}%",),
+                ).fetchone()
+                assert left == (0,), table
     finally:
         close_checkpointer(saver)
 

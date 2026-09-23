@@ -39,6 +39,7 @@ from caos.graph.route import (
     ResolvedRoute,
     frontier,
     node_states,
+    route_digest,
 )
 from caos.methodology.bundle import Bundle
 from caos.methodology.canonical import (
@@ -210,7 +211,15 @@ def run_route(
         finish=terminal,
         checkpointer=execution.checkpointer,
     )
-    thread = str(run_id)
+    # CF-037: bound to the pinned route's own digest, not the run alone, so a
+    # thread whose graph shape no longer matches what this pass just verified
+    # pinned (a build upgraded mid-run, `dependency_order`'s ordering changed)
+    # is treated as absent rather than resumed into a mismatch. Invariant 6:
+    # the checkpoint only ever remembers position, so starting over from
+    # `START` under a fresh thread costs nothing this pass's own re-derived,
+    # store-backed frontier does not already make safe -- every node it
+    # revisits reports SKIPPED for whatever the ledger already accepted.
+    thread = f"{run_id}:{route_digest(route)}"
     try:
         ended = graph.invoke(
             resume_input(graph, thread),
