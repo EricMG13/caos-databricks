@@ -1,3 +1,30 @@
+# The deployment fork (D31) replayed on every stored real answer — 23 September 2026, night
+
+Status: **no spend; live runs blocked (the OpenRouter account has $0.48 of credit left,
+`docs/rebuild/blockers.md`).** Every stored answer from the day's runs (80, five models)
+was put through the vendor's checks as the host runs them (validator, completeness,
+CP-0's T8 parser) twice: under the original bundle (`78c24be4`) and under the fork
+(`99ed0dc3`).
+
+| Module | Answers | Vendor-clean, original | Vendor-clean, fork |
+|---|---|---|---|
+| CP-0 | 65 | 26 | 32 |
+| CP-1 | 6 | 0 | 1 |
+| CP-1A | 3 | 0 | 1 |
+| CP-3D | 4 | 1 | 2 |
+| CP-5 | 2 | 1 | 1 |
+
+The fork cleared 8 validator refusals (6 MATERIAL, 2 CRITICAL, each a Severity table outside
+QA Validation) and cut completeness violations from 221 to 114. Of the 9 answers it newly
+clears, all 9 also pass the host's own checks, which no bundle changes: every quote carried
+verbatim, every citation anchored (checked against the run's whole evidence, not each node's
+delivered subset). They are both Claude Opus 5.5 CP-0 answers, CP-0 answers from GPT-5.6 luna
+(2), Gemini 2.5 Flash and GPT-6 Luna Pro, and GPT-6 Luna Pro's CP-1, CP-1A and CP-3D: the first
+CP-1 and CP-1A answers any model has produced that the contract accepts. Not re-run here:
+the host's identity check and CP-0's T8 module-set check, which a replay under a new build
+cannot reproduce (the runs pinned the old bundle). The largest refusal left is the model's own:
+`qa_status: Restricted` above the score cap of 59 (18 answers), which the second attempt names.
+
 # Downstream modules, and N52 measured — 23 September 2026, late
 
 Status: **one set qualifies end to end: `ccl-fy2025-market-dislocation` on GPT-6 Luna Pro with

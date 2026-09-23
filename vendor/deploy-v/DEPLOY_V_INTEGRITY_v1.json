@@ -1,14 +1,14 @@
 {
   "authority": "DEPLOY_V_INTEGRITY_v1",
-  "build_id": "78c24be4483612e75d9a0809fcb1cb7c2dd5617e669491de13be9c0123e3ff93",
+  "build_id": "99ed0dc3713e9b7ba6055469f77eb1784e4f6b7c3b1a801ac55b9d22581eef7c",
   "root_file_hashes": {
     ".gitignore": {
       "bytes": 83,
       "sha256": "185f903395dfbacbee9b0ef5e7a5cf2d495920a5432ade4674eb73029f85fc63"
     },
     "CANON_SHARED.md": {
-      "bytes": 49646,
-      "sha256": "7c3e587a26a92a0231202ea199022e8a79d4415a34c70c5ac27ddfea1aa2a854"
+      "bytes": 50136,
+      "sha256": "e55964e74bed562ed61b61053d708a8bdbccfde2dc6930acb967f918381f582f"
     },
     "CP_DEPLOY_V_CHILD_SCHEMA_REGISTRY_v1.json": {
       "bytes": 2614,
@@ -24,7 +24,7 @@
     },
     "CP_DEPLOY_V_RETRIEVAL_INDEX_v1.json": {
       "bytes": 5437,
-      "sha256": "5d1feb99b38d5bd5f01e4b0437ddb9eea3239f1700bd0d2cac0f4b48c4d3b7cf"
+      "sha256": "70de6c26e4bd928e24b2ba34335c3d5a7dab40d56203ee2e8af513fc015f0a1f"
     },
     "CP_MODULE_PAYLOAD_BASE.schema.txt": {
       "bytes": 1930,
@@ -32,19 +32,19 @@
     },
     "DEPLOY_V_BASELINE.json": {
       "bytes": 58178,
-      "sha256": "0ac9503fb1d97d1eaf3bce3bb212d9883716f7df138552a4fb80107a550c814a"
+      "sha256": "fd07d96ea7c8fe55dafb2cdaa9920b45a1f45287859b53151c926fee5f0dde7c"
     },
     "DEPLOY_V_COPILOT_MEMORY_PROMPT.md": {
       "bytes": 11934,
-      "sha256": "ac68427afa24ecdaa484b32a0620ece298c3a18418a8571d9c879c7590dfe2e3"
+      "sha256": "ad0f23dd41441fb3162920d291a4df4446a1373785c9dbc1d9e870556d5ad76e"
     },
     "DEPLOY_V_COPILOT_MEMORY_PROMPT_URL_BOUND.md": {
       "bytes": 12653,
-      "sha256": "16163d7feb310b209d31bbd44df966f802ba41ff79a19a25acf51c490e2a9596"
+      "sha256": "0de52dfdf4d0da7daf0a34acfcfd3616550ea47a606a44c6ee8016dd9ba7240a"
     },
     "DEPLOY_V_MANIFEST.json": {
       "bytes": 70373,
-      "sha256": "a33bde4fb9efbbfd651999c45c5cdcc79b763c692f11e2ab72623fb1230fe9de"
+      "sha256": "0d3206288b0540f18e8b9fdce0669f8aa901e286bfaa1d8e9f059a71794f5223"
     },
     "README.md": {
       "bytes": 7233,
@@ -55,8 +55,8 @@
       "sha256": "71fc109b3f90aaba15712c3a80b185115a016a583e827fd50accba1d1a223fc6"
     },
     "tests/test_regressions.py": {
-      "bytes": 18309,
-      "sha256": "7156ea4f2be591deeb26d4d1df77a57f51e95294e64d1a5aa6f2292d586f0756"
+      "bytes": 18398,
+      "sha256": "5f858cf81a74080d01782134053668ed5dedb9d78e23f4078da13ac8dce89a6a"
     },
     "tests/test_research_workflow.py": {
       "bytes": 18006,
@@ -77,14 +77,14 @@
       "companion_count": 13,
       "companion_limit": 20,
       "companion_limit_exception": false,
-      "entry_bytes": 34529,
-      "entry_sha256": "35045632d7bfd3c57183d62900746b1c85ab2447db5aa0155637028101fabdc7",
+      "entry_bytes": 34682,
+      "entry_sha256": "fd2c1995e8e08bda75b0ca7a2786d1a9ede70109c05ee6528e175db1c2647fa2",
       "folder_slug": "cp-0-source-readiness",
       "module_id": "CP-0",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 34529,
-          "sha256": "35045632d7bfd3c57183d62900746b1c85ab2447db5aa0155637028101fabdc7"
+          "bytes": 34682,
+          "sha256": "fd2c1995e8e08bda75b0ca7a2786d1a9ede70109c05ee6528e175db1c2647fa2"
         },
         "references/CP-0_SCHEMA_REFERENCE.md": {
           "bytes": 2933,
@@ -115,16 +115,16 @@
           "sha256": "45ad6ab2eeeb754ae46a716b7e947e3acac214ea2696ef5e072f10ef7d36451a"
         },
         "references/REF_CP-0_STEPS.md": {
-          "bytes": 23432,
-          "sha256": "a0b2acc2ba74c8e8a964be6e02e5f17ca12f72218d2552f20fa32ffcb30161e1"
+          "bytes": 23872,
+          "sha256": "25ee81c0da47a39ad8923a6d8cc2f8cbdb926a42fbe0149ab4d467f44c02a378"
         },
         "references/REF_CP-PARSE_STEPS.md": {
           "bytes": 14038,
           "sha256": "bacd9bc112fdef8b7207f5362490bb893d4451fee5075a5b1029f9a7c2fe6b75"
         },
         "scripts/completeness_check.py": {
-          "bytes": 33921,
-          "sha256": "0a667724cb56861a4b2313e4c544ed1547f8209b1ed88837decacac946ca7661"
+          "bytes": 36603,
+          "sha256": "f5fe2b65782cf8d4e482151a1570af11ab4f2025f54f8cb547b43d562b7ffe09"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
@@ -135,8 +135,8 @@
           "sha256": "02590c0bf151e1e291b72214df3311f686d88e576d60a80a6b5ca73ecc44a8d1"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 38933,
-          "sha256": "66a6f712616412d2a9a99efd14e26e18143fabe102acd4a3eb5141add8f54853"
+          "bytes": 39964,
+          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
         }
       }
     },
@@ -145,14 +145,14 @@
       "companion_count": 9,
       "companion_limit": 20,
       "companion_limit_exception": false,
-      "entry_bytes": 20249,
-      "entry_sha256": "63b2d8088137f3ecf252a02862f848fe58c66ce138ee799c11df8dd6bae8fb86",
+      "entry_bytes": 20197,
+      "entry_sha256": "bd5b207ca1bc17e0264fd760d332e73859b111e14859145543c27787b90a440a",
       "folder_slug": "cp-1-canonical-data-foundation",
       "module_id": "CP-1",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 20249,
-          "sha256": "63b2d8088137f3ecf252a02862f848fe58c66ce138ee799c11df8dd6bae8fb86"
+          "bytes": 20197,
+          "sha256": "bd5b207ca1bc17e0264fd760d332e73859b111e14859145543c27787b90a440a"
         },
         "references/CP-1_RUNBOOK.md": {
           "bytes": 12020,
@@ -171,8 +171,8 @@
           "sha256": "96925a4e8d0ce3da574976ac594562aa518b838cc52b66160758216a1d408dc3"
         },
         "scripts/completeness_check.py": {
-          "bytes": 33921,
-          "sha256": "0a667724cb56861a4b2313e4c544ed1547f8209b1ed88837decacac946ca7661"
+          "bytes": 36603,
+          "sha256": "f5fe2b65782cf8d4e482151a1570af11ab4f2025f54f8cb547b43d562b7ffe09"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
@@ -187,8 +187,8 @@
           "sha256": "8f90ad05f99ffe09ea6f223cbd67827bb4ab36f4d243e12645eac628dbff9233"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 38933,
-          "sha256": "66a6f712616412d2a9a99efd14e26e18143fabe102acd4a3eb5141add8f54853"
+          "bytes": 39964,
+          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
         }
       }
     },
@@ -199,14 +199,14 @@
       "companion_count": 11,
       "companion_limit": 20,
       "companion_limit_exception": false,
-      "entry_bytes": 41991,
-      "entry_sha256": "6d9217ab45a24b97269ce096c155885ba1d92ca6f4aaf367a9844f90c6fb8167",
+      "entry_bytes": 41828,
+      "entry_sha256": "07b16779b2a24fbec22cd8c2b5a8e78fc717718fc8e4f995fda2794183d56000",
       "folder_slug": "cp-1a-business-transaction-fact-pack",
       "module_id": "CP-1A",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 41991,
-          "sha256": "6d9217ab45a24b97269ce096c155885ba1d92ca6f4aaf367a9844f90c6fb8167"
+          "bytes": 41828,
+          "sha256": "07b16779b2a24fbec22cd8c2b5a8e78fc717718fc8e4f995fda2794183d56000"
         },
         "references/CP-1A_SCHEMA_REFERENCE.md": {
           "bytes": 2607,
@@ -237,8 +237,8 @@
           "sha256": "8e738d43447219ab8cf7f46b4ca97cd32c67eb7831aaae683b365a9f3514ad45"
         },
         "scripts/completeness_check.py": {
-          "bytes": 33921,
-          "sha256": "0a667724cb56861a4b2313e4c544ed1547f8209b1ed88837decacac946ca7661"
+          "bytes": 36603,
+          "sha256": "f5fe2b65782cf8d4e482151a1570af11ab4f2025f54f8cb547b43d562b7ffe09"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
@@ -249,8 +249,8 @@
           "sha256": "02590c0bf151e1e291b72214df3311f686d88e576d60a80a6b5ca73ecc44a8d1"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 38933,
-          "sha256": "66a6f712616412d2a9a99efd14e26e18143fabe102acd4a3eb5141add8f54853"
+          "bytes": 39964,
+          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
         }
       }
     },
@@ -259,14 +259,14 @@
       "companion_count": 8,
       "companion_limit": 20,
       "companion_limit_exception": false,
-      "entry_bytes": 25318,
-      "entry_sha256": "4652e8e10d69f05849ded6ab45d07475b8ff4d5de2cef664e6ece017ed81c4d2",
+      "entry_bytes": 25266,
+      "entry_sha256": "b676f638200a598fd106b1d4264d1867883f07495afa9c4011c0fba9b5d1fa26",
       "folder_slug": "cp-1b-earnings-delta",
       "module_id": "CP-1B",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 25318,
-          "sha256": "4652e8e10d69f05849ded6ab45d07475b8ff4d5de2cef664e6ece017ed81c4d2"
+          "bytes": 25266,
+          "sha256": "b676f638200a598fd106b1d4264d1867883f07495afa9c4011c0fba9b5d1fa26"
         },
         "references/CP-1B_SCHEMA_REFERENCE.md": {
           "bytes": 3393,
@@ -281,8 +281,8 @@
           "sha256": "5a5baa859471254ecba1807dfd067a8cc648fb5e0d40907dbc45a9b1edbd4889"
         },
         "scripts/completeness_check.py": {
-          "bytes": 33921,
-          "sha256": "0a667724cb56861a4b2313e4c544ed1547f8209b1ed88837decacac946ca7661"
+          "bytes": 36603,
+          "sha256": "f5fe2b65782cf8d4e482151a1570af11ab4f2025f54f8cb547b43d562b7ffe09"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
@@ -297,8 +297,8 @@
           "sha256": "8f90ad05f99ffe09ea6f223cbd67827bb4ab36f4d243e12645eac628dbff9233"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 38933,
-          "sha256": "66a6f712616412d2a9a99efd14e26e18143fabe102acd4a3eb5141add8f54853"
+          "bytes": 39964,
+          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
         }
       }
     },
@@ -307,14 +307,14 @@
       "companion_count": 9,
       "companion_limit": 20,
       "companion_limit_exception": false,
-      "entry_bytes": 24365,
-      "entry_sha256": "078eb49bdd2527f6f3a13e70b037077fdbaecefe0db067ee992874040a43b93e",
+      "entry_bytes": 24313,
+      "entry_sha256": "fdc08b4ae1fd424d5312553bc6a27ebcbeb80227db0470af8d0b2d1584416e83",
       "folder_slug": "cp-1c-peer-benchmark",
       "module_id": "CP-1C",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 24365,
-          "sha256": "078eb49bdd2527f6f3a13e70b037077fdbaecefe0db067ee992874040a43b93e"
+          "bytes": 24313,
+          "sha256": "fdc08b4ae1fd424d5312553bc6a27ebcbeb80227db0470af8d0b2d1584416e83"
         },
         "references/CP-1C_SCHEMA_REFERENCE.md": {
           "bytes": 3163,
@@ -333,8 +333,8 @@
           "sha256": "fbbed9bac006c67a04397303c39c684046817cf491ebad6a4fa1302ecfbfd766"
         },
         "scripts/completeness_check.py": {
-          "bytes": 33921,
-          "sha256": "0a667724cb56861a4b2313e4c544ed1547f8209b1ed88837decacac946ca7661"
+          "bytes": 36603,
+          "sha256": "f5fe2b65782cf8d4e482151a1570af11ab4f2025f54f8cb547b43d562b7ffe09"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
@@ -349,8 +349,8 @@
           "sha256": "3073ed168e8f89b422b3421df4255a48a0875b1d44a90a53414ce078c2f7015b"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 38933,
-          "sha256": "66a6f712616412d2a9a99efd14e26e18143fabe102acd4a3eb5141add8f54853"
+          "bytes": 39964,
+          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
         }
       }
     },
@@ -361,14 +361,14 @@
       "companion_count": 6,
       "companion_limit": 20,
       "companion_limit_exception": false,
-      "entry_bytes": 22848,
-      "entry_sha256": "9682b2da83fe7fd3288cae31fc5d1cf7f6d2daa3de2fac297637fe13d5e8e2ae",
+      "entry_bytes": 22685,
+      "entry_sha256": "98c7b9e6bb97c036ee94d41bead590fbaa6e42c220827ccd7bc584ce7eb9cf52",
       "folder_slug": "cp-1d-earnings-quality",
       "module_id": "CP-1D",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 22848,
-          "sha256": "9682b2da83fe7fd3288cae31fc5d1cf7f6d2daa3de2fac297637fe13d5e8e2ae"
+          "bytes": 22685,
+          "sha256": "98c7b9e6bb97c036ee94d41bead590fbaa6e42c220827ccd7bc584ce7eb9cf52"
         },
         "references/CP-1D_SCHEMA_REFERENCE.md": {
           "bytes": 2448,
@@ -379,8 +379,8 @@
           "sha256": "709dd5cb14cab3fbd2d73f586be4349a06e8b5e785b43176b70b5e47cf476582"
         },
         "scripts/completeness_check.py": {
-          "bytes": 33921,
-          "sha256": "0a667724cb56861a4b2313e4c544ed1547f8209b1ed88837decacac946ca7661"
+          "bytes": 36603,
+          "sha256": "f5fe2b65782cf8d4e482151a1570af11ab4f2025f54f8cb547b43d562b7ffe09"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
@@ -391,8 +391,8 @@
           "sha256": "02590c0bf151e1e291b72214df3311f686d88e576d60a80a6b5ca73ecc44a8d1"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 38933,
-          "sha256": "66a6f712616412d2a9a99efd14e26e18143fabe102acd4a3eb5141add8f54853"
+          "bytes": 39964,
+          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
         }
       }
     },
@@ -401,14 +401,14 @@
       "companion_count": 8,
       "companion_limit": 20,
       "companion_limit_exception": false,
-      "entry_bytes": 25099,
-      "entry_sha256": "4a70cef2aa74781245b1aff9a556f040f84532d00d7af1847a351abd46103b34",
+      "entry_bytes": 25047,
+      "entry_sha256": "1e814dbc0bd768bbc13999878a9b71c9435068381f72aaef23f55817f04d659c",
       "folder_slug": "cp-2-fundamental-credit-synthesizer",
       "module_id": "CP-2",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 25099,
-          "sha256": "4a70cef2aa74781245b1aff9a556f040f84532d00d7af1847a351abd46103b34"
+          "bytes": 25047,
+          "sha256": "1e814dbc0bd768bbc13999878a9b71c9435068381f72aaef23f55817f04d659c"
         },
         "references/CP-2_SCHEMA_REFERENCE.md": {
           "bytes": 3565,
@@ -427,8 +427,8 @@
           "sha256": "292f114bc456c5924712d692408550b058ed4424d146719fe42579b092a94a92"
         },
         "scripts/completeness_check.py": {
-          "bytes": 33921,
-          "sha256": "0a667724cb56861a4b2313e4c544ed1547f8209b1ed88837decacac946ca7661"
+          "bytes": 36603,
+          "sha256": "f5fe2b65782cf8d4e482151a1570af11ab4f2025f54f8cb547b43d562b7ffe09"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
@@ -439,8 +439,8 @@
           "sha256": "02590c0bf151e1e291b72214df3311f686d88e576d60a80a6b5ca73ecc44a8d1"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 38933,
-          "sha256": "66a6f712616412d2a9a99efd14e26e18143fabe102acd4a3eb5141add8f54853"
+          "bytes": 39964,
+          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
         }
       }
     },
@@ -451,14 +451,14 @@
       "companion_count": 12,
       "companion_limit": 20,
       "companion_limit_exception": false,
-      "entry_bytes": 40875,
-      "entry_sha256": "48518e714049037fb39c8b77bac57d6d503dd1b1598fbe25ee80ae70d671c1f7",
+      "entry_bytes": 40712,
+      "entry_sha256": "1c07e05c9aed08dede3352fda52bdd86f91ccead82e41882bfaae2b5a22e33b2",
       "folder_slug": "cp-2a-downside-pathway",
       "module_id": "CP-2A",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 40875,
-          "sha256": "48518e714049037fb39c8b77bac57d6d503dd1b1598fbe25ee80ae70d671c1f7"
+          "bytes": 40712,
+          "sha256": "1c07e05c9aed08dede3352fda52bdd86f91ccead82e41882bfaae2b5a22e33b2"
         },
         "references/CP-2A_SCHEMA_REFERENCE.md": {
           "bytes": 4737,
@@ -493,8 +493,8 @@
           "sha256": "75434b4a5602c97f001d144ee5934a6601105f76aad9ea0ed2d71638726d7415"
         },
         "scripts/completeness_check.py": {
-          "bytes": 33921,
-          "sha256": "0a667724cb56861a4b2313e4c544ed1547f8209b1ed88837decacac946ca7661"
+          "bytes": 36603,
+          "sha256": "f5fe2b65782cf8d4e482151a1570af11ab4f2025f54f8cb547b43d562b7ffe09"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
@@ -505,8 +505,8 @@
           "sha256": "02590c0bf151e1e291b72214df3311f686d88e576d60a80a6b5ca73ecc44a8d1"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 38933,
-          "sha256": "66a6f712616412d2a9a99efd14e26e18143fabe102acd4a3eb5141add8f54853"
+          "bytes": 39964,
+          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
         }
       }
     },
@@ -517,14 +517,14 @@
       "companion_count": 13,
       "companion_limit": 20,
       "companion_limit_exception": false,
-      "entry_bytes": 39131,
-      "entry_sha256": "b21ca08ef9380c8d727320b53c5d8b13f9285fd1a540ca91d6f4bfc9ec44a1e5",
+      "entry_bytes": 38968,
+      "entry_sha256": "1f177f1d9dba567a93a39cbede4c0867a2417042d6c6c103e41fa18628f0742b",
       "folder_slug": "cp-2e-macro-fx-hedging-sensitivity",
       "module_id": "CP-2E",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 39131,
-          "sha256": "b21ca08ef9380c8d727320b53c5d8b13f9285fd1a540ca91d6f4bfc9ec44a1e5"
+          "bytes": 38968,
+          "sha256": "1f177f1d9dba567a93a39cbede4c0867a2417042d6c6c103e41fa18628f0742b"
         },
         "references/CP-2E_SCHEMA_REFERENCE.md": {
           "bytes": 4314,
@@ -559,8 +559,8 @@
           "sha256": "312301c620990d3810d19125cde30224f9696860c3ef5f04b3f9473652555e08"
         },
         "scripts/completeness_check.py": {
-          "bytes": 33921,
-          "sha256": "0a667724cb56861a4b2313e4c544ed1547f8209b1ed88837decacac946ca7661"
+          "bytes": 36603,
+          "sha256": "f5fe2b65782cf8d4e482151a1570af11ab4f2025f54f8cb547b43d562b7ffe09"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
@@ -575,8 +575,8 @@
           "sha256": "48eedacfa17fcb75ac17f67e3141639973aec1e7e0f00f3491896f702d27158f"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 38933,
-          "sha256": "66a6f712616412d2a9a99efd14e26e18143fabe102acd4a3eb5141add8f54853"
+          "bytes": 39964,
+          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
         }
       }
     },
@@ -585,14 +585,14 @@
       "companion_count": 9,
       "companion_limit": 20,
       "companion_limit_exception": false,
-      "entry_bytes": 22983,
-      "entry_sha256": "31fe445277dc18797a90478f134dc2ec4b53cfe2649794c128bfbf3f504914e0",
+      "entry_bytes": 22931,
+      "entry_sha256": "038d1034450215c89eee40f9593e58b6b3a745dae0c9a619343f8cbeae1e0552",
       "folder_slug": "cp-2g-forward-credit-model",
       "module_id": "CP-2G",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 22983,
-          "sha256": "31fe445277dc18797a90478f134dc2ec4b53cfe2649794c128bfbf3f504914e0"
+          "bytes": 22931,
+          "sha256": "038d1034450215c89eee40f9593e58b6b3a745dae0c9a619343f8cbeae1e0552"
         },
         "references/CP-2G_ForwardCreditModel.schema.md": {
           "bytes": 3518,
@@ -607,8 +607,8 @@
           "sha256": "b59d94f04dd2b7d4f243856433bdc46896be3765faf9d20acd77e0f56cf57536"
         },
         "scripts/completeness_check.py": {
-          "bytes": 33921,
-          "sha256": "0a667724cb56861a4b2313e4c544ed1547f8209b1ed88837decacac946ca7661"
+          "bytes": 36603,
+          "sha256": "f5fe2b65782cf8d4e482151a1570af11ab4f2025f54f8cb547b43d562b7ffe09"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
@@ -627,8 +627,8 @@
           "sha256": "3bb7fd7ea167ccb154ac92e819aaa6640c63a08648a3808ccaa7283e8a595722"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 38933,
-          "sha256": "66a6f712616412d2a9a99efd14e26e18143fabe102acd4a3eb5141add8f54853"
+          "bytes": 39964,
+          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
         }
       }
     },
@@ -637,14 +637,14 @@
       "companion_count": 9,
       "companion_limit": 20,
       "companion_limit_exception": false,
-      "entry_bytes": 22031,
-      "entry_sha256": "35cd53f12065b7bcd59478e7bf168a0218863742f9dd803be4a77a594051e848",
+      "entry_bytes": 21979,
+      "entry_sha256": "d74169f070c853d3bfa70ba2026fca04a7493afeed4af2e0509d5c3eaaf5fe07",
       "folder_slug": "cp-2h-ratings-migration-trigger",
       "module_id": "CP-2H",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 22031,
-          "sha256": "35cd53f12065b7bcd59478e7bf168a0218863742f9dd803be4a77a594051e848"
+          "bytes": 21979,
+          "sha256": "d74169f070c853d3bfa70ba2026fca04a7493afeed4af2e0509d5c3eaaf5fe07"
         },
         "references/CP-2H_RatingTransition.schema.md": {
           "bytes": 1993,
@@ -663,8 +663,8 @@
           "sha256": "b51b375a1a1c0aff668f85a9550e2d272f5f9a9be142407a68ba7bced0d4bced"
         },
         "scripts/completeness_check.py": {
-          "bytes": 33921,
-          "sha256": "0a667724cb56861a4b2313e4c544ed1547f8209b1ed88837decacac946ca7661"
+          "bytes": 36603,
+          "sha256": "f5fe2b65782cf8d4e482151a1570af11ab4f2025f54f8cb547b43d562b7ffe09"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
@@ -679,8 +679,8 @@
           "sha256": "02590c0bf151e1e291b72214df3311f686d88e576d60a80a6b5ca73ecc44a8d1"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 38933,
-          "sha256": "66a6f712616412d2a9a99efd14e26e18143fabe102acd4a3eb5141add8f54853"
+          "bytes": 39964,
+          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
         }
       }
     },
@@ -692,14 +692,14 @@
       "companion_count": 18,
       "companion_limit": 20,
       "companion_limit_exception": false,
-      "entry_bytes": 57235,
-      "entry_sha256": "9101e0e271fbf2fb8b528f46eca2e9b4db2ecc0d342c923a33437913e36d08af",
+      "entry_bytes": 56961,
+      "entry_sha256": "20ace0a84451368ea4b2a929b2c5cb9191baa10499374de80864acdabc3fcaea",
       "folder_slug": "cp-3-relative-value-security-selection",
       "module_id": "CP-3",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 57235,
-          "sha256": "9101e0e271fbf2fb8b528f46eca2e9b4db2ecc0d342c923a33437913e36d08af"
+          "bytes": 56961,
+          "sha256": "20ace0a84451368ea4b2a929b2c5cb9191baa10499374de80864acdabc3fcaea"
         },
         "references/CP-3A_RUNBOOK.md": {
           "bytes": 11981,
@@ -754,8 +754,8 @@
           "sha256": "ea7e76a2b05134c1746695c643b3cf5ac2c27fc7d1886704c5f086a5a120c69a"
         },
         "scripts/completeness_check.py": {
-          "bytes": 33921,
-          "sha256": "0a667724cb56861a4b2313e4c544ed1547f8209b1ed88837decacac946ca7661"
+          "bytes": 36603,
+          "sha256": "f5fe2b65782cf8d4e482151a1570af11ab4f2025f54f8cb547b43d562b7ffe09"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
@@ -770,8 +770,8 @@
           "sha256": "2e6c084747be7f67052c5c333fc80d5954f0fe6dcdba14e6b933fffaae3c1878"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 38933,
-          "sha256": "66a6f712616412d2a9a99efd14e26e18143fabe102acd4a3eb5141add8f54853"
+          "bytes": 39964,
+          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
         }
       }
     },
@@ -784,14 +784,14 @@
       "companion_count": 18,
       "companion_limit": 20,
       "companion_limit_exception": false,
-      "entry_bytes": 41931,
-      "entry_sha256": "fbf9e0a99d79e7a8f187b86a7b7e9d1b5357ffe3f0c13134dc68bd9df5a12cce",
+      "entry_bytes": 41546,
+      "entry_sha256": "4bd84ca1f49eaef4f07e562106e51aaa871ac7ef91d5d8b7c47adce61bc92f23",
       "folder_slug": "cp-4-legal-covenant-interpreter",
       "module_id": "CP-4",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 41931,
-          "sha256": "fbf9e0a99d79e7a8f187b86a7b7e9d1b5357ffe3f0c13134dc68bd9df5a12cce"
+          "bytes": 41546,
+          "sha256": "4bd84ca1f49eaef4f07e562106e51aaa871ac7ef91d5d8b7c47adce61bc92f23"
         },
         "references/CP-4A_RUNBOOK.md": {
           "bytes": 11568,
@@ -846,8 +846,8 @@
           "sha256": "ef5eb569be59ec30dd3a66c1bcc81c5cc0bcc2e9d2ac3909b04caa23339b6b94"
         },
         "scripts/completeness_check.py": {
-          "bytes": 33921,
-          "sha256": "0a667724cb56861a4b2313e4c544ed1547f8209b1ed88837decacac946ca7661"
+          "bytes": 36603,
+          "sha256": "f5fe2b65782cf8d4e482151a1570af11ab4f2025f54f8cb547b43d562b7ffe09"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
@@ -862,8 +862,8 @@
           "sha256": "02590c0bf151e1e291b72214df3311f686d88e576d60a80a6b5ca73ecc44a8d1"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 38933,
-          "sha256": "66a6f712616412d2a9a99efd14e26e18143fabe102acd4a3eb5141add8f54853"
+          "bytes": 39964,
+          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
         }
       }
     },
@@ -872,14 +872,14 @@
       "companion_count": 9,
       "companion_limit": 20,
       "companion_limit_exception": false,
-      "entry_bytes": 23221,
-      "entry_sha256": "8a80516367dc3873f8b13c4a27480172d03e952a4ba83a206b1dcf1768e5404f",
+      "entry_bytes": 23169,
+      "entry_sha256": "da19f497a13c2a432b4dd8186a8856661a5036474723219864d069c6417c9bbb",
       "folder_slug": "cp-4c-restructuring-fulcrum",
       "module_id": "CP-4C",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 23221,
-          "sha256": "8a80516367dc3873f8b13c4a27480172d03e952a4ba83a206b1dcf1768e5404f"
+          "bytes": 23169,
+          "sha256": "da19f497a13c2a432b4dd8186a8856661a5036474723219864d069c6417c9bbb"
         },
         "references/CP-4C_RestructuringScenario.schema.md": {
           "bytes": 2095,
@@ -894,8 +894,8 @@
           "sha256": "1483f4fe9e37d593bdf0cab58ac8eb0674aaa22745579bd9430380c57e763e97"
         },
         "scripts/completeness_check.py": {
-          "bytes": 33921,
-          "sha256": "0a667724cb56861a4b2313e4c544ed1547f8209b1ed88837decacac946ca7661"
+          "bytes": 36603,
+          "sha256": "f5fe2b65782cf8d4e482151a1570af11ab4f2025f54f8cb547b43d562b7ffe09"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
@@ -914,8 +914,8 @@
           "sha256": "2e6c084747be7f67052c5c333fc80d5954f0fe6dcdba14e6b933fffaae3c1878"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 38933,
-          "sha256": "66a6f712616412d2a9a99efd14e26e18143fabe102acd4a3eb5141add8f54853"
+          "bytes": 39964,
+          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
         }
       }
     },
@@ -926,14 +926,14 @@
       "companion_count": 11,
       "companion_limit": 20,
       "companion_limit_exception": false,
-      "entry_bytes": 23478,
-      "entry_sha256": "1bfd89282493202acad549febd93f5beea5f25c8d5c8b8a2cd523a7a571567c0",
+      "entry_bytes": 23426,
+      "entry_sha256": "7e914ce763bfd773850783e4a990ec3911a26bef9f4dc1d2cf35a53d2cfe45b4",
       "folder_slug": "cp-5-evidence-trace-validator",
       "module_id": "CP-5",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 23478,
-          "sha256": "1bfd89282493202acad549febd93f5beea5f25c8d5c8b8a2cd523a7a571567c0"
+          "bytes": 23426,
+          "sha256": "7e914ce763bfd773850783e4a990ec3911a26bef9f4dc1d2cf35a53d2cfe45b4"
         },
         "references/CP-5A_SCHEMA_REFERENCE.md": {
           "bytes": 4633,
@@ -964,8 +964,8 @@
           "sha256": "0b5beddbc0a5d3c99065379b7110e3b87fbc5392d38ed243ccbf7fdce70e506a"
         },
         "scripts/completeness_check.py": {
-          "bytes": 33921,
-          "sha256": "0a667724cb56861a4b2313e4c544ed1547f8209b1ed88837decacac946ca7661"
+          "bytes": 36603,
+          "sha256": "f5fe2b65782cf8d4e482151a1570af11ab4f2025f54f8cb547b43d562b7ffe09"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
@@ -976,8 +976,8 @@
           "sha256": "02590c0bf151e1e291b72214df3311f686d88e576d60a80a6b5ca73ecc44a8d1"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 38933,
-          "sha256": "66a6f712616412d2a9a99efd14e26e18143fabe102acd4a3eb5141add8f54853"
+          "bytes": 39964,
+          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
         }
       }
     },
@@ -988,14 +988,14 @@
       "companion_count": 11,
       "companion_limit": 20,
       "companion_limit_exception": false,
-      "entry_bytes": 46670,
-      "entry_sha256": "35e651430c910057c8b345d75f324ebed01bf52e954790b5450a7ee7d099d052",
+      "entry_bytes": 46507,
+      "entry_sha256": "98fc68460a4e388aca1be4ce8e2e74e09a46debc71a15cd40c3abfc86ebf8731",
       "folder_slug": "cp-6-ic-debate-challenge",
       "module_id": "CP-6",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 46670,
-          "sha256": "35e651430c910057c8b345d75f324ebed01bf52e954790b5450a7ee7d099d052"
+          "bytes": 46507,
+          "sha256": "98fc68460a4e388aca1be4ce8e2e74e09a46debc71a15cd40c3abfc86ebf8731"
         },
         "references/CP-6A_SCHEMA_REFERENCE.md": {
           "bytes": 3936,
@@ -1026,8 +1026,8 @@
           "sha256": "6141d27e800d45d2d0208173f38060c75d97005ee9b93013e24a16a40570f1e1"
         },
         "scripts/completeness_check.py": {
-          "bytes": 33921,
-          "sha256": "0a667724cb56861a4b2313e4c544ed1547f8209b1ed88837decacac946ca7661"
+          "bytes": 36603,
+          "sha256": "f5fe2b65782cf8d4e482151a1570af11ab4f2025f54f8cb547b43d562b7ffe09"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
@@ -1038,8 +1038,8 @@
           "sha256": "02590c0bf151e1e291b72214df3311f686d88e576d60a80a6b5ca73ecc44a8d1"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 38933,
-          "sha256": "66a6f712616412d2a9a99efd14e26e18143fabe102acd4a3eb5141add8f54853"
+          "bytes": 39964,
+          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
         }
       }
     },
@@ -1048,14 +1048,14 @@
       "companion_count": 8,
       "companion_limit": 20,
       "companion_limit_exception": false,
-      "entry_bytes": 22181,
-      "entry_sha256": "695b5261c45793f53d6103af2b57bea2357d1b5aa5e12d58184079e7527dc71d",
+      "entry_bytes": 22129,
+      "entry_sha256": "e931e1ccf35d718c4f3a018c17cfd057e2f05a080c7d4f044654488bc8ee03da",
       "folder_slug": "cp-8-decision-ledger-post-mortem",
       "module_id": "CP-8",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 22181,
-          "sha256": "695b5261c45793f53d6103af2b57bea2357d1b5aa5e12d58184079e7527dc71d"
+          "bytes": 22129,
+          "sha256": "e931e1ccf35d718c4f3a018c17cfd057e2f05a080c7d4f044654488bc8ee03da"
         },
         "references/CP-8_SCHEMA_REFERENCE.md": {
           "bytes": 3486,
@@ -1074,8 +1074,8 @@
           "sha256": "54e85dad34e3a2e30e9ad89d5e335bc780097d582a277259c14a7c4f666c54bc"
         },
         "scripts/completeness_check.py": {
-          "bytes": 33921,
-          "sha256": "0a667724cb56861a4b2313e4c544ed1547f8209b1ed88837decacac946ca7661"
+          "bytes": 36603,
+          "sha256": "f5fe2b65782cf8d4e482151a1570af11ab4f2025f54f8cb547b43d562b7ffe09"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
@@ -1086,8 +1086,8 @@
           "sha256": "02590c0bf151e1e291b72214df3311f686d88e576d60a80a6b5ca73ecc44a8d1"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 38933,
-          "sha256": "66a6f712616412d2a9a99efd14e26e18143fabe102acd4a3eb5141add8f54853"
+          "bytes": 39964,
+          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
         }
       }
     },
@@ -1096,14 +1096,14 @@
       "companion_count": 7,
       "companion_limit": 20,
       "companion_limit_exception": false,
-      "entry_bytes": 19389,
-      "entry_sha256": "6a2d6e0b7ba2a8507c6f9d34d78bdf71538c9764dfc1f07f0035047c10e9c6cc",
+      "entry_bytes": 19337,
+      "entry_sha256": "759a675553200e569cbc16bfa9540a599bcfbea5879ab69ea62292c61b6bb866",
       "folder_slug": "cp-dr-deep-research",
       "module_id": "CP-DR",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 19389,
-          "sha256": "6a2d6e0b7ba2a8507c6f9d34d78bdf71538c9764dfc1f07f0035047c10e9c6cc"
+          "bytes": 19337,
+          "sha256": "759a675553200e569cbc16bfa9540a599bcfbea5879ab69ea62292c61b6bb866"
         },
         "references/CP-DR_DeepResearch.schema.md": {
           "bytes": 2302,
@@ -1126,8 +1126,8 @@
           "sha256": "02590c0bf151e1e291b72214df3311f686d88e576d60a80a6b5ca73ecc44a8d1"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 38933,
-          "sha256": "66a6f712616412d2a9a99efd14e26e18143fabe102acd4a3eb5141add8f54853"
+          "bytes": 39964,
+          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
         },
         "scripts/validate_research.py": {
           "bytes": 4145,
@@ -1145,14 +1145,14 @@
       "companion_count": 20,
       "companion_limit": 20,
       "companion_limit_exception": false,
-      "entry_bytes": 67293,
-      "entry_sha256": "c5e053a1d76e78d84a1d592b3194a3d576d169ea26939ce1214658e273b7fc1f",
+      "entry_bytes": 66738,
+      "entry_sha256": "e19099b70960489d6248ad74cfcc43012aaa1cbb602508a17ecbd56010d42d98",
       "folder_slug": "cp-l10-financial-change-screen",
       "module_id": "CP-L10",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 67293,
-          "sha256": "c5e053a1d76e78d84a1d592b3194a3d576d169ea26939ce1214658e273b7fc1f"
+          "bytes": 66738,
+          "sha256": "e19099b70960489d6248ad74cfcc43012aaa1cbb602508a17ecbd56010d42d98"
         },
         "references/CP-L10_CP_LITE_ANALYSIS_POLICY_v1.md": {
           "bytes": 3992,
@@ -1219,8 +1219,8 @@
           "sha256": "f80e3cb4f91c8fef9c2ea83c6af385864876d8683f65d79e9895a2f1ed8e0874"
         },
         "scripts/completeness_check.py": {
-          "bytes": 33921,
-          "sha256": "0a667724cb56861a4b2313e4c544ed1547f8209b1ed88837decacac946ca7661"
+          "bytes": 36603,
+          "sha256": "f5fe2b65782cf8d4e482151a1570af11ab4f2025f54f8cb547b43d562b7ffe09"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
@@ -1231,8 +1231,8 @@
           "sha256": "02590c0bf151e1e291b72214df3311f686d88e576d60a80a6b5ca73ecc44a8d1"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 38933,
-          "sha256": "66a6f712616412d2a9a99efd14e26e18143fabe102acd4a3eb5141add8f54853"
+          "bytes": 39964,
+          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
         }
       }
     },
@@ -1391,8 +1391,8 @@
           "sha256": "e0a54b1872094e1c691dd0e919623966811884c35a914499d07c0ea4eaef02b1"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 38933,
-          "sha256": "66a6f712616412d2a9a99efd14e26e18143fabe102acd4a3eb5141add8f54853"
+          "bytes": 39964,
+          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
         }
       }
     },
@@ -1487,8 +1487,8 @@
           "sha256": "4ca68d044594d0e5777e4af01646be2df66597dd6e8dfcba754b799deef60242"
         },
         "scripts/completeness_check.py": {
-          "bytes": 33921,
-          "sha256": "0a667724cb56861a4b2313e4c544ed1547f8209b1ed88837decacac946ca7661"
+          "bytes": 36603,
+          "sha256": "f5fe2b65782cf8d4e482151a1570af11ab4f2025f54f8cb547b43d562b7ffe09"
         },
         "scripts/cp_tables.py": {
           "bytes": 9460,
@@ -1535,8 +1535,8 @@
           "sha256": "e8a221951431061270fc997b811106a7f7f59eb1f8b2fa81b4b9d54563e0ea83"
         },
         "scripts/credit_os_v/navigation.py": {
-          "bytes": 36223,
-          "sha256": "76a18936f2e192ee55252d4d3e1dd1d359435fb4da8e60a744be96349c9a8df5"
+          "bytes": 36713,
+          "sha256": "ac85a2fefb665520acc5a93fe63a52b2daca3b56858fea91626fcb1d32c22077"
         },
         "scripts/credit_os_v/reconcile.py": {
           "bytes": 12787,
@@ -1567,22 +1567,22 @@
           "sha256": "558b7812f2445b90d6835566c0efffab86a2dda0bb085531477635d85663dc0d"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 38933,
-          "sha256": "66a6f712616412d2a9a99efd14e26e18143fabe102acd4a3eb5141add8f54853"
+          "bytes": 39964,
+          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
         }
       }
     },
     {
       "aliases": [],
       "companion_count": 9,
-      "entry_bytes": 20591,
-      "entry_sha256": "0b9dd32806b8a1f48548557ad1258751981b5438c66ee51d2ecc67c179d05806",
+      "entry_bytes": 20539,
+      "entry_sha256": "5744921a59097d29e8184f3b3e37a796199c92060fca66a2ba67b752b702b1fc",
       "folder_slug": "cp-2d-liquidity-cash-flow-bridge",
       "module_id": "CP-2D",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 20591,
-          "sha256": "0b9dd32806b8a1f48548557ad1258751981b5438c66ee51d2ecc67c179d05806"
+          "bytes": 20539,
+          "sha256": "5744921a59097d29e8184f3b3e37a796199c92060fca66a2ba67b752b702b1fc"
         },
         "references/CP-2D_SCHEMA_REFERENCE.md": {
           "bytes": 3855,
@@ -1601,8 +1601,8 @@
           "sha256": "84bdff527a5575b900fc94d2bf94eb433a508f8c2883ee84f40ca9dcf94ce595"
         },
         "scripts/completeness_check.py": {
-          "bytes": 33921,
-          "sha256": "0a667724cb56861a4b2313e4c544ed1547f8209b1ed88837decacac946ca7661"
+          "bytes": 36603,
+          "sha256": "f5fe2b65782cf8d4e482151a1570af11ab4f2025f54f8cb547b43d562b7ffe09"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
@@ -1617,22 +1617,22 @@
           "sha256": "3bb7fd7ea167ccb154ac92e819aaa6640c63a08648a3808ccaa7283e8a595722"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 38933,
-          "sha256": "66a6f712616412d2a9a99efd14e26e18143fabe102acd4a3eb5141add8f54853"
+          "bytes": 39964,
+          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
         }
       }
     },
     {
       "aliases": [],
       "companion_count": 8,
-      "entry_bytes": 18707,
-      "entry_sha256": "6c5b1806557344a29c81bfc6260e5e3c1b2eebd0e4c7db152c50135296dea494",
+      "entry_bytes": 18655,
+      "entry_sha256": "50402e2325ee2fd2e5a360c9f12a205ad2afb671f20e88596335da4e7629d2f2",
       "folder_slug": "cp-3d-market-implied-risk",
       "module_id": "CP-3D",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 18707,
-          "sha256": "6c5b1806557344a29c81bfc6260e5e3c1b2eebd0e4c7db152c50135296dea494"
+          "bytes": 18655,
+          "sha256": "50402e2325ee2fd2e5a360c9f12a205ad2afb671f20e88596335da4e7629d2f2"
         },
         "references/CP-3D_MarketImpliedRisk.schema.md": {
           "bytes": 2131,
@@ -1651,8 +1651,8 @@
           "sha256": "b51b375a1a1c0aff668f85a9550e2d272f5f9a9be142407a68ba7bced0d4bced"
         },
         "scripts/completeness_check.py": {
-          "bytes": 33921,
-          "sha256": "0a667724cb56861a4b2313e4c544ed1547f8209b1ed88837decacac946ca7661"
+          "bytes": 36603,
+          "sha256": "f5fe2b65782cf8d4e482151a1570af11ab4f2025f54f8cb547b43d562b7ffe09"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
@@ -1663,22 +1663,22 @@
           "sha256": "02590c0bf151e1e291b72214df3311f686d88e576d60a80a6b5ca73ecc44a8d1"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 38933,
-          "sha256": "66a6f712616412d2a9a99efd14e26e18143fabe102acd4a3eb5141add8f54853"
+          "bytes": 39964,
+          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
         }
       }
     },
     {
       "aliases": [],
       "companion_count": 9,
-      "entry_bytes": 17845,
-      "entry_sha256": "753fa529d19db2f59237809429f18f1746cdc65ad08ddfadbfedd7e6e84121ea",
+      "entry_bytes": 17793,
+      "entry_sha256": "20f5998c0ef62f20093e6ecc6dff3cac004f84bff148918e5a533e96c8937f3f",
       "folder_slug": "cp-3c-refinancing-lme-risk",
       "module_id": "CP-3C",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 17845,
-          "sha256": "753fa529d19db2f59237809429f18f1746cdc65ad08ddfadbfedd7e6e84121ea"
+          "bytes": 17793,
+          "sha256": "20f5998c0ef62f20093e6ecc6dff3cac004f84bff148918e5a533e96c8937f3f"
         },
         "references/CP-3C_RUNBOOK.md": {
           "bytes": 13826,
@@ -1697,8 +1697,8 @@
           "sha256": "a0b1abe8f5ce28cf7d962aa26e72ae12326c102fba34f4d66f52b620dd40bf84"
         },
         "scripts/completeness_check.py": {
-          "bytes": 33921,
-          "sha256": "0a667724cb56861a4b2313e4c544ed1547f8209b1ed88837decacac946ca7661"
+          "bytes": 36603,
+          "sha256": "f5fe2b65782cf8d4e482151a1570af11ab4f2025f54f8cb547b43d562b7ffe09"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
@@ -1713,15 +1713,15 @@
           "sha256": "19fbf04ce2c909dacc43037081e5da95c539ef4ac3e7e3839a1d70d5c13cd18b"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 38933,
-          "sha256": "66a6f712616412d2a9a99efd14e26e18143fabe102acd4a3eb5141add8f54853"
+          "bytes": 39964,
+          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
         }
       }
     }
   ],
   "source_hashes": {
-    "deployed_baseline": "0ac9503fb1d97d1eaf3bce3bb212d9883716f7df138552a4fb80107a550c814a",
+    "deployed_baseline": "fd07d96ea7c8fe55dafb2cdaa9920b45a1f45287859b53151c926fee5f0dde7c",
     "deployed_child_schema_registry": "6b1766e5698632e277ede71037bee2fcd3e02b726c43b76fc4fe0f8b47c5ef48",
-    "deployed_manifest": "a33bde4fb9efbbfd651999c45c5cdcc79b763c692f11e2ab72623fb1230fe9de"
+    "deployed_manifest": "0d3206288b0540f18e8b9fdce0669f8aa901e286bfaa1d8e9f059a71794f5223"
   }
 }

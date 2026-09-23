@@ -35,7 +35,7 @@ Use current command qualifiers, current conversation scope, then validated match
 7. Subsequent event: flag date; never blend into period figures.
 8. Non-debt funding float: trend deposits/deferred revenue/supplier finance—not payables; Evidence→Risk Mechanic→Credit Implication.
 9. Show source vs normalized one-offs; label normalization+Analyst Judgement. Never infer covenant capacity; absent inputs=`Not Calculable`.
-10. `committee_status`∈Committee Ready|Draft Only|Requires More Work|Insufficient Information|Restricted|Blocked. `qa_status` Restricted→score≤59/band Low; Blocked→≤39.
+10. `committee_status`∈Committee Ready|Draft Only|Requires More Work|Insufficient Information|Restricted|Blocked. `qa_status` Restricted→score≤59 (band from the score: 40-59 Low, below 40 Insufficient Information); Blocked→≤39.
 
 ## Analytical depth — binding on every run
 
@@ -80,9 +80,9 @@ conclusions, never shorter reasoning or invented filler.
       - none
   - **full_run_disqualifiers**: structured below
     - **critical_cell_substrings_casefold**: structured below
-      - retained cp-model integration sources do not supply; obtain the complete underwriting source pack; quantitative threshold not available in provided materials
+      - retained cp-model integration sources do not supply; obtain the complete underwriting source pack
     - **critical_cell_values_casefold**: structured below
-      - ; [insufficient information]; insufficient information; n/a; tbd; unknown; not calculable from provided materials; not assessable; unavailable
+      - ; [insufficient information]; n/a; tbd; not calculable from provided materials; unavailable
     - **fixture_document_substrings_casefold**: structured below
       - integration fixture; not a current analytical golden; retained cp-model integration source; synthetic test input
     - **fixture_limitation_flags**: structured below

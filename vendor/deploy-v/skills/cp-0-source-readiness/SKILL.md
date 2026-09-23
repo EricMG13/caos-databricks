@@ -30,7 +30,7 @@ Use `../cp-os-credit-os/scripts/prepare_invocation.py` from this skill folder wi
 7. Subsequent event: flag date; never blend into period figures.
 8. Non-debt funding float: trend deposits/deferred revenue/supplier finance—not payables; Evidence→Risk Mechanic→Credit Implication.
 9. Show source vs normalized one-offs; label normalization+Analyst Judgement. Never infer covenant capacity; absent inputs=`Not Calculable`.
-10. `committee_status`∈Committee Ready|Draft Only|Requires More Work|Insufficient Information|Restricted|Blocked. `qa_status` Restricted→score≤59/band Low; Blocked→≤39.
+10. `committee_status`∈Committee Ready|Draft Only|Requires More Work|Insufficient Information|Restricted|Blocked. `qa_status` Restricted→score≤59 (band from the score: 40-59 Low, below 40 Insufficient Information); Blocked→≤39.
 
 ## Analytical depth — binding on every run
 
@@ -71,8 +71,8 @@ conclusions, never shorter reasoning or invented filler.
   - **conditional_stable_tables_by_consumer**: structured below
     - **CP-MODEL**: none
   - **full_run_disqualifiers**: structured below
-    - **critical_cell_substrings_casefold**: retained cp-model integration sources do not supply; obtain the complete underwriting source pack; quantitative threshold not available in provided materials
-    - **critical_cell_values_casefold**: ; [insufficient information]; insufficient information; n/a; tbd; unknown; not calculable from provided materials; not assessable; unavailable
+    - **critical_cell_substrings_casefold**: retained cp-model integration sources do not supply; obtain the complete underwriting source pack
+    - **critical_cell_values_casefold**: ; [insufficient information]; n/a; tbd; not calculable from provided materials; unavailable
     - **fixture_document_substrings_casefold**: integration fixture; not a current analytical golden; retained cp-model integration source; synthetic test input
     - **fixture_limitation_flags**: INTEGRATION_FIXTURE_ONLY; PRESENTATION_FIXTURE_NOT_CURRENT_GOLDEN; SYNTHETIC_FORWARD_ASSUMPTIONS
     - **fixture_validation_warnings**: INTEGRATION_FIXTURE_ONLY; PRESENTATION_FIXTURE; TEST_ONLY_FORECAST_ASSUMPTIONS
@@ -268,9 +268,9 @@ Follow `CP_AB_EXPORT_SPEC.md`. Preserve the canonical YAML plus six H2 sections.
       - none
   - **full_run_disqualifiers**: structured below
     - **critical_cell_substrings_casefold**: structured below
-      - retained cp-model integration sources do not supply; obtain the complete underwriting source pack; quantitative threshold not available in provided materials
+      - retained cp-model integration sources do not supply; obtain the complete underwriting source pack
     - **critical_cell_values_casefold**: structured below
-      - ; [insufficient information]; insufficient information; n/a; tbd; unknown; not calculable from provided materials; not assessable; unavailable
+      - ; [insufficient information]; n/a; tbd; not calculable from provided materials; unavailable
     - **fixture_document_substrings_casefold**: structured below
       - integration fixture; not a current analytical golden; retained cp-model integration source; synthetic test input
     - **fixture_limitation_flags**: structured below
@@ -365,7 +365,7 @@ Ask for the strongest available files first: controlling primary documents; then
 #### T8 recommended-run command contract
 T8 contains only canonical live, navigable host module IDs: CP-1, CP-1A, CP-1B, CP-1C, CP-1D, CP-2, CP-2A, CP-2D, CP-2E, CP-2G, CP-2H, CP-3, CP-3C, CP-3D, CP-4, CP-4C, CP-5, CP-6, CP-8, CP-L10, CP-DR. Never emit CP-X, CP-PARSE, a retired alias, CP-MODEL or CP-MEMO as a recommended row.
 
-Every row contains `sequence`, `module_id`, `candidate_command`, `exact_command`, `source_files_to_attach`, `upstream_handoff`, `readiness`, and `why_now_or_blocker`. `candidate_command` is the canonical `Run <module_id>` preview with only supported qualifiers. For `READY` and `READY_WITH_LIMITATIONS`, `exact_command` equals `candidate_command`. For `CONDITIONAL` and `BLOCKED`, `exact_command` is exactly `DO NOT RUN`; the candidate remains a non-executable preview and `why_now_or_blocker` states the missing evidence briefly. `CONDITIONAL` names a source, or the prepared representation of one, that the effective-source set does not carry; it is discharged only when that named source is supplied and CP-0 is re-run. An upstream analytical handoff that has not yet been produced is never a readiness ground and never a `CONDITIONAL` condition: navigation and the catalog's dependency edges sequence modules, `readiness` does not.
+Every row contains `sequence`, `module_id`, `candidate_command`, `exact_command`, `source_files_to_attach`, `upstream_handoff`, `readiness`, and `why_now_or_blocker`. `candidate_command` is the canonical `Run <module_id>` preview with only supported qualifiers. For `READY` and `READY_WITH_LIMITATIONS`, `exact_command` equals `candidate_command`. For `CONDITIONAL` and `BLOCKED`, `exact_command` is exactly `DO NOT RUN`; the candidate remains a non-executable preview and `why_now_or_blocker` states the missing evidence briefly. `CONDITIONAL` names a source, or the prepared representation of one, that the effective-source set does not carry; it is discharged only when that named source is supplied and CP-0 is re-run. Mark a consumer `CONDITIONAL` only when its own workflow cannot proceed without that source; where the consumer can complete with the gap recorded (its method yields a gaps or limitations outcome, such as `COMPLETE_WITH_GAPS`), the verdict is `READY_WITH_LIMITATIONS` and the missing source is carried into the row. An upstream analytical handoff that has not yet been produced is never a readiness ground and never a `CONDITIONAL` condition: navigation and the catalog's dependency edges sequence modules, `readiness` does not.
 
 Select the pathway that covers the user's objective, and include every required prerequisite in T8. Use the catalog's dependency edges to order selected work; optional inputs precede consumers when selected. Source readiness does not assert that upstream analytical handoffs already exist: navigation checks those separately. In T4 record every relevant capability with a recommended, blocked, or explicitly inapplicable disposition and a source-located reason; never silently omit an applicable capability. CP-2D handles near-term liquidity, CP-3C handles performing-issuer refinancing as well as stress, and CP-3D handles market dislocations without a ratings-model gate.
 

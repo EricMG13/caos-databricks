@@ -294,6 +294,7 @@ def find_registers(handoff_text, register_ids=None):
     actually written ("### T4C.4 — Covenant headroom").
     """
     id_re = REGISTER_ID_RE
+    titles, title_re = {}, None
     if register_ids is not None:
         unique_ids = sorted(set(register_ids), key=lambda value: (-len(value), value))
         if not unique_ids:
@@ -302,9 +303,25 @@ def find_registers(handoff_text, register_ids=None):
             re.escape(reg_id)
             for reg_id in unique_ids
         )
+        # A sentence's full stop after an ID ("### T1. Input gate") ends it;
+        # only a dot that continues the ID ("T1.2") does not (fork r1).
         id_re = re.compile(
-            rf"(?<![A-Za-z0-9_.])({alternatives})(?![A-Za-z0-9_.])"
+            rf"(?<![A-Za-z0-9_.])({alternatives})(?![A-Za-z0-9_]|\.[A-Za-z0-9])"
         )
+        titles = {
+            reg_id.replace("_", " ").casefold(): reg_id
+            for reg_id in unique_ids
+            if "_" in reg_id and "." not in reg_id
+        }
+        if titles:
+            # A snake_case register written under its title on a heading line
+            # ("#### Company description" for company_description), fork r1.
+            title_re = re.compile(
+                r"(?<![A-Za-z0-9])("
+                + "|".join(re.escape(title) for title in sorted(titles, key=len, reverse=True))
+                + r")(?![A-Za-z0-9])",
+                re.IGNORECASE,
+            )
     lines = unfenced_markdown(handoff_text).splitlines()
     out, recent = {}, []
     i = 0
@@ -329,6 +346,10 @@ def find_registers(handoff_text, register_ids=None):
                 if match:
                     out.setdefault(match.group(1), (header, rows))
                     break
+                titled = title_re.search(label) if title_re and label.startswith("#") else None
+                if titled:
+                    out.setdefault(titles[titled.group(1).casefold()], (header, rows))
+                    break
             i = j
             recent = []
             continue
@@ -337,6 +358,63 @@ def find_registers(handoff_text, register_ids=None):
             recent = recent[-4:]
         i += 1
     return out
+
+
+# Contract column names as the host's models write them (fork r1): the same
+# label up to case, emphasis, dash variants and spacing around "/", and a
+# template column ("Period 1…N", "issuer-specific …") standing for the
+# header cells no other contract column claims.
+TEMPLATE_COLUMN_RE = re.compile(r"(?:\s1\s*(?:…|\.\.\.)\s*N\b|^issuer-specific\s)", re.IGNORECASE)
+
+
+def _column_key(label):
+    label = label.replace("`", "").replace("*", "")
+    label = re.sub("[\u2012-\u2015\u2212]", "-", label)
+    label = re.sub(r"\s*/\s*", "/", label)
+    return re.sub(r"\s+", " ", label).strip().casefold()
+
+
+def _resolve_columns(columns, header):
+    """{contract column: [header cells]}; an empty list is a missing column."""
+    keys = {}
+    for cell in header:
+        keys.setdefault(_column_key(cell), cell)
+    resolved, claimed = {}, set()
+    for column in columns:
+        if TEMPLATE_COLUMN_RE.search(column):
+            continue
+        cell = column if column in header else keys.get(_column_key(column))
+        resolved[column] = [cell] if cell is not None else []
+        claimed.update(resolved[column])
+    extra = [cell for cell in header if cell not in claimed]
+    for column in columns:
+        if TEMPLATE_COLUMN_RE.search(column):
+            resolved[column] = extra
+    return resolved
+
+
+def _cell_violations(contract, reg_id, n, col, value):
+    cell = value.casefold().strip()
+    if cell in contract["blocklist"]:
+        return [
+            f"{reg_id} row {n}: critical column {col!r} holds a "
+            f"disqualifying placeholder {value!r}"
+        ]
+    for sub in contract["substrings"]:
+        if sub and sub in cell:
+            return [
+                f"{reg_id} row {n}: critical column {col!r} contains "
+                f"disqualifying text {sub!r}"
+            ]
+    return []
+
+
+def _cell(row, column):
+    """A row's cell for a contract column name, matched as `_column_key` does."""
+    if column in row:
+        return row[column]
+    key = _column_key(column)
+    return next((value for name, value in row.items() if _column_key(name) == key), "")
 
 
 def check(skill_text, handoff_text, module_id=None):
@@ -349,8 +427,9 @@ def check(skill_text, handoff_text, module_id=None):
             violations.append(f"{reg_id}: required register missing from the handoff")
             continue
         header, rows = present[reg_id]
+        resolved = _resolve_columns(spec["columns"], header)
         if spec["columns"]:
-            missing = [c for c in spec["columns"] if c not in header]
+            missing = [c for c in spec["columns"] if not resolved[c]]
             if missing:
                 violations.append(f"{reg_id}: missing column(s) {missing}")
         if len(rows) < spec["minimum_body_rows"]:
@@ -361,22 +440,10 @@ def check(skill_text, handoff_text, module_id=None):
         exempt = set(spec["disqualifier_exempt_columns"])
         for n, row in enumerate(rows, 1):
             for col in spec["critical_columns"]:
-                if col in exempt or col not in row:
+                if col in exempt:
                     continue
-                cell = row[col].casefold().strip()
-                if cell in contract["blocklist"]:
-                    violations.append(
-                        f"{reg_id} row {n}: critical column {col!r} holds a "
-                        f"disqualifying placeholder {row[col]!r}"
-                    )
-                    continue
-                for sub in contract["substrings"]:
-                    if sub and sub in cell:
-                        violations.append(
-                            f"{reg_id} row {n}: critical column {col!r} contains "
-                            f"disqualifying text {sub!r}"
-                        )
-                        break
+                for actual in resolved.get(col) or ([col] if col in row else []):
+                    violations.extend(_cell_violations(contract, reg_id, n, actual, row[actual]))
 
     violations.extend(_semantic_violations(contract["semantic_rules"], present, contract["blocklist"]))
     violations.extend(_fixture_violations(contract, handoff_text))
@@ -418,12 +485,12 @@ def _semantic_violations(rules, present, blocklist=frozenset()):
         fold = (lambda v: v.strip()) if rule.get("case_sensitive", True) else (lambda v: v.strip().casefold())
         col = rule.get("column")
         values = [fold(v) for v in rule.get("values", [])]
-        cells = [fold(row.get(col, "")) for row in rows] if col else []
+        cells = [fold(_cell(row, col)) for row in rows] if col else []
         if kind == "unique_columns":
             for column in rule.get("columns", []):
                 seen = set()
                 for row in rows:
-                    cell = fold(row.get(column, ""))
+                    cell = fold(_cell(row, column))
                     if cell in seen:
                         out.append(f"{reg_id}: {rule_id} -- column {column!r} repeats {cell!r}")
                         break
@@ -444,7 +511,7 @@ def _semantic_violations(rules, present, blocklist=frozenset()):
                            f"{rule.get('values', [])!r} once each")
         elif kind == "at_least_one_row_populates":
             columns = rule.get("columns", [])
-            if not any(all(row.get(c, "").strip() and row.get(c, "").strip().casefold() not in blocklist
+            if not any(all(_cell(row, c).strip() and _cell(row, c).strip().casefold() not in blocklist
                            for c in columns) for row in rows):
                 out.append(f"{reg_id}: {rule_id} -- no row populates every one of {columns!r}")
         else:

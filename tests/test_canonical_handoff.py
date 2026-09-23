@@ -120,8 +120,10 @@ def test_restricted_is_accepted_with_limitations() -> None:
     assert projections.limitation_flags == ("Interim period only",)
 
 
-# The T5 register as live CP-0 runs wrote it (`docs/DECISIONS.md` §61): a
-# header named Severity, and CRITICAL | MATERIAL | MINOR in its cells.
+# A QA finding register: a header named Severity, and CRITICAL | MATERIAL |
+# MINOR in its cells (`docs/DECISIONS.md` §61). Since the deployment fork
+# (D31) only a table in QA Validation is read as findings; the same table in
+# Gaps & Conflicts is an analytical register (`tests/test_vendor_fork.py`).
 def _with_findings(
     markdown: bytes, *severities: str, header: str = "Severity"
 ) -> bytes:
@@ -134,8 +136,8 @@ def _with_findings(
         )
     )
     return markdown.replace(
-        b"## Gaps & Conflicts\n\n",
-        b"## Gaps & Conflicts\n\n" + table.encode() + b"\n",
+        b"## QA Validation\n\n",
+        b"## QA Validation\n\n" + table.encode() + b"\n",
         1,
     )
 
@@ -204,8 +206,8 @@ def test_a_minor_finding_or_no_finding_leaves_the_declared_status_alone() -> Non
 
 def test_a_finding_inside_a_code_fence_is_not_a_finding() -> None:
     fenced = CP0_MD.replace(
-        b"## Gaps & Conflicts\n\n",
-        b"## Gaps & Conflicts\n\n```\n| ID | Severity |\n|---|---|\n"
+        b"## QA Validation\n\n",
+        b"## QA Validation\n\n```\n| ID | Severity |\n|---|---|\n"
         b"| 1 | MATERIAL |\n```\n\n",
         1,
     )

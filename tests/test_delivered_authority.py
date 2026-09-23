@@ -41,7 +41,8 @@ LITE_BASE = "../../CP_DEPLOY_V_LITE_MODULE_PAYLOAD_BASE_v1.schema.txt"
 # CP-0 re-measured at 91c219fb (§98), whose REF_CP-0_STEPS.md grew by 740 bytes.
 # The ceiling below keeps authority a minor share of one request, leaving room
 # for evidence.
-MEASURED = {"CP-0": 147_345, "CP-L10": 199_898, "CP-5": 165_973}
+# Re-measured on the deployment fork's build 99ed0dc3 (D31).
+MEASURED = {"CP-0": 148_428, "CP-L10": 199_833, "CP-5": 166_411}
 AUTHORITY_SHARE_OF_REQUEST = 0.25
 FOLDERS = {
     "CP-0": "cp-0-source-readiness",

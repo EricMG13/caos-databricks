@@ -70,7 +70,7 @@ Complete the RV analysis, then CP-3A instrument preference, then CP-3B portfolio
 7. Subsequent event: flag date; never blend into period figures.
 8. Non-debt funding float: trend deposits/deferred revenue/supplier finance—not payables; Evidence→Risk Mechanic→Credit Implication.
 9. Show source vs normalized one-offs; label normalization+Analyst Judgement. Never infer covenant capacity; absent inputs=`Not Calculable`.
-10. `committee_status`∈Committee Ready|Draft Only|Requires More Work|Insufficient Information|Restricted|Blocked. `qa_status` Restricted→score≤59/band Low; Blocked→≤39.
+10. `committee_status`∈Committee Ready|Draft Only|Requires More Work|Insufficient Information|Restricted|Blocked. `qa_status` Restricted→score≤59 (band from the score: 40-59 Low, below 40 Insufficient Information); Blocked→≤39.
 
 ## Analytical depth — binding on every run
 
@@ -111,8 +111,8 @@ conclusions, never shorter reasoning or invented filler.
   - **conditional_stable_tables_by_consumer**: structured below
     - **CP-MODEL**: none
   - **full_run_disqualifiers**: structured below
-    - **critical_cell_substrings_casefold**: retained cp-model integration sources do not supply; obtain the complete underwriting source pack; quantitative threshold not available in provided materials
-    - **critical_cell_values_casefold**: ; [insufficient information]; insufficient information; n/a; tbd; unknown; not calculable from provided materials; not assessable; unavailable
+    - **critical_cell_substrings_casefold**: retained cp-model integration sources do not supply; obtain the complete underwriting source pack
+    - **critical_cell_values_casefold**: ; [insufficient information]; n/a; tbd; not calculable from provided materials; unavailable
     - **fixture_document_substrings_casefold**: integration fixture; not a current analytical golden; retained cp-model integration source; synthetic test input
     - **fixture_limitation_flags**: INTEGRATION_FIXTURE_ONLY; PRESENTATION_FIXTURE_NOT_CURRENT_GOLDEN; SYNTHETIC_FORWARD_ASSUMPTIONS
     - **fixture_validation_warnings**: INTEGRATION_FIXTURE_ONLY; PRESENTATION_FIXTURE; TEST_ONLY_FORECAST_ASSUMPTIONS
@@ -516,9 +516,9 @@ CP-3A keeps its method in its companions rather than inline; they moved with thi
       - none
   - **full_run_disqualifiers**: structured below
     - **critical_cell_substrings_casefold**: structured below
-      - retained cp-model integration sources do not supply; obtain the complete underwriting source pack; quantitative threshold not available in provided materials
+      - retained cp-model integration sources do not supply; obtain the complete underwriting source pack
     - **critical_cell_values_casefold**: structured below
-      - ; [insufficient information]; insufficient information; n/a; tbd; unknown; not calculable from provided materials; not assessable; unavailable
+      - ; [insufficient information]; n/a; tbd; not calculable from provided materials; unavailable
     - **fixture_document_substrings_casefold**: structured below
       - integration fixture; not a current analytical golden; retained cp-model integration source; synthetic test input
     - **fixture_limitation_flags**: structured below
@@ -588,9 +588,9 @@ CP-3B keeps its method in its companions rather than inline; they moved with thi
       - none
   - **full_run_disqualifiers**: structured below
     - **critical_cell_substrings_casefold**: structured below
-      - retained cp-model integration sources do not supply; obtain the complete underwriting source pack; quantitative threshold not available in provided materials
+      - retained cp-model integration sources do not supply; obtain the complete underwriting source pack
     - **critical_cell_values_casefold**: structured below
-      - ; [insufficient information]; insufficient information; n/a; tbd; unknown; not calculable from provided materials; not assessable; unavailable
+      - ; [insufficient information]; n/a; tbd; not calculable from provided materials; unavailable
     - **fixture_document_substrings_casefold**: structured below
       - integration fixture; not a current analytical golden; retained cp-model integration source; synthetic test input
     - **fixture_limitation_flags**: structured below

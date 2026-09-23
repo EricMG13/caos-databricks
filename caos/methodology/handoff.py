@@ -867,8 +867,39 @@ def retry_feedback(
     _markdown, text, citations = parsed
     quote = _quote_line(text, citations)
     lines = [quote] if quote else []
+    absent = _absent_ids_line(contract, identity.module_id, text, skill)
+    lines += [absent] if absent else []
     lines += _vendor_lines(contract, catalog, identity, text, skill)
     return tuple(lines[:MAX_FEEDBACK_MESSAGES])
+
+
+def _absent_ids_line(
+    contract: VendorContract, module_id: str, text: str, skill: bytes
+) -> str | None:
+    """Which of the module's register IDs the answer never writes (N52): a
+    fact about the answer, not a rule. The checker finds a register by its ID
+    and says only that it is missing; CP-1A live wrote every register under a
+    human title and its second attempt, told eleven were missing, could not see
+    why. At most `MAX_FEEDBACK_CITATIONS` IDs are named, the rest counted."""
+    if not skill or module_id == MODEL_MODULE:
+        return None
+    with suppress(Exception):  # a contract it cannot read is nothing to report
+        registers = contract.completeness_check.load_contract(
+            skill.decode("utf-8"), module_id
+        )["registers"]
+        absent = sorted(register for register in registers if register not in text)
+        if absent:
+            shown = absent[:MAX_FEEDBACK_CITATIONS]
+            rest = len(absent) - len(shown)
+            named = ", ".join(f"`{register}`" for register in shown)
+            named += f" and {rest} more" if rest else ""
+            subject = "register ID" if len(absent) == 1 else "register IDs"
+            verb = "appears" if len(absent) == 1 else "appear"
+            return (
+                f"host register check: the {subject} {named} {verb} nowhere"
+                " in the answer"
+            )
+    return None
 
 
 def _transport_or_reason(

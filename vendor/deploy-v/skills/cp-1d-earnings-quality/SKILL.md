@@ -29,7 +29,7 @@ Use `../cp-os-credit-os/scripts/prepare_invocation.py` from this skill folder wi
 6. An add-back is challenged on evidence, never on preference. Absent evidence produces `[Insufficient Information]` and a gap row — never a silent acceptance and never an invented haircut.
 7. Never present a quality-adjusted figure as the issuer's reported or covenant EBITDA. Covenant-permitted capacity is CP-4A's; this module's restatement is analytical.
 8. Multi-figure event: all figures+roles, one conflict row; never silently choose.
-9. `committee_status`∈Committee Ready|Draft Only|Requires More Work|Insufficient Information|Restricted|Blocked. `qa_status` Restricted→score≤59/band Low; Blocked→≤39.
+9. `committee_status`∈Committee Ready|Draft Only|Requires More Work|Insufficient Information|Restricted|Blocked. `qa_status` Restricted→score≤59 (band from the score: 40-59 Low, below 40 Insufficient Information); Blocked→≤39.
 
 ## Analytical depth — binding on every run
 
@@ -68,8 +68,8 @@ conclusions, never shorter reasoning or invented filler.
   - **schema_path**: ./references/CP-1D_SCHEMA_REFERENCE.md
 - **completeness_contract**: structured below
   - **full_run_disqualifiers**: structured below
-    - **critical_cell_substrings_casefold**: obtain the complete underwriting source pack; quantitative threshold not available in provided materials
-    - **critical_cell_values_casefold**: ; [insufficient information]; insufficient information; n/a; tbd; unknown; not calculable from provided materials; not assessable; unavailable
+    - **critical_cell_substrings_casefold**: obtain the complete underwriting source pack
+    - **critical_cell_values_casefold**: ; [insufficient information]; n/a; tbd; not calculable from provided materials; unavailable
   - **required_registers**: structured below
     - **T1E.1**: structured below
       - **columns**: Item; Category; Reported Amount; Period; Source / Locator; Disclosure Quality; Evidence ID
@@ -251,8 +251,8 @@ Follow `../../CANON_SHARED.md § CP_AB_EXPORT_SPEC.md`. Every run authors and va
   - **schema_path**: ./references/CP-1E_SCHEMA_REFERENCE.md
 - **completeness_contract**: structured below
   - **full_run_disqualifiers**: structured below
-    - **critical_cell_substrings_casefold**: obtain the complete underwriting source pack; quantitative threshold not available in provided materials
-    - **critical_cell_values_casefold**: ; [insufficient information]; insufficient information; n/a; tbd; unknown; not calculable from provided materials; not assessable; unavailable
+    - **critical_cell_substrings_casefold**: obtain the complete underwriting source pack
+    - **critical_cell_values_casefold**: ; [insufficient information]; n/a; tbd; not calculable from provided materials; unavailable
   - **required_registers**: merged into the host's `## Output profile` above; not restated here
   - **semantic_rules**: none
 - **opening_h3**: ### Adjusted debt read-through

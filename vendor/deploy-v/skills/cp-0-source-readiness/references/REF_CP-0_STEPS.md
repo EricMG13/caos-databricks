@@ -212,7 +212,7 @@ Run representation QA after coverage QA: one active content representation per r
 ## REF_CP-0_I_DownstreamReadiness.md
 <!-- REF_CP-0_I_DownstreamReadiness (Tier 2) | 2026-08-02 -->
 <step_reference module="CP-0" step="I" name="DownstreamReadiness">
-Per-module source-readiness verdict: `READY` | `READY_WITH_LIMITATIONS` | `CONDITIONAL` | `BLOCKED`. Justify each verdict from the frozen Representation Catalog, content map, gaps, conflicts and risk log. `CONDITIONAL` names a source, or the prepared representation of one, that the effective-source set does not carry; an upstream analytical handoff that has not yet been produced is never a readiness ground, because navigation sequences modules and readiness does not.
+Per-module source-readiness verdict: `READY` | `READY_WITH_LIMITATIONS` | `CONDITIONAL` | `BLOCKED`. Justify each verdict from the frozen Representation Catalog, content map, gaps, conflicts and risk log. `CONDITIONAL` names a source, or the prepared representation of one, that the effective-source set does not carry; an upstream analytical handoff that has not yet been produced is never a readiness ground, because navigation sequences modules and readiness does not. Mark a consumer `CONDITIONAL` only when its own workflow cannot proceed without that source; where the consumer can complete with the gap recorded (its method yields a gaps or limitations outcome, such as `COMPLETE_WITH_GAPS`), the verdict is `READY_WITH_LIMITATIONS` and the missing source is carried into the row.
 
 After the readiness table, produce the **Recommended Run Command Sheet**. One
 row per recommended or blocked next live host module:
@@ -254,7 +254,8 @@ Follow `../../../CANON_SHARED.md § CP_AB_EXPORT_SPEC.md`. Author and validate *
 
 Handoff Gate: validated canonical Markdown completes the analytical run and is
 the only analytical file. Its `## Analysis` must include the source hierarchy
-and Recommended Run Command Sheet from Step I. **Markdown only** is the analytical handoff contract. Do not produce DOCX, PDF, HTML,
+and name the Recommended Run Command Sheet from Step I, which appears exactly once, as the T8
+table in the analytical appendix; never repeat the T8 table in the Analysis. **Markdown only** is the analytical handoff contract. Do not produce DOCX, PDF, HTML,
 slide, JSON, dashboard or presentation-view exports. No lettered appendices,
 embedded machine payloads, auxiliary manifest, renderer/parser agent, or
 database.

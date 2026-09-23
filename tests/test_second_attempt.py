@@ -53,7 +53,8 @@ def _module(prompt: str) -> str:
 
 
 def _with_material(body: str) -> str:
-    """The same answer with a MATERIAL finding row, `qa_status` left Passed."""
+    """The same answer with a MATERIAL QA finding row, `qa_status` left Passed
+    (in QA Validation, the one section read as findings since D31)."""
     wire = json.loads(body)
     table = (
         "| ID | Type | Severity | Affected modules | Remediation |\n"
@@ -61,9 +62,9 @@ def _with_material(body: str) -> str:
         "| G-1 | SOURCE_GAP | MATERIAL | CP-5 | Obtain it |\n\n"
     )
     markdown = wire["canonical_markdown"]
-    assert "## Gaps & Conflicts\n\n" in markdown
+    assert "## QA Validation\n\n" in markdown
     wire["canonical_markdown"] = markdown.replace(
-        "## Gaps & Conflicts\n\n", "## Gaps & Conflicts\n\n" + table, 1
+        "## QA Validation\n\n", "## QA Validation\n\n" + table, 1
     )
     return json.dumps(wire)
 
@@ -422,6 +423,43 @@ def test_retry_feedback_carries_the_completeness_and_t8_checks_too(
         line.startswith("completeness_check: ") and "PRESENTATION_FIXTURE" in line
         for line in lines
     ), lines
+
+
+def test_retry_feedback_says_which_register_ids_the_answer_never_writes(
+    harness: _Harness,
+) -> None:
+    """The checker finds a register only by its ID, and its message says only
+    that the register is missing. CP-1A live wrote every register under a
+    human title (`#### Company description`) and its second attempt, told
+    eleven registers were missing, could not see why. The host adds the fact:
+    those IDs appear nowhere in the answer."""
+    answers = CanonicalCompletions(harness.source_id)
+    assert _run(harness, answers) is None
+    wire = json.loads(answers.bodies[0])
+    assert "#### P3\n" in wire["canonical_markdown"]
+    wire["canonical_markdown"] = wire["canonical_markdown"].replace(
+        "#### P3\n", "#### Input sources\n", 1
+    )
+    lines = retry_feedback(
+        cached_contract(harness.bundle),
+        catalog(harness.bundle),
+        _identity_cp0(),
+        json.dumps(wire),
+        skill=_skill(harness),
+    )
+    assert (
+        "host register check: the register ID `P3` appears nowhere in the answer"
+        in lines
+    ), lines
+    # An answer that writes every ID gets no such line.
+    clean = retry_feedback(
+        cached_contract(harness.bundle),
+        catalog(harness.bundle),
+        _identity_cp0(),
+        answers.bodies[0],
+        skill=_skill(harness),
+    )
+    assert not any(line.startswith("host register check") for line in clean)
 
 
 def _identity_cp0() -> HostIdentity:
