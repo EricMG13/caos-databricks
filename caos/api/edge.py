@@ -434,14 +434,23 @@ def _names_host(origin: str, headers: list[tuple[bytes, bytes]]) -> bool:
     return bool(named) and named.lower() == hosts[0].decode("latin-1").lower()
 
 
+_CACHEABLE = frozenset({200, 304})
+
+
+def _cache_policy(path: str, status: int) -> str:
+    """The one cache-control this status earns at this path (CF-087): the
+    year-long immutable asset policy only on a response that actually served
+    the asset, never on a refusal or a miss that happened to share its path
+    -- a browser that cached either of those forever would never ask again."""
+    if is_api_path(path):
+        return "no-store"
+    if path.startswith("/assets/"):
+        return _ASSET_CACHE if status in _CACHEABLE else "no-store"
+    return "no-cache"
+
+
 def _secured(send: Send, path: str) -> Send:
     """Every response start gains the policy and loses any cookie or CORS."""
-    if is_api_path(path):
-        cache = "no-store"
-    elif path.startswith("/assets/"):
-        cache = _ASSET_CACHE
-    else:
-        cache = "no-cache"
 
     async def wrapped(message: Message) -> None:
         if message["type"] == "http.response.start":
@@ -453,6 +462,7 @@ def _secured(send: Send, path: str) -> Send:
                 and not key.lower().startswith(b"access-control-")
             ]
             kept.extend(SECURITY_HEADER_PAIRS)
+            cache = _cache_policy(path, message["status"])
             kept.append((b"cache-control", cache.encode()))
             message = {**message, "headers": kept}
         await send(message)

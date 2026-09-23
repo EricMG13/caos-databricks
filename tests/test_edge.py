@@ -233,6 +233,18 @@ def test_every_response_carries_the_security_headers_and_the_policy() -> None:
     assert asset.headers["cache-control"] == "public, max-age=31536000, immutable"
 
 
+def test_the_immutable_asset_cache_is_never_set_on_a_refusal() -> None:
+    """CF-087. `_secured` used to pick the cache policy from the path alone,
+    before the response existed: a 404 or a refusal under `/assets/` carried
+    the same year-long `immutable` policy as a real file, so a browser that
+    ever saw one cached it forever. Only 200 and 304 earn it."""
+    client = TestClient(app)
+    missing = client.get("/assets/does-not-exist.js")
+    assert missing.status_code == 404
+    assert missing.headers["cache-control"] != "public, max-age=31536000, immutable"
+    assert missing.headers["cache-control"] == "no-store"
+
+
 def test_openapi_and_docs_are_not_served() -> None:
     client = TestClient(app)
     for path in ("/docs", "/redoc", "/openapi.json", "/docs/oauth2-redirect"):
