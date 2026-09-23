@@ -33,6 +33,9 @@ from caos.methodology.handoff import (
     HostIdentity,
     anchoring_line,
     answer_citations,
+    capped,
+    feedback_lines,
+    readiness_set_line,
     retry_feedback,
 )
 from caos.methodology.runner import ModuleProvider
@@ -460,6 +463,95 @@ def test_retry_feedback_says_which_register_ids_the_answer_never_writes(
         skill=_skill(harness),
     )
     assert not any(line.startswith("host register check") for line in clean)
+
+
+def test_capped_says_how_many_check_messages_were_dropped() -> None:
+    """A long refusal no longer loses its tail silently (G2-16, G3-10)."""
+    lines = [f"line {n}" for n in range(MAX_FEEDBACK_MESSAGES + 4)]
+    kept = capped(lines)
+    assert len(kept) == MAX_FEEDBACK_MESSAGES
+    assert kept[-1] == "host feedback: 5 more check messages not shown"
+    assert capped(lines[:3]) == tuple(lines[:3])
+
+
+def test_retry_feedback_is_feedback_lines_capped(harness: _Harness) -> None:
+    """The prompt builder adds host lines before the cap, so it takes the
+    uncapped lines; `retry_feedback` is the same lines, capped."""
+    answers = CanonicalCompletions(harness.source_id)
+    assert _run(harness, answers) is None
+    wire = json.loads(answers.bodies[0])
+    wire["canonical_markdown"] = wire["canonical_markdown"].replace(
+        "#### P3\n", "#### Input sources\n", 1
+    )
+    args = (
+        cached_contract(harness.bundle),
+        catalog(harness.bundle),
+        _identity_cp0(),
+        json.dumps(wire),
+    )
+    lines = feedback_lines(*args, skill=_skill(harness))
+    assert lines
+    assert retry_feedback(*args, skill=_skill(harness)) == capped(lines)
+
+
+def test_a_table_that_does_not_parse_is_named_before_what_it_voids() -> None:
+    """One malformed CP-MODEL interface table makes every one of them
+    "missing"; the cause leads, the seven consequences trail (G2-16)."""
+    from caos.methodology.handoff import _consequence
+
+    messages = [
+        "cp1.a: CP-MODEL interface table missing -- emitted on every run",
+        "T4.4: missing column(s) ['Line Item']",
+        "cp1.b: table row width differs from its header",
+    ]
+    ordered = sorted(messages, key=_consequence)
+    assert ordered[0].endswith("differs from its header")
+    assert "interface table missing" in ordered[-1]
+
+
+def test_the_readiness_set_line_names_what_t8_lacks_and_adds(
+    harness: _Harness,
+) -> None:
+    """CP-0's T8 must name exactly the route's modules; a wrong set refused
+    `HANDOFF_INCOMPLETE` and told the second attempt nothing (G1-6)."""
+    answers = CanonicalCompletions(harness.source_id)
+    assert _run(harness, answers) is None
+    contract, pathways = cached_contract(harness.bundle), catalog(harness.bundle)
+    body = answers.bodies[0]
+    route = frozenset({"CP-L10", "CP-5"})
+    assert readiness_set_line(contract, pathways, body, route) is None
+    lacking = readiness_set_line(contract, pathways, body, route | {"CP-1C"})
+    assert lacking is not None and "it lacks CP-1C" in lacking
+    extra = readiness_set_line(contract, pathways, body, frozenset({"CP-L10"}))
+    assert extra is not None and "it names CP-5, not on this route" in extra
+    assert readiness_set_line(contract, pathways, body, frozenset()) is None
+
+
+def test_cp_dr_is_told_the_dossier_validators_own_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CP-DR's dossier refusal reached neither the model nor the operator
+    (G1-4); now it rides the second attempt like the validator's."""
+    from types import SimpleNamespace
+
+    from caos.methodology import handoff
+
+    said = "TDR.1 must hold the brief's questions exactly"
+
+    def refuse(_dossier: object, _brief: object) -> None:
+        raise ValueError(said)
+
+    from typing import cast
+
+    from caos.methodology.vendor import VendorContract
+
+    stub = cast(
+        VendorContract,
+        SimpleNamespace(research=SimpleNamespace(validate_dossier=refuse)),
+    )
+    monkeypatch.setattr(handoff, "research_brief_of", lambda _identity: {})
+    found = handoff._research_messages(stub, _identity_cp0(), {}, "text")
+    assert [(label, str(message)) for label, message in found] == [("research", said)]
 
 
 def _identity_cp0() -> HostIdentity:
