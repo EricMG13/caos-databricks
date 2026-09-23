@@ -10,6 +10,7 @@ command an administrator runs to create it. Nothing is created here.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from collections.abc import Callable
 from typing import TYPE_CHECKING
@@ -35,7 +36,17 @@ def main(argv: list[str] | None = None) -> int:
 
     from databricks.sdk import WorkspaceClient
 
-    client = WorkspaceClient()
+    try:
+        client = WorkspaceClient()
+    except ValueError:
+        # No credentials resolve. The SDK's message names the profile and the
+        # variables it read; the profile name is all this prints.
+        profile = os.environ.get("DATABRICKS_CONFIG_PROFILE") or "DEFAULT"
+        print(
+            f"MISSING workspace credentials for profile {profile}: run "
+            f"'databricks auth login --host <workspace-url> --profile {profile}'"
+        )
+        return 1
     checks: list[tuple[str, Callable[[], object], str]] = [
         (
             f"serving endpoint {args.endpoint}",

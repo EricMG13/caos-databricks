@@ -89,6 +89,19 @@ def test_preflight_names_each_resource_and_the_fix_for_a_missing_one(
     assert stub.host not in out
 
 
+def test_preflight_names_a_profile_nobody_logged_in_as(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    for name in ("DATABRICKS_HOST", "DATABRICKS_TOKEN"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("DATABRICKS_CONFIG_PROFILE", "no-such-profile")
+    flags = ["--endpoint", ENDPOINT, "--catalog", "c", "--schema", "s"]
+    assert preflight.main([*flags, "--lakebase-instance", "i"]) == 1
+    out = capsys.readouterr().out
+    assert out.startswith("MISSING workspace credentials for profile no-such-profile")
+    assert "databricks auth login" in out and "no-such-profile" in out
+
+
 def test_the_forwarded_token_resolves_through_scim_over_http(
     stub: WorkspaceStub, monkeypatch: pytest.MonkeyPatch
 ) -> None:
