@@ -26,7 +26,9 @@ from caos.graph.runtime import Execution, run_route
 from caos.methodology.canonical import second_attempt_due
 from caos.methodology.handoff import (
     MAX_FEEDBACK_CHARS,
+    MAX_FEEDBACK_CITATIONS,
     MAX_FEEDBACK_MESSAGES,
+    HostIdentity,
     retry_feedback,
 )
 from caos.methodology.runner import ModuleProvider
@@ -248,8 +250,9 @@ def test_retry_feedback_reports_the_vendors_message_and_the_quote_count(
         {"source_id": str(harness.source_id), "page": 1, "matched_text": "never said"}
     )
     lines = _feedback(harness, json.dumps(wire))
-    assert lines[0].startswith("host citation check: 1 of 2 citations")
-    assert QUOTE not in lines[0]
+    # N51: which ones, by their place in the list, never by their text.
+    assert lines[0].startswith("host citation check: citation 2 of 2 quotes text")
+    assert QUOTE not in lines[0] and "never said" not in lines[0]
     assert VENDOR_LINE in [line.split(";")[0] for line in lines[1:]]
     assert all(
         len(line) <= len("validate_handoff: ") + MAX_FEEDBACK_CHARS for line in lines
@@ -259,8 +262,78 @@ def test_retry_feedback_reports_the_vendors_message_and_the_quote_count(
     assert _feedback(harness, answers.bodies[0]) == ()
 
 
-def test_retry_feedback_says_nothing_about_a_body_that_is_not_a_transport(
+def test_retry_feedback_says_why_a_body_is_not_the_transport(
     harness: _Harness,
 ) -> None:
-    assert _feedback(harness, "not json") == ()
-    assert _feedback(harness, json.dumps({"canonical_markdown": "x"})) == ()
+    """N50: an answer that is not the JSON object gets the host's own reason,
+    in the parser's fixed words, never the answer's text."""
+    [line] = _feedback(harness, "not json")
+    assert line.startswith("host transport check: the answer is not one JSON object")
+    [raw] = _feedback(harness, '{"canonical_markdown": "---\nmodule_id: X\n"}')
+    assert "control character" in raw and "\\n" in raw and "module_id" not in raw
+    [shape] = _feedback(harness, json.dumps({"canonical_markdown": "x"}))
+    assert shape.startswith("host transport check: the answer is not the JSON object")
+
+
+def test_retry_feedback_names_at_most_the_first_twenty_failed_citations(
+    harness: _Harness,
+) -> None:
+    answers = CanonicalCompletions(harness.source_id)
+    assert _run(harness, answers) is None
+    wire = json.loads(answers.bodies[0])
+    wire["citations"] = [
+        {"source_id": str(harness.source_id), "page": 1, "matched_text": f"absent{n}"}
+        for n in range(MAX_FEEDBACK_CITATIONS + 10)
+    ]
+    [line] = _feedback(harness, json.dumps(wire))
+    total = MAX_FEEDBACK_CITATIONS + 10
+    assert f", {MAX_FEEDBACK_CITATIONS} and 10 more of {total}" in line
+    assert "citations 1, 2, 3" in line
+
+
+def _skill(harness: _Harness) -> bytes:
+    from caos.methodology.bundle import assemble_authority
+    from caos.methodology.executor import SKILL
+
+    return assemble_authority(harness.bundle, "CP-0").files[SKILL]
+
+
+def test_retry_feedback_carries_the_completeness_and_t8_checks_too(
+    harness: _Harness,
+) -> None:
+    """A second attempt told only the first check it failed trips over the
+    next: the one live answer to clear every earlier check on 23 September
+    (GPT-5.6 luna) failed the vendor's completeness checker and its T8 parser.
+    Their own messages ride along, labelled by checker, as the validator's do."""
+    answers = CanonicalCompletions(harness.source_id)
+    assert _run(harness, answers) is None
+    wire = json.loads(answers.bodies[0])
+    markdown = wire["canonical_markdown"]
+    contract = cached_contract(harness.bundle)
+    header = "| " + " | ".join(contract.navigation.NEW_HEADERS) + " |"
+    start = markdown.index(header)
+    end = markdown.index("\n\n", start)
+    doubled = markdown[:end] + "\n\n" + markdown[start:end] + markdown[end:]
+    marked = doubled.replace(
+        "validation_warnings: []", 'validation_warnings: ["PRESENTATION_FIXTURE"]', 1
+    )
+    assert marked != doubled
+    wire["canonical_markdown"] = marked
+    lines = retry_feedback(
+        contract,
+        catalog(harness.bundle),
+        _identity_cp0(),
+        json.dumps(wire),
+        skill=_skill(harness),
+    )
+    assert any(line.startswith("navigation: ") for line in lines), lines
+    assert any(
+        line.startswith("completeness_check: ") and "PRESENTATION_FIXTURE" in line
+        for line in lines
+    ), lines
+
+
+def _identity_cp0() -> HostIdentity:
+    from canonical_fixtures import identity
+
+    return identity("CP-0")

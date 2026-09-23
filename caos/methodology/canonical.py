@@ -629,7 +629,10 @@ def _retry_feedback(
             raise
     if body is None:
         return ()
-    return retry_feedback(_contract(bundle), catalog(bundle), identity, body)
+    skill = assemble_authority(bundle, assignment.module_id).files[SKILL]
+    return retry_feedback(
+        _contract(bundle), catalog(bundle), identity, body, skill=skill
+    )
 
 
 def _lineage_moved(

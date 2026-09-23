@@ -1,3 +1,50 @@
+# CP-0 investigation — 23 September 2026, evening
+
+Status: **a real model's CP-0 answer accepted live (GPT-5.6 luna, anchored); two host
+defects fixed (F148, F149); NOT_QUALIFIED (no set has finished).**
+
+Method. Every stored CP-0 answer with a body in the blob root (29, from six models) was
+replayed read-only through the host's full post-call verdict (`canonical._replayed_answer`),
+and each refusal traced to the check and the cause behind it, by rule, page and shape only.
+Then three live sets on `openai/gpt-5.6-luna` ($0.20/$1.20 per million, `--ceiling 1.00`) at
+the `cp0/investigation` commits, under the same $8.00 authorisation as below. Spend on the
+key: **$9.21** after, $1.57 of the $8.00 in all. Evidence (git-ignored):
+`docs/rebuild/runs/live-2026-09-23/L1..L3-luna-market-dislocation.*`.
+
+Host defects. F148: sentence punctuation and brackets beside a quote made its edge word a
+different word (12 quotes; all nine of the Opus 5.5 answer's). F149: Markdown's backslash
+escape did the same (`\"...\"`; all eight of the Sonnet 5 answer's).
+
+What each stored answer gets from the fixed host:
+
+| Model | Answers | Refused now for |
+|---|---|---|
+| Claude Opus 5.5 | 2 | the vendor severity rule alone (a MATERIAL finding under `qa_status: Passed`), the rule D30's second attempt names; every quote carried |
+| Claude Opus 5 | 1 | the same |
+| Claude Sonnet 5 | 1 | one citation of ten naming page 17 for a line its prompt shows under page 18 (`CITATION_NOT_LOCATED`); quotes, validator and completeness pass |
+| Claude Haiku 4.5 | 5 | quotes absent or paraphrased; the severity rule; the confidence cap; in one answer two quotes glued by an ellipsis with no space (`Ba1...Carnival`), read as one different word, beside a quote absent from the body |
+| Gemini 2.5 Flash | 12 | quotes not verbatim; answers not JSON; one two-word quote on its page twice (`CITATION_AMBIGUOUS`); one incomplete |
+| GPT-5.6 luna | 8 | the live runs below; one accepted |
+
+GPT-5.6 terra and sol (18–19 September, the only earlier accepted CP-0s) have no body in this
+blob root and were not replayed.
+
+| Run | CP-0 attempts | Stop |
+|---|---|---|
+| L1 | 1: transport, quotes and validator clean; a fixture marker in `validation_warnings` and a second T8 table | `HANDOFF_INCOMPLETE` (no second attempt on it, OD-1) |
+| L2 (`--attempts 3`) | 1: `Restricted` caps `confidence_score` at 59. 2 (D30): **that rule met**; one citation absent from the body. 3 (operator re-entry): **accepted**, its citation anchored | CP-3D refused twice, then `BUDGET_CEILING_REACHED` at 1.00 |
+| L3 (`--attempts 3`) | 1: page 11 cited with page 18's spacing (`CITATION_NOT_LOCATED`). 2: a paraphrased quote. 3 (D30): **quote fixed**; the confidence cap. 4 (re-entry): a re-cased quote and an absent one | `HANDOFF_MALFORMED`, attempts spent |
+
+What it shows. After F148 and F149, every refusal is traceable to a rule the authority or
+the final check states and the answer broke; none remains that the host caused (the glued
+ellipsis is kept as the model's: a letter follows the marks, and that answer fails anyway). The fed-back
+check is acted on each time it is given (L2 #2, L3 #3), and a clean answer is accepted and
+anchored (L2 #3). What stands between a model and CP-0 is per-attempt reliability: the second
+attempt is due only on `HANDOFF_MALFORMED`, so three of luna's eight attempts stopped their
+node on a code that gets none. N52 is the owner's option. A live Claude run was not made:
+D29's admission needs a 9.05 (Sonnet 5 at $2/$10) or 22.61 (Opus at $5/$25) ceiling,
+beyond the $6.43 left.
+
 # Second attempt (D30) and whole 10-Ks (D29) — 23 September 2026, afternoon
 
 Status: **D30 and D29 measured live; no CP-0 accepted yet; NOT_QUALIFIED.**

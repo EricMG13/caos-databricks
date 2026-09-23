@@ -359,6 +359,69 @@ def test_a_quote_the_body_wraps_in_quotation_marks_is_still_quoted(
     assert markdown
 
 
+@pytest.mark.parametrize(
+    "marks",
+    [
+        '"{}".',
+        "\u201c{}\u201d,",
+        "({})",
+        "({}).",
+        "[{}];",
+        "{}.",
+        "{}:",
+        "\u201c({}),\u201d",
+    ],
+)
+def test_a_quote_the_body_ends_a_sentence_with_is_still_quoted(marks: str) -> None:
+    """Sentence punctuation and brackets around a quotation are typography too.
+
+    Prose closes a quotation with a full stop or a comma and puts a citation in
+    brackets. Of the 75 quotes the live CP-0 answers of 23 September 2026 were
+    refused for (`qualification/PROVIDER_RUNBOOK.md`), 12 were in the body
+    word for word with only this around them -- all nine of one Claude Opus 5.5
+    answer's, and the one quote that sank an otherwise vendor-clean Gemini
+    answer. Only the outer tokens may wear it: opening marks before the first
+    word, closing marks after the last, and the quote's own words exactly."""
+    body = wire(
+        f"---\nmodule_id: CP-0\n---\n\n## Evidence Trace\n\n- E-01, p.1: "
+        f"{marks.format(QUOTE)}\n".encode(),
+        [_citation()],
+    )
+    _markdown, citations = parse_response(body, delivered=DELIVERED)
+    assert citations[0].matched_text == QUOTE
+
+
+@pytest.mark.parametrize("marks", ['\\"{}\\".', "\\({}\\)", "\\[{}\\]:"])
+def test_a_quote_the_body_writes_with_markdown_escapes_is_still_quoted(
+    marks: str,
+) -> None:
+    """A backslash before punctuation is Markdown's own spelling of that mark
+    (CommonMark's backslash escape): `\\"Total debt\\"` reads `"Total debt"`.
+    One Claude Sonnet 5 CP-0 answer of 23 September 2026 wrote all eight of the
+    quotes it was refused for that way (F149)."""
+    body = wire(
+        f"---\nmodule_id: CP-0\n---\n\n## Evidence Trace\n\n- "
+        f"{marks.format(QUOTE)}\n".encode(),
+        [_citation()],
+    )
+    _markdown, citations = parse_response(body, delivered=DELIVERED)
+    assert citations[0].matched_text == QUOTE
+
+
+@pytest.mark.parametrize("marks", ["{}s", "x{}", "{}-1", "({}x)", "\\{}"])
+def test_a_quote_whose_edge_word_is_a_different_word_is_not_quoted(
+    marks: str,
+) -> None:
+    """Only punctuation is forgiven at the edges: a letter, digit or dash
+    touching the quote makes the edge word a different word."""
+    body = wire(
+        f"---\nmodule_id: CP-0\n---\n\n## Evidence Trace\n\n- "
+        f"{marks.format(QUOTE)}\n".encode(),
+        [_citation()],
+    )
+    assert _parse_refused(body) is RefusalCode.HANDOFF_MALFORMED
+
+
 def test_a_quotation_mark_inside_the_quote_still_matches_whole_tokens() -> None:
     """Only the edges are typography; the middle is the quote itself."""
     body = wire(
