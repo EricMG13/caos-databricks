@@ -321,7 +321,8 @@ def test_cp1c_under_lite_is_held_until_cp_l10_is_accepted(harness: _Harness) -> 
         _run_route(harness, _module_provider(harness, answers))
         is RefusalCode.CITATION_NOT_LOCATED
     )
-    assert _modules(answers) == ["CP-0", "CP-L10"]
+    # N52: CP-L10's one second attempt, refused the same way.
+    assert _modules(answers) == ["CP-0", "CP-L10", "CP-L10"]
     assert _attempts_at(harness, "CP-1C") == (0, 0)
 
     named = named_objects(BUNDLE, ROUTE)

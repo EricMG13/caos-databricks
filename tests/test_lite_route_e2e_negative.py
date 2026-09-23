@@ -41,6 +41,7 @@ from caos.deliverable.canonical import Revision, canonical_payload
 from caos.evidence.ingest import Document, admit_pack
 from caos.graph.route import NodeState, node_states
 from caos.graph.runtime import accepted_artifacts
+from caos.methodology.canonical import SECOND_ATTEMPT_CODES
 from caos.methodology.executor import captured_blocks
 from caos.methodology.handoff import HostIdentity, _decoded_record
 from caos.methodology.invocation import named_objects
@@ -314,9 +315,12 @@ def test_a_wrong_upstream_or_undelivered_citation_never_reaches_the_deliverable(
         )
         expected = RefusalCode.CITATION_NOT_DELIVERED
     assert _run_route(harness, _module_provider(harness, answers)) is expected
-    assert _modules_called(answers) == ["CP-0", "CP-L10"]
-    assert _counts(harness) == (2, [REPORTED] * 2, 1, 2, 2)
-    assert _screen_outcome(harness) == (_sha(answers.bodies[1]), 0)
+    # N52: anchoring's refusal earns CP-L10 one second attempt, refused the same way.
+    screens = 2 if expected in SECOND_ATTEMPT_CODES else 1
+    assert _modules_called(answers) == ["CP-0"] + ["CP-L10"] * screens
+    calls = 1 + screens
+    assert _counts(harness) == (calls, [REPORTED] * calls, 1, calls, calls)
+    assert _screen_outcomes(harness) == [(_sha(body), 0) for body in answers.bodies[1:]]
     _cp5_untouched(harness)
     proof = _prove(harness)
     assert (proof.artifacts, proof.citations) == (1, 1)

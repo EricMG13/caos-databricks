@@ -21,6 +21,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 from uuid import UUID
 
 import psycopg
@@ -30,7 +31,6 @@ from canonical_fixtures import (
     LITE_PROFILE,
     LITE_SELECTION,
     QUOTE,
-    UNANCHORED,
     VENDORED,
     CanonicalCompletions,
 )
@@ -804,6 +804,13 @@ def test_crash_after_a_billed_answer_accepts_from_the_stored_body_without_a_call
     assert _refusals(run) == []
 
 
+def _another_issuer(fields: dict[str, Any]) -> dict[str, Any]:
+    """An answer about someone else: billed, then refused
+    `HANDOFF_IDENTITY_MISMATCH`, a code that earns no second attempt (D30), so
+    these two tests watch replay and retry alone."""
+    return {**fields, "issuer_name": "Someone Else"}
+
+
 def test_crash_after_a_billed_refused_answer_records_it_and_stops_without_a_call(
     case: tuple[StoreConnection, UUID],
     route: ResolvedRoute,
@@ -812,7 +819,7 @@ def test_crash_after_a_billed_refused_answer_records_it_and_stops_without_a_call
 ) -> None:
     conn, case_id = case
     run = _approved_run(conn, case_id, route, bundle, blobs)
-    answers = CanonicalCompletions(run.source_id, quotes=(UNANCHORED,))
+    answers = CanonicalCompletions(run.source_id, mutate=_another_issuer)
     with pytest.raises(_Boom):
         run.run(_DiesAfterItsBill(run.provider(answers=answers)))
     [(attempt,)] = conn.execute(
@@ -825,13 +832,13 @@ def test_crash_after_a_billed_refused_answer_records_it_and_stops_without_a_call
     with pytest.raises(Refusal) as caught:
         run.run(_Uncallable())
 
-    assert caught.value.code is RefusalCode.CITATION_NOT_LOCATED
-    assert _refusals(run) == [(attempt, "CITATION_NOT_LOCATED")]
+    assert caught.value.code is RefusalCode.HANDOFF_IDENTITY_MISMATCH
+    assert _refusals(run) == [(attempt, "HANDOFF_IDENTITY_MISMATCH")]
     conn.rollback()
     # Written once; a store fault is never an explanation of an answer.
     for code in (RefusalCode.ROUTE_IDENTITY_INVALID, RefusalCode.STORE_UNAVAILABLE):
         assert not record_refusal(conn, attempt_id=attempt, code=code)
-    assert _refusals(run) == [(attempt, "CITATION_NOT_LOCATED")]
+    assert _refusals(run) == [(attempt, "HANDOFF_IDENTITY_MISMATCH")]
     assert _attempts_per_module(conn, run.run_id) == {_node_id(route, "CP-0"): 1}
     assert _count(run, "budget_ledger") == 1
     assert run_status(conn, run.run_id) is RunStatus.RUNNING
@@ -845,13 +852,13 @@ def test_a_retry_skips_a_recorded_refusal_and_makes_one_new_attempt(
 ) -> None:
     conn, case_id = case
     run = _approved_run(conn, case_id, route, bundle, blobs)
-    answers = CanonicalCompletions(run.source_id, quotes=(UNANCHORED,))
+    answers = CanonicalCompletions(run.source_id, mutate=_another_issuer)
     with pytest.raises(Refusal) as caught:
         run.run(run.provider(answers=answers))
-    assert caught.value.code is RefusalCode.CITATION_NOT_LOCATED
+    assert caught.value.code is RefusalCode.HANDOFF_IDENTITY_MISMATCH
     # The live path explains the billed answer, so no retry replays it.
     [(refused, code)] = _refusals(run)
-    assert code == "CITATION_NOT_LOCATED"
+    assert code == "HANDOFF_IDENTITY_MISMATCH"
     conn.rollback()
 
     retry = run.provider()
@@ -864,7 +871,7 @@ def test_a_retry_skips_a_recorded_refusal_and_makes_one_new_attempt(
         _node_id(route, "CP-L10"): 1,
         _node_id(route, "CP-5"): 1,
     }
-    assert _refusals(run) == [(refused, "CITATION_NOT_LOCATED")]
+    assert _refusals(run) == [(refused, "HANDOFF_IDENTITY_MISMATCH")]
     assert _count(run, "budget_ledger") == 4
 
 

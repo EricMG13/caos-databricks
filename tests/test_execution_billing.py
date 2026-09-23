@@ -21,7 +21,12 @@ from test_execution_attempts import _invoke, provider, ready, route
 from test_loop_charges import ESTIMATE, MODEL, REPORTED, _Completions
 
 from caos.blobs import BlobStore
-from caos.evidence.citations import AnchoredCitation, Citation, verify_citations
+from caos.evidence.citations import (
+    AnchoredCitation,
+    Citation,
+    TokenIndex,
+    verify_citations,
+)
 from caos.methodology import canonical
 from caos.methodology.runner import ModuleProvider
 from caos.provider import Completion
@@ -120,8 +125,8 @@ def test_native_refusal_records_only_independently_known_money(
         _invoke(provider, uuid4(), "runtime", provider.route.nodes[0])
     assert "private" not in str(caught.value) + repr(caught.value)
     assert caught.value.__cause__ is None
-    # D30: a HANDOFF_MALFORMED answer earns its node one second attempt.
-    calls = 2 if code == "HANDOFF_MALFORMED" else 1
+    # D30, N52: a refusal the checks can explain earns its node one second attempt.
+    calls = 2 if code in canonical.SECOND_ATTEMPT_CODES else 1
     assert chat.calls == calls
     assert provider.conn.info.transaction_status is TransactionStatus.IDLE
     _bills(_url_for(provider.conn.info.dbname), provider.run_id, charge, calls)
@@ -159,8 +164,9 @@ def test_analysis_failure_preserves_bill_and_exact_replay(
     assert str(caught.value) == codes[failure]
     assert provider.conn.info.transaction_status is TransactionStatus.IDLE
     dsn = _url_for(provider.conn.info.dbname)
-    # D30: the malformed envelope earns one second attempt, refused the same way.
-    calls = 2 if failure == "envelope" else 1
+    # D30, N52: a refusal the checks can explain earns one second attempt,
+    # refused the same way.
+    calls = 2 if codes[failure] in canonical.SECOND_ATTEMPT_CODES else 1
     attempts = _bills(dsn, provider.run_id, REPORTED, calls)
     attempt = attempts[-1]
     assert len(completions.bodies) == calls
@@ -239,8 +245,11 @@ def test_postbilling_citation_cleanup_preserves_money_and_original_refusal(
         *,
         delivered: Mapping[UUID, frozenset[str]],
         citations: Sequence[Citation],
+        index: TokenIndex | None = None,
     ) -> list[AnchoredCitation]:
-        anchored = verify_citations(conn, delivered=delivered, citations=citations)
+        anchored = verify_citations(
+            conn, delivered=delivered, citations=citations, index=index
+        )
         if broken_cleanup:
             monkeypatch.setattr(psycopg.Connection, "rollback", broken)
         if failure == "sql":
@@ -258,9 +267,11 @@ def test_postbilling_citation_cleanup_preserves_money_and_original_refusal(
         or provider.conn.info.transaction_status is TransactionStatus.IDLE
     )
     assert isinstance(provider.completions, _Completions)
-    assert len(provider.completions.prompts) == 1
+    # N52: anchoring's refusal earns one second attempt when the store is sound.
+    calls = 2 if failure == "refusal" and not broken_cleanup else 1
+    assert len(provider.completions.prompts) == calls
     monkeypatch.undo()
-    _bill(dsn, provider.run_id, REPORTED)
+    _bills(dsn, provider.run_id, REPORTED, calls)
 
 
 @pytest.mark.parametrize("broken_cleanup", [False, True])

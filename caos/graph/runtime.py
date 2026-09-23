@@ -191,20 +191,7 @@ def run_route(
             ).value
 
     def one_node(route_node_id: str) -> str:
-        # An answer refused `HANDOFF_MALFORMED` or `HANDOFF_INCOMPLETE` earns
-        # the node one second attempt (D30, the owner's choice under N32; N52):
-        # the node's pass runs once more, and the ledger, not this frame, says
-        # the attempt it makes is that one -- reserved and priced like any
-        # other, carrying what the checks reported. A second refusal, or any
-        # other code, is raised.
-        try:
-            return one_pass(route_node_id)
-        except Refusal as refused:
-            if refused.code not in SECOND_ATTEMPT_CODES or not _second_due(
-                conn, run_id, route_node_id
-            ):
-                raise
-        return one_pass(route_node_id)
+        return _with_second_attempt(one_pass, conn, run_id, route_node_id)
 
     def terminal() -> str:
         with message_free():
@@ -366,6 +353,38 @@ def node_pass(  # noqa: PLR0913 -- one node of one run, keyword-only
         execution=execution,
     )
     return Pass.ACCEPTED if ran else Pass.ENDED
+
+
+def _with_second_attempt(
+    one_pass: Callable[[str], str],
+    conn: StoreConnection,
+    run_id: UUID,
+    route_node_id: str,
+) -> str:
+    """One node's pass, and its one second attempt when the ledger gives it.
+
+    An answer refused with one of `SECOND_ATTEMPT_CODES` earns the node one
+    second attempt (D30, the owner's choice under N32; N52): the node's pass
+    runs once more, and the ledger, not this frame, says the attempt it makes
+    is that one -- reserved and priced like any other, carrying what the checks
+    reported. A second refusal, or any other code, is raised; a second attempt
+    the ceiling cannot pay for leaves the first refusal standing, since that is
+    what the answer was.
+    """
+    try:
+        return one_pass(route_node_id)
+    except Refusal as refused:
+        if refused.code not in SECOND_ATTEMPT_CODES or not _second_due(
+            conn, run_id, route_node_id
+        ):
+            raise
+        first = refused.code
+    try:
+        return one_pass(route_node_id)
+    except Refusal as again:
+        if again.code is not RefusalCode.BUDGET_CEILING_REACHED:
+            raise
+    raise Refusal(first)
 
 
 def _second_due(conn: StoreConnection, run_id: UUID, route_node_id: str) -> bool:
