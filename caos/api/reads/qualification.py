@@ -8,19 +8,26 @@ evidence digest it wants to display; this route never chooses a nearby verdict.
 from __future__ import annotations
 
 from re import fullmatch
+from uuid import UUID
 
 from fastapi import APIRouter
 
 from caos.api.deps import IDENTITY_FIRST, Caller, Store
 from caos.api.identity import GlobalRole
 from caos.api.wire import QualificationRead, QualificationState
-from caos.qualification.store import Evidence, current_verdict, evidence_at
+from caos.qualification.store import (
+    Evidence,
+    current_verdict,
+    evidence_at,
+    verdict_reviewer_id,
+)
 from caos.qualification.verdict import Verdict
 from caos.refusals import Refusal, RefusalCode
 
-# Database time and exact evidence lookup, then the current-verdict lookup and
-# the two store facts `assert_store_agrees` compares it with (DQ-3).
-IO_BUDGET = 5
+# Database time and exact evidence lookup, then the current-verdict lookup,
+# the two store facts `assert_store_agrees` compares it with (DQ-3), and the
+# reviewer_id lookup beside it (CF-027).
+IO_BUDGET = 6
 router = APIRouter()
 
 
@@ -54,7 +61,10 @@ def read_qualification(
                 return _read(evidence_sha256, QualificationState.UNAVAILABLE)
             raise
         return _read(evidence_sha256, QualificationState.UNQUALIFIED, evidence)
-    return _read(evidence_sha256, QualificationState.QUALIFIED, evidence, verdict)
+    reviewer_id = verdict_reviewer_id(conn, evidence_sha256=evidence_sha256)
+    return _read(
+        evidence_sha256, QualificationState.QUALIFIED, evidence, verdict, reviewer_id
+    )
 
 
 def _digest(value: str) -> None:
@@ -67,6 +77,7 @@ def _read(
     state: QualificationState,
     evidence: Evidence | None = None,
     verdict: Verdict | None = None,
+    reviewer_id: UUID | None = None,
 ) -> QualificationRead:
     """Keep restricted and absent identities metadata-free."""
     if evidence is None or verdict is None:
@@ -80,6 +91,7 @@ def _read(
             provider=None,
             model=None,
             reviewer=None,
+            reviewer_id=None,
             decided_at=None,
             expires_at=None,
         )
@@ -94,6 +106,7 @@ def _read(
         provider=evidence.provider,
         model=evidence.model,
         reviewer=verdict.reviewer.value,
+        reviewer_id=reviewer_id,
         decided_at=verdict.decided_at,
         expires_at=verdict.expires_at,
     )

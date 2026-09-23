@@ -28,6 +28,7 @@ from caos.qualification.store import (
     record_evidence,
     record_performed,
     record_verdict,
+    verdict_reviewer_id,
 )
 from caos.qualification.verdict import Verdict, read_verdict
 from caos.refusals import Refusal, RefusalCode
@@ -412,6 +413,34 @@ def test_record_verdict_binds_the_reviewer_and_evidence(empty_database: str) -> 
             verdict=_verdict(now, evidence),
         )
         assert current_verdict(conn, evidence=evidence, now=now)
+
+
+def test_verdict_reviewer_id_is_the_authenticated_signer_or_none(
+    empty_database: str,
+) -> None:
+    """CF-027. The signer's own identity is store provenance the six-binding
+    document never carried (`caos/qualification/verdict.py`), so it is read
+    beside `current_verdict` rather than off its `Verdict`."""
+    now = datetime(2026, 9, 15, tzinfo=UTC)
+    with connect(empty_database) as conn:
+        apply_schema(conn)
+        performed = _performed()
+        evidence = performed.evidence
+        record_performed_earlier(conn, performed)
+        record_runs(conn, performed)
+
+        assert verdict_reviewer_id(conn, evidence_sha256=evidence.sha256) is None
+
+        reviewer = uuid4()
+        record_verdict(
+            conn,
+            evidence=evidence,
+            reviewer_id=reviewer,
+            verdict=_verdict(now, evidence),
+        )
+
+        assert verdict_reviewer_id(conn, evidence_sha256=evidence.sha256) == reviewer
+        assert verdict_reviewer_id(conn, evidence_sha256="f" * 64) is None
 
 
 @pytest.mark.parametrize("recorded", ["another-model", None])

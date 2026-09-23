@@ -131,6 +131,7 @@ class QualificationRead(BaseModel):
     provider: Id | None
     model: Id | None
     reviewer: Text | None
+    reviewer_id: UUID | None
     decided_at: AwareDatetime | None
     expires_at: AwareDatetime | None
 
