@@ -85,7 +85,8 @@ class RegressionTests(unittest.TestCase):
 
     def test_completeness_enforces_bullet_list_columns(self):
         skill = (ROOT / 'skills/cp-3-relative-value-security-selection/SKILL.md').read_text()
-        draft = '### T3.7\n| Rank | Evidence ID |\n| --- | --- |\n| 1 | unknown |\n'
+        # fork r1: `unknown` is a value-list label now; a bare `n/a` is still a placeholder.
+        draft = '### T3.7\n| Rank | Evidence ID |\n| --- | --- |\n| 1 | n/a |\n'
         violations, contract, _ = complete.check(skill, draft, 'CP-3')
         spec = contract['registers']['T3.7']
         self.assertIn('Countervailing Evidence', spec['columns'])

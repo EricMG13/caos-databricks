@@ -100,6 +100,8 @@ TABLE_SEPARATOR_CELL_RE = re.compile(r"^:?-{3,}:?$")
 # handoff tables under a Severity column rather than from the counts it declared.
 SEVERITY_HEADER_RE = re.compile(r"^severity\b")
 FINDING_SEVERITY_RE = re.compile(r"^(critical|material|minor)\b")
+RESOLUTION_HEADER_RE = re.compile(r"^(status|resolution)\b")
+RESOLVED_RE = re.compile(r"^(resolved|closed|cleared)\b")
 CONCLUSION_TITLE_RE = re.compile(
     r"\b(?:view|read-through|recommendation|decision|answer|conclusion|implication|thesis|summary|outlook)\b",
     re.IGNORECASE,
@@ -453,17 +455,23 @@ class _MarkdownTable:
 def _analysis_lines(body: str) -> list[tuple[int, str]]:
     """Return unfenced lines inside the canonical Analysis H2 section."""
 
+    return _section_lines(body, "Analysis")
+
+
+def _section_lines(body: str, section: str) -> list[tuple[int, str]]:
+    """Return unfenced lines inside one canonical H2 section."""
+
     result: list[tuple[int, str]] = []
-    in_analysis = False
+    inside = False
     for line_number, line in _unfenced_lines(body):
         heading_match = H2_RE.fullmatch(line)
         if heading_match:
             heading = _heading_text(heading_match)
-            if in_analysis:
+            if inside:
                 break
-            in_analysis = heading == "Analysis"
+            inside = heading == section
             continue
-        if in_analysis:
+        if inside:
             result.append((line_number, line))
     return result
 
@@ -653,14 +661,19 @@ def _plain_cell(cell: str) -> str:
 
 
 def _finding_severities(body: str) -> dict[str, int]:
-    """Return {CRITICAL | MATERIAL | MINOR: first body line} over every finding row.
+    """Return {CRITICAL | MATERIAL | MINOR: first body line} over every open finding row.
 
-    A finding is a row of any unfenced table whose column is headed Severity
-    and whose cell is one of the canon's three words.  The rows are the
-    authority: the counts a module passes to confidence_score.py are its own.
+    A finding is a row of a table in the QA Validation section whose column is
+    headed Severity and whose cell is one of the canon's three words, and
+    whose Status or Resolution cell, if it has one, does not mark it resolved.
+    The canon's caps are "CP-5A severity gates" charged "per CP-5A finding":
+    QA findings, not an analytical register's own severity scale (a capacity
+    grade, a source gap CP-0 routes to its consumer), which must not decide
+    the module's qa_status (deployment fork r1).  The rows are the authority:
+    the counts a module passes to confidence_score.py are its own.
     """
 
-    lines = _unfenced_lines(body)
+    lines = _section_lines(body, "QA Validation")
     found: dict[str, int] = {}
     for table in _markdown_tables(lines):
         columns = [
@@ -670,9 +683,19 @@ def _finding_severities(body: str) -> dict[str, int]:
         ]
         if not columns:
             continue
+        statuses = [
+            index
+            for index, header in enumerate(table.headers)
+            if RESOLUTION_HEADER_RE.match(_plain_cell(header))
+        ]
         first_row = table.start_index + 2
         for line_number, line in lines[first_row : first_row + table.body_rows]:
             cells = _table_cells(line)
+            if any(
+                index < len(cells) and RESOLVED_RE.match(_plain_cell(cells[index]))
+                for index in statuses
+            ):
+                continue
             for index in columns:
                 if index < len(cells):
                     match = FINDING_SEVERITY_RE.match(_plain_cell(cells[index]))

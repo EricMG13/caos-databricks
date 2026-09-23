@@ -342,6 +342,17 @@ def _matching_header(cells: tuple[str, ...]) -> tuple[str, ...] | None:
     return None
 
 
+def _plain_value(value: str) -> str:
+    """An enum cell (module ID, readiness) without one inline-code or bold
+    wrapper, as models write them after the examples (deployment fork r1)."""
+    for mark in ("`", "**"):
+        if len(value) > 2 * len(mark) and value.startswith(mark) and value.endswith(mark):
+            inner = value[len(mark):-len(mark)]
+            if mark not in inner:
+                return inner.strip()
+    return value
+
+
 def _unwrap_command(value: str, module_id: str) -> str:
     """Accept plain commands or one complete single-backtick code wrapper."""
     tick_count = value.count("`")
@@ -401,13 +412,13 @@ def parse_t8(text: str, catalog: Catalog) -> tuple[Recommendation, ...]:
             raise NavigationError("CP-0 T8 sequence must be a positive integer") from None
         if sequence < 1:
             raise NavigationError("CP-0 T8 sequence must be a positive integer")
-        module_id = cells[1]
+        module_id = _plain_value(cells[1])
         if module_id in catalog.superseded_modules:
             raise NavigationError(f"{module_id} is an alias for {catalog.superseded_modules[module_id]}; replace the T8 row with its current owner and preserve qualifiers")
         if module_id in SUPPRESSED_MODULES:
             raise NavigationError(f"{module_id} cannot appear as a downstream T8 recommendation")
         if is_legacy:
-            exact_command, readiness, reason = cells[2], cells[5], cells[6]
+            exact_command, readiness, reason = cells[2], _plain_value(cells[5]), cells[6]
             source_files = cells[3]
             exact_command = _unwrap_command(exact_command, module_id)
             if readiness in RUNNABLE:
@@ -426,7 +437,7 @@ def parse_t8(text: str, catalog: Catalog) -> tuple[Recommendation, ...]:
             candidate_command, exact_command = cells[2], cells[3]
             candidate_command = _unwrap_command(candidate_command, module_id)
             exact_command = _unwrap_command(exact_command, module_id)
-            source_files, readiness, reason = cells[4], cells[6], cells[7]
+            source_files, readiness, reason = cells[4], _plain_value(cells[6]), cells[7]
         module = catalog.modules.get(module_id)
         # CP-DR is navigable with no layer, as validate_catalog admits; CP-0's
         # T8 contract lists it among the ids a row may name.

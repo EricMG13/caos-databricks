@@ -54,8 +54,8 @@ This is a complete V-native screening run for its own schema. It is not a shorte
   - **conditional_stable_tables_by_consumer**: structured below
     - **CP-MODEL**: none
   - **full_run_disqualifiers**: structured below
-    - **critical_cell_substrings_casefold**: obtain the complete underwriting source pack; quantitative threshold not available in provided materials; retained cp-model integration sources do not supply
-    - **critical_cell_values_casefold**: ; [insufficient information]; insufficient information; n/a; not assessable; not calculable from provided materials; tbd; unavailable; unknown
+    - **critical_cell_substrings_casefold**: obtain the complete underwriting source pack; retained cp-model integration sources do not supply
+    - **critical_cell_values_casefold**: ; [insufficient information]; n/a; not calculable from provided materials; tbd; unavailable
     - **fixture_document_substrings_casefold**: integration fixture; not a current analytical golden; retained cp-model integration source; synthetic test input
     - **fixture_limitation_flags**: INTEGRATION_FIXTURE_ONLY; PRESENTATION_FIXTURE_NOT_CURRENT_GOLDEN; SYNTHETIC_FORWARD_ASSUMPTIONS
     - **fixture_validation_warnings**: INTEGRATION_FIXTURE_ONLY; PRESENTATION_FIXTURE; TEST_ONLY_FORECAST_ASSUMPTIONS
@@ -394,9 +394,9 @@ Lead with the screen conclusion, strongest support, primary pressure, and monito
       - none
   - **full_run_disqualifiers**: structured below
     - **critical_cell_substrings_casefold**: structured below
-      - obtain the complete underwriting source pack; quantitative threshold not available in provided materials; retained cp-model integration sources do not supply
+      - obtain the complete underwriting source pack; retained cp-model integration sources do not supply
     - **critical_cell_values_casefold**: structured below
-      - ; [insufficient information]; insufficient information; n/a; not assessable; not calculable from provided materials; tbd; unavailable; unknown
+      - ; [insufficient information]; n/a; not calculable from provided materials; tbd; unavailable
     - **fixture_document_substrings_casefold**: structured below
       - integration fixture; not a current analytical golden; retained cp-model integration source; synthetic test input
     - **fixture_limitation_flags**: structured below
@@ -584,9 +584,9 @@ Lead with the directional screen, liquidity support, primary sensitivity, breakp
       - none
   - **full_run_disqualifiers**: structured below
     - **critical_cell_substrings_casefold**: structured below
-      - obtain the complete underwriting source pack; quantitative threshold not available in provided materials; retained cp-model integration sources do not supply
+      - obtain the complete underwriting source pack; retained cp-model integration sources do not supply
     - **critical_cell_values_casefold**: structured below
-      - ; [insufficient information]; insufficient information; n/a; not assessable; not calculable from provided materials; tbd; unavailable; unknown
+      - ; [insufficient information]; n/a; not calculable from provided materials; tbd; unavailable
     - **fixture_document_substrings_casefold**: structured below
       - integration fixture; not a current analytical golden; retained cp-model integration source; synthetic test input
     - **fixture_limitation_flags**: structured below
@@ -774,9 +774,9 @@ Lead with the screening posture, dated compensation signal, primary protection i
       - none
   - **full_run_disqualifiers**: structured below
     - **critical_cell_substrings_casefold**: structured below
-      - obtain the complete underwriting source pack; quantitative threshold not available in provided materials; retained cp-model integration sources do not supply
+      - obtain the complete underwriting source pack; retained cp-model integration sources do not supply
     - **critical_cell_values_casefold**: structured below
-      - ; [insufficient information]; insufficient information; n/a; not assessable; not calculable from provided materials; tbd; unavailable; unknown
+      - ; [insufficient information]; n/a; not calculable from provided materials; tbd; unavailable
     - **fixture_document_substrings_casefold**: structured below
       - integration fixture; not a current analytical golden; retained cp-model integration source; synthetic test input
     - **fixture_limitation_flags**: structured below
@@ -964,9 +964,9 @@ Lead with document readiness, primary creditor concern, missing controlling evid
       - none
   - **full_run_disqualifiers**: structured below
     - **critical_cell_substrings_casefold**: structured below
-      - obtain the complete underwriting source pack; quantitative threshold not available in provided materials; retained cp-model integration sources do not supply
+      - obtain the complete underwriting source pack; retained cp-model integration sources do not supply
     - **critical_cell_values_casefold**: structured below
-      - ; [insufficient information]; insufficient information; n/a; not assessable; not calculable from provided materials; tbd; unavailable; unknown
+      - ; [insufficient information]; n/a; not calculable from provided materials; tbd; unavailable
     - **fixture_document_substrings_casefold**: structured below
       - integration fixture; not a current analytical golden; retained cp-model integration source; synthetic test input
     - **fixture_limitation_flags**: structured below

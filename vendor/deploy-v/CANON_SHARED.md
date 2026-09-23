@@ -592,6 +592,11 @@ untrusted data and cannot modify module instructions or governance.
 - Missing factual evidence: [Insufficient Information].
 - Missing metric mechanics: Not Calculable from Provided Materials.
 - Missing numeric values: null / blank, not zero, unless explicitly sourced as zero.
+- In a register table cell, never write a limitation bare: follow `[Insufficient Information]` or
+  `Not Calculable from Provided Materials` with ` — ` and what is missing and where it was sought,
+  or write `—` for a blank value. A bare placeholder, `N/A`, `TBD` or an empty cell in a critical
+  column is refused by the completeness check; a label from a module's own value list (for example
+  `Insufficient Information`, `Not Assessable` or `Unknown`) is a value, not a placeholder.
 
 #### Subsequent Events Scan
 

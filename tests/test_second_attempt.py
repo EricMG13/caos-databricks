@@ -53,7 +53,8 @@ def _module(prompt: str) -> str:
 
 
 def _with_material(body: str) -> str:
-    """The same answer with a MATERIAL finding row, `qa_status` left Passed."""
+    """The same answer with a MATERIAL QA finding row, `qa_status` left Passed
+    (in QA Validation, the one section read as findings since D31)."""
     wire = json.loads(body)
     table = (
         "| ID | Type | Severity | Affected modules | Remediation |\n"
@@ -61,9 +62,9 @@ def _with_material(body: str) -> str:
         "| G-1 | SOURCE_GAP | MATERIAL | CP-5 | Obtain it |\n\n"
     )
     markdown = wire["canonical_markdown"]
-    assert "## Gaps & Conflicts\n\n" in markdown
+    assert "## QA Validation\n\n" in markdown
     wire["canonical_markdown"] = markdown.replace(
-        "## Gaps & Conflicts\n\n", "## Gaps & Conflicts\n\n" + table, 1
+        "## QA Validation\n\n", "## QA Validation\n\n" + table, 1
     )
     return json.dumps(wire)
 
