@@ -41,6 +41,8 @@ from time import monotonic, sleep
 from typing import Literal, overload
 from uuid import UUID
 
+import psycopg
+
 from caos.api.events import STREAM_NAMES, Marker, parse_marker
 from caos.api.wire import EventName
 from caos.refusals import Refusal, RefusalCode
@@ -244,32 +246,43 @@ def case_tail(  # noqa: PLR0913 -- the stream's identity, then its lifetime
     `after` is the raw `Last-Event-ID`; it is parsed against the heads read
     here. A deadline of zero is one poll. Yields nothing at all to an actor
     who cannot read the case.
+
+    A store fault (CF-022) refuses `STORE_UNAVAILABLE` rather than escaping as
+    a bare `psycopg.Error`: the response has long since started by the time any
+    query here runs, so no fresh status reaches the wire either way, but a
+    typed refusal is safe wherever an unhandled exception is logged and a
+    driver's own message is not.
     """
-    started = monotonic()
-    audit_head, run_head, terminal = _heads(conn, case_id, run_id)
-    at = parse_marker(after, Marker(audit_head, run_head))
-    run_open = run_id is not None and (terminal is None or at.run_seq < terminal)
-
-    if not _may_watch(conn, case_id, actor_id):
-        return
-    yield StreamEvent(at, None)
-
-    while True:
-        for event, closes in _pending(conn, case_id, run_id if run_open else None, at):
-            at = event.id
-            if event.name is not None:
-                if not _may_watch(conn, case_id, actor_id):
-                    return
-                yield event
-            run_open = run_open and not closes
+    try:
+        started = monotonic()
+        audit_head, run_head, terminal = _heads(conn, case_id, run_id)
+        at = parse_marker(after, Marker(audit_head, run_head))
+        run_open = run_id is not None and (terminal is None or at.run_seq < terminal)
 
         if not _may_watch(conn, case_id, actor_id):
             return
-        if monotonic() - started >= deadline:
-            return
-        sleep(poll)
-        if heartbeat:
-            yield None
+        yield StreamEvent(at, None)
+
+        while True:
+            for event, closes in _pending(
+                conn, case_id, run_id if run_open else None, at
+            ):
+                at = event.id
+                if event.name is not None:
+                    if not _may_watch(conn, case_id, actor_id):
+                        return
+                    yield event
+                run_open = run_open and not closes
+
+            if not _may_watch(conn, case_id, actor_id):
+                return
+            if monotonic() - started >= deadline:
+                return
+            sleep(poll)
+            if heartbeat:
+                yield None
+    except psycopg.Error:
+        raise Refusal(RefusalCode.STORE_UNAVAILABLE) from None
 
 
 def _pending(

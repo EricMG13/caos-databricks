@@ -38,6 +38,7 @@ from pathlib import Path
 from typing import Annotated
 from uuid import UUID
 
+import psycopg
 from fastapi import Depends, Request
 from psycopg import OperationalError
 
@@ -72,6 +73,12 @@ def store_connection() -> Iterator[StoreConnection]:
     A store that does not answer is refused like any other store fault. The
     refusal is raised outside the `except`, so psycopg's message -- the host,
     the port and the role -- is neither chained behind it nor logged with it.
+
+    A fault after connect (CF-022) -- a dropped session, a statement timeout --
+    is refused the same way rather than escaping as a bare `psycopg.Error` for
+    the edge guard to answer generically `INTERNAL_FAULT`: the store not
+    answering mid-request is the same fact as it not answering at connect, and
+    callers should be told the same thing (503, retryable) either way.
     """
     conn: StoreConnection | None
     try:
@@ -80,8 +87,11 @@ def store_connection() -> Iterator[StoreConnection]:
         conn = None
     if conn is None:
         raise Refusal(RefusalCode.STORE_UNAVAILABLE)
-    with conn:
-        yield conn
+    try:
+        with conn:
+            yield conn
+    except psycopg.Error:
+        raise Refusal(RefusalCode.STORE_UNAVAILABLE) from None
 
 
 def blob_store() -> BlobStore:

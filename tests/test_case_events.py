@@ -16,9 +16,11 @@ import time
 import weakref
 from collections.abc import Callable, Generator, Iterator, Mapping
 from pathlib import Path
+from typing import cast
 from uuid import UUID, uuid4
 
 import httpx2 as httpx
+import psycopg
 import pytest
 import uvicorn
 
@@ -643,6 +645,40 @@ def test_the_event_stream_costs_its_declared_budget(
     assert first_poll == stream.IO_BUDGET == CONNECT_IO + CURSOR_IO + POLL_IO
     assert app_module.EVENTS_IO_BUDGET == 2 + stream.IO_BUDGET
     assert app_module.IO_BUDGET == app_module.EVENTS_IO_BUDGET
+
+
+def test_case_tail_refuses_a_post_connect_fault_as_store_unavailable(
+    case: tuple[StoreConnection, UUID],
+) -> None:
+    """CF-022: a store fault mid-poll -- a dropped session, a statement
+    timeout -- refuses `STORE_UNAVAILABLE` rather than escaping `case_tail` as
+    the bare `psycopg.Error` an unhandled exception elsewhere would be logged
+    with, its own message included. The response has long since started by
+    the time any query here runs, so no fresh status reaches the wire either
+    way; what changes is what is safe to raise and to log.
+    """
+    conn, case_id = case
+    reader = _reader(conn, case_id, Standing.READER)
+    conn.commit()
+    tail = stream.case_tail(
+        conn,
+        case_id=case_id,
+        run_id=None,
+        actor_id=reader,
+        after=None,
+        deadline=5.0,
+        poll=0.01,
+        heartbeat=True,
+    )
+
+    assert next(tail) is not None  # the cursor frame
+
+    with pytest.raises(Refusal) as caught:
+        cast("Generator[object]", tail).throw(
+            psycopg.OperationalError("server closed the connection")
+        )
+
+    assert caught.value.code is RefusalCode.STORE_UNAVAILABLE
 
 
 def test_a_tail_slot_is_returned_however_the_stream_ends() -> None:
