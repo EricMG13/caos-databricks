@@ -21,7 +21,7 @@ Status is as of `e4e4e01`. FIXED names the entry that closed it; OPEN rows are t
 | G1-9 | CP-0, CP-L10 | "Reserve CONDITIONAL" read as any missing source; CP-L10 held although it completes with gaps | HOLDS | FIXED D31 (V4), D34 |
 | G1-10 | CP-0 | T8 required in Analysis and in the appendix (two tables); backticked readiness refused | BLOCKS | FIXED D31 (V4) |
 | G1-11 | all | Score rules in three places, one wrong (band below 40); host pointed at an undelivered script | BLOCKS | FIXED D31 (V5), D34 |
-| G1-12 | CP-6 | The portfolio workbook is delivered as base64 sample data; critical cells then take a placeholder | BLOCKS | OPEN (host delivery; register) |
+| G1-12 | CP-6 | The portfolio workbook is delivered as base64 sample data; critical cells then take a placeholder | BLOCKS | FIXED D38 (withheld; inputs from the evidence) |
 | G1-13 | CP-8 | Undelivered upstreams (CP-6/6A) meant Blocked; T7.6 needs a row with fewer than 3 decisions | HOLDS | FIXED D34 (canon SEC4, one-row rule) |
 | G1-14 | CP-5, CP-6 | The two modules disagree which runs first | DEGRADES | OPEN (vendor, OD-8) |
 | G1-15 | all | Host blocks discouraged self-checking and named only three refusal grounds | DEGRADES | FIXED D34 |

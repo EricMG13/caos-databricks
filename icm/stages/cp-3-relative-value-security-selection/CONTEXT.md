@@ -18,10 +18,8 @@ Bundle folder `vendor/deploy-v/skills/cp-3-relative-value-security-selection/`, 
 | bundle | vendor/deploy-v/skills/cp-3-relative-value-security-selection/references/CP-3_SCHEMA_REFERENCE.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-3-relative-value-security-selection/references/CP-3_SYSTEM_REFERENCE.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-3-relative-value-security-selection/references/REF_CP-3A_STEPS.md | whole | delivered authority file |
-| bundle | vendor/deploy-v/skills/cp-3-relative-value-security-selection/references/REF_CP-3B_Portfolio_Constraints.xlsx | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-3-relative-value-security-selection/references/REF_CP-3B_STEPS.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-3-relative-value-security-selection/references/REF_CP-3_STEPS.md | whole | delivered authority file |
-| bundle | vendor/deploy-v/skills/cp-3-relative-value-security-selection/references/REF_CP-3_Sector_RV.xlsx | whole | delivered authority file |
 | bundle | vendor/deploy-v/CANON_SHARED.md | whole | delivered authority file |
 | prompt | icm/shared/prompt/instruction.md | whole | prompt block |
 | prompt | icm/shared/prompt/tagged.md | whole | prompt block |

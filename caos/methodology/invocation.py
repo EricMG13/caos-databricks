@@ -17,13 +17,10 @@ call, and once under `prospective_identity` before the attempt exists.
 
 from __future__ import annotations
 
-import base64
 import hashlib
-import io
 import json
 import re
 import threading
-import zipfile
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from typing import Any
@@ -847,29 +844,33 @@ def _citation_register(
     )
 
 
-def _authority_text(module_id: str, name: str, data: bytes) -> str:
-    # Only these manifest-verified workbook references are binary.
-    if (module_id, name) in {
-        ("CP-3", "references/REF_CP-3B_Portfolio_Constraints.xlsx"),
-        ("CP-3", "references/REF_CP-3_Sector_RV.xlsx"),
-        ("CP-6", "references/REF_CP-6A_Portfolio_Debate_Inputs.xlsx"),
-    }:
-        if not zipfile.is_zipfile(io.BytesIO(data)):
-            raise Refusal(RefusalCode.AUTHORITY_BYTES_MISMATCH)
-        return "ENCODING: base64 (complete XLSX reference bytes)\n" + base64.b64encode(
-            data
-        ).decode("ascii")
-    return _utf8(data, RefusalCode.AUTHORITY_BYTES_MISMATCH)
+# D38 (G1-12): what the host says of the workbooks it keeps back.
+_WITHHELD = (
+    "\n--- AUTHORITY {tag} WITHHELD (host-owned note) ---\n"
+    "Not delivered: {names}. The bundle ships each as sample or placeholder data"
+    " for a reference the enterprise maintains, never this case's portfolio or"
+    " market data. Portfolio, mandate, constraint, exposure and sector"
+    " relative-value inputs can come only from the evidence below. Where the"
+    " evidence carries none, apply your SKILL.md's rule for a missing or"
+    " mismatched reference: a gap, stated in words in the rows that need it,"
+    " never a live constraint and never a placeholder.\n"
+    "--- END AUTHORITY {tag} WITHHELD ---\n"
+)
 
 
 def _authority_sections(authority: DeliveredAuthority, tag: str) -> str:
-    return "".join(
+    # Every delivered file is text: the only binary references are withheld.
+    files = "".join(
         f"\n--- AUTHORITY {tag} FILE {name} SHA256 "
         f"{hashlib.sha256(data).hexdigest()} ---\n"
-        f"{_authority_text(authority.module_id, name, data)}"
+        f"{_utf8(data, RefusalCode.AUTHORITY_BYTES_MISMATCH)}"
         f"\n--- END AUTHORITY {tag} FILE {name} ---\n"
         for name, data in authority.files
     )
+    if not authority.withheld:
+        return files
+    names = ", ".join(f"`{name}`" for name in authority.withheld)
+    return files + _WITHHELD.format(tag=tag, names=names)
 
 
 def _printable(value: str) -> str:

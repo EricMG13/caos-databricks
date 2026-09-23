@@ -311,6 +311,22 @@ CROSS_SKILL_AUTHORITY: dict[str, tuple[tuple[str, str], ...]] = {
     "CP-DR": (("CP-OS", "references/CP_DR_RESEARCH_BRIEF_V1.md"),),
 }
 
+# Workbooks a module's manifest lists that the host never delivers (G1-12, D38).
+# The bundle ships each as sample or placeholder data for a reference the
+# enterprise maintains -- CP-3B's first sheet reads "SAMPLE DATA", the Sector RV
+# workbook is empty by design, CP-6A describes a test CLO -- so none is a case's
+# portfolio, and as base64 of a zip no model could read it. A case supplies its
+# own portfolio, mandate, constraint and sector data as sources.
+WITHHELD_AUTHORITY: dict[str, frozenset[str]] = {
+    "CP-3": frozenset(
+        {
+            "references/REF_CP-3B_Portfolio_Constraints.xlsx",
+            "references/REF_CP-3_Sector_RV.xlsx",
+        }
+    ),
+    "CP-6": frozenset({"references/REF_CP-6A_Portfolio_Debate_Inputs.xlsx"}),
+}
+
 
 @dataclass(frozen=True, slots=True)
 class DeliveredAuthority:
@@ -319,12 +335,14 @@ class DeliveredAuthority:
     `SKILL.md` first, then the module's non-script manifest files by name, then
     any declared file of another skill its `SKILL.md` names (§101), then the
     root files `SKILL.md` names, each under its `../../` literal
-    (`docs/DECISIONS.md` §45.1).
+    (`docs/DECISIONS.md` §45.1). `withheld` names the manifest files the host
+    keeps back (`WITHHELD_AUTHORITY`), for the prompt to say so.
     """
 
     module_id: str
     build_id: str
     files: tuple[tuple[str, bytes], ...]
+    withheld: tuple[str, ...] = ()
 
 
 def _named_root_files(bundle: Bundle, skill: bytes) -> list[str]:
@@ -361,12 +379,14 @@ def delivered_authority(bundle: Bundle, module_id: str) -> DeliveredAuthority:
     verified `SKILL.md`, never from a caller, a source or a model."""
     build_id = bundle.build_id
     skill = verified_bytes(bundle, module_id, "SKILL.md")
-    references = sorted(
+    listed = sorted(
         name
         for name in bundle.skill_of(module_id)["relative_file_hashes"]
         if name != "SKILL.md"
         and (module_id == MODEL_MODULE or not name.startswith("scripts/"))
     )
+    kept_back = WITHHELD_AUTHORITY.get(module_id, frozenset())
+    references = [name for name in listed if name not in kept_back]
     files = [("SKILL.md", skill)]
     files += [(name, verified_bytes(bundle, module_id, name)) for name in references]
     files += _cross_skill_files(bundle, module_id, skill)
@@ -376,7 +396,10 @@ def delivered_authority(bundle: Bundle, module_id: str) -> DeliveredAuthority:
     ]
     # Every read above re-verified the manifest bound when `build_id` was read.
     return DeliveredAuthority(
-        module_id=module_id, build_id=build_id, files=tuple(files)
+        module_id=module_id,
+        build_id=build_id,
+        files=tuple(files),
+        withheld=tuple(name for name in listed if name in kept_back),
     )
 
 

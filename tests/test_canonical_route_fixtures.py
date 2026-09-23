@@ -51,40 +51,41 @@ def test_cp2g_forecast_driver_columns_match_the_vendor_contract() -> None:
     assert {r[8] for r in rows} == {"READY"}
 
 
-def test_cp3_binary_authority_is_lossless_and_explicit() -> None:
-    import base64
-
+def test_cp3_sample_workbooks_are_withheld_and_named() -> None:
     from canonical_fixtures import BUNDLE
 
-    from caos.methodology.bundle import delivered_authority
-    from caos.methodology.invocation import _authority_sections, _authority_text
+    from caos.methodology.bundle import WITHHELD_AUTHORITY, delivered_authority
+    from caos.methodology.invocation import _authority_sections
 
     authority = delivered_authority(BUNDLE, "CP-3")
     prompt = _authority_sections(authority, "test")
-    binary = [(n, b) for n, b in authority.files if n.endswith(".xlsx")]
-    assert len(binary) == 2
-    for name, data in binary:
-        encoded = _authority_text("CP-3", name, data)
-        assert encoded.startswith("ENCODING: base64")
-        assert base64.b64decode(encoded.split("\n", 1)[1], validate=True) == data
-        assert name in prompt and encoded in prompt
+    assert not [n for n, _ in authority.files if n.endswith(".xlsx")]
+    assert set(authority.withheld) == WITHHELD_AUTHORITY["CP-3"]
+    assert "--- AUTHORITY test WITHHELD (host-owned note) ---" in prompt
+    assert all(f"`{name}`" in prompt for name in authority.withheld)
+    assert "base64" not in prompt
+
+
+def test_module_without_withheld_files_gets_no_note() -> None:
+    from canonical_fixtures import BUNDLE
+
+    from caos.methodology.bundle import delivered_authority
+    from caos.methodology.invocation import _authority_sections
+
+    authority = delivered_authority(BUNDLE, "CP-1")
+    assert authority.withheld == ()
+    assert "WITHHELD" not in _authority_sections(authority, "test")
 
 
 @pytest.mark.parametrize(
-    ("module", "name", "data"),
-    [
-        ("CP-3", "references/unlisted.xlsx", b"\xff\xfe"),
-        ("CP-1", "references/REF_CP-3_Sector_RV.xlsx", b"\xff\xfe"),
-        ("CP-3", "references/REF_CP-3_Sector_RV.xlsx", b"PK\x03\x04invalid"),
-        ("CP-3", "references/broken.md", b"\xff\xfe"),
-    ],
+    "name", ["references/REF_CP-3_Sector_RV.xlsx", "references/broken.md"]
 )
-def test_unlisted_or_invalid_binary_authority_refuses(
-    module: str, name: str, data: bytes
-) -> None:
-    from caos.methodology.invocation import _authority_text
+def test_binary_authority_refuses(name: str) -> None:
+    from caos.methodology.bundle import DeliveredAuthority
+    from caos.methodology.invocation import _authority_sections
     from caos.refusals import Refusal, RefusalCode
 
+    authority = DeliveredAuthority("CP-3", "b" * 64, ((name, b"PK\x03\x04\xff\xfe"),))
     with pytest.raises(Refusal) as refused:
-        _authority_text(module, name, data)
+        _authority_sections(authority, "test")
     assert refused.value.code is RefusalCode.AUTHORITY_BYTES_MISMATCH

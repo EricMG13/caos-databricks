@@ -13,7 +13,6 @@ Bundle folder `vendor/deploy-v/skills/cp-6-ic-debate-challenge/`, read through t
 | bundle | vendor/deploy-v/skills/cp-6-ic-debate-challenge/references/CP-6A_SYSTEM_REFERENCE.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-6-ic-debate-challenge/references/CP-6_SCHEMA_REFERENCE.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-6-ic-debate-challenge/references/CP-6_SYSTEM_REFERENCE.md | whole | delivered authority file |
-| bundle | vendor/deploy-v/skills/cp-6-ic-debate-challenge/references/REF_CP-6A_Portfolio_Debate_Inputs.xlsx | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-6-ic-debate-challenge/references/REF_CP-6A_STEPS.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-6-ic-debate-challenge/references/REF_CP-6_STEPS.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/CANON_SHARED.md | whole | delivered authority file |
