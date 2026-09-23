@@ -155,15 +155,27 @@ async def _admission_documents(
     declared: Annotated[int, Depends(_upload_envelope)],
     _released: Annotated[None, Depends(_release_read)],
 ) -> list[Document]:
-    """The pack's documents, in part order, from a stream held to its length."""
+    """The pack's documents, in part order, from a stream held to its length.
+
+    Parsed with one file past the ceiling (CF-075): the parser's own
+    `max_files` answers a generic `REQUEST_INVALID` the instant it is
+    exceeded, indistinguishable from any other malformed multipart body. One
+    extra slot lets a pack exactly at the ceiling parse whole, so the count
+    below can answer the specific `SOURCE_TOO_LARGE` instead.
+    """
     bounded = Request(request.scope, _bounded(request.receive, declared))
     try:
-        form = await bounded.form(max_files=DEFAULT_LIMITS.max_documents, max_fields=0)
+        form = await bounded.form(
+            max_files=DEFAULT_LIMITS.max_documents + 1, max_fields=0
+        )
     except (HTTPException, ValueError):
         raise Refusal(RefusalCode.REQUEST_INVALID) from None
     try:
+        parts = form.multi_items()
+        if len(parts) > DEFAULT_LIMITS.max_documents:
+            raise Refusal(RefusalCode.SOURCE_TOO_LARGE)
         documents = []
-        for name, part in form.multi_items():
+        for name, part in parts:
             if name != DOCUMENT_PART or not isinstance(part, UploadFile):
                 raise Refusal(RefusalCode.REQUEST_INVALID)
             filename = BoundaryText.of(part.filename or "", limit=FILENAME_CHARS)

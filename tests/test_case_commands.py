@@ -312,11 +312,6 @@ def test_parts_other_than_named_documents_are_request_invalid(
         ),
         command_client.post(
             path,
-            headers=command_headers(writer),
-            files=[("document", ("a.txt", TEXT))] * 51,
-        ),
-        command_client.post(
-            path,
             headers={**command_headers(writer), "content-type": "multipart/form-data"},
             content=b"no boundary",
         ),
@@ -324,7 +319,32 @@ def test_parts_other_than_named_documents_are_request_invalid(
 
     assert [(a.status_code, a.json()["code"]) for a in answers] == [
         (400, "REQUEST_INVALID")
-    ] * 4
+    ] * 3
+    assert seen["prepare"] == 0
+    assert _sources(conn, case_id) == 0
+
+
+def test_a_pack_over_the_document_ceiling_is_source_too_large(
+    case: tuple[StoreConnection, UUID],
+    command_client: TestClient,
+    seen: dict[str, int],
+) -> None:
+    """CF-075. The form parser's own `max_files` answered a generic
+    `REQUEST_INVALID` the instant the ceiling was exceeded, indistinguishable
+    from any other malformed multipart body. Parsed with one file past the
+    ceiling instead, a count over it now answers the specific
+    `SOURCE_TOO_LARGE` a pack this size deserves."""
+    conn, case_id = case
+    writer = member(conn, case_id)
+    path = f"/api/v1/cases/{case_id}/sources"
+
+    over = command_client.post(
+        path,
+        headers=command_headers(writer),
+        files=[("document", ("a.txt", TEXT))] * (DEFAULT_LIMITS.max_documents + 1),
+    )
+
+    assert (over.status_code, over.json()["code"]) == (413, "SOURCE_TOO_LARGE")
     assert seen["prepare"] == 0
     assert _sources(conn, case_id) == 0
 
