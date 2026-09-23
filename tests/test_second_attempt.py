@@ -31,6 +31,8 @@ from caos.methodology.handoff import (
     MAX_FEEDBACK_CITATIONS,
     MAX_FEEDBACK_MESSAGES,
     HostIdentity,
+    anchoring_line,
+    answer_citations,
     retry_feedback,
 )
 from caos.methodology.runner import ModuleProvider
@@ -232,6 +234,49 @@ def test_an_incomplete_answer_gets_the_second_attempt_too(harness: _Harness) -> 
         in answers.prompts[1]
     )
     assert _cp0_ledger(harness) == (2, 2, ["HANDOFF_INCOMPLETE"], 1)
+
+
+def _cites_a_wrong_page(body: str) -> str:
+    """The same answer with its first citation naming a page it is not on."""
+    wire = json.loads(body)
+    wire["citations"][0]["page"] = 99
+    return json.dumps(wire)
+
+
+def test_an_unanchored_citation_gets_the_second_attempt_naming_it(
+    harness: _Harness,
+) -> None:
+    """N52: anchoring's refusal earns the one second attempt too, told which
+    citation failed and why, by number only."""
+    answers = CanonicalCompletions(harness.source_id)
+    assert _run(harness, _Flawed(answers, flaw=_cites_a_wrong_page)) is None
+    total = len(json.loads(answers.bodies[0])["citations"])
+    assert (
+        f"host anchoring check: citation 1 of {total} is not on its cited page"
+        in answers.prompts[1]
+    )
+    assert _cp0_ledger(harness) == (2, 2, ["CITATION_NOT_LOCATED"], 1)
+
+
+def test_the_anchoring_line_names_each_failed_citation_by_number_and_reason() -> None:
+    line = anchoring_line(
+        [
+            None,
+            RefusalCode.CITATION_NOT_LOCATED,
+            RefusalCode.CITATION_AMBIGUOUS,
+            RefusalCode.CITATION_AMBIGUOUS,
+            RefusalCode.CITATION_NOT_DELIVERED,
+        ]
+    )
+    assert line == (
+        "host anchoring check: citation 2 of 5 is not on its cited page;"
+        " citations 3 and 4 of 5 are on their cited pages more than once;"
+        " citation 5 of 5 names a page or line this node was not given"
+        " (numbered from 1 in the order given)"
+    )
+    assert anchoring_line([None, None]) is None
+    assert anchoring_line([]) is None
+    assert answer_citations("not json") == ()
 
 
 def test_one_second_attempt_per_node_whichever_code_refused_first(

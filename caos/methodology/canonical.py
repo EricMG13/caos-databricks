@@ -31,6 +31,8 @@ from caos import methodology
 from caos.blobs import BlobStore
 from caos.evidence.citations import (
     AnchoredCitation,
+    Citation,
+    TokenIndex,
     verify_citations,
 )
 from caos.graph.route import MODEL_MODULE, ResolvedRoute, RouteNode
@@ -51,12 +53,15 @@ from caos.methodology.executor import (
 )
 from caos.methodology.handoff import (
     GATE_MODULE,
+    MAX_FEEDBACK_MESSAGES,
     MAX_TRANSPORT_CHARS,
     CanonicalRecord,
     HostIdentity,
     LineageRef,
     Projections,
     UpstreamRef,
+    anchoring_line,
+    answer_citations,
     parse_response,
     record_bytes,
     retry_feedback,
@@ -575,17 +580,37 @@ def _prompt_context(
     """`_context` for a prompt about to be priced or sent: with the lines a
     node's one second attempt carries (D30). Replay and the readers never
     build a prompt, so they never pay for the ledger read this adds."""
-    return replace(
-        _context(conn, blobs, bundle, assignment, identity),
-        feedback=_retry_feedback(conn, blobs, bundle, assignment, identity),
+    context = _context(conn, blobs, bundle, assignment, identity)
+    body = _feedback_body(conn, blobs, assignment)
+    if body is None:
+        return context
+    skill = assemble_authority(bundle, assignment.module_id).files[SKILL]
+    lines = retry_feedback(
+        _contract(bundle), catalog(bundle), identity, body, skill=skill
     )
+    anchoring = anchoring_line(
+        _anchoring(conn, _by_source(context.delivered), answer_citations(body))
+    )
+    if anchoring is not None:
+        lines = (anchoring, *lines)[:MAX_FEEDBACK_MESSAGES]
+    return replace(context, feedback=lines)
 
 
+# Anchoring's own refusals: a quote not on its cited page, on it more than
+# once, or on a line the node was not given.
+_ANCHORING_CODES = frozenset(
+    {
+        RefusalCode.CITATION_NOT_LOCATED,
+        RefusalCode.CITATION_AMBIGUOUS,
+        RefusalCode.CITATION_NOT_DELIVERED,
+    }
+)
 # The refusals whose checks a second attempt can be told of (D30, N52): the
-# validator's and the host's own (`HANDOFF_MALFORMED`) and the completeness
-# checker's (`HANDOFF_INCOMPLETE`).
-SECOND_ATTEMPT_CODES = frozenset(
-    {RefusalCode.HANDOFF_MALFORMED, RefusalCode.HANDOFF_INCOMPLETE}
+# validator's and the host's own (`HANDOFF_MALFORMED`), the completeness
+# checker's (`HANDOFF_INCOMPLETE`) and anchoring's.
+SECOND_ATTEMPT_CODES = (
+    frozenset({RefusalCode.HANDOFF_MALFORMED, RefusalCode.HANDOFF_INCOMPLETE})
+    | _ANCHORING_CODES
 )
 
 
@@ -609,15 +634,11 @@ def second_attempt_due(
         return _feedback_source(node_attempts(conn, run_id, route_node_id)) is not None
 
 
-def _retry_feedback(
-    conn: StoreConnection,
-    blobs: BlobStore,
-    bundle: Bundle,
-    assignment: Assignment,
-    identity: HostIdentity,
-) -> tuple[str, ...]:
-    """What this attempt carries: the checks its refused predecessor failed,
-    when it is the node's one second attempt (D30), else nothing.
+def _feedback_body(
+    conn: StoreConnection, blobs: BlobStore, assignment: Assignment
+) -> str | None:
+    """The refused answer this attempt answers, when it is the node's one
+    second attempt (D30), else None.
 
     Counted from the attempts before this one, so the prospective prompt that
     is priced and the attempt's own rebuilt prompt carry the same lines. A body
@@ -629,19 +650,34 @@ def _retry_feedback(
     before = ids.index(assignment.attempt_id) if assignment.attempt_id in ids else None
     source = _feedback_source(attempts[:before])
     if source is None or source.diagnostic_sha256 is None:
-        return ()
-    body: str | None = None
+        return None
     try:
-        body = _stored_body(blobs, source.diagnostic_sha256)
+        return _stored_body(blobs, source.diagnostic_sha256)
     except Refusal as lost:
         if lost.code not in _BLOB_LOST:
             raise
-    if body is None:
-        return ()
-    skill = assemble_authority(bundle, assignment.module_id).files[SKILL]
-    return retry_feedback(
-        _contract(bundle), catalog(bundle), identity, body, skill=skill
-    )
+    return None
+
+
+def _anchoring(
+    conn: StoreConnection,
+    blocks: dict[UUID, frozenset[str]],
+    citations: Sequence[Citation],
+) -> list[RefusalCode | None]:
+    """Each citation's own anchoring verdict, by the rule the answer was
+    judged by (`verify_citations`), one at a time so every one is named."""
+    index = TokenIndex()
+    verdicts: list[RefusalCode | None] = []
+    for citation in citations:
+        try:
+            verify_citations(conn, delivered=blocks, citations=(citation,), index=index)
+        except Refusal as refused:
+            if refused.code not in _ANCHORING_CODES:
+                raise
+            verdicts.append(refused.code)
+        else:
+            verdicts.append(None)
+    return verdicts
 
 
 def _lineage_moved(
