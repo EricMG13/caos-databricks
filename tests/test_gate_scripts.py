@@ -578,6 +578,24 @@ def test_main_prints_a_failure_line_per_floor_failed(
     assert "0 files" in capsys.readouterr().err
 
 
+def test_main_refuses_a_bare_cover_flag_with_no_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """N46: `nargs="*"` let a bare `--cover` (no directory after it) leave
+    `args.cover` empty, so `if args.cover:` in `main` took the false branch
+    and skipped the claim check silently -- a scan claimed to cover nothing
+    passed as though nothing needed claiming."""
+    report = tmp_path / "bandit.json"
+    report.write_text(json.dumps({"errors": [], "metrics": {}}), encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(SystemExit) as caught:
+        scan_floors.main([str(report), "--cover"])
+
+    assert caught.value.code == 2
+    assert "--cover" in capsys.readouterr().err
+
+
 def test_check_tested_module_guard_exits_with_mains_return_code(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

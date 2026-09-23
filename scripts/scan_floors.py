@@ -170,7 +170,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--min-files", type=int, default=1)
     parser.add_argument("--no-parse-errors", action="store_true")
     parser.add_argument("--trivy", action="store_true")
-    parser.add_argument("--cover", nargs="*", default=[])
+    # `nargs="+"`, not `"*"`: bare `--cover` given no directory used to leave
+    # `args.cover` empty, so `if args.cover:` below skipped the claim check
+    # silently rather than refusing a scan claimed for nothing (N46).
+    parser.add_argument("--cover", nargs="+", default=[])
     parser.add_argument("--unscanned", nargs="*", default=[])
     parser.add_argument(
         "--repo", type=Path, default=Path(__file__).resolve().parents[1]

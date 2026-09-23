@@ -13,6 +13,7 @@ and `--against` refuses a baseline that rose above an earlier commit's.
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import re
 import shlex
@@ -72,6 +73,72 @@ PRE_COMMIT_HOOKS = frozenset(
         "vocabulary", "tested", "io-budget",
     }
 )  # fmt: skip
+# The five keys on a hook's own body that change whether or on what it runs
+# (AR-07, N46): `entry` swapped for a no-op, `stages` moved off the default
+# run, and `files`/`exclude`/`args` narrowed all disable a hook while its
+# `id` keeps naming it present in `PRE_COMMIT_HOOKS` above. Each hook not
+# listed here must carry none of the five; a hook that is listed is held to
+# exactly the value given.
+HOOK_KEYS = ("entry", "stages", "files", "exclude", "args")
+_LARGE_FILES_EXCLUDE = (
+    r"^(vendor/|qualification/ba-fy2025/documents/BA_FY2025_10K\.txt$|"
+    r"qualification/f-fy2025/documents/F_FY2025_10K\.txt$|"
+    r"qualification/ccl-fy2025-covenant-refinancing/documents/"
+    r"CCL_2025_Revolving_Credit_Agreement\.txt$|"
+    r"qualification/ccl-fy2025-full-relative-value/documents/"
+    r"CCL_2025_Revolving_Credit_Agreement\.txt$|"
+    r"qualification/ccl-fy2025-lite-covenant-refinancing/documents/"
+    r"CCL_2025_Revolving_Credit_Agreement\.txt$|"
+    r"qualification/ccl-fy2025-lite-full-credit-screen/documents/"
+    r"CCL_2025_Revolving_Credit_Agreement\.txt$|"
+    r"qualification/save-2024-distressed-restructuring/documents/"
+    r"SAVE_2024_RSA_with_Chapter_11_Plan\.txt$|"
+    r"qualification/save-2024-lite-distressed-restructuring/documents/"
+    r"SAVE_2024_RSA_with_Chapter_11_Plan\.txt$)"
+)
+_VENDOR_QUAL_EXCLUDE = (
+    r"^(vendor/|qualification/.*/documents/|\.claude/skills/|"
+    r"complexipy-snapshot\.json$)"
+)
+PRE_COMMIT_HOOK_BODY: dict[str, dict[str, str]] = {
+    "ruff": {"args": "[--fix]", "exclude": "^vendor/"},
+    "ruff-format": {"exclude": "^vendor/"},
+    "check-added-large-files": {"exclude": _LARGE_FILES_EXCLUDE},
+    "check-merge-conflict": {"exclude": "^vendor/"},
+    "end-of-file-fixer": {"exclude": _VENDOR_QUAL_EXCLUDE},
+    "trailing-whitespace": {"exclude": _VENDOR_QUAL_EXCLUDE},
+    "vocabulary": {"entry": "uv run python scripts/check_vocabulary.py"},
+    "tested": {"entry": "uv run python scripts/check_tested.py"},
+    "io-budget": {"entry": "uv run python scripts/io_budget.py --assert"},
+}
+# A conftest.py can drop a test from the run with nothing in the output to
+# notice (N46): `collect_ignore`/`collect_ignore_glob` drop a file from
+# collection outright, and a collection hook can deselect items the same
+# way pytest_collection_modifyitems already does for `live_provider`. That
+# one use is legitimate and pinned below; anything else is refused.
+COLLECTION_ASSIGNMENTS = frozenset({"collect_ignore", "collect_ignore_glob"})
+COLLECTION_HOOKS = frozenset(
+    {
+        "pytest_collection_modifyitems", "pytest_ignore_collect",
+        "pytest_collect_file", "pytest_pycollect_makemodule",
+        "pytest_collectstart",
+    }
+)  # fmt: skip
+PYTEST_COLLECTION_MODIFYITEMS = (
+    "def pytest_collection_modifyitems(config: pytest.Config, "
+    "items: list[pytest.Item]) -> None:\n"
+    "    live = [item for item in items if item.get_closest_marker"
+    "('live_provider')]\n"
+    "    if not config.getoption('--live-provider'):\n"
+    "        items[:] = [item for item in items if item not in live]\n"
+    "        config.hook.pytest_deselected(items=live)\n"
+    "        return\n"
+    "    missing = [name for name in _LIVE_CONFIGURATION if not "
+    "os.environ.get(name)]\n"
+    "    if live and missing:\n"
+    "        raise pytest.UsageError('live provider tests require: ' + "
+    "', '.join(missing))"
+)
 PARITY_PACKAGE = "server"  # the legacy snapshot the goldens describe
 PARITY_CASE_FLOOR = {
     "cash_flow": 71,
@@ -259,11 +326,99 @@ def _python_problems(root: Path, project: dict[str, object]) -> list[str]:
     return problems
 
 
+def _pre_commit_hooks(config: str) -> dict[str, dict[str, str]]:
+    """Every hook's own body, by id: whichever of `HOOK_KEYS` it sets.
+
+    A line-oriented reading, not a YAML parser (stdlib first): a hook starts
+    at `- id: <name>`, and its own keys are every following line indented
+    past that dash, up to the next `- id:` or a line indented no further.
+    """
+    hooks: dict[str, dict[str, str]] = {}
+    current: dict[str, str] | None = None
+    indent = -1
+    for line in config.splitlines():
+        started = re.match(r"^(\s*)-\s*id:\s*(\S+)\s*$", line)
+        if started is not None:
+            indent = len(started.group(1))
+            current = hooks.setdefault(started.group(2), {})
+            continue
+        if not line.strip():
+            continue
+        this_indent = len(line) - len(line.lstrip(" "))
+        if current is None or this_indent <= indent:
+            current = None
+            continue
+        body = re.match(r"^\s*(\w[\w-]*):\s*(.*?)\s*$", line)
+        if body is not None and body.group(1) in HOOK_KEYS:
+            current[body.group(1)] = body.group(2).strip("'\"")
+    return hooks
+
+
 def _hook_problems(root: Path) -> list[str]:
     config = (root / ".pre-commit-config.yaml").read_text(encoding="utf-8")
-    hooks = set(re.findall(r"^\s*-\s*id:\s*(\S+)", config, re.M))
-    missing = sorted(PRE_COMMIT_HOOKS - hooks)
-    return [f"pre-commit: hooks missing {missing}"] if missing else []
+    hooks = _pre_commit_hooks(config)
+    missing = sorted(PRE_COMMIT_HOOKS - set(hooks))
+    problems = [f"pre-commit: hooks missing {missing}"] if missing else []
+    for name in sorted(PRE_COMMIT_HOOKS & set(hooks)):
+        expected = PRE_COMMIT_HOOK_BODY.get(name, {})
+        actual = hooks[name]
+        problems += [
+            f"pre-commit: {name}.{key} is {actual.get(key)!r}, not {value!r}"
+            for key, value in expected.items()
+            if actual.get(key) != value
+        ]
+        problems += [
+            f"pre-commit: {name}.{key} is set; it can change what the hook runs on"
+            for key in HOOK_KEYS
+            if key not in expected and key in actual
+        ]
+    return problems
+
+
+def _collection_hook_problems(root: Path) -> list[str]:
+    """Refuse a `conftest.py` that can drop a test with nothing to notice.
+
+    `tests/conftest.py`'s own `pytest_collection_modifyitems` is legitimate
+    -- it is what makes `-m "not live_provider"` a floor rather than an
+    opt-out -- and is pinned to the body it is committed with; any other
+    `collect_ignore`, `collect_ignore_glob` or collection hook, there or in
+    a conftest.py anywhere else under `tests/`, is new and is refused.
+    """
+    problems: list[str] = []
+    for name in tracked_files(root, "tests/conftest.py", ":(glob)tests/**/conftest.py"):
+        path = root / name
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=name)
+        except (OSError, SyntaxError):
+            problems.append(f"conftest: {name} could not be parsed")
+            continue
+        for node in tree.body:
+            problems += _collection_node_problems(name, node)
+    return problems
+
+
+def _collection_node_problems(name: str, node: ast.stmt) -> list[str]:
+    if isinstance(node, ast.Assign | ast.AnnAssign):
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        return [
+            f"conftest: {name} sets {target.id}; it can drop a file from "
+            "collection with nothing reported"
+            for target in targets
+            if isinstance(target, ast.Name) and target.id in COLLECTION_ASSIGNMENTS
+        ]
+    if isinstance(node, ast.FunctionDef) and node.name in COLLECTION_HOOKS:
+        if name == "tests/conftest.py" and node.name == "pytest_collection_modifyitems":
+            if ast.unparse(node) != PYTEST_COLLECTION_MODIFYITEMS:
+                return [
+                    "conftest: tests/conftest.py's pytest_collection_modifyitems "
+                    "no longer matches what is committed"
+                ]
+            return []
+        return [
+            f"conftest: {name} defines {node.name}; it can change what pytest "
+            "collects or runs"
+        ]
+    return []
 
 
 def _parity_problems(root: Path) -> list[str]:
@@ -489,6 +644,7 @@ def configuration_problems(root: Path = REPO) -> list[str]:
         + _overriding_problems(root)
         + _python_problems(root, project)
         + _hook_problems(root)
+        + _collection_hook_problems(root)
         + _parity_problems(root)
         + _bundle_problems(root)
         + _ci_problems(root)
@@ -502,8 +658,10 @@ SNAPSHOT = "complexipy-snapshot.json"
 def suppression_counts(root: Path = REPO) -> dict[str, int]:
     """How many of each suppression the tracked Python files carry, how many
     functions the cognitive-complexity baseline (G14) still carries, and the
-    complexity it allows them in all: a recorded value raised (31 to 60)
-    lets its function grow while the count stays put (MAX-13)."""
+    complexity recorded for each of them by name (AR-07, N46): ratcheting
+    only their sum let one function's complexity rise as long as another's
+    fell to match, so the pair's total held still and the rise passed
+    unseen. Each baselined function is its own budget below."""
     counts = dict.fromkeys(SUPPRESSIONS, 0)
     for path in tracked_python(root):
         text = path.read_text(encoding="utf-8")
@@ -511,35 +669,43 @@ def suppression_counts(root: Path = REPO) -> dict[str, int]:
             counts[name] += len(pattern.findall(text))
     functions = _baselined_functions(root / SNAPSHOT)
     counts["complexity_baselined"] = len(functions)
-    counts["complexity_total"] = sum(functions)
+    counts.update(functions)
     return counts
 
 
-def _baselined_functions(snapshot: Path) -> list[int]:
-    """The complexity recorded for each function the snapshot baselines."""
+def _baselined_functions(snapshot: Path) -> dict[str, int]:
+    """The complexity recorded for each function the snapshot baselines, by
+    a `complexity:<path>::<name>` key unique to that function."""
     try:
         recorded = json.loads(snapshot.read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return []
-    return [
-        int(function.get("complexity", 0))
+        return {}
+    return {
+        f"complexity:{entry.get('path')}::{function.get('name')}": int(
+            function.get("complexity", 0)
+        )
         for entry in recorded
         for function in entry.get("functions", [])
-    ]
+    }
 
 
 def suppression_problems(root: Path = REPO, baseline: Path = BASELINE) -> list[str]:
     """Each suppression kind whose count is not the baseline's. A ratchet
     (DF-11): a count above it is a new suppression, and a count below it is
     room a later change could spend unseen, so the change that removes a
-    suppression lowers the baseline with it."""
+    suppression lowers the baseline with it. The two sides can also name
+    different kinds outright -- a baselined function fixed below 15 leaves
+    the complexipy snapshot, and with it this run's counts, while the
+    committed baseline still carries its key -- and that too is a fall to 0,
+    not silence."""
     try:
         allowed = json.loads(baseline.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return ["baseline: tests/gate_baseline.json unreadable"]
     counts = suppression_counts(root)
     problems: list[str] = []
-    for name, count in counts.items():
+    for name in sorted(set(counts) | set(allowed)):
+        count = counts.get(name, 0)
         budget = int(allowed.get(name, 0))
         if count > budget:
             problems.append(f"suppressions: {name} rose to {count} (baseline {budget})")

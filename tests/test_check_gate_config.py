@@ -30,6 +30,7 @@ def _tree(tmp_path: Path) -> Path:
         "databricks.yml",
         "app.yaml",
         ".github/workflows/ci.yml",
+        "tests/conftest.py",
     ):
         (root / name).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(REPO / name, root / name)
@@ -104,13 +105,15 @@ def test_the_suppression_count_is_a_ratchet(tmp_path: Path) -> None:
 
 def test_a_raised_complexity_record_is_a_budget_that_rose(tmp_path: Path) -> None:
     """MAX-13: raising one function's recorded complexity in the snapshot
-    (31 to 60) let it grow while the baselined count stayed the same; the
-    total the snapshot allows is budgeted too."""
+    (31 to 60) let it grow while the baselined count stayed the same; each
+    function the snapshot allows is budgeted by its own name now."""
     snapshot = json.loads((REPO / check_gate_config.SNAPSHOT).read_text())
     counts = check_gate_config.suppression_counts()
     assert counts["complexity_baselined"] == sum(
         len(entry["functions"]) for entry in snapshot
     )
+    key = f"complexity:{snapshot[0]['path']}::{snapshot[0]['functions'][0]['name']}"
+    assert counts[key] == snapshot[0]["functions"][0]["complexity"]
     snapshot[0]["functions"][0]["complexity"] += 29
     root = tmp_path / "tree"
     root.mkdir()
@@ -118,7 +121,60 @@ def test_a_raised_complexity_record_is_a_budget_that_rose(tmp_path: Path) -> Non
     (root / check_gate_config.SNAPSHOT).write_text(json.dumps(snapshot))
     raised = check_gate_config.suppression_counts(root)
     assert raised["complexity_baselined"] == counts["complexity_baselined"]
-    assert raised["complexity_total"] == counts["complexity_total"] + 29
+    assert raised[key] == counts[key] + 29
+
+
+def test_two_baselined_functions_cannot_swap_complexity_unnoticed(
+    tmp_path: Path,
+) -> None:
+    """AR-07 and N46: ratcheting only the snapshot's total let one function's
+    complexity rise as long as another fell to match, so the pair's sum held
+    still and the rise passed unseen. Each function is its own budget now,
+    so the one that rose is named even though the total did not move."""
+    snapshot = json.loads((REPO / check_gate_config.SNAPSHOT).read_text())
+    first_entry, second_entry = snapshot[0], snapshot[1]
+    first, second = first_entry["functions"][0], second_entry["functions"][0]
+    delta = 5
+    first["complexity"] += delta
+    second["complexity"] -= delta
+    root = tmp_path / "tree"
+    root.mkdir()
+    _git(root, "init", "-q")
+    (root / check_gate_config.SNAPSHOT).write_text(json.dumps(snapshot))
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text(json.dumps(check_gate_config.suppression_counts()))
+
+    problems = check_gate_config.suppression_problems(root, baseline)
+
+    first_key = f"complexity:{first_entry['path']}::{first['name']}"
+    second_key = f"complexity:{second_entry['path']}::{second['name']}"
+    assert any(p.startswith(f"suppressions: {first_key} rose") for p in problems)
+    assert any(p.startswith(f"suppressions: {second_key} fell") for p in problems)
+
+
+def test_a_function_fixed_off_the_snapshot_must_lower_the_baseline_too(
+    tmp_path: Path,
+) -> None:
+    """A baselined function brought to 15 or below leaves the complexipy
+    snapshot, and with it this run's counts; the committed baseline still
+    naming it is a fall to 0, not a key the ratchet stops watching."""
+    snapshot = json.loads((REPO / check_gate_config.SNAPSHOT).read_text())
+    fixed_key = (
+        f"complexity:{snapshot[0]['path']}::{snapshot[0]['functions'][0]['name']}"
+    )
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text(json.dumps(check_gate_config.suppression_counts()))
+    del snapshot[0]["functions"][0]
+    if not snapshot[0]["functions"]:
+        del snapshot[0]
+    root = tmp_path / "tree"
+    root.mkdir()
+    _git(root, "init", "-q")
+    (root / check_gate_config.SNAPSHOT).write_text(json.dumps(snapshot))
+
+    problems = check_gate_config.suppression_problems(root, baseline)
+
+    assert any(p.startswith(f"suppressions: {fixed_key} fell to 0") for p in problems)
 
 
 def test_the_suppression_grammar_is_each_tool_s_own() -> None:
@@ -226,6 +282,103 @@ def test_a_gate_weakened_in_effect_is_named(tmp_path: Path) -> None:
     ):
         assert expected in problems, problems
     assert any("jscpd --threshold 3 " in p for p in problems), problems
+
+
+def test_a_hook_s_own_body_weakened_in_effect_is_named(tmp_path: Path) -> None:
+    """AR-07 and N46: the old check matched only `- id:`, so a hook kept
+    naming itself present while its `entry` was swapped for a no-op, its
+    `exclude` widened, or a fresh `stages`/`files` moved it off the default
+    run or narrowed what it saw."""
+    root = _tree(tmp_path)
+    assert check_gate_config._hook_problems(root) == []
+    config = root / ".pre-commit-config.yaml"
+    text = config.read_text(encoding="utf-8")
+    text = text.replace(
+        "        entry: uv run python scripts/check_vocabulary.py\n",
+        "        entry: 'true'\n",
+    )
+    text = text.replace(
+        "      - id: ruff\n        args: [--fix]\n        exclude: ^vendor/\n",
+        "      - id: ruff\n        args: [--fix]\n        exclude: ^(vendor/|caos/)\n",
+    )
+    text = text.replace(
+        "      - id: gitleaks\n",
+        "      - id: gitleaks\n        stages: [manual]\n",
+    )
+    config.write_text(text, encoding="utf-8")
+    problems = check_gate_config._hook_problems(root)
+    assert (
+        "pre-commit: vocabulary.entry is 'true', not 'uv run python "
+        "scripts/check_vocabulary.py'" in problems
+    )
+    assert "pre-commit: ruff.exclude is '^(vendor/|caos/)', not '^vendor/'" in problems
+    assert (
+        "pre-commit: gitleaks.stages is set; it can change what the hook runs on"
+        in problems
+    )
+
+
+def test_a_hook_removed_is_still_named_missing(tmp_path: Path) -> None:
+    root = _tree(tmp_path)
+    config = root / ".pre-commit-config.yaml"
+    text = config.read_text(encoding="utf-8").replace(
+        "      - id: io-budget\n"
+        "        name: every request path declares an I/O budget\n"
+        "        entry: uv run python scripts/io_budget.py --assert\n"
+        "        language: system\n"
+        "        pass_filenames: false\n",
+        "",
+    )
+    config.write_text(text, encoding="utf-8")
+    assert (
+        "pre-commit: hooks missing ['io-budget']"
+        in check_gate_config._hook_problems(root)
+    )
+
+
+def test_a_conftest_collection_hook_is_refused_unless_pinned(tmp_path: Path) -> None:
+    """N46: `tests/conftest.py`'s `pytest_collection_modifyitems` is what
+    makes `-m "not live_provider"` a floor rather than an opt-out, so it is
+    pinned rather than banned outright; a change to it, a `collect_ignore`
+    anywhere, or a second collection hook elsewhere under `tests/` all drop
+    a test from a run with nothing in the tally to notice, and are refused."""
+    root = _tree(tmp_path)
+    assert check_gate_config._collection_hook_problems(root) == []
+
+    conftest = root / "tests" / "conftest.py"
+    original = conftest.read_text(encoding="utf-8")
+    tampered = original.replace(
+        "    live = [item for item in items if item.get_closest_marker"
+        '("live_provider")]\n',
+        "    live = []\n",
+    )
+    assert tampered != original
+    conftest.write_text(tampered, encoding="utf-8")
+    assert (
+        "conftest: tests/conftest.py's pytest_collection_modifyitems no longer "
+        "matches what is committed" in check_gate_config._collection_hook_problems(root)
+    )
+
+    conftest.write_text(original + "\ncollect_ignore = ['test_security.py']\n")
+    assert (
+        "conftest: tests/conftest.py sets collect_ignore; it can drop a file "
+        "from collection with nothing reported"
+        in check_gate_config._collection_hook_problems(root)
+    )
+
+    conftest.write_text(original, encoding="utf-8")
+    nested = root / "tests" / "sub" / "conftest.py"
+    nested.parent.mkdir(parents=True)
+    nested.write_text(
+        "def pytest_ignore_collect(collection_path, config):\n    return True\n",
+        encoding="utf-8",
+    )
+    _git(root, "add", "tests/sub/conftest.py")
+    assert (
+        "conftest: tests/sub/conftest.py defines pytest_ignore_collect; it can "
+        "change what pytest collects or runs"
+        in check_gate_config._collection_hook_problems(root)
+    )
 
 
 def test_the_ci_file_s_commands_are_read_as_the_runner_runs_them() -> None:
