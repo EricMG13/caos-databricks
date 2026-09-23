@@ -44,6 +44,7 @@ from caos.pricing import price_from_environment as price_from_environment
 from caos.provider import CompletionProvider, resend_checked
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection, apply_schema, connect, rollback_or_close
+from caos.store.budget import configured_ceiling
 from caos.store.gates import execution_input
 from caos.store.lakebase import note_connect_failure, store_url
 from caos.store.outcomes import execution_reads
@@ -428,6 +429,11 @@ class Configured:
 
 def _configured() -> Configured:
     """Configure from the environment, or refuse having made no call."""
+    # CF-048: checked first, before the provider or the store, the same way a
+    # malformed CAOS_MODEL_PRICE refuses below -- so a CAOS_RUN_CEILING nobody
+    # could price refuses the worker at boot instead of sitting invisible
+    # until the first run a caller starts under it.
+    configured_ceiling()
     completions = from_environment()
     url, root = _store_configuration()
     bundle = Bundle(VENDORED_BUNDLE)

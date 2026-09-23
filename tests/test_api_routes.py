@@ -83,6 +83,7 @@ from caos.methodology.bundle import Bundle
 from caos.methodology.handoff import _decoded_record, record_bytes
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
+from caos.store.budget import CEILING_ENV
 from caos.store.commands import request_digest
 from caos.store.members import Standing, grant, revoke
 from caos.store.routes import pin_route, pinned_route
@@ -1268,6 +1269,47 @@ def test_a_process_with_no_database_refuses_to_start(
         pass  # pragma: no cover -- entering the client is what raises
 
     assert caught.value.code is RefusalCode.STORE_NOT_CONFIGURED
+
+
+def test_a_malformed_database_url_refuses_to_start_without_the_password(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """CF-078: a DSN psycopg's own parser refuses -- bad percent-encoding in
+    the password -- raises `ProgrammingError` with the whole connection
+    string, password included, quoted in its message. The lifespan's
+    unguarded `connect(_database_url())` let that string reach stderr
+    verbatim; it must fail at boot with the typed code alone instead."""
+    monkeypatch.setenv(
+        app_module.DATABASE_URL,
+        "postgresql://baduser:SuperSecretPw%2passwordZZZ@127.0.0.1:1/nodb",
+    )
+
+    with pytest.raises(Refusal) as caught, TestClient(app):
+        pass  # pragma: no cover -- entering the client is what raises
+
+    assert caught.value.code is RefusalCode.STORE_UNAVAILABLE
+    logged = capsys.readouterr().err
+    assert logged.strip() == "STORE_UNAVAILABLE"
+    assert "SuperSecretPw" not in logged
+
+
+def test_a_malformed_run_ceiling_refuses_to_start(
+    empty_database: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """CF-048: `CAOS_RUN_CEILING` was only ever read lazily, when a caller
+    started a run, so a value nobody could price sat invisible from boot
+    until the first such request. Checked at the same point the store is,
+    the same way a malformed `CAOS_MODEL_PRICE` already refuses the worker."""
+    monkeypatch.setenv(app_module.DATABASE_URL, empty_database)
+    monkeypatch.setenv(CEILING_ENV, "not-a-number")
+
+    with pytest.raises(Refusal) as caught, TestClient(app):
+        pass  # pragma: no cover -- entering the client is what raises
+
+    assert caught.value.code is RefusalCode.PROVIDER_NOT_CONFIGURED
+    assert capsys.readouterr().err.strip() == "PROVIDER_NOT_CONFIGURED"
 
 
 def test_startup_applies_the_declared_schema(

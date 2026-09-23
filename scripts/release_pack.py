@@ -47,6 +47,8 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
+import psycopg
+
 # Run as a script, not as a package module: the repository root is what makes
 # `server` importable (the same line `scripts/qualify.py` carries).
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -612,8 +614,18 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
     identity = None if args.provider is None else (args.provider, args.model)
-    with connect(url) as conn:
-        qualified = read_store(conn, bundle=bundle, as_of=as_of, identity=identity)
+    try:
+        with connect(url) as conn:
+            qualified = read_store(conn, bundle=bundle, as_of=as_of, identity=identity)
+    except Refusal as refused:
+        print(refused.code.value, file=sys.stderr)
+        return 2
+    except psycopg.Error:
+        # CF-078: a DSN psycopg itself refuses to parse -- bad percent-encoding
+        # in a password included -- quotes the whole string, password and all,
+        # in its own message; only the typed code is ever printed here.
+        print(RefusalCode.STORE_UNAVAILABLE.value, file=sys.stderr)
+        return 2
     write_pack(
         build_pack(REPO, bundle=bundle, store=(qualified, as_of), identity=identity),
         args.out,

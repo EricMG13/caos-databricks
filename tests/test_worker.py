@@ -42,6 +42,7 @@ from caos.methodology.bundle import Bundle
 from caos.provider import CompletionProvider
 from caos.refusals import Refusal, RefusalCode
 from caos.store import RunStatus, StoreConnection, apply_schema
+from caos.store.budget import CEILING_ENV
 from caos.store.runs import run_status
 from caos.store.work import LEASE_SECONDS, Lease, enqueue_run, worker_states
 
@@ -343,6 +344,30 @@ def test_an_unset_price_says_unset_not_misconfigured(
     # A malformed price is misconfiguration, not absence: the code alone, with
     # no name and nothing of the value.
     monkeypatch.setenv("CAOS_MODEL_PRICE", "a-model/for-the-test,not-a-number")
+
+    assert worker.main() == 2
+    assert capsys.readouterr().err.strip() == "PROVIDER_NOT_CONFIGURED"
+
+
+def test_a_malformed_run_ceiling_refuses_the_worker_at_boot(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """CF-048: `CAOS_RUN_CEILING` used to be read only when a caller started a
+    run, so a value nobody could price sat invisible until then. It is
+    checked first now, before the provider, the store or the bundle, printed
+    as its code alone -- the same shape a malformed `CAOS_MODEL_PRICE` already
+    refuses the worker in."""
+
+    def never(*_args: object, **_kwargs: object) -> object:
+        pytest.fail("no provider, store, bundle or call before the ceiling")
+
+    monkeypatch.setattr(worker, "from_environment", never)
+    monkeypatch.setattr(worker, "connect", never)
+    monkeypatch.setattr(worker, "run_worker", never)
+    # Set so `_report`'s "unset" tag -- which names CAOS_MODEL_PRICE alone,
+    # whichever check actually refused -- does not append to this code.
+    monkeypatch.setenv("CAOS_MODEL_PRICE", "irrelevant: never read")
+    monkeypatch.setenv(CEILING_ENV, "not-a-number")
 
     assert worker.main() == 2
     assert capsys.readouterr().err.strip() == "PROVIDER_NOT_CONFIGURED"
