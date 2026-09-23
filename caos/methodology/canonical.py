@@ -53,7 +53,6 @@ from caos.methodology.executor import (
 )
 from caos.methodology.handoff import (
     GATE_MODULE,
-    MAX_FEEDBACK_MESSAGES,
     MAX_TRANSPORT_CHARS,
     CanonicalRecord,
     HostIdentity,
@@ -62,9 +61,11 @@ from caos.methodology.handoff import (
     UpstreamRef,
     anchoring_line,
     answer_citations,
+    capped,
+    feedback_lines,
     parse_response,
+    readiness_set_line,
     record_bytes,
-    retry_feedback,
     stored_lineage,
     validate_markdown,
 )
@@ -585,15 +586,22 @@ def _prompt_context(
     if body is None:
         return context
     skill = assemble_authority(bundle, assignment.module_id).files[SKILL]
-    lines = retry_feedback(
-        _contract(bundle), catalog(bundle), identity, body, skill=skill
+    contract, pathways = _contract(bundle), catalog(bundle)
+    host = (
+        anchoring_line(
+            _anchoring(conn, _by_source(context.delivered), answer_citations(body))
+        ),
+        readiness_set_line(
+            contract,
+            pathways,
+            body,
+            gate_expects(assignment.route, assignment.node),
+        ),
     )
-    anchoring = anchoring_line(
-        _anchoring(conn, _by_source(context.delivered), answer_citations(body))
+    lines = feedback_lines(contract, pathways, identity, body, skill=skill)
+    return replace(
+        context, feedback=capped([line for line in host if line] + list(lines))
     )
-    if anchoring is not None:
-        lines = (anchoring, *lines)[:MAX_FEEDBACK_MESSAGES]
-    return replace(context, feedback=lines)
 
 
 # Anchoring's own refusals: a quote not on its cited page, on it more than

@@ -861,6 +861,19 @@ def retry_feedback(
     own answer back to it. These lines go into that one request and nowhere
     else: never a log, a refusal or a row.
     """
+    return capped(feedback_lines(contract, catalog, identity, body, skill=skill))
+
+
+def feedback_lines(
+    contract: VendorContract,
+    catalog: Mapping[str, Any],
+    identity: HostIdentity,
+    body: str,
+    *,
+    skill: bytes = b"",
+) -> tuple[str, ...]:
+    """`retry_feedback`'s lines before the cap, most telling first: the
+    transport, the quotes, the missing IDs, then the vendor's own messages."""
     parsed, reason = _transport_or_reason(body)
     if parsed is None:
         return (reason,)
@@ -870,7 +883,52 @@ def retry_feedback(
     absent = _absent_ids_line(contract, identity.module_id, text, skill)
     lines += [absent] if absent else []
     lines += _vendor_lines(contract, catalog, identity, text, skill)
-    return tuple(lines[:MAX_FEEDBACK_MESSAGES])
+    return tuple(lines)
+
+
+def capped(lines: Sequence[str]) -> tuple[str, ...]:
+    """At most `MAX_FEEDBACK_MESSAGES` lines; when some are dropped, the last
+    says how many, so a second attempt knows it was not told everything."""
+    if len(lines) <= MAX_FEEDBACK_MESSAGES:
+        return tuple(lines)
+    kept = MAX_FEEDBACK_MESSAGES - 1
+    return (
+        *lines[:kept],
+        f"host feedback: {len(lines) - kept} more check messages not shown",
+    )
+
+
+def readiness_set_line(
+    contract: VendorContract,
+    catalog: Mapping[str, Any],
+    body: str,
+    expects: frozenset[str],
+) -> str | None:
+    """CP-0's T8 against the modules this route pins (`gate_expects`): the
+    host's own readiness check, which refuses `HANDOFF_INCOMPLETE` and until
+    now told the second attempt nothing. Names module IDs only."""
+    parsed, _reason = _transport_or_reason(body)
+    if parsed is None or not expects:
+        return None
+    nav = contract.navigation
+    try:
+        rows = nav.parse_t8(parsed[1], nav.validate_catalog(catalog))
+    except ValueError:  # the parser's own line already says why
+        return None
+    named = frozenset(row.module_id for row in rows)
+    if named == expects:
+        return None
+    parts = []
+    if missing := sorted(expects - named):
+        parts.append("it lacks " + ", ".join(missing))
+    if extra := sorted(named - expects):
+        parts.append("it names " + ", ".join(extra) + ", not on this route")
+    return (
+        "host readiness check: T8 must have one row for each of "
+        + ", ".join(sorted(expects))
+        + "; "
+        + "; ".join(parts)
+    )
 
 
 def _absent_ids_line(
@@ -1002,20 +1060,49 @@ def _vendor_lines(
 ) -> list[str]:
     """The vendor's own messages on the answer, labelled, bounded, as written."""
     found: list[tuple[str, object]] = []
+    fields: object = None
     with suppress(Exception):  # the vendor's checker raising is nothing to report
         _text(text.encode("utf-8"))
         scope = _decision_scope(catalog, identity)
         checked = contract.validate_handoff.validate_text(text, decision_scope=scope)
         found += [("validate_handoff", error) for error in checked.errors or ()]
+        fields = checked.fields
+    if identity.module_id == GATE_MODULE:
+        found += _t8_messages(contract, catalog, text)
+    if identity.module_id == RESEARCH_MODULE and fields is not None:
+        found += _research_messages(contract, identity, fields, text)
     if skill and identity.module_id != MODEL_MODULE:
         with suppress(Exception):
             violations = contract.completeness_check.check(
                 skill.decode("utf-8"), text, identity.module_id
             )[0]
-            found += [("completeness_check", violation) for violation in violations]
-    if identity.module_id == GATE_MODULE:
-        found += _t8_messages(contract, catalog, text)
+            ordered = sorted(map(str, violations), key=_consequence)
+            found += [("completeness_check", violation) for violation in ordered]
     return [line for label, message in found if (line := _bounded(label, message))]
+
+
+def _consequence(message: str) -> int:
+    """A table that does not parse first, the registers it then voids last:
+    one malformed interface table makes every one of them "missing"."""
+    if "differs from its header" in message or "separator" in message:
+        return 0
+    return 2 if "interface table missing" in message else 1
+
+
+def _research_messages(
+    contract: VendorContract, identity: HostIdentity, fields: object, text: str
+) -> list[tuple[str, object]]:
+    """The vendor's research-dossier refusal (§96) for CP-DR, which refuses
+    `HANDOFF_INCOMPLETE` and until now told the second attempt nothing."""
+    try:
+        contract.research.validate_dossier(
+            SimpleNamespace(fields=fields, text=text), research_brief_of(identity)
+        )
+    except ValueError as refused:  # the vendor's own message, bounded
+        return [("research", refused)]
+    except Refusal:  # no bound brief: a help line never stops a run
+        return []
+    return []
 
 
 def _t8_messages(
