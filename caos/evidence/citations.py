@@ -32,7 +32,12 @@ from dataclasses import dataclass, field
 from itertools import groupby
 from uuid import UUID
 
-from caos.evidence.ingest import GROUP_WIDTH, block_ids_by_line
+from caos.evidence.ingest import (
+    GROUP_WIDTH,
+    PACKING_BY_TOKEN,
+    PACKING_BY_WIDTH,
+    block_ids_by_line,
+)
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
 
@@ -194,7 +199,7 @@ def anchor_citation(
     `CITATION_NOT_LOCATED` when the quote is not there and `CITATION_AMBIGUOUS`
     when it is there more than once. Neither refusal carries the quote.
     """
-    _digest, tracking = _source_facts(conn, source_id)
+    _digest, tracking, _packing = _source_facts(conn, source_id)
     tokens = _page_tokens(conn, source_id, page)
     return _rectangles(_unique_run(tokens, matched_text, tracking=tracking), page)
 
@@ -411,6 +416,7 @@ class TokenIndex:
     pages: dict[tuple[UUID, int], _Page] = field(default_factory=dict)
     digests: dict[UUID, str] = field(default_factory=dict)
     tracking: dict[UUID, bool] = field(default_factory=dict)
+    packing: dict[UUID, int] = field(default_factory=dict)
     line_blocks: dict[UUID, dict[int, tuple[str, ...]]] = field(default_factory=dict)
 
     def page(self, conn: StoreConnection, source_id: UUID, page: int) -> _Page:
@@ -422,20 +428,23 @@ class TokenIndex:
 
     def facts(self, conn: StoreConnection, source_id: UUID) -> tuple[str, bool]:
         """A live source's digest and whether it tracks (`_source_facts`),
-        read once."""
+        read once with the packing its blocks were written under."""
         if source_id not in self.digests:
-            self.digests[source_id], self.tracking[source_id] = _source_facts(
-                conn, source_id
-            )
+            (digest, tracking, packing) = _source_facts(conn, source_id)
+            self.digests[source_id], self.tracking[source_id] = digest, tracking
+            self.packing[source_id] = packing
         return self.digests[source_id], self.tracking[source_id]
 
     def lines(
         self, conn: StoreConnection, source_id: UUID
     ) -> dict[int, tuple[str, ...]]:
         """Line id to the blocks admission wrote for it (`_line_blocks`),
-        read once per source."""
+        read once per source, under the packing `facts` read."""
         if source_id not in self.line_blocks:
-            self.line_blocks[source_id] = _line_blocks(conn, source_id)
+            self.facts(conn, source_id)
+            self.line_blocks[source_id] = _line_blocks(
+                conn, source_id, self.packing[source_id]
+            )
         return self.line_blocks[source_id]
 
 
@@ -506,11 +515,16 @@ def _page_tokens(conn: StoreConnection, source_id: UUID, page: int) -> list[_Tok
     return [_Token(*row) for row in rows]
 
 
-def _line_blocks(conn: StoreConnection, source_id: UUID) -> dict[int, tuple[str, ...]]:
+def _line_blocks(
+    conn: StoreConnection, source_id: UUID, packing: int = PACKING_BY_WIDTH
+) -> dict[int, tuple[str, ...]]:
     """Line id to the blocks admission wrote for it, once per source: admission's
     own numbering (`block_ids_by_line`) over the token index's line ids.
 
-    A line past `GROUP_WIDTH` was split, so a line may own more than one block.
+    A source packed between tokens (`PACKING_BY_TOKEN`) is read back instead
+    (`_walked_blocks`). What follows is `PACKING_BY_WIDTH`'s reading, which
+    every source admitted before CF-013 was written under and still verifies
+    by. A line past `GROUP_WIDTH` was split, so a line may own more than one block.
     Which lines were split is not guessed, and the direction of the count is
     what says whether to ask. Splitting only ever writes **more** blocks than
     lines, so a source with more stored blocks than lines carries a split and
@@ -523,6 +537,8 @@ def _line_blocks(conn: StoreConnection, source_id: UUID) -> dict[int, tuple[str,
     reading is right and the missing block is simply not among the delivered,
     which is `CITATION_NOT_DELIVERED` and not this function's to answer.
     """
+    if packing == PACKING_BY_TOKEN:
+        return _walked_blocks(conn, source_id)
     rows = conn.execute(
         "SELECT lines.line_id, blocks.stored FROM"
         " (SELECT DISTINCT line_id FROM source_tokens WHERE source_id = %s) AS lines,"
@@ -546,6 +562,75 @@ def _line_blocks(conn: StoreConnection, source_id: UUID) -> dict[int, tuple[str,
         # source" cannot clear it, and re-admission under this build can.
         raise Refusal(RefusalCode.EVIDENCE_PACKING_MISMATCH)
     return block_ids_by_line(counts)
+
+
+# How many space-separated pieces a stored text holds: one more than its
+# spaces. Tokens never hold whitespace a split would find, so a line's pieces
+# are its tokens' pieces summed, and NFC neither adds nor removes U+0020.
+_PIECES = "length({0}) - length(replace({0}, ' ', '')) + 1"
+_WALK_QUERY = (
+    f"SELECT 0, line_id::text, sum({_PIECES.format('text')})"
+    " FROM source_tokens WHERE source_id = %s GROUP BY line_id"
+    f" UNION ALL SELECT 1, block_id, {_PIECES.format('text')}"
+    " FROM source_blocks WHERE source_id = %s"
+)
+
+
+def _walked_blocks(
+    conn: StoreConnection, source_id: UUID
+) -> dict[int, tuple[str, ...]]:
+    """`PACKING_BY_TOKEN`'s numbering, read back from the blocks admission
+    wrote rather than re-derived from a rule (CF-013).
+
+    A packing-2 block is a run of a line's whole tokens joined by one space,
+    so its space-separated pieces are exactly its tokens' pieces. Walking the
+    blocks in id order against the lines in line order, each line takes blocks
+    until their pieces sum to its own: what admission wrote, found without
+    measuring a length on either side's Unicode tables (N40) and without
+    `GROUP_WIDTH`. One round trip, the lines' and the blocks' counts together.
+    Blocks that do not tile the lines exactly -- a block gone, a line that
+    ends inside one -- are this host's own rows failing to read as they were
+    written: `EVIDENCE_PACKING_MISMATCH`.
+    """
+    lines: list[tuple[int, int]] = []
+    blocks: list[tuple[int, str, int]] = []
+    for kind, key, pieces in conn.execute(
+        _WALK_QUERY, (source_id, source_id)
+    ).fetchall():
+        if kind == 0:
+            lines.append((int(key), int(pieces)))
+        else:
+            blocks.append((_ordinal(str(key)), str(key), int(pieces)))
+    return _walk(sorted(lines), sorted(blocks))
+
+
+def _ordinal(block_id: str) -> int:
+    digits = block_id[1:]
+    if not (digits.isascii() and digits.isdigit()):
+        raise Refusal(RefusalCode.EVIDENCE_PACKING_MISMATCH)
+    return int(digits)
+
+
+def _walk(
+    lines: list[tuple[int, int]], blocks: list[tuple[int, str, int]]
+) -> dict[int, tuple[str, ...]]:
+    """Each line, in order, with the blocks whose pieces sum to its own."""
+    numbering: dict[int, tuple[str, ...]] = {}
+    at = 0
+    for line_id, wanted in lines:
+        taken: list[str] = []
+        pieces = 0
+        while pieces < wanted and at < len(blocks):
+            (_ordinal_at, block_id, held) = blocks[at]
+            taken.append(block_id)
+            pieces += held
+            at += 1
+        if pieces != wanted:
+            raise Refusal(RefusalCode.EVIDENCE_PACKING_MISMATCH)
+        numbering[line_id] = tuple(taken)
+    if at != len(blocks):
+        raise Refusal(RefusalCode.EVIDENCE_PACKING_MISMATCH)
+    return numbering
 
 
 def _group_counts(conn: StoreConnection, source_id: UUID) -> dict[int, int]:
@@ -675,11 +760,12 @@ def _rectangles(run: list[_Token], page: int) -> list[Rect]:
     ]
 
 
-def _source_facts(conn: StoreConnection, source_id: UUID) -> tuple[str, bool]:
-    """A live source's document digest, and whether its extractor is one whose
-    own rule can split a tracked word into letters.
+def _source_facts(conn: StoreConnection, source_id: UUID) -> tuple[str, bool, int]:
+    """A live source's document digest, whether its extractor is one whose
+    own rule can split a tracked word into letters, and the packing its blocks
+    were written under (`format_version`, migration 0032).
 
-    Both in one round trip rather than two, because the digest read is already
+    All in one round trip rather than two, because the digest read is already
     paid for once per source and every section's `IO_BUDGET` is asserted with
     `==`: a second query here would move four declared budgets for a fact the
     first row could carry.
@@ -687,10 +773,12 @@ def _source_facts(conn: StoreConnection, source_id: UUID) -> tuple[str, bool]:
     `source_extractions` is outer-joined, and a source with no row is not
     tracking-normalised -- "no row means UNKNOWN: never attribute legacy
     extraction to today's adapter" is that table's own rule, and the
-    fail-closed reading of it here is the exact search alone.
+    fail-closed reading of it here is the exact search alone. Such a source
+    was packed before there was a second packing, so it reads as packing 1.
     """
     row = conn.execute(
-        "SELECT live.document_sha256, extraction.extractor_identity"
+        "SELECT live.document_sha256, extraction.extractor_identity,"
+        " extraction.format_version"
         " FROM live_sources AS live"
         " LEFT JOIN source_extractions AS extraction USING (source_id)"
         " WHERE live.source_id = %s",
@@ -698,7 +786,8 @@ def _source_facts(conn: StoreConnection, source_id: UUID) -> tuple[str, bool]:
     ).fetchone()
     if row is None:
         raise Refusal(RefusalCode.EVIDENCE_NOT_AVAILABLE)
-    return str(row[0]), _extractor_name(row[1]) in TRACKING_EXTRACTORS
+    tracking = _extractor_name(row[1]) in TRACKING_EXTRACTORS
+    return str(row[0]), tracking, PACKING_BY_WIDTH if row[2] is None else int(row[2])
 
 
 def _extractor_name(identity: str | None) -> str:

@@ -50,6 +50,15 @@ BLOCK_PREFIX = "b"
 # documents already admitted under this one -- whose rows are immutable and whose
 # stored citations name the ids they were given.
 GROUP_WIDTH = DEFAULT_LIMIT
+# How a line wider than `GROUP_WIDTH` is cut into blocks, recorded per source as
+# `source_extractions.format_version` (migration 0032) and carried by its
+# output digest. 1: at the width, inside a word if that is where it fell
+# (`line_groups`) -- every source admitted before CF-013. 2: between tokens only
+# (`token_groups`). Both write a line that fits as one block, byte for byte, so a
+# source whose lines all fit is recorded as 1 and keeps the digests every
+# earlier admission of it wrote.
+PACKING_BY_WIDTH = 1
+PACKING_BY_TOKEN = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,6 +100,8 @@ class _Packed:
     extractor_identity: str
     output_sha256: str
     extraction_sha256: str
+    # `PACKING_BY_WIDTH` or `PACKING_BY_TOKEN`: the row's `format_version`.
+    packing: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -310,9 +321,10 @@ def _refuse_unassigned(blocks: list[_Block]) -> None:
     assign -- general category `Cn`, noncharacters included (N40).
 
     Why: a line's length is measured on two Unicode tables. Admission cuts it
-    by its NFC length in Python, and anchoring re-measures a split line in the
-    database (`citations._group_counts` sums Postgres's
-    `length(normalize(text, NFC))`). The normalization stability policy fixes
+    by its NFC length in Python, and anchoring re-measures a width-packed
+    source's split line in the database (`citations._group_counts` sums
+    Postgres's `length(normalize(text, NFC))`; packing 2 reads its numbering
+    back without measuring, CF-013). The normalization stability policy fixes
     NFC for every *assigned* character, but a code point unassigned in one
     table can be assigned, with compositions, in the other's newer version --
     Unicode 16 adds compositions -- and the two would then disagree about a
@@ -360,12 +372,16 @@ def _prepare(document: Document, tokens: list[Token], identity: str) -> _Packed:
             prepared.append(Token(token.text, *indices, *map(float, coords)))
     except (AttributeError, TypeError, ValueError, OverflowError):
         raise Refusal(RefusalCode.SOURCE_IDENTITY_INVALID) from None
-    blocks = _blocks(prepared)
+    blocks, packing = _blocks(prepared)
     _refuse_hidden_text(blocks)
     _refuse_unassigned(blocks)
+    # The output's format is its packing, so the digest a pin captures binds
+    # how the blocks were cut. The extraction envelope around it -- document,
+    # identity, output digest -- is unchanged and keeps its own version 1,
+    # which `source_sets._valid_member` re-derives for every member.
     output = canonical_digest(
         {
-            "format_version": 1,
+            "format_version": packing,
             "tokens": [asdict(token) for token in prepared],
             "blocks": [
                 [block.block_id, block.page, block.text.value] for block in blocks
@@ -380,7 +396,7 @@ def _prepare(document: Document, tokens: list[Token], identity: str) -> _Packed:
             "output_sha256": output,
         }
     )
-    return _Packed(document, prepared, blocks, identity, output, extraction)
+    return _Packed(document, prepared, blocks, identity, output, extraction, packing)
 
 
 def _require_case(conn: StoreConnection, case_id: UUID) -> None:
@@ -413,9 +429,10 @@ def _admit_one(
         "INSERT INTO source_extractions"
         " (source_id, format_version, extractor_identity,"
         " output_sha256, extraction_sha256)"
-        " VALUES (%s, 1, %s, %s, %s)",
+        " VALUES (%s, %s, %s, %s, %s)",
         (
             source_id,
+            packed.packing,
             packed.extractor_identity,
             packed.output_sha256,
             packed.extraction_sha256,
@@ -456,8 +473,9 @@ def _store_tokens(conn: StoreConnection, source_id: UUID, tokens: list[Token]) -
             )
 
 
-def _blocks(tokens: list[Token]) -> list[_Block]:
-    """One block per line while the line fits, its text across the boundary.
+def _blocks(tokens: list[Token]) -> tuple[list[_Block], int]:
+    """One block per line while the line fits, its text across the boundary,
+    and the packing that wrote them.
 
     `source_blocks.text` is pinned state, and CLAUDE.md's rule is that every
     string reaching pinned state carries `BoundaryText`. It was carried on the
@@ -467,21 +485,23 @@ def _blocks(tokens: list[Token]) -> list[_Block]:
     then refused at every read. A refusal here costs a pack; there it cost a
     pinned source no run can read.
 
-    A line past `GROUP_WIDTH` is split at the width rather than given a block of
-    its own (`SYSTEM_SPEC.md` section 5), because a block of its own is a block
-    the boundary refuses -- and refusing it refused the whole pack, so one wide
-    table row in a text export meant no document of it could be admitted at all.
+    A line past `GROUP_WIDTH` is split rather than given a block of its own
+    (`SYSTEM_SPEC.md` section 5), because a block of its own is a block the
+    boundary refuses -- and refusing it refused the whole pack, so one wide
+    table row in a text export meant no document of it could be admitted at
+    all. It is split between tokens (`token_groups`, CF-013), and a source with
+    such a line is `PACKING_BY_TOKEN`.
     """
     lines: dict[int, list[Token]] = {}
     for token in tokens:
         lines.setdefault(token.line_id, []).append(token)
     groups = {
-        line_id: line_groups(" ".join(token.text for token in line))
+        line_id: token_groups([token.text for token in line])
         for line_id, line in lines.items()
     }
     block_ids = block_ids_by_line({line_id: len(g) for line_id, g in groups.items()})
-
-    return [
+    split = any(len(group) > 1 for group in groups.values())
+    blocks = [
         _Block(
             block_id=block_id,
             page=lines[line_id][0].page,
@@ -490,23 +510,50 @@ def _blocks(tokens: list[Token]) -> list[_Block]:
         for line_id in sorted(lines)
         for block_id, text in zip(block_ids[line_id], groups[line_id], strict=True)
     ]
+    return blocks, PACKING_BY_TOKEN if split else PACKING_BY_WIDTH
+
+
+def token_groups(words: Sequence[str]) -> list[str]:
+    """One line's blocks under `PACKING_BY_TOKEN`: its tokens, NFC, joined by
+    one space while they fit `GROUP_WIDTH`, and a new block begun at the token
+    that would not.
+
+    A block ends where the token index can break a quote (CF-013). Cut at the
+    width instead (`line_groups`), a block began and ended inside words, and a
+    module shown it as a line of its own and quoting it whole was refused
+    `CITATION_NOT_LOCATED`. A token is never wider than a block -- the
+    extractor cuts at `MAX_TOKEN_CHARS`, which is this width, and `_prepare`
+    holds every token to `BoundaryText` -- so every block is at most the
+    width. A line that fits is the one group `line_groups` makes of it, byte
+    for byte: nothing composes across the space between two tokens, so the
+    tokens' NFC joined is the joined line's NFC.
+    """
+    groups: list[list[str]] = []
+    width = 0
+    for word in words:
+        normal = unicodedata.normalize("NFC", word)
+        if groups and width + 1 + len(normal) <= GROUP_WIDTH:
+            groups[-1].append(normal)
+            width += 1 + len(normal)
+        else:
+            groups.append([normal])
+            width = len(normal)
+    return [" ".join(group) for group in groups]
 
 
 def line_groups(text: str) -> list[str]:
-    """One line's blocks: the whole line while it fits `GROUP_WIDTH`, chunks of
-    that width once it does not.
+    """One line's blocks under `PACKING_BY_WIDTH`: the whole line while it
+    fits `GROUP_WIDTH`, chunks of that width once it does not.
 
     Normalised before it is measured and cut, because the width is
     `BoundaryText`'s and `BoundaryText` measures what it has normalised. A line
     that fits is therefore the one group it has always been, byte for byte.
 
     A chunk cuts wherever the width falls, inside a word if that is where it
-    falls. Cutting at a token boundary instead would make the block count
-    depend on the tokens rather than on the width, and anchoring would have to
-    read every token's text back to learn it. Nothing reads a quote out of a
-    block -- `verify_citations` anchors in the token index -- so what a cut
-    costs is a word shown in two pieces to a module, on a line no document could
-    carry at all until now.
+    falls. No longer how admission packs (`token_groups`, CF-013): it is the
+    rule every source recorded as packing 1 was written under, which
+    `citations._group_counts` re-derives in the database when it numbers one
+    of their split lines.
     """
     normalised = unicodedata.normalize("NFC", text)
     if len(normalised) <= GROUP_WIDTH:

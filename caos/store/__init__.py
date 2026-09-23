@@ -163,6 +163,12 @@ MIGRATIONS = (
         .with_name("0031_verdict_recorded_at.sql")
         .read_text(encoding="utf-8"),
     ),
+    (
+        "0032_packing_by_token",
+        Path(__file__)
+        .with_name("0032_packing_by_token.sql")
+        .read_text(encoding="utf-8"),
+    ),
 )
 
 # One well-known lock, held for the applying transaction only, so two processes
