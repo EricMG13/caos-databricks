@@ -1,6 +1,6 @@
 {
   "authority": "CREDIT_OS_V_AUTHORITY_BUNDLE_v2",
-  "authority_bundle_sha256": "e3d0f8b2b8893ddddbd3fca9bba46cd9e1a5db540a4ca81ff184e31e49590b93",
+  "authority_bundle_sha256": "2480e3696b814d61a7b6735541575bcf1a498479006c41dd77e75aa885b58a2d",
   "available_profiles": [
     "FULL_CREDIT_32",
     "LITE_CREDIT_22"
@@ -99,12 +99,12 @@
     "research_brief_contract": {
       "path": "skills/cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md",
       "runtime_required": true,
-      "sha256": "5028a6476cdff812a457bdb994e614b15b73f7c663eaa96b533b64cfd758fbf0"
+      "sha256": "ad88aaf53849ca53eb61d573f3b2615032ca346794450a473b6f803a2f31f86c"
     },
     "research_validation": {
       "path": "skills/cp-os-credit-os/scripts/credit_os_v/research.py",
       "runtime_required": true,
-      "sha256": "bb6215d881a84f85d76fbd6b13dbb150c402a5d828dfe583696fe59d7e4ebc78"
+      "sha256": "aa883feca5d724c304f01c133155eeaac584c504aa84c18aefa04da489366a65"
     },
     "resolved_catalog": {
       "path": "Co-Pilot Agents/CP-OS/references/deploy_v/CREDIT_OS_V_MODULE_CATALOG_v2.json",
@@ -144,7 +144,7 @@
   },
   "local_rebuild": {
     "method": "verify_package.py --rebuild-authorities; unavailable upstream provenance retained",
-    "previous_authority_bundle_sha256": "47fec65f45dfce5ac566f4d2cc9eae1413d5ff8443442501e9f0c30ad9e8ac02"
+    "previous_authority_bundle_sha256": "e3d0f8b2b8893ddddbd3fca9bba46cd9e1a5db540a4ca81ff184e31e49590b93"
   },
   "schema_version": "1.0",
   "target_profile": null

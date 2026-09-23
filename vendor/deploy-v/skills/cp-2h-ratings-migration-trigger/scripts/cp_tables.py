@@ -68,6 +68,8 @@ def _finite_figure(value, where):
 _ANGLO_THOUSANDS = re.compile(r"^\d{1,3}(,\d{3})+(\.\d+)?$")
 _CONTINENTAL = re.compile(r"^\d{1,3}(\.\d{3})+(,\d+)?$")
 _AMBIGUOUS_COMMA = re.compile(r"^\d+,\d{1,2}$")
+# The spaces a figure may carry between digit groups, each stripped alike.
+_DIGIT_GROUP_SPACES = str.maketrans("", "", "\u00a0\u2009\u202f ")
 
 
 def parse_figure(cell, where="value"):
@@ -79,6 +81,21 @@ def parse_figure(cell, where="value"):
     error, on a leverage multiple, that looks like an ordinary number. Refusing
     is the only safe reading: the caller knows the source's notation and this
     function does not.
+
+    Percent convention: a trailing `%` is stripped and the figure stays in
+    percentage points -- `10.4%` reads 10.4, never 0.104. CP-MODEL's `_number`
+    (cp-model/scripts/validate_cp_model_inputs.py) reads the same cell as 0.104,
+    a fraction; the two readers are not interchangeable and neither is changed
+    while their callers disagree. The scripts that take a fraction here
+    (covenant_headroom `percentage`, rate_fx_sensitivity `adverse_move_pct`,
+    bond_analytics `recovery_assumption`) refuse a value above 1, so a `%` cell
+    reaches them as a refusal, not a 100x misreading.
+
+    Digit-group spaces -- the no-break space U+00A0, the thin space U+2009 and
+    the narrow no-break space U+202F -- are stripped like an ordinary space
+    (deployment fork r3: the thin space was the one left in). A nonzero figure
+    whose exponent is outside float's normal range (`1e-400`) is refused rather
+    than underflowed to 0.0 or a denormal.
     """
     if is_null(cell):
         return None
@@ -95,7 +112,7 @@ def parse_figure(cell, where="value"):
     # spaces, a multiple's trailing x, a trailing percent. Deliberately not
     # "remove every non-digit": that turns prose like "roughly 5" or "5 to 6"
     # into a confident 5.0, which is worse than refusing the cell.
-    core = s.replace(" ", " ").replace(" ", " ").replace(" ", "")
+    core = s.translate(_DIGIT_GROUP_SPACES)
     core = re.sub(r"^[€$£¥₹]|[€$£¥₹]$", "", core)
     core = re.sub(r"[xX]$", "", core)
     core = re.sub(r"%$", "", core)
@@ -125,6 +142,8 @@ def parse_figure(cell, where="value"):
             raise AmbiguousFigure(f"{where}: {cell!r} uses ',' in an unrecognised pattern")
 
     value = _finite_figure(core, where)
+    if abs(value) < sys.float_info.min and re.search(r"[1-9]", re.split(r"[eE]", core)[0]):
+        raise ValueError(f"{where}: {cell!r} has an exponent outside the range a figure is read in")
     return -value if negative else value
 
 
