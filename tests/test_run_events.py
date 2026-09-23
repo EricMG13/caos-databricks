@@ -21,7 +21,7 @@ from uuid import UUID, uuid4
 import psycopg
 import pytest
 from canonical_fixtures import CATALOG, LITE_PROFILE, LITE_SELECTION
-from conftest import approve_run
+from conftest import _checked_values, approve_run
 from psycopg.pq import TransactionStatus
 from test_loop_charges import VENDORED
 
@@ -536,8 +536,14 @@ def test_the_charge_survives_as_the_decimal_it_was_given(
 def test_every_run_event_is_one_the_database_accepts(
     run: tuple[StoreConnection, UUID, UUID],
 ) -> None:
-    """`RunEvent` and the `run_events_name_is_known` CHECK are one closed set."""
+    """`RunEvent` and the `run_events_name_is_known` CHECK are one closed set,
+    checked in both directions (CF-106): the INSERT loop below only catches a
+    Python event the database refuses, not a name the CHECK still accepts
+    after `RunEvent` dropped it."""
     conn, _case_id, run_id = run
+    assert _checked_values(conn, "run_events", "run_events_name_is_known") == {
+        event.value for event in RunEvent
+    }
 
     for index, event in enumerate(RunEvent, start=1):
         conn.execute(

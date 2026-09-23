@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -145,6 +146,21 @@ def pytest_collection_modifyitems(
 def _url_for(database: str) -> str:
     parts = urlsplit(POSTGRES_URL or "")
     return urlunsplit(parts._replace(path=f"/{database}"))
+
+
+def _checked_values(conn: StoreConnection, table: str, constraint: str) -> set[str]:
+    """The literal set a `<column> IN (...)` CHECK named `constraint` declares,
+    read from the catalog rather than assumed from the source that wrote it
+    (CF-106). A Python enum and a database CHECK are two spellings of one
+    closed set; comparing against this instead of re-deriving the same
+    literals by hand is what catches a value only one of them names."""
+    row = conn.execute(
+        "SELECT pg_get_constraintdef(oid) FROM pg_constraint"
+        " WHERE conrelid = %s::regclass AND conname = %s",
+        (table, constraint),
+    ).fetchone()
+    assert row is not None, constraint
+    return set(re.findall(r"'([^']*)'", row[0]))
 
 
 def gate_verdict(prompt: str, status: str = "READY") -> dict[str, object]:

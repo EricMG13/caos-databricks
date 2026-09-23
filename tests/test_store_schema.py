@@ -26,6 +26,7 @@ from uuid import UUID, uuid4
 
 import psycopg
 import pytest
+from conftest import _checked_values
 from test_case_ordering import _blocked, _wait_for_blocking
 from test_extraction_provenance import Reader
 from test_run_inputs import Prepared, _prepare, pin_version_one
@@ -161,10 +162,15 @@ def test_a_runs_predecessor_is_written_once_and_is_never_itself(
 
 def test_every_run_status_is_one_the_database_accepts(empty_database: str) -> None:
     """`RunStatus` and the `runs_status_is_known` CHECK are two spellings of one
-    closed set. Nothing but this test stops a status added to one of them from
-    reaching an INSERT that the other refuses."""
+    closed set, checked in both directions (CF-106): the INSERT loop below
+    only catches a Python status the database refuses, so a status the CHECK
+    still names after `RunStatus` dropped it would pass unnoticed without the
+    equality assertion first."""
     with connect(empty_database) as conn:
         apply_schema(conn)
+        assert _checked_values(conn, "runs", "runs_status_is_known") == {
+            status.value for status in RunStatus
+        }
         case_id = create_case(conn, BoundaryText.of("Acme 2026 refinancing"))
 
         for status in RunStatus:
