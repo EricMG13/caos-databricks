@@ -11,6 +11,14 @@ import check_gate_config
 from tracked import tracked_files
 
 REPO = Path(__file__).resolve().parents[1]
+# Built at runtime, not spelled contiguously in this file's own source: this
+# file is itself one of the tracked .py files a real scan measures, and a
+# suppression comment written whole into a sample below would inflate it.
+_HASH = "#"
+
+
+def _noqa(code: str) -> str:
+    return f"{_HASH} noqa: {code}"
 
 
 def _git(root: Path, *args: str) -> None:
@@ -136,6 +144,41 @@ def test_the_suppression_count_is_a_ratchet(tmp_path: Path) -> None:
     ]
 
 
+def test_a_noqa_code_swap_is_named_even_though_the_aggregate_holds(
+    tmp_path: Path,
+) -> None:
+    """FP-11, optional: budgeting only the aggregate `noqa` count let one
+    rule code's occurrences rise as long as another's fell to match, so the
+    total held still and the swap passed unseen. Each code is its own
+    `noqa:<CODE>` budget now."""
+    root = tmp_path / "tree"
+    root.mkdir()
+    _git(root, "init", "-q")
+    (root / "m.py").write_text(
+        f"a = 1  {_noqa('E501')}\nb = 2  {_noqa('E501')}\nc = 3  {_noqa('BLE001')}\n",
+        encoding="utf-8",
+    )
+    _git(root, "add", "m.py")
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text(json.dumps({"noqa": 3, "noqa:E501": 2, "noqa:BLE001": 1}))
+    assert check_gate_config.suppression_problems(root, baseline) == []
+
+    # Swap: one E501 becomes a BLE001. The aggregate noqa count (3) holds.
+    (root / "m.py").write_text(
+        f"a = 1  {_noqa('E501')}\nb = 2  {_noqa('BLE001')}\nc = 3  {_noqa('BLE001')}\n",
+        encoding="utf-8",
+    )
+
+    problems = check_gate_config.suppression_problems(root, baseline)
+
+    assert "suppressions: noqa:BLE001 rose to 2 (baseline 1)" in problems
+    assert (
+        "suppressions: noqa:E501 fell to 1 (baseline 2): lower "
+        "tests/gate_baseline.json to match" in problems
+    )
+    assert not any(p.startswith("suppressions: noqa rose") for p in problems)
+
+
 def test_a_raised_complexity_record_is_a_budget_that_rose(tmp_path: Path) -> None:
     """MAX-13: raising one function's recorded complexity in the snapshot
     (31 to 60) let it grow while the baselined count stayed the same; each
@@ -235,6 +278,7 @@ def test_the_suppression_grammar_is_each_tool_s_own() -> None:
             "raise unittest.Skip" + "Test",
             "@mark." + "xfail",
             "@unittest.expected" + "Failure",
+            f"    pass  {hash_} complex" + "ipy: ignore",
         ]
     )
     found = {
@@ -250,7 +294,9 @@ def test_the_suppression_grammar_is_each_tool_s_own() -> None:
         "no_cover": 3,
         "skip": 7,
         "xfail": 2,
+        "complexipy_ignore": 1,
     }
+    assert check_gate_config.NOQA_CODE.findall(sample) == ["E501"]
 
 
 def test_a_gate_weakened_in_effect_is_named(tmp_path: Path) -> None:
@@ -510,15 +556,8 @@ def test_a_budget_may_not_rise_against_the_base_branch_and_shipping_is_checked(
 ) -> None:
     """F58 and F48: the PR that breaches a budget cannot rewrite it, and the
     CLI's own deployment record must list what the app needs."""
-    now = json.loads(check_gate_config.BASELINE.read_text())
-    base = tmp_path / "base.json"
-    base.write_text(json.dumps({**now, "noqa": now["noqa"] - 1}))
-    assert check_gate_config.baseline_problems(base) == [
-        f"baseline: noqa rose to {now['noqa']} (base branch {now['noqa'] - 1})"
-    ]
-    base.write_text(json.dumps(now))
-    assert check_gate_config.baseline_problems(base) == []
-    assert check_gate_config.main(["--against", str(base)]) == 0
+    assert check_gate_config.baseline_problems("HEAD") == []
+    assert check_gate_config.main(["--against", "HEAD"]) == 0
     record = tmp_path / "deployment.json"
     needed = sorted(check_gate_config.shipped_files())
     files = [{"local_path": path} for path in needed]
@@ -532,6 +571,84 @@ def test_a_budget_may_not_rise_against_the_base_branch_and_shipping_is_checked(
     record.write_text(json.dumps({"files": []}))
     missing = check_gate_config.shipped_problems(record)
     assert missing[-1] == f"shipped: and {len(needed) - 20} more", missing
+
+
+def _base_rev(root: Path) -> str:
+    return subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
+def test_baseline_problems_measures_the_base_tree_fresh_not_its_own_json(
+    tmp_path: Path,
+) -> None:
+    """FP-11: comparing two commits' own committed tests/gate_baseline.json
+    numbers let a PR that only weakened a `SUPPRESSIONS` pattern make its
+    own, freshly weaker count look like a fall against a base measured
+    under the old, stronger one. Both sides are now measured fresh under
+    this module's current patterns; the base commit's own committed JSON
+    -- deliberately wrong here -- is not read at all."""
+    root = tmp_path / "repo"
+    root.mkdir()
+    _git(root, "init", "-q")
+    _git(root, "config", "user.email", "test@example.invalid")
+    _git(root, "config", "user.name", "Gate test")
+    (root / "m.py").write_text(f"x = 1  {_noqa('E501')}\n", encoding="utf-8")
+    (root / "tests").mkdir()
+    # A wildly wrong committed number: trusted at face value, a rise would
+    # read as a fall instead.
+    (root / "tests" / "gate_baseline.json").write_text(
+        json.dumps({"noqa": 999, "noqa:E501": 999})
+    )
+    _git(root, "add", "m.py", "tests/gate_baseline.json")
+    _git(root, "commit", "-qm", "base")
+    base_rev = _base_rev(root)
+
+    (root / "m.py").write_text(
+        f"x = 1  {_noqa('E501')}\ny = 2  {_noqa('E501')}\n", encoding="utf-8"
+    )
+    _git(root, "add", "m.py")
+    _git(root, "commit", "-qm", "add a second noqa")
+
+    problems = check_gate_config.baseline_problems(base_rev, root)
+
+    assert "baseline: noqa rose to 2 (base branch 1)" in problems
+    assert "baseline: noqa:E501 rose to 2 (base branch 1)" in problems
+
+
+def test_baseline_problems_refuses_an_unresolvable_revision(tmp_path: Path) -> None:
+    root = tmp_path / "repo"
+    root.mkdir()
+    _git(root, "init", "-q")
+    problems = check_gate_config.baseline_problems("not-a-real-revision", root)
+    assert len(problems) == 1
+    assert problems[0].startswith("baseline: git could not list")
+
+
+def test_suppression_counts_at_matches_a_fresh_checkout_of_the_same_commit(
+    tmp_path: Path,
+) -> None:
+    """`suppression_counts_at(rev)` reads `rev`'s own tracked files through
+    git, not the working tree; measured at the tip of a small repo it must
+    equal `suppression_counts` measured on a working tree checked out to
+    that same commit."""
+    root = tmp_path / "repo"
+    root.mkdir()
+    _git(root, "init", "-q")
+    _git(root, "config", "user.email", "test@example.invalid")
+    _git(root, "config", "user.name", "Gate test")
+    (root / "m.py").write_text(f"x = 1  {_noqa('E501')}\n", encoding="utf-8")
+    _git(root, "add", "m.py")
+    _git(root, "commit", "-qm", "one file, one suppression")
+    tip = _base_rev(root)
+
+    assert check_gate_config.suppression_counts_at(tip, root) == (
+        check_gate_config.suppression_counts(root)
+    )
     assert check_gate_config._gitleaks_problems(check_gate_config.REPO) == []
 
 

@@ -46,6 +46,19 @@ def test_ci_cancels_superseded_runs() -> None:
     assert "cancel-in-progress: true" in text
 
 
+def test_a_retargeted_pull_request_reruns_the_gates() -> None:
+    """FP-11: every gate that reads `github.base_ref` -- the suppression
+    baseline among them -- is only as current as the last run that read it.
+    Retargeting a PR's base branch is an "edited" event; without it in
+    `types:`, that run stays green against the base it was last computed
+    against rather than the one the PR now targets."""
+    text = CI_YAML.read_text(encoding="utf-8")
+    match = re.search(r"\n  pull_request:\n(?:.*\n)*?    types:\s*\[([^\]]*)\]", text)
+    assert match, "pull_request.types not found in the shape this test expects"
+    types = {item.strip() for item in match.group(1).split(",")}
+    assert "edited" in types
+
+
 def test_the_size_job_delegates_to_the_canonical_script() -> None:
     """The `size` job once reimplemented `check_pr_size.py`'s pathspec inline,
     with `**/vendor/**` where the script's own comment explains why that must

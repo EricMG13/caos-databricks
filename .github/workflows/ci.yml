@@ -8,7 +8,11 @@ on:
   push:
     branches: [main, rebuild/databricks]
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    # `edited` too (FP-11): retargeting a PR's base branch is an "edited"
+    # event, and every gate that reads `github.base_ref` -- this one
+    # included -- must re-run against the new base rather than leave a
+    # result computed against the old one showing as still current.
+    types: [opened, synchronize, reopened, ready_for_review, edited]
 
 permissions:
   contents: read
@@ -50,8 +54,12 @@ jobs:
         run: |
           base=HEAD^
           if [ -n "$BASE_REF" ]; then base="origin/$BASE_REF"; elif git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then base="$BEFORE"; fi
-          git show "$base:tests/gate_baseline.json" > "$RUNNER_TEMP/base.json"
-          uv run python scripts/check_gate_config.py --against "$RUNNER_TEMP/base.json"
+          # `--against` measures $base's own tracked files fresh, under this
+          # commit's SUPPRESSIONS patterns (FP-11), rather than trusting its
+          # committed tests/gate_baseline.json at face value -- a PR that
+          # only weakened a pattern could otherwise make its own count look
+          # like a fall against a base measured under the old, stronger one.
+          uv run python scripts/check_gate_config.py --against "$base"
 
   types:
     runs-on: ubuntu-latest

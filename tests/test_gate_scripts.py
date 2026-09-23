@@ -433,6 +433,63 @@ def test_tracked_python_keeps_a_path_containing_a_space(tmp_path: Path) -> None:
     assert tracked.tracked_python(tmp_path) == [tmp_path / "my file.py"]
 
 
+def _committed(repo: Path, name: str, text: str, message: str) -> str:
+    (repo / name).write_text(text, encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo), "add", name], check=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-qm", message], check=True)
+    return subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
+def test_tracked_python_at_reads_an_earlier_commit_not_the_working_tree(
+    tmp_path: Path,
+) -> None:
+    """FP-11: a gate re-measuring a base branch's own files, rather than
+    trusting a number that commit computed for itself, needs the base
+    commit's *text*, not whatever the working tree holds now."""
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "config", "user.email", "t@e.invalid"])
+    subprocess.run(["git", "-C", str(tmp_path), "config", "user.name", "t"])
+    base = _committed(tmp_path, "m.py", "x = 1\n", "base")
+    (tmp_path / "vendor").mkdir()
+    _committed(tmp_path, "vendor/skip.py", "y = 2\n", "vendor file")
+    _committed(tmp_path, "m.py", "x = 1\nz = 3\n", "changed after base")
+
+    at_base = tracked.tracked_python_at(tmp_path, base)
+
+    assert at_base == {"m.py": "x = 1\n"}
+
+
+def test_tracked_python_at_refuses_an_unresolvable_revision(tmp_path: Path) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    with pytest.raises(RuntimeError, match="could not list"):
+        tracked.tracked_python_at(tmp_path, "not-a-real-revision")
+
+
+def test_tracked_python_at_refuses_when_git_is_not_on_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(shutil, "which", lambda _name: None)
+    with pytest.raises(RuntimeError, match="git is not on PATH"):
+        tracked.tracked_python_at(tmp_path, "HEAD")
+
+
+def test_blob_at_reads_one_file_and_is_none_for_a_path_the_revision_lacks(
+    tmp_path: Path,
+) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "config", "user.email", "t@e.invalid"])
+    subprocess.run(["git", "-C", str(tmp_path), "config", "user.name", "t"])
+    base = _committed(tmp_path, "snapshot.json", "[]\n", "base")
+
+    assert tracked.blob_at(tmp_path, base, "snapshot.json") == "[]\n"
+    assert tracked.blob_at(tmp_path, base, "never-existed.json") is None
+
+
 def test_io_budget_reports_without_asserting(tmp_path: Path) -> None:
     api = tmp_path / "caos" / "api"
     api.mkdir(parents=True)

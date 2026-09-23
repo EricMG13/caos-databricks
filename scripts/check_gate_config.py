@@ -7,7 +7,8 @@ silence what it reports is refused, not only a threshold that moved (MAX-13).
 The number of suppressions in tracked Python must equal the committed
 baseline: a new one fails, and so does one removed while the baseline keeps
 its room (DF-11). `--baseline` rewrites the baseline from the current tree,
-and `--against` refuses a baseline that rose above an earlier commit's.
+and `--against <revision>` refuses a count that rose above that revision's
+own tree, both measured fresh under this commit's rules (FP-11).
 """
 
 from __future__ import annotations
@@ -19,11 +20,12 @@ import re
 import shlex
 import sys
 import tomllib
+from collections.abc import Iterable
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from tracked import tracked_files, tracked_python
+from tracked import blob_at, tracked_files, tracked_python, tracked_python_at
 
 REPO = Path(__file__).resolve().parents[1]
 BASELINE = REPO / "tests" / "gate_baseline.json"
@@ -185,7 +187,18 @@ SUPPRESSIONS = {
         r"|\bunittest\.skip\w*|\bskip(?:If|Unless|Test)\b|\bSkipTest\b"
     ),
     "xfail": re.compile(r"(?:\bpytest\.|\bmark\.)xfail\b|\bexpectedFailure\b"),
+    # complexipy's own ignore comment (FP-11): its binary's grammar, from
+    # its compiled matcher, is `#\s*complexipy\s*:\s*ignore`; the sibling
+    # spelling, a noqa comment scoped to the word "complexipy" as though it
+    # were a rule code, is already a `noqa` match above (the pattern this
+    # file matches none of, per the note above SUPPRESSIONS).
+    "complexipy_ignore": re.compile(r"#\s*complexipy\s*:\s*ignore\b", re.IGNORECASE),
 }
+# A noqa comment scoped to one or more rule codes has each code budgeted
+# individually (FP-11, optional): the aggregate `noqa` count stays put
+# while one code is swapped for another underneath it, so each is also its
+# own `noqa:<CODE>` key in `suppression_counts` below.
+NOQA_CODE = re.compile(r"#\s*noqa\s*:\s*([A-Za-z0-9, ]+)")
 # What the App must ship (F48): the sample every deployment record must
 # list, whatever else the tree holds. `--shipped` also asks for every
 # tracked file under `SYNC_ROOTS` and every file of the built export.
@@ -582,7 +595,7 @@ CI_GATES = (
     "--cover caos scripts icm --unscanned tests",
     "uv run bandit -r caos scripts icm",
     "uv run pip-audit --strict",
-    'uv run python scripts/check_gate_config.py --against "$RUNNER_TEMP/base.json"',
+    'uv run python scripts/check_gate_config.py --against "$base"',
     f"{STAND_IN_PRICE} {STAND_IN} databricks bundle validate -t dev {STAND_IN_VARS}",
     f'{STAND_IN} sh -c "databricks bundle deploy -t dev {STAND_IN_VARS} '
     f'&& databricks bundle run caos -t dev {STAND_IN_VARS}"',
@@ -673,6 +686,33 @@ def configuration_problems(root: Path = REPO) -> list[str]:
 SNAPSHOT = "complexipy-snapshot.json"
 
 
+def _noqa_code_counts(text: str) -> dict[str, int]:
+    """Each `noqa:<CODE>` key a noqa comment scoped to one or more rule
+    codes names (FP-11, optional): the aggregate `noqa` count stays put
+    while one code is swapped for another underneath it, so each code is
+    budgeted too."""
+    counts: dict[str, int] = {}
+    for match in NOQA_CODE.finditer(text):
+        for code in match.group(1).split(","):
+            code = code.strip().upper()
+            if code:
+                counts[f"noqa:{code}"] = counts.get(f"noqa:{code}", 0) + 1
+    return counts
+
+
+def _measure_suppressions(texts: Iterable[str]) -> dict[str, int]:
+    """`SUPPRESSIONS` and per-code `noqa` counts over a set of file texts,
+    however they were read -- from disk for the working tree, or from git
+    for an earlier commit (FP-11)."""
+    counts = dict.fromkeys(SUPPRESSIONS, 0)
+    for text in texts:
+        for name, pattern in SUPPRESSIONS.items():
+            counts[name] += len(pattern.findall(text))
+        for code, found in _noqa_code_counts(text).items():
+            counts[code] = counts.get(code, 0) + found
+    return counts
+
+
 def suppression_counts(root: Path = REPO) -> dict[str, int]:
     """How many of each suppression the tracked Python files carry, how many
     functions the cognitive-complexity baseline (G14) still carries, and the
@@ -680,23 +720,40 @@ def suppression_counts(root: Path = REPO) -> dict[str, int]:
     only their sum let one function's complexity rise as long as another's
     fell to match, so the pair's total held still and the rise passed
     unseen. Each baselined function is its own budget below."""
-    counts = dict.fromkeys(SUPPRESSIONS, 0)
-    for path in tracked_python(root):
-        text = path.read_text(encoding="utf-8")
-        for name, pattern in SUPPRESSIONS.items():
-            counts[name] += len(pattern.findall(text))
+    counts = _measure_suppressions(
+        path.read_text(encoding="utf-8") for path in tracked_python(root)
+    )
     functions = _baselined_functions(root / SNAPSHOT)
     counts["complexity_baselined"] = len(functions)
     counts.update(functions)
     return counts
 
 
-def _baselined_functions(snapshot: Path) -> dict[str, int]:
-    """The complexity recorded for each function the snapshot baselines, by
-    a `complexity:<path>::<name>` key unique to that function."""
+def suppression_counts_at(rev: str, root: Path = REPO) -> dict[str, int]:
+    """`suppression_counts`, but measuring `rev`'s own tracked files rather
+    than the working tree (FP-11): this module's *current* `SUPPRESSIONS`
+    patterns and per-function complexity keys, applied to an earlier
+    commit's code. Comparing two commits' own committed JSON numbers let a
+    PR that only weakened a pattern -- so it now matches less -- make its
+    own, freshly weaker count look like a fall against a base measured
+    under the old, stronger one; both sides are measured the same way now.
+    """
+    counts = _measure_suppressions(tracked_python_at(root, rev).values())
+    functions = _parse_baselined_functions(blob_at(root, rev, SNAPSHOT))
+    counts["complexity_baselined"] = len(functions)
+    counts.update(functions)
+    return counts
+
+
+def _parse_baselined_functions(snapshot_text: str | None) -> dict[str, int]:
+    """The complexity recorded for each function a complexipy-snapshot.json
+    text baselines, by a `complexity:<path>::<name>` key unique to that
+    function; `{}` if there is no text or it does not parse."""
+    if snapshot_text is None:
+        return {}
     try:
-        recorded = json.loads(snapshot.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+        recorded = json.loads(snapshot_text)
+    except ValueError:
         return {}
     return {
         f"complexity:{entry.get('path')}::{function.get('name')}": int(
@@ -705,6 +762,16 @@ def _baselined_functions(snapshot: Path) -> dict[str, int]:
         for entry in recorded
         for function in entry.get("functions", [])
     }
+
+
+def _baselined_functions(snapshot: Path) -> dict[str, int]:
+    """The complexity recorded for each function the snapshot baselines, by
+    a `complexity:<path>::<name>` key unique to that function."""
+    try:
+        text = snapshot.read_text(encoding="utf-8")
+    except OSError:
+        return {}
+    return _parse_baselined_functions(text)
 
 
 def suppression_problems(root: Path = REPO, baseline: Path = BASELINE) -> list[str]:
@@ -735,19 +802,22 @@ def suppression_problems(root: Path = REPO, baseline: Path = BASELINE) -> list[s
     return problems
 
 
-def baseline_problems(against: Path, baseline: Path = BASELINE) -> list[str]:
-    """Each budget the committed baseline raised above `against`, the base
-    branch's copy (F58): the change that breaches a budget cannot also be the
-    change that rewrites it."""
+def baseline_problems(against: str, root: Path = REPO) -> list[str]:
+    """Each budget that rose against `against`, a base branch's git revision
+    (F58, FP-11): both sides are measured fresh, this commit's own
+    `SUPPRESSIONS` patterns and complexity keys applied to each tree in
+    turn, rather than trusting two commits' own committed JSON numbers --
+    which let a PR that only weakened a pattern compare its own count
+    against a base measured under the old, stronger one."""
     try:
-        base = json.loads(against.read_text(encoding="utf-8"))
-        now = json.loads(baseline.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return ["baseline: a baseline to compare is unreadable"]
+        base = suppression_counts_at(against, root)
+    except RuntimeError as refusal:
+        return [f"baseline: {refusal}"]
+    now = suppression_counts(root)
     return [
-        f"baseline: {name} rose to {count} (base branch {base.get(name)})"
+        f"baseline: {name} rose to {count} (base branch {base.get(name, 0)})"
         for name, count in now.items()
-        if name in base and int(count) > int(base[name])
+        if count > int(base.get(name, 0))
     ]
 
 
@@ -784,7 +854,7 @@ def shipped_problems(record: Path, root: Path = REPO) -> list[str]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--baseline", action="store_true", help="rewrite the baseline")
-    parser.add_argument("--against", type=Path, help="the base branch's baseline file")
+    parser.add_argument("--against", help="the base branch's git revision")
     parser.add_argument("--shipped", type=Path, help="the CLI's deployment.json")
     args = parser.parse_args(argv)
     if args.shipped is not None:
