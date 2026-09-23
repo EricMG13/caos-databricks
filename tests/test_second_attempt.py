@@ -424,6 +424,43 @@ def test_retry_feedback_carries_the_completeness_and_t8_checks_too(
     ), lines
 
 
+def test_retry_feedback_says_which_register_ids_the_answer_never_writes(
+    harness: _Harness,
+) -> None:
+    """The checker finds a register only by its ID, and its message says only
+    that the register is missing. CP-1A live wrote every register under a
+    human title (`#### Company description`) and its second attempt, told
+    eleven registers were missing, could not see why. The host adds the fact:
+    those IDs appear nowhere in the answer."""
+    answers = CanonicalCompletions(harness.source_id)
+    assert _run(harness, answers) is None
+    wire = json.loads(answers.bodies[0])
+    assert "#### P3\n" in wire["canonical_markdown"]
+    wire["canonical_markdown"] = wire["canonical_markdown"].replace(
+        "#### P3\n", "#### Input sources\n", 1
+    )
+    lines = retry_feedback(
+        cached_contract(harness.bundle),
+        catalog(harness.bundle),
+        _identity_cp0(),
+        json.dumps(wire),
+        skill=_skill(harness),
+    )
+    assert (
+        "host register check: the register ID `P3` appears nowhere in the answer"
+        in lines
+    ), lines
+    # An answer that writes every ID gets no such line.
+    clean = retry_feedback(
+        cached_contract(harness.bundle),
+        catalog(harness.bundle),
+        _identity_cp0(),
+        answers.bodies[0],
+        skill=_skill(harness),
+    )
+    assert not any(line.startswith("host register check") for line in clean)
+
+
 def _identity_cp0() -> HostIdentity:
     from canonical_fixtures import identity
 
