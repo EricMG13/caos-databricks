@@ -230,8 +230,60 @@ def test_pdfminer_never_logs_document_text_through_this_process(
 
 
 def test_plain_text_beginning_with_a_pdf_header_is_read_as_pdf_and_refused() -> None:
-    """Deliberate (§44.6): bytes that declare a PDF are parsed as one; a memo
-    quoting a PDF header in its first kilobyte is refused, never re-read as
-    text, so a corrupt PDF cannot be admitted as garbage tokens."""
+    """Deliberate (§44.6): bytes that begin by declaring a PDF are parsed as
+    one; a memo whose first bytes are a PDF header is refused, never re-read
+    as text, so a corrupt PDF cannot be admitted as garbage tokens."""
     memo = b"%PDF-1.7 is the version our template uses.\n" + SECRET.encode()
     assert isinstance(dispatch_by_content(memo), PdfExtractor)
+
+
+def test_a_text_that_mentions_a_pdf_header_near_its_top_is_read_as_text(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> None:
+    """CF-074: a memo naming the format its issuer files in, in its first
+    kilobyte, is a memo. It was sent to the PDF extractor and refused, so a
+    readable document could not be admitted for one phrase in it. A header
+    past the first byte is a PDF's only when the document also ends as one."""
+    memo = TEXT + b"The issuer files its reports as %PDF-1.7 documents.\n"
+    assert isinstance(dispatch_by_content(memo), PlainTextExtractor)
+    conn, case_id = case
+    sources = admit_pack(
+        conn,
+        BlobStore(tmp_path),
+        case_id=case_id,
+        documents=[_document("memo.txt", memo)],
+    )
+    assert _identities(conn, sources) == ["caos.plain-text"]
+
+
+@pytest.mark.parametrize(
+    "junk",
+    [
+        pytest.param(b"\n" * 1000, id="blank-lines"),
+        pytest.param(b"\x00\x05\x16junk\xff\xfe" * 10, id="binary"),
+        pytest.param(
+            b"HTTP/1.1 200 OK\r\nContent-Type: application/pdf\r\n\r\n", id="http"
+        ),
+    ],
+)
+def test_a_pdf_with_leading_junk_before_its_header_is_still_read_as_pdf(
+    case: tuple[StoreConnection, UUID], tmp_path: Path, junk: bytes
+) -> None:
+    """Readers accept a header anywhere in the first kilobyte of a file whose
+    end-of-file marker is in its last one, and pdfminer reads through the
+    junk to the document's own objects."""
+    data = junk + PDF
+    assert isinstance(dispatch_by_content(data), PdfExtractor)
+    conn, case_id = case
+    sources = admit_pack(
+        conn,
+        BlobStore(tmp_path),
+        case_id=case_id,
+        documents=[_document("report.pdf", data)],
+    )
+    assert _identities(conn, sources) == ["caos.pdfminer"]
+    first = conn.execute(
+        "SELECT text FROM source_tokens WHERE source_id = %s ORDER BY token_id LIMIT 1",
+        (sources[0],),
+    ).fetchone()
+    assert first == ("Confidential",)

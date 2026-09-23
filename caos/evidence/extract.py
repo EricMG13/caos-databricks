@@ -149,15 +149,24 @@ class ExtractorDispatch(Protocol):
 # leading junk is still a PDF; past that it is not one any reader will open.
 PDF_HEADER = b"%PDF-"
 PDF_HEADER_WINDOW = 1024
+# And they look for the end-of-file marker in the last kilobyte, the same
+# implementation note's other half: what tells a PDF behind leading junk from
+# a text that merely mentions a header near its top (CF-074).
+PDF_EOF = b"%%EOF"
+PDF_EOF_WINDOW = 1024
 
 
 def dispatch_by_content(data: bytes) -> Extractor:
     """A PDF by its header, plain text otherwise -- never by its filename.
 
     A name is whatever the uploader typed; the bytes are what the extractor
-    will actually meet.
+    will actually meet. Bytes that begin with the header declare a PDF
+    (§44.6). A header further into the first kilobyte is a PDF's only when
+    the document also ends as one, so a memo naming `%PDF-1.7` in its first
+    lines is read as the text it is rather than refused as a broken PDF.
     """
-    if PDF_HEADER in data[:PDF_HEADER_WINDOW]:
+    at = data.find(PDF_HEADER, 0, PDF_HEADER_WINDOW)
+    if at == 0 or (at > 0 and PDF_EOF in data[-PDF_EOF_WINDOW:]):
         # Imported here: `pdf` imports this module, and plain-text admission
         # should not pay for pdfminer.
         from caos.evidence.pdf import PdfExtractor
