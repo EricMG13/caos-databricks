@@ -199,6 +199,39 @@ def anchor_citation(
     return _rectangles(_unique_run(tokens, matched_text, tracking=tracking), page)
 
 
+@dataclass(slots=True)
+class _Page:
+    """One page's tokens and the lists the search derives from them, each
+    derived the first time a search asks for it and kept with the page.
+
+    They depend on the page alone: its words as compared (their bytes, or
+    their NFC) and, for a tracking extractor, the page with its tracked
+    letters joined. Rebuilt per citation, 512 citations of one 240,000-token
+    page spent 18 s on them (N41); a `TokenIndex` holds its pages as these.
+    """
+
+    tokens: list[_Token]
+    exact: list[str] | None = None
+    nfc: list[str] | None = None
+    tracked: _Page | None = None
+
+    def keys(self, *, normalised: bool) -> list[str]:
+        """The page's words as `_starts` compares them."""
+        if self.exact is None:
+            self.exact = [token.text for token in self.tokens]
+        if not normalised:
+            return self.exact
+        if self.nfc is None:
+            self.nfc = list(map(_nfc, self.exact))
+        return self.nfc
+
+    def joined(self) -> _Page:
+        """This page with its tracked letters joined (`_joined_tracking`)."""
+        if self.tracked is None:
+            self.tracked = _Page(_joined_tracking(self.tokens))
+        return self.tracked
+
+
 def _unique_run(
     tokens: list[_Token], matched_text: str, *, tracking: bool = False
 ) -> list[_Token]:
@@ -212,21 +245,30 @@ def _unique_run(
     the second pass exists, so every quote that anchored before these rules
     were written anchors to the same rectangles.
     """
+    return _page_run(_Page(tokens), matched_text, tracking=tracking)
+
+
+def _page_run(page: _Page, matched_text: str, *, tracking: bool) -> list[_Token]:
+    """`_unique_run` over a page whose derived keys may already be in hand."""
     words = matched_text.split()
     if not words:
         raise Refusal(RefusalCode.CITATION_NOT_LOCATED)
-    exact = _one_match(tokens, words, normalised=False)
+    exact = _one_match(page.tokens, words, normalised=False, page=page)
     if exact is not None:
         return exact
-    candidates = _joined_tracking(tokens) if tracking else tokens
-    run = _one_match(candidates, words, normalised=True)
+    candidates = page.joined() if tracking else page
+    run = _one_match(candidates.tokens, words, normalised=True, page=candidates)
     if run is None:
         raise Refusal(RefusalCode.CITATION_NOT_LOCATED)
     return run
 
 
 def _one_match(
-    tokens: list[_Token], words: Sequence[str], *, normalised: bool
+    tokens: list[_Token],
+    words: Sequence[str],
+    *,
+    normalised: bool,
+    page: _Page | None = None,
 ) -> list[_Token] | None:
     """The single run matching `words`, `None` for no run, a refusal for two.
 
@@ -246,7 +288,7 @@ def _one_match(
     width = len(words)
     found: int | None = None
     region_end = 0
-    for start in _starts(tokens, words, normalised=normalised):
+    for start in _starts(tokens, words, normalised=normalised, page=page):
         if start >= region_end:
             # Starts ascend, so one scan per region serves every start in it.
             region_end = _region_end(tokens, start)
@@ -264,12 +306,17 @@ def _one_match(
 
 
 def _starts(
-    tokens: list[_Token], words: Sequence[str], *, normalised: bool
+    tokens: list[_Token],
+    words: Sequence[str],
+    *,
+    normalised: bool,
+    page: _Page | None = None,
 ) -> Iterable[int]:
     """Every start, ascending, at which the words compared by equality alone
     match: the whole quote in the exact pass, its interior in the normalised
     one, whose edge words `_one_match` compares itself. With no interior every
-    start is a candidate."""
+    start is a candidate. `page`, when given, is `tokens` with the keys an
+    earlier search of it already derived."""
     width = len(words)
     last = len(tokens) - width
     if last < 0:
@@ -281,9 +328,9 @@ def _starts(
     if not pattern:
         return range(last + 1)
     # The page's keys in one comprehension each, not a call per token: on a
-    # long page this is most of what the search costs.
-    texts = [token.text for token in tokens]
-    keys = list(map(_nfc, texts)) if inner else texts
+    # long page this is most of what the search costs, so a page derives them
+    # once for every search of it (N41).
+    keys = (page or _Page(tokens)).keys(normalised=normalised)
     return (
         at - inner for at in _occurrences(keys, pattern) if inner <= at <= last + inner
     )
@@ -356,14 +403,40 @@ class TokenIndex:
     """What `verify_citations` read from the token index, keyed per page and
     per source, so several calls inside one read unit read each once.
 
-    Holds only what the store returned; delivery is judged per call against
-    that call's `delivered`, never cached.
+    Holds only what the store returned, and what the search derives from a
+    page it returned (`_Page`); delivery is judged per call against that
+    call's `delivered`, never cached.
     """
 
-    pages: dict[tuple[UUID, int], list[_Token]] = field(default_factory=dict)
+    pages: dict[tuple[UUID, int], _Page] = field(default_factory=dict)
     digests: dict[UUID, str] = field(default_factory=dict)
     tracking: dict[UUID, bool] = field(default_factory=dict)
     line_blocks: dict[UUID, dict[int, tuple[str, ...]]] = field(default_factory=dict)
+
+    def page(self, conn: StoreConnection, source_id: UUID, page: int) -> _Page:
+        """One page of a live source, read once."""
+        key = (source_id, page)
+        if key not in self.pages:
+            self.pages[key] = _Page(_page_tokens(conn, source_id, page))
+        return self.pages[key]
+
+    def facts(self, conn: StoreConnection, source_id: UUID) -> tuple[str, bool]:
+        """A live source's digest and whether it tracks (`_source_facts`),
+        read once."""
+        if source_id not in self.digests:
+            self.digests[source_id], self.tracking[source_id] = _source_facts(
+                conn, source_id
+            )
+        return self.digests[source_id], self.tracking[source_id]
+
+    def lines(
+        self, conn: StoreConnection, source_id: UUID
+    ) -> dict[int, tuple[str, ...]]:
+        """Line id to the blocks admission wrote for it (`_line_blocks`),
+        read once per source."""
+        if source_id not in self.line_blocks:
+            self.line_blocks[source_id] = _line_blocks(conn, source_id)
+        return self.line_blocks[source_id]
 
 
 def verify_citations(
@@ -397,36 +470,23 @@ def verify_citations(
     """
     if index is None:
         index = TokenIndex()
-    pages, digests, ordinals = index.pages, index.digests, index.line_blocks
-    tracking = index.tracking
-
     anchored = []
     for citation in citations:
         blocks = delivered.get(citation.source_id)
         if blocks is None:
             raise Refusal(RefusalCode.CITATION_NOT_DELIVERED)
-        key = (citation.source_id, citation.page)
-        if key not in pages:
-            pages[key] = _page_tokens(conn, citation.source_id, citation.page)
-        if citation.source_id not in digests:
-            digests[citation.source_id], tracking[citation.source_id] = _source_facts(
-                conn, citation.source_id
-            )
-        run = _unique_run(
-            pages[key], citation.matched_text, tracking=tracking[citation.source_id]
-        )
-        if citation.source_id not in ordinals:
-            ordinals[citation.source_id] = _line_blocks(conn, citation.source_id)
-        lines = ordinals[citation.source_id]
+        searched = index.page(conn, citation.source_id, citation.page)
+        digest, tracking = index.facts(conn, citation.source_id)
+        run = _page_run(searched, citation.matched_text, tracking=tracking)
+        lines = index.lines(conn, citation.source_id)
         if any(not _delivered(lines.get(token.line_id), blocks) for token in run):
             raise Refusal(RefusalCode.CITATION_NOT_DELIVERED)
-        boxes = _rectangles(run, citation.page)
         anchored.append(
             AnchoredCitation(
-                document_sha256=digests[citation.source_id],
+                document_sha256=digest,
                 page=citation.page,
                 matched_text=citation.matched_text,
-                bboxes=tuple(boxes),
+                bboxes=tuple(_rectangles(run, citation.page)),
             )
         )
     return anchored
