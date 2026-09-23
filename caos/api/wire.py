@@ -280,6 +280,7 @@ CLEARS: Mapping[RefusalCode, str] = {
     _C.STORE_NOT_TRANSACTIONAL: "An operator must fix the store connection.",
     _C.STORE_NOT_CONFIGURED: "An operator must configure the store.",
     _C.STORE_UNAVAILABLE: "Retry when the store answers.",
+    _C.IDENTITY_UNAVAILABLE: "Retry when the workspace answers.",
 }
 
 

@@ -434,3 +434,20 @@ def test_the_gate_bound_leaves_two_mapped_sources_and_the_authority_room() -> No
     delivered authority stay under the whole request ceiling."""
     assert GATE_SOURCE_BYTES == 3 * MAX_REQUEST_BYTES // 8
     assert 2 * GATE_SOURCE_BYTES + MEASURED["CP-0"] < MAX_REQUEST_BYTES
+
+
+def test_a_space_padded_or_overlong_item_names_nothing_and_answers_at_once() -> None:
+    """A cell of a name, thousands of spaces and a word once cost cubic time in
+    the page expression, inside an open transaction (F32); it now names nothing
+    the pin carries and is answered as such before any clock notices."""
+    import time
+
+    a, b = _member("BA_FY2025_10K.txt"), _member("other.txt")
+    last = {a.source_id: 108, b.source_id: 3}
+    padded = "BA_FY2025_10K.txt" + " " * 20_000 + "pages 1-2"
+    started = time.perf_counter()
+    found = select_sources((a, b), padded, last_pages=last)
+    assert time.perf_counter() - started < 2.0
+    assert found.basis is Basis.WHOLE_UNMAPPED
+    short = select_sources((a, b), "BA_FY2025_10K.txt   pages  1-2", last_pages=last)
+    assert short.pages == {a.source_id: frozenset({1, 2})}

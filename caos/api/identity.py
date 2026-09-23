@@ -34,12 +34,15 @@ grants nothing, so it is not on the actor and cannot be mistaken for authority.
 
 from __future__ import annotations
 
+import http.client
+import json
 import os
 import threading
 import time
 from dataclasses import dataclass
 from enum import StrEnum
 from hashlib import sha256
+from urllib.parse import urlsplit
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 from caos.refusals import Refusal, RefusalCode
@@ -190,6 +193,12 @@ class WorkspaceUser:
 
 
 _CACHE: dict[str, tuple[Actor, float]] = {}
+_NEGATIVE: dict[str, float] = {}
+CACHE_CAPACITY = 4096
+NEGATIVE_SECONDS = 5.0
+SCIM_ME_PATH = "/api/2.0/preview/scim/v2/Me"
+SCIM_TIMEOUT_SECONDS = 10.0
+SCIM_BODY_BYTES = 1_048_576
 _CACHE_LOCK = threading.Lock()
 
 
@@ -197,8 +206,11 @@ def actor_from_token(token: object) -> Actor:
     """The actor behind a platform-forwarded token, or `NOT_AUTHENTICATED`.
 
     One SCIM round trip per token, remembered for `CACHE_SECONDS` under the
-    token's digest (never the token). The subject is `uuid5` over the
-    workspace and the SCIM id, so the same person is the same subject on
+    token's digest (never the token); a token the workspace refused is
+    remembered for `NEGATIVE_SECONDS` so it costs one round trip, not one per
+    request (F43). The cache is bounded: expired entries go on every write
+    and nothing is added past `CACHE_CAPACITY`. The subject is `uuid5` over
+    the workspace and the SCIM id, so the same person is the same subject on
     every request and no name reaches the store. Roles come from the two
     configured group names; any other group grants nothing.
     """
@@ -210,14 +222,27 @@ def actor_from_token(token: object) -> Actor:
         cached = _CACHE.get(key)
         if cached is not None and cached[1] > now:
             return cached[0]
-    user = _current_user(token)
+        if _NEGATIVE.get(key, 0.0) > now:
+            raise Refusal(RefusalCode.NOT_AUTHENTICATED)
+    try:
+        user = _current_user(token)
+    except Refusal as refused:
+        if refused.code is RefusalCode.NOT_AUTHENTICATED:
+            with _CACHE_LOCK:
+                _NEGATIVE[key] = now + NEGATIVE_SECONDS
+        raise
     workspace = os.environ.get(WORKSPACE_ENV, "")
     actor = Actor(
         user_id=uuid5(NAMESPACE, f"{workspace}:{user.scim_id}"),
         role=_platform_role(user.groups),
     )
     with _CACHE_LOCK:
-        _CACHE[key] = (actor, now + CACHE_SECONDS)
+        for stale in [k for k, (_, until) in _CACHE.items() if until <= now]:
+            del _CACHE[stale]
+        for stale in [k for k, until in _NEGATIVE.items() if until <= now]:
+            del _NEGATIVE[stale]
+        if len(_CACHE) < CACHE_CAPACITY:
+            _CACHE[key] = (actor, now + CACHE_SECONDS)
     return actor
 
 
@@ -232,19 +257,59 @@ def _platform_role(groups: frozenset[str]) -> GlobalRole:
 
 
 def _current_user(token: str) -> WorkspaceUser:
-    """SCIM `Me` for the token's holder, through the SDK; nothing of the
-    token or of a failure's message travels past this boundary."""
-    from databricks.sdk import WorkspaceClient
+    """SCIM `Me` for the token's holder, over one bounded HTTP request.
 
+    Not through the SDK (F43): building its client performs an uncached
+    discovery probe with a five-minute retry budget, and beside the app's own
+    service-principal variables a forwarded token is refused as a second
+    authentication method. Nothing of the token or of a failure's text
+    travels past this boundary: the workspace's refusal is
+    `NOT_AUTHENTICATED`, anything else `IDENTITY_UNAVAILABLE`.
+    """
+    host = os.environ.get("DATABRICKS_HOST") or ""
+    parts = urlsplit(host if "://" in host else f"https://{host}")
+    if not parts.hostname:
+        raise Refusal(RefusalCode.IDENTITY_UNAVAILABLE)
+    connection: http.client.HTTPConnection
+    if parts.scheme == "http":
+        connection = http.client.HTTPConnection(
+            parts.hostname, parts.port, timeout=SCIM_TIMEOUT_SECONDS
+        )
+    else:
+        connection = http.client.HTTPSConnection(
+            parts.hostname, parts.port, timeout=SCIM_TIMEOUT_SECONDS
+        )
     try:
-        me = WorkspaceClient(host=os.environ.get("DATABRICKS_HOST"), token=token)
-        current = me.current_user.me()
-    except OSError:
-        raise Refusal(RefusalCode.NOT_AUTHENTICATED) from None
-    scim_id = current.id
+        connection.request(
+            "GET",
+            SCIM_ME_PATH,
+            headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+        )
+        response = connection.getresponse()
+        status, body = response.status, response.read(SCIM_BODY_BYTES + 1)
+    except (OSError, http.client.HTTPException):
+        raise Refusal(RefusalCode.IDENTITY_UNAVAILABLE) from None
+    finally:
+        connection.close()
+    if status in (401, 403):
+        raise Refusal(RefusalCode.NOT_AUTHENTICATED)
+    if status != 200 or len(body) > SCIM_BODY_BYTES:
+        raise Refusal(RefusalCode.IDENTITY_UNAVAILABLE)
+    return _scim_user(body)
+
+
+def _scim_user(body: bytes) -> WorkspaceUser:
+    try:
+        current = json.loads(body)
+    except ValueError:
+        raise Refusal(RefusalCode.IDENTITY_UNAVAILABLE) from None
+    scim_id = current.get("id") if isinstance(current, dict) else None
     if not isinstance(scim_id, str) or not scim_id:
         raise Refusal(RefusalCode.NOT_AUTHENTICATED)
+    listed = current.get("groups") or []
     groups = frozenset(
-        group.display for group in (current.groups or []) if group.display
+        str(group["display"])
+        for group in listed
+        if isinstance(group, dict) and isinstance(group.get("display"), str)
     )
     return WorkspaceUser(scim_id=scim_id, groups=groups)

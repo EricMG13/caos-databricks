@@ -14,6 +14,8 @@
 # The script stops at the first step that fails. Nothing secret is printed.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# The engine every stand-in run used; the other one needs a Terraform download.
+export DATABRICKS_BUNDLE_ENGINE=direct
 
 PROFILE="${1?profile (may be empty: '')}"
 CATALOG="${2:?catalog}"

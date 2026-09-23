@@ -5,7 +5,10 @@ environment (`CAOS_BIND_HOST`; the App sets the platform's all-interfaces
 address, local development keeps loopback) and the port from
 `DATABRICKS_APP_PORT`, which the platform injects. The worker thread starts
 only when `CAOS_WORKER_IN_PROCESS=1` (D11), and a refused configuration is
-printed as its typed code while the API still serves.
+printed as its typed code while the API still serves. On stop the worker is
+given `LIMIT_JOIN_SECONDS` to finish the node in flight; a call still on the
+wire past that is abandoned with its reservation held and the run is
+reclaimed after its lease.
 """
 
 from __future__ import annotations
@@ -23,6 +26,7 @@ PORT = "DATABRICKS_APP_PORT"
 LOCAL_PORT = 8000
 # One uvicorn worker, a bounded number of in-flight requests (legacy §53).
 LIMIT_CONCURRENCY = 32
+LIMIT_JOIN_SECONDS = 30
 
 
 def main() -> int:
@@ -39,7 +43,7 @@ def main() -> int:
     finally:
         stopping.set()
         if worker is not None:
-            worker.join(timeout=30)
+            worker.join(timeout=LIMIT_JOIN_SECONDS)
     return 0
 
 

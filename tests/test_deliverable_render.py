@@ -509,3 +509,17 @@ def test_a_consecutive_ordered_list_starts_where_the_model_numbered_it() -> None
 
     assert '<ol start="7">' in page
     assert "<li>First</li>" in page
+
+
+def test_provenance_and_citation_digests_are_cut_before_they_are_escaped() -> None:
+    """F65: a truncation after escaping could leave half an entity on the page."""
+    payload = json.loads(json.dumps(PAYLOAD_DATA))
+    artifact = payload["artifacts"][0]
+    record = json.loads(artifact["record"])
+    record["build_id"] = "a" * 9 + "<b>"
+    record["citations"][0]["document_sha256"] = "c" * 9 + "<d>"
+    artifact["record"] = json.dumps(record, sort_keys=True, separators=(",", ":"))
+    artifact["record_sha256"] = hashlib.sha256(artifact["record"].encode()).hexdigest()
+    page = render(payload)
+    assert b"aaaaaaaaa&lt;b&gt;" in page and b"ccccccccc&lt;d&gt;" in page
+    assert b"&amp;lt" not in page and b"&lt;b>" not in page

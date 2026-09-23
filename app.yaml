@@ -1,21 +1,9 @@
 # Databricks Apps runtime configuration (spec section 4, R8, R12).
 #
-# The bundle (`databricks.yml`) overrides `env` per target with the
-# workspace's own values; what stands here is what every deployment needs and
-# what a local `databricks apps run-local` gets. With no `requirements.txt` in
-# this tree the platform installs from `uv.lock` and honours `requires-python`
-# (3.13), and `DATABRICKS_APP_PORT` is injected by the platform.
-command: ["uv", "run", "python", "-m", "caos.serve"]
-env:
-  - name: CAOS_BIND_HOST
-    value: "0.0.0.0"
-  - name: CAOS_WORKER_IN_PROCESS
-    value: "1"
-  - name: CAOS_SITE_ROOT
-    value: "frontend/dist"
-  - name: CAOS_MODEL_ENDPOINT
-    value: "databricks-claude-opus-5"
-  - name: CAOS_GROUP_ADMIN
-    value: "caos-admins"
-  - name: CAOS_GROUP_ANALYST
-    value: "caos-analysts"
+# The bundle (`databricks.yml`) is the one source of the app's environment:
+# nothing is set here, so a platform that ignored the bundle's `config` fails
+# visibly at boot rather than running on stale defaults (F52). With no
+# `requirements.txt` in this tree the platform installs from `uv.lock` and
+# honours `requires-python` (3.13); `DATABRICKS_APP_PORT` is injected by the
+# platform. The lock and the runtime groups only: no dev toolchain (F49).
+command: ["uv", "run", "--locked", "--no-dev", "python", "-m", "caos.serve"]

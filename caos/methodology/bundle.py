@@ -72,6 +72,15 @@ class Bundle:
         if _read_manifest(self.root) != self._raw_manifest:
             raise Refusal(RefusalCode.AUTHORITY_BYTES_MISMATCH)
 
+    def verify_pinned(self) -> None:
+        """Refuse a manifest other than the one compiled into this build (F66):
+        the manifest verifies every file, and this pin verifies the manifest,
+        so a bundle swapped under a deployed process names nothing."""
+        from caos.methodology.bundle_pin import BUNDLE_MANIFEST_SHA256
+
+        if self.manifest_sha256 != BUNDLE_MANIFEST_SHA256:
+            raise Refusal(RefusalCode.AUTHORITY_BYTES_MISMATCH)
+
     @property
     def _manifest(self) -> dict[str, Any]:
         self.verify_manifest()

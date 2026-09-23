@@ -121,7 +121,14 @@ def affordable(price: str, run_ceiling: str | None) -> bool:
 
 
 def _group(client: WorkspaceClient, display: str) -> object:
-    found = list(client.groups.list(filter=f'displayName eq "{display}"'))
+    from databricks.sdk.errors import PermissionDenied
+
+    try:
+        found = list(client.groups.list(filter=f'displayName eq "{display}"'))
+    except PermissionDenied:
+        # The profile may not list workspace groups: unknown, not missing.
+        print(f"UNKNOWN group {display}: this profile may not list workspace groups")
+        raise
     if not found:
         raise OSError(display)
     return found[0]

@@ -42,11 +42,11 @@ It stops at the first step that fails and writes `docs/rebuild/runs/<today>/ente
 | E2 | `databricks bundle validate` | The bundle or a variable value; the log is the CLI's own message. |
 | E3 | `databricks bundle deploy` | Usually a grant the app's service principal lacks (`CAN_QUERY`, `CAN_CONNECT_AND_CREATE`, `WRITE_VOLUME`). Record it as a blocker; do not edit `databricks.yml` to drop a resource. |
 | E4 | `databricks bundle run caos` | The app failed to start; `databricks apps logs caos -p <profile>` has the process output. |
-| E5 | The app is RUNNING and has a URL | Same as E4. |
-| E6 | `/api/health` answers ready with `python_version` 3.13 | A `python_version` that is not 3.13 means the platform did not install from `uv.lock`: check that no `requirements.txt` was added at the root. |
+| E5 | The app is RUNNING, has a URL, and reports `forward_user_access_token=True` | Same as E4; `forward_user_access_token=False` means the workspace has not enabled the preview feature (F53): ask Databricks to enable it, then `databricks apps stop caos` and `start`. |
+| E6 | `/api/health` answers ready with `python_version` 3.13 and every code `OK`: store, bundle, blobs, identity, workers | A `python_version` that is not 3.13 means the platform did not install from `uv.lock`: check that no `requirements.txt` was added at the root. |
 | E7 | The gateway smoke, JSON mode included (A31) | `json_mode=` other than `accepted` means the endpoint rejects `response_format`; ask the owner which endpoint to use, do not remove the parameter. |
-| E8 | Lakebase `SELECT version()` | Copy the version line into `docs/rebuild/decisions.md` under D17 when it succeeds. |
-| E9 | The event stream's first frame arrives through the Apps proxy (C42) | `no frame within 20s` means the proxy buffers: record it as a finding (`Fn`) and log the polling fallback in `docs/rebuild/next.md`; do not build it unasked. `unverified` means your profile has no writer standing in the app: ask to be added to the analyst or admin group and rerun. |
+| E8 | Lakebase `SELECT version()` as the deployer (the app's own access is E6's `store` code) | Copy the version line into `docs/rebuild/decisions.md` under D17 when it succeeds. |
+| E9 | The event stream's first frame arrives through the Apps proxy (C42) | `no frame within 20s` means the proxy buffers: record it as a finding (`Fn`) and log the polling fallback in `docs/rebuild/next.md`; do not build it unasked. `unverified` (a 403) means your profile has no writer standing in the app: ask to be added to the analyst or admin group and rerun; any other status is the app failing and the row says which. |
 
 ## Afterwards
 

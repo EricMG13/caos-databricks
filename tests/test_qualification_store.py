@@ -545,3 +545,30 @@ def test_the_blocked_key_is_in_the_snapshot_only_when_declared() -> None:
     assert declared_matrix["rows"][0]["blocked_met"] is True
     undeclared = _with(original, status=RunStatus.BLOCKED)
     assert declared.performed_sha256 != undeclared.performed_sha256
+
+
+def test_a_refusal_met_beside_a_missed_key_is_not_complete(
+    empty_database: str,
+) -> None:
+    """F64: keys declared beside an expected refusal are measured too."""
+    original = _performed()
+    matrix = original.performed.matrix
+    assert matrix is not None
+    [row] = matrix.rows
+    both = performed_evidence(
+        prepared=original.prepared,
+        performed=replace(
+            original.performed,
+            matrix=replace(
+                matrix,
+                rows=(
+                    replace(
+                        row,
+                        expected_refusal_met=True,
+                        missed=(ExpectedCitation("CP-0", "c" * 64, "quoted text"),),
+                    ),
+                ),
+            ),
+        ),
+    )
+    assert both.complete is False

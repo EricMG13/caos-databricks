@@ -69,3 +69,13 @@ def test_forecast_extension_refuses_stale_or_absent_pin() -> None:
         with pytest.raises(Refusal) as caught:
             verify_extension(replace(route, predicates=predicates))
         assert caught.value.code is RefusalCode.AUTHORITY_BYTES_MISMATCH
+
+
+def test_the_bundle_pin_is_the_vendored_manifest_s_digest() -> None:
+    """F66: `scripts/host_manifest.py` compiles the pin the runtime checks."""
+    from host_manifest import bundle_manifest_sha256
+
+    from caos.methodology.bundle_pin import BUNDLE_MANIFEST_SHA256
+
+    assert bundle_manifest_sha256() == BUNDLE_MANIFEST_SHA256
+    assert BUNDLE.manifest_sha256 == BUNDLE_MANIFEST_SHA256

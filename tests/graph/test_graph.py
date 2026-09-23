@@ -10,6 +10,7 @@ provider, that a LITE route completes through the same seam.
 from __future__ import annotations
 
 import os
+from dataclasses import replace
 from pathlib import Path
 from uuid import UUID
 
@@ -30,6 +31,7 @@ from caos.graph.build import (
     RunState,
     build_graph,
     initial_state,
+    resume_input,
     thread_config,
 )
 from caos.graph.route import ResolvedRoute, dependency_order
@@ -100,13 +102,15 @@ def test_a_checkpointed_run_records_its_thread_and_the_store_stays_the_truth(
         execution = Execution(
             provider, priced(ESTIMATE), provider.bundle, checkpointer=saver
         )
+        beats: list[int] = []
+        execution = replace(execution, heartbeat=lambda: beats.append(1))
         run_route(conn, blobs, run_id=run_id, route=route, execution=execution)
         assert run_status(conn, run_id) is RunStatus.COMPLETE
         conn.rollback()  # the status read above opened a unit; execution owns its own
         assert len(answers.prompts) == len(route.nodes)
-        thread = saver.get(thread_config(str(run_id)))
-        assert thread is not None
-        assert thread["channel_values"]["ended"] == "COMPLETE"
+        assert len(beats) == len(route.nodes), "one beat per node (F38)"
+        # Position only (D6, F39): a thread that reached its end is deleted.
+        assert saver.get(thread_config(str(run_id))) is None
         # Driven again on the same thread: the store, not the checkpoint, says
         # the run is over, so nothing runs and nothing is charged twice.
         with pytest.raises(Refusal, match=r"^RUN_NOT_RUNNING$"):
@@ -166,3 +170,47 @@ def test_a_lite_route_completes_through_the_test_adapter(
     )
     assert run_status(conn, run_id) in (RunStatus.COMPLETE, RunStatus.BLOCKED)
     assert os.environ.get("OPENROUTER_API_KEY"), "the adapter read the key at call time"
+
+
+class _Died(RuntimeError):
+    """The process died inside a node."""
+
+
+def test_a_run_that_died_mid_route_resumes_at_the_node_it_died_in(
+    route: ResolvedRoute,
+) -> None:
+    """F39: with a checkpoint whose next task is pending, the graph is handed
+    `None` and LangGraph resumes there; the nodes before it are not visited."""
+    from langgraph.checkpoint.memory import MemorySaver
+
+    order = [node.route_node_id for node in dependency_order(route.nodes, route.edges)]
+    seen: list[str] = []
+    attempts = {"third": 0}
+
+    def passing(node: str) -> str:
+        seen.append(node)
+        if node == order[2] and attempts["third"] == 0:
+            attempts["third"] += 1
+            raise _Died
+        return ACCEPTED
+
+    saver = MemorySaver()
+    graph = build_graph(
+        route, node_pass=passing, finish=lambda: "COMPLETE", checkpointer=saver
+    )
+    config = thread_config("r")
+    assert isinstance(resume_input(graph, "r"), RunState), "a fresh thread starts"
+    with pytest.raises(_Died):
+        graph.invoke(resume_input(graph, "r"), config=config)
+    assert seen == order[:3]
+    assert resume_input(graph, "r") is None, "work pending: resume, not restart"
+    state = graph.invoke(resume_input(graph, "r"), config=config)
+    assert seen == order[:3] + order[2:], "resumed at the third node"
+    assert state["ended"] == "COMPLETE"
+    assert isinstance(resume_input(graph, "r"), RunState), "nothing pending any more"
+
+
+def test_no_route_node_can_share_the_terminal_node_s_name() -> None:
+    from caos.graph.build import FINISH
+
+    assert not FINISH[0].isalnum(), "outside the route-id grammar"

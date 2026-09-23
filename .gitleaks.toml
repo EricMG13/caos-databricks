@@ -1,17 +1,24 @@
-# gitleaks' default rules, plus one exemption.
+# gitleaks' default rules, plus exemptions by path.
 #
-# The closed provider finish reasons below are public enum values rather than
-# credentials. Nothing else is allowlisted: every identifier this repository
-# tracks is public, and the credentials it uses (the app's service principal,
-# Lakebase credentials minted per connection, a test-only OpenRouter key read
-# from the environment) appear in no tracked file.
+# Nothing is allowlisted by pattern repository-wide (F68): a 32-byte key
+# written as hex is exactly 64 hex characters, the shape of `CAOS_EDGE_TOKEN`,
+# so a pattern exemption would hide the one secret this host mints. The
+# paths below hold content digests and nothing that could be a credential;
+# the one pattern is a closed pair of public enum values. The singular table
+# is the one every pinned gitleaks (the hook's and CI's v8.21.2) reads.
 [extend]
 useDefault = true
 
 [allowlist]
-description = "Closed provider finish-reason enums, and SHA-256 digests"
-# A bare 64-hex string is a content digest here: the parity manifests, the
-# host records and the bundle manifests are made of them, and no credential
-# this repository could hold has that shape (a token carries its prefix, which
-# this expression does not admit).
-regexes = ['''^finish_reason=(?:stop|length)$''', '''^[0-9a-f]{64}$''']
+description = "Digests where digests live, and the closed provider finish reasons"
+paths = [
+  '''^vendor/deploy-v/.*\.json$''',
+  '''^tests/parity/golden/.*$''',
+  '''^icm/HOST_INTEGRITY_v1\.json$''',
+  '''^caos/methodology/(host_pin|bundle_pin)\.py$''',
+  '''^caos/deliverable/verify_package\.py$''',
+  '''^complexipy-snapshot\.json$''',
+  '''^qualification/.*\.json$''',
+  '''^caos/qualification/documents\.json$''',
+]
+regexes = ['''^finish_reason=(?:stop|length)$''']

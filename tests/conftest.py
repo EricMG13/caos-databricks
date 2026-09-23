@@ -111,6 +111,10 @@ def _development_edge() -> Iterator[None]:
     while its database fixtures clean up.
     """
     saved = {name: os.environ.pop(name, None) for name in _AMBIENT_IDENTITY}
+    from caos.api import identity
+
+    identity._CACHE.clear()
+    identity._NEGATIVE.clear()
     yield
     for name, value in saved.items():
         os.environ.pop(name, None)

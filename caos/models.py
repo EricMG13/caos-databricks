@@ -34,7 +34,9 @@ from caos.pricing import ModelPrice, price_from_environment
 from caos.provider import (
     MAX_COMPLETION_TOKENS,
     MAX_REQUEST_BYTES,
+    MAX_RESPONSE_BYTES,
     NEVER_RETRIED,
+    TIMEOUT_SECONDS,
     TRANSIENT,
     Completion,
     encode_request,
@@ -75,8 +77,13 @@ def chat_model(*, endpoint: str | None = None) -> BaseChatModel:
     """
     from databricks_langchain import ChatDatabricks
 
+    # The socket deadline the lease is sized against (brief D5, F40), and no
+    # retry below the seam: a retry is the caller's reservation.
     return ChatDatabricks(
-        endpoint=endpoint or configured_endpoint(), max_tokens=MAX_COMPLETION_TOKENS
+        endpoint=endpoint or configured_endpoint(),
+        max_tokens=MAX_COMPLETION_TOKENS,
+        timeout=TIMEOUT_SECONDS,
+        max_retries=0,
     )
 
 
@@ -137,10 +144,8 @@ class ChatCompletions:
 
     def _completion(self, prompt: str, message: AIMessage) -> Completion:
         charge = self._charge(message.usage_metadata)
-        generation = producer_identifier(
-            message.id or message.response_metadata.get("id"), limit=512
-        )
         content = _text(message.content)
+        generation = producer_identifier(_claimed_id(message), limit=512)
         if generation is None:
             generation = (
                 HOST_MINTED
@@ -148,11 +153,24 @@ class ChatCompletions:
                     (prompt + (content or "")).encode("utf-8", "surrogatepass")
                 ).hexdigest()[:40]
             )
-        finish = message.response_metadata.get("finish_reason", "stop")
-        refusal = finish_refusal(finish) if isinstance(finish, str) else None
+        # A finish reason the response does not state is not `stop` (F34):
+        # `stop` is the one completed reason, and an answer with none is a
+        # response the host does not understand.
+        finish = message.response_metadata.get("finish_reason")
+        refusal = (
+            finish_refusal(finish)
+            if isinstance(finish, str) and finish
+            else RefusalCode.PROVIDER_RESPONSE_INVALID
+        )
         if refusal is not None:
             return Completion(None, charge, generation, refusal)
         if content is None or charge is None:
+            return Completion(
+                None, charge, generation, RefusalCode.PROVIDER_RESPONSE_INVALID
+            )
+        if len(content.encode("utf-8", "surrogatepass")) > MAX_RESPONSE_BYTES:
+            # Billed, never stored or parsed (F35): no prefix of an oversize
+            # answer is an answer.
             return Completion(
                 None, charge, generation, RefusalCode.PROVIDER_RESPONSE_INVALID
             )
@@ -172,6 +190,23 @@ class ChatCompletions:
         except (KeyError, TypeError, ValueError, DecimalException):
             return None
         return reported_charge(amount)
+
+
+# LangChain fills an id the response did not carry with its own run id, so a
+# message id with this prefix names nothing the provider said (F36).
+_LANGCHAIN_RUN_PREFIX = "lc_run"
+
+
+def _claimed_id(message: AIMessage) -> object:
+    """The id the response itself carried, or None: the completion's id when
+    the client surfaced it, else the message id unless LangChain minted it."""
+    claimed = message.response_metadata.get("id")
+    if isinstance(claimed, str) and claimed:
+        return claimed
+    own = message.id
+    if isinstance(own, str) and own.startswith(_LANGCHAIN_RUN_PREFIX):
+        return None
+    return own
 
 
 def _status_refusal(failed: OpenAIError) -> RefusalCode:

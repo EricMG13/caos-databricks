@@ -126,7 +126,7 @@ class PdfExtractor:
         data: bytes,
         *,
         limits: AdmissionLimits = DEFAULT_LIMITS,
-        deadline: float = float("inf"),
+        deadline: float | None = None,
     ) -> list[Token]:
         """`walk_pages` in a child interpreter, killed at `deadline` (§47).
 
@@ -136,7 +136,8 @@ class PdfExtractor:
         `SOURCE_NOT_READABLE` for anything else, an unreadable answer included.
         Only a code or the tokens cross back, never a message.
         """
-        return _answer(*_in_child({"limits": asdict(limits)}, data, deadline))
+        header: dict[str, object] = {"limits": asdict(limits)}
+        return _answer(*_in_child(header, data, _finite(deadline, limits)))
 
 
 def page_frame(
@@ -144,7 +145,7 @@ def page_frame(
     page: int,
     *,
     limits: AdmissionLimits = DEFAULT_LIMITS,
-    deadline: float = float("inf"),
+    deadline: float | None = None,
 ) -> Frame:
     """One page's visible crop in pdfminer's layout space, y up (`_crop_frame`).
 
@@ -156,7 +157,13 @@ def page_frame(
     whose crop clips to nothing, and the child's codes otherwise.
     """
     header = {"limits": asdict(limits), "frame": page}
-    return _frame_answer(*_in_child(header, data, deadline))
+    return _frame_answer(*_in_child(header, data, _finite(deadline, limits)))
+
+
+def _finite(deadline: float | None, limits: AdmissionLimits) -> float:
+    """A caller that names no deadline gets the limits' own: an entry point
+    for untrusted bytes never waits forever on a child (F56)."""
+    return time.monotonic() + limits.max_seconds if deadline is None else deadline
 
 
 def _in_child(
@@ -165,6 +172,8 @@ def _in_child(
     """The child's answer to `header` and `data` with its exit status, or
     `SOURCE_EXTRACTION_TIMEOUT` once `deadline` passes, with the child killed."""
     line = json.dumps({**header, "deadline": deadline}).encode()
+    # A caller may still choose no deadline explicitly; the entry points
+    # above default to the limits' own (F56).
     wait = None if deadline == float("inf") else deadline - time.monotonic()
     if wait is not None and wait <= 0.0:
         # Before `Popen`: an interpreter started only to be killed unanswered is

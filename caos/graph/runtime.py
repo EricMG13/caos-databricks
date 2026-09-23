@@ -19,7 +19,7 @@ lived to record it (`caos/store/budget.py`).
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import StrEnum
@@ -69,6 +69,7 @@ from caos.store.runs import (
     accept_attempt,
     block_run,
     complete_run,
+    run_status,
     start_attempt,
 )
 from caos.store.work import Lease, holds_lease
@@ -143,6 +144,8 @@ class Execution:
     # (D6). None -- every direct caller, the harness and the suite -- compiles
     # the graph without one: the store is the truth either way.
     checkpointer: BaseCheckpointSaver[str] | None = None
+    # Called before each node's pass; the worker beats its heartbeat here.
+    heartbeat: Callable[[], None] | None = None
 
 
 def run_route(
@@ -168,9 +171,11 @@ def run_route(
     route = _execution_route(conn, run_id, route, execution.bundle)
     # Read once from verified bundle bytes, handed to the pure engine (§46.1).
     named = named_objects(execution.bundle, route)
-    from caos.graph.build import build_graph, initial_state, thread_config
+    from caos.graph.build import build_graph, resume_input, thread_config
 
     def one_node(route_node_id: str) -> str:
+        if execution.heartbeat is not None:
+            execution.heartbeat()
         return node_pass(
             conn,
             blobs,
@@ -192,14 +197,19 @@ def run_route(
         finish=terminal,
         checkpointer=execution.checkpointer,
     )
+    thread = str(run_id)
     try:
-        graph.invoke(
-            initial_state(str(run_id)),
-            config=thread_config(str(run_id)) if execution.checkpointer else None,
+        ended = graph.invoke(
+            resume_input(graph, thread),
+            config=thread_config(thread) if execution.checkpointer else None,
         )
     except Exception as failed:
         _without_task_notes(failed)
         raise
+    if execution.checkpointer is not None and ended.get("ended"):
+        # Position only (D6): a thread that reached its end has nothing left
+        # to resume from, and the store holds the verdict (F39).
+        execution.checkpointer.delete_thread(thread)
 
 
 # The note LangGraph attaches to an exception leaving a node names the task;
@@ -339,16 +349,37 @@ def finish(  # noqa: PLR0913 -- one run, keyword-only
         decided = frozenset(accepted)
         complete = all(state is NodeState.COMPLETE for state in states.values())
         try:
-            if complete:
-                complete_run(conn, run_id, lease=execution.lease, accepted=decided)
-            else:
-                block_run(conn, run_id, lease=execution.lease, accepted=decided)
+            moved = _terminal_move(conn, run_id, execution, complete, decided)
         except Refusal as refusal:
             if refusal.code is not RefusalCode.RUN_TERMINAL_STALE or last:
                 raise
             continue
-        return "COMPLETE" if complete else "BLOCKED"
+        return _terminal_word(conn, run_id, complete, moved)
     raise Refusal(RefusalCode.RUN_TERMINAL_STALE)
+
+
+def _terminal_move(
+    conn: StoreConnection,
+    run_id: UUID,
+    execution: Execution,
+    complete: bool,
+    decided: frozenset[str],
+) -> bool:
+    if complete:
+        return complete_run(conn, run_id, lease=execution.lease, accepted=decided)
+    return block_run(conn, run_id, lease=execution.lease, accepted=decided)
+
+
+def _terminal_word(
+    conn: StoreConnection, run_id: UUID, complete: bool, moved: bool
+) -> str:
+    """The verdict the store made: this call's, or -- when a cancel landed
+    between the last node and here -- the one already there, never a verdict
+    the graph did not make."""
+    if moved:
+        return "COMPLETE" if complete else "BLOCKED"
+    with execution_reads(conn):
+        return run_status(conn, run_id).value
 
 
 def _settle(

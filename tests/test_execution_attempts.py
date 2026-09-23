@@ -430,12 +430,12 @@ def test_only_an_expired_or_queued_row_is_claimable_and_each_claim_advances_the_
     with pytest.raises(Refusal, match=r"^BOUNDARY_TEXT_INVALID$"):
         claim_run(conn, worker=BoundaryText.of("é" * 65), lease_seconds=60)
     first = claim_run(conn, worker=WORKER, lease_seconds=60)
-    assert first == Lease(run_id, 1)
+    assert first == Lease(run_id, 1, 60)
     assert _work(conn, run_id) == ("CLAIMED", 1, "worker-a", None, False)
     assert claim_run(conn, worker=WORKER, lease_seconds=60) is None, "live lease"
     _expire(conn, run_id)
     second = claim_run(conn, worker=BoundaryText.of("worker-b"), lease_seconds=60)
-    assert second == Lease(run_id, 2)
+    assert second == Lease(run_id, 2, 60)
     assert stop(conn, second, RefusalCode.CONTEXT_OVER_CEILING) is True
     conn.commit()
     assert _work(conn, run_id) == ("STOPPED", 2, None, "CONTEXT_OVER_CEILING", False)
@@ -444,7 +444,7 @@ def test_only_an_expired_or_queued_row_is_claimable_and_each_claim_advances_the_
     assert requeue_run(conn, run_id) is False
     conn.commit()
     third = claim_run(conn, worker=WORKER, lease_seconds=60)
-    assert third == Lease(run_id, 3)
+    assert third == Lease(run_id, 3, 60)
     mark_work_done(conn, run_id)
     conn.commit()
     _expire(conn, run_id)
@@ -472,7 +472,7 @@ def test_a_stale_lease_is_refused_and_a_live_one_renews(
     conn.rollback()
     _expire(conn, run_id)
     live = claim_run(conn, worker=WORKER, lease_seconds=60)
-    assert live == Lease(run_id, stale.token + 1)
+    assert live is not None and live == Lease(run_id, stale.token + 1, live.seconds)
     for held in (stale, None, Lease(uuid4(), live.token)):
         lock_run(conn, run_id)
         with pytest.raises(Refusal, match=r"^LEASE_NOT_HELD$"):

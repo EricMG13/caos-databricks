@@ -75,6 +75,10 @@ class WorkspaceStub:
     # a platform-mode boot, so `store_url()` reaches the Docker Postgres.
     database_credential: str = BEARER
     apps: set[str] = field(default_factory=lambda: {"caos"})
+    # What each app was created or updated with; `app()` echoes the fields a
+    # deploy reads back (`forward_user_access_token`).
+    app_bodies: dict[str, dict[str, Any]] = field(default_factory=dict)
+    permissions: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     app_url: str = ""
     files: dict[str, bytes] = field(default_factory=dict)
     directories: set[str] = field(default_factory=set)
@@ -143,10 +147,12 @@ class WorkspaceStub:
 
     def app(self, name: str) -> dict[str, Any]:
         url = self.app_url or f"{self.host}/apps/{name}"
+        body = self.app_bodies.get(name, {})
         return {
             "name": name,
             "id": f"app-{name}",
             "url": url,
+            "forward_user_access_token": body.get("forward_user_access_token"),
             "app_status": {"state": "RUNNING", "message": "App is running"},
             "compute_status": {"state": "ACTIVE", "message": ""},
             "service_principal_client_id": "sp-stub",
@@ -307,7 +313,7 @@ class _Handler(BaseHTTPRequestHandler):
     def _file_get(self, rest: str, query: Query, raw: bytes) -> None:
         data = self.stub.files.get("/" + rest)
         if data is None:
-            self._missing()
+            self._missing("RESOURCE_DOES_NOT_EXIST")  # the Files API's own code
         else:
             self._send(200, None, data)
 
@@ -365,8 +371,10 @@ class _Handler(BaseHTTPRequestHandler):
         stub = self.stub
         name, _, action = rest.strip("/").partition("/")
         if self.command == "POST" and not rest.strip("/"):
-            created = json.loads(raw or b"{}").get("name", "")
+            body = json.loads(raw or b"{}")
+            created = body.get("name", "")
             stub.apps.add(created)
+            stub.app_bodies[created] = body
             self._send(200, stub.app(created))
         elif name not in stub.apps:
             self._missing()
@@ -385,12 +393,29 @@ class _Handler(BaseHTTPRequestHandler):
         elif action == "update":
             # The direct engine POSTs the update, then GETs it until its status
             # settles; the SDK reads `status.state`.
+            if self.command == "POST":
+                stub.app_bodies[name] = {
+                    **stub.app_bodies.get(name, {}),
+                    **json.loads(raw or b"{}"),
+                }
             settled = {"state": "SUCCEEDED", "message": "updated"}
             self._send(200, {**stub.app(name), "status": settled})
         elif action in ("start", "stop"):
             self._send(200, stub.app(name))
         else:
             self._missing()
+
+    def _permissions(self, rest: str, query: Query, raw: bytes) -> None:
+        """`PUT|GET /api/2.0/permissions/apps/<name>`: the grants as given."""
+        name = rest.strip("/").split("/", 1)[0]
+        if name not in self.stub.apps:
+            self._missing()
+            return
+        if self.command == "PUT":
+            given = json.loads(raw or b"{}").get("access_control_list", [])
+            self.stub.permissions[name] = given
+        granted = self.stub.permissions.get(name, [])
+        self._send(200, {"object_id": f"/apps/{name}", "access_control_list": granted})
 
     def _telemetry(self, rest: str, query: Query, raw: bytes) -> None:
         self._send(200, {})
@@ -422,6 +447,8 @@ _ROUTES: list[tuple[str, str, bool, Route]] = [
     ("GET", APPS, False, _Handler._apps),
     ("POST", APPS, False, _Handler._apps),
     ("PATCH", APPS, False, _Handler._apps),
+    ("PUT", "/api/2.0/permissions/apps/", False, _Handler._permissions),
+    ("GET", "/api/2.0/permissions/apps/", False, _Handler._permissions),
     ("POST", "/telemetry-ext", True, _Handler._telemetry),
 ]
 

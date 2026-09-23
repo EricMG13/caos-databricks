@@ -571,6 +571,7 @@ const RefusalCode = enumOf([
   "STORE_NOT_TRANSACTIONAL",
   "STORE_NOT_CONFIGURED",
   "STORE_UNAVAILABLE",
+  "IDENTITY_UNAVAILABLE",
   "STREAM_LIMIT_REACHED",
 ]);
 const RefusalBody = object({ code: RefusalCode, clears: text });

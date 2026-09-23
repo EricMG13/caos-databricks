@@ -153,6 +153,7 @@ def test_realistic_lite_route_completes_proves_and_freezes(harness: _Harness) ->
             "signed_by": "analyst",
             "frozen_by": "freezer",
             "filed_by": "filer",
+            **{key: payload[key] for key in ("case_id", "run_id", "revision_id")},
         }
     ).encode()
     package = build_package(data, receipt, render(payload))

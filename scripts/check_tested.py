@@ -93,16 +93,24 @@ def referenced_names(tests_dir: Path) -> frozenset[str]:
     for path in sorted(tests_dir.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
-            if isinstance(node, ast.Name):
-                names.add(node.id)
-            elif isinstance(node, ast.Attribute):
-                names.add(node.attr)
-            elif isinstance(node, ast.alias):
-                names.add(node.asname or node.name.rpartition(".")[2])
-            elif isinstance(node, ast.Constant) and isinstance(node.value, str):
-                if DOTTED_PATH.match(node.value):
-                    names.add(node.value.rpartition(".")[2])
+            names.update(_referenced_by(node))
     return frozenset(names)
+
+
+def _referenced_by(node: ast.AST) -> list[str]:
+    """The names one node uses. Loads only (F63): a local a test assigns, a
+    parameter or a loop variable that happens to share a public name clears
+    nothing."""
+    if isinstance(node, ast.Name):
+        return [node.id] if isinstance(node.ctx, ast.Load) else []
+    if isinstance(node, ast.Attribute):
+        return [node.attr] if isinstance(node.ctx, ast.Load) else []
+    if isinstance(node, ast.alias):
+        return [node.asname or node.name.rpartition(".")[2]]
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        if DOTTED_PATH.match(node.value):
+            return [node.value.rpartition(".")[2]]
+    return []
 
 
 def untested(path: Path, referenced: frozenset[str]) -> list[str]:

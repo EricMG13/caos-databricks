@@ -71,9 +71,11 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from caos.api.identity import (
     EDGE_TOKEN_ENV,
     GROUPS_HEADER,
+    PLATFORM_HEADER,
     ROLE_HEADER,
     SUBJECT_HEADER,
     TRUST_SWITCH,
+    WORKSPACE_ENV,
 )
 from caos.api.wire import CLEARS, RefusalBody
 from caos.refusals import Refusal, RefusalCode
@@ -187,9 +189,13 @@ def resolve_mode(environ: Mapping[str, str] | None = None) -> EdgeMode:
     key = env.get(EDGE_TOKEN_ENV)
     if env.get(PLATFORM_ENV):
         # A key or the trust switch beside the platform is a configuration
-        # that cannot mean anything: the platform is the edge.
+        # that cannot mean anything: the platform is the edge. And every
+        # subject is minted under the workspace id (F46): a process without
+        # one would name everybody under an empty workspace, so it refuses.
         origin = env.get(PUBLIC_ORIGIN_ENV)
         if key is not None or TRUST_SWITCH in env:
+            raise Refusal(RefusalCode.EDGE_CONFIG_INVALID)
+        if not env.get(WORKSPACE_ENV):
             raise Refusal(RefusalCode.EDGE_CONFIG_INVALID)
         if origin is not None and not _bare_origin(origin):
             raise Refusal(RefusalCode.EDGE_CONFIG_INVALID)
@@ -439,12 +445,15 @@ class EdgeGuard:
                 await self.app(scope, receive, send)
             return
         path = scope.get("path", "")
-        refusal, asserted = self._refusal(scope, path)
+        refusal, asserted, mode = self._refusal(scope, path)
         # The assertion is gone before any other code -- a refusal included --
-        # runs, and in edge mode so is every identity header the request
-        # carried: what the application reads is the verified assertion's.
+        # runs, and wherever an edge exists (a key, the platform, or a mode
+        # that would not resolve) so is every identity header the request
+        # carried, on the health path too (F44): what the application reads
+        # is the verified assertion's, or nothing.
+        edged = mode is None or mode.platform or mode.key is not None
         scope["headers"] = _rewritten(
-            scope.get("headers", []), asserted, platform=PLATFORM_ENV in os.environ
+            scope.get("headers", []), asserted, platform=edged
         )
         scope["caos.edge_guarded"] = True
         guarded = _secured(send, path)
@@ -484,28 +493,32 @@ class EdgeGuard:
 
     def _refusal(
         self, scope: Scope, path: str
-    ) -> tuple[RefusalCode | None, Asserted | None]:
+    ) -> tuple[RefusalCode | None, Asserted | None, EdgeMode | None]:
         method = scope.get("method", "")
         headers: list[tuple[bytes, bytes]] = list(scope.get("headers", []))
         health = path == HEALTH_PATH and method in _SAFE
         try:
             mode = resolve_mode()
         except Refusal:
-            return (None if health else RefusalCode.EDGE_NOT_TRUSTED), None
+            return (None if health else RefusalCode.EDGE_NOT_TRUSTED), None, None
         if health:
-            return None, None
+            return None, None, mode
         asserted: Asserted | None = None
         if mode.key is not None:
             asserted = self._asserted(mode.key, scope, method, headers)
             if asserted is None:
-                return RefusalCode.EDGE_NOT_TRUSTED, None
+                return RefusalCode.EDGE_NOT_TRUSTED, None, mode
         elif not mode.platform and not _dev_peer(scope, headers):
-            return RefusalCode.EDGE_NOT_TRUSTED, None
+            return RefusalCode.EDGE_NOT_TRUSTED, None, mode
         if not _hygienic(headers):
-            return RefusalCode.NOT_AUTHENTICATED, None
+            return RefusalCode.NOT_AUTHENTICATED, None, mode
+        # The one header that decides identity behind the platform gets the
+        # hygiene the others get (F44): two of them name nobody.
+        if mode.platform and len(_all(headers, PLATFORM_HEADER)) > 1:
+            return RefusalCode.NOT_AUTHENTICATED, None, mode
         if is_api_path(path) and not _origin_allowed(mode, method, headers):
-            return RefusalCode.ORIGIN_REFUSED, None
-        return None, asserted
+            return RefusalCode.ORIGIN_REFUSED, None, mode
+        return None, asserted, mode
 
     def _asserted(
         self, key: bytes, scope: Scope, method: str, headers: list[tuple[bytes, bytes]]
@@ -590,7 +603,25 @@ def _origin_allowed(
     # `cross-site`, `same-site` and any unknown value fall through both rules.
     if method in _SAFE:
         return site in (None, "none", "same-origin")
-    return site == "same-origin" or (site is None and origin is not None)
+    if site == "same-origin":
+        return True
+    if site is not None or origin is None:
+        return False
+    # A client with no `sec-fetch-site`: its origin was checked above when a
+    # public origin is declared; behind the platform without one, the request's
+    # own `Host` is what the origin must name (F45), never any origin at all.
+    return allowed is not None or _names_host(origin, headers)
+
+
+def _names_host(origin: str, headers: list[tuple[bytes, bytes]]) -> bool:
+    hosts = _all(headers, "host")
+    if len(hosts) != 1:
+        return False
+    try:
+        named = urlsplit(origin).netloc
+    except ValueError:
+        return False
+    return bool(named) and named.lower() == hosts[0].decode("latin-1").lower()
 
 
 def _secured(send: Send, path: str) -> Send:

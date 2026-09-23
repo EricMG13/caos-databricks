@@ -38,6 +38,15 @@ NAMES = {
 }
 
 
+# Every receipt this host writes names its case, run and revision (F60).
+IDENTITY = {
+    "case_id": "11111111-1111-4111-8111-111111111111",
+    "run_id": "22222222-2222-4222-8222-222222222222",
+    "revision_id": "33333333-3333-4333-8333-333333333333",
+}
+PAYLOAD_DATA = {**PAYLOAD_DATA, **IDENTITY}
+
+
 def _package(**changes: bytes) -> bytes:
     payload = changes.get("payload", json.dumps(PAYLOAD_DATA).encode())
     receipt = json.dumps(
@@ -46,6 +55,7 @@ def _package(**changes: bytes) -> bytes:
             "signed_by": "analyst",
             "frozen_by": "freezer",
             "filed_by": "filer",
+            **IDENTITY,
         }
     ).encode()
     return build_package(
@@ -181,6 +191,7 @@ def test_a_highly_compressible_valid_package_round_trips(tmp_path: Path) -> None
             "signed_by": "analyst",
             "frozen_by": "freezer",
             "filed_by": "filer",
+            **IDENTITY,
         }
     ).encode()
 
@@ -491,3 +502,29 @@ def test_two_writers_still_cannot_overwrite_one_another(tmp_path: Path) -> None:
 
     with pytest.raises(FileExistsError):
         write_package(package, _package())
+
+
+def test_the_archived_verifier_must_be_this_verifier() -> None:
+    """F59: a package whose verifier member is not the host's is refused by
+    the host, so the lie it would carry is never published."""
+    members = _members(_package())
+    assert verify_package(_archive(list(members.items()))).verified
+    members["verify_package.py"] = b"# replaced\n"
+    result = verify_package(_archive(list(members.items())))
+    assert not result.verified
+    assert result.reason == "the archived verifier is not this verifier"
+
+
+def test_a_receipt_that_names_no_identity_verifies_nothing() -> None:
+    """F60: nothing this host filed omits the three identifiers."""
+    payload = json.dumps(PAYLOAD_DATA).encode()
+    receipt = {
+        "payload_sha256": hashlib.sha256(payload).hexdigest(),
+        "signed_by": "analyst",
+        "frozen_by": "freezer",
+        "filed_by": "filer",
+    }
+    package = build_package(payload, json.dumps(receipt).encode(), render(PAYLOAD_DATA))
+    result = verify_package(package)
+    assert not result.verified
+    assert result.reason == "the receipt does not identify this payload"

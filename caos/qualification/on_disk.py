@@ -119,8 +119,6 @@ _SUBJECT_KEYS = frozenset(
 # The same bound `matrix.py` puts on a label when it digests one. Stated here
 # too because this is where an authored label first arrives.
 _LABEL_LIMIT = 128
-# A manifest names cases; it never carries a document's bytes.
-MAX_MANIFEST_BYTES = 1024 * 1024
 _PROJECTION_KEYS = frozenset({"module_id", "field", "value"})
 _REGISTER_KEYS = frozenset(
     {"module_id", "register_id", "row_key", "column", "expected"}

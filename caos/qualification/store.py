@@ -66,7 +66,9 @@ def _answered(row: MatrixRow) -> bool:
     ):
         return False
     if row.expected_refusal_met is not None:
-        return row.expected_refusal_met
+        # A conjunct, not a short circuit (F64): keys declared beside an
+        # expected refusal are measured too.
+        return row.expected_refusal_met and not row.missed
     return row.proven and not row.missed
 
 

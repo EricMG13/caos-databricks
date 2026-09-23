@@ -140,7 +140,7 @@ def freeze_in(  # noqa: PLR0913 -- exact revision and authority for its re-proof
     # (`test_freeze_refuses_a_signature_altered_outside_this_code`). What a
     # signer actually reviewed is the route's `_reviewed`, against the digest
     # the client sent -- that is the live check.
-    if signatures[0][1] != digest:
+    if any(held != digest for _, held in signatures):
         raise Refusal(RefusalCode.DELIVERABLE_MOVED_SINCE_SIGNING)
     if actor_id in {who for who, _ in signatures}:
         raise Refusal(RefusalCode.APPROVER_NOT_INDEPENDENT)

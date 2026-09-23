@@ -20,6 +20,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from functools import cache
+from hashlib import sha256
 from pathlib import Path, PurePosixPath
 
 from caos.methodology.bundle import Bundle, delivered_authority
@@ -49,13 +50,21 @@ _ROW = re.compile(
 
 @cache
 def prompt_block(name: str) -> str:
-    """One host prompt block, exactly as its file holds it (Layer 3)."""
+    """One host prompt block, exactly as its file holds it (Layer 3), and
+    exactly as the host manifest records it (F67): bytes the manifest does not
+    name, or names differently, are refused, never delivered."""
     if _NAME.match(name) is None:
         raise Refusal(RefusalCode.AUTHORITY_BYTES_MISMATCH)
+    from caos.methodology.host import host_skill
+
+    entry = host_skill().get("host_prompt_hashes", {}).get(f"{name}.md")
     try:
-        return (PROMPTS / f"{name}.md").read_text(encoding="utf-8")
+        raw = (PROMPTS / f"{name}.md").read_bytes()
     except OSError:
         raise Refusal(RefusalCode.AUTHORITY_BYTES_MISMATCH) from None
+    if not isinstance(entry, dict) or entry.get("sha256") != sha256(raw).hexdigest():
+        raise Refusal(RefusalCode.AUTHORITY_BYTES_MISMATCH)
+    return raw.decode("utf-8")
 
 
 @dataclass(frozen=True, slots=True)

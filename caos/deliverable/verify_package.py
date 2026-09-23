@@ -18,7 +18,7 @@ from typing import Any
 
 VERIFIER_VERSION = "1"
 # Updated with render.py; the archived verifier retains its historical pin.
-RENDERER_SHA256 = "cae64483764b94d325ad96f2a329ce3271c3772d36e4f02e4c827aa5630a49ad"
+RENDERER_SHA256 = "5a8586276b5d22a52fb5fe0f6daaba63c5e21a13335c3cda0ea125cb8a9cd6af"
 MAX_ARCHIVE_BYTES = 64 * 1024 * 1024
 LIMITS = {
     "payload.json": 32 * 1024 * 1024,
@@ -95,10 +95,9 @@ def _member(archive: zipfile.ZipFile, info: zipfile.ZipInfo, data: bytes) -> byt
 
 
 def _receipt_identity_matches(receipt: dict[str, Any], payload: object) -> bool:
-    """Current receipts bind their three identifiers; historical ones omit all."""
+    """A receipt binds its three identifiers to the payload's (F60); nothing
+    this host ever filed omits them, so none is excused."""
     identity = ("case_id", "run_id", "revision_id")
-    if not any(key in receipt for key in identity):
-        return True
     return isinstance(payload, dict) and all(
         isinstance(receipt.get(key), str)
         and receipt[key].strip()
@@ -116,15 +115,32 @@ def _receipt_role_error(receipt: dict[str, Any]) -> str | None:
     return None
 
 
+def _own_bytes() -> bytes | None:
+    try:
+        return Path(__file__).read_bytes()
+    except (NameError, OSError):
+        return None
+
+
+def _receipt_error(receipt: dict[str, Any], payload: bytes) -> str | None:
+    if hashlib.sha256(payload).hexdigest() != receipt.get("payload_sha256"):
+        return "the payload does not hash to what the receipt says"
+    return _receipt_role_error(receipt)
+
+
 def _contents(members: dict[str, bytes]) -> tuple[bool, str | None]:
     payload = members["payload.json"]
     receipt = json.loads(members["receipt.json"])
     if not isinstance(receipt, dict):
         return False, "the receipt is not a JSON object"
-    if hashlib.sha256(payload).hexdigest() != receipt.get("payload_sha256"):
-        return False, "the payload does not hash to what the receipt says"
-    if role_error := _receipt_role_error(receipt):
-        return False, role_error
+    if receipt_error := _receipt_error(receipt, payload):
+        return False, receipt_error
+    # The verifier that travels with the package is this one (F59): the host
+    # never blesses a package whose verifier it did not write. A copy run from
+    # a pipe has no file to compare against and checks everything else.
+    running = _own_bytes()
+    if running is not None and members["verify_package.py"] != running:
+        return False, "the archived verifier is not this verifier"
     renderer = members["render.py"]
     digest = hashlib.sha256(renderer).hexdigest()
     if digest != RENDERER_SHA256:

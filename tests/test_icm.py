@@ -113,3 +113,43 @@ def test_the_generator_renders_what_is_committed(bundle: Bundle) -> None:
     assert icm_stages.render_prompt("CP-0").startswith("---\nmodule: CP-0\n")
     assert icm_stages.main(["--check"]) == 0
     assert check_icm.main() == 0
+
+
+def test_the_vendored_bundle_is_pinned_and_a_swapped_manifest_refuses(
+    bundle: Bundle, tmp_path: Path
+) -> None:
+    """F66: the manifest verifies every file; the pin verifies the manifest."""
+    from caos.methodology.bundle_pin import BUNDLE_MANIFEST_SHA256
+
+    assert bundle.manifest_sha256 == BUNDLE_MANIFEST_SHA256
+    bundle.verify_pinned()
+    swapped = tmp_path / "bundle"
+    swapped.mkdir()
+    manifest = bundle.root / "DEPLOY_V_INTEGRITY_v1.json"
+    (swapped / manifest.name).write_bytes(manifest.read_bytes().replace(b"}", b" }", 1))
+    with pytest.raises(Refusal, match=r"^AUTHORITY_BYTES_MISMATCH$"):
+        Bundle(swapped).verify_pinned()
+
+
+def test_a_prompt_block_that_is_not_what_the_host_manifest_records_refuses(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F67: the instruction layer of every prompt is verified like the
+    methodology it is delivered with."""
+    blocks = tmp_path / "prompt"
+    blocks.mkdir()
+    for block in icm.PROMPTS.glob("*.md"):
+        (blocks / block.name).write_bytes(block.read_bytes())
+    (blocks / "instruction.md").write_bytes(
+        (blocks / "instruction.md").read_bytes() + b"\nOne more line.\n"
+    )
+    (blocks / "unlisted.md").write_text("A block the manifest never named.\n")
+    monkeypatch.setattr(icm, "PROMPTS", blocks)
+    prompt_block.cache_clear()
+    try:
+        assert prompt_block("tagged") == (blocks / "tagged.md").read_text()
+        for tampered in ("instruction", "unlisted"):
+            with pytest.raises(Refusal, match=r"^AUTHORITY_BYTES_MISMATCH$"):
+                prompt_block(tampered)
+    finally:
+        prompt_block.cache_clear()

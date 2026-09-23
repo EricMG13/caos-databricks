@@ -727,3 +727,29 @@ def test_undeclared_names_the_module_a_refusal_must_be_acted_on(
     (api / "bare.py").write_text("def read_two() -> None: ...\n", encoding="utf-8")
 
     assert io_budget.undeclared(api) == [api / "bare.py"]
+
+
+def test_a_name_a_test_only_binds_does_not_clear_a_public_definition(
+    tmp_path: Path,
+) -> None:
+    """F63: a local, a parameter or a loop variable that shares a public name
+    is a binding, not a use."""
+    module = tmp_path / "pkg" / "m.py"
+    module.parent.mkdir()
+    module.write_text("def freeze_the_deliverable() -> int:\n    return 1\n")
+    tests_dir = tmp_path / "tests"
+    tests_dir.mkdir()
+    bound = tests_dir / "test_bound.py"
+    bound.write_text(
+        "def test_x(freeze_the_deliverable: int = 1) -> None:\n"
+        "    del freeze_the_deliverable\n"
+        "    for freeze_the_deliverable in ():\n"
+        "        pass\n"
+    )
+    assert check_tested.main([str(module), "--tests", str(tests_dir)]) == 1
+    bound.write_text(
+        "from pkg.m import freeze_the_deliverable\n\n"
+        "def test_x() -> None:\n"
+        "    assert freeze_the_deliverable() == 1\n"
+    )
+    assert check_tested.main([str(module), "--tests", str(tests_dir)]) == 0

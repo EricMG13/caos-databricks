@@ -37,6 +37,7 @@ jobs:
       - run: uv run python scripts/io_budget.py --assert
       - run: uv run python scripts/check_gate_config.py
       - run: uv run python scripts/check_icm.py
+      - run: uv run python scripts/document_register.py
       - run: uv run complexipy caos scripts icm --max-complexity-allowed 15
       - run: uv run pre-commit run --all-files --show-diff-on-failure
 
@@ -101,8 +102,10 @@ jobs:
       # the push's commit range and failed on the first push over git's own
       # stderr while finding nothing; the image is digest-pinned like postgres.
       - run: >-
-          docker run --rm -v "$PWD:/repo" -w /repo
-          ghcr.io/gitleaks/gitleaks:v8.24.3@sha256:e1b35e12a8c6fa8901f060459cfb6b2fc4c484d3afbe3b029733a3bbfab07055
+          docker run --rm -u "$(id -u):$(id -g)"
+          -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=/repo
+          -v "$PWD:/repo" -w /repo
+          ghcr.io/gitleaks/gitleaks:v8.21.2@sha256:0e99e8821643ea5b235718642b93bb32486af9c8162c8b8731f7cbdc951a7f46
           git --no-banner .
 
   bundle:
@@ -128,6 +131,9 @@ jobs:
       - run: >-
           uv run python tests/workspace_stub.py -- databricks bundle run caos -t dev
           --var uc_catalog=main --var uc_schema=caos --var lakebase_instance=caos-lb
+      # What the deploy synced is what the app needs (F48): the check reads the
+      # CLI's own record of the files it uploaded.
+      - run: uv run python scripts/check_gate_config.py --shipped .databricks/bundle/dev/deployment.json
 
   size:
     # AI PRs carry ~1.7x the issues of human PRs, and density rises with size.
@@ -138,6 +144,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: {fetch-depth: 0}
       - run: python3 scripts/check_pr_size.py "origin/${{ github.base_ref }}"
+      # A budget may only fall (F58): the base branch's baseline is the ceiling.
+      - run: git show "origin/${{ github.base_ref }}:tests/gate_baseline.json" > "$RUNNER_TEMP/base.json"
+      - run: python3 scripts/check_gate_config.py --against "$RUNNER_TEMP/base.json"
 
   frontend:
     runs-on: ubuntu-latest

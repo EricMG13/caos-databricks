@@ -25,6 +25,7 @@ single enclosing rectangle would cover text the quote does not contain.
 from __future__ import annotations
 
 import json
+import unicodedata
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from itertools import groupby
@@ -100,8 +101,15 @@ EDGE_PUNCTUATION = "\"'\u201c\u201d\u2018\u2019()[]{}.,;:!?"
 TRACKING_EXTRACTORS = frozenset({"caos.pdfminer"})
 
 
+def _nfc(text: str) -> str:
+    """The form the block was shown in: admission stores a token's own bytes
+    but renders the line NFC, so a quote of what was shown must compare NFC
+    (F33). NFC is idempotent, so nothing that anchored before stops anchoring."""
+    return unicodedata.normalize("NFC", text)
+
+
 def _stripped(word: str) -> str:
-    return word.strip(EDGE_PUNCTUATION)
+    return _nfc(word).strip(EDGE_PUNCTUATION)
 
 
 def _joined_tracking(tokens: list[_Token]) -> list[_Token]:
@@ -407,7 +415,7 @@ def _match_at(
     run = tokens[start : start + len(words)]
     last = len(words) - 1
     for position, (token, word) in enumerate(zip(run, words, strict=True)):
-        if token.text == word:
+        if _nfc(token.text) == _nfc(word):
             continue
         edge = normalised and position in (0, last)
         if edge and _stripped(word) and _stripped(token.text) == _stripped(word):

@@ -396,6 +396,7 @@ def test_a_package_refuses_a_pair_that_does_not_hash_to_its_handoff(
         "signed_by": "a",
         "frozen_by": "b",
         "filed_by": "c",
+        **{key: payload[key] for key in ("case_id", "run_id", "revision_id")},
     }
     good = build_package(data, json.dumps(receipt).encode(), render(payload))
     assert verify_package(good).verified

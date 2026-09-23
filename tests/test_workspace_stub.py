@@ -16,6 +16,7 @@ import gateway_smoke
 import preflight
 import pytest
 from conftest import priced
+from langgraph.checkpoint.postgres import PostgresSaver
 from openai import NotFoundError
 from test_loop_charges import ESTIMATE, _Completions, ready, route
 from workspace_stub import BEARER, ENDPOINT, WorkspaceStub, main
@@ -24,7 +25,12 @@ from caos.api import edge, identity
 from caos.api.identity import GlobalRole, actor_from_token
 from caos.blobs import BlobStore
 from caos.graph.build import thread_config
-from caos.graph.checkpoint import SCHEMA, MintedConnection, checkpointer
+from caos.graph.checkpoint import (
+    SCHEMA,
+    MintedConnection,
+    checkpointer,
+    close_checkpointer,
+)
 from caos.graph.route import ResolvedRoute
 from caos.graph.runtime import Execution, run_route
 from caos.methodology.bundle import Bundle
@@ -33,6 +39,7 @@ from caos.models import completions
 from caos.refusals import Refusal
 from caos.store import RunStatus, StoreConnection
 from caos.store.runs import run_status
+from caos.workspace import workspace_client
 
 __all__ = ["ready", "route"]
 
@@ -108,6 +115,7 @@ def test_the_forwarded_token_resolves_through_scim_over_http(
     monkeypatch.setenv(edge.PLATFORM_ENV, "caos")
     monkeypatch.setenv(identity.WORKSPACE_ENV, "1234")
     monkeypatch.setattr(identity, "_CACHE", {})
+    monkeypatch.setattr(identity, "_NEGATIVE", {})
     actor = actor_from_token("a-forwarded-token")
     assert actor.role is GlobalRole.ADMIN
     assert isinstance(actor.user_id, UUID)
@@ -116,7 +124,22 @@ def test_the_forwarded_token_resolves_through_scim_over_http(
 
     stub.groups = frozenset({"caos-analysts"})
     monkeypatch.setattr(identity, "_CACHE", {})
+    monkeypatch.setattr(identity, "_NEGATIVE", {})
     assert actor_from_token("another").role is GlobalRole.ANALYST
+    # A token the workspace refuses is remembered briefly (F43): one round
+    # trip, not one per request.
+    stub.identities["refused"] = ("", frozenset())
+    asked = len(stub.requests)
+    for _ in range(3):
+        with pytest.raises(Refusal, match=r"^NOT_AUTHENTICATED$"):
+            actor_from_token("refused")
+    assert len(stub.requests) == asked + 1
+    # The cache is bounded: past its capacity nothing more is remembered.
+    monkeypatch.setattr(identity, "CACHE_CAPACITY", 1)
+    monkeypatch.setattr(identity, "_CACHE", {})
+    actor_from_token("first")
+    actor_from_token("second")
+    assert len(identity._CACHE) == 1
 
 
 def test_the_volume_backend_round_trips_bytes_through_the_files_api(
@@ -209,3 +232,35 @@ def test_the_lakebase_checkpointer_mints_each_connection_over_the_platform_value
             (SCHEMA,),
         ).fetchall()
     assert schema == SCHEMA
+    close_checkpointer(saver)
+    assert isinstance(saver, PostgresSaver) and saver.conn.closed, "pool released"
+
+
+def test_the_bounded_workspace_client_reaches_the_stub_with_its_budgets(
+    stub: WorkspaceStub,
+) -> None:
+    from caos.workspace import HTTP_TIMEOUT_SECONDS, RETRY_TIMEOUT_SECONDS
+
+    client = workspace_client()
+    assert client.config.http_timeout_seconds == HTTP_TIMEOUT_SECONDS
+    assert client.config.retry_timeout_seconds == RETRY_TIMEOUT_SECONDS
+    assert client.apps.get("caos").name == "caos"
+
+
+def test_a_workspace_that_does_not_answer_is_unavailable_not_unauthenticated(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """F43: SCIM over one bounded request; a closed port is the workspace's
+    absence, a 401 is the caller's, and neither costs the SDK's discovery."""
+    from caos.api import identity
+    from caos.api.identity import actor_from_token
+
+    monkeypatch.setenv(identity.WORKSPACE_ENV, "1234")
+    monkeypatch.setenv("DATABRICKS_HOST", "http://127.0.0.1:9")
+    monkeypatch.setattr(identity, "_CACHE", {})
+    monkeypatch.setattr(identity, "_NEGATIVE", {})
+    with pytest.raises(Refusal, match=r"^IDENTITY_UNAVAILABLE$"):
+        actor_from_token("a-token")
+    monkeypatch.delenv("DATABRICKS_HOST")
+    with pytest.raises(Refusal, match=r"^IDENTITY_UNAVAILABLE$"):
+        actor_from_token("a-token")

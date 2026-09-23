@@ -78,7 +78,10 @@ def json_body[M: BaseModel](
         declared = request.headers.get("content-length")
         if media.lower() != "application/json" or (
             declared is not None
-            and (not declared.isdigit() or int(declared) > max_bytes)
+            and (
+                not (declared.isascii() and declared.isdigit())
+                or int(declared) > max_bytes
+            )
         ):
             raise Refusal(RefusalCode.REQUEST_INVALID)
         raw = bytearray()

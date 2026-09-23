@@ -12,13 +12,17 @@ This repository deploys as one Databricks App from an asset bundle. Nothing in t
 | A Lakebase (provisioned) instance | `lakebase_instance`, `lakebase_database` (default `databricks_postgres`) | The store's schema is applied on first start; LangGraph checkpoints go to schema `caos_graph` on the same database. The app's service principal needs `CAN_CONNECT_AND_CREATE` (granted by the bundle). |
 | Two workspace groups | `group_admin` (default `caos-admins`), `group_analyst` (default `caos-analysts`) | Members of the admin group act as ADMIN, of the analyst group as ANALYST; any other authenticated user is READER. |
 | What one run may spend | `run_ceiling` (default `25.00`) | Must cover one worst-case call at `model_price` (about 6.88 at the default price); preflight refuses less (F28). |
+| The forwarded-token preview | none | `forward_user_access_token` is a preview feature Databricks must enable for the workspace (F53); row E5 reads it back. Changing it on an existing app needs `databricks apps stop` then `start`. |
+| Who may open the app | `group_admin` → `CAN_MANAGE`, `group_analyst` → `CAN_USE` | Granted by the bundle (F50); a user outside both groups is stopped at the proxy. Members must be in the groups directly: SCIM `Me` does not expand nested groups. |
+| The app's Lakebase role | none | `CAN_CONNECT_AND_CREATE` is expected to provision the app's service principal as a Postgres role; row E6's `store` code says whether it did. |
 
 Check them with the deployer's profile before the first deploy:
 
 ```bash
 DATABRICKS_CONFIG_PROFILE=<profile> uv run python scripts/preflight.py \
   --endpoint databricks-claude-opus-5 --catalog <catalog> --schema <schema> \
-  --lakebase-instance <instance>
+  --lakebase-instance <instance> \
+  --price databricks-claude-opus-5,0.000005,0.000025,2026-09-22 --run-ceiling 25.00
 ```
 
 ## 2. Build the tree that ships
@@ -50,7 +54,7 @@ databricks bundle run caos -t prod -p <profile>           # starts, or restarts 
 databricks apps get caos -p <profile>                     # app_status.state RUNNING
 ```
 
-The App installs from `uv.lock` on Python 3.13 (`requires-python`); there is deliberately no `requirements.txt`, which would switch the platform to pip and Python 3.11.
+The App installs from `uv.lock` on Python 3.13 (`requires-python`) with `uv run --locked --no-dev` (F49); there is deliberately no `requirements.txt`, which would switch the platform to pip and Python 3.11. `app.yaml` sets no environment: the bundle's `config` is the one source (F52).
 
 ## 4. What the app expects at runtime
 
@@ -87,4 +91,4 @@ uv run python tests/workspace_stub.py -- databricks bundle validate -t dev \
 CAOS_REQUIRE_POSTGRES=1 uv run pytest --no-cov tests/test_workspace_stub.py
 ```
 
-The first prints `Validation OK!` and the paths the CLI asked for (`bundle deploy` and `bundle run caos` pass the same way); the second runs the gateway smoke, `scripts/preflight.py`, SCIM identity, the volume backend, the Lakebase checkpointer and a LITE route through `ChatDatabricks` over HTTP. `tests/test_platform_boot.py` goes further: it boots `python -m caos.serve` under the platform's own environment against the stub and the Docker Postgres and drives a governed run through the HTTP surface to COMPLETE; `tests/test_enterprise_deploy.py` runs the one command of section 3 against that. What the stand-in cannot tell you: whether the workspace grants what the bundle asks for, how its Apps proxy treats the event stream (C42), the Lakebase major version (D17), or what a real model answers. The one command reports each of those the first time it runs there; the instruction for that run is `docs/rebuild/ENTERPRISE_HANDOFF.md`.
+The first ends with `Validation OK!` and lists the paths the CLI asked for (`bundle deploy` and `bundle run caos` pass the same way, and `scripts/check_gate_config.py --shipped .databricks/bundle/dev/deployment.json` then checks that what the deploy synced holds everything the app needs); the second runs the gateway smoke, `scripts/preflight.py`, SCIM identity, the volume backend, the Lakebase checkpointer and a LITE route through `ChatDatabricks` over HTTP. `tests/test_platform_boot.py` goes further: it boots `python -m caos.serve` under the platform's own environment against the stub and the Docker Postgres and drives a governed run through the HTTP surface to COMPLETE; `tests/test_enterprise_deploy.py` runs the one command of section 3 against that. What the stand-in cannot tell you: whether the workspace grants what the bundle asks for, how its Apps proxy treats the event stream (C42), the Lakebase major version (D17), or what a real model answers. The one command reports each of those the first time it runs there; the instruction for that run is `docs/rebuild/ENTERPRISE_HANDOFF.md`.

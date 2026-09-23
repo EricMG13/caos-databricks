@@ -28,15 +28,25 @@ def manifest_path(group: str, base: Path = GOLDEN_DIR) -> Path:
     return base / group / MANIFEST
 
 
+LEGACY_PACKAGE = "server"
+
+
 def golden_path(group: str, name: str, base: Path = GOLDEN_DIR) -> Path:
     return base / group / f"{name}.json"
 
 
-def read_manifest(group: str, base: Path = GOLDEN_DIR) -> dict[str, str]:
+def read_manifest(
+    group: str, base: Path = GOLDEN_DIR, *, package: str = LEGACY_PACKAGE
+) -> dict[str, str]:
     """Case name to output digest, as the generator wrote it."""
     document = json.loads(manifest_path(group, base).read_text(encoding="utf-8"))
     if not isinstance(document, dict) or not isinstance(document.get("cases"), dict):
         message = f"{group}: manifest carries no cases object"
+        raise TypeError(message)
+    if document.get("package") != package:
+        # A golden written from the rebuilt package would match a regression
+        # rather than catch it (F57).
+        message = f"{group}: manifest was written from {document.get('package')!r}"
         raise TypeError(message)
     cases = document["cases"]
     return {str(name): str(digest) for name, digest in cases.items()}

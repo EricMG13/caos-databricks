@@ -62,9 +62,9 @@ class VolumeBackend:
     def _service(self) -> FilesService:
         if self.files is not None:
             return self.files
-        from databricks.sdk import WorkspaceClient
+        from caos.workspace import workspace_client
 
-        service: FilesService = WorkspaceClient().files
+        service: FilesService = workspace_client().files
         object.__setattr__(self, "files", service)
         return service
 
@@ -80,7 +80,7 @@ class VolumeBackend:
             contents = getattr(response, "contents", None)
             data: bytes = contents.read() if contents is not None else b""
         except OSError as failed:
-            if type(failed).__name__ == "NotFound":
+            if _not_found(failed):
                 raise Refusal(RefusalCode.BLOB_NOT_FOUND) from None
             raise Refusal(RefusalCode.STORE_UNAVAILABLE) from None
         return data
@@ -90,6 +90,15 @@ class VolumeBackend:
             self._service().get_directory_metadata(str(root))
         except OSError:
             raise Refusal(RefusalCode.STORE_UNAVAILABLE) from None
+
+
+def _not_found(failed: OSError) -> bool:
+    """Whether the SDK said the file is not there (F41): its `NotFound` is a
+    family (`ResourceDoesNotExist` answers a missing file), and the error code
+    is carried beside the class, so both are read rather than one class name."""
+    names = {cls.__name__ for cls in type(failed).__mro__}
+    code = getattr(failed, "error_code", "")
+    return "NotFound" in names or code in {"NOT_FOUND", "RESOURCE_DOES_NOT_EXIST"}
 
 
 @dataclass(frozen=True, slots=True)

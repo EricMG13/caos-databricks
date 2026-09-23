@@ -124,6 +124,7 @@ POLL_INTERVAL = 0.5
 TRANSIENT = frozenset(
     {
         RefusalCode.STORE_UNAVAILABLE,
+        RefusalCode.IDENTITY_UNAVAILABLE,
         RefusalCode.STREAM_LIMIT_REACHED,
         RefusalCode.PROVIDER_UNAVAILABLE,
     }
@@ -189,6 +190,7 @@ _STATUS = {
     RefusalCode.PAGE_NOT_AVAILABLE: 404,
     RefusalCode.STORE_NOT_CONFIGURED: 500,
     RefusalCode.STORE_UNAVAILABLE: 503,
+    RefusalCode.IDENTITY_UNAVAILABLE: 503,
     RefusalCode.STREAM_LIMIT_REACHED: 503,
     RefusalCode.STORE_NOT_TRANSACTIONAL: 500,
     RefusalCode.STORE_SCHEMA_DRIFT: 500,

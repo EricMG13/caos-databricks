@@ -19,14 +19,19 @@ import time
 from urllib.parse import quote
 from uuid import uuid4
 
+import psycopg
+from psycopg import errors
+
 from caos.refusals import Refusal, RefusalCode
 
 DATABASE_URL = "CAOS_DATABASE_URL"
 LAKEBASE_INSTANCE = "CAOS_LAKEBASE_INSTANCE"
 # Databricks Apps inject these for the first database resource (R11).
 PG_ENV = ("PGHOST", "PGPORT", "PGDATABASE", "PGUSER")
-# Below the documented one-hour token life, with room for a slow connect.
-TOKEN_SECONDS = 50 * 60
+# Below the credential life the vendor library plans for (a 15-minute cache
+# and a 14-minute pool recycle in `databricks_ai_bridge.lakebase`, the same
+# figure the build contract names), with room for a slow connect. F37.
+TOKEN_SECONDS = 14 * 60
 
 _LOCK = threading.Lock()
 _CACHED: tuple[str, float] | None = None
@@ -40,13 +45,32 @@ def store_url() -> str:
     values = {name: os.environ.get(name) for name in PG_ENV}
     if not all(values.values()):
         raise Refusal(RefusalCode.STORE_NOT_CONFIGURED)
+    port = str(values["PGPORT"])
+    if not (port.isascii() and port.isdigit()):
+        raise Refusal(RefusalCode.STORE_NOT_CONFIGURED)
     user = quote(str(values["PGUSER"]), safe="")
     password = quote(_credential(), safe="")
-    sslmode = os.environ.get("PGSSLMODE", "require")
-    return (
-        f"postgresql://{user}:{password}@{values['PGHOST']}:{values['PGPORT']}"
-        f"/{values['PGDATABASE']}?sslmode={sslmode}"
-    )
+    host = quote(str(values["PGHOST"]), safe="")
+    database = quote(str(values["PGDATABASE"]), safe="")
+    sslmode = quote(os.environ.get("PGSSLMODE", "require"), safe="")
+    return f"postgresql://{user}:{password}@{host}:{port}/{database}?sslmode={sslmode}"
+
+
+def invalidate_credential() -> None:
+    """Forget the cached credential; the next connection mints a fresh one."""
+    global _CACHED
+    with _LOCK:
+        _CACHED = None
+
+
+def note_connect_failure(failed: psycopg.OperationalError) -> None:
+    """An authentication failure drops the cached credential (F37): a token
+    revoked or rotated early would otherwise be handed to the driver until the
+    clock said otherwise. Any other failure leaves the cache alone."""
+    if isinstance(
+        failed, (errors.InvalidPassword, errors.InvalidAuthorizationSpecification)
+    ):
+        invalidate_credential()
 
 
 def _credential() -> str:
@@ -62,9 +86,9 @@ def _credential() -> str:
 
 def _mint() -> str:
     """One credential from the SDK's unified auth: instance or endpoint form."""
-    from databricks.sdk import WorkspaceClient
+    from caos.workspace import workspace_client
 
-    client = WorkspaceClient()
+    client = workspace_client()
     instance = os.environ.get(LAKEBASE_INSTANCE)
     endpoint = os.environ.get("LAKEBASE_AUTOSCALING_ENDPOINT")
     token: str | None = None

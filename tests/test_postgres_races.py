@@ -218,7 +218,7 @@ def test_two_connections_claiming_one_queued_run_claim_it_once(
     with ThreadPoolExecutor(max_workers=APPENDERS) as pool:
         claims = list(pool.map(claim, range(APPENDERS)))
 
-    assert [lease for lease in claims if lease is not None] == [Lease(run_id, 1)]
+    assert [lease for lease in claims if lease is not None] == [Lease(run_id, 1, 60)]
     with connect(empty_database) as conn:
         assert conn.execute(
             "SELECT state, lease_token FROM run_work WHERE run_id = %s", (run_id,)

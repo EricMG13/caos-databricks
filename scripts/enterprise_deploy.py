@@ -11,7 +11,8 @@ in `<evidence>/<id>.log`:
     --stage after    E5 the app is RUNNING with a URL
                      E6 /api/health answers ready on Python 3.13
                      E7 the gateway smoke, JSON mode included (A31)
-                     E8 Lakebase `SELECT version()`, for D17
+                     E8 Lakebase `SELECT version()` as the deployer, for D17
+                        (the app's own access is E6's `store` code)
                      E9 the event stream delivers through the Apps proxy (C42)
 
 No secret is printed or written: the bearer the app calls carry comes from
@@ -153,8 +154,14 @@ def _app_url(evidence: Evidence) -> str:
     status = app.app_status
     state = status.state.value if status and status.state else ""
     url = app.url or ""
-    code = 0 if state == "RUNNING" and url else 1
-    line = f"state={state} url={'set' if url else 'missing'}"
+    # The forwarded-token flag is a preview feature the workspace must have
+    # enabled; an app deployed without it names nobody (F53).
+    forwarding = bool(getattr(app, "forward_user_access_token", False))
+    code = 0 if state == "RUNNING" and url and forwarding else 1
+    line = (
+        f"state={state} url={'set' if url else 'missing'} "
+        f"forward_user_access_token={forwarding}"
+    )
     evidence.record("E5", f"apps get {APP}", code, line)
     return url if code == 0 else ""
 
@@ -167,7 +174,9 @@ def _open(
     body: bytes | None = None,
     timeout: float = 30.0,
 ) -> tuple[int, http.client.HTTPResponse]:
-    """One request to the app over http.client; the caller reads the body."""
+    """One request to the app over http.client; the caller reads the body.
+    A redirect is answered as its status: the sign-in flow's 302 is a row
+    that says 302, never a body parsed as JSON."""
     parts = urlsplit(target)
     connection: http.client.HTTPConnection
     if parts.scheme == "https":
@@ -193,15 +202,26 @@ def _headers() -> dict[str, str]:
 def _health(url: str, evidence: Evidence) -> int:
     try:
         status, response = _open(url + "/api/health", "GET", _headers())
-        body: dict[str, Any] = json.loads(response.read())
+        raw = response.read()
+        body: dict[str, Any] = json.loads(raw) if status < 300 else {}
     except (OSError, ValueError) as failed:
         return evidence.record("E6", "GET /api/health", 1, type(failed).__name__)
+    if status >= 300:
+        return evidence.record("E6", "GET /api/health", 1, f"answered {status}")
     ready = status == 200 and body.get("status") == "ready"
     version = str(body.get("python_version", ""))
-    code = 0 if ready and version.startswith("3.13") else 1
-    line = (
-        f"status={body.get('status')} python_version={version} "
-        f"build_id={body.get('build_id')}"
+    # Every code, the worker's included (F54): an app whose worker never
+    # started answers `ready` and runs nothing.
+    codes = {
+        k: body.get(k) for k in ("store", "bundle", "blobs", "identity", "workers")
+    }
+    code = (
+        0
+        if ready and version.startswith("3.13") and set(codes.values()) == {"OK"}
+        else 1
+    )
+    line = f"status={body.get('status')} python_version={version} " + " ".join(
+        f"{k}={v}" for k, v in codes.items()
     )
     return evidence.record("E6", "GET /api/health", code, line)
 
@@ -270,9 +290,12 @@ def _stream(url: str, evidence: Evidence) -> int:
         created = json.loads(response.read())
     except (OSError, ValueError) as failed:
         return evidence.record(step, "POST /api/v1/cases", 1, type(failed).__name__)
-    if status != 201:
-        note = f"unverified: creating a case answered {status}; needs writer standing"
+    if status == 403:
+        note = "unverified: creating a case answered 403; needs writer standing"
         return evidence.record(step, path, 0, note)
+    if status != 201:
+        # Any other answer is the app failing, not a standing question (F55).
+        return evidence.record(step, "POST /api/v1/cases", 1, f"answered {status}")
     events = f"/api/v1/cases/{created['case_id']}/events"
     try:
         status, response = _open(url + events, "GET", forwarded, timeout=STREAM_SECONDS)

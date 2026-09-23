@@ -194,6 +194,9 @@ def prove_revision(
     that commits mid-read rather than serving bytes this did not prove.
     """
     payload = read_revision(conn, blobs, case_id=case_id, revision_id=revision_id)
+    if not isinstance(payload.get("narrative"), list):
+        raise Refusal(RefusalCode.DELIVERABLE_PAYLOAD_INVALID)
+
     narrative = [
         [
             span

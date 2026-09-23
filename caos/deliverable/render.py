@@ -527,11 +527,11 @@ def _citation(citation: object) -> str:
     if not isinstance(citation, Mapping):
         raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
     quote = escape(_text(citation, "matched_text"))
-    document = escape(_text(citation, "document_sha256"))
+    document = escape(_text(citation, "document_sha256")[:12])  # cut, then escape
     page = _page(citation)
     return (
         f"<blockquote>{quote}</blockquote>\n"
-        f'<p class="cite">{document[:12]} · page {page}</p>'
+        f'<p class="cite">{document} · page {page}</p>'
     )
 
 
@@ -580,8 +580,8 @@ def _provenance(artifacts: Sequence[object]) -> str:
     """
     rows = "\n".join(
         f"<li>{escape(_text(artifact, 'module_id'))} · "
-        f"build {escape(_text(artifact, 'build_id'))[:12]} · "
-        f"authority {escape(_text(artifact, 'authority_digest'))[:12]}</li>"
+        f"build {escape(_text(artifact, 'build_id')[:12])} · "
+        f"authority {escape(_text(artifact, 'authority_digest')[:12])}</li>"
         for artifact in artifacts
         if isinstance(artifact, Mapping)
     )

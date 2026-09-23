@@ -30,7 +30,7 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
-from caos.graph.checkpoint import checkpointer
+from caos.graph.checkpoint import checkpointer, close_checkpointer
 from caos.graph.runtime import Execution, Provider, ProviderResult, run_route
 from caos.methodology.bundle import Bundle
 from caos.methodology.runner import ModuleProvider
@@ -41,7 +41,7 @@ from caos.provider import CompletionProvider
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection, apply_schema, connect, rollback_or_close
 from caos.store.gates import execution_input
-from caos.store.lakebase import store_url
+from caos.store.lakebase import note_connect_failure, store_url
 from caos.store.outcomes import execution_reads
 from caos.store.runs import cancel_run
 from caos.store.work import (
@@ -178,6 +178,9 @@ def work_once(
                 execution,
                 provider=_Stoppable(execution.provider, stopping),
                 lease=lease,
+                # One beat per node, so a worker driving a long run reads as
+                # fresh rather than stale for its whole length (F38).
+                heartbeat=lambda: _beat(conn, config, "WORKING", 0),
             ),
         )
     except _Stopping:
@@ -272,6 +275,16 @@ def _beat(
         conn.rollback()
 
 
+def _store_fault(fault: Refusal | psycopg.OperationalError) -> None:
+    """A fault the loop rides out, or re-raised when it is not the store's.
+    A refused credential drops the cached one, so the next connect mints."""
+    if isinstance(fault, Refusal):
+        if fault.code not in STORE_FAULTS:
+            raise fault
+        return
+    note_connect_failure(fault)
+
+
 def run_worker(
     config: WorkerConfig,
     *,
@@ -299,8 +312,7 @@ def run_worker(
                 )
                 failures = 0
             except (Refusal, psycopg.OperationalError) as fault:
-                if isinstance(fault, Refusal) and fault.code not in STORE_FAULTS:
-                    raise
+                _store_fault(fault)
                 failures += 1
                 # Said here rather than at the next poll, and before the
                 # connection is dropped. A worker looping claim-fault-claim
@@ -355,9 +367,10 @@ def _configured() -> Configured:
     url, root = _store_configuration()
     bundle = Bundle(VENDORED_BUNDLE)
     bundle.verify_manifest()
+    bundle.verify_pinned()
     with connect(url) as conn:
         apply_schema(conn)
-    return Configured(completions, url, root, bundle, checkpointer(url))
+    return Configured(completions, url, root, bundle, checkpointer())
 
 
 def _report(refused: Refusal, unset: str) -> None:
@@ -374,6 +387,13 @@ def _unset_price() -> str:
 
 def _worker(configured: Configured, stopping: Event) -> int:
     blobs = BlobStore.from_setting(configured.root)
+    try:
+        return _drive(configured, blobs, stopping)
+    finally:
+        close_checkpointer(configured.saver)
+
+
+def _drive(configured: Configured, blobs: BlobStore, stopping: Event) -> int:
     return run_worker(
         WorkerConfig(BoundaryText.of(f"worker-{os.getpid()}")),
         execution_for=module_execution(
@@ -384,7 +404,10 @@ def _worker(configured: Configured, stopping: Event) -> int:
             configured.saver,
         ),
         stopping=stopping,
-        conn_factory=lambda: connect(configured.url),
+        # Minted at connect time, as the API and the checkpoint pool do (F30,
+        # F37): a URL frozen at boot dies with its credential, and the loop's
+        # reconnect would then fail forever without ever re-minting.
+        conn_factory=lambda: connect(store_url()),
         blobs=blobs,
     )
 

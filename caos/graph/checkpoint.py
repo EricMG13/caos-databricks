@@ -23,7 +23,7 @@ from langgraph.checkpoint.postgres import PostgresSaver
 from psycopg.rows import DictRow, dict_row
 from psycopg_pool import ConnectionPool
 
-from caos.store.lakebase import LAKEBASE_INSTANCE, store_url
+from caos.store.lakebase import LAKEBASE_INSTANCE, TOKEN_SECONDS, store_url
 
 SCHEMA = "caos_graph"
 # The autoscaling endpoint path a Databricks App resource injects (R11, R12).
@@ -62,6 +62,9 @@ def checkpointer(url: str | None = None) -> BaseCheckpointSaver[str]:
             configure=_search_path,
             min_size=POOL_MIN,
             max_size=POOL_MAX,
+            # A connection is retired within the credential's life, so the
+            # pool never holds one whose password has since been rotated.
+            max_lifetime=TOKEN_SECONDS,
             open=True,
         )
         with pool.connection() as conn:
@@ -75,3 +78,10 @@ def checkpointer(url: str | None = None) -> BaseCheckpointSaver[str]:
     local = PostgresSaver(conn)
     local.setup()
     return local
+
+
+def close_checkpointer(saver: BaseCheckpointSaver[str]) -> None:
+    """Release what `checkpointer` opened: the pool, or the one connection."""
+    held = getattr(saver, "conn", None)
+    if isinstance(held, ConnectionPool | psycopg.Connection):
+        held.close()

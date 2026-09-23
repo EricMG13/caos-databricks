@@ -124,7 +124,9 @@ def methodology_bundle() -> Bundle:
 
 @cache
 def _vendored_bundle() -> Bundle:
-    return Bundle(VENDORED_BUNDLE)
+    bundle = Bundle(VENDORED_BUNDLE)
+    bundle.verify_pinned()
+    return bundle
 
 
 # Declared on every store-touching route's decorator, `dependencies=

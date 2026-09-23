@@ -24,6 +24,8 @@ def test_the_one_command_runs_the_cli_and_verifies_the_deployment(
     parts = urlparse(empty_database)
     stub.instance_host = parts.hostname or "127.0.0.1"
     stub.user_name = parts.username or "postgres"  # Lakebase mints for the caller
+    # What a real `bundle deploy` creates the app with; the recorder CLI does not.
+    stub.app_bodies["caos"] = {"forward_user_access_token": True}
     calls = tmp_path / "cli-calls.txt"
     shim = tmp_path / "bin"
     shim.mkdir()

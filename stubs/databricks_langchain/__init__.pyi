@@ -15,9 +15,13 @@ class ChatDatabricks(BaseChatModel):
         endpoint: str,
         max_tokens: int | None = ...,
         temperature: float | None = ...,
+        timeout: float | None = ...,
+        max_retries: int | None = ...,
         extra_params: dict[str, object] | None = ...,
         workspace_client: WorkspaceClient | None = ...,
     ) -> None: ...
+    timeout: float | None
+    max_retries: int | None
     @property
     def _llm_type(self) -> str: ...
     def _generate(

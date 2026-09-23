@@ -76,12 +76,17 @@ _DIGEST = re.compile(r"[0-9a-f]{64}")
 # optionally parenthesised, hyphen or en dash. A number longer than
 # `_PAGE_DIGITS` is past any page an admission can carry
 # (`AdmissionLimits.max_pages`) and is refused before `int` reads it.
+# Possessive quantifiers (F32): with backtracking, one cell of a name, a long
+# run of spaces and a word is cubic in the run's length, and a table row may
+# carry 65,000 spaces. An item past `_MAX_ITEM_CHARS` names nothing a pin
+# carries and is never handed to the expression.
 _PAGES = re.compile(
-    r"(?P<name>.+?)\s+\(?\s*pages?\s+(?P<first>\d+)"
-    r"(?:\s*[-" + chr(0x2013) + r"]\s*(?P<last>\d+))?\s*\)?",
+    r"(?P<name>.+?)\s++\(?\s*+pages?\s++(?P<first>\d+)"
+    r"(?:\s*+[-" + chr(0x2013) + r"]\s*+(?P<last>\d+))?\s*+\)?",
     re.IGNORECASE | re.ASCII,
 )
 _PAGE_DIGITS = 6
+_MAX_ITEM_CHARS = 512
 
 
 class Basis(StrEnum):
@@ -291,7 +296,7 @@ def _named(
     found = _matching(members, item)
     if found:
         return found, None
-    form = _PAGES.fullmatch(item)
+    form = _PAGES.fullmatch(item) if len(item) <= _MAX_ITEM_CHARS else None
     if form is None:
         return found, None
     name = form["name"].strip().strip(_WRAPPING).strip()

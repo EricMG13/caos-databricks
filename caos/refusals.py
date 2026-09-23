@@ -180,6 +180,9 @@ class RefusalCode(StrEnum):
     STORE_NOT_TRANSACTIONAL = "STORE_NOT_TRANSACTIONAL"
     STORE_NOT_CONFIGURED = "STORE_NOT_CONFIGURED"
     STORE_UNAVAILABLE = "STORE_UNAVAILABLE"
+    # The workspace that names the caller did not answer (F43); the caller is
+    # not refused, the process could not ask.
+    IDENTITY_UNAVAILABLE = "IDENTITY_UNAVAILABLE"
     # Every stream slot is taken. Transient by the D3 question -- the identical
     # request later, with nobody doing anything in between, plausibly succeeds,
     # because a watcher only has to close a tab.

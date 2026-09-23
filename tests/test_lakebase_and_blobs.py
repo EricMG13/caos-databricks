@@ -68,11 +68,15 @@ class _Files:
             raise OSError("private")
 
 
-class _NotFound(OSError):
-    """Named like the SDK's error class, which the backend recognises."""
+class NotFound(OSError):
+    """The SDK's class family: `ResourceDoesNotExist` is a `NotFound` (F41)."""
 
 
-_NotFound.__name__ = "NotFound"
+class ResourceDoesNotExist(NotFound):
+    error_code = "RESOURCE_DOES_NOT_EXIST"
+
+
+_NotFound = ResourceDoesNotExist
 
 
 def test_the_volume_backend_keeps_the_cas_contract() -> None:
@@ -112,3 +116,47 @@ def test_a_volume_setting_must_name_a_volume_and_a_directory_probe_is_real(
     with pytest.raises(Refusal, match=r"^STORE_UNAVAILABLE$"):
         missing.probe()
     assert blobs_module.VOLUME_SCHEME == "volume://"
+
+
+def test_the_credential_life_and_an_authentication_failure_dropping_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from psycopg import errors
+
+    from caos.store.lakebase import (
+        TOKEN_SECONDS,
+        invalidate_credential,
+        note_connect_failure,
+    )
+
+    assert TOKEN_SECONDS == 14 * 60, "the vendor's 15-minute plan, minus room"
+    monkeypatch.setattr(lakebase, "_CACHED", ("token", float("inf")))
+    note_connect_failure(errors.ConnectionTimeout())
+    assert lakebase._CACHED is not None, "a network fault keeps the credential"
+    note_connect_failure(errors.InvalidPassword())
+    assert lakebase._CACHED is None, "a refused password mints anew (F37)"
+    monkeypatch.setattr(lakebase, "_CACHED", ("token", float("inf")))
+    note_connect_failure(errors.InvalidAuthorizationSpecification())
+    assert lakebase._CACHED is None
+    invalidate_credential()
+    assert lakebase._CACHED is None
+
+
+def test_the_injected_names_are_quoted_and_the_port_must_be_a_number(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("CAOS_DATABASE_URL", raising=False)
+    for name, value in {
+        "PGHOST": "instance.database.cloud",
+        "PGPORT": "5432",
+        "PGDATABASE": "odd?name&here",
+        "PGUSER": "0000-client-id",
+        "PGSSLMODE": "require",
+    }.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setattr(lakebase, "_mint", lambda: "tok")
+    monkeypatch.setattr(lakebase, "_CACHED", None)
+    assert "/odd%3Fname%26here?sslmode=require" in store_url()
+    monkeypatch.setenv("PGPORT", "54 32")
+    with pytest.raises(Refusal, match=r"^STORE_NOT_CONFIGURED$"):
+        store_url()

@@ -31,6 +31,9 @@ MAX_FORECAST_CASES = 6
 MAX_FORECAST_FACILITIES = 40
 MAX_WORK = 100_000
 MAX_AMORTISATION = 2_000
+# In the request's own unit: a residual past this is unreconciled, whatever the
+# request says (F62).
+MAX_TOLERANCE = Decimal("1000")
 _NUMBER = re.compile(r"-?(0|[1-9][0-9]{0,17})(\.[0-9]{1,6})?")
 _MOVEMENTS = (
     "revenue",
@@ -228,7 +231,7 @@ def _parse(request: Mapping[str, Any]) -> _Inputs:
             sum(facilities.values(), Decimal(0)),
             _decimal(request["opening"]["cash"], signed=True),
         ),
-        _decimal(request.get("tolerance", "0.001")),
+        _tolerance(request.get("tolerance", "0.001")),
         dict(units),
         _text(request["perimeter"]),
     )
@@ -285,12 +288,24 @@ def _contractual(
         _object(row, _PAIR | {"facility_id", "amount"})
         pair, facility = _pair(row), _text(row["facility_id"])
         amount = _decimal(row["amount"])
+        # A facility may state more than one instalment in a period and they
+        # sum (the legacy rule, held by the cash_flow parity goldens); only a
+        # row repeated exactly is refused.
         key = (*pair, facility, amount)
         if pair not in pairs or facility not in facilities or key in seen:
             raise Refusal(RefusalCode.METHODOLOGY_INPUT_INVALID)
         seen.add(key)
         totals[pair] = totals.get(pair, Decimal(0)) + amount
     return totals
+
+
+def _tolerance(value: object) -> Decimal:
+    """The reconciliation tolerance, within `MAX_TOLERANCE` (F62): a tolerance
+    wide enough to pass any residual switches the one arithmetic check off."""
+    tolerance = _decimal(value)
+    if tolerance < 0 or tolerance > MAX_TOLERANCE:
+        raise Refusal(RefusalCode.METHODOLOGY_INPUT_INVALID)
+    return tolerance
 
 
 def _unavailable_reason(

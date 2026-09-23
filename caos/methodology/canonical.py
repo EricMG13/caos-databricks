@@ -139,7 +139,7 @@ def _diagnostic(blobs: BlobStore, content: object) -> tuple[str | None, bool]:
         data = content.encode("utf-8")
     except UnicodeEncodeError:
         return None, False  # a lone surrogate: no body the host could store
-    with suppress(OSError, Refusal):
+    with suppress(Exception):  # the bill commits whatever the blob store did (F42)
         return blobs.put(data), False
     return None, True
 

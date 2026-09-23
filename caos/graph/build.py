@@ -30,7 +30,9 @@ from langgraph.graph.state import CompiledStateGraph
 
 from caos.graph.route import ResolvedRoute, dependency_order
 
-FINISH = "finish"
+# Outside `caos.store.routes._identifier` (an id starts alphanumeric), so no
+# route node can share the terminal node's name.
+FINISH = "_finish"
 # What a node pass reports back to the graph; the store holds the real state.
 ACCEPTED = "ACCEPTED"
 SKIPPED = "SKIPPED"
@@ -116,3 +118,18 @@ def thread_config(run_id: str) -> RunnableConfig:
 def initial_state(run_id: str) -> RunState:
     """The state a run starts from; every node adds its pass to it."""
     return RunState(run_id=run_id)
+
+
+def resume_input(
+    graph: CompiledStateGraph[RunState, None, RunState, RunState], run_id: str
+) -> RunState | None:
+    """What to hand `invoke`: `None` when the thread has a checkpoint with work
+    still pending, so LangGraph resumes at that node rather than at START
+    (F39); a fresh state otherwise. A fresh state is also what a run with a
+    finished thread gets, and the store refuses that run before anything runs.
+    """
+    if graph.checkpointer is None:
+        return initial_state(run_id)
+    return (
+        None if graph.get_state(thread_config(run_id)).next else initial_state(run_id)
+    )

@@ -32,10 +32,15 @@ MAX_WORKER_BYTES = 128
 
 @dataclass(frozen=True, slots=True)
 class Lease:
-    """The right to write to one run, for as long as `token` is its row's."""
+    """The right to write to one run, for as long as `token` is its row's.
+
+    `seconds` is what every renewal grants: the number the claim was made
+    with, so a worker configured for a shorter lease is not renewed for the
+    module default behind its back."""
 
     run_id: UUID
     token: int
+    seconds: int = LEASE_SECONDS
 
 
 def enqueue_run(conn: StoreConnection, run_id: UUID) -> bool:
@@ -80,7 +85,7 @@ def claim_run(
             " RETURNING w.run_id, w.lease_token",
             (worker.value, lease_seconds),
         ).fetchone()
-    return None if row is None else Lease(UUID(str(row[0])), int(row[1]))
+    return None if row is None else Lease(UUID(str(row[0])), int(row[1]), lease_seconds)
 
 
 def require_running(conn: StoreConnection, run_id: UUID, lease: Lease | None) -> None:
@@ -104,6 +109,8 @@ def require_lease(
     Returns whether a cancel was requested. `None` is the direct caller: it may
     write only to a run that was never enqueued. Refuses `LEASE_NOT_HELD`.
     """
+    if lease is not None and lease_seconds == LEASE_SECONDS:
+        lease_seconds = lease.seconds
     _require_seconds(lease_seconds)
     if lease is None:
         queued = conn.execute(

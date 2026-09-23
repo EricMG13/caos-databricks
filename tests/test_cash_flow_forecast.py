@@ -426,3 +426,29 @@ def test_signed_opening_balances_are_preserved_without_a_policy_plug() -> None:
     assert row["unavailable_reason"] is None
     assert row["debt"]["closing"] == "-400.000000"
     assert row["cash"]["closing"] == "-74.000000"
+
+
+def test_a_facility_s_instalments_in_one_period_sum_and_only_a_repeat_refuses() -> None:
+    """The legacy rule the parity goldens hold: two rows for one facility and
+    period are two instalments, and only an exact repeat is refused."""
+    request = forecast_request()
+    first = request["contractual"]["amortisation"][0]
+    request["contractual"]["amortisation"].append(
+        {**first, "amount": str(Decimal(first["amount"]) + 1)}
+    )
+    assert cash_flow_forecast(request)["status"] in ("complete", "incomplete")
+    request["contractual"]["amortisation"].append(dict(first))
+    with pytest.raises(Refusal, match=r"^METHODOLOGY_INPUT_INVALID$"):
+        cash_flow_forecast(request)
+
+
+def test_the_reconciliation_tolerance_is_bounded() -> None:
+    """F62: a tolerance wide enough to pass any residual switches the one
+    arithmetic check off."""
+    request = forecast_request()
+    request["tolerance"] = str(cash_flow.MAX_TOLERANCE)
+    assert cash_flow_forecast(request)["status"] in ("complete", "incomplete")
+    for outside in (str(cash_flow.MAX_TOLERANCE + Decimal("0.000001")), "-0.5"):
+        request["tolerance"] = outside
+        with pytest.raises(Refusal, match=r"^METHODOLOGY_INPUT_INVALID$"):
+            cash_flow_forecast(request)

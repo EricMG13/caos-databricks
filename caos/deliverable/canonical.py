@@ -130,6 +130,9 @@ def canonical_payload(
             )
     payload: dict[str, Any] = {
         "case_title": revision.case_title.value,
+        # The three identifiers the filing receipt binds (F60): a package's
+        # receipt is verified against them, so the payload carries all three.
+        "case_id": str(revision.case_id),
         "revision_id": revision.revision_id.value,
         "run_id": str(run_id),
         "artifacts": artifacts,

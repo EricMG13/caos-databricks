@@ -48,7 +48,9 @@ resources:
       user_api_scopes:
         - iam.current-user:read
       config:
-        command: ["uv", "run", "python", "-m", "caos.serve"]
+        # The lock, and only the runtime groups: the dev toolchain never
+        # installs into the app (F49).
+        command: ["uv", "run", "--locked", "--no-dev", "python", "-m", "caos.serve"]
         env:
           - name: CAOS_BIND_HOST
             value: "0.0.0.0"
@@ -72,6 +74,13 @@ resources:
             value: ${var.group_admin}
           - name: CAOS_GROUP_ANALYST
             value: ${var.group_analyst}
+      # Who may open the app (F50): the proxy stops anyone without CAN_USE
+      # before the API sees them, whatever group standing they hold.
+      permissions:
+        - group_name: ${var.group_admin}
+          level: CAN_MANAGE
+        - group_name: ${var.group_analyst}
+          level: CAN_USE
       resources:
         - name: model
           description: The gateway endpoint the model factory calls.
@@ -111,12 +120,19 @@ sync:
     - frontend/src/**
     - frontend/tests/**
     - frontend/scripts/**
-    - frontend/public/**
+    - frontend/.prettierrc
+    - frontend/.prettierignore
+    - frontend/a11y-results/**
     - frontend/*.ts
     - frontend/*.mjs
     - frontend/*.json
     - frontend/*.html
-    - "*.md"
+    - scripts/**
+    # Never a bare `*.md` (F48): a slashless pattern matches at every depth and
+    # took every SKILL.md and prompt block out of the app while health stayed
+    # green. The root documents are named one by one.
+    - CLAUDE.md
+    - DESIGN.md
     - compose.yaml
     - complexipy-snapshot.json
     - .pre-commit-config.yaml
@@ -129,3 +145,7 @@ targets:
     default: true
   prod:
     mode: production
+    # One copy, in a path of its own rather than the deployer's home or the
+    # world-writable Shared folder (F51); the deployer creates it.
+    workspace:
+      root_path: /Workspace/caos-bundle/${bundle.target}

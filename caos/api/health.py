@@ -32,6 +32,7 @@ from fastapi.responses import JSONResponse
 from pydantic import AwareDatetime, BaseModel, ConfigDict
 
 from caos.api.deps import BLOB_ROOT, VENDORED_BUNDLE, _vendored_bundle
+from caos.api.edge import PLATFORM_ENV
 from caos.blobs import VOLUME_SCHEME, BlobStore
 from caos.methodology.bundle import Bundle
 from caos.refusals import Refusal
@@ -43,13 +44,16 @@ from caos.store.work import worker_states
 IO_BUDGET = 0
 
 PROBE_INTERVAL = 10.0
-PROBE_DEADLINE = 2.0
+# A credential mint and a TLS connect across the workspace network fit in
+# this; `PROBE_INTERVAL` stays above it so rounds never queue (F47).
+PROBE_DEADLINE = 5.0
 STALE_AFTER = 30.0
 
 HealthCode = Literal[
     "OK",
     "STORE_NOT_CONFIGURED",
     "STORE_UNAVAILABLE",
+    "IDENTITY_UNAVAILABLE",
     "STORE_SCHEMA_DRIFT",
     "BUNDLE_MOVED",
     "BUNDLE_INVALID",
@@ -75,6 +79,8 @@ class HealthDocument(BaseModel):
     store: HealthCode
     bundle: HealthCode
     blobs: HealthCode
+    # Behind the platform, the workspace that names every caller (F43).
+    identity: HealthCode
     # Reported, never folded into `status` -- see `HealthCode`.
     workers: HealthCode
     checked_at: AwareDatetime | None
@@ -119,6 +125,7 @@ def probe_bundle(
     except Refusal:
         return "BUNDLE_INVALID"
     try:
+        fresh.verify_pinned()
         same = process.manifest_sha256 == fresh.manifest_sha256
     except Refusal:
         same = False
@@ -181,14 +188,32 @@ def probe_workers() -> HealthCode:
     return "OK"
 
 
+def probe_identity() -> HealthCode:
+    """Behind the platform, one SCIM `Me` as the app's own principal, through
+    the SDK with bounded budgets; anywhere else there is nothing to ask. A
+    process that cannot reach the workspace cannot name a caller, so this is
+    folded into `status` (F43)."""
+    if not os.environ.get(PLATFORM_ENV):
+        return "OK"
+    from caos.workspace import workspace_client
+
+    try:
+        workspace_client().current_user.me()
+    except (OSError, ValueError):
+        return "IDENTITY_UNAVAILABLE"
+    return "OK"
+
+
 PROBES: Mapping[str, Probe] = {
     "store": probe_store,
     "bundle": probe_bundle,
     "blobs": probe_blobs,
+    "identity": probe_identity,
     "workers": probe_workers,
 }
 _FAILED: Mapping[str, HealthCode] = {
     "store": "STORE_UNAVAILABLE",
+    "identity": "IDENTITY_UNAVAILABLE",
     "bundle": "BUNDLE_INVALID",
     "blobs": "BLOB_ROOT_UNAVAILABLE",
     "workers": "STORE_UNAVAILABLE",
@@ -215,20 +240,31 @@ class ProbeState:
     store: HealthCode = "PROBE_NOT_RUN"
     bundle: HealthCode = "PROBE_NOT_RUN"
     blobs: HealthCode = "PROBE_NOT_RUN"
+    identity: HealthCode = "PROBE_NOT_RUN"
     workers: HealthCode = "PROBE_NOT_RUN"
     checked_at: datetime | None = None
     checked: float | None = None
     running: bool = False
+    # Probe threads still alive, an abandoned one included: no new round
+    # starts over them, so a slow store cannot pile up connections (F47).
+    inflight: int = 0
 
 
 async def _one(state: ProbeState, name: str) -> HealthCode:
+    probe = state.probes[name]
+
+    def counted() -> HealthCode:
+        try:
+            return probe()
+        finally:
+            state.inflight -= 1
+
+    state.inflight += 1
     try:
-        return await asyncio.wait_for(
-            asyncio.to_thread(state.probes[name]), state.deadline
-        )
+        return await asyncio.wait_for(asyncio.to_thread(counted), state.deadline)
     except TimeoutError:
         # The thread is abandoned, not awaited: it cannot be interrupted, and
-        # the next round must not queue behind it.
+        # the next round must not queue behind it; `inflight` says it lives.
         return "PROBE_TIMEOUT"
     except Exception:  # noqa: BLE001 -- a probe's fault is its code, never text
         return _FAILED[name]
@@ -236,18 +272,19 @@ async def _one(state: ProbeState, name: str) -> HealthCode:
 
 async def probe_once(state: ProbeState) -> None:
     """One round of all three probes, unless a round is already in flight."""
-    if state.running:
+    if state.running or state.inflight:
         return
     state.running = True
     try:
-        store, bundle, blobs, workers = await asyncio.gather(
+        store, bundle, blobs, identity, workers = await asyncio.gather(
             _one(state, "store"),
             _one(state, "bundle"),
             _one(state, "blobs"),
+            _one(state, "identity"),
             _one(state, "workers"),
         )
         state.store, state.bundle, state.blobs = store, bundle, blobs
-        state.workers = workers
+        state.identity, state.workers = identity, workers
         state.checked_at, state.checked = state.wall(), state.clock()
     finally:
         state.running = False
@@ -263,21 +300,28 @@ async def probe_loop(state: ProbeState) -> None:
 def _document(state: ProbeState | None) -> HealthDocument:
     """What the cached round says now: stale past `STALE_AFTER`."""
     if state is None or state.checked is None:
-        codes: tuple[HealthCode, ...] = ("PROBE_NOT_RUN",) * 4
+        codes: tuple[HealthCode, ...] = ("PROBE_NOT_RUN",) * 5
         checked_at = None
     else:
         checked_at = state.checked_at
         if state.clock() - state.checked > STALE_AFTER:
-            codes = ("PROBE_STALE",) * 4
+            codes = ("PROBE_STALE",) * 5
         else:
-            codes = (state.store, state.bundle, state.blobs, state.workers)
+            codes = (
+                state.store,
+                state.bundle,
+                state.blobs,
+                state.identity,
+                state.workers,
+            )
     return HealthDocument(
-        # The first three only: a stalled queue does not make this API unready.
-        status="ready" if codes[:3] == ("OK",) * 3 else "not_ready",
+        # The first four only: a stalled queue does not make this API unready.
+        status="ready" if codes[:4] == ("OK",) * 4 else "not_ready",
         store=codes[0],
         bundle=codes[1],
         blobs=codes[2],
-        workers=codes[3],
+        identity=codes[3],
+        workers=codes[4],
         checked_at=checked_at,
         python_version=platform.python_version(),
         build_id=_held_build_id(),

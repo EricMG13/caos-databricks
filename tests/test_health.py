@@ -68,6 +68,7 @@ def test_health_is_200_only_when_store_bundle_and_blobs_hold(
         "store": "PROBE_NOT_RUN",
         "bundle": "PROBE_NOT_RUN",
         "blobs": "PROBE_NOT_RUN",
+        "identity": "PROBE_NOT_RUN",
         "workers": "PROBE_NOT_RUN",
         "checked_at": None,
     }
@@ -83,7 +84,7 @@ def test_health_is_200_only_when_store_bundle_and_blobs_hold(
     assert body["workers"] == "WORKERS_ABSENT"
     assert datetime.fromisoformat(str(body["checked_at"])).tzinfo is not None
 
-    for failing in ("store", "bundle", "blobs"):
+    for failing in ("store", "bundle", "blobs", "identity"):
         probes = _all("OK")
         probes[failing] = lambda: "PROBE_TIMEOUT"
         one_down = health.ProbeState(probes=probes)
@@ -240,7 +241,7 @@ def test_a_probe_past_its_deadline_is_a_timeout_not_awaited() -> None:
         never.set()
     assert elapsed < 1
     assert (state.store, state.bundle, state.blobs) == ("OK", "OK", "PROBE_TIMEOUT")
-    assert health.PROBE_DEADLINE == 2.0
+    assert health.PROBE_DEADLINE == 5.0
     assert health.PROBE_INTERVAL == 10.0
     assert health.STALE_AFTER == 30.0
 
@@ -313,7 +314,13 @@ def test_the_health_body_is_closed_and_carries_no_path_or_exception_text(
     monkeypatch.setenv(BLOB_ROOT, secret)
     monkeypatch.setenv(DATABASE_URL, f"postgresql://role:pw@127.0.0.1:1/{secret}")
     state = health.ProbeState(
-        probes={"store": health.probe_store, "bundle": raises, "blobs": raises}
+        probes={
+            "store": health.probe_store,
+            "bundle": raises,
+            "blobs": raises,
+            "identity": raises,
+            "workers": raises,
+        }
     )
     _round(state)
     status, body, _cache = _ask(state)
@@ -341,3 +348,65 @@ def test_health_needs_no_identity() -> None:
     state = health.ProbeState(probes=_all("OK"))
     _round(state)
     assert _ask(state)[0] == 200  # no role header, no subject
+
+
+def test_the_identity_probe_asks_nothing_off_the_platform_and_the_workspace_on_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """F43: off the platform there is nobody to ask; on it, a workspace that
+    does not answer is `IDENTITY_UNAVAILABLE`, and that folds into `status`."""
+    from caos.api.edge import PLATFORM_ENV
+
+    monkeypatch.delenv(PLATFORM_ENV, raising=False)
+    assert health.probe_identity() == "OK"
+    monkeypatch.setenv(PLATFORM_ENV, "caos")
+    monkeypatch.setenv("DATABRICKS_HOST", "http://127.0.0.1:9")
+    monkeypatch.setenv("DATABRICKS_TOKEN", "unused-placeholder")
+    monkeypatch.setattr(health, "PROBE_DEADLINE", 30.0)
+    import caos.workspace as workspace
+
+    monkeypatch.setattr(workspace, "HTTP_TIMEOUT_SECONDS", 1)
+    monkeypatch.setattr(workspace, "RETRY_TIMEOUT_SECONDS", 1)
+    assert health.probe_identity() == "IDENTITY_UNAVAILABLE"
+    probes = _all("OK")
+    probes["identity"] = lambda: "IDENTITY_UNAVAILABLE"
+    state = health.ProbeState(probes=probes)
+    _round(state)
+    status, body, _cache = _ask(state)
+    assert (status, body["status"], body["identity"]) == (
+        503,
+        "not_ready",
+        "IDENTITY_UNAVAILABLE",
+    )
+
+
+def test_no_round_starts_over_a_probe_thread_still_alive() -> None:
+    """F47: an abandoned probe keeps `inflight` up, and the next round waits."""
+    import asyncio
+
+    release = Event()
+
+    def slow() -> health.HealthCode:
+        release.wait(5)
+        return "OK"
+
+    probes = _all("OK")
+    probes["store"] = slow
+    state = health.ProbeState(probes=probes, deadline=0.05)
+
+    async def scenario() -> None:
+        await health.probe_once(state)
+        assert state.store == "PROBE_TIMEOUT" and state.inflight == 1
+        before = state.checked
+        await health.probe_once(state)
+        assert state.checked == before, "no round over the one still running"
+        release.set()
+        for _ in range(50):
+            if state.inflight == 0:
+                break
+            await asyncio.sleep(0.05)
+        assert state.inflight == 0
+        await health.probe_once(state)
+        assert state.checked != before
+
+    asyncio.run(scenario())

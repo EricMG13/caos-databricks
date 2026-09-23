@@ -218,3 +218,37 @@ def test_the_numbering_is_ascending_by_line_and_widens_past_six_digits() -> None
     }
     wide = block_ids_by_line(dict.fromkeys(range(1_000_001), 1))
     assert (wide[999_999], wide[1_000_000]) == (("b999999",), ("b1000000",))
+
+
+# A producer that writes decomposed characters (NFD, as macOS and some PDF
+# writers do): the host shows the line NFC and a verbatim quote of what it
+# showed must anchor (F33).
+DECOMPOSED = (
+    "\n".join(f"Section {n} of the annual report" for n in range(LINES_PER_PAGE - 1))
+    + "\n\n"
+    + "Le chiffre d'affaires a augmente\u0301 de 12 pour cent.\n"
+).encode()
+
+
+def test_a_decomposed_character_is_shown_composed_and_still_anchors(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> None:
+    import unicodedata
+
+    conn, case_id = case
+    [source_id] = admit_pack(
+        conn,
+        BlobStore(tmp_path / "blobs"),
+        case_id=case_id,
+        documents=[Document(filename=BoundaryText.of("nfd.txt"), data=DECOMPOSED)],
+    )
+    block_id = _block(conn, source_id, "chiffre")
+    block = read_block(conn, source_id=source_id, block_id=block_id)
+    shown = block.text.value
+    assert unicodedata.is_normalized("NFC", shown) and "augment\u00e9" in shown
+    [anchored] = verify_citations(
+        conn,
+        delivered=every_block(conn, source_id),
+        citations=[Citation(source_id=source_id, page=block.page, matched_text=shown)],
+    )
+    assert anchored.bboxes, "the quote of the line as shown is anchored"

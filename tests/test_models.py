@@ -159,15 +159,23 @@ def test_the_production_model_is_chat_databricks_on_the_endpoint(
     seen: dict[str, object] = {}
 
     class _ChatDatabricks(ScriptedChat):
-        def __init__(self, *, endpoint: str, max_tokens: int) -> None:
+        def __init__(
+            self, *, endpoint: str, max_tokens: int, timeout: float, max_retries: int
+        ) -> None:
             seen.update(endpoint=endpoint, max_tokens=max_tokens)
+            seen.update(timeout=timeout, max_retries=max_retries)
             super().__init__(answer=answer())
 
     monkeypatch.setattr(databricks_langchain, "ChatDatabricks", _ChatDatabricks)
     monkeypatch.setenv(models.ENDPOINT_ENV, "databricks-claude-opus-5")
     model = chat_model()
     assert isinstance(model, _ChatDatabricks)
-    assert seen == {"endpoint": "databricks-claude-opus-5", "max_tokens": 65536}
+    assert seen == {
+        "endpoint": "databricks-claude-opus-5",
+        "max_tokens": 65536,
+        "timeout": 120.0,
+        "max_retries": 0,
+    }
     assert isinstance(chat_model(endpoint="other"), _ChatDatabricks)
     assert seen["endpoint"] == "other"
 
@@ -179,3 +187,67 @@ def test_reported_charge_is_exact_known_money_or_unknown() -> None:
     assert reported_charge(Decimal("-1")) is None
     assert reported_charge(0.25) is None
     assert reported_charge("0.25") is None
+
+
+def test_a_finish_reason_the_response_does_not_state_is_not_stop() -> None:
+    """`stop` is the one completed reason (F34): a response with no finish
+    reason, or a null one, is refused as invalid with its bill kept."""
+    from langchain_core.messages import AIMessage
+
+    for metadata in ({}, {"finish_reason": None}, {"finish_reason": ""}):
+        message = AIMessage(
+            content='{"a": 1}',
+            id="generation",
+            response_metadata=metadata,
+            usage_metadata={"input_tokens": 3, "output_tokens": 7, "total_tokens": 10},
+        )
+        completion = fake_completions(ScriptedChat(answer=message)).complete("q")
+        assert completion.refusal is RefusalCode.PROVIDER_RESPONSE_INVALID, metadata
+        assert completion.content is None and completion.charge is not None
+
+
+def test_an_answer_past_the_response_ceiling_is_billed_and_refused() -> None:
+    from caos.provider import MAX_RESPONSE_BYTES
+
+    huge = answer("x" * (MAX_RESPONSE_BYTES + 1), finish="stop", tokens=(1, 1))
+    completion = fake_completions(ScriptedChat(answer=huge)).complete("q")
+    assert completion.refusal is RefusalCode.PROVIDER_RESPONSE_INVALID
+    assert completion.content is None and completion.charge is not None
+    exact = answer("x" * MAX_RESPONSE_BYTES, finish="stop", tokens=(1, 1))
+    assert fake_completions(ScriptedChat(answer=exact)).complete("q").refusal is None
+
+
+def test_a_langchain_run_id_is_never_recorded_as_the_provider_s() -> None:
+    """LangChain fills an id the response did not carry with its own run id
+    (F36); the record says host-minted, and a completion id the client
+    surfaces wins over the message id."""
+    from langchain_core.messages import AIMessage
+
+    minted = answer("body", finish="stop", generation="lc_run--0192-abc-0")
+    completion = fake_completions(ScriptedChat(answer=minted)).complete("q")
+    assert completion.generation_id is not None
+    assert completion.generation_id.startswith(models.HOST_MINTED)
+    surfaced = AIMessage(
+        content="body",
+        id="lc_run--0192-abc-0",
+        response_metadata={"finish_reason": "stop", "id": "chatcmpl-77"},
+        usage_metadata={"input_tokens": 1, "output_tokens": 1, "total_tokens": 2},
+    )
+    assert (
+        fake_completions(ScriptedChat(answer=surfaced)).complete("q").generation_id
+        == "chatcmpl-77"
+    )
+
+
+def test_the_chat_model_carries_the_socket_deadline_and_never_retries() -> None:
+    """F40: the lease is sized against `TIMEOUT_SECONDS` (brief D5), so the
+    transport must actually carry it, and a retry is the caller's reservation."""
+    from databricks_langchain import ChatDatabricks
+
+    from caos.models import chat_model
+    from caos.provider import TIMEOUT_SECONDS
+
+    chat = chat_model(endpoint="databricks-x")
+    assert isinstance(chat, ChatDatabricks)
+    assert chat.timeout == TIMEOUT_SECONDS
+    assert chat.max_retries == 0

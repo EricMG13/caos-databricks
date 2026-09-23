@@ -60,7 +60,7 @@ def test_generate_reproduces_the_committed_manifests(tmp_path: Path) -> None:
     assert tuple(manifests) == groups
     for group, cases in manifests.items():
         assert cases == read_manifest(group)
-        assert read_manifest(group, tmp_path) == cases
+        assert read_manifest(group, tmp_path, package="caos") == cases
         assert manifest_path(group, tmp_path).name == MANIFEST
 
 
@@ -145,7 +145,9 @@ def test_refusal_or_records_the_code_and_never_the_message() -> None:
 def test_write_group_round_trips_through_the_readers(tmp_path: Path) -> None:
     digests = write_group("demo", {"one": {"a": 1}}, package="caos", base=tmp_path)
     assert digests == {"one": sha256_hex(b'{"a":1}')}
-    assert read_manifest("demo", tmp_path) == digests
+    assert read_manifest("demo", tmp_path, package="caos") == digests
+    with pytest.raises(TypeError, match="written from 'caos'"):
+        read_manifest("demo", tmp_path)  # F57: not the legacy snapshot
     assert read_golden("demo", "one", tmp_path) == {"a": 1}
     assert golden_path("demo", "one", tmp_path).read_text() == '{"a":1}\n'
 
