@@ -396,6 +396,39 @@ def _pre_commit_hooks(config: str) -> list[tuple[str, dict[str, str]]]:
     return hooks
 
 
+def _hook_occurrence_problems(
+    name: str, index: int, expected: dict[str, str], actual: dict[str, str]
+) -> list[str]:
+    """One occurrence of one hook id against the body expected of it."""
+    return [
+        f"pre-commit: {name}[{index}].{key} is {actual.get(key)!r}, not {value!r}"
+        for key, value in expected.items()
+        if actual.get(key) != value
+    ] + [
+        f"pre-commit: {name}[{index}].{key} is set; it can change what the "
+        "hook runs on"
+        for key in HOOK_KEYS
+        if key not in expected and key in actual
+    ]
+
+
+def _named_hook_problems(name: str, actual_list: list[dict[str, str]]) -> list[str]:
+    """One hook id's every occurrence against `PRE_COMMIT_HOOK_BODY`."""
+    expected_list = PRE_COMMIT_HOOK_BODY.get(name, [{}])
+    if len(actual_list) != len(expected_list):
+        return [
+            f"pre-commit: {name} appears {len(actual_list)} time(s), "
+            f"expected {len(expected_list)}"
+        ]
+    return [
+        problem
+        for index, (expected, actual) in enumerate(
+            zip(expected_list, actual_list, strict=True)
+        )
+        for problem in _hook_occurrence_problems(name, index, expected, actual)
+    ]
+
+
 def _hook_problems(root: Path) -> list[str]:
     config = (root / ".pre-commit-config.yaml").read_text(encoding="utf-8")
     occurrences = _pre_commit_hooks(config)
@@ -406,29 +439,7 @@ def _hook_problems(root: Path) -> list[str]:
     for hook_id, body in occurrences:
         by_id.setdefault(hook_id, []).append(body)
     for name in sorted(PRE_COMMIT_HOOKS & present):
-        expected_list = PRE_COMMIT_HOOK_BODY.get(name, [{}])
-        actual_list = by_id[name]
-        if len(actual_list) != len(expected_list):
-            problems.append(
-                f"pre-commit: {name} appears {len(actual_list)} time(s), "
-                f"expected {len(expected_list)}"
-            )
-            continue
-        for index, (expected, actual) in enumerate(
-            zip(expected_list, actual_list, strict=True)
-        ):
-            problems += [
-                f"pre-commit: {name}[{index}].{key} is {actual.get(key)!r}, "
-                f"not {value!r}"
-                for key, value in expected.items()
-                if actual.get(key) != value
-            ]
-            problems += [
-                f"pre-commit: {name}[{index}].{key} is set; it can change "
-                "what the hook runs on"
-                for key in HOOK_KEYS
-                if key not in expected and key in actual
-            ]
+        problems += _named_hook_problems(name, by_id[name])
     return problems
 
 
