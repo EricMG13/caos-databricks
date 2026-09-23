@@ -1,3 +1,38 @@
+# Second attempt (D30) and whole 10-Ks (D29) — 23 September 2026, afternoon
+
+Status: **D30 and D29 measured live; no CP-0 accepted yet; NOT_QUALIFIED.**
+
+A second owner authorisation: cheaper models only, **$8.00** for all combined testing.
+Seven sets were run at `c37733e` plus the D29/D30 commits (`6e99ec4`, `029c13b`) through
+the test-only adapter, `--attempts 1` (so every second attempt below is the host's own, D30),
+`--ceiling 2.00` for Gemini and `5.00` for Haiku, which D29 requires to cover one 4 MiB
+worst-case call (1.42 and 4.52). A run started only if the key's spend so far plus its
+ceiling fitted the $8.00. The key was read from the owner's file at call time and is not
+recorded. Spend on the key: **$1.13** ($7.64 before, $8.77 after); the host billed $1.29 at
+list prices. Evidence (git-ignored): `docs/rebuild/runs/live-2026-09-23/`.
+
+The checks each answer failed, as the second attempt's block reports them (rules only):
+
+| Run | Model | Set | CP-0 attempt 1 | CP-0 attempt 2 (carrying attempt 1's checks) | Stop |
+|---|---|---|---|---|---|
+| A | `google/gemini-2.5-flash` | `ccl-fy2025-market-dislocation` | vendor-clean; 1 of 4 citations not verbatim | not a JSON object (a raw newline inside a string) | `HANDOFF_MALFORMED` |
+| A2 | same | same | not a JSON object | vendor-clean; 2 of 2 citations not verbatim | `HANDOFF_MALFORMED` |
+| A3 | same | same | 6 of 6 not verbatim; H2 headings out of order | no body, no usage | `PROVIDER_RESPONSE_INVALID` |
+| H1 | `anthropic/claude-haiku-4.5` | same | 12 of 12 not verbatim; **MATERIAL finding under `qa_status: Passed`** | **severity rule met**; 3 of 9 not verbatim; `Restricted` caps `confidence_score` at 59 | `HANDOFF_MALFORMED` |
+| H2 | same | same | 10 of 10 not verbatim; MATERIAL under Passed; H2 headings out of order | **headings fixed**; 8 of 10 not verbatim; MATERIAL under Passed | `HANDOFF_MALFORMED` |
+| B1 | `google/gemini-2.5-flash` | `ba-fy2025` (Boeing 10-K, 1.18 MB, whole) | 3 of 8 not verbatim; front matter YAML malformed | 1 of 1 not verbatim; no front-matter boundary | `HANDOFF_MALFORMED` |
+| F1 | same | `f-fy2025` (Ford 10-K, 1.92 MB, whole) | not a JSON object | transport and vendor clean | `HANDOFF_INCOMPLETE` |
+
+What it shows. D30 works as built: every refused CP-0 got exactly one second attempt,
+reserved and billed like any other, carrying the checks; a second refusal stopped the run and
+nothing was called downstream. The fed-back check is acted on: Haiku met the exact rule it was
+told it broke (H1: the severity rule; H2: the heading order) and quoted more verbatim, but broke
+an adjacent rule or kept another, so no CP-0 has been accepted from any model. D29 works end to
+end: both 10-Ks went to the gate whole in one request each, admitted by the host and answered by
+the provider at about $0.08–0.12 a call, where the legacy 1 MiB ceiling had forced page mode.
+The two misses left are the model's: quotes that are not verbatim (every run) and, on Gemini,
+answers that are not strict JSON (3 of its 10). N50 and N51 are the host-side options.
+
 # Qualification provider and spend pin — 23 September 2026 (rebuilt host)
 
 Status: **FIRST LIVE RUNS ON CLAUDE OPUS 5 — one LITE set launched once; CP-0 refused by the vendor's severity rule; NOT_QUALIFIED.**
