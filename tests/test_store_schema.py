@@ -108,6 +108,52 @@ def test_the_declared_schema_holds_a_case_and_its_run(empty_database: str) -> No
         assert run_status(conn, run_id) is RunStatus.RUNNING
 
 
+def test_connect_asks_for_keepalives_and_an_optional_statement_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CF-041: a peer that vanished without closing the socket -- a container
+    killed under it, a network partition -- must be noticed well inside any
+    lease, not after the OS's own multi-hour keepalive default, so every
+    connection asks for both keepalives and `tcp_user_timeout`. A caller that
+    names no `statement_timeout_ms` gets none forced on it (`apply_schema`'s
+    migration path may legitimately run long); one that does gets it as
+    `options` at connect time, which holds for the whole session."""
+    captured: dict[str, object] = {}
+
+    def fake_connect(_url: str, **kwargs: object) -> None:
+        captured.update(kwargs)
+        raise psycopg.OperationalError("down")
+
+    monkeypatch.setattr(psycopg, "connect", fake_connect)
+
+    with pytest.raises(psycopg.OperationalError):
+        store.connect("postgresql://unused.invalid/none")
+    assert captured["keepalives"] == 1
+    assert captured["keepalives_idle"] == store.KEEPALIVES_IDLE_SECONDS
+    assert captured["keepalives_interval"] == store.KEEPALIVES_INTERVAL_SECONDS
+    assert captured["keepalives_count"] == store.KEEPALIVES_COUNT
+    assert captured["tcp_user_timeout"] == store.TCP_USER_TIMEOUT_MS
+    assert "options" not in captured
+
+    captured.clear()
+    with pytest.raises(psycopg.OperationalError):
+        store.connect("postgresql://unused.invalid/none", statement_timeout_ms=5000)
+    assert captured["options"] == "-c statement_timeout=5000"
+
+
+def test_connect_s_statement_timeout_bounds_the_whole_session(
+    empty_database: str,
+) -> None:
+    """The bound holds across a commit, unlike `SET LOCAL`; a connection that
+    named none is the store's ordinary unbounded session."""
+    with connect(empty_database, statement_timeout_ms=1234) as conn:
+        assert conn.execute("SHOW statement_timeout").fetchone() == ("1234ms",)
+        conn.commit()
+        assert conn.execute("SHOW statement_timeout").fetchone() == ("1234ms",)
+    with connect(empty_database) as other:
+        assert other.execute("SHOW statement_timeout").fetchone() == ("0",)
+
+
 def test_a_runs_predecessor_is_written_once_and_is_never_itself(
     empty_database: str,
 ) -> None:

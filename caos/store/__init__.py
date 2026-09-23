@@ -208,11 +208,41 @@ class RunStatus(StrEnum):
     CANCELLED = "CANCELLED"
 
 
-def connect(url: str, *, connect_timeout: int | None = None) -> StoreConnection:
+# CF-041: a peer that vanished without closing the socket -- a container
+# killed under it, a network partition -- otherwise leaves a connection
+# psycopg still calls open, with every statement on it blocking until the
+# OS's own keepalive defaults give up (Linux ships `tcp_keepalive_time=7200`,
+# two hours, far past any lease). These probe well inside that: idle a while,
+# then a handful of tries close enough together to notice within about a
+# minute. `tcp_user_timeout` is Linux's own, more precise bound on the same
+# question and a documented no-op everywhere libpq does not support it, so it
+# is always safe to send.
+KEEPALIVES_IDLE_SECONDS = 30
+KEEPALIVES_INTERVAL_SECONDS = 10
+KEEPALIVES_COUNT = 3
+TCP_USER_TIMEOUT_MS = 30_000
+
+
+def connect(
+    url: str,
+    *,
+    connect_timeout: int | None = None,
+    statement_timeout_ms: int | None = None,
+) -> StoreConnection:
     """A connection with the store's policy on it: transactions are explicit.
 
     `connect_timeout` (seconds) bounds the connection attempt, for a caller
     such as the health probe that must not wait on an unanswering host.
+
+    `statement_timeout_ms` bounds every statement for the connection's whole
+    session (`options`, at connect time -- not `SET LOCAL`, which a caller's
+    own commits keep resetting, and not a bare `SET`, which a one-shot caller
+    would have to remember to `RESET`). Left `None` for a caller such as
+    `apply_schema`'s, which may legitimately run longer than the bound a
+    caller that reuses this connection for many short statements wants; the
+    worker's own polling connection passes one well under `LEASE_SECONDS`, so
+    one wedged query cannot hold a lease past the point another worker would
+    otherwise have reclaimed it.
 
     A connection that fails drops the cached Lakebase credential, so the next
     one mints (ST-2): the API, the health probes and the lifespan open theirs
@@ -220,10 +250,19 @@ def connect(url: str, *, connect_timeout: int | None = None) -> StoreConnection:
     """
     from caos.store.lakebase import note_connect_failure
 
+    kwargs: dict[str, Any] = {
+        "keepalives": 1,
+        "keepalives_idle": KEEPALIVES_IDLE_SECONDS,
+        "keepalives_interval": KEEPALIVES_INTERVAL_SECONDS,
+        "keepalives_count": KEEPALIVES_COUNT,
+        "tcp_user_timeout": TCP_USER_TIMEOUT_MS,
+    }
+    if connect_timeout is not None:
+        kwargs["connect_timeout"] = connect_timeout
+    if statement_timeout_ms is not None:
+        kwargs["options"] = f"-c statement_timeout={statement_timeout_ms}"
     try:
-        if connect_timeout is None:
-            return psycopg.connect(url, autocommit=False)
-        return psycopg.connect(url, autocommit=False, connect_timeout=connect_timeout)
+        return psycopg.connect(url, autocommit=False, **kwargs)
     except psycopg.OperationalError as failed:
         note_connect_failure(failed)
         raise

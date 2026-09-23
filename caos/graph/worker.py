@@ -84,6 +84,13 @@ ExecutionFor = Callable[[StoreConnection, UUID, Lease], Execution]
 # The idle heartbeat cadence (DL-10) and the most the backoff ever doubles.
 BEAT_SECONDS = 10.0
 MAX_DOUBLINGS = 30
+# CF-041: well under LEASE_SECONDS, so a single wedged statement -- lock
+# contention, a stuck autovacuum -- cannot hold the worker's own connection
+# past the point its lease has already been reclaimed and a second worker is
+# free to claim the same run; every query this loop makes is a handful of
+# short reads and writes, never a model call, which is not sent over this
+# connection at all.
+STATEMENT_TIMEOUT_MS = 30_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -478,7 +485,9 @@ def _drive(configured: Configured, blobs: BlobStore, stopping: Event) -> int:
         # Minted at connect time, as the API and the checkpoint pool do (F30,
         # F37): a URL frozen at boot dies with its credential, and the loop's
         # reconnect would then fail forever without ever re-minting.
-        conn_factory=lambda: connect(store_url()),
+        conn_factory=lambda: connect(
+            store_url(), statement_timeout_ms=STATEMENT_TIMEOUT_MS
+        ),
         blobs=blobs,
     )
 
