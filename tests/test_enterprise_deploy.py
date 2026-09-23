@@ -36,7 +36,7 @@ def _resolved(name: str, **env: str) -> dict[str, Any]:
     values = {
         "CAOS_MODEL_ENDPOINT": ENDPOINT,
         "CAOS_MODEL_PRICE": PRICE,
-        "CAOS_RUN_CEILING": "25.00",
+        "CAOS_RUN_CEILING": "100.00",  # the bundle default (D29)
         **env,
     }
     listed = [{"name": key, "value": value} for key, value in values.items()]
@@ -204,7 +204,7 @@ def test_a_validate_that_resolved_other_values_is_a_failed_row(
             target="prod",
             endpoint=ENDPOINT,
             price=PRICE,
-            run_ceiling="25.00",
+            run_ceiling="100.00",
         )
         == []
     )
