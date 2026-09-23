@@ -575,7 +575,9 @@ STAND_IN_PRICE = (
 # Each gate CLAUDE.md lists, as CI runs it (MAX-13): a step removed, a
 # threshold raised or a command made to pass whatever it finds is a gate
 # that no longer runs. `|| true` stands on one command only, bandit's JSON
-# report, whose verdict is the floor check after it.
+# report, whose verdict is the floor check after it -- the one bandit
+# invocation now, since a bare second run once existed only to let its own
+# exit code stand for the same scan the floor already verdicts (N29).
 CI_GATES = (
     "uv run ruff check .",
     "uv run ruff format --check .",
@@ -593,7 +595,6 @@ CI_GATES = (
     "uv run pytest --no-cov tests/test_postgres_races.py",
     "uv run python scripts/scan_floors.py bandit.json --no-parse-errors "
     "--cover caos scripts icm --unscanned tests",
-    "uv run bandit -r caos scripts icm",
     "uv run pip-audit --strict",
     'uv run python scripts/check_gate_config.py --against "$base"',
     f"{STAND_IN_PRICE} {STAND_IN} databricks bundle validate -t dev {STAND_IN_VARS}",

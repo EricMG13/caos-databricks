@@ -113,12 +113,14 @@ jobs:
         with: {version: "0.12.5", enable-cache: true}
       - run: uv sync --locked --all-groups
       # `|| true` so the floor check, not bandit's exit code, is the verdict:
-      # a report that parsed nothing must fail even when it found nothing.
+      # a report that parsed nothing must fail even when it found nothing,
+      # and one that carries a finding fails on that finding below (N29) --
+      # a second, bare `bandit -r caos scripts icm` once ran the same scan
+      # again just to let its own exit code be the verdict too.
       - run: uv run bandit -r caos scripts icm -f json -o bandit.json || true
       - run: |
           uv run python scripts/scan_floors.py bandit.json --no-parse-errors \
                  --cover caos scripts icm --unscanned tests
-      - run: uv run bandit -r caos scripts icm
       # The environment `uv sync --locked` built from the hashed lock is what runs.
       - run: uv run pip-audit --strict
       # The whole history, as gate A12 runs it locally. The action scans only

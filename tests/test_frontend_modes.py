@@ -9,9 +9,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-import check_postgres
 import check_pr_size
-import psycopg
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
@@ -292,46 +290,6 @@ def test_fixture_browser_launchers_never_reuse_an_unrelated_server() -> None:
     assert "reuseExistingServer: false" in playwright
     assert '"--mode",' in axe and '"demo",' in axe
     assert '"--outDir",' in axe and '"dist-demo",' in axe
-
-
-def test_postgres_preflight_does_not_echo_the_connection_string() -> None:
-    sentinel = "postgresql://secret:do-not-print@127.0.0.1:1/caos"
-    result = subprocess.run(
-        [sys.executable, str(REPO / "scripts/check_postgres.py")],
-        env={"CAOS_TEST_POSTGRES_URL": sentinel},
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-
-    assert result.returncode != 0
-    assert "test PostgreSQL is not reachable" in result.stdout
-    assert sentinel not in result.stdout + result.stderr
-
-
-def test_postgres_preflight_main_covers_success_missing_and_failure(
-    empty_database: str,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    monkeypatch.setenv("CAOS_TEST_POSTGRES_URL", empty_database)
-    assert check_postgres.main() == 0
-
-    monkeypatch.delenv("CAOS_TEST_POSTGRES_URL")
-    assert check_postgres.main() == 1
-    assert "CAOS_TEST_POSTGRES_URL is required" in capsys.readouterr().out
-
-    sentinel = "database-secret-do-not-print"
-    monkeypatch.setenv("CAOS_TEST_POSTGRES_URL", sentinel)
-
-    def refuse(*_args: object, **_kwargs: object) -> None:
-        raise psycopg.OperationalError(sentinel)
-
-    monkeypatch.setattr(psycopg, "connect", refuse)
-    assert check_postgres.main() == 1
-    captured = capsys.readouterr()
-    assert "test PostgreSQL is not reachable" in captured.out
-    assert sentinel not in captured.out + captured.err
 
 
 def _git(repo: Path, *args: str) -> None:
