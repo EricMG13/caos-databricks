@@ -61,6 +61,7 @@ from caos.methodology.handoff import (
     UpstreamRef,
     anchoring_line,
     answer_citations,
+    answer_markdown,
     capped,
     feedback_lines,
     parse_response,
@@ -599,6 +600,7 @@ def _prompt_context(
             body,
             gate_expects(assignment.route, assignment.node),
         ),
+        _driver_line(contract, assignment, context, body),
     )
     # Judged under the identity the refused answer was asked under: its
     # ordinal, not this attempt's, fixes the attempt id and invocation digest
@@ -609,6 +611,24 @@ def _prompt_context(
     return replace(
         context, feedback=capped([line for line in host if line] + list(lines))
     )
+
+
+def _driver_line(
+    contract: VendorContract, assignment: Assignment, context: _Context, body: str
+) -> str | None:
+    """CP-CF's second attempt told which of CP-2G's driver rows its refused
+    request cannot map, by row (G3-9); None for every other module."""
+    if assignment.module_id != MODEL_MODULE:
+        return None
+    owner = next(
+        (data for ref, data in context.upstream if ref.module_id == "CP-2G"), None
+    )
+    markdown = answer_markdown(body)
+    if owner is None or markdown is None:
+        return None
+    from caos.methodology.forecast import driver_line
+
+    return driver_line(contract, markdown, owner)
 
 
 # Anchoring's own refusals: a quote not on its cited page, on it more than

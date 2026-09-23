@@ -9,8 +9,8 @@
       "sha256": "a1eec37b9fa64bcc69960caa9a716044c83a96f75e3d4f3266cbf8d0aa42432c"
     },
     "forecast_extension.md": {
-      "bytes": 424,
-      "sha256": "331524d0f1a395917f5966d02263149405fe8664cd123ab1024067b7b2f7207b"
+      "bytes": 565,
+      "sha256": "ea02916d56ca38b121209a875d7a92601e68627ad6fbb59194a66953348f73cd"
     },
     "gate_instruction.md": {
       "bytes": 122,
@@ -36,8 +36,8 @@
   "module_id": "CP-CF",
   "relative_file_hashes": {
     "SKILL.md": {
-      "bytes": 2013,
-      "sha256": "1b8b7c5ac6fdb4032bb6cc19f15348ef9da945db784aacef86a41589a08de310"
+      "bytes": 2273,
+      "sha256": "a4dbe4afe3748c4d1698020877114ab11d276201bd611f4ac0b0ee26554e3c3a"
     },
     "scripts/cash_flow.py": {
       "bytes": 14482,

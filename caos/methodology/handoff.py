@@ -1241,6 +1241,13 @@ def answer_citations(body: str) -> tuple[Citation, ...]:
     return () if parsed is None else parsed[2]
 
 
+def answer_markdown(body: str) -> bytes | None:
+    """The Markdown a stored answer carried; None when it is not the
+    transport, whose reason `retry_feedback` gives."""
+    parsed, _reason = _transport_or_reason(body)
+    return None if parsed is None else parsed[0]
+
+
 def _vendor_lines(
     contract: VendorContract,
     catalog: Mapping[str, Any],

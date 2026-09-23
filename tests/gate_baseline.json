@@ -1,6 +1,6 @@
 {
-  "complexity_baselined": 25,
-  "complexity_total": 487,
+  "complexity_baselined": 24,
+  "complexity_total": 460,
   "file_noqa": 7,
   "mypy_directive": 0,
   "no_cover": 5,

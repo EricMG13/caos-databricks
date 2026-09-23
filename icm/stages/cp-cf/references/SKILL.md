@@ -17,11 +17,15 @@ and must contain the exact line `/<pointer> = <JSON scalar>` (with only one
 leading slash). Include those same quotes in this handoff and its citations.
 No unrelated number, missing movement or unstated zero is authority.
 
-CP-2G's accepted forecast_driver_table retains its vendor vocabulary. Map
-`acquisitions_disposals` to that movement and `dividends_paid` to distributions
-for the exact case/period/year; both must be READY and CURRENCY_MM. Reject a
-nonzero net_equity_issue_repay or other_investing_financing: this contract
-has no corresponding movement. Division growth is not revenue. Obtain every
+CP-2G's accepted forecast_driver_table retains its vendor vocabulary. For the
+exact case/period/year, all four of `acquisitions_disposals`, `dividends_paid`,
+`net_equity_issue_repay` and `other_investing_financing` must be READY and
+CURRENCY_MM, each value a plain, comma-grouped or parenthesised figure
+(`1,250.0`, `(45)`). `acquisitions_disposals` is that movement and
+`dividends_paid` is distributions. net_equity_issue_repay and
+other_investing_financing must be a READY 0: this contract has no
+corresponding movement. A NOT_APPLICABLE row leaves the forecast not ready
+until CP-2G states it. Division growth is not revenue. Obtain every
 other movement, independent stated close, and policy-free zero explicitly
 from CP-2G's accepted evidence-anchored supplemental assignments. Never infer
 them from growth or reinterpret vendor columns. CP-1's opening and CP-4's

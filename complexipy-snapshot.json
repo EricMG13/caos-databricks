@@ -80,16 +80,6 @@
     ]
   },
   {
-    "path": "caos/methodology/forecast.py",
-    "file_name": "forecast.py",
-    "functions": [
-      {
-        "name": "_mapped_rows",
-        "complexity": 27
-      }
-    ]
-  },
-  {
     "path": "caos/methodology/handoff.py",
     "file_name": "handoff.py",
     "functions": [
