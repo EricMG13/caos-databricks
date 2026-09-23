@@ -323,6 +323,65 @@ def test_a_document_carrying_text_no_reader_can_see_is_refused(
     assert caught.value.__cause__ is None and not caught.value.__context__
 
 
+@pytest.mark.parametrize(
+    "unassigned",
+    [
+        pytest.param("͸", id="unassigned-in-greek"),
+        pytest.param("﷐", id="noncharacter"),
+        pytest.param("\U0002fffe", id="plane-two-noncharacter"),
+        pytest.param("\U000323b0", id="unassigned-in-plane-three"),
+    ],
+)
+def test_a_document_carrying_a_code_point_unicode_does_not_assign_is_refused(
+    case: tuple[StoreConnection, UUID], tmp_path: Path, unassigned: str
+) -> None:
+    """N40: anchoring measures a line's NFC length in the database and
+    admission measured it in Python. Normalisation is stable for assigned
+    characters only, so a code point this Python's Unicode does not assign
+    is one the two tables may one day normalise differently. Refused
+    `SOURCE_NOT_READABLE`, with nothing chained behind it."""
+    import unicodedata
+
+    assert unicodedata.category(unassigned) == "Cn"
+    conn, case_id = case
+    with pytest.raises(Refusal, match=r"^SOURCE_NOT_READABLE$") as caught:
+        admit_pack(
+            conn,
+            BlobStore(tmp_path / "blobs"),
+            case_id=case_id,
+            documents=[
+                Document(
+                    filename=BoundaryText.of("unassigned.txt"),
+                    data=f"Total debt {unassigned} was USD 1,240.0m.\n".encode(),
+                )
+            ],
+        )
+    assert caught.value.__cause__ is None and not caught.value.__context__
+    row = conn.execute("SELECT count(*) FROM sources").fetchone()
+    assert row == (0,)
+
+
+def test_a_code_point_this_python_assigns_is_admitted(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> None:
+    """The line is where Python's table ends, not where a script is rare: an
+    ideograph Unicode 15.1 encoded and a private-use character (assigned, `Co`)
+    are admitted."""
+    conn, case_id = case
+    [source_id] = admit_pack(
+        conn,
+        BlobStore(tmp_path / "blobs"),
+        case_id=case_id,
+        documents=[
+            Document(
+                filename=BoundaryText.of("assigned.txt"),
+                data="Holdings \U0002ebf0 Ltd  logo\n".encode(),
+            )
+        ],
+    )
+    assert every_block(conn, source_id)
+
+
 def test_a_selector_after_the_base_it_changes_is_admitted(
     case: tuple[StoreConnection, UUID], tmp_path: Path
 ) -> None:

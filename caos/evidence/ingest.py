@@ -305,6 +305,42 @@ def _refuse_hidden_text(blocks: list[_Block]) -> None:
         raise Refusal(RefusalCode.SOURCE_NOT_READABLE)
 
 
+def _refuse_unassigned(blocks: list[_Block]) -> None:
+    """Refuse a document carrying a code point this Python's Unicode does not
+    assign -- general category `Cn`, noncharacters included (N40).
+
+    Why: a line's length is measured on two Unicode tables. Admission cuts it
+    by its NFC length in Python, and anchoring re-measures a split line in the
+    database (`citations._group_counts` sums Postgres's
+    `length(normalize(text, NFC))`). The normalization stability policy fixes
+    NFC for every *assigned* character, but a code point unassigned in one
+    table can be assigned, with compositions, in the other's newer version --
+    Unicode 16 adds compositions -- and the two would then disagree about a
+    line nobody changed. Refusing what Python does not assign keeps every
+    admitted character inside the table both sides share, whichever side
+    moves first.
+
+    What a future Postgres upgrade must check: `SELECT unicode_version()`
+    against `unicodedata.unidata_version` (both 15.1 on Postgres 17 and Python
+    3.13), and `test_the_store_and_the_host_agree_on_every_nfc_length` rerun.
+    A server newer than Python is covered here; one older than Python is not,
+    because a code point Python assigns and the server does not passes this
+    check and is normalised by one side only -- so neither a Postgres
+    downgrade nor a Python upgrade may leave the server's version behind.
+    Tokens admitted before this refusal were never asked, and a server version
+    that assigns one of their code points re-measures their split lines.
+
+    Read over the distinct characters of the non-ASCII blocks, so a document
+    costs one category lookup per character it uses, not per character.
+    """
+    used: set[str] = set()
+    for block in blocks:
+        if not block.text.value.isascii():
+            used.update(block.text.value)
+    if any(unicodedata.category(character) == "Cn" for character in used):
+        raise Refusal(RefusalCode.SOURCE_NOT_READABLE)
+
+
 def _prepare(document: Document, tokens: list[Token], identity: str) -> _Packed:
     prepared: list[Token] = []
     try:
@@ -326,6 +362,7 @@ def _prepare(document: Document, tokens: list[Token], identity: str) -> _Packed:
         raise Refusal(RefusalCode.SOURCE_IDENTITY_INVALID) from None
     blocks = _blocks(prepared)
     _refuse_hidden_text(blocks)
+    _refuse_unassigned(blocks)
     output = canonical_digest(
         {
             "format_version": 1,
