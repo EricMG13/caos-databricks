@@ -188,14 +188,16 @@ def _within_reservation(
     A missing reservation refuses here as well as in `check_call`: the unit that
     spends checks it, not only the unit that ordered it.
     """
-    from caos.pricing import priced_request
+    from caos.pricing import bills_at, priced_request
 
     measured = request_size(provider, prompt)
     with execution_reads(conn):
         taken = reserved_for(conn, attempt_id)
     if taken is None:
         raise Refusal(RefusalCode.BUDGET_NOT_RESERVED)
-    if taken.price.model != provider.model:
+    # The whole price, not its model alone: the charge is the provider's, at
+    # the provider's own price (CF-089).
+    if not bills_at(provider, taken.price):
         raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
     if priced_request(taken.price, measured) > taken.amount:
         raise Refusal(RefusalCode.RESERVATION_BELOW_REQUEST)

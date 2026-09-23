@@ -268,3 +268,28 @@ def test_a_run_that_spent_past_one_worst_case_still_resumes(
     # says the money was there all along: `reserve` priced each node and none
     # of them needed a worst case.
     assert run_status(conn, run.run_id) is RunStatus.COMPLETE
+
+
+def test_bills_at_compares_the_whole_price_a_provider_states() -> None:
+    """CF-089: the reservation is priced at the run's price and the charge at
+    the provider's own, so the two must be one price -- model, rates and date
+    -- not only one model. A provider that states no price (one that reports
+    money) is still held to the model."""
+    from types import SimpleNamespace
+
+    from caos.pricing import bills_at
+
+    assert bills_at(SimpleNamespace(model=MODEL, price=PRICE), PRICE)
+    assert bills_at(SimpleNamespace(model=MODEL), PRICE)
+    assert bills_at(SimpleNamespace(model=MODEL, price=None), PRICE)
+    for moved in (
+        replace(PRICE, input_per_token=Decimal("0.0000002")),
+        replace(PRICE, output_per_token=Decimal("0.000001")),
+        replace(PRICE, as_of=date(2026, 9, 12)),
+    ):
+        assert not bills_at(SimpleNamespace(model=MODEL, price=moved), PRICE)
+    assert not bills_at(SimpleNamespace(model="another-model", price=PRICE), PRICE)
+    assert not bills_at(SimpleNamespace(), PRICE)
+    # The same rate spelled with another exponent is the same price.
+    same = replace(PRICE, output_per_token=Decimal("0.0000020"))
+    assert bills_at(SimpleNamespace(model=MODEL, price=same), PRICE)
