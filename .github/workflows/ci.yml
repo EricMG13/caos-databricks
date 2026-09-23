@@ -97,10 +97,13 @@ jobs:
       - run: uv run bandit -r caos scripts icm
       # The environment `uv sync --locked` built from the hashed lock is what runs.
       - run: uv run pip-audit --strict
-      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "false"
+      # The whole history, as gate A12 runs it locally. The action scans only
+      # the push's commit range and failed on the first push over git's own
+      # stderr while finding nothing; the image is digest-pinned like postgres.
+      - run: >-
+          docker run --rm -v "$PWD:/repo" -w /repo
+          ghcr.io/gitleaks/gitleaks:v8.24.3@sha256:e1b35e12a8c6fa8901f060459cfb6b2fc4c484d3afbe3b029733a3bbfab07055
+          git --no-banner .
 
   bundle:
     # The bundle against the loopback workspace (D28): validate, deploy and

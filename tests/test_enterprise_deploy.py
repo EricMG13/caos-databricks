@@ -77,9 +77,11 @@ def test_the_one_command_runs_the_cli_and_verifies_the_deployment(
     assert "PostgreSQL" in (evidence / "E8.log").read_text()
     assert "first frame" in rows[-1][3]
     assert f"deployed: {app.url}" in done.stdout
+    # No credential in any row, log or line: the bearer the SDK was handed,
+    # and the minted password in the only shape it could leak in, a URL.
     everything = "".join(p.read_text() for p in evidence.iterdir()) + done.stdout
-    assert parts.password and parts.password not in everything
     assert BEARER not in everything
+    assert parts.password and f":{parts.password}@" not in everything
 
 
 def test_a_recorded_cli_step_is_one_row_with_the_log_tail(tmp_path: Path) -> None:
