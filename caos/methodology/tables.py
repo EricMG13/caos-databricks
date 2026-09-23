@@ -44,7 +44,9 @@ TablesUnavailable = Literal["TABLES_MALFORMED", "TABLES_TOO_LARGE"]
 
 # `parse_figure`'s decorations and separator grammar, restated so a spelling
 # the bundle read as a figure is read again, exactly, in the order it reads it.
-_SPACES = str.maketrans("", "", "\u00a0\u202f ")
+# Its digit-group spaces are the no-break, thin and narrow no-break spaces
+# (fork r3 added the thin space U+2009).
+_SPACES = str.maketrans("", "", "\u00a0\u2009\u202f ")
 _CURRENCY = re.compile("^[\u20ac$\u00a3\u00a5\u20b9]|[\u20ac$\u00a3\u00a5\u20b9]$")
 _MULTIPLE = re.compile(r"[xX]$")
 _PERCENT = re.compile(r"%$")

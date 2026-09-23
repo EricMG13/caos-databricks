@@ -179,12 +179,15 @@ def _rows(facts: EarningsFacts) -> dict[str, list[list[str]]]:
         ("Cash", facts.prior_cash, facts.current_cash),
         ("Debt", facts.prior_debt, facts.current_debt),
     )
+    # The method's own columns (fork r3, G2-6): T4.12 keeps the `values` and
+    # `changes` a qualification key reads beside the keyed comparator's columns.
     return {
         "T4.4": [
             [
                 name,
                 f"FY2024 {prior}; FY2025 {current}",
-                f"{current - prior} / {(current - prior) / prior:.1%}",
+                str(current - prior),
+                f"{(current - prior) / prior:.1%}",
                 "same annual basis",
             ]
             for name, prior, current in metrics
@@ -193,9 +196,12 @@ def _rows(facts: EarningsFacts) -> dict[str, list[list[str]]]:
             [
                 name,
                 "YoY",
-                f"{prior}/{current}",
+                str(prior),
+                str(current),
                 str(current - prior),
+                f"{(current - prior) / prior:.1%}",
                 "reported annual results",
+                "annual comparison",
                 "period-specific credit signal",
             ]
             for name, prior, current in metrics
@@ -203,12 +209,20 @@ def _rows(facts: EarningsFacts) -> dict[str, list[list[str]]]:
         "T4.12": [
             [
                 name.lower().replace(" ", "_"),
-                "FY2025/FY2024",
-                "YoY",
+                "FY2025",
+                "FY2024",
+                "LTM_PRIOR",
+                str(current),
+                str(prior),
+                str(current - prior),
+                f"{(current - prior) / prior:.1%}",
+                "Supported",
+                "false",
+                "false",
+                "false",
+                "false",
                 f"{current}/{prior}",
                 str(current - prior),
-                "SUPPORTED",
-                "same annual basis",
             ]
             for name, prior, current in metrics
         ],
@@ -222,22 +236,29 @@ def _rows(facts: EarningsFacts) -> dict[str, list[list[str]]]:
                 "0",
                 "PASS",
                 "CP-1 canonical value retained",
+                "annual-results",
             ]
         ],
         "T4.14": [
             [
-                "none disclosed",
+                "NONE",
                 "FY2025",
-                "null/null",
-                "null",
-                "NOT AVAILABLE",
-                "No add-backs disclosed; gap retained",
+                "—",
+                "—",
+                "—",
+                "—",
+                "—",
+                "—",
+                "—",
+                "No add-backs disclosed; adjusted EBITDA equals EBITDA",
+                "annual-results",
             ]
         ],
         "T4.15": [
             [
                 "CP-MODEL",
                 "READY",
+                "none",
                 "none",
                 "none",
                 "two-period historical snapshot supplied",

@@ -140,7 +140,7 @@ def test_cp1b_emits_every_register_with_two_period_delta_rows() -> None:
         ("Debt", 600, 580, -20),
     ):
         assert (
-            f"| {metric} | FY2024 {prior}; FY2025 {current} | {change} / "
+            f"| {metric} | FY2024 {prior}; FY2025 {current} | {change} | "
             f"{change / prior:.1%} |" in markdown
         )
     assert "| CP-MODEL | READY |" in markdown
@@ -198,17 +198,18 @@ def test_changed_current_fact_rebuilds_pack_and_all_dependent_rows() -> None:
     assert f"FY2025 revenue {changed.current_revenue}" in pack
     revenue_row = (
         f"| Revenue | FY2024 {changed.prior_revenue}; FY2025 "
-        f"{changed.current_revenue} | {changed.revenue_change} / "
+        f"{changed.current_revenue} | {changed.revenue_change} | "
         f"{changed.revenue_change / changed.prior_revenue:.1%} |"
     )
     assert revenue_row in markdown
     assert (
-        f"| Revenue | YoY | {changed.prior_revenue}/{changed.current_revenue} | "
+        f"| Revenue | YoY | {changed.prior_revenue} | {changed.current_revenue} | "
         f"{changed.revenue_change} |" in markdown
     )
+    # T4.12 keeps `values` and `changes` beside the comparator's own columns.
     comparator_row = (
-        f"| revenue | FY2025/FY2024 | YoY | {changed.current_revenue}/"
-        f"{changed.prior_revenue} | {changed.revenue_change} |"
+        f"| false | {changed.current_revenue}/{changed.prior_revenue} | "
+        f"{changed.revenue_change} |"
     )
     assert comparator_row in markdown
     assert (

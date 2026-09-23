@@ -399,15 +399,18 @@ def _cp2d_rows(
                 trace,
             ],
         ],
+        # T2E.6 is a register with the method's columns (fork r3, G2-14).
         "T2E.6": [
             [
                 "Months to Empty",
                 f"{facts.months_to_empty:.2f} months",
                 (
                     f"{facts.beginning_accessible_liquidity} / "
-                    f"({-facts.net_movement} / {facts.period_months}); "
-                    "recurring average burn"
+                    f"({-facts.net_movement} / {facts.period_months})"
                 ),
+                "Twelve-month bridge; recurring average burn",
+                "Calculated",
+                trace,
             ]
         ],
         "T2E.7": [
@@ -501,11 +504,7 @@ def liquidity_markdown(
         if ident.module_id == "CP-0" and register == "T8":
             columns, rows = CONTRACT.navigation.NEW_HEADERS, _t8(knobs.readiness)
         elif register in authored:
-            columns = (
-                ["Calculation", "Result", "Basis"]
-                if register == "T2E.6"
-                else spec["columns"]
-            )
+            columns = spec["columns"]
             rows = authored[register]
         else:
             columns = spec["columns"] or ["Evidence"]

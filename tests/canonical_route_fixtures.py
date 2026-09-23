@@ -156,19 +156,25 @@ def forecast_driver_rows() -> list[list[str]]:
 
 
 def _cp1() -> dict[str, list[list[str]]]:
+    """CP-1's keyed registers in the method's own columns (fork r3, G2-6)."""
     return {
         "T4.14": [
             [
                 "FY2025",
+                "2025",
+                "—",
                 "FY",
-                "actual",
-                "2025-01-01/2025-12-31",
+                "2025-01-01",
+                "2025-12-31",
+                "365",
                 "audited",
                 "USD",
                 "million",
                 "reported",
                 "consolidated",
+                "issuer-pack",
                 "issuer-pack p1",
+                "—",
             ]
         ],
         "T4.15": [
@@ -179,6 +185,7 @@ def _cp1() -> dict[str, list[list[str]]]:
                 "+",
                 "reported",
                 "READY",
+                "issuer-pack",
                 "issuer-pack p1",
                 "none disclosed",
                 "annual only",
@@ -193,27 +200,35 @@ def _cp1() -> dict[str, list[list[str]]]:
         "T4.18": [
             [
                 "TERM",
+                "Term loan",
                 "FY2025",
+                "term loan",
                 "600",
                 "600",
                 "600",
                 "600",
                 "secured",
                 "senior",
+                "USD",
                 "5 percent fixed",
                 "2030",
+                "not a lease",
+                "issuer-pack",
+                "issuer-pack p1",
             ]
         ],
         "T4.19": [
             [
                 "net-debt",
                 "FY2025",
+                "net debt",
                 "500",
                 "500",
                 "0",
                 "0.001",
                 "reconciled",
                 "600 debt less 100 cash",
+                "issuer-pack p1",
             ]
         ],
     }
