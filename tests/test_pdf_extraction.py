@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import io
 import json
+import resource
 from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Literal, cast
@@ -734,14 +735,22 @@ def _drive_child(header: dict[str, object], data: bytes) -> dict[str, object]:
     clean refusal.
     """
     stdin, stdout = io.BytesIO(json.dumps(header).encode() + b"\n" + data), io.BytesIO()
+    address_space = resource.getrlimit(resource.RLIMIT_AS)
     # Patched by path rather than by reaching through the module: `sys` is an
     # import of `pdf`, not part of its declared surface, and asking for it as
     # an attribute is the kind of reach a re-export rule is right to refuse.
-    with mock.patch(
-        "caos.evidence.pdf.sys",
-        mock.Mock(stdin=mock.Mock(buffer=stdin), stdout=mock.Mock(buffer=stdout)),
+    # The address-space cap is the child's own (F102); applied in-process it
+    # lands on this test worker, and on Linux every later thread start in the
+    # worker then hangs before it can signal (the CI stall, F150).
+    with (
+        mock.patch(
+            "caos.evidence.pdf.sys",
+            mock.Mock(stdin=mock.Mock(buffer=stdin), stdout=mock.Mock(buffer=stdout)),
+        ),
+        mock.patch("caos.evidence.pdf._limit_address_space", lambda inflater: None),
     ):
         pdf.child_main()
+    assert resource.getrlimit(resource.RLIMIT_AS) == address_space, "worker capped"
     return cast(dict[str, object], json.loads(stdout.getvalue()))
 
 
