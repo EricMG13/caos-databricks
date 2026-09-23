@@ -113,6 +113,7 @@ from caos.store.outcomes import (
     require_idle,
 )
 from caos.store.run_inputs import load_run_input
+from caos.store.runs import attempt_ordinal
 from caos.store.source_sets import SourceSet, load_source_set
 from caos.store.work import require_resendable
 
@@ -582,9 +583,10 @@ def _prompt_context(
     node's one second attempt carries (D30). Replay and the readers never
     build a prompt, so they never pay for the ledger read this adds."""
     context = _context(conn, blobs, bundle, assignment, identity)
-    body = _feedback_body(conn, blobs, assignment)
-    if body is None:
+    fed = _feedback_body(conn, blobs, assignment)
+    if fed is None:
         return context
+    body, refused = fed
     skill = assemble_authority(bundle, assignment.module_id).files[SKILL]
     contract, pathways = _contract(bundle), catalog(bundle)
     host = (
@@ -598,6 +600,11 @@ def _prompt_context(
             gate_expects(assignment.route, assignment.node),
         ),
     )
+    # Judged under the identity the refused answer was asked under: its
+    # ordinal, not this attempt's, fixes the attempt id and invocation digest
+    # it had to copy, so only a field it really copied wrong is named.
+    with suppress(Refusal):  # an attempt from before ordinals: this identity
+        identity = replace(identity, ordinal=attempt_ordinal(conn, refused))
     lines = feedback_lines(contract, pathways, identity, body, skill=skill)
     return replace(
         context, feedback=capped([line for line in host if line] + list(lines))
@@ -615,9 +622,18 @@ _ANCHORING_CODES = frozenset(
 )
 # The refusals whose checks a second attempt can be told of (D30, N52): the
 # validator's and the host's own (`HANDOFF_MALFORMED`), the completeness
-# checker's (`HANDOFF_INCOMPLETE`) and anchoring's.
+# checker's (`HANDOFF_INCOMPLETE`), anchoring's, and -- owner-approved on
+# 2026-09-23 (G1-16) -- a host-owned field copied wrong or a field no handoff
+# may carry, each told by field name (`handoff._front_matter_lines`).
 SECOND_ATTEMPT_CODES = (
-    frozenset({RefusalCode.HANDOFF_MALFORMED, RefusalCode.HANDOFF_INCOMPLETE})
+    frozenset(
+        {
+            RefusalCode.HANDOFF_MALFORMED,
+            RefusalCode.HANDOFF_INCOMPLETE,
+            RefusalCode.HANDOFF_IDENTITY_MISMATCH,
+            RefusalCode.HANDOFF_UNDECLARED_FIELD,
+        }
+    )
     | _ANCHORING_CODES
 )
 
@@ -644,9 +660,9 @@ def second_attempt_due(
 
 def _feedback_body(
     conn: StoreConnection, blobs: BlobStore, assignment: Assignment
-) -> str | None:
-    """The refused answer this attempt answers, when it is the node's one
-    second attempt (D30), else None.
+) -> tuple[str, UUID] | None:
+    """The refused answer this attempt answers and the attempt that gave it,
+    when this is the node's one second attempt (D30), else None.
 
     Counted from the attempts before this one, so the prospective prompt that
     is priced and the attempt's own rebuilt prompt carry the same lines. A body
@@ -659,12 +675,13 @@ def _feedback_body(
     source = _feedback_source(attempts[:before])
     if source is None or source.diagnostic_sha256 is None:
         return None
+    body: str | None = None
     try:
-        return _stored_body(blobs, source.diagnostic_sha256)
+        body = _stored_body(blobs, source.diagnostic_sha256)
     except Refusal as lost:
         if lost.code not in _BLOB_LOST:
             raise
-    return None
+    return None if body is None else (body, source.attempt_id)
 
 
 def _anchoring(
