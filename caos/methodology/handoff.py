@@ -921,8 +921,8 @@ def _numbered(failed: Sequence[int]) -> str:
 _ANCHORING = (
     (
         RefusalCode.CITATION_NOT_LOCATED,
-        "is not on its cited page",
-        "are not on their cited pages",
+        "is not one evidence line of its cited page",
+        "are not each one evidence line of their cited pages",
     ),
     (
         RefusalCode.CITATION_AMBIGUOUS,

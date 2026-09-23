@@ -252,7 +252,7 @@ def test_an_unanchored_citation_gets_the_second_attempt_naming_it(
     assert _run(harness, _Flawed(answers, flaw=_cites_a_wrong_page)) is None
     total = len(json.loads(answers.bodies[0])["citations"])
     assert (
-        f"host anchoring check: citation 1 of {total} is not on its cited page"
+        f"host anchoring check: citation 1 of {total} is not one evidence line of its"
         in answers.prompts[1]
     )
     assert _cp0_ledger(harness) == (2, 2, ["CITATION_NOT_LOCATED"], 1)
@@ -269,7 +269,8 @@ def test_the_anchoring_line_names_each_failed_citation_by_number_and_reason() ->
         ]
     )
     assert line == (
-        "host anchoring check: citation 2 of 5 is not on its cited page;"
+        "host anchoring check: citation 2 of 5 is not one evidence line of its"
+        " cited page;"
         " citations 3 and 4 of 5 are on their cited pages more than once;"
         " citation 5 of 5 names a page or line this node was not given"
         " (numbered from 1 in the order given)"
