@@ -121,12 +121,15 @@ POLL_INTERVAL = 0.5
 # entry beside them already said as much in words before the status agreed.
 # `STREAM_LIMIT_REACHED` joins it for the same reason and not by analogy: the
 # capacity is released by a watcher closing a tail, so waiting is exactly what
-# repairs it. Nothing an operator does is required.
+# repairs it. Nothing an operator does is required. `CONCURRENCY_LIMIT_REACHED`
+# (CF-051) is the same shape one level up: the capacity is released by another
+# request finishing, not by anything an operator does either.
 TRANSIENT = frozenset(
     {
         RefusalCode.STORE_UNAVAILABLE,
         RefusalCode.IDENTITY_UNAVAILABLE,
         RefusalCode.STREAM_LIMIT_REACHED,
+        RefusalCode.CONCURRENCY_LIMIT_REACHED,
         RefusalCode.PROVIDER_UNAVAILABLE,
     }
 )
@@ -193,6 +196,10 @@ _STATUS = {
     RefusalCode.STORE_UNAVAILABLE: 503,
     RefusalCode.IDENTITY_UNAVAILABLE: 503,
     RefusalCode.STREAM_LIMIT_REACHED: 503,
+    # Answered by the edge guard before routing (CF-051, replacing uvicorn's
+    # own `limit_concurrency`); listed here, beside the store's own capacity
+    # refusals, so a route could not give it a different status either.
+    RefusalCode.CONCURRENCY_LIMIT_REACHED: 503,
     RefusalCode.STORE_NOT_TRANSACTIONAL: 500,
     RefusalCode.STORE_SCHEMA_DRIFT: 500,
     RefusalCode.BLOB_NOT_FOUND: 500,

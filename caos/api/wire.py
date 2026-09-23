@@ -200,6 +200,7 @@ CLEARS: Mapping[RefusalCode, str] = {
     _C.EDGE_NOT_TRUSTED: "Reach the service through its edge.",
     _C.ORIGIN_REFUSED: "Send the request from the service's own origin.",
     _C.EDGE_CONFIG_INVALID: "An operator must correct the edge configuration.",
+    _C.CONCURRENCY_LIMIT_REACHED: "Retry shortly.",
     _C.INTERNAL_FAULT: "Retry; an operator must investigate if it persists.",
     _C.NOT_AUTHORISED: "Obtain the required standing on the case.",
     _C.REQUEST_INVALID: "Send a well-formed request body.",

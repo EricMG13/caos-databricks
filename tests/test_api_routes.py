@@ -922,7 +922,7 @@ def test_every_code_the_edge_answers_carries_the_apps_status() -> None:
     }
     answered = {code.name for code in EDGE_STATUS}
     assert named == answered | {RefusalCode.EDGE_CONFIG_INVALID.name}
-    assert len(answered) == 4
+    assert len(answered) == 5
 
 
 def test_an_unhandled_fault_is_logged_as_its_class_and_frame_never_its_message(

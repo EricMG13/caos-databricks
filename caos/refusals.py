@@ -78,6 +78,8 @@ class RefusalCode(StrEnum):
     EDGE_NOT_TRUSTED = "EDGE_NOT_TRUSTED"
     ORIGIN_REFUSED = "ORIGIN_REFUSED"
     EDGE_CONFIG_INVALID = "EDGE_CONFIG_INVALID"
+    # CF-051: every in-flight request slot is held; waiting is what repairs it.
+    CONCURRENCY_LIMIT_REACHED = "CONCURRENCY_LIMIT_REACHED"
     # An unhandled exception, answered by the guard in the constant body.
     INTERNAL_FAULT = "INTERNAL_FAULT"
     NOT_AUTHORISED = "NOT_AUTHORISED"

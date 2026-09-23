@@ -8,13 +8,14 @@ answer before any store connection.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Iterator
 from uuid import uuid4
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from starlette.types import Receive, Scope, Send
+from starlette.types import Message, Receive, Scope, Send
 
 from caos.api import edge, identity
 from caos.api.app import app
@@ -243,6 +244,80 @@ def test_the_immutable_asset_cache_is_never_set_on_a_refusal() -> None:
     assert missing.status_code == 404
     assert missing.headers["cache-control"] != "public, max-age=31536000, immutable"
     assert missing.headers["cache-control"] == "no-store"
+
+
+async def _asked(guard: EdgeGuard, path: str) -> tuple[int, dict[bytes, bytes], bytes]:
+    """One raw request through `guard`, its status, headers and body."""
+    sent: list[Message] = []
+
+    async def receive() -> Message:
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message: Message) -> None:
+        sent.append(message)
+
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": "GET",
+        "scheme": "http",
+        "path": path,
+        "raw_path": path.encode(),
+        "root_path": "",
+        "query_string": b"",
+        "headers": [(b"host", b"127.0.0.1:8000"), (b"sec-fetch-site", b"same-origin")],
+        "client": ("127.0.0.1", 50000),
+        "server": ("127.0.0.1", 8000),
+    }
+    await guard(scope, receive, send)
+    start = next(m for m in sent if m["type"] == "http.response.start")
+    body = b"".join(
+        m.get("body", b"") for m in sent if m["type"] == "http.response.body"
+    )
+    headers = dict(start["headers"])
+    return start["status"], headers, body
+
+
+def test_the_in_flight_limit_is_a_typed_refusal_with_headers_and_retry_after() -> None:
+    """CF-051. uvicorn's own `limit_concurrency` counted idle keep-alive
+    connections too (DP-7) and answered a bare 503 outside the app, with no
+    security headers and no `Retry-After`. The bound now lives in the guard
+    itself, so a rejection is the same typed refusal every other one is."""
+    import json
+
+    entered, release = asyncio.Event(), asyncio.Event()
+
+    async def slow(scope: Scope, receive: Receive, send: Send) -> None:
+        entered.set()
+        await release.wait()
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b""})
+
+    guard = EdgeGuard(slow, in_flight_limit=1)
+
+    async def scenario() -> tuple[int, int, dict[bytes, bytes], bytes]:
+        first = asyncio.ensure_future(_asked(guard, "/api/v1/cases"))
+        await entered.wait()
+        second_status, second_headers, second_body = await _asked(
+            guard, "/api/v1/cases"
+        )
+        release.set()
+        first_status, _, _ = await first
+        return first_status, second_status, second_headers, second_body
+
+    first_status, second_status, headers, body = asyncio.run(scenario())
+
+    assert first_status == 200
+    assert second_status == 503
+    assert json.loads(body) == {
+        "code": "CONCURRENCY_LIMIT_REACHED",
+        "clears": CLEARS[RefusalCode.CONCURRENCY_LIMIT_REACHED],
+    }
+    assert headers[b"retry-after"] == b"5"
+    for name, value in SECURITY_HEADERS.items():
+        assert headers[name.encode()] == value.encode()
+    assert headers[b"cache-control"] == b"no-store"
 
 
 def test_openapi_and_docs_are_not_served() -> None:

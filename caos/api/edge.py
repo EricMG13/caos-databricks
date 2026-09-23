@@ -68,6 +68,7 @@ from caos.api.identity import (
     workspace_address,
 )
 from caos.api.identity import PLATFORM_ENV as PLATFORM_ENV  # re-exported, see below
+from caos.api.stream import STREAM_LIMIT
 from caos.api.wire import CLEARS, RefusalBody
 from caos.refusals import Refusal, RefusalCode
 
@@ -110,6 +111,20 @@ SECURITY_HEADERS: Mapping[str, str] = {
 }
 _STRIPPED = (b"set-cookie", b"cache-control")
 _ASSET_CACHE = "public, max-age=31536000, immutable"
+
+# CF-051. uvicorn's own `limit_concurrency` (`caos/serve.py`) counts every
+# accepted connection, idle keep-alive ones included (DP-7), and a rejection
+# there is a bare 503 outside the ASGI app: no security headers, no typed
+# body, no `Retry-After`. The bound moves here, counting only a request
+# actually being dispatched into the app -- the resource (store connections,
+# memory, CPU) the ceiling exists to protect -- so an idle connection never
+# spends it and a refusal is the same typed answer every other one is. Same
+# number as before: every stream slot and forty more (DP-7).
+IN_FLIGHT_LIMIT = STREAM_LIMIT + 40
+# Matches `caos/api/app.py`'s `RETRY_AFTER_SECONDS`; duplicated rather than
+# imported, for the reason `EDGE_STATUS` below already is (this module cannot
+# import the app, which imports it).
+_BUSY_RETRY_AFTER_SECONDS = 5
 
 
 def is_api_path(path: str) -> bool:
@@ -280,9 +295,17 @@ def _all(headers: list[tuple[bytes, bytes]], name: str) -> list[bytes]:
 class EdgeGuard:
     """Pure ASGI middleware in front of the API and the static site."""
 
-    def __init__(self, app: ASGIApp, *, clock: Callable[[], float] = time.time) -> None:
+    def __init__(
+        self,
+        app: ASGIApp,
+        *,
+        clock: Callable[[], float] = time.time,
+        in_flight_limit: int = IN_FLIGHT_LIMIT,
+    ) -> None:
         self.app = app
         self.clock = clock
+        self.in_flight_limit = in_flight_limit
+        self._in_flight = 0
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] == "lifespan":
@@ -312,7 +335,22 @@ class EdgeGuard:
         if refusal is not None:
             await _refuse(guarded, refusal)
             return
-        await _answering_faults(self.app, scope, receive, guarded, log=True)
+        if self._in_flight >= self.in_flight_limit:
+            # CF-051. No `await` between here and the increment below, so
+            # nothing else on this event loop can observe or change
+            # `_in_flight` in between: the check and the reservation are one
+            # step, the way a semaphore's would be.
+            await _refuse(
+                guarded,
+                RefusalCode.CONCURRENCY_LIMIT_REACHED,
+                retry_after=_BUSY_RETRY_AFTER_SECONDS,
+            )
+            return
+        self._in_flight += 1
+        try:
+            await _answering_faults(self.app, scope, receive, guarded, log=True)
+        finally:
+            self._in_flight -= 1
 
     async def _lifespan(self, scope: Scope, receive: Receive, send: Send) -> None:
         """Refuse to start under an invalid edge configuration."""
@@ -488,21 +526,21 @@ EDGE_STATUS: Mapping[RefusalCode, int] = MappingProxyType(
         RefusalCode.NOT_AUTHENTICATED: 401,
         RefusalCode.ORIGIN_REFUSED: 403,
         RefusalCode.INTERNAL_FAULT: 500,
+        RefusalCode.CONCURRENCY_LIMIT_REACHED: 503,
     }
 )
 
 
-async def _refuse(send: Send, code: RefusalCode) -> None:
+async def _refuse(
+    send: Send, code: RefusalCode, *, retry_after: int | None = None
+) -> None:
     body = refusal_body(code)
     status = EDGE_STATUS[code]
-    await send(
-        {
-            "type": "http.response.start",
-            "status": status,
-            "headers": [
-                (b"content-type", b"application/json"),
-                (b"content-length", str(len(body)).encode()),
-            ],
-        }
-    )
+    headers = [
+        (b"content-type", b"application/json"),
+        (b"content-length", str(len(body)).encode()),
+    ]
+    if retry_after is not None:
+        headers.append((b"retry-after", str(retry_after).encode()))
+    await send({"type": "http.response.start", "status": status, "headers": headers})
     await send({"type": "http.response.body", "body": body})

@@ -34,14 +34,26 @@ from caos.graph.worker import start_in_process
 BIND_HOST = "CAOS_BIND_HOST"
 PORT = "DATABRICKS_APP_PORT"
 LOCAL_PORT = 8000
-# One uvicorn worker, a bounded number of connections (legacy §53). uvicorn
-# counts idle keep-alive connections too (DP-7), so the bound leaves every
-# event-stream slot open and forty more for requests and the proxy's pool.
+# One uvicorn worker, a bounded number of connections (legacy §53). Not
+# uvicorn's own `limit_concurrency` any more (CF-051): it counts idle
+# keep-alive connections too (DP-7) and rejects outside the ASGI app, with no
+# security headers and no typed body. `caos.api.edge.EdgeGuard` bounds the
+# same number of in-flight requests instead; this stays as the figure the
+# tests that drive a real uvicorn socket of their own still reference.
 LIMIT_CONCURRENCY = STREAM_LIMIT + 40
 # Inside the platform's grace before SIGKILL, with the drain after it.
 GRACEFUL_SECONDS = 2
 LIMIT_JOIN_SECONDS = 12
 SERVER_LOGGER = "uvicorn.error"
+# CF-051. A conservative keep-alive: how long an accepted connection may sit
+# with no complete request on it, whether it is idle between requests or
+# still sending one -- uvicorn arms the same timer either way (h11_impl.py),
+# and this version has no separate, named timeout for "still reading the
+# headers". `h11_max_incomplete_event_size` bounds the same slow-header
+# shape in bytes rather than seconds, uvicorn's other lever on it. Both
+# conservative placeholders; the tuned production figures are N26 (enterprise).
+TIMEOUT_KEEP_ALIVE_SECONDS = 5
+HEADER_READ_LIMIT_BYTES = 16 * 1024
 
 
 class _NoExceptionText(logging.Filter):
@@ -95,7 +107,8 @@ def main() -> int:
             "caos.api.site:application",
             host=os.environ.get(BIND_HOST) or "127.0.0.1",
             port=int(os.environ.get(PORT) or LOCAL_PORT),
-            limit_concurrency=LIMIT_CONCURRENCY,
+            timeout_keep_alive=TIMEOUT_KEEP_ALIVE_SECONDS,
+            h11_max_incomplete_event_size=HEADER_READ_LIMIT_BYTES,
             timeout_graceful_shutdown=GRACEFUL_SECONDS,
             proxy_headers=False,
         )
