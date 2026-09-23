@@ -24,6 +24,7 @@ introduces a synonym for a term below.
 | **opinion** | the analyst's signature on an exact revision | approval, sign-off of the deliverable |
 | **filing** | the independent approval that makes a deliverable final | publication, release |
 | **qualification set** | the immutable cases and answer keys one verdict is measured against | benchmark, golden set |
+| **tagged table** | a handoff's `<!-- table-id: x.y -->` pipe table: the machine interface the bundle's `cp_tables` reads, served on the Analysis read as `TableView` (D32) | — |
 
 ## Node states — the bundle's words, unchanged
 

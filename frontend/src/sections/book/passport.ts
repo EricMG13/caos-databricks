@@ -14,6 +14,7 @@
 // that is unchecked.
 import type { Citation, Passport, ResearchLink } from "@/wire";
 import type { BookCell, BookColumn, BookRow, CitationView } from "@/wire/v1";
+import { displayDecimal } from "@/ds/format";
 
 export function citationOf(fact: CitationView, observedAt: string): Citation {
   return {
@@ -31,8 +32,12 @@ export function citationOf(fact: CitationView, observedAt: string): Citation {
 
 /** What the cell shows in the passport's value line: the figure, or the typed
     reason the projection has none for it. */
+/** What a cell reads: the figure rounded for display, or why there is none.
+    The passport carries the exact decimal. */
 export function shownValue(cell: BookCell): string {
-  return cell.value ?? cell.unavailable_reason ?? "NOT SERVED";
+  return cell.value === null
+    ? (cell.unavailable_reason ?? "NOT SERVED")
+    : displayDecimal(cell.value);
 }
 
 export function passportOf(

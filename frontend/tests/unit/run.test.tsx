@@ -203,7 +203,7 @@ describe("Run", () => {
       const placed = byId.get(node.route_node_id)!;
       expect(placed.col).toBe(layout.columns.findIndex((c) => c.stage === node.stage));
       expect(placed.x).toBe(layout.columns[placed.col]!.x);
-      expect(placed.y).toBe(30 + placed.row * ROW_H);
+      expect(placed.y).toBe(36 + placed.row * ROW_H);
     }
     const slots = new Set(layout.nodes.map((n) => `${n.x},${n.y}`));
     expect(slots.size).toBe(layout.nodes.length);
@@ -214,7 +214,7 @@ describe("Run", () => {
       expect(placed.x + NODE_W).toBeLessThanOrEqual(layout.width);
       expect(placed.y + NODE_H).toBeLessThanOrEqual(layout.height);
     }
-    expect(layoutRoute([])).toEqual({ nodes: [], columns: [], width: 28, height: 40 });
+    expect(layoutRoute([])).toEqual({ nodes: [], columns: [], width: 28, height: 46 });
   });
 
   test("test_edges_are_derived_from_each_node_s_waiting_on_not_a_separate_list", () => {
@@ -316,8 +316,8 @@ describe("Run", () => {
     expect(pin).toHaveAttribute("aria-disabled", "true");
     expect(pin).toHaveAttribute("data-refusal", "RUN_NOT_RUNNING");
     const reason = pin.nextElementSibling;
-    expect(reason).toHaveTextContent("RUN_NOT_RUNNING");
-    expect(reason).toHaveTextContent("clears when the run is RUNNING");
+    expect(reason).toHaveTextContent("Available once the run is RUNNING.");
+    expect(pin).toHaveAttribute("title", "RUN_NOT_RUNNING — clears when the run is RUNNING");
   });
 
   test("test_an_action_absent_from_served_actions_is_action_unplaced_not_available", () => {

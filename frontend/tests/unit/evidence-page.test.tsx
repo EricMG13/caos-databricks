@@ -145,7 +145,7 @@ describe("the page read", () => {
 
 describe("the evidence drawer", () => {
   test("a source fact opens its page's text layer with the citation highlighted", async () => {
-    await mount(`/analysis/?case=${CASE}`);
+    await mount(`/analysis/?case=${CASE}&tab=rn-cp-0`);
     await openFirstFact();
     expect(dialog()).not.toBeNull();
     expect(urls).toContain(PAGE_PATH);
@@ -161,13 +161,13 @@ describe("the evidence drawer", () => {
       url.includes(OTHER)
         ? JSON.parse(text("../../fixtures/analysis.json").replaceAll(CASE, OTHER))
         : analysis();
-    window.history.pushState({}, "", `/analysis/?case=${CASE}`);
+    window.history.pushState({}, "", `/analysis/?case=${CASE}&tab=rn-cp-0`);
     render(<App />);
     await settle();
     await openFirstFact();
     expect(lines()).toHaveLength(3);
     act(() => {
-      window.history.pushState({}, "", `/analysis/?case=${OTHER}`);
+      window.history.pushState({}, "", `/analysis/?case=${OTHER}&tab=rn-cp-0`);
       window.dispatchEvent(new PopStateEvent("popstate"));
     });
     await settle();
@@ -180,12 +180,12 @@ describe("the evidence drawer", () => {
       url.includes(OTHER)
         ? JSON.parse(text("../../fixtures/analysis.json").replaceAll(CASE, OTHER))
         : analysis();
-    window.history.pushState({}, "", `/analysis/?case=${CASE}`);
+    window.history.pushState({}, "", `/analysis/?case=${CASE}&tab=rn-cp-0`);
     render(<App />);
     await settle();
     const chip = await openFirstFact();
     act(() => {
-      window.history.pushState({}, "", `/analysis/?case=${OTHER}`);
+      window.history.pushState({}, "", `/analysis/?case=${OTHER}&tab=rn-cp-0`);
       window.dispatchEvent(new PopStateEvent("popstate"));
     });
     await settle();
@@ -195,7 +195,7 @@ describe("the evidence drawer", () => {
 
   test("test_withdrawal_updates_the_open_drawer_and_refuses_its_page", async () => {
     // R2: the refetch marks the chip, and the open drawer follows it.
-    await mount(`/analysis/?case=${CASE}`);
+    await mount(`/analysis/?case=${CASE}&tab=rn-cp-0`);
     await openFirstFact();
     expect(lines()).toHaveLength(3);
     const pageReads = urls.filter((url) => url.includes("/pages/")).length;
@@ -214,7 +214,7 @@ describe("the evidence drawer", () => {
 
   test("a refused page shows its state and no text", async () => {
     pageAnswer = () => ({ status: 404, body: { code: "PAGE_NOT_AVAILABLE", clears: "x" } });
-    await mount(`/analysis/?case=${CASE}`);
+    await mount(`/analysis/?case=${CASE}&tab=rn-cp-0`);
     await openFirstFact();
     expect(dialog()!.querySelector("[data-page-state='unavailable']")).not.toBeNull();
     expect(lines()).toHaveLength(0);
@@ -227,7 +227,7 @@ describe("the evidence drawer", () => {
       doc["body"].frame = { x0: 0, y0: 0, x1: 612, y1: 130, y_axis: "down" };
       return { status: 200, body: doc };
     };
-    await mount(`/analysis/?case=${CASE}`);
+    await mount(`/analysis/?case=${CASE}&tab=rn-cp-0`);
     await openFirstFact();
     expect(dialog()!.querySelectorAll("[data-highlight]")).toHaveLength(0);
     expect(dialog()!.querySelector("[data-outside-frame]")).toHaveTextContent("1");
@@ -236,7 +236,7 @@ describe("the evidence drawer", () => {
   });
 
   test("test_the_drawer_reads_the_visible_snapshot_not_the_pending_one", async () => {
-    await mount(`/analysis/?case=${CASE}`);
+    await mount(`/analysis/?case=${CASE}&tab=rn-cp-0`);
     await openFirstFact();
     const quote = analysis()["body"].handoffs[0].source_facts[0].matched_text;
     sectionBody = () => {

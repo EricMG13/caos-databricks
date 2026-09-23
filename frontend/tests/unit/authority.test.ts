@@ -113,6 +113,7 @@ describe("what a name refetches and what a view is", () => {
       case_title: "Issuer",
       artifacts: [],
       narrative: [],
+      revisions: [],
     },
     observed_at: "2026-09-14T10:00:00Z",
     observed_empty: false,

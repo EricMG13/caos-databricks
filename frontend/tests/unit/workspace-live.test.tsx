@@ -277,7 +277,7 @@ describe("what a screen reader is told about a command and a run", () => {
       <Announcer>
         <CommandOutcome
           result={{ kind: "ok", status: 201, receipt: {}, replayed: false }}
-          success="Run created. Reading the new run back."
+          success="Run created."
         />
       </Announcer>,
     );

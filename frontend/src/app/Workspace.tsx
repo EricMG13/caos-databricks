@@ -16,7 +16,7 @@ import {
   type Authority,
 } from "./authority";
 import { focusSectionHeading, pageTitle } from "./heading";
-import { SECTION_LABELS, isEnabledSection } from "./sections";
+import { SECTION_LABELS, committeeRevisionOf, isEnabledSection, sectionPath } from "./sections";
 import { VisibleSnapshotContext, type VisibleSnapshot } from "./snapshot";
 import { LedgerProvider } from "./ledger";
 import { eventsUrl, openTail } from "./sse";
@@ -24,6 +24,7 @@ import {
   OFFLINE_WORDING,
   fetchSection,
   sectionUrl,
+  selectionNeeded,
   type RegionStatus,
   type WorkspaceDocument,
 } from "./transport";
@@ -108,7 +109,7 @@ function visible(held: Held): RegionStatus {
 }
 
 export function Workspace({ section }: { section: Section }) {
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const caseId = params.get("case");
   const runId = params.get("run");
   const revisionId = params.get("revision");
@@ -124,6 +125,9 @@ export function Workspace({ section }: { section: Section }) {
   // opens no tail: it is `unavailable` in every mode (brief 4.1, decision 9).
   const requested =
     sectionUrl(section, { case: caseId, run: runId, revision: revisionId, fixture }) !== null;
+  // Report and Committee without the run or revision they read are waiting on
+  // the reader, not refused: they say what to pick and where (plan step 1).
+  const need = selectionNeeded(section, { case: caseId, run: runId, revision: revisionId });
   // Everything the reader sees is keyed on the request that produced it, so a
   // navigation shows `loading` without a render-time state write. The
   // qualification hash is not part of it: it binds global evidence the strip
@@ -150,10 +154,12 @@ export function Workspace({ section }: { section: Section }) {
   }, []);
 
   const current = requested && held?.key === key ? held.value : null;
-  const status = useMemo(
-    () => (requested ? (current ? visible(current) : LOADING) : UNAVAILABLE),
-    [requested, current],
-  );
+  const status = useMemo<RegionStatus>(() => {
+    if (requested) return current ? visible(current) : LOADING;
+    if (need === null) return UNAVAILABLE;
+    const where = sectionPath(need === "run" ? "run" : "report");
+    return { kind: "choose", need, href: caseSearch ? `${where}?${caseSearch}` : where };
+  }, [requested, current, need, caseSearch]);
   const latest = current?.pending ?? current?.displayed ?? null;
   // The refetch that did not answer says the view is not live and replaces
   // nothing (FE-2).
@@ -164,6 +170,8 @@ export function Workspace({ section }: { section: Section }) {
   // The read the tail drives. Set by the load below and read through a ref, so
   // the tail can follow the run on screen without tearing the read down.
   const loadRef = useRef<(() => Promise<RegionStatus | null>) | null>(null);
+  // Offline and refused regions ask again through the same one-flight read.
+  const retry = useCallback(() => void loadRef.current?.(), []);
   // The tail follows the run the reader is looking at. An address that names
   // no run is answered with the case's latest, and a tail opened on the bare
   // address carries the case's audit actions and no run's events: the run on
@@ -268,6 +276,23 @@ export function Workspace({ section }: { section: Section }) {
   const displayedRevisionId =
     document && "revision_id" in document.body ? document.body.revision_id : null;
   const mountKey = `${caseId ?? ""}|${displayedRunId ?? ""}|${displayedRevisionId ?? ""}`;
+  // Report opens on the run on screen, and Committee on a frozen revision of
+  // it, whether or not the address named them: before, both were reachable
+  // only by editing the URL (critique P0).
+  const listed = document && "revisions" in document.body ? document.body.revisions : null;
+  const committeeRevision = listed ? committeeRevisionOf(listed, displayedRevisionId) : revisionId;
+  const railSearch = (id: Section): string => {
+    const query = new URLSearchParams(carried);
+    if ((id === "report" || id === "committee") && !runId && displayedRunId) {
+      query.set("run", displayedRunId);
+    }
+    if (id === "committee") {
+      if (committeeRevision) query.set("revision", committeeRevision);
+      else query.delete("revision");
+    }
+    const text = query.toString();
+    return text ? `?${text}` : "";
+  };
   const snapshot = useMemo<VisibleSnapshot | null>(
     () =>
       document
@@ -286,8 +311,28 @@ export function Workspace({ section }: { section: Section }) {
   // following; a region with none is already saying more than that (FE-3).
   const paused = document !== null && tail?.key === key && !tail.value;
   const chrome = chromeOf(section, status);
+  // A tab named in the address is the one shown, so a view is linkable and
+  // survives a reload; else the reader's choice, else the view the section
+  // opens on (Analysis: its conclusion), else the first.
+  const tabs = chrome?.tabs ?? [];
+  const addressed = params.get("tab");
   const activeTab =
-    (tabChoice?.key === key ? tabChoice.value : null) ?? chrome?.tabs[0]?.id ?? null;
+    (addressed && tabs.some((tab) => tab.id === addressed) ? addressed : null) ??
+    (tabChoice?.key === key ? tabChoice.value : null) ??
+    tabs.find((tab) => tab.opens)?.id ??
+    tabs[0]?.id ??
+    null;
+  const chooseTab = (id: string) => {
+    setTabChoice({ key, value: id });
+    setParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        next.set("tab", id);
+        return next;
+      },
+      { replace: true },
+    );
+  };
   const subject = chrome?.subject?.issuer ?? caseId;
   // The tab says which section of which case is on screen (WCAG 2.4.2).
   useEffect(() => {
@@ -319,14 +364,14 @@ export function Workspace({ section }: { section: Section }) {
         ribbon={(chrome ?? fallback).ribbon}
         subject={chrome?.subject ?? null}
         tabs={chrome?.tabs.map((tab) => tab.id)}
-        onTab={(id) => setTabChoice({ key, value: id })}
+        onTab={chooseTab}
       />
       <DecisionBrief brief={(chrome ?? fallback).brief} />
       <SectionTabs
         label={SECTION_LABELS[section]}
         tabs={chrome?.tabs ?? []}
         active={activeTab}
-        onSelect={(id) => setTabChoice({ key, value: id })}
+        onSelect={chooseTab}
       />
       <VerdictStrip verdict={(chrome ?? fallback).verdict} />
       <QualificationStrip evidenceSha256={qualificationEvidence} />
@@ -336,7 +381,7 @@ export function Workspace({ section }: { section: Section }) {
           entries={markDisabled(chrome?.rail ?? null)}
           local={chrome?.rail_local ?? null}
           servedRole={chrome?.served_role ?? null}
-          search={caseSearch ? `?${caseSearch}` : ""}
+          searchFor={railSearch}
         />
         <main className="body" id="body" aria-label={SECTION_LABELS[section]}>
           <Announcer>
@@ -354,7 +399,7 @@ export function Workspace({ section }: { section: Section }) {
                 {/* The snapshot ledger outlives the documents a section renders,
                     so it sits above the boundary and the mount key. */}
                 <LedgerProvider>
-                  <RegionState status={status} onReload={reload}>
+                  <RegionState status={status} onReload={reload} onRetry={retry}>
                     {(doc) => (
                       // A render failure is about the document that caused it:
                       // the next one served clears it, without waiting for a

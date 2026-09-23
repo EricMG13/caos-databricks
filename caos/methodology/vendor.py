@@ -68,6 +68,10 @@ class VendorContract:
     # `credit_os_v.research`: the brief validator and the dossier validator
     # (§96). The host binds a brief and hands it over; it re-implements no rule.
     research: Any
+    # `cp_tables`: the reader of a handoff's tagged tables, the one the
+    # completeness checker imports, and the figure and null rules its cells
+    # are read by (`caos.methodology.tables`).
+    cp_tables: Any
 
 
 # One compiled contract per manifest, shared by every caller of `cached_contract`.
@@ -185,6 +189,7 @@ def load_vendor_contract(bundle: Bundle) -> VendorContract:
                 navigation=loader.load("credit_os_v.navigation"),
                 routing=loader.load("credit_os_v.routing"),
                 research=loader.load("credit_os_v.research"),
+                cp_tables=loader.load("cp_tables"),
             )
         finally:
             for module in loader.modules.values():

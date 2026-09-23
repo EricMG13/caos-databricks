@@ -39,6 +39,15 @@ from caos.methodology.handoff import (
     MAX_FILE_BYTES,
     MAX_LINE_BYTES,
 )
+from caos.methodology.tables import (
+    CELL_CHARS,
+    FIGURE_CHARS,
+    TABLE_COLUMNS_MAX,
+    TABLE_ID_CHARS,
+    TABLE_ROWS_MAX,
+    TABLES_MAX,
+    TablesUnavailable,
+)
 from caos.refusals import RefusalCode
 from caos.store.gates import Gate, GateState
 from caos.store.members import Standing
@@ -64,6 +73,8 @@ ATTEMPTS_MAX = 4096
 CITATIONS_MAX = 1024
 RECTS_MAX = 256
 FLAGS_MAX = 256
+# A run's revisions Report lists, newest first; older ones stay openable by id.
+REVISIONS_MAX = 64
 TITLE_CHARS = 256  # a case title a command sets
 SOURCE_IDS_MAX = 50  # `AdmissionLimits.max_documents`
 ROUTE_CHOICES_MAX = 18
@@ -609,6 +620,40 @@ class CitationView(BaseModel):
     withdrawn_at: AwareDatetime | None
 
 
+# A handoff's tagged tables (`caos.methodology.tables`), whose bounds these are.
+CellText = Annotated[str, Field(max_length=CELL_CHARS)]
+DecimalText = Annotated[
+    str, Field(max_length=FIGURE_CHARS, pattern=r"^-?[0-9]+(\.[0-9]+)?$")
+]
+
+
+class CellView(BaseModel):
+    """One cell: its exact text and, where the bundle's `parse_figure` reads a
+    figure, that figure's exact value -- `Decimal` in plain notation, never a
+    float (invariant 7). `None` is no figure, which is never zero."""
+
+    model_config = _CLOSED
+
+    text: CellText
+    value: DecimalText | None
+
+
+class TableView(BaseModel):
+    """One `<!-- table-id: -->`-tagged table, as the bundle's reader reads it:
+    the header, then every row in header order."""
+
+    model_config = _CLOSED
+
+    table_id: Annotated[
+        str, Field(max_length=TABLE_ID_CHARS, pattern=r"^[A-Za-z0-9_.]+$")
+    ]
+    columns: Annotated[list[CellText], Field(max_length=TABLE_COLUMNS_MAX)]
+    rows: Annotated[
+        list[Annotated[list[CellView], Field(max_length=TABLE_COLUMNS_MAX)]],
+        Field(max_length=TABLE_ROWS_MAX),
+    ]
+
+
 class HandoffView(BaseModel):
     """One accepted handoff, labelled per §46.3."""
 
@@ -630,6 +675,11 @@ class HandoffView(BaseModel):
     source_facts: Annotated[list[CitationView], Field(max_length=CITATIONS_MAX)]
     model_analysis: Annotated[str, Field(max_length=MARKDOWN_CHARS)]
     host_calculation: Literal["NONE", "CP_CF_FORECAST"]
+    # The tagged tables `model_analysis` carries, derived from it at read time;
+    # model-authored as it is, and it stays the authority. Empty with a reason
+    # when the bundle's reader refused them or they are past a bound.
+    tables: Annotated[list[TableView], Field(max_length=TABLES_MAX)]
+    tables_unavailable_reason: TablesUnavailable | None
 
 
 class PendingNode(BaseModel):
@@ -872,6 +922,21 @@ class ReportArtifact(BaseModel):
     validation_warnings: Annotated[list[Text], Field(max_length=FLAGS_MAX)]
 
 
+class RevisionSummary(BaseModel):
+    """One revision of the displayed run and how far it has gone.
+
+    What Report lists and Committee's front door links to. It proves nothing:
+    opening a revision runs that section's own proofs.
+    """
+
+    model_config = _CLOSED
+
+    revision_id: UUID
+    payload_sha256: Sha256
+    saved_at: AwareDatetime
+    state: Literal["saved", "frozen", "filed"]
+
+
 class ReportBody(BaseModel):
     model_config = _CLOSED
 
@@ -887,6 +952,8 @@ class ReportBody(BaseModel):
     narrative: Annotated[
         list[Annotated[list[NarrativeSpan], Field(max_length=64)]], Field(max_length=64)
     ]
+    # The run's revisions, newest first: empty on the Report with none.
+    revisions: Annotated[list[RevisionSummary], Field(max_length=REVISIONS_MAX)]
 
 
 class FiledReceipt(BaseModel):

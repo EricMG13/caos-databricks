@@ -50,7 +50,7 @@ describe("an irreversible act asks once more", () => {
     expect(document.activeElement).toBe(
       screen.getByRole("button", { name: "Confirm Sign opinion" }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    fireEvent.click(screen.getByRole("button", { name: "Go back" }));
     expect(sent).not.toHaveBeenCalled();
     expect(document.activeElement).toBe(container.querySelector("[data-action='SIGN_OPINION']"));
   });

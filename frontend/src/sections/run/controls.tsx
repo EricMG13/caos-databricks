@@ -223,8 +223,12 @@ export function CommandOutcome<R>({
   result,
   success,
   mark,
+  read = false,
 }: {
   result: CommandResult<R> | null;
+  /** A read, not a write (the gate preview): nothing can have taken effect, so
+      a failure says to load it again, never what a retry would resend. */
+  read?: boolean;
   /** What a success shows and says: one sentence, or one drawn from the
       receipt where the receipt names what was made. Never empty -- a success
       nobody hears is a form that silently did nothing (findings FE-6, DF-6). */
@@ -266,7 +270,7 @@ export function CommandOutcome<R>({
     return (
       <div className="note crit" role="alert">
         <RefusalNote refusal={result.refusal} />
-        {IN_DOUBT.has(result.refusal.code) ? (
+        {!read && IN_DOUBT.has(result.refusal.code) ? (
           <p data-command-in-doubt>
             Whether the command took effect is not known yet. Retrying sends the same key.
           </p>
@@ -277,7 +281,14 @@ export function CommandOutcome<R>({
   if (result.kind === "offline") {
     return (
       <div className="note crit" role="alert" data-command-offline>
-        {OFFLINE_WORDING} Retrying sends the same key.
+        {OFFLINE_WORDING} {read ? "Try again." : "Retrying sends the same key."}
+      </div>
+    );
+  }
+  if (read) {
+    return (
+      <div className="note crit" role="alert" data-command-error>
+        The server&apos;s answer could not be read. Try again.
       </div>
     );
   }
@@ -435,7 +446,7 @@ export function CreateRunControl({
             No route choices are offered for this case.
           </div>
         )}
-        <CommandOutcome result={result} success="Run created. Reading the new run back." />
+        <CommandOutcome result={result} success="Run created." />
       </div>
     </section>
   );
@@ -521,7 +532,7 @@ export function PinInputControl({
         >
           {pending ? "Pinning…" : "Pin input"}
         </RefusedControl>
-        <CommandOutcome result={result} success="Subject pinned. Reading it back." />
+        <CommandOutcome result={result} success="Subject pinned." />
       </div>
     </section>
   );
@@ -604,7 +615,7 @@ export function GatePanelControl({
             {previewed.content}
           </pre>
         ) : null}
-        <CommandOutcome result={preview.result} success="Preview read." />
+        <CommandOutcome result={preview.result} success="Preview loaded." read />
         {state === "OPEN" ? (
           <>
             <RefusedControl
@@ -633,7 +644,7 @@ export function GatePanelControl({
             >
               {approve.pending ? "Approving…" : "Approve"}
             </RefusedControl>
-            <CommandOutcome result={approve.result} success="Gate approved. Reading it back." />
+            <CommandOutcome result={approve.result} success="Gate approved." />
           </>
         ) : null}
       </div>
@@ -723,7 +734,7 @@ export function WorkControls({
         >
           {start.pending ? "Starting…" : "Start run"}
         </RefusedControl>
-        <CommandOutcome result={start.result} success="Run enqueued. Reading it back." />
+        <CommandOutcome result={start.result} success="Run queued to start." />
         <RefusedControl
           refusal={retryRefusal}
           busy={retry.pending}
@@ -744,7 +755,7 @@ export function WorkControls({
         >
           {retry.pending ? "Retrying…" : "Retry run"}
         </RefusedControl>
-        <CommandOutcome result={retry.result} success="Run requeued. Reading it back." />
+        <CommandOutcome result={retry.result} success="Run queued again." />
         {/* Cancelling a run ends work nothing on the v1 wire restarts, so it
             asks once more and names the run it would end (finding FE-7). */}
         <ConfirmedControl
@@ -767,7 +778,7 @@ export function WorkControls({
         >
           {cancel.pending ? "Cancelling…" : "Cancel run"}
         </ConfirmedControl>
-        <CommandOutcome result={cancel.result} success="Cancellation requested. Reading it back." />
+        <CommandOutcome result={cancel.result} success="Cancellation requested." />
       </div>
     </section>
   );

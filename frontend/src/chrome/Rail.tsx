@@ -38,14 +38,15 @@ export function Rail({
   entries,
   local,
   servedRole,
-  search,
+  searchFor,
 }: {
   section: Section | null;
   entries: RailEntry[] | null;
   local: RailLocal | null;
   servedRole: Role | null;
-  /** The query to carry between sections, so the case travels with the reader. */
-  search: string;
+  /** The query each entry carries, so the case -- and the run and revision a
+      section needs to open -- travels with the reader. */
+  searchFor: (section: Section) => string;
 }) {
   const byId = new Map((entries ?? []).map((entry) => [entry.section, entry]));
   return (
@@ -56,7 +57,7 @@ export function Rail({
         return (
           <NavLink
             key={id}
-            to={`${sectionPath(id)}${search}`}
+            to={`${sectionPath(id)}${searchFor(id)}`}
             // The count and the state are the point of the entry, and at
             // 1024 px and below they are the only text there is: the strip
             // rail hides the name, so the label carries all three rather than

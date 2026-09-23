@@ -87,6 +87,7 @@ function v1Report({
       case_title: "Acme",
       artifacts: [],
       narrative: [],
+      revisions: [],
     },
     observed_at: AT,
     observed_empty: false,
@@ -438,7 +439,7 @@ describe("the transport", () => {
           entries: null,
           local: null,
           servedRole: null,
-          search: `?case=${CASE}&run=${RUN}&revision=${REVISION}`,
+          searchFor: () => `?case=${CASE}&run=${RUN}&revision=${REVISION}`,
         }),
       ),
     );
@@ -467,7 +468,7 @@ describe("the transport", () => {
           entries: asAdmin.rail,
           local: null,
           servedRole: asAdmin.served_role,
-          search: "",
+          searchFor: () => "",
         }),
       ),
     );

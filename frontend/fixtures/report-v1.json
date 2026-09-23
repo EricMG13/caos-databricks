@@ -1,7 +1,13 @@
 {
   "chrome": {
-    "subject": { "case_id": "00000000-0000-4000-8000-000000000001", "title": "Acme Credit" },
-    "served_role": { "global_role": "READER", "standing": "READER" },
+    "subject": {
+      "case_id": "00000000-0000-4000-8000-000000000001",
+      "title": "Acme Credit"
+    },
+    "served_role": {
+      "global_role": "READER",
+      "standing": "READER"
+    },
     "actions": []
   },
   "body": {
@@ -26,7 +32,10 @@
     ],
     "narrative": [
       [
-        { "text": "<img src=x onerror=\"window.pwned=1\">", "figure": null },
+        {
+          "text": "<img src=x onerror=\"window.pwned=1\">",
+          "figure": null
+        },
         {
           "text": null,
           "figure": {
@@ -38,6 +47,14 @@
           }
         }
       ]
+    ],
+    "revisions": [
+      {
+        "revision_id": "00000000-0000-4000-8000-0000000000c3",
+        "payload_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "saved_at": "2026-09-14T09:40:00Z",
+        "state": "filed"
+      }
     ]
   },
   "observed_at": "2026-09-14T10:00:00Z",

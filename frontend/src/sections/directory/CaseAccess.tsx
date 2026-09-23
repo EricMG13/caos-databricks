@@ -61,7 +61,7 @@ function RevokeMember({
       >
         {pending ? "Revoking…" : "Revoke"}
       </ConfirmedControl>
-      <CommandOutcome result={result} success="Standing revoked. Reading the register back." />
+      <CommandOutcome result={result} success="Standing revoked." />
     </>
   );
 }
@@ -126,7 +126,7 @@ function GrantMember({
       >
         {pending ? "Granting…" : "Grant"}
       </RefusedControl>
-      <CommandOutcome result={result} success="Standing granted. Reading the register back." />
+      <CommandOutcome result={result} success="Standing granted." />
     </div>
   );
 }
@@ -136,41 +136,56 @@ function CaseMembers({ row, onChanged }: { row: CaseRow; onChanged: () => void }
   return (
     // A named group per case, so a screen reader hears which case a repeated
     // "Grant standing" or "Revoke" belongs to.
-    <div
-      className="access"
-      data-access={row.case_id}
-      role="group"
-      aria-labelledby={`access-${row.case_id}`}
-    >
-      <h3 id={`access-${row.case_id}`}>{row.title}</h3>
-      {row.members === null ? (
-        <>
-          <p className="note" data-members-withheld>
-            Members are shown to the case&apos;s administrator. Your standing is {row.standing}.
-          </p>
-          <RevokeMember caseId={row.case_id} member={null} action={revoke} onChanged={onChanged} />
-        </>
-      ) : (
-        <ul className="members">
-          {row.members.map((member) => (
-            <li key={member.user_id} data-member={member.user_id}>
-              <span className="m">{member.user_id}</span> <span>{member.standing}</span>{" "}
-              <RevokeMember
-                caseId={row.case_id}
-                member={member}
-                action={revoke}
-                onChanged={onChanged}
-              />
-            </li>
-          ))}
-        </ul>
-      )}
-      <GrantMember
-        caseId={row.case_id}
-        action={actionOf(row, "GRANT_STANDING")}
-        onChanged={onChanged}
-      />
-    </div>
+    // Open where the reader administers the case (its members are served to
+    // them); closed to one line where there is nothing they can change, so
+    // the register is no longer a wall of refused forms (critique).
+    <details className="access" data-access={row.case_id} open={row.members !== null}>
+      <summary>
+        <span className="nm">{row.title}</span>{" "}
+        <span className="m">
+          {row.members === null
+            ? `your standing ${row.standing}`
+            : `${row.members.length} ${row.members.length === 1 ? "member" : "members"}`}
+        </span>
+      </summary>
+      <div role="group" aria-labelledby={`access-${row.case_id}`}>
+        <h3 id={`access-${row.case_id}`} className="sr-only">
+          {row.title}
+        </h3>
+        {row.members === null ? (
+          <>
+            <p className="note" data-members-withheld>
+              Members are shown to the case&apos;s administrator. Your standing is {row.standing}.
+            </p>
+            <RevokeMember
+              caseId={row.case_id}
+              member={null}
+              action={revoke}
+              onChanged={onChanged}
+            />
+          </>
+        ) : (
+          <ul className="members">
+            {row.members.map((member) => (
+              <li key={member.user_id} data-member={member.user_id}>
+                <span className="m">{member.user_id}</span> <span>{member.standing}</span>{" "}
+                <RevokeMember
+                  caseId={row.case_id}
+                  member={member}
+                  action={revoke}
+                  onChanged={onChanged}
+                />
+              </li>
+            ))}
+          </ul>
+        )}
+        <GrantMember
+          caseId={row.case_id}
+          action={actionOf(row, "GRANT_STANDING")}
+          onChanged={onChanged}
+        />
+      </div>
+    </details>
   );
 }
 

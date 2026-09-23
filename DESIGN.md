@@ -24,13 +24,18 @@ falls back to 16px.
 --caos-border #262633   --caos-text #e6e6ef   --caos-muted #8a8a9a
 --caos-accent #4f8cff
 --caos-success #22c55e   --caos-warning #f5a524   --caos-critical #ef4444
---caos-idle #3f3f46
+--caos-idle #3f3f46   --field-edge #63636f (3:1 on panel; a field's edge)
 --tranche-1l #2dd4bf  --tranche-2l #4f8cff  --tranche-unsec #f5a524
 --tranche-sub #a855f7  --tranche-eq #64748b
 ```
 
-Type scale: `3xs 8` `2xs 8.5` `xs 9` `sm 9.5` `md 10` `lg 10.5` `xl 11`
-`2xl 12` `metric 16` `hero 22`.
+Type scale: `3xs 10` `2xs 10` `xs 11` `sm 11` `md 12` `lg 12.5` `xl 13`
+`2xl 14` `metric 18` `hero 24`. Body text is 12px.
+
+**Type floors.** Labels and captions are never below 10px, tabular mono data
+never below 11px, body and prose never below 12px. Density comes from fewer,
+better-chosen things, not from smaller text (raised from an 8px floor after
+the 2026-09-23 critique).
 
 ## Named rules
 
@@ -61,11 +66,54 @@ Four bands, in order, on every section: ribbon → decision brief
 verdict strip. Then the rail, the body, and a right column that is always about
 the selected thing, never a second menu.
 
+**Bands say only what the document supports.** Every cell is composed from the
+section's own body facts (run status, open gates, the conclusion module's
+committee status, withdrawn citations, revision state). A cell with nothing to
+say is not drawn, a brief with nothing to say is no band, and the ribbon names
+the issuer, not the case id. Never "—", never "No action is offered", never the
+section's own name as the headline figure. The verdict wash is flat, not a
+gradient.
+
 Panels: hairline border, 6–10px radius, one faint resting shadow, a 29–30px
 sentence-case header. A larger shadow means the object floats above the
 workflow.
 
 The ribbon carries at most three actions and exactly one primary.
+
+## Analysis
+
+The legacy desk's three panes, on this frame. The route's modules are the
+section's tabs, in route order, each with its QA state as shape and hue; the
+address names the one shown (`?tab=<route node>`), and the section opens on
+its conclusion (the last module that reasons, never the CP-CF calculator). The
+body is the evidence rail (what the run rests on: each cited document once,
+its pages and citation count, withdrawn marked; then the module's own source
+facts), the module (name first, code second; status, limitations, figures,
+the model's prose as text at 72ch, the host-calculation note), and the right
+column, which is always the selected thing's provenance. Pending nodes follow.
+The decision lives in the bands, not in a third pane.
+
+## Charts
+
+Drawn by React as SVG; `d3-scale` and `d3-shape` do the maths only (D33).
+Nothing writes `innerHTML`, so every chart holds under the production CSP.
+
+- **Provenance is drawn in the mark.** Host-verified figures are solid;
+  model-authored ones are outlined and hatched (a model line is dashed with
+  hollow points). A value the document does not carry is a gap marked n/a
+  with its reason, never zero and never interpolated. A bridge that does not
+  reconcile draws its unexplained residual in the critical hue and says so.
+- **Figures are printed as served.** Labels, names and table twins print the
+  API's exact decimals; sums are exact; a float only places a mark.
+- **Every chart is a figure:** a title, one plain summary line, and a table
+  twin behind a Table toggle. Every mark is a button named for its series,
+  category, value and origin; pressing it fills the right column.
+- **Colour:** `--chart-series-1..5` (validated on the panel), the tranche
+  tokens for seniority, `--chart-neutral` for stated totals; a sixth series is
+  neutral, never a recycled hue.
+- **Type at the floors:** ticks 10px and values 11px mono tabular, titles 12px.
+- No motion, gradients, shadows, glow or rounded bar ends; bars start at zero;
+  no dual axes.
 
 ## Rules with teeth
 

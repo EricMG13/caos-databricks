@@ -4,8 +4,12 @@
 // reminder that the host performs no calculation. Pending nodes are named
 // with the state the route left them in.
 import { readFileSync } from "node:fs";
-import { render } from "@testing-library/react";
-import { AnalysisSection } from "@/sections/analysis/AnalysisSection";
+import type { ReactNode } from "react";
+import { fireEvent, render } from "@testing-library/react";
+import { MemoryRouter } from "react-router";
+import { composeChrome } from "@/chrome/compose";
+import { AnalysisSection, PROSE_SHOWN, sourceRegister } from "@/sections/analysis/AnalysisSection";
+import { conclusionOf, handoffSeverity, moduleName } from "@/sections/analysis/modules";
 import { parseAnalysisDocument } from "@/wire/v1";
 import type { AnalysisDocument, HandoffView } from "@/wire/v1";
 
@@ -15,8 +19,18 @@ const load = (path: string): unknown =>
 const complete = parseAnalysisDocument(load("../../fixtures/analysis.json"));
 const partial = parseAnalysisDocument(load("../../fixtures/states/analysis.partial.json"));
 
+// The section links to Model, so it renders inside a router.
+const routed = (node: ReactNode) => render(<MemoryRouter>{node}</MemoryRouter>);
+
 function mount(document: AnalysisDocument) {
-  return render(<AnalysisSection document={document} tab={null} />);
+  return routed(<AnalysisSection document={document} tab={null} />);
+}
+
+/** One module is shown at a time (the section's tabs pick it): this renders
+    the section with `moduleId`'s module selected. */
+function mountAt(document: AnalysisDocument, moduleId: string) {
+  const handoff = document.body.handoffs.find((entry) => entry.module_id === moduleId)!;
+  return routed(<AnalysisSection document={document} tab={handoff.route_node_id} />);
 }
 
 describe("Analysis", () => {
@@ -31,8 +45,9 @@ describe("Analysis", () => {
   });
 
   test("test_analysis_renders_markdown_as_text_with_limitations_visible", () => {
-    const { container } = mount(complete);
-    const cp1c = container.querySelector('[data-handoff="CP-1C"]')!;
+    const { container } = mountAt(complete, "CP-1");
+    const { container: restricted } = mountAt(complete, "CP-1C");
+    const cp1c = restricted.querySelector('[data-handoff="CP-1C"]')!;
     // The model's own prose (headings, emphasis, code) is a `<pre>`'s literal
     // text content, never parsed into markup: no heading, strong or em tag
     // reaches the page, and the raw markdown characters survive verbatim.
@@ -50,17 +65,101 @@ describe("Analysis", () => {
     expect(cp1Flags).toBeVisible();
   });
 
-  test("the three labelled parts render in order for every handoff", () => {
-    const { container } = mount(complete);
-    for (const handoff of complete.body.handoffs) {
-      const card = container.querySelector(`[data-handoff="${handoff.module_id}"]`)!;
-      const headings = [...card.querySelectorAll("h3")].map((h) => h.textContent);
-      expect(headings).toEqual([
-        "Source facts (host-verified citations)",
-        "Analysis (model-authored, not host-verified)",
-        "Deterministic calculations: none performed by the host",
-      ]);
+  test("test_the_demo_tables_arrive_as_typed_data_the_section_can_chart", () => {
+    // The server reads a handoff's tagged tables with the bundle's own reader;
+    // the browser receives text and exact decimal strings and parses nothing.
+    const cp1 = complete.body.handoffs.find((h) => h.module_id === "CP-1")!;
+    expect(cp1.tables_unavailable_reason).toBeNull();
+    expect(cp1.tables.map((t) => t.table_id)).toEqual([
+      "cp1.model_period_register",
+      "cp1.segment_revenue_schedule",
+      "cp1.operating_kpi_schedule",
+      "cp1.adjusted_ebitda_bridge",
+      "cp1.debt_facility_register",
+    ]);
+    for (const table of cp1.tables) {
+      expect(cp1.model_analysis).toContain(`<!-- table-id: ${table.table_id} -->`);
+      expect(cp1.model_analysis).toContain(`| ${table.columns.join(" | ")} |`);
+      for (const row of table.rows) expect(row).toHaveLength(table.columns.length);
     }
+    const kpis = cp1.tables.find((t) => t.table_id === "cp1.operating_kpi_schedule")!;
+    const id = kpis.columns.indexOf("kpi_id");
+    const value = kpis.columns.indexOf("value");
+    const series = (kpi: string) =>
+      kpis.rows.filter((row) => row[id]?.text === kpi).map((row) => row[value]);
+    expect(series("retail_units_sold").map((cell) => cell?.value)).toEqual([
+      "143280",
+      "155941",
+      "163522",
+      "184114",
+      "197325",
+    ]);
+    expect(series("total_gpu").at(-1)).toEqual({ text: "$7,125", value: "7125" });
+    // A null is "no figure", never zero; a bracketed figure is negative.
+    const cells = cp1.tables.flatMap((t) => t.rows.flat());
+    expect(cells.find((c) => c.text === "Not applicable")!.value).toBeNull();
+    expect(cells.find((c) => c.text === "(14)")!.value).toBe("-14");
+    // Tables the bundle's reader refused are withheld whole, the reason named.
+    const cf = partial.body.handoffs.find((h) => h.module_id === "CP-CF")!;
+    expect([cf.tables, cf.tables_unavailable_reason]).toEqual([[], "TABLES_MALFORMED"]);
+  });
+
+  test("the three labelled parts render for every handoff, in their panes", () => {
+    for (const handoff of complete.body.handoffs) {
+      const { container, unmount } = mountAt(complete, handoff.module_id);
+      // Its citations in the evidence rail, its prose and its calculation note
+      // in the module, and where it came from in the right column.
+      const rail = container.querySelector(".pane.evidence")!;
+      expect(rail.querySelector("[data-source-facts] h3")).toHaveTextContent(
+        "Source facts (host-verified citations)",
+      );
+      const card = container.querySelector(`[data-handoff="${handoff.module_id}"]`)!;
+      // CP-1's figures come first when its tables are served; the prose after.
+      expect(card.querySelector("[data-model-analysis] h3")).toHaveTextContent(
+        "Analysis (model-authored, not host-verified)",
+      );
+      expect(card.querySelector("[data-host-calculation]")).toHaveTextContent(
+        "Deterministic calculations: none performed by the host",
+      );
+      expect(container.querySelector(".pane.context [data-provenance]")).toHaveTextContent(
+        handoff.route_node_id,
+      );
+      unmount();
+    }
+  });
+
+  test("the section opens on its conclusion, not on the calculator that runs after it", () => {
+    const { container } = mount(complete);
+    // CP-CF is last in route order, but it calculates; CP-7 concludes.
+    expect(container.querySelectorAll("[data-handoff]")).toHaveLength(1);
+    expect(container.querySelector("[data-handoff]")).toHaveAttribute("data-handoff", "CP-7");
+  });
+
+  test("test_sourceRegister_names_each_cited_document_once_with_its_pages", () => {
+    const register = sourceRegister(complete.body.handoffs);
+    const facts = complete.body.handoffs.flatMap((handoff) => handoff.source_facts);
+    expect(register.reduce((sum, entry) => sum + entry.count, 0)).toBe(facts.length);
+    expect(new Set(register.map((entry) => entry.digest)).size).toBe(register.length);
+    const withdrawn = facts.find((fact) => fact.withdrawn_at !== null)!;
+    expect(register.find((entry) => entry.digest === withdrawn.document_sha256)!.withdrawn).toBe(
+      true,
+    );
+    const { container } = mount(complete);
+    expect(container.querySelectorAll("[data-register-document]")).toHaveLength(register.length);
+  });
+
+  test("long model prose is shown in part, and the rest on request", () => {
+    const long = { ...complete.body.handoffs[0]!, model_analysis: "x".repeat(PROSE_SHOWN + 5) };
+    const { container } = routed(
+      <AnalysisSection
+        document={{ ...complete, body: { ...complete.body, handoffs: [long] } }}
+        tab={long.route_node_id}
+      />,
+    );
+    const pre = container.querySelector("pre.model-text")!;
+    expect(pre.textContent).toHaveLength(PROSE_SHOWN);
+    fireEvent.click(container.querySelector("[data-prose-rest]")!);
+    expect(container.querySelector("pre.model-text")!.textContent).toHaveLength(PROSE_SHOWN + 5);
   });
 
   test("a screening-only handoff shows the screening notice; a full-committee one does not", () => {
@@ -84,9 +183,8 @@ describe("Analysis", () => {
   });
 
   test("source facts name the file, page, matched text and withdrawn state", () => {
-    const { container } = mount(complete);
-    const cp4 = container.querySelector('[data-handoff="CP-4"]')!;
-    const fact = cp4.querySelector("[data-source-facts] [data-citation]")!;
+    const { container } = mountAt(complete, "CP-4");
+    const fact = container.querySelector("[data-source-facts] [data-citation]")!;
     const withdrawn = complete.body.handoffs.find((h) => h.module_id === "CP-4")!.source_facts[0]!;
     expect(fact).toHaveTextContent(withdrawn.filename);
     expect(fact).toHaveTextContent(`p.${withdrawn.page}`);
@@ -94,27 +192,26 @@ describe("Analysis", () => {
     expect(fact.getAttribute("data-withdrawn")).toBe("true");
     expect(fact).toHaveTextContent(withdrawn.withdrawn_at!);
 
-    const cp0 = container.querySelector('[data-handoff="CP-0"]')!;
+    const { container: cp0 } = mountAt(complete, "CP-0");
     const notWithdrawn = cp0.querySelector("[data-source-facts] [data-citation]")!;
     expect(notWithdrawn.getAttribute("data-withdrawn")).toBe("false");
   });
 
   test("a handoff with no citation says so rather than rendering nothing", () => {
-    const { container } = mount(complete);
-    const cp5 = container.querySelector('[data-handoff="CP-5"]')!;
-    expect(cp5.querySelector("[data-source-facts]")).toHaveTextContent(
+    const { container } = mountAt(complete, "CP-5");
+    expect(container.querySelector("[data-source-facts]")).toHaveTextContent(
       "No citation is carried on this handoff.",
     );
   });
 
   test("host_calculation keeps LITE as NONE and labels a host CP-CF forecast", () => {
-    const { container } = mount(complete);
     for (const handoff of complete.body.handoffs) {
       expect(handoff.host_calculation).toBe("NONE");
-      const card = container.querySelector(`[data-handoff="${handoff.module_id}"]`)!;
-      expect(card.querySelector("[data-host-calculation]")).toHaveTextContent(
+      const { container, unmount } = mountAt(complete, handoff.module_id);
+      expect(container.querySelector("[data-host-calculation]")).toHaveTextContent(
         "Deterministic calculations: none performed by the host",
       );
+      unmount();
     }
     const forecast: HandoffView = {
       ...complete.body.handoffs[0]!,
@@ -131,7 +228,7 @@ describe("Analysis", () => {
   });
 
   test("qa status, committee status, decision scope and confidence are all shown", () => {
-    const { container } = mount(complete);
+    const { container } = mountAt(complete, "CP-1C");
     const cp1c = complete.body.handoffs.find((h) => h.module_id === "CP-1C")!;
     const card = container.querySelector('[data-handoff="CP-1C"]')!;
     expect(card.querySelector("[data-qa-status]")).toHaveTextContent(cp1c.qa_status);
@@ -144,19 +241,33 @@ describe("Analysis", () => {
   });
 
   test("validation warnings render only when carried", () => {
-    const { container } = mount(complete);
-    const cp1c = container.querySelector('[data-handoff="CP-1C"]')!;
-    expect(cp1c.querySelector("[data-validation-warnings]")).not.toBeNull();
-    const cp0 = container.querySelector('[data-handoff="CP-0"]')!;
-    expect(cp0.querySelector("[data-validation-warnings]")).toBeNull();
+    expect(
+      mountAt(complete, "CP-1C").container.querySelector("[data-validation-warnings]"),
+    ).not.toBeNull();
+    expect(
+      mountAt(complete, "CP-0").container.querySelector("[data-validation-warnings]"),
+    ).toBeNull();
   });
 
-  test("handoffs render in route order, one card per accepted node", () => {
-    const { container } = mount(complete);
-    const cards = [...container.querySelectorAll("[data-handoff]")].map((el) =>
-      el.getAttribute("data-handoff"),
-    );
-    expect(cards).toEqual(complete.body.handoffs.map((h) => h.module_id));
+  test("the modules are the section's tabs, in route order, each with its state", () => {
+    const tabs = composeChrome("analysis", complete).tabs;
+    expect(tabs.map((tab) => tab.label)).toEqual(complete.body.handoffs.map((h) => h.module_id));
+    expect(tabs.find((tab) => tab.label === "CP-1C")).toMatchObject({
+      severity: "WARNING",
+      cp: moduleName("CP-1C"),
+    });
+    expect(tabs.filter((tab) => tab.opens).map((tab) => tab.label)).toEqual(["CP-7"]);
+  });
+
+  test("test_moduleName_handoffSeverity_and_conclusionOf", () => {
+    expect(moduleName("CP-1C")).toBe("Peer benchmark");
+    expect(moduleName("CP-99")).toBe("CP-99");
+    const cp1c = complete.body.handoffs.find((h) => h.module_id === "CP-1C")!;
+    expect(handoffSeverity(cp1c)).toBe("WARNING");
+    expect(handoffSeverity(complete.body.handoffs[0]!)).toBe("SUCCESS");
+    expect(handoffSeverity({ ...cp1c, qa_status: "Failed" })).toBe("CRITICAL");
+    expect(conclusionOf(complete.body.handoffs)?.module_id).toBe("CP-7");
+    expect(conclusionOf([])).toBeNull();
   });
 
   test("unaccepted route nodes are named as pending, with the state the route left them in", () => {

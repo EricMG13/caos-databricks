@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { App } from "./app/App";
 import "./styles/tokens.css";
 import "./styles/caos.css";
+import "./styles/charts.css";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("no root element");

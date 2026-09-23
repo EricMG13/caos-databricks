@@ -35,7 +35,7 @@ describe("the chrome", () => {
           entries={doc.chrome.rail}
           local={null}
           servedRole={doc.chrome.served_role}
-          search=""
+          searchFor={() => ""}
         />
       </MemoryRouter>,
     );
@@ -164,7 +164,7 @@ describe("the chrome", () => {
             entries={doc.chrome.rail}
             local={doc.chrome.rail_local}
             servedRole={doc.chrome.served_role}
-            search=""
+            searchFor={() => ""}
           />
         </MemoryRouter>,
       );
@@ -184,7 +184,7 @@ describe("the chrome", () => {
       <SectionTabs label="Analysis" tabs={[]} active={null} onSelect={() => {}} />,
     );
     expect(container.querySelector("[role='tablist']")).toBeNull();
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("ANALYSIS");
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Analysis");
     // With tabs, each one names the panel it controls, and that panel is
     // labelled by the tab (FE-11).
     rerender(
@@ -223,7 +223,7 @@ describe("the chrome", () => {
           ]}
           local={{ title: "This run", items: [{ label: "CP-6", meta: "RUNNABLE", on: true }] }}
           servedRole={{ role: "READER", standing: "READER" }}
-          search=""
+          searchFor={() => ""}
         />
       </MemoryRouter>,
     );

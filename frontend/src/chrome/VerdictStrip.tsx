@@ -7,7 +7,7 @@ export function VerdictStrip({ verdict }: { verdict: Verdict }) {
   return (
     <section className={`verdict ${toneOf(verdict.severity)}`} aria-label="Verdict">
       <span className="sig">
-        <SeverityMark severity={verdict.severity} pulse />
+        <SeverityMark severity={verdict.severity} pulse decorative />
         {verdict.severity}
       </span>
       <span className="txt">

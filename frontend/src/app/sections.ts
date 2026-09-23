@@ -50,6 +50,19 @@ export const SECTION_ABBREVIATIONS: Record<Section, string> = {
   admin: "Ad",
 };
 
+/** The revision a link to Committee carries from a document that lists them:
+    the displayed one once it is frozen or filed, else the newest that is, else
+    none -- Committee reads nothing else, so an unfrozen one would only refuse.
+    The list is newest first, as the read serves it. */
+export function committeeRevisionOf(
+  revisions: readonly { revision_id: string; state: string }[],
+  displayed: string | null,
+): string | null {
+  const ready = revisions.filter((revision) => revision.state !== "saved");
+  const shown = ready.find((revision) => revision.revision_id === displayed);
+  return (shown ?? ready[0])?.revision_id ?? null;
+}
+
 export function sectionPath(section: Section): string {
   return `/${section}/`;
 }

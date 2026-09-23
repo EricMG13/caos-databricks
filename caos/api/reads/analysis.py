@@ -5,7 +5,11 @@ Every accepted handoff of the displayed run, in route order, each read through
 store rebuilds, this build and the accepted lineage, and nothing is re-anchored
 (§42.4). Each is labelled per §46.3 -- `source_facts` are the host-verified
 citations with withdrawal read live, `model_analysis` is the model's exact
-Markdown, and `host_calculation` is `NONE`. A node without an accepted handoff
+Markdown, and `host_calculation` is `NONE`. Beside the Markdown, each serves
+the tagged tables it carries, read from those same bytes by the bundle's own
+reader (`caos.methodology.tables`): exact text, and `Decimal` figures where the
+bundle reads a figure -- or no table and a typed reason. Nothing is stored and
+the Markdown stays the authority. A node without an accepted handoff
 is listed as pending with its recomputed state and makes the document partial;
 on a run a validated Blocked verdict ended, `blocked_by` names which of those
 nodes answered, because a Blocked verdict accepts nothing (§68).
@@ -32,6 +36,7 @@ from caos.api.wire import (
     AnalysisBody,
     AnalysisDocument,
     BlockedByView,
+    CellView,
     Chrome,
     CitationView,
     HandoffView,
@@ -41,6 +46,7 @@ from caos.api.wire import (
     SectionNote,
     ServedRole,
     Subject,
+    TableView,
 )
 from caos.blobs import BlobStore
 from caos.deliverable.render import SCREENING_ONLY
@@ -56,6 +62,8 @@ from caos.methodology.bundle import Bundle
 from caos.methodology.canonical import accepted_handoff
 from caos.methodology.handoff import CanonicalRecord
 from caos.methodology.invocation import named_objects
+from caos.methodology.tables import HandoffTable, handoff_tables
+from caos.methodology.vendor import cached_contract
 from caos.methodology.verification import AcceptedRow
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
@@ -87,6 +95,8 @@ IO_BUDGET = FIXED_IO + LONGEST_ROUTE_NODES * PER_HANDOFF_IO + MODEL_PROOFS_IO
 # of the lineage and record readers ask for it (`BlobStore.remembering`).
 PER_HANDOFF_BLOBS = 2
 BLOB_BUDGET = LONGEST_ROUTE_NODES * PER_HANDOFF_BLOBS
+# A handoff's tables cost neither: they are read from the Markdown this request
+# already downloaded and verified, by the contract `accepted_handoff` compiled.
 
 router = APIRouter()
 
@@ -263,7 +273,9 @@ def _handoffs(
 
     documents = _cited_documents(conn, run_id, [r for _n, _s, r, _m, _c in read])
     handoffs = [
-        _handoff_view(node_id, sha, record, markdown, created, documents)
+        _handoff_view(
+            node_id, sha, record, markdown.decode("utf-8"), created, documents, bundle
+        )
         for node_id, sha, record, markdown, created in read
     ]
     accepted = {
@@ -322,11 +334,14 @@ def _handoff_view(  # noqa: PLR0913 -- one accepted handoff and its lookups
     route_node_id: str,
     record_sha256: str,
     record: CanonicalRecord,
-    markdown: bytes,
+    markdown: str,
     accepted_at: object,
     documents: dict[str, tuple[UUID, str, object]],
+    bundle: Bundle,
 ) -> HandoffView:
     projections = record.projections
+    # The contract `accepted_handoff` compiled for this manifest, read again.
+    derived = handoff_tables(cached_contract(bundle), markdown)
     return HandoffView(
         route_node_id=route_node_id,
         module_id=projections.module_id,
@@ -343,10 +358,23 @@ def _handoff_view(  # noqa: PLR0913 -- one accepted handoff and its lookups
         screening_only=projections.decision_scope == SCREENING_ONLY,
         source_facts=[_citation(c, documents) for c in record.citations],
         # Model-authored and rendered as text, never as markup (§46.3).
-        model_analysis=markdown.decode("utf-8"),
+        model_analysis=markdown,
         host_calculation=(
             "CP_CF_FORECAST" if projections.module_id == MODEL_MODULE else "NONE"
         ),
+        tables=[_table_view(table) for table in derived.tables],
+        tables_unavailable_reason=derived.unavailable_reason,
+    )
+
+
+def _table_view(table: HandoffTable) -> TableView:
+    return TableView(
+        table_id=table.table_id,
+        columns=list(table.columns),
+        rows=[
+            [CellView(text=cell.text, value=cell.value) for cell in row]
+            for row in table.rows
+        ],
     )
 
 

@@ -55,6 +55,7 @@ export function ConfirmedControl({
   step,
   onConfirm,
   className = "",
+  reasonDisplay = "inline",
   children,
   ...rest
 }: {
@@ -68,6 +69,8 @@ export function ConfirmedControl({
       the control is then `ACTION_UNPLACED`, as it is without a confirm step. */
   onConfirm: (() => void) | undefined;
   className?: string;
+  /** "hidden" where a list states one shared refusal once, above its rows. */
+  reasonDisplay?: "inline" | "hidden";
   children: ReactNode;
   "aria-label"?: string;
 }) {
@@ -139,7 +142,7 @@ export function ConfirmedControl({
             onKeyDown={escape}
             onClick={() => setArmed(false)}
           >
-            Cancel
+            Go back
           </button>
         </div>
       ) : (
@@ -147,7 +150,7 @@ export function ConfirmedControl({
           refusal={refusal}
           busy={busy}
           className={className}
-          reasonDisplay="inline"
+          reasonDisplay={reasonDisplay}
           data-action={action}
           data-confirm-open=""
           onClick={onConfirm ? () => setArmed(true) : undefined}

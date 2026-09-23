@@ -2,6 +2,7 @@
 // stage, typed edges as SVG lines, the one QA_GATE drawn through a diamond.
 // Node states are the bundle's four; edges come from each node's own
 // `waiting_on` (v1 carries no separate edge list — brief 4.1, slice 4.1i).
+import { useLayoutEffect, useRef } from "react";
 import { RouteLegend } from "./RouteLegend";
 import { blockingOf, reasonOf, runningOf, stateWordOf } from "./reason";
 import { SeverityMark } from "@/chrome/SeverityMark";
@@ -9,16 +10,18 @@ import type { AttemptView, BlockedByView } from "./types";
 import type { EdgeType, NodeState, Severity } from "@/wire";
 import type { NodeView, RunView } from "@/wire/v1";
 
-export const NODE_W = 128;
-// Tall enough for the id, the state and two whole lines of reason; at 62 the
-// second reason line was cut through the middle. Both sizes are set on each
-// node and stage header here, not in caos.css, so each is one number.
-export const NODE_H = 76;
+// Sized for the type floors (DESIGN.md: 10px labels, 11px mono data): the id,
+// the state and two whole lines of reason. At the old 7.5px text the node was
+// 128 x 76; at 62 tall the second reason line was cut through the middle. Both
+// sizes are set on each node and stage header here, not in caos.css, so each
+// is one number.
+export const NODE_W = 152;
+export const NODE_H = 92;
 export const COL_GAP = 40;
 export const ROW_H = NODE_H + 12;
 const PAD_X = 14;
-// Below a stage header clamped at two lines: 8px down, two 9.4px lines.
-const TOP = 30;
+// Below a stage header clamped at two lines: 8px down, two 12.5px lines.
+const TOP = 36;
 const PAD_BOTTOM = 10;
 
 export interface PlacedNode {
@@ -126,6 +129,25 @@ export function edgesOf(
   return lines;
 }
 
+/** Where the work is: a running node, then a blocking one, then one waiting on
+    a gate, then the frontier; a finished route shows its end. */
+function focusOf(
+  nodes: NodeView[],
+  attempts: AttemptView[],
+  status: RunView["status"],
+  blockedBy: BlockedByView | null,
+): string | null {
+  const first = (test: (node: NodeView) => boolean) => nodes.find(test)?.route_node_id;
+  return (
+    first((node) => runningOf(node, attempts, status)) ??
+    first((node) => blockingOf(node, blockedBy)) ??
+    first((node) => node.awaiting_gate) ??
+    first((node) => node.state === "RUNNABLE") ??
+    nodes.at(-1)?.route_node_id ??
+    null
+  );
+}
+
 export function RouteGraph({
   nodes,
   attempts,
@@ -164,9 +186,23 @@ export function RouteGraph({
   const gateMid = gate
     ? { x: (gate.seg.x1 + gate.seg.x2) / 2, y: (gate.seg.y1 + gate.seg.y2) / 2 }
     : null;
+  // A wide route hid its frontier past the panel's right edge (critique): the
+  // stages where the work is are brought into view once per route, and never
+  // again, so a reader's own scrolling is left alone.
+  const box = useRef<HTMLDivElement>(null);
+  const shown = useRef<string | null>(null);
+  const focus = focusOf(nodes, attempts, status, blockedBy);
+  const focusX = focus === null ? null : (at.get(focus)?.x ?? null);
+  const routeKey = nodes.map((node) => node.route_node_id).join("|");
+  useLayoutEffect(() => {
+    const dag = box.current;
+    if (!dag || focusX === null || shown.current === routeKey) return;
+    shown.current = routeKey;
+    dag.scrollLeft = Math.max(0, focusX - dag.clientWidth / 3);
+  }, [routeKey, focusX]);
   return (
     <>
-      <div className="dag" data-route={`${nodes.length} nodes · ${edges.length} edges`}>
+      <div ref={box} className="dag" data-route={`${nodes.length} nodes · ${edges.length} edges`}>
         <div className="dagbox" style={{ width: layout.width, height: layout.height }}>
           <svg
             className="edges"
@@ -210,7 +246,11 @@ export function RouteGraph({
               >
                 <span className="id">{node.module_id}</span>
                 <span className="st">
-                  <SeverityMark severity={severityOf(node, running, blocking)} pulse={running} />
+                  <SeverityMark
+                    severity={severityOf(node, running, blocking)}
+                    pulse={running}
+                    decorative
+                  />
                   {stateWordOf(node, status, running, blocking)}
                 </span>
                 <span className="why">{reasonOf(node, status, blocking)}</span>

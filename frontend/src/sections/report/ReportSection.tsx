@@ -1,10 +1,15 @@
 // The saved Report payload, read only. Text stays text: this surface never
 // interprets markdown, follows evidence, or offers a legacy draft action.
 import { useState } from "react";
+import { Link } from "react-router";
 import { FilingControls } from "./FilingControls";
+import { sectionPath } from "@/app/sections";
+import { SeverityMark } from "@/chrome/SeverityMark";
 import { scrollArtifact } from "@/controls/scroll";
 import { NoteList } from "@/ds/atoms";
-import type { ReportDocument } from "@/wire/v1";
+import { shortDigest, stamp } from "@/ds/format";
+import type { Severity } from "@/wire";
+import type { ReportDocument, RevisionSummary } from "@/wire/v1";
 
 /* Keyboard scroll makes static, wide canonical text reachable in every browser. */
 /* eslint-disable jsx-a11y/no-noninteractive-element-interactions */
@@ -62,6 +67,104 @@ function Artifact({ artifact }: { artifact: ReportDocument["body"]["artifacts"][
 }
 /* eslint-enable jsx-a11y/no-noninteractive-element-interactions */
 
+/** How far a revision has gone, drawn as DESIGN.md's shapes: a flat dot for
+    saved, a disc for frozen and waiting on committee, filed as done. */
+const REVISION_STATE: Record<RevisionSummary["state"], { label: string; severity: Severity }> = {
+  saved: { label: "Saved", severity: "IDLE" },
+  frozen: { label: "Frozen · awaiting committee", severity: "RUNNING" },
+  filed: { label: "Filed", severity: "SUCCESS" },
+};
+
+/** The run's revisions, newest first: where a reader picks one to read here,
+    and the one front door to Committee for a revision once it is frozen. */
+function Revisions({ body }: { body: ReportDocument["body"] }) {
+  const run = new URLSearchParams({ case: body.case_id, run: body.displayed_run_id });
+  const at = (section: "report" | "committee", revision: string) =>
+    `${sectionPath(section)}?${run.toString()}&revision=${encodeURIComponent(revision)}`;
+  return (
+    <section className="pnl" data-report-revisions>
+      <header>
+        <h2>Revisions</h2>
+        <span className="tag">{body.revisions.length}</span>
+      </header>
+      {body.revisions.length === 0 ? (
+        <p className="pb note">
+          Nothing has been saved from this run yet. A save makes the first revision.
+        </p>
+      ) : (
+        <div className="tscroll" tabIndex={0} role="region" aria-label="Revisions">
+          <table className="tbl revisions">
+            <caption className="sr-only">This run&apos;s revisions, newest first</caption>
+            <thead>
+              <tr>
+                <th scope="col" className="l">
+                  Revision
+                </th>
+                <th scope="col">Saved</th>
+                <th scope="col" className="l">
+                  State
+                </th>
+                <th scope="col">
+                  <span className="sr-only">Open</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {body.revisions.map((revision) => {
+                const shown = revision.revision_id === body.revision_id;
+                const state = REVISION_STATE[revision.state];
+                return (
+                  <tr
+                    key={revision.revision_id}
+                    aria-current={shown ? "true" : undefined}
+                    data-revision-row={revision.revision_id}
+                    data-state={revision.state}
+                  >
+                    <td className="l mono" title={revision.revision_id}>
+                      {shortDigest(revision.revision_id)}
+                    </td>
+                    <td>
+                      <time className="ts" dateTime={revision.saved_at}>
+                        {stamp(revision.saved_at)}
+                      </time>
+                    </td>
+                    <td className="l">
+                      <span className="revstate">
+                        <SeverityMark severity={state.severity} decorative />
+                        {state.label}
+                      </span>
+                    </td>
+                    <td className="acts">
+                      {shown ? (
+                        <span className="note">Shown</span>
+                      ) : (
+                        <Link
+                          to={at("report", revision.revision_id)}
+                          aria-label={`Open revision ${revision.revision_id}`}
+                        >
+                          Open
+                        </Link>
+                      )}
+                      {revision.state === "saved" ? null : (
+                        <Link
+                          to={at("committee", revision.revision_id)}
+                          aria-label={`Open revision ${revision.revision_id} in Committee`}
+                        >
+                          Committee
+                        </Link>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function ReportSection({ document }: { document: ReportDocument; tab: string | null }) {
   // The filing controls re-read this section's own document after an act, and
   // a fresh document from the parent always supersedes that local copy --
@@ -100,6 +203,7 @@ export function ReportSection({ document }: { document: ReportDocument; tab: str
           </dl>
         </div>
       </section>
+      <Revisions body={body} />
       {body.artifacts.map((artifact) => (
         <Artifact key={artifact.route_node_id} artifact={artifact} />
       ))}

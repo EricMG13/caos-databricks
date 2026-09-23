@@ -17,7 +17,13 @@ function Absent() {
   return (
     <div className="ap" data-section="absent">
       <div className="frame">
-        <Rail section={null} entries={null} local={null} servedRole={null} search={caseSearch} />
+        <Rail
+          section={null}
+          entries={null}
+          local={null}
+          servedRole={null}
+          searchFor={() => caseSearch}
+        />
         <main className="body" id="body" aria-label="Unavailable">
           <h1 className="sr-only" tabIndex={-1}>
             Unavailable

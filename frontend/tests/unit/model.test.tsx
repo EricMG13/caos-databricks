@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { ModelSection } from "@/sections/model/ModelSection";
+import { ModelSection, forecastSeries } from "@/sections/model/ModelSection";
 import { parseModelDocument, type ModelDocument } from "@/wire/v1";
 
 const CASE = "00000000-0000-4000-8000-000000000001";
@@ -153,5 +153,34 @@ describe("Model v1", () => {
     });
     render(<ModelSection document={document} tab={null} />);
     expect(screen.getByText("INPUT_MISSING")).toBeInTheDocument();
+  });
+});
+
+describe("the host's forecast, drawn", () => {
+  test("test_forecastSeries_joins_two_or_more_periods_of_one_case_as_host_lines", () => {
+    const single = model().body.forecast!;
+    // One period has nothing to join: no chart.
+    expect(forecastSeries(single)).toEqual([]);
+    const second = {
+      ...single.periods[0]!,
+      period_id: "Q2",
+      values: [
+        { name: "cash", value: "130.00", unavailable_reason: null },
+        { name: "coverage", value: "1.8", unavailable_reason: null },
+      ],
+      unavailable_reason: null,
+    };
+    const two = { ...single, periods: [single.periods[0]!, second] };
+    const charts = forecastSeries(two);
+    expect(charts.map((chart) => chart.series[0]!.key)).toEqual(["Base:cash", "Base:coverage"]);
+    expect(charts[0]!.series[0]!.origin).toBe("host");
+    expect(charts[0]!.series[0]!.data).toEqual([{ value: "123.45" }, { value: "130.00" }]);
+    // A value the host could not compute is a gap with its reason, never zero.
+    expect(charts[1]!.series[0]!.data[0]).toEqual({
+      value: null,
+      reason: "ZERO_OR_NEGATIVE_DENOMINATOR",
+    });
+    const { container } = render(<ModelSection document={model({ forecast: two })} tab={null} />);
+    expect(container.querySelectorAll("[data-forecast-chart]")).toHaveLength(2);
   });
 });

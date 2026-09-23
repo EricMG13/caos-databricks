@@ -1,17 +1,60 @@
-// One region, eight ways: the seven states of IA_SPEC.md 6 rendered distinctly,
-// and `ready`, which renders its children with no marker of its own.
+// One region, nine ways: the seven states of IA_SPEC.md 6 rendered distinctly,
+// `choose`, which says what the reader must pick and where, and `ready`, which
+// renders its children with no marker of its own.
 import type { ReactNode } from "react";
-import { UNAVAILABLE_WORDING, type RegionStatus } from "@/app/transport";
+import { Link } from "react-router";
+import { UNAVAILABLE_WORDING, type RegionStatus, type SelectionNeed } from "@/app/transport";
+import { refusalText } from "@/controls/RefusedControl";
+import type { Refusal } from "@/wire";
 import { SurfaceState } from "@/ds/SurfaceState";
+
+const CHOICES: Record<SelectionNeed, { title: string; detail: string; link: string }> = {
+  run: {
+    title: "Choose a run",
+    detail: "Report and Committee each read one run of this case. Run lists them.",
+    link: "OPEN RUN",
+  },
+  revision: {
+    title: "Choose a frozen revision",
+    detail:
+      "Committee reads a revision once it is frozen. Report lists this run's revisions and how far each has gone.",
+    link: "OPEN REPORT",
+  },
+};
+
+/** What a refused or unreadable section read means, in the reader's terms;
+    the code stays beside it for anyone who needs to quote it. */
+const REGION_PLAIN: Record<string, string> = {
+  STORE_UNAVAILABLE: "The store did not answer.",
+  RESPONSE_INVALID: "The server's answer could not be read.",
+  WIRE_SHAPE_INVALID: "The server's answer could not be read.",
+  WIRE_IDENTITY_MISMATCH: "The answer was about a different case or run.",
+  RENDER_FAILED: "This section could not be drawn.",
+};
+
+export function regionSentence(refusal: Refusal): string {
+  return REGION_PLAIN[refusal.code] ?? "This section could not be read.";
+}
+
+/** Sends the section's read again, for a state that says nothing arrived. */
+function RetryButton({ onRetry }: { onRetry: () => void }) {
+  return (
+    <button type="button" className="rb" onClick={onRetry}>
+      TRY AGAIN
+    </button>
+  );
+}
 
 export function RegionState<D>({
   status,
   children,
   onReload,
+  onRetry,
 }: {
   status: RegionStatus<D>;
   children: (document: D) => ReactNode;
   onReload?: () => void;
+  onRetry?: () => void;
 }) {
   switch (status.kind) {
     case "ready":
@@ -39,16 +82,42 @@ export function RegionState<D>({
     case "unavailable":
       return <SurfaceState kind="unavailable" title={UNAVAILABLE_WORDING} />;
     case "offline":
-      // The one sentence lives in the page-level alert; the region carries the marker.
-      return <SurfaceState kind="offline" />;
+      // The one sentence lives in the page-level alert; the region carries the
+      // marker and the way to ask again.
+      return (
+        <SurfaceState
+          kind="offline"
+          supporting={onRetry ? <RetryButton onRetry={onRetry} /> : null}
+        />
+      );
     case "error":
       return (
         <SurfaceState
           kind="error"
-          title={status.refusal.code}
-          detail={<>Clears when {status.refusal.clears}</>}
+          title={regionSentence(status.refusal)}
+          detail={
+            <>
+              {refusalText(status.refusal)} <code>{status.refusal.code}</code>
+            </>
+          }
+          supporting={onRetry ? <RetryButton onRetry={onRetry} /> : null}
         />
       );
+    case "choose": {
+      const choice = CHOICES[status.need];
+      return (
+        <SurfaceState
+          kind="choose"
+          title={choice.title}
+          detail={choice.detail}
+          supporting={
+            <Link className="rb acc" to={status.href}>
+              {choice.link}
+            </Link>
+          }
+        />
+      );
+    }
     case "stale":
       return (
         <>

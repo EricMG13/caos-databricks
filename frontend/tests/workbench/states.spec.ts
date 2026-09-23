@@ -32,8 +32,9 @@ test("observed-empty is timestamped and never inferred", async ({ page }) => {
 test("a typed refusal shows its code and what clears it", async ({ page }) => {
   await page.goto(`/analysis/?case=${CASE}&fixture=error`);
   const region = page.locator("main#body [data-surface-state='error']");
+  // Said in plain words, the typed code beside it for anyone who quotes it.
+  await expect(region).toContainText("The store did not answer.");
   await expect(region).toContainText("STORE_UNAVAILABLE");
-  await expect(region).toContainText("Clears when");
 });
 
 test("partial renders through warning status with its notes and the body", async ({ page }) => {
@@ -46,7 +47,7 @@ test("partial renders through warning status with its notes and the body", async
 test("a stale view holds its figures until Reload", async ({ page }) => {
   // The fixture stream announces an accepted handoff; the refetch answers for
   // another displayed run with other figures (brief 4.4, decision 6).
-  await page.goto(`/analysis/?case=${CASE}&fixture=stale`);
+  await page.goto(`/analysis/?case=${CASE}&fixture=stale&tab=rn-cp-0`);
   const figure = page.locator("main#body [data-confidence]").first();
   await expect(figure).toHaveText(/^96 /);
   const stale = page.locator("main#body [data-surface-state='stale']");

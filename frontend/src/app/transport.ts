@@ -47,7 +47,13 @@ export type RegionStatus<D = WorkspaceDocument> =
   | { kind: "unavailable" }
   | { kind: "stale"; document: D }
   | { kind: "offline" }
-  | { kind: "partial"; document: D; notes: string[] };
+  | { kind: "partial"; document: D; notes: string[] }
+  // A case section waiting on a selection only the reader can make: neither
+  // a 404 nor an empty document, so it never borrows their wording.
+  | { kind: "choose"; need: SelectionNeed; href: string };
+
+/** What Report and Committee wait on before they can send a request. */
+export type SelectionNeed = "run" | "revision";
 
 export type StateKind = RegionStatus["kind"];
 
@@ -107,6 +113,14 @@ export function sectionUrl(section: Section, query: SectionQuery): string | null
   if (section === "report" && !query.run) return null;
   if (section === "committee" && (!query.run || !query.revision)) return null;
   return `/api/v1/cases/${encodeURIComponent(query.case)}/${section}${suffix}`;
+}
+
+/** The selection a case section still needs from the reader, or null when it
+    needs none: Report reads one run, Committee one frozen revision of it. */
+export function selectionNeeded(section: Section, query: SectionQuery): SelectionNeed | null {
+  if (!query.case || (section !== "report" && section !== "committee")) return null;
+  if (!query.run) return "run";
+  return section === "committee" && !query.revision ? "revision" : null;
 }
 
 const RESPONSE_INVALID: Refusal = {

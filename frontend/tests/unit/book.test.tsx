@@ -40,7 +40,7 @@ describe("the book", () => {
     mount();
     const table = screen.getByRole("table", { name: /BASE · FY2026/ });
     const row = within(table).getByRole("row", { name: /Carvana/ });
-    expect(within(row).getByRole("button", { name: /EBITDA margin.*0\.2000/ })).toBeVisible();
+    expect(within(row).getByRole("button", { name: /EBITDA margin.*0\.20$/ })).toBeVisible();
     expect(row).toHaveTextContent("USD · millions");
   });
 
@@ -55,7 +55,7 @@ describe("the book", () => {
 
   test("selecting a cell opens the passport with its ten fields", () => {
     mount();
-    fireEvent.click(screen.getAllByRole("button", { name: /EBITDA margin.*0\.2000/ })[0]!);
+    fireEvent.click(screen.getAllByRole("button", { name: /EBITDA margin.*0\.20$/ })[0]!);
     const dialog = screen.getByRole("dialog");
     const fields = [...dialog.querySelectorAll("[data-passport] > [data-passport-field]")].map(
       (element) => element.getAttribute("data-passport-field"),
@@ -78,7 +78,9 @@ describe("the book", () => {
   test("a refused cell value shows its typed reason, never a blank", () => {
     const doc = document();
     const cell = doc.body.rows[0]!.periods[0]!.cells[0]!;
-    expect(shownValue(cell)).toBe("500.000000");
+    // Rounded for reading; the passport keeps the exact decimal.
+    expect(shownValue(cell)).toBe("500.00");
+    expect(cell.value).toBe("500.000000");
     expect(
       shownValue({
         ...cell,

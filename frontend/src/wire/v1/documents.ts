@@ -210,6 +210,19 @@ const CitationView = object({
   rects: array(RectView, 256),
   withdrawn_at: nullable(datetime),
 });
+// A handoff's tagged tables, read by the server from its Markdown with the
+// bundle's own reader (`caos/methodology/tables.py`); the browser never parses
+// Markdown. A figure is the server's exact decimal string, never a float, and
+// null is "no figure", never zero.
+const CellView = object({
+  text,
+  value: nullable(string({ max: 64, pattern: "^-?[0-9]+(\\.[0-9]+)?$" })),
+});
+const TableView = object({
+  table_id: string({ max: SHORT, pattern: "^[A-Za-z0-9_.]+$" }),
+  columns: array(text, 32),
+  rows: array(array(CellView, 32), 2000),
+});
 const HandoffView = object({
   route_node_id: short,
   module_id: short,
@@ -227,6 +240,8 @@ const HandoffView = object({
   source_facts: array(CitationView, 1024),
   model_analysis: string({ max: 26214400 }),
   host_calculation: enumOf(["NONE", "CP_CF_FORECAST"]),
+  tables: array(TableView, 64),
+  tables_unavailable_reason: nullable(enumOf(["TABLES_MALFORMED", "TABLES_TOO_LARGE"])),
 });
 const PendingNode = object({ route_node_id: short, module_id: short, state: NodeState });
 const AnalysisBody = object({
@@ -360,6 +375,14 @@ const ReportArtifact = object({
   limitation_flags: array(text, 256),
   validation_warnings: array(text, 256),
 });
+// One revision of the displayed run and how far it has gone: what Report lists
+// and Committee's front door links to. It proves nothing; opening one does.
+const RevisionSummary = object({
+  revision_id: uuid,
+  payload_sha256: hash,
+  saved_at: datetime,
+  state: enumOf(["saved", "frozen", "filed"]),
+});
 const reportFields = {
   case_id: uuid,
   displayed_run_id: uuid,
@@ -369,6 +392,8 @@ const reportFields = {
   case_title: text,
   artifacts: array(ReportArtifact, 256),
   narrative: array(array(NarrativeSpan, 64), 64),
+  // The run's revisions, newest first: empty on the Report with none.
+  revisions: array(RevisionSummary, 64),
 };
 const ReportBody = object(reportFields);
 const ReportDocument = sectionDocument(ReportBody);
@@ -595,6 +620,7 @@ export const V1_SHAPES = {
   NarrativeFigure,
   NarrativeSpan,
   ReportArtifact,
+  RevisionSummary,
   ReportBody,
   ReportDocument,
   FiledReceipt,
@@ -622,6 +648,7 @@ export const V1_SHAPES = {
   BlockedByView,
   CaseRow,
   MemberRow,
+  CellView,
   Chrome,
   CitationView,
   DirectoryBody,
@@ -658,6 +685,7 @@ export const V1_SHAPES = {
   SourceRow,
   Standing,
   Subject,
+  TableView,
   UploadBody,
   UploadDocument,
   WorkView,
@@ -676,6 +704,7 @@ export type BookColumn = Infer<typeof BookColumn>;
 export type BookPeriod = Infer<typeof BookPeriod>;
 export type ReportDocument = Infer<typeof ReportDocument>;
 export type CommitteeDocument = Infer<typeof CommitteeDocument>;
+export type RevisionSummary = Infer<typeof RevisionSummary>;
 export type RefusalBody = Infer<typeof RefusalBody>;
 export type RefusalCode = Infer<typeof RefusalCode>;
 export type QualificationRead = Infer<typeof QualificationRead>;
@@ -687,6 +716,8 @@ export type SourceRow = Infer<typeof SourceRow>;
 export type RunView = Infer<typeof RunView>;
 export type NodeView = Infer<typeof NodeView>;
 export type HandoffView = Infer<typeof HandoffView>;
+export type TableView = Infer<typeof TableView>;
+export type CellView = Infer<typeof CellView>;
 export type CitationView = Infer<typeof CitationView>;
 export type PendingNode = Infer<typeof PendingNode>;
 export type EventName = Infer<typeof EventName>;

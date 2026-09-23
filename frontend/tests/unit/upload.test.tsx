@@ -119,7 +119,7 @@ describe("Upload", () => {
     expect(control).toHaveAttribute("data-refusal", "NOT_AUTHORISED");
     expect(control.title).toContain("NOT_AUTHORISED");
     expect(control.title).toContain("your case standing is WRITER or higher");
-    expect(screen.getByText(/NOT_AUTHORISED/)).toBeInTheDocument();
+    expect(document.querySelector("[data-refusal='NOT_AUTHORISED']")).not.toBeNull();
     expect(screen.getByText(/your case standing is WRITER or higher/)).toBeInTheDocument();
     fireEvent.click(control);
     await settle();
@@ -322,6 +322,17 @@ describe("Upload", () => {
     expect(control).toHaveAttribute("aria-disabled", "true");
     expect(control).toHaveAttribute("data-refusal", "NOT_AUTHORISED");
     expect(container).toHaveTextContent("the actor holds WRITER standing");
+    // Said once above the pack, not down the column; each control keeps it
+    // as its accessible description.
+    const shared = container.querySelectorAll("[data-shared-refusal]");
+    expect(shared).toHaveLength(1);
+    expect(shared[0]).toHaveTextContent(
+      "Withdraw: Available once the actor holds WRITER standing.",
+    );
+    expect(container.querySelectorAll("[data-withdraw-control] .caos-action-reason")).toHaveLength(
+      0,
+    );
+    expect(control).toHaveAccessibleDescription("Available once the actor holds WRITER standing.");
   });
 
   test("an absent withdrawal action is ACTION_UNPLACED, and a click sends nothing", () => {

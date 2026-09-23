@@ -211,7 +211,7 @@ function FilingAct({
       >
         {pending ? `${verb}…` : label}
       </ConfirmedControl>
-      <CommandOutcome result={result} success={`${label}: done. Re-reading the report.`} />
+      <CommandOutcome result={result} success={`${label}: done.`} />
     </div>
   );
 }
@@ -280,6 +280,7 @@ export function FilingControls({
         </label>
         <textarea
           id="narrative-draft"
+          className="tin tarea"
           ref={editor}
           value={draft}
           rows={4}

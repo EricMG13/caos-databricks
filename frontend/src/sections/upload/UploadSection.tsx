@@ -68,11 +68,11 @@ export function UploadSection({ document }: { document: UploadDocument; tab: str
             ) : null}
           </div>
         </section>
-        <p className="note">
-          <b>Withdrawal is checked live at every use, not at pin time.</b> A withdrawn source is
-          still a member of the sets that admitted it, because sets are immutable — but a run
-          reading it now is refused with a typed code, and every conclusion that cited it is marked.
-        </p>
+        <details className="help">
+          <summary>What withdrawing a source does</summary>A withdrawn source stays in the set
+          versions that admitted it, because a set never changes. Any new use of it is refused, and
+          every conclusion that cited it is marked.
+        </details>
       </div>
       <div className="col right">
         <SetVersions versions={body.set_versions} />

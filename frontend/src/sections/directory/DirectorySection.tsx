@@ -57,14 +57,12 @@ export function DirectorySection({
           The membership changed, but the register could not be refreshed. Reload to see it.
         </p>
       ) : null}
-      <p className="note">
-        <b>One action per row, and it is the same action.</b> A row opens its case; everything else
-        a case can do belongs to the section that owns it — granting and revoking standing to Case
-        access below, admitting and withdrawing sources to Upload, approving a plan or accepting a
-        run to Run, saving, signing, freezing and filing a revision to Report. There is no batch
-        state and no second selection model, so nothing on this page can act on four cases at once
-        without a person having read four cases.
-      </p>
+      <details className="help">
+        <summary>Why each case has one action here</summary>
+        Opening a case is the one thing this register does. Standing is granted in Case access
+        below, sources are admitted in Upload, runs are approved in Run, and revisions are saved,
+        signed, frozen and filed in Report. Nothing here acts on several cases at once.
+      </details>
     </div>
   );
 }

@@ -79,7 +79,9 @@ describe("the states", () => {
     expect(control).toHaveAttribute("aria-disabled", "true");
     expect(control).not.toHaveAttribute("disabled");
     expect(control).toHaveAttribute("data-refusal", "APPROVER_NOT_INDEPENDENT");
-    expect(control).toHaveAccessibleDescription(/APPROVER_NOT_INDEPENDENT — clears when/);
+    // The reason is named in plain words; the code rides in the detail.
+    expect(control).toHaveAccessibleDescription("Available once an independent approver files it.");
+    expect(control).toHaveAttribute("title", expect.stringContaining("APPROVER_NOT_INDEPENDENT"));
     expect(screen.getByText(/an independent approver files it/)).toBeVisible();
   });
 });

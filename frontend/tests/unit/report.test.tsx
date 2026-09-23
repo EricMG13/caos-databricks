@@ -55,10 +55,17 @@ describe("Report v1", () => {
     // from `chrome.actions` and never from the payload; asserting over the
     // whole root rather than over the payload's regions is what keeps a field
     // rendered outside them from escaping this check.
+    // The one other interactive markup is the revision list's navigation,
+    // whose targets are built from decoded UUIDs and never from payload text.
     for (const node of root.querySelectorAll(
       "img, script, a, button, input, textarea, [contenteditable]",
     )) {
-      expect(node.closest("[data-filing-controls]")).not.toBeNull();
+      expect(node.closest("[data-filing-controls], [data-report-revisions]")).not.toBeNull();
+    }
+    for (const link of root.querySelectorAll("[data-report-revisions] a")) {
+      expect(link.getAttribute("href")).toMatch(
+        /^\/(report|committee)\/\?case=[0-9a-f-]{36}&run=[0-9a-f-]{36}&revision=[0-9a-f-]{36}$/,
+      );
     }
     expect(root).toHaveTextContent(document.body.artifacts[0]!.record);
     expect(root.querySelector("[data-report-limitations]")).toHaveTextContent(
