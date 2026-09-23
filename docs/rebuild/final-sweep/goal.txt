@@ -1,0 +1,22 @@
+Run the final pre-handoff sweep of caos-databricks on rebuild/databricks. This run is unattended: nobody can answer, approve or unblock you, so never ask, never wait, never end a turn with a plan or a promise. First read docs/rebuild/final-sweep/CONTRACT.md in full and follow it; it is the contract, and its section 0 Owner decisions bind you and may not be edited. BASE is the commit its section 3 records.
+
+DONE means your final message contains an EVIDENCE table copied verbatim from tool output produced in that same final turn, in the main session, one row per check with its exit code and one summary line:
+- A1-A37: every gate in CLAUDE.md run exactly as written on the final commit with a clean tracked tree, exit 0 each; the pytest line shows 0 failed, 0 skipped, 0 xfailed and coverage >= 80%; A30 and A31 without a workspace profile quote their blockers.md entry instead.
+- S1: the pytest suite and the frontend gates rerun from a fresh detached worktree at the final commit, with the same pass counts.
+- S2: git diff --stat BASE..HEAD -- tests/parity/golden vendor/deploy-v prints nothing, or only a change an Owner decision names.
+- S3: metrics against BASE: tests passed >= BASE minus tests removed by name in Fn entries; every suppression count <= BASE; complexity_baselined <= 20 with the removed functions listed, including the six the contract requires unless a next.md entry records the two failed attempts its stop rule allows; jscpd <= 3%.
+- S4: docs/rebuild/runs/final-sweep/register.md counted by class and severity: every ID from every ledger in contract section 2 on a row; zero OPEN rows at CRITICAL or HIGH; every DEFERRED, DECISION or PLATFORM-ONLY row naming its N, OD, E-row or B entry.
+- S5: the file set the stub deployment ships boots python -m caos.serve and completes one governed LITE run through ChatDatabricks over the stub, every health code OK; tests/test_enterprise_deploy.py passes.
+- S6: ten consecutive distinct realistic scenarios pass on the final commit (the streak log's last lines).
+- S7: a final independent adversarial review of git diff BASE..HEAD leaves zero open CRITICAL or HIGH findings.
+- S8: git status --short shows only the untracked paths recorded at BASE; git log --oneline BASE..HEAD printed; nothing pushed.
+
+Then print the register rows not closed, the Owner decisions still open, and docs/rebuild/blockers.md verbatim.
+
+A blocked finish also counts as done: a check may instead cite a blockers.md entry whose cause is a missing external resource (workspace, credential, permission), quoted with the exact command and error from this run, when every other check passes. A failing test, gate, parity check or review finding is never a blocker.
+
+The result is void if any of these slipped: a lowered threshold; a new noqa, type: ignore, nosec, pragma, skip or xfail; an excluded path or coverage omit; a test removed or weakened without being named in an Fn entry; a parity golden or vendor byte changed without an Owner decision; a behaviour change presented as a refactor; a row this sweep repaired without a test that fails before the fix; git add -A, or an untracked owner file committed; OpenRouter named outside tests/; live provider spend beyond Owner decision OD-6, or presented as gateway evidence; any key, token or password printed or written; a stub presented as the platform; a subset of tests or paths presented as the whole; evidence reused from an earlier turn; a push.
+
+Commit each concern on rebuild/databricks once it is green, with its Fn entry in docs/rebuild/decisions.md; new scope goes to docs/rebuild/next.md. Keep docs/rebuild/runs/final-sweep/progress.md current after every step so a resumed session continues from it.
+
+Or stop after 300 turns, printing status against every check and the register rows still open.
