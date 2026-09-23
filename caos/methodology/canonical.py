@@ -581,12 +581,21 @@ def _prompt_context(
     )
 
 
+# The refusals whose checks a second attempt can be told of (D30, N52): the
+# validator's and the host's own (`HANDOFF_MALFORMED`) and the completeness
+# checker's (`HANDOFF_INCOMPLETE`).
+SECOND_ATTEMPT_CODES = frozenset(
+    {RefusalCode.HANDOFF_MALFORMED, RefusalCode.HANDOFF_INCOMPLETE}
+)
+
+
 def _feedback_source(attempts: Sequence[NodeAttempt]) -> NodeAttempt | None:
     """The refused attempt a node's next attempt answers, when that next one is
-    its one second attempt (D30): the latest attempt, refused
-    `HANDOFF_MALFORMED`, and the node's only such refusal. Read from the ledger,
-    so a crash between the refusal and the second attempt changes nothing."""
-    refused = [a for a in attempts if a.refusal == RefusalCode.HANDOFF_MALFORMED]
+    its one second attempt (D30): the latest attempt, refused with one of
+    `SECOND_ATTEMPT_CODES`, and the node's only such refusal. Read from the
+    ledger, so a crash between the refusal and the second attempt changes
+    nothing."""
+    refused = [a for a in attempts if a.refusal in SECOND_ATTEMPT_CODES]
     if len(refused) != 1 or attempts[-1] != refused[0]:
         return None
     return refused[0]

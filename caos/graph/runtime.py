@@ -42,6 +42,7 @@ from caos.graph.route import (
 )
 from caos.methodology.bundle import Bundle
 from caos.methodology.canonical import (
+    SECOND_ATTEMPT_CODES,
     Replayed,
     Verdict,
     accepted_projections,
@@ -190,15 +191,16 @@ def run_route(
             ).value
 
     def one_node(route_node_id: str) -> str:
-        # An answer refused `HANDOFF_MALFORMED` earns the node one second
-        # attempt (D30, the owner's choice under N32): the node's pass runs
-        # once more, and the ledger, not this frame, says the attempt it makes
-        # is that one -- reserved and priced like any other, carrying what the
-        # checks reported. A second refusal, or any other code, is raised.
+        # An answer refused `HANDOFF_MALFORMED` or `HANDOFF_INCOMPLETE` earns
+        # the node one second attempt (D30, the owner's choice under N32; N52):
+        # the node's pass runs once more, and the ledger, not this frame, says
+        # the attempt it makes is that one -- reserved and priced like any
+        # other, carrying what the checks reported. A second refusal, or any
+        # other code, is raised.
         try:
             return one_pass(route_node_id)
         except Refusal as refused:
-            if refused.code is not RefusalCode.HANDOFF_MALFORMED or not _second_due(
+            if refused.code not in SECOND_ATTEMPT_CODES or not _second_due(
                 conn, run_id, route_node_id
             ):
                 raise
