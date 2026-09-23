@@ -29,21 +29,31 @@ export const ENFORCED = [
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
-// Lower-to-upper transitions, found by hand rather than a lookbehind+lookahead
-// regex — SonarQube flags that shape as super-linear (javascript:S8786) though
-// it holds no quantifier to backtrack on; a char-code scan reads the same and
-// draws no such flag.
+// Lower-to-upper and acronym-to-word transitions, found by hand rather than a
+// lookbehind+lookahead regex — SonarQube flags that shape as super-linear
+// (javascript:S8786) though it holds no quantifier to backtrack on; a
+// char-code scan reads the same and draws no such flag.
 function isLowerOrDigit(code) {
   return (code >= 97 && code <= 122) || (code >= 48 && code <= 57); // a-z, 0-9
 }
 function isUpper(code) {
   return code >= 65 && code <= 90; // A-Z
 }
+function isLower(code) {
+  return code >= 97 && code <= 122; // a-z
+}
 
 export function normalise(phrase) {
   let spaced = "";
   for (let i = 0; i < phrase.length; i += 1) {
-    if (i > 0 && isUpper(phrase.charCodeAt(i)) && isLowerOrDigit(phrase.charCodeAt(i - 1))) {
+    const code = phrase.charCodeAt(i);
+    const previous = i > 0 ? phrase.charCodeAt(i - 1) : -1;
+    const next = i + 1 < phrase.length ? phrase.charCodeAt(i + 1) : -1;
+    // A run of capitals ("HTTP") followed by a capitalised word ("Response")
+    // never crossed a lower-to-upper boundary, so "HTTPResponse" stayed one
+    // token and a banned word spelled after an acronym went unenforced.
+    const acronymThenWord = isUpper(code) && isUpper(previous) && isLower(next);
+    if (i > 0 && isUpper(code) && (isLowerOrDigit(previous) || acronymThenWord)) {
       spaced += "_";
     }
     spaced += phrase[i];
