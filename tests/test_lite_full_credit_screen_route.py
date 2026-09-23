@@ -21,7 +21,7 @@ from test_execution_freshness import _counts, _events, _Harness
 from test_full_credit_assessment_route import _attempts, harness
 from test_lite_route_e2e_positive import _revision
 from test_loop_charges import ESTIMATE
-from test_runtime import _Boom, _DiesAfterItsBill, _Uncallable
+from test_runtime import _Boom, _DiesAfterItsBill
 
 from caos.boundary_text import BoundaryText
 from caos.deliverable.canonical import (
@@ -385,9 +385,15 @@ def test_billed_cp5_replay_cannot_strip_restricted_direct_upstream_limits(
             harness,
             _DiesAfterItsBill(_module_provider(harness, answers)),  # type: ignore[arg-type]
         )
-    assert _run_route(harness, _Uncallable()) is RefusalCode.HANDOFF_INCOMPLETE
-    assert _modules(answers)[-1] == "CP-5"
-    assert _attempts(harness, "CP-5") == (1, 1)
+    assert _modules(answers).count("CP-5") == 1
+    # The replay itself makes no call; N52 then gives CP-5 its one second
+    # attempt, which strips the same limits and is refused the same way.
+    assert (
+        _run_route(harness, _module_provider(harness, answers))
+        is RefusalCode.HANDOFF_INCOMPLETE
+    )
+    assert _modules(answers).count("CP-5") == 2
+    assert _attempts(harness, "CP-5") == (2, 2)
 
 
 def test_accepted_cp5_reads_reject_a_self_consistent_restriction_forgery(

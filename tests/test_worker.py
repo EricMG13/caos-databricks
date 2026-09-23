@@ -128,16 +128,19 @@ def test_worker_stops_a_refused_run_with_its_code_and_releases_the_lease(
 
     assert drive(run, completions) == run.run_id
 
-    [(code,)] = run.conn.execute(
+    # N52: the unanchored answer earns one second attempt, refused the same way.
+    codes = run.conn.execute(
         "SELECT r.code FROM attempt_refusals r JOIN run_attempts a USING (attempt_id)"
         " WHERE a.run_id = %s",
         (run.run_id,),
     ).fetchall()
+    assert codes == [("CITATION_NOT_LOCATED",)] * 2
+    code = codes[0][0]
     assert work_row(run.conn, run.run_id) == ("STOPPED", code, None, True)
     assert run_status(run.conn, run.run_id) is RunStatus.RUNNING
     run.conn.rollback()
     assert drive(run, completions) is None, "a stopped run waits for a retry"
-    assert len(completions.prompts) == 1
+    assert len(completions.prompts) == 2
 
 
 def test_sigterm_finishes_the_unit_and_requeues(

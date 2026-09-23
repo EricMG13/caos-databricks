@@ -1,5 +1,6 @@
-"""D30 (N32, the owner's choice): a node whose answer is refused
-`HANDOFF_MALFORMED` gets exactly one second attempt, reserved and priced like
+"""D30 (N32, the owner's choice; widened by N52): a node whose answer is
+refused `HANDOFF_MALFORMED` or `HANDOFF_INCOMPLETE` gets exactly one second
+attempt, reserved and priced like
 any other, carrying what the checks reported on the refused answer. The ledger
 decides it, so a crash between the refusal and the second attempt changes
 nothing, and a second refusal stops the run as before.
@@ -11,6 +12,7 @@ MATERIAL and still writes `qa_status: Passed`.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from typing import Any
 
@@ -29,6 +31,8 @@ from caos.methodology.handoff import (
     MAX_FEEDBACK_CITATIONS,
     MAX_FEEDBACK_MESSAGES,
     HostIdentity,
+    anchoring_line,
+    answer_citations,
     retry_feedback,
 )
 from caos.methodology.runner import ModuleProvider
@@ -64,12 +68,27 @@ def _with_material(body: str) -> str:
     return json.dumps(wire)
 
 
+def _with_fixture_marker(body: str) -> str:
+    """The same answer declaring a fixture marker: the completeness checker's
+    refusal (`HANDOFF_INCOMPLETE`), which the validator does not report."""
+    wire = json.loads(body)
+    markdown = wire["canonical_markdown"]
+    assert "validation_warnings: []\n" in markdown
+    wire["canonical_markdown"] = markdown.replace(
+        "validation_warnings: []\n",
+        'validation_warnings: ["PRESENTATION_FIXTURE"]\n',
+        1,
+    )
+    return json.dumps(wire)
+
+
 @dataclass
 class _Flawed:
     """CanonicalCompletions whose first `bad` CP-0 answers carry the live miss."""
 
     delegate: CanonicalCompletions
     bad: int = 1
+    flaw: Callable[[str], str] = _with_material
 
     @property
     def model(self) -> str:
@@ -84,7 +103,7 @@ class _Flawed:
             return done
         self.bad -= 1
         assert done.content is not None
-        return replace(done, content=_with_material(done.content))
+        return replace(done, content=self.flaw(done.content))
 
 
 def _provider(harness: _Harness, completions: CompletionProvider) -> ModuleProvider:
@@ -201,6 +220,78 @@ def test_the_second_attempt_survives_a_crash_after_the_refusal(
     assert _run(harness, flawed) is None
     assert VENDOR_LINE in answers.prompts[1]
     assert _cp0_ledger(harness) == (2, 2, ["HANDOFF_MALFORMED"], 1)
+
+
+def test_an_incomplete_answer_gets_the_second_attempt_too(harness: _Harness) -> None:
+    """N52: the completeness checker's refusal earns the same one second
+    attempt, carrying the checker's own message (its register or marker)."""
+    answers = CanonicalCompletions(harness.source_id)
+    assert _run(harness, _Flawed(answers, flaw=_with_fixture_marker)) is None
+    assert [_module(prompt) for prompt in answers.prompts[:2]] == ["CP-0", "CP-0"]
+    assert SECOND not in answers.prompts[0]
+    assert (
+        "completeness_check: validation_warnings declares the fixture marker"
+        in answers.prompts[1]
+    )
+    assert _cp0_ledger(harness) == (2, 2, ["HANDOFF_INCOMPLETE"], 1)
+
+
+def _cites_a_wrong_page(body: str) -> str:
+    """The same answer with its first citation naming a page it is not on."""
+    wire = json.loads(body)
+    wire["citations"][0]["page"] = 99
+    return json.dumps(wire)
+
+
+def test_an_unanchored_citation_gets_the_second_attempt_naming_it(
+    harness: _Harness,
+) -> None:
+    """N52: anchoring's refusal earns the one second attempt too, told which
+    citation failed and why, by number only."""
+    answers = CanonicalCompletions(harness.source_id)
+    assert _run(harness, _Flawed(answers, flaw=_cites_a_wrong_page)) is None
+    total = len(json.loads(answers.bodies[0])["citations"])
+    assert (
+        f"host anchoring check: citation 1 of {total} is not one evidence line of its"
+        in answers.prompts[1]
+    )
+    assert _cp0_ledger(harness) == (2, 2, ["CITATION_NOT_LOCATED"], 1)
+
+
+def test_the_anchoring_line_names_each_failed_citation_by_number_and_reason() -> None:
+    line = anchoring_line(
+        [
+            None,
+            RefusalCode.CITATION_NOT_LOCATED,
+            RefusalCode.CITATION_AMBIGUOUS,
+            RefusalCode.CITATION_AMBIGUOUS,
+            RefusalCode.CITATION_NOT_DELIVERED,
+        ]
+    )
+    assert line == (
+        "host anchoring check: citation 2 of 5 is not one evidence line of its"
+        " cited page;"
+        " citations 3 and 4 of 5 are on their cited pages more than once;"
+        " citation 5 of 5 names a page or line this node was not given"
+        " (numbered from 1 in the order given)"
+    )
+    assert anchoring_line([None, None]) is None
+    assert anchoring_line([]) is None
+    assert answer_citations("not json") == ()
+
+
+def test_one_second_attempt_per_node_whichever_code_refused_first(
+    harness: _Harness,
+) -> None:
+    """A node refused incomplete, then malformed, has spent its one."""
+    answers = CanonicalCompletions(harness.source_id)
+    flaws = iter((_with_fixture_marker, _with_material))
+    flawed = _Flawed(answers, bad=2, flaw=lambda body: next(flaws)(body))
+    assert _run(harness, flawed) is RefusalCode.HANDOFF_MALFORMED
+    assert [_module(prompt) for prompt in answers.prompts] == ["CP-0", "CP-0"]
+    count, reserved, codes, accepted = _cp0_ledger(harness)
+    assert (count, reserved, accepted) == (2, 2, 0)
+    assert sorted(codes) == ["HANDOFF_INCOMPLETE", "HANDOFF_MALFORMED"]
 
 
 def test_any_other_refusal_gets_no_second_attempt(harness: _Harness) -> None:

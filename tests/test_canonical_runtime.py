@@ -323,7 +323,8 @@ def test_an_unanchorable_blocked_handoff_is_an_ordinary_refusal(
     )
     code = _run_route(harness, _module_provider(harness, answers))
     assert code is RefusalCode.CITATION_NOT_LOCATED
-    assert _counts(harness) == (1, [REPORTED], 0, 1, 1)
+    # N52: anchoring's refusal earns the one second attempt, refused the same way.
+    assert _counts(harness) == (2, [REPORTED, REPORTED], 0, 2, 2)
     _still_running(harness)
     assert _events(harness, "RUN_BLOCKED") == 0
 

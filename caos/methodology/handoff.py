@@ -898,18 +898,68 @@ def _quote_line(text: str, citations: Sequence[Citation]) -> str | None:
     ]
     if not failed:
         return None
+    verb = "quotes" if len(failed) == 1 else "quote"
+    return (
+        f"host citation check: {_numbered(failed)} of {len(citations)} {verb} text"
+        " that does not appear verbatim in the Markdown body (numbered from 1 in"
+        " the order given)"
+    )
+
+
+def _numbered(failed: Sequence[int]) -> str:
+    """`citation 2`, `citations 2 and 5`, `citations 1, 2 and 3`: at most
+    `MAX_FEEDBACK_CITATIONS` numbers, the rest counted."""
     shown = [str(number) for number in failed[:MAX_FEEDBACK_CITATIONS]]
     rest = len(failed) - len(shown)
     named = ", ".join(shown) + (f" and {rest} more" if rest else "")
     if not rest and len(shown) > 1:
         named = ", ".join(shown[:-1]) + f" and {shown[-1]}"
-    subject = f"citation {named}" if len(failed) == 1 else f"citations {named}"
-    verb = "quotes" if len(failed) == 1 else "quote"
+    return f"citation {named}" if len(failed) == 1 else f"citations {named}"
+
+
+# What anchoring found for a citation, singular and plural (N52).
+_ANCHORING = (
+    (
+        RefusalCode.CITATION_NOT_LOCATED,
+        "is not one evidence line of its cited page",
+        "are not each one evidence line of their cited pages",
+    ),
+    (
+        RefusalCode.CITATION_AMBIGUOUS,
+        "is on its cited page more than once",
+        "are on their cited pages more than once",
+    ),
+    (
+        RefusalCode.CITATION_NOT_DELIVERED,
+        "names a page or line this node was not given",
+        "name a page or line this node was not given",
+    ),
+)
+
+
+def anchoring_line(verdicts: Sequence[RefusalCode | None]) -> str | None:
+    """Which citations did not anchor in the delivered evidence, by number and
+    reason, never by text (N52): `verdicts` holds each citation's own
+    anchoring refusal, `None` for one that anchored."""
+    parts = [
+        f"{_numbered(failed)} of {len(verdicts)} {one if len(failed) == 1 else many}"
+        for code, one, many in _ANCHORING
+        if (failed := [n for n, found in enumerate(verdicts, 1) if found is code])
+    ]
+    if not parts:
+        return None
     return (
-        f"host citation check: {subject} of {len(citations)} {verb} text that"
-        " does not appear verbatim in the Markdown body (numbered from 1 in the"
-        " order given)"
+        "host anchoring check: "
+        + "; ".join(parts)
+        + " (numbered from 1 in the order given)"
     )
+
+
+def answer_citations(body: str) -> tuple[Citation, ...]:
+    """The citations a stored answer asked for; none when it is not the
+    transport, whose reason `retry_feedback` gives."""
+    parsed, _reason = _transport_or_reason(body)
+    return () if parsed is None else parsed[2]
 
 
 def _vendor_lines(
