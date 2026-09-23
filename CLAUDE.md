@@ -6,7 +6,7 @@ Governed source documents to committee-ready credit conclusions, as one Databric
 
 - `caos/` — the app package. `api/` (edge, identity, wire models, section reads, commands, health, site), `store/` (psycopg SQL, ordered migrations, `lakebase.py`), `evidence/`, `methodology/` (bundle authority, canonical executor, invocation), `graph/` (`route.py` resolution, `build.py` LangGraph graph, `runtime.py` node passes, `worker.py`), `calculators/`, `deliverable/`, `qualification/`, `models.py` (the model factory), `blobs.py`, `icm.py`, `serve.py` (the process entry).
 - `icm/` — agent definitions: `CONTEXT.md` (Layer 1), `stages/<slug>/` contracts and prompt declarations, `shared/prompt/` the host prompt blocks, `HOST_INTEGRITY_v1.json`.
-- `vendor/deploy-v/` — the methodology bundle, read-only and byte-verified at use. Never edit it.
+- `vendor/deploy-v/` — the methodology bundle, byte-verified at use: a deployment fork of the upstream Deploy V (D31, D34). Edit it only with the owner's explicit authorisation, then re-pin: `python3 -B vendor/deploy-v/verify_package.py --refresh`, `uv run python scripts/host_manifest.py`, the build pins in the tests, and the `prompt` goldens regenerated from the legacy snapshot's code over the fork (D31's procedure).
 - `frontend/` — the React workspace, built to `frontend/dist` and served by the app.
 - `scripts/` — gates and tooling; `tests/` — the suite, `tests/parity/` goldens against the legacy host, `tests/graph/` the graph.
 - `app.yaml`, `databricks.yml` — the App and its bundle; `docs/DEPLOYMENT.md` — the enterprise runbook; `scripts/enterprise_deploy.sh` — the one deployment command (F31); `tests/workspace_stub.py` and `tests/platform_app.py` — the workspace and the platform boot, stood in locally (D28).
@@ -26,7 +26,7 @@ uv run python -m caos.serve            # local API on 127.0.0.1:8000 (dev mode n
 
 ## Invariants (never weaken)
 
-1. Pinned sources only; no web discovery. 2. Evidence reads fail closed with a typed code, no text on refusal. 3. The host owns identity; provider frontmatter never survives. 4. The bundle is the methodology authority, verified on the bytes at use; never edit an upstream file. 5. Human gates are digest-bound. 6. Execution is durable and exactly-once: the accepted-attempt ledger is the truth, the LangGraph checkpoint only remembers position (D6). 7. Calculation is pure and finite; Decimal, never float, on money. 8. Budgets fail closed; no model call without a reservation. 9. Module output is the strict canonical envelope. 10. The route is resolved once and pinned. 11. Citations are coordinate-anchored or refused.
+1. Pinned sources only; no web discovery. 2. Evidence reads fail closed with a typed code, no text on refusal. 3. The host owns identity; provider frontmatter never survives. 4. The bundle is the methodology authority, verified on the bytes at use; it changes only as an owner-authorised, re-pinned fork (D31, D34), never by hand. 5. Human gates are digest-bound. 6. Execution is durable and exactly-once: the accepted-attempt ledger is the truth, the LangGraph checkpoint only remembers position (D6). 7. Calculation is pure and finite; Decimal, never float, on money. 8. Budgets fail closed; no model call without a reservation. 9. Module output is the strict canonical envelope. 10. The route is resolved once and pinned. 11. Citations are coordinate-anchored or refused.
 
 ## Conventions
 
