@@ -135,6 +135,72 @@ def test_the_vendored_bundle_is_pinned_and_a_swapped_manifest_refuses(
         Bundle(swapped).verify_pinned()
 
 
+def test_verify_catches_a_declared_block_whose_bytes_do_not_match_the_manifest(
+    bundle: Bundle, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CF-079: `is_file()` could only ever say a block's name existed; a
+    block edited without regenerating the host manifest to match -- the
+    exact bytes `build_handoff_prompt` would refuse at request time -- once
+    passed the static workspace check, which asked only that."""
+    blocks = tmp_path / "prompt"
+    blocks.mkdir()
+    for block in icm.PROMPTS.glob("*.md"):
+        (blocks / block.name).write_bytes(block.read_bytes())
+    (blocks / "instruction.md").write_bytes(
+        (blocks / "instruction.md").read_bytes() + b"\nOne more line.\n"
+    )
+    monkeypatch.setattr(icm, "PROMPTS", blocks)
+    prompt_block.cache_clear()
+    try:
+        problems = verify(bundle)
+    finally:
+        prompt_block.cache_clear()
+    assert any(
+        "block instruction is missing, or its bytes do not match the host manifest" in p
+        for p in problems
+    )
+
+
+def test_manifest_problems_matches_the_committed_manifest(bundle: Bundle) -> None:
+    assert check_icm.manifest_problems() == []
+
+
+def test_manifest_problems_reports_a_missing_manifest(tmp_path: Path) -> None:
+    assert check_icm.manifest_problems(tmp_path) == [
+        "icm/HOST_INTEGRITY_v1.json: missing"
+    ]
+
+
+def test_manifest_problems_catches_a_source_file_edited_without_regenerating_it(
+    tmp_path: Path,
+) -> None:
+    """CF-079: nothing checked that icm/HOST_INTEGRITY_v1.json still matches
+    a fresh run of host_manifest.py's own logic, so cash_flow.py, SKILL.md
+    or a prompt block could drift from what the manifest records with
+    nothing catching it until a route actually tried to use CP-CF."""
+    root = tmp_path / "repo"
+    for name in (
+        "icm/HOST_INTEGRITY_v1.json",
+        "icm/stages/cp-cf/references/SKILL.md",
+        "caos/calculators/cash_flow.py",
+    ):
+        (root / name).parent.mkdir(parents=True, exist_ok=True)
+        (root / name).write_bytes((REPO / name).read_bytes())
+    prompts = root / "icm" / "shared" / "prompt"
+    prompts.mkdir(parents=True)
+    for block in icm.PROMPTS.glob("*.md"):
+        (prompts / block.name).write_bytes(block.read_bytes())
+    assert check_icm.manifest_problems(root) == []
+
+    cash_flow = root / "caos" / "calculators" / "cash_flow.py"
+    cash_flow.write_bytes(cash_flow.read_bytes() + b"\n# tampered, not regenerated\n")
+
+    assert check_icm.manifest_problems(root) == [
+        "icm/HOST_INTEGRITY_v1.json: does not match a freshly generated "
+        "manifest; run scripts/host_manifest.py"
+    ]
+
+
 def test_a_prompt_block_that_is_not_what_the_host_manifest_records_refuses(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
