@@ -50,7 +50,7 @@ from caos.api.deps import (
 )
 from caos.api.reads.reports import ProvenRevision, proven_filing, proven_revision
 from caos.blobs import BlobStore
-from caos.deliverable.package import packed_receipt
+from caos.deliverable.package import packed_export, packed_receipt
 from caos.deliverable.render import RenderRefused, render
 from caos.methodology.bundle import Bundle
 from caos.refusals import Refusal, RefusalCode
@@ -65,9 +65,10 @@ from caos.store.outcomes import execution_reads
 # (the publication, its signatures, the trail, the signer's and freezer's
 # receipts, the chain and its head), `read_filed_receipt`'s own eight and
 # `read_revision`'s one. The package reads one more, the digest of the archive
-# stored at filing (W1). Measured in `tests/test_deliverable_reads.py`.
-RENDER_IO = 19
+# stored at filing (W1), and so does a filed render, which serves the page
+# stored in that archive (N76). Measured in `tests/test_deliverable_reads.py`.
 PACKAGE_IO = 20
+RENDER_IO = PACKAGE_IO
 # A frozen, unfiled revision is re-derived rather than read back
 # (`prove_revision`), as Committee's "frozen" proof re-derives it.
 RENDER_FROZEN_IO = 50
@@ -79,10 +80,10 @@ IO_BUDGET = {
 # A filed revision downloads two blobs, the receipt `read_filed_receipt`
 # proves and the payload it names; asking for that payload again, to render
 # it, costs nothing -- the request's blob store remembers what it already
-# verified (`caos.api.deps.request_blobs`, ED-7). The package downloads a
-# third, the archive stored at filing (W1). A frozen render pays
-# `prove_revision`'s seven, as Committee's "frozen" does.
-BLOB_BUDGET = {"render": 2, "render_frozen": 7, "package": 3}
+# verified (`caos.api.deps.request_blobs`, ED-7). The package and a filed
+# render download a third, the archive stored at filing (W1, N76). A frozen
+# render pays `prove_revision`'s seven, as Committee's "frozen" does.
+BLOB_BUDGET = {"render": 3, "render_frozen": 7, "package": 3}
 
 router = APIRouter()
 
@@ -160,9 +161,27 @@ class Selection:
 
 
 def render_revision(selection: Selection) -> bytes:
-    """The frozen or filed revision's rendered page, from its proven payload."""
-    _publication, payload = _proven(selection, proven_revision)
-    return _rendered(payload)
+    """The frozen or filed revision's rendered page, proven as Committee
+    proves it. A filed revision's is the page stored in its package at filing,
+    served while that package carries the filing's proven receipt (N76):
+    re-rendered, a later renderer moved or refused a record that is fixed. A
+    frozen one's, and a filing's from before packages were stored (`0041`),
+    is drawn from its proven payload by this build's renderer."""
+    return _proven(selection, _page)
+
+
+def _page(proof: ProvenRevision) -> bytes:
+    publication, payload = proven_revision(proof)
+    if publication["state"] != "filed":
+        return _rendered(payload)
+    digest = _stored_package(proof)
+    if digest is None:
+        return _rendered(payload)
+    archive = proof.blobs.get(digest)
+    page = packed_export(archive)
+    if page is None or packed_receipt(archive) != publication["receipt"]:
+        raise Refusal(RefusalCode.ARTIFACT_RECORD_MISMATCH)
+    return page
 
 
 def package_revision(selection: Selection) -> bytes:
@@ -182,14 +201,21 @@ def _packaged(proof: ProvenRevision) -> tuple[dict[str, Any], str]:
     were stored (`0041`): an archive built now would pack this build's
     renderer, not the one the receipt pins, and would not verify."""
     publication, _payload = proven_filing(proof)
+    digest = _stored_package(proof)
+    if digest is None:
+        raise Refusal(RefusalCode.DELIVERABLE_PACKAGE_NOT_STORED)
+    return publication["receipt"], digest
+
+
+def _stored_package(proof: ProvenRevision) -> str | None:
+    """The digest of the package stored when this revision was filed, or
+    `None` for a filing that predates stored packages (`0041`)."""
     row = proof.conn.execute(
         "SELECT package_sha256 FROM deliverable_receipts"
         " WHERE case_id=%s AND revision_id=%s",
         (proof.case_id, str(proof.revision)),
     ).fetchone()
-    if row is None or row[0] is None:
-        raise Refusal(RefusalCode.DELIVERABLE_PACKAGE_NOT_STORED)
-    return publication["receipt"], str(row[0])
+    return None if row is None or row[0] is None else str(row[0])
 
 
 def _proven[T](selection: Selection, prove: Callable[[ProvenRevision], T]) -> T:

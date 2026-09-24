@@ -496,6 +496,31 @@ def test_the_package_is_the_archive_stored_at_filing(
         assert opened.read("receipt.json") == receipt_bytes(receipt)
 
 
+def test_a_filed_revisions_page_is_the_one_stored_at_filing(
+    client: TestClient, lite: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N76. A filed revision's render re-rendered its payload with the
+    deployed renderer, while its package served the page stored at filing, so
+    a later renderer moved the filed record's page, or refused it with a code
+    asking for a change nobody may make. The render serves the stored page;
+    only a frozen, unfiled revision is drawn by this build's renderer."""
+    receipt = _file(lite)
+    stored = _stored_package(lite, receipt.revision_id)
+    assert stored is not None
+    page = deliverable_reads.packed_export(lite.blobs.get(stored))
+    assert page is not None
+
+    def moved(*_args: object, **_kwargs: object) -> bytes:
+        raise AssertionError
+
+    monkeypatch.setattr(deliverable_reads, "render", moved)
+    response = client.get(
+        _render_path(lite, receipt.revision_id), headers=_as(lite.approver)
+    )
+    assert response.status_code == 200
+    assert response.content == page
+
+
 def test_a_filing_with_no_stored_package_is_refused_not_served(
     client: TestClient, lite: _Harness
 ) -> None:

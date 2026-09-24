@@ -69,6 +69,16 @@ def packed_receipt(archive_bytes: bytes) -> object:
         return None
 
 
+def packed_export(archive_bytes: bytes) -> bytes | None:
+    """The rendered page a package carries, or `None` for bytes that are not a
+    package carrying one. Checks nothing else, as `packed_receipt`."""
+    try:
+        with zipfile.ZipFile(BytesIO(archive_bytes)) as archive:
+            return archive.read(EXPORT)
+    except (zipfile.BadZipFile, KeyError):
+        return None
+
+
 def verify_package(archive_bytes: bytes) -> Verification:
     """The portable verifier's verdict in the host's existing return type."""
     return Verification(*verify(archive_bytes))
