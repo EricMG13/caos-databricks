@@ -433,8 +433,10 @@ def test_no_re_send_starts_once_the_wait_and_the_fence_spent_the_deadline(
     """R24-08: the deadline was checked before the wait and the re-send fence,
     and not after. A 429 at second 237, a two-second wait and a fence check
     (store reads) of two seconds more started a second request at second 241
-    of a 240-second call -- answered, it was accepted and charged. Nothing is
-    sent once the whole call's deadline has passed: the 429 is the answer."""
+    of a 240-second call -- answered, it was accepted and charged. The time
+    left is read again after both, against the floor a re-send needs (N11):
+    a 429 three seconds before the floor, a two-second wait and a two-second
+    fence leave too little, and the 429 is the answer."""
     from caos.provider import TIMEOUT_SECONDS, resend_checked
 
     clock = {"t": 0.0}
@@ -447,7 +449,7 @@ def test_no_re_send_starts_once_the_wait_and_the_fence_spent_the_deadline(
 
     def late_limit_then_answer(prompt: str) -> object:
         if chat.calls == 1:
-            clock["t"] = TIMEOUT_SECONDS - 3.0
+            clock["t"] = TIMEOUT_SECONDS - models.MIN_RESEND_SECONDS - 3.0
             return _Limited("2")
         return answer(finish="stop")
 
@@ -457,10 +459,64 @@ def test_no_re_send_starts_once_the_wait_and_the_fence_spent_the_deadline(
     chat = ScriptedChat(answer=late_limit_then_answer)
     with resend_checked(slow_fence):
         completion = fake_completions(chat).complete(PROMPT)
-    assert chat.calls == 1, "a request started past the deadline"
+    assert chat.calls == 1, "a request started without the time it needs"
     assert completion.refusal is RefusalCode.PROVIDER_UNAVAILABLE
     assert completion.charge is None and completion.content is None
-    assert clock["t"] > TIMEOUT_SECONDS
+    assert clock["t"] > TIMEOUT_SECONDS - models.MIN_RESEND_SECONDS
+
+
+@pytest.mark.parametrize(
+    ("limited_at", "wait", "sent"),
+    [
+        pytest.param(150.0, "2", 1, id="ninety-seconds-left"),
+        pytest.param(237.0, "2", 1, id="three-seconds-left"),
+        pytest.param(118.0, "2", 2, id="exactly-the-floor-left-after-the-wait"),
+        pytest.param(118.5, "2", 1, id="just-short-of-the-floor"),
+        pytest.param(1.0, "20", 2, id="a-prompt-429-and-a-capped-wait"),
+    ],
+)
+def test_a_re_send_starts_only_with_the_time_a_generation_needs(
+    monkeypatch: pytest.MonkeyPatch, limited_at: float, wait: str, sent: int
+) -> None:
+    """N11: a re-send could start with any time at all left of the one
+    deadline -- a 429 at second 150 and a two-second wait sent the request
+    again with 88 s left, to be abandoned mid-generation at the deadline while
+    the provider may still bill it. A re-send now needs `MIN_RESEND_SECONDS`
+    left after the wait, half the deadline: the 120 s whole-call deadline F89
+    measured as too short to deliver a few thousand tokens. A wait that could
+    not be followed by a re-send is not waited at all."""
+    from caos.provider import TIMEOUT_SECONDS
+
+    assert models.MIN_RESEND_SECONDS == TIMEOUT_SECONDS / 2 == 120.0
+    # Two capped waits leave more than the floor: a rate limit answered
+    # promptly is still asked again every time it is allowed to be.
+    waits = (models.RATE_LIMIT_TRIES - 1) * models.RETRY_AFTER_CAP_SECONDS
+    assert TIMEOUT_SECONDS - waits > models.MIN_RESEND_SECONDS
+    clock = {"t": 0.0}
+    slept: list[float] = []
+    monkeypatch.setattr(models, "_clock", lambda: clock["t"])
+
+    def waited(seconds: float) -> None:
+        slept.append(seconds)
+        clock["t"] += seconds
+
+    monkeypatch.setattr(models, "_sleep", waited)
+
+    def limited_then_answer(prompt: str) -> object:
+        if chat.calls == 1:
+            clock["t"] = limited_at
+            return _Limited(wait)
+        return answer(finish="stop")
+
+    chat = ScriptedChat(answer=limited_then_answer)
+    completion = fake_completions(chat).complete(PROMPT)
+    assert chat.calls == sent
+    if sent == 1:
+        assert completion.refusal is RefusalCode.PROVIDER_UNAVAILABLE
+        assert completion.charge is None and slept == []
+    else:
+        assert completion.refusal is None and slept == [float(wait)]
+        assert TIMEOUT_SECONDS - clock["t"] >= models.MIN_RESEND_SECONDS
 
 
 def test_an_answer_that_never_finishes_arriving_is_abandoned_at_the_deadline(
