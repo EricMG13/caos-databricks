@@ -1357,6 +1357,16 @@ def test_every_value_in_any_section_is_data_host_labelled_ones_included() -> Non
         assert section in compact
 
 
+def test_the_forecast_extension_defines_cfo_as_the_calculator_reads_it() -> None:
+    """FP-39 (prompt half): the calculator and CP-CF's brief define `cfo` as
+    before cash interest and cash taxes (D44); the owners that assign it are
+    told so too, or a reported CFO after them is deducted twice."""
+    compact = " ".join(_FORECAST_EXTENSION.split())
+    assert "`cfo` is operating cash flow before cash interest and cash taxes" in (
+        compact
+    )
+
+
 def test_the_prompt_states_one_citation_rule_and_it_is_the_enforced_one() -> None:
     # The rule's own line wrap falls inside the phrase; compare it unwrapped.
     compact = " ".join(prompt_for().split())
