@@ -1316,8 +1316,9 @@ def test_startup_applies_the_declared_schema(
     empty_database: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """ "Postgres schema in full at startup". The database here has had nothing
-    applied to it, and after the app has started it holds the store's tables."""
-    from caos.store import connect
+    applied to it, and after the app has started it holds the store's tables,
+    in the store's own schema and not `public` (DL-1)."""
+    from caos.store import STORE_SCHEMA, connect
 
     monkeypatch.setenv(app_module.DATABASE_URL, empty_database)
 
@@ -1326,12 +1327,12 @@ def test_startup_applies_the_declared_schema(
 
     with connect(empty_database) as conn:
         applied = conn.execute(
-            "SELECT count(*) FROM information_schema.tables"
-            " WHERE table_schema = 'public' AND table_name IN"
+            "SELECT table_schema, count(*) FROM information_schema.tables"
+            " WHERE table_name IN"
             " ('runs', 'run_events', 'case_members', 'audit_events')"
-        ).fetchone()
-    assert applied is not None
-    assert applied[0] == 4
+            " GROUP BY table_schema"
+        ).fetchall()
+    assert applied == [(STORE_SCHEMA, 4)]
 
 
 class _CountingConnection:

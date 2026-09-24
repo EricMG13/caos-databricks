@@ -41,7 +41,13 @@ from caos.graph.worker import (
 from caos.methodology.bundle import Bundle
 from caos.provider import CompletionProvider
 from caos.refusals import Refusal, RefusalCode
-from caos.store import RunStatus, StoreConnection, apply_schema
+from caos.store import (
+    SEARCH_PATH_OPTION,
+    RunStatus,
+    StoreConnection,
+    apply_schema,
+    connect,
+)
 from caos.store import work as work_module
 from caos.store.budget import CEILING_ENV
 from caos.store.runs import run_status
@@ -267,7 +273,7 @@ def test_store_fault_backs_off_without_holding_a_claim(  # noqa: PLR0913 -- para
     def conn_factory() -> StoreConnection:
         if not next(connects):
             raise psycopg.OperationalError("down")
-        return psycopg.connect(empty_database, autocommit=False)
+        return connect(empty_database)
 
     clock = _Clock(limit=4)
     assert (
@@ -603,7 +609,7 @@ def test_the_worker_says_what_it_is_doing_and_a_backing_off_worker_says_so(
         CONFIG,
         execution_for=faulty,  # type: ignore[arg-type]
         stopping=_Clock(limit=3),
-        conn_factory=lambda: psycopg.connect(empty_database, autocommit=False),
+        conn_factory=lambda: connect(empty_database),
         blobs=blobs,
     )
 
@@ -634,7 +640,7 @@ def test_a_graceful_stop_beats_stopped_not_a_stale_polling_or_working(
             CONFIG,
             execution_for=never,
             stopping=_Clock(limit=1),
-            conn_factory=lambda: psycopg.connect(empty_database, autocommit=False),
+            conn_factory=lambda: connect(empty_database),
             blobs=blobs,
         )
         == 0
@@ -678,7 +684,7 @@ def test_a_store_that_will_not_take_the_beat_does_not_stop_the_worker(
                 CONFIG,
                 execution_for=watching,  # type: ignore[arg-type]
                 stopping=_Clock(limit=2),
-                conn_factory=lambda: psycopg.connect(empty_database, autocommit=False),
+                conn_factory=lambda: connect(empty_database),
                 blobs=blobs,
             )
             == 0
@@ -744,7 +750,12 @@ def test_a_session_the_server_ends_does_not_stop_the_worker(
     name = f"caos-worker-under-test-{uuid4().hex[:12]}"
 
     def factory() -> StoreConnection:
-        conn = psycopg.connect(empty_database, autocommit=False, application_name=name)
+        conn = psycopg.connect(
+            empty_database,
+            autocommit=False,
+            application_name=name,
+            options=SEARCH_PATH_OPTION,
+        )
         opened.append(1)
         return conn
 
@@ -754,7 +765,7 @@ def test_a_session_the_server_ends_does_not_stop_the_worker(
     # A migrated store, so the worker polls and keeps its session: on an
     # empty one every poll faults, the worker closes its session and backs
     # off, and a live session to end exists only by chance.
-    with psycopg.connect(empty_database) as migrating:
+    with connect(empty_database) as migrating:
         apply_schema(migrating)
     stopping = Event()
     config = WorkerConfig(BoundaryText.of("worker-test"), poll_seconds=0.1)
@@ -849,7 +860,7 @@ def test_a_cancel_during_the_last_call_ends_the_run_cancelled(
     def late_cancel() -> None:
         calls.append(1)
         if len(calls) == len(route.nodes):
-            with psycopg.connect(empty_database, autocommit=False) as other:
+            with connect(empty_database) as other:
                 assert request_cancel(other, run.run_id) is True
                 other.commit()
 

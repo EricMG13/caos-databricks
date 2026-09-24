@@ -285,23 +285,23 @@ def _wait_for_end(
 
 
 @contextmanager
-def _app_role(database_url: str, *, schema_create: bool) -> Iterator[str]:
-    """A login role holding only what the runbook grants the app's service
-    principal (MAX-22): CONNECT and CREATE on the database, which the bundle's
-    `CAN_CONNECT_AND_CREATE` gives, and, when `schema_create`, USAGE and
-    CREATE on the database's `public` schema, which PostgreSQL 15 and later
-    give nobody by default. Its URL; the role goes when the block ends."""
+def _app_role(database_url: str, *, database_create: bool) -> Iterator[str]:
+    """A login role holding only what the bundle grants the app's service
+    principal (MAX-22, DL-1): CONNECT and, when `database_create`, CREATE on
+    the database -- what `CAN_CONNECT_AND_CREATE` gives. Nothing on `public`,
+    which PostgreSQL 15 and later give nobody. Its URL; the role goes when the
+    block ends."""
     import psycopg
 
     parts = urlparse(database_url)
     database = parts.path.lstrip("/")
     role, password = f"caos_app_{uuid4().hex[:12]}", uuid4().hex
+    granted = "CONNECT, CREATE" if database_create else "CONNECT"
     with psycopg.connect(database_url, autocommit=True) as admin:
         # Both names are this function's own hex, never caller input.
         admin.execute(f"CREATE ROLE \"{role}\" LOGIN PASSWORD '{password}'")
-        admin.execute(f'GRANT CONNECT, CREATE ON DATABASE "{database}" TO "{role}"')
-        if schema_create:
-            admin.execute(f'GRANT USAGE, CREATE ON SCHEMA public TO "{role}"')
+        admin.execute(f'GRANT {granted} ON DATABASE "{database}" TO "{role}"')
+        admin.execute(f'REVOKE ALL ON SCHEMA public FROM PUBLIC, "{role}"')
     host = f"{parts.hostname}:{parts.port or 5432}"
     try:
         yield f"postgresql://{role}:{password}@{host}/{database}"
@@ -311,37 +311,50 @@ def _app_role(database_url: str, *, schema_create: bool) -> Iterator[str]:
             admin.execute(f'DROP ROLE "{role}"')
 
 
-def test_the_app_starts_on_the_grants_the_runbook_names(
+def test_the_app_starts_on_the_bundle_s_database_grant_alone(
     stub: WorkspaceStub, empty_database: str, tmp_path: Path
 ) -> None:
-    """MAX-22: every other boot here connects as an administrator. Holding
-    only the documented grants, the process applies the store's schema and
-    the checkpoint schema and answers ready."""
-    with (
-        _app_role(empty_database, schema_create=True) as url,
-        platform_app(stub, url, tmp_path / "caos.serve.log") as served,
-    ):
-        health = served.health()
+    """DL-1 (MAX-22): every other boot here connects as an administrator.
+    Holding only CONNECT and CREATE on the database -- the bundle's
+    `CAN_CONNECT_AND_CREATE`, and no hand-run grant on `public` -- the
+    process creates and fills the store's own schema and the checkpoint
+    schema, and answers ready; `public` is left with nothing of either."""
+    import psycopg
+
+    with _app_role(empty_database, database_create=True) as url:
+        with platform_app(stub, url, tmp_path / "caos.serve.log") as served:
+            health = served.health()
+        with psycopg.connect(empty_database) as admin:  # before the role goes
+            placed = {
+                str(row[0])
+                for row in admin.execute(
+                    "SELECT DISTINCT table_schema FROM information_schema.tables"
+                    " WHERE table_schema IN ('public', 'caos_store', 'caos_graph')"
+                ).fetchall()
+            }
     assert health["status"] == "ready" and health["store"] == "OK", health
+    assert placed == {"caos_store", "caos_graph"}, placed
 
 
-def test_the_database_grants_alone_cannot_hold_the_store(
+def test_a_role_that_may_not_create_the_schema_is_refused_by_sqlstate(
     empty_database: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """MAX-22: CONNECT and CREATE on the database do not reach its `public`
-    schema, where the store's tables go; that grant is a prerequisite of its
-    own, and without it the schema is refused with the server's 42501."""
-    from caos.refusals import Refusal
+    """DL-1: without CREATE on the database the store's schema cannot be
+    created. The refusal keeps its typed code, and stderr carries the
+    server's SQLSTATE alone -- 42501, a missing privilege, told apart from
+    drift -- never the server's message."""
+    from caos.refusals import Refusal, RefusalCode
     from caos.store import apply_schema, connect
 
-    with _app_role(empty_database, schema_create=False) as url:
+    with _app_role(empty_database, database_create=False) as url:
         conn = connect(url)
         try:
-            with pytest.raises(Refusal):
+            with pytest.raises(Refusal) as refused:
                 apply_schema(conn)
         finally:
             conn.close()
-    assert "schema: sqlstate 42501" in capsys.readouterr().err
+    assert refused.value.code is RefusalCode.STORE_SCHEMA_DRIFT
+    assert capsys.readouterr().err == "schema: sqlstate 42501\n"
 
 
 def test_the_platform_s_stop_signal_drains_the_worker_inside_the_grace(

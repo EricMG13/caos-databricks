@@ -25,7 +25,13 @@ from caos.evidence.extract import (
 from caos.evidence.ingest import Document, admit_pack
 from caos.evidence.read import read_block
 from caos.refusals import Refusal, RefusalCode
-from caos.store import StoreConnection, apply_schema, connect, source_sets
+from caos.store import (
+    STORE_SCHEMA,
+    StoreConnection,
+    apply_schema,
+    connect,
+    source_sets,
+)
 from caos.store.cases import lock_case
 from caos.store.gates import withdraw_source
 from caos.store.members import Standing, grant
@@ -307,12 +313,12 @@ def test_native_late_concurrent_and_cross_case_members_refuse(
 
 
 @pytest.mark.parametrize("table", ["source_set_versions", "source_set_members"])
-@pytest.mark.parametrize("schema", ["public", "source sets review"])
+@pytest.mark.parametrize("schema", [STORE_SCHEMA, "source sets review"])
 def test_native_completeness_ignores_temporary_shadows(
     empty_database: str, tmp_path: Path, table: str, schema: str
 ) -> None:
     with connect(empty_database) as conn:
-        if schema != "public":
+        if schema != STORE_SCHEMA:  # the store's own is created by `apply_schema`
             conn.execute(
                 psycopg.sql.SQL("CREATE SCHEMA {}").format(
                     psycopg.sql.Identifier(schema)

@@ -134,12 +134,50 @@ def test_connect_asks_for_keepalives_and_an_optional_statement_timeout(
     assert captured["keepalives_interval"] == store.KEEPALIVES_INTERVAL_SECONDS
     assert captured["keepalives_count"] == store.KEEPALIVES_COUNT
     assert captured["tcp_user_timeout"] == store.TCP_USER_TIMEOUT_MS
-    assert "options" not in captured
+    assert captured["options"] == "-c search_path=caos_store", "DL-1, and no bound"
 
     captured.clear()
     with pytest.raises(psycopg.OperationalError):
         store.connect("postgresql://unused.invalid/none", statement_timeout_ms=5000)
-    assert captured["options"] == "-c statement_timeout=5000"
+    assert captured["options"] == (
+        "-c search_path=caos_store -c statement_timeout=5000"
+    )
+
+
+def test_the_store_lives_in_its_own_schema_and_never_in_public(
+    empty_database: str,
+) -> None:
+    """DL-1: `public` needs a grant PostgreSQL 15 and later give nobody, so
+    the store creates its own schema, beside `caos_graph`, and names it as
+    every connection's whole search path. Every table, index, function and
+    bookkeeping row lands there; `public` holds nothing of the store's."""
+    assert store.STORE_SCHEMA == "caos_store"
+    assert store.SEARCH_PATH_OPTION == "-c search_path=caos_store"
+    with connect(empty_database) as conn:
+        assert conn.execute("SHOW search_path").fetchone() == ("caos_store",)
+        apply_schema(conn)
+        assert conn.execute("SELECT current_schema()").fetchone() == ("caos_store",)
+        placed: dict[str, int] = {
+            str(name): int(number)
+            for name, number in conn.execute(
+                "SELECT n.nspname, count(*) FROM pg_class c"
+                " JOIN pg_namespace n ON n.oid = c.relnamespace"
+                " WHERE n.nspname IN ('public', 'caos_store') GROUP BY 1"
+            ).fetchall()
+        }
+        functions = conn.execute(
+            "SELECT count(*) FROM pg_proc WHERE pronamespace = 'public'::regnamespace"
+        ).fetchone()
+        tables = {
+            str(row[0])
+            for row in conn.execute(
+                "SELECT table_name FROM information_schema.tables"
+                " WHERE table_schema = 'caos_store'"
+            ).fetchall()
+        }
+    assert "public" not in placed and functions == (0,)
+    assert {"store_schema", "store_migrations", "runs", "run_work"} <= tables
+    assert placed["caos_store"] > len(tables), "tables and their indexes"
 
 
 def test_connect_s_statement_timeout_bounds_the_whole_session(
@@ -374,6 +412,9 @@ def test_the_drift_refusal_carries_no_schema_text(empty_database: str) -> None:
 
 
 def _legacy(conn: StoreConnection) -> None:
+    """A store an older build wrote by hand, in the schema `connect` names
+    (DL-1), which `apply_schema` would otherwise have created first."""
+    conn.execute(f"CREATE SCHEMA {store.STORE_SCHEMA}")
     conn.execute(SCHEMA)
     conn.execute(store._BOOKKEEPING)
     conn.execute(
