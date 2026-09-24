@@ -564,14 +564,16 @@ def _line_blocks(
     return block_ids_by_line(counts)
 
 
-# How many space-separated pieces a stored text holds: one more than its
-# spaces. Tokens never hold whitespace a split would find, so a line's pieces
-# are its tokens' pieces summed, and NFC neither adds nor removes U+0020.
-_PIECES = "length({0}) - length(replace({0}, ' ', '')) + 1"
+# Each line's and each block's space-separated pieces -- one more than the
+# spaces its text holds -- in one statement. A line's pieces are its tokens'
+# summed (the tokens are joined by one space), and NFC neither adds nor
+# removes U+0020, so a block's pieces are the pieces of the tokens it holds.
 _WALK_QUERY = (
-    f"SELECT 0, line_id::text, sum({_PIECES.format('text')})"
+    "SELECT 0, line_id::text,"
+    " sum(length(text) - length(replace(text, ' ', '')) + 1)"
     " FROM source_tokens WHERE source_id = %s GROUP BY line_id"
-    f" UNION ALL SELECT 1, block_id, {_PIECES.format('text')}"
+    " UNION ALL SELECT 1, block_id,"
+    " length(text) - length(replace(text, ' ', '')) + 1"
     " FROM source_blocks WHERE source_id = %s"
 )
 

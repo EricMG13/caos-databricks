@@ -96,7 +96,7 @@ CROP_POLICY = "drop-outside"
 UNENCRYPTED = ""
 # How a run past `MAX_TOKEN_CHARS` is cut (`extract.nfc_pieces`): on its NFC
 # form, each piece's rectangle its share of the run's by character.
-TOKEN_CUT = "nfc-proportional"
+RUN_CUT = "nfc-proportional"
 
 Frame = tuple[float, float, float, float]
 
@@ -132,7 +132,7 @@ class PdfExtractor:
                 "maxpages": 0,
                 "caching": True,
                 "max_token_chars": MAX_TOKEN_CHARS,
-                "token_cut": TOKEN_CUT,
+                "token_cut": RUN_CUT,
             },
         )
 
