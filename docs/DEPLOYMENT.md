@@ -73,14 +73,25 @@ Identity: the platform proxy is the edge. The app reads the forwarded token, res
 ## 5. Smoke test after the first deploy
 
 ```bash
-curl -fsS "$(databricks apps get caos -p <profile> | jq -r .url)/api/health"
+TOKEN=$(DATABRICKS_CONFIG_PROFILE=<profile> uv run python -c \
+  "from databricks.sdk import WorkspaceClient as W; print(W().config.authenticate()['Authorization'])")
+curl -fsS -H "Authorization: $TOKEN" \
+  "$(databricks apps get caos -p <profile> | jq -r .url)/api/health"
 DATABRICKS_CONFIG_PROFILE=<profile> CAOS_MODEL_ENDPOINT=<endpoint> \
   CAOS_MODEL_PRICE=<endpoint,in,out,date> uv run python scripts/gateway_smoke.py
 ```
 
+`/api/health` sits behind the Apps proxy like every other route: an unauthenticated request never reaches the app, so the curl above carries the same bearer `scripts/enterprise_deploy.py`'s `_headers()` reads from the SDK's unified auth (`WorkspaceClient().config.authenticate()`). `$TOKEN` holds the word `Bearer` and the token together; nothing here prints it, and it belongs in a variable, never in a logged command line.
+
 Health must answer 200 with `python_version` starting `3.13` and `status: ready`; the smoke script must print the endpoint, `model=ChatDatabricks`, a response id and token usage. Record the Lakebase `SELECT version()` on first connection in `docs/rebuild/decisions.md` (D17).
 
-## 6. Operating notes
+## 6. Rolling back a release
+
+A rollback is a redeploy: check out the previous commit and run the same one command (section 3) against it, or run section 3a by hand at that commit. There is no separate rollback path or script, because there is nothing else to run -- `bundle deploy` overwrites the app's code and restarts it on whatever commit is checked out, the same as any other release.
+
+What a rollback does not undo is the store's schema: migrations (`caos/store/0002_*.sql` onward) are ordered, forward-only and applied additively on boot (`apply_schema`), with no corresponding "down" migration for any of them. Rolling code back to a commit from before a migration was added leaves that migration's tables and columns in place; the older code simply never reads them, which is safe only because every migration to date is additive (a new table or a new nullable column, never a rename or a drop). If a future migration ever needs to remove or rename something, redeploying the older code is not a safe way to undo it, and that migration's own entry should say so. The accepted-attempt ledger and the audit chain are append-only regardless (invariant 6), so a rollback never rewrites or loses either.
+
+## 7. Operating notes
 
 - The app is `caos` in the `prod` target only. In `dev` it is `caos-dev-<user id>`, each developer's own app (an app name is unique in the workspace, and the numeric SCIM id keeps to the Apps name rule of lowercase letters, digits and hyphens), and in any other target `caos-<target>` (DP-6, DF-5). A target added later therefore never deploys over the production app; the one command's E5 row looks up the name E2 resolved, and E2 fails if a target other than `prod` resolves to `caos`.
 - Preflight refuses an endpoint that logs payloads (an AI Gateway inference table, the legacy auto-capture, or a `telemetry_config` inference table that is named or samples any request), that exports logs or traces through `telemetry_config` (metrics alone are fine), that falls back to another model, or that serves more than one entity; the same rules are applied to an update still pending on the endpoint (DP-3, DF-3). Every prompt carries document text, and the host prices one model per endpoint. Guardrails are reported, not refused.
@@ -94,7 +105,7 @@ Health must answer 200 with `python_version` starting `3.13` and `status: ready`
 - Logs never carry document text: refusals are typed codes (`caos/refusals.py`).
 - To rotate the model: change `model_endpoint` and `model_price` together and redeploy; runs pinned under the old price finish under it.
 
-## 7. Before the workspace exists: the loopback stand-in
+## 8. Before the workspace exists: the loopback stand-in
 
 `tests/workspace_stub.py` (D28) answers, on `127.0.0.1`, every workspace path this repository's code and the CLI use, so the whole chain can be exercised with no profile:
 
