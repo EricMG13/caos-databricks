@@ -271,7 +271,7 @@ def test_both_gitleaks_scans_run_the_one_pinned_version() -> None:
     assert (check_gate_config.GITLEAKS_GATE,) in check_gate_config.CI_STEPS
 
 
-def test_an_unreadable_workflow_or_hook_config_is_refused(tmp_path: Path) -> None:
+def test_an_unreadable_ci_file_or_hook_config_is_refused(tmp_path: Path) -> None:
     root = _tree(tmp_path)
     (root / CI).write_text("jobs: [unclosed\n", encoding="utf-8")
     (root / HOOKS).write_text("- a list, not a mapping\n", encoding="utf-8")
