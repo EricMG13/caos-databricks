@@ -82,6 +82,33 @@ describe("Committee v1", () => {
     expect(held).toHaveTextContent("Available once the revision is filed.");
   });
 
+  test("a filed revision is paper, with its stamp, signatures and digests; a frozen one is not (N62)", () => {
+    const filed = committee();
+    const { container, unmount } = render(<CommitteeSection document={filed} tab={null} />);
+    const paper = container.querySelector("[data-paper]")!;
+    expect(paper.tagName).toBe("ARTICLE");
+    expect(paper).toHaveAccessibleName(filed.body.case_title);
+    expect(paper.querySelector(".paper-stamp")).toHaveTextContent("Filed");
+    expect(paper.querySelector("[data-figure-chip]")).not.toBeNull();
+    const sign = paper.querySelector(".paper-sign")!;
+    expect(sign).toHaveTextContent("Signed by");
+    expect(sign).toHaveTextContent("Filed by");
+    // Short on the page, whole in the title.
+    const payload = paper.querySelector(`[title="sha256:${filed.body.payload_sha256}"]`);
+    expect(payload).not.toBeNull();
+    expect(paper.querySelector(".paper-filed")).toHaveTextContent("filed event");
+    // The full receipt is still the record below it.
+    expect(container.querySelector("[data-committee-receipt]")).not.toBeNull();
+    unmount();
+    const frozen = parseCommitteeDocument({
+      ...filed,
+      body: { ...filed.body, state: "frozen", filed_by: null, receipt: null, package_url: null },
+    });
+    const { container: held } = render(<CommitteeSection document={frozen} tab={null} />);
+    expect(held.querySelector("[data-paper]")).toBeNull();
+    expect(held.querySelector("[data-committee-narrative]")).not.toBeNull();
+  });
+
   test("renders distinct hostile narrative spans and typed figures as text", () => {
     const { container } = render(<CommitteeSection document={committee()} tab={null} />);
     const narrative = container.querySelector("[data-committee-narrative]")!;
