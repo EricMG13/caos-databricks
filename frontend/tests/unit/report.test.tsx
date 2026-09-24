@@ -193,8 +193,7 @@ describe("Report v1", () => {
         return <output data-where>{useLocation().search}</output>;
       }
       const path =
-        `/report/?case=${document.body.case_id}` +
-        `&run=${document.body.displayed_run_id}&tab=x`;
+        `/report/?case=${document.body.case_id}` + `&run=${document.body.displayed_run_id}&tab=x`;
       const view = (shown: boolean) => (
         <MemoryRouter initialEntries={[path]}>
           {shown ? <ReportSection document={document} tab={null} /> : null}

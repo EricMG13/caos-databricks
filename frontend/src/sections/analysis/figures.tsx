@@ -142,7 +142,8 @@ export function segmentMix(tables: readonly Table[]): Figure | null {
   const unit = periodUnit(tables, latest);
   const values = segments.map((segment) => at(segment, latest)?.revenue?.value);
   const total = sumOf(values);
-  const amount = total.value === null ? null : `${formatDecimal(total.value)}${unit ? ` ${unit}` : ""}`;
+  const amount =
+    total.value === null ? null : `${formatDecimal(total.value)}${unit ? ` ${unit}` : ""}`;
   return {
     key: "segment-mix",
     table: "cp1.segment_revenue_schedule",
@@ -209,7 +210,8 @@ export function addbacks(tables: readonly Table[]): Figure | null {
   const unit = periodUnit(tables, latest);
   const values = items.map((item) => at(item)?.value?.value);
   const net = sumOf(values);
-  const amount = net.value === null ? null : `${formatDecimal(net.value, true)}${unit ? ` ${unit}` : ""}`;
+  const amount =
+    net.value === null ? null : `${formatDecimal(net.value, true)}${unit ? ` ${unit}` : ""}`;
   return {
     key: "addbacks",
     table: "cp1.adjusted_ebitda_bridge",
@@ -290,7 +292,8 @@ export function maturityLadder(tables: readonly Table[]): Figure | null {
   const values = own.map((row) => row.principal?.value);
   const total = sumOf(values);
   const unknown = unknownCount(values);
-  const amount = total.value === null ? null : `${formatDecimal(total.value)}${unit ? ` ${unit}` : ""}`;
+  const amount =
+    total.value === null ? null : `${formatDecimal(total.value)}${unit ? ` ${unit}` : ""}`;
   const principal =
     amount === null
       ? `Principal unstated for all ${own.length} facilities`

@@ -222,13 +222,17 @@ test("the nearest maturity date does not move when its own principal is unstated
     ...debt,
     rows: debt.rows.map((row) =>
       row[facility]!.text === "SUN_2027"
-        ? row.map((cell, index) => (index === principal ? { text: "Not stated", value: null } : cell))
+        ? row.map((cell, index) =>
+            index === principal ? { text: "Not stated", value: null } : cell,
+          )
         : row,
     ),
   };
   const ladder = maturityLadder(cp1.tables.map((table) => (table === debt ? unstated : table)))!;
   // Still the nearest: principal availability never enters that choice.
-  expect(ladder.summary).toMatch(/the nearest, 5\.50% Senior Notes due 2027, falls due 2027-04-15\.$/);
+  expect(ladder.summary).toMatch(
+    /the nearest, 5\.50% Senior Notes due 2027, falls due 2027-04-15\.$/,
+  );
   // A second facility now unstated, its own class/year cell retained as a
   // gap rather than dropped or silently folded into 0.
   expect(ladder.summary).toBe(

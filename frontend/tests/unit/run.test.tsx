@@ -529,10 +529,9 @@ describe("Run", () => {
         },
       ],
     };
-    const doc = withActions(
-      { ...running, body: { ...running.body, run: researchRun } },
-      [{ action: "PIN_RUN_INPUT", refusal: null }],
-    );
+    const doc = withActions({ ...running, body: { ...running.body, run: researchRun } }, [
+      { action: "PIN_RUN_INPUT", refusal: null },
+    ]);
     const receipt = {
       run_id: run.run_id,
       source_set_version: run.source_set_version,

@@ -553,7 +553,9 @@ export function PinInputControl({
     onChange: (event: ChangeEvent<HTMLInputElement>) =>
       setResearch((current: ResearchBrief) => ({
         ...current,
-        questions: [{ ...(current.questions[0] ?? EMPTY_RESEARCH_QUESTION), [key]: event.target.value }],
+        questions: [
+          { ...(current.questions[0] ?? EMPTY_RESEARCH_QUESTION), [key]: event.target.value },
+        ],
       })),
   });
   const payload = requiresResearch ? research : null;
