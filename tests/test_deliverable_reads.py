@@ -226,13 +226,15 @@ def test_a_render_refusal_maps_to_its_typed_code() -> None:
     assert excinfo.value.code == RefusalCode.DELIVERABLE_PAYLOAD_INVALID
 
 
-def test_a_frozen_row_disagreeing_with_the_saved_revision_is_refused_invalid(
+def test_a_frozen_row_disagreeing_with_the_saved_revision_is_a_record_mismatch(
     client: TestClient, lite: _Harness
 ) -> None:
-    """`deliverable_revisions` is immutable, so only the frozen row can move:
-    a `payload_sha256` written outside `freeze_in` is the app disagreeing
-    with itself, not the caller's fault, and `_frozen`'s own tamper check
-    catches it before `render` ever sees a byte."""
+    """N4. `deliverable_revisions` is immutable, so only the frozen row can
+    move: a `payload_sha256` written outside `freeze_in` is the app disagreeing
+    with itself, not the caller's fault. It was answered 400 "Correct the
+    deliverable payload", which no caller can do; it is the server's own
+    record failing verification, 500 `ARTIFACT_RECORD_MISMATCH`, wherever the
+    publication is proven -- Committee and both downloads alike."""
     revision = _save(lite)
     _sign(lite, revision)
     _freeze(lite, revision)
@@ -242,9 +244,9 @@ def test_a_frozen_row_disagreeing_with_the_saved_revision_is_refused_invalid(
         ("0" * 64, lite.case_id, str(revision)),
     )
     lite.conn.commit()
-    response = client.get(_render_path(lite, revision), headers=_as(lite.approver))
-    assert response.status_code != 200
-    assert response.json()["code"] == "DELIVERABLE_PAYLOAD_INVALID"
+    mismatch = (500, "ARTIFACT_RECORD_MISMATCH")
+    assert _answer(client, lite, _render_path(lite, revision)) == mismatch
+    assert _answer(client, lite, _section(lite, revision, "committee")) == mismatch
 
 
 def test_render_revision_reads_the_frozen_bytes_directly(lite: _Harness) -> None:

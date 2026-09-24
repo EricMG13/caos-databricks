@@ -408,11 +408,15 @@ def _publication(
     if row is None:
         raise Refusal(RefusalCode.DELIVERABLE_NOT_FROZEN)
     frozen_digest, freezer, filer, filed_at, filing_evidence, packaged = row
+    if frozen_digest != digest:
+        # N4: the revision row is immutable, so this is the publication row
+        # moved outside `freeze_in` -- the server's own record failing
+        # verification, which no caller can correct.
+        raise Refusal(RefusalCode.ARTIFACT_RECORD_MISMATCH)
     signatures = revision_signatures(conn, case_id, revision)
     signers = [who for who, _ in signatures]
     if (
-        frozen_digest != digest
-        or not signers
+        not signers
         or freezer in signers
         or any(signed != digest for _, signed in signatures)
         or (filer is None) != (filed_at is None)
