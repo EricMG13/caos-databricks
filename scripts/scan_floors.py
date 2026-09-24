@@ -25,22 +25,6 @@ from tracked import tracked_python
 MEASURED = re.compile(r'\bfilename="([^"]*)"')
 
 
-def scanned_targets(report: Mapping[str, object]) -> list[str]:
-    """The targets a Trivy report actually examined.
-
-    An image report with no Results at all is the same failure as a bandit
-    report with no metrics: the scan ran, exited zero, and looked at nothing.
-    """
-    results = report.get("Results")
-    if not isinstance(results, list):
-        return []
-    return [
-        str(result.get("Target"))
-        for result in results
-        if isinstance(result, dict) and result.get("Target")
-    ]
-
-
 def covered_files(report: Mapping[str, object]) -> list[str]:
     """The files a bandit report actually measured, excluding its own totals row."""
     metrics = report.get("metrics")
@@ -124,6 +108,13 @@ class Claims:
         ]
 
 
+def _bandit_findings(report: Mapping[str, object]) -> list[object]:
+    """A bandit report's own `results`; `[]` for a report shape (Cobertura's
+    reshaped `{"metrics": ...}`) that never carries one."""
+    results = report.get("results")
+    return list(results) if isinstance(results, list) else []
+
+
 def floor_failures(
     report: Mapping[str, object],
     *,
@@ -131,7 +122,13 @@ def floor_failures(
     no_parse_errors: bool = False,
     claims: Claims | None = None,
 ) -> list[str]:
-    """One line per floor the report fell through."""
+    """One line per floor the report fell through.
+
+    Bandit's own findings are one of them (N29): CI once ran bandit twice,
+    once to a JSON report this floor read and once bare so its own exit
+    code could be the verdict. The floor is the verdict now, so a bare
+    second run added nothing but the same scan again.
+    """
     failures = []
     covered = covered_files(report)
     if len(covered) < min_files:
@@ -142,6 +139,9 @@ def floor_failures(
     errors = _parse_errors(report)
     if no_parse_errors and errors:
         failures.append(f"report carries {len(errors)} parse error(s)")
+    findings = _bandit_findings(report)
+    if findings:
+        failures.append(f"found {len(findings)} issue(s)")
     if claims is not None:
         failures.extend(_claim_failures(claims, frozenset(covered)))
     return failures
@@ -167,10 +167,11 @@ def _claim_failures(claims: Claims, covered: frozenset[str]) -> list[str]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("report", type=Path)
-    parser.add_argument("--min-files", type=int, default=1)
     parser.add_argument("--no-parse-errors", action="store_true")
-    parser.add_argument("--trivy", action="store_true")
-    parser.add_argument("--cover", nargs="*", default=[])
+    # `nargs="+"`, not `"*"`: bare `--cover` given no directory used to leave
+    # `args.cover` empty, so `if args.cover:` below skipped the claim check
+    # silently rather than refusing a scan claimed for nothing (N46).
+    parser.add_argument("--cover", nargs="+", default=[])
     parser.add_argument("--unscanned", nargs="*", default=[])
     parser.add_argument(
         "--repo", type=Path, default=Path(__file__).resolve().parents[1]
@@ -187,21 +188,7 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as refusal:
         parser.error(str(refusal))
     text = report_path.read_text(encoding="utf-8")
-    # `--trivy` reads the scanner's own JSON, so it takes the same branch a
-    # bandit report does; only `--cobertura` reshapes what was read.
     report = cobertura_metrics(text) if args.cobertura else json.loads(text)
-
-    if args.trivy:
-        targets = scanned_targets(report)
-        if not targets:
-            print(
-                f"{args.report}: the image scan examined no targets; "
-                "a scan that scanned nothing is a failure",
-                file=sys.stderr,
-            )
-            return 1
-        print(f"image scan examined {len(targets)} target(s)")
-        return 0
 
     claims = None
     if args.cover:
@@ -212,10 +199,7 @@ def main(argv: list[str] | None = None) -> int:
             tracked=tuple(str(path.relative_to(repo)) for path in tracked_python(repo)),
         )
     failures = floor_failures(
-        report,
-        min_files=args.min_files,
-        no_parse_errors=args.no_parse_errors,
-        claims=claims,
+        report, no_parse_errors=args.no_parse_errors, claims=claims
     )
     for line in failures:
         print(f"{args.report}: {line}", file=sys.stderr)

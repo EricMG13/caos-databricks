@@ -72,8 +72,16 @@ NOT_ENFORCED = {
 
 
 def _normalise(phrase: str) -> str:
-    """Lower-case a phrase or identifier to underscore-joined word tokens."""
+    """Lower-case a phrase or identifier to underscore-joined word tokens.
+
+    Two boundaries, not one: lower-to-upper (`loadDeal` -> `load_Deal`) and,
+    since a run of capitals is itself one word, the acronym-to-word boundary
+    inside it (`HTTPResponse` -> `HTTP_Response`). Splitting only the first
+    left an acronym-prefixed spelling of a banned word -- `APICorpus` -- as
+    one token that matched neither the word nor its plural.
+    """
     spaced = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", phrase)
+    spaced = re.sub(r"(?<=[A-Z])(?=[A-Z][a-z])", "_", spaced)
     return re.sub(r"[^a-z0-9]+", "_", spaced.lower()).strip("_")
 
 
@@ -99,7 +107,16 @@ def unclassified(banned: dict[str, str]) -> tuple[set[str], set[str]]:
 
 
 def identifiers(tree: ast.Module) -> Iterator[tuple[int, str]]:
-    """Every name this module defines: functions, classes, arguments, targets."""
+    """Every name this module defines: functions, classes, arguments, targets.
+
+    A PEP 695 type parameter (`def f[Corpus](...)`, `class C[Chunk]:`) is a
+    name this module defines as surely as an argument is: `ast.walk` already
+    reaches it through the `type_params` field, but a `TypeVar`, `ParamSpec`
+    or `TypeVarTuple` node carries its name as a plain string attribute, not
+    a nested `ast.Name`, so it was walked past rather than classified. A
+    `type X = ...` alias's own name is already a `Name` node in `Store`
+    context and needs no separate branch.
+    """
     for node in ast.walk(tree):
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
             yield node.lineno, node.name
@@ -112,6 +129,8 @@ def identifiers(tree: ast.Module) -> Iterator[tuple[int, str]]:
         elif isinstance(node, ast.alias):
             yield node.lineno, node.asname or node.name
         elif isinstance(node, ast.ExceptHandler | ast.MatchAs) and node.name:
+            yield node.lineno, node.name
+        elif isinstance(node, ast.TypeVar | ast.ParamSpec | ast.TypeVarTuple):
             yield node.lineno, node.name
 
 

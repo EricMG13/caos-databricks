@@ -183,6 +183,25 @@ def _front_matter_list(prompt: str, key: str) -> tuple[str, ...]:
     return tuple(item.strip() for item in match.group(1).split(",") if item.strip())
 
 
+def _block_byte_problems(slug: str, blocks: tuple[str, ...]) -> list[str]:
+    """Every declared block, read through `prompt_block` (CF-079): a file
+    missing was the only thing `is_file()` could ever have told this gate,
+    so a block edited without its host manifest entry updated to match --
+    the bytes `build_handoff_prompt` would actually refuse at request time
+    -- passed a workspace check that only asked whether the name existed.
+    """
+    problems = []
+    for block in blocks:
+        try:
+            prompt_block(block)
+        except Refusal:
+            problems.append(
+                f"{slug}: block {block} is missing, or its bytes do not match "
+                "the host manifest"
+            )
+    return problems
+
+
 def _contract_problems(
     bundle: Bundle, module_id: str, slug: str, slugs: dict[str, str]
 ) -> tuple[list[str], set[str]]:
@@ -205,11 +224,7 @@ def _contract_problems(
     prompt_rows = tuple(row.file for row in contract.inputs if row.source == "prompt")
     if prompt_rows != blocks:
         problems.append(f"{slug}: Inputs prompt rows do not match the blocks")
-    problems += [
-        f"{slug}: block {block} has no file"
-        for block in (*always, *conditional)
-        if not (PROMPTS / f"{block}.md").is_file()
-    ]
+    problems += _block_byte_problems(slug, (*always, *conditional))
     if not (contract.has_process and contract.has_outputs):
         problems.append(f"{slug}: Process or Outputs section missing")
     return problems, named | set(blocks)

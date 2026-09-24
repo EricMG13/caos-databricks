@@ -11,6 +11,12 @@ repos:
     rev: v8.24.3
     hooks:
       - id: gitleaks
+      # The staged hook above (`gitleaks git --pre-commit --staged`) never
+      # sees an unstaged or untracked file (CF-064); this one scans the
+      # whole working tree as it sits on disk, same pin as the hook above.
+      - id: gitleaks
+        name: gitleaks (uncommitted tree)
+        entry: gitleaks dir --no-banner --redact -v .
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:

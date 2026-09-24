@@ -1,0 +1,14 @@
+{
+  "caos/api/reads/analysis.py": {
+    "blob": 40,
+    "io": 249
+  },
+  "caos/api/reads/book.py": {
+    "blob": 160,
+    "io": 998
+  },
+  "caos/api/reads/model.py": {
+    "blob": 40,
+    "io": 250
+  }
+}

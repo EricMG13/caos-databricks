@@ -53,6 +53,30 @@ def stale_stages(bundle: Bundle) -> list[str]:
     ]
 
 
+def manifest_problems(root: Path = REPO) -> list[str]:
+    """The committed host manifest must be exactly what `host_manifest.py`'s
+    own logic generates from the current source now (CF-079): `verify`
+    checks each prompt block's bytes against whatever the manifest already
+    records, but never that the manifest itself still matches the two
+    files (`SKILL.md`, `cash_flow.py`) and every prompt block it hashes --
+    so all three could drift together, unregenerated, and nothing here
+    would have noticed.
+    """
+    from host_manifest import generate_host_manifest
+
+    manifest = root / "icm" / "HOST_INTEGRITY_v1.json"
+    try:
+        committed = manifest.read_bytes()
+    except OSError:
+        return ["icm/HOST_INTEGRITY_v1.json: missing"]
+    if generate_host_manifest(root) != committed:
+        return [
+            "icm/HOST_INTEGRITY_v1.json: does not match a freshly generated "
+            "manifest; run scripts/host_manifest.py"
+        ]
+    return []
+
+
 def main() -> int:
     from caos.icm import BUNDLE, verify
     from caos.methodology.bundle import Bundle
@@ -60,6 +84,7 @@ def main() -> int:
     bundle = Bundle(BUNDLE)
     problems = verify(bundle) + [f"stale: {p}" for p in stale_stages(bundle)]
     problems += skill_problems()
+    problems += manifest_problems()
     for problem in problems:
         print(problem)
     if problems:

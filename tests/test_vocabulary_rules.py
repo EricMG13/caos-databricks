@@ -137,6 +137,45 @@ def test_identifiers_includes_match_capture_names() -> None:
     assert "chunk_capture" in found
 
 
+def test_identifiers_includes_pep695_type_parameters() -> None:
+    """CF-105: a generic's own type parameters are declared in `type_params`,
+    a field `ast.walk` reaches but the old branch list never classified, so a
+    banned word spelled only as `def f[Corpus](...)` was never named."""
+    tree = ast.parse(
+        "def f[Corpus](x: Corpus) -> Corpus:\n"
+        "    return x\n"
+        "class C[Chunk]:\n"
+        "    pass\n"
+        "def g[*Passage](x): ...\n"
+        "def h[**Footnote](x): ...\n"
+        "type Fragment = list[int]\n"
+    )
+    found = {name for _, name in check_vocabulary.identifiers(tree)}
+    assert {"Corpus", "Chunk", "Passage", "Footnote"} <= found
+
+
+def test_normalise_splits_an_acronym_from_the_word_after_it() -> None:
+    """CF-105: only a lower-to-upper boundary was split, so an acronym run
+    swallowed the capitalised word after it -- `HTTPResponse` stayed one
+    token, and a banned word spelled that way was never enforced."""
+    assert check_vocabulary._normalise("HTTPResponse") == "http_response"
+    assert check_vocabulary._normalise("loadDealChunks") == "load_deal_chunks"
+
+
+def test_violations_catches_a_banned_word_spelled_after_an_acronym(
+    tmp_path: Path,
+) -> None:
+    """Before the fix, `APICorpus` normalised to one token, `apicorpus`, which
+    matches neither `corpus` nor its plural, so the class slipped past."""
+    module = tmp_path / "m.py"
+    module.write_text("class APICorpus:\n    pass\n", encoding="utf-8")
+    reported = list(
+        check_vocabulary.violations(module, check_vocabulary.banned_terms(CONTEXT_MD))
+    )
+    assert len(reported) == 1
+    assert "'source set'" in reported[0]
+
+
 def test_banned_terms_skips_an_empty_synonym_cell() -> None:
     """A trailing comma in the Domain table's synonym cell is an empty phrase,
     which normalises to no token and bans nothing."""

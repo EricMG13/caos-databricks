@@ -153,6 +153,29 @@ def test_a_set_up_held_by_an_old_snapshot_refuses_in_time_and_heals(
     finally:
         reader.rollback()
         reader.close()
+
+
+def test_a_set_up_lock_held_by_another_process_refuses_in_time(
+    empty_database: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CF-071: the sibling test above exercises _bounded_set_up's statement
+    timeout, once inside the advisory lock. _set_up's own deadline -- polling
+    for a lock another process already holds, never reaching the index build
+    at all -- was the one STORE_UNAVAILABLE branch no test reached."""
+    import time
+
+    monkeypatch.setattr(checkpoint, "SETUP_LOCK_SECONDS", 0.3)
+    monkeypatch.setattr(checkpoint, "SETUP_LOCK_POLL_SECONDS", 0.05)
+    holder = psycopg.connect(empty_database, autocommit=True)
+    try:
+        holder.execute("SELECT pg_advisory_lock(%s)", (SETUP_LOCK_KEY,))
+        started = time.monotonic()
+        with pytest.raises(Refusal, match=r"^STORE_UNAVAILABLE$"):
+            checkpointer(empty_database)
+        assert time.monotonic() - started < 5
+    finally:
+        holder.execute("SELECT pg_advisory_unlock(%s)", (SETUP_LOCK_KEY,))
+        holder.close()
     with psycopg.connect(empty_database, autocommit=True) as conn:
         held = conn.execute(
             # `pg_locks` is the whole server's: under `-n auto` other tests'

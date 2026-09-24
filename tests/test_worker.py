@@ -42,6 +42,7 @@ from caos.methodology.bundle import Bundle
 from caos.provider import CompletionProvider
 from caos.refusals import Refusal, RefusalCode
 from caos.store import RunStatus, StoreConnection, apply_schema
+from caos.store import work as work_module
 from caos.store.runs import run_status
 from caos.store.work import LEASE_SECONDS, Lease, enqueue_run, worker_states
 
@@ -353,6 +354,19 @@ def test_price_from_environment_reads_one_dated_price() -> None:
     assert (str(price.input_per_token), str(price.as_of)) == ("0.000001", "2026-09-13")
     with pytest.raises(Refusal, match=r"^MONEY_INVALID$"):
         worker.price_from_environment("m/x", "m/x,NaN,0.1,2026-09-13")
+
+
+@pytest.mark.parametrize("seconds", [0, -1, 86_401, "60", 60.5, True])
+def test_require_seconds_refuses_a_non_whole_or_out_of_range_lease(
+    seconds: object,
+) -> None:
+    """CF-071: `claim_run` and `require_lease` both delegate their own
+    `lease_seconds` bound to this one check, which no test called directly;
+    a caller could not reach it without a live claim, so the type gate --
+    a bool passes `0 < x <= 86_400` were it not excluded by name -- had
+    never actually run."""
+    with pytest.raises(Refusal, match=r"^CALL_OUTCOME_INVALID$"):
+        work_module._require_seconds(cast(int, seconds))
 
 
 def test_the_lease_outlives_the_provider_timeout() -> None:
