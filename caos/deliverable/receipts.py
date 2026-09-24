@@ -44,10 +44,16 @@ def read_filed_receipt(
     advice offered for a record that is immutable (FP-05). What is proven here is
     what a filed record *is*: the frozen payload still hashes to the digest the
     receipt names, the receipt bytes are the ones the host wrote, the three roles
-    are independent, and the `DELIVERABLE_FILED` link is in a verified audit
-    chain whose head has not moved. Filing itself re-proves the revision under
-    the case lock (`caos/api/commands/deliverable.py`), which is where a live
-    re-derivation belongs.
+    are independent, and the `OPINION_SIGNED`, `DELIVERABLE_FROZEN` and
+    `DELIVERABLE_FILED` links are all in one verified audit chain whose head has
+    not moved (FP-34: `deliverable_opinions` and `deliverable_publications` are
+    consistent with each other by construction here, but consistency is not
+    provenance -- `sign_opinion_in` and `freeze_in` write only those rows, and a
+    caller composing its own envelope around them, as this repository's own
+    convenience wrappers do not, could commit either with no audit event at
+    all). Filing itself re-proves the revision under the case lock
+    (`caos/api/commands/deliverable.py`), which is where a live re-derivation
+    belongs.
     """
     row = conn.execute(
         "SELECT r.payload_sha256,p.payload_sha256,p.frozen_by,p.filed_by,"
@@ -107,6 +113,32 @@ def read_filed_receipt(
         or not verify_chain(conn, case_id)
         or trail[-1].entry_sha256 != audit_head(conn, case_id)
     ):
+        raise invalid
+    # FP-34: the same OPINION_SIGNED/DELIVERABLE_FROZEN provenance check
+    # `_publication` (`caos/api/reads/reports.py`) makes over a frozen
+    # revision, made here too so this reader does not depend on that one
+    # caller for it. The rows above are consistent with each other; this is
+    # what proves each was actually signed or frozen through the audited
+    # commands, not merely written to agree.
+    bound = {"revision_id": str(revision_id), "payload_sha256": digest}
+    required = {("OPINION_SIGNED", who) for who in signers}
+    required.add(("DELIVERABLE_FROZEN", freezer))
+    accepted = {
+        actor: payload_digests(
+            conn,
+            scope=case_id,
+            actor_id=actor,
+            payload=bound,
+            commands=("SIGN_OPINION", "FREEZE_DELIVERABLE"),
+        )
+        for _action, actor in required
+    }
+    events = {
+        (entry.action, entry.actor_id)
+        for entry in trail
+        if entry.payload_sha256 in accepted.get(entry.actor_id, frozenset())
+    }
+    if not required <= events:
         raise invalid
     # The frozen payload's own bytes, from the store that addresses them by
     # digest: a filed record is immutable, so what is checked is that the bytes
