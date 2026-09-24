@@ -114,9 +114,11 @@ def test_code_from_before_the_schema_move_is_never_a_rollback(repo: Path) -> Non
 
 def test_an_unreadable_commit_is_refused_not_passed(repo: Path) -> None:
     release = _commit(repo, _store(), "release")
-    assert rollback_check.rollback_problems("not-a-commit", release, repo) == [
-        "not-a-commit has no caos/store/__init__.py (or is not a commit)"
-    ]
+    missing = "not-a-commit has no caos/store/__init__.py (or is not a commit)"
+    assert rollback_check.store_layout("not-a-commit", repo) == (
+        rollback_check.StoreLayout("", (), missing)
+    )
+    assert rollback_check.rollback_problems("not-a-commit", release, repo) == [missing]
     computed = _commit(
         repo,
         {"caos/store/__init__.py": "MIGRATIONS = tuple(load())\n"},
