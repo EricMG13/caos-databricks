@@ -177,7 +177,7 @@ def test_committee_reads_the_exact_frozen_payload_and_receipt(
         _path(lite, revision, "committee"), headers=_as(lite.approver)
     )
     assert response.status_code != 200
-    assert response.json()["code"] == "DELIVERABLE_PAYLOAD_INVALID"
+    assert response.json()["code"] == "ARTIFACT_RECORD_MISMATCH"
     assert set(response.json()) == {"code", "clears"}
 
 
@@ -337,7 +337,7 @@ def test_frozen_actors_must_match_the_saved_events(
         _path(lite, revision, "committee"), headers=_as(lite.approver)
     )
     assert response.status_code != 200
-    assert response.json()["code"] == "DELIVERABLE_PAYLOAD_INVALID"
+    assert response.json()["code"] == "ARTIFACT_RECORD_MISMATCH"
 
 
 ACTIONS = (

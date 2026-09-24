@@ -14,12 +14,12 @@
   "caos/api/reads/deliverable.py": {
     "blob": {
       "package": 3,
-      "render": 2,
+      "render": 3,
       "render_frozen": 7
     },
     "io": {
       "package": 20,
-      "render": 19,
+      "render": 20,
       "render_frozen": 50
     }
   },

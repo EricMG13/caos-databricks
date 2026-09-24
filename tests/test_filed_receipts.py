@@ -18,7 +18,7 @@ from test_filing_chain import _actor, _default_signer, _freeze, _sign
 from test_revisions import _save
 
 from caos.blobs import BlobStore
-from caos.deliverable import filing
+from caos.deliverable import revisions
 from caos.deliverable.filing import (
     Receipt,
     file_deliverable,
@@ -163,7 +163,7 @@ def test_receipt_refuses_changed_publication_or_signature(
         "digest": "UPDATE deliverable_publications SET payload_sha256=%s",
     }
     _corrupt(lite, statements[field], "f" * 64 if field == "digest" else uuid4())
-    with pytest.raises(Refusal, match="DELIVERABLE_PAYLOAD_INVALID"):
+    with pytest.raises(Refusal, match="ARTIFACT_RECORD_MISMATCH"):
         _read(lite, receipt)
 
 
@@ -217,7 +217,7 @@ def test_receipt_refuses_corrupt_audit_linkage(lite: _Harness, damage: str) -> N
             "UPDATE deliverable_receipts SET receipt_sha256=%s",
             lite.blobs.put(json.dumps(data).encode()),
         )
-    with pytest.raises(Refusal, match="DELIVERABLE_PAYLOAD_INVALID"):
+    with pytest.raises(Refusal, match="ARTIFACT_RECORD_MISMATCH"):
         _read(lite, receipt)
 
 
@@ -261,7 +261,7 @@ def test_read_filed_receipt_refuses_a_signature_or_freeze_never_audited(
     actions = {entry.action for entry in audit_trail(lite.conn, lite.case_id)}
     assert "DELIVERABLE_FILED" in actions
     assert not actions & {"OPINION_SIGNED", "DELIVERABLE_FROZEN"}
-    with pytest.raises(Refusal, match="DELIVERABLE_PAYLOAD_INVALID"):
+    with pytest.raises(Refusal, match="ARTIFACT_RECORD_MISMATCH"):
         _read(lite, receipt)
 
 
@@ -342,7 +342,7 @@ def test_coherently_replaced_receipt_and_pin_cannot_change_the_filed_event(
         lite.blobs.put(receipt_bytes(forged)),
     )
     assert verify_chain(lite.conn, lite.case_id)
-    with pytest.raises(Refusal, match="DELIVERABLE_PAYLOAD_INVALID"):
+    with pytest.raises(Refusal, match="ARTIFACT_RECORD_MISMATCH"):
         _read(lite, receipt)
 
 
@@ -626,7 +626,7 @@ def test_a_payload_the_renderer_refuses_is_not_filed(
     def refused(_payload: object) -> bytes:
         raise RenderRefused("DELIVERABLE_MARKDOWN_UNSUPPORTED")
 
-    monkeypatch.setattr(filing, "render", refused)
+    monkeypatch.setattr(revisions, "render", refused)
     with pytest.raises(Refusal) as caught:
         file_deliverable(
             lite.conn,

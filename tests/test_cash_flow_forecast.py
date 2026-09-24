@@ -544,7 +544,6 @@ def test_each_residual_is_held_to_its_own_opening_balance(
         assert row["unavailable_reason"] == reason, (off, row[f"residual_{residual}"])
 
 
-
 def test_each_period_is_held_to_its_own_opening_balances() -> None:
     """N75: the tolerance was fixed from the chain's first openings, so once a
     year repaid 99,990 of 100,000 of debt the next year's stated debt of 110
@@ -552,7 +551,9 @@ def test_each_period_is_held_to_its_own_opening_balances() -> None:
     read 2x on the computed debt where the stated one implies 22x. Each period
     now answers to the balances it opened with."""
     request = forecast_request()
-    request["opening"]["debt_by_facility"] = [{"facility_id": "TERM", "amount": "100000"}]
+    request["opening"]["debt_by_facility"] = [
+        {"facility_id": "TERM", "amount": "100000"}
+    ]
     request["opening"]["cash"] = "100000"
     request["tolerance"] = "1000"
     request["contractual"]["amortisation"] = []
@@ -570,12 +571,16 @@ def test_each_period_is_held_to_its_own_opening_balances() -> None:
     second["stated_closing_cash"] = "10"
     result = cash_flow_forecast(request)
     assert [row["unavailable_reason"] for row in result["rows"]] == [None, None]
-    for field, stated in (("stated_closing_debt", "110"), ("stated_closing_cash", "110")):
+    for field, stated in (
+        ("stated_closing_debt", "110"),
+        ("stated_closing_cash", "110"),
+    ):
         moved = deepcopy(request)
         moved["drivers"][1][field] = stated
         rows = cash_flow_forecast(moved)["rows"]
         assert rows[0]["unavailable_reason"] is None
         assert rows[1]["unavailable_reason"] == "RESIDUAL_UNRECONCILED", field
+
 
 def test_a_case_s_periods_run_in_fiscal_year_order_after_the_opening() -> None:
     """FP-37: the calculator chains a case's periods in the order given, so a

@@ -66,7 +66,9 @@ def read_filed_receipt(
     ).fetchone()
     if row is None:
         raise Refusal(RefusalCode.DELIVERABLE_NOT_FOUND)
-    invalid = Refusal(RefusalCode.DELIVERABLE_PAYLOAD_INVALID)
+    # Every check below is of the server's own filed records, which no caller
+    # can correct: a failure is a record mismatch, not a payload to fix (N74).
+    invalid = Refusal(RefusalCode.ARTIFACT_RECORD_MISMATCH)
     digest, frozen_digest, freezer, filer, filed_at, receipt_digest, renderer, event = (
         row
     )

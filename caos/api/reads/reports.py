@@ -337,7 +337,7 @@ def _reproven(proof: ProvenRevision) -> dict[str, Any]:
         revision_id=proof.revision,
     )
     if sha256(data).hexdigest() != proof.digest:
-        raise Refusal(RefusalCode.DELIVERABLE_PAYLOAD_INVALID)
+        raise Refusal(RefusalCode.ARTIFACT_RECORD_MISMATCH)
     return dict(json.loads(data))
 
 
@@ -424,10 +424,10 @@ def _publication(
     if row is None:
         raise Refusal(RefusalCode.DELIVERABLE_NOT_FROZEN)
     frozen_digest, freezer, filer, filed_at, filing_evidence, packaged = row
+    # N4, N74: every check here is of the server's own records -- the revision
+    # row is immutable, the publication moves only through `freeze_in` and
+    # filing -- so a failure is a record mismatch no caller can correct.
     if frozen_digest != digest:
-        # N4: the revision row is immutable, so this is the publication row
-        # moved outside `freeze_in` -- the server's own record failing
-        # verification, which no caller can correct.
         raise Refusal(RefusalCode.ARTIFACT_RECORD_MISMATCH)
     signatures = revision_signatures(conn, case_id, revision)
     signers = [who for who, _ in signatures]
@@ -438,7 +438,7 @@ def _publication(
         or (filer is None) != (filed_at is None)
         or (filer is None and filing_evidence)
     ):
-        raise Refusal(RefusalCode.DELIVERABLE_PAYLOAD_INVALID)
+        raise Refusal(RefusalCode.ARTIFACT_RECORD_MISMATCH)
     bound = {"revision_id": str(revision), "payload_sha256": digest}
     trail = audit_trail(conn, case_id)
     required = {("OPINION_SIGNED", who) for who in signers}
@@ -471,7 +471,7 @@ def _publication(
         or not verify_chain(conn, case_id)
         or trail[-1].entry_sha256 != audit_head(conn, case_id)
     ):
-        raise Refusal(RefusalCode.DELIVERABLE_PAYLOAD_INVALID)
+        raise Refusal(RefusalCode.ARTIFACT_RECORD_MISMATCH)
     return dict(
         state="frozen" if filer is None else "filed",
         signed_by=signers,
