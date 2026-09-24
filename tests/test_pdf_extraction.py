@@ -690,8 +690,9 @@ def test_the_pdf_identity_records_effective_layout_and_convention() -> None:
     identity = PdfExtractor().identity
     effective = LAParams(**LAYOUT)
 
-    assert (identity.name, identity.version) == ("caos.pdfminer", "6")
+    assert (identity.name, identity.version) == ("caos.pdfminer", "7")
     assert identity.config["max_token_chars"] == MAX_TOKEN_CHARS
+    assert identity.config["token_line_breaks"] == "space"
     assert (
         identity.config["hidden_render_mode"],
         identity.config["hidden_clip_render_mode"],
@@ -765,7 +766,7 @@ def test_v1_pdf_extractions_still_verify_and_reanchor_as_recorded(
         dispatch=lambda data: cast(Extractor, _V1Reader()),
     )
     conn.commit()
-    assert PdfExtractor().identity.version == "6"
+    assert PdfExtractor().identity.version == "7"
 
     [member] = snapshot_source_set(conn, case_id).members
     assert json.loads(member.extractor_identity)["version"] == "1"

@@ -226,6 +226,23 @@ RUN_CUT = "nfc-proportional"
 # (`page._text_frame`): UTF-8, a leading byte order mark dropped (CF-017).
 TEXT_ENCODING = "utf-8-sig"
 
+# Every character `str.splitlines` ends a line at, in code point order: LF,
+# VT, FF, CR, the ASCII file, group and record separators, NEL, and U+2028 and
+# U+2029. A token is one run of one line, and its line is one line of the
+# evidence section, so no token may hold one (W4): a PDF glyph whose ToUnicode
+# maps to text with a line feed in it broke its line there, and what followed
+# read as the host's own header -- a `source_id` and `page` of the document's
+# choosing. The plain-text extractor splits at them; the PDF extractor writes
+# each as a space (`one_line`).
+LINE_BREAKS = "\n\x0b\x0c\r\x1c\x1d\x1e\x85\u2028\u2029"
+_ONE_LINE = str.maketrans(dict.fromkeys(LINE_BREAKS, " "))
+
+
+def one_line(text: str) -> str:
+    """`text` with each of `LINE_BREAKS` written as a space, and nothing else
+    changed: one character for one, so a run keeps its length and its cut."""
+    return text.translate(_ONE_LINE)
+
 
 @dataclass(frozen=True, slots=True)
 class PlainTextExtractor:

@@ -61,6 +61,7 @@ from caos.evidence.extract import (
     MarkedToken,
     Token,
     nfc_pieces,
+    one_line,
 )
 from caos.refusals import Refusal, RefusalCode
 
@@ -96,6 +97,9 @@ CROP_POLICY = "drop-outside"
 # pdfminer opens an unencrypted document with the empty password; the identity
 # record names the parameter as pdfminer does and carries that value.
 UNENCRYPTED = ""
+# What a token makes of a line break in its glyphs' text (`extract.LINE_BREAKS`,
+# W4): a space, so a token is never more than one line.
+TOKEN_LINE_BREAKS = "space"
 # What marks a line a reader of the rendered page may not see (N27,
 # `caos/evidence/visibility.py`), declared because it decides the tokens' marks.
 # Text render mode 3 paints a glyph neither filled nor stroked (ISO 32000-1,
@@ -155,10 +159,11 @@ class PdfExtractor:
             # page may not see is kept and marked with why (N27). v5: text in
             # optional content the document switches off is marked too, and
             # render mode 7 is declared. v6: so is text an opaque fill paints
-            # over later. Earlier rows keep their stored identity and verify
-            # as recorded; readmission is how a source gains the new tokens
-            # (section 44.4's rule).
-            "6",
+            # over later. v7: a line break a glyph's text carries is a space
+            # in its token (W4). Earlier rows keep their stored identity and
+            # verify as recorded; readmission is how a source gains the new
+            # tokens (section 44.4's rule).
+            "7",
             {
                 "pdfminer_version": version("pdfminer.six"),
                 "line_overlap": LAYOUT["line_overlap"],
@@ -176,6 +181,7 @@ class PdfExtractor:
                 "caching": True,
                 "max_token_chars": MAX_TOKEN_CHARS,
                 "token_cut": RUN_CUT,
+                "token_line_breaks": TOKEN_LINE_BREAKS,
                 "hidden_render_mode": INVISIBLE_RENDER_MODE,
                 "hidden_clip_render_mode": CLIP_ONLY_RENDER_MODE,
                 "hidden_under_pt": SMALLEST_READABLE_PT,
@@ -507,6 +513,10 @@ def _line_tokens(
     page may not see some of the text the line keeps, gathered over the
     glyphs of its kept runs -- one note a line, as the line is what a module
     and the approver are shown.
+
+    A glyph's text is whatever the font's ToUnicode maps it to, line breaks
+    included; each is written as a space (`one_line`, W4), so the token and
+    its line stay one line wherever they are shown.
     """
     (left, _bottom, _right, top) = sheet.frame
     boxed = [(run, _box(run)) for run in _runs(line)]
@@ -514,7 +524,7 @@ def _line_tokens(
     mark = _mark([character for run, _box in kept for character in run], sheet)
     tokens: list[Token] = []
     for run, (x0, y0, x1, y1) in kept:
-        text = "".join(character.get_text() for character in run)
+        text = one_line("".join(character.get_text() for character in run))
         tokens.extend(
             MarkedToken(
                 text=piece,

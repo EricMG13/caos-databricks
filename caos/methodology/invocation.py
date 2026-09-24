@@ -31,6 +31,7 @@ from caos.blobs import BlobStore
 from caos.boundary_text import visible
 from caos.digest import canonical_json
 from caos.evidence.citations import AnchoredCitation
+from caos.evidence.extract import one_line
 from caos.graph.route import (
     BLOCKING,
     MODEL_MODULE,
@@ -1058,7 +1059,7 @@ def evidence_sizes(delivered: Sequence[Delivery]) -> list[int]:
     previous: tuple[UUID, int, str] | None = None
     for item in delivered:
         key = (item.source_id, item.page, item.hidden)
-        size = len(item.text.value.encode("utf-8")) + 2
+        size = len(one_line(item.text.value).encode("utf-8")) + 2
         if key != previous:
             size += len(_evidence_header(*key).encode("utf-8")) + 3
         sizes.append(size)
@@ -1076,13 +1077,17 @@ def _evidence_section(delivered: Sequence[Delivery]) -> str:
     its header names the mark (`_evidence_header`). Grouping follows the
     delivered order (source, then block), so a page's lines stay together as
     the store ordered them. `evidence_sizes` counts what this adds.
+
+    A line is shown as one line (`one_line`, W4): a block stored before the
+    PDF extractor's v7 can carry a glyph's line feed, and past it the rest of
+    the block would read as a line of its own -- or as a header.
     """
     groups: list[tuple[tuple[UUID, int, str], list[str]]] = []
     for item in delivered:
         key = (item.source_id, item.page, item.hidden)
         if not groups or groups[-1][0] != key:
             groups.append((key, []))
-        groups[-1][1].append(item.text.value)
+        groups[-1][1].append(one_line(item.text.value))
     return "\n\n\n".join(
         _evidence_header(*key) + "\n\n".join(lines) for key, lines in groups
     )
