@@ -202,6 +202,7 @@ name = "caos"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "anyio" },
     { name = "databricks-langchain", extra = ["memory"] },
     { name = "databricks-sdk" },
     { name = "fastapi" },
@@ -231,6 +232,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "anyio", specifier = "==4.15.1" },
     { name = "databricks-langchain", extras = ["memory"], specifier = ">=0.20.0" },
     { name = "databricks-sdk", specifier = ">=0.89.0" },
     { name = "fastapi", specifier = "==0.141.1" },
