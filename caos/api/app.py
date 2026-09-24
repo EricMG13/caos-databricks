@@ -138,7 +138,6 @@ PERMANENT = frozenset(
         RefusalCode.BLOB_NOT_FOUND,
         RefusalCode.BLOB_DIGEST_MISMATCH,
         RefusalCode.BLOB_ADDRESS_INVALID,
-        RefusalCode.READINESS_INVALID,
         RefusalCode.ROUTE_IDENTITY_INVALID,
         RefusalCode.ROUTE_EDGE_UNSUPPORTED,
         RefusalCode.ORCHESTRATION_ARTIFACT_UNREADABLE,
@@ -162,10 +161,6 @@ PERMANENT = frozenset(
         RefusalCode.PROVIDER_OUTPUT_TRUNCATED,
         RefusalCode.PROVIDER_REFUSED,
         RefusalCode.PROVIDER_RESPONSE_INVALID,
-        RefusalCode.ENVELOPE_INVALID,
-        RefusalCode.ENVELOPE_UNDECLARED_FIELD,
-        RefusalCode.ENVELOPE_UNCITED_CLAIM,
-        RefusalCode.READINESS_INCOMPLETE,
     }
 )
 # What a transient answer promises, in seconds. A constant rather than a
@@ -198,18 +193,10 @@ _STATUS = {
     RefusalCode.BLOB_NOT_FOUND: 500,
     RefusalCode.BLOB_DIGEST_MISMATCH: 500,
     RefusalCode.BLOB_ADDRESS_INVALID: 500,
-    # The gate's map is read out of a stored artifact, so a map the host cannot
-    # bound is bytes this server wrote. Not a store fault, which is what this
-    # comment used to call it: the store answers, and answers the same bytes
-    # to the next reader, so waiting is not what fixes it. Its clearance says
-    # an operator must verify the artifact, and that is the discharge.
-    RefusalCode.READINESS_INVALID: 500,
-    # The neighbour below was filed at 503 by copying this one, and this one was
-    # wrong too: a route pin whose identity the host cannot rebuild is stored
-    # bytes, and the next read rebuilds the same identity from the same pin. The
-    # two are not distinguishable on the time axis, which is why they now carry
-    # the same status -- the history is here because the copying is how both got
-    # their old one.
+    # A route pin whose identity the host cannot rebuild is stored bytes, and
+    # the next read rebuilds the same identity from the same pin, so waiting is
+    # not what fixes it. It was filed at 503 by copying a neighbour, since
+    # retired (`READINESS_INVALID`), that was wrong the same way.
     RefusalCode.ROUTE_IDENTITY_INVALID: 500,
     # A pinned build whose catalog declares an edge type this engine cannot
     # evaluate: the vendored bytes, not the request. No profile or pathway the
@@ -314,25 +301,19 @@ _STATUS = {
     # The owner's second half of D3 (§88). These answered 400 while their
     # clearances said retry. The provider not answering is cleared by waiting,
     # so 503. The rest are an answer the provider already gave -- truncated,
-    # refused, unreadable, or a handoff that fails its contract -- which the
-    # identical request later meets again: not the caller's fault (so not 400)
-    # and not cleared by waiting (so not 503). A new attempt is the discharge,
-    # which is what "Retry the attempt" names.
+    # refused or unreadable -- which the identical request later meets again:
+    # not the caller's fault (so not 400) and not cleared by waiting (so not
+    # 503). A new attempt is the discharge, which is what "Retry the attempt"
+    # names.
     RefusalCode.PROVIDER_UNAVAILABLE: 503,
     RefusalCode.PROVIDER_OUTPUT_TRUNCATED: 500,
     RefusalCode.PROVIDER_REFUSED: 500,
     RefusalCode.PROVIDER_RESPONSE_INVALID: 500,
-    RefusalCode.ENVELOPE_INVALID: 500,
-    RefusalCode.ENVELOPE_UNDECLARED_FIELD: 500,
-    RefusalCode.ENVELOPE_UNCITED_CLAIM: 500,
-    RefusalCode.READINESS_INCOMPLETE: 500,
     RefusalCode.EDGE_CONFIG_INVALID: 400,
     RefusalCode.REQUEST_INVALID: 400,
     RefusalCode.IDEMPOTENCY_KEY_REQUIRED: 400,
     RefusalCode.ROUTE_NOT_ENABLED: 400,
     RefusalCode.METHODOLOGY_INPUT_INVALID: 400,
-    RefusalCode.FORECAST_CHAIN_BROKEN: 400,
-    RefusalCode.FORECAST_RESIDUAL_UNRECONCILED: 400,
     RefusalCode.FORECAST_DRIVER_NOT_READY: 400,
     RefusalCode.DELIVERABLE_PAYLOAD_INVALID: 400,
     RefusalCode.NARRATIVE_FIGURE_UNREFERENCED: 400,

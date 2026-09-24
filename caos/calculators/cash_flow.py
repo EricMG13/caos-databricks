@@ -81,7 +81,6 @@ def cash_flow_forecast(request: Mapping[str, Any]) -> dict[str, Any]:
         rows: list[dict[str, Any]] = []
         checks = []
         openings: dict[str, tuple[Decimal, Decimal]] = {}
-        previous: dict[str, dict[str, Any]] = {}
         unavailable: set[str] = set()
         for period in inputs.periods:
             case = period["case"]
@@ -90,11 +89,8 @@ def cash_flow_forecast(request: Mapping[str, Any]) -> dict[str, Any]:
             if reason is not None:
                 row = {**period, "unavailable_reason": reason}
             else:
-                if case in previous:
-                    _check_chain(previous[case], opening)
                 row, debt, cash = _project_period(period, inputs, opening)
                 openings[case] = (debt, cash)
-                previous[case] = row
             if row["unavailable_reason"] is not None:
                 unavailable.add(case)
             rows.append(row)
@@ -321,14 +317,6 @@ def _unavailable_reason(
     if not set(_MOVEMENTS) <= driver.keys():
         return "DRIVER_FIELD_MISSING"
     return None
-
-
-def _check_chain(previous: dict[str, Any], opening: tuple[Decimal, Decimal]) -> None:
-    if opening != (
-        Decimal(previous["debt"]["closing"]),
-        Decimal(previous["cash"]["closing"]),
-    ):
-        raise Refusal(RefusalCode.FORECAST_CHAIN_BROKEN)
 
 
 def _amount(value: Decimal) -> str:

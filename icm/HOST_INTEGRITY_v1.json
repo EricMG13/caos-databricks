@@ -40,8 +40,8 @@
       "sha256": "a4dbe4afe3748c4d1698020877114ab11d276201bd611f4ac0b0ee26554e3c3a"
     },
     "scripts/cash_flow.py": {
-      "bytes": 14482,
-      "sha256": "538af8fb0dfb34277568ba9e2e55c92d961466dcf6168f2f40dc58935dbdad35"
+      "bytes": 14037,
+      "sha256": "803d5bfc3d4fce8c80d17fabef6b667bcac04f955392bf71bb24ac781d16b60d"
     }
   }
 }

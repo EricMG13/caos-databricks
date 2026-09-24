@@ -407,15 +407,6 @@ def test_every_case_may_have_its_own_forty_period_ids() -> None:
     assert result["status"] == "incomplete"
 
 
-def test_chain_disagreement_is_a_typed_refusal() -> None:
-    with pytest.raises(Refusal) as caught:
-        cash_flow._check_chain(
-            {"debt": {"closing": "1.000000"}, "cash": {"closing": "2.000000"}},
-            (Decimal("2"), Decimal("2")),
-        )
-    assert caught.value.code is RefusalCode.FORECAST_CHAIN_BROKEN
-
-
 def test_signed_opening_balances_are_preserved_without_a_policy_plug() -> None:
     """Debt=-700+300=-400; debt movement=0. Cash=-100+45-4-15=-74."""
     request = forecast_request()
