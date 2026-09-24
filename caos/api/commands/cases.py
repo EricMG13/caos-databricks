@@ -197,16 +197,28 @@ def _release_read(
 
 class _PackParser(MultiPartParser):
     """Starlette's multipart parser, holding a pack on disk rather than in
-    memory.
+    memory, and counting its documents.
 
     Every part is spooled to a temporary file from its first bytes: a pack is
     received before its admission waits for a slot (W3), so an admission
     waiting holds its documents on disk and N5's bound on what admissions hold
     in memory -- `ADMISSION_SLOTS` packs -- still stands. (A size of `0` is
     Python's "never roll over", so the bound is one byte.)
+
+    And a part past `max_documents` is `SOURCE_TOO_LARGE` the moment it ends
+    (N2). CF-075 gave the parser one file past the ceiling and counted the
+    parsed parts, which named only a pack exactly one over: two over, the
+    parser's own `max_files` answered first, with the generic refusal every
+    malformed body gets. A part ends before the next one's headers are read,
+    so this answers ahead of `max_files` however many more follow.
     """
 
     spool_max_size = 1
+
+    def on_part_end(self) -> None:
+        super().on_part_end()
+        if len(self.items) > DEFAULT_LIMITS.max_documents:
+            raise Refusal(RefusalCode.SOURCE_TOO_LARGE)
 
 
 async def _admission_form(
@@ -237,14 +249,10 @@ async def _admission_form(
 
 def _named_parts(form: FormData) -> list[tuple[BoundaryText, UploadFile]]:
     """Only file parts named `document`, each filename `BoundaryText` of at
-    most 255 characters and not blank; at least one of them and at most
-    `max_documents` (else `SOURCE_TOO_LARGE`, CF-075: the parser is given one
-    file past the ceiling so a pack exactly at it parses whole)."""
-    items = form.multi_items()
-    if len(items) > DEFAULT_LIMITS.max_documents:
-        raise Refusal(RefusalCode.SOURCE_TOO_LARGE)
+    most 255 characters and not blank; at least one of them (at most
+    `max_documents` is `_PackParser`'s to refuse)."""
     parts = []
-    for name, part in items:
+    for name, part in form.multi_items():
         if name != DOCUMENT_PART or not isinstance(part, UploadFile):
             raise Refusal(RefusalCode.REQUEST_INVALID)
         filename = BoundaryText.of(part.filename or "", limit=FILENAME_CHARS)

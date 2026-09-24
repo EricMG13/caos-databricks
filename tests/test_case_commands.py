@@ -346,13 +346,16 @@ def test_a_pack_over_the_document_ceiling_is_source_too_large(
     writer = member(conn, case_id)
     path = f"/api/v1/cases/{case_id}/sources"
 
-    over = command_client.post(
-        path,
-        headers=command_headers(writer),
-        files=[("document", ("a.txt", TEXT))] * (DEFAULT_LIMITS.max_documents + 1),
-    )
-
-    assert (over.status_code, over.json()["code"]) == (413, "SOURCE_TOO_LARGE")
+    for past in (1, 2, 9):
+        over = command_client.post(
+            path,
+            headers=command_headers(writer),
+            files=[("document", ("a.txt", TEXT))]
+            * (DEFAULT_LIMITS.max_documents + past),
+        )
+        # N2: two or more past the ceiling were the parser's own `max_files`
+        # refusal, the generic `REQUEST_INVALID` CF-075 had meant to replace.
+        assert (over.status_code, over.json()["code"]) == (413, "SOURCE_TOO_LARGE")
     assert seen["prepare"] == 0
     assert _sources(conn, case_id) == 0
 

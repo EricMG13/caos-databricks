@@ -30,7 +30,8 @@ from caos.api.edge import EdgeGuard
 from caos.api.identity import TRUST_SWITCH, TRUSTED
 from caos.api.wire import CLEARS
 from caos.blobs import BlobStore
-from caos.refusals import RefusalCode
+from caos.evidence.extract import DEFAULT_LIMITS
+from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
 
 BOUNDARY = "w3boundary"
@@ -324,3 +325,21 @@ def test_a_received_pack_is_held_on_disk_until_its_slot() -> None:
             await form.close()
 
     assert anyio.run(main) == [True]
+
+
+def test_one_document_past_the_ceiling_is_source_too_large() -> None:
+    """N2 (CF-075): the parser's own file limit answered a generic
+    `REQUEST_INVALID` for a pack more than one document past the ceiling."""
+    parts = _head() + b"x\r\n"
+    ceiling = DEFAULT_LIMITS.max_documents
+    for count in (ceiling + 1, ceiling + 2, ceiling + 9):
+        body = parts * count + f"--{BOUNDARY}--\r\n".encode()
+
+        async def parse(body: bytes = body) -> None:
+            await cases._PackParser(
+                MULTIPART, _once(body), max_files=ceiling + 1
+            ).parse()
+
+        with pytest.raises(Refusal) as caught:
+            anyio.run(parse)
+        assert caught.value.code is RefusalCode.SOURCE_TOO_LARGE, count
