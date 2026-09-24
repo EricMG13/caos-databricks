@@ -1001,6 +1001,13 @@ class CommitteeBody(ReportBody):
     frozen_by: UUID
     filed_by: UUID | None
     receipt: FiledReceipt | None
+    # Committee never serves a revision `caos/api/reads/deliverable.py` would
+    # refuse `DELIVERABLE_NOT_FROZEN` (N4): every revision it names is already
+    # proven frozen, so `render_url` is never a dead link. `package_url` names
+    # the same revision's audit package once `state` is "filed", and is null
+    # until then -- there is no receipt for `read_deliverable_package` to prove.
+    render_url: Text
+    package_url: Text | None
 
 
 SectionStatus = Literal["complete", "partial"]

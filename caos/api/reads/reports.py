@@ -372,6 +372,18 @@ def _publication(
         frozen_by=freezer,
         filed_by=filer,
         receipt=None,
+        **_links(case_id, revision, filed=filer is not None),
+    )
+
+
+def _links(case_id: UUID, revision: UUID, *, filed: bool) -> dict[str, str | None]:
+    """Where this revision's render and, once filed, its package are read
+    (`caos/api/reads/deliverable.py`, N4). Proven nowhere here: opening either
+    link runs that module's own proof."""
+    base = f"/api/v1/cases/{case_id}/revisions/{revision}"
+    return dict(
+        render_url=f"{base}/render",
+        package_url=f"{base}/package" if filed else None,
     )
 
 

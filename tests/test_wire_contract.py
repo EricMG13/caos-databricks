@@ -140,7 +140,8 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
     wire.CommitteeBody: frozenset(
         (
             "case_id displayed_run_id revision_id payload_sha256 case_title artifacts "
-            "narrative revisions state signed_by frozen_by filed_by receipt"
+            "narrative revisions state signed_by frozen_by filed_by receipt "
+            "render_url package_url"
         ).split()
     ),
     wire.ReportDocument: ENVELOPE,

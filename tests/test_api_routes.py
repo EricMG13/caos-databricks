@@ -1103,6 +1103,13 @@ def test_the_surface_is_exactly_the_routes_it_declares(
         "/api/v1/cases/{case_id}/revisions/{revision_id}/signature": "sign",
         "/api/v1/cases/{case_id}/revisions/{revision_id}/freeze": "freeze",
         "/api/v1/cases/{case_id}/revisions/{revision_id}/filing": "file",
+        # N4: the deliverable's own render and audit-package downloads.
+        "/api/v1/cases/{case_id}/revisions/{revision_id}/render": (
+            "read_deliverable_render"
+        ),
+        "/api/v1/cases/{case_id}/revisions/{revision_id}/package": (
+            "read_deliverable_package"
+        ),
     }
 
 
