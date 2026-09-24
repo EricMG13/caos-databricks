@@ -12,6 +12,7 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import date
 from decimal import Decimal
+from typing import cast
 from uuid import UUID
 
 import pytest
@@ -76,7 +77,7 @@ def test_priced_request_refuses_a_malformed_or_oversized_byte_count(
     which never exercises `priced_request`'s own guards on the count a direct
     caller supplies."""
     with pytest.raises(Refusal) as caught:
-        priced_request(PRICE, request_bytes)  # type: ignore[arg-type]
+        priced_request(PRICE, cast(int, request_bytes))
     assert caught.value.code is code
 
 
