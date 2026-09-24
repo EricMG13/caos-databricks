@@ -75,7 +75,7 @@ def _exported(root: Path) -> bool:
 _NAMED = re.compile(rb'(?:src|href)="/(?!/)([^"?#]+)"')
 
 
-# Vite's build manifest (`build.manifest`): every chunk, stylesheet and asset
+# Vite's build manifest (`build.manifest`): every script, stylesheet and asset
 # the build emitted, the section views the index loads lazily included (F317).
 # The server's own record of the export, read at boot and never served.
 MANIFEST = Path(".vite") / "manifest.json"
@@ -83,14 +83,14 @@ MANIFEST = Path(".vite") / "manifest.json"
 MANIFEST_CAP = 1 << 20
 
 
-def _chunk_files(chunk: object) -> list[str] | None:
+def _entry_files(entry: object) -> list[str] | None:
     """The files one manifest entry names: its own, its styles and its assets."""
-    if not isinstance(chunk, dict):
+    if not isinstance(entry, dict):
         return None
-    css, assets = chunk.get("css", []), chunk.get("assets", [])
+    css, assets = entry.get("css", []), entry.get("assets", [])
     if not isinstance(css, list) or not isinstance(assets, list):
         return None
-    files = [chunk.get("file"), *css, *assets]
+    files = [entry.get("file"), *css, *assets]
     if not all(isinstance(name, str) and name for name in files):
         return None
     return files
@@ -109,8 +109,8 @@ def _manifest_files(root: Path) -> list[str] | None:
     if not isinstance(entries, dict) or "index.html" not in entries:
         return None
     named: list[str] = []
-    for chunk in entries.values():
-        files = _chunk_files(chunk)
+    for entry in entries.values():
+        files = _entry_files(entry)
         if files is None:
             return None
         named.extend(files)

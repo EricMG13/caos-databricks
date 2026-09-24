@@ -332,7 +332,7 @@ def test_the_production_build_is_a_complete_export_to_its_manifest(
     one section view is not, though its index names none of them."""
     assert _complete(production_export)
     manifest = json.loads((production_export / MANIFEST).read_text(encoding="utf-8"))
-    lazy = [chunk["file"] for chunk in manifest.values() if chunk.get("isDynamicEntry")]
+    lazy = [entry["file"] for entry in manifest.values() if entry.get("isDynamicEntry")]
     assert len(lazy) == 9
     index = (production_export / "index.html").read_text(encoding="utf-8")
     assert not any(name in index for name in lazy)
