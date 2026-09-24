@@ -18,9 +18,11 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Event
+from urllib.parse import urlsplit
 
+import psycopg
 import pytest
-from conftest import recorded_statements
+from conftest import login_role, recorded_statements
 from fake_chat import fake_completions
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
@@ -293,6 +295,40 @@ def test_the_health_request_opens_no_store_connection(
     assert health.IO_BUDGET == 0
     # N35's remainder: the blob probe reads no digest-addressed document.
     assert health.BLOB_BUDGET == 0
+
+
+@pytest.mark.parametrize(
+    "handed",
+    [
+        "SCHEMA caos_store",
+        "TABLE caos_store.store_migrations",
+        "FUNCTION caos_store.refuse_route_mutation()",
+        "SCHEMA caos_graph",
+        "TABLE caos_graph.checkpoints",
+    ],
+)
+def test_the_store_probe_refuses_a_schema_handed_to_another_role_after_boot(
+    empty_database: str, monkeypatch: pytest.MonkeyPatch, handed: str
+) -> None:
+    """The boots refuse `caos_store` or `caos_graph` when another role owns it
+    or anything in it (W2), but the store probe read the migration history
+    alone, so a schema handed away after boot read OK until the next boot. It
+    reads `STORE_SCHEMA_DRIFT` now, and OK again once handed back; a
+    `caos_graph` the worker has not set up yet is no drift."""
+    from caos.graph.checkpoint import checkpointer, close_checkpointer
+
+    with login_role(empty_database) as other, login_role(empty_database) as app:
+        with connect(app) as conn:
+            apply_schema(conn)
+        monkeypatch.setenv(DATABASE_URL, app)
+        assert health.probe_store() == "OK", "no caos_graph yet"
+        close_checkpointer(checkpointer(app))
+        assert health.probe_store() == "OK"
+        for owner, code in ((other, "STORE_SCHEMA_DRIFT"), (app, "OK")):
+            with psycopg.connect(empty_database, autocommit=True) as admin:
+                admin.execute(f'ALTER {handed} OWNER TO "{urlsplit(owner).username}"')
+                admin.execute(f'GRANT ALL ON {handed} TO "{urlsplit(app).username}"')
+            assert health.probe_store() == code, urlsplit(owner).username
 
 
 def test_the_schema_probe_writes_nothing(empty_database: str) -> None:

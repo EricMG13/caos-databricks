@@ -39,7 +39,13 @@ from caos.api.identity import scim_me
 from caos.blobs import VOLUME_SCHEME, BlobStore
 from caos.methodology.bundle import Bundle, verify_every_file
 from caos.refusals import Refusal
-from caos.store import connect, verify_schema
+from caos.store import (
+    CHECKPOINT_SCHEMA,
+    STORE_SCHEMA,
+    connect,
+    owned_schema,
+    verify_schema,
+)
 from caos.store.lakebase import store_url
 from caos.store.work import WorkerBeat, worker_states
 
@@ -108,6 +114,13 @@ class HealthDocument(BaseModel):
 def probe_store() -> HealthCode:
     """Connect with a deadline, bound every statement, verify the schema.
 
+    Verified as the boots verify it: every migration applied, and both
+    schemas, with everything in them, the connecting role's own (W2), so one
+    handed to another role after boot reads `STORE_SCHEMA_DRIFT` now rather
+    than at the next boot. `caos_graph` not set up yet is no drift: the
+    worker's checkpointer makes it. Two catalog reads more, each under the
+    same statement bound.
+
     Nothing is committed: the connection is closed with its transaction open,
     which discards it.
     """
@@ -122,6 +135,8 @@ def probe_store() -> HealthCode:
     try:
         conn.execute("SET LOCAL statement_timeout = '2s'")
         verify_schema(conn)
+        owned_schema(conn, STORE_SCHEMA)
+        owned_schema(conn, CHECKPOINT_SCHEMA)
     except Refusal:
         return "STORE_SCHEMA_DRIFT"
     except psycopg.Error:
