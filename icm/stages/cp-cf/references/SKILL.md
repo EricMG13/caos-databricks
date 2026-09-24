@@ -11,9 +11,9 @@ deterministic result. Incomplete or unreconciled output cannot be accepted.
 `cfo` is operating cash flow before cash interest and cash taxes: the
 calculator deducts `cash_interest` and `cash_taxes` itself, so a reported CFO
 that already deducted them counts both twice. Each case's periods run in
-fiscal-year order after the opening's period, and a stated close reconciles
-within the tolerance, never wider than one part in a thousand of the opening
-balances.
+fiscal-year order after the opening's period, and each stated close reconciles
+within the tolerance, never wider than one part in a thousand of its own
+opening balance: debt of the opening debt, cash of the opening cash.
 
 `bindings` is one object per scalar leaf of request, keyed by JSON pointer.
 Each binding is exactly `{module_id, quote}`. CP-1 owns opening, periods,

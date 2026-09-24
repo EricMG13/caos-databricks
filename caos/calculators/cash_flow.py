@@ -9,9 +9,10 @@ from an opening that is none of them. `cfo` is operating cash flow before cash
 interest and cash taxes: free cash flow is `cfo - capex - cash_interest -
 cash_taxes`, so a reported CFO that already deducted interest and taxes paid
 counts both twice (FP-39). A period reconciles when its stated closing debt and
-cash are each within the tolerance of the chain's own, and the tolerance is
-never wider than one part in a thousand of the opening balances nor than
-`MAX_TOLERANCE` (N20).
+cash are each within the tolerance of the chain's own, and each residual's
+tolerance is never wider than one part in a thousand of its own opening
+balance -- debt of the opening debt, cash of the opening cash -- nor than
+`MAX_TOLERANCE` (N20, N10).
 """
 
 from __future__ import annotations
@@ -44,9 +45,11 @@ MAX_AMORTISATION = 2_000
 # In the request's own unit: a residual past this is unreconciled, whatever the
 # request says (F62).
 MAX_TOLERANCE = Decimal("1000")
-# And past this share of the opening balances, debt and cash each by its size
-# (N20, FP-23): with scale in millions an absolute cap alone passed a 999m
-# residual on a 1,000m balance, which switches the one arithmetic check off.
+# And past this share of its own opening balance, debt by the opening debt and
+# cash by the opening cash (N20, FP-23, N10): with scale in millions an
+# absolute cap alone passed a 999m residual on a 1,000m balance, which switches
+# the one arithmetic check off, and one share of both balances together passed
+# a cash residual of 90 on an opening cash of 10 beside 100,000 of debt.
 RELATIVE_TOLERANCE = Decimal("0.001")
 # A fiscal year as the chain orders it: a year number.
 _FISCAL_YEAR = re.compile(r"[1-9][0-9]{3}")
@@ -77,7 +80,8 @@ class _Inputs:
     drivers: dict[tuple[str, str], dict[str, Any]]
     repayments: dict[tuple[str, str], Decimal]
     opening: tuple[Decimal, Decimal]
-    tolerance: Decimal
+    # (debt, cash): each residual's own (N10).
+    tolerance: tuple[Decimal, Decimal]
     units: dict[str, Any]
     perimeter: str
 
@@ -326,17 +330,25 @@ def _contractual(
     return totals
 
 
-def _tolerance(value: object, opening: tuple[Decimal, Decimal]) -> Decimal:
-    """The reconciliation tolerance: the one stated, or 0.001, within
-    `MAX_TOLERANCE` or refused (F62), and never wider than
-    `RELATIVE_TOLERANCE` of the opening balances, debt and cash each by its
-    size (N20, FP-23). A tolerance wide enough to pass any residual switches
-    the one arithmetic check off; nothing opened reconciles exactly."""
+def _tolerance(
+    value: object, opening: tuple[Decimal, Decimal]
+) -> tuple[Decimal, Decimal]:
+    """The debt and the cash residual's reconciliation tolerances: the one
+    stated, or 0.001, within `MAX_TOLERANCE` or refused (F62), and each never
+    wider than `RELATIVE_TOLERANCE` of its own opening balance by its size --
+    debt of the opening debt, cash of the opening cash (N20, FP-23, N10). One
+    share of both together let the larger balance widen the smaller's check:
+    100,000 of debt passed a cash residual of 90 on an opening cash of 10. A
+    tolerance wide enough to pass any residual switches the one arithmetic
+    check off; a balance that opened at nothing reconciles exactly."""
     tolerance = _decimal(value)
     if tolerance < 0 or tolerance > MAX_TOLERANCE:
         raise Refusal(RefusalCode.METHODOLOGY_INPUT_INVALID)
     debt, cash = opening
-    return min(tolerance, (abs(debt) + abs(cash)) * RELATIVE_TOLERANCE)
+    return (
+        min(tolerance, abs(debt) * RELATIVE_TOLERANCE),
+        min(tolerance, abs(cash) * RELATIVE_TOLERANCE),
+    )
 
 
 def _unavailable_reason(
@@ -391,9 +403,10 @@ def _project_period(
     cash = opening_cash + fcf - moves["distributions"] + financing
     residual_debt = moves["stated_closing_debt"] - debt
     residual_cash = moves["stated_closing_cash"] - cash
+    debt_tolerance, cash_tolerance = inputs.tolerance
     reason = (
         "RESIDUAL_UNRECONCILED"
-        if max(abs(residual_debt), abs(residual_cash)) > inputs.tolerance
+        if abs(residual_debt) > debt_tolerance or abs(residual_cash) > cash_tolerance
         else None
     )
     row = {

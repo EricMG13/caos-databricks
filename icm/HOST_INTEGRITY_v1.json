@@ -36,12 +36,12 @@
   "module_id": "CP-CF",
   "relative_file_hashes": {
     "SKILL.md": {
-      "bytes": 3051,
-      "sha256": "4ef64e891aea82a5aaa22730f933eeac85dced6eefca93e3098e3b07432555d5"
+      "bytes": 3109,
+      "sha256": "6955060d87418ebbfcc3ea88431c94ade97d2555e1c53c505a3a0125dd355545"
     },
     "scripts/cash_flow.py": {
-      "bytes": 16150,
-      "sha256": "260b01a40734bf81e9e47cd63b6d35ec90bb981706419dfaa9ba2331728c2002"
+      "bytes": 16845,
+      "sha256": "97684ff37412c2424663ea1f1d89b7a2da1c4749e0887babc683ef8a4b6e8a50"
     }
   }
 }

@@ -446,35 +446,47 @@ def test_the_reconciliation_tolerance_is_bounded() -> None:
 
 def test_the_reconciliation_tolerance_is_relative_to_the_opening_balances() -> None:
     """N20 (FP-23): a tolerance capped only at `MAX_TOLERANCE`, in the request's
-    own unit, passed a 999m residual on 1,100m of openings. It is now never
-    wider than one part in a thousand of the opening balances -- debt and cash,
-    each by its size -- nor than `MAX_TOLERANCE`; a stated tolerance tighter
-    than that is the one applied, and a stated one outside the absolute bound
-    is still refused (F62)."""
+    own unit, passed a 999m residual on 1,100m of openings. Each residual's is
+    now never wider than one part in a thousand of its own opening balance --
+    debt of the opening debt, cash of the opening cash (N10) -- nor than
+    `MAX_TOLERANCE`; a stated tolerance tighter than that is the one applied,
+    and a stated one outside the absolute bound is still refused (F62)."""
     request = forecast_request()  # openings: debt 700 + 300, cash 100
     request["tolerance"] = str(cash_flow.MAX_TOLERANCE)
     request["drivers"][0]["stated_closing_cash"] = "1125"  # residual 999
     row = cash_flow_forecast(request)["rows"][0]
     assert row["unavailable_reason"] == "RESIDUAL_UNRECONCILED"
-    # One part in a thousand of 1,100 is 1.1.
+    # One part in a thousand of the cash's 100 is 0.1, of the debt's 1,000 is 1.
     request["tolerance"] = "5"
-    for stated, reason in (("127.1", None), ("127.100001", "RESIDUAL_UNRECONCILED")):
+    for stated, reason in (("126.1", None), ("126.100001", "RESIDUAL_UNRECONCILED")):
         request["drivers"][0]["stated_closing_cash"] = stated
         assert cash_flow_forecast(request)["rows"][0]["unavailable_reason"] == reason
+    request["drivers"][0]["stated_closing_cash"] = "126"
+    for stated, reason in (("1001", None), ("1001.000001", "RESIDUAL_UNRECONCILED")):
+        request["drivers"][0]["stated_closing_debt"] = stated
+        assert cash_flow_forecast(request)["rows"][0]["unavailable_reason"] == reason
+    # A stated tolerance tighter than the debt's share is the one applied.
     request["tolerance"] = "0.5"
-    for stated, reason in (("126.5", None), ("126.500001", "RESIDUAL_UNRECONCILED")):
-        request["drivers"][0]["stated_closing_cash"] = stated
+    for stated, reason in (("1000.5", None), ("1000.500001", "RESIDUAL_UNRECONCILED")):
+        request["drivers"][0]["stated_closing_debt"] = stated
         assert cash_flow_forecast(request)["rows"][0]["unavailable_reason"] == reason
-    # A negative opening counts by its size (debt -400, cash -100: 0.5).
+    # A negative opening counts by its size (debt -400: 0.4; cash -100: 0.1).
     signed = forecast_request()
     signed["opening"]["debt_by_facility"][0]["amount"] = "-700"
     signed["opening"]["cash"] = "-100"
     signed["tolerance"] = "5"
-    signed["drivers"][0].update(stated_closing_debt="-400", stated_closing_cash="-73.5")
+    signed["drivers"][0].update(
+        stated_closing_debt="-399.6", stated_closing_cash="-73.9"
+    )
     assert cash_flow_forecast(signed)["rows"][0]["unavailable_reason"] is None
-    signed["drivers"][0]["stated_closing_cash"] = "-73.499999"
-    row = cash_flow_forecast(signed)["rows"][0]
-    assert row["unavailable_reason"] == "RESIDUAL_UNRECONCILED"
+    for moved in (
+        {"stated_closing_debt": "-399.599999"},
+        {"stated_closing_cash": "-73.899999"},
+    ):
+        wrong = deepcopy(signed)
+        wrong["drivers"][0].update(moved)
+        row = cash_flow_forecast(wrong)["rows"][0]
+        assert row["unavailable_reason"] == "RESIDUAL_UNRECONCILED"
     # Nothing opened, nothing to be approximate about: the close must be exact.
     empty = forecast_request()
     empty["opening"]["debt_by_facility"] = [
@@ -487,6 +499,49 @@ def test_the_reconciliation_tolerance_is_relative_to_the_opening_balances() -> N
     empty["drivers"][0]["stated_closing_cash"] = "26.000001"
     row = cash_flow_forecast(empty)["rows"][0]
     assert row["unavailable_reason"] == "RESIDUAL_UNRECONCILED"
+
+
+@pytest.mark.parametrize(
+    ("debt", "cash", "residual"),
+    [
+        pytest.param("100000", "10", "cash", id="small-cash-beside-large-debt"),
+        pytest.param("10", "100000", "debt", id="small-debt-beside-large-cash"),
+    ],
+)
+def test_each_residual_is_held_to_its_own_opening_balance(
+    debt: str, cash: str, residual: str
+) -> None:
+    """N10: D44's tolerance was one number for both residuals, one part in a
+    thousand of the two balances together, so with debt 100,000 and cash 10 a
+    cash residual of 90 -- nine times the cash it opened with -- reconciled.
+    Each residual now answers to its own balance: 0.01 for that cash, 100 for
+    that debt, and the same the other way round."""
+    request = forecast_request()
+    request["periods"] = request["periods"][:1]
+    request["drivers"] = request["drivers"][:1]
+    request["contractual"]["amortisation"] = []
+    request["opening"]["debt_by_facility"] = [{"facility_id": "TERM", "amount": debt}]
+    request["opening"]["cash"] = cash
+    request["tolerance"] = "1000"
+    first = cash_flow_forecast(request)["rows"][0]
+    driver = request["drivers"][0]
+    driver["stated_closing_debt"] = first["debt"]["closing"]
+    driver["stated_closing_cash"] = first["cash"]["closing"]
+    assert cash_flow_forecast(request)["rows"][0]["unavailable_reason"] is None
+    small = Decimal(debt if residual == "debt" else cash) * cash_flow.RELATIVE_TOLERANCE
+    large = Decimal(cash if residual == "debt" else debt) * cash_flow.RELATIVE_TOLERANCE
+    field = f"stated_closing_{residual}"
+    chain = Decimal(first[residual]["closing"])
+    for off, reason in (
+        (small, None),
+        (small + Decimal("0.000001"), "RESIDUAL_UNRECONCILED"),
+        (Decimal(90), "RESIDUAL_UNRECONCILED"),
+        (large, "RESIDUAL_UNRECONCILED"),
+    ):
+        moved = deepcopy(request)
+        moved["drivers"][0][field] = format(chain + off, "f")
+        row = cash_flow_forecast(moved)["rows"][0]
+        assert row["unavailable_reason"] == reason, (off, row[f"residual_{residual}"])
 
 
 def test_a_case_s_periods_run_in_fiscal_year_order_after_the_opening() -> None:
@@ -522,3 +577,16 @@ def test_cfo_is_named_as_before_interest_and_taxes_where_the_model_reads() -> No
     for name in ("SKILL.md", "scripts/cash_flow.py"):
         text = " ".join(verified_host_bytes(name).decode().split())
         assert "before cash interest and cash taxes" in text, name
+
+
+def test_the_brief_holds_each_close_to_its_own_opening_balance() -> None:
+    """N10: CP-CF's brief states the per-residual rule the calculator applies,
+    so a model is not told one share of both balances together."""
+    from caos.methodology.host import verified_host_bytes
+
+    brief = " ".join(verified_host_bytes("SKILL.md").decode().split())
+    assert (
+        "each stated close reconciles within the tolerance, never wider than one"
+        " part in a thousand of its own opening balance: debt of the opening"
+        " debt, cash of the opening cash" in brief
+    )
