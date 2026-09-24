@@ -234,6 +234,8 @@ def test_main_runs_a_command_against_the_stub_and_lists_what_it_asked(
     child = (
         "import os, sys, urllib.request, urllib.error\n"
         "assert 'DATABRICKS_CONFIG_PROFILE' not in os.environ\n"
+        "config = os.environ['DATABRICKS_CONFIG_FILE']\n"
+        "assert open(config, encoding='utf-8').read() == ''\n"
         "try:\n"
         "    urllib.request.urlopen(os.environ['DATABRICKS_HOST'] + '/.well-known/x')\n"
         "except urllib.error.HTTPError as failed:\n"
@@ -243,6 +245,61 @@ def test_main_runs_a_command_against_the_stub_and_lists_what_it_asked(
     assert "stub: GET /.well-known/x\n" in capsys.readouterr().out
     assert main([]) == 2
     assert "DATABRICKS_HOST" not in os.environ
+
+
+def test_an_explicit_profile_never_reaches_the_workspace_it_names(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """R24-02: real CLI 1.17.0 resolves an explicit `-p`/`--profile` flag's
+    own host and credentials ahead of `DATABRICKS_HOST`/`DATABRICKS_TOKEN`,
+    though the wrapper already strips `DATABRICKS_CONFIG_PROFILE` -- two
+    loopback workspaces prove it, as the audit did: the wrapper's own, and
+    the one a profile would name. `-p`/`--profile` on a `databricks` command
+    must be refused before the CLI ever runs, so the workspace it names is
+    never contacted; and reading a profile from an inherited config must
+    fail too, because the config the CLI is actually handed is empty."""
+    with WorkspaceStub().serving() as attacker:
+        config = tmp_path / "attacker.databrickscfg"
+        config.write_text(f"[attacker]\nhost = {attacker.host}\ntoken = x\n")
+        monkeypatch.setenv("DATABRICKS_CONFIG_FILE", str(config))
+
+        for flag in ("-p", "--profile"):
+            code = main(["--", "databricks", "bundle", "validate", flag, "attacker"])
+            assert code == 2
+        err = capsys.readouterr().err
+        assert "-p" in err and "--profile" in err
+        assert attacker.requests == []
+
+        # Also inside a single `sh -c "..."` argument, the shape the
+        # committed CI and enterprise-deploy stand-in commands use.
+        assert (
+            main(["--", "sh", "-c", "databricks bundle deploy -p attacker -t dev"]) == 2
+        )
+        assert attacker.requests == []
+
+        # Without the flag, the CLI has no profile to resolve and no config
+        # holding one -- the empty file it is actually handed (R24-02).
+        child = (
+            "import os, sys\n"
+            "assert os.environ.get('DATABRICKS_CONFIG_PROFILE') is None\n"
+            "config = os.environ['DATABRICKS_CONFIG_FILE']\n"
+            "assert config != os.environ.get('DATABRICKS_CONFIG_FILE_ORIGINAL')\n"
+            "assert open(config, encoding='utf-8').read() == ''\n"
+        )
+        monkeypatch.setenv("DATABRICKS_CONFIG_FILE_ORIGINAL", str(config))
+        assert main(["--", sys.executable, "-c", child]) == 0
+        assert attacker.requests == []
+
+
+def test_an_unrelated_command_carrying_its_own_p_flag_is_not_refused(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The `-p`/`--profile` refusal is scoped to a `databricks` command: a
+    child that happens to take its own `-p` flag for something else is not
+    mistaken for one."""
+    child = "import sys; sys.exit(0 if sys.argv[1:] == ['-p', 'x'] else 3)"
+    assert main(["--", sys.executable, "-c", child, "-p", "x"]) == 0
+    assert "profile" not in capsys.readouterr().err.lower()
 
 
 def test_the_lakebase_checkpointer_mints_each_connection_over_the_platform_values(
@@ -457,7 +514,9 @@ def test_a_stand_in_run_starts_from_no_bundle_state_of_its_own(
     """DF-13: each stand-in run is a new, empty workspace; a deploy planned on
     the state an earlier one left made CLI 1.17.0 panic. That state is
     cleared; a real workspace's state is kept, and a bundle command refuses
-    to run over it."""
+    to run over it. R24-N02: a target with no sync snapshot at all -- what
+    `bundle summary` leaves -- is kept too, not mistaken for the stand-in's
+    own because there is nothing to say otherwise."""
     state = tmp_path / ".databricks" / "bundle"
 
     def target(name: str, snapshot: str | None) -> None:
@@ -467,17 +526,49 @@ def test_a_stand_in_run_starts_from_no_bundle_state_of_its_own(
             (state / name / "sync-snapshots" / "s.json").write_text(snapshot)
 
     target("dev", json.dumps({"host": "http://127.0.0.1:50123"}))
-    target("validated", None)
+    target("summarized", None)
     target("prod", json.dumps({"host": "https://adb-1.azuredatabricks.net"}))
     target("torn", "{not json")
-    assert fresh_state(tmp_path) == ["prod", "torn"]
-    assert sorted(p.name for p in state.iterdir()) == ["prod", "torn"]
+    assert fresh_state(tmp_path) == ["prod", "summarized", "torn"]
+    assert sorted(p.name for p in state.iterdir()) == ["prod", "summarized", "torn"]
     monkeypatch.chdir(tmp_path)
     assert main(["--", "databricks", "bundle", "validate"]) == 2
     assert ".databricks/bundle/prod holds a real workspace's state" in (
         capsys.readouterr().err
     )
     assert fresh_state(tmp_path / "absent") == []
+
+
+def test_a_target_with_no_sync_snapshot_is_kept_not_assumed_stand_in(
+    tmp_path: Path,
+) -> None:
+    """R24-N02: `all(...)` over an empty set of hosts is `True`, so a target
+    holding a `resources.json` but no `sync-snapshots` at all -- what a real
+    `bundle summary` leaves, with no sync ever run -- was deleted on no
+    evidence, not kept the way unreadable state already is. Positive
+    loopback provenance is required before removal."""
+    state = tmp_path / ".databricks" / "bundle"
+    (state / "summarized" / "sync-snapshots").mkdir(parents=True)
+    (state / "summarized" / "resources.json").write_text("{}")
+    assert fresh_state(tmp_path) == ["summarized"]
+    assert (state / "summarized").is_dir()
+
+
+def test_a_validate_only_target_with_nothing_downloaded_is_still_cleared(
+    tmp_path: Path,
+) -> None:
+    """A `databricks bundle validate` under the direct engine writes no
+    `resources.json` and no sync snapshot at all -- unlike `bundle summary`,
+    it downloads nothing. That empty shell is still the stand-in's own and
+    is cleared, the same as before R24-N02: there is nothing there for the
+    ambiguity that finding is about to be ambiguous over, and CLAUDE.md's
+    own `validate`, then `deploy`, then `run` sequence -- three separate
+    stand-in runs against one target -- depends on it."""
+    state = tmp_path / ".databricks" / "bundle"
+    (state / "dev" / "sync-snapshots").mkdir(parents=True)
+    (state / "dev" / ".internal").mkdir()
+    assert fresh_state(tmp_path) == []
+    assert not (state / "dev").exists()
 
 
 def test_preflight_reads_the_gateway_posture_and_the_price_s_endpoint(

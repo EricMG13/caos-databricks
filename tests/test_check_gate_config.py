@@ -391,6 +391,66 @@ def test_a_template_expression_spliced_into_a_run_script_is_refused(
     ), problems
 
 
+def test_a_required_step_disabled_with_if_is_refused(tmp_path: Path) -> None:
+    """R24-11: the old check read only a required command's `run:` text, so
+    a step left intact but given `if: false` still counted as present --
+    the command never runs, but nothing here said so."""
+    root = _tree(tmp_path)
+    assert check_gate_config._ci_problems(root) == []
+    ci = root / ".github" / "workflows" / "ci.yml"
+    ci_text = ci.read_text(encoding="utf-8")
+    disabled = ci_text.replace(
+        "      - run: uv run mypy caos scripts tests\n",
+        "      - if: false\n        run: uv run mypy caos scripts tests\n",
+        1,
+    )
+    assert disabled != ci_text, "the types job's shape changed"
+    ci.write_text(disabled, encoding="utf-8")
+
+    problems = check_gate_config._ci_problems(root)
+
+    assert (
+        "ci: 'uv run mypy caos scripts tests' runs only when its step's "
+        "if: allows it" in problems
+    ), problems
+    # The command's own text is still there, so the old, narrower check
+    # alone would have called this configuration intact.
+    assert "ci: no step runs 'uv run mypy caos scripts tests'" not in problems
+
+
+def test_a_required_job_disabled_with_if_is_refused(tmp_path: Path) -> None:
+    """R24-11: a job-level `if:` disables every step under it, its required
+    commands included, the same way a step-level one does."""
+    root = _tree(tmp_path)
+    ci = root / ".github" / "workflows" / "ci.yml"
+    ci_text = ci.read_text(encoding="utf-8")
+    disabled = ci_text.replace(
+        "  types:\n    runs-on: ubuntu-latest\n    timeout-minutes: 20\n    steps:\n",
+        "  types:\n    runs-on: ubuntu-latest\n    timeout-minutes: 20\n"
+        "    if: github.actor != 'nobody'\n    steps:\n",
+        1,
+    )
+    assert disabled != ci_text, "the types job's shape changed"
+    ci.write_text(disabled, encoding="utf-8")
+
+    problems = check_gate_config._ci_problems(root)
+
+    assert (
+        "ci: 'uv run mypy caos scripts tests' runs only when its job's "
+        "if: allows it" in problems
+    ), problems
+
+
+def test_a_job_if_for_an_optional_job_is_not_refused(tmp_path: Path) -> None:
+    """The `size` job's own `if: github.event_name == 'pull_request'` names
+    no required gate command, so it is not refused: the rule is about a
+    required gate that can be switched off, not `if:` in general."""
+    root = _tree(tmp_path)
+    ci_text = (root / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    assert "if: github.event_name == 'pull_request'" in ci_text
+    assert check_gate_config._ci_condition_problems(ci_text) == []
+
+
 def test_a_hook_s_own_body_weakened_in_effect_is_named(tmp_path: Path) -> None:
     """AR-07 and N46: the old check matched only `- id:`, so a hook kept
     naming itself present while its `entry` was swapped for a no-op, its

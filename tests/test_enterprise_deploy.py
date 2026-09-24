@@ -53,6 +53,11 @@ def test_the_one_command_runs_the_cli_and_verifies_the_deployment(
     # not. E5 reads the name the CLI resolved, not one it recomputes (DF-5).
     stub.apps.add(DEV_APP)
     stub.app_bodies[DEV_APP] = {"forward_user_access_token": True}
+    # R24-15: comma-holding group names (e.g. "Research, Credit") are
+    # supported workspace display names; E1 must find them by their exact
+    # name, unsplit. Added alongside the deployer's own admin group, which
+    # E9's writer-standing check still needs.
+    stub.groups |= {"Research, Credit", "Analysts, Readers"}
     calls = tmp_path / "cli-calls.txt"
     resolved = tmp_path / "resolved.json"
     resolved.write_text(json.dumps(_resolved(DEV_APP)))
@@ -67,7 +72,8 @@ def test_the_one_command_runs_the_cli_and_verifies_the_deployment(
     shim.mkdir()
     recorder = (
         "#!/usr/bin/env bash\n"
-        f'printf "%s price=%s\\n" "$*" "$BUNDLE_VAR_model_price" >> "{calls}"\n'
+        'printf "%s price=%s admin=%s analyst=%s\\n" "$*" "$BUNDLE_VAR_model_price" '
+        f'"$BUNDLE_VAR_group_admin" "$BUNDLE_VAR_group_analyst" >> "{calls}"\n'
         f'case " $* " in *" -o json "*) cat "{resolved}" ;; '
         '*) echo "Validation OK!" ;; esac\n'
     )
@@ -85,6 +91,10 @@ def test_the_one_command_runs_the_cli_and_verifies_the_deployment(
         "PG_PORT": str(parts.port),
         "PG_SSLMODE": "disable",
         "MLFLOW_DISABLE_AGENT_HINT": "1",
+        # R24-15: a comma-containing group name, the CLI's `--var` parser
+        # splits a value on commas even when the shell argument is quoted.
+        "GROUP_ADMIN": "Research, Credit",
+        "GROUP_ANALYST": "Analysts, Readers",
         # The stub has no proxy to forward the caller's token (W4).
         enterprise_deploy.FORWARD_CALLER_ENV: "1",
     }
@@ -127,6 +137,14 @@ def test_the_one_command_runs_the_cli_and_verifies_the_deployment(
     assert all("--var run_ceiling=100.00" in line and "-p" not in line for line in seen)
     # The price travels whole in the environment (C1), never as a `--var`.
     assert all(f"price={PRICE}" in line and "model_price" not in line for line in seen)
+    # R24-15: the comma-holding group names travel the same way, never as a
+    # `--var` the CLI's own parser would split on the comma.
+    assert all(
+        "admin=Research, Credit analyst=Analysts, Readers" in line
+        and "group_admin" not in line
+        and "group_analyst" not in line
+        for line in seen
+    )
     assert "answered 200 status=ready" in rows[5][3] and "workers=OK" in rows[5][3]
     assert "json_mode=accepted" in (evidence / "E7.log").read_text()
     assert "PostgreSQL" in (evidence / "E8.log").read_text()
