@@ -612,11 +612,13 @@ def test_a_report_without_a_revision_is_private_to_the_runs_case(
 def test_each_new_command_meets_its_declared_store_budget(
     filing_client: TestClient, lite: _Harness
 ) -> None:
-    """Each filing command's declared cost is measured, and met exactly.
+    """Each command's declared cost is measured, and met exactly (N9).
 
     Freeze is measured beside save because it pays the same price: `freeze_in`
     re-proves the revision under the lock, which is the whole payload
-    derivation again. The membership commands still share one ceiling.
+    derivation again. Grant, revoke and withdrawal share `members.IO_BUDGET`
+    as a route-level ceiling, but each is still held to its own named
+    constant exactly, the way every section read already is.
 
     The withdrawal is sent last on purpose: it takes the run's one source out
     of the live set, and every later derivation of this run's payload would
@@ -633,9 +635,10 @@ def test_each_new_command_meets_its_declared_store_budget(
     admin = member(conn, case_id, Standing.ADMIN)
     target = member(conn, case_id, Standing.READER)
 
-    # The filing commands each declare their own cost and are held to it
-    # exactly, as every section read is: a ceiling shared by four commands let
-    # the signature grow from fourteen round trips to sixty unnoticed.
+    # Every command's own declared cost is held to it exactly (N9): a ceiling
+    # shared by several commands let the signature grow from fourteen round
+    # trips to sixty unnoticed, and one that was never measured against any
+    # of the commands sharing it is the same gap by another name.
     exact = [
         (
             deliverable.SAVE_IO,
@@ -661,36 +664,38 @@ def test_each_new_command_meets_its_declared_store_budget(
             filer,
             {"payload_sha256": digest},
         ),
-    ]
-    bounded = [
         (
-            members.IO_BUDGET,
+            members.GRANT_IO,
             f"{_case(lite)}/members",
             admin,
             {"user_id": str(uuid4()), "standing": "READER"},
         ),
-        (members.IO_BUDGET, f"{_case(lite)}/members/{target}/revocation", admin, {}),
         (
-            members.IO_BUDGET,
+            members.REVOKE_IO,
+            f"{_case(lite)}/members/{target}/revocation",
+            admin,
+            {},
+        ),
+        (
+            members.WITHDRAW_IO,
             f"{_case(lite)}/sources/{lite.source_id}/withdrawal",
             writer,
             {},
         ),
     ]
-    for held_exactly, sent in ((True, exact), (False, bounded)):
-        for budget, path, actor, body in sent:
-            counted.executed = 0
-            answer = filing_client.post(path, headers=command_headers(actor), json=body)
-            assert answer.status_code in (200, 201), (path, answer.text)
-            if held_exactly:
-                assert counted.executed == budget, (path, counted.executed)
-            else:
-                assert 0 < counted.executed <= budget, (path, counted.executed)
+    for budget, path, actor, body in exact:
+        counted.executed = 0
+        answer = filing_client.post(path, headers=command_headers(actor), json=body)
+        assert answer.status_code in (200, 201), (path, answer.text)
+        assert counted.executed == budget, (path, counted.executed)
     assert deliverable.IO_BUDGET == max(
         deliverable.SAVE_IO,
         deliverable.SIGN_IO,
         deliverable.FREEZE_IO,
         deliverable.FILE_IO,
+    )
+    assert members.IO_BUDGET == max(
+        members.GRANT_IO, members.REVOKE_IO, members.WITHDRAW_IO
     )
 
 

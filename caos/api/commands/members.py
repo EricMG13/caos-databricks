@@ -51,12 +51,15 @@ from caos.store.audit import GovernedAction
 from caos.store.gates import withdraw_source_in
 from caos.store.members import Standing, grant, revoke
 
-# The costliest of the three, measured by
-# `tests/test_governed_write_routes.py`: standing, the receipt lookup, then the
-# unit -- two case locks (the envelope's and `grant`'s or `revoke`'s own),
-# chain head, standing, the twin lookup, the domain statement, the receipt
-# read-back, the receipt and two audit writes.
-IO_BUDGET = 13
+# Statements per success path, each asserted with `==` by
+# `tests/test_governed_write_routes.py` (N9): standing, the receipt lookup,
+# then the unit -- chain head, standing, the domain statement (`grant` and
+# `revoke` take their own case lock beside the envelope's; `withdraw_source_in`
+# takes none), the receipt read-back, the receipt and two audit writes.
+GRANT_IO = 13
+REVOKE_IO = 13
+WITHDRAW_IO = 11
+IO_BUDGET = max(GRANT_IO, REVOKE_IO, WITHDRAW_IO)
 
 router = APIRouter()
 Writer = Annotated[Standing, Depends(require_case_writer)]
