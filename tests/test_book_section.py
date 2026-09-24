@@ -62,6 +62,16 @@ def test_the_book_row_carries_the_accepted_projection_cells_and_their_passports(
         "financing.cash_interest",
         "operating.margin",
     ]
+    # N60: a plain fraction and a currency amount are the same shape of
+    # Decimal, so the cell is told which the column is.
+    assert {column.key: column.unit for column in document.body.columns} == {
+        "operating.revenue": "currency",
+        "operating.ebitda": "currency",
+        "operating.cfo": "currency",
+        "investing.capex": "currency",
+        "financing.cash_interest": "currency",
+        "operating.margin": "percent",
+    }
     [row] = document.body.rows
     assert row.case_id == harness.case_id
     assert row.displayed_run_id == harness.run_id

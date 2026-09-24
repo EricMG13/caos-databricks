@@ -788,12 +788,18 @@ class ModelBody(BaseModel):
 
 
 class BookColumn(BaseModel):
-    """One column of the book: a value the accepted projection already carries."""
+    """One column of the book: a value the accepted projection already
+    carries. `unit` is what the cell's own figure is (N60): a plain
+    `Decimal` states a fraction (`0.20`) and a count identically, so the
+    cell has to be told which -- the calculator names its own margins and
+    coverage ratios, and the column declares that naming, never a guess
+    from the figure's magnitude."""
 
     model_config = _CLOSED
 
     key: Id
     label: Text
+    unit: Literal["percent", "currency", "multiple", "count", "none"]
 
 
 class BookResearch(BaseModel):

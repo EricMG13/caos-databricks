@@ -431,7 +431,13 @@ const ModelDocument = sectionDocument(ModelBody);
 // Book, `/api/v1/book` (IA_SPEC.md 4.4): the credit across the portfolio. No
 // case in its body, so it is the one section document beside Directory's that
 // answers for no single case.
-const BookColumn = object({ key: short, label: text });
+// What the column's own figure is (N60): a plain fraction and a currency
+// amount are the same shape of decimal string, so the cell is told which.
+const BookColumn = object({
+  key: short,
+  label: text,
+  unit: enumOf(["percent", "currency", "multiple", "count", "none"]),
+});
 const BookResearch = object({ route_node_id: short, module_id: short, qa_status: short });
 /** The ten fields of IA_SPEC.md 4.4, in its order and closed to them. */
 const BookPassport = object({

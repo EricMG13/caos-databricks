@@ -147,7 +147,7 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
     ),
     wire.ReportDocument: ENVELOPE,
     wire.CommitteeDocument: ENVELOPE,
-    wire.BookColumn: frozenset({"key", "label"}),
+    wire.BookColumn: frozenset({"key", "label", "unit"}),
     wire.BookResearch: frozenset({"route_node_id", "module_id", "qa_status"}),
     # The ten fields of IA_SPEC.md 4.4, and nothing beside them: a passport
     # that grew an eleventh would be this host asserting something the
