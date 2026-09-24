@@ -27,7 +27,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from canonical_fixtures import CanonicalCompletions
-from conftest import route_fault
+from conftest import route_fault, tamper
 from fastapi import FastAPI, HTTPException
 from fastapi.dependencies.utils import get_dependant
 from fastapi.exceptions import RequestValidationError
@@ -558,7 +558,8 @@ def test_a_stored_gate_record_the_markdown_does_not_bind_is_a_server_fault(
         stored,
         projections=replace(stored.projections, readiness=(("CP-5", "READY"),)),
     )
-    harness.conn.execute(
+    tamper(
+        harness.conn,
         "UPDATE artifacts SET record_sha256 = %s WHERE attempt_id = %s",
         (harness.blobs.put(record_bytes(lying)), attempt),
     )
@@ -570,7 +571,8 @@ def test_a_stored_gate_record_the_markdown_does_not_bind_is_a_server_fault(
         500,
         _refused("ARTIFACT_RECORD_MISMATCH"),
     )
-    harness.conn.execute(
+    tamper(
+        harness.conn,
         "UPDATE artifacts SET record_sha256 = %s WHERE attempt_id = %s",
         (harness.blobs.put(record_bytes(lying)), attempt),
     )

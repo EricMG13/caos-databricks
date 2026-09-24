@@ -9,7 +9,7 @@ from uuid import UUID, uuid4
 import pytest
 from canonical_fixtures import CONTRACT, skill
 from canonical_route_fixtures import driver_schema, forecast_driver_rows
-from conftest import route_fault
+from conftest import route_fault, tamper
 from fastapi.testclient import TestClient
 from test_analysis_section import (
     _as,
@@ -198,7 +198,8 @@ def test_model_refuses_missing_or_changed_projection_authority(
 ) -> None:
     _complete(harness)
     if change == "owner":
-        harness.conn.execute(
+        tamper(
+            harness.conn,
             "DELETE FROM artifacts WHERE run_id=%s AND route_node_id LIKE '%%CP-1%%'",
             (harness.run_id,),
         )
@@ -212,7 +213,8 @@ def test_model_refuses_missing_or_changed_projection_authority(
         altered = replace(
             record, projections=replace(record.projections, confidence_score=1)
         )
-        harness.conn.execute(
+        tamper(
+            harness.conn,
             "UPDATE artifacts SET record_sha256=%s"
             " WHERE run_id=%s AND route_node_id=%s",
             (harness.blobs.put(record_bytes(altered)), harness.run_id, node),

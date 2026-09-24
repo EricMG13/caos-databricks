@@ -14,7 +14,7 @@ from canonical_fixtures import (
     CanonicalCompletions,
     research_brief,
 )
-from conftest import priced
+from conftest import priced, tamper
 from fastapi.testclient import TestClient
 from test_api_routes import _section
 from test_canonical_readers import _reader, _run, client
@@ -185,7 +185,8 @@ def test_an_existing_claims_pin_refuses_execution(
 
 def _strip_record(harness: _Harness, module_id: str) -> None:
     node = next(n for n in harness.route.nodes if n.module_id == module_id)
-    harness.conn.execute(
+    tamper(
+        harness.conn,
         "UPDATE artifacts SET record_sha256 = NULL WHERE run_id = %s"
         " AND route_node_id = %s",
         (harness.run_id, node.route_node_id),

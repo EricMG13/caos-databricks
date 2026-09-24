@@ -8,14 +8,18 @@ import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import urlsplit, urlunsplit
 from uuid import UUID, uuid4
 
 import pytest
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from decimal import Decimal
+
+    from psycopg import Cursor
+    from psycopg.abc import Query
 
     from caos.pricing import ModelPrice
     from caos.store import StoreConnection
@@ -58,6 +62,46 @@ def route_fault(conn: object) -> Iterator[None]:
         connection.execute("ALTER TABLE run_routes DISABLE TRIGGER route_immutable")
         yield
         connection.execute("ALTER TABLE run_routes ENABLE TRIGGER route_immutable")
+
+
+def tamper(
+    conn: object, statement: Query, params: Sequence[object] | None = None
+) -> Cursor[tuple[Any, ...]]:
+    """Corrupt a governed row the schema refuses to change, for one statement.
+
+    `run_attempts` and `artifacts` refuse UPDATE, DELETE and TRUNCATE (CF-091,
+    `0037_attempts_artifacts_immutable.sql`): the app only ever inserts into
+    them. The suites that simulate a row corrupted after the fact -- to prove
+    the application's own verification catches what the database would
+    otherwise prevent -- corrupt it here. The one statement runs with
+    `session_replication_role = replica`, which skips user and foreign-key
+    triggers but never a CHECK or a unique index; only this suite's superuser
+    may set it, and only in its own disposable databases. No table lock is
+    taken, and the caller's transaction is neither committed nor ended: the
+    role is set back before this returns, so the next statement is refused
+    again. An autocommit connection gets a transaction of its own.
+    """
+    connection = cast("StoreConnection", conn)
+    assert connection.info.dbname.startswith("caos_test_")
+    if not connection.autocommit:
+        return _as_replica(connection, statement, params)
+    with connection.transaction():
+        return _as_replica(connection, statement, params)
+
+
+def _as_replica(
+    connection: StoreConnection, statement: Query, params: Sequence[object] | None
+) -> Cursor[tuple[Any, ...]]:
+    from psycopg.pq import TransactionStatus
+
+    connection.execute("SET LOCAL session_replication_role = replica")
+    try:
+        return connection.execute(statement, params)
+    finally:
+        # A refused statement leaves the transaction failed, and its rollback
+        # restores the role; setting it here would only mask the refusal.
+        if connection.info.transaction_status is TransactionStatus.INTRANS:
+            connection.execute("SET LOCAL session_replication_role = origin")
 
 
 # Where a suite's `TestClient` stands (slice 4.5a1). The edge guard serves a

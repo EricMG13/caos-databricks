@@ -28,6 +28,7 @@ from uuid import UUID, uuid4
 import psycopg
 import pytest
 from canonical_fixtures import CATALOG, LITE_PROFILE, LITE_SELECTION
+from conftest import tamper
 from psycopg.pq import TransactionStatus
 from test_case_ordering import _blocked, _wait_for_blocking
 from test_run_events import RECORD, approved_nodes
@@ -603,7 +604,8 @@ def test_reserve_revalidates_attempt_owner_after_waiting(
             assert other.info.transaction_status is TransactionStatus.IDLE
 
         with _blocked(conn, other, refused):
-            conn.execute(
+            tamper(
+                conn,
                 "UPDATE run_attempts SET run_id = %s WHERE attempt_id = %s",
                 (new_run, attempt),
             )
