@@ -33,6 +33,7 @@ from caos.api.commands import deliverable, members
 from caos.api.commands._request import require_case_admin
 from caos.api.deps import actor_from_request
 from caos.api.reads import reports as reports_read
+from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
 from caos.deliverable.filing import Receipt, filing_payload, sign_opinion
 from caos.refusals import Refusal
@@ -572,7 +573,7 @@ def _judged(document: dict[str, Any]) -> dict[str, str | None]:
 
 
 def test_a_run_with_no_revision_is_served_a_report_that_offers_its_first_save(
-    filing_client: TestClient, lite: _Harness
+    filing_client: TestClient, lite: _Harness, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The filing chain's front door. Without a revision the Report names the
     run's accepted artifacts as a save would carry them and offers the save
@@ -582,11 +583,23 @@ def test_a_run_with_no_revision_is_served_a_report_that_offers_its_first_save(
     approver = _approver(lite)
     counted = _Counting(conn)
     app.dependency_overrides[store_connection] = lambda: counted
+    # N35's remainder: the payload a first save would carry is derived the
+    # same way "report" always is.
+    downloaded: list[str] = []
+    real_get = BlobStore.get
+
+    def counted_get(store: BlobStore, digest: str) -> bytes:
+        if store.verified is None or digest not in store.verified:
+            downloaded.append(digest)
+        return real_get(store, digest)
+
+    monkeypatch.setattr(BlobStore, "get", counted_get)
 
     first = _unsaved(filing_client, lite, approver)
 
     assert first.status_code == 200, first.text
     assert counted.executed == reports_read.IO_BUDGET["unsaved"]
+    assert len(downloaded) == reports_read.BLOB_BUDGET["unsaved"]
     document = first.json()
     body = document["body"]
     # Accepted artifacts are shown, so the section is not an empty observation.
@@ -664,7 +677,7 @@ def test_a_report_without_a_revision_is_private_to_the_runs_case(
 
 
 def test_each_new_command_meets_its_declared_store_budget(
-    filing_client: TestClient, lite: _Harness
+    filing_client: TestClient, lite: _Harness, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Each command's declared cost is measured, and met exactly (N9).
 
@@ -687,6 +700,17 @@ def test_each_new_command_meets_its_declared_store_budget(
     writer = member(conn, case_id, Standing.WRITER)
     admin = member(conn, case_id, Standing.ADMIN)
     target = member(conn, case_id, Standing.READER)
+    # N35's remainder: each command's own declared blob cost, held the same
+    # exact way as its store round trips.
+    downloaded: list[str] = []
+    real_get = BlobStore.get
+
+    def counted_get(store: BlobStore, digest: str) -> bytes:
+        if store.verified is None or digest not in store.verified:
+            downloaded.append(digest)
+        return real_get(store, digest)
+
+    monkeypatch.setattr(BlobStore, "get", counted_get)
 
     # The save below supersedes `original` (CF-026), so sign, freeze and file
     # are measured on the revision it names, not the one that composed it; its
@@ -700,6 +724,7 @@ def test_each_new_command_meets_its_declared_store_budget(
     )
     assert saved.status_code == 201, saved.text
     assert counted.executed == deliverable.SAVE_IO
+    assert len(downloaded) == deliverable.SAVE_BLOBS
     revision = UUID(saved.json()["revision_id"])
     digest = saved.json()["payload_sha256"]
 
@@ -710,51 +735,65 @@ def test_each_new_command_meets_its_declared_store_budget(
     exact = [
         (
             deliverable.SIGN_IO,
+            deliverable.SIGN_BLOBS,
             f"{_case(lite)}/revisions/{revision}/signature",
             signer,
             {"payload_sha256": digest},
         ),
         (
             deliverable.FREEZE_IO,
+            deliverable.FREEZE_BLOBS,
             f"{_case(lite)}/revisions/{revision}/freeze",
             freezer,
             {"payload_sha256": digest},
         ),
         (
             deliverable.FILE_IO,
+            deliverable.FILE_BLOBS,
             f"{_case(lite)}/revisions/{revision}/filing",
             filer,
             {"payload_sha256": digest},
         ),
         (
             members.GRANT_IO,
+            0,
             f"{_case(lite)}/members",
             admin,
             {"user_id": str(uuid4()), "standing": "READER"},
         ),
         (
             members.REVOKE_IO,
+            0,
             f"{_case(lite)}/members/{target}/revocation",
             admin,
             {},
         ),
         (
             members.WITHDRAW_IO,
+            0,
             f"{_case(lite)}/sources/{lite.source_id}/withdrawal",
             writer,
             {},
         ),
     ]
-    for budget, path, actor, body in exact:
+    for budget, blob_budget, path, actor, body in exact:
         counted.executed = 0
+        downloaded.clear()
         answer = filing_client.post(path, headers=command_headers(actor), json=body)
         assert answer.status_code in (200, 201), (path, answer.text)
         assert counted.executed == budget, (path, counted.executed)
+        assert len(downloaded) == blob_budget, (path, downloaded)
     assert deliverable.IO_BUDGET == max(
         deliverable.SAVE_IO,
         deliverable.SIGN_IO,
         deliverable.FREEZE_IO,
         deliverable.FILE_IO,
+    )
+    assert deliverable.BLOB_BUDGET == max(
+        deliverable.SAVE_BLOBS,
+        deliverable.SIGN_BLOBS,
+        deliverable.FREEZE_BLOBS,
+        deliverable.FILE_BLOBS,
     )
     assert members.IO_BUDGET == max(
         members.GRANT_IO, members.REVOKE_IO, members.WITHDRAW_IO

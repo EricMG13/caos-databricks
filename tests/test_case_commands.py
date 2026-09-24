@@ -680,10 +680,22 @@ class _Counting:
 
 
 def test_each_case_command_declares_and_meets_its_store_budget(
-    case: tuple[StoreConnection, UUID], command_client: TestClient
+    case: tuple[StoreConnection, UUID],
+    command_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     conn, case_id = case
     writer = member(conn, case_id)
+    # N35's remainder: `put_pack` only ever writes; a replay answers from the
+    # receipt row. Neither command here should ever read a blob back.
+    downloaded: list[str] = []
+    real_get = BlobStore.get
+
+    def counted(store: BlobStore, digest: str) -> bytes:
+        downloaded.append(digest)
+        return real_get(store, digest)
+
+    monkeypatch.setattr(BlobStore, "get", counted)
 
     def measured(send: Callable[[], Response]) -> tuple[int, int]:
         counter = _Counting(conn)
@@ -713,6 +725,8 @@ def test_each_case_command_declares_and_meets_its_store_budget(
     )
     assert replay[0] == 201 and replay[1] <= cases.REPLAY_IO
     assert cases.IO_BUDGET >= cases.ADMISSION_FIXED_IO + 50 * per_document
+    assert downloaded == []
+    assert cases.BLOB_BUDGET == 0
 
 
 def test_the_case_commands_are_the_two_routes_of_their_router() -> None:

@@ -28,6 +28,13 @@ def test_parse_uuid_refuses_anything_else_with_the_given_code() -> None:
     assert caught.value.code is RefusalCode.RUN_NOT_FOUND
 
 
+def test_deps_reads_no_blob() -> None:
+    """N35's remainder: `visible_case` is a store row and `blob_store`/
+    `request_blobs` only construct the handle a route reads through, so this
+    module's own IO_BUDGET (1) carries no blob dimension."""
+    assert deps.BLOB_BUDGET == 0
+
+
 def test_visible_case_reads_the_callers_own_standing(
     case: tuple[StoreConnection, UUID],
 ) -> None:

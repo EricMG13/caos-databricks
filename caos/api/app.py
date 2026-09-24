@@ -101,6 +101,8 @@ from caos.store.budget import configured_ceiling
 # `tests/test_case_events.py`. The section reads declare their own budgets.
 EVENTS_IO_BUDGET = 2 + STREAM_IO
 IO_BUDGET = EVENTS_IO_BUDGET
+# N35's remainder: the tail streams named store events; it opens no blob.
+BLOB_BUDGET = 0
 
 # §9: a tail closes so the edge can reauthenticate. Five minutes, and it lives
 # here rather than in `stream.py` because it is a property of the connection

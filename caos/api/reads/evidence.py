@@ -35,6 +35,10 @@ from caos.store.members import Standing
 
 # Standing, `now()` and the run's ownership in one row; then the page itself.
 IO_BUDGET = 1 + page_read.IO_BUDGET
+# N35's remainder: `read_page` downloads the pinned document once
+# (`page.py`'s own `_document`), remembered so a second read of the same
+# page within the request costs no second download.
+BLOB_BUDGET = 1
 
 router = APIRouter()
 

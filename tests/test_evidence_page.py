@@ -231,18 +231,29 @@ def test_a_page_over_its_line_bound_is_partial_list_truncated(
 
 
 def test_the_page_read_declares_its_store_budget(
-    client: TestClient, report: Pinned
+    client: TestClient, report: Pinned, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     reader = _member(report, Standing.READER)
     counter = _CountingConnection(report.conn)
     app.dependency_overrides[store_connection] = lambda: counter
     path = _path(report, report.sources[0])
+    # N35's remainder: the one document `read_page` downloads.
+    downloaded: list[str] = []
+    real_get = BlobStore.get
+
+    def counted_get(store: BlobStore, digest: str) -> bytes:
+        if store.verified is None or digest not in store.verified:
+            downloaded.append(digest)
+        return real_get(store, digest)
+
+    monkeypatch.setattr(BlobStore, "get", counted_get)
 
     assert _get(client, report, path, reader).status_code == 200
     assert counter.executed == evidence_read.IO_BUDGET == 2
     # The read unit is ended once, where the connection's own exit would
     # otherwise have sent its COMMIT, so the round trips do not move.
     assert counter.ended == 1
+    assert len(downloaded) == evidence_read.BLOB_BUDGET == 1
 
     opened: list[str] = []
 

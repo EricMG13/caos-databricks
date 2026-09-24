@@ -60,6 +60,15 @@ MEASURED_MODULES = (
     Path("caos/api/reads/analysis.py"),
     Path("caos/api/reads/model.py"),
     Path("caos/api/reads/book.py"),
+    # N35's remainder: every other module with a test-verified BLOB_BUDGET
+    # above zero and a plain declared number -- `reads/reports.py` and
+    # `reads/deliverable.py` declare theirs per pathway, a dict `--record`
+    # does not snapshot (`record_measurements` records an int budget only),
+    # so their BLOB_BUDGET stays declared and test-verified without a
+    # ratcheted floor here.
+    Path("caos/api/reads/evidence.py"),
+    Path("caos/api/reads/run.py"),
+    Path("caos/api/commands/deliverable.py"),
 )
 
 # The most store round trips one request may be declared to cost. The widest

@@ -18,7 +18,8 @@ from test_revisions import _read, _save
 from test_run_commands import _Counting
 
 from caos.api.app import app, store_connection
-from caos.api.reads.reports import IO_BUDGET
+from caos.api.reads.reports import BLOB_BUDGET, IO_BUDGET
+from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
 from caos.deliverable.filing import file_deliverable, receipt_bytes
 from caos.refusals import Refusal, RefusalCode
@@ -181,7 +182,7 @@ def test_committee_reads_the_exact_frozen_payload_and_receipt(
 
 
 def test_committee_distinguishes_frozen_from_filed(
-    client: TestClient, lite: _Harness
+    client: TestClient, lite: _Harness, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _file(lite)
     revision = _save(lite)
@@ -194,9 +195,21 @@ def test_committee_distinguishes_frozen_from_filed(
     _freeze(lite, revision)
     counter = _Counting(lite.conn)
     app.dependency_overrides[store_connection] = lambda: counter
+    # N35's remainder: frozen-not-filed re-derives, the same shape "report"
+    # does, not the filed pathway's two stored reads.
+    downloaded: list[str] = []
+    real_get = BlobStore.get
+
+    def counted_get(store: BlobStore, digest: str) -> bytes:
+        if store.verified is None or digest not in store.verified:
+            downloaded.append(digest)
+        return real_get(store, digest)
+
+    monkeypatch.setattr(BlobStore, "get", counted_get)
     body = _get(client, lite, revision, "committee")
     assert (body["state"], body["filed_by"], body["receipt"]) == ("frozen", None, None)
     assert counter.executed == IO_BUDGET["frozen"]
+    assert len(downloaded) == BLOB_BUDGET["frozen"]
 
 
 def test_historical_receiptless_filing_does_not_block_a_newer_frozen_revision(
@@ -337,7 +350,10 @@ ACTIONS = (
 
 @pytest.mark.parametrize("section", ["report", "committee"])
 def test_revision_http_actor_matrix_and_declared_io(
-    client: TestClient, lite: _Harness, section: str
+    client: TestClient,
+    lite: _Harness,
+    section: str,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     receipt = _file(lite)
     readers = [uuid4() for _ in range(4)]
@@ -347,12 +363,24 @@ def test_revision_http_actor_matrix_and_declared_io(
     grant(lite.conn, case_id=lite.case_id, user_id=revoked, standing=Standing.READER)
     revoke(lite.conn, case_id=lite.case_id, user_id=revoked)
     lite.conn.commit()
+    # N35's remainder: "report" always re-derives (6 blobs); a filed
+    # "committee" reads its own two stored blobs instead.
+    downloaded: list[str] = []
+    real_get = BlobStore.get
+
+    def counted_get(store: BlobStore, digest: str) -> bytes:
+        if store.verified is None or digest not in store.verified:
+            downloaded.append(digest)
+        return real_get(store, digest)
+
+    monkeypatch.setattr(BlobStore, "get", counted_get)
     # Task 12.1: the section offers its four filing controls, and every one of
     # them is refused here whatever the standing -- these callers assert no
     # global role, and a global READER may not write however the case sees it.
     for actor in [*readers, uuid4(), revoked]:
         counter = _Counting(lite.conn)
         app.dependency_overrides[store_connection] = lambda: counter  # noqa: B023
+        downloaded.clear()
         response = client.get(
             _path(lite, receipt.revision_id, section),
             headers=_as(actor, "ADMIN" if actor not in readers else None),
@@ -361,6 +389,7 @@ def test_revision_http_actor_matrix_and_declared_io(
         if actor in readers:
             assert response.status_code == 200, response.json()
             assert counter.executed == IO_BUDGET[section]
+            assert len(downloaded) == BLOB_BUDGET[section]
             offered = {
                 view["action"]: view["refusal"] and view["refusal"]["code"]
                 for view in response.json()["chrome"]["actions"]
@@ -369,6 +398,7 @@ def test_revision_http_actor_matrix_and_declared_io(
         else:
             assert response.json()["code"] == "CASE_NOT_FOUND"
             assert counter.executed == 2  # isolation and live standing only
+            assert downloaded == []
 
 
 @pytest.mark.parametrize("section", ["report", "committee"])

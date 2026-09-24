@@ -145,6 +145,12 @@ IO_BUDGET = (
     + READINESS_ROWS * CANONICAL_READINESS_IO
     + BLOCKED_BY_IO
 )
+# N35's remainder: `accepted_artifacts` reads two blobs -- the artifact and
+# its record -- per readiness row (`caos.graph.runtime`), the same shape
+# `PER_HANDOFF_BLOBS` counts for Analysis; `READINESS_ROWS` is the same
+# ceiling `CANONICAL_READINESS_IO` is scaled by above.
+PER_READINESS_BLOBS = 2
+BLOB_BUDGET = READINESS_ROWS * PER_READINESS_BLOBS
 
 router = APIRouter()
 

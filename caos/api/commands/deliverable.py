@@ -92,6 +92,16 @@ SIGN_IO = 15
 FREEZE_IO = 56
 FILE_IO = 57
 IO_BUDGET = max(SAVE_IO, SIGN_IO, FREEZE_IO, FILE_IO)
+# N35's remainder: save derives the payload directly (`canonical_payload`,
+# the LITE route's three nodes at two blobs each); sign reads only chain
+# rows. Freeze and file each re-prove it (`prove_revision`): the saved
+# payload once for its narrative, then the same derivation again -- one more
+# than save, the same shape `reads/reports.py`'s "report"/"frozen" pay.
+SAVE_BLOBS = 6
+SIGN_BLOBS = 0
+FREEZE_BLOBS = 7
+FILE_BLOBS = 7
+BLOB_BUDGET = max(SAVE_BLOBS, SIGN_BLOBS, FREEZE_BLOBS, FILE_BLOBS)
 
 _REVISION = "/api/v1/cases/{case_id}/revisions/{revision_id}"
 

@@ -676,6 +676,8 @@ def test_the_event_stream_costs_its_declared_budget(
     assert first_poll == stream.IO_BUDGET == CONNECT_IO + CURSOR_IO + POLL_IO
     assert app_module.EVENTS_IO_BUDGET == 2 + stream.IO_BUDGET
     assert app_module.IO_BUDGET == app_module.EVENTS_IO_BUDGET
+    # N35's remainder: the tail streams named store events; no blob is read.
+    assert app_module.BLOB_BUDGET == 0
 
 
 def test_guarded_case_tail_refuses_a_post_connect_fault_as_store_unavailable(

@@ -70,6 +70,10 @@ IO_BUDGET = max(
     CREATE_CASE_IO,
     ADMISSION_FIXED_IO + ADMISSION_PER_DOCUMENT_IO * DEFAULT_LIMITS.max_documents,
 )
+# N35's remainder: `put_pack` only ever writes a pack's documents (`blobs.put`);
+# a replay answers from the receipt row, never by reading a blob back, and
+# neither command here downloads a digest-addressed document.
+BLOB_BUDGET = 0
 
 CREATE_CASE = "CREATE_CASE"
 ADMIT_SOURCES = "ADMIT_SOURCES"

@@ -72,6 +72,15 @@ from caos.store.source_sets import cited_source_ids
 # -- the same one signer, one freezer shape the rest of this budget is stated
 # for -- so "committee" pays two more for a filed revision.
 IO_BUDGET = {"report": 46, "committee": 22, "frozen": 53, "unsaved": 42}
+# N35's remainder: "report" and "frozen" (a state the store has not filed)
+# `prove_revision` -- the saved payload once, for its narrative
+# (`read_revision`), then the whole payload re-derived (`canonical_payload`),
+# the LITE route's three nodes at two blobs each (artifact and record,
+# `PER_HANDOFF_BLOBS`'s own shape): 1 + 3*2. "unsaved" derives the same way
+# with no saved payload to read first: 3*2. A filed "committee" instead reads
+# its own two stored blobs -- the receipt `read_filed_receipt` proves and the
+# frozen payload `read_revision` then serves -- never re-deriving.
+BLOB_BUDGET = {"report": 7, "committee": 2, "frozen": 7, "unsaved": 6}
 router = APIRouter()
 
 

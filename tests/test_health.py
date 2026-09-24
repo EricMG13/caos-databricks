@@ -291,6 +291,8 @@ def test_the_health_request_opens_no_store_connection(
     _ask(None)
     assert opened == []
     assert health.IO_BUDGET == 0
+    # N35's remainder: the blob probe reads no digest-addressed document.
+    assert health.BLOB_BUDGET == 0
 
 
 def test_the_schema_probe_writes_nothing(empty_database: str) -> None:
