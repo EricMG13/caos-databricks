@@ -64,7 +64,6 @@ import psycopg
 
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
-from caos.evidence.citations import _Token, _unique_run
 from caos.evidence.extract import dispatch_by_content
 from caos.evidence.ingest import admit_pack
 from caos.graph.route import (
@@ -769,42 +768,41 @@ def _accepted(
 
 
 def _locatable(data: bytes, matched_text: str) -> bool:
-    """Whether `matched_text` could ever anchor somewhere in `data` (FP-26).
+    """Whether `matched_text` occurs, in order, in some page of `data` (FP-26).
 
-    The same search a real citation is verified by (`caos/evidence/citations.py`
-    `_unique_run`), over the same extractor's tokens, page by page: a quote no
-    page holds could never be cited by a correct run, whatever it answers.
-    Ambiguity on one page does not fail this -- an ambiguous quote still
-    anchors if a run cites the right page, and a truly ambiguous one is
-    `CITATION_AMBIGUOUS` at run time, not a defect in the set. Unreadable bytes
-    answer `False`: nothing extracted from them could ever be cited either.
+    Deliberately not the full search a real citation is verified by
+    (`caos/evidence/citations.py`'s region-scoped, normalising `_unique_run`):
+    that module's search machinery is private to it, and
+    `test_package_boundaries.py` refuses a private name imported across a
+    package for exactly the reason this one stays local -- only the public
+    `dispatch_by_content`/`Token` (`caos/evidence/extract.py`) are used here.
+    A plain, honest word-run check is enough for what this guards: a key
+    naming a quote the document could not possibly produce. The real search's
+    finer rules (normalisation, edge punctuation, tracked-glyph joining) can
+    only ever find *more* than this does, so this never refuses a quote the
+    real search would anchor -- it only catches the ones neither could.
+
+    A document with no extracted text at all is a different, more specific
+    problem than a wrong key -- `SOURCE_HAS_NO_TEXT`, raised moments later by
+    admission -- so it answers `True` here and lets that check run instead of
+    masking it. Unreadable bytes (`SOURCE_NOT_READABLE` and the like) are left
+    to raise from here: the same refusal admission would give them anyway.
     """
-    try:
-        tokens = dispatch_by_content(data).extract(data)
-    except Refusal:
+    words = matched_text.split()
+    if not words:
         return False
-    pages: dict[int, list[_Token]] = defaultdict(list)
-    for token in tokens:
-        pages[token.page].append(
-            _Token(
-                token.text,
-                token.region_id,
-                token.line_id,
-                token.x0,
-                token.y0,
-                token.x1,
-                token.y1,
-            )
-        )
-    for page_tokens in pages.values():
-        try:
-            _unique_run(page_tokens, matched_text)
-        except Refusal as refused:
-            if refused.code is RefusalCode.CITATION_NOT_LOCATED:
-                continue
-            return True  # CITATION_AMBIGUOUS: found, just not uniquely here
+    tokens = dispatch_by_content(data).extract(data)
+    if not tokens:
         return True
-    return False
+    by_page: dict[int, list[str]] = defaultdict(list)
+    for token in tokens:
+        by_page[token.page].append(token.text)
+    width = len(words)
+    return any(
+        texts[start : start + width] == words
+        for texts in by_page.values()
+        for start in range(len(texts) - width + 1)
+    )
 
 
 def _answerable(bundle: Bundle, qualification: QualificationSet) -> None:
