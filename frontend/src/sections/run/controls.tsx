@@ -436,11 +436,18 @@ export function CreateRunControl({
                           // analyst did not move, the run they are on gained
                           // a name. `replace` keeps Back at where they came
                           // from rather than at a case with no run, and every
-                          // other parameter the address carries survives.
+                          // other parameter the address carries survives --
+                          // except `revision`, which named a revision of
+                          // whatever run was displayed before (or none, on a
+                          // first run): the new run has none yet, and a
+                          // reader (Report, Committee) refuses the mismatched
+                          // pair `RUN_NOT_FOUND`/`DELIVERABLE_NOT_FOUND`
+                          // rather than silently reattach it (R24-04).
                           setParams(
                             (current) => {
                               const next = new URLSearchParams(current);
                               next.set("run", outcome.receipt.run_id);
+                              next.delete("revision");
                               return next;
                             },
                             { replace: true },

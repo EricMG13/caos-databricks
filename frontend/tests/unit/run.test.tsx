@@ -905,6 +905,33 @@ describe("Run", () => {
     }
   });
 
+  // R24-04: a revision named in the address is a revision of the *previous*
+  // run. The new run has none yet, and its readers (Report, Committee)
+  // refuse the mismatched pair rather than silently reattach an old
+  // revision to a new run -- so creating a run must drop it, while every
+  // independent parameter survives untouched.
+  test("test_creating_a_run_drops_a_revision_that_belonged_to_the_previous_run", async () => {
+    const caseId = routeNotPinned.body.case_id;
+    const newRunId = "33333333-3333-4333-8333-333333333333";
+    const created = { case_id: caseId, run_id: newRunId, route_digest: "f".repeat(64) };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(jsonResponse(created, 201)));
+    try {
+      const { container } = mountAt(
+        EMPTY_RUN,
+        `/run/?case=${caseId}&run=00000000-0000-4000-8000-0000000000aa` +
+          `&revision=00000000-0000-4000-8000-0000000000bb&tab=route`,
+      );
+      fireEvent.click(container.querySelector('[data-action="CREATE_RUN"]')!);
+      await waitFor(() => expect(new URLSearchParams(address()).get("run")).toBe(newRunId));
+      const params = new URLSearchParams(address());
+      expect(params.get("case")).toBe(caseId);
+      expect(params.get("tab")).toBe("route");
+      expect(params.has("revision")).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   // The analyst may leave while Create run is in flight: its answer names a run
   // on a page no longer shown, and writing it into the address would navigate
   // them back to it (CF-058).
