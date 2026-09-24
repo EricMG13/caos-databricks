@@ -25,6 +25,7 @@ from caos.methodology.bundle import (
     Bundle,
     assemble_authority,
     authority_digest,
+    module_display_names,
     verified_bytes,
 )
 from caos.refusals import Refusal, RefusalCode
@@ -198,3 +199,20 @@ def test_the_manifest_itself_is_pinned(bundle: Bundle) -> None:
 
     assert recorded["build_id"] == bundle.build_id
     assert bundle.manifest_sha256.startswith("a80849a8")
+
+
+def test_module_display_names_reads_the_bundle_catalog(bundle: Bundle) -> None:
+    """N61: a display name for every module the manifest carries, read from
+    its own folder slug -- prose, not a slug -- plus the two modules the
+    manifest itself does not carry a slug for: CP-PARSE, which shares CP-0's
+    name under the host's own carve-out (§5), and CP-CF, the host's model
+    extension, which keeps its host-declared name."""
+    names = module_display_names(bundle)
+
+    assert names["CP-1"] == "Canonical data foundation"
+    assert names["CP-2G"] == "Forward credit model"
+    assert names["CP-PARSE"] == names["CP-0"] == "Source readiness"
+    assert names["CP-CF"] == "Cash-flow forecast"
+    # Every manifest module plus the two carve-outs, never a blank name.
+    assert set(names) == set(bundle.physical_modules()) | {"CP-PARSE", "CP-CF"}
+    assert all(names.values())

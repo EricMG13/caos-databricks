@@ -44,7 +44,13 @@ from caos.pricing import ModelPrice
 from caos.pricing import price_from_environment as price_from_environment
 from caos.provider import CompletionProvider, resend_checked
 from caos.refusals import Refusal, RefusalCode
-from caos.store import StoreConnection, apply_schema, connect, rollback_or_close
+from caos.store import (
+    RunStatus,
+    StoreConnection,
+    apply_schema,
+    connect,
+    rollback_or_close,
+)
 from caos.store.budget import configured_ceiling
 from caos.store.gates import execution_input
 from caos.store.lakebase import note_connect_failure, store_url
@@ -220,8 +226,9 @@ def work_once(
         _settle(conn, lambda: release(conn, lease))
         raise Refusal(RefusalCode.STORE_UNAVAILABLE) from None
     except Refusal as refused:
-        if _refused(conn, lease, refused):
-            _forget(execution, lease.run_id, route)
+        _forget(
+            conn, execution, lease.run_id, route, mine=_refused(conn, lease, refused)
+        )
     except Exception as fault:  # noqa: BLE001 -- neither a refusal nor a store error
         # Parked, not raised: a worker that died holding the claim would find the
         # same run first after every lease expiry and never reach the rest of the
@@ -230,20 +237,34 @@ def work_once(
         frames = traceback.extract_tb(fault.__traceback__)
         where = f"{frames[-1].filename}:{frames[-1].lineno}" if frames else "?"
         print(f"{type(fault).__name__} at {where}", file=sys.stderr)
-        if _settle(conn, lambda: stop(conn, lease, RefusalCode.INTERNAL_FAULT)):
-            _forget(execution, lease.run_id, route)
+        mine = _settle(conn, lambda: stop(conn, lease, RefusalCode.INTERNAL_FAULT))
+        _forget(conn, execution, lease.run_id, route, mine=mine)
     return lease.run_id
 
 
 def _forget(
-    execution: Execution | None, run_id: UUID, route: ResolvedRoute | None
+    conn: StoreConnection,
+    execution: Execution | None,
+    run_id: UUID,
+    route: ResolvedRoute | None,
+    *,
+    mine: bool,
 ) -> None:
     """Drop the checkpoint thread of a run this worker just parked or ended
     (DL-8): the thread holds position only (D6), a requeued run re-derives
     its frontier from the ledger, and a thread nobody will resume is rows
-    nothing reads. Best effort: the run's status is already committed. Only
-    after this worker's own write moved the run (ST-5): a worker whose lease
-    was lost would otherwise delete the thread its successor is driving.
+    nothing reads. Best effort: the run's status is already committed.
+
+    `mine` is whether this worker's own write moved the run (ST-5): true, the
+    thread is unconditionally this worker's to forget. False, this worker's
+    own write lost -- another holder's claim, still driving the same thread
+    key, or the run ended out from under it while its lease was already
+    stale (F218's residual race: a cancel that finds an abandoned claim ends
+    the run and forgets the thread in its own unit, but the stale holder can
+    still write one more checkpoint after that commits). The two read alike
+    here, so a fresh read of the run's own status tells them apart: RUNNING
+    is a live holder's, still using the thread; anything else is nobody's,
+    including the run this stale write just found already ended.
 
     `route` names the same pinned route `run_route` bound the thread to
     (CF-037): a pass that never resolved one -- the claim's own read refused
@@ -252,9 +273,22 @@ def _forget(
     """
     if execution is None or execution.checkpointer is None or route is None:
         return
+    if not mine and not _run_is_terminal(conn, run_id):
+        return
     thread = f"{run_id}:{route_digest(route)}"
     with suppress(psycopg.Error, OSError, Refusal):
         execution.checkpointer.delete_thread(thread)
+
+
+def _run_is_terminal(conn: StoreConnection, run_id: UUID) -> bool:
+    """Whether the run's own status now says anything but RUNNING -- read
+    fresh, never assumed from a refusal's code alone (F218's residual race)."""
+    with suppress(psycopg.Error):
+        found = conn.execute(
+            "SELECT status FROM runs WHERE run_id = %s", (run_id,)
+        ).fetchall()
+        return bool(found) and found[0][0] != RunStatus.RUNNING.value
+    return False
 
 
 def _refused(conn: StoreConnection, lease: Lease, refused: Refusal) -> bool:

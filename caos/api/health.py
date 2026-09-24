@@ -45,6 +45,10 @@ from caos.store.work import WorkerBeat, worker_states
 
 # The route reads a cached result; the probes' round trips are the loop's.
 IO_BUDGET = 0
+# N35's remainder: the blob probe checks the volume's own reachability
+# (`BlobStore.probe`, a directory-metadata call), never a digest-addressed
+# document; no route here downloads one.
+BLOB_BUDGET = 0
 
 PROBE_INTERVAL = 10.0
 # A credential mint and a TLS connect across the workspace network fit in

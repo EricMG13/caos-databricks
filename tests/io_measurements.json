@@ -1,4 +1,8 @@
 {
+  "caos/api/commands/deliverable.py": {
+    "blob": 7,
+    "io": 57
+  },
   "caos/api/reads/analysis.py": {
     "blob": 40,
     "io": 249
@@ -7,8 +11,16 @@
     "blob": 160,
     "io": 998
   },
+  "caos/api/reads/evidence.py": {
+    "blob": 1,
+    "io": 2
+  },
   "caos/api/reads/model.py": {
     "blob": 40,
     "io": 250
+  },
+  "caos/api/reads/run.py": {
+    "blob": 4,
+    "io": 52
   }
 }

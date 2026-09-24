@@ -51,6 +51,10 @@ from caos.store.lakebase import store_url
 from caos.store.members import Standing, satisfies, standing_of
 
 IO_BUDGET = 1  # `visible_case`: the caller's standing on the case
+# N35's remainder: this module's own dependencies read no blob -- `visible_case`
+# is a store row, and `blob_store`/`request_blobs` construct the handle a
+# route reads with, never reading through it themselves.
+BLOB_BUDGET = 0
 
 # Reading a case -- any section of it, its events, an evidence page -- is
 # holding live standing on it; holding more grants nothing further here.

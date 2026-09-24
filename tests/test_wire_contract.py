@@ -113,7 +113,8 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
         ).split()
     ),
     wire.NarrativeFigure: frozenset(
-        "route_node_id citation_index document_sha256 page matched_text".split()
+        "route_node_id record_sha256 citation_index document_sha256 source_id"
+        " page matched_text".split()
     ),
     wire.NarrativeSpan: frozenset({"text", "figure"}),
     wire.ReportArtifact: frozenset(
@@ -146,7 +147,7 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
     ),
     wire.ReportDocument: ENVELOPE,
     wire.CommitteeDocument: ENVELOPE,
-    wire.BookColumn: frozenset({"key", "label"}),
+    wire.BookColumn: frozenset({"key", "label", "unit"}),
     wire.BookResearch: frozenset({"route_node_id", "module_id", "qa_status"}),
     # The ten fields of IA_SPEC.md 4.4, and nothing beside them: a passport
     # that grew an eleventh would be this host asserting something the
@@ -248,6 +249,7 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
         {
             "route_node_id",
             "module_id",
+            "module_name",
             "stage",
             "state",
             "waiting_on",
@@ -302,6 +304,7 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
         {
             "route_node_id",
             "module_id",
+            "module_name",
             "artifact_sha256",
             "record_sha256",
             "accepted_at",
@@ -322,7 +325,7 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
     ),
     TableView: frozenset({"table_id", "columns", "rows"}),
     CellView: frozenset({"text", "value"}),
-    PendingNode: frozenset({"route_node_id", "module_id", "state"}),
+    PendingNode: frozenset({"route_node_id", "module_id", "module_name", "state"}),
     AnalysisBody: frozenset(
         {
             "case_id",

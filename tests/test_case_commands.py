@@ -26,7 +26,7 @@ from psycopg.pq import TransactionStatus
 from starlette.datastructures import FormData
 from starlette.requests import Request
 
-from caos.api.app import app
+from caos.api.app import RETRY_AFTER_SECONDS, app
 from caos.api.commands import cases
 from caos.api.deps import store_connection
 from caos.blobs import BlobStore
@@ -523,6 +523,35 @@ def test_a_refused_admission_gives_its_slot_back(
     assert admitted.status_code == 201
 
 
+def test_an_admission_refuses_concurrency_limit_reached_once_its_wait_expires(
+    case: tuple[StoreConnection, UUID],
+    command_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """N5's remainder (F207): the wait for a slot is bounded by
+    `ADMISSION_WAIT_SECONDS`. Past it, the request refuses the existing
+    transient `CONCURRENCY_LIMIT_REACHED` (503 with `Retry-After`, F192)
+    rather than waiting on unbounded behind an admission that never frees its
+    slot, and gives nothing back that it never took."""
+    conn, case_id = case
+    writer = member(conn, case_id)
+    slots = _one_slot(monkeypatch)
+    monkeypatch.setattr(cases, "ADMISSION_WAIT_SECONDS", 0.05)
+    assert slots.acquire(blocking=False), "the one slot, held by another admission"
+    try:
+        refused = _admit(command_client, case_id, writer, [("a.txt", TEXT)])
+    finally:
+        slots.release()
+
+    assert (refused.status_code, refused.json()["code"]) == (
+        503,
+        "CONCURRENCY_LIMIT_REACHED",
+    )
+    assert int(refused.headers["retry-after"]) == RETRY_AFTER_SECONDS
+    assert slots.acquire(blocking=False), "the exhausted wait took no slot"
+    slots.release()
+
+
 def test_a_stranger_is_answered_without_waiting_for_a_slot(
     case: tuple[StoreConnection, UUID],
     command_client: TestClient,
@@ -651,10 +680,22 @@ class _Counting:
 
 
 def test_each_case_command_declares_and_meets_its_store_budget(
-    case: tuple[StoreConnection, UUID], command_client: TestClient
+    case: tuple[StoreConnection, UUID],
+    command_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     conn, case_id = case
     writer = member(conn, case_id)
+    # N35's remainder: `put_pack` only ever writes; a replay answers from the
+    # receipt row. Neither command here should ever read a blob back.
+    downloaded: list[str] = []
+    real_get = BlobStore.get
+
+    def counted(store: BlobStore, digest: str) -> bytes:
+        downloaded.append(digest)
+        return real_get(store, digest)
+
+    monkeypatch.setattr(BlobStore, "get", counted)
 
     def measured(send: Callable[[], Response]) -> tuple[int, int]:
         counter = _Counting(conn)
@@ -684,6 +725,8 @@ def test_each_case_command_declares_and_meets_its_store_budget(
     )
     assert replay[0] == 201 and replay[1] <= cases.REPLAY_IO
     assert cases.IO_BUDGET >= cases.ADMISSION_FIXED_IO + 50 * per_document
+    assert downloaded == []
+    assert cases.BLOB_BUDGET == 0
 
 
 def test_the_case_commands_are_the_two_routes_of_their_router() -> None:

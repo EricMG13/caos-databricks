@@ -119,6 +119,33 @@ def test_the_extraction_child_marks_what_it_reads() -> None:
     assert _lines(PdfExtractor().extract(raw_pdf(SHAPES))) == MARKED
 
 
+# Render mode 7: add to the clip path, neither filled nor stroked -- the same
+# nothing-is-drawn glyph render mode 3 is (N27's remainder).
+CLIP_ONLY = b"""BT
+/F1 12 Tf
+7 Tr
+1 0 0 1 72 700 Tm
+(Clip-only OCR layer) Tj
+ET
+"""
+
+
+def test_render_mode_7_is_marked_the_same_as_render_mode_3() -> None:
+    """N27's remainder: a glyph added only to the clip path is drawn exactly
+    as little as one in render mode 3, so the same reason marks it. Left out
+    of `PdfExtractor.identity`'s declared config (unlike `INVISIBLE_RENDER_MODE`):
+    an admitted source's stored identity is verified against a fresh
+    computation of it, so a value that moved without a version bump would
+    make every already-admitted document fail that check. This fixture is
+    the check that nothing needed one: extraction under the pinned identity
+    already marks the glyph the item asks for."""
+    tokens = pdf.walk_pages(raw_pdf(CLIP_ONLY), limits=DEFAULT_LIMITS, deadline=inf)
+
+    assert _lines(tokens) == {"Clip-only OCR layer": "render_mode_3"}
+    assert PdfExtractor().identity.version == "4"
+    assert PdfExtractor().identity.config["hidden_render_mode"] == 3
+
+
 def test_a_scanned_page_keeps_its_ocr_layer_as_marked_citable_evidence(
     case: tuple[StoreConnection, UUID], tmp_path: Path
 ) -> None:

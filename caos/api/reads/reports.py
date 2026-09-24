@@ -40,6 +40,7 @@ from caos.store.audit import audit_head, audit_trail, verify_chain
 from caos.store.commands import payload_digests
 from caos.store.members import Standing, standing_of
 from caos.store.outcomes import execution_reads
+from caos.store.source_sets import cited_source_ids
 
 # Three-node LITE: isolation/standing/selection (3), live proof (40). No lock:
 # a read takes none, and the payload digest below is the consistency check.
@@ -71,6 +72,15 @@ from caos.store.outcomes import execution_reads
 # -- the same one signer, one freezer shape the rest of this budget is stated
 # for -- so "committee" pays two more for a filed revision.
 IO_BUDGET = {"report": 46, "committee": 22, "frozen": 53, "unsaved": 42}
+# N35's remainder: "report" and "frozen" (a state the store has not filed)
+# `prove_revision` -- the saved payload once, for its narrative
+# (`read_revision`), then the whole payload re-derived (`canonical_payload`),
+# the LITE route's three nodes at two blobs each (artifact and record,
+# `PER_HANDOFF_BLOBS`'s own shape): 1 + 3*2. "unsaved" derives the same way
+# with no saved payload to read first: 3*2. A filed "committee" instead reads
+# its own two stored blobs -- the receipt `read_filed_receipt` proves and the
+# frozen payload `read_revision` then serves -- never re-deriving.
+BLOB_BUDGET = {"report": 7, "committee": 2, "frozen": 7, "unsaved": 6}
 router = APIRouter()
 
 
@@ -189,7 +199,7 @@ def _read(  # noqa: PLR0913 -- both documents share one authorization/proof unit
                 ),
             ),
             body={
-                **_body(payload, digest),
+                **_body(conn, payload, digest),
                 **publication,
                 "revisions": _revisions(conn, case_id, run),
             },
@@ -253,7 +263,7 @@ def _unsaved(  # noqa: PLR0913 -- the read's caller, selection and stores
             served_role=dict(global_role=actor.role, standing=standing),
             actions=report_actions(actor.role, standing, None, underivable),
         ),
-        body={**_body(payload, None), "revisions": []},
+        body={**_body(conn, payload, None), "revisions": []},
         observed_at=observed_at,
         observed_empty=not artifacts,
         status="complete",
@@ -392,11 +402,13 @@ def _links(case_id: UUID, revision: UUID, *, filed: bool) -> dict[str, str | Non
     )
 
 
-def _body(payload: dict[str, Any], digest: str | None) -> dict[str, Any]:
+def _body(conn: Store, payload: dict[str, Any], digest: str | None) -> dict[str, Any]:
     artifacts = []
+    digests: dict[str, str] = {}
     for artifact in payload["artifacts"]:
         projections = json.loads(artifact["record"])["projections"]
         artifacts.append(dict(artifact))
+        digests[artifact["route_node_id"]] = artifact["record_sha256"]
         for key in (
             "qa_status",
             "committee_status",
@@ -405,6 +417,9 @@ def _body(payload: dict[str, Any], digest: str | None) -> dict[str, Any]:
             "validation_warnings",
         ):
             artifacts[-1][key] = projections[key]
+    narrative = _narrative_view(
+        conn, UUID(payload["run_id"]), payload["narrative"], digests
+    )
     return dict(
         case_id=payload["case_id"],
         displayed_run_id=payload["run_id"],
@@ -412,11 +427,47 @@ def _body(payload: dict[str, Any], digest: str | None) -> dict[str, Any]:
         payload_sha256=digest,
         case_title=payload["case_title"],
         artifacts=artifacts,
-        narrative=[
-            [
-                dict(text=span.get("text"), figure=span.get("figure"))
-                for span in paragraph
-            ]
-            for paragraph in payload["narrative"]
-        ],
+        narrative=narrative,
     )
+
+
+def _narrative_view(
+    conn: Store,
+    run_id: UUID,
+    narrative: list[list[dict[str, Any]]],
+    digests: dict[str, str],
+) -> list[list[dict[str, Any]]]:
+    """Each paragraph's spans, a bracketed figure filled out with the record
+    digest its own node already carries (`digests`, from this same payload's
+    artifacts) and the source its document resolves to, live preferred
+    (N59) -- the two fields the evidence drawer needs to open a figure's
+    source without cross-referencing `ReportBody.artifacts` itself."""
+    documents = {
+        span["figure"]["document_sha256"]
+        for paragraph in narrative
+        for span in paragraph
+        if span.get("figure")
+    }
+    sources = cited_source_ids(conn, run_id, documents)
+    return [
+        [
+            dict(
+                text=span.get("text"),
+                figure=_figure(span.get("figure"), digests, sources),
+            )
+            for span in paragraph
+        ]
+        for paragraph in narrative
+    ]
+
+
+def _figure(
+    figure: dict[str, Any] | None, digests: dict[str, str], sources: dict[str, UUID]
+) -> dict[str, Any] | None:
+    if figure is None:
+        return None
+    return {
+        **figure,
+        "record_sha256": digests[figure["route_node_id"]],
+        "source_id": sources[figure["document_sha256"]],
+    }

@@ -36,10 +36,15 @@ from pdfminer.utils import Matrix, PathSegment, apply_matrix_pt, mult_matrix
 
 from caos.evidence.extract import NEAR_BACKGROUND, RENDER_MODE_3, UNDER_2PT
 from caos.evidence.pdf import (
+    CLIP_ONLY_RENDER_MODE,
     INVISIBLE_RENDER_MODE,
     NEAR_BACKGROUND_DISTANCE,
     SMALLEST_READABLE_PT,
 )
+
+# Neither fills nor strokes (ISO 32000-1, 9.3.6): the same nothing-is-drawn
+# glyph as `INVISIBLE_RENDER_MODE`, so the same reason marks it.
+_INVISIBLE_RENDER_MODES = frozenset({INVISIBLE_RENDER_MODE, CLIP_ONLY_RENDER_MODE})
 
 # The backdrop's grid: a page is cut into this many cells a side, and a filled
 # path is noted in each cell it overlaps, so a glyph is compared with the paths
@@ -184,7 +189,7 @@ class MarkingAggregator(PDFPageAggregator):
     def _reasons(self, glyph: LTChar, render: int, em: float) -> str:
         """Why `glyph` may not be seen, sorted and joined by a comma."""
         reasons = []
-        if render == INVISIBLE_RENDER_MODE:
+        if render in _INVISIBLE_RENDER_MODES:
             reasons.append(RENDER_MODE_3)
         elif _near(_paints(render, glyph.graphicstate), self._behind(glyph)):
             reasons.append(NEAR_BACKGROUND)

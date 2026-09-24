@@ -1,6 +1,5 @@
 {
   "complexipy_ignore": 0,
-  "complexity:caos/api/reads/analysis.py::read_analysis": 20,
   "complexity:caos/api/reads/run.py::node_readiness": 17,
   "complexity:caos/api/stream.py::case_tail": 22,
   "complexity:caos/deliverable/render.py::_list": 31,

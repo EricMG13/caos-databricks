@@ -17,7 +17,7 @@ from caos.api.deps import (
     VisibleCase,
 )
 from caos.api.reads import analysis
-from caos.api.reads.analysis import read_analysis
+from caos.api.reads.analysis import AnalysisQuery, read_analysis_without_tables
 from caos.api.wire import (
     AnalysisBody,
     ModelBody,
@@ -58,7 +58,9 @@ def read_model(  # noqa: PLR0913 -- authenticated case/run before dependencies
     blobs: Blobs,
     bundle: Methodology,
 ) -> ModelDocument:
-    analysis = read_analysis(actor, case_id, run, standing, conn, blobs, bundle)
+    analysis = read_analysis_without_tables(
+        AnalysisQuery(actor, case_id, run, standing, conn, blobs, bundle)
+    )
     body = analysis.body
     forecast = accepted_forecast(conn, body)
     return ModelDocument(

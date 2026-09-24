@@ -498,6 +498,7 @@ class NodeView(BaseModel):
 
     route_node_id: Id
     module_id: Id
+    module_name: Text
     stage: int
     state: NodeState
     waiting_on: Annotated[list[EdgeView], Field(max_length=ROUTE_NODES_MAX)]
@@ -680,6 +681,9 @@ class HandoffView(BaseModel):
 
     route_node_id: Id
     module_id: Id
+    # The bundle catalog's own name for `module_id` (N61), so a reader is
+    # never the one mirroring `icm/stages` slugs into prose.
+    module_name: Text
     artifact_sha256: Sha256
     record_sha256: Sha256
     accepted_at: AwareDatetime
@@ -706,6 +710,7 @@ class PendingNode(BaseModel):
 
     route_node_id: Id
     module_id: Id
+    module_name: Text
     state: NodeState
 
 
@@ -788,12 +793,18 @@ class ModelBody(BaseModel):
 
 
 class BookColumn(BaseModel):
-    """One column of the book: a value the accepted projection already carries."""
+    """One column of the book: a value the accepted projection already
+    carries. `unit` is what the cell's own figure is (N60): a plain
+    `Decimal` states a fraction (`0.20`) and a count identically, so the
+    cell has to be told which -- the calculator names its own margins and
+    coverage ratios, and the column declares that naming, never a guess
+    from the figure's magnitude."""
 
     model_config = _CLOSED
 
     key: Id
     label: Text
+    unit: Literal["percent", "currency", "multiple", "count", "none"]
 
 
 class BookResearch(BaseModel):
@@ -900,11 +911,20 @@ class BookBody(BaseModel):
 
 
 class NarrativeFigure(BaseModel):
+    """A bracketed figure the narrative cites, self-contained the way
+    `CitationView` is: the evidence drawer opens it without cross-referencing
+    `ReportBody.artifacts` for the record or the run's pinned members for the
+    source. `record_sha256` is the accepted record `route_node_id` bound at
+    save time; `source_id` is the pinned source `document_sha256` resolves
+    to, live preferred (N59)."""
+
     model_config = _CLOSED
 
     route_node_id: Id
+    record_sha256: Sha256
     citation_index: Annotated[int, Field(ge=0)]
     document_sha256: Sha256
+    source_id: UUID
     page: Annotated[int, Field(ge=1)]
     matched_text: Annotated[str, Field(max_length=QUOTE_CHARS)]
 

@@ -269,6 +269,8 @@ const EdgeView = object({ source: short, type: EdgeType });
 const NodeView = object({
   route_node_id: short,
   module_id: short,
+  // The bundle catalog's own name for `module_id` (N61).
+  module_name: text,
   stage: int(),
   state: NodeState,
   waiting_on: array(EdgeView, 256),
@@ -360,6 +362,7 @@ const TableView = object({
 const HandoffView = object({
   route_node_id: short,
   module_id: short,
+  module_name: text,
   artifact_sha256: hash,
   record_sha256: hash,
   accepted_at: datetime,
@@ -377,7 +380,12 @@ const HandoffView = object({
   tables: array(TableView, 64),
   tables_unavailable_reason: nullable(enumOf(["TABLES_MALFORMED", "TABLES_TOO_LARGE"])),
 });
-const PendingNode = object({ route_node_id: short, module_id: short, state: NodeState });
+const PendingNode = object({
+  route_node_id: short,
+  module_id: short,
+  module_name: text,
+  state: NodeState,
+});
 const AnalysisBody = object({
   case_id: uuid,
   latest_run_id: nullable(uuid),
@@ -431,7 +439,13 @@ const ModelDocument = sectionDocument(ModelBody);
 // Book, `/api/v1/book` (IA_SPEC.md 4.4): the credit across the portfolio. No
 // case in its body, so it is the one section document beside Directory's that
 // answers for no single case.
-const BookColumn = object({ key: short, label: text });
+// What the column's own figure is (N60): a plain fraction and a currency
+// amount are the same shape of decimal string, so the cell is told which.
+const BookColumn = object({
+  key: short,
+  label: text,
+  unit: enumOf(["percent", "currency", "multiple", "count", "none"]),
+});
 const BookResearch = object({ route_node_id: short, module_id: short, qa_status: short });
 /** The ten fields of IA_SPEC.md 4.4, in its order and closed to them. */
 const BookPassport = object({
@@ -486,10 +500,15 @@ const BookBody = object({
 });
 const BookDocument = sectionDocument(BookBody);
 
+// Self-contained the way `CitationView` is: the evidence drawer opens a
+// figure's source from `record_sha256` and `source_id` without
+// cross-referencing `ReportBody.artifacts` or the run's pinned members.
 const NarrativeFigure = object({
   route_node_id: short,
+  record_sha256: hash,
   citation_index: int({ min: 0 }),
   document_sha256: hash,
+  source_id: uuid,
   page: int({ min: 1 }),
   matched_text: string({ max: 65536 }),
 });

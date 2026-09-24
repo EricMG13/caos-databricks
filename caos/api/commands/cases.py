@@ -35,7 +35,7 @@ from typing import Annotated
 from uuid import UUID, uuid4
 
 import psycopg
-from anyio import sleep
+from anyio import move_on_after, sleep
 from fastapi import APIRouter, Depends, Request, Response
 from starlette.datastructures import UploadFile
 from starlette.exceptions import HTTPException
@@ -70,6 +70,10 @@ IO_BUDGET = max(
     CREATE_CASE_IO,
     ADMISSION_FIXED_IO + ADMISSION_PER_DOCUMENT_IO * DEFAULT_LIMITS.max_documents,
 )
+# N35's remainder: `put_pack` only ever writes a pack's documents (`blobs.put`);
+# a replay answers from the receipt row, never by reading a blob back, and
+# neither command here downloads a digest-addressed document.
+BLOB_BUDGET = 0
 
 CREATE_CASE = "CREATE_CASE"
 ADMIT_SOURCES = "ADMIT_SOURCES"
@@ -82,15 +86,22 @@ MAX_UPLOAD_BYTES = DEFAULT_LIMITS.max_pack_bytes + MULTIPART_OVERHEAD_BYTES
 # then their extraction, up to `max_pack_bytes` and `max_pack_tokens`, in the
 # one App process that also runs the worker. Past this an admission waits for
 # a slot before a byte of its pack is read, so the queue holds requests, not
-# packs, and no refusal code is added: a waiting admission is answered as it
-# would have been. Writer-only: identity, the envelope, the key and WRITER
-# standing are answered before a slot is asked for.
+# packs. Writer-only: identity, the envelope, the key and WRITER standing are
+# answered before a slot is asked for.
 ADMISSION_SLOTS = 2
 _SLOTS = threading.BoundedSemaphore(ADMISSION_SLOTS)
 # How often a waiting admission asks again. A thread semaphore polled from the
 # event loop rather than a loop's own primitive: it is released wherever the
 # request ends, and a waiter holds neither a thread nor a loop binding.
 SLOT_POLL_SECONDS = 0.05
+# N5's remainder (F207): the longest a request waits for a slot before it is
+# refused the existing transient `CONCURRENCY_LIMIT_REACHED` (503 with
+# `Retry-After`, F192) rather than waiting past the point a client watching
+# the clock would already have given up. Generous beside `SLOT_POLL_SECONDS`
+# -- a legitimate pack's own extraction is the usual thing a slot is held
+# for, not a stall -- so ordinary contention between the two concurrent
+# admissions this process allows rides it out untouched.
+ADMISSION_WAIT_SECONDS = 30.0
 
 router = APIRouter()
 
@@ -172,9 +183,21 @@ async def _admission_slot(
     _released: Annotated[None, Depends(_release_read)],
 ) -> AsyncIterator[None]:
     """One of `ADMISSION_SLOTS`, taken once the caller is known to be a writer
-    and held until the admission has answered, whatever it answered."""
-    while not _SLOTS.acquire(blocking=False):
-        await sleep(SLOT_POLL_SECONDS)
+    and held until the admission has answered, whatever it answered.
+
+    N5's remainder (F207): the wait is bounded by `ADMISSION_WAIT_SECONDS`,
+    after which this request refuses the existing transient
+    `CONCURRENCY_LIMIT_REACHED` rather than waiting on, unbounded, behind
+    every earlier admission.
+    """
+    acquired = _SLOTS.acquire(blocking=False)
+    if not acquired:
+        with move_on_after(ADMISSION_WAIT_SECONDS):
+            while not acquired:
+                await sleep(SLOT_POLL_SECONDS)
+                acquired = _SLOTS.acquire(blocking=False)
+    if not acquired:
+        raise Refusal(RefusalCode.CONCURRENCY_LIMIT_REACHED)
     try:
         yield
     finally:

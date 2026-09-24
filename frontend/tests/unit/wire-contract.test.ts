@@ -117,8 +117,10 @@ test("Report and Committee bind case/run/revision and exact receipt identity", (
   expect(() =>
     parse(V1_SHAPES.NarrativeFigure, {
       route_node_id: "CP-0",
+      record_sha256: SHA,
       citation_index: -1,
       document_sha256: SHA,
+      source_id: CASE,
       page: 1,
       matched_text: "figure",
     }),
@@ -336,6 +338,7 @@ function runSection(): { [key: string]: Json } {
           {
             route_node_id: "CP-5",
             module_id: "CP-5",
+            module_name: "Evidence trace validator",
             stage: 2,
             state: "BLOCKED",
             waiting_on: [{ source: "CP-0", type: "REQUIRED" }],
@@ -382,6 +385,7 @@ function analysis(): { [key: string]: Json } {
         {
           route_node_id: "CP-0",
           module_id: "CP-0",
+          module_name: "Source readiness",
           artifact_sha256: SHA,
           record_sha256: SHA,
           accepted_at: AT,

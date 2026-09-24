@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from uuid import UUID
@@ -200,6 +201,36 @@ def pinned_live_sources(conn: StoreConnection, run_id: UUID) -> dict[str, UUID]:
         resolved.setdefault(str(document), UUID(str(source)))
         outputs.setdefault(str(document), set()).add(str(output))
     return {doc: source for doc, source in resolved.items() if len(outputs[doc]) == 1}
+
+
+def cited_source_ids(
+    conn: StoreConnection, run_id: UUID, documents: Iterable[str]
+) -> dict[str, UUID]:
+    """Document digest to the run's pinned source, for exactly the documents
+    named -- a live source preferred, so a document withdrawn under one
+    pinned copy and still live under another resolves to the live one (as
+    `caos.api.reads.analysis._cited_documents` resolves the same choice for a
+    handoff's own citations). A document no member of the run names is the
+    caller's own record disagreeing with the store: `ARTIFACT_RECORD_MISMATCH`.
+    """
+    cited = sorted(set(documents))
+    if not cited:
+        return {}
+    found = {
+        str(document): UUID(str(source_id))
+        for document, source_id in conn.execute(
+            "SELECT DISTINCT ON (s.document_sha256) s.document_sha256, s.source_id"
+            " FROM run_inputs i JOIN source_set_members m"
+            " ON (m.case_id, m.version) = (i.case_id, i.source_version)"
+            " JOIN sources s ON (s.case_id, s.source_id) = (m.case_id, m.source_id)"
+            " WHERE i.run_id = %s AND s.document_sha256 = ANY(%s)"
+            " ORDER BY s.document_sha256, s.withdrawn_at IS NOT NULL, s.source_id",
+            (run_id, cited),
+        ).fetchall()
+    }
+    if set(found) != set(cited):
+        raise Refusal(RefusalCode.ARTIFACT_RECORD_MISMATCH)
+    return found
 
 
 @dataclass(frozen=True, slots=True)

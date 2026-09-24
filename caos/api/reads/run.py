@@ -70,7 +70,7 @@ from caos.graph.route import (
     waiting_on,
 )
 from caos.graph.runtime import accepted_artifacts
-from caos.methodology.bundle import Bundle
+from caos.methodology.bundle import Bundle, module_display_names
 from caos.methodology.handoff import ADAPTER_ROUTES
 from caos.methodology.invocation import named_objects
 from caos.methodology.vendor import catalog
@@ -97,6 +97,11 @@ WORK_IO = 1
 # the run that answers it. Read for every displayed run, not only a BLOCKED
 # one -- `supersedes` sits on the successor, whatever its status.
 SUPERSEDES_IO = 1
+# N5's remainder (D46): how many runs the caller already holds queued or
+# claimed, read for every displayed run so Start and Retry can be shown
+# refused `QUEUED_RUNS_LIMIT_REACHED` rather than offered and refused only
+# at commit (`caos.store.work.MAX_QUEUED_RUNS_PER_ACTOR`).
+QUEUE_IO = 1
 # Whether the pinned sources are still live, read once a pin exists.
 LIVE_IO = 1
 # Of those, the accepted artifacts are read only once a route is pinned.
@@ -110,11 +115,12 @@ PINNED_INPUT_IO = 5
 # approver's standing and the live-source check.
 GATE_IO = PINNED_INPUT_IO + 3
 # Before an input is pinned, the input read and each gate's find no row.
-UNPINNED_INPUT_IO = _FIXED_IO + WORK_IO + SUPERSEDES_IO + 1 + len(Gate)
+UNPINNED_INPUT_IO = _FIXED_IO + WORK_IO + SUPERSEDES_IO + QUEUE_IO + 1 + len(Gate)
 SECTION_READ_IO = (
     _FIXED_IO
     + WORK_IO
     + SUPERSEDES_IO
+    + QUEUE_IO
     + LIVE_IO
     + PINNED_INPUT_IO
     + len(Gate) * GATE_IO
@@ -139,6 +145,12 @@ IO_BUDGET = (
     + READINESS_ROWS * CANONICAL_READINESS_IO
     + BLOCKED_BY_IO
 )
+# N35's remainder: `accepted_artifacts` reads two blobs -- the artifact and
+# its record -- per readiness row (`caos.graph.runtime`), the same shape
+# `PER_HANDOFF_BLOBS` counts for Analysis; `READINESS_ROWS` is the same
+# ceiling `CANONICAL_READINESS_IO` is scaled by above.
+PER_READINESS_BLOBS = 2
+BLOB_BUDGET = READINESS_ROWS * PER_READINESS_BLOBS
 
 router = APIRouter()
 
@@ -181,14 +193,16 @@ def read_run_section(  # noqa: PLR0913 -- identity, two ids, store, blobs, bundl
         displayed = displayed or _displayed_beyond_the_list(conn, case_id, run)
 
     view = facts = None
+    queued_runs = 0
     if displayed is not None:
         view, facts, run_notes = _run_view(conn, blobs, bundle, displayed)
         notes.extend(run_notes)
+        queued_runs = _queued_runs(conn, actor.user_id)
     return RunSectionDocument(
         chrome=Chrome(
             subject=Subject(case_id=case_id, title=title),
             served_role=ServedRole(global_role=actor.role, standing=standing),
-            actions=run_actions(actor.role, standing, facts, live_sources),
+            actions=run_actions(actor.role, standing, facts, live_sources, queued_runs),
         ),
         body=RunBody(
             case_id=case_id,
@@ -229,6 +243,19 @@ def _visible_case(
         raise Refusal(RefusalCode.CASE_NOT_FOUND)
     standing = readable(None if row[1] is None else Standing(row[1]))
     return str(row[0]), standing, int(row[3]), row[2]
+
+
+def _queued_runs(conn: StoreConnection, actor_id: UUID) -> int:
+    """How many runs this actor holds queued or claimed right now (N5's
+    remainder, D46): the same count `enqueue_run`/`requeue_run` refuse
+    `QUEUED_RUNS_LIMIT_REACHED` against, so Start and Retry can be shown
+    refused rather than offered and refused only at commit."""
+    [count] = conn.execute(
+        "SELECT count(*) FROM run_work WHERE requested_by = %s"
+        " AND state IN ('QUEUED', 'CLAIMED')",
+        (actor_id,),
+    ).fetchall()[0]
+    return int(count)
 
 
 def _summary(row: tuple[Any, ...]) -> RunSummary:
@@ -470,9 +497,18 @@ def _node_views(
     readiness = readiness_from(route, accepted)
     # From the same accepted gate artifact as `readiness`, so no further read.
     reasons = blockers_from(route, accepted)
+    # The bundle catalog's own names, read once and shared by every node (N61).
+    names = module_display_names(bundle)
     views = (
         _node_view(
-            route, accepted, node, states, readiness, reasons=reasons, named=named
+            route,
+            accepted,
+            node,
+            states,
+            readiness,
+            reasons=reasons,
+            named=named,
+            names=names,
         )
         for node in route.nodes
     )
@@ -542,6 +578,7 @@ def _node_view(  # noqa: PLR0913 -- one node of one run document
     *,
     reasons: Mapping[str, str] | None = None,
     named: NamedObjects | None = None,
+    names: Mapping[str, str] | None = None,
 ) -> NodeView:
     unmet, awaiting_gate, gate_verdict = node_readiness(
         route, accepted, node, states, readiness, named=named
@@ -549,6 +586,7 @@ def _node_view(  # noqa: PLR0913 -- one node of one run document
     return NodeView(
         route_node_id=node.route_node_id,
         module_id=node.module_id,
+        module_name=(names or {}).get(node.module_id, node.module_id),
         stage=node.stage,
         state=states[node.route_node_id],
         waiting_on=[EdgeView(source=edge.source, type=edge.type) for edge in unmet],

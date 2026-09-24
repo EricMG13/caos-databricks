@@ -36,6 +36,7 @@ from caos.api import app as app_module
 from caos.api.identity import TRUST_SWITCH
 from caos.api.reads import run as run_read
 from caos.api.wire import BlockedByView, DirectoryDocument, RunSectionDocument
+from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
 from caos.graph.route import ResolvedRoute, resolve_route, route_digest
 from caos.refusals import Refusal, RefusalCode
@@ -599,7 +600,7 @@ def test_a_run_the_frontier_emptied_names_no_blocking_node(
 
 
 def test_the_run_section_request_path_declares_its_store_budget(
-    client: TestClient, lite: tuple[_Harness, UUID]
+    client: TestClient, lite: tuple[_Harness, UUID], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Counted on a run with its input pinned and both gates released, which
     is the most a run document reads: the canonical gate row, both gates and
@@ -608,12 +609,26 @@ def test_the_run_section_request_path_declares_its_store_budget(
     _answer(harness, "CP-0")
     counter = _CountingConnection(harness.conn)
     app_module.app.dependency_overrides[app_module.store_connection] = lambda: counter
+    # N35's remainder: the one readiness row this fixture has (CP-0's) reads
+    # two blobs (`accepted_artifacts`); `BLOB_BUDGET` is the two-row ceiling.
+    # A `get` the request's own memo already answered is not a download.
+    downloaded: list[str] = []
+    real_get = BlobStore.get
+
+    def counted_get(store: BlobStore, digest: str) -> bytes:
+        if store.verified is None or digest not in store.verified:
+            downloaded.append(digest)
+        return real_get(store, digest)
+
+    monkeypatch.setattr(BlobStore, "get", counted_get)
 
     assert _section(client, harness.case_id, None, viewer).status_code == 200
 
     read = run_read.SECTION_READ_IO + run_read.CANONICAL_READINESS_IO
     assert counter.executed == read
     assert counter.executed <= run_read.IO_BUDGET
+    assert len(downloaded) == run_read.PER_READINESS_BLOBS
+    assert len(downloaded) <= run_read.BLOB_BUDGET
 
 
 def test_a_blocked_run_names_the_source_its_conditional_row_asked_for(

@@ -16,27 +16,33 @@
     "columns": [
       {
         "key": "operating.revenue",
-        "label": "Revenue"
+        "label": "Revenue",
+        "unit": "currency"
       },
       {
         "key": "operating.ebitda",
-        "label": "EBITDA"
+        "label": "EBITDA",
+        "unit": "currency"
       },
       {
         "key": "operating.cfo",
-        "label": "Cash flow from operations"
+        "label": "Cash flow from operations",
+        "unit": "currency"
       },
       {
         "key": "investing.capex",
-        "label": "Capital expenditure"
+        "label": "Capital expenditure",
+        "unit": "currency"
       },
       {
         "key": "financing.cash_interest",
-        "label": "Cash interest"
+        "label": "Cash interest",
+        "unit": "currency"
       },
       {
         "key": "operating.margin",
-        "label": "EBITDA margin"
+        "label": "EBITDA margin",
+        "unit": "percent"
       }
     ],
     "rows": [

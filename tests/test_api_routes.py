@@ -759,6 +759,7 @@ def test_the_wire_key_sets_are_pinned() -> None:
     assert set(NodeView.model_fields) == {
         "route_node_id",
         "module_id",
+        "module_name",
         "stage",
         "state",
         "waiting_on",

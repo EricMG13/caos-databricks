@@ -1,15 +1,5 @@
 [
   {
-    "path": "caos/api/reads/analysis.py",
-    "file_name": "analysis.py",
-    "functions": [
-      {
-        "name": "read_analysis",
-        "complexity": 20
-      }
-    ]
-  },
-  {
     "path": "caos/api/reads/run.py",
     "file_name": "run.py",
     "functions": [
