@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router";
 import { ReportSection } from "@/sections/report/ReportSection";
 import { parseReportDocument, type ActionView, type ReportDocument } from "@/wire/v1";
@@ -169,6 +169,67 @@ describe("Report v1", () => {
     });
     expect(await screen.findByText(/00000000-0000-4000-8000-0000000000c4/)).toBeInTheDocument();
     vi.unstubAllGlobals();
+  });
+
+  // R24-03: the analyst may leave before a deferred save's answer arrives --
+  // another case, or another section -- and its success then names a
+  // revision on an address no longer shown; writing it in would navigate
+  // them back to the abandoned Report (guarded the way CF-058 guards Create
+  // run in `run.test.tsx`'s "answer that lands after the analyst has left").
+  test("a Save revision answer that lands after the analyst has left moves nothing", async () => {
+    const document = withActions(AVAILABLE);
+    let answer!: (response: Response) => void;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        () =>
+          new Promise<Response>((resolve) => {
+            answer = resolve;
+          }),
+      ),
+    );
+    try {
+      function Where() {
+        return <output data-where>{useLocation().search}</output>;
+      }
+      const path =
+        `/report/?case=${document.body.case_id}` +
+        `&run=${document.body.displayed_run_id}&tab=x`;
+      const view = (shown: boolean) => (
+        <MemoryRouter initialEntries={[path]}>
+          {shown ? <ReportSection document={document} tab={null} /> : null}
+          <Where />
+        </MemoryRouter>
+      );
+      const { container, rerender } = render(view(true));
+      fireEvent.change(screen.getByLabelText("Narrative draft"), {
+        target: { value: "Leverage held at 4.2x." },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Save revision" }));
+      // The analyst leaves the Report -- the workspace remounts the section
+      // tree on a case, run or revision change (`Workspace.tsx`'s `mountKey`),
+      // which is exactly what unmounts `FilingControls`.
+      rerender(view(false));
+      await act(async () => {
+        answer(
+          jsonResponse(
+            {
+              case_id: document.body.case_id,
+              run_id: document.body.displayed_run_id,
+              revision_id: "00000000-0000-4000-8000-0000000000c4",
+              payload_sha256: "b".repeat(64),
+            },
+            201,
+          ),
+        );
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      const where = container.querySelector("[data-where]")!;
+      expect(where).toHaveTextContent(`case=${document.body.case_id}`);
+      expect(where.textContent).not.toContain("revision=");
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   test("test_a_run_with_no_revision_offers_the_save_that_makes_its_first", async () => {
