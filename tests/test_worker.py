@@ -1468,6 +1468,10 @@ class _EndsAfterAbandonedCancel:
     def model(self) -> str:
         return self.inner.model
 
+    @property
+    def price(self) -> ModelPrice | None:
+        return self.inner.price
+
     def check_context(self, route_node_id: str, module_id: str) -> int:
         self.late_write()
         raise self.fault
