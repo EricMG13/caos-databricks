@@ -549,6 +549,58 @@ def test_frame_children_never_run_past_their_process_bound(
     assert answers == {page: (0.0, 0.0, 1.0, float(page)) for page in range(1, 13)}
 
 
+def test_one_actor_cannot_hold_both_frame_children_slots(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """N38. `FRAME_CHILDREN` bounds the whole process, not one reader: nothing
+    kept a single READER's own concurrent page requests from racing for every
+    slot, so a different reader's read waited out its own deadline for a
+    resource one actor was hoarding. Each actor now holds at most
+    `ACTOR_FRAME_CHILDREN` of the global slots at once, the way
+    `ACTOR_STREAM_LIMIT` shares `caos/api/stream.py`'s `STREAM_LIMIT`: the
+    hog's own second read now waits on its own share instead of ever
+    contending for the slot a different actor needs.
+    """
+    import threading
+
+    first_entered, release = threading.Event(), threading.Event()
+
+    def slow(data: bytes, page: int, **bounds: object) -> pdf_module.Frame:
+        first_entered.set()
+        release.wait(5)
+        return (0.0, 0.0, 1.0, float(page))
+
+    monkeypatch.setattr(pdf_module, "page_frame", slow)
+    hog = uuid4()
+    deadline = time.monotonic() + 30.0
+
+    def hog_read(page: int) -> None:
+        crop = page_module._Crop("h" * 64, b"", DEFAULT_LIMITS, deadline, hog)
+        page_module._page_crop(crop, page)
+
+    # Two concurrent reads from the same actor: the first takes a global slot,
+    # and the second -- free before this fix to race for the other one -- is
+    # given time here to have done exactly that.
+    threads = [threading.Thread(target=hog_read, args=(page,)) for page in (1, 2)]
+    for thread in threads:
+        thread.start()
+    try:
+        assert first_entered.wait(5), "the hog's own read never started"
+        time.sleep(0.2)
+
+        other = uuid4()
+        crop = page_module._Crop(
+            "o" * 64, b"", DEFAULT_LIMITS, time.monotonic() + 1.0, other
+        )
+        answer = page_module._page_crop(crop, 1)
+
+        assert answer == (0.0, 0.0, 1.0, 1.0), "a different actor was starved"
+    finally:
+        release.set()
+        for thread in threads:
+            thread.join(5)
+
+
 def test_a_read_whose_deadline_passes_waiting_for_a_slot_starts_no_child(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

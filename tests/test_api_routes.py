@@ -809,6 +809,26 @@ def test_every_refusal_code_has_a_constant_clearance() -> None:
         assert "{" not in clears and "}" not in clears and "%" not in clears, code
 
 
+def test_the_handoff_clearances_name_the_right_fix() -> None:
+    """G2-17. `HANDOFF_BLOCKED` names a stored module blocker a caller can act
+    on directly; the other four are a stored handoff that failed to re-parse
+    on read, which no caller's retry alone repairs without an operator's own
+    look -- and neither used to say either thing."""
+    assert CLEARS[RefusalCode.HANDOFF_BLOCKED] == (
+        "Supply what the module's stated blocker names, then start a new run."
+    )
+    verify_on_read = (
+        "Retry the attempt; an operator must verify a stored handoff refused on read."
+    )
+    for code in (
+        RefusalCode.HANDOFF_MALFORMED,
+        RefusalCode.HANDOFF_IDENTITY_MISMATCH,
+        RefusalCode.HANDOFF_INCOMPLETE,
+        RefusalCode.HANDOFF_UNDECLARED_FIELD,
+    ):
+        assert CLEARS[code] == verify_on_read, code
+
+
 def test_every_refusal_code_has_an_explicit_http_status() -> None:
     """`_STATUS` is total over `RefusalCode`, the way `CLEARS` beside it is.
 
@@ -923,7 +943,7 @@ def test_every_code_the_edge_answers_carries_the_apps_status() -> None:
     }
     answered = {code.name for code in EDGE_STATUS}
     assert named == answered | {RefusalCode.EDGE_CONFIG_INVALID.name}
-    assert len(answered) == 4
+    assert len(answered) == 5
 
 
 def test_an_unhandled_fault_is_logged_as_its_class_and_frame_never_its_message(

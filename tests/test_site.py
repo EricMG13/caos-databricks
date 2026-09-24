@@ -22,7 +22,7 @@ from caos.api import health
 from caos.api.app import app
 from caos.api.deps import DATABASE_URL
 from caos.api.edge import SECURITY_HEADERS
-from caos.api.site import SECTIONS, SITE_ROOT_ENV, application
+from caos.api.site import SECTIONS, SITE_ROOT_ENV, application, dispatch
 from caos.refusals import Refusal, RefusalCode
 
 INDEX = b"<!doctype html><title>CAOS</title><div id=root></div>"
@@ -83,6 +83,53 @@ async def _ask(path: str, method: str = "GET") -> tuple[int, bytes]:
 
 def _raw(path: str, method: str = "GET") -> tuple[int, bytes]:
     return asyncio.run(_ask(path, method))
+
+
+async def _dispatched(path: str, host: bytes) -> tuple[int, list[tuple[bytes, bytes]]]:
+    """`dispatch` directly, past the edge guard: platform mode admits any
+    `Host` (`_dev_peer`'s loopback check is dev mode's alone), so the guard
+    is not what stands between a directory redirect and an echoed one."""
+    sent: list[Message] = []
+
+    async def receive() -> Message:
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message: Message) -> None:
+        sent.append(message)
+
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": "GET",
+        "scheme": "http",
+        "path": path,
+        "raw_path": path.encode(),
+        "root_path": "",
+        "query_string": b"",
+        "headers": [(b"host", host)],
+        "client": ("127.0.0.1", 50000),
+        "server": ("127.0.0.1", 8000),
+    }
+    await dispatch(scope, receive, send)
+    start = next(m for m in sent if m["type"] == "http.response.start")
+    return start["status"], list(start.get("headers", []))
+
+
+def test_a_directory_redirect_never_echoes_the_client_host(site: Path) -> None:
+    """CF-086. Starlette's own directory redirect builds its `Location` from
+    `URL(scope=scope)`, which is the request's `Host` over whatever scheme
+    `serve.py`'s `proxy_headers=False` leaves in scope -- `http`, even behind
+    a TLS-terminating proxy. A relative reference names the same place
+    without ever repeating what the client sent, over any scheme."""
+    (site / "docs").mkdir()
+    (site / "docs" / "index.html").write_bytes(b"nested")
+
+    status, headers = asyncio.run(_dispatched("/docs", host=b"evil.example.com"))
+
+    assert status == 307
+    location = dict(headers)[b"location"]
+    assert location == b"/docs/"
 
 
 def test_section_deep_links_serve_the_export_with_their_query(site: Path) -> None:

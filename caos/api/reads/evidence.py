@@ -79,6 +79,7 @@ def read_evidence_page(  # noqa: PLR0913 -- identity, three ids and a page, stor
         run_id=run_id,
         source_id=_source(source_id),
         page=_page(page),
+        actor_id=actor.user_id,
     )
     response.headers["cache-control"] = "no-store"
     return PageDocument(

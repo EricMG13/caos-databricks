@@ -12,6 +12,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 from uuid import UUID
 
+import anyio
 import gateway_smoke
 import preflight
 import pytest
@@ -147,7 +148,7 @@ def test_the_forwarded_token_resolves_through_scim_over_http(
     monkeypatch.setenv(identity.WORKSPACE_ENV, "1234")
     monkeypatch.setattr(identity, "_CACHE", {})
     monkeypatch.setattr(identity, "_NEGATIVE", {})
-    actor = actor_from_token("a-forwarded-token")
+    actor = anyio.run(actor_from_token, "a-forwarded-token")
     assert actor.role is GlobalRole.ADMIN
     assert isinstance(actor.user_id, UUID)
     assert ("GET", "/api/2.0/preview/scim/v2/Me") in stub.requests
@@ -156,20 +157,20 @@ def test_the_forwarded_token_resolves_through_scim_over_http(
     stub.groups = frozenset({"caos-analysts"})
     monkeypatch.setattr(identity, "_CACHE", {})
     monkeypatch.setattr(identity, "_NEGATIVE", {})
-    assert actor_from_token("another").role is GlobalRole.ANALYST
+    assert anyio.run(actor_from_token, "another").role is GlobalRole.ANALYST
     # A token the workspace refuses is remembered briefly (F43): one round
     # trip, not one per request.
     stub.identities["refused"] = ("", frozenset())
     asked = len(stub.requests)
     for _ in range(3):
         with pytest.raises(Refusal, match=r"^NOT_AUTHENTICATED$"):
-            actor_from_token("refused")
+            anyio.run(actor_from_token, "refused")
     assert len(stub.requests) == asked + 1
     # The cache is bounded: past its capacity nothing more is remembered.
     monkeypatch.setattr(identity, "CACHE_CAPACITY", 1)
     monkeypatch.setattr(identity, "_CACHE", {})
-    actor_from_token("first")
-    actor_from_token("second")
+    anyio.run(actor_from_token, "first")
+    anyio.run(actor_from_token, "second")
     assert len(identity._CACHE) == 1
 
 
@@ -292,10 +293,10 @@ def test_a_workspace_that_does_not_answer_is_unavailable_not_unauthenticated(
     monkeypatch.setattr(identity, "_CACHE", {})
     monkeypatch.setattr(identity, "_NEGATIVE", {})
     with pytest.raises(Refusal, match=r"^IDENTITY_UNAVAILABLE$"):
-        actor_from_token("a-token")
+        anyio.run(actor_from_token, "a-token")
     monkeypatch.delenv("DATABRICKS_HOST")
     with pytest.raises(Refusal, match=r"^IDENTITY_UNAVAILABLE$"):
-        actor_from_token("a-token")
+        anyio.run(actor_from_token, "a-token")
 
 
 def test_the_stub_serves_exports_and_refuses_a_duplicate_app(

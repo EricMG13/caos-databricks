@@ -108,7 +108,7 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
     wire.QualificationRead: frozenset(
         (
             "evidence_sha256 state qualification_set_sha256 performed_sha256 build_id "
-            "adapter_version provider model reviewer decided_at expires_at"
+            "adapter_version provider model reviewer reviewer_id decided_at expires_at"
         ).split()
     ),
     wire.NarrativeFigure: frozenset(
@@ -263,6 +263,7 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
             "route_digest",
             "build_id",
             "source_set_version",
+            "input_fingerprint",
             "subject",
             "gates",
             "nodes",

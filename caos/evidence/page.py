@@ -108,7 +108,7 @@ class PageRead:
     truncated: bool
 
 
-def read_page(  # noqa: PLR0913 -- the store, the blobs and one page's four ids
+def read_page(  # noqa: PLR0913 -- the store, the blobs, one page's four ids, the actor
     conn: StoreConnection,
     blobs: BlobStore,
     *,
@@ -117,11 +117,14 @@ def read_page(  # noqa: PLR0913 -- the store, the blobs and one page's four ids
     source_id: UUID,
     page: int,
     limits: AdmissionLimits = DEFAULT_LIMITS,
+    actor_id: UUID | None = None,
 ) -> PageRead:
     """Page `page` of `source_id` as the run `run_id` of `case_id` pinned it,
     or `PAGE_NOT_AVAILABLE`. Authorisation is the caller's, and must be read
     before this is called: this ends the caller's read unit once the page's
-    rows are fetched, before the document is read or its frame extracted."""
+    rows are fetched, before the document is read or its frame extracted.
+    `actor_id`, when given, is who a shared `FRAME_CHILDREN` slot is charged
+    to (N38); a caller that does not pass one shares nothing."""
     if (
         any(not isinstance(value, UUID) for value in (case_id, run_id, source_id))
         or type(page) is not int
@@ -139,7 +142,7 @@ def read_page(  # noqa: PLR0913 -- the store, the blobs and one page's four ids
     name, version, config = _identity(identity)
     data = _document(blobs, document)
     deadline = time.monotonic() + limits.max_seconds
-    crop = _Crop(document, data, limits, deadline)
+    crop = _Crop(document, data, limits, deadline, actor_id)
     frame = _frame(name, version, config, crop, page)
     lines = [row for row in rows if row[2] is not None]
     body = PageBody(
@@ -219,6 +222,28 @@ _FRAMES: OrderedDict[tuple[str, int], tuple[float, float, float, float] | None] 
 # bound its child would have run under, and is refused if none frees.
 FRAME_CHILDREN = 2
 _CHILDREN = threading.BoundedSemaphore(FRAME_CHILDREN)
+# One of the two global slots, never both (N38): nothing otherwise kept a
+# single READER's own concurrent page requests from taking every slot this
+# process has, so a different reader's read waited out its own deadline for
+# a resource one actor was hoarding. A personal semaphore is acquired first
+# and released last, so a second concurrent read from the same actor waits
+# on its own share rather than ever contending for the slot a different
+# actor needs -- the same idea as `ACTOR_STREAM_LIMIT` beside `STREAM_LIMIT`
+# in `caos/api/stream.py`, adapted to a wait rather than an instant refusal.
+ACTOR_FRAME_CHILDREN = 1
+_ACTOR_CHILDREN_LOCK = threading.Lock()
+_ACTOR_CHILDREN: dict[UUID, threading.BoundedSemaphore] = {}
+
+
+def _actor_slot(actor_id: UUID) -> threading.BoundedSemaphore:
+    with _ACTOR_CHILDREN_LOCK:
+        slot = _ACTOR_CHILDREN.get(actor_id)
+        if slot is None:
+            slot = threading.BoundedSemaphore(ACTOR_FRAME_CHILDREN)
+            _ACTOR_CHILDREN[actor_id] = slot
+        return slot
+
+
 # Sync routes run in the threadpool, so two readers share this dictionary. The
 # lock covers the read-then-reorder and the write-then-evict, which are not one
 # operation: without it a key evicted between a `get` and its `move_to_end`
@@ -250,13 +275,18 @@ def _remember(
 
 @dataclass(frozen=True, slots=True)
 class _Crop:
-    """One document's bytes with the digest they are addressed by, and the
-    bounds a crop read of them runs under."""
+    """One document's bytes with the digest they are addressed by, the
+    bounds a crop read of them runs under, and who is asking.
+
+    `actor_id` is who a shared `FRAME_CHILDREN` slot is charged to (N38); a
+    caller that does not track one leaves it `None` and shares nothing.
+    """
 
     document_sha256: str
     data: bytes
     limits: AdmissionLimits
     deadline: float
+    actor_id: UUID | None = None
 
 
 def _page_crop(crop: _Crop, page: int) -> tuple[float, float, float, float] | None:
@@ -272,20 +302,32 @@ def _page_crop(crop: _Crop, page: int) -> tuple[float, float, float, float] | No
 
     The child runs in one of `FRAME_CHILDREN` slots, waited for within the
     read's deadline; the cache is asked again once a slot is held, because
-    the reader holding it before may have been answering the same page.
+    the reader holding it before may have been answering the same page. When
+    `crop.actor_id` is set, its own `ACTOR_FRAME_CHILDREN` share is waited for
+    first (N38), so at most that many of this actor's reads ever contend for
+    a global slot at once; `None` (a caller that does not track one) waits on
+    the global slots alone, exactly as before.
     """
     key = (crop.document_sha256, page)
     known, frame = _remembered(key)
     if known:
         return frame
+    actor_slot = _actor_slot(crop.actor_id) if crop.actor_id is not None else None
     wait = min(max(0.0, crop.deadline - time.monotonic()), crop.limits.max_seconds)
-    if not _CHILDREN.acquire(timeout=wait):
+    if actor_slot is not None and not actor_slot.acquire(timeout=wait):
         return None
     try:
-        known, frame = _remembered(key)
-        return frame if known else _child_crop(crop, page)
+        wait = min(max(0.0, crop.deadline - time.monotonic()), crop.limits.max_seconds)
+        if not _CHILDREN.acquire(timeout=wait):
+            return None
+        try:
+            known, frame = _remembered(key)
+            return frame if known else _child_crop(crop, page)
+        finally:
+            _CHILDREN.release()
     finally:
-        _CHILDREN.release()
+        if actor_slot is not None:
+            actor_slot.release()
 
 
 def _child_crop(crop: _Crop, page: int) -> tuple[float, float, float, float] | None:

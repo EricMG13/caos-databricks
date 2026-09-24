@@ -21,7 +21,7 @@ because somebody widened a SELECT.
 FastAPI's own `/docs`, `/redoc` and `/openapi.json` are not served (Task 4.5
 decision 6): Swagger loads a script from a CDN the policy refuses, and a route
 map is nothing a browser of this workspace needs. Every request passes
-`caos/api/edge.py`'s guard first -- the edge token or the loopback rule, the
+`caos/api/edge.py`'s guard first -- the platform or the loopback rule, the
 identity-header hygiene, the Origin check -- before routing or identity.
 """
 
@@ -125,12 +125,15 @@ POLL_INTERVAL = 0.5
 # entry beside them already said as much in words before the status agreed.
 # `STREAM_LIMIT_REACHED` joins it for the same reason and not by analogy: the
 # capacity is released by a watcher closing a tail, so waiting is exactly what
-# repairs it. Nothing an operator does is required.
+# repairs it. Nothing an operator does is required. `CONCURRENCY_LIMIT_REACHED`
+# (CF-051) is the same shape one level up: the capacity is released by another
+# request finishing, not by anything an operator does either.
 TRANSIENT = frozenset(
     {
         RefusalCode.STORE_UNAVAILABLE,
         RefusalCode.IDENTITY_UNAVAILABLE,
         RefusalCode.STREAM_LIMIT_REACHED,
+        RefusalCode.CONCURRENCY_LIMIT_REACHED,
         RefusalCode.PROVIDER_UNAVAILABLE,
     }
 )
@@ -197,6 +200,10 @@ _STATUS = {
     RefusalCode.STORE_UNAVAILABLE: 503,
     RefusalCode.IDENTITY_UNAVAILABLE: 503,
     RefusalCode.STREAM_LIMIT_REACHED: 503,
+    # Answered by the edge guard before routing (CF-051, replacing uvicorn's
+    # own `limit_concurrency`); listed here, beside the store's own capacity
+    # refusals, so a route could not give it a different status either.
+    RefusalCode.CONCURRENCY_LIMIT_REACHED: 503,
     RefusalCode.STORE_NOT_TRANSACTIONAL: 500,
     RefusalCode.STORE_SCHEMA_DRIFT: 500,
     RefusalCode.BLOB_NOT_FOUND: 500,
@@ -543,7 +550,7 @@ async def _malformed_run_id(
     else:
         return await request_validation_exception_handler(request, error)
     try:
-        actor_from_headers(request.headers)
+        await actor_from_headers(request.headers)
     except Refusal as refusal:
         return _refused(request, refusal)
     return _refused(request, Refusal(code))
@@ -643,14 +650,23 @@ class _TailResponse(StreamingResponse):
 
 
 def _frame(event: StreamEvent | None) -> bytes:
-    """One SSE frame. The cursor frame is `id` alone, which sets the browser's
-    `lastEventId` and dispatches nothing. A named frame's `data` is a
-    placeholder because the spec dispatches no event without one. The
-    keepalive (`None`) is a comment, which the browser ignores."""
+    """One SSE frame. The cursor frame is `id` and `retry`, which sets the
+    browser's `lastEventId` and its reconnect delay and dispatches nothing.
+    A named frame's `data` is a placeholder because the spec dispatches no
+    event without one. The keepalive (`None`) is a comment, which the
+    browser ignores.
+
+    `retry` (N48): `TAIL_DEADLINE` closes every tail, expected reconnects
+    included, and with none ever sent the browser's own default reconnect
+    delay was the gap a watcher saw -- indistinguishable from a real drop.
+    Carried on the cursor frame, the first of any connection, so a fresh
+    reconnect after the deadline is as quick as an idle poll would have been.
+    """
     if event is None:
         return b":\n\n"
     if event.name is None:
-        return f"id: {event.id}\n\n".encode()
+        retry_ms = int(POLL_INTERVAL * 1000)
+        return f"retry: {retry_ms}\nid: {event.id}\n\n".encode()
     return f"id: {event.id}\nevent: {event.name}\ndata: {dumps({})}\n\n".encode()
 
 

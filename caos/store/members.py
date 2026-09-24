@@ -1,9 +1,11 @@
 """Case standing: who may do what, on which case.
 
-`SYSTEM_SPEC.md` §8. Case standing and global role are separate and both are
-rechecked at commit time. This module answers the first question; the recheck
-happens inside `caos/store/audit.py`'s `governed_write`, because a check
-anywhere else is a check at request time wearing a different name.
+`SYSTEM_SPEC.md` §8. Case standing and global role are separate, and only
+standing is rechecked at commit time: `caos/store/audit.py`'s `governed_write`
+calls `_require_standing` for the same reason a check anywhere else is a check
+at request time wearing a different name. The global role is not re-read
+there; it is whatever `caos/api/identity.py` cached for up to `CACHE_SECONDS`
+(300 s) when the request began (D10/F13, accepted).
 
 Standing is ordered. An ADMIN can do what a WRITER can, which is why `requires`
 is a floor rather than an equality -- an authority model that demanded the exact

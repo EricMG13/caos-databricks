@@ -29,10 +29,11 @@ from __future__ import annotations
 import os
 import re
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from starlette.exceptions import HTTPException
 from starlette.staticfiles import StaticFiles
-from starlette.types import ASGIApp, Receive, Scope, Send
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from caos.api.app import app
 from caos.api.edge import EdgeGuard, is_api_path, startup_failed
@@ -94,6 +95,41 @@ async def _bare(send: Send, status: int) -> None:
     await send({"type": "http.response.body", "body": b""})
 
 
+def _as_relative(location: bytes) -> bytes:
+    """A `Location`'s path and query alone (CF-086): a relative reference
+    resolves against the request's own URL, so it names the same place
+    without ever repeating a `Host` the response quoted -- over any scheme,
+    and whatever that header held."""
+    parts = urlsplit(location.decode("latin-1"))
+    relative = parts.path + (f"?{parts.query}" if parts.query else "")
+    return relative.encode("latin-1")
+
+
+def _relative_redirects(send: Send) -> Send:
+    """Rewrite any `Location` on a redirect to a relative reference.
+
+    Starlette's static-file handler answers a directory request missing its
+    trailing slash with a 307 whose `Location` it builds from `URL(scope=
+    scope)` -- the request's own `Host` header, over whatever scheme
+    `serve.py`'s `proxy_headers=False` leaves in scope. A client's `Host` is
+    never trusted for anything the wire carries back to it.
+    """
+
+    async def wrapped(message: Message) -> None:
+        if message["type"] == "http.response.start" and message["status"] in (
+            307,
+            308,
+        ):
+            rewritten = [
+                (name, _as_relative(value) if name.lower() == b"location" else value)
+                for name, value in message.get("headers", [])
+            ]
+            message = {**message, "headers": rewritten}
+        await send(message)
+
+    return wrapped
+
+
 async def _static(scope: Scope, receive: Receive, send: Send) -> None:
     if scope.get("method") not in _SAFE:
         await _bare(send, 405)
@@ -107,7 +143,7 @@ async def _static(scope: Scope, receive: Receive, send: Send) -> None:
         scope = {**scope, "path": "/", "raw_path": b"/", "root_path": ""}
     files = StaticFiles(directory=root, html=True, follow_symlink=False)
     try:
-        await files(scope, receive, send)
+        await files(scope, receive, _relative_redirects(send))
     except HTTPException as refused:
         await _bare(send, refused.status_code)
 

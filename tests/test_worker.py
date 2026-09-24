@@ -1290,6 +1290,40 @@ def test_the_drain_joins_the_worker_once_however_many_paths_reach_it(
     assert capsys.readouterr().err == ""
 
 
+def test_main_moves_the_concurrency_bound_off_uvicorns_own_count(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CF-051. uvicorn's own `limit_concurrency` counts idle keep-alive
+    connections too and answers a bare 503 outside the ASGI app; the bound
+    now lives in `EdgeGuard` (`caos/api/edge.py`) instead, so `main` no
+    longer passes it. `timeout_keep_alive` is set explicitly rather than
+    left at uvicorn's silent default, and doubles as this uvicorn version's
+    only lever on how long a connection may sit before it finishes sending
+    its request -- there is no separate, named header-read timeout to set.
+    The exact tuned figures stay N26, which is enterprise.
+    """
+    import uvicorn
+
+    from caos import serve
+
+    monkeypatch.delenv("CAOS_WORKER_IN_PROCESS", raising=False)
+    calls: list[dict[str, object]] = []
+
+    def recorded(_app: object, **kwargs: object) -> None:
+        calls.append(kwargs)
+
+    monkeypatch.setattr(uvicorn, "run", recorded)
+
+    assert serve.main() == 0
+
+    [kwargs] = calls
+    assert "limit_concurrency" not in kwargs
+    assert kwargs["timeout_keep_alive"] == serve.TIMEOUT_KEEP_ALIVE_SECONDS
+    assert 0 < serve.TIMEOUT_KEEP_ALIVE_SECONDS <= 10
+    assert kwargs["h11_max_incomplete_event_size"] == serve.HEADER_READ_LIMIT_BYTES
+    assert 0 < serve.HEADER_READ_LIMIT_BYTES <= 65_536
+
+
 def test_a_re_send_reads_the_fence_without_writing(enqueued: _Run) -> None:
     """ST-7: what the executor reads before a rate-limited call is sent again:
     a lost lease or a recorded cancel refuses, and the read renews nothing."""

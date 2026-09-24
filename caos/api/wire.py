@@ -131,6 +131,7 @@ class QualificationRead(BaseModel):
     provider: Id | None
     model: Id | None
     reviewer: Text | None
+    reviewer_id: UUID | None
     decided_at: AwareDatetime | None
     expires_at: AwareDatetime | None
 
@@ -185,11 +186,21 @@ CLEARS: Mapping[RefusalCode, str] = {
     _C.ENVELOPE_INVALID: "Retry the attempt.",
     _C.ENVELOPE_UNDECLARED_FIELD: "Retry the attempt.",
     _C.ENVELOPE_UNCITED_CLAIM: "Retry the attempt.",
-    _C.HANDOFF_MALFORMED: "An operator must verify the stored handoff.",
-    _C.HANDOFF_BLOCKED: "Change the input that blocked the module.",
-    _C.HANDOFF_IDENTITY_MISMATCH: "An operator must verify the stored handoff.",
-    _C.HANDOFF_INCOMPLETE: "An operator must verify the stored handoff.",
-    _C.HANDOFF_UNDECLARED_FIELD: "An operator must verify the stored handoff.",
+    _C.HANDOFF_MALFORMED: (
+        "Retry the attempt; an operator must verify a stored handoff refused on read."
+    ),
+    _C.HANDOFF_BLOCKED: (
+        "Supply what the module's stated blocker names, then start a new run."
+    ),
+    _C.HANDOFF_IDENTITY_MISMATCH: (
+        "Retry the attempt; an operator must verify a stored handoff refused on read."
+    ),
+    _C.HANDOFF_INCOMPLETE: (
+        "Retry the attempt; an operator must verify a stored handoff refused on read."
+    ),
+    _C.HANDOFF_UNDECLARED_FIELD: (
+        "Retry the attempt; an operator must verify a stored handoff refused on read."
+    ),
     _C.HANDOFF_MODULE_UNSUPPORTED: "Select a route the adapter executes.",
     _C.CALL_OUTCOME_UNEXPLAINED: "An operator must decide whether to pay again.",
     _C.ARTIFACT_RECORD_MISMATCH: "An operator must verify the stored record.",
@@ -200,6 +211,7 @@ CLEARS: Mapping[RefusalCode, str] = {
     _C.EDGE_NOT_TRUSTED: "Reach the service through its edge.",
     _C.ORIGIN_REFUSED: "Send the request from the service's own origin.",
     _C.EDGE_CONFIG_INVALID: "An operator must correct the edge configuration.",
+    _C.CONCURRENCY_LIMIT_REACHED: "Retry shortly.",
     _C.INTERNAL_FAULT: "Retry; an operator must investigate if it persists.",
     _C.NOT_AUTHORISED: "Obtain the required standing on the case.",
     _C.REQUEST_INVALID: "Send a well-formed request body.",
@@ -565,6 +577,11 @@ class RunView(BaseModel):
     route_digest: Sha256 | None
     build_id: Id | None
     source_set_version: int | None
+    # The run's own pinned input, when one is pinned (N48): Start and Retry
+    # both take it back, so a client that reloaded without an open preview
+    # still has what it needs to send either, rather than only a client that
+    # kept a preview's answer in memory.
+    input_fingerprint: Sha256 | None
     subject: RunSubjectView | None
     gates: Annotated[list[GateView], Field(max_length=len(Gate))]
     nodes: Annotated[list[NodeView], Field(max_length=ROUTE_NODES_MAX)]
