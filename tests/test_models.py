@@ -524,3 +524,20 @@ def test_a_charge_is_computed_in_the_reservation_s_exact_context() -> None:
         ScriptedChat(answer=answer("", finish="length", tokens=(1000, 0)))
     ).complete(PROMPT)
     assert empty.charge == Decimal("0.1")
+
+
+@pytest.mark.parametrize("blank", ["", "   \n\t ", "```json\n```", "```\n  \n```"])
+def test_a_blank_answer_is_an_invalid_response_billed_not_a_success(
+    blank: str,
+) -> None:
+    """CF-047: a completed call whose text is empty or whitespace -- a fence
+    around nothing included -- became a billed, empty, "successful"
+    `Completion`, and surfaced downstream as a malformed handoff (and a second
+    attempt spent on nothing). It is the provider's invalid response, like no
+    text at all, and its known charge still stands."""
+    message = answer(blank, finish="stop", tokens=(1000, 0))
+    completion = fake_completions(ScriptedChat(answer=message)).complete(PROMPT)
+    assert completion.content is None
+    assert completion.refusal is RefusalCode.PROVIDER_RESPONSE_INVALID
+    assert completion.charge == Decimal("0.1")
+    assert completion.generation_id == "generation"

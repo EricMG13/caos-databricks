@@ -201,7 +201,10 @@ class ChatCompletions:
         )
         if refusal is not None:
             return Completion(None, charge, generation, refusal)
-        if content is None or charge is None:
+        # Blank text -- empty, whitespace, a fence around nothing -- is no
+        # answer, as no text is (CF-047): billed, and never handed on as a
+        # handoff to be refused as malformed.
+        if not content or charge is None:
             return Completion(
                 None, charge, generation, RefusalCode.PROVIDER_RESPONSE_INVALID
             )
