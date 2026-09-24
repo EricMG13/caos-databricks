@@ -9,7 +9,10 @@ vi.mock("@/app/views", () => {
   const Throws = () => {
     throw new Error("document-derived text that must never render");
   };
-  return { SECTION_VIEWS: new Proxy({}, { get: () => Throws }) };
+  return {
+    SECTION_VIEWS: new Proxy({}, { get: () => Throws }),
+    preloadView: () => Promise.resolve(),
+  };
 });
 
 const DIRECTORY = {

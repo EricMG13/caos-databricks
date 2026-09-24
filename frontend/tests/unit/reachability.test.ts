@@ -58,6 +58,27 @@ test("a type-only import does not reach: the bundler erases it, so the file ship
   rmSync(root, { recursive: true, force: true });
 });
 
+test("a literal dynamic import reaches its chunk; a computed one reaches nothing (N65)", () => {
+  const root = mkdtempSync(join(tmpdir(), "reach-"));
+  mkdirSync(join(root, "sections"), { recursive: true });
+  for (const name of ["Lazy", "Computed"]) {
+    writeFileSync(
+      join(root, "sections", `${name}.tsx`),
+      `export function ${name}() { return null; }\n`,
+    );
+  }
+  writeFileSync(
+    join(root, "main.tsx"),
+    'const name = "Computed";\n' +
+      'export const lazy = () => import("@/sections/Lazy").then((m) => m.Lazy);\n' +
+      "export const computed = () => import(`./sections/${name}`);\n",
+  );
+  const graph = importGraph(join(root, "main.tsx"), root);
+  expect(graph.has(join(root, "sections", "Lazy.tsx"))).toBe(true);
+  expect(graph.has(join(root, "sections", "Computed.tsx"))).toBe(false);
+  rmSync(root, { recursive: true, force: true });
+});
+
 // Admin is unavailable in every mode (`src/app/sections.ts`), and on
 // 17 September 2026 the owner decided to reduce it and the Book to the shell
 // `tests/workbench/chrome.spec.ts` asserts rather than keep implementations
