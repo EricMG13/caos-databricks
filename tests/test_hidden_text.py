@@ -1025,6 +1025,38 @@ def test_a_fill_this_reading_follows_hides_what_it_holds(cover: bytes) -> None:
     assert marks == {"Kept visible": PAINTED}
 
 
+@pytest.mark.parametrize(
+    ("layers", "group"),
+    [
+        # Left on by the configuration, but off by the group's own view usage
+        # -- which a viewer reading usage honours -- or left to a zoom event.
+        (LAYERS, b"<< /Type /OCG /Usage << /View << /ViewState /OFF >> >> >>"),
+        (
+            b"<< /OCGs [6 0 R 7 0 R] /D << /OFF [6 0 R] /AS [<< /Event /View"
+            b" /Category [/Zoom] /OCGs [7 0 R] >>] >> >>",
+            ON_GROUP,
+        ),
+    ],
+)
+def test_a_fill_in_a_group_some_viewer_may_hide_covers_nothing(
+    layers: bytes, group: bytes
+) -> None:
+    """A group is ON only where every viewer draws it: a fill in one that some
+    viewer may hide is no cover every viewer paints, so the line under it is
+    not marked -- and the group's own text is not marked switched off."""
+    page = (
+        shown(700, "Kept visible")
+        + b"/OC /on BDC 1 g 60 690 300 30 re f EMC\n"
+        + b"/OC /on BDC 0 g\n"
+        + shown(600, "In the group")
+        + b"EMC\n"
+    )
+
+    marks = _marks(layered_pdf(page, layers=layers, groups=(OFF_GROUP, group)))
+
+    assert marks == {"Kept visible": "", "In the group": ""}
+
+
 # A Type3 font whose one glyph, `a`, a procedure draws as a full em square.
 TYPE3 = (
     b"<< /Type /Font /Subtype /Type3 /FontBBox [0 0 1000 1000] /FontMatrix"

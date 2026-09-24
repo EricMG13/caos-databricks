@@ -181,17 +181,23 @@ class OptionalContent:
         return cls(declared, on, off, base == "OFF", intents, unsettled)
 
     def state(self, number: int, group: dict[str, object]) -> bool | None:
-        """Whether group `number` is ON (`True`) or OFF (`False`); `None`
-        where conforming viewers could differ: a group the configuration
-        does not declare, one it lists both ON and OFF, and one it switches
-        off that a viewer may still draw -- by an intent the configuration
-        does not consider, by its own `/View` usage, or by an automatic
-        `/AS` event."""
-        if number not in self.declared or (number in self.on and number in self.off):
+        """Whether group `number` is ON (`True`) or OFF (`False`) in every
+        conforming viewer; `None` where they could differ: a group the
+        configuration does not declare, lists both ON and OFF, or leaves to
+        an automatic `/AS` event (zoom, language, user); one it leaves on
+        that the group's own `/View` usage switches off; and one it switches
+        off that a viewer may still draw -- by that usage, or by an intent
+        the configuration does not consider."""
+        if (
+            number not in self.declared
+            or (number in self.on and number in self.off)
+            or number in self.unsettled
+        ):
             return None
+        view = _view_state(group)
         if number not in self.off and (number in self.on or not self.base_off):
-            return True
-        if number in self.unsettled or _viewed(group) or not self._considers(group):
+            return None if view == "OFF" else True
+        if view == "ON" or not self._considers(group):
             return None
         return False
 
@@ -1009,11 +1015,11 @@ def _unsettled(value: object) -> frozenset[int] | None:
     return frozenset(unsettled)
 
 
-def _viewed(group: dict[str, object]) -> bool:
-    """Whether a group's own `/Usage /View /ViewState` is ON: a viewer that
-    reads it draws the group whatever the configuration says."""
+def _view_state(group: dict[str, object]) -> str | None:
+    """A group's own `/Usage /View /ViewState`: how a viewer that reads usage
+    draws the group, whatever the configuration says."""
     view = _entry(_entry(group, "Usage"), "View")
-    return _name(_entry(view, "ViewState")) == "ON"
+    return _name(_entry(view, "ViewState"))
 
 
 def _policy(policy: str | None, states: list[bool]) -> bool | None:
