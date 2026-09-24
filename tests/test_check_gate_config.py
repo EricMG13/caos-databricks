@@ -598,6 +598,85 @@ def test_a_sync_exclude_is_refused_in_any_spelling(tmp_path: Path) -> None:
     )
 
 
+def test_each_target_binds_exactly_its_own_lakebase_kind(tmp_path: Path) -> None:
+    """R24-14: a variable cannot choose the `database` resource's form, so the
+    targets do, each once: dev and prod bind Lakebase Autoscaling (the
+    endpoint variable with a `postgres` resource), the `-provisioned` pair an
+    existing instance (the instance variable with a `database` resource).
+    Nothing binds outside the targets, and no target binds both or neither."""
+    root = _tree(tmp_path)
+    bundle = root / "databricks.yml"
+    written = bundle.read_text()
+    assert check_gate_config._bundle_problems(root) == []
+    blocks = check_gate_config.target_blocks(written)
+    assert list(blocks) == ["dev", "prod", "dev-provisioned", "prod-provisioned"]
+
+    def problems(text: str) -> list[str]:
+        bundle.write_text(text)
+        return [p for p in check_gate_config._bundle_problems(root) if "LAKEBASE" in p]
+
+    swapped = written.replace("CAOS_LAKEBASE_INSTANCE", "CAOS_LAKEBASE_ENDPOINT")
+    assert problems(swapped) == [
+        f"bundle: target {target} must bind CAOS_LAKEBASE_INSTANCE and a database "
+        "resource, and nothing of the other kind"
+        for target in ("dev-provisioned", "prod-provisioned")
+    ]
+    endpoint_env = (
+        "              - name: CAOS_LAKEBASE_ENDPOINT\n"
+        "                value: projects/${var.lakebase_project}/branches/"
+        "${var.lakebase_branch}/endpoints/${var.lakebase_endpoint}\n"
+    )
+    assert written.count(endpoint_env) == 2
+    unbound = written.replace(endpoint_env, "", 1)  # dev's resource, no variable
+    assert problems(unbound) == [
+        "bundle: target dev must bind CAOS_LAKEBASE_ENDPOINT and a postgres "
+        "resource, and nothing of the other kind"
+    ]
+    both = written.replace(
+        endpoint_env,
+        endpoint_env + "              - name: CAOS_LAKEBASE_INSTANCE\n"
+        "                value: x\n",
+        1,
+    )
+    assert len(problems(both)) == 1
+    shared = written.replace(
+        "        env:\n", "        env:\n          - name: CAOS_LAKEBASE_INSTANCE\n", 1
+    )
+    assert "bundle: CAOS_LAKEBASE_INSTANCE is bound outside the targets" in (
+        problems(shared)
+    )
+    added = written + "  staging:\n    mode: production\n"
+    assert problems(added) == [
+        "bundle: target staging must bind CAOS_LAKEBASE_ENDPOINT and a postgres "
+        "resource, and nothing of the other kind"
+    ]
+
+
+def test_ci_runs_every_target_under_the_stand_in() -> None:
+    """R24-14 (A37, DF-4): each target is validated, deployed and run under
+    one stub, then held to what its deploy synced -- the Provisioned pair
+    with the instance, the default targets with the Autoscaling project."""
+    run, shipped = check_gate_config.stand_in_target("dev-provisioned", "--var x=y")
+    assert run == (
+        f"{check_gate_config.STAND_IN} sh -c "
+        '"databricks bundle validate -t dev-provisioned --var x=y '
+        "&& databricks bundle deploy -t dev-provisioned --var x=y "
+        '&& databricks bundle run caos -t dev-provisioned --var x=y"'
+    )
+    assert shipped.endswith(
+        "--shipped .databricks/bundle/dev-provisioned/deployment.json"
+    )
+    gates = check_gate_config.CI_GATES
+    for target in check_gate_config.target_blocks(
+        (REPO / "databricks.yml").read_text()
+    ):
+        assert any(f"--shipped .databricks/bundle/{target}/" in g for g in gates), (
+            target
+        )
+    assert "lakebase_project=caos" in check_gate_config.STAND_IN_VARS
+    assert "lakebase_instance=caos-lb" in check_gate_config.STAND_IN_PROVISIONED_VARS
+
+
 def test_the_goldens_must_come_from_the_legacy_snapshot_and_not_shrink(
     tmp_path: Path,
 ) -> None:

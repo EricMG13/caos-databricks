@@ -22,10 +22,32 @@ variables:
     description: The Unity Catalog catalog holding the caos schema and its blob volume.
   uc_schema:
     description: The schema under that catalog (the volume is <catalog>.<schema>.caos_blobs).
+  # The store and the graph checkpoints live in Lakebase, bound by the target
+  # (see targets): Autoscaling by default, an existing Provisioned instance
+  # in the -provisioned pair. Each target requires its own kind's names and
+  # leaves the other kind's unbound.
+  lakebase_project:
+    description: >-
+      The Lakebase Autoscaling project, by its id (projects/<id>), that holds
+      the store and the graph checkpoints: the default kind, bound by dev and prod.
+  lakebase_branch:
+    description: The branch of that project the app binds.
+    default: production
+  lakebase_endpoint:
+    description: The read-write endpoint on that branch, by its id; the app mints its credential for it.
+    default: primary
+  lakebase_database_id:
+    description: >-
+      The database on that branch, by its resource id
+      (`databricks postgres list-databases projects/<project>/branches/<branch>`).
+    default: databricks-postgres
   lakebase_instance:
-    description: The Lakebase (provisioned) instance name that holds the store and the graph checkpoints.
+    description: >-
+      An existing Lakebase Provisioned instance's name, bound only by
+      dev-provisioned and prod-provisioned (no new Provisioned instance can be
+      created since 12 March 2026).
   lakebase_database:
-    description: The database on that instance.
+    description: The database on that Provisioned instance.
     default: databricks_postgres
   run_ceiling:
     description: >-
@@ -72,8 +94,6 @@ resources:
             value: ${var.run_ceiling}
           - name: CAOS_BLOB_ROOT
             value: volume:///Volumes/${var.uc_catalog}/${var.uc_schema}/caos_blobs
-          - name: CAOS_LAKEBASE_INSTANCE
-            value: ${var.lakebase_instance}
           - name: CAOS_GROUP_ADMIN
             value: ${var.group_admin}
           - name: CAOS_GROUP_ANALYST
@@ -93,12 +113,6 @@ resources:
           serving_endpoint:
             name: ${var.model_endpoint}
             permission: CAN_QUERY
-        - name: database
-          description: The store and the LangGraph checkpoint schema.
-          database:
-            instance_name: ${var.lakebase_instance}
-            database_name: ${var.lakebase_database}
-            permission: CAN_CONNECT_AND_CREATE
         - name: blobs
           description: Content-addressed sources and artifacts.
           uc_securable:
@@ -127,9 +141,20 @@ sync:
     - frontend/dist/**
 
 targets:
+  # Which Lakebase the app binds is the target's to say, and each target
+  # says it once: the `database` resource in its form and the one variable
+  # the process mints its credential for (CAOS_LAKEBASE_ENDPOINT or
+  # CAOS_LAKEBASE_INSTANCE, never both). A variable cannot choose between the
+  # `postgres` and `database` resource forms (N45), so the kinds are target
+  # pairs: dev and prod bind Lakebase Autoscaling, the default;
+  # dev-provisioned and prod-provisioned bind an existing Provisioned
+  # instance. Moving a deployed app from one kind to the other changes the
+  # Postgres role it connects as (docs/DEPLOYMENT.md section 7).
   dev:
     mode: development
     default: true
+    variables:
+      lakebase_instance: unbound  # the -provisioned targets' own
     # Each developer's copy is their own app (DP-6, DF-5): development mode
     # gives each a bundle root of their own but leaves app names alone, and
     # an app name is unique in the workspace. The numeric user id keeps to
@@ -138,13 +163,82 @@ targets:
       apps:
         caos:
           name: caos-${bundle.target}-${workspace.current_user.id}
+          config:
+            env:
+              - name: CAOS_LAKEBASE_ENDPOINT
+                value: projects/${var.lakebase_project}/branches/${var.lakebase_branch}/endpoints/${var.lakebase_endpoint}
+          resources:
+            - name: database
+              description: The store and the LangGraph checkpoint schema.
+              postgres:
+                branch: projects/${var.lakebase_project}/branches/${var.lakebase_branch}
+                database: projects/${var.lakebase_project}/branches/${var.lakebase_branch}/databases/${var.lakebase_database_id}
+                permission: CAN_CONNECT_AND_CREATE
   prod:
     mode: production
+    variables:
+      lakebase_instance: unbound  # the -provisioned targets' own
     resources:
       apps:
         caos:
           name: caos
+          config:
+            env:
+              - name: CAOS_LAKEBASE_ENDPOINT
+                value: projects/${var.lakebase_project}/branches/${var.lakebase_branch}/endpoints/${var.lakebase_endpoint}
+          resources:
+            - name: database
+              description: The store and the LangGraph checkpoint schema.
+              postgres:
+                branch: projects/${var.lakebase_project}/branches/${var.lakebase_branch}
+                database: projects/${var.lakebase_project}/branches/${var.lakebase_branch}/databases/${var.lakebase_database_id}
+                permission: CAN_CONNECT_AND_CREATE
     # One copy, in a path of its own rather than the deployer's home or the
     # world-writable Shared folder (F51); the deployer creates it.
+    workspace:
+      root_path: /Workspace/caos-bundle/${bundle.target}
+  dev-provisioned:
+    mode: development
+    variables:
+      lakebase_project: unbound  # the Autoscaling targets' own
+    resources:
+      apps:
+        caos:
+          # Shorter than caos-${bundle.target}-<id>: an app name is at most
+          # 30 characters, and a user id can take 16 of them.
+          name: caos-devprov-${workspace.current_user.id}
+          config:
+            env:
+              - name: CAOS_LAKEBASE_INSTANCE
+                value: ${var.lakebase_instance}
+          resources:
+            - name: database
+              description: The store and the LangGraph checkpoint schema.
+              database:
+                instance_name: ${var.lakebase_instance}
+                database_name: ${var.lakebase_database}
+                permission: CAN_CONNECT_AND_CREATE
+  prod-provisioned:
+    mode: production
+    variables:
+      lakebase_project: unbound  # the Autoscaling targets' own
+    resources:
+      apps:
+        caos:
+          # The production app, as in prod: a deploy of one kind over an app
+          # the other kind's state holds is refused as a taken name (DP-6)
+          # rather than rebinding the app's role (section 7).
+          name: caos
+          config:
+            env:
+              - name: CAOS_LAKEBASE_INSTANCE
+                value: ${var.lakebase_instance}
+          resources:
+            - name: database
+              description: The store and the LangGraph checkpoint schema.
+              database:
+                instance_name: ${var.lakebase_instance}
+                database_name: ${var.lakebase_database}
+                permission: CAN_CONNECT_AND_CREATE
     workspace:
       root_path: /Workspace/caos-bundle/${bundle.target}
