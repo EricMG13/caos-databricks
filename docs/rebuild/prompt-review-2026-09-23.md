@@ -25,7 +25,7 @@ Status is as of `e4e4e01`. FIXED names the entry that closed it; OPEN rows are t
 | G1-13 | CP-8 | Undelivered upstreams (CP-6/6A) meant Blocked; T7.6 needs a row with fewer than 3 decisions | HOLDS | FIXED D34 (canon SEC4, one-row rule) |
 | G1-14 | CP-5, CP-6 | The two modules disagree which runs first | DEGRADES | FIXED D40 (CP-5 is CP-6's QA gate in both) |
 | G1-15 | all | Host blocks discouraged self-checking and named only three refusal grounds | DEGRADES | FIXED D34 |
-| G1-16 | host | Feedback gaps: T8 set, dossier, `_text` limits, blocker over 512, no retry on identity/undeclared | DEGRADES | T8 set and dossier FIXED D30 5th addendum; the rest OPEN (register) |
+| G1-16 | host | Feedback gaps: T8 set, dossier, `_text` limits, blocker over 512, no retry on identity/undeclared | DEGRADES | FIXED D30 5th addendum (T8 set, dossier), F210 (text bounds, blocker), D41 (identity, undeclared) |
 | G1-17 | CP-5, CP-8 | Told they are FULL runs while LITE routes validate SCREENING_ONLY; scope never stated | DEGRADES | FIXED D34 (final check names permitted statuses) |
 | G1-18 | CP-0, CP-L10 | No user objective delivered; five opening headings; an undelivered brief file named | DEGRADES | FIXED D40 |
 | G2-1 | all eight | The canon prescribes the exact placeholders the checker refuses | BLOCKS | FIXED D31 (V1) |
@@ -44,7 +44,7 @@ Status is as of `e4e4e01`. FIXED names the entry that closed it; OPEN rows are t
 | G2-14 | CP-2D | T2E.6 is prose in the method, a register in the checker | BLOCKS | FIXED D40 (T2E.6 register) |
 | G2-15 | CP-2 | T2.10 must hold a Positive and a Negative driver even when none is supported | BLOCKS | FIXED D40 (`None supported` row) |
 | G2-16 | host | The 16-line feedback cap hid the root cause | DEGRADES | FIXED D30 5th addendum |
-| G2-17 | host | Operator hints give the wrong fix for `HANDOFF_INCOMPLETE` and `HANDOFF_BLOCKED` | DEGRADES | OPEN (host, register) |
+| G2-17 | host | Operator hints give the wrong fix for `HANDOFF_INCOMPLETE` and `HANDOFF_BLOCKED` | DEGRADES | FIXED F200 |
 | G2-18 | CP-1A, CP-2A, CP-1D, CP-1 | Absorbed phases carry contradictory headings and rules; canon `Not Reviewed` refused | DEGRADES | FIXED D40 |
 | G3-1 | all eight | A correct Blocked answer refused `HANDOFF_INCOMPLETE` | DEGRADES | FIXED D34 (Blocked before completeness) |
 | G3-2 | CP-2E, CP-3, CP-3C, CP-2H, CP-4 | Vendor label lists hold blocklisted values in critical columns | BLOCKS | FIXED D31 (V1) |
@@ -54,7 +54,7 @@ Status is as of `e4e4e01`. FIXED names the entry that closed it; OPEN rows are t
 | G3-6 | CP-4, CP-4C | Required registers the method says to skip or blank | BLOCKS | FIXED D34 (one-row rule), D31 (V1) |
 | G3-7 | CP-2E, CP-3D, CP-3C | Undelivered upstreams named; canon says stop | HOLDS | FIXED D34 (canon SEC4) |
 | G3-8 | CP-2H, CP-4C | FULL dependencies on LITE routes; `UPGRADE` undefined | HOLDS | FIXED D34, D40 (`UPGRADE` in canon SEC5) |
-| G3-9 | CP-2G → CP-CF | A permitted driver row breaks CP-CF; `FORECAST_DRIVER_NOT_READY` never raised; commas not parsed | HOLDS | OPEN (host, register) |
+| G3-9 | CP-2G → CP-CF | A permitted driver row breaks CP-CF; `FORECAST_DRIVER_NOT_READY` never raised; commas not parsed | HOLDS | FIXED F211 |
 | G3-10 | host | Feedback cap dropped tail registers | BLOCKS | FIXED D30 5th addendum |
 | G3-11 | CP-3, CP-4 | Retrieval instructions (Sector RV workbook, EDGAR) the host cannot honour | DEGRADES | FIXED D34 (host_steps) |
 | G3-12 | all eight | Module status words have no mapping to qa_status | DEGRADES | FIXED D31 (V5), D40 (status map) |
