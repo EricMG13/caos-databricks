@@ -514,7 +514,7 @@ async def _malformed_run_id(
     else:
         return await request_validation_exception_handler(request, error)
     try:
-        actor_from_headers(request.headers)
+        await actor_from_headers(request.headers)
     except Refusal as refusal:
         return _refused(request, refusal)
     return _refused(request, Refusal(code))

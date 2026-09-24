@@ -21,6 +21,7 @@ from __future__ import annotations
 from pathlib import Path
 from uuid import UUID, uuid4
 
+import anyio
 import pytest
 from command_fixtures import command_client, command_headers, member
 from fastapi.testclient import TestClient
@@ -62,7 +63,7 @@ def test_the_role_header_is_trusted_only_when_explicitly_switched_on(
     """Development's convenience, and it has to be asked for by name."""
     monkeypatch.setenv(TRUST_SWITCH, "1")
 
-    actor = actor_from_headers(_headers(**{"x-caos-role": "ADMIN"}))
+    actor = anyio.run(actor_from_headers, _headers(**{"x-caos-role": "ADMIN"}))
 
     assert actor.role is GlobalRole.ADMIN
 
@@ -75,8 +76,9 @@ def test_anything_but_one_leaves_the_switch_off(
     would eventually accept something a deployment set for another purpose."""
     monkeypatch.setenv(TRUST_SWITCH, value)
 
-    actor = actor_from_headers(
-        _headers(**{"x-caos-role": "ADMIN", "x-forwarded-groups": "caos-readers"})
+    actor = anyio.run(
+        actor_from_headers,
+        _headers(**{"x-caos-role": "ADMIN", "x-forwarded-groups": "caos-readers"}),
     )
 
     assert actor.role is GlobalRole.READER
@@ -90,7 +92,7 @@ def test_an_unknown_role_name_under_trust_is_still_the_lowest_role(
     header being trusted twice over."""
     monkeypatch.setenv(TRUST_SWITCH, "1")
 
-    actor = actor_from_headers(_headers(**{"x-caos-role": "SUPERUSER"}))
+    actor = anyio.run(actor_from_headers, _headers(**{"x-caos-role": "SUPERUSER"}))
 
     assert actor.role is GlobalRole.READER
 
@@ -102,7 +104,7 @@ def test_no_groups_and_no_trust_is_the_lowest_role(
     administrator by default."""
     monkeypatch.delenv(TRUST_SWITCH, raising=False)
 
-    actor = actor_from_headers(_headers())
+    actor = anyio.run(actor_from_headers, _headers())
 
     assert actor.role is GlobalRole.READER
 
@@ -113,7 +115,7 @@ def test_a_request_with_no_user_at_all_is_refused(
     monkeypatch.delenv(TRUST_SWITCH, raising=False)
 
     with pytest.raises(Refusal) as caught:
-        actor_from_headers({"x-forwarded-groups": "caos-admins"})
+        anyio.run(actor_from_headers, {"x-forwarded-groups": "caos-admins"})
 
     assert caught.value.code is RefusalCode.NOT_AUTHENTICATED
 
@@ -126,7 +128,7 @@ def test_a_user_that_is_not_an_identifier_is_refused(
     monkeypatch.delenv(TRUST_SWITCH, raising=False)
 
     with pytest.raises(Refusal) as caught:
-        actor_from_headers({"x-caos-user": "../../etc/passwd"})
+        anyio.run(actor_from_headers, {"x-caos-user": "../../etc/passwd"})
 
     assert caught.value.code is RefusalCode.NOT_AUTHENTICATED
 
@@ -140,7 +142,7 @@ def test_something_that_is_not_even_a_headers_object_is_refused(
     monkeypatch.delenv(TRUST_SWITCH, raising=False)
 
     with pytest.raises(Refusal) as caught:
-        actor_from_headers(None)
+        anyio.run(actor_from_headers, None)
 
     assert caught.value.code is RefusalCode.NOT_AUTHENTICATED
 
@@ -152,7 +154,7 @@ def test_trust_switched_on_with_no_role_header_at_all_is_the_lowest_role(
     answer as one asserting a role outside the closed set: the floor."""
     monkeypatch.setenv(TRUST_SWITCH, "1")
 
-    actor = actor_from_headers(_headers())
+    actor = anyio.run(actor_from_headers, _headers())
 
     assert actor.role is GlobalRole.READER
 
@@ -161,7 +163,7 @@ def test_the_refusal_carries_no_part_of_what_was_sent() -> None:
     """§ refusals: the code travels, the offending text never does. An identity
     header is exactly the string that must not reach a log line."""
     with pytest.raises(Refusal) as caught:
-        actor_from_headers({"x-caos-user": "mallory@example.test"})
+        anyio.run(actor_from_headers, {"x-caos-user": "mallory@example.test"})
 
     assert "mallory" not in str(caught.value)
     assert "mallory" not in repr(caught.value)
@@ -204,10 +206,10 @@ def test_the_switch_is_read_at_the_request_not_at_import(
     """A process started in one mode must not keep behaving that way after the
     environment is corrected."""
     monkeypatch.delenv(TRUST_SWITCH, raising=False)
-    before = actor_from_headers(_headers(**{"x-caos-role": "ADMIN"}))
+    before = anyio.run(actor_from_headers, _headers(**{"x-caos-role": "ADMIN"}))
 
     monkeypatch.setenv(TRUST_SWITCH, "1")
-    after = actor_from_headers(_headers(**{"x-caos-role": "ADMIN"}))
+    after = anyio.run(actor_from_headers, _headers(**{"x-caos-role": "ADMIN"}))
 
     assert (before.role, after.role) == (GlobalRole.READER, GlobalRole.ADMIN)
 
@@ -414,7 +416,9 @@ def test_without_a_token_or_the_switch_groups_grant_nothing(
     sending one grants nothing whatever its value.
     """
     monkeypatch.delenv(TRUST_SWITCH, raising=False)
-    actor = actor_from_headers(_headers(**{"x-forwarded-groups": "caos-admins"}))
+    actor = anyio.run(
+        actor_from_headers, _headers(**{"x-forwarded-groups": "caos-admins"})
+    )
     assert actor.role is GlobalRole.READER
 
 

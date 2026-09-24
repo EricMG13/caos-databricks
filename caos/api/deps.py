@@ -99,7 +99,7 @@ def request_blobs(blobs: Annotated[BlobStore, Depends(blob_store)]) -> BlobStore
     return blobs.remembering()
 
 
-def actor_from_request(request: Request) -> Actor:
+async def actor_from_request(request: Request) -> Actor:
     """Who is asking. A dependency rather than a line in a route body.
 
     Every store-touching route declares it on its decorator as
@@ -116,8 +116,13 @@ def actor_from_request(request: Request) -> Actor:
     any well-formed subject still reaches the connection, because whether that
     subject is real is the edge's question rather than this process's
     (`caos/api/identity.py`).
+
+    Async so that FastAPI solves it on the event loop rather than one of
+    AnyIO's worker threads (N36): dev mode awaits nothing, and behind the
+    platform only the request actually making a cold SCIM lookup ever leaves
+    it, in `caos.api.identity._resolved`.
     """
-    return actor_from_headers(request.headers)
+    return await actor_from_headers(request.headers)
 
 
 def methodology_bundle() -> Bundle:
