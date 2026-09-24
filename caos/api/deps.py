@@ -42,11 +42,12 @@ import psycopg
 from fastapi import Depends, Request
 from psycopg import OperationalError
 
+from caos.api.edge import _logged
 from caos.api.identity import Actor, actor_from_headers
 from caos.blobs import BlobStore
 from caos.methodology.bundle import Bundle
 from caos.refusals import Refusal, RefusalCode
-from caos.store import StoreConnection, connect
+from caos.store import StoreConnection, connect, interrupted
 from caos.store.lakebase import store_url
 from caos.store.members import Standing, satisfies, standing_of
 
@@ -78,11 +79,15 @@ def store_connection() -> Iterator[StoreConnection]:
     refusal is raised outside the `except`, so psycopg's message -- the host,
     the port and the role -- is neither chained behind it nor logged with it.
 
-    A fault after connect (CF-022) -- a dropped session, a statement timeout --
-    is refused the same way rather than escaping as a bare `psycopg.Error` for
-    the edge guard to answer generically `INTERNAL_FAULT`: the store not
-    answering mid-request is the same fact as it not answering at connect, and
-    callers should be told the same thing (503, retryable) either way.
+    A fault after connect (CF-022) that is the store not answering -- a
+    dropped session, a statement timeout, a lock wait or a transaction the
+    server gave up on (`caos.store.interrupted`) -- is refused the same way:
+    the store not answering mid-request is the same fact as it not answering
+    at connect, and callers should be told the same thing (503, retryable).
+    Any other `psycopg.Error` -- a statement the database refused, a unique
+    violation, a trigger's refusal -- is no outage (N5): `INTERNAL_FAULT`,
+    logged as the edge logs an unhandled fault, its class and frame and never
+    its text, because once it is a refusal the edge no longer sees it.
     """
     conn: StoreConnection | None
     try:
@@ -94,8 +99,16 @@ def store_connection() -> Iterator[StoreConnection]:
     try:
         with conn:
             yield conn
-    except psycopg.Error:
-        raise Refusal(RefusalCode.STORE_UNAVAILABLE) from None
+    except psycopg.Error as fault:
+        raise Refusal(_store_fault(fault)) from None
+
+
+def _store_fault(fault: psycopg.Error) -> RefusalCode:
+    """The code a store fault mid-request is answered with (N5)."""
+    if interrupted(fault):
+        return RefusalCode.STORE_UNAVAILABLE
+    _logged(fault)
+    return RefusalCode.INTERNAL_FAULT
 
 
 def blob_store() -> BlobStore:

@@ -1005,6 +1005,35 @@ def test_apply_schema_answers_a_lock_wait_that_timed_out_as_unavailable(
         store.verify_schema(again)
 
 
+def test_interrupted_is_the_store_not_answering_and_nothing_else() -> None:
+    """R24-05, N2, N5: the one classifier the boot and the request edge share.
+    A session seen to close, an ended session, a cancelled statement, a
+    rolled-back transaction, exhausted resources and a lock wait that timed
+    out are the store not answering this time; a statement it refused --
+    including class 55's other states -- is a finding about what it holds."""
+    answered_later = [
+        psycopg.OperationalError(),
+        psycopg.errors.ConnectionFailure(),
+        psycopg.errors.AdminShutdown(),
+        psycopg.errors.QueryCanceled(),
+        psycopg.errors.SerializationFailure(),
+        psycopg.errors.DeadlockDetected(),
+        psycopg.errors.TooManyConnections(),
+        psycopg.errors.LockNotAvailable(),
+    ]
+    findings = [
+        psycopg.errors.UndefinedColumn(),
+        psycopg.errors.UniqueViolation(),
+        psycopg.errors.RaiseException(),
+        psycopg.errors.InsufficientPrivilege(),
+        psycopg.errors.ObjectInUse(),
+        psycopg.ProgrammingError(),
+        psycopg.InterfaceError(),
+    ]
+    assert [store.interrupted(fault) for fault in answered_later] == [True] * 8
+    assert [store.interrupted(fault) for fault in findings] == [False] * 7
+
+
 def test_apply_schema_keeps_a_refused_statement_a_drift_finding(
     empty_database: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:

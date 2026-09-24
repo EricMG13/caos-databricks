@@ -467,24 +467,33 @@ def apply_schema(conn: StoreConnection, *, sql: str = SCHEMA) -> None:
         raise
 
 
+def interrupted(fault: psycopg.Error) -> bool:
+    """Whether a store fault is the store failing to answer this time (R24-05),
+    rather than refusing a statement.
+
+    A session the client saw close carries no SQLSTATE at all, and a server
+    that ended it or cancelled the statement says so by class, as it says a
+    lock wait timed out by its own state (N2). Anything else -- a statement the
+    database refused, a constraint, a trigger's refusal -- is a finding about
+    what it holds, which asking again will not change. The boot's classifier
+    (`_schema_fault_code`) and the request edge's (`caos.api.deps`, N5).
+    """
+    if fault.sqlstate is None:
+        return isinstance(fault, psycopg.OperationalError)
+    return fault.sqlstate[:2] in _INTERRUPTED or fault.sqlstate == _LOCK_NOT_AVAILABLE
+
+
 def _schema_fault_code(fault: psycopg.Error) -> RefusalCode:
     """`STORE_UNAVAILABLE` for an interruption, `STORE_SCHEMA_DRIFT` otherwise.
 
-    An interruption is the store failing to answer (R24-05): a session the
-    client saw close carries no SQLSTATE at all, and a server that ended it or
-    cancelled the statement says so by class, as it says a lock wait timed out
-    by its own state (N2). The worker's boot loop asks the store again after
-    one; drift is final, so only a statement the database refused -- a
-    disagreement with what it holds -- may be named drift.
+    The worker's boot loop asks the store again after an interruption; drift is
+    final, so only a statement the database refused -- a disagreement with what
+    it holds -- may be named drift.
     """
-    if fault.sqlstate is None:
-        interrupted = isinstance(fault, psycopg.OperationalError)
-    else:
-        interrupted = (
-            fault.sqlstate[:2] in _INTERRUPTED or fault.sqlstate == _LOCK_NOT_AVAILABLE
-        )
     return (
-        RefusalCode.STORE_UNAVAILABLE if interrupted else RefusalCode.STORE_SCHEMA_DRIFT
+        RefusalCode.STORE_UNAVAILABLE
+        if interrupted(fault)
+        else RefusalCode.STORE_SCHEMA_DRIFT
     )
 
 
