@@ -577,6 +577,11 @@ def test_a_forged_snapshot_over_a_run_that_never_ran_refuses_the_pack(
         apply_schema(conn)
         performed = _pin(conn, profile_id, selection_id, accepted_nothing="case")
         [case] = performed.prepared
+        # CF-091: runs.status is guarded against a terminal move now; this
+        # forges exactly that move to prove the app's own read still catches
+        # it, so the trigger -- not what this test is about -- is set aside.
+        assert conn.info.dbname.startswith("caos_test_")
+        conn.execute("ALTER TABLE runs DISABLE TRIGGER runs_status_terminal_once")
         conn.execute(
             "UPDATE runs SET status='RUNNING' WHERE run_id=%s", (case.input.run_id,)
         )

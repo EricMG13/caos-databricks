@@ -287,6 +287,10 @@ def _refused(conn: StoreConnection, lease: Lease, refused: Refusal) -> bool:
     if code in STORE_FAULTS:
         _settle(conn, lambda: release(conn, lease))
         raise Refusal(code)
+    # CF-044: the code alone, the same shape the sibling branch above already
+    # prints for the same reason -- a run parked with nothing on stderr is a
+    # worker that went quiet for a reason nobody watching the process learns.
+    print(code.value, file=sys.stderr)
     return _settle(conn, lambda: stop(conn, lease, code))
 
 
@@ -402,8 +406,22 @@ def run_worker(
             if claimed is None:
                 stopping.wait(pause_seconds(config, failures))
     finally:
+        _beat_stopped(conn, config, failures)
         _closed(conn)
     return 0
+
+
+def _beat_stopped(
+    conn: StoreConnection | None, config: WorkerConfig, failures: int
+) -> None:
+    """N37: a beat of STOPPED, distinct from BACKOFF or a merely stale
+    POLLING/WORKING, so a fleet read tells a worker that ended here on
+    purpose from one whose last word just went quiet. Best effort, on
+    whatever connection the loop still holds when it stops; `_beat` never
+    raises. Its own function so `run_worker`'s `finally` costs no added
+    branch (C901)."""
+    if conn is not None and not conn.closed:
+        _beat(conn, config, "STOPPED", failures)
 
 
 def _closed(conn: StoreConnection | None) -> None:

@@ -123,6 +123,7 @@ def test_worker_stops_a_refused_run_with_its_code_and_releases_the_lease(
     route: ResolvedRoute,
     bundle: Bundle,
     blobs: BlobStore,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     run = queued_run(case, route, bundle, blobs)
     completions = CanonicalCompletions(run.source_id, quotes=(UNANCHORED,))
@@ -139,6 +140,9 @@ def test_worker_stops_a_refused_run_with_its_code_and_releases_the_lease(
     code = codes[0][0]
     assert work_row(run.conn, run.run_id) == ("STOPPED", code, None, True)
     assert run_status(run.conn, run.run_id) is RunStatus.RUNNING
+    # CF-044: a park otherwise left nothing on stderr for an operator watching
+    # the process to notice by.
+    assert capsys.readouterr().err.strip() == code
     run.conn.rollback()
     assert drive(run, completions) is None, "a stopped run waits for a retry"
     assert len(completions.prompts) == 2
@@ -594,6 +598,40 @@ def test_the_worker_says_what_it_is_doing_and_a_backing_off_worker_says_so(
     # The last word is BACKOFF with a count: the loop faulted and said so.
     assert state.state == "BACKOFF"
     assert state.consecutive_faults > 0
+
+
+def test_a_graceful_stop_beats_stopped_not_a_stale_polling_or_working(
+    case: tuple[StoreConnection, UUID],
+    blobs: BlobStore,
+    empty_database: str,
+) -> None:
+    """N37: a standalone worker's last word on a clean stop is STOPPED, a
+    state distinct from POLLING, WORKING and BACKOFF -- not whichever of
+    those it happened to hold when told to stop, which stayed 'fresh' for
+    `WORKER_STALE_AFTER` with nothing to tell it apart from one still going.
+    """
+    conn, _case_id = case
+
+    def never(_conn: StoreConnection, _run_id: UUID, _lease: Lease) -> Execution:
+        pytest.fail("nothing was ever queued to claim")
+
+    assert (
+        run_worker(
+            CONFIG,
+            execution_for=never,
+            stopping=_Clock(limit=1),
+            conn_factory=lambda: psycopg.connect(empty_database, autocommit=False),
+            blobs=blobs,
+        )
+        == 0
+    )
+
+    [state] = worker_states(conn)
+    assert (state.worker_id, state.state, state.fresh) == (
+        "worker-test",
+        "STOPPED",
+        True,
+    )
 
 
 def test_a_store_that_will_not_take_the_beat_does_not_stop_the_worker(

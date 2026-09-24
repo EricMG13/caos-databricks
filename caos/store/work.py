@@ -182,6 +182,10 @@ def stop(conn: StoreConnection, lease: Lease, code: RefusalCode) -> bool:
     instead (MAX-04): `requeue_run` refuses a run with a recorded cancel, so a
     parked one would sit RUNNING with nothing left to end it. Takes `lock_run`
     first, as every move of a run's status does.
+
+    A genuine park appends `RUN_PARKED` (CF-044): the run itself stays
+    RUNNING, so nothing else would ever say a worker gave up on it, on the
+    stream a watcher tails or in the audit trail read back later.
     """
     if not isinstance(code, RefusalCode):
         raise Refusal(RefusalCode.CALL_OUTCOME_INVALID)
@@ -197,6 +201,8 @@ def stop(conn: StoreConnection, lease: Lease, code: RefusalCode) -> bool:
         return False
     if running and row[0]:
         _end_cancelled(conn, lease.run_id)
+    else:
+        append(conn, lease.run_id, RunEvent.RUN_PARKED)
     return True
 
 
@@ -315,7 +321,7 @@ def _require_seconds(seconds: int) -> None:
 # depend on the provider seam; the rule it follows is named here instead, and
 # `tests/test_worker_heartbeat.py` asserts the two stay in that relation.
 WORKER_STALE_AFTER = 300.0
-type WorkerState = Literal["POLLING", "WORKING", "BACKOFF"]
+type WorkerState = Literal["POLLING", "WORKING", "BACKOFF", "STOPPED"]
 
 
 @dataclass(frozen=True, slots=True)

@@ -374,6 +374,12 @@ class RunSummary(BaseModel):
     created_at: AwareDatetime
     profile_id: Id | None
     selection_id: Id | None
+    # CF-044: a run parked by its worker (`run_work.state = 'STOPPED'`) still
+    # reads `status: RUNNING` here -- the run itself is recoverable, not
+    # ended -- so this is the one field that tells a list apart from a run
+    # nobody is currently driving. `None` for a run never enqueued or still
+    # being worked.
+    stop_code: RefusalCode | None
 
 
 class MemberRow(BaseModel):

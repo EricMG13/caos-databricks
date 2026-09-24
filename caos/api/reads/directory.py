@@ -24,6 +24,7 @@ from caos.api.wire import (
     SectionNote,
     ServedRole,
 )
+from caos.refusals import RefusalCode
 from caos.store.members import cases_for_member
 
 # The store's `now()` and the one listing query (`cases_for_member` reads the
@@ -74,6 +75,9 @@ def read_directory(actor: Caller, conn: Store) -> DirectoryDocument:
                         created_at=row.latest_run.created_at,
                         profile_id=row.latest_run.profile_id,
                         selection_id=row.latest_run.selection_id,
+                        stop_code=None
+                        if row.latest_run.stop_code is None
+                        else RefusalCode(row.latest_run.stop_code),
                     ),
                     members=None
                     if row.members is None

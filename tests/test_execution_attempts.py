@@ -440,6 +440,10 @@ def test_only_an_expired_or_queued_row_is_claimable_and_each_claim_advances_the_
     assert second == Lease(run_id, 2, 60)
     assert stop(conn, second, RefusalCode.CONTEXT_OVER_CEILING) is True
     conn.commit()
+    # CF-044: a genuine park (the run stays RUNNING, recoverable) appends its
+    # own event, the one thing that otherwise made a parked run invisible on
+    # the audit trail and the SSE tail.
+    assert [e.name for e in events_of(conn, run_id)] == [RunEvent.RUN_PARKED.value]
     assert _work(conn, run_id) == ("STOPPED", 2, None, "CONTEXT_OVER_CEILING", False)
     assert claim_run(conn, worker=WORKER, lease_seconds=60) is None, "stopped"
     assert requeue_run(conn, run_id) is True

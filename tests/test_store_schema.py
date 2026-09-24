@@ -39,6 +39,7 @@ from caos.evidence.ingest import Document, admit_pack
 from caos.evidence.read import read_block
 from caos.refusals import Refusal, RefusalCode
 from caos.store import SCHEMA, RunStatus, StoreConnection, apply_schema, connect
+from caos.store.events import RunEvent, append
 from caos.store.routes import resolved_route
 from caos.store.run_inputs import RunInput, load_run_input
 from caos.store.runs import block_run, create_case, run_status, start_run
@@ -204,6 +205,93 @@ def test_a_runs_predecessor_is_written_once_and_is_never_itself(
             " IS NOT NULL"
         ).fetchall()
         assert links == [(successor, first)]
+
+
+def test_budget_reservations_and_run_events_are_immutable(
+    empty_database: str,
+) -> None:
+    """CF-091, the trigger half of N16 (MX-6): `caos/store/budget.py` and
+    `events.py` only ever insert into these two tables -- never an UPDATE, a
+    DELETE or a TRUNCATE anywhere in the app -- which now refuse what the app
+    never sends, the same shape `0007_call_outcomes.sql` gave `call_outcomes`
+    and `budget_ledger`.
+
+    `run_attempts` and `artifacts` are the same shape (insert-only) but are
+    deliberately left unguarded: the test suite reaches into both by design
+    to simulate a row corrupted after the fact, proving the application's own
+    verification catches it (`tests/test_canonical_proof.py` and others).
+    Guarding them the same way would need every one of those call sites
+    rewritten first, which is an owner's call (N16), not this fix's.
+    """
+    with connect(empty_database) as conn:
+        apply_schema(conn)
+        case_id = create_case(conn, BoundaryText.of("Acme 2026 refinancing"))
+        run_id = start_run(conn, case_id)
+        conn.commit()
+        attempt_id = uuid4()
+        conn.execute(
+            "INSERT INTO run_attempts (attempt_id, run_id, route_node_id, ordinal)"
+            " VALUES (%s, %s, 'CP-0', 1)",
+            (attempt_id, run_id),
+        )
+        conn.execute(
+            "INSERT INTO budget_reservations (attempt_id, run_id, amount,"
+            " price_model, price_input, price_output, price_as_of)"
+            " VALUES (%s, %s, 1.00, 'm', 0.000001, 0.000001, %s)",
+            (attempt_id, run_id, date.today()),
+        )
+        append(conn, run_id, RunEvent.ROUTE_PINNED)
+        conn.commit()
+
+        for table, mutation in (
+            ("budget_reservations", "UPDATE budget_reservations SET amount = 2.00"),
+            ("budget_reservations", "DELETE FROM budget_reservations"),
+            ("budget_reservations", "TRUNCATE budget_reservations"),
+            ("run_events", "UPDATE run_events SET name = 'RUN_FAILED'"),
+            ("run_events", "DELETE FROM run_events"),
+            ("run_events", "TRUNCATE run_events"),
+        ):
+            with pytest.raises(
+                psycopg.errors.RaiseException, match="immutable"
+            ) as caught:
+                conn.execute(mutation)
+            assert table in str(caught.value)
+            conn.rollback()
+
+        assert conn.execute(
+            "SELECT count(*) FROM budget_reservations WHERE attempt_id = %s",
+            (attempt_id,),
+        ).fetchone() == (1,)
+
+
+def test_a_runs_terminal_status_never_moves_again(empty_database: str) -> None:
+    """CF-091: `runs.status` moves RUNNING to a terminal status exactly once
+    (`caos.store.runs._transition`, `work.py`'s `_end_cancelled` -- both
+    conditioned on `WHERE status = 'RUNNING'` already); the schema now refuses
+    what those functions never ask for, a terminal status moving again, to
+    another terminal or back to RUNNING (`0025_supersedes.sql`: a BLOCKED
+    run's discharge is a new run, never itself resumed)."""
+    with connect(empty_database) as conn:
+        apply_schema(conn)
+        case_id = create_case(conn, BoundaryText.of("Acme 2026 refinancing"))
+        run_id = start_run(conn, case_id)
+        conn.commit()
+
+        # The one move every terminal status is reached by still works.
+        conn.execute("UPDATE runs SET status = 'COMPLETE' WHERE run_id = %s", (run_id,))
+        conn.commit()
+        assert run_status(conn, run_id) is RunStatus.COMPLETE
+
+        # Not COMPLETE again: setting a status to its own current value is not
+        # a move at all (`WHEN (NEW.status IS DISTINCT FROM OLD.status)`), the
+        # same idiom `0025_supersedes.sql`'s own write-once trigger uses.
+        for status in ("RUNNING", "FAILED", "BLOCKED", "CANCELLED"):
+            with pytest.raises(psycopg.errors.RaiseException, match="terminal"):
+                conn.execute(
+                    "UPDATE runs SET status = %s WHERE run_id = %s", (status, run_id)
+                )
+            conn.rollback()
+        assert run_status(conn, run_id) is RunStatus.COMPLETE
 
 
 def test_every_run_status_is_one_the_database_accepts(empty_database: str) -> None:
@@ -771,9 +859,14 @@ def test_native_money_constraints_refuse_malformed_rows(
     with connect(empty_database) as conn:
         apply_schema(conn)
         _populate(conn, BlobStore(tmp_path))
-        if table == "budget_ledger":
+        # CF-091: budget_reservations is immutable by trigger now too, the
+        # same as budget_ledger already was; this probe reaches the native
+        # constraint through an UPDATE the app never sends, so the trigger --
+        # not what this test is about -- is set aside for it, on the test's
+        # own throwaway database.
+        if table in ("budget_ledger", "budget_reservations"):
             assert conn.info.dbname.startswith("caos_test_")
-            conn.execute("ALTER TABLE budget_ledger DISABLE TRIGGER USER")
+            conn.execute(f"ALTER TABLE {table} DISABLE TRIGGER USER")
         with pytest.raises(psycopg.errors.CheckViolation):
             conn.execute(f"UPDATE {table} SET {column} = %s", (Decimal(value),))
         conn.rollback()
@@ -789,9 +882,10 @@ def test_budget_owner_keys_reject_existing_unrelated_run(
         other_case = create_case(conn, BoundaryText.of("unrelated owner"))
         other_run = start_run(conn, other_case)
         conn.commit()
-        if table == "budget_ledger":
-            assert conn.info.dbname.startswith("caos_test_")
-            conn.execute("ALTER TABLE budget_ledger DISABLE TRIGGER USER")
+        # CF-091: both tables are immutable by trigger; set aside for the
+        # same reason as above.
+        assert conn.info.dbname.startswith("caos_test_")
+        conn.execute(f"ALTER TABLE {table} DISABLE TRIGGER USER")
         with pytest.raises(psycopg.errors.ForeignKeyViolation):
             conn.execute(f"UPDATE {table} SET run_id = %s", (other_run,))
         conn.rollback()
@@ -1384,6 +1478,10 @@ def test_a_reservation_price_outside_its_constraint_refuses(
     with connect(empty_database) as conn:
         apply_schema(conn)
         _populate(conn, BlobStore(tmp_path))
+        # CF-091: reaches the native constraint through an UPDATE the app
+        # never sends, past budget_reservations' own immutability trigger.
+        assert conn.info.dbname.startswith("caos_test_")
+        conn.execute("ALTER TABLE budget_reservations DISABLE TRIGGER USER")
         given: object = value if column == "price_model" else Decimal(value)
         with pytest.raises(psycopg.errors.CheckViolation):
             conn.execute(f"UPDATE budget_reservations SET {column} = %s", (given,))

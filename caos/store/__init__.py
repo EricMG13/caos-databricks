@@ -163,6 +163,24 @@ MIGRATIONS = (
         .with_name("0031_verdict_recorded_at.sql")
         .read_text(encoding="utf-8"),
     ),
+    (
+        "0032_run_parked_event",
+        Path(__file__)
+        .with_name("0032_run_parked_event.sql")
+        .read_text(encoding="utf-8"),
+    ),
+    (
+        "0033_governed_writes_immutable",
+        Path(__file__)
+        .with_name("0033_governed_writes_immutable.sql")
+        .read_text(encoding="utf-8"),
+    ),
+    (
+        "0034_worker_stopped_state",
+        Path(__file__)
+        .with_name("0034_worker_stopped_state.sql")
+        .read_text(encoding="utf-8"),
+    ),
 )
 
 # One well-known lock, held for the applying transaction only, so two processes

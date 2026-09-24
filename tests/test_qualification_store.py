@@ -775,6 +775,11 @@ def test_a_verdict_over_runs_the_store_does_not_hold_is_refused(
         conn.commit()
         assert_store_agrees(conn, document=performed.document, model=evidence.model)
         assert current_verdict(conn, evidence=evidence, now=now)
+        # CF-091: runs.status is guarded against a terminal move now; this
+        # forges exactly that move to prove the app's own read still catches
+        # it, so the trigger -- not what this test is about -- is set aside.
+        assert conn.info.dbname.startswith("caos_test_")
+        conn.execute("ALTER TABLE runs DISABLE TRIGGER runs_status_terminal_once")
         conn.execute(
             "UPDATE runs SET status='RUNNING' WHERE run_id=%s", (case.input.run_id,)
         )
