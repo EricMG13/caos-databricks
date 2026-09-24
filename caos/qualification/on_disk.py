@@ -52,6 +52,7 @@ from caos.boundary_text import DEFAULT_LIMIT, BoundaryText
 from caos.evidence.extract import DEFAULT_LIMITS
 from caos.evidence.ingest import Document
 from caos.qualification.matrix import (
+    _LABEL_LIMIT,
     DECLARABLE_REFUSALS,
     PROJECTION_FIELDS,
     ExpectedCitation,
@@ -129,9 +130,6 @@ _SUBJECT_KEYS = frozenset(
     {"issuer_id", "issuer_name", "reporting_period", "analysis_date"}
 )
 
-# The same bound `matrix.py` puts on a label when it digests one. Stated here
-# too because this is where an authored label first arrives.
-_LABEL_LIMIT = 128
 _PROJECTION_KEYS = frozenset({"module_id", "field", "value"})
 _REGISTER_KEYS = frozenset(
     {"module_id", "register_id", "row_key", "column", "expected"}

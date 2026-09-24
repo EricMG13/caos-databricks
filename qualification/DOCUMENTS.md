@@ -54,9 +54,9 @@ a row typed here is a row that fails. -->
 | `ccl-fy2025-10k-covenant-refinancing` | CCL | Carnival Corporation & plc FY2025 Form 10-K (text extract, covenant-refinancing set copy) | in_hand | CP-0, CP-1, CP-2, CP-2D, CP-3C, CP-5 | COVENANT_REFINANCING | 311896 | yes | `8fa7fceda34be50b…` |
 | `ccl-2025-revolving-credit-agreement` | CCL | Carnival Corporation & plc $4.5 billion Revolving Credit Agreement dated 13 June 2025 (SEC exhibit text extract) | in_hand | CP-4, CP-3C | COVENANT_REFINANCING, PORTFOLIO_DECISION, FULL_CREDIT_ASSESSMENT | 757831 | yes | `0f5a7510e20cbf71…` |
 | `ccl-2025-575-notes-2030-indenture` | CCL | Carnival Corporation & plc 5.750% Senior Unsecured Notes due 2030 indenture dated 28 February 2025 (SEC exhibit text extract) | in_hand | CP-4, CP-3C | COVENANT_REFINANCING, PORTFOLIO_DECISION, FULL_CREDIT_ASSESSMENT | 336377 | yes | `2340549fd4f215df…` |
-| `ba-2003-senior-debt-indenture` | BA | The Boeing Company senior debt securities indenture dated 26 February 2003 (SEC exhibit text extract) | in_hand | CP-4, CP-3C | COVENANT_REFINANCING, PORTFOLIO_DECISION, FULL_CREDIT_ASSESSMENT | 325091 | yes | `fc1258f8c7818ce3…` |
-| `ba-2024-first-supplemental-indenture` | BA | The Boeing Company first supplemental indenture dated 1 May 2024 (SEC exhibit text extract) | in_hand | CP-4, CP-3C | COVENANT_REFINANCING, PORTFOLIO_DECISION, FULL_CREDIT_ASSESSMENT | 430921 | yes | `0be63506bdaaf6ce…` |
-| `ba-2025-364-day-credit-agreement` | BA | The Boeing Company 364-day credit agreement dated 8 August 2025 (SEC exhibit text extract) | in_hand | CP-4, CP-3C | COVENANT_REFINANCING, PORTFOLIO_DECISION, FULL_CREDIT_ASSESSMENT | 281756 | yes | `27fc62eb384923a3…` |
+| `ba-2003-senior-debt-indenture` | BA | The Boeing Company senior debt securities indenture dated 26 February 2003 (SEC exhibit text extract) | to_source | CP-4, CP-3C | COVENANT_REFINANCING, PORTFOLIO_DECISION, FULL_CREDIT_ASSESSMENT | — | — | — |
+| `ba-2024-first-supplemental-indenture` | BA | The Boeing Company first supplemental indenture dated 1 May 2024 (SEC exhibit text extract) | to_source | CP-4, CP-3C | COVENANT_REFINANCING, PORTFOLIO_DECISION, FULL_CREDIT_ASSESSMENT | — | — | — |
+| `ba-2025-364-day-credit-agreement` | BA | The Boeing Company 364-day credit agreement dated 8 August 2025 (SEC exhibit text extract) | to_source | CP-4, CP-3C | COVENANT_REFINANCING, PORTFOLIO_DECISION, FULL_CREDIT_ASSESSMENT | — | — | — |
 | `ccl-2025-fitch-rating-action` | CCL | Fitch rating action: Carnival Corporation IDR upgraded to BBB-/Stable, 1 October 2025 | in_hand | CP-2H | LITE_DISTRESSED_RESTRUCTURING, LITE_FULL_CREDIT_SCREEN, FULL_CREDIT_ASSESSMENT, DISTRESSED_RESTRUCTURING | 134938 | yes | `33863f60a0f6c945…` |
 | `ccl-finra-trace-143658by7-2026-09-19` | CCL | FINRA TRACE observation for Carnival 5.75% notes due 2030, CUSIP 143658BY7 | in_hand | CP-3D, CP-3 | MARKET_DISLOCATION, PORTFOLIO_DECISION, RELATIVE_VALUE | 1304 | yes | `28f9289818978608…` |
 | `ccl-portfolio-mandate-exposures` | CCL | Current portfolio mandate, holdings/exposures, limits, and proposed-position inputs | to_source | CP-3, CP-6 | PORTFOLIO_DECISION, FULL_CREDIT_ASSESSMENT | — | — | — |
@@ -94,8 +94,8 @@ a row typed here is a row that fails. -->
 | `answer-key-3issuer` | CCL, BA, F | ANSWER_KEY_3ISSUER.md — human-authored core facts, derived values and 24 traps per issuer | **key source, never admitted** | — | — | — | — | — |
 <!-- /emitted -->
 
-Fifty documents: forty-eight `in_hand`, one `to_source`, and one
-`to_author`; plus one key source. Thirty of the forty-eight in hand are
+Fifty documents: forty-five `in_hand`, four `to_source`, and one
+`to_author`; plus one key source. Thirty of the forty-five in hand are
 byte-identical route-local copies of already admitted evidence: eleven from the
 earlier sets and nineteen added for the Phase 2 route inventory. The on-disk
 loader requires those copies because it refuses a declared path resolving
@@ -144,6 +144,16 @@ issuer pack. What remains needs private owner data or a real prior decision.
    large-file hook names those two original paths and each of the four
    byte-identical Phase 2 route-local copies exactly; no directory-wide
    evidence exclusion was added.
+
+   FP-29 (24 September 2026): the BA three were held under
+   `qualification/ba-fy2025-covenant-refinancing/`, which never carried a
+   financial-statements document. Every covenant-refinancing pathway --
+   `COVENANT_REFINANCING` and `LITE_COVENANT_REFINANCING` alike -- routes
+   through CP-1 or CP-L10, both of which need one, so no complete,
+   honest `qualification.json` could be written for that set from the debt
+   instruments alone; the same gap rules out `PORTFOLIO_DECISION` and
+   `FULL_CREDIT_ASSESSMENT`. The directory was removed and the three rows
+   above moved back to `to_source`.
 3. ~~**A dated CCL rating action.**~~ The official Fitch 1 October 2025 rating
    disclosure is in hand. Current criteria and a complete cross-agency history
    are not, so CP-2H must retain those limitations.

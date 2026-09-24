@@ -3,7 +3,7 @@
 ## Current tree status
 
 The current set digest is
-`27b7df72963c877f707750adfb9e21d2bd42fbcdc1d8ac726cd5c2b53b4e4b07`.
+`ff9dc7ecc2229ae0d7a114bb8f50e8c30ac9fdd05d62191447c63c8a4dee6b41`.
 It adds the CP-L10 `TL10.2` liquidity/maturities register key and has **not**
 been run. Its status is **OFFLINE / UNVERIFIED / NOT QUALIFIED**. Every run and
 snapshot below is retained historical evidence bound to an earlier set digest;

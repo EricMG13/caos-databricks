@@ -9,7 +9,7 @@ digest and build must equal the recorded evidence, and the snapshot must be
 
 Three things the route keeps apart.
 
-*The document is the reviewer's.* The body is the six bindings `read_verdict`
+*The document is the reviewer's.* The body is the seven bindings `read_verdict`
 declares and nothing else, closed at the wire and read once, by that reader,
 against the store's clock. The host originates none of it.
 

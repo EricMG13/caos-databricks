@@ -42,15 +42,15 @@ class Receipt:
 
 def _revision(
     conn: StoreConnection, case_id: UUID, revision_id: UUID
-) -> tuple[UUID, str]:
+) -> tuple[UUID, str, UUID]:
     row = conn.execute(
-        "SELECT run_id,payload_sha256 FROM deliverable_revisions"
+        "SELECT run_id,payload_sha256,saved_by FROM deliverable_revisions"
         " WHERE case_id=%s AND revision_id=%s",
         (case_id, revision_id),
     ).fetchone()
     if row is None:
         raise Refusal(RefusalCode.DELIVERABLE_NOT_FOUND)
-    return UUID(str(row[0])), str(row[1])
+    return UUID(str(row[0])), str(row[1]), UUID(str(row[2]))
 
 
 def sign_opinion(
@@ -78,8 +78,15 @@ def sign_opinion_in(
     One signature per signer: a second is refused by the store's own
     constraint, named here so no other conflict can inherit the code, and
     `DO NOTHING` so the refusal leaves the governed transaction usable.
+
+    FP-33: the narrative's own author is not an independent opinion on it, so
+    the revision's `saved_by` is checked here, before any signature is written
+    -- the same independence `freeze_in` and `file_deliverable_in` check
+    against the signers they find.
     """
-    _, digest = _revision(conn, case_id, revision_id)
+    _, digest, saved_by = _revision(conn, case_id, revision_id)
+    if actor_id == saved_by:
+        raise Refusal(RefusalCode.APPROVER_NOT_INDEPENDENT)
     if _frozen(conn, case_id, revision_id) is not None:
         raise Refusal(RefusalCode.DELIVERABLE_ALREADY_FROZEN)
     signed = conn.execute(
@@ -136,7 +143,7 @@ def freeze_in(  # noqa: PLR0913 -- exact revision and authority for its re-proof
     The independence check is here rather than in any caller's view: it is the
     case lock this runs under that makes a signer's second act refusable.
     """
-    _, digest = _revision(conn, case_id, revision_id)
+    _, digest, _ = _revision(conn, case_id, revision_id)
     if _frozen(conn, case_id, revision_id) is not None:
         raise Refusal(RefusalCode.DELIVERABLE_ALREADY_FROZEN)
     signatures = revision_signatures(conn, case_id, revision_id)
@@ -213,7 +220,7 @@ def file_deliverable_in(
     suppression budget may only fall, so it lives at the one caller that files
     in production until `blobs` and `bundle` travel as one carrier.
     """
-    run_id, digest = _revision(conn, case_id, revision_id)
+    run_id, digest, _ = _revision(conn, case_id, revision_id)
     frozen = _frozen(conn, case_id, revision_id)
     if frozen is None:
         raise Refusal(RefusalCode.DELIVERABLE_NOT_FROZEN)

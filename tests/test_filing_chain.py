@@ -45,11 +45,28 @@ def _actor(lite: _Harness) -> UUID:
     return actor
 
 
+# FP-33: `_save` always drafts as `lite.approver`, so `lite.approver` cannot
+# sign what it drafted. Callers that do not care who signs still need one
+# stable identity per case -- not a fresh one on every call -- so a second,
+# unqualified `_sign` still hits `DELIVERABLE_ALREADY_SIGNED` rather than
+# quietly co-signing. Memoized per case rather than per test so two harnesses
+# sharing no case never collide.
+_DEFAULT_SIGNERS: dict[UUID, UUID] = {}
+
+
+def _default_signer(lite: _Harness) -> UUID:
+    signer = _DEFAULT_SIGNERS.get(lite.case_id)
+    if signer is None:
+        signer = _actor(lite)
+        _DEFAULT_SIGNERS[lite.case_id] = signer
+    return signer
+
+
 def _sign(lite: _Harness, revision: UUID, actor: UUID | None = None) -> None:
     sign_opinion(
         lite.conn,
         case_id=lite.case_id,
-        actor_id=actor or lite.approver,
+        actor_id=actor or _default_signer(lite),
         revision_id=revision,
     )
 
@@ -92,7 +109,7 @@ def test_a_signer_cannot_sign_one_revision_twice(lite: _Harness) -> None:
     _sign(lite, revision, cosigner)
     signers = [who for who, _ in revision_signatures(lite.conn, lite.case_id, revision)]
     lite.conn.rollback()
-    assert sorted(signers) == sorted([lite.approver, cosigner])
+    assert sorted(signers) == sorted([_default_signer(lite), cosigner])
     assert _STATUS[RefusalCode.DELIVERABLE_ALREADY_SIGNED] == 409
 
 
@@ -105,7 +122,7 @@ def test_revision_signatures_names_the_signer_and_its_bound_digest(
     lite.conn.rollback()
     assert signatures == [
         (
-            lite.approver,
+            _default_signer(lite),
             hashlib.sha256(payload_bytes(_read(lite, revision))).hexdigest(),
         )
     ]
@@ -187,7 +204,7 @@ def test_filing_refuses_the_signer_and_the_freezer(lite: _Harness) -> None:
     _sign(lite, revision)
     freezer = _actor(lite)
     _freeze(lite, revision, freezer)
-    for actor in (lite.approver, freezer):
+    for actor in (_default_signer(lite), freezer):
         with pytest.raises(Refusal) as caught:
             file_deliverable(
                 lite.conn,
@@ -274,7 +291,7 @@ def test_sign_freeze_file_refusals_preserve_one_chain(lite: _Harness) -> None:
     _sign(lite, revision)
     cosigner = _actor(lite)
     _sign(lite, revision, cosigner)
-    for signer in (lite.approver, cosigner):
+    for signer in (_default_signer(lite), cosigner):
         with pytest.raises(Refusal, match="APPROVER_NOT_INDEPENDENT"):
             _freeze(lite, revision, signer)
     freezer, filer = _actor(lite), _actor(lite)
@@ -283,7 +300,7 @@ def test_sign_freeze_file_refusals_preserve_one_chain(lite: _Harness) -> None:
         _sign(lite, revision, filer)
     with pytest.raises(Refusal, match="DELIVERABLE_ALREADY_FROZEN"):
         _freeze(lite, revision, freezer)
-    for signer in (lite.approver, cosigner):
+    for signer in (_default_signer(lite), cosigner):
         with pytest.raises(Refusal, match="APPROVER_NOT_INDEPENDENT"):
             file_deliverable(
                 lite.conn,
@@ -323,7 +340,7 @@ def test_filing_refuses_the_opinion_signer(lite: _Harness) -> None:
             lite.conn,
             lite.blobs,
             case_id=lite.case_id,
-            actor_id=lite.approver,
+            actor_id=_default_signer(lite),
             revision_id=revision,
         )
     assert not any(
@@ -385,7 +402,7 @@ def test_the_in_unit_writes_commit_nothing_of_their_own(
     rolled back, they leave nothing behind.
     """
     conn, case_id = lite.conn, lite.case_id
-    signer, freezer, filer = (uuid4() for _ in range(3))
+    author, signer, freezer, filer = (uuid4() for _ in range(4))
     revision = uuid4()
 
     digest = save_revision_in(
@@ -394,7 +411,7 @@ def test_the_in_unit_writes_commit_nothing_of_their_own(
         lite.bundle,
         case_id=case_id,
         run_id=lite.run_id,
-        actor_id=signer,
+        actor_id=author,
         narrative=[],
         revision_id=revision,
     )
@@ -461,7 +478,7 @@ def test_the_receipt_names_only_the_latest_of_several_signers(
         actor_id=_actor(lite),
         revision_id=revision,
     )
-    signers = {lite.approver, cosigner}
+    signers = {_default_signer(lite), cosigner}
     assert receipt.signed_by in signers
     assert {
         who for who, _ in revision_signatures(lite.conn, lite.case_id, revision)

@@ -120,6 +120,15 @@ class VendorAuthority:
     catalog: Mapping[str, Any]
 
 
+# FP-32: the one profile and selection CP-5's owner-restriction check narrows
+# to (`caos/methodology/canonical.py`'s `_forecast_inputs`, and both
+# deliverable-proof callers, `caos/deliverable/canonical.py` and
+# `caos/qualification/proof.py`). CP-CF's own check is unconditional --
+# `selection=None` -- because the forecast module carries no profile of its
+# own to narrow by.
+CREDIT_SCREEN_SELECTION: tuple[str, str] = ("LITE_CREDIT_22", "LITE_FULL_CREDIT_SCREEN")
+
+
 def verify_owner_restrictions(
     contract: VendorContract,
     markdown: bytes,

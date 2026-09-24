@@ -31,7 +31,7 @@ from caos.qualification.on_disk import load_qualification_set
 from caos.store.run_inputs import UNANCHORED_CP0, bound_research_brief
 
 ROOT = Path(__file__).resolve().parents[1] / "qualification/vmo2-fy2025-deep-research"
-DIGEST = "09807efb1a3d5d40680d1a9d0e054333537781d7bb4013ecd7670323f817fd9b"
+DIGEST = "1881fcf6818e623322b52679268906a624d9ad4b4026c759f74bdcf9435e9bdd"
 Q3 = "505bf1a0f4181c9cdffeeac7e6af3253d1883788e9cd1a81e65952e008aa17a1"
 Q4 = "66055bbb8d27721d07a5e8cb834c9b96a256ada45a0812ea4fb2e7202ee4f64d"
 

@@ -6,7 +6,7 @@ first authorized run and the later pinned Phase 4 smoke run are recorded below.
 ## The set
 
 - Qualification-set digest:
-  `7dcfa84602ff94a38fcc2627d15b7922acb08c23a871f7280e16bfe4a92d6a6c` since
+  `504fcb0641cb445d6413b0824b2482013f862b739594b0b80fdb3dfa82ae7532` since
   owner decision A (below); the set the authorized run was performed against
   was `5d50d1e7b9d39b0318d730ea98c795518c72e8f8644fe321b6f96acbc4bb2f29`. A
   digest covers the keys, so the two are different sets.
@@ -112,7 +112,7 @@ must give -- only that CP-0 withholds CP-L10.
   CP-0's T8 verdict for CP-L10 is `BLOCKED` or `CONDITIONAL`; a met key waives
   the run-COMPLETE requirement only for a run that ended BLOCKED.
 - New set digest:
-  `7dcfa84602ff94a38fcc2627d15b7922acb08c23a871f7280e16bfe4a92d6a6c`.
+  `504fcb0641cb445d6413b0824b2482013f862b739594b0b80fdb3dfa82ae7532`.
 
 **The retained run was not re-scored through the matrix.** Its database,
 `caos_qualify_13ec1a9ca0814387aca7e8977dd1f9f1`, no longer exists on the test
@@ -137,7 +137,7 @@ second permitted attempt; it was not launched again.
 
 - Run `f6fbf50c-454b-477a-a479-a098d16bb9f4`; build
   `78c24be4483612e75d9a0809fcb1cb7c2dd5617e669491de13be9c0123e3ff93`;
-  set `7dcfa84602ff94a38fcc2627d15b7922acb08c23a871f7280e16bfe4a92d6a6c`.
+  set `504fcb0641cb445d6413b0824b2482013f862b739594b0b80fdb3dfa82ae7532`.
 - Final evidence `29a832bfaf31d07785626849871b61a5605b9d5b41582280924729d6aabfc665`;
   performed `e014f5f74bf342381671ae1b54f35e86d242ab11a2a7ec082608d6760f49ccc4`.
 - Retained database `caos_qualify_d416bca1abbd4c30b81be008eec52770`;
@@ -181,7 +181,7 @@ log were reserved before launch; the driver was launched once and exited 1.
 - Run `0e4198da-abb8-4188-8f1e-c5547f3d0dec`; build
   `78c24be4483612e75d9a0809fcb1cb7c2dd5617e669491de13be9c0123e3ff93`;
   unchanged set
-  `7dcfa84602ff94a38fcc2627d15b7922acb08c23a871f7280e16bfe4a92d6a6c`.
+  `504fcb0641cb445d6413b0824b2482013f862b739594b0b80fdb3dfa82ae7532`.
 - Final evidence `1ca3641478aac0a4775445724e475d2f6af385989d41cc19319098961f82338b`;
   performed `7ed0035ac8f35df63073418bed445e96b6030e897b7d288fdcc95cab7e65af1d`.
 - Retained database `caos_qualify_0fea5b169d6e4eccb59cd4815302eab5`;

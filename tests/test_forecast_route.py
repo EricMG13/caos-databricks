@@ -10,19 +10,30 @@ from typing import Any
 from uuid import UUID
 
 import pytest
-from canonical_fixtures import AUTHORED, CATALOG, CONTRACT, fields_from_prompt, wire
+from canonical_fixtures import (
+    AUTHORED,
+    CATALOG,
+    CONTRACT,
+    fields_from_prompt,
+    skill,
+    wire,
+)
 from canonical_route_fixtures import LIMITATION, PACK, RouteCompletions
 from forecast_fixtures import forecast_request
 from lite_route_fixtures import _yaml
+from test_canonical_execution import _node
 from test_canonical_runtime import _module_provider, _run_route, _status
 from test_execution_freshness import _Harness
 from test_relative_value_route import harness as _harness
 
 from caos.boundary_text import BoundaryText
 from caos.calculators.cash_flow import cash_flow_forecast
+from caos.deliverable.canonical import Revision, canonical_payload
 from caos.evidence.ingest import Document
 from caos.graph.route import ResolvedRoute, RouteExtensions, resolve_route
 from caos.methodology.forecast import forecast_projection
+from caos.methodology.handoff import read_record, record_bytes, validate_markdown
+from caos.methodology.invocation import host_identity
 from caos.provider import Completion
 from caos.qualification.matrix import (
     ExpectedCitation,
@@ -33,7 +44,7 @@ from caos.qualification.matrix import (
     build_matrix,
 )
 from caos.qualification.proof import assert_orchestration_proof
-from caos.refusals import RefusalCode
+from caos.refusals import Refusal, RefusalCode
 
 harness = _harness
 
@@ -267,6 +278,97 @@ def test_forecast_retains_an_accepted_owner_restriction(harness: _Harness) -> No
     answers.qa_by_module = {"CP-1": "Restricted"}
     assert _run_route(harness, _module_provider(harness, answers)) is None
     assert _status(harness) == "COMPLETE"
+
+
+def _forge_cp_cf(harness: _Harness, answers: ForecastCompletions) -> None:
+    """Replace the accepted, restriction-retaining CP-CF artifact with a
+    self-consistent forgery that drops the restriction it was accepted having
+    kept, built by the exact same completion code with the defect off, so it
+    is vendor-valid -- just no longer honest about what CP-1 restricted."""
+    node = _node(harness, "CP-CF")
+    row = harness.conn.execute(
+        "SELECT attempt_id, artifact_sha256, record_sha256 FROM artifacts"
+        " WHERE run_id=%s AND route_node_id=%s",
+        (harness.run_id, node.route_node_id),
+    ).fetchone()
+    assert row is not None
+    attempt, old_artifact, old_record = row
+    identity = host_identity(
+        harness.conn,
+        harness.bundle,
+        run_id=harness.run_id,
+        route=harness.route,
+        node=node,
+        attempt_id=attempt,
+    )
+    record = read_record(
+        harness.blobs,
+        artifact_sha256=old_artifact,
+        record_sha256=old_record,
+        expected=identity,
+    )
+    [prompt] = [
+        p for p in answers.prompts if fields_from_prompt(p)["module_id"] == "CP-CF"
+    ]
+    passed = ForecastCompletions(harness.source_id)
+    passed.complete(prompt)
+    markdown = passed.answers[-1]
+    artifact = harness.blobs.put(markdown)
+    projections = validate_markdown(
+        CONTRACT,
+        CATALOG,
+        skill("CP-CF"),
+        markdown,
+        identity=identity,
+        gate_expects=frozenset(),
+    )
+    record_sha = harness.blobs.put(
+        record_bytes(replace(record, artifact_sha256=artifact, projections=projections))
+    )
+    harness.conn.execute(
+        "UPDATE artifacts SET artifact_sha256=%s, record_sha256=%s"
+        " WHERE run_id=%s AND route_node_id=%s",
+        (artifact, record_sha, harness.run_id, node.route_node_id),
+    )
+    harness.conn.commit()
+
+
+def test_proof_and_payload_reject_a_self_consistent_cp_cf_restriction_forgery(
+    harness: _Harness,
+) -> None:
+    """FP-32: `assert_orchestration_proof` and `canonical_payload` re-verify
+    owner restrictions only when a node's `module_id == "CP-5"`; CP-CF (the
+    forecast module, `MODEL_MODULE`) is the other module `_forecast_inputs`
+    holds to the same rule at acceptance, and both proof callers must hold a
+    later, forged artifact to it too."""
+    answers = ForecastCompletions(harness.source_id, defect="retain-restriction")
+    answers.qa_by_module = {"CP-1": "Restricted"}
+    assert _run_route(harness, _module_provider(harness, answers)) is None
+    assert _status(harness) == "COMPLETE"
+
+    _forge_cp_cf(harness, answers)
+
+    with pytest.raises(Refusal) as proof_refused:
+        assert_orchestration_proof(
+            harness.conn, harness.blobs, harness.bundle, run_id=harness.run_id
+        )
+    harness.conn.rollback()
+    assert proof_refused.value.code is RefusalCode.ARTIFACT_RECORD_MISMATCH
+
+    with pytest.raises(Refusal) as payload_refused:
+        canonical_payload(
+            harness.conn,
+            harness.blobs,
+            harness.bundle,
+            Revision(
+                harness.case_id,
+                harness.run_id,
+                BoundaryText.of("Acme Holdings plc"),
+                BoundaryText.of("00000000-0000-0000-0000-000000000000"),
+            ),
+        )
+    harness.conn.rollback()
+    assert payload_refused.value.code is RefusalCode.ARTIFACT_RECORD_MISMATCH
 
 
 def test_qualification_checks_host_recomputed_forecast_not_its_citation(

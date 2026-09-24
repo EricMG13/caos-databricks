@@ -44,8 +44,10 @@ from caos.methodology.handoff import Projections
 from caos.methodology.runner import ModuleProvider
 from caos.qualification.matrix import (
     ExpectedCitation,
+    ExpectedForecast,
     ExpectedProjection,
     ExpectedRegister,
+    ForecastValue,
     Matrix,
     MatrixRow,
     QualificationCase,
@@ -60,6 +62,7 @@ from caos.store import RunStatus, StoreConnection
 from caos.store.gates import withdraw_source
 from caos.store.members import Standing, grant
 from caos.store.routes import resolved_route
+from caos.store.run_inputs import RunSubject
 from caos.store.runs import run_status, start_run
 
 REPO = Path(__file__).resolve().parents[1]
@@ -409,6 +412,118 @@ def test_the_digest_does_not_depend_on_the_order_keys_were_written_in(
     assert qualification_set_digest(
         QualificationSet(cases=(first, second))
     ) == qualification_set_digest(QualificationSet(cases=(second, first)))
+
+
+@dataclass(frozen=True, slots=True)
+class _Optional:
+    """The six optional fields the two tests below vary one at a time.
+
+    A single parameter object, not six keyword arguments -- `QualificationCase`
+    mixes enough field types (`RunSubject | None`, tuples of different element
+    types, a bare `RefusalCode | None`) that a plain `object`-typed catch-all
+    cannot be handed to the dataclass, or to `dataclasses.replace`, without
+    mypy correctly refusing it as untyped per-field; naming each field here
+    keeps every one of them checked at its own type.
+    """
+
+    subject: RunSubject | None = None
+    forecast: ExpectedForecast | None = None
+    expected_refusal: RefusalCode | None = None
+    expects_ready: tuple[str, ...] = ()
+    expects_projection: tuple[ExpectedProjection, ...] = ()
+    expects_register: tuple[ExpectedRegister, ...] = ()
+
+
+def _plain_case(optional: _Optional | None = None) -> QualificationCase:
+    """A case naming no optional field but whichever `optional` supplies."""
+    optional = optional or _Optional()
+    return QualificationCase(
+        label="acme-2026",
+        documents=(Document(filename=BoundaryText.of("report.txt"), data=REPORT),),
+        profile_id=PROFILE,
+        selection_id=SELECTION,
+        expects=(
+            ExpectedCitation(
+                module_id="CP-0", document_sha256="a" * 64, matched_text=QUOTE
+            ),
+        ),
+        subject=optional.subject,
+        forecast=optional.forecast,
+        expected_refusal=optional.expected_refusal,
+        expects_ready=optional.expects_ready,
+        expects_projection=optional.expects_projection,
+        expects_register=optional.expects_register,
+    )
+
+
+def test_a_subject_and_a_same_shaped_expects_ready_used_to_share_a_digest() -> None:
+    """N8/FP-25: before every optional field carried its own tag, a case
+    naming a four-part subject and a case naming four ready modules whose
+    sorted ids happened to equal the subject's four fields, in that order,
+    digested identically -- two different answer keys binding one verdict.
+    """
+    subject = RunSubject("Alpha", "Bravo", "Charlie", "Delta")
+    with_subject = QualificationSet(cases=(_plain_case(_Optional(subject=subject)),))
+    with_ready = QualificationSet(
+        cases=(
+            _plain_case(
+                _Optional(expects_ready=("Delta", "Bravo", "Charlie", "Alpha"))
+            ),
+        )
+    )
+
+    assert qualification_set_digest(with_subject) != qualification_set_digest(
+        with_ready
+    )
+
+
+def test_every_optional_field_digests_distinctly_from_every_other_field() -> None:
+    """N8/FP-25: a set differing only in *which* optional field it carries
+    must digest differently for every one of the six fields the tagging
+    fixed -- not only differently from a set naming none."""
+    variants = {
+        "subject": _plain_case(_Optional(subject=RunSubject("A", "B", "C", "D"))),
+        "forecast": _plain_case(
+            _Optional(
+                forecast=ExpectedForecast(
+                    scenario="BASE",
+                    period_id="FY2026",
+                    values=(ForecastValue("cash.closing", "1"),),
+                    currency="USD",
+                    scale="millions",
+                    perimeter="Consolidated",
+                    qa_status="Passed",
+                    limitation_flags=(),
+                    readiness=(),
+                )
+            )
+        ),
+        "expected_refusal": _plain_case(
+            _Optional(expected_refusal=RefusalCode.SOURCE_PACK_EMPTY)
+        ),
+        "expects_ready": _plain_case(_Optional(expects_ready=("CP-1",))),
+        "expects_projection": _plain_case(
+            _Optional(
+                expects_projection=(ExpectedProjection("CP-1", "qa_status", "Passed"),)
+            )
+        ),
+        "expects_register": _plain_case(
+            _Optional(
+                expects_register=(
+                    ExpectedRegister(
+                        "CP-1", "register", (("column", "value"),), "column", "value"
+                    ),
+                )
+            )
+        ),
+    }
+    digests = {
+        name: qualification_set_digest(QualificationSet(cases=(case,)))
+        for name, case in variants.items()
+    }
+    assert len(set(digests.values())) == len(digests), digests
+    plain = qualification_set_digest(QualificationSet(cases=(_plain_case(),)))
+    assert plain not in digests.values()
 
 
 def test_a_matrix_row_is_immutable_once_reported(ran: Ran) -> None:

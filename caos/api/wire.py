@@ -1298,11 +1298,14 @@ class RunWork(BaseModel):
 
 
 class SignVerdict(BaseModel):
-    """A reviewer's verdict document: the six bindings `read_verdict` declares,
-    and nothing else. The shape is closed here; what the document *means* --
-    a naive or future `decided_at`, a passed expiry -- is the reader's to
-    decide, so the moments travel as text and are parsed once, there. The
-    reviewer's identity is not a field: the host derives it from the actor.
+    """A reviewer's verdict document: the seven bindings `read_verdict`
+    declares, and nothing else. The shape is closed here; what the document
+    *means* -- a naive or future `decided_at`, a passed expiry -- is the
+    reader's to decide, so the moments travel as text and are parsed once,
+    there. The reviewer's identity is not a field: the host derives it from
+    the actor. `evidence_sha256` names the exact evidence identity the
+    document was read against (N44): the other six can agree for two
+    different snapshots of the same set, build and provider.
     """
 
     model_config = _CLOSED
@@ -1313,6 +1316,7 @@ class SignVerdict(BaseModel):
     decided_at: Moment
     expires_at: Moment
     reviewer: Id
+    evidence_sha256: Sha256
 
 
 class VerdictRecorded(BaseModel):

@@ -257,11 +257,11 @@
       "modules": ["CP-4", "CP-3C"],
       "pathways": ["COVENANT_REFINANCING", "PORTFOLIO_DECISION", "FULL_CREDIT_ASSESSMENT"],
       "source": "https://www.sec.gov/Archives/edgar/data/12927/000119312509048656/dex41.htm",
-      "status": "in_hand",
-      "local_path": "qualification/ba-fy2025-covenant-refinancing/documents/BA_2003_Senior_Debt_Indenture.txt",
+      "status": "to_source",
+      "local_path": null,
       "external_path": null,
       "demand_verified": true,
-      "note": "Official EDGAR exhibit converted from HTML to plain text on 19 September 2026. It is the base indenture; the 2024 supplement below changes the governing terms for its issuance."
+      "note": "FP-29: held under qualification/ba-fy2025-covenant-refinancing/ until 2026-09-24, but that set carried no financial-statements document, so none of COVENANT_REFINANCING, PORTFOLIO_DECISION or FULL_CREDIT_ASSESSMENT could be completed from it alone and the directory was removed. Re-source from the URL above alongside a BA 10-K to build one."
     },
     {
       "id": "ba-2024-first-supplemental-indenture",
@@ -270,11 +270,11 @@
       "modules": ["CP-4", "CP-3C"],
       "pathways": ["COVENANT_REFINANCING", "PORTFOLIO_DECISION", "FULL_CREDIT_ASSESSMENT"],
       "source": "https://www.sec.gov/Archives/edgar/data/12927/000119312524130860/d836110dex41.htm",
-      "status": "in_hand",
-      "local_path": "qualification/ba-fy2025-covenant-refinancing/documents/BA_2024_First_Supplemental_Indenture.txt",
+      "status": "to_source",
+      "local_path": null,
       "external_path": null,
       "demand_verified": true,
-      "note": "Official EDGAR exhibit converted from HTML to plain text on 19 September 2026. It must be read with the 2003 base indenture."
+      "note": "FP-29: held under qualification/ba-fy2025-covenant-refinancing/ until 2026-09-24, but that set carried no financial-statements document, so none of COVENANT_REFINANCING, PORTFOLIO_DECISION or FULL_CREDIT_ASSESSMENT could be completed from it alone and the directory was removed. Re-source from the URL above alongside a BA 10-K to build one."
     },
     {
       "id": "ba-2025-364-day-credit-agreement",
@@ -283,11 +283,11 @@
       "modules": ["CP-4", "CP-3C"],
       "pathways": ["COVENANT_REFINANCING", "PORTFOLIO_DECISION", "FULL_CREDIT_ASSESSMENT"],
       "source": "https://www.sec.gov/Archives/edgar/data/12927/000001292725000064/a202508aug258kex101.htm",
-      "status": "in_hand",
-      "local_path": "qualification/ba-fy2025-covenant-refinancing/documents/BA_2025_364_Day_Credit_Agreement.txt",
+      "status": "to_source",
+      "local_path": null,
       "external_path": null,
       "demand_verified": true,
-      "note": "Official EDGAR exhibit converted from HTML to plain text on 19 September 2026. This sources the previous aggregate BA debt-document demand without creating a BA qualification claim."
+      "note": "FP-29: held under qualification/ba-fy2025-covenant-refinancing/ until 2026-09-24, but that set carried no financial-statements document, so none of COVENANT_REFINANCING, PORTFOLIO_DECISION or FULL_CREDIT_ASSESSMENT could be completed from it alone and the directory was removed. Re-source from the URL above alongside a BA 10-K to build one."
     },
     {
       "id": "ccl-2025-fitch-rating-action",

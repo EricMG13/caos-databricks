@@ -172,8 +172,9 @@ def _pin(
     """
     route = resolve_route(catalog(Bundle(VENDORED_BUNDLE)), profile_id, selection_id)
     performed = _on_route(route, performed)
-    record_performed_earlier(conn, performed)
+    # FP-24: recorded first, as production's run-then-persist order has it.
     record_runs(conn, performed, accepted_nothing=accepted_nothing)
+    record_performed_earlier(conn, performed)
     # `pin_route_in`'s own row, written without its lock: the fixture's runs are
     # rows, not runs a worker drove, so they are not RUNNING.
     for case in performed.prepared:
@@ -225,6 +226,7 @@ def _sign(
                 "decided_at": NOW.isoformat(),
                 "expires_at": (NOW + timedelta(days=days)).isoformat(),
                 "reviewer": "Reviewer",
+                "evidence_sha256": evidence.sha256,
             },
             now=NOW,
         ),
@@ -354,6 +356,29 @@ def test_a_malformed_database_url_refuses_the_pack_without_the_password(
     assert "SuperSecretPw" not in logged
 
 
+def test_a_store_whose_schema_is_undescribed_refuses_the_pack_without_a_traceback(
+    empty_database: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """CF-094: `main`'s `connect(url)`/`read_store(...)` call also raises a
+    typed `Refusal` directly -- `verify_schema` over a store no migration has
+    touched, here -- and not only the untyped `psycopg.Error` CF-078 guarded.
+    An uncaught one would have printed a traceback instead of the code."""
+    monkeypatch.setenv("CAOS_DATABASE_URL", empty_database)
+
+    code = release_pack.main(
+        ["--out", str(tmp_path), "--store", "--as-of", NOW.isoformat()]
+    )
+
+    assert code == 2
+    logged = capsys.readouterr()
+    assert logged.err.strip() == "STORE_SCHEMA_DRIFT"
+    assert "Traceback" not in logged.err
+    assert not (tmp_path / release_pack.JSON_NAME).exists()
+
+
 def test_a_store_its_migrations_do_not_describe_refuses_the_pack(
     empty_database: str,
 ) -> None:
@@ -471,8 +496,8 @@ def test_a_pin_the_store_cannot_read_names_no_pathway(empty_database: str) -> No
     performed = qualification_performed()
     with connect(empty_database) as conn:
         apply_schema(conn)
-        record_performed_earlier(conn, performed)
         record_runs(conn, performed)
+        record_performed_earlier(conn, performed)
         [case] = performed.prepared
         conn.execute(
             "INSERT INTO run_routes (run_id,profile_id,selection_id,route_digest,"
@@ -575,7 +600,11 @@ def test_a_forged_snapshot_over_a_run_that_never_ran_refuses_the_pack(
     profile_id, selection_id = sorted(ADAPTER_ROUTES)[0]
     with connect(empty_database) as conn:
         apply_schema(conn)
-        performed = _pin(conn, profile_id, selection_id, accepted_nothing="case")
+        # FP-24: recorded with its real artifact and call outcome, so the
+        # snapshot's producer is confirmed and it persists complete; the "no
+        # artifact" the docstring names is live drift since then, not a fact
+        # about how the snapshot was recorded.
+        performed = _pin(conn, profile_id, selection_id)
         [case] = performed.prepared
         # CF-091: runs.status is guarded against a terminal move now; this
         # forges exactly that move to prove the app's own read still catches
@@ -585,6 +614,7 @@ def test_a_forged_snapshot_over_a_run_that_never_ran_refuses_the_pack(
         conn.execute(
             "UPDATE runs SET status='RUNNING' WHERE run_id=%s", (case.input.run_id,)
         )
+        conn.execute("DELETE FROM artifacts WHERE run_id=%s", (case.input.run_id,))
         _direct_verdict(conn, performed)
         with pytest.raises(Refusal, match=r"^VERDICT_BINDING_INVALID$"):
             release_pack.qualified_pathways(

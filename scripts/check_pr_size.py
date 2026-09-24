@@ -28,7 +28,6 @@ EXCLUSIONS = (
     # Immutable Phase 6 public evidence is also indivisible; each new set is
     # named explicitly so unrelated qualification changes remain counted.
     ":!qualification/ba-fy2025/documents/**",
-    ":!qualification/ba-fy2025-covenant-refinancing/documents/**",
     ":!qualification/ccl-fy2025-covenant-refinancing/documents/**",
     ":!qualification/ccl-fy2025-earnings-update/documents/**",
     ":!qualification/ccl-fy2025-liquidity/documents/**",

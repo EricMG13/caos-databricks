@@ -136,6 +136,9 @@ def report_actions(
             _A.SIGN_OPINION,
             [
                 *approver,
+                # CF-026: the route checks this first, before any signature
+                # state, so a superseded revision is refused the same way here.
+                (not filing.head, _C.COMMAND_EXPECTATION_STALE),
                 (filing.frozen, _C.DELIVERABLE_ALREADY_FROZEN),
                 (filing.actor_signed, _C.DELIVERABLE_ALREADY_SIGNED),
             ],
@@ -144,6 +147,7 @@ def report_actions(
             _A.FREEZE_DELIVERABLE,
             [
                 *approver,
+                (not filing.head, _C.COMMAND_EXPECTATION_STALE),
                 (filing.frozen, _C.DELIVERABLE_ALREADY_FROZEN),
                 (not filing.signed, _C.DELIVERABLE_NOT_SIGNED),
                 (filing.actor_signed, _C.APPROVER_NOT_INDEPENDENT),
@@ -153,6 +157,7 @@ def report_actions(
             _A.FILE_DELIVERABLE,
             [
                 *approver,
+                (not filing.head, _C.COMMAND_EXPECTATION_STALE),
                 (not filing.frozen, _C.DELIVERABLE_NOT_FROZEN),
                 (not filing.signed, _C.DELIVERABLE_NOT_SIGNED),
                 (

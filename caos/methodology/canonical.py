@@ -88,6 +88,7 @@ from caos.methodology.selection import (
 )
 from caos.methodology.vendor import VendorContract, cached_contract, catalog
 from caos.methodology.verification import (
+    CREDIT_SCREEN_SELECTION,
     AcceptedRow,
     Step,
     VendorAuthority,
@@ -1113,8 +1114,7 @@ def _verified_accepted(  # noqa: PLR0913 -- the unit's handles, its row, its pai
     identity = verified.record.identity
     if node.module_id == MODEL_MODULE or (
         node.module_id == "CP-5"
-        and (identity.profile_id, identity.selection_id)
-        == ("LITE_CREDIT_22", "LITE_FULL_CREDIT_SCREEN")
+        and (identity.profile_id, identity.selection_id) == CREDIT_SCREEN_SELECTION
     ):
         assignment = Assignment(node.module_id, row.run_id, node, route, row.attempt_id)
         _forecast_inputs(
@@ -1150,9 +1150,7 @@ def _forecast_inputs(
         markdown,
         upstream.values(),
         refuse=RefusalCode.HANDOFF_INCOMPLETE,
-        selection=(
-            ("LITE_CREDIT_22", "LITE_FULL_CREDIT_SCREEN") if module == "CP-5" else None
-        ),
+        selection=(CREDIT_SCREEN_SELECTION if module == "CP-5" else None),
     )
 
 
