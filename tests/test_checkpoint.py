@@ -285,8 +285,11 @@ def test_a_checkpoint_thread_is_bound_to_the_pinned_route_s_digest(
     exactly what a thread keyed on the run alone would have handed back
     regardless of whether the shape still matched.
     """
+    from uuid import uuid4
+
     from caos.graph.build import build_graph, resume_input, thread_config
     from caos.graph.route import ResolvedRoute, RouteNode, route_digest
+    from caos.store.work import checkpoint_thread
 
     saver = checkpointer(empty_database)
     try:
@@ -297,8 +300,10 @@ def test_a_checkpoint_thread_is_bound_to_the_pinned_route_s_digest(
             "p", "s", (RouteNode("CP-1", "CP-1", 0), RouteNode("CP-0", "CP-0", 0)), ()
         )
         assert route_digest(route) != route_digest(moved)
-        thread = f"a-run:{route_digest(route)}"
-        thread_moved = f"a-run:{route_digest(moved)}"
+        run_id = uuid4()
+        thread = checkpoint_thread(run_id, route_digest(route))
+        thread_moved = checkpoint_thread(run_id, route_digest(moved))
+        assert thread == f"{run_id}:{route_digest(route)}"
 
         def stops_at_cp1(route_node_id: str) -> str:
             if route_node_id == "CP-1":

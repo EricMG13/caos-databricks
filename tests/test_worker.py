@@ -52,7 +52,13 @@ from caos.store import (
 from caos.store import work as work_module
 from caos.store.budget import CEILING_ENV
 from caos.store.runs import run_status
-from caos.store.work import LEASE_SECONDS, Lease, enqueue_run, worker_states
+from caos.store.work import (
+    LEASE_SECONDS,
+    Lease,
+    checkpoint_thread,
+    enqueue_run,
+    worker_states,
+)
 
 __all__ = ["blobs", "bundle", "route"]
 
@@ -1269,7 +1275,10 @@ def test_a_worker_that_lost_its_lease_leaves_the_holder_s_thread(
     from caos.store.work import claim_run
 
     run = enqueued
-    thread = str(run.run_id)
+    # The key `run_route` really writes the holder's position under (W3): the
+    # run's id alone, which this test once used, is a thread no path writes,
+    # so `_forget` deleting the real one regardless of `mine` still passed.
+    thread = checkpoint_thread(run.run_id, route_digest(run.route))
     saver = checkpointer(empty_database)
     taken: list[Lease | None] = []
 
@@ -1362,7 +1371,7 @@ def test_a_late_checkpoint_write_after_an_abandoned_cancel_is_still_forgotten(
     from caos.store import connect
 
     run = enqueued
-    thread = f"{run.run_id}:{route_digest(run.route)}"
+    thread = checkpoint_thread(run.run_id, route_digest(run.route))
     saver = checkpointer(empty_database)
 
     def late_write() -> None:

@@ -61,6 +61,7 @@ from caos.store.work import (
     Lease,
     WorkerState,
     beat,
+    checkpoint_thread,
     claim_run,
     release,
     stop,
@@ -275,7 +276,7 @@ def _forget(
         return
     if not mine and not _run_is_terminal(conn, run_id):
         return
-    thread = f"{run_id}:{route_digest(route)}"
+    thread = checkpoint_thread(run_id, route_digest(route))
     with suppress(psycopg.Error, OSError, Refusal):
         execution.checkpointer.delete_thread(thread)
 
