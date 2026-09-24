@@ -608,7 +608,7 @@ Round 4 (2026-09-23): five adversarial reviewers (Claude Opus 5.5 at effort max)
 
 - D50 (2026-09-24; review 4: W2, W7) — PyYAML is a direct dev dependency (`pyyaml==6.0.3`, already locked through langchain-core and bandit): the gate checker and the stand-in read `ci.yml`, the pre-commit config and `databricks.yml` structurally, since text windows let a moved `if:`, a quoted key, a `defaults.run` shell or an `exit 0` switch a gate off unnoticed.
 
-- F353 — The documented rollback (check out the previous commit, run the one command) boots `STORE_SCHEMA_DRIFT` across a migration, and a commit from before F219 boots on an empty store in `public` (review 4: C1): `DEPLOYMENT.md` and `ENTERPRISE_HANDOFF.md` allow a redeploy only across no migration and no schema move, and otherwise roll forward or restore the database.
+- F353 — The documented rollback (check out the previous commit, run the one command) boots `STORE_SCHEMA_DRIFT` across a migration, and a commit from before F219 boots on an empty store in `public` (review 4: C1): `scripts/rollback_check.py <older>` refuses an older commit whose migrations or store schema differ from the release's, and `DEPLOYMENT.md` §6 and `ENTERPRISE_HANDOFF.md` run it first; otherwise roll forward, or restore into a new database (the `docs/MIGRATIONS.md` backup or a point-in-time Lakebase branch), proven by E6 and E8. Tests in `tests/test_rollback_check.py`.
 
 - F354 — E10 counted any two progress frames as proof, so a gateway that refused the app's own call (403, 404, 429) or a park passed (review 4: W1): E10 requires an answered call and names the outcome code otherwise.
 
