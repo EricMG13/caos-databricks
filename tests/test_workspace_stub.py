@@ -285,6 +285,28 @@ def test_the_bounded_workspace_client_reaches_the_stub_with_its_budgets(
     assert client.apps.get("caos").name == "caos"
 
 
+def test_a_client_the_sdk_refuses_to_build_is_store_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """N68: a construction the SDK itself refuses -- unresolved credentials, a
+    host that will not parse -- is the typed `STORE_UNAVAILABLE` (CR-1),
+    never the SDK's own `ValueError` reaching a caller."""
+    from caos.workspace import forget_clients, workspace_client
+
+    monkeypatch.delenv("DATABRICKS_HOST", raising=False)
+
+    def broken(*args: object, **kwargs: object) -> object:
+        raise ValueError("no")
+
+    monkeypatch.setattr("databricks.sdk.WorkspaceClient", broken)
+    forget_clients()
+    try:
+        with pytest.raises(Refusal, match=r"^STORE_UNAVAILABLE$"):
+            workspace_client()
+    finally:
+        forget_clients()
+
+
 def test_a_workspace_that_does_not_answer_is_unavailable_not_unauthenticated(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

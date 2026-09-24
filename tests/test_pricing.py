@@ -22,7 +22,7 @@ from caos.blobs import BlobStore
 from caos.graph.route import ResolvedRoute
 from caos.graph.runtime import Execution, run_route
 from caos.methodology.bundle import Bundle
-from caos.pricing import ModelPrice, priced_request, worst_case
+from caos.pricing import ModelPrice, price_from_environment, priced_request, worst_case
 from caos.provider import MAX_COMPLETION_TOKENS, MAX_REQUEST_BYTES
 from caos.refusals import Refusal, RefusalCode
 from caos.store import RunStatus, StoreConnection
@@ -58,6 +58,37 @@ def test_invalid_prices_refuse(field: str, value: object, code: RefusalCode) -> 
     with pytest.raises(Refusal) as caught:
         worst_case(replace(PRICE, **{field: value}))  # type: ignore[arg-type]
     assert caught.value.code is code
+
+
+@pytest.mark.parametrize(
+    "request_bytes,code",
+    [
+        (1.5, RefusalCode.MONEY_NOT_DECIMAL),
+        (True, RefusalCode.MONEY_NOT_DECIMAL),
+        (-1, RefusalCode.MONEY_INVALID),
+        (MAX_REQUEST_BYTES + 1, RefusalCode.CONTEXT_OVER_CEILING),
+    ],
+)
+def test_priced_request_refuses_a_malformed_or_oversized_byte_count(
+    request_bytes: object, code: RefusalCode
+) -> None:
+    """N68: `worst_case` only ever calls this at exactly `MAX_REQUEST_BYTES`,
+    which never exercises `priced_request`'s own guards on the count a direct
+    caller supplies."""
+    with pytest.raises(Refusal) as caught:
+        priced_request(PRICE, request_bytes)  # type: ignore[arg-type]
+    assert caught.value.code is code
+
+
+def test_price_from_environment_refuses_a_price_for_another_model() -> None:
+    """N68: `caos.models.from_environment` names the endpoint twice -- once as
+    the model `price_from_environment` must match, once again to build the
+    provider -- so a `CAOS_MODEL_PRICE` for some other endpoint is refused
+    here, before either the provider or its own later, redundant check."""
+    with pytest.raises(Refusal, match=r"^PROVIDER_NOT_CONFIGURED$"):
+        price_from_environment(
+            "databricks-claude-opus-5", "other-model,0.000005,0.000025,2026-09-22"
+        )
 
 
 def test_a_free_price_refuses_rather_than_reserving_nothing() -> None:
