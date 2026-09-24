@@ -108,8 +108,9 @@ PDF_V2_COORDINATES = "crop-top-left-rotated-pt"
 # marks the lines a reader may not see (N27), v5 marks optional content
 # switched off, v6 text painted over, and v7 writes a line break in a token as
 # a space (W4), measures a glyph on both axes and reads Indexed and Separation
-# colours (N9), and lays text out after a form XObject in the page's matrix.
-PDF_CROP_VERSIONS = frozenset({"2", "3", "4", "5", "6", "7"})
+# colours (N9), and lays text out after a form XObject in the page's matrix;
+# v8 marks text painted in a colorant that paints nothing.
+PDF_CROP_VERSIONS = frozenset({"2", "3", "4", "5", "6", "7", "8"})
 TEXT_COORDINATES = "cell-top-left-pt"
 # The encodings a `caos.plain-text` identity records: v1-v3 `utf-8`, v4
 # `utf-8-sig` (`extract.TEXT_ENCODING`). Each is also the codec's name.

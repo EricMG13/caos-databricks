@@ -1168,11 +1168,13 @@ class FrameView(BaseModel):
 
 # Why a reader of the rendered page may not see a line's text (N27): drawn in
 # text render mode 3 (a scan's OCR layer), painted near the colour behind it,
-# in glyphs under 2 pt, inside optional content the document switches off, or
-# under an opaque fill painted over it later: `HIDDEN_REASONS` of
-# `caos.evidence.extract`, as the wire names them. A line with nothing to note
-# -- every line of a source extracted before there were marks -- carries none.
+# in glyphs under 2 pt, inside optional content the document switches off,
+# under an opaque fill painted over it later, or in a colorant that paints
+# nothing: `HIDDEN_REASONS` of `caos.evidence.extract`, as the wire names them.
+# A line with nothing to note -- every line of a source extracted before there
+# were marks -- carries none.
 HiddenReason = Literal[
+    "colorant_none",
     "near_background",
     "optional_content_off",
     "painted_over",
@@ -1191,7 +1193,7 @@ class PageLine(BaseModel):
     y0: float
     x1: float
     y1: float
-    hidden: Annotated[list[HiddenReason], Field(max_length=5)]
+    hidden: Annotated[list[HiddenReason], Field(max_length=6)]
 
 
 class PageBody(BaseModel):

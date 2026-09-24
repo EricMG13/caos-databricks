@@ -690,7 +690,7 @@ def test_the_pdf_identity_records_effective_layout_and_convention() -> None:
     identity = PdfExtractor().identity
     effective = LAParams(**LAYOUT)
 
-    assert (identity.name, identity.version) == ("caos.pdfminer", "7")
+    assert (identity.name, identity.version) == ("caos.pdfminer", "8")
     assert identity.config["max_token_chars"] == MAX_TOKEN_CHARS
     assert identity.config["token_line_breaks"] == "space"
     assert (
@@ -701,6 +701,8 @@ def test_the_pdf_identity_records_effective_layout_and_convention() -> None:
         identity.config["hidden_near_background"],
         identity.config["hidden_backdrop"],
         identity.config["hidden_colour_spaces"],
+        identity.config["hidden_colorant_none"],
+        identity.config["hidden_device_n_colorants"],
     ) == (
         3,
         7,
@@ -709,6 +711,8 @@ def test_the_pdf_identity_records_effective_layout_and_convention() -> None:
         0.1,
         "last-filled-path-over-white",
         "gray-rgb-cmyk-by-count,indexed,separation-exponential",
+        "separation-none,devicen-all-none",
+        32,
     )
     assert (
         identity.config["hidden_optional_content"],
@@ -776,7 +780,7 @@ def test_v1_pdf_extractions_still_verify_and_reanchor_as_recorded(
         dispatch=lambda data: cast(Extractor, _V1Reader()),
     )
     conn.commit()
-    assert PdfExtractor().identity.version == "7"
+    assert PdfExtractor().identity.version == "8"
 
     [member] = snapshot_source_set(conn, case_id).members
     assert json.loads(member.extractor_identity)["version"] == "1"

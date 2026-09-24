@@ -239,7 +239,7 @@ describe("the evidence drawer", () => {
     pageAnswer = () => {
       const doc = pageDoc();
       doc["body"].lines[1].hidden = ["render_mode_3", "near_background"];
-      doc["body"].lines[2].hidden = ["under_2pt"];
+      doc["body"].lines[2].hidden = ["colorant_none", "under_2pt"];
       return { status: 200, body: doc };
     };
     await mount(`/analysis/?case=${CASE}&tab=rn-cp-0`);
@@ -247,7 +247,7 @@ describe("the evidence drawer", () => {
     const marked = [...lines()].filter((line) => line.hasAttribute("data-hidden"));
     expect(marked.map((line) => line.getAttribute("data-hidden"))).toEqual([
       "render_mode_3 near_background",
-      "under_2pt",
+      "colorant_none under_2pt",
     ]);
     // Told, not only drawn: a screen reader hears it on the line itself.
     expect(marked[0]).toHaveTextContent(
@@ -257,7 +257,7 @@ describe("the evidence drawer", () => {
     const note = dialog()!.querySelector("[data-hidden-lines]")!;
     expect(note).toHaveTextContent("2 lines on this page cannot be seen on the rendered page");
     expect(note).toHaveTextContent(
-      "drawn invisible (render mode 3), the colour of its background, under 2 pt",
+      "drawn invisible (render mode 3), the colour of its background, painted with no ink (colorant None), under 2 pt",
     );
   });
 

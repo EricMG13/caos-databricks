@@ -628,13 +628,14 @@ const PageLine = object({
   y1: number,
   hidden: array(
     enumOf([
+      "colorant_none",
       "near_background",
       "optional_content_off",
       "painted_over",
       "render_mode_3",
       "under_2pt",
     ]),
-    5,
+    6,
   ),
 });
 const PageBody = object({
