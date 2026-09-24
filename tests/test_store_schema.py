@@ -1028,6 +1028,27 @@ def _in_store_schema(url: str) -> int:
     return int(row[0])
 
 
+def test_owned_schema_is_absent_this_role_s_or_refused(empty_database: str) -> None:
+    """W2's one read, on a dict-row connection as the checkpointer asks it:
+    no schema is False, one this role owns with everything in it is True, and
+    anything in it another role owns refuses `STORE_SCHEMA_DRIFT`."""
+    from psycopg.rows import dict_row
+
+    with login_role(empty_database) as other:
+        with psycopg.connect(empty_database, row_factory=dict_row) as conn:
+            assert store.owned_schema(conn, "caos_nowhere") is False
+            conn.execute("CREATE SCHEMA caos_mine")
+            conn.execute("CREATE TABLE caos_mine.kept (id int)")
+            assert store.owned_schema(conn, "caos_mine") is True
+            conn.execute(
+                f'ALTER TABLE caos_mine.kept OWNER TO "{urlsplit(other).username}"'
+            )
+            with pytest.raises(Refusal) as refused:
+                store.owned_schema(conn, "caos_mine")
+            assert refused.value.code is RefusalCode.STORE_SCHEMA_DRIFT
+            conn.rollback()
+
+
 def test_a_store_schema_another_role_made_first_is_refused_not_adopted(
     empty_database: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
