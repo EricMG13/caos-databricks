@@ -405,8 +405,7 @@ def _hook_occurrence_problems(
         for key, value in expected.items()
         if actual.get(key) != value
     ] + [
-        f"pre-commit: {name}[{index}].{key} is set; it can change what the "
-        "hook runs on"
+        f"pre-commit: {name}[{index}].{key} is set; it can change what the hook runs on"
         for key in HOOK_KEYS
         if key not in expected and key in actual
     ]
