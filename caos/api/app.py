@@ -74,6 +74,7 @@ from caos.api.edge import EdgeGuard, is_api_path, refusal_body
 from caos.api.identity import actor_from_headers
 from caos.api.reads import analysis as analysis_read
 from caos.api.reads import book as book_read
+from caos.api.reads import deliverable as deliverable_read
 from caos.api.reads import directory as directory_read
 from caos.api.reads import evidence as evidence_read
 from caos.api.reads import model as model_read
@@ -464,6 +465,7 @@ for _section in (
     qualification_read,
     reports_read,
     evidence_read,
+    deliverable_read,
 ):
     app.include_router(_section.router)
 app.include_router(health.router)

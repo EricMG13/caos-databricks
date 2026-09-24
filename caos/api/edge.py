@@ -112,6 +112,21 @@ SECURITY_HEADERS: Mapping[str, str] = {
 _STRIPPED = (b"set-cookie", b"cache-control")
 _ASSET_CACHE = "public, max-age=31536000, immutable"
 
+# The deliverable render (`caos/api/reads/deliverable.py`) serves one
+# self-contained page with its own inline `<style>` block and nothing else --
+# no script, no external stylesheet, no image (`caos.deliverable.render`'s
+# `ELEMENTS` never draws one). The workspace's own policy above blocks that
+# inline style outright (no `'unsafe-inline'`, no nonce), so this one path
+# earns a narrower policy instead of the wider one every other response
+# carries: no directive this page could not already have justified on its own,
+# and nothing the workspace's policy grants that this one does not also
+# refuse (N4).
+_DELIVERABLE_RENDER = re.compile(r"^/api/v1/cases/[^/]+/revisions/[^/]+/render\Z")
+_DELIVERABLE_RENDER_CSP = (
+    "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; "
+    "form-action 'none'; frame-ancestors 'none'"
+)
+
 # CF-051. uvicorn's own `limit_concurrency` (`caos/serve.py`) counts every
 # accepted connection, idle keep-alive ones included (DP-7), and a rejection
 # there is a bare 503 outside the ASGI app: no security headers, no typed
@@ -499,13 +514,23 @@ def _secured(send: Send, path: str) -> Send:
                 and key.lower() not in SECURITY_HEADERS_BYTES
                 and not key.lower().startswith(b"access-control-")
             ]
-            kept.extend(SECURITY_HEADER_PAIRS)
+            kept.extend(_security_header_pairs(path))
             cache = _cache_policy(path, message["status"])
             kept.append((b"cache-control", cache.encode()))
             message = {**message, "headers": kept}
         await send(message)
 
     return wrapped
+
+
+def _security_header_pairs(path: str) -> tuple[tuple[bytes, bytes], ...]:
+    """The security headers this response carries: every one, unchanged, on
+    every path but the deliverable render, which keeps every header but a
+    narrower `content-security-policy` (`_DELIVERABLE_RENDER_CSP`)."""
+    if not _DELIVERABLE_RENDER.match(path):
+        return SECURITY_HEADER_PAIRS
+    narrowed = {**SECURITY_HEADERS, "content-security-policy": _DELIVERABLE_RENDER_CSP}
+    return tuple((name.encode(), value.encode()) for name, value in narrowed.items())
 
 
 SECURITY_HEADER_PAIRS = tuple(
