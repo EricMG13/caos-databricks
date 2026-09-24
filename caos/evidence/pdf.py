@@ -125,14 +125,18 @@ MARKED_CONTENT_DEPTH = 256
 # Text the page paints over later, with one fill that holds the glyph's whole
 # box: a rectangle on the page itself, opaque and normally blended, in a colour
 # the backdrop reads, under a clip that is a rectangle this reading follows
-# (`visibility.Covers`). A fill in a form, under any other clip, transparency
-# or optional content, or drawn where pdfminer's own matrix is stale, is not;
-# nor is a stroked or Type3 glyph ever found covered, pdfminer's box not
-# bounding its ink.
+# (`visibility.Covers`). A fill in a form, or under any other clip,
+# transparency or optional content, is not; nor is a stroked or Type3 glyph
+# ever found covered, pdfminer's box not bounding its ink.
 PAINTED_OVER_COVER = "later-opaque-rectangle-holding-the-glyph-box"
 # What one document may spend comparing glyphs with the fills painted over
 # them and noting those fills, one unit each; past it nothing more is marked.
 PAINTED_OVER_WORK = 4_000_000
+# The matrix text and paths are laid out in after a form XObject: the one the
+# form began under, as every viewer draws them (`visibility.MarkingAggregator`)
+# -- pdfminer left its device at the form's own until the page's next `cm` or
+# `Q`, and laid out what came between where no viewer draws it.
+FORM_MATRIX = "restored-when-the-form-ends"
 # A glyph whose em is smaller than this on the page, in points, is not read.
 SMALLEST_READABLE_PT = 2.0
 # On which axis a glyph's em is measured (N9): the narrower of the two. The
@@ -177,9 +181,11 @@ class PdfExtractor:
             # over later. v7: a line break a glyph's text carries is a space
             # in its token (W4); a glyph's size is its em on its narrower
             # axis, and Indexed and exponential Separation colours are read
-            # (N9). Earlier rows keep their stored identity and verify as
-            # recorded; readmission is how a source gains the new tokens
-            # (section 44.4's rule).
+            # (N9); text drawn after a form XObject is laid out in the matrix
+            # a viewer draws it in, where pdfminer placed it by the form's.
+            # Earlier rows keep their stored identity and verify as recorded;
+            # readmission is how a source gains the new tokens (section
+            # 44.4's rule).
             "7",
             {
                 "pdfminer_version": version("pdfminer.six"),
@@ -212,6 +218,7 @@ class PdfExtractor:
                 "hidden_marked_content_depth": MARKED_CONTENT_DEPTH,
                 "hidden_painted_over": PAINTED_OVER_COVER,
                 "hidden_painted_over_work": PAINTED_OVER_WORK,
+                "form_matrix": FORM_MATRIX,
             },
         )
 

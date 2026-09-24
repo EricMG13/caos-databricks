@@ -469,6 +469,13 @@ class MarkingAggregator(PDFPageAggregator):
     the page ends: the glyphs the page itself drew (`drawn`) against the
     rectangles it filled after them (`covers`, each beside how many glyphs
     came before it), within the document's `work`.
+
+    It also draws with the matrix a viewer draws with after a form XObject.
+    pdfminer's form sets this device's matrix to its own and nothing sets it
+    back until the page's next `cm` or `Q`, so text drawn in between was laid
+    out -- and its citation rectangle stored -- where no viewer draws it: 600
+    pt off after a form whose `/Matrix` moved it 600 pt (invariant 11). The
+    matrix a figure began under is restored when it ends (`end_figure`).
     """
 
     def __init__(self, resources: PDFResourceManager, laparams: LAParams) -> None:
@@ -480,8 +487,7 @@ class MarkingAggregator(PDFPageAggregator):
         self.covers: list[tuple[Box, int]] = []
         self.work = PAINTED_OVER_WORK
         self._least = (math.inf, math.inf)
-        self._figures: list[tuple[Matrix, bool]] = []
-        self._stale = False
+        self._figures: list[Matrix] = []
         self._compound = 0
 
     @override
@@ -491,18 +497,13 @@ class MarkingAggregator(PDFPageAggregator):
         self.backdrop = Backdrop(self.cur_item.bbox)
         self.marked = MarkedContent()
         (self.drawn, self.covers, self._figures) = ([], [], [])
-        (self._least, self._stale, self._compound) = ((math.inf, math.inf), False, 0)
+        (self._least, self._compound) = ((math.inf, math.inf), 0)
 
     @override
     def end_page(self, page: PDFPage) -> None:
         for glyph in self._painted_over():
             self.hidden[glyph] = _with(self.hidden.get(glyph, ""), PAINTED_OVER)
         super().end_page(page)
-
-    @override
-    def set_ctm(self, ctm: Matrix) -> None:
-        super().set_ctm(ctm)
-        self._stale = False
 
     @override
     def begin_tag(self, tag: PSLiteral, props: PDFStackT | None = None) -> None:
@@ -525,19 +526,18 @@ class MarkingAggregator(PDFPageAggregator):
 
     @override
     def begin_figure(self, name: str, bbox: Rect, matrix: Matrix) -> None:
-        self._figures.append((self.ctm, self._stale))
+        self._figures.append(self.ctm)
         super().begin_figure(name, bbox, matrix)
         self.marked.enter()
 
     @override
     def end_figure(self, _: str) -> None:
+        """The figure ends, and so does its matrix: the one it began under,
+        which is the drawing's own, is this device's again."""
         super().end_figure(_)
         self.marked.leave()
-        (ctm, stale) = self._figures.pop() if self._figures else (self.ctm, True)
-        # pdfminer leaves this device at a form's own matrix until the page
-        # next sets one, so until then it places a path or a glyph where a
-        # viewer may not: neither covers nor is covered.
-        self._stale = stale or self.ctm != ctm
+        if self._figures:
+            self.set_ctm(self._figures.pop())
 
     @override
     def paint_path(
@@ -568,15 +568,15 @@ class MarkingAggregator(PDFPageAggregator):
         drew before it: an opaque, normally blended fill in a colour this
         reading reads, of one subpath, on the page itself -- a form's box
         clips its own -- where every open marked-content sequence is drawn,
-        with pdfminer's matrix in step, after the page drew some glyph. A
-        paint the pending `W` of its own path clips leaves the clip unknown."""
+        after the page drew some glyph. A paint the pending `W` of its own
+        path clips leaves the clip unknown."""
         if not isinstance(gstate, PaintState):
             return None
         if gstate.clipping is not None:
             (gstate.clip, gstate.clipping) = (None, None)
         if not fill or gstate.translucent or _rgb(gstate.ncs, gstate.ncolor) is None:
             return None
-        if self._compound or self._figures or self._stale or not self.marked.draws:
+        if self._compound or self._figures or not self.marked.draws:
             return None
         return gstate.clip if self.drawn else None
 
@@ -612,14 +612,12 @@ class MarkingAggregator(PDFPageAggregator):
         super().render_string(textstate, seq, ncs, graphicstate)
         em = _em(textstate, mult_matrix(textstate.matrix, self.ctm))
         switched_off = self.marked.hides
-        # Only a page's own glyphs are its lines (a form's are a figure's),
-        # only where pdfminer's matrix is the one a viewer draws with, and only
-        # where pdfminer's box bounds the ink: a stroke reaches past it by its
-        # width, and further at a mitre; a Type3 glyph draws what its
+        # Only a page's own glyphs are its lines (a form's are a figure's), and
+        # only where pdfminer's box bounds the ink: a stroke reaches past it by
+        # its width, and further at a mitre; a Type3 glyph draws what its
         # procedure draws.
         coverable = (
             not self._figures
-            and not self._stale
             and self.work > 0
             and textstate.render not in _STROKED
             and not isinstance(textstate.font, PDFType3Font)

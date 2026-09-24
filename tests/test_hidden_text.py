@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from hashlib import sha256
 from io import BytesIO
 from math import inf
@@ -1195,9 +1195,9 @@ FORMS = (form(b"1 g 0 0 612 792 re f"), form(b"", matrix=b"/Matrix [1 0 0 1 0 60
         b"1 g 0 0 612 792 re 360 690 -300 30 re f\n",
         b"1 g 0 0 m 612 0 l 612 792 l 0 792 c f\n",
         b"q 0.8 0.6 -0.6 0.8 300 300 cm 1 g -900 -900 1800 1800 re f Q\n",
-        # Painted in a form, whose box clips it; or where pdfminer, after a
-        # form that moved its matrix, places the fill over the line while a
-        # viewer paints it 600 pt lower.
+        # Painted in a form, whose box clips it; or, after a form that moved
+        # its own matrix, 600 pt below the line, where every viewer paints it
+        # and pdfminer, left at the form's matrix, laid it over the line.
         b"/Fm Do\n",
         b"/Up Do 1 g 60 90 300 30 re f\n",
         # Glyphs added to the clip leave the next fill clipped to them.
@@ -1223,11 +1223,13 @@ def test_a_fill_that_may_not_hide_the_glyphs_marks_nothing(cover: bytes) -> None
         # Held with room to spare, a hair under the glyphs' boxes.
         b"1 g 60 697.4 300 30 re f\n",
         # A clip restored by `Q`, a clip that is the page, an ExtGState that
-        # leaves fills opaque, a matrix a `Q` set back in step.
+        # leaves fills opaque; after a form that moved its own matrix, with a
+        # `Q` or without one: the page's matrix is back when the form ends.
         b"q 0 0 10 10 re W n Q 1 g 60 690 300 30 re f\n",
         b"q 0 0 612 792 re W* n 1 g 60 690 300 30 re f Q\n",
         b"q /Opaque gs 1 g 60 690 300 30 re f Q\n",
         b"/Up Do q Q 1 g 60 690 300 30 re f\n",
+        b"/Up Do 1 g 60 690 300 30 re f\n",
         # In a sequence that is not optional content, or that is switched on.
         b"/Artifact BMC 1 g 60 690 300 30 re f EMC\n",
         b"/OC /on BDC 1 g 60 690 300 30 re f EMC\n",
@@ -1421,6 +1423,80 @@ def test_a_fill_in_an_indexed_space_covers_what_it_holds() -> None:
 
     assert _marks(data) == {"Kept visible": PAINTED}
     assert _lines(PdfExtractor().extract(data)) == {"Kept visible": PAINTED}
+
+
+# A page resource naming the form that moves its own matrix 600 pt up
+# (`FORMS[1]`, object 9), and one (object 10) that draws it inside itself.
+MOVING = b"/XObject << /Up 9 0 R /Outer 10 0 R >>"
+NESTED = form(b"/Up Do", b"/XObject << /Up 9 0 R >>")
+
+
+def _placed(data: bytes) -> list[tuple[str, float, float, float, float]]:
+    """Each token's text and rectangle, as the walk lays the page out."""
+    tokens = pdf.walk_pages(data, limits=DEFAULT_LIMITS, deadline=inf)
+    return [(t.text, t.x0, t.y0, t.x1, t.y1) for t in tokens]
+
+
+@pytest.mark.parametrize(
+    "before", [b"/Up Do\n", b"/Outer Do\n", b"/Up Do /Up Do\n", b"/Up Do q Q\n"]
+)
+def test_text_after_a_form_is_placed_where_a_viewer_draws_it(before: bytes) -> None:
+    """New scope (N27's remainder): a form XObject sets pdfminer's device to
+    its own matrix and nothing set it back until the page's next `cm` or `Q`,
+    so text drawn after a form whose `/Matrix` moves it 600 pt was laid out,
+    and its citation rectangle stored, 600 pt from where every viewer draws
+    it (invariant 11). The matrix a form began under is restored when it
+    ends -- after one form, two, or a form drawing another -- in the walk and
+    in the extraction child alike."""
+    line = shown(100, "After the form")
+    plain = layered_pdf(line, layers=b"", resources=MOVING, more=(*FORMS, NESTED))
+    moved = layered_pdf(
+        before + line, layers=b"", resources=MOVING, more=(*FORMS, NESTED)
+    )
+
+    assert _placed(moved) == _placed(plain)
+    assert [t.y0 for t in PdfExtractor().extract(moved)] == [
+        t.y0 for t in PdfExtractor().extract(plain)
+    ]
+    assert (
+        PdfExtractor().identity.config["form_matrix"] == "restored-when-the-form-ends"
+    )
+
+
+def test_a_row_placed_by_a_forms_matrix_before_v7_keeps_its_rectangles(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> None:
+    """Stored rows verify as recorded: a source admitted under identity v6,
+    its tokens 600 pt from where the page draws them, keeps its identity and
+    its tokens -- its page read serves them and a quote anchors to them --
+    and only readmission moves it (section 44.4's rule)."""
+    data = layered_pdf(
+        b"/Up Do\n" + shown(100, "After the form"),
+        layers=b"",
+        resources=MOVING,
+        more=(*FORMS, NESTED),
+    )
+    config = {
+        key: value
+        for key, value in PdfExtractor().identity.config.items()
+        if key not in ("token_line_breaks", "hidden_under_pt_axis")
+        and key not in ("hidden_colour_spaces", "form_matrix")
+    }
+    recorded = [
+        replace(token, y0=token.y0 - 600, y1=token.y1 - 600)
+        for token in PdfExtractor().extract(data)
+    ]
+    reader = Reader(ExtractorIdentity("caos.pdfminer", "6", config), recorded)
+    blobs = BlobStore(tmp_path / "blobs")
+    pinned = pin(*case, blobs, [("moved.pdf", data)], reader)
+
+    [line] = page_of(pinned, pinned.sources[0]).body.lines
+    [box] = anchor_citation(
+        pinned.conn, source_id=pinned.sources[0], page=1, matched_text="After the form"
+    )
+
+    assert (line.y0, line.y1) == (recorded[0].y0, recorded[0].y1)
+    assert (box.y0, box.y1) == (recorded[0].y0, recorded[0].y1)
 
 
 def test_reasons_join_sorted_on_one_line() -> None:
