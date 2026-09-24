@@ -86,7 +86,9 @@ RESEARCH_BRIEF = {
     "questions": [
         {
             "question_id": "RQ-headroom",
-            "question": "What undrawn committed facilities did the issuer report at year end?",
+            "question": (
+                "What undrawn committed facilities did the issuer report at year end?"
+            ),
             "decision_relevance": "Sets the liquidity headroom assumption",
             "consumer_module_id": "NONE",
             "after_module_id": "CP-0",

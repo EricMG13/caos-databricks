@@ -421,7 +421,14 @@ def test_linked_research_brief_completes_the_wire_caller_fields(
     caller's fields cannot shadow the host's own identity keys even if they
     carry them (invariant 3)."""
     full = research_brief()
-    host_owned = {"schema", "mode", "scope_type", "scope_key", "subject_name", "source_mode"}
+    host_owned = {
+        "schema",
+        "mode",
+        "scope_type",
+        "scope_key",
+        "subject_name",
+        "source_mode",
+    }
     caller_fields = {key: value for key, value in full.items() if key not in host_owned}
     completed = linked_research_brief(caller_fields, subject=SUBJECT)
     assert completed == full
