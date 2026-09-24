@@ -68,6 +68,7 @@ def _record(conn: StoreConnection, *, expires_at: datetime) -> Evidence:
             "decided_at": decided_at.isoformat(),
             "expires_at": expires_at.isoformat(),
             "reviewer": "Reviewer",
+            "evidence_sha256": evidence.sha256,
         },
         now=decided_at,
     )

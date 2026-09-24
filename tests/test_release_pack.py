@@ -225,6 +225,7 @@ def _sign(
                 "decided_at": NOW.isoformat(),
                 "expires_at": (NOW + timedelta(days=days)).isoformat(),
                 "reviewer": "Reviewer",
+                "evidence_sha256": evidence.sha256,
             },
             now=NOW,
         ),

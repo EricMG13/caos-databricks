@@ -5,15 +5,26 @@ qualification-set digest, build, date, expiry and reviewer. This module reads
 such a document and either returns a `Verdict` or refuses -- it never builds one
 from anything the host knows about itself.
 
-Why six. A signature saying "the outputs met the answer keys" is checkable only
-if it also says whose outputs, against which cases, from which build, signed
-when, current until when, and by whom. Drop `provider` and the same sentence
-covers a model nobody measured. Drop `qualification_set_sha256` and it covers a
-set of answer keys that has since been edited. Drop `build_id` and it covers
-next year's methodology. Drop the dates and it never stops applying. Drop
-`reviewer` and nobody is accountable for it. So a missing binding is
-`VERDICT_INCOMPLETE` rather than a `None` field, and the reader refuses before
-anything downstream can read a hole as a pass.
+Why six, and a seventh (N44). A signature saying "the outputs met the answer
+keys" is checkable only if it also says whose outputs, against which cases,
+from which build, signed when, current until when, and by whom. Drop
+`provider` and the same sentence covers a model nobody measured. Drop
+`qualification_set_sha256` and it covers a set of answer keys that has since
+been edited. Drop `build_id` and it covers next year's methodology. Drop the
+dates and it never stops applying. Drop `reviewer` and nobody is accountable
+for it. So a missing binding is `VERDICT_INCOMPLETE` rather than a `None`
+field, and the reader refuses before anything downstream can read a hole as a
+pass.
+
+The six above are coarse: two snapshots of the same set, the same build and
+the same provider can still be two different runs of the methodology --
+`performed_sha256` and `adapter_version` differ, so `evidence_sha256` does --
+and a document that named only the six bound identically to either one.
+`evidence_sha256` is the seventh binding for exactly that reason: the
+reviewer's document now names the one exact evidence identity it was read
+against, and `record_verdict` refuses a document naming any other
+(`VERDICT_BINDING_INVALID`), the same way it already refused one naming
+another provider, set or build.
 
 Expiry is judged against a `now` the caller passes, not against the clock. Route
 resolution is pure for the same reason (`CLAUDE.md`): a decision that reads the
@@ -32,9 +43,10 @@ from caos.boundary_text import BoundaryText
 from caos.qualification import Assurance
 from caos.refusals import Refusal, RefusalCode
 
-# The six, in the order `docs/REBUILD_PLAN.md` Phase 10 names them. This tuple
-# is the declared shape: it is what a document is checked for and what it is
-# closed against, so the two can never disagree.
+# The seven, in the order `docs/REBUILD_PLAN.md` Phase 10 names the first six;
+# `evidence_sha256` is N44's addition. This tuple is the declared shape: it is
+# what a document is checked for and what it is closed against, so the two can
+# never disagree.
 BINDINGS = (
     "provider",
     "qualification_set_sha256",
@@ -42,6 +54,7 @@ BINDINGS = (
     "decided_at",
     "expires_at",
     "reviewer",
+    "evidence_sha256",
 )
 
 # Lower-case hex, fixed width. A digest that is not one binds the verdict to a
@@ -76,6 +89,7 @@ class Verdict:
     decided_at: datetime
     expires_at: datetime
     reviewer: BoundaryText
+    evidence_sha256: str
 
     @property
     def assurance(self) -> Assurance:
@@ -88,7 +102,7 @@ def read_verdict(document: object, *, now: datetime) -> Verdict:
 
     Four refusals, each a different thing being wrong: a binding absent or blank
     is `VERDICT_INCOMPLETE`; one present but not readable as what it claims is
-    `VERDICT_BINDING_INVALID`; a key the six do not declare is
+    `VERDICT_BINDING_INVALID`; a key the seven do not declare is
     `VERDICT_UNDECLARED_FIELD`; and a complete, readable verdict whose moment
     has passed is `VERDICT_EXPIRED`. Conflating them would leave a reader unable
     to tell a malformed document from a stale signature, which are the two cases
@@ -105,6 +119,7 @@ def read_verdict(document: object, *, now: datetime) -> Verdict:
     provider = _boundary_text(fields, "provider")
     reviewer = _boundary_text(fields, "reviewer")
     qualification_set_sha256 = _digest(fields, "qualification_set_sha256")
+    evidence_sha256 = _digest(fields, "evidence_sha256")
     build_id = _present(fields, "build_id").strip()
     decided_at = _moment(fields, "decided_at")
     expires_at = _moment(fields, "expires_at")
@@ -126,11 +141,12 @@ def read_verdict(document: object, *, now: datetime) -> Verdict:
         decided_at=decided_at,
         expires_at=expires_at,
         reviewer=reviewer,
+        evidence_sha256=evidence_sha256,
     )
 
 
 def _closed(document: object) -> dict[str, Any]:
-    """The outer shape: a mapping, carrying the six and nothing else."""
+    """The outer shape: a mapping, carrying the seven and nothing else."""
     if not isinstance(document, dict):
         raise Refusal(RefusalCode.VERDICT_INCOMPLETE)
     if set(document) - set(BINDINGS):

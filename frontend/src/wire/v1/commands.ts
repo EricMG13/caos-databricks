@@ -64,6 +64,9 @@ const RunWork = object({
 });
 // A verdict is the reviewer's document: the moments travel as text and are
 // read once, by the server's verdict reader. The receipt is the host's.
+// `evidence_sha256` names the exact evidence identity the document was read
+// against (N44): the other six can agree for two different snapshots of the
+// same set, build and provider.
 const moment = string({ max: 64 });
 const SignVerdict = object({
   provider: short,
@@ -72,6 +75,7 @@ const SignVerdict = object({
   decided_at: moment,
   expires_at: moment,
   reviewer: short,
+  evidence_sha256: hash,
 });
 const VerdictRecorded = object({
   evidence_sha256: hash,

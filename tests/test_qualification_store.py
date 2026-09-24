@@ -51,6 +51,8 @@ def _verdict(now: datetime, evidence: Evidence) -> Verdict:
             "decided_at": now.isoformat(),
             "expires_at": (now + timedelta(days=1)).isoformat(),
             "reviewer": "Reviewer",
+            # N44: the exact evidence identity the document is read against.
+            "evidence_sha256": evidence.sha256,
         },
         now=now,
     )
@@ -683,6 +685,7 @@ def test_a_verdict_binds_provider_and_model_as_a_pair(empty_database: str) -> No
                 "decided_at": now.isoformat(),
                 "expires_at": (now + timedelta(days=1)).isoformat(),
                 "reviewer": "Reviewer",
+                "evidence_sha256": evidence.sha256,
             },
             now=now,
         )
@@ -712,6 +715,7 @@ def test_a_signature_may_not_stand_for_longer_than_the_cap() -> None:
         "decided_at": now.isoformat(),
         "expires_at": (now + MAX_VALIDITY + timedelta(seconds=1)).isoformat(),
         "reviewer": "Reviewer",
+        "evidence_sha256": evidence.sha256,
     }
     with pytest.raises(Refusal, match="VERDICT_BINDING_INVALID"):
         read_verdict(document, now=now)

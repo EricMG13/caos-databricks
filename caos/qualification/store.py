@@ -653,6 +653,11 @@ def record_verdict(
         verdict.qualification_set_sha256 != evidence.qualification_set_sha256
         or signed != [evidence.provider, evidence.model]
         or verdict.build_id != evidence.build_id
+        # N44: the coarse four above can agree for two different snapshots of
+        # the same set, build and provider -- `performed_sha256` and
+        # `adapter_version` differ, so `evidence.sha256` does. The document
+        # must name the one exact evidence identity it was read against.
+        or verdict.evidence_sha256 != evidence.sha256
     ):
         raise Refusal(RefusalCode.VERDICT_BINDING_INVALID)
     snapshot = conn.execute(
@@ -757,6 +762,7 @@ def current_verdict(
             "decided_at": decided_at.isoformat(),
             "expires_at": expires_at.isoformat(),
             "reviewer": reviewer,
+            "evidence_sha256": evidence.sha256,
         },
         now=now,
     )

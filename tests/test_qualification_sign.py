@@ -77,6 +77,8 @@ def _document(evidence: Evidence, **changes: str) -> dict[str, Any]:
         "decided_at": decided_at.isoformat(),
         "expires_at": (decided_at + timedelta(days=365)).isoformat(),
         "reviewer": "A. Reviewer",
+        # N44: the exact evidence identity the document is read against.
+        "evidence_sha256": evidence.sha256,
     }
     document.update(changes)
     return document
@@ -444,6 +446,10 @@ def test_a_body_carrying_reviewer_id_is_refused_as_undeclared(
         {"build_id": "not-this-build"},
         {"qualification_set_sha256": "9" * 64},
         {"provider": "openrouter/other:some/model"},
+        # N44: naming the six coarse bindings correctly is not enough --
+        # the document must also name the exact evidence identity it was
+        # read against.
+        {"evidence_sha256": "9" * 64},
     ],
 )
 def test_a_verdict_bound_to_other_evidence_is_refused_and_nothing_is_written(

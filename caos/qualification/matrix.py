@@ -2,8 +2,8 @@
 
 `docs/REBUILD_PLAN.md` Phase 10. A **qualification set** is the immutable cases
 and answer keys one verdict is measured against (`CONTEXT.md`); its digest is
-one of the six bindings `read_verdict` requires, and this module is where that
-digest is computed.
+one of the seven bindings `read_verdict` requires, and this module is where
+that digest is computed.
 
 **The matrix reports; it does not conclude.** Comparing a run against an answer
 key is mechanical, and the host may do it. Deciding that the comparison is good
