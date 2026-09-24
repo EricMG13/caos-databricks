@@ -262,13 +262,14 @@ def test_units_and_perimeter_are_required_and_carried() -> None:
         refused(request)
 
 
-@pytest.mark.parametrize(
-    "ceiling", ["periods", "cases", "facilities", "amortisation", "work"]
-)
+@pytest.mark.parametrize("ceiling", ["periods", "cases", "facilities", "amortisation"])
 def test_work_factor_refuses_before_any_numeric_is_parsed(
     monkeypatch: pytest.MonkeyPatch,
     ceiling: str,
 ) -> None:
+    """The collection ceilings bound the whole of the work -- at most 40
+    periods in each of 6 cases over 41 balances, 9,840 -- so no product bound
+    stands beside them (FP-36: one did, at 100,000, and could never fire)."""
     request = forecast_request()
     if ceiling == "periods":
         request["periods"] = [
@@ -279,10 +280,8 @@ def test_work_factor_refuses_before_any_numeric_is_parsed(
         request["periods"] = [{"case": str(n), "days": "bad"} for n in range(7)]
     elif ceiling == "facilities":
         request["opening"]["debt_by_facility"] = [{}] * 41
-    elif ceiling == "amortisation":
-        request["contractual"]["amortisation"] = [{}] * 2001
     else:
-        monkeypatch.setattr(cash_flow, "MAX_WORK", 1)
+        request["contractual"]["amortisation"] = [{}] * 2001
 
     def numeric_was_parsed(*args: object, **kwargs: object) -> None:
         pytest.fail("work factor must precede numeric parsing")
@@ -443,3 +442,83 @@ def test_the_reconciliation_tolerance_is_bounded() -> None:
         request["tolerance"] = outside
         with pytest.raises(Refusal, match=r"^METHODOLOGY_INPUT_INVALID$"):
             cash_flow_forecast(request)
+
+
+def test_the_reconciliation_tolerance_is_relative_to_the_opening_balances() -> None:
+    """N20 (FP-23): a tolerance capped only at `MAX_TOLERANCE`, in the request's
+    own unit, passed a 999m residual on 1,100m of openings. It is now never
+    wider than one part in a thousand of the opening balances -- debt and cash,
+    each by its size -- nor than `MAX_TOLERANCE`; a stated tolerance tighter
+    than that is the one applied, and a stated one outside the absolute bound
+    is still refused (F62)."""
+    request = forecast_request()  # openings: debt 700 + 300, cash 100
+    request["tolerance"] = str(cash_flow.MAX_TOLERANCE)
+    request["drivers"][0]["stated_closing_cash"] = "1125"  # residual 999
+    row = cash_flow_forecast(request)["rows"][0]
+    assert row["unavailable_reason"] == "RESIDUAL_UNRECONCILED"
+    # One part in a thousand of 1,100 is 1.1.
+    request["tolerance"] = "5"
+    for stated, reason in (("127.1", None), ("127.100001", "RESIDUAL_UNRECONCILED")):
+        request["drivers"][0]["stated_closing_cash"] = stated
+        assert cash_flow_forecast(request)["rows"][0]["unavailable_reason"] == reason
+    request["tolerance"] = "0.5"
+    for stated, reason in (("126.5", None), ("126.500001", "RESIDUAL_UNRECONCILED")):
+        request["drivers"][0]["stated_closing_cash"] = stated
+        assert cash_flow_forecast(request)["rows"][0]["unavailable_reason"] == reason
+    # A negative opening counts by its size (debt -400, cash -100: 0.5).
+    signed = forecast_request()
+    signed["opening"]["debt_by_facility"][0]["amount"] = "-700"
+    signed["opening"]["cash"] = "-100"
+    signed["tolerance"] = "5"
+    signed["drivers"][0].update(stated_closing_debt="-400", stated_closing_cash="-73.5")
+    assert cash_flow_forecast(signed)["rows"][0]["unavailable_reason"] is None
+    signed["drivers"][0]["stated_closing_cash"] = "-73.499999"
+    row = cash_flow_forecast(signed)["rows"][0]
+    assert row["unavailable_reason"] == "RESIDUAL_UNRECONCILED"
+    # Nothing opened, nothing to be approximate about: the close must be exact.
+    empty = forecast_request()
+    empty["opening"]["debt_by_facility"] = [
+        {"facility_id": "TERM", "amount": "0"},
+        {"facility_id": "BOND", "amount": "0"},
+    ]
+    empty["opening"]["cash"] = "0"
+    empty["drivers"][0].update(stated_closing_debt="0", stated_closing_cash="26")
+    assert cash_flow_forecast(empty)["rows"][0]["unavailable_reason"] is None
+    empty["drivers"][0]["stated_closing_cash"] = "26.000001"
+    row = cash_flow_forecast(empty)["rows"][0]
+    assert row["unavailable_reason"] == "RESIDUAL_UNRECONCILED"
+
+
+def test_a_case_s_periods_run_in_fiscal_year_order_after_the_opening() -> None:
+    """FP-37: the calculator chains a case's periods in the order given, so a
+    period out of order opened from the wrong closing and only an independent
+    stated close could catch it; and `opening.as_of_period_id` was validated
+    and then ignored. A case's fiscal years may not fall -- quarters share
+    one -- a fiscal year is a year number, and the opening's period is none of
+    the forecast's own."""
+    request = forecast_request()
+    request["periods"] = [request["periods"][i] for i in (1, 0, 2, 3)]
+    refused(request)
+    for fiscal_year in ("FY2026", "26", "2026.0", ""):
+        request = forecast_request()
+        request["periods"][0]["fiscal_year"] = fiscal_year
+        refused(request)
+    request = forecast_request()
+    request["opening"]["as_of_period_id"] = "FY26"
+    refused(request)
+    # Interleaved cases keep each case's own order, and quarters one year.
+    interleaved = forecast_request()
+    interleaved["periods"] = [interleaved["periods"][i] for i in (2, 0, 3, 1)]
+    assert cash_flow_forecast(interleaved)["status"] == "complete"
+    assert cash_flow_forecast(forecast_request(quarterly=True))["status"] == "complete"
+
+
+def test_cfo_is_named_as_before_interest_and_taxes_where_the_model_reads() -> None:
+    """FP-39: `fcf = cfo - capex - cash_interest - cash_taxes` deducts interest
+    and taxes itself, so a reported CFO that already did would count both
+    twice; CP-CF's SKILL.md and the calculator it is delivered say so."""
+    from caos.methodology.host import verified_host_bytes
+
+    for name in ("SKILL.md", "scripts/cash_flow.py"):
+        text = " ".join(verified_host_bytes(name).decode().split())
+        assert "before cash interest and cash taxes" in text, name

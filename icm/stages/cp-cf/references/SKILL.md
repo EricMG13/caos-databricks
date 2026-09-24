@@ -8,6 +8,12 @@ In Analysis include exactly one fenced `caos-forecast-v1` JSON object with
 exactly `request`, `bindings` and `forecast`. `request` follows the closed
 contract in the delivered calculator source. `forecast` must equal the host's
 deterministic result. Incomplete or unreconciled output cannot be accepted.
+`cfo` is operating cash flow before cash interest and cash taxes: the
+calculator deducts `cash_interest` and `cash_taxes` itself, so a reported CFO
+that already deducted them counts both twice. Each case's periods run in
+fiscal-year order after the opening's period, and a stated close reconciles
+within the tolerance, never wider than one part in a thousand of the opening
+balances.
 
 `bindings` is one object per scalar leaf of request, keyed by JSON pointer.
 Each binding is exactly `{module_id, quote}`. CP-1 owns opening, periods,
