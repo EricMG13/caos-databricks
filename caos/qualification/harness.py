@@ -84,10 +84,12 @@ from caos.methodology.runner import ModuleProvider
 from caos.pricing import ModelPrice, worst_case
 from caos.provider import CompletionProvider
 from caos.qualification.matrix import (
+    _LABEL_LIMIT,
     DECLARABLE_REFUSALS,
     Matrix,
     QualificationCase,
     QualificationSet,
+    _accepted_rows,
     assert_measurable,
     assert_unambiguous,
     build_matrix,
@@ -104,10 +106,6 @@ from caos.store.routes import pin_route, resolved_route
 from caos.store.run_inputs import RunInput, pin_run_input, valid_subject
 from caos.store.runs import create_case, run_status, start_run
 from caos.store.source_sets import snapshot_source_set
-
-# The label a case is admitted under. A qualification case is a case like any
-# other in the store, which is what lets the proof read it like any other.
-_LABEL_LIMIT = 128
 
 
 @dataclass(frozen=True, slots=True)
@@ -765,13 +763,9 @@ def _accepted(
     try:
         return accepted_artifacts(conn, blobs, route, run_id, bundle=bundle)
     except (Refusal, ValueError):
-        rows = conn.execute(
-            "SELECT t.route_node_id FROM artifacts a"
-            " JOIN run_attempts t ON t.attempt_id = a.attempt_id"
-            " WHERE a.run_id = %s",
-            (run_id,),
-        ).fetchall()
-        return {str(row[0]): NodeResult() for row in rows}
+        # FP-30: the same per-node artifact read `_accepted_rows` already
+        # makes; only the node names are needed here.
+        return {node: NodeResult() for node in _accepted_rows(conn, run_id)}
 
 
 def _locatable(data: bytes, matched_text: str) -> bool:

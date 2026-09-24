@@ -25,7 +25,7 @@ leverage is 4.2x" has nothing to compare against until the record carries the
 figure as a number, which is the known-gaps entry this module ships with.
 
 Beside the citations a key may also ask what a module *concluded*
-(`ExpectedProjection`, over the seven fields the host projects) and what it
+(`ExpectedProjection`, over the eight fields the host projects) and what it
 *wrote in a named register cell* (`ExpectedRegister`, read through the vendor's
 own register reader). None of the three is the conclusion's soundness, and a
 reviewer still reads the rows.
@@ -197,7 +197,7 @@ class ExpectedRegister:
 
     The third question an answer key can ask, and the first that reaches the
     analysis itself. A citation key asks which quotes a module drew; a
-    projection key asks what its seven host-projected scalars said; this asks
+    projection key asks what its eight host-projected scalars said; this asks
     what it *wrote in a named register cell* -- a liquidity bridge's figure, a
     covenant term, a topic's materiality. Those live in the appendix registers
     the vendor's own contract declares, and the vendor ships the reader

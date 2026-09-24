@@ -340,14 +340,29 @@ def record_evidence(conn: StoreConnection, evidence: Evidence) -> str:
         " (evidence_sha256,qualification_set_sha256,performed_sha256,build_id,"
         " adapter_version,provider,model) VALUES (%s,%s,%s,%s,%s,%s,%s)"
         " ON CONFLICT (evidence_sha256) DO NOTHING",
-        (digest, *asdict(evidence).values()),
+        (
+            digest,
+            evidence.qualification_set_sha256,
+            evidence.performed_sha256,
+            evidence.build_id,
+            evidence.adapter_version,
+            evidence.provider,
+            evidence.model,
+        ),
     )
     row = conn.execute(
         "SELECT qualification_set_sha256,performed_sha256,build_id,adapter_version,"
         " provider,model FROM qualification_evidence WHERE evidence_sha256=%s",
         (digest,),
     ).fetchone()
-    if row != tuple(asdict(evidence).values()):
+    if row != (
+        evidence.qualification_set_sha256,
+        evidence.performed_sha256,
+        evidence.build_id,
+        evidence.adapter_version,
+        evidence.provider,
+        evidence.model,
+    ):
         raise Refusal(RefusalCode.VERDICT_BINDING_INVALID)
     return digest
 
@@ -366,7 +381,15 @@ def evidence_at(conn: StoreConnection, *, evidence_sha256: str) -> Evidence | No
     ).fetchone()
     if row is None:
         return None
-    evidence = Evidence(*row)
+    set_digest, performed_digest, build_id, adapter_version, provider, model = row
+    evidence = Evidence(
+        qualification_set_sha256=set_digest,
+        performed_sha256=performed_digest,
+        build_id=build_id,
+        adapter_version=adapter_version,
+        provider=provider,
+        model=model,
+    )
     if evidence.sha256 != evidence_sha256:
         raise Refusal(RefusalCode.VERDICT_BINDING_INVALID)
     return evidence
