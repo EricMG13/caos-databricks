@@ -446,6 +446,66 @@ Round 4 (2026-09-23): five adversarial reviewers (Claude Opus 5.5 at effort max)
 
 - F249 — Integration of the backlog branches, second pass: the package read's cost is 10, not 8, since `read_filed_receipt` proves the sign and freeze events itself (F231); the CP-CF restriction-forgery and release-pack forgery tests corrupt `artifacts` through `conftest.tamper` (F220); the reviewer-id test records runs before the snapshot, as production does (F227); the PDF harness test names its extracted line as the quote, since the shared case helper now takes the whole raw line (F235).
 
+- F250 — `route.dependency_order` hand-rolled a topological sort at complexity 20 (N29, SI-6): it runs on `graphlib.TopologicalSorter` with the same ready-batch order and the same `ROUTE_DUPLICATE_MODULE` and `ROUTE_HAS_A_CYCLE` refusals (complexity 9; the route goldens pin the order).
+
+- F251 — Dead code with no defect behind it (N29, SI-6, SI-7, SI-9): `stream.case_tail`'s two unused overloads, `_status_refusal`'s branch that always agreed with its fallthrough, `provider.TRANSIENT` and `app.PERMANENT` (duplicated tables; `app.TRANSIENT` is derived from `_STATUS`), `verify_package.VERIFIER_VERSION` (referenced nowhere); `runs.fail_run`, which only tests called, lives in `tests/run_terminals.py`.
+
+- F252 — Hand-built plumbing where the library already had it (SI-10): `lakebase.store_url` uses `psycopg.conninfo.make_conninfo`, and `blobs._not_found` matches `databricks.sdk.errors.NotFound` by `isinstance`, the error code kept as a fallback.
+
+- F253 — "Store both bodies, or refuse `STORE_UNAVAILABLE`" was spelled out in both `runtime._settle` and `ModuleProvider.execute`: it is `BlobStore.put_both`.
+
+- F254 — The 27 stage contracts repeated the same 36-line Process and Outputs sections (SI-12): they are stated once in `icm/CONTEXT.md` and each stage points at them, through `scripts/icm_stages.py`; the contracts are not delivered to a model, so no prompt moved.
+
+- F255 — Comments and docstrings cited documents this repository does not hold (CF-101, FP-35): `docs/DECISIONS.md`, `SYSTEM_SPEC.md`, `docs/AI_CODE_QUALITY.md`, `docs/REBUILD_PLAN.md`, `docs/REPAIR_PLAN.md`, `docs/COMPLETION_PLAN.md` and "CLAUDE.md known gaps" are repointed to their decisions or the spec, or dropped, across 43 files in `caos/` and `scripts/` and three frontend files. `render.py`'s bytes moved with its comments, so `verify_package.RENDERER_SHA256` is regenerated.
+
+- F256 — `handoff.MAX_TRANSPORT_CHARS` was twice the vendor's 26 MB `MAX_FILE_BYTES`: it is twice `MAX_RESPONSE_BYTES`, D45's handoff bound, keeping the margin the retry feedback's own transport needs.
+
+- F257 — Model and Book called `read_analysis` and dropped the tables it built (N58): they read `read_analysis_without_tables`, which skips `handoff_tables`; the document is otherwise the same. Tests `test_read_analysis_without_tables_matches_read_analysis_but_the_tables` and a call count in each section's tests.
+
+- F258 — N59's backend half: `NarrativeFigure` carries `record_sha256` and `source_id`, resolved at read time by `source_sets.cited_source_ids`, so a figure can open its evidence; the saved revision is untouched. Test `test_cited_source_ids_resolves_the_run_pin_and_refuses_an_uncited_document`.
+
+- F259 — N60's backend half: `BookColumn.unit` (percent, currency, multiple, count or none), declared per column.
+
+- F260 — N61's backend half: `HandoffView`, `PendingNode` and `NodeView` carry `module_name`, read from each module's manifest folder (`bundle.module_display_names`), so the frontend need not mirror the stage slugs. Test `test_module_display_names_reads_the_bundle_catalog`.
+
+- F261 — Start and Retry were offered while the command would refuse `QUEUED_RUNS_LIMIT_REACHED` (D46): the Run section counts the actor's queued and claimed runs (`QUEUE_IO` 1) and names the refusal. Test `test_a_full_queue_refuses_start_and_retry_as_the_commands_would`.
+
+- F262 — A worker whose lease had expired could write one more checkpoint after a cancel had forgotten the thread (F218): `_forget` also forgets when the run is found no longer RUNNING, not only after the worker's own move. Test `test_a_late_checkpoint_write_after_an_abandoned_cancel_is_still_forgotten`.
+
+- F263 — The admission slot (F207) waited without a deadline: it waits `ADMISSION_WAIT_SECONDS` (30) and then refuses `CONCURRENCY_LIMIT_REACHED` (503, Retry-After). Test `test_an_admission_refuses_concurrency_limit_reached_once_its_wait_expires`.
+
+- F264 — Render mode 7 (text added to the clip path, drawn nowhere) was not marked (N27): it is marked as render mode 3 is; no fixture's output moved, so no identity bump. Test `test_render_mode_7_is_marked_the_same_as_render_mode_3`.
+
+- F265 — `BLOB_BUDGET` was declared only for analysis, model and book (N35): it is declared and held by tests for the evidence, run, report and deliverable reads and the deliverable commands, and is zero where nothing is downloaded (cases, deps, health, app); the plain-number budgets join `io_measurements.json`.
+
+- F266 — A connection lost during `apply_schema` read as `STORE_SCHEMA_DRIFT`, which ends the worker's boot (R24-05): an `OperationalError` without a SQLSTATE and the connection, rollback, resource and operator classes (08, 40, 53, 57) are `STORE_UNAVAILABLE` and retried; a statement the database refuses is still drift.
+
+- F267 — An approver who lost standing while a call was out excluded that paid answer from replay for good (R24-06): the post-call run checks raise `RunRefusal`, which `_run_node` never records as the answer's refusal, so the answer is replayed once standing is restored, with no new call. Test `test_authority_lost_during_a_call_leaves_the_paid_answer_to_replay`.
+
+- F268 — CP-DR's dossier refusal never reached the second attempt, because the vendor's exception was dropped before the text filter (R24-07): `_vendor_said` turns it into text first, and `retry_feedback` carries it.
+
+- F269 — A resend could start after the provider call's total deadline (R24-08): `_sends_again` rechecks the clock after the 429 wait and the resend fence.
+
+- F270 — Quote matching in the answer body did quadratic near-match work (R24-09): starts are compared one by one only while that costs no more than the body, otherwise one KMP pass over the inner words (`citations.occurrences`, now public) with edge checks per start.
+
+- F271 — A parenthesised figure was rounded to 28 digits or raised `decimal.Overflow` (R24-10): `_exact` negates with `copy_negate`, so `(x)` reads as `-x` exactly and an out-of-range one has no value, as its positive form does.
+
+- F272 — Qualification's pre-spend check refused whole-line keys the citation matcher accepts (R24-18): `_locatable` compares NFKD case-folded letters and digits, a necessary condition of anchoring under either rule, so it only refuses what could never anchor.
+
+- F273 — `qualify.py` derived the run ceiling before validating its inputs (R24-N03): an empty set is `QUALIFICATION_SET_EMPTY` and a non-finite ceiling `MONEY_INVALID`, exit 2, before any database is created.
+
+- F274 — An explicit `-p`/`--profile` sent a stand-in deployment to the real workspace that profile named (R24-02): the stand-in refuses a `databricks` command carrying either flag, including inside `sh -c`, and hands the CLI an empty private config. Test `test_an_explicit_profile_never_reaches_the_workspace_it_names`.
+
+- F275 — The stand-in deleted bundle state it had no evidence it owned (R24-N02): a `resources.json` without a sync snapshot is kept, and an empty validate-only target is still cleared.
+
+- F276 — Group names containing a comma broke the one-command deploy, because the CLI splits a `--var` on commas (R24-15): the group names travel as `BUNDLE_VAR_group_admin` and `BUNDLE_VAR_group_analyst`.
+
+- F277 — A required CI step or job could be switched off with `if:` and still pass the gate-integrity check (R24-11): `check_gate_config` refuses any `if:` on a required gate's step or job.
+
+- F278 — A package whose local ZIP headers disagreed with its central directory could extract different bytes from those verified (R24-17): `verify_package` compares each member's local CRC and sizes with the directory's, in the detached verifier too.
+
+- D49 (2026-09-24, owner: "Autoscaling default"; R24-14) — Lakebase Autoscaling is the one-command deployment's default database; closes N13 and N45. The CLI cannot choose the app resource's form from a variable, so the target does: `dev` and `prod` bind a Lakebase Autoscaling project through the `postgres` resource and `CAOS_LAKEBASE_ENDPOINT`; `dev-provisioned` and `prod-provisioned` bind an existing Provisioned instance through the `database` resource and `CAOS_LAKEBASE_INSTANCE`; `scripts/enterprise_deploy.sh --provisioned` selects the second pair. E1 and E8 use the chosen kind's own API, and E2 holds the resolved binding to it. At runtime exactly one kind is configured, or the app refuses `STORE_NOT_CONFIGURED` before any mint. Changing an existing app's kind changes its Postgres role (Databricks Apps documentation), so a switch is an owner and DBA procedure (`docs/DEPLOYMENT.md` §7). The stand-in answers the Postgres API and checks app resources; platform injection of `PG*` for a `postgres` resource, role provisioning and live grants remain enterprise checks (E3, E6, E8).
+
 ### Design critique plan, 2026-09-23 (the `/impeccable critique` of `frontend/src`, 16/40, and the owner's plan built on it; branch `impeccable/plan`)
 
 - D32 (2026-09-23) — The Analysis read serves each accepted handoff's `<!-- table-id: -->`-tagged tables as typed data, derived at request time from the Markdown it already verified, by the bundle's own reader: `caos.methodology.tables.handoff_tables` calls `cp_tables.parse_tables` from the verified contract (`VendorContract.cp_tables`, the module the completeness checker imports), in document order, each cell its text as that reader splits it. Nothing is stored; the Markdown stays the authority and the tables are model-authored as it is (§46.3); no store or blob read is added. A cell has a value only where the bundle's `parse_figure` reads a figure (its null vocabulary is null, `5,2` is no value), and the value is that spelling re-read with `Decimal`, never the vendor's float (invariant 7), in plain notation (`^-?[0-9]+(\.[0-9]+)?$`); a figure past 64 characters has no value and keeps its text. Bounds: 64 tables, 32 columns, 2,000 rows, 4,096 characters a cell, 256 a table id; past one, or where the reader raises, the handoff serves no table and `tables_unavailable_reason` `TABLES_TOO_LARGE` or `TABLES_MALFORMED`. Alternatives: store tables at acceptance (a record change and a second authority); parse Markdown in the browser (the frontend never does); a host-only figure grammar (the bundle is the authority on what a figure is, invariant 4); the vendor's float (invariant 7). Evidence: `tests/test_handoff_tables.py`, `tests/test_model_section.py::test_analysis_serves_the_tagged_tables_each_owner_wrote`, `tests/test_wire_contract.py::test_a_table_cell_is_its_text_and_a_plain_decimal_string_or_null`.
