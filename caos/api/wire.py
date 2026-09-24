@@ -275,6 +275,7 @@ CLEARS: Mapping[RefusalCode, str] = {
     _C.ROUTE_IDENTITY_INVALID: "An operator must verify the pinned route.",
     _C.ROUTE_PIN_TOO_LATE: "Start a new run.",
     _C.RUN_INPUT_INVALID: "An operator must verify the run input.",
+    _C.RESEARCH_BRIEF_INVALID: "Correct the research brief for the run's route.",
     _C.RUN_INPUT_ALREADY_PINNED: "Nothing; the input is already pinned.",
     _C.RUN_INPUT_TOO_LATE: "Start a new run.",
     _C.GATE_APPROVAL_MISMATCH: "Approve the content currently shown.",

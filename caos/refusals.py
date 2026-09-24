@@ -148,6 +148,9 @@ class RefusalCode(StrEnum):
     ROUTE_IDENTITY_INVALID = "ROUTE_IDENTITY_INVALID"
     ROUTE_PIN_TOO_LATE = "ROUTE_PIN_TOO_LATE"
     RUN_INPUT_INVALID = "RUN_INPUT_INVALID"
+    # W4: a caller's own research brief -- or its absence, on a route that
+    # reads one -- is what a new pin refused, not the stored input.
+    RESEARCH_BRIEF_INVALID = "RESEARCH_BRIEF_INVALID"
     RUN_INPUT_ALREADY_PINNED = "RUN_INPUT_ALREADY_PINNED"
     RUN_INPUT_TOO_LATE = "RUN_INPUT_TOO_LATE"
     GATE_APPROVAL_MISMATCH = "GATE_APPROVAL_MISMATCH"

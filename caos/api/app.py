@@ -293,6 +293,9 @@ _STATUS = {
     RefusalCode.IDEMPOTENCY_KEY_REQUIRED: 400,
     RefusalCode.ROUTE_NOT_ENABLED: 400,
     RefusalCode.METHODOLOGY_INPUT_INVALID: 400,
+    # W4: the caller's own brief, judged at the pin exactly as CP-DR will read
+    # it. `RUN_INPUT_INVALID` stays 500 for the stored input it names.
+    RefusalCode.RESEARCH_BRIEF_INVALID: 400,
     RefusalCode.FORECAST_DRIVER_NOT_READY: 400,
     RefusalCode.DELIVERABLE_PAYLOAD_INVALID: 400,
     RefusalCode.NARRATIVE_FIGURE_UNREFERENCED: 400,
