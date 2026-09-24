@@ -1311,7 +1311,9 @@ def _research_messages(
             SimpleNamespace(fields=fields, text=text), research_brief_of(identity)
         )
     except ValueError as refused:  # the vendor's own message, bounded
-        return [("research", refused)]
+        # As text, here at the vendor's boundary: `_bounded` passes strings
+        # alone, and the exception itself was dropped there (R24-07).
+        return [("research", _vendor_said(refused))]
     except Refusal:  # no bound brief: a help line never stops a run
         return []
     return []
@@ -1325,8 +1327,16 @@ def _t8_messages(
     try:
         nav.parse_t8(text, nav.validate_catalog(catalog))
     except ValueError as refused:  # the vendor's NavigationError
-        return [("navigation", str(refused))]
+        return [("navigation", _vendor_said(refused))]
     return []
+
+
+def _vendor_said(refused: ValueError) -> str | None:
+    """A vendor refusal's own message as text, or nothing when rendering it
+    fails; `_bounded` then cuts and checks it like every vendor line."""
+    with suppress(Exception):
+        return str(refused)
+    return None
 
 
 def _bounded(label: str, message: object) -> str | None:

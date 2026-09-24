@@ -534,6 +534,38 @@ def test_cp_dr_contract_refuses_a_dossier_that_does_not_lock_the_brief() -> None
     assert _refused(ident, overstated.encode()) is RefusalCode.HANDOFF_INCOMPLETE
 
 
+def test_a_dossier_refusal_rides_the_public_second_attempt_feedback() -> None:
+    """R24-07: the vendor's `validate_dossier` refusal reached the feedback
+    as its `ValueError` object, and the string-only boundary dropped it, so
+    public `retry_feedback` told CP-DR's second attempt nothing. The message
+    now crosses as text, bounded and labelled, beside the validator's."""
+    from caos.methodology.handoff import MAX_FEEDBACK_CHARS, retry_feedback
+
+    ident, _fields, markdown = _cp_dr()
+    text = markdown.decode()
+    overstated = text.replace("coverage_score: 50", "coverage_score: 60")
+    assert overstated != text
+    assert _refused(ident, overstated.encode()) is RefusalCode.HANDOFF_INCOMPLETE
+
+    def feedback(canonical: str) -> tuple[str, ...]:
+        body = json.dumps(
+            {
+                "canonical_markdown": canonical,
+                "citations": [
+                    {"source_id": str(uuid4()), "page": 1, "matched_text": "x"}
+                ],
+            }
+        )
+        return retry_feedback(
+            CONTRACT, CATALOG, ident, body, skill=skill(ident.module_id)
+        )
+
+    research = [line for line in feedback(overstated) if line.startswith("research: ")]
+    assert len(research) == 1, feedback(overstated)
+    assert len(research[0]) <= len("research: ") + MAX_FEEDBACK_CHARS
+    assert not any(line.startswith("research: ") for line in feedback(text))
+
+
 def test_a_blocked_research_dossier_is_diagnostic_not_incomplete() -> None:
     """A genuinely blocked research run records `research_status: Blocked`
     and is unaccepted: the host reads it as the Blocked verdict every module

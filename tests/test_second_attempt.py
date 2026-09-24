@@ -848,7 +848,8 @@ def test_cp_dr_is_told_the_dossier_validators_own_message(
     )
     monkeypatch.setattr(handoff, "research_brief_of", lambda _identity: {})
     found = handoff._research_messages(stub, _identity_cp0(), {}, "text")
-    assert [(label, str(message)) for label, message in found] == [("research", said)]
+    # Text already, not the exception: `_bounded` drops anything else (R24-07).
+    assert found == [("research", said)]
 
 
 def _identity_cp0() -> HostIdentity:
