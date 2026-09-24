@@ -28,6 +28,7 @@ from uuid import UUID, uuid4
 import psycopg
 import pytest
 from conftest import _checked_values, login_role, tamper
+from psycopg_pool import ConnectionPool
 from test_case_ordering import _blocked, _wait_for_blocking
 from test_extraction_provenance import Reader
 from test_run_inputs import Prepared, _prepare, pin_version_one
@@ -127,6 +128,7 @@ def test_connect_asks_for_keepalives_and_an_optional_statement_timeout(
     migration path may legitimately run long); one that does gets it as
     `options` at connect time, which holds for the whole session."""
     captured: dict[str, object] = {}
+    monkeypatch.delenv("PGOPTIONS", raising=False)
 
     def fake_connect(_url: str, **kwargs: object) -> None:
         captured.update(kwargs)
@@ -149,6 +151,65 @@ def test_connect_asks_for_keepalives_and_an_optional_statement_timeout(
     assert captured["options"] == (
         "-c search_path=caos_store -c statement_timeout=5000"
     )
+
+
+def test_startup_options_put_the_operator_s_first_as_libpq_reads_them(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """N4: the DSN's own `options` when it names any -- an empty one included,
+    which libpq does not replace with `PGOPTIONS` either -- else `PGOPTIONS`,
+    and this process's after them."""
+    ours = "-c search_path=caos_store"
+    monkeypatch.setenv("PGOPTIONS", "-c work_mem=64MB")
+    assert store.startup_options("host=h", ours) == f"-c work_mem=64MB {ours}"
+    assert store.startup_options("host=h options='-c a=1'", ours) == f"-c a=1 {ours}"
+    assert store.startup_options("host=h options=''", ours) == ours
+    monkeypatch.delenv("PGOPTIONS")
+    assert store.startup_options("", ours, "-c b=2") == f"{ours} -c b=2"
+
+
+def test_connect_keeps_the_operator_s_options_and_its_own_win(
+    empty_database: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N4: `options` passed as a keyword replaced the DSN's own and, with it,
+    libpq's `PGOPTIONS` fallback, so a DBA's `lock_timeout` or a DSN's
+    `application_name` never reached the server. They come first now -- the
+    DSN's, or `PGOPTIONS` where it names none, as libpq reads them -- and the
+    store's own follow, so its search path and its bound still win. The
+    checkpointer's pool, which names its own bound, keeps them the same way."""
+    from caos.graph.checkpoint import checkpointer, close_checkpointer
+
+    monkeypatch.delenv("PGOPTIONS", raising=False)
+    dsn = (
+        empty_database + "?options=-c%20lock_timeout%3D1234%20-c%20search_path%3Dpublic"
+    )
+    shown = ("lock_timeout", "search_path", "statement_timeout")
+
+    def settings(url: str, **bound: int) -> tuple[object, ...]:
+        with connect(url, **bound) as conn:
+            return tuple(conn.execute(f"SHOW {name}").fetchone() for name in shown)
+
+    assert settings(dsn, statement_timeout_ms=5000) == (
+        ("1234ms",),
+        ("caos_store",),
+        ("5s",),
+    )
+    monkeypatch.setenv("PGOPTIONS", "-c lock_timeout=4321 -c statement_timeout=9000")
+    assert settings(empty_database) == (("4321ms",), ("caos_store",), ("9s",))
+    assert settings(dsn)[0] == ("1234ms",), "the DSN's own, not PGOPTIONS"
+    saver = checkpointer(dsn)
+    try:
+        pool = getattr(saver, "conn", None)
+        assert isinstance(pool, ConnectionPool)
+        with pool.connection() as pooled:
+            kept = [pooled.execute(f"SHOW {name}").fetchone() for name in shown]
+    finally:
+        close_checkpointer(saver)
+    assert kept == [
+        {"lock_timeout": "1234ms"},
+        {"search_path": "caos_graph"},
+        {"statement_timeout": "30s"},
+    ]
 
 
 def test_the_store_lives_in_its_own_schema_and_never_in_public(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
@@ -13,6 +14,7 @@ from types import MappingProxyType
 from typing import Any
 
 import psycopg
+from psycopg.conninfo import conninfo_to_dict
 from psycopg.rows import tuple_row
 
 from caos.refusals import Refusal, RefusalCode
@@ -330,6 +332,21 @@ SOCKET_BOUNDS: Mapping[str, int] = MappingProxyType(
 )
 
 
+def startup_options(url: str, *options: str) -> str:
+    """The `options` a connection to `url` starts with (N4): the operator's
+    first -- the DSN's own, or `PGOPTIONS` where the DSN names none, which is
+    how libpq reads them -- then `options`, this process's, which the server
+    applies last and so win for any parameter both name.
+
+    A keyword `options` replaces the DSN's outright, and libpq falls back to
+    `PGOPTIONS` only when none is given, so the operator's `lock_timeout` or
+    `application_name` never reached the server.
+    """
+    named = conninfo_to_dict(url)
+    theirs = named["options"] if "options" in named else os.environ.get("PGOPTIONS")
+    return " ".join(str(part) for part in (theirs, *options) if part)
+
+
 def connect(
     url: str,
     *,
@@ -342,7 +359,8 @@ def connect(
     such as the health probe that must not wait on an unanswering host.
 
     Every connection's `search_path` is the store's own schema alone
-    (`STORE_SCHEMA`, DL-1), sent as a startup option like the bound below.
+    (`STORE_SCHEMA`, DL-1), sent as a startup option like the bound below,
+    after the operator's own (`startup_options`), which it overrides.
 
     `statement_timeout_ms` bounds every statement for the connection's whole
     session (`options`, at connect time -- not `SET LOCAL`, which a caller's
@@ -366,7 +384,7 @@ def connect(
     options = [SEARCH_PATH_OPTION]
     if statement_timeout_ms is not None:
         options.append(f"-c statement_timeout={statement_timeout_ms}")
-    kwargs["options"] = " ".join(options)
+    kwargs["options"] = startup_options(url, *options)
     try:
         return psycopg.connect(url, autocommit=False, **kwargs)
     except psycopg.OperationalError as failed:

@@ -41,7 +41,7 @@ from psycopg_pool import ConnectionPool
 
 from caos.graph.build import RunState
 from caos.refusals import Refusal, RefusalCode
-from caos.store import SOCKET_BOUNDS, owned_schema
+from caos.store import SOCKET_BOUNDS, owned_schema, startup_options
 from caos.store.lakebase import (
     TOKEN_SECONDS,
     lakebase_database,
@@ -229,7 +229,9 @@ def _pooled(
             "autocommit": True,
             "row_factory": dict_row,
             **SOCKET_BOUNDS,
-            "options": f"-c statement_timeout={STATEMENT_TIMEOUT_MS}",
+            "options": startup_options(
+                conninfo, f"-c statement_timeout={STATEMENT_TIMEOUT_MS}"
+            ),
         },
         configure=_search_path,
         min_size=POOL_MIN,
