@@ -1,15 +1,15 @@
 """The run's event stream: append-only, numbered per run, ordered by a row lock.
 
-`SYSTEM_SPEC.md` section 2: `run_events.seq` is per-run monotonic, allocated
-under the run row lock, and no event is inserted without the transition it
-records. The second half is enforced by the callers in `runs.py`, which append
-only on a conditional update that changed a row. The first half is enforced
-here: `append` takes the lock itself rather than trusting its caller to have
-taken it, because "allocated under the run row lock" is not a comment.
+`run_events.seq` is per-run monotonic, allocated under the run row lock, and
+no event is inserted without the transition it records. The second half is
+enforced by the callers in `runs.py`, which append only on a conditional
+update that changed a row. The first half is enforced here: `append` takes
+the lock itself rather than trusting its caller to have taken it, because
+"allocated under the run row lock" is not a comment.
 
-The stream is what the browser tails (`SYSTEM_SPEC.md` section 9) and the client
-never reads an event's payload -- a name triggers a refetch. So an event carries
-a name and a position, and nothing a document produced.
+The stream is what the browser tails and the client never reads an event's
+payload -- a name triggers a refetch. So an event carries a name and a
+position, and nothing a document produced.
 """
 
 from __future__ import annotations

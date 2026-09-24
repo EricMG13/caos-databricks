@@ -3,8 +3,7 @@
 Phase 4 built a loop that asked a `Provider` for an artifact and a charge. Phase 5
 built the thing that actually produces one: verified authority, a provider call,
 a canonical envelope, citations anchored in the host's token index. This is the
-join `docs/REBUILD_PLAN.md` owes as
-`test_the_loop_charges_what_the_provider_reported`.
+join `test_the_loop_charges_what_the_provider_reported` proves.
 
 The charge is the one the provider reported, never the estimate. They are
 different numbers answering different questions: the estimate is what the run set

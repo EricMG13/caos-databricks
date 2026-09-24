@@ -516,9 +516,8 @@ def accepted_artifacts(
 
     Only CP-0's and the QA gate source's bodies are fetched. `node_states` reads
     readiness and QA clearance from those and needs nothing but presence from the
-    others, so fetching every payload
-    would be a blob read per node per pass for data nobody looks at -- the ~8x
-    shape `docs/AI_CODE_QUALITY.md` section 1 measures.
+    others, so fetching every payload would be a blob read per node per pass for
+    data nobody looks at -- the ~8x N+1 shape.
 
     One query for the rows. A row without its host record refuses
     `ARTIFACT_RECORD_MISMATCH`: no artifact is read as a claims body (§42.1).

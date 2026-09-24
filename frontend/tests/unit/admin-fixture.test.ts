@@ -1,5 +1,5 @@
 // The demonstration Admin fixture is prose about the deployment, and prose
-// can go stale while every shape check still passes. `server/api/health.py`
+// can go stale while every shape check still passes. `caos/api/health.py`
 // has served `GET /api/health` since §53.8; the fixture said it was not.
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";

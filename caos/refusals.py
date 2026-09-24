@@ -1,7 +1,7 @@
 """Typed refusals. The code travels; the offending text never does.
 
-Error handling is ~2x worse in agent-written code (docs/AI_CODE_QUALITY.md
-section 1) and the failure is always the same shape: an exception string
+Error handling is ~2x worse in agent-written code, and the failure is always
+the same shape: an exception string
 carrying a document's contents, a vendor's name or a filesystem path into a log
 line or an HTTP body. A Refusal carries a code from a closed set and nothing
 else, so there is no string to leak.

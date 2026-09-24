@@ -1,8 +1,8 @@
 """The deliverable: one HTML file, and a render that originates nothing.
 
-`SYSTEM_SPEC.md` §7. The host renders from the frozen snapshot -- the accepted
-artifacts in route order, every figure carrying its citation, then the analyst's
-narrative and the module provenance index.
+The host renders from the frozen snapshot -- the accepted artifacts in route
+order, every figure carrying its citation, then the analyst's narrative and
+the module provenance index.
 
 The structural claim is the one worth protecting: *the render is a function of
 frozen bytes*. It takes a payload and returns a page. It has no store, no
@@ -30,7 +30,7 @@ from html import escape
 from typing import Any
 
 # Every approved copy says so on its face. The bytes that carry an opinion are
-# not the bytes that carry a filing (`SYSTEM_SPEC.md` §7).
+# not the bytes that carry a filing.
 PENDING = "PENDING APPROVAL"
 # A pathway scope that is a screen, never committee clearance (`handoff.py`).
 SCREENING_ONLY = "SCREENING_ONLY"

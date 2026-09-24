@@ -200,7 +200,7 @@ def file_deliverable(
 
 
 def renderer_sha256() -> str:
-    """The exact renderer bytes a filing names (`docs/DECISIONS.md` §55)."""
+    """The exact renderer bytes a filing names."""
     return sha256(Path(__file__).with_name("render.py").read_bytes()).hexdigest()
 
 

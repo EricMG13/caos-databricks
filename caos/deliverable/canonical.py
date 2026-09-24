@@ -1,8 +1,8 @@
 """The deliverable's canonical payload, read from the store and bound to it.
 
-`docs/DECISIONS.md` §41.2 and §42.4. A canonical artifact's identity is the pair
-(`artifact_sha256`, `record_sha256`), and the record is never read back as fact.
-Every accepted artifact of the pinned route is read in route order through
+A canonical artifact's identity is the pair (`artifact_sha256`, `record_sha256`),
+and the record is never read back as fact. Every accepted artifact of the
+pinned route is read in route order through
 `read_record` against the identity the host rebuilds from its pins; its Markdown
 is re-validated and must project exactly what the record says; every recorded
 citation is re-anchored in the run's pinned evidence and must land on exactly

@@ -4,7 +4,6 @@
 bandit 1.7.10 reaches for `ast.Constant.s`, which newer interpreters no longer
 provide: under Python 3.14 it skips every server file and exits 0. A green SAST
 gate that scanned nothing is worse than a red one, because it is believed.
-See docs/AI_CODE_QUALITY.md section 4.
 """
 
 from __future__ import annotations

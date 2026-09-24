@@ -1,6 +1,6 @@
 """Two words, and the line this package exists to hold between them.
 
-`docs/REBUILD_PLAN.md` Phase 10 defines both, because nothing else does:
+Qualification defines both, because nothing else does:
 
 `ORCHESTRATION_PROOF` is what the host can assert **on its own** -- the pinned
 methodology ran as pinned, against the pinned sources, and every citation

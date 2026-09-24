@@ -1,9 +1,9 @@
 """The content-addressed blob store. Bytes in, `sha256` out, verified on the way back.
 
-`SYSTEM_SPEC.md` section 2 keeps bytes out of the database: rows hold a digest.
-The digest is only worth holding if reading it back proves it, so `get` re-hashes
-what it read and refuses what does not match. Nothing else in the system can tell
-a source document apart from a plausible replacement of it.
+Bytes stay out of the database: rows hold a digest. The digest is only worth
+holding if reading it back proves it, so `get` re-hashes what it read and
+refuses what does not match. Nothing else in the system can tell a source
+document apart from a plausible replacement of it.
 
 A blob is written under a temporary name and renamed into place, so the address
 either holds the whole blob or holds nothing. A partial file at the final address

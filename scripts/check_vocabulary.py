@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Refuse an identifier that spells a CONTEXT.md term by one of its synonyms.
 
-Naming inconsistency is ~2x more frequent in agent-written code
-(docs/AI_CODE_QUALITY.md section 1). CONTEXT.md is the single glossary; this
-check is what makes it binding on code rather than on intention.
+Naming inconsistency is ~2x more frequent in agent-written code. CONTEXT.md
+is the single glossary; this check is what makes it binding on code rather
+than on intention.
 
 Only identifiers are examined -- never prose, never string literals -- because
 the defect being prevented is two spellings of one concept minting two lineages.

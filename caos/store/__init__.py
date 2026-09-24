@@ -367,7 +367,7 @@ def apply_schema(conn: StoreConnection, *, sql: str = SCHEMA) -> None:
         # Only "the store could not answer" keeps its own code. Everything else
         # a migration refuses -- including a malformed row its own verification
         # finds, which may be raised from outside this module -- is a drift
-        # finding and says so (`docs/DECISIONS.md` §20a).
+        # finding and says so.
         rollback_or_close(conn)
         if refused.code in _STORE_SILENT:
             raise

@@ -1,8 +1,8 @@
 """`ORCHESTRATION_PROOF`: the one thing the host may assert about itself.
 
-`docs/REBUILD_PLAN.md` Phase 10 defines it as three claims — the pinned
-methodology ran as pinned, against the pinned sources, and every citation
-re-located. Every one of those is a fact this repository holds the records for,
+Three claims define it — the pinned methodology ran as pinned, against the
+pinned sources, and every citation re-located. Every one of those is a fact
+this repository holds the records for,
 which is exactly why it is the word the host is allowed to say. The other word
 (`QUALIFIED`) is a reviewer's, and nothing here reaches it.
 
@@ -23,7 +23,7 @@ artifacts all hold vacuously, and the strongest-looking proof this module could
 ever return would be one about a run that never ran. `CLAUDE.md`: a change that
 makes an invariant pass vacuously is wrong even with a green suite.
 
-**Every run is canonical** (`docs/DECISIONS.md` §42): an artifact is proven
+**Every run is canonical**: an artifact is proven
 through its host record and nothing else -- an artifact without one refuses
 `ARTIFACT_RECORD_MISMATCH`, and none is parsed as claims. Both blobs are read,
 the record must bind this Markdown and the identity rebuilt from the store, its

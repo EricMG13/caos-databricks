@@ -5,15 +5,15 @@ and its integrity is checked *at use* rather than at startup only -- because a
 digest verified when the process booted says nothing about the file the process
 reads an hour later, and that file is the methodology a credit opinion rests on.
 
-Two rules from `docs/DECISIONS.md` shape what is here.
+Two rules shape what is here.
 
-*§5, the carve-out.* Upstream merged CP-PARSE into CP-0. The host keeps them as
+*The carve-out.* Upstream merged CP-PARSE into CP-0. The host keeps them as
 separate stage-0 nodes because CP-PARSE owns the `document_parse_manifest` over
 the host's own already-extracted blocks, which is host territory. `_CARVE_OUTS`
 is the host's one declaration, and CP-PARSE receives the whole CP-0 skill.
 
-*§5's consequence, which is easy to miss.* `assemble_authority` must not slice
-`SKILL.md` on section markers. The merged skill has dropped
+*The carve-out's consequence, which is easy to miss.* `assemble_authority` must
+not slice `SKILL.md` on section markers. The merged skill has dropped
 `## CP-PARSE runnable profile`, so a slicer looking for it would break CP-0 as
 well as CP-PARSE. The whole file, or a refusal.
 """
@@ -37,8 +37,8 @@ SKILLS_DIR = "skills"
 # §35: pinned manifest is 68,657 bytes; read at most this ceiling plus one.
 MANIFEST_BYTE_LIMIT = 128 * 1024
 
-# The host's one declaration (`docs/DECISIONS.md` §5). CP-PARSE is not a folder
-# in this build; it is CP-0's authority under its own route node.
+# The host's one declaration. CP-PARSE is not a folder in this build; it is
+# CP-0's authority under its own route node.
 _CARVE_OUTS = {"CP-PARSE": "CP-0"}
 
 
@@ -91,7 +91,7 @@ class Bundle:
     def manifest_sha256(self) -> str:
         """The one vendored file the manifest cannot cover: its own bytes.
 
-        `docs/DECISIONS.md` §13 records this digest separately, because the host
+        Recorded separately from the manifest's own digests, because the host
         does not mint an identity for something that ships with one.
         """
         self.verify_manifest()
@@ -361,9 +361,9 @@ class DeliveredAuthority:
 
     `SKILL.md` first, then the module's non-script manifest files by name, then
     any declared file of another skill its `SKILL.md` names (§101), then the
-    root files `SKILL.md` names, each under its `../../` literal
-    (`docs/DECISIONS.md` §45.1). `withheld` names the manifest files the host
-    keeps back (`WITHHELD_AUTHORITY`), for the prompt to say so.
+    root files `SKILL.md` names, each under its `../../` literal. `withheld`
+    names the manifest files the host keeps back (`WITHHELD_AUTHORITY`), for
+    the prompt to say so.
     """
 
     module_id: str

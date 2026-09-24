@@ -1,7 +1,5 @@
 """The one ASGI entry the image serves: the edge, the API and the static export.
 
-Phase 4 Task 4.5, decision 7 (recorded in `docs/DECISIONS.md` §53).
-
 `application` is `EdgeGuard` outermost, so every response -- a static file, a
 refusal, an API document -- carries the security headers and policy, and no
 request reaches a file or a route before the edge has admitted it. Behind it:

@@ -184,9 +184,8 @@ def _finished(record: Performed, row: MatrixRow | None) -> bool:
         return False
     # A case that declared its refusal declared that the run would not finish.
     # Demanding COMPLETE of it as well made the key unanswerable by any run this
-    # system produces, which is what `docs/REPAIR_PLAN.md` Phase 6 asks for in
-    # a deliberately restricted case. Over a run that ended refused, and no
-    # other (DQ-3).
+    # system produces, for a deliberately restricted case. Over a run that
+    # ended refused, and no other (DQ-3).
     if row.expected_refusal_met:
         return record.status in REFUSED_ENDINGS
     # A case keyed `expects_blocked` declared that CP-0 would refuse a consumer,
@@ -654,11 +653,11 @@ def _models_recorded(
     whose declared refusal was met, and a run whose first node returns a
     validated Blocked verdict ends BLOCKED with a billed attempt, a
     `call_outcomes` row and no artifact -- so the join below returns no row for
-    it. Demanding every run appear refused exactly the case
-    `docs/REPAIR_PLAN.md` Phase 6 asks for, the deliberately restricted one,
-    and refused it as a *wrong binding* when the bindings were right. One
-    unsignable case poisons the whole set. Found by the Completion Phase 8
-    confidence review, which built the snapshot and reproduced it.
+    it. Demanding every run appear refused exactly matched the deliberately
+    restricted case, and refused it as a *wrong binding* when the bindings
+    were right. One unsignable case poisons the whole set. Found by the
+    Completion Phase 8 confidence review, which built the snapshot and
+    reproduced it.
 
     Every artifact-bearing run is still checked against the store's fact, and
     an empty result still refuses: a snapshot in which nothing was ever

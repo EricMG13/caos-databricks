@@ -7,9 +7,8 @@ is the one `test_terminal_event_is_exactly_once` counts.
 Who commits, and why it differs: `create_case` and `start_run` do not, because
 they are setup and their caller may want them beside something else. The three
 transitions below do, because each one *is* a unit of work in the sense the
-pairing rule means (`SYSTEM_SPEC.md` section 2) -- state and its event, together
-or not at all. Leaving that commit to a caller would leave the invariant to a
-caller.
+pairing rule means -- state and its event, together or not at all. Leaving
+that commit to a caller would leave the invariant to a caller.
 """
 
 from __future__ import annotations
@@ -146,7 +145,7 @@ def start_attempt(
 
     The row exists before the work does, because it is the identity the work is
     charged against: a crash after a provider completed still has the attempt it
-    completed (`docs/DECISIONS.md` §12, adopting CAOS-Final §21 with Phase 4).
+    completed (adopting CAOS-Final §21 with Phase 4).
     """
     try:
         require_running(conn, run_id, lease)
@@ -216,7 +215,7 @@ class Accepted:
     generation_id: str
     diagnostic_sha256: str | None = None
     # The host record blob; present exactly when the run pins the canonical
-    # adapter (`docs/DECISIONS.md` §42.1).
+    # adapter.
     record_sha256: str | None = None
 
 
@@ -441,7 +440,7 @@ def _transition(  # noqa: PLR0913 -- one terminal move and its re-derived decisi
 ) -> bool:
     """Move a RUNNING run into a terminal status, appending `event` only if the
     move actually happened. Zero rows updated, no event -- the rule that makes a
-    terminal event exactly-once (`SYSTEM_SPEC.md` section 2).
+    terminal event exactly-once.
 
     Under `lock_run`, a run already ended is answered False before the fence; a
     RUNNING run is ended only by its lease holder, and its work row closes in

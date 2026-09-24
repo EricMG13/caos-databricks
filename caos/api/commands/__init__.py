@@ -1,5 +1,5 @@
 """The governed commands under `/api/v1/cases` (Task 4.2), and the one
-global write, a qualification verdict (`docs/DECISIONS.md` §65).
+global write, a qualification verdict.
 
 One module per command family, each owning its `APIRouter` and `IO_BUDGET`:
 `cases` (create case, admission), `runs` (route, input, preview, approval) and

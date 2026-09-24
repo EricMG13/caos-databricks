@@ -1,11 +1,11 @@
 """The HTTP surface: the section reads, the run tail, and one answer for a
 stranger.
 
-`SYSTEM_SPEC.md` §9 and `docs/DECISIONS.md` §22. Each section read lives in its
-own module under `caos/api/reads/` (Task 4.1); the retired run document is now
-the Run section. The events path is the socket `caos/api/stream.py`'s
-contract is served over -- that module already answers every rule §9 states,
-and this is where those answers meet a connection.
+Each section read lives in its own module under `caos/api/reads/` (Task 4.1);
+the retired run document is now the Run section. The events path is the
+socket `caos/api/stream.py`'s contract is served over -- that module already
+answers every rule the case stream keeps, and this is where those answers
+meet a connection.
 
 The privacy rule is the load-bearing one. A run somebody may not see and a run
 that does not exist get the same status and the same body, because 403 is the
@@ -108,7 +108,7 @@ IO_BUDGET = EVENTS_IO_BUDGET
 TAIL_DEADLINE = 300.0
 # How long the loop waits before asking again. Short enough that a run finishing
 # closes the stream promptly, long enough that an idle watcher is not a query a
-# second (CLAUDE.md known gaps -- `LISTEN`/`NOTIFY` is the upgrade).
+# second -- `LISTEN`/`NOTIFY` is the upgrade.
 POLL_INTERVAL = 0.5
 
 # What a transient answer promises, in seconds. A constant rather than a
