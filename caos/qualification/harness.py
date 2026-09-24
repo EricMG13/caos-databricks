@@ -51,6 +51,7 @@ that omits the cases after the stop reads as complete.
 from __future__ import annotations
 
 import json
+from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, fields
 from decimal import Decimal
@@ -63,6 +64,8 @@ import psycopg
 
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
+from caos.evidence.citations import _Token, _unique_run
+from caos.evidence.extract import dispatch_by_content
 from caos.evidence.ingest import admit_pack
 from caos.graph.route import (
     GATE_MODULE,
@@ -771,25 +774,76 @@ def _accepted(
         return {str(row[0]): NodeResult() for row in rows}
 
 
+def _locatable(data: bytes, matched_text: str) -> bool:
+    """Whether `matched_text` could ever anchor somewhere in `data` (FP-26).
+
+    The same search a real citation is verified by (`caos/evidence/citations.py`
+    `_unique_run`), over the same extractor's tokens, page by page: a quote no
+    page holds could never be cited by a correct run, whatever it answers.
+    Ambiguity on one page does not fail this -- an ambiguous quote still
+    anchors if a run cites the right page, and a truly ambiguous one is
+    `CITATION_AMBIGUOUS` at run time, not a defect in the set. Unreadable bytes
+    answer `False`: nothing extracted from them could ever be cited either.
+    """
+    try:
+        tokens = dispatch_by_content(data).extract(data)
+    except Refusal:
+        return False
+    pages: dict[int, list[_Token]] = defaultdict(list)
+    for token in tokens:
+        pages[token.page].append(
+            _Token(
+                token.text,
+                token.region_id,
+                token.line_id,
+                token.x0,
+                token.y0,
+                token.x1,
+                token.y1,
+            )
+        )
+    for page_tokens in pages.values():
+        try:
+            _unique_run(page_tokens, matched_text)
+        except Refusal as refused:
+            if refused.code is RefusalCode.CITATION_NOT_LOCATED:
+                continue
+            return True  # CITATION_AMBIGUOUS: found, just not uniquely here
+        return True
+    return False
+
+
 def _answerable(bundle: Bundle, qualification: QualificationSet) -> None:
-    """Every key names input the case carries and the adapter can locate.
+    """Every key names input the case carries, at a quote the adapter can
+    locate.
 
     Only checkable now that the set holds both halves. Before, a key could name
     any digest at all and the row would simply always miss — indistinguishable
     from a system that failed to find it. A set that no correct run could
     satisfy is a defect in the set, and it is refused before the first call
-    rather than after paying for every one of them.
+    rather than after paying for every one of them. FP-26: a document's digest
+    being carried said nothing about whether its declared quote was ever in the
+    document at all -- a typo in an answer key was indistinguishable from a
+    model that could not find a real quote, until a run had already paid to
+    discover which.
     """
     for case in qualification.cases:
-        carried = {sha256(document.data).hexdigest() for document in case.documents}
+        by_digest = {
+            sha256(document.data).hexdigest(): document.data
+            for document in case.documents
+        }
         if (
-            any(expect.document_sha256 not in carried for expect in case.expects)
+            any(expect.document_sha256 not in by_digest for expect in case.expects)
             or (case.forecast is not None and not case.model_extension)
             # A refusal outside the methodology's own is a key about the host or
             # its infrastructure, which no run can be measured against (FP-01).
             or (
                 case.expected_refusal is not None
                 and case.expected_refusal not in DECLARABLE_REFUSALS
+            )
+            or any(
+                not _locatable(by_digest[expect.document_sha256], expect.matched_text)
+                for expect in case.expects
             )
         ):
             raise Refusal(RefusalCode.QUALIFICATION_KEY_UNANSWERABLE)
