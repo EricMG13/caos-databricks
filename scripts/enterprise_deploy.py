@@ -29,8 +29,11 @@ in `<evidence>/<id>.log`:
                      E10 one model call through the app's own HTTP surface,
                         not this script's process or credentials (CF-054): a
                         tiny text source admitted (a blob write) to the case
-                        E9 left behind, a LITE run started, and the event
-                        stream watched for the first node's call outcome
+                        E9 left behind, a LITE run started, and its Run
+                        section read on each event until the call answered:
+                        an accepted attempt, or a validated Blocked verdict.
+                        A refused call, a park or a pre-call refusal fails
+                        and names its code (W1)
 
 Every step ends in a row, never a traceback (N1): a failure is its class or
 its typed code. No secret is printed or written: the bearer the app calls
@@ -128,10 +131,10 @@ MODEL_CALL_SUBJECT = {
 # `caos.provider.TIMEOUT_SECONDS` (240) is the model call's own deadline;
 # E10 waits comfortably past it rather than racing it.
 MODEL_CALL_SECONDS = 260.0
-# Two `run_progress` frames after `start` are `ATTEMPT_STARTED` then
-# `CALL_OUTCOME_RECORDED` (`caos/api/events.py`): the second is the model
-# call's outcome written to the ledger, whatever the outcome was.
-CALL_OUTCOME_AT = 2
+# What ends a run without an answered call (`caos.store.RunStatus`): an
+# outcome is recorded for a refused call too, and a park is a progress frame
+# like any other (W1), so E10 reads the run itself, never counts frames.
+ENDED = frozenset({"COMPLETE", "FAILED", "BLOCKED", "CANCELLED"})
 
 
 def resolved_app(document: object) -> tuple[str, dict[str, str]]:
@@ -851,22 +854,56 @@ def _gate_approved(url: str, base: str, gate: str, headers: dict[str, str]) -> i
     return status
 
 
-def _progress_events(lines: queue.Queue[bytes], seconds: float) -> int:
-    """How many `run_progress` frames arrived before a terminal frame, a
-    close or the deadline. Two mean the first node's attempt started and its
-    call outcome was recorded (`caos.store.outcomes.record_outcome`) --
-    proof of one model call, whatever the call answered (CF-054)."""
-    seen = 0
-    until = time.monotonic() + seconds
-    while seen < CALL_OUTCOME_AT:
+def call_verdict(document: object) -> tuple[int, str] | None:
+    """E10's verdict on the Run section's document (W1), or None while the
+    first call is still undecided. The gateway answered the app's own call
+    when an attempt was accepted, or when a validated Blocked verdict ended
+    the run; a park, or any other end, is a call that did not answer, and
+    the row names the run's own code for it."""
+    run = _mapping(_mapping(_mapping(document).get("body")).get("run"))
+    attempts = run.get("attempts")
+    listed = attempts if isinstance(attempts, list) else []
+    if any(_mapping(attempt).get("accepted") is True for attempt in listed):
+        return (
+            0,
+            "one model call answered and accepted through the app's own HTTP surface",
+        )
+    status = run.get("status")
+    if status == "BLOCKED" and run.get("blocked_by") is not None:
+        return 0, "one model call answered: its validated verdict ended the run BLOCKED"
+    work = _mapping(run.get("work"))
+    if work.get("state") == "STOPPED":
+        return 1, f"the run parked {work.get('stop_code')}: no model call answered"
+    if status in ENDED:
+        return 1, f"the run ended {status}: no model call answered"
+    return None
+
+
+def _answered(
+    url: str,
+    read: str,
+    headers: dict[str, str],
+    lines: queue.Queue[bytes],
+) -> tuple[int, str]:
+    """The run read once per event frame (a heartbeat changes nothing) until
+    `call_verdict` decides, the stream closes or `MODEL_CALL_SECONDS` pass;
+    read once more at the end, so a decision the last frame announced is
+    never missed."""
+    until = time.monotonic() + MODEL_CALL_SECONDS
+    last = 0
+    while True:
         ended, frame = _next_frame(lines, until)
+        if ended == FRAME and "event: " not in frame:
+            continue
+        last, document = _json_call(url, "GET", read, headers)
+        verdict = call_verdict(document) if last == 200 else None
+        if verdict is not None:
+            return verdict
         if ended != FRAME:
-            return seen
-        if "event: run_progress" in frame:
-            seen += 1
-        elif "event: run_terminal" in frame:
-            return seen  # ended early, but not before a call was recorded
-    return seen
+            return 1, (
+                f"no model call answered within {MODEL_CALL_SECONDS}s "
+                f"(the run read answered {last})"
+            )
 
 
 def _started_and_watched(
@@ -877,10 +914,12 @@ def _started_and_watched(
     evidence: Evidence,
 ) -> int:
     """The stream opened before `start` so no early frame is missed, the run
-    started, then watched for the first node's call outcome."""
+    started, then its Run section read on each event until the first call
+    answered or did not (W1)."""
     step = "E10"
     run_id = prepared.run_id
     events = f"/api/v1/cases/{case_id}/events?run={run_id}"
+    read = f"/api/v1/cases/{case_id}/run?run={run_id}"
     try:
         status, response, _ = _open(
             url + events, "GET", headers, timeout=MODEL_CALL_SECONDS
@@ -895,14 +934,10 @@ def _started_and_watched(
         status, _ = _json_call(url, "POST", f"{base}/start", headers, pin)
         if status != 202:
             return evidence.record(step, f"POST {base}/start", 1, f"answered {status}")
-        seen = _progress_events(lines, MODEL_CALL_SECONDS)
+        code, note = _answered(url, read, headers, lines)
     except READ_FAILURES as failed:
         return evidence.record(step, f"GET {events}", 1, type(failed).__name__)
-    if seen < CALL_OUTCOME_AT:
-        note = f"no model call recorded within {MODEL_CALL_SECONDS}s"
-        return evidence.record(step, f"GET {events}", 1, note)
-    note = "one model call recorded through the app's own HTTP surface"
-    return evidence.record(step, f"GET {events}", 0, note)
+    return evidence.record(step, f"GET {read}", code, note)
 
 
 def _model_call(url: str, case_id: str, evidence: Evidence) -> int:

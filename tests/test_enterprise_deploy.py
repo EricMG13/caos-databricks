@@ -15,13 +15,16 @@ import threading
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import ParseResult, urlparse
+from uuid import UUID
 
 import check_gate_config
 import enterprise_deploy
 import pytest
+from canonical_fixtures import CanonicalCompletions
 from enterprise_deploy import Evidence, Row
 from platform_app import BINDINGS, REPO, PlatformApp
 from test_platform_boot import BOTH_KINDS, app, stub
@@ -87,15 +90,40 @@ def _resolved(
     return {"resources": {"apps": {"caos": app}}}
 
 
-@BOTH_KINDS
-def test_the_one_command_runs_the_cli_and_verifies_the_deployment(
+@dataclass(frozen=True, slots=True)
+class Deployed:
+    """One run of the one command against the booted app: the process, its
+    rows, the evidence directory, the CLI calls the recorder saw, and the
+    app name and database URL parts the run was given."""
+
+    done: subprocess.CompletedProcess[str]
+    rows: list[list[str]]
+    evidence: Path
+    seen: list[str]
+    name: str
+    parts: ParseResult
+
+
+def _answering(prompt: str, json_object: bool) -> str:
+    """A model that answers: the first node's valid handoff, citing the one
+    line E10 admits, for a prompt carrying evidence; E7's plain and JSON
+    smoke calls get the stub's own short answers (W1)."""
+    found = re.search(r"--- EVIDENCE \w+ ---\nsource_id: ([0-9a-f-]{36})\n", prompt)
+    if found is None or not json_object:
+        return '{"ok": true}' if json_object else "OK"
+    source = UUID(found.group(1))
+    line = enterprise_deploy.MODEL_CALL_SOURCE.decode().strip()
+    answers = CanonicalCompletions(source, quotes=(), cited=((source, line),))
+    return answers.complete(prompt, json_object=True).content or ""
+
+
+def _deploy(
     app: PlatformApp, stub: WorkspaceStub, empty_database: str, tmp_path: Path
-) -> None:
-    """E1..E10 for the Lakebase kind the flag chooses, the app booted bound
-    to that kind: E1 looks it up and E8 reads its version through that
-    kind's own API (R24-14)."""
+) -> Deployed:
+    """The one command, E1..E10, against the booted app and the stub, with
+    the CLI on the path a recorder answering as a real one would."""
     kind = app.kind
-    target, name = DEV_APPS[kind]
+    _, name = DEV_APPS[kind]
     parts = urlparse(empty_database)
     stub.instance_host = parts.hostname or "127.0.0.1"
     stub.user_name = parts.username or "postgres"  # Lakebase mints for the caller
@@ -169,11 +197,33 @@ def test_the_one_command_runs_the_cli_and_verifies_the_deployment(
         text=True,
         check=False,
     )
-    assert done.returncode == 0, done.stdout + done.stderr
     rows = [
         line.split("\t")
         for line in (evidence / "evidence.tsv").read_text().splitlines()
     ]
+    seen = calls.read_text().splitlines() if calls.is_file() else []
+    return Deployed(done, rows, evidence, seen, name, parts)
+
+
+@BOTH_KINDS
+def test_the_one_command_runs_the_cli_and_verifies_the_deployment(
+    app: PlatformApp, stub: WorkspaceStub, empty_database: str, tmp_path: Path
+) -> None:
+    """E1..E10 for the Lakebase kind the flag chooses, the app booted bound
+    to that kind: E1 looks it up and E8 reads its version through that
+    kind's own API (R24-14). E10's call is answered and accepted (W1)."""
+    kind = app.kind
+    target, name = DEV_APPS[kind]
+    stub.reply = _answering
+    deployed = _deploy(app, stub, empty_database, tmp_path)
+    done, rows, evidence, seen = (
+        deployed.done,
+        deployed.rows,
+        deployed.evidence,
+        deployed.seen,
+    )
+    parts = deployed.parts
+    assert done.returncode == 0, done.stdout + done.stderr
     assert [row[0] for row in rows] == [f"E{n}" for n in range(1, 11)]
     assert all(row[2] == "0" for row in rows), rows
     assert (
@@ -182,7 +232,6 @@ def test_the_one_command_runs_the_cli_and_verifies_the_deployment(
     )
     assert rows[2][3] == "every path the app needs was synced"
     assert rows[4][1] == f"apps get {name}"
-    seen = calls.read_text().splitlines()
     assert [line.split(" -t ")[0] for line in seen] == [
         "bundle validate -o json",
         "bundle deploy",
@@ -205,13 +254,83 @@ def test_the_one_command_runs_the_cli_and_verifies_the_deployment(
     assert "json_mode=accepted" in (evidence / "E7.log").read_text()
     assert "PostgreSQL" in (evidence / "E8.log").read_text()
     assert "with the stream open" in rows[8][3]
-    assert "one model call recorded" in rows[-1][3]
+    assert rows[-1][3] == (
+        "one model call answered and accepted through the app's own HTTP surface"
+    )
     assert f"deployed: {app.url}" in done.stdout
     # No credential in any row, log or line: the bearer the SDK was handed,
     # and the minted password in the only shape it could leak in, a URL.
     everything = "".join(p.read_text() for p in evidence.iterdir()) + done.stdout
     assert BEARER not in everything
     assert parts.password and f":{parts.password}@" not in everything
+
+
+def test_e10_fails_when_the_gateway_refuses_the_app_s_own_call(
+    app: PlatformApp,
+    stub: WorkspaceStub,
+    empty_database: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """W1: the deployer's two E7 smoke calls are answered; every later chat
+    completion -- the app's, from E10's run -- is answered as an endpoint
+    the caller cannot reach (a 404, what an app whose serving-endpoint
+    binding is wrong gets). The refused call is billed and its outcome
+    recorded, so two progress frames once read as "one model call
+    recorded"; the run parks instead, and E10 fails naming its code."""
+    answered = stub.completion
+    calls: list[str] = []
+
+    def refusing_after_the_smoke(body: dict[str, Any]) -> dict[str, Any] | None:
+        calls.append("refused" if len(calls) >= 2 else "answered")
+        return None if calls[-1] == "refused" else answered(body)
+
+    monkeypatch.setattr(stub, "completion", refusing_after_the_smoke)
+    deployed = _deploy(app, stub, empty_database, tmp_path)
+    assert "refused" in calls, calls
+    assert deployed.done.returncode != 0
+    assert [row[0] for row in deployed.rows] == [f"E{n}" for n in range(1, 11)]
+    assert all(row[2] == "0" for row in deployed.rows[:-1]), deployed.rows
+    e10 = deployed.rows[-1]
+    assert e10[2] == "1", e10
+    assert e10[3] == "the run parked PROVIDER_CALL_INVALID: no model call answered"
+
+
+def test_e10_passes_only_on_a_call_the_gateway_answered() -> None:
+    """W1: an accepted attempt, or a run a validated Blocked verdict ended,
+    is an answered call; a park or any other end is not, and names its code;
+    anything else is still undecided."""
+
+    def run(**fields: object) -> dict[str, object]:
+        return {"body": {"run": {"status": "RUNNING", "attempts": [], **fields}}}
+
+    accepted = run(attempts=[{"accepted": False}, {"accepted": True}])
+    assert enterprise_deploy.call_verdict(accepted) == (
+        0,
+        "one model call answered and accepted through the app's own HTTP surface",
+    )
+    blocked = run(status="BLOCKED", blocked_by={"route_node_id": "RN-1"})
+    assert enterprise_deploy.call_verdict(blocked) == (
+        0,
+        "one model call answered: its validated verdict ended the run BLOCKED",
+    )
+    parked = run(work={"state": "STOPPED", "stop_code": "PROVIDER_UNAVAILABLE"})
+    assert enterprise_deploy.call_verdict(parked) == (
+        1,
+        "the run parked PROVIDER_UNAVAILABLE: no model call answered",
+    )
+    # A BLOCKED run no verdict ended (an empty frontier) answered nothing.
+    assert enterprise_deploy.call_verdict(run(status="BLOCKED", blocked_by=None)) == (
+        1,
+        "the run ended BLOCKED: no model call answered",
+    )
+    assert enterprise_deploy.call_verdict(run(status="FAILED")) == (
+        1,
+        "the run ended FAILED: no model call answered",
+    )
+    assert enterprise_deploy.call_verdict(run(work={"state": "CLAIMED"})) is None
+    assert enterprise_deploy.call_verdict({"body": {"run": None}}) is None
+    assert enterprise_deploy.call_verdict("not a document") is None
 
 
 def _only_the_kind_s_own(
