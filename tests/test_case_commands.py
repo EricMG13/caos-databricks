@@ -26,7 +26,7 @@ from psycopg.pq import TransactionStatus
 from starlette.datastructures import FormData
 from starlette.requests import Request
 
-from caos.api.app import app
+from caos.api.app import RETRY_AFTER_SECONDS, app
 from caos.api.commands import cases
 from caos.api.deps import store_connection
 from caos.blobs import BlobStore
@@ -521,6 +521,35 @@ def test_a_refused_admission_gives_its_slot_back(
     slots.release()
     admitted = _admit(command_client, case_id, writer, [("a.txt", TEXT)])
     assert admitted.status_code == 201
+
+
+def test_an_admission_refuses_concurrency_limit_reached_once_its_wait_expires(
+    case: tuple[StoreConnection, UUID],
+    command_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """N5's remainder (F207): the wait for a slot is bounded by
+    `ADMISSION_WAIT_SECONDS`. Past it, the request refuses the existing
+    transient `CONCURRENCY_LIMIT_REACHED` (503 with `Retry-After`, F192)
+    rather than waiting on unbounded behind an admission that never frees its
+    slot, and gives nothing back that it never took."""
+    conn, case_id = case
+    writer = member(conn, case_id)
+    slots = _one_slot(monkeypatch)
+    monkeypatch.setattr(cases, "ADMISSION_WAIT_SECONDS", 0.05)
+    assert slots.acquire(blocking=False), "the one slot, held by another admission"
+    try:
+        refused = _admit(command_client, case_id, writer, [("a.txt", TEXT)])
+    finally:
+        slots.release()
+
+    assert (refused.status_code, refused.json()["code"]) == (
+        503,
+        "CONCURRENCY_LIMIT_REACHED",
+    )
+    assert int(refused.headers["retry-after"]) == RETRY_AFTER_SECONDS
+    assert slots.acquire(blocking=False), "the exhausted wait took no slot"
+    slots.release()
 
 
 def test_a_stranger_is_answered_without_waiting_for_a_slot(
