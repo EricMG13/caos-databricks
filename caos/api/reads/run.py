@@ -341,6 +341,7 @@ def _run_view(
         route_digest=None if pin_of_route is None else pin_of_route[1],
         build_id=None if pin is None else pin.build_id,
         source_set_version=None if pin is None else pin.source_version,
+        input_fingerprint=None if pin is None else pin.input_fingerprint,
         subject=None
         if pin is None or pin.subject is None
         else RunSubjectView(

@@ -263,6 +263,7 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
             "route_digest",
             "build_id",
             "source_set_version",
+            "input_fingerprint",
             "subject",
             "gates",
             "nodes",

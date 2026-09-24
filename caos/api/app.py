@@ -612,14 +612,23 @@ class _TailResponse(StreamingResponse):
 
 
 def _frame(event: StreamEvent | None) -> bytes:
-    """One SSE frame. The cursor frame is `id` alone, which sets the browser's
-    `lastEventId` and dispatches nothing. A named frame's `data` is a
-    placeholder because the spec dispatches no event without one. The
-    keepalive (`None`) is a comment, which the browser ignores."""
+    """One SSE frame. The cursor frame is `id` and `retry`, which sets the
+    browser's `lastEventId` and its reconnect delay and dispatches nothing.
+    A named frame's `data` is a placeholder because the spec dispatches no
+    event without one. The keepalive (`None`) is a comment, which the
+    browser ignores.
+
+    `retry` (N48): `TAIL_DEADLINE` closes every tail, expected reconnects
+    included, and with none ever sent the browser's own default reconnect
+    delay was the gap a watcher saw -- indistinguishable from a real drop.
+    Carried on the cursor frame, the first of any connection, so a fresh
+    reconnect after the deadline is as quick as an idle poll would have been.
+    """
     if event is None:
         return b":\n\n"
     if event.name is None:
-        return f"id: {event.id}\n\n".encode()
+        retry_ms = int(POLL_INTERVAL * 1000)
+        return f"retry: {retry_ms}\nid: {event.id}\n\n".encode()
     return f"id: {event.id}\nevent: {event.name}\ndata: {dumps({})}\n\n".encode()
 
 

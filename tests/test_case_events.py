@@ -111,7 +111,14 @@ def _refused(code: RefusalCode) -> dict[str, str]:
 
 
 def _frames(response: httpx.Response) -> Iterator[Frame]:
-    """Each SSE frame as its fields, in order, as they arrive."""
+    """Each SSE frame as its fields, in order, as they arrive.
+
+    `retry` is dropped: it is on every cursor frame (N48,
+    `test_the_cursor_frame_carries_a_short_reconnect_retry` names it
+    directly), transport-level like the keepalive comment below it, and
+    asserting it on every other cursor-frame check in this file would be
+    noise repeated for no reason.
+    """
     fields: Frame = {}
     for line in response.iter_lines():
         if line == "":
@@ -122,6 +129,8 @@ def _frames(response: httpx.Response) -> Iterator[Frame]:
         if line.startswith(":"):  # an SSE comment: the keepalive, not a field
             continue
         key, _, value = line.partition(": ")
+        if key == "retry":
+            continue
         fields[key] = value
     if fields:
         yield fields
@@ -294,6 +303,27 @@ def test_the_first_frame_is_a_cursor_at_the_current_heads(
 
     assert frames == [{"id": "2.1"}]
     assert audit_only == [{"id": "2.0"}]
+
+
+def test_the_cursor_frame_carries_a_short_reconnect_retry(
+    served: str, case: tuple[StoreConnection, UUID]
+) -> None:
+    """N48. `TAIL_DEADLINE` (300 s) closes every tail, expected reconnect
+    included; with no `retry` ever sent, the browser's own default reconnect
+    delay is what a watcher saw as the gap, and a UI that reads a dropped
+    connection as "paused" had no way to tell the two apart. Every cursor
+    frame -- the first of any connection, this reconnect's included -- now
+    carries one explicitly, short enough that the gap is not the read."""
+    conn, case_id = case
+    reader = _reader(conn, case_id, Standing.READER)
+    with (
+        httpx.Client(base_url=served, timeout=10) as http,
+        http.stream("GET", _path(case_id), headers=_as(reader)) as response,
+    ):
+        lines = list(response.iter_lines())
+    cursor = lines[: lines.index("")]
+    assert f"retry: {int(app_module.POLL_INTERVAL * 1000)}" in cursor
+    assert any(line.startswith("id: ") for line in cursor)
 
 
 def test_frames_carry_only_a_cursor_a_name_and_empty_data(
@@ -509,6 +539,7 @@ def test_the_http_stream_writes_the_keepalive_as_a_comment(
         http.stream("GET", _path(case_id), headers=_as(reader)) as response,
     ):
         lines = response.iter_lines()
+        assert next(lines) == f"retry: {int(app_module.POLL_INTERVAL * 1000)}"
         assert next(lines) == "id: 0.0"
         assert next(lines) == ""
         assert next(lines) == ":"

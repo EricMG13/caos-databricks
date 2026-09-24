@@ -571,6 +571,11 @@ class RunView(BaseModel):
     route_digest: Sha256 | None
     build_id: Id | None
     source_set_version: int | None
+    # The run's own pinned input, when one is pinned (N48): Start and Retry
+    # both take it back, so a client that reloaded without an open preview
+    # still has what it needs to send either, rather than only a client that
+    # kept a preview's answer in memory.
+    input_fingerprint: Sha256 | None
     subject: RunSubjectView | None
     gates: Annotated[list[GateView], Field(max_length=len(Gate))]
     nodes: Annotated[list[NodeView], Field(max_length=ROUTE_NODES_MAX)]
