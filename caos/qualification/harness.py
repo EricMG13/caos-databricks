@@ -1,8 +1,8 @@
 """The harness: a qualification set performed, then reported.
 
-`docs/REBUILD_PLAN.md` Phase 10 names three things — the harness, the answer
-keys, and the matrix. This is the first: it admits each case's documents, runs
-the route that case declares, and hands `build_matrix` the runs it produced.
+Qualification names three things — the harness, the answer keys, and the
+matrix. This is the first: it admits each case's documents, runs the route
+that case declares, and hands `build_matrix` the runs it produced.
 
 **Not a second execution path.** Every case goes through `admit_pack`,
 `resolve_route`, `pin_route` and `run_route` — the same calls any other caller

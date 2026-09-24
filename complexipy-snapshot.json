@@ -60,16 +60,6 @@
     ]
   },
   {
-    "path": "caos/graph/route.py",
-    "file_name": "route.py",
-    "functions": [
-      {
-        "name": "dependency_order",
-        "complexity": 20
-      }
-    ]
-  },
-  {
     "path": "caos/methodology/handoff.py",
     "file_name": "handoff.py",
     "functions": [

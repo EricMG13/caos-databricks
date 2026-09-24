@@ -11,6 +11,7 @@ import psycopg
 import pytest
 from conftest import reserve_at as reserve
 from psycopg.pq import TransactionStatus
+from run_terminals import fail_run
 from test_budget import money_run as _money_run
 from test_case_ordering import _blocked
 from test_store_schema import _records
@@ -64,7 +65,7 @@ def test_acceptance_requires_known_charge(
     assert _counts(conn) == (0, 0, 0)
 
 
-@pytest.mark.parametrize("terminal", [runs.block_run, runs.fail_run])
+@pytest.mark.parametrize("terminal", [runs.block_run, fail_run])
 def test_late_outcome_is_durable_without_analytical_acceptance(
     money_run: tuple[StoreConnection, UUID, UUID],
     terminal: Callable[[StoreConnection, UUID], bool],
@@ -233,7 +234,7 @@ def test_analytical_failure_cannot_rollback_an_independent_bill(
         accepted = replace(accepted, artifact_sha256="private-invalid")
     else:
         runs.accept_attempt(conn, attempt_id=attempt, accepted=accepted)
-        runs.fail_run(conn, run)
+        fail_run(conn, run)
         accepted = replace(accepted, artifact_sha256="c" * 64)
     with pytest.raises(Refusal):
         runs.accept_attempt(conn, attempt_id=attempt, accepted=accepted)
@@ -291,7 +292,7 @@ def test_acceptance_rechecks_termination_after_outcome_commit(
         result = record(c, attempt_id=attempt_id, outcome=outcome)
         with connect(empty_database) as other:
             other.execute("SET lock_timeout = '1s'")
-            runs.fail_run(other, run)
+            fail_run(other, run)
         return result
 
     monkeypatch.setattr(runs, "record_outcome", end)

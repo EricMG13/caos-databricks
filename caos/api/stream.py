@@ -1,8 +1,8 @@
 """The case stream: what the browser is told, and when it stops being told it.
 
-`SYSTEM_SPEC.md` §9 as brief 4.4 decisions 1-4 restate it. One stream per case
-carries the case's audit actions and, for a named run, that run's events --
-because withdrawal is recorded in `audit_events`, which a run tail never read.
+One stream per case carries the case's audit actions and, for a named run,
+that run's events -- because withdrawal is recorded in `audit_events`, which
+a run tail never read.
 
 A stream event carries a cursor and a name. Nothing else: the client never
 reads payloads, and a payload would be a second copy of state the client is
@@ -38,7 +38,6 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from threading import Lock
 from time import monotonic, sleep
-from typing import Literal, overload
 from uuid import UUID
 
 import psycopg
@@ -199,34 +198,6 @@ class StreamEvent:
 
     id: Marker
     name: EventName | None
-
-
-@overload
-def case_tail(
-    conn: StoreConnection,
-    *,
-    case_id: UUID,
-    run_id: UUID | None,
-    actor_id: UUID,
-    after: str | None,
-    deadline: float = ...,
-    poll: float = ...,
-    heartbeat: Literal[False] = ...,
-) -> Iterator[StreamEvent]: ...
-
-
-@overload
-def case_tail(
-    conn: StoreConnection,
-    *,
-    case_id: UUID,
-    run_id: UUID | None,
-    actor_id: UUID,
-    after: str | None,
-    deadline: float = ...,
-    poll: float = ...,
-    heartbeat: Literal[True],
-) -> Iterator[StreamEvent | None]: ...
 
 
 def case_tail(  # noqa: PLR0913 -- the stream's identity, then its lifetime

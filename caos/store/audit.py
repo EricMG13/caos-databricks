@@ -2,15 +2,15 @@
 
 Two rules meet here.
 
-*`SYSTEM_SPEC.md` §8 — commit time.* The gap between checking standing and
-committing is a real window: a request arrives, the actor is a WRITER, work
-happens, their membership is revoked, and the commit lands anyway. So the check
-is inside the store call that writes, not in the route that called it.
+*Commit time.* The gap between checking standing and committing is a real
+window: a request arrives, the actor is a WRITER, work happens, their
+membership is revoked, and the commit lands anyway. So the check is inside
+the store call that writes, not in the route that called it.
 
-*`SYSTEM_SPEC.md` §2 — transactional pairing.* A governed write commits its state
-and its audit event in one transaction, or neither. The caller's write runs
-inside this function's transaction for exactly that reason: it cannot commit on
-its own, so it cannot land without its event.
+*Transactional pairing.* A governed write commits its state and its audit
+event in one transaction, or neither. The caller's write runs inside this
+function's transaction for exactly that reason: it cannot commit on its own,
+so it cannot land without its event.
 
 `audit_events` is hash-chained per case under the existing case row lock.
 The chain has no external anchor, so what it gives is *detection*: an entry

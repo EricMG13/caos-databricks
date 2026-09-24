@@ -12,6 +12,7 @@ import pytest
 from canonical_fixtures import research_brief
 from conftest import route_fault
 from psycopg.pq import TransactionStatus
+from run_terminals import fail_run
 from test_case_ordering import _blocked
 from test_route_pinning import CATALOG_PATH, PROFILE
 from test_source_sets import _admit
@@ -40,7 +41,7 @@ from caos.store.run_inputs import (
     pin_run_input,
     research_text,
 )
-from caos.store.runs import create_case, fail_run, start_attempt, start_run
+from caos.store.runs import create_case, start_attempt, start_run
 from caos.store.source_sets import SourceSet, snapshot_source_set
 
 type Prepared = tuple[StoreConnection, UUID, SourceSet, Bundle, ResolvedRoute]

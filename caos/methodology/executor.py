@@ -1,8 +1,8 @@
 """Evidence delivery and stored-identity checks shared by the canonical executor.
 
 The claims executor that once lived here -- `execute_module`, its envelope
-parsing and its prompt building -- is retired (`docs/DECISIONS.md` §42.1) and
-deleted in slice f-2b. What remains is what `caos/methodology/canonical.py`
+parsing and its prompt building -- is retired and deleted in slice f-2b.
+What remains is what `caos/methodology/canonical.py`
 still imports: the evidence reader every module call delivers from
 (`Delivery`, `_delivered`), the call identity (`Assignment`) and the check that
 a pin's adapter matches the executor reading it (`_stored_identity`).

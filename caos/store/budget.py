@@ -17,9 +17,9 @@ that later spends reads the price back to check that the request it is about to
 send still fits what was set aside.
 
 *Nothing is released.* An indeterminate call may have reached the provider and
-may be billed (`docs/DECISIONS.md` §16: `PROVIDER_UNAVAILABLE` leaves the attempt
-indeterminate with its reservation). Releasing it would let the retry spend money
-the run has already committed. A retry is a new attempt and a new reservation --
+may be billed (`PROVIDER_UNAVAILABLE` leaves the attempt indeterminate with its
+reservation). Releasing it would let the retry spend money the run has
+already committed. A retry is a new attempt and a new reservation --
 the price of a provider with no idempotency key, paid knowingly.
 """
 

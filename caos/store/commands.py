@@ -328,8 +328,7 @@ def payload_digests(
     whose event binds the payload as given, and a command, whose envelope adds
     `request_sha256`. The second is not recomputable from the payload -- it is
     a digest of the whole request -- so it is read back from the receipts this
-    actor committed on this scope, which is the join
-    `docs/DECISIONS.md`'s Repair Phase 4 ledger entry says no column makes.
+    actor committed on this scope, which is a join no column makes.
 
     `scope` is the **receipt's** scope, which is the case for every command but
     one: `CREATE_CASE` records its receipt under `NIL_SCOPE` while its audit

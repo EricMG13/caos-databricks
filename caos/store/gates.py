@@ -143,7 +143,7 @@ def approve_gate(conn: StoreConnection, approval: GateApproval) -> None:
 
     Through `governed_write` rather than beside it: releasing a gate is a human
     decision that a conclusion later rests on, so it is checked at the commit and
-    recorded in the case's chain (`SYSTEM_SPEC.md` §8).
+    recorded in the case's chain.
     """
     case_id = _case_of(conn, approval.run_id)
     action = GovernedAction(

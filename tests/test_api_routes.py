@@ -44,7 +44,6 @@ from caos.api import deps
 from caos.api import edge as edge_module
 from caos.api.app import (
     _STATUS,
-    PERMANENT,
     RETRY_AFTER_SECONDS,
     TRANSIENT,
     app,
@@ -862,20 +861,19 @@ def test_every_refusal_is_classed_transient_or_permanent_and_none_is_both() -> N
     of the codes that already happened to answer 5xx.
 
     Every code is exactly one of: a client refusal (4xx), a permanent server
-    fault (500, `PERMANENT`), or a transient one (503, `TRANSIENT`, the only
-    class that says come back later). A code in neither server set could sit at
-    5xx while nobody had asked whether waiting would help; a code in both would
-    make the answer depend on which membership was consulted first. The first
-    version of this test took its universe from the codes already at 500 or 503,
-    so `INTERNAL_FAULT` at 400 was invisible to it.
+    fault (500), or a transient one (503, `TRANSIENT`, the only class that says
+    come back later). A code in neither server set could sit at 5xx while
+    nobody had asked whether waiting would help; the length check below counts
+    each code once, which a code sitting in two of the three status ranges
+    could not do. The first version of this test took its universe from the
+    codes already at 500 or 503, so `INTERNAL_FAULT` at 400 was invisible to
+    it.
     """
-    assert TRANSIENT & PERMANENT == frozenset()
     client = {code for code, status in _STATUS.items() if 400 <= status < 500}
     permanent = {code for code, status in _STATUS.items() if status == 500}
     transient = {code for code, status in _STATUS.items() if status == 503}
     assert client | permanent | transient == set(RefusalCode)
     assert len(client) + len(permanent) + len(transient) == len(RefusalCode)
-    assert permanent == PERMANENT
     assert transient == TRANSIENT
 
 
@@ -918,7 +916,7 @@ def test_an_internal_fault_answers_500_wherever_it_is_raised(
         _refused("INTERNAL_FAULT"),
     )
     assert "retry-after" not in response.headers
-    assert RefusalCode.INTERNAL_FAULT in PERMANENT
+    assert _STATUS[RefusalCode.INTERNAL_FAULT] == 500
 
 
 def test_every_code_the_edge_answers_carries_the_apps_status() -> None:

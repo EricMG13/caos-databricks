@@ -1,9 +1,9 @@
 """The reviewer's signature, read rather than minted.
 
-`docs/REBUILD_PLAN.md` Phase 10: a verdict is bound to provider identity,
-qualification-set digest, build, date, expiry and reviewer. This module reads
-such a document and either returns a `Verdict` or refuses -- it never builds one
-from anything the host knows about itself.
+A verdict is bound to provider identity, qualification-set digest, build,
+date, expiry and reviewer. This module reads such a document and either
+returns a `Verdict` or refuses -- it never builds one from anything the host
+knows about itself.
 
 Why six, and a seventh (N44). A signature saying "the outputs met the answer
 keys" is checkable only if it also says whose outputs, against which cases,
@@ -43,7 +43,7 @@ from caos.boundary_text import BoundaryText
 from caos.qualification import Assurance
 from caos.refusals import Refusal, RefusalCode
 
-# The seven, in the order `docs/REBUILD_PLAN.md` Phase 10 names the first six;
+# The seven: the first six are the reviewer's original binding;
 # `evidence_sha256` is N44's addition. This tuple is the declared shape: it is
 # what a document is checked for and what it is closed against, so the two can
 # never disagree.

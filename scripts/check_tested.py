@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Refuse a public function or class that no test names.
 
-Logic and correctness errors are ~75% more frequent in agent-written code
-(docs/AI_CODE_QUALITY.md section 1), and the control is a test that was watched
-to fail. This gate cannot see whether a test was written first; it can and does
-refuse the case where no test mentions the symbol at all.
+Logic and correctness errors are ~75% more frequent in agent-written code,
+and the control is a test that was watched to fail. This gate cannot see
+whether a test was written first; it can and does refuse the case where no
+test mentions the symbol at all.
 
 Scope is module-level definitions. Methods are covered through the class that
 holds them -- see the known-gaps ledger in CLAUDE.md.

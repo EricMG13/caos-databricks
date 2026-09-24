@@ -113,7 +113,7 @@ def main() -> int:
         return 2
     print(f"changed lines: {count}")
     if count > LIMIT:
-        print("PR too large; split it (docs/AI_CODE_QUALITY.md)", file=sys.stderr)
+        print("PR too large; split it", file=sys.stderr)
         return 1
     return 0
 

@@ -12,10 +12,10 @@ match. Highlighting one of two identical sentences asserts a precision the host
 does not have.
 
 *Never across a region.* Matching joins tokens within a line and continues only
-onto the next line of the same region (`SYSTEM_SPEC.md` section 5). Two columns
-are two regions, so a phrase cannot be assembled across the gutter between them --
-which is what a naive scan of page text does, and what it silently produces is a
-quote that exists nowhere on the page.
+onto the next line of the same region. Two columns are two regions, so a phrase
+cannot be assembled across the gutter between them -- which is what a naive
+scan of page text does, and what it silently produces is a quote that exists
+nowhere on the page.
 
 *One whole line, where an answer is accepted* (N28, `WHOLE_LINE`). The final
 check tells a module that `matched_text` is the complete text of one evidence
@@ -92,7 +92,7 @@ class _Token:
     y1: float
 
 
-# The declared quote normalisations (Task 10.5, `docs/DECISIONS.md` section 78).
+# The declared quote normalisations.
 #
 # They are tried **only** after the exact search above has found nothing, which
 # is what makes them safe: the widening is monotone, so every quote that
@@ -652,22 +652,21 @@ def verify_citations(
     nobody can find is the thing invariant 11 exists to prevent, and one that has
     already been stored is a correction rather than a refusal.
 
-    A citation may only name evidence actually delivered to that node
-    (`SYSTEM_SPEC.md` section 5) -- a real source in the same case is still
-    something this node was not given. `delivered` maps each source to the
-    exact blocks the node was handed, and the one match must lie wholly within
-    their lines: a quote on an undelivered page, or wrapping onto an undelivered
-    line, refuses `CITATION_NOT_DELIVERED`. Ambiguity is still counted over the
-    whole page (`docs/DECISIONS.md` section 44.5), so a quote repeated on a line
-    the node never saw is ambiguous rather than resolved to the copy it did --
+    A citation may only name evidence actually delivered to that node --
+    a real source in the same case is still something this node was not given.
+    `delivered` maps each source to the exact blocks the node was handed, and
+    the one match must lie wholly within their lines: a quote on an undelivered
+    page, or wrapping onto an undelivered line, refuses `CITATION_NOT_DELIVERED`.
+    Ambiguity is still counted over the whole page, so a quote repeated on a
+    line the node never saw is ambiguous rather than resolved to the copy it did --
     over every run of the page under `ANY_RUN`, over every line of it under
     `WHOLE_LINE`.
 
     An artifact carries many citations and they cluster: several quotes from one
     page of one source is the normal shape. Both lookups are therefore fetched
     once per distinct page and per distinct source rather than once per citation,
-    which is the N+1 that `docs/AI_CODE_QUALITY.md` section 1 measures at ~8x on
-    exactly this kind of list. A caller verifying several lists in one unit
+    avoiding the N+1 shape that runs ~8x slower on exactly this kind of list.
+    A caller verifying several lists in one unit
     passes one `TokenIndex` to share those reads across them.
     """
     if index is None:

@@ -1,9 +1,9 @@
 """The content-addressed blob store. Bytes in, `sha256` out, verified on the way back.
 
-`SYSTEM_SPEC.md` section 2 keeps bytes out of the database: rows hold a digest.
-The digest is only worth holding if reading it back proves it, so `get` re-hashes
-what it read and refuses what does not match. Nothing else in the system can tell
-a source document apart from a plausible replacement of it.
+Bytes stay out of the database: rows hold a digest. The digest is only worth
+holding if reading it back proves it, so `get` re-hashes what it read and
+refuses what does not match. Nothing else in the system can tell a source
+document apart from a plausible replacement of it.
 
 A blob is written under a temporary name and renamed into place, so the address
 either holds the whole blob or holds nothing. A partial file at the final address
@@ -106,11 +106,19 @@ class VolumeBackend:
 
 def _not_found(failed: OSError) -> bool:
     """Whether the SDK said the file is not there (F41): its `NotFound` is a
-    family (`ResourceDoesNotExist` answers a missing file), and the error code
-    is carried beside the class, so both are read rather than one class name."""
-    names = {cls.__name__ for cls in type(failed).__mro__}
+    family (`ResourceDoesNotExist` answers a missing file, `issubclass`d from
+    it), checked by `isinstance` against the SDK's own class rather than by
+    matching a class name across `__mro__`. The error code is still read as a
+    fallback, for a double that raises the shape without the class. Imported
+    lazily, like `_service`'s workspace client: this module carries no SDK
+    import until Databricks is actually in use."""
+    from databricks.sdk.errors import NotFound
+
     code = getattr(failed, "error_code", "")
-    return "NotFound" in names or code in {"NOT_FOUND", "RESOURCE_DOES_NOT_EXIST"}
+    return isinstance(failed, NotFound) or code in {
+        "NOT_FOUND",
+        "RESOURCE_DOES_NOT_EXIST",
+    }
 
 
 @dataclass(frozen=True, slots=True)
@@ -182,6 +190,25 @@ class BlobStore:
         os.replace(staged, destination)
         self._sync_directory(destination.parent)
         return digest
+
+    def put_both(self, first: bytes, second: bytes) -> tuple[str, str]:
+        """`put` two blobs as one unit: both digests, or `STORE_UNAVAILABLE`.
+
+        A module's handoff and its host record -- or a replayed outcome's
+        same pair -- are accepted together or not at all, so a write failing
+        partway must not leave an attempt accepted on half a pair. The second
+        `put` after the first has already faulted would carry no useful
+        context, so the raw fault is swallowed here and every caller sees one
+        typed refusal instead of writing this same three-line guard itself.
+        """
+        stored: tuple[str, str] | None = None
+        try:
+            stored = self.put(first), self.put(second)
+        except (OSError, Refusal):
+            pass  # raised below, outside the handler: no context carried
+        if stored is None:
+            raise Refusal(RefusalCode.STORE_UNAVAILABLE)
+        return stored
 
     @staticmethod
     def _stage(data: bytes, directory: Path) -> Path:

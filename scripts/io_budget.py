@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Refuse a server that declares no I/O budget for its request paths.
 
-Excessive I/O is the largest single multiple in the measurements behind
-docs/AI_CODE_QUALITY.md (~8x), and the predecessor had exactly that defect:
-evidence blocks lived in one JSON column, so `read_evidence` parsed every block
-of a source on every call.
+Excessive I/O is the largest single multiple measured for this N+1 shape
+(~8x), and the predecessor had exactly that defect: evidence blocks lived in
+one JSON column, so `read_evidence` parsed every block of a source on every
+call.
 
 Every module under `caos/api/` declares `IO_BUDGET`, the number of store
 round-trips a request through it may cost. A module that makes no round trip

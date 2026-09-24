@@ -15,6 +15,7 @@ from conftest import reserve_at as reserve
 from fake_chat import PRICE, ScriptedChat, answer, fake_completions
 from langchain_core.messages import AIMessage
 from psycopg.pq import TransactionStatus
+from run_terminals import fail_run
 from test_loop_charges import (
     ESTIMATE,
     MODEL,
@@ -44,7 +45,6 @@ from caos.store.runs import (
     accept_attempt,
     cancel_run,
     create_case,
-    fail_run,
     run_status,
     start_attempt,
     start_run,

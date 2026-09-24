@@ -1,10 +1,11 @@
 """Route resolution: pure, from typed edges, and pinned once.
 
-`docs/DECISIONS.md` §2 is the reason this module is built before anything that
-depends on it. The predecessor resolved routes from `navigation.dependencies` --
-97 untyped pairs meant for display -- so 25 OPTIONAL and 22 ADVISORY edges were
-enforced as mandatory, the single QA_GATE did not gate, and RESTRICTED could not
-occur. Nothing here reads that list; the typed set is `profile["edges"]`.
+That the route is typed is the reason this module is built before anything
+that depends on it. The predecessor resolved routes from
+`navigation.dependencies` -- 97 untyped pairs meant for display -- so 25
+OPTIONAL and 22 ADVISORY edges were enforced as mandatory, the single QA_GATE
+did not gate, and RESTRICTED could not occur. Nothing here reads that list;
+the typed set is `profile["edges"]`.
 
 Three rules carry the phase:
 
@@ -15,9 +16,8 @@ READY_WITH_LIMITATIONS, at which point the evidence exists and running without i
 would discard what the case has.
 
 *Readiness is read, never passed.* It comes from the accepted CP-0 artifact's
-readiness rows, typed as a `NodeResult` (`docs/DECISIONS.md` §12, adopting
-CAOS-Final §18). A caller able to assert readiness could assert its way past the
-gate that measures it.
+readiness rows, typed as a `NodeResult` (adopting CAOS-Final §18). A caller
+able to assert readiness could assert its way past the gate that measures it.
 
 *Resolution is pure.* No I/O, no clock. The resolved route is digested at the
 plan gate and execution reads only the pin, so a replay from the same pins takes
@@ -29,6 +29,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
+from graphlib import CycleError, TopologicalSorter
 from hashlib import sha256
 from json import dumps
 from typing import Any
@@ -69,9 +70,9 @@ READY = frozenset({"READY", "READY_WITH_LIMITATIONS"})
 # says what this module must cover.
 GATE_MODULE = "CP-0"
 
-# The host's model extension. `SYSTEM_SPEC.md` §6.2: CP-CF is appended at stage
-# 100 with synthesised REQUIRED edges naming every artifact owner it reads, so
-# CP-2G completing alone does not release it. No catalog is edited.
+# The host's model extension: CP-CF is appended at stage 100 with synthesised
+# REQUIRED edges naming every artifact owner it reads, so CP-2G completing
+# alone does not release it. No catalog is edited.
 MODEL_MODULE = "CP-CF"
 MODEL_STAGE = 100
 MODEL_OWNERS = ("CP-1", "CP-2G", "CP-4")
@@ -152,10 +153,10 @@ class NamedObjects:
 class RouteExtensions:
     """The host-declared additions to a pathway, which travel together.
 
-    `SYSTEM_SPEC.md` section 4 listed these as separate keyword arguments to
-    `resolve_route`; corrected in place by `docs/DECISIONS.md` section 21, which
-    also says why. They are one thing -- how this route was extended beyond the
-    catalog's own node list -- and each is part of the pinned digest.
+    The legacy host took these as separate keyword arguments to
+    `resolve_route`, corrected in place here: they are one thing -- how this
+    route was extended beyond the catalog's own node list -- and each is part
+    of the pinned digest.
     """
 
     research_brief: Mapping[str, Any] | None = None
@@ -185,7 +186,7 @@ def resolve_route(
 
     `extensions.research_brief` appends CP-DR at stage 99 and
     `extensions.model_extension` appends CP-CF at stage 100, both host-declared
-    and neither editing the catalog (`docs/DECISIONS.md` §6).
+    and neither editing the catalog.
 
     An extension naming a module the pathway already runs is refused
     `ROUTE_DUPLICATE_MODULE` by `dependency_order`, rather than appending a
@@ -249,26 +250,30 @@ def dependency_order(
     if len(set(modules)) != len(modules):
         raise Refusal(RefusalCode.ROUTE_DUPLICATE_MODULE)
 
-    incoming = {node.module_id: 0 for node in nodes}
+    by_module = {node.module_id: node for node in nodes}
+    sorter: TopologicalSorter[str] = TopologicalSorter()
+    for module_id in by_module:
+        sorter.add(module_id)
     for edge in edges:
-        incoming[edge.target] += 1
+        sorter.add(edge.target, edge.source)
 
-    remaining = {node.module_id: node for node in nodes}
+    try:
+        sorter.prepare()
+    except CycleError as exc:
+        # The catalog is a DAG; a cycle means the pin would never resolve.
+        raise Refusal(RefusalCode.ROUTE_HAS_A_CYCLE) from exc
+
     ordered: list[RouteNode] = []
-    while remaining:
+    while sorter.is_active():
         ready = sorted(
-            (node for module_id, node in remaining.items() if not incoming[module_id]),
-            key=lambda node: (node.stage, node.route_node_id),
+            sorter.get_ready(),
+            key=lambda module_id: (
+                by_module[module_id].stage,
+                by_module[module_id].route_node_id,
+            ),
         )
-        if not ready:
-            # The catalog is a DAG; a cycle means the pin would never resolve.
-            raise Refusal(RefusalCode.ROUTE_HAS_A_CYCLE)
-        for node in ready:
-            ordered.append(node)
-            del remaining[node.module_id]
-            for edge in edges:
-                if edge.source == node.module_id:
-                    incoming[edge.target] -= 1
+        ordered.extend(by_module[module_id] for module_id in ready)
+        sorter.done(*ready)
     return tuple(ordered)
 
 

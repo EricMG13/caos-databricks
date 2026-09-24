@@ -16,6 +16,7 @@ from conftest import _url_for, priced
 from fake_chat import ScriptedChat, StatusError, answer, fake_completions
 from langchain_core.messages import AIMessage
 from psycopg.pq import TransactionStatus
+from run_terminals import fail_run
 from test_call_outcomes import _counts
 from test_execution_attempts import _invoke, provider, ready, route
 from test_loop_charges import ESTIMATE, MODEL, REPORTED, _Completions
@@ -35,7 +36,6 @@ from caos.provider import Completion
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection, connect
 from caos.store.outcomes import CallOutcome, record_outcome
-from caos.store.runs import fail_run
 
 __all__ = ["provider", "ready", "route"]
 

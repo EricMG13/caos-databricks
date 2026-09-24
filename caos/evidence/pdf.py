@@ -1,7 +1,7 @@
 """A real PDF into tokens that carry where they were.
 
-`docs/DECISIONS.md` §21. `pdfminer.six` exposes a layout tree that maps exactly
-onto the three things invariant 11 needs from a token:
+`pdfminer.six` exposes a layout tree that maps exactly onto the three things
+invariant 11 needs from a token:
 
     LTTextBox   -> the region a quote may not leave
     LTTextLine  -> the line it sits on

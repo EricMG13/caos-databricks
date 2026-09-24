@@ -13,6 +13,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from psycopg.pq import TransactionStatus
+from run_terminals import fail_run
 from test_gates import _approval, _pin
 
 from caos.blobs import BlobStore
@@ -25,7 +26,7 @@ from caos.store.audit import GovernedAction, audit_trail, governed_write, verify
 from caos.store.cases import lock_case
 from caos.store.gates import Gate, GateApproval, approve_gate, withdraw_source
 from caos.store.members import Standing, grant, revoke
-from caos.store.runs import create_case, fail_run, start_attempt, start_run
+from caos.store.runs import create_case, start_attempt, start_run
 
 
 @contextmanager

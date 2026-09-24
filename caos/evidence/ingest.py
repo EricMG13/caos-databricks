@@ -1,7 +1,7 @@
 """Admitting a pack: the only way bytes enter a case.
 
-`SYSTEM_SPEC.md` section 5. Web discovery is structurally absent -- there is no
-code path from here to a network, and that is the point of there being one door.
+Invariant 1: web discovery is structurally absent -- there is no code path
+from here to a network, and that is the point of there being one door.
 
 The whole pack lands or none of it does. A half-admitted pack is a set of
 documents nobody agreed to run against, and invariant 1 says a run executes
@@ -46,10 +46,10 @@ _PDFMINER.addHandler(logging.NullHandler())
 _PDFMINER.propagate = False
 
 BLOCK_PREFIX = "b"
-# What one block may carry (`SYSTEM_SPEC.md` section 5's group width). Not a free
-# parameter: `source_blocks.text` is `BoundaryText`, so a block holds
-# `DEFAULT_LIMIT` characters and no more, and any narrower width would re-number
-# documents already admitted under this one -- whose rows are immutable and whose
+# What one block may carry (the group width). Not a free parameter:
+# `source_blocks.text` is `BoundaryText`, so a block holds `DEFAULT_LIMIT`
+# characters and no more, and any narrower width would re-number documents
+# already admitted under this one -- whose rows are immutable and whose
 # stored citations name the ids they were given.
 GROUP_WIDTH = DEFAULT_LIMIT
 # How a line wider than `GROUP_WIDTH` is cut into blocks, recorded per source as
@@ -148,8 +148,8 @@ def prepare_pack(
     bytes (§44.6), so a mixed pack admits whole and a PDF named `.txt` is still
     a PDF. Text is extracted to tokens carrying page, region, line and
     rectangle, and packed into blocks -- one row each when admitted, never a
-    JSON column on the source row, which is the ~8x read defect
-    `docs/AI_CODE_QUALITY.md` section 1 measures.
+    JSON column on the source row, which is the ~8x read defect the N+1 shape
+    carries.
 
     `limits` bounds the pack (document count, pack bytes, and the tokens its
     documents hold together) and each document (document bytes, then -- inside
@@ -514,12 +514,12 @@ def _blocks(tokens: list[Token]) -> tuple[list[_Block], int]:
     then refused at every read. A refusal here costs a pack; there it cost a
     pinned source no run can read.
 
-    A line past `GROUP_WIDTH` is split rather than given a block of its own
-    (`SYSTEM_SPEC.md` section 5), because a block of its own is a block the
-    boundary refuses -- and refusing it refused the whole pack, so one wide
-    table row in a text export meant no document of it could be admitted at
-    all. It is split between tokens (`token_groups`, CF-013), and a source with
-    such a line is `PACKING_BY_TOKEN`.
+    A line past `GROUP_WIDTH` is split rather than given a block of its own,
+    because a block of its own is a block the boundary refuses -- and refusing
+    it refused the whole pack, so one wide table row in a text export meant no
+    document of it could be admitted at all. It is split between tokens
+    (`token_groups`, CF-013), and a source with such a line is
+    `PACKING_BY_TOKEN`.
     """
     lines: dict[int, list[Token]] = {}
     for token in tokens:

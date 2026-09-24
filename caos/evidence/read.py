@@ -24,9 +24,9 @@ from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
 
 # One read is one row fetch. The predecessor's blocks lived in a JSON column on
-# the source row, so every read parsed every block: ~8x, the largest multiple in
-# the measurements behind docs/AI_CODE_QUALITY.md. `test_io_budget_read_evidence`
-# counts the round trips against this number.
+# the source row, so every read parsed every block: ~8x, the largest multiple
+# measured for this N+1 shape. `test_io_budget_read_evidence` counts the round
+# trips against this number.
 IO_BUDGET = 1
 
 _BLOCK_QUERY = (

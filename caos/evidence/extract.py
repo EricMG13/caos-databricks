@@ -4,14 +4,14 @@ Invariant 11 needs four things per token: the page, the layout region, the line,
 and a rectangle. A citation is re-located by joining tokens within a line and
 continuing only onto the next line of the same region, so a quote can never be
 assembled across a column gutter -- the two columns are different regions and the
-phrase never forms (`SYSTEM_SPEC.md` section 5).
+phrase never forms.
 
 What extracts them is deliberately an argument. This module ships the plain-text
 extractor, which is honest about what it is: a `.txt` document has no typography,
 so its rectangles are the cells of a fixed-pitch rendering at `CELL`, stated here
-rather than implied. `docs/REBUILD_PLAN.md` owes Phase 6 a real PDF fixture
-through a real extractor (`test_citations_anchor_in_an_extracted_pdf`); that
-extractor implements the same protocol and nothing above this module changes.
+rather than implied. `caos/evidence/pdf.py` is the real extractor, proven
+against a real PDF fixture (`test_citations_anchor_in_an_extracted_pdf`); it
+implements the same protocol and nothing above this module changes.
 """
 
 from __future__ import annotations

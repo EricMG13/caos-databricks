@@ -664,8 +664,15 @@ def validate_markdown(  # noqa: PLR0913 -- the brief's pure signature
 WIRE_KEYS = frozenset({"canonical_markdown", "citations"})
 WIRE_CITATION_KEYS = frozenset({"source_id", "page", "matched_text"})
 RECORD_FORMAT = "caos-canonical-record-v2"
-# A body may carry the largest Markdown the vendor reads plus its citations.
-MAX_TRANSPORT_CHARS = 2 * MAX_FILE_BYTES
+# A body may carry the largest Markdown the host accepts plus its citations
+# and the JSON wrapper. Sized from `MAX_RESPONSE_BYTES` (D45's handoff bound)
+# rather than from the vendor's file-read ceiling, `MAX_FILE_BYTES` (nothing
+# here parses a whole file against it): a live model call can never answer
+# past `MAX_RESPONSE_BYTES` (`models.py` refuses PROVIDER_RESPONSE_INVALID
+# first). `feedback_lines` parses a body directly, though, ahead of that
+# gate, so the margin the vendor bound once gave the wrapper and citations
+# over the raw Markdown is kept here too, in the new bound's terms.
+MAX_TRANSPORT_CHARS = 2 * MAX_RESPONSE_BYTES
 MAX_PAGE = 2**31 - 1  # the store's integer page
 # How many citations one handoff may carry. Every citation is checked against
 # the body here and anchored in the token index by `verify_citations` later,

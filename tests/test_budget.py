@@ -30,6 +30,7 @@ import pytest
 from canonical_fixtures import CATALOG, LITE_PROFILE, LITE_SELECTION
 from conftest import tamper
 from psycopg.pq import TransactionStatus
+from run_terminals import fail_run
 from test_case_ordering import _blocked, _wait_for_blocking
 from test_run_events import RECORD, approved_nodes
 
@@ -52,7 +53,6 @@ from caos.store.runs import (
     accept_attempt,
     block_run,
     create_case,
-    fail_run,
     start_attempt,
     start_run,
 )

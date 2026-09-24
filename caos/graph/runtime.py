@@ -487,13 +487,7 @@ def _settle(
         code = replayed.code or RefusalCode.PROVIDER_RESPONSE_INVALID
         record_refusal(conn, attempt_id=replayed.attempt_id, code=code, lease=lease)
         raise Refusal(code)
-    stored: tuple[str, str] | None = None
-    try:
-        stored = blobs.put(outcome.markdown), blobs.put(outcome.record)
-    except (OSError, Refusal):
-        pass  # raised below, outside the handler: no context carried
-    if stored is None:
-        raise Refusal(RefusalCode.STORE_UNAVAILABLE)
+    stored = blobs.put_both(outcome.markdown, outcome.record)
     accept_attempt(
         conn,
         attempt_id=replayed.attempt_id,
@@ -522,9 +516,8 @@ def accepted_artifacts(
 
     Only CP-0's and the QA gate source's bodies are fetched. `node_states` reads
     readiness and QA clearance from those and needs nothing but presence from the
-    others, so fetching every payload
-    would be a blob read per node per pass for data nobody looks at -- the ~8x
-    shape `docs/AI_CODE_QUALITY.md` section 1 measures.
+    others, so fetching every payload would be a blob read per node per pass for
+    data nobody looks at -- the ~8x N+1 shape.
 
     One query for the rows. A row without its host record refuses
     `ARTIFACT_RECORD_MISMATCH`: no artifact is read as a claims body (§42.1).

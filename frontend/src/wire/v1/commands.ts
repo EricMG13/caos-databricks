@@ -1,5 +1,5 @@
 // The v1 command requests, receipts and the gate preview, one shape per model
-// in `server/api/wire.py`'s `V1_COMMANDS` (brief 4.2, decision 11). Every
+// in `caos/api/wire.py`'s `V1_COMMANDS` (brief 4.2, decision 11). Every
 // receipt and preview is validated here before use; nothing is cast.
 //
 // A request carries no actor, case, run or approver: the server derives them

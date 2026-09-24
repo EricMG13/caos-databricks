@@ -46,9 +46,6 @@ MAX_COMPLETION_TOKENS = 65_536
 # A call that cannot succeed by being repeated. Retrying one of these spends a
 # second reservation on the same certain failure.
 NEVER_RETRIED = frozenset({400, 401, 402, 403, 404, 413, 422})
-# A call whose outcome is unknown. The attempt stays indeterminate and keeps its
-# reservation, because it may have reached the provider and may be billed.
-TRANSIENT = frozenset({408, 429})
 
 _FINISH_REFUSALS = {
     "length": RefusalCode.PROVIDER_OUTPUT_TRUNCATED,

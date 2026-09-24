@@ -1,5 +1,5 @@
 // The v1 section documents and the refusal body, one shape per model in
-// `server/api/wire.py`, named as there. `schema.json` beside this file is the
+// `caos/api/wire.py`, named as there. `schema.json` beside this file is the
 // backend's emitted schema; tests/unit/wire-contract.test.ts proves these
 // shapes normalise to it exactly.
 import {

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Emit the release pack from the suite, the tree and, when asked, the store.
 
-`docs/COMPLETION_PLAN.md` Phase 13 (Task 13.6, O26): release evidence was a
-signed check and a hand-kept record, not a pack, and `docs/feature-status.csv`
--- 248 dated rows, 14 of them citing tests the repair deleted -- is what a
-hand-kept inventory becomes. This script is the regenerated answer that file's
-ledger entry asked for. It writes two files and types neither:
+Release evidence was a signed check and a hand-kept record, not a pack, and
+`docs/feature-status.csv` -- 248 dated rows, 14 of them citing tests the
+repair deleted -- is what a hand-kept inventory becomes. This script is the
+regenerated answer that file's ledger entry asked for. It writes two files
+and types neither:
 
 - `release-pack.json`: the methodology build and manifest digest, the migration
   head (the same digest a migrated store records), the SHA-256 of every lock,

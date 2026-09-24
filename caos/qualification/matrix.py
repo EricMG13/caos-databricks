@@ -1,9 +1,8 @@
 """The qualification set, its answer keys, and the matrix a reviewer reads.
 
-`docs/REBUILD_PLAN.md` Phase 10. A **qualification set** is the immutable cases
-and answer keys one verdict is measured against (`CONTEXT.md`); its digest is
-one of the seven bindings `read_verdict` requires, and this module is where
-that digest is computed.
+A **qualification set** is the immutable cases and answer keys one verdict is
+measured against (`CONTEXT.md`); its digest is one of the seven bindings
+`read_verdict` requires, and this module is where that digest is computed.
 
 **The matrix reports; it does not conclude.** Comparing a run against an answer
 key is mechanical, and the host may do it. Deciding that the comparison is good
@@ -30,7 +29,7 @@ Beside the citations a key may also ask what a module *concluded*
 own register reader). None of the three is the conclusion's soundness, and a
 reviewer still reads the rows.
 
-**A canonical run is scored on its records** (`docs/DECISIONS.md` §42.4), and
+**A canonical run is scored on its records**, and
 only on what the proof proved: the proof returns the citations it re-anchored
 under the pinned modules, and those are the run's -- nothing is read again, so
 an artifact accepted after the proof is not scored, and a source withdrawn since
@@ -609,9 +608,8 @@ def _refusal_met(
     ends in one of two places: the proof cannot be taken, or execution stopped
     and wrote the reason against an attempt. Reading only the first made this
     key unanswerable by any run the system produces — a deliberately restricted
-    case (`docs/REPAIR_PLAN.md` Phase 6) stops with a refusal recorded and a
-    sound proof over what it did accept, so the proof says nothing and the
-    stored refusal says everything.
+    case stops with a refusal recorded and a sound proof over what it did
+    accept, so the proof says nothing and the stored refusal says everything.
 
     Three rules, all of them from the adversarial pass (FP-01), because
     `PerformedEvidence.complete` waives its COMPLETE requirement for whatever
