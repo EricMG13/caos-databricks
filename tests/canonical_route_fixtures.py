@@ -21,6 +21,7 @@ from canonical_fixtures import (
     CATALOG,
     CONTRACT,
     RUN,
+    RUN_PRICE,
     conforming_rows,
     fields_from_prompt,
     research_brief,
@@ -34,6 +35,7 @@ from caos.graph.route import resolve_route
 from caos.methodology.bundle import verified_bytes
 from caos.methodology.handoff import HostIdentity, UpstreamRef, invocation_fields
 from caos.methodology.vendor import authority_bundle_sha256
+from caos.pricing import ModelPrice
 from caos.provider import Completion, encode_request
 
 SELECTION = ("FULL_CREDIT_32", "RELATIVE_VALUE")
@@ -502,6 +504,7 @@ def canonical_markdown(ident: HostIdentity, knobs: HandoffKnobs | None = None) -
 class RouteCompletions:
     source_id: UUID
     model: str = "a-model/for-the-test"
+    price: ModelPrice | None = RUN_PRICE
     charge: Decimal = Decimal("0.0000041")
     qa_by_module: dict[str, str] = field(default_factory=dict)
     readiness: dict[str, str] = field(default_factory=dict)
@@ -826,6 +829,7 @@ class LedgerCompletions:
     memo_id: UUID
     outcome_id: UUID
     model: str = "a-model/for-the-test"
+    price: ModelPrice | None = RUN_PRICE
     charge: Decimal = Decimal("0.0000041")
     qa_by_module: dict[str, str] = field(default_factory=dict)
     readiness: dict[str, str] = field(default_factory=dict)
@@ -1152,6 +1156,7 @@ class ResearchCompletions:
     release_id: UUID
     facility_id: UUID
     model: str = "a-model/for-the-test"
+    price: ModelPrice | None = RUN_PRICE
     charge: Decimal = Decimal("0.0000041")
     selection: tuple[str, str] = RESEARCH_SELECTION
     qa_by_module: dict[str, str] = field(default_factory=dict)

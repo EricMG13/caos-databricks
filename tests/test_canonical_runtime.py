@@ -19,7 +19,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
-from canonical_fixtures import QUOTE, UNANCHORED, CanonicalCompletions
+from canonical_fixtures import QUOTE, RUN_PRICE, UNANCHORED, CanonicalCompletions
 from conftest import priced, recorded_statements, tamper
 from test_canonical_execution import (
     _accept,
@@ -83,6 +83,7 @@ class _Answers:
     during: Callable[[], None] = lambda: None
     facts: dict[str, Any] = field(default_factory=dict)
     model: str = MODEL
+    price: ModelPrice | None = RUN_PRICE
     calls: int = 0
 
     def request_bytes(self, prompt: str, *, json_object: bool = False) -> bytes:
@@ -334,6 +335,7 @@ class _UnbilledBlocked:
     """A Provider claiming Blocked without any call behind it."""
 
     model: str = MODEL
+    price: ModelPrice | None = RUN_PRICE
 
     def check_context(self, route_node_id: str, module_id: str) -> int:
         # No prompt is built here, so there are no request bytes to price.
@@ -542,6 +544,10 @@ class _ClaimsBlocked:
     inner: ModuleProvider
     module: str = "CP-0"
     model: str = MODEL
+
+    @property
+    def price(self) -> ModelPrice | None:
+        return self.inner.price
 
     def check_context(self, route_node_id: str, module_id: str) -> int:
         return self.inner.check_context(route_node_id, module_id)
@@ -812,6 +818,10 @@ class _Sized:
     def model(self) -> str:
         return self.inner.model
 
+    @property
+    def price(self) -> ModelPrice | None:
+        return self.inner.price
+
     def request_bytes(self, prompt: str, *, json_object: bool = False) -> bytes:
         self.seen.append(prompt)
         return self.inner.request_bytes(prompt, json_object=json_object)
@@ -827,6 +837,10 @@ class _ChangesAfterCheck:
     inner: ModuleProvider
     change: Callable[[], None]
     model: str = MODEL
+
+    @property
+    def price(self) -> ModelPrice | None:
+        return self.inner.price
 
     def check_context(self, route_node_id: str, module_id: str) -> int:
         measured = self.inner.check_context(route_node_id, module_id)
@@ -910,6 +924,10 @@ class _UnderMeasures:
     def model(self) -> str:
         return self.inner.model
 
+    @property
+    def price(self) -> ModelPrice | None:
+        return self.inner.price
+
     def check_context(self, route_node_id: str, module_id: str) -> int:
         return self.inner.check_context(route_node_id, module_id) // 10
 
@@ -936,7 +954,7 @@ def test_a_request_costing_more_than_was_reserved_refuses_before_the_call(
     taken under and prices the request it is about to send against exactly
     that, so the refusal costs no call and no charge.
     """
-    answers = CanonicalCompletions(harness.source_id)
+    answers = CanonicalCompletions(harness.source_id, price=_PRICED_INPUT)
     provider = _UnderMeasures(_module_provider(harness, answers))
 
     with pytest.raises(Refusal) as caught:

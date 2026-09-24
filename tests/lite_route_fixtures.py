@@ -35,6 +35,7 @@ from canonical_fixtures import (
     PINNED,
     QUOTE,
     RUN,
+    RUN_PRICE,
     conforming_rows,
     fields_from_prompt,
     identity,
@@ -48,6 +49,7 @@ from caos.methodology.handoff import (
     expected_filename,
     invocation_fields,
 )
+from caos.pricing import ModelPrice
 from caos.provider import Completion, encode_request
 
 # Whole words, no punctuation: must match whole tokens in the delivered
@@ -445,6 +447,7 @@ class RealisticLiteCompletions:
     source_id: UUID
     charge: Decimal | None = Decimal("0.0000041")
     model: str = "a-model/for-the-test"
+    price: ModelPrice | None = RUN_PRICE
     generation_id: str = "gen-lite-realistic-test"
     qa_status: str = "Passed"
     qa_by_module: dict[str, str] = field(default_factory=dict)

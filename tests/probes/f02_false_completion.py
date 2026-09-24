@@ -83,14 +83,18 @@ def main() -> None:
                 conn, case_id=case_id, run_id=run_id, route=route, bundle=bundle
             )
 
-            answers = CanonicalCompletions(source_id, readiness={"CP-L10": "BLOCKED"})
+            # The answers state the price the run executes at (N15).
+            price = priced(Decimal("0.01"))
+            answers = CanonicalCompletions(
+                source_id, readiness={"CP-L10": "BLOCKED"}, price=price
+            )
             provider = ModuleProvider(conn, bundle, blobs, answers, route, run_id)
             run_route(
                 conn,
                 blobs,
                 run_id=run_id,
                 route=route,
-                execution=Execution(provider, priced(Decimal("0.01")), bundle),
+                execution=Execution(provider, price, bundle),
             )
             status = run_status(conn, run_id)
             accepted_row = conn.execute(

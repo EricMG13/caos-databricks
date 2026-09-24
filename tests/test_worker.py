@@ -22,7 +22,15 @@ import pytest
 from canonical_fixtures import UNANCHORED, CanonicalCompletions
 from conftest import priced
 from lite_route_fixtures import RealisticLiteCompletions
-from test_runtime import ESTIMATE, _approved_run, _Run, blobs, bundle, route
+from test_runtime import (
+    ESTIMATE,
+    RUN_AT,
+    _approved_run,
+    _Run,
+    blobs,
+    bundle,
+    route,
+)
 
 from caos import models
 from caos import provider as provider_module
@@ -39,6 +47,7 @@ from caos.graph.worker import (
     work_once,
 )
 from caos.methodology.bundle import Bundle
+from caos.pricing import ModelPrice
 from caos.provider import CompletionProvider
 from caos.refusals import Refusal, RefusalCode
 from caos.store import (
@@ -114,7 +123,7 @@ def test_worker_drives_an_enqueued_lite_run_to_complete_with_a_deterministic_pro
     blobs: BlobStore,
 ) -> None:
     run = queued_run(case, route, bundle, blobs)
-    completions = RealisticLiteCompletions(run.source_id)
+    completions = RealisticLiteCompletions(run.source_id, price=RUN_AT)
 
     assert drive(run, completions) == run.run_id
 
@@ -133,7 +142,9 @@ def test_worker_stops_a_refused_run_with_its_code_and_releases_the_lease(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     run = queued_run(case, route, bundle, blobs)
-    completions = CanonicalCompletions(run.source_id, quotes=(UNANCHORED,))
+    completions = CanonicalCompletions(
+        run.source_id, quotes=(UNANCHORED,), price=RUN_AT
+    )
 
     assert drive(run, completions) == run.run_id
 
@@ -169,7 +180,9 @@ def test_sigterm_finishes_the_unit_and_requeues(
     install_stop_handler(stopping)
     try:
         completions = CanonicalCompletions(
-            run.source_id, during=lambda: signal.raise_signal(signal.SIGTERM)
+            run.source_id,
+            during=lambda: signal.raise_signal(signal.SIGTERM),
+            price=RUN_AT,
         )
         assert drive(run, completions, stopping=stopping) == run.run_id
     finally:
@@ -483,7 +496,7 @@ def test_an_unexpected_fault_parks_the_run_and_the_worker_goes_on(
     def fault() -> None:
         raise RuntimeError("an unexpected fault with text that must not be shown")  # noqa: TRY003 -- the text is the point
 
-    completions = CanonicalCompletions(run.source_id, during=fault)
+    completions = CanonicalCompletions(run.source_id, during=fault, price=RUN_AT)
 
     assert drive(run, completions) == run.run_id
 
@@ -714,7 +727,10 @@ def test_a_worker_drives_runs_one_node_at_a_time_without_a_checkpointer(
             run.conn,
             blobs,
             execution_for=module_execution(
-                CanonicalCompletions(run.source_id), priced(ESTIMATE), bundle, blobs
+                CanonicalCompletions(run.source_id, price=RUN_AT),
+                priced(ESTIMATE),
+                bundle,
+                blobs,
             ),
             config=CONFIG,
             stopping=Event(),
@@ -864,7 +880,7 @@ def test_a_cancel_during_the_last_call_ends_the_run_cancelled(
                 assert request_cancel(other, run.run_id) is True
                 other.commit()
 
-    completions = CanonicalCompletions(run.source_id, during=late_cancel)
+    completions = CanonicalCompletions(run.source_id, during=late_cancel, price=RUN_AT)
     assert drive(run, completions) == run.run_id
     assert len(calls) == len(route.nodes), "every node was called once"
     assert run_status(run.conn, run.run_id) is RunStatus.CANCELLED
@@ -900,7 +916,7 @@ def test_a_parked_run_s_checkpoint_thread_is_forgotten(
         def refuse() -> None:
             raise Refusal(RefusalCode.PROVIDER_CALL_INVALID)
 
-        completions = CanonicalCompletions(run.source_id, during=refuse)
+        completions = CanonicalCompletions(run.source_id, during=refuse, price=RUN_AT)
         driven = work_once(
             run.conn,
             run.blobs,
@@ -971,7 +987,9 @@ def test_a_run_cancelled_while_queued_leaves_no_checkpoint_thread(
     saver = checkpointer(empty_database)
     stopping = Event()
     try:
-        completions = CanonicalCompletions(run.source_id, during=stopping.set)
+        completions = CanonicalCompletions(
+            run.source_id, during=stopping.set, price=RUN_AT
+        )
         driven = work_once(
             run.conn,
             run.blobs,
@@ -1140,6 +1158,7 @@ def test_a_cancel_during_a_call_whose_answer_is_refused_ends_the_run(
         during=lambda: acknowledged.append(
             _cancel_from_elsewhere(empty_database, run.run_id)
         ),
+        price=RUN_AT,
     )
     assert drive(run, completions) == run.run_id
     assert acknowledged == [True]
@@ -1164,7 +1183,10 @@ def test_a_cancel_during_a_blocked_last_call_ends_the_run_cancelled(
             acknowledged.append(_cancel_from_elsewhere(empty_database, run.run_id))
 
     completions = CanonicalCompletions(
-        run.source_id, qa_by_module={"CP-5": "Blocked"}, during=cancel_on_last
+        run.source_id,
+        qa_by_module={"CP-5": "Blocked"},
+        during=cancel_on_last,
+        price=RUN_AT,
     )
     assert drive(run, completions) == run.run_id
     assert acknowledged == [True]
@@ -1190,6 +1212,10 @@ class _Stolen:
     @property
     def model(self) -> str:
         return self.inner.model
+
+    @property
+    def price(self) -> ModelPrice | None:
+        return self.inner.price
 
     def check_context(self, route_node_id: str, module_id: str) -> int:
         self.steal()
@@ -1237,7 +1263,7 @@ def test_a_worker_that_lost_its_lease_leaves_the_holder_s_thread(
         saver.put(position, empty_checkpoint(), {}, {})
 
     base = module_execution(
-        CanonicalCompletions(run.source_id),
+        CanonicalCompletions(run.source_id, price=RUN_AT),
         priced(ESTIMATE),
         run.bundle,
         run.blobs,
@@ -1276,6 +1302,10 @@ class _Abandoned:
     @property
     def model(self) -> str:
         return self.inner.model
+
+    @property
+    def price(self) -> ModelPrice | None:
+        return self.inner.price
 
     def check_context(self, route_node_id: str, module_id: str) -> int:
         self.late_write()
@@ -1334,7 +1364,7 @@ def test_a_late_checkpoint_write_after_an_abandoned_cancel_is_still_forgotten(
         )
 
     base = module_execution(
-        CanonicalCompletions(run.source_id),
+        CanonicalCompletions(run.source_id, price=RUN_AT),
         priced(ESTIMATE),
         run.bundle,
         run.blobs,
@@ -1408,7 +1438,7 @@ def test_a_rate_limited_call_is_not_sent_again_after_a_cancel_or_a_stop(
     or SIGTERM set `stopping`, and the paid call was sent again anyway. The
     fence and the stop are read before every re-send now."""
     run = enqueued
-    provider = _limited_once(CanonicalCompletions(run.source_id))
+    provider = _limited_once(CanonicalCompletions(run.source_id, price=RUN_AT))
     stopping = Event()
 
     def waiting(seconds: float) -> None:
@@ -1450,7 +1480,7 @@ def test_a_bill_whose_first_write_fails_is_written_again_not_paid_twice(
     from caos.store import outcomes
 
     run = enqueued
-    answers = CanonicalCompletions(run.source_id)
+    answers = CanonicalCompletions(run.source_id, price=RUN_AT)
     real = outcomes._record
     faults = {"left": 1}
 

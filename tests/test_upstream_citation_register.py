@@ -26,6 +26,7 @@ from canonical_fixtures import (
     CATALOG,
     CONTRACT,
     QUOTE,
+    RUN_PRICE,
     UNANCHORED,
     CanonicalCompletions,
     fields_from_prompt,
@@ -50,6 +51,7 @@ from caos.methodology.invocation import (
     SUPPORT,
     build_handoff_prompt,
 )
+from caos.pricing import ModelPrice
 from caos.provider import Completion, encode_request
 from caos.refusals import Refusal, RefusalCode
 from caos.store.gates import withdraw_source
@@ -101,6 +103,7 @@ class _Quoting:
     source_id: UUID
     quote: str
     model: str = MODEL
+    price: ModelPrice | None = RUN_PRICE
     prompts: list[str] = field(default_factory=list)
 
     def request_bytes(self, prompt: str, *, json_object: bool = False) -> bytes:

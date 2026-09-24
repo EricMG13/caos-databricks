@@ -42,7 +42,12 @@ from uuid import UUID, uuid4
 
 import psycopg
 import pytest
-from canonical_fixtures import LITE_PROFILE, LITE_SELECTION, CanonicalCompletions
+from canonical_fixtures import (
+    LITE_PROFILE,
+    LITE_SELECTION,
+    RUN_PRICE,
+    CanonicalCompletions,
+)
 from conftest import every_block, priced, route_fault, tamper
 from fake_chat import fake_completions
 from test_gates import _approval
@@ -52,6 +57,7 @@ from caos.boundary_text import BoundaryText
 from caos.evidence.ingest import Document
 from caos.graph.route import NodeState
 from caos.methodology.bundle import Bundle
+from caos.pricing import ModelPrice
 from caos.provider import Completion, encode_request
 from caos.qualification.harness import (
     Attempted,
@@ -137,6 +143,7 @@ class _Completions:
 
     # What the host configured; with fallbacks off it is what answers.
     model: str = "a-model/for-the-test"
+    price: ModelPrice | None = RUN_PRICE
     provider: str = "qualification-test"
     qa_by_module: dict[str, str] = field(default_factory=dict)
 
@@ -179,6 +186,11 @@ class _DamagesWhatWasAccepted:
         """Whatever it wraps. A double that invented its own identity would
         record a producer no test had asked for."""
         return self.inner.model
+
+    @property
+    def price(self) -> ModelPrice | None:
+        """Whatever it wraps states, passed on as a wrapper must (N15)."""
+        return self.inner.price
 
     @property
     def provider(self) -> str:

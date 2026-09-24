@@ -21,6 +21,7 @@ from canonical_fixtures import (
     CATALOG,
     CONTRACT,
     QUOTE,
+    RUN_PRICE,
     UNANCHORED,
     CanonicalCompletions,
     skill,
@@ -46,6 +47,7 @@ from caos.methodology.executor import Assignment, captured_blocks
 from caos.methodology.handoff import read_record, validate_markdown
 from caos.methodology.invocation import host_identity
 from caos.methodology.runner import ModuleProvider
+from caos.pricing import ModelPrice
 from caos.provider import Completion, CompletionProvider, encode_request
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
@@ -292,6 +294,7 @@ class _ClaimsJson:
 
     source_id: UUID
     model: str = "a-model/for-the-test"
+    price: ModelPrice | None = RUN_PRICE
     prompts: list[str] = field(default_factory=list)
 
     def request_bytes(self, prompt: str, *, json_object: bool = False) -> bytes:

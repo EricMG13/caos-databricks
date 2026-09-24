@@ -12,6 +12,7 @@ import json
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -20,7 +21,8 @@ from uuid import UUID
 from caos.methodology.bundle import Bundle, verified_bytes
 from caos.methodology.handoff import HostIdentity, UpstreamRef, invocation_fields
 from caos.methodology.vendor import authority_bundle_sha256, load_vendor_contract
-from caos.provider import Completion, encode_request
+from caos.pricing import ModelPrice
+from caos.provider import MAX_COMPLETION_TOKENS, Completion, encode_request
 
 VENDORED = Path(__file__).resolve().parents[1] / "vendor/deploy-v"
 BUNDLE = Bundle(VENDORED)
@@ -35,6 +37,16 @@ LITE_PROFILE = "LITE_CREDIT_22"
 LITE_SELECTION = "LITE_EARNINGS_UPDATE"
 ROUTE = CONTRACT.routing.Route(CATALOG, LITE_PROFILE, LITE_SELECTION)
 RUN = "COS-20260908T120000Z-" + "1" * 32
+# The dated price the suite's runs execute at -- `conftest.priced(ESTIMATE)`:
+# a worst case of 0.50, all of it output -- stated by every fake completions
+# as the price its reported charges are billed at. A provider that states no
+# price is refused like one that states another (N15).
+RUN_PRICE = ModelPrice(
+    "a-model/for-the-test",
+    Decimal(0),
+    Decimal("0.50") / MAX_COMPLETION_TOKENS,
+    date(2026, 9, 13),
+)
 PINNED = frozenset({"CP-L10", "CP-5"})
 
 # A caller's research brief as `pin_run_input` takes it (§96): every
@@ -381,6 +393,7 @@ class CanonicalCompletions:
     source_id: UUID
     charge: Decimal | None = Decimal("0.0000041")
     model: str = "a-model/for-the-test"
+    price: ModelPrice | None = RUN_PRICE
     generation_id: str = "gen-canonical-test"
     qa_status: str = "Passed"
     qa_by_module: dict[str, str] = field(default_factory=dict)

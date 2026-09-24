@@ -651,6 +651,8 @@ def test_cp_cf_second_attempt_names_the_driver_row_it_could_not_map(
     from caos.graph.runtime import Execution, run_route
 
     answers = _MisMappedOnce(harness.source_id)
+    # Its completions bill at the price the run is executed at (N15).
+    answers.price = priced(Decimal("0.25"))
     run_route(
         harness.conn,
         harness.blobs,

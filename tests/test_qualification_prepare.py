@@ -143,6 +143,7 @@ def test_preparation_uses_an_explicit_run_ceiling(ready: Fixture) -> None:
     price = priced(Decimal("1.90"))
     authorized = replace(
         harness,
+        completions=_Completions(price=price),
         price=price,
         ceiling=Decimal("22.00"),
         run_ceiling=Decimal("22.00"),

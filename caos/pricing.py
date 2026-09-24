@@ -90,16 +90,18 @@ def bills_at(provider: object, price: ModelPrice) -> bool:
 
     A call reserves at the run's price and is charged what the provider
     reports, and `models.ChatCompletions` computes that charge from its own
-    dated price. So the provider's model must be the price's, and a provider
-    that states the price it charges at must state this one, rates and date
-    alike: another would reserve one number and bill another. A provider that
-    reports money rather than tokens states no price, and only its model is
-    compared, as before.
+    dated price. So the provider's model must be the price's, and the price it
+    states it charges at must be this one, rates and date alike: another
+    would reserve one number and bill another. A provider that states no
+    price -- one reporting money it did not price, or a wrapper that does not
+    pass its inner provider's on -- is not known to bill at this one, and is
+    refused like a wrong one (N15): budgets fail closed (invariant 8), and it
+    was compared by model name alone.
     """
     if getattr(provider, "model", None) != price.model:
         return False
     stated = getattr(provider, "price", None)
-    return stated is None or stated == price
+    return isinstance(stated, ModelPrice) and stated == price
 
 
 def exact_context() -> Context:

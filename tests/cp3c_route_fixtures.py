@@ -16,6 +16,7 @@ from canonical_fixtures import (
     CATALOG,
     CONTRACT,
     RUN,
+    RUN_PRICE,
     conforming_rows,
     fields_from_prompt,
     skill,
@@ -53,6 +54,7 @@ from caos.methodology.handoff import (
     invocation_fields,
 )
 from caos.methodology.vendor import authority_bundle_sha256
+from caos.pricing import ModelPrice
 from caos.provider import Completion, encode_request
 
 SELECTION = ("FULL_CREDIT_32", "COVENANT_REFINANCING")
@@ -737,6 +739,7 @@ def route_markdown(
 class RefinancingCompletions:
     source_id: UUID
     model: str = "a-model/for-the-test"
+    price: ModelPrice | None = RUN_PRICE
     charge: Decimal = Decimal("0.0000041")
     selection: tuple[str, str] = field(default=SELECTION, kw_only=True)
     qa_by_module: dict[str, str] = field(default_factory=dict)

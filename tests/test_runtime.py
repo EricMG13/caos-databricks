@@ -71,6 +71,9 @@ from caos.store.runs import (
 from caos.store.work import Lease, claim_run, enqueue_run
 
 ESTIMATE = Decimal("0.10")
+# The price this module's runs execute at, which the fixture answers state as
+# the price they bill at (N15).
+RUN_AT = priced(ESTIMATE)
 # What `CanonicalCompletions` reports per call unless told otherwise.
 REPORTED = Decimal("0.0000041")
 LITE_ORDER = ["CP-0", "CP-L10", "CP-5"]
@@ -95,6 +98,10 @@ class _Provider:
     @property
     def model(self) -> str:
         return self.inner.model
+
+    @property
+    def price(self) -> ModelPrice | None:
+        return self.inner.price
 
     def check_context(self, route_node_id: str, module_id: str) -> int:
         return self.inner.check_context(route_node_id, module_id)
@@ -126,9 +133,12 @@ class _Run:
         answers: CanonicalCompletions | None = None,
         lease: Lease | None = None,
     ) -> _Provider:
+        """The module provider over fixture answers billed at the price `run`
+        executes at, which a provider must state (N15); a test running at
+        another price passes `answers` stating it."""
         if answers is None:
             answers = CanonicalCompletions(
-                self.source_id, charge=charge, during=at_call
+                self.source_id, charge=charge, during=at_call, price=RUN_AT
             )
         inner = ModuleProvider(
             self.conn, self.bundle, self.blobs, answers, self.route, self.run_id, lease
@@ -743,6 +753,7 @@ class _Uncallable:
     """A provider a resumed run must not touch: the stored facts decide."""
 
     model: str = "a-model/for-the-test"
+    price: ModelPrice | None = field(default_factory=lambda: priced(ESTIMATE))
 
     def check_context(self, route_node_id: str, module_id: str) -> int:
         pytest.fail(f"{module_id} was prepared for a second call")
@@ -764,6 +775,10 @@ class _DiesAfterItsBill:
     @property
     def model(self) -> str:
         return self.inner.model
+
+    @property
+    def price(self) -> ModelPrice | None:
+        return self.inner.price
 
     def check_context(self, route_node_id: str, module_id: str) -> int:
         return self.inner.check_context(route_node_id, module_id)
@@ -884,7 +899,7 @@ def test_crash_after_a_billed_refused_answer_records_it_and_stops_without_a_call
 ) -> None:
     conn, case_id = case
     run = _approved_run(conn, case_id, route, bundle, blobs)
-    answers = CanonicalCompletions(run.source_id, mutate=_another_issuer)
+    answers = CanonicalCompletions(run.source_id, mutate=_another_issuer, price=RUN_AT)
     # The first answer is refused and explained live; the process dies after
     # the bill of the second, the node's one second attempt.
     with pytest.raises(_Boom):
@@ -919,7 +934,7 @@ def test_a_retry_skips_a_recorded_refusal_and_makes_one_new_attempt(
 ) -> None:
     conn, case_id = case
     run = _approved_run(conn, case_id, route, bundle, blobs)
-    answers = CanonicalCompletions(run.source_id, mutate=_another_issuer)
+    answers = CanonicalCompletions(run.source_id, mutate=_another_issuer, price=RUN_AT)
     with pytest.raises(Refusal) as caught:
         run.run(run.provider(answers=answers))
     assert caught.value.code is RefusalCode.HANDOFF_IDENTITY_MISMATCH
