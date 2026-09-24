@@ -22,11 +22,12 @@ from hashlib import sha256
 from pathlib import Path
 from threading import Barrier, Event
 from typing import cast
+from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
 import psycopg
 import pytest
-from conftest import _checked_values, tamper
+from conftest import _checked_values, login_role, tamper
 from test_case_ordering import _blocked, _wait_for_blocking
 from test_extraction_provenance import Reader
 from test_run_inputs import Prepared, _prepare, pin_version_one
@@ -923,6 +924,73 @@ def test_apply_schema_keeps_a_refused_statement_a_drift_finding(
     with connect(empty_database) as conn, pytest.raises(Refusal) as caught:
         apply_schema(conn)
     assert caught.value.code is RefusalCode.STORE_SCHEMA_DRIFT
+
+
+def _in_store_schema(url: str) -> int:
+    """How many relations `caos_store` holds, read as the suite's own role."""
+    with psycopg.connect(url, autocommit=True) as admin:
+        row = admin.execute(
+            "SELECT count(*) FROM pg_class WHERE relnamespace = %s::regnamespace",
+            (store.STORE_SCHEMA,),
+        ).fetchone()
+    assert row is not None
+    return int(row[0])
+
+
+def test_a_store_schema_another_role_made_first_is_refused_not_adopted(
+    empty_database: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """W2: `CAN_CONNECT_AND_CREATE` gives every principal bound to the database
+    CREATE on it, so a co-tenant can make `caos_store` first -- and grant
+    everyone CREATE in it. The app adopted it: its tables went in under an
+    owner who can drop them or take their immutability triggers off, and a
+    trigger of the owner's runs as the app's role. It is refused
+    `STORE_SCHEMA_DRIFT` before anything is created in it; the boot prints
+    that code alone (`_boot_or_refuse`, `worker._report`)."""
+    with login_role(empty_database) as squatter, login_role(empty_database) as app:
+        with psycopg.connect(squatter, autocommit=True) as other:
+            other.execute(f"CREATE SCHEMA {store.STORE_SCHEMA}")
+            other.execute(
+                f"GRANT USAGE, CREATE ON SCHEMA {store.STORE_SCHEMA} TO PUBLIC"
+            )
+        capsys.readouterr()
+        with connect(app) as conn, pytest.raises(Refusal) as refused:
+            apply_schema(conn)
+        assert refused.value.code is RefusalCode.STORE_SCHEMA_DRIFT
+        assert capsys.readouterr().err == ""
+        assert _in_store_schema(empty_database) == 0, "nothing of the app's in it"
+
+
+@pytest.mark.parametrize(
+    "handed",
+    [
+        "TABLE caos_store.store_migrations",
+        "FUNCTION caos_store.refuse_route_mutation()",
+    ],
+)
+def test_a_store_schema_holding_anything_of_another_role_s_is_refused(
+    empty_database: str, handed: str
+) -> None:
+    """W2: the schema is the app's own, but a bookkeeping table -- or a trigger
+    function, whose owner may replace its body -- has since been handed to
+    another role, which grants the app everything on it so nothing fails to
+    read. The next boot refuses `STORE_SCHEMA_DRIFT`, and the one after the
+    object is handed back boots as before."""
+    with login_role(empty_database) as other, login_role(empty_database) as app:
+        with connect(app) as conn:
+            apply_schema(conn)
+        for owner, refused in ((other, True), (app, False)):
+            with psycopg.connect(empty_database, autocommit=True) as admin:
+                admin.execute(f'ALTER {handed} OWNER TO "{urlsplit(owner).username}"')
+                admin.execute(f'GRANT ALL ON {handed} TO "{urlsplit(app).username}"')
+            with connect(app) as conn:
+                if refused:
+                    with pytest.raises(Refusal) as caught:
+                        apply_schema(conn)
+                    assert caught.value.code is RefusalCode.STORE_SCHEMA_DRIFT
+                else:
+                    apply_schema(conn)
+                    store.verify_schema(conn)
 
 
 def test_committed_unit_commits_the_body_on_a_clean_exit(empty_database: str) -> None:

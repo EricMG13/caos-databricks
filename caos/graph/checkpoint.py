@@ -41,6 +41,7 @@ from psycopg_pool import ConnectionPool
 
 from caos.graph.build import RunState
 from caos.refusals import Refusal, RefusalCode
+from caos.store import owned_schema
 from caos.store.lakebase import (
     TOKEN_SECONDS,
     lakebase_database,
@@ -164,6 +165,9 @@ def _bounded_set_up(conn: psycopg.Connection[DictRow]) -> None:
     conn.execute(sql.SQL("SET lock_timeout = {}").format(bound))
     try:
         conn.execute(f"CREATE SCHEMA IF NOT EXISTS {SCHEMA}")
+        # W2: a schema another role created first, or holds anything in, is
+        # refused `STORE_SCHEMA_DRIFT` before a table of it is read or written.
+        owned_schema(conn, SCHEMA)
         _search_path(conn)
         _drop_invalid_indexes(conn)
         PostgresSaver(conn, serde=serializer()).setup()

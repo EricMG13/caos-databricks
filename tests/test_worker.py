@@ -21,7 +21,7 @@ from uuid import UUID, uuid4
 import psycopg
 import pytest
 from canonical_fixtures import UNANCHORED, CanonicalCompletions
-from conftest import priced
+from conftest import login_role, priced
 from lite_route_fixtures import RealisticLiteCompletions
 from test_runtime import ESTIMATE, _approved_run, _Run, blobs, bundle, route
 
@@ -1021,6 +1021,57 @@ def test_a_cancel_with_no_checkpoint_schema_still_ends_the_run(
     assert _cancel_from_elsewhere(empty_database, run.run_id) is True
     assert run_status(run.conn, run.run_id) is RunStatus.CANCELLED
     run.conn.rollback()
+
+
+def test_a_cancel_never_writes_to_a_checkpoint_schema_another_role_owns(
+    empty_database: str,
+) -> None:
+    """W2: made by a co-tenant after the app's boot -- no worker has set one up
+    yet -- `caos_graph` was still written to inside the Cancel's own governed
+    unit (F218), so a trigger of the co-tenant's ran there as the app's role,
+    and took `run_events`' immutability trigger off. Only tables this role
+    owns, in a schema it owns, are forgotten from; the run still ends."""
+    from caos.store.runs import create_case, start_run
+    from caos.store.work import claim_run, release
+
+    with login_role(empty_database) as squatter, login_role(empty_database) as app:
+        with connect(app) as conn:
+            apply_schema(conn)
+            run_id = start_run(conn, create_case(conn, BoundaryText.of("Held")))
+            conn.commit()
+            enqueue_run(conn, run_id)
+            conn.commit()
+            lease = claim_run(conn, worker=BoundaryText.of("w"), lease_seconds=60)
+            assert lease is not None and release(conn, lease)
+            conn.commit()
+        with psycopg.connect(squatter, autocommit=True) as other:
+            other.execute(f"CREATE SCHEMA {work_module.CHECKPOINT_SCHEMA}")
+            other.execute(f"SET search_path TO {work_module.CHECKPOINT_SCHEMA}")
+            for table in work_module.CHECKPOINT_TABLES:
+                other.execute(f"CREATE TABLE {table} (thread_id text)")
+                other.execute(f"GRANT ALL ON {table} TO PUBLIC")
+            other.execute(
+                f"GRANT USAGE ON SCHEMA {work_module.CHECKPOINT_SCHEMA} TO PUBLIC"
+            )
+            other.execute(
+                "CREATE FUNCTION squat() RETURNS trigger LANGUAGE plpgsql AS $$"
+                " BEGIN ALTER TABLE caos_store.run_events"
+                " DISABLE TRIGGER run_event_immutable; RETURN NULL; END $$"
+            )
+            other.execute(
+                "CREATE TRIGGER squat AFTER DELETE ON checkpoints"
+                " FOR EACH STATEMENT EXECUTE FUNCTION squat()"
+            )
+        assert _cancel_from_elsewhere(app, run_id) is True
+        with psycopg.connect(empty_database, autocommit=True) as admin:
+            enabled = admin.execute(
+                "SELECT tgenabled FROM pg_trigger WHERE tgname = 'run_event_immutable'"
+            ).fetchone()
+            status = admin.execute(
+                "SELECT status FROM caos_store.runs WHERE run_id = %s", (run_id,)
+            ).fetchone()
+    assert enabled == ("O",), "the co-tenant's trigger never ran as the app"
+    assert status == (RunStatus.CANCELLED.value,)
 
 
 def test_a_lost_or_corrupt_stored_body_parks_the_run_with_its_own_code() -> None:

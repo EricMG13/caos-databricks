@@ -12,6 +12,7 @@ from pathlib import Path
 import ormsgpack
 import psycopg
 import pytest
+from conftest import login_role
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from psycopg_pool import ConnectionPool, PoolTimeout
 
@@ -321,3 +322,33 @@ def test_a_checkpoint_thread_is_bound_to_the_pinned_route_s_digest(
         assert saver.get(thread_config(thread_moved)) is None
     finally:
         close_checkpointer(saver)
+
+
+def test_a_checkpoint_schema_another_role_made_first_refuses_both_boots(
+    empty_database: str,
+) -> None:
+    """W2: a co-tenant's `caos_graph`, made before the app's first boot and
+    open to everyone, was set up and written to as the app's own. Both boots
+    refuse it `STORE_SCHEMA_DRIFT` now: the API process's `apply_schema`,
+    since a Cancel there writes to that schema and nothing there sets it up,
+    and the worker's checkpointer, which sets up no table in it."""
+    from caos.store import apply_schema, connect
+
+    with login_role(empty_database) as squatter, login_role(empty_database) as app:
+        with psycopg.connect(squatter, autocommit=True) as other:
+            other.execute(f"CREATE SCHEMA {checkpoint.SCHEMA}")
+            other.execute(
+                f"GRANT USAGE, CREATE ON SCHEMA {checkpoint.SCHEMA} TO PUBLIC"
+            )
+        with connect(app) as conn, pytest.raises(Refusal) as api_boot:
+            apply_schema(conn)
+        assert api_boot.value.code is RefusalCode.STORE_SCHEMA_DRIFT
+        with pytest.raises(Refusal) as worker_boot:
+            checkpointer(app)
+        assert worker_boot.value.code is RefusalCode.STORE_SCHEMA_DRIFT
+        with psycopg.connect(empty_database, autocommit=True) as admin:
+            held = admin.execute(
+                "SELECT count(*) FROM pg_class WHERE relnamespace = %s::regnamespace",
+                (checkpoint.SCHEMA,),
+            ).fetchone()
+        assert held == (0,), "no LangGraph table was set up in it"

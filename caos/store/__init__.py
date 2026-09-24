@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 import psycopg
+from psycopg.rows import tuple_row
 
 from caos.refusals import Refusal, RefusalCode
 
@@ -228,6 +229,25 @@ MIGRATIONS = (
 # session, not written into the SQL.
 STORE_SCHEMA = "caos_store"
 SEARCH_PATH_OPTION = f"-c search_path={STORE_SCHEMA}"
+# LangGraph's own schema (`caos.graph.checkpoint.SCHEMA`), named here rather
+# than imported: the store does not depend on the graph package. The store
+# writes to it too, forgetting a cancelled run's thread (`work._forget_threads`).
+CHECKPOINT_SCHEMA = "caos_graph"
+
+# W2: whether a schema is there, and whether it and everything in it -- the
+# bookkeeping tables, every table, index, sequence and function -- belong to
+# the role this session acts as. `CAN_CONNECT_AND_CREATE` gives any principal
+# bound to the database CREATE on it, so a co-tenant can create either schema
+# first: the app would then run on tables whose owner can disable their
+# immutability triggers, and a trigger of theirs would run as the app's role.
+_OWNED_SCHEMA = (
+    "SELECT pg_get_userbyid(n.nspowner) = current_user"
+    " AND NOT EXISTS (SELECT 1 FROM pg_class c WHERE c.relnamespace = n.oid"
+    "   AND pg_get_userbyid(c.relowner) <> current_user)"
+    " AND NOT EXISTS (SELECT 1 FROM pg_proc p WHERE p.pronamespace = n.oid"
+    "   AND pg_get_userbyid(p.proowner) <> current_user)"
+    " FROM pg_namespace n WHERE n.nspname = %s"
+)
 
 # One well-known lock, held for the applying transaction only, so two processes
 # starting at once do not both read an empty bookkeeping table and both apply.
@@ -341,6 +361,23 @@ def connect(
     except psycopg.OperationalError as failed:
         note_connect_failure(failed)
         raise
+
+
+def owned_schema(conn: psycopg.Connection[Any], schema: str) -> bool:
+    """Whether `schema` exists, refusing `STORE_SCHEMA_DRIFT` for one that
+    another role owns or holds anything in (W2).
+
+    Read on a cursor of its own, so the checkpointer's dict-row connections ask
+    it the same way the store's own do. Nothing is written: a refusal leaves
+    the caller's transaction as it was, for the caller to end.
+    """
+    with conn.cursor(row_factory=tuple_row) as cursor:
+        row = cursor.execute(_OWNED_SCHEMA, (schema,)).fetchone()
+    if row is None:
+        return False
+    if row != (True,):
+        raise Refusal(RefusalCode.STORE_SCHEMA_DRIFT)
+    return True
 
 
 def rollback_or_close(conn: StoreConnection) -> None:
@@ -485,6 +522,11 @@ def _migrate(conn: StoreConnection, sql: str) -> None:
     # Under the lock: two processes' `IF NOT EXISTS` can otherwise both miss
     # the schema and one fail on the catalog's unique name.
     conn.execute(f"CREATE SCHEMA IF NOT EXISTS {STORE_SCHEMA}")
+    # Before anything is created or read in it (W2): a schema another role
+    # made first is not adopted, and the checkpoint schema is checked here as
+    # well, because the API process writes to it and never sets it up.
+    owned_schema(conn, STORE_SCHEMA)
+    owned_schema(conn, CHECKPOINT_SCHEMA)
     conn.execute(_BOOKKEEPING)
     conn.execute(_HISTORY)
     applied = conn.execute("SELECT applied_digest FROM store_schema").fetchone()
