@@ -95,7 +95,7 @@ from caos.api.wire import (
     wire_schema,
 )
 from caos.evidence.extract import HIDDEN_REASONS
-from caos.methodology.handoff import MAX_FILE_BYTES
+from caos.methodology.handoff import MAX_HANDOFF_BYTES
 
 REPO = Path(__file__).resolve().parents[1]
 COMMITTED = REPO / "frontend" / "src" / "wire" / "v1" / "schema.json"
@@ -727,7 +727,7 @@ def test_v1_command_models_are_closed_bounded_and_in_the_committed_schema() -> N
     assert defs["CreateCase"]["properties"]["title"]["maxLength"] == 256
     assert defs["SourcesAdmitted"]["properties"]["source_ids"]["maxItems"] == 50
     content = defs["GatePreviewDocument"]["properties"]["content"]["maxLength"]
-    assert content == wire.PREVIEW_CHARS == MAX_FILE_BYTES
+    assert content == wire.PREVIEW_CHARS == MAX_HANDOFF_BYTES
     assert defs["Chrome"]["properties"]["actions"]["maxItems"] == len(ActionName)
     choices = defs["RunBody"]["properties"]["route_choices"]
     assert choices["maxItems"] == wire.ROUTE_CHOICES_MAX == 18
