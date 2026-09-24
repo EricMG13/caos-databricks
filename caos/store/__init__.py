@@ -191,7 +191,31 @@ MIGRATIONS = (
         "0036_hidden_text",
         Path(__file__).with_name("0036_hidden_text.sql").read_text(encoding="utf-8"),
     ),
+    (
+        "0037_attempts_artifacts_immutable",
+        Path(__file__)
+        .with_name("0037_attempts_artifacts_immutable.sql")
+        .read_text(encoding="utf-8"),
+    ),
+    (
+        "0038_queued_runs_per_actor",
+        Path(__file__)
+        .with_name("0038_queued_runs_per_actor.sql")
+        .read_text(encoding="utf-8"),
+    ),
 )
+
+# DL-1: the store's own schema, beside LangGraph's `caos_graph`
+# (`caos.graph.checkpoint.SCHEMA`) and named the same way: the app creates it
+# at `apply_schema`, and every store connection names it as its whole
+# `search_path` at connect time (`connect`), so the unqualified names in
+# `schema.sql` and every migration resolve here and never in `public`, where
+# PostgreSQL 15 and later give nobody CREATE. `CAN_CONNECT_AND_CREATE`'s
+# CREATE on the database is what creating it takes; nothing else is granted
+# by hand. The migration bytes are unchanged: a schema is chosen by the
+# session, not written into the SQL.
+STORE_SCHEMA = "caos_store"
+SEARCH_PATH_OPTION = f"-c search_path={STORE_SCHEMA}"
 
 # One well-known lock, held for the applying transaction only, so two processes
 # starting at once do not both read an empty bookkeeping table and both apply.
@@ -262,6 +286,9 @@ def connect(
     `connect_timeout` (seconds) bounds the connection attempt, for a caller
     such as the health probe that must not wait on an unanswering host.
 
+    Every connection's `search_path` is the store's own schema alone
+    (`STORE_SCHEMA`, DL-1), sent as a startup option like the bound below.
+
     `statement_timeout_ms` bounds every statement for the connection's whole
     session (`options`, at connect time -- not `SET LOCAL`, which a caller's
     own commits keep resetting, and not a bare `SET`, which a one-shot caller
@@ -287,8 +314,10 @@ def connect(
     }
     if connect_timeout is not None:
         kwargs["connect_timeout"] = connect_timeout
+    options = [SEARCH_PATH_OPTION]
     if statement_timeout_ms is not None:
-        kwargs["options"] = f"-c statement_timeout={statement_timeout_ms}"
+        options.append(f"-c statement_timeout={statement_timeout_ms}")
+    kwargs["options"] = " ".join(options)
     try:
         return psycopg.connect(url, autocommit=False, **kwargs)
     except psycopg.OperationalError as failed:
@@ -417,6 +446,9 @@ def _migrate(conn: StoreConnection, sql: str) -> None:
         raise Refusal(RefusalCode.STORE_SCHEMA_DRIFT)
     expected = _expected_history()
     conn.execute("SELECT pg_advisory_xact_lock(%s)", (_SCHEMA_LOCK,))
+    # Under the lock: two processes' `IF NOT EXISTS` can otherwise both miss
+    # the schema and one fail on the catalog's unique name.
+    conn.execute(f"CREATE SCHEMA IF NOT EXISTS {STORE_SCHEMA}")
     conn.execute(_BOOKKEEPING)
     conn.execute(_HISTORY)
     applied = conn.execute("SELECT applied_digest FROM store_schema").fetchone()

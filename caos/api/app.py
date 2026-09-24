@@ -280,6 +280,10 @@ _STATUS = {
     RefusalCode.RUN_INPUT_NOT_PINNED: 409,
     RefusalCode.RUN_ALREADY_STARTED: 409,
     RefusalCode.RUN_NOT_STOPPED: 409,
+    # The caller's own queue is full (N15): a conflict with state the caller
+    # holds, cleared by one of their runs ending or being cancelled -- not a
+    # server fault, and no `Retry-After` promises when.
+    RefusalCode.QUEUED_RUNS_LIMIT_REACHED: 409,
     RefusalCode.RUN_CANCEL_REQUESTED: 409,
     # One signature per signer per revision (`0029`): the request was sound and
     # the state already holds it, as VERDICT_ALREADY_RECORDED's is.

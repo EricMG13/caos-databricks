@@ -9,7 +9,7 @@ from uuid import uuid4
 
 import pytest
 from canonical_fixtures import BUNDLE, CATALOG, CONTRACT, fields_from_prompt, skill
-from conftest import priced
+from conftest import priced, tamper
 from cp1a_contract_fixtures import LIMITATION as SPONSOR_LIMITATION
 from cp2h_contract_fixtures import LIMITATION as RATINGS_LIMITATION
 from cp3c_route_fixtures import LIMITATION as REFINANCING_LIMITATION
@@ -199,7 +199,8 @@ def _forge_cp5(harness: _Harness) -> AcceptedRow:
     record_sha = harness.blobs.put(
         record_bytes(replace(record, artifact_sha256=artifact, projections=projections))
     )
-    harness.conn.execute(
+    tamper(
+        harness.conn,
         "UPDATE artifacts SET artifact_sha256=%s, record_sha256=%s"
         " WHERE run_id=%s AND route_node_id=%s",
         (artifact, record_sha, harness.run_id, node.route_node_id),

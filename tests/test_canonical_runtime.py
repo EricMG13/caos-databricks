@@ -20,7 +20,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from canonical_fixtures import QUOTE, UNANCHORED, CanonicalCompletions
-from conftest import priced, recorded_statements
+from conftest import priced, recorded_statements, tamper
 from test_canonical_execution import (
     _accept,
     _node,
@@ -652,7 +652,8 @@ def test_upstream_rewritten_during_transport_is_refused_keeping_the_bill(
     def rewrite() -> None:
         with connect(harness.url) as other:
             lock_run(other, harness.run_id)
-            other.execute(
+            tamper(
+                other,
                 "UPDATE artifacts SET artifact_sha256=%s WHERE route_node_id=%s",
                 (harness.blobs.put(b"other accepted bytes"), first),
             )
@@ -671,7 +672,7 @@ def test_host_identity_changed_during_transport_is_refused_keeping_the_bill(
 
     def renumber() -> None:
         with connect(harness.url) as other:
-            other.execute("UPDATE run_attempts SET ordinal = ordinal + 1")
+            tamper(other, "UPDATE run_attempts SET ordinal = ordinal + 1")
             other.commit()
 
     answers = _answers(harness, during=renumber)

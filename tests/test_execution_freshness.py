@@ -18,7 +18,7 @@ from uuid import UUID, uuid4
 
 import psycopg
 import pytest
-from conftest import _url_for, approve_run, priced
+from conftest import _url_for, approve_run, priced, tamper
 from conftest import reserve_at as reserve
 from psycopg.pq import TransactionStatus
 from test_loop_charges import (
@@ -1429,7 +1429,8 @@ def _rewrite_gate(harness: _Harness, conn: StoreConnection) -> None:
     """Point CP-0's accepted row at other bytes, under the run lock."""
     gate = harness.route.nodes[0]
     lock_run(conn, harness.run_id)
-    conn.execute(
+    tamper(
+        conn,
         "UPDATE artifacts SET artifact_sha256 = %s"
         " WHERE run_id = %s AND route_node_id = %s",
         (harness.blobs.put(b"other bytes"), harness.run_id, gate.route_node_id),

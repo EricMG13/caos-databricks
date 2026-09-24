@@ -41,7 +41,13 @@ from caos.graph.worker import (
 from caos.methodology.bundle import Bundle
 from caos.provider import CompletionProvider
 from caos.refusals import Refusal, RefusalCode
-from caos.store import RunStatus, StoreConnection, apply_schema
+from caos.store import (
+    SEARCH_PATH_OPTION,
+    RunStatus,
+    StoreConnection,
+    apply_schema,
+    connect,
+)
 from caos.store import work as work_module
 from caos.store.budget import CEILING_ENV
 from caos.store.runs import run_status
@@ -267,7 +273,7 @@ def test_store_fault_backs_off_without_holding_a_claim(  # noqa: PLR0913 -- para
     def conn_factory() -> StoreConnection:
         if not next(connects):
             raise psycopg.OperationalError("down")
-        return psycopg.connect(empty_database, autocommit=False)
+        return connect(empty_database)
 
     clock = _Clock(limit=4)
     assert (
@@ -603,7 +609,7 @@ def test_the_worker_says_what_it_is_doing_and_a_backing_off_worker_says_so(
         CONFIG,
         execution_for=faulty,  # type: ignore[arg-type]
         stopping=_Clock(limit=3),
-        conn_factory=lambda: psycopg.connect(empty_database, autocommit=False),
+        conn_factory=lambda: connect(empty_database),
         blobs=blobs,
     )
 
@@ -634,7 +640,7 @@ def test_a_graceful_stop_beats_stopped_not_a_stale_polling_or_working(
             CONFIG,
             execution_for=never,
             stopping=_Clock(limit=1),
-            conn_factory=lambda: psycopg.connect(empty_database, autocommit=False),
+            conn_factory=lambda: connect(empty_database),
             blobs=blobs,
         )
         == 0
@@ -678,7 +684,7 @@ def test_a_store_that_will_not_take_the_beat_does_not_stop_the_worker(
                 CONFIG,
                 execution_for=watching,  # type: ignore[arg-type]
                 stopping=_Clock(limit=2),
-                conn_factory=lambda: psycopg.connect(empty_database, autocommit=False),
+                conn_factory=lambda: connect(empty_database),
                 blobs=blobs,
             )
             == 0
@@ -744,7 +750,12 @@ def test_a_session_the_server_ends_does_not_stop_the_worker(
     name = f"caos-worker-under-test-{uuid4().hex[:12]}"
 
     def factory() -> StoreConnection:
-        conn = psycopg.connect(empty_database, autocommit=False, application_name=name)
+        conn = psycopg.connect(
+            empty_database,
+            autocommit=False,
+            application_name=name,
+            options=SEARCH_PATH_OPTION,
+        )
         opened.append(1)
         return conn
 
@@ -754,7 +765,7 @@ def test_a_session_the_server_ends_does_not_stop_the_worker(
     # A migrated store, so the worker polls and keeps its session: on an
     # empty one every poll faults, the worker closes its session and backs
     # off, and a live session to end exists only by chance.
-    with psycopg.connect(empty_database) as migrating:
+    with connect(empty_database) as migrating:
         apply_schema(migrating)
     stopping = Event()
     config = WorkerConfig(BoundaryText.of("worker-test"), poll_seconds=0.1)
@@ -849,7 +860,7 @@ def test_a_cancel_during_the_last_call_ends_the_run_cancelled(
     def late_cancel() -> None:
         calls.append(1)
         if len(calls) == len(route.nodes):
-            with psycopg.connect(empty_database, autocommit=False) as other:
+            with connect(empty_database) as other:
                 assert request_cancel(other, run.run_id) is True
                 other.commit()
 
@@ -914,6 +925,101 @@ def test_a_parked_run_s_checkpoint_thread_is_forgotten(
                 assert left == (0,), table
     finally:
         close_checkpointer(saver)
+
+
+def _thread_rows(url: str, run_id: UUID) -> dict[str, int]:
+    """Rows in each checkpoint table under any thread of `run_id`, whatever
+    the thread key is suffixed with (the scan the test above makes).
+
+    Every table LangGraph keys by thread, read from the catalog: the store
+    names them itself (`work.CHECKPOINT_TABLES`), and one LangGraph adds
+    later would otherwise go unforgotten and unnoticed.
+    """
+    from caos.graph import checkpoint as checkpoint_module
+
+    assert work_module.CHECKPOINT_SCHEMA == checkpoint_module.SCHEMA
+    counted: dict[str, int] = {}
+    with psycopg.connect(url, autocommit=True) as conn:
+        keyed = conn.execute(
+            "SELECT table_name FROM information_schema.columns"
+            " WHERE table_schema = %s AND column_name = 'thread_id'",
+            (checkpoint_module.SCHEMA,),
+        ).fetchall()
+        assert {str(row[0]) for row in keyed} == set(work_module.CHECKPOINT_TABLES)
+        for table in work_module.CHECKPOINT_TABLES:
+            row = conn.execute(
+                f"SELECT count(*) FROM {checkpoint_module.SCHEMA}.{table}"
+                " WHERE thread_id LIKE %s",
+                (f"{run_id}%",),
+            ).fetchone()
+            assert row is not None
+            counted[table] = int(row[0])
+    return counted
+
+
+def test_a_run_cancelled_while_queued_leaves_no_checkpoint_thread(
+    enqueued: _Run, empty_database: str
+) -> None:
+    """N21 (DL-8): a run released mid-route keeps its thread for the next
+    holder to resume. Cancelled while QUEUED, no worker holds it, so no
+    worker ever called `_forget`: the cancel that ends it drops the thread in
+    its own unit, and every checkpoint table is left with nothing of it."""
+    from caos.graph.checkpoint import checkpointer, close_checkpointer
+    from caos.store.work import request_cancel
+
+    run = enqueued
+    saver = checkpointer(empty_database)
+    stopping = Event()
+    try:
+        completions = CanonicalCompletions(run.source_id, during=stopping.set)
+        driven = work_once(
+            run.conn,
+            run.blobs,
+            execution_for=module_execution(
+                completions, priced(ESTIMATE), run.bundle, run.blobs, saver
+            ),
+            config=CONFIG,
+            stopping=stopping,
+        )
+        assert driven == run.run_id
+        assert work_row(run.conn, run.run_id)[0] == "QUEUED", "released"
+        assert sum(_thread_rows(empty_database, run.run_id).values()) > 0
+
+        assert _cancel_from_elsewhere(empty_database, run.run_id) is True
+        assert run_status(run.conn, run.run_id) is RunStatus.CANCELLED
+        assert _thread_rows(empty_database, run.run_id) == dict.fromkeys(
+            work_module.CHECKPOINT_TABLES, 0
+        )
+        run.conn.rollback()
+        assert request_cancel(run.conn, run.run_id) is False, "already ended"
+        run.conn.rollback()
+    finally:
+        close_checkpointer(saver)
+
+
+def test_a_cancel_with_no_checkpoint_schema_still_ends_the_run(
+    enqueued: _Run, empty_database: str
+) -> None:
+    """N21: a store no worker has ever set a checkpointer up on has no
+    `caos_graph` schema; forgetting a claimed run's threads there is nothing
+    to do, never a refusal that keeps the run from ending."""
+    from caos.graph import checkpoint as checkpoint_module
+    from caos.store.work import claim_run, release
+
+    run = enqueued
+    lease = claim_run(run.conn, worker=BoundaryText.of("w"), lease_seconds=60)
+    assert lease is not None
+    assert release(run.conn, lease)
+    run.conn.commit()
+    row = run.conn.execute(
+        "SELECT to_regnamespace(%s)", (checkpoint_module.SCHEMA,)
+    ).fetchone()
+    run.conn.rollback()
+    assert row == (None,), "no checkpointer was ever set up here"
+
+    assert _cancel_from_elsewhere(empty_database, run.run_id) is True
+    assert run_status(run.conn, run.run_id) is RunStatus.CANCELLED
+    run.conn.rollback()
 
 
 def test_a_lost_or_corrupt_stored_body_parks_the_run_with_its_own_code() -> None:

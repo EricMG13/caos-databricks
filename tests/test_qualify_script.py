@@ -39,6 +39,7 @@ from canonical_fixtures import LITE_PROFILE, LITE_SELECTION, QUOTE, CanonicalCom
 from caos.provider import Completion, encode_request
 from caos.qualification.on_disk import MANIFEST
 from caos.refusals import Refusal, RefusalCode
+from caos.store import connect
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
@@ -499,7 +500,7 @@ def test_a_set_of_more_than_one_case_can_be_admitted(
     document = json.loads(rest.strip("\n"))
     runs = [item["run_id"] for item in document["result"]]
     assert document["run_ids"] == runs and len(set(runs)) == 2
-    with psycopg.connect(
+    with connect(
         _database_url(os.environ["CAOS_TEST_POSTGRES_URL"], preamble["database"])
     ) as conn:
         stored = conn.execute(

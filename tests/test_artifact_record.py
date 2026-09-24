@@ -10,6 +10,7 @@ from uuid import UUID
 
 import psycopg
 import pytest
+from conftest import tamper
 from test_accepted_owner import _billed, _count
 from test_execution_freshness import _Harness, harness
 from test_loop_charges import MODEL, REPORTED, VENDORED
@@ -142,5 +143,5 @@ def test_version_twelve_adds_an_empty_record_column(
             "SELECT artifact_sha256, record_sha256 FROM artifacts"
         ).fetchall() == [("a" * 64, None)]
         with pytest.raises(psycopg.errors.CheckViolation):
-            conn.execute("UPDATE artifacts SET record_sha256 = 'E' || repeat('e', 63)")
+            tamper(conn, "UPDATE artifacts SET record_sha256 = 'E' || repeat('e', 63)")
         conn.rollback()

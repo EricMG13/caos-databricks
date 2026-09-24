@@ -24,7 +24,7 @@ Read first if anything is unclear: `docs/DEPLOYMENT.md` (the runbook the command
 | What one run may spend | argument 7 (default `100.00`: the widest profile at its section bounds plus one worst-case call, D29; it must cover at least one worst-case call, about 22.61 at the default price; raise it for large packs, since evidence is on top) |
 | Lakebase database, the two groups, the target | environment: `LAKEBASE_DATABASE` (`databricks_postgres`), `GROUP_ADMIN` (`caos-admins`), `GROUP_ANALYST` (`caos-analysts`), `TARGET` (`prod`; the app is `caos` there, `caos-dev-<your user id>` in `dev` and `caos-<target>` in any other, DP-6, DF-5) |
 
-Before the first deploy an administrator grants the app's service principal `USAGE` and `CREATE` on schema `public` of that database (`docs/DEPLOYMENT.md` section 1, MAX-22): the bundle's grant reaches the database, not the schema the store's tables go in.
+No grant is run by hand before the first deploy: the bundle's `CAN_CONNECT_AND_CREATE` gives the app's service principal `CREATE` on the database, and the app creates its own schemas there, `caos_store` and `caos_graph`, rather than writing to `public` (`docs/DEPLOYMENT.md` section 1, DL-1, MAX-22).
 
 Substitute real values; drop the angle brackets.
 

@@ -31,7 +31,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from canonical_fixtures import LITE_PROFILE, LITE_SELECTION, CanonicalCompletions
-from conftest import approve_run, priced, route_fault
+from conftest import approve_run, priced, route_fault, tamper
 from test_canonical_proof import _token_fault
 
 from caos.blobs import BlobStore
@@ -449,7 +449,8 @@ def test_an_unreadable_artifact_cites_nothing_and_does_not_end_the_matrix(
     """
     # Bytes no record binds: the proof refuses, and nothing is read as claims.
     digest = ran.blobs.put(b"{]not json at all")
-    ran.conn.execute(
+    tamper(
+        ran.conn,
         "UPDATE artifacts SET artifact_sha256 = %s WHERE run_id = %s",
         (digest, ran.run_id),
     )
@@ -510,7 +511,7 @@ def test_a_record_that_moves_after_the_proof_does_not_change_the_score(
     _after_proof(
         monkeypatch,
         lambda: None,
-        lambda: ran.conn.execute("UPDATE run_attempts SET ordinal = ordinal + 1"),
+        lambda: tamper(ran.conn, "UPDATE run_attempts SET ordinal = ordinal + 1"),
     )
     key = _one_case(ran)
     [row] = _matrix(ran, QualificationSet(cases=(key,))).rows
@@ -559,9 +560,10 @@ def test_an_artifact_accepted_after_the_proof_is_not_scored(
 
     def hold() -> None:
         ran.conn.execute("CREATE TEMP TABLE held_cp5 AS " + held, (ran.run_id, cp5))
-        ran.conn.execute(
+        tamper(
+            ran.conn,
             "DELETE FROM artifacts"
-            " WHERE attempt_id IN (SELECT attempt_id FROM held_cp5)"
+            " WHERE attempt_id IN (SELECT attempt_id FROM held_cp5)",
         )
 
     def accept() -> None:

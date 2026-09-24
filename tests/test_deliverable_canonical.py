@@ -16,7 +16,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from canonical_fixtures import CATALOG, CONTRACT, handoff_markdown, skill
-from conftest import every_block, recorded_statements
+from conftest import every_block, recorded_statements, tamper
 from conftest import reserve_at as reserve
 from test_execution_freshness import _Harness, harness
 from test_loop_charges import ESTIMATE, MODEL, REPORTED
@@ -195,7 +195,8 @@ def _rewrite(harness: _Harness, module_id: str, **changes: object) -> None:
     moved = json.dumps(
         document, sort_keys=True, separators=(",", ":"), ensure_ascii=False
     ).encode()
-    harness.conn.execute(
+    tamper(
+        harness.conn,
         "UPDATE artifacts SET record_sha256 = %s WHERE artifact_sha256 = %s",
         (harness.blobs.put(moved), artifact),
     )
@@ -369,14 +370,16 @@ def test_freezing_binds_both_hashes_and_verification_refuses_either_moving(
     with pytest.raises(Refusal) as record_moved:
         _verify(lite, data)
     assert record_moved.value.code is RefusalCode.ARTIFACT_RECORD_MISMATCH
-    lite.conn.execute(
+    tamper(
+        lite.conn,
         "UPDATE artifacts SET record_sha256 = %s WHERE artifact_sha256 = %s",
         (record, artifact),
     )
     lite.conn.commit()
     _verify(lite, data)
     # The stored artifact moves.
-    lite.conn.execute(
+    tamper(
+        lite.conn,
         "UPDATE artifacts SET artifact_sha256 = %s WHERE artifact_sha256 = %s",
         (lite.blobs.put(b"another handoff"), artifact),
     )

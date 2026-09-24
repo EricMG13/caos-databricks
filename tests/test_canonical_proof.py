@@ -27,6 +27,7 @@ from conftest import (
     priced,
     recorded_statements,
     route_fault,
+    tamper,
 )
 from test_canonical_execution import _node, harness, route
 from test_deliverable_canonical import RESTRICTED, _accept
@@ -145,7 +146,8 @@ def _stored(ran: _Harness, module_id: str) -> tuple[UUID, str, str]:
 def _set(ran: _Harness, module_id: str, column: str, value: str | None) -> None:
     attempt, _artifact, _record = _stored(ran, module_id)
     assert column in {"artifact_sha256", "record_sha256"}
-    ran.conn.execute(
+    tamper(
+        ran.conn,
         f"UPDATE artifacts SET {column} = %s WHERE attempt_id = %s",
         (value, attempt),
     )
@@ -257,13 +259,15 @@ def test_an_artifact_whose_producer_differs_from_its_call_refuses(
 ) -> None:
     for column in ("model", "generation_id"):
         attempt, _artifact, _record = _stored(ran, "CP-L10")
-        ran.conn.execute(
+        tamper(
+            ran.conn,
             f"UPDATE artifacts SET {column} = 'another' WHERE attempt_id = %s",
             (attempt,),
         )
         ran.conn.commit()
         assert _refusal(ran) is RefusalCode.CALL_OUTCOME_CONFLICT
-        ran.conn.execute(
+        tamper(
+            ran.conn,
             f"UPDATE artifacts SET {column} = o.{column} FROM call_outcomes o"
             " WHERE o.attempt_id = artifacts.attempt_id"
             " AND artifacts.attempt_id = %s",
@@ -363,7 +367,8 @@ def test_a_projection_the_markdown_does_not_say_refuses(ran: _Harness) -> None:
 
 def test_an_identity_the_store_no_longer_holds_refuses(ran: _Harness) -> None:
     attempt, _artifact, record = _stored(ran, "CP-5")
-    ran.conn.execute(
+    tamper(
+        ran.conn,
         "UPDATE run_attempts SET ordinal = ordinal + 1 WHERE attempt_id = %s",
         (attempt,),
     )
@@ -384,8 +389,10 @@ def test_an_identity_the_store_no_longer_holds_refuses(ran: _Harness) -> None:
 
 def test_an_identity_the_host_cannot_rebuild_keeps_its_own_code(ran: _Harness) -> None:
     attempt, _artifact, _record = _stored(ran, "CP-5")
-    ran.conn.execute(
-        "UPDATE run_attempts SET ordinal = NULL WHERE attempt_id = %s", (attempt,)
+    tamper(
+        ran.conn,
+        "UPDATE run_attempts SET ordinal = NULL WHERE attempt_id = %s",
+        (attempt,),
     )
     ran.conn.commit()
     assert _refusal(ran) is RefusalCode.ATTEMPT_NOT_FOUND

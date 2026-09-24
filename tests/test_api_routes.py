@@ -27,7 +27,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from canonical_fixtures import CanonicalCompletions
-from conftest import route_fault
+from conftest import route_fault, tamper
 from fastapi import FastAPI, HTTPException
 from fastapi.dependencies.utils import get_dependant
 from fastapi.exceptions import RequestValidationError
@@ -558,7 +558,8 @@ def test_a_stored_gate_record_the_markdown_does_not_bind_is_a_server_fault(
         stored,
         projections=replace(stored.projections, readiness=(("CP-5", "READY"),)),
     )
-    harness.conn.execute(
+    tamper(
+        harness.conn,
         "UPDATE artifacts SET record_sha256 = %s WHERE attempt_id = %s",
         (harness.blobs.put(record_bytes(lying)), attempt),
     )
@@ -570,7 +571,8 @@ def test_a_stored_gate_record_the_markdown_does_not_bind_is_a_server_fault(
         500,
         _refused("ARTIFACT_RECORD_MISMATCH"),
     )
-    harness.conn.execute(
+    tamper(
+        harness.conn,
         "UPDATE artifacts SET record_sha256 = %s WHERE attempt_id = %s",
         (harness.blobs.put(record_bytes(lying)), attempt),
     )
@@ -1334,8 +1336,9 @@ def test_startup_applies_the_declared_schema(
     empty_database: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """ "Postgres schema in full at startup". The database here has had nothing
-    applied to it, and after the app has started it holds the store's tables."""
-    from caos.store import connect
+    applied to it, and after the app has started it holds the store's tables,
+    in the store's own schema and not `public` (DL-1)."""
+    from caos.store import STORE_SCHEMA, connect
 
     monkeypatch.setenv(app_module.DATABASE_URL, empty_database)
 
@@ -1344,12 +1347,12 @@ def test_startup_applies_the_declared_schema(
 
     with connect(empty_database) as conn:
         applied = conn.execute(
-            "SELECT count(*) FROM information_schema.tables"
-            " WHERE table_schema = 'public' AND table_name IN"
+            "SELECT table_schema, count(*) FROM information_schema.tables"
+            " WHERE table_name IN"
             " ('runs', 'run_events', 'case_members', 'audit_events')"
-        ).fetchone()
-    assert applied is not None
-    assert applied[0] == 4
+            " GROUP BY table_schema"
+        ).fetchall()
+    assert applied == [(STORE_SCHEMA, 4)]
 
 
 class _CountingConnection:

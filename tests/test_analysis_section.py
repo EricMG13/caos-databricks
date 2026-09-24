@@ -16,7 +16,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from canonical_fixtures import CATALOG
-from conftest import priced
+from conftest import priced, tamper
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from lite_route_fixtures import RealisticLiteCompletions
@@ -238,7 +238,8 @@ def test_a_record_that_no_longer_binds_its_markdown_refuses_artifact_record_mism
             confidence_score=record.projections.confidence_score - 1,
         ),
     )
-    harness.conn.execute(
+    tamper(
+        harness.conn,
         "UPDATE artifacts SET record_sha256 = %s WHERE run_id = %s"
         " AND route_node_id = %s",
         (harness.blobs.put(record_bytes(moved)), harness.run_id, last),

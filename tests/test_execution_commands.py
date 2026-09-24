@@ -25,6 +25,7 @@ from caos import methodology
 from caos.api.app import app
 from caos.api.commands import execution
 from caos.api.deps import methodology_bundle
+from caos.api.wire import CLEARS
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
 from caos.evidence.ingest import Document, admit_pack
@@ -35,7 +36,7 @@ from caos.store import StoreConnection
 from caos.store.gates import withdraw_source
 from caos.store.members import Standing, revoke
 from caos.store.runs import create_case, start_run
-from caos.store.work import claim_run, enqueue_run, stop
+from caos.store.work import MAX_QUEUED_RUNS_PER_ACTOR, claim_run, enqueue_run, stop
 
 __all__ = ["command_client"]
 
@@ -190,6 +191,64 @@ def test_start_rechecks_live_authority_and_enqueues_in_the_audited_unit(
         assert _code(refused) == (409, code)
         assert _work(conn, moved.run_id) is None
     assert _audited(conn, case_id, "RUN_ENQUEUED") == 1
+
+
+def test_an_actor_s_queued_runs_are_capped_and_a_cancel_frees_a_place(
+    case: tuple[StoreConnection, UUID], client: TestClient, tmp_path: Path
+) -> None:
+    """N15 (D39): one actor holds at most `MAX_QUEUED_RUNS_PER_ACTOR` runs
+    queued or in a worker's hands. One more Start or Retry by that actor is
+    refused 409 `QUEUED_RUNS_LIMIT_REACHED` with nothing written; another
+    actor is not held by it; a cancel frees a place. Aggregate spend limits
+    are the AI Gateway's, an enterprise setting, and not the host's."""
+    conn, case_id = case
+    writer = member(conn, case_id)
+    other = member(conn, case_id)
+    cap = MAX_QUEUED_RUNS_PER_ACTOR
+    # Prepared first: its claim would otherwise take a started run instead.
+    stopped, stopped_fingerprint = _ready(conn, case_id, tmp_path, "retry")
+    ready = [_ready(conn, case_id, tmp_path, "start") for _ in range(cap + 2)]
+    for run_id, fingerprint in ready[:cap]:
+        started = _post(
+            client, case_id, run_id, "start", writer, fingerprint=fingerprint
+        )
+        assert started.status_code == 202
+
+    extra, extra_fingerprint = ready[cap]
+    refused = _post(
+        client, case_id, extra, "start", writer, fingerprint=extra_fingerprint
+    )
+    assert _code(refused) == (409, "QUEUED_RUNS_LIMIT_REACHED")
+    assert refused.json()["clears"] == CLEARS[RefusalCode.QUEUED_RUNS_LIMIT_REACHED]
+    retried = _post(
+        client, case_id, stopped, "retry", writer, fingerprint=stopped_fingerprint
+    )
+    assert _code(retried) == (409, "QUEUED_RUNS_LIMIT_REACHED")
+    assert _work(conn, extra) is None
+    assert _work(conn, stopped) == ("STOPPED", "CITATION_NOT_LOCATED", False)
+    assert _audited(conn, case_id, "RUN_ENQUEUED") == cap
+    assert _audited(conn, case_id, "RUN_REQUEUED") == 0
+
+    spare, spare_fingerprint = ready[cap + 1]
+    by_other = _post(
+        client, case_id, spare, "start", other, fingerprint=spare_fingerprint
+    )
+    assert by_other.status_code == 202, "one actor's queue holds nobody else"
+
+    assert _post(client, case_id, ready[0][0], "cancel", writer).status_code == 202
+    again = _post(
+        client, case_id, extra, "start", writer, fingerprint=extra_fingerprint
+    )
+    assert again.status_code == 202, "the cancel freed a place"
+    assert (
+        _scalar(
+            conn,
+            "SELECT count(*) FROM run_work WHERE requested_by = %s"
+            " AND state IN ('QUEUED', 'CLAIMED')",
+            writer,
+        )
+        == cap
+    )
 
 
 def test_start_without_a_pin_or_under_another_build_is_a_conflict_not_a_fault(

@@ -18,6 +18,7 @@ from uuid import UUID
 
 import pytest
 from canonical_fixtures import CATALOG, CanonicalCompletions
+from conftest import tamper
 from test_canonical_execution import LITE, _accept, _node, _reserved, _run
 from test_canonical_runtime import _answers, _module_provider, _run_route
 from test_execution_freshness import _counts, _Harness, harness
@@ -86,7 +87,8 @@ def _repoint(harness: _Harness, module_id: str, record: CanonicalRecord) -> None
     """A privileged rewrite of one accepted row's record, under the run lock."""
     with connect(harness.url) as other:
         lock_run(other, harness.run_id)
-        other.execute(
+        tamper(
+            other,
             "UPDATE artifacts SET record_sha256 = %s"
             " WHERE run_id = %s AND route_node_id = %s",
             (

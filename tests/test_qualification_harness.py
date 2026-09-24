@@ -42,7 +42,7 @@ from uuid import UUID, uuid4
 import psycopg
 import pytest
 from canonical_fixtures import LITE_PROFILE, LITE_SELECTION, CanonicalCompletions
-from conftest import priced, route_fault
+from conftest import priced, route_fault, tamper
 from fake_chat import fake_completions
 from test_gates import _approval
 
@@ -1322,7 +1322,8 @@ def test_the_last_attempt_is_the_last_by_ordinal_not_by_clock(
         ).fetchone()
         assert row is not None
         retry = start_attempt(conn, record.run_id, str(row[0]))
-        conn.execute(
+        tamper(
+            conn,
             "UPDATE run_attempts SET started_at = started_at - interval '1 hour'"
             " WHERE attempt_id=%s",
             (retry,),

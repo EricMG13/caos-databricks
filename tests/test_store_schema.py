@@ -26,7 +26,7 @@ from uuid import UUID, uuid4
 
 import psycopg
 import pytest
-from conftest import _checked_values
+from conftest import _checked_values, tamper
 from test_case_ordering import _blocked, _wait_for_blocking
 from test_extraction_provenance import Reader
 from test_run_inputs import Prepared, _prepare, pin_version_one
@@ -42,7 +42,13 @@ from caos.store import SCHEMA, RunStatus, StoreConnection, apply_schema, connect
 from caos.store.events import RunEvent, append
 from caos.store.routes import resolved_route
 from caos.store.run_inputs import RunInput, load_run_input
-from caos.store.runs import block_run, create_case, run_status, start_run
+from caos.store.runs import (
+    block_run,
+    create_case,
+    run_status,
+    start_attempt,
+    start_run,
+)
 
 # A declared schema that differs from the repository's by one table -- the shape
 # a later build has when it adds one, and the shape `IF NOT EXISTS` hides.
@@ -134,12 +140,50 @@ def test_connect_asks_for_keepalives_and_an_optional_statement_timeout(
     assert captured["keepalives_interval"] == store.KEEPALIVES_INTERVAL_SECONDS
     assert captured["keepalives_count"] == store.KEEPALIVES_COUNT
     assert captured["tcp_user_timeout"] == store.TCP_USER_TIMEOUT_MS
-    assert "options" not in captured
+    assert captured["options"] == "-c search_path=caos_store", "DL-1, and no bound"
 
     captured.clear()
     with pytest.raises(psycopg.OperationalError):
         store.connect("postgresql://unused.invalid/none", statement_timeout_ms=5000)
-    assert captured["options"] == "-c statement_timeout=5000"
+    assert captured["options"] == (
+        "-c search_path=caos_store -c statement_timeout=5000"
+    )
+
+
+def test_the_store_lives_in_its_own_schema_and_never_in_public(
+    empty_database: str,
+) -> None:
+    """DL-1: `public` needs a grant PostgreSQL 15 and later give nobody, so
+    the store creates its own schema, beside `caos_graph`, and names it as
+    every connection's whole search path. Every table, index, function and
+    bookkeeping row lands there; `public` holds nothing of the store's."""
+    assert store.STORE_SCHEMA == "caos_store"
+    assert store.SEARCH_PATH_OPTION == "-c search_path=caos_store"
+    with connect(empty_database) as conn:
+        assert conn.execute("SHOW search_path").fetchone() == ("caos_store",)
+        apply_schema(conn)
+        assert conn.execute("SELECT current_schema()").fetchone() == ("caos_store",)
+        placed: dict[str, int] = {
+            str(name): int(number)
+            for name, number in conn.execute(
+                "SELECT n.nspname, count(*) FROM pg_class c"
+                " JOIN pg_namespace n ON n.oid = c.relnamespace"
+                " WHERE n.nspname IN ('public', 'caos_store') GROUP BY 1"
+            ).fetchall()
+        }
+        functions = conn.execute(
+            "SELECT count(*) FROM pg_proc WHERE pronamespace = 'public'::regnamespace"
+        ).fetchone()
+        tables = {
+            str(row[0])
+            for row in conn.execute(
+                "SELECT table_name FROM information_schema.tables"
+                " WHERE table_schema = 'caos_store'"
+            ).fetchall()
+        }
+    assert "public" not in placed and functions == (0,)
+    assert {"store_schema", "store_migrations", "runs", "run_work"} <= tables
+    assert placed["caos_store"] > len(tables), "tables and their indexes"
 
 
 def test_connect_s_statement_timeout_bounds_the_whole_session(
@@ -214,14 +258,8 @@ def test_budget_reservations_and_run_events_are_immutable(
     `events.py` only ever insert into these two tables -- never an UPDATE, a
     DELETE or a TRUNCATE anywhere in the app -- which now refuse what the app
     never sends, the same shape `0007_call_outcomes.sql` gave `call_outcomes`
-    and `budget_ledger`.
-
-    `run_attempts` and `artifacts` are the same shape (insert-only) but are
-    deliberately left unguarded: the test suite reaches into both by design
-    to simulate a row corrupted after the fact, proving the application's own
-    verification catches it (`tests/test_canonical_proof.py` and others).
-    Guarding them the same way would need every one of those call sites
-    rewritten first, which is an owner's call (N16), not this fix's.
+    and `budget_ledger`. `run_attempts` and `artifacts` follow in `0037`
+    (`test_run_attempts_and_artifacts_are_immutable`).
     """
     with connect(empty_database) as conn:
         apply_schema(conn)
@@ -261,6 +299,64 @@ def test_budget_reservations_and_run_events_are_immutable(
         assert conn.execute(
             "SELECT count(*) FROM budget_reservations WHERE attempt_id = %s",
             (attempt_id,),
+        ).fetchone() == (1,)
+
+
+def test_run_attempts_and_artifacts_are_immutable(empty_database: str) -> None:
+    """CF-091's remainder (N16, invariant 6): the accepted-attempt ledger is
+    the truth, and the app only ever inserts into it -- an attempt at
+    `start_attempt`, its artifact at acceptance, whose replay is a read --
+    never an UPDATE, a DELETE or a TRUNCATE. Every column of both is
+    write-once now (`0037_attempts_artifacts_immutable.sql`).
+
+    The suites that corrupt a row on purpose, to prove the application's own
+    verification catches it, go through `conftest.tamper`: one statement with
+    the refusal set aside, and the refusal back for the next."""
+    with connect(empty_database) as conn:
+        apply_schema(conn)
+        case_id = create_case(conn, BoundaryText.of("Acme 2026 refinancing"))
+        run_id = start_run(conn, case_id)
+        conn.commit()
+        attempt_id = start_attempt(conn, run_id, "CP-0")
+        conn.execute(
+            "INSERT INTO artifacts (attempt_id, artifact_sha256, run_id, case_id,"
+            " model, generation_id) VALUES (%s, %s, %s, %s, 'm', 'g')",
+            (attempt_id, "a" * 64, run_id, case_id),
+        )
+        conn.commit()
+
+        for table, mutation in (
+            ("run_attempts", "UPDATE run_attempts SET ordinal = 2"),
+            ("run_attempts", "UPDATE run_attempts SET started_at = now()"),
+            ("run_attempts", "UPDATE run_attempts SET lease_token = 7"),
+            ("run_attempts", "DELETE FROM run_attempts"),
+            ("run_attempts", "TRUNCATE run_attempts CASCADE"),
+            ("artifacts", "UPDATE artifacts SET artifact_sha256 = repeat('b', 64)"),
+            ("artifacts", "UPDATE artifacts SET record_sha256 = repeat('c', 64)"),
+            ("artifacts", "UPDATE artifacts SET model = 'another'"),
+            ("artifacts", "DELETE FROM artifacts"),
+            ("artifacts", "TRUNCATE artifacts"),
+        ):
+            with pytest.raises(
+                psycopg.errors.RaiseException, match="immutable"
+            ) as caught:
+                conn.execute(mutation)
+            assert table in str(caught.value), mutation
+            conn.rollback()
+
+        assert tamper(conn, "UPDATE artifacts SET model = 'another'").rowcount == 1
+        assert conn.execute("SELECT model FROM artifacts").fetchone() == ("another",)
+        with pytest.raises(psycopg.errors.RaiseException, match="immutable"):
+            conn.execute("UPDATE artifacts SET model = 'm'")
+        conn.rollback()
+        with pytest.raises(psycopg.errors.CheckViolation):
+            tamper(conn, "UPDATE artifacts SET record_sha256 = 'not a digest'")
+        conn.rollback()
+        conn.autocommit = True
+        assert tamper(conn, "DELETE FROM artifacts").rowcount == 1
+        conn.autocommit = False
+        assert conn.execute(
+            "SELECT count(*) FROM run_attempts WHERE attempt_id = %s", (attempt_id,)
         ).fetchone() == (1,)
 
 
@@ -374,6 +470,9 @@ def test_the_drift_refusal_carries_no_schema_text(empty_database: str) -> None:
 
 
 def _legacy(conn: StoreConnection) -> None:
+    """A store an older build wrote by hand, in the schema `connect` names
+    (DL-1), which `apply_schema` would otherwise have created first."""
+    conn.execute(f"CREATE SCHEMA {store.STORE_SCHEMA}")
     conn.execute(SCHEMA)
     conn.execute(store._BOOKKEEPING)
     conn.execute(
