@@ -6,7 +6,7 @@ import json
 import re
 from collections.abc import Mapping, Sequence
 from decimal import Decimal
-from typing import Any
+from typing import Any, NamedTuple
 
 from caos.calculators.cash_flow import cash_flow_forecast
 from caos.evidence.citations import AnchoredCitation
@@ -153,14 +153,38 @@ def validate_forecast_bindings(
 
 
 _DRIVER_TABLE = "cp2g.cp_model_forecast_drivers"
-# The CP-2G driver rows CP-CF maps for each case and period (G3-9): each to the
-# request movement named, or -- None -- to no movement this contract carries,
-# so the row must be a READY 0 with its own source line.
-_DRIVER_ROWS: tuple[tuple[str, str | None], ...] = (
-    ("acquisitions_disposals", "acquisitions_disposals"),
-    ("dividends_paid", "distributions"),
-    ("net_equity_issue_repay", None),
-    ("other_investing_financing", None),
+
+
+class _DriverRow(NamedTuple):
+    """One CP-2G driver row CP-CF maps for each case and period (G3-9).
+
+    `field` is the request movement the row is, or None for a movement this
+    contract does not carry, so the row must be a READY 0 with its own source
+    line. `negated` is how the row's signed figure becomes the calculator's
+    input: the figure itself, or its sign reversed (`Decimal.copy_negate`,
+    exact in any context).
+    """
+
+    driver_id: str
+    field: str | None
+    negated: bool
+
+
+# CP-2G signs a driver as the vendor's CP-MODEL adds it into net cash flow:
+# inflows positive and outflows negative (REF_CP-1_STEPS, "the canonical sign
+# convention"; REF_CP-MODEL_STEPS, "NCF = FCF + acquisitions/disposals + ... +
+# dividends"). The calculator takes both movements the other way round
+# (`cash_flow._project_period`): it subtracts `distributions`, which is
+# unsigned, and `acquisitions_disposals`, an acquisition positive and a
+# disposal negative. So each is CP-2G's figure negated: a `(45)` dividend is
+# distributions 45, a `(45)` acquisition is acquisitions_disposals 45 and a
+# `45` disposal is -45. A dividend written positive -- an inflow -- negates to
+# a distribution the calculator refuses, so no request maps it (C2).
+_DRIVER_ROWS: tuple[_DriverRow, ...] = (
+    _DriverRow("acquisitions_disposals", "acquisitions_disposals", negated=True),
+    _DriverRow("dividends_paid", "distributions", negated=True),
+    _DriverRow("net_equity_issue_repay", None, negated=False),
+    _DriverRow("other_investing_financing", None, negated=False),
 )
 # A driver value as the host reads it (G3-9): digits grouped by commas in
 # threes or not at all, an optional fraction, and a sign written as a leading
@@ -213,8 +237,9 @@ def validate_driver_mapping(
     the row READY (a zero with its own source line). `HANDOFF_INCOMPLETE` for
     anything else it cannot map: no table, a scale other than millions, a
     missing or doubled row, a status, unit or value that is malformed, or a
-    value that is not the request's movement -- or, for the two movements this
-    contract lacks, not 0.
+    value that is not the request's movement once CP-2G's sign convention is
+    reversed into the calculator's (`_DRIVER_ROWS`, C2) -- or, for the two
+    movements this contract lacks, not 0.
     """
     request = _document(markdown)["request"]
     faults = _faults_or_none(contract, request, owner)
@@ -270,13 +295,21 @@ def _faults(
         period = next((p for p in request["periods"] if _pair(p) == pair), None)
         if period is None:
             raise ValueError
-        for vendor, field in _DRIVER_ROWS:
-            key = (vendor, *pair, period["fiscal_year"])
-            wanted = driver[field] if field else "0"
-            fault = _row_fault(contract, rows, key, wanted, field)
+        for mapped in _DRIVER_ROWS:
+            key = (mapped.driver_id, *pair, period["fiscal_year"])
+            wanted = _figure(driver[mapped.field]) if mapped.field else Decimal(0)
+            fault = _row_fault(contract, rows, key, wanted, mapped)
             if fault is not None:
                 faults.append((_row_name(key), fault))
     return faults
+
+
+def _figure(value: object) -> Decimal:
+    """A request movement as the calculator reads it: a string in its own
+    number form, read with `Decimal`, never a float. `ValueError` otherwise."""
+    if not isinstance(value, str) or _PLAIN.fullmatch(value) is None:
+        raise ValueError
+    return Decimal(value)
 
 
 def _pair(period: Mapping[str, Any]) -> tuple[object, object]:
@@ -287,10 +320,14 @@ def _row_fault(
     contract: VendorContract,
     rows: list[dict[str, str]],
     key: tuple[str, ...],
-    wanted: str,
-    field: str | None,
+    wanted: Decimal,
+    mapped: _DriverRow,
 ) -> str | None:
-    """Why the one CP-2G row `key` names cannot be mapped to `wanted`, or None."""
+    """Why the one CP-2G row `key` names cannot be mapped to `wanted`, or None.
+
+    The row's figure is compared once converted to the calculator's input as
+    `mapped` declares (C2), exactly: `Decimal` equality, never a float.
+    """
     matches = [
         row
         for row in rows
@@ -316,11 +353,14 @@ def _row_fault(
         figure = driver_value(value)
     except ValueError:
         return "holds no plain, comma-grouped or parenthesised figure"
-    if figure == Decimal(wanted):
+    if (figure.copy_negate() if mapped.negated else figure) == wanted:
         return None
-    if field is None:
+    if mapped.field is None:
         return "is not 0, and this contract carries no such movement"
-    return f"does not equal the request's {field}"
+    return (
+        f"does not equal the request's {mapped.field} once negated: CP-2G signs"
+        " an outflow negative, the calculator positive"
+    )
 
 
 def _row_name(key: tuple[str, ...]) -> str:

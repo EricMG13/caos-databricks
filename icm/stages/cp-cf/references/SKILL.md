@@ -28,7 +28,12 @@ exact case/period/year, all four of `acquisitions_disposals`, `dividends_paid`,
 `net_equity_issue_repay` and `other_investing_financing` must be READY and
 CURRENCY_MM, each value a plain, comma-grouped or parenthesised figure
 (`1,250.0`, `(45)`). `acquisitions_disposals` is that movement and
-`dividends_paid` is distributions. net_equity_issue_repay and
+`dividends_paid` is distributions, each with its sign reversed: CP-2G signs a
+row as the vendor's model adds it into net cash flow, inflows positive and
+outflows negative, while the calculator subtracts both, `distributions`
+unsigned and `acquisitions_disposals` an acquisition positive and a disposal
+negative. A `(45)` dividend is distributions 45, a `(45)` acquisition is
+acquisitions_disposals 45 and a `45` disposal is -45. net_equity_issue_repay and
 other_investing_financing must be a READY 0: this contract has no
 corresponding movement. A NOT_APPLICABLE row leaves the forecast not ready
 until CP-2G states it. Division growth is not revenue. Obtain every
