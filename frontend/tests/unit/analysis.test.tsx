@@ -10,7 +10,7 @@ import { MemoryRouter } from "react-router";
 import { composeChrome, words } from "@/chrome/compose";
 import { stamp } from "@/ds/format";
 import { AnalysisSection, PROSE_SHOWN, sourceRegister } from "@/sections/analysis/AnalysisSection";
-import { conclusionOf, handoffSeverity, moduleName } from "@/sections/analysis/modules";
+import { conclusionOf, handoffSeverity } from "@/sections/analysis/tone";
 import { parseAnalysisDocument } from "@/wire/v1";
 import type { AnalysisDocument, HandoffView } from "@/wire/v1";
 
@@ -258,14 +258,30 @@ describe("Analysis", () => {
     expect(tabs.map((tab) => tab.label)).toEqual(complete.body.handoffs.map((h) => h.module_id));
     expect(tabs.find((tab) => tab.label === "CP-1C")).toMatchObject({
       severity: "WARNING",
-      cp: moduleName("CP-1C"),
+      cp: "Peer benchmark",
     });
     expect(tabs.filter((tab) => tab.opens).map((tab) => tab.label)).toEqual(["CP-7"]);
   });
 
-  test("test_moduleName_handoffSeverity_and_conclusionOf", () => {
-    expect(moduleName("CP-1C")).toBe("Peer benchmark");
-    expect(moduleName("CP-99")).toBe("CP-99");
+  test("a module is named by the bundle catalog's name on the wire, its id once when that is all (N61)", () => {
+    const cp1c = complete.body.handoffs.find((h) => h.module_id === "CP-1C")!;
+    expect(cp1c.module_name).toBe("Peer benchmark");
+    const { container } = mountAt(complete, "CP-1C");
+    expect(container.querySelector("#module-heading")).toHaveTextContent("Peer benchmark");
+    const unnamed = parseAnalysisDocument({
+      ...complete,
+      body: {
+        ...complete.body,
+        handoffs: complete.body.handoffs.map((h) =>
+          h === cp1c ? { ...h, module_name: h.module_id } : h,
+        ),
+      },
+    });
+    const tab = composeChrome("analysis", unnamed).tabs.find((entry) => entry.label === "CP-1C");
+    expect(tab?.cp).toBeNull();
+  });
+
+  test("test_handoffSeverity_and_conclusionOf", () => {
     const cp1c = complete.body.handoffs.find((h) => h.module_id === "CP-1C")!;
     expect(handoffSeverity(cp1c)).toBe("WARNING");
     expect(handoffSeverity(complete.body.handoffs[0]!)).toBe("SUCCESS");

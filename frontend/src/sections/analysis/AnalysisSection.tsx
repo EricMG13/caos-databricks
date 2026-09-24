@@ -10,8 +10,7 @@
 import { useState } from "react";
 import { Link } from "react-router";
 import { Figures, type FigurePick } from "./figures";
-import { conclusionOf, handoffSeverity, moduleName } from "./modules";
-import { NODE_SEVERITY, nodeTone } from "./tone";
+import { NODE_SEVERITY, conclusionOf, handoffSeverity, nodeTone } from "./tone";
 import { sectionPath } from "@/app/sections";
 import { SeverityMark } from "@/chrome/SeverityMark";
 import { words } from "@/chrome/compose";
@@ -204,8 +203,8 @@ function ModuleView({
     <article className="module" data-handoff={handoff.module_id} aria-labelledby="module-heading">
       <header className="modhead">
         <SeverityMark severity={severity} decorative />
-        <h2 id="module-heading">{moduleName(handoff.module_id)}</h2>
-        {moduleName(handoff.module_id) === handoff.module_id ? null : (
+        <h2 id="module-heading">{handoff.module_name}</h2>
+        {handoff.module_name === handoff.module_id ? null : (
           <span className="code">{handoff.module_id}</span>
         )}
         <span className="right">
@@ -357,7 +356,10 @@ function PendingList({
               data-blocking={blockedBy?.route_node_id === node.route_node_id ? "yes" : "no"}
             >
               <span className="id">{node.module_id}</span>
-              <span className="cp">{node.route_node_id}</span>
+              <span className="cp">
+                {node.module_name === node.module_id ? "" : `${node.module_name} · `}
+                {node.route_node_id}
+              </span>
               {blockedBy?.route_node_id === node.route_node_id ? (
                 <span className="cp" data-blocking-note>
                   its verdict ended the run · attempt {blockedBy.attempt_id}

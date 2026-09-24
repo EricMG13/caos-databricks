@@ -255,6 +255,25 @@ describe("Run", () => {
     expect(stale).toHaveTextContent(superseded.body.latest_run_id!);
   });
 
+  test("a parked run in the runs list reads parked, with its stop code (CF-044)", () => {
+    const latest = superseded.body.latest_run_id!;
+    const parked: RunSectionDocument = {
+      ...superseded,
+      body: {
+        ...superseded.body,
+        runs: superseded.body.runs.map((summary) =>
+          summary.run_id === latest
+            ? { ...summary, status: "RUNNING", stop_code: "PROVIDER_UNAVAILABLE" }
+            : summary,
+        ),
+      },
+    };
+    const { container } = mount(parked);
+    const row = container.querySelector(`[data-run-row="${latest}"]`)!;
+    expect(row).toHaveTextContent("Parked · PROVIDER_UNAVAILABLE");
+    expect(row).not.toHaveTextContent("Running");
+  });
+
   test("test_route_not_pinned_is_rendered_as_a_preview", () => {
     expect(routeNotPinned.status).toBe("partial");
     expect(routeNotPinned.notes).toContain("ROUTE_NOT_PINNED");

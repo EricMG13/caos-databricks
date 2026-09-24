@@ -5,7 +5,7 @@ A new feature or requirement beyond the ledgers is written here, not built. One 
 - N1 (spec author, 2026-09-22; closed by D42) — Runs stay sequential; the unused frontier helpers are deleted.
 - N2 (spec author, 2026-09-22) — Reasoning-effort passthrough to Databricks Claude endpoints (`extra_params`), once the endpoint's accepted parameters are confirmed; v1 records `none` in the qualification identity when the parameter is not sent.
 - N3 (spec author, 2026-09-22) — Lakebase-hosted test databases for CI (instead of the local Docker Postgres) once a Databricks profile exists in CI.
-- N4 (review, 2026-09-23; closed by F221) — The deliverable's rendered page and its audit package are served; the frontend offers them from Committee (design session).
+- N4 (review, 2026-09-23; closed by F221 and F310) — The deliverable's rendered page and its audit package are served; the frontend offers them from Committee.
 - N5 (review, 2026-09-23; closed by F207) — Concurrent admissions share a process-wide slot.
 - N6 (review, 2026-09-23; closed by D43) — `FORECAST_CHAIN_BROKEN` and `_check_chain` are retired.
 - N7 (review, 2026-09-23; closed by F248) — The stand-in runs the service principal's own M2M authentication.
@@ -62,8 +62,8 @@ A new feature or requirement beyond the ledgers is written here, not built. One 
 - N57 (vendor; closed by D40) — `parse_figure` and `figure_value` strip every digit-group space and refuse an underflowing exponent; the two percent readings are documented where they are defined.
 - N58 (design plan; closed by F257) — Model and Book no longer build tables they drop.
 - N59 (design plan) — Narrative figures in Report and Committee are bracketed text, not openable chips: `NarrativeFigure` carries no `source_id` or record digest, which the evidence drawer needs; and the narrative editor shows raw `{{figure:…}}` tokens.
-- N60 (design plan) — Book columns carry no unit, so a margin reads `0.20` rather than `20.0%`; a `unit` on `BookColumn` would let the cell format it.
-- N61 (design plan) — Module display names are a frontend map mirroring `icm/stages` slugs (`sections/analysis/modules.ts`); the bundle catalog's names could be served on the wire.
+- N60 (design plan; closed by F259 and F312) — Book columns carry no unit, so a margin reads `0.20` rather than `20.0%`; a `unit` on `BookColumn` would let the cell format it.
+- N61 (design plan; closed by F260 and F313) — Module display names are a frontend map mirroring `icm/stages` slugs (`sections/analysis/modules.ts`); the bundle catalog's names could be served on the wire.
 - N62 (design plan; D37) — Filed output never renders as paper, so filing, the product's peak moment, reads like any other page. The unreferenced `rd-*` deliverable styles (stamp, watermark, filed line) went with D37's reskin; paper comes back designed for the new world, still ink on cream and in filed output only.
 - N64 (D37, 2026-09-23) — The evidence drawer, the source drawer and the metric passport keep their own dialog (`ds/use-modal-a11y.ts`), restyled as shadcn's sheet and dialog. Moving them onto Base UI's Dialog would retire the hook (SI-11, N29), but it must keep the explicit opener focus return (IA_SPEC.md 7) that the three callers pass today.
 - N65 (D35, 2026-09-23) — The JS bundle is 707 kB (230 kB gzip) since D35, and Vite warns past 500 kB. Loading each section's view lazily (`SECTION_VIEWS`) would cut first load to the shell and the section on screen.

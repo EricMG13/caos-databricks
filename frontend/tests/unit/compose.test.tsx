@@ -8,7 +8,7 @@ import { MemoryRouter } from "react-router";
 import { SectionSummary, headlineOf } from "@/chrome/SectionSummary";
 import { SectionTabs } from "@/chrome/SectionTabs";
 import { SiteHeader } from "@/chrome/SiteHeader";
-import { RUN_SEVERITY, composeChrome, sentence, words } from "@/chrome/compose";
+import { RUN_SEVERITY, composeChrome, isParked, sentence, words } from "@/chrome/compose";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import {
   parseAnalysisDocument,
@@ -82,6 +82,28 @@ test("an empty directory and a run with no forecast say so, and what to do", () 
   const none = composeChrome("model", parseModelDocument(model));
   expect(none.brief.action).toBe("Run a route that includes CP-CF.");
   expect(none.brief.headline).toBeNull();
+});
+
+test("isParked: a running run with a stop code is parked, and the Directory says so (CF-044)", () => {
+  expect(isParked({ status: "RUNNING", stop_code: "PROVIDER_UNAVAILABLE" })).toBe(true);
+  expect(isParked({ status: "RUNNING", stop_code: null })).toBe(false);
+  expect(isParked({ status: "FAILED", stop_code: "PROVIDER_UNAVAILABLE" })).toBe(false);
+  const directory = load("directory.json");
+  const moving = composeChrome("directory", parseDirectoryDocument(directory));
+  expect(moving.brief.evidence).toBe("1 run in progress.");
+  expect(moving.verdict.severity).toBe("IDLE");
+  // The fixture's one RUNNING run, parked by its worker.
+  const running = directory.body.cases.find(
+    (row: { latest_run: { status: string } | null }) => row.latest_run?.status === "RUNNING",
+  );
+  running.latest_run.stop_code = "PROVIDER_UNAVAILABLE";
+  const parked = composeChrome("directory", parseDirectoryDocument(directory));
+  expect(parked.brief.evidence).toBe("1 run parked.");
+  expect(parked.brief.action).toBe("Retry a parked run from its case's Run section.");
+  expect(parked.verdict).toMatchObject({
+    severity: "WARNING",
+    conclusion: "1 run parked, waiting on a retry.",
+  });
 });
 
 test("a partial document with no notes says so in words, never 'Partial: .'", () => {
