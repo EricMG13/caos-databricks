@@ -137,6 +137,41 @@ def test_identifiers_includes_match_capture_names() -> None:
     assert "chunk_capture" in found
 
 
+def test_identifiers_includes_star_captures_in_match_patterns() -> None:
+    """N4: `case [first, *rest]` and `case {"k": v, **rest}` each bind a name
+    as surely as a plain capture does, but through `MatchStar.name` and
+    `MatchMapping.rest`, plain strings the old branch list walked past."""
+    tree = ast.parse(
+        "match blocks:\n"
+        "    case [first, *chunks]:\n"
+        "        pass\n"
+        "match table:\n"
+        '    case {"k": _, **passages}:\n'
+        "        pass\n"
+        "    case [*_]:\n"
+        "        pass\n"
+    )
+    found = {name for _, name in check_vocabulary.identifiers(tree)}
+    assert {"chunks", "passages"} <= found
+
+
+def test_violations_reads_a_banned_word_with_a_digit_suffix(tmp_path: Path) -> None:
+    """N4: `chunk2` normalised to the one word `chunk2`, which matched no
+    banned word; digits end a word as an underscore does."""
+    module = tmp_path / "m.py"
+    module.write_text(
+        "chunk2 = 1\nx2chunks = 2\ngolden2_set = 3\nblock2 = 4\n", encoding="utf-8"
+    )
+    reported = list(
+        check_vocabulary.violations(module, check_vocabulary.banned_terms(CONTEXT_MD))
+    )
+    assert [line.split(": ", 1)[1].split(" says ")[0] for line in reported] == [
+        "'chunk2'",
+        "'x2chunks'",
+        "'golden2_set'",
+    ]
+
+
 def test_identifiers_includes_pep695_type_parameters() -> None:
     """CF-105: a generic's own type parameters are declared in `type_params`,
     a field `ast.walk` reaches but the old branch list never classified, so a
