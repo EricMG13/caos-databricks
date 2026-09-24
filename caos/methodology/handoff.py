@@ -33,6 +33,7 @@ from caos.digest import canonical_json
 from caos.evidence.citations import AnchoredCitation, Citation, Rect
 from caos.graph.route import MODEL_MODULE
 from caos.methodology.vendor import VendorContract
+from caos.provider import MAX_RESPONSE_BYTES
 from caos.refusals import Refusal, RefusalCode
 
 # Both sets are enforced together at one point, `gates.require_adapter_route`
@@ -117,8 +118,12 @@ MAX_FILE_BYTES = 26_214_400
 MAX_FRONTMATTER_BYTES = 262_144
 MAX_LINE_BYTES = 65_536
 # The most Markdown the host accepts as a handoff, on model output and on
-# stored reads alike (`_text`).
-MAX_HANDOFF_BYTES = MAX_FILE_BYTES
+# stored reads alike (`_text`): the response bound the transport accepts
+# (N39, owner-approved). No answer is longer than that, and a handoff's
+# Markdown is never longer than the JSON body it arrived in, since an escape
+# only ever shortens when read. The vendor's reader goes to `MAX_FILE_BYTES`,
+# where validation took 6-22 s on every read of an accepted handoff.
+MAX_HANDOFF_BYTES = MAX_RESPONSE_BYTES
 # The longest run of spaces or tabs any line of a handoff may carry.
 #
 # The vendor's heading expressions are `^ {0,3}##(?!#)[ \t]+(.+?)[ \t]*$` and
