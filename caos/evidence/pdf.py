@@ -55,6 +55,7 @@ from pdfminer.utils import apply_matrix_rect
 from caos.evidence.extract import (
     DEFAULT_LIMITS,
     MAX_TOKEN_CHARS,
+    RUN_CUT,
     AdmissionLimits,
     ExtractorIdentity,
     MarkedToken,
@@ -95,9 +96,6 @@ CROP_POLICY = "drop-outside"
 # pdfminer opens an unencrypted document with the empty password; the identity
 # record names the parameter as pdfminer does and carries that value.
 UNENCRYPTED = ""
-# How a run past `MAX_TOKEN_CHARS` is cut (`extract.nfc_pieces`): on its NFC
-# form, each piece's rectangle its share of the run's by character.
-RUN_CUT = "nfc-proportional"
 # What marks a line a reader of the rendered page may not see (N27,
 # `caos/evidence/visibility.py`), declared because it decides the tokens' marks.
 # Text render mode 3 paints a glyph neither filled nor stroked (ISO 32000-1,

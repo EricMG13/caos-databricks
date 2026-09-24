@@ -635,6 +635,7 @@ def test_a_read_whose_deadline_passes_waiting_for_a_slot_starts_no_child(
 # only observable is the typed code it raises (invariant 2).
 
 _TEXT_CONFIG: dict[str, Any] = {
+    "encoding": "utf-8",
     "cell_width": 6.0,
     "cell_height": 12.0,
     "margin": 18.0,
@@ -697,7 +698,13 @@ def test_a_cell_size_that_is_not_a_positive_finite_number_is_refused(
 
 @pytest.mark.parametrize(
     "over",
-    [{"lines_per_page": 0}, {"lines_per_page": "2"}, {"coordinates": "elsewhere"}],
+    [
+        {"lines_per_page": 0},
+        {"lines_per_page": "2"},
+        {"coordinates": "elsewhere"},
+        {"encoding": "latin-1"},
+        {"encoding": None},
+    ],
 )
 def test_a_text_frame_refuses_a_configuration_it_cannot_draw_in(
     over: dict[str, Any],
@@ -712,6 +719,22 @@ def test_a_text_page_with_no_lines_is_unavailable_rather_than_empty(
 ) -> None:
     with pytest.raises(Refusal, match=r"^PAGE_NOT_AVAILABLE$"):
         page_module._text_frame(_TEXT_CONFIG, data, page)
+
+
+@pytest.mark.parametrize(
+    "encoding,cells", [("utf-8", len("\ufeffabcd")), ("utf-8-sig", len("abcd"))]
+)
+def test_a_text_frame_decodes_the_document_as_its_identity_recorded(
+    encoding: str, cells: int
+) -> None:
+    """CF-017: a v4 row dropped a leading byte order mark before it drew a
+    cell, and a v3 row drew one for it. Each frame is re-read under the
+    encoding its row recorded, so its width is the page its tokens were
+    measured on, and a v3 source keeps the frame it always had."""
+    data = "\ufeffabcd\nab\n".encode()
+    frame = page_module._text_frame({**_TEXT_CONFIG, "encoding": encoding}, data, 1)
+    assert frame.x1 == 2 * 18.0 + cells * 6.0
+    assert page_module.TEXT_ENCODINGS == {"utf-8", "utf-8-sig"}
 
 
 def test_a_text_frame_is_as_wide_as_its_widest_line_and_as_tall_as_its_rows() -> None:

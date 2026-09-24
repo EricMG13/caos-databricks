@@ -713,7 +713,7 @@ def test_the_pdf_identity_records_effective_layout_and_convention() -> None:
     assert identity.config["crop_policy"] == "drop-outside"
     identity.canonical()
     plain = PlainTextExtractor().identity
-    assert (plain.version, plain.config["coordinates"]) == ("3", "cell-top-left-pt")
+    assert (plain.version, plain.config["coordinates"]) == ("4", "cell-top-left-pt")
 
 
 V1_IDENTITY: dict[str, str | int | float | bool | None] = {

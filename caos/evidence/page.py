@@ -58,7 +58,12 @@ from caos.api.wire import (
     PageLine,
 )
 from caos.blobs import BlobStore
-from caos.evidence.extract import DEFAULT_LIMITS, HIDDEN_REASONS, AdmissionLimits
+from caos.evidence.extract import (
+    DEFAULT_LIMITS,
+    HIDDEN_REASONS,
+    TEXT_ENCODING,
+    AdmissionLimits,
+)
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
 
@@ -103,6 +108,9 @@ PDF_V2_COORDINATES = "crop-top-left-rotated-pt"
 # marks the lines a reader may not see (N27).
 PDF_CROP_VERSIONS = frozenset({"2", "3", "4"})
 TEXT_COORDINATES = "cell-top-left-pt"
+# The encodings a `caos.plain-text` identity records: v1-v3 `utf-8`, v4
+# `utf-8-sig` (`extract.TEXT_ENCODING`). Each is also the codec's name.
+TEXT_ENCODINGS = frozenset({"utf-8", TEXT_ENCODING})
 
 
 @dataclass(frozen=True, slots=True)
@@ -403,20 +411,27 @@ def _frame(
 
 def _text_frame(config: dict[str, Any], data: bytes, page: int) -> FrameView:
     """A fixed-pitch page from its recorded cells: the rows and margins its
-    configuration declares, as wide as its widest line."""
+    configuration declares, as wide as its widest line.
+
+    The document is decoded as its identity recorded (`TEXT_ENCODINGS`): a v4
+    row dropped a leading byte order mark before it drew a cell (CF-017), and
+    an earlier row drew one for it, so each frame is the page its tokens'
+    rectangles were measured on."""
     cell_width = _positive(config.get("cell_width"))
     cell_height = _positive(config.get("cell_height"))
     margin = _positive(config.get("margin"), zero=True)
     rows = config.get("lines_per_page")
+    encoding = config.get("encoding")
     if (
         type(rows) is not int
         or rows < 1
         or config.get("coordinates", TEXT_COORDINATES) != TEXT_COORDINATES
+        or encoding not in TEXT_ENCODINGS
     ):
         raise Refusal(RefusalCode.SOURCE_IDENTITY_INVALID)
     text: str | None
     try:
-        text = data.decode("utf-8")
+        text = data.decode(encoding)
     except UnicodeDecodeError:
         text = None
     lines = [] if text is None else text.splitlines()[(page - 1) * rows : page * rows]

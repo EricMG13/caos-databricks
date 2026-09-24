@@ -17,6 +17,7 @@ import pytest
 
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
+from caos.evidence.citations import anchor_citation
 from caos.evidence.extract import (
     CELL_WIDTH,
     LINES_PER_PAGE,
@@ -91,6 +92,43 @@ def test_bytes_that_are_not_text_are_refused_without_quoting_them() -> None:
 
     assert caught.value.code is RefusalCode.SOURCE_NOT_READABLE
     assert str(caught.value) == RefusalCode.SOURCE_NOT_READABLE.value
+
+
+def test_a_leading_byte_order_mark_is_the_encodings_and_never_text(
+    tmp_path: Path, case: tuple[StoreConnection, UUID]
+) -> None:
+    """CF-017: a text exported with a byte order mark kept it as the first
+    word's first character, so the document's first line was never quoted as
+    it reads and every cell on it sat one column late. v4 decodes
+    `utf-8-sig`: the mark is the encoding's, the first word starts at the
+    margin, and the first line anchors as it is shown. A U+FEFF anywhere
+    else is text, as it always was."""
+    tokens = PlainTextExtractor().extract("\ufeff".encode() + TWO_PARAGRAPHS)
+    assert tokens == PlainTextExtractor().extract(TWO_PARAGRAPHS)
+    assert tokens[0].text == "Total" and tokens[0].x0 == MARGIN
+    [inner, after] = PlainTextExtractor().extract("a\ufeffb c".encode())
+    assert inner.text == "a\ufeffb" and after.text == "c"
+    assert PlainTextExtractor().identity.config["encoding"] == "utf-8-sig"
+
+    conn, case_id = case
+    [source_id] = admit_pack(
+        conn,
+        BlobStore(tmp_path / "blobs"),
+        case_id=case_id,
+        documents=[
+            Document(
+                filename=BoundaryText.of("bom.txt"),
+                data="\ufeff".encode() + TWO_PARAGRAPHS,
+            )
+        ],
+    )
+    [rect] = anchor_citation(
+        conn,
+        source_id=source_id,
+        page=1,
+        matched_text="Total debt at 31 December 2026",
+    )
+    assert rect.x0 == MARGIN
 
 
 @dataclass(frozen=True, slots=True)
