@@ -1,6 +1,8 @@
 """`scripts/enterprise_deploy.sh` against the loopback workspace and the app
 booted the platform way (D28, F31): the CLI on the path is a recorder, every
-other step is the real one over HTTP, and the rows say what happened."""
+other step is the real one over HTTP, and the rows say what happened -- for
+each Lakebase kind the bundle binds (R24-14): Autoscaling by default, an
+existing Provisioned instance with `--provisioned`."""
 
 from __future__ import annotations
 
@@ -21,38 +23,88 @@ import check_gate_config
 import enterprise_deploy
 import pytest
 from enterprise_deploy import Evidence, Row
-from platform_app import REPO, PlatformApp
-from test_platform_boot import app, stub
-from workspace_stub import BEARER, ENDPOINT, PRICE, WorkspaceStub
+from platform_app import BINDINGS, REPO, PlatformApp
+from test_platform_boot import BOTH_KINDS, app, stub
+from test_workspace_stub import CREDENTIALS
+from workspace_stub import (
+    BEARER,
+    ENDPOINT,
+    LAKEBASE_DATABASE,
+    LAKEBASE_ENDPOINT,
+    LAKEBASE_INSTANCE,
+    LAKEBASE_PROJECT,
+    PRICE,
+    WorkspaceStub,
+)
+
+from caos.store.lakebase import LakebaseKind
 
 __all__ = ["app", "stub"]
 
-# What `bundle validate -o json` resolves for the dev target under the stub,
+# What `bundle validate -o json` resolves for each dev target under the stub,
 # cut to the fields the one command reads (DF-5: the stub's user id is 42).
 DEV_APP = "caos-dev-42"
+DEV_APPS = {
+    LakebaseKind.AUTOSCALING: ("dev", DEV_APP),
+    LakebaseKind.PROVISIONED: ("dev-provisioned", "caos-devprov-42"),
+}
+# The `database` resource each kind's targets resolve to.
+FORMS = {
+    LakebaseKind.AUTOSCALING: {"postgres": {"branch": "b", "database": "d"}},
+    LakebaseKind.PROVISIONED: {"database": {"instance_name": LAKEBASE_INSTANCE}},
+}
+# The one command's Lakebase arguments, the `--var` it must pass, the other
+# kind's variable it must not, and the row E1 writes for the lookup.
+GIVEN = {
+    LakebaseKind.AUTOSCALING: (
+        [LAKEBASE_PROJECT],
+        f"lakebase_project={LAKEBASE_PROJECT}",
+        "lakebase_instance",
+        f"ok      lakebase endpoint {LAKEBASE_ENDPOINT}",
+    ),
+    LakebaseKind.PROVISIONED: (
+        ["--provisioned", LAKEBASE_INSTANCE],
+        f"lakebase_instance={LAKEBASE_INSTANCE}",
+        "lakebase_project",
+        f"ok      lakebase instance {LAKEBASE_INSTANCE}",
+    ),
+}
 
 
-def _resolved(name: str, **env: str) -> dict[str, Any]:
+def _resolved(
+    name: str, kind: LakebaseKind = LakebaseKind.AUTOSCALING, **env: str
+) -> dict[str, Any]:
     values = {
         "CAOS_MODEL_ENDPOINT": ENDPOINT,
         "CAOS_MODEL_PRICE": PRICE,
         "CAOS_RUN_CEILING": "100.00",  # the bundle default (D29)
+        **BINDINGS[kind],
         **env,
     }
     listed = [{"name": key, "value": value} for key, value in values.items()]
-    return {"resources": {"apps": {"caos": {"name": name, "config": {"env": listed}}}}}
+    resources = [{"name": "database", **FORMS[kind]}]
+    app = {"name": name, "config": {"env": listed}, "resources": resources}
+    return {"resources": {"apps": {"caos": app}}}
 
 
+@BOTH_KINDS
 def test_the_one_command_runs_the_cli_and_verifies_the_deployment(
     app: PlatformApp, stub: WorkspaceStub, empty_database: str, tmp_path: Path
 ) -> None:
+    """E1..E10 for the Lakebase kind the flag chooses, the app booted bound
+    to that kind: E1 looks it up and E8 reads its version through that
+    kind's own API (R24-14)."""
+    kind = app.kind
+    target, name = DEV_APPS[kind]
     parts = urlparse(empty_database)
     stub.instance_host = parts.hostname or "127.0.0.1"
     stub.user_name = parts.username or "postgres"  # Lakebase mints for the caller
+    # The Autoscaling database's Postgres name is the Postgres API's to say.
+    stub.postgres_databases = {LAKEBASE_DATABASE: parts.path.lstrip("/")}
     # What a real `bundle deploy` creates the app with; the recorder CLI does
     # not. E5 reads the name the CLI resolved, not one it recomputes (DF-5).
-    stub.apps.add(DEV_APP)
-    stub.app_bodies[DEV_APP] = {"forward_user_access_token": True}
+    stub.apps.add(name)
+    stub.app_bodies[name] = {"forward_user_access_token": True}
     # R24-15: comma-holding group names (e.g. "Research, Credit") are
     # supported workspace display names; E1 must find them by their exact
     # name, unsplit. Added alongside the deployer's own admin group, which
@@ -60,7 +112,7 @@ def test_the_one_command_runs_the_cli_and_verifies_the_deployment(
     stub.groups |= {"Research, Credit", "Analysts, Readers"}
     calls = tmp_path / "cli-calls.txt"
     resolved = tmp_path / "resolved.json"
-    resolved.write_text(json.dumps(_resolved(DEV_APP)))
+    resolved.write_text(json.dumps(_resolved(name, kind)))
     # What a real deploy records it synced: every file the app reads (DF-4).
     state = tmp_path / "state"
     state.mkdir()
@@ -99,13 +151,15 @@ def test_the_one_command_runs_the_cli_and_verifies_the_deployment(
         enterprise_deploy.FORWARD_CALLER_ENV: "1",
     }
     env.pop("DATABRICKS_CONFIG_PROFILE", None)
+    *flag, lakebase = GIVEN[kind][0]
     done = subprocess.run(
         [
             str(REPO / "scripts/enterprise_deploy.sh"),
+            *flag,
             "",
             "main",
             "caos",
-            "caos-lb",
+            lakebase,
             ENDPOINT,
             PRICE,
         ],
@@ -124,17 +178,19 @@ def test_the_one_command_runs_the_cli_and_verifies_the_deployment(
     assert all(row[2] == "0" for row in rows), rows
     assert (
         rows[1][3]
-        == f"resolved app {DEV_APP}: endpoint, price and run ceiling as given"
+        == f"resolved app {name}: endpoint, price, run ceiling and Lakebase as given"
     )
     assert rows[2][3] == "every path the app needs was synced"
-    assert rows[4][1] == f"apps get {DEV_APP}"
+    assert rows[4][1] == f"apps get {name}"
     seen = calls.read_text().splitlines()
     assert [line.split(" -t ")[0] for line in seen] == [
         "bundle validate -o json",
         "bundle deploy",
         "bundle run caos",
     ]
-    assert all("--var run_ceiling=100.00" in line and "-p" not in line for line in seen)
+    assert all("--var run_ceiling=100.00" in line for line in seen)
+    assert not any(" -p " in f" {line} " for line in seen), "no profile flag"
+    _only_the_kind_s_own(kind, target, seen, evidence, stub)
     # The price travels whole in the environment (C1), never as a `--var`.
     assert all(f"price={PRICE}" in line and "model_price" not in line for line in seen)
     # R24-15: the comma-holding group names travel the same way, never as a
@@ -156,6 +212,23 @@ def test_the_one_command_runs_the_cli_and_verifies_the_deployment(
     everything = "".join(p.read_text() for p in evidence.iterdir()) + done.stdout
     assert BEARER not in everything
     assert parts.password and f":{parts.password}@" not in everything
+
+
+def _only_the_kind_s_own(
+    kind: LakebaseKind,
+    target: str,
+    seen: list[str],
+    evidence: Path,
+    stub: WorkspaceStub,
+) -> None:
+    """R24-14: the target, the `--var`s, E1's lookup and the credential E8
+    minted are the flag's kind's, and nothing of the other kind's."""
+    _, bound, other, looked_up = GIVEN[kind]
+    assert all(f" -t {target} " in line for line in seen), seen
+    assert all(f"--var {bound}" in line for line in seen), seen
+    assert not any(other in line for line in seen), seen
+    assert looked_up in (evidence / "E1.log").read_text()
+    assert CREDENTIALS[kind] in stub.requests
 
 
 def test_a_recorded_cli_step_is_one_row_with_the_log_tail(tmp_path: Path) -> None:
@@ -194,6 +267,7 @@ def test_a_validate_that_resolved_other_values_is_a_failed_row(
     for name in ("CAOS_MODEL_ENDPOINT", "CAOS_MODEL_PRICE"):
         monkeypatch.delenv(name, raising=False)  # `main` sets them; undone after
     given = ["--target", "dev", "--endpoint", ENDPOINT, "--price", PRICE]
+    given += ["--lakebase-project", LAKEBASE_PROJECT]
     resolved = tmp_path / "bundle.json"
     log = tmp_path / "E2.cli.log"
     log.write_text("")
@@ -216,17 +290,50 @@ def test_a_validate_that_resolved_other_values_is_a_failed_row(
     assert code == 1 and summary.startswith("no app resolved")
     code, summary = record(_resolved(DEV_APP))
     assert code == 0 and summary.startswith(f"resolved app {DEV_APP}")
-    assert enterprise_deploy.resolved_app("not a document") == ("", {})
+    # R24-14: the Lakebase binding is the target's kind and the value given.
+    branch = "projects/caos/branches/staging/endpoints/primary"
+    code, summary = record(_resolved(DEV_APP, CAOS_LAKEBASE_ENDPOINT=branch))
+    assert (code, summary) == (
+        1,
+        "resolved CAOS_LAKEBASE_ENDPOINT is not the value given",
+    )
+    code, summary = record(_resolved(DEV_APP, CAOS_LAKEBASE_INSTANCE=LAKEBASE_INSTANCE))
+    assert (code, summary) == (1, "resolved app also binds CAOS_LAKEBASE_INSTANCE")
+    provisioned_form = _resolved(DEV_APP)
+    provisioned_form["resources"]["apps"]["caos"]["resources"] = [
+        {"name": "database", **FORMS[LakebaseKind.PROVISIONED]}
+    ]
+    code, summary = record(provisioned_form)
+    assert (code, summary) == (1, "resolved database resource is not the postgres form")
+    assert enterprise_deploy.resolved_form({"resources": {}}) == ""
+    # The target names the kind; the ids given compose the endpoint's path.
+    base = ["--stage", "record", "--evidence", str(tmp_path / "ev")]
+    endpoint_path = "projects/p/branches/production/endpoints/primary"
+    for flags, expected in (
+        (["--target", "prod", "--lakebase-project", "p"], endpoint_path),
+        (["--target", "prod-provisioned", "--lakebase-instance", "i"], "i"),
+    ):
+        args = enterprise_deploy._parser().parse_args([*base, *flags])
+        assert enterprise_deploy.lakebase_binding(args)[1] == expected
     assert (
-        enterprise_deploy.resolution_problems(
-            _resolved("caos"),
-            target="prod",
-            endpoint=ENDPOINT,
-            price=PRICE,
-            run_ceiling="100.00",
+        enterprise_deploy.binding_problems(
+            _resolved("caos", LakebaseKind.PROVISIONED),
+            ("CAOS_LAKEBASE_INSTANCE", LAKEBASE_INSTANCE),
         )
         == []
     )
+    assert enterprise_deploy.resolved_app("not a document") == ("", {})
+    for production in ("prod", "prod-provisioned"):
+        assert (
+            enterprise_deploy.resolution_problems(
+                _resolved("caos"),
+                target=production,
+                endpoint=ENDPOINT,
+                price=PRICE,
+                run_ceiling="100.00",
+            )
+            == []
+        )
     # With nothing resolved, E5 has no name to look up and says so.
     assert (
         enterprise_deploy.main(["--stage", "after", "--evidence", str(tmp_path / "e5")])
@@ -288,19 +395,49 @@ def _last_summary(evidence: Path) -> str:
 
 def test_no_target_but_prod_names_the_production_app() -> None:
     """DP-6 and DF-5: the app's name is `caos-<target>` unless a target says
-    otherwise, only `prod` says `caos`, and each developer's dev copy carries
-    their numeric user id so two developers never share one app."""
+    otherwise, only the production targets -- `prod` and its Provisioned
+    pair, one app bound to one Lakebase kind (R24-14) -- say `caos`, and each
+    developer's dev copy carries their numeric user id so two developers
+    never share one app."""
     text = (REPO / "databricks.yml").read_text()
-    top, _, targets = text.partition("\ntargets:\n")
+    top, _, _ = text.partition("\ntargets:\n")
     assert re.search(r"^      name: caos-\$\{bundle\.target\}$", top, re.M), top
-    blocks = re.split(r"^  (\w+):\n", targets, flags=re.M)[1:]
     names = {
         target: re.findall(r"^          name: (\S+)$", body, re.M)
-        for target, body in zip(blocks[::2], blocks[1::2], strict=True)
+        for target, body in check_gate_config.target_blocks(text).items()
     }
-    assert names.pop("prod") == ["caos"]
+    for production in enterprise_deploy.PRODUCTION_TARGETS:
+        assert names.pop(production) == ["caos"]
     assert names.pop("dev") == ["caos-${bundle.target}-${workspace.current_user.id}"]
-    assert all("caos" not in overrides for overrides in names.values()), names
+    # An app name is at most 30 characters; a user id can take 16.
+    assert names.pop("dev-provisioned") == ["caos-devprov-${workspace.current_user.id}"]
+    assert names == {}, names
+
+
+def test_the_flag_chooses_the_kind_and_the_target_never_does(tmp_path: Path) -> None:
+    """R24-14: `--provisioned` is the one flag, and TARGET names the base
+    target: a `-provisioned` TARGET, or any other flag, is refused before
+    anything runs."""
+    env = {**os.environ, "EVIDENCE": str(tmp_path / "ev")}
+    script = str(REPO / "scripts/enterprise_deploy.sh")
+    refused = subprocess.run(
+        [script, "--provisoned", "", "main", "caos", "x"],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert refused.returncode == 2 and "the one flag is --provisioned" in refused.stderr
+    env["TARGET"] = "prod-provisioned"
+    refused = subprocess.run(
+        [script, "--provisioned", "", "main", "caos", "x"],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert refused.returncode == 2 and "TARGET names dev or prod" in refused.stderr
+    assert not (tmp_path / "ev").exists()
 
 
 Write = tuple[float, bytes]  # (the wait before it, the bytes)

@@ -10,6 +10,11 @@ The serving endpoint is also checked for the AI Gateway posture the host
 relies on (DP-3, MX-5): no inference-table payload logging, because every
 prompt carries document text; no fallback and one served entity, because the
 host prices one model per endpoint. Guardrails are reported, not refused.
+
+Lakebase is looked up as the target binds it (R24-14): by default a Lakebase
+Autoscaling project, its read-write endpoint and its database through the
+Postgres API (`--lakebase-project`), or an existing Provisioned instance
+through the database API (`--lakebase-instance`); exactly one is given.
 """
 
 from __future__ import annotations
@@ -18,8 +23,11 @@ import argparse
 import os
 import sys
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+import bundle_defaults
 
 if TYPE_CHECKING:
     from databricks.sdk import WorkspaceClient
@@ -33,6 +41,39 @@ if str(REPO) not in sys.path:
 
 # What `_group` answers when the profile cannot list groups: not missing.
 UNKNOWN = object()
+# The bundle's own defaults for the Lakebase names it defaults (N23).
+_DEFAULTS = bundle_defaults.defaults()
+READ_ONLY = "ENDPOINT_TYPE_READ_ONLY"
+ENDPOINT_READ_ONLY = "a read-only endpoint: the app writes; name the read-write one"
+ENDPOINT_DISABLED = "the endpoint is disabled: enable it or name another"
+
+Check = tuple[str, Callable[[], object], str]
+
+
+@dataclass(frozen=True, slots=True)
+class LakebasePaths:
+    """A Lakebase Autoscaling binding as the Postgres API names it: the
+    bundle's `postgres` resource binds `branch` and `database`, and the app
+    mints its credential for `endpoint`."""
+
+    project: str
+    branch: str
+    endpoint: str
+    database: str
+
+
+def autoscaling_paths(
+    project: str, branch: str, endpoint: str, database_id: str
+) -> LakebasePaths:
+    """The resource paths `databricks.yml` composes from the same four ids."""
+    project_path = f"projects/{project}"
+    branch_path = f"{project_path}/branches/{branch}"
+    return LakebasePaths(
+        project_path,
+        branch_path,
+        f"{branch_path}/endpoints/{endpoint}",
+        f"{branch_path}/databases/{database_id}",
+    )
 
 
 class Unfit(OSError):
@@ -44,7 +85,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--endpoint", required=True, help="serving endpoint name")
     parser.add_argument("--catalog", required=True)
     parser.add_argument("--schema", required=True)
-    parser.add_argument("--lakebase-instance", required=True)
+    kind = parser.add_mutually_exclusive_group(required=True)
+    kind.add_argument(
+        "--lakebase-project", help="Lakebase Autoscaling project id (the default)"
+    )
+    kind.add_argument(
+        "--lakebase-instance", help="an existing Lakebase Provisioned instance"
+    )
+    parser.add_argument("--lakebase-branch", default=_DEFAULTS["lakebase_branch"])
+    parser.add_argument("--lakebase-endpoint", default=_DEFAULTS["lakebase_endpoint"])
+    parser.add_argument(
+        "--lakebase-database-id", default=_DEFAULTS["lakebase_database_id"]
+    )
     parser.add_argument("--group-admin", default="caos-admins")
     parser.add_argument("--group-analyst", default="caos-analysts")
     parser.add_argument("--price", help="the bundle's model_price value")
@@ -69,7 +121,7 @@ def main(argv: list[str] | None = None) -> int:
             f"'databricks auth login --host <workspace-url> --profile {profile}'"
         )
         return 1
-    checks: list[tuple[str, Callable[[], object], str]] = [
+    checks: list[Check] = [
         (
             f"serving endpoint {args.endpoint}",
             lambda: _fit_endpoint(client, args.endpoint),
@@ -85,11 +137,7 @@ def main(argv: list[str] | None = None) -> int:
             lambda: client.volumes.read(f"{args.catalog}.{args.schema}.caos_blobs"),
             f"CREATE VOLUME {args.catalog}.{args.schema}.caos_blobs",
         ),
-        (
-            f"lakebase instance {args.lakebase_instance}",
-            lambda: client.database.get_database_instance(args.lakebase_instance),
-            "create a Lakebase instance in Compute > Lakebase",
-        ),
+        *_lakebase_checks(client, args),
         (
             f"group {args.group_admin}",
             lambda: _group(client, args.group_admin),
@@ -236,6 +284,56 @@ def _telemetry_problems(telemetry: object) -> list[str]:
             "the prompts carry document text"
         )
     return problems
+
+
+def _lakebase_checks(client: WorkspaceClient, args: argparse.Namespace) -> list[Check]:
+    """The rows for the Lakebase the target binds: an Autoscaling project,
+    endpoint and database, or one Provisioned instance."""
+    if args.lakebase_instance is not None:
+        instance = args.lakebase_instance
+        return [
+            (
+                f"lakebase instance {instance}",
+                lambda: client.database.get_database_instance(instance),
+                "name an existing Provisioned instance (none can be created "
+                "now), or deploy the default kind, Lakebase Autoscaling",
+            )
+        ]
+    paths = autoscaling_paths(
+        args.lakebase_project,
+        args.lakebase_branch,
+        args.lakebase_endpoint,
+        args.lakebase_database_id,
+    )
+    return [
+        (
+            f"lakebase project {paths.project}",
+            lambda: client.postgres.get_project(paths.project),
+            f"databricks postgres create-project {args.lakebase_project}",
+        ),
+        (
+            f"lakebase endpoint {paths.endpoint}",
+            lambda: _fit_lakebase_endpoint(client, paths.endpoint),
+            f"'databricks postgres list-endpoints {paths.branch}' names its endpoints",
+        ),
+        (
+            f"lakebase database {paths.database}",
+            lambda: client.postgres.get_database(paths.database),
+            f"'databricks postgres list-databases {paths.branch}' names its databases",
+        ),
+    ]
+
+
+def _fit_lakebase_endpoint(client: WorkspaceClient, path: str) -> object:
+    """The endpoint, or `Unfit` when the app could not write through it."""
+    endpoint = client.postgres.get_endpoint(path)
+    status = getattr(endpoint, "status", None)
+    kind = getattr(getattr(status, "endpoint_type", None), "value", "")
+    if kind == READ_ONLY:
+        raise Unfit(ENDPOINT_READ_ONLY)
+    if getattr(status, "disabled", False):
+        raise Unfit(ENDPOINT_DISABLED)
+    return endpoint
 
 
 def _group(client: WorkspaceClient, display: str) -> object:

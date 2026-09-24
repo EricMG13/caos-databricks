@@ -243,10 +243,17 @@ APP_ENVIRONMENT = frozenset(
     {
         "CAOS_BIND_HOST", "CAOS_WORKER_IN_PROCESS", "CAOS_SITE_ROOT",
         "CAOS_MODEL_ENDPOINT", "CAOS_MODEL_PRICE", "CAOS_RUN_CEILING",
-        "CAOS_BLOB_ROOT", "CAOS_LAKEBASE_INSTANCE",
-        "CAOS_GROUP_ADMIN", "CAOS_GROUP_ANALYST",
+        "CAOS_BLOB_ROOT", "CAOS_GROUP_ADMIN", "CAOS_GROUP_ANALYST",
     }
 )  # fmt: skip
+# Which Lakebase the app binds is each target's to say, once (R24-14): the
+# variable the process mints its credential for, with the `database`
+# resource in the matching form. A `-provisioned` target binds an existing
+# Provisioned instance; every other target Lakebase Autoscaling, the default.
+LAKEBASE_ENDPOINT = "CAOS_LAKEBASE_ENDPOINT"
+LAKEBASE_INSTANCE = "CAOS_LAKEBASE_INSTANCE"
+LAKEBASE_BINDINGS = {LAKEBASE_ENDPOINT: "postgres", LAKEBASE_INSTANCE: "database"}
+PROVISIONED_SUFFIX = "-provisioned"
 
 
 def _tool_problems(tool: dict[str, object]) -> list[str]:
@@ -539,6 +546,46 @@ def _read(root: Path, name: str) -> str | None:
         return None
 
 
+def target_blocks(bundle: str) -> dict[str, str]:
+    """Each target's own text under `targets:`, by name."""
+    targets = bundle.partition("\ntargets:\n")[2]
+    parts = re.split(r"^  ([\w-]+):[ \t]*\n", targets, flags=re.M)
+    return dict(zip(parts[1::2], parts[2::2], strict=True))
+
+
+def _lakebase_bound(text: str) -> list[tuple[str, bool]]:
+    """Each Lakebase variable `text` sets, with whether its resource form is
+    there too; a form with no variable counts as the variable unset."""
+    found = []
+    for name, form in LAKEBASE_BINDINGS.items():
+        named = re.search(rf"^\s+-\s*name:\s*{name}\s*$", text, re.M) is not None
+        formed = re.search(rf"^\s+{form}:\s*$", text, re.M) is not None
+        if named or formed:
+            found.append((name, named and formed))
+    return found
+
+
+def _binding_problems(bundle: str) -> list[str]:
+    """R24-14: no Lakebase outside the targets, and each target binds exactly
+    its own kind, variable and resource form together."""
+    code = "\n".join(line.partition("#")[0] for line in bundle.splitlines())
+    shared = code.partition("\ntargets:\n")[0]
+    problems = [
+        f"bundle: {name} is bound outside the targets"
+        for name, _ in _lakebase_bound(shared)
+    ]
+    for target, body in target_blocks(code).items():
+        provisioned = target.endswith(PROVISIONED_SUFFIX)
+        wanted = LAKEBASE_INSTANCE if provisioned else LAKEBASE_ENDPOINT
+        if _lakebase_bound(body) != [(wanted, True)]:
+            form = LAKEBASE_BINDINGS[wanted]
+            problems.append(
+                f"bundle: target {target} must bind {wanted} and a {form} "
+                "resource, and nothing of the other kind"
+            )
+    return problems
+
+
 def _bundle_problems(root: Path) -> list[str]:
     problems: list[str] = []
     bundle, app = _read(root, "databricks.yml"), _read(root, "app.yaml")
@@ -571,7 +618,7 @@ def _bundle_problems(root: Path) -> list[str]:
         problems.append(f"bundle: env does not set {missing}")
     if re.search(r"^env:", app, re.M):
         problems.append("app.yaml: sets env; the bundle is the one source (F52)")
-    return problems
+    return problems + _binding_problems(bundle)
 
 
 def _block_lines(lines: list[str], start: int, indent: int) -> list[str]:
@@ -662,12 +709,30 @@ def _ci_condition_problems(ci_text: str) -> list[str]:
 
 
 STAND_IN = "uv run python tests/workspace_stub.py --"
-STAND_IN_VARS = (
+# The stand-in's own Lakebase of each kind (`tests/workspace_stub.py`).
+STAND_IN_VARS = "--var uc_catalog=main --var uc_schema=caos --var lakebase_project=caos"
+STAND_IN_PROVISIONED_VARS = (
     "--var uc_catalog=main --var uc_schema=caos --var lakebase_instance=caos-lb"
 )
 STAND_IN_PRICE = (
     "BUNDLE_VAR_model_price=databricks-claude-opus-5,0.000007,0.000030,2026-09-23"
 )
+
+
+def stand_in_target(target: str, variables: str) -> tuple[str, str]:
+    """One target validated, deployed and run under one stub (A37), then
+    held to what its deploy synced (DF-4): the two commands CI runs."""
+    run = " && ".join(
+        f"databricks bundle {verb} -t {target} {variables}"
+        for verb in ("validate", "deploy", "run caos")
+    )
+    shipped = f".databricks/bundle/{target}/deployment.json"
+    return (
+        f'{STAND_IN} sh -c "{run}"',
+        f"uv run python scripts/check_gate_config.py --shipped {shipped}",
+    )
+
+
 # Each gate CLAUDE.md lists, as CI runs it (MAX-13): a step removed, a
 # threshold raised or a command made to pass whatever it finds is a gate
 # that no longer runs. `|| true` stands on one command only, bandit's JSON
@@ -698,11 +763,10 @@ CI_GATES = (
     f'&& databricks bundle run caos -t dev {STAND_IN_VARS}"',
     "uv run python scripts/check_gate_config.py --shipped "
     ".databricks/bundle/dev/deployment.json",
-    f'{STAND_IN} sh -c "databricks bundle validate -t prod {STAND_IN_VARS} '
-    f"&& databricks bundle deploy -t prod {STAND_IN_VARS} "
-    f'&& databricks bundle run caos -t prod {STAND_IN_VARS}"',
-    "uv run python scripts/check_gate_config.py --shipped "
-    ".databricks/bundle/prod/deployment.json",
+    *stand_in_target("prod", STAND_IN_VARS),
+    # The Provisioned pair (R24-14), each the way prod is.
+    *stand_in_target("dev-provisioned", STAND_IN_PROVISIONED_VARS),
+    *stand_in_target("prod-provisioned", STAND_IN_PROVISIONED_VARS),
     "npm run lint",
     "npm run typecheck",
     "npm test",

@@ -25,7 +25,6 @@ than failing every later claim (ST-13).
 
 from __future__ import annotations
 
-import os
 import time
 from typing import Any, Self, cast
 
@@ -43,9 +42,8 @@ from psycopg_pool import ConnectionPool
 from caos.graph.build import RunState
 from caos.refusals import Refusal, RefusalCode
 from caos.store.lakebase import (
-    AUTOSCALING_ENDPOINT,
-    LAKEBASE_INSTANCE,
     TOKEN_SECONDS,
+    lakebase_database,
     note_connect_failure,
     store_url,
 )
@@ -195,15 +193,14 @@ def _drop_invalid_indexes(conn: psycopg.Connection[DictRow]) -> None:
 def checkpointer(url: str | None = None) -> BaseCheckpointSaver[str]:
     """A ready checkpointer, its tables created, for this environment.
 
-    On Databricks (`CAOS_LAKEBASE_INSTANCE` or the autoscaling endpoint set)
-    a pool of `MintedConnection`s over the platform's `PG*` values. Anywhere
-    else the same pool of plain connections to the store's own database
-    (ST-13): one held connection, once the server ended it, failed every
-    later claim for the life of the process.
+    On Databricks (the one Lakebase `caos.store.lakebase.lakebase_database`
+    names: an Autoscaling endpoint or a Provisioned instance, both refused
+    `STORE_NOT_CONFIGURED`) a pool of `MintedConnection`s over the platform's
+    `PG*` values. Anywhere else the same pool of plain connections to the
+    store's own database (ST-13): one held connection, once the server ended
+    it, failed every later claim for the life of the process.
     """
-    instance = os.environ.get(LAKEBASE_INSTANCE)
-    endpoint = os.environ.get(AUTOSCALING_ENDPOINT)
-    if instance or endpoint:
+    if lakebase_database() is not None:
         return _pooled(MintedConnection, "")
     return _pooled(psycopg.Connection, url or store_url())
 

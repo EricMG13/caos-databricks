@@ -3,11 +3,13 @@
 `python -m caos.serve` in a subprocess with the platform's environment: the
 app name and port, `PG*` for the database resource, the workspace host and
 a bearer, the volume blob root, the gateway endpoint and price, the run
-ceiling, the in-process worker and the static export. The workspace is the
-loopback stub (D28) and the database is the test Postgres, reached through
-the credential the stub mints -- so `store_url()`, the migrations, the
-health probes, identity, the worker and the volume backend all run as they
-would behind the Apps proxy, with nothing injected below HTTP.
+ceiling, the in-process worker, the static export, and the one Lakebase the
+target binds (an Autoscaling endpoint by default, or a Provisioned instance;
+R24-14). The workspace is the loopback stub (D28) and the database is the
+test Postgres, reached through the credential the stub mints for that
+kind -- so `store_url()`, the migrations, the health probes, identity, the
+worker and the volume backend all run as they would behind the Apps proxy,
+with nothing injected below HTTP.
 """
 
 from __future__ import annotations
@@ -25,7 +27,10 @@ from pathlib import Path
 from socket import socket
 from urllib.parse import urlparse
 
-from workspace_stub import BEARER, WorkspaceStub
+from workspace_stub import BEARER, LAKEBASE_ENDPOINT, LAKEBASE_INSTANCE, WorkspaceStub
+
+from caos.store import lakebase
+from caos.store.lakebase import LakebaseKind
 
 REPO = Path(__file__).resolve().parents[1]
 VOLUME = "/Volumes/main/caos/caos_blobs"
@@ -41,6 +46,12 @@ LOCAL_ONLY = (
     "CAOS_PUBLIC_ORIGIN",
     "DATABRICKS_CONFIG_PROFILE",
 )
+# What each kind's targets set for the process: the one Lakebase it mints for.
+LAKEBASE_NAMES = (lakebase.LAKEBASE_ENDPOINT, lakebase.LAKEBASE_INSTANCE)
+BINDINGS = {
+    LakebaseKind.AUTOSCALING: {lakebase.LAKEBASE_ENDPOINT: LAKEBASE_ENDPOINT},
+    LakebaseKind.PROVISIONED: {lakebase.LAKEBASE_INSTANCE: LAKEBASE_INSTANCE},
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,6 +59,7 @@ class PlatformApp:
     url: str
     process: subprocess.Popen[bytes]
     log: Path
+    kind: LakebaseKind = LakebaseKind.AUTOSCALING
 
     def log_tail(self, chars: int = 4000) -> str:
         """The process's last output, for a failing assertion to quote."""
@@ -62,14 +74,20 @@ class PlatformApp:
 
 
 def platform_environment(
-    stub: WorkspaceStub, database_url: str, port: int, site_root: Path
+    stub: WorkspaceStub,
+    database_url: str,
+    port: int,
+    site_root: Path,
+    kind: LakebaseKind = LakebaseKind.AUTOSCALING,
 ) -> dict[str, str]:
     """The environment the bundle and the platform give the process. When the
     stub holds a deployment, its `env_vars` are the bundle's part, as the
-    platform would apply them (DF-12); only the bind address and the export
-    stay local, since a test binds loopback and serves the export it has."""
+    platform would apply them (DF-12), its Lakebase binding included; only
+    the bind address and the export stay local, since a test binds loopback
+    and serves the export it has."""
     parts = urlparse(database_url)
-    env = {k: v for k, v in os.environ.items() if k not in LOCAL_ONLY}
+    ambient = LOCAL_ONLY + LAKEBASE_NAMES
+    env = {k: v for k, v in os.environ.items() if k not in ambient}
     # N7: the platform hands the app a service principal's client id and
     # secret, never a token; an ambient DATABRICKS_TOKEN (a developer's own
     # shell) must not leak in and stand in for that exchange.
@@ -84,7 +102,6 @@ def platform_environment(
         PGDATABASE=parts.path.lstrip("/"),
         PGUSER=parts.username or "postgres",
         PGSSLMODE="disable",  # the test Postgres speaks no TLS; Lakebase requires it
-        CAOS_LAKEBASE_INSTANCE="caos-lb",
         CAOS_BLOB_ROOT=f"volume://{VOLUME}",
         CAOS_RUN_CEILING="100.00",
         CAOS_WORKER_IN_PROCESS="1",
@@ -92,7 +109,10 @@ def platform_environment(
         CAOS_GROUP_ANALYST="caos-analysts",
         MLFLOW_DISABLE_AGENT_HINT="1",
     )
-    env.update(stub.deployed_environment())
+    deployed = stub.deployed_environment()
+    if not deployed.keys() & set(LAKEBASE_NAMES):
+        env.update(BINDINGS[kind])
+    env.update(deployed)
     env.update(CAOS_SITE_ROOT=str(site_root), CAOS_BIND_HOST="127.0.0.1")
     return env
 
@@ -118,7 +138,10 @@ def free_port() -> int:
 
 @contextmanager
 def platform_app(
-    stub: WorkspaceStub, database_url: str, log: Path
+    stub: WorkspaceStub,
+    database_url: str,
+    log: Path,
+    kind: LakebaseKind = LakebaseKind.AUTOSCALING,
 ) -> Iterator[PlatformApp]:
     """`python -m caos.serve` under the platform's environment, ready or refused.
 
@@ -135,13 +158,13 @@ def platform_app(
         process = subprocess.Popen(
             [sys.executable, "-m", "caos.serve"],
             cwd=REPO,
-            env=platform_environment(stub, database_url, port, site_root),
+            env=platform_environment(stub, database_url, port, site_root, kind),
             stdout=sink,
             stderr=subprocess.STDOUT,
         )
     try:
         _wait_ready(url, process, log)
-        yield PlatformApp(url, process, log)
+        yield PlatformApp(url, process, log, kind)
     finally:
         process.terminate()
         try:

@@ -161,40 +161,64 @@ jobs:
       - run: >-
           BUNDLE_VAR_model_price=databricks-claude-opus-5,0.000007,0.000030,2026-09-23
           uv run python tests/workspace_stub.py -- databricks bundle validate -t dev
-          --var uc_catalog=main --var uc_schema=caos --var lakebase_instance=caos-lb
+          --var uc_catalog=main --var uc_schema=caos --var lakebase_project=caos
       # What the CLI resolved is what was given (DF-4, DF-5): the price
-      # reached the app's configuration, and only prod names the production
-      # app. The check is the one command's own E2.
+      # reached the app's configuration, only prod and prod-provisioned name
+      # the production app, and each target binds its own Lakebase kind
+      # (R24-14). The check is the one command's own E2.
       - run: >-
           BUNDLE_VAR_model_price=databricks-claude-opus-5,0.000007,0.000030,2026-09-23
           uv run python tests/workspace_stub.py -- sh -c
-          "databricks bundle validate -t dev -o json --var uc_catalog=main --var uc_schema=caos --var lakebase_instance=caos-lb > $RUNNER_TEMP/dev.json
-          && databricks bundle validate -t prod -o json --var uc_catalog=main --var uc_schema=caos --var lakebase_instance=caos-lb > $RUNNER_TEMP/prod.json"
+          "databricks bundle validate -t dev -o json --var uc_catalog=main --var uc_schema=caos --var lakebase_project=caos > $RUNNER_TEMP/dev.json
+          && databricks bundle validate -t prod -o json --var uc_catalog=main --var uc_schema=caos --var lakebase_project=caos > $RUNNER_TEMP/prod.json
+          && databricks bundle validate -t dev-provisioned -o json --var uc_catalog=main --var uc_schema=caos --var lakebase_instance=caos-lb > $RUNNER_TEMP/dev-provisioned.json
+          && databricks bundle validate -t prod-provisioned -o json --var uc_catalog=main --var uc_schema=caos --var lakebase_instance=caos-lb > $RUNNER_TEMP/prod-provisioned.json"
       - run: >-
           uv run python scripts/enterprise_deploy.py --stage record --evidence "$RUNNER_TEMP/resolved"
-          --step E2 --target dev --price databricks-claude-opus-5,0.000007,0.000030,2026-09-23
+          --step E2 --target dev --price databricks-claude-opus-5,0.000007,0.000030,2026-09-23 --lakebase-project caos
           --bundle "$RUNNER_TEMP/dev.json"
       - run: >-
           uv run python scripts/enterprise_deploy.py --stage record --evidence "$RUNNER_TEMP/resolved"
-          --step E2 --target prod --price databricks-claude-opus-5,0.000007,0.000030,2026-09-23
+          --step E2 --target prod --price databricks-claude-opus-5,0.000007,0.000030,2026-09-23 --lakebase-project caos
           --bundle "$RUNNER_TEMP/prod.json"
+      - run: >-
+          uv run python scripts/enterprise_deploy.py --stage record --evidence "$RUNNER_TEMP/resolved"
+          --step E2 --target dev-provisioned --price databricks-claude-opus-5,0.000007,0.000030,2026-09-23 --lakebase-instance caos-lb
+          --bundle "$RUNNER_TEMP/dev-provisioned.json"
+      - run: >-
+          uv run python scripts/enterprise_deploy.py --stage record --evidence "$RUNNER_TEMP/resolved"
+          --step E2 --target prod-provisioned --price databricks-claude-opus-5,0.000007,0.000030,2026-09-23 --lakebase-instance caos-lb
+          --bundle "$RUNNER_TEMP/prod-provisioned.json"
       # Deploy and run under one stub: the run starts the app the deploy created
       # (the stub seeds none, DP-6).
       - run: >-
           uv run python tests/workspace_stub.py -- sh -c
-          "databricks bundle deploy -t dev --var uc_catalog=main --var uc_schema=caos --var lakebase_instance=caos-lb
-          && databricks bundle run caos -t dev --var uc_catalog=main --var uc_schema=caos --var lakebase_instance=caos-lb"
+          "databricks bundle deploy -t dev --var uc_catalog=main --var uc_schema=caos --var lakebase_project=caos
+          && databricks bundle run caos -t dev --var uc_catalog=main --var uc_schema=caos --var lakebase_project=caos"
       # What the deploy synced is what the app needs (F48): the check reads the
       # CLI's own record of the files it uploaded.
       - run: uv run python scripts/check_gate_config.py --shipped .databricks/bundle/dev/deployment.json
       # The production target, lock and all, in one stub (C3): validate,
-      # deploy and run the way the one command does.
+      # deploy and run the way the one command does; then the Provisioned
+      # pair the same way (R24-14).
       - run: >-
           uv run python tests/workspace_stub.py -- sh -c
-          "databricks bundle validate -t prod --var uc_catalog=main --var uc_schema=caos --var lakebase_instance=caos-lb
-          && databricks bundle deploy -t prod --var uc_catalog=main --var uc_schema=caos --var lakebase_instance=caos-lb
-          && databricks bundle run caos -t prod --var uc_catalog=main --var uc_schema=caos --var lakebase_instance=caos-lb"
+          "databricks bundle validate -t prod --var uc_catalog=main --var uc_schema=caos --var lakebase_project=caos
+          && databricks bundle deploy -t prod --var uc_catalog=main --var uc_schema=caos --var lakebase_project=caos
+          && databricks bundle run caos -t prod --var uc_catalog=main --var uc_schema=caos --var lakebase_project=caos"
       - run: uv run python scripts/check_gate_config.py --shipped .databricks/bundle/prod/deployment.json
+      - run: >-
+          uv run python tests/workspace_stub.py -- sh -c
+          "databricks bundle validate -t dev-provisioned --var uc_catalog=main --var uc_schema=caos --var lakebase_instance=caos-lb
+          && databricks bundle deploy -t dev-provisioned --var uc_catalog=main --var uc_schema=caos --var lakebase_instance=caos-lb
+          && databricks bundle run caos -t dev-provisioned --var uc_catalog=main --var uc_schema=caos --var lakebase_instance=caos-lb"
+      - run: uv run python scripts/check_gate_config.py --shipped .databricks/bundle/dev-provisioned/deployment.json
+      - run: >-
+          uv run python tests/workspace_stub.py -- sh -c
+          "databricks bundle validate -t prod-provisioned --var uc_catalog=main --var uc_schema=caos --var lakebase_instance=caos-lb
+          && databricks bundle deploy -t prod-provisioned --var uc_catalog=main --var uc_schema=caos --var lakebase_instance=caos-lb
+          && databricks bundle run caos -t prod-provisioned --var uc_catalog=main --var uc_schema=caos --var lakebase_instance=caos-lb"
+      - run: uv run python scripts/check_gate_config.py --shipped .databricks/bundle/prod-provisioned/deployment.json
 
   size:
     # AI PRs carry ~1.7x the issues of human PRs, and density rises with size.

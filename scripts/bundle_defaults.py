@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """The one source for the bundle's own variable defaults (N23).
 
-`databricks.yml` states the endpoint, price, run ceiling and both group
-names once, as `variables.<name>.default`; the deploy scripts and the
-loopback stub read them back from here rather than repeating the values by
-hand. No YAML parser: the same small, line-oriented reading
+`databricks.yml` states the endpoint, price, run ceiling, both group names
+and the Lakebase names that have a default (the Autoscaling branch, endpoint
+and database id, the Provisioned database) once, as
+`variables.<name>.default`; the deploy scripts and the loopback stub read
+them back from here rather than repeating the values by hand. No YAML
+parser: the same small, line-oriented reading
 `scripts/check_gate_config.py` already uses on this file's other blocks,
 so nothing here can read a default a real YAML parser would not, and
 nothing new is added to the dependency closet for it.
@@ -18,7 +20,17 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 # The names every copy repeats, in the bundle's own spelling.
-NAMES = ("model_endpoint", "model_price", "run_ceiling", "group_admin", "group_analyst")
+NAMES = (
+    "model_endpoint",
+    "model_price",
+    "run_ceiling",
+    "group_admin",
+    "group_analyst",
+    "lakebase_branch",
+    "lakebase_endpoint",
+    "lakebase_database_id",
+    "lakebase_database",
+)
 _ENTRY = re.compile(r"  (\w+):\s*")
 _DEFAULT = re.compile(r'\s+default:\s*"?([^"\n]*?)"?\s*')
 

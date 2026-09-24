@@ -122,6 +122,7 @@ def test_doctor_names_every_variable_the_worker_and_edge_read() -> None:
         "CAOS_MODEL_PRICE",
         "CAOS_RUN_CEILING",
         "CAOS_SITE_ROOT",
+        "CAOS_LAKEBASE_ENDPOINT",
         "CAOS_LAKEBASE_INSTANCE",
         "CAOS_PUBLIC_ORIGIN",
     ):
