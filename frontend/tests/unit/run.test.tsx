@@ -520,6 +520,7 @@ describe("Run", () => {
         {
           route_node_id: "CP-DR",
           module_id: "CP-DR",
+          module_name: "Deep research",
           stage: 99,
           state: "RUNNABLE" as NodeState,
           waiting_on: [],
