@@ -343,63 +343,6 @@ def frontier(
     ]
 
 
-def reachable(route: ResolvedRoute) -> Mapping[str, frozenset[str]]:
-    """Every node each node can reach along the route's typed edges.
-
-    Pure, like everything else here, and over **every** edge type rather than
-    the blocking ones alone. A soft edge is exactly the case this exists for:
-    the frontier may offer a node and one of its own optional upstreams at the
-    same time, and that pair is the one that must not run together.
-    """
-    forward: dict[str, set[str]] = {node.route_node_id: set() for node in route.nodes}
-    for edge in route.edges:
-        forward.setdefault(edge.source, set()).add(edge.target)
-    reach: dict[str, frozenset[str]] = {}
-
-    def walk(node: str) -> frozenset[str]:
-        if node in reach:
-            return reach[node]
-        reach[node] = frozenset()  # a cycle cannot occur; resolution refuses one
-        seen: set[str] = set()
-        for target in forward.get(node, ()):
-            seen.add(target)
-            seen |= walk(target)
-        reach[node] = frozenset(seen)
-        return reach[node]
-
-    for node in route.nodes:
-        walk(node.route_node_id)
-    return reach
-
-
-def independent_batch(route: ResolvedRoute, ready: Sequence[str]) -> list[str]:
-    """The nodes of `ready` that may be executed at the same time.
-
-    Greedy in route order, which is what keeps it deterministic: the same
-    pinned route and the same accepted set choose the same batch, so replay
-    takes the same path (invariant 10) even though the nodes overlap in time.
-
-    The rule is that no chosen node reaches another, in either direction. It is
-    not a tidiness constraint, it is a money one: `execute_handoff` binds an
-    attempt to the upstream accepted when its prompt was built and refuses when
-    another of its inputs is accepted during the call, so running a node beside
-    one of its own transitive upstreams buys a billed attempt that is then
-    thrown away. The frontier can offer such a pair whenever the edge between
-    them is soft, because a soft edge does not hold its target back.
-
-    Nodes left out are not lost: they are simply still in the frontier on the
-    next pass, which is recomputed from the store like every other pass.
-    """
-    reach = reachable(route)
-    chosen: list[str] = []
-    for node in ready:
-        related = reach[node]
-        if any(other in related or node in reach[other] for other in chosen):
-            continue
-        chosen.append(node)
-    return chosen
-
-
 def waiting_on(
     route: ResolvedRoute, accepted: Mapping[str, NodeResult], route_node_id: str
 ) -> tuple[Edge, ...]:
