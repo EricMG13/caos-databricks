@@ -427,6 +427,42 @@ def test_one_deadline_bounds_the_whole_call_and_the_lease_outlives_it(
     assert WORKER_STALE_AFTER >= TIMEOUT_SECONDS + 60.0
 
 
+def test_no_re_send_starts_once_the_wait_and_the_fence_spent_the_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """R24-08: the deadline was checked before the wait and the re-send fence,
+    and not after. A 429 at second 237, a two-second wait and a fence check
+    (store reads) of two seconds more started a second request at second 241
+    of a 240-second call -- answered, it was accepted and charged. Nothing is
+    sent once the whole call's deadline has passed: the 429 is the answer."""
+    from caos.provider import TIMEOUT_SECONDS, resend_checked
+
+    clock = {"t": 0.0}
+    monkeypatch.setattr(models, "_clock", lambda: clock["t"])
+
+    def waited(seconds: float) -> None:
+        clock["t"] += seconds
+
+    monkeypatch.setattr(models, "_sleep", waited)
+
+    def late_limit_then_answer(prompt: str) -> object:
+        if chat.calls == 1:
+            clock["t"] = TIMEOUT_SECONDS - 3.0
+            return _Limited("2")
+        return answer(finish="stop")
+
+    def slow_fence() -> None:
+        clock["t"] += 2.0  # the fence's store reads
+
+    chat = ScriptedChat(answer=late_limit_then_answer)
+    with resend_checked(slow_fence):
+        completion = fake_completions(chat).complete(PROMPT)
+    assert chat.calls == 1, "a request started past the deadline"
+    assert completion.refusal is RefusalCode.PROVIDER_UNAVAILABLE
+    assert completion.charge is None and completion.content is None
+    assert clock["t"] > TIMEOUT_SECONDS
+
+
 def test_an_answer_that_never_finishes_arriving_is_abandoned_at_the_deadline(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
