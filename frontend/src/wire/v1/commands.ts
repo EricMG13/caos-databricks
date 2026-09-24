@@ -45,7 +45,7 @@ const RunInputPinned = object({ run_id: uuid, source_set_version: int(), input_f
 const GatePreviewDocument = object({
   run_id: uuid,
   gate: V1_SHAPES.Gate,
-  content: string({ max: 26214400 }),
+  content: string({ max: 4194304 }),
   preview_sha256: hash,
   input_fingerprint: hash,
   observed_at: datetime,

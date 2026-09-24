@@ -1,6 +1,6 @@
 """Phase 3 Task 3.3a: the delivered authority is exactly what a module needs.
 
-`docs/DECISIONS.md` §45 (1): every non-script file of the module's manifest
+Every non-script file of the module's manifest
 entry plus every root file its verified `SKILL.md` names, each verified on the
 bytes at use (invariant 4) and delivered whole. Root files are read only
 through the manifest's `root_file_hashes`; no source or model text chooses a
@@ -34,11 +34,11 @@ VENDORED = Path(__file__).resolve().parents[1] / "vendor/deploy-v"
 CANON = "../../CANON_SHARED.md"
 LITE_BASE = "../../CP_DEPLOY_V_LITE_MODULE_PAYLOAD_BASE_v1.schema.txt"
 # Measured at build a43cb903 (brief, "Current state"); CP-0 re-measured at
-# cdea0c9f, whose three CP-0 texts grew by 1,061 bytes (docs/DECISIONS.md §61);
-# CP-5 re-measured at 30222a49, whose SKILL.md grew by 16 bytes (§63); all
-# three re-measured at 62a94ccd (§92), where every SKILL.md's marker lists were
-# split into their two classes and CANON_SHARED.md gained the D2-by-scope line;
-# CP-0 re-measured at 91c219fb (§98), whose REF_CP-0_STEPS.md grew by 740 bytes.
+# cdea0c9f, whose three CP-0 texts grew by 1,061 bytes; CP-5 re-measured at
+# 30222a49, whose SKILL.md grew by 16 bytes; all three re-measured at
+# 62a94ccd, where every SKILL.md's marker lists were split into their two
+# classes and CANON_SHARED.md gained the D2-by-scope line; CP-0 re-measured
+# at 91c219fb, whose REF_CP-0_STEPS.md grew by 740 bytes.
 # The ceiling below keeps authority a minor share of one request, leaving room
 # for evidence.
 # Re-measured on the deployment fork's build b160c75e (D31, D34), and on fork

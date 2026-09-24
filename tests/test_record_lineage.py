@@ -1,5 +1,5 @@
 """Record format v2: the delivered authority and the full upstream lineage
-(Phase 3 Task 3.3 slice 3.3c; `docs/DECISIONS.md` §45.1, §45.4, §45.5).
+(Phase 3 Task 3.3 slice 3.3c).
 
 A record binds exactly the authority files its prompt carried, and the whole
 accepted chain behind its direct inputs -- each ancestor's (artifact, record)

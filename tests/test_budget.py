@@ -4,7 +4,7 @@ Invariant 8 (CLAUDE.md): budgets fail closed. Every ceiling refuses the next
 operation *before* overspend, and no provider call happens without a reservation
 behind it.
 
-`docs/DECISIONS.md` §12 adopts CAOS-Final §21 with this phase: the attempt row is
+The attempt row is
 the call identity, and a retry is a new reservation rather than a reuse of the
 old one. That is the price of a provider with no idempotency key, and it is
 charged deliberately -- the alternative is a second call believed to be the first.
@@ -196,7 +196,7 @@ def test_crash_after_remote_completion_keeps_its_reservation(
 def test_a_retry_without_provider_idempotency_reserves_again(
     case: tuple[StoreConnection, UUID],
 ) -> None:
-    """`docs/DECISIONS.md` §16: the provider is called with no idempotency key
+    """The provider is called with no idempotency key
     and retries are unwanted, so a retry is a new attempt and a new reservation.
 
     The old one is not released. An indeterminate call may have reached the

@@ -1,8 +1,8 @@
 """A line wider than a block, through the paths that admit and cite it.
 
-`SYSTEM_SPEC.md` section 5 packs blocks "one per line while small, bounded line
-groups once not, splitting a line at the group width rather than giving it a
-block of its own". The width is not a free parameter: `source_blocks.text` is
+Blocks pack one per line while small, and bounded line groups once not,
+splitting a line at the group width rather than giving it a block of its
+own. The width is not a free parameter: `source_blocks.text` is
 `BoundaryText`, so a block can carry `boundary_text.DEFAULT_LIMIT` characters
 and no more, and a line past that refused the whole pack -- one wide table row
 in a text export and no document of it could be admitted at all.

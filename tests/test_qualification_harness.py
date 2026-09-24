@@ -1,7 +1,7 @@
 """The harness: a qualification set performed, not merely compared.
 
-`docs/REBUILD_PLAN.md` Phase 10 names three things — "the qualification-set
-harness, the answer keys, the matrix". The keys and the matrix landed first and
+Three things make qualification whole: the harness, the answer keys, the
+matrix. The keys and the matrix landed first and
 `build_matrix` had to be handed a `runs` mapping it could not produce, because
 `QualificationSet` modelled only half of what `CONTEXT.md` says a set is: "the
 immutable **cases** and answer keys". A case is its inputs. Without them there
@@ -1154,8 +1154,8 @@ def test_a_case_that_declared_the_block_it_expected_is_signable(
 ) -> None:
     """The deliberately restricted case, built from a run rather than a dataclass.
 
-    `docs/REPAIR_PLAN.md` Phase 6 asks for a case whose expected result is that
-    the evidence does not support the work. Until now no run could answer one:
+    A case whose expected result is that the evidence does not support the
+    work needs this. Until now no run could answer one:
     `expected_refusal_met` read only the proof's refusal, and a validated
     Blocked handoff leaves a sound proof and writes no `attempt_refusals` row,
     while `complete` demanded every run reach COMPLETE -- which a blocked run

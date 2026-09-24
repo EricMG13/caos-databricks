@@ -8,10 +8,10 @@ document it refused is the leak the whole typed-refusal design exists to stop.
 Invariant 11: a citation is re-located in the token index and one that cannot be
 located exactly once is refused *before it reaches the artifact*, not after.
 
-`docs/AI_CODE_QUALITY.md` section 1 measures excessive I/O at ~8x, the largest
-multiple in the report, against exactly this call: the predecessor parsed every
-block of a source on every read. `test_io_budget_read_evidence` counts the round
-trips rather than trusting the shape.
+Excessive I/O was the largest defect measured against exactly this call: the
+predecessor parsed every block of a source on every read.
+`test_io_budget_read_evidence` counts the round trips rather than trusting
+the shape.
 """
 
 from __future__ import annotations
@@ -315,7 +315,7 @@ def test_uncitable_quote_is_refused_before_artifact(
 def test_a_citation_may_only_name_evidence_that_was_delivered(
     case: tuple[StoreConnection, UUID], blobs: BlobStore
 ) -> None:
-    """`SYSTEM_SPEC.md` section 5, last line. A module may cite what it was
+    """A module may cite what it was
     given and nothing else -- including a real source in the same case."""
     conn, case_id = case
     delivered = _admit(conn, case_id, blobs, REPORT)

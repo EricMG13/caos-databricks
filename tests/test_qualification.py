@@ -1,7 +1,7 @@
 """Phase 10's first exit: what a verdict has to bind before it is one.
 
-`docs/REBUILD_PLAN.md` Phase 10: "A verdict is bound to provider identity,
-qualification-set digest, build, date, expiry and reviewer." Six bindings, and a
+A verdict is bound to provider identity, qualification-set digest, build,
+date, expiry and reviewer. Six bindings, and a
 verdict missing any of them is refused rather than read with a hole in it.
 N44 adds a seventh, `evidence_sha256`: the six above can agree for two
 different snapshots of the same set, build and provider, so the document also
@@ -127,10 +127,9 @@ def test_a_verdict_is_not_current_before_its_decision_time() -> None:
 def test_a_verdict_is_what_it_was_read_as_and_stays_that() -> None:
     """A signature that can be edited after it is read is not a signature.
 
-    `deliverable_opinions` is append-only for the same reason
-    (`SYSTEM_SPEC.md` §2): the seven bindings a reader checked and the seven a
-    later caller acts on have to be the same seven, or the check was of a
-    different document.
+    `deliverable_opinions` is append-only for the same reason: the seven
+    bindings a reader checked and the seven a later caller acts on have to be
+    the same seven, or the check was of a different document.
     """
     verdict = read_verdict(document(), now=NOW)
     assert isinstance(verdict, Verdict)

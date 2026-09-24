@@ -101,7 +101,7 @@ def test_an_awkward_document_can_be_quoted_back_to_the_host(
 
 # Slice 3.2e: a source being delivered is not every line of it being delivered.
 # A citation anchors only in the exact blocks the node was handed; ambiguity is
-# still counted over the whole page (docs/DECISIONS.md section 44.5).
+# still counted over the whole page.
 
 
 def _blocks_on(conn: StoreConnection, source_id: UUID, page: int) -> frozenset[str]:

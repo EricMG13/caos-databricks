@@ -24,6 +24,13 @@ token the server still accepts is used until its real expiry when a fresh one
 cannot be had. A token is refreshed at `TOKEN_SECONDS` or at the server's
 stated expiry, whichever is sooner (ST-3). No lock is held across the network.
 
+An abandoned mint's helper thread keeps running past `MINT_SECONDS`, since
+the SDK's token exchange carries no timeout of its own; concurrent helpers
+are capped at one (R24-N01), so a mint made while the identity's helper is
+still alive does not start a second thread -- it refuses `STORE_UNAVAILABLE`
+at once, until that helper ends, rather than piling one up every
+`FAILURE_SECONDS`.
+
 No credential is ever printed, logged or written; the URL this returns is
 handed straight to the driver.
 """
@@ -109,10 +116,12 @@ def lakebase_database() -> LakebaseDatabase | None:
     return None
 
 
-_LOCK = threading.Lock()  # guards `_CACHED` and `_REFUSED_UNTIL`; never held on I/O
+# Guards `_CACHED`, `_REFUSED_UNTIL` and `_HELPER` below; never held on I/O.
+_LOCK = threading.Lock()
 _MINTING = threading.Lock()  # single-flight: one mint at a time
 _CACHED: _Credential | None = None
 _REFUSED_UNTIL = 0.0
+_HELPER: threading.Thread | None = None  # the identity's mint helper, if still running
 
 
 def store_url() -> str:
@@ -232,7 +241,20 @@ def _refreshed(now: float) -> str:
 
 def _mint_bounded() -> tuple[str, float]:
     """`_mint` on a helper thread, abandoned past `MINT_SECONDS` (MX-3): the
-    SDK posts to the token endpoint with no timeout of its own."""
+    SDK posts to the token endpoint with no timeout of its own, so an
+    abandoned helper keeps running. Capped (R24-N01): while that helper is
+    still alive, this does not start a second one for the identity -- it
+    refuses `STORE_UNAVAILABLE` at once, so no later caller pays the hung
+    helper's real, unbounded lifetime, only the bounded wait that found it
+    hung in the first place. `_mint_bounded` only ever runs one at a time
+    (under `_MINTING`), so the alive-check and the thread it guards never
+    race."""
+    global _HELPER
+    with _LOCK:
+        stale = _HELPER
+    if stale is not None and stale.is_alive():
+        raise Refusal(RefusalCode.STORE_UNAVAILABLE)
+
     outcome: list[tuple[str, float] | Refusal] = []
 
     def run() -> None:
@@ -242,6 +264,8 @@ def _mint_bounded() -> tuple[str, float]:
             outcome.append(refused)
 
     minter = threading.Thread(target=run, name="caos-lakebase-mint", daemon=True)
+    with _LOCK:
+        _HELPER = minter
     minter.start()
     minter.join(MINT_SECONDS)
     if not outcome:

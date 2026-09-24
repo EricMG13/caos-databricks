@@ -1,8 +1,7 @@
 """Every governed race proven on two independent connections.
 
-`docs/AI_CODE_QUALITY.md` section 1 lists concurrency at ~2x in agent-written
-code, and the control it names is this file: a race argued from the code is not
-a race proven. One connection cannot prove a lock -- it never contends with
+A race argued from the code is not a race proven: this file is the control
+against that. One connection cannot prove a lock -- it never contends with
 itself -- so each test here holds two.
 """
 
@@ -180,7 +179,7 @@ def prepared_run(empty_database: str) -> tuple[UUID, UUID]:
 def test_concurrent_appenders_never_share_a_seq(
     empty_database: str, prepared_run: tuple[UUID, UUID]
 ) -> None:
-    """`run_events.seq` is allocated under the run row lock (SYSTEM_SPEC.md 2).
+    """`run_events.seq` is allocated under the run row lock.
 
     Without the lock, two connections read the same `max(seq)` and insert the
     same next one: on a primary key that is a failed insert, and on anything

@@ -2,8 +2,8 @@
 against.
 
 Invariant 4: the bundle is the methodology authority, integrity checked on the
-bytes. This is the pin -- every fact `docs/DECISIONS.md` §2 and §5 rest on,
-asserted against the bytes in `vendor/`. A bundle swap that changes any of them
+bytes. This is the pin -- every fact this suite rests on, asserted against
+the bytes in `vendor/`. A bundle swap that changes any of them
 fails here rather than silently changing every route the system runs.
 
 Verification at *use* is Phase 5. This is verification at rest: the vendored
@@ -51,8 +51,7 @@ CATALOG = (
     BUNDLE / "skills/cp-os-credit-os/references/CREDIT_OS_V_MODULE_CATALOG_v2.json"
 )
 
-# docs/DECISIONS.md §96 and §98 together moved the §13 pin last (after §61,
-# §63, §92). A run pinned to one build never executes under another.
+# A run pinned to one build never executes under another.
 BUILD_ID = "820dfc7c624af6ef920eefff9e809c9cb41c83be230e374e481a814e7953ac8a"
 
 
@@ -105,7 +104,7 @@ def test_the_typed_edges_are_where_the_spec_says(catalog: dict[str, object]) -> 
     counted = collections.Counter(
         edge["type"] for edge in profiles["FULL_CREDIT_32"]["edges"]
     )
-    # docs/DECISIONS.md §2: the numbers the predecessor's defect was measured in.
+    # The numbers the predecessor's defect was measured in.
     assert counted == {"REQUIRED": 44, "OPTIONAL": 25, "ADVISORY": 22, "QA_GATE": 1}
 
 
@@ -266,9 +265,9 @@ def test_the_bundle_verifies_with_its_own_tool() -> None:
     assert result.returncode == 0, result.stdout[-2000:] + result.stderr[-2000:]
 
 
-# `docs/DECISIONS.md` §61: the three places CP-0 reads `CONDITIONAL` from must
-# say the same thing -- a source condition, discharged by supplying the source
-# and re-running CP-0, never an upstream handoff that has not run yet.
+# The three places CP-0 reads `CONDITIONAL` from must say the same thing --
+# a source condition, discharged by supplying the source and re-running
+# CP-0, never an upstream handoff that has not run yet.
 CP0_CONDITIONAL_TEXTS = (
     "skills/cp-0-source-readiness/SKILL.md",
     "skills/cp-0-source-readiness/references/REF_CP-0_STEPS.md",
@@ -285,10 +284,10 @@ def test_cp0_defines_conditional_as_a_source_condition_everywhere_it_is_read(
     assert "CP-0 is re-run" in text, relative
 
 
-# `docs/DECISIONS.md` §98: T8's `Source files to attach` may carry a page range
-# beside a filename, and a source the host shows CP-0 as a page map is attached
-# by page, never whole. The bundle states both, in the step CP-0 authors T8
-# from, so the grammar the host reads is the bundle's and not the host's.
+# T8's `Source files to attach` may carry a page range beside a filename,
+# and a source the host shows CP-0 as a page map is attached by page, never
+# whole. The bundle states both, in the step CP-0 authors T8 from, so the
+# grammar the host reads is the bundle's and not the host's.
 CP0_STEPS = "skills/cp-0-source-readiness/references/REF_CP-0_STEPS.md"
 
 
@@ -302,7 +301,7 @@ def test_cp0_states_the_page_range_form_and_the_page_map_rule() -> None:
     assert "never the file alone" in step_i
 
 
-# `docs/DECISIONS.md` §63: T5B.5 is where CP-5 records what became of a
+# T5B.5 is where CP-5 records what became of a
 # calculation, and "not calculable from provided materials" is the answer its
 # runbook asks for when the sources carry none. Its two status columns are
 # exempt from the placeholder disqualifiers; its seven substantive columns are
@@ -355,9 +354,9 @@ def test_cp5_exempts_only_its_status_columns_from_the_disqualifiers() -> None:
         ]
 
 
-# `docs/DECISIONS.md` §92: the owner's authorised build carrying the six
-# 2026-09-17 vendor requests. Each test below drives the bundle's own code
-# through the verified contract, so the host still reads and invents nothing.
+# The owner's authorised build carrying the six 2026-09-17 vendor requests.
+# Each test below drives the bundle's own code through the verified
+# contract, so the host still reads and invents nothing.
 CANON = "CANON_SHARED.md"
 CP0_SKILL = "skills/cp-0-source-readiness/SKILL.md"
 L10_SKILL = "skills/cp-l10-financial-change-screen/SKILL.md"

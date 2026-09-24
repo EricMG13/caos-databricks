@@ -97,7 +97,7 @@ from caos.api.wire import (
     wire_schema,
 )
 from caos.evidence.extract import HIDDEN_REASONS
-from caos.methodology.handoff import MAX_FILE_BYTES
+from caos.methodology.handoff import MAX_HANDOFF_BYTES
 
 REPO = Path(__file__).resolve().parents[1]
 COMMITTED = REPO / "frontend" / "src" / "wire" / "v1" / "schema.json"
@@ -395,9 +395,8 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
     RetryRun: frozenset({"input_fingerprint"}),
     CancelRun: frozenset(),
     RunWork: frozenset({"run_id", "run_status", "work"}),
-    # A verdict (F17's producer, `docs/DECISIONS.md` §65): the reviewer's
-    # seven bindings in (N44's `evidence_sha256` the newest), and the host's
-    # receipt out.
+    # A verdict: the reviewer's seven bindings in (N44's `evidence_sha256`
+    # the newest), and the host's receipt out.
     SignVerdict: frozenset(
         (
             "provider qualification_set_sha256 build_id decided_at expires_at"
@@ -758,7 +757,7 @@ def test_v1_command_models_are_closed_bounded_and_in_the_committed_schema() -> N
     assert defs["CreateCase"]["properties"]["title"]["maxLength"] == 256
     assert defs["SourcesAdmitted"]["properties"]["source_ids"]["maxItems"] == 50
     content = defs["GatePreviewDocument"]["properties"]["content"]["maxLength"]
-    assert content == wire.PREVIEW_CHARS == MAX_FILE_BYTES
+    assert content == wire.PREVIEW_CHARS == MAX_HANDOFF_BYTES
     assert defs["Chrome"]["properties"]["actions"]["maxItems"] == len(ActionName)
     choices = defs["RunBody"]["properties"]["route_choices"]
     assert choices["maxItems"] == wire.ROUTE_CHOICES_MAX == 18

@@ -1,9 +1,9 @@
 """Phase 4 exit test: recovery is recomputation, not restoration.
 
-`docs/DECISIONS.md` §3: execution state *is* the accepted-attempt ledger. There
-is no checkpointer, so there is nothing to restore and nothing that can disagree
-with the domain state -- which is where most of the predecessor's recovery
-machinery came from.
+Execution state *is* the accepted-attempt ledger; the graph checkpoint
+remembers position only, never node completion (D6), so there is nothing to
+restore and nothing that can disagree with the domain state -- which is
+where most of the predecessor's recovery machinery came from.
 
 A process that dies mid-run leaves accepted attempts behind. The next one
 recomputes `node_states` over exactly those rows and continues from the frontier
@@ -620,8 +620,9 @@ def test_no_checkpoint_is_written_anywhere(
     blobs: BlobStore,
     bundle: Bundle,
 ) -> None:
-    """`docs/DECISIONS.md` §3: no checkpointer. The store's own tables are the
-    execution state, so there is no second place for it to disagree from."""
+    """D6: the graph checkpoint remembers position only. The store's own
+    tables are the execution state, so there is no second place for it to
+    disagree from."""
     conn, case_id = case
     run = _approved_run(conn, case_id, route, bundle, blobs)
 

@@ -42,7 +42,7 @@ def test_the_qualification_set_keeps_its_own_synonyms_and_remaps_nothing(
 ) -> None:
     """Phase 10's term, and the one it is careful not to take over.
 
-    `docs/DECISIONS.md` §23: the body a verdict is measured against is a
+    The body a verdict is measured against is a
     *qualification set*, not a source set and not a corpus. It gets a term
     because it is a concept CONTEXT.md did not have -- cases and their answer
     keys, spanning runs -- rather than an exemption for the word the plan

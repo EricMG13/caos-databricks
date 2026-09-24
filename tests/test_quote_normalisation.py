@@ -1,7 +1,7 @@
-"""Task 10.5: the two normalisations `docs/COMPLETION_PLAN.md` Phase 10 names.
+"""Task 10.5: the two normalisations tested here.
 
-Its exit check is "a letter-spaced heading and a quote ending in a full stop
-anchor to the rectangle a reader sees". Both are refused today, and both are
+The requirement is that a letter-spaced heading and a quote ending in a full
+stop still anchor to the rectangle a reader sees. Both are refused today, and both are
 refused for a reason the host created: the full stop because a quote is split
 on whitespace and every word must equal a token, and the heading because
 pdfminer inserts a virtual word break between glyphs tracked past

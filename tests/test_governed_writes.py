@@ -1,18 +1,17 @@
 """Phase 6: authority is checked where the commit is, and the audit chains.
 
-`SYSTEM_SPEC.md` §8 says commit time, and a check at the request is not that.
-The distance between them is a real window: a request arrives, standing is
-checked, work happens, the actor's membership is revoked, and the commit lands
-anyway. So the check lives inside the store call that writes.
+Authority has to be checked at commit time, and a check at the request is not
+that. The distance between them is a real window: a request arrives, standing
+is checked, work happens, the actor's membership is revoked, and the commit
+lands anyway. So the check lives inside the store call that writes.
 
-`SYSTEM_SPEC.md` §2's audit rule is the other half. A governed write commits its
-state and its audit event in one transaction -- or neither. `audit_events` is
-hash-chained per case under an `audit_chain_heads` lock row, so a rewrite is
-detectable by comparing a retained head against the live one.
+The audit rule is the other half. A governed write commits its state and its
+audit event in one transaction -- or neither. `audit_events` is hash-chained
+per case under an `audit_chain_heads` lock row, so a rewrite is detectable by
+comparing a retained head against the live one.
 
-Two of the tests here are named in `docs/REBUILD_PLAN.md`: Phase 6's
-`test_membership_revocation_refuses_commit`, and the Phase 1 debt Phase 6 owes,
-`test_a_governed_write_commits_its_audit_event_or_nothing`.
+Two of the tests here: `test_membership_revocation_refuses_commit`, and the
+Phase 1 debt Phase 6 owes, `test_a_governed_write_commits_its_audit_event_or_nothing`.
 """
 
 from __future__ import annotations
@@ -233,7 +232,7 @@ def test_the_chain_links_each_entry_to_the_last(
 def test_a_rewritten_entry_breaks_the_chain(
     actor: tuple[StoreConnection, UUID, UUID],
 ) -> None:
-    """The chain has no external anchor (`SYSTEM_SPEC.md` §2); what it gives is
+    """The chain has no external anchor; what it gives is
     detection. An entry edited in place no longer hashes to what the next one
     says came before it."""
     conn, case_id, user_id = actor

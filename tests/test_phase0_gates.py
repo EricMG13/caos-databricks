@@ -7,8 +7,8 @@ reasons cannot tell an author which control they tripped, and a gate that
 refuses everything is worth as little as one that refuses nothing. So each gate
 is also driven against a clean equivalent and must accept it.
 
-Invariant protected: the controls in docs/AI_CODE_QUALITY.md section 1 exist and
-bite before any application code depends on them.
+Invariant protected: the controls exist and bite before any application code
+depends on them.
 """
 
 from __future__ import annotations

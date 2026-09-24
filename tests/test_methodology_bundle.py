@@ -5,7 +5,7 @@ only. A digest verified when the process booted says nothing about the file the
 process is reading an hour later -- and the file is the methodology a credit
 opinion rests on.
 
-`docs/DECISIONS.md` §5 adds the one thing that must *not* happen here:
+The one thing that must *not* happen here:
 `assemble_authority` must not slice `SKILL.md` on section markers. The merged
 upstream skill has dropped `## CP-PARSE runnable profile`, so slicing would
 break CP-0 as well as CP-PARSE. CP-PARSE receives the whole CP-0 skill plus its
@@ -43,8 +43,7 @@ def tampered(tmp_path: Path) -> Bundle:
     """A copy of the bundle with one byte of CP-1's skill changed.
 
     A copy rather than the vendored tree: the tree is authority we never edit
-    (`docs/DECISIONS.md` §6), and a test that edited it would be the thing the
-    rule forbids.
+    (D4), and a test that edited it would be the thing the rule forbids.
     """
     root = tmp_path / "deploy-v"
     shutil.copytree(VENDORED, root)
@@ -54,8 +53,8 @@ def tampered(tmp_path: Path) -> Bundle:
 
 
 def test_the_build_id_is_the_one_the_repository_pinned(bundle: Bundle) -> None:
-    """`docs/DECISIONS.md` §61 pins the build, having moved the §13 pin. A run
-    pinned to one build never executes under another (invariant 4)."""
+    """The repository pins the build id. A run pinned to one build never
+    executes under another (invariant 4)."""
     assert bundle.build_id.startswith("820dfc7c")
 
 
@@ -175,7 +174,7 @@ def test_a_path_outside_the_module_is_refused(bundle: Bundle) -> None:
 
 
 def test_cp_parse_receives_the_whole_cp0_skill(bundle: Bundle) -> None:
-    """`docs/DECISIONS.md` §5: the host keeps CP-PARSE as a separate stage-0
+    """The host keeps CP-PARSE as a separate stage-0
     node even though upstream merged it into CP-0. It owns the
     `document_parse_manifest` over the host's own already-extracted blocks,
     which is host territory.
@@ -192,7 +191,7 @@ def test_cp_parse_receives_the_whole_cp0_skill(bundle: Bundle) -> None:
 
 def test_the_manifest_itself_is_pinned(bundle: Bundle) -> None:
     """The one vendored file the manifest cannot cover is its own bytes, so
-    `docs/DECISIONS.md` §61 records that digest separately."""
+    that digest is recorded separately."""
     recorded = json.loads(
         (VENDORED / "DEPLOY_V_INTEGRITY_v1.json").read_text(encoding="utf-8")
     )

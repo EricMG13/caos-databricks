@@ -36,7 +36,7 @@ from caos.api.identity import GlobalRole
 from caos.graph.route import EdgeType, NodeState
 from caos.methodology.handoff import (
     MAX_BLOCKER_CHARS,
-    MAX_FILE_BYTES,
+    MAX_HANDOFF_BYTES,
     MAX_LINE_BYTES,
 )
 from caos.methodology.tables import (
@@ -60,7 +60,7 @@ _CLOSED = ConfigDict(extra="forbid", frozen=True)
 ID_CHARS = 256  # route node, module, profile, selection, build ids
 TEXT_CHARS = 4096  # `BoundaryText`'s default limit: titles, filenames, labels
 QUOTE_CHARS = MAX_LINE_BYTES  # one quoted line of evidence
-MARKDOWN_CHARS = MAX_FILE_BYTES  # a whole handoff, as the validator bounds it
+MARKDOWN_CHARS = MAX_HANDOFF_BYTES  # a whole accepted handoff is bounded (D45)
 CASES_MAX = 200  # beyond it the Directory is partial, `LIST_TRUNCATED`
 RUNS_MAX = 200
 # A case's members as its administrator sees them in Directory; beyond it the
@@ -78,7 +78,7 @@ REVISIONS_MAX = 64
 TITLE_CHARS = 256  # a case title a command sets
 SOURCE_IDS_MAX = 50  # `AdmissionLimits.max_documents`
 ROUTE_CHOICES_MAX = 18
-PREVIEW_CHARS = MAX_FILE_BYTES  # a gate preview, bounded as a handoff is
+PREVIEW_CHARS = MAX_HANDOFF_BYTES  # a gate preview, bounded as a handoff is
 PAGE_LINES_MAX = 2000  # beyond it a page is partial, `LIST_TRUNCATED`
 PAGE_MAX = 500  # a page outside 1..PAGE_MAX is `PAGE_NOT_AVAILABLE`
 MOMENT_CHARS = 64  # an ISO-8601 instant with its offset, as `read_verdict` reads it

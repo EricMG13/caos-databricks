@@ -1,9 +1,9 @@
 """The two gates that guard against a control passing vacuously.
 
-`scan_floors` refuses a scanner report that covered nothing; `io_budget` refuses
-a server that declares no I/O budget. Excessive I/O is the largest single
-multiple in the measurements behind docs/AI_CODE_QUALITY.md (~8x), and the
-predecessor's `read_evidence` had exactly that defect.
+`scan_floors` refuses a scanner report that covered nothing; `io_budget`
+refuses a server that declares no I/O budget. Excessive I/O was the largest
+defect measured in the predecessor, and `read_evidence` had exactly that
+defect.
 """
 
 from __future__ import annotations
@@ -221,8 +221,8 @@ def test_floor_failures_reports_each_floor_separately() -> None:
 
 def test_scan_floor_refuses_a_file_under_cover_that_the_report_skipped() -> None:
     """The floor `--min-files 1` could not express. One scannable file satisfied
-    it while bandit silently skipped the rest -- the failure mode of
-    docs/AI_CODE_QUALITY.md section 4, with a green tick on it."""
+    it while bandit silently skipped the rest -- a green tick over a gate
+    that covered almost nothing."""
     report: dict[str, object] = {"metrics": {"caos/blobs.py": {}, "_totals": {}}}
     claims = scan_floors.Claims(
         cover=("caos",),
@@ -743,10 +743,10 @@ def test_io_budget_refuses_a_second_route_module_that_declares_no_budget(
     was never asked.
 
     `CLAUDE.md`'s Phase 0 ledger called this out and pointed the upgrade at
-    Phase 2. Excessive I/O is the largest measured multiple in
-    `docs/AI_CODE_QUALITY.md`, and the predecessor's `read_evidence` is what it
-    was measured on -- so a gate that stops asking after the first answer is a
-    gate the next request path walks past.
+    Phase 2. Excessive I/O was the largest defect measured in the
+    predecessor, and `read_evidence` is what it was measured on -- so a gate
+    that stops asking after the first answer is a gate the next request path
+    walks past.
     """
     api = tmp_path / "caos" / "api"
     api.mkdir(parents=True)
@@ -912,6 +912,77 @@ def test_record_measurements_snapshots_the_measured_modules(
         "caos/api/reads/analysis.py": {"io": 249, "blob": 40},
         "caos/api/reads/run.py": {"io": 7},
     }
+
+
+def test_record_measurements_snapshots_a_dict_shaped_module_per_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N35: `reads/reports.py` and `reads/deliverable.py` declare `IO_BUDGET`
+    and `BLOB_BUDGET` per pathway, a dict rather than a plain number.
+    `--record` snapshots one measured value per key the same way it
+    snapshots a plain int, so these are ratcheted too."""
+    api = tmp_path / "caos" / "api" / "reads"
+    api.mkdir(parents=True)
+    (api / "reports.py").write_text(
+        'IO_BUDGET = {"report": 46, "committee": 22}\n'
+        'BLOB_BUDGET = {"report": 7, "committee": 2}\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        io_budget, "MEASURED_MODULES", (Path("caos/api/reads/reports.py"),)
+    )
+
+    recorded = io_budget.record_measurements(tmp_path)
+
+    assert recorded == {
+        "caos/api/reads/reports.py": {
+            "io": {"report": 46, "committee": 22},
+            "blob": {"report": 7, "committee": 2},
+        }
+    }
+
+
+def test_measured_problems_refuses_a_dict_key_fallen_below_its_floor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N35: a module budgeted per pathway (a dict) is ratcheted key by key --
+    one pathway falling below its own recorded floor is refused, even while
+    every other key in the same dict still holds or grew, and a shape that
+    stopped being a dict at all is refused rather than silently comparing
+    the whole declaration to nothing."""
+    api = tmp_path / "caos" / "api" / "reads"
+    api.mkdir(parents=True)
+    (api / "reports.py").write_text(
+        'IO_BUDGET = {"report": 46, "committee": 22}\n', encoding="utf-8"
+    )
+    monkeypatch.setattr(
+        io_budget, "MEASURED_MODULES", (Path("caos/api/reads/reports.py"),)
+    )
+    measured = tmp_path / "measured.json"
+    measured.write_text(
+        json.dumps(
+            {"caos/api/reads/reports.py": {"io": {"report": 46, "committee": 30}}}
+        )
+    )
+
+    problems = io_budget.measured_problems(tmp_path, measured)
+
+    assert problems == [
+        "caos/api/reads/reports.py: IO_BUDGET['committee'] is 22, below the "
+        "30 last measured and recorded in measured.json"
+    ]
+
+    (api / "reports.py").write_text("IO_BUDGET = 46\n", encoding="utf-8")
+    shape_changed = io_budget.measured_problems(tmp_path, measured)
+    assert shape_changed == [
+        "caos/api/reads/reports.py: IO_BUDGET is 46, not the per-key budget "
+        "last measured and recorded in measured.json"
+    ]
+
+    (api / "reports.py").write_text(
+        'IO_BUDGET = {"report": 46, "committee": 30}\n', encoding="utf-8"
+    )
+    assert io_budget.measured_problems(tmp_path, measured) == []
 
 
 def test_measured_problems_refuses_a_declaration_fallen_below_its_floor(
