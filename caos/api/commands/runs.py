@@ -9,12 +9,14 @@ re-derives the preview under the case and run locks (`release_gate_in`).
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from caos.api.commands._request import (
+    MAX_BODY_BYTES,
     CommandRequest,
     Key,
     governed,
@@ -32,6 +34,7 @@ from caos.api.deps import (
     Store,
 )
 from caos.api.wire import (
+    BRIEF_BYTES,
     ApproveGate,
     CreateRun,
     GateApproved,
@@ -40,9 +43,15 @@ from caos.api.wire import (
     RunCreated,
     RunInputPinned,
 )
+from caos.boundary_text import BoundaryText
 from caos.graph.route import RouteExtensions, resolve_route, route_digest
-from caos.methodology.handoff import ADAPTER_ROUTES
-from caos.methodology.vendor import catalog
+from caos.methodology.bundle import Bundle
+from caos.methodology.handoff import ADAPTER_ROUTES, RESEARCH_MODULE
+from caos.methodology.vendor import (
+    authority_bundle_sha256,
+    cached_contract,
+    catalog,
+)
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
 from caos.store.audit import GovernedAction
@@ -55,11 +64,15 @@ from caos.store.gates import (
     require_adapter_route,
 )
 from caos.store.members import Standing
-from caos.store.routes import pin_route_in
+from caos.store.routes import pin_route_in, route_pin
 from caos.store.run_inputs import (
+    UNANCHORED_CP0,
     RunSubject,
+    bound_research_brief,
+    cos_run_id,
     linked_research_brief,
     pin_run_input_in,
+    research_text,
     valid_subject,
 )
 from caos.store.runs import start_run
@@ -84,6 +97,14 @@ PREVIEW_IO = PINNED_INPUT_IO + 2  # standing; ownership, pin and clock
 # Ownership 1; `release_gate_in`: run lock, preview, live sources, upsert.
 APPROVE_IO = REPLAY_IO + UNIT_IO + 1 + 4 + PINNED_INPUT_IO + 2
 IO_BUDGET = max(SUCCESSOR_RUN_IO, PIN_INPUT_IO, PREVIEW_IO, APPROVE_IO)
+# N1: every command body is held to `MAX_BODY_BYTES`, and a pin's carries a
+# research brief the store admits up to `BRIEF_BYTES` of canonical JSON, so a
+# twenty-question brief the wire and the store both accept was refused as a
+# malformed body. The pin's body carries the brief twice over -- a client that
+# escapes its non-ASCII text as `\uXXXX` doubles the three-byte characters
+# most scripts need -- and the usual bound besides for the subject and the
+# rest. Past the store's own bound the brief is `RESEARCH_BRIEF_INVALID`.
+PIN_INPUT_BODY_BYTES = 2 * BRIEF_BYTES + MAX_BODY_BYTES
 
 _GATES = {"source-set": Gate.SOURCE_SET, "research-plan": Gate.RESEARCH_PLAN}
 
@@ -187,7 +208,9 @@ def pin_input(  # noqa: PLR0913 -- identity, key, floor, body, path, store, bund
     key: Key,
     _standing: Writer,
     run: RunPath,
-    body: Annotated[PinRunInput, Depends(json_body(PinRunInput))],
+    body: Annotated[
+        PinRunInput, Depends(json_body(PinRunInput, max_bytes=PIN_INPUT_BODY_BYTES))
+    ],
     case_id: CasePath,
     conn: Store,
     bundle: Methodology,
@@ -205,7 +228,7 @@ def pin_input(  # noqa: PLR0913 -- identity, key, floor, body, path, store, bund
         None
         if body.research is None
         else linked_research_brief(
-            body.research.model_dump(mode="json"), subject=subject
+            _composed_brief(body.research.model_dump(mode="json")), subject=subject
         )
     )
 
@@ -213,9 +236,17 @@ def pin_input(  # noqa: PLR0913 -- identity, key, floor, body, path, store, bund
         if _owned_run(unit, case_id, run)[0]:
             raise Refusal(RefusalCode.RUN_INPUT_ALREADY_PINNED)
         source = snapshot_in(unit, case_id)
-        pin = pin_run_input_in(
-            unit, run, source.version, bundle, research, subject=subject
-        )
+        try:
+            pin = pin_run_input_in(
+                unit, run, source.version, bundle, research, subject=subject
+            )
+        except Refusal as refused:
+            brief = Brief(bundle, run, research, subject)
+            if refused.code is RefusalCode.RUN_INPUT_INVALID and brief_refused(
+                unit, brief
+            ):
+                raise Refusal(RefusalCode.RESEARCH_BRIEF_INVALID) from None
+            raise
         return 200, RunInputPinned(
             run_id=run,
             source_set_version=pin.source_version,
@@ -239,6 +270,81 @@ def pin_input(  # noqa: PLR0913 -- identity, key, floor, body, path, store, bund
         write=write,
         model=RunInputPinned,
     )
+
+
+type _Json = str | int | float | bool | None | list[_Json] | dict[str, _Json]
+
+
+def _composed_brief(brief: dict[str, Any]) -> dict[str, Any]:
+    """The caller's brief with every string in it composed (NFC) and held to
+    the boundary's rules, as every other text a command takes is
+    (`BoundaryText`, W4): text pasted from a PDF often arrives decomposed, and
+    the store keeps a brief only as NFC. A control or bidi character is
+    `BOUNDARY_TEXT_INVALID`."""
+    return {key: _composed(value) for key, value in brief.items()}
+
+
+def _composed(value: _Json) -> _Json:
+    if isinstance(value, str):
+        return BoundaryText.of(value).value
+    if isinstance(value, dict):
+        return {key: _composed(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_composed(item) for item in value]
+    return value
+
+
+@dataclass(frozen=True, slots=True)
+class Brief:
+    """A pin's research brief as the caller sent it, linked to its subject,
+    with what judges it: the bundle and the run it is pinned to."""
+
+    bundle: Bundle
+    run: UUID
+    research: dict[str, Any] | None
+    subject: RunSubject
+
+
+def brief_refused(conn: StoreConnection, brief: Brief) -> bool:
+    """Whether the brief itself is what a pin refused `RUN_INPUT_INVALID` (W4).
+
+    The store answers every refused input with that one code, which is right
+    for the stored input it guards and wrong for the caller's own brief -- an
+    empty field, an impossible date, a consumer the pathway does not select,
+    a brief on a route no CP-DR node reads, or none on one that needs it -- so
+    a refused pin asks the store's own two rules again, over the pinned route,
+    for the brief alone (`research_text`, `bound_research_brief`) and for its
+    absence (a CP-DR route requires one, as `pin_run_input_in` says). Asked
+    only once the pin has refused, so a pin that succeeds pays nothing.
+    """
+    pinned = route_pin(conn, brief.run)
+    created = conn.execute(
+        "SELECT created_at FROM runs WHERE run_id=%s", (brief.run,)
+    ).fetchone()
+    if pinned is None or created is None:
+        return False
+    route = pinned[0]
+    if brief.research is None:
+        return (route.profile_id, route.selection_id) in ADAPTER_ROUTES and any(
+            node.module_id == RESEARCH_MODULE for node in route.nodes
+        )
+    try:
+        research_text(brief.research)
+        bound_research_brief(
+            cached_contract(brief.bundle),
+            catalog(brief.bundle),
+            brief=brief.research,
+            route=route,
+            subject=brief.subject,
+            run_id=cos_run_id(brief.run, created[0]),
+            cp0_sha256=UNANCHORED_CP0,
+            authority_sha256=authority_bundle_sha256(brief.bundle),
+        )
+    except Refusal as refused:
+        if refused.code is not RefusalCode.RUN_INPUT_INVALID:
+            raise
+        return True
+    return False
 
 
 @router.get(

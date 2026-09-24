@@ -9,6 +9,8 @@ from pathlib import Path
 from uuid import UUID
 
 from caos.blobs import BlobStore
+from caos.deliverable.package import build_package
+from caos.deliverable.render import RenderRefused, render
 from caos.deliverable.revisions import prove_revision
 from caos.methodology.bundle import Bundle
 from caos.refusals import Refusal, RefusalCode
@@ -265,20 +267,38 @@ def file_deliverable_in(
 def persist_receipt(
     conn: StoreConnection, blobs: BlobStore, receipt: Receipt, event: str
 ) -> Receipt:
-    """Store the detached receipt naming this exact filing link, in the unit
-    that wrote it."""
+    """Store the detached receipt naming this exact filing link, and the audit
+    package it pins, in the unit that wrote it.
+
+    The package is built here, once (W1): the payload the receipt names, the
+    receipt's own bytes, the page this build's renderer draws from that
+    payload, and the renderer and verifier the receipt's `renderer_sha256`
+    was taken from -- the same process, so the same files. A download built
+    later packed whatever renderer was deployed by then, and a revision filed
+    under an earlier one was served an archive its own verifier refused. A
+    payload the renderer refuses is refused here, with the render's own code,
+    and nothing is filed.
+    """
     filed = replace(receipt, filed_event_sha256=event)
-    digest = blobs.put(receipt_bytes(filed))
+    data = receipt_bytes(filed)
+    digest = blobs.put(data)
+    payload = blobs.get(receipt.payload_sha256)
+    try:
+        export = render(json.loads(payload))
+    except RenderRefused as refused:
+        raise Refusal(RefusalCode(refused.code)) from None
+    package = blobs.put(build_package(payload, data, export))
     conn.execute(
         "INSERT INTO deliverable_receipts"
-        " (case_id,revision_id,receipt_sha256,renderer_sha256,filed_event_sha256)"
-        " VALUES (%s,%s,%s,%s,%s)",
+        " (case_id,revision_id,receipt_sha256,renderer_sha256,filed_event_sha256,"
+        "package_sha256) VALUES (%s,%s,%s,%s,%s,%s)",
         (
             receipt.case_id,
             str(receipt.revision_id),
             digest,
             receipt.renderer_sha256,
             event,
+            package,
         ),
     )
     return filed

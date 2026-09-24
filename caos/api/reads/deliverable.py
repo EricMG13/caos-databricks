@@ -6,69 +6,100 @@ answers a filed revision's audit package -- both produced only by the test
 suite until this slice, while a filing receipt already pinned the renderer's
 digest (`caos/deliverable/filing.py` `renderer_sha256`).
 
-Neither derives from live state. The render reads the revision's own stored
-bytes (`caos.deliverable.revisions.read_revision`) once its freeze is proven
-by the row `caos/deliverable/filing.py` `freeze_in` wrote; the package reads
-the filed record's own bytes through `caos.deliverable.receipts
-.read_filed_receipt`, which proves the whole filing chain before this module
-ever sees a byte. `caos.deliverable.render.render` stays the pure function it
-always was -- nothing here re-derives its input from a source, a bundle or the
-clock.
+Each is proven exactly as Committee proves the same revision (W2), by the one
+proof both share (`caos.api.reads.reports.proven_revision`): the publication,
+its signatures and the audit provenance of every act; then, filed, the receipt
+`caos.deliverable.receipts.read_filed_receipt` proves and the revision's own
+stored bytes, or, frozen, the payload re-derived from the run as it stands, so
+a source withdrawn after the freeze refuses the render as it refuses
+Committee. The render only looked for the publication row, and served a
+withdrawn source's quotes after Report and Committee refused them.
+`caos.deliverable.render.render` stays the pure function it always was.
+
+The package is not built here: it is the archive filing stored beside the
+receipt (W1, `caos.deliverable.filing.persist_receipt`), so it packs the
+renderer the receipt pins rather than whichever this build deploys. A filing
+made before that is `DELIVERABLE_PACKAGE_NOT_STORED`, never an archive built
+now that its own verifier would refuse.
 
 Standing is the floor Report and Committee already read at
-(`caos.api.deps.VisibleCase`, `Standing.READER`): a case member reads either
-download of a revision they could already read through those sections, and a
-stranger or a revoked member gets the same private `CASE_NOT_FOUND` every
-other section serves them.
+(`caos.api.deps.readable`, `Standing.READER`), read inside the same read unit
+as the proof: a case member reads either download of a revision they could
+already read through those sections, and a stranger or a revoked member gets
+the same private `CASE_NOT_FOUND` every other section serves them.
 """
 
 from __future__ import annotations
 
-import json
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, Depends, Response
 
 from caos.api.deps import (
     IDENTITY_FIRST,
     Blobs,
+    Caller,
     CasePath,
+    Methodology,
     RevisionPath,
     Store,
-    VisibleCase,
+    readable,
 )
+from caos.api.reads.reports import ProvenRevision, proven_filing, proven_revision
 from caos.blobs import BlobStore
-from caos.deliverable.package import build_package
-from caos.deliverable.receipts import read_filed_receipt
+from caos.deliverable.package import packed_receipt
 from caos.deliverable.render import RenderRefused, render
-from caos.deliverable.revisions import read_revision
+from caos.methodology.bundle import Bundle
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
+from caos.store.members import standing_of
+from caos.store.outcomes import execution_reads
 
-# One case standing (`VisibleCase`), the revision's own digest, the frozen row
-# that must bind it, and `read_revision`'s own read of the first row again --
-# it re-reads rather than trusting the digest this module already holds,
-# because its own cross-check (the stored payload names this exact case, run
-# and revision) is not this module's to skip. Measured in
-# `tests/test_deliverable_reads.py`.
-RENDER_IO = 4
-# The same standing check, the revision's run (so `read_filed_receipt` is
-# asked what it is written to answer, not left to derive it), and that read's
-# own six: the filed join, its signatures, the audit trail read twice -- once
-# directly and once inside `verify_chain` -- the payload digests it rebuilds,
-# and the chain's current head, and the sign and freeze events it now proves
-# itself (F231). Measured in `tests/test_deliverable_reads.py`.
-PACKAGE_IO = 10
-IO_BUDGET = {"render": RENDER_IO, "package": PACKAGE_IO}
-# The render downloads one blob: the revision's own payload, inside
-# `read_revision`. The package downloads two: the receipt `read_filed_receipt`
-# proves, and the same payload digest again to build `payload.json` byte for
-# byte -- the request's blob store remembers what it already verified
-# (`caos.api.deps.request_blobs`, ED-7), so asking for that digest a second
-# time costs no second download.
-BLOB_BUDGET = {"render": 1, "package": 2}
+# W2: each download runs the proof Committee runs for the same revision
+# (`caos.api.reads.reports.proven_revision`), in one read unit, so each costs
+# what that proof costs. A filed revision: the unit's isolation check, the
+# caller's standing, the revision's run and digest, `_publication`'s seven
+# (the publication, its signatures, the trail, the signer's and freezer's
+# receipts, the chain and its head), `read_filed_receipt`'s own eight and
+# `read_revision`'s one. The package reads one more, the digest of the archive
+# stored at filing (W1). Measured in `tests/test_deliverable_reads.py`.
+RENDER_IO = 19
+PACKAGE_IO = 20
+# A frozen, unfiled revision is re-derived rather than read back
+# (`prove_revision`), as Committee's "frozen" proof re-derives it.
+RENDER_FROZEN_IO = 50
+IO_BUDGET = {
+    "render": RENDER_IO,
+    "render_frozen": RENDER_FROZEN_IO,
+    "package": PACKAGE_IO,
+}
+# A filed revision downloads two blobs, the receipt `read_filed_receipt`
+# proves and the payload it names; asking for that payload again, to render
+# it, costs nothing -- the request's blob store remembers what it already
+# verified (`caos.api.deps.request_blobs`, ED-7). The package downloads a
+# third, the archive stored at filing (W1). A frozen render pays
+# `prove_revision`'s seven, as Committee's "frozen" does.
+BLOB_BUDGET = {"render": 2, "render_frozen": 7, "package": 3}
 
 router = APIRouter()
+
+
+@dataclass(frozen=True, slots=True)
+class Stores:
+    """The request's connection, blobs and bundle a download is proven with."""
+
+    conn: StoreConnection
+    blobs: BlobStore
+    bundle: Bundle
+
+
+def _stores(conn: Store, blobs: Blobs, bundle: Methodology) -> Stores:
+    """Declared after the caller and the path on each route, so the connection
+    opens only for a request that names a well-formed revision."""
+    return Stores(conn, blobs, bundle)
 
 
 @router.get(
@@ -76,19 +107,19 @@ router = APIRouter()
     dependencies=[IDENTITY_FIRST],
 )
 def read_deliverable_render(
+    actor: Caller,
     case_id: CasePath,
     revision_id: RevisionPath,
-    _standing: VisibleCase,
-    conn: Store,
-    blobs: Blobs,
+    stores: Annotated[Stores, Depends(_stores)],
 ) -> Response:
     """The frozen or filed revision's page, byte for byte what `render`
-    produced from its own stored payload -- the "PENDING APPROVAL" marking
-    included, exactly as that function writes it. Refuses
-    `DELIVERABLE_NOT_FROZEN` before an unfrozen revision's draft ever reaches
-    `render`, and a render refusal's own code otherwise.
+    produced from its own proven payload -- the "PENDING APPROVAL" marking
+    included, exactly as that function writes it. Refuses whatever Committee
+    refuses for the same revision (W2): `DELIVERABLE_NOT_FROZEN` before an
+    unfrozen revision's draft ever reaches `render`, and a render refusal's
+    own code otherwise.
     """
-    html = render_revision(conn, blobs, case_id=case_id, revision_id=revision_id)
+    html = render_revision(Selection(stores, actor.user_id, case_id, revision_id))
     return Response(content=html, media_type="text/html; charset=utf-8")
 
 
@@ -97,19 +128,18 @@ def read_deliverable_render(
     dependencies=[IDENTITY_FIRST],
 )
 def read_deliverable_package(
+    actor: Caller,
     case_id: CasePath,
     revision_id: RevisionPath,
-    _standing: VisibleCase,
-    conn: Store,
-    blobs: Blobs,
+    stores: Annotated[Stores, Depends(_stores)],
 ) -> Response:
-    """A filed revision's audit package, built fresh from its own filed bytes
-    -- the same archive `caos.deliverable.package.verify_package` verifies.
-    An unfiled revision, frozen or not, is `read_filed_receipt`'s own
-    `DELIVERABLE_NOT_FOUND`: the closest existing code, since no receipt row
-    for it exists to name any other.
+    """A filed revision's audit package, built from its own filed bytes once
+    Committee's proof of the filing holds -- the same archive
+    `caos.deliverable.package.verify_package` verifies. An unfiled revision,
+    frozen or not, is `DELIVERABLE_NOT_FOUND`: the closest existing code, since
+    no filing of it exists to name any other.
     """
-    archive = package_revision(conn, blobs, case_id=case_id, revision_id=revision_id)
+    archive = package_revision(Selection(stores, actor.user_id, case_id, revision_id))
     filename = f"deliverable-{revision_id}.zip"
     return Response(
         content=archive,
@@ -118,59 +148,76 @@ def read_deliverable_package(
     )
 
 
-def render_revision(
-    conn: StoreConnection, blobs: BlobStore, *, case_id: UUID, revision_id: UUID
-) -> bytes:
-    """The frozen or filed revision's rendered page, from its stored bytes."""
-    digest = _digest(conn, case_id, revision_id)
-    _frozen(conn, case_id, revision_id, digest)
-    payload = read_revision(conn, blobs, case_id=case_id, revision_id=revision_id)
+@dataclass(frozen=True, slots=True)
+class Selection:
+    """What a download names -- a case's revision, asked for by a caller --
+    and the request's stores it is proven with."""
+
+    stores: Stores
+    user_id: UUID
+    case_id: UUID
+    revision_id: UUID
+
+
+def render_revision(selection: Selection) -> bytes:
+    """The frozen or filed revision's rendered page, from its proven payload."""
+    _publication, payload = _proven(selection, proven_revision)
     return _rendered(payload)
 
 
-def package_revision(
-    conn: StoreConnection, blobs: BlobStore, *, case_id: UUID, revision_id: UUID
-) -> bytes:
-    """A filed revision's audit package, from the filed record's own bytes."""
-    row = conn.execute(
-        "SELECT run_id FROM deliverable_revisions WHERE case_id=%s AND revision_id=%s",
-        (case_id, str(revision_id)),
-    ).fetchone()
-    if row is None:
-        raise Refusal(RefusalCode.DELIVERABLE_NOT_FOUND)
-    run_id = UUID(str(row[0]))
-    receipt = read_filed_receipt(
-        conn, blobs, case_id=case_id, run_id=run_id, revision_id=revision_id
-    )
-    digest = str(json.loads(receipt)["payload_sha256"])
-    data = blobs.get(digest)
-    export = _rendered(json.loads(data))
-    return build_package(data, receipt, export)
+def package_revision(selection: Selection) -> bytes:
+    """A filed revision's audit package: the archive stored when it was filed
+    (W1), served once Committee's proof of the filing holds and only while it
+    carries that filing's own proven receipt."""
+    receipt, digest = _proven(selection, _packaged)
+    archive = selection.stores.blobs.get(digest)
+    if packed_receipt(archive) != receipt:
+        raise Refusal(RefusalCode.ARTIFACT_RECORD_MISMATCH)
+    return archive
 
 
-def _digest(conn: StoreConnection, case_id: UUID, revision_id: UUID) -> str:
-    row = conn.execute(
-        "SELECT payload_sha256 FROM deliverable_revisions"
+def _packaged(proof: ProvenRevision) -> tuple[dict[str, Any], str]:
+    """The filing's proven receipt and the digest of the package stored with
+    it, or `DELIVERABLE_PACKAGE_NOT_STORED` for a filing made before packages
+    were stored (`0041`): an archive built now would pack this build's
+    renderer, not the one the receipt pins, and would not verify."""
+    publication, _payload = proven_filing(proof)
+    row = proof.conn.execute(
+        "SELECT package_sha256 FROM deliverable_receipts"
         " WHERE case_id=%s AND revision_id=%s",
-        (case_id, str(revision_id)),
+        (proof.case_id, str(proof.revision)),
     ).fetchone()
-    if row is None:
-        raise Refusal(RefusalCode.DELIVERABLE_NOT_FOUND)
-    return str(row[0])
+    if row is None or row[0] is None:
+        raise Refusal(RefusalCode.DELIVERABLE_PACKAGE_NOT_STORED)
+    return publication["receipt"], str(row[0])
 
 
-def _frozen(
-    conn: StoreConnection, case_id: UUID, revision_id: UUID, digest: str
-) -> None:
-    row = conn.execute(
-        "SELECT payload_sha256 FROM deliverable_publications"
-        " WHERE case_id=%s AND revision_id=%s",
-        (case_id, str(revision_id)),
-    ).fetchone()
-    if row is None:
-        raise Refusal(RefusalCode.DELIVERABLE_NOT_FROZEN)
-    if str(row[0]) != digest:
-        raise Refusal(RefusalCode.DELIVERABLE_PAYLOAD_INVALID)
+def _proven[T](selection: Selection, prove: Callable[[ProvenRevision], T]) -> T:
+    """The revision proven by `prove` in one read unit, as Committee proves it:
+    the caller's standing read inside the unit, then the revision's own run
+    and digest, then the proof."""
+    conn = selection.stores.conn
+    with execution_reads(conn):
+        user_id = selection.user_id
+        readable(standing_of(conn, case_id=selection.case_id, user_id=user_id))
+        row = conn.execute(
+            "SELECT run_id,payload_sha256 FROM deliverable_revisions"
+            " WHERE case_id=%s AND revision_id=%s",
+            (selection.case_id, str(selection.revision_id)),
+        ).fetchone()
+        if row is None:
+            raise Refusal(RefusalCode.DELIVERABLE_NOT_FOUND)
+        return prove(
+            ProvenRevision(
+                conn,
+                selection.stores.blobs,
+                selection.stores.bundle,
+                selection.case_id,
+                UUID(str(row[0])),
+                selection.revision_id,
+                str(row[1]),
+            )
+        )
 
 
 def _rendered(payload: dict[str, object]) -> bytes:

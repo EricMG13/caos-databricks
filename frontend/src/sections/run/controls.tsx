@@ -484,9 +484,13 @@ const EMPTY_SUBJECT: RunSubjectView = {
 // fixed, not edited: every route this host advertises a brief for
 // (`LITE_DEEP_RESEARCH`, `DEEP_RESEARCH`) is anchored on CP-DR itself, whose
 // one placement the vendor's own schema accepts is consumer `NONE` after
-// `CP-0` -- so there is nothing here for a caller to get wrong.
+// `CP-0` -- so there is nothing here for a caller to get wrong. The question
+// id starts as one the vendor's `RQ-*` rule accepts (W4): a caller has no way
+// to know that shape, and an empty id was refused however well the rest was
+// written. The prose fields are the caller's to write; one left empty is
+// answered `RESEARCH_BRIEF_INVALID`.
 const EMPTY_RESEARCH_QUESTION: ResearchBriefQuestion = {
-  question_id: "",
+  question_id: "RQ-1",
   question: "",
   decision_relevance: "",
   consumer_module_id: "NONE",

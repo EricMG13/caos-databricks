@@ -15,7 +15,8 @@ case lock:
    and the frozen digest as they always did.
 3. **One head per run.** A draft names the revision it was composed against,
    so a save that raced another save is `COMMAND_EXPECTATION_STALE` rather
-   than a second head nobody chose.
+   than a second head nobody chose; and a head that is frozen and not yet
+   filed takes no draft at all (`DELIVERABLE_ALREADY_FROZEN`, W5).
 
 The revision id is minted in the route rather than in the unit, because the
 receipt has to name it: a command that minted one inside its transaction could
@@ -100,6 +101,8 @@ IO_BUDGET = max(SAVE_IO, SIGN_IO, FREEZE_IO, FILE_IO)
 SAVE_BLOBS = 6
 SIGN_BLOBS = 0
 FREEZE_BLOBS = 7
+# The package filing stores (W1) is built from the payload `prove_revision`
+# already read, which the request's blob store remembers: no eighth download.
 FILE_BLOBS = 7
 BLOB_BUDGET = max(SAVE_BLOBS, SIGN_BLOBS, FREEZE_BLOBS, FILE_BLOBS)
 
@@ -144,6 +147,29 @@ def _latest(conn: StoreConnection, case_id: UUID, run_id: UUID) -> UUID | None:
         (case_id, run_id),
     ).fetchone()
     return None if row is None else UUID(str(row[0]))
+
+
+def _open_head(
+    conn: StoreConnection, case_id: UUID, run_id: UUID
+) -> tuple[UUID | None, bool]:
+    """The run's newest revision, as `_latest` orders it, and whether it is
+    frozen and not yet filed -- closed to a new draft (W5).
+
+    A draft saved over a frozen head superseded it, and filing it was then
+    refused as stale (CF-026), so anyone who may write could block a signed,
+    frozen deliverable from ever being filed. Once filed, a draft supersedes
+    it as before: the filed record, its receipt and its package stay exactly
+    as filed, and the new head starts its own chain.
+    """
+    row = conn.execute(
+        "SELECT r.revision_id,p.revision_id IS NOT NULL AND p.filed_at IS NULL"
+        " FROM deliverable_revisions r LEFT JOIN deliverable_publications p"
+        " ON p.case_id=r.case_id AND p.revision_id=r.revision_key"
+        " WHERE r.case_id=%s AND r.run_id=%s"
+        " ORDER BY r.saved_at DESC, r.revision_id DESC LIMIT 1",
+        (case_id, run_id),
+    ).fetchone()
+    return (None, False) if row is None else (UUID(str(row[0])), bool(row[1]))
 
 
 def _owned_run(conn: StoreConnection, case_id: UUID, run_id: UUID) -> None:
@@ -211,8 +237,11 @@ def save(  # noqa: PLR0913 -- decision 2's dependency order, keyword-only
 
     def write(unit: StoreConnection) -> tuple[int, RevisionSaved]:
         _owned_run(unit, case_id, run_id)
-        if _latest(unit, case_id, run_id) != body.expected_revision_id:
+        head, closed = _open_head(unit, case_id, run_id)
+        if head != body.expected_revision_id:
             raise Refusal(RefusalCode.COMMAND_EXPECTATION_STALE)
+        if closed:
+            raise Refusal(RefusalCode.DELIVERABLE_ALREADY_FROZEN)
         digest = save_revision_in(
             unit,
             blobs,
@@ -357,7 +386,9 @@ def file(  # noqa: PLR0913 -- decision 2's dependency order, keyword-only
 
     The detached receipt names the audit link this unit writes, so it is
     persisted in `after_event` -- after the command receipt, which therefore
-    cannot carry it. The Committee section serves it.
+    cannot carry it -- with the audit package it pins, built there once (W1).
+    The Committee section serves the receipt, and the package download those
+    stored bytes.
     """
     filed: list[Any] = []
     payload: dict[str, str] = {"revision_id": str(revision_id)}

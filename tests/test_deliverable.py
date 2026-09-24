@@ -15,6 +15,7 @@ from caos.deliverable.package import (
     EXPORT,
     PAYLOAD,
     build_package,
+    packed_receipt,
     verify_package,
     write_package,
 )
@@ -209,3 +210,14 @@ def test_a_filed_package_is_never_overwritten(tmp_path: Path) -> None:
 
     with pytest.raises(FileExistsError):
         write_package(path, build_package(PAYLOAD_BYTES, b"{}", b"<html></html>"))
+
+
+def test_packed_receipt_reads_a_packages_receipt_and_nothing_else() -> None:
+    """W1: the package download serves a stored archive only while the receipt
+    it carries is the filing's own; anything that is not a package carrying
+    one reads as none."""
+    receipt = b'{"payload_sha256":"x"}'
+    archive = build_package(PAYLOAD_BYTES, receipt, render(PAYLOAD_DATA))
+    assert packed_receipt(archive) == {"payload_sha256": "x"}
+    assert packed_receipt(b"not a zip") is None
+    assert packed_receipt(build_package(PAYLOAD_BYTES, b"not json", b"")) is None

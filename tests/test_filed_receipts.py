@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import io
 import json
+import zipfile
 from dataclasses import replace
 from hashlib import sha256
 from pathlib import Path
@@ -16,6 +18,7 @@ from test_filing_chain import _actor, _default_signer, _freeze, _sign
 from test_revisions import _save
 
 from caos.blobs import BlobStore
+from caos.deliverable import filing
 from caos.deliverable.filing import (
     Receipt,
     file_deliverable,
@@ -24,8 +27,10 @@ from caos.deliverable.filing import (
     revision_signatures,
     sign_opinion_in,
 )
+from caos.deliverable.package import verify_package
 from caos.deliverable.receipts import read_filed_receipt
-from caos.refusals import Refusal
+from caos.deliverable.render import RenderRefused
+from caos.refusals import Refusal, RefusalCode
 from caos.store import connect
 from caos.store.audit import (
     GENESIS,
@@ -589,3 +594,52 @@ def test_revision_signatures_names_each_signer_and_what_they_signed(
     signed = revision_signatures(lite.conn, lite.case_id, revision)
     assert [who for who, _ in signed] == [signer]
     assert all(len(digest) == 64 for _, digest in signed)
+
+
+def test_filing_stores_the_package_its_receipt_pins(lite: _Harness) -> None:
+    """W1: the receipt row names the archive built in the filing's own unit,
+    which carries that receipt, its payload and the renderer it pins."""
+    receipt = _file(lite)
+    row = lite.conn.execute(
+        "SELECT package_sha256 FROM deliverable_receipts WHERE revision_id=%s",
+        (str(receipt.revision_id),),
+    ).fetchone()
+    lite.conn.rollback()
+    assert row is not None
+    archive = lite.blobs.get(str(row[0]))
+    with zipfile.ZipFile(io.BytesIO(archive)) as opened:
+        assert opened.read("receipt.json") == receipt_bytes(receipt)
+        assert opened.read("payload.json") == lite.blobs.get(receipt.payload_sha256)
+        assert sha256(opened.read("render.py")).hexdigest() == receipt.renderer_sha256
+    assert verify_package(archive).verified
+
+
+def test_a_payload_the_renderer_refuses_is_not_filed(
+    lite: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """W1: a package is built at filing, so a payload no page can be drawn
+    from is refused there, with the render's own code, and nothing is filed."""
+    revision = _save(lite)
+    _sign(lite, revision)
+    _freeze(lite, revision)
+
+    def refused(_payload: object) -> bytes:
+        raise RenderRefused("DELIVERABLE_MARKDOWN_UNSUPPORTED")
+
+    monkeypatch.setattr(filing, "render", refused)
+    with pytest.raises(Refusal) as caught:
+        file_deliverable(
+            lite.conn,
+            lite.blobs,
+            case_id=lite.case_id,
+            actor_id=_actor(lite),
+            revision_id=revision,
+        )
+    row = lite.conn.execute(
+        "SELECT filed_by, (SELECT count(*) FROM deliverable_receipts)"
+        " FROM deliverable_publications WHERE revision_id=%s",
+        (str(revision),),
+    ).fetchone()
+    lite.conn.rollback()
+    assert caught.value.code is RefusalCode.DELIVERABLE_MARKDOWN_UNSUPPORTED
+    assert row == (None, 0)

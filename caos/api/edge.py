@@ -55,6 +55,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from urllib.parse import urlsplit
 
+import anyio
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from caos.api.identity import (
@@ -76,6 +77,13 @@ from caos.refusals import Refusal, RefusalCode
 IO_BUDGET = 0
 
 PUBLIC_ORIGIN_ENV = "CAOS_PUBLIC_ORIGIN"
+# W6. The variables of the edge mode F188 retired: its assertion key. Deleting
+# the mode deleted its boot refusal too (the key beside the trust switch), so
+# a deployment still carrying one resolved to dev mode, and a loopback proxy
+# forwarding `x-caos-role: ADMIN` was served as ADMIN. A process whose
+# environment still names one was configured for an edge this build does not
+# have, so it refuses to boot, in either mode, and names nothing but the code.
+RETIRED_ENV = ("CAOS_EDGE_TOKEN",)
 # Platform mode (D10): Databricks Apps set `PLATFORM_ENV` for every app
 # process. The platform's proxy authenticates the caller and forwards a user
 # token; there is no assertion to verify and no loopback rule, and no header is
@@ -136,6 +144,18 @@ _DELIVERABLE_RENDER_CSP = (
 # spends it and a refusal is the same typed answer every other one is. Same
 # number as before: every stream slot and forty more (DP-7).
 IN_FLIGHT_LIMIT = STREAM_LIMIT + 40
+# W3. How long a request body may take to arrive once the app starts reading
+# it: a grace, plus the declared length at a floor rate. uvicorn 0.52.4's h11
+# protocol arms no timer while a request is in progress -- its keep-alive
+# timer runs only between one response and the next request (`caos/serve.py`)
+# -- so a body that stalls held its in-flight place above, and whatever the
+# route held while reading it, for as long as the client kept the socket open.
+# A body past its deadline is `REQUEST_INVALID`. The deadline ends with the
+# body: a stream then waiting on `receive` for the client's disconnect is not
+# bounded by it. Conservative placeholders, like `caos/serve.py`'s; the tuned
+# production figures are N26 (enterprise).
+BODY_GRACE_SECONDS = 10.0
+BODY_MIN_BYTES_PER_SECOND = 128 * 1024
 # Matches `caos/api/app.py`'s `RETRY_AFTER_SECONDS`; duplicated rather than
 # imported, for the reason `EDGE_STATUS` below already is (this module cannot
 # import the app, which imports it).
@@ -181,8 +201,11 @@ class EdgeMode:
 
 
 def resolve_mode(environ: Mapping[str, str] | None = None) -> EdgeMode:
-    """The mode this environment declares, or `EDGE_CONFIG_INVALID`."""
+    """The mode this environment declares, or `EDGE_CONFIG_INVALID` -- a
+    retired edge-mode variable among it included (W6)."""
     env = os.environ if environ is None else environ
+    if any(name in env for name in RETIRED_ENV):
+        raise Refusal(RefusalCode.EDGE_CONFIG_INVALID)
     if env.get(PLATFORM_ENV):
         return _platform_mode(env)
     return _dev_mode(env)
@@ -302,6 +325,36 @@ def _loopback(address: object) -> bool:
         return False
 
 
+def _deadlined(receive: Receive, headers: list[tuple[bytes, bytes]]) -> Receive:
+    """`receive`, refusing `REQUEST_INVALID` once the request's body has taken
+    longer than its deadline to arrive (W3): `BODY_GRACE_SECONDS` plus its
+    declared length at `BODY_MIN_BYTES_PER_SECOND`, from the first read. Past
+    the body's last message it is `receive` unchanged."""
+    lengths = _all(headers, "content-length")
+    declared = int(lengths[0]) if len(lengths) == 1 and lengths[0].isdigit() else 0
+    allowed = BODY_GRACE_SECONDS + declared / BODY_MIN_BYTES_PER_SECOND
+    deadline: float | None = None
+    arrived = False
+
+    async def bounded() -> Message:
+        nonlocal deadline, arrived
+        if arrived:
+            return await receive()
+        now = anyio.current_time()
+        deadline = now + allowed if deadline is None else deadline
+        message: Message | None = None
+        with anyio.move_on_after(deadline - now):
+            message = await receive()
+        if message is None:
+            raise Refusal(RefusalCode.REQUEST_INVALID)
+        arrived = message["type"] != "http.request" or not message.get(
+            "more_body", False
+        )
+        return message
+
+    return bounded
+
+
 def _all(headers: list[tuple[bytes, bytes]], name: str) -> list[bytes]:
     wanted = name.encode()
     return [value for key, value in headers if key.lower() == wanted]
@@ -363,7 +416,13 @@ class EdgeGuard:
             return
         self._in_flight += 1
         try:
-            await _answering_faults(self.app, scope, receive, guarded, log=True)
+            await _answering_faults(
+                self.app,
+                scope,
+                _deadlined(receive, scope["headers"]),
+                guarded,
+                log=True,
+            )
         finally:
             self._in_flight -= 1
 

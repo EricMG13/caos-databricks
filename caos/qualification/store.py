@@ -822,7 +822,7 @@ def verdict_reviewer_id(conn: StoreConnection, *, evidence_sha256: str) -> UUID 
     None when none is stored (CF-027).
 
     Read beside `current_verdict` rather than folded into it: `Verdict` is
-    exactly the six bindings a reviewer signed (`caos/qualification/verdict.py`),
+    exactly the seven bindings a reviewer signed (`caos/qualification/verdict.py`),
     and the signer's own identity is store provenance the document never
     carried, the way `record_verdict` records it and `scripts/release_pack.py`
     already reads it. `evidence_sha256` is unique here

@@ -358,6 +358,49 @@ def test_a_superseded_revision_refuses_signature_freeze_and_filing(
         ), answer.text
 
 
+def test_a_frozen_head_takes_no_new_draft_until_it_is_filed(
+    filing_client: TestClient, lite: _Harness
+) -> None:
+    """W5. A writer's draft over a frozen, unfiled head made it no longer the
+    run's head, and its filing was then refused as stale (CF-026): anyone who
+    may write could block a signed, frozen deliverable. The frozen head is
+    closed to drafts until it is filed; once it is, a draft supersedes it and
+    the filed record stays exactly as filed."""
+    frozen = _save(lite)
+    digest = _digest(lite, frozen)
+    signer, freezer, filer = (_approver(lite) for _ in range(3))
+    writer = member(lite.conn, lite.case_id, Standing.WRITER)
+    for path, who in (("signature", signer), ("freeze", freezer)):
+        answer = _post(
+            filing_client,
+            f"{_case(lite)}/revisions/{frozen}/{path}",
+            who,
+            {"payload_sha256": digest},
+        )
+        assert answer.status_code == 200, answer.text
+    draft = {"narrative": [], "expected_revision_id": str(frozen)}
+    runs = f"{_case(lite)}/runs/{lite.run_id}/revisions"
+
+    assert _shown(filing_client, lite, frozen, writer)["SAVE_REVISION"] == (
+        "DELIVERABLE_ALREADY_FROZEN"
+    )
+    refused = _post(filing_client, runs, writer, draft)
+    assert (refused.status_code, refused.json()["code"]) == (
+        400,
+        "DELIVERABLE_ALREADY_FROZEN",
+    )
+    filed = _post(
+        filing_client,
+        f"{_case(lite)}/revisions/{frozen}/filing",
+        filer,
+        {"payload_sha256": digest},
+    )
+    assert filed.status_code == 200, filed.text
+    assert _shown(filing_client, lite, frozen, writer)["SAVE_REVISION"] is None
+    superseding = _post(filing_client, runs, writer, draft)
+    assert superseding.status_code == 201, superseding.text
+
+
 def test_a_filing_against_a_digest_that_is_no_longer_the_frozen_one_refuses(
     filing_client: TestClient, lite: _Harness
 ) -> None:

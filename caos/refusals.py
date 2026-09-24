@@ -106,6 +106,10 @@ class RefusalCode(StrEnum):
     # `0029_one_opinion_per_signer`: this approver has already signed this
     # revision. Its own code so a second press is not read as a wrong binding.
     DELIVERABLE_ALREADY_SIGNED = "DELIVERABLE_ALREADY_SIGNED"
+    # W1: a filing made before packages were stored at filing (`0041`). Its
+    # receipt pins a renderer this build may not carry, so no archive built
+    # now would verify, and none is served in its place.
+    DELIVERABLE_PACKAGE_NOT_STORED = "DELIVERABLE_PACKAGE_NOT_STORED"
     APPROVER_NOT_INDEPENDENT = "APPROVER_NOT_INDEPENDENT"
     CASE_NOT_FOUND = "CASE_NOT_FOUND"
     SOURCE_PACK_EMPTY = "SOURCE_PACK_EMPTY"
@@ -144,6 +148,9 @@ class RefusalCode(StrEnum):
     ROUTE_IDENTITY_INVALID = "ROUTE_IDENTITY_INVALID"
     ROUTE_PIN_TOO_LATE = "ROUTE_PIN_TOO_LATE"
     RUN_INPUT_INVALID = "RUN_INPUT_INVALID"
+    # W4: a caller's own research brief -- or its absence, on a route that
+    # reads one -- is what a new pin refused, not the stored input.
+    RESEARCH_BRIEF_INVALID = "RESEARCH_BRIEF_INVALID"
     RUN_INPUT_ALREADY_PINNED = "RUN_INPUT_ALREADY_PINNED"
     RUN_INPUT_TOO_LATE = "RUN_INPUT_TOO_LATE"
     GATE_APPROVAL_MISMATCH = "GATE_APPROVAL_MISMATCH"

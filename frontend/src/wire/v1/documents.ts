@@ -161,6 +161,7 @@ const RefusalCode = enumOf([
   "DELIVERABLE_ALREADY_FILED",
   "DELIVERABLE_ALREADY_FROZEN",
   "DELIVERABLE_ALREADY_SIGNED",
+  "DELIVERABLE_PACKAGE_NOT_STORED",
   "APPROVER_NOT_INDEPENDENT",
   "CASE_NOT_FOUND",
   "SOURCE_PACK_EMPTY",
@@ -187,6 +188,7 @@ const RefusalCode = enumOf([
   "ROUTE_IDENTITY_INVALID",
   "ROUTE_PIN_TOO_LATE",
   "RUN_INPUT_INVALID",
+  "RESEARCH_BRIEF_INVALID",
   "RUN_INPUT_ALREADY_PINNED",
   "RUN_INPUT_TOO_LATE",
   "GATE_APPROVAL_MISMATCH",
@@ -421,8 +423,8 @@ const AnalysisDocument = sectionDocument(AnalysisBody);
 
 // A projected value's own dimension (R24-12): MONEY for an `_amount`, in the
 // forecast's own currency and scale; MULTIPLE for the leverage/coverage
-// family; RATIO for the one margin, shown unscaled (a Model reader performs
-// no arithmetic on the server's decimal strings).
+// family; RATIO for the margin and FCF over debt (N3), shown unscaled (a
+// Model reader performs no arithmetic on the server's decimal strings).
 const ModelUnit = enumOf(["MONEY", "MULTIPLE", "RATIO"]);
 const ModelValue = object({
   name: short,

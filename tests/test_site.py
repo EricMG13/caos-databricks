@@ -10,18 +10,23 @@ from __future__ import annotations
 
 import asyncio
 import re
+import socket
+import threading
+import time
 from collections.abc import Iterator
 from pathlib import Path
 
 import httpx2 as httpx
 import pytest
+import uvicorn
 from fastapi.testclient import TestClient
 from starlette.types import Message
 
 from caos.api import health
 from caos.api.app import app
 from caos.api.deps import DATABASE_URL
-from caos.api.edge import SECURITY_HEADERS
+from caos.api.edge import PLATFORM_ENV, SECURITY_HEADERS
+from caos.api.identity import WORKSPACE_ENV
 from caos.api.site import SECTIONS, SITE_ROOT_ENV, application, dispatch
 from caos.refusals import Refusal, RefusalCode
 
@@ -88,7 +93,7 @@ def _raw(path: str, method: str = "GET") -> tuple[int, bytes]:
 async def _dispatched(path: str, host: bytes) -> tuple[int, list[tuple[bytes, bytes]]]:
     """`dispatch` directly, past the edge guard: platform mode admits any
     `Host` (`_dev_peer`'s loopback check is dev mode's alone), so the guard
-    is not what stands between a directory redirect and an echoed one."""
+    is not what stands between a directory request and a redirect."""
     sent: list[Message] = []
 
     async def receive() -> Message:
@@ -116,20 +121,116 @@ async def _dispatched(path: str, host: bytes) -> tuple[int, list[tuple[bytes, by
     return start["status"], list(start.get("headers", []))
 
 
-def test_a_directory_redirect_never_echoes_the_client_host(site: Path) -> None:
-    """CF-086. Starlette's own directory redirect builds its `Location` from
-    `URL(scope=scope)`, which is the request's `Host` over whatever scheme
-    `serve.py`'s `proxy_headers=False` leaves in scope -- `http`, even behind
-    a TLS-terminating proxy. A relative reference names the same place
-    without ever repeating what the client sent, over any scheme."""
+def test_a_directory_request_is_never_redirected(site: Path) -> None:
+    """CF-086, then C1. Starlette's own directory redirect built its
+    `Location` from the request's `Host` (CF-086); the relative rewrite that
+    replaced it kept the request's path, and a path uvicorn decoded from
+    `/%2Fevil.example%2F..` was the scheme-relative `//evil.example/../`
+    (C1). The export never redirects: a directory without its slash is 404,
+    whatever `Host` or path asked for it, and with its slash it serves its
+    own index."""
     (site / "docs").mkdir()
     (site / "docs" / "index.html").write_bytes(b"nested")
 
-    status, headers = asyncio.run(_dispatched("/docs", host=b"evil.example.com"))
+    for path in ("/docs", "//evil.example/..", "/assets/.."):
+        status, headers = asyncio.run(_dispatched(path, host=b"evil.example.com"))
+        assert status == 404, path
+        assert b"location" not in dict(headers), path
+    assert _raw("/docs/") == (200, b"nested")
 
-    assert status == 307
-    location = dict(headers)[b"location"]
-    assert location == b"/docs/"
+
+def _served_on_a_socket() -> tuple[uvicorn.Server, threading.Thread, int]:
+    """`caos.api.site:application` under a real uvicorn, as `caos.serve` runs
+    it (`proxy_headers=False`): the request target reaches it percent-decoded
+    by uvicorn itself, which no test client reproduces."""
+    listener = socket.socket()
+    listener.bind(("127.0.0.1", 0))
+    port = int(listener.getsockname()[1])
+    server = uvicorn.Server(
+        uvicorn.Config(
+            application, lifespan="off", log_level="warning", proxy_headers=False
+        )
+    )
+    thread = threading.Thread(
+        target=server.run, kwargs={"sockets": [listener]}, daemon=True
+    )
+    thread.start()
+    while not server.started:
+        time.sleep(0.01)
+    return server, thread, port
+
+
+def _raw_get(port: int, target: str, host: str) -> tuple[str, str | None]:
+    with socket.create_connection(("127.0.0.1", port), timeout=10) as sock:
+        request = f"GET {target} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n"
+        sock.sendall(f"{request}\r\n".encode())
+        answer = b""
+        while received := sock.recv(65536):
+            answer += received
+    head = answer.split(b"\r\n\r\n", 1)[0].decode("latin-1").splitlines()
+    location = next(
+        (
+            line.split(":", 1)[1].strip()
+            for line in head
+            if line.lower().startswith("location:")
+        ),
+        None,
+    )
+    return head[0], location
+
+
+@pytest.mark.parametrize("platform", [False, True], ids=["dev", "platform"])
+def test_no_request_target_redirects_off_the_app_origin(
+    site: Path, monkeypatch: pytest.MonkeyPatch, platform: bool
+) -> None:
+    """C1, over a real socket in both modes: `%2F` in the target is decoded by
+    uvicorn to a path starting `//`, which the export normalised to its root
+    and answered with a scheme-relative `Location` that a browser follows to
+    another host, the query (an OAuth `code`, say) carried along."""
+    port_host = "caos-1.aws.databricksapps.com"
+    if platform:
+        monkeypatch.setenv(PLATFORM_ENV, "caos")
+        monkeypatch.setenv(WORKSPACE_ENV, "1")
+    server, thread, port = _served_on_a_socket()
+    host = port_host if platform else f"127.0.0.1:{port}"
+    try:
+        for target in (
+            "/%2Fevil.example%2F..",
+            "/%2F%2Fevil.example%2F..",
+            "/%2Fevil.example%2F..?code=abc&state=xyz",
+            "/%5Cevil.example%2F..",
+            "/%2F%5Cevil.example%2F..",
+        ):
+            status, location = _raw_get(port, target, host)
+            assert location is None, (target, status, location)
+            assert status.split()[1] in {"200", "404"}, (target, status)
+    finally:
+        server.should_exit = True
+        thread.join(10)
+
+
+@pytest.mark.parametrize("platform", [False, True], ids=["dev", "platform"])
+def test_no_api_path_redirects_either(
+    site: Path, monkeypatch: pytest.MonkeyPatch, platform: bool
+) -> None:
+    """C1's sibling on the API: routing answered a declared path asked for with
+    a trailing slash with a 307 to the same path without it, built from the
+    request's own `Host` over `http` -- behind the platform, whatever `Host`
+    the request named, and a downgrade from the TLS the proxy terminated. The
+    API redirects nothing: an undeclared spelling is `ENDPOINT_NOT_FOUND`."""
+    if platform:
+        monkeypatch.setenv(PLATFORM_ENV, "caos")
+        monkeypatch.setenv(WORKSPACE_ENV, "1")
+    server, thread, port = _served_on_a_socket()
+    host = "evil.example" if platform else f"127.0.0.1:{port}"
+    try:
+        for target in ("/api/health/", "/api/v1/directory/", "/api/v1/cases/"):
+            status, location = _raw_get(port, target, host)
+            assert location is None, (target, status, location)
+            assert status.split()[1] == "404", (target, status)
+    finally:
+        server.should_exit = True
+        thread.join(10)
 
 
 def test_section_deep_links_serve_the_export_with_their_query(site: Path) -> None:

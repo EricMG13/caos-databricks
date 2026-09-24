@@ -219,6 +219,10 @@ MIGRATIONS = (
         .with_name("0040_hidden_painted_over.sql")
         .read_text(encoding="utf-8"),
     ),
+    (
+        "0041_filed_packages",
+        Path(__file__).with_name("0041_filed_packages.sql").read_text(encoding="utf-8"),
+    ),
 )
 
 # DL-1: the store's own schema, beside LangGraph's `caos_graph`

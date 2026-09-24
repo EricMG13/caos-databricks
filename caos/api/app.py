@@ -150,6 +150,9 @@ _STATUS = {
     RefusalCode.RUN_NOT_FOUND: 404,
     RefusalCode.CASE_NOT_FOUND: 404,
     RefusalCode.DELIVERABLE_NOT_FOUND: 404,
+    # W1: the filing exists and is proven; the package it would need does not,
+    # and nothing the caller or an operator does later brings it into being.
+    RefusalCode.DELIVERABLE_PACKAGE_NOT_STORED: 404,
     # Every unavailable evidence page is one private answer (decision 7).
     RefusalCode.PAGE_NOT_AVAILABLE: 404,
     RefusalCode.STORE_NOT_CONFIGURED: 500,
@@ -290,6 +293,9 @@ _STATUS = {
     RefusalCode.IDEMPOTENCY_KEY_REQUIRED: 400,
     RefusalCode.ROUTE_NOT_ENABLED: 400,
     RefusalCode.METHODOLOGY_INPUT_INVALID: 400,
+    # W4: the caller's own brief, judged at the pin exactly as CP-DR will read
+    # it. `RUN_INPUT_INVALID` stays 500 for the stored input it names.
+    RefusalCode.RESEARCH_BRIEF_INVALID: 400,
     RefusalCode.FORECAST_DRIVER_NOT_READY: 400,
     RefusalCode.DELIVERABLE_PAYLOAD_INVALID: 400,
     RefusalCode.NARRATIVE_FIGURE_UNREFERENCED: 400,
@@ -416,6 +422,12 @@ app = FastAPI(
     docs_url=None,
     redoc_url=None,
     openapi_url=None,
+    # C1: routing answered a declared path asked for with a trailing slash
+    # with a 307 built from the request's own `Host`, over the `http` that
+    # `proxy_headers=False` leaves in scope -- the export's CF-086 echo, on
+    # the API. The API redirects nothing; another spelling of a path is
+    # `ENDPOINT_NOT_FOUND`, as any undeclared one is.
+    redirect_slashes=False,
 )
 app.add_middleware(EdgeGuard)
 # One router per section read (Task 4.1), so each slice adds its route in its

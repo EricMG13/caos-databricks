@@ -6,6 +6,8 @@ through the real app against PostgreSQL. A refusal commits nothing.
 
 from __future__ import annotations
 
+import json
+import unicodedata
 from hashlib import sha256
 from pathlib import Path
 from uuid import UUID, uuid4
@@ -18,9 +20,11 @@ from run_terminals import fail_run
 
 from caos.api import app as app_module
 from caos.api.commands import runs as runs_command
+from caos.api.commands._request import MAX_BODY_BYTES
+from caos.api.commands.runs import Brief, brief_refused
 from caos.api.deps import methodology_bundle, store_connection
 from caos.api.reads import run as run_read
-from caos.api.wire import CLEARS
+from caos.api.wire import CLEARS, PinRunInput
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
 from caos.evidence.ingest import Document, admit_pack
@@ -45,7 +49,7 @@ from caos.store.gates import (
 )
 from caos.store.members import Standing, grant, revoke
 from caos.store.routes import pinned_route, resolved_route
-from caos.store.run_inputs import load_run_input
+from caos.store.run_inputs import RunSubject, linked_research_brief, load_run_input
 from caos.store.runs import block_run, create_case, start_run
 from caos.store.source_sets import snapshot_source_set
 
@@ -512,7 +516,8 @@ def test_a_research_route_requires_and_accepts_a_bound_brief(
     run_id = UUID(created.json()["run_id"])
 
     subject_only = _send(client, _path(case_id, run_id, "input"), writer, PIN)
-    assert _outcome(subject_only) == "500 RUN_INPUT_INVALID"
+    # W4: the missing brief is the caller's to supply, and answered so.
+    assert _outcome(subject_only) == "400 RESEARCH_BRIEF_INVALID"
 
     pinned = _send(
         client,
@@ -535,6 +540,179 @@ def test_a_research_route_requires_and_accepts_a_bound_brief(
         )
         assert approved.status_code == 200, approved.text
     assert {gate_state(conn, run_id, gate) for gate in Gate} == {GateState.RELEASED}
+
+
+def _research_run(client: TestClient, case_id: UUID, writer: UUID) -> UUID:
+    created = _send(client, _path(case_id), writer, RESEARCH_ROUTE)
+    assert created.status_code == 201, created.text
+    return UUID(created.json()["run_id"])
+
+
+def test_a_callers_own_brief_mistakes_are_answered_as_the_callers(
+    client: TestClient, case: tuple[StoreConnection, UUID], sourced: UUID
+) -> None:
+    """W4. Each of these answered 500 `RUN_INPUT_INVALID` -- "an operator must
+    verify the run input" -- for a mistake only the caller can correct. They
+    now answer a 4xx whose clearance names the brief; a store fault the brief
+    does not explain still answers the operator's code."""
+    conn, case_id = case
+    writer = member(conn, case_id)
+    questions = RESEARCH_BRIEF["questions"]
+    assert isinstance(questions, list)
+    question = questions[0]
+    mistakes = {
+        # the pin form's own default for a field left empty
+        "empty_field": {
+            **RESEARCH_BRIEF,
+            "questions": [{**question, "completion_test": ""}],
+        },
+        # an impossible calendar date that the wire pattern admits
+        "bad_date": {**RESEARCH_BRIEF, "as_of_date": "2026-13-45"},
+        # a consumer the pinned pathway does not select
+        "unknown_consumer": {
+            **RESEARCH_BRIEF,
+            "questions": [{**question, "consumer_module_id": "CP-99"}],
+        },
+    }
+    refused = {
+        name: _send(
+            client,
+            _path(case_id, _research_run(client, case_id, writer), "input"),
+            writer,
+            {"subject": SUBJECT, "research": brief},
+        )
+        for name, brief in mistakes.items()
+    }
+    # And a brief on a route no CP-DR node reads, and none on one that needs it.
+    lite = _run(client, case_id, writer, pin=False)
+    refused["brief_on_lite"] = _send(
+        client,
+        _path(case_id, lite, "input"),
+        writer,
+        {"subject": SUBJECT, "research": RESEARCH_BRIEF},
+    )
+    refused["no_brief"] = _send(
+        client,
+        _path(case_id, _research_run(client, case_id, writer), "input"),
+        writer,
+        PIN,
+    )
+    for name, answer in refused.items():
+        assert answer.json() == {
+            "code": "RESEARCH_BRIEF_INVALID",
+            "clears": CLEARS[RefusalCode.RESEARCH_BRIEF_INVALID],
+        }, name
+        assert answer.status_code == 400, name
+
+
+def test_brief_refused_blames_the_brief_only_when_the_brief_is_at_fault(
+    client: TestClient, case: tuple[StoreConnection, UUID], sourced: UUID
+) -> None:
+    """The judgement a refused pin asks: the store's own brief rules over the
+    pinned route. A sound brief is not blamed, so a store fault it does not
+    explain keeps the operator's `RUN_INPUT_INVALID`."""
+    conn, case_id = case
+    writer = member(conn, case_id)
+    research = _research_run(client, case_id, writer)
+    lite = _run(client, case_id, writer, pin=False)
+    subject = RunSubject(**SUBJECT)
+    bundle = app_module.methodology_bundle()
+    linked = linked_research_brief(RESEARCH_BRIEF, subject=subject)
+    empty = linked_research_brief(
+        {**RESEARCH_BRIEF, "decision_context": ""}, subject=subject
+    )
+
+    def refused(run: UUID, brief: dict[str, object] | None) -> bool:
+        answer = brief_refused(conn, Brief(bundle, run, brief, subject))
+        conn.rollback()
+        return answer
+
+    assert refused(research, linked) is False
+    assert refused(research, empty) is True
+    assert refused(research, None) is True
+    assert refused(lite, linked) is True
+    assert refused(lite, None) is False
+    assert refused(uuid4(), linked) is False
+
+
+def _questions(count: int, prose: str) -> list[dict[str, str]]:
+    return [
+        {
+            "question_id": f"RQ-{index:02d}",
+            "question": prose,
+            "decision_relevance": prose,
+            "consumer_module_id": "NONE",
+            "after_module_id": "CP-0",
+            "evidence_needed": prose,
+            "completion_test": prose,
+        }
+        for index in range(count)
+    ]
+
+
+def test_the_pin_carries_every_brief_the_store_admits(
+    client: TestClient, case: tuple[StoreConnection, UUID], sourced: UUID
+) -> None:
+    """N1. The wire admits 32 questions of seven fields and the store a
+    canonical brief of 64 KiB, but every command body was held to 16 KiB, so
+    a twenty-question brief of about 20 KB was refused `REQUEST_INVALID`. The
+    pin's body now admits the brief the store does; past the store's own
+    bound the brief is refused as the brief, and past the body's the body."""
+    conn, case_id = case
+    writer = member(conn, case_id)
+    prose = (
+        "Whether the issuer's reported undrawn committed facilities at year end "
+        "cover the next twelve months of scheduled maturities and interest, "
+        "net of restricted cash and any springing covenant limiting drawings."
+    )
+
+    def pin(questions: list[dict[str, str]]) -> Response:
+        body = {
+            "subject": SUBJECT,
+            "research": {**RESEARCH_BRIEF, "questions": questions},
+        }
+        assert PinRunInput.model_validate(body)
+        run = _research_run(client, case_id, writer)
+        return _send(client, _path(case_id, run, "input"), writer, body)
+
+    twenty = pin(_questions(20, prose))
+    assert twenty.status_code == 200, twenty.text
+    stored = load_run_input(conn, UUID(twenty.json()["run_id"]))
+    conn.rollback()
+    assert stored is not None and stored.research_json is not None
+    assert len(stored.research_json.encode()) > MAX_BODY_BYTES
+
+    over_store = pin(_questions(32, prose * 3))
+    assert _outcome(over_store) == "400 RESEARCH_BRIEF_INVALID"
+    over_body = pin(_questions(32, prose * 19))
+    assert _outcome(over_body) == "400 REQUEST_INVALID"
+
+
+def test_a_decomposed_brief_is_pinned_as_its_composed_text(
+    client: TestClient, case: tuple[StoreConnection, UUID], sourced: UUID
+) -> None:
+    """W4. Text pasted from a PDF often arrives decomposed (NFD); the store
+    holds a brief only in NFC and answered it 500. It is composed at the
+    command's boundary, as every other text a command takes is, and pinned."""
+    conn, case_id = case
+    writer = member(conn, case_id)
+    context = "Revue de la liquidit\u00e9"
+    decomposed = unicodedata.normalize("NFD", context)
+    assert decomposed != context
+    pinned = _send(
+        client,
+        _path(case_id, _research_run(client, case_id, writer), "input"),
+        writer,
+        {
+            "subject": SUBJECT,
+            "research": {**RESEARCH_BRIEF, "decision_context": decomposed},
+        },
+    )
+    assert pinned.status_code == 200, pinned.text
+    stored = load_run_input(conn, UUID(pinned.json()["run_id"]))
+    conn.rollback()
+    assert stored is not None and stored.research_json is not None
+    assert json.loads(stored.research_json)["decision_context"] == context
 
 
 def test_approval_of_a_stale_or_transplanted_preview_is_a_conflict(

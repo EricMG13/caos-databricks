@@ -927,8 +927,10 @@ def test_every_code_the_edge_answers_carries_the_apps_status() -> None:
 
     The second half reads every `RefusalCode` the guard's module names, so a
     code answered with a status that bypassed `EDGE_STATUS` fails here.
-    `EDGE_CONFIG_INVALID` is the one exception: it is raised as a `Refusal` and
-    sent as a lifespan failure, never answered by the guard over HTTP.
+    `EDGE_CONFIG_INVALID` and `REQUEST_INVALID` are the two exceptions, raised
+    as a `Refusal` and never answered by the guard over HTTP: the first is sent
+    as a lifespan failure, the second is raised from `receive` into the app, for
+    a body past its deadline (W3), and answered there by the app's own handler.
     """
     assert EDGE_STATUS.items() <= _STATUS.items()
     tree = ast.parse(Path(edge_module.__file__).read_text(encoding="utf-8"))
@@ -940,7 +942,8 @@ def test_every_code_the_edge_answers_carries_the_apps_status() -> None:
         and node.value.id == "RefusalCode"
     }
     answered = {code.name for code in EDGE_STATUS}
-    assert named == answered | {RefusalCode.EDGE_CONFIG_INVALID.name}
+    raised = {RefusalCode.EDGE_CONFIG_INVALID.name, RefusalCode.REQUEST_INVALID.name}
+    assert named == answered | raised
     assert len(answered) == 5
 
 

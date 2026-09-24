@@ -17,14 +17,13 @@ from uuid import UUID, uuid4
 import anyio
 import psycopg
 import pytest
-from command_fixtures import command_client, command_headers, member
+from command_fixtures import borrowed, command_client, command_headers, member
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from httpx2 import Response
 from journey.pack import PDF_NAME, TEXT_NAME, journey_pack
 from psycopg.pq import TransactionStatus
-from starlette.datastructures import FormData
-from starlette.requests import Request
+from starlette.datastructures import FormData, UploadFile
 
 from caos.api.app import RETRY_AFTER_SECONDS, app
 from caos.api.commands import cases
@@ -88,19 +87,26 @@ def _create(
 
 @pytest.fixture
 def seen(monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str, int]]:
-    """How often the route parsed a form and prepared (extracted) a pack."""
-    counts = {"form": 0, "prepare": 0}
-    real_form = Request._get_form
+    """How often the route parsed a form, read a received pack's documents
+    into memory, and prepared (extracted) a pack."""
+    counts = {"form": 0, "read": 0, "prepare": 0}
+    real_parse = cases._PackParser.parse
+    real_read = UploadFile.read
 
-    async def form(self: Request, **kwargs: int) -> FormData:
+    async def form(self: cases._PackParser) -> FormData:
         counts["form"] += 1
-        return await real_form(self, **kwargs)
+        return await real_parse(self)
+
+    async def read(self: UploadFile, size: int = -1) -> bytes:
+        counts["read"] += 1
+        return await real_read(self, size)
 
     def prepare(documents: list[ingest.Document]) -> ingest.PreparedPack:
         counts["prepare"] += 1
         return ingest.prepare_pack(documents)
 
-    monkeypatch.setattr(Request, "_get_form", form)
+    monkeypatch.setattr(cases._PackParser, "parse", form)
+    monkeypatch.setattr(UploadFile, "read", read)
     monkeypatch.setattr(cases, "prepare_pack", prepare)
     yield counts
 
@@ -340,13 +346,16 @@ def test_a_pack_over_the_document_ceiling_is_source_too_large(
     writer = member(conn, case_id)
     path = f"/api/v1/cases/{case_id}/sources"
 
-    over = command_client.post(
-        path,
-        headers=command_headers(writer),
-        files=[("document", ("a.txt", TEXT))] * (DEFAULT_LIMITS.max_documents + 1),
-    )
-
-    assert (over.status_code, over.json()["code"]) == (413, "SOURCE_TOO_LARGE")
+    for past in (1, 2, 9):
+        over = command_client.post(
+            path,
+            headers=command_headers(writer),
+            files=[("document", ("a.txt", TEXT))]
+            * (DEFAULT_LIMITS.max_documents + past),
+        )
+        # N2: two or more past the ceiling were the parser's own `max_files`
+        # refusal, the generic `REQUEST_INVALID` CF-075 had meant to replace.
+        assert (over.status_code, over.json()["code"]) == (413, "SOURCE_TOO_LARGE")
     assert seen["prepare"] == 0
     assert _sources(conn, case_id) == 0
 
@@ -409,7 +418,7 @@ def test_a_nonmember_upload_is_404_without_extraction(
     unknown = _admit(command_client, uuid4(), uuid4(), [("a.txt", TEXT)])
     assert unknown.status_code == 404
 
-    assert seen == {"form": 0, "prepare": 0}, (
+    assert seen == {"form": 0, "read": 0, "prepare": 0}, (
         "no stranger's pack is parsed or extracted"
     )
     assert _sources(conn, case_id) == 0
@@ -441,7 +450,7 @@ def test_admission_actor_matrix(  # noqa: PLR0913 -- one matrix row
     assert answer.status_code == status
     if status == 403:
         assert answer.json()["code"] == "NOT_AUTHORISED"
-        assert seen == {"form": 0, "prepare": 0}
+        assert seen == {"form": 0, "read": 0, "prepare": 0}
     anonymous = command_client.post(
         f"/api/v1/cases/{case_id}/sources",
         files=[("document", ("a.txt", TEXT, "text/plain"))],
@@ -472,10 +481,11 @@ def test_an_admission_waits_for_a_slot_before_it_reads_its_pack(
     seen: dict[str, int],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """N5: an admission holds its pack twice -- spooled by the form parser and
-    read into memory -- then its extraction, for up to fifty documents, in the
-    process that also runs the worker. Only `ADMISSION_SLOTS` do at once; the
-    rest wait before a byte of their pack is read, holding no thread."""
+    """N5: an admission holds its pack in memory, then its extraction, for up
+    to fifty documents, in the process that also runs the worker. Only
+    `ADMISSION_SLOTS` do at once. W3: the rest receive their pack to disk
+    first and then wait, holding no thread, no slot while it arrives and no
+    byte of it in memory."""
     conn, case_id = case
     writer = member(conn, case_id)
     slots = _one_slot(monkeypatch)
@@ -492,12 +502,14 @@ def test_an_admission_waits_for_a_slot_before_it_reads_its_pack(
     )
     try:
         assert waiting.wait(timeout=30), "the admission never waited for a slot"
-        assert seen == {"form": 0, "prepare": 0}, "no byte of a waiting pack is read"
+        assert seen == {"form": 1, "read": 0, "prepare": 0}, (
+            "a waiting pack is received, and none of it read into memory"
+        )
     finally:
         slots.release()
         thread.join(timeout=60)
     assert [answer.status_code for answer in answers] == [201]
-    assert seen == {"form": 1, "prepare": 1}
+    assert seen == {"form": 1, "read": 1, "prepare": 1}
     assert slots.acquire(blocking=False), "the slot is given back"
     slots.release()
 
@@ -699,9 +711,9 @@ def test_each_case_command_declares_and_meets_its_store_budget(
 
     def measured(send: Callable[[], Response]) -> tuple[int, int]:
         counter = _Counting(conn)
-        app.dependency_overrides[store_connection] = lambda: counter
+        app.dependency_overrides[store_connection] = borrowed(counter)
         answer = send()
-        app.dependency_overrides[store_connection] = lambda: conn
+        app.dependency_overrides[store_connection] = borrowed(conn)
         return answer.status_code, counter.executed
 
     user, key = uuid4(), uuid4()

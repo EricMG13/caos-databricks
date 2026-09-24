@@ -12,14 +12,19 @@ single-actor release under invariant 5.
    pack ceiling plus multipart overhead (else 413 `SOURCE_TOO_LARGE`).
 2. Key, visibility, global role and the WRITER floor -- so a stranger's pack
    is never parsed, let alone extracted.
-3. The standing read's transaction is closed, one of `ADMISSION_SLOTS` is
-   waited for (N5), then the form is parsed with the stream held to its
-   declared length: only file parts named `document`, each filename
-   `BoundaryText` of at most 255 characters and not blank.
-4. The receipt is looked up for the pack's digest and a replay answers without
-   extracting; otherwise `prepare_pack` extracts (the §47 child for a PDF) and
-   `put_pack` uploads the documents, with no transaction open and no case lock
-   or chain head held (ED-5).
+3. The standing read's connection is closed (W3), then the form is received
+   whole, spooled to disk, with the stream held to its declared length and the
+   edge's body deadline: only file parts named `document`, at most
+   `max_documents` of them (else `SOURCE_TOO_LARGE`), each filename
+   `BoundaryText` of at most 255 characters and not blank. Only then is one of
+   `ADMISSION_SLOTS` waited for (N5), so a pack still arriving holds no slot
+   and an admission waiting holds no connection, and only with the slot are
+   the documents read into memory.
+4. A connection of the admission's own is opened; the receipt is looked up for
+   the pack's digest and a replay answers without extracting; otherwise
+   `prepare_pack` extracts (the §47 child for a PDF) and `put_pack` uploads
+   the documents, with no transaction open and no case lock or chain head
+   held (ED-5).
 5. One governed unit: `admit_prepared`, `SOURCES_ADMITTED` and the receipt.
    A refusal there commits no row; blobs already put are content-addressed
    orphans, kept by design -- deleting governed bytes is the workspace
@@ -37,8 +42,8 @@ from uuid import UUID, uuid4
 import psycopg
 from anyio import move_on_after, sleep
 from fastapi import APIRouter, Depends, Request, Response
-from starlette.datastructures import UploadFile
-from starlette.exceptions import HTTPException
+from starlette.datastructures import FormData, UploadFile
+from starlette.formparsers import MultiPartException, MultiPartParser
 from starlette.types import Message, Receive
 
 from caos.api.commands._request import (
@@ -49,7 +54,14 @@ from caos.api.commands._request import (
     json_body,
     require_case_writer,
 )
-from caos.api.deps import IDENTITY_FIRST, Blobs, Caller, CasePath, Store
+from caos.api.deps import (
+    IDENTITY_FIRST,
+    Blobs,
+    Caller,
+    CasePath,
+    Store,
+    store_connection,
+)
 from caos.api.identity import Actor, GlobalRole
 from caos.api.wire import TITLE_CHARS, CaseCreated, CreateCase, SourcesAdmitted
 from caos.boundary_text import BoundaryText
@@ -81,13 +93,15 @@ DOCUMENT_PART = "document"
 FILENAME_CHARS = 255
 MULTIPART_OVERHEAD_BYTES = 1024 * 1024
 MAX_UPLOAD_BYTES = DEFAULT_LIMITS.max_pack_bytes + MULTIPART_OVERHEAD_BYTES
-# How many admissions hold a pack in this process at once (N5). Each holds its
-# documents twice -- spooled by the form parser and read into memory -- and
-# then their extraction, up to `max_pack_bytes` and `max_pack_tokens`, in the
-# one App process that also runs the worker. Past this an admission waits for
-# a slot before a byte of its pack is read, so the queue holds requests, not
-# packs. Writer-only: identity, the envelope, the key and WRITER standing are
-# answered before a slot is asked for.
+# How many admissions hold a pack in memory in this process at once (N5).
+# Each holds its documents read into memory and then their extraction, up to
+# `max_pack_bytes` and `max_pack_tokens`, in the one App process that also
+# runs the worker. An admission receives its pack to disk first and then waits
+# for a slot (W3): a slot taken before the body let two stalled uploads hold
+# both, with no deadline, while every other writer's complete pack waited and
+# was refused -- so the queue holds packs on disk, never in memory.
+# Writer-only: identity, the envelope, the key and WRITER standing are
+# answered before a byte of the pack is read.
 ADMISSION_SLOTS = 2
 _SLOTS = threading.BoundedSemaphore(ADMISSION_SLOTS)
 # How often a waiting admission asks again. A thread semaphore polled from the
@@ -175,15 +189,87 @@ def _upload_envelope(request: Request) -> int:
 def _release_read(
     _standing: Annotated[Standing, Depends(require_case_writer)], conn: Store
 ) -> None:
-    """End the standing read's transaction: parsing and extraction hold none."""
-    rollback_or_close(conn)
+    """End the standing read's connection, not only its transaction (W3):
+    receiving the pack, waiting for a slot and extracting hold none, and the
+    admission's unit opens its own once it has a slot (`admit_sources`)."""
+    conn.close()
+
+
+class _PackParser(MultiPartParser):
+    """Starlette's multipart parser, holding a pack on disk rather than in
+    memory, and counting its documents.
+
+    Every part is spooled to a temporary file from its first bytes: a pack is
+    received before its admission waits for a slot (W3), so an admission
+    waiting holds its documents on disk and N5's bound on what admissions hold
+    in memory -- `ADMISSION_SLOTS` packs -- still stands. (A size of `0` is
+    Python's "never roll over", so the bound is one byte.)
+
+    And a part past `max_documents` is `SOURCE_TOO_LARGE` the moment it ends
+    (N2). CF-075 gave the parser one file past the ceiling and counted the
+    parsed parts, which named only a pack exactly one over: two over, the
+    parser's own `max_files` answered first, with the generic refusal every
+    malformed body gets. A part ends before the next one's headers are read,
+    so this answers ahead of `max_files` however many more follow.
+    """
+
+    spool_max_size = 1
+
+    def on_part_end(self) -> None:
+        super().on_part_end()
+        if len(self.items) > DEFAULT_LIMITS.max_documents:
+            raise Refusal(RefusalCode.SOURCE_TOO_LARGE)
+
+
+async def _admission_form(
+    request: Request,
+    declared: Annotated[int, Depends(_upload_envelope)],
+    _released: Annotated[None, Depends(_release_read)],
+) -> AsyncIterator[list[tuple[BoundaryText, UploadFile]]]:
+    """The pack's named document parts, in part order, received whole from a
+    stream held to its declared length -- before any slot is asked for (W3),
+    so a pack still arriving holds none. The edge's body deadline bounds how
+    long it may take (`caos.api.edge.BODY_GRACE_SECONDS`). Every part's file
+    is closed once the admission has answered, whatever it answered."""
+    parser = _PackParser(
+        request.headers,
+        Request(request.scope, _bounded(request.receive, declared)).stream(),
+        max_files=DEFAULT_LIMITS.max_documents + 1,
+        max_fields=0,
+    )
+    try:
+        form = await parser.parse()
+    except (MultiPartException, ValueError):
+        raise Refusal(RefusalCode.REQUEST_INVALID) from None
+    try:
+        yield _named_parts(form)
+    finally:
+        await form.close()
+
+
+def _named_parts(form: FormData) -> list[tuple[BoundaryText, UploadFile]]:
+    """Only file parts named `document`, each filename `BoundaryText` of at
+    most 255 characters and not blank; at least one of them (at most
+    `max_documents` is `_PackParser`'s to refuse)."""
+    parts = []
+    for name, part in form.multi_items():
+        if name != DOCUMENT_PART or not isinstance(part, UploadFile):
+            raise Refusal(RefusalCode.REQUEST_INVALID)
+        filename = BoundaryText.of(part.filename or "", limit=FILENAME_CHARS)
+        if not filename.value.strip():
+            raise Refusal(RefusalCode.BOUNDARY_TEXT_INVALID)
+        parts.append((filename, part))
+    if not parts:
+        raise Refusal(RefusalCode.SOURCE_PACK_EMPTY)
+    return parts
 
 
 async def _admission_slot(
-    _released: Annotated[None, Depends(_release_read)],
+    _parts: Annotated[list[tuple[BoundaryText, UploadFile]], Depends(_admission_form)],
 ) -> AsyncIterator[None]:
     """One of `ADMISSION_SLOTS`, taken once the caller is known to be a writer
-    and held until the admission has answered, whatever it answered.
+    and its whole pack has arrived (W3), and held until the admission has
+    answered, whatever it answered.
 
     N5's remainder (F207): the wait is bounded by `ADMISSION_WAIT_SECONDS`,
     after which this request refuses the existing transient
@@ -205,43 +291,11 @@ async def _admission_slot(
 
 
 async def _admission_documents(
-    request: Request,
-    declared: Annotated[int, Depends(_upload_envelope)],
-    _released: Annotated[None, Depends(_release_read)],
+    parts: Annotated[list[tuple[BoundaryText, UploadFile]], Depends(_admission_form)],
     _slot: Annotated[None, Depends(_admission_slot)],
 ) -> list[Document]:
-    """The pack's documents, in part order, from a stream held to its length.
-
-    Parsed with one file past the ceiling (CF-075): the parser's own
-    `max_files` answers a generic `REQUEST_INVALID` the instant it is
-    exceeded, indistinguishable from any other malformed multipart body. One
-    extra slot lets a pack exactly at the ceiling parse whole, so the count
-    below can answer the specific `SOURCE_TOO_LARGE` instead.
-    """
-    bounded = Request(request.scope, _bounded(request.receive, declared))
-    try:
-        form = await bounded.form(
-            max_files=DEFAULT_LIMITS.max_documents + 1, max_fields=0
-        )
-    except (HTTPException, ValueError):
-        raise Refusal(RefusalCode.REQUEST_INVALID) from None
-    try:
-        parts = form.multi_items()
-        if len(parts) > DEFAULT_LIMITS.max_documents:
-            raise Refusal(RefusalCode.SOURCE_TOO_LARGE)
-        documents = []
-        for name, part in parts:
-            if name != DOCUMENT_PART or not isinstance(part, UploadFile):
-                raise Refusal(RefusalCode.REQUEST_INVALID)
-            filename = BoundaryText.of(part.filename or "", limit=FILENAME_CHARS)
-            if not filename.value.strip():
-                raise Refusal(RefusalCode.BOUNDARY_TEXT_INVALID)
-            documents.append(Document(filename, await part.read()))
-    finally:
-        await form.close()
-    if not documents:
-        raise Refusal(RefusalCode.SOURCE_PACK_EMPTY)
-    return documents
+    """The pack's documents in memory, read only once a slot is held (N5)."""
+    return [Document(filename, await part.read()) for filename, part in parts]
 
 
 def _bounded(receive: Receive, declared: int) -> Receive:
@@ -268,7 +322,7 @@ def admit_sources(  # noqa: PLR0913 -- decision 2's dependency order, one per st
     key: Key,
     documents: Annotated[list[Document], Depends(_admission_documents)],
     case_id: CasePath,
-    conn: Store,
+    conn: Annotated[StoreConnection, Depends(store_connection, use_cache=False)],
     blobs: Blobs,
 ) -> Response:
     listing = [

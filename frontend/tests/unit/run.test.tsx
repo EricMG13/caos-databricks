@@ -624,6 +624,42 @@ describe("Run", () => {
     }
   });
 
+  // W4: the question id is the one default the form writes that a caller
+  // could not guess the shape of, so it starts as an id the vendor's `RQ-*`
+  // rule accepts rather than an empty one refused however the rest reads.
+  test("test_the_brief_forms_question_id_starts_as_an_id_the_vendor_accepts", async () => {
+    const run = running.body.run!;
+    const researchRun = {
+      ...run,
+      nodes: [
+        ...run.nodes,
+        {
+          route_node_id: "CP-DR",
+          module_id: "CP-DR",
+          module_name: "Deep research",
+          stage: 99,
+          state: "RUNNABLE" as NodeState,
+          waiting_on: [],
+          awaiting_gate: false,
+          gate_verdict: null,
+          gate_reason: null,
+        },
+      ],
+    };
+    const doc = withActions({ ...running, body: { ...running.body, run: researchRun } }, [
+      { action: "PIN_RUN_INPUT", refusal: null },
+    ]);
+    const fetchSpy = vi.fn().mockResolvedValue(jsonResponse(doc));
+    vi.stubGlobal("fetch", fetchSpy);
+    try {
+      const { container } = mount(doc);
+      const field = container.querySelector<HTMLInputElement>('[data-field="question_id"]');
+      expect(field?.value).toMatch(/^RQ-[A-Za-z0-9-]{1,40}$/);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   // A non-research route shows no brief fields at all, and the field the
   // form does not render cannot be filled in and sent by mistake.
   test("test_an_ordinary_route_shows_no_brief_fields_and_sends_a_null_research", async () => {

@@ -131,7 +131,12 @@ def report_actions(
     return [
         _view(
             _A.SAVE_REVISION,
-            [*writer, (not filing.head, _C.COMMAND_EXPECTATION_STALE)],
+            [
+                *writer,
+                (not filing.head, _C.COMMAND_EXPECTATION_STALE),
+                # W5: a frozen head takes no draft until it is filed.
+                (filing.frozen and not filing.filed, _C.DELIVERABLE_ALREADY_FROZEN),
+            ],
         ),
         _view(
             _A.SIGN_OPINION,
