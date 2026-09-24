@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from pathlib import Path
 from threading import Barrier, Event
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from canonical_fixtures import (
@@ -51,6 +51,7 @@ from caos.store.runs import (
     start_run,
 )
 from caos.store.work import (
+    MAX_QUEUED_RUNS_PER_ACTOR,
     Lease,
     claim_run,
     enqueue_run,
@@ -319,6 +320,53 @@ def test_two_successors_for_one_blocked_run_commit_one(empty_database: str) -> N
         assert rows == [(winners[0],)]
         counted = conn.execute("SELECT count(*) FROM runs").fetchone()
         assert counted == (2,), "the loser inserted nothing"
+
+
+def test_one_actor_racing_past_the_queue_cap_queues_exactly_the_cap(
+    empty_database: str,
+) -> None:
+    """N15 (D39): the per-actor cap is counted under a per-actor lock held to
+    commit. Each run here is in a case of its own, so no case or run lock
+    orders the racers: without the actor's lock each would count the same
+    committed rows and all would pass. Exactly the cap commits; every other
+    racer is refused `QUEUED_RUNS_LIMIT_REACHED` and wrote nothing."""
+    racers = MAX_QUEUED_RUNS_PER_ACTOR + 3
+    actor = uuid4()
+    with connect(empty_database) as conn:
+        apply_schema(conn)
+        run_ids = [
+            start_run(conn, create_case(conn, BoundaryText.of(f"Issuer {n}")))
+            for n in range(racers)
+        ]
+        conn.commit()
+    start = Barrier(racers)
+
+    def queue(run_id: UUID) -> bool | RefusalCode:
+        with connect(empty_database) as conn:
+            start.wait(5)
+            try:
+                queued = enqueue_run(conn, run_id, actor_id=actor)
+            except Refusal as refusal:
+                conn.rollback()
+                return refusal.code
+            conn.commit()
+            return queued
+
+    with ThreadPoolExecutor(max_workers=racers) as pool:
+        outcomes = list(pool.map(queue, run_ids))
+
+    assert outcomes.count(True) == MAX_QUEUED_RUNS_PER_ACTOR, outcomes
+    assert outcomes.count(RefusalCode.QUEUED_RUNS_LIMIT_REACHED) == 3, outcomes
+    with connect(empty_database) as conn:
+        assert conn.execute(
+            "SELECT count(*), count(*) FILTER (WHERE requested_by = %s) FROM run_work",
+            (actor,),
+        ).fetchone() == (MAX_QUEUED_RUNS_PER_ACTOR, MAX_QUEUED_RUNS_PER_ACTOR)
+        # Nobody's queue is anybody else's: a run queued with no actor, as a
+        # direct caller or Cancel queues one, counts against no one.
+        spare = start_run(conn, create_case(conn, BoundaryText.of("Spare")))
+        assert enqueue_run(conn, spare) is True
+        conn.commit()
 
 
 # -- The lease fence (brief 4.3 D3; interleavings I2-I4, I7, I8, I12) --------

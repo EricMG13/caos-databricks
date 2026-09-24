@@ -208,6 +208,9 @@ CLEARS: Mapping[RefusalCode, str] = {
     _C.RUN_INPUT_NOT_PINNED: "Pin the run input first.",
     _C.RUN_ALREADY_STARTED: "Nothing; the run is already started.",
     _C.RUN_NOT_STOPPED: "Retry only a stopped run.",
+    _C.QUEUED_RUNS_LIMIT_REACHED: (
+        "Wait for one of your queued or running runs to end, or cancel one."
+    ),
     _C.ROUTE_NOT_ENABLED: "Select a route the adapter executes.",
     _C.COMMAND_EXPECTATION_STALE: "Re-read the run and act on what it shows.",
     _C.METHODOLOGY_INPUT_INVALID: "Correct the calculation inputs.",

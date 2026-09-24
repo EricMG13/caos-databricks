@@ -30,6 +30,18 @@ from caos.store.outcomes import require_idle
 # call deadlines (`caos.provider.TIMEOUT_SECONDS`, 240 s since MX-4).
 LEASE_SECONDS = 600
 MAX_WORKER_BYTES = 128
+# N15 (D39): the most runs one actor may hold queued or in a worker's hands at
+# once. A run is driven one node at a time and holds a worker while it does,
+# so a deeper queue buys an actor nothing but other actors' waiting; four
+# covers a small batch (one issuer across a few pathways) at once. Each place
+# also commits up to one run ceiling of spend, so an actor's outstanding
+# exposure is bounded at four ceilings; aggregate spend limits are the AI
+# Gateway's, an enterprise setting, and not the host's.
+MAX_QUEUED_RUNS_PER_ACTOR = 4
+# The class of the advisory lock one actor's queue writes are counted under
+# (the two-key form, a space that never overlaps a one-key lock such as
+# `apply_schema`'s). Arbitrary and permanent; the actor is the second key.
+_ACTOR_QUEUE_LOCK = 0x0CA0_0015
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,17 +57,59 @@ class Lease:
     seconds: int = LEASE_SECONDS
 
 
-def enqueue_run(conn: StoreConnection, run_id: UUID) -> bool:
-    """Queue a RUNNING run once. Returns whether this call queued it."""
+def enqueue_run(
+    conn: StoreConnection, run_id: UUID, *, actor_id: UUID | None = None
+) -> bool:
+    """Queue a RUNNING run once. Returns whether this call queued it.
+
+    `actor_id` is who asked (N15): the place is theirs, and one past
+    `MAX_QUEUED_RUNS_PER_ACTOR` refuses `QUEUED_RUNS_LIMIT_REACHED` with
+    nothing written, counted under that actor's lock (`_lock_queue_of`) so two
+    requests cannot both take the last place. A run already queued answers
+    False first, as it always has. None holds no place: a direct caller, or a
+    run Cancel queues only to end it in the same unit.
+    """
     if lock_run(conn, run_id) is not RunStatus.RUNNING:
         raise Refusal(RefusalCode.RUN_NOT_RUNNING)
-    return bool(
+    _lock_queue_of(conn, actor_id)
+    queued = conn.execute(
+        "INSERT INTO run_work (run_id, state, requested_by)"
+        " SELECT %(run)s, 'QUEUED', %(actor)s"
+        " WHERE %(actor)s::uuid IS NULL OR (SELECT count(*) FROM run_work"
+        "   WHERE requested_by = %(actor)s AND state IN ('QUEUED', 'CLAIMED'))"
+        "   < %(cap)s"
+        " ON CONFLICT (run_id) DO NOTHING",
+        {"run": run_id, "actor": actor_id, "cap": MAX_QUEUED_RUNS_PER_ACTOR},
+    ).rowcount
+    if not queued and actor_id is not None:
+        # Nothing inserted: the run's own row (already started), or the cap.
+        _refuse_if_full(
+            conn.execute(
+                "SELECT 1 FROM run_work WHERE run_id = %s", (run_id,)
+            ).fetchone()
+            is None
+        )
+    return bool(queued)
+
+
+def _lock_queue_of(conn: StoreConnection, actor_id: UUID | None) -> None:
+    """Serialise one actor's queue writes until the caller's commit (N15).
+
+    Taken in a statement of its own, before the count: under READ COMMITTED
+    the counting statement's snapshot then includes whatever the previous
+    holder committed. Always after the case and run locks, and nothing is
+    locked after it, so it adds no cycle to the lock order.
+    """
+    if actor_id is not None:
         conn.execute(
-            "INSERT INTO run_work (run_id, state) VALUES (%s, 'QUEUED')"
-            " ON CONFLICT (run_id) DO NOTHING",
-            (run_id,),
-        ).rowcount
-    )
+            "SELECT pg_advisory_xact_lock(%s::integer, hashtext(%s))",
+            (_ACTOR_QUEUE_LOCK, str(actor_id)),
+        )
+
+
+def _refuse_if_full(full: bool) -> None:
+    if full:
+        raise Refusal(RefusalCode.QUEUED_RUNS_LIMIT_REACHED)
 
 
 def claim_run(
@@ -237,20 +291,39 @@ def require_resendable(
         raise Refusal(RefusalCode.RUN_CANCEL_REQUESTED)
 
 
-def requeue_run(conn: StoreConnection, run_id: UUID) -> bool:
+def requeue_run(
+    conn: StoreConnection, run_id: UUID, *, actor_id: UUID | None = None
+) -> bool:
     """Retry a stopped RUNNING run with no cancel requested. Returns whether this
-    call requeued it."""
+    call requeued it.
+
+    The place is then `actor_id`'s, under the same cap and lock as
+    `enqueue_run` (N15); a run that is not stopped answers False first.
+    """
     if lock_run(conn, run_id) is not RunStatus.RUNNING:
         raise Refusal(RefusalCode.RUN_NOT_RUNNING)
-    return bool(
-        conn.execute(
-            "UPDATE run_work SET state = 'QUEUED', stop_code = NULL,"
-            " requested_at = now()"
-            " WHERE run_id = %s AND state = 'STOPPED'"
-            " AND cancel_requested_at IS NULL",
-            (run_id,),
-        ).rowcount
-    )
+    _lock_queue_of(conn, actor_id)
+    requeued = conn.execute(
+        "UPDATE run_work SET state = 'QUEUED', stop_code = NULL,"
+        " requested_at = now(), requested_by = %(actor)s"
+        " WHERE run_id = %(run)s AND state = 'STOPPED'"
+        " AND cancel_requested_at IS NULL"
+        " AND (%(actor)s::uuid IS NULL OR (SELECT count(*) FROM run_work"
+        "   WHERE requested_by = %(actor)s AND state IN ('QUEUED', 'CLAIMED'))"
+        "   < %(cap)s)",
+        {"run": run_id, "actor": actor_id, "cap": MAX_QUEUED_RUNS_PER_ACTOR},
+    ).rowcount
+    if not requeued and actor_id is not None:
+        # Nothing moved: a run that is not stopped, or the cap.
+        _refuse_if_full(
+            conn.execute(
+                "SELECT 1 FROM run_work WHERE run_id = %s AND state = 'STOPPED'"
+                " AND cancel_requested_at IS NULL",
+                (run_id,),
+            ).fetchone()
+            is not None
+        )
+    return bool(requeued)
 
 
 def request_cancel(conn: StoreConnection, run_id: UUID) -> bool:
