@@ -99,7 +99,7 @@ from caos.methodology.verification import (
     verify_owner_restrictions,
 )
 from caos.provider import CompletionProvider, reported_charge, resend_checked
-from caos.refusals import Refusal, RefusalCode
+from caos.refusals import Refusal, RefusalCode, RunRefusal
 from caos.store import StoreConnection, connect
 from caos.store.budget import reserved_for
 from caos.store.lakebase import store_url
@@ -268,13 +268,7 @@ def execute_handoff(
         raise Refusal(RefusalCode.PROVIDER_RESPONSE_INVALID)
 
     with execution_reads(conn):
-        check_attempt(
-            conn,
-            attempt_id=attempt,
-            run_id=assignment.run_id,
-            route_node_id=route_node_id,
-        )
-        _stored_identity(conn, assignment, bundle, adapter=adapter)
+        _run_still_holds(conn, assignment, bundle, adapter=adapter)
         markdown, record = _answer(
             conn,
             bundle,
@@ -293,6 +287,29 @@ def execute_handoff(
         generation_id=generation,
         diagnostic_sha256=diagnostic,
     )
+
+
+def _run_still_holds(
+    conn: StoreConnection, assignment: Assignment, bundle: Bundle, *, adapter: str
+) -> None:
+    """The post-call unit's run checks -- the attempt, the pin, live authority
+    -- as `replay_billed` makes them. A refusal here is the run's, not the
+    answer's (R24-06), and says so by its class."""
+    code: RefusalCode | None = None
+    try:
+        check_attempt(
+            conn,
+            attempt_id=assignment.attempt_id,
+            run_id=assignment.run_id,
+            route_node_id=assignment.node.route_node_id,
+        )
+        _stored_identity(conn, assignment, bundle, adapter=adapter)
+    except Refusal as refused:
+        code = refused.code
+    # Raised outside the handler, so the refusal it replaces does not ride
+    # along as context: the code is the whole of what travels.
+    if code is not None:
+        raise RunRefusal(code)
 
 
 def _still_resendable(conn: StoreConnection, assignment: Assignment) -> None:

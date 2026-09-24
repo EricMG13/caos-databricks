@@ -55,7 +55,7 @@ from caos.methodology.canonical import (
 from caos.methodology.invocation import named_objects
 from caos.methodology.verification import AcceptedRow
 from caos.pricing import ModelPrice, bills_at, priced_request, worst_case
-from caos.refusals import Refusal, RefusalCode
+from caos.refusals import Refusal, RefusalCode, RunRefusal
 from caos.store import StoreConnection
 from caos.store.budget import ceiling_of, reserve
 from caos.store.gates import execution_input
@@ -645,8 +645,10 @@ def _run_node(  # noqa: PLR0913 -- one node of one run, keyword-only
         refused = refusal
     if refused is not None and refused.code is not RefusalCode.HANDOFF_BLOCKED:
         # A recorded call's answer is explained once, so no retry replays it
-        # (D7); an attempt with no recorded call writes nothing.
-        _explain_live(conn, attempt_id, refused, lease)
+        # (D7); an attempt with no recorded call writes nothing, and a refusal
+        # about the run is no explanation of the answer (R24-06).
+        if not isinstance(refused, RunRefusal):
+            _explain_live(conn, attempt_id, refused, lease)
         raise refused
     if result is None:
         _end_blocked(
