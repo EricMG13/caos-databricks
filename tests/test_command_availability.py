@@ -617,3 +617,26 @@ def test_a_run_with_no_revision_offers_its_first_save_and_nothing_else() -> None
         for view in report_actions(GlobalRole.READER, Standing.ADMIN, None)
     }
     assert below == {"NOT_AUTHORISED"}
+
+
+def test_a_frozen_head_offers_no_save_until_it_is_filed() -> None:
+    """W5: a draft saved over a frozen, unfiled head supersedes it (CF-026),
+    and filing it is then refused as stale. The save is shown refused with
+    the code its commit answers until the frozen revision is filed, and
+    offered again once it is."""
+
+    def save_on(*, frozen: bool, filed: bool) -> str | None:
+        facts = FilingFacts(
+            signed=frozen,
+            frozen=frozen,
+            filed=filed,
+            actor_signed=False,
+            actor_froze=False,
+            head=True,
+        )
+        [save, *_] = report_actions(GlobalRole.ANALYST, Standing.WRITER, facts)
+        return save.refusal and save.refusal.code
+
+    assert save_on(frozen=False, filed=False) is None
+    assert save_on(frozen=True, filed=False) == "DELIVERABLE_ALREADY_FROZEN"
+    assert save_on(frozen=True, filed=True) is None
