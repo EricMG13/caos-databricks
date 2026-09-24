@@ -66,7 +66,7 @@ It stops at the first step that fails and writes `docs/rebuild/runs/<today>/ente
 
 ```bash
 uv run pre-commit run --all-files
-git add -A && git commit -m "Enterprise deploy: E1-E9 against <profile>, D17 recorded"
+git add -A && git commit -m "Enterprise deploy: E1-E10 against <profile>, D17 recorded"
 ```
 
 Do not push unless told.
