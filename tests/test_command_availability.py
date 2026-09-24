@@ -507,6 +507,40 @@ def test_save_revision_is_judged_against_the_runs_head() -> None:
     assert save.refusal.code == "COMMAND_EXPECTATION_STALE"
 
 
+def test_sign_freeze_and_file_are_each_judged_against_the_runs_head() -> None:
+    """CF-026: the route refuses sign, freeze and file of a superseded
+    revision before any of the three acts on it, under exactly the code
+    `save` already answers a stale draft with, so the Report shows the same
+    thing whatever state the superseded revision was otherwise in."""
+    for facts in (
+        FilingFacts(
+            signed=False,
+            frozen=False,
+            filed=False,
+            actor_signed=False,
+            actor_froze=False,
+            head=False,
+        ),
+        # Even a fully filed revision is refused this way once superseded --
+        # the stale check runs first, ahead of every filing-state check.
+        FilingFacts(
+            signed=True,
+            frozen=True,
+            filed=True,
+            actor_signed=False,
+            actor_froze=False,
+            head=False,
+        ),
+    ):
+        judged = {
+            view.action: view.refusal and view.refusal.code
+            for view in report_actions(GlobalRole.ANALYST, Standing.APPROVER, facts)
+        }
+        assert judged[A.SIGN_OPINION] == "COMMAND_EXPECTATION_STALE"
+        assert judged[A.FREEZE_DELIVERABLE] == "COMMAND_EXPECTATION_STALE"
+        assert judged[A.FILE_DELIVERABLE] == "COMMAND_EXPECTATION_STALE"
+
+
 def test_a_run_with_no_revision_offers_its_first_save_and_nothing_else() -> None:
     """No revision saved: the save needs none, and the other three name one
     their command would not find. A save the run cannot derive is refused with

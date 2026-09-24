@@ -330,6 +330,33 @@ def test_a_freeze_against_a_digest_that_is_not_the_revisions_refuses(
     assert answer.json()["code"] == "DELIVERABLE_MOVED_SINCE_SIGNING", answer.text
 
 
+def test_a_superseded_revision_refuses_signature_freeze_and_filing(
+    filing_client: TestClient, lite: _Harness
+) -> None:
+    """CF-026: a revision that is no longer the run's head must not be signed,
+    frozen or filed, even though its stored digest still matches exactly what
+    the caller reviewed. `save` already refuses a stale draft this way
+    (`COMMAND_EXPECTATION_STALE`); the same code is reused here because the
+    shape is the same -- the actor's expectation of what is current no longer
+    holds."""
+    superseded = _save(lite)
+    stale_digest = _digest(lite, superseded)
+    _save(lite)  # a fresh head; `superseded` is no longer the run's newest
+
+    for path in (
+        f"{_case(lite)}/revisions/{superseded}/signature",
+        f"{_case(lite)}/revisions/{superseded}/freeze",
+        f"{_case(lite)}/revisions/{superseded}/filing",
+    ):
+        answer = _post(
+            filing_client, path, _approver(lite), {"payload_sha256": stale_digest}
+        )
+        assert (answer.status_code, answer.json()["code"]) == (
+            409,
+            "COMMAND_EXPECTATION_STALE",
+        ), answer.text
+
+
 def test_a_filing_against_a_digest_that_is_no_longer_the_frozen_one_refuses(
     filing_client: TestClient, lite: _Harness
 ) -> None:
@@ -417,6 +444,12 @@ def test_every_new_command_replays_its_receipt_and_commits_nothing_twice(
 
 
 _FILING = ("SAVE_REVISION", "SIGN_OPINION", "FREEZE_DELIVERABLE", "FILE_DELIVERABLE")
+# The three-actor progression below walks sign/freeze/file on one fixed
+# revision; SAVE_REVISION is deliberately not among them there because sending
+# it while it is offered would supersede that same revision (CF-026) and stale
+# every step after it. Its own offered/refused parity is walked separately,
+# once the chain is filed and no further state on `revision` is needed.
+_SIGNING = ("SIGN_OPINION", "FREEZE_DELIVERABLE", "FILE_DELIVERABLE")
 _PATH = {
     "SIGN_OPINION": "signature",
     "FREEZE_DELIVERABLE": "freeze",
@@ -466,10 +499,10 @@ def test_every_filing_control_the_report_shows_answers_as_it_was_shown(
     every state the chain distinguishes, judged by the document read
     immediately before each command is sent.
 
-    All four, the save included: the first save below is made at the head and
-    succeeds, and every later one is shown the revision it superseded, so the
-    walk holds both the save that is offered and the one refused
-    `COMMAND_EXPECTATION_STALE`."""
+    All three the walk touches are exercised on one fixed revision, and once
+    at the end, CF-026's own control -- SAVE_REVISION is offered while it is
+    still the head and refused, with the code `save` has always answered a
+    stale draft, once it is superseded."""
     signer, freezer, filer = (_approver(lite) for _ in range(3))
     revision = _save(lite)
 
@@ -482,24 +515,45 @@ def test_every_filing_control_the_report_shows_answers_as_it_was_shown(
             assert answer.json()["code"] == shown, (action, answer.text)
 
     # Unsigned: freeze and file are refused, the sign is not.
-    for action in _FILING:
+    for action in _SIGNING:
         walk(freezer, action)
     walk(signer, "SIGN_OPINION")
     # Signed: the signer is offered neither the freeze nor the filing.
-    for action in _FILING:
+    for action in _SIGNING:
         walk(signer, action)
     walk(freezer, "FREEZE_DELIVERABLE")
     # Frozen: the signer and the freezer are refused the filing; a third is not.
     for actor in (signer, freezer, filer):
         walk(actor, "FILE_DELIVERABLE")
     # Filed: every one of the three is refused, each with its own code.
-    for action in _FILING:
+    for action in _SIGNING:
         walk(filer, action)
     # And a member below the floor is refused every one of them.
     reader = member(lite.conn, lite.case_id, Standing.READER)
     assert set(_shown(filing_client, lite, revision, reader).values()) == {
         "NOT_AUTHORISED"
     }
+
+    # CF-026: filed and still the run's head, a save is offered and succeeds.
+    writer = member(lite.conn, lite.case_id, Standing.WRITER)
+    assert _shown(filing_client, lite, revision, writer)["SAVE_REVISION"] is None
+    superseding = _post(
+        filing_client,
+        f"{_case(lite)}/runs/{lite.run_id}/revisions",
+        writer,
+        {"expected_revision_id": str(revision), "narrative": []},
+    )
+    assert superseding.status_code == 201, superseding.text
+    # Superseded, every one of the three the walk exercised is now shown, and
+    # refused, exactly as a stale save always has been.
+    stale = _shown(filing_client, lite, revision, filer)
+    assert {stale[action] for action in _SIGNING} == {"COMMAND_EXPECTATION_STALE"}
+    for action in _SIGNING:
+        answer = _send(filing_client, lite, revision, filer, action)
+        assert answer.json()["code"] == "COMMAND_EXPECTATION_STALE", (
+            action,
+            answer.text,
+        )
 
 
 def _unsaved(client: TestClient, lite: _Harness, actor: UUID) -> Response:
@@ -627,22 +681,30 @@ def test_each_new_command_meets_its_declared_store_budget(
     counted = _Counting(conn)
     app.dependency_overrides[store_connection] = lambda: counted
     signer, freezer, filer = (_approver(lite) for _ in range(3))
-    revision = _save(lite)
-    digest = _digest(lite, revision)
+    original = _save(lite)
     writer = member(conn, case_id, Standing.WRITER)
     admin = member(conn, case_id, Standing.ADMIN)
     target = member(conn, case_id, Standing.READER)
+
+    # The save below supersedes `original` (CF-026), so sign, freeze and file
+    # are measured on the revision it names, not the one that composed it; its
+    # own cost is measured here, ahead of the loop, for the same reason.
+    counted.executed = 0
+    saved = _post(
+        filing_client,
+        f"{_case(lite)}/runs/{lite.run_id}/revisions",
+        writer,
+        {"expected_revision_id": str(original), "narrative": []},
+    )
+    assert saved.status_code == 201, saved.text
+    assert counted.executed == deliverable.SAVE_IO
+    revision = UUID(saved.json()["revision_id"])
+    digest = saved.json()["payload_sha256"]
 
     # The filing commands each declare their own cost and are held to it
     # exactly, as every section read is: a ceiling shared by four commands let
     # the signature grow from fourteen round trips to sixty unnoticed.
     exact = [
-        (
-            deliverable.SAVE_IO,
-            f"{_case(lite)}/runs/{lite.run_id}/revisions",
-            writer,
-            {"expected_revision_id": str(revision), "narrative": []},
-        ),
         (
             deliverable.SIGN_IO,
             f"{_case(lite)}/revisions/{revision}/signature",

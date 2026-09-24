@@ -84,10 +84,13 @@ from caos.store.members import Standing
 # Signature reads only the revision's chain rows, so it does not. Filing
 # re-proves what it files (FP-04), so it now scales with the route as freeze
 # does; the difference between it and freeze is the filing chain's own rows.
+# Sign, freeze and file each pay one more than they used to (CF-026): `_reviewed`
+# now reads the run's head alongside the revision's own row, so a superseded
+# revision is refused before any of the three acts on it.
 SAVE_IO = 52
-SIGN_IO = 14
-FREEZE_IO = 55
-FILE_IO = 56
+SIGN_IO = 15
+FREEZE_IO = 56
+FILE_IO = 57
 IO_BUDGET = max(SAVE_IO, SIGN_IO, FREEZE_IO, FILE_IO)
 
 _REVISION = "/api/v1/cases/{case_id}/revisions/{revision_id}"
@@ -145,11 +148,16 @@ def _owned_run(conn: StoreConnection, case_id: UUID, run_id: UUID) -> None:
 def _reviewed(
     conn: StoreConnection, case_id: UUID, revision_id: UUID, expected: str
 ) -> UUID:
-    """The revision's run, having proved the caller reviewed its exact bytes.
+    """The revision's run, having proved the caller reviewed its exact bytes
+    and that those bytes are still the run's head (CF-026).
 
-    Invariant 5's half that a route owns: a revision is immutable, so this
-    cannot refuse a revision that moved -- it refuses an actor acting on bytes
-    other than the ones in front of them.
+    Invariant 5's half that a route owns: a revision is immutable, so the
+    digest check cannot refuse a revision that moved -- it refuses an actor
+    acting on bytes other than the ones in front of them. A later save can
+    still supersede it without touching a byte, so the head check below is
+    what catches signing, freezing or filing a superseded revision; it reuses
+    `COMMAND_EXPECTATION_STALE`, the code `save` already gives an actor whose
+    expectation of what is current no longer holds.
     """
     row = conn.execute(
         "SELECT run_id,payload_sha256 FROM deliverable_revisions"
@@ -160,7 +168,10 @@ def _reviewed(
         raise Refusal(RefusalCode.DELIVERABLE_NOT_FOUND)
     if str(row[1]) != expected:
         raise Refusal(RefusalCode.DELIVERABLE_MOVED_SINCE_SIGNING)
-    return UUID(str(row[0]))
+    run_id = UUID(str(row[0]))
+    if _latest(conn, case_id, run_id) != revision_id:
+        raise Refusal(RefusalCode.COMMAND_EXPECTATION_STALE)
+    return run_id
 
 
 @router.post(
