@@ -240,6 +240,24 @@ SUPPRESSIONS = {
     # were a rule code, is already a `noqa` match above (the pattern this
     # file matches none of, per the note above SUPPRESSIONS).
     "complexipy_ignore": re.compile(r"#\s*complexipy\s*:\s*ignore\b", re.IGNORECASE),
+    # A test CI's marker expression (`-m "not live_provider"`) deselects:
+    # it never runs there, so each one is budgeted like a skip (W4).
+    "live_provider": re.compile(r"\bmark\.live_provider\b"),
+}
+# The pytest names each kind above covers, as the module path they resolve
+# to (W4): `from pytest import skip` and a bare call, `import pytest as pt`,
+# or `mark` imported under another name spell one without the prefix the
+# patterns read, so each file's imports are resolved too. Written as tuples
+# so this file matches none of the patterns.
+PYTEST_MODULES = {("pytest",): ("pytest",), ("_pytest", "outcomes"): ("pytest",)}
+PYTEST_NAMES: dict[tuple[str, ...], str] = {
+    ("pytest", "skip"): "skip",
+    ("pytest", "importorskip"): "skip",
+    ("pytest", "mark", "skip"): "skip",
+    ("pytest", "mark", "skipif"): "skip",
+    ("pytest", "xfail"): "xfail",
+    ("pytest", "mark", "xfail"): "xfail",
+    ("pytest", "mark", "live_provider"): "live_provider",
 }
 # A noqa comment scoped to one or more rule codes has each code budgeted
 # individually (FP-11, optional): the aggregate `noqa` count stays put
@@ -1131,16 +1149,86 @@ def _noqa_code_counts(text: str) -> dict[str, int]:
     return counts
 
 
+def _pytest_bindings(tree: ast.Module) -> dict[str, tuple[str, ...]]:
+    """Each name a module binds to pytest or one of its names, by the path
+    it resolves to: `import pytest as pt` binds `pt` to `("pytest",)`, and
+    `from pytest import skip as s` binds `s` to `("pytest", "skip")`."""
+    bound: dict[str, tuple[str, ...]] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            bound.update(_imported(node))
+        elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
+            module = tuple(node.module.split("."))
+            if module in PYTEST_MODULES:
+                bound.update(
+                    {
+                        alias.asname or alias.name: (*module, alias.name)
+                        for alias in node.names
+                    }
+                )
+    return bound
+
+
+def _imported(node: ast.Import) -> dict[str, tuple[str, ...]]:
+    """What one `import` statement binds to pytest: `import pytest [as x]`,
+    `import _pytest.outcomes as x`, or `_pytest` itself for the dotted form."""
+    bound: dict[str, tuple[str, ...]] = {}
+    for alias in node.names:
+        path = tuple(alias.name.split("."))
+        if alias.asname and path in PYTEST_MODULES:
+            bound[alias.asname] = PYTEST_MODULES[path]
+        elif path[0] in ("pytest", "_pytest"):
+            bound[path[0]] = path[:1]
+    return bound
+
+
+def _resolved(node: ast.expr, bound: dict[str, tuple[str, ...]]) -> tuple[str, ...]:
+    """The pytest path a name or attribute chain resolves to, or `()`;
+    `_pytest.outcomes.<name>` is `pytest.<name>`."""
+    if isinstance(node, ast.Name):
+        path = bound.get(node.id, ())
+    elif isinstance(node, ast.Attribute):
+        base = _resolved(node.value, bound)
+        path = (*base, node.attr) if base else ()
+    else:
+        return ()
+    for prefix, module in PYTEST_MODULES.items():
+        if path[: len(prefix)] == prefix:
+            return module + path[len(prefix) :]
+    return path
+
+
+def _pytest_counts(text: str) -> dict[str, int]:
+    """Each use of a pytest name in `PYTEST_NAMES` that the text patterns
+    do not already count: a bare or aliased skip, xfail or marker (W4)."""
+    try:
+        tree = ast.parse(text)
+    except (SyntaxError, ValueError):
+        return {}
+    bound = _pytest_bindings(tree)
+    counts: dict[str, int] = {}
+    for node in ast.walk(tree) if bound else []:
+        if not isinstance(node, ast.Name | ast.Attribute):
+            continue
+        kind = PYTEST_NAMES.get(_resolved(node, bound))
+        if kind is not None and not SUPPRESSIONS[kind].search(ast.unparse(node)):
+            counts[kind] = counts.get(kind, 0) + 1
+    return counts
+
+
 def _measure_suppressions(texts: Iterable[str]) -> dict[str, int]:
-    """`SUPPRESSIONS` and per-code `noqa` counts over a set of file texts,
-    however they were read -- from disk for the working tree, or from git
-    for an earlier commit (FP-11)."""
+    """`SUPPRESSIONS`, per-code `noqa` counts and the pytest names the
+    patterns cannot read over a set of file texts, however they were read
+    -- from disk for the working tree, or from git for an earlier commit
+    (FP-11)."""
     counts = dict.fromkeys(SUPPRESSIONS, 0)
     for text in texts:
         for name, pattern in SUPPRESSIONS.items():
             counts[name] += len(pattern.findall(text))
         for code, found in _noqa_code_counts(text).items():
             counts[code] = counts.get(code, 0) + found
+        for kind, found in _pytest_counts(text).items():
+            counts[kind] += found
     return counts
 
 

@@ -279,6 +279,7 @@ def test_the_suppression_grammar_is_each_tool_s_own() -> None:
             "@mark." + "xfail",
             "@unittest.expected" + "Failure",
             f"    pass  {hash_} complex" + "ipy: ignore",
+            "@pytest.mark." + "live_provider",
         ]
     )
     found = {
@@ -295,6 +296,7 @@ def test_the_suppression_grammar_is_each_tool_s_own() -> None:
         "skip": 7,
         "xfail": 2,
         "complexipy_ignore": 1,
+        "live_provider": 1,
     }
     assert check_gate_config.NOQA_CODE.findall(sample) == ["E501"]
 
