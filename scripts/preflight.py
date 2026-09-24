@@ -41,7 +41,7 @@ if str(REPO) not in sys.path:
 
 # What `_group` answers when the profile cannot list groups: not missing.
 UNKNOWN = object()
-# The bundle's own defaults for the Lakebase names it defaults (N23).
+# The bundle's own defaults for the Lakebase names and the groups (N23, N5).
 _DEFAULTS = bundle_defaults.defaults()
 READ_ONLY = "ENDPOINT_TYPE_READ_ONLY"
 ENDPOINT_READ_ONLY = "a read-only endpoint: the app writes; name the read-write one"
@@ -97,8 +97,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--lakebase-database-id", default=_DEFAULTS["lakebase_database_id"]
     )
-    parser.add_argument("--group-admin", default="caos-admins")
-    parser.add_argument("--group-analyst", default="caos-analysts")
+    parser.add_argument("--group-admin", default=_DEFAULTS["group_admin"])
+    parser.add_argument("--group-analyst", default=_DEFAULTS["group_analyst"])
     parser.add_argument("--price", help="the bundle's model_price value")
     parser.add_argument("--run-ceiling", help="the bundle's run_ceiling value")
     args = parser.parse_args(argv)
