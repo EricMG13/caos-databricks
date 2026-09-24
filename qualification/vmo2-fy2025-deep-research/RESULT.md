@@ -9,7 +9,7 @@ below await the owner's confirmation** before that run.
 ## The set
 
 - Qualification-set digest:
-  `09807efb1a3d5d40680d1a9d0e054333537781d7bb4013ecd7670323f817fd9b`
+  `1881fcf6818e623322b52679268906a624d9ad4b4026c759f74bdcf9435e9bdd`
 - Route: `LITE_CREDIT_22 / LITE_DEEP_RESEARCH` (`CP-0` → `CP-DR`, one
   REQUIRED edge, `decision_scope: SCREENING_ONLY`, terminal deliverable
   `CP-DR`), enabled by `docs/DECISIONS.md` §96 at build `6a5f1050`.

@@ -140,7 +140,7 @@ second permitted attempt; it was not launched again.
 
 - Run `b54bc007-e6c8-4798-b266-e975aa143f5f`; build
   `78c24be4483612e75d9a0809fcb1cb7c2dd5617e669491de13be9c0123e3ff93`;
-  set `a46a1b4f597885e8f6937b47f9da7eba5ec266f4a43818d5f9fa1d42337b87ea`.
+  set `011afb84cd2915e27d3927c938e59e362f020d8307b4c8117648cb36af6d1cb1`.
 - Final evidence `961940c10eabb9589d7a8aedf168a4ed7b4fbe3f749b1a6a6758c45273028dd8`;
   performed `75e303228c1ab10a3be7e8f0de8368e634213d39a26c19fa841127e50620bf79`.
 - Retained database `caos_qualify_f68731cc5b584def9975852b55cb0283`;
@@ -194,7 +194,7 @@ midnight; its `-b` stamp preserves the authorized launch date.
 - Run `802ae485-54a8-4f4c-96c8-2f1cd9f80d2d`; build
   `78c24be4483612e75d9a0809fcb1cb7c2dd5617e669491de13be9c0123e3ff93`;
   unchanged set
-  `a46a1b4f597885e8f6937b47f9da7eba5ec266f4a43818d5f9fa1d42337b87ea`.
+  `011afb84cd2915e27d3927c938e59e362f020d8307b4c8117648cb36af6d1cb1`.
 - Final evidence `5aff20e9bcde08f4ae3dcf0c409150afeb764191edc8152f3e2cf6f183418bef`;
   performed `27fe9ca5706ca2188138e96967e4b9c9402e32b42eb3afe1742d6d58ad7b0fb9`.
 - Retained database `caos_qualify_cc7b22d0e73745f3918abf44cbb9ed6e`;

@@ -375,10 +375,17 @@ def _digested(case: QualificationCase) -> list[object]:
             for expect in case.expects
         ),
     ]
+    # N8/FP-25: every optional field below is tagged with its own name before
+    # its value, not appended bare. Two of the nine were already tagged
+    # (`expects_blocked`, `research_brief`) for exactly this reason --
+    # untagged, a set differing only in which optional field it carries could
+    # digest identically to one that carries a different field of the same
+    # shape. Tagging all nine closes that the same way for the rest.
     if case.subject is not None:
         subject = case.subject
         entry.append(
             [
+                "subject",
                 subject.issuer_id,
                 subject.issuer_name,
                 subject.reporting_period,
@@ -390,6 +397,7 @@ def _digested(case: QualificationCase) -> list[object]:
     if case.forecast is not None:
         entry.append(
             [
+                "forecast",
                 case.forecast.scenario,
                 case.forecast.period_id,
                 sorted([value.name, value.value] for value in case.forecast.values),
@@ -402,37 +410,44 @@ def _digested(case: QualificationCase) -> list[object]:
             ]
         )
     if case.expected_refusal is not None:
-        entry.append(case.expected_refusal.value)
+        entry.append(["expected_refusal", case.expected_refusal.value])
     if case.expects_ready:
-        entry.append(sorted(case.expects_ready))
+        entry.append(["expects_ready", sorted(case.expects_ready)])
     if case.expects_blocked:
         # Tagged, because the same ids appended bare would digest exactly as an
         # `expects_ready` key does -- two opposite sets, one digest.
         entry.append(["expects_blocked", sorted(case.expects_blocked)])
     if case.expects_projection:
         entry.append(
-            sorted(
-                [expect.module_id, expect.field, expect.value]
-                for expect in case.expects_projection
-            )
+            [
+                "expects_projection",
+                sorted(
+                    [expect.module_id, expect.field, expect.value]
+                    for expect in case.expects_projection
+                ),
+            ]
         )
     if case.research_brief is not None:
         entry.append(["research_brief", case.research_brief])
     if case.expects_register:
         entry.append(
-            sorted(
-                [
-                    expect.module_id,
-                    expect.register_id,
-                    # The row key is a set of cell conditions, not a sequence:
-                    # two authors naming the same row in either order name the
-                    # same row, and the digest has to agree with them.
-                    sorted([column, value] for column, value in expect.row_key),
-                    expect.column,
-                    expect.expected,
-                ]
-                for expect in case.expects_register
-            )
+            [
+                "expects_register",
+                sorted(
+                    [
+                        expect.module_id,
+                        expect.register_id,
+                        # The row key is a set of cell conditions, not a
+                        # sequence: two authors naming the same row in either
+                        # order name the same row, and the digest has to
+                        # agree with them.
+                        sorted([column, value] for column, value in expect.row_key),
+                        expect.column,
+                        expect.expected,
+                    ]
+                    for expect in case.expects_register
+                ),
+            ]
         )
     return entry
 

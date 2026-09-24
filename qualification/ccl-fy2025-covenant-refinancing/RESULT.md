@@ -2,7 +2,7 @@
 
 This set is prepared offline for `FULL_CREDIT_32 / COVENANT_REFINANCING`; it
 does not record or claim qualification. Its qualification-set digest is
-`726e28dad1498a56ed6692d09819834c9727ebbd23ec8bac619f31e61ba4ab8a`.
+`7535bd63d52e2d4f1cdd9f3f81fc88864e37ea160b20f624a4e8ce92fb7f0538`.
 
 ## Corpus and key provenance
 
