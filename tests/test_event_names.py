@@ -78,6 +78,7 @@ def test_every_run_event_and_audit_action_maps_to_one_stream_name_or_is_declared
         "RUN_FAILED": "run_terminal",
         "RUN_BLOCKED": "run_terminal",
         "RUN_CANCELLED": "run_terminal",
+        "RUN_PARKED": "run_progress",
     }
     assert STREAM_NAMES["SOURCE_WITHDRAWN"] == "sources_changed"
     assert STREAM_NAMES["GATE_RELEASED:SOURCE_SET"] == "runs_changed"

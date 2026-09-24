@@ -43,6 +43,7 @@ from caos.provider import CompletionProvider
 from caos.refusals import Refusal, RefusalCode
 from caos.store import RunStatus, StoreConnection, apply_schema
 from caos.store import work as work_module
+from caos.store.budget import CEILING_ENV
 from caos.store.runs import run_status
 from caos.store.work import LEASE_SECONDS, Lease, enqueue_run, worker_states
 
@@ -123,6 +124,7 @@ def test_worker_stops_a_refused_run_with_its_code_and_releases_the_lease(
     route: ResolvedRoute,
     bundle: Bundle,
     blobs: BlobStore,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     run = queued_run(case, route, bundle, blobs)
     completions = CanonicalCompletions(run.source_id, quotes=(UNANCHORED,))
@@ -139,6 +141,9 @@ def test_worker_stops_a_refused_run_with_its_code_and_releases_the_lease(
     code = codes[0][0]
     assert work_row(run.conn, run.run_id) == ("STOPPED", code, None, True)
     assert run_status(run.conn, run.run_id) is RunStatus.RUNNING
+    # CF-044: a park otherwise left nothing on stderr for an operator watching
+    # the process to notice by.
+    assert capsys.readouterr().err.strip() == code
     run.conn.rollback()
     assert drive(run, completions) is None, "a stopped run waits for a retry"
     assert len(completions.prompts) == 2
@@ -344,6 +349,30 @@ def test_an_unset_price_says_unset_not_misconfigured(
     # A malformed price is misconfiguration, not absence: the code alone, with
     # no name and nothing of the value.
     monkeypatch.setenv("CAOS_MODEL_PRICE", "a-model/for-the-test,not-a-number")
+
+    assert worker.main() == 2
+    assert capsys.readouterr().err.strip() == "PROVIDER_NOT_CONFIGURED"
+
+
+def test_a_malformed_run_ceiling_refuses_the_worker_at_boot(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """CF-048: `CAOS_RUN_CEILING` used to be read only when a caller started a
+    run, so a value nobody could price sat invisible until then. It is
+    checked first now, before the provider, the store or the bundle, printed
+    as its code alone -- the same shape a malformed `CAOS_MODEL_PRICE` already
+    refuses the worker in."""
+
+    def never(*_args: object, **_kwargs: object) -> object:
+        pytest.fail("no provider, store, bundle or call before the ceiling")
+
+    monkeypatch.setattr(worker, "from_environment", never)
+    monkeypatch.setattr(worker, "connect", never)
+    monkeypatch.setattr(worker, "run_worker", never)
+    # Set so `_report`'s "unset" tag -- which names CAOS_MODEL_PRICE alone,
+    # whichever check actually refused -- does not append to this code.
+    monkeypatch.setenv("CAOS_MODEL_PRICE", "irrelevant: never read")
+    monkeypatch.setenv(CEILING_ENV, "not-a-number")
 
     assert worker.main() == 2
     assert capsys.readouterr().err.strip() == "PROVIDER_NOT_CONFIGURED"
@@ -585,6 +614,40 @@ def test_the_worker_says_what_it_is_doing_and_a_backing_off_worker_says_so(
     assert state.consecutive_faults > 0
 
 
+def test_a_graceful_stop_beats_stopped_not_a_stale_polling_or_working(
+    case: tuple[StoreConnection, UUID],
+    blobs: BlobStore,
+    empty_database: str,
+) -> None:
+    """N37: a standalone worker's last word on a clean stop is STOPPED, a
+    state distinct from POLLING, WORKING and BACKOFF -- not whichever of
+    those it happened to hold when told to stop, which stayed 'fresh' for
+    `WORKER_STALE_AFTER` with nothing to tell it apart from one still going.
+    """
+    conn, _case_id = case
+
+    def never(_conn: StoreConnection, _run_id: UUID, _lease: Lease) -> Execution:
+        pytest.fail("nothing was ever queued to claim")
+
+    assert (
+        run_worker(
+            CONFIG,
+            execution_for=never,
+            stopping=_Clock(limit=1),
+            conn_factory=lambda: psycopg.connect(empty_database, autocommit=False),
+            blobs=blobs,
+        )
+        == 0
+    )
+
+    [state] = worker_states(conn)
+    assert (state.worker_id, state.state, state.fresh) == (
+        "worker-test",
+        "STOPPED",
+        True,
+    )
+
+
 def test_a_store_that_will_not_take_the_beat_does_not_stop_the_worker(
     case: tuple[StoreConnection, UUID],
     route: ResolvedRoute,
@@ -807,8 +870,16 @@ def test_a_parked_run_s_checkpoint_thread_is_forgotten(
     empty_database: str,
 ) -> None:
     """DL-8: the thread holds position only (D6); a run this worker parked
-    leaves no rows behind, and the requeued run re-derives its frontier."""
-    from caos.graph.build import thread_config
+    leaves no rows behind, and the requeued run re-derives its frontier.
+
+    `_forget` must drop the exact thread `run_route` opened (CF-037): bound to
+    the run and the pinned route's own digest, not the run alone. Checked by
+    scanning every checkpoint table for a `thread_id` merely starting with the
+    run's id, whatever it is suffixed with, rather than asserting a specific
+    key is absent -- which nothing having ever written under a guessed key
+    would satisfy just as well as `_forget` actually working.
+    """
+    from caos.graph import checkpoint as checkpoint_module
     from caos.graph.checkpoint import checkpointer, close_checkpointer
 
     run = queued_run(case, route, bundle, blobs)
@@ -833,7 +904,14 @@ def test_a_parked_run_s_checkpoint_thread_is_forgotten(
             "STOPPED",
             "PROVIDER_CALL_INVALID",
         )
-        assert saver.get(thread_config(str(run.run_id))) is None
+        with psycopg.connect(empty_database, autocommit=True) as conn:
+            for table in ("checkpoints", "checkpoint_writes", "checkpoint_blobs"):
+                left = conn.execute(
+                    f"SELECT count(*) FROM {checkpoint_module.SCHEMA}.{table}"
+                    " WHERE thread_id LIKE %s",
+                    (f"{run.run_id}%",),
+                ).fetchone()
+                assert left == (0,), table
     finally:
         close_checkpointer(saver)
 

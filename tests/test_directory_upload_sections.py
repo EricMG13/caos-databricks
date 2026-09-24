@@ -49,6 +49,7 @@ from caos.store.runs import create_case, start_run
 from caos.store.source_sets import (
     snapshot_source_set,
 )
+from caos.store.work import claim_run, enqueue_run, stop
 
 CATALOG_PATH = (
     Path(__file__).resolve().parents[1]
@@ -170,6 +171,34 @@ def test_directory_lists_only_cases_with_live_standing(
         "FULL_CREDIT_32",
         "FULL_CREDIT_ASSESSMENT",
     )
+    assert row.latest_run.stop_code is None
+
+
+def test_the_directory_names_a_parked_run_s_stop_code(
+    client: TestClient, case: tuple[StoreConnection, UUID]
+) -> None:
+    """CF-044: a run a worker parked still reads `status: RUNNING` -- it is
+    recoverable, not ended -- so `stop_code` is the one field that tells a
+    list a run stopped being driven apart from one nobody is touching yet."""
+    conn, case_id = case
+    user = uuid4()
+    grant(conn, case_id=case_id, user_id=user, standing=Standing.READER)
+    run_id = start_run(conn, case_id)
+    conn.commit()
+    enqueue_run(conn, run_id)
+    conn.commit()
+    lease = claim_run(conn, worker=BoundaryText.of("worker-a"), lease_seconds=60)
+    assert lease is not None
+    assert stop(conn, lease, RefusalCode.CONTEXT_OVER_CEILING) is True
+    conn.commit()
+
+    response = client.get(DIRECTORY, headers=_as(user))
+
+    document = DirectoryDocument.model_validate(response.json())
+    [row] = document.body.cases
+    assert row.latest_run is not None
+    assert row.latest_run.status == "RUNNING"
+    assert row.latest_run.stop_code is RefusalCode.CONTEXT_OVER_CEILING
 
 
 def test_the_directory_serves_a_cases_members_only_to_its_administrator(

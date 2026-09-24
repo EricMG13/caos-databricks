@@ -212,7 +212,7 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
     RunSectionDocument: ENVELOPE,
     AnalysisDocument: ENVELOPE,
     RunSummary: frozenset(
-        {"run_id", "status", "created_at", "profile_id", "selection_id"}
+        {"run_id", "status", "created_at", "profile_id", "selection_id", "stop_code"}
     ),
     CaseRow: frozenset(
         (

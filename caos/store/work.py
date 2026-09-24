@@ -182,6 +182,10 @@ def stop(conn: StoreConnection, lease: Lease, code: RefusalCode) -> bool:
     instead (MAX-04): `requeue_run` refuses a run with a recorded cancel, so a
     parked one would sit RUNNING with nothing left to end it. Takes `lock_run`
     first, as every move of a run's status does.
+
+    A genuine park appends `RUN_PARKED` (CF-044): the run itself stays
+    RUNNING, so nothing else would ever say a worker gave up on it, on the
+    stream a watcher tails or in the audit trail read back later.
     """
     if not isinstance(code, RefusalCode):
         raise Refusal(RefusalCode.CALL_OUTCOME_INVALID)
@@ -197,6 +201,8 @@ def stop(conn: StoreConnection, lease: Lease, code: RefusalCode) -> bool:
         return False
     if running and row[0]:
         _end_cancelled(conn, lease.run_id)
+    else:
+        append(conn, lease.run_id, RunEvent.RUN_PARKED)
     return True
 
 
@@ -248,26 +254,30 @@ def requeue_run(conn: StoreConnection, run_id: UUID) -> bool:
 def request_cancel(conn: StoreConnection, run_id: UUID) -> bool:
     """Record a cancel once; end a run no worker holds CANCELLED in this unit.
 
-    A claimed run keeps running: its holder learns of the request from
-    `require_lease` and ends the run itself. Returns whether this call recorded
-    the request or ended the run.
+    A claimed run whose lease is still live keeps running: its holder learns
+    of the request from `require_lease` and ends the run itself. A CLAIMED row
+    whose lease has expired (CF-039) is nobody's -- `claim_run` itself treats
+    it exactly like QUEUED -- so waiting for that holder to act would wait
+    forever; it is ended now instead. Returns whether this call recorded the
+    request or ended the run.
     """
     if lock_run(conn, run_id) is not RunStatus.RUNNING:
         return False
     row = conn.execute(
-        "SELECT state, cancel_requested_at IS NULL FROM run_work"
-        " WHERE run_id = %s FOR UPDATE",
+        "SELECT state, cancel_requested_at IS NULL,"
+        " state = 'CLAIMED' AND lease_expires_at <= clock_timestamp()"
+        " FROM run_work WHERE run_id = %s FOR UPDATE",
         (run_id,),
     ).fetchone()
     if row is None or row[0] == "DONE":
         return False
-    state, unrequested = row
+    state, unrequested, abandoned = row
     if unrequested:
         conn.execute(
             "UPDATE run_work SET cancel_requested_at = now() WHERE run_id = %s",
             (run_id,),
         )
-    if state not in ("QUEUED", "STOPPED"):
+    if state not in ("QUEUED", "STOPPED") and not abandoned:
         return bool(unrequested)
     return _end_cancelled(conn, run_id)
 
@@ -311,7 +321,7 @@ def _require_seconds(seconds: int) -> None:
 # depend on the provider seam; the rule it follows is named here instead, and
 # `tests/test_worker_heartbeat.py` asserts the two stay in that relation.
 WORKER_STALE_AFTER = 300.0
-type WorkerState = Literal["POLLING", "WORKING", "BACKOFF"]
+type WorkerState = Literal["POLLING", "WORKING", "BACKOFF", "STOPPED"]
 
 
 @dataclass(frozen=True, slots=True)

@@ -330,6 +330,30 @@ def test_a_store_read_reports_enabled_pathways_qualified_or_not(
     assert f"store read as of {NOW.isoformat()}" in markdown
 
 
+def test_a_malformed_database_url_refuses_the_pack_without_the_password(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """CF-078: a DSN psycopg's own parser refuses -- bad percent-encoding in
+    the password -- raises `ProgrammingError` quoting the whole connection
+    string, password included. `main`'s unguarded `connect(url)` let that
+    string escape to stderr; it must print the typed code alone instead."""
+    monkeypatch.setenv(
+        "CAOS_DATABASE_URL",
+        "postgresql://baduser:SuperSecretPw%2passwordZZZ@127.0.0.1:1/nodb",
+    )
+
+    code = release_pack.main(
+        ["--out", str(tmp_path), "--store", "--as-of", NOW.isoformat()]
+    )
+
+    assert code == 2
+    logged = capsys.readouterr().err
+    assert logged.strip() == "STORE_UNAVAILABLE"
+    assert "SuperSecretPw" not in logged
+
+
 def test_a_store_its_migrations_do_not_describe_refuses_the_pack(
     empty_database: str,
 ) -> None:
@@ -553,6 +577,11 @@ def test_a_forged_snapshot_over_a_run_that_never_ran_refuses_the_pack(
         apply_schema(conn)
         performed = _pin(conn, profile_id, selection_id, accepted_nothing="case")
         [case] = performed.prepared
+        # CF-091: runs.status is guarded against a terminal move now; this
+        # forges exactly that move to prove the app's own read still catches
+        # it, so the trigger -- not what this test is about -- is set aside.
+        assert conn.info.dbname.startswith("caos_test_")
+        conn.execute("ALTER TABLE runs DISABLE TRIGGER runs_status_terminal_once")
         conn.execute(
             "UPDATE runs SET status='RUNNING' WHERE run_id=%s", (case.input.run_id,)
         )

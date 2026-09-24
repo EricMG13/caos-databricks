@@ -28,12 +28,14 @@ identity-header hygiene, the Origin check -- before routing or identity.
 from __future__ import annotations
 
 import asyncio
+import sys
 import weakref
 from collections.abc import AsyncIterator, Callable, Generator
 from contextlib import asynccontextmanager, suppress
 from json import dumps
 from uuid import UUID
 
+import psycopg
 from fastapi import FastAPI, Request, Response
 from fastapi.exception_handlers import (
     http_exception_handler,
@@ -84,10 +86,12 @@ from caos.api.stream import (
     StreamEvent,
     StreamSlot,
     case_tail,
+    guarded,
     take_stream_slot,
 )
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection, apply_schema, connect
+from caos.store.budget import configured_ceiling
 
 # `GET /api/v1/cases/{case_id}/events`, the one path this module serves: the
 # caller's standing and the run's case, then the stream's own connect, cursor
@@ -389,17 +393,18 @@ def on_shutdown(hook: Callable[[], None]) -> None:
 @asynccontextmanager
 async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """Apply the declared schema before the first request, and refuse to start
-    without a database.
+    without a database or a readable run ceiling.
 
     "Postgres schema in full at startup" is the store's rule, and `apply_schema`
     is idempotent -- it advances a verified migration prefix on this fresh
     connection and refuses `STORE_SCHEMA_DRIFT` for unknown or edited history.
     It commits the migration transaction before requests begin. Doing it
     here rather than lazily means a process pointed at the wrong database dies at
-    boot instead of serving 500s that look like a bug in the route.
+    boot instead of serving 500s that look like a bug in the route. A malformed
+    `CAOS_RUN_CEILING` (CF-048) is checked the same way here, rather than left
+    invisible until the first caller tries to start a run.
     """
-    with connect(_database_url()) as conn:
-        apply_schema(conn)
+    _boot_or_refuse()
     # The one health probe task (slice 4.5b); the route reads what it leaves.
     _app.state.health = health.ProbeState()
     probes = asyncio.create_task(health.probe_loop(_app.state.health))
@@ -413,6 +418,37 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
             hook()
         with suppress(asyncio.CancelledError):
             await probes
+
+
+def _boot_or_refuse() -> None:
+    """The store connect and schema, then the run ceiling: a fault in either
+    refuses to start, printed as its typed code alone (CF-078, CF-048).
+
+    psycopg's own exception for a connection the driver never opened -- a
+    malformed DSN included -- may quote the whole connection string, password
+    and all, back in its message; only `code.value` is ever written here. The
+    new `Refusal` is raised after the `except` that observed the fault has
+    finished, as `caos.api.deps.store_connection` already raises its own, so
+    it carries no chained context -- of the driver's or of the ceiling's raw
+    value -- for anything downstream to print.
+    """
+    code: RefusalCode | None = None
+    try:
+        with connect(_database_url()) as conn:
+            apply_schema(conn)
+    except Refusal as refused:
+        code = refused.code
+    except psycopg.Error:
+        code = RefusalCode.STORE_UNAVAILABLE
+    if code is None:
+        try:
+            configured_ceiling()
+        except Refusal as refused:
+            code = refused.code
+    if code is None:
+        return
+    print(code.value, file=sys.stderr)
+    raise Refusal(code)
 
 
 app = FastAPI(
@@ -541,15 +577,17 @@ def read_case_events(
     # actor, so the cap is a share of the fleet's tails rather than a race for
     # all of them (MX-2).
     slot = take_stream_slot(actor_id=actor.user_id)
-    events = case_tail(
-        conn,
-        case_id=case_id,
-        run_id=run,
-        actor_id=actor.user_id,
-        after=request.headers.get("last-event-id"),
-        deadline=TAIL_DEADLINE,
-        poll=POLL_INTERVAL,
-        heartbeat=True,
+    events = guarded(
+        case_tail(
+            conn,
+            case_id=case_id,
+            run_id=run,
+            actor_id=actor.user_id,
+            after=request.headers.get("last-event-id"),
+            deadline=TAIL_DEADLINE,
+            poll=POLL_INTERVAL,
+            heartbeat=True,
+        )
     )
 
     def framed() -> Generator[bytes]:
