@@ -24,9 +24,16 @@ const document = parseAnalysisDocument(
 const cp1 = document.body.handoffs.find((handoff) => handoff.module_id === "CP-1")!;
 
 test("test_sumOf_is_exact_and_unitOf_reads_the_register", () => {
-  expect(sumOf(["0.1", "0.2"])).toBe("0.3");
-  expect(sumOf(["9007199254740993", "1"])).toBe("9007199254740994");
-  expect(sumOf([null, undefined])).toBeNull();
+  expect(sumOf(["0.1", "0.2"])).toEqual({ value: "0.3", complete: true });
+  expect(sumOf(["9007199254740993", "1"])).toEqual({
+    value: "9007199254740994",
+    complete: true,
+  });
+  expect(sumOf([null, undefined])).toEqual({ value: null, complete: false });
+  // R24-13: a partial sum states what is known and that it is not the whole
+  // -- never a number silently standing in for a total with a missing member.
+  expect(sumOf(["1", null])).toEqual({ value: "1", complete: false });
+  expect(sumOf([])).toEqual({ value: null, complete: true });
   expect(unitOf("USD", "MILLIONS")).toBe("USD m");
   expect(unitOf("", "MILLIONS")).toBeUndefined();
   expect(recordsOf(cp1.tables[0]!)[0]!["period_id"]?.text).toBe("FY2025");
@@ -146,4 +153,90 @@ test("a maturity segment summing two facilities names both stated sources", () =
   })!;
   expect(source).toContain("Floor Plan");
   expect(source.split("; ")).toHaveLength(2);
+});
+
+// R24-13: a caption that sums known segment values without saying one is
+// missing presents an incomplete aggregate as complete.
+test("a segment caption states a partial sum as known, not as the total", () => {
+  const revenue = cp1.tables.find((table) => table.table_id === "cp1.segment_revenue_schedule")!;
+  const segment = revenue.columns.indexOf("segment_id");
+  const value = revenue.columns.indexOf("revenue");
+  const withheld = {
+    ...revenue,
+    rows: revenue.rows.map((row) =>
+      row[segment]!.text === "OTHER"
+        ? row.map((cell, index) => (index === value ? { text: "n/a", value: null } : cell))
+        : row,
+    ),
+  };
+  const complete = segmentMix(cp1.tables)!;
+  expect(complete.summary).toBe("Q2-2026: 7,394 USD m across 3 segments.");
+  const figure = segmentMix(cp1.tables.map((table) => (table === revenue ? withheld : table)))!;
+  // The two known segments' own sum, not the fixture's full total, and
+  // explicitly short of "3 segments" rather than silently across all of them.
+  expect(figure.summary).toBe("Q2-2026: 6,806 USD m known across 2 of 3 segments (1 unavailable).");
+  // The chart's own mark for the withheld segment is still a stated gap, not
+  // a silent zero (unaffected by this fix; the caption was the only defect).
+  const withheldSeries = figure.series.find((series) => series.key === "OTHER")!;
+  expect(withheldSeries.data.at(-1)).toEqual({ value: null, reason: "n/a" });
+});
+
+// R24-13: a facility with an unknown amount (the fixture's own
+// FINANCE_LEASES row, principal "Not applicable") must not vanish from the
+// maturity chart -- it belongs to a real class and year (here, undated) that
+// a facility-dropping filter would silently omit from `categories`/`series`
+// altogether -- and the caption must say the total is a known subtotal, not
+// present it as every facility's principal.
+test("an unstated principal keeps its facility on the ladder instead of vanishing", () => {
+  const ladder = maturityLadder(cp1.tables)!;
+  expect(ladder.categories).toContain("Undated");
+  const unstatedClass = ladder.series.find((series) => series.key === "NOT_STATED NOT_STATED")!;
+  const index = ladder.categories.indexOf("Undated");
+  expect(unstatedClass.data[index]).toEqual({ value: null, reason: "not stated" });
+  expect(
+    ladder.sourceOf({
+      series: unstatedClass.key,
+      category: "Undated",
+      index,
+      value: null,
+      origin: "model",
+    }),
+  ).toContain("Finance lease");
+  expect(ladder.summary).toBe(
+    "5,530 USD m known principal across 5 of 6 facilities (1 unstated); the nearest," +
+      " 5.50% Senior Notes due 2027, falls due 2027-04-15.",
+  );
+});
+
+// R24-13: the nearest-maturity claim must not depend on whether the nearest
+// facility's principal happens to be known -- a maturity date is not less
+// near for it.
+test("the nearest maturity date does not move when its own principal is unstated", () => {
+  const debt = cp1.tables.find((table) => table.table_id === "cp1.debt_facility_register")!;
+  const facility = debt.columns.indexOf("facility_id");
+  const principal = debt.columns.indexOf("principal");
+  // SUN_2027 (2027-04-15) is the nearest maturity in the fixture, ahead of
+  // Floor Plan (2028-03-31); this states its principal unknown without
+  // touching its maturity date.
+  const unstated = {
+    ...debt,
+    rows: debt.rows.map((row) =>
+      row[facility]!.text === "SUN_2027"
+        ? row.map((cell, index) => (index === principal ? { text: "Not stated", value: null } : cell))
+        : row,
+    ),
+  };
+  const ladder = maturityLadder(cp1.tables.map((table) => (table === debt ? unstated : table)))!;
+  // Still the nearest: principal availability never enters that choice.
+  expect(ladder.summary).toMatch(/the nearest, 5\.50% Senior Notes due 2027, falls due 2027-04-15\.$/);
+  // A second facility now unstated, its own class/year cell retained as a
+  // gap rather than dropped or silently folded into 0.
+  expect(ladder.summary).toBe(
+    "5,455 USD m known principal across 4 of 6 facilities (2 unstated); the nearest," +
+      " 5.50% Senior Notes due 2027, falls due 2027-04-15.",
+  );
+  expect(ladder.categories).toContain("2027");
+  const unsecured = ladder.series.find((series) => series.key === "UNSECURED SENIOR")!;
+  const index = ladder.categories.indexOf("2027");
+  expect(unsecured.data[index]).toEqual({ value: null, reason: "not stated" });
 });

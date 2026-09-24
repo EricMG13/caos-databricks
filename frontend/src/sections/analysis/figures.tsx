@@ -33,15 +33,34 @@ const datum = (cell: Cell | undefined): Datum =>
     ? { value: cell.value }
     : { value: null, reason: cell?.text ? cell.text : "not stated" };
 
-/** The exact sum of decimal strings; null when there is none to add. */
-export function sumOf(values: readonly (string | null | undefined)[]): string | null {
+/** The exact sum of a set of values that may include unknown members
+    (R24-13): `value` sums only the known ones (null when none are known),
+    and `complete` says whether every member was known -- a caller states
+    this partial-sum distinction rather than let an aggregate stand in
+    silently for a total that may be missing components. */
+export interface PartialSum {
+  value: string | null;
+  complete: boolean;
+}
+
+/** The exact sum of decimal strings, and whether every input was known. */
+export function sumOf(values: readonly (string | null | undefined)[]): PartialSum {
   const known = values.filter((value): value is string => typeof value === "string");
-  if (known.length === 0) return null;
+  const complete = known.length === values.length;
+  if (known.length === 0) return { value: null, complete };
   const places = Math.max(...known.map(placesOf));
-  return fromScaled(
-    known.reduce((sum, value) => sum + toScaled(value, places), 0n),
-    places,
-  );
+  return {
+    value: fromScaled(
+      known.reduce((sum, value) => sum + toScaled(value, places), 0n),
+      places,
+    ),
+    complete,
+  };
+}
+
+/** How many of `values` are unknown (null or undefined). */
+function unknownCount(values: readonly (string | null | undefined)[]): number {
+  return values.filter((value) => value == null).length;
 }
 
 const SCALE: Record<string, string> = {
@@ -121,15 +140,21 @@ export function segmentMix(tables: readonly Table[]): Figure | null {
   }));
   const latest = periods.at(-1)!;
   const unit = periodUnit(tables, latest);
-  const total = sumOf(segments.map((segment) => at(segment, latest)?.revenue?.value));
+  const values = segments.map((segment) => at(segment, latest)?.revenue?.value);
+  const total = sumOf(values);
+  const amount = total.value === null ? null : `${formatDecimal(total.value)}${unit ? ` ${unit}` : ""}`;
   return {
     key: "segment-mix",
     table: "cp1.segment_revenue_schedule",
     kind: "stack",
     title: "Revenue by segment",
-    summary: total
-      ? `${latest}: ${formatDecimal(total)}${unit ? ` ${unit}` : ""} across ${segments.length} segments.`
-      : `${segments.length} segments over ${periods.length} periods.`,
+    summary:
+      amount === null
+        ? `${segments.length} segments over ${periods.length} periods.`
+        : total.complete
+          ? `${latest}: ${amount} across ${segments.length} segments.`
+          : `${latest}: ${amount} known across ${segments.length - unknownCount(values)} of` +
+            ` ${segments.length} segments (${unknownCount(values)} unavailable).`,
     unit,
     categories: periods,
     series,
@@ -182,15 +207,21 @@ export function addbacks(tables: readonly Table[]): Figure | null {
   const items = byPriority(own, "addback_id");
   const at = (item: string) => own.find((row) => text(row, "addback_id") === item);
   const unit = periodUnit(tables, latest);
-  const net = sumOf(items.map((item) => at(item)?.value?.value));
+  const values = items.map((item) => at(item)?.value?.value);
+  const net = sumOf(values);
+  const amount = net.value === null ? null : `${formatDecimal(net.value, true)}${unit ? ` ${unit}` : ""}`;
   return {
     key: "addbacks",
     table: "cp1.adjusted_ebitda_bridge",
     kind: "diverging",
     title: `Add-backs to EBITDA, ${latest}`,
-    summary: net
-      ? `Net ${formatDecimal(net, true)}${unit ? ` ${unit}` : ""} across ${items.length} add-backs.`
-      : `${items.length} add-backs.`,
+    summary:
+      amount === null
+        ? `${items.length} add-backs.`
+        : net.complete
+          ? `Net ${amount} across ${items.length} add-backs.`
+          : `Net ${amount} known across ${items.length - unknownCount(values)} of` +
+            ` ${items.length} add-backs (${unknownCount(values)} unavailable).`,
     unit,
     // A band scale drops a repeated category, so two add-backs the model
     // labelled alike keep their ids beside the label.
@@ -222,36 +253,57 @@ const TRANCHE: Record<string, ChartColor> = {
 };
 const sentence = (words: string) => words.charAt(0) + words.slice(1).toLowerCase();
 
-/** Principal falling due each year, stacked by seniority: the maturity wall. */
+/** Principal falling due each year, stacked by seniority: the maturity wall.
+    A facility with an unknown principal is still a stated maturity (R24-13):
+    it is retained through `own` rather than dropped before the years and
+    classes it belongs to are chosen, so it is not silently missing from the
+    chart and cannot silently lose the nearest-date claim to a facility whose
+    principal happens to be known. */
 export function maturityLadder(tables: readonly Table[]): Figure | null {
   const rows = tableOf(tables, "cp1.debt_facility_register");
   if (!rows?.length) return null;
   const periods = periodsOf(tables, unique(rows.map((row) => text(row, "period_id"))));
   const latest = periods.at(-1)!;
-  const own = rows.filter((row) => text(row, "period_id") === latest && row.principal?.value);
+  const own = rows.filter((row) => text(row, "period_id") === latest);
   if (own.length === 0) return null;
   const yearOf = (row: Row) => /^\d{4}/.exec(text(row, "maturity_date"))?.[0] ?? "Undated";
   const classOf = (row: Row) => `${text(row, "secured_status")} ${text(row, "seniority")}`;
   const years = unique(own.map(yearOf)).sort();
   const classes = unique(own.map(classOf));
-  const cell = (klass: string, year: string) =>
-    sumOf(
-      own
-        .filter((row) => classOf(row) === klass && yearOf(row) === year)
-        .map((row) => row.principal?.value),
-    ) ?? "0";
+  // A class/year with no facility at all is genuinely zero; one whose every
+  // facility's principal is unstated is unknown, never silently zero
+  // (`sumOf`'s own `?? "0"` fallback used to conflate the two).
+  const cell = (klass: string, year: string): Datum => {
+    const matched = own.filter((row) => classOf(row) === klass && yearOf(row) === year);
+    if (matched.length === 0) return { value: "0" };
+    const sum = sumOf(matched.map((row) => row.principal?.value));
+    return sum.value === null ? { value: null, reason: "not stated" } : { value: sum.value };
+  };
   const dated = own.filter((row) => yearOf(row) !== "Undated");
+  // The nearest date is chosen from every dated facility, independently of
+  // whether its principal is known: principal availability is not what makes
+  // a maturity date the nearest one (R24-13).
   const nearest = [...(dated.length ? dated : own)].sort((a, b) =>
     text(a, "maturity_date").localeCompare(text(b, "maturity_date")),
   )[0]!;
   const unit = periodUnit(tables, latest) ?? unitOf(text(nearest, "currency"), "");
-  const total = sumOf(own.map((row) => row.principal?.value));
+  const values = own.map((row) => row.principal?.value);
+  const total = sumOf(values);
+  const unknown = unknownCount(values);
+  const amount = total.value === null ? null : `${formatDecimal(total.value)}${unit ? ` ${unit}` : ""}`;
+  const principal =
+    amount === null
+      ? `Principal unstated for all ${own.length} facilities`
+      : total.complete
+        ? `${amount} principal in ${own.length} facilities`
+        : `${amount} known principal across ${own.length - unknown} of ${own.length}` +
+          ` facilities (${unknown} unstated)`;
   return {
     key: "maturities",
     table: "cp1.debt_facility_register",
     kind: "stack",
     title: `Debt maturities by seniority, ${latest}`,
-    summary: `${formatDecimal(total ?? "0")}${unit ? ` ${unit}` : ""} principal in ${own.length} facilities${
+    summary: `${principal}${
       dated.length
         ? `; the nearest, ${text(nearest, "facility_name")}, falls due ${text(nearest, "maturity_date")}`
         : ""
@@ -263,7 +315,7 @@ export function maturityLadder(tables: readonly Table[]): Figure | null {
       label: sentence(klass.replace("_", " ")),
       origin: "model" as const,
       color: TRANCHE[klass] ?? "neutral",
-      data: years.map((year) => ({ value: cell(klass, year) })),
+      data: years.map((year) => cell(klass, year)),
     })),
     // A segment sums every facility of its class falling due that year, so it
     // names each one's stated source, not the first's (rewrite tournament).
