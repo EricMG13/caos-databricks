@@ -732,10 +732,24 @@ class AnalysisBody(BaseModel):
     pending: Annotated[list[PendingNode], Field(max_length=ROUTE_NODES_MAX)]
 
 
+class ModelUnit(StrEnum):
+    """A projected value's own dimension (R24-12): the calculator's `_amount`
+    values are money, in the forecast's stated currency and scale; its
+    `_ratio` values are dimensionless -- a multiple for the leverage/coverage
+    family (`metrics.*`), an explicit ratio for the one margin (never a
+    percentage relabelled without the scaling that would take, since a Model
+    reader performs no arithmetic on the server's decimal strings). Closed."""
+
+    MONEY = "MONEY"
+    MULTIPLE = "MULTIPLE"
+    RATIO = "RATIO"
+
+
 class ModelValue(BaseModel):
     model_config = _CLOSED
 
     name: Id
+    unit: ModelUnit
     value: Annotated[str, Field(max_length=64, pattern=r"^-?[0-9]+(\.[0-9]+)?$")] | None
     unavailable_reason: Literal["ZERO_OR_NEGATIVE_DENOMINATOR"] | None
 

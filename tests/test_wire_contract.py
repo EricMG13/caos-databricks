@@ -172,7 +172,7 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
     wire.BookBasis: frozenset({"period", "scenario", "accepted_only"}),
     wire.BookBody: frozenset({"basis", "columns", "rows"}),
     wire.BookDocument: ENVELOPE,
-    wire.ModelValue: frozenset({"name", "value", "unavailable_reason"}),
+    wire.ModelValue: frozenset({"name", "unit", "value", "unavailable_reason"}),
     wire.ModelPeriod: frozenset(
         {"case", "period_id", "fiscal_year", "days", "values", "unavailable_reason"}
     ),
@@ -561,6 +561,13 @@ def test_the_v1_wire_key_sets_are_pinned() -> None:
         SectionNote.LIST_TRUNCATED,
         SectionNote.ROUTE_NOT_PINNED,
         SectionNote.HANDOFFS_PENDING,
+    }
+    # R24-12: MONEY (an `_amount`), MULTIPLE (the leverage/coverage family) and
+    # RATIO (the one margin) are every dimension a projected value carries.
+    assert set(wire.ModelUnit) == {
+        wire.ModelUnit.MONEY,
+        wire.ModelUnit.MULTIPLE,
+        wire.ModelUnit.RATIO,
     }
     assert {action.value for action in ActionName} == {
         "CREATE_CASE",

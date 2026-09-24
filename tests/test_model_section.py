@@ -112,6 +112,16 @@ def test_model_reads_only_the_accepted_cp_cf_projection(
     assert values["cash.closing"]["value"] == "145.000000"
     assert values["debt.closing"]["value"] == "600.000000"
     assert values["metrics.gross_leverage"]["value"] == "6.0000"
+    # R24-12: a chart labelling every line by the forecast's currency and
+    # scale would call a leverage multiple and a margin ratio a monetary
+    # amount. Each value's own `unit` -- MONEY for an `_amount`, MULTIPLE for
+    # the leverage/coverage family, RATIO for the one margin -- is what a
+    # reader now derives its label from instead.
+    assert values["cash.closing"]["unit"] == "MONEY"
+    assert values["debt.closing"]["unit"] == "MONEY"
+    assert values["metrics.gross_leverage"]["unit"] == "MULTIPLE"
+    assert values["metrics.net_leverage"]["unit"] == "MULTIPLE"
+    assert values["operating.margin"]["unit"] == "RATIO"
     assert period["unavailable_reason"] is None
     assert all(v["unavailable_reason"] is None for v in values.values())
     row = harness.conn.execute(
@@ -302,6 +312,7 @@ def test_model_preserves_an_accepted_unavailable_ratio_reason(
     )
     assert ratio == {
         "name": "metrics.interest_coverage",
+        "unit": "MULTIPLE",
         "value": None,
         "unavailable_reason": "ZERO_OR_NEGATIVE_DENOMINATOR",
     }

@@ -32,9 +32,10 @@ function model(overrides: Record<string, unknown> = {}): ModelDocument {
           fiscal_year: "2026",
           days: "90",
           values: [
-            { name: "cash", value: "123.45", unavailable_reason: null },
+            { name: "cash", unit: "MONEY", value: "123.45", unavailable_reason: null },
             {
               name: "coverage",
+              unit: "MULTIPLE",
               value: null,
               unavailable_reason: "ZERO_OR_NEGATIVE_DENOMINATOR",
             },
@@ -165,8 +166,8 @@ describe("the host's forecast, drawn", () => {
       ...single.periods[0]!,
       period_id: "Q2",
       values: [
-        { name: "cash", value: "130.00", unavailable_reason: null },
-        { name: "coverage", value: "1.8", unavailable_reason: null },
+        { name: "cash", unit: "MONEY" as const, value: "130.00", unavailable_reason: null },
+        { name: "coverage", unit: "MULTIPLE" as const, value: "1.8", unavailable_reason: null },
       ],
       unavailable_reason: null,
     };
@@ -180,7 +181,23 @@ describe("the host's forecast, drawn", () => {
       value: null,
       reason: "ZERO_OR_NEGATIVE_DENOMINATOR",
     });
+    // R24-12: a dimensionless ratio is not a monetary amount. `unit` is
+    // carried per line, not the forecast's currency/scale for every chart.
+    expect(charts[0]!.unit).toBe("MONEY");
+    expect(charts[1]!.unit).toBe("MULTIPLE");
     const { container } = render(<ModelSection document={model({ forecast: two })} tab={null} />);
     expect(container.querySelectorAll("[data-forecast-chart]")).toHaveLength(2);
+    // Each mark's accessible name states the value with its own unit label
+    // (`@/charts/series.ts` `cellName`/`valueText`): money keeps "USD
+    // millions"; the coverage ratio is labelled "multiple", never money. Two
+    // elements share each `data-mark` key (a focus target and the drawn
+    // point); the one carrying the announced name is what a reader hears.
+    const labelled = (mark: string) =>
+      Array.from(container.querySelectorAll(`[data-mark="${mark}"]`))
+        .map((el) => el.getAttribute("aria-label"))
+        .find((label): label is string => label !== null);
+    expect(labelled("Base:cash:0")).toContain("USD millions");
+    expect(labelled("Base:coverage:1")).toContain("multiple");
+    expect(labelled("Base:coverage:1")).not.toContain("USD");
   });
 });
