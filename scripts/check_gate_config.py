@@ -20,8 +20,10 @@ import re
 import shlex
 import sys
 import tomllib
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from pathlib import Path
+
+import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -73,20 +75,48 @@ OVERRIDING = (
     # all overrides the CLI flags the gates invoke.
     "complexipy.toml", ".complexipy.toml", ".bandit",
 )  # fmt: skip
+# The one gitleaks both scans run (W3): the hook's rev and the CI image's
+# tag are this one version, and the image is also pinned by digest.
+GITLEAKS_VERSION = "v8.24.3"
+GITLEAKS_IMAGE = (
+    f"ghcr.io/gitleaks/gitleaks:{GITLEAKS_VERSION}"
+    "@sha256:e1b35e12a8c6fa8901f060459cfb6b2fc4c484d3afbe3b029733a3bbfab07055"
+)
+# The config's own top level (review 4, W2): a top-level `exclude`, `files`
+# or `default_stages` switches every hook off at once while each hook's own
+# body stays exactly as pinned below, so `repos` is the one key it may set.
+PRE_COMMIT_KEYS = frozenset({"repos"})
+REPO_KEYS = frozenset({"repo", "rev", "hooks"})
+# Each repo by its URL, at its pinned rev, running exactly these hook ids in
+# file order: a repo pointed at a fork, a rev moved, or a hook id moved into
+# another repo (a `local` hook named `ruff`) runs something else under the
+# same name. `local` has no rev.
+PRE_COMMIT_REPOS: dict[str, tuple[str | None, tuple[str, ...]]] = {
+    "https://github.com/astral-sh/ruff-pre-commit": (
+        "v0.14.0",
+        ("ruff", "ruff-format"),
+    ),
+    "https://github.com/gitleaks/gitleaks": (
+        GITLEAKS_VERSION,
+        ("gitleaks", "gitleaks"),
+    ),
+    "https://github.com/pre-commit/pre-commit-hooks": (
+        "v5.0.0",
+        (
+            "check-added-large-files",
+            "check-merge-conflict",
+            "end-of-file-fixer",
+            "trailing-whitespace",
+        ),
+    ),
+    "local": (None, ("vocabulary", "tested", "io-budget")),
+}
 PRE_COMMIT_HOOKS = frozenset(
-    {
-        "ruff", "ruff-format", "gitleaks", "check-added-large-files",
-        "check-merge-conflict", "end-of-file-fixer", "trailing-whitespace",
-        "vocabulary", "tested", "io-budget",
-    }
-)  # fmt: skip
-# The five keys on a hook's own body that change whether or on what it runs
-# (AR-07, N46): `entry` swapped for a no-op, `stages` moved off the default
-# run, and `files`/`exclude`/`args` narrowed all disable a hook while its
-# `id` keeps naming it present in `PRE_COMMIT_HOOKS` above. Each hook not
-# listed here must carry none of the five; a hook that is listed is held to
-# exactly the value given.
-HOOK_KEYS = ("entry", "stages", "files", "exclude", "args")
+    hook for _, hooks in PRE_COMMIT_REPOS.values() for hook in hooks
+)
+# The keys a hook body may carry without changing what it runs: its `id`,
+# and the `name` it is displayed under.
+HOOK_LABELS = frozenset({"id", "name"})
 _LARGE_FILES_EXCLUDE = (
     r"^(vendor/|qualification/ba-fy2025/documents/BA_FY2025_10K\.txt$|"
     r"qualification/f-fy2025/documents/F_FY2025_10K\.txt$|"
@@ -107,19 +137,29 @@ _VENDOR_QUAL_EXCLUDE = (
     r"^(vendor/|qualification/.*/documents/|\.claude/skills/|"
     r"complexipy-snapshot\.json$)"
 )
-# Each hook id's own body (or bodies, in file order, for an id repeated
-# with a different override -- gitleaks below, CF-064): a hook not listed
-# here must appear exactly once, carrying none of `HOOK_KEYS`.
-PRE_COMMIT_HOOK_BODY: dict[str, list[dict[str, str]]] = {
-    "ruff": [{"args": "[--fix]", "exclude": "^vendor/"}],
+
+
+def _local(entry: str) -> dict[str, object]:
+    """A local hook's whole body: the command, run once by the system."""
+    return {"entry": entry, "language": "system", "pass_filenames": False}
+
+
+# Each hook id's whole body but its labels (or bodies, in file order, for an
+# id repeated with a different override -- gitleaks below, CF-064), exactly
+# (AR-07, N46, review 4 W2): `entry` swapped for a no-op, `stages` moved off
+# the default run, `files`/`exclude`/`args` narrowed, and `types`,
+# `types_or`, `exclude_types` or `language` set all disable a hook while its
+# `id` keeps naming it present. A key not given here is refused.
+PRE_COMMIT_HOOK_BODY: dict[str, list[dict[str, object]]] = {
+    "ruff": [{"args": ["--fix"], "exclude": "^vendor/"}],
     "ruff-format": [{"exclude": "^vendor/"}],
     "check-added-large-files": [{"exclude": _LARGE_FILES_EXCLUDE}],
     "check-merge-conflict": [{"exclude": "^vendor/"}],
     "end-of-file-fixer": [{"exclude": _VENDOR_QUAL_EXCLUDE}],
     "trailing-whitespace": [{"exclude": _VENDOR_QUAL_EXCLUDE}],
-    "vocabulary": [{"entry": "uv run python scripts/check_vocabulary.py"}],
-    "tested": [{"entry": "uv run python scripts/check_tested.py"}],
-    "io-budget": [{"entry": "uv run python scripts/io_budget.py --assert"}],
+    "vocabulary": [_local("uv run python scripts/check_vocabulary.py")],
+    "tested": [_local("uv run python scripts/check_tested.py")],
+    "io-budget": [_local("uv run python scripts/io_budget.py --assert")],
     "gitleaks": [
         {},
         {"entry": "gitleaks dir --no-banner --redact -v ."},
@@ -371,40 +411,69 @@ def _python_problems(root: Path, project: dict[str, object]) -> list[str]:
     return problems
 
 
-def _pre_commit_hooks(config: str) -> list[tuple[str, dict[str, str]]]:
-    """Every hook, in file order, as (id, body): whichever of `HOOK_KEYS` its
-    body sets. A repo-hosted id can appear more than once with a different
-    override each time (gitleaks's staged scan and its dir scan, CF-064),
-    so this is a list, not a dict keyed by id.
+def _yaml_mapping(text: str | None) -> dict[object, object] | None:
+    """`text` read as YAML, the way pre-commit and Actions read it, when it
+    is a mapping; None when it is missing, does not parse, or is not one."""
+    if text is None:
+        return None
+    try:
+        loaded = yaml.safe_load(text)
+    except yaml.YAMLError:
+        return None
+    return loaded if isinstance(loaded, dict) else None
 
-    A line-oriented reading, not a YAML parser (stdlib first): a hook starts
-    at `- id: <name>`, and its own keys are every following line indented
-    past that dash, up to the next `- id:` or a line indented no further.
-    """
-    hooks: list[tuple[str, dict[str, str]]] = []
-    current: dict[str, str] | None = None
-    indent = -1
-    for line in config.splitlines():
-        started = re.match(r"^(\s*)-\s*id:\s*(\S+)\s*$", line)
-        if started is not None:
-            indent = len(started.group(1))
-            current = {}
-            hooks.append((started.group(2), current))
-            continue
-        if not line.strip():
-            continue
-        this_indent = len(line) - len(line.lstrip(" "))
-        if current is None or this_indent <= indent:
-            current = None
-            continue
-        body = re.match(r"^\s*(\w[\w-]*):\s*(.*?)\s*$", line)
-        if body is not None and body.group(1) in HOOK_KEYS:
-            current[body.group(1)] = body.group(2).strip("'\"")
-    return hooks
+
+def _map(value: object) -> dict[object, object]:
+    """`value` when it is a YAML mapping, else an empty one."""
+    return value if isinstance(value, dict) else {}
+
+
+def _seq(value: object) -> list[object]:
+    """`value` when it is a YAML sequence, else an empty one."""
+    return value if isinstance(value, list) else []
+
+
+def _repo_problems(url: str, entry: dict[object, object]) -> list[str]:
+    """One `repos` entry against `PRE_COMMIT_REPOS`: its URL, its rev and the
+    hook ids it runs, in order."""
+    pinned = PRE_COMMIT_REPOS.get(url)
+    if pinned is None:
+        return [f"pre-commit: repo {url} is not one this gate pins"]
+    rev, hooks = pinned
+    problems = [
+        f"pre-commit: repo {url} sets {key!r}; a repo may set only {sorted(REPO_KEYS)}"
+        for key in entry
+        if key not in REPO_KEYS
+    ]
+    if entry.get("rev") != rev:
+        problems.append(
+            f"pre-commit: repo {url} is at {entry.get('rev')!r}, not {rev!r}"
+        )
+    ids = tuple(str(_map(hook).get("id")) for hook in _seq(entry.get("hooks")))
+    if ids != hooks:
+        problems.append(f"pre-commit: repo {url} runs {list(ids)}, not {list(hooks)}")
+    return problems
+
+
+def _pre_commit_hooks(
+    config: dict[object, object],
+) -> list[tuple[str, dict[object, object]]]:
+    """Every hook, in file order, as (id, body): its whole body but its
+    labels. A repo-hosted id can appear more than once with a different
+    override each time (gitleaks's staged scan and its dir scan, CF-064),
+    so this is a list, not a dict keyed by id."""
+    return [
+        (
+            str(_map(hook).get("id")),
+            {k: v for k, v in _map(hook).items() if k not in HOOK_LABELS},
+        )
+        for repo in _seq(config.get("repos"))
+        for hook in _seq(_map(repo).get("hooks"))
+    ]
 
 
 def _hook_occurrence_problems(
-    name: str, index: int, expected: dict[str, str], actual: dict[str, str]
+    name: str, index: int, expected: dict[str, object], actual: dict[object, object]
 ) -> list[str]:
     """One occurrence of one hook id against the body expected of it."""
     return [
@@ -413,12 +482,14 @@ def _hook_occurrence_problems(
         if actual.get(key) != value
     ] + [
         f"pre-commit: {name}[{index}].{key} is set; it can change what the hook runs on"
-        for key in HOOK_KEYS
-        if key not in expected and key in actual
+        for key in actual
+        if key not in expected
     ]
 
 
-def _named_hook_problems(name: str, actual_list: list[dict[str, str]]) -> list[str]:
+def _named_hook_problems(
+    name: str, actual_list: list[dict[object, object]]
+) -> list[str]:
     """One hook id's every occurrence against `PRE_COMMIT_HOOK_BODY`."""
     expected_list = PRE_COMMIT_HOOK_BODY.get(name, [{}])
     if len(actual_list) != len(expected_list):
@@ -436,15 +507,35 @@ def _named_hook_problems(name: str, actual_list: list[dict[str, str]]) -> list[s
 
 
 def _hook_problems(root: Path) -> list[str]:
-    config = (root / ".pre-commit-config.yaml").read_text(encoding="utf-8")
+    """The pre-commit configuration, read as pre-commit reads it (W2): only
+    `repos` at the top, each pinned repo once at its rev with its own hook
+    ids, and each hook's whole body as pinned."""
+    config = _yaml_mapping(_read(root, ".pre-commit-config.yaml"))
+    if config is None:
+        return ["pre-commit: .pre-commit-config.yaml is missing or not a mapping"]
+    problems = [
+        f"pre-commit: the config sets {key!r}; it may set only "
+        f"{sorted(PRE_COMMIT_KEYS)}"
+        for key in config
+        if key not in PRE_COMMIT_KEYS
+    ]
+    urls = [str(_map(repo).get("repo")) for repo in _seq(config.get("repos"))]
+    for repo in _seq(config.get("repos")):
+        problems += _repo_problems(str(_map(repo).get("repo")), _map(repo))
+    problems += [
+        f"pre-commit: repo {url} appears {urls.count(url)} times, not once"
+        for url in PRE_COMMIT_REPOS
+        if urls.count(url) != 1
+    ]
     occurrences = _pre_commit_hooks(config)
     present = {hook_id for hook_id, _ in occurrences}
     missing = sorted(PRE_COMMIT_HOOKS - present)
-    problems = [f"pre-commit: hooks missing {missing}"] if missing else []
-    by_id: dict[str, list[dict[str, str]]] = {}
+    if missing:
+        problems.append(f"pre-commit: hooks missing {missing}")
+    by_id: dict[str, list[dict[object, object]]] = {}
     for hook_id, body in occurrences:
         by_id.setdefault(hook_id, []).append(body)
-    for name in sorted(PRE_COMMIT_HOOKS & present):
+    for name in sorted(present):
         problems += _named_hook_problems(name, by_id[name])
     return problems
 
@@ -621,93 +712,6 @@ def _bundle_problems(root: Path) -> list[str]:
     return problems + _binding_problems(bundle)
 
 
-def _block_lines(lines: list[str], start: int, indent: int) -> list[str]:
-    """The indented lines following a `run: |`/`run: >` key, up to the first
-    that dedents to `indent` or less -- the keys after the block, not part
-    of it."""
-    block: list[str] = []
-    for follow in lines[start:]:
-        if follow.strip() and len(follow) - len(follow.lstrip()) <= indent:
-            break
-        block.append(follow.strip())
-    return block
-
-
-def _block_commands(value: str, block: list[str]) -> list[str]:
-    """A folded block (`>`/`>-`) is one command; a literal block (`|`/`|-`)
-    is one per line, its backslash continuations joined first."""
-    joined = "\n".join(block).replace("\\\n", " ")
-    return [joined.replace("\n", " ")] if value[0] == ">" else joined.split("\n")
-
-
-def _ci_spans(ci_text: str) -> list[tuple[str, int, int]]:
-    """Every command a CI file's `run:` steps execute, whitespace collapsed,
-    each paired with the line owning its `run:` key and the line marking
-    its step's start (`- `) -- so a `run:` guarded by an `if:` on its own
-    step, or on the job around it, can still be found (R24-11) without
-    touching what `ci_commands` reads."""
-    lines = ci_text.splitlines()
-    spans: list[tuple[str, int, int]] = []
-    step_start = 0
-    for index, line in enumerate(lines):
-        if re.match(r"^\s*-\s", line):
-            step_start = index
-        step = re.match(r"^(\s*)(-\s+)?run:\s*(.*?)\s*$", line)
-        if step is None:
-            continue
-        value = step.group(3)
-        if value not in ("|", "|-", ">", ">-"):
-            spans.append((value, index, step_start))
-            continue
-        indent = len(step.group(1)) + len(step.group(2) or "")
-        block = _block_lines(lines, index + 1, indent)
-        spans += [(c, index, step_start) for c in _block_commands(value, block)]
-    return [
-        (" ".join(command.split()), run_line, step_start)
-        for command, run_line, step_start in spans
-        if command.strip()
-    ]
-
-
-def ci_commands(ci_text: str) -> list[str]:
-    """Every command a CI file's `run:` steps execute, whitespace collapsed:
-    a folded block is one command, a literal block one per line (with its
-    backslash continuations joined)."""
-    return [command for command, _run_line, _step_start in _ci_spans(ci_text)]
-
-
-_STEP_IF = re.compile(r"^\s*(?:-\s+)?if:\s*\S")
-_JOB_IF = re.compile(r"^ {4}if:\s*\S")
-_JOB_HEADER = re.compile(r"^ {2}[\w-]+:\s*$")
-
-
-def _job_start(lines: list[str], step_start: int) -> int:
-    for index in range(step_start, -1, -1):
-        if _JOB_HEADER.match(lines[index]):
-            return index
-    return 0
-
-
-def _ci_condition_problems(ci_text: str) -> list[str]:
-    """R24-11: `if:` on a required gate's own step, or on the job around it,
-    can stop it from ever running while its `run:` text -- all
-    `ci_commands` reads -- stays exactly as committed, so the old check
-    still saw it as present. Any `if:` there is refused outright; a
-    required gate step or job may not carry one at all."""
-    lines = ci_text.splitlines()
-    problems: list[str] = []
-    for command, run_line, step_start in _ci_spans(ci_text):
-        if command not in CI_GATES:
-            continue
-        if any(_STEP_IF.match(line) for line in lines[step_start : run_line + 1]):
-            problems.append(f"ci: {command!r} runs only when its step's if: allows it")
-            continue
-        job_start = _job_start(lines, step_start)
-        if any(_JOB_IF.match(line) for line in lines[job_start:step_start]):
-            problems.append(f"ci: {command!r} runs only when its job's if: allows it")
-    return problems
-
-
 STAND_IN = "uv run python tests/workspace_stub.py --"
 # The stand-in's own Lakebase of each kind (`tests/workspace_stub.py`).
 STAND_IN_VARS = "--var uc_catalog=main --var uc_schema=caos --var lakebase_project=caos"
@@ -716,6 +720,13 @@ STAND_IN_PROVISIONED_VARS = (
 )
 STAND_IN_PRICE = (
     "BUNDLE_VAR_model_price=databricks-claude-opus-5,0.000007,0.000030,2026-09-23"
+)
+# Each target with the stand-in Lakebase of its own kind (R24-14).
+STAND_IN_TARGETS = (
+    ("dev", STAND_IN_VARS),
+    ("prod", STAND_IN_VARS),
+    ("dev-provisioned", STAND_IN_PROVISIONED_VARS),
+    ("prod-provisioned", STAND_IN_PROVISIONED_VARS),
 )
 
 
@@ -733,12 +744,41 @@ def stand_in_target(target: str, variables: str) -> tuple[str, str]:
     )
 
 
+def _resolved_check(target: str, variables: str) -> tuple[str, str]:
+    """E2 in CI for one target (DF-4, DF-5, R24-14): the stand-in's
+    `validate -o json`, and the one command's own E2 over what it wrote."""
+    kind = variables.rpartition(" --var ")[2].partition("=")
+    flag = (
+        "--lakebase-instance"
+        if kind[0] == "lakebase_instance"
+        else "--lakebase-project"
+    )
+    return (
+        f"databricks bundle validate -t {target} -o json {variables} "
+        f"> $RUNNER_TEMP/{target}.json",
+        "uv run python scripts/enterprise_deploy.py --stage record --evidence "
+        f'"$RUNNER_TEMP/resolved" --step E2 --target {target} --price '
+        f"{STAND_IN_PRICE.partition('=')[2]} {flag} {kind[2]} "
+        f'--bundle "$RUNNER_TEMP/{target}.json"',
+    )
+
+
 # Each gate CLAUDE.md lists, as CI runs it (MAX-13): a step removed, a
 # threshold raised or a command made to pass whatever it finds is a gate
 # that no longer runs. `|| true` stands on one command only, bandit's JSON
 # report, whose verdict is the floor check after it -- the one bandit
 # invocation now, since a bare second run once existed only to let its own
 # exit code stand for the same scan the floor already verdicts (N29).
+PYTEST_GATE = (
+    'uv run pytest -n auto -m "not live_provider" --max-worker-restart=0 '
+    "-o faulthandler_timeout=600 -ra --durations=25"
+)
+RACES_GATE = "uv run pytest --no-cov tests/test_postgres_races.py"
+GITLEAKS_GATE = (
+    'docker run --rm -u "$(id -u):$(id -g)" -e GIT_CONFIG_COUNT=1 '
+    "-e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=/repo "
+    f'-v "$PWD:/repo" -w /repo {GITLEAKS_IMAGE} git --no-banner .'
+)
 CI_GATES = (
     "uv run ruff check .",
     "uv run ruff format --check .",
@@ -750,14 +790,15 @@ CI_GATES = (
     "uv run complexipy caos scripts icm --max-complexity-allowed 15",
     "uv run pre-commit run --all-files --show-diff-on-failure",
     "uv run mypy caos scripts tests",
-    'uv run pytest -n auto -m "not live_provider" --max-worker-restart=0 '
-    "-o faulthandler_timeout=600 -ra --durations=25",
+    PYTEST_GATE,
     "uv run python scripts/scan_floors.py coverage.xml --cobertura",
-    "uv run pytest --no-cov tests/test_postgres_races.py",
+    RACES_GATE,
     "uv run python scripts/scan_floors.py bandit.json --no-parse-errors "
     "--cover caos scripts icm --unscanned tests",
     "uv run pip-audit --strict",
-    'uv run python scripts/check_gate_config.py --against "$base"',
+    # The whole history, digest-pinned (W3): its text alone in a comment
+    # once satisfied a check that read the file's raw text.
+    GITLEAKS_GATE,
     f"{STAND_IN_PRICE} {STAND_IN} databricks bundle validate -t dev {STAND_IN_VARS}",
     f'{STAND_IN} sh -c "databricks bundle deploy -t dev {STAND_IN_VARS} '
     f'&& databricks bundle run caos -t dev {STAND_IN_VARS}"',
@@ -767,64 +808,282 @@ CI_GATES = (
     # The Provisioned pair (R24-14), each the way prod is.
     *stand_in_target("dev-provisioned", STAND_IN_PROVISIONED_VARS),
     *stand_in_target("prod-provisioned", STAND_IN_PROVISIONED_VARS),
-    "npm run lint",
-    "npm run typecheck",
-    "npm test",
-    "npm run build",
-    "npm run build:demo",
-    "npx --no-install jscpd --threshold 3 --min-lines 10 --ignore "
-    '"**/node_modules/**,**/dist/**,**/dist-demo/**" ../caos ../scripts ../icm src',
-    "npm run a11y",
-    "npm run test:workbench",
+    # E2 for every target: what the CLI resolved is what was given.
+    f'{STAND_IN_PRICE} {STAND_IN} sh -c "'
+    + " && ".join(_resolved_check(*target)[0] for target in STAND_IN_TARGETS)
+    + '"',
+    *(_resolved_check(*target)[1] for target in STAND_IN_TARGETS),
+    "uv run python scripts/document_register.py",
+    "uv run python -B vendor/deploy-v/verify_package.py",
+    "npm --prefix frontend run lint",
+    "npm --prefix frontend run typecheck",
+    "npm --prefix frontend run test",
+    "npm --prefix frontend run build",
+    "npm --prefix frontend run build:demo",
+    "npx --prefix frontend --no-install jscpd --threshold 3 --min-lines 10 --ignore "
+    '"**/node_modules/**,**/dist/**,**/dist-demo/**" caos scripts icm frontend/src',
+    "npm --prefix frontend run a11y",
+    "npm --prefix frontend run test:workbench",
 )
 EXCUSED = "uv run bandit -r caos scripts icm -f json -o bandit.json || true"
 # A failure turned into a success: `|| true`, `|| :`, `|| exit 0`, `set +e`.
 SWALLOWED = re.compile(r"\|\|\s*(?:true\b|:(?:\s|;|$)|exit\s+0\b)|\bset\s+\+e\b")
+# The steps that are more than one line, each exactly (W2): an `exit 0` or a
+# `trap 'exit 0' EXIT` ahead of a gate, or the gate inside a heredoc, is a
+# script no pin names. Comment lines are not part of a script.
+BASELINE_SCRIPT = (
+    "base=HEAD^",
+    'if [ -n "$BASE_REF" ]; then base="origin/$BASE_REF"; elif git cat-file -e '
+    '"$BEFORE^{commit}" 2>/dev/null; then base="$BEFORE"; fi',
+    'uv run python scripts/check_gate_config.py --against "$base"',
+)
+FRONTEND_SECURITY = (
+    "uv sync --locked --all-groups",
+    "uv run pytest -rs --no-cov "
+    '"tests/test_frontend_modes.py::test_the_dev_proxy_strips_client_identity_and_'
+    'injects_the_local_actor" '
+    '"tests/test_frontend_modes.py::test_production_build_contains_no_fixture_or_'
+    'demo_route"',
+)
+SECTION_ROUTES = (
+    "for s in directory upload analysis book run model report committee admin; do",
+    'test -f "frontend/dist/$s/index.html" || { echo "missing '
+    'frontend/dist/$s/index.html"; exit 1; }',
+    "done",
+)
+PR_SIZE = 'python3 scripts/check_pr_size.py "origin/$BASE_REF"'
+_POSTGRES = {
+    "CAOS_TEST_POSTGRES_URL": "postgresql://postgres:caos@localhost:5432/caos",
+    # A store suite that skipped is not a store suite that passed.
+    "CAOS_REQUIRE_POSTGRES": "1",
+}
+# Every script a CI step may run, as its lines, with the environment its
+# step carries exactly (W2): a script not listed here can rewrite PATH, the
+# environment or the virtualenv before a gate runs, so it is refused, and
+# every one listed must run -- the gates above among them. An env key is a
+# way in too: `SKIP` skips pre-commit hooks, `PYTEST_ADDOPTS` narrows the
+# suite, and the races suite without `CAOS_REQUIRE_POSTGRES` skips whole.
+CI_STEPS: dict[tuple[str, ...], dict[str, str]] = {
+    **{(gate,): {} for gate in CI_GATES},
+    (PYTEST_GATE,): _POSTGRES,
+    (RACES_GATE,): _POSTGRES,
+    BASELINE_SCRIPT: {
+        "BASE_REF": "${{ github.base_ref }}",
+        "BEFORE": "${{ github.event.before }}",
+    },
+    FRONTEND_SECURITY: {"CAOS_REQUIRE_NODE": "1"},
+    SECTION_ROUTES: {},
+    # FP-40: the base ref crosses an env: variable, never the script.
+    (PR_SIZE,): {"BASE_REF": "${{ github.base_ref }}"},
+    ("uv sync --locked --all-groups",): {},
+    ("npm --prefix frontend ci --ignore-scripts",): {},
+    ("frontend/node_modules/.bin/playwright install --with-deps",): {},
+    (EXCUSED,): {},
+}
+# The one condition a job may run under, by the script it runs: the PR size
+# check on pull requests. A job holding any other script may set none.
+CI_CONDITIONS: dict[tuple[str, ...], str] = {
+    (PR_SIZE,): "github.event_name == 'pull_request'"
+}
+# Each action step exactly, by its SHA and its inputs: a tag, a fork's
+# commit or an input such as `ref:` or a `version:` runs something else.
+_CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+_SETUP_UV = "astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4"
+_SETUP_NODE = "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020"
+CI_ACTIONS: tuple[dict[object, object], ...] = (
+    {"uses": _CHECKOUT},
+    {"uses": _CHECKOUT, "with": {"fetch-depth": 0}},
+    {"uses": _SETUP_UV, "with": {"version": "0.12.5", "enable-cache": True}},
+    {
+        "uses": "databricks/setup-cli@d76f84cea9893ce68311a1f33fb0c95af6c963b7",
+        "with": {"version": "1.17.0"},
+    },
+    {
+        "uses": _SETUP_NODE,
+        "with": {
+            "node-version": "24",
+            "cache": "npm",
+            "cache-dependency-path": "frontend/package-lock.json",
+        },
+    },
+    {
+        "uses": "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+        "with": {
+            "path": "~/.cache/ms-playwright",
+            "key": "playwright-${{ hashFiles('frontend/package-lock.json') }}",
+        },
+    },
+)
+# The workflow's own top level (W2): what triggers it, what its token may
+# do and the one environment every step inherits are pinned; `defaults`
+# (`defaults.run.shell: "true {0}"` reaches every gate at once) and any
+# other key are refused. YAML 1.1 reads the bare key `on` as true.
+CI_TOP_PINNED: dict[str, object] = {
+    "on": {
+        "push": {"branches": ["main", "rebuild/databricks"]},
+        "pull_request": {
+            "types": ["opened", "synchronize", "reopened", "ready_for_review", "edited"]
+        },
+    },
+    "permissions": {"contents": "read"},
+    "env": {"UV_VERSION": "0.12.5"},
+}
+CI_TOP_FREE = frozenset({"name", "concurrency", "jobs"})
+# A job's own keys: `defaults`, `env`, `continue-on-error`, `container`,
+# `strategy` and `needs` each change how, where or whether its gates run.
+JOB_KEYS = frozenset({"runs-on", "timeout-minutes", "services", "steps", "if"})
+RUNS_ON = "ubuntu-latest"
+# A step's own keys: `if`, `continue-on-error`, `working-directory` and
+# `shell` each change whether, where or how its script runs.
+STEP_KEYS = frozenset({"name", "uses", "with", "run", "env"})
 
 
-def _ci_problems(root: Path) -> list[str]:
-    ci_text = _read(root, ".github/workflows/ci.yml")
-    if ci_text is None:
-        return ["ci: .github/workflows/ci.yml missing"]
-    commands = ci_commands(ci_text)
+def script_lines(run: str) -> tuple[str, ...]:
+    """A `run:` value as the shell runs it, one command a line: backslash
+    continuations joined, whitespace collapsed, blank and comment lines
+    dropped. PyYAML has already folded a `>` block into one line."""
+    joined = run.replace("\\\n", " ")
+    lines = (" ".join(line.split()) for line in joined.split("\n"))
+    return tuple(line for line in lines if line and not line.startswith("#"))
+
+
+def _ci_file(ci_text: str | None) -> dict[object, object] | None:
+    """The workflow as Actions reads it, with `on` under its own name."""
+    ci_file = _yaml_mapping(ci_text)
+    if ci_file is None:
+        return None
+    return {("on" if key is True else key): value for key, value in ci_file.items()}
+
+
+def _jobs(ci_file: dict[object, object]) -> Iterator[tuple[str, dict[object, object]]]:
+    for name, job in _map(ci_file.get("jobs")).items():
+        yield str(name), _map(job)
+
+
+def ci_commands(ci_text: str) -> list[str]:
+    """Every command a CI file's `run:` steps execute, one a line, as
+    `script_lines` reads each step's script."""
+    ci_file = _ci_file(ci_text) or {}
+    return [
+        line
+        for _, job in _jobs(ci_file)
+        for step in _seq(job.get("steps"))
+        if isinstance(_map(step).get("run"), str)
+        for line in script_lines(str(_map(step).get("run")))
+    ]
+
+
+def _shown(script: tuple[str, ...]) -> str:
+    return "\n".join(script)
+
+
+def _ci_top_problems(ci_file: dict[object, object]) -> list[str]:
     problems = [
-        f"ci: no step runs {gate!r}" for gate in CI_GATES if gate not in commands
+        f"ci: the workflow sets {key!r}; only {sorted(CI_TOP_PINNED)} and "
+        f"{sorted(CI_TOP_FREE)} are held"
+        for key in ci_file
+        if key not in CI_TOP_PINNED and key not in CI_TOP_FREE
     ]
+    return problems + [
+        f"ci: the workflow's {key} is not as pinned"
+        for key, value in CI_TOP_PINNED.items()
+        if ci_file.get(key) != value
+    ]
+
+
+def _job_problems(name: str, job: dict[object, object]) -> list[str]:
+    """A job's own keys, and its `if:` against the scripts it runs (R24-11):
+    a gate whose job can be switched off is a gate that need not run."""
+    problems = [
+        f"ci: job {name} sets {key!r}; a job may set only {sorted(JOB_KEYS)}"
+        for key in job
+        if key not in JOB_KEYS
+    ]
+    if job.get("runs-on") != RUNS_ON:
+        problems.append(f"ci: job {name} runs on {job.get('runs-on')!r}, not {RUNS_ON}")
+    condition = job.get("if")
+    if condition is None:
+        return problems
+    runs = [_map(step).get("run") for step in _seq(job.get("steps"))]
+    scripts = [script_lines(run) for run in runs if isinstance(run, str)]
+    return problems + [
+        f"ci: {_shown(script)!r} runs only when its job's if: allows it"
+        for script in scripts or [()]
+        if CI_CONDITIONS.get(script) != condition
+    ]
+
+
+def _step_problems(job: str, step: dict[object, object]) -> list[str]:
+    """One step against the pins: an action exactly as `CI_ACTIONS` gives
+    it, or a script `CI_STEPS` names carrying exactly its env."""
+    run = step.get("run")
+    script = script_lines(run) if isinstance(run, str) else ()
+    problems = [
+        f"ci: {_shown(script)!r} runs only when its step's if: allows it"
+        if key == "if"
+        else f"ci: a step in job {job} sets {key!r}; a step may set only "
+        f"{sorted(STEP_KEYS)}"
+        for key in step
+        if key not in STEP_KEYS
+    ]
+    if "uses" in step or not isinstance(run, str):
+        action = {key: value for key, value in step.items() if key != "name"}
+        if action not in CI_ACTIONS:
+            problems.append(f"ci: job {job} uses {step.get('uses')!r} as no pin gives")
+        return problems
+    return problems + _script_problems(job, run, _map(step.get("env")))
+
+
+def _script_problems(job: str, run: str, given: dict[object, object]) -> list[str]:
+    """A step's script: pinned, carrying exactly its pinned env, able to
+    fail, and free of a spliced template expression."""
+    script = script_lines(run)
+    # FP-40, N3: a template spliced into a script is expanded before the
+    # shell sees it -- script injection -- in whatever YAML spelling.
+    spliced = "${{" in run
+    problems = (
+        [f"ci: {run!r} splices a template expression into a run: script"]
+        if spliced
+        else []
+    )
     problems += [
-        f"ci: {command!r} cannot fail"
-        for command in commands
-        if SWALLOWED.search(command) and command != EXCUSED
+        f"ci: {line!r} cannot fail"
+        for line in script
+        if SWALLOWED.search(line) and line != EXCUSED
     ]
-    # FP-40: a run: script is shell, and github.base_ref (or any other
-    # attacker-influenced context) spliced straight into one is a template
-    # expanded before the shell ever sees it -- script injection, not a
-    # gate that merely reads a bad value. Every such expression must cross
-    # an env: variable instead, as the suppression-baseline step already
-    # does.
-    problems += [
-        f"ci: {command!r} splices a template expression into a run: script"
-        for command in commands
-        if "${{" in command
-    ]
-    problems += _ci_condition_problems(ci_text)
-    for key in ("continue-on-error", "PYTEST_ADDOPTS"):
-        if key in ci_text:
-            problems.append(f"ci: {key} is set; a gate would pass whatever it finds")
+    env = {str(key): str(value) for key, value in given.items()}
+    if script not in CI_STEPS:
+        problems.append(f"ci: job {job} runs a script no pin names: {_shown(script)!r}")
+    elif env != CI_STEPS[script]:
+        problems.append(
+            f"ci: {_shown(script)!r} does not carry exactly its pinned env "
+            f"{sorted(CI_STEPS[script])}"
+        )
     return problems
 
 
-def _gitleaks_problems(root: Path) -> list[str]:
-    hooks = _read(root, ".pre-commit-config.yaml") or ""
-    pinned = re.search(r"gitleaks/gitleaks\n\s*rev:\s*(v[\d.]+)", hooks)
-    ci = _read(root, ".github/workflows/ci.yml") or ""
-    image = re.search(r"ghcr\.io/gitleaks/gitleaks:(v[\d.]+)@sha256:[0-9a-f]{64}", ci)
-    if pinned is None or image is None:
-        return ["gitleaks: not pinned in both the hook and the CI image"]
-    if pinned.group(1) != image.group(1):
-        return [
-            f"gitleaks: hook {pinned.group(1)} and CI image {image.group(1)} differ"
-        ]
-    return []
+def _ci_problems(root: Path) -> list[str]:
+    """`ci.yml` read as Actions reads it (W2, W3, N3): the workflow's own
+    keys, each job's, and each step against the pins, then every pinned
+    script present."""
+    ci_text = _read(root, ".github/workflows/ci.yml")
+    ci_file = _ci_file(ci_text)
+    if ci_file is None:
+        return ["ci: .github/workflows/ci.yml is missing or not a mapping"]
+    problems = _ci_top_problems(ci_file)
+    present: set[tuple[str, ...]] = set()
+    for name, job in _jobs(ci_file):
+        problems += _job_problems(name, job)
+        for step in _seq(job.get("steps")):
+            problems += _step_problems(name, _map(step))
+            run = _map(step).get("run")
+            if isinstance(run, str):
+                present.add(script_lines(run))
+    return problems + [
+        f"ci: no step runs {_shown(script)!r}"
+        for script in CI_STEPS
+        if script not in present
+    ]
 
 
 def _table(mapping: dict[str, object], key: str) -> dict[str, object]:
@@ -852,7 +1111,6 @@ def configuration_problems(root: Path = REPO) -> list[str]:
         + _parity_problems(root)
         + _bundle_problems(root)
         + _ci_problems(root)
-        + _gitleaks_problems(root)
     )
 
 
