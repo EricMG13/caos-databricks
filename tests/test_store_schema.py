@@ -885,10 +885,42 @@ def test_newer_database_or_changed_applied_prefix_refuses(
 
 
 def test_apply_schema_closed_connection_is_sanitized(empty_database: str) -> None:
-    """rollback_or_close must retain the migration's safe refusal code."""
+    """rollback_or_close must retain a safe refusal code -- and a connection
+    that cannot answer is a store that could not answer, not drift (R24-05)."""
     conn = connect(empty_database)
     conn.close()
     with pytest.raises(Refusal) as caught:
+        apply_schema(conn)
+    assert caught.value.code is RefusalCode.STORE_UNAVAILABLE
+
+
+def test_apply_schema_answers_a_session_the_server_ended_as_unavailable(
+    empty_database: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """R24-05: the server ending the session mid-check (SQLSTATE 57P01) is an
+    interruption the worker's boot loop retries, not a drift finding it stops
+    on for good. The store is unchanged, so the next connection migrates."""
+    conn = connect(empty_database)
+    with psycopg.connect(empty_database, autocommit=True) as admin:
+        admin.execute("SELECT pg_terminate_backend(%s, 5000)", (conn.info.backend_pid,))
+    with pytest.raises(Refusal) as caught:
+        apply_schema(conn)
+    assert caught.value.code is RefusalCode.STORE_UNAVAILABLE
+    assert caught.value.__cause__ is None and caught.value.__suppress_context__
+    assert "57P01" in capsys.readouterr().err
+    with connect(empty_database) as again:
+        apply_schema(again)
+        store.verify_schema(again)
+
+
+def test_apply_schema_keeps_a_refused_statement_a_drift_finding(
+    empty_database: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A statement the database refuses (a ProgrammingError, not an outage)
+    is still drift: only an interruption changes code under R24-05."""
+    later = (*store.MIGRATIONS, ("probe_broken", "SELECT * FROM no_such_table"))
+    monkeypatch.setattr(store, "MIGRATIONS", later)
+    with connect(empty_database) as conn, pytest.raises(Refusal) as caught:
         apply_schema(conn)
     assert caught.value.code is RefusalCode.STORE_SCHEMA_DRIFT
 
@@ -1328,7 +1360,9 @@ def test_migration_deadlock_refuses_and_releases_its_partial_locks(
         migration.commit()
 
         def upgrade() -> None:
-            with pytest.raises(Refusal, match=r"^STORE_SCHEMA_DRIFT$"):
+            # A deadlock (40P01) is an interruption the next try clears, as the
+            # retry below shows: unavailable, never final drift (R24-05).
+            with pytest.raises(Refusal, match=r"^STORE_UNAVAILABLE$"):
                 apply_schema(migration)
             assert (
                 migration.info.transaction_status is psycopg.pq.TransactionStatus.IDLE

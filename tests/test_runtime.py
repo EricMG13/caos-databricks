@@ -53,7 +53,7 @@ from caos.graph.runtime import (
 from caos.methodology.bundle import MANIFEST_NAME, Bundle
 from caos.methodology.runner import ModuleProvider
 from caos.pricing import ModelPrice, worst_case
-from caos.refusals import Refusal, RefusalCode
+from caos.refusals import Refusal, RefusalCode, RunRefusal
 from caos.store import RunStatus, StoreConnection, connect
 from caos.store.budget import reserve as reserve_budget
 from caos.store.events import RunEvent, events_of
@@ -402,6 +402,56 @@ def test_the_final_pre_call_check_sees_a_late_revocation(
         assert conn.execute(
             "SELECT count(*) FROM " + table + " WHERE run_id=%s", (run.run_id,)
         ).fetchone() == (count,), table
+
+
+@pytest.mark.parametrize("change", ["revoked", "downgraded"])
+def test_authority_lost_during_a_call_leaves_the_paid_answer_to_replay(
+    case: tuple[StoreConnection, UUID],
+    route: ResolvedRoute,
+    blobs: BlobStore,
+    bundle: Bundle,
+    change: str,
+) -> None:
+    """R24-06: the post-call unit's run checks refuse a run whose authority
+    moved while its call was out -- a fact about the run, not the answer, as
+    `replay_billed` already treats it. Written down as the answer's
+    explanation, it excluded the paid answer from replay for good, so once
+    the approver was restored a Retry paid for CP-0 again."""
+    conn, case_id = case
+    run = _approved_run(conn, case_id, route, bundle, blobs)
+    actor = conn.execute(
+        "SELECT DISTINCT approved_by FROM run_gates WHERE run_id=%s", (run.run_id,)
+    ).fetchone()
+    assert actor is not None
+    actor_id = UUID(str(actor[0]))
+    conn.rollback()
+
+    def revoke_while_out() -> None:
+        with connect(_url_for(conn.info.dbname)) as other:
+            if change == "revoked":
+                revoke(other, case_id=case_id, user_id=actor_id)
+            else:
+                grant(
+                    other, case_id=case_id, user_id=actor_id, standing=Standing.READER
+                )
+            other.commit()
+
+    first = run.provider(at_call=revoke_while_out)
+    with pytest.raises(RunRefusal, match=r"^GATE_APPROVAL_MISMATCH$"):
+        run.run(first)
+    assert first.calls == ["CP-0"]
+    assert _refusals(run) == []
+    conn.rollback()
+    grant(conn, case_id=case_id, user_id=actor_id, standing=Standing.APPROVER)
+    conn.commit()
+
+    again = run.provider()
+    run.run(again)
+
+    assert again.calls == ["CP-L10", "CP-5"], "CP-0 is replayed, not paid again"
+    assert list(_attempts_per_module(conn, run.run_id).values()) == [1, 1, 1]
+    assert _count(run, "budget_ledger") == len(LITE_ORDER)
+    assert run_status(conn, run.run_id) is RunStatus.COMPLETE
 
 
 def test_provider_transport_is_idle_and_holds_no_case_or_run_lock(

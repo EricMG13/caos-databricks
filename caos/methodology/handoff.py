@@ -37,6 +37,7 @@ from caos.evidence.citations import (
     Citation,
     CitationRule,
     Rect,
+    occurrences,
 )
 from caos.graph.route import MODEL_MODULE
 from caos.methodology.vendor import VendorContract
@@ -843,15 +844,29 @@ def _quoted(words: list[str], openings: dict[str, tuple[int, ...]], quote: str) 
     Nothing here widens what may be *cited*: `verify_citations` anchors against
     the document's own tokens and is untouched. This decides only whether the
     module quoted, in its own narrative, what it says it quoted.
+
+    The work is the body's and the quote's, never their product (R24-09).
+    Each start is compared a quote's length at a time while that costs no
+    more than the body; past that -- a word the body repeats and a quote that
+    near-matches at each -- the inner words' runs are found in one pass
+    instead (`occurrences`), and a start is then judged by its edges alone.
     """
     wanted = quote.split()
     if not wanted:
         return False
     span = len(wanted)
+    starts = [
+        start for start in openings.get(wanted[0], ()) if start + span <= len(words)
+    ]
+    if span <= 2 or len(starts) * span <= len(words):
+        return any(_carried(words[start : start + span], wanted) for start in starts)
+    inner = {at - 1 for at in occurrences(words, wanted[1:-1])}
+    edges = [wanted[0], wanted[-1]]
+    # With the inner words matched, the edge words are the window left.
     return any(
-        _carried(words[start : start + span], wanted)
-        for start in openings.get(wanted[0], ())
-        if start + span <= len(words)
+        _carried([words[start], words[start + span - 1]], edges)
+        for start in starts
+        if start in inner
     )
 
 
@@ -1318,7 +1333,9 @@ def _research_messages(
             SimpleNamespace(fields=fields, text=text), research_brief_of(identity)
         )
     except ValueError as refused:  # the vendor's own message, bounded
-        return [("research", refused)]
+        # As text, here at the vendor's boundary: `_bounded` passes strings
+        # alone, and the exception itself was dropped there (R24-07).
+        return [("research", _vendor_said(refused))]
     except Refusal:  # no bound brief: a help line never stops a run
         return []
     return []
@@ -1332,8 +1349,16 @@ def _t8_messages(
     try:
         nav.parse_t8(text, nav.validate_catalog(catalog))
     except ValueError as refused:  # the vendor's NavigationError
-        return [("navigation", str(refused))]
+        return [("navigation", _vendor_said(refused))]
     return []
+
+
+def _vendor_said(refused: ValueError) -> str | None:
+    """A vendor refusal's own message as text, or nothing when rendering it
+    fails; `_bounded` then cuts and checks it like every vendor line."""
+    with suppress(Exception):
+        return str(refused)
+    return None
 
 
 def _bounded(label: str, message: object) -> str | None:

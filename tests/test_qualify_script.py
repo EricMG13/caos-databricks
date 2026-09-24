@@ -568,6 +568,40 @@ def test_a_run_ceiling_of_zero_is_the_operators_and_spends_nothing(
     assert created == [] and provider.prompts == []
 
 
+@pytest.mark.parametrize(
+    "refused",
+    [
+        (0, "5.00", "QUALIFICATION_SET_EMPTY"),
+        (1, "Infinity", "MONEY_INVALID"),
+        (1, "sNaN", "MONEY_INVALID"),
+    ],
+)
+def test_the_derived_run_ceiling_is_computed_only_from_what_admission_accepts(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    created: list[str],
+    refused: tuple[int, str, str],
+) -> None:
+    """R24-N03: with no `--run-ceiling`, the set ceiling was divided by the
+    case count and quantized before either was checked, so an empty set raised
+    `DivisionByZero` and `--ceiling Infinity` `InvalidOperation`: a traceback
+    and exit 1 where every pre-spend refusal is a typed code and exit 2."""
+    cases, ceiling, code = refused
+    provider = _FakeProvider()
+    _refused_before_the_database(monkeypatch, tmp_path, provider)
+    root = _write_lite_set(tmp_path / "set")
+    if not cases:
+        manifest = json.loads((root / MANIFEST).read_text(encoding="utf-8"))
+        (root / MANIFEST).write_text(json.dumps({**manifest, "cases": []}))
+
+    argv = [str(root), "--expect-identity", "test-fake-identity", "--ceiling", ceiling]
+    assert qualify.main(argv) == 2
+    err = capsys.readouterr().err
+    assert f"{code}: the set was refused; nothing was spent" in err
+    assert created == [] and provider.prompts == []
+
+
 def test_a_set_prepare_would_refuse_creates_no_database(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

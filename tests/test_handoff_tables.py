@@ -254,6 +254,40 @@ def test_a_figure_past_the_wire_bound_has_no_value_and_keeps_its_text() -> None:
     assert table.rows == ((TableCell("1e64", None),),)
 
 
+@pytest.mark.parametrize(
+    "cell",
+    [
+        "123456789012345678901234567890",
+        "9" * 63,
+        "9" * 64,
+        "1e62",
+        "1e1000000",
+        "1e-62",
+        "1,234,567.891234567890123456789",
+        "0e1000000",
+    ],
+)
+def test_an_accounting_parenthesis_is_the_positive_figure_negated(cell: str) -> None:
+    """R24-10: unary minus applied the ambient 28-digit context, so the
+    parenthesized form of a 30-digit figure was rounded where the figure was
+    not, and `(1e1000000)` raised `decimal.Overflow` out of the table reader
+    where the positive form is simply served no value. The sign is now exact
+    and context-free: the parenthesized cell reads as the minus-signed one --
+    the positive figure negated, or no value exactly where that has none (the
+    sign counts toward `FIGURE_CHARS`, as the wire's bound does)."""
+    positive = figure_value(CONTRACT, cell)
+    negated = figure_value(CONTRACT, f"({cell})")
+    assert negated == figure_value(CONTRACT, f"-{cell}")
+    if positive is None:
+        assert negated is None
+    elif negated is not None:
+        # `copy_negate`: unary minus here would round, as the reader did.
+        assert Decimal(negated) == Decimal(positive).copy_negate()
+        assert negated == ("-" + positive if Decimal(positive) else positive)
+    [table] = handoff_tables(CONTRACT, _tagged("t.x", ["v"], [[f"({cell})"]])).tables
+    assert table.rows == ((TableCell(f"({cell})", negated),),)
+
+
 def test_zero_is_served_without_a_sign() -> None:
     for cell, plain in (("(0)", "0"), ("-0", "0"), ("-0.00", "0.00"), ("0e5", "0")):
         assert figure_value(CONTRACT, cell) == plain

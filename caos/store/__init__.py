@@ -247,6 +247,12 @@ _STORE_SILENT = frozenset(
     {RefusalCode.STORE_UNAVAILABLE, RefusalCode.STORE_NOT_TRANSACTIONAL}
 )
 
+# R24-05: the SQLSTATE classes that say the session or the server could not
+# answer this time -- connection exception, transaction rollback, insufficient
+# resources, operator intervention (an ended session, a cancelled statement) --
+# rather than that the database refused a statement the declared history holds.
+_INTERRUPTED = frozenset({"08", "40", "53", "57"})
+
 
 class RunStatus(StrEnum):
     """A run's own state. Node states are the bundle's four and are not these."""
@@ -377,10 +383,28 @@ def apply_schema(conn: StoreConnection, *, sql: str = SCHEMA) -> None:
         # SQLSTATE is the standard's five-character class code, never text --
         # but the field is the server's, so the length is this module's.
         print(f"schema: sqlstate {(fault.sqlstate or '?????')[:5]}", file=sys.stderr)
-        raise Refusal(RefusalCode.STORE_SCHEMA_DRIFT) from None
+        raise Refusal(_schema_fault_code(fault)) from None
     except BaseException:
         rollback_or_close(conn)
         raise
+
+
+def _schema_fault_code(fault: psycopg.Error) -> RefusalCode:
+    """`STORE_UNAVAILABLE` for an interruption, `STORE_SCHEMA_DRIFT` otherwise.
+
+    An interruption is the store failing to answer (R24-05): a session the
+    client saw close carries no SQLSTATE at all, and a server that ended it or
+    cancelled the statement says so by class. The worker's boot loop asks the
+    store again after one; drift is final, so only a statement the database
+    refused -- a disagreement with what it holds -- may be named drift.
+    """
+    if fault.sqlstate is None:
+        interrupted = isinstance(fault, psycopg.OperationalError)
+    else:
+        interrupted = fault.sqlstate[:2] in _INTERRUPTED
+    return (
+        RefusalCode.STORE_UNAVAILABLE if interrupted else RefusalCode.STORE_SCHEMA_DRIFT
+    )
 
 
 def verify_schema(conn: StoreConnection) -> None:

@@ -197,3 +197,16 @@ class Refusal(Exception):
 
     def __repr__(self) -> str:
         return f"Refusal({self.code.value})"
+
+
+class RunRefusal(Refusal):
+    """A refusal about the run -- its attempt, its pin, its live authority --
+    raised after the run's call was recorded: never an explanation of what
+    the call answered (R24-06).
+
+    The code still travels alone. The class is the provenance, because one
+    code can name either: `EVIDENCE_NOT_AVAILABLE` or `ROUTE_IDENTITY_INVALID`
+    is the run's from the post-call run checks and the answer's from judging
+    it. Written down as the answer's, an approver who loses standing while a
+    call is out would exclude that paid answer from replay for good.
+    """

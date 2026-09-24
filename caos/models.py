@@ -156,11 +156,8 @@ class ChatCompletions:
             sent += 1
             answer = _invoked(self.chat, prompt, options, deadline - _clock())
             if isinstance(answer, OpenAIError):
-                if not _waited_out(answer, sent, deadline):
+                if not _sends_again(answer, sent, deadline):
                     return Completion(None, None, None, _status_refusal(answer))
-                # Nothing was billed yet; what the caller installed decides
-                # whether the call may still be made (ST-7), and raises if not.
-                check_resend()
                 continue
             if answer is None:
                 # Indeterminate: the request may have been delivered and
@@ -317,6 +314,19 @@ def _content_parts_contained() -> Iterator[None]:
             "ignore", message=_CONTENT_PARTS_WARNING, category=UserWarning
         )
         yield
+
+
+def _sends_again(failed: OpenAIError, sent: int, deadline: float) -> bool:
+    """Whether the call is sent again after `failed`: a rate limit waited out
+    (`_waited_out`), every installed check asked, and time still left."""
+    if not _waited_out(failed, sent, deadline):
+        return False
+    # Nothing was billed yet; what the caller installed decides whether the
+    # call may still be made (ST-7), and raises if not.
+    check_resend()
+    # The wait and the fence can spend what was left (R24-08): nothing is
+    # started past the one deadline, and the rate limit is then the answer.
+    return _clock() < deadline
 
 
 def _waited_out(failed: OpenAIError, sent: int, deadline: float) -> bool:

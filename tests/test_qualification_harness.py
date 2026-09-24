@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
@@ -42,7 +43,7 @@ from uuid import UUID, uuid4
 import psycopg
 import pytest
 from canonical_fixtures import LITE_PROFILE, LITE_SELECTION, CanonicalCompletions
-from conftest import priced, route_fault, tamper
+from conftest import every_block, priced, route_fault, tamper
 from fake_chat import fake_completions
 from test_gates import _approval
 
@@ -481,6 +482,72 @@ def test_a_key_naming_a_quote_its_document_actually_carries_is_answerable(
         )
 
         assert performed.matrix is not None
+
+
+# A line a sentence ends with a full stop, and a word NFC composes (R24-18).
+_STOPPED = "Soci\u00e9t\u00e9 total debt at 31 December 2026 was USD 1,240.0m."
+
+
+@pytest.mark.parametrize(
+    ("spelling", "anchors"),
+    [
+        (_STOPPED, True),
+        (_STOPPED.rstrip("."), True),
+        (f"\u201c{_STOPPED}\u201d", True),
+        (unicodedata.normalize("NFD", _STOPPED), True),
+        (_STOPPED.replace("1,240.0m", "1,250.0m"), False),
+        (_STOPPED.replace("total debt", "debt total"), False),
+    ],
+)
+def test_the_pre_spend_key_check_never_refuses_what_the_answer_rule_anchors(
+    case: tuple[StoreConnection, UUID],
+    tmp_path: Path,
+    spelling: str,
+    anchors: bool,
+) -> None:
+    """R24-18: F228's pre-spend check compared raw tokens, stricter than the
+    whole-line rule an answer's citation is anchored by, which forgives a
+    sentence's full stop, quotation marks at the line's ends and NFC. So
+    `assert_admissible` refused `QUALIFICATION_KEY_UNANSWERABLE` for keys a
+    correct run meets. It refuses now only a key no rule could anchor -- a
+    wrong figure, words out of order -- still before any call."""
+    from caos.evidence.citations import WHOLE_LINE, Citation, verify_citations
+    from caos.evidence.ingest import admit_pack
+    from caos.qualification.harness import assert_admissible
+
+    data = f"Acme Holdings plc annual report 2026\n{_STOPPED}\n".encode()
+    conn, case_id = case
+    [source_id] = admit_pack(
+        conn,
+        BlobStore(tmp_path / "blobs"),
+        case_id=case_id,
+        documents=[Document(filename=BoundaryText.of("report.txt"), data=data)],
+    )
+    try:
+        verify_citations(
+            conn,
+            delivered=every_block(conn, source_id),
+            citations=[Citation(source_id, 1, spelling)],
+            rule=WHOLE_LINE,
+        )
+        anchored = True
+    except Refusal as refused:
+        assert refused.code is RefusalCode.CITATION_NOT_LOCATED
+        anchored = False
+    assert anchored is anchors
+    harness = Harness(
+        bundle=Bundle(root=VENDORED),
+        catalog=CATALOG,
+        completions=_Completions(),
+        price=priced(ESTIMATE),
+        ceiling=SET_CEILING,
+    )
+    qualification = QualificationSet(cases=(_case("acme-2026", data, quote=spelling),))
+    if anchors:
+        assert assert_admissible(harness, qualification=qualification)
+    else:
+        with pytest.raises(Refusal, match=r"^QUALIFICATION_KEY_UNANSWERABLE$"):
+            assert_admissible(harness, qualification=qualification)
 
 
 def test_a_set_that_could_outspend_its_ceiling_is_refused_before_it_starts(

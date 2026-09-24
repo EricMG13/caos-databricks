@@ -521,6 +521,98 @@ def test_the_body_is_indexed_once_rather_than_scanned_per_citation() -> None:
     )
 
 
+class _Counted(str):
+    """A body word that counts how often it is compared."""
+
+    compared = 0
+    __hash__ = str.__hash__
+
+    def __eq__(self, other: object) -> bool:
+        _Counted.compared += 1
+        return str.__eq__(self, other)
+
+    def __ne__(self, other: object) -> bool:
+        _Counted.compared += 1
+        return str.__ne__(self, other)
+
+
+@pytest.mark.parametrize("found", [True, False])
+def test_a_near_match_repeated_through_the_body_costs_the_body_not_its_product(
+    found: bool,
+) -> None:
+    """R24-09: every place the quote's first word stands was compared a whole
+    quote's length, so a body of one repeated word and a quote failing only
+    at its last word cost the body times the quote -- per citation, up to
+    `MAX_CITATIONS` of them. The work is now bounded by the two together."""
+    from caos.methodology import handoff
+
+    size, span = 600, 200
+    words = [_Counted("a")] * (size - 1) + [_Counted("b" if found else "c")]
+    openings = handoff._openings(list(words))
+    quote = " ".join(["a"] * (span - 1) + ["b"])
+    _Counted.compared = 0
+    assert handoff._quoted(list(words), openings, quote) is found
+    assert _Counted.compared <= 4 * (size + span), _Counted.compared
+
+
+def test_the_bounded_quote_check_finds_what_every_start_found() -> None:
+    """R24-09: the bounded check against the check it replaced -- every start,
+    a quote's length each -- on bodies built to collide: a two-word vocabulary
+    wearing quotation marks, brackets and full stops, so both the one-by-one
+    and the one-pass branch are taken, over thousands of quotes."""
+    import random
+
+    from caos.evidence.citations import occurrences
+    from caos.methodology import handoff
+
+    assert list(occurrences(["a", "a", "b", "a", "a"], ["a", "a"])) == [0, 3]
+    assert list(occurrences(["a", "a", "a"], ["a", "a"])) == [0, 1]
+    assert list(occurrences(["a", "b"], ["c"])) == []
+
+    def every_start(words: list[str], quote: str) -> bool:
+        wanted = quote.split()
+        return bool(wanted) and any(
+            handoff._carried(words[start : start + len(wanted)], wanted)
+            for start in range(len(words) - len(wanted) + 1)
+        )
+
+    rng = random.Random(24_09)
+    spellings = ["a", "b", '"a', 'b"', "(a", "a).", "b,", "\u201ca\u201d"]
+    for _ in range(3_000):
+        words = [rng.choice(spellings) for _ in range(rng.randint(1, 30))]
+        openings = handoff._openings(words)
+        quote = " ".join(rng.choice("ab") for _ in range(rng.randint(1, 8)))
+        assert handoff._quoted(words, openings, quote) is every_start(words, quote), (
+            words,
+            quote,
+        )
+
+
+def test_the_public_parser_answers_repeated_near_matches_in_linear_time() -> None:
+    """R24-09 at the public boundary: quotes that each match only at the body's
+    end, after a near match at every earlier word, used to cost about half a
+    second each here, and `MAX_CITATIONS` of them far longer. Typography is
+    judged as before: the edge words may wear quotation marks, the inner words
+    match exactly."""
+    size = 20_000
+    body = "---\nmodule_id: CP-0\n---\n\n" + " ".join(["a"] * size) + " b.\n"
+    quotes = [
+        _citation(matched_text=" ".join(["a"] * (size // 2 + n) + ["b"]))
+        for n in range(8)
+    ]
+    started = time.perf_counter()
+    _markdown, citations = parse_response(
+        wire(body.encode(), quotes), delivered=DELIVERED
+    )
+    spent = time.perf_counter() - started
+    assert len(citations) == len(quotes)
+    assert spent < 1.0, spent
+    missing = _citation(matched_text=" ".join(["a"] * (size // 2) + ["c"]))
+    assert (
+        _parse_refused(wire(body.encode(), [missing])) is RefusalCode.HANDOFF_MALFORMED
+    )
+
+
 def test_a_record_contradicting_its_own_identity_refuses(tmp_path: Path) -> None:
     blobs, artifact, sha = _stored(tmp_path, _record(authority_bundle_sha256="e" * 64))
     _mismatch(blobs, artifact, sha, CP0)

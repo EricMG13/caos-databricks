@@ -51,6 +51,7 @@ that omits the cases after the stop reads as complete.
 from __future__ import annotations
 
 import json
+import unicodedata
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, fields
@@ -768,19 +769,27 @@ def _accepted(
 
 
 def _locatable(data: bytes, matched_text: str) -> bool:
-    """Whether `matched_text` occurs, in order, in some page of `data` (FP-26).
+    """Whether `matched_text` could be anchored on some page of `data` (FP-26):
+    a necessary condition, never a sufficient one.
 
-    Deliberately not the full search a real citation is verified by
-    (`caos/evidence/citations.py`'s region-scoped, normalising `_unique_run`):
-    that module's search machinery is private to it, and
-    `test_package_boundaries.py` refuses a private name imported across a
-    package for exactly the reason this one stays local -- only the public
-    `dispatch_by_content`/`Token` (`caos/evidence/extract.py`) are used here.
-    A plain, honest word-run check is enough for what this guards: a key
-    naming a quote the document could not possibly produce. The real search's
-    finer rules (normalisation, edge punctuation, tracked-glyph joining) can
-    only ever find *more* than this does, so this never refuses a quote the
-    real search would anchor -- it only catches the ones neither could.
+    Not the search a real citation is verified by (`caos/evidence/citations.py`,
+    whose machinery is private to it: `test_package_boundaries.py` refuses a
+    private name imported across a package, so only the public
+    `dispatch_by_content`/`Token` of `caos/evidence/extract.py` are used here).
+    What this guards is a key naming a quote the document could not possibly
+    produce -- a wrong word or figure, words out of order -- and it must never
+    refuse one that search anchors (R24-18). Raw token equality did: the
+    whole-line rule an answer is held to forgives a sentence's full stop and
+    quotation marks at the line's ends, and compares NFC.
+
+    So both sides are compared in a form no rule's forgiveness can reach
+    (`_letters`): letters and digits alone, compatibility-decomposed and
+    case-folded, with every space, mark and punctuation dropped. Everything
+    that search forgives -- edge punctuation, NFC, whitespace between words,
+    tracked glyphs joined into a word -- changes only what this form drops, so
+    a quote any rule anchors on a page is a substring of that page's form in
+    token order. The price is the other direction: a key wrong only in its
+    punctuation passes here and misses in the run.
 
     A document with no extracted text at all is a different, more specific
     problem than a wrong key -- `SOURCE_HAS_NO_TEXT`, raised moments later by
@@ -788,21 +797,24 @@ def _locatable(data: bytes, matched_text: str) -> bool:
     masking it. Unreadable bytes (`SOURCE_NOT_READABLE` and the like) are left
     to raise from here: the same refusal admission would give them anyway.
     """
-    words = matched_text.split()
-    if not words:
+    if not matched_text.split():
         return False
     tokens = dispatch_by_content(data).extract(data)
     if not tokens:
         return True
     by_page: dict[int, list[str]] = defaultdict(list)
     for token in tokens:
-        by_page[token.page].append(token.text)
-    width = len(words)
-    return any(
-        texts[start : start + width] == words
-        for texts in by_page.values()
-        for start in range(len(texts) - width + 1)
-    )
+        by_page[token.page].append(_letters(token.text))
+    wanted = _letters(matched_text)
+    return any(wanted in "".join(texts) for texts in by_page.values())
+
+
+def _letters(text: str) -> str:
+    """`text`'s letters and digits alone: NFKD, case-folded, every mark,
+    space and punctuation dropped. Character by character, so a page's form is
+    the join of its tokens' forms; and NFC-equal text has one form."""
+    folded = unicodedata.normalize("NFKD", text).casefold()
+    return "".join(character for character in folded if character.isalnum())
 
 
 def _answerable(bundle: Bundle, qualification: QualificationSet) -> None:
