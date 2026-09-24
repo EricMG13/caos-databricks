@@ -11,7 +11,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
-from canonical_fixtures import AUTHORED, BUNDLE, CATALOG, CONTRACT, RUN, skill
+from canonical_fixtures import (
+    AUTHORED,
+    BUNDLE,
+    CATALOG,
+    CONTRACT,
+    RUN,
+    skill,
+    whole_line,
+)
 from lite_route_fixtures import _table, _yaml
 
 from caos.graph.route import resolve_route
@@ -65,7 +73,10 @@ No agency-issued action, criteria publication or recovery-rating report was deli
 
 
 PACK = rating_pack()
-QUOTE = "Issuer disclosure reports S&P corporate rating BB, outlook Negative"
+# The whole rating line of the pack (N28).
+QUOTE = whole_line(
+    PACK, "Issuer disclosure reports S&P corporate rating BB, outlook Negative"
+)
 
 _SCRIPT = (
     Path(__file__).resolve().parents[1]

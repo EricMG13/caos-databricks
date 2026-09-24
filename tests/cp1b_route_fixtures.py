@@ -17,6 +17,7 @@ from canonical_fixtures import (
     conforming_rows,
     fields_from_prompt,
     skill,
+    whole_line,
     wire,
 )
 from lite_route_fixtures import _table, _yaml
@@ -122,13 +123,11 @@ def earnings_pack(facts: EarningsFacts) -> bytes:
 
 
 PACK = earnings_pack(EARNINGS_FACTS)
-QUOTES = {
-    "CP-0": "FY2025 revenue 1100 EBITDA 220 operating cash flow 155",
-    "CP-1": "FY2025 revenue 1100 EBITDA 220",
-    "CP-1B": "FY2025 revenue 1100 EBITDA 220 operating cash flow 155",
-    "CP-2": "FY2025 revenue 1100 EBITDA 220 operating cash flow 155",
-    "CP-5": "FY2025 revenue 1100 EBITDA 220 operating cash flow 155",
-}
+# The whole line each module cites (N28).
+QUOTES = dict.fromkeys(
+    ("CP-0", "CP-1", "CP-1B", "CP-2", "CP-5"),
+    whole_line(PACK, "FY2025 revenue 1100 EBITDA 220 operating cash flow 155"),
+)
 
 
 def cp1b_identity(
@@ -535,9 +534,11 @@ def _t8(readiness: dict[str, str]) -> list[list[str]]:
 
 
 def _quote(facts: EarningsFacts) -> str:
-    return (
+    """The whole current-year line of the pack `facts` make (N28)."""
+    return whole_line(
+        earnings_pack(facts),
         f"FY2025 revenue {facts.current_revenue} EBITDA {facts.current_ebitda} "
-        f"operating cash flow {facts.current_operating_cash_flow}"
+        f"operating cash flow {facts.current_operating_cash_flow}",
     )
 
 

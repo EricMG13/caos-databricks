@@ -22,8 +22,10 @@ from test_loop_charges import ESTIMATE, MODEL, REPORTED, _Completions
 
 from caos.blobs import BlobStore
 from caos.evidence.citations import (
+    ANY_RUN,
     AnchoredCitation,
     Citation,
+    CitationRule,
     TokenIndex,
     verify_citations,
 )
@@ -263,9 +265,10 @@ def test_postbilling_citation_cleanup_preserves_money_and_original_refusal(
         delivered: Mapping[UUID, frozenset[str]],
         citations: Sequence[Citation],
         index: TokenIndex | None = None,
+        rule: CitationRule = ANY_RUN,
     ) -> list[AnchoredCitation]:
         anchored = verify_citations(
-            conn, delivered=delivered, citations=citations, index=index
+            conn, delivered=delivered, citations=citations, index=index, rule=rule
         )
         if broken_cleanup:
             monkeypatch.setattr(psycopg.Connection, "rollback", broken)

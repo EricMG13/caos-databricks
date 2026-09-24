@@ -19,6 +19,7 @@ from canonical_fixtures import (
     conforming_rows,
     fields_from_prompt,
     skill,
+    whole_line,
     wire,
 )
 from canonical_route_fixtures import (
@@ -110,7 +111,10 @@ Widely held issuer with seven of nine directors classified as independent
 
 
 PACK = debate_pack()
-QUOTE = "Acme senior secured loan mid price 98 spread 350 basis points"
+# The whole line CP-5 and CP-6 cite (N28).
+QUOTE = whole_line(
+    PACK, "Acme senior secured loan mid price 98 spread 350 basis points"
+)
 ROUTE_PACK = CANONICAL_PACK + PACK
 ROUTE_QUOTES = {
     module: CANONICAL_QUOTES[module]

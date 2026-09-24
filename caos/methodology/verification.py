@@ -332,10 +332,16 @@ def _reanchored(
         refuse,
         Step.CITATION_ANCHOR,
         lambda: verify_citations(
-            conn, delivered=evidence.delivered, citations=requests, index=evidence.index
+            conn,
+            delivered=evidence.delivered,
+            citations=requests,
+            index=evidence.index,
+            rule=record.citation_rule,
         ),
     )
-    # Same quotes, same rectangles, inside the captured blocks.
+    # Same quotes, same rectangles, inside the captured blocks -- located by
+    # the rule the record was accepted under (N28), so a record accepted
+    # before the whole-line rule re-anchors as it always has.
     if tuple(anchored) != record.citations:
         raise _refusal(refuse, Step.CITATION_MOVED, _MISMATCH)
     return record.citations

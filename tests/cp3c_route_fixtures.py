@@ -19,6 +19,7 @@ from canonical_fixtures import (
     conforming_rows,
     fields_from_prompt,
     skill,
+    whole_line,
     wire,
 )
 from canonical_route_fixtures import (
@@ -120,9 +121,11 @@ PACK = refinancing_pack(FACTS)
 
 
 def source_quote(facts: RefinancingFacts) -> str:
-    return (
+    """The whole term-loan line of the pack `facts` make (N28)."""
+    return whole_line(
+        refinancing_pack(facts),
         f"Term loan carrying value {facts.carrying_debt} USD million; "
-        f"gross principal {facts.gross_principal} USD million"
+        f"gross principal {facts.gross_principal} USD million",
     )
 
 

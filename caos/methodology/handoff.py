@@ -30,7 +30,14 @@ from uuid import UUID
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText, hides_text
 from caos.digest import canonical_json
-from caos.evidence.citations import AnchoredCitation, Citation, Rect
+from caos.evidence.citations import (
+    ANY_RUN,
+    CITATION_RULES,
+    AnchoredCitation,
+    Citation,
+    CitationRule,
+    Rect,
+)
 from caos.graph.route import MODEL_MODULE
 from caos.methodology.vendor import VendorContract
 from caos.provider import MAX_RESPONSE_BYTES
@@ -678,7 +685,9 @@ class CanonicalRecord:
     `delivered_authority_digest` binds exactly the authority files the prompt
     carried (§45.1); `lineage` is the whole accepted chain behind the direct
     upstream, ordered by route node id, each pair read from the stored records
-    (§45.4).
+    (§45.4). `citation_rule` is how `citations` were located when it was
+    accepted (N28), and so how a reader re-anchors them: `ANY_RUN` for every
+    record written before the whole-line rule, which carries no such field.
     """
 
     artifact_sha256: str
@@ -692,6 +701,7 @@ class CanonicalRecord:
     lineage: tuple[LineageRef, ...]
     projections: Projections
     citations: tuple[AnchoredCitation, ...]
+    citation_rule: CitationRule = ANY_RUN
 
 
 def _unique(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -1338,11 +1348,15 @@ def record_bytes(record: CanonicalRecord) -> bytes:
     ran -- so a field added for the CONDITIONAL case did not invalidate records
     already stored. The mapping is still one-to-one: absent means no row, and
     `_decoded_record` reads it back as the empty tuple, so `record_bytes` of a
-    decoded record is the bytes it was decoded from.
+    decoded record is the bytes it was decoded from. `citation_rule` is kept
+    the same way (N28): written only when it is not `ANY_RUN`, the rule every
+    record stored before the field existed was anchored by.
     """
     document: dict[str, Any] = {"format": RECORD_FORMAT, **asdict(record)}
     if not document["projections"]["blockers"]:
         del document["projections"]["blockers"]
+    if document["citation_rule"] == ANY_RUN:
+        del document["citation_rule"]
     if document["identity"]["research_brief"] is None:
         del document["identity"]["research_brief"]
     for citation in document["citations"]:
@@ -1399,6 +1413,21 @@ def _with_research(value: object) -> dict[str, Any]:
     return {**value, "research_brief": None}
 
 
+def _with_rule(value: dict[str, Any]) -> dict[str, Any]:
+    """Supply the `ANY_RUN` a record omits (every record written before the
+    whole-line rule, N28), so `_typed`'s closed key set holds for both."""
+    return value if "citation_rule" in value else {**value, "citation_rule": ANY_RUN}
+
+
+def _citation_rule(value: object) -> CitationRule:
+    """A stored rule this build names, or `ValueError`: a record naming a
+    rule nothing here anchors by cannot be re-anchored as accepted."""
+    for rule in CITATION_RULES:
+        if value == rule:
+            return rule
+    raise ValueError
+
+
 def _optional_str(value: object) -> str | None:
     if value is None:
         return None
@@ -1424,7 +1453,8 @@ def _decoded_record(data: bytes) -> CanonicalRecord:
         raise ValueError
     return _typed(
         CanonicalRecord,
-        document,
+        _with_rule(document),
+        citation_rule=_citation_rule,
         identity=lambda item: _typed(
             HostIdentity,
             _with_research(item),

@@ -42,9 +42,7 @@ def _line(n: int) -> str:
 
 
 # Three fixed-pitch pages of sixty lines; the fixtures' quote opens page one.
-DOCUMENT = (
-    f"{QUOTE} was USD 1,240.0m\n" + "".join(f"{_line(n)}\n" for n in range(1, 180))
-).encode()
+DOCUMENT = (f"{QUOTE}\n" + "".join(f"{_line(n)}\n" for n in range(1, 180))).encode()
 
 
 @pytest.fixture

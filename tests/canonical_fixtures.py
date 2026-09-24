@@ -338,8 +338,18 @@ def fields_from_prompt(prompt: str) -> dict[str, Any]:
     return dict(parsed)
 
 
-# Whole words of the harness report's page 1, repeated in every handoff body.
-QUOTE = "Total debt at 31 December 2026"
+# One whole line of the harness report's page 1, repeated in every handoff
+# body: an answer's quote is one whole evidence line (N28).
+QUOTE = "Total debt at 31 December 2026 was USD 1,240.0m"
+
+
+def whole_line(pack: bytes, words: str) -> str:
+    """The one line of `pack` that holds `words`: what a module cites, since an
+    accepted quote is one whole evidence line (N28)."""
+    [line] = [line for line in pack.decode().splitlines() if words in line]
+    return line
+
+
 # Whole words of the body that no evidence carries.
 UNANCHORED = "Leverage was unchanged"
 # The authored fields a validated `qa_status` must agree with.

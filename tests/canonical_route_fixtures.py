@@ -25,6 +25,7 @@ from canonical_fixtures import (
     fields_from_prompt,
     research_brief,
     skill,
+    whole_line,
     wire,
 )
 from lite_route_fixtures import _table, _yaml
@@ -51,16 +52,20 @@ Acme peer and market table dated 2026-09-08
 Beta plc revenue 900 EBITDA 180 debt 500 cash 80 FY2025 USD million
 Acme loan mid price 98 spread 350 basis points Beta loan spread 320 basis points
 """
+# Each module cites the whole line of the pack its fact is on (N28).
 QUOTES = {
-    "CP-0": "Acme Holdings plc FY2025 annual report extract",
-    "CP-1": "Revenue 1000 EBITDA 200 cash 100 debt 600",
-    "CP-1C": "Beta plc revenue 900 EBITDA 180 debt 500 cash 80",
-    "CP-2": "Operating cash flow 140 and free cash flow 100",
-    "CP-4": "Maximum net leverage 4.0 times tested annually against covenant EBITDA",
-    "CP-3D": "Acme loan mid price 98 spread 350 basis points",
-    "CP-2A": "downside revenue growth minus 10 percent",
-    "CP-2G": "FY2026 base revenue growth 5 percent",
-    "CP-3": "Beta loan spread 320 basis points",
+    module: whole_line(PACK, words)
+    for module, words in {
+        "CP-0": "Acme Holdings plc FY2025 annual report extract",
+        "CP-1": "Revenue 1000 EBITDA 200 cash 100 debt 600",
+        "CP-1C": "Beta plc revenue 900 EBITDA 180 debt 500 cash 80",
+        "CP-2": "Operating cash flow 140 and free cash flow 100",
+        "CP-4": "Maximum net leverage 4.0 times tested annually against covenant",
+        "CP-3D": "Acme loan mid price 98 spread 350 basis points",
+        "CP-2A": "downside revenue growth minus 10 percent",
+        "CP-2G": "FY2026 base revenue growth 5 percent",
+        "CP-3": "Beta loan spread 320 basis points",
+    }.items()
 }
 LIMITATION = (
     "Peer sample contains one comparable issuer; sizing requires portfolio data"
@@ -523,17 +528,16 @@ class RouteCompletions:
             ),
         )
         self.answers.append(markdown)
+        # One citation per line of the module's quote: an accepted quote is
+        # one whole evidence line (N28), so the forecast owners cite each
+        # assignment line on its own.
+        quote = self.quotes_by_module.get(module, QUOTES[module])
         return Completion(
             wire(
                 markdown,
                 [
-                    {
-                        "source_id": str(self.source_id),
-                        "page": 1,
-                        "matched_text": self.quotes_by_module.get(
-                            module, QUOTES[module]
-                        ),
-                    }
+                    {"source_id": str(self.source_id), "page": 1, "matched_text": line}
+                    for line in quote.splitlines()
                 ],
             ),
             self.charge,

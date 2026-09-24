@@ -33,7 +33,7 @@ from canonical_fixtures import BUNDLE, CATALOG, research_brief
 from caos.boundary_text import BoundaryText
 from caos.evidence.citations import _match_at, _Token
 from caos.evidence.extract import DEFAULT_LIMITS, dispatch_by_content
-from caos.evidence.ingest import Document
+from caos.evidence.ingest import Document, token_groups
 from caos.graph.route import resolve_route
 from caos.qualification.matrix import (
     ExpectedCitation,
@@ -251,10 +251,10 @@ def test_a_module_expected_both_ready_and_blocked_is_refused(tmp_path: Path) -> 
 # manifest or documents move; a change to the loader or the digest that moved
 # one of these would silently orphan every verdict and snapshot bound to it.
 COMMITTED_SET_DIGESTS = {
-    "ba-fy2025": ("a30533b3530ed1e609ce33df67e50b4ce5e4f80167be4efc29f398b4c24a7bba"),
+    "ba-fy2025": ("6aa9fc7b377c240570999693aadec6aa31dd1716a58ac5a40da2c2d709290a45"),
     "ccl-fy2025": "f5555753cf7b39868fa4885d95a0b80847c61204a4b3ebe5fffe8345587c327e",
     "ccl-fy2025-covenant-refinancing": (
-        "726e28dad1498a56ed6692d09819834c9727ebbd23ec8bac619f31e61ba4ab8a"
+        "d47678300de7224a96037701f24d433f650b733f9eeabd872d3d787b8ce61775"
     ),
     "ccl-fy2025-earnings-update": (
         "7f3619434a2697f10f5ea78d64a2e3e87c67691272037034235289a87507e275"
@@ -266,16 +266,16 @@ COMMITTED_SET_DIGESTS = {
         "7dcfa84602ff94a38fcc2627d15b7922acb08c23a871f7280e16bfe4a92d6a6c"
     ),
     "ccl-fy2025-full-relative-value": (
-        "c834105e7c6e12d6e11996c3744eb414715aef07b549df11bbc9f7ba741977f2"
+        "9a13c8f1b2aeceafa4cad5e0315be90a3cd84736e1b68899791ea93a2678fcd2"
     ),
     "ccl-fy2025-relative-value": (
         "a8df0ccf6d8fd735886c584951f7ca82e460f483a4f235a5ad31143fd3f60ac8"
     ),
     "ccl-fy2025-lite-covenant-refinancing": (
-        "4bc8aceaa622a76e930fa8aa419a349ffedd8ca681360571f5c8f2ee38c3aa9e"
+        "a53728b908e8a83eb197bd81b37e178c8c6541c7fd5da2cf7b93e2e21fe75c5e"
     ),
     "ccl-fy2025-lite-full-credit-screen": (
-        "a033b1f59bec2d61c887ab018fac8ef7ca22f048cf52c0c0d0f873d0bd53f13e"
+        "b7e50701759c1b64dc2aeab2b6280ed5fa4019853c751fc8e4874f713d314446"
     ),
     "ccl-fy2025-market-dislocation": (
         "502ca79ca3cda068f4621698f45f979e34e78945261b284c2ee232b2f57e11fe"
@@ -286,7 +286,7 @@ COMMITTED_SET_DIGESTS = {
     "save-2024-lite-distressed-restructuring": (
         "f53523a15053a2d4f191408cddc600c1667837cbacade354468e0f58fb03c391"
     ),
-    "f-fy2025": ("f7659a750e559db22b97ee3175aa5660819a65fef2d6735fae172126782a2fc2"),
+    "f-fy2025": ("9308a02875101717bc1faef5e21527c0e6267d3d9b5e5d603c0b3e88d500b465"),
     "vmo2-fy2025": "27b7df72963c877f707750adfb9e21d2bd42fbcdc1d8ac726cd5c2b53b4e4b07",
     "vmo2-fy2025-deep-research": (
         "09807efb1a3d5d40680d1a9d0e054333537781d7bb4013ecd7670323f817fd9b"
@@ -295,7 +295,7 @@ COMMITTED_SET_DIGESTS = {
         "1f15f91b746ee2bc58a9719ff5b5f0cb6a4328c827642bb384f8040ba8cfe3c2"
     ),
     "vmo2-fy2025-portfolio": (
-        "a46a1b4f597885e8f6937b47f9da7eba5ec266f4a43818d5f9fa1d42337b87ea"
+        "b80a6ad21e0fb6fb553eb0b75a70f93b97afdea7290fac8c92a9fb9e50d19b79"
     ),
 }
 
@@ -322,6 +322,16 @@ def test_every_committed_set_binds_its_recorded_digest() -> None:
 
     assert found == COMMITTED_SET_DIGESTS
     assert pending == PENDING_SET_DOCUMENTS
+
+
+def _shown_lines(pages: dict[int, list[_Token]]) -> set[str]:
+    """Every evidence line a module is shown of a document: each token line
+    cut into the blocks admission writes for it (`token_groups`)."""
+    lines: dict[int, list[str]] = {}
+    for tokens in pages.values():
+        for token in tokens:
+            lines.setdefault(token.line_id, []).append(token.text)
+    return {block for words in lines.values() for block in token_groups(words)}
 
 
 def test_every_committed_answer_key_names_its_route_and_exact_source() -> None:
@@ -378,6 +388,11 @@ def test_every_committed_answer_key_names_its_route_and_exact_source() -> None:
                     for start in range(len(tokens))
                 )
                 assert hits == 1, expected
+                # N28: a key is what an accepted answer can cite, one whole
+                # evidence line as a module is shown it.
+                assert " ".join(words) in _shown_lines(
+                    extracted[expected.document_sha256]
+                ), expected
 
 
 def test_ccl_liquidity_set_is_a_complete_offline_copy_with_pinned_keys() -> None:
