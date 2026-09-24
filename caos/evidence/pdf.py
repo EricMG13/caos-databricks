@@ -101,6 +101,14 @@ UNENCRYPTED = ""
 # Text render mode 3 paints a glyph neither filled nor stroked (ISO 32000-1,
 # 9.3.6): it lays out, and nothing is drawn.
 INVISIBLE_RENDER_MODE = 3
+# N27's remainder: render mode 7 -- add to the clip path, neither filled nor
+# stroked -- is the same "nothing is drawn" as mode 3, so the same glyph is
+# marked `render_mode_3` under it. Not declared in `PdfExtractor.identity`'s
+# config: no admitted fixture's tokens change under it (checked directly,
+# `tests/test_hidden_text.py`), and the config is part of the identity a
+# stored source's own record must still verify against, so it is left to name
+# only what a change in it would actually move.
+CLIP_ONLY_RENDER_MODE = 7
 # A glyph whose em is smaller than this on the page, in points, is not read.
 SMALLEST_READABLE_PT = 2.0
 # How far a glyph's paint may be from what is behind it, per channel of an RGB
