@@ -100,12 +100,19 @@ def _metadata(infos: list[zipfile.ZipInfo]) -> str | None:
 
 
 def _member(archive: zipfile.ZipFile, info: zipfile.ZipInfo, data: bytes) -> bytes:
-    # ZipFile.open checks local names, flags and overlapping member extents.
+    # ZipFile.open checks local names, flags and overlapping member extents,
+    # but never the local header's own CRC and sizes -- it trusts only the
+    # central directory's when validating what it reads. A local header that
+    # disagrees can still steer a general extractor, one that walks local
+    # headers instead of the directory (a streaming unzip, `tar` reading a
+    # pipe), to different bytes than the ones checked here (R24-17).
     # Read compressed bytes ourselves: ZipExtFile truncates an inflater's output
     # to the declared size, hiding a maliciously under-declared body.
     with archive.open(info):
         fields = struct.unpack_from("<4s5H3I2H", data, info.header_offset)
         if fields[2:4] != (info.flag_bits, info.compress_type):
+            raise ValueError
+        if fields[6:9] != (info.CRC, info.compress_size, info.file_size):
             raise ValueError
         offset = info.header_offset + 30 + fields[-2] + fields[-1]
         compressed = memoryview(data)[offset : offset + info.compress_size]

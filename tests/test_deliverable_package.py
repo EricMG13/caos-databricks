@@ -97,6 +97,17 @@ def _central(data: bytes, offset: int, value: int, fmt: str = "<I") -> bytes:
     return bytes(changed)
 
 
+def _local(data: bytes, name: str, offset: int, value: int, fmt: str = "<I") -> bytes:
+    """Like `_central`, but the named member's own local header (R24-17):
+    signature(4) version(2) flags(2) method(2) time(2) date(2) crc(4)
+    compressed_size(4) uncompressed_size(4) at offsets 14, 18, 22."""
+    changed = bytearray(data)
+    with zipfile.ZipFile(BytesIO(data)) as archive:
+        start = archive.getinfo(name).header_offset
+    struct.pack_into(fmt, changed, start + offset, value)
+    return bytes(changed)
+
+
 def test_a_package_verifies_with_a_fresh_interpreter_outside_the_repository(
     tmp_path: Path,
 ) -> None:
@@ -356,6 +367,22 @@ def test_declared_and_actual_member_sizes_must_match(compression: int) -> None:
     assert not verify_package(_central(data, 24, len(members[0][1]) - 1)).verified
 
 
+def test_a_local_header_crc_or_size_disagreeing_with_the_directory_is_refused() -> None:
+    """R24-17: `_member` compared the local header's flags and method
+    against the central directory but trusted only the central CRC and
+    sizes when reading and checking a member -- so a local header naming a
+    different CRC, compressed size or uncompressed size left content, both
+    directories and every other member intact, and still verified, while a
+    reader that walks local headers instead of the directory (a streaming
+    unzip, `tar` reading a pipe) extracted the local header's own bytes."""
+    data = _package()
+    assert verify_package(data).verified
+    for local_offset in (14, 18, 22):  # crc, compressed size, uncompressed size
+        assert not verify_package(
+            _local(data, "deliverable.html", local_offset, 0)
+        ).verified
+
+
 def test_an_underdeclared_deflate_body_with_a_matching_prefix_crc_is_refused() -> None:
     members = _members(_package())
     original = members["deliverable.html"]
@@ -381,7 +408,12 @@ def test_decompression_uses_a_hard_output_cap_even_when_metadata_lies(
 
     members = _members(_package())
     members["deliverable.html"] = b"x" * 100000
-    data = _central(_archive(list(members.items()), zipfile.ZIP_DEFLATED), 24, 1)
+    built = _archive(list(members.items()), zipfile.ZIP_DEFLATED)
+    # R24-17: local and central sizes must now agree, so the lie is told in
+    # both, the same way a genuine package's local and central headers
+    # would (a decompression bomb is not local/central disagreement).
+    built = _local(built, "deliverable.html", 22, 1)
+    data = _central(built, 24, 1)
     inflater = Mock(wraps=zlib.decompressobj(-15))
     monkeypatch.setitem(standalone.LIMITS, "deliverable.html", 32)
     monkeypatch.setattr(zlib, "decompressobj", lambda _: inflater)
