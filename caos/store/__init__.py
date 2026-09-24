@@ -3,15 +3,19 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from enum import StrEnum
 from hashlib import sha256
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 import psycopg
+from psycopg.conninfo import conninfo_to_dict
+from psycopg.rows import tuple_row
 
 from caos.refusals import Refusal, RefusalCode
 
@@ -228,6 +232,25 @@ MIGRATIONS = (
 # session, not written into the SQL.
 STORE_SCHEMA = "caos_store"
 SEARCH_PATH_OPTION = f"-c search_path={STORE_SCHEMA}"
+# LangGraph's own schema (`caos.graph.checkpoint.SCHEMA`), named here rather
+# than imported: the store does not depend on the graph package. The store
+# writes to it too, forgetting a cancelled run's thread (`work._forget_threads`).
+CHECKPOINT_SCHEMA = "caos_graph"
+
+# W2: whether a schema is there, and whether it and everything in it -- the
+# bookkeeping tables, every table, index, sequence and function -- belong to
+# the role this session acts as. `CAN_CONNECT_AND_CREATE` gives any principal
+# bound to the database CREATE on it, so a co-tenant can create either schema
+# first: the app would then run on tables whose owner can disable their
+# immutability triggers, and a trigger of theirs would run as the app's role.
+_OWNED_SCHEMA = (
+    "SELECT pg_get_userbyid(n.nspowner) = current_user"
+    " AND NOT EXISTS (SELECT 1 FROM pg_class c WHERE c.relnamespace = n.oid"
+    "   AND pg_get_userbyid(c.relowner) <> current_user)"
+    " AND NOT EXISTS (SELECT 1 FROM pg_proc p WHERE p.pronamespace = n.oid"
+    "   AND pg_get_userbyid(p.proowner) <> current_user)"
+    " FROM pg_namespace n WHERE n.nspname = %s"
+)
 
 # One well-known lock, held for the applying transaction only, so two processes
 # starting at once do not both read an empty bookkeeping table and both apply.
@@ -264,6 +287,10 @@ _STORE_SILENT = frozenset(
 # resources, operator intervention (an ended session, a cancelled statement) --
 # rather than that the database refused a statement the declared history holds.
 _INTERRUPTED = frozenset({"08", "40", "53", "57"})
+# N2: and one state of class 55 whose others are findings: `lock_not_available`,
+# a lock wait a `lock_timeout` ended -- the API lifespan and the in-process
+# worker both apply the schema at boot, and one waits for the other's lock.
+_LOCK_NOT_AVAILABLE = "55P03"
 
 
 class RunStatus(StrEnum):
@@ -291,6 +318,33 @@ KEEPALIVES_IDLE_SECONDS = 30
 KEEPALIVES_INTERVAL_SECONDS = 10
 KEEPALIVES_COUNT = 3
 TCP_USER_TIMEOUT_MS = 30_000
+# The connection parameters that carry them, for every connection to the
+# store's database: `connect`'s own, and the checkpointer pool's (W4), which
+# opens its connections itself and so never passed through `connect`.
+SOCKET_BOUNDS: Mapping[str, int] = MappingProxyType(
+    {
+        "keepalives": 1,
+        "keepalives_idle": KEEPALIVES_IDLE_SECONDS,
+        "keepalives_interval": KEEPALIVES_INTERVAL_SECONDS,
+        "keepalives_count": KEEPALIVES_COUNT,
+        "tcp_user_timeout": TCP_USER_TIMEOUT_MS,
+    }
+)
+
+
+def startup_options(url: str, options: Sequence[str]) -> str:
+    """The `options` a connection to `url` starts with (N4): the operator's
+    first -- the DSN's own, or `PGOPTIONS` where the DSN names none, which is
+    how libpq reads them -- then `options`, this process's, which the server
+    applies last and so win for any parameter both name.
+
+    A keyword `options` replaces the DSN's outright, and libpq falls back to
+    `PGOPTIONS` only when none is given, so the operator's `lock_timeout` or
+    `application_name` never reached the server.
+    """
+    named = conninfo_to_dict(url)
+    theirs = named["options"] if "options" in named else os.environ.get("PGOPTIONS")
+    return " ".join(str(part) for part in (theirs, *options) if part)
 
 
 def connect(
@@ -305,7 +359,8 @@ def connect(
     such as the health probe that must not wait on an unanswering host.
 
     Every connection's `search_path` is the store's own schema alone
-    (`STORE_SCHEMA`, DL-1), sent as a startup option like the bound below.
+    (`STORE_SCHEMA`, DL-1), sent as a startup option like the bound below,
+    after the operator's own (`startup_options`), which it overrides.
 
     `statement_timeout_ms` bounds every statement for the connection's whole
     session (`options`, at connect time -- not `SET LOCAL`, which a caller's
@@ -323,24 +378,35 @@ def connect(
     """
     from caos.store.lakebase import note_connect_failure
 
-    kwargs: dict[str, Any] = {
-        "keepalives": 1,
-        "keepalives_idle": KEEPALIVES_IDLE_SECONDS,
-        "keepalives_interval": KEEPALIVES_INTERVAL_SECONDS,
-        "keepalives_count": KEEPALIVES_COUNT,
-        "tcp_user_timeout": TCP_USER_TIMEOUT_MS,
-    }
+    kwargs: dict[str, Any] = dict(SOCKET_BOUNDS)
     if connect_timeout is not None:
         kwargs["connect_timeout"] = connect_timeout
     options = [SEARCH_PATH_OPTION]
     if statement_timeout_ms is not None:
         options.append(f"-c statement_timeout={statement_timeout_ms}")
-    kwargs["options"] = " ".join(options)
+    kwargs["options"] = startup_options(url, options)
     try:
         return psycopg.connect(url, autocommit=False, **kwargs)
     except psycopg.OperationalError as failed:
         note_connect_failure(failed)
         raise
+
+
+def owned_schema(conn: psycopg.Connection[Any], schema: str) -> bool:
+    """Whether `schema` exists, refusing `STORE_SCHEMA_DRIFT` for one that
+    another role owns or holds anything in (W2).
+
+    Read on a cursor of its own, so the checkpointer's dict-row connections ask
+    it the same way the store's own do. Nothing is written: a refusal leaves
+    the caller's transaction as it was, for the caller to end.
+    """
+    with conn.cursor(row_factory=tuple_row) as cursor:
+        row = cursor.execute(_OWNED_SCHEMA, (schema,)).fetchone()
+    if row is None:
+        return False
+    if row != (True,):
+        raise Refusal(RefusalCode.STORE_SCHEMA_DRIFT)
+    return True
 
 
 def rollback_or_close(conn: StoreConnection) -> None:
@@ -401,21 +467,33 @@ def apply_schema(conn: StoreConnection, *, sql: str = SCHEMA) -> None:
         raise
 
 
+def interrupted(fault: psycopg.Error) -> bool:
+    """Whether a store fault is the store failing to answer this time (R24-05),
+    rather than refusing a statement.
+
+    A session the client saw close carries no SQLSTATE at all, and a server
+    that ended it or cancelled the statement says so by class, as it says a
+    lock wait timed out by its own state (N2). Anything else -- a statement the
+    database refused, a constraint, a trigger's refusal -- is a finding about
+    what it holds, which asking again will not change. The boot's classifier
+    (`_schema_fault_code`) and the request edge's (`caos.api.deps`, N5).
+    """
+    if fault.sqlstate is None:
+        return isinstance(fault, psycopg.OperationalError)
+    return fault.sqlstate[:2] in _INTERRUPTED or fault.sqlstate == _LOCK_NOT_AVAILABLE
+
+
 def _schema_fault_code(fault: psycopg.Error) -> RefusalCode:
     """`STORE_UNAVAILABLE` for an interruption, `STORE_SCHEMA_DRIFT` otherwise.
 
-    An interruption is the store failing to answer (R24-05): a session the
-    client saw close carries no SQLSTATE at all, and a server that ended it or
-    cancelled the statement says so by class. The worker's boot loop asks the
-    store again after one; drift is final, so only a statement the database
-    refused -- a disagreement with what it holds -- may be named drift.
+    The worker's boot loop asks the store again after an interruption; drift is
+    final, so only a statement the database refused -- a disagreement with what
+    it holds -- may be named drift.
     """
-    if fault.sqlstate is None:
-        interrupted = isinstance(fault, psycopg.OperationalError)
-    else:
-        interrupted = fault.sqlstate[:2] in _INTERRUPTED
     return (
-        RefusalCode.STORE_UNAVAILABLE if interrupted else RefusalCode.STORE_SCHEMA_DRIFT
+        RefusalCode.STORE_UNAVAILABLE
+        if interrupted(fault)
+        else RefusalCode.STORE_SCHEMA_DRIFT
     )
 
 
@@ -482,9 +560,16 @@ def _migrate(conn: StoreConnection, sql: str) -> None:
         raise Refusal(RefusalCode.STORE_SCHEMA_DRIFT)
     expected = _expected_history()
     conn.execute("SELECT pg_advisory_xact_lock(%s)", (_SCHEMA_LOCK,))
-    # Under the lock: two processes' `IF NOT EXISTS` can otherwise both miss
-    # the schema and one fail on the catalog's unique name.
-    conn.execute(f"CREATE SCHEMA IF NOT EXISTS {STORE_SCHEMA}")
+    # Before anything is created or read in it (W2): a schema another role
+    # made first is not adopted, and the checkpoint schema is checked here as
+    # well, because the API process writes to it and never sets it up. Created
+    # only when it is not there (N3): `CREATE SCHEMA`, `IF NOT EXISTS` or not,
+    # takes CREATE on the database, and a role that owns both needs no more
+    # than CONNECT to boot. Under the lock, so two processes cannot both miss
+    # it; plain `CREATE`, so one another role made since is refused (42P06).
+    if not owned_schema(conn, STORE_SCHEMA):
+        conn.execute(f"CREATE SCHEMA {STORE_SCHEMA}")
+    owned_schema(conn, CHECKPOINT_SCHEMA)
     conn.execute(_BOOKKEEPING)
     conn.execute(_HISTORY)
     applied = conn.execute("SELECT applied_digest FROM store_schema").fetchone()

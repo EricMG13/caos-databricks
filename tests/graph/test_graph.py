@@ -34,13 +34,14 @@ from caos.graph.build import (
     resume_input,
     thread_config,
 )
-from caos.graph.route import ResolvedRoute, dependency_order
+from caos.graph.route import ResolvedRoute, dependency_order, route_digest
 from caos.graph.runtime import Execution, Pass, node_pass, run_route
 from caos.methodology.bundle import Bundle
 from caos.methodology.runner import ModuleProvider
 from caos.refusals import Refusal
 from caos.store import RunStatus, StoreConnection
 from caos.store.runs import run_status
+from caos.store.work import checkpoint_thread
 
 __all__ = ["ready", "route"]
 VENDORED = Path(__file__).resolve().parents[2] / "vendor/deploy-v"
@@ -102,15 +103,25 @@ def test_a_checkpointed_run_records_its_thread_and_the_store_stays_the_truth(
         execution = Execution(
             provider, priced(ESTIMATE), provider.bundle, checkpointer=saver
         )
-        beats: list[int] = []
-        execution = replace(execution, heartbeat=lambda: beats.append(1))
+        # The key `run_route` writes the run's position under (W3). Asserted
+        # gone under the run's id alone, which no path writes, this passed
+        # whether or not the end-of-run delete ran; so each beat also reads
+        # the thread under this key, which must have held the position.
+        thread = thread_config(checkpoint_thread(run_id, route_digest(route)))
+        kept: list[bool] = []
+        execution = replace(
+            execution, heartbeat=lambda: kept.append(saver.get(thread) is not None)
+        )
         run_route(conn, blobs, run_id=run_id, route=route, execution=execution)
         assert run_status(conn, run_id) is RunStatus.COMPLETE
         conn.rollback()  # the status read above opened a unit; execution owns its own
         assert len(answers.prompts) == len(route.nodes)
-        assert len(beats) == len(route.nodes), "one beat per node (F38)"
+        assert len(kept) == len(route.nodes), "one beat per node (F38)"
+        # LangGraph writes a step's checkpoint while the next one runs, so a
+        # beat may come before the write it follows: at least one saw it.
+        assert any(kept), "the run's position was kept under this key"
         # Position only (D6, F39): a thread that reached its end is deleted.
-        assert saver.get(thread_config(str(run_id))) is None
+        assert saver.get(thread) is None
         # Driven again on the same thread: the store, not the checkpoint, says
         # the run is over, so nothing runs and nothing is charged twice.
         with pytest.raises(Refusal, match=r"^RUN_NOT_RUNNING$"):

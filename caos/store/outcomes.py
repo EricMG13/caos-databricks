@@ -207,15 +207,31 @@ class CallOutcome:
     diagnostic_sha256: str | None = None
 
 
+# W1: the bill's own unit waits for as long as its locks take. The worker's
+# connection bounds every statement (CF-041) and a DBA may bound every lock
+# wait, so a wedged read cannot outlive its lease; but this is the one write
+# that says a paid call was made, and its first statement waits on the case
+# row a freeze, a filing or a large admission holds for as long as it takes.
+# Cancelled there, every try failed, no row said the call was made, and the
+# next claim paid for the node again. `set_config(..., true)` is `SET LOCAL`:
+# the session's bounds are back from the unit's commit or rollback on.
+_UNBOUNDED_UNIT = (
+    "SELECT set_config('statement_timeout', '0', true),"
+    " set_config('lock_timeout', '0', true)"
+)
+
+
 def record_outcome(
     conn: StoreConnection, *, attempt_id: UUID, outcome: CallOutcome
 ) -> bool:
     """Commit outcome/known charge/event even after termination; never analysis.
 
     Owns the caller transaction. Exact replay is a no-op; conflicts and legacy
-    rows refuse. Unknown outcomes remain immutable, with no backfill.
+    rows refuse. Unknown outcomes remain immutable, with no backfill. No
+    statement or lock bound of the session's cancels it (`_UNBOUNDED_UNIT`).
     """
     with committed_unit(conn):
+        conn.execute(_UNBOUNDED_UNIT)
         inserted = _record(conn, attempt_id, outcome)
     return inserted
 

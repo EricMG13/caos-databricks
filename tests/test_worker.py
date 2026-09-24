@@ -9,6 +9,7 @@ from __future__ import annotations
 import ast
 import signal
 import sys
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -20,7 +21,7 @@ from uuid import UUID, uuid4
 import psycopg
 import pytest
 from canonical_fixtures import UNANCHORED, CanonicalCompletions
-from conftest import priced
+from conftest import login_role, priced
 from lite_route_fixtures import RealisticLiteCompletions
 from test_runtime import ESTIMATE, _approved_run, _Run, blobs, bundle, route
 
@@ -51,7 +52,13 @@ from caos.store import (
 from caos.store import work as work_module
 from caos.store.budget import CEILING_ENV
 from caos.store.runs import run_status
-from caos.store.work import LEASE_SECONDS, Lease, enqueue_run, worker_states
+from caos.store.work import (
+    LEASE_SECONDS,
+    Lease,
+    checkpoint_thread,
+    enqueue_run,
+    worker_states,
+)
 
 __all__ = ["blobs", "bundle", "route"]
 
@@ -1022,6 +1029,57 @@ def test_a_cancel_with_no_checkpoint_schema_still_ends_the_run(
     run.conn.rollback()
 
 
+def test_a_cancel_never_writes_to_a_checkpoint_schema_another_role_owns(
+    empty_database: str,
+) -> None:
+    """W2: made by a co-tenant after the app's boot -- no worker has set one up
+    yet -- `caos_graph` was still written to inside the Cancel's own governed
+    unit (F218), so a trigger of the co-tenant's ran there as the app's role,
+    and took `run_events`' immutability trigger off. Only tables this role
+    owns, in a schema it owns, are forgotten from; the run still ends."""
+    from caos.store.runs import create_case, start_run
+    from caos.store.work import claim_run, release
+
+    with login_role(empty_database) as squatter, login_role(empty_database) as app:
+        with connect(app) as conn:
+            apply_schema(conn)
+            run_id = start_run(conn, create_case(conn, BoundaryText.of("Held")))
+            conn.commit()
+            enqueue_run(conn, run_id)
+            conn.commit()
+            lease = claim_run(conn, worker=BoundaryText.of("w"), lease_seconds=60)
+            assert lease is not None and release(conn, lease)
+            conn.commit()
+        with psycopg.connect(squatter, autocommit=True) as other:
+            other.execute(f"CREATE SCHEMA {work_module.CHECKPOINT_SCHEMA}")
+            other.execute(f"SET search_path TO {work_module.CHECKPOINT_SCHEMA}")
+            for table in work_module.CHECKPOINT_TABLES:
+                other.execute(f"CREATE TABLE {table} (thread_id text)")
+                other.execute(f"GRANT ALL ON {table} TO PUBLIC")
+            other.execute(
+                f"GRANT USAGE ON SCHEMA {work_module.CHECKPOINT_SCHEMA} TO PUBLIC"
+            )
+            other.execute(
+                "CREATE FUNCTION squat() RETURNS trigger LANGUAGE plpgsql AS $$"
+                " BEGIN ALTER TABLE caos_store.run_events"
+                " DISABLE TRIGGER run_event_immutable; RETURN NULL; END $$"
+            )
+            other.execute(
+                "CREATE TRIGGER squat AFTER DELETE ON checkpoints"
+                " FOR EACH STATEMENT EXECUTE FUNCTION squat()"
+            )
+        assert _cancel_from_elsewhere(app, run_id) is True
+        with psycopg.connect(empty_database, autocommit=True) as admin:
+            enabled = admin.execute(
+                "SELECT tgenabled FROM pg_trigger WHERE tgname = 'run_event_immutable'"
+            ).fetchone()
+            status = admin.execute(
+                "SELECT status FROM caos_store.runs WHERE run_id = %s", (run_id,)
+            ).fetchone()
+    assert enabled == ("O",), "the co-tenant's trigger never ran as the app"
+    assert status == (RunStatus.CANCELLED.value,)
+
+
 def test_a_lost_or_corrupt_stored_body_parks_the_run_with_its_own_code() -> None:
     """DL-5: a blob that is gone or corrupt is not a store fault. As one it
     released the run to the head of the queue, and every other run waited
@@ -1217,7 +1275,10 @@ def test_a_worker_that_lost_its_lease_leaves_the_holder_s_thread(
     from caos.store.work import claim_run
 
     run = enqueued
-    thread = str(run.run_id)
+    # The key `run_route` really writes the holder's position under (W3): the
+    # run's id alone, which this test once used, is a thread no path writes,
+    # so `_forget` deleting the real one regardless of `mine` still passed.
+    thread = checkpoint_thread(run.run_id, route_digest(run.route))
     saver = checkpointer(empty_database)
     taken: list[Lease | None] = []
 
@@ -1310,7 +1371,7 @@ def test_a_late_checkpoint_write_after_an_abandoned_cancel_is_still_forgotten(
     from caos.store import connect
 
     run = enqueued
-    thread = f"{run.run_id}:{route_digest(run.route)}"
+    thread = checkpoint_thread(run.run_id, route_digest(run.route))
     saver = checkpointer(empty_database)
 
     def late_write() -> None:
@@ -1359,6 +1420,102 @@ def test_a_late_checkpoint_write_after_an_abandoned_cancel_is_still_forgotten(
         assert saver.get_tuple(thread_config(thread)) is None, (
             "the straggler is forgotten"
         )
+    finally:
+        close_checkpointer(saver)
+
+
+@dataclass(frozen=True)
+class _EndsAfterAbandonedCancel:
+    """`_Abandoned`'s straggler, after which the pass ends in `fault`: the
+    `_Stopping` `_Stoppable` raises once SIGTERM set `stopping`, or a store
+    fault -- a checkpoint write's own among them -- rather than a refusal."""
+
+    inner: Provider
+    late_write: Callable[[], None]
+    fault: type[Exception]
+
+    @property
+    def model(self) -> str:
+        return self.inner.model
+
+    def check_context(self, route_node_id: str, module_id: str) -> int:
+        self.late_write()
+        raise self.fault
+
+    def execute(
+        self, route_node_id: str, module_id: str, *, attempt_id: UUID
+    ) -> ProviderResult:
+        return self.inner.execute(route_node_id, module_id, attempt_id=attempt_id)
+
+
+@pytest.mark.parametrize("ending", ["stopping", "store-fault"])
+def test_a_straggler_is_forgotten_when_the_pass_stops_or_its_store_faults(
+    enqueued: _Run, empty_database: str, ending: str
+) -> None:
+    """N1: F218's residual race -- this worker's claim abandoned, the run
+    cancelled from elsewhere and its thread forgotten, then one more
+    checkpoint written by this worker -- with the pass ending at a stop or a
+    store fault instead of a refusal. Those two branches released the claim
+    and never called `_forget`, so the straggler stayed for ever. They read
+    the run's own status too now: CANCELLED, so it goes. A run they did
+    release is RUNNING and keeps its thread for the next holder
+    (`test_a_run_cancelled_while_queued_leaves_no_checkpoint_thread`)."""
+    from dataclasses import replace
+
+    from langgraph.checkpoint.base import empty_checkpoint
+
+    from caos.graph.build import thread_config
+    from caos.graph.checkpoint import checkpointer, close_checkpointer
+
+    run = enqueued
+    thread = checkpoint_thread(run.run_id, route_digest(run.route))
+    saver = checkpointer(empty_database)
+
+    def late_write() -> None:
+        with connect(empty_database) as other:
+            other.execute(
+                "UPDATE run_work SET lease_expires_at = clock_timestamp()"
+                " - interval '1 second' WHERE run_id = %s",
+                (run.run_id,),
+            )
+            other.commit()
+        assert _cancel_from_elsewhere(empty_database, run.run_id) is True
+        position = thread_config(thread)
+        position["configurable"]["checkpoint_ns"] = ""
+        saver.put(position, empty_checkpoint(), {}, {})
+
+    fault = worker._Stopping if ending == "stopping" else psycopg.OperationalError
+    base = module_execution(
+        CanonicalCompletions(run.source_id),
+        priced(ESTIMATE),
+        run.bundle,
+        run.blobs,
+        saver,
+    )
+
+    def execution_for(conn: StoreConnection, run_id: UUID, lease: Lease) -> Execution:
+        built = base(conn, run_id, lease)
+        ends = _EndsAfterAbandonedCancel(built.provider, late_write, fault)
+        return replace(built, provider=ends)
+
+    def once() -> UUID | None:
+        return work_once(
+            run.conn,
+            run.blobs,
+            execution_for=execution_for,
+            config=CONFIG,
+            stopping=Event(),
+        )
+
+    try:
+        if ending == "stopping":
+            assert once() == run.run_id
+        else:
+            with pytest.raises(Refusal, match=r"^STORE_UNAVAILABLE$"):
+                once()
+        assert run_status(run.conn, run.run_id) is RunStatus.CANCELLED
+        run.conn.rollback()
+        assert saver.get_tuple(thread_config(thread)) is None, "the straggler went"
     finally:
         close_checkpointer(saver)
 
@@ -1596,3 +1753,90 @@ def test_a_bill_on_a_closed_connection_is_written_on_a_fresh_one(
     assert count(run.conn, "budget_ledger", run.run_id) == 1
     canonical.bill(run.conn, attempt, outcome)  # an exact replay is a no-op
     assert count(run.conn, "call_outcomes", run.run_id) == 1
+
+
+# How long another session holds the run's case row in the test below: past
+# every try the bill would get under a 300 ms bound (`canonical.BILL_TRIES`,
+# its pause patched out), with room for a loaded server.
+_CASE_LOCK_SECONDS = 2.5
+
+
+def _case_lock_held(url: str, run_id: UUID, held: Event) -> threading.Thread:
+    """Another session holding the run's case row for `_CASE_LOCK_SECONDS`:
+    what a freeze's proof, a filing's upload or a large admission holds for
+    as long as it takes."""
+
+    def hold() -> None:
+        with connect(url) as other:
+            other.execute(
+                "SELECT 1 FROM cases WHERE case_id ="
+                " (SELECT case_id FROM runs WHERE run_id = %s) FOR UPDATE",
+                (run_id,),
+            )
+            held.set()
+            time.sleep(_CASE_LOCK_SECONDS)
+            other.rollback()
+
+    holder = threading.Thread(target=hold, daemon=True)
+    holder.start()
+    return holder
+
+
+@pytest.mark.parametrize("bound", ["statement_timeout", "lock_timeout"])
+def test_a_paid_call_s_bill_outwaits_a_held_case_lock_under_the_worker_s_bounds(
+    enqueued: _Run,
+    empty_database: str,
+    monkeypatch: pytest.MonkeyPatch,
+    bound: str,
+) -> None:
+    """W1 (invariant 6): the bill's first write waits on the case row lock, and
+    the worker's connection bounds every statement (CF-041) -- a DBA's
+    `lock_timeout` bounds every lock wait the same way. Cancelled there, each
+    of `BILL_TRIES` failed, the run was released with no `call_outcomes` row,
+    neither `replay_billed` nor `unexplained_charge` could see the answer, and
+    the next claim paid for the node again. The bill's own unit lifts both
+    bounds for itself alone, so it waits the lock out and the node is paid for
+    once; the session keeps its bound for everything after it."""
+    from caos.methodology import canonical
+
+    run = enqueued
+    monkeypatch.setattr(canonical, "_pause", lambda _seconds: None)
+    if bound == "lock_timeout":
+        with psycopg.connect(empty_database, autocommit=True) as admin:
+            admin.execute(
+                f'ALTER DATABASE "{run.conn.info.dbname}" SET lock_timeout = 300'
+            )
+        worker_conn = connect(empty_database)
+    else:
+        worker_conn = connect(empty_database, statement_timeout_ms=300)
+    holders: list[threading.Thread] = []
+
+    def lock_during_the_first_call() -> None:
+        if not holders:
+            held = Event()
+            holders.append(_case_lock_held(empty_database, run.run_id, held))
+            assert held.wait(5)
+
+    completions = CanonicalCompletions(run.source_id, during=lock_during_the_first_call)
+    try:
+        claimed = work_once(
+            worker_conn,
+            run.blobs,
+            execution_for=module_execution(
+                completions, priced(ESTIMATE), run.bundle, run.blobs
+            ),
+            config=CONFIG,
+            stopping=Event(),
+        )
+        kept = worker_conn.execute(f"SHOW {bound}").fetchone()
+    finally:
+        worker_conn.close()
+        for holder in holders:
+            holder.join(10)
+    assert claimed == run.run_id
+    assert kept == ("300ms",), "lifted for the bill's unit alone"
+    assert run_status(run.conn, run.run_id) is RunStatus.COMPLETE
+    run.conn.rollback()
+    assert len(completions.prompts) == len(run.route.nodes), "one paid call a node"
+    assert count(run.conn, "call_outcomes", run.run_id) == len(run.route.nodes)
+    assert count(run.conn, "budget_ledger", run.run_id) == len(run.route.nodes)

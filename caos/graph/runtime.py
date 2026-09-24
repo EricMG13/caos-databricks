@@ -76,7 +76,7 @@ from caos.store.runs import (
     run_status,
     start_attempt,
 )
-from caos.store.work import Lease, holds_lease
+from caos.store.work import Lease, checkpoint_thread, holds_lease
 
 
 @dataclass(frozen=True, slots=True)
@@ -220,7 +220,7 @@ def run_route(
     # `START` under a fresh thread costs nothing this pass's own re-derived,
     # store-backed frontier does not already make safe -- every node it
     # revisits reports SKIPPED for whatever the ledger already accepted.
-    thread = f"{run_id}:{route_digest(route)}"
+    thread = checkpoint_thread(run_id, route_digest(route))
     try:
         ended = graph.invoke(
             resume_input(graph, thread),

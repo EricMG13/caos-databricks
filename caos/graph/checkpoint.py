@@ -41,6 +41,7 @@ from psycopg_pool import ConnectionPool
 
 from caos.graph.build import RunState
 from caos.refusals import Refusal, RefusalCode
+from caos.store import SOCKET_BOUNDS, owned_schema, startup_options
 from caos.store.lakebase import (
     TOKEN_SECONDS,
     lakebase_database,
@@ -63,6 +64,12 @@ SETUP_LOCK_POLL_SECONDS = 0.2
 # `CONCURRENTLY`, which waits on every older snapshot in the database, and a
 # backup or an analyst's session would otherwise hold boot with no limit.
 SETUP_STATEMENT_SECONDS = 30.0
+# The most any other checkpoint statement may take (W4): a write is a handful
+# of small rows, and it runs between two nodes of the worker's run, whose own
+# connection is bounded the same (`caos.graph.worker.STATEMENT_TIMEOUT_MS`,
+# CF-041), so a wedged write cannot hold the worker past the lease it drives
+# under. Set-up raises and then resets its own bound over this one.
+STATEMENT_TIMEOUT_MS = 30_000
 # What a checkpoint row may say it is, by LangGraph's own serde tags.
 _LOADABLE = frozenset({"null", "bytes", "bytearray", "msgpack"})
 
@@ -163,7 +170,12 @@ def _bounded_set_up(conn: psycopg.Connection[DictRow]) -> None:
     conn.execute(sql.SQL("SET statement_timeout = {}").format(bound))
     conn.execute(sql.SQL("SET lock_timeout = {}").format(bound))
     try:
-        conn.execute(f"CREATE SCHEMA IF NOT EXISTS {SCHEMA}")
+        # W2: a schema another role created first, or holds anything in, is
+        # refused `STORE_SCHEMA_DRIFT` before a table of it is read or written;
+        # one this role owns is not created again (N3), which would take
+        # CREATE on the database, and a least-privilege role holds only CONNECT.
+        if not owned_schema(conn, SCHEMA):
+            conn.execute(f"CREATE SCHEMA {SCHEMA}")
         _search_path(conn)
         _drop_invalid_indexes(conn)
         PostgresSaver(conn, serde=serializer()).setup()
@@ -211,7 +223,16 @@ def _pooled(
     pool: ConnectionPool[psycopg.Connection[DictRow]] = ConnectionPool(
         conninfo=conninfo,
         connection_class=connection_class,
-        kwargs={"autocommit": True, "row_factory": dict_row},
+        # `connect`'s socket bounds (W4): a half-open socket otherwise stalls a
+        # checkpoint write, or the pool's own check, for the kernel's timeout.
+        kwargs={
+            "autocommit": True,
+            "row_factory": dict_row,
+            **SOCKET_BOUNDS,
+            "options": startup_options(
+                conninfo, [f"-c statement_timeout={STATEMENT_TIMEOUT_MS}"]
+            ),
+        },
         configure=_search_path,
         min_size=POOL_MIN,
         max_size=POOL_MAX,

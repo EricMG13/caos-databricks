@@ -22,11 +22,13 @@ from hashlib import sha256
 from pathlib import Path
 from threading import Barrier, Event
 from typing import cast
+from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
 import psycopg
 import pytest
-from conftest import _checked_values, tamper
+from conftest import _checked_values, login_role, tamper
+from psycopg_pool import ConnectionPool
 from test_case_ordering import _blocked, _wait_for_blocking
 from test_extraction_provenance import Reader
 from test_run_inputs import Prepared, _prepare, pin_version_one
@@ -126,6 +128,7 @@ def test_connect_asks_for_keepalives_and_an_optional_statement_timeout(
     migration path may legitimately run long); one that does gets it as
     `options` at connect time, which holds for the whole session."""
     captured: dict[str, object] = {}
+    monkeypatch.delenv("PGOPTIONS", raising=False)
 
     def fake_connect(_url: str, **kwargs: object) -> None:
         captured.update(kwargs)
@@ -148,6 +151,65 @@ def test_connect_asks_for_keepalives_and_an_optional_statement_timeout(
     assert captured["options"] == (
         "-c search_path=caos_store -c statement_timeout=5000"
     )
+
+
+def test_startup_options_put_the_operator_s_first_as_libpq_reads_them(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """N4: the DSN's own `options` when it names any -- an empty one included,
+    which libpq does not replace with `PGOPTIONS` either -- else `PGOPTIONS`,
+    and this process's after them."""
+    ours = "-c search_path=caos_store"
+    monkeypatch.setenv("PGOPTIONS", "-c work_mem=64MB")
+    assert store.startup_options("host=h", [ours]) == f"-c work_mem=64MB {ours}"
+    assert store.startup_options("host=h options='-c a=1'", [ours]) == f"-c a=1 {ours}"
+    assert store.startup_options("host=h options=''", [ours]) == ours
+    monkeypatch.delenv("PGOPTIONS")
+    assert store.startup_options("", [ours, "-c b=2"]) == f"{ours} -c b=2"
+
+
+def test_connect_keeps_the_operator_s_options_and_its_own_win(
+    empty_database: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N4: `options` passed as a keyword replaced the DSN's own and, with it,
+    libpq's `PGOPTIONS` fallback, so a DBA's `lock_timeout` or a DSN's
+    `application_name` never reached the server. They come first now -- the
+    DSN's, or `PGOPTIONS` where it names none, as libpq reads them -- and the
+    store's own follow, so its search path and its bound still win. The
+    checkpointer's pool, which names its own bound, keeps them the same way."""
+    from caos.graph.checkpoint import checkpointer, close_checkpointer
+
+    monkeypatch.delenv("PGOPTIONS", raising=False)
+    dsn = (
+        empty_database + "?options=-c%20lock_timeout%3D1234%20-c%20search_path%3Dpublic"
+    )
+    shown = ("lock_timeout", "search_path", "statement_timeout")
+
+    def settings(url: str, **bound: int) -> tuple[object, ...]:
+        with connect(url, **bound) as conn:
+            return tuple(conn.execute(f"SHOW {name}").fetchone() for name in shown)
+
+    assert settings(dsn, statement_timeout_ms=5000) == (
+        ("1234ms",),
+        ("caos_store",),
+        ("5s",),
+    )
+    monkeypatch.setenv("PGOPTIONS", "-c lock_timeout=4321 -c statement_timeout=9000")
+    assert settings(empty_database) == (("4321ms",), ("caos_store",), ("9s",))
+    assert settings(dsn)[0] == ("1234ms",), "the DSN's own, not PGOPTIONS"
+    saver = checkpointer(dsn)
+    try:
+        pool = getattr(saver, "conn", None)
+        assert isinstance(pool, ConnectionPool)
+        with pool.connection() as pooled:
+            kept = [pooled.execute(f"SHOW {name}").fetchone() for name in shown]
+    finally:
+        close_checkpointer(saver)
+    assert kept == [
+        {"lock_timeout": "1234ms"},
+        {"search_path": "caos_graph"},
+        {"statement_timeout": "30s"},
+    ]
 
 
 def test_the_store_lives_in_its_own_schema_and_never_in_public(
@@ -913,6 +975,65 @@ def test_apply_schema_answers_a_session_the_server_ended_as_unavailable(
         store.verify_schema(again)
 
 
+def test_apply_schema_answers_a_lock_wait_that_timed_out_as_unavailable(
+    empty_database: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """N2: the API lifespan and the in-process worker both run `apply_schema`
+    at boot, and one waits on the schema lock while the other migrates. Under
+    a DBA's `lock_timeout` the waiter's 55P03 was classed drift, which is
+    final: the in-process worker stopped for the life of the process. A lock
+    wait that timed out is the store not answering this time, which the
+    worker's boot asks again; the next boot migrates."""
+    from caos.graph import worker
+
+    database = urlsplit(empty_database).path.lstrip("/")
+    with psycopg.connect(empty_database, autocommit=True) as admin:
+        admin.execute(f'ALTER DATABASE "{database}" SET lock_timeout = 300')
+    migrating = psycopg.connect(empty_database)  # another process's migration
+    try:
+        migrating.execute("SELECT pg_advisory_xact_lock(%s)", (store._SCHEMA_LOCK,))
+        capsys.readouterr()
+        with connect(empty_database) as conn, pytest.raises(Refusal) as caught:
+            apply_schema(conn)
+    finally:
+        migrating.close()
+    assert caught.value.code is RefusalCode.STORE_UNAVAILABLE
+    assert caught.value.code in worker.STORE_FAULTS, "the worker's boot asks again"
+    assert capsys.readouterr().err == "schema: sqlstate 55P03\n"
+    with connect(empty_database) as again:
+        apply_schema(again)
+        store.verify_schema(again)
+
+
+def test_interrupted_is_the_store_not_answering_and_nothing_else() -> None:
+    """R24-05, N2, N5: the one classifier the boot and the request edge share.
+    A session seen to close, an ended session, a cancelled statement, a
+    rolled-back transaction, exhausted resources and a lock wait that timed
+    out are the store not answering this time; a statement it refused --
+    including class 55's other states -- is a finding about what it holds."""
+    answered_later = [
+        psycopg.OperationalError(),
+        psycopg.errors.ConnectionFailure(),
+        psycopg.errors.AdminShutdown(),
+        psycopg.errors.QueryCanceled(),
+        psycopg.errors.SerializationFailure(),
+        psycopg.errors.DeadlockDetected(),
+        psycopg.errors.TooManyConnections(),
+        psycopg.errors.LockNotAvailable(),
+    ]
+    findings = [
+        psycopg.errors.UndefinedColumn(),
+        psycopg.errors.UniqueViolation(),
+        psycopg.errors.RaiseException(),
+        psycopg.errors.InsufficientPrivilege(),
+        psycopg.errors.ObjectInUse(),
+        psycopg.ProgrammingError(),
+        psycopg.InterfaceError(),
+    ]
+    assert [store.interrupted(fault) for fault in answered_later] == [True] * 8
+    assert [store.interrupted(fault) for fault in findings] == [False] * 7
+
+
 def test_apply_schema_keeps_a_refused_statement_a_drift_finding(
     empty_database: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -923,6 +1044,122 @@ def test_apply_schema_keeps_a_refused_statement_a_drift_finding(
     with connect(empty_database) as conn, pytest.raises(Refusal) as caught:
         apply_schema(conn)
     assert caught.value.code is RefusalCode.STORE_SCHEMA_DRIFT
+
+
+def _in_store_schema(url: str) -> int:
+    """How many relations `caos_store` holds, read as the suite's own role."""
+    with psycopg.connect(url, autocommit=True) as admin:
+        row = admin.execute(
+            "SELECT count(*) FROM pg_class WHERE relnamespace = %s::regnamespace",
+            (store.STORE_SCHEMA,),
+        ).fetchone()
+    assert row is not None
+    return int(row[0])
+
+
+def test_owned_schema_is_absent_this_role_s_or_refused(empty_database: str) -> None:
+    """W2's one read, on a dict-row connection as the checkpointer asks it:
+    no schema is False, one this role owns with everything in it is True, and
+    anything in it another role owns refuses `STORE_SCHEMA_DRIFT`."""
+    from psycopg.rows import dict_row
+
+    with login_role(empty_database) as other:
+        with psycopg.connect(empty_database, row_factory=dict_row) as conn:
+            assert store.owned_schema(conn, "caos_nowhere") is False
+            conn.execute("CREATE SCHEMA caos_mine")
+            conn.execute("CREATE TABLE caos_mine.kept (id int)")
+            assert store.owned_schema(conn, "caos_mine") is True
+            conn.execute(
+                f'ALTER TABLE caos_mine.kept OWNER TO "{urlsplit(other).username}"'
+            )
+            with pytest.raises(Refusal) as refused:
+                store.owned_schema(conn, "caos_mine")
+            assert refused.value.code is RefusalCode.STORE_SCHEMA_DRIFT
+            conn.rollback()
+
+
+def test_a_store_schema_another_role_made_first_is_refused_not_adopted(
+    empty_database: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """W2: `CAN_CONNECT_AND_CREATE` gives every principal bound to the database
+    CREATE on it, so a co-tenant can make `caos_store` first -- and grant
+    everyone CREATE in it. The app adopted it: its tables went in under an
+    owner who can drop them or take their immutability triggers off, and a
+    trigger of the owner's runs as the app's role. It is refused
+    `STORE_SCHEMA_DRIFT` before anything is created in it; the boot prints
+    that code alone (`_boot_or_refuse`, `worker._report`)."""
+    with login_role(empty_database) as squatter, login_role(empty_database) as app:
+        with psycopg.connect(squatter, autocommit=True) as other:
+            other.execute(f"CREATE SCHEMA {store.STORE_SCHEMA}")
+            other.execute(
+                f"GRANT USAGE, CREATE ON SCHEMA {store.STORE_SCHEMA} TO PUBLIC"
+            )
+        capsys.readouterr()
+        with connect(app) as conn, pytest.raises(Refusal) as refused:
+            apply_schema(conn)
+        assert refused.value.code is RefusalCode.STORE_SCHEMA_DRIFT
+        assert capsys.readouterr().err == ""
+        assert _in_store_schema(empty_database) == 0, "nothing of the app's in it"
+
+
+@pytest.mark.parametrize(
+    "handed",
+    [
+        "TABLE caos_store.store_migrations",
+        "FUNCTION caos_store.refuse_route_mutation()",
+    ],
+)
+def test_a_store_schema_holding_anything_of_another_role_s_is_refused(
+    empty_database: str, handed: str
+) -> None:
+    """W2: the schema is the app's own, but a bookkeeping table -- or a trigger
+    function, whose owner may replace its body -- has since been handed to
+    another role, which grants the app everything on it so nothing fails to
+    read. The next boot refuses `STORE_SCHEMA_DRIFT`, and the one after the
+    object is handed back boots as before."""
+    with login_role(empty_database) as other, login_role(empty_database) as app:
+        with connect(app) as conn:
+            apply_schema(conn)
+        for owner, refused in ((other, True), (app, False)):
+            with psycopg.connect(empty_database, autocommit=True) as admin:
+                admin.execute(f'ALTER {handed} OWNER TO "{urlsplit(owner).username}"')
+                admin.execute(f'GRANT ALL ON {handed} TO "{urlsplit(app).username}"')
+            with connect(app) as conn:
+                if refused:
+                    with pytest.raises(Refusal) as caught:
+                        apply_schema(conn)
+                    assert caught.value.code is RefusalCode.STORE_SCHEMA_DRIFT
+                else:
+                    apply_schema(conn)
+                    store.verify_schema(conn)
+
+
+def test_a_role_without_database_create_boots_on_the_schemas_it_owns(
+    empty_database: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """N3: both boots ran `CREATE SCHEMA IF NOT EXISTS` every time, which needs
+    CREATE on the database even when the schema is there, so a deployment
+    that withdrew that grant after the first boot -- least privilege, N16 --
+    was refused 42501 on every boot after. With both schemas present and
+    owned (W2), neither boot creates them, and the role boots on CONNECT."""
+    from caos.graph.checkpoint import checkpointer, close_checkpointer
+
+    database = urlsplit(empty_database).path.lstrip("/")
+    with login_role(empty_database) as app:
+        with connect(app) as conn:
+            apply_schema(conn)  # the first boot, on CAN_CONNECT_AND_CREATE
+        close_checkpointer(checkpointer(app))
+        with psycopg.connect(empty_database, autocommit=True) as admin:
+            admin.execute(
+                f'REVOKE CREATE ON DATABASE "{database}"'
+                f' FROM "{urlsplit(app).username}", PUBLIC'
+            )
+        capsys.readouterr()
+        with connect(app) as conn:
+            apply_schema(conn)
+            store.verify_schema(conn)
+        close_checkpointer(checkpointer(app))
+        assert capsys.readouterr().err == ""
 
 
 def test_committed_unit_commits_the_body_on_a_clean_exit(empty_database: str) -> None:

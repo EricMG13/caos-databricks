@@ -22,6 +22,7 @@ from psycopg import sql
 
 from caos.boundary_text import BoundaryText
 from caos.refusals import Refusal, RefusalCode
+from caos.store import CHECKPOINT_SCHEMA as CHECKPOINT_SCHEMA
 from caos.store import RunStatus, StoreConnection, committed_unit
 from caos.store.events import RunEvent, append, lock_run
 from caos.store.outcomes import require_idle
@@ -361,11 +362,24 @@ def request_cancel(conn: StoreConnection, run_id: UUID) -> bool:
     return ended
 
 
-# LangGraph's own schema and the tables of it keyed by thread
-# (`caos.graph.checkpoint`, `langgraph.checkpoint.postgres.base`). Named here
-# rather than imported: the store does not depend on the graph package.
-CHECKPOINT_SCHEMA = "caos_graph"
+# The tables of LangGraph's own schema (`CHECKPOINT_SCHEMA`) keyed by thread
+# (`caos.graph.checkpoint`, `langgraph.checkpoint.postgres.base`), in the order
+# its own `delete_thread` deletes from them. Named here rather than imported:
+# the store does not depend on the graph package.
 CHECKPOINT_TABLES = ("checkpoints", "checkpoint_blobs", "checkpoint_writes")
+
+
+def checkpoint_thread(run_id: UUID, route_digest: str) -> str:
+    """The checkpoint thread a run's pinned route is driven on (CF-037).
+
+    The run and the route's own digest, so a thread written for another shape
+    of the graph is never resumed into this one. One spelling for every place
+    that names it -- the runtime that writes it (`run_route`), the worker that
+    forgets it (`_forget`) and the Cancel that forgets it here -- because three
+    once spelled it apart, and when the key changed (F182) two regression
+    tests went on asserting under the old one and passed on nothing (W3).
+    """
+    return f"{run_id}:{route_digest}"
 
 
 def _forget_threads(conn: StoreConnection, run_id: UUID) -> None:
@@ -375,21 +389,31 @@ def _forget_threads(conn: StoreConnection, run_id: UUID) -> None:
     A run is checkpointed only under a claim, so only a claimed run has a
     thread; one released or parked and then cancelled while QUEUED or STOPPED
     was never forgotten by a worker (`caos.graph.worker._forget`). The key is
-    the one `run_route` binds, `<run_id>:<route_digest>`, from the pinned
-    route. A table the checkpointer never set up is nothing to forget.
+    `checkpoint_thread`'s, from the pinned route's digest, read in the same
+    statement as the tables; a run with no pinned route opened no thread. A
+    table the checkpointer never set up is nothing to forget, and neither is
+    one another role owns, or one in a schema another role owns (W2): a
+    trigger on it would run as this role, inside the Cancel's own governed
+    unit, and the API process that runs it never set that schema up.
     """
-    present = conn.execute(
-        "SELECT t FROM unnest(%s::text[]) AS t"
-        " WHERE to_regclass(quote_ident(%s) || '.' || quote_ident(t)) IS NOT NULL",
-        (list(CHECKPOINT_TABLES), CHECKPOINT_SCHEMA),
-    ).fetchall()
-    for (table,) in present:
+    row = conn.execute(
+        "SELECT (SELECT route_digest FROM run_routes WHERE run_id = %s),"
+        " array(SELECT c.relname::text FROM pg_class c"
+        "   JOIN pg_namespace n ON n.oid = c.relnamespace"
+        "   WHERE n.nspname = %s AND c.relname = ANY(%s)"
+        "   AND pg_get_userbyid(n.nspowner) = current_user"
+        "   AND pg_get_userbyid(c.relowner) = current_user)",
+        (run_id, CHECKPOINT_SCHEMA, list(CHECKPOINT_TABLES)),
+    ).fetchone()
+    if row is None or row[0] is None:
+        return
+    thread = checkpoint_thread(run_id, str(row[0]))
+    for table in (name for name in CHECKPOINT_TABLES if name in row[1]):
         conn.execute(
-            sql.SQL(
-                "DELETE FROM {} WHERE thread_id = (SELECT run_id::text || ':'"
-                " || route_digest FROM run_routes WHERE run_id = %s)"
-            ).format(sql.Identifier(CHECKPOINT_SCHEMA, str(table))),
-            (run_id,),
+            sql.SQL("DELETE FROM {} WHERE thread_id = %s").format(
+                sql.Identifier(CHECKPOINT_SCHEMA, table)
+            ),
+            (thread,),
         )
 
 

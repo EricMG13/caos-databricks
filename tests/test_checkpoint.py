@@ -12,6 +12,7 @@ from pathlib import Path
 import ormsgpack
 import psycopg
 import pytest
+from conftest import login_role
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from psycopg_pool import ConnectionPool, PoolTimeout
 
@@ -284,8 +285,11 @@ def test_a_checkpoint_thread_is_bound_to_the_pinned_route_s_digest(
     exactly what a thread keyed on the run alone would have handed back
     regardless of whether the shape still matched.
     """
+    from uuid import uuid4
+
     from caos.graph.build import build_graph, resume_input, thread_config
     from caos.graph.route import ResolvedRoute, RouteNode, route_digest
+    from caos.store.work import checkpoint_thread
 
     saver = checkpointer(empty_database)
     try:
@@ -296,8 +300,10 @@ def test_a_checkpoint_thread_is_bound_to_the_pinned_route_s_digest(
             "p", "s", (RouteNode("CP-1", "CP-1", 0), RouteNode("CP-0", "CP-0", 0)), ()
         )
         assert route_digest(route) != route_digest(moved)
-        thread = f"a-run:{route_digest(route)}"
-        thread_moved = f"a-run:{route_digest(moved)}"
+        run_id = uuid4()
+        thread = checkpoint_thread(run_id, route_digest(route))
+        thread_moved = checkpoint_thread(run_id, route_digest(moved))
+        assert thread == f"{run_id}:{route_digest(route)}"
 
         def stops_at_cp1(route_node_id: str) -> str:
             if route_node_id == "CP-1":
@@ -321,3 +327,65 @@ def test_a_checkpoint_thread_is_bound_to_the_pinned_route_s_digest(
         assert saver.get(thread_config(thread_moved)) is None
     finally:
         close_checkpointer(saver)
+
+
+def test_a_checkpoint_schema_another_role_made_first_refuses_both_boots(
+    empty_database: str,
+) -> None:
+    """W2: a co-tenant's `caos_graph`, made before the app's first boot and
+    open to everyone, was set up and written to as the app's own. Both boots
+    refuse it `STORE_SCHEMA_DRIFT` now: the API process's `apply_schema`,
+    since a Cancel there writes to that schema and nothing there sets it up,
+    and the worker's checkpointer, which sets up no table in it."""
+    from caos.store import apply_schema, connect
+
+    with login_role(empty_database) as squatter, login_role(empty_database) as app:
+        with psycopg.connect(squatter, autocommit=True) as other:
+            other.execute(f"CREATE SCHEMA {checkpoint.SCHEMA}")
+            other.execute(
+                f"GRANT USAGE, CREATE ON SCHEMA {checkpoint.SCHEMA} TO PUBLIC"
+            )
+        with connect(app) as conn, pytest.raises(Refusal) as api_boot:
+            apply_schema(conn)
+        assert api_boot.value.code is RefusalCode.STORE_SCHEMA_DRIFT
+        with pytest.raises(Refusal) as worker_boot:
+            checkpointer(app)
+        assert worker_boot.value.code is RefusalCode.STORE_SCHEMA_DRIFT
+        with psycopg.connect(empty_database, autocommit=True) as admin:
+            held = admin.execute(
+                "SELECT count(*) FROM pg_class WHERE relnamespace = %s::regnamespace",
+                (checkpoint.SCHEMA,),
+            ).fetchone()
+        assert held == (0,), "no LangGraph table was set up in it"
+
+
+@pytest.mark.parametrize("platform", [False, True], ids=["local", "platform"])
+def test_a_pooled_checkpoint_connection_carries_socket_and_statement_bounds(
+    empty_database: str, monkeypatch: pytest.MonkeyPatch, platform: bool
+) -> None:
+    """W4: the pool opens its own connections -- a `MintedConnection` on the
+    platform, a plain one elsewhere -- and so never passed through
+    `caos.store.connect`: no keepalives, no `tcp_user_timeout`, no statement
+    bound, and a half-open socket stalled a checkpoint write, or the pool's
+    own check, for the kernel's timeout. Every pooled connection carries the
+    store's socket bounds now, and `STATEMENT_TIMEOUT_MS`, which set-up's own
+    longer bound does not outlive."""
+    from caos import store
+
+    if platform:
+        monkeypatch.setenv(lakebase.LAKEBASE_INSTANCE, "caos-lb")
+        monkeypatch.setattr(checkpoint, "store_url", lambda: empty_database)
+    saver = checkpointer(None if platform else empty_database)
+    try:
+        pool = getattr(saver, "conn", None)
+        assert isinstance(pool, ConnectionPool)
+        with pool.connection() as pooled:
+            parameters = pooled.info.get_parameters()
+            bound = pooled.execute("SHOW statement_timeout").fetchone()
+    finally:
+        close_checkpointer(saver)
+    assert {name: parameters.get(name) for name in store.SOCKET_BOUNDS} == {
+        name: str(value) for name, value in store.SOCKET_BOUNDS.items()
+    }
+    assert checkpoint.STATEMENT_TIMEOUT_MS == 30_000
+    assert bound == {"statement_timeout": "30s"}

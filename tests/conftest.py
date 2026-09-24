@@ -367,6 +367,36 @@ def empty_database(request: pytest.FixtureRequest) -> Iterator[str]:
             admin.execute(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
 
 
+@contextmanager
+def login_role(database_url: str, *, database_create: bool = True) -> Iterator[str]:
+    """A login role of its own on `database_url`'s database, and its URL.
+
+    It holds what the bundle's `CAN_CONNECT_AND_CREATE` gives any principal
+    bound to the database: CONNECT and, when `database_create`, CREATE on it
+    -- and nothing on `public`, which PostgreSQL 15 and later give nobody. Two
+    of them are the app and a co-tenant bound the same way (W2). The role and
+    everything it owns go when the block ends; the name is this function's
+    own hex, never caller input.
+    """
+    import psycopg
+
+    parts = urlsplit(database_url)
+    database = parts.path.lstrip("/")
+    role, password = f"caos_role_{uuid4().hex[:12]}", uuid4().hex
+    granted = "CONNECT, CREATE" if database_create else "CONNECT"
+    with psycopg.connect(database_url, autocommit=True) as admin:
+        admin.execute(f"CREATE ROLE \"{role}\" LOGIN PASSWORD '{password}'")
+        admin.execute(f'GRANT {granted} ON DATABASE "{database}" TO "{role}"')
+        admin.execute(f'REVOKE ALL ON SCHEMA public FROM PUBLIC, "{role}"')
+    netloc = f"{role}:{password}@{parts.hostname}:{parts.port or 5432}"
+    try:
+        yield urlunsplit(parts._replace(netloc=netloc))
+    finally:
+        with psycopg.connect(database_url, autocommit=True) as admin:
+            admin.execute(f'DROP OWNED BY "{role}" CASCADE')
+            admin.execute(f'DROP ROLE "{role}"')
+
+
 def priced(estimate: Decimal, model: str = "a-model/for-the-test") -> ModelPrice:
     """A dated price whose worst case (F06) is exactly `estimate`, for `model`.
 
