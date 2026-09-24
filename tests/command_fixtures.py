@@ -8,6 +8,7 @@ from collections.abc import Callable, Iterator
 from pathlib import Path
 from uuid import UUID, uuid4
 
+import psycopg
 import pytest
 from fastapi.testclient import TestClient
 
@@ -53,6 +54,34 @@ def constant(value: object) -> Callable[[], object]:
     return lambda: value
 
 
+class Borrowed:
+    """One resolution's hold on the test's one connection, standing in for the
+    connection of its own production's `store_connection` opens for each.
+
+    `close` ends this hold and no other -- the admission closes its standing
+    read's connection before it receives the pack (W3) -- and any use after it
+    fails as a closed connection's would, while the test's own connection,
+    and every other hold on it, stays open.
+    """
+
+    def __init__(self, conn: object) -> None:
+        self._conn = conn
+        self.closed = False
+
+    def close(self) -> None:
+        self.closed = True
+
+    def __getattr__(self, name: str) -> object:
+        if self.closed:
+            raise psycopg.OperationalError
+        return getattr(self._conn, name)
+
+
+def borrowed(conn: object) -> Callable[[], object]:
+    """A `store_connection` override handing each resolution its own hold."""
+    return lambda: Borrowed(conn)
+
+
 @pytest.fixture
 def command_client(
     case: tuple[StoreConnection, UUID],
@@ -67,7 +96,7 @@ def command_client(
     # READER whatever arrives, and an authority matrix would prove nothing.
     monkeypatch.setenv(TRUST_SWITCH, TRUSTED)
     monkeypatch.setenv(app_module.DATABASE_URL, empty_database)
-    app.dependency_overrides[store_connection] = constant(conn)
+    app.dependency_overrides[store_connection] = borrowed(conn)
     app.dependency_overrides[blob_store] = constant(BlobStore(tmp_path / "blobs"))
     try:
         with TestClient(app) as opened:

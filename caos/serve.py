@@ -45,13 +45,16 @@ LIMIT_CONCURRENCY = STREAM_LIMIT + 40
 GRACEFUL_SECONDS = 2
 LIMIT_JOIN_SECONDS = 12
 SERVER_LOGGER = "uvicorn.error"
-# CF-051. A conservative keep-alive: how long an accepted connection may sit
-# with no complete request on it, whether it is idle between requests or
-# still sending one -- uvicorn arms the same timer either way (h11_impl.py),
-# and this version has no separate, named timeout for "still reading the
-# headers". `h11_max_incomplete_event_size` bounds the same slow-header
-# shape in bytes rather than seconds, uvicorn's other lever on it. Both
-# conservative placeholders; the tuned production figures are N26 (enterprise).
+# CF-051. A conservative keep-alive: how long a connection may sit idle
+# between one response and its next request. That is the only timer uvicorn
+# 0.52.4's h11 protocol arms (`on_response_complete`), and it is disarmed the
+# moment a byte arrives (W3): nothing here bounds, in seconds, a connection
+# still sending its first request's headers, and nothing bounds a request
+# whose body is still arriving. `h11_max_incomplete_event_size` bounds the
+# slow-header shape in bytes, uvicorn's one lever on it; a body is bounded by
+# the edge's own receive deadline instead (`caos.api.edge.BODY_GRACE_SECONDS`
+# and `BODY_MIN_BYTES_PER_SECOND`). Conservative placeholders; the tuned
+# production figures are N26 (enterprise).
 TIMEOUT_KEEP_ALIVE_SECONDS = 5
 HEADER_READ_LIMIT_BYTES = 16 * 1024
 
