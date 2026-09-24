@@ -3,13 +3,12 @@
 // rectangles over it, placed by one geometry function. There is no page
 // render. A withdrawn source shows its withdrawal and reads no page; a page
 // the server refuses shows its state and no text.
-import { useEffect, useId, useState } from "react";
+import { useEffect, useState } from "react";
 import { toFraction, type Box } from "./geometry";
+import { Overlay } from "./Overlay";
 import { OFFLINE_WORDING, UNAVAILABLE_WORDING, fetchPage, type PageStatus } from "@/app/transport";
 import { words } from "@/chrome/compose";
-import { useModalA11y } from "@/ds/use-modal-a11y";
 import type { CitationView, PageDocument } from "@/wire/v1";
-import { Button } from "@/components/ui/button";
 
 const place = (box: Box) => ({
   left: `${box.left * 100}%`,
@@ -148,9 +147,8 @@ export function SourceDrawer({
   opener: HTMLElement;
   onClose: () => void;
 }) {
-  const ref = useModalA11y<HTMLDivElement>(onClose, opener);
-  // Declared after the modal hook, so its cleanup runs after the opener's
-  // restore: an opener that has left the page hands focus to the heading.
+  // The overlay returns focus to an opener still on the page and does nothing
+  // for one that has left it; this hands focus to the heading instead.
   useEffect(
     () => () => {
       if (opener.isConnected) return;
@@ -161,7 +159,6 @@ export function SourceDrawer({
     },
     [opener],
   );
-  const titleId = useId();
   // The page read is bound to the address it was asked for; a response under
   // any other address, or for a source withdrawn since, is never shown.
   const pageKey =
@@ -185,59 +182,44 @@ export function SourceDrawer({
   const status = pageKey !== null && page?.key === pageKey ? page.status : null;
 
   return (
-    <>
-      <div className="scrim" aria-hidden="true" onClick={onClose} />
-      <div
-        ref={ref}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        className="drawer"
-        data-evidence-drawer
-      >
-        <div className="dhead">
-          <h2 id={titleId}>
-            {fact.filename} · page {fact.page}
-          </h2>
-          <Button type="button" variant="ghost" size="sm" className="ml-auto" onClick={onClose}>
-            Close
-            <kbd className="rounded border px-1 font-mono text-[11px] text-muted-foreground">
-              Esc
-            </kbd>
-          </Button>
-        </div>
-        <div className="db">
-          {withdrawnAt !== null ? (
-            <div className="note limitation" data-withdrawn>
-              <b>This source has been withdrawn</b> at{" "}
-              <time dateTime={withdrawnAt}>{withdrawnAt}</time>. The citation stays so the
-              conclusion that rests on it stays explicable; its page is no longer read.
-            </div>
-          ) : pageKey === null ? null : (
-            <div data-page-layer>
-              <div className="lbl">Text layer from the token index</div>
-              {status !== null && "document" in status ? (
-                <TextLayer page={status.document} fact={fact} />
-              ) : (
-                <PageState status={status} />
-              )}
-            </div>
-          )}
-          <div className="lbl">Matched text</div>
-          <blockquote className="matched" style={{ margin: 0 }}>
-            <mark>{fact.matched_text}</mark>
-          </blockquote>
-          <dl className="kv">
-            <dt>Document</dt>
-            <dd title={fact.document_sha256}>sha256 {fact.document_sha256.slice(0, 12)}…</dd>
-            <dt>Rectangles</dt>
-            <dd>{fact.rects.length}</dd>
-          </dl>
-          <div className="focusnote">
-            <b>Escape</b> returns focus to the chip that opened this.
+    <Overlay
+      look="drawer"
+      opener={opener}
+      onClose={onClose}
+      title={`${fact.filename} · page ${fact.page}`}
+      data-evidence-drawer
+    >
+      <div className="db">
+        {withdrawnAt !== null ? (
+          <div className="note limitation" data-withdrawn>
+            <b>This source has been withdrawn</b> at{" "}
+            <time dateTime={withdrawnAt}>{withdrawnAt}</time>. The citation stays so the conclusion
+            that rests on it stays explicable; its page is no longer read.
           </div>
+        ) : pageKey === null ? null : (
+          <div data-page-layer>
+            <div className="lbl">Text layer from the token index</div>
+            {status !== null && "document" in status ? (
+              <TextLayer page={status.document} fact={fact} />
+            ) : (
+              <PageState status={status} />
+            )}
+          </div>
+        )}
+        <div className="lbl">Matched text</div>
+        <blockquote className="matched" style={{ margin: 0 }}>
+          <mark>{fact.matched_text}</mark>
+        </blockquote>
+        <dl className="kv">
+          <dt>Document</dt>
+          <dd title={fact.document_sha256}>sha256 {fact.document_sha256.slice(0, 12)}…</dd>
+          <dt>Rectangles</dt>
+          <dd>{fact.rects.length}</dd>
+        </dl>
+        <div className="focusnote">
+          <b>Escape</b> returns focus to the chip that opened this.
         </div>
       </div>
-    </>
+    </Overlay>
   );
 }

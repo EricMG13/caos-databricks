@@ -1,11 +1,10 @@
 // The metric passport: exactly the ten fields of IA_SPEC.md 4.4, for an actual
 // and for a projected cell alike. A projected cell also names its driver and
 // the driver's evidence.
-import { useId, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { CitationChip } from "./CitationChip";
-import { useModalA11y } from "@/ds/use-modal-a11y";
+import { Overlay } from "./Overlay";
 import { PASSPORT_FIELDS, type Passport, type PassportField } from "@/wire";
-import { Button } from "@/components/ui/button";
 
 export const PASSPORT_LABELS: Record<PassportField, string> = {
   definition: "Definition",
@@ -91,28 +90,14 @@ export function MetricPassport({
   opener: HTMLElement | null;
   onClose: () => void;
 }) {
-  const ref = useModalA11y<HTMLDivElement>(onClose, opener);
-  const titleId = useId();
   return (
-    <>
-      <div className="scrim" aria-hidden="true" onClick={onClose} />
-      <div ref={ref} role="dialog" aria-modal="true" aria-labelledby={titleId} className="modal">
-        <div className="dhead">
-          <h2 id={titleId}>Passport · {passport.label}</h2>
-          <Button type="button" variant="ghost" size="sm" className="ml-auto" onClick={onClose}>
-            Close
-            <kbd className="rounded border px-1 font-mono text-[11px] text-muted-foreground">
-              Esc
-            </kbd>
-          </Button>
-        </div>
-        <div className="ppval">
-          <span className="v">{passport.value}</span>
-          {passport.unit ? <span className="u">{passport.unit}</span> : null}
-          {passport.driver ? <span className="tag acc badge">Projected</span> : null}
-        </div>
-        <PassportFields passport={passport} />
+    <Overlay look="modal" opener={opener} onClose={onClose} title={`Passport · ${passport.label}`}>
+      <div className="ppval">
+        <span className="v">{passport.value}</span>
+        {passport.unit ? <span className="u">{passport.unit}</span> : null}
+        {passport.driver ? <span className="tag acc badge">Projected</span> : null}
       </div>
-    </>
+      <PassportFields passport={passport} />
+    </Overlay>
   );
 }

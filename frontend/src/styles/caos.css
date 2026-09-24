@@ -770,7 +770,9 @@
   /* ---- the passport ---- */
   .ppfull {
     display: grid;
-    grid-template-columns: 128px 1fr;
+    /* `minmax(0, …)`: a bare 1fr is at least its longest word, and a 64-digit
+       snapshot digest pushed the column past the dialog's edge. */
+    grid-template-columns: 128px minmax(0, 1fr);
     margin: 0;
   }
   .ppfull dt {
@@ -791,6 +793,9 @@
   }
   .ppfull dd code {
     font: 400 0.8125rem var(--font-mono);
+    /* A digest or a derivation is one long word: it breaks rather than
+       leaving the dialog. */
+    overflow-wrap: anywhere;
   }
   .ppfull dd .dev {
     color: var(--warning);
@@ -914,6 +919,22 @@
       opacity: 0;
       scale: 0.96;
     }
+  }
+  /* Leaving mirrors arriving, a little quicker (N64: Base UI holds the
+     overlay mounted until this ends). */
+  .scrim[data-ending-style] {
+    opacity: 0;
+    transition-duration: 150ms;
+  }
+  .drawer[data-ending-style] {
+    translate: 2.5rem 0;
+    opacity: 0;
+    transition-duration: 200ms;
+  }
+  .modal[data-ending-style] {
+    opacity: 0;
+    scale: 0.96;
+    transition-duration: 150ms;
   }
   .drawer > .dhead,
   .modal > .dhead {

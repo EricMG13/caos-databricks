@@ -6,8 +6,8 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { useRef, useState } from "react";
 import { SECTION_ABBREVIATIONS, SECTION_LABELS } from "@/app/sections";
-import { useModalA11y } from "@/ds/use-modal-a11y";
 import { useEvidence } from "@/evidence/EvidenceContext";
+import { Overlay } from "@/evidence/Overlay";
 import { SECTIONS } from "@/wire/shared";
 
 describe("every section has a word and an abbreviation", () => {
@@ -35,70 +35,108 @@ describe("a hook outside its provider says so rather than rendering nothing", ()
   });
 });
 
-describe("modal a11y returns focus to the opener it was given", () => {
-  function Dialog({ onClose }: { onClose: () => void }) {
+describe("the evidence overlay returns focus to the opener it was given (N64)", () => {
+  // The opener is passed, never inferred from focus: WebKit does not focus a
+  // clicked button, and an inferred opener drops focus to the landmark.
+  function Opens({ onClose, nested = false }: { onClose: () => void; nested?: boolean }) {
     const opener = useRef<HTMLButtonElement>(null);
+    const inner = useRef<HTMLButtonElement>(null);
     const [open, setOpen] = useState(false);
+    const [second, setSecond] = useState(false);
     return (
       <>
         <button ref={opener} onClick={() => setOpen(true)}>
           open
         </button>
         {open ? (
-          <Panel opener={opener.current} onClose={() => (setOpen(false), onClose())} />
+          <Overlay
+            look="modal"
+            title="First"
+            opener={opener.current}
+            onClose={() => (setOpen(false), onClose())}
+          >
+            <button ref={inner} onClick={() => setSecond(true)}>
+              inside
+            </button>
+            {nested && second ? (
+              <Overlay
+                look="drawer"
+                title="Second"
+                opener={inner.current}
+                onClose={() => setSecond(false)}
+              >
+                <p>second</p>
+              </Overlay>
+            ) : null}
+          </Overlay>
         ) : null}
       </>
     );
   }
 
-  function Panel({ opener, onClose }: { opener: HTMLElement | null; onClose: () => void }) {
-    const ref = useModalA11y<HTMLDivElement>(onClose, opener);
-    return (
-      <div ref={ref} role="dialog" aria-modal="true">
-        <button>inside</button>
-      </div>
-    );
-  }
+  const settle = () => act(() => new Promise((resolve) => setTimeout(resolve, 0)));
 
-  test("it locks the body while open and clears the lock on close", () => {
+  test("Escape closes it and focus returns to its opener", async () => {
     const closed = vi.fn();
-    const { unmount } = render(<Dialog onClose={closed} />);
+    render(<Opens onClose={closed} />);
     fireEvent.click(screen.getByText("open"));
-    expect(document.body.style.overflow).toBe("hidden");
-    unmount();
-    // Cleared outright rather than restored from a captured value.
-    expect(document.body.style.overflow).toBe("");
+    await settle();
+    expect(screen.getByRole("dialog", { name: "First" })).toBeInTheDocument();
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+    await settle();
+    expect(closed).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.activeElement).toBe(screen.getByText("open"));
+  });
+
+  test("Escape closes only the topmost of two, and focus returns to that one's opener", async () => {
+    const closed = vi.fn();
+    render(<Opens onClose={closed} nested />);
+    fireEvent.click(screen.getByText("open"));
+    await settle();
+    fireEvent.click(screen.getByText("inside"));
+    await settle();
+    expect(screen.getByRole("dialog", { name: "Second" })).toBeInTheDocument();
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+    await settle();
+    expect(screen.queryByRole("dialog", { name: "Second" })).toBeNull();
+    expect(screen.getByRole("dialog", { name: "First" })).toBeInTheDocument();
+    expect(closed).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(screen.getByText("inside"));
+  });
+
+  test("the close button closes it", async () => {
+    const closed = vi.fn();
+    render(<Opens onClose={closed} />);
+    fireEvent.click(screen.getByText("open"));
+    await settle();
+    fireEvent.click(screen.getByRole("button", { name: /Close/ }));
+    await settle();
+    expect(closed).toHaveBeenCalledOnce();
   });
 
   // FE-4: an opener that has left the page cannot take focus. Calling focus()
   // on it silently drops focus to <body>, which is what the caller's own
   // fallback (SourceDrawer's section heading) exists to prevent -- so the
-  // hook must not call it at all.
-  test("test_focus_is_not_handed_to_an_opener_that_has_left_the_page", () => {
+  // overlay must not call it at all.
+  test("test_focus_is_not_handed_to_an_opener_that_has_left_the_page", async () => {
     const gone = window.document.createElement("button");
     const focused = vi.fn();
     gone.focus = focused;
     function Gone() {
-      const ref = useModalA11y<HTMLDivElement>(() => {}, gone);
-      return (
-        <div ref={ref} role="dialog" aria-modal="true">
+      const [open, setOpen] = useState(true);
+      return open ? (
+        <Overlay look="modal" title="Gone" opener={gone} onClose={() => setOpen(false)}>
           <span>panel</span>
-        </div>
-      );
+        </Overlay>
+      ) : null;
     }
-    const dialog = render(<Gone />);
+    render(<Gone />);
+    await settle();
     expect(gone.isConnected).toBe(false);
-    dialog.unmount();
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+    await settle();
+    expect(screen.queryByRole("dialog")).toBeNull();
     expect(focused).not.toHaveBeenCalled();
-  });
-
-  test("Escape closes the topmost overlay", () => {
-    const closed = vi.fn();
-    render(<Dialog onClose={closed} />);
-    fireEvent.click(screen.getByText("open"));
-    act(() => {
-      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
-    });
-    expect(closed).toHaveBeenCalledOnce();
   });
 });
