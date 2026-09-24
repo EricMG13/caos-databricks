@@ -131,9 +131,10 @@ _FIGURE_RIGHT = EDGE_PUNCTUATION.replace(")", "")
 # then, on a tracking extractor, the line with its tracked letters joined
 # (`_shown_line_run`, W6). `WHOLE_LINE_AS_STORED` is that rule as N28 first
 # accepted answers under it -- the line's stored tokens byte for byte first,
-# and past them only the tracked-letter line -- which refused a line copied
-# exactly as shown when the PDF stored an accent decomposed or tracked a `$`,
-# and anchored the stored form of one of two lines shown alike. `ANY_RUN` is
+# and past them, on a tracking extractor, only the tracked-letter line -- which
+# refused a line copied exactly as shown when a PDF stored an accent
+# decomposed or tracked a `$`, and anchored the stored form of one of two
+# lines shown alike. `ANY_RUN` is
 # the rule every record accepted before either was located by, any unique run
 # of the page. A record names the rule it was accepted under
 # (`CanonicalRecord.citation_rule`) and is re-anchored by it, so a rule
