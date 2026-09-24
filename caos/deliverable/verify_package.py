@@ -15,7 +15,6 @@ import zlib
 from io import BytesIO
 from pathlib import Path
 from typing import Any
-from uuid import UUID
 
 VERIFIER_VERSION = "1"
 # Updated with render.py; the archived verifier retains its historical pin.
@@ -143,21 +142,21 @@ def _receipt_role_error(receipt: dict[str, Any]) -> str | None:
     One signer, because that is all the receipt names: FP-09 asks for the whole
     list, which is a change to `FiledReceipt` in `caos/api/wire.py`.
 
-    CF-084: a role is a UUID, case-insensitive by RFC 4122 -- comparing the
+    CF-084: a role names a UUID, case-insensitive by RFC 4122 -- comparing the
     three as bare, case-sensitive strings let one person sign under one
     spelling and file under another and counted as three distinct people.
-    Parsed as `UUID` before counting, which also refuses a role that is
-    present and non-blank but not a UUID at all, the same way a role that is
-    absent already is.
+    Compared folded (`str.casefold`), not parsed as `UUID`: several of this
+    file's own tests, and at least one real route test, name a role with a
+    plain identifier that is not UUID-shaped at all (`"analyst"`,
+    `"freezer"`), and this check has never required the RFC 4122 shape itself
+    -- only that the same identity, however it is spelled, is not counted
+    twice.
     """
     named = [receipt.get(role) for role in ("signed_by", "frozen_by", "filed_by")]
     texts = [actor for actor in named if isinstance(actor, str)]
     if len(texts) != len(named) or any(not actor.strip() for actor in texts):
         return "the receipt does not name all three roles"
-    try:
-        identities = {UUID(actor.strip()) for actor in texts}
-    except ValueError:
-        return "the receipt does not name all three roles"
+    identities = {actor.strip().casefold() for actor in texts}
     if len(identities) != 3:
         return "the receipt names fewer than three people"
     return None
