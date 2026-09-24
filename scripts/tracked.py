@@ -15,13 +15,14 @@ from __future__ import annotations
 
 import shutil
 import subprocess  # nosec B404
+from collections.abc import Sequence
 from pathlib import Path
 
 # Read-only upstream. Never edited, so never judged.
 VENDOR = "vendor"
 
 
-def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
+def _git(repo: Path, args: Sequence[str]) -> subprocess.CompletedProcess[str]:
     """One resolved, shell-less git invocation; every function below goes
     through it, so there is exactly one subprocess call site in this file to
     audit, whichever git subcommand a caller needs (`RuntimeError` when git
@@ -38,7 +39,7 @@ def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
 def tracked_files(repo: Path, *pathspecs: str) -> list[str]:
     """Repo-relative paths git tracks under `repo` that match `pathspecs`;
     `RuntimeError` when git is missing or cannot list them."""
-    listed = _git(repo, "ls-files", "-z", "--", *pathspecs)
+    listed = _git(repo, ("ls-files", "-z", "--", *pathspecs))
     if listed.returncode != 0:
         message = "git could not list the tracked files; the gate cannot judge them"
         raise RuntimeError(message)
@@ -71,7 +72,7 @@ def tracked_python_at(repo: Path, rev: str) -> dict[str, str]:
     # `--end-of-options`: `rev` is a caller-supplied string (ultimately a PR's
     # `--against` argument); without it, a value shaped like an option (e.g.
     # "--upload-pack=...") could be read as one rather than as a revision.
-    listed = _git(repo, "ls-tree", "-r", "--name-only", "-z", "--end-of-options", rev)
+    listed = _git(repo, ("ls-tree", "-r", "--name-only", "-z", "--end-of-options", rev))
     if listed.returncode != 0:
         message = (
             f"git could not list {rev}'s tracked files; the gate cannot judge them"
@@ -84,7 +85,7 @@ def tracked_python_at(repo: Path, rev: str) -> dict[str, str]:
     ]
     texts: dict[str, str] = {}
     for name in names:
-        blob = _git(repo, "show", "--end-of-options", f"{rev}:{name}")
+        blob = _git(repo, ("show", "--end-of-options", f"{rev}:{name}"))
         if blob.returncode == 0:
             texts[name] = blob.stdout
     return texts
@@ -93,7 +94,7 @@ def tracked_python_at(repo: Path, rev: str) -> dict[str, str]:
 def blob_at(repo: Path, rev: str, path: str) -> str | None:
     """One file's text as git recorded it at `rev`; `None` if `rev` never
     had it (a file the base commit predates, e.g. a snapshot added since)."""
-    blob = _git(repo, "show", "--end-of-options", f"{rev}:{path}")
+    blob = _git(repo, ("show", "--end-of-options", f"{rev}:{path}"))
     return blob.stdout if blob.returncode == 0 else None
 
 

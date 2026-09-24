@@ -192,6 +192,7 @@ describe("the transport", () => {
       provider: null,
       model: null,
       reviewer: null,
+      reviewer_id: null,
       decided_at: null,
       expires_at: null,
     };

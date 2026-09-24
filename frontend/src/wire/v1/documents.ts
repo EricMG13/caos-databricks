@@ -135,6 +135,7 @@ const RefusalCode = enumOf([
   "EDGE_NOT_TRUSTED",
   "ORIGIN_REFUSED",
   "EDGE_CONFIG_INVALID",
+  "CONCURRENCY_LIMIT_REACHED",
   "INTERNAL_FAULT",
   "NOT_AUTHORISED",
   "REQUEST_INVALID",
@@ -215,7 +216,6 @@ const RefusalCode = enumOf([
   "STORE_UNAVAILABLE",
   "IDENTITY_UNAVAILABLE",
   "STREAM_LIMIT_REACHED",
-  "CONCURRENCY_LIMIT_REACHED",
 ]);
 const RunSummary = object({
   run_id: uuid,
