@@ -544,6 +544,39 @@ def test_each_residual_is_held_to_its_own_opening_balance(
         assert row["unavailable_reason"] == reason, (off, row[f"residual_{residual}"])
 
 
+
+def test_each_period_is_held_to_its_own_opening_balances() -> None:
+    """N75: the tolerance was fixed from the chain's first openings, so once a
+    year repaid 99,990 of 100,000 of debt the next year's stated debt of 110
+    against the chain's 10 (and cash of 108 against 8) reconciled, and leverage
+    read 2x on the computed debt where the stated one implies 22x. Each period
+    now answers to the balances it opened with."""
+    request = forecast_request()
+    request["opening"]["debt_by_facility"] = [{"facility_id": "TERM", "amount": "100000"}]
+    request["opening"]["cash"] = "100000"
+    request["tolerance"] = "1000"
+    request["contractual"]["amortisation"] = []
+    request["periods"] = request["periods"][:2]
+    first, second = request["drivers"][:2]
+    request["drivers"] = [first, second]
+    for driver in (first, second):
+        for name in cash_flow._MOVEMENTS:
+            if name not in ("revenue", "ebitda"):
+                driver[name] = "0"
+    first["optional_repayment"] = "99990"
+    first["stated_closing_debt"] = "10"
+    first["stated_closing_cash"] = "10"
+    second["stated_closing_debt"] = "10"
+    second["stated_closing_cash"] = "10"
+    result = cash_flow_forecast(request)
+    assert [row["unavailable_reason"] for row in result["rows"]] == [None, None]
+    for field, stated in (("stated_closing_debt", "110"), ("stated_closing_cash", "110")):
+        moved = deepcopy(request)
+        moved["drivers"][1][field] = stated
+        rows = cash_flow_forecast(moved)["rows"]
+        assert rows[0]["unavailable_reason"] is None
+        assert rows[1]["unavailable_reason"] == "RESIDUAL_UNRECONCILED", field
+
 def test_a_case_s_periods_run_in_fiscal_year_order_after_the_opening() -> None:
     """FP-37: the calculator chains a case's periods in the order given, so a
     period out of order opened from the wrong closing and only an independent

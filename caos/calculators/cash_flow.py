@@ -11,8 +11,8 @@ cash_taxes`, so a reported CFO that already deducted interest and taxes paid
 counts both twice (FP-39). A period reconciles when its stated closing debt and
 cash are each within the tolerance of the chain's own, and each residual's
 tolerance is never wider than one part in a thousand of its own opening
-balance -- debt of the opening debt, cash of the opening cash -- nor than
-`MAX_TOLERANCE` (N20, N10).
+balance -- debt of the period's opening debt, cash of its opening cash -- nor
+than `MAX_TOLERANCE` (N20, N10, N75).
 """
 
 from __future__ import annotations
@@ -80,8 +80,8 @@ class _Inputs:
     drivers: dict[tuple[str, str], dict[str, Any]]
     repayments: dict[tuple[str, str], Decimal]
     opening: tuple[Decimal, Decimal]
-    # (debt, cash): each residual's own (N10).
-    tolerance: tuple[Decimal, Decimal]
+    # The stated tolerance; each period caps it by its own openings (N75).
+    tolerance: Decimal
     units: dict[str, Any]
     perimeter: str
 
@@ -246,7 +246,7 @@ def _parse(request: Mapping[str, Any]) -> _Inputs:
         _drivers(request["drivers"], pairs),
         _contractual(request["contractual"]["amortisation"], pairs, set(facilities)),
         opening,
-        _tolerance(request.get("tolerance", "0.001"), opening),
+        _tolerance(request.get("tolerance", "0.001")),
         dict(units),
         _text(request["perimeter"]),
     )
@@ -330,25 +330,13 @@ def _contractual(
     return totals
 
 
-def _tolerance(
-    value: object, opening: tuple[Decimal, Decimal]
-) -> tuple[Decimal, Decimal]:
-    """The debt and the cash residual's reconciliation tolerances: the one
-    stated, or 0.001, within `MAX_TOLERANCE` or refused (F62), and each never
-    wider than `RELATIVE_TOLERANCE` of its own opening balance by its size --
-    debt of the opening debt, cash of the opening cash (N20, FP-23, N10). One
-    share of both together let the larger balance widen the smaller's check:
-    100,000 of debt passed a cash residual of 90 on an opening cash of 10. A
-    tolerance wide enough to pass any residual switches the one arithmetic
-    check off; a balance that opened at nothing reconciles exactly."""
+def _tolerance(value: object) -> Decimal:
+    """The reconciliation tolerance stated, or 0.001, within `MAX_TOLERANCE`
+    or refused (F62). Each period narrows it per residual (`_project_period`)."""
     tolerance = _decimal(value)
     if tolerance < 0 or tolerance > MAX_TOLERANCE:
         raise Refusal(RefusalCode.METHODOLOGY_INPUT_INVALID)
-    debt, cash = opening
-    return (
-        min(tolerance, abs(debt) * RELATIVE_TOLERANCE),
-        min(tolerance, abs(cash) * RELATIVE_TOLERANCE),
-    )
+    return tolerance
 
 
 def _unavailable_reason(
@@ -403,7 +391,13 @@ def _project_period(
     cash = opening_cash + fcf - moves["distributions"] + financing
     residual_debt = moves["stated_closing_debt"] - debt
     residual_cash = moves["stated_closing_cash"] - cash
-    debt_tolerance, cash_tolerance = inputs.tolerance
+    # Each residual is held to `RELATIVE_TOLERANCE` of its own balance as this
+    # period opened -- debt of the opening debt, cash of the opening cash
+    # (N20, FP-23, N10) -- never the chain's first: after a deleveraging year
+    # the first year's debt would pass a residual ten times the debt left
+    # (N75). A balance that opened at nothing reconciles exactly.
+    debt_tolerance = min(inputs.tolerance, abs(opening_debt) * RELATIVE_TOLERANCE)
+    cash_tolerance = min(inputs.tolerance, abs(opening_cash) * RELATIVE_TOLERANCE)
     reason = (
         "RESIDUAL_UNRECONCILED"
         if abs(residual_debt) > debt_tolerance or abs(residual_cash) > cash_tolerance
