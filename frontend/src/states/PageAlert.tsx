@@ -1,9 +1,13 @@
 // The page-level alert: one sentence, never engine text (IA_SPEC.md 6).
+import { CloudOffIcon, PauseIcon } from "lucide-react";
+import { Alert, AlertTitle } from "@/components/ui/alert";
+
 export function PageAlert({ sentence }: { sentence: string }) {
   return (
-    <div role="alert" className="pagealert" data-page-alert>
-      {sentence}
-    </div>
+    <Alert variant="destructive" className="border-destructive/30" data-page-alert>
+      <CloudOffIcon />
+      <AlertTitle>{sentence}</AlertTitle>
+    </Alert>
   );
 }
 
@@ -14,8 +18,9 @@ export function PageAlert({ sentence }: { sentence: string }) {
     names which of the two, so a test and a reader read the same thing. */
 export function NotLive({ mark, sentence }: { mark: "refresh" | "tail"; sentence: string }) {
   return (
-    <div role="status" className="pagealert warn" data-not-live={mark}>
-      {sentence}
-    </div>
+    <Alert role="status" className="border-warning/40 bg-warning/10" data-not-live={mark}>
+      <PauseIcon className="text-warning" />
+      <AlertTitle className="font-normal">{sentence}</AlertTitle>
+    </Alert>
   );
 }

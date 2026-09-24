@@ -5,6 +5,7 @@ import { Link } from "react-router";
 import { FilingControls } from "./FilingControls";
 import { sectionPath } from "@/app/sections";
 import { SeverityMark } from "@/chrome/SeverityMark";
+import { sentence } from "@/chrome/compose";
 import { scrollArtifact } from "@/controls/scroll";
 import { NoteList } from "@/ds/atoms";
 import { shortDigest, stamp } from "@/ds/format";
@@ -19,7 +20,7 @@ function Artifact({ artifact }: { artifact: ReportDocument["body"]["artifacts"][
       <header>
         <h2>{artifact.route_node_id}</h2>
         <span className="cp">
-          {artifact.qa_status} · {artifact.committee_status}
+          {sentence(artifact.qa_status)} · {sentence(artifact.committee_status)}
         </span>
       </header>
       <div className="pb">
@@ -29,7 +30,7 @@ function Artifact({ artifact }: { artifact: ReportDocument["body"]["artifacts"][
           <dt>Record</dt>
           <dd>sha256:{artifact.record_sha256}</dd>
           <dt>Scope</dt>
-          <dd>{artifact.decision_scope}</dd>
+          <dd className="prose">{sentence(artifact.decision_scope)}</dd>
         </dl>
         <pre
           className="tscroll artifact-scroll"
@@ -188,7 +189,7 @@ export function ReportSection({ document }: { document: ReportDocument; tab: str
           <h2>{body.case_title}</h2>
           {/* A run nothing has been saved from is served its accepted
               artifacts as a first save would carry them, and says so. */}
-          <span className="cp">{body.revision_id === null ? "NOT YET SAVED" : "SAVED REPORT"}</span>
+          <span className="cp">{body.revision_id === null ? "Not yet saved" : "Saved report"}</span>
         </header>
         <div className="pb">
           <dl className="kv">

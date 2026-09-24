@@ -30,6 +30,7 @@ import {
   type Intent,
 } from "@/app/commands";
 import { OFFLINE_WORDING } from "@/app/transport";
+import { sentence } from "@/chrome/compose";
 import { fetchSection } from "@/app/transport";
 import { ConfirmedControl } from "@/controls/ConfirmedControl";
 import { RefusalNote, RefusedControl } from "@/controls/RefusedControl";
@@ -335,6 +336,16 @@ export function CreateRunControl({
   const [, setParams] = useSearchParams();
   const { pending, result, run } = useCommand<RunCreated>();
   const extensionWhy = useId();
+  // The analyst may leave while the command is in flight (another case, or
+  // another section): its answer then names a run on a page no longer shown,
+  // and correcting the address would navigate them back (CF-058).
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const chosen = choices[pick] ?? null;
   const named = predecessor.trim();
   // The choice says whether its route can carry CP-CF (the server's own
@@ -411,14 +422,14 @@ export function CreateRunControl({
             <RefusedControl
               refusal={action ? action.refusal : null}
               busy={pending}
-              className="rb acc"
+              variant="default"
               data-action="CREATE_RUN"
               onClick={
                 action && request
                   ? () => {
                       void run(request, (intent) => createRun(caseId, request, intent)).then(
                         (outcome) => {
-                          if (outcome?.kind !== "ok") return;
+                          if (outcome?.kind !== "ok" || !mounted.current) return;
                           // The address is corrected, not navigated: the
                           // analyst did not move, the run they are on gained
                           // a name. `replace` keeps Back at where they came
@@ -513,7 +524,7 @@ export function PinInputControl({
         <RefusedControl
           refusal={action ? action.refusal : null}
           busy={pending}
-          className="rb acc"
+          variant="default"
           data-action="PIN_RUN_INPUT"
           onClick={
             action
@@ -584,13 +595,12 @@ export function GatePanelControl({
     <section className="pnl" data-gate-panel={gate}>
       <header>
         <h2>{gate === "SOURCE_SET" ? "Source set" : "Research plan"}</h2>
-        <span className="cp">{state}</span>
+        <span className="cp">{sentence(state)}</span>
       </header>
       <div className="pb">
         <RefusedControl
           refusal={null}
           busy={preview.pending}
-          className="rb"
           data-action="PREVIEW"
           data-preview-gate={gate}
           onClick={() => {
@@ -621,7 +631,7 @@ export function GatePanelControl({
             <RefusedControl
               refusal={approveRefusal}
               busy={approve.pending}
-              className="rb acc"
+              variant="default"
               data-action={APPROVE_ACTION[gate]}
               onClick={
                 action && previewed
@@ -712,73 +722,80 @@ export function WorkControls({
       <header>
         <h2>Work</h2>
       </header>
-      <div className="pb flush">
+      <div className="pb">
         {work?.stop_code ? <StopCode state={work.state} code={work.stop_code} /> : null}
-        <RefusedControl
-          refusal={startRefusal}
-          busy={start.pending}
-          className="rb acc"
-          data-action="START_RUN"
-          onClick={
-            startAction && fingerprint
-              ? () => {
-                  const body = { input_fingerprint: fingerprint };
-                  void start
-                    .run(body, (intent) => startRun(caseId, runId, body, intent))
-                    .then((outcome) => {
-                      if (outcome?.kind === "ok") onRefetch(runId);
-                    });
-                }
-              : undefined
-          }
-        >
-          {start.pending ? "Starting…" : "Start run"}
-        </RefusedControl>
-        <CommandOutcome result={start.result} success="Run queued to start." />
-        <RefusedControl
-          refusal={retryRefusal}
-          busy={retry.pending}
-          className="rb"
-          data-action="RETRY_RUN"
-          onClick={
-            retryAction && fingerprint
-              ? () => {
-                  const body = { input_fingerprint: fingerprint };
-                  void retry
-                    .run(body, (intent) => retryRun(caseId, runId, body, intent))
-                    .then((outcome) => {
-                      if (outcome?.kind === "ok") onRefetch(runId);
-                    });
-                }
-              : undefined
-          }
-        >
-          {retry.pending ? "Retrying…" : "Retry run"}
-        </RefusedControl>
-        <CommandOutcome result={retry.result} success="Run queued again." />
-        {/* Cancelling a run ends work nothing on the v1 wire restarts, so it
+        <div className="flex flex-wrap items-start gap-x-6 gap-y-3">
+          <div className="grid justify-items-start gap-1">
+            <RefusedControl
+              refusal={startRefusal}
+              busy={start.pending}
+              variant="default"
+              data-action="START_RUN"
+              onClick={
+                startAction && fingerprint
+                  ? () => {
+                      const body = { input_fingerprint: fingerprint };
+                      void start
+                        .run(body, (intent) => startRun(caseId, runId, body, intent))
+                        .then((outcome) => {
+                          if (outcome?.kind === "ok") onRefetch(runId);
+                        });
+                    }
+                  : undefined
+              }
+            >
+              {start.pending ? "Starting…" : "Start run"}
+            </RefusedControl>
+            <CommandOutcome result={start.result} success="Run queued to start." />
+          </div>
+          <div className="grid justify-items-start gap-1">
+            <RefusedControl
+              refusal={retryRefusal}
+              busy={retry.pending}
+              data-action="RETRY_RUN"
+              onClick={
+                retryAction && fingerprint
+                  ? () => {
+                      const body = { input_fingerprint: fingerprint };
+                      void retry
+                        .run(body, (intent) => retryRun(caseId, runId, body, intent))
+                        .then((outcome) => {
+                          if (outcome?.kind === "ok") onRefetch(runId);
+                        });
+                    }
+                  : undefined
+              }
+            >
+              {retry.pending ? "Retrying…" : "Retry run"}
+            </RefusedControl>
+            <CommandOutcome result={retry.result} success="Run queued again." />
+          </div>
+          <div className="grid justify-items-start gap-1">
+            {/* Cancelling a run ends work nothing on the v1 wire restarts, so it
             asks once more and names the run it would end (finding FE-7). */}
-        <ConfirmedControl
-          refusal={cancelRefusal}
-          busy={cancel.pending}
-          step={{ act: "Cancel run", subject: `run ${runId}`, digest: null }}
-          className="rb crit"
-          action="CANCEL_RUN"
-          onConfirm={
-            cancelAction
-              ? () => {
-                  void cancel
-                    .run({}, (intent) => cancelRun(caseId, runId, intent))
-                    .then((outcome) => {
-                      if (outcome?.kind === "ok") onRefetch(runId);
-                    });
-                }
-              : undefined
-          }
-        >
-          {cancel.pending ? "Cancelling…" : "Cancel run"}
-        </ConfirmedControl>
-        <CommandOutcome result={cancel.result} success="Cancellation requested." />
+            <ConfirmedControl
+              refusal={cancelRefusal}
+              busy={cancel.pending}
+              step={{ act: "Cancel run", subject: `run ${runId}`, digest: null }}
+              variant="destructive"
+              action="CANCEL_RUN"
+              onConfirm={
+                cancelAction
+                  ? () => {
+                      void cancel
+                        .run({}, (intent) => cancelRun(caseId, runId, intent))
+                        .then((outcome) => {
+                          if (outcome?.kind === "ok") onRefetch(runId);
+                        });
+                    }
+                  : undefined
+              }
+            >
+              {cancel.pending ? "Cancelling…" : "Cancel run"}
+            </ConfirmedControl>
+            <CommandOutcome result={cancel.result} success="Cancellation requested." />
+          </div>
+        </div>
       </div>
     </section>
   );

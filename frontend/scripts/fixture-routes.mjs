@@ -112,4 +112,4 @@ export const ENGINES = ["chromium", "firefox", "webkit"];
     or a state region is on screen. Both are required, so a skeleton is never
     scanned as a page. */
 export const LOADING = "main#body [data-surface-state='loading']";
-export const SETTLED = "header.ribbon, main#body [data-surface-state]";
+export const SETTLED = "main#body [data-summary], main#body [data-surface-state]";

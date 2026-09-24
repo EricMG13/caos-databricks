@@ -1,13 +1,15 @@
-// The bands say what each section's own document says (critique P1): no "—"
-// cells, no "No action is offered", no section name as the headline figure,
-// and a cell with nothing to say is not drawn.
+// The header and the summary say what each section's own document says
+// (critique P1): no "—" cells, no "No action is offered", no section name as
+// the headline figure, and a cell with nothing to say is not drawn.
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fireEvent, render } from "@testing-library/react";
-import { DecisionBrief } from "@/chrome/DecisionBrief";
-import { Ribbon } from "@/chrome/Ribbon";
+import { MemoryRouter } from "react-router";
+import { SectionSummary, headlineOf } from "@/chrome/SectionSummary";
 import { SectionTabs } from "@/chrome/SectionTabs";
-import { composeChrome, words } from "@/chrome/compose";
+import { SiteHeader } from "@/chrome/SiteHeader";
+import { RUN_SEVERITY, composeChrome, sentence, words } from "@/chrome/compose";
+import { SidebarProvider } from "@/components/ui/sidebar";
 import {
   parseAnalysisDocument,
   parseDirectoryDocument,
@@ -22,6 +24,10 @@ const load = (name: string) =>
 test("test_words_reads_a_code_as_words", () => {
   expect(words("FULL_COMMITTEE")).toBe("full committee");
   expect(words("RUNNING")).toBe("running");
+  // A code shown as a label reads as a sentence would.
+  expect(sentence("FULL_COMMITTEE")).toBe("Full committee");
+  expect(sentence("2 gates open")).toBe("2 gates open");
+  expect(RUN_SEVERITY.FAILED).toBe("CRITICAL");
 });
 
 test("Analysis names the conclusion, the module to review and the evidence it rests on", () => {
@@ -85,34 +91,67 @@ test("a partial document with no notes says so in words, never 'Partial: .'", ()
   const chrome = composeChrome("analysis", parseAnalysisDocument(document));
   expect(chrome.brief.evidence).toBe("Some parts of this document could not be read.");
   expect(chrome.verdict.severity).toBe("WARNING");
-  expect(chrome.ribbon.chips[0]).toEqual({ label: "PARTIAL", tone: "warn" });
+  expect(chrome.ribbon.chips[0]).toEqual({ label: "Partial", tone: "warn" });
 });
 
-test("a brief cell with nothing to say is not drawn, and an empty brief is no band", () => {
+test("a brief cell with nothing to say is not drawn, and an empty brief draws no row", () => {
+  const verdict = { severity: "IDLE" as const, conclusion: "Held.", blocked_on: null };
+  const quiet = { chips: [], execution: null, persistence: null, approval: null, actions: [] };
   const { container, rerender } = render(
-    <DecisionBrief
+    <SectionSummary
+      verdict={verdict}
+      ribbon={quiet}
       brief={{ change: "Changed.", impact: null, action: null, evidence: null, headline: "3" }}
     />,
   );
   expect([...container.querySelectorAll("[data-cell]")].map((cell) => cell.textContent)).toEqual([
-    "CHANGEChanged.",
+    "ChangeChanged.",
   ]);
+  expect(container.querySelector("[data-headline]")).toHaveTextContent("3");
+  // A figure the conclusion already states is not drawn twice.
+  expect(
+    headlineOf(
+      { change: null, impact: null, action: null, evidence: null, headline: "4" },
+      { severity: "IDLE", conclusion: "4 cases.", blocked_on: null },
+    ),
+  ).toBeNull();
+  expect(
+    headlineOf(
+      { change: null, impact: null, action: null, evidence: null, headline: "6/10" },
+      { severity: "RUNNING", conclusion: "In progress · CP-6 at its gate", blocked_on: null },
+    ),
+  ).toBe("6/10");
   rerender(
-    <DecisionBrief
+    <SectionSummary
+      verdict={verdict}
+      ribbon={quiet}
       brief={{ change: null, impact: null, action: null, evidence: null, headline: null }}
     />,
   );
-  expect(container.querySelector(".brief")).toBeNull();
+  expect(container.querySelector("[data-brief]")).toBeNull();
+  expect(container.querySelector("[data-headline]")).toBeNull();
 });
 
-test("the ribbon names the issuer and draws only the state it has", () => {
+test("the header names the issuer and draws only the state it has", () => {
   const { container } = render(
-    <Ribbon
-      ribbon={{ chips: [], execution: "RUNNING", persistence: null, approval: null, actions: [] }}
-      subject={{ case_id: "00000000-0000-4000-8000-000000000001", issuer: "Carvana Co." }}
-    />,
+    <MemoryRouter>
+      <SidebarProvider>
+        <SiteHeader
+          label="Run"
+          crumb="Carvana Co."
+          subject={{ case_id: "00000000-0000-4000-8000-000000000001", issuer: "Carvana Co." }}
+          ribbon={{
+            chips: [],
+            execution: "RUNNING",
+            persistence: null,
+            approval: null,
+            actions: [],
+          }}
+        />
+      </SidebarProvider>
+    </MemoryRouter>,
   );
-  expect(container.querySelector(".subject")).toHaveTextContent("Carvana Co.");
+  expect(container.querySelector("[data-case]")).toHaveTextContent("Carvana Co.");
   expect(
     [...container.querySelectorAll("[data-state-cell]")].map((cell) =>
       cell.getAttribute("data-state-cell"),

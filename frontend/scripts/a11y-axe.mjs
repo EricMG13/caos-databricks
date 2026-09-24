@@ -44,6 +44,9 @@ const viewports = (process.env.VIEWPORTS || VIEWPORTS.join(",")).split(",").map(
   return parsed;
 });
 const routes = process.env.ROUTES ? process.env.ROUTES.split(",") : ROUTES;
+// Both themes are scanned: each has its own colours, and contrast holds in
+// one says nothing about the other (D37).
+const schemes = (process.env.SCHEMES || "light,dark").split(",");
 
 // The pinned binary by path, never `npx`: `npx` resolves through PATH and may
 // fetch and run a package's lifecycle scripts, and its wrapper process does not
@@ -211,17 +214,20 @@ try {
   for (const engineName of engines) {
     const engine = { chromium, firefox, webkit }[engineName];
     const browser = await engine.launch();
-    const page = await browser.newPage({ viewport: viewports[0] });
-    for (const viewport of viewports) {
-      for (const route of routes) {
-        const key = `${engineName} ${route} @${viewport.width}x${viewport.height}`;
-        console.error(`axe: ${key}`);
-        try {
-          out[key] = await scan(page, route, viewport);
-        } catch (error) {
-          out[key] = { url: route, viewport, scan_error: error.message, violations: [] };
+    for (const colorScheme of schemes) {
+      const page = await browser.newPage({ viewport: viewports[0], colorScheme });
+      for (const viewport of viewports) {
+        for (const route of routes) {
+          const key = `${engineName} ${colorScheme} ${route} @${viewport.width}x${viewport.height}`;
+          console.error(`axe: ${key}`);
+          try {
+            out[key] = await scan(page, route, viewport);
+          } catch (error) {
+            out[key] = { url: route, viewport, scan_error: error.message, violations: [] };
+          }
         }
       }
+      await page.close();
     }
     await browser.close();
   }
@@ -237,7 +243,7 @@ try {
   }
 }
 
-const expected = engines.length * viewports.length * routes.length;
+const expected = engines.length * schemes.length * viewports.length * routes.length;
 let nodes = 0;
 let scanErrors = 0;
 let layoutFailures = 0;
@@ -258,6 +264,7 @@ const summary = {
   base: BASE,
   tags: TAGS,
   engines,
+  schemes,
   viewports,
   routes,
   entries: Object.keys(out).length,

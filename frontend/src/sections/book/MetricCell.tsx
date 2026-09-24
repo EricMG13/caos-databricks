@@ -19,7 +19,7 @@ export function MetricCell({
   return (
     <button
       type="button"
-      className="cellbtn focus-ring"
+      className="cellbtn"
       data-cell={cell.column}
       data-unavailable={cell.unavailable_reason ?? undefined}
       aria-pressed={selected}

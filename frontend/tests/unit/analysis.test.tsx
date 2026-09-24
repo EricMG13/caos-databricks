@@ -7,7 +7,8 @@ import { readFileSync } from "node:fs";
 import type { ReactNode } from "react";
 import { fireEvent, render } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
-import { composeChrome } from "@/chrome/compose";
+import { composeChrome, words } from "@/chrome/compose";
+import { stamp } from "@/ds/format";
 import { AnalysisSection, PROSE_SHOWN, sourceRegister } from "@/sections/analysis/AnalysisSection";
 import { conclusionOf, handoffSeverity, moduleName } from "@/sections/analysis/modules";
 import { parseAnalysisDocument } from "@/wire/v1";
@@ -175,7 +176,7 @@ describe("Analysis", () => {
     const { container } = mount(document);
     const card = container.querySelector(`[data-handoff="${screening.module_id}"]`)!;
     expect(card.querySelector("[data-screening-only]")).toHaveTextContent(
-      "SCREENING ONLY: a screen, not committee clearance.",
+      "Screening only: a screen, not committee clearance.",
     );
     // The fixture's own handoffs are all full-committee: none carries the notice.
     const { container: full } = mount(complete);
@@ -190,7 +191,7 @@ describe("Analysis", () => {
     expect(fact).toHaveTextContent(`p.${withdrawn.page}`);
     expect(fact).toHaveTextContent(withdrawn.matched_text);
     expect(fact.getAttribute("data-withdrawn")).toBe("true");
-    expect(fact).toHaveTextContent(withdrawn.withdrawn_at!);
+    expect(fact).toHaveTextContent(stamp(withdrawn.withdrawn_at!));
 
     const { container: cp0 } = mountAt(complete, "CP-0");
     const notWithdrawn = cp0.querySelector("[data-source-facts] [data-citation]")!;
@@ -233,11 +234,13 @@ describe("Analysis", () => {
     const card = container.querySelector('[data-handoff="CP-1C"]')!;
     expect(card.querySelector("[data-qa-status]")).toHaveTextContent(cp1c.qa_status);
     expect(card.querySelector("[data-committee-status]")).toHaveTextContent(cp1c.committee_status);
-    expect(card.querySelector("[data-committee-status]")).toHaveTextContent(cp1c.decision_scope);
+    expect(card.querySelector("[data-committee-status]")).toHaveTextContent(
+      words(cp1c.decision_scope),
+    );
     expect(card.querySelector("[data-confidence]")).toHaveTextContent(
       String(cp1c.confidence_score),
     );
-    expect(card.querySelector("[data-confidence]")).toHaveTextContent(cp1c.confidence_band);
+    expect(card.querySelector("[data-confidence]")).toHaveTextContent(words(cp1c.confidence_band));
   });
 
   test("validation warnings render only when carried", () => {

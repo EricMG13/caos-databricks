@@ -591,45 +591,66 @@ describe("drawn at the container's width", () => {
 describe("the chart stylesheet", () => {
   const css = readFileSync(resolve(process.cwd(), "src/styles/charts.css"), "utf8");
   const tokens = readFileSync(resolve(process.cwd(), "src/styles/tokens.css"), "utf8");
-  const hex = (source: string, name: string) =>
-    new RegExp(`--${name}:\\s*(#[0-9a-f]{6})`, "i").exec(source)?.[1] ?? "";
-  const luminance = (value: string) => {
-    const [r = 0, g = 0, b = 0] = [1, 3, 5].map((at) => {
-      const channel = parseInt(value.slice(at, at + 2), 16) / 255;
-      return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
-    });
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  // Each theme's own values: light on :root, dark in its `@variant dark` block.
+  const [light = "", dark = ""] = tokens.split("@variant dark");
+  /** A token's colour as linear sRGB, from its hex or oklch() value. */
+  const colour = (source: string, name: string): number[] => {
+    const value = new RegExp(`--${name}:\\s*([^;]+);`).exec(source)?.[1]?.trim() ?? "";
+    const hexed = /^#([0-9a-f]{6})$/i.exec(value);
+    if (hexed) {
+      return [0, 2, 4].map((at) => {
+        const channel = parseInt(hexed[1]!.slice(at, at + 2), 16) / 255;
+        return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+      });
+    }
+    const [l = 0, c = 0, h = 0] = (/^oklch\(([^)]*)\)$/.exec(value)?.[1] ?? "")
+      .split(/\s+/)
+      .map(Number);
+    const a = c * Math.cos((h * Math.PI) / 180);
+    const b = c * Math.sin((h * Math.PI) / 180);
+    const [L, M, S] = [
+      l + 0.3963377774 * a + 0.2158037573 * b,
+      l - 0.1055613458 * a - 0.0638541728 * b,
+      l - 0.0894841775 * a - 1.291485548 * b,
+    ].map((v) => v ** 3) as [number, number, number];
+    return [
+      4.0767416621 * L - 3.3077115913 * M + 0.2309699292 * S,
+      -1.2684380046 * L + 2.6097574011 * M - 0.3413193965 * S,
+      -0.0041960863 * L - 0.7034186147 * M + 1.707614701 * S,
+    ].map((v) => Math.min(1, Math.max(0, v)));
   };
-  const contrast = (a: string, b: string) => {
-    const [high, low] = [luminance(a), luminance(b)].sort((x, y) => y - x);
-    return ((high ?? 0) + 0.05) / ((low ?? 0) + 0.05);
+  const luminance = ([r = 0, g = 0, b = 0]: number[]) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  const contrast = (x: number[], y: number[]) => {
+    const [high = 0, low = 0] = [luminance(x), luminance(y)].sort((p, q) => q - p);
+    return (high + 0.05) / (low + 0.05);
   };
-  const panel = hex(tokens, "caos-panel");
 
-  test("sets no chart text below the floors: ticks 10px, values 11px, titles 12px", () => {
-    const sizes = [...css.matchAll(/(?:font-size:\s*|font:[^;]*?\s)(\d+(?:\.\d+)?)px/g)].map(
-      (match) => Number(match[1]),
+  test("sets no chart text below 11px: ticks 11px, values 12px, titles 14px", () => {
+    const sizes = [...css.matchAll(/(?:font-size:\s*|font:[^;]*?\s)(\d+(?:\.\d+)?)(px|rem)/g)].map(
+      (match) => Number(match[1]) * (match[2] === "rem" ? 16 : 1),
     );
     expect(sizes.length).toBeGreaterThan(5);
-    expect(Math.min(...sizes)).toBeGreaterThanOrEqual(10);
-    expect(css).toMatch(/\.chart-title\s*\{[^}]*font: 600 12px var\(--font-sans\)/);
+    expect(Math.min(...sizes)).toBeGreaterThanOrEqual(11);
+    expect(css).toMatch(/\.chart-title\s*\{[^}]*font-size: 0\.875rem/);
   });
 
-  test("holds every mark hue at 3:1 against the panel and every text at 4.5:1", () => {
-    expect(panel).toBe("#12121a");
-    for (const name of [
-      "chart-series-1",
-      "chart-series-2",
-      "chart-series-3",
-      "chart-series-4",
-      "chart-series-5",
-      "chart-neutral",
-      "chart-zero",
-    ]) {
-      expect(contrast(hex(css, name), panel)).toBeGreaterThanOrEqual(3);
-    }
-    for (const name of ["caos-muted", "caos-text", "caos-critical-bright", "caos-accent-bright"]) {
-      expect(contrast(hex(tokens, name), panel)).toBeGreaterThanOrEqual(4.5);
+  test("holds every mark hue at 3:1 against the card and every text at 4.5:1, in both themes", () => {
+    for (const theme of [light, dark]) {
+      const card = colour(theme, "card");
+      for (const name of [
+        "chart-1",
+        "chart-2",
+        "chart-3",
+        "chart-4",
+        "chart-5",
+        "chart-neutral",
+        "chart-zero",
+      ]) {
+        expect(contrast(colour(theme, name), card), name).toBeGreaterThanOrEqual(3);
+      }
+      for (const name of ["muted-foreground", "foreground", "destructive", "info"]) {
+        expect(contrast(colour(theme, name), card), name).toBeGreaterThanOrEqual(4.5);
+      }
     }
   });
 });

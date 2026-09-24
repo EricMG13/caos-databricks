@@ -95,7 +95,7 @@ export function AdmitSources({
         refusal={refusal}
         onClick={action ? () => void submit() : undefined}
         busy={pending}
-        className="rb solid"
+        variant="default"
         reasonDisplay="inline"
         aria-label="Admit sources"
       >

@@ -4,6 +4,7 @@
 import { useId } from "react";
 import { useModalA11y } from "@/ds/use-modal-a11y";
 import type { BBox, Citation } from "@/wire";
+import { Button } from "@/components/ui/button";
 
 function rect(box: BBox) {
   const [x, y, w, h] = box;
@@ -60,9 +61,12 @@ export function EvidenceDrawer({
           <h2 id={titleId}>
             {citation.source_label} · page {citation.page}
           </h2>
-          <button type="button" className="close focus-ring" onClick={onClose}>
-            ESC · CLOSE
-          </button>
+          <Button type="button" variant="ghost" size="sm" className="ml-auto" onClick={onClose}>
+            Close
+            <kbd className="rounded border px-1 font-mono text-[11px] text-muted-foreground">
+              Esc
+            </kbd>
+          </Button>
         </div>
         <div className="db">
           <div className="lbl">Page render · rectangle from the token index</div>

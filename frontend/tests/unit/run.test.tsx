@@ -8,6 +8,7 @@ import { readFileSync } from "node:fs";
 import { useEffect } from "react";
 import { act, fireEvent, render, waitFor } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router";
+import { sentence } from "@/chrome/compose";
 import { actionOf } from "@/sections/run/controls";
 import { RunSection } from "@/sections/run/RunSection";
 import { COL_GAP, NODE_H, NODE_W, ROW_H, edgesOf, layoutRoute } from "@/sections/run/RouteGraph";
@@ -120,7 +121,7 @@ describe("Run", () => {
       expect(BUNDLE).toContain(state);
       seen.add(state);
       expect(node.className).toContain(state.toLowerCase());
-      expect(node.querySelector(".st")?.textContent).toContain(state);
+      expect(node.querySelector(".st")?.textContent).toContain(sentence(state));
       expect(node.querySelector(".why")?.textContent?.trim().length).toBeGreaterThan(0);
       expect(node.querySelector(".glyph[data-severity]")).not.toBeNull();
     }
@@ -134,7 +135,8 @@ describe("Run", () => {
       expect(why).toMatch(/REQUIRED|OPTIONAL|ADVISORY|QA_GATE|CONDITIONAL/);
     }
     const restricted = container.querySelector('button.node[data-state="RESTRICTED"]');
-    expect(restricted?.querySelector(".glyph")).toHaveAttribute("data-severity", "WARNING");
+    // Ran, carrying its limitation: its own ring, never a warning (CF-036).
+    expect(restricted?.querySelector(".glyph")).toHaveAttribute("data-severity", "RESTRICTED");
     expect(container.querySelector(".dag[data-route]")).not.toBeNull();
     expect(container.querySelector(".legend")).not.toBeNull();
   });
@@ -234,9 +236,9 @@ describe("Run", () => {
     expect(detail).toHaveTextContent("QA_GATE rn-cp-5");
     const attempts = container.querySelectorAll(".att[data-attempt]");
     expect(attempts.length).toBe(2);
-    expect(attempts[0]).toHaveTextContent("attempt 1");
-    expect(attempts[0]).toHaveTextContent("NOT ACCEPTED");
-    expect(attempts[1]).toHaveTextContent("attempt unassigned");
+    expect(attempts[0]).toHaveTextContent("Attempt 1");
+    expect(attempts[0]).toHaveTextContent("Not accepted");
+    expect(attempts[1]).toHaveTextContent("Attempt unassigned");
   });
 
   test("test_displayed_run_is_labelled_separately_from_latest", () => {
@@ -777,6 +779,43 @@ describe("Run", () => {
     }
   });
 
+  // The analyst may leave while Create run is in flight: its answer names a run
+  // on a page no longer shown, and writing it into the address would navigate
+  // them back to it (CF-058).
+  test("a Create run answer that lands after the analyst has left moves nothing", async () => {
+    const caseId = routeNotPinned.body.case_id;
+    const created = { case_id: caseId, run_id: RUN_B, route_digest: "f".repeat(64) };
+    let answer!: (response: Response) => void;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        () =>
+          new Promise<Response>((resolve) => {
+            answer = resolve;
+          }),
+      ),
+    );
+    try {
+      seenAddress = "";
+      const view = (shown: boolean) => (
+        <MemoryRouter initialEntries={[`/run/?case=${caseId}&tab=route`]}>
+          {shown ? <RunSection document={EMPTY_RUN} tab={null} /> : null}
+          <Address />
+        </MemoryRouter>
+      );
+      const { container, rerender } = render(view(true));
+      fireEvent.click(container.querySelector('[data-action="CREATE_RUN"]')!);
+      rerender(view(false));
+      await act(async () => {
+        answer(jsonResponse(created, 201));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      expect(new URLSearchParams(address()).get("run")).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   // A refetch a command started is always older than a document the workspace
   // has since served: the slower one must be dropped, not applied.
   test("test_a_slower_command_refetch_cannot_resurrect_an_older_run_document", async () => {
@@ -1187,9 +1226,9 @@ describe("Run", () => {
       "button.node[data-route-node='rn-cp-6']",
     )!;
     expect(node.getAttribute("data-blocking")).toBe("yes");
-    expect(node.textContent).toContain("BLOCKED THE RUN");
+    expect(node.textContent).toMatch(/blocked the run/i);
     expect(node.textContent).toContain("answered Blocked");
-    expect(node.textContent).not.toContain("FRONTIER");
+    expect(node.textContent).not.toMatch(/frontier/i);
     expect(node.classList.contains("running")).toBe(false);
     for (const other of container.querySelectorAll(
       "button.node:not([data-route-node='rn-cp-6'])",
@@ -1205,7 +1244,7 @@ describe("Run", () => {
     expect(detail.textContent).not.toContain("did not run");
     const rows = container.querySelectorAll("[data-blocking-attempt]");
     expect(rows).toHaveLength(1);
-    expect(rows[0]!.textContent).toContain("BLOCKED · NOT ACCEPTED");
+    expect(rows[0]!.textContent).toContain("Blocked · not accepted");
     unmount();
 
     // The other way a run ends BLOCKED (§39): no verdict, so no node is named
@@ -1217,7 +1256,7 @@ describe("Run", () => {
     const second = mount(emptied);
     const idle = second.container.querySelector("button.node[data-route-node='rn-cp-6']")!;
     expect(idle.getAttribute("data-blocking")).toBe("no");
-    expect(idle.textContent).toContain("DID NOT RUN");
+    expect(idle.textContent).toMatch(/did not run/i);
     expect(second.container.querySelector("[data-blocked-by]")!.textContent).toBe(
       "no node's verdict — the frontier emptied with required work unfinished",
     );

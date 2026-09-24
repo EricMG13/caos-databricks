@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { SeverityMark } from "@/chrome/SeverityMark";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { Severity } from "@/wire";
 
 /** The seven states of IA_SPEC.md 6. `ready` is not a state of this component:
@@ -73,6 +74,13 @@ export function SurfaceState({
       </div>
       {title ? <Heading>{title}</Heading> : null}
       {detail ? <p>{detail}</p> : null}
+      {kind === "loading" ? (
+        <div className="mt-4 grid max-w-xl gap-2" aria-hidden="true">
+          <Skeleton className="h-4 w-2/3" />
+          <Skeleton className="h-4 w-1/2" />
+          <Skeleton className="h-4 w-3/5" />
+        </div>
+      ) : null}
       {supporting ? <div className="mt-2">{supporting}</div> : null}
     </section>
   );

@@ -8,9 +8,10 @@
 // document, which is what says the membership changed.
 import { useState } from "react";
 import { grantStanding, revokeStanding } from "@/app/commands";
+import { words } from "@/chrome/compose";
 import { ConfirmedControl } from "@/controls/ConfirmedControl";
 import { RefusedControl } from "@/controls/RefusedControl";
-import { TextInput } from "@/ds/TextInput";
+import { Input } from "@/components/ui/input";
 import { CommandOutcome, useCommand } from "@/sections/run/controls";
 import type { ActionView, CaseRow, MemberRow, StandingGranted, StandingRevoked } from "@/wire/v1";
 
@@ -55,7 +56,6 @@ function RevokeMember({
           digest: null,
         }}
         onConfirm={action && member ? () => void submit() : undefined}
-        className="rb"
         action="REVOKE_STANDING"
         aria-label={member ? `Revoke ${member.user_id}` : "Revoke standing"}
       >
@@ -96,8 +96,9 @@ function GrantMember({
   return (
     <div className="fld" data-grant={caseId}>
       <label htmlFor={inputId}>Member id</label>
-      <TextInput
+      <Input
         id={inputId}
+        className="w-72 max-w-full"
         type="text"
         value={userId}
         placeholder="User id (UUID)"
@@ -119,7 +120,7 @@ function GrantMember({
         refusal={refusal}
         onClick={action ? () => void submit() : undefined}
         busy={pending}
-        className="rb solid"
+        variant="default"
         reasonDisplay="inline"
         data-action="GRANT_STANDING"
         aria-label="Grant standing"
@@ -144,7 +145,7 @@ function CaseMembers({ row, onChanged }: { row: CaseRow; onChanged: () => void }
         <span className="nm">{row.title}</span>{" "}
         <span className="m">
           {row.members === null
-            ? `your standing ${row.standing}`
+            ? `your standing: ${words(row.standing)}`
             : `${row.members.length} ${row.members.length === 1 ? "member" : "members"}`}
         </span>
       </summary>
@@ -195,7 +196,7 @@ export function CaseAccess({ rows, onChanged }: { rows: CaseRow[]; onChanged: ()
     <section className="pnl" aria-labelledby="directory-access-heading">
       <header>
         <h2 id="directory-access-heading">Case access</h2>
-        <span className="cp">WHO HOLDS STANDING ON EACH CASE</span>
+        <span className="cp">Who holds standing on each case</span>
       </header>
       <div className="pb">
         {rows.map((row) => (

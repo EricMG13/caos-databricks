@@ -27,7 +27,7 @@ test("qualification states are never composed from a section verdict", async () 
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response("RESTRICTED")));
   render(<QualificationStrip evidenceSha256={EVIDENCE} />);
 
-  expect(await screen.findByText("RESTRICTED")).toBeInTheDocument();
+  expect(await screen.findByText("Restricted")).toBeInTheDocument();
   expect(screen.getByLabelText("Qualification")).toHaveTextContent(
     "Qualification metadata requires an analyst role.",
   );
@@ -46,7 +46,7 @@ test("unverifiable persisted evidence is unavailable, not unqualified", async ()
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response("UNAVAILABLE")));
   render(<QualificationStrip evidenceSha256={EVIDENCE} />);
 
-  expect(await screen.findByText("UNAVAILABLE")).toBeInTheDocument();
+  expect(await screen.findByText("Unavailable")).toBeInTheDocument();
   expect(screen.getByLabelText("Qualification")).toHaveTextContent(
     "Qualification evidence cannot be verified.",
   );

@@ -289,8 +289,8 @@ describe("axes print nice numbers, not float residue", () => {
   });
 
   test("text is sized at the floors, and cut rather than crowded", () => {
-    expect(TICK_SIZE).toBe(10);
-    expect(VALUE_SIZE).toBe(11);
+    expect(TICK_SIZE).toBe(11);
+    expect(VALUE_SIZE).toBe(12);
     expect(FALLBACK_WIDTH).toBeGreaterThan(0);
     expect(textWidth("12345", 10)).toBeCloseTo(31);
     expect(fitText("Q1", 60, TICK_SIZE)).toBe("Q1");
