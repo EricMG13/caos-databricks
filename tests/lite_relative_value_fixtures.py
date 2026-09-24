@@ -35,6 +35,7 @@ from canonical_fixtures import (
     CATALOG,
     CONTRACT,
     RUN,
+    RUN_PRICE,
     conforming_rows,
     fields_from_prompt,
     skill,
@@ -46,6 +47,7 @@ from lite_route_fixtures import _table, _yaml, cp_l10_topic_rows
 from caos.graph.route import resolve_route
 from caos.methodology.handoff import HostIdentity, UpstreamRef, invocation_fields
 from caos.methodology.vendor import authority_bundle_sha256
+from caos.pricing import ModelPrice
 from caos.provider import Completion, encode_request
 
 SELECTION = ("LITE_CREDIT_22", "LITE_RELATIVE_VALUE")
@@ -177,6 +179,7 @@ class LiteRelativeValueCompletions:
 
     source_id: UUID
     model: str = "a-model/for-the-test"
+    price: ModelPrice | None = RUN_PRICE
     charge: Decimal = Decimal("0.0000041")
     qa_by_module: dict[str, str] = field(default_factory=dict)
     readiness: dict[str, str] = field(default_factory=dict)

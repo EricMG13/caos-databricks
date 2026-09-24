@@ -65,8 +65,8 @@ class ModuleProvider:
 
     @property
     def price(self) -> ModelPrice | None:
-        """The dated price its completions charge at, or None for completions
-        that report money rather than a price (`pricing.bills_at`)."""
+        """The dated price its completions charge at, or None when they state
+        none -- and `pricing.bills_at` then refuses the run (N15)."""
         stated = getattr(self.completions, "price", None)
         return stated if isinstance(stated, ModelPrice) else None
 

@@ -68,6 +68,14 @@ RATE_LIMITED = 429
 RATE_LIMIT_TRIES = 3
 RETRY_AFTER_SECONDS = 2.0
 RETRY_AFTER_CAP_SECONDS = 20.0
+# A re-send starts only with at least this long left of the call's one
+# deadline (N11): half of it, the 120 s whole-call deadline F89 measured as too
+# short to deliver a few thousand tokens at real throughput. A re-send started
+# with less is expected to be abandoned mid-generation at the deadline while
+# the provider may still bill it, so the 429 is the answer instead. Two capped
+# waits spend at most 40 s of the 240, so a rate limit answered promptly is
+# still re-sent; only 429s that were themselves slow to arrive leave less.
+MIN_RESEND_SECONDS = TIMEOUT_SECONDS / 2
 _sleep = time.sleep
 _clock = time.monotonic
 
@@ -318,25 +326,28 @@ def _content_parts_contained() -> Iterator[None]:
 
 def _sends_again(failed: OpenAIError, sent: int, deadline: float) -> bool:
     """Whether the call is sent again after `failed`: a rate limit waited out
-    (`_waited_out`), every installed check asked, and time still left."""
+    (`_waited_out`), every installed check asked, and `MIN_RESEND_SECONDS`
+    still left."""
     if not _waited_out(failed, sent, deadline):
         return False
     # Nothing was billed yet; what the caller installed decides whether the
     # call may still be made (ST-7), and raises if not.
     check_resend()
     # The wait and the fence can spend what was left (R24-08): nothing is
-    # started past the one deadline, and the rate limit is then the answer.
-    return _clock() < deadline
+    # started without the time a generation needs (N11), past the one deadline
+    # least of all, and the rate limit is then the answer.
+    return deadline - _clock() >= MIN_RESEND_SECONDS
 
 
 def _waited_out(failed: OpenAIError, sent: int, deadline: float) -> bool:
     """Whether a rate limit was waited out and the call may be sent again: a
-    429 reached no model (DP-5), within the tries, and the wait ends before
-    the call's one deadline (ST-9)."""
+    429 reached no model (DP-5), within the tries, and the wait still leaves
+    `MIN_RESEND_SECONDS` of the call's one deadline (ST-9, N11) -- a wait that
+    could not be followed by a re-send is not waited."""
     if not _rate_limited(failed) or sent >= RATE_LIMIT_TRIES:
         return False
     wait = _retry_after(failed)
-    if wait >= deadline - _clock():
+    if wait + MIN_RESEND_SECONDS > deadline - _clock():
         return False
     _sleep(wait)
     return True

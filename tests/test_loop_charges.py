@@ -27,6 +27,7 @@ from canonical_fixtures import (
     LITE_SELECTION,
     PINNED,
     QUOTE,
+    RUN_PRICE,
     CanonicalCompletions,
 )
 from conftest import _url_for, approve_run, priced
@@ -83,6 +84,7 @@ class _Completions(CanonicalCompletions):
 
     charge: Decimal | None = REPORTED
     model: str = MODEL
+    price: ModelPrice | None = RUN_PRICE
     generation_id: str = "gen-loop-test"
     verdict: str = "READY"
 
@@ -377,7 +379,7 @@ def test_a_small_prompt_reserves_its_priced_cost_not_the_byte_ceiling(
     and it is the bound that lets three nodes run under one $5 ceiling.
     """
     conn, run_id, source_id, blobs = ready
-    completions = _Completions(source_id)
+    completions = _Completions(source_id, price=TERRA)
     provider = ModuleProvider(
         conn=conn,
         bundle=Bundle(root=VENDORED),
@@ -454,7 +456,7 @@ def test_a_prompt_rebuilt_larger_than_the_one_priced_is_refused_before_the_call(
     from caos.methodology import canonical
 
     conn, run_id, source_id, blobs = ready
-    completions = _Completions(source_id)
+    completions = _Completions(source_id, price=TERRA)
     real = canonical._prompt
     builds = 0
 

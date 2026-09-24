@@ -34,6 +34,7 @@ from caos.graph import runtime
 from caos.graph.route import NodeState, ResolvedRoute, resolve_route
 from caos.graph.runtime import Execution, Provider, ProviderResult, run_route
 from caos.methodology.bundle import Bundle
+from caos.pricing import ModelPrice
 from caos.refusals import Refusal, RefusalCode
 from caos.store import RunStatus, StoreConnection, apply_schema, connect, runs
 from caos.store.events import RunEvent, events_of
@@ -663,6 +664,11 @@ class _Reclaiming:
     def model(self) -> str:
         return MODEL
 
+    @property
+    def price(self) -> ModelPrice | None:
+        """The price both of its runs are executed at (N15)."""
+        return priced(RESERVED)
+
     def check_context(self, route_node_id: str, module_id: str) -> int:
         # No prompt is built here, so there are no request bytes to price.
         return 0
@@ -786,7 +792,7 @@ def _work(url: str, run: object, completions: object, blobs: BlobStore) -> UUID 
             blobs,
             execution_for=module_execution(
                 completions,  # type: ignore[arg-type]
-                priced(Decimal("0.10")),
+                priced(RESERVED),
                 Bundle(VENDORED),
                 blobs,
             ),
@@ -808,7 +814,7 @@ def test_two_workers_polling_one_queued_run_claim_it_once(
     from test_worker import queued_run
 
     run = queued_run(case, _lite(), Bundle(VENDORED), BlobStore(tmp_path / "blobs"))
-    completions = CanonicalCompletions(run.source_id)
+    completions = CanonicalCompletions(run.source_id, price=priced(RESERVED))
     start = Barrier(2)
 
     def poll(_worker: int) -> UUID | None:
@@ -838,7 +844,9 @@ def test_cancel_during_a_call_keeps_the_bill_accepts_once_and_starts_nothing(
             assert request_cancel(other, run.run_id)
             other.commit()
 
-    completions = CanonicalCompletions(run.source_id, during=cancel)
+    completions = CanonicalCompletions(
+        run.source_id, during=cancel, price=priced(RESERVED)
+    )
 
     assert _work(empty_database, run, completions, run.blobs) == run.run_id
 
@@ -873,7 +881,7 @@ def test_cancel_with_reclaim_ends_the_run_cancelled_exactly_once(
             (run.run_id,),
         )
         a.commit()
-        completions = CanonicalCompletions(run.source_id)
+        completions = CanonicalCompletions(run.source_id, price=priced(RESERVED))
 
         assert _work(empty_database, run, completions, run.blobs) == run.run_id
 
@@ -962,6 +970,7 @@ from caos.boundary_text import BoundaryText
 from caos.graph import runtime
 from caos.graph.worker import WorkerConfig, module_execution, run_worker
 from caos.methodology.bundle import Bundle
+from caos.pricing import ModelPrice
 from caos.store import connect
 
 calls = Path(os.environ["CALLS"])
@@ -984,7 +993,7 @@ if os.environ.get("KILL") == "1":
 
 blobs = BlobStore(Path(os.environ["BLOBS"]))
 bundle = Bundle(VENDORED)
-completions = Recording(UUID(os.environ["SOURCE"]))
+completions = Recording(UUID(os.environ["SOURCE"]), price=priced(Decimal("0.10")))
 sys.exit(run_worker(
     WorkerConfig(BoundaryText.of("worker-subprocess")),
     execution_for=module_execution(completions, priced(Decimal("0.10")), bundle, blobs),

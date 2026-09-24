@@ -14,6 +14,7 @@ from canonical_fixtures import (
     CATALOG,
     CONTRACT,
     RUN,
+    RUN_PRICE,
     conforming_rows,
     fields_from_prompt,
     skill,
@@ -25,6 +26,7 @@ from lite_route_fixtures import _table, _yaml
 from caos.graph.route import resolve_route
 from caos.methodology.handoff import HostIdentity, UpstreamRef, invocation_fields
 from caos.methodology.vendor import authority_bundle_sha256
+from caos.pricing import ModelPrice
 from caos.provider import Completion, encode_request
 
 SELECTION = ("FULL_CREDIT_32", "EARNINGS_UPDATE")
@@ -657,6 +659,7 @@ def cp1b_markdown(  # noqa: PLR0913 - explicit independent contract knobs
 class EarningsCompletions:
     source_id: UUID
     model: str = "a-model/for-the-test"
+    price: ModelPrice | None = RUN_PRICE
     charge: Decimal = Decimal("0.0000041")
     readiness: dict[str, str] = field(default_factory=dict)
     prompts: list[str] = field(default_factory=list)

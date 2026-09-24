@@ -127,9 +127,11 @@ class _Stoppable:
         return self.inner.model
 
     @property
-    def price(self) -> object:
-        """The price the inner provider states it bills at (`pricing.bills_at`)."""
-        return getattr(self.inner, "price", None)
+    def price(self) -> ModelPrice | None:
+        """The price the inner provider states it bills at (`pricing.bills_at`),
+        passed on: a wrapper that states none has the run refused (N15)."""
+        stated = getattr(self.inner, "price", None)
+        return stated if isinstance(stated, ModelPrice) else None
 
     def check_context(self, route_node_id: str, module_id: str) -> int:
         if self.stopping.is_set():

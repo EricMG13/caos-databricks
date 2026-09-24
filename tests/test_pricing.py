@@ -9,19 +9,20 @@ Runtime-driven cases run the canonical LITE route (Task 3.1 slice e-2).
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import date
 from decimal import Decimal
 from typing import cast
 from uuid import UUID
 
 import pytest
+from canonical_fixtures import CanonicalCompletions
 from conftest import reserve_at
 from test_runtime import _approved_run, blobs, bundle, route
 
 from caos.blobs import BlobStore
 from caos.graph.route import ResolvedRoute
-from caos.graph.runtime import Execution, run_route
+from caos.graph.runtime import Execution, Provider, ProviderResult, run_route
 from caos.methodology.bundle import Bundle
 from caos.pricing import ModelPrice, price_from_environment, priced_request, worst_case
 from caos.provider import MAX_COMPLETION_TOKENS, MAX_REQUEST_BYTES
@@ -167,7 +168,7 @@ def test_a_run_ceiling_below_one_worst_case_still_refuses_before_any_attempt(
     run = _approved_run(
         conn, case_id, route, bundle, blobs, ceiling=worst_case(PRICE) - Decimal("0.01")
     )
-    provider = run.provider()
+    provider = run.provider(answers=CanonicalCompletions(run.source_id, price=PRICE))
 
     with pytest.raises(Refusal) as caught:
         run_route(
@@ -202,7 +203,7 @@ def test_a_reservation_is_priced_on_the_request_not_on_the_byte_ceiling(
     """
     conn, case_id = case
     run = _approved_run(conn, case_id, route, bundle, blobs)
-    provider = run.provider()
+    provider = run.provider(answers=CanonicalCompletions(run.source_id, price=PRICE))
     run_route(
         conn,
         blobs,
@@ -293,7 +294,11 @@ def test_a_run_that_spent_past_one_worst_case_still_resumes(
         blobs,
         run_id=run.run_id,
         route=route,
-        execution=Execution(run.provider(), price, bundle),
+        execution=Execution(
+            run.provider(answers=CanonicalCompletions(run.source_id, price=price)),
+            price,
+            bundle,
+        ),
     )
 
     # The point is that admission did not refuse. The run then finishes, which
@@ -305,15 +310,21 @@ def test_a_run_that_spent_past_one_worst_case_still_resumes(
 def test_bills_at_compares_the_whole_price_a_provider_states() -> None:
     """CF-089: the reservation is priced at the run's price and the charge at
     the provider's own, so the two must be one price -- model, rates and date
-    -- not only one model. A provider that states no price (one that reports
-    money) is still held to the model."""
+    -- not only one model. A provider that states no price was compared by its
+    model alone (N15); it is refused now, as is one whose `price` is not a
+    price, whatever it claims to equal."""
     from types import SimpleNamespace
 
     from caos.pricing import bills_at
 
+    class _EqualToAnything:
+        def __eq__(self, other: object) -> bool:
+            return True
+
     assert bills_at(SimpleNamespace(model=MODEL, price=PRICE), PRICE)
-    assert bills_at(SimpleNamespace(model=MODEL), PRICE)
-    assert bills_at(SimpleNamespace(model=MODEL, price=None), PRICE)
+    assert not bills_at(SimpleNamespace(model=MODEL), PRICE)
+    assert not bills_at(SimpleNamespace(model=MODEL, price=None), PRICE)
+    assert not bills_at(SimpleNamespace(model=MODEL, price=_EqualToAnything()), PRICE)
     for moved in (
         replace(PRICE, input_per_token=Decimal("0.0000002")),
         replace(PRICE, output_per_token=Decimal("0.000001")),
@@ -325,3 +336,82 @@ def test_bills_at_compares_the_whole_price_a_provider_states() -> None:
     # The same rate spelled with another exponent is the same price.
     same = replace(PRICE, output_per_token=Decimal("0.0000020"))
     assert bills_at(SimpleNamespace(model=MODEL, price=same), PRICE)
+
+
+@dataclass
+class _Unpriced:
+    """A wrapper that passes its inner provider's model on and not its price:
+    the shape N15 found compared by model name alone."""
+
+    inner: Provider
+
+    @property
+    def model(self) -> str:
+        return self.inner.model
+
+    def check_context(self, route_node_id: str, module_id: str) -> int:
+        return self.inner.check_context(route_node_id, module_id)
+
+    def execute(
+        self, route_node_id: str, module_id: str, *, attempt_id: UUID
+    ) -> ProviderResult:
+        return self.inner.execute(route_node_id, module_id, attempt_id=attempt_id)
+
+
+@pytest.mark.parametrize("unpriced", ["completions", "wrapper"])
+def test_a_provider_that_states_no_price_is_refused_before_any_attempt(
+    case: tuple[StoreConnection, UUID],
+    route: ResolvedRoute,
+    blobs: BlobStore,
+    bundle: Bundle,
+    unpriced: str,
+) -> None:
+    """N15: `bills_at` failed open -- completions that state no price, or a
+    wrapper that does not pass its inner provider's on, was compared by model
+    name alone, so a run reserved at one price could be billed at another.
+    Both are `PROVIDER_NOT_CONFIGURED` now, before an attempt, a reservation
+    or a call exists (invariant 8); the same provider stating the run's price
+    runs."""
+    conn, case_id = case
+    run = _approved_run(conn, case_id, route, bundle, blobs)
+    answers = CanonicalCompletions(run.source_id, price=PRICE)
+    stated = run.provider(answers=answers)
+    if unpriced == "completions":
+        answers.price = None
+        provider: Provider = stated
+    else:
+        provider = cast(Provider, _Unpriced(stated))
+    with pytest.raises(Refusal) as caught:
+        run_route(
+            conn,
+            blobs,
+            run_id=run.run_id,
+            route=route,
+            execution=Execution(provider, PRICE, bundle),
+        )
+    assert caught.value.code is RefusalCode.PROVIDER_NOT_CONFIGURED
+    assert answers.prompts == []
+    assert conn.execute(
+        "SELECT count(*) FROM run_attempts WHERE run_id = %s", (run.run_id,)
+    ).fetchone() == (0,)
+    conn.rollback()
+    answers.price = PRICE
+    run_route(
+        conn,
+        blobs,
+        run_id=run.run_id,
+        route=route,
+        execution=Execution(stated, PRICE, bundle),
+    )
+    assert run_status(conn, run.run_id) is RunStatus.COMPLETE
+
+
+def test_the_suite_s_fakes_state_the_price_their_runs_execute_at() -> None:
+    """N15: the fixtures' completions report money, and state `RUN_PRICE` as
+    the price it is billed at; it is the price the route suites execute at."""
+    from canonical_fixtures import RUN_PRICE
+    from conftest import priced
+    from test_loop_charges import ESTIMATE
+
+    assert RUN_PRICE == priced(ESTIMATE)
+    assert CanonicalCompletions(UUID(int=1)).price == RUN_PRICE

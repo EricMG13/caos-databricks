@@ -18,6 +18,7 @@ from uuid import UUID, uuid4
 
 import psycopg
 import pytest
+from canonical_fixtures import RUN_PRICE
 from conftest import _url_for, approve_run, priced, tamper
 from conftest import reserve_at as reserve
 from psycopg.pq import TransactionStatus
@@ -49,6 +50,7 @@ from caos.methodology.handoff import (
     record_bytes,
 )
 from caos.methodology.runner import ModuleProvider
+from caos.pricing import ModelPrice
 from caos.provider import Completion, CompletionProvider, encode_request
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection, connect
@@ -153,6 +155,7 @@ class _DuringCompletion:
     mutate: Callable[[], None]
     calls: int = 0
     model: str = MODEL
+    price: ModelPrice | None = RUN_PRICE
 
     def request_bytes(self, prompt: str, *, json_object: bool = False) -> bytes:
         return self.delegate.request_bytes(prompt, json_object=json_object)
@@ -245,6 +248,7 @@ class _ArbitraryProvider:
     mutate: Callable[[], None]
     calls: int = 0
     model: str = MODEL
+    price: ModelPrice | None = RUN_PRICE
 
     def check_context(self, route_node_id: str, module_id: str) -> int:
         # No prompt is built here, so there are no request bytes to price.
@@ -864,6 +868,7 @@ def test_direct_executor_refuses_a_moved_node_before_any_call(
 class _RefusedCompletion:
     mutate: Callable[[], None]
     model: str = MODEL
+    price: ModelPrice | None = RUN_PRICE
     calls: int = 0
 
     def request_bytes(self, prompt: str, *, json_object: bool = False) -> bytes:
@@ -988,6 +993,7 @@ class _Charged:
     """An arbitrary Provider answering every node with one fixed call fact."""
 
     model = "a-model/for-the-test"
+    price = RUN_PRICE
 
     harness: _Harness
     charge: Decimal | None

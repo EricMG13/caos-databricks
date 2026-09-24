@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from copy import deepcopy
 from dataclasses import replace
 from decimal import Decimal
 from typing import Any
@@ -84,31 +85,68 @@ def assignment_rows(value: object, pointer: str = "") -> dict[str, str]:
     return {pointer: pointer + " = " + json.dumps(value)}
 
 
+def owner_of(pointer: str) -> str:
+    """The module that owns a request pointer's assignment."""
+    if pointer.startswith("/contractual/"):
+        return "CP-4"
+    return "CP-2G" if pointer.startswith("/drivers/") else "CP-1"
+
+
+def owner_quotes(rows: dict[str, str]) -> dict[str, str]:
+    """Each owner's assignment lines, one per request leaf it owns."""
+    return {
+        m: "\n".join(v for p, v in rows.items() if owner_of(p) == m)
+        for m in ("CP-1", "CP-2G", "CP-4")
+    }
+
+
 ROWS = assignment_rows(request_data())
-OWNER = {
-    p: (
-        "CP-4"
-        if p.startswith("/contractual/")
-        else "CP-2G"
-        if p.startswith("/drivers/")
-        else "CP-1"
-    )
-    for p in ROWS
+OWNER = {p: owner_of(p) for p in ROWS}
+OWNER_QUOTES = owner_quotes(ROWS)
+
+# C2, end to end: CP-2G's BASE FY2026 driver cells as the vendor signs them
+# (outflows negative), the request movements CP-CF maps them to (the
+# calculator's outflows positive), and the stated close they reconcile to
+# from the route request's opening cash of 100.
+SIGNED: dict[str, tuple[dict[str, str], dict[str, str], str]] = {
+    "dividend": ({"dividends_paid": "(45)"}, {"distributions": "45"}, "100"),
+    "acquisition": (
+        {"acquisitions_disposals": "(45)"},
+        {"acquisitions_disposals": "45"},
+        "100",
+    ),
+    "disposal": (
+        {"acquisitions_disposals": "45"},
+        {"acquisitions_disposals": "-45"},
+        "190",
+    ),
+    "zero": ({"dividends_paid": "(0)", "acquisitions_disposals": "-0"}, {}, "145"),
 }
-OWNER_QUOTES = {
-    m: "\n".join(v for p, v in ROWS.items() if OWNER[p] == m)
-    for m in ("CP-1", "CP-2G", "CP-4")
-}
+
+
+def signed_request(case: str) -> dict[str, Any]:
+    """The route request with `SIGNED[case]`'s movements and stated close."""
+    _cells, movements, closing = SIGNED[case]
+    request = request_data()
+    request["drivers"][0].update(movements, stated_closing_cash=closing)
+    return request
 
 
 @pytest.fixture
-def route(monkeypatch: pytest.MonkeyPatch) -> ResolvedRoute:
+def route(
+    monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
+) -> ResolvedRoute:
+    """The model-extended route over a pack carrying the owners' assignment
+    lines: the route request's, or a `SIGNED` case's when parametrized with
+    its name."""
     import test_relative_value_route
 
+    case = getattr(request, "param", None)
+    rows = ROWS if case is None else assignment_rows(signed_request(case))
     monkeypatch.setattr(
         test_relative_value_route,
         "PACK",
-        PACK + b"\n" + "\n".join(OWNER_QUOTES.values()).encode(),
+        PACK + b"\n" + "\n".join(owner_quotes(rows).values()).encode(),
     )
     return resolve_route(
         CATALOG,
@@ -125,19 +163,42 @@ class ForecastCompletions(RouteCompletions):
         *,
         defect: str = "",
         limitations: tuple[str, ...] = (),
+        request: dict[str, Any] | None = None,
+        cells: dict[str, str] | None = None,
     ) -> None:
-        super().__init__(source_id, quotes_by_module=OWNER_QUOTES)
+        self.request = request or request_data()
+        self.rows = assignment_rows(self.request)
+        super().__init__(source_id, quotes_by_module=owner_quotes(self.rows))
         self.defect = defect
         self.limitations = limitations
+        # CP-2G's BASE FY2026 driver cells to write in place of its zeros.
+        self.cells = cells or {}
+
+    def _driver_cells(self, done: Completion) -> Completion:
+        """CP-2G's answer with `cells` written into its driver table."""
+        assert done.content is not None
+        answer = json.loads(done.content)
+        for driver, value in self.cells.items():
+            row = f"| {driver} |  | BASE | FY2026 | 2026 | "
+            written = answer["canonical_markdown"].replace(
+                row + "0 | CURRENCY_MM", row + value + " | CURRENCY_MM", 1
+            )
+            assert written != answer["canonical_markdown"], driver
+            answer["canonical_markdown"] = written
+        return replace(done, content=json.dumps(answer))
 
     def complete(self, prompt: str, *, json_object: bool = False) -> Completion:
         fields = fields_from_prompt(prompt)
+        if fields["module_id"] == "CP-2G" and self.cells:
+            return self._driver_cells(super().complete(prompt, json_object=json_object))
         if fields["module_id"] != "CP-CF":
             return super().complete(prompt, json_object=json_object)
         self.prompts.append(prompt)
-        request = request_data()
+        request = deepcopy(self.request)
         # Each binding quotes its owner's one anchored line (N28).
-        bindings = {p: {"module_id": OWNER[p], "quote": ROWS[p]} for p in ROWS}
+        bindings = {
+            p: {"module_id": owner_of(p), "quote": q} for p, q in self.rows.items()
+        }
         result = cash_flow_forecast(request)
         if self.defect == "missing":
             del bindings["/opening/cash"]
@@ -160,7 +221,7 @@ class ForecastCompletions(RouteCompletions):
         if self.defect == "retain-restriction":
             front.update(AUTHORED["Restricted"])
             front.update(qa_status="Restricted", limitation_flags=[LIMITATION])
-        quotes = "\n".join(OWNER_QUOTES.values())
+        quotes = "\n".join(owner_quotes(self.rows).values())
         body = "".join(
             "## "
             + h
@@ -181,7 +242,7 @@ class ForecastCompletions(RouteCompletions):
                 markdown,
                 [
                     {"source_id": str(self.source_id), "page": 1, "matched_text": q}
-                    for q in ROWS.values()
+                    for q in self.rows.values()
                 ],
             ),
             Decimal("0.0000041"),
@@ -250,6 +311,44 @@ def test_forecast_route_accepts_real_host_calculated_artifact(
         narrative=[],
     )
     assert isinstance(revision, UUID)
+
+
+@pytest.mark.parametrize(
+    ("route", "signed"), [(c, c) for c in SIGNED], indirect=["route"]
+)
+def test_cp_cf_maps_each_cp2g_sign_to_the_calculator_end_to_end(
+    harness: _Harness, signed: str
+) -> None:
+    """C2: CP-2G writes a dividend and an acquisition as the vendor's model
+    adds them into net cash flow, `(45)`, and a disposal as 45; CP-CF's
+    request carries the calculator's own inputs -- distributions 45,
+    acquisitions_disposals 45, and -45 for the disposal -- and the route
+    accepts the forecast those project, closing cash 100, 100 and 190. A zero
+    written `(0)` or `-0` is the request's 0. Before, no dividend-paying
+    forecast could pass, and the acquisition was accepted only as an inflow."""
+    from conftest import priced
+    from test_loop_charges import ESTIMATE
+
+    from caos.graph.runtime import Execution, run_route
+
+    cells, _movements, closing = SIGNED[signed]
+    answers = ForecastCompletions(
+        harness.source_id, request=signed_request(signed), cells=cells
+    )
+    run_route(
+        harness.conn,
+        harness.blobs,
+        run_id=harness.run_id,
+        route=harness.route,
+        execution=Execution(
+            _module_provider(harness, answers), priced(ESTIMATE), harness.bundle
+        ),
+    )
+    assert _status(harness) == "COMPLETE"
+    called = [fields_from_prompt(p)["module_id"] for p in answers.prompts]
+    assert called.count("CP-CF") == 1, "accepted at the first attempt"
+    result = forecast_projection(answers.answers[-1])
+    assert result["rows"][0]["cash"]["closing"] == f"{closing}.000000"
 
 
 @pytest.mark.parametrize("defect", ["missing", "wrong-owner", "result"])
@@ -552,6 +651,8 @@ def test_cp_cf_second_attempt_names_the_driver_row_it_could_not_map(
     from caos.graph.runtime import Execution, run_route
 
     answers = _MisMappedOnce(harness.source_id)
+    # Its completions bill at the price the run is executed at (N15).
+    answers.price = priced(Decimal("0.25"))
     run_route(
         harness.conn,
         harness.blobs,

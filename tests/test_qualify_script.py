@@ -36,6 +36,7 @@ import psycopg
 import pytest
 from canonical_fixtures import LITE_PROFILE, LITE_SELECTION, QUOTE, CanonicalCompletions
 
+from caos.pricing import ModelPrice, price_from_environment
 from caos.provider import Completion, encode_request
 from caos.qualification.on_disk import MANIFEST
 from caos.refusals import Refusal, RefusalCode
@@ -146,10 +147,21 @@ class _FakeProvider:
     provider: str = "test-fake"
     qualification_identity: str = "test-fake-identity"
     prompts: list[str] = field(default_factory=list)
+    price: ModelPrice | None = None
 
     @classmethod
     def from_environment(cls) -> _FakeProvider:
-        return cls()
+        """Priced as `caos.models.from_environment` prices the gateway
+        provider -- from `CAOS_MODEL_PRICE`, for its own model -- or not at
+        all, and then refused where a price is compared (N15)."""
+        try:
+            return cls(
+                price=price_from_environment(
+                    cls.model, os.environ.get("CAOS_MODEL_PRICE", "")
+                )
+            )
+        except Refusal:
+            return cls()
 
     def request_bytes(self, prompt: str, *, json_object: bool = False) -> bytes:
         return encode_request(self.model, prompt, json_object=json_object)

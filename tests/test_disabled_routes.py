@@ -11,6 +11,7 @@ from canonical_fixtures import (
     CATALOG,
     LITE_PROFILE,
     LITE_SELECTION,
+    RUN_PRICE,
     CanonicalCompletions,
     research_brief,
 )
@@ -37,6 +38,7 @@ from caos.graph.runtime import (
 )
 from caos.methodology.bundle import Bundle
 from caos.methodology.handoff import ADAPTER_ROUTES
+from caos.pricing import ModelPrice
 from caos.qualification.proof import assert_orchestration_proof
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
@@ -71,6 +73,7 @@ class _Counting:
     """A provider that must never be asked: every call is recorded."""
 
     model: str = MODEL
+    price: ModelPrice | None = RUN_PRICE
     calls: list[str] = field(default_factory=list)
 
     def check_context(self, route_node_id: str, module_id: str) -> int:

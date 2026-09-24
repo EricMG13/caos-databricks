@@ -21,10 +21,13 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from caos.refusals import Refusal, RefusalCode
 from caos.store.budget import validate_spend
+
+if TYPE_CHECKING:
+    from caos.pricing import ModelPrice
 
 # The most one `complete` may take, every rate-limit re-send and wait included
 # (ST-9): nothing arrives until generation ends, so this is the generation
@@ -100,6 +103,12 @@ class CompletionProvider(Protocol):
         A property rather than a plain annotation, so a frozen implementer
         satisfies it.
         """
+
+    @property
+    def price(self) -> ModelPrice | None:
+        """The dated price the charges it reports are billed at: what a run's
+        reservation must have been priced at (`pricing.bills_at`). None states
+        no price, and such a provider is refused (N15): budgets fail closed."""
 
     def complete(self, prompt: str, *, json_object: bool = False) -> Completion: ...
 

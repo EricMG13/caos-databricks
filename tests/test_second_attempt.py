@@ -43,6 +43,7 @@ from caos.methodology.handoff import (
 )
 from caos.methodology.runner import ModuleProvider
 from caos.methodology.vendor import cached_contract, catalog
+from caos.pricing import ModelPrice
 from caos.provider import Completion, CompletionProvider
 from caos.refusals import Refusal, RefusalCode
 from caos.store import connect
@@ -100,6 +101,10 @@ class _Flawed:
     @property
     def model(self) -> str:
         return self.delegate.model
+
+    @property
+    def price(self) -> ModelPrice | None:
+        return self.delegate.price
 
     def request_bytes(self, prompt: str, *, json_object: bool = False) -> bytes:
         return self.delegate.request_bytes(prompt, json_object=json_object)
@@ -336,6 +341,10 @@ class _Withheld:
     @property
     def model(self) -> str:
         return self.delegate.model
+
+    @property
+    def price(self) -> ModelPrice | None:
+        return self.delegate.price
 
     def request_bytes(self, prompt: str, *, json_object: bool = False) -> bytes:
         return self.delegate.request_bytes(prompt, json_object=json_object)

@@ -108,6 +108,12 @@ class Provider(Protocol):
     @property
     def model(self) -> str: ...
 
+    @property
+    def price(self) -> ModelPrice | None:
+        """The dated price its calls are billed at, which must be the run's
+        (`pricing.bills_at`); a wrapper passes its inner provider's on. None
+        states no price, and the run is refused (N15)."""
+
     def check_context(self, route_node_id: str, module_id: str) -> int:
         """Refuse a context the call could not carry (`CONTEXT_OVER_CEILING`),
         before the loop starts an attempt or reserves anything (§45.3), and
