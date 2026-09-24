@@ -107,6 +107,7 @@ from caos.store.outcomes import (
     CallOutcome,
     NodeAttempt,
     accepted_rows,
+    call_hold,
     check_attempt,
     check_call,
     execution_reads,
@@ -219,44 +220,50 @@ def execute_handoff(
     Billing, with the diagnostic address, commits before any analytical
     refusal. A validated `qa_status: Blocked` refuses `HANDOFF_BLOCKED` only
     once the host identity has held and every citation has anchored.
+
+    From before the call's lease check until its bill commits, the attempt is
+    held (`call_hold`), so a worker that claims the run after this one's lease
+    lapsed starts nothing at the node while this call may still be billed.
     """
     adapter = methodology.CANONICAL_ADAPTER_VERSION
     attempt, route_node_id = assignment.attempt_id, assignment.node.route_node_id
-    with execution_reads(conn):
-        check_call(
-            conn,
-            attempt_id=attempt,
-            run_id=assignment.run_id,
-            route_node_id=route_node_id,
-            lease=assignment.lease,
-        )
-        _stored_identity(conn, assignment, bundle, adapter=adapter)
-        identity = _identity(conn, bundle, assignment)
-        context = _prompt_context(conn, blobs, bundle, assignment, identity)
-    # The record binds exactly the authority this prompt carries (§45.1).
-    carried = delivered_authority(bundle, assignment.module_id)
-    # Met before reservation by `check_context`; built again here so the call
-    # carries exactly this attempt's identity, and refused again if it moved.
-    prompt = _prompt(bundle, assignment, identity, context, carried)
-    _within_reservation(conn, provider, prompt, attempt_id=attempt)
+    with call_hold(conn, attempt):
+        with execution_reads(conn):
+            check_call(
+                conn,
+                attempt_id=attempt,
+                run_id=assignment.run_id,
+                route_node_id=route_node_id,
+                lease=assignment.lease,
+            )
+            _stored_identity(conn, assignment, bundle, adapter=adapter)
+            identity = _identity(conn, bundle, assignment)
+            context = _prompt_context(conn, blobs, bundle, assignment, identity)
+        # The record binds exactly the authority this prompt carries (§45.1).
+        carried = delivered_authority(bundle, assignment.module_id)
+        # Met before reservation by `check_context`; built again here so the
+        # call carries exactly this attempt's identity, and refused again if it
+        # moved.
+        prompt = _prompt(bundle, assignment, identity, context, carried)
+        _within_reservation(conn, provider, prompt, attempt_id=attempt)
 
-    bundle.verify_manifest()
-    model = producer_identifier(provider.model, limit=256)
-    if model is None:
-        raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
-    require_idle(conn)
-    # A transport that asks again after a rate limit re-reads the fence first
-    # (ST-7): a lost lease or a recorded cancel sends nothing more.
-    with resend_checked(lambda: _still_resendable(conn, assignment)):
-        completion = provider.complete(prompt, json_object=True)
-    charge = reported_charge(
-        completion.charge if isinstance(completion.charge, Decimal) else None
-    )
-    generation = producer_identifier(completion.generation_id, limit=512)
-    content = completion.content if completion.refusal is None else None
-    diagnostic, unstored = _diagnostic(blobs, content)
-    require_idle(conn)
-    bill(conn, attempt, CallOutcome(charge, model, generation, diagnostic))
+        bundle.verify_manifest()
+        model = producer_identifier(provider.model, limit=256)
+        if model is None:
+            raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
+        require_idle(conn)
+        # A transport that asks again after a rate limit re-reads the fence
+        # first (ST-7): a lost lease or a recorded cancel sends nothing more.
+        with resend_checked(lambda: _still_resendable(conn, assignment)):
+            completion = provider.complete(prompt, json_object=True)
+        charge = reported_charge(
+            completion.charge if isinstance(completion.charge, Decimal) else None
+        )
+        generation = producer_identifier(completion.generation_id, limit=512)
+        content = completion.content if completion.refusal is None else None
+        diagnostic, unstored = _diagnostic(blobs, content)
+        require_idle(conn)
+        bill(conn, attempt, CallOutcome(charge, model, generation, diagnostic))
     if unstored:
         raise Refusal(RefusalCode.STORE_UNAVAILABLE)
     if completion.refusal is not None:

@@ -39,7 +39,7 @@ dev = [
   "complexipy>=3.0",
   # The gate checker and the stand-in read ci.yml, the pre-commit config and
   # databricks.yml as YAML (review 4, W2 and W7); already locked through
-  # langchain-core and bandit, named here because they import it (D?).
+  # langchain-core and bandit, named here because they import it (D50).
   "pyyaml==6.0.3",
   # Test-only OpenRouter adapter (spec section 3.4); never imported outside tests/.
   "langchain-openai>=1.0",

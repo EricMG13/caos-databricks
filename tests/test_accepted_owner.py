@@ -43,16 +43,35 @@ __all__ = ["harness", "route"]
 
 
 def _billed(harness: _Harness, conn: StoreConnection | None = None) -> UUID:
+    return _bill(harness, _started(harness, conn), conn)
+
+
+def _started(harness: _Harness, conn: StoreConnection | None = None) -> UUID:
     conn = conn or harness.conn
     node = harness.route.nodes[0].route_node_id
     attempt = start_attempt(conn, harness.run_id, node)
     reserve(conn, attempt, ESTIMATE)
+    return attempt
+
+
+def _bill(
+    harness: _Harness, attempt: UUID, conn: StoreConnection | None = None
+) -> UUID:
     record_outcome(
-        conn,
+        conn or harness.conn,
         attempt_id=attempt,
         outcome=CallOutcome(REPORTED, MODEL, f"g{attempt.hex}"),
     )
     return attempt
+
+
+def _billed_pair(harness: _Harness) -> tuple[UUID, UUID]:
+    """Two billed attempts at one node, both started before either was billed:
+    once one is billed and owed a verdict, no attempt starts beside it
+    (`ATTEMPT_UNSETTLED`), so two calls billed at once is the only way two
+    bills meet at acceptance."""
+    first, second = _started(harness), _started(harness)
+    return _bill(harness, first), _bill(harness, second)
 
 
 def _accept(
@@ -85,7 +104,7 @@ def _count(harness: _Harness, table: str) -> int:
 def test_a_second_attempt_cannot_accept_an_already_accepted_node(
     harness: _Harness,
 ) -> None:
-    first, second = _billed(harness), _billed(harness)
+    first, second = _billed_pair(harness)
     assert _accept(harness, first) is True
     assert _accept(harness, second) == RefusalCode.NODE_ALREADY_ACCEPTED
     assert [_count(harness, t) for t in ("artifacts", "budget_ledger")] == [1, 2]
@@ -138,7 +157,7 @@ def test_two_racing_connections_accept_exactly_one_result_and_keep_both_bills(
     """Both acceptors are provably waiting on the run lock before either runs."""
     from caos.store.events import lock_run
 
-    attempts = [_billed(harness), _billed(harness)]
+    attempts = list(_billed_pair(harness))
     with (
         connect(harness.url) as holder,
         connect(harness.url) as left,
@@ -218,7 +237,7 @@ def test_accepted_owner_names_the_attempt_that_owns_the_nodes_result(
     node = harness.route.nodes[0].route_node_id
     assert accepted_owner(harness.conn, harness.run_id, node) is None
 
-    refused, owner = _billed(harness), _billed(harness)
+    refused, owner = _billed_pair(harness)
     assert _accept(harness, owner) is True
 
     assert accepted_owner(harness.conn, harness.run_id, node) == owner

@@ -44,6 +44,7 @@ from test_handoff_invocation import ANCHORED, LITE_ROUTE, _delivered
 from test_loop_charges import MODEL, REPORT
 
 from caos.evidence.citations import AnchoredCitation, Rect
+from caos.graph.runtime import ProviderResult
 from caos.methodology.bundle import delivered_authority
 from caos.methodology.handoff import _decoded_record
 from caos.methodology.invocation import (
@@ -85,15 +86,26 @@ def _stored(harness: _Harness, module_id: str) -> tuple[bytes, bytes]:
     return harness.blobs.get(str(row[0])), harness.blobs.get(str(row[1]))
 
 
-def _cp5_prompt(harness: _Harness) -> str:
-    """CP-5's prompt for one fresh attempt, whatever its answer's fate."""
+def _cp5_prompt(harness: _Harness, attempt: UUID | None = None) -> str:
+    """CP-5's prompt for one fresh attempt, or the one reserved for it, whatever
+    its answer's fate."""
     answers = _answers(harness)
-    attempt = _reserved(harness, "CP-5")
+    attempt = attempt or _reserved(harness, "CP-5")
     _module_provider(harness, answers).execute(
         _node(harness, "CP-5").route_node_id, "CP-5", attempt_id=attempt
     )
     [prompt] = answers.delegate.prompts
     return prompt
+
+
+def _screened(
+    harness: _Harness, attempt: UUID, answers: CanonicalCompletions
+) -> ProviderResult:
+    """CP-L10's reserved `attempt`, executed against `answers`."""
+    node = _node(harness, "CP-L10")
+    return _module_provider(harness, answers).execute(
+        node.route_node_id, "CP-L10", attempt_id=attempt
+    )
 
 
 @dataclass
@@ -256,24 +268,35 @@ def test_a_blocked_or_refused_attempt_never_reaches_a_consumer_prompt(
 ) -> None:
     """CP-L10 answers Blocked, then an unanchorable handoff: CP-5's prompt names
     no CP-L10 at all. Once a third attempt is accepted, CP-5's prompt carries
-    that Markdown and its record's citations -- never either diagnostic body."""
+    that Markdown and its record's citations -- never either diagnostic body.
+
+    Every attempt is started before any is billed: an answer billed and owed
+    a verdict holds its node against a new attempt (`ATTEMPT_UNSETTLED`), and
+    this harness, unlike a pass, replays none."""
     attempt, gate = _run(harness, "CP-0", CanonicalCompletions(harness.source_id))
     _accept(harness, attempt, gate)
+    screens = [_reserved(harness, "CP-L10") for _ in range(3)]
+    probes = [_reserved(harness, "CP-5") for _ in range(2)]
     blocked = CanonicalCompletions(harness.source_id, qa_status="Blocked")
     unanchored = CanonicalCompletions(harness.source_id, quotes=(UNANCHORED,))
-    assert _refused(harness, "CP-L10", blocked) is RefusalCode.HANDOFF_BLOCKED
-    assert _refused(harness, "CP-L10", unanchored) is RefusalCode.CITATION_NOT_LOCATED
+    for screen, answers, code in (
+        (screens[0], blocked, RefusalCode.HANDOFF_BLOCKED),
+        (screens[1], unanchored, RefusalCode.CITATION_NOT_LOCATED),
+    ):
+        with pytest.raises(Refusal) as refused:
+            _screened(harness, screen, answers)
+        assert refused.value.code is code
     diagnostics = [
         json.loads(body)["canonical_markdown"]
         for body in (*blocked.bodies, *unanchored.bodies)
     ]
     screen_node = _node(harness, "CP-L10").route_node_id
-    before = _cp5_prompt(harness)
+    before = _cp5_prompt(harness, probes[0])
     assert f"route_node_id: {screen_node}" not in before
 
-    attempt, result = _run(harness, "CP-L10", CanonicalCompletions(harness.source_id))
-    _accept(harness, attempt, result)
-    after = _cp5_prompt(harness)
+    result = _screened(harness, screens[2], CanonicalCompletions(harness.source_id))
+    _accept(harness, screens[2], result)
+    after = _cp5_prompt(harness, probes[1])
     assert _stored(harness, "CP-L10")[0].decode("utf-8") in after
     assert f"route_node_id: {screen_node}\nhandoff_sha256: " in _register(after)
     for prompt in (before, after):
