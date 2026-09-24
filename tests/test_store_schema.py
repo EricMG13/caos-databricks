@@ -914,6 +914,36 @@ def test_apply_schema_answers_a_session_the_server_ended_as_unavailable(
         store.verify_schema(again)
 
 
+def test_apply_schema_answers_a_lock_wait_that_timed_out_as_unavailable(
+    empty_database: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """N2: the API lifespan and the in-process worker both run `apply_schema`
+    at boot, and one waits on the schema lock while the other migrates. Under
+    a DBA's `lock_timeout` the waiter's 55P03 was classed drift, which is
+    final: the in-process worker stopped for the life of the process. A lock
+    wait that timed out is the store not answering this time, which the
+    worker's boot asks again; the next boot migrates."""
+    from caos.graph import worker
+
+    database = urlsplit(empty_database).path.lstrip("/")
+    with psycopg.connect(empty_database, autocommit=True) as admin:
+        admin.execute(f'ALTER DATABASE "{database}" SET lock_timeout = 300')
+    migrating = psycopg.connect(empty_database)  # another process's migration
+    try:
+        migrating.execute("SELECT pg_advisory_xact_lock(%s)", (store._SCHEMA_LOCK,))
+        capsys.readouterr()
+        with connect(empty_database) as conn, pytest.raises(Refusal) as caught:
+            apply_schema(conn)
+    finally:
+        migrating.close()
+    assert caught.value.code is RefusalCode.STORE_UNAVAILABLE
+    assert caught.value.code in worker.STORE_FAULTS, "the worker's boot asks again"
+    assert capsys.readouterr().err == "schema: sqlstate 55P03\n"
+    with connect(empty_database) as again:
+        apply_schema(again)
+        store.verify_schema(again)
+
+
 def test_apply_schema_keeps_a_refused_statement_a_drift_finding(
     empty_database: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:

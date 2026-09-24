@@ -285,6 +285,10 @@ _STORE_SILENT = frozenset(
 # resources, operator intervention (an ended session, a cancelled statement) --
 # rather than that the database refused a statement the declared history holds.
 _INTERRUPTED = frozenset({"08", "40", "53", "57"})
+# N2: and one state of class 55 whose others are findings: `lock_not_available`,
+# a lock wait a `lock_timeout` ended -- the API lifespan and the in-process
+# worker both apply the schema at boot, and one waits for the other's lock.
+_LOCK_NOT_AVAILABLE = "55P03"
 
 
 class RunStatus(StrEnum):
@@ -450,14 +454,17 @@ def _schema_fault_code(fault: psycopg.Error) -> RefusalCode:
 
     An interruption is the store failing to answer (R24-05): a session the
     client saw close carries no SQLSTATE at all, and a server that ended it or
-    cancelled the statement says so by class. The worker's boot loop asks the
-    store again after one; drift is final, so only a statement the database
-    refused -- a disagreement with what it holds -- may be named drift.
+    cancelled the statement says so by class, as it says a lock wait timed out
+    by its own state (N2). The worker's boot loop asks the store again after
+    one; drift is final, so only a statement the database refused -- a
+    disagreement with what it holds -- may be named drift.
     """
     if fault.sqlstate is None:
         interrupted = isinstance(fault, psycopg.OperationalError)
     else:
-        interrupted = fault.sqlstate[:2] in _INTERRUPTED
+        interrupted = (
+            fault.sqlstate[:2] in _INTERRUPTED or fault.sqlstate == _LOCK_NOT_AVAILABLE
+        )
     return (
         RefusalCode.STORE_UNAVAILABLE if interrupted else RefusalCode.STORE_SCHEMA_DRIFT
     )
