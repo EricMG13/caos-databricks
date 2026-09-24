@@ -41,7 +41,7 @@ scripts/enterprise_deploy.sh <profile> <catalog> <schema> <lakebase-instance> \
   [<endpoint>] [<endpoint>,<in>,<out>,<YYYY-MM-DD>] [<run-ceiling>]
 ```
 
-It runs sections 1, 3 and 5 of this page in order and writes one evidence row per step to `docs/rebuild/runs/<today>/enterprise/<time>/evidence.tsv` (E1 preflight; E2–E4 the three bundle commands, E2 being `validate -o json`, whose resolved app name, endpoint, price and run ceiling must be the ones given, DF-4, DF-5; E5 the state and URL of the app E2 resolved; E6 health; E7 the gateway smoke in JSON mode; E8 the Lakebase version for D17; E9 the event stream through the proxy for C42, which must keep delivering frames for 3 s, none more than 1.5 s apart, DF-2), stopping at the first failure. `TARGET`, `LAKEBASE_DATABASE`, `GROUP_ADMIN`, `GROUP_ANALYST` and `EVIDENCE` are read from the environment when set. The manual commands below are what it runs.
+It runs sections 1, 3 and 5 of this page in order and writes one evidence row per step to `docs/rebuild/runs/<today>/enterprise/<time>/evidence.tsv` (E1 preflight; E2–E4 the three bundle commands, E2 being `validate -o json`, whose resolved app name, endpoint, price and run ceiling must be the ones given, DF-4, DF-5; E5 the state and URL of the app E2 resolved; E6 health; E7 the gateway smoke in JSON mode; E8 the Lakebase version for D17; E9 the event stream through the proxy for C42, which must keep delivering frames for 3 s, none more than 1.5 s apart, DF-2; E10 one model call through the app's own HTTP surface, not this script's process or credentials, CF-054: a tiny text source admitted to the case E9 left behind, a LITE run started, and the event stream watched for the first node's call outcome), stopping at the first failure. `TARGET`, `LAKEBASE_DATABASE`, `GROUP_ADMIN`, `GROUP_ANALYST` and `EVIDENCE` are read from the environment when set. The manual commands below are what it runs.
 
 ## 3a. Validate and deploy by hand
 
@@ -73,14 +73,25 @@ Identity: the platform proxy is the edge. The app reads the forwarded token, res
 ## 5. Smoke test after the first deploy
 
 ```bash
-curl -fsS "$(databricks apps get caos -p <profile> | jq -r .url)/api/health"
+TOKEN=$(DATABRICKS_CONFIG_PROFILE=<profile> uv run python -c \
+  "from databricks.sdk import WorkspaceClient as W; print(W().config.authenticate()['Authorization'])")
+curl -fsS -H "Authorization: $TOKEN" \
+  "$(databricks apps get caos -p <profile> | jq -r .url)/api/health"
 DATABRICKS_CONFIG_PROFILE=<profile> CAOS_MODEL_ENDPOINT=<endpoint> \
   CAOS_MODEL_PRICE=<endpoint,in,out,date> uv run python scripts/gateway_smoke.py
 ```
 
+`/api/health` sits behind the Apps proxy like every other route: an unauthenticated request never reaches the app, so the curl above carries the same bearer `scripts/enterprise_deploy.py`'s `_headers()` reads from the SDK's unified auth (`WorkspaceClient().config.authenticate()`). `$TOKEN` holds the word `Bearer` and the token together; nothing here prints it, and it belongs in a variable, never in a logged command line.
+
 Health must answer 200 with `python_version` starting `3.13` and `status: ready`; the smoke script must print the endpoint, `model=ChatDatabricks`, a response id and token usage. Record the Lakebase `SELECT version()` on first connection in `docs/rebuild/decisions.md` (D17).
 
-## 6. Operating notes
+## 6. Rolling back a release
+
+A rollback is a redeploy: check out the previous commit and run the same one command (section 3) against it, or run section 3a by hand at that commit. There is no separate rollback path or script, because there is nothing else to run -- `bundle deploy` overwrites the app's code and restarts it on whatever commit is checked out, the same as any other release.
+
+What a rollback does not undo is the store's schema: migrations (`caos/store/0002_*.sql` onward) are ordered, forward-only and applied additively on boot (`apply_schema`), with no corresponding "down" migration for any of them. Rolling code back to a commit from before a migration was added leaves that migration's tables and columns in place; the older code simply never reads them, which is safe only because every migration to date is additive (a new table or a new nullable column, never a rename or a drop). If a future migration ever needs to remove or rename something, redeploying the older code is not a safe way to undo it, and that migration's own entry should say so. The accepted-attempt ledger and the audit chain are append-only regardless (invariant 6), so a rollback never rewrites or loses either.
+
+## 7. Operating notes
 
 - The app is `caos` in the `prod` target only. In `dev` it is `caos-dev-<user id>`, each developer's own app (an app name is unique in the workspace, and the numeric SCIM id keeps to the Apps name rule of lowercase letters, digits and hyphens), and in any other target `caos-<target>` (DP-6, DF-5). A target added later therefore never deploys over the production app; the one command's E5 row looks up the name E2 resolved, and E2 fails if a target other than `prod` resolves to `caos`.
 - Preflight refuses an endpoint that logs payloads (an AI Gateway inference table, the legacy auto-capture, or a `telemetry_config` inference table that is named or samples any request), that exports logs or traces through `telemetry_config` (metrics alone are fine), that falls back to another model, or that serves more than one entity; the same rules are applied to an update still pending on the endpoint (DP-3, DF-3). Every prompt carries document text, and the host prices one model per endpoint. Guardrails are reported, not refused.
@@ -88,13 +99,14 @@ Health must answer 200 with `python_version` starting `3.13` and `status: ready`
 - CLI 1.17.0 panics during `bundle deploy` (a Go stack trace naming `OverrideChangeDesc`) when the app its state records was deleted outside the bundle and the release changes the app's configuration, a price rotation for instance (DF-13). Run `databricks bundle deployment unbind caos -t <target> -p <profile>` with the same variables, then deploy again: the deploy creates the app anew. Raise `databricks_cli_version` once a CLI release no longer panics.
 - `PGSSLMODE=require` encrypts but does not authenticate the Lakebase server (MX-7). Where the workspace publishes a CA bundle, set `PGSSLMODE=verify-full` and `PGSSLROOTCERT` in the bundle's `config.env`; libpq reads both.
 - The gateway smoke (E7) makes two paid calls outside the budget ledger (AI-8): a documented exception, once per deploy.
+- E9 and E10 leave one governed case behind per deploy, titled `CAOS deployment check (safe to archive)` so an operator who opens it recognises it at a glance: it exists only to prove the event stream delivers through the Apps proxy (E9) and that one model call reaches the gateway through the app's own HTTP surface (E10, CF-054), never through this script's process or credentials. It costs one tiny admitted source and one model call at the configured price, same as any other run. It is safe to leave in place (every later deploy makes its own) or for an admin to archive; nothing reads it back.
 
 - The worker runs inside the app process (one run at a time). A queued run waits while the app restarts; leases expire and the run is reclaimed.
 - Secrets: the app reads none. Model calls use the service principal's OAuth; Lakebase credentials are minted per connection and never logged.
 - Logs never carry document text: refusals are typed codes (`caos/refusals.py`).
 - To rotate the model: change `model_endpoint` and `model_price` together and redeploy; runs pinned under the old price finish under it.
 
-## 7. Before the workspace exists: the loopback stand-in
+## 8. Before the workspace exists: the loopback stand-in
 
 `tests/workspace_stub.py` (D28) answers, on `127.0.0.1`, every workspace path this repository's code and the CLI use, so the whole chain can be exercised with no profile:
 

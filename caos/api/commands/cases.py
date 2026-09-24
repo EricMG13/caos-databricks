@@ -22,7 +22,8 @@ single-actor release under invariant 5.
    or chain head held (ED-5).
 5. One governed unit: `admit_prepared`, `SOURCES_ADMITTED` and the receipt.
    A refusal there commits no row; blobs already put are content-addressed
-   orphans (CLAUDE.md known gaps).
+   orphans, kept by design -- deleting governed bytes is the workspace
+   volume's retention policy, not this process's (CF-076).
 """
 
 from __future__ import annotations

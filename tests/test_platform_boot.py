@@ -176,6 +176,11 @@ def test_the_platform_process_boots_ready_on_minted_credentials_and_the_volume(
     assert health["store"] == health["blobs"] == health["bundle"], health
     assert ("POST", "/api/2.0/database/credentials") in stub.requests
     assert ("HEAD", "/api/2.0/fs/directories" + VOLUME) in stub.requests
+    # N7: the platform hands the process a service principal's client id and
+    # secret, not a token; the app traded them for one itself, through the
+    # SDK's own oauth-m2m discovery and exchange, to make every call above.
+    assert ("GET", "/oidc/.well-known/oauth-authorization-server") in stub.requests
+    assert ("POST", "/oidc/v1/token") in stub.requests
     # The platform is the edge: a request with no forwarded token is anonymous,
     # and a role header a client sends decides nothing.
     anonymous = urllib.request.Request(

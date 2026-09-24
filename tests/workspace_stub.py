@@ -24,6 +24,7 @@ compared for authorisation or printed; `requests` holds methods and paths.
 from __future__ import annotations
 
 import base64
+import binascii
 import json
 import os
 import re
@@ -42,11 +43,29 @@ from socketserver import BaseServer
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlparse
 
+try:
+    from bundle_defaults import defaults as _bundle_defaults
+except ImportError:
+    # Standalone (`python tests/workspace_stub.py -- ...`) has no conftest to
+    # put the gate scripts on the path first, the way pytest's always has.
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from bundle_defaults import defaults as _bundle_defaults
+
 # What the SDK is handed as a token. It is a placeholder the stub never
-# compares against; any non-empty bearer passes.
+# compares against; any non-empty bearer passes. The rest are the bundle's
+# own defaults (N23): `databricks.yml` states each once.
 BEARER = "local-stub"
-ENDPOINT = "databricks-claude-opus-5"
-PRICE = f"{ENDPOINT},0.000005,0.000025,2026-09-22"
+_DEFAULTS = _bundle_defaults()
+ENDPOINT = _DEFAULTS["model_endpoint"]
+PRICE = _DEFAULTS["model_price"]
+GROUP_ADMIN = _DEFAULTS["group_admin"]
+GROUP_ANALYST = _DEFAULTS["group_analyst"]
+# N7: the platform hands the app a service principal's client id and secret,
+# not a token; the process trades them for one itself, through the SDK's
+# oauth-m2m credential strategy over these two placeholders. Never a real
+# secret -- the stub never compares against it, the same as `BEARER`.
+CLIENT_ID = "stub-client-id"
+CLIENT_SECRET = "stub-client-secret"
 USER = {"id": "42", "userName": "stub@example.com", "displayName": "Stub User"}
 FILES = "/api/2.0/fs/files"
 DIRECTORIES = "/api/2.0/fs/directories"
@@ -74,7 +93,7 @@ class WorkspaceStub:
     # Answer with the content as a list of text parts, the shape some serving
     # endpoints send where the client's model declares a string (CF-077).
     content_parts: bool = False
-    groups: frozenset[str] = frozenset({"caos-admins", "caos-analysts"})
+    groups: frozenset[str] = frozenset({GROUP_ADMIN, GROUP_ANALYST})
     # A profile that may not list groups is answered 403 (preflight's W5).
     groups_forbidden: bool = False
     # What the serving endpoint's `ai_gateway` reads back (preflight's DP-3),
@@ -135,6 +154,21 @@ class WorkspaceStub:
         return {
             "DATABRICKS_HOST": self.host,
             "DATABRICKS_TOKEN": BEARER,
+            "CAOS_MODEL_ENDPOINT": ENDPOINT,
+            "CAOS_MODEL_PRICE": PRICE,
+        }
+
+    def service_principal_environment(self) -> dict[str, str]:
+        """What the platform actually hands the app process (N7): a service
+        principal's client id and secret, never a token. The SDK's
+        oauth-m2m strategy trades them for one itself, over the discovery
+        and token routes this stub also answers (`/.well-known/databricks-
+        config`, `/oidc/.well-known/oauth-authorization-server`,
+        `/oidc/v1/token`)."""
+        return {
+            "DATABRICKS_HOST": self.host,
+            "DATABRICKS_CLIENT_ID": CLIENT_ID,
+            "DATABRICKS_CLIENT_SECRET": CLIENT_SECRET,
             "CAOS_MODEL_ENDPOINT": ENDPOINT,
             "CAOS_MODEL_PRICE": PRICE,
         }
@@ -303,6 +337,48 @@ class _Handler(BaseHTTPRequestHandler):
         self._missing()
 
     do_GET = do_POST = do_PUT = do_HEAD = do_DELETE = do_PATCH = _handle
+
+    # -- OAuth machine-to-machine (N7): the service principal's own login ---
+
+    def _host_metadata(self, rest: str, query: Query, raw: bytes) -> None:
+        """`GET /.well-known/databricks-config`: names where OIDC discovery
+        is, so the SDK's own host-metadata probe resolves `discovery_url`
+        without either side hard-coding the other's path."""
+        self._send(200, {"oidc_endpoint": f"{self.stub.host}/oidc"})
+
+    def _oidc_endpoints(self, rest: str, query: Query, raw: bytes) -> None:
+        """`GET /oidc/.well-known/oauth-authorization-server`: the two
+        endpoints `oauth_service_principal`'s `ClientCredentials` needs."""
+        self._send(
+            200,
+            {
+                "authorization_endpoint": f"{self.stub.host}/oidc/v1/authorize",
+                "token_endpoint": f"{self.stub.host}/oidc/v1/token",
+            },
+        )
+
+    def _token(self, rest: str, query: Query, raw: bytes) -> None:
+        """`POST /oidc/v1/token`: the client-credentials exchange the SDK's
+        oauth-m2m strategy makes with the client id and secret over Basic
+        auth (`use_header=True`), never the bearer this stub otherwise reads.
+        Any non-empty pair passes, the same looseness `BEARER` gets; the
+        placeholders are compared to nothing here either."""
+        header = self.headers.get("Authorization", "")
+        pair = b""
+        if header.startswith("Basic "):
+            try:
+                pair = base64.b64decode(header[len("Basic ") :], validate=True)
+            except (ValueError, binascii.Error):
+                pair = b""
+        client_id, _, client_secret = pair.decode(errors="replace").partition(":")
+        given = parse_qs(raw.decode())
+        grant = given.get("grant_type", [""])[0]
+        if not client_id or not client_secret or grant != "client_credentials":
+            self._send(400, {"error": "invalid_client"})
+            return
+        self._send(
+            200, {"access_token": BEARER, "token_type": "Bearer", "expires_in": 3600}
+        )
 
     # -- identity -----------------------------------------------------------
 
@@ -527,6 +603,14 @@ def _under(path: str, root: str) -> bool:
 Route = Callable[[_Handler, str, Query, bytes], None]
 # (method, prefix, exact, route); the first match answers.
 _ROUTES: list[tuple[str, str, bool, Route]] = [
+    ("GET", "/.well-known/databricks-config", True, _Handler._host_metadata),
+    (
+        "GET",
+        "/oidc/.well-known/oauth-authorization-server",
+        True,
+        _Handler._oidc_endpoints,
+    ),
+    ("POST", "/oidc/v1/token", True, _Handler._token),
     ("GET", "/api/2.0/preview/scim/v2/Me", True, _Handler._me),
     ("GET", "/api/2.0/preview/scim/v2/Groups", True, _Handler._groups),
     ("POST", "/serving-endpoints/chat/completions", True, _Handler._chat),
