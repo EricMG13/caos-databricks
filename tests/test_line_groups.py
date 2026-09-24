@@ -168,6 +168,40 @@ def test_each_block_of_a_split_line_can_be_quoted_whole(
     )
 
 
+def test_a_page_map_showing_only_the_first_block_of_a_split_line_still_anchors_it(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> None:
+    """R24-16: a gate page map may show a source line's first block while
+    withholding its continuation (`caos.methodology.selection.gate_view`
+    cuts a page's leading blocks to fit a budget, unaware of which blocks
+    share a line). `WHOLE_LINE` already matches a quote against one block at
+    a time, exactly as the map shows it, and calls that block whole citable
+    evidence -- so its delivery check must be judged against that one block,
+    not against the continuation the map never promised. The second block's
+    own text still refuses: it was never delivered."""
+    conn, case_id = case
+    source_id = _admit(conn, case_id, tmp_path, DOCUMENT)
+    (first_id, first_text), (second_id, second_text) = _blocks(conn, source_id)[1:3]
+    delivered = {source_id: frozenset({first_id})}
+
+    [anchored] = verify_citations(
+        conn,
+        delivered=delivered,
+        citations=[Citation(source_id, 1, first_text)],
+        rule=WHOLE_LINE,
+    )
+    assert anchored.bboxes
+
+    with pytest.raises(Refusal, match=r"^CITATION_NOT_DELIVERED$"):
+        verify_citations(
+            conn,
+            delivered=delivered,
+            citations=[Citation(source_id, 1, second_text)],
+            rule=WHOLE_LINE,
+        )
+    assert first_id != second_id
+
+
 def _whole_line(
     conn: StoreConnection, source_id: UUID, quote: str
 ) -> RefusalCode | int:
