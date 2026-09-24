@@ -518,6 +518,60 @@ Round 4 (2026-09-23): five adversarial reviewers (Claude Opus 5.5 at effort max)
 
 - F284 — Under `WHOLE_LINE` a quote of exactly one shown block was refused `CITATION_NOT_DELIVERED` when the gate had withheld the rest of its source line (R24-16): delivery is judged against the one block the match is, and `ANY_RUN`'s per-line check is unchanged. Test `test_a_page_map_showing_only_the_first_block_of_a_split_line_still_anchors_it`.
 
+- F285 — A credential mint abandoned at `MINT_SECONDS` left its helper thread running, since the SDK's OAuth exchange has no timeout, and a new helper could start every `FAILURE_SECONDS` (R24-N01; owner accepted the cap): while an abandoned helper is alive, a new mint refuses `STORE_UNAVAILABLE` at once instead of starting another, one helper per identity at most. Test `test_an_abandoned_mint_does_not_start_a_second_helper`.
+
+- F286 — `wire.MARKDOWN_CHARS` and `PREVIEW_CHARS` were sized from the vendor's 26 MB `MAX_FILE_BYTES`, promising more than any accepted handoff can hold (D45): they read `handoff.MAX_HANDOFF_BYTES`; `schema.json`, `documents.ts` and `commands.ts` follow.
+
+- F287 — 86 comments and docstrings under `tests/` cited documents this repository does not hold (CF-101's remainder): three are repointed to their live analogue (the spec's §7, D4, D6, correcting two claims D6 superseded) and the rest dropped with the sentence kept true; the prompt goldens' baked bytes are untouched.
+
+- F288 — `io_budget.py`'s ratchet skipped a per-pathway (dict-shaped) budget, so `reads/reports.py` and `reads/deliverable.py` sat outside it (N35): `--record` snapshots a dict key by key and `--assert` refuses a key below its floor, or a declaration that stopped being a dict. Tests `test_record_measurements_snapshots_a_dict_shaped_module_per_key`, `test_measured_problems_refuses_a_dict_key_fallen_below_its_floor`.
+
+- F289 — Two more ways a PDF hides text were admitted unmarked (N27's remainder): text inside optional content the default configuration switches off (`optional_content_off`: `/D /OFF`, or `/BaseState /OFF` without `/D /ON`, an OCMD by its policy; every state a conforming viewer could disagree on is left unmarked), and text a later opaque, normally blended, axis-aligned rectangle fill covers whole (`painted_over`, compared exactly against the glyph, a rectangular clip intersected, strokes, patterns, images, curves and forms never counting). Bounded: one indirect reference, 4,096 groups, 32 OCMD members, nesting 256, 4,000,000 cover work units. `PdfExtractor` v5 and v6; migrations `0039` and `0040`; `PageLine.hidden` holds up to five reasons. A clip that is one rectangle is intersected rather than refused, so page-sized clips don't silence the reading. Tests in `tests/test_hidden_text.py`.
+
+- F290 — A marked evidence line carried N27's note inline, so on a scan no line could be quoted as shown, and a text line could imitate the note (review 2: C1, W3, W4): the note is a `hidden` line in the host header over each run of a page's same-marked lines, the final check says a quote never includes host text, `gate_view` counts every host byte (`evidence_sizes`), no token holds a line break (`PdfExtractor` v7, `LINE_BREAKS` written as spaces) and stored blocks are shown as one line. Tests `test_a_scans_lines_are_quoted_exactly_as_the_model_is_shown_them`, `test_a_document_cannot_write_a_header_or_its_note`, `test_the_gate_bound_counts_every_host_byte_of_the_evidence_section`, `test_no_token_carries_a_line_break`.
+
+- F291 — On PDF sources the whole-line rule compared quotes with the tracking-joined line, so a shown line with separate one-character tokens, or decomposed accents, could not be quoted as shown, and two lines shown alike were not ambiguous (review 2: W6, N13): answers are held to `whole-line-as-shown` (NFC words as the evidence section shows them, ambiguity counted on that form, then edges, then the tracked-letter line); records accepted under `whole-line` are re-anchored by that first reading. Tests `test_a_line_is_quoted_as_the_evidence_section_shows_it`, `test_two_lines_shown_alike_are_ambiguous_however_each_is_stored`.
+
+- F292 — The second attempt relayed vendor research messages that quote the model's own answer text (review 2: N7): quoted values are withheld (`<value withheld>`), the field and the fault kept.
+
+- F293 — A short text naming both `%PDF-` and `%%EOF` was sent to the PDF reader and refused (review 2: N8): bytes with a header past byte 0 that no PDF parse can read are admitted as plain text, and the qualification pre-spend check reads them the same way.
+
+- F294 — Hidden-text size was measured on the vertical axis only, and Indexed and Separation colours were never compared (review 2: N9): a glyph is measured on its narrower axis (`Tz` included), Indexed tables over gray, RGB or CMYK and exponential Separation tints are read, and `cs`/`CS` set their space's initial colour as ISO 32000-1 requires (`PdfExtractor` v7).
+
+- F295 — pdfminer left its device at a form XObject's matrix after `Do`, so text after a form was laid out, and its citation rectangle stored, where no viewer draws it (invariant 11): the figure's end restores the page matrix (`PdfExtractor` v7, `form_matrix`); earlier rows verify as recorded. Test `test_text_after_a_form_is_placed_where_a_viewer_draws_it`.
+
+- F296 — The worker's statement bound could drop a paid call's bill when the case row lock was held long enough, so the next claim paid for the node again (review 1: W1; invariant 6): the bill's own unit lifts `statement_timeout` and `lock_timeout` for itself. Test `test_a_paid_call_s_bill_outwaits_a_held_case_lock_under_the_worker_s_bounds`.
+
+- F297 — `caos_store` and `caos_graph` were used whoever owned them, so a co-tenant with CREATE could create either first and run triggers as the app's role (review 1: W2): `store.owned_schema` refuses `STORE_SCHEMA_DRIFT` unless the schema and everything in it belong to the connecting role, both boots check, and a Cancel forgets threads only in tables it owns.
+
+- F298 — The run-digest thread key (F182) was spelled in three places and two regression tests still keyed the bare run id, so they passed with their bugs restored (review 1: W3): `work.checkpoint_thread` is the one spelling, and the rekeyed tests fail under their mutations.
+
+- F299 — The checkpointer pool had no socket bounds and no statement bound (review 1: W4): `store.SOCKET_BOUNDS` is shared with `connect()`, and pooled connections start with a 30 s statement timeout.
+
+- F300 — A stopped or store-faulted pass released a cancelled run without forgetting its thread (review 1: N1): both branches forget after releasing.
+
+- F301 — A `lock_timeout` (55P03) during `apply_schema` was final drift (review 1: N2): it is `STORE_UNAVAILABLE` and retried.
+
+- F302 — Every boot needed CREATE on the database (review 1: N3): a schema is created only when absent, so a least-privilege role boots on schemas it owns.
+
+- F303 — `connect()` replaced the operator's `options` from the connection string or `PGOPTIONS` (review 1: N4): `store.startup_options` puts the operator's first and ours last.
+
+- F304 — `store_connection` answered every `psycopg.Error` with 503 and logged nothing (review 1: N5): only `store.interrupted` faults are `STORE_UNAVAILABLE`; the rest are `INTERNAL_FAULT` with the edge's class-and-frame line.
+
+- F305 — CP-2G's driver rows and CP-CF's request were compared without reversing the vendor's sign convention (outflows negative), so a dividend could never match and an acquisition was booked as an inflow (review 2: C2; invariant 7): each mapped row declares a negated conversion, compared in Decimal with `copy_negate`, and CP-CF's brief and the forecast extension state the convention; three model-owner prompt goldens regenerated from the legacy snapshot with the text mirrored. Tests at the mapping and `test_cp_cf_maps_each_cp2g_sign_to_the_calculator_end_to_end`.
+
+- F306 — `driver_value` negated with unary minus, which rounds in the ambient context (review 2: N14): it uses `copy_negate`.
+
+- F307 — D44's tolerance was shared between debt and cash, so a large debt let a cash residual far past its own size reconcile (review 2: N10): each residual is held to one part in a thousand of its own opening balance, still capped by the stated tolerance and `MAX_TOLERANCE`.
+
+- F308 — A 429 resend could start with seconds left and be abandoned while billed (review 2: N11): `MIN_RESEND_SECONDS` (half the call deadline, 120 s) is checked before the wait and after the resend fence.
+
+- F309 — F209's one-selector rule could be bypassed through ZWJ, ZWNJ and soft hyphen, and VS1–VS14 after any letter left 4 hidden bits a character (review 2: W5): shaping characters are not drawn bases and their runs are only Unicode's defined sequences; VS1–VS14 only after CJK ideographs and small registered sets; VS15/VS16 after any drawn character; U+034F only between combining marks. A Latin letter now carries under 3.5 bits; Japanese IVS names still admit.
+
+- F334 — `bills_at` compared an unpriced provider by model name only (review 2: N15; invariant 8): it fails closed, `price` is a member of both provider protocols (which found `worker._Stoppable` typed `object`), and the suite's fakes state their run price.
+
+- F335 — Integration of the fix batches: the store fixes' straggler double and worker tests state their run price (F334); the demo's CP-1B, CP-2B and CP-2G handoffs carry their tables in their markdown, so what is served derives from it.
+
 ### Design critique plan, 2026-09-23 (the `/impeccable critique` of `frontend/src`, 16/40, and the owner's plan built on it; branch `impeccable/plan`)
 
 - D32 (2026-09-23) — The Analysis read serves each accepted handoff's `<!-- table-id: -->`-tagged tables as typed data, derived at request time from the Markdown it already verified, by the bundle's own reader: `caos.methodology.tables.handoff_tables` calls `cp_tables.parse_tables` from the verified contract (`VendorContract.cp_tables`, the module the completeness checker imports), in document order, each cell its text as that reader splits it. Nothing is stored; the Markdown stays the authority and the tables are model-authored as it is (§46.3); no store or blob read is added. A cell has a value only where the bundle's `parse_figure` reads a figure (its null vocabulary is null, `5,2` is no value), and the value is that spelling re-read with `Decimal`, never the vendor's float (invariant 7), in plain notation (`^-?[0-9]+(\.[0-9]+)?$`); a figure past 64 characters has no value and keeps its text. Bounds: 64 tables, 32 columns, 2,000 rows, 4,096 characters a cell, 256 a table id; past one, or where the reader raises, the handoff serves no table and `tables_unavailable_reason` `TABLES_TOO_LARGE` or `TABLES_MALFORMED`. Alternatives: store tables at acceptance (a record change and a second authority); parse Markdown in the browser (the frontend never does); a host-only figure grammar (the bundle is the authority on what a figure is, invariant 4); the vendor's float (invariant 7). Evidence: `tests/test_handoff_tables.py`, `tests/test_model_section.py::test_analysis_serves_the_tagged_tables_each_owner_wrote`, `tests/test_wire_contract.py::test_a_table_cell_is_its_text_and_a_plain_decimal_string_or_null`.

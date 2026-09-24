@@ -1,276 +1,290 @@
-# Current audit findings — Astra max — 2026-09-23
+# Current audit findings — Astra max — 2026-09-24
 
-**Verdict: BLOCK under the requested Adversarial Reviewer rubric.** The current list contains **22 findings: 13 promoted CRITICAL and 9 WARNING, plus 3 notes**. Every promoted finding has base severity WARNING; the promotion records two reviewer personas identifying the same issue. It does not mean 13 security breaches or production outages were demonstrated. The reopened-run workflow in MAX-18 has a separate P1 priority from the skills review.
+**Verdict: BLOCK under the requested adversarial-review rubric.** **18 current findings: 2 P1 and 16 P2; 3 notes; 1 separate owner-recorded limitation.** Six base WARNING findings promote to CRITICAL under the skill's cross-persona rule; the other twelve are WARNING (the CI guard promotes from NOTE). Practical priorities and demonstrated consequences govern triage. The P1 items are the unreachable research workflows and stand-in profile redirection.
 
-**Scope and revision:** API edge and identity; store and graph; model seam, methodology and evidence; deployment and platform stand-ins; deliverables, qualification, calculators and gate scripts. Reviewed HEAD 653dc9ce91a73137360c43b81f14284d324de58f plus the working tree. This is a system review across callers, rather than a diff-only review.
+This replaces this reviewer's previous MAX list. The independent historical FP review is retained verbatim below and is not a second current findings list. The five requested scopes each received an adversarial assignment and a separate engineering/Databricks-skills assignment, using **Astra at max**. The runtime allowed three child reviewers alongside the coordinator, below the requested maximum of five.
 
-**Method:** both requested passes were rerun as ten scoped assignments using gpt-6-astra at max, under standard safeguards. The first five used sequential Saboteur, New Hire and Security Auditor perspectives; the second five applied the relevant audit, design, specialist and Databricks skills. At most three child agents ran concurrently, four agents including the coordinator, within the user's maximum of five. Some completed agents were reused for a different scope. Duplicate findings were consolidated and unsupported leads excluded.
+**Version boundary:** reviews began at `01d4c5795f6e80bf4230867b28a8038331d6dfb0`. Another task merged `9b591af3d8e6e175c0bdcbee04b2f67765bb75b0` during the audit. The final deliverable skills pass used that merged snapshot; retained findings were revalidated against it through current probes or explicitly identified source checks. Locations below name the merged tree. Original proof results remain tied to their original revision; the verification section states the limits of the merge follow-up.
 
-**Replacement and changes:** MAX identifiers replace this reviewer's prior AR-01–25 and R2 findings. The separate historical FP review written by another session is preserved below and is not included in current counts. This audit changes only this findings document. Application code, tests, configuration and vendor files were not edited by the reviewers.
+No code was edited. The only repository write by this audit is this findings-document replacement.
 
-## Critical findings under persona promotion
+## Status, 2026-09-24 (backlog/r24)
 
-### MAX-01 — A typed store refusal changes the retry key after an ambiguous commit
+Each finding below was patched and ledgered in `decisions.md`; the text after this table is the audit as delivered.
 
-**Base WARNING → CRITICAL; Saboteur + New Hire.** [controls.tsx:142](/Users/ericguei/Documents/caos-databricks/frontend/src/sections/run/controls.tsx:142), [store transaction:224](/Users/ericguei/Documents/caos-databricks/caos/store/__init__.py:224).
+| Finding | Resolution |
+|---|---|
+| R24-01 | F279 |
+| R24-02 | F274 |
+| R24-03 | F280 |
+| R24-04 | F281 |
+| R24-05 | F266 |
+| R24-06 | F267 |
+| R24-07 | F268 |
+| R24-08 | F269 |
+| R24-09 | F270 |
+| R24-10 | F271 |
+| R24-11 | F277 |
+| R24-12 | F282 |
+| R24-13 | F283 |
+| R24-14 | D49 |
+| R24-15 | F276 |
+| R24-16 | F284 |
+| R24-17 | F278 |
+| R24-18 | F272 |
+| R24-N01 | F285 |
+| R24-N02 | F275 |
+| R24-N03 | F273 |
+| R24-L01 | Record only (D39, N34); not a defect to patch |
 
-The browser retains an unchanged command's key for offline/invalid-response outcomes, but rotates it after a typed STORE_UNAVAILABLE. That refusal can follow a successful commit whose acknowledgement was lost. A disposable PostgreSQL probe injected failure after the real commit: the case and receipt existed, the same-key retry replayed them, and a fresh key created another case. A separate mounted production-hook probe confirmed that this typed 503 produces that fresh key. These are complementary database and React probes, not an end-to-end network fault test.
+## Current findings
 
-**Repair direction:** retain the command intent through commit-ambiguous refusals until its receipt is resolved. The previous unreadable-response defect is fixed; this typed-refusal variant remains.
+### R24-01 — Advertised research routes cannot receive their required brief
 
-### MAX-02 — Health recovery forgets probes that are still running
+**P1 · WARNING → CRITICAL under persona promotion (Saboteur, New Hire).** [Pin command](/Users/ericguei/Documents/caos-databricks/caos/api/commands/runs.py:204); [closed input model](/Users/ericguei/Documents/caos-databricks/caos/api/wire.py:1230).
 
-**Base WARNING → CRITICAL; Saboteur + New Hire.** [health.py:323](/Users/ericguei/Documents/caos-databricks/caos/api/health.py:323), completion accounting at [health.py:285](/Users/ericguei/Documents/caos-databricks/caos/api/health.py:285).
+The Run API advertises and creates both `LITE_DEEP_RESEARCH` and `DEEP_RESEARCH`, but Pin input accepts only a subject. The [store](/Users/ericguei/Documents/caos-databricks/caos/store/run_inputs.py:440) requires a research brief for these routes; neither the command nor its browser control can supply one. Both research workflows stop before execution.
 
-After the inflight ceiling expires, recovery clears the counter although old threads may still run. Their later completion decrements the replacement round's counter. The ceiling is 10 seconds, below supported SDK HTTP/retry durations; the async deadline cannot cancel a running thread. A bounded event-controlled, simulated-clock probe started a second probe while the first remained active; the old completion then allowed a third without another ceiling interval. Three calls ran, with peak overlap two.
+**Evidence:** Three disposable-DB API checks passed: both advertised research routes create with 201, subject-only pin returns 500 `RUN_INPUT_INVALID`, and adding a valid brief returns 400 `REQUEST_INVALID`. The same run/source/subject pins successfully through the store when given that brief. The ordinary earnings route pins with 200. No paid call was needed. **Repair direction:** carry a validated brief through the wire model, form, command and request digest, retaining the existing route-specific validation. [Detailed proof](/tmp/caos-r24-api-delta-wFIe8s/delta-report.md).
 
-**Repair direction:** track actual jobs or generations through completion and distinguish a never-started cancellation from a running probe. The historical permanent stall is repaired; this demonstrates overlapping work, not measured pool exhaustion or an outage.
+### R24-02 — An explicit CLI profile redirects a stand-in deployment to that workspace
 
-### MAX-03 — API and health reconnects retain a rejected Lakebase credential
+**P1 · WARNING → CRITICAL (Saboteur, Security Auditor).** [Stand-in child environment](/Users/ericguei/Documents/caos-databricks/tests/workspace_stub.py:718).
 
-**Base WARNING → CRITICAL; Saboteur + Security Auditor.** [deps.py:78](/Users/ericguei/Documents/caos-databricks/caos/api/deps.py:78), [health.py:113](/Users/ericguei/Documents/caos-databricks/caos/api/health.py:113), [shared connect:202](/Users/ericguei/Documents/caos-databricks/caos/store/__init__.py:202).
+The wrapper removes the environment's profile selector but leaves the CLI configuration accessible and forwards `-p/--profile`. Real CLI 1.17.0 resolves the explicit profile's host and credentials instead of the loopback host. A copied [manual deployment command](/Users/ericguei/Documents/caos-databricks/docs/DEPLOYMENT.md:53) can therefore make workspace changes when the operator expected only the local stand-in.
 
-Worker and checkpoint connections now invalidate rejected cached credentials, but API and health connections do not. Two real API connections and a health probe against a disposable database rejected an intentionally invalid cached password while retaining it and making zero mint calls. Explicit invalidation then allowed SELECT 1 using one mint. A rejected credential can therefore persist until the local refresh point, up to about 14 minutes, unless another caller refreshes it first. Existing sessions can remain active and need not trigger that recovery. [Lakebase authentication](https://docs.databricks.com/aws/en/oltp/projects/authentication).
+**Evidence:** With two loopback servers and a synthetic temporary profile, wrapped validation and deployment returned 0; the wrapper's own server received zero requests, while the alternate server received app creation, permissions and **586 uploaded files**. Omitting the profile reached only the intended server; an empty config made the named profile fail before workspace calls. No real profile, credential or workspace was used. The committed profile-free CI commands are unaffected. **Repair direction:** provide a private empty config and prevent explicit profile selection from leaving the stand-in for supported command forms. This is accidental operator redirection, not a remote production-app exploit. [Detailed proof](/var/folders/81/bwblpst93lb6wb3lwrk8k6800000gn/T/caos-r24-adversarial-deploy-otvktxp7/report.md).
 
-**Repair direction:** apply bounded invalidation/remint consistently at the shared connection boundary. This is an availability defect; actual cloud token revocation and an authorization bypass were not demonstrated.
+### R24-03 — A late Report save overrides a later navigation
 
-### MAX-04 — Cancellation during a refused call leaves the run nonterminal
+**P2 · WARNING → CRITICAL (Saboteur, New Hire).** [Save success callback](/Users/ericguei/Documents/caos-databricks/frontend/src/sections/report/FilingControls.tsx:310).
 
-**Base WARNING → CRITICAL; Saboteur + New Hire.** [worker.py:258](/Users/ericguei/Documents/caos-databricks/caos/graph/worker.py:258), [work.py:195](/Users/ericguei/Documents/caos-databricks/caos/store/work.py:195).
+Save a Report revision, then navigate to another case before the response arrives. The unmounted form's success callback uses its captured search-parameter setter and returns the reader to the abandoned Report. The F160 mounted/identity protection on Create run does not cover this producer.
 
-A Cancel accepted during a provider call remains pending if the answer then fails ordinary validation. The refusal path parks the queue without settling cancellation. A real worker/runtime/database probe produced CITATION_NOT_LOCATED, run RUNNING, queue STOPPED and cancellation requested. Subsequent claim returned nothing, Retry was disabled, and no terminal event existed. The outcome and charge remained durable, with no further model spend. A second Cancel completed cancellation; the UI permits that manual recovery.
+**Evidence:** A mounted real ReportSection, command receipt parser and router navigated to the other case's Analysis, then returned to the old Report when a valid deferred 201 receipt arrived. The regression assertion fails on current code. No cross-case write or draft loss was demonstrated. **Repair direction:** require the sending view's navigation identity to remain current before changing the address; allow its already-authorized save to finish. [Detailed proof](/tmp/caos-r24-api-delta-wFIe8s/delta-report.md).
 
-**Repair direction:** honor a pending cancellation under the existing fence when settling an ordinary refusal. The successful-final-call cancellation fix does not cover this branch.
+### R24-04 — Create run retains a revision belonging to the previous run
 
-### MAX-05 — SDK normalization hides malformed token usage before validation
+**P2 · WARNING (New Hire).** [Create run success callback](/Users/ericguei/Documents/caos-databricks/frontend/src/sections/run/controls.tsx:440).
 
-**Base WARNING → CRITICAL; Saboteur + New Hire.** [models.py:170](/Users/ericguei/Documents/caos-databricks/caos/models.py:170), [charge validation:204](/Users/ericguei/Documents/caos-databricks/caos/models.py:204).
+Report-to-Run navigation carries the saved revision. Creating another run changes only `run`; the old `revision` survives into Report or Committee. Their [reader](/Users/ericguei/Documents/caos-databricks/caos/api/reads/reports.py:147) correctly refuses the mismatched pair with `DELIVERABLE_NOT_FOUND`, breaking the ordinary navigation chain.
 
-The installed adapter defaults absent/null usage counts to zero, and its message model coerces other types before the application's integer checks. The real ChatDatabricks/OpenAI stack over an in-memory HTTP transport accepted usage={} and null counts as a known zero charge; booleans, numeric strings and integral floats also became accepted counts. Entire usage=null and negative counts correctly refused. Thus malformed upstream accounting can become a trusted charge and continue to artifact validation.
+**Evidence:** A mounted CreateRunControl with the real command/receipt and `sectionUrl` retained the old revision after a valid creation response. Its regression assertion fails. The mismatched HTTP request was source-traced, not separately DB-executed. A first run without a revision is unaffected; selecting a run by the existing selector clears dependent selection correctly. **Repair direction:** clear `revision` when creation changes `run`, while preserving independent query parameters. [Detailed proof](/tmp/caos-r24-api-delta-wFIe8s/delta-report.md).
 
-**Repair direction:** validate original usage presence and types before lossy SDK normalization, or preserve sufficient raw metadata. Conservative reservations still hold; no released-budget or overspending bypass was demonstrated. Both model reviews independently reproduced this seam.
+### R24-05 — A transient schema-check connection failure permanently ends worker startup
 
-### MAX-06 — Ambiguous citation matching retains every matching token slice
+**P2 · WARNING (Saboteur).** [Database error classification](/Users/ericguei/Documents/caos-databricks/caos/store/__init__.py:375); [startup retry loop](/Users/ericguei/Documents/caos-databricks/caos/graph/worker.py:577).
 
-**Base WARNING → CRITICAL; Saboteur + Security Auditor.** [citations.py:207](/Users/ericguei/Documents/caos-databricks/caos/evidence/citations.py:207), [candidate collection:426](/Users/ericguei/Documents/caos-databricks/caos/evidence/citations.py:426).
+`apply_schema` translates every native `psycopg.Error`, including connection loss, into `STORE_SCHEMA_DRIFT`. The startup loop retries `STORE_UNAVAILABLE` but permanently returns for drift. F114 fixes the original pre-thread failure; this inner classification still leaves the worker stopped after a recoverable database interruption.
 
-Matching allocates quote-sized token slices and retains every successful match before refusing ambiguity. With only 24 repeated tokens and an eight-token quote, the bounded probe retained 17 slices/136 token references before CITATION_AMBIGUOUS. Current limits allow a 500,000-token page and a 6,000-token quote: source arithmetic implies 2,964,006,000 retained references, about 23.7 GB of pointers alone. That large workload was not executed. The second review checked that page tokenization survives block splitting and that a bounded CP-0 request fits the request limit; anchoring searches the whole page before delivered-block validation.
+**Current evidence:** A real disposable-DB connection was ended during the worker's schema boundary. Native SQLSTATE 57P01 became drift; boot returned 2 after one connection attempt without driving work. Immediate manual configuration and schema verification succeeded, with the run still queued. Existing retry tests passed but bypass this transformation; the closed-connection schema test explicitly expects the wrong classification. **Repair direction:** preserve operational unavailability separately from actual migration/history incompatibility. [Current merged-source proof](/tmp/caos-r24-store-9b-TAxPxo/report.md).
 
-**Repair direction:** stop at the second match, avoid per-position slice allocation, and bound long near-match searches. This work runs in the application process, outside PDF child limits.
+### R24-06 — A temporary authority refusal permanently excludes a valid paid answer from replay
 
-### MAX-07 — The documented standalone preflight command fails on import
+**P2 · WARNING (Saboteur; New Hire countercheck).** [Refusal classification](/Users/ericguei/Documents/caos-databricks/caos/store/outcomes.py:272); [live execution](/Users/ericguei/Documents/caos-databricks/caos/graph/runtime.py:649); [replay selection](/Users/ericguei/Documents/caos-databricks/caos/methodology/canonical.py:896).
 
-**Base WARNING → CRITICAL; Saboteur + New Hire.** [preflight.py:125](/Users/ericguei/Documents/caos-databricks/scripts/preflight.py:125), [deployment instructions:22](/Users/ericguei/Documents/caos-databricks/docs/DEPLOYMENT.md:22).
+If an approver loses standing while a valid completion is in flight, its answer and bill are saved, then `GATE_APPROVAL_MISMATCH` becomes an immutable answer-refusal row. Restoring the approver makes the stored answer valid again, but replay excludes it permanently. This contradicts the code's distinction between run/authority faults and answer verdicts.
 
-The documented uv run python scripts/preflight.py command, with a valid --price and without an ambient PYTHONPATH, raises ModuleNotFoundError for caos before performing its checks. The project is not installed as a package and direct script execution does not place the repository root on the import path. Imported tests conceal this entry-point failure. The enterprise wrapper explicitly sets up the root, so its one-command path works.
+**Current evidence:** A real local worker/store route with deterministic completions reproduced the refusal, restored both released gates, and revalidated the original answer successfully. `replay_billed` nevertheless returned none. An explicit user Retry produced two billed CP-0 attempts and four bills for three route nodes. This is lost reuse after deliberate Retry; there was no automatic duplicate spend, accounting loss, ceiling bypass or acceptance while authority was revoked. **Repair direction:** preserve typed run-versus-answer failure provenance and keep temporary authority failures out of immutable answer explanations; retain fresh authority checks. [Current merged-source proof](/tmp/caos-r24-store-9b-TAxPxo/report.md).
 
-**Repair direction:** make the documented direct entry point resolve its package consistently, or document an entry point that does. The endpoint/price mismatch check itself is now correct when imports succeed.
+### R24-07 — CP-DR validation feedback disappears before the second attempt
 
-### MAX-08 — Deployment E9 accepts two buffered frames from a closed stream
+**P2 · WARNING → CRITICAL (Saboteur, New Hire).** [Dossier messages](/Users/ericguei/Documents/caos-databricks/caos/methodology/handoff.py:1313); [string-only filter](/Users/ericguei/Documents/caos-databricks/caos/methodology/handoff.py:1334).
 
-**Base WARNING → CRITICAL; Saboteur + New Hire.** [enterprise_deploy.py:401](/Users/ericguei/Documents/caos-databricks/scripts/enterprise_deploy.py:401), timing setup at [enterprise_deploy.py:374](/Users/ericguei/Documents/caos-databricks/scripts/enterprise_deploy.py:374).
+The dossier validator's `ValueError` object is returned as feedback, then silently dropped by the downstream string-only filter. The reserved second attempt receives no explanation for this deterministic research failure, despite D30's fifth addendum claiming the gap closed.
 
-E9 validates frame shape but accepts the second frame without establishing the requested liveness interval. A real loopback HTTP server returned two SSE frames with Content-Length and Connection: close, then closed. E9 exited successfully in approximately 0.002–0.005 seconds despite LIVE_SECONDS=2. Both frames were already buffered. Closed HTML, single-frame EOF and inappropriate case-create responses are now rejected; those fixes do not establish continued streaming.
+**Evidence:** On the initial snapshot, a small real CP-DR fixture with coverage 60 instead of the computed 50 passed the ordinary vendor/completeness validators, failed the dossier check, and received host `HANDOFF_INCOMPLETE`. Public `retry_feedback` returned an empty tuple. The existing helper-level test passes because its assertion itself converts the exception to a string. A current small helper/filter check reproduced the dropped exception and accepted the same explanation as a string; the full new-fork dossier path was not rerun. **Repair direction:** perform bounded string conversion at the vendor exception boundary and check the composed feedback path. Invalid dossiers still refuse. [Original proof](/tmp/caos-r24-model.0jFjvY/adversarial-model-report.md); [current reconciliation](/tmp/caos-r24-skills-model.oHVTNQ/current-merge-reconciliation-9b.md).
 
-**Repair direction:** require observed stream liveness over the declared interval before recording verification. This is a false-positive deployment proof; real Databricks proxy buffering was not tested.
+### R24-08 — A resend can start after the total provider deadline
 
-### MAX-09 — The deployment path cannot select Lakebase Autoscaling
+**P2 · WARNING (Saboteur).** [Resend loop](/Users/ericguei/Documents/caos-databricks/caos/models.py:158); [sender start](/Users/ericguei/Documents/caos-databricks/caos/models.py:289).
 
-**Base WARNING → CRITICAL; Saboteur + New Hire.** [databricks.yml:25](/Users/ericguei/Documents/caos-databricks/databricks.yml:25), [database resource:92](/Users/ericguei/Documents/caos-databricks/databricks.yml:92), [enterprise_deploy.py:295](/Users/ericguei/Documents/caos-databricks/scripts/enterprise_deploy.py:295).
+The deadline is checked before back-off and `check_resend()`. The next iteration starts a sender even when that check or scheduling has consumed the remaining time; `_invoked` starts the thread before joining for zero seconds.
 
-The runtime supports an Autoscaling endpoint, but deployment requires a Provisioned instance, binds that resource, and uses its API in preflight/E8. CAOS_LAKEBASE_INSTANCE also takes precedence over the Autoscaling setting. The real installed SDK could fetch and mint for an Autoscaling endpoint against the loopback stand-in; passing the same endpoint through the deployment instance path failed. Existing Provisioned resources remain supported, while creation of new ones is unavailable after March 12, 2026. [Official Lakebase Apps resource documentation](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/lakebase).
+**Evidence:** The initial snapshot's logical-clock probe returned the first 429 at second 237, waited two seconds, and spent two seconds in the fence check. A second request started at second 241 against the 240-second total budget; its immediate fake answer was accepted and charged. Production resend checks perform store reads. No provider, wall-clock wait, lease takeover or database double-billing was exercised. F116 repairs the old multiplication of per-try deadlines. The merged implementation retains the same missing pre-start guard by source review; the timing probe was not repeated. **Repair direction:** recompute the remaining budget after the fence and refuse before starting a sender when none remains. [Original proof](/tmp/caos-r24-model.0jFjvY/adversarial-model-report.md); [current reconciliation](/tmp/caos-r24-skills-model.oHVTNQ/current-merge-reconciliation-9b.md).
 
-**Repair direction:** carry the selected resource type consistently through bundle, credentials, preflight and verification. Preserve existing Provisioned bindings and role identity. No live deployment was attempted.
+### R24-09 — Body quote matching retains quadratic near-match work
 
-### MAX-10 — A final matrix refusal loses the performed qualification snapshot
+**P2 · WARNING → CRITICAL (Saboteur, Security Auditor).** [Body quote matcher](/Users/ericguei/Documents/caos-databricks/caos/methodology/handoff.py:845); [public parser](/Users/ericguei/Documents/caos-databricks/caos/methodology/handoff.py:866).
 
-**Base WARNING → CRITICAL; Saboteur + New Hire.** [harness.py:373](/Users/ericguei/Documents/caos-databricks/caos/qualification/harness.py:373), [matrix.py:475](/Users/ericguei/Documents/caos-databricks/caos/qualification/matrix.py:475).
+Repeated first words propose many candidate positions; each candidate copies a quote-sized body slice and performs further comparisons. A single late-failing quote still requires work proportional to body tokens times quote tokens. The citation-count cap and ordinary-case index do not bound this dimension.
 
-Matrix construction runs before the harness persists its performed result. If the local methodology manifest changes after execution but before the final authority check, the refusal escapes that persistence boundary. In a scratch vendor copy, appending one space after the final record yielded AUTHORITY_BYTES_MISMATCH after three real harness calls with scripted responses: the run was COMPLETE, three call outcomes remained, and zero performed snapshots were added.
+**Evidence:** Previously completed tiny operation-count probes with 24/48/96 body tokens copied 156/600/2,352 token references before correctly refusing. Entire wires were 199/271/415 bytes. This proves superlinear work and public-parser reachability on the original snapshot. Current source retains the same copying algorithm; no current timing or resource claim is added. No enlarged workload was run. The separate evidence-anchor matcher now uses linear KMP and fixes original MAX-06. **Repair direction:** preserve typography semantics with linear matching or a declared work bound. [Original proof](/tmp/caos-r24-model.0jFjvY/adversarial-model-report.md); [current source check and limitations](/tmp/caos-r24-skills-model.oHVTNQ/current-merge-reconciliation-9b.md).
 
-**Repair direction:** preserve a non-signable performed result when post-execution matrix construction refuses, while keeping the authority check. This requires privileged/concurrent local file mutation. The paid-call ledger and blobs survive; no false qualification or remote mutation capability was shown.
+### R24-10 — Parenthesized numbers can round or raise during table projection
 
-### MAX-11 — Multi-case qualification capture exports only the first run's attempts
+**P2 · WARNING → CRITICAL (Saboteur, New Hire).** [Sign conversion](/Users/ericguei/Documents/caos-databricks/caos/methodology/tables.py:169); [Analysis projection](/Users/ericguei/Documents/caos-databricks/caos/api/reads/analysis.py:344).
 
-**Base WARNING → CRITICAL; Saboteur + New Hire.** [qualify.py:129](/Users/ericguei/Documents/caos-databricks/scripts/qualify.py:129), [first-run argument:400](/Users/ericguei/Documents/caos-databricks/scripts/qualify.py:400).
+Unary minus on a Decimal applies the ambient precision. A positive 30-digit number remains exact, while its accounting-parenthesis form rounds under the normal 28-digit context. A small parenthesized exponent can also raise `decimal.Overflow` before the plain-notation size bound handles it.
 
-The CLI now admits multi-case sets, but its attempt query still receives only prepared[0].input.run_id. A two-case LITE run completed six scripted calls. The durable ledger contained six attempts and total charge 0.0000246; the capture reported complete=true and two results, but only three attempts and charge 0.0000123. All second-run attempt identities and diagnostics were omitted. The database's performed snapshot correctly contained both cases.
+**Evidence:** `123456789012345678901234567890` stays exact; its parenthesized form becomes `-123456789012345678901234567900`. `(1e1000000)` raises while the positive counterpart returns no display value. On the original snapshot, a 2,440-byte CP-0 handoff with the offending supplemental table passed real pinned validation and then failed `handoff_tables`; the clean control passed both. Analysis, and its Model/Book consumers, reach this path; full DB/HTTP reads were not run for this example. The current public cell reader independently reproduced both defects using the current vendor contract; full current accepted-handoff/HTTP reproduction was not run. This affects derived display/read availability, not the canonical calculator ledger. **Repair direction:** use context-independent sign handling and bounded error/size checks. [Original proof](/tmp/caos-r24-model.0jFjvY/adversarial-model-report.md); [current reconciliation](/tmp/caos-r24-skills-model.oHVTNQ/current-merge-reconciliation-9b.md).
 
-**Repair direction:** collect attempts for every prepared/performed run and preserve case/run association, including cases without a proof. This is incomplete exported evidence, not lost ledger entries or a budget bypass.
+### R24-11 — A required CI command can be disabled without failing the integrity checker
 
-### MAX-12 — The Markdown release pack omits qualification identity
+**P2 · NOTE → WARNING (Saboteur, Security Auditor).** [Command extraction](/Users/ericguei/Documents/caos-databricks/scripts/check_gate_config.py:583); [CI checks](/Users/ericguei/Documents/caos-databricks/scripts/check_gate_config.py:665).
 
-**Base WARNING → CRITICAL; New Hire + Security Auditor.** [release_pack.py:466](/Users/ericguei/Documents/caos-databricks/scripts/release_pack.py:466); compare the repaired [JSON projection:333](/Users/ericguei/Documents/caos-databricks/scripts/release_pack.py:333).
+The checker verifies required `run:` text but ignores its step's execution condition. A contributor can leave the command intact and add `if: false`; the advertised regression guard still says the gate configuration holds. The committed mypy step currently runs unconditionally.
 
-The Markdown renderer shows QUALIFIED with a shortened evidence digest and expiry, but omits provider, model, reviewer and set. A real signed fixture preserved all four fields in JSON and none in Markdown. A reader sharing only the human artifact cannot tell which execution identity its qualification covers, particularly when it came from a test/OpenRouter provider. The underlying verdict binding and optional identity filter remain correct.
+**Evidence:** In a separate tracked copy, the full checker returned 0 for unchanged configuration and for a mypy step disabled with `if: false`. Adding `--ignore-errors` to the command returned 1. Original MAX-13 Ruff/coverage examples now all return 1, so their repairs hold. The merged CI-check branch also accepts a disabled Ruff step and rejects a removed command; that current branch check is distinct from the initial full copied-checker proof. This is a regression-protection gap, not a claim that current CI skips checks or that a runtime user can disable it. **Repair direction:** associate required commands with their step/job conditions and reject unapproved ways of disabling them. A same-repository checker cannot prevent arbitrary malicious self-rewriting. [Detailed proof](/tmp/caos-r24-deliverable.c6cpcQ/report.md).
 
-**Repair direction:** display the qualification's execution identity and relevant signer/set bindings beside its status, or explicitly scope the entire artifact. The previous blanket claim about both JSON and Markdown is withdrawn.
+### R24-12 — Model charts label dimensionless ratios as monetary amounts
 
-### MAX-13 — The gate-integrity checker accepts effective gate weakening
+**P2 · WARNING; library/fullstack pass.** [Chart units](/Users/ericguei/Documents/caos-databricks/frontend/src/sections/model/ModelSection.tsx:107).
 
-**Base WARNING → CRITICAL; Saboteur + Security Auditor.** [check_gate_config.py:126](/Users/ericguei/Documents/caos-databricks/scripts/check_gate_config.py:126).
+All forecast lines receive the currency and scale, including margin, leverage, coverage and FCF/debt ratios. The host calculator and API preserve correct ratio values; the rendered annotations give them the wrong dimension.
 
-The checker inspects positive rule selections and option substrings without resolving overriding configuration. Three isolated mutations each returned no problems: ignoring F821 made installed Ruff stop reporting an undefined name; appending --cov-fail-under=0 made installed pytest's effective coverage threshold zero; restricting coverage source to caos.boundary_text narrowed the measured package. These were scratch configurations. The current repository was not changed to disable its gates, and the current gate checks pass.
+**Evidence:** A real host forecast fixture passed through the actual API conversion, typed frontend parser and mounted ModelSection. Gross leverage rendered and announced `10.0000 USD millions (host-verified)`. The monetary debt-closing control correctly carried monetary units. The regression assertion fails. **Repair direction:** derive or carry each line's dimension; retain money units for money, multiples for leverage/coverage, and explicit ratios or correctly scaled percentages for margins. No stored calculation corruption was shown. [Detailed proof](/tmp/caos-r24-api-delta-wFIe8s/delta-report.md).
 
-**Repair direction:** validate effective rules, conflicting options, exclusions and the intended coverage source. The coordinator reproduced the tool behavior and the deliverable security perspective corroborated the guard failure. Generic scanner scores were not used as evidence.
+### R24-13 — Analysis presents incomplete aggregates as complete and can hide the nearest maturity
 
-## Warnings
+**P2 · WARNING; library/fullstack pass.** [Partial-sum helper](/Users/ericguei/Documents/caos-databricks/frontend/src/sections/analysis/figures.tsx:37); [maturity pre-filter](/Users/ericguei/Documents/caos-databricks/frontend/src/sections/analysis/figures.tsx:231); [nearest-date claim](/Users/ericguei/Documents/caos-databricks/frontend/src/sections/analysis/figures.tsx:243).
 
-### MAX-14 — EventSource reconnection leaves a disconnected view marked live
+Captions sum known segment/add-back values without qualifying the missing components. The maturity transform also drops an entire facility when principal is unavailable, removing its known maturity before choosing the nearest date and building the chart/table.
 
-**WARNING; Saboteur.** [sse.ts:75](/Users/ericguei/Documents/caos-databricks/frontend/src/app/sse.ts:75), [Workspace.tsx:195](/Users/ericguei/Documents/caos-databricks/frontend/src/app/Workspace.tsx:195).
+**Evidence:** A small CP-1 fixture with supported `n/a` cells passed real validation and table conversion. The mounted UI stated `100 USD m across 2 segments` and `Net +10 USD m across 2 add-backs` despite one missing component in each. It showed only 300 principal due in 2030 and named that facility nearest, although the intact source table disclosed another facility due in 2028 with unknown principal. Two regression assertions fail. Segment marks/table correctly show unavailable values and an unavailable total; their caption contradicts them. This is not universal null-to-zero behavior, and exact arithmetic is not the fault.
 
-The error handler returns while EventSource is CONNECTING, before marking the view not live. A transport stand-in transitioned OPEN → CONNECTING and emitted an error; live changes remained [true]. During native reconnect attempts, stale content therefore retains its live indication. A later successful open resynchronizes it, and CLOSED handling already retries correctly.
+**Repair direction:** preserve completeness through aggregation, explicitly identify known subtotals or withhold complete totals, and retain facilities with unknown amounts. Choose the nearest known date independently of principal availability. The raw source/API values remain intact; evidence used validated synthetic data and mounted UI, not a persisted provider run. [Detailed proof](/tmp/caos-r24-api-delta-wFIe8s/delta-report.md).
 
-**Repair direction:** mark loss of the open connection immediately while allowing the existing reconnection/resync path to restore freshness. This is separate from selecting the wrong stream in MAX-19.
+### R24-14 — The one-command deployment still cannot select Lakebase Autoscaling
 
-### MAX-15 — Autoscaling credential expiry uses the wrong SDK field
+**P2 · WARNING; reconfirmed compatibility limitation, explicitly deferred F146/N45.** [Bundle variable](/Users/ericguei/Documents/caos-databricks/databricks.yml:25); [resource binding](/Users/ericguei/Documents/caos-databricks/databricks.yml:96); [deployment evidence E8](/Users/ericguei/Documents/caos-databricks/scripts/enterprise_deploy.py:456).
 
-**WARNING; Saboteur.** [lakebase.py:188](/Users/ericguei/Documents/caos-databricks/caos/store/lakebase.py:188), fallback at [lakebase.py:202](/Users/ericguei/Documents/caos-databricks/caos/store/lakebase.py:202).
+The committed bundle requires a Provisioned instance, preflight/E8 use that API, and runtime selects `CAOS_LAKEBASE_INSTANCE` ahead of the Autoscaling endpoint. A workspace with only Autoscaling resources cannot use the committed deployment path. Runtime support and a backlog entry do not supply the missing deployment selector.
 
-The Autoscaling API returns expire_time as a Timestamp, but the common path reads the Provisioned field expiration_time. A real installed SDK object with one hour remaining therefore retained only the synthetic 840-second deadline; its Provisioned equivalent retained 3,540 seconds. With refresh failing at simulated second 841, the real credential cache refused although the server token was still valid. Successful routine refreshes hide this availability gap. [Documented SDK credential fields](https://databricks-sdk-py.readthedocs.io/en/stable/dbdataclasses/postgres.html#databricks.sdk.service.postgres.DatabaseCredential).
+**Evidence/limits:** Real CLI validation/deploy/run passed for the existing Provisioned loopback path. Installed SDK 0.140.0 and CLI 1.17.0 expose distinct database/postgres resource shapes; the committed path was source-traced. Current [official app-resource documentation](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/lakebase) states new Provisioned resources cannot be created after March 12, 2026 and warns that changing an existing resource type changes role identity. No live Autoscaling injection, grants or credential mint was tested. **Repair direction:** implement and qualify an explicit deployment choice with the corresponding environment/resource/permission contract. Existing Provisioned deployments were not shown broken. [Detailed reconciliation](/var/folders/81/bwblpst93lb6wb3lwrk8k6800000gn/T/caos-r24-adversarial-deploy-otvktxp7/report.md).
 
-**Repair direction:** normalize the two response shapes and Timestamp representation before entering the common cache. No live endpoint or expired-token acceptance was tested.
+### R24-15 — Comma-containing group names break the one-command deployment
 
-### MAX-16 — NaN Retry-After escapes the typed provider interface
+**P2 · WARNING; library/DevOps pass.** [CLI variable transport](/Users/ericguei/Documents/caos-databricks/scripts/enterprise_deploy.sh:56).
 
-**WARNING; Saboteur.** [models.py:233](/Users/ericguei/Documents/caos-databricks/caos/models.py:233), [retry handler:156](/Users/ericguei/Documents/caos-databricks/caos/models.py:156).
+The wrapper passes group display names through CLI `--var`, whose separate parser splits values at commas even when the shell argument is quoted. A supported group such as `Research, Credit` passes preflight but fails deployment validation. The existing model-price path already uses the environment variable form to preserve commas.
 
-A gateway 429 with Retry-After: NaN survives float parsing and clamping. Sleeping raises ValueError inside the exception handler, outside its sibling catch clauses. The real SDK over an in-memory transport raised after exactly one call. The traced worker path then parks the run as INTERNAL_FAULT before a typed outcome is recorded. Ordinary numeric, invalid-text and infinite headers were counterchecked and remained bounded.
+**Evidence on both commits:** The actual wrapper with CLI 1.17.0, private synthetic configuration and a loopback workspace returned E1=0/E2=1, with no app/deployment created. A space-only name passed; `BUNDLE_VAR_group_admin='Research, Credit'` also passed and preserved the exact name in the app environment and permission. The [official group reference](https://docs.databricks.com/aws/en/dev-tools/cli/reference/groups-commands) describes human-readable display names; the application/runbook impose no comma prohibition. **Repair direction:** use the existing `BUNDLE_VAR` pattern for both group names and remove competing `--var` arguments. Default hyphenated groups remain unaffected. [Current proof](/tmp/caos-r24-skills-deploy-rcad9xdn/report.md).
 
-**Repair direction:** require a finite interval and use the existing invalid-header fallback. This requires a malformed upstream header; a case uploader cannot directly supply it. Other runs remain serviceable.
+### R24-16 — A page map can show a complete evidence block that cannot be cited
 
-### MAX-17 — Truncated HTTP bodies escape deployment evidence recording
+**P2 · WARNING; library/model pass.** [Per-block selection](/Users/ericguei/Documents/caos-databricks/caos/methodology/selection.py:184); [citation delivery check](/Users/ericguei/Documents/caos-databricks/caos/evidence/citations.py:689); [required original-line blocks](/Users/ericguei/Documents/caos-databricks/caos/evidence/citations.py:883).
 
-**WARNING; Saboteur.** [enterprise_deploy.py:249](/Users/ericguei/Documents/caos-databricks/scripts/enterprise_deploy.py:249), [E9 reads:343](/Users/ericguei/Documents/caos-databricks/scripts/enterprise_deploy.py:343).
+The map chooses a prefix of blocks from each page. The current whole-line matcher treats each width-bounded block as an eligible evidence line, but its delivery check still requires every block of the original source line. Showing the first block while withholding its continuation therefore makes an otherwise valid quote fail `CITATION_NOT_DELIVERED`. The prompt explicitly calls the shown text citable evidence.
 
-The response-body catches omit http.client.IncompleteRead. A loopback response declaring 100 bytes and sending 10 raised it from the E6 health read and produced no evidence row. The same uncovered body-read boundary exists in E9. The command fails closed, so this is missing diagnostics/retry handling rather than false readiness.
+**Current small proof:** Real preparation/packing of a 4,100-byte source produces blocks of 4,096 and 3 characters. With a reduced 4,096-byte test map budget, the first block is shown intact. Its complete quote anchors under current `WHOLE_LINE` when both blocks are delivered; the identical quote fails when only the map's first block is delivered. The current pure production walker supplies the index; unexpected DB access fails the probe.
 
-**Repair direction:** map incomplete HTTP responses into the normal failed-attempt evidence and bounded polling behavior.
+**Production reachability is a separate inference:** 384 ordinary text pages of this shape fit document/page/token admission bounds. All packed text totals 1,574,016 bytes, exceeding the 1,572,864-byte default gate budget; the first blocks fit exactly. The default selector therefore produces the same cut, leaving this source's displayed evidence unusable. No full-size source, model call or DB/HTTP run was executed. Mixed sources lose only partially delivered original lines. **Repair direction:** align selection and citation delivery granularity, retaining complete required groups or refusing before a paid call when the minimum map cannot fit. The current packing/whole-line changes were explicitly rechecked. [Current proof and arithmetic](/tmp/caos-r24-skills-model.oHVTNQ/current-merge-reconciliation-9b.md).
 
-### MAX-18 — Reopening an approved run leaves Start and Retry unusable
+### R24-17 — A verified ZIP can extract a different page because local sizes are unchecked
 
-**WARNING; skills review priority P1.** [controls.tsx:539](/Users/ericguei/Documents/caos-databricks/frontend/src/sections/run/controls.tsx:539), [RunSection.tsx:45](/Users/ericguei/Documents/caos-databricks/frontend/src/sections/run/RunSection.tsx:45).
+**P2 · WARNING; library/deliverable pass.** [Local header validation](/Users/ericguei/Documents/caos-databricks/caos/deliverable/verify_package.py:108); [central-only CRC and sizes](/Users/ericguei/Documents/caos-databricks/caos/deliverable/verify_package.py:120).
 
-The component's fingerprint starts null, ordinary Run reads omit it, and a successful gate preview deliberately does not retain it. If input is already pinned and both gates are RELEASED, the user cannot Pin again or use an Approve button to recover it. Mounted production components reproduced both Start and Retry remaining disabled with COMMAND_EXPECTATION_STALE after two valid previews returned the fingerprint; zero command POSTs occurred. Same-session pin/approval still works.
+The verifier compares local flags/method against the central directory but trusts only central CRC and sizes when reading and checking each member. Contradictory local size metadata can therefore direct a general extractor to different bytes from those the verifier validated.
 
-**Repair direction:** make the server-verified fingerprint recoverable after reload without discarding the reviewed preview. Preserve server checks and binding. This blocks normal authorized UI use; it is not a server authorization failure.
+**Current proof:** The normal five-member host package and a STORED repack both verified and extracted the same 1,578-byte page. Changing only `deliverable.html`'s local CRC/compressed/uncompressed sizes to zero left all content, receipts and central metadata intact. The full verifier and its detached stdlib-only invocation still succeeded; both system `bsdtar` and `unzip` extracted an empty page with exit 0. Flags/method were zero and no data descriptor was present. A changed-method control correctly refused. **Repair direction:** compare local CRC and both sizes with the central values before selecting the body. This concerns an untrusted tampered archive accepted by the portable verifier; normal generated packages remain valid, and no signature, receipt or filing-authorization forgery was demonstrated. [Full controls](/tmp/caos-r24-skills-deliverable-styMwZ/report.md).
 
-### MAX-19 — Case-only navigation displays a run but subscribes only to case audit events
+### R24-18 — Qualification rejects whole-line keys its citation matcher accepts
 
-**WARNING; skills review priority P2.** [Workspace.tsx:180](/Users/ericguei/Documents/caos-databricks/frontend/src/app/Workspace.tsx:180), [stream.py:278](/Users/ericguei/Documents/caos-databricks/caos/api/stream.py:278).
+**P2 · WARNING; library/deliverable pass.** [Precheck token comparison](/Users/ericguei/Documents/caos-databricks/caos/qualification/harness.py:802); [admission refusal](/Users/ericguei/Documents/caos-databricks/caos/qualification/harness.py:836).
 
-Directory navigation omits the run query. Reads resolve the latest run, but Workspace opens its stream with the raw null selection. That server stream intentionally excludes run events. Mounted Run/Analysis views retained this URL after showing a run; a real database comparison yielded no run_progress event for the case-only tail and one for the named-run tail. A frontend test currently injects an event that this real URL cannot deliver.
+F228's impossible-key precheck uses raw token equality, a stricter rule than the authoritative whole-line citation matcher. It rejects supported edge-punctuation normalization before a satisfiable case can qualify.
 
-**Repair direction:** scope events to the displayed run while retaining case events and the explicit-reload identity policy. Under healthy networking, the server's 300-second stream expiry/reopen limits the stale interval to about five minutes plus reconnect delay; manual refresh or relevant audit events can shorten it.
+**Current public-boundary proof:** A real admitted synthetic line ending with a full stop accepts its exact answer key. Removing only the final full stop, or wrapping the complete line in curly quotes, still anchors through public `verify_citations(rule=WHOLE_LINE)` and matches the matrix's expected tuple. Public `assert_admissible` nevertheless raises `QUALIFICATION_KEY_UNANSWERABLE` for both variants, with zero provider calls. Every word remains present; the current whole-line policy expressly allows these punctuation variations. **Repair direction:** reuse the authoritative matcher or make the precheck demonstrably permissive relative to it, preserving impossible-key rejection before spend. [Proof and accepted controls](/tmp/caos-r24-skills-deliverable-styMwZ/report.md).
 
-### MAX-20 — A transient startup failure permanently disables the in-process worker
+## Owner-recorded limitation
 
-**WARNING; skills review priority P2.** [worker.py:490](/Users/ericguei/Documents/caos-databricks/caos/graph/worker.py:490), [serve.py:65](/Users/ericguei/Documents/caos-databricks/caos/serve.py:65).
+### R24-L01 — Raw usage normalization remains under D39's record-only decision
 
-start_in_process is called once and returns None on transient configuration/database failures. The API then starts separately, with no worker-start retry. A probe followed the real serve ordering, injected one failed initial worker connection, then used real successful database connections and the API lifespan. Health returned ready/store OK/workers ABSENT while work stayed QUEUED. A subsequent manual worker configuration succeeded, establishing a temporary dependency failure. Reconnect logic inside an already-running worker cannot help when no thread was created.
+[Current host usage check](/Users/ericguei/Documents/caos-databricks/caos/models.py:237) receives counts after the adapter normalizes them. The initial real-SDK/in-memory-transport proof accepted boolean, numeric-string and integral-float counts as integers; missing/null and negative counts refused. Conservative reservations held, with no overspend or released-budget bypass demonstrated.
 
-**Repair direction:** retry transient startup failures with bounded shutdown handling, or fail required-worker startup so the platform restarts it. API readiness remaining separate from worker health is an accepted design and is not itself the finding.
-
-### MAX-21 — The provider retry sequence can outlast the lease and duplicate billing
-
-**WARNING; skills review priority P2.** [models.py:148](/Users/ericguei/Documents/caos-databricks/caos/models.py:148), [600-second lease:27](/Users/ericguei/Documents/caos-databricks/caos/store/work.py:27), [240-second call timeout:30](/Users/ericguei/Documents/caos-databricks/caos/provider.py:30).
-
-Three calls and two waits of up to 20 seconds can exceed the 600-second lease without renewal. A logical-time probe used two 230-second 429 responses plus waits, followed by a third call ending at second 730. A replacement worker claimed at simulated second 601 through real database/runtime code. Both CP-0 attempts were billed; only the replacement's artifact was accepted. Each call fit its individual timeout. No long wall-clock wait or paid invocation occurred.
-
-**Repair direction:** bound the whole retry operation against the lease with settlement margin, or renew/revalidate ownership throughout it. This needs late 429s and overlapping workers. Exactly-once acceptance and conservative reservation accounting held; no budget bypass was shown.
-
-### MAX-22 — Deployment prerequisites omit the store schema's CREATE privilege
-
-**WARNING; conditional skills review priority P2.** [DEPLOYMENT.md:12](/Users/ericguei/Documents/caos-databricks/docs/DEPLOYMENT.md:12), [store bookkeeping:173](/Users/ericguei/Documents/caos-databricks/caos/store/__init__.py:173), [platform fixture:79](/Users/ericguei/Documents/caos-databricks/tests/platform_app.py:79).
-
-Database CONNECT/CREATE does not grant CREATE within an existing public schema. If the app role has only the documented database grants and no writable default schema, startup's unqualified store table creation fails. A restricted temporary PostgreSQL 17 role reproduced SQLSTATE 42501; adding CREATE on public allowed all 27 migrations. The ordinary boot fixture uses an administrator and misses this condition. Current Apps docs describe database grants; the Autoscaling tutorial separately grants schema privileges. [Apps resource grants](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/lakebase), [custom-app schema setup](https://docs.databricks.com/aws/en/oltp/projects/tutorial-databricks-apps-autoscaling).
-
-**Repair direction:** arrange/document the writable store schema and check startup with the declared app-role privileges. Live Lakebase ACL defaults were not inspected; already-writable deployments are unaffected.
+The merged [D39 decision](/Users/ericguei/Documents/caos-databricks/docs/rebuild/decisions.md:263) explicitly records N34 only while retaining D7's adapter. The adapter bytes and relevant host behavior remain unchanged by source comparison. This is not repaired, but the owner's disposition removes it from the actionable/blocking findings in this rerun. No current raw-transport probe was repeated. [Original evidence](/tmp/caos-r24-model.0jFjvY/adversarial-model-report.md); [current disposition](/tmp/caos-r24-skills-model.oHVTNQ/current-merge-reconciliation-9b.md).
 
 ## Notes
 
-### MAX-N01 — The UUID-parser guard scans a nonexistent directory
+### R24-N01 — Credential-mint ownership ends before a timed-out helper finishes
 
-**NOTE; New Hire.** [test_api_routes.py:1306](/Users/ericguei/Documents/caos-databricks/tests/test_api_routes.py:1306) searches server/api rather than caos/api. The scan visits zero files and passes vacuously. Point it at the current package and assert a nonempty scan. No current UUID authorization/parser bypass was established.
+[Mint timeout](/Users/ericguei/Documents/caos-databricks/caos/store/lakebase.py:178); [lock release](/Users/ericguei/Documents/caos-databricks/caos/store/lakebase.py:138). After timeout, the caller releases `_MINTING` while its daemon helper remains alive. After the failure-cache interval, another caller can create a second helper. Two event-controlled calls with short scaled deadlines demonstrated overlap on the merged code; both helpers were then released and joined, leaving no surviving helper. The installed [SDK OAuth call](https://github.com/databricks/databricks-sdk-py/blob/v0.140.0/databricks/sdk/oauth.py) has no request timeout. F113 repairs live-token waiters, but not this previously noted helper-lifetime residual. Retain ownership until completion or bound the underlying transport. No load/exhaustion or request-pool outage was demonstrated. [Current bounded evidence](/tmp/caos-r24-store-9b-TAxPxo/report.md).
 
-### MAX-N02 — The manual bundle-run example omits required variable values
+### R24-N02 — Missing sync snapshots are mistaken for stand-in state ownership
 
-**NOTE; New Hire.** [DEPLOYMENT.md:55](/Users/ericguei/Documents/caos-databricks/docs/DEPLOYMENT.md:55). Values supplied with --var during deployment are not persisted as defaults for the subsequent CLI invocation. The documented standalone bundle run lacks required values unless the operator separately supplies them through the environment or an override file. The enterprise wrapper works. State the manual command's variable prerequisites.
+[State cleanup](/Users/ericguei/Documents/caos-databricks/tests/workspace_stub.py:685). `all(...)` over an empty host set is true, allowing cleanup to remove local target state without positive loopback provenance. Real CLI `bundle summary` can produce this state: it downloads `resources.json` without a sync snapshot. The guard then deletes it without refusing. A subsequent summary re-downloaded the state, kept identical app/permission IDs and left remote resources unchanged. This is a recoverable local-cache/refusal-contract defect, not authoritative-state or remote-resource loss. Require positive provenance before deletion. [Evidence and recovery countercheck](/var/folders/81/bwblpst93lb6wb3lwrk8k6800000gn/T/caos-r24-adversarial-deploy-otvktxp7/report.md).
 
-### MAX-N03 — Provider charge precision differs from validated price precision
+### R24-N03 — Qualification CLI default arithmetic runs before input validation
 
-**NOTE; skills model review.** [models.py:71](/Users/ericguei/Documents/caos-databricks/caos/models.py:71), [pricing.py:75](/Users/ericguei/Documents/caos-databricks/caos/pricing.py:75).
+[Default ceiling calculation](/Users/ericguei/Documents/caos-databricks/scripts/qualify.py:370); [typed boundary](/Users/ericguei/Documents/caos-databricks/scripts/qualify.py:442). With no explicit run ceiling, an empty case manifest raises `DivisionByZero`; `--ceiling Infinity` raises `InvalidOperation`. Actual subprocesses exited 1 with raw Decimal errors, while a valid set/ceiling with absent configuration used the intended typed exit 2. The failures precede provider configuration, database creation and spend. Validate nonempty cases and finite ceilings before division/quantization. This is a local operator-experience note, not lost paid evidence or a budget bypass. [Evidence](/tmp/caos-r24-deliverable.c6cpcQ/report.md).
 
-Price validation permits precision up to 1,000 digits with inexact arithmetic trapped, while charge multiplication uses precision 60 without that trap. An accepted one-token input price of 1 + 10^-70 produced charge 1, losing 10^-70 units. This is a contrived 71-significant-digit input, not material rounding for ordinary configured prices or a demonstrated budget bypass. Align the supported precision contract or reject excess precision.
+## Reconciliation with the replaced list
 
-## Skills and verification
+These dispositions concern the earlier concrete triggers on the new tree. A backlog entry is neither an implemented repair nor permission to weaken a contract. The independent historical FP report below remains a historical record, with its original counts and conclusions.
 
-The adversarial pass used [Adversarial Reviewer](/Users/ericguei/.codex/skills/adversarial-reviewer/SKILL.md). The second pass applied [Codebase Design](/Users/ericguei/.codex/skills/codebase-design/SKILL.md), [Code Reviewer](/Users/ericguei/.codex/skills/code-reviewer/SKILL.md) and its applicable Python/TypeScript guidance, with [Senior Fullstack](/Users/ericguei/.codex/skills/senior-fullstack/SKILL.md), [Senior Backend](/Users/ericguei/.codex/skills/senior-backend/SKILL.md), [Senior ML Engineer](/Users/ericguei/.codex/skills/senior-ml-engineer/SKILL.md), [Senior DevOps](/Users/ericguei/.codex/skills/senior-devops/SKILL.md), and [Dimensional Analysis](/Users/ericguei/.codex/skills/dimensional-analysis/SKILL.md) where relevant.
+| Prior item | Current disposition |
+|---|---|
+| MAX-01 | Original transient-refusal key rotation repaired by F145; current command/caller tests passed. This rerun did not repeat the store-level ambiguous-commit injection. |
+| MAX-02 | Original health-probe duplication/starvation repaired by F121; bounded live-thread controls passed. |
+| MAX-03, MAX-15 | Rejected credential invalidation and SDK expiry-field handling repaired by F113; current tests and installed SDK shapes checked. No live cloud credential mint/revocation. |
+| MAX-04 | Refused-call cancellation repaired by F115; real local worker/race tests retain the bill and terminate work correctly. |
+| MAX-05 | F117 repairs absent/null and impossible counts; raw-type coercion remains R24-L01/N34, now explicitly record-only under D39. |
+| MAX-06 | Retained-all-matches anchoring repaired by F128; focused equivalence and ambiguity-stop tests passed. R24-09 is the separate body-presence matcher. |
+| MAX-07 | Standalone preflight import repaired by F137; actual documented subprocess test passed without ambient PYTHONPATH. |
+| MAX-08, MAX-17 | Closed/buffered/truncated deployment evidence cases repaired by F136; targeted E6/E9 tests passed. Real Apps proxy liveness remains untested. |
+| MAX-09 | Autoscaling deployment choice remains explicitly deferred, R24-14/F146/N45. |
+| MAX-10, MAX-11, MAX-12 | Post-run refused qualification snapshot, multi-case capture and release-pack identity repaired and revalidated against local DB/real readers. |
+| MAX-13 | Original Ruff-ignore, duplicate coverage threshold and narrowed-source examples now refuse. CI execution conditions remain R24-11; F167–F171 close the other named N46 omissions; the CI-condition residual was rechecked on the merge. |
+| MAX-14 | CONNECTING now clears the live flag; current SSE tests passed. F195 also adds the server retry frame; live proxy behavior remains outside this audit. |
+| MAX-16 | Finite Retry-After normalization contains NaN; current model checks passed. |
+| MAX-18 | Reopened-run preview then Start/Retry works after F145. F195 now supplies the approval fingerprint in the read; the frontend still does not consume it on reopening, so the broader no-preview handoff remains deferred. |
+| MAX-19 | Case-only navigation now subscribes to the displayed run; current mounted refresh/tail tests passed. The separate DB event-tail comparison was not rerun. |
+| MAX-20 | The original pre-thread startup failure is repaired by F114; native failure transformed inside schema verification remains R24-05. |
+| MAX-21 | F116 repairs the old per-try deadline multiplication/730-second scenario. R24-08 is the narrower remaining late-send gap; no new lease-overrun/double-billing scenario was demonstrated. |
+| MAX-22 | Public-schema CREATE is now an explicit prerequisite; restricted-role actual process boot passed and the missing-schema-grant countercase refused. |
+| MAX-N01, MAX-N02, MAX-N03 | Correct UUID scan path, complete manual bundle variables and shared exact charge context are repaired and checked. R24-10 concerns another Decimal projection path. |
 
-Databricks review used the repository's [Core](/Users/ericguei/Documents/caos-databricks/.claude/skills/databricks-core/SKILL.md), [Apps Python](/Users/ericguei/Documents/caos-databricks/.claude/skills/databricks-apps-python/SKILL.md), [Lakebase](/Users/ericguei/Documents/caos-databricks/.claude/skills/databricks-lakebase/SKILL.md), [Python SDK](/Users/ericguei/Documents/caos-databricks/.claude/skills/databricks-python-sdk/SKILL.md), [Model Serving](/Users/ericguei/Documents/caos-databricks/.claude/skills/databricks-model-serving/SKILL.md) and [DABs](/Users/ericguei/Documents/caos-databricks/.claude/skills/databricks-dabs/SKILL.md) skills and relevant references. Current official documentation and installed SDK shapes took precedence over stale examples. Python 3.13 with uv.lock, bundle app config.env, and support for existing Provisioned resources were counterchecked and excluded as findings. [Apps dependencies](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/dependencies), [bundle resources](https://docs.databricks.com/aws/en/dev-tools/bundles/resources).
+The current deliverable pass revalidated duplicate-signature replay, qualification store/evidence binding, superseded-revision refusals, historical receipt provenance, new render/package reads and portable-package controls. It kept accepted latest-signer, legacy rendering and negative-CFO/parity policies. New F225 optional-field digest tagging, F226 reviewer/evidence binding and D44/F236 tolerance/CFO contracts are implemented and checked; their old omissions are not retained.
 
-| Scoped assignment | Verification result |
-| --- | --- |
-| [Adversarial API/identity](/private/var/folders/81/bwblpst93lb6wb3lwrk8k6800000gn/T/caos-api-audit-max-kb3pcmcu/first-pass-api-report.md) | 54 existing cases completed successfully; 2 Python and 2 mounted frontend counterexamples passed. |
-| [Adversarial store/graph](/tmp/caos-store-audit-03tuWT/report.md) | 52 passed, 1 live-provider case deselected; bounded credential, cancellation and SDK-expiry probes. |
-| [Adversarial model/methodology/evidence](/tmp/caos-audit-model-3plulse7/report.md) | 72 passed; 1 explicitly excluded direct SDK-construction test after a stalled discovery attempt; bounded transport/citation probes. |
-| [Adversarial deployment/stand-ins](/var/folders/81/bwblpst93lb6wb3lwrk8k6800000gn/T/caos-deploy-astra-audit-bp_z3qfc/report.md) | 18 passed; real CLI 1.17.0 validate/deploy/run succeeded for both dev and prod against loopback. Each uploaded 572 files including 28 frontend distribution files; both shipping checks passed. |
-| [Adversarial deliverables/qualification/calculators/gates](/var/folders/81/bwblpst93lb6wb3lwrk8k6800000gn/T/caos-max-adversarial-deliverable-xl05s9gz/REPORT.md) | 243 pure/package/loader checks and 25 selected database cases passed; nine scripted harness calls in disposable-database counterexamples. |
-| [Skills API/identity/fullstack](/tmp/caos-api-skills-audit-VQqIe1/report.md) | 154 existing checks passed; 4 mounted workflow and 1 database stream counterexamples passed. |
-| [Skills store/graph](/tmp/caos-max-skills-store/report.md) | 49 passed, 1 deselected; real startup/retry-lease probes with simulated transport/time. |
-| [Skills model/methodology/evidence](/tmp/caos-max-skills-model/report.md) | 116 passed, 5 database-dependent skips, 1 explicit direct SDK-construction exclusion; independently corroborated all three model findings. |
-| [Skills deployment/stand-ins](/var/folders/81/bwblpst93lb6wb3lwrk8k6800000gn/T/caos-skills-deploy-audit-dsa0g1_u/report.md) | 21 passed; restricted-role schema probe failed then succeeded as described in MAX-22; temporary role/database cleanup verified. |
-| [Skills deliverables/qualification/calculators/gates](/tmp/caos-max-skills-deliverable/report.md) | 349 passed, zero failures/skips/deselections; four calculator scale transformations with 276 monetary comparisons passed, ratios unchanged and Decimal context isolated. No new finding beyond corroborating MAX-10/11/12. |
-| Coordinator | Ruff lint passed; formatting check passed for 341 files; mypy passed for 340 source files. Five read-only gate scripts passed. Focused gate tests: 75 passed, 39 database-dependent skips. |
+The merge also changes the disposition of older notes: F185/F220 add native immutability triggers, while separating the runtime role from schema ownership remains an enterprise prerequisite; F208 implements specified hidden-text markings, with additional visibility cases still listed as unobserved; F187 adds the stopped-worker state, and current recovery tests close N21's queued-cancel cleanup gap. D39 explicitly records N25/N34 and verdict revocation only, and closes N42 even though its backlog wording lags. N47's real-CLI-to-recorded-process integration remains open; F248 separately addresses stand-in OAuth. None of those statuses is substituted for live platform evidence.
 
-Key installed versions used for the reproductions: Databricks SDK 0.140.0, databricks-langchain 0.20.0, OpenAI client 3.18.0, langchain-core 1.6.4, Databricks CLI 1.17.0 and PostgreSQL 17.11.
+## Method, skills and verification
 
-Counts overlap across assignments and must not be added as unique coverage. Counterexample checks pass when they reproduce a defect. The five coordinator scripts were check_gate_config, check_tested, io_budget --assert, check_vocabulary and check_icm. Python checks used no coverage output, no pytest cache and no bytecode writes; database tests used disposable UUID databases on the existing local test server. CLI state and all probe files stayed outside the repository.
+The five adversarial assignments applied [adversarial-reviewer](/Users/ericguei/.codex/skills/adversarial-reviewer/SKILL.md) in Saboteur, New Hire and Security Auditor passes. The separate engineering assignments used [codebase-design](/Users/ericguei/.codex/skills/codebase-design/SKILL.md), the available library equivalent of the requested code-design example, and [code-reviewer](/Users/ericguei/.codex/skills/code-reviewer/SKILL.md) with relevant language rules. Specialist and Databricks skills were chosen for the actual scope. No finding was invented to satisfy a persona quota. Independent corroboration using another reviewer's probe is identified as such and is not counted as a second execution or an automatic severity promotion.
 
-This was not a full CI or coverage run, a live workspace deployment, paid provider qualification, live grant/token-revocation test, or memory-exhaustion test. The direct SDK-construction discovery stall was not reported as a product failure or a passing check. Actual Apps proxy behavior, enterprise ACLs and live model quality remain unverified. Heuristic scanner alerts were investigated as leads; fixture credentials, parameterized SQL matches, scores and estimated coverage were not promoted to findings.
+| Assignment / full evidence report (original snapshot unless stated) | Fresh verification and relevant skills |
+|---|---|
+| [Adversarial API / identity](/tmp/caos-r24-api-AAEe9s/report.md) | 56 targeted backend tests passed, 3 deselected; 3 disposable-DB API probes passed; 98 existing mounted frontend tests passed and 2 new regression assertions failed as expected. |
+| [Adversarial store / graph](/tmp/caos-r24-store-BaP6Zk/report.md) | 38 selected tests passed; bounded real-DB startup and paid-answer recovery probes plus a two-helper credential control. |
+| [Adversarial model / methodology / evidence](/tmp/caos-r24-model.0jFjvY/adversarial-model-report.md) | 204 tests passed, 2 explicitly excluded; real installed SDK adapters on an in-memory transport and small deterministic validator/Decimal/deadline probes. |
+| [Adversarial deployment / stand-ins](/var/folders/81/bwblpst93lb6wb3lwrk8k6800000gn/T/caos-r24-adversarial-deploy-otvktxp7/report.md) | 24 selected tests passed, 17 deselected; real CLI 1.17.0 dev/prod validation and prod deployment/run passed locally; 586-file shipping check passed. Profile and state-recovery counterchecks used two loopback servers. |
+| [Adversarial deliverable / qualification / calculators / gates](/tmp/caos-r24-deliverable.c6cpcQ/report.md) | 212 tests passed (13 qualification and 199 deliverable/calculator/package/parity), no skips; copied-tree gate mutations and actual CLI input-boundary controls. |
+| [Engineering API / identity](/tmp/caos-r24-skills-api-Tpujcq/report.md) | senior-fullstack; Databricks Core, Apps authorization and Python SDK. 12 backend tests passed, 1 DB-dependent identity check skipped; 61 existing frontend tests passed, 3 new regression assertions failed as expected; accepted CP-1 and host forecast data fed through real API conversions and mounted components. |
+| [Engineering store / graph](/tmp/caos-r24-skills-store-WyJ49d/report.md) | senior-backend; Databricks Core, Lakebase/connectivity and Python SDK. 30 tests passed; a new real PostgreSQL checkpoint-failure recovery control completed three nodes with exactly three calls/bills. First-pass defects corroborated by independent trace, without repeating those two probes. |
+| [Engineering model / methodology / evidence](/tmp/caos-r24-skills-model.oHVTNQ/library-skills-model-report.md) | senior-ml-engineer; Databricks Core, Model Serving and Python SDK. 106 tests passed, 3 deselected; small packing/map/citation witness and focused model/evidence controls. |
+| [Engineering deployment / stand-ins](/tmp/caos-r24-skills-deploy-rcad9xdn/report.md) | senior-devops; Databricks Core, DABs, Apps resources/deployment, Lakebase and Python SDK. 5 focused original-snapshot tests passed; real hermetic CLI group-name controls, with current-merge follow-up in the same report. |
+| [Engineering deliverable / qualification / calculators / gates — merged 9b snapshot](/tmp/caos-r24-skills-deliverable-styMwZ/report.md) | senior-qa and manual dimensional-analysis; Databricks Core, SDK, Apps and Model Serving contracts. 222 tests passed (221 regressions plus a public-boundary counterexample); detached ZIP checks, dimension/context controls and current CI/CLI counterchecks. |
 
-The tree changed in another session during review. The second model pass checked the current 52 KiB invocation contract and credited its fail-closed tradeoff. Finding-bearing source was hash-checked by each scope. The coordinator rechecked all 33 linked repository files against the initial snapshot on 2026-09-23 at 11:38 UTC: none changed. The current invocation implementation and its tests also match the second model reviewer's recorded hashes. Concurrent OpenRouter qualification work was not treated as a completed live qualification or fully certified here.
+Pass counts are not additive: selections overlap across reviewers. Tests that assert the broken current behavior can pass while proving a defect. The five intentionally failing frontend regression assertions establish the listed navigation/display problems; ordinary existing tests passed. The one skipped identity test supplies no fresh coverage of that behavior. Early scratch harness/path/assertion errors were corrected and retained in evidence logs; they are not counted as product failures.
 
-## Reconciliation with this reviewer's previous list
+On the original snapshot, the coordinator separately ran Ruff lint and format checks (346 files), mypy (345 source files), frontend lint, all five read-only project gates and 82 gate tests. All passed. The five gates were configuration integrity, tested-name coverage, I/O budget (29 route modules), vocabulary and ICM integrity. The original frontend dependencies were stale and failed typechecking; an external HEAD snapshot received the committed lockfile's cached dependencies with lifecycle scripts disabled. Typechecking and a production build then passed, exporting 25 routes. The 708 kB chunk warning is the already-recorded N65 limitation, not a new finding. No original dependency tree or lockfile was changed.
 
-Only the reported scenarios and inspected callers are classified below; a repaired historical scenario does not certify all neighboring behavior.
+Verification used targeted local runs, not a full CI/coverage claim. It did not include a live workspace, actual authentication provider, paid model, real Apps proxy, live Lakebase grants/failover, exhaustive hidden-PDF validation, or resource-exhaustion work. Mounted UI probes used jsdom and controlled network responses, not Chromium end-to-end against the deployed application. Platform statements were checked against installed SDK/CLI source and cited primary documentation; local stand-ins do not establish live platform qualification.
 
-| Previous identifiers | Current disposition |
-| --- | --- |
-| AR-01, AR-03 | Broken-connection rollback/recovery and retry exponent overflow are repaired in current worker paths and regressions. MAX-20 concerns the separate pre-thread startup phase. |
-| AR-02 | Worker/checkpoint invalidation repaired; API/health omission remains as MAX-03. |
-| AR-04, AR-12 | Negative identity cache bounds and malformed SCIM group parsing repaired and tested. |
-| AR-05 | HTML/single-frame false success repaired; two already-buffered closed frames still pass as MAX-08. |
-| AR-06, AR-17 | Endpoint/price consistency and JSON smoke parsing repaired. MAX-07 concerns the standalone import path. |
-| AR-07 | Effective gate override gap revalidated as MAX-13. |
-| AR-08 | Renderer-numbering change explicitly declined in current decisions/parity contract; no production renderer caller found. Excluded from current open findings. |
-| AR-09, AR-23, AR-25 | Loader materialization/type bounds and contradictory scalar-key preflight checks repaired in reviewed paths. |
-| AR-10 | Current code recovers the winning receipt after a duplicate-verdict rollback. The historical two-connection race was not independently repeated by the coordinator. |
-| AR-11 | Never-started probe permanent stall repaired; MAX-02 covers the replacement generation's accounting. |
-| AR-13 | Successful final-call cancellation repaired; ordinary validation refusal remains MAX-04. |
-| AR-14 | Negative usage rejected; raw usage normalized before validation remains MAX-05. |
-| AR-15, AR-16 | Unsupported reasoning setting rejected; non-finite PDF deadline normalized. |
-| AR-18 | Multi-case ceilings/admission repaired; resulting capture still omits later attempts, MAX-11. |
-| AR-19 | Offline/unreadable-response key retention repaired; typed ambiguous-commit refusal remains MAX-01. |
-| AR-20 | Checkpoint setup serialization repaired; concurrent setup checks passed. |
-| AR-21 | Autoscaling deployment gap remains MAX-09. |
-| AR-22 | JSON identity repaired; Markdown residual remains MAX-12. |
-| AR-24 | Original single-call freshness threshold repaired; aggregate retry duration is part of MAX-21 rather than a duplicate finding. |
-| R2-E1 | Qualification/package shipping omission repaired; both real-CLI loopback uploaded trees passed current shipping checks. |
-| R2-N1 | Vacuous UUID test remains MAX-N01. |
-| R2-N2 | Register comparison fields now included through dataclass projection; distinct multi-run capture issue is MAX-11. |
+One model/evidence review was interrupted by the service's cybersecurity restriction and resumed only permitted source/fixture correctness work under standard safeguards. No blocked operation was repeated, no workaround or model switch was used, and uncompleted live/stress coverage remains outside the claim. The direct SDK-discovery test that could contact/discover external configuration and the large transport allocation test were explicitly excluded. PDF child verification used only an external no-bytecode harness adjustment, with source unchanged.
 
-The first deliverable pass also counterchecked the repaired refusal scoring, release coverage, signed evidence re-derivation, filing proof, frozen receipt, subject binding and portable figure-verification paths. Latest-signer receipt semantics and legacy negative-CFO refusal are documented accepted choices and were not reopened. The final calculator review found no additional confirmed arithmetic or unit-scaling defect: annual/quarterly money values scaled consistently between millions, thousands and units, ratios stayed unchanged, and caller Decimal settings did not change canonical output. Dimensional Analysis was applied as a bounded manual audit with external probes; its repository-annotation pipeline was not run.
+All probes, copied-tree mutations, caches, installs, builds and detailed evidence stayed outside the repository. The coordinator captured 1,588 original file hashes and then all 1,593 tracked files at the external merge. No auditor changed repository code, tests, configuration, vendor files, dependencies or other audit reports. The authorized final write replaces only this findings document; the independent historical FP content inside the details block is preserved byte for byte. The pre-existing `.impeccable/` and intermittently present local settings were untouched. No audit commit or external deployment was made. The existing documented local test-Postgres service was started for these checks and remains running; disposable test databases were removed.
 
-The most direct normal-use blocker is reopening an already approved run (MAX-18). Worker startup recovery, aggregate retry/lease timing, citation-search bounds and the qualification/deployment evidence gaps warrant repair or explicit acceptance before release. This report records findings and repair directions; it applies no fixes.
+### Current-merge follow-up
 
+The workspace changed externally from `01d4c579` to `9b591af` while the reviews ran: 499 files changed. Original evidence was preserved with its revision. The final deliverable skills assignment switched to the new frozen snapshot; other retained findings received bounded revalidation as below. This does not claim that all 499 changed files received two new full audits.
+
+| Current 9b follow-up | Result and limits |
+|---|---|
+| [API/identity/display](/tmp/caos-r24-api-delta-wFIe8s/delta-report.md) | All five findings persist: 3 DB research-route checks passed, 5 mounted regression assertions reproduced four UI findings, 10 current identity/edge tests passed and 1 DB-dependent check explicitly skipped. No additional verified identity defect. |
+| [Model/methodology/evidence](/tmp/caos-r24-skills-model.oHVTNQ/current-merge-reconciliation-9b.md) | 3 small checks passed: packing-2/WHOLE_LINE map disagreement, CP-DR helper/filter composition and public Decimal-cell reading. Deadline and body-copying findings are current-source corroboration using the versioned original proofs; neither resource nor timing probes were repeated. N34 moved to the owner-recorded limitation. |
+| [Deployment](/tmp/caos-r24-skills-deploy-rcad9xdn/report.md) | Profile redirection, unknown-cache provenance and comma-group failure rechecked with hermetic loopback CLI/fixtures. N45/N47 source dispositions confirmed; no new full deployment/shipping or live platform claim. |
+| [Store/graph](/tmp/caos-r24-store-9b-TAxPxo/report.md) | Both native-DB findings reproduced on 9b; 20 selected changed-contract tests passed with no skips, and four bounded probes exited 0. Checkpoint recovery completed three nodes with three calls/bills; two credential helpers were joined. All temporary fixture databases were removed. |
+| [Deliverable/calculator/qualification](/tmp/caos-r24-skills-deliverable-styMwZ/report.md) | Full assigned scope reviewed on frozen 9b; 222 selected tests passed and the new ZIP/normalization findings proved. Changed owner decisions and current repairs were reconciled. |
+
+Current coordinator checks also passed: Ruff lint/format (349 files), mypy (348 source files), frontend lint/typecheck, five project gates (30 route modules), 104 gate tests across the completed selections, and a production frontend build exporting 25 routes. Initial Git-aware checks on the archive export lacked Git metadata: lint and one history-dependent gate test were rerun successfully after attaching a matching external index/commit. This setup issue is not a product finding; the other 103 gate tests had already passed. The 708 kB bundle warning remains. No full CI, coverage or live qualification result is claimed for either snapshot.
 
 ---
 
 ## Preserved independent historical review
 
-The following FP section was written by another session against an older tree. It is retained verbatim to preserve that independent work, including its historical counts and conclusions. It is not the current findings list or an assertion that all FP items remain open. The MAX list and reconciliation above state this rerun's verified results.
+The independent focused pass below is retained verbatim from the earlier snapshot. Its findings, counts and source locations are historical; the current list and reconciliation above supersede this reviewer's prior MAX list.
 
 <details>
 <summary>Independent focused pass from the earlier snapshot — historical record</summary>
