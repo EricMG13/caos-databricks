@@ -687,7 +687,11 @@ def _prepared_run(url: str, case_id: str, headers: dict[str, str]) -> _Prepared:
     run_id = str(run.get("run_id", ""))
     base = f"/api/v1/cases/{case_id}/runs/{run_id}"
     status, pinned = _json_call(
-        url, "POST", f"{base}/input", headers, {"subject": MODEL_CALL_SUBJECT}
+        url,
+        "POST",
+        f"{base}/input",
+        headers,
+        {"subject": MODEL_CALL_SUBJECT, "research": None},
     )
     if status not in (200, 201):
         return _Prepared(False, "POST .../input", status, run_id)
