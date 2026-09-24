@@ -6,6 +6,7 @@
 import { useEffect, useId, useState } from "react";
 import { toFraction, type Box } from "./geometry";
 import { OFFLINE_WORDING, UNAVAILABLE_WORDING, fetchPage, type PageStatus } from "@/app/transport";
+import { words } from "@/chrome/compose";
 import { useModalA11y } from "@/ds/use-modal-a11y";
 import type { CitationView, PageDocument } from "@/wire/v1";
 import { Button } from "@/components/ui/button";
@@ -17,12 +18,28 @@ const place = (box: Box) => ({
   height: `${box.height * 100}%`,
 });
 
+/** Why a line is not visible on the rendered page, in the reader's words
+    (N27). A reason the host adds later reads as its own words until it is
+    named here, so a new one is shown, never dropped. */
+const HIDDEN: Record<string, string> = {
+  render_mode_3: "drawn invisible (render mode 3)",
+  near_background: "the colour of its background",
+  under_2pt: "under 2 pt",
+  optional_content_off: "on a layer switched off",
+  painted_over: "painted over",
+};
+const hiddenWords = (reasons: readonly string[]) =>
+  reasons.map((reason) => HIDDEN[reason] ?? words(reason)).join(", ");
+
 function TextLayer({ page, fact }: { page: PageDocument; fact: CitationView }) {
   const { frame, lines } = page.body;
   const width = frame.x1 - frame.x0;
   const height = frame.y1 - frame.y0;
   const highlights = fact.rects.flatMap((rect) => toFraction(rect, frame) ?? []);
   const outside = fact.rects.length - highlights.length;
+  // Only the lines the layer places: the note says they are outlined above.
+  const hidden = lines.filter((line) => line.hidden.length > 0 && toFraction(line, frame) !== null);
+  const reasons = [...new Set(hidden.flatMap((line) => line.hidden))];
   return (
     <>
       <div
@@ -40,6 +57,12 @@ function TextLayer({ page, fact }: { page: PageDocument; fact: CitationView }) {
             <span
               key={index}
               data-page-line
+              data-hidden={line.hidden.length ? line.hidden.join(" ") : undefined}
+              title={
+                line.hidden.length
+                  ? `Not visible on the page: ${hiddenWords(line.hidden)}`
+                  : undefined
+              }
               style={{
                 ...place(box),
                 position: "absolute",
@@ -51,6 +74,12 @@ function TextLayer({ page, fact }: { page: PageDocument; fact: CitationView }) {
               }}
             >
               {line.text}
+              {line.hidden.length ? (
+                <span className="sr-only">
+                  {" "}
+                  (not visible on the page: {hiddenWords(line.hidden)})
+                </span>
+              ) : null}
             </span>
           );
         })}
@@ -58,6 +87,24 @@ function TextLayer({ page, fact }: { page: PageDocument; fact: CitationView }) {
           <div key={index} className="bbox" data-highlight aria-hidden="true" style={place(box)} />
         ))}
       </div>
+      {hidden.length > 0 ? (
+        <div className="note limitation" data-hidden-lines>
+          <b>
+            {hidden.length === 1 ? "1 line" : `${hidden.length} lines`} on this page cannot be seen
+            on the rendered page
+          </b>{" "}
+          ({hiddenWords(reasons)}).{" "}
+          {hidden.length === 1
+            ? "It is outlined in dashes above: read it before you rely on this page."
+            : "They are outlined in dashes above: read them before you rely on this page."}
+        </div>
+      ) : null}
+      {fact.rects.length === 0 ? (
+        <div className="note" data-no-rects>
+          No rectangle is stored for this quote, so nothing on the page is highlighted; the quote is
+          below.
+        </div>
+      ) : null}
       {outside > 0 ? (
         <div className="note limitation" data-outside-frame>
           {outside} of {fact.rects.length} rectangles lie outside the page frame and are not drawn.

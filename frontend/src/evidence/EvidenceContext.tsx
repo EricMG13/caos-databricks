@@ -11,7 +11,10 @@ import { MetricPassport } from "./MetricPassport";
 import { SourceDrawer } from "./SourceDrawer";
 import { useVisibleSnapshot, type VisibleSnapshot } from "@/app/snapshot";
 import type { Citation, Passport } from "@/wire";
-import type { CitationView } from "@/wire/v1";
+import { shortDigest } from "@/ds/format";
+import type { CitationView, ReportDocument } from "@/wire/v1";
+
+type NarrativeFigure = NonNullable<ReportDocument["body"]["narrative"][number][number]["figure"]>;
 
 /** Which citation of which accepted record: `index` within its source facts. */
 export interface FactIdentity {
@@ -53,8 +56,36 @@ interface Open<T> {
   opener: HTMLElement;
 }
 
+/** A saved narrative's figure as the drawer reads a citation (N59). It names
+    its document, source, page and quote but stores no rectangle and no file
+    name, so it claims none: the drawer says nothing is highlighted, and the
+    heading names the document by its digest. */
+function figureFact(figure: NarrativeFigure): CitationView {
+  return {
+    document_sha256: figure.document_sha256,
+    source_id: figure.source_id,
+    filename: `${figure.route_node_id} source ${shortDigest(figure.document_sha256)}`,
+    page: figure.page,
+    matched_text: figure.matched_text,
+    rects: [],
+    withdrawn_at: null,
+  };
+}
+
 function resolveFact(snapshot: VisibleSnapshot, identity: FactIdentity): CitationView | null {
   const body = snapshot.document.body;
+  if ("narrative" in body) {
+    const figure = body.narrative
+      .flat()
+      .find(
+        ({ figure }) =>
+          figure?.record_sha256 === identity.record_sha256 &&
+          figure.citation_index === identity.index &&
+          figure.source_id === identity.source_id &&
+          figure.page === identity.page,
+      )?.figure;
+    return figure ? figureFact(figure) : null;
+  }
   if (!("handoffs" in body)) return null;
   for (const handoff of body.handoffs) {
     if (handoff.record_sha256 !== identity.record_sha256) continue;

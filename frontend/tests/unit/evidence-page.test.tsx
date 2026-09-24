@@ -235,6 +235,39 @@ describe("the evidence drawer", () => {
     expect(lines()).toHaveLength(1);
   });
 
+  test("a line the rendered page does not show is marked with every reason the host names (N27)", async () => {
+    pageAnswer = () => {
+      const doc = pageDoc();
+      doc["body"].lines[1].hidden = ["render_mode_3", "near_background"];
+      doc["body"].lines[2].hidden = ["under_2pt"];
+      return { status: 200, body: doc };
+    };
+    await mount(`/analysis/?case=${CASE}&tab=rn-cp-0`);
+    await openFirstFact();
+    const marked = [...lines()].filter((line) => line.hasAttribute("data-hidden"));
+    expect(marked.map((line) => line.getAttribute("data-hidden"))).toEqual([
+      "render_mode_3 near_background",
+      "under_2pt",
+    ]);
+    // Told, not only drawn: a screen reader hears it on the line itself.
+    expect(marked[0]).toHaveTextContent(
+      "not visible on the page: drawn invisible (render mode 3), the colour of its background",
+    );
+    expect(lines()[0]).not.toHaveAttribute("data-hidden");
+    const note = dialog()!.querySelector("[data-hidden-lines]")!;
+    expect(note).toHaveTextContent("2 lines on this page cannot be seen on the rendered page");
+    expect(note).toHaveTextContent(
+      "drawn invisible (render mode 3), the colour of its background, under 2 pt",
+    );
+  });
+
+  test("a page with nothing hidden carries no hidden-text note", async () => {
+    await mount(`/analysis/?case=${CASE}&tab=rn-cp-0`);
+    await openFirstFact();
+    expect(dialog()!.querySelector("[data-hidden-lines]")).toBeNull();
+    expect(dialog()!.querySelector("[data-no-rects]")).toBeNull();
+  });
+
   test("test_the_drawer_reads_the_visible_snapshot_not_the_pending_one", async () => {
     await mount(`/analysis/?case=${CASE}&tab=rn-cp-0`);
     await openFirstFact();
@@ -250,5 +283,43 @@ describe("the evidence drawer", () => {
     expect(document.querySelector("[data-surface-state='stale']")).not.toBeNull();
     expect(dialog()).toHaveTextContent(quote);
     expect(lines()).toHaveLength(3);
+  });
+});
+
+describe("a narrative figure (N59)", () => {
+  const RUN_B = "00000000-0000-4000-8000-0000000000b2";
+  const REVISION = "00000000-0000-4000-8000-0000000000c3";
+  const FIGURE_SOURCE = "00000000-0000-4000-8000-0000000000a1";
+  const FIGURE_PAGE = `/api/v1/cases/${CASE}/runs/${RUN_B}/sources/${FIGURE_SOURCE}/pages/7`;
+
+  test("a committee figure's chip opens its source page, claiming no rectangle", async () => {
+    sectionBody = () => JSON.parse(text("../../fixtures/committee-v1.json"));
+    pageAnswer = () => {
+      const doc = pageDoc();
+      Object.assign(doc["body"], {
+        run_id: RUN_B,
+        source_id: FIGURE_SOURCE,
+        page: 7,
+        document_sha256: "d".repeat(64),
+      });
+      return { status: 200, body: doc };
+    };
+    render(
+      <MemoryRouter initialEntries={[`/committee/?case=${CASE}&run=${RUN_B}&revision=${REVISION}`]}>
+        <Workspace section="committee" />
+      </MemoryRouter>,
+    );
+    await settle();
+    const chip = screen.getByRole("button", { name: "Evidence CP-1 p.7: Coverage 2.1x" });
+    expect(chip).toHaveAttribute("aria-expanded", "false");
+    act(() => fireEvent.click(chip));
+    await settle();
+    expect(urls).toContain(FIGURE_PAGE);
+    expect(chip).toHaveAttribute("aria-expanded", "true");
+    expect(dialog()).toHaveTextContent("CP-1 source dddddddd…dddd · page 7");
+    expect(lines()).toHaveLength(3);
+    expect(dialog()!.querySelectorAll("[data-highlight]")).toHaveLength(0);
+    expect(dialog()!.querySelector("[data-no-rects]")).not.toBeNull();
+    expect(dialog()).toHaveTextContent("Coverage 2.1x");
   });
 });

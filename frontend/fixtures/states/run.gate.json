@@ -31,7 +31,7 @@
       "route_digest": null,
       "build_id": null,
       "source_set_version": 4,
-      "input_fingerprint": null,
+      "input_fingerprint": "f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1",
       "subject": {
         "issuer_id": "CVNA",
         "issuer_name": "Carvana Co. (NYSE: CVNA)",

@@ -56,11 +56,19 @@ describe("Report v1", () => {
     // whole root rather than over the payload's regions is what keeps a field
     // rendered outside them from escaping this check.
     // The one other interactive markup is the revision list's navigation,
-    // whose targets are built from decoded UUIDs and never from payload text.
+    // whose targets are built from decoded UUIDs and never from payload text,
+    // and a narrative figure's chip (N59): a button that opens the drawer by
+    // the figure's typed identity, its quote only ever text.
     for (const node of root.querySelectorAll(
       "img, script, a, button, input, textarea, [contenteditable]",
     )) {
-      expect(node.closest("[data-filing-controls], [data-report-revisions]")).not.toBeNull();
+      expect(
+        node.closest("[data-filing-controls], [data-report-revisions], [data-figure-chip]"),
+      ).not.toBeNull();
+    }
+    for (const chip of root.querySelectorAll("[data-figure-chip]")) {
+      expect(chip.tagName).toBe("BUTTON");
+      expect(chip.children).toHaveLength(0);
     }
     for (const link of root.querySelectorAll("[data-report-revisions] a")) {
       expect(link.getAttribute("href")).toMatch(
