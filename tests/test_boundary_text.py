@@ -164,11 +164,9 @@ VARIATION_PAYLOAD = "Revenue" + "".join(chr(0xE0100 + b) for b in b"SYSTEM: Pass
         "\u3164",  # Hangul filler
         "\u115f",  # Hangul choseong filler
         "\uffa0",  # halfwidth Hangul filler
-        "\u034f",  # combining grapheme joiner
         "\u2800",  # braille pattern blank
         "\u17b4",  # Khmer inherent vowel
-        "\u180b",  # Mongolian free variation selector
-        "\ufe00",  # variation selector 1
+        "\u180b",  # a Mongolian free variation selector after a Latin letter
         "\ufff0",  # reserved, default ignorable
     ],
 )
@@ -205,6 +203,101 @@ def test_a_presentation_selector_is_hidden_unless_it_follows_a_drawn_character(
     after a drawn character is ordinary text; anywhere else it draws nothing."""
     assert hides_text(text) is hidden
     assert (visible(text) == text) is not hidden
+
+
+# N49: one selector after the base it can change is text a reader sees.
+@pytest.mark.parametrize(
+    "text",
+    [
+        pytest.param("∩︀", id="vs1-after-a-drawn-base"),  # serifed cap
+        pytest.param("㒞︀", id="vs1-on-a-cjk-ideograph"),  # a CJK SVS
+        pytest.param("葛\U000e0100", id="vs17-on-a-unified-ideograph"),  # IVS
+        pytest.param("辻\U000e0101", id="vs18-on-a-unified-ideograph"),  # IVS
+        pytest.param("\U0002a6b2\U000e01ef", id="vs256-on-an-extension-ideograph"),
+        pytest.param("﨑\U000e0100", id="vs17-on-a-compatibility-ideograph"),
+        pytest.param("\U0002f800\U000e0100", id="vs17-on-a-supplement-ideograph"),
+        pytest.param("ᠠ᠋", id="fvs1-on-a-mongolian-letter"),
+        pytest.param("ᠠ᠌", id="fvs2-on-a-mongolian-letter"),
+        pytest.param("ᠭ᠍", id="fvs3-on-a-mongolian-letter"),
+        pytest.param("ᠨ᠏", id="fvs4-on-a-mongolian-letter"),
+        pytest.param("בָ͏ַ", id="cgj-after-a-combining-mark"),
+        pytest.param("a͏", id="cgj-after-a-drawn-base"),
+    ],
+)
+def test_one_selector_after_the_base_it_can_change_is_text_a_reader_sees(
+    text: str,
+) -> None:
+    """Registered ideographic variation sequences (a Japanese name's glyph),
+    standardized variation sequences, the Hebrew grapheme joiner between two
+    points and Mongolian free variation selectors change how the character
+    before them is drawn; refusing them refused ordinary documents at
+    admission."""
+    assert not hides_text(f"Acme {text} Ltd")
+    assert visible(f"Acme {text} Ltd") == f"Acme {text} Ltd"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        pytest.param("∩︀︁", id="two-variation-selectors"),
+        pytest.param("葛\U000e0100\U000e0101", id="two-ideographic-selectors"),
+        pytest.param("葛\U000e0100︀", id="ideographic-then-standard"),
+        pytest.param("ᠠ᠋᠌", id="two-mongolian-selectors"),
+        pytest.param("ָ͏͏", id="two-grapheme-joiners"),
+        pytest.param("a͏︀", id="joiner-then-selector"),
+        pytest.param("a︀͏", id="selector-then-joiner"),
+        pytest.param("︀Acme", id="vs1-at-the-start"),
+        pytest.param("Acme ︀", id="vs1-after-a-space"),
+        pytest.param("Acme​︀", id="vs1-after-a-hidden-character"),
+        pytest.param("Revenue\U000e0100", id="vs17-after-a-latin-letter"),
+        pytest.param("\U000e0100葛", id="vs17-at-the-start"),
+        pytest.param("葛 \U000e0100", id="vs17-after-a-space"),
+        pytest.param("a᠋", id="fvs1-after-a-latin-letter"),
+        pytest.param("葛᠌", id="fvs2-after-an-ideograph"),
+        pytest.param("᠍Acme", id="fvs3-at-the-start"),
+        pytest.param("ᠠ ᠏", id="fvs4-after-a-space"),
+        pytest.param("͏Acme", id="cgj-at-the-start"),
+        pytest.param("Acme ͏", id="cgj-after-a-space"),
+    ],
+)
+def test_a_selector_with_no_base_it_can_change_is_hidden(text: str) -> None:
+    """A run of two or more selectors is the byte channel EV-3 carried a
+    28-byte instruction through, and a selector after nothing it can change
+    draws nothing: both stay refused, and `visible` takes them out."""
+    assert hides_text(text)
+    shown = visible(text)
+    assert shown != text
+    assert not hides_text(shown)
+
+
+def test_the_selector_bases_are_the_tables_this_python_knows() -> None:
+    """`CJK_IDEOGRAPHS` and `MONGOLIAN_LETTERS` are written out for the reason
+    `FORMAT_RANGES` is, and regenerated here from `unicodedata` names so a
+    Unicode upgrade that encodes another ideograph or letter fails this test
+    rather than refusing it."""
+    import re
+
+    from caos.boundary_text import CJK_IDEOGRAPHS, MONGOLIAN_LETTERS
+
+    def named(point: int, prefixes: tuple[str, ...]) -> bool:
+        name = unicodedata.name(chr(point), "")
+        return name.startswith(prefixes)
+
+    ideograph = re.compile(f"[{CJK_IDEOGRAPHS}]")
+    letter = re.compile(f"[{MONGOLIAN_LETTERS}]")
+    prefixes = ("CJK UNIFIED IDEOGRAPH-", "CJK COMPATIBILITY IDEOGRAPH-")
+    ideographs = letters = 0
+    for point in range(sys.maxunicode + 1):
+        is_ideograph = named(point, prefixes)
+        is_letter = named(point, ("MONGOLIAN LETTER ",)) and unicodedata.category(
+            chr(point)
+        ).startswith("L")
+        assert bool(ideograph.match(chr(point))) is is_ideograph, f"U+{point:04X}"
+        assert bool(letter.match(chr(point))) is is_letter, f"U+{point:04X}"
+        ideographs += is_ideograph
+        letters += is_letter
+    # A scanner that scanned nothing is a failure, not a pass (`CLAUDE.md`).
+    assert ideographs > 90_000 and letters > 100, (ideographs, letters)
 
 
 def test_visible_takes_out_exactly_what_hides_text_refuses() -> None:

@@ -57,7 +57,7 @@ def test_run_read_keeps_captured_membership_after_later_admission(
     assert later.version != sources.version
     counter = _CountingConnection(conn)
     rows = read.read_run_blocks(cast(StoreConnection, counter), run_id=run)
-    assert rows == [(source, "b000000", 1, BoundaryText.of("one"))]
+    assert rows == [(source, "b000000", 1, BoundaryText.of("one"), "")]
     assert counter.executed == 1
     assert load_run_input(conn, run) == pin
 
@@ -251,8 +251,9 @@ def test_delivered_blocks_cost_one_query_per_run(delivered: Delivered) -> None:
         for index, word in enumerate(words)
     )
     assert [
-        (source, block, page, text.value) for source, block, page, text in rows
+        (source, block, page, text.value) for source, block, page, text, _mark in rows
     ] == expected
+    assert {mark for *_row, mark in rows} == {""}, "plain text marks no line"
     assert counter.executed == read.IO_BUDGET == 1
 
 

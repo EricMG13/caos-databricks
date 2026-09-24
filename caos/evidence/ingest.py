@@ -26,10 +26,12 @@ from caos.boundary_text import DEFAULT_LIMIT, BoundaryText, hides_text
 from caos.digest import canonical_digest
 from caos.evidence.extract import (
     DEFAULT_LIMITS,
+    HIDDEN_MARKS,
     AdmissionLimits,
     Extractor,
     ExtractorDispatch,
     ExtractorIdentity,
+    MarkedToken,
     Token,
     dispatch_by_content,
 )
@@ -50,6 +52,17 @@ BLOCK_PREFIX = "b"
 # documents already admitted under this one -- whose rows are immutable and whose
 # stored citations name the ids they were given.
 GROUP_WIDTH = DEFAULT_LIMIT
+# How a line wider than `GROUP_WIDTH` is cut into blocks, recorded per source as
+# `source_extractions.format_version` (migration 0032) and carried by its
+# output digest. 1: at the width, inside a word if that is where it fell
+# (`line_groups`) -- every source admitted before CF-013. 2: between tokens only
+# (`token_groups`). Both write a line that fits as one block, byte for byte, so a
+# source whose lines all fit is recorded as 1 and keeps the digests every
+# earlier admission of it wrote. Format 2 is also the one that carries a line's
+# hidden-text mark (N27, migration 0033): a source with a mark is written as 2
+# whether or not a line was cut, and packing 2 cuts nothing that fits.
+PACKING_BY_WIDTH = 1
+PACKING_BY_TOKEN = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,6 +85,8 @@ class _Block:
     block_id: str
     page: int
     text: BoundaryText
+    # Why a reader of the rendered page may not see its line (N27), or "".
+    hidden: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,6 +106,8 @@ class _Packed:
     extractor_identity: str
     output_sha256: str
     extraction_sha256: str
+    # `PACKING_BY_WIDTH` or `PACKING_BY_TOKEN`: the row's `format_version`.
+    packing: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -305,34 +322,60 @@ def _refuse_hidden_text(blocks: list[_Block]) -> None:
         raise Refusal(RefusalCode.SOURCE_NOT_READABLE)
 
 
+def _refuse_unassigned(blocks: list[_Block]) -> None:
+    """Refuse a document carrying a code point this Python's Unicode does not
+    assign -- general category `Cn`, noncharacters included (N40).
+
+    Why: a line's length is measured on two Unicode tables. Admission cuts it
+    by its NFC length in Python, and anchoring re-measures a width-packed
+    source's split line in the database (`citations._group_counts` sums
+    Postgres's `length(normalize(text, NFC))`; packing 2 reads its numbering
+    back without measuring, CF-013). The normalization stability policy fixes
+    NFC for every *assigned* character, but a code point unassigned in one
+    table can be assigned, with compositions, in the other's newer version --
+    Unicode 16 adds compositions -- and the two would then disagree about a
+    line nobody changed. Refusing what Python does not assign keeps every
+    admitted character inside the table both sides share, whichever side
+    moves first.
+
+    What a future Postgres upgrade must check: `SELECT unicode_version()`
+    against `unicodedata.unidata_version` (both 15.1 on Postgres 17 and Python
+    3.13), and `test_the_store_and_the_host_agree_on_every_nfc_length` rerun.
+    A server newer than Python is covered here; one older than Python is not,
+    because a code point Python assigns and the server does not passes this
+    check and is normalised by one side only -- so neither a Postgres
+    downgrade nor a Python upgrade may leave the server's version behind.
+    Tokens admitted before this refusal were never asked, and a server version
+    that assigns one of their code points re-measures their split lines.
+
+    Read over the distinct characters of the non-ASCII blocks, so a document
+    costs one category lookup per character it uses, not per character.
+    """
+    used: set[str] = set()
+    for block in blocks:
+        if not block.text.value.isascii():
+            used.update(block.text.value)
+    if any(unicodedata.category(character) == "Cn" for character in used):
+        raise Refusal(RefusalCode.SOURCE_NOT_READABLE)
+
+
 def _prepare(document: Document, tokens: list[Token], identity: str) -> _Packed:
-    prepared: list[Token] = []
     try:
-        for token in tokens:
-            indices = (token.page, token.region_id, token.line_id)
-            coords = (token.x0, token.y0, token.x1, token.y1)
-            if any(type(i) is not int or not -(2**31) <= i < 2**31 for i in indices):
-                raise Refusal(RefusalCode.SOURCE_IDENTITY_INVALID)
-            if any(
-                type(c) not in (int, float) or not isfinite(c) or float(c) != c
-                for c in coords
-            ):
-                raise Refusal(RefusalCode.SOURCE_IDENTITY_INVALID)
-            if type(token.text) is not str:
-                raise Refusal(RefusalCode.SOURCE_IDENTITY_INVALID)
-            BoundaryText.of(token.text)
-            prepared.append(Token(token.text, *indices, *map(float, coords)))
+        prepared = [_prepared(token) for token in tokens]
     except (AttributeError, TypeError, ValueError, OverflowError):
         raise Refusal(RefusalCode.SOURCE_IDENTITY_INVALID) from None
-    blocks = _blocks(prepared)
+    blocks, packing = _blocks(prepared)
     _refuse_hidden_text(blocks)
+    _refuse_unassigned(blocks)
+    # The output's format is its packing, so the digest a pin captures binds
+    # how the blocks were cut. The extraction envelope around it -- document,
+    # identity, output digest -- is unchanged and keeps its own version 1,
+    # which `source_sets._valid_member` re-derives for every member.
     output = canonical_digest(
         {
-            "format_version": 1,
+            "format_version": packing,
             "tokens": [asdict(token) for token in prepared],
-            "blocks": [
-                [block.block_id, block.page, block.text.value] for block in blocks
-            ],
+            "blocks": [_block_record(block) for block in blocks],
         }
     )
     extraction = canonical_digest(
@@ -343,7 +386,38 @@ def _prepare(document: Document, tokens: list[Token], identity: str) -> _Packed:
             "output_sha256": output,
         }
     )
-    return _Packed(document, prepared, blocks, identity, output, extraction)
+    return _Packed(document, prepared, blocks, identity, output, extraction, packing)
+
+
+def _prepared(token: Token) -> Token:
+    """One extracted token, checked field by field and rebuilt, so what is
+    written is exactly what was checked -- a `MarkedToken` only when its line
+    carries a mark (N27), so an unmarked token's record is the one it always
+    was. Raises `TypeError` and friends for `_prepare` to reduce to a code."""
+    indices = (token.page, token.region_id, token.line_id)
+    coords = (token.x0, token.y0, token.x1, token.y1)
+    if any(type(i) is not int or not -(2**31) <= i < 2**31 for i in indices):
+        raise Refusal(RefusalCode.SOURCE_IDENTITY_INVALID)
+    if any(
+        type(c) not in (int, float) or not isfinite(c) or float(c) != c for c in coords
+    ):
+        raise Refusal(RefusalCode.SOURCE_IDENTITY_INVALID)
+    if type(token.text) is not str:
+        raise Refusal(RefusalCode.SOURCE_IDENTITY_INVALID)
+    BoundaryText.of(token.text)
+    (x0, y0, x1, y1) = map(float, coords)
+    hidden = token.hidden if isinstance(token, MarkedToken) else ""
+    if hidden == "":
+        return Token(token.text, *indices, x0, y0, x1, y1)
+    if hidden not in HIDDEN_MARKS:
+        raise Refusal(RefusalCode.SOURCE_IDENTITY_INVALID)
+    return MarkedToken(token.text, *indices, x0, y0, x1, y1, hidden)
+
+
+def _block_record(block: _Block) -> list[object]:
+    """A block as the output digest holds it: its mark only when it has one."""
+    record: list[object] = [block.block_id, block.page, block.text.value]
+    return [*record, block.hidden] if block.hidden else record
 
 
 def _require_case(conn: StoreConnection, case_id: UUID) -> None:
@@ -376,9 +450,10 @@ def _admit_one(
         "INSERT INTO source_extractions"
         " (source_id, format_version, extractor_identity,"
         " output_sha256, extraction_sha256)"
-        " VALUES (%s, 1, %s, %s, %s)",
+        " VALUES (%s, %s, %s, %s, %s)",
         (
             source_id,
+            packed.packing,
             packed.extractor_identity,
             packed.output_sha256,
             packed.extraction_sha256,
@@ -387,40 +462,49 @@ def _admit_one(
     return source_id
 
 
+# The column a mark is written to, named in a `COPY` only when there is one.
+_MARKED = {False: "", True: ", hidden"}
+
+
 def _store_tokens(conn: StoreConnection, source_id: UUID, tokens: list[Token]) -> None:
     """One COPY, so one statement carries the document.
 
     A row at a time cost a round trip and a seal check each: 100,000 tokens took
     13 s of a 14 s admission. `COPY` makes it one of each, which is also what
     the statement-level seal trigger (migration 0027) is counted by.
+
+    `hidden` (migration 0033) is named only for a document with a mark to
+    write, so an unmarked one is written with exactly the columns every
+    earlier admission wrote (`_MARKED`).
     """
+    marked = any(isinstance(token, MarkedToken) for token in tokens)
     with (
         conn.cursor() as cursor,
         cursor.copy(
-            "COPY source_tokens"
-            " (source_id, token_id, page, region_id, line_id, text, x0, y0, x1, y1)"
-            " FROM STDIN"
+            "COPY source_tokens (source_id, token_id, page, region_id, line_id,"
+            f" text, x0, y0, x1, y1{_MARKED[marked]}) FROM STDIN"
         ) as copy,
     ):
         for token_id, token in enumerate(tokens):
-            copy.write_row(
-                (
-                    source_id,
-                    token_id,
-                    token.page,
-                    token.region_id,
-                    token.line_id,
-                    token.text,
-                    token.x0,
-                    token.y0,
-                    token.x1,
-                    token.y1,
-                )
+            row = (
+                source_id,
+                token_id,
+                token.page,
+                token.region_id,
+                token.line_id,
+                token.text,
+                token.x0,
+                token.y0,
+                token.x1,
+                token.y1,
             )
+            mark = token.hidden if isinstance(token, MarkedToken) else None
+            copy.write_row((*row, mark) if marked else row)
 
 
-def _blocks(tokens: list[Token]) -> list[_Block]:
-    """One block per line while the line fits, its text across the boundary.
+def _blocks(tokens: list[Token]) -> tuple[list[_Block], int]:
+    """One block per line while the line fits, its text across the boundary,
+    and the packing that wrote them.
 
     `source_blocks.text` is pinned state, and CLAUDE.md's rule is that every
     string reaching pinned state carries `BoundaryText`. It was carried on the
@@ -430,46 +514,89 @@ def _blocks(tokens: list[Token]) -> list[_Block]:
     then refused at every read. A refusal here costs a pack; there it cost a
     pinned source no run can read.
 
-    A line past `GROUP_WIDTH` is split at the width rather than given a block of
-    its own (`SYSTEM_SPEC.md` section 5), because a block of its own is a block
-    the boundary refuses -- and refusing it refused the whole pack, so one wide
-    table row in a text export meant no document of it could be admitted at all.
+    A line past `GROUP_WIDTH` is split rather than given a block of its own
+    (`SYSTEM_SPEC.md` section 5), because a block of its own is a block the
+    boundary refuses -- and refusing it refused the whole pack, so one wide
+    table row in a text export meant no document of it could be admitted at
+    all. It is split between tokens (`token_groups`, CF-013), and a source with
+    such a line is `PACKING_BY_TOKEN`.
     """
     lines: dict[int, list[Token]] = {}
     for token in tokens:
         lines.setdefault(token.line_id, []).append(token)
     groups = {
-        line_id: line_groups(" ".join(token.text for token in line))
+        line_id: token_groups([token.text for token in line])
         for line_id, line in lines.items()
     }
+    marks = {line_id: _line_mark(line) for line_id, line in lines.items()}
     block_ids = block_ids_by_line({line_id: len(g) for line_id, g in groups.items()})
-
-    return [
+    blocks = [
         _Block(
             block_id=block_id,
             page=lines[line_id][0].page,
             text=BoundaryText.of(text),
+            hidden=marks[line_id],
         )
         for line_id in sorted(lines)
         for block_id, text in zip(block_ids[line_id], groups[line_id], strict=True)
     ]
+    written = any(len(group) > 1 for group in groups.values()) or any(marks.values())
+    return blocks, PACKING_BY_TOKEN if written else PACKING_BY_WIDTH
+
+
+def _line_mark(line: list[Token]) -> str:
+    """Why a reader of the rendered page may not see some of `line` (N27):
+    its tokens' reasons, sorted and joined by a comma, or ""."""
+    reasons = {
+        reason
+        for token in line
+        if isinstance(token, MarkedToken) and token.hidden
+        for reason in token.hidden.split(",")
+    }
+    return ",".join(sorted(reasons))
+
+
+def token_groups(words: Sequence[str]) -> list[str]:
+    """One line's blocks under `PACKING_BY_TOKEN`: its tokens, NFC, joined by
+    one space while they fit `GROUP_WIDTH`, and a new block begun at the token
+    that would not.
+
+    A block ends where the token index can break a quote (CF-013). Cut at the
+    width instead (`line_groups`), a block began and ended inside words, and a
+    module shown it as a line of its own and quoting it whole was refused
+    `CITATION_NOT_LOCATED`. A token is never wider than a block -- the
+    extractor cuts at `MAX_TOKEN_CHARS`, which is this width, and `_prepare`
+    holds every token to `BoundaryText` -- so every block is at most the
+    width. A line that fits is the one group `line_groups` makes of it, byte
+    for byte: nothing composes across the space between two tokens, so the
+    tokens' NFC joined is the joined line's NFC.
+    """
+    groups: list[list[str]] = []
+    width = 0
+    for word in words:
+        normal = unicodedata.normalize("NFC", word)
+        if groups and width + 1 + len(normal) <= GROUP_WIDTH:
+            groups[-1].append(normal)
+            width += 1 + len(normal)
+        else:
+            groups.append([normal])
+            width = len(normal)
+    return [" ".join(group) for group in groups]
 
 
 def line_groups(text: str) -> list[str]:
-    """One line's blocks: the whole line while it fits `GROUP_WIDTH`, chunks of
-    that width once it does not.
+    """One line's blocks under `PACKING_BY_WIDTH`: the whole line while it
+    fits `GROUP_WIDTH`, chunks of that width once it does not.
 
     Normalised before it is measured and cut, because the width is
     `BoundaryText`'s and `BoundaryText` measures what it has normalised. A line
     that fits is therefore the one group it has always been, byte for byte.
 
     A chunk cuts wherever the width falls, inside a word if that is where it
-    falls. Cutting at a token boundary instead would make the block count
-    depend on the tokens rather than on the width, and anchoring would have to
-    read every token's text back to learn it. Nothing reads a quote out of a
-    block -- `verify_citations` anchors in the token index -- so what a cut
-    costs is a word shown in two pieces to a module, on a line no document could
-    carry at all until now.
+    falls. No longer how admission packs (`token_groups`, CF-013): it is the
+    rule every source recorded as packing 1 was written under, which
+    `citations._group_counts` re-derives in the database when it numbers one
+    of their split lines.
     """
     normalised = unicodedata.normalize("NFC", text)
     if len(normalised) <= GROUP_WIDTH:
@@ -503,12 +630,16 @@ def block_ids_by_line(groups: Mapping[int, int]) -> dict[int, tuple[str, ...]]:
 
 def _store_blocks(conn: StoreConnection, source_id: UUID, blocks: list[_Block]) -> None:
     """By `COPY` for the same reason `_store_tokens` is: one statement, one seal
-    check. A block per line means a tenth of the rows, not a different shape."""
+    check. A block per line means a tenth of the rows, not a different shape,
+    and `hidden` is named only when a block has a mark to write."""
+    marked = any(block.hidden for block in blocks)
     with (
         conn.cursor() as cursor,
         cursor.copy(
-            "COPY source_blocks (source_id, block_id, page, text) FROM STDIN"
+            f"COPY source_blocks (source_id, block_id, page, text{_MARKED[marked]})"
+            " FROM STDIN"
         ) as copy,
     ):
         for block in blocks:
-            copy.write_row((source_id, block.block_id, block.page, block.text.value))
+            row = (source_id, block.block_id, block.page, block.text.value)
+            copy.write_row((*row, block.hidden or None) if marked else row)

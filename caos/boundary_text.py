@@ -54,24 +54,48 @@ FORMAT_RANGES = (
 # The code points Unicode itself says render as nothing -- Default_Ignorable_
 # Code_Point in DerivedCoreProperties (15.1) -- that are not `Cf` and so not in
 # the table above, and the braille blank, which is drawn as an empty cell (EV-3).
-# The variation selectors carry a byte each past one visible character, and the
-# tag block, the Hangul fillers, the combining grapheme joiner and the reserved
-# ranges show nothing at all: an approver's preview cannot show what they say.
+# The tag block, the Hangul fillers and the reserved ranges show nothing at
+# all: an approver's preview cannot show what they say. The selectors among the
+# default ignorables are below, because they are sometimes text.
 IGNORABLE_RANGES = (
-    "\u034f\u115f-\u1160\u17b4-\u17b5\u180b-\u180d\u180f\u2065\u2800\u3164"
-    "\ufe00-\ufe0d\uffa0\ufff0-\ufff8\U000e0000-\U000e0fff"
+    "\u115f-\u1160\u17b4-\u17b5\u2065\u2800\u3164"
+    "\uffa0\ufff0-\ufff8\U000e0000-\U000e00ff\U000e01f0-\U000e0fff"
 )
-# Text and emoji presentation, the two selectors ordinary text carries (the
-# warning sign drawn as an emoji is U+26A0 U+FE0F). Visible as a change to the
-# character before them, so one after a character that is drawn is kept, and
-# any other -- at the start, after a space, after another selector -- is hidden.
-PRESENTATION_SELECTORS = "\ufe0e\ufe0f"
+# The selectors, each visible only as a change to the character before it
+# (N49): a registered ideographic variation sequence is how a Japanese name
+# keeps its glyph, U+26A0 U+FE0F is the warning sign drawn as an emoji, and the
+# grapheme joiner keeps two Hebrew points in their written order. Exactly one is
+# kept after the base it can change; anywhere else -- at the start, after a
+# space or a hidden character, and after another selector -- it draws nothing,
+# and a run of them is the byte channel EV-3 carried an instruction through.
+# VS1-VS16, including text and emoji presentation, and the combining grapheme
+# joiner: after any character that is drawn, a combining mark included.
+VARIATION_SELECTORS = "\ufe00-\ufe0f"
+GRAPHEME_JOINER = "\u034f"
+# VS17-VS256, the Ideographic Variation Database's: after an ideograph only.
+IDEOGRAPHIC_SELECTORS = "\U000e0100-\U000e01ef"
+# FVS1-FVS4: after a Mongolian letter only.
+MONGOLIAN_SELECTORS = "\u180b-\u180d\u180f"
+# Their bases, written out for the reason `FORMAT_RANGES` is and regenerated
+# from `unicodedata` names by `tests/test_boundary_text.py`: every CJK unified
+# and compatibility ideograph, and every Mongolian letter.
+CJK_IDEOGRAPHS = (
+    "\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufa6d\ufa70-\ufad9\U00020000-\U0002a6df"
+    "\U0002a700-\U0002b739\U0002b740-\U0002b81d\U0002b820-\U0002cea1"
+    "\U0002ceb0-\U0002ebe0\U0002ebf0-\U0002ee5d\U0002f800-\U0002fa1d"
+    "\U00030000-\U0003134a\U00031350-\U000323af"
+)
+MONGOLIAN_LETTERS = "\u1820-\u1878\u1880-\u1884\u1887-\u18a8\u18aa"
+_ANY_BASE = f"{VARIATION_SELECTORS}{GRAPHEME_JOINER}"
+_SELECTORS = f"{_ANY_BASE}{IDEOGRAPHIC_SELECTORS}{MONGOLIAN_SELECTORS}"
 _HIDDEN_SET = f"{FORMAT_RANGES}{IGNORABLE_RANGES}"
-_NOT_DRAWN = f"{_HIDDEN_SET}{PRESENTATION_SELECTORS}\\s"
+_NOT_DRAWN = f"{_HIDDEN_SET}{_SELECTORS}\\s"
 _HIDDEN = re.compile(
     f"[{_HIDDEN_SET}]"
-    f"|[{PRESENTATION_SELECTORS}](?<=[{_NOT_DRAWN}][{PRESENTATION_SELECTORS}])"
-    f"|\\A[{PRESENTATION_SELECTORS}]"
+    f"|[{_ANY_BASE}](?<=[{_NOT_DRAWN}][{_ANY_BASE}])"
+    f"|\\A[{_ANY_BASE}]"
+    f"|[{IDEOGRAPHIC_SELECTORS}](?<![{CJK_IDEOGRAPHS}][{IDEOGRAPHIC_SELECTORS}])"
+    f"|[{MONGOLIAN_SELECTORS}](?<![{MONGOLIAN_LETTERS}][{MONGOLIAN_SELECTORS}])"
 )
 
 
@@ -88,9 +112,9 @@ def hides_text(text: str) -> bool:
     text a human approves is the text the model is given (AI-2).
 
     Every `Cf` but the three shaping characters, every other default-ignorable
-    code point and the braille blank (EV-3), and a presentation selector that
-    follows nothing drawn. ASCII carries none, so the common line costs one C
-    call.
+    code point and the braille blank (EV-3), and a selector that does not
+    follow the base it can change -- one of them after it is text, a second
+    never is (N49). ASCII carries none, so the common line costs one C call.
     """
     if text.isascii():
         return False
@@ -103,7 +127,7 @@ def visible(text: str) -> str:
     One expression serves both, so the host never shows text its own reader
     would refuse: `visible(text) == text` exactly when `hides_text(text)` is
     false, and `hides_text(visible(text))` is always false -- a selector kept
-    follows a drawn character, which nothing here removes (EV-5).
+    follows the base it changes, which nothing here removes (EV-5).
     """
     if text.isascii():
         return text

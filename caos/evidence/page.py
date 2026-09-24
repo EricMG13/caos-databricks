@@ -9,11 +9,11 @@ Its lines are the token index citations were anchored in, grouped by
 coordinates the tokens are stored in (invariant 11). No renderer draws the page.
 
 The frame says what those coordinates are, read from the digest-verified
-document under the stored extractor identity: a `caos.pdfminer` v2 row's
-rectangles are crop-relative with y down (§44.3), a v1 row's are pdfminer's
-layout space with y up (§44.4), and a `caos.plain-text` row's are the cells of
-its recorded fixed pitch. PDF frames come from the §47 child, and a crop that
-child has already answered for a document is remembered in process
+document under the stored extractor identity: a `caos.pdfminer` row's from v2
+on (`PDF_CROP_VERSIONS`) are crop-relative with y down (§44.3), a v1 row's are
+pdfminer's layout space with y up (§44.4), and a `caos.plain-text` row's are
+the cells of its recorded fixed pitch. PDF frames come from the §47 child, and
+a crop that child has already answered for a document is remembered in process
 (`FRAME_CACHE_SIZE`): it is derived from a digest-addressed document and a page
 number, so it cannot go stale, and the child costs an interpreter each time.
 
@@ -43,7 +43,7 @@ import threading
 import time
 from collections import OrderedDict
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, cast
 from uuid import UUID
 
 import psycopg
@@ -53,11 +53,12 @@ from caos.api.wire import (
     PAGE_MAX,
     QUOTE_CHARS,
     FrameView,
+    HiddenReason,
     PageBody,
     PageLine,
 )
 from caos.blobs import BlobStore
-from caos.evidence.extract import DEFAULT_LIMITS, AdmissionLimits
+from caos.evidence.extract import DEFAULT_LIMITS, HIDDEN_REASONS, AdmissionLimits
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
 
@@ -86,16 +87,21 @@ _PAGE_QUERY = (
     " AND members.extraction_sha256 = extraction.extraction_sha256)"
     " SELECT member.document_sha256, member.extractor_identity,"
     " left(line.text, %s), length(line.text) > %s,"
-    " line.x0, line.y0, line.x1, line.y1"
+    " line.x0, line.y0, line.x1, line.y1, line.hidden"
     " FROM member LEFT JOIN LATERAL (SELECT"
     " string_agg(t.text, ' ' ORDER BY t.token_id) AS text,"
     " min(t.x0) AS x0, min(t.y0) AS y0, max(t.x1) AS x1, max(t.y1) AS y1,"
+    " max(t.hidden) AS hidden,"
     " min(t.token_id) AS first FROM source_tokens AS t"
     " WHERE t.source_id = member.source_id AND t.page = %s"
     " GROUP BY t.region_id, t.line_id ORDER BY first LIMIT %s) AS line ON true"
     " ORDER BY line.first"
 )
 PDF_V2_COORDINATES = "crop-top-left-rotated-pt"
+# The `caos.pdfminer` versions whose rectangles are crop-relative with y down:
+# v2 introduced the convention, v3 cuts long runs within it (CF-072) and v4
+# marks the lines a reader may not see (N27).
+PDF_CROP_VERSIONS = frozenset({"2", "3", "4"})
 TEXT_COORDINATES = "cell-top-left-pt"
 
 
@@ -153,12 +159,31 @@ def read_page(  # noqa: PLR0913 -- the store, the blobs, one page's four ids, th
         page=page,
         frame=frame,
         lines=[
-            PageLine(text=row[2], x0=row[4], y0=row[5], x1=row[6], y1=row[7])
+            PageLine(
+                text=row[2],
+                x0=row[4],
+                y0=row[5],
+                x1=row[6],
+                y1=row[7],
+                hidden=_reasons(row[8]),
+            )
             for row in lines[:PAGE_LINES_MAX]
         ],
     )
     truncated = len(lines) > PAGE_LINES_MAX or any(row[3] for row in lines)
     return PageRead(body=body, truncated=truncated)
+
+
+def _reasons(mark: object) -> list[HiddenReason]:
+    """A line's stored mark (N27) as the reasons the page read names: none for
+    a line with nothing to note, or a row written before there were marks. A
+    mark this build does not name is the server's own row failing."""
+    if mark is None:
+        return []
+    reasons = str(mark).split(",")
+    if not all(reason in HIDDEN_REASONS for reason in reasons):
+        raise Refusal(RefusalCode.SOURCE_IDENTITY_INVALID)
+    return [cast(HiddenReason, reason) for reason in reasons]
 
 
 def _rows(conn: StoreConnection, ids: tuple[UUID, UUID, UUID, int]) -> list[Any]:
@@ -362,7 +387,7 @@ def _frame(
     pdf_v1 = name == "caos.pdfminer" and version == "1"
     pdf_v2 = (
         name == "caos.pdfminer"
-        and version == "2"
+        and version in PDF_CROP_VERSIONS
         and config.get("coordinates") == PDF_V2_COORDINATES
     )
     if not (pdf_v1 or pdf_v2):

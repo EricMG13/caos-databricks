@@ -18,6 +18,7 @@ dashes, a mangled extraction -- is not something a reader could quote either.
 from __future__ import annotations
 
 import json
+from itertools import pairwise
 from pathlib import Path
 from uuid import UUID
 
@@ -26,7 +27,12 @@ import pytest
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
 from caos.evidence.citations import anchor_citation
-from caos.evidence.extract import MAX_TOKEN_CHARS, PlainTextExtractor, Token
+from caos.evidence.extract import (
+    MAX_TOKEN_CHARS,
+    PlainTextExtractor,
+    Token,
+    nfc_pieces,
+)
 from caos.evidence.ingest import Document, admit_pack
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
@@ -164,3 +170,36 @@ def test_a_split_run_is_still_refused_for_what_the_boundary_actually_guards(
         )
 
     assert caught.value.code is RefusalCode.BOUNDARY_TEXT_INVALID
+
+
+@pytest.mark.parametrize(
+    "run",
+    [
+        pytest.param("x" * (MAX_TOKEN_CHARS * 2 + 7), id="ascii"),
+        pytest.param("\u2adc" * 3000, id="grows-under-nfc"),
+        pytest.param("e\u0301" * 3000, id="shrinks-under-nfc"),
+        # Hangul jamo NFC composes, then marks it cannot: the cut falls inside
+        # a combining sequence, which a slice of NFC text keeps as it is.
+        pytest.param("\u1100\u1161" * 3000 + "q\u0323\u0302" * 1000, id="mixed"),
+    ],
+)
+def test_the_pdf_cut_is_chosen_on_the_nfc_form(run: str) -> None:
+    """CF-073: `BoundaryText` measures a token's NFC, so the PDF extractor's
+    cut (`nfc_pieces`) chooses its points there. Every piece fits the limit
+    as measured, the pieces are the run's NFC exactly, and their spans tile
+    it; a run whose NFC fits is one piece, its own text as drawn."""
+    import unicodedata
+
+    normal = unicodedata.normalize("NFC", run)
+    pieces = nfc_pieces(run)
+
+    if len(normal) <= MAX_TOKEN_CHARS:
+        assert pieces == [(run, 0, len(normal), len(normal))]
+        return
+    assert "".join(text for text, *_span in pieces) == normal
+    assert all(
+        len(BoundaryText.of(text).value) <= MAX_TOKEN_CHARS for text, *_ in pieces
+    )
+    spans = [(start, end) for _text, start, end, _of in pieces]
+    assert spans[0][0] == 0 and spans[-1][1] == len(normal)
+    assert all(end == start for (_, end), (start, _) in pairwise(spans))

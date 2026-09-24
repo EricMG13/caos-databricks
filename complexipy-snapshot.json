@@ -50,16 +50,6 @@
     ]
   },
   {
-    "path": "caos/evidence/ingest.py",
-    "file_name": "ingest.py",
-    "functions": [
-      {
-        "name": "_prepare",
-        "complexity": 16
-      }
-    ]
-  },
-  {
     "path": "caos/evidence/pdf.py",
     "file_name": "pdf.py",
     "functions": [

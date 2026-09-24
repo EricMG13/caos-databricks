@@ -48,7 +48,7 @@ _RUN_BLOCKS_QUERY = (
     "SELECT inputs.case_id, inputs.source_version, inputs.source_fingerprint,"
     " members.source_id, members.document_sha256, members.extractor_identity,"
     " members.output_sha256, members.extraction_sha256,"
-    " blocks.block_id, blocks.page, blocks.text"
+    " blocks.block_id, blocks.page, blocks.text, blocks.hidden"
     " FROM runs AS run"
     " JOIN run_inputs AS inputs ON (inputs.run_id,inputs.case_id)"
     " = (run.run_id,run.case_id)"
@@ -57,8 +57,8 @@ _RUN_BLOCKS_QUERY = (
     " JOIN source_blocks AS blocks ON blocks.source_id = members.source_id"
     " WHERE run.run_id = %s"
     "), live AS ("
-    "SELECT captured.source_id, captured.block_id, captured.page, captured.text"
-    " FROM captured"
+    "SELECT captured.source_id, captured.block_id, captured.page, captured.text,"
+    " captured.hidden FROM captured"
     " JOIN source_set_versions AS versions"
     " ON (versions.case_id,versions.version,versions.fingerprint)"
     " = (captured.case_id,captured.source_version,captured.source_fingerprint)"
@@ -71,8 +71,8 @@ _RUN_BLOCKS_QUERY = (
     " AND captured.output_sha256 = extraction.output_sha256"
     " AND captured.extraction_sha256 = extraction.extraction_sha256"
     ")"
-    " SELECT live.source_id, live.block_id, live.page, live.text, totals.captured"
-    " FROM (SELECT count(*) AS captured FROM captured) AS totals"
+    " SELECT live.source_id, live.block_id, live.page, live.text, totals.captured,"
+    " live.hidden FROM (SELECT count(*) AS captured FROM captured) AS totals"
     " LEFT JOIN live ON true"
     " ORDER BY live.source_id, live.block_id"
 )
@@ -107,8 +107,10 @@ def read_block(conn: StoreConnection, *, source_id: UUID, block_id: str) -> Bloc
 
 def read_run_blocks(
     conn: StoreConnection, *, run_id: UUID
-) -> list[tuple[UUID, str, int, BoundaryText]]:
-    """Every block the run's pin captured, in `(source_id, block_id)` order.
+) -> list[tuple[UUID, str, int, BoundaryText, str]]:
+    """Every block the run's pin captured, in `(source_id, block_id)` order,
+    each with why a reader of the rendered page may not see its line (N27) --
+    empty when nothing is noted.
 
     One statement where the per-block reader was one statement per block: a pack
     of twenty thousand lines cost twenty thousand round trips under the case
@@ -146,8 +148,14 @@ def read_run_blocks(
         raise Refusal(RefusalCode.EVIDENCE_NOT_AVAILABLE) from None
     try:
         return [
-            (UUID(str(source)), str(block), int(page), BoundaryText.of(text))
-            for source, block, page, text, _ in live
+            (
+                UUID(str(source)),
+                str(block),
+                int(page),
+                BoundaryText.of(text),
+                str(hidden or ""),
+            )
+            for source, block, page, text, _, hidden in live
         ]
     except Refusal as refused:
         raise Refusal(refused.code) from None

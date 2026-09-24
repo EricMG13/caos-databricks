@@ -17,9 +17,10 @@ extractor implements the same protocol and nothing above this module changes.
 from __future__ import annotations
 
 import time
+import unicodedata
 from collections.abc import Iterator
 from dataclasses import dataclass
-from itertools import islice
+from itertools import combinations, islice
 from typing import Protocol
 
 from caos.boundary_text import DEFAULT_LIMIT as BOUNDARY_LIMIT
@@ -50,6 +51,33 @@ class Token:
     y0: float
     x1: float
     y1: float
+
+
+# Why a line's text may not be seen on the rendered page (N27): drawn in text
+# render mode 3 -- every OCR'd scan's text layer -- painted near the colour
+# behind it, or in glyphs under 2 pt. Such text is kept as evidence and its
+# line marked, never dropped.
+NEAR_BACKGROUND = "near_background"
+RENDER_MODE_3 = "render_mode_3"
+UNDER_2PT = "under_2pt"
+HIDDEN_REASONS = (NEAR_BACKGROUND, RENDER_MODE_3, UNDER_2PT)
+# Every mark a line can carry: its reasons, sorted and joined by a comma.
+HIDDEN_MARKS = frozenset(
+    ",".join(reasons)
+    for count in range(1, len(HIDDEN_REASONS) + 1)
+    for reasons in combinations(HIDDEN_REASONS, count)
+)
+
+
+@dataclass(frozen=True, slots=True)
+class MarkedToken(Token):
+    """A token, and why a reader of the rendered page may not see the line it
+    is on: one of `HIDDEN_MARKS`, or empty for a line with nothing to note.
+
+    A subclass rather than a field of `Token`, so an extractor that marks
+    nothing emits exactly the token it always has."""
+
+    hidden: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -149,15 +177,24 @@ class ExtractorDispatch(Protocol):
 # leading junk is still a PDF; past that it is not one any reader will open.
 PDF_HEADER = b"%PDF-"
 PDF_HEADER_WINDOW = 1024
+# And they look for the end-of-file marker in the last kilobyte, the same
+# implementation note's other half: what tells a PDF behind leading junk from
+# a text that merely mentions a header near its top (CF-074).
+PDF_EOF = b"%%EOF"
+PDF_EOF_WINDOW = 1024
 
 
 def dispatch_by_content(data: bytes) -> Extractor:
     """A PDF by its header, plain text otherwise -- never by its filename.
 
     A name is whatever the uploader typed; the bytes are what the extractor
-    will actually meet.
+    will actually meet. Bytes that begin with the header declare a PDF
+    (§44.6). A header further into the first kilobyte is a PDF's only when
+    the document also ends as one, so a memo naming `%PDF-1.7` in its first
+    lines is read as the text it is rather than refused as a broken PDF.
     """
-    if PDF_HEADER in data[:PDF_HEADER_WINDOW]:
+    at = data.find(PDF_HEADER, 0, PDF_HEADER_WINDOW)
+    if at == 0 or (at > 0 and PDF_EOF in data[-PDF_EOF_WINDOW:]):
         # Imported here: `pdf` imports this module, and plain-text admission
         # should not pay for pdfminer.
         from caos.evidence.pdf import PdfExtractor
@@ -284,6 +321,28 @@ def _bounded(run: str, start: int) -> Iterator[tuple[str, int]]:
         return
     for offset in range(0, len(run), MAX_TOKEN_CHARS):
         yield run[offset : offset + MAX_TOKEN_CHARS], start + offset
+
+
+def nfc_pieces(run: str) -> list[tuple[str, int, int, int]]:
+    """One whitespace run as the tokens `BoundaryText` can hold, each with the
+    span of the run's NFC form it covers: `(text, start, end, of)`.
+
+    The PDF extractor's cut (CF-072, CF-073). A run whose NFC fits
+    `MAX_TOKEN_CHARS` is one token, its own text as drawn. Past it the cut
+    points are chosen on the NFC form -- the form `BoundaryText` measures --
+    so a piece is never past the limit it is measured against, as a raw cut
+    can be: 3,000 U+2ADC fit a raw bound and are 6,000 code points in NFC.
+    `_bounded` still measures the raw run for the plain-text extractor, whose
+    identity names that rule and whose extraction goldens pin it.
+    """
+    normal = unicodedata.normalize("NFC", run)
+    size = len(normal)
+    if size <= MAX_TOKEN_CHARS:
+        return [(run, 0, size, size)]
+    return [
+        (normal[at : at + MAX_TOKEN_CHARS], at, min(at + MAX_TOKEN_CHARS, size), size)
+        for at in range(0, size, MAX_TOKEN_CHARS)
+    ]
 
 
 def _words(line: str) -> Iterator[tuple[str, int]]:

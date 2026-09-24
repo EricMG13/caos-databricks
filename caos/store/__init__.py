@@ -181,6 +181,16 @@ MIGRATIONS = (
         .with_name("0034_worker_stopped_state.sql")
         .read_text(encoding="utf-8"),
     ),
+    (
+        "0035_packing_by_token",
+        Path(__file__)
+        .with_name("0035_packing_by_token.sql")
+        .read_text(encoding="utf-8"),
+    ),
+    (
+        "0036_hidden_text",
+        Path(__file__).with_name("0036_hidden_text.sql").read_text(encoding="utf-8"),
+    ),
 )
 
 # One well-known lock, held for the applying transaction only, so two processes

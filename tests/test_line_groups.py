@@ -23,13 +23,18 @@ import pytest
 
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
+from caos.evidence import ingest
 from caos.evidence.citations import Citation, _line_blocks, verify_citations
+from caos.evidence.extract import Token
 from caos.evidence.ingest import (
     GROUP_WIDTH,
+    PACKING_BY_TOKEN,
+    PACKING_BY_WIDTH,
     Document,
     admit_pack,
     block_ids_by_line,
     line_groups,
+    token_groups,
 )
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
@@ -63,6 +68,40 @@ def _blocks(conn: StoreConnection, source_id: UUID) -> list[tuple[str, str]]:
     ]
 
 
+def _packing(conn: StoreConnection, source_id: UUID) -> int:
+    row = conn.execute(
+        "SELECT format_version FROM source_extractions WHERE source_id = %s",
+        (source_id,),
+    ).fetchone()
+    assert row is not None
+    return int(row[0])
+
+
+def _by_width(tokens: list[Token]) -> tuple[list[ingest._Block], int]:
+    """Admission's packing before CF-013, as every source it admitted holds it:
+    a wide line cut at `GROUP_WIDTH` wherever the width fell, recorded as
+    packing 1. What a test admits through it is an old stored source."""
+    lines: dict[int, list[Token]] = {}
+    for token in tokens:
+        lines.setdefault(token.line_id, []).append(token)
+    groups = {
+        line_id: line_groups(" ".join(token.text for token in line))
+        for line_id, line in lines.items()
+    }
+    ids = block_ids_by_line({line_id: len(g) for line_id, g in groups.items()})
+    blocks = [
+        ingest._Block(block_id, lines[line_id][0].page, BoundaryText.of(text))
+        for line_id in sorted(lines)
+        for block_id, text in zip(ids[line_id], groups[line_id], strict=True)
+    ]
+    return blocks, PACKING_BY_WIDTH
+
+
+@pytest.fixture
+def by_width(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(ingest, "_blocks", _by_width)
+
+
 def test_a_line_wider_than_the_group_is_split_rather_than_refusing_the_pack(
     case: tuple[StoreConnection, UUID], tmp_path: Path
 ) -> None:
@@ -77,7 +116,63 @@ def test_a_line_wider_than_the_group_is_split_rather_than_refusing_the_pack(
     assert all(len(text) <= GROUP_WIDTH for _id, text in blocks)
     # Three lines, and only the wide one is more than one block.
     assert len(blocks) == 4
-    assert "".join(text for _id, text in blocks[1:3]) == WIDE_LINE
+    assert " ".join(text for _id, text in blocks[1:3]) == WIDE_LINE
+
+
+def test_a_wide_line_is_cut_between_its_tokens_never_inside_one() -> None:
+    """CF-013: the width cut fell wherever the width fell, inside a word if
+    that is where it fell. A line is now cut only where the token index can
+    break a quote, and the space it is cut at is the one between two blocks."""
+    groups = token_groups(WIDE_WORDS)
+
+    assert len(groups) == 2
+    assert all(len(group) <= GROUP_WIDTH for group in groups)
+    assert [word for group in groups for word in group.split(" ")] == WIDE_WORDS
+    # A line that fits is the one group the width rule made of it, byte for byte.
+    assert token_groups(["Caf\u0065\u0301", "abcdefg"]) == line_groups(
+        "Caf\u0065\u0301 abcdefg"
+    )
+    # A token as wide as a block is a block of its own.
+    wide = "x" * GROUP_WIDTH
+    assert token_groups(["a", wide, "b"]) == ["a", wide, "b"]
+
+
+def test_each_block_of_a_split_line_can_be_quoted_whole(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> None:
+    """CF-013: a module is shown each block of a split line as a line of its
+    own, and a quote of one of them whole was refused `CITATION_NOT_LOCATED`
+    because the block began and ended inside words the token index does not
+    break. Cut between tokens, each block is a run of whole words, quotable on
+    the delivery of its line."""
+    conn, case_id = case
+    source_id = _admit(conn, case_id, tmp_path, DOCUMENT)
+    blocks = _blocks(conn, source_id)
+    line = frozenset(block_id for block_id, _ in blocks[1:3])
+
+    for _block_id, text in blocks[1:3]:
+        [anchored] = verify_citations(
+            conn,
+            delivered={source_id: line},
+            citations=[Citation(source_id, 1, text)],
+        )
+        assert anchored.bboxes
+    assert _packing(conn, source_id) == PACKING_BY_TOKEN
+    assert _line_blocks(conn, source_id, PACKING_BY_TOKEN) == block_ids_by_line(
+        {0: 1, 1: 2, 2: 1}
+    )
+
+
+def test_a_source_whose_lines_all_fit_keeps_packing_one(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> None:
+    """Both packings write a line that fits as one block, byte for byte, so a
+    source with no wide line is recorded as packing 1 -- its extraction and
+    output digests are the ones every earlier admission of it wrote."""
+    conn, case_id = case
+    source_id = _admit(conn, case_id, tmp_path, NARROW)
+
+    assert _packing(conn, source_id) == PACKING_BY_WIDTH
 
 
 def test_a_quote_crossing_a_group_boundary_needs_every_block_of_its_line(
@@ -142,7 +237,9 @@ def test_a_packing_that_disagrees_with_the_stored_blocks_refuses(
     source", names an act that cannot help a source that is live.
     """
     conn, case_id = case
+    monkeypatch.setattr(ingest, "_blocks", _by_width)
     source_id = _admit(conn, case_id, tmp_path, DOCUMENT)
+    monkeypatch.undo()
     # The rule this source was admitted under, moved: a quarter of the width
     # packs the wide line into more groups than admission wrote, so the
     # recomputed total no longer equals the stored count.
@@ -240,14 +337,16 @@ def _admission_numbering(
 
 
 def test_a_decomposed_line_is_packed_and_anchored_by_the_same_measure(
-    case: tuple[StoreConnection, UUID], tmp_path: Path
+    case: tuple[StoreConnection, UUID], tmp_path: Path, by_width: None
 ) -> None:
     """EV-1: admission cuts a line by its NFC length and anchoring read the
     stored, un-normalised length back. A decomposed line (what macOS writes)
     that fits one block in NFC and not raw made the totals disagree, and every
     citation of the source -- a pure-ASCII line's too -- refused
     `EVIDENCE_PACKING_MISMATCH`, for good: re-admission packs it the same way.
-    Both sides now measure NFC."""
+    Both sides now measure NFC. Held on a source packed by the width rule
+    (`by_width`), as every source admitted before CF-013 was: stored rows
+    keep verifying as recorded."""
     conn, case_id = case
     prefix = unicodedata.normalize("NFD", "\u00e9 " * 40)
     decomposed = prefix + _filler("Report", 4100 - len(prefix))
@@ -269,13 +368,14 @@ def test_a_decomposed_line_is_packed_and_anchored_by_the_same_measure(
 
 
 def test_a_line_that_shrinks_and_one_that_grows_keep_their_own_blocks(
-    case: tuple[StoreConnection, UUID], tmp_path: Path
+    case: tuple[StoreConnection, UUID], tmp_path: Path, by_width: None
 ) -> None:
     """EV-1's silent half: one line shrinks under NFC and the next grows (U+2ADC
     is a composition exclusion, one code point NFC writes as two), so the
     totals agreed, the guard passed, and each line was handed the other's
     blocks -- a quote on an undelivered half of a line was accepted and a
-    quote on a delivered line refused."""
+    quote on a delivered line refused. Held on a width-packed source, as the
+    test above is."""
     conn, case_id = case
     shrinks = _filler("Cafe\u0301", 4097)  # NFC 4,096: one block
     grows = _filler("\u2adc", 4096)  # NFC 4,097: two blocks
@@ -297,6 +397,80 @@ def test_a_line_that_shrinks_and_one_that_grows_keep_their_own_blocks(
         citations=[Citation(source_id, 1, "Caf\u00e9 abcdefghij")],
     )
     assert anchored.bboxes
+
+
+def _token_numbering(
+    conn: StoreConnection, source_id: UUID
+) -> dict[int, tuple[str, ...]]:
+    """What admission wrote under packing 2, recomputed from the stored tokens."""
+    lines: dict[int, list[str]] = {}
+    for line_id, text in conn.execute(
+        "SELECT line_id, text FROM source_tokens WHERE source_id = %s"
+        " ORDER BY token_id",
+        (source_id,),
+    ).fetchall():
+        lines.setdefault(int(line_id), []).append(str(text))
+    return block_ids_by_line(
+        {line_id: len(token_groups(words)) for line_id, words in lines.items()}
+    )
+
+
+def test_a_token_packed_line_that_shrinks_and_one_that_grows_keep_their_own_blocks(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> None:
+    """EV-1's shapes under packing 2. Its numbering is read back from the
+    stored blocks -- each block's space-separated pieces walked against each
+    line's tokens -- so no length is measured on either side's Unicode table,
+    and each line keeps the blocks admission wrote for it."""
+    conn, case_id = case
+    shrinks = _filler("Cafe\u0301", 4097)  # NFC 4,096: one block
+    grows = _filler("\u2adc", 4096)  # NFC 4,097: two blocks
+    source_id = _admit(
+        conn, case_id, tmp_path, (shrinks + "\n" + grows + "\n").encode()
+    )
+
+    assert _packing(conn, source_id) == PACKING_BY_TOKEN
+    numbering = _line_blocks(conn, source_id, PACKING_BY_TOKEN)
+    assert numbering == _token_numbering(conn, source_id)
+    assert sorted(numbering.values()) == [("b000000",), ("b000001", "b000002")]
+    with pytest.raises(Refusal, match=r"^CITATION_NOT_DELIVERED$"):
+        verify_citations(
+            conn,
+            delivered={source_id: frozenset({"b000002"})},
+            citations=[Citation(source_id, 1, "\u2adc abcdefghij")],
+        )
+    [anchored] = verify_citations(
+        conn,
+        delivered={source_id: frozenset({"b000000"})},
+        citations=[Citation(source_id, 1, "Caf\u00e9 abcdefghij")],
+    )
+    assert anchored.bboxes
+
+
+def test_a_token_packed_source_whose_blocks_no_longer_tile_its_lines_refuses(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> None:
+    """Packing 2 is read back from what admission wrote, so a store whose
+    blocks no longer tile its lines -- here one removed past migration 0027's
+    seal -- is not numbered by guesswork: `EVIDENCE_PACKING_MISMATCH`, the
+    host's own reading failing, for every citation of the source."""
+    conn, case_id = case
+    source_id = _admit(conn, case_id, tmp_path, DOCUMENT)
+    blocks = _blocks(conn, source_id)
+    with conn.transaction():
+        conn.execute("ALTER TABLE source_blocks DISABLE TRIGGER evidence_immutable")
+        conn.execute(
+            "DELETE FROM source_blocks WHERE source_id = %s AND block_id = %s",
+            (source_id, blocks[2][0]),
+        )
+        conn.execute("ALTER TABLE source_blocks ENABLE TRIGGER evidence_immutable")
+
+    with pytest.raises(Refusal, match=r"^EVIDENCE_PACKING_MISMATCH$"):
+        verify_citations(
+            conn,
+            delivered={source_id: frozenset({blocks[0][0]})},
+            citations=[Citation(source_id, 1, "Annual report of the issuer")],
+        )
 
 
 def test_the_store_and_the_host_agree_on_every_nfc_length(

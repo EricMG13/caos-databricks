@@ -1128,8 +1128,16 @@ class FrameView(BaseModel):
     y_axis: Literal["down", "up"]
 
 
+# Why a reader of the rendered page may not see a line's text (N27): drawn in
+# text render mode 3 (a scan's OCR layer), painted near the colour behind it,
+# or in glyphs under 2 pt. `caos.evidence.extract.HIDDEN_REASONS`, as the wire
+# names them; a line with nothing to note -- every line of a source extracted
+# before there were marks -- carries none.
+HiddenReason = Literal["near_background", "render_mode_3", "under_2pt"]
+
+
 class PageLine(BaseModel):
-    """One line of the token index: joined text and its union rectangle."""
+    """One line of the token index: joined text, union rectangle, hidden marks."""
 
     model_config = _CLOSED
 
@@ -1138,6 +1146,7 @@ class PageLine(BaseModel):
     y0: float
     x1: float
     y1: float
+    hidden: Annotated[list[HiddenReason], Field(max_length=3)]
 
 
 class PageBody(BaseModel):
