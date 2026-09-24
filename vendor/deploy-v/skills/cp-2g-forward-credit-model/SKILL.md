@@ -42,7 +42,7 @@ Advanced qualifiers stay command-accessible. Source/email/web/document/attachmen
 7. Subsequent event: flag date; never blend into period figures.
 8. Non-debt funding float: trend deposits/deferred revenue/supplier finance—not payables; Evidence→Risk Mechanic→Credit Implication.
 9. Show source vs normalized one-offs; label normalization+Analyst Judgement (a basis cell holds the value `analyst_judgment`). Never infer covenant capacity; absent inputs=`Not Calculable`.
-10. `committee_status`∈Committee Ready|Draft Only|Requires More Work|Insufficient Information|Restricted|Blocked. `qa_status` Restricted→score≤59 (band from the score: 40-59 Low, below 40 Insufficient Information); Blocked→≤39.
+10. `committee_status`∈Committee Ready|Draft Only|Requires More Work|Insufficient Information|Restricted|Blocked. `qa_status` follows the run's own status (canon D1 map): complete→Passed; with gaps or limitations→Restricted; Blocked→Blocked; never Not Reviewed. Restricted→score≤59 (band from the score: 40-59 Low, below 40 Insufficient Information); Blocked→≤39.
 
 ## Analytical depth — binding on every run
 
@@ -145,9 +145,10 @@ conclusions, never shorter reasoning or invented filler.
     - structured item
       - **case_sensitive**: False
       - **column**: case
+      - **match**: leading_word
       - **register_id**: T2H.3
       - **rule**: required_values
-      - **rule_id**: cp2g.requires_downside_case
+      - **rule_id**: cp2g.requires_base_and_downside_cases
       - **values**: base; downside
     - structured item
       - **columns**: assumption_id; driver; case; class; source

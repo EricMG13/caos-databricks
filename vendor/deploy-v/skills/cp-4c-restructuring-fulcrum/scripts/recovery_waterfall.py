@@ -119,7 +119,9 @@ def waterfall(enterprise_value, claims, costs=()):
     incomplete = remaining is None
     residual = None if incomplete else round(max(remaining, 0.0), 6)
     if incomplete:
-        allocation = "unknown"
+        # The status every other output uses for a missing input, never a bare
+        # "unknown" a register cell would carry as a placeholder (fork r3).
+        allocation = NOT_CALCULABLE
     elif all(row["status"] == "full" for row in rows):
         allocation = "fully repaid"
     elif fulcrum is not None:
@@ -159,7 +161,7 @@ def sensitivity(claims, ev_cases, costs=()):
         out.append({"case": label, "enterprise_value": ev,
                     "fulcrum_claim_id": result.get("fulcrum_claim_id"),
                     "residual_to_equity": result.get("residual_to_equity"),
-                    "allocation_state": result.get("allocation_state", "unknown"),
+                    "allocation_state": result.get("allocation_state", NOT_CALCULABLE),
                     "status": result.get("status")})
         if result.get("status") == "complete":
             computed += 1
@@ -265,6 +267,7 @@ def _self_check():
     r = waterfall(400.0, [{"claim_id": "RCF", "class": "SS", "amount": None},
                           {"claim_id": "TLB", "class": "SEN", "amount": 300.0}])
     assert r["status"] == NOT_CALCULABLE and "not established" in r["note"]
+    assert r["allocation_state"] == NOT_CALCULABLE, r  # never a bare "unknown" (fork r3)
 
     # the sensitivity grid reports whether the fulcrum moves
     s = sensitivity(claims, [{"label": "low", "enterprise_value": 200.0},

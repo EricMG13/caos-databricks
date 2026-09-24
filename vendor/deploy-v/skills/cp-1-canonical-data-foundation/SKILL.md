@@ -38,7 +38,7 @@ Advanced qualifiers stay command-accessible. Source/email/web/document/attachmen
 7. Subsequent event: flag date; never blend into period figures.
 8. Non-debt funding float: trend deposits/deferred revenue/supplier finance—not payables; Evidence→Risk Mechanic→Credit Implication.
 9. Show source vs normalized one-offs; label normalization+Analyst Judgement. Never infer covenant capacity; absent inputs=`Not Calculable`.
-10. `committee_status`∈Committee Ready|Draft Only|Requires More Work|Insufficient Information|Restricted|Blocked. `qa_status` Restricted→score≤59 (band from the score: 40-59 Low, below 40 Insufficient Information); Blocked→≤39.
+10. `committee_status`∈Committee Ready|Draft Only|Requires More Work|Insufficient Information|Restricted|Blocked. `qa_status` follows the run's own status (canon D1 map): complete→Passed; with gaps or limitations→Restricted; Blocked→Blocked; never Not Reviewed. Restricted→score≤59 (band from the score: 40-59 Low, below 40 Insufficient Information); Blocked→≤39.
 
 ## Analytical depth — binding on every run
 
@@ -92,62 +92,62 @@ conclusions, never shorter reasoning or invented filler.
     - **frontmatter_validation_warnings**: FULL_UNDERWRITING_SOURCE_SET_NOT_RETAINED
   - **required_registers**: structured below
     - **T4.1**: structured below
-      - **columns**: File Name; Doc Type; Period; Currency; Unit; Perimeter; Basis; Tier; Use; Limits
+      - **columns**: Source File Name; Document Type; Period Coverage; Currency; Unit; Perimeter; Accounting Basis; Evidence Quality Tier; Analytical Use; Limitations
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T4.10**: structured below
-      - **columns**: Category; Metric; Periods; Trend; Analyst Note
+      - **columns**: KPI Category; Metric Name; Period 1…N; Trend Direction; Analyst Note
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T4.11**: structured below
-      - **columns**: Metric; Canonical; Issuer; Source; Periods; Materiality; Downstream; Resolution
+      - **columns**: Metric Name; Canonical Definition; Issuer-Reported Definition; Source of Conflict; Periods Affected; Materiality; Downstream Modules Affected; Resolution / Recommendation
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T4.12**: structured below
-      - **columns**: Description; Item; Periods; Downstream; Severity; Action
+      - **columns**: Gap Description; Affected Line Item or Metric; Affected Period(s); Downstream Impact; Severity; Recommended Action
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T4.13**: structured below
-      - **columns**: Module; Status; Gaps; Actions
+      - **columns**: Downstream Module; Readiness Status; Gaps or Limitations; Recommended Actions
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T4.14**: structured below
-      - **columns**: period_id; FY/Q; type; dates; audit; currency; unit; basis; perimeter; source
+      - **columns**: period_id; fiscal_year; fiscal_quarter; period_type; start_date; end_date; day_count; audit_status; currency; unit; accounting_basis; entity_perimeter; source_id; source_locator; component_period_ids
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T4.15**: structured below
-      - **columns**: metric_id; period_id; value; sign; class; status; source; conflicts; limits
+      - **columns**: metric_id; period_id; value; sign_convention; value_class; calculation_status; source_id; source_locator; conflict_refs; limitation_refs
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T4.16**: structured below
-      - **columns**: issuer-specific segment_id/name/type; priority; period_id; revenue; status; source
+      - **columns**: segment_id; segment_name; segment_type; display_priority; period_id; revenue; status; source_id; source_locator
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 0
     - **T4.17**: structured below
-      - **columns**: issuer-specific addback_id/label/classification/realization_status; priority; period_id; value; definition; source
+      - **columns**: addback_id; addback_label; addback_classification; realization_status; display_priority; period_id; value; status; source_definition; source_id; source_locator
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 0
     - **T4.18**: structured below
-      - **columns**: facility_id; period_id; carrying value; principal; drawn; commitment; security; seniority; coupon; maturity
+      - **columns**: facility_id; facility_name; period_id; facility_type; carrying_value; principal; drawn_amount; commitment; secured_status; seniority; currency; margin_or_coupon; maturity_date; lease_classification; source_id; source_locator
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T4.19**: structured below
-      - **columns**: check_id; period_id; reported; calculated; difference; tolerance; status; explanation
+      - **columns**: check_id; period_id; check_type; reported_value; calculated_value; difference; tolerance; status; explanation; source_refs
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T4.2**: structured below
-      - **columns**: Entity; Role; FY End; Currency; Unit; Perimeter; Basis; Periods
+      - **columns**: Entity Name; Entity Role; Fiscal Year End; Reporting Currency; Reporting Unit; Consolidation Perimeter; Accounting Basis; Available Periods
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
@@ -177,12 +177,12 @@ conclusions, never shorter reasoning or invented filler.
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T4.8**: structured below
-      - **columns**: Metric; Type; FY/Stubs; Value; Status; Sources; Limits
+      - **columns**: Metric Name; Derived Period Type; Full-Year Component; Current Stub; Prior-Year Stub; Derived Value; Calculation Status; Source Files; Limitations
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T4.9**: structured below
-      - **columns**: Metric; Formula; Num/Den+Source; Period; Value; Status; Tier; Limits
+      - **columns**: Metric Name; Formula; Numerator Value; Numerator Source; Denominator Value; Denominator Source; Period; Currency; Unit; Calculated Value; Calculation Status; Evidence Quality Tier; Limitations
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1

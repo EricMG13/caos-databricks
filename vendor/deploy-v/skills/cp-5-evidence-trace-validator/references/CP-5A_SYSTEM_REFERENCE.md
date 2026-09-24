@@ -4,7 +4,7 @@
 module_id: CP-5A | module_name: ResearchIntegrityQA | schema_family: Nested | layer: L5
 
 ## Dependencies
-UP: CP-5 (evidence trace), all analytical modules (CP-1 through CP-4A, CP-6, CP-6A) | DOWN (Analytical): None (gates upstream modules) | DOWN (QA): CP-5, CP-5A
+UP: CP-5 (evidence trace), all analytical modules the route runs before it (CP-1 through CP-4A) | DOWN (Analytical): None (gates upstream modules) | DOWN (QA gate): CP-6, CP-6A | DOWN (QA): CP-5, CP-5A
 
 ## Input
 CP-5A reads each upstream module's canonical Markdown handoff `.md` directly — the YAML front-matter envelope + canonical H2 headings (## Audit Summary, ## Analysis, ## Evidence Trace, ## Source Registry, ## Gaps & Conflicts, ## QA Validation). It does NOT parse .docx JSON appendices; there is no CP-EXTRACT.

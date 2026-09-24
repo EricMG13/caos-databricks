@@ -23,8 +23,8 @@ Stable identity: `module_id=CP-0`, `module_name=SourceReadiness`, `owned_object=
 - Readiness consumes the frozen same-run preparation catalog; changed sources return to preparation before readiness.
 - A blocked preparation has no content fallback; changed or absent sources return to the internal preparation phase.
 - Authority belongs to the original source; extraction confidence and fidelity belong to the active representation.
-- Each consumer receives an objective-specific readiness status and limitation, not a pack-level source-count proxy.
-- T8 uses canonical live navigable host IDs only; CP-X, CP-PARSE, retired aliases, CP-MODEL, CP-MEMO and CP-DR are never recommendation rows.
+- Each consumer receives an objective-specific readiness status and limitation, not a pack-level source-count proxy. With no stated objective delivered, the objective is the selected pathway's use case (the purpose its `credit_os_selection_id` names in the catalog), recorded in T1.
+- T8 uses canonical live navigable host IDs only; CP-X, CP-PARSE, retired aliases, CP-MODEL and CP-MEMO are never recommendation rows. CP-DR is a row when the selected pathway carries it (`DEEP_RESEARCH`, `LITE_DEEP_RESEARCH`) or a named research question has a receiving module.
 - Every T8 row carries `candidate_command`; non-runnable rows retain `exact_command=DO NOT RUN`.
 - A downstream handoff launched from T8 retains the selected CP-0 `run_id` in `upstream_artifacts_used`.
 

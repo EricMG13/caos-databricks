@@ -17,6 +17,7 @@ This module remains a FULL run when the run profile is `LITE_CREDIT_22`; the ret
 - **accepted_lite_object_ids**: `lite_liquidity_sensitivity_screen`, `lite_market_recovery_opportunity_screen`, `lite_legal_structure_capacity_screen`
 - **allowed_use**: `SCREENING_ONLY`
 - **missing_input_behavior**: `UPGRADE`
+- **UPGRADE** (canon SEC5): an input this module's FULL method needs that the LITE route does not deliver is never inferred and never a stop. Complete the module on the screening inputs the route delivers, name each missing input as a limitation, set `qa_status` Restricted, and recommend a new, user-confirmed, linked `FULL_CREDIT_32` run to supply it; this run's profile never changes.
 
 In LITE_CREDIT_22 require CP-0 and the validated CP-L10 screening handoff containing the named liquidity, market/recovery and legal-capacity screen registers. These substitute only the explicitly supported screening inputs for CP-1/CP-2D. Preserve SCREENING_ONLY limitations; no full underwriting or legal-capacity assertion may be inferred. A full decision requires a new FULL run. In FULL_CREDIT_32 use the required handoffs above.
 
@@ -35,7 +36,7 @@ Use current command qualifiers, current conversation scope, then validated match
 7. Subsequent event: flag date; never blend into period figures.
 8. Non-debt funding float: trend deposits/deferred revenue/supplier finance—not payables; Evidence→Risk Mechanic→Credit Implication.
 9. Show source vs normalized one-offs; label normalization+Analyst Judgement. Never infer covenant capacity; absent inputs=`Not Calculable`.
-10. `committee_status`∈Committee Ready|Draft Only|Requires More Work|Insufficient Information|Restricted|Blocked. `qa_status` Restricted→score≤59 (band from the score: 40-59 Low, below 40 Insufficient Information); Blocked→≤39.
+10. `committee_status`∈Committee Ready|Draft Only|Requires More Work|Insufficient Information|Restricted|Blocked. `qa_status` follows the run's own status (canon D1 map): complete→Passed; with gaps or limitations→Restricted; Blocked→Blocked; never Not Reviewed. Restricted→score≤59 (band from the score: 40-59 Low, below 40 Insufficient Information); Blocked→≤39.
 
 ## Analytical depth — binding on every run
 

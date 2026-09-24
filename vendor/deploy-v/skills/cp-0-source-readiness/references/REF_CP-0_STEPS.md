@@ -221,7 +221,7 @@ row per recommended or blocked next live host module:
 |---:|---|---|---|---|---|---|---|
 
 Rules:
-1. Module IDs are canonical live, navigable hosts only: CP-1, CP-1A, CP-1B, CP-1C, CP-1D, CP-2, CP-2A, CP-2D, CP-2E, CP-2G, CP-2H, CP-3, CP-3C, CP-3D, CP-4, CP-4C, CP-5, CP-6, CP-8, CP-L10. Never recommend CP-X, CP-PARSE, a retired alias, CP-MODEL, CP-MEMO or CP-DR.
+1. Module IDs are canonical live, navigable hosts only: CP-1, CP-1A, CP-1B, CP-1C, CP-1D, CP-2, CP-2A, CP-2D, CP-2E, CP-2G, CP-2H, CP-3, CP-3C, CP-3D, CP-4, CP-4C, CP-5, CP-6, CP-8, CP-L10, CP-DR. Never recommend CP-X, CP-PARSE, a retired alias, CP-MODEL or CP-MEMO. CP-DR is a row when the selected pathway carries it (`DEEP_RESEARCH`, `LITE_DEEP_RESEARCH`, where it answers the approved research question with no receiving module) or when a named research question has a receiving module; otherwise the host's research brief adds it later without a T8 row.
 2. `candidate_command` is `Run <module_id>` plus only objective, issuer/entity and period qualifiers supported by this run. Its command module must match the row module exactly.
 3. READY and READY_WITH_LIMITATIONS rows set `exact_command` equal to `candidate_command` and carry every limitation into the row.
 4. CONDITIONAL and BLOCKED rows set `exact_command` to exactly `DO NOT RUN`; retain the candidate only as a non-executable preview and state the missing or unusable evidence briefly. A CONDITIONAL row is discharged only when the named source is supplied and CP-0 is re-run; it never waits on an upstream analytical handoff.

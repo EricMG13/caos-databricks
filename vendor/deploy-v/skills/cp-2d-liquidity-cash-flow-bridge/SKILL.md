@@ -25,7 +25,7 @@ Use current command qualifiers, current conversation scope, then validated match
 7. Subsequent event: flag date; never blend into period figures.
 8. Non-debt funding float: trend deposits/deferred revenue/supplier finance—not payables; Evidence→Risk Mechanic→Credit Implication.
 9. Show source vs normalized one-offs; label normalization+Analyst Judgement. Never infer covenant capacity; absent inputs=`Not Calculable`.
-10. `committee_status`∈Committee Ready|Draft Only|Requires More Work|Insufficient Information|Restricted|Blocked. `qa_status` Restricted→score≤59 (band from the score: 40-59 Low, below 40 Insufficient Information); Blocked→≤39.
+10. `committee_status`∈Committee Ready|Draft Only|Requires More Work|Insufficient Information|Restricted|Blocked. `qa_status` follows the run's own status (canon D1 map): complete→Passed; with gaps or limitations→Restricted; Blocked→Blocked; never Not Reviewed. Restricted→score≤59 (band from the score: 40-59 Low, below 40 Insufficient Information); Blocked→≤39.
 
 ## Analytical depth — binding on every run
 
@@ -113,7 +113,7 @@ conclusions, never shorter reasoning or invented filler.
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T2E.6**: structured below
-      - **columns**: none
+      - **columns**: Calculation; Result; Formula / Inputs; Cash-Burn Basis; Status; Source Trace
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1

@@ -12,6 +12,15 @@ QUESTION_COLUMNS = ("question_id", "question", "decision_relevance", "consumer_m
 EVIDENCE_COLUMNS = ("evidence_id", "question_id", "claim", "claim_type", "source", "source_locator", "source_date", "source_type", "independence_family", "entity_period_unit_perimeter")
 FINDING_COLUMNS = ("question_id", "answer", "evidence_ids", "contrary_evidence", "resolution_status", "uncertainty", "proposed_consequence")
 ADOPTION_COLUMNS = ("question_id", "research_sha256", "disposition", "reason", "analytical_effect")
+CLAIM_TYPES = {"fact", "source_characterisation", "inference", "analyst_judgment"}
+# A gap row (source_type and claim_type `gap`) records a search that found
+# nothing: it has no source date or independence family, and its perimeter may
+# be unstated, so those three cells may hold the canon's null. Everywhere else
+# a null is still an unresolved placeholder (deployment fork r3).
+GAP = "gap"
+NULL = "—"
+GAP_NULL_COLUMNS = ("source_date", "independence_family", "entity_period_unit_perimeter")
+PLACEHOLDERS = {"tbd", "n/a", "unknown", "requires_analyst_decision", "[insufficient information]", NULL}
 
 
 def validate_brief(brief, *, cp0=None):
@@ -64,14 +73,21 @@ def brief_from_snapshot(candidates, cp0):
     return validate_brief(json.loads(matches[0].text), cp0=cp0) if matches else None
 
 
-def rows(text, table_id, columns):
+def _gap_null(row, column):
+    """Whether `column` of `row` may carry the canon's null: a gap row's date,
+    family and perimeter, which a search that found nothing does not have."""
+    return row.get("source_type") == GAP and column in GAP_NULL_COLUMNS
+
+
+def rows(text, table_id, columns, *, may_be_null=lambda row, column: False):
     table = parse_tables(text).get(table_id)
     if table is None or tuple(table.columns) != columns or not table.rows:
         raise ValueError(f"{table_id}: required nonempty register/columns missing")
     if any(not value.strip() for row in table.rows for value in row.values()):
         raise ValueError(f"{table_id}: empty register cell")
-    if any(value.strip().casefold() in {"tbd", "n/a", "unknown", "requires_analyst_decision", "[insufficient information]", "—"}
-           for row in table.rows for value in row.values()):
+    if any(value.strip().casefold() in PLACEHOLDERS
+           and not (value.strip() == NULL and may_be_null(row, column))
+           for row in table.rows for column, value in row.items()):
         raise ValueError(f"{table_id}: unresolved placeholder in register")
     return table.rows
 
@@ -93,14 +109,16 @@ def validate_dossier(candidate, brief):
         raise ValueError("research questions differ from the locked coverage denominator")
     wanted = {q["question_id"] for q in questions}
     by_id = {}
-    for row in rows(candidate.text, "cpdr.evidence", EVIDENCE_COLUMNS):
+    for row in rows(candidate.text, "cpdr.evidence", EVIDENCE_COLUMNS, may_be_null=_gap_null):
         if row["evidence_id"] in by_id or row["question_id"] not in wanted:
             raise ValueError("research evidence IDs are duplicated or refer to an unknown question")
-        if row["claim_type"] not in {"fact", "source_characterisation", "inference", "analyst_judgment"}:
+        if row["claim_type"] not in CLAIM_TYPES | {GAP}:
             raise ValueError("research claim_type is invalid")
-        if row["source_type"] not in {"primary", "independent_secondary", "attributed_view", "gap"}:
+        if row["source_type"] not in {"primary", "independent_secondary", "attributed_view", GAP}:
             raise ValueError("research source_type is invalid")
-        if row["source_type"] != "gap":
+        if row["claim_type"] == GAP and row["source_type"] != GAP:
+            raise ValueError("research claim_type gap belongs only to a gap row (source_type gap)")
+        if row["source_type"] != GAP:
             source_date = date.fromisoformat(row["source_date"])
             if source_date.isoformat() != row["source_date"] or source_date > date.fromisoformat(brief["as_of_date"]):
                 raise ValueError("research source date is invalid or after the brief's as-of boundary")

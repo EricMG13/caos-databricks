@@ -28,7 +28,7 @@ Each topic appears exactly once. Source owners and upgrade IDs are limited to CP
 | `TL10.3` | Decision Screen | screen_item; assessment; evidence; credit_transmission; screening_implication; confidence; source_refs |
 | `TL10.4` | Gaps and Upgrade Register | topic_id; trigger; missing_inputs; decision_impact; required_source; target_full_module_id; expected_owned_object; blocking_for_full_decision |
 
-`TL10.3` requires an `OVERALL` row. No FULL table ID is part of this schema.
+`TL10.3` requires an `OVERALL` row. `TL10.4` lists every gap and FULL upgrade. When no topic is `DEEPEN` or decision-material `GAP_ONLY` (outcome `LITE_COMPLETE`) it has no entries, as the payload's `gap_upgrade_register` may be empty: its one row then says no gap or FULL upgrade is needed, and a register with no body rows is also accepted. No FULL table ID is part of this schema.
 
 ## Runtime output
 

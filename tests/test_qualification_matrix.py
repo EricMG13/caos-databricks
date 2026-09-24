@@ -227,7 +227,7 @@ def test_the_matrix_reports_every_case_and_concludes_nothing(ran: Ran) -> None:
     matrix = _matrix(ran, qualification)
 
     assert matrix.qualification_set_sha256 == qualification_set_digest(qualification)
-    assert matrix.build_id.startswith("b160c75e")
+    assert matrix.build_id.startswith("e6fc7978")
     [row] = matrix.rows
     assert row.case_label == "acme-2026-refinancing"
     assert row.proven is True
@@ -1063,8 +1063,8 @@ def test_register_key_columns_and_values_are_normalised_like_runtime() -> None:
     expect = ExpectedRegister(
         module_id="CP-1",
         register_id="T4.1",
-        row_key=(("File   Name", "annual\n report.pdf"),),
-        column="Doc   Type",
+        row_key=(("Source   File\n Name", "annual\n report.pdf"),),
+        column="Document   Type",
         expected="10-\n K",
     )
     case = replace(_register_case(), expects_register=(expect,))
@@ -1121,11 +1121,11 @@ def test_register_key_with_pipe_is_unlocatable(part: str) -> None:
         register_id="T4.1",
         row_key=(
             (
-                "File|Name" if part == "selector-column" else "File Name",
+                "Source File|Name" if part == "selector-column" else "Source File Name",
                 "annual|report.pdf" if part == "selector" else "annual report.pdf",
             ),
         ),
-        column="Doc|Type" if part == "expected-column" else "Doc Type",
+        column="Document|Type" if part == "expected-column" else "Document Type",
         expected="10|K" if part == "expected" else "10-K",
     )
     case = replace(_register_case(), expects_register=(expect,))

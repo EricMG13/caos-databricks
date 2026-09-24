@@ -93,14 +93,24 @@ def test_ccl_earnings_set_is_a_complete_offline_copy_with_pinned_keys() -> None:
 
     rules = CONTRACT.completeness_check.load_contract(skill("CP-1B").decode(), "CP-1B")
     comparator_columns = set(rules["registers"]["T4.12"]["columns"])
+    # Fork r3 (G2-6): T4.12 follows the method's keyed comparator columns and
+    # keeps the `values` and `changes` this key reads.
     assert comparator_columns == {
         "metric_id",
-        "current/reference period IDs",
-        "basis",
+        "current_period_id",
+        "reference_period_id",
+        "comparison_basis",
+        "current_value",
+        "reference_value",
+        "absolute_change",
+        "percentage_change",
+        "calculation_status",
+        "restatement_flag",
+        "basis_change_flag",
+        "perimeter_change_flag",
+        "definition_change_flag",
         "values",
         "changes",
-        "status",
-        "comparability flags",
     }
     assert all(
         key.column in comparator_columns

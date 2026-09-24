@@ -32,6 +32,7 @@ Strong / Average / Weak / Not Assessable
 ## Materiality Filter Values
 - Direction: Positive / Negative / Mixed
 - Confidence: High / Medium / Low / Not Assessable
+- T2.10 holds a Positive and a Negative row. A direction with no supported driver takes one row saying so (`Driver` `None supported`, `Confidence` `Not Assessable`), never an invented driver.
 
 ## QA Checklist
 - [ ] Source register completed with all available sources and limitations

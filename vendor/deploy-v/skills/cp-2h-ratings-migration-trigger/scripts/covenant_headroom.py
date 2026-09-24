@@ -75,9 +75,19 @@ TEST_TYPE_ALIASES = {
 #     numerator, threshold, or basket usage."
 #   capacity, absent inputs  -> Canon Core 9: "Never infer covenant capacity;
 #     absent inputs=`Not Calculable`."
-# Each is used where its own source says to use it.
+# Each is used where its own source says to use it. A register cell never
+# carries the first bare -- the canon's Missing Information Treatment follows it
+# with ` — ` and what is missing, and the completeness check refuses it bare in
+# T2R.4 and T4C.4, where these outputs are transcribed -- so the headroom cell
+# names the missing inputs and the row's status is `Not Calculable`
+# (deployment fork r3).
 NOT_CALCULABLE = "Not Calculable"
 INSUFFICIENT = "[Insufficient Information]"
+
+
+def _insufficient(missing):
+    """The headroom cell for missing inputs: the placeholder, never bare."""
+    return f"{INSUFFICIENT} — missing: " + ", ".join(missing)
 
 
 _NULL_WORDS = {"null", "n/a", "na", "none", "not disclosed", "not available",
@@ -142,9 +152,9 @@ def headroom(test):
                    if v is None]
         row.update({
             "headroom": None,
-            "headroom_display": INSUFFICIENT,
-            "status": INSUFFICIENT,
             # Step 04 instruction 4 requires naming WHICH input is missing.
+            "headroom_display": _insufficient(missing),
+            "status": NOT_CALCULABLE,
             "missing_inputs": missing,
         })
         return row
@@ -177,9 +187,10 @@ def max_additional_debt(test):
     debt = _num(test.get("current_debt"), f"{where}.current_debt")
     threshold = _num(test.get("threshold"), f"{where}.threshold")
     if None in (ebitda, debt, threshold):
-        return {"value": None, "status": INSUFFICIENT, "missing_inputs": [
-            k for k, v in (("governing_ebitda", ebitda), ("current_debt", debt),
-                           ("threshold", threshold)) if v is None]}
+        missing = [k for k, v in (("governing_ebitda", ebitda), ("current_debt", debt),
+                                  ("threshold", threshold)) if v is None]
+        return {"value": None, "status": NOT_CALCULABLE, "display": _insufficient(missing),
+                "missing_inputs": missing}
     if ebitda <= 0:
         # Solving against a non-positive denominator yields a negative or
         # infinite "capacity". There is no incremental-debt answer here; the
@@ -257,9 +268,10 @@ def trigger_headroom(trigger):
             raise ValueError(f"{where}: duplicate period {label!r} in case {case!r}")
         value = _num(row.get("value"), f"{where}.cases[{label}].value")
         if value is None:
-            observations[label] = INSUFFICIENT
+            observations[label] = NOT_CALCULABLE
             periods.append({"period": label, "case": case, "value": None, "headroom": None,
-                            "status": INSUFFICIENT})
+                            "headroom_display": _insufficient(["value"]),
+                            "status": NOT_CALCULABLE})
             continue
         entry = {"period": label, "case": case, "value": value,
                  "headroom": {k: signed(value, t) for k, t in bounds.items()}}
@@ -277,7 +289,7 @@ def trigger_headroom(trigger):
     sustained_cases = [case for case, observations in cases.items() if window and all(
         observations.get(period) == "Breached" for period in window
     )]
-    unknown = not periods or any(row["status"] == INSUFFICIENT for row in periods)
+    unknown = not periods or any(row["status"] == NOT_CALCULABLE for row in periods)
     if window:
         unknown = unknown or any(
             period not in observations for observations in cases.values() for period in window
@@ -488,7 +500,7 @@ def compute(payload):
 
     breached = [r["test"] for r in headroom_rows if r["status"] == "Breached"]
     at_threshold = [r["test"] for r in headroom_rows if r["status"] == "At threshold"]
-    incomplete = [r["test"] for r in headroom_rows if r["status"] == INSUFFICIENT]
+    incomplete = [r["test"] for r in headroom_rows if r["status"] == NOT_CALCULABLE]
 
     return {
         "headroom": headroom_rows,
@@ -554,7 +566,15 @@ def _self_check():
     miss = headroom({"test": "L", "test_type": "max-ratio", "threshold": None,
                      "current_ratio": 4.0})
     assert miss["headroom"] is None and miss["missing_inputs"] == ["threshold"]
-    assert miss["status"] == INSUFFICIENT
+    # ... and no output cell is the bare placeholder a register refuses (fork r3)
+    assert miss["status"] == NOT_CALCULABLE, miss
+    assert miss["headroom_display"] == "[Insufficient Information] — missing: threshold", miss
+    gap = trigger_headroom({"trigger": "L", "trigger_direction": "max-ratio", "threshold": 5.0,
+                            "cases": [{"period": "FY26", "value": None}]})
+    assert gap["periods"][0]["status"] == NOT_CALCULABLE, gap
+    assert gap["classification"] == "insufficient information", gap
+    assert max_additional_debt({"test": "L", "test_type": "max-ratio", "threshold": 5.0,
+                                "current_debt": 400.0})["status"] == NOT_CALCULABLE
 
     # incremental debt
     d = max_additional_debt({"test": "L", "test_type": "max-ratio", "threshold": 5.0,

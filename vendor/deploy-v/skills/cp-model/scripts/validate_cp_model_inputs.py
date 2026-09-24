@@ -371,6 +371,16 @@ def parse_stable_tables(markdown: str) -> dict[str, TableRows]:
 
 
 def _number(value: str, *, field: str, errors: list[str]) -> float | None:
+    """A CP-MODEL input figure, or None for its null words.
+
+    Percent convention: a trailing `%` divides by 100 -- `10.4%` is 0.104, the
+    fraction the workbook takes. `cp_tables.parse_figure`, the reader every
+    other script and the host use, keeps percentage points (10.4); the two are
+    not interchangeable and neither is changed while their callers disagree.
+    Digit-group spaces are refused here, not stripped. A nonzero figure whose
+    exponent is outside float's normal range (`1e-400`) is an error rather than
+    an underflow to 0.0 (deployment fork r3).
+    """
     text = value.strip()
     if text.lower() in {"", "null", "n/a", "not available", "not calculable", "-"}:
         return None
@@ -386,6 +396,9 @@ def _number(value: str, *, field: str, errors: list[str]) -> float | None:
         return None
     if not math.isfinite(parsed):
         errors.append(f"{field}: numeric value must be finite, got {value!r}")
+        return None
+    if abs(parsed) < sys.float_info.min and re.search(r"[1-9]", re.split(r"[eE]", cleaned)[0]):
+        errors.append(f"{field}: numeric value is outside the representable range, got {value!r}")
         return None
     if negative:
         parsed = -parsed

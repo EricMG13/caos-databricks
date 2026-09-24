@@ -4,7 +4,7 @@
 module_id: CP-6 | module_name: ICDebateChallenge | schema_family: Nested | layer: L6
 
 ## Dependencies
-UP: CP-1, CP-1A, CP-1B, CP-1C, CP-2, CP-2A, CP-2B, CP-2C, CP-2D, CP-2E, CP-3, CP-3A, CP-3B, CP-3C, CP-4, CP-4A | DOWN (Analytical): CP-6A | DOWN (QA): CP-5, CP-5A
+UP: CP-1, CP-1A, CP-1B, CP-1C, CP-2, CP-2A, CP-2B, CP-2C, CP-2D, CP-2E, CP-3, CP-3A, CP-3B, CP-3C, CP-4, CP-4A | UP (QA gate): CP-5, CP-5A | DOWN (Analytical): CP-6A
 
 ## Governance Rules
 1. CP-6 is an adversarial debate module — output must force a decision-useful action bias, not produce balanced narrative.

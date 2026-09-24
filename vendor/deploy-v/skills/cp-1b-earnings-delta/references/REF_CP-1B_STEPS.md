@@ -200,6 +200,10 @@ canonical values.
 - `<!-- table-id: cp1b.model_readiness -->`
 - `<!-- table-id: cp1b.cp_model_snapshot_fields -->`
 
+Registers T4.12–T4.15 are the comparator, validation, add-back validation and
+readiness tables below, in that order: write each under its register heading,
+then its table-id comment, then the one table with exactly the columns below.
+
 ## Snapshot field
 
 Columns:
@@ -214,7 +218,11 @@ validates/interprets CP-1 history and does not create replacement numbers.
 ## Comparator register
 
 Columns:
-`metric_id | current_period_id | reference_period_id | comparison_basis | current_value | reference_value | absolute_change | percentage_change | calculation_status | restatement_flag | basis_change_flag | perimeter_change_flag | definition_change_flag`
+`metric_id | current_period_id | reference_period_id | comparison_basis | current_value | reference_value | absolute_change | percentage_change | calculation_status | restatement_flag | basis_change_flag | perimeter_change_flag | definition_change_flag | values | changes`
+
+`values` restates the pair as `current_value/reference_value` (for example
+`26622/25021`) and `changes` restates `absolute_change`, one cell each for a
+reader of register T4.12; both repeat figures already in the row and add none.
 
 `comparison_basis` is one of `YOY_SAME_QUARTER`, `SEQUENTIAL`, `YTD_PRIOR`,
 `LTM_PRIOR`. A percentage comparison with a null or zero denominator is null
