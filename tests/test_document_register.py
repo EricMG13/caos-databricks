@@ -267,6 +267,7 @@ def test_the_committed_table_is_the_one_the_script_emits() -> None:
         21: "Twenty-one",
         30: "Thirty",
         41: "Forty-one",
+        45: "Forty-five",
         48: "Forty-eight",
         50: "Fifty",
     }
