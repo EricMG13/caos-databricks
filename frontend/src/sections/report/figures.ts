@@ -47,20 +47,47 @@ export function citationsOf(artifacts: ReportDocument["body"]["artifacts"]): Cit
   return choices;
 }
 
-/** The draft's marker for one figure. It never reaches the server as text:
-    `paragraphs` turns each one into a figure span. */
-export function figureToken(routeNodeId: string, citationIndex: number): string {
-  return `{{figure:${routeNodeId}#${citationIndex}}}`;
+/** A figure the draft names: which citation of which record. */
+export interface FigureRef {
+  route_node_id: string;
+  citation_index: number;
 }
 
-const TOKEN = /\{\{figure:([^#{}\s]+)#(\d{1,6})\}\}/g;
+/** The draft's marker for its nth figure, a footnote number the author reads
+    (`[1]`) rather than a token (N90). The number is the figure's place in the
+    draft's own list, never in the picker's, so a refetch that reorders the
+    picker cannot re-point a marker. It never reaches the server as text:
+    `paragraphs` turns each one into a figure span. */
+export function figureMarker(n: number): string {
+  return `[${n}]`;
+}
+
+/** The draft's figure list with `ref` in it, and the marker that names it:
+    a citation inserted twice is one figure with one number. */
+export function withFigure(
+  figures: readonly FigureRef[],
+  ref: FigureRef,
+): { figures: FigureRef[]; marker: string } {
+  const at = figures.findIndex(
+    (known) =>
+      known.route_node_id === ref.route_node_id && known.citation_index === ref.citation_index,
+  );
+  if (at !== -1) return { figures: [...figures], marker: figureMarker(at + 1) };
+  const next = [
+    ...figures,
+    { route_node_id: ref.route_node_id, citation_index: ref.citation_index },
+  ];
+  return { figures: next, marker: figureMarker(next.length) };
+}
+
+const MARKER = /\[(\d{1,3})\]/g;
 
 /** One paragraph per non-empty line; within it, prose spans around one figure
-    span per marker. Anything that is not a well-formed marker stays prose, so a
-    digit typed by hand still reaches the server as text and is refused there
-    `NARRATIVE_FIGURE_UNREFERENCED` -- the rule is the server's, not this
-    file's. */
-export function paragraphs(draft: string): NarrativeDraft[][] {
+    span per marker the draft's figure list names. Anything else stays prose,
+    a bracketed number typed by hand included, so a digit still reaches the
+    server as text and is refused there `NARRATIVE_FIGURE_UNREFERENCED` -- the
+    rule is the server's, not this file's. */
+export function paragraphs(draft: string, figures: readonly FigureRef[]): NarrativeDraft[][] {
   return draft
     .split("\n")
     .map((line) => line.trim())
@@ -68,11 +95,13 @@ export function paragraphs(draft: string): NarrativeDraft[][] {
     .map((line) => {
       const spans: NarrativeDraft[] = [];
       let at = 0;
-      for (const match of line.matchAll(TOKEN)) {
+      for (const match of line.matchAll(MARKER)) {
+        const figure = figures[Number(match[1]) - 1];
+        if (!figure) continue;
         if (match.index > at) spans.push({ text: line.slice(at, match.index), figure: null });
         spans.push({
           text: null,
-          figure: { route_node_id: match[1]!, citation_index: Number(match[2]) },
+          figure: { route_node_id: figure.route_node_id, citation_index: figure.citation_index },
         });
         at = match.index + match[0].length;
       }

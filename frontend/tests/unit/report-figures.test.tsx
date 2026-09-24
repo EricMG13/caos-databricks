@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { ReportSection } from "@/sections/report/ReportSection";
-import { citationsOf, figureToken, paragraphs } from "@/sections/report/figures";
+import { citationsOf, figureMarker, paragraphs, withFigure } from "@/sections/report/figures";
 import { parseReportDocument, type ReportDocument } from "@/wire/v1";
 
 // A figure span names a citation of a verified record; the host fills the
@@ -64,21 +64,44 @@ describe("Report figure picker", () => {
     ]);
   });
 
-  test("test_a_figure_token_composes_the_span_the_save_command_validates", () => {
+  test("test_a_figure_marker_composes_the_span_the_save_command_validates", () => {
+    // The draft's own list: `[n]` is its nth entry (N90).
+    const figures = [
+      { route_node_id: "CP-0", citation_index: 1 },
+      { route_node_id: "RN-LITE-01-CP-0", citation_index: 0 },
+    ];
     const draft = [
-      `Net debt closed at ${figureToken("CP-0", 1)} after the refinancing.`,
+      `Net debt closed at ${figureMarker(1)} after the refinancing.`,
       "",
-      figureToken("RN-LITE-01-CP-0", 0),
-      "Prose with a digit 4 stays prose, for the server to refuse.",
+      figureMarker(2),
+      "A bracketed [3] the draft does not list, and a digit 4, stay prose for the server to refuse.",
     ].join("\n");
-    expect(paragraphs(draft)).toEqual([
+    expect(paragraphs(draft, figures)).toEqual([
       [
         { text: "Net debt closed at ", figure: null },
         { text: null, figure: { route_node_id: "CP-0", citation_index: 1 } },
         { text: " after the refinancing.", figure: null },
       ],
       [{ text: null, figure: { route_node_id: "RN-LITE-01-CP-0", citation_index: 0 } }],
-      [{ text: "Prose with a digit 4 stays prose, for the server to refuse.", figure: null }],
+      [
+        {
+          text: "A bracketed [3] the draft does not list, and a digit 4, stay prose for the server to refuse.",
+          figure: null,
+        },
+      ],
+    ]);
+  });
+
+  test("withFigure: a citation inserted twice keeps its number, a new one takes the next", () => {
+    const first = withFigure([], { route_node_id: "CP-0", citation_index: 1 });
+    expect(first.marker).toBe("[1]");
+    const again = withFigure(first.figures, { route_node_id: "CP-0", citation_index: 1 });
+    expect(again).toEqual({ figures: first.figures, marker: "[1]" });
+    const second = withFigure(again.figures, { route_node_id: "CP-5", citation_index: 0 });
+    expect(second.marker).toBe("[2]");
+    expect(second.figures).toEqual([
+      { route_node_id: "CP-0", citation_index: 1 },
+      { route_node_id: "CP-5", citation_index: 0 },
     ]);
   });
 
@@ -115,12 +138,11 @@ describe("Report figure picker", () => {
     expect(picker.tagName).toBe("SELECT");
     fireEvent.change(picker, { target: { value: "CP-0#1" } });
     fireEvent.click(screen.getByRole("button", { name: "Insert figure" }));
-    expect((draft as HTMLTextAreaElement).value).toBe(
-      `Net debt closed at ${figureToken("CP-0", 1)}`,
-    );
-    // The composed draft reads back with the quote the chosen citation names.
-    expect(container.querySelector("[data-draft-preview]")).toHaveTextContent(
-      "CP-0 · p.9 · Net debt 2.0bn",
+    // A footnote marker the author can read, not a token (N90).
+    expect((draft as HTMLTextAreaElement).value).toBe("Net debt closed at [1]");
+    // Listed under the draft with the quote the chosen citation names.
+    expect(container.querySelector("[data-draft-figure='[1]']")).toHaveTextContent(
+      "[1] CP-0 · p.9 · Net debt 2.0bn",
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Save revision" }));
