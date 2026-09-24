@@ -70,7 +70,11 @@ def platform_environment(
     stay local, since a test binds loopback and serves the export it has."""
     parts = urlparse(database_url)
     env = {k: v for k, v in os.environ.items() if k not in LOCAL_ONLY}
-    env.update(stub.environment())
+    # N7: the platform hands the app a service principal's client id and
+    # secret, never a token; an ambient DATABRICKS_TOKEN (a developer's own
+    # shell) must not leak in and stand in for that exchange.
+    env.pop("DATABRICKS_TOKEN", None)
+    env.update(stub.service_principal_environment())
     env.update(
         DATABRICKS_APP_NAME="caos",
         DATABRICKS_APP_PORT=str(port),

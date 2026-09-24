@@ -4,6 +4,7 @@ repository's code. What a real workspace grants stays with the deployer."""
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import sys
@@ -410,6 +411,44 @@ def test_the_stub_refuses_what_the_platform_refuses(stub: WorkspaceStub) -> None
     stub.app_state, stub.deployment_state = "CRASHED", "FAILED"
     assert stub.app("caos-dev-42")["app_status"]["state"] == "CRASHED"
     assert stub.deployment("caos-dev-42")["status"]["state"] == "FAILED"
+
+
+def test_the_token_endpoint_refuses_a_malformed_exchange(stub: WorkspaceStub) -> None:
+    """N7: the client-credentials exchange the SDK's oauth-m2m strategy makes
+    over Basic auth -- a missing or malformed pair, or a grant that is not
+    `client_credentials`, is refused `invalid_client`; a well-formed one
+    mints the same bearer every other route already accepts."""
+    import urllib.error
+    import urllib.request
+
+    def token(headers: dict[str, str], body: bytes) -> tuple[int, dict[str, object]]:
+        request = urllib.request.Request(
+            stub.host + "/oidc/v1/token", data=body, method="POST", headers=headers
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=5) as answered:
+                return int(answered.status), json.loads(answered.read())
+        except urllib.error.HTTPError as refused:
+            return refused.code, json.loads(refused.read())
+
+    body = b"grant_type=client_credentials"
+    assert token({}, body) == (400, {"error": "invalid_client"})
+    basic = "Basic " + base64.b64encode(b"id:secret").decode()
+    assert token({"Authorization": basic}, b"grant_type=authorization_code") == (
+        400,
+        {"error": "invalid_client"},
+    )
+    assert (
+        token({"Authorization": "Basic " + base64.b64encode(b"noid").decode()}, body)[0]
+        == 400
+    )
+    status, answer = token({"Authorization": basic}, body)
+    assert status == 200
+    assert answer == {
+        "access_token": BEARER,
+        "token_type": "Bearer",
+        "expires_in": 3600,
+    }
 
 
 def test_a_stand_in_run_starts_from_no_bundle_state_of_its_own(
