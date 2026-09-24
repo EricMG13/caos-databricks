@@ -695,7 +695,9 @@ class CanonicalRecord:
     upstream, ordered by route node id, each pair read from the stored records
     (§45.4). `citation_rule` is how `citations` were located when it was
     accepted (N28), and so how a reader re-anchors them: `ANY_RUN` for every
-    record written before the whole-line rule, which carries no such field.
+    record written before the whole-line rule, which carries no such field,
+    `WHOLE_LINE_AS_STORED` for one accepted under that rule's first reading,
+    and `WHOLE_LINE` for one accepted since (W6, N13).
     """
 
     artifact_sha256: str

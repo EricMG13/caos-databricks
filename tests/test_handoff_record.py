@@ -37,6 +37,7 @@ from caos.digest import canonical_json
 from caos.evidence.citations import (
     ANY_RUN,
     WHOLE_LINE,
+    WHOLE_LINE_AS_STORED,
     AnchoredCitation,
     Citation,
     Rect,
@@ -239,14 +240,17 @@ def test_a_record_names_the_rule_its_citations_were_accepted_under(
 ) -> None:
     """N28: a record accepted before the whole-line rule carries no rule and
     reads back as `ANY_RUN`, byte for byte as it was stored; one accepted
-    since names `WHOLE_LINE`. A record naming any other rule, or `ANY_RUN`
-    aloud, is not one this host wrote."""
+    under its first reading names `whole-line` (`WHOLE_LINE_AS_STORED`), and
+    one accepted since `whole-line-as-shown` (`WHOLE_LINE`, W6). A record
+    naming any other rule, or `ANY_RUN` aloud, is not one this host wrote."""
     old = _record()
     assert old.citation_rule == ANY_RUN
     assert "citation_rule" not in json.loads(record_bytes(old))
+    first = _record(citation_rule=WHOLE_LINE_AS_STORED)
+    assert json.loads(record_bytes(first))["citation_rule"] == "whole-line"
     new = _record(citation_rule=WHOLE_LINE)
-    assert json.loads(record_bytes(new))["citation_rule"] == WHOLE_LINE
-    for record in (old, new):
+    assert json.loads(record_bytes(new))["citation_rule"] == "whole-line-as-shown"
+    for record in (old, first, new):
         blobs, artifact, sha = _stored(tmp_path, record)
         read = read_record(
             blobs, artifact_sha256=artifact, record_sha256=sha, expected=CP0
