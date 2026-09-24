@@ -217,9 +217,7 @@ MIGRATIONS = (
     ),
     (
         "0041_filed_packages",
-        Path(__file__)
-        .with_name("0041_filed_packages.sql")
-        .read_text(encoding="utf-8"),
+        Path(__file__).with_name("0041_filed_packages.sql").read_text(encoding="utf-8"),
     ),
 )
 
