@@ -60,15 +60,15 @@ MEASURED_MODULES = (
     Path("caos/api/reads/analysis.py"),
     Path("caos/api/reads/model.py"),
     Path("caos/api/reads/book.py"),
-    # N35's remainder: every other module with a test-verified BLOB_BUDGET
-    # above zero and a plain declared number -- `reads/reports.py` and
-    # `reads/deliverable.py` declare theirs per pathway, a dict `--record`
-    # does not snapshot (`record_measurements` records an int budget only),
-    # so their BLOB_BUDGET stays declared and test-verified without a
-    # ratcheted floor here.
     Path("caos/api/reads/evidence.py"),
     Path("caos/api/reads/run.py"),
     Path("caos/api/commands/deliverable.py"),
+    # N35: `reads/reports.py` and `reads/deliverable.py` declare theirs per
+    # pathway, a dict rather than a plain number. `record_measurements`
+    # snapshots one measured value per key the same way it snapshots a
+    # plain int, so these are ratcheted too.
+    Path("caos/api/reads/reports.py"),
+    Path("caos/api/reads/deliverable.py"),
 )
 
 # The most store round trips one request may be declared to cost. The widest
@@ -187,32 +187,84 @@ def _measured_path(root: Path) -> Path:
     return root / "tests" / "io_measurements.json"
 
 
-def record_measurements(root: Path = REPO) -> dict[str, dict[str, int]]:
+Measured = int | dict[str, int]
+
+
+def _recordable(value: object) -> Measured | None:
+    """`value` in the one shape `--record` snapshots it in (N35): a plain
+    int, or -- for a module that declares its budget per pathway -- a dict
+    of them, one measured value per key. Anything else (a name that failed
+    to resolve, a mixed or empty dict) records nothing for that dimension,
+    the same as an int declaration does today."""
+    if isinstance(value, int):
+        return value
+    if (
+        isinstance(value, dict)
+        and value
+        and all(isinstance(v, int) for v in value.values())
+    ):
+        return dict(value)
+    return None
+
+
+def record_measurements(root: Path = REPO) -> dict[str, dict[str, Measured]]:
     """`MEASURED_MODULES`' current `IO_BUDGET`/`BLOB_BUDGET`, by repo-relative
     path, as `--record` snapshots them (F123, N35): a floor a later change
     to the same module may not fall under without this file also changing,
     the same ratchet `tests/gate_baseline.json` already applies to a
-    suppression count.
+    suppression count. A module that declares its budget per pathway (a
+    dict) is snapshotted the same way, key by key.
     """
-    recorded: dict[str, dict[str, int]] = {}
+    recorded: dict[str, dict[str, Measured]] = {}
     for relative in MEASURED_MODULES:
         path = root / relative
-        costs: dict[str, int] = {}
-        io_value = declared_value(path, root, DECLARATION)
-        if isinstance(io_value, int):
-            costs["io"] = io_value
-        blob_value = declared_value(path, root, BLOB_DECLARATION)
-        if isinstance(blob_value, int):
-            costs["blob"] = blob_value
+        costs: dict[str, Measured] = {}
+        io_recorded = _recordable(declared_value(path, root, DECLARATION))
+        if io_recorded is not None:
+            costs["io"] = io_recorded
+        blob_recorded = _recordable(declared_value(path, root, BLOB_DECLARATION))
+        if blob_recorded is not None:
+            costs["blob"] = blob_recorded
         if costs:
             recorded[relative.as_posix()] = costs
     return recorded
 
 
+def _fallen(
+    relative: str, name: str, value: object, floor: object, source: str
+) -> list[str]:
+    """Every way `value` (the module's current declaration) no longer covers
+    `floor` (what `--record` last measured and recorded in `source`): a bare
+    number below its floor, or -- for a per-pathway dict -- a declaration
+    that is no longer a dict at all, or one missing or below one of the keys
+    its floor named (N35: a dict floor is checked key by key, never as a
+    single number against the whole).
+    """
+    if isinstance(floor, dict):
+        if not isinstance(value, dict):
+            return [
+                f"{relative}: {name} is {value!r}, not the per-key budget "
+                f"last measured and recorded in {source}"
+            ]
+        return [
+            f"{relative}: {name}[{key!r}] is {value.get(key)!r}, below the "
+            f"{key_floor} last measured and recorded in {source}"
+            for key, key_floor in floor.items()
+            if not isinstance(value.get(key), int) or value[key] < key_floor
+        ]
+    if not isinstance(value, int) or not isinstance(floor, int) or value < floor:
+        return [
+            f"{relative}: {name} is {value!r}, below the {floor} last "
+            f"measured and recorded in {source}"
+        ]
+    return []
+
+
 def measured_problems(root: Path = REPO, measured: Path | None = None) -> list[str]:
     """Each recorded module whose current declaration fell under what was
-    last measured and recorded here (F123, N35): a declared number is a
-    claim, and this is the one check that holds it to a number a real
+    last measured and recorded here (F123, N35): a declared number -- or,
+    for a module budgeted per pathway, each declared number in its dict --
+    is a claim, and this is the one check that holds it to a number a real
     request was once shown to cost, not only to its own shape and range.
 
     `measured` defaults to `root`'s own `tests/io_measurements.json`, not
@@ -241,11 +293,7 @@ def measured_problems(root: Path = REPO, measured: Path | None = None) -> list[s
         for dimension, floor in costs.items():
             name = names.get(dimension, dimension)
             value = declared_value(path, root, name)
-            if not isinstance(value, int) or value < int(floor):
-                problems.append(
-                    f"{relative}: {name} is {value!r}, below the {floor} last "
-                    f"measured and recorded in {measured_path.name}"
-                )
+            problems.extend(_fallen(relative, name, value, floor, measured_path.name))
     return problems
 
 
