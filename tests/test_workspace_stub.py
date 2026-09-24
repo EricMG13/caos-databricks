@@ -273,8 +273,7 @@ def test_an_explicit_profile_never_reaches_the_workspace_it_names(
         # Also inside a single `sh -c "..."` argument, the shape the
         # committed CI and enterprise-deploy stand-in commands use.
         assert (
-            main(["--", "sh", "-c", "databricks bundle deploy -p attacker -t dev"])
-            == 2
+            main(["--", "sh", "-c", "databricks bundle deploy -p attacker -t dev"]) == 2
         )
         assert attacker.requests == []
 
@@ -553,6 +552,23 @@ def test_a_target_with_no_sync_snapshot_is_kept_not_assumed_stand_in(
     (state / "summarized" / "resources.json").write_text("{}")
     assert fresh_state(tmp_path) == ["summarized"]
     assert (state / "summarized").is_dir()
+
+
+def test_a_validate_only_target_with_nothing_downloaded_is_still_cleared(
+    tmp_path: Path,
+) -> None:
+    """A `databricks bundle validate` under the direct engine writes no
+    `resources.json` and no sync snapshot at all -- unlike `bundle summary`,
+    it downloads nothing. That empty shell is still the stand-in's own and
+    is cleared, the same as before R24-N02: there is nothing there for the
+    ambiguity that finding is about to be ambiguous over, and CLAUDE.md's
+    own `validate`, then `deploy`, then `run` sequence -- three separate
+    stand-in runs against one target -- depends on it."""
+    state = tmp_path / ".databricks" / "bundle"
+    (state / "dev" / "sync-snapshots").mkdir(parents=True)
+    (state / "dev" / ".internal").mkdir()
+    assert fresh_state(tmp_path) == []
+    assert not (state / "dev").exists()
 
 
 def test_preflight_reads_the_gateway_posture_and_the_price_s_endpoint(

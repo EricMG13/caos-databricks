@@ -669,12 +669,13 @@ def fresh_state(root: Path) -> list[str]:
     Each stand-in run is a new, empty workspace, while `.databricks/bundle`
     outlives it: a deploy planned against the last run's state looks for an
     app this workspace never had, and CLI 1.17.0 panics when that config has
-    changed (DF-13). State is the stand-in's only when it holds a sync
-    snapshot and every one names a loopback host (R24-N02): no snapshot at
-    all -- `bundle summary` can leave exactly that, a `resources.json` with
-    nothing under `sync-snapshots` -- is not positive evidence either way,
-    `all()` of nothing is `True`, and this is deleted state, not a refusal;
-    it is kept, the same as state this cannot read.
+    changed (DF-13). State is the stand-in's when every sync snapshot in it
+    names a loopback host, `all()` of nothing included -- a validate-only
+    stand-in run downloads nothing else either, so an empty target is
+    still cleared. But no snapshot at all next to a `resources.json` (R24-
+    N02) -- what a real `bundle summary` can leave, downloaded without ever
+    syncing -- is positive evidence of neither, so it is kept, the same as
+    state this cannot read.
     """
     kept: list[str] = []
     state = root / ".databricks" / "bundle"
@@ -687,7 +688,8 @@ def fresh_state(root: Path) -> list[str]:
             }
         except (OSError, ValueError, AttributeError):
             hosts = {"unreadable"}
-        if hosts and all(host.startswith(LOOPBACK) for host in hosts):
+        undocumented = not hosts and (target / "resources.json").is_file()
+        if not undocumented and all(host.startswith(LOOPBACK) for host in hosts):
             shutil.rmtree(target)
         else:
             kept.append(target.name)
