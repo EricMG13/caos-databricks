@@ -165,8 +165,8 @@ def _raw_get(port: int, target: str, host: str) -> tuple[str, str | None]:
         request = f"GET {target} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n"
         sock.sendall(f"{request}\r\n".encode())
         answer = b""
-        while chunk := sock.recv(65536):
-            answer += chunk
+        while received := sock.recv(65536):
+            answer += received
     head = answer.split(b"\r\n\r\n", 1)[0].decode("latin-1").splitlines()
     location = next(
         (
