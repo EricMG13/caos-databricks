@@ -1,9 +1,9 @@
 // A section that throws renders its region error, not a blank workspace
 // (brief 4.4, R4 and decision 6).
-import { act, render } from "@testing-library/react";
+import { act, fireEvent, render, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { Workspace } from "@/app/Workspace";
-import { SectionBoundary } from "@/states/SectionBoundary";
+import { SectionBoundary, ViewNotLoaded } from "@/states/SectionBoundary";
 
 vi.mock("@/app/views", () => {
   const Throws = () => {
@@ -87,5 +87,29 @@ describe("the section render boundary", () => {
       </SectionBoundary>,
     );
     expect(container.querySelector("[data-ok]")).not.toBeNull();
+  });
+
+  // W7 of the API review: the first failed load is worth another try; a
+  // second in a row is a stale page, and only a reload fetches new files.
+  test("a view that will not load offers another try, then a reload of the page", () => {
+    let attempts = 0;
+    const NeverLoads = () => {
+      attempts += 1;
+      throw new ViewNotLoaded();
+    };
+    const { container } = render(
+      <SectionBoundary resetOn="2026-09-14T00:00:00Z">
+        <NeverLoads />
+      </SectionBoundary>,
+    );
+    const error = () => container.querySelector("[data-surface-state='error']") as HTMLElement;
+    expect(error()).toHaveTextContent("VIEW_NOT_LOADED");
+    expect(error()).toHaveTextContent("Available once it is tried again.");
+    const tried = attempts;
+    fireEvent.click(within(error()).getByText("Try again"));
+    expect(attempts).toBeGreaterThan(tried);
+    expect(error()).toHaveTextContent("Available once the page is reloaded.");
+    expect(within(error()).queryByText("Try again")).toBeNull();
+    expect(within(error()).getByRole("button", { name: "Reload the page" })).toBeVisible();
   });
 });

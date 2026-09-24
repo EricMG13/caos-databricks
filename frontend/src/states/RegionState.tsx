@@ -31,6 +31,7 @@ const REGION_PLAIN: Record<string, string> = {
   WIRE_SHAPE_INVALID: "The server's answer could not be read.",
   WIRE_IDENTITY_MISMATCH: "The answer was about a different case or run.",
   RENDER_FAILED: "This section could not be drawn.",
+  VIEW_NOT_LOADED: "This part of the workspace did not load.",
 };
 
 export function regionSentence(refusal: Refusal): string {
@@ -101,7 +102,15 @@ export function RegionState<D>({
               {refusalText(status.refusal)} <code>{status.refusal.code}</code>
             </>
           }
-          supporting={onRetry ? <RetryButton onRetry={onRetry} /> : null}
+          supporting={
+            onRetry ? (
+              <RetryButton onRetry={onRetry} />
+            ) : onReload ? (
+              <Button type="button" size="sm" onClick={onReload}>
+                Reload the page
+              </Button>
+            ) : null
+          }
         />
       );
     case "choose": {

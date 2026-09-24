@@ -18,7 +18,7 @@ export function shortDigest(digest: string | null, fallback = "—"): string {
 
 /** A decimal string for reading: thousands grouped and `places` fraction
     digits, rounded half away from zero on the digits themselves, never through
-    a float. `500.000000` reads `500.00`; the exact value stays in the passport.
+    a float. `500.000000` reads `500.00`; the exact value stays on the wire.
     Anything that is not a plain decimal is returned as it came. */
 export function displayDecimal(value: string, places = 2): string {
   const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(value);

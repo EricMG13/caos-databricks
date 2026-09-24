@@ -231,12 +231,13 @@ export function RunSection({ document }: { document: RunSectionDocument; tab: st
             onRefetch={refetch}
           />
           {run.gates.map((gate) => (
-            // Keyed on the fingerprint: a pin (or an approval that moved it)
+            // Keyed on the input's fingerprint: a pin (or an approval that
+            // moved it), here or by someone else as the run read shows it,
             // remounts the panel, clearing any preview read under the input
-            // that just changed rather than leaving a stale digest approvable
-            // (brief 4.2 review finding 3).
+            // that changed rather than leaving a stale digest approvable
+            // (brief 4.2 review finding 3). A preview moves neither (MAX-18).
             <GatePanelControl
-              key={`${gate.gate}:${pinned ?? "none"}`}
+              key={`${gate.gate}:${run.input_fingerprint ?? "none"}:${pinned ?? "none"}`}
               caseId={body.case_id}
               runId={run.run_id}
               gate={gate.gate}
@@ -292,7 +293,11 @@ export function RunSection({ document }: { document: RunSectionDocument; tab: st
           <div className="pb">
             <dl className="kv">
               <dt>Status</dt>
-              <dd className="prose">{sentence(run.status)}</dd>
+              <dd className="prose">
+                {isParked({ status: run.status, stop_code: run.work?.stop_code ?? null })
+                  ? `Parked · ${run.work?.stop_code}`
+                  : sentence(run.status)}
+              </dd>
               {blockedBy !== null ? (
                 <>
                   <dt>Blocked by</dt>

@@ -1062,7 +1062,7 @@ describe("Run", () => {
     const { container } = mount(doc);
     const start = container.querySelector('[data-action="START_RUN"]')!;
     expect(start).toHaveAttribute("aria-disabled", "true");
-    expect(start).toHaveAttribute("data-refusal", "COMMAND_EXPECTATION_STALE");
+    expect(start).toHaveAttribute("data-refusal", "RUN_INPUT_NOT_PINNED");
     const retry = container.querySelector('[data-action="RETRY_RUN"]')!;
     expect(retry).toHaveAttribute("aria-disabled", "true");
     const cancel = container.querySelector('[data-action="CANCEL_RUN"]')!;
@@ -1108,8 +1108,8 @@ describe("Run", () => {
       const { container } = mount(doc);
       const start = () => container.querySelector('[data-action="START_RUN"]')!;
       const retry = () => container.querySelector('[data-action="RETRY_RUN"]')!;
-      expect(start()).toHaveAttribute("data-refusal", "COMMAND_EXPECTATION_STALE");
-      expect(retry()).toHaveAttribute("data-refusal", "COMMAND_EXPECTATION_STALE");
+      expect(start()).toHaveAttribute("data-refusal", "RUN_INPUT_NOT_PINNED");
+      expect(retry()).toHaveAttribute("data-refusal", "RUN_INPUT_NOT_PINNED");
 
       fireEvent.click(
         container.querySelector('[data-gate-panel="SOURCE_SET"] [data-action="PREVIEW"]')!,
@@ -1166,6 +1166,17 @@ describe("Run", () => {
       const [url, init] = fetchSpy.mock.calls[0]!;
       expect(url).toBe(`/api/v1/cases/${running.body.case_id}/runs/${pinnedRun.run_id}/start`);
       expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+        input_fingerprint: fingerprint,
+      });
+      // Retry carries the same fingerprint, not only Start (review note).
+      fireEvent.click(container.querySelector('[data-action="RETRY_RUN"]')!);
+      await waitFor(() =>
+        expect(fetchSpy.mock.calls.some(([called]) => String(called).endsWith("/retry"))).toBe(
+          true,
+        ),
+      );
+      const retried = fetchSpy.mock.calls.find(([called]) => String(called).endsWith("/retry"))!;
+      expect(JSON.parse((retried[1] as RequestInit).body as string)).toEqual({
         input_fingerprint: fingerprint,
       });
     } finally {

@@ -82,6 +82,60 @@ describe("Committee v1", () => {
     expect(held).toHaveTextContent("Available once the revision is filed.");
   });
 
+  test("a filed revision is paper, with its stamp, signatures and digests; a frozen one is not (N62)", () => {
+    const filed = committee();
+    const { container, unmount } = render(<CommitteeSection document={filed} tab={null} />);
+    const paper = container.querySelector("[data-paper]")!;
+    expect(paper.tagName).toBe("ARTICLE");
+    expect(paper).toHaveAccessibleName(filed.body.case_title);
+    expect(paper.querySelector(".paper-stamp")).toHaveTextContent("Filed");
+    expect(paper.querySelector("[data-figure-chip]")).not.toBeNull();
+    const sign = paper.querySelector(".paper-sign")!;
+    expect(sign).toHaveTextContent("Signed by");
+    expect(sign).toHaveTextContent("Filed by");
+    // Short on the page, whole in the title.
+    const payload = paper.querySelector(`[title="sha256:${filed.body.payload_sha256}"]`);
+    expect(payload).not.toBeNull();
+    expect(paper.querySelector(".paper-filed")).toHaveTextContent("filed event");
+    // The full receipt is still the record below it.
+    expect(container.querySelector("[data-committee-receipt]")).not.toBeNull();
+    unmount();
+    const frozen = parseCommitteeDocument({
+      ...filed,
+      body: { ...filed.body, state: "frozen", filed_by: null, receipt: null, package_url: null },
+    });
+    const { container: held } = render(<CommitteeSection document={frozen} tab={null} />);
+    expect(held.querySelector("[data-paper]")).toBeNull();
+    expect(held.querySelector("[data-committee-narrative]")).not.toBeNull();
+  });
+
+  // Security review note 1: only the host's own read of this revision is
+  // linked; another origin, a script or another revision is refused.
+  test("a link that is not this revision's own read is refused, never followed", () => {
+    const filed = committee();
+    for (const [render_url, package_url] of [
+      ["https://evil.example/render", "//evil.example/package"],
+      ["javascript:alert(1)", "data:text/html,x"],
+      [
+        filed.body.render_url.replace(
+          filed.body.revision_id,
+          "00000000-0000-4000-8000-0000000000ff",
+        ),
+        filed.body.package_url!.replace(filed.body.case_id, "00000000-0000-4000-8000-0000000000fe"),
+      ],
+    ]) {
+      const odd = parseCommitteeDocument({
+        ...filed,
+        body: { ...filed.body, render_url, package_url },
+      });
+      const { container, unmount } = render(<CommitteeSection document={odd} tab={null} />);
+      const downloads = container.querySelector("[data-committee-downloads]")!;
+      expect(downloads.querySelector("a")).toBeNull();
+      expect(downloads.querySelectorAll('[data-refusal="LINK_NOT_OWN"]')).toHaveLength(2);
+      unmount();
+    }
+  });
+
   test("renders distinct hostile narrative spans and typed figures as text", () => {
     const { container } = render(<CommitteeSection document={committee()} tab={null} />);
     const narrative = container.querySelector("[data-committee-narrative]")!;

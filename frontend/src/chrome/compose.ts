@@ -196,6 +196,10 @@ function run(document: RunSectionDocument): Facts {
   const gated = view.nodes
     .filter((node) => node.awaiting_gate && node.state !== "COMPLETE")
     .map((node) => node.module_id);
+  // CF-044: a run its worker parked still reads RUNNING; its own section
+  // says so first, since the Directory sends the reader here to retry it.
+  const stop = view.work?.stop_code ?? null;
+  const parked = isParked({ status: view.status, stop_code: stop });
   const waiting = open.length
     ? `waiting on the ${words(open[0]!.gate)} gate`
     : gated.length
@@ -204,7 +208,7 @@ function run(document: RunSectionDocument): Facts {
   return {
     ribbon: {
       ...QUIET,
-      execution: view.status,
+      execution: parked ? "PARKED" : view.status,
       approval: open.length ? `${plural(open.length, "gate")} open` : "gates released",
     },
     brief: {
@@ -214,14 +218,23 @@ function run(document: RunSectionDocument): Facts {
         : restricted
           ? `${plural(restricted, "module")} restricted.`
           : null,
-      action: open.length ? `Review the ${words(open[0]!.gate)} gate.` : null,
+      action: parked
+        ? "Retry the run once what stopped it is cleared."
+        : open.length
+          ? `Review the ${words(open[0]!.gate)} gate.`
+          : null,
       evidence: null,
       headline: `${done}/${view.nodes.length}`,
       headline_label: "modules complete",
     },
     verdict: {
-      severity: open.length && view.status === "RUNNING" ? "WARNING" : RUN_SEVERITY[view.status],
-      conclusion: [RUN_WORDS[view.status], waiting].filter(Boolean).join(" · "),
+      severity:
+        parked || (open.length && view.status === "RUNNING")
+          ? "WARNING"
+          : RUN_SEVERITY[view.status],
+      conclusion: parked
+        ? `Parked · ${stop}`
+        : [RUN_WORDS[view.status], waiting].filter(Boolean).join(" · "),
       blocked_on: view.blocked_by?.module_id ?? null,
     },
   };

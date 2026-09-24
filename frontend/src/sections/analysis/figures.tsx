@@ -2,7 +2,7 @@
 // bundle's own reader (D32). The tables are the model's, like its prose, so
 // every mark is model-authored: outlined and hatched, printed exactly as
 // served. Sums are exact (BigInt); a float only places a mark.
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   DivergingBarChart,
   LineChart,
@@ -89,6 +89,29 @@ export interface Figure {
   series: ChartSeries[];
   /** Where the model says a mark's figure came from: its source locator. */
   sourceOf: (selection: ChartSelection) => string | null;
+  /** Past `MAX_MARKS`: stated, not drawn. */
+  oversized?: boolean;
+}
+
+/** A figure past this many marks is stated, not drawn, and past this many
+    figures a module's are stated too. The tables are model-authored and may
+    run to 2,000 rows: a cross product of two of their columns is millions of
+    marks, and drawing them froze the tab (security review, F327). */
+const MAX_MARKS = 2_000;
+const MAX_FIGURES = 24;
+
+function oversized(key: string, table: string, title: string, marks: number): Figure {
+  return {
+    key,
+    table,
+    kind: "stack",
+    title,
+    summary: `${marks} marks: too many to draw. The module's tables below list every row.`,
+    categories: [],
+    series: [],
+    sourceOf: () => null,
+    oversized: true,
+  };
 }
 
 function tableOf(tables: readonly Table[], id: string): Row[] | null {
@@ -103,7 +126,8 @@ function periodsOf(tables: readonly Table[], present: readonly string[]): string
   );
   const wanted = new Set(present);
   const ordered = register.filter((period) => wanted.has(period));
-  return [...ordered, ...present.filter((period) => !ordered.includes(period))];
+  const placed = new Set(ordered);
+  return [...ordered, ...present.filter((period) => !placed.has(period))];
 }
 
 /** The register's currency and scale for a period. */
@@ -115,6 +139,20 @@ function periodUnit(tables: readonly Table[], period: string | undefined): strin
 }
 
 const unique = (values: readonly string[]) => [...new Set(values)];
+/** Rows grouped by `key`, in table order, built once: a `find` or `filter`
+    per mark made the figures cubic in a table's rows. */
+function groupBy(rows: readonly Row[], key: (row: Row) => string): Map<string, Row[]> {
+  const groups = new Map<string, Row[]>();
+  for (const row of rows) {
+    const k = key(row);
+    const group = groups.get(k);
+    if (group) group.push(row);
+    else groups.set(k, [row]);
+  }
+  return groups;
+}
+/** Two cells as one key; the separator cannot occur in a served cell's text. */
+const pair = (a: string, b: string) => `${a}\u0000${b}`;
 // A priority the model did not state sorts last, never as NaN.
 const priority = (row: Row) => Number(text(row, "display_priority")) || Number.MAX_SAFE_INTEGER;
 const byPriority = (rows: readonly Row[], key: string) =>
@@ -127,15 +165,21 @@ export function segmentMix(tables: readonly Table[]): Figure | null {
   const rows = tableOf(tables, "cp1.segment_revenue_schedule");
   if (!rows?.length) return null;
   const periods = periodsOf(tables, unique(rows.map((row) => text(row, "period_id"))));
-  const at = (segment: string, period: string) =>
-    rows.find((row) => text(row, "segment_id") === segment && text(row, "period_id") === period);
   const segments = byPriority(rows, "segment_id");
+  if (segments.length * periods.length > MAX_MARKS) {
+    return oversized(
+      "segment-mix",
+      "cp1.segment_revenue_schedule",
+      "Revenue by segment",
+      segments.length * periods.length,
+    );
+  }
+  const cells = groupBy(rows, (row) => pair(text(row, "segment_id"), text(row, "period_id")));
+  const at = (segment: string, period: string) => cells.get(pair(segment, period))?.[0];
+  const named = groupBy(rows, (row) => text(row, "segment_id"));
   const series = segments.map((segment) => ({
     key: segment,
-    label: text(
-      rows.find((row) => text(row, "segment_id") === segment)!,
-      "segment_name",
-    ),
+    label: text(named.get(segment)![0]!, "segment_name"),
     origin: "model" as const,
     data: periods.map((period) => datum(at(segment, period)?.revenue)),
   }));
@@ -170,10 +214,12 @@ const KPI_UNIT: Record<string, string> = { UNITS: "units", PERCENT: "%", RATIO: 
 export function kpiLines(tables: readonly Table[]): Figure[] {
   const rows = tableOf(tables, "cp1.operating_kpi_schedule");
   if (!rows?.length) return [];
+  const byKpi = groupBy(rows, (row) => text(row, "kpi_id"));
   return byPriority(rows, "kpi_id").map((kpi) => {
-    const own = rows.filter((row) => text(row, "kpi_id") === kpi);
+    const own = byKpi.get(kpi)!;
     const periods = periodsOf(tables, unique(own.map((row) => text(row, "period_id"))));
-    const at = (period: string) => own.find((row) => text(row, "period_id") === period);
+    const byPeriod = groupBy(own, (row) => text(row, "period_id"));
+    const at = (period: string) => byPeriod.get(period)?.[0];
     const label = text(own[0]!, "kpi_label");
     const unit = KPI_UNIT[text(own[0]!, "unit").toUpperCase()] ?? text(own[0]!, "unit");
     const first = at(periods[0]!);
@@ -207,7 +253,17 @@ export function addbacks(tables: readonly Table[]): Figure | null {
   const latest = periods.at(-1)!;
   const own = rows.filter((row) => text(row, "period_id") === latest);
   const items = byPriority(own, "addback_id");
-  const at = (item: string) => own.find((row) => text(row, "addback_id") === item);
+  if (items.length > MAX_MARKS) {
+    return oversized(
+      "addbacks",
+      "cp1.adjusted_ebitda_bridge",
+      `Add-backs to EBITDA, ${latest}`,
+      items.length,
+    );
+  }
+  const byItem = groupBy(own, (row) => text(row, "addback_id"));
+  const at = (item: string) => byItem.get(item)?.[0];
+  const labels = groupBy(own, (row) => text(row, "addback_label"));
   const unit = periodUnit(tables, latest);
   const values = items.map((item) => at(item)?.value?.value);
   const net = sumOf(values);
@@ -228,11 +284,9 @@ export function addbacks(tables: readonly Table[]): Figure | null {
     unit,
     // A band scale drops a repeated category, so two add-backs the model
     // labelled alike keep their ids beside the label.
-    categories: items.map((item, index) => {
+    categories: items.map((item) => {
       const label = text(at(item)!, "addback_label");
-      const twin = items.some(
-        (other, at2) => at2 !== index && text(at(other)!, "addback_label") === label,
-      );
+      const twin = new Set(labels.get(label)!.map((row) => text(row, "addback_id"))).size > 1;
       return twin ? `${label} (${item})` : label;
     }),
     series: [
@@ -273,11 +327,20 @@ export function maturityLadder(tables: readonly Table[]): Figure | null {
   const classOf = (row: Row) => `${text(row, "secured_status")} ${text(row, "seniority")}`;
   const years = unique(own.map(yearOf)).sort();
   const classes = unique(own.map(classOf));
+  if (classes.length * years.length > MAX_MARKS) {
+    return oversized(
+      "maturities",
+      "cp1.debt_facility_register",
+      `Debt maturities by seniority, ${latest}`,
+      classes.length * years.length,
+    );
+  }
+  const falling = groupBy(own, (row) => pair(classOf(row), yearOf(row)));
   // A class/year with no facility at all is genuinely zero; one whose every
   // facility's principal is unstated is unknown, never silently zero
   // (`sumOf`'s own `?? "0"` fallback used to conflate the two).
   const cell = (klass: string, year: string): Datum => {
-    const matched = own.filter((row) => classOf(row) === klass && yearOf(row) === year);
+    const matched = falling.get(pair(klass, year)) ?? [];
     if (matched.length === 0) return { value: "0" };
     const sum = sumOf(matched.map((row) => row.principal?.value));
     return sum.value === null ? { value: null, reason: "not stated" } : { value: sum.value };
@@ -324,9 +387,7 @@ export function maturityLadder(tables: readonly Table[]): Figure | null {
     // A segment sums every facility of its class falling due that year, so it
     // names each one's stated source, not the first's (rewrite tournament).
     sourceOf: (selection) => {
-      const summed = own.filter(
-        (row) => classOf(row) === selection.series && yearOf(row) === selection.category,
-      );
+      const summed = falling.get(pair(selection.series, selection.category)) ?? [];
       return summed.length
         ? summed.map((row) => `${text(row, "facility_name")}: ${locate(row)}`).join("; ")
         : null;
@@ -334,10 +395,15 @@ export function maturityLadder(tables: readonly Table[]): Figure | null {
   };
 }
 
-/** A fraction the bundle wrote (`current / prior - 1`, a `PERCENT_DECIMAL`
-    driver) as the percent a reader reads, moved on its digits. */
-const percentDatum = (cell: Cell | undefined, reason: string): Datum =>
-  cell?.value != null ? { value: hundredfold(cell.value) } : { value: null, reason };
+/** A rate as the percent a reader reads. The model may write it either way:
+    a bare fraction (`0.08`, a `PERCENT_DECIMAL` driver) is moved two places
+    on its digits, while `8%` already is one -- the host's reader strips the
+    sign and keeps the points (`caos/methodology/tables.py`), so the served
+    value is `8`, and scaling it again drew 800%. */
+const percentDatum = (cell: Cell | undefined, reason: string): Datum => {
+  if (cell?.value == null) return { value: null, reason };
+  return { value: cell.text.trim().endsWith("%") ? cell.value : hundredfold(cell.value) };
+};
 
 /** A comparison basis in words for a title, and short for a bar that needs
     one because its neighbours differ. */
@@ -369,15 +435,25 @@ const idLabel = (id: string) =>
 export function comparatorChanges(tables: readonly Table[]): Figure | null {
   const rows = tableOf(tables, "cp1b.model_comparator_register");
   if (!rows?.length) return null;
+  if (rows.length > MAX_MARKS) {
+    return oversized("comparator", "cp1b.model_comparator_register", "Change", rows.length);
+  }
   // One basis names the figure; several name each bar, short, so a label
   // is the metric rather than a phrase repeated down the axis.
   const bases = unique(rows.map((row) => text(row, "comparison_basis")));
   const [said] = BASIS[bases[0]!] ?? [bases[0]!.toLowerCase()];
-  const categories = rows.map((row) => {
+  const named = rows.map((row) => {
     const metric = idLabel(text(row, "metric_id"));
     const basis = text(row, "comparison_basis");
     return bases.length === 1 ? metric : `${metric} ${BASIS[basis]?.[1] ?? basis}`;
   });
+  // A metric compared twice on one basis (two quarters' revenue) is two
+  // bars: each names its period, so neither is read as the other.
+  const seen = new Map<string, number>();
+  for (const label of named) seen.set(label, (seen.get(label) ?? 0) + 1);
+  const categories = named.map((label, index) =>
+    seen.get(label) === 1 ? label : `${label}, ${text(rows[index]!, "current_period_id")}`,
+  );
   const data = rows.map((row) =>
     percentDatum(row.percentage_change, text(row, "calculation_status") || "not calculable"),
   );
@@ -418,39 +494,50 @@ export function comparatorChanges(tables: readonly Table[]): Figure | null {
   };
 }
 
-/** CP-1B's comparison of each add-back less CP-1's, for the latest period
-    validated (N56): zero where they agree. The summary counts what the
-    module ruled, since a difference inside tolerance still passes. */
+/** CP-1B's comparison of each add-back less CP-1's, every period it
+    validated (N56): zero where they agree. Every period, not a "latest" one:
+    this register carries no period order of its own (CP-1's register is
+    another module's table), and a row order that put an older period last
+    hid a BLOCK in the newer one. The summary counts what the module ruled,
+    since a difference inside tolerance still passes. */
 export function addbackValidation(tables: readonly Table[]): Figure | null {
   const rows = tableOf(tables, "cp1b.addback_validation_register");
   if (!rows?.length) return null;
-  const latest = unique(rows.map((row) => text(row, "period_id"))).at(-1)!;
-  const own = rows.filter((row) => text(row, "period_id") === latest);
+  if (rows.length > MAX_MARKS) {
+    return oversized(
+      "addback-validation",
+      "cp1b.addback_validation_register",
+      "Add-backs against CP-1",
+      rows.length,
+    );
+  }
   const count = (status: string) =>
-    own.filter((row) => text(row, "status").toUpperCase() === status).length;
+    rows.filter((row) => text(row, "status").toUpperCase() === status).length;
   const [pass, warn, block] = [count("PASS"), count("WARN"), count("BLOCK")];
+  const periods = unique(rows.map((row) => text(row, "period_id")));
   return {
     key: "addback-validation",
     table: "cp1b.addback_validation_register",
     kind: "diverging",
-    title: `Add-backs against CP-1, ${latest}`,
+    title: "Add-backs against CP-1",
     summary:
-      `${pass} of ${own.length} pass` +
+      `${pass} of ${rows.length} pass` +
       (warn ? `, ${warn} warn` : "") +
       (block ? `, ${block} block model readiness` : "") +
-      ".",
-    // The register names an add-back by its id; its label is CP-1's table.
-    categories: own.map((row) => idLabel(text(row, "addback_id"))),
+      ` across ${periods.length === 1 ? periods[0] : `${periods.length} periods`}.`,
+    // The register names an add-back by its id (its label is CP-1's table),
+    // and each bar by its period too, so no two read alike.
+    categories: rows.map((row) => `${idLabel(text(row, "addback_id"))}, ${text(row, "period_id")}`),
     series: [
       {
         key: "difference",
         label: "CP-1B less CP-1",
         origin: "model",
-        data: own.map((row) => datum(row.difference)),
+        data: rows.map((row) => datum(row.difference)),
       },
     ],
     sourceOf: (selection) => {
-      const row = own[selection.index];
+      const row = rows[selection.index];
       if (!row) return null;
       return [text(row, "status"), text(row, "explanation"), text(row, "source_or_conflict_ref")]
         .filter(Boolean)
@@ -473,20 +560,23 @@ export function forecastDrivers(tables: readonly Table[]): Figure[] {
   const slots = unique(rows.map((row) => text(row, "slot_id"))).filter((slot) =>
     rows.some((row) => text(row, "slot_id") === slot && text(row, "status") === "READY"),
   );
+  const bySlot = groupBy(rows, (row) => text(row, "slot_id"));
   return slots.map((slot) => {
-    const own = rows.filter((row) => text(row, "slot_id") === slot);
+    const own = bySlot.get(slot)!;
     const years = unique(own.map((row) => text(row, "fiscal_year"))).sort();
-    const cases = unique(own.map((row) => text(row, "case"))).sort(
-      (a, b) => CASE_ORDER.indexOf(a) - CASE_ORDER.indexOf(b),
-    );
-    const at = (kase: string, year: string) =>
-      own.find((row) => text(row, "case") === kase && text(row, "fiscal_year") === year);
+    // A case the bundle does not name sorts after the two it does, never
+    // before BASE (`indexOf` is -1).
+    const order = (kase: string) =>
+      CASE_ORDER.includes(kase) ? CASE_ORDER.indexOf(kase) : CASE_ORDER.length;
+    const cases = unique(own.map((row) => text(row, "case"))).sort((a, b) => order(a) - order(b));
+    const cells = groupBy(own, (row) => pair(text(row, "case"), text(row, "fiscal_year")));
+    const at = (kase: string, year: string) => cells.get(pair(kase, year))?.[0];
     const label = sentence(slot.replace("_", " "));
     const span = (kase: string) => {
-      const first = at(kase, years[0]!)?.value?.value;
-      const last = at(kase, years.at(-1)!)?.value?.value;
+      const first = percentDatum(at(kase, years[0]!)?.value, "").value;
+      const last = percentDatum(at(kase, years.at(-1)!)?.value, "").value;
       return first != null && last != null
-        ? `${sentence(kase)} ${formatDecimal(hundredfold(first), true)}% to ${formatDecimal(hundredfold(last), true)}%`
+        ? `${sentence(kase)} ${formatDecimal(first, true)}% to ${formatDecimal(last, true)}%`
         : null;
     };
     return {
@@ -514,7 +604,7 @@ export function forecastDrivers(tables: readonly Table[]): Figure[] {
 /** Every figure a handoff's tables support, in reading order. */
 export function figuresOf(handoff: HandoffView): Figure[] {
   const tables = handoff.tables;
-  return [
+  const figures = [
     segmentMix(tables),
     ...kpiLines(tables),
     addbacks(tables),
@@ -523,6 +613,15 @@ export function figuresOf(handoff: HandoffView): Figure[] {
     addbackValidation(tables),
     ...forecastDrivers(tables),
   ].filter((figure): figure is Figure => figure !== null);
+  if (figures.length <= MAX_FIGURES) return figures;
+  const rest = figures.length - (MAX_FIGURES - 1);
+  return [
+    ...figures.slice(0, MAX_FIGURES - 1),
+    {
+      ...oversized("more", figures[MAX_FIGURES - 1]!.table, `${rest} more figures`, 0),
+      summary: `${rest} more figures are not drawn. The module's tables below list every row.`,
+    },
+  ];
 }
 
 /** CP-2B's catalysts, ranked, each with the date or window it falls in
@@ -530,11 +629,12 @@ export function figuresOf(handoff: HandoffView): Figure[] {
 function Catalysts({ tables }: { tables: HandoffView["tables"] }) {
   const rows = tableOf(tables, "cp2b.cp_model_catalysts");
   if (!rows?.length) return null;
-  const ranked = [...rows].sort(
-    (a, b) =>
-      (Number(text(a, "rank")) || Number.MAX_SAFE_INTEGER) -
-      (Number(text(b, "rank")) || Number.MAX_SAFE_INTEGER),
-  );
+  // A rank that is not a number sorts last; 0 is a rank, not a missing one.
+  const rank = (row: Row) => {
+    const value = Number(text(row, "rank") || Number.NaN);
+    return Number.isFinite(value) ? value : Number.MAX_SAFE_INTEGER;
+  };
+  const ranked = [...rows].sort((a, b) => rank(a) - rank(b));
   return (
     <section className="catalysts" aria-labelledby="catalysts-heading" data-catalysts>
       <h4 id="catalysts-heading">Catalysts, ranked</h4>
@@ -652,6 +752,12 @@ export function Figures({
   handoff: HandoffView;
   onPick: (pick: FigurePick, opener: HTMLElement) => void;
 }) {
+  // Once a document, not once a render: pressing a mark re-renders the
+  // section, and the figures' cost is the tables' (F327).
+  const figures = useMemo(
+    () => (handoff.tables_unavailable_reason ? [] : figuresOf(handoff)),
+    [handoff],
+  );
   if (handoff.tables_unavailable_reason) {
     return (
       <p className="note" data-tables-unavailable={handoff.tables_unavailable_reason}>
@@ -660,7 +766,6 @@ export function Figures({
       </p>
     );
   }
-  const figures = figuresOf(handoff);
   if (figures.length === 0 && handoff.tables.length === 0) return null;
   return (
     <section className="figures" aria-labelledby="figures-heading" data-figures>
@@ -671,7 +776,13 @@ export function Figures({
         <div className="figgrid">
           {figures.map((figure) => (
             <div key={figure.key} className={`fig ${figure.kind}`} data-figure={figure.key}>
-              <Chart figure={figure} onPick={onPick} />
+              {figure.oversized ? (
+                <p className="note" data-figure-oversized>
+                  <b>{figure.title}.</b> {figure.summary}
+                </p>
+              ) : (
+                <Chart figure={figure} onPick={onPick} />
+              )}
             </div>
           ))}
         </div>

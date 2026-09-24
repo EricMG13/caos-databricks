@@ -979,6 +979,117 @@
     width: 100%;
     height: auto;
   }
+  /* The filed deliverable as paper (N62): ink on cream in either theme, a
+     sheet set on the page rather than a card in it. Its only colour is the
+     paper's own: blue for what points into the evidence, green for the stamp. */
+  .paper {
+    position: relative;
+    width: min(46rem, 100%);
+    padding: 2rem 2.25rem 1.25rem;
+    border-radius: var(--radius-md);
+    background: var(--paper-bg);
+    color: var(--paper-ink);
+    box-shadow:
+      0 1px 2px rgb(0 0 0 / 0.08),
+      0 12px 32px -12px rgb(0 0 0 / 0.25);
+  }
+  .paper-mast {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--paper-rule);
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--paper-meta);
+  }
+  .paper h2 {
+    margin: 1.25rem 7rem 0.25rem 0;
+    font-size: 1.375rem;
+    font-weight: 650;
+    line-height: 1.25;
+    letter-spacing: -0.015em;
+    text-wrap: balance;
+  }
+  .paper-sub {
+    margin: 0;
+    font-size: 0.8125rem;
+    color: var(--paper-note);
+  }
+  .paper h3 {
+    margin: 1.5rem 0 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--paper-meta);
+  }
+  .paper-body p {
+    margin: 0 0 0.75rem;
+    font-size: 1rem;
+    line-height: 1.65;
+    text-wrap: pretty;
+  }
+  .paper .chip {
+    border-color: var(--paper-rule);
+    background: transparent;
+    color: var(--paper-cite);
+  }
+  .paper .chip:hover {
+    background: color-mix(in oklab, var(--paper-cite) 8%, transparent);
+  }
+  /* A stamp, set once: a ruled box in the paper's green, turned a little as
+     a hand would, and never animated. */
+  .paper-stamp {
+    position: absolute;
+    top: 3.25rem;
+    right: 2.25rem;
+    margin: 0;
+    padding: 0.25rem 0.75rem;
+    border: 2px solid var(--paper-stamp);
+    border-radius: var(--radius-sm);
+    color: var(--paper-stamp);
+    font-size: 0.875rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    rotate: -4deg;
+  }
+  .paper-sign {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 0.25rem 1rem;
+    margin: 1.25rem 0 0;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--paper-rule);
+    font-size: 0.8125rem;
+  }
+  .paper-sign dt {
+    color: var(--paper-meta);
+  }
+  .paper-sign dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+  .paper-filed {
+    margin-top: 1rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--paper-rule);
+    font-size: 0.75rem;
+    color: var(--paper-note);
+    overflow-wrap: anywhere;
+  }
+  @media (max-width: 40rem) {
+    .paper {
+      padding: 1.25rem 1rem 1rem;
+    }
+    .paper-stamp {
+      position: static;
+      display: inline-block;
+      margin-top: 1rem;
+    }
+    .paper h2 {
+      margin-right: 0;
+    }
+  }
   /* A line the rendered page does not show (N27): outlined in dashes on a
      warm wash, so it reads as marked and not as cited. */
   .pagerender [data-hidden] {

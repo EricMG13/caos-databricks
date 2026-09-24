@@ -284,21 +284,153 @@ test("comparatorChanges: each metric's change in percent, an uncalculable one a 
   ).toBe("Q2-2026 against Q2-2025: 6,112/5,294");
 });
 
-test("addbackValidation: the latest period's differences, with what the module ruled", () => {
+test("addbackValidation: every period's differences, with what the module ruled", () => {
   const figure = addbackValidation(handoffOf("CP-1B").tables)!;
-  expect(figure.title).toBe("Add-backs against CP-1, Q2-2026");
-  expect(figure.categories).toEqual(["SBC", "Root warrants", "Restructuring", "Other income"]);
-  expect(figure.series[0]!.data.map((entry) => entry.value)).toEqual(["0", "0", "2", "0"]);
-  expect(figure.summary).toBe("3 of 4 pass, 1 warn.");
+  expect(figure.title).toBe("Add-backs against CP-1");
+  expect(figure.categories).toHaveLength(8);
+  expect(figure.categories[6]).toBe("Restructuring, Q2-2026");
+  expect(figure.series[0]!.data[6]).toEqual({ value: "2" });
+  expect(figure.summary).toBe("7 of 8 pass, 1 warn across 2 periods.");
   expect(
     figure.sourceOf({
       series: "difference",
-      category: "Restructuring",
-      index: 2,
+      category: "Restructuring, Q2-2026",
+      index: 6,
       value: "2",
       origin: "model",
     }),
   ).toMatch(/^WARN · The 10-Q books 2 of site costs/);
+});
+
+// Security and saboteur review: the figures read what the model wrote, so
+// each of these is a table a model can write.
+const table = (table_id: string, columns: string[], rows: string[][]) => ({
+  table_id,
+  columns,
+  rows: rows.map((row) =>
+    row.map((text) => ({
+      text,
+      value: /^-?[0-9]+(\.[0-9]+)?%?$/.test(text) ? text.replace("%", "") : null,
+    })),
+  ),
+});
+const COMPARATOR = [
+  "metric_id",
+  "current_period_id",
+  "reference_period_id",
+  "comparison_basis",
+  "percentage_change",
+  "calculation_status",
+];
+
+test("a rate written with a percent sign is not scaled again (it is points, not a fraction)", () => {
+  const figure = comparatorChanges([
+    table("cp1b.model_comparator_register", COMPARATOR, [
+      ["revenue", "Q2-2026", "Q2-2025", "YOY_SAME_QUARTER", "15.45%", "Calculated"],
+      ["ebitda", "Q2-2026", "Q2-2025", "YOY_SAME_QUARTER", "0.2379", "Calculated"],
+    ]),
+  ])!;
+  expect(figure.series[0]!.data).toEqual([{ value: "15.45" }, { value: "23.79" }]);
+  const [growth] = forecastDrivers([
+    table(
+      "cp2g.cp_model_forecast_drivers",
+      ["driver_id", "slot_id", "case", "fiscal_year", "value", "status"],
+      [
+        ["division_growth", "DIVISION_1", "BASE", "2026", "8%", "READY"],
+        ["division_growth", "DIVISION_1", "BASE", "2027", "0.06", "READY"],
+      ],
+    ),
+  ]);
+  expect(growth!.series[0]!.data).toEqual([{ value: "8" }, { value: "6" }]);
+  expect(growth!.summary).toMatch(/^Base \+?8(\.0+)?% to \+?6(\.0+)?%/);
+});
+
+test("a metric compared twice on one basis is two named bars, not two alike", () => {
+  const figure = comparatorChanges([
+    table("cp1b.model_comparator_register", COMPARATOR, [
+      ["revenue", "Q1-2026", "Q1-2025", "YOY_SAME_QUARTER", "0.1", "Calculated"],
+      ["revenue", "Q2-2026", "Q2-2025", "YOY_SAME_QUARTER", "0.2", "Calculated"],
+    ]),
+  ])!;
+  expect(figure.categories).toEqual(["Revenue, Q1-2026", "Revenue, Q2-2026"]);
+});
+
+test("a BLOCK in any period shows, whatever order the register lists its periods in", () => {
+  const columns = ["addback_id", "period_id", "difference", "status", "explanation"];
+  const figure = addbackValidation([
+    table("cp1b.addback_validation_register", columns, [
+      ["SBC", "Q2-2026", "5", "BLOCK", "unreconciled"],
+      ["SBC", "Q1-2026", "0", "PASS", ""],
+    ]),
+  ])!;
+  expect(figure.categories).toEqual(["SBC, Q2-2026", "SBC, Q1-2026"]);
+  expect(figure.summary).toBe("1 of 2 pass, 1 block model readiness across 2 periods.");
+});
+
+test("an unknown case sorts after base and downside, and rank 0 is a rank", () => {
+  const [growth] = forecastDrivers([
+    table(
+      "cp2g.cp_model_forecast_drivers",
+      ["driver_id", "slot_id", "case", "fiscal_year", "value", "status"],
+      [
+        ["division_growth", "DIVISION_1", "STRESS", "2026", "0.01", "READY"],
+        ["division_growth", "DIVISION_1", "DOWNSIDE", "2026", "0.02", "READY"],
+        ["division_growth", "DIVISION_1", "BASE", "2026", "0.03", "READY"],
+      ],
+    ),
+  ]);
+  expect(growth!.series.map((series) => series.key)).toEqual(["BASE", "DOWNSIDE", "STRESS"]);
+});
+
+test("the catalyst list sorts by rank, whatever order the model wrote", () => {
+  const cp2b = handoffOf("CP-2B");
+  const [catalysts] = cp2b.tables;
+  const shuffled = {
+    ...document,
+    body: {
+      ...document.body,
+      handoffs: document.body.handoffs.map((handoff) =>
+        handoff === cp2b
+          ? { ...handoff, tables: [{ ...catalysts!, rows: [...catalysts!.rows].reverse() }] }
+          : handoff,
+      ),
+    },
+  };
+  const { container } = render(
+    <MemoryRouter>
+      <AnalysisSection document={shuffled} tab="rn-cp-2b" />
+    </MemoryRouter>,
+  );
+  expect(
+    [...container.querySelectorAll("[data-catalyst]")].map((item) =>
+      item.getAttribute("data-catalyst"),
+    ),
+  ).toEqual(["1", "2", "3", "4"]);
+});
+
+test("a table built to be expensive is stated, not drawn, and costs no more than its rows", () => {
+  // 2,000 facilities, each in its own class and year: 4 million marks drawn
+  // as a stack, and seconds of nested lookups, before F327.
+  const rows = Array.from({ length: 2000 }, (_, index) => [
+    `F${index}`,
+    "Q2-2026",
+    `CLASS_${index}`,
+    "SENIOR",
+    `${3000 + index}-01-01`,
+    "100",
+  ]);
+  const started = performance.now();
+  const ladder = maturityLadder([
+    table(
+      "cp1.debt_facility_register",
+      ["facility_name", "period_id", "secured_status", "seniority", "maturity_date", "principal"],
+      rows,
+    ),
+  ])!;
+  expect(performance.now() - started).toBeLessThan(1000);
+  expect(ladder.oversized).toBe(true);
+  expect(ladder.series).toEqual([]);
+  expect(ladder.summary).toMatch(/^4000000 marks: too many to draw/);
 });
 
 test("forecastDrivers: one figure a division, base against downside, in percent", () => {

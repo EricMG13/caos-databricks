@@ -437,12 +437,14 @@ export function Workspace({ section }: { section: Section }) {
                   // navigation to unmount the boundary.
                   <SectionBoundary key={mountKey} resetOn={doc.observed_at}>
                     {/* A view whose chunk is still in flight reads as the
-                        region loading, and a failed one meets the boundary. */}
-                    <Suspense fallback={<SurfaceState kind="loading" />}>
-                      <SectionPanel tab={activeTab}>
+                        region loading, and a failed one meets the boundary.
+                        Inside the panel, so the tabs never name a panel that
+                        is not on the page while it loads. */}
+                    <SectionPanel tab={activeTab}>
+                      <Suspense fallback={<SurfaceState kind="loading" />}>
                         <View key={mountKey} document={doc} tab={activeTab} />
-                      </SectionPanel>
-                    </Suspense>
+                      </Suspense>
+                    </SectionPanel>
                   </SectionBoundary>
                 )}
               </RegionState>
