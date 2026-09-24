@@ -21,9 +21,11 @@ from caos.api.app import app, store_connection
 from caos.api.reads.reports import IO_BUDGET
 from caos.boundary_text import BoundaryText
 from caos.deliverable.filing import file_deliverable, receipt_bytes
+from caos.refusals import Refusal, RefusalCode
 from caos.store.gates import withdraw_source
 from caos.store.members import Standing, grant, revoke
 from caos.store.runs import create_case, start_run
+from caos.store.source_sets import cited_source_ids
 
 __all__ = ["client", "harness", "lite", "route"]
 
@@ -64,8 +66,17 @@ def test_report_reads_the_exact_saved_revision(
     assert body["revision_id"] == str(revision)
     assert body["displayed_run_id"] == str(lite.run_id)
     assert body["narrative"][0][0] == {"text": "Debt: ", "figure": None}
-    assert body["narrative"][0][1]["figure"] == saved["narrative"][0][1]["figure"]
-    assert body["narrative"][0][1]["figure"]["matched_text"] == QUOTE
+    # N59: the served figure is the saved one plus the two fields the
+    # evidence drawer needs to open its source without cross-referencing
+    # `artifacts` or the run's pinned members itself.
+    figure = body["narrative"][0][1]["figure"]
+    saved_figure = saved["narrative"][0][1]["figure"]
+    assert {k: figure[k] for k in saved_figure} == saved_figure
+    assert figure["matched_text"] == QUOTE
+    assert figure["source_id"] == str(lite.source_id)
+    assert figure["record_sha256"] == next(
+        a["record_sha256"] for a in saved["artifacts"] if a["route_node_id"] == node
+    )
     assert [a["route_node_id"] for a in body["artifacts"]] == [
         n.route_node_id for n in lite.route.nodes
     ]
@@ -74,6 +85,30 @@ def test_report_reads_the_exact_saved_revision(
         projections = json.loads(expected["record"])["projections"]
         assert actual["limitation_flags"] == projections["limitation_flags"]
         assert actual["decision_scope"] == projections["decision_scope"]
+
+
+def test_cited_source_ids_resolves_the_run_pin_and_refuses_an_uncited_document(
+    client: TestClient, lite: _Harness
+) -> None:
+    """`cited_source_ids` is what `read_report`/`read_committee` resolve a
+    figure's `source_id` from (N59): the same document this run's own
+    narrative cites resolves to the source that pinned it, an empty request
+    costs no query, and a document no member of the run names is the typed
+    `ARTIFACT_RECORD_MISMATCH` -- never a `KeyError` a reader would leak."""
+    node = lite.route.nodes[0].route_node_id
+    revision = _save(
+        lite,
+        [[{"figure": {"route_node_id": node, "citation_index": 0}}]],
+    )
+    body = _get(client, lite, revision, "report")
+    document = body["narrative"][0][0]["figure"]["document_sha256"]
+    assert cited_source_ids(lite.conn, lite.run_id, [document]) == {
+        document: lite.source_id
+    }
+    assert cited_source_ids(lite.conn, lite.run_id, []) == {}
+    with pytest.raises(Refusal) as excinfo:
+        cited_source_ids(lite.conn, lite.run_id, [document, "0" * 64])
+    assert excinfo.value.code is RefusalCode.ARTIFACT_RECORD_MISMATCH
 
 
 @pytest.mark.parametrize(

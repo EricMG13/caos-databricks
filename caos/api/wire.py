@@ -900,11 +900,20 @@ class BookBody(BaseModel):
 
 
 class NarrativeFigure(BaseModel):
+    """A bracketed figure the narrative cites, self-contained the way
+    `CitationView` is: the evidence drawer opens it without cross-referencing
+    `ReportBody.artifacts` for the record or the run's pinned members for the
+    source. `record_sha256` is the accepted record `route_node_id` bound at
+    save time; `source_id` is the pinned source `document_sha256` resolves
+    to, live preferred (N59)."""
+
     model_config = _CLOSED
 
     route_node_id: Id
+    record_sha256: Sha256
     citation_index: Annotated[int, Field(ge=0)]
     document_sha256: Sha256
+    source_id: UUID
     page: Annotated[int, Field(ge=1)]
     matched_text: Annotated[str, Field(max_length=QUOTE_CHARS)]
 

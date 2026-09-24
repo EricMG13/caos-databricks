@@ -117,8 +117,10 @@ test("Report and Committee bind case/run/revision and exact receipt identity", (
   expect(() =>
     parse(V1_SHAPES.NarrativeFigure, {
       route_node_id: "CP-0",
+      record_sha256: SHA,
       citation_index: -1,
       document_sha256: SHA,
+      source_id: CASE,
       page: 1,
       matched_text: "figure",
     }),

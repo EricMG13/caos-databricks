@@ -486,10 +486,15 @@ const BookBody = object({
 });
 const BookDocument = sectionDocument(BookBody);
 
+// Self-contained the way `CitationView` is: the evidence drawer opens a
+// figure's source from `record_sha256` and `source_id` without
+// cross-referencing `ReportBody.artifacts` or the run's pinned members.
 const NarrativeFigure = object({
   route_node_id: short,
+  record_sha256: hash,
   citation_index: int({ min: 0 }),
   document_sha256: hash,
+  source_id: uuid,
   page: int({ min: 1 }),
   matched_text: string({ max: 65536 }),
 });
