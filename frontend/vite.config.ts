@@ -308,5 +308,8 @@ export default defineConfig(({ command, mode }) => ({
         : devProxy(loadEnv(mode, REPO_ROOT, "CAOS_DEV_")),
   },
   preview: { port: 4173, strictPort: true },
-  build: { sourcemap: false, target: "es2022" },
+  // The manifest (`.vite/manifest.json`) names every file the build emitted,
+  // the lazy section views the index does not; the server's boot check holds
+  // the export to it (N92), and never serves it.
+  build: { sourcemap: false, target: "es2022", manifest: true },
 }));
