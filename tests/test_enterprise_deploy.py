@@ -32,6 +32,9 @@ from test_workspace_stub import CREDENTIALS
 from workspace_stub import (
     BEARER,
     ENDPOINT,
+    GROUP_ADMIN,
+    GROUP_ANALYST,
+    LAKEBASE_BRANCH,
     LAKEBASE_DATABASE,
     LAKEBASE_ENDPOINT,
     LAKEBASE_INSTANCE,
@@ -51,11 +54,22 @@ DEV_APPS = {
     LakebaseKind.AUTOSCALING: ("dev", DEV_APP),
     LakebaseKind.PROVISIONED: ("dev-provisioned", "caos-devprov-42"),
 }
-# The `database` resource each kind's targets resolve to.
+# The `database` resource each kind's targets resolve to, with the stub's
+# own Lakebase of that kind and the bundle's default database names.
 FORMS = {
-    LakebaseKind.AUTOSCALING: {"postgres": {"branch": "b", "database": "d"}},
-    LakebaseKind.PROVISIONED: {"database": {"instance_name": LAKEBASE_INSTANCE}},
+    LakebaseKind.AUTOSCALING: {
+        "postgres": {"branch": LAKEBASE_BRANCH, "database": LAKEBASE_DATABASE}
+    },
+    LakebaseKind.PROVISIONED: {
+        "database": {
+            "instance_name": LAKEBASE_INSTANCE,
+            "database_name": enterprise_deploy._DEFAULTS["lakebase_database"],
+        }
+    },
 }
+DEFAULT_GROUPS = (GROUP_ADMIN, GROUP_ANALYST)
+# R24-15: comma-holding group names are supported workspace display names.
+COMMA_GROUPS = ("Research, Credit", "Analysts, Readers")
 # The one command's Lakebase arguments, the `--var` it must pass, the other
 # kind's variable it must not, and the row E1 writes for the lookup.
 GIVEN = {
@@ -75,18 +89,36 @@ GIVEN = {
 
 
 def _resolved(
-    name: str, kind: LakebaseKind = LakebaseKind.AUTOSCALING, **env: str
+    name: str,
+    kind: LakebaseKind = LakebaseKind.AUTOSCALING,
+    *,
+    groups: tuple[str, str] = DEFAULT_GROUPS,
+    form: dict[str, Any] | None = None,
+    **env: str,
 ) -> dict[str, Any]:
+    """What `bundle validate -o json` resolves for the app, cut to the
+    fields the one command reads: its name, environment, `database`
+    resource and the groups' CAN_USE (a CAN_MANAGE for the deployer too,
+    as the CLI resolves it)."""
     values = {
         "CAOS_MODEL_ENDPOINT": ENDPOINT,
         "CAOS_MODEL_PRICE": PRICE,
         "CAOS_RUN_CEILING": "100.00",  # the bundle default (D29)
+        "CAOS_GROUP_ADMIN": groups[0],
+        "CAOS_GROUP_ANALYST": groups[1],
         **BINDINGS[kind],
         **env,
     }
     listed = [{"name": key, "value": value} for key, value in values.items()]
-    resources = [{"name": "database", **FORMS[kind]}]
-    app = {"name": name, "config": {"env": listed}, "resources": resources}
+    resources = [{"name": "database", **(form or FORMS[kind])}]
+    permissions = [{"group_name": group, "level": "CAN_USE"} for group in groups]
+    permissions.append({"user_name": "stub@example.com", "level": "CAN_MANAGE"})
+    app = {
+        "name": name,
+        "config": {"env": listed},
+        "resources": resources,
+        "permissions": permissions,
+    }
     return {"resources": {"apps": {"caos": app}}}
 
 
@@ -137,10 +169,19 @@ def _deploy(
     # supported workspace display names; E1 must find them by their exact
     # name, unsplit. Added alongside the deployer's own admin group, which
     # E9's writer-standing check still needs.
-    stub.groups |= {"Research, Credit", "Analysts, Readers"}
+    stub.groups |= set(COMMA_GROUPS)
     calls = tmp_path / "cli-calls.txt"
     resolved = tmp_path / "resolved.json"
-    resolved.write_text(json.dumps(_resolved(name, kind)))
+    database = parts.path.lstrip("/")
+    form = {
+        LakebaseKind.AUTOSCALING: FORMS[LakebaseKind.AUTOSCALING],
+        LakebaseKind.PROVISIONED: {
+            "database": {"instance_name": LAKEBASE_INSTANCE, "database_name": database}
+        },
+    }[kind]
+    resolved.write_text(
+        json.dumps(_resolved(name, kind, groups=COMMA_GROUPS, form=form))
+    )
     # What a real deploy records it synced: every file the app reads (DF-4).
     state = tmp_path / "state"
     state.mkdir()
@@ -167,7 +208,7 @@ def _deploy(
         "EVIDENCE": str(evidence),
         "BUNDLE_STATE": str(state),
         "TARGET": "dev",
-        "LAKEBASE_DATABASE": parts.path.lstrip("/"),
+        "LAKEBASE_DATABASE": database,
         "PG_PORT": str(parts.port),
         "PG_SSLMODE": "disable",
         "MLFLOW_DISABLE_AGENT_HINT": "1",
@@ -228,7 +269,8 @@ def test_the_one_command_runs_the_cli_and_verifies_the_deployment(
     assert all(row[2] == "0" for row in rows), rows
     assert (
         rows[1][3]
-        == f"resolved app {name}: endpoint, price, run ceiling and Lakebase as given"
+        == f"resolved app {name}: endpoint, price, run ceiling, groups and Lakebase "
+        "as given"
     )
     assert rows[2][3] == "every path the app needs was synced"
     assert rows[4][1] == f"apps get {name}"
@@ -438,6 +480,7 @@ def test_a_validate_that_resolved_other_values_is_a_failed_row(
         enterprise_deploy.binding_problems(
             _resolved("caos", LakebaseKind.PROVISIONED),
             ("CAOS_LAKEBASE_INSTANCE", LAKEBASE_INSTANCE),
+            FORMS[LakebaseKind.PROVISIONED]["database"],
         )
         == []
     )
@@ -447,9 +490,11 @@ def test_a_validate_that_resolved_other_values_is_a_failed_row(
             enterprise_deploy.resolution_problems(
                 _resolved("caos"),
                 target=production,
-                endpoint=ENDPOINT,
-                price=PRICE,
-                run_ceiling="100.00",
+                given=enterprise_deploy.given_values(
+                    enterprise_deploy._parser().parse_args(
+                        [*base, "--endpoint", ENDPOINT, "--price", PRICE]
+                    )
+                ),
             )
             == []
         )
@@ -459,6 +504,77 @@ def test_a_validate_that_resolved_other_values_is_a_failed_row(
         == 1
     )
     assert _last_summary(tmp_path / "e5") == "no app name resolved by E2"
+
+
+def test_e2_holds_the_groups_and_the_bound_database_to_what_was_given(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """W8 and N2: F276 moved both group names onto the same BUNDLE_VAR_
+    channel whose silent fall-back to the default is why E2 exists, and E2
+    compared neither them nor the `database` resource's branch, database,
+    instance or database name: review 4's probe resolved the default groups
+    and passed. Each is held to the value given, commas included."""
+    for name in ("CAOS_MODEL_ENDPOINT", "CAOS_MODEL_PRICE"):
+        monkeypatch.delenv(name, raising=False)
+    resolved, log = tmp_path / "bundle.json", tmp_path / "E2.log"
+    log.write_text("")
+
+    def record(document: object, *given: str) -> tuple[int, str]:
+        resolved.write_text(json.dumps(document))
+        evidence = tmp_path / "ev"
+        flags = ["--log", str(log), "--bundle", str(resolved), "--step", "E2"]
+        code = enterprise_deploy.main(
+            [
+                *("--stage", "record", "--evidence", str(evidence), *flags),
+                *("--endpoint", ENDPOINT, "--price", PRICE, *given),
+            ]
+        )
+        return code, _last_summary(evidence)
+
+    autoscaling = ["--target", "prod", "--lakebase-project", LAKEBASE_PROJECT]
+    commas = [*autoscaling, "--group-admin", COMMA_GROUPS[0]]
+    commas += ["--group-analyst", COMMA_GROUPS[1]]
+    # The probe: the groups given, the defaults resolved.
+    code, summary = record(_resolved("caos"), *commas)
+    assert (code, summary) == (
+        1,
+        "resolved CAOS_GROUP_ADMIN is not the value given; resolved "
+        "CAOS_GROUP_ANALYST is not the value given; resolved app permissions "
+        "do not grant CAN_USE to exactly the groups given",
+    )
+    assert record(_resolved("caos", groups=COMMA_GROUPS), *commas)[0] == 0
+    staging = {
+        "postgres": {
+            "branch": "projects/caos/branches/staging",
+            "database": LAKEBASE_DATABASE,
+        }
+    }
+    code, summary = record(_resolved("caos", form=staging), *autoscaling)
+    assert (code, summary) == (
+        1,
+        "resolved database resource's branch is not the value given",
+    )
+    provisioned = ["--target", "prod-provisioned"]
+    provisioned += ["--lakebase-instance", LAKEBASE_INSTANCE]
+    other_database = {
+        "database": {"instance_name": LAKEBASE_INSTANCE, "database_name": "other"}
+    }
+    code, summary = record(
+        _resolved("caos", LakebaseKind.PROVISIONED, form=other_database), *provisioned
+    )
+    assert (code, summary) == (
+        1,
+        "resolved database resource's database_name is not the value given",
+    )
+    assert record(_resolved("caos", LakebaseKind.PROVISIONED), *provisioned)[0] == 0
+    given = ["--stage", "record", "--evidence", str(tmp_path / "ev")]
+    for flags, form in (
+        (autoscaling, LakebaseKind.AUTOSCALING),
+        (provisioned, LakebaseKind.PROVISIONED),
+    ):
+        args = enterprise_deploy._parser().parse_args([*given, *flags])
+        [fields] = FORMS[form].values()
+        assert enterprise_deploy.lakebase_resource(args) == fields
 
 
 def test_a_deploy_whose_record_lacks_a_file_the_app_reads_is_a_failed_row(
