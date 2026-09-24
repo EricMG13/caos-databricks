@@ -1424,6 +1424,102 @@ def test_a_late_checkpoint_write_after_an_abandoned_cancel_is_still_forgotten(
         close_checkpointer(saver)
 
 
+@dataclass(frozen=True)
+class _EndsAfterAbandonedCancel:
+    """`_Abandoned`'s straggler, after which the pass ends in `fault`: the
+    `_Stopping` `_Stoppable` raises once SIGTERM set `stopping`, or a store
+    fault -- a checkpoint write's own among them -- rather than a refusal."""
+
+    inner: Provider
+    late_write: Callable[[], None]
+    fault: type[Exception]
+
+    @property
+    def model(self) -> str:
+        return self.inner.model
+
+    def check_context(self, route_node_id: str, module_id: str) -> int:
+        self.late_write()
+        raise self.fault
+
+    def execute(
+        self, route_node_id: str, module_id: str, *, attempt_id: UUID
+    ) -> ProviderResult:
+        return self.inner.execute(route_node_id, module_id, attempt_id=attempt_id)
+
+
+@pytest.mark.parametrize("ending", ["stopping", "store-fault"])
+def test_a_straggler_is_forgotten_when_the_pass_stops_or_its_store_faults(
+    enqueued: _Run, empty_database: str, ending: str
+) -> None:
+    """N1: F218's residual race -- this worker's claim abandoned, the run
+    cancelled from elsewhere and its thread forgotten, then one more
+    checkpoint written by this worker -- with the pass ending at a stop or a
+    store fault instead of a refusal. Those two branches released the claim
+    and never called `_forget`, so the straggler stayed for ever. They read
+    the run's own status too now: CANCELLED, so it goes. A run they did
+    release is RUNNING and keeps its thread for the next holder
+    (`test_a_run_cancelled_while_queued_leaves_no_checkpoint_thread`)."""
+    from dataclasses import replace
+
+    from langgraph.checkpoint.base import empty_checkpoint
+
+    from caos.graph.build import thread_config
+    from caos.graph.checkpoint import checkpointer, close_checkpointer
+
+    run = enqueued
+    thread = checkpoint_thread(run.run_id, route_digest(run.route))
+    saver = checkpointer(empty_database)
+
+    def late_write() -> None:
+        with connect(empty_database) as other:
+            other.execute(
+                "UPDATE run_work SET lease_expires_at = clock_timestamp()"
+                " - interval '1 second' WHERE run_id = %s",
+                (run.run_id,),
+            )
+            other.commit()
+        assert _cancel_from_elsewhere(empty_database, run.run_id) is True
+        position = thread_config(thread)
+        position["configurable"]["checkpoint_ns"] = ""
+        saver.put(position, empty_checkpoint(), {}, {})
+
+    fault = worker._Stopping if ending == "stopping" else psycopg.OperationalError
+    base = module_execution(
+        CanonicalCompletions(run.source_id),
+        priced(ESTIMATE),
+        run.bundle,
+        run.blobs,
+        saver,
+    )
+
+    def execution_for(conn: StoreConnection, run_id: UUID, lease: Lease) -> Execution:
+        built = base(conn, run_id, lease)
+        ends = _EndsAfterAbandonedCancel(built.provider, late_write, fault)
+        return replace(built, provider=ends)
+
+    def once() -> UUID | None:
+        return work_once(
+            run.conn,
+            run.blobs,
+            execution_for=execution_for,
+            config=CONFIG,
+            stopping=Event(),
+        )
+
+    try:
+        if ending == "stopping":
+            assert once() == run.run_id
+        else:
+            with pytest.raises(Refusal, match=r"^STORE_UNAVAILABLE$"):
+                once()
+        assert run_status(run.conn, run.run_id) is RunStatus.CANCELLED
+        run.conn.rollback()
+        assert saver.get_tuple(thread_config(thread)) is None, "the straggler went"
+    finally:
+        close_checkpointer(saver)
+
+
 def _limited_once(canonical: CanonicalCompletions) -> models.ChatCompletions:
     """The production adapter over a gateway whose first answer is a 429."""
     from types import SimpleNamespace

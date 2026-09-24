@@ -222,9 +222,9 @@ def work_once(
             ),
         )
     except _Stopping:
-        _settle(conn, lambda: release(conn, lease))
+        _released(conn, execution, lease, route)
     except psycopg.Error:
-        _settle(conn, lambda: release(conn, lease))
+        _released(conn, execution, lease, route)
         raise Refusal(RefusalCode.STORE_UNAVAILABLE) from None
     except Refusal as refused:
         _forget(
@@ -241,6 +241,24 @@ def work_once(
         mine = _settle(conn, lambda: stop(conn, lease, RefusalCode.INTERNAL_FAULT))
         _forget(conn, execution, lease.run_id, route, mine=mine)
     return lease.run_id
+
+
+def _released(
+    conn: StoreConnection,
+    execution: Execution | None,
+    lease: Lease,
+    route: ResolvedRoute | None,
+) -> None:
+    """Give the claim back after a stop or a store fault, and forget a thread
+    nobody will resume (N1).
+
+    Released, the run is RUNNING and its thread is the next holder's to resume
+    (D6), so `_forget` keeps it on its fresh read. Not released, the run may
+    have ended out from under a stale lease -- F218's residual race -- after
+    this worker wrote one more checkpoint, and that straggler is forgotten
+    here as the refused branch forgets it."""
+    _settle(conn, lambda: release(conn, lease))
+    _forget(conn, execution, lease.run_id, route, mine=False)
 
 
 def _forget(
