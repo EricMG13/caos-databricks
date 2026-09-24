@@ -14,7 +14,7 @@
 // that is unchecked.
 import type { Citation, Passport, ResearchLink } from "@/wire";
 import type { BookCell, BookColumn, BookRow, CitationView } from "@/wire/v1";
-import { displayDecimal } from "@/ds/format";
+import { displayDecimal, hundredfold } from "@/ds/format";
 
 export function citationOf(fact: CitationView, observedAt: string): Citation {
   return {
@@ -28,17 +28,6 @@ export function citationOf(fact: CitationView, observedAt: string): Citation {
     render_url: null,
     withdrawn_at: fact.withdrawn_at,
   };
-}
-
-/** A fraction as a percentage: the point moved two places on the digits,
-    never through a float (`0.2034` is `20.34`). */
-function hundredfold(value: string): string {
-  const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(value);
-  if (!match) return value;
-  const [, sign, whole, fraction = ""] = match;
-  const digits = fraction.padEnd(2, "0");
-  const rest = digits.slice(2);
-  return `${sign}${BigInt(whole + digits.slice(0, 2))}${rest ? `.${rest}` : ""}`;
 }
 
 /** How each unit the column declares reads (N60). A currency figure's

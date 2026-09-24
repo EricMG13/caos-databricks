@@ -7,8 +7,11 @@ import { fireEvent, render, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { AnalysisSection } from "@/sections/analysis/AnalysisSection";
 import {
+  addbackValidation,
   addbacks,
+  comparatorChanges,
   figuresOf,
+  forecastDrivers,
   kpiLines,
   maturityLadder,
   recordsOf,
@@ -243,4 +246,98 @@ test("the nearest maturity date does not move when its own principal is unstated
   const unsecured = ladder.series.find((series) => series.key === "UNSECURED SENIOR")!;
   const index = ladder.categories.indexOf("2027");
   expect(unsecured.data[index]).toEqual({ value: null, reason: "not stated" });
+});
+
+// N56: the three modules the demo route now carries, each read from the
+// table the bundle names, in its exact columns.
+const handoffOf = (module: string) =>
+  document.body.handoffs.find((handoff) => handoff.module_id === module)!;
+
+test("comparatorChanges: each metric's change in percent, an uncalculable one a gap", () => {
+  const figure = comparatorChanges(handoffOf("CP-1B").tables)!;
+  expect(figure.kind).toBe("diverging");
+  expect(figure.unit).toBe("%");
+  // One basis names the figure, so each bar is only its metric.
+  expect(figure.title).toBe("Change year on year, %");
+  expect(figure.categories).toEqual([
+    "Revenue",
+    "Adjusted EBITDA",
+    "Net income",
+    "CFO",
+    "Net debt",
+    "FCF",
+  ]);
+  const data = figure.series[0]!.data;
+  // The bundle's fraction (0.1545) read as a percent on its digits.
+  expect(data[0]).toEqual({ value: "15.45" });
+  expect(data[3]).toEqual({ value: "-23.72" });
+  expect(data.at(-1)).toEqual({ value: null, reason: "Not Calculable" });
+  expect(figure.summary).toMatch(/^Largest move: Net income .*166\.67%\. 1 not calculable\.$/);
+  expect(
+    figure.sourceOf({
+      series: "change",
+      category: figure.categories[0]!,
+      index: 0,
+      value: "15.45",
+      origin: "model",
+    }),
+  ).toBe("Q2-2026 against Q2-2025: 6,112/5,294");
+});
+
+test("addbackValidation: the latest period's differences, with what the module ruled", () => {
+  const figure = addbackValidation(handoffOf("CP-1B").tables)!;
+  expect(figure.title).toBe("Add-backs against CP-1, Q2-2026");
+  expect(figure.categories).toEqual(["SBC", "Root warrants", "Restructuring", "Other income"]);
+  expect(figure.series[0]!.data.map((entry) => entry.value)).toEqual(["0", "0", "2", "0"]);
+  expect(figure.summary).toBe("3 of 4 pass, 1 warn.");
+  expect(
+    figure.sourceOf({
+      series: "difference",
+      category: "Restructuring",
+      index: 2,
+      value: "2",
+      origin: "model",
+    }),
+  ).toMatch(/^WARN · The 10-Q books 2 of site costs/);
+});
+
+test("forecastDrivers: one figure a division, base against downside, in percent", () => {
+  const figures = forecastDrivers(handoffOf("CP-2G").tables);
+  expect(figures.map((figure) => figure.title)).toEqual([
+    "Division 1 growth, %",
+    "Division 2 growth, %",
+    "Division 3 growth, %",
+  ]);
+  const first = figures[0]!;
+  expect(first.categories).toEqual(["2026", "2027", "2028"]);
+  expect(first.series.map((series) => series.label)).toEqual(["Base", "Downside"]);
+  expect(first.series[0]!.data).toEqual([{ value: "8" }, { value: "7" }, { value: "6" }]);
+  expect(first.series[1]!.data).toEqual([{ value: "-6" }, { value: "-2" }, { value: "1" }]);
+  expect(first.summary).toMatch(
+    /^Base .*8.*% to .*6.*%; Downside .*6.*% to .*1.*%, 2026 to 2028\.$/,
+  );
+  // The currency drivers carry no division and draw nothing here.
+  expect(figuresOf(handoffOf("CP-2G")).map((figure) => figure.table)).toEqual([
+    "cp2g.cp_model_forecast_drivers",
+    "cp2g.cp_model_forecast_drivers",
+    "cp2g.cp_model_forecast_drivers",
+  ]);
+});
+
+test("CP-2B's catalysts are a ranked, dated list, not a chart", () => {
+  const { container } = render(
+    <MemoryRouter>
+      <AnalysisSection document={document} tab="rn-cp-2b" />
+    </MemoryRouter>,
+  );
+  const list = container.querySelector("[data-catalysts]")!;
+  expect(
+    within(list as HTMLElement).getByRole("heading", { name: "Catalysts, ranked" }),
+  ).toBeVisible();
+  const items = [...list.querySelectorAll("li")];
+  expect(items.map((item) => item.getAttribute("data-catalyst"))).toEqual(["1", "2", "3", "4"]);
+  expect(items[0]).toHaveTextContent("2027-03-31");
+  expect(items[0]).toHaveTextContent("Springing leverage test on the revolver");
+  expect(items[0]).toHaveTextContent("p.22, Note 9 Debt, financial covenants");
+  expect(container.querySelector("[data-figure]")).toBeNull();
 });

@@ -991,6 +991,301 @@
         "tables_unavailable_reason": null
       },
       {
+        "route_node_id": "rn-cp-1b",
+        "module_id": "CP-1B",
+        "module_name": "Earnings delta",
+        "artifact_sha256": "4f80b35a1f96dbe892258205f4f358caf7c45a5b347c75a3b27dcca8fb67d009",
+        "record_sha256": "83009984b16e7e91125eedff60093a64b2ad349ba3ecf5e1247b7e0fbc8dc6d8",
+        "accepted_at": "2026-09-08T13:20:00Z",
+        "qa_status": "Passed",
+        "committee_status": "Ready",
+        "confidence_score": 82,
+        "confidence_band": "HIGH",
+        "limitation_flags": [],
+        "validation_warnings": [],
+        "decision_scope": "FULL_COMMITTEE",
+        "screening_only": false,
+        "source_facts": [],
+        "model_analysis": "### Earnings delta\n\nQ2 2026 against Q2 2025: revenue and adjusted EBITDA grew while operating cash flow fell on working capital. Free cash flow has no percentage change against a zero prior quarter. One add-back does not reconcile to the shareholder letter and is flagged for CP-MODEL.",
+        "host_calculation": "NONE",
+        "tables": [
+          {
+            "table_id": "cp1b.model_comparator_register",
+            "columns": [
+              "metric_id",
+              "current_period_id",
+              "reference_period_id",
+              "comparison_basis",
+              "current_value",
+              "reference_value",
+              "absolute_change",
+              "percentage_change",
+              "calculation_status",
+              "restatement_flag",
+              "basis_change_flag",
+              "perimeter_change_flag",
+              "definition_change_flag",
+              "values",
+              "changes"
+            ],
+            "rows": [
+              [
+                { "text": "revenue", "value": null },
+                { "text": "Q2-2026", "value": null },
+                { "text": "Q2-2025", "value": null },
+                { "text": "YOY_SAME_QUARTER", "value": null },
+                { "text": "6,112", "value": "6112" },
+                { "text": "5,294", "value": "5294" },
+                { "text": "818", "value": "818" },
+                { "text": "0.1545", "value": "0.1545" },
+                { "text": "Calculated", "value": null },
+                { "text": "N", "value": null },
+                { "text": "N", "value": null },
+                { "text": "N", "value": null },
+                { "text": "N", "value": null },
+                { "text": "6,112/5,294", "value": null },
+                { "text": "818", "value": "818" }
+              ],
+              [
+                { "text": "adjusted_ebitda", "value": null },
+                { "text": "Q2-2026", "value": null },
+                { "text": "Q2-2025", "value": null },
+                { "text": "YOY_SAME_QUARTER", "value": null },
+                { "text": "562", "value": "562" },
+                { "text": "454", "value": "454" },
+                { "text": "108", "value": "108" },
+                { "text": "0.2379", "value": "0.2379" },
+                { "text": "Calculated", "value": null },
+                { "text": "N", "value": null },
+                { "text": "N", "value": null },
+                { "text": "N", "value": null },
+                { "text": "N", "value": null },
+                { "text": "562/454", "value": null },
+                { "text": "108", "value": "108" }
+              ],
+              [
+                { "text": "net_income", "value": null },
+                { "text": "Q2-2026", "value": null },
+                { "text": "Q2-2025", "value": null },
+                { "text": "YOY_SAME_QUARTER", "value": null },
+                { "text": "128", "value": "128" },
+                { "text": "48", "value": "48" },
+                { "text": "80", "value": "80" },
+                { "text": "1.6667", "value": "1.6667" },
+                { "text": "Calculated", "value": null },
+                { "text": "N", "value": null },
+                { "text": "N", "value": null },
+                { "text": "N", "value": null },
+                { "text": "N", "value": null },
+                { "text": "128/48", "value": null },
+                { "text": "80", "value": "80" }
+              ],
+              [
+                { "text": "cfo", "value": null },
+                { "text": "Q2-2026", "value": null },
+                { "text": "Q2-2025", "value": null },
+                { "text": "YOY_SAME_QUARTER", "value": null },
+                { "text": "238", "value": "238" },
+                { "text": "312", "value": "312" },
+                { "text": "(74)", "value": "-74" },
+                { "text": "-0.2372", "value": "-0.2372" },
+                { "text": "Calculated", "value": null },
+                { "text": "N", "value": null },
+                { "text": "N", "value": null },
+                { "text": "N", "value": null },
+                { "text": "N", "value": null },
+                { "text": "238/312", "value": null },
+                { "text": "(74)", "value": "-74" }
+              ],
+              [
+                { "text": "net_debt", "value": null },
+                { "text": "Q2-2026", "value": null },
+                { "text": "Q2-2025", "value": null },
+                { "text": "YOY_SAME_QUARTER", "value": null },
+                { "text": "4,650", "value": "4650" },
+                { "text": "5,210", "value": "5210" },
+                { "text": "(560)", "value": "-560" },
+                { "text": "-0.1075", "value": "-0.1075" },
+                { "text": "Calculated", "value": null },
+                { "text": "N", "value": null },
+                { "text": "N", "value": null },
+                { "text": "N", "value": null },
+                { "text": "N", "value": null },
+                { "text": "4,650/5,210", "value": null },
+                { "text": "(560)", "value": "-560" }
+              ],
+              [
+                { "text": "fcf", "value": null },
+                { "text": "Q2-2026", "value": null },
+                { "text": "Q2-2025", "value": null },
+                { "text": "YOY_SAME_QUARTER", "value": null },
+                { "text": "102", "value": "102" },
+                { "text": "0", "value": "0" },
+                { "text": "102", "value": "102" },
+                { "text": "", "value": null },
+                { "text": "Not Calculable", "value": null },
+                { "text": "N", "value": null },
+                { "text": "N", "value": null },
+                { "text": "N", "value": null },
+                { "text": "N", "value": null },
+                { "text": "102/0", "value": null },
+                { "text": "102", "value": "102" }
+              ]
+            ]
+          },
+          {
+            "table_id": "cp1b.addback_validation_register",
+            "columns": [
+              "addback_id",
+              "period_id",
+              "cp1_value",
+              "cp1b_comparison_value",
+              "difference",
+              "tolerance",
+              "status",
+              "label_match",
+              "definition_change_flag",
+              "explanation",
+              "source_or_conflict_ref"
+            ],
+            "rows": [
+              [
+                { "text": "SBC", "value": null },
+                { "text": "Q1-2026", "value": null },
+                { "text": "25", "value": "25" },
+                { "text": "25", "value": "25" },
+                { "text": "0", "value": "0" },
+                { "text": "1", "value": "1" },
+                { "text": "PASS", "value": null },
+                { "text": "Y", "value": null },
+                { "text": "N", "value": null },
+                { "text": "Matches the letter's reconciliation", "value": null },
+                {
+                  "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm, p.12",
+                  "value": null
+                }
+              ],
+              [
+                { "text": "ROOT_WARRANTS", "value": null },
+                { "text": "Q1-2026", "value": null },
+                { "text": "7", "value": "7" },
+                { "text": "7", "value": "7" },
+                { "text": "0", "value": "0" },
+                { "text": "1", "value": "1" },
+                { "text": "PASS", "value": null },
+                { "text": "Y", "value": null },
+                { "text": "N", "value": null },
+                { "text": "Matches the letter's reconciliation", "value": null },
+                {
+                  "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm, p.12",
+                  "value": null
+                }
+              ],
+              [
+                { "text": "RESTRUCTURING", "value": null },
+                { "text": "Q1-2026", "value": null },
+                { "text": "6", "value": "6" },
+                { "text": "6", "value": "6" },
+                { "text": "0", "value": "0" },
+                { "text": "1", "value": "1" },
+                { "text": "PASS", "value": null },
+                { "text": "Y", "value": null },
+                { "text": "N", "value": null },
+                { "text": "Matches the letter's reconciliation", "value": null },
+                {
+                  "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm, p.12",
+                  "value": null
+                }
+              ],
+              [
+                { "text": "OTHER_INCOME", "value": null },
+                { "text": "Q1-2026", "value": null },
+                { "text": "(4)", "value": "-4" },
+                { "text": "(4)", "value": "-4" },
+                { "text": "0", "value": "0" },
+                { "text": "1", "value": "1" },
+                { "text": "PASS", "value": null },
+                { "text": "Y", "value": null },
+                { "text": "N", "value": null },
+                { "text": "Matches the letter's reconciliation", "value": null },
+                {
+                  "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm, p.12",
+                  "value": null
+                }
+              ],
+              [
+                { "text": "SBC", "value": null },
+                { "text": "Q2-2026", "value": null },
+                { "text": "27", "value": "27" },
+                { "text": "27", "value": "27" },
+                { "text": "0", "value": "0" },
+                { "text": "1", "value": "1" },
+                { "text": "PASS", "value": null },
+                { "text": "Y", "value": null },
+                { "text": "N", "value": null },
+                { "text": "Matches the letter's reconciliation", "value": null },
+                {
+                  "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm, p.12",
+                  "value": null
+                }
+              ],
+              [
+                { "text": "ROOT_WARRANTS", "value": null },
+                { "text": "Q2-2026", "value": null },
+                { "text": "(14)", "value": "-14" },
+                { "text": "(14)", "value": "-14" },
+                { "text": "0", "value": "0" },
+                { "text": "1", "value": "1" },
+                { "text": "PASS", "value": null },
+                { "text": "Y", "value": null },
+                { "text": "N", "value": null },
+                { "text": "Matches the letter's reconciliation", "value": null },
+                {
+                  "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm, p.12",
+                  "value": null
+                }
+              ],
+              [
+                { "text": "RESTRUCTURING", "value": null },
+                { "text": "Q2-2026", "value": null },
+                { "text": "4", "value": "4" },
+                { "text": "6", "value": "6" },
+                { "text": "2", "value": "2" },
+                { "text": "1", "value": "1" },
+                { "text": "WARN", "value": null },
+                { "text": "Y", "value": null },
+                { "text": "N", "value": null },
+                {
+                  "text": "The 10-Q books 2 of site costs to restructuring that the letter carries in SG&A",
+                  "value": null
+                },
+                {
+                  "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm, p.12",
+                  "value": null
+                }
+              ],
+              [
+                { "text": "OTHER_INCOME", "value": null },
+                { "text": "Q2-2026", "value": null },
+                { "text": "(6)", "value": "-6" },
+                { "text": "(6)", "value": "-6" },
+                { "text": "0", "value": "0" },
+                { "text": "1", "value": "1" },
+                { "text": "PASS", "value": null },
+                { "text": "Y", "value": null },
+                { "text": "N", "value": null },
+                { "text": "Matches the letter's reconciliation", "value": null },
+                {
+                  "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm, p.12",
+                  "value": null
+                }
+              ]
+            ]
+          }
+        ],
+        "tables_unavailable_reason": null
+      },
+      {
         "route_node_id": "rn-cp-1c",
         "module_id": "CP-1C",
         "module_name": "Peer benchmark",
@@ -1009,6 +1304,778 @@
         "model_analysis": "### Peer benchmark\n\nThe peer set carries a gap: one comparable has not filed in over 200 days. The benchmark is offered with that limitation attached, never silently dropped.\n",
         "host_calculation": "NONE",
         "tables": [],
+        "tables_unavailable_reason": null
+      },
+      {
+        "route_node_id": "rn-cp-2b",
+        "module_id": "CP-2B",
+        "module_name": "Events and catalysts",
+        "artifact_sha256": "95f84a38aa0939e2ff1c32fcb6616e1107999dec337e487fc9c6df30f01a7d62",
+        "record_sha256": "9bacfc2a44915b3269213da3a9bbbfadeeeb4ab43330bc38ed05f3c9a108b2ad",
+        "accepted_at": "2026-09-08T13:20:00Z",
+        "qa_status": "Passed",
+        "committee_status": "Ready",
+        "confidence_score": 82,
+        "confidence_band": "HIGH",
+        "limitation_flags": [],
+        "validation_warnings": [],
+        "decision_scope": "FULL_COMMITTEE",
+        "screening_only": false,
+        "source_facts": [],
+        "model_analysis": "### Events and catalysts\n\nFour catalysts fall inside the monitoring horizon. The springing leverage test is the nearest material one; the 2028 notes' call date is the main refinancing window.",
+        "host_calculation": "NONE",
+        "tables": [
+          {
+            "table_id": "cp2b.cp_model_catalysts",
+            "columns": [
+              "rank",
+              "event_date_or_window",
+              "event",
+              "credit_relevance",
+              "status",
+              "source_id",
+              "source_locator",
+              "as_of"
+            ],
+            "rows": [
+              [
+                { "text": "1", "value": "1" },
+                { "text": "2027-03-31", "value": null },
+                { "text": "Springing leverage test on the revolver", "value": null },
+                {
+                  "text": "Headroom is 1.4x at Q2 2026; an EBITDA fall of about a fifth would trip it.",
+                  "value": null
+                },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.22, Note 9 Debt, financial covenants", "value": null },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "2", "value": "2" },
+                { "text": "Q4 2026", "value": null },
+                { "text": "2028 senior secured notes become callable at par", "value": null },
+                {
+                  "text": "A refinancing window: a call would cut cash interest and move the nearest maturity past 2030.",
+                  "value": null
+                },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.21, Note 9 Debt, redemption terms", "value": null },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "3", "value": "3" },
+                { "text": "2026-10-29", "value": null },
+                { "text": "Q3 2026 results", "value": null },
+                {
+                  "text": "The first quarter at the lower advertising spend: tests whether retail unit growth holds.",
+                  "value": null
+                },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm", "value": null },
+                { "text": "p.3, outlook", "value": null },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "4", "value": "4" },
+                { "text": "H1 2027", "value": null },
+                { "text": "Floor-plan facility renewal", "value": null },
+                {
+                  "text": "The facility funds inventory; a smaller renewal would tighten working capital.",
+                  "value": null
+                },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.23, Note 9 Debt, floor plan facility", "value": null },
+                { "text": "2026-09-08", "value": null }
+              ]
+            ]
+          }
+        ],
+        "tables_unavailable_reason": null
+      },
+      {
+        "route_node_id": "rn-cp-2g",
+        "module_id": "CP-2G",
+        "module_name": "Forward credit model",
+        "artifact_sha256": "e526e12e7b01585104d4753dbc501944c907ecd8f7ac48479075677fd3312e68",
+        "record_sha256": "a680a919531bd9e3ac88db9f5b760ebe5572913ee6fdd339fd01a96fb2ec1877",
+        "accepted_at": "2026-09-08T13:20:00Z",
+        "qa_status": "Passed",
+        "committee_status": "Ready",
+        "confidence_score": 82,
+        "confidence_band": "HIGH",
+        "limitation_flags": [],
+        "validation_warnings": [],
+        "decision_scope": "FULL_COMMITTEE",
+        "screening_only": false,
+        "source_facts": [],
+        "model_analysis": "### Forward credit model\n\nBase and downside growth for each division over FY2026 to FY2028. The downside contracts every division in FY2026 and recovers by FY2028.",
+        "host_calculation": "NONE",
+        "tables": [
+          {
+            "table_id": "cp2g.cp_model_forecast_drivers",
+            "columns": [
+              "driver_id",
+              "slot_id",
+              "case",
+              "period_id",
+              "fiscal_year",
+              "value",
+              "unit",
+              "assumption_id",
+              "status",
+              "source_id",
+              "source_locator",
+              "as_of"
+            ],
+            "rows": [
+              [
+                { "text": "division_growth", "value": null },
+                { "text": "DIVISION_1", "value": null },
+                { "text": "BASE", "value": null },
+                { "text": "FY2026", "value": null },
+                { "text": "2026", "value": "2026" },
+                { "text": "0.08", "value": "0.08" },
+                { "text": "PERCENT_DECIMAL", "value": null },
+                { "text": "A-B-1-2026", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                {
+                  "text": "p.12, Note 3 Revenue Recognition; management outlook, p.31",
+                  "value": null
+                },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "division_growth", "value": null },
+                { "text": "DIVISION_2", "value": null },
+                { "text": "BASE", "value": null },
+                { "text": "FY2026", "value": null },
+                { "text": "2026", "value": "2026" },
+                { "text": "0.05", "value": "0.05" },
+                { "text": "PERCENT_DECIMAL", "value": null },
+                { "text": "A-B-2-2026", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                {
+                  "text": "p.12, Note 3 Revenue Recognition; management outlook, p.31",
+                  "value": null
+                },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "division_growth", "value": null },
+                { "text": "DIVISION_3", "value": null },
+                { "text": "BASE", "value": null },
+                { "text": "FY2026", "value": null },
+                { "text": "2026", "value": "2026" },
+                { "text": "0.10", "value": "0.10" },
+                { "text": "PERCENT_DECIMAL", "value": null },
+                { "text": "A-B-3-2026", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                {
+                  "text": "p.12, Note 3 Revenue Recognition; management outlook, p.31",
+                  "value": null
+                },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "acquisitions_disposals", "value": null },
+                { "text": "", "value": null },
+                { "text": "BASE", "value": null },
+                { "text": "FY2026", "value": null },
+                { "text": "2026", "value": "2026" },
+                { "text": "0", "value": "0" },
+                { "text": "CURRENCY_MM", "value": null },
+                { "text": "A-B-ACQU-2026", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.31, capital allocation", "value": null },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "net_equity_issue_repay", "value": null },
+                { "text": "", "value": null },
+                { "text": "BASE", "value": null },
+                { "text": "FY2026", "value": null },
+                { "text": "2026", "value": "2026" },
+                { "text": "0", "value": "0" },
+                { "text": "CURRENCY_MM", "value": null },
+                { "text": "A-B-NET_-2026", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.31, capital allocation", "value": null },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "dividends_paid", "value": null },
+                { "text": "", "value": null },
+                { "text": "BASE", "value": null },
+                { "text": "FY2026", "value": null },
+                { "text": "2026", "value": "2026" },
+                { "text": "0", "value": "0" },
+                { "text": "CURRENCY_MM", "value": null },
+                { "text": "A-B-DIVI-2026", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.31, capital allocation", "value": null },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "other_investing_financing", "value": null },
+                { "text": "", "value": null },
+                { "text": "BASE", "value": null },
+                { "text": "FY2026", "value": null },
+                { "text": "2026", "value": "2026" },
+                { "text": "0", "value": "0" },
+                { "text": "CURRENCY_MM", "value": null },
+                { "text": "A-B-OTHE-2026", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.31, capital allocation", "value": null },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "division_growth", "value": null },
+                { "text": "DIVISION_1", "value": null },
+                { "text": "BASE", "value": null },
+                { "text": "FY2027", "value": null },
+                { "text": "2027", "value": "2027" },
+                { "text": "0.07", "value": "0.07" },
+                { "text": "PERCENT_DECIMAL", "value": null },
+                { "text": "A-B-1-2027", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                {
+                  "text": "p.12, Note 3 Revenue Recognition; management outlook, p.31",
+                  "value": null
+                },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "division_growth", "value": null },
+                { "text": "DIVISION_2", "value": null },
+                { "text": "BASE", "value": null },
+                { "text": "FY2027", "value": null },
+                { "text": "2027", "value": "2027" },
+                { "text": "0.05", "value": "0.05" },
+                { "text": "PERCENT_DECIMAL", "value": null },
+                { "text": "A-B-2-2027", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                {
+                  "text": "p.12, Note 3 Revenue Recognition; management outlook, p.31",
+                  "value": null
+                },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "division_growth", "value": null },
+                { "text": "DIVISION_3", "value": null },
+                { "text": "BASE", "value": null },
+                { "text": "FY2027", "value": null },
+                { "text": "2027", "value": "2027" },
+                { "text": "0.08", "value": "0.08" },
+                { "text": "PERCENT_DECIMAL", "value": null },
+                { "text": "A-B-3-2027", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                {
+                  "text": "p.12, Note 3 Revenue Recognition; management outlook, p.31",
+                  "value": null
+                },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "acquisitions_disposals", "value": null },
+                { "text": "", "value": null },
+                { "text": "BASE", "value": null },
+                { "text": "FY2027", "value": null },
+                { "text": "2027", "value": "2027" },
+                { "text": "0", "value": "0" },
+                { "text": "CURRENCY_MM", "value": null },
+                { "text": "A-B-ACQU-2027", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.31, capital allocation", "value": null },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "net_equity_issue_repay", "value": null },
+                { "text": "", "value": null },
+                { "text": "BASE", "value": null },
+                { "text": "FY2027", "value": null },
+                { "text": "2027", "value": "2027" },
+                { "text": "0", "value": "0" },
+                { "text": "CURRENCY_MM", "value": null },
+                { "text": "A-B-NET_-2027", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.31, capital allocation", "value": null },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "dividends_paid", "value": null },
+                { "text": "", "value": null },
+                { "text": "BASE", "value": null },
+                { "text": "FY2027", "value": null },
+                { "text": "2027", "value": "2027" },
+                { "text": "0", "value": "0" },
+                { "text": "CURRENCY_MM", "value": null },
+                { "text": "A-B-DIVI-2027", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.31, capital allocation", "value": null },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "other_investing_financing", "value": null },
+                { "text": "", "value": null },
+                { "text": "BASE", "value": null },
+                { "text": "FY2027", "value": null },
+                { "text": "2027", "value": "2027" },
+                { "text": "0", "value": "0" },
+                { "text": "CURRENCY_MM", "value": null },
+                { "text": "A-B-OTHE-2027", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.31, capital allocation", "value": null },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "division_growth", "value": null },
+                { "text": "DIVISION_1", "value": null },
+                { "text": "BASE", "value": null },
+                { "text": "FY2028", "value": null },
+                { "text": "2028", "value": "2028" },
+                { "text": "0.06", "value": "0.06" },
+                { "text": "PERCENT_DECIMAL", "value": null },
+                { "text": "A-B-1-2028", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                {
+                  "text": "p.12, Note 3 Revenue Recognition; management outlook, p.31",
+                  "value": null
+                },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "division_growth", "value": null },
+                { "text": "DIVISION_2", "value": null },
+                { "text": "BASE", "value": null },
+                { "text": "FY2028", "value": null },
+                { "text": "2028", "value": "2028" },
+                { "text": "0.04", "value": "0.04" },
+                { "text": "PERCENT_DECIMAL", "value": null },
+                { "text": "A-B-2-2028", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                {
+                  "text": "p.12, Note 3 Revenue Recognition; management outlook, p.31",
+                  "value": null
+                },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "division_growth", "value": null },
+                { "text": "DIVISION_3", "value": null },
+                { "text": "BASE", "value": null },
+                { "text": "FY2028", "value": null },
+                { "text": "2028", "value": "2028" },
+                { "text": "0.07", "value": "0.07" },
+                { "text": "PERCENT_DECIMAL", "value": null },
+                { "text": "A-B-3-2028", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                {
+                  "text": "p.12, Note 3 Revenue Recognition; management outlook, p.31",
+                  "value": null
+                },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "acquisitions_disposals", "value": null },
+                { "text": "", "value": null },
+                { "text": "BASE", "value": null },
+                { "text": "FY2028", "value": null },
+                { "text": "2028", "value": "2028" },
+                { "text": "0", "value": "0" },
+                { "text": "CURRENCY_MM", "value": null },
+                { "text": "A-B-ACQU-2028", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.31, capital allocation", "value": null },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "net_equity_issue_repay", "value": null },
+                { "text": "", "value": null },
+                { "text": "BASE", "value": null },
+                { "text": "FY2028", "value": null },
+                { "text": "2028", "value": "2028" },
+                { "text": "0", "value": "0" },
+                { "text": "CURRENCY_MM", "value": null },
+                { "text": "A-B-NET_-2028", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.31, capital allocation", "value": null },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "dividends_paid", "value": null },
+                { "text": "", "value": null },
+                { "text": "BASE", "value": null },
+                { "text": "FY2028", "value": null },
+                { "text": "2028", "value": "2028" },
+                { "text": "0", "value": "0" },
+                { "text": "CURRENCY_MM", "value": null },
+                { "text": "A-B-DIVI-2028", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.31, capital allocation", "value": null },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "other_investing_financing", "value": null },
+                { "text": "", "value": null },
+                { "text": "BASE", "value": null },
+                { "text": "FY2028", "value": null },
+                { "text": "2028", "value": "2028" },
+                { "text": "0", "value": "0" },
+                { "text": "CURRENCY_MM", "value": null },
+                { "text": "A-B-OTHE-2028", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.31, capital allocation", "value": null },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "division_growth", "value": null },
+                { "text": "DIVISION_1", "value": null },
+                { "text": "DOWNSIDE", "value": null },
+                { "text": "FY2026", "value": null },
+                { "text": "2026", "value": "2026" },
+                { "text": "-0.06", "value": "-0.06" },
+                { "text": "PERCENT_DECIMAL", "value": null },
+                { "text": "A-D-1-2026", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                {
+                  "text": "p.12, Note 3 Revenue Recognition; management outlook, p.31",
+                  "value": null
+                },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "division_growth", "value": null },
+                { "text": "DIVISION_2", "value": null },
+                { "text": "DOWNSIDE", "value": null },
+                { "text": "FY2026", "value": null },
+                { "text": "2026", "value": "2026" },
+                { "text": "-0.10", "value": "-0.10" },
+                { "text": "PERCENT_DECIMAL", "value": null },
+                { "text": "A-D-2-2026", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                {
+                  "text": "p.12, Note 3 Revenue Recognition; management outlook, p.31",
+                  "value": null
+                },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "division_growth", "value": null },
+                { "text": "DIVISION_3", "value": null },
+                { "text": "DOWNSIDE", "value": null },
+                { "text": "FY2026", "value": null },
+                { "text": "2026", "value": "2026" },
+                { "text": "-0.08", "value": "-0.08" },
+                { "text": "PERCENT_DECIMAL", "value": null },
+                { "text": "A-D-3-2026", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                {
+                  "text": "p.12, Note 3 Revenue Recognition; management outlook, p.31",
+                  "value": null
+                },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "acquisitions_disposals", "value": null },
+                { "text": "", "value": null },
+                { "text": "DOWNSIDE", "value": null },
+                { "text": "FY2026", "value": null },
+                { "text": "2026", "value": "2026" },
+                { "text": "0", "value": "0" },
+                { "text": "CURRENCY_MM", "value": null },
+                { "text": "A-D-ACQU-2026", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.31, capital allocation", "value": null },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "net_equity_issue_repay", "value": null },
+                { "text": "", "value": null },
+                { "text": "DOWNSIDE", "value": null },
+                { "text": "FY2026", "value": null },
+                { "text": "2026", "value": "2026" },
+                { "text": "0", "value": "0" },
+                { "text": "CURRENCY_MM", "value": null },
+                { "text": "A-D-NET_-2026", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.31, capital allocation", "value": null },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "dividends_paid", "value": null },
+                { "text": "", "value": null },
+                { "text": "DOWNSIDE", "value": null },
+                { "text": "FY2026", "value": null },
+                { "text": "2026", "value": "2026" },
+                { "text": "0", "value": "0" },
+                { "text": "CURRENCY_MM", "value": null },
+                { "text": "A-D-DIVI-2026", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.31, capital allocation", "value": null },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "other_investing_financing", "value": null },
+                { "text": "", "value": null },
+                { "text": "DOWNSIDE", "value": null },
+                { "text": "FY2026", "value": null },
+                { "text": "2026", "value": "2026" },
+                { "text": "0", "value": "0" },
+                { "text": "CURRENCY_MM", "value": null },
+                { "text": "A-D-OTHE-2026", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.31, capital allocation", "value": null },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "division_growth", "value": null },
+                { "text": "DIVISION_1", "value": null },
+                { "text": "DOWNSIDE", "value": null },
+                { "text": "FY2027", "value": null },
+                { "text": "2027", "value": "2027" },
+                { "text": "-0.02", "value": "-0.02" },
+                { "text": "PERCENT_DECIMAL", "value": null },
+                { "text": "A-D-1-2027", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                {
+                  "text": "p.12, Note 3 Revenue Recognition; management outlook, p.31",
+                  "value": null
+                },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "division_growth", "value": null },
+                { "text": "DIVISION_2", "value": null },
+                { "text": "DOWNSIDE", "value": null },
+                { "text": "FY2027", "value": null },
+                { "text": "2027", "value": "2027" },
+                { "text": "-0.04", "value": "-0.04" },
+                { "text": "PERCENT_DECIMAL", "value": null },
+                { "text": "A-D-2-2027", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                {
+                  "text": "p.12, Note 3 Revenue Recognition; management outlook, p.31",
+                  "value": null
+                },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "division_growth", "value": null },
+                { "text": "DIVISION_3", "value": null },
+                { "text": "DOWNSIDE", "value": null },
+                { "text": "FY2027", "value": null },
+                { "text": "2027", "value": "2027" },
+                { "text": "-0.03", "value": "-0.03" },
+                { "text": "PERCENT_DECIMAL", "value": null },
+                { "text": "A-D-3-2027", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                {
+                  "text": "p.12, Note 3 Revenue Recognition; management outlook, p.31",
+                  "value": null
+                },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "acquisitions_disposals", "value": null },
+                { "text": "", "value": null },
+                { "text": "DOWNSIDE", "value": null },
+                { "text": "FY2027", "value": null },
+                { "text": "2027", "value": "2027" },
+                { "text": "0", "value": "0" },
+                { "text": "CURRENCY_MM", "value": null },
+                { "text": "A-D-ACQU-2027", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.31, capital allocation", "value": null },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "net_equity_issue_repay", "value": null },
+                { "text": "", "value": null },
+                { "text": "DOWNSIDE", "value": null },
+                { "text": "FY2027", "value": null },
+                { "text": "2027", "value": "2027" },
+                { "text": "0", "value": "0" },
+                { "text": "CURRENCY_MM", "value": null },
+                { "text": "A-D-NET_-2027", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.31, capital allocation", "value": null },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "dividends_paid", "value": null },
+                { "text": "", "value": null },
+                { "text": "DOWNSIDE", "value": null },
+                { "text": "FY2027", "value": null },
+                { "text": "2027", "value": "2027" },
+                { "text": "0", "value": "0" },
+                { "text": "CURRENCY_MM", "value": null },
+                { "text": "A-D-DIVI-2027", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.31, capital allocation", "value": null },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "other_investing_financing", "value": null },
+                { "text": "", "value": null },
+                { "text": "DOWNSIDE", "value": null },
+                { "text": "FY2027", "value": null },
+                { "text": "2027", "value": "2027" },
+                { "text": "0", "value": "0" },
+                { "text": "CURRENCY_MM", "value": null },
+                { "text": "A-D-OTHE-2027", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.31, capital allocation", "value": null },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "division_growth", "value": null },
+                { "text": "DIVISION_1", "value": null },
+                { "text": "DOWNSIDE", "value": null },
+                { "text": "FY2028", "value": null },
+                { "text": "2028", "value": "2028" },
+                { "text": "0.01", "value": "0.01" },
+                { "text": "PERCENT_DECIMAL", "value": null },
+                { "text": "A-D-1-2028", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                {
+                  "text": "p.12, Note 3 Revenue Recognition; management outlook, p.31",
+                  "value": null
+                },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "division_growth", "value": null },
+                { "text": "DIVISION_2", "value": null },
+                { "text": "DOWNSIDE", "value": null },
+                { "text": "FY2028", "value": null },
+                { "text": "2028", "value": "2028" },
+                { "text": "0.00", "value": "0.00" },
+                { "text": "PERCENT_DECIMAL", "value": null },
+                { "text": "A-D-2-2028", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                {
+                  "text": "p.12, Note 3 Revenue Recognition; management outlook, p.31",
+                  "value": null
+                },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "division_growth", "value": null },
+                { "text": "DIVISION_3", "value": null },
+                { "text": "DOWNSIDE", "value": null },
+                { "text": "FY2028", "value": null },
+                { "text": "2028", "value": "2028" },
+                { "text": "0.02", "value": "0.02" },
+                { "text": "PERCENT_DECIMAL", "value": null },
+                { "text": "A-D-3-2028", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                {
+                  "text": "p.12, Note 3 Revenue Recognition; management outlook, p.31",
+                  "value": null
+                },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "acquisitions_disposals", "value": null },
+                { "text": "", "value": null },
+                { "text": "DOWNSIDE", "value": null },
+                { "text": "FY2028", "value": null },
+                { "text": "2028", "value": "2028" },
+                { "text": "0", "value": "0" },
+                { "text": "CURRENCY_MM", "value": null },
+                { "text": "A-D-ACQU-2028", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.31, capital allocation", "value": null },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "net_equity_issue_repay", "value": null },
+                { "text": "", "value": null },
+                { "text": "DOWNSIDE", "value": null },
+                { "text": "FY2028", "value": null },
+                { "text": "2028", "value": "2028" },
+                { "text": "0", "value": "0" },
+                { "text": "CURRENCY_MM", "value": null },
+                { "text": "A-D-NET_-2028", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.31, capital allocation", "value": null },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "dividends_paid", "value": null },
+                { "text": "", "value": null },
+                { "text": "DOWNSIDE", "value": null },
+                { "text": "FY2028", "value": null },
+                { "text": "2028", "value": "2028" },
+                { "text": "0", "value": "0" },
+                { "text": "CURRENCY_MM", "value": null },
+                { "text": "A-D-DIVI-2028", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.31, capital allocation", "value": null },
+                { "text": "2026-09-08", "value": null }
+              ],
+              [
+                { "text": "other_investing_financing", "value": null },
+                { "text": "", "value": null },
+                { "text": "DOWNSIDE", "value": null },
+                { "text": "FY2028", "value": null },
+                { "text": "2028", "value": "2028" },
+                { "text": "0", "value": "0" },
+                { "text": "CURRENCY_MM", "value": null },
+                { "text": "A-D-OTHE-2028", "value": null },
+                { "text": "READY", "value": null },
+                { "text": "CVNA_10Q_Quarterly_Report_Q2_2026.htm", "value": null },
+                { "text": "p.31, capital allocation", "value": null },
+                { "text": "2026-09-08", "value": null }
+              ]
+            ]
+          }
+        ],
         "tables_unavailable_reason": null
       },
       {

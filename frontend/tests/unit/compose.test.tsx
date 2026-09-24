@@ -36,7 +36,7 @@ test("Analysis names the conclusion, the module to review and the evidence it re
   expect(chrome.brief.impact).toBe("Committee Ready · full committee");
   expect(chrome.brief.action).toBe("Review CP-1C before committee.");
   expect(chrome.brief.evidence).toBe("4 citations across 4 documents, 1 withdrawn.");
-  expect(chrome.brief.headline).toBe("9/9");
+  expect(chrome.brief.headline).toBe("12/12");
   expect(chrome.verdict).toEqual({
     severity: "WARNING",
     conclusion: "Committee Ready · full committee, with 1 module to review",

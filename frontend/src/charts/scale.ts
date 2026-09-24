@@ -25,7 +25,10 @@ export function textWidth(text: string, size: number): number {
 /** `text` cut to fit `room` px at `size`, ending in an ellipsis when cut. The
     whole label stays in the accessible name, the readout and the table. */
 export function fitText(text: string, room: number, size: number): string {
-  const fits = Math.floor(room / (size * ADVANCE));
+  // The room is often `textWidth` of the widest label itself, and 13 × 6.82
+  // ÷ 6.82 is 12.999… in floating point: without the tolerance the widest
+  // label was always cut by its last character.
+  const fits = Math.floor(room / (size * ADVANCE) + 1e-9);
   if (text.length <= fits) return text;
   return fits <= 1 ? "…" : `${text.slice(0, fits - 1)}…`;
 }

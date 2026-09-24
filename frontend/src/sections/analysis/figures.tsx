@@ -14,6 +14,7 @@ import {
   type Datum,
 } from "@/charts";
 import { fromScaled, placesOf, toScaled } from "@/charts/decimal";
+import { hundredfold } from "@/ds/format";
 import type { HandoffView } from "@/wire/v1";
 
 type Table = HandoffView["tables"][number];
@@ -333,11 +334,226 @@ export function maturityLadder(tables: readonly Table[]): Figure | null {
   };
 }
 
+/** A fraction the bundle wrote (`current / prior - 1`, a `PERCENT_DECIMAL`
+    driver) as the percent a reader reads, moved on its digits. */
+const percentDatum = (cell: Cell | undefined, reason: string): Datum =>
+  cell?.value != null ? { value: hundredfold(cell.value) } : { value: null, reason };
+
+/** A comparison basis in words for a title, and short for a bar that needs
+    one because its neighbours differ. */
+const BASIS: Record<string, [string, string]> = {
+  YOY_SAME_QUARTER: ["year on year", "YoY"],
+  SEQUENTIAL: ["on the prior quarter", "QoQ"],
+  YTD_PRIOR: ["year to date", "YTD"],
+  LTM_PRIOR: ["last twelve months", "LTM"],
+};
+const ACRONYMS = new Set(["ebitda", "cfo", "ncfo", "fcf", "sbc", "sga", "ltm", "ytd"]);
+/** `adjusted_ebitda` reads "Adjusted EBITDA": a register id as a label. */
+const idLabel = (id: string) =>
+  id
+    .toLowerCase()
+    .split("_")
+    .map((word, index) =>
+      ACRONYMS.has(word)
+        ? word.toUpperCase()
+        : index === 0
+          ? word.charAt(0).toUpperCase() + word.slice(1)
+          : word,
+    )
+    .join(" ");
+
+/** Each metric's change on its reference period, in percent (N56): the one
+    unit a revenue change and a debt change share, so they sit on one axis.
+    A change the bundle could not calculate is a gap with its status, not a
+    zero. */
+export function comparatorChanges(tables: readonly Table[]): Figure | null {
+  const rows = tableOf(tables, "cp1b.model_comparator_register");
+  if (!rows?.length) return null;
+  // One basis names the figure; several name each bar, short, so a label
+  // is the metric rather than a phrase repeated down the axis.
+  const bases = unique(rows.map((row) => text(row, "comparison_basis")));
+  const [said] = BASIS[bases[0]!] ?? [bases[0]!.toLowerCase()];
+  const categories = rows.map((row) => {
+    const metric = idLabel(text(row, "metric_id"));
+    const basis = text(row, "comparison_basis");
+    return bases.length === 1 ? metric : `${metric} ${BASIS[basis]?.[1] ?? basis}`;
+  });
+  const data = rows.map((row) =>
+    percentDatum(row.percentage_change, text(row, "calculation_status") || "not calculable"),
+  );
+  // Only to name the largest move: a float orders marks, it never states one.
+  const known = data.flatMap((entry, index) =>
+    entry.value === null ? [] : [{ index, value: entry.value }],
+  );
+  const largest = [...known].sort(
+    (a, b) => Math.abs(Number(b.value)) - Math.abs(Number(a.value)),
+  )[0];
+  const gaps = rows.length - known.length;
+  return {
+    key: "comparator",
+    table: "cp1b.model_comparator_register",
+    kind: "diverging",
+    title: bases.length === 1 ? `Change ${said}, %` : "Change on the reference period, %",
+    summary:
+      (largest
+        ? `Largest move: ${categories[largest.index]} ${formatDecimal(largest.value, true)}%.`
+        : `${rows.length} comparisons, none calculable.`) +
+      (largest && gaps ? ` ${gaps} not calculable.` : ""),
+    unit: "%",
+    categories,
+    series: [{ key: "change", label: "Change", origin: "model", data }],
+    sourceOf: (selection) => {
+      const row = rows[selection.index];
+      if (!row) return null;
+      const flags = ["restatement", "basis_change", "perimeter_change", "definition_change"]
+        .filter((flag) => /^(Y|YES|TRUE)$/i.test(text(row, `${flag}_flag`)))
+        .map((flag) => flag.replace("_", " "));
+      return [
+        `${text(row, "current_period_id")} against ${text(row, "reference_period_id")}: ${text(row, "values")}`,
+        flags.length ? `flagged: ${flags.join(", ")}` : "",
+      ]
+        .filter(Boolean)
+        .join("; ");
+    },
+  };
+}
+
+/** CP-1B's comparison of each add-back less CP-1's, for the latest period
+    validated (N56): zero where they agree. The summary counts what the
+    module ruled, since a difference inside tolerance still passes. */
+export function addbackValidation(tables: readonly Table[]): Figure | null {
+  const rows = tableOf(tables, "cp1b.addback_validation_register");
+  if (!rows?.length) return null;
+  const latest = unique(rows.map((row) => text(row, "period_id"))).at(-1)!;
+  const own = rows.filter((row) => text(row, "period_id") === latest);
+  const count = (status: string) =>
+    own.filter((row) => text(row, "status").toUpperCase() === status).length;
+  const [pass, warn, block] = [count("PASS"), count("WARN"), count("BLOCK")];
+  return {
+    key: "addback-validation",
+    table: "cp1b.addback_validation_register",
+    kind: "diverging",
+    title: `Add-backs against CP-1, ${latest}`,
+    summary:
+      `${pass} of ${own.length} pass` +
+      (warn ? `, ${warn} warn` : "") +
+      (block ? `, ${block} block model readiness` : "") +
+      ".",
+    // The register names an add-back by its id; its label is CP-1's table.
+    categories: own.map((row) => idLabel(text(row, "addback_id"))),
+    series: [
+      {
+        key: "difference",
+        label: "CP-1B less CP-1",
+        origin: "model",
+        data: own.map((row) => datum(row.difference)),
+      },
+    ],
+    sourceOf: (selection) => {
+      const row = own[selection.index];
+      if (!row) return null;
+      return [text(row, "status"), text(row, "explanation"), text(row, "source_or_conflict_ref")]
+        .filter(Boolean)
+        .join(" · ");
+    },
+  };
+}
+
+const CASE_ORDER = ["BASE", "DOWNSIDE"];
+
+/** Each division's forecast growth, base against downside, by fiscal year
+    (N56): one figure a division, as the KPIs are, so two lines share each
+    axis. A slot the issuer does not use (`NOT_APPLICABLE` throughout) draws
+    nothing. The division is named by its slot: CP-1's allocation that maps
+    it to a segment is another module's table. */
+export function forecastDrivers(tables: readonly Table[]): Figure[] {
+  const rows = (tableOf(tables, "cp2g.cp_model_forecast_drivers") ?? []).filter(
+    (row) => text(row, "driver_id") === "division_growth",
+  );
+  const slots = unique(rows.map((row) => text(row, "slot_id"))).filter((slot) =>
+    rows.some((row) => text(row, "slot_id") === slot && text(row, "status") === "READY"),
+  );
+  return slots.map((slot) => {
+    const own = rows.filter((row) => text(row, "slot_id") === slot);
+    const years = unique(own.map((row) => text(row, "fiscal_year"))).sort();
+    const cases = unique(own.map((row) => text(row, "case"))).sort(
+      (a, b) => CASE_ORDER.indexOf(a) - CASE_ORDER.indexOf(b),
+    );
+    const at = (kase: string, year: string) =>
+      own.find((row) => text(row, "case") === kase && text(row, "fiscal_year") === year);
+    const label = sentence(slot.replace("_", " "));
+    const span = (kase: string) => {
+      const first = at(kase, years[0]!)?.value?.value;
+      const last = at(kase, years.at(-1)!)?.value?.value;
+      return first != null && last != null
+        ? `${sentence(kase)} ${formatDecimal(hundredfold(first), true)}% to ${formatDecimal(hundredfold(last), true)}%`
+        : null;
+    };
+    return {
+      key: `forecast-${slot}`,
+      table: "cp2g.cp_model_forecast_drivers",
+      kind: "line" as const,
+      title: `${label} growth, %`,
+      summary:
+        [cases.map(span).filter(Boolean).join("; "), `${years[0]} to ${years.at(-1)}`]
+          .filter(Boolean)
+          .join(", ") + ".",
+      unit: "%",
+      categories: years,
+      series: cases.map((kase) => ({
+        key: kase,
+        label: sentence(kase),
+        origin: "model" as const,
+        data: years.map((year) => percentDatum(at(kase, year)?.value, "not stated")),
+      })),
+      sourceOf: (selection: ChartSelection) => locate(at(selection.series, selection.category)),
+    };
+  });
+}
+
 /** Every figure a handoff's tables support, in reading order. */
 export function figuresOf(handoff: HandoffView): Figure[] {
   const tables = handoff.tables;
-  return [segmentMix(tables), ...kpiLines(tables), addbacks(tables), maturityLadder(tables)].filter(
-    (figure): figure is Figure => figure !== null,
+  return [
+    segmentMix(tables),
+    ...kpiLines(tables),
+    addbacks(tables),
+    maturityLadder(tables),
+    comparatorChanges(tables),
+    addbackValidation(tables),
+    ...forecastDrivers(tables),
+  ].filter((figure): figure is Figure => figure !== null);
+}
+
+/** CP-2B's catalysts, ranked, each with the date or window it falls in
+    (N56): a list, not a chart -- an event is not a magnitude. */
+function Catalysts({ tables }: { tables: HandoffView["tables"] }) {
+  const rows = tableOf(tables, "cp2b.cp_model_catalysts");
+  if (!rows?.length) return null;
+  const ranked = [...rows].sort(
+    (a, b) =>
+      (Number(text(a, "rank")) || Number.MAX_SAFE_INTEGER) -
+      (Number(text(b, "rank")) || Number.MAX_SAFE_INTEGER),
+  );
+  return (
+    <section className="catalysts" aria-labelledby="catalysts-heading" data-catalysts>
+      <h4 id="catalysts-heading">Catalysts, ranked</h4>
+      <ol>
+        {ranked.map((row, index) => (
+          <li key={`${text(row, "rank")}-${index}`} data-catalyst={text(row, "rank")}>
+            <span className="when">{text(row, "event_date_or_window") || "Undated"}</span>
+            <span className="what">
+              <b>{text(row, "event")}</b>
+              {text(row, "credit_relevance") ? <span>{text(row, "credit_relevance")}</span> : null}
+              {text(row, "status") && text(row, "status") !== "READY" ? (
+                <span className="tag warn">{text(row, "status")}</span>
+              ) : null}
+            </span>
+            {locate(row) ? <span className="src">{locate(row)}</span> : null}
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }
 
@@ -451,13 +667,16 @@ export function Figures({
       <h3 id="figures-heading" className="grouphead">
         Figures <span className="cp">model-authored, drawn outlined</span>
       </h3>
-      <div className="figgrid">
-        {figures.map((figure) => (
-          <div key={figure.key} className={`fig ${figure.kind}`} data-figure={figure.key}>
-            <Chart figure={figure} onPick={onPick} />
-          </div>
-        ))}
-      </div>
+      {figures.length ? (
+        <div className="figgrid">
+          {figures.map((figure) => (
+            <div key={figure.key} className={`fig ${figure.kind}`} data-figure={figure.key}>
+              <Chart figure={figure} onPick={onPick} />
+            </div>
+          ))}
+        </div>
+      ) : null}
+      <Catalysts tables={handoff.tables} />
       {handoff.tables.length ? <RawTables tables={handoff.tables} /> : null}
     </section>
   );

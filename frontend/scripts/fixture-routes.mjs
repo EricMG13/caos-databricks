@@ -95,6 +95,12 @@ export const STATE_ROUTES = [
   sectionRoute("report", "acts"),
   armedRoute("report", "SIGN_OPINION"),
   armedRoute("upload", "WITHDRAW_SOURCE"),
+  // Analysis opens on its conclusion, which carries no table, so a module's
+  // figures were never scanned: CP-1's charts, and N56's comparator,
+  // add-back validation, division growth and catalyst list.
+  ...["rn-cp-1", "rn-cp-1b", "rn-cp-2b", "rn-cp-2g"].map(
+    (tab) => `${sectionRoute("analysis")}&tab=${tab}`,
+  ),
   "/analysis/",
   "/nothing/",
 ];

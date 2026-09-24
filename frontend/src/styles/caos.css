@@ -1541,7 +1541,10 @@
   }
   .analysis .figgrid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    /* `min(…, 100%)`: a 320 px track could not shrink on a 320 px screen and
+       pushed the page 16 px sideways (found when N56 put a module's figures
+       in the a11y matrix). */
+    grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
     gap: 1rem;
   }
   .analysis .fig {
@@ -1550,6 +1553,52 @@
     border-radius: var(--radius-xl);
     background: var(--card);
     box-shadow: var(--ring-card);
+  }
+  /* CP-2B's catalysts (N56): a card like a figure's, the date in its own
+     column so the list reads down time, the event over what it means. */
+  .analysis .catalysts {
+    padding: 1rem;
+    border-radius: var(--radius-xl);
+    background: var(--card);
+    box-shadow: var(--ring-card);
+  }
+  .analysis .catalysts h4 {
+    margin: 0 0 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+  .analysis .catalysts ol {
+    display: grid;
+    gap: 0.625rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .analysis .catalysts li {
+    display: grid;
+    grid-template-columns: minmax(6.5rem, max-content) minmax(0, 1fr);
+    gap: 0.125rem 1rem;
+    font-size: 0.875rem;
+    line-height: 1.5;
+  }
+  .analysis .catalysts .when {
+    font: 400 0.8125rem/1.6 var(--font-mono);
+    color: var(--muted-foreground);
+  }
+  .analysis .catalysts .what {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    min-width: 0;
+  }
+  .analysis .catalysts .what .tag {
+    align-self: flex-start;
+  }
+  .analysis .catalysts .src {
+    grid-column: 2;
+    font-size: 0.75rem;
+    color: var(--muted-foreground);
+    overflow-wrap: break-word;
   }
   .analysis details.tables table.raw {
     margin-top: 0.5rem;
