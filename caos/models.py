@@ -24,8 +24,9 @@ import math
 import os
 import threading
 import time
-from collections.abc import Mapping
-from contextlib import suppress
+import warnings
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
 from decimal import Decimal, DecimalException
 from typing import Any
@@ -276,9 +277,12 @@ def _invoked(
     def send() -> None:
         with suppress(Exception):  # indeterminate, never text (ST-8)
             try:
-                answered.append(
-                    context.run(chat.invoke, [HumanMessage(content=prompt)], **options)
-                )
+                with _content_parts_contained():
+                    answered.append(
+                        context.run(
+                            chat.invoke, [HumanMessage(content=prompt)], **options
+                        )
+                    )
             except OpenAIError as failed:
                 answered.append(failed)
 
@@ -286,6 +290,34 @@ def _invoked(
     sender.start()
     sender.join(max(seconds, 0.0))
     return answered[0] if answered else None
+
+
+# Pydantic's serializer warning when the client dumps a response message whose
+# `content` is a list of parts where its model declares a string (CF-077). The
+# warning quotes that value -- the model's answer, which quotes the evidence --
+# and Python prints it to stderr. Matched by category and the whole message:
+# one content-list entry, nothing after it; no other warning is touched.
+_CONTENT_PARTS_WARNING = (
+    r"Pydantic serializer warnings:\s+PydanticSerializationUnexpectedValue\("
+    r"Expected `str` - serialized value may not be as expected \["
+    r"field_name='content', input_value=.*, input_type=list\]\)\Z"
+)
+
+
+@contextmanager
+def _content_parts_contained() -> Iterator[None]:
+    """Contain `_CONTENT_PARTS_WARNING` for the one call inside the block.
+
+    Python 3.13's filter state is process-wide. A call abandoned at its
+    deadline and still running when the next one starts can end the next
+    call's containment early, or leave this one filter in place after both;
+    neither touches any other warning.
+    """
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore", message=_CONTENT_PARTS_WARNING, category=UserWarning
+        )
+        yield
 
 
 def _waited_out(failed: OpenAIError, sent: int, deadline: float) -> bool:

@@ -544,3 +544,31 @@ def test_the_smoke_parses_the_json_answer_it_asked_for(
     stub.reply = lambda prompt, json_object: "definitely not JSON"
     assert gateway_smoke.main() == 1
     assert capsys.readouterr().out.rstrip().endswith("json_mode=not JSON")
+
+
+def test_an_answer_in_content_parts_prints_no_warning_quoting_it(
+    stub: WorkspaceStub,
+) -> None:
+    """CF-077: an endpoint that answers with a list of content parts made the
+    client's message dump raise Pydantic's serializer `UserWarning`, whose
+    text quotes the answer -- the model's words, which quote the evidence --
+    and Python prints a warning to stderr. Through the real `ChatDatabricks`
+    over HTTP it is contained around the call, and nothing of it is left."""
+    import warnings
+
+    from caos.models import from_environment
+
+    said = "SECRET-PART-TEXT from the model"
+    stub.reply = lambda _prompt, _json_object: said
+    stub.content_parts = True
+    provider = from_environment()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        completion = provider.complete("q" * 200)
+    assert completion.charge is not None
+    # The warning shortens the value it quotes, so its own words and the
+    # answer's tail are what is looked for.
+    messages = [str(w.message) for w in caught]
+    assert not [m for m in messages if "serializer warnings" in m], messages
+    assert not [m for m in messages if "from the model" in m], messages
+    assert stub.completions == 1

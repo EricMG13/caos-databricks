@@ -71,6 +71,9 @@ class WorkspaceStub:
     """One in-memory workspace: what it holds, what it answers, what it saw."""
 
     reply: Reply = _ok
+    # Answer with the content as a list of text parts, the shape some serving
+    # endpoints send where the client's model declares a string (CF-077).
+    content_parts: bool = False
     groups: frozenset[str] = frozenset({"caos-admins", "caos-analysts"})
     # A profile that may not list groups is answered 403 (preflight's W5).
     groups_forbidden: bool = False
@@ -159,7 +162,14 @@ class WorkspaceStub:
             "choices": [
                 {
                     "index": 0,
-                    "message": {"role": "assistant", "content": answer},
+                    "message": {
+                        "role": "assistant",
+                        "content": (
+                            [{"type": "text", "text": answer}]
+                            if self.content_parts
+                            else answer
+                        ),
+                    },
                     "finish_reason": "stop",
                 }
             ],

@@ -541,3 +541,53 @@ def test_a_blank_answer_is_an_invalid_response_billed_not_a_success(
     assert completion.refusal is RefusalCode.PROVIDER_RESPONSE_INVALID
     assert completion.charge == Decimal("0.1")
     assert completion.generation_id == "generation"
+
+
+def test_only_the_list_content_serializer_warning_is_contained() -> None:
+    """CF-077: the client dumps a response message whose `content` is a list
+    where its model declares a string, and Pydantic's serializer `UserWarning`
+    quotes that content. It is contained around the invoke, by category and
+    message; any other warning raised in the call still reaches its handler."""
+    import warnings
+    from typing import cast
+
+    from langchain_core.messages import AIMessage
+    from openai._models import construct_type
+    from openai.types.chat import ChatCompletion
+
+    said = "SECRET-PART-TEXT from the model"
+
+    def reply(_prompt: str) -> AIMessage:
+        body = {
+            "id": "chatcmpl-1",
+            "object": "chat.completion",
+            "created": 1,
+            "model": MODEL,
+            "choices": [
+                {
+                    "index": 0,
+                    "finish_reason": "stop",
+                    "message": {
+                        "role": "assistant",
+                        "content": [{"type": "text", "text": said}],
+                    },
+                }
+            ],
+        }
+        response = cast(
+            ChatCompletion, construct_type(type_=ChatCompletion, value=body)
+        )
+        response.choices[0].message.model_dump(exclude_unset=True)
+        warnings.warn("another warning, not contained", UserWarning, stacklevel=1)
+        return answer("{}", finish="stop", tokens=(1, 1))
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        completion = fake_completions(ScriptedChat(answer=reply)).complete(PROMPT)
+    assert completion.content == "{}"
+    messages = [str(w.message) for w in caught]
+    # The warning shortens the value it quotes (`'text':...T-TEXT from the
+    # model'`), so its own words and the answer's tail are what is looked for.
+    assert not [m for m in messages if "serializer warnings" in m], messages
+    assert not [m for m in messages if "from the model" in m], messages
+    assert "another warning, not contained" in messages
