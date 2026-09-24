@@ -1306,6 +1306,123 @@ def test_a_glyph_whose_ink_its_box_may_not_bound_is_never_found_covered() -> Non
     assert _marks(data) == {"Stroked": "", "aaaa": "", "Filled": PAINTED}
 
 
+@pytest.mark.parametrize(
+    ("content", "mark"),
+    [
+        # Squeezed to a hairline across, by horizontal scaling or by the text
+        # matrix: 0.12 pt wide however tall.
+        (b"BT /F1 12 Tf 1 Tz 1 0 0 1 72 700 Tm (Squeezed) Tj ET", "under_2pt"),
+        (b"BT /F1 12 Tf 0.01 0 0 1 72 700 Tm (Squashed) Tj ET", "under_2pt"),
+        # Condensed type is 6 pt across and read; a negative scaling or size
+        # mirrors the glyph, and a turned matrix turns it, at its full size.
+        (b"BT /F1 12 Tf 50 Tz 1 0 0 1 72 700 Tm (Condensed) Tj ET", ""),
+        (b"BT /F1 12 Tf -100 Tz 1 0 0 1 300 700 Tm (Mirrored) Tj ET", ""),
+        (b"BT /F1 -12 Tf 1 0 0 1 72 700 Tm (Negative) Tj ET", ""),
+    ],
+)
+def test_a_glyph_is_measured_on_its_narrower_axis(content: bytes, mark: str) -> None:
+    """N9: a glyph's size was its em on the y axis alone, so text squeezed
+    flat across -- `1 Tz`, or a text matrix 0.01 wide -- read as 12 pt and
+    was not marked. Both axes are measured now, the x axis with the
+    horizontal scaling, and the narrower decides."""
+    [(_text, found)] = _marks(raw_pdf(content)).items()
+
+    assert found == mark
+
+
+def stream(data: bytes, attrs: bytes = b"") -> bytes:
+    """A stream object holding `data`, with `attrs` in its dictionary."""
+    return (
+        b"<< /Length %d " % len(data) + attrs + b" >>\nstream\n" + data + b"\nendstream"
+    )
+
+
+# Colour spaces pdfminer names without reading (N9): objects 8 to 10 are an
+# Indexed table held in a stream, a PostScript tint transform, and an ICC
+# profile of three components.
+SPACES = (
+    b"/ColorSpace << /IdxW [/Indexed /DeviceRGB 1 <FFFFFF000000>]"
+    b" /IdxLab [/Indexed [/Lab << /WhitePoint [0.9505 1 1.089] >>] 0 <FF8080>]"
+    b" /IdxShort [/Indexed /DeviceRGB 1 <FFFFFF>]"
+    b" /IdxStream [/Indexed /DeviceGray 1 8 0 R]"
+    b" /Sep [/Separation /Spot /DeviceCMYK << /FunctionType 2 /Domain [0 1]"
+    b" /C0 [0 0 0 0] /C1 [0 0 0 1] /N 1 >>]"
+    b" /SepNone [/Separation /None /DeviceGray << /FunctionType 2 /Domain [0 1]"
+    b" /C0 [1] /C1 [0] /N 1 >>]"
+    b" /SepPS [/Separation /Spot /DeviceGray 9 0 R]"
+    b" /CS0 [/ICCBased 10 0 R] >>"
+)
+SPACE_OBJECTS = (
+    stream(b"\xff\x00"),
+    stream(b"{ 1 exch sub }", b"/FunctionType 4 /Domain [0 1] /Range [0 1]"),
+    stream(b"", b"/N 3"),
+)
+NEAR = "near_background"
+
+
+@pytest.mark.parametrize(
+    ("paint", "mark"),
+    [
+        # An Indexed table over RGB: white at index 0, black at 1, an index
+        # past the table held to its last entry, and `cs` alone setting
+        # index 0; a table held in a stream reads the same.
+        (b"/IdxW cs 0 sc", NEAR),
+        (b"/IdxW cs 1 sc", ""),
+        (b"/IdxW cs 7 sc", ""),
+        (b"/IdxW cs", NEAR),
+        (b"/IdxStream cs 0 sc", NEAR),
+        # A spot colour whose tint transform is exponential into CMYK: no ink
+        # at tint 0, full ink at 1 -- the tint `cs` sets, whatever colour
+        # came before it.
+        (b"/Sep cs 0 scn", NEAR),
+        (b"/Sep cs", ""),
+        (b"0 g /Sep cs", ""),
+        # `cs` sets the space's initial colour: pdfminer kept the white
+        # before it, and black text in an ICC space read as white.
+        (b"1 g /CS0 cs", ""),
+        (b"1 g /CS0 cs 1 1 1 sc", NEAR),
+        # Undecided: an Indexed base this reading does not read or a table
+        # too short for its entries, the `None` colorant, and a PostScript
+        # tint transform.
+        (b"/IdxLab cs 0 sc", ""),
+        (b"/IdxShort cs 0 sc", ""),
+        (b"/SepNone cs 0 scn", ""),
+        (b"/SepPS cs 0 scn", ""),
+    ],
+)
+def test_a_colour_space_this_reading_decides_is_compared_with_the_paper(
+    paint: bytes, mark: str
+) -> None:
+    """N9: text painted white in an Indexed or a Separation colour space was
+    never compared with what is behind it -- pdfminer names such a space and
+    reads none of its colours. An Indexed table over gray, RGB or CMYK, and
+    a Separation whose tint transform is exponential into one of them, are
+    read now; any other stays undecided and marks nothing."""
+    data = layered_pdf(
+        paint + b"\n" + shown(700, "Line"),
+        layers=b"",
+        resources=SPACES,
+        more=SPACE_OBJECTS,
+    )
+
+    assert _marks(data) == {"Line": mark}
+
+
+def test_a_fill_in_an_indexed_space_covers_what_it_holds() -> None:
+    """A fill's colour is read the same way, so an opaque rectangle painted
+    from an Indexed table over a line hides it; the extraction child marks
+    what the walk marks."""
+    data = layered_pdf(
+        shown(700, "Kept visible") + b"/IdxW cs 0 sc 60 690 300 30 re f\n",
+        layers=b"",
+        resources=SPACES,
+        more=SPACE_OBJECTS,
+    )
+
+    assert _marks(data) == {"Kept visible": PAINTED}
+    assert _lines(PdfExtractor().extract(data)) == {"Kept visible": PAINTED}
+
+
 def test_reasons_join_sorted_on_one_line() -> None:
     """Text in optional content switched off and painted over as well carries
     both reasons, sorted."""

@@ -135,9 +135,24 @@ PAINTED_OVER_COVER = "later-opaque-rectangle-holding-the-glyph-box"
 PAINTED_OVER_WORK = 4_000_000
 # A glyph whose em is smaller than this on the page, in points, is not read.
 SMALLEST_READABLE_PT = 2.0
+# On which axis a glyph's em is measured (N9): the narrower of the two. The
+# text space's x axis is scaled by the font size and the horizontal scaling
+# (`Tz`), its y axis by the font size alone; measured on y only, text squeezed
+# to a hairline by `1 Tz`, or by a text matrix 0.01 wide, read as 12 pt.
+SMALLEST_READABLE_AXIS = "narrower-of-width-and-height"
 # How far a glyph's paint may be from what is behind it, per channel of an RGB
 # colour on 0..1, and still be the same colour to a reader.
 NEAR_BACKGROUND_DISTANCE = 0.1
+# The colour spaces whose paint is compared with what is behind a glyph (N9):
+# gray, RGB and CMYK -- the device spaces, the CIE-based gray and RGB and an
+# ICC profile -- read by their count; an `Indexed` table over one of them; and
+# a `Separation` whose tint transform is an exponential (Type 2) function into
+# one of them. Any other -- Lab, a pattern, DeviceN, the `None` colorant, a
+# sampled, stitching or PostScript tint transform -- is not decided, and a
+# glyph painted in one is never found near the background. A `cs` or `CS`
+# sets its space's initial colour (ISO 32000-1, 8.6.8), which pdfminer does
+# not: it kept the colour before, so `1 g /CS0 cs` read black text as white.
+READ_COLOUR_SPACES = "gray-rgb-cmyk-by-count,indexed,separation-exponential"
 # What is behind a glyph: the last filled path under its centre, or white.
 BACKDROP = "last-filled-path-over-white"
 
@@ -160,9 +175,11 @@ class PdfExtractor:
             # optional content the document switches off is marked too, and
             # render mode 7 is declared. v6: so is text an opaque fill paints
             # over later. v7: a line break a glyph's text carries is a space
-            # in its token (W4). Earlier rows keep their stored identity and
-            # verify as recorded; readmission is how a source gains the new
-            # tokens (section 44.4's rule).
+            # in its token (W4); a glyph's size is its em on its narrower
+            # axis, and Indexed and exponential Separation colours are read
+            # (N9). Earlier rows keep their stored identity and verify as
+            # recorded; readmission is how a source gains the new tokens
+            # (section 44.4's rule).
             "7",
             {
                 "pdfminer_version": version("pdfminer.six"),
@@ -185,7 +202,9 @@ class PdfExtractor:
                 "hidden_render_mode": INVISIBLE_RENDER_MODE,
                 "hidden_clip_render_mode": CLIP_ONLY_RENDER_MODE,
                 "hidden_under_pt": SMALLEST_READABLE_PT,
+                "hidden_under_pt_axis": SMALLEST_READABLE_AXIS,
                 "hidden_near_background": NEAR_BACKGROUND_DISTANCE,
+                "hidden_colour_spaces": READ_COLOUR_SPACES,
                 "hidden_backdrop": BACKDROP,
                 "hidden_optional_content": OPTIONAL_CONTENT,
                 "hidden_optional_content_groups": OPTIONAL_CONTENT_GROUPS,

@@ -697,9 +697,19 @@ def test_the_pdf_identity_records_effective_layout_and_convention() -> None:
         identity.config["hidden_render_mode"],
         identity.config["hidden_clip_render_mode"],
         identity.config["hidden_under_pt"],
+        identity.config["hidden_under_pt_axis"],
         identity.config["hidden_near_background"],
         identity.config["hidden_backdrop"],
-    ) == (3, 7, 2.0, 0.1, "last-filled-path-over-white")
+        identity.config["hidden_colour_spaces"],
+    ) == (
+        3,
+        7,
+        2.0,
+        "narrower-of-width-and-height",
+        0.1,
+        "last-filled-path-over-white",
+        "gray-rgb-cmyk-by-count,indexed,separation-exponential",
+    )
     assert (
         identity.config["hidden_optional_content"],
         identity.config["hidden_optional_content_groups"],
