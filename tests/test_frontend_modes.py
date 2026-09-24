@@ -12,6 +12,8 @@ from pathlib import Path
 import check_pr_size
 import pytest
 
+from caos.api.site import MANIFEST, _complete
+
 REPO = Path(__file__).resolve().parents[1]
 # A store suite that skipped is not a store suite that passed; the same is
 # true of a security test that never ran anywhere because no CI job ever had
@@ -284,10 +286,12 @@ def test_the_production_build_carries_no_dev_actor_or_identity_header(
     assert _demo_leaks(tmp_path) == ["index.js: x-caos-"]
 
 
-def test_production_build_contains_no_fixture_or_demo_route(tmp_path: Path) -> None:
+@pytest.fixture(scope="module")
+def production_export(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """One production `vite build`, shared by the tests that read it."""
     node = _node_and_vite()
     vite = REPO / "frontend/node_modules/vite/bin/vite.js"
-    out = tmp_path / "dist"
+    out = tmp_path_factory.mktemp("production") / "dist"
     subprocess.run(
         [
             node,
@@ -310,8 +314,32 @@ def test_production_build_contains_no_fixture_or_demo_route(tmp_path: Path) -> N
             "CAOS_DEV_ROLE": "ADMIN",
         },
     )
-    assert (out / "index.html").is_file()
-    assert _demo_leaks(out) == []
+    return out
+
+
+def test_production_build_contains_no_fixture_or_demo_route(
+    production_export: Path,
+) -> None:
+    assert (production_export / "index.html").is_file()
+    assert _demo_leaks(production_export) == []
+
+
+def test_the_production_build_is_a_complete_export_to_its_manifest(
+    production_export: Path, tmp_path: Path
+) -> None:
+    """N92: the real build writes the manifest the boot check reads, names
+    each lazy section view in it, and is complete; the same export without
+    one section view is not, though its index names none of them."""
+    assert _complete(production_export)
+    manifest = json.loads((production_export / MANIFEST).read_text(encoding="utf-8"))
+    lazy = [entry["file"] for entry in manifest.values() if entry.get("isDynamicEntry")]
+    assert len(lazy) == 9
+    index = (production_export / "index.html").read_text(encoding="utf-8")
+    assert not any(name in index for name in lazy)
+    reduced = tmp_path / "dist"
+    shutil.copytree(production_export, reduced)
+    (reduced / lazy[0]).unlink()
+    assert not _complete(reduced)
 
 
 def test_fixture_browser_launchers_never_reuse_an_unrelated_server() -> None:

@@ -9,6 +9,7 @@ that lists no directory, leaves no root and follows no symlink out of it.
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 import socket
 import threading
@@ -27,12 +28,26 @@ from caos.api.app import app
 from caos.api.deps import DATABASE_URL
 from caos.api.edge import PLATFORM_ENV, SECURITY_HEADERS
 from caos.api.identity import WORKSPACE_ENV
-from caos.api.site import SECTIONS, SITE_ROOT_ENV, application, dispatch
+from caos.api.site import (
+    MANIFEST,
+    MANIFEST_CAP,
+    SECTIONS,
+    SITE_ROOT_ENV,
+    _complete,
+    application,
+    dispatch,
+)
 from caos.refusals import Refusal, RefusalCode
 
 INDEX = b"<!doctype html><title>CAOS</title><div id=root></div>"
 CASE = "8c0d2b7e-3f7a-4e53-9a53-2f4f4c1b7a10"
 RUN = "1f6a3c55-8e0b-4b8e-a4ad-6f2d1c9e0b42"
+
+
+def _write_manifest(root: Path, entries: object) -> None:
+    """Vite's `build.manifest` shape: entry key to its file, styles, assets."""
+    (root / MANIFEST).parent.mkdir(parents=True, exist_ok=True)
+    (root / MANIFEST).write_text(json.dumps(entries), encoding="utf-8")
 
 
 @pytest.fixture
@@ -41,6 +56,7 @@ def site(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     (root / "assets").mkdir(parents=True)
     (root / "index.html").write_bytes(INDEX)
     (root / "assets" / "app.js").write_bytes(b"export {};")
+    _write_manifest(root, {"index.html": {"file": "assets/app.js", "isEntry": True}})
     (root / "api").mkdir()
     (root / "api" / "index.html").write_bytes(b"shadow")
     (tmp_path / "secret.txt").write_bytes(b"outside the export")
@@ -347,6 +363,111 @@ def test_an_export_missing_a_file_its_index_names_refuses_boot(
     (site / "assets" / "app.css").write_bytes(b"")
     with TestClient(application) as client:
         _secured(client.get("/directory/"))
+
+
+def test_an_export_missing_a_lazy_section_view_refuses_boot(
+    site: Path, empty_database: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N92: since F317 each section view is its own file, loaded when its
+    section opens, and the index names none of them; an export missing one
+    booted `ready` and drew that section as a failed load. Boot now holds
+    the export to every file the build's manifest names as well."""
+
+    async def idle(state: health.ProbeState) -> None:
+        del state
+
+    monkeypatch.setattr(health, "probe_loop", idle)
+    monkeypatch.setenv(DATABASE_URL, empty_database)
+    lazy = "src/sections/analysis/AnalysisSection.tsx"
+    _write_manifest(
+        site,
+        {
+            "index.html": {
+                "file": "assets/app.js",
+                "isEntry": True,
+                "dynamicImports": [lazy],
+                "css": ["assets/app.css"],
+                "assets": ["assets/font.woff2"],
+            },
+            lazy: {"file": "assets/AnalysisSection.js", "isDynamicEntry": True},
+        },
+    )
+    (site / "assets" / "app.css").write_bytes(b"")
+    (site / "assets" / "font.woff2").write_bytes(b"")
+    with pytest.raises(Refusal) as missing, TestClient(application):
+        pass
+    assert missing.value.code is RefusalCode.EDGE_CONFIG_INVALID
+    (site / "assets" / "AnalysisSection.js").write_bytes(b"export {};")
+    with TestClient(application) as client:
+        _secured(client.get("/analysis/"))
+        # The manifest is the server's record of the export, never served: it
+        # names the build's source paths.
+        assert client.get("/.vite/manifest.json").status_code == 404
+        assert client.get("/assets/AnalysisSection.js").status_code == 200
+
+
+@pytest.mark.parametrize(
+    "manifest",
+    [
+        None,
+        b"",
+        b"{not json",
+        b"\xff\xfe",
+        b"[" * 100_000 + b"]" * 100_000,
+        b"[]",
+        b"{}",
+        b'{"src/main.tsx": {"file": "assets/app.js"}}',
+        b'{"index.html": "assets/app.js"}',
+        b'{"index.html": {"isEntry": true}}',
+        b'{"index.html": {"file": ""}}',
+        b'{"index.html": {"file": "assets/app.js", "css": "assets/app.js"}}',
+        b'{"index.html": {"file": "assets/app.js", "assets": [7]}}',
+        b'{"index.html": {"file": "../secret.txt"}}',
+        b'{"index.html": {"file": "/etc/hosts"}}',
+        b'{"index.html": {"file": ".vite/manifest.json"}}',
+    ],
+    ids=[
+        "missing",
+        "empty",
+        "not-json",
+        "not-utf8",
+        "too-deep",
+        "not-an-object",
+        "no-entries",
+        "no-index-entry",
+        "entry-not-an-object",
+        "entry-without-file",
+        "empty-file",
+        "css-not-a-list",
+        "asset-not-a-name",
+        "outside-the-root",
+        "absolute",
+        "a-dot-file",
+    ],
+)
+def test_a_missing_or_malformed_manifest_is_not_a_complete_export(
+    site: Path, manifest: bytes | None
+) -> None:
+    """N92: the manifest fails closed. Missing, unreadable, not JSON, not
+    Vite's shape, without the index's own entry, or naming a path the export
+    would not serve: each is an export boot refuses."""
+    assert _complete(site)
+    if manifest is None:
+        (site / MANIFEST).unlink()
+    else:
+        (site / MANIFEST).write_bytes(manifest)
+    assert not _complete(site)
+
+
+def test_a_manifest_past_its_cap_is_not_read(site: Path) -> None:
+    """N92: the boot read is bounded; a manifest past `MANIFEST_CAP` is not
+    the build's, and is refused without being parsed."""
+    entry = b'{"index.html": {"file": "assets/app.js"}}'
+    padding = b" " * (MANIFEST_CAP - len(entry))
+    (site / MANIFEST).write_bytes(entry + padding)
+    assert _complete(site)
+    (site / MANIFEST).write_bytes(entry + padding + b" ")
+    assert not _complete(site)
 
 
 def test_the_deep_link_sections_are_the_workspace_sections() -> None:

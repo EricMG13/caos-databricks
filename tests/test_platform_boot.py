@@ -20,6 +20,7 @@ from typing import Any
 from urllib.parse import urlparse
 from uuid import UUID, uuid4, uuid5
 
+import platform_app as platform_app_module
 import pytest
 from canonical_fixtures import CATALOG, LITE_PROFILE, LITE_SELECTION
 from platform_app import (
@@ -27,6 +28,7 @@ from platform_app import (
     VOLUME,
     BootFailed,
     PlatformApp,
+    export_root,
     platform_app,
     platform_environment,
 )
@@ -35,6 +37,7 @@ from test_workspace_stub import CREDENTIALS, stub
 from workspace_stub import LAKEBASE_ENDPOINT, LAKEBASE_INSTANCE, WorkspaceStub
 
 from caos.api.identity import NAMESPACE
+from caos.api.site import _complete
 from caos.graph.route import resolve_route
 from caos.store import lakebase
 from caos.store.lakebase import LakebaseKind
@@ -198,6 +201,18 @@ def test_the_boot_environment_is_the_bundle_s_and_what_the_deploy_sent(
     env = platform_environment(stub, database, 8000, tmp_path)
     assert env[lakebase.LAKEBASE_INSTANCE] == LAKEBASE_INSTANCE
     assert lakebase.LAKEBASE_ENDPOINT not in env
+
+
+def test_the_stand_in_export_is_complete_to_the_boot_check(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N92: where no export is built, the harness boots a stand-in, and the
+    boot check now reads the build manifest too; a stand-in without one would
+    refuse boot on every job that builds no frontend."""
+    monkeypatch.setattr(platform_app_module, "REPO", tmp_path / "unbuilt")
+    root = export_root(tmp_path)
+    assert root == tmp_path / "site"
+    assert _complete(root)
 
 
 @BOTH_KINDS

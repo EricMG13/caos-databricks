@@ -29,6 +29,7 @@ from urllib.parse import urlparse
 
 from workspace_stub import BEARER, LAKEBASE_ENDPOINT, LAKEBASE_INSTANCE, WorkspaceStub
 
+from caos.api.site import MANIFEST
 from caos.store import lakebase
 from caos.store.lakebase import LakebaseKind
 
@@ -118,14 +119,16 @@ def platform_environment(
 
 
 def export_root(scratch: Path) -> Path:
-    """The built export when it is here, else a one-file stand-in so the boot
-    is the platform's (`CAOS_SITE_ROOT` set) and not the local 404 mode."""
+    """The built export when it is here, else a stand-in -- an index and the
+    build manifest the boot check reads (N92) -- so the boot is the
+    platform's (`CAOS_SITE_ROOT` set) and not the local 404 mode."""
     built = REPO / "frontend" / "dist"
     if (built / "index.html").is_file():
         return built
     stand_in = scratch / "site"
-    stand_in.mkdir(parents=True, exist_ok=True)
+    (stand_in / MANIFEST).parent.mkdir(parents=True, exist_ok=True)
     (stand_in / "index.html").write_text("<!doctype html><title>stand-in</title>")
+    (stand_in / MANIFEST).write_text('{"index.html": {"file": "index.html"}}')
     return stand_in
 
 
