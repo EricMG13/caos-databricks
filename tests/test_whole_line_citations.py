@@ -139,45 +139,59 @@ def test_tracked_letters_join_within_their_line_and_never_across_two() -> None:
     """A heading tracked into single letters is quoted as the word a reader
     sees, on a tracking extractor only, and only inside its own line."""
     page = _Page([*_line(0, "H", "e", "a", "d"), *_line(1, "i", "n", "g")])
+    lines = {0: ("B000000",), 1: ("B000001",)}
 
-    [joined] = _line_run(page, None, "Head", tracking=True)
+    ([joined], block_id) = _line_run(page, None, lines, "Head", tracking=True)
     assert joined.text == "Head"
+    assert block_id == "B000000"
     with pytest.raises(Refusal, match=r"^CITATION_NOT_LOCATED$"):
-        _line_run(page, None, "Head", tracking=False)
+        _line_run(page, None, lines, "Head", tracking=False)
     with pytest.raises(Refusal, match=r"^CITATION_NOT_LOCATED$"):
-        _line_run(page, None, "Heading", tracking=True)
+        _line_run(page, None, lines, "Heading", tracking=True)
     with pytest.raises(Refusal, match=r"^CITATION_NOT_LOCATED$"):
-        _line_run(page, None, "   ", tracking=True)
+        _line_run(page, None, lines, "   ", tracking=True)
 
 
 def test_each_block_of_a_token_cut_line_is_a_line_of_its_own() -> None:
     """Packing 2: a wide line was shown as the blocks admission cut it into,
-    each read back by the pieces it holds (`_walk`); a cut that does not tile
-    the line is the host's own rows failing, never the citation's."""
+    each read back by the pieces it holds (`_walk`) and paired with the one
+    block id it is; a cut that does not tile the line is the host's own rows
+    failing, never the citation's."""
     line = _line(7, "a", "b", "c", "d", "e")
-    assert _shown(line, {7: (2, 3)}) == [line[:2], line[2:]]
+    lines = {7: ("B000000", "B000001")}
+    assert _shown(line, {7: (2, 3)}, lines) == [
+        (line[:2], "B000000"),
+        (line[2:], "B000001"),
+    ]
     for cut in ((2, 2), (2, 4), (6,)):
         with pytest.raises(Refusal, match=r"^EVIDENCE_PACKING_MISMATCH$"):
             _token_spans(line, cut)
     with pytest.raises(Refusal, match=r"^EVIDENCE_PACKING_MISMATCH$"):
-        _shown(line, {8: (5,)})
+        _shown(line, {8: (5,)}, lines)
+    # A line whose stored blocks are fewer than its spans need is the same
+    # failure, read the other way (R24-16).
+    with pytest.raises(Refusal, match=r"^EVIDENCE_PACKING_MISMATCH$"):
+        _shown(line, {7: (2, 3)}, {7: ("B000000",)})
 
 
 def test_a_width_cut_line_keeps_only_the_blocks_cut_between_tokens() -> None:
     """Packing 1 (every source admitted before CF-013): a line that fits is
     one line; past `GROUP_WIDTH` it was cut at the width, and a block whose
     edge fell inside a word began or ended with part of one, which no run of
-    whole tokens is. Its neighbours cut between tokens are lines of their own."""
-    assert _width_spans(_line(0, "short", "line")) == [(0, 2)]
+    whole tokens is. Its neighbours cut between tokens are lines of their
+    own, each numbered by its `GROUP_WIDTH` bucket -- the index a torn
+    neighbour would have carried is simply absent, not renumbered down."""
+    assert _width_spans(_line(0, "short", "line")) == [(0, (0, 2))]
     # Seven characters and a space: the width falls exactly between words.
     even = _line(0, *(f"x{n:06d}" for n in range(600)))
     per_block = GROUP_WIDTH // 8
-    assert _width_spans(even) == [(0, per_block), (per_block, 600)]
+    assert _width_spans(even) == [(0, (0, per_block)), (1, (per_block, 600))]
     # Five and a space: the cut tears a word, and both blocks it touches
     # hold part of one.
     assert _width_spans(_line(0, *(f"w{n:04d}" for n in range(700)))) == []
-    # A clean first cut, then a torn second: only the first block is a line.
+    # A clean first cut, then a torn second: only the first block is a line,
+    # numbered 0 -- the torn second block's index (1) is missing, not reused.
     mixed = _line(
         0, *(f"x{n:06d}" for n in range(per_block)), *(f"w{n:04d}" for n in range(700))
     )
-    assert _width_spans(mixed) == [(0, per_block)]
+    assert _width_spans(mixed) == [(0, (0, per_block))]

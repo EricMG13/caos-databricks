@@ -37,6 +37,7 @@ from caos.store.run_inputs import (
     RunInput,
     RunSubject,
     bound_research_brief,
+    linked_research_brief,
     load_run_input,
     pin_run_input,
     research_text,
@@ -407,6 +408,40 @@ def test_the_bound_brief_carries_exactly_the_host_bindings(
         )
     assert refused.value.code.value == "RUN_INPUT_INVALID"
     assert refused.value.__context__ is None and refused.value.__cause__ is None
+
+
+def test_linked_research_brief_completes_the_wire_caller_fields(
+    research_prepared: Prepared,
+) -> None:
+    """R24-01: the closed wire model (`ResearchBrief`) states only the
+    fields `CP_DR_RESEARCH_BRIEF_V1.md` leaves to the caller;
+    `linked_research_brief` completes it with the host's fixed and
+    subject-derived keys, and the result is exactly the brief
+    `research_brief()` builds by hand for every other test in this module --
+    so it is what `pin_run_input`/`bound_research_brief` already accept. A
+    caller's fields cannot shadow the host's own identity keys even if they
+    carry them (invariant 3)."""
+    full = research_brief()
+    host_owned = {
+        "schema",
+        "mode",
+        "scope_type",
+        "scope_key",
+        "subject_name",
+        "source_mode",
+    }
+    caller_fields = {key: value for key, value in full.items() if key not in host_owned}
+    completed = linked_research_brief(caller_fields, subject=SUBJECT)
+    assert completed == full
+
+    smuggled = linked_research_brief(
+        {**caller_fields, "mode": "standalone", "scope_key": "OTHER"}, subject=SUBJECT
+    )
+    assert smuggled == full
+
+    conn, run, source, bundle, _ = research_prepared
+    pin = pin_run_input(conn, run, source.version, bundle, completed, subject=SUBJECT)
+    assert pin.research_json is not None and json.loads(pin.research_json) == full
 
 
 def test_a_deep_research_run_pinned_without_a_brief_refuses_at_pin(

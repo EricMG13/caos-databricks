@@ -6,13 +6,29 @@ import type { ModelDocument } from "@/wire/v1";
 import { displayDecimal } from "@/ds/format";
 
 type Forecast = NonNullable<ModelDocument["body"]["forecast"]>;
+type ForecastValue = Forecast["periods"][number]["values"][number];
+type ForecastUnit = ForecastValue["unit"];
+
+/** How each of a chart's own dimensions reads (R24-12): money keeps the
+    forecast's stated currency and scale, exactly as before; the
+    leverage/coverage family reads as a multiple, and the one margin as an
+    explicit ratio -- neither relabelled as money, and the ratio shown
+    unscaled, since this view performs no arithmetic on the server's decimal
+    strings. */
+const UNIT_LABEL: Record<ForecastUnit, (forecast: Forecast) => string> = {
+  MONEY: (forecast) => `${forecast.currency} ${forecast.scale}`,
+  MULTIPLE: () => "multiple",
+  RATIO: () => "ratio",
+};
 
 /** One line per projected value, across the periods of one case, drawn only
     where there are two periods to join. These are the host's own figures
-    (CP-CF), so the marks are solid: host-verified. */
+    (CP-CF), so the marks are solid: host-verified. Each line carries its own
+    `unit` -- every period's value of the same name shares one dimension, so
+    the first one served names it. */
 export function forecastSeries(
   forecast: Forecast,
-): { categories: string[]; series: ChartSeries[] }[] {
+): { categories: string[]; series: ChartSeries[]; unit: ForecastUnit }[] {
   const cases = [...new Set(forecast.periods.map((period) => period.case))];
   return cases.flatMap((name) => {
     const periods = forecast.periods.filter((period) => period.case === name);
@@ -20,25 +36,30 @@ export function forecastSeries(
     const lines = [
       ...new Set(periods.flatMap((period) => period.values.map((value) => value.name))),
     ];
-    return lines.map((line) => ({
-      categories: periods.map((period) => period.period_id),
-      series: [
-        {
-          key: `${name}:${line}`,
-          label: `${line} · ${name}`,
-          origin: "host" as const,
-          data: periods.map((period) => {
-            const value = period.values.find((entry) => entry.name === line);
-            return value?.value
-              ? { value: value.value }
-              : {
-                  value: null,
-                  reason: value?.unavailable_reason ?? period.unavailable_reason ?? "not served",
-                };
-          }),
-        },
-      ],
-    }));
+    return lines.map((line) => {
+      const named = (value: ForecastValue) => value.name === line;
+      const unit = periods.flatMap((period) => period.values).find(named)?.unit ?? "MONEY";
+      return {
+        categories: periods.map((period) => period.period_id),
+        unit,
+        series: [
+          {
+            key: `${name}:${line}`,
+            label: `${line} · ${name}`,
+            origin: "host" as const,
+            data: periods.map((period) => {
+              const value = period.values.find(named);
+              return value?.value
+                ? { value: value.value }
+                : {
+                    value: null,
+                    reason: value?.unavailable_reason ?? period.unavailable_reason ?? "not served",
+                  };
+            }),
+          },
+        ],
+      };
+    });
   });
 }
 
@@ -104,7 +125,7 @@ export function ModelSection({ document }: { document: ModelDocument; tab: strin
             <LineChart
               title={chart.series[0]!.label}
               summary={`The host's projection over ${chart.categories.length} periods, ${chart.categories[0]} to ${chart.categories.at(-1)}.`}
-              unit={`${forecast.currency} ${forecast.scale}`}
+              unit={UNIT_LABEL[chart.unit](forecast)}
               categories={chart.categories}
               series={chart.series}
             />

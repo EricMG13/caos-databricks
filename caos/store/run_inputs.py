@@ -219,6 +219,39 @@ BRIEF_KEYS = frozenset(
 )
 
 
+RESEARCH_BRIEF_SCHEMA = "CP_DR_RESEARCH_BRIEF_V1"
+
+
+def linked_research_brief(
+    fields: Mapping[str, Any], *, subject: RunSubject
+) -> dict[str, Any]:
+    """A caller's run-linked brief fields, completed with the host's fixed
+    and subject-derived keys before `bound_research_brief` judges the whole.
+
+    `schema` and `mode: linked` are constant; `scope_type`, `scope_key` and
+    `subject_name` are the CP-0 issuer identity `bound_research_brief`'s
+    vendor check requires to match the pinned `subject` exactly, so this host
+    derives them from the pin rather than trust a second, possibly
+    mismatched, copy from the caller; `source_mode` is always
+    `supplied_only` (invariant 1). `fields` supplies the rest the vendor
+    schema leaves to the caller -- `decision_context`, `as_of_date`,
+    `time_horizon`, `budget`, `authorization_basis`, `exclusions` and
+    `questions`. The six keys above are written in last, so nothing `fields`
+    happens to carry -- the closed wire model never declares them, but this
+    function does not depend on that alone -- can shadow the host's own
+    identity (invariant 3).
+    """
+    return {
+        **fields,
+        "schema": RESEARCH_BRIEF_SCHEMA,
+        "mode": "linked",
+        "scope_type": "issuer",
+        "scope_key": subject.issuer_id,
+        "subject_name": subject.issuer_name,
+        "source_mode": SUPPLIED_ONLY,
+    }
+
+
 def _bound_brief(
     brief: Mapping[str, Any], *, run_id: str, cp0_sha256: str, authority_sha256: str
 ) -> dict[str, Any]:

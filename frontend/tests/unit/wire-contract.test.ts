@@ -163,6 +163,7 @@ test("Model is closed and binds the displayed run independently of latest", () =
   ).toThrow(WireShapeError);
   const ratio = {
     name: "metrics.interest_coverage",
+    unit: "MULTIPLE",
     value: null,
     unavailable_reason: "ZERO_OR_NEGATIVE_DENOMINATOR",
   };

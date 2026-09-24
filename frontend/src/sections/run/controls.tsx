@@ -54,6 +54,8 @@ import type { V1_SHAPES } from "@/wire/v1/documents";
 // way rather than duplicated by hand.
 type GateView = Infer<typeof V1_SHAPES.GateView>;
 type RunSubjectView = Infer<typeof V1_SHAPES.RunSubjectView>;
+type ResearchBrief = Infer<typeof V1_SHAPES.ResearchBrief>;
+type ResearchBriefQuestion = Infer<typeof V1_SHAPES.ResearchBriefQuestion>;
 type WorkView = Infer<typeof V1_SHAPES.WorkView>;
 
 export type ActionName = ActionView["action"];
@@ -434,11 +436,18 @@ export function CreateRunControl({
                           // analyst did not move, the run they are on gained
                           // a name. `replace` keeps Back at where they came
                           // from rather than at a case with no run, and every
-                          // other parameter the address carries survives.
+                          // other parameter the address carries survives --
+                          // except `revision`, which named a revision of
+                          // whatever run was displayed before (or none, on a
+                          // first run): the new run has none yet, and a
+                          // reader (Report, Committee) refuses the mismatched
+                          // pair `RUN_NOT_FOUND`/`DELIVERABLE_NOT_FOUND`
+                          // rather than silently reattach it (R24-04).
                           setParams(
                             (current) => {
                               const next = new URLSearchParams(current);
                               next.set("run", outcome.receipt.run_id);
+                              next.delete("revision");
                               return next;
                             },
                             { replace: true },
@@ -470,18 +479,48 @@ const EMPTY_SUBJECT: RunSubjectView = {
   analysis_date: "",
 };
 
-/** Pins the subject the run executes against. The subject reuses
-    `RunSubjectView`; the receipt's `input_fingerprint` is what a gate
-    approval and start/retry must carry, and the document never re-serves it,
-    so the caller is handed it here to hold for the session — and a change to
-    it invalidates any preview already read (`RunSection` remounts each gate
-    panel on a fingerprint change, clearing a digest that would else point at
-    the old input). */
+// The one question shape a caller edits here (`CP_DR_RESEARCH_BRIEF_V1.md`:
+// "One question is sufficient"). `consumer_module_id`/`after_module_id` are
+// fixed, not edited: every route this host advertises a brief for
+// (`LITE_DEEP_RESEARCH`, `DEEP_RESEARCH`) is anchored on CP-DR itself, whose
+// one placement the vendor's own schema accepts is consumer `NONE` after
+// `CP-0` -- so there is nothing here for a caller to get wrong.
+const EMPTY_RESEARCH_QUESTION: ResearchBriefQuestion = {
+  question_id: "",
+  question: "",
+  decision_relevance: "",
+  consumer_module_id: "NONE",
+  after_module_id: "CP-0",
+  evidence_needed: "",
+  completion_test: "",
+};
+
+const EMPTY_RESEARCH: ResearchBrief = {
+  decision_context: "",
+  as_of_date: "",
+  time_horizon: "",
+  budget: "standard",
+  authorization_basis: "",
+  exclusions: "",
+  questions: [EMPTY_RESEARCH_QUESTION],
+};
+
+/** Pins the subject the run executes against, and -- on the two advertised
+    research routes -- the run-linked CP-DR brief the store requires before
+    it will accept the pin (R24-01): the wire model, the request digest and
+    idempotency all carry it through `research`, additive beside `subject`.
+    The subject reuses `RunSubjectView`; the receipt's `input_fingerprint` is
+    what a gate approval and start/retry must carry, and the document never
+    re-serves it, so the caller is handed it here to hold for the session —
+    and a change to it invalidates any preview already read (`RunSection`
+    remounts each gate panel on a fingerprint change, clearing a digest that
+    would else point at the old input). */
 export function PinInputControl({
   caseId,
   runId,
   action,
   initial,
+  requiresResearch,
   onPinned,
   onRefetch,
 }: {
@@ -489,16 +528,37 @@ export function PinInputControl({
   runId: string;
   action: ActionView | undefined;
   initial: RunSubjectView | null;
+  requiresResearch: boolean;
   onPinned: (fingerprint: string) => void;
   onRefetch: (runId: string | null) => void;
 }) {
   const [subject, setSubject] = useState<RunSubjectView>(initial ?? EMPTY_SUBJECT);
+  const [research, setResearch] = useState<ResearchBrief>(EMPTY_RESEARCH);
   const { pending, result, run } = useCommand<RunInputPinned>();
   const field = (key: keyof RunSubjectView) => ({
     value: subject[key],
     onChange: (event: ChangeEvent<HTMLInputElement>) =>
       setSubject((current: RunSubjectView) => ({ ...current, [key]: event.target.value })),
   });
+  const briefField = (key: Exclude<keyof ResearchBrief, "questions" | "budget">) => ({
+    value: research[key],
+    onChange: (event: ChangeEvent<HTMLInputElement>) =>
+      setResearch((current: ResearchBrief) => ({ ...current, [key]: event.target.value })),
+  });
+  const question = research.questions[0] ?? EMPTY_RESEARCH_QUESTION;
+  const questionField = (
+    key: Exclude<keyof ResearchBriefQuestion, "consumer_module_id" | "after_module_id">,
+  ) => ({
+    value: question[key],
+    onChange: (event: ChangeEvent<HTMLInputElement>) =>
+      setResearch((current: ResearchBrief) => ({
+        ...current,
+        questions: [
+          { ...(current.questions[0] ?? EMPTY_RESEARCH_QUESTION), [key]: event.target.value },
+        ],
+      })),
+  });
+  const payload = requiresResearch ? research : null;
   return (
     <section className="pnl" data-pin-input>
       <header>
@@ -521,6 +581,71 @@ export function PinInputControl({
           Analysis date
           <input data-field="analysis_date" placeholder="YYYY-MM-DD" {...field("analysis_date")} />
         </label>
+        {requiresResearch ? (
+          <fieldset className="fld" data-research-brief>
+            <legend>Research brief</legend>
+            <label className="fld">
+              Decision context
+              <input data-field="decision_context" {...briefField("decision_context")} />
+            </label>
+            <label className="fld">
+              As of date
+              <input
+                data-field="as_of_date"
+                placeholder="YYYY-MM-DD"
+                {...briefField("as_of_date")}
+              />
+            </label>
+            <label className="fld">
+              Time horizon
+              <input data-field="time_horizon" {...briefField("time_horizon")} />
+            </label>
+            <label className="fld">
+              Budget
+              <select
+                data-field="budget"
+                value={research.budget}
+                onChange={(event) =>
+                  setResearch((current) => ({
+                    ...current,
+                    budget: event.target.value === "extended" ? "extended" : "standard",
+                  }))
+                }
+              >
+                <option value="standard">Standard</option>
+                <option value="extended">Extended</option>
+              </select>
+            </label>
+            <label className="fld">
+              Authorization basis
+              <input data-field="authorization_basis" {...briefField("authorization_basis")} />
+            </label>
+            <label className="fld">
+              Exclusions
+              <input data-field="exclusions" {...briefField("exclusions")} />
+            </label>
+            <label className="fld">
+              Question id
+              <input data-field="question_id" {...questionField("question_id")} />
+            </label>
+            <label className="fld">
+              Question
+              <input data-field="question" {...questionField("question")} />
+            </label>
+            <label className="fld">
+              Decision relevance
+              <input data-field="decision_relevance" {...questionField("decision_relevance")} />
+            </label>
+            <label className="fld">
+              Evidence needed
+              <input data-field="evidence_needed" {...questionField("evidence_needed")} />
+            </label>
+            <label className="fld">
+              Completion test
+              <input data-field="completion_test" {...questionField("completion_test")} />
+            </label>
+          </fieldset>
+        ) : null}
         <RefusedControl
           refusal={action ? action.refusal : null}
           busy={pending}
@@ -529,14 +654,14 @@ export function PinInputControl({
           onClick={
             action
               ? () => {
-                  void run(subject, (intent) => pinRunInput(caseId, runId, subject, intent)).then(
-                    (outcome) => {
-                      if (outcome?.kind === "ok") {
-                        onPinned(outcome.receipt.input_fingerprint);
-                        onRefetch(runId);
-                      }
-                    },
-                  );
+                  void run({ subject, research: payload }, (intent) =>
+                    pinRunInput(caseId, runId, subject, payload, intent),
+                  ).then((outcome) => {
+                    if (outcome?.kind === "ok") {
+                      onPinned(outcome.receipt.input_fingerprint);
+                      onRefetch(runId);
+                    }
+                  });
                 }
               : undefined
           }

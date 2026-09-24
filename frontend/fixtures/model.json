@@ -29,9 +29,10 @@
           "fiscal_year": "2026",
           "days": "90",
           "values": [
-            { "name": "cash", "value": "123.45", "unavailable_reason": null },
+            { "name": "cash", "unit": "MONEY", "value": "123.45", "unavailable_reason": null },
             {
               "name": "coverage",
+              "unit": "MULTIPLE",
               "value": null,
               "unavailable_reason": "ZERO_OR_NEGATIVE_DENOMINATOR"
             }

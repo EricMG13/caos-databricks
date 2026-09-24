@@ -57,6 +57,7 @@ import { OFFLINE_WORDING, bodyOf } from "./transport";
 /** Drawn from the shared shapes rather than redeclared here. */
 type Gate = Infer<typeof V1_SHAPES.Gate>;
 type RunSubjectView = Infer<typeof V1_SHAPES.RunSubjectView>;
+type ResearchBrief = Infer<typeof V1_SHAPES.ResearchBrief>;
 type Standing = Infer<typeof V1_SHAPES.Standing>;
 
 /** One key per user intent. Reuse it to retry an answer that settled nothing
@@ -209,9 +210,10 @@ export function pinRunInput(
   caseId: string,
   runId: string,
   subject: RunSubjectView,
+  research: ResearchBrief | null,
   intent: Intent = newIntent(),
 ): Promise<CommandResult<RunInputPinned>> {
-  const request: PinRunInput = { subject };
+  const request: PinRunInput = { subject, research };
   return jsonCommand(intent, `${runPath(caseId, runId)}/input`, request, parseRunInputPinned);
 }
 

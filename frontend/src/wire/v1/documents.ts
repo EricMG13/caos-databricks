@@ -264,6 +264,27 @@ const RunSubjectView = object({
   reporting_period: text,
   analysis_date: string({ max: 10, pattern: "^\\d{4}-\\d{2}-\\d{2}$" }),
 });
+// A CP-DR run-linked brief's caller-authored fields (`PinRunInput.research`):
+// the host supplies schema, `mode: linked`, the CP-0 scope/subject identity
+// and `source_mode` itself before the store judges the whole.
+const ResearchBriefQuestion = object({
+  question_id: short,
+  question: text,
+  decision_relevance: text,
+  consumer_module_id: short,
+  after_module_id: short,
+  evidence_needed: text,
+  completion_test: text,
+});
+const ResearchBrief = object({
+  decision_context: text,
+  as_of_date: string({ max: 10, pattern: "^\\d{4}-\\d{2}-\\d{2}$" }),
+  time_horizon: text,
+  budget: enumOf(["standard", "extended"]),
+  authorization_basis: text,
+  exclusions: text,
+  questions: array(ResearchBriefQuestion, 32),
+});
 const GateView = object({ gate: Gate, state: GateState });
 const EdgeView = object({ source: short, type: EdgeType });
 const NodeView = object({
@@ -398,8 +419,14 @@ const AnalysisBody = object({
 });
 const AnalysisDocument = sectionDocument(AnalysisBody);
 
+// A projected value's own dimension (R24-12): MONEY for an `_amount`, in the
+// forecast's own currency and scale; MULTIPLE for the leverage/coverage
+// family; RATIO for the one margin, shown unscaled (a Model reader performs
+// no arithmetic on the server's decimal strings).
+const ModelUnit = enumOf(["MONEY", "MULTIPLE", "RATIO"]);
 const ModelValue = object({
   name: short,
+  unit: ModelUnit,
   value: nullable(string({ max: 64, pattern: "^-?[0-9]+(\\.[0-9]+)?$" })),
   unavailable_reason: nullable(literal("ZERO_OR_NEGATIVE_DENOMINATOR")),
 });
@@ -646,6 +673,7 @@ export const V1_SHAPES = {
   FiledReceipt,
   CommitteeBody,
   CommitteeDocument,
+  ModelUnit,
   ModelValue,
   ModelPeriod,
   ModelForecast,
@@ -693,6 +721,8 @@ export const V1_SHAPES = {
   RefusalCode,
   QualificationRead,
   QualificationState,
+  ResearchBrief,
+  ResearchBriefQuestion,
   RouteChoice,
   RunBody,
   RunSectionDocument,

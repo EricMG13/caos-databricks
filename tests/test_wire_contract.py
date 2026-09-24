@@ -61,6 +61,8 @@ from caos.api.wire import (
     PinRunInput,
     RectView,
     RefusalBody,
+    ResearchBrief,
+    ResearchBriefQuestion,
     RetryRun,
     RevisionSaved,
     RevokeStanding,
@@ -171,7 +173,7 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
     wire.BookBasis: frozenset({"period", "scenario", "accepted_only"}),
     wire.BookBody: frozenset({"basis", "columns", "rows"}),
     wire.BookDocument: ENVELOPE,
-    wire.ModelValue: frozenset({"name", "value", "unavailable_reason"}),
+    wire.ModelValue: frozenset({"name", "unit", "value", "unavailable_reason"}),
     wire.ModelPeriod: frozenset(
         {"case", "period_id", "fiscal_year", "days", "values", "unavailable_reason"}
     ),
@@ -353,7 +355,29 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
         {"profile_id", "selection_id", "supersedes", "model_extension"}
     ),
     RunCreated: frozenset({"case_id", "run_id", "route_digest"}),
-    PinRunInput: frozenset({"subject"}),
+    ResearchBriefQuestion: frozenset(
+        {
+            "question_id",
+            "question",
+            "decision_relevance",
+            "consumer_module_id",
+            "after_module_id",
+            "evidence_needed",
+            "completion_test",
+        }
+    ),
+    ResearchBrief: frozenset(
+        {
+            "decision_context",
+            "as_of_date",
+            "time_horizon",
+            "budget",
+            "authorization_basis",
+            "exclusions",
+            "questions",
+        }
+    ),
+    PinRunInput: frozenset({"subject", "research"}),
     RunInputPinned: frozenset({"run_id", "source_set_version", "input_fingerprint"}),
     GatePreviewDocument: frozenset(
         {
@@ -540,6 +564,13 @@ def test_the_v1_wire_key_sets_are_pinned() -> None:
         SectionNote.LIST_TRUNCATED,
         SectionNote.ROUTE_NOT_PINNED,
         SectionNote.HANDOFFS_PENDING,
+    }
+    # R24-12: MONEY (an `_amount`), MULTIPLE (the leverage/coverage family) and
+    # RATIO (the one margin) are every dimension a projected value carries.
+    assert set(wire.ModelUnit) == {
+        wire.ModelUnit.MONEY,
+        wire.ModelUnit.MULTIPLE,
+        wire.ModelUnit.RATIO,
     }
     assert {action.value for action in ActionName} == {
         "CREATE_CASE",

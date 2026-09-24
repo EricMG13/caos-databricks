@@ -16,7 +16,7 @@
 // digest each act binds and the head a draft was composed against are all
 // checked at commit, under the case lock. A signer whose browser still offers
 // "Freeze" is refused there, and that refusal is what this surface shows.
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import {
   fileDeliverable,
@@ -240,6 +240,17 @@ export function FilingControls({
   const [, setParams] = useSearchParams();
   const [refreshFailed, setRefreshFailed] = useState(false);
   const save = useCommand<{ revision_id: string }>();
+  // The analyst may leave before a deferred save's answer arrives -- another
+  // case, or another section -- and its success then names a revision on an
+  // address no longer shown; correcting it would navigate them back to the
+  // abandoned Report (R24-03, guarded the way CF-058 guards Create run).
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const actionOf = (name: string) => document.chrome.actions.find((a) => a.action === name);
   const saved: Saved | null =
     body.revision_id !== null && body.payload_sha256 !== null
@@ -308,7 +319,7 @@ export function FilingControls({
                           saveRevision(body.case_id, body.displayed_run_id, request, intent),
                         )
                         .then((outcome) => {
-                          if (outcome?.kind !== "ok") return;
+                          if (outcome?.kind !== "ok" || !mounted.current) return;
                           setDraft("");
                           // The address is corrected, not navigated: the reader
                           // did not move, the run gained a newer revision, and a

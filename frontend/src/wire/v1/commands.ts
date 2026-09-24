@@ -37,7 +37,10 @@ const CreateRun = object({
   model_extension: bool,
 });
 const RunCreated = object({ case_id: uuid, run_id: uuid, route_digest: hash });
-const PinRunInput = object({ subject: V1_SHAPES.RunSubjectView });
+const PinRunInput = object({
+  subject: V1_SHAPES.RunSubjectView,
+  research: nullable(V1_SHAPES.ResearchBrief),
+});
 const RunInputPinned = object({ run_id: uuid, source_set_version: int(), input_fingerprint: hash });
 const GatePreviewDocument = object({
   run_id: uuid,

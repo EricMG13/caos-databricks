@@ -247,7 +247,10 @@ class _Page:
     tracked: _Page | None = None
     # The page's evidence lines as a module was shown them, by word count:
     # as stored (`False`) and with tracked letters joined within each (`True`).
-    shown_lines: dict[bool, dict[int, list[list[_Token]]]] = field(default_factory=dict)
+    # Each span carries the one block id it is (R24-16).
+    shown_lines: dict[bool, dict[int, list[tuple[list[_Token], str]]]] = field(
+        default_factory=dict
+    )
 
     def keys(self, *, normalised: bool) -> list[str]:
         """The page's words as `_starts` compares them."""
@@ -266,19 +269,25 @@ class _Page:
         return self.tracked
 
     def shown(
-        self, cuts: Mapping[int, tuple[int, ...]] | None, *, joined: bool
-    ) -> dict[int, list[list[_Token]]]:
+        self,
+        cuts: Mapping[int, tuple[int, ...]] | None,
+        lines: Mapping[int, tuple[str, ...]],
+        *,
+        joined: bool,
+    ) -> dict[int, list[tuple[list[_Token], str]]]:
         """The page's evidence lines as a module was shown them (`_shown`),
         keyed by how many words each holds, derived once per page. `cuts` is
-        the source's packing-2 cut per line, `None` for packing 1. Joined, a
-        line's tracked letters are joined within it and never across two."""
+        the source's packing-2 cut per line, `None` for packing 1; `lines` is
+        the source's line-to-block-ids map, so each returned span carries the
+        one block id it is. Joined, a line's tracked letters are joined
+        within it and never across two."""
         if joined not in self.shown_lines:
-            lines = _shown(self.tokens, cuts)
+            spans = _shown(self.tokens, cuts, lines)
             if joined:
-                lines = [_joined_tracking(line) for line in lines]
-            by_width: dict[int, list[list[_Token]]] = {}
-            for line in lines:
-                by_width.setdefault(len(line), []).append(line)
+                spans = [(_joined_tracking(span), block_id) for span, block_id in spans]
+            by_width: dict[int, list[tuple[list[_Token], str]]] = {}
+            for span, block_id in spans:
+                by_width.setdefault(len(span), []).append((span, block_id))
             self.shown_lines[joined] = by_width
         return self.shown_lines[joined]
 
@@ -317,13 +326,15 @@ def _page_run(page: _Page, matched_text: str, *, tracking: bool) -> list[_Token]
 def _line_run(
     page: _Page,
     cuts: Mapping[int, tuple[int, ...]] | None,
+    lines: Mapping[int, tuple[str, ...]],
     matched_text: str,
     *,
     tracking: bool,
-) -> list[_Token]:
+) -> tuple[list[_Token], str]:
     """`WHOLE_LINE`: the one evidence line of the page `matched_text` is,
     whole -- exactly, and only where no line is, under the declared
-    normalisations -- in the order `_page_run` keeps and for its reason.
+    normalisations -- in the order `_page_run` keeps and for its reason, and
+    the one block id that line is (R24-16): what delivery is judged against.
 
     A candidate is a line as the module was shown it with as many words as
     the quote, so the search compares a handful of lines where the run search
@@ -339,43 +350,64 @@ def _line_run(
     if not words:
         raise Refusal(RefusalCode.CITATION_NOT_LOCATED)
     width = len(words)
-    exact = _one_line(page.shown(cuts, joined=False).get(width, ()), words, False)
+    exact = _one_line(
+        page.shown(cuts, lines, joined=False).get(width, ()), words, False
+    )
     if exact is not None:
         return exact
-    lines = page.shown(cuts, joined=tracking).get(width, ())
-    run = _one_line(lines, words, True)
+    candidates = page.shown(cuts, lines, joined=tracking).get(width, ())
+    run = _one_line(candidates, words, True)
     if run is None:
         raise Refusal(RefusalCode.CITATION_NOT_LOCATED)
     return run
 
 
 def _one_line(
-    lines: Iterable[list[_Token]], words: Sequence[str], normalised: bool
-) -> list[_Token] | None:
+    lines: Iterable[tuple[list[_Token], str]], words: Sequence[str], normalised: bool
+) -> tuple[list[_Token], str] | None:
     """The single line `words` is whole (`_match_at` from its first token
-    over a line exactly as long), `None` for none, a refusal for two."""
-    found: list[_Token] | None = None
-    for line in lines:
+    over a line exactly as long), with the one block id it is; `None` for
+    none, a refusal for two."""
+    found: tuple[list[_Token], str] | None = None
+    for line, block_id in lines:
         if not _match_at(line, 0, words, normalised=normalised):
             continue
         if found is not None:
             raise Refusal(RefusalCode.CITATION_AMBIGUOUS)
-        found = line
+        found = (line, block_id)
     return found
 
 
 def _shown(
-    tokens: list[_Token], cuts: Mapping[int, tuple[int, ...]] | None
-) -> list[list[_Token]]:
+    tokens: list[_Token],
+    cuts: Mapping[int, tuple[int, ...]] | None,
+    lines: Mapping[int, tuple[str, ...]],
+) -> list[tuple[list[_Token], str]]:
     """The page's evidence lines as the evidence section showed them: each
-    token line, cut into the blocks admission wrote for it.
+    token line, cut into the blocks admission wrote for it, each span paired
+    with the one block id it is.
 
     A line that fits `GROUP_WIDTH` is one block, so it is itself. A wider
     line was shown as several, and each is a line of its own to the module:
     packing 2 cut it between tokens, and `cuts` holds how many space-separated
     pieces each of its blocks carries (`_token_spans`); packing 1 cut it at
-    the width (`_width_spans`)."""
-    shown: list[list[_Token]] = []
+    the width (`_width_spans`), which can hold fewer spans than the line has
+    stored blocks -- a block a packing-1 cut tore inside a word is no line a
+    quote can be, and is silently absent from `_width_spans`' own numbering,
+    never a count to reconcile against the stored block count here.
+
+    The block id travels with its span rather than staying only the line's
+    (R24-16): `WHOLE_LINE` matches at this same per-block granularity -- the
+    prompt calls one delivered block a citable evidence line -- and a
+    delivery check that instead asked for every block of the *line* refused a
+    quote whose one shown block was the whole match, withholding the rest of
+    a wider line the map never promised. Each span carries the block index
+    `_token_spans`/`_width_spans` numbered it at, which is `block_ids_by_line`'s
+    own ordinal within the line (CF-013) -- so the span's block id is read
+    off `lines[line_id]` at that index, not by position among the spans kept.
+    An index past what the line's stored blocks carry is this host's own rows
+    failing to read as they were written."""
+    shown: list[tuple[list[_Token], str]] = []
     for line_id, group in groupby(tokens, key=lambda token: token.line_id):
         line = list(group)
         spans = (
@@ -383,39 +415,46 @@ def _shown(
             if cuts is None
             else _token_spans(line, cuts.get(line_id))
         )
-        shown.extend(line[start:end] for start, end in spans)
+        block_ids = lines.get(line_id, ())
+        for index, (start, end) in spans:
+            if index >= len(block_ids):
+                raise Refusal(RefusalCode.EVIDENCE_PACKING_MISMATCH)
+            shown.append((line[start:end], block_ids[index]))
     return shown
 
 
 def _token_spans(
     line: list[_Token], pieces: tuple[int, ...] | None
-) -> list[tuple[int, int]]:
+) -> list[tuple[int, tuple[int, int]]]:
     """Packing 2: each block of `line` as the run of its tokens, found as
     `_walk` numbers them -- by the space-separated pieces each block holds --
     so a block quoted whole is one run however admission measured it
-    (CF-013). A line the blocks do not tile is this host's own rows failing
-    to read as they were written: `EVIDENCE_PACKING_MISMATCH`."""
+    (CF-013), with the block's own index within the line. A line the blocks
+    do not tile is this host's own rows failing to read as they were
+    written: `EVIDENCE_PACKING_MISMATCH`."""
     if pieces is None:
         raise Refusal(RefusalCode.EVIDENCE_PACKING_MISMATCH)
-    spans: list[tuple[int, int]] = []
+    spans: list[tuple[int, tuple[int, int]]] = []
     at = 0
-    for wanted in pieces:
+    for index, wanted in enumerate(pieces):
         (start, held) = (at, 0)
         while held < wanted and at < len(line):
             held += line[at].text.count(" ") + 1
             at += 1
         if held != wanted:
             raise Refusal(RefusalCode.EVIDENCE_PACKING_MISMATCH)
-        spans.append((start, at))
+        spans.append((index, (start, at)))
     if at != len(line):
         raise Refusal(RefusalCode.EVIDENCE_PACKING_MISMATCH)
     return spans
 
 
-def _width_spans(line: list[_Token]) -> list[tuple[int, int]]:
+def _width_spans(line: list[_Token]) -> list[tuple[int, tuple[int, int]]]:
     """Packing 1: the whole line while it fits `GROUP_WIDTH`; past it, each
     block `line_groups` cut at the width whose two edges fall between
-    tokens, as its run of whole tokens.
+    tokens, as its run of whole tokens, with the block's own index within
+    the line (its `GROUP_WIDTH` bucket number, which is `line_groups`' own
+    ordinal for it).
 
     Measured as `line_groups` measured it, on the NFC line the tokens make
     joined by one space. A block whose edge fell inside a word began or ended
@@ -429,7 +468,7 @@ def _width_spans(line: list[_Token]) -> list[tuple[int, int]]:
         bounds.append((at, at + size))
         at += size + 1
     if at - 1 <= GROUP_WIDTH:
-        return [(0, len(line))]
+        return [(0, (0, len(line)))]
     held: dict[int, list[int]] = {}
     torn: set[int] = set()
     for index, (start, end) in enumerate(bounds):
@@ -439,7 +478,7 @@ def _width_spans(line: list[_Token]) -> list[tuple[int, int]]:
         else:
             torn.update(range(first, last + 1))
     return [
-        (indexes[0], indexes[-1] + 1)
+        (block, (indexes[0], indexes[-1] + 1))
         for block, indexes in sorted(held.items())
         if block not in torn
     ]
@@ -656,13 +695,17 @@ def verify_citations(
 
     A citation may only name evidence actually delivered to that node --
     a real source in the same case is still something this node was not given.
-    `delivered` maps each source to the exact blocks the node was handed, and
-    the one match must lie wholly within their lines: a quote on an undelivered
-    page, or wrapping onto an undelivered line, refuses `CITATION_NOT_DELIVERED`.
-    Ambiguity is still counted over the whole page, so a quote repeated on a
-    line the node never saw is ambiguous rather than resolved to the copy it did --
-    over every run of the page under `ANY_RUN`, over every line of it under
-    `WHOLE_LINE`.
+    `delivered` maps each source to the exact blocks the node was handed. Under
+    `ANY_RUN` the match must lie wholly within delivered lines: a quote on an
+    undelivered page, or wrapping onto an undelivered line, refuses
+    `CITATION_NOT_DELIVERED`. Under `WHOLE_LINE` a match is exactly one block,
+    and delivery is judged against that one block (R24-16): the prompt calls a
+    shown block whole citable evidence, and a page map may show a source line's
+    first block while withholding its continuation, so requiring the *line's*
+    every block would refuse a quote of exactly what was shown. Ambiguity is
+    still counted over the whole page, so a quote repeated on a line the node
+    never saw is ambiguous rather than resolved to the copy it did -- over every
+    run of the page under `ANY_RUN`, over every line of it under `WHOLE_LINE`.
 
     An artifact carries many citations and they cluster: several quotes from one
     page of one source is the normal shape. Both lookups are therefore fetched
@@ -678,17 +721,7 @@ def verify_citations(
         blocks = delivered.get(citation.source_id)
         if blocks is None:
             raise Refusal(RefusalCode.CITATION_NOT_DELIVERED)
-        searched = index.page(conn, citation.source_id, citation.page)
-        digest, tracking = index.facts(conn, citation.source_id)
-        if rule == WHOLE_LINE:
-            index.lines(conn, citation.source_id)
-            cuts = index.cuts.get(citation.source_id)
-            run = _line_run(searched, cuts, citation.matched_text, tracking=tracking)
-        else:
-            run = _page_run(searched, citation.matched_text, tracking=tracking)
-        lines = index.lines(conn, citation.source_id)
-        if any(not _delivered(lines.get(token.line_id), blocks) for token in run):
-            raise Refusal(RefusalCode.CITATION_NOT_DELIVERED)
+        run, digest = _located(conn, index, citation, blocks, rule=rule)
         anchored.append(
             AnchoredCitation(
                 document_sha256=digest,
@@ -698,6 +731,41 @@ def verify_citations(
             )
         )
     return anchored
+
+
+def _located(
+    conn: StoreConnection,
+    index: TokenIndex,
+    citation: Citation,
+    blocks: frozenset[str],
+    *,
+    rule: CitationRule,
+) -> tuple[list[_Token], str]:
+    """One citation's run under `rule`, already checked delivered, and its
+    source's digest.
+
+    Under `WHOLE_LINE` a match is exactly one block (R24-16): delivery is
+    judged against the block its match is, not every block its source line
+    was split into -- a page map showing that one block whole withholds
+    nothing this match needs, even when the line continues past it. Under
+    `ANY_RUN` a match is not confined to one block, so delivery is judged
+    against every block of every line its tokens touch.
+    """
+    digest, tracking = index.facts(conn, citation.source_id)
+    searched = index.page(conn, citation.source_id, citation.page)
+    lines = index.lines(conn, citation.source_id)
+    if rule == WHOLE_LINE:
+        cuts = index.cuts.get(citation.source_id)
+        run, block_id = _line_run(
+            searched, cuts, lines, citation.matched_text, tracking=tracking
+        )
+        if block_id not in blocks:
+            raise Refusal(RefusalCode.CITATION_NOT_DELIVERED)
+        return run, digest
+    run = _page_run(searched, citation.matched_text, tracking=tracking)
+    if any(not _delivered(lines.get(token.line_id), blocks) for token in run):
+        raise Refusal(RefusalCode.CITATION_NOT_DELIVERED)
+    return run, digest
 
 
 def _page_tokens(conn: StoreConnection, source_id: UUID, page: int) -> list[_Token]:
@@ -886,9 +954,11 @@ def _delivered(ids: tuple[str, ...] | None, blocks: frozenset[str]) -> bool:
 
     Fail closed, and deliberately line-granular: a quote crossing a group
     boundary needs both sides, and a delivery carrying half a split line
-    carries none of it. Nothing narrows a delivery below a whole source today,
-    so this is the rule per-node evidence selection will meet rather than one
-    any run can meet now.
+    carries none of it. `ANY_RUN`'s own rule -- its match is not confined to
+    one block, so it is judged against every block of every line its tokens
+    touch. `WHOLE_LINE` judges its match against the one block it is instead
+    (R24-16, `verify_citations`), never calling this function: its match
+    cannot cross a block boundary in the first place.
     """
     if not ids:
         return False

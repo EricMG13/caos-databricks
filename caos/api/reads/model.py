@@ -24,6 +24,7 @@ from caos.api.wire import (
     ModelDocument,
     ModelForecast,
     ModelPeriod,
+    ModelUnit,
     ModelValue,
 )
 from caos.graph.route import MODEL_MODULE
@@ -113,8 +114,28 @@ def accepted_forecast(
     )
 
 
+# The one ratio the calculator computes as a margin
+# (`_ratio(ebitda, revenue)` in `caos/calculators/cash_flow.py`) rather than a
+# leverage/coverage multiple: the one dimensionless leaf this reader labels a
+# ratio instead of a multiple (R24-12). It stays unscaled -- a Model reader
+# performs no arithmetic on the server's decimal strings, so "correctly
+# scaled" would mean host-side scaling, and margin is not the canonical
+# calculator's own concern to re-cast. Every other `_ratio`-shaped leaf (the
+# "metrics" group: gross/net leverage, interest coverage, FCF/debt) is a
+# multiple; a leaf that is not ratio-shaped -- came from `_amount`, not
+# `_ratio` -- is money, in the forecast's own currency and scale.
+_RATIO_UNITS = {"operating.margin": ModelUnit.RATIO}
+
+
+def _unit(name: str, *, is_ratio: bool) -> ModelUnit:
+    if not is_ratio:
+        return ModelUnit.MONEY
+    return _RATIO_UNITS.get(name, ModelUnit.MULTIPLE)
+
+
 def _period(row: dict[str, Any]) -> ModelPeriod:
-    """Flatten named result groups without arithmetic, preserving ratio reasons."""
+    """Flatten named result groups without arithmetic, preserving ratio
+    reasons and each leaf's own dimension (R24-12)."""
     identity = {
         k: row[k]
         for k in ("case", "period_id", "fiscal_year", "days", "unavailable_reason")
@@ -124,13 +145,14 @@ def _period(row: dict[str, Any]) -> ModelPeriod:
         if group in identity:
             continue
         for name, value in data.items() if isinstance(data, dict) else [("", data)]:
+            is_ratio = isinstance(value, dict)
+            full_name = f"{group}.{name}" if name else group
             values.append(
                 ModelValue(
-                    name=f"{group}.{name}" if name else group,
-                    value=value["value"] if isinstance(value, dict) else value,
-                    unavailable_reason=value["reason"]
-                    if isinstance(value, dict)
-                    else None,
+                    name=full_name,
+                    unit=_unit(full_name, is_ratio=is_ratio),
+                    value=value["value"] if is_ratio else value,
+                    unavailable_reason=value["reason"] if is_ratio else None,
                 )
             )
     return ModelPeriod(**identity, values=values)
