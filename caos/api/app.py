@@ -111,66 +111,6 @@ TAIL_DEADLINE = 300.0
 # second (CLAUDE.md known gaps -- `LISTEN`/`NOTIFY` is the upgrade).
 POLL_INTERVAL = 0.5
 
-# The owner's D3 decision (17 September 2026). One status had been carrying two
-# claims: "this is not your request's fault" and "come back later". Only the
-# second is what 503 means on the wire, so a proxy read every server fault as
-# worth retrying, including the ones no amount of retrying reaches. The split
-# asks one question per code -- would the identical request, later, with nobody
-# doing anything in between, plausibly succeed? -- and a fault only an operator
-# can repair answers no, because the client's waiting is not what repairs it.
-#
-# The store not answering is the whole of the yes side, with the provider not
-# answering beside it since the owner's second half (§88). Everything else here is
-# stored bytes failing verification against what this server itself wrote, a
-# pinned input the run cannot change, or an operator's repair; each `CLEARS`
-# entry beside them already said as much in words before the status agreed.
-# `STREAM_LIMIT_REACHED` joins it for the same reason and not by analogy: the
-# capacity is released by a watcher closing a tail, so waiting is exactly what
-# repairs it. Nothing an operator does is required. `CONCURRENCY_LIMIT_REACHED`
-# (CF-051) is the same shape one level up: the capacity is released by another
-# request finishing, not by anything an operator does either.
-TRANSIENT = frozenset(
-    {
-        RefusalCode.STORE_UNAVAILABLE,
-        RefusalCode.IDENTITY_UNAVAILABLE,
-        RefusalCode.STREAM_LIMIT_REACHED,
-        RefusalCode.CONCURRENCY_LIMIT_REACHED,
-        RefusalCode.PROVIDER_UNAVAILABLE,
-    }
-)
-PERMANENT = frozenset(
-    {
-        RefusalCode.STORE_NOT_CONFIGURED,
-        RefusalCode.STORE_NOT_TRANSACTIONAL,
-        RefusalCode.STORE_SCHEMA_DRIFT,
-        RefusalCode.BLOB_NOT_FOUND,
-        RefusalCode.BLOB_DIGEST_MISMATCH,
-        RefusalCode.BLOB_ADDRESS_INVALID,
-        RefusalCode.ROUTE_IDENTITY_INVALID,
-        RefusalCode.ROUTE_EDGE_UNSUPPORTED,
-        RefusalCode.ORCHESTRATION_ARTIFACT_UNREADABLE,
-        RefusalCode.ORCHESTRATION_NODE_NOT_IN_ROUTE,
-        RefusalCode.ARTIFACT_RECORD_MISMATCH,
-        RefusalCode.RUN_INPUT_INVALID,
-        RefusalCode.SOURCE_IDENTITY_INVALID,
-        RefusalCode.AUTHORITY_BYTES_MISMATCH,
-        RefusalCode.AUTHORITY_MODULE_UNKNOWN,
-        RefusalCode.HANDOFF_MALFORMED,
-        RefusalCode.HANDOFF_BLOCKED,
-        RefusalCode.HANDOFF_IDENTITY_MISMATCH,
-        RefusalCode.HANDOFF_INCOMPLETE,
-        RefusalCode.HANDOFF_UNDECLARED_FIELD,
-        RefusalCode.HANDOFF_MODULE_UNSUPPORTED,
-        RefusalCode.ATTEMPT_NOT_FOUND,
-        RefusalCode.EVIDENCE_PACKING_MISMATCH,
-        RefusalCode.EVIDENCE_DEMAND_UNRESOLVED,
-        RefusalCode.INTERNAL_FAULT,
-        RefusalCode.RESERVATION_BELOW_REQUEST,
-        RefusalCode.PROVIDER_OUTPUT_TRUNCATED,
-        RefusalCode.PROVIDER_REFUSED,
-        RefusalCode.PROVIDER_RESPONSE_INVALID,
-    }
-)
 # What a transient answer promises, in seconds. A constant rather than a
 # forecast: the host knows nothing about when its store returns, so this is a
 # floor on how often a client may ask again, not a prediction that it will work.
@@ -180,9 +120,27 @@ RETRY_AFTER_SECONDS = 5
 # a code a future route raises must not inherit 400 from a lookup default,
 # because "your request was wrong" is a claim about the caller and nothing
 # chose it. The server's own faults are 5xx: it cannot answer, whoever asks,
-# and a 400 would tell the caller their request was the problem. Which 5xx is
-# `TRANSIENT` and `PERMANENT` above, and those two are the reasoning; the
-# numbers here only carry it.
+# and a 400 would tell the caller their request was the problem.
+#
+# Which 5xx is the owner's D3 decision (17 September 2026). One status had been
+# carrying two claims: "this is not your request's fault" and "come back
+# later". Only the second is what 503 means on the wire, so a proxy read every
+# server fault as worth retrying, including the ones no amount of retrying
+# reaches. The split asks one question per code -- would the identical
+# request, later, with nobody doing anything in between, plausibly succeed? --
+# and a fault only an operator can repair answers no, because the client's
+# waiting is not what repairs it.
+#
+# The store not answering is the whole of the yes side, with the provider not
+# answering beside it since the owner's second half (§88). `STREAM_LIMIT_REACHED`
+# joins it for the same reason and not by analogy: the capacity is released by
+# a watcher closing a tail, so waiting is exactly what repairs it. Nothing an
+# operator does is required. `CONCURRENCY_LIMIT_REACHED` (CF-051) is the same
+# shape one level up: the capacity is released by another request finishing,
+# not by anything an operator does either. Everything else at 500 is stored
+# bytes failing verification against what this server itself wrote, a pinned
+# input the run cannot change, or an operator's repair; each `CLEARS` entry
+# beside it already says as much in words before the status agreed.
 _STATUS = {
     RefusalCode.NOT_AUTHENTICATED: 401,
     # Below the signing floor or not held: one private answer, as for a case.
@@ -373,6 +331,11 @@ _STATUS = {
     RefusalCode.VERDICT_EXPIRED: 400,
     RefusalCode.VERDICT_ALREADY_RECORDED: 409,
 }
+
+# The codes classed transient above: derived from `_STATUS` rather than held
+# as a second table, so a code's classification cannot come apart from its own
+# status by one of the two being edited and not the other.
+TRANSIENT = frozenset(code for code, status in _STATUS.items() if status == 503)
 
 
 SHUTDOWN_HOOKS: list[Callable[[], None]] = []

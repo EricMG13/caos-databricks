@@ -421,12 +421,11 @@ def test_a_reservation_below_its_request_answers_a_code_of_its_own() -> None:
     caller's request being wrong (400), and the same attempt meets the same
     reservation later (not 503): a permanent 500 whose clearance is a new
     attempt, which reserves for the request it sends."""
-    from caos.api.app import _STATUS, PERMANENT
+    from caos.api.app import _STATUS
     from caos.api.wire import CLEARS
 
     code = RefusalCode.RESERVATION_BELOW_REQUEST
     assert _STATUS[code] == 500
-    assert code in PERMANENT
     assert CLEARS[code] != CLEARS[RefusalCode.CONTEXT_OVER_CEILING]
     assert "context" not in CLEARS[code].lower()
     assert "attempt" in CLEARS[code].lower()

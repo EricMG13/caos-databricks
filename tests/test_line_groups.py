@@ -323,12 +323,11 @@ def test_a_packing_mismatch_is_an_operators_fault_with_a_clearance_it_can_act_on
     """The refusal above is the host's rule disagreeing with bytes it wrote, so
     no caller act clears it and no retry does either: a permanent 500 whose
     clearance names the one discharge there is, re-admitting the source."""
-    from caos.api.app import _STATUS, PERMANENT
+    from caos.api.app import _STATUS
     from caos.api.wire import CLEARS
 
     code = RefusalCode.EVIDENCE_PACKING_MISMATCH
     assert _STATUS[code] == 500
-    assert code in PERMANENT
     assert "re-admit" in CLEARS[code].lower()
     assert CLEARS[code] != CLEARS[RefusalCode.EVIDENCE_NOT_AVAILABLE]
 

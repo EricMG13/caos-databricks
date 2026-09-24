@@ -42,7 +42,6 @@ from caos.provider import (
     MAX_RESPONSE_BYTES,
     NEVER_RETRIED,
     TIMEOUT_SECONDS,
-    TRANSIENT,
     Completion,
     check_resend,
     encode_request,
@@ -373,8 +372,6 @@ def _status_refusal(failed: OpenAIError) -> RefusalCode:
     status = getattr(failed, "status_code", None)
     if isinstance(status, int) and status in NEVER_RETRIED:
         return RefusalCode.PROVIDER_CALL_INVALID
-    if isinstance(status, int) and (status in TRANSIENT or status >= 500):
-        return RefusalCode.PROVIDER_UNAVAILABLE
     return RefusalCode.PROVIDER_UNAVAILABLE
 
 
