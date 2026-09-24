@@ -25,13 +25,14 @@ describe("Committee v1", () => {
     }
     expect(root).toHaveTextContent('<img src=x onerror="window.pwned=1">');
     expect(root).toHaveTextContent("<script>limit</script>");
-    // The saved text is text: the only links are the host's two reads (N4).
+    // The saved text is text: the only links are the host's two reads (N4),
+    // and the only buttons a narrative carries are its figures' chips (N59).
     for (const saved of root.querySelectorAll(
       "[data-committee-artifact], [data-committee-narrative]",
-    ))
-      expect(
-        saved.querySelector("img, script, a, button, input, textarea, [contenteditable]"),
-      ).toBeNull();
+    )) {
+      expect(saved.querySelector("img, script, a, input, textarea, [contenteditable]")).toBeNull();
+      expect(saved.querySelector("button:not([data-figure-chip])")).toBeNull();
+    }
     expect(root.querySelectorAll("[data-committee-artifact]")).toHaveLength(
       document.body.artifacts.length,
     );
@@ -85,7 +86,9 @@ describe("Committee v1", () => {
     const { container } = render(<CommitteeSection document={committee()} tab={null} />);
     const narrative = container.querySelector("[data-committee-narrative]")!;
     expect(narrative).toHaveTextContent("<svg onload=window.pwned=1>");
-    expect(narrative).toHaveTextContent("CP-1 · p.7 · Coverage 2.1x");
+    // The figure is its quote and a chip naming its module and page (N59).
+    expect(narrative.querySelector("q")).toHaveTextContent("Coverage 2.1x");
+    expect(narrative.querySelector("[data-figure-chip]")).toHaveTextContent("CP-1 · p.7");
     expect(narrative.querySelector("svg, img, script")).toBeNull();
   });
 });

@@ -32,6 +32,12 @@ const superseded = parseRunSectionDocument(load("../../fixtures/states/run.super
 const frames = [1, 2, 3, 4].map((n) =>
   parseRunSectionDocument(load(`../../fixtures/run/frames/${n}.json`)),
 );
+/** The run read with no fingerprint on it, so start and retry have only one
+    read in this session to send (the path before N48). */
+const unfingerprinted: RunSectionDocument = {
+  ...running,
+  body: { ...running.body, run: { ...running.body.run!, input_fingerprint: null } },
+};
 
 function mount(document: RunSectionDocument) {
   return render(
@@ -1048,7 +1054,7 @@ describe("Run", () => {
   });
 
   test("test_start_and_retry_are_refused_until_a_fingerprint_is_known", () => {
-    const doc = withActions(running, [
+    const doc = withActions(unfingerprinted, [
       { action: "START_RUN", refusal: null },
       { action: "RETRY_RUN", refusal: null },
       { action: "CANCEL_RUN", refusal: null },
@@ -1081,7 +1087,7 @@ describe("Run", () => {
       input_fingerprint: fingerprint,
       observed_at: "2026-09-14T10:00:00Z",
     };
-    const doc = withActions(running, [
+    const doc = withActions(unfingerprinted, [
       { action: "PIN_RUN_INPUT", refusal: { code: "RUN_ALREADY_STARTED", clears: "never" } },
       { action: "START_RUN", refusal: null },
       { action: "RETRY_RUN", refusal: null },
@@ -1122,6 +1128,88 @@ describe("Run", () => {
       expect(startUrl).toBe(`/api/v1/cases/${running.body.case_id}/runs/${run.run_id}/start`);
       expect(JSON.parse((startInit as RequestInit).body as string)).toEqual({
         input_fingerprint: fingerprint,
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  // N48: the run read serves the pinned input's fingerprint, so a freshly
+  // loaded page offers Start and Retry with nothing read in this session.
+  test("start and retry send the run read's own fingerprint after a reload (N48)", async () => {
+    const fingerprint = "7".repeat(64);
+    const pinnedRun = { ...running.body.run!, input_fingerprint: fingerprint };
+    const doc = withActions({ ...running, body: { ...running.body, run: pinnedRun } }, [
+      { action: "START_RUN", refusal: null },
+      { action: "RETRY_RUN", refusal: null },
+    ]);
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          run_id: pinnedRun.run_id,
+          run_status: "RUNNING",
+          work: { state: "QUEUED", stop_code: null, cancel_requested: false },
+        }),
+      )
+      .mockResolvedValue(jsonResponse(doc));
+    vi.stubGlobal("fetch", fetchSpy);
+    try {
+      const { container } = mount(doc);
+      const start = container.querySelector('[data-action="START_RUN"]')!;
+      expect(start).not.toHaveAttribute("aria-disabled");
+      expect(container.querySelector('[data-action="RETRY_RUN"]')).not.toHaveAttribute(
+        "aria-disabled",
+      );
+      fireEvent.click(start);
+      await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+      const [url, init] = fetchSpy.mock.calls[0]!;
+      expect(url).toBe(`/api/v1/cases/${running.body.case_id}/runs/${pinnedRun.run_id}/start`);
+      expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+        input_fingerprint: fingerprint,
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  // A preview read in this session outranks the run read's fingerprint: a
+  // start after it asserts the input it showed, so a re-pin by someone else
+  // in between is refused by the host rather than silently sent.
+  test("a fingerprint read in this session is sent before the run read's own", async () => {
+    const run = running.body.run!;
+    expect(run.input_fingerprint).not.toBeNull();
+    const previewed = "9".repeat(64);
+    const doc = withActions(running, [{ action: "START_RUN", refusal: null }]);
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          run_id: run.run_id,
+          gate: "SOURCE_SET",
+          content: "SOURCE SET PREVIEW\n",
+          preview_sha256: "8".repeat(64),
+          input_fingerprint: previewed,
+          observed_at: "2026-09-14T10:00:00Z",
+        }),
+      )
+      .mockResolvedValue(jsonResponse(doc));
+    vi.stubGlobal("fetch", fetchSpy);
+    try {
+      const { container } = mount(doc);
+      fireEvent.click(
+        container.querySelector('[data-gate-panel="SOURCE_SET"] [data-action="PREVIEW"]')!,
+      );
+      await waitFor(() =>
+        expect(
+          container.querySelector('[data-gate-panel="SOURCE_SET"] [data-gate-preview-content]'),
+        ).not.toBeNull(),
+      );
+      fireEvent.click(container.querySelector('[data-action="START_RUN"]')!);
+      await waitFor(() => expect(fetchSpy.mock.calls.length).toBeGreaterThanOrEqual(2));
+      const [, init] = fetchSpy.mock.calls[1]!;
+      expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+        input_fingerprint: previewed,
       });
     } finally {
       vi.unstubAllGlobals();
@@ -1304,7 +1392,7 @@ describe("Run", () => {
       run_status: "RUNNING",
       work: { state, stop_code: null, cancel_requested: false },
     });
-    const doc = withActions(running, [
+    const doc = withActions(unfingerprinted, [
       { action: "PIN_RUN_INPUT", refusal: null },
       { action: "START_RUN", refusal: null },
       { action: "RETRY_RUN", refusal: null },

@@ -1,0 +1,32 @@
+{
+  "body": {
+    "case_id": "00000000-0000-4000-8000-000000000001",
+    "run_id": "00000000-0000-4000-8000-0000000000b2",
+    "source_id": "00000000-0000-4000-8000-0000000000a1",
+    "document_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "page": 7,
+    "frame": { "x0": 0.0, "y0": 0.0, "x1": 612.0, "y1": 792.0, "y_axis": "down" },
+    "lines": [
+      { "text": "Credit metrics", "x0": 72.0, "y0": 90.0, "x1": 170.0, "y1": 103.5, "hidden": [] },
+      {
+        "text": "Interest cover for the year: Coverage 2.1x",
+        "x0": 72.0,
+        "y0": 120.5,
+        "x1": 330.0,
+        "y1": 134.0,
+        "hidden": []
+      },
+      {
+        "text": "Covenant headroom is ample in every scenario.",
+        "x0": 72.0,
+        "y0": 140.0,
+        "x1": 350.0,
+        "y1": 153.5,
+        "hidden": ["near_background"]
+      }
+    ]
+  },
+  "observed_at": "2026-09-14T10:00:00Z",
+  "status": "complete",
+  "notes": []
+}

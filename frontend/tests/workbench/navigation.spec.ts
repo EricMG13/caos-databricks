@@ -77,9 +77,16 @@ test("demo Model, Report, and Committee routes render parsed v1 content", async 
   );
   await expect(page.locator("[data-committee-v1]")).toBeVisible();
   await expect(page.locator("[data-committee-filing]")).toHaveAttribute("data-state", "filed");
-  await expect(page.locator("[data-committee-v1] button, [data-committee-v1] input")).toHaveCount(
-    0,
-  );
+  // Read only: no field, and the one kind of button is a narrative figure's
+  // chip, which opens its source page (N59) with its hidden line marked (N27).
+  await expect(page.locator("[data-committee-v1] input")).toHaveCount(0);
+  await expect(page.locator("[data-committee-v1] button:not([data-figure-chip])")).toHaveCount(0);
+  await page.locator("[data-figure-chip]").click();
+  const drawer = page.locator("[data-evidence-drawer]");
+  await expect(drawer).toContainText("page 7");
+  await expect(drawer.locator("[data-page-line]")).toHaveCount(3);
+  await expect(drawer.locator("[data-page-line][data-hidden='near_background']")).toHaveCount(1);
+  await expect(drawer.locator("[data-hidden-lines]")).toContainText("1 line on this page");
 });
 
 test("saved artifacts preserve canonical tables in contained scroll viewers", async ({ page }) => {

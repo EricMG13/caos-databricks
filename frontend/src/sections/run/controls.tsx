@@ -806,14 +806,14 @@ function StopCode({ state, code }: { state: WorkView["state"]; code: string }) {
 
 const NO_FINGERPRINT = {
   code: "COMMAND_EXPECTATION_STALE",
-  clears:
-    "the subject is pinned, or a gate preview or approval is read, in this browser session — start and retry send the current input fingerprint",
+  clears: "the run's input is pinned — start and retry send the pinned input's fingerprint",
 };
 
 /** Start, retry and cancel. Start and retry carry the pinned input's
-    fingerprint (brief 4.2, decision 1); this file has no other source for it
-    than a pin, preview or approval read in this session, so with none yet
-    read the control names that rather than guessing a value. */
+    fingerprint (brief 4.2, decision 1): one a pin, preview or approval read
+    in this session, else the run read's own `input_fingerprint` (N48), so
+    they work after a reload. With neither, the input is not pinned, and the
+    control names that rather than guessing a value. */
 export function WorkControls({
   caseId,
   runId,

@@ -148,6 +148,8 @@
   --paper-rule: #9c998e;
   --paper-gutter: #e9e6dc;
   --paper-cite: #1f4fa0;
+  /* Text the rendered page does not show (N27): 5.7:1 on the paper. */
+  --paper-hidden: #9a4a00;
   --paper-stamp: #1f6b3a;
   --paper-line: #c9c5b8;
   --paper-line-soft: #d8d5c9;

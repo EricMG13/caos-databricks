@@ -1,5 +1,6 @@
 // The saved Report payload, read only. Text stays text: this surface never
-// interprets markdown, follows evidence, or offers a legacy draft action.
+// interprets markdown or offers a legacy draft action. A narrative figure is
+// a chip that opens its source page (N59).
 import { useState } from "react";
 import { Link } from "react-router";
 import { FilingControls } from "./FilingControls";
@@ -9,6 +10,7 @@ import { sentence } from "@/chrome/compose";
 import { scrollArtifact } from "@/controls/scroll";
 import { NoteList } from "@/ds/atoms";
 import { shortDigest, stamp } from "@/ds/format";
+import { Narrative } from "@/evidence/Narrative";
 import type { Severity } from "@/wire";
 import type { ReportDocument, RevisionSummary } from "@/wire/v1";
 
@@ -215,18 +217,7 @@ export function ReportSection({ document }: { document: ReportDocument; tab: str
           <span className="tag">{body.narrative.length}</span>
         </header>
         <div className="pb">
-          {body.narrative.map((spans, index) => (
-            <p key={index} data-report-paragraph={index}>
-              {spans.map((span, spanIndex) => (
-                <span key={spanIndex}>
-                  {span.text}
-                  {span.figure
-                    ? ` [${span.figure.route_node_id} · p.${span.figure.page} · ${span.figure.matched_text}]`
-                    : null}
-                </span>
-              ))}
-            </p>
-          ))}
+          <Narrative narrative={body.narrative} />
         </div>
       </section>
     </div>

@@ -46,15 +46,13 @@ export function RunSection({ document }: { document: RunSectionDocument; tab: st
   const body = live.body;
   const actions = live.chrome.actions;
   const [choice, setChoice] = useState<{ run: string; node: string } | null>(null);
-  // The fingerprint a start or retry must send. The document never re-serves
-  // it (`RunView` carries no such field), so it is held from whichever of a
-  // pin, a preview or an approval was last read in this session
-  // (`controls.tsx`, brief 4.2 decision 1). Two holds of it: `pinned` keys the
+  // The fingerprint a start or retry must send: whichever of a pin, a preview
+  // or an approval was last read in this session (`controls.tsx`, brief 4.2
+  // decision 1), else the run read's own `input_fingerprint` (N48), so a
+  // reload keeps them usable. Two holds of the session's: `pinned` keys the
   // gate panels and moves only on a pin or an approval, and `known` is what
-  // start and retry send and moves on a preview too. A reload forgets both,
-  // and on a run whose subject is pinned and whose gates are released no pin
-  // or approval is left to press -- a preview is, and it must not remount the
-  // panel that read it (MAX-18).
+  // start and retry send and moves on a preview too -- which must not remount
+  // the panel that read it (MAX-18).
   const [pinned, setPinned] = useState<string | null>(null);
   const [known, setKnown] = useState<string | null>(null);
   const learn = useCallback((fingerprint: string) => {
@@ -255,7 +253,11 @@ export function RunSection({ document }: { document: RunSectionDocument; tab: st
           <WorkControls
             caseId={body.case_id}
             runId={run.run_id}
-            fingerprint={known}
+            // What this session last read first: a start after a preview
+            // asserts the input that preview showed, and a re-pin by someone
+            // else since is then refused, not silently sent. The run read's
+            // own is what a reload has (N48).
+            fingerprint={known ?? run.input_fingerprint}
             work={run.work}
             actions={actions}
             onRefetch={refetch}
