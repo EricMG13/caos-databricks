@@ -26,6 +26,7 @@ import tomllib
 from collections.abc import Callable, Iterable, Iterator
 from hashlib import sha256
 from pathlib import Path
+from types import ModuleType
 from typing import cast
 
 import yaml
@@ -1299,7 +1300,12 @@ def suppression_counts_at(rev: str, root: Path = REPO) -> dict[str, int]:
     own, freshly weaker count look like a fall against a base measured
     under the old, stronger one; both sides are measured the same way now.
     """
-    counts = _measure_suppressions(tracked_python_at(root, rev).values())
+    return _counts_at(rev, root, tracked_python_at(root, rev))
+
+
+def _counts_at(rev: str, root: Path, texts: dict[str, str]) -> dict[str, int]:
+    """`suppression_counts_at` over texts already read from `rev`."""
+    counts = _measure_suppressions(texts.values())
     functions = _parse_baselined_functions(blob_at(root, rev, SNAPSHOT))
     counts["complexity_baselined"] = len(functions)
     counts.update(functions)
@@ -1367,32 +1373,29 @@ Measure = Callable[[Iterable[str]], dict[str, int]]
 CHECKER = "scripts/check_gate_config.py"
 
 
-def base_measure(rev: str, root: Path = REPO) -> Measure | None:
+def base_measure(
+    rev: str, root: Path = REPO, texts: dict[str, str] | None = None
+) -> Measure | None:
     """`rev`'s own measure of suppressions (W5): its checker, read through
-    git and loaded under a private name, supplies `_measure_suppressions`,
-    or, for a checker from before that existed (84eb06d), its `SUPPRESSIONS`
-    counted over each text. None when `rev` has no checker at all; an
-    `ImportError` or `SyntaxError` when it has one that will not load."""
-    source = blob_at(root, rev, CHECKER)
-    if source is None:
+    git with the rest of its `scripts/` (so it imports its own `tracked`,
+    not this commit's) and loaded under a private name, supplies
+    `_measure_suppressions`, or, for a checker from before that existed
+    (84eb06d), its `SUPPRESSIONS` counted over each text. `texts` is
+    `rev`'s tracked Python when already read. None when `rev` has no
+    checker at all; an `ImportError` or `SyntaxError` when it has one that
+    will not load."""
+    texts = tracked_python_at(root, rev) if texts is None else texts
+    scripts = {
+        name.removeprefix("scripts/"): text
+        for name, text in texts.items()
+        if name.startswith("scripts/") and name.count("/") == 1
+    }
+    if CHECKER.removeprefix("scripts/") not in scripts:
         return None
-    name = (
-        "_base_check_gate_config_" + sha256(f"{root}:{rev}".encode()).hexdigest()[:16]
-    )
-    saved = list(sys.path)
     with tempfile.TemporaryDirectory() as scratch:
-        path = Path(scratch) / "check_gate_config.py"
-        path.write_text(source, encoding="utf-8")
-        spec = importlib.util.spec_from_file_location(name, path)
-        if spec is None or spec.loader is None:
-            raise ImportError(name)
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[name] = module
-        try:
-            spec.loader.exec_module(module)
-        finally:
-            sys.path[:] = saved
-            del sys.modules[name]
+        for name, text in scripts.items():
+            (Path(scratch) / name).write_text(text, encoding="utf-8")
+        module = _loaded_apart(Path(scratch), {name[:-3] for name in scripts})
     measure = getattr(module, "_measure_suppressions", None)
     if callable(measure):
         return cast(Measure, measure)
@@ -1400,7 +1403,34 @@ def base_measure(rev: str, root: Path = REPO) -> Measure | None:
     if isinstance(patterns, dict):
         return lambda texts: _pattern_counts(patterns, texts)
     # A checker with neither is not one this gate can hold a tree to.
-    raise ImportError(name)
+    raise ImportError(CHECKER)
+
+
+def _loaded_apart(scratch: Path, names: set[str]) -> ModuleType:
+    """The checker in `scratch` loaded under a private name, its own sibling
+    modules (`names`) found in `scratch` first; this process's modules of
+    those names and its import path are restored afterwards."""
+    private = (
+        "_base_check_gate_config_" + sha256(str(scratch).encode()).hexdigest()[:16]
+    )
+    spec = importlib.util.spec_from_file_location(
+        private, scratch / "check_gate_config.py"
+    )
+    if spec is None or spec.loader is None:
+        raise ImportError(private)
+    saved_path = list(sys.path)
+    saved = {name: sys.modules.pop(name) for name in names if name in sys.modules}
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[private] = module
+    sys.path.insert(0, str(scratch))
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.path[:] = saved_path
+        for name in names | {private}:
+            sys.modules.pop(name, None)
+        sys.modules.update(saved)
+    return module
 
 
 def _pattern_counts(
@@ -1422,9 +1452,10 @@ def baseline_problems(against: str, root: Path = REPO) -> list[str]:
     base lacked go unapplied to it, and under `against`'s own checker, which
     lets no pattern this commit weakened hide the suppression it spends."""
     try:
-        base = suppression_counts_at(against, root)
+        texts = tracked_python_at(root, against)
     except RuntimeError as refusal:
         return [f"baseline: {refusal}"]
+    base = _counts_at(against, root, texts)
     now = suppression_counts(root)
     problems = [
         f"baseline: {name} rose to {count} (base branch {base.get(name, 0)})"
@@ -1432,12 +1463,12 @@ def baseline_problems(against: str, root: Path = REPO) -> list[str]:
         if count > int(base.get(name, 0))
     ]
     try:
-        measure = base_measure(against, root)
+        measure = base_measure(against, root, texts)
     except (ImportError, SyntaxError):
         return [*problems, f"baseline: {against}'s own checker could not be loaded"]
     if measure is None:
         return problems
-    was = measure(tracked_python_at(root, against).values())
+    was = measure(texts.values())
     held = measure(path.read_text(encoding="utf-8") for path in tracked_python(root))
     return problems + [
         f"baseline: {name} rose to {count} under {against}'s own rules "

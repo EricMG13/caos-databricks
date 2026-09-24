@@ -199,3 +199,30 @@ def test_the_base_rules_are_the_base_checker_s_own(tmp_path: Path) -> None:
     assert check_gate_config.baseline_problems(broken, root) == [
         f"baseline: {broken}'s own checker could not be loaded"
     ]
+
+
+def test_the_base_checker_imports_its_own_siblings_not_this_commit_s(
+    tmp_path: Path,
+) -> None:
+    """A base checker is loaded with the rest of its own `scripts/`, so a
+    pull request that renames something in `tracked.py` is still held to
+    its base's rules rather than failing to load them; this process's own
+    modules are back in place afterwards."""
+    import tracked
+
+    root = tmp_path / "repo"
+    (root / "scripts").mkdir(parents=True)
+    _git(root, "init", "-q")
+    _git(root, "config", "user.email", "test@example.invalid")
+    _git(root, "config", "user.name", "Ratchet test")
+    (root / "scripts" / "tracked.py").write_text("def only_in_base() -> None: ...\n")
+    (root / "scripts" / "check_gate_config.py").write_text(
+        "import re\nfrom tracked import only_in_base\n"
+        'SUPPRESSIONS = {"noqa": re.compile(r"' + "#" + '\\s*noqa\\b")}\n'
+    )
+    base = _commit(root, "a base with its own tracked module")
+    measure = check_gate_config.base_measure(base, root)
+    assert measure is not None
+    assert measure(["x = 1  " + "#" + " noqa"]) == {"noqa": 1}
+    assert sys.modules["tracked"] is tracked
+    assert not hasattr(tracked, "only_in_base")
