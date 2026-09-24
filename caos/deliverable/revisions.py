@@ -28,6 +28,11 @@ def _is_figure(character: str) -> bool:
     `str.isnumeric` is the whole class: every `isdigit` and `isdecimal`
     character is numeric, and the fractions and numerals that are neither are
     numeric too.
+
+    The rule sees figures, not numbers: a quantity spelled in words ("four
+    point two times") has no numeric character, so it saves, files and
+    verifies uncited. Reading number words is language work this rule does
+    not attempt; the signers' review is what holds prose quantities (N79).
     """
     return character.isnumeric()
 

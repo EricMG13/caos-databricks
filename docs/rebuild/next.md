@@ -82,7 +82,7 @@ A new feature or requirement beyond the ledgers is written here, not built. One 
 - N76 (review 5, 2026-09-24; closed by F351) — A filed revision's page is the one stored at filing.
 - N77 (review 5, 2026-09-24; closed by F349) — Save and freeze render; an unfileable frozen head takes a superseding draft.
 - N78 (review 5, 2026-09-24; closed by F350) — The author is not offered the signature.
-- N79 (review 5, 2026-09-24) — The narrative's every-figure-is-cited rule tests `str.isnumeric`, so quantities in words ("four point two times") save, file and verify uncited; state the limit against invariant 11 or widen the rule.
+- N79 (review 5, 2026-09-24; closed by F367, a recorded limit) — The every-figure-is-cited rule sees numeric characters, not numbers spelled in words; the signers' review holds prose quantities.
 - N80 (review 1 residual, 2026-09-24) — Two bill windows F363 leaves: about one second after a lost connection (the hold goes with the old connection before the bill is retried on a fresh one), and a bill abandoned after `BILL_TRIES` (store down about 2 s), after which the next claim pays for the node again; `CALL_HOLD_SECONDS` is sized from the default lease, not `WorkerConfig.lease_seconds`, so a vanished holder can keep a node up to 20 minutes.
 - N81 (review 4, 2026-09-24) — A store-side tripwire (a `public` row a pre-DL-1 build refuses) would make a pre-F219 rollback fail safe rather than boot empty; today `rollback_check.py` is the only guard.
 - N82 (review 4, 2026-09-24; enterprise) — F354's stricter E10 has not met a real model: a first CP-0 answer the app refuses would fail E10 with that code; the first live run shows it.
