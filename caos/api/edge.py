@@ -76,6 +76,13 @@ from caos.refusals import Refusal, RefusalCode
 IO_BUDGET = 0
 
 PUBLIC_ORIGIN_ENV = "CAOS_PUBLIC_ORIGIN"
+# W6. The variables of the edge mode F188 retired: its assertion key. Deleting
+# the mode deleted its boot refusal too (the key beside the trust switch), so
+# a deployment still carrying one resolved to dev mode, and a loopback proxy
+# forwarding `x-caos-role: ADMIN` was served as ADMIN. A process whose
+# environment still names one was configured for an edge this build does not
+# have, so it refuses to boot, in either mode, and names nothing but the code.
+RETIRED_ENV = ("CAOS_EDGE_TOKEN",)
 # Platform mode (D10): Databricks Apps set `PLATFORM_ENV` for every app
 # process. The platform's proxy authenticates the caller and forwards a user
 # token; there is no assertion to verify and no loopback rule, and no header is
@@ -181,8 +188,11 @@ class EdgeMode:
 
 
 def resolve_mode(environ: Mapping[str, str] | None = None) -> EdgeMode:
-    """The mode this environment declares, or `EDGE_CONFIG_INVALID`."""
+    """The mode this environment declares, or `EDGE_CONFIG_INVALID` -- a
+    retired edge-mode variable among it included (W6)."""
     env = os.environ if environ is None else environ
+    if any(name in env for name in RETIRED_ENV):
+        raise Refusal(RefusalCode.EDGE_CONFIG_INVALID)
     if env.get(PLATFORM_ENV):
         return _platform_mode(env)
     return _dev_mode(env)

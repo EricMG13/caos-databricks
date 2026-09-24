@@ -456,3 +456,52 @@ def test_startup_failed_ignores_a_non_startup_message() -> None:
     asyncio.run(startup_failed(receive, send))
 
     assert sent == []
+
+
+RETIRED_TOKEN = "k" * 64
+
+
+@pytest.mark.parametrize("platform", [False, True], ids=["dev", "platform"])
+def test_a_retired_edge_token_refuses_the_configuration(
+    monkeypatch: pytest.MonkeyPatch, platform: bool
+) -> None:
+    """W6. F188 deleted edge mode and, with it, the boot refusal of its key
+    beside the trust switch: a leftover `CAOS_EDGE_TOKEN` then resolved to dev
+    mode, and a loopback proxy's `x-caos-role: ADMIN` was believed. Any
+    retired edge-mode variable is now a configuration that cannot mean
+    anything, in either mode, with or without the switch."""
+    monkeypatch.setenv(edge.RETIRED_ENV[0], RETIRED_TOKEN)
+    if platform:
+        monkeypatch.setenv(edge.PLATFORM_ENV, "caos")
+        monkeypatch.setenv(identity.WORKSPACE_ENV, "1234")
+    for switch in (None, "1"):
+        if switch is not None:
+            monkeypatch.setenv(TRUST_SWITCH, switch)
+        with pytest.raises(Refusal) as caught:
+            resolve_mode()
+        assert caught.value.code is RefusalCode.EDGE_CONFIG_INVALID
+    assert edge.RETIRED_ENV == ("CAOS_EDGE_TOKEN",)
+
+
+def test_a_retired_edge_token_refuses_boot_and_every_request_but_health(
+    monkeypatch: pytest.MonkeyPatch, capfd: pytest.CaptureFixture[str]
+) -> None:
+    """W6, end to end through the real app: boot is refused
+    `EDGE_CONFIG_INVALID`, a loopback peer claiming ADMIN is refused before
+    identity, health still answers, and the token's value is never printed."""
+    monkeypatch.setenv(edge.RETIRED_ENV[0], RETIRED_TOKEN)
+    monkeypatch.setenv(TRUST_SWITCH, "1")
+    with pytest.raises(Refusal) as caught, TestClient(app):
+        pass
+    assert caught.value.code is RefusalCode.EDGE_CONFIG_INVALID
+
+    client = TestClient(app)
+    claimed = client.get(
+        "/api/v1/directory",
+        headers={"x-caos-user": str(uuid4()), "x-caos-role": "ADMIN"},
+    )
+    assert (claimed.status_code, claimed.json()["code"]) == (403, "EDGE_NOT_TRUSTED")
+    assert client.get("/api/health").status_code != 403
+    printed = capfd.readouterr()
+    assert RETIRED_TOKEN not in printed.out + printed.err
+    assert RETIRED_TOKEN not in claimed.text
