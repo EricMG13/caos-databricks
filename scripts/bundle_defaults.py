@@ -15,6 +15,7 @@ nothing new is added to the dependency closet for it.
 from __future__ import annotations
 
 import re
+import shlex
 import sys
 from pathlib import Path
 
@@ -31,8 +32,35 @@ NAMES = (
     "lakebase_database_id",
     "lakebase_database",
 )
+# What `scripts/enterprise_deploy.sh` lets the environment set, as its own
+# header lists them. The endpoint, price and run ceiling are its arguments 5
+# to 7 and never read from the environment (N5): an inherited MODEL_PRICE
+# once replaced the bundle's default price unannounced.
+FROM_ENVIRONMENT = frozenset(
+    {
+        "group_admin",
+        "group_analyst",
+        "lakebase_branch",
+        "lakebase_endpoint",
+        "lakebase_database_id",
+        "lakebase_database",
+    }
+)
 _ENTRY = re.compile(r"  (\w+):\s*")
-_DEFAULT = re.compile(r'\s+default:\s*"?([^"\n]*?)"?\s*')
+_DEFAULT = re.compile(r"\s+default:(.*)")
+# Where a plain scalar's inline comment starts: a `#` after whitespace.
+_COMMENT = re.compile(r"\s#")
+
+
+def _scalar(raw: str) -> str:
+    """One scalar as YAML reads it on its line (N5): a quoted value is what
+    its quotes hold, whatever follows; a plain one ends where an inline
+    comment starts, and a `#` inside a word is part of it."""
+    raw = raw.strip()
+    if raw[:1] in ("'", '"') and raw.find(raw[0], 1) > 0:
+        return raw[1 : raw.find(raw[0], 1)]
+    comment = _COMMENT.search(raw)
+    return (raw[: comment.start()] if comment else raw).strip()
 
 
 def _variables(text: str) -> dict[str, str]:
@@ -46,7 +74,7 @@ def _variables(text: str) -> dict[str, str]:
         if (entry := _ENTRY.fullmatch(line)) is not None:
             name = entry.group(1)
         elif name and (value := _DEFAULT.fullmatch(line)) is not None:
-            found[name] = value.group(1)
+            found[name] = _scalar(value.group(1))
             name = ""
     return found
 
@@ -58,16 +86,20 @@ def defaults(root: Path = REPO) -> dict[str, str]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """`--shell` prints each default as a bash default-assignment (`: "${NAME:=value}"`,
-    upper-cased), so a wrapper can `eval` them without overriding a value the
-    caller already exported; anything else prints `name=value`, one a line."""
+    """`--shell` prints each default as a bash assignment to its upper-cased
+    name, for a wrapper to `eval`: one in `FROM_ENVIRONMENT` only when the
+    caller has not already set it, any other always (N5); anything else
+    prints `name=value`, one a line."""
     args = sys.argv[1:] if argv is None else argv
     shell = "--shell" in args
     for name, value in defaults().items():
-        if shell:
-            print(f': "${{{name.upper()}:={value}}}"')
-        else:
+        if not shell:
             print(f"{name}={value}")
+        elif name in FROM_ENVIRONMENT:
+            upper = name.upper()
+            print(f'[ -n "${{{upper}:-}}" ] || {upper}={shlex.quote(value)}')
+        else:
+            print(f"{name.upper()}={shlex.quote(value)}")
     return 0
 
 

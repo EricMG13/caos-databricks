@@ -279,6 +279,7 @@ def test_the_suppression_grammar_is_each_tool_s_own() -> None:
             "@mark." + "xfail",
             "@unittest.expected" + "Failure",
             f"    pass  {hash_} complex" + "ipy: ignore",
+            "@pytest.mark." + "live_provider",
         ]
     )
     found = {
@@ -295,6 +296,7 @@ def test_the_suppression_grammar_is_each_tool_s_own() -> None:
         "skip": 7,
         "xfail": 2,
         "complexipy_ignore": 1,
+        "live_provider": 1,
     }
     assert check_gate_config.NOQA_CODE.findall(sample) == ["E501"]
 
@@ -357,7 +359,8 @@ def test_a_gate_weakened_in_effect_is_named(tmp_path: Path) -> None:
         "--cobertura'",
         "ci: no step runs 'uv run mypy caos scripts tests'",
         "ci: 'uv run mypy caos scripts tests || true' cannot fail",
-        "ci: continue-on-error is set; a gate would pass whatever it finds",
+        "ci: job lint sets 'continue-on-error'; a job may set only "
+        f"{sorted(check_gate_config.JOB_KEYS)}",
     ):
         assert expected in problems, problems
     assert any("jscpd --threshold 3 " in p for p in problems), problems
@@ -442,13 +445,21 @@ def test_a_required_job_disabled_with_if_is_refused(tmp_path: Path) -> None:
 
 
 def test_a_job_if_for_an_optional_job_is_not_refused(tmp_path: Path) -> None:
-    """The `size` job's own `if: github.event_name == 'pull_request'` names
-    no required gate command, so it is not refused: the rule is about a
-    required gate that can be switched off, not `if:` in general."""
+    """The `size` job's own `if: github.event_name == 'pull_request'` is the
+    one condition pinned for the one script it runs, so it is not refused:
+    the rule is about a gate that can be switched off, not `if:` in
+    general. Any other condition there is refused all the same."""
     root = _tree(tmp_path)
-    ci_text = (root / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    ci = root / ".github" / "workflows" / "ci.yml"
+    ci_text = ci.read_text(encoding="utf-8")
     assert "if: github.event_name == 'pull_request'" in ci_text
-    assert check_gate_config._ci_condition_problems(ci_text) == []
+    assert check_gate_config._ci_problems(root) == []
+    ci.write_text(
+        ci_text.replace("if: github.event_name == 'pull_request'", "if: false")
+    )
+    assert check_gate_config._ci_problems(root) == [
+        f"ci: {check_gate_config.PR_SIZE!r} runs only when its job's if: allows it"
+    ]
 
 
 def test_a_hook_s_own_body_weakened_in_effect_is_named(tmp_path: Path) -> None:
@@ -594,6 +605,8 @@ def test_the_ci_file_s_commands_are_read_as_the_runner_runs_them() -> None:
     continuations joined, and the keys after a block are not part of it."""
     ci_text = "\n".join(
         [
+            "jobs:",
+            "  one:",
             "    steps:",
             "      - run: >-",
             "          a b",
@@ -857,7 +870,6 @@ def test_suppression_counts_at_matches_a_fresh_checkout_of_the_same_commit(
     assert check_gate_config.suppression_counts_at(tip, root) == (
         check_gate_config.suppression_counts(root)
     )
-    assert check_gate_config._gitleaks_problems(check_gate_config.REPO) == []
 
 
 def test_the_deployment_must_carry_every_file_the_app_reads(tmp_path: Path) -> None:

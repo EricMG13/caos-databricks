@@ -118,20 +118,41 @@ def identifiers(tree: ast.Module) -> Iterator[tuple[int, str]]:
     context and needs no separate branch.
     """
     for node in ast.walk(tree):
-        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
-            yield node.lineno, node.name
-        elif isinstance(node, ast.arg):
-            yield node.lineno, node.arg
-        elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
-            yield node.lineno, node.id
-        elif isinstance(node, ast.Attribute) and isinstance(node.ctx, ast.Store):
-            yield node.lineno, node.attr
-        elif isinstance(node, ast.alias):
-            yield node.lineno, node.asname or node.name
-        elif isinstance(node, ast.ExceptHandler | ast.MatchAs) and node.name:
-            yield node.lineno, node.name
-        elif isinstance(node, ast.TypeVar | ast.ParamSpec | ast.TypeVarTuple):
-            yield node.lineno, node.name
+        name = _bound_name(node)
+        if name:
+            yield getattr(node, "lineno", 1), name
+
+
+# Each node that binds a name, by the attribute holding it as a plain
+# string. A star capture binds one as surely as a plain capture does (N4):
+# `case [first, *rest]` through `MatchStar.name`, `case {**rest}` through
+# `MatchMapping.rest`; `*_` and `case _` bind none.
+_NAMED: dict[type[ast.AST], str] = {
+    ast.FunctionDef: "name",
+    ast.AsyncFunctionDef: "name",
+    ast.ClassDef: "name",
+    ast.arg: "arg",
+    ast.ExceptHandler: "name",
+    ast.MatchAs: "name",
+    ast.MatchStar: "name",
+    ast.MatchMapping: "rest",
+    ast.TypeVar: "name",
+    ast.ParamSpec: "name",
+    ast.TypeVarTuple: "name",
+}
+
+
+def _bound_name(node: ast.AST) -> str | None:
+    """The name `node` binds in this module, or None when it binds none."""
+    if isinstance(node, ast.Name):
+        return node.id if isinstance(node.ctx, ast.Store) else None
+    if isinstance(node, ast.Attribute):
+        return node.attr if isinstance(node.ctx, ast.Store) else None
+    if isinstance(node, ast.alias):
+        return node.asname or node.name
+    attribute = _NAMED.get(type(node))
+    value = getattr(node, attribute, None) if attribute else None
+    return value if isinstance(value, str) and value else None
 
 
 def violations(path: Path, banned: dict[str, str]) -> Iterator[str]:
@@ -139,7 +160,8 @@ def violations(path: Path, banned: dict[str, str]) -> Iterator[str]:
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     named = [(1, path.stem), *identifiers(tree)]
     for lineno, name in named:
-        normalised = _normalise(name)
+        # Digits end a word as an underscore does (N4): `chunk2` is `chunk`.
+        normalised = re.sub(r"_*[0-9]+_*", "_", _normalise(name)).strip("_")
         words = set(normalised.split("_"))
         # `chunks` is the same wrong word as `chunk`; plural collection
         # names are the shape agent-written code reaches for most.

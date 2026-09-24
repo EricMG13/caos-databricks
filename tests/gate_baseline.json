@@ -23,6 +23,7 @@
   "complexity:caos/store/run_inputs.py::_research": 20,
   "complexity_baselined": 21,
   "file_noqa": 7,
+  "live_provider": 3,
   "mypy_directive": 0,
   "no_cover": 5,
   "noqa": 118,

@@ -8,8 +8,9 @@ in `<evidence>/<id>.log`:
 
     --stage before   E1 preflight: the resources exist, the ceiling covers a call
     --stage record   one CLI step the wrapper ran: E2 validate (its JSON form,
-                        whose resolved app name, endpoint, price and run
-                        ceiling must be the ones given: DF-4, DF-5), E3
+                        whose resolved app name, endpoint, price, run
+                        ceiling, groups and Lakebase binding must be the
+                        ones given: DF-4, DF-5, W8, N2), E3
                         deploy (its deployment record must list every file
                         the app reads: F48, DF-4), E4 run
     --stage after    E5 the app E2 resolved is RUNNING with a URL
@@ -29,8 +30,11 @@ in `<evidence>/<id>.log`:
                      E10 one model call through the app's own HTTP surface,
                         not this script's process or credentials (CF-054): a
                         tiny text source admitted (a blob write) to the case
-                        E9 left behind, a LITE run started, and the event
-                        stream watched for the first node's call outcome
+                        E9 left behind, a LITE run started, and its Run
+                        section read on each event until the call answered:
+                        an accepted attempt, or a validated Blocked verdict.
+                        A refused call, a park or a pre-call refusal fails
+                        and names its code (W1)
 
 Every step ends in a row, never a traceback (N1): a failure is its class or
 its typed code. No secret is printed or written: the bearer the app calls
@@ -128,10 +132,10 @@ MODEL_CALL_SUBJECT = {
 # `caos.provider.TIMEOUT_SECONDS` (240) is the model call's own deadline;
 # E10 waits comfortably past it rather than racing it.
 MODEL_CALL_SECONDS = 260.0
-# Two `run_progress` frames after `start` are `ATTEMPT_STARTED` then
-# `CALL_OUTCOME_RECORDED` (`caos/api/events.py`): the second is the model
-# call's outcome written to the ledger, whatever the outcome was.
-CALL_OUTCOME_AT = 2
+# What ends a run without an answered call (`caos.store.RunStatus`): an
+# outcome is recorded for a refused call too, and a park is a progress frame
+# like any other (W1), so E10 reads the run itself, never counts frames.
+ENDED = frozenset({"COMPLETE", "FAILED", "BLOCKED", "CANCELLED"})
 
 
 def resolved_app(document: object) -> tuple[str, dict[str, str]]:
@@ -159,14 +163,9 @@ def resolved_app(document: object) -> tuple[str, dict[str, str]]:
 def resolved_form(document: object) -> str:
     """Which form the app's `database` resource resolved to -- `postgres`
     (Lakebase Autoscaling) or `database` (Provisioned) -- or `""`."""
-    apps = _mapping(_mapping(document).get("resources")).get("apps")
-    listed = _mapping(_mapping(apps).get(APP_KEY)).get("resources")
-    for resource in listed if isinstance(listed, list) else []:
-        named = _mapping(resource)
-        if named.get("name") == DATABASE_RESOURCE:
-            forms = [key for key in LAKEBASE_BINDINGS.values() if key in named]
-            return forms[0] if len(forms) == 1 else ""
-    return ""
+    named = _database_resource(document)
+    forms = [key for key in LAKEBASE_BINDINGS.values() if key in named]
+    return forms[0] if len(forms) == 1 else ""
 
 
 def _mapping(value: object) -> dict[str, object]:
@@ -174,36 +173,72 @@ def _mapping(value: object) -> dict[str, object]:
     return value if isinstance(value, dict) else {}
 
 
+def given_values(args: argparse.Namespace) -> dict[str, str]:
+    """The app environment E2 holds to the values given (DF-4, W8): the
+    endpoint, price and run ceiling, and the two groups, which travel as
+    `BUNDLE_VAR_` (F276) with the same silent fall-back to the default."""
+    return {
+        "CAOS_MODEL_ENDPOINT": args.endpoint,
+        "CAOS_MODEL_PRICE": args.price,
+        "CAOS_RUN_CEILING": args.run_ceiling,
+        "CAOS_GROUP_ADMIN": args.group_admin,
+        "CAOS_GROUP_ANALYST": args.group_analyst,
+    }
+
+
 def resolution_problems(
-    document: object, *, target: str, endpoint: str, price: str, run_ceiling: str
+    document: object, *, target: str, given: dict[str, str]
 ) -> list[str]:
     """What the CLI resolved that is not what was given (DF-4, DF-5): a
     misspelt `BUNDLE_VAR_model_price` validates on the default price, and a
-    target with no name rule of its own resolves to the production app."""
+    target with no name rule of its own resolves to the production app.
+    `given` is `given_values`: each is held exactly, the groups commas
+    included, and the groups in the app's CAN_USE too (W8)."""
     name, env = resolved_app(document)
     problems = [] if name else ["no app resolved"]
     if name == "caos" and target not in PRODUCTION_TARGETS:
         problems.append(f"target {target} resolves to the production app")
-    given = {
-        "CAOS_MODEL_ENDPOINT": endpoint,
-        "CAOS_MODEL_PRICE": price,
-        "CAOS_RUN_CEILING": run_ceiling,
-    }
     problems += [
         f"resolved {key} is not the value given"
         for key, value in given.items()
         if env.get(key) != value
     ]
-    return problems
+    groups = (given["CAOS_GROUP_ADMIN"], given["CAOS_GROUP_ANALYST"])
+    return problems + _permission_problems(document, groups)
 
 
-def binding_problems(document: object, lakebase: tuple[str, str]) -> list[str]:
+def _permission_problems(document: object, groups: tuple[str, str]) -> list[str]:
+    """The app's group grants as resolved: CAN_USE to exactly the two groups
+    given, and to no other group, at no other level (F50, W3, W8)."""
+    app = _mapping(_mapping(_mapping(document).get("resources")).get("apps"))
+    listed = _mapping(app.get(APP_KEY)).get("permissions")
+    granted = sorted(
+        (str(entry.get("group_name")), str(entry.get("level")))
+        for entry in (_mapping(item) for item in _list(listed))
+        if "group_name" in entry
+    )
+    wanted = sorted((group, "CAN_USE") for group in groups)
+    if granted == wanted:
+        return []
+    return ["resolved app permissions do not grant CAN_USE to exactly the groups given"]
+
+
+def _list(value: object) -> list[object]:
+    """`value` when it is a JSON array, else an empty one."""
+    return value if isinstance(value, list) else []
+
+
+def binding_problems(
+    document: object, lakebase: tuple[str, str], resource: dict[str, str]
+) -> list[str]:
     """A Lakebase binding the CLI resolved that is not the one given
-    (R24-14): `lakebase` is the variable the target's kind sets and its
-    value. The other kind's variable, a value that is not the one given (a
-    misspelt `BUNDLE_VAR_lakebase_branch` validates on the default branch)
-    or a `database` resource of the other form would connect the app as
-    some other role."""
+    (R24-14, N2): `lakebase` is the variable the target's kind sets and its
+    value, `resource` the `database` resource's fields in that kind's form.
+    The other kind's variable, a value that is not the one given (a
+    misspelt `BUNDLE_VAR_lakebase_branch` validates on the default branch),
+    a `database` resource of the other form, or one bound to another
+    branch, database or instance would connect the app as some other role
+    or to some other store than the one E1 looked up and E8 reads."""
     bound, value = lakebase
     _, env = resolved_app(document)
     problems = (
@@ -216,8 +251,36 @@ def binding_problems(document: object, lakebase: tuple[str, str]) -> list[str]:
     ]
     form = LAKEBASE_BINDINGS[bound]
     if resolved_form(document) != form:
-        problems.append(f"resolved database resource is not the {form} form")
-    return problems
+        return [*problems, f"resolved database resource is not the {form} form"]
+    fields = _mapping(_database_resource(document).get(form))
+    return problems + [
+        f"resolved database resource's {key} is not the value given"
+        for key, given in resource.items()
+        if fields.get(key) != given
+    ]
+
+
+def _database_resource(document: object) -> dict[str, object]:
+    """The app's `database` resource as resolved, or an empty mapping."""
+    apps = _mapping(_mapping(document).get("resources")).get("apps")
+    listed = _mapping(_mapping(apps).get(APP_KEY)).get("resources")
+    for resource in _list(listed):
+        if _mapping(resource).get("name") == DATABASE_RESOURCE:
+            return _mapping(resource)
+    return {}
+
+
+def lakebase_resource(args: argparse.Namespace) -> dict[str, str]:
+    """The `database` resource's fields the target's kind binds, as given:
+    an Autoscaling branch and database by resource path, or a Provisioned
+    instance and its database (N2)."""
+    if args.target.endswith(PROVISIONED_SUFFIX):
+        return {
+            "instance_name": args.lakebase_instance,
+            "database_name": args.lakebase_database,
+        }
+    paths = _paths(args)
+    return {"branch": paths.branch, "database": paths.database}
 
 
 def lakebase_binding(args: argparse.Namespace) -> tuple[str, str]:
@@ -365,16 +428,15 @@ def _record(args: argparse.Namespace, evidence: Evidence) -> int:
 def _resolution(args: argparse.Namespace) -> tuple[int, str]:
     document = _resolved(args.bundle)
     problems = resolution_problems(
-        document,
-        target=args.target,
-        endpoint=args.endpoint,
-        price=args.price,
-        run_ceiling=args.run_ceiling,
-    ) + binding_problems(document, lakebase_binding(args))
+        document, target=args.target, given=given_values(args)
+    ) + binding_problems(document, lakebase_binding(args), lakebase_resource(args))
     name, _ = resolved_app(document)
     if problems:
         return 1, "; ".join(problems)
-    return 0, f"resolved app {name}: endpoint, price, run ceiling and Lakebase as given"
+    return 0, (
+        f"resolved app {name}: endpoint, price, run ceiling, groups and Lakebase "
+        "as given"
+    )
 
 
 def _shipped(args: argparse.Namespace) -> tuple[int, str]:
@@ -851,22 +913,56 @@ def _gate_approved(url: str, base: str, gate: str, headers: dict[str, str]) -> i
     return status
 
 
-def _progress_events(lines: queue.Queue[bytes], seconds: float) -> int:
-    """How many `run_progress` frames arrived before a terminal frame, a
-    close or the deadline. Two mean the first node's attempt started and its
-    call outcome was recorded (`caos.store.outcomes.record_outcome`) --
-    proof of one model call, whatever the call answered (CF-054)."""
-    seen = 0
-    until = time.monotonic() + seconds
-    while seen < CALL_OUTCOME_AT:
+def call_verdict(document: object) -> tuple[int, str] | None:
+    """E10's verdict on the Run section's document (W1), or None while the
+    first call is still undecided. The gateway answered the app's own call
+    when an attempt was accepted, or when a validated Blocked verdict ended
+    the run; a park, or any other end, is a call that did not answer, and
+    the row names the run's own code for it."""
+    run = _mapping(_mapping(_mapping(document).get("body")).get("run"))
+    attempts = run.get("attempts")
+    listed = attempts if isinstance(attempts, list) else []
+    if any(_mapping(attempt).get("accepted") is True for attempt in listed):
+        return (
+            0,
+            "one model call answered and accepted through the app's own HTTP surface",
+        )
+    status = run.get("status")
+    if status == "BLOCKED" and run.get("blocked_by") is not None:
+        return 0, "one model call answered: its validated verdict ended the run BLOCKED"
+    work = _mapping(run.get("work"))
+    if work.get("state") == "STOPPED":
+        return 1, f"the run parked {work.get('stop_code')}: no model call answered"
+    if status in ENDED:
+        return 1, f"the run ended {status}: no model call answered"
+    return None
+
+
+def _answered(
+    url: str,
+    read: str,
+    headers: dict[str, str],
+    lines: queue.Queue[bytes],
+) -> tuple[int, str]:
+    """The run read once per event frame (a heartbeat changes nothing) until
+    `call_verdict` decides, the stream closes or `MODEL_CALL_SECONDS` pass;
+    read once more at the end, so a decision the last frame announced is
+    never missed."""
+    until = time.monotonic() + MODEL_CALL_SECONDS
+    last = 0
+    while True:
         ended, frame = _next_frame(lines, until)
+        if ended == FRAME and "event: " not in frame:
+            continue
+        last, document = _json_call(url, "GET", read, headers)
+        verdict = call_verdict(document) if last == 200 else None
+        if verdict is not None:
+            return verdict
         if ended != FRAME:
-            return seen
-        if "event: run_progress" in frame:
-            seen += 1
-        elif "event: run_terminal" in frame:
-            return seen  # ended early, but not before a call was recorded
-    return seen
+            return 1, (
+                f"no model call answered within {MODEL_CALL_SECONDS}s "
+                f"(the run read answered {last})"
+            )
 
 
 def _started_and_watched(
@@ -877,10 +973,12 @@ def _started_and_watched(
     evidence: Evidence,
 ) -> int:
     """The stream opened before `start` so no early frame is missed, the run
-    started, then watched for the first node's call outcome."""
+    started, then its Run section read on each event until the first call
+    answered or did not (W1)."""
     step = "E10"
     run_id = prepared.run_id
     events = f"/api/v1/cases/{case_id}/events?run={run_id}"
+    read = f"/api/v1/cases/{case_id}/run?run={run_id}"
     try:
         status, response, _ = _open(
             url + events, "GET", headers, timeout=MODEL_CALL_SECONDS
@@ -895,14 +993,10 @@ def _started_and_watched(
         status, _ = _json_call(url, "POST", f"{base}/start", headers, pin)
         if status != 202:
             return evidence.record(step, f"POST {base}/start", 1, f"answered {status}")
-        seen = _progress_events(lines, MODEL_CALL_SECONDS)
+        code, note = _answered(url, read, headers, lines)
     except READ_FAILURES as failed:
         return evidence.record(step, f"GET {events}", 1, type(failed).__name__)
-    if seen < CALL_OUTCOME_AT:
-        note = f"no model call recorded within {MODEL_CALL_SECONDS}s"
-        return evidence.record(step, f"GET {events}", 1, note)
-    note = "one model call recorded through the app's own HTTP surface"
-    return evidence.record(step, f"GET {events}", 0, note)
+    return evidence.record(step, f"GET {read}", code, note)
 
 
 def _model_call(url: str, case_id: str, evidence: Evidence) -> int:

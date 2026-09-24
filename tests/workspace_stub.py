@@ -53,6 +53,7 @@ except ImportError:
     # put the gate scripts on the path first, the way pytest's always has.
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
     from bundle_defaults import defaults as _bundle_defaults
+from check_gate_config import bundle_auth_problems
 
 # What the SDK is handed as a token. It is a placeholder the stub never
 # compares against; any non-empty bearer passes. The rest are the bundle's
@@ -819,7 +820,17 @@ def fresh_state(root: Path) -> list[str]:
 # own checkout path can read "...-caos-databricks/...", and `\b` alone
 # would treat that hyphenated segment as the CLI too.
 _DATABRICKS_CLI = re.compile(r"(?:^|[\s/])databricks(?:[\s/]|$)")
-_PROFILE_FLAG = re.compile(r"(?:^|[\s\"'])(-p(?:[=\s\"']|$)|--profile\b)")
+# Every spelling the CLI's parser reads as the flag (N1): `-p NAME`,
+# `-pNAME`, `-p=NAME`, `--profile NAME` and `--profile=NAME`.
+_PROFILE_FLAG = re.compile(r"(?:^|[\s\"'])(?:-p|--profile)")
+# The files the CLI reads a bundle from, the first found walking up from
+# where it runs (W7).
+BUNDLE_FILES = ("databricks.yml", "databricks.yaml", "bundle.yml", "bundle.yaml")
+# What the child may not inherit (W7): any DATABRICKS_* variable but the
+# stub's own (an auth type, a client id and secret, an account, another
+# bundle root) and Azure's and Google's credentials, each of which chooses
+# another way into another workspace.
+_INHERITED_AUTH = re.compile(r"(?:DATABRICKS|ARM)_\w*|GOOGLE_CREDENTIALS")
 
 
 def _forwards_profile(args: list[str]) -> bool:
@@ -828,18 +839,52 @@ def _forwards_profile(args: list[str]) -> bool:
     return bool(_DATABRICKS_CLI.search(joined) and _PROFILE_FLAG.search(joined))
 
 
+def bundle_config(start: Path) -> Path | None:
+    """The bundle file the CLI would read from `start`: the first of
+    `BUNDLE_FILES` in it or the nearest directory above it, or None."""
+    for directory in (start, *start.parents):
+        for name in BUNDLE_FILES:
+            if (directory / name).is_file():
+                return directory / name
+    return None
+
+
+def _own_workspace(args: list[str]) -> list[str]:
+    """Why a `databricks` command in `args` would leave loopback through the
+    bundle it runs in: a host, profile or credential the bundle names for
+    itself, or files it includes (W7). Empty when there is none to read."""
+    if not _DATABRICKS_CLI.search(" ".join(args)):
+        return []
+    config = bundle_config(Path.cwd())
+    if config is None:
+        return []
+    return bundle_auth_problems(config.read_text(encoding="utf-8"))
+
+
+def stand_in_environment(
+    inherited: dict[str, str], stub: WorkspaceStub
+) -> dict[str, str]:
+    """The child's environment: everything inherited but a way into another
+    workspace (`_INHERITED_AUTH`), then the stub as its one workspace, no
+    profile, and a private, empty config file set by `main`."""
+    kept = {k: v for k, v in inherited.items() if not _INHERITED_AUTH.fullmatch(k)}
+    return {**kept, **stub.environment(), "DATABRICKS_BUNDLE_ENGINE": "direct"}
+
+
 def main(argv: list[str] | None = None) -> int:
     """`workspace_stub.py -- <command...>`: run the command against the stub.
 
     The child inherits the environment with the stub as its workspace, no
-    ambient CLI profile and no `.databrickscfg` of its own -- an explicit
-    `-p`/`--profile` is refused outright (R24-02), and the config file the
-    CLI would otherwise read is a private, empty one, so nothing named by a
-    profile or left over in an inherited config can be reached; only this
-    loopback stub can. The exit code is the child's. Afterwards the paths
-    the child asked for are printed, one per line, so a run shows what it
-    exercised. A `bundle` command starts from no bundle state but a real
-    workspace's, and refuses to run over that (`fresh_state`, DF-13).
+    ambient CLI profile, no inherited auth variable and no `.databrickscfg`
+    of its own -- an explicit `-p`/`--profile` in any spelling is refused
+    outright (R24-02, N1), so is a bundle that names a workspace or a
+    credential of its own (W7), and the config file the CLI would otherwise
+    read is a private, empty one, so nothing named by a profile, a bundle
+    or an inherited variable can be reached; only this loopback stub can.
+    The exit code is the child's. Afterwards the paths the child asked for
+    are printed, one per line, so a run shows what it exercised. A `bundle`
+    command starts from no bundle state but a real workspace's, and refuses
+    to run over that (`fresh_state`, DF-13).
     """
     args = sys.argv[1:] if argv is None else argv
     if args[:1] == ["--"]:
@@ -852,6 +897,14 @@ def main(argv: list[str] | None = None) -> int:
             "stub: -p/--profile would let the CLI resolve a workspace of its "
             "own; omit it -- this stand-in already points the CLI at the "
             "loopback stub",
+            file=sys.stderr,
+        )
+        return 2
+    own = _own_workspace(args)
+    if own:
+        print(
+            f"stub: {'; '.join(own)} -- the CLI would prefer it to the loopback "
+            "stub; a stand-in run takes the workspace from the stub alone",
             file=sys.stderr,
         )
         return 2
@@ -868,8 +921,7 @@ def main(argv: list[str] | None = None) -> int:
     with stub.serving(), tempfile.TemporaryDirectory() as private:
         config_file = Path(private) / "empty.databrickscfg"
         config_file.write_text("", encoding="utf-8")
-        env = {**os.environ, **stub.environment(), "DATABRICKS_BUNDLE_ENGINE": "direct"}
-        env.pop("DATABRICKS_CONFIG_PROFILE", None)
+        env = stand_in_environment(dict(os.environ), stub)
         env["DATABRICKS_CONFIG_FILE"] = str(config_file)
         code = subprocess.run(args, env=env, check=False).returncode
     for method, path in stub.requests:

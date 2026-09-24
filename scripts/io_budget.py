@@ -31,7 +31,9 @@ cost 149 round trips on the route that actually reaches it. `--record`
 snapshots `MEASURED_MODULES`' current, test-verified `IO_BUDGET` and
 `BLOB_BUDGET` (the blob dimension, N35 -- declared only where a route
 downloads verified bytes) to `tests/io_measurements.json`; `--assert`
-refuses a declaration that has fallen under what was last recorded there.
+refuses a declaration that has fallen under what was last recorded there,
+and a measured module, or a dimension it declares, that the record does
+not carry at all (W6).
 """
 
 from __future__ import annotations
@@ -267,21 +269,26 @@ def measured_problems(root: Path = REPO, measured: Path | None = None) -> list[s
     is a claim, and this is the one check that holds it to a number a real
     request was once shown to cost, not only to its own shape and range.
 
-    `measured` defaults to `root`'s own `tests/io_measurements.json`, not
-    the fixed constant: a root a test builds from nothing has recorded no
-    measurement for anything under it, which is not the same failure as a
-    file that is there and will not parse. A caller that names a path
-    explicitly is naming a file it expects to exist, so only the default
-    is missing-is-nothing-recorded; a named path missing is unreadable.
+    And every measured module the root holds must be recorded, each
+    dimension it declares included (W6): an entry dropped from the record,
+    or the record dropped whole, once let that module fall to any number.
+    `measured` defaults to `root`'s own `tests/io_measurements.json`; a
+    root holding no measured module (a tree a test builds from nothing)
+    needs no record, but a caller that names a path explicitly is naming a
+    file it expects to exist, so a named path missing is unreadable.
     """
     measured_path = measured if measured is not None else _measured_path(root)
-    if not measured_path.is_file():
-        return [] if measured is None else [f"{measured_path}: unreadable"]
+    if not measured_path.is_file() and measured is not None:
+        return [f"{measured_path}: unreadable"]
     try:
-        recorded = json.loads(measured_path.read_text(encoding="utf-8"))
+        recorded = (
+            json.loads(measured_path.read_text(encoding="utf-8"))
+            if measured_path.is_file()
+            else {}
+        )
     except ValueError:
         return [f"{measured_path}: unreadable"]
-    problems: list[str] = []
+    problems = _unrecorded(root, recorded, measured_path.name)
     names = {"io": DECLARATION, "blob": BLOB_DECLARATION}
     for relative, costs in recorded.items():
         path = root / relative
@@ -294,6 +301,28 @@ def measured_problems(root: Path = REPO, measured: Path | None = None) -> list[s
             name = names.get(dimension, dimension)
             value = declared_value(path, root, name)
             problems.extend(_fallen(relative, name, value, floor, measured_path.name))
+    return problems
+
+
+def _unrecorded(
+    root: Path, recorded: dict[str, dict[str, object]], source: str
+) -> list[str]:
+    """Each measured module under `root` that `recorded` does not carry, and
+    each dimension one declares that its entry does not (W6)."""
+    problems: list[str] = []
+    for relative in MEASURED_MODULES:
+        key, path = relative.as_posix(), root / relative
+        if not path.is_file():
+            continue
+        if key not in recorded:
+            problems.append(f"{key}: in MEASURED_MODULES but not recorded in {source}")
+            continue
+        problems += [
+            f"{key}: {name} is declared but not recorded in {source}"
+            for dimension, name in (("io", DECLARATION), ("blob", BLOB_DECLARATION))
+            if _recordable(declared_value(path, root, name)) is not None
+            and dimension not in recorded[key]
+        ]
     return problems
 
 

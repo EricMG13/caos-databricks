@@ -15,7 +15,10 @@
 # for Provisioned LAKEBASE_DATABASE (databricks_postgres), GROUP_ADMIN
 # (caos-admins), GROUP_ANALYST (caos-analysts), PG_PORT (5432), PG_SSLMODE
 # (require), EVIDENCE (docs/rebuild/runs/<today>/enterprise/<time>),
-# BUNDLE_STATE (.databricks/bundle/<target>).
+# BUNDLE_STATE (.databricks/bundle/<target>). Nothing else is read from the
+# environment: the endpoint, price and run ceiling are arguments 5 to 7
+# only, and an inherited MODEL_ENDPOINT, MODEL_PRICE or RUN_CEILING is
+# ignored (N5).
 # An empty profile means the SDK's ambient auth (DATABRICKS_HOST and a token).
 #
 # Steps E1..E10 are described in scripts/enterprise_deploy.py; the three
@@ -36,8 +39,10 @@ CATALOG="${2:?catalog}"
 SCHEMA="${3:?schema}"
 LAKEBASE="${4:?lakebase project (or, with --provisioned, the instance)}"
 # One source (N23): databricks.yml's own variable defaults, read back
-# rather than repeated here. `: "${NAME:=...}"` only fills a name this
-# shell does not already have, so an inherited GROUP_ADMIN etc. still wins.
+# rather than repeated here. A name the header lists (GROUP_ADMIN, the
+# LAKEBASE_* names) is filled only when this shell does not already have
+# it; MODEL_ENDPOINT, MODEL_PRICE and RUN_CEILING are always the bundle's,
+# the defaults of arguments 5 to 7 (N5).
 eval "$(uv run python scripts/bundle_defaults.py --shell)"
 ENDPOINT="${5:-$MODEL_ENDPOINT}"
 PRICE="${6:-$MODEL_PRICE}"

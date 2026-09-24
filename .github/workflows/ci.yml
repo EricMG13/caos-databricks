@@ -54,11 +54,12 @@ jobs:
         run: |
           base=HEAD^
           if [ -n "$BASE_REF" ]; then base="origin/$BASE_REF"; elif git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then base="$BEFORE"; fi
-          # `--against` measures $base's own tracked files fresh, under this
-          # commit's SUPPRESSIONS patterns (FP-11), rather than trusting its
-          # committed tests/gate_baseline.json at face value -- a PR that
-          # only weakened a pattern could otherwise make its own count look
-          # like a fall against a base measured under the old, stronger one.
+          # `--against` measures $base's own tracked files and this tree's
+          # fresh, rather than trusting either committed
+          # tests/gate_baseline.json, and twice: under this commit's
+          # SUPPRESSIONS patterns (FP-11), and under $base's own checker read
+          # from git (W5) -- so a PR that only weakened a pattern can neither
+          # make its count look like a fall nor hide the suppression it spends.
           uv run python scripts/check_gate_config.py --against "$base"
 
   types:
@@ -236,10 +237,11 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
 
   frontend:
+    # Every step runs from the root and names frontend/ itself: a job-level
+    # `defaults.run.working-directory` is a default every gate in the job
+    # would inherit, and check_gate_config refuses one (review 4, W2).
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    defaults:
-      run: {working-directory: frontend}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -247,11 +249,11 @@ jobs:
           node-version: "24"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - run: npm ci --ignore-scripts
-      - run: npm run lint
-      - run: npm run typecheck
-      - run: npm test
-      - run: npm run build
+      - run: npm --prefix frontend ci --ignore-scripts
+      - run: npm --prefix frontend run lint
+      - run: npm --prefix frontend run typecheck
+      - run: npm --prefix frontend run test
+      - run: npm --prefix frontend run build
       # FP-21 / CF-063: these two security tests (the dev proxy strips a
       # forged client identity; a production build carries no fixture or
       # demo route) skip without Node, the `test` job installs no Node,
@@ -262,7 +264,6 @@ jobs:
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with: {version: "0.12.5", enable-cache: true}
       - name: frontend security tests that need a real Node and build
-        working-directory: .
         env:
           CAOS_REQUIRE_NODE: "1"
         run: |
@@ -273,14 +274,14 @@ jobs:
       - name: nine section routes in the export
         run: |
           for s in directory upload analysis book run model report committee admin; do
-            test -f "dist/$s/index.html" || { echo "missing dist/$s/index.html"; exit 1; }
+            test -f "frontend/dist/$s/index.html" || { echo "missing frontend/dist/$s/index.html"; exit 1; }
           done
-      - run: npm run build:demo
-      - run: npx --no-install jscpd --threshold 3 --min-lines 10 --ignore "**/node_modules/**,**/dist/**,**/dist-demo/**" ../caos ../scripts ../icm src
+      - run: npm --prefix frontend run build:demo
+      - run: npx --prefix frontend --no-install jscpd --threshold 3 --min-lines 10 --ignore "**/node_modules/**,**/dist/**,**/dist-demo/**" caos scripts icm frontend/src
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ hashFiles('frontend/package-lock.json') }}
-      - run: ./node_modules/.bin/playwright install --with-deps
-      - run: npm run a11y
-      - run: npm run test:workbench
+      - run: frontend/node_modules/.bin/playwright install --with-deps
+      - run: npm --prefix frontend run a11y
+      - run: npm --prefix frontend run test:workbench
