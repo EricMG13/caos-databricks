@@ -514,7 +514,7 @@ def _starts(
     # once for every search of it (N41).
     keys = (page or _Page(tokens)).keys(normalised=normalised)
     return (
-        at - inner for at in _occurrences(keys, pattern) if inner <= at <= last + inner
+        at - inner for at in occurrences(keys, pattern) if inner <= at <= last + inner
     )
 
 
@@ -523,10 +523,12 @@ def _key(text: str, *, normalised: bool) -> str:
     return _nfc(text) if normalised else text
 
 
-def _occurrences(sequence: list[str], pattern: list[str]) -> Iterator[int]:
+def occurrences(sequence: list[str], pattern: list[str]) -> Iterator[int]:
     """Every index at which `pattern` begins in `sequence`, overlapping ones
     too, in one pass over each (Knuth-Morris-Pratt). Where nothing is matched
-    yet, the next place the pattern could begin is found by `list.index`."""
+    yet, the next place the pattern could begin is found by `list.index`.
+    Public for the handoff's body quote check, which needs the same bound
+    (R24-09)."""
     border = _borders(pattern)
     matched = 0
     index = 0
