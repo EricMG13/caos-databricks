@@ -30,6 +30,7 @@ export function NodeDetail({
         <header>
           <h2>Selected node</h2>
           <span className="cp">
+            {node.module_name === node.module_id ? "" : `${node.module_name} · `}
             {node.module_id} · {node.route_node_id}
           </span>
           <span className={`tag ${toneOf(severity)} right`}>

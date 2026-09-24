@@ -25,9 +25,13 @@ describe("Committee v1", () => {
     }
     expect(root).toHaveTextContent('<img src=x onerror="window.pwned=1">');
     expect(root).toHaveTextContent("<script>limit</script>");
-    expect(
-      root.querySelector("img, script, a, button, input, textarea, [contenteditable]"),
-    ).toBeNull();
+    // The saved text is text: the only links are the host's two reads (N4).
+    for (const saved of root.querySelectorAll(
+      "[data-committee-artifact], [data-committee-narrative]",
+    ))
+      expect(
+        saved.querySelector("img, script, a, button, input, textarea, [contenteditable]"),
+      ).toBeNull();
     expect(root.querySelectorAll("[data-committee-artifact]")).toHaveLength(
       document.body.artifacts.length,
     );
@@ -51,6 +55,30 @@ describe("Committee v1", () => {
     expect(container.querySelector("[data-committee-receipt]")).toBeNull();
     expect(container).toHaveTextContent(frozen.body.frozen_by);
     expect(container).toHaveTextContent("—");
+  });
+
+  test("offers the rendered paper, and the package once filed, refused not hidden before (N4)", () => {
+    const filed = committee();
+    const { container, unmount } = render(<CommitteeSection document={filed} tab={null} />);
+    expect(container.querySelector("[data-committee-render]")).toHaveAttribute(
+      "href",
+      filed.body.render_url,
+    );
+    const pkg = container.querySelector("[data-committee-package]")!;
+    expect(pkg).toHaveAttribute("href", filed.body.package_url!);
+    expect(pkg).toHaveAttribute("download");
+    unmount();
+    const frozen = parseCommitteeDocument({
+      ...filed,
+      body: { ...filed.body, state: "frozen", filed_by: null, receipt: null, package_url: null },
+    });
+    const { container: held } = render(<CommitteeSection document={frozen} tab={null} />);
+    expect(held.querySelector("[data-committee-render]")).not.toBeNull();
+    expect(held.querySelector("[data-committee-package]")).toBeNull();
+    const refused = held.querySelector('[data-refusal="PACKAGE_NOT_FILED"]')!;
+    expect(refused).toHaveTextContent("Download the package (.zip)");
+    expect(refused).toHaveAttribute("aria-disabled", "true");
+    expect(held).toHaveTextContent("Available once the revision is filed.");
   });
 
   test("renders distinct hostile narrative spans and typed figures as text", () => {

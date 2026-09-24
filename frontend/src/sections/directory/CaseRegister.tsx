@@ -5,7 +5,7 @@
 // "Fixture fields dropped rather than faked").
 import { Link } from "react-router";
 import { SEVERITY_BADGE, SeverityMark } from "@/chrome/SeverityMark";
-import { RUN_SEVERITY, sentence } from "@/chrome/compose";
+import { RUN_SEVERITY, isParked, sentence } from "@/chrome/compose";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { stamp } from "@/ds/format";
@@ -21,12 +21,21 @@ export function caseHref(caseId: string): string {
 
 function LatestRunCell({ run }: { run: RunSummary | null }) {
   if (!run) return <span className="m">No runs yet</span>;
+  // A parked run reads RUNNING on the wire; the register says it is not moving.
+  const parked = isParked(run);
+  const severity = parked ? "WARNING" : RUN_SEVERITY[run.status];
   return (
     <span className="m">
-      <Badge variant={SEVERITY_BADGE[RUN_SEVERITY[run.status]]} className="gap-1.5">
-        <SeverityMark severity={RUN_SEVERITY[run.status]} decorative />
-        {sentence(run.status)}
+      <Badge variant={SEVERITY_BADGE[severity]} className="gap-1.5">
+        <SeverityMark severity={severity} decorative />
+        {parked ? "Parked" : sentence(run.status)}
       </Badge>
+      {parked ? (
+        <span className="sub" data-stop-code>
+          {" "}
+          {run.stop_code}
+        </span>
+      ) : null}
       {run.profile_id ? <span className="sub"> {run.profile_id}</span> : null}
       {run.selection_id ? <span className="sub"> · {run.selection_id}</span> : null}
     </span>

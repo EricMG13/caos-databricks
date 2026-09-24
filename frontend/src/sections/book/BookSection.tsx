@@ -149,7 +149,9 @@ export function BookSection({ document }: { document: BookDocument; tab: string 
               <thead>
                 <tr>
                   <th scope="col">Credit</th>
-                  <th scope="col">Units</th>
+                  {/* The row's currency and scale: the currency columns' units.
+                      A percent or multiple column carries its own sign (N60). */}
+                  <th scope="col">Currency</th>
                   {body.columns.map((column) => (
                     <th scope="col" key={column.key}>
                       {column.label}
@@ -188,6 +190,7 @@ export function BookSection({ document }: { document: BookDocument; tab: string 
                             {cell ? (
                               <MetricCell
                                 cell={cell}
+                                unit={column.unit}
                                 label={`${row.title} ${column.label} ${key}`}
                                 selected={selected === `${row.case_id}|${key}|${column.key}`}
                                 onSelect={(opener) => select(row, column, key, opener)}

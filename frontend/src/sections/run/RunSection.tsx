@@ -18,7 +18,7 @@ import { blockedByOf } from "./reason";
 import { RouteGraph } from "./RouteGraph";
 import type { GateView } from "./types";
 import { SEVERITY_BADGE, SeverityMark } from "@/chrome/SeverityMark";
-import { sentence, words } from "@/chrome/compose";
+import { isParked, sentence, words } from "@/chrome/compose";
 import { Badge } from "@/components/ui/badge";
 import { shortDigest, stamp } from "@/ds/format";
 import { NODE_SEVERITY } from "@/sections/analysis/tone";
@@ -147,7 +147,11 @@ export function RunSection({ document }: { document: RunSectionDocument; tab: st
                     data-latest={latest}
                     to={runHref(body.case_id, summary.run_id)}
                   >
-                    <span className="a">{sentence(summary.status)}</span>
+                    <span className="a" data-stop-code={summary.stop_code ?? undefined}>
+                      {isParked(summary)
+                        ? `Parked · ${summary.stop_code}`
+                        : sentence(summary.status)}
+                    </span>
                     <time dateTime={summary.created_at}>{stamp(summary.created_at)}</time>
                     <span>{label}</span>
                   </Link>

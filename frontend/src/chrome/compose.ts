@@ -12,7 +12,7 @@ import {
   type EnabledSection,
 } from "@/app/sections";
 import { stamp } from "@/ds/format";
-import { conclusionOf, handoffSeverity, moduleName } from "@/sections/analysis/modules";
+import { conclusionOf, handoffSeverity } from "@/sections/analysis/tone";
 import {
   SECTIONS,
   type Brief,
@@ -89,9 +89,21 @@ const verdict = (severity: Verdict["severity"], conclusion: string): Verdict => 
   blocked_on: null,
 });
 
+/** A run its worker parked (CF-044): it still reads RUNNING, and its stop code
+    is the one field saying nobody drives it until a retry requeues it. */
+export function isParked(run: { status: string; stop_code: string | null }): boolean {
+  return run.status === "RUNNING" && run.stop_code !== null;
+}
+
 function directory(document: DirectoryDocument): Facts {
   const cases = document.body.cases;
-  const running = cases.filter((row) => row.latest_run?.status === "RUNNING").length;
+  const runs = cases.flatMap((row) => (row.latest_run ? [row.latest_run] : []));
+  const parked = runs.filter(isParked).length;
+  const running = runs.filter((run) => run.status === "RUNNING").length - parked;
+  const said = [
+    running ? `${plural(running, "run")} in progress` : null,
+    parked ? `${plural(parked, "run")} parked` : null,
+  ].filter(Boolean);
   return {
     ribbon: QUIET,
     brief: {
@@ -99,14 +111,18 @@ function directory(document: DirectoryDocument): Facts {
         ? `${plural(cases.length, "case")} you hold standing on.`
         : "You hold standing on no case yet.",
       impact: null,
-      action: cases.length
-        ? "Open a case to read its analysis."
-        : "Create a case, or ask an administrator for standing on one.",
-      evidence: running ? `${plural(running, "run")} in progress.` : null,
+      action: parked
+        ? "Retry a parked run from its case's Run section."
+        : cases.length
+          ? "Open a case to read its analysis."
+          : "Create a case, or ask an administrator for standing on one.",
+      evidence: said.length ? `${said.join(", ")}.` : null,
       headline: String(cases.length),
       headline_label: noun(cases.length, "case"),
     },
-    verdict: verdict("IDLE", cases.length ? `${plural(cases.length, "case")}.` : "No cases yet."),
+    verdict: parked
+      ? verdict("WARNING", `${plural(parked, "run")} parked, waiting on a retry.`)
+      : verdict("IDLE", cases.length ? `${plural(cases.length, "case")}.` : "No cases yet."),
   };
 }
 
@@ -237,8 +253,8 @@ function analysis(document: AnalysisDocument): Facts {
   const tabs: Tab[] = handoffs.map((handoff) => ({
     id: handoff.route_node_id,
     label: handoff.module_id,
-    // A module the name map does not know reads as its id once, not twice.
-    cp: moduleName(handoff.module_id) === handoff.module_id ? null : moduleName(handoff.module_id),
+    // A module the catalog names only by its id reads as its id once, not twice.
+    cp: handoff.module_name === handoff.module_id ? null : handoff.module_name,
     severity: handoffSeverity(handoff),
     opens: handoff === conclusion,
   }));
@@ -251,7 +267,7 @@ function analysis(document: AnalysisDocument): Facts {
       action: weak.length
         ? `Review ${weak.join(", ")} before committee.`
         : pending.length
-          ? `Waiting on ${pending[0]!.module_id}.`
+          ? `Waiting on ${pending[0]!.module_name}.`
           : conclusion
             ? "Open Report to save a revision."
             : null,

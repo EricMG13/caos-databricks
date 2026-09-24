@@ -1,7 +1,39 @@
+import { DownloadIcon, FileTextIcon } from "lucide-react";
 import { sentence } from "@/chrome/compose";
+import { buttonVariants } from "@/components/ui/button";
+import { RefusedControl } from "@/controls/RefusedControl";
 import { scrollArtifact } from "@/controls/scroll";
 import { NoteList } from "@/ds/atoms";
+import type { Refusal } from "@/wire";
 import type { CommitteeDocument } from "@/wire/v1";
+
+/** The package is the filed revision's: a frozen one has none to download. */
+const PACKAGE_NOT_FILED: Refusal = {
+  code: "PACKAGE_NOT_FILED",
+  clears: "the revision is filed",
+};
+
+/** The saved paper as the renderer draws it, and once filed, the package
+    (N4). Both are the host's own reads; the page only links them. */
+function Downloads({ body }: { body: CommitteeDocument["body"] }) {
+  const look = buttonVariants({ variant: "outline", size: "sm" });
+  return (
+    <div className="flex flex-wrap items-start gap-2" data-committee-downloads>
+      <a className={look} href={body.render_url} data-committee-render>
+        <FileTextIcon aria-hidden="true" />
+        Open the rendered paper
+      </a>
+      {body.package_url ? (
+        <a className={look} href={body.package_url} download data-committee-package>
+          <DownloadIcon aria-hidden="true" />
+          Download the package (.zip)
+        </a>
+      ) : (
+        <RefusedControl refusal={PACKAGE_NOT_FILED}>Download the package (.zip)</RefusedControl>
+      )}
+    </div>
+  );
+}
 
 /* Keyboard scroll makes static, wide canonical text reachable in every browser. */
 /* eslint-disable jsx-a11y/no-noninteractive-element-interactions */
@@ -132,6 +164,7 @@ export function CommitteeSection({
             <dt>Payload</dt>
             <dd>sha256:{body.payload_sha256}</dd>
           </dl>
+          <Downloads body={body} />
         </div>
       </section>
       {body.artifacts.map((artifact) => (

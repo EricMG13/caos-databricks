@@ -239,6 +239,8 @@ export function RouteGraph({
                 className={cls}
                 data-node={node.module_id}
                 data-route-node={node.route_node_id}
+                // The card is sized for the id; the catalog's name is the tooltip.
+                title={node.module_name}
                 data-state={node.state}
                 data-blocking={blocking ? "yes" : "no"}
                 aria-pressed={on}

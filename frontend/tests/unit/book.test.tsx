@@ -7,7 +7,7 @@ import { PASSPORT_FIELDS } from "@/wire";
 import { BookSection } from "@/sections/book/BookSection";
 import { citationOf, passportOf, shownValue } from "@/sections/book/passport";
 import { tailed } from "@/app/authority";
-import { parseBookDocument, type BookDocument } from "@/wire/v1";
+import { parseBookDocument, type BookColumn, type BookDocument } from "@/wire/v1";
 
 const FIXTURE = resolve(process.cwd(), "fixtures", "book.json");
 
@@ -40,7 +40,7 @@ describe("the book", () => {
     mount();
     const table = screen.getByRole("table", { name: /BASE · FY2026/ });
     const row = within(table).getByRole("row", { name: /Carvana/ });
-    expect(within(row).getByRole("button", { name: /EBITDA margin.*0\.20$/ })).toBeVisible();
+    expect(within(row).getByRole("button", { name: /EBITDA margin.*20\.0%$/ })).toBeVisible();
     expect(row).toHaveTextContent("USD · millions");
   });
 
@@ -55,7 +55,7 @@ describe("the book", () => {
 
   test("selecting a cell opens the passport with its ten fields", () => {
     mount();
-    fireEvent.click(screen.getAllByRole("button", { name: /EBITDA margin.*0\.20$/ })[0]!);
+    fireEvent.click(screen.getAllByRole("button", { name: /EBITDA margin.*20\.0%$/ })[0]!);
     const dialog = screen.getByRole("dialog");
     const fields = [...dialog.querySelectorAll("[data-passport] > [data-passport-field]")].map(
       (element) => element.getAttribute("data-passport-field"),
@@ -67,7 +67,8 @@ describe("the book", () => {
     // apart in the passport rather than both reading NOT_DECLARED.
     expect(dialog).toHaveTextContent("Scenario");
     expect(dialog).toHaveTextContent("BASE");
-    expect(within(dialog).getByText("USD millions")).toBeVisible();
+    // A margin is a percentage: the row's currency is not its unit (N60).
+    expect(within(dialog).queryByText("USD millions")).toBeNull();
     // The analyst's declared reporting period, labelled as what it is: the
     // host derives no date from any admitted document.
     expect(dialog).toHaveTextContent("Reporting period");
@@ -79,16 +80,38 @@ describe("the book", () => {
     const doc = document();
     const cell = doc.body.rows[0]!.periods[0]!.cells[0]!;
     // Rounded for reading; the passport keeps the exact decimal.
-    expect(shownValue(cell)).toBe("500.00");
+    expect(shownValue(cell, "currency")).toBe("500.00");
     expect(cell.value).toBe("500.000000");
     expect(
-      shownValue({
-        ...cell,
-        value: null,
-        unavailable_reason: "ZERO_OR_NEGATIVE_DENOMINATOR",
-      }),
+      shownValue(
+        {
+          ...cell,
+          value: null,
+          unavailable_reason: "ZERO_OR_NEGATIVE_DENOMINATOR",
+        },
+        "percent",
+      ),
     ).toBe("ZERO_OR_NEGATIVE_DENOMINATOR");
-    expect(shownValue({ ...cell, value: null })).toBe("Not served");
+    expect(shownValue({ ...cell, value: null }, "currency")).toBe("Not served");
+  });
+
+  test("a cell reads in the unit its column declares, and only currency takes the row's (N60)", () => {
+    const doc = document();
+    const row = doc.body.rows[0]!;
+    const cell = row.periods[0]!.cells[0]!;
+    const at = (value: string, unit: BookColumn["unit"]) => shownValue({ ...cell, value }, unit);
+    expect(at("0.2000", "percent")).toBe("20.0%");
+    expect(at("-0.05", "percent")).toBe("-5.0%");
+    expect(at("1.23456", "percent")).toBe("123.5%");
+    expect(at("-0.0001", "percent")).toBe("0.0%");
+    expect(at("3.456", "multiple")).toBe("3.46x");
+    expect(at("1234.5", "count")).toBe("1,235");
+    expect(at("500.000000", "currency")).toBe("500.00");
+    expect(at("7", "none")).toBe("7.00");
+    const revenue = doc.body.columns.find((column) => column.unit === "currency")!;
+    const margin = doc.body.columns.find((column) => column.unit === "percent")!;
+    expect(passportOf(row, revenue, cell, doc.observed_at).unit).toBe("USD millions");
+    expect(passportOf(row, margin, cell, doc.observed_at).unit).toBeNull();
   });
 
   test("a passport citation names its document, page and quote and claims no rectangle", () => {

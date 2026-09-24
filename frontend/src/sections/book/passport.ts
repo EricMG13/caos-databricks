@@ -30,14 +30,31 @@ export function citationOf(fact: CitationView, observedAt: string): Citation {
   };
 }
 
-/** What the cell shows in the passport's value line: the figure, or the typed
-    reason the projection has none for it. */
-/** What a cell reads: the figure rounded for display, or why there is none.
-    The passport carries the exact decimal. */
-export function shownValue(cell: BookCell): string {
-  return cell.value === null
-    ? (cell.unavailable_reason ?? "Not served")
-    : displayDecimal(cell.value);
+/** A fraction as a percentage: the point moved two places on the digits,
+    never through a float (`0.2034` is `20.34`). */
+function hundredfold(value: string): string {
+  const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(value);
+  if (!match) return value;
+  const [, sign, whole, fraction = ""] = match;
+  const digits = fraction.padEnd(2, "0");
+  const rest = digits.slice(2);
+  return `${sign}${BigInt(whole + digits.slice(0, 2))}${rest ? `.${rest}` : ""}`;
+}
+
+/** How each unit the column declares reads (N60). A currency figure's
+    currency and scale are the row's, stated beside it. */
+const SHOWN: Record<BookColumn["unit"], (value: string) => string> = {
+  percent: (value) => `${displayDecimal(hundredfold(value), 1)}%`,
+  multiple: (value) => `${displayDecimal(value)}x`,
+  count: (value) => displayDecimal(value, 0),
+  currency: (value) => displayDecimal(value),
+  none: (value) => displayDecimal(value),
+};
+
+/** What a cell reads: the figure rounded for display in its column's unit,
+    or the typed reason the projection has none for it. */
+export function shownValue(cell: BookCell, unit: BookColumn["unit"]): string {
+  return cell.value === null ? (cell.unavailable_reason ?? "Not served") : SHOWN[unit](cell.value);
 }
 
 export function passportOf(
@@ -54,8 +71,11 @@ export function passportOf(
   }));
   return {
     label: `${row.title} · ${column.label}`,
-    value: shownValue(cell),
-    unit: row.currency && row.scale ? `${row.currency} ${row.scale}` : null,
+    value: shownValue(cell, column.unit),
+    unit:
+      column.unit === "currency" && row.currency && row.scale
+        ? `${row.currency} ${row.scale}`
+        : null,
     definition: passport.definition,
     period: passport.period,
     scenario: passport.scenario,

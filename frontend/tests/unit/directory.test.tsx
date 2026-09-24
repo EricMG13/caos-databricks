@@ -92,6 +92,30 @@ describe("Directory", () => {
     expect(tr.querySelector("time")).toHaveAttribute("dateTime", row.created_at);
   });
 
+  test("a parked latest run reads parked with its stop code, not running (CF-044)", () => {
+    const first = fixture.body.cases[0]!;
+    const one: DirectoryDocument = {
+      ...fixture,
+      body: {
+        cases: [
+          {
+            ...first,
+            latest_run: {
+              ...first.latest_run!,
+              status: "RUNNING",
+              stop_code: "BUDGET_CEILING_REACHED",
+            },
+          },
+        ],
+      },
+    };
+    const { container } = mount(one);
+    const row = container.querySelector<HTMLElement>(`tr[data-case="${first.case_id}"]`)!;
+    expect(row).toHaveTextContent("Parked");
+    expect(row.querySelector("[data-stop-code]")).toHaveTextContent("BUDGET_CEILING_REACHED");
+    expect(row).not.toHaveTextContent("Running");
+  });
+
   test("a case with no run yet reads 'No runs yet' rather than a blank cell", () => {
     const one: DirectoryDocument = {
       ...fixture,
