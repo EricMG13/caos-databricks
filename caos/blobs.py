@@ -191,6 +191,25 @@ class BlobStore:
         self._sync_directory(destination.parent)
         return digest
 
+    def put_both(self, first: bytes, second: bytes) -> tuple[str, str]:
+        """`put` two blobs as one unit: both digests, or `STORE_UNAVAILABLE`.
+
+        A module's handoff and its host record -- or a replayed outcome's
+        same pair -- are accepted together or not at all, so a write failing
+        partway must not leave an attempt accepted on half a pair. The second
+        `put` after the first has already faulted would carry no useful
+        context, so the raw fault is swallowed here and every caller sees one
+        typed refusal instead of writing this same three-line guard itself.
+        """
+        stored: tuple[str, str] | None = None
+        try:
+            stored = self.put(first), self.put(second)
+        except (OSError, Refusal):
+            pass  # raised below, outside the handler: no context carried
+        if stored is None:
+            raise Refusal(RefusalCode.STORE_UNAVAILABLE)
+        return stored
+
     @staticmethod
     def _stage(data: bytes, directory: Path) -> Path:
         """`data` in a durable file beside where it is going."""

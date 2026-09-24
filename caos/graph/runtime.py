@@ -487,13 +487,7 @@ def _settle(
         code = replayed.code or RefusalCode.PROVIDER_RESPONSE_INVALID
         record_refusal(conn, attempt_id=replayed.attempt_id, code=code, lease=lease)
         raise Refusal(code)
-    stored: tuple[str, str] | None = None
-    try:
-        stored = blobs.put(outcome.markdown), blobs.put(outcome.record)
-    except (OSError, Refusal):
-        pass  # raised below, outside the handler: no context carried
-    if stored is None:
-        raise Refusal(RefusalCode.STORE_UNAVAILABLE)
+    stored = blobs.put_both(outcome.markdown, outcome.record)
     accept_attempt(
         conn,
         attempt_id=replayed.attempt_id,
