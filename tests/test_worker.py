@@ -29,7 +29,7 @@ from caos import provider as provider_module
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
 from caos.graph import worker
-from caos.graph.route import ResolvedRoute
+from caos.graph.route import ResolvedRoute, route_digest
 from caos.graph.runtime import Execution, Provider, ProviderResult
 from caos.graph.worker import (
     WorkerConfig,
@@ -1260,6 +1260,105 @@ def test_a_worker_that_lost_its_lease_leaves_the_holder_s_thread(
         assert taken and taken[0] is not None and taken[0].token == 2
         assert work_row(run.conn, run.run_id)[:3] == ("CLAIMED", None, "worker-b")
         assert saver.get_tuple(thread_config(thread)) is not None, "B's thread stays"
+    finally:
+        close_checkpointer(saver)
+
+
+@dataclass(frozen=True)
+class _Abandoned:
+    """A provider whose first node finds its own claim already abandoned and
+    cancelled from elsewhere, after a straggler checkpoint write the ending
+    transaction could not have caught (F218's residual race)."""
+
+    inner: Provider
+    late_write: Callable[[], None]
+
+    @property
+    def model(self) -> str:
+        return self.inner.model
+
+    def check_context(self, route_node_id: str, module_id: str) -> int:
+        self.late_write()
+        raise Refusal(RefusalCode.NODE_ALREADY_ACCEPTED)
+
+    def execute(
+        self, route_node_id: str, module_id: str, *, attempt_id: UUID
+    ) -> ProviderResult:
+        return self.inner.execute(route_node_id, module_id, attempt_id=attempt_id)
+
+
+def test_a_late_checkpoint_write_after_an_abandoned_cancel_is_still_forgotten(
+    enqueued: _Run, empty_database: str
+) -> None:
+    """F218's residual race: a cancel that finds this worker's lease already
+    expired ends the run CANCELLED and forgets the thread in its own
+    transaction, but this worker -- unaware -- can still write one more
+    checkpoint after that commits, and those rows then stay for ever.
+
+    This worker's own next write now finds the run no longer its own --
+    `LEASE_NOT_HELD`, not merely a lease another live holder took, since the
+    row is `DONE` -- and `_forget` reads the run's own status fresh rather
+    than trusting the refusal's code alone: CANCELLED, not RUNNING, so the
+    straggler is forgotten too.
+    """
+    from dataclasses import replace
+
+    from langgraph.checkpoint.base import empty_checkpoint
+
+    from caos.graph.build import thread_config
+    from caos.graph.checkpoint import checkpointer, close_checkpointer
+    from caos.store import connect
+
+    run = enqueued
+    thread = f"{run.run_id}:{route_digest(run.route)}"
+    saver = checkpointer(empty_database)
+
+    def late_write() -> None:
+        # A separate connection, as the cancel command itself is: `run.conn`
+        # is mid-node on the worker's own, and must stay that way.
+        with connect(empty_database) as other:
+            other.execute(
+                "UPDATE run_work SET lease_expires_at = clock_timestamp()"
+                " - interval '1 second' WHERE run_id = %s",
+                (run.run_id,),
+            )
+            other.commit()
+        assert _cancel_from_elsewhere(empty_database, run.run_id) is True
+        # The straggler: a checkpoint write that lands after the cancel's own
+        # unit already deleted the thread, exactly what F218 could not catch.
+        position = thread_config(thread)
+        position["configurable"]["checkpoint_ns"] = ""
+        saver.put(position, empty_checkpoint(), {}, {})
+        assert saver.get_tuple(thread_config(thread)) is not None, (
+            "the straggler landed"
+        )
+
+    base = module_execution(
+        CanonicalCompletions(run.source_id),
+        priced(ESTIMATE),
+        run.bundle,
+        run.blobs,
+        saver,
+    )
+
+    def execution_for(conn: StoreConnection, run_id: UUID, lease: Lease) -> Execution:
+        built = base(conn, run_id, lease)
+        return replace(built, provider=_Abandoned(built.provider, late_write))
+
+    try:
+        claimed = work_once(
+            run.conn,
+            run.blobs,
+            execution_for=execution_for,
+            config=CONFIG,
+            stopping=Event(),
+        )
+        assert claimed == run.run_id
+        assert run_status(run.conn, run.run_id) is RunStatus.CANCELLED
+        run.conn.rollback()
+        assert saver.get_tuple(thread_config(thread)) is None, (
+            "the straggler is forgotten"
+        )
     finally:
         close_checkpointer(saver)
 
