@@ -14,8 +14,8 @@ request reaches a file or a route before the edge has admitted it. Behind it:
   section's `/<section>/` (with or without its slash, with any query) serve the
   exported `index.html`, which routes on the client; anything else is a file
   under the root or 404. A directory is never listed, a path that normalises
-  outside the root and a symlink resolving outside it are 404, and any other
-  method is 405. Both carry no body.
+  outside the root and a symlink resolving outside it are 404, nothing is
+  ever redirected (C1), and any other method is 405. Both carry no body.
 
 The root is read from the environment on every use, like the edge's mode. With
 it unset every non-API path is 404; set without an `index.html`, boot refuses
@@ -27,11 +27,11 @@ from __future__ import annotations
 import os
 import re
 from pathlib import Path
-from urllib.parse import urlsplit
 
 from starlette.exceptions import HTTPException
+from starlette.responses import Response
 from starlette.staticfiles import StaticFiles
-from starlette.types import ASGIApp, Message, Receive, Scope, Send
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from caos.api.app import app
 from caos.api.edge import EdgeGuard, is_api_path, startup_failed
@@ -93,39 +93,26 @@ async def _bare(send: Send, status: int) -> None:
     await send({"type": "http.response.body", "body": b""})
 
 
-def _as_relative(location: bytes) -> bytes:
-    """A `Location`'s path and query alone (CF-086): a relative reference
-    resolves against the request's own URL, so it names the same place
-    without ever repeating a `Host` the response quoted -- over any scheme,
-    and whatever that header held."""
-    parts = urlsplit(location.decode("latin-1"))
-    relative = parts.path + (f"?{parts.query}" if parts.query else "")
-    return relative.encode("latin-1")
+class _Export(StaticFiles):
+    """The export's files, with no redirect of any kind (C1).
 
-
-def _relative_redirects(send: Send) -> Send:
-    """Rewrite any `Location` on a redirect to a relative reference.
-
-    Starlette's static-file handler answers a directory request missing its
-    trailing slash with a 307 whose `Location` it builds from `URL(scope=
-    scope)` -- the request's own `Host` header, over whatever scheme
-    `serve.py`'s `proxy_headers=False` leaves in scope. A client's `Host` is
-    never trusted for anything the wire carries back to it.
+    Starlette answers a directory request missing its trailing slash with a
+    307 built from the request itself: first its `Host` (CF-086), and, once
+    that was rewritten to a relative reference, its path -- which uvicorn
+    percent-decodes, so `/%2Fevil.example%2F..` arrived as
+    `//evil.example/..`, normalised to the root and came back as the
+    scheme-relative `Location: //evil.example/../` a browser follows off the
+    app's origin. Nothing the export serves needs a redirect: the workspace
+    paths are rewritten to `/` before this runs, and any other directory is
+    404 without its slash and its own index with it. A response that would
+    carry a `Location` is refused before a byte of it is sent.
     """
 
-    async def wrapped(message: Message) -> None:
-        if message["type"] == "http.response.start" and message["status"] in (
-            307,
-            308,
-        ):
-            rewritten = [
-                (name, _as_relative(value) if name.lower() == b"location" else value)
-                for name, value in message.get("headers", [])
-            ]
-            message = {**message, "headers": rewritten}
-        await send(message)
-
-    return wrapped
+    async def get_response(self, path: str, scope: Scope) -> Response:
+        response = await super().get_response(path, scope)
+        if "location" in response.headers:
+            raise HTTPException(status_code=404)
+        return response
 
 
 async def _static(scope: Scope, receive: Receive, send: Send) -> None:
@@ -139,9 +126,9 @@ async def _static(scope: Scope, receive: Receive, send: Send) -> None:
     path = scope.get("path", "")
     if _WORKSPACE.match(path):
         scope = {**scope, "path": "/", "raw_path": b"/", "root_path": ""}
-    files = StaticFiles(directory=root, html=True, follow_symlink=False)
+    files = _Export(directory=root, html=True, follow_symlink=False)
     try:
-        await files(scope, receive, _relative_redirects(send))
+        await files(scope, receive, send)
     except HTTPException as refused:
         await _bare(send, refused.status_code)
 
