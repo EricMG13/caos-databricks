@@ -29,6 +29,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
+from graphlib import CycleError, TopologicalSorter
 from hashlib import sha256
 from json import dumps
 from typing import Any
@@ -249,26 +250,30 @@ def dependency_order(
     if len(set(modules)) != len(modules):
         raise Refusal(RefusalCode.ROUTE_DUPLICATE_MODULE)
 
-    incoming = {node.module_id: 0 for node in nodes}
+    by_module = {node.module_id: node for node in nodes}
+    sorter: TopologicalSorter[str] = TopologicalSorter()
+    for module_id in by_module:
+        sorter.add(module_id)
     for edge in edges:
-        incoming[edge.target] += 1
+        sorter.add(edge.target, edge.source)
 
-    remaining = {node.module_id: node for node in nodes}
+    try:
+        sorter.prepare()
+    except CycleError as exc:
+        # The catalog is a DAG; a cycle means the pin would never resolve.
+        raise Refusal(RefusalCode.ROUTE_HAS_A_CYCLE) from exc
+
     ordered: list[RouteNode] = []
-    while remaining:
+    while sorter.is_active():
         ready = sorted(
-            (node for module_id, node in remaining.items() if not incoming[module_id]),
-            key=lambda node: (node.stage, node.route_node_id),
+            sorter.get_ready(),
+            key=lambda module_id: (
+                by_module[module_id].stage,
+                by_module[module_id].route_node_id,
+            ),
         )
-        if not ready:
-            # The catalog is a DAG; a cycle means the pin would never resolve.
-            raise Refusal(RefusalCode.ROUTE_HAS_A_CYCLE)
-        for node in ready:
-            ordered.append(node)
-            del remaining[node.module_id]
-            for edge in edges:
-                if edge.source == node.module_id:
-                    incoming[edge.target] -= 1
+        ordered.extend(by_module[module_id] for module_id in ready)
+        sorter.done(*ready)
     return tuple(ordered)
 
 
