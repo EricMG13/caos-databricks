@@ -1520,7 +1520,7 @@ def test_a_straggler_is_forgotten_when_the_pass_stops_or_its_store_faults(
 
     fault = worker._Stopping if ending == "stopping" else psycopg.OperationalError
     base = module_execution(
-        CanonicalCompletions(run.source_id),
+        CanonicalCompletions(run.source_id, price=RUN_AT),
         priced(ESTIMATE),
         run.bundle,
         run.blobs,
@@ -1851,7 +1851,9 @@ def test_a_paid_call_s_bill_outwaits_a_held_case_lock_under_the_worker_s_bounds(
             holders.append(_case_lock_held(empty_database, run.run_id, held))
             assert held.wait(5)
 
-    completions = CanonicalCompletions(run.source_id, during=lock_during_the_first_call)
+    completions = CanonicalCompletions(
+        run.source_id, during=lock_during_the_first_call, price=RUN_AT
+    )
     try:
         claimed = work_once(
             worker_conn,
