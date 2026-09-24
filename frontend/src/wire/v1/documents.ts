@@ -423,8 +423,8 @@ const AnalysisDocument = sectionDocument(AnalysisBody);
 
 // A projected value's own dimension (R24-12): MONEY for an `_amount`, in the
 // forecast's own currency and scale; MULTIPLE for the leverage/coverage
-// family; RATIO for the one margin, shown unscaled (a Model reader performs
-// no arithmetic on the server's decimal strings).
+// family; RATIO for the margin and FCF over debt (N3), shown unscaled (a
+// Model reader performs no arithmetic on the server's decimal strings).
 const ModelUnit = enumOf(["MONEY", "MULTIPLE", "RATIO"]);
 const ModelValue = object({
   name: short,

@@ -124,7 +124,11 @@ def test_model_reads_only_the_accepted_cp_cf_projection(
     assert values["debt.closing"]["unit"] == "MONEY"
     assert values["metrics.gross_leverage"]["unit"] == "MULTIPLE"
     assert values["metrics.net_leverage"]["unit"] == "MULTIPLE"
+    assert values["metrics.interest_coverage"]["unit"] == "MULTIPLE"
     assert values["operating.margin"]["unit"] == "RATIO"
+    # N3: FCF over debt is a fraction of the debt, which credit practice
+    # states as a percentage -- never a multiple of it.
+    assert values["metrics.fcf_to_debt"]["unit"] == "RATIO"
     assert period["unavailable_reason"] is None
     assert all(v["unavailable_reason"] is None for v in values.values())
     row = harness.conn.execute(

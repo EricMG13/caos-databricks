@@ -114,17 +114,22 @@ def accepted_forecast(
     )
 
 
-# The one ratio the calculator computes as a margin
-# (`_ratio(ebitda, revenue)` in `caos/calculators/cash_flow.py`) rather than a
-# leverage/coverage multiple: the one dimensionless leaf this reader labels a
-# ratio instead of a multiple (R24-12). It stays unscaled -- a Model reader
-# performs no arithmetic on the server's decimal strings, so "correctly
-# scaled" would mean host-side scaling, and margin is not the canonical
-# calculator's own concern to re-cast. Every other `_ratio`-shaped leaf (the
-# "metrics" group: gross/net leverage, interest coverage, FCF/debt) is a
-# multiple; a leaf that is not ratio-shaped -- came from `_amount`, not
-# `_ratio` -- is money, in the forecast's own currency and scale.
-_RATIO_UNITS = {"operating.margin": ModelUnit.RATIO}
+# The two ratios the calculator computes as a fraction of a whole
+# (`caos/calculators/cash_flow.py`): the margin, `_ratio(ebitda, revenue)`,
+# and FCF over debt, `_ratio(fcf, debt)` -- each a share its reader states as
+# a percentage, never a multiple (R24-12; N3 moved FCF/debt, which was labelled
+# a multiple and read as "0.0450x"). Both stay unscaled: a Model reader
+# performs no arithmetic on the server's decimal strings, so "a percentage"
+# would mean host-side scaling, and the label says what the figure is. The
+# Book shows the margin as a percent column moved on its digits (N60), which
+# is the same figure under its own explicit unit. Every other `_ratio`-shaped
+# leaf (gross and net leverage, interest coverage) is a multiple; a leaf that
+# is not ratio-shaped -- came from `_amount`, not `_ratio` -- is money, in the
+# forecast's own currency and scale.
+_RATIO_UNITS = {
+    "operating.margin": ModelUnit.RATIO,
+    "metrics.fcf_to_debt": ModelUnit.RATIO,
+}
 
 
 def _unit(name: str, *, is_ratio: bool) -> ModelUnit:

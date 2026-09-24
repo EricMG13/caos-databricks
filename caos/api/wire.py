@@ -751,9 +751,10 @@ class ModelUnit(StrEnum):
     """A projected value's own dimension (R24-12): the calculator's `_amount`
     values are money, in the forecast's stated currency and scale; its
     `_ratio` values are dimensionless -- a multiple for the leverage/coverage
-    family (`metrics.*`), an explicit ratio for the one margin (never a
-    percentage relabelled without the scaling that would take, since a Model
-    reader performs no arithmetic on the server's decimal strings). Closed."""
+    family, an explicit ratio for the margin and FCF over debt (N3), each a
+    share of a whole, never a percentage relabelled without the scaling that
+    would take, since a Model reader performs no arithmetic on the server's
+    decimal strings. Closed."""
 
     MONEY = "MONEY"
     MULTIPLE = "MULTIPLE"
