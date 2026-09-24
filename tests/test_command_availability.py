@@ -625,7 +625,7 @@ def test_a_frozen_head_offers_no_save_until_it_is_filed() -> None:
     the code its commit answers until the frozen revision is filed, and
     offered again once it is."""
 
-    def save_on(*, frozen: bool, filed: bool) -> str | None:
+    def save_on(*, frozen: bool, filed: bool) -> RefusalCode | None:
         facts = FilingFacts(
             signed=frozen,
             frozen=frozen,
@@ -635,7 +635,7 @@ def test_a_frozen_head_offers_no_save_until_it_is_filed() -> None:
             head=True,
         )
         [save, *_] = report_actions(GlobalRole.ANALYST, Standing.WRITER, facts)
-        return save.refusal and save.refusal.code
+        return None if save.refusal is None else save.refusal.code
 
     assert save_on(frozen=False, filed=False) is None
     assert save_on(frozen=True, filed=False) == "DELIVERABLE_ALREADY_FROZEN"
