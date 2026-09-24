@@ -166,7 +166,10 @@ def _exact(cell: str) -> Decimal | None:
         value = Decimal(plain)
     except InvalidOperation:  # `1.2.3`: the bundle refuses it before this
         return None
-    return -value if negative else value
+    # `copy_negate`, not unary minus: that rounds to the ambient context's
+    # precision and raises past its exponent range (R24-10), where the
+    # positive figure is read exactly and bounded by `_plain` alone.
+    return value.copy_negate() if negative else value
 
 
 def _separated(core: str) -> str | None:
