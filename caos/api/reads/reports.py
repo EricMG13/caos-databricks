@@ -10,6 +10,7 @@ the filing chain's front door: nothing else in the workspace sets `?revision`.
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from hashlib import sha256
 from typing import Annotated, Any
 from uuid import UUID
@@ -30,12 +31,15 @@ from caos.api.deps import (
     revision_query,
 )
 from caos.api.wire import REVISIONS_MAX, CommitteeDocument, ReportDocument
+from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
 from caos.deliverable.canonical import Revision, canonical_payload
 from caos.deliverable.filing import revision_signatures
 from caos.deliverable.receipts import read_filed_receipt
 from caos.deliverable.revisions import prove_revision, read_revision
+from caos.methodology.bundle import Bundle
 from caos.refusals import Refusal, RefusalCode
+from caos.store import StoreConnection
 from caos.store.audit import audit_head, audit_trail, verify_chain
 from caos.store.commands import payload_digests
 from caos.store.members import Standing, standing_of
@@ -169,25 +173,11 @@ def _read(  # noqa: PLR0913 -- both documents share one authorization/proof unit
             raise Refusal(RefusalCode.DELIVERABLE_NOT_FOUND)
         selected, digest, observed_at, head = row
         revision = UUID(str(selected))
-        publication = _publication(conn, case_id, revision, digest) if committee else {}
-        if publication.get("state") == "filed":
-            publication["receipt"] = json.loads(
-                read_filed_receipt(
-                    conn,
-                    blobs,
-                    case_id=case_id,
-                    run_id=run,
-                    revision_id=revision,
-                )
-            )
-            payload = read_revision(conn, blobs, case_id=case_id, revision_id=revision)
+        proof = ProvenRevision(conn, blobs, bundle, case_id, run, revision, digest)
+        if committee:
+            publication, payload = proven_revision(proof)
         else:
-            data = prove_revision(
-                conn, blobs, bundle, case_id=case_id, revision_id=revision
-            )
-            if sha256(data).hexdigest() != digest:
-                raise Refusal(RefusalCode.DELIVERABLE_PAYLOAD_INVALID)
-            payload = json.loads(data)
+            publication, payload = {}, _reproven(proof)
         return dict(
             chrome=dict(
                 subject=dict(case_id=case_id, title=payload["case_title"]),
@@ -269,6 +259,86 @@ def _unsaved(  # noqa: PLR0913 -- the read's caller, selection and stores
         status="complete",
         notes=[],
     )
+
+
+@dataclass(frozen=True, slots=True)
+class ProvenRevision:
+    """One saved revision a read proves, and what it proves it with: the
+    request's store and blobs, the process's bundle, and the revision's run
+    and stored digest as the read selected them."""
+
+    conn: StoreConnection
+    blobs: BlobStore
+    bundle: Bundle
+    case_id: UUID
+    run: UUID
+    revision: UUID
+    digest: str
+
+
+def proven_revision(proof: ProvenRevision) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Committee's proof of a frozen or filed revision, and its payload (W2).
+
+    The publication, its signatures and the audit provenance of every act
+    (`_publication`); then, filed, the receipt `read_filed_receipt` proves and
+    the stored payload, or, frozen, the payload re-derived from the run as it
+    stands (`prove_revision`), so a withdrawn source refuses it. The render
+    and package downloads (`caos/api/reads/deliverable.py`) run this same
+    proof, so neither serves a revision this section refuses.
+    """
+    publication = _publication(proof.conn, proof.case_id, proof.revision, proof.digest)
+    if publication["state"] == "filed":
+        return publication, _filed(proof, publication)
+    return publication, _reproven(proof)
+
+
+def proven_filing(proof: ProvenRevision) -> tuple[dict[str, Any], dict[str, Any]]:
+    """`proven_revision` for a revision that must already be filed: an unfiled
+    one, frozen or not, is `DELIVERABLE_NOT_FOUND` -- no filing of it exists
+    to name -- before its payload is re-derived for nothing."""
+    try:
+        publication = _publication(
+            proof.conn, proof.case_id, proof.revision, proof.digest
+        )
+    except Refusal as refused:
+        if refused.code is not RefusalCode.DELIVERABLE_NOT_FROZEN:
+            raise
+        raise Refusal(RefusalCode.DELIVERABLE_NOT_FOUND) from None
+    if publication["state"] != "filed":
+        raise Refusal(RefusalCode.DELIVERABLE_NOT_FOUND)
+    return publication, _filed(proof, publication)
+
+
+def _filed(proof: ProvenRevision, publication: dict[str, Any]) -> dict[str, Any]:
+    """A filed revision's proven receipt, set on `publication`, and its own
+    stored payload: a filed record is served from its bytes, never live state."""
+    publication["receipt"] = json.loads(
+        read_filed_receipt(
+            proof.conn,
+            proof.blobs,
+            case_id=proof.case_id,
+            run_id=proof.run,
+            revision_id=proof.revision,
+        )
+    )
+    return read_revision(
+        proof.conn, proof.blobs, case_id=proof.case_id, revision_id=proof.revision
+    )
+
+
+def _reproven(proof: ProvenRevision) -> dict[str, Any]:
+    """The saved payload re-derived from the run as it stands, and still the
+    digest the read selected."""
+    data = prove_revision(
+        proof.conn,
+        proof.blobs,
+        proof.bundle,
+        case_id=proof.case_id,
+        revision_id=proof.revision,
+    )
+    if sha256(data).hexdigest() != proof.digest:
+        raise Refusal(RefusalCode.DELIVERABLE_PAYLOAD_INVALID)
+    return dict(json.loads(data))
 
 
 def _revisions(conn: Store, case_id: UUID, run: UUID) -> list[dict[str, Any]]:
