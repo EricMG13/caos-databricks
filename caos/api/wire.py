@@ -90,6 +90,12 @@ BOOK_CASES_MAX = 4  # "Two to four credits side by side" (IA_SPEC.md 4.4)
 BOOK_COLUMNS_MAX = 16  # the host-declared columns of the CP-CF projection
 BOOK_PERIODS_MAX = 8  # beyond it a row is partial, `LIST_TRUNCATED`
 BRIEF_QUESTIONS_MAX = 32  # `CP_DR_RESEARCH_BRIEF_V1.md`'s bounded batch
+# The whole brief, as `caos.store.run_inputs` pins it and CP-DR reads it: its
+# canonical JSON is at most 64 KiB. Every field above may be at its own bound
+# only while the whole stays under this one; a brief past it is refused as
+# the brief (`RESEARCH_BRIEF_INVALID`), and the pin's body is sized to carry
+# any brief under it (`caos.api.commands.runs.PIN_INPUT_BODY_BYTES`, N1).
+BRIEF_BYTES = 65_536
 
 Id = Annotated[str, Field(max_length=ID_CHARS)]
 Text = Annotated[str, Field(max_length=TEXT_CHARS)]

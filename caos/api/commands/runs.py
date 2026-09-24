@@ -16,6 +16,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from caos.api.commands._request import (
+    MAX_BODY_BYTES,
     CommandRequest,
     Key,
     governed,
@@ -33,6 +34,7 @@ from caos.api.deps import (
     Store,
 )
 from caos.api.wire import (
+    BRIEF_BYTES,
     ApproveGate,
     CreateRun,
     GateApproved,
@@ -95,6 +97,14 @@ PREVIEW_IO = PINNED_INPUT_IO + 2  # standing; ownership, pin and clock
 # Ownership 1; `release_gate_in`: run lock, preview, live sources, upsert.
 APPROVE_IO = REPLAY_IO + UNIT_IO + 1 + 4 + PINNED_INPUT_IO + 2
 IO_BUDGET = max(SUCCESSOR_RUN_IO, PIN_INPUT_IO, PREVIEW_IO, APPROVE_IO)
+# N1: every command body is held to `MAX_BODY_BYTES`, and a pin's carries a
+# research brief the store admits up to `BRIEF_BYTES` of canonical JSON, so a
+# twenty-question brief the wire and the store both accept was refused as a
+# malformed body. The pin's body carries the brief twice over -- a client that
+# escapes its non-ASCII text as `\uXXXX` doubles the three-byte characters
+# most scripts need -- and the usual bound besides for the subject and the
+# rest. Past the store's own bound the brief is `RESEARCH_BRIEF_INVALID`.
+PIN_INPUT_BODY_BYTES = 2 * BRIEF_BYTES + MAX_BODY_BYTES
 
 _GATES = {"source-set": Gate.SOURCE_SET, "research-plan": Gate.RESEARCH_PLAN}
 
@@ -198,7 +208,9 @@ def pin_input(  # noqa: PLR0913 -- identity, key, floor, body, path, store, bund
     key: Key,
     _standing: Writer,
     run: RunPath,
-    body: Annotated[PinRunInput, Depends(json_body(PinRunInput))],
+    body: Annotated[
+        PinRunInput, Depends(json_body(PinRunInput, max_bytes=PIN_INPUT_BODY_BYTES))
+    ],
     case_id: CasePath,
     conn: Store,
     bundle: Methodology,

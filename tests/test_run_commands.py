@@ -20,10 +20,11 @@ from run_terminals import fail_run
 
 from caos.api import app as app_module
 from caos.api.commands import runs as runs_command
+from caos.api.commands._request import MAX_BODY_BYTES
 from caos.api.commands.runs import Brief, brief_refused
 from caos.api.deps import methodology_bundle, store_connection
 from caos.api.reads import run as run_read
-from caos.api.wire import CLEARS
+from caos.api.wire import CLEARS, PinRunInput
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
 from caos.evidence.ingest import Document, admit_pack
@@ -632,6 +633,59 @@ def test_brief_refused_blames_the_brief_only_when_the_brief_is_at_fault(
     assert refused(lite, linked) is True
     assert refused(lite, None) is False
     assert refused(uuid4(), linked) is False
+
+
+def _questions(count: int, prose: str) -> list[dict[str, str]]:
+    return [
+        {
+            "question_id": f"RQ-{index:02d}",
+            "question": prose,
+            "decision_relevance": prose,
+            "consumer_module_id": "NONE",
+            "after_module_id": "CP-0",
+            "evidence_needed": prose,
+            "completion_test": prose,
+        }
+        for index in range(count)
+    ]
+
+
+def test_the_pin_carries_every_brief_the_store_admits(
+    client: TestClient, case: tuple[StoreConnection, UUID], sourced: UUID
+) -> None:
+    """N1. The wire admits 32 questions of seven fields and the store a
+    canonical brief of 64 KiB, but every command body was held to 16 KiB, so
+    a twenty-question brief of about 20 KB was refused `REQUEST_INVALID`. The
+    pin's body now admits the brief the store does; past the store's own
+    bound the brief is refused as the brief, and past the body's the body."""
+    conn, case_id = case
+    writer = member(conn, case_id)
+    prose = (
+        "Whether the issuer's reported undrawn committed facilities at year end "
+        "cover the next twelve months of scheduled maturities and interest, "
+        "net of restricted cash and any springing covenant limiting drawings."
+    )
+
+    def pin(questions: list[dict[str, str]]) -> Response:
+        body = {
+            "subject": SUBJECT,
+            "research": {**RESEARCH_BRIEF, "questions": questions},
+        }
+        assert PinRunInput.model_validate(body)
+        run = _research_run(client, case_id, writer)
+        return _send(client, _path(case_id, run, "input"), writer, body)
+
+    twenty = pin(_questions(20, prose))
+    assert twenty.status_code == 200, twenty.text
+    stored = load_run_input(conn, UUID(twenty.json()["run_id"]))
+    conn.rollback()
+    assert stored is not None and stored.research_json is not None
+    assert len(stored.research_json.encode()) > MAX_BODY_BYTES
+
+    over_store = pin(_questions(32, prose * 3))
+    assert _outcome(over_store) == "400 RESEARCH_BRIEF_INVALID"
+    over_body = pin(_questions(32, prose * 19))
+    assert _outcome(over_body) == "400 REQUEST_INVALID"
 
 
 def test_a_decomposed_brief_is_pinned_as_its_composed_text(
