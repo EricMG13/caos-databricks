@@ -96,9 +96,26 @@ Health must answer 200 with `python_version` starting `3.13` and `status: ready`
 
 ## 6. Rolling back a release
 
-A rollback is a redeploy: check out the previous commit and run the same one command (section 3) against it, or run section 3a by hand at that commit. There is no separate rollback path or script, because there is nothing else to run -- `bundle deploy` overwrites the app's code and restarts it on whatever commit is checked out, the same as any other release.
+The store runs only code whose migration list is its own: a release's first boot applies its migrations (`apply_schema`), and from then on code with a shorter or different list is refused at boot with `STORE_SCHEMA_DRIFT` and does not start. Migrations are forward-only, with no "down" migration. So a rollback is a redeploy only when the older commit carries exactly the release's migrations. Decide that first, from the release's own checkout, before checking anything else out (C1):
 
-What a rollback does not undo is the store's schema: migrations (`caos/store/0002_*.sql` onward) are ordered, forward-only and applied additively on boot (`apply_schema`), with no corresponding "down" migration for any of them. Rolling code back to a commit from before a migration was added leaves that migration's tables and columns in place; the older code simply never reads them, which is safe only because every migration to date is additive (a new table or a new nullable column, never a rename or a drop). If a future migration ever needs to remove or rename something, redeploying the older code is not a safe way to undo it, and that migration's own entry should say so. The accepted-attempt ledger and the audit chain are append-only regardless (invariant 6), so a rollback never rewrites or loses either.
+```bash
+uv run python scripts/rollback_check.py <older commit> --release <the commit the release was deployed from>
+```
+
+**Exit 0: redeploy.** The older commit carries the release's migrations in order and byte for byte, and reads the same schema (`caos_store`). Check it out and run the same one command (section 3) against it, or section 3a by hand at that commit; `bundle deploy` overwrites the app's code and restarts it, and leaves the store as it is. Row E6's `store` code `OK` is the proof that the older code accepted the store.
+
+**Exit 1: do not redeploy that commit.** It names one of two reasons:
+
+- The release applied a migration the older commit does not carry. Its app would refuse the store at boot (`STORE_SCHEMA_DRIFT`, E6 `store` not `OK`) and production would stay down until a commit carrying the migration is deployed again.
+- The older commit is from before DL-1 (F219), which moved the store from `public` into `caos_store`. Its code reads `public`, finds no store there, creates an empty one and starts green, with every case, run and ledger row the release wrote invisible to it. No commit from before F219 is ever a rollback target. That code cannot be changed to refuse, and nothing newer can make it refuse, so this check is the only guard.
+
+Then do one of these instead:
+
+1. **Roll forward** (the default): fix the fault on top of the release and deploy that commit with the one command. The store, the ledger and the audit chain stay exactly as they are (invariant 6).
+2. **Restore, then deploy the older commit against the restored copy**, when the data the release wrote must be abandoned as well. This is an owner's decision: everything written after the restore point stays only in the release's copy.
+   - Restore into a new database, never over the live one (`docs/MIGRATIONS.md`). Use the custom-format backup `docs/MIGRATIONS.md` says to take before an upgrade, restored with `pg_restore` into a new, empty database. On Lakebase Autoscaling you can instead create a branch from a point in time before the release's first boot: Databricks describes point-in-time branching (`databricks postgres create-branch` with `spec.source_branch_time`) in the Lakebase skill this repository carries, `.claude/skills/databricks-lakebase/SKILL.md`. Nothing in this repository has exercised either path against a real workspace.
+   - Bind the older commit to that copy through the one command's own values: `LAKEBASE_BRANCH` and `LAKEBASE_ENDPOINT` for a restored branch and its read-write endpoint, or `LAKEBASE_DATABASE` (with `--provisioned`) for a restored Provisioned database. E1 looks a branch's endpoint and database up, E2 holds the bound branch and database to the values given, and E8 connects to the copy and names its version.
+   - Row E6's `store` code `OK` on that deploy is the proof: the older code verified the restored store's migration history at boot and accepted it. Apply `docs/MIGRATIONS.md`'s blob check to the restored copy: every digest it references must still read back from the volume.
 
 ## 7. Operating notes
 

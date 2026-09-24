@@ -68,7 +68,7 @@ It stops at the first step that fails and writes `docs/rebuild/runs/<today>/ente
 
    D38: CP-3 and CP-6 take their portfolio, mandate, constraint and sector relative-value inputs only from the case's own sources (the bundle's sample workbooks are withheld from every prompt, named but never delivered); supply the enterprise's maintained workbook as a case source -- a CSV export or a PDF -- never as a live constraint or a placeholder.
 
-2. If this release needs a rollback, it is a redeploy of the previous commit through the same one command (`docs/DEPLOYMENT.md` section 6); it does not undo any migration the release already applied, since migrations are forward-only with no corresponding "down" migration (same section).
+2. If this release needs a rollback, first run `uv run python scripts/rollback_check.py <previous commit>` from this checkout, before checking anything else out. Only when it exits 0 is the rollback a redeploy of that commit through the same one command. Exit 1 means redeploying it would take production down or split the store. Either the release applied a migration the previous commit does not carry, and that app refuses the store at boot (`STORE_SCHEMA_DRIFT`); or the previous commit predates DL-1 (F219), and its app would start on an empty store. Do not redeploy it: stop and ask the owner whether to roll forward or restore (`docs/DEPLOYMENT.md` section 6).
 3. Update `docs/rebuild/blockers.md` (B2 and B9 resolved, quoting the rows' last lines; the profile name is fine, the host and any token are not) and `docs/rebuild/decisions.md` (D17; any `Fn`), then:
 
 ```bash
