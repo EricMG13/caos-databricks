@@ -888,6 +888,119 @@ def test_io_budget_refuses_a_value_that_is_not_a_bounded_count(
     assert not io_budget.within(io_budget.declared_value(api / "routes.py", tmp_path))
 
 
+def test_record_measurements_snapshots_the_measured_modules(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F123, N35: `--record` snapshots `MEASURED_MODULES`' own current
+    IO_BUDGET and, where declared, BLOB_BUDGET -- the blob dimension, which
+    only a route that downloads verified bytes declares at all."""
+    api = tmp_path / "caos" / "api" / "reads"
+    api.mkdir(parents=True)
+    (api / "analysis.py").write_text(
+        "IO_BUDGET = 249\nBLOB_BUDGET = 40\n", encoding="utf-8"
+    )
+    (api / "run.py").write_text("IO_BUDGET = 7\n", encoding="utf-8")
+    monkeypatch.setattr(
+        io_budget,
+        "MEASURED_MODULES",
+        (Path("caos/api/reads/analysis.py"), Path("caos/api/reads/run.py")),
+    )
+
+    recorded = io_budget.record_measurements(tmp_path)
+
+    assert recorded == {
+        "caos/api/reads/analysis.py": {"io": 249, "blob": 40},
+        "caos/api/reads/run.py": {"io": 7},
+    }
+
+
+def test_measured_problems_refuses_a_declaration_fallen_below_its_floor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F123: a declared 37 once cost 149 round trips on the route that
+    actually reached it. A number in range and a number anyone measured
+    are different claims; this is the check that holds a module to the
+    second one, not only the first."""
+    api = tmp_path / "caos" / "api" / "reads"
+    api.mkdir(parents=True)
+    (api / "analysis.py").write_text(
+        "IO_BUDGET = 30\nBLOB_BUDGET = 5\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(
+        io_budget, "MEASURED_MODULES", (Path("caos/api/reads/analysis.py"),)
+    )
+    measured = tmp_path / "measured.json"
+    measured.write_text(
+        json.dumps({"caos/api/reads/analysis.py": {"io": 37, "blob": 10}})
+    )
+
+    problems = io_budget.measured_problems(tmp_path, measured)
+
+    assert any("IO_BUDGET is 30, below the 37" in p for p in problems)
+    assert any("BLOB_BUDGET is 5, below the 10" in p for p in problems)
+
+    (api / "analysis.py").write_text(
+        "IO_BUDGET = 37\nBLOB_BUDGET = 10\n", encoding="utf-8"
+    )
+    assert io_budget.measured_problems(tmp_path, measured) == []
+
+
+def test_measured_problems_names_a_recorded_module_no_longer_present(
+    tmp_path: Path,
+) -> None:
+    measured = tmp_path / "measured.json"
+    measured.write_text(json.dumps({"caos/api/reads/gone.py": {"io": 5}}))
+
+    problems = io_budget.measured_problems(tmp_path, measured)
+
+    assert problems == [
+        "caos/api/reads/gone.py: recorded in measured.json but no longer a file"
+    ]
+
+
+def test_measured_problems_refuses_an_unreadable_file(tmp_path: Path) -> None:
+    assert io_budget.measured_problems(tmp_path, tmp_path / "absent.json") == [
+        f"{tmp_path / 'absent.json'}: unreadable"
+    ]
+
+
+def test_measured_problems_matches_what_is_committed() -> None:
+    assert io_budget.measured_problems() == []
+
+
+def test_main_record_writes_the_measurements_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    api = tmp_path / "caos" / "api" / "reads"
+    api.mkdir(parents=True)
+    (api / "analysis.py").write_text("IO_BUDGET = 12\n", encoding="utf-8")
+    analysis = Path("caos/api/reads/analysis.py")
+    monkeypatch.setattr(io_budget, "MEASURED_MODULES", (analysis,))
+
+    assert io_budget.main(["--record", "--root", str(tmp_path)]) == 0
+
+    written = tmp_path / "tests" / "io_measurements.json"
+    assert json.loads(written.read_text()) == {"caos/api/reads/analysis.py": {"io": 12}}
+
+
+def test_main_refuses_when_a_measured_module_fell_below_its_recorded_floor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    api = tmp_path / "caos" / "api" / "reads"
+    api.mkdir(parents=True)
+    (api / "analysis.py").write_text("IO_BUDGET = 12\n", encoding="utf-8")
+    analysis = Path("caos/api/reads/analysis.py")
+    monkeypatch.setattr(io_budget, "MEASURED_MODULES", (analysis,))
+    measured = tmp_path / "tests"
+    measured.mkdir()
+    (measured / "io_measurements.json").write_text(
+        json.dumps({"caos/api/reads/analysis.py": {"io": 249}})
+    )
+
+    assert io_budget.main(["--root", str(tmp_path)]) == 0
+    assert io_budget.main(["--assert", "--root", str(tmp_path)]) == 1
+
+
 def test_io_budget_reads_a_package_module_too(tmp_path: Path) -> None:
     """DQ-10, FP-19's first bullet: `__init__.py` was skipped, so a route
     declared in a package's own module was never read."""
