@@ -32,7 +32,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { ConfirmedControl } from "@/controls/ConfirmedControl";
 import { RefusedControl } from "@/controls/RefusedControl";
 import { CommandOutcome, useCommand } from "@/sections/run/controls";
-import { citationsOf, figureToken, paragraphs, type CitationChoice } from "./figures";
+import {
+  citationsOf,
+  figureMarker,
+  paragraphs,
+  withFigure,
+  type CitationChoice,
+  type FigureRef,
+} from "./figures";
 import {
   parseReportDocument,
   type ActionView,
@@ -78,36 +85,43 @@ const choiceKey = (choice: { route_node_id: string; citation_index: number }) =>
 const choiceLabel = (choice: CitationChoice) =>
   `${choice.route_node_id} · p.${choice.page} · ${choice.matched_text}`;
 
-/** The draft as it will be sent, each figure shown by the citation it names --
-    or said to name none the served records carry, which the server will then
-    refuse. What is read back after a save is the host's resolution, not this. */
-function DraftPreview({
+/** The draft's figures as footnotes (N90): each marker the text uses, and the
+    citation it names -- or that it names none the served records carry, which
+    the server will then refuse. What is read back after a save is the host's
+    resolution, not this. */
+function DraftFigures({
   narrative,
+  figures,
   choices,
 }: {
   narrative: NarrativeDraft[][];
+  figures: readonly FigureRef[];
   choices: CitationChoice[];
 }) {
-  if (!narrative.some((spans) => spans.some((span) => span.figure))) return null;
+  const used = new Set(
+    narrative.flat().flatMap((span) => (span.figure ? [choiceKey(span.figure)] : [])),
+  );
+  const listed = figures
+    .map((figure, index) => ({ figure, marker: figureMarker(index + 1) }))
+    .filter(({ figure }) => used.has(choiceKey(figure)));
+  if (listed.length === 0) return null;
   const byKey = new Map(choices.map((choice) => [choiceKey(choice), choice]));
   return (
-    <div className="note" data-draft-preview>
-      <p>Draft as it will be saved:</p>
-      {narrative.map((spans, index) => (
-        <p key={index}>
-          {spans.map((span, spanIndex) => {
-            if (!span.figure) return <span key={spanIndex}>{span.text}</span>;
-            const choice = byKey.get(choiceKey(span.figure));
-            return (
-              <span key={spanIndex} data-draft-figure>
-                {choice
-                  ? `[${choiceLabel(choice)}]`
-                  : `[${span.figure.route_node_id} · no such citation in this report]`}
-              </span>
-            );
-          })}
-        </p>
-      ))}
+    <div className="note" data-draft-figures>
+      <p>Figures in this draft:</p>
+      <ul className="plain">
+        {listed.map(({ figure, marker }) => {
+          const choice = byKey.get(choiceKey(figure));
+          return (
+            <li key={marker} data-draft-figure={marker}>
+              <b className="font-mono">{marker}</b>{" "}
+              {choice
+                ? choiceLabel(choice)
+                : `${figure.route_node_id} · no such citation in this report`}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
@@ -226,6 +240,9 @@ export function FilingControls({
 }) {
   const { body } = document;
   const [draft, setDraft] = useState("");
+  // The citations the draft's `[n]` markers name, in the order they were
+  // first inserted: the draft's own list, which a refetch does not reorder.
+  const [figures, setFigures] = useState<FigureRef[]>([]);
   const editor = useRef<HTMLTextAreaElement>(null);
   // Where the caret goes after a figure is inserted: set with the draft, and
   // placed once React has written the new value, which moves the caret.
@@ -265,16 +282,17 @@ export function FilingControls({
   }
 
   const saveAction = actionOf("SAVE_REVISION");
-  const narrative = paragraphs(draft);
+  const narrative = paragraphs(draft, figures);
   // Parsed once per served document, not per keystroke: a record may be large.
   const choices = useMemo(() => citationsOf(body.artifacts), [body.artifacts]);
 
   function insert(choice: CitationChoice) {
-    const token = figureToken(choice.route_node_id, choice.citation_index);
+    const { figures: next, marker } = withFigure(figures, choice);
     const start = editor.current?.selectionStart ?? draft.length;
     const end = editor.current?.selectionEnd ?? start;
-    caret.current = start + token.length;
-    setDraft(draft.slice(0, start) + token + draft.slice(end));
+    caret.current = start + marker.length;
+    setFigures(next);
+    setDraft(draft.slice(0, start) + marker + draft.slice(end));
   }
   // The served revision is the head this draft was composed against; on a run
   // with none it is null, which is what a first save names.
@@ -301,11 +319,12 @@ export function FilingControls({
           onChange={(event) => setDraft(event.target.value)}
         />
         <p className="note" id="narrative-draft-rule">
-          Type prose only. Every figure goes in through the citation picker, which names a citation
-          of a verified record; prose carrying a digit is refused at save.
+          Type prose only. Every figure goes in through the citation picker, which puts a numbered
+          marker such as [1] at the caret and lists it below with the citation of a verified record
+          it names; prose carrying a digit is refused at save.
         </p>
         <FigurePicker key={choices.map(choiceKey).join(" ")} choices={choices} onInsert={insert} />
-        <DraftPreview narrative={narrative} choices={choices} />
+        <DraftFigures narrative={narrative} figures={figures} choices={choices} />
         <div className="flex flex-wrap items-start gap-x-6 gap-y-3" data-filing-acts>
           <div className="grid justify-items-start gap-1">
             <RefusedControl
@@ -321,6 +340,7 @@ export function FilingControls({
                         .then((outcome) => {
                           if (outcome?.kind !== "ok" || !mounted.current) return;
                           setDraft("");
+                          setFigures([]);
                           // The address is corrected, not navigated: the reader
                           // did not move, the run gained a newer revision, and a
                           // reload shows the one they are looking at.
