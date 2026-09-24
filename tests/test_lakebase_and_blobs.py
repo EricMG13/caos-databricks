@@ -315,15 +315,93 @@ def test_minting_is_single_flight_bounded_and_falls_back_to_a_live_token(
     # A mint that never answers is abandoned within the bound.
     lakebase.invalidate_credential()
     monkeypatch.setattr(lakebase, "MINT_SECONDS", 0.2)
-    monkeypatch.setattr(lakebase, "_mint", lambda: (threading.Event().wait(5), 0.0))
+    hangs = threading.Event()
+    monkeypatch.setattr(lakebase, "_mint", lambda: (hangs.wait(5), 0.0))
     started = time.monotonic()
     with pytest.raises(Refusal, match=r"^STORE_UNAVAILABLE$"):
         store_url()
     assert time.monotonic() - started < 2.0
+    hangs.set()  # let the abandoned helper end so it cannot outlive this test
+    if (helper := lakebase._HELPER) is not None:
+        helper.join(5)
     assert (
         lakebase._expires_at("2099-01-01T00:00:00Z") > time.monotonic() + TOKEN_SECONDS
     )
     assert lakebase._expires_at("not a date") <= time.monotonic() + TOKEN_SECONDS
+
+
+def test_an_abandoned_mint_does_not_start_a_second_helper(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """R24-N01: a mint abandoned at `MINT_SECONDS` leaves its helper thread
+    running, because the SDK's token exchange has no timeout of its own, and
+    since a failed mint is retried after `FAILURE_SECONDS`, a new one could
+    start on top of it -- so hung helpers piled up. Capped: past that
+    window, while the abandoned helper for the identity is still running, a
+    new mint still does not start a second thread; it refuses
+    `STORE_UNAVAILABLE` at once. No caller pays the hung helper's real,
+    unbounded lifetime -- only the first pays the bounded wait that found it
+    hung -- and once that helper ends, minting recovers: it never deadlocks."""
+    import threading
+    import time
+
+    _name_the_endpoint(monkeypatch)
+    lakebase.invalidate_credential()
+    monkeypatch.setattr(lakebase, "MINT_SECONDS", 0.2)
+    monkeypatch.setattr(lakebase, "FAILURE_SECONDS", 0.1)
+    hang = threading.Event()
+    started = threading.Event()
+    calls: list[int] = []
+
+    def hangs_on_the_event() -> tuple[str, float]:
+        calls.append(1)
+        started.set()
+        hang.wait(10)
+        return "late", float("inf")
+
+    monkeypatch.setattr(lakebase, "_mint", hangs_on_the_event)
+
+    began = time.monotonic()
+    with pytest.raises(Refusal, match=r"^STORE_UNAVAILABLE$"):
+        lakebase._credential()
+    assert time.monotonic() - began < 2.0, "abandoned at MINT_SECONDS, not later"
+    assert started.wait(5), "the helper actually started minting"
+    helper = lakebase._HELPER
+    assert helper is not None and helper.is_alive(), "abandoned, but still running"
+
+    # Past FAILURE_SECONDS, the old fast-fail cache alone would allow a new
+    # mint attempt; a storm of callers here must still be capped by the
+    # still-alive helper, not each spawn -- or each wait behind -- a new one.
+    time.sleep(0.3)
+    answers: list[str] = []
+    lock = threading.Lock()
+
+    def one() -> None:
+        try:
+            lakebase._credential()
+        except Refusal as refused:
+            with lock:
+                answers.append(refused.code.value)
+
+    callers = [threading.Thread(target=one) for _ in range(5)]
+    began = time.monotonic()
+    for caller in callers:
+        caller.start()
+    for caller in callers:
+        caller.join(5)
+    elapsed = time.monotonic() - began
+    assert elapsed < 1.0, f"capped rather than queued behind the helper ({elapsed}s)"
+    assert answers == ["STORE_UNAVAILABLE"] * 5
+    assert len(calls) == 1, "no second helper thread for the same identity"
+    assert lakebase._HELPER is helper, "still the one abandoned helper"
+
+    # Once that helper ends, minting recovers: capped, never deadlocked.
+    hang.set()
+    helper.join(5)
+    assert not helper.is_alive()
+    monkeypatch.setattr(lakebase, "_REFUSED_UNTIL", 0.0)
+    assert lakebase._credential() == "late"
+    assert len(calls) == 2, "a fresh helper starts once the old one is gone"
 
 
 def test_the_injected_names_are_quoted_and_the_port_must_be_a_number(
