@@ -33,6 +33,9 @@ class RefusalCode(StrEnum):
     RUN_TERMINAL_STALE = "RUN_TERMINAL_STALE"
     ATTEMPT_NOT_FOUND = "ATTEMPT_NOT_FOUND"
     ATTEMPT_LIMIT_REACHED = "ATTEMPT_LIMIT_REACHED"
+    # An earlier attempt at the node may still be billed, or its bill is owed
+    # the verdict the next pass gives: nothing new is paid for until it is.
+    ATTEMPT_UNSETTLED = "ATTEMPT_UNSETTLED"
     CALL_OUTCOME_INVALID = "CALL_OUTCOME_INVALID"
     CALL_OUTCOME_CONFLICT = "CALL_OUTCOME_CONFLICT"
     CALL_OUTCOME_LEGACY = "CALL_OUTCOME_LEGACY"

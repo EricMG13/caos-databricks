@@ -158,6 +158,9 @@ CLEARS: Mapping[RefusalCode, str] = {
     _C.RUN_TERMINAL_STALE: "Re-read the run and decide again.",
     _C.ATTEMPT_NOT_FOUND: "An operator must repair the attempt ledger.",
     _C.ATTEMPT_LIMIT_REACHED: "Start a new run.",
+    _C.ATTEMPT_UNSETTLED: (
+        "Nothing; the node is tried again once its last attempt settles."
+    ),
     _C.STREAM_LIMIT_REACHED: "Close a tail already open, or retry shortly.",
     _C.CALL_OUTCOME_INVALID: "Record a well-formed call outcome.",
     _C.CALL_OUTCOME_CONFLICT: "Nothing; a different outcome is already recorded.",

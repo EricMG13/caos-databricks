@@ -160,6 +160,11 @@ _STATUS = {
     # own `limit_concurrency`); listed here, beside the store's own capacity
     # refusals, so a route could not give it a different status either.
     RefusalCode.CONCURRENCY_LIMIT_REACHED: 503,
+    # A node whose last attempt another worker may still bill, or whose bill
+    # the next pass settles: the worker gives the run back and backs off, and
+    # the earlier call finishing is what repairs it -- the same shape. Raised
+    # by the worker's own start; listed so no route could serve it otherwise.
+    RefusalCode.ATTEMPT_UNSETTLED: 503,
     RefusalCode.STORE_NOT_TRANSACTIONAL: 500,
     RefusalCode.STORE_SCHEMA_DRIFT: 500,
     RefusalCode.BLOB_NOT_FOUND: 500,

@@ -85,6 +85,13 @@ VENDORED_BUNDLE = Path(__file__).resolve().parents[2] / "vendor" / "deploy-v"
 STORE_FAULTS = frozenset(
     {RefusalCode.STORE_UNAVAILABLE, RefusalCode.STORE_NOT_TRANSACTIONAL}
 )
+# What a refused pass gives its claim back for and backs off on, rather than
+# parking the run: the store's own faults, and a node whose last attempt is
+# not settled yet (`ATTEMPT_UNSETTLED`) -- another worker may still bill its
+# call, or its bill landed as this pass started and the next pass replays it.
+# Waiting is what clears each; a park would ask an operator to requeue a run
+# nothing is wrong with.
+RELEASED = STORE_FAULTS | {RefusalCode.ATTEMPT_UNSETTLED}
 
 ExecutionFor = Callable[[StoreConnection, UUID, Lease], Execution]
 
@@ -342,7 +349,7 @@ def _refused(conn: StoreConnection, lease: Lease, refused: Refusal) -> bool:
                 return False
             print(unmet.value, file=sys.stderr)
             return _settle(conn, lambda: stop(conn, lease, unmet))
-    if code in STORE_FAULTS:
+    if code in RELEASED:
         _settle(conn, lambda: release(conn, lease))
         raise Refusal(code)
     # CF-044: the code alone, the same shape the sibling branch above already
@@ -403,10 +410,10 @@ def _beat(
 
 
 def _store_fault(fault: Refusal | psycopg.OperationalError) -> None:
-    """A fault the loop rides out, or re-raised when it is not the store's.
+    """A fault the loop rides out (`RELEASED`), or re-raised when it is not one.
     A refused credential drops the cached one, so the next connect mints."""
     if isinstance(fault, Refusal):
-        if fault.code not in STORE_FAULTS:
+        if fault.code not in RELEASED:
             raise fault
         return
     note_connect_failure(fault)

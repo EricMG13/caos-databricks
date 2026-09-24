@@ -8,11 +8,13 @@ itself -- so each test here holds two.
 from __future__ import annotations
 
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from decimal import Decimal
+from functools import partial
 from pathlib import Path
 from threading import Barrier, Event
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 import pytest
@@ -34,10 +36,18 @@ from caos.graph import runtime
 from caos.graph.route import NodeState, ResolvedRoute, resolve_route
 from caos.graph.runtime import Execution, Provider, ProviderResult, run_route
 from caos.methodology.bundle import Bundle
+from caos.pricing import ModelPrice
 from caos.refusals import Refusal, RefusalCode
 from caos.store import RunStatus, StoreConnection, apply_schema, connect, runs
 from caos.store.events import RunEvent, events_of
-from caos.store.outcomes import check_call, execution_reads
+from caos.store.outcomes import (
+    CallOutcome,
+    call_hold,
+    check_call,
+    execution_reads,
+    record_outcome,
+    record_refusal,
+)
 from caos.store.runs import (
     Accepted,
     accept_attempt,
@@ -58,6 +68,9 @@ from caos.store.work import (
     request_cancel,
     stop,
 )
+
+if TYPE_CHECKING:
+    from test_runtime import _Run
 
 # The producer the store records beside every accepted artifact: what the
 # host configured, and the provider's own handle for the call.
@@ -1281,3 +1294,267 @@ def test_two_workers_on_a_queue_of_two_runs_take_one_each(
 
     assert None not in claimed, "a worker idled while there was work for it"
     assert set(claimed) == queued, "the two workers did not take one run each"
+
+
+def _lapsed(url: str, run_id: UUID) -> None:
+    """End the holder's lease now, as a lease outlived by its holder ends."""
+    with connect(url) as conn:
+        conn.execute(
+            "UPDATE run_work SET lease_expires_at = now() - interval '1 second'"
+            " WHERE run_id = %s",
+            (run_id,),
+        )
+        conn.commit()
+
+
+# What the two-worker races below run at. Their provider states it too: a
+# provider says the price its calls bill at, and a run refuses one that does
+# not (`pricing.bills_at`).
+_RUN_AT = priced(Decimal("0.10"))
+
+
+@dataclass
+class _PricedCompletions(CanonicalCompletions):
+    """The canonical fake, stating the price its run executes at."""
+
+    price: ModelPrice = _RUN_AT
+
+
+def _drive(url: str, run: _Run, completions: _PricedCompletions) -> UUID | None:
+    """One worker's pass on a connection of its own, at its provider's price."""
+    from test_worker import CONFIG
+
+    from caos.graph.worker import module_execution, work_once
+
+    with connect(url) as conn:
+        return work_once(
+            conn,
+            run.blobs,
+            execution_for=module_execution(
+                completions, completions.price, run.bundle, run.blobs
+            ),
+            config=CONFIG,
+            stopping=Event(),
+        )
+
+
+def _outcome(work: Callable[[], UUID | None]) -> str:
+    """A worker pass's run id, or the code it was refused with."""
+    try:
+        return str(work())
+    except Refusal as refused:
+        return refused.code.value
+
+
+def _paid_once_per_node(
+    conn: StoreConnection, run_id: UUID, completions: _PricedCompletions
+) -> None:
+    from test_worker import count
+
+    nodes = len(_lite().nodes)
+    assert run_status(conn, run_id) is RunStatus.COMPLETE
+    conn.rollback()
+    assert len(completions.prompts) == nodes, "one paid call a node"
+    for table in ("run_attempts", "call_outcomes", "budget_ledger", "artifacts"):
+        assert count(conn, table, run_id) == nodes, table
+
+
+def test_a_bill_landing_after_a_pass_read_the_ledger_is_replayed_not_paid_twice(
+    case: tuple[StoreConnection, UUID],
+    empty_database: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Invariant 6, the bill: A's call outlives its lease and B claims the run.
+    B's pass reads the ledger -- no bill there yet, nothing to replay -- and
+    while it builds its prompt A's call answers, A bills, lets go of its hold
+    and is fenced out of acceptance. Under the run lock B's start finds the
+    bill that landed and refuses `ATTEMPT_UNSETTLED` with nothing written, the
+    worker gives the run back, and the next pass replays A's answer: one paid
+    call a node. Before the fix B started a second attempt there and paid for
+    the node again (W1's residual: a bill that waits out a held case lock
+    lands after the lease it was made under)."""
+    from test_worker import queued_run
+
+    run = queued_run(case, _lite(), Bundle(VENDORED), BlobStore(tmp_path / "blobs"))
+    a_calling, b_starting = Event(), Event()
+    workers: list[Future[UUID | None]] = []
+    starts: list[str] = []
+
+    def start_once_a_has_billed(
+        conn: StoreConnection, run_id: UUID, route_node_id: str, *, lease: Lease
+    ) -> UUID:
+        starts.append(route_node_id)
+        if len(starts) == 2:  # B's, after A's own
+            b_starting.set()
+            assert workers[0].result(60) == run.run_id  # billed, let go, fenced
+        return start_attempt(conn, run_id, route_node_id, lease=lease)
+
+    def during_the_first_call() -> None:
+        if not a_calling.is_set():
+            _lapsed(empty_database, run.run_id)
+            a_calling.set()
+            assert b_starting.wait(60)
+
+    monkeypatch.setattr(runtime, "start_attempt", start_once_a_has_billed)
+    completions = _PricedCompletions(run.source_id, during=during_the_first_call)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        workers.append(pool.submit(_drive, empty_database, run, completions))
+        assert a_calling.wait(60)
+        b = pool.submit(_outcome, lambda: _drive(empty_database, run, completions))
+        assert b.result(120) == RefusalCode.ATTEMPT_UNSETTLED.value
+    monkeypatch.undo()
+    assert len(completions.prompts) == 1, "B paid for nothing"
+    assert _count(run.conn, "run_attempts", run.run_id) == 1
+    assert _count(run.conn, "budget_ledger", run.run_id) == 1, "A's bill landed"
+    assert run.conn.execute(
+        "SELECT state FROM run_work WHERE run_id = %s", (run.run_id,)
+    ).fetchone() == ("QUEUED",), "given back, not parked"
+    run.conn.rollback()
+
+    assert _drive(empty_database, run, completions) == run.run_id
+    _paid_once_per_node(run.conn, run.run_id, completions)
+
+
+def test_a_call_in_flight_past_its_lease_keeps_its_node_from_a_second_call(
+    case: tuple[StoreConnection, UUID], empty_database: str, tmp_path: Path
+) -> None:
+    """Invariant 6, the call itself: A's lease lapses while its call is still
+    on the wire and B claims the run. A holds its attempt (`call_hold`) from
+    before its pre-call check to its bill, so B's start refuses
+    `ATTEMPT_UNSETTLED` and makes no call; A's answer is billed, and the next
+    pass replays it. Before the fix B paid for the node a second time while
+    A's call was still being answered."""
+    from test_worker import queued_run
+
+    run = queued_run(case, _lite(), Bundle(VENDORED), BlobStore(tmp_path / "blobs"))
+    claimed_meanwhile: list[str] = []
+
+    def reclaimed_during_the_first_call() -> None:
+        if not claimed_meanwhile:
+            claimed_meanwhile.append("pending")
+            _lapsed(empty_database, run.run_id)
+            claimed_meanwhile[0] = _outcome(
+                lambda: _drive(empty_database, run, completions)
+            )
+
+    completions = _PricedCompletions(
+        run.source_id, during=reclaimed_during_the_first_call
+    )
+    assert _drive(empty_database, run, completions) == run.run_id
+    assert claimed_meanwhile == [RefusalCode.ATTEMPT_UNSETTLED.value]
+    assert len(completions.prompts) == 1, "B paid for nothing"
+    assert _count(run.conn, "run_attempts", run.run_id) == 1
+    assert _count(run.conn, "budget_ledger", run.run_id) == 1, "A's bill landed"
+
+    assert _drive(empty_database, run, completions) == run.run_id
+    _paid_once_per_node(run.conn, run.run_id, completions)
+
+
+def test_a_held_call_keeps_its_node_only_while_a_live_session_holds_it(
+    empty_database: str,
+    prepared_run: tuple[UUID, UUID],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The hold's three ends, each on a node of its own: let go (the call
+    billed or never made), its session gone (a holder that died keeps
+    nothing), and `CALL_HOLD_SECONDS` past its reservation (a holder wedged
+    or unreachable does not keep the node for ever)."""
+    _case_id, run_id = prepared_run
+    with connect(empty_database) as conn:
+        nodes = approved_nodes(conn, run_id, tmp_path)
+    stale = _claimed(empty_database, run_id)
+    attempts: dict[str, UUID] = {}
+    with connect(empty_database) as a:
+        for module in ("CP-0", "CP-L10", "CP-5"):
+            attempts[module] = start_attempt(a, run_id, nodes[module], lease=stale)
+            reserve(a, attempts[module], RESERVED, lease=stale)
+    fresh = _reclaimed(empty_database, run_id)
+    live, gone = connect(empty_database), connect(empty_database)
+    with connect(empty_database) as b, call_hold(live, attempts["CP-0"]):
+        with call_hold(live, attempts["CP-5"]), call_hold(gone, attempts["CP-L10"]):
+            gone.close()
+            _refused(
+                RefusalCode.ATTEMPT_UNSETTLED,
+                lambda: start_attempt(b, run_id, nodes["CP-0"], lease=fresh),
+            )
+            _refused(
+                RefusalCode.ATTEMPT_UNSETTLED,
+                lambda: start_attempt(b, run_id, nodes["CP-5"], lease=fresh),
+            )
+            assert _count(b, "run_attempts", run_id) == 3, "nothing written"
+            start_attempt(b, run_id, nodes["CP-L10"], lease=fresh)
+            monkeypatch.setattr(runs, "CALL_HOLD_SECONDS", 0)
+            start_attempt(b, run_id, nodes["CP-5"], lease=fresh)
+            monkeypatch.undo()
+        _refused(
+            RefusalCode.ATTEMPT_UNSETTLED,
+            lambda: start_attempt(b, run_id, nodes["CP-0"], lease=fresh),
+        )
+    live.close()
+    with connect(empty_database) as b:
+        start_attempt(b, run_id, nodes["CP-0"], lease=fresh)
+        assert _count(b, "run_attempts", run_id) == 6
+
+
+def test_a_charged_answer_holds_its_node_exactly_when_the_next_pass_settles_it(
+    empty_database: str, prepared_run: tuple[UUID, UUID], tmp_path: Path
+) -> None:
+    """The owed half of `ATTEMPT_UNSETTLED` is the set `replay_billed` settles
+    or `unexplained_charge` parks, and nothing else: an attempt either
+    refuses but no pass settles would stop the node for ever, and one a pass
+    settles that no start refuses is paid for twice. Each outcome shape is
+    asked of all three."""
+    from caos.methodology.canonical import replay_billed, unexplained_charge
+
+    _case_id, run_id = prepared_run
+    diagnostic = "d" * 64
+    (tmp_path / "empty").mkdir()
+    shapes = (
+        ("unknown charge", CallOutcome(None, MODEL, GENERATION, diagnostic), False),
+        ("no generation", CallOutcome(CHARGE, MODEL, None, diagnostic), False),
+        ("explained", CallOutcome(CHARGE, MODEL, GENERATION, diagnostic), False),
+        ("no body", CallOutcome(CHARGE, MODEL, GENERATION, None), True),
+        ("answered", CallOutcome(CHARGE, MODEL, GENERATION, diagnostic), True),
+    )
+    with connect(empty_database) as conn:
+        nodes = approved_nodes(conn, run_id, tmp_path)
+        node = nodes["CP-0"]
+        for name, outcome, owed in shapes:
+            if name == "answered":
+                node = nodes["CP-L10"]
+            attempt = start_attempt(conn, run_id, node)
+            record_outcome(conn, attempt_id=attempt, outcome=outcome)
+            if name == "explained":
+                assert record_refusal(
+                    conn, attempt_id=attempt, code=RefusalCode.PROVIDER_RESPONSE_INVALID
+                )
+            try:
+                picked = (
+                    replay_billed(
+                        conn,
+                        BlobStore(tmp_path / "empty"),
+                        Bundle(VENDORED),
+                        run_id=run_id,
+                        route=_lite(),
+                        route_node_ids=(node,),
+                    )
+                    is not None
+                )
+            except Refusal as refused:
+                # A row it would settle: its body is read first, and is not there.
+                assert refused.code is RefusalCode.BLOB_NOT_FOUND, name
+                picked = True
+            finally:
+                conn.rollback()
+            parked = unexplained_charge(conn, run_id=run_id, route_node_ids=(node,))
+            conn.rollback()
+            assert (picked or parked is not None) is owed, name
+            if owed:
+                _refused(
+                    RefusalCode.ATTEMPT_UNSETTLED,
+                    partial(start_attempt, conn, run_id, node),
+                )
+            else:
+                start_attempt(conn, run_id, node)

@@ -49,6 +49,56 @@ def _read_committed(conn: StoreConnection) -> None:
         raise Refusal(RefusalCode.STORE_NOT_TRANSACTIONAL)
 
 
+# The class of the session-level advisory lock `call_hold` takes on one attempt
+# (the two-key form, the attempt's text hashed as the second key; the class
+# keeps it apart from every one-key lock and from `work`'s queue lock).
+# Arbitrary and permanent.
+CALL_HOLD_LOCK = 0x0CA0_0006
+_HOLD = "SELECT pg_advisory_lock(%s::integer, hashtext(%s))"
+_LET_GO = "SELECT pg_advisory_unlock(%s::integer, hashtext(%s))"
+
+
+@contextmanager
+def call_hold(conn: StoreConnection, attempt_id: UUID) -> Iterator[None]:
+    """Say, for as long as the scope runs, that this session may still call
+    for the attempt or bill its call (invariant 6).
+
+    The scope runs from before the pre-call lease check to the bill.
+    `start_attempt` refuses `ATTEMPT_UNSETTLED` at the node while another
+    session holds it: a holder whose lease lapsed while its call ran, or while
+    its bill waited behind a held case lock (W1), may still bill, and a new
+    attempt started then would pay for the node again. A session-level
+    advisory lock rather than a row: the scope spans several units and the
+    call runs outside any of them, and a session that ends -- a process
+    killed, a socket lost -- lets go of it with everything else, so a dead
+    holder keeps nothing. On exit it is let go in a unit of its own; a
+    connection that cannot do that is closed, which lets go too.
+    """
+    key = (CALL_HOLD_LOCK, str(attempt_id))
+    require_idle(conn)
+    try:
+        conn.execute(_HOLD, key)
+        conn.rollback()
+    except psycopg.Error:
+        rollback_or_close(conn)
+        raise Refusal(RefusalCode.STORE_UNAVAILABLE) from None
+    try:
+        yield
+    finally:
+        _let_go(conn, key)
+
+
+def _let_go(conn: StoreConnection, key: tuple[int, str]) -> None:
+    if conn.closed:
+        return
+    try:
+        conn.rollback()
+        conn.execute(_LET_GO, key)
+        conn.rollback()
+    except psycopg.Error:
+        conn.close()
+
+
 def accepted_owner(
     conn: StoreConnection, run_id: UUID, route_node_id: str
 ) -> UUID | None:

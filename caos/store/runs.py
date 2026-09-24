@@ -29,6 +29,7 @@ from caos.store.cases import lock_case
 from caos.store.events import RunEvent, append, lock_run
 from caos.store.gates import approved_run_input, require_adapter_route
 from caos.store.outcomes import (
+    CALL_HOLD_LOCK,
     CallOutcome,
     _attempt_owner,
     _locked_attempt,
@@ -36,10 +37,52 @@ from caos.store.outcomes import (
     artifact_digests,
     record_outcome,
 )
-from caos.store.work import Lease, mark_work_done, require_lease, require_running
+from caos.store.work import (
+    LEASE_SECONDS,
+    Lease,
+    mark_work_done,
+    require_lease,
+    require_running,
+)
 
 # The vendor's `envelope.MAX_ATTEMPT_ORDINAL`: a run folder holds at most 256.
 MAX_ATTEMPT_ORDINAL = 256
+# How long past its reservation a held call keeps its node (`call_hold`): the
+# lease a worker claims with (`LEASE_SECONDS`, renewed by the reservation),
+# then one lease more. A holder still silent that long past its own lease has
+# stopped -- a wedged process, a host gone without closing its socket -- and
+# the node is not kept for it for ever.
+CALL_HOLD_SECONDS = 2 * LEASE_SECONDS
+# An earlier attempt at the node that must settle before a new one is paid for
+# (invariant 6), read under the run lock in the unit that would start it: a
+# charged answer owed a verdict -- exactly what `replay_billed` settles or
+# `unexplained_charge` parks, so the next pass acts on it -- or a reserved
+# attempt with no outcome whose call another session still holds
+# (`call_hold`), for at most `CALL_HOLD_SECONDS` past its reservation. The
+# hold is tried on those alone; a try that takes it lets go at this unit's end.
+_UNSETTLED = (
+    "SELECT 1 FROM (SELECT t.attempt_id, r.reserved_at,"
+    "   o.attempt_id IS NOT NULL AS recorded,"
+    "   l.attempt_id IS NOT NULL"
+    "   AND (o.diagnostic_sha256 IS NULL"
+    "     OR (o.model IS NOT NULL AND o.generation_id IS NOT NULL))"
+    "   AND NOT EXISTS (SELECT 1 FROM artifacts a WHERE a.attempt_id = t.attempt_id)"
+    "   AND NOT EXISTS"
+    "   (SELECT 1 FROM attempt_refusals x WHERE x.attempt_id = t.attempt_id) AS owed"
+    " FROM run_attempts t"
+    " LEFT JOIN budget_reservations r ON r.attempt_id = t.attempt_id"
+    " LEFT JOIN call_outcomes o ON o.attempt_id = t.attempt_id"
+    " LEFT JOIN budget_ledger l"
+    "   ON (l.run_id, l.attempt_id) = (o.run_id, o.charged_attempt_id)"
+    " WHERE t.run_id = %(run)s AND t.route_node_id = %(node)s OFFSET 0) earlier"
+    " WHERE CASE WHEN earlier.owed THEN true"
+    "   WHEN earlier.recorded OR earlier.reserved_at IS NULL"
+    "     OR earlier.reserved_at <= now() - make_interval(secs => %(hold)s)"
+    "   THEN false"
+    "   ELSE NOT pg_try_advisory_xact_lock(%(lock)s::integer,"
+    "     hashtext(earlier.attempt_id::text)) END"
+    " LIMIT 1"
+)
 # `0025_supersedes.sql`: the partial unique index that holds one successor per
 # predecessor. A violation is mapped to `RUN_ALREADY_SUPERSEDED` by this name
 # and never by the driver's message.
@@ -146,6 +189,12 @@ def start_attempt(
     The row exists before the work does, because it is the identity the work is
     charged against: a crash after a provider completed still has the attempt it
     completed (adopting CAOS-Final §21 with Phase 4).
+
+    Refuses `ATTEMPT_UNSETTLED`, with nothing written, while an earlier attempt
+    at the node may still be paid for or is owed a verdict (`_UNSETTLED`): the
+    pass that decided to start read the ledger before this lock, and a bill
+    that landed since -- or a call another worker still holds past its lapsed
+    lease -- would otherwise have the node paid for twice.
     """
     try:
         require_running(conn, run_id, lease)
@@ -165,6 +214,19 @@ def _start(
     conn: StoreConnection, run_id: UUID, route_node_id: str, lease: Lease | None
 ) -> UUID:
     """The attempt row and its event, under the caller's run lock."""
+    if (
+        conn.execute(
+            _UNSETTLED,
+            {
+                "run": run_id,
+                "node": route_node_id,
+                "hold": CALL_HOLD_SECONDS,
+                "lock": CALL_HOLD_LOCK,
+            },
+        ).fetchone()
+        is not None
+    ):
+        raise Refusal(RefusalCode.ATTEMPT_UNSETTLED)
     # Under the run lock, so two starts cannot take one ordinal. Counting rows
     # rather than reading the maximum keeps attempts that predate ordinals.
     counted = conn.execute(
