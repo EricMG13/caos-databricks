@@ -189,7 +189,9 @@ def test_the_volume_backend_round_trips_bytes_through_the_files_api(
     assert name == f"/Volumes/main/caos/caos_blobs/{digest[:2]}/{digest}"
     assert data == b"source bytes"
     methods = {m for m, p in stub.requests if p.startswith("/api/2.0/fs/")}
-    assert methods == {"HEAD", "PUT", "POST", "GET"}
+    # CF-095: no presigned-URL negotiation (that mode's own POST) -- the
+    # plain Files API path only ever GETs, PUTs and HEADs.
+    assert methods == {"HEAD", "PUT", "GET"}
     with pytest.raises(Refusal, match=r"^BLOB_NOT_FOUND$"):
         store.get("0" * 64)
 
@@ -277,6 +279,9 @@ def test_the_bounded_workspace_client_reaches_the_stub_with_its_budgets(
     client = workspace_client()
     assert client.config.http_timeout_seconds == HTTP_TIMEOUT_SECONDS
     assert client.config.retry_timeout_seconds == RETRY_TIMEOUT_SECONDS
+    # CF-095: the presigned-URL download mode is never taken; the plain
+    # Files API path `caos.blobs` covers stays the one in force.
+    assert client.config.disable_experimental_files_api_client is True
     assert client.apps.get("caos").name == "caos"
 
 
