@@ -281,3 +281,33 @@ def test_an_unreadable_ci_file_or_hook_config_is_refused(tmp_path: Path) -> None
     assert check_gate_config._hook_problems(root) == [
         "pre-commit: .pre-commit-config.yaml is missing or not a mapping"
     ]
+
+
+def test_a_committed_host_or_auth_key_in_the_bundle_is_refused(tmp_path: Path) -> None:
+    """W7: the one command supplies the workspace through the profile, and
+    a stand-in run through the stub; a host, profile or credential the
+    bundle names for itself would win over either, and an `include` brings
+    in files the checks never read."""
+    root = _tree(tmp_path)
+    bundle = root / "databricks.yml"
+    written = bundle.read_text(encoding="utf-8")
+    assert check_gate_config.bundle_auth_problems(written) == []
+    target_host = written.replace(
+        "    workspace:\n      root_path: /Workspace/caos-bundle/${bundle.target}\n",
+        "    workspace:\n      root_path: /Workspace/caos-bundle/${bundle.target}\n"
+        "      host: https://elsewhere.example.invalid\n",
+        1,
+    )
+    assert target_host != written
+    bundle.write_text(target_host, encoding="utf-8")
+    assert (
+        "bundle: target prod sets workspace.host; the workspace is the profile's"
+        in check_gate_config._bundle_problems(root)
+    )
+    for extra, named in (
+        ("workspace:\n  profile: deployer\n", "the bundle sets workspace.profile"),
+        ("workspace:\n  client_id: an-sp\n", "the bundle sets workspace.client_id"),
+        ("include:\n  - more/*.yml\n", "the bundle includes other files"),
+    ):
+        bundle.write_text(written + extra, encoding="utf-8")
+        assert any(named in p for p in check_gate_config._bundle_problems(root)), extra

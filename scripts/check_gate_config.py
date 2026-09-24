@@ -700,6 +700,43 @@ def _binding_problems(bundle: str) -> list[str]:
     return problems
 
 
+# What a bundle's `workspace` mapping may set, at the top or in a target
+# (W7): paths inside whichever workspace it is deployed to. `host`,
+# `profile`, `auth_type`, a client id, an account or any cloud's credential
+# names a workspace, or a way into one, of the bundle's own, which CLI
+# 1.17.0 prefers to the profile's and to a stand-in's DATABRICKS_HOST: the
+# one command supplies the workspace through the profile, and a stand-in
+# run through the loopback stub, so the bundle never does. An `include`
+# brings in files these checks do not read, so it is refused as well.
+BUNDLE_WORKSPACE_KEYS = frozenset(
+    {"root_path", "file_path", "artifact_path", "state_path", "resource_path"}
+)
+
+
+def bundle_auth_problems(bundle: str | None) -> list[str]:
+    """Each way a bundle's text names a workspace or credential of its own,
+    read as the CLI reads it (W7); the loopback stand-in refuses to run a
+    bundle this names anything for, and the committed one must name none."""
+    document = _yaml_mapping(bundle)
+    if document is None:
+        return ["bundle: databricks.yml is missing or not a mapping"]
+    problems = (
+        ["bundle: the bundle includes other files; one file states it"]
+        if "include" in document
+        else []
+    )
+    targets = _map(document.get("targets"))
+    scopes = [("the bundle", document)] + [
+        (f"target {name}", _map(body)) for name, body in targets.items()
+    ]
+    return problems + [
+        f"bundle: {scope} sets workspace.{key}; the workspace is the profile's"
+        for scope, body in scopes
+        for key in _map(body.get("workspace"))
+        if key not in BUNDLE_WORKSPACE_KEYS
+    ]
+
+
 def _bundle_problems(root: Path) -> list[str]:
     problems: list[str] = []
     bundle, app = _read(root, "databricks.yml"), _read(root, "app.yaml")
@@ -732,7 +769,7 @@ def _bundle_problems(root: Path) -> list[str]:
         problems.append(f"bundle: env does not set {missing}")
     if re.search(r"^env:", app, re.M):
         problems.append("app.yaml: sets env; the bundle is the one source (F52)")
-    return problems + _binding_problems(bundle)
+    return problems + _binding_problems(bundle) + bundle_auth_problems(bundle)
 
 
 STAND_IN = "uv run python tests/workspace_stub.py --"

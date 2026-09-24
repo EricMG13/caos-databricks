@@ -8,7 +8,7 @@ import base64
 import json
 import os
 import sys
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from urllib.parse import urlparse
 from uuid import UUID
@@ -31,8 +31,10 @@ from workspace_stub import (
     LAKEBASE_INSTANCE,
     LAKEBASE_PROJECT,
     WorkspaceStub,
+    bundle_config,
     fresh_state,
     main,
+    stand_in_environment,
 )
 
 from caos.api import edge, identity
@@ -353,6 +355,111 @@ def test_an_explicit_profile_never_reaches_the_workspace_it_names(
         monkeypatch.setenv("DATABRICKS_CONFIG_FILE_ORIGINAL", str(config))
         assert main(["--", sys.executable, "-c", child]) == 0
         assert attacker.requests == []
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        ["databricks", "bundle", "validate", "-pattacker"],
+        ["databricks", "bundle", "validate", "-p=attacker"],
+        ["databricks", "bundle", "validate", "--profile=attacker"],
+        ["sh", "-c", "databricks bundle deploy -pattacker -t dev"],
+        ["sh", "-c", "databricks bundle deploy --profile=attacker -t dev"],
+    ],
+    ids=["attached", "equals", "long-equals", "sh-attached", "sh-long-equals"],
+)
+def test_an_attached_profile_flag_is_refused_too(
+    command: list[str], capsys: pytest.CaptureFixture[str]
+) -> None:
+    """N1: `-pNAME` and `--profile=NAME` are the same flag to the CLI's
+    parser; the refusal read only `-p` followed by a space, `=` or quote."""
+    assert main(["--", *command]) == 2
+    assert "-p/--profile" in capsys.readouterr().err
+
+
+BUNDLE = """\
+bundle:
+  name: caos
+targets:
+  dev:
+    mode: development
+"""
+
+
+@pytest.mark.parametrize(
+    ("edit", "named"),
+    [
+        (
+            lambda host: BUNDLE + f"    workspace:\n      host: {host}\n",
+            "target dev sets workspace.host",
+        ),
+        (
+            lambda host: BUNDLE + "workspace:\n  profile: attacker\n",
+            "the bundle sets workspace.profile",
+        ),
+        (
+            lambda host: BUNDLE + "    workspace:\n      auth_type: azure-cli\n",
+            "target dev sets workspace.auth_type",
+        ),
+        (
+            lambda host: BUNDLE + "include:\n  - resources/*.yml\n",
+            "the bundle includes other files",
+        ),
+    ],
+    ids=["target-host", "root-profile", "target-auth-type", "include"],
+)
+def test_a_bundle_naming_a_workspace_of_its_own_never_leaves_loopback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    edit: Callable[[str], str],
+    named: str,
+) -> None:
+    """W7: CLI 1.17.0 reached a target's own `workspace.host` rather than
+    the stub's DATABRICKS_HOST (review 4's probe: 0 requests served). A
+    bundle that names a workspace, a way into one, or files the stand-in
+    cannot vouch for is refused before the CLI runs -- from any directory
+    under the bundle's root, as the CLI finds it."""
+    with WorkspaceStub().serving() as attacker:
+        root = tmp_path / "bundle"
+        (root / "sub").mkdir(parents=True)
+        (root / "databricks.yml").write_text(edit(attacker.host), encoding="utf-8")
+        monkeypatch.chdir(root / "sub")
+        assert bundle_config(root / "sub") == root / "databricks.yml"
+        assert main(["--", "databricks", "bundle", "validate", "-t", "dev"]) == 2
+        assert named in capsys.readouterr().err
+        assert attacker.requests == []
+
+
+def test_inherited_auth_never_reaches_the_child(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """W7: an inherited DATABRICKS_AUTH_TYPE, client id or secret -- or any
+    other DATABRICKS_*, ARM_* or Google credential -- would choose another
+    way into another workspace; the child sees the stub's host and token
+    and nothing else of the kind."""
+    for name, value in {
+        "DATABRICKS_AUTH_TYPE": "azure-cli",
+        "DATABRICKS_CLIENT_ID": "inherited-id",
+        "DATABRICKS_CLIENT_SECRET": "inherited-secret",
+        "DATABRICKS_BUNDLE_ROOT": "/elsewhere",
+        "ARM_CLIENT_ID": "inherited-azure",
+        "GOOGLE_CREDENTIALS": "{}",
+    }.items():
+        monkeypatch.setenv(name, value)
+    child = (
+        "import os, sys\n"
+        "named = sorted(k for k in os.environ if k.startswith(('DATABRICKS_', 'ARM_'))"
+        " or k == 'GOOGLE_CREDENTIALS')\n"
+        "expected = ['DATABRICKS_BUNDLE_ENGINE', 'DATABRICKS_CONFIG_FILE',"
+        " 'DATABRICKS_HOST', 'DATABRICKS_TOKEN']\n"
+        "assert named == expected, named\n"
+        "assert os.environ['DATABRICKS_HOST'].startswith('http://127.0.0.1:')\n"
+    )
+    assert main(["--", sys.executable, "-c", child]) == 0
+    handed = stand_in_environment(dict(os.environ), WorkspaceStub(host="http://x"))
+    assert "DATABRICKS_CLIENT_SECRET" not in handed
+    assert handed["DATABRICKS_HOST"] == "http://x"
 
 
 def test_an_unrelated_command_carrying_its_own_p_flag_is_not_refused(
