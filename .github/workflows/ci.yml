@@ -54,11 +54,12 @@ jobs:
         run: |
           base=HEAD^
           if [ -n "$BASE_REF" ]; then base="origin/$BASE_REF"; elif git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then base="$BEFORE"; fi
-          # `--against` measures $base's own tracked files fresh, under this
-          # commit's SUPPRESSIONS patterns (FP-11), rather than trusting its
-          # committed tests/gate_baseline.json at face value -- a PR that
-          # only weakened a pattern could otherwise make its own count look
-          # like a fall against a base measured under the old, stronger one.
+          # `--against` measures $base's own tracked files and this tree's
+          # fresh, rather than trusting either committed
+          # tests/gate_baseline.json, and twice: under this commit's
+          # SUPPRESSIONS patterns (FP-11), and under $base's own checker read
+          # from git (W5) -- so a PR that only weakened a pattern can neither
+          # make its count look like a fall nor hide the suppression it spends.
           uv run python scripts/check_gate_config.py --against "$base"
 
   types:
