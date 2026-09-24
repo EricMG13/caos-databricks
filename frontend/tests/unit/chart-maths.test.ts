@@ -297,6 +297,11 @@ describe("axes print nice numbers, not float residue", () => {
     const cut = fitText("Annual report and accounts 2025", 60, TICK_SIZE);
     expect(cut.endsWith("…")).toBe(true);
     expect(textWidth(cut, TICK_SIZE)).toBeLessThanOrEqual(60);
+    // A label given exactly its own width fits whole: the widest label of a
+    // horizontal chart is sized so, and lost its last letter to rounding.
+    for (const label of ["Restructuring", "Adjusted EBITDA", "Other income"]) {
+      expect(fitText(label, textWidth(label, TICK_SIZE), TICK_SIZE)).toBe(label);
+    }
     // Labels too wide for their step are thinned at an even step, never overlapped.
     const labels = acrossLabels(
       ["January 2026", "February 2026", "March 2026"],

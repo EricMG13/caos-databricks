@@ -11,7 +11,7 @@ import { fallbackChrome } from "@/chrome/fallback";
 import { ACTION_UNPLACED, refusalDetail, refusalText } from "@/controls/RefusedControl";
 import { scrollArtifact } from "@/controls/scroll";
 import { regionSentence } from "@/states/RegionState";
-import { displayDecimal, shortDigest, stamp } from "@/ds/format";
+import { displayDecimal, hundredfold, shortDigest, stamp } from "@/ds/format";
 import { NODE_SEVERITY, confidenceTier, nodeTone } from "@/sections/analysis/tone";
 import { caseHref } from "@/sections/directory/CaseRegister";
 import { severityOf } from "@/sections/run/RouteGraph";
@@ -205,6 +205,17 @@ describe("displayDecimal", () => {
     expect(displayDecimal("7")).toBe("7.00");
     expect(displayDecimal("12.6", 0)).toBe("13");
     expect(displayDecimal("n/a")).toBe("n/a");
+  });
+});
+
+describe("hundredfold", () => {
+  test("a fraction becomes a percent on its digits, never through a float", () => {
+    expect(hundredfold("0.2034")).toBe("20.34");
+    expect(hundredfold("0.1")).toBe("10");
+    expect(hundredfold("-0.05")).toBe("-5");
+    expect(hundredfold("1.23456")).toBe("123.456");
+    expect(hundredfold("0.070000000000000007")).toBe("7.0000000000000007");
+    expect(hundredfold("n/a")).toBe("n/a");
   });
 });
 

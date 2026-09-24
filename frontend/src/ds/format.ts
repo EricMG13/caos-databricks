@@ -32,3 +32,15 @@ export function displayDecimal(value: string, places = 2): string {
   const shown = places ? `${integer}.${text.slice(text.length - places)}` : integer;
   return scaled === 0n ? shown : `${sign}${shown}`;
 }
+
+/** A fraction as a percentage: the point moved two places on the digits,
+    never through a float (`0.2034` is `20.34`). The Book's percent cells and
+    the Analysis figures of a fraction the bundle wrote share it. */
+export function hundredfold(value: string): string {
+  const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(value);
+  if (!match) return value;
+  const [, sign, whole, fraction = ""] = match;
+  const digits = fraction.padEnd(2, "0");
+  const rest = digits.slice(2);
+  return `${sign}${BigInt(whole + digits.slice(0, 2))}${rest ? `.${rest}` : ""}`;
+}
