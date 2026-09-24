@@ -153,10 +153,18 @@ NEAR_BACKGROUND_DISTANCE = 0.1
 # a `Separation` whose tint transform is an exponential (Type 2) function into
 # one of them. Any other -- Lab, a pattern, DeviceN, the `None` colorant, a
 # sampled, stitching or PostScript tint transform -- is not decided, and a
-# glyph painted in one is never found near the background. A `cs` or `CS`
+# glyph painted in one is never found near the background (the `None`
+# colorant is marked by its own reason, `COLORANT_NONE_SPACES`). A `cs` or `CS`
 # sets its space's initial colour (ISO 32000-1, 8.6.8), which pdfminer does
 # not: it kept the colour before, so `1 g /CS0 cs` read black text as white.
 READ_COLOUR_SPACES = "gray-rgb-cmyk-by-count,indexed,separation-exponential"
+# The colour spaces that paint nothing (ISO 32000-1, 8.6.6.4 and 8.6.6.5): a
+# `Separation` whose colorant is `None`, and a `DeviceN` whose colorants all
+# are, `DEVICE_N_COLORANTS` at most (Annex C's limit). A glyph every colour of
+# whose render mode -- its fill's, its stroke's, or both -- is painted in one
+# is drawn by no conforming viewer, whatever the tints.
+COLORANT_NONE_SPACES = "separation-none,devicen-all-none"
+DEVICE_N_COLORANTS = 32
 # What is behind a glyph: the last filled path under its centre, or white.
 BACKDROP = "last-filled-path-over-white"
 
@@ -183,10 +191,12 @@ class PdfExtractor:
             # axis, and Indexed and exponential Separation colours are read
             # (N9); text drawn after a form XObject is laid out in the matrix
             # a viewer draws it in, where pdfminer placed it by the form's.
-            # Earlier rows keep their stored identity and verify as recorded;
-            # readmission is how a source gains the new tokens (section
-            # 44.4's rule).
-            "7",
+            # v8: text painted in a colorant that paints nothing -- the
+            # `None` of a Separation, or of every colorant of a DeviceN -- is
+            # marked. Earlier rows keep their stored identity and verify as
+            # recorded; readmission is how a source gains the new tokens
+            # (section 44.4's rule).
+            "8",
             {
                 "pdfminer_version": version("pdfminer.six"),
                 "line_overlap": LAYOUT["line_overlap"],
@@ -211,6 +221,8 @@ class PdfExtractor:
                 "hidden_under_pt_axis": SMALLEST_READABLE_AXIS,
                 "hidden_near_background": NEAR_BACKGROUND_DISTANCE,
                 "hidden_colour_spaces": READ_COLOUR_SPACES,
+                "hidden_colorant_none": COLORANT_NONE_SPACES,
+                "hidden_device_n_colorants": DEVICE_N_COLORANTS,
                 "hidden_backdrop": BACKDROP,
                 "hidden_optional_content": OPTIONAL_CONTENT,
                 "hidden_optional_content_groups": OPTIONAL_CONTENT_GROUPS,

@@ -29,6 +29,7 @@ const HIDDEN: Record<HiddenReason, string> = {
   under_2pt: "under 2 pt",
   optional_content_off: "on a layer switched off",
   painted_over: "painted over",
+  colorant_none: "painted with no ink (colorant None)",
 };
 const hiddenWords = (reasons: readonly HiddenReason[]) =>
   reasons.map((reason) => HIDDEN[reason]).join(", ");

@@ -63,6 +63,7 @@ from caos.evidence.extract import (
     HIDDEN_REASONS,
     TEXT_ENCODING,
     AdmissionLimits,
+    one_line,
 )
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
@@ -108,8 +109,9 @@ PDF_V2_COORDINATES = "crop-top-left-rotated-pt"
 # marks the lines a reader may not see (N27), v5 marks optional content
 # switched off, v6 text painted over, and v7 writes a line break in a token as
 # a space (W4), measures a glyph on both axes and reads Indexed and Separation
-# colours (N9), and lays text out after a form XObject in the page's matrix.
-PDF_CROP_VERSIONS = frozenset({"2", "3", "4", "5", "6", "7"})
+# colours (N9), and lays text out after a form XObject in the page's matrix;
+# v8 marks text painted in a colorant that paints nothing.
+PDF_CROP_VERSIONS = frozenset({"2", "3", "4", "5", "6", "7", "8"})
 TEXT_COORDINATES = "cell-top-left-pt"
 # The encodings a `caos.plain-text` identity records: v1-v3 `utf-8`, v4
 # `utf-8-sig` (`extract.TEXT_ENCODING`). Each is also the codec's name.
@@ -162,6 +164,9 @@ def read_page(  # noqa: PLR0913 -- the store, the blobs, one page's four ids, th
     crop = _Crop(document, data, limits, deadline, actor_id)
     frame = _frame(name, version, config, crop, page)
     lines = [row for row in rows if row[2] is not None]
+    # Each line shown as one line (`one_line`, W4), as the prompt shows it: a
+    # token stored before `caos.pdfminer` v7 can hold a glyph's line breaks,
+    # and the stored bytes and their digests stay as recorded.
     body = PageBody(
         case_id=case_id,
         run_id=run_id,
@@ -171,7 +176,7 @@ def read_page(  # noqa: PLR0913 -- the store, the blobs, one page's four ids, th
         frame=frame,
         lines=[
             PageLine(
-                text=row[2],
+                text=one_line(row[2]),
                 x0=row[4],
                 y0=row[5],
                 x1=row[6],

@@ -1,14 +1,15 @@
 """Why a glyph a PDF lays out may not be seen on the rendered page (N27).
 
 pdfminer lays out every glyph a content stream shows, however it is painted,
-so five kinds of text a reader of the rendered page does not see arrive as
+so six kinds of text a reader of the rendered page does not see arrive as
 ordinary words: text in render mode 3, painted neither filled nor stroked --
 which is also the text layer every OCR'd scan carries over its image -- text
 painted in the colour already behind it, glyphs too small to read, text
-inside optional content the document switches off, and text the page paints
-over later. They stay evidence, because a scan's only text is its invisible
-layer, and the extractor marks each line that carries one with why
-(`pdf._line_tokens`), so the approver and the model can weigh it.
+inside optional content the document switches off, text the page paints
+over later, and text painted in a colorant that paints nothing. They stay
+evidence, because a scan's only text is its invisible layer, and the
+extractor marks each line that carries one with why (`pdf._line_tokens`), so
+the approver and the model can weigh it.
 
 `MarkingAggregator` is pdfminer's page aggregator watching the paint in
 drawing order: each string's render mode and em on the page -- on its
@@ -22,7 +23,8 @@ that device cannot see: whether an `/OC` sequence is optional content the
 document's default configuration switches off (`OptionalContent`), read
 against the resources in force; the clip and transparency a fill is painted
 under (`PaintState`); and the colours of an `Indexed` or `Separation` space
-pdfminer names without reading (`read_space`, N9).
+pdfminer names without reading (`read_space`, N9), or that a `Separation` or
+`DeviceN` space paints none (`ColorantNone`).
 
 It is a reading of the paint, not a rendering: where a viewer could differ --
 a clip of any shape but a rectangle, a transparency group, a soft mask, a
@@ -65,6 +67,7 @@ from pdfminer.utils import (
 )
 
 from caos.evidence.extract import (
+    COLORANT_NONE,
     NEAR_BACKGROUND,
     OPTIONAL_CONTENT_OFF,
     PAINTED_OVER,
@@ -73,6 +76,7 @@ from caos.evidence.extract import (
 )
 from caos.evidence.pdf import (
     CLIP_ONLY_RENDER_MODE,
+    DEVICE_N_COLORANTS,
     INVISIBLE_RENDER_MODE,
     MARKED_CONTENT_DEPTH,
     NEAR_BACKGROUND_DISTANCE,
@@ -667,6 +671,8 @@ class MarkingAggregator(PDFPageAggregator):
         reasons = [OPTIONAL_CONTENT_OFF] if switched_off else []
         if render in _INVISIBLE_RENDER_MODES:
             reasons.append(RENDER_MODE_3)
+        elif _unpainted(render, glyph.graphicstate):
+            reasons.append(COLORANT_NONE)
         elif _near(_paints(render, glyph.graphicstate), self._behind(glyph)):
             reasons.append(NEAR_BACKGROUND)
         if em < SMALLEST_READABLE_PT:
@@ -724,9 +730,9 @@ class MarkingInterpreter(PDFPageInterpreter):
 
     @override
     def init_resources(self, resources: dict[object, object]) -> None:
-        """pdfminer's resources, and each `Indexed` or `Separation` colour
-        space among them this reading decides (`read_space`, N9) in place of
-        the bare name pdfminer keeps for it."""
+        """pdfminer's resources, and each `Indexed`, `Separation` or
+        `DeviceN` colour space among them this reading decides (`read_space`,
+        N9) in place of the bare name pdfminer keeps for it."""
         super().init_resources(resources)
         spaces = _dict(_entry(resources, "ColorSpace"))
         for name, spec in (spaces or {}).items():
@@ -799,14 +805,29 @@ class MarkingInterpreter(PDFPageInterpreter):
             state.clipping = (self.curpath, len(self.curpath))
 
 
+def _painted_in(
+    render: int, graphicstate: PDFGraphicState
+) -> list[tuple[PDFColorSpace, object]]:
+    """The spaces and colours a glyph in render mode `render` is painted in:
+    the fill's when the mode fills, the stroke's when it strokes."""
+    painted: list[tuple[PDFColorSpace, object]] = []
+    if render in _FILLED:
+        painted.append((graphicstate.ncs, graphicstate.ncolor))
+    if render in _STROKED:
+        painted.append((graphicstate.scs, graphicstate.scolor))
+    return painted
+
+
 def _paints(render: int, graphicstate: PDFGraphicState) -> list[Rgb | None]:
     """The colours a glyph in render mode `render` is painted in."""
-    paints: list[Rgb | None] = []
-    if render in _FILLED:
-        paints.append(_rgb(graphicstate.ncs, graphicstate.ncolor))
-    if render in _STROKED:
-        paints.append(_rgb(graphicstate.scs, graphicstate.scolor))
-    return paints
+    return [_rgb(space, value) for space, value in _painted_in(render, graphicstate)]
+
+
+def _unpainted(render: int, graphicstate: PDFGraphicState) -> bool:
+    """Whether every space a glyph in render mode `render` is painted in --
+    chosen as its colours are (`_painted_in`) -- paints nothing."""
+    spaces = [space for space, _value in _painted_in(render, graphicstate)]
+    return bool(spaces) and all(isinstance(space, ColorantNone) for space in spaces)
 
 
 def _near(paints: list[Rgb | None], behind: Rgb | None) -> bool:
@@ -945,19 +966,43 @@ class SeparationSpace(PDFColorSpace):
         return None if components is None else _counted(components)
 
 
-def read_space(spec: object) -> IndexedSpace | SeparationSpace | None:
+class ColorantNone(PDFColorSpace):
+    """A colour space that paints nothing: a `Separation` whose colorant is
+    `None`, or a `DeviceN` whose colorants all are (ISO 32000-1, 8.6.6.4 and
+    8.6.6.5). Painting in it has no effect on the page, whatever its tints,
+    so it has no colour to compare (`_rgb` reads none), and a glyph painted
+    in nothing else is marked `colorant_none` (`_unpainted`)."""
+
+
+def read_space(
+    spec: object,
+) -> IndexedSpace | SeparationSpace | ColorantNone | None:
     """The colour space `spec` declares, when it is an `Indexed` or a
-    `Separation` one whose colours this reading decides (N9); `None` for any
-    other, and for one it cannot read."""
-    entries = _list(spec, 4)
+    `Separation` one whose colours this reading decides (N9), or one that
+    paints nothing (`ColorantNone`); `None` for any other, and for one it
+    cannot read."""
+    entries = _list(spec, 5)
+    family = _name(entries[0]) if entries else None
+    if family == "DeviceN" and entries is not None and len(entries) >= 4:
+        return _device_n(entries[1])
     if entries is None or len(entries) != 4:
         return None
-    family = _name(entries[0])
     if family == "Indexed":
         return _indexed(entries[1], entries[2], entries[3])
     if family == "Separation":
         return _separation(entries[1], entries[2], entries[3])
     return None
+
+
+def _device_n(names: object) -> ColorantNone | None:
+    """A `DeviceN` space whose colorants, `DEVICE_N_COLORANTS` at most, are
+    all `None`: it paints nothing. `None` for any other, which this reading
+    does not decide -- its tints are components of an alternate space it does
+    not read."""
+    colorants = _list(names, DEVICE_N_COLORANTS)
+    if not colorants or any(_name(colorant) != "None" for colorant in colorants):
+        return None
+    return ColorantNone("DeviceN", len(colorants))
 
 
 def _indexed(base: object, top: object, lookup: object) -> IndexedSpace | None:
@@ -984,14 +1029,17 @@ def _indexed(base: object, top: object, lookup: object) -> IndexedSpace | None:
 
 def _separation(
     colorant: object, alternate: object, transform: object
-) -> SeparationSpace | None:
-    """A `Separation` space whose colorant paints -- `None` paints nothing,
-    for which no reason here is the word -- and whose tint transform is an
-    exponential function into an alternate space `_counted` reads."""
+) -> SeparationSpace | ColorantNone | None:
+    """A `Separation` space: its `None` colorant paints nothing, whatever its
+    alternate and tint transform; any other is read when its tint transform
+    is an exponential function into an alternate space `_counted` reads."""
+    name = _name(colorant)
+    if name == "None":
+        return ColorantNone("Separation", 1)
     count = _count(alternate)
     function = _dict(transform)
     if (
-        _name(colorant) in (None, "None")
+        name is None
         or count is None
         or function is None
         or _resolved(function.get("FunctionType")) != 2

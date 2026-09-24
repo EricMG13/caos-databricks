@@ -56,15 +56,18 @@ class Token:
 # Why a line's text may not be seen on the rendered page (N27): drawn in text
 # render mode 3 -- every OCR'd scan's text layer -- painted near the colour
 # behind it, in glyphs under 2 pt, inside optional content the document's
-# default configuration switches off, or under an opaque fill the page paints
-# over it later. Such text is kept as evidence and its line marked, never
-# dropped. Sorted, so a mark is its reasons in this order.
+# default configuration switches off, under an opaque fill the page paints
+# over it later, or in a colorant that paints nothing -- a Separation's `None`
+# (ISO 32000-1, 8.6.6.4). Such text is kept as evidence and its line marked,
+# never dropped. Sorted, so a mark is its reasons in this order.
+COLORANT_NONE = "colorant_none"
 NEAR_BACKGROUND = "near_background"
 OPTIONAL_CONTENT_OFF = "optional_content_off"
 PAINTED_OVER = "painted_over"
 RENDER_MODE_3 = "render_mode_3"
 UNDER_2PT = "under_2pt"
 HIDDEN_REASONS = (
+    COLORANT_NONE,
     NEAR_BACKGROUND,
     OPTIONAL_CONTENT_OFF,
     PAINTED_OVER,

@@ -70,6 +70,7 @@ from caos.evidence.pdf import (
 from caos.evidence.visibility import (
     PAPER,
     Backdrop,
+    ColorantNone,
     Covers,
     IndexedSpace,
     MarkedContent,
@@ -486,7 +487,7 @@ def test_no_token_carries_a_line_break() -> None:
     assert not any(set(token.text) & set(LINE_BREAKS) for token in tokens)
     assert one_line(DETACHED) in [token.text for token in tokens]
     identity = PdfExtractor().identity
-    assert (identity.version, identity.config["token_line_breaks"]) == ("7", "space")
+    assert (identity.version, identity.config["token_line_breaks"]) == ("8", "space")
 
 
 def test_a_glyphs_line_breaks_cannot_detach_the_host_note() -> None:
@@ -578,13 +579,14 @@ def test_the_marks_are_every_sorted_combination_of_the_reasons() -> None:
     """One word per reason, sorted and joined, so a line's mark is one string
     the store can check and the page read can split."""
     assert HIDDEN_REASONS == (
+        "colorant_none",
         "near_background",
         "optional_content_off",
         "painted_over",
         "render_mode_3",
         "under_2pt",
     )
-    assert len(HIDDEN_MARKS) == 31
+    assert len(HIDDEN_MARKS) == 63
     assert all(mark.split(",") == sorted(set(mark.split(","))) for mark in HIDDEN_MARKS)
 
 
@@ -1387,12 +1389,13 @@ NEAR = "near_background"
         (b"1 g /CS0 cs", ""),
         (b"1 g /CS0 cs 1 1 1 sc", NEAR),
         # Undecided: an Indexed base this reading does not read or a table
-        # too short for its entries, the `None` colorant, and a PostScript
-        # tint transform.
+        # too short for its entries, and a PostScript tint transform.
         (b"/IdxLab cs 0 sc", ""),
         (b"/IdxShort cs 0 sc", ""),
-        (b"/SepNone cs 0 scn", ""),
         (b"/SepPS cs 0 scn", ""),
+        # The `None` colorant paints nothing: never compared with the paper,
+        # it is marked by its own reason.
+        (b"/SepNone cs 0 scn", "colorant_none"),
     ],
 )
 def test_a_colour_space_this_reading_decides_is_compared_with_the_paper(
@@ -1421,10 +1424,13 @@ def _exponential(**entries: object) -> dict[str, object]:
 def test_the_colour_space_reader_decides_only_what_it_can() -> None:
     """`read_space` decides an `Indexed` table over a space read by count and
     a `Separation` with an exponential tint transform into one; everything
-    else -- a malformed table or function, the `None` colorant, a stitching
-    function, a base or alternate it does not read -- is `None`, undecided.
-    Indices are rounded and held to the table, tints to their domain and
-    outputs to their range; a tint with no real value is undecided."""
+    else -- a malformed table or function, a stitching function, a base or
+    alternate it does not read -- is `None`, undecided. Indices are rounded
+    and held to the table, tints to their domain and outputs to their range;
+    a tint with no real value is undecided. A Separation's `None` colorant,
+    and a DeviceN's when it is every colorant, paint nothing (`ColorantNone`),
+    whatever the alternate and tint transform, with as many tints as pdfminer
+    reads for the space."""
     gray, rgb = LIT("DeviceGray"), LIT("DeviceRGB")
     table = read_space([LIT("Indexed"), gray, 2, bytes([0, 128, 255])])
     assert isinstance(table, IndexedSpace)
@@ -1458,6 +1464,16 @@ def test_the_colour_space_reader_decides_only_what_it_can() -> None:
     )
     assert isinstance(rooted, SeparationSpace)
     assert rooted.rgb(0.0) is None and rooted.rgb(-0.5) is None
+    function = PDFStream({"FunctionType": 4}, b"{ pop }")
+    for unpainted, family, count in (
+        ([LIT("Separation"), LIT("None"), gray, _exponential(N=1)], "Separation", 1),
+        ([LIT("Separation"), LIT("None"), LIT("Lab"), function], "Separation", 1),
+        ([LIT("DeviceN"), [LIT("None")] * 2, gray, function], "DeviceN", 2),
+        ([LIT("DeviceN"), [LIT("None")] * 32, gray, function, {}], "DeviceN", 32),
+    ):
+        space = read_space(unpainted)
+        assert isinstance(space, ColorantNone), unpainted
+        assert (space.name, space.ncomponents) == (family, count)
     two = PDFStream({"N": 2}, b"")
     for undecided in (
         [LIT("Indexed"), gray, 256, bytes(257)],
@@ -1465,12 +1481,16 @@ def test_the_colour_space_reader_decides_only_what_it_can() -> None:
         [LIT("Indexed"), [LIT("ICCBased"), two], 0, bytes(2)],
         [LIT("Indexed"), LIT("Pattern"), 0, bytes(1)],
         [LIT("Indexed"), rgb, 1, bytes(5)],
-        [LIT("Separation"), LIT("None"), gray, _exponential(N=1)],
         [LIT("Separation"), LIT("Spot"), gray, {"FunctionType": 3, "Domain": [0, 1]}],
         [LIT("Separation"), LIT("Spot"), rgb, _exponential(N=1)],
         [LIT("Separation"), LIT("Spot"), LIT("Lab"), _exponential(N=1)],
         [LIT("Separation"), LIT("Spot"), gray, _exponential(N=1, Range=[0, 1, 0])],
         [LIT("DeviceN"), [LIT("A"), LIT("B")], gray, _exponential(N=1)],
+        [LIT("DeviceN"), [LIT("None"), LIT("Spot")], gray, function],
+        [LIT("DeviceN"), [LIT("None")] * 33, gray, function],
+        [LIT("DeviceN"), [], gray, function],
+        [LIT("DeviceN"), [LIT("None")], gray],
+        [LIT("Separation"), LIT("None"), gray, function, {}],
         [LIT("Indexed"), gray, 0],
     ):
         assert read_space(undecided) is None, undecided
@@ -1489,6 +1509,112 @@ def test_a_fill_in_an_indexed_space_covers_what_it_holds() -> None:
 
     assert _marks(data) == {"Kept visible": PAINTED}
     assert _lines(PdfExtractor().extract(data)) == {"Kept visible": PAINTED}
+
+
+# Colour spaces that paint nothing (ISO 32000-1, 8.6.6.4 and 8.6.6.5): a
+# Separation's `None` colorant, a DeviceN whose colorants all are `None`, and
+# one whose colorants are not all; `/Sep` is a spot ink, as in `SPACES`.
+# Object 8 is the DeviceN spaces' tint transform, two tints to one gray.
+UNPAINTED = (
+    b"/ColorSpace << /SepNone [/Separation /None /DeviceGray << /FunctionType 2"
+    b" /Domain [0 1] /C0 [1] /C1 [0] /N 1 >>]"
+    b" /Sep [/Separation /Spot /DeviceCMYK << /FunctionType 2 /Domain [0 1]"
+    b" /C0 [0 0 0 0] /C1 [0 0 0 1] /N 1 >>]"
+    b" /DevNone [/DeviceN [/None /None] /DeviceGray 8 0 R]"
+    b" /DevSome [/DeviceN [/None /Spot] /DeviceGray 8 0 R] >>"
+)
+TWO_TINTS = stream(b"{ add 2 div }", b"/FunctionType 4 /Domain [0 1 0 1] /Range [0 1]")
+COLORANT = "colorant_none"
+
+
+def _painted(paint: bytes) -> bytes:
+    """`Line` shown after `paint`, in `UNPAINTED`'s spaces."""
+    return layered_pdf(
+        paint + b"\n" + shown(700, "Line"),
+        layers=b"",
+        resources=UNPAINTED,
+        more=(TWO_TINTS,),
+    )
+
+
+@pytest.mark.parametrize(
+    ("paint", "mark"),
+    [
+        # Filled: the fill's space decides, whatever the tint `cs` or `scn`
+        # sets -- and a DeviceN whose every colorant is `None` is the same.
+        (b"/SepNone cs 1 scn", COLORANT),
+        (b"/SepNone cs 0 scn", COLORANT),
+        (b"/SepNone cs", COLORANT),
+        (b"/DevNone cs 1 1 scn", COLORANT),
+        (b"/SepNone CS", ""),
+        # Stroked only: the stroke's space decides, as it does for the
+        # colour compared with what is behind the glyph.
+        (b"/SepNone CS 1 SCN 1 Tr", COLORANT),
+        (b"/SepNone cs 1 Tr", ""),
+        # Filled and stroked: seen unless both paint nothing.
+        (b"/SepNone cs /SepNone CS 2 Tr", COLORANT),
+        (b"/SepNone cs 2 Tr", ""),
+        # A space that paints, set after it or in its place, is read as ever.
+        (b"/SepNone cs 0 g", ""),
+        (b"/DevSome cs 1 1 scn", ""),
+        (b"/Sep cs 1 scn", ""),
+        # Render mode 3 draws nothing whatever the colour: its own reason.
+        (b"/SepNone cs 3 Tr", "render_mode_3"),
+    ],
+)
+def test_text_in_a_colorant_that_paints_nothing_is_marked(
+    paint: bytes, mark: str
+) -> None:
+    """ISO 32000-1, 8.6.6.4: painting in a Separation space whose colorant is
+    `None` has no effect on the page, so text filled in it is seen on no
+    output. The reader left it undecided and admitted it unmarked; its line
+    is marked `colorant_none` now -- by the colours its render mode paints,
+    as the colour compared with the background is chosen."""
+    assert _marks(_painted(paint)) == {"Line": mark}
+
+
+def test_the_extraction_child_marks_the_none_colorant() -> None:
+    """Admission's killed, budgeted child marks what the walk marks, under
+    identity v8, which declares the reading."""
+    identity = PdfExtractor().identity
+
+    assert _lines(PdfExtractor().extract(_painted(b"/SepNone cs"))) == {
+        "Line": COLORANT
+    }
+    assert (identity.version, identity.config["hidden_colorant_none"]) == (
+        "8",
+        "separation-none,devicen-all-none",
+    )
+
+
+def test_the_approver_reads_the_none_colorant_on_the_page(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> None:
+    """Admitted, stored and served: the store accepts the mark and the page
+    read names the reason on the line."""
+    blobs = BlobStore(tmp_path / "blobs")
+    pinned = pin(*case, blobs, [("unpainted.pdf", _painted(b"/SepNone cs"))])
+
+    [line] = page_of(pinned, pinned.sources[0]).body.lines
+
+    assert (line.text, line.hidden) == ("Line", [COLORANT])
+
+
+@pytest.mark.parametrize(
+    ("paint", "mark"),
+    [
+        (b"/Sep cs 0 scn", NEAR),
+        (b"/Sep cs 0.05 scn", NEAR),
+        (b"/Sep cs 0.5 scn", ""),
+        (b"/Sep cs 1 scn", ""),
+        (b"/Sep cs", ""),
+    ],
+)
+def test_a_spot_ink_is_still_read_by_its_tint(paint: bytes, mark: str) -> None:
+    """A Separation naming a real ink is not the `None` colorant: its colour
+    is its exponential tint transform's, compared with what is behind the
+    glyph as before -- no ink is the paper's white, full ink is black."""
+    assert _marks(_painted(paint)) == {"Line": mark}
 
 
 # A page resource naming the form that moves its own matrix 600 pt up
@@ -1529,6 +1655,28 @@ def test_text_after_a_form_is_placed_where_a_viewer_draws_it(before: bytes) -> N
     )
 
 
+# What PdfExtractor v7 and v8 added to the identity's configuration: without
+# them, the current configuration is the one a v6 row recorded.
+SINCE_V7 = (
+    "token_line_breaks",
+    "hidden_under_pt_axis",
+    "hidden_colour_spaces",
+    "form_matrix",
+    "hidden_colorant_none",
+    "hidden_device_n_colorants",
+)
+
+
+def _v6_identity() -> ExtractorIdentity:
+    """The identity a row admitted under PdfExtractor v6 recorded."""
+    config = {
+        key: value
+        for key, value in PdfExtractor().identity.config.items()
+        if key not in SINCE_V7
+    }
+    return ExtractorIdentity("caos.pdfminer", "6", config)
+
+
 def test_a_row_placed_by_a_forms_matrix_before_v7_keeps_its_rectangles(
     case: tuple[StoreConnection, UUID], tmp_path: Path
 ) -> None:
@@ -1542,17 +1690,11 @@ def test_a_row_placed_by_a_forms_matrix_before_v7_keeps_its_rectangles(
         resources=MOVING,
         more=(*FORMS, NESTED),
     )
-    config = {
-        key: value
-        for key, value in PdfExtractor().identity.config.items()
-        if key not in ("token_line_breaks", "hidden_under_pt_axis")
-        and key not in ("hidden_colour_spaces", "form_matrix")
-    }
     recorded = [
         replace(token, y0=token.y0 - 600, y1=token.y1 - 600)
         for token in PdfExtractor().extract(data)
     ]
-    reader = Reader(ExtractorIdentity("caos.pdfminer", "6", config), recorded)
+    reader = Reader(_v6_identity(), recorded)
     blobs = BlobStore(tmp_path / "blobs")
     pinned = pin(*case, blobs, [("moved.pdf", data)], reader)
 
@@ -1563,6 +1705,34 @@ def test_a_row_placed_by_a_forms_matrix_before_v7_keeps_its_rectangles(
 
     assert (line.y0, line.y1) == (recorded[0].y0, recorded[0].y1)
     assert (box.y0, box.y1) == (recorded[0].y0, recorded[0].y1)
+
+
+def test_the_page_read_shows_a_line_stored_with_a_break_as_one_line(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> None:
+    """A token admitted before v7 can hold a glyph's line breaks. The prompt
+    shows its line as one line (F290), but the approver's page read served
+    the stored breaks as they were, so one line of the token index -- here
+    one carrying a header of the document's choosing -- read as several in
+    the drawer. It is shown as one line now, as the prompt shows it; what is
+    stored, the token and the digests over it, is untouched."""
+    data = raw_pdf(shown(700, "Recorded"))
+    [token] = PdfExtractor().extract(data)
+    reader = Reader(_v6_identity(), [replace(token, text=DETACHED)])
+    blobs = BlobStore(tmp_path / "blobs")
+    pinned = pin(*case, blobs, [("stored.pdf", data)], reader)
+    query = (
+        "SELECT t.text, e.output_sha256, e.extraction_sha256 FROM source_tokens t"
+        " JOIN source_extractions e USING (source_id) WHERE source_id = %s"
+    )
+    stored = pinned.conn.execute(query, (pinned.sources[0],)).fetchall()
+
+    [line] = page_of(pinned, pinned.sources[0]).body.lines
+
+    assert line.text == one_line(DETACHED)
+    assert not set(line.text) & set(LINE_BREAKS)
+    assert stored[0][0] == DETACHED
+    assert pinned.conn.execute(query, (pinned.sources[0],)).fetchall() == stored
 
 
 def test_reasons_join_sorted_on_one_line() -> None:
