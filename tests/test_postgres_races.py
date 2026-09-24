@@ -102,9 +102,7 @@ def test_concurrent_sign_freeze_and_file_across_two_cases_keep_one_chain_each(
             # attempts need their own, independent signer minted up front --
             # `_sign`'s own default is memoized lazily, which two threads
             # racing its very first call could double-grant.
-            cases.append(
-                (held, _save(held), _actor(held), _actor(held), _actor(held))
-            )
+            cases.append((held, _save(held), _actor(held), _actor(held), _actor(held)))
 
         for stage in ("sign", "freeze", "file"):
             barrier = Barrier(4)

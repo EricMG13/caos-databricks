@@ -151,10 +151,11 @@ def _receipt_role_error(receipt: dict[str, Any]) -> str | None:
     absent already is.
     """
     named = [receipt.get(role) for role in ("signed_by", "frozen_by", "filed_by")]
-    if any(not isinstance(actor, str) or not actor.strip() for actor in named):
+    texts = [actor for actor in named if isinstance(actor, str)]
+    if len(texts) != len(named) or any(not actor.strip() for actor in texts):
         return "the receipt does not name all three roles"
     try:
-        identities = {UUID(actor.strip()) for actor in named}
+        identities = {UUID(actor.strip()) for actor in texts}
     except ValueError:
         return "the receipt does not name all three roles"
     if len(identities) != 3:

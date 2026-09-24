@@ -48,8 +48,8 @@ from caos.graph.route import MODEL_MODULE, ResolvedRoute, RouteNode
 from caos.methodology.bundle import Bundle
 from caos.methodology.executor import captured_blocks
 from caos.methodology.verification import (
-    AcceptedRow,
     CREDIT_SCREEN_SELECTION,
+    AcceptedRow,
     PinnedEvidence,
     Step,
     load_vendor_authority,

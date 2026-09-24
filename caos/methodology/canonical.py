@@ -87,8 +87,8 @@ from caos.methodology.selection import (
 )
 from caos.methodology.vendor import VendorContract, cached_contract, catalog
 from caos.methodology.verification import (
-    AcceptedRow,
     CREDIT_SCREEN_SELECTION,
+    AcceptedRow,
     Step,
     VendorAuthority,
     Verified,

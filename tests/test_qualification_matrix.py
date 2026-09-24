@@ -414,8 +414,29 @@ def test_the_digest_does_not_depend_on_the_order_keys_were_written_in(
     ) == qualification_set_digest(QualificationSet(cases=(second, first)))
 
 
-def _plain_case(**optional: object) -> QualificationCase:
+@dataclass(frozen=True, slots=True)
+class _Optional:
+    """The six optional fields the two tests below vary one at a time.
+
+    A single parameter object, not six keyword arguments -- `QualificationCase`
+    mixes enough field types (`RunSubject | None`, tuples of different element
+    types, a bare `RefusalCode | None`) that a plain `object`-typed catch-all
+    cannot be handed to the dataclass, or to `dataclasses.replace`, without
+    mypy correctly refusing it as untyped per-field; naming each field here
+    keeps every one of them checked at its own type.
+    """
+
+    subject: RunSubject | None = None
+    forecast: ExpectedForecast | None = None
+    expected_refusal: RefusalCode | None = None
+    expects_ready: tuple[str, ...] = ()
+    expects_projection: tuple[ExpectedProjection, ...] = ()
+    expects_register: tuple[ExpectedRegister, ...] = ()
+
+
+def _plain_case(optional: _Optional | None = None) -> QualificationCase:
     """A case naming no optional field but whichever `optional` supplies."""
+    optional = optional or _Optional()
     return QualificationCase(
         label="acme-2026",
         documents=(Document(filename=BoundaryText.of("report.txt"), data=REPORT),),
@@ -426,7 +447,12 @@ def _plain_case(**optional: object) -> QualificationCase:
                 module_id="CP-0", document_sha256="a" * 64, matched_text=QUOTE
             ),
         ),
-        **optional,  # type: ignore[arg-type]
+        subject=optional.subject,
+        forecast=optional.forecast,
+        expected_refusal=optional.expected_refusal,
+        expects_ready=optional.expects_ready,
+        expects_projection=optional.expects_projection,
+        expects_register=optional.expects_register,
     )
 
 
@@ -437,10 +463,12 @@ def test_a_subject_and_a_same_shaped_expects_ready_used_to_share_a_digest() -> N
     digested identically -- two different answer keys binding one verdict.
     """
     subject = RunSubject("Alpha", "Bravo", "Charlie", "Delta")
-    with_subject = QualificationSet(cases=(_plain_case(subject=subject),))
+    with_subject = QualificationSet(cases=(_plain_case(_Optional(subject=subject)),))
     with_ready = QualificationSet(
         cases=(
-            _plain_case(expects_ready=("Delta", "Bravo", "Charlie", "Alpha")),
+            _plain_case(
+                _Optional(expects_ready=("Delta", "Bravo", "Charlie", "Alpha"))
+            ),
         )
     )
 
@@ -454,32 +482,38 @@ def test_every_optional_field_digests_distinctly_from_every_other_field() -> Non
     must digest differently for every one of the six fields the tagging
     fixed -- not only differently from a set naming none."""
     variants = {
-        "subject": _plain_case(subject=RunSubject("A", "B", "C", "D")),
+        "subject": _plain_case(_Optional(subject=RunSubject("A", "B", "C", "D"))),
         "forecast": _plain_case(
-            forecast=ExpectedForecast(
-                scenario="BASE",
-                period_id="FY2026",
-                values=(ForecastValue("cash.closing", "1"),),
-                currency="USD",
-                scale="millions",
-                perimeter="Consolidated",
-                qa_status="Passed",
-                limitation_flags=(),
-                readiness=(),
+            _Optional(
+                forecast=ExpectedForecast(
+                    scenario="BASE",
+                    period_id="FY2026",
+                    values=(ForecastValue("cash.closing", "1"),),
+                    currency="USD",
+                    scale="millions",
+                    perimeter="Consolidated",
+                    qa_status="Passed",
+                    limitation_flags=(),
+                    readiness=(),
+                )
             )
         ),
         "expected_refusal": _plain_case(
-            expected_refusal=RefusalCode.SOURCE_PACK_EMPTY
+            _Optional(expected_refusal=RefusalCode.SOURCE_PACK_EMPTY)
         ),
-        "expects_ready": _plain_case(expects_ready=("CP-1",)),
+        "expects_ready": _plain_case(_Optional(expects_ready=("CP-1",))),
         "expects_projection": _plain_case(
-            expects_projection=(ExpectedProjection("CP-1", "qa_status", "Passed"),)
+            _Optional(
+                expects_projection=(ExpectedProjection("CP-1", "qa_status", "Passed"),)
+            )
         ),
         "expects_register": _plain_case(
-            expects_register=(
-                ExpectedRegister(
-                    "CP-1", "register", (("column", "value"),), "column", "value"
-                ),
+            _Optional(
+                expects_register=(
+                    ExpectedRegister(
+                        "CP-1", "register", (("column", "value"),), "column", "value"
+                    ),
+                )
             )
         ),
     }

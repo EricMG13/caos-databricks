@@ -10,7 +10,14 @@ from typing import Any
 from uuid import UUID
 
 import pytest
-from canonical_fixtures import AUTHORED, CATALOG, CONTRACT, fields_from_prompt, skill, wire
+from canonical_fixtures import (
+    AUTHORED,
+    CATALOG,
+    CONTRACT,
+    fields_from_prompt,
+    skill,
+    wire,
+)
 from canonical_route_fixtures import LIMITATION, PACK, RouteCompletions
 from forecast_fixtures import forecast_request
 from lite_route_fixtures import _yaml

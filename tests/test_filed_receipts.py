@@ -232,7 +232,9 @@ def test_read_filed_receipt_refuses_a_signature_or_freeze_never_audited(
     """
     revision = _save(lite)
     signer, freezer, filer = _actor(lite), _actor(lite), _actor(lite)
-    sign_opinion_in(lite.conn, case_id=lite.case_id, actor_id=signer, revision_id=revision)
+    sign_opinion_in(
+        lite.conn, case_id=lite.case_id, actor_id=signer, revision_id=revision
+    )
     freeze_in(
         lite.conn,
         lite.blobs,
