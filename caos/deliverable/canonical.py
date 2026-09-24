@@ -27,11 +27,12 @@ from uuid import UUID
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
 from caos.evidence.citations import TokenIndex
-from caos.graph.route import ResolvedRoute, RouteNode
+from caos.graph.route import MODEL_MODULE, ResolvedRoute, RouteNode
 from caos.methodology.bundle import Bundle
 from caos.methodology.executor import captured_blocks
 from caos.methodology.verification import (
     AcceptedRow,
+    CREDIT_SCREEN_SELECTION,
     PinnedEvidence,
     Step,
     load_vendor_authority,
@@ -197,7 +198,7 @@ class _Reader:
             reanchor=self.evidence,
             refuse=_refuse,
         )
-        if node.module_id == "CP-5":
+        if node.module_id in (MODEL_MODULE, "CP-5"):
             verify_owner_chain(
                 self.vendor.contract,
                 verified.markdown,
@@ -206,7 +207,9 @@ class _Reader:
                     for ref in verified.record.identity.upstream
                 ),
                 self.verified_markdown,
-                selection=("LITE_CREDIT_22", "LITE_FULL_CREDIT_SCREEN"),
+                selection=(
+                    CREDIT_SCREEN_SELECTION if node.module_id == "CP-5" else None
+                ),
             )
         self.verified_markdown[(node.route_node_id, artifact)] = verified.markdown
         return verified.markdown, verified.stored
