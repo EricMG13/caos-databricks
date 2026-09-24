@@ -94,6 +94,7 @@ from caos.api.wire import (
     WorkView,
     wire_schema,
 )
+from caos.evidence.extract import HIDDEN_REASONS
 from caos.methodology.handoff import MAX_FILE_BYTES
 
 REPO = Path(__file__).resolve().parents[1]
@@ -108,7 +109,7 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
     wire.QualificationRead: frozenset(
         (
             "evidence_sha256 state qualification_set_sha256 performed_sha256 build_id "
-            "adapter_version provider model reviewer decided_at expires_at"
+            "adapter_version provider model reviewer reviewer_id decided_at expires_at"
         ).split()
     ),
     wire.NarrativeFigure: frozenset(
@@ -139,7 +140,8 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
     wire.CommitteeBody: frozenset(
         (
             "case_id displayed_run_id revision_id payload_sha256 case_title artifacts "
-            "narrative revisions state signed_by frozen_by filed_by receipt"
+            "narrative revisions state signed_by frozen_by filed_by receipt "
+            "render_url package_url"
         ).split()
     ),
     wire.ReportDocument: ENVELOPE,
@@ -212,7 +214,7 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
     RunSectionDocument: ENVELOPE,
     AnalysisDocument: ENVELOPE,
     RunSummary: frozenset(
-        {"run_id", "status", "created_at", "profile_id", "selection_id"}
+        {"run_id", "status", "created_at", "profile_id", "selection_id", "stop_code"}
     ),
     CaseRow: frozenset(
         (
@@ -263,6 +265,7 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
             "route_digest",
             "build_id",
             "source_set_version",
+            "input_fingerprint",
             "subject",
             "gates",
             "nodes",
@@ -334,7 +337,7 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
     ),
     # Evidence pages (Task 4.4, decision 7).
     FrameView: frozenset({"x0", "y0", "x1", "y1", "y_axis"}),
-    PageLine: frozenset({"text", "x0", "y0", "x1", "y1"}),
+    PageLine: frozenset({"text", "x0", "y0", "x1", "y1", "hidden"}),
     PageBody: frozenset(
         {"case_id", "run_id", "source_id", "document_sha256", "page", "frame", "lines"}
     ),
@@ -365,11 +368,13 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
     RetryRun: frozenset({"input_fingerprint"}),
     CancelRun: frozenset(),
     RunWork: frozenset({"run_id", "run_status", "work"}),
-    # A verdict (F17's producer, `docs/DECISIONS.md` §65): the reviewer's six
-    # bindings in, and the host's receipt out.
+    # A verdict (F17's producer, `docs/DECISIONS.md` §65): the reviewer's
+    # seven bindings in (N44's `evidence_sha256` the newest), and the host's
+    # receipt out.
     SignVerdict: frozenset(
         (
-            "provider qualification_set_sha256 build_id decided_at expires_at reviewer"
+            "provider qualification_set_sha256 build_id decided_at expires_at"
+            " reviewer evidence_sha256"
         ).split()
     ),
     VerdictRecorded: frozenset(
@@ -605,6 +610,11 @@ def test_event_names_and_the_page_document_are_in_the_committed_schema() -> None
     assert frame == {"enum": ["down", "up"], "title": "Y Axis", "type": "string"}
     line = defs["PageLine"]["properties"]["text"]
     assert line["maxLength"] == wire.QUOTE_CHARS
+    # N27: why a reader of the rendered page may not see the line, as the
+    # extractor names it.
+    hidden = defs["PageLine"]["properties"]["hidden"]
+    assert hidden["items"]["enum"] == list(HIDDEN_REASONS)
+    assert hidden["maxItems"] == len(HIDDEN_REASONS)
 
     body: dict[str, Any] = {
         "case_id": str(uuid4()),
@@ -613,7 +623,9 @@ def test_event_names_and_the_page_document_are_in_the_committed_schema() -> None
         "document_sha256": "a" * 64,
         "page": 1,
         "frame": {"x0": 0, "y0": 0, "x1": 612, "y1": 792, "y_axis": "down"},
-        "lines": [{"text": "net leverage", "x0": 1, "y0": 2, "x1": 3, "y1": 4}],
+        "lines": [
+            {"text": "net leverage", "x0": 1, "y0": 2, "x1": 3, "y1": 4, "hidden": []}
+        ],
     }
     document = {
         "body": body,
@@ -629,6 +641,10 @@ def test_event_names_and_the_page_document_are_in_the_committed_schema() -> None
         {**document, "body": {**body, "lines": [body["lines"][0]] * 2001}},
         {**document, "body": {**body, "frame": {**body["frame"], "y_axis": "left"}}},
         {**document, "body": {**body, "lines": None}},
+        {
+            **document,
+            "body": {**body, "lines": [{**body["lines"][0], "hidden": ["x"]}]},
+        },
     ):
         with pytest.raises(ValidationError):
             PageDocument.model_validate(bad)

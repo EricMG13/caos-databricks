@@ -22,11 +22,13 @@ from datetime import date
 from decimal import Decimal, Inexact, Rounded, localcontext
 from pathlib import Path
 from threading import Event
+from typing import cast
 from uuid import UUID, uuid4
 
 import psycopg
 import pytest
 from canonical_fixtures import CATALOG, LITE_PROFILE, LITE_SELECTION
+from conftest import tamper
 from psycopg.pq import TransactionStatus
 from test_case_ordering import _blocked, _wait_for_blocking
 from test_run_events import RECORD, approved_nodes
@@ -602,7 +604,8 @@ def test_reserve_revalidates_attempt_owner_after_waiting(
             assert other.info.transaction_status is TransactionStatus.IDLE
 
         with _blocked(conn, other, refused):
-            conn.execute(
+            tamper(
+                conn,
                 "UPDATE run_attempts SET run_id = %s WHERE attempt_id = %s",
                 (new_run, attempt),
             )
@@ -712,3 +715,29 @@ def test_a_reservation_under_a_nameless_price_is_refused(
 
     assert caught.value.code is RefusalCode.PROVIDER_NOT_CONFIGURED
     assert reserved_for(conn, attempt_id) is None
+
+
+def test_a_reservation_under_a_non_date_as_of_is_refused(
+    case: tuple[StoreConnection, UUID],
+) -> None:
+    """CF-071: `ModelPrice` is a plain dataclass, so nothing but
+    `_validate_price` stops an `as_of` that is not a `date` -- a string, a
+    bool, or none at all -- from reaching a row a later audit reads back as
+    a date. Untested, this branch had never actually run."""
+    conn, case_id = case
+    run_id = _run_with_ceiling(conn, case_id)
+    conn.commit()
+    attempt_id = start_attempt(conn, run_id, "CP-1")
+    for bad_as_of in (
+        cast(date, "2026-09-17"),
+        cast(date, None),
+        cast(date, True),
+        cast(date, 20260917),
+    ):
+        undated = ModelPrice("gpt", Decimal("0.1"), Decimal("0.2"), bad_as_of)
+
+        with pytest.raises(Refusal) as caught:
+            reserve(conn, attempt_id, Decimal("0.25"), price=undated)
+
+        assert caught.value.code is RefusalCode.PROVIDER_NOT_CONFIGURED, bad_as_of
+        assert reserved_for(conn, attempt_id) is None

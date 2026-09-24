@@ -46,6 +46,19 @@ def test_ci_cancels_superseded_runs() -> None:
     assert "cancel-in-progress: true" in text
 
 
+def test_a_retargeted_pull_request_reruns_the_gates() -> None:
+    """FP-11: every gate that reads `github.base_ref` -- the suppression
+    baseline among them -- is only as current as the last run that read it.
+    Retargeting a PR's base branch is an "edited" event; without it in
+    `types:`, that run stays green against the base it was last computed
+    against rather than the one the PR now targets."""
+    text = CI_YAML.read_text(encoding="utf-8")
+    match = re.search(r"\n  pull_request:\n(?:.*\n)*?    types:\s*\[([^\]]*)\]", text)
+    assert match, "pull_request.types not found in the shape this test expects"
+    types = {item.strip() for item in match.group(1).split(",")}
+    assert "edited" in types
+
+
 def test_the_size_job_delegates_to_the_canonical_script() -> None:
     """The `size` job once reimplemented `check_pr_size.py`'s pathspec inline,
     with `**/vendor/**` where the script's own comment explains why that must
@@ -56,6 +69,27 @@ def test_the_size_job_delegates_to_the_canonical_script() -> None:
     jobs = _jobs(CI_YAML.read_text(encoding="utf-8"))
     assert "check_pr_size.py" in jobs["size"]
     assert "**/vendor/**" not in jobs["size"]
+
+
+def test_the_frontend_job_runs_the_two_security_tests_that_need_a_real_build() -> None:
+    """FP-21 / CF-063: test_the_dev_proxy_strips_client_identity_and_injects_
+    the_local_actor and test_production_build_contains_no_fixture_or_demo_route
+    skip without Node; the backend `test` job installs no Node, and this job
+    never ran pytest, so neither test ever ran anywhere. CAOS_REQUIRE_NODE
+    turns a skip there into a failure."""
+    jobs = _jobs(CI_YAML.read_text(encoding="utf-8"))
+    frontend = jobs["frontend"]
+    assert "CAOS_REQUIRE_NODE" in frontend
+    assert (
+        "tests/test_frontend_modes.py::"
+        "test_the_dev_proxy_strips_client_identity_and_injects_the_local_actor"
+        in frontend
+    )
+    assert (
+        "tests/test_frontend_modes.py::"
+        "test_production_build_contains_no_fixture_or_demo_route" in frontend
+    )
+    assert "astral-sh/setup-uv" in frontend
 
 
 def test_every_install_is_locked_and_wheels_only() -> None:

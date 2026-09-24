@@ -9,11 +9,11 @@ Its lines are the token index citations were anchored in, grouped by
 coordinates the tokens are stored in (invariant 11). No renderer draws the page.
 
 The frame says what those coordinates are, read from the digest-verified
-document under the stored extractor identity: a `caos.pdfminer` v2 row's
-rectangles are crop-relative with y down (§44.3), a v1 row's are pdfminer's
-layout space with y up (§44.4), and a `caos.plain-text` row's are the cells of
-its recorded fixed pitch. PDF frames come from the §47 child, and a crop that
-child has already answered for a document is remembered in process
+document under the stored extractor identity: a `caos.pdfminer` row's from v2
+on (`PDF_CROP_VERSIONS`) are crop-relative with y down (§44.3), a v1 row's are
+pdfminer's layout space with y up (§44.4), and a `caos.plain-text` row's are
+the cells of its recorded fixed pitch. PDF frames come from the §47 child, and
+a crop that child has already answered for a document is remembered in process
 (`FRAME_CACHE_SIZE`): it is derived from a digest-addressed document and a page
 number, so it cannot go stale, and the child costs an interpreter each time.
 
@@ -43,7 +43,7 @@ import threading
 import time
 from collections import OrderedDict
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, cast
 from uuid import UUID
 
 import psycopg
@@ -53,11 +53,17 @@ from caos.api.wire import (
     PAGE_MAX,
     QUOTE_CHARS,
     FrameView,
+    HiddenReason,
     PageBody,
     PageLine,
 )
 from caos.blobs import BlobStore
-from caos.evidence.extract import DEFAULT_LIMITS, AdmissionLimits
+from caos.evidence.extract import (
+    DEFAULT_LIMITS,
+    HIDDEN_REASONS,
+    TEXT_ENCODING,
+    AdmissionLimits,
+)
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
 
@@ -86,17 +92,25 @@ _PAGE_QUERY = (
     " AND members.extraction_sha256 = extraction.extraction_sha256)"
     " SELECT member.document_sha256, member.extractor_identity,"
     " left(line.text, %s), length(line.text) > %s,"
-    " line.x0, line.y0, line.x1, line.y1"
+    " line.x0, line.y0, line.x1, line.y1, line.hidden"
     " FROM member LEFT JOIN LATERAL (SELECT"
     " string_agg(t.text, ' ' ORDER BY t.token_id) AS text,"
     " min(t.x0) AS x0, min(t.y0) AS y0, max(t.x1) AS x1, max(t.y1) AS y1,"
+    " max(t.hidden) AS hidden,"
     " min(t.token_id) AS first FROM source_tokens AS t"
     " WHERE t.source_id = member.source_id AND t.page = %s"
     " GROUP BY t.region_id, t.line_id ORDER BY first LIMIT %s) AS line ON true"
     " ORDER BY line.first"
 )
 PDF_V2_COORDINATES = "crop-top-left-rotated-pt"
+# The `caos.pdfminer` versions whose rectangles are crop-relative with y down:
+# v2 introduced the convention, v3 cuts long runs within it (CF-072) and v4
+# marks the lines a reader may not see (N27).
+PDF_CROP_VERSIONS = frozenset({"2", "3", "4"})
 TEXT_COORDINATES = "cell-top-left-pt"
+# The encodings a `caos.plain-text` identity records: v1-v3 `utf-8`, v4
+# `utf-8-sig` (`extract.TEXT_ENCODING`). Each is also the codec's name.
+TEXT_ENCODINGS = frozenset({"utf-8", TEXT_ENCODING})
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,7 +122,7 @@ class PageRead:
     truncated: bool
 
 
-def read_page(  # noqa: PLR0913 -- the store, the blobs and one page's four ids
+def read_page(  # noqa: PLR0913 -- the store, the blobs, one page's four ids, the actor
     conn: StoreConnection,
     blobs: BlobStore,
     *,
@@ -117,11 +131,14 @@ def read_page(  # noqa: PLR0913 -- the store, the blobs and one page's four ids
     source_id: UUID,
     page: int,
     limits: AdmissionLimits = DEFAULT_LIMITS,
+    actor_id: UUID | None = None,
 ) -> PageRead:
     """Page `page` of `source_id` as the run `run_id` of `case_id` pinned it,
     or `PAGE_NOT_AVAILABLE`. Authorisation is the caller's, and must be read
     before this is called: this ends the caller's read unit once the page's
-    rows are fetched, before the document is read or its frame extracted."""
+    rows are fetched, before the document is read or its frame extracted.
+    `actor_id`, when given, is who a shared `FRAME_CHILDREN` slot is charged
+    to (N38); a caller that does not pass one shares nothing."""
     if (
         any(not isinstance(value, UUID) for value in (case_id, run_id, source_id))
         or type(page) is not int
@@ -139,7 +156,7 @@ def read_page(  # noqa: PLR0913 -- the store, the blobs and one page's four ids
     name, version, config = _identity(identity)
     data = _document(blobs, document)
     deadline = time.monotonic() + limits.max_seconds
-    crop = _Crop(document, data, limits, deadline)
+    crop = _Crop(document, data, limits, deadline, actor_id)
     frame = _frame(name, version, config, crop, page)
     lines = [row for row in rows if row[2] is not None]
     body = PageBody(
@@ -150,12 +167,31 @@ def read_page(  # noqa: PLR0913 -- the store, the blobs and one page's four ids
         page=page,
         frame=frame,
         lines=[
-            PageLine(text=row[2], x0=row[4], y0=row[5], x1=row[6], y1=row[7])
+            PageLine(
+                text=row[2],
+                x0=row[4],
+                y0=row[5],
+                x1=row[6],
+                y1=row[7],
+                hidden=_reasons(row[8]),
+            )
             for row in lines[:PAGE_LINES_MAX]
         ],
     )
     truncated = len(lines) > PAGE_LINES_MAX or any(row[3] for row in lines)
     return PageRead(body=body, truncated=truncated)
+
+
+def _reasons(mark: object) -> list[HiddenReason]:
+    """A line's stored mark (N27) as the reasons the page read names: none for
+    a line with nothing to note, or a row written before there were marks. A
+    mark this build does not name is the server's own row failing."""
+    if mark is None:
+        return []
+    reasons = str(mark).split(",")
+    if not all(reason in HIDDEN_REASONS for reason in reasons):
+        raise Refusal(RefusalCode.SOURCE_IDENTITY_INVALID)
+    return [cast(HiddenReason, reason) for reason in reasons]
 
 
 def _rows(conn: StoreConnection, ids: tuple[UUID, UUID, UUID, int]) -> list[Any]:
@@ -219,6 +255,28 @@ _FRAMES: OrderedDict[tuple[str, int], tuple[float, float, float, float] | None] 
 # bound its child would have run under, and is refused if none frees.
 FRAME_CHILDREN = 2
 _CHILDREN = threading.BoundedSemaphore(FRAME_CHILDREN)
+# One of the two global slots, never both (N38): nothing otherwise kept a
+# single READER's own concurrent page requests from taking every slot this
+# process has, so a different reader's read waited out its own deadline for
+# a resource one actor was hoarding. A personal semaphore is acquired first
+# and released last, so a second concurrent read from the same actor waits
+# on its own share rather than ever contending for the slot a different
+# actor needs -- the same idea as `ACTOR_STREAM_LIMIT` beside `STREAM_LIMIT`
+# in `caos/api/stream.py`, adapted to a wait rather than an instant refusal.
+ACTOR_FRAME_CHILDREN = 1
+_ACTOR_CHILDREN_LOCK = threading.Lock()
+_ACTOR_CHILDREN: dict[UUID, threading.BoundedSemaphore] = {}
+
+
+def _actor_slot(actor_id: UUID) -> threading.BoundedSemaphore:
+    with _ACTOR_CHILDREN_LOCK:
+        slot = _ACTOR_CHILDREN.get(actor_id)
+        if slot is None:
+            slot = threading.BoundedSemaphore(ACTOR_FRAME_CHILDREN)
+            _ACTOR_CHILDREN[actor_id] = slot
+        return slot
+
+
 # Sync routes run in the threadpool, so two readers share this dictionary. The
 # lock covers the read-then-reorder and the write-then-evict, which are not one
 # operation: without it a key evicted between a `get` and its `move_to_end`
@@ -250,13 +308,18 @@ def _remember(
 
 @dataclass(frozen=True, slots=True)
 class _Crop:
-    """One document's bytes with the digest they are addressed by, and the
-    bounds a crop read of them runs under."""
+    """One document's bytes with the digest they are addressed by, the
+    bounds a crop read of them runs under, and who is asking.
+
+    `actor_id` is who a shared `FRAME_CHILDREN` slot is charged to (N38); a
+    caller that does not track one leaves it `None` and shares nothing.
+    """
 
     document_sha256: str
     data: bytes
     limits: AdmissionLimits
     deadline: float
+    actor_id: UUID | None = None
 
 
 def _page_crop(crop: _Crop, page: int) -> tuple[float, float, float, float] | None:
@@ -272,20 +335,32 @@ def _page_crop(crop: _Crop, page: int) -> tuple[float, float, float, float] | No
 
     The child runs in one of `FRAME_CHILDREN` slots, waited for within the
     read's deadline; the cache is asked again once a slot is held, because
-    the reader holding it before may have been answering the same page.
+    the reader holding it before may have been answering the same page. When
+    `crop.actor_id` is set, its own `ACTOR_FRAME_CHILDREN` share is waited for
+    first (N38), so at most that many of this actor's reads ever contend for
+    a global slot at once; `None` (a caller that does not track one) waits on
+    the global slots alone, exactly as before.
     """
     key = (crop.document_sha256, page)
     known, frame = _remembered(key)
     if known:
         return frame
+    actor_slot = _actor_slot(crop.actor_id) if crop.actor_id is not None else None
     wait = min(max(0.0, crop.deadline - time.monotonic()), crop.limits.max_seconds)
-    if not _CHILDREN.acquire(timeout=wait):
+    if actor_slot is not None and not actor_slot.acquire(timeout=wait):
         return None
     try:
-        known, frame = _remembered(key)
-        return frame if known else _child_crop(crop, page)
+        wait = min(max(0.0, crop.deadline - time.monotonic()), crop.limits.max_seconds)
+        if not _CHILDREN.acquire(timeout=wait):
+            return None
+        try:
+            known, frame = _remembered(key)
+            return frame if known else _child_crop(crop, page)
+        finally:
+            _CHILDREN.release()
     finally:
-        _CHILDREN.release()
+        if actor_slot is not None:
+            actor_slot.release()
 
 
 def _child_crop(crop: _Crop, page: int) -> tuple[float, float, float, float] | None:
@@ -320,7 +395,7 @@ def _frame(
     pdf_v1 = name == "caos.pdfminer" and version == "1"
     pdf_v2 = (
         name == "caos.pdfminer"
-        and version == "2"
+        and version in PDF_CROP_VERSIONS
         and config.get("coordinates") == PDF_V2_COORDINATES
     )
     if not (pdf_v1 or pdf_v2):
@@ -336,20 +411,27 @@ def _frame(
 
 def _text_frame(config: dict[str, Any], data: bytes, page: int) -> FrameView:
     """A fixed-pitch page from its recorded cells: the rows and margins its
-    configuration declares, as wide as its widest line."""
+    configuration declares, as wide as its widest line.
+
+    The document is decoded as its identity recorded (`TEXT_ENCODINGS`): a v4
+    row dropped a leading byte order mark before it drew a cell (CF-017), and
+    an earlier row drew one for it, so each frame is the page its tokens'
+    rectangles were measured on."""
     cell_width = _positive(config.get("cell_width"))
     cell_height = _positive(config.get("cell_height"))
     margin = _positive(config.get("margin"), zero=True)
     rows = config.get("lines_per_page")
+    encoding = config.get("encoding")
     if (
         type(rows) is not int
         or rows < 1
         or config.get("coordinates", TEXT_COORDINATES) != TEXT_COORDINATES
+        or encoding not in TEXT_ENCODINGS
     ):
         raise Refusal(RefusalCode.SOURCE_IDENTITY_INVALID)
     text: str | None
     try:
-        text = data.decode("utf-8")
+        text = data.decode(encoding)
     except UnicodeDecodeError:
         text = None
     lines = [] if text is None else text.splitlines()[(page - 1) * rows : page * rows]

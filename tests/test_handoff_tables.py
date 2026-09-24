@@ -240,10 +240,15 @@ def test_a_figure_past_the_wire_bound_has_no_value_and_keeps_its_text() -> None:
     for cell, plain in at_bound.items():
         assert figure_value(CONTRACT, cell) == plain
         assert len(plain) == tables.FIGURE_CHARS
-    # The bundle reads `1e-400` as 0.0 -- its float underflowed -- and
-    # `1e-999999` too, which is refused before a million digits are written.
-    for cell in ("1e64", "1e-63", "9" * 65, "1e-400", "1e-999999"):
+    for cell in ("1e64", "1e-63", "9" * 65):
         assert CONTRACT.cp_tables.parse_figure(cell) is not None
+        assert figure_value(CONTRACT, cell) is None, cell
+    # Fork r3 (N57): the bundle no longer underflows `1e-400` to 0.0; it refuses
+    # an exponent outside float's range, `1e-999999` too, and so the host
+    # serves no value either, before a million digits are written.
+    for cell in ("1e-400", "1e-999999"):
+        with pytest.raises(ValueError):
+            CONTRACT.cp_tables.parse_figure(cell)
         assert figure_value(CONTRACT, cell) is None, cell
     [table] = handoff_tables(CONTRACT, _tagged("t.x", ["v"], [["1e64"]])).tables
     assert table.rows == ((TableCell("1e64", None),),)

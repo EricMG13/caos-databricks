@@ -60,7 +60,7 @@ Deduplicate by originating evidence. Preserve canonical URL, title, publisher, a
 ## REF_CP-DR_D_ClaimEvidenceLedger.md
 # CP-DR D — Claim–Evidence Ledger
 
-Every material claim receives a claim ID, claim text, claim type (`fact`, `source_characterisation`, `inference`, `analyst_judgment`), workstream, evidence IDs, counter-evidence IDs, coverage status, and confidence.
+Every material claim receives a claim ID, claim text, claim type (`fact`, `source_characterisation`, `inference`, `analyst_judgment`; a gap row, which records a search that found nothing, takes `gap`), workstream, evidence IDs, counter-evidence IDs, coverage status, and confidence.
 
 Every evidence item receives source ID, exact locator, quoted/paraphrased flag, entity, period, unit/currency, perimeter, publication/event dates, lineage, and independence family. A URL without a locator is not adequate evidence for a material claim.
 
@@ -80,7 +80,7 @@ Stop after coverage is satisfied, budget is exhausted, relevant sources are exha
 
 Required QA checks: approved plan hash continuity; scope/exclusion adherence; source-mode compliance; capability proof; claim coverage; source independence and deduplication; numerical entity/period/unit/perimeter; contradiction visibility; locator retrievability; freshness; prompt-injection rejection; unsupported-certainty scan; static reference integrity; canonical H2 and envelope validation; canonical Markdown→Markdown handoff semantic and numerical parity.
 
-Status mapping: `Complete` when completion tests and material coverage are met; `Complete with Gaps` when the answer is useful but named gaps remain; `Blocked` when required capability, access, approval, identity, or evidence is missing. A Blocked run is structurally recordable but cannot be projected as committee-ready research.
+Status mapping: `Complete` when completion tests and material coverage are met; `Complete with Gaps` when the answer is useful but named gaps remain, including every question left UNRESOLVED because its evidence is missing (recorded with its gap row); `Blocked` when required capability, access, approval or identity is missing. Missing evidence alone is never `Blocked`. A Blocked run is structurally recordable but cannot be projected as committee-ready research.
 
 Output is `[ScopeKey]_CP-DR_[YYYYMMDD].md`. Chat contains no unique analytical claim or figure.
 

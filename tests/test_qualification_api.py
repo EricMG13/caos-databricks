@@ -52,13 +52,16 @@ def client(
             app.dependency_overrides.clear()
 
 
-def _record(conn: StoreConnection, *, expires_at: datetime) -> Evidence:
+def _record(conn: StoreConnection, *, expires_at: datetime) -> tuple[Evidence, UUID]:
     evidence = _evidence()
     performed = qualification_performed()
-    record_performed_earlier(conn, performed)
-    # The runs behind the snapshot: `record_verdict` refuses a verdict naming
-    # a model no accepted artifact of them recorded.
+    # The runs behind the snapshot, recorded first as production has it:
+    # `record_verdict` refuses a verdict naming a model no accepted artifact
+    # of them recorded, and `record_performed`'s own completeness check
+    # (FP-24) now reads the same `call_outcomes` rows before the snapshot is
+    # ever persisted.
     record_runs(conn, performed)
+    record_performed_earlier(conn, performed)
     decided_at = expires_at - timedelta(days=1)
     verdict = read_verdict(
         {
@@ -68,12 +71,14 @@ def _record(conn: StoreConnection, *, expires_at: datetime) -> Evidence:
             "decided_at": decided_at.isoformat(),
             "expires_at": expires_at.isoformat(),
             "reviewer": "Reviewer",
+            "evidence_sha256": evidence.sha256,
         },
         now=decided_at,
     )
-    record_verdict(conn, evidence=evidence, reviewer_id=uuid4(), verdict=verdict)
+    reviewer_id = uuid4()
+    record_verdict(conn, evidence=evidence, reviewer_id=reviewer_id, verdict=verdict)
     conn.commit()
-    return evidence
+    return evidence, reviewer_id
 
 
 def _read(
@@ -90,7 +95,9 @@ def test_read_qualification(
 ) -> None:
     """read_qualification gives an analyst only an exact current verdict."""
     http, conn = client
-    evidence = _record(conn, expires_at=datetime.now(UTC) + timedelta(days=1))
+    evidence, reviewer_id = _record(
+        conn, expires_at=datetime.now(UTC) + timedelta(days=1)
+    )
 
     response = _read(http, evidence, uuid4())
 
@@ -110,6 +117,7 @@ def test_read_qualification(
         "provider": evidence.provider,
         "model": evidence.model,
         "reviewer": "Reviewer",
+        "reviewer_id": str(reviewer_id),
     }
     assert datetime.fromisoformat(body["decided_at"]) < datetime.fromisoformat(
         body["expires_at"]
@@ -120,7 +128,9 @@ def test_missing_or_expired_evidence_is_unqualified_not_qualified(
     client: tuple[TestClient, StoreConnection],
 ) -> None:
     http, conn = client
-    expired = _record(conn, expires_at=datetime.now(UTC) - timedelta(days=1))
+    expired, _reviewer_id = _record(
+        conn, expires_at=datetime.now(UTC) - timedelta(days=1)
+    )
 
     missing = Evidence("c" * 64, "d" * 64, "build", "adapter", "p", "m")
     for evidence in (expired, missing):
@@ -136,6 +146,7 @@ def test_missing_or_expired_evidence_is_unqualified_not_qualified(
             "provider": None,
             "model": None,
             "reviewer": None,
+            "reviewer_id": None,
             "decided_at": None,
             "expires_at": None,
         }
@@ -145,7 +156,9 @@ def test_reader_sees_restricted_without_global_verdict_metadata(
     client: tuple[TestClient, StoreConnection],
 ) -> None:
     http, conn = client
-    evidence = _record(conn, expires_at=datetime.now(UTC) + timedelta(days=1))
+    evidence, _reviewer_id = _record(
+        conn, expires_at=datetime.now(UTC) + timedelta(days=1)
+    )
 
     response = _read(http, evidence, uuid4(), "READER")
 
@@ -160,6 +173,7 @@ def test_reader_sees_restricted_without_global_verdict_metadata(
         "provider": None,
         "model": None,
         "reviewer": None,
+        "reviewer_id": None,
         "decided_at": None,
         "expires_at": None,
     }
@@ -204,17 +218,20 @@ def test_a_qualified_read_costs_what_it_declares(
     client: tuple[TestClient, StoreConnection],
 ) -> None:
     """N9 for this route, and DQ-3's price: the store's clock, the evidence,
-    the verdict, and the runs' status and models `assert_store_agrees` reads."""
+    the verdict, the runs' status and models `assert_store_agrees` reads, and
+    the reviewer_id lookup beside it (CF-027)."""
     from test_qualification_sign import _Counting
 
     from caos.api.reads import qualification as qualification_read
 
     http, conn = client
-    evidence = _record(conn, expires_at=datetime.now(UTC) + timedelta(days=1))
+    evidence, _reviewer_id = _record(
+        conn, expires_at=datetime.now(UTC) + timedelta(days=1)
+    )
     counted = _Counting(conn)
     app.dependency_overrides[store_connection] = lambda: counted
 
     response = _read(http, evidence, uuid4())
 
     assert response.json()["state"] == QualificationState.QUALIFIED
-    assert counted.executed == qualification_read.IO_BUDGET == 5
+    assert counted.executed == qualification_read.IO_BUDGET == 6

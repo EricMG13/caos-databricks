@@ -18,6 +18,8 @@ decision 7's order, so a caller's mistake is a 409 and never the 503 that
 4. The verified pin's fingerprint is not the one the caller saw:
    `COMMAND_EXPECTATION_STALE`.
 5. `enqueue_run` (`RUN_ALREADY_STARTED`) or `requeue_run` (`RUN_NOT_STOPPED`).
+6. The actor already holds `MAX_QUEUED_RUNS_PER_ACTOR` runs queued or in a
+   worker's hands: `QUEUED_RUNS_LIMIT_REACHED` (N15).
 
 Cancel needs no authority beyond standing: a run with no work row is queued and
 cancelled in the same unit, so it ends CANCELLED before any worker can see it.
@@ -63,7 +65,8 @@ from caos.store.work import enqueue_run, request_cancel, requeue_run
 # receipt lookup, the governed unit's case lock, chain head and standing, the
 # twin lookup, the run's owner, three `lock_run`s, the queue insert, the cancel
 # and its run event, the receipt read-back, the receipt and the audit link.
-# Start and retry spend 32 (`execution_input`'s verified pin reads).
+# Start and retry spend 33: `execution_input`'s verified pin reads, and the
+# actor's queue lock (N15), whose count rides the queue write itself.
 IO_BUDGET = 35
 
 router = APIRouter()
@@ -148,9 +151,10 @@ def _queue(  # noqa: PLR0913 -- one start or retry, positional
         pin, _route = execution_input(unit, run_id, bundle)
         if pin.input_fingerprint != body.input_fingerprint:
             raise Refusal(RefusalCode.COMMAND_EXPECTATION_STALE)
-        if requeue and not requeue_run(unit, run_id):
+        # The place is the actor's (N15): one past their cap refuses here.
+        if requeue and not requeue_run(unit, run_id, actor_id=actor_id):
             raise Refusal(RefusalCode.RUN_NOT_STOPPED)
-        if not requeue and not enqueue_run(unit, run_id):
+        if not requeue and not enqueue_run(unit, run_id, actor_id=actor_id):
             raise Refusal(RefusalCode.RUN_ALREADY_STARTED)
         return 202, _receipt(unit, run_id)
 

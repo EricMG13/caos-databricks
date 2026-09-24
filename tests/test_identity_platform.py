@@ -10,7 +10,7 @@ import time
 from collections.abc import Callable, Iterator, Mapping
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
-from uuid import UUID, uuid4, uuid5
+from uuid import UUID, uuid5
 
 import anyio
 import httpx2 as httpx
@@ -20,7 +20,7 @@ from fastapi.testclient import TestClient
 from starlette.types import Receive, Scope, Send
 
 from caos.api import edge, identity
-from caos.api.edge import Asserted, EdgeMode, resolve_mode
+from caos.api.edge import EdgeMode, resolve_mode
 from caos.api.identity import (
     Actor,
     GlobalRole,
@@ -51,7 +51,7 @@ def platform(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_platform_mode_is_declared_by_the_app_name_and_excludes_the_others(
     platform: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    assert resolve_mode() == EdgeMode(key=None, public_origin=None, platform=True)
+    assert resolve_mode() == EdgeMode(public_origin=None, platform=True)
     monkeypatch.setenv(edge.PUBLIC_ORIGIN_ENV, "https://caos.example")
     assert resolve_mode().public_origin == "https://caos.example"
     monkeypatch.setenv(edge.PUBLIC_ORIGIN_ENV, "https://caos.example/path")
@@ -59,10 +59,6 @@ def test_platform_mode_is_declared_by_the_app_name_and_excludes_the_others(
         resolve_mode()
     monkeypatch.delenv(edge.PUBLIC_ORIGIN_ENV)
     monkeypatch.setenv(identity.TRUST_SWITCH, "1")
-    with pytest.raises(Refusal, match=r"^EDGE_CONFIG_INVALID$"):
-        resolve_mode()
-    monkeypatch.delenv(identity.TRUST_SWITCH)
-    monkeypatch.setenv(identity.EDGE_TOKEN_ENV, "k" * 40)
     with pytest.raises(Refusal, match=r"^EDGE_CONFIG_INVALID$"):
         resolve_mode()
 
@@ -78,28 +74,77 @@ def test_the_token_names_the_caller_and_the_groups_name_the_role(
         return WorkspaceUser(scim_id="42", groups=frozenset(groups.get(token, ())))
 
     monkeypatch.setattr(identity, "_current_user", current_user)
-    admin = actor_from_token("tok-admin")
-    assert admin.role is GlobalRole.ADMIN
-    assert isinstance(admin.user_id, UUID)
-    assert admin.user_id == uuid5(identity.NAMESPACE, "1234:42")
-    assert actor_from_token("tok-analyst").role is GlobalRole.ANALYST
-    assert actor_from_token("tok-other").role is GlobalRole.READER
-    assert (
-        actor_from_token("tok-admin").user_id == actor_from_token("tok-other").user_id
-    )
-    assert looked_up == ["tok-admin", "tok-analyst", "tok-other"], (
-        "one lookup per token"
-    )
-    for bad in (None, "", "   ", 7):
+
+    async def main() -> None:
+        admin = await actor_from_token("tok-admin")
+        assert admin.role is GlobalRole.ADMIN
+        assert isinstance(admin.user_id, UUID)
+        assert admin.user_id == uuid5(identity.NAMESPACE, "1234:42")
+        assert (await actor_from_token("tok-analyst")).role is GlobalRole.ANALYST
+        assert (await actor_from_token("tok-other")).role is GlobalRole.READER
+        assert (await actor_from_token("tok-admin")).user_id == (
+            await actor_from_token("tok-other")
+        ).user_id
+        assert looked_up == ["tok-admin", "tok-analyst", "tok-other"], (
+            "one lookup per token"
+        )
+        for bad in (None, "", "   ", 7):
+            with pytest.raises(Refusal, match=r"^NOT_AUTHENTICATED$"):
+                await actor_from_token(bad)
+        monkeypatch.setenv(identity.GROUP_ADMIN_ENV, "lf-credit-admins")
+        monkeypatch.setattr(identity, "_CACHE", {})
+        monkeypatch.setattr(identity, "_NEGATIVE", {})
+        assert (await actor_from_token("tok-admin")).role is GlobalRole.READER
+        served = await actor_from_headers({"x-forwarded-access-token": "tok-analyst"})
+        assert served.role is GlobalRole.ANALYST
+
+    anyio.run(main)
+
+
+def test_the_positive_and_negative_caches_expire_on_their_own_schedules(
+    platform: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CF-070. `CACHE_SECONDS` bounds a good token's cached actor and
+    `NEGATIVE_SECONDS` a refused one's; neither had a test that moved past
+    either bound, and both call `time.monotonic()` directly, so the clock
+    is replaced rather than actually waited on.
+    """
+    clock = [0.0]
+    monkeypatch.setattr(time, "monotonic", lambda: clock[0])
+    calls: list[str] = []
+
+    def current_user(token: str) -> WorkspaceUser:
+        calls.append(token)
+        if token == "revoked":
+            raise Refusal(RefusalCode.NOT_AUTHENTICATED)
+        return WorkspaceUser(scim_id="42", groups=frozenset())
+
+    monkeypatch.setattr(identity, "_current_user", current_user)
+
+    async def main() -> None:
+        # A good lookup is remembered for CACHE_SECONDS, to the second: still
+        # cached at one second short of it, asked again once past it.
+        await actor_from_token("good")
+        clock[0] += identity.CACHE_SECONDS - 1
+        await actor_from_token("good")
+        assert calls == ["good"], "still within CACHE_SECONDS"
+        clock[0] += 2
+        await actor_from_token("good")
+        assert calls == ["good", "good"], "past CACHE_SECONDS, asked again"
+
+        # A refused lookup is remembered for NEGATIVE_SECONDS the same way.
         with pytest.raises(Refusal, match=r"^NOT_AUTHENTICATED$"):
-            actor_from_token(bad)
-    monkeypatch.setenv(identity.GROUP_ADMIN_ENV, "lf-credit-admins")
-    monkeypatch.setattr(identity, "_CACHE", {})
-    monkeypatch.setattr(identity, "_NEGATIVE", {})
-    assert actor_from_token("tok-admin").role is GlobalRole.READER
-    assert actor_from_headers({"x-forwarded-access-token": "tok-analyst"}).role is (
-        GlobalRole.ANALYST
-    )
+            await actor_from_token("revoked")
+        clock[0] += identity.NEGATIVE_SECONDS - 1
+        with pytest.raises(Refusal, match=r"^NOT_AUTHENTICATED$"):
+            await actor_from_token("revoked")
+        assert calls == ["good", "good", "revoked"], "still within NEGATIVE_SECONDS"
+        clock[0] += 2
+        with pytest.raises(Refusal, match=r"^NOT_AUTHENTICATED$"):
+            await actor_from_token("revoked")
+        assert calls == ["good", "good", "revoked", "revoked"], "past it, asked again"
+
+    anyio.run(main)
 
 
 def test_a_workspace_that_cannot_answer_is_not_authenticated(
@@ -110,7 +155,7 @@ def test_a_workspace_that_cannot_answer_is_not_authenticated(
 
     monkeypatch.setattr(identity, "_current_user", failing)
     with pytest.raises(Refusal, match=r"^NOT_AUTHENTICATED$"):
-        actor_from_headers({"x-forwarded-access-token": "tok"})
+        anyio.run(actor_from_headers, {"x-forwarded-access-token": "tok"})
 
 
 def test_a_platform_request_from_any_peer_reaches_the_api_without_forged_headers(
@@ -141,10 +186,11 @@ def test_a_platform_request_from_any_peer_reaches_the_api_without_forged_headers
         "/api/v1/directory", headers={"sec-fetch-site": "same-origin"}
     )
     assert unsigned.json()["code"] == "NOT_AUTHENTICATED"
-    asserted = Asserted(subject="s", groups=("g",))
-    kept = edge._rewritten([(b"x-caos-user", b"u"), (b"host", b"h")], None, edged=True)
+    kept = edge._rewritten([(b"x-caos-user", b"u"), (b"host", b"h")], edged=True)
     assert kept == [(b"host", b"h")]
-    assert edge._rewritten([(b"x-caos-user", b"u")], asserted)[0][0] == b"x-caos-user"
+    assert edge._rewritten([(b"x-caos-user", b"u")], edged=False) == [
+        (b"x-caos-user", b"u")
+    ]
 
 
 def test_the_health_path_is_scrubbed_and_a_doubled_token_names_nobody(
@@ -212,28 +258,22 @@ def test_the_platform_refuses_to_boot_without_the_workspace_id(
 def test_the_configured_group_names_are_read_in_every_mode(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """EI-W2. Edge mode used to map the literal `caos-admins` to ADMIN and
-    never look at `CAOS_GROUP_ADMIN`, so the configured group granted nothing
-    while whatever IdP group happened to carry that spelling granted
-    everything. One reader of the two variables now answers both modes.
+    """EI-W2. A literal `caos-admins` used to be the only spelling any mode
+    read, so the configured `CAOS_GROUP_ADMIN` granted nothing while whatever
+    IdP group happened to carry that spelling granted everything. One reader
+    of the two variables (`role_from_groups`, the mapping platform mode feeds
+    SCIM's group list through -- the only mode a group list decides a role in
+    at all now that the HMAC edge assertion is gone, D10) now answers every
+    mode there is.
     """
-    monkeypatch.delenv(identity.TRUST_SWITCH, raising=False)
-    monkeypatch.setenv(identity.EDGE_TOKEN_ENV, "x" * 32)
     monkeypatch.setenv(identity.GROUP_ADMIN_ENV, "lf-credit-admins")
     monkeypatch.setenv(identity.GROUP_ANALYST_ENV, "lf-credit-analysts")
-    subject = {identity.SUBJECT_HEADER: str(uuid4())}
 
-    named = actor_from_headers({**subject, identity.GROUPS_HEADER: "lf-credit-admins"})
-    displaced = actor_from_headers({**subject, identity.GROUPS_HEADER: "caos-admins"})
-    analyst = actor_from_headers(
-        {**subject, identity.GROUPS_HEADER: "other,lf-credit-analysts"}
-    )
-
-    assert named.role is GlobalRole.ADMIN
-    assert displaced.role is GlobalRole.READER, "the displaced literal grants nothing"
-    assert analyst.role is GlobalRole.ANALYST
-    # The same reader, and the same defaults, whichever mode asks it.
     assert role_from_groups({"lf-credit-admins"}) is GlobalRole.ADMIN
+    assert role_from_groups({"caos-admins"}) is GlobalRole.READER, (
+        "the displaced literal grants nothing"
+    )
+    assert role_from_groups({"other", "lf-credit-analysts"}) is GlobalRole.ANALYST
     monkeypatch.delenv(identity.GROUP_ADMIN_ENV)
     monkeypatch.delenv(identity.GROUP_ANALYST_ENV)
     assert role_from_groups({identity.GROUP_ADMIN_DEFAULT}) is GlobalRole.ADMIN
@@ -260,16 +300,20 @@ def test_requests_arriving_together_for_one_cold_token_make_one_round_trip(
 
     monkeypatch.setattr(identity, "_current_user", slow)
     found: list[Actor] = []
-    threads = [
-        threading.Thread(target=lambda: found.append(actor_from_token("tok")))
-        for _ in range(8)
-    ]
-    for thread in threads:
-        thread.start()
-    assert arrived.wait(5), "the first request never reached the workspace"
-    release.set()
-    for thread in threads:
-        thread.join(5)
+
+    async def asked() -> None:
+        found.append(await actor_from_token("tok"))
+
+    async def main() -> None:
+        async with anyio.create_task_group() as group:
+            for _ in range(8):
+                group.start_soon(asked)
+            assert await anyio.to_thread.run_sync(arrived.wait, 5), (
+                "the first request never reached the workspace"
+            )
+            release.set()
+
+    anyio.run(main)
 
     assert calls == ["tok"], "one round trip for the whole burst"
     assert len(found) == 8
@@ -290,19 +334,23 @@ def test_a_refusal_shared_by_a_burst_is_the_workspace_s_own_refusal(
         raise Refusal(RefusalCode.NOT_AUTHENTICATED)
 
     monkeypatch.setattr(identity, "_current_user", refusing)
-    with pytest.raises(Refusal, match=r"^NOT_AUTHENTICATED$"):
-        actor_from_token("revoked")
-    with pytest.raises(Refusal, match=r"^NOT_AUTHENTICATED$"):
-        actor_from_token("revoked")
 
-    assert calls == ["revoked"], "the refusal is remembered, not re-asked"
-    # The flight is closed however it ended: nothing waits on it afterwards.
-    assert identity._INFLIGHT == {}
-    shared = identity._Flight()
-    shared.code = RefusalCode.IDENTITY_UNAVAILABLE
-    shared.settled.set()
-    with pytest.raises(Refusal, match=r"^IDENTITY_UNAVAILABLE$"):
-        identity._shared(shared)
+    async def main() -> None:
+        with pytest.raises(Refusal, match=r"^NOT_AUTHENTICATED$"):
+            await actor_from_token("revoked")
+        with pytest.raises(Refusal, match=r"^NOT_AUTHENTICATED$"):
+            await actor_from_token("revoked")
+
+        assert calls == ["revoked"], "the refusal is remembered, not re-asked"
+        # The flight is closed however it ended: nothing waits on it afterwards.
+        assert identity._INFLIGHT == {}
+        shared = identity._Flight()
+        shared.code = RefusalCode.IDENTITY_UNAVAILABLE
+        shared.settled.set()
+        with pytest.raises(Refusal, match=r"^IDENTITY_UNAVAILABLE$"):
+            await identity._shared(shared)
+
+    anyio.run(main)
 
 
 def test_a_refused_token_is_stamped_after_the_workspace_answers(
@@ -322,9 +370,13 @@ def test_a_refused_token_is_stamped_after_the_workspace_answers(
 
     monkeypatch.setattr(identity, "_current_user", slow_refusal)
     monkeypatch.setattr(identity, "NEGATIVE_SECONDS", refusal_seconds - 0.1)
-    for _ in range(3):
-        with pytest.raises(Refusal, match=r"^NOT_AUTHENTICATED$"):
-            actor_from_token("revoked")
+
+    async def main() -> None:
+        for _ in range(3):
+            with pytest.raises(Refusal, match=r"^NOT_AUTHENTICATED$"):
+                await actor_from_token("revoked")
+
+    anyio.run(main)
 
     assert calls == ["revoked"], "one round trip for three back-to-back requests"
 
@@ -345,16 +397,23 @@ def test_refused_tokens_are_pruned_and_bounded_as_they_arrive(
     monkeypatch.setattr(identity, "CACHE_CAPACITY", 2)
     monkeypatch.setattr(identity, "NEGATIVE_SECONDS", 60.0)
 
-    for ordinal in range(6):
-        with pytest.raises(Refusal, match=r"^NOT_AUTHENTICATED$"):
-            actor_from_token(f"revoked-{ordinal}")
+    async def revoked() -> None:
+        for ordinal in range(6):
+            with pytest.raises(Refusal, match=r"^NOT_AUTHENTICATED$"):
+                await actor_from_token(f"revoked-{ordinal}")
+
+    anyio.run(revoked)
     assert len(identity._NEGATIVE) == 2, "bounded on the way in"
 
     monkeypatch.setattr(identity, "_NEGATIVE", {})
     monkeypatch.setattr(identity, "NEGATIVE_SECONDS", 0.0)
-    for ordinal in range(6):
-        with pytest.raises(Refusal, match=r"^NOT_AUTHENTICATED$"):
-            actor_from_token(f"stale-{ordinal}")
+
+    async def stale() -> None:
+        for ordinal in range(6):
+            with pytest.raises(Refusal, match=r"^NOT_AUTHENTICATED$"):
+                await actor_from_token(f"stale-{ordinal}")
+
+    anyio.run(stale)
     assert len(identity._NEGATIVE) <= 1, "expired entries go on every write"
 
 
@@ -385,9 +444,13 @@ def test_a_malformed_scim_answer_is_a_typed_refusal_not_a_type_error(
     monkeypatch.setenv(identity.HOST_ENV, "caos.cloud.databricks.com")
     scim = _Scim(body=b"{}")
     scim.install(monkeypatch)
-    for _ in range(2):
-        with pytest.raises(Refusal, match=r"^IDENTITY_UNAVAILABLE$"):
-            actor_from_token("nameless")
+
+    async def asking() -> None:
+        for _ in range(2):
+            with pytest.raises(Refusal, match=r"^IDENTITY_UNAVAILABLE$"):
+                await actor_from_token("nameless")
+
+    anyio.run(asking)
     assert (len(scim.sent), identity._NEGATIVE) == (2, {})
 
     read = identity._scim_user(
@@ -500,7 +563,7 @@ def test_a_workspace_is_asked_over_tls_and_the_header_is_passed_through(
     assert scim.sent[0]["path"] == identity.SCIM_ME_PATH
     # And the token the platform forwards reaches it the same way.
     monkeypatch.setattr(identity, "_CACHE", {})
-    assert actor_from_token("forwarded").role is GlobalRole.ANALYST
+    assert anyio.run(actor_from_token, "forwarded").role is GlobalRole.ANALYST
     assert scim.sent[1]["Authorization"] == "Bearer forwarded"
 
 
@@ -648,19 +711,20 @@ def test_a_trickling_workspace_is_given_up_at_the_deadline(
     monkeypatch.setattr(identity, "SCIM_TIMEOUT_SECONDS", 1.0)
     outcomes: list[tuple[str, float]] = []
 
-    def ask() -> None:
+    async def ask() -> None:
         started = time.monotonic()
         try:
-            actor_from_token("drip")
+            await actor_from_token("drip")
             outcomes.append(("actor", time.monotonic() - started))
         except Refusal as refused:
             outcomes.append((refused.code.value, time.monotonic() - started))
 
-    askers = [threading.Thread(target=ask) for _ in range(3)]
-    for asker in askers:
-        asker.start()
-    for asker in askers:
-        asker.join(10)
+    async def main() -> None:
+        async with anyio.create_task_group() as group:
+            for _ in range(3):
+                group.start_soon(ask)
+
+    anyio.run(main)
 
     assert [code for code, _ in outcomes] == ["IDENTITY_UNAVAILABLE"] * 3
     assert max(took for _, took in outcomes) < 2.0
@@ -677,37 +741,36 @@ def _helpers_alive() -> bool:
 def test_requests_past_the_waiting_limit_are_refused_at_once(
     workspace: str,
 ) -> None:
-    """ED-8. Every request waiting on the workspace holds one of AnyIO's forty
-    threads, and a burst of cold requests during a slow lookup took all of
-    them: a caller already cached waited behind it. Past
-    `SCIM_WAITING_LIMIT` a request is refused at once and holds nothing, and
-    the limit leaves most of the pool to everyone else."""
+    """ED-8. The one request actually making a cold lookup holds a worker
+    thread for its socket call (N36); every other request sharing it now
+    awaits the flight's own async signal, holding nothing. Past
+    `SCIM_WAITING_LIMIT` a request is refused at once and holds nothing
+    either, and the limit still leaves every waiter's wait bounded."""
     total = anyio.run(_thread_limit)
     assert identity.SCIM_WAITING_LIMIT <= total // 2
-    actor_from_token("cached")
+    anyio.run(actor_from_token, "cached")
     burst = identity.SCIM_WAITING_LIMIT + 8
     outcomes: list[tuple[str, float]] = []
-    lock = threading.Lock()
 
-    def ask() -> None:
+    async def ask() -> None:
         started = time.monotonic()
         try:
-            actor_from_token("slow")
+            await actor_from_token("slow")
             code = "actor"
         except Refusal as refused:
             code = refused.code.value
-        with lock:
-            outcomes.append((code, time.monotonic() - started))
+        outcomes.append((code, time.monotonic() - started))
 
-    askers = [threading.Thread(target=ask) for _ in range(burst)]
-    for asker in askers:
-        asker.start()
-    time.sleep(0.3)
-    started = time.monotonic()
-    assert actor_from_token("cached").role is GlobalRole.READER
-    assert time.monotonic() - started < 0.1
-    for asker in askers:
-        asker.join(10)
+    async def main() -> None:
+        async with anyio.create_task_group() as group:
+            for _ in range(burst):
+                group.start_soon(ask)
+            await anyio.sleep(0.3)
+            started = time.monotonic()
+            assert (await actor_from_token("cached")).role is GlobalRole.READER
+            assert time.monotonic() - started < 0.1
+
+    anyio.run(main)
 
     served = [took for code, took in outcomes if code == "actor"]
     refused = [took for code, took in outcomes if code == "IDENTITY_UNAVAILABLE"]

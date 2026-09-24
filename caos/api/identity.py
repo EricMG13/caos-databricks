@@ -1,32 +1,22 @@
-"""Who is asking. Derived from what the edge asserted, never from what the client
-claimed about itself.
+"""Who is asking. Derived from what the platform authenticated, never from what
+the client claimed about itself.
 
 The spec's §8 (`docs/rebuild/2026-09-22-caos-databricks-spec.md`) and D10 in
-`docs/rebuild/decisions.md`. The host sits behind a proxy that authenticates
-the caller, and what that proxy hands over is the whole input.
+`docs/rebuild/decisions.md`. D10: the platform is the edge, and there is no
+other kind of edge -- the legacy HMAC assertion mode is gone (spec §54).
 
 *Behind a Databricks App* (platform mode, the production deployment) the proxy
 forwards the caller's own access token, and this module asks the workspace who
 holds it: one bounded SCIM `Me` round trip per token digest, remembered for
 `CACHE_SECONDS`. So a group list is **not** the only thing read in production,
 and this module is not free: `IO_BUDGET` below counts store round trips and
-says so.
+says so. Every identity header the request arrived with is dropped by
+`caos/api/edge.py`'s guard before this module ever sees it, so a proxy that
+forwarded a client-supplied header unsigned decides nothing.
 
-*In edge mode* the proxy asserts the subject and its groups instead, and those
-two reach this module as the two headers `caos/api/edge.py`'s guard **wrote**
-from the request's verified per-request assertion, after removing every
-identity header the request arrived with -- so a proxy that forwarded a
-client-supplied `x-forwarded-groups` unsigned is not a misconfiguration this
-code cannot detect any more: the forwarded header is dropped and the
-assertion's groups are what is read. The role header is off by default.
-
-Which of the two carries the role is the deployment's mode, and the role is
-never a third thing. In edge mode (`CAOS_EDGE_TOKEN` set -- the assertion key)
-the groups decide it, because a proxy stood between the client and this
-process and signed what it asserted. Without a key the groups header proves
-nothing -- no edge asserted it -- so it is not read at all, and the role comes
-from the role header only while the development switch below asks for it. A
-process configured as neither serves READER, whatever arrives.
+*In dev mode* (no Databricks App) the guard trusts a loopback peer's own
+`x-caos-user`, and its `x-caos-role` only while the development switch below
+is on. A process configured as neither serves READER, whatever arrives.
 
 Two things this deliberately does not do.
 
@@ -56,6 +46,9 @@ from hashlib import sha256
 from urllib.parse import urlsplit
 from uuid import NAMESPACE_URL, UUID, uuid5
 
+import anyio
+import anyio.to_thread
+
 from caos.refusals import Refusal, RefusalCode
 
 # No *store* round trips: nothing here opens a connection or reads a row.
@@ -77,14 +70,11 @@ TRUST_SWITCH = "CAOS_TRUST_ROLE_HEADER"
 TRUSTED = "1"
 
 SUBJECT_HEADER = "x-caos-user"
-GROUPS_HEADER = "x-forwarded-groups"  # edge mode only: written from the assertion
+# Never read directly (`role_from_groups` reads the platform's SCIM answer
+# instead): named here so `caos/api/edge.py`'s hygiene and stripping rules
+# treat it as an identity header wherever it arrives on the wire.
+GROUPS_HEADER = "x-forwarded-groups"
 ROLE_HEADER = "x-caos-role"
-# Edge mode (`caos/api/edge.py`): the per-request assertion's HMAC key. While
-# this is set, the switch above is never believed, whatever it says -- boot
-# refuses the pair, and this is the rule a request meeting the pair anyway
-# still obeys. The name predates §93, when the value was a static shared
-# secret; it is kept so no deployment's environment moves.
-EDGE_TOKEN_ENV = "CAOS_EDGE_TOKEN"  # nosec B105 -- a variable name, not a secret
 # Platform mode (D10): Databricks Apps forward the caller's own access token in
 # this header; the caller is then whoever the workspace says holds it (SCIM
 # `Me`), and the role is read from the workspace groups named below.
@@ -161,18 +151,23 @@ class Actor:
     role: GlobalRole
 
 
-def actor_from_headers(headers: object) -> Actor:
+async def actor_from_headers(headers: object) -> Actor:
     """The actor this request is from, or `NOT_AUTHENTICATED`.
 
     The switch is read here rather than at import, so a process started against a
     wrong environment starts behaving correctly the moment it is corrected --
     rather than for as long as it happens to stay up.
+
+    Async so that a request sharing another's cold SCIM lookup (N36) awaits it
+    rather than holding one of AnyIO's worker threads doing nothing: dev mode
+    never awaits anything, and only the one thread actually making a lookup
+    ever leaves the event loop, in `_resolved`.
     """
     get = getattr(headers, "get", None)
     if get is None:
         raise Refusal(RefusalCode.NOT_AUTHENTICATED)
     if os.environ.get(PLATFORM_ENV):
-        return actor_from_token(get(PLATFORM_HEADER))
+        return await actor_from_token(get(PLATFORM_HEADER))
 
     subject = get(SUBJECT_HEADER)
     if not isinstance(subject, str):
@@ -183,20 +178,11 @@ def actor_from_headers(headers: object) -> Actor:
         # `from None`: the ValueError's message is the header the client sent.
         raise Refusal(RefusalCode.NOT_AUTHENTICATED) from None
 
-    if EDGE_TOKEN_ENV in os.environ:
-        return Actor(user_id=user_id, role=_from_groups(get(GROUPS_HEADER)))
     if os.environ.get(TRUST_SWITCH) == TRUSTED:
         return Actor(user_id=user_id, role=_claimed(get(ROLE_HEADER)))
-    # ponytail: no token and no switch is nobody's deployment; the lowest role,
-    # never a header's word. The one line that closes C3.
+    # ponytail: no switch is nobody's deployment; the lowest role, never a
+    # header's word. The one line that closes C3.
     return Actor(user_id=user_id, role=GlobalRole.READER)
-
-
-def _from_groups(groups: object) -> GlobalRole:
-    """The greatest role the asserted group header carries, READER if none."""
-    if not isinstance(groups, str):
-        return GlobalRole.READER
-    return role_from_groups({part.strip() for part in groups.split(",")})
 
 
 def _claimed(role: object) -> GlobalRole:
@@ -261,9 +247,15 @@ _CACHE_LOCK = threading.Lock()
 @dataclass
 class _Flight:
     """One SCIM lookup in progress, and what it found. Shared by every request
-    that arrives for the same token digest while it is open."""
+    that arrives for the same token digest while it is open.
 
-    settled: threading.Event = field(default_factory=threading.Event)
+    `settled` is an `anyio.Event`, not a `threading.Event` (N36): the one
+    request making the lookup sets it back on the event loop, after its own
+    `anyio.to_thread.run_sync` call returns, so every other request sharing
+    this flight awaits it without ever holding a worker thread of its own.
+    """
+
+    settled: anyio.Event = field(default_factory=anyio.Event)
     actor: Actor | None = None
     code: RefusalCode | None = None
 
@@ -271,7 +263,7 @@ class _Flight:
 _INFLIGHT: dict[str, _Flight] = {}
 
 
-def actor_from_token(token: object) -> Actor:
+async def actor_from_token(token: object) -> Actor:
     """The actor behind a platform-forwarded token, or `NOT_AUTHENTICATED`.
 
     One SCIM round trip per token, remembered for `CACHE_SECONDS` under the
@@ -279,14 +271,16 @@ def actor_from_token(token: object) -> Actor:
     remembered for `NEGATIVE_SECONDS` so it costs one round trip, not one per
     request (F43). One round trip *concurrently*, too: requests that arrive
     for the same cold token while a lookup is open wait on that lookup instead
-    of opening their own (EI-W3), because each of those holds a thread out of
-    the process's `LIMIT_CONCURRENCY`. Both caches are bounded: expired entries
+    of opening their own (EI-W3). Both caches are bounded: expired entries
     go on every write and nothing is added past `CACHE_CAPACITY`. The subject
     is `uuid5` over the workspace and the SCIM id, so the same person is the
     same subject on every request and no name reaches the store. Roles come
     from the two configured group names; any other group grants nothing.
     A request that would wait on the workspace while `SCIM_WAITING_LIMIT`
-    others already do is refused at once rather than holding a thread (ED-8).
+    others already do is refused at once rather than joining them (ED-8, N36):
+    the limit no longer guards a scarce worker thread -- a waiter now costs
+    the event loop almost nothing -- but the same bound still holds, so a
+    stalled workspace cannot grow the wait list without end.
     """
     if not isinstance(token, str) or not token.strip():
         raise Refusal(RefusalCode.NOT_AUTHENTICATED)
@@ -297,19 +291,20 @@ def actor_from_token(token: object) -> Actor:
     if not _WAITING.acquire(blocking=False):
         raise Refusal(RefusalCode.IDENTITY_UNAVAILABLE)
     try:
-        return _resolved(key, token)
+        return await _resolved(key, token)
     finally:
         _WAITING.release()
 
 
-def _resolved(key: str, token: str) -> Actor:
-    """The actor a cold token names: this thread's own lookup, or the one
-    another thread is already making for the same digest."""
+async def _resolved(key: str, token: str) -> Actor:
+    """The actor a cold token names: this request's own lookup, made on a
+    worker thread of its own (N36), or the one another request is already
+    making for the same digest, awaited rather than held for."""
     flight, leading = _flight(key)
     if not leading:
-        return _shared(flight)
+        return await _shared(flight)
     try:
-        actor = _looked_up(key, token)
+        actor = await anyio.to_thread.run_sync(_looked_up, key, token)
     except Refusal as refused:
         flight.code = refused.code
         raise
@@ -356,14 +351,17 @@ def _settle(key: str, flight: _Flight) -> None:
     flight.settled.set()
 
 
-def _shared(flight: _Flight) -> Actor:
-    """What the thread already asking about this token found.
+async def _shared(flight: _Flight) -> Actor:
+    """What the request already asking about this token found.
 
     A lookup that never settles, or settled with neither an actor nor a code,
     is `IDENTITY_UNAVAILABLE` rather than a second call to a workspace that is
-    in no state to answer the first.
+    in no state to answer the first. Awaited (N36): this holds no thread while
+    it waits, only a suspended coroutine, however long the lookup takes.
     """
-    if not flight.settled.wait(SHARED_WAIT_SECONDS) or flight.actor is None:
+    with anyio.move_on_after(SHARED_WAIT_SECONDS):
+        await flight.settled.wait()
+    if flight.actor is None:
         raise Refusal(flight.code or RefusalCode.IDENTITY_UNAVAILABLE)
     return flight.actor
 

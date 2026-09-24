@@ -3,6 +3,15 @@
 Money is parsed only after collection ceilings, and computed under one explicit
 Decimal context. Missing drivers and failed reconciliation remain unavailable.
 The dictionary API is serialized as sorted, compact JSON by forecast_bytes.
+
+A case's periods chain in the order given, which must be fiscal-year order,
+from an opening that is none of them. `cfo` is operating cash flow before cash
+interest and cash taxes: free cash flow is `cfo - capex - cash_interest -
+cash_taxes`, so a reported CFO that already deducted interest and taxes paid
+counts both twice (FP-39). A period reconciles when its stated closing debt and
+cash are each within the tolerance of the chain's own, and the tolerance is
+never wider than one part in a thousand of the opening balances nor than
+`MAX_TOLERANCE` (N20).
 """
 
 from __future__ import annotations
@@ -26,14 +35,21 @@ from typing import Any
 from caos.boundary_text import BoundaryText
 from caos.refusals import Refusal, RefusalCode
 
+# The collection ceilings bound the whole of the work: at most 40 periods in
+# each of 6 cases over 41 balances (FP-36).
 MAX_FORECAST_PERIODS = 40
 MAX_FORECAST_CASES = 6
 MAX_FORECAST_FACILITIES = 40
-MAX_WORK = 100_000
 MAX_AMORTISATION = 2_000
 # In the request's own unit: a residual past this is unreconciled, whatever the
 # request says (F62).
 MAX_TOLERANCE = Decimal("1000")
+# And past this share of the opening balances, debt and cash each by its size
+# (N20, FP-23): with scale in millions an absolute cap alone passed a 999m
+# residual on a 1,000m balance, which switches the one arithmetic check off.
+RELATIVE_TOLERANCE = Decimal("0.001")
+# A fiscal year as the chain orders it: a year number.
+_FISCAL_YEAR = re.compile(r"[1-9][0-9]{3}")
 _NUMBER = re.compile(r"-?(0|[1-9][0-9]{0,17})(\.[0-9]{1,6})?")
 _MOVEMENTS = (
     "revenue",
@@ -81,7 +97,6 @@ def cash_flow_forecast(request: Mapping[str, Any]) -> dict[str, Any]:
         rows: list[dict[str, Any]] = []
         checks = []
         openings: dict[str, tuple[Decimal, Decimal]] = {}
-        previous: dict[str, dict[str, Any]] = {}
         unavailable: set[str] = set()
         for period in inputs.periods:
             case = period["case"]
@@ -90,11 +105,8 @@ def cash_flow_forecast(request: Mapping[str, Any]) -> dict[str, Any]:
             if reason is not None:
                 row = {**period, "unavailable_reason": reason}
             else:
-                if case in previous:
-                    _check_chain(previous[case], opening)
                 row, debt, cash = _project_period(period, inputs, opening)
                 openings[case] = (debt, cash)
-                previous[case] = row
             if row["unavailable_reason"] is not None:
                 unavailable.add(case)
             rows.append(row)
@@ -183,7 +195,7 @@ def _enforce_work_factor(request: Mapping[str, Any]) -> None:
     opening = _object(
         request["opening"], {"cash", "as_of_period_id", "debt_by_facility"}
     )
-    facilities = _rows(opening["debt_by_facility"], MAX_FORECAST_FACILITIES)
+    _rows(opening["debt_by_facility"], MAX_FORECAST_FACILITIES)
     periods = _rows(request["periods"], MAX_FORECAST_PERIODS * MAX_FORECAST_CASES)
     _rows(request["drivers"], len(periods))
     contractual = _object(request["contractual"], {"amortisation"})
@@ -194,8 +206,6 @@ def _enforce_work_factor(request: Mapping[str, Any]) -> None:
         or len(counts) > MAX_FORECAST_CASES
         or max(counts.values()) > MAX_FORECAST_PERIODS
     ):
-        raise Refusal(RefusalCode.METHODOLOGY_INPUT_INVALID)
-    if max(counts.values()) * len(counts) * (1 + len(facilities)) > MAX_WORK:
         raise Refusal(RefusalCode.METHODOLOGY_INPUT_INVALID)
 
 
@@ -222,19 +232,36 @@ def _parse(request: Mapping[str, Any]) -> _Inputs:
         if facility in facilities:
             raise Refusal(RefusalCode.METHODOLOGY_INPUT_INVALID)
         facilities[facility] = _decimal(row["amount"], signed=True)
-    _text(request["opening"]["as_of_period_id"])
+    _chronological(periods, _text(request["opening"]["as_of_period_id"]))
+    opening = (
+        sum(facilities.values(), Decimal(0)),
+        _decimal(request["opening"]["cash"], signed=True),
+    )
     return _Inputs(
         periods,
         _drivers(request["drivers"], pairs),
         _contractual(request["contractual"]["amortisation"], pairs, set(facilities)),
-        (
-            sum(facilities.values(), Decimal(0)),
-            _decimal(request["opening"]["cash"], signed=True),
-        ),
-        _tolerance(request.get("tolerance", "0.001")),
+        opening,
+        _tolerance(request.get("tolerance", "0.001"), opening),
         dict(units),
         _text(request["perimeter"]),
     )
+
+
+def _chronological(periods: list[dict[str, Any]], as_of: str) -> None:
+    """Each case's periods in fiscal-year order, after an opening that is none
+    of them (FP-37). The chain opens each period from the one before it in the
+    request, so a period out of order opened from the wrong closing, and only
+    an independent stated close could catch it. Quarters share a year."""
+    latest: dict[str, int] = {}
+    for period in periods:
+        if _FISCAL_YEAR.fullmatch(period["fiscal_year"]) is None:
+            raise Refusal(RefusalCode.METHODOLOGY_INPUT_INVALID)
+        year = int(period["fiscal_year"])
+        case = period["case"]
+        if period["period_id"] == as_of or year < latest.get(case, year):
+            raise Refusal(RefusalCode.METHODOLOGY_INPUT_INVALID)
+        latest[case] = year
 
 
 def _periods(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -299,13 +326,17 @@ def _contractual(
     return totals
 
 
-def _tolerance(value: object) -> Decimal:
-    """The reconciliation tolerance, within `MAX_TOLERANCE` (F62): a tolerance
-    wide enough to pass any residual switches the one arithmetic check off."""
+def _tolerance(value: object, opening: tuple[Decimal, Decimal]) -> Decimal:
+    """The reconciliation tolerance: the one stated, or 0.001, within
+    `MAX_TOLERANCE` or refused (F62), and never wider than
+    `RELATIVE_TOLERANCE` of the opening balances, debt and cash each by its
+    size (N20, FP-23). A tolerance wide enough to pass any residual switches
+    the one arithmetic check off; nothing opened reconciles exactly."""
     tolerance = _decimal(value)
     if tolerance < 0 or tolerance > MAX_TOLERANCE:
         raise Refusal(RefusalCode.METHODOLOGY_INPUT_INVALID)
-    return tolerance
+    debt, cash = opening
+    return min(tolerance, (abs(debt) + abs(cash)) * RELATIVE_TOLERANCE)
 
 
 def _unavailable_reason(
@@ -321,14 +352,6 @@ def _unavailable_reason(
     if not set(_MOVEMENTS) <= driver.keys():
         return "DRIVER_FIELD_MISSING"
     return None
-
-
-def _check_chain(previous: dict[str, Any], opening: tuple[Decimal, Decimal]) -> None:
-    if opening != (
-        Decimal(previous["debt"]["closing"]),
-        Decimal(previous["cash"]["closing"]),
-    ):
-        raise Refusal(RefusalCode.FORECAST_CHAIN_BROKEN)
 
 
 def _amount(value: Decimal) -> str:
@@ -363,6 +386,7 @@ def _project_period(
         - moves["optional_repayment"]
         - moves["acquisitions_disposals"]
     )
+    # `cfo` is before cash interest and cash taxes, deducted here (FP-39).
     fcf = moves["cfo"] - moves["capex"] - moves["cash_interest"] - moves["cash_taxes"]
     cash = opening_cash + fcf - moves["distributions"] + financing
     residual_debt = moves["stated_closing_debt"] - debt

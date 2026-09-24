@@ -160,8 +160,8 @@ def test_the_caller_is_resolved_once_though_it_is_declared_twice(
 
     resolved: list[Actor] = []
 
-    def counted(headers: Headers) -> Actor:
-        actor = actor_from_headers(headers)
+    async def counted(headers: Headers) -> Actor:
+        actor = await actor_from_headers(headers)
         resolved.append(actor)
         return actor
 

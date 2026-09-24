@@ -44,10 +44,11 @@ from uuid import UUID
 from caos import methodology
 from caos.blobs import BlobStore
 from caos.evidence.citations import AnchoredCitation, TokenIndex
-from caos.graph.route import ResolvedRoute, RouteNode
+from caos.graph.route import MODEL_MODULE, ResolvedRoute, RouteNode
 from caos.methodology.bundle import Bundle
 from caos.methodology.executor import captured_blocks
 from caos.methodology.verification import (
+    CREDIT_SCREEN_SELECTION,
     AcceptedRow,
     PinnedEvidence,
     Step,
@@ -264,7 +265,7 @@ class _CanonicalReader:
             reanchor=self.evidence,
             refuse=_refuse,
         )
-        if node.module_id == "CP-5":
+        if node.module_id in (MODEL_MODULE, "CP-5"):
             verify_owner_chain(
                 self.vendor.contract,
                 verified.markdown,
@@ -273,7 +274,9 @@ class _CanonicalReader:
                     for ref in verified.record.identity.upstream
                 ),
                 self.verified_markdown,
-                selection=("LITE_CREDIT_22", "LITE_FULL_CREDIT_SCREEN"),
+                selection=(
+                    CREDIT_SCREEN_SELECTION if node.module_id == "CP-5" else None
+                ),
             )
         self.verified_markdown[(node.route_node_id, artifact_sha256)] = (
             verified.markdown

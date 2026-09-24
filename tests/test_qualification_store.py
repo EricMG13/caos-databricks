@@ -28,6 +28,7 @@ from caos.qualification.store import (
     record_evidence,
     record_performed,
     record_verdict,
+    verdict_reviewer_id,
 )
 from caos.qualification.verdict import Verdict, read_verdict
 from caos.refusals import Refusal, RefusalCode
@@ -51,6 +52,8 @@ def _verdict(now: datetime, evidence: Evidence) -> Verdict:
             "decided_at": now.isoformat(),
             "expires_at": (now + timedelta(days=1)).isoformat(),
             "reviewer": "Reviewer",
+            # N44: the exact evidence identity the document is read against.
+            "evidence_sha256": evidence.sha256,
         },
         now=now,
     )
@@ -402,8 +405,11 @@ def test_record_verdict_binds_the_reviewer_and_evidence(empty_database: str) -> 
         apply_schema(conn)
         performed = _performed()
         evidence = performed.evidence
-        record_performed_earlier(conn, performed)
+        # FP-24: recorded before the snapshot, exactly as production's run then
+        # persist order has it -- `record_performed`'s own completeness check
+        # reads `call_outcomes` and would otherwise find nothing yet.
         record_runs(conn, performed)
+        record_performed_earlier(conn, performed)
         reviewer = uuid4()
         record_verdict(
             conn,
@@ -412,6 +418,35 @@ def test_record_verdict_binds_the_reviewer_and_evidence(empty_database: str) -> 
             verdict=_verdict(now, evidence),
         )
         assert current_verdict(conn, evidence=evidence, now=now)
+
+
+def test_verdict_reviewer_id_is_the_authenticated_signer_or_none(
+    empty_database: str,
+) -> None:
+    """CF-027. The signer's own identity is store provenance the six-binding
+    document never carried (`caos/qualification/verdict.py`), so it is read
+    beside `current_verdict` rather than off its `Verdict`."""
+    now = datetime(2026, 9, 15, tzinfo=UTC)
+    with connect(empty_database) as conn:
+        apply_schema(conn)
+        performed = _performed()
+        evidence = performed.evidence
+        # Runs, then the snapshot: the order production records them in (F227).
+        record_runs(conn, performed)
+        record_performed_earlier(conn, performed)
+
+        assert verdict_reviewer_id(conn, evidence_sha256=evidence.sha256) is None
+
+        reviewer = uuid4()
+        record_verdict(
+            conn,
+            evidence=evidence,
+            reviewer_id=reviewer,
+            verdict=_verdict(now, evidence),
+        )
+
+        assert verdict_reviewer_id(conn, evidence_sha256=evidence.sha256) == reviewer
+        assert verdict_reviewer_id(conn, evidence_sha256="f" * 64) is None
 
 
 @pytest.mark.parametrize("recorded", ["another-model", None])
@@ -425,8 +460,8 @@ def test_a_verdict_is_refused_unless_every_run_recorded_the_model_it_names(
         apply_schema(conn)
         performed = _performed()
         evidence = performed.evidence
-        record_performed_earlier(conn, performed)
         record_runs(conn, performed, model=recorded, outcome=recorded is not None)
+        record_performed_earlier(conn, performed)
         with pytest.raises(Refusal, match=r"^VERDICT_BINDING_INVALID$"):
             record_verdict(
                 conn,
@@ -434,6 +469,50 @@ def test_a_verdict_is_refused_unless_every_run_recorded_the_model_it_names(
                 reviewer_id=uuid4(),
                 verdict=_verdict(now, evidence),
             )
+
+
+@pytest.mark.parametrize("recorded", ["another-model", None])
+def test_recorded_producers_are_compared_before_a_snapshot_counts_complete(
+    empty_database: str, recorded: str | None
+) -> None:
+    """FP-24: the same comparison `_models_recorded` makes at signing time
+    also runs when the snapshot is first persisted, so a case whose recorded
+    producer never matches what it was prepared under does not count complete
+    before any reviewer ever sees it.
+
+    `PerformedEvidence.complete` is a pure, connection-free property -- it
+    cannot read `call_outcomes` -- so it still reads `True` here; the stored
+    `complete` column is `record_performed`'s own fact, re-derived against the
+    store the same way `_models_recorded` already does at signing.
+    """
+    performed = _performed()
+    assert performed.complete is True
+    with connect(empty_database) as conn:
+        apply_schema(conn)
+        record_runs(conn, performed, model=recorded, outcome=recorded is not None)
+        digest = record_performed(conn, performed)
+        stored = conn.execute(
+            "SELECT complete FROM qualification_performed WHERE performed_sha256=%s",
+            (digest,),
+        ).fetchone()
+        assert stored == (False,)
+
+
+def test_a_snapshot_whose_producers_agree_still_counts_complete(
+    empty_database: str,
+) -> None:
+    """The other half of FP-24: the new check does not make a genuinely
+    signable snapshot unsignable."""
+    performed = _performed()
+    with connect(empty_database) as conn:
+        apply_schema(conn)
+        record_runs(conn, performed)
+        digest = record_performed(conn, performed)
+        stored = conn.execute(
+            "SELECT complete FROM qualification_performed WHERE performed_sha256=%s",
+            (digest,),
+        ).fetchone()
+        assert stored == (True,)
 
 
 def test_the_one_verdict_constraint_is_mapped_by_name_not_by_message(
@@ -447,8 +526,8 @@ def test_the_one_verdict_constraint_is_mapped_by_name_not_by_message(
         apply_schema(conn)
         performed = _performed()
         evidence = performed.evidence
-        record_performed_earlier(conn, performed)
         record_runs(conn, performed)
+        record_performed_earlier(conn, performed)
         record_verdict(
             conn,
             evidence=evidence,
@@ -498,8 +577,8 @@ def test_a_set_holding_a_case_that_accepted_nothing_is_still_signable(
         performed = qualification_performed(blocked_label="restricted")
         evidence = performed.evidence
         assert performed.complete is True, "the snapshot a reviewer is offered"
-        record_performed_earlier(conn, performed)
         record_runs(conn, performed, accepted_nothing="restricted")
+        record_performed_earlier(conn, performed)
 
         record_verdict(
             conn,
@@ -683,6 +762,7 @@ def test_a_verdict_binds_provider_and_model_as_a_pair(empty_database: str) -> No
                 "decided_at": now.isoformat(),
                 "expires_at": (now + timedelta(days=1)).isoformat(),
                 "reviewer": "Reviewer",
+                "evidence_sha256": evidence.sha256,
             },
             now=now,
         )
@@ -712,6 +792,7 @@ def test_a_signature_may_not_stand_for_longer_than_the_cap() -> None:
         "decided_at": now.isoformat(),
         "expires_at": (now + MAX_VALIDITY + timedelta(seconds=1)).isoformat(),
         "reviewer": "Reviewer",
+        "evidence_sha256": evidence.sha256,
     }
     with pytest.raises(Refusal, match="VERDICT_BINDING_INVALID"):
         read_verdict(document, now=now)
@@ -768,13 +849,18 @@ def test_a_verdict_over_runs_the_store_does_not_hold_is_refused(
     [case] = performed.prepared
     with connect(empty_database) as conn:
         apply_schema(conn)
-        record_performed_earlier(conn, performed)
         record_runs(conn, performed)
+        record_performed_earlier(conn, performed)
         verdict = _verdict(now, evidence)
         record_verdict(conn, evidence=evidence, reviewer_id=uuid4(), verdict=verdict)
         conn.commit()
         assert_store_agrees(conn, document=performed.document, model=evidence.model)
         assert current_verdict(conn, evidence=evidence, now=now)
+        # CF-091: runs.status is guarded against a terminal move now; this
+        # forges exactly that move to prove the app's own read still catches
+        # it, so the trigger -- not what this test is about -- is set aside.
+        assert conn.info.dbname.startswith("caos_test_")
+        conn.execute("ALTER TABLE runs DISABLE TRIGGER runs_status_terminal_once")
         conn.execute(
             "UPDATE runs SET status='RUNNING' WHERE run_id=%s", (case.input.run_id,)
         )
@@ -817,8 +903,8 @@ def test_a_verdict_decided_before_its_snapshot_was_recorded_is_refused(
     evidence = performed.evidence
     with connect(empty_database) as conn:
         apply_schema(conn)
-        record_performed(conn, performed)
         record_runs(conn, performed)
+        record_performed(conn, performed)
         conn.commit()
         row = conn.execute("SELECT recorded_at FROM qualification_performed").fetchone()
         assert row is not None

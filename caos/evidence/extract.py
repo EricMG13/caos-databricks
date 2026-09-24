@@ -17,9 +17,10 @@ extractor implements the same protocol and nothing above this module changes.
 from __future__ import annotations
 
 import time
+import unicodedata
 from collections.abc import Iterator
 from dataclasses import dataclass
-from itertools import islice
+from itertools import combinations, islice
 from typing import Protocol
 
 from caos.boundary_text import DEFAULT_LIMIT as BOUNDARY_LIMIT
@@ -50,6 +51,33 @@ class Token:
     y0: float
     x1: float
     y1: float
+
+
+# Why a line's text may not be seen on the rendered page (N27): drawn in text
+# render mode 3 -- every OCR'd scan's text layer -- painted near the colour
+# behind it, or in glyphs under 2 pt. Such text is kept as evidence and its
+# line marked, never dropped.
+NEAR_BACKGROUND = "near_background"
+RENDER_MODE_3 = "render_mode_3"
+UNDER_2PT = "under_2pt"
+HIDDEN_REASONS = (NEAR_BACKGROUND, RENDER_MODE_3, UNDER_2PT)
+# Every mark a line can carry: its reasons, sorted and joined by a comma.
+HIDDEN_MARKS = frozenset(
+    ",".join(reasons)
+    for count in range(1, len(HIDDEN_REASONS) + 1)
+    for reasons in combinations(HIDDEN_REASONS, count)
+)
+
+
+@dataclass(frozen=True, slots=True)
+class MarkedToken(Token):
+    """A token, and why a reader of the rendered page may not see the line it
+    is on: one of `HIDDEN_MARKS`, or empty for a line with nothing to note.
+
+    A subclass rather than a field of `Token`, so an extractor that marks
+    nothing emits exactly the token it always has."""
+
+    hidden: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -149,15 +177,24 @@ class ExtractorDispatch(Protocol):
 # leading junk is still a PDF; past that it is not one any reader will open.
 PDF_HEADER = b"%PDF-"
 PDF_HEADER_WINDOW = 1024
+# And they look for the end-of-file marker in the last kilobyte, the same
+# implementation note's other half: what tells a PDF behind leading junk from
+# a text that merely mentions a header near its top (CF-074).
+PDF_EOF = b"%%EOF"
+PDF_EOF_WINDOW = 1024
 
 
 def dispatch_by_content(data: bytes) -> Extractor:
     """A PDF by its header, plain text otherwise -- never by its filename.
 
     A name is whatever the uploader typed; the bytes are what the extractor
-    will actually meet.
+    will actually meet. Bytes that begin with the header declare a PDF
+    (§44.6). A header further into the first kilobyte is a PDF's only when
+    the document also ends as one, so a memo naming `%PDF-1.7` in its first
+    lines is read as the text it is rather than refused as a broken PDF.
     """
-    if PDF_HEADER in data[:PDF_HEADER_WINDOW]:
+    at = data.find(PDF_HEADER, 0, PDF_HEADER_WINDOW)
+    if at == 0 or (at > 0 and PDF_EOF in data[-PDF_EOF_WINDOW:]):
         # Imported here: `pdf` imports this module, and plain-text admission
         # should not pay for pdfminer.
         from caos.evidence.pdf import PdfExtractor
@@ -171,6 +208,13 @@ def dispatch_by_content(data: bytes) -> Extractor:
 # refused. A cut falls wherever the width falls, inside a word if that is where
 # it falls -- the same trade the line group takes, for the same reason.
 MAX_TOKEN_CHARS = BOUNDARY_LIMIT
+# How a run past `MAX_TOKEN_CHARS` is cut (`nfc_pieces`), declared by both
+# extractors: on its NFC form, each piece taking its share of the run's
+# rectangle -- or, in plain text, of its cells -- by character.
+RUN_CUT = "nfc-proportional"
+# How the plain-text extractor decodes a document, and how a frame re-reads it
+# (`page._text_frame`): UTF-8, a leading byte order mark dropped (CF-017).
+TEXT_ENCODING = "utf-8-sig"
 
 
 @dataclass(frozen=True, slots=True)
@@ -179,18 +223,24 @@ class PlainTextExtractor:
 
     Refuses `SOURCE_NOT_READABLE` for bytes that are not UTF-8, carrying the code
     and nothing else -- the offending bytes are exactly what must not travel.
+    A leading byte order mark is read as the encoding's (`TEXT_ENCODING`): kept
+    as text, it was the first word's first character, so the document's first
+    line was never quoted as it reads.
     """
 
     @property
     def identity(self) -> ExtractorIdentity:
         return ExtractorIdentity(
             "caos.plain-text",
-            # v3: a run past `max_token_chars` is cut. v2 rows keep their
+            # v3: a run past `max_token_chars` is cut. v4: a leading byte
+            # order mark is the encoding's, not text (CF-017), and a run is
+            # cut on its NFC form, each piece taking its share of the run's
+            # cells (CF-073, as F203 cut PDF runs). Earlier rows keep their
             # stored identity and verify as recorded; readmission is how a
             # source gains the new tokenisation (section 44.4's rule).
-            "3",
+            "4",
             {
-                "encoding": "utf-8",
+                "encoding": TEXT_ENCODING,
                 # Cells from the page's top-left corner, y down: the PDF
                 # extractor's convention, with no crop or rotation to apply.
                 "coordinates": "cell-top-left-pt",
@@ -199,6 +249,7 @@ class PlainTextExtractor:
                 "margin": MARGIN,
                 "lines_per_page": LINES_PER_PAGE,
                 "max_token_chars": MAX_TOKEN_CHARS,
+                "token_cut": RUN_CUT,
             },
         )
 
@@ -210,7 +261,7 @@ class PlainTextExtractor:
         deadline: float = float("inf"),
     ) -> list[Token]:
         try:
-            text = data.decode("utf-8")
+            text = data.decode(TEXT_ENCODING)
         except UnicodeDecodeError:
             raise Refusal(RefusalCode.SOURCE_NOT_READABLE) from None
 
@@ -241,22 +292,22 @@ class PlainTextExtractor:
 def _line_tokens(line: str, line_number: int, region_id: int) -> Iterator[Token]:
     page, row = divmod(line_number, LINES_PER_PAGE)
     top = MARGIN + row * CELL_HEIGHT
-    for word, column in _words(line):
+    for word, left, right in _words(line):
         yield Token(
             text=word,
             page=page + 1,
             region_id=region_id,
             line_id=line_number,
-            x0=MARGIN + column * CELL_WIDTH,
+            x0=MARGIN + left * CELL_WIDTH,
             y0=top,
-            x1=MARGIN + (column + len(word)) * CELL_WIDTH,
+            x1=MARGIN + right * CELL_WIDTH,
             y1=top + CELL_HEIGHT,
         )
 
 
-def _bounded(run: str, start: int) -> Iterator[tuple[str, int]]:
-    """One whitespace-separated run, cut into tokens no wider than
-    `MAX_TOKEN_CHARS`.
+def _bounded(run: str, start: int) -> Iterator[tuple[str, float, float]]:
+    """One whitespace-separated run, cut into tokens `BoundaryText` can hold,
+    each with the columns it covers.
 
     A run longer than `BoundaryText`'s limit refuses the **whole pack** at
     `ingest._prepare`, before any line is grouped -- which is what stops
@@ -264,6 +315,13 @@ def _bounded(run: str, start: int) -> Iterator[tuple[str, int]]:
     what no line group can help with, because the line group cuts between
     tokens and this is one token. Cut here instead: the extractor is where a
     token's boundaries are decided, and the cut is declared in its identity.
+
+    The cut is `nfc_pieces`', chosen on the run's NFC form because that is the
+    form `BoundaryText` measures (CF-073): cut on its raw length, a run that
+    grows under NFC -- 3,000 U+2ADC are 6,000 code points -- fitted the bound
+    and refused the pack anyway. A run whose NFC fits is one token, its own
+    text, under its own cells; a cut piece takes its share of the run's cells
+    by character, which for a run NFC leaves alone is exactly its own.
 
     Splitting rather than refusing, for the reason the line group splits. A
     refusal leaves the document unadmissible and every honest word in it
@@ -279,15 +337,34 @@ def _bounded(run: str, start: int) -> Iterator[tuple[str, int]]:
     stored token equals it, so the run is quotable only piece by piece. It was
     not quotable at all before, because the document did not admit.
     """
-    if len(run) <= MAX_TOKEN_CHARS:
-        yield run, start
-        return
-    for offset in range(0, len(run), MAX_TOKEN_CHARS):
-        yield run[offset : offset + MAX_TOKEN_CHARS], start + offset
+    for piece, at, end, of in nfc_pieces(run):
+        yield piece, start + len(run) * at / of, start + len(run) * end / of
 
 
-def _words(line: str) -> Iterator[tuple[str, int]]:
-    """Each whitespace-separated run with the column it starts at.
+def nfc_pieces(run: str) -> list[tuple[str, int, int, int]]:
+    """One whitespace run as the tokens `BoundaryText` can hold, each with the
+    span of the run's NFC form it covers: `(text, start, end, of)`.
+
+    The PDF extractor's cut (CF-072, CF-073). A run whose NFC fits
+    `MAX_TOKEN_CHARS` is one token, its own text as drawn. Past it the cut
+    points are chosen on the NFC form -- the form `BoundaryText` measures --
+    so a piece is never past the limit it is measured against, as a raw cut
+    can be: 3,000 U+2ADC fit a raw bound and are 6,000 code points in NFC.
+    The plain-text extractor cuts by it too, from its v4 (`_bounded`).
+    """
+    normal = unicodedata.normalize("NFC", run)
+    size = len(normal)
+    if size <= MAX_TOKEN_CHARS:
+        return [(run, 0, size, size)]
+    return [
+        (normal[at : at + MAX_TOKEN_CHARS], at, min(at + MAX_TOKEN_CHARS, size), size)
+        for at in range(0, size, MAX_TOKEN_CHARS)
+    ]
+
+
+def _words(line: str) -> Iterator[tuple[str, float, float]]:
+    """Each whitespace-separated run, cut by `_bounded`, with the columns it
+    starts and ends at.
 
     Whitespace as `str.split()` draws it, not the space character alone.
     `caos/evidence/citations.py` splits `matched_text` that way, so a token

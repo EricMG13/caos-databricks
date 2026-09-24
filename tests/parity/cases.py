@@ -989,7 +989,6 @@ def _describe_route(target: Target, route: object) -> Json:
             module: jsonable(call(route_mod, "predecessors", route, module))
             for module in modules
         },
-        "reachable": jsonable(call(route_mod, "reachable", route)),
     }
 
 

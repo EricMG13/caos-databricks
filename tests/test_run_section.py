@@ -44,7 +44,7 @@ from caos.store import routes as store_routes
 from caos.store.members import Standing, grant, revoke
 from caos.store.routes import pin_route
 from caos.store.runs import create_case, start_run
-from caos.store.work import enqueue_run, request_cancel
+from caos.store.work import claim_run, enqueue_run, request_cancel, stop
 
 __all__ = ["catalog", "client", "harness", "lite", "route", "run"]
 
@@ -332,6 +332,30 @@ def test_run_and_analysis_name_displayed_and_latest_runs_separately(
     assert (shown.latest_run_id, shown.displayed_run_id) == (newer, older)
     assert shown.run is not None and shown.run.run_id == older
     assert [summary.run_id for summary in shown.runs] == [newer, older]
+
+
+def test_a_parked_run_s_stop_code_reaches_the_runs_list(
+    client: TestClient,
+    case: tuple[StoreConnection, UUID],
+    run: tuple[UUID, UUID],
+) -> None:
+    """CF-044: a run a worker parked still reads `status: RUNNING` in its own
+    summary -- `stop_code` is what tells the list it stopped being driven,
+    the same field the detailed `RunView.work` already carried."""
+    conn, case_id = case
+    run_id, viewer = run
+    enqueue_run(conn, run_id)
+    conn.commit()
+    lease = claim_run(conn, worker=BoundaryText.of("worker-a"), lease_seconds=60)
+    assert lease is not None
+    assert stop(conn, lease, RefusalCode.CONTEXT_OVER_CEILING) is True
+    conn.commit()
+
+    document = _document(_section(client, case_id, run_id, viewer))
+
+    [summary] = document.body.runs
+    assert summary.run_id == run_id
+    assert summary.stop_code is RefusalCode.CONTEXT_OVER_CEILING
 
 
 def test_a_run_beyond_the_bounded_list_is_still_displayed_and_the_list_noted(

@@ -37,7 +37,7 @@ from caos.api.deps import BLOB_ROOT, VENDORED_BUNDLE, _vendored_bundle
 from caos.api.edge import PLATFORM_ENV
 from caos.api.identity import scim_me
 from caos.blobs import VOLUME_SCHEME, BlobStore
-from caos.methodology.bundle import Bundle
+from caos.methodology.bundle import Bundle, verify_every_file
 from caos.refusals import Refusal
 from caos.store import connect, verify_schema
 from caos.store.lakebase import store_url
@@ -51,6 +51,8 @@ PROBE_INTERVAL = 10.0
 # this; `PROBE_INTERVAL` stays above it so rounds never queue (F47).
 PROBE_DEADLINE = 5.0
 STALE_AFTER = 30.0
+# How long the bundle probe trusts its last full per-file pass (`FileCheck`).
+FILES_TTL = 300.0
 # The in-process worker (D11, DF-1): `caos.graph.worker.start_in_process`
 # starts it on a thread of this name when this variable is `1`, and it beats
 # as `worker-<pid>`. Spelled here rather than imported, because importing the
@@ -125,10 +127,45 @@ def probe_store() -> HealthCode:
     return "OK"
 
 
+@dataclass
+class FileCheck:
+    """When the full per-file pass last proved a bundle intact (CF-093).
+
+    Every file the manifest lists -- about 350 and 5 MB, some 70 ms warm and
+    most of it holding the GIL -- is more than a round every `PROBE_INTERVAL`
+    should repeat, so an OK is trusted for `ttl` seconds, per bundle root and
+    manifest digest. A failure is never kept: the next round proves it again,
+    so a restored file clears as soon as it is back.
+    """
+
+    ttl: float = FILES_TTL
+    clock: Callable[[], float] = monotonic
+    proven: dict[tuple[Path, str], float] = field(default_factory=dict)
+
+    def verify(self, bundle: Bundle) -> None:
+        """Refuse `AUTHORITY_BYTES_MISMATCH` unless every listed file is the
+        bytes the manifest lists, proven within the last `ttl` seconds."""
+        key = (bundle.root, bundle.manifest_sha256)
+        at = self.proven.pop(key, None)
+        if at is not None and self.clock() - at < self.ttl:
+            self.proven[key] = at
+            return
+        verify_every_file(bundle)
+        self.proven[key] = self.clock()
+
+
+_FILES = FileCheck()
+
+
 def probe_bundle(
-    root: Path = VENDORED_BUNDLE, held: Callable[[], Bundle] = _vendored_bundle
+    root: Path = VENDORED_BUNDLE,
+    held: Callable[[], Bundle] = _vendored_bundle,
+    files: FileCheck = _FILES,
 ) -> HealthCode:
-    """A fresh manifest snapshot must equal the one the process verifies under."""
+    """A fresh manifest snapshot must equal the one the process verifies
+    under, and every file it lists must be the bytes it lists (CF-093): the
+    pin names only the manifest, so a file swapped under it moved the bundle
+    too. The per-file pass is `files`' own, proven at most every `FILES_TTL`."""
     try:
         fresh = Bundle(root)
         process = held()
@@ -137,6 +174,8 @@ def probe_bundle(
     try:
         fresh.verify_pinned()
         same = process.manifest_sha256 == fresh.manifest_sha256
+        if same:
+            files.verify(fresh)
     except Refusal:
         same = False
     return "OK" if same else "BUNDLE_MOVED"

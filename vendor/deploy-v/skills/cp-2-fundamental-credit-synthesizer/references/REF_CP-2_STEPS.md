@@ -234,8 +234,9 @@ Rank the most important PD, LGD, liquidity, refinancing, or relative-value drive
 
 ## Output
 **T2.10 Materiality Filter:** `Rank`|`Driver`|`Evidence`|`Risk Mechanic`|`Credit Implication`|`Direction`|`Confidence`
-- Direction: Positive / Negative / Mixed
+- Direction: Positive / Negative. A driver that cuts both ways is split into a Positive row and a Negative row, each with its own `Credit Implication` (canon: Mixed->split); `Mixed` is never a Direction.
 - Confidence: High / Medium / Low / Not Assessable
+- Rank at least one Positive and one Negative driver. Where the evidence supports no driver in a direction, write one row for that direction saying so, never an invented driver: `Driver` `None supported`, `Evidence` naming what was reviewed, `Risk Mechanic` and `Credit Implication` `—`, the missing `Direction`, `Confidence` `Not Assessable`.
 </step_reference>
 ## REF_CP-2_11_IssuerMatrix.md
 <!-- REF_CP-2_11 (T2) | 2026-06-03 -->

@@ -12,26 +12,30 @@ single-actor release under invariant 5.
    pack ceiling plus multipart overhead (else 413 `SOURCE_TOO_LARGE`).
 2. Key, visibility, global role and the WRITER floor -- so a stranger's pack
    is never parsed, let alone extracted.
-3. The standing read's transaction is closed, then the form is parsed with
-   the stream held to its declared length: only file parts named `document`,
-   each filename `BoundaryText` of at most 255 characters and not blank.
+3. The standing read's transaction is closed, one of `ADMISSION_SLOTS` is
+   waited for (N5), then the form is parsed with the stream held to its
+   declared length: only file parts named `document`, each filename
+   `BoundaryText` of at most 255 characters and not blank.
 4. The receipt is looked up for the pack's digest and a replay answers without
    extracting; otherwise `prepare_pack` extracts (the §47 child for a PDF) and
    `put_pack` uploads the documents, with no transaction open and no case lock
    or chain head held (ED-5).
 5. One governed unit: `admit_prepared`, `SOURCES_ADMITTED` and the receipt.
    A refusal there commits no row; blobs already put are content-addressed
-   orphans (CLAUDE.md known gaps).
+   orphans, kept by design -- deleting governed bytes is the workspace
+   volume's retention policy, not this process's (CF-076).
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
+import threading
+from collections.abc import AsyncIterator, Callable
 from hashlib import sha256
 from typing import Annotated
 from uuid import UUID, uuid4
 
 import psycopg
+from anyio import sleep
 from fastapi import APIRouter, Depends, Request, Response
 from starlette.datastructures import UploadFile
 from starlette.exceptions import HTTPException
@@ -73,6 +77,20 @@ DOCUMENT_PART = "document"
 FILENAME_CHARS = 255
 MULTIPART_OVERHEAD_BYTES = 1024 * 1024
 MAX_UPLOAD_BYTES = DEFAULT_LIMITS.max_pack_bytes + MULTIPART_OVERHEAD_BYTES
+# How many admissions hold a pack in this process at once (N5). Each holds its
+# documents twice -- spooled by the form parser and read into memory -- and
+# then their extraction, up to `max_pack_bytes` and `max_pack_tokens`, in the
+# one App process that also runs the worker. Past this an admission waits for
+# a slot before a byte of its pack is read, so the queue holds requests, not
+# packs, and no refusal code is added: a waiting admission is answered as it
+# would have been. Writer-only: identity, the envelope, the key and WRITER
+# standing are answered before a slot is asked for.
+ADMISSION_SLOTS = 2
+_SLOTS = threading.BoundedSemaphore(ADMISSION_SLOTS)
+# How often a waiting admission asks again. A thread semaphore polled from the
+# event loop rather than a loop's own primitive: it is released wherever the
+# request ends, and a waiter holds neither a thread nor a loop binding.
+SLOT_POLL_SECONDS = 0.05
 
 router = APIRouter()
 
@@ -150,20 +168,46 @@ def _release_read(
     rollback_or_close(conn)
 
 
+async def _admission_slot(
+    _released: Annotated[None, Depends(_release_read)],
+) -> AsyncIterator[None]:
+    """One of `ADMISSION_SLOTS`, taken once the caller is known to be a writer
+    and held until the admission has answered, whatever it answered."""
+    while not _SLOTS.acquire(blocking=False):
+        await sleep(SLOT_POLL_SECONDS)
+    try:
+        yield
+    finally:
+        _SLOTS.release()
+
+
 async def _admission_documents(
     request: Request,
     declared: Annotated[int, Depends(_upload_envelope)],
     _released: Annotated[None, Depends(_release_read)],
+    _slot: Annotated[None, Depends(_admission_slot)],
 ) -> list[Document]:
-    """The pack's documents, in part order, from a stream held to its length."""
+    """The pack's documents, in part order, from a stream held to its length.
+
+    Parsed with one file past the ceiling (CF-075): the parser's own
+    `max_files` answers a generic `REQUEST_INVALID` the instant it is
+    exceeded, indistinguishable from any other malformed multipart body. One
+    extra slot lets a pack exactly at the ceiling parse whole, so the count
+    below can answer the specific `SOURCE_TOO_LARGE` instead.
+    """
     bounded = Request(request.scope, _bounded(request.receive, declared))
     try:
-        form = await bounded.form(max_files=DEFAULT_LIMITS.max_documents, max_fields=0)
+        form = await bounded.form(
+            max_files=DEFAULT_LIMITS.max_documents + 1, max_fields=0
+        )
     except (HTTPException, ValueError):
         raise Refusal(RefusalCode.REQUEST_INVALID) from None
     try:
+        parts = form.multi_items()
+        if len(parts) > DEFAULT_LIMITS.max_documents:
+            raise Refusal(RefusalCode.SOURCE_TOO_LARGE)
         documents = []
-        for name, part in form.multi_items():
+        for name, part in parts:
             if name != DOCUMENT_PART or not isinstance(part, UploadFile):
                 raise Refusal(RefusalCode.REQUEST_INVALID)
             filename = BoundaryText.of(part.filename or "", limit=FILENAME_CHARS)

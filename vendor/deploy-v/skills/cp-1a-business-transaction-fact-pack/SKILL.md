@@ -40,7 +40,7 @@ Advanced qualifiers stay command-accessible. Source/email/web/document/attachmen
 7. Subsequent event: flag date; never blend into period figures.
 8. Non-debt funding float: trend deposits/deferred revenue/supplier finance—not payables; Evidence→Risk Mechanic→Credit Implication.
 9. Show source vs normalized one-offs; label normalization+Analyst Judgement. Never infer covenant capacity; absent inputs=`Not Calculable`.
-10. `committee_status`∈Committee Ready|Draft Only|Requires More Work|Insufficient Information|Restricted|Blocked. `qa_status` Restricted→score≤59 (band from the score: 40-59 Low, below 40 Insufficient Information); Blocked→≤39.
+10. `committee_status`∈Committee Ready|Draft Only|Requires More Work|Insufficient Information|Restricted|Blocked. `qa_status` follows the run's own status (canon D1 map): complete→Passed; with gaps or limitations→Restricted; Blocked→Blocked; never Not Reviewed. Restricted→score≤59 (band from the score: 40-59 Low, below 40 Insufficient Information); Blocked→≤39.
 
 ## Analytical depth — binding on every run
 
@@ -72,7 +72,7 @@ conclusions, never shorter reasoning or invented filler.
 
 - **analytical_validation**: implemented
 - **appendix_contract**: structured below
-  - **conditional_register_ids**: cp1a.cp_model_snapshot_fields
+  - **conditional_register_ids**: none
   - **heading**: ### Analytical appendix — complete canonical registers
   - **lossless**: True
   - **required_register_ids**: structured below
@@ -485,7 +485,7 @@ Binding per `../../CANON_SHARED.md § CP_AB_EXPORT_SPEC.md` and `../../CANON_SHA
 
 <!-- READING_ORDER:BEGIN -->
 #### Reading Order
-Workflow order is not reading order: open `## Analysis` with `### Governance view` before any table, and keep every canonical register byte-identical below `### Analytical appendix — complete canonical registers`. Reading order is governed by
+Workflow order is not reading order: this phase is a section of the one artifact, headed `### Governance view` later in `## Analysis`, after the artifact's opening `### Analytical read-through` (never a second opening); keep every canonical register byte-identical below `### Analytical appendix — complete canonical registers`. Reading order is governed by
 `../../CANON_SHARED.md § CP_AB_EXPORT_SPEC.md` and the module presentation profile.
 <!-- READING_ORDER:END -->
 
@@ -533,7 +533,7 @@ Workflow order is not reading order: open `## Analysis` with `### Governance vie
     - **presentation_fixture**: source_limited_complete
   - **supported_evidence_classes**: structured below
     - presentation_fixture; full_run
-- **opening_h3**: ### Governance view
+- **opening_h3**: none of its own; the artifact opens with `### Analytical read-through`, and this phase's section heading is `### Governance view`
 - **opening_view_word_range**: maximum=150; minimum=90
 - **permitted_front_table**: max_body_rows=8; max_columns=6; name=Governance-risk summary; optional=True; values_must_come_from_appendix_registers=True
 - **prohibited_conclusions**: No individual evaluation, reputation inference, or legal-capacity calculation.
@@ -574,6 +574,6 @@ For the absorbed `CP-2C` phase on every run:
 
 ## Research questions and adoption — binding when applicable
 
-Before finalizing an assumption or conclusion, identify any unresolved material evidence question. If existing sources answer it, continue. Otherwise use `../cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md` to add a bounded request naming this module as consumer and a factual predecessor. The host authors the control brief under the user's existing task authorization; CP-OS remains read-only. Do not create a self-dependency from this module back through CP-DR. For a late challenge, retain the current CP-0 anchor and archive superseded research attempts outside the active snapshot.
+Before finalizing an assumption or conclusion, identify any unresolved material evidence question. If existing sources answer it, continue. Otherwise, where `../cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md` is delivered with this module, use it to add a bounded request naming this module as consumer and a factual predecessor; where it is not delivered, record the question as an unresolved gap under `## Gaps & Conflicts` and do not request research. The host authors the control brief under the user's existing task authorization; CP-OS remains read-only. Do not create a self-dependency from this module back through CP-DR. For a late challenge, retain the current CP-0 anchor and archive superseded research attempts outside the active snapshot.
 
 Run the invocation helper against the fresh snapshot. If it returns `research_adoption_rows`, complete the tagged `cpdr.adoptions` table in the analytical appendix: `question_id`, `research_sha256`, `disposition` (ACCEPTED / REJECTED / QUALIFIED), `reason`, `analytical_effect`. Record one row per assigned question, with the exact current research hash. Rejection or qualification still explains the consequence. CP-DR supplies evidence; this module remains responsible for source applicability, numerical extraction, assumptions and conclusions. Unresolved research blocks its named consumer, not unrelated modules. A changed research dossier invalidates its declared consumers and their dependents; research is versioned per bounded batch, not per claim.

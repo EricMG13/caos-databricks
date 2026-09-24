@@ -39,6 +39,7 @@ from canonical_fixtures import LITE_PROFILE, LITE_SELECTION, QUOTE, CanonicalCom
 from caos.provider import Completion, encode_request
 from caos.qualification.on_disk import MANIFEST
 from caos.refusals import Refusal, RefusalCode
+from caos.store import connect
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
@@ -323,6 +324,43 @@ def test_main_performs_a_full_qualification_set_against_a_real_database(
     assert capture_path.read_text(encoding="utf-8") == body + "\n"
 
 
+def test_main_refuses_a_malformed_admin_url_without_the_password(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    """CF-078: a DSN psycopg's own parser refuses -- bad percent-encoding in
+    the password -- raises `ProgrammingError` quoting the whole connection
+    string, password included, in its message. `main`'s unguarded
+    `_create_database(admin_url)` let that string escape to stderr; it must
+    print the typed code alone, before any database was created."""
+    monkeypatch.setenv(
+        "CAOS_QUALIFY_POSTGRES_URL",
+        "postgresql://baduser:SuperSecretPw%2passwordZZZ@127.0.0.1:1/nodb",
+    )
+    monkeypatch.setenv("CAOS_QUALIFY_BLOB_ROOT", str(tmp_path / "blobs"))
+    monkeypatch.setattr(qualify, "from_environment", _FakeProvider.from_environment)
+    monkeypatch.setenv(
+        "CAOS_MODEL_PRICE", "a-model/for-the-test,0.0000000001,0.00001,2026-09-13"
+    )
+    set_root = _write_lite_set(tmp_path / "set")
+
+    code = qualify.main(
+        [
+            str(set_root),
+            "--expect-identity",
+            "test-fake-identity",
+            "--ceiling",
+            "5.00",
+        ]
+    )
+
+    assert code == 2
+    logged = capsys.readouterr().err
+    assert logged.strip() == "STORE_UNAVAILABLE: the set was refused; nothing was spent"
+    assert "SuperSecretPw" not in logged
+
+
 def test_main_writes_no_capture_file_when_the_flag_is_omitted(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -462,7 +500,7 @@ def test_a_set_of_more_than_one_case_can_be_admitted(
     document = json.loads(rest.strip("\n"))
     runs = [item["run_id"] for item in document["result"]]
     assert document["run_ids"] == runs and len(set(runs)) == 2
-    with psycopg.connect(
+    with connect(
         _database_url(os.environ["CAOS_TEST_POSTGRES_URL"], preamble["database"])
     ) as conn:
         stored = conn.execute(

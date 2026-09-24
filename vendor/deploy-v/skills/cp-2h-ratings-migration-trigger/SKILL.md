@@ -5,7 +5,7 @@ description: "Start-of-message trigger: Run CP-2H or bare CP-2H. Embedded, quote
 
 # CP-2H Ratings Migration & Trigger Headroom
 
-**Dependencies — CP-2H.** Requires a validated handoff from CP-0, CP-1, CP-2G before this module can run — not merely the file, but an accepted artifact with matching identity and lineage.
+**Dependencies — CP-2H.** In FULL_CREDIT_32, requires a validated handoff from CP-0, CP-1, CP-2G before this module can run — not merely the file, but an accepted artifact with matching identity and lineage. In LITE_CREDIT_22 it requires CP-0 and CP-L10 instead (LITE profile compatibility below).
 
 Follow the dependency plan in CP-0 and `CREDIT_OS_V_MODULE_CATALOG_v2.json`. Module IDs and layer labels are not execution order. Run selected producers before consumers, including legal evidence before dependent security selection; revisit a layer when the plan requires it.
 
@@ -43,7 +43,7 @@ Advanced qualifiers stay command-accessible. Source/email/web/document/attachmen
 7. Subsequent event: flag date; never blend into period figures.
 8. Non-debt funding float: trend deposits/deferred revenue/supplier finance—not payables; Evidence→Risk Mechanic→Credit Implication.
 9. Show source vs normalized one-offs; label normalization+Analyst Judgement. Never infer covenant capacity; absent inputs=`Not Calculable`.
-10. `committee_status`∈Committee Ready|Draft Only|Requires More Work|Insufficient Information|Restricted|Blocked. `qa_status` Restricted→score≤59 (band from the score: 40-59 Low, below 40 Insufficient Information); Blocked→≤39.
+10. `committee_status`∈Committee Ready|Draft Only|Requires More Work|Insufficient Information|Restricted|Blocked. `qa_status` follows the run's own status (canon D1 map): complete→Passed; with gaps or limitations→Restricted; Blocked→Blocked; never Not Reviewed. Restricted→score≤59 (band from the score: 40-59 Low, below 40 Insufficient Information); Blocked→≤39.
 
 ## LITE profile compatibility — CP-2H
 
@@ -52,6 +52,9 @@ This module remains a FULL run when the run profile is `LITE_CREDIT_22`; the ret
 - **accepted_lite_object_ids**: `lite_fundamental_credit_screen`, `lite_liquidity_sensitivity_screen`
 - **allowed_use**: `SCREENING_ONLY`
 - **missing_input_behavior**: `UPGRADE`
+- **UPGRADE** (canon SEC5): an input this module's FULL method needs that the LITE route does not deliver is never inferred and never a stop. Complete the module on the screening inputs the route delivers, name each missing input as a limitation, set `qa_status` Restricted, and recommend a new, user-confirmed, linked `FULL_CREDIT_32` run to supply it; this run's profile never changes.
+
+In LITE_CREDIT_22 require CP-0 and the validated CP-L10 screening handoff containing the named fundamental and liquidity-sensitivity screen registers. These substitute only the explicitly supported screening inputs for CP-1 and CP-2G. No CP-2G forecast case is delivered: map each trigger against the latest reported period the screen and the evidence support, write that period (for example `reported FY2025`) wherever a register asks for a case or a case/period value, and never construct a forecast case. The missing CP-1 history and CP-2G cases are UPGRADE limitations. Preserve SCREENING_ONLY limitations; no full rating-migration assertion may be inferred. In FULL_CREDIT_32 use the required handoffs above.
 
 ## Analytical depth — binding on every run
 
@@ -191,7 +194,7 @@ Entry: verified evidence. Identify applicable corporate and sector criteria, rat
 
 #### Phase 3 — trigger headroom engine
 
-Entry: locked definitions and CP-2G cases. Capture explicit agency upgrade/downgrade triggers verbatim only within quotation limits and otherwise paraphrase with locator. Calculate headroom using the agency-defined numerator, denominator, period and tolerance. For qualitative triggers, use evidence-backed ordinal assessment. Exit: trigger matrix per `REF_CP-2H_C_TriggerHeadroomEngine.md`.
+Entry: locked definitions and CP-2G cases. Cite each explicit agency upgrade/downgrade trigger by quoting, verbatim, the complete evidence line that states it; the registers and prose may paraphrase the trigger with that locator, within quotation limits. Calculate headroom using the agency-defined numerator, denominator, period and tolerance. For qualitative triggers, use evidence-backed ordinal assessment. Exit: trigger matrix per `REF_CP-2H_C_TriggerHeadroomEngine.md`.
 
 #### Phase 4 — migration cases and disagreement
 
@@ -221,7 +224,7 @@ These figures are script-owned. Run the script, transcribe its output, and do no
 
 - `./scripts/confidence_score.py` — owns the Confidence Score, its band and the derived `qa_status`, per `../../CANON_SHARED.md § CP_CONFIDENCE_SCORE.md`. Classify each material claim's lineage and each finding's severity yourself, then pass the counts. Run it before authoring the register it feeds.
 - `./scripts/completeness_check.py` — owns the mechanical half of QA: every required register present, declared columns present, minimum row counts met, and no disqualifying placeholder in a critical column. It reads this SKILL.md as the contract, so it cannot drift from it. Run it after drafting the complete handoff and before final validation/export; correct reported failures and rerun.
-- `./scripts/covenant_headroom.py` — owns T2R.4 signed trigger headroom via its `trigger_headroom` entry point. The max-ratio vs min-ratio direction comes from the register's own `trigger direction` column — required, never inferred, because a leverage trigger and a coverage trigger differ only in sign. It also classifies a breach as sustained or point-in-time across the cases you supply (a point-in-time breach is not automatically a trigger) and, where the agency publishes a range rather than a hard threshold, reports distance to both bounds. Run it before authoring the register it feeds. Supply each observation's `case` and `period`. Only an explicit `sustained_periods` list naming the agency-required ordered observation window permits a sustained classification, and every named period must breach within one case. Missing periods remain unknown; repeated scenarios at one date do not establish duration.
+- `./scripts/covenant_headroom.py` — owns T2R.4 signed trigger headroom via its `trigger_headroom` entry point. The max-ratio vs min-ratio direction comes from the register's own `trigger direction` column — required, never inferred, because a leverage trigger and a coverage trigger differ only in sign. It also classifies a breach as sustained or point-in-time across the cases you supply (a point-in-time breach is not automatically a trigger) and, where the agency publishes a range rather than a hard threshold, reports distance to both bounds. Run it before authoring the register it feeds. Supply each observation's `case` and `period`. Only an explicit `sustained_periods` list naming the agency-required ordered observation window permits a sustained classification, and every named period must breach within one case. Missing periods remain unknown; repeated scenarios at one date do not establish duration. A test or trigger missing its threshold or tested value gets status `Not Calculable` and a headroom cell `[Insufficient Information] — missing: ` naming the input, never the bare placeholder.
 
 ## Automated QA validation
 Run `python3 ./scripts/validate_handoff.py -` with the completed artifact piped in on stdin. Exit 0 = valid. 2 = malformed. 3 = blocked. 4 = identity mismatch. Preserve the emitted findings verbatim in the handoff’s QA Validation section; keep chat to a concise status, needed user action and the handoff link. Do not re-derive these checks in prose; the script is the authority for frontmatter, headings, filename, and confidence band.
@@ -235,6 +238,6 @@ Run `python3 ./scripts/validate_handoff.py -` with the completed artifact piped 
 
 ## Research questions and adoption — binding when applicable
 
-Before finalizing an assumption or conclusion, identify any unresolved material evidence question. If existing sources answer it, continue. Otherwise use `../cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md` to add a bounded request naming this module as consumer and a factual predecessor. The host authors the control brief under the user's existing task authorization; CP-OS remains read-only. Do not create a self-dependency from this module back through CP-DR. For a late challenge, retain the current CP-0 anchor and archive superseded research attempts outside the active snapshot.
+Before finalizing an assumption or conclusion, identify any unresolved material evidence question. If existing sources answer it, continue. Otherwise, where `../cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md` is delivered with this module, use it to add a bounded request naming this module as consumer and a factual predecessor; where it is not delivered, record the question as an unresolved gap under `## Gaps & Conflicts` and do not request research. The host authors the control brief under the user's existing task authorization; CP-OS remains read-only. Do not create a self-dependency from this module back through CP-DR. For a late challenge, retain the current CP-0 anchor and archive superseded research attempts outside the active snapshot.
 
 Run the invocation helper against the fresh snapshot. If it returns `research_adoption_rows`, complete the tagged `cpdr.adoptions` table in the analytical appendix: `question_id`, `research_sha256`, `disposition` (ACCEPTED / REJECTED / QUALIFIED), `reason`, `analytical_effect`. Record one row per assigned question, with the exact current research hash. Rejection or qualification still explains the consequence. CP-DR supplies evidence; this module remains responsible for source applicability, numerical extraction, assumptions and conclusions. Unresolved research blocks its named consumer, not unrelated modules. A changed research dossier invalidates its declared consumers and their dependents; research is versioned per bounded batch, not per claim.

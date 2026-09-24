@@ -26,6 +26,7 @@ from uuid import UUID, uuid4
 
 import psycopg
 import pytest
+from conftest import _checked_values, tamper
 from test_case_ordering import _blocked, _wait_for_blocking
 from test_extraction_provenance import Reader
 from test_run_inputs import Prepared, _prepare, pin_version_one
@@ -38,9 +39,16 @@ from caos.evidence.ingest import Document, admit_pack
 from caos.evidence.read import read_block
 from caos.refusals import Refusal, RefusalCode
 from caos.store import SCHEMA, RunStatus, StoreConnection, apply_schema, connect
+from caos.store.events import RunEvent, append
 from caos.store.routes import resolved_route
 from caos.store.run_inputs import RunInput, load_run_input
-from caos.store.runs import block_run, create_case, run_status, start_run
+from caos.store.runs import (
+    block_run,
+    create_case,
+    run_status,
+    start_attempt,
+    start_run,
+)
 
 # A declared schema that differs from the repository's by one table -- the shape
 # a later build has when it adds one, and the shape `IF NOT EXISTS` hides.
@@ -107,6 +115,90 @@ def test_the_declared_schema_holds_a_case_and_its_run(empty_database: str) -> No
         assert run_status(conn, run_id) is RunStatus.RUNNING
 
 
+def test_connect_asks_for_keepalives_and_an_optional_statement_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CF-041: a peer that vanished without closing the socket -- a container
+    killed under it, a network partition -- must be noticed well inside any
+    lease, not after the OS's own multi-hour keepalive default, so every
+    connection asks for both keepalives and `tcp_user_timeout`. A caller that
+    names no `statement_timeout_ms` gets none forced on it (`apply_schema`'s
+    migration path may legitimately run long); one that does gets it as
+    `options` at connect time, which holds for the whole session."""
+    captured: dict[str, object] = {}
+
+    def fake_connect(_url: str, **kwargs: object) -> None:
+        captured.update(kwargs)
+        raise psycopg.OperationalError("down")
+
+    monkeypatch.setattr(psycopg, "connect", fake_connect)
+
+    with pytest.raises(psycopg.OperationalError):
+        store.connect("postgresql://unused.invalid/none")
+    assert captured["keepalives"] == 1
+    assert captured["keepalives_idle"] == store.KEEPALIVES_IDLE_SECONDS
+    assert captured["keepalives_interval"] == store.KEEPALIVES_INTERVAL_SECONDS
+    assert captured["keepalives_count"] == store.KEEPALIVES_COUNT
+    assert captured["tcp_user_timeout"] == store.TCP_USER_TIMEOUT_MS
+    assert captured["options"] == "-c search_path=caos_store", "DL-1, and no bound"
+
+    captured.clear()
+    with pytest.raises(psycopg.OperationalError):
+        store.connect("postgresql://unused.invalid/none", statement_timeout_ms=5000)
+    assert captured["options"] == (
+        "-c search_path=caos_store -c statement_timeout=5000"
+    )
+
+
+def test_the_store_lives_in_its_own_schema_and_never_in_public(
+    empty_database: str,
+) -> None:
+    """DL-1: `public` needs a grant PostgreSQL 15 and later give nobody, so
+    the store creates its own schema, beside `caos_graph`, and names it as
+    every connection's whole search path. Every table, index, function and
+    bookkeeping row lands there; `public` holds nothing of the store's."""
+    assert store.STORE_SCHEMA == "caos_store"
+    assert store.SEARCH_PATH_OPTION == "-c search_path=caos_store"
+    with connect(empty_database) as conn:
+        assert conn.execute("SHOW search_path").fetchone() == ("caos_store",)
+        apply_schema(conn)
+        assert conn.execute("SELECT current_schema()").fetchone() == ("caos_store",)
+        placed: dict[str, int] = {
+            str(name): int(number)
+            for name, number in conn.execute(
+                "SELECT n.nspname, count(*) FROM pg_class c"
+                " JOIN pg_namespace n ON n.oid = c.relnamespace"
+                " WHERE n.nspname IN ('public', 'caos_store') GROUP BY 1"
+            ).fetchall()
+        }
+        functions = conn.execute(
+            "SELECT count(*) FROM pg_proc WHERE pronamespace = 'public'::regnamespace"
+        ).fetchone()
+        tables = {
+            str(row[0])
+            for row in conn.execute(
+                "SELECT table_name FROM information_schema.tables"
+                " WHERE table_schema = 'caos_store'"
+            ).fetchall()
+        }
+    assert "public" not in placed and functions == (0,)
+    assert {"store_schema", "store_migrations", "runs", "run_work"} <= tables
+    assert placed["caos_store"] > len(tables), "tables and their indexes"
+
+
+def test_connect_s_statement_timeout_bounds_the_whole_session(
+    empty_database: str,
+) -> None:
+    """The bound holds across a commit, unlike `SET LOCAL`; a connection that
+    named none is the store's ordinary unbounded session."""
+    with connect(empty_database, statement_timeout_ms=1234) as conn:
+        assert conn.execute("SHOW statement_timeout").fetchone() == ("1234ms",)
+        conn.commit()
+        assert conn.execute("SHOW statement_timeout").fetchone() == ("1234ms",)
+    with connect(empty_database) as other:
+        assert other.execute("SHOW statement_timeout").fetchone() == ("0",)
+
+
 def test_a_runs_predecessor_is_written_once_and_is_never_itself(
     empty_database: str,
 ) -> None:
@@ -159,12 +251,156 @@ def test_a_runs_predecessor_is_written_once_and_is_never_itself(
         assert links == [(successor, first)]
 
 
-def test_every_run_status_is_one_the_database_accepts(empty_database: str) -> None:
-    """`RunStatus` and the `runs_status_is_known` CHECK are two spellings of one
-    closed set. Nothing but this test stops a status added to one of them from
-    reaching an INSERT that the other refuses."""
+def test_budget_reservations_and_run_events_are_immutable(
+    empty_database: str,
+) -> None:
+    """CF-091, the trigger half of N16 (MX-6): `caos/store/budget.py` and
+    `events.py` only ever insert into these two tables -- never an UPDATE, a
+    DELETE or a TRUNCATE anywhere in the app -- which now refuse what the app
+    never sends, the same shape `0007_call_outcomes.sql` gave `call_outcomes`
+    and `budget_ledger`. `run_attempts` and `artifacts` follow in `0037`
+    (`test_run_attempts_and_artifacts_are_immutable`).
+    """
     with connect(empty_database) as conn:
         apply_schema(conn)
+        case_id = create_case(conn, BoundaryText.of("Acme 2026 refinancing"))
+        run_id = start_run(conn, case_id)
+        conn.commit()
+        attempt_id = uuid4()
+        conn.execute(
+            "INSERT INTO run_attempts (attempt_id, run_id, route_node_id, ordinal)"
+            " VALUES (%s, %s, 'CP-0', 1)",
+            (attempt_id, run_id),
+        )
+        conn.execute(
+            "INSERT INTO budget_reservations (attempt_id, run_id, amount,"
+            " price_model, price_input, price_output, price_as_of)"
+            " VALUES (%s, %s, 1.00, 'm', 0.000001, 0.000001, %s)",
+            (attempt_id, run_id, date.today()),
+        )
+        append(conn, run_id, RunEvent.ROUTE_PINNED)
+        conn.commit()
+
+        for table, mutation in (
+            ("budget_reservations", "UPDATE budget_reservations SET amount = 2.00"),
+            ("budget_reservations", "DELETE FROM budget_reservations"),
+            ("budget_reservations", "TRUNCATE budget_reservations"),
+            ("run_events", "UPDATE run_events SET name = 'RUN_FAILED'"),
+            ("run_events", "DELETE FROM run_events"),
+            ("run_events", "TRUNCATE run_events"),
+        ):
+            with pytest.raises(
+                psycopg.errors.RaiseException, match="immutable"
+            ) as caught:
+                conn.execute(mutation)
+            assert table in str(caught.value)
+            conn.rollback()
+
+        assert conn.execute(
+            "SELECT count(*) FROM budget_reservations WHERE attempt_id = %s",
+            (attempt_id,),
+        ).fetchone() == (1,)
+
+
+def test_run_attempts_and_artifacts_are_immutable(empty_database: str) -> None:
+    """CF-091's remainder (N16, invariant 6): the accepted-attempt ledger is
+    the truth, and the app only ever inserts into it -- an attempt at
+    `start_attempt`, its artifact at acceptance, whose replay is a read --
+    never an UPDATE, a DELETE or a TRUNCATE. Every column of both is
+    write-once now (`0037_attempts_artifacts_immutable.sql`).
+
+    The suites that corrupt a row on purpose, to prove the application's own
+    verification catches it, go through `conftest.tamper`: one statement with
+    the refusal set aside, and the refusal back for the next."""
+    with connect(empty_database) as conn:
+        apply_schema(conn)
+        case_id = create_case(conn, BoundaryText.of("Acme 2026 refinancing"))
+        run_id = start_run(conn, case_id)
+        conn.commit()
+        attempt_id = start_attempt(conn, run_id, "CP-0")
+        conn.execute(
+            "INSERT INTO artifacts (attempt_id, artifact_sha256, run_id, case_id,"
+            " model, generation_id) VALUES (%s, %s, %s, %s, 'm', 'g')",
+            (attempt_id, "a" * 64, run_id, case_id),
+        )
+        conn.commit()
+
+        for table, mutation in (
+            ("run_attempts", "UPDATE run_attempts SET ordinal = 2"),
+            ("run_attempts", "UPDATE run_attempts SET started_at = now()"),
+            ("run_attempts", "UPDATE run_attempts SET lease_token = 7"),
+            ("run_attempts", "DELETE FROM run_attempts"),
+            ("run_attempts", "TRUNCATE run_attempts CASCADE"),
+            ("artifacts", "UPDATE artifacts SET artifact_sha256 = repeat('b', 64)"),
+            ("artifacts", "UPDATE artifacts SET record_sha256 = repeat('c', 64)"),
+            ("artifacts", "UPDATE artifacts SET model = 'another'"),
+            ("artifacts", "DELETE FROM artifacts"),
+            ("artifacts", "TRUNCATE artifacts"),
+        ):
+            with pytest.raises(
+                psycopg.errors.RaiseException, match="immutable"
+            ) as caught:
+                conn.execute(mutation)
+            assert table in str(caught.value), mutation
+            conn.rollback()
+
+        assert tamper(conn, "UPDATE artifacts SET model = 'another'").rowcount == 1
+        assert conn.execute("SELECT model FROM artifacts").fetchone() == ("another",)
+        with pytest.raises(psycopg.errors.RaiseException, match="immutable"):
+            conn.execute("UPDATE artifacts SET model = 'm'")
+        conn.rollback()
+        with pytest.raises(psycopg.errors.CheckViolation):
+            tamper(conn, "UPDATE artifacts SET record_sha256 = 'not a digest'")
+        conn.rollback()
+        conn.autocommit = True
+        assert tamper(conn, "DELETE FROM artifacts").rowcount == 1
+        conn.autocommit = False
+        assert conn.execute(
+            "SELECT count(*) FROM run_attempts WHERE attempt_id = %s", (attempt_id,)
+        ).fetchone() == (1,)
+
+
+def test_a_runs_terminal_status_never_moves_again(empty_database: str) -> None:
+    """CF-091: `runs.status` moves RUNNING to a terminal status exactly once
+    (`caos.store.runs._transition`, `work.py`'s `_end_cancelled` -- both
+    conditioned on `WHERE status = 'RUNNING'` already); the schema now refuses
+    what those functions never ask for, a terminal status moving again, to
+    another terminal or back to RUNNING (`0025_supersedes.sql`: a BLOCKED
+    run's discharge is a new run, never itself resumed)."""
+    with connect(empty_database) as conn:
+        apply_schema(conn)
+        case_id = create_case(conn, BoundaryText.of("Acme 2026 refinancing"))
+        run_id = start_run(conn, case_id)
+        conn.commit()
+
+        # The one move every terminal status is reached by still works.
+        conn.execute("UPDATE runs SET status = 'COMPLETE' WHERE run_id = %s", (run_id,))
+        conn.commit()
+        assert run_status(conn, run_id) is RunStatus.COMPLETE
+
+        # Not COMPLETE again: setting a status to its own current value is not
+        # a move at all (`WHEN (NEW.status IS DISTINCT FROM OLD.status)`), the
+        # same idiom `0025_supersedes.sql`'s own write-once trigger uses.
+        for status in ("RUNNING", "FAILED", "BLOCKED", "CANCELLED"):
+            with pytest.raises(psycopg.errors.RaiseException, match="terminal"):
+                conn.execute(
+                    "UPDATE runs SET status = %s WHERE run_id = %s", (status, run_id)
+                )
+            conn.rollback()
+        assert run_status(conn, run_id) is RunStatus.COMPLETE
+
+
+def test_every_run_status_is_one_the_database_accepts(empty_database: str) -> None:
+    """`RunStatus` and the `runs_status_is_known` CHECK are two spellings of one
+    closed set, checked in both directions (CF-106): the INSERT loop below
+    only catches a Python status the database refuses, so a status the CHECK
+    still names after `RunStatus` dropped it would pass unnoticed without the
+    equality assertion first."""
+    with connect(empty_database) as conn:
+        apply_schema(conn)
+        assert _checked_values(conn, "runs", "runs_status_is_known") == {
+            status.value for status in RunStatus
+        }
         case_id = create_case(conn, BoundaryText.of("Acme 2026 refinancing"))
 
         for status in RunStatus:
@@ -234,6 +470,9 @@ def test_the_drift_refusal_carries_no_schema_text(empty_database: str) -> None:
 
 
 def _legacy(conn: StoreConnection) -> None:
+    """A store an older build wrote by hand, in the schema `connect` names
+    (DL-1), which `apply_schema` would otherwise have created first."""
+    conn.execute(f"CREATE SCHEMA {store.STORE_SCHEMA}")
     conn.execute(SCHEMA)
     conn.execute(store._BOOKKEEPING)
     conn.execute(
@@ -719,9 +958,14 @@ def test_native_money_constraints_refuse_malformed_rows(
     with connect(empty_database) as conn:
         apply_schema(conn)
         _populate(conn, BlobStore(tmp_path))
-        if table == "budget_ledger":
+        # CF-091: budget_reservations is immutable by trigger now too, the
+        # same as budget_ledger already was; this probe reaches the native
+        # constraint through an UPDATE the app never sends, so the trigger --
+        # not what this test is about -- is set aside for it, on the test's
+        # own throwaway database.
+        if table in ("budget_ledger", "budget_reservations"):
             assert conn.info.dbname.startswith("caos_test_")
-            conn.execute("ALTER TABLE budget_ledger DISABLE TRIGGER USER")
+            conn.execute(f"ALTER TABLE {table} DISABLE TRIGGER USER")
         with pytest.raises(psycopg.errors.CheckViolation):
             conn.execute(f"UPDATE {table} SET {column} = %s", (Decimal(value),))
         conn.rollback()
@@ -737,9 +981,10 @@ def test_budget_owner_keys_reject_existing_unrelated_run(
         other_case = create_case(conn, BoundaryText.of("unrelated owner"))
         other_run = start_run(conn, other_case)
         conn.commit()
-        if table == "budget_ledger":
-            assert conn.info.dbname.startswith("caos_test_")
-            conn.execute("ALTER TABLE budget_ledger DISABLE TRIGGER USER")
+        # CF-091: both tables are immutable by trigger; set aside for the
+        # same reason as above.
+        assert conn.info.dbname.startswith("caos_test_")
+        conn.execute(f"ALTER TABLE {table} DISABLE TRIGGER USER")
         with pytest.raises(psycopg.errors.ForeignKeyViolation):
             conn.execute(f"UPDATE {table} SET run_id = %s", (other_run,))
         conn.rollback()
@@ -1332,6 +1577,10 @@ def test_a_reservation_price_outside_its_constraint_refuses(
     with connect(empty_database) as conn:
         apply_schema(conn)
         _populate(conn, BlobStore(tmp_path))
+        # CF-091: reaches the native constraint through an UPDATE the app
+        # never sends, past budget_reservations' own immutability trigger.
+        assert conn.info.dbname.startswith("caos_test_")
+        conn.execute("ALTER TABLE budget_reservations DISABLE TRIGGER USER")
         given: object = value if column == "price_model" else Decimal(value)
         with pytest.raises(psycopg.errors.CheckViolation):
             conn.execute(f"UPDATE budget_reservations SET {column} = %s", (given,))

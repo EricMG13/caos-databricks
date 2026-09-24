@@ -30,6 +30,7 @@ from caos.methodology import CANONICAL_ADAPTER_VERSION
 from caos.methodology.bundle import Bundle
 from caos.methodology.canonical import check_context, execute_handoff
 from caos.methodology.executor import Assignment
+from caos.pricing import ModelPrice
 from caos.provider import CompletionProvider
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
@@ -62,6 +63,13 @@ class ModuleProvider:
     def model(self) -> str:
         """The configured model identity this provider's calls are billed as."""
         return self.completions.model
+
+    @property
+    def price(self) -> ModelPrice | None:
+        """The dated price its completions charge at, or None for completions
+        that report money rather than a price (`pricing.bills_at`)."""
+        stated = getattr(self.completions, "price", None)
+        return stated if isinstance(stated, ModelPrice) else None
 
     def check_context(self, route_node_id: str, module_id: str) -> int:
         """Build and bound the node's whole prompt before any attempt exists,

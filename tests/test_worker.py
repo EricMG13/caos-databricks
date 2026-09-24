@@ -41,7 +41,15 @@ from caos.graph.worker import (
 from caos.methodology.bundle import Bundle
 from caos.provider import CompletionProvider
 from caos.refusals import Refusal, RefusalCode
-from caos.store import RunStatus, StoreConnection, apply_schema
+from caos.store import (
+    SEARCH_PATH_OPTION,
+    RunStatus,
+    StoreConnection,
+    apply_schema,
+    connect,
+)
+from caos.store import work as work_module
+from caos.store.budget import CEILING_ENV
 from caos.store.runs import run_status
 from caos.store.work import LEASE_SECONDS, Lease, enqueue_run, worker_states
 
@@ -122,6 +130,7 @@ def test_worker_stops_a_refused_run_with_its_code_and_releases_the_lease(
     route: ResolvedRoute,
     bundle: Bundle,
     blobs: BlobStore,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     run = queued_run(case, route, bundle, blobs)
     completions = CanonicalCompletions(run.source_id, quotes=(UNANCHORED,))
@@ -138,6 +147,9 @@ def test_worker_stops_a_refused_run_with_its_code_and_releases_the_lease(
     code = codes[0][0]
     assert work_row(run.conn, run.run_id) == ("STOPPED", code, None, True)
     assert run_status(run.conn, run.run_id) is RunStatus.RUNNING
+    # CF-044: a park otherwise left nothing on stderr for an operator watching
+    # the process to notice by.
+    assert capsys.readouterr().err.strip() == code
     run.conn.rollback()
     assert drive(run, completions) is None, "a stopped run waits for a retry"
     assert len(completions.prompts) == 2
@@ -261,7 +273,7 @@ def test_store_fault_backs_off_without_holding_a_claim(  # noqa: PLR0913 -- para
     def conn_factory() -> StoreConnection:
         if not next(connects):
             raise psycopg.OperationalError("down")
-        return psycopg.connect(empty_database, autocommit=False)
+        return connect(empty_database)
 
     clock = _Clock(limit=4)
     assert (
@@ -348,11 +360,48 @@ def test_an_unset_price_says_unset_not_misconfigured(
     assert capsys.readouterr().err.strip() == "PROVIDER_NOT_CONFIGURED"
 
 
+def test_a_malformed_run_ceiling_refuses_the_worker_at_boot(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """CF-048: `CAOS_RUN_CEILING` used to be read only when a caller started a
+    run, so a value nobody could price sat invisible until then. It is
+    checked first now, before the provider, the store or the bundle, printed
+    as its code alone -- the same shape a malformed `CAOS_MODEL_PRICE` already
+    refuses the worker in."""
+
+    def never(*_args: object, **_kwargs: object) -> object:
+        pytest.fail("no provider, store, bundle or call before the ceiling")
+
+    monkeypatch.setattr(worker, "from_environment", never)
+    monkeypatch.setattr(worker, "connect", never)
+    monkeypatch.setattr(worker, "run_worker", never)
+    # Set so `_report`'s "unset" tag -- which names CAOS_MODEL_PRICE alone,
+    # whichever check actually refused -- does not append to this code.
+    monkeypatch.setenv("CAOS_MODEL_PRICE", "irrelevant: never read")
+    monkeypatch.setenv(CEILING_ENV, "not-a-number")
+
+    assert worker.main() == 2
+    assert capsys.readouterr().err.strip() == "PROVIDER_NOT_CONFIGURED"
+
+
 def test_price_from_environment_reads_one_dated_price() -> None:
     price = worker.price_from_environment("m/x", "m/x,0.000001,0.000004,2026-09-13")
     assert (str(price.input_per_token), str(price.as_of)) == ("0.000001", "2026-09-13")
     with pytest.raises(Refusal, match=r"^MONEY_INVALID$"):
         worker.price_from_environment("m/x", "m/x,NaN,0.1,2026-09-13")
+
+
+@pytest.mark.parametrize("seconds", [0, -1, 86_401, "60", 60.5, True])
+def test_require_seconds_refuses_a_non_whole_or_out_of_range_lease(
+    seconds: object,
+) -> None:
+    """CF-071: `claim_run` and `require_lease` both delegate their own
+    `lease_seconds` bound to this one check, which no test called directly;
+    a caller could not reach it without a live claim, so the type gate --
+    a bool passes `0 < x <= 86_400` were it not excluded by name -- had
+    never actually run."""
+    with pytest.raises(Refusal, match=r"^CALL_OUTCOME_INVALID$"):
+        work_module._require_seconds(cast(int, seconds))
 
 
 def test_the_lease_outlives_the_provider_timeout() -> None:
@@ -560,7 +609,7 @@ def test_the_worker_says_what_it_is_doing_and_a_backing_off_worker_says_so(
         CONFIG,
         execution_for=faulty,  # type: ignore[arg-type]
         stopping=_Clock(limit=3),
-        conn_factory=lambda: psycopg.connect(empty_database, autocommit=False),
+        conn_factory=lambda: connect(empty_database),
         blobs=blobs,
     )
 
@@ -569,6 +618,40 @@ def test_the_worker_says_what_it_is_doing_and_a_backing_off_worker_says_so(
     # The last word is BACKOFF with a count: the loop faulted and said so.
     assert state.state == "BACKOFF"
     assert state.consecutive_faults > 0
+
+
+def test_a_graceful_stop_beats_stopped_not_a_stale_polling_or_working(
+    case: tuple[StoreConnection, UUID],
+    blobs: BlobStore,
+    empty_database: str,
+) -> None:
+    """N37: a standalone worker's last word on a clean stop is STOPPED, a
+    state distinct from POLLING, WORKING and BACKOFF -- not whichever of
+    those it happened to hold when told to stop, which stayed 'fresh' for
+    `WORKER_STALE_AFTER` with nothing to tell it apart from one still going.
+    """
+    conn, _case_id = case
+
+    def never(_conn: StoreConnection, _run_id: UUID, _lease: Lease) -> Execution:
+        pytest.fail("nothing was ever queued to claim")
+
+    assert (
+        run_worker(
+            CONFIG,
+            execution_for=never,
+            stopping=_Clock(limit=1),
+            conn_factory=lambda: connect(empty_database),
+            blobs=blobs,
+        )
+        == 0
+    )
+
+    [state] = worker_states(conn)
+    assert (state.worker_id, state.state, state.fresh) == (
+        "worker-test",
+        "STOPPED",
+        True,
+    )
 
 
 def test_a_store_that_will_not_take_the_beat_does_not_stop_the_worker(
@@ -601,7 +684,7 @@ def test_a_store_that_will_not_take_the_beat_does_not_stop_the_worker(
                 CONFIG,
                 execution_for=watching,  # type: ignore[arg-type]
                 stopping=_Clock(limit=2),
-                conn_factory=lambda: psycopg.connect(empty_database, autocommit=False),
+                conn_factory=lambda: connect(empty_database),
                 blobs=blobs,
             )
             == 0
@@ -667,7 +750,12 @@ def test_a_session_the_server_ends_does_not_stop_the_worker(
     name = f"caos-worker-under-test-{uuid4().hex[:12]}"
 
     def factory() -> StoreConnection:
-        conn = psycopg.connect(empty_database, autocommit=False, application_name=name)
+        conn = psycopg.connect(
+            empty_database,
+            autocommit=False,
+            application_name=name,
+            options=SEARCH_PATH_OPTION,
+        )
         opened.append(1)
         return conn
 
@@ -677,7 +765,7 @@ def test_a_session_the_server_ends_does_not_stop_the_worker(
     # A migrated store, so the worker polls and keeps its session: on an
     # empty one every poll faults, the worker closes its session and backs
     # off, and a live session to end exists only by chance.
-    with psycopg.connect(empty_database) as migrating:
+    with connect(empty_database) as migrating:
         apply_schema(migrating)
     stopping = Event()
     config = WorkerConfig(BoundaryText.of("worker-test"), poll_seconds=0.1)
@@ -772,7 +860,7 @@ def test_a_cancel_during_the_last_call_ends_the_run_cancelled(
     def late_cancel() -> None:
         calls.append(1)
         if len(calls) == len(route.nodes):
-            with psycopg.connect(empty_database, autocommit=False) as other:
+            with connect(empty_database) as other:
                 assert request_cancel(other, run.run_id) is True
                 other.commit()
 
@@ -793,8 +881,16 @@ def test_a_parked_run_s_checkpoint_thread_is_forgotten(
     empty_database: str,
 ) -> None:
     """DL-8: the thread holds position only (D6); a run this worker parked
-    leaves no rows behind, and the requeued run re-derives its frontier."""
-    from caos.graph.build import thread_config
+    leaves no rows behind, and the requeued run re-derives its frontier.
+
+    `_forget` must drop the exact thread `run_route` opened (CF-037): bound to
+    the run and the pinned route's own digest, not the run alone. Checked by
+    scanning every checkpoint table for a `thread_id` merely starting with the
+    run's id, whatever it is suffixed with, rather than asserting a specific
+    key is absent -- which nothing having ever written under a guessed key
+    would satisfy just as well as `_forget` actually working.
+    """
+    from caos.graph import checkpoint as checkpoint_module
     from caos.graph.checkpoint import checkpointer, close_checkpointer
 
     run = queued_run(case, route, bundle, blobs)
@@ -819,9 +915,111 @@ def test_a_parked_run_s_checkpoint_thread_is_forgotten(
             "STOPPED",
             "PROVIDER_CALL_INVALID",
         )
-        assert saver.get(thread_config(str(run.run_id))) is None
+        with psycopg.connect(empty_database, autocommit=True) as conn:
+            for table in ("checkpoints", "checkpoint_writes", "checkpoint_blobs"):
+                left = conn.execute(
+                    f"SELECT count(*) FROM {checkpoint_module.SCHEMA}.{table}"
+                    " WHERE thread_id LIKE %s",
+                    (f"{run.run_id}%",),
+                ).fetchone()
+                assert left == (0,), table
     finally:
         close_checkpointer(saver)
+
+
+def _thread_rows(url: str, run_id: UUID) -> dict[str, int]:
+    """Rows in each checkpoint table under any thread of `run_id`, whatever
+    the thread key is suffixed with (the scan the test above makes).
+
+    Every table LangGraph keys by thread, read from the catalog: the store
+    names them itself (`work.CHECKPOINT_TABLES`), and one LangGraph adds
+    later would otherwise go unforgotten and unnoticed.
+    """
+    from caos.graph import checkpoint as checkpoint_module
+
+    assert work_module.CHECKPOINT_SCHEMA == checkpoint_module.SCHEMA
+    counted: dict[str, int] = {}
+    with psycopg.connect(url, autocommit=True) as conn:
+        keyed = conn.execute(
+            "SELECT table_name FROM information_schema.columns"
+            " WHERE table_schema = %s AND column_name = 'thread_id'",
+            (checkpoint_module.SCHEMA,),
+        ).fetchall()
+        assert {str(row[0]) for row in keyed} == set(work_module.CHECKPOINT_TABLES)
+        for table in work_module.CHECKPOINT_TABLES:
+            row = conn.execute(
+                f"SELECT count(*) FROM {checkpoint_module.SCHEMA}.{table}"
+                " WHERE thread_id LIKE %s",
+                (f"{run_id}%",),
+            ).fetchone()
+            assert row is not None
+            counted[table] = int(row[0])
+    return counted
+
+
+def test_a_run_cancelled_while_queued_leaves_no_checkpoint_thread(
+    enqueued: _Run, empty_database: str
+) -> None:
+    """N21 (DL-8): a run released mid-route keeps its thread for the next
+    holder to resume. Cancelled while QUEUED, no worker holds it, so no
+    worker ever called `_forget`: the cancel that ends it drops the thread in
+    its own unit, and every checkpoint table is left with nothing of it."""
+    from caos.graph.checkpoint import checkpointer, close_checkpointer
+    from caos.store.work import request_cancel
+
+    run = enqueued
+    saver = checkpointer(empty_database)
+    stopping = Event()
+    try:
+        completions = CanonicalCompletions(run.source_id, during=stopping.set)
+        driven = work_once(
+            run.conn,
+            run.blobs,
+            execution_for=module_execution(
+                completions, priced(ESTIMATE), run.bundle, run.blobs, saver
+            ),
+            config=CONFIG,
+            stopping=stopping,
+        )
+        assert driven == run.run_id
+        assert work_row(run.conn, run.run_id)[0] == "QUEUED", "released"
+        assert sum(_thread_rows(empty_database, run.run_id).values()) > 0
+
+        assert _cancel_from_elsewhere(empty_database, run.run_id) is True
+        assert run_status(run.conn, run.run_id) is RunStatus.CANCELLED
+        assert _thread_rows(empty_database, run.run_id) == dict.fromkeys(
+            work_module.CHECKPOINT_TABLES, 0
+        )
+        run.conn.rollback()
+        assert request_cancel(run.conn, run.run_id) is False, "already ended"
+        run.conn.rollback()
+    finally:
+        close_checkpointer(saver)
+
+
+def test_a_cancel_with_no_checkpoint_schema_still_ends_the_run(
+    enqueued: _Run, empty_database: str
+) -> None:
+    """N21: a store no worker has ever set a checkpointer up on has no
+    `caos_graph` schema; forgetting a claimed run's threads there is nothing
+    to do, never a refusal that keeps the run from ending."""
+    from caos.graph import checkpoint as checkpoint_module
+    from caos.store.work import claim_run, release
+
+    run = enqueued
+    lease = claim_run(run.conn, worker=BoundaryText.of("w"), lease_seconds=60)
+    assert lease is not None
+    assert release(run.conn, lease)
+    run.conn.commit()
+    row = run.conn.execute(
+        "SELECT to_regnamespace(%s)", (checkpoint_module.SCHEMA,)
+    ).fetchone()
+    run.conn.rollback()
+    assert row == (None,), "no checkpointer was ever set up here"
+
+    assert _cancel_from_elsewhere(empty_database, run.run_id) is True
+    assert run_status(run.conn, run.run_id) is RunStatus.CANCELLED
+    run.conn.rollback()
 
 
 def test_a_lost_or_corrupt_stored_body_parks_the_run_with_its_own_code() -> None:
@@ -1196,6 +1394,40 @@ def test_the_drain_joins_the_worker_once_however_many_paths_reach_it(
     none_started()
     none_started()
     assert capsys.readouterr().err == ""
+
+
+def test_main_moves_the_concurrency_bound_off_uvicorns_own_count(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CF-051. uvicorn's own `limit_concurrency` counts idle keep-alive
+    connections too and answers a bare 503 outside the ASGI app; the bound
+    now lives in `EdgeGuard` (`caos/api/edge.py`) instead, so `main` no
+    longer passes it. `timeout_keep_alive` is set explicitly rather than
+    left at uvicorn's silent default, and doubles as this uvicorn version's
+    only lever on how long a connection may sit before it finishes sending
+    its request -- there is no separate, named header-read timeout to set.
+    The exact tuned figures stay N26, which is enterprise.
+    """
+    import uvicorn
+
+    from caos import serve
+
+    monkeypatch.delenv("CAOS_WORKER_IN_PROCESS", raising=False)
+    calls: list[dict[str, object]] = []
+
+    def recorded(_app: object, **kwargs: object) -> None:
+        calls.append(kwargs)
+
+    monkeypatch.setattr(uvicorn, "run", recorded)
+
+    assert serve.main() == 0
+
+    [kwargs] = calls
+    assert "limit_concurrency" not in kwargs
+    assert kwargs["timeout_keep_alive"] == serve.TIMEOUT_KEEP_ALIVE_SECONDS
+    assert 0 < serve.TIMEOUT_KEEP_ALIVE_SECONDS <= 10
+    assert kwargs["h11_max_incomplete_event_size"] == serve.HEADER_READ_LIMIT_BYTES
+    assert 0 < serve.HEADER_READ_LIMIT_BYTES <= 65_536
 
 
 def test_a_re_send_reads_the_fence_without_writing(enqueued: _Run) -> None:

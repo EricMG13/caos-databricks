@@ -29,7 +29,7 @@ from caos.methodology.vendor import (
 from caos.refusals import Refusal, RefusalCode
 from caos.store import RunStatus, StoreConnection, committed_unit
 from caos.store.events import RunEvent, append, lock_run
-from caos.store.routes import route_pin
+from caos.store.routes import require_catalog_route, route_pin
 from caos.store.source_sets import SourceSet, load_source_set
 
 # The vendor's `validate_handoff.SUBJECT_KEY_RE`, and 0011's CHECK.
@@ -508,6 +508,9 @@ def pin_run_input_in(  # noqa: PLR0913 -- pin_run_input's arguments
             "SELECT 1 FROM run_attempts WHERE run_id = %s LIMIT 1", (run_id,)
         ).fetchone():
             raise Refusal(RefusalCode.RUN_INPUT_TOO_LATE)
+        # The pinned route must be this build's own catalog resolution (CF-025):
+        # the input binds the build the route is then executed under.
+        require_catalog_route(pinned[0], catalog(bundle))
         _judge_research(
             bundle,
             pinned[0],

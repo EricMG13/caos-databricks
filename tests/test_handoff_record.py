@@ -33,7 +33,14 @@ from canonical_fixtures import handoff_markdown as _markdown
 from canonical_fixtures import identity as _identity
 
 from caos.blobs import BlobStore
-from caos.evidence.citations import AnchoredCitation, Citation, Rect
+from caos.digest import canonical_json
+from caos.evidence.citations import (
+    ANY_RUN,
+    WHOLE_LINE,
+    AnchoredCitation,
+    Citation,
+    Rect,
+)
 from caos.methodology import bundle as bundle_module
 from caos.methodology.bundle import (
     MANIFEST_NAME,
@@ -225,6 +232,31 @@ def test_a_record_round_trips_exactly(tmp_path: Path) -> None:
     assert record_bytes(record) == json.dumps(
         decoded, sort_keys=True, separators=(",", ":"), ensure_ascii=False
     ).encode("utf-8")
+
+
+def test_a_record_names_the_rule_its_citations_were_accepted_under(
+    tmp_path: Path,
+) -> None:
+    """N28: a record accepted before the whole-line rule carries no rule and
+    reads back as `ANY_RUN`, byte for byte as it was stored; one accepted
+    since names `WHOLE_LINE`. A record naming any other rule, or `ANY_RUN`
+    aloud, is not one this host wrote."""
+    old = _record()
+    assert old.citation_rule == ANY_RUN
+    assert "citation_rule" not in json.loads(record_bytes(old))
+    new = _record(citation_rule=WHOLE_LINE)
+    assert json.loads(record_bytes(new))["citation_rule"] == WHOLE_LINE
+    for record in (old, new):
+        blobs, artifact, sha = _stored(tmp_path, record)
+        read = read_record(
+            blobs, artifact_sha256=artifact, record_sha256=sha, expected=CP0
+        )
+        assert read == record
+    for rule in (ANY_RUN, "prefix", 1):
+        document = json.loads(record_bytes(new))
+        document["citation_rule"] = rule
+        sha = blobs.put(canonical_json(document).encode("utf-8"))
+        _mismatch(blobs, artifact, sha, CP0)
 
 
 def _mismatch(blobs: BlobStore, artifact: str, sha: str, expected: object) -> None:

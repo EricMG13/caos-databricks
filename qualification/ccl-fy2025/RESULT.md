@@ -15,7 +15,7 @@ answers it is being evaluated against.
 
 ## Run
 
-- Qualification-set digest: `f5555753cf7b39868fa4885d95a0b80847c61204a4b3ebe5fffe8345587c327e`
+- Qualification-set digest: `85d50a252f3158fe8a4bd8e4cd0747409f1b559460c16bdc1761b8745d381eb5`
 - Route: `LITE_CREDIT_22 / LITE_EARNINGS_UPDATE` (`CP-0`, `CP-L10`, `CP-5`)
 - Provider/model: `openrouter / deepseek/deepseek-v4-pro-0813`
 - Price configuration: `$0.96` input and `$2.88` output per million tokens, dated 2026-09-15

@@ -28,7 +28,6 @@ EXCLUSIONS = (
     # Immutable Phase 6 public evidence is also indivisible; each new set is
     # named explicitly so unrelated qualification changes remain counted.
     ":!qualification/ba-fy2025/documents/**",
-    ":!qualification/ba-fy2025-covenant-refinancing/documents/**",
     ":!qualification/ccl-fy2025-covenant-refinancing/documents/**",
     ":!qualification/ccl-fy2025-earnings-update/documents/**",
     ":!qualification/ccl-fy2025-liquidity/documents/**",
@@ -80,10 +79,23 @@ def changed_lines(base: str) -> int:
         text=True,
     )
     total = 0
+    binary: list[str] = []
     for line in result.stdout.splitlines():
-        added, removed, _path = line.split("\t", 2)
-        if added != "-" and removed != "-":
-            total += int(added) + int(removed)
+        added, removed, path = line.split("\t", 2)
+        if added == "-" or removed == "-":
+            # `git diff --numstat` prints "-\t-\t<path>" for a binary file:
+            # no line count to add, and none was added (FP-10). Silently
+            # skipping it let a PR add or change an unbounded binary blob
+            # under no line-count ceiling at all; it is refused instead.
+            binary.append(path)
+            continue
+        total += int(added) + int(removed)
+    if binary:
+        message = (
+            "binary file(s) changed; this gate counts lines and cannot "
+            f"measure them: {', '.join(binary)}"
+        )
+        raise ValueError(message)
     return total
 
 
@@ -93,8 +105,11 @@ def main() -> int:
         return 2
     try:
         count = changed_lines(sys.argv[1])
-    except (FileNotFoundError, subprocess.CalledProcessError, ValueError):
-        print(f"cannot diff caller-supplied base {sys.argv[1]}", file=sys.stderr)
+    except (FileNotFoundError, subprocess.CalledProcessError, ValueError) as refusal:
+        print(
+            f"cannot measure the change against {sys.argv[1]}: {refusal}",
+            file=sys.stderr,
+        )
         return 2
     print(f"changed lines: {count}")
     if count > LIMIT:

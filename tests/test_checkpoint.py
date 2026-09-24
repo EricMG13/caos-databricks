@@ -25,7 +25,7 @@ from caos.graph.checkpoint import (
     close_checkpointer,
     serializer,
 )
-from caos.refusals import Refusal
+from caos.refusals import Refusal, RefusalCode
 from caos.store import lakebase
 
 EXT_CONSTRUCTOR_SINGLE_ARG = 0  # LangGraph's tag for "import and call this"
@@ -153,6 +153,29 @@ def test_a_set_up_held_by_an_old_snapshot_refuses_in_time_and_heals(
     finally:
         reader.rollback()
         reader.close()
+
+
+def test_a_set_up_lock_held_by_another_process_refuses_in_time(
+    empty_database: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CF-071: the sibling test above exercises _bounded_set_up's statement
+    timeout, once inside the advisory lock. _set_up's own deadline -- polling
+    for a lock another process already holds, never reaching the index build
+    at all -- was the one STORE_UNAVAILABLE branch no test reached."""
+    import time
+
+    monkeypatch.setattr(checkpoint, "SETUP_LOCK_SECONDS", 0.3)
+    monkeypatch.setattr(checkpoint, "SETUP_LOCK_POLL_SECONDS", 0.05)
+    holder = psycopg.connect(empty_database, autocommit=True)
+    try:
+        holder.execute("SELECT pg_advisory_lock(%s)", (SETUP_LOCK_KEY,))
+        started = time.monotonic()
+        with pytest.raises(Refusal, match=r"^STORE_UNAVAILABLE$"):
+            checkpointer(empty_database)
+        assert time.monotonic() - started < 5
+    finally:
+        holder.execute("SELECT pg_advisory_unlock(%s)", (SETUP_LOCK_KEY,))
+        holder.close()
     with psycopg.connect(empty_database, autocommit=True) as conn:
         held = conn.execute(
             # `pg_locks` is the whole server's: under `-n auto` other tests'
@@ -246,5 +269,55 @@ def test_a_checkpoint_row_the_host_never_writes_is_refused_not_loaded(
             ).fetchall()
         assert written, "the failed node's write is there"
         assert not [row for row in written if b"EBITDA" in bytes(row[0])]
+    finally:
+        close_checkpointer(saver)
+
+
+def test_a_checkpoint_thread_is_bound_to_the_pinned_route_s_digest(
+    empty_database: str,
+) -> None:
+    """CF-037: `caos.graph.runtime.run_route` keys the checkpoint thread on
+    the run *and* the pinned route's own digest (`route_digest`), not the run
+    alone. A checkpoint left mid-route resumes under that same digest; under
+    a different one for the same run it is invisible -- a fresh start, never
+    a resume into a shape the recompiled graph no longer has -- which is
+    exactly what a thread keyed on the run alone would have handed back
+    regardless of whether the shape still matched.
+    """
+    from caos.graph.build import build_graph, resume_input, thread_config
+    from caos.graph.route import ResolvedRoute, RouteNode, route_digest
+
+    saver = checkpointer(empty_database)
+    try:
+        route = ResolvedRoute(
+            "p", "s", (RouteNode("CP-0", "CP-0", 0), RouteNode("CP-1", "CP-1", 0)), ()
+        )
+        moved = ResolvedRoute(
+            "p", "s", (RouteNode("CP-1", "CP-1", 0), RouteNode("CP-0", "CP-0", 0)), ()
+        )
+        assert route_digest(route) != route_digest(moved)
+        thread = f"a-run:{route_digest(route)}"
+        thread_moved = f"a-run:{route_digest(moved)}"
+
+        def stops_at_cp1(route_node_id: str) -> str:
+            if route_node_id == "CP-1":
+                raise Refusal(RefusalCode.PROVIDER_CALL_INVALID)
+            return "ACCEPTED"
+
+        graph = build_graph(
+            route, node_pass=stops_at_cp1, finish=lambda: "COMPLETE", checkpointer=saver
+        )
+        with pytest.raises(Refusal) as raised:
+            graph.invoke(resume_input(graph, thread), config=thread_config(thread))
+        assert raised.value.code is RefusalCode.PROVIDER_CALL_INVALID
+
+        assert saver.get(thread_config(thread)) is not None, "left mid-route"
+        assert resume_input(graph, thread) is None, "resumes its own thread"
+
+        assert resume_input(graph, thread_moved) is not None, (
+            "a different digest for the same run finds no checkpoint of its "
+            "own and starts fresh, rather than resuming the other shape's"
+        )
+        assert saver.get(thread_config(thread_moved)) is None
     finally:
         close_checkpointer(saver)

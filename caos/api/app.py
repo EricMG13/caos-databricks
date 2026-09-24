@@ -21,19 +21,21 @@ because somebody widened a SELECT.
 FastAPI's own `/docs`, `/redoc` and `/openapi.json` are not served (Task 4.5
 decision 6): Swagger loads a script from a CDN the policy refuses, and a route
 map is nothing a browser of this workspace needs. Every request passes
-`caos/api/edge.py`'s guard first -- the edge token or the loopback rule, the
+`caos/api/edge.py`'s guard first -- the platform or the loopback rule, the
 identity-header hygiene, the Origin check -- before routing or identity.
 """
 
 from __future__ import annotations
 
 import asyncio
+import sys
 import weakref
 from collections.abc import AsyncIterator, Callable, Generator
 from contextlib import asynccontextmanager, suppress
 from json import dumps
 from uuid import UUID
 
+import psycopg
 from fastapi import FastAPI, Request, Response
 from fastapi.exception_handlers import (
     http_exception_handler,
@@ -72,6 +74,7 @@ from caos.api.edge import EdgeGuard, is_api_path, refusal_body
 from caos.api.identity import actor_from_headers
 from caos.api.reads import analysis as analysis_read
 from caos.api.reads import book as book_read
+from caos.api.reads import deliverable as deliverable_read
 from caos.api.reads import directory as directory_read
 from caos.api.reads import evidence as evidence_read
 from caos.api.reads import model as model_read
@@ -84,10 +87,12 @@ from caos.api.stream import (
     StreamEvent,
     StreamSlot,
     case_tail,
+    guarded,
     take_stream_slot,
 )
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection, apply_schema, connect
+from caos.store.budget import configured_ceiling
 
 # `GET /api/v1/cases/{case_id}/events`, the one path this module serves: the
 # caller's standing and the run's case, then the stream's own connect, cursor
@@ -121,12 +126,15 @@ POLL_INTERVAL = 0.5
 # entry beside them already said as much in words before the status agreed.
 # `STREAM_LIMIT_REACHED` joins it for the same reason and not by analogy: the
 # capacity is released by a watcher closing a tail, so waiting is exactly what
-# repairs it. Nothing an operator does is required.
+# repairs it. Nothing an operator does is required. `CONCURRENCY_LIMIT_REACHED`
+# (CF-051) is the same shape one level up: the capacity is released by another
+# request finishing, not by anything an operator does either.
 TRANSIENT = frozenset(
     {
         RefusalCode.STORE_UNAVAILABLE,
         RefusalCode.IDENTITY_UNAVAILABLE,
         RefusalCode.STREAM_LIMIT_REACHED,
+        RefusalCode.CONCURRENCY_LIMIT_REACHED,
         RefusalCode.PROVIDER_UNAVAILABLE,
     }
 )
@@ -138,7 +146,6 @@ PERMANENT = frozenset(
         RefusalCode.BLOB_NOT_FOUND,
         RefusalCode.BLOB_DIGEST_MISMATCH,
         RefusalCode.BLOB_ADDRESS_INVALID,
-        RefusalCode.READINESS_INVALID,
         RefusalCode.ROUTE_IDENTITY_INVALID,
         RefusalCode.ROUTE_EDGE_UNSUPPORTED,
         RefusalCode.ORCHESTRATION_ARTIFACT_UNREADABLE,
@@ -162,10 +169,6 @@ PERMANENT = frozenset(
         RefusalCode.PROVIDER_OUTPUT_TRUNCATED,
         RefusalCode.PROVIDER_REFUSED,
         RefusalCode.PROVIDER_RESPONSE_INVALID,
-        RefusalCode.ENVELOPE_INVALID,
-        RefusalCode.ENVELOPE_UNDECLARED_FIELD,
-        RefusalCode.ENVELOPE_UNCITED_CLAIM,
-        RefusalCode.READINESS_INCOMPLETE,
     }
 )
 # What a transient answer promises, in seconds. A constant rather than a
@@ -193,23 +196,19 @@ _STATUS = {
     RefusalCode.STORE_UNAVAILABLE: 503,
     RefusalCode.IDENTITY_UNAVAILABLE: 503,
     RefusalCode.STREAM_LIMIT_REACHED: 503,
+    # Answered by the edge guard before routing (CF-051, replacing uvicorn's
+    # own `limit_concurrency`); listed here, beside the store's own capacity
+    # refusals, so a route could not give it a different status either.
+    RefusalCode.CONCURRENCY_LIMIT_REACHED: 503,
     RefusalCode.STORE_NOT_TRANSACTIONAL: 500,
     RefusalCode.STORE_SCHEMA_DRIFT: 500,
     RefusalCode.BLOB_NOT_FOUND: 500,
     RefusalCode.BLOB_DIGEST_MISMATCH: 500,
     RefusalCode.BLOB_ADDRESS_INVALID: 500,
-    # The gate's map is read out of a stored artifact, so a map the host cannot
-    # bound is bytes this server wrote. Not a store fault, which is what this
-    # comment used to call it: the store answers, and answers the same bytes
-    # to the next reader, so waiting is not what fixes it. Its clearance says
-    # an operator must verify the artifact, and that is the discharge.
-    RefusalCode.READINESS_INVALID: 500,
-    # The neighbour below was filed at 503 by copying this one, and this one was
-    # wrong too: a route pin whose identity the host cannot rebuild is stored
-    # bytes, and the next read rebuilds the same identity from the same pin. The
-    # two are not distinguishable on the time axis, which is why they now carry
-    # the same status -- the history is here because the copying is how both got
-    # their old one.
+    # A route pin whose identity the host cannot rebuild is stored bytes, and
+    # the next read rebuilds the same identity from the same pin, so waiting is
+    # not what fixes it. It was filed at 503 by copying a neighbour, since
+    # retired (`READINESS_INVALID`), that was wrong the same way.
     RefusalCode.ROUTE_IDENTITY_INVALID: 500,
     # A pinned build whose catalog declares an edge type this engine cannot
     # evaluate: the vendored bytes, not the request. No profile or pathway the
@@ -282,6 +281,10 @@ _STATUS = {
     RefusalCode.RUN_INPUT_NOT_PINNED: 409,
     RefusalCode.RUN_ALREADY_STARTED: 409,
     RefusalCode.RUN_NOT_STOPPED: 409,
+    # The caller's own queue is full (N15): a conflict with state the caller
+    # holds, cleared by one of their runs ending or being cancelled -- not a
+    # server fault, and no `Retry-After` promises when.
+    RefusalCode.QUEUED_RUNS_LIMIT_REACHED: 409,
     RefusalCode.RUN_CANCEL_REQUESTED: 409,
     # One signature per signer per revision (`0029`): the request was sound and
     # the state already holds it, as VERDICT_ALREADY_RECORDED's is.
@@ -314,25 +317,19 @@ _STATUS = {
     # The owner's second half of D3 (§88). These answered 400 while their
     # clearances said retry. The provider not answering is cleared by waiting,
     # so 503. The rest are an answer the provider already gave -- truncated,
-    # refused, unreadable, or a handoff that fails its contract -- which the
-    # identical request later meets again: not the caller's fault (so not 400)
-    # and not cleared by waiting (so not 503). A new attempt is the discharge,
-    # which is what "Retry the attempt" names.
+    # refused or unreadable -- which the identical request later meets again:
+    # not the caller's fault (so not 400) and not cleared by waiting (so not
+    # 503). A new attempt is the discharge, which is what "Retry the attempt"
+    # names.
     RefusalCode.PROVIDER_UNAVAILABLE: 503,
     RefusalCode.PROVIDER_OUTPUT_TRUNCATED: 500,
     RefusalCode.PROVIDER_REFUSED: 500,
     RefusalCode.PROVIDER_RESPONSE_INVALID: 500,
-    RefusalCode.ENVELOPE_INVALID: 500,
-    RefusalCode.ENVELOPE_UNDECLARED_FIELD: 500,
-    RefusalCode.ENVELOPE_UNCITED_CLAIM: 500,
-    RefusalCode.READINESS_INCOMPLETE: 500,
     RefusalCode.EDGE_CONFIG_INVALID: 400,
     RefusalCode.REQUEST_INVALID: 400,
     RefusalCode.IDEMPOTENCY_KEY_REQUIRED: 400,
     RefusalCode.ROUTE_NOT_ENABLED: 400,
     RefusalCode.METHODOLOGY_INPUT_INVALID: 400,
-    RefusalCode.FORECAST_CHAIN_BROKEN: 400,
-    RefusalCode.FORECAST_RESIDUAL_UNRECONCILED: 400,
     RefusalCode.FORECAST_DRIVER_NOT_READY: 400,
     RefusalCode.DELIVERABLE_PAYLOAD_INVALID: 400,
     RefusalCode.NARRATIVE_FIGURE_UNREFERENCED: 400,
@@ -389,17 +386,18 @@ def on_shutdown(hook: Callable[[], None]) -> None:
 @asynccontextmanager
 async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """Apply the declared schema before the first request, and refuse to start
-    without a database.
+    without a database or a readable run ceiling.
 
     "Postgres schema in full at startup" is the store's rule, and `apply_schema`
     is idempotent -- it advances a verified migration prefix on this fresh
     connection and refuses `STORE_SCHEMA_DRIFT` for unknown or edited history.
     It commits the migration transaction before requests begin. Doing it
     here rather than lazily means a process pointed at the wrong database dies at
-    boot instead of serving 500s that look like a bug in the route.
+    boot instead of serving 500s that look like a bug in the route. A malformed
+    `CAOS_RUN_CEILING` (CF-048) is checked the same way here, rather than left
+    invisible until the first caller tries to start a run.
     """
-    with connect(_database_url()) as conn:
-        apply_schema(conn)
+    _boot_or_refuse()
     # The one health probe task (slice 4.5b); the route reads what it leaves.
     _app.state.health = health.ProbeState()
     probes = asyncio.create_task(health.probe_loop(_app.state.health))
@@ -413,6 +411,37 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
             hook()
         with suppress(asyncio.CancelledError):
             await probes
+
+
+def _boot_or_refuse() -> None:
+    """The store connect and schema, then the run ceiling: a fault in either
+    refuses to start, printed as its typed code alone (CF-078, CF-048).
+
+    psycopg's own exception for a connection the driver never opened -- a
+    malformed DSN included -- may quote the whole connection string, password
+    and all, back in its message; only `code.value` is ever written here. The
+    new `Refusal` is raised after the `except` that observed the fault has
+    finished, as `caos.api.deps.store_connection` already raises its own, so
+    it carries no chained context -- of the driver's or of the ceiling's raw
+    value -- for anything downstream to print.
+    """
+    code: RefusalCode | None = None
+    try:
+        with connect(_database_url()) as conn:
+            apply_schema(conn)
+    except Refusal as refused:
+        code = refused.code
+    except psycopg.Error:
+        code = RefusalCode.STORE_UNAVAILABLE
+    if code is None:
+        try:
+            configured_ceiling()
+        except Refusal as refused:
+            code = refused.code
+    if code is None:
+        return
+    print(code.value, file=sys.stderr)
+    raise Refusal(code)
 
 
 app = FastAPI(
@@ -436,6 +465,7 @@ for _section in (
     qualification_read,
     reports_read,
     evidence_read,
+    deliverable_read,
 ):
     app.include_router(_section.router)
 app.include_router(health.router)
@@ -507,7 +537,7 @@ async def _malformed_run_id(
     else:
         return await request_validation_exception_handler(request, error)
     try:
-        actor_from_headers(request.headers)
+        await actor_from_headers(request.headers)
     except Refusal as refusal:
         return _refused(request, refusal)
     return _refused(request, Refusal(code))
@@ -541,15 +571,17 @@ def read_case_events(
     # actor, so the cap is a share of the fleet's tails rather than a race for
     # all of them (MX-2).
     slot = take_stream_slot(actor_id=actor.user_id)
-    events = case_tail(
-        conn,
-        case_id=case_id,
-        run_id=run,
-        actor_id=actor.user_id,
-        after=request.headers.get("last-event-id"),
-        deadline=TAIL_DEADLINE,
-        poll=POLL_INTERVAL,
-        heartbeat=True,
+    events = guarded(
+        case_tail(
+            conn,
+            case_id=case_id,
+            run_id=run,
+            actor_id=actor.user_id,
+            after=request.headers.get("last-event-id"),
+            deadline=TAIL_DEADLINE,
+            poll=POLL_INTERVAL,
+            heartbeat=True,
+        )
     )
 
     def framed() -> Generator[bytes]:
@@ -605,14 +637,23 @@ class _TailResponse(StreamingResponse):
 
 
 def _frame(event: StreamEvent | None) -> bytes:
-    """One SSE frame. The cursor frame is `id` alone, which sets the browser's
-    `lastEventId` and dispatches nothing. A named frame's `data` is a
-    placeholder because the spec dispatches no event without one. The
-    keepalive (`None`) is a comment, which the browser ignores."""
+    """One SSE frame. The cursor frame is `id` and `retry`, which sets the
+    browser's `lastEventId` and its reconnect delay and dispatches nothing.
+    A named frame's `data` is a placeholder because the spec dispatches no
+    event without one. The keepalive (`None`) is a comment, which the
+    browser ignores.
+
+    `retry` (N48): `TAIL_DEADLINE` closes every tail, expected reconnects
+    included, and with none ever sent the browser's own default reconnect
+    delay was the gap a watcher saw -- indistinguishable from a real drop.
+    Carried on the cursor frame, the first of any connection, so a fresh
+    reconnect after the deadline is as quick as an idle poll would have been.
+    """
     if event is None:
         return b":\n\n"
     if event.name is None:
-        return f"id: {event.id}\n\n".encode()
+        retry_ms = int(POLL_INTERVAL * 1000)
+        return f"retry: {retry_ms}\nid: {event.id}\n\n".encode()
     return f"id: {event.id}\nevent: {event.name}\ndata: {dumps({})}\n\n".encode()
 
 

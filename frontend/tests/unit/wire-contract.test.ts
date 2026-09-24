@@ -63,6 +63,8 @@ test("Report and Committee bind case/run/revision and exact receipt identity", (
     signed_by: [CASE],
     frozen_by: RUN,
     filed_by: SOURCE,
+    render_url: "/render",
+    package_url: "/package",
     receipt: {
       case_id: CASE,
       run_id: RUN,
@@ -266,6 +268,7 @@ const RUN_SUMMARY = {
   created_at: AT,
   profile_id: "LITE",
   selection_id: null,
+  stop_code: null,
 };
 
 function directory(): { [key: string]: Json } {
@@ -326,6 +329,7 @@ function runSection(): { [key: string]: Json } {
         route_digest: SHA,
         build_id: null,
         source_set_version: 1,
+        input_fingerprint: null,
         subject: null,
         gates: [{ gate: "SOURCE_SET", state: "RELEASED" }],
         nodes: [
@@ -432,7 +436,7 @@ function page(): { [key: string]: Json } {
       document_sha256: SHA,
       page: 3,
       frame: { x0: 0, y0: 0, x1: 612, y1: 792, y_axis: "down" },
-      lines: [{ text: "net leverage", x0: 1, y0: 2, x1: 3, y1: 4 }],
+      lines: [{ text: "net leverage", x0: 1, y0: 2, x1: 3, y1: 4, hidden: [] }],
     },
     observed_at: AT,
     status: "complete",
@@ -466,6 +470,7 @@ describe("the v1 wire contract", () => {
       provider: "openrouter",
       model: "model",
       reviewer: "Reviewer",
+      reviewer_id: null,
       decided_at: AT,
       expires_at: "2026-09-16T10:00:00Z",
     };

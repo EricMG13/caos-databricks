@@ -243,6 +243,11 @@ CP-0 owns one canonical Markdown handoff containing preparation followed by read
 CP-PARSE is an alternate command for that complete workflow. CP-MODEL is the governed
 XLSX exception.
 
+A command another module absorbs (the catalog's superseded IDs, such as CP-2B in CP-2A,
+CP-2C in CP-1A, CP-2F in CP-2E) authors its owner's one artifact. `## Analysis` opens
+with the owner's H3 above; the absorbed phase's H3 heads that phase's own section later
+in `## Analysis` and is never a second opening.
+
 The reader-facing portion of `## Analysis` follows this sequence:
 
 1. conclusion-first H3 and 90–150 word view;
@@ -315,13 +320,15 @@ ORPHAN CLAIM: lineage in (Untraced|Weak Lineage|Insufficient Information) + comm
 CP CANONICAL STATE RULES (vNext)
 SEC1 PRINCIPLES: State explicit, monotonic within run.
 SEC2 REQUIRED FIELDS: module_id, module_name, owned_object, schema_family, runtime_output, evidence_trace, confidence(High|Medium|Low|Insufficient Information), limitation_flags, qa_status(Not Reviewed|Passed|Restricted|Blocked), validation_warnings, downstream_consumers. REMOVED: source_basis (U2).
-SEC3 TRANSITIONS: qa_status: Not Reviewed->Passed|Restricted|Blocked. committee_status: Draft Only->Committee Ready|Restricted|Blocked|Requires More Work|Insufficient Information.
+SEC3 TRANSITIONS: qa_status: Not Reviewed->Passed|Restricted|Blocked. Not Reviewed is the state before the module's own QA step; every run completes that step, so a handoff's front-matter qa_status is always Passed, Restricted or Blocked, never Not Reviewed. committee_status: Draft Only->Committee Ready|Restricted|Blocked|Requires More Work|Insufficient Information.
 SEC4 HARD STOPS: an upstream the pinned route delivers that is missing, stale or refused->Blocked+UPSTREAM_DEPENDENCY_MISSING; an upstream the route does not include is a named limitation, never a stop. CP-2A: stop if CP-1 and CP-2 are both on the route and both unavailable.
+SEC5 UPGRADE (a LITE compatibility block's missing_input_behavior): an input the module's FULL method needs that the LITE route does not deliver is never inferred and never a stop. The module completes on the screening inputs the route delivers, names each missing input as a limitation, sets qa_status Restricted, and recommends a new, user-confirmed, linked FULL_CREDIT_32 run that supplies it; this run's profile never changes.
 
 ## CP_CANONICAL_STATUS_TAXONOMY.txt
 
 CP CANONICAL STATUS TAXONOMY (NEW, resolves E1)
-D1 QA: Not Reviewed | Passed | Restricted | Blocked
+D1 QA: Not Reviewed | Passed | Restricted | Blocked (Not Reviewed is never a handoff's qa_status; see SEC3)
+D1 FROM MODULE STATUS: a module's own run-status word sets its qa_status, unless a QA finding caps it lower (CP_CONFIDENCE_SCORE hard caps): Complete | Completed | Full Run | COMPLETE -> Passed; Complete with Gaps | Completed with Limitations | Ready with Limitations | Partial | COMPLETE_WITH_GAPS -> Restricted; Blocked | BLOCKED | BLOCKED_IDENTITY -> Blocked. Not Applicable -> Passed when the module's own gate finds its analysis does not apply (the handoff says why, one row per register), Restricted when that finding rests on missing evidence. A LITE route's UPGRADE limitation (SEC5) -> Restricted. The score and band then follow CP_CONFIDENCE_SCORE.
 D2 COMMITTEE: Committee Ready | Draft Only | Requires More Work | Insufficient Information | Restricted | Blocked
 D2 BY SCOPE: decision_scope FULL permits every D2 value; SCREENING_ONLY never permits Committee Ready (a screen is not committee clearance; a full decision requires a new FULL run). validate_handoff.py refuses a status outside the pathway's scope.
 D3 CALCULATION: Supported | Derived | Implied | Provisional | Not Available | Not Comparable | Not Calculable | Insufficient Information
@@ -878,4 +885,4 @@ Aliases invoke the complete physical owner's workflow and artifact. CP-2D, CP-3C
 
 ## CP-DR workflow integration
 
-CP-DR can be inserted by a run-specific research brief before a named consumer. Follow `skills/cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md`. The sole analytical output remains canonical Markdown; brief JSON is a workflow control. Research evidence must pass the receiving owner's source/definition checks and explicit adoption register. Standalone dossiers carry their own research scope and cannot silently become same-run upstream handoffs.
+CP-DR can be inserted by a run-specific research brief before a named consumer. Where `skills/cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md` is delivered with a module, follow it; where it is not, an unresolved research question is recorded as that module's gap and no research is requested. The sole analytical output remains canonical Markdown; brief JSON is a workflow control. Research evidence must pass the receiving owner's source/definition checks and explicit adoption register. Standalone dossiers carry their own research scope and cannot silently become same-run upstream handoffs.

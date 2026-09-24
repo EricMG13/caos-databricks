@@ -273,10 +273,20 @@ def test_lite_deep_research_route_completes_proves_and_freezes(
         n.route_node_id for n in RESEARCH_ROUTE.nodes
     ]
     data = payload_bytes(payload)
+    # FP-33: the signer must be independent of the actor who saved the
+    # narrative (`harness.approver`), so a fresh approver signs here.
+    signer = uuid4()
+    grant(
+        harness.conn,
+        case_id=harness.case_id,
+        user_id=signer,
+        standing=Standing.APPROVER,
+    )
+    harness.conn.commit()
     sign_opinion(
         harness.conn,
         case_id=harness.case_id,
-        actor_id=harness.approver,
+        actor_id=signer,
         revision_id=saved,
     )
     freezer = uuid4()
@@ -496,7 +506,7 @@ def test_cp_dr_contract_validates_identifies_and_projects() -> None:
     projection = _validated(ident, markdown)
     assert projection.module_id == "CP-DR"
     assert projection.decision_scope == "SCREENING_ONLY"
-    assert projection.qa_status == "Passed"
+    assert projection.qa_status == "Restricted"
     findings = CONTRACT.research.rows(
         markdown.decode(), "cpdr.findings", CONTRACT.research.FINDING_COLUMNS
     )

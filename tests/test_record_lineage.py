@@ -18,6 +18,7 @@ from uuid import UUID
 
 import pytest
 from canonical_fixtures import CATALOG, CanonicalCompletions
+from conftest import tamper
 from test_canonical_execution import LITE, _accept, _node, _reserved, _run
 from test_canonical_runtime import _answers, _module_provider, _run_route
 from test_execution_freshness import _counts, _Harness, harness
@@ -37,7 +38,7 @@ from caos.methodology.handoff import (
 )
 from caos.qualification.proof import assert_orchestration_proof
 from caos.refusals import Refusal, RefusalCode
-from caos.store import StoreConnection, connect, outcomes
+from caos.store import StoreConnection, connect, gates, outcomes, run_inputs
 from caos.store.events import lock_run
 
 __all__ = ["harness"]
@@ -46,11 +47,17 @@ UNANCHORED = "unanchored"
 
 
 @pytest.fixture
-def route(request: pytest.FixtureRequest) -> ResolvedRoute:
+def route(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> ResolvedRoute:
     lite = resolve_route(CATALOG, *LITE)
     if getattr(request, "param", None) != UNANCHORED:
         return lite
     # A synthetic pin: CP-L10 keeps its node but loses its direct CP-0 edge.
+    # CF-025 refuses such a pin at input pin and at execution input; both are
+    # stood aside so §45.5's own per-node check is what this pin meets.
+    for module in (run_inputs, gates):
+        monkeypatch.setattr(module, "require_catalog_route", lambda *_: None)
     edges = tuple(e for e in lite.edges if (e.source, e.target) != ("CP-0", "CP-L10"))
     return replace(lite, edges=edges)
 
@@ -80,7 +87,8 @@ def _repoint(harness: _Harness, module_id: str, record: CanonicalRecord) -> None
     """A privileged rewrite of one accepted row's record, under the run lock."""
     with connect(harness.url) as other:
         lock_run(other, harness.run_id)
-        other.execute(
+        tamper(
+            other,
             "UPDATE artifacts SET record_sha256 = %s"
             " WHERE run_id = %s AND route_node_id = %s",
             (
@@ -288,7 +296,9 @@ def test_a_missing_cp0_anchor_refuses_on_a_non_direct_route(
     harness: _Harness,
 ) -> None:
     """§45.5: CP-L10's pin gives it no direct CP-0 input. It is refused before
-    any attempt, reservation or call; CP-0 itself still runs."""
+    any attempt, reservation or call; CP-0 itself still runs. (CF-025 refuses
+    such a pin earlier; the fixture stands that check aside, and
+    test_execution_refuses_a_pinned_route_the_catalog_does_not_resolve holds it.)"""
     answers = _answers(harness)
     provider = _module_provider(harness, answers)
     assert _run_route(harness, provider) is RefusalCode.ROUTE_IDENTITY_INVALID

@@ -104,6 +104,28 @@ def test_a_receipt_naming_fewer_than_three_people_does_not_verify() -> None:
     assert verification.reason == "the receipt names fewer than three people"
 
 
+def test_a_receipt_naming_one_person_under_two_spellings_does_not_verify() -> None:
+    """CF-084: a role is a UUID, case-insensitive by RFC 4122. Comparing the
+    three roles as bare strings let the same person sign and file under two
+    different spellings of one UUID and counted as three distinct people."""
+    same_actor = str(uuid4())
+    receipt = json.dumps(
+        {
+            "payload_sha256": hashlib.sha256(PAYLOAD_BYTES).hexdigest(),
+            "signed_by": same_actor.upper(),
+            "frozen_by": str(uuid4()),
+            "filed_by": same_actor.lower(),
+        }
+    ).encode("utf-8")
+
+    verification = verify_package(
+        build_package(PAYLOAD_BYTES, receipt, render(PAYLOAD_DATA))
+    )
+
+    assert verification.verified is False
+    assert verification.reason == "the receipt names fewer than three people"
+
+
 def test_a_receipt_that_omits_a_role_does_not_verify() -> None:
     """The gap beside the test above: absent, not duplicated.
 

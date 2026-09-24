@@ -42,7 +42,7 @@ from uuid import UUID, uuid4
 import psycopg
 import pytest
 from canonical_fixtures import LITE_PROFILE, LITE_SELECTION, CanonicalCompletions
-from conftest import priced, route_fault
+from conftest import priced, route_fault, tamper
 from fake_chat import fake_completions
 from test_gates import _approval
 
@@ -109,7 +109,8 @@ ESTIMATE = Decimal("0.50")
 # Enough for any set these tests build: the per-run ceiling times ten.
 SET_CEILING = CEILING * 10
 
-QUOTE = "Total debt at 31 December 2026"
+# The whole report line a handoff cites (N28).
+QUOTE = "Total debt at 31 December 2026 was USD 1,240.0m"
 REPORT = b"""Acme Holdings plc annual report 2026
 Total debt at 31 December 2026 was USD 1,240.0m
 """
@@ -145,12 +146,16 @@ class _Completions:
         self.prompts.append(prompt)
         if len(self.prompts) == self.refuses_call:
             return Completion(None, None, None, RefusalCode.PROVIDER_UNAVAILABLE)
-        # The evidence section is last, so its source is the last one named.
+        # The evidence section is last, so its source is the last one named,
+        # and the debt line it shows is the whole line the answer cites (N28).
         source_id = re.findall(r"^source_id: (\S+)$", prompt, re.MULTILINE)[-1]
+        line = re.findall(r"^Total debt at 31 December 2026 .*$", prompt, re.MULTILINE)
         return CanonicalCompletions(
             UUID(source_id),
             generation_id="gen-harness-test",
             qa_by_module=self.qa_by_module,
+            quotes=(),
+            cited=((UUID(source_id), line[-1] if line else QUOTE),),
         ).complete(prompt, json_object=json_object)
 
 
@@ -261,8 +266,14 @@ def _approve(
     return actors
 
 
-def _case(label: str, data: bytes, *, quote: str = QUOTE) -> QualificationCase:
+def _case(label: str, data: bytes, *, quote: str | None = None) -> QualificationCase:
+    """A case keyed on the document's debt line, the whole line its answer
+    cites (N28), unless told another."""
     from hashlib import sha256
+
+    if quote is None:
+        lines = [line for line in data.decode().splitlines() if "Total debt" in line]
+        quote = lines[0] if lines else QUOTE
 
     return QualificationCase(
         label=label,
@@ -425,6 +436,51 @@ def test_a_key_naming_a_document_the_case_does_not_carry_is_refused(
         assert refused.value.code is RefusalCode.QUALIFICATION_KEY_UNANSWERABLE
         # Refused before anything ran, not after paying for it.
         assert _count(conn, "SELECT count(*) FROM runs") == 0
+
+
+def test_a_key_naming_a_quote_its_own_document_never_carries_is_refused(
+    empty_database: str, tmp_path: Path
+) -> None:
+    """FP-26: the document's digest being carried says nothing about whether
+    its declared quote is anywhere in it. Before, a typo in an answer key was
+    indistinguishable from a model that simply could not find a real quote,
+    and either way the set paid for a run to discover it."""
+    from caos.store import apply_schema, connect
+
+    with connect(empty_database) as conn:
+        apply_schema(conn)
+        conn.commit()
+        unanswerable = _case(
+            "acme-2026", REPORT, quote="A sentence this report never states"
+        )
+
+        with pytest.raises(Refusal) as refused:
+            _perform(
+                conn,
+                BlobStore(tmp_path / "blobs"),
+                QualificationSet(cases=(unanswerable,)),
+            )
+        assert refused.value.code is RefusalCode.QUALIFICATION_KEY_UNANSWERABLE
+        # Refused before anything ran, not after paying for it.
+        assert _count(conn, "SELECT count(*) FROM runs") == 0
+
+
+def test_a_key_naming_a_quote_its_document_actually_carries_is_answerable(
+    empty_database: str, tmp_path: Path
+) -> None:
+    """The other half of FP-26: the new check does not refuse a real quote."""
+    from caos.store import apply_schema, connect
+
+    with connect(empty_database) as conn:
+        apply_schema(conn)
+        conn.commit()
+        answerable = _case("acme-2026", REPORT)
+
+        performed = _perform(
+            conn, BlobStore(tmp_path / "blobs"), QualificationSet(cases=(answerable,))
+        )
+
+        assert performed.matrix is not None
 
 
 def test_a_set_that_could_outspend_its_ceiling_is_refused_before_it_starts(
@@ -1312,7 +1368,14 @@ def test_the_last_attempt_is_the_last_by_ordinal_not_by_clock(
         performed = _perform(
             conn,
             BlobStore(tmp_path / "blobs"),
-            QualificationSet(cases=(_case("stale", no_quote),)),
+            # FP-26: the grading key's own quote must be one `no_quote` really
+            # carries, or `_answerable` refuses before any run starts. The
+            # model still cites the module's usual QUOTE regardless of the
+            # key, and this document never carries that one -- which is the
+            # real, run-time CITATION_NOT_LOCATED this test is about.
+            QualificationSet(
+                cases=(_case("stale", no_quote, quote="Revenue grew in the year"),)
+            ),
         )
         [record] = performed.performed
         assert record.stopped is RefusalCode.CITATION_NOT_LOCATED
@@ -1322,7 +1385,8 @@ def test_the_last_attempt_is_the_last_by_ordinal_not_by_clock(
         ).fetchone()
         assert row is not None
         retry = start_attempt(conn, record.run_id, str(row[0]))
-        conn.execute(
+        tamper(
+            conn,
             "UPDATE run_attempts SET started_at = started_at - interval '1 hour'"
             " WHERE attempt_id=%s",
             (retry,),

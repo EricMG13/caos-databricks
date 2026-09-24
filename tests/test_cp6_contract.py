@@ -234,19 +234,18 @@ def test_cp6_emits_both_complete_evidence_led_debate_methods() -> None:
     assert QUOTE in markdown and QUOTE.encode() in PACK
 
 
-def test_cp6_binary_authority_is_lossless_and_explicit() -> None:
-    import base64
-
+def test_cp6_sample_portfolio_workbook_is_withheld_and_named() -> None:
     from canonical_fixtures import BUNDLE
 
     from caos.methodology.bundle import delivered_authority
-    from caos.methodology.invocation import _authority_text
+    from caos.methodology.invocation import _authority_sections
 
     authority = delivered_authority(BUNDLE, "CP-6")
-    [(name, data)] = [item for item in authority.files if item[0].endswith(".xlsx")]
-    encoded = _authority_text("CP-6", name, data)
-    assert encoded.startswith("ENCODING: base64")
-    assert base64.b64decode(encoded.split("\n", 1)[1], validate=True) == data
+    assert not [n for n, _ in authority.files if n.endswith(".xlsx")]
+    assert authority.withheld == ("references/REF_CP-6A_Portfolio_Debate_Inputs.xlsx",)
+    prompt = _authority_sections(authority, "t")
+    assert "`references/REF_CP-6A_Portfolio_Debate_Inputs.xlsx`" in prompt
+    assert "never a live constraint and never a placeholder" in prompt
 
 
 @pytest.mark.parametrize("register", REGISTERS)

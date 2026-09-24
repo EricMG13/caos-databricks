@@ -101,7 +101,7 @@ This is a complete V-native screening run for its own schema. It is not a shorte
       - **columns**: topic_id; trigger; missing_inputs; decision_impact; required_source; target_full_module_id; expected_owned_object; blocking_for_full_decision
       - **critical_columns**: topic_id; trigger; decision_impact; required_source; target_full_module_id; expected_owned_object; blocking_for_full_decision
       - **disqualifier_exempt_columns**: none
-      - **minimum_body_rows**: 1
+      - **minimum_body_rows**: 0
     - **TL30.1**: structured below
       - **columns**: subject_identity; source_ref; source_owner_module; as_of_or_period; scope_status; topics_supported; limitation
       - **critical_columns**: subject_identity; source_ref; source_owner_module; scope_status
@@ -121,7 +121,7 @@ This is a complete V-native screening run for its own schema. It is not a shorte
       - **columns**: topic_id; trigger; missing_inputs; decision_impact; required_source; target_full_module_id; expected_owned_object; blocking_for_full_decision
       - **critical_columns**: topic_id; trigger; decision_impact; required_source; target_full_module_id; expected_owned_object; blocking_for_full_decision
       - **disqualifier_exempt_columns**: none
-      - **minimum_body_rows**: 1
+      - **minimum_body_rows**: 0
     - **TL23.1**: structured below
       - **columns**: subject_identity; source_ref; source_owner_module; as_of_or_period; scope_status; topics_supported; limitation
       - **critical_columns**: subject_identity; source_ref; source_owner_module; scope_status
@@ -141,7 +141,7 @@ This is a complete V-native screening run for its own schema. It is not a shorte
       - **columns**: topic_id; trigger; missing_inputs; decision_impact; required_source; target_full_module_id; expected_owned_object; blocking_for_full_decision
       - **critical_columns**: topic_id; trigger; decision_impact; required_source; target_full_module_id; expected_owned_object; blocking_for_full_decision
       - **disqualifier_exempt_columns**: none
-      - **minimum_body_rows**: 1
+      - **minimum_body_rows**: 0
     - **TL20.1**: structured below
       - **columns**: subject_identity; source_ref; source_owner_module; as_of_or_period; scope_status; topics_supported; limitation
       - **critical_columns**: subject_identity; source_ref; source_owner_module; scope_status
@@ -161,7 +161,7 @@ This is a complete V-native screening run for its own schema. It is not a shorte
       - **columns**: topic_id; trigger; missing_inputs; decision_impact; required_source; target_full_module_id; expected_owned_object; blocking_for_full_decision
       - **critical_columns**: topic_id; trigger; decision_impact; required_source; target_full_module_id; expected_owned_object; blocking_for_full_decision
       - **disqualifier_exempt_columns**: none
-      - **minimum_body_rows**: 1
+      - **minimum_body_rows**: 0
     - **TL10.1**: structured below
       - **columns**: subject_identity; source_ref; source_owner_module; as_of_or_period; scope_status; topics_supported; limitation
       - **critical_columns**: subject_identity; source_ref; source_owner_module; scope_status
@@ -181,7 +181,7 @@ This is a complete V-native screening run for its own schema. It is not a shorte
       - **columns**: topic_id; trigger; missing_inputs; decision_impact; required_source; target_full_module_id; expected_owned_object; blocking_for_full_decision
       - **critical_columns**: topic_id; trigger; decision_impact; required_source; target_full_module_id; expected_owned_object; blocking_for_full_decision
       - **disqualifier_exempt_columns**: none
-      - **minimum_body_rows**: 1
+      - **minimum_body_rows**: 0
   - **screening_run_disqualifiers**: structured below
     - **fixture_document_substrings_casefold**: contract_fixture_only; synthetic contract evidence only
     - **fixture_limitation_flags**: CONTRACT_FIXTURE_ONLY
@@ -281,12 +281,12 @@ Emit exactly one `screening_posture`: `IMPROVING | STABLE | DETERIORATING | MIXE
 4. Apply `REF_CP-L10_ADAPTIVE_METHOD.md` for deterministic ranking and evidence-proportionate depth.
 5. Write evidenced findings only for `DEEPEN`, `SUMMARIZE`, and `IMMATERIAL`; `GAP_ONLY` has no analytical conclusion.
 6. Create a targeted CP-1/CP-1B upgrade for every `DEEPEN` and decision-material `GAP_ONLY` row.
-7. Synthesize the screening posture in `TL10.3` and gaps/upgrades in `TL10.4`.
+7. Synthesize the screening posture in `TL10.3` and gaps/upgrades in `TL10.4`; when no topic is `DEEPEN` or decision-material `GAP_ONLY` (outcome `LITE_COMPLETE`) the gaps register has no entries, as the payload's `gap_upgrade_register` may be empty: write one row saying no gap or FULL upgrade is needed.
 8. Author and validate one canonical Markdown artifact.
 
 #### Output contract
 
-Binding export: `../../CANON_SHARED.md § CP_AB_EXPORT_SPEC.md`. Filename: `[IssuerID]_CP-L10_[YYYYMMDD].md`. Use canonical YAML, exactly six canonical H2 sections, and only `CANONICAL_MARKDOWN`. Open `## Analysis` with `### Financial change screen`; any reader-facing synthesis must remain traceable to the complete appendix. Preserve all four module-owned tables below `### Analytical appendix — complete canonical registers`.
+Binding export: `../../CANON_SHARED.md § CP_AB_EXPORT_SPEC.md`. Filename: `[IssuerID]_CP-L10_[YYYYMMDD].md`. Use canonical YAML, exactly six canonical H2 sections, and only `CANONICAL_MARKDOWN`. Open `## Analysis` with `### Financial change screen`, the artifact's one opening heading: each absorbed screen (CP-L20, CP-L23, CP-L30, CP-L40) follows later in `## Analysis` under its own H3; any reader-facing synthesis must remain traceable to the complete appendix. Preserve all four module-owned tables below `### Analytical appendix — complete canonical registers`.
 
 #### Reading order
 
@@ -362,12 +362,12 @@ Emit exactly one `screening_posture`: `SUPPORTIVE | BALANCED | PRESSURED | MIXED
 4. Apply `REF_CP-L20_ADAPTIVE_METHOD.md` for deterministic ranking and evidence-proportionate depth.
 5. Write only sourced credit-transmission analysis; `GAP_ONLY` has no analytical conclusion.
 6. Create targeted FULL upgrades for every `DEEPEN` and material `GAP_ONLY` row.
-7. Synthesize the screen in `TL20.3` and gaps/upgrades in `TL20.4`.
+7. Synthesize the screen in `TL20.3` and gaps/upgrades in `TL20.4`; when no topic is `DEEPEN` or decision-material `GAP_ONLY` (outcome `LITE_COMPLETE`) the gaps register has no entries, as the payload's `gap_upgrade_register` may be empty: write one row saying no gap or FULL upgrade is needed.
 8. Author and validate one canonical Markdown artifact.
 
 #### Output contract
 
-Binding export: `../../CANON_SHARED.md § CP_AB_EXPORT_SPEC.md`. Filename: `[IssuerID]_CP-L10_[YYYYMMDD].md`. Use canonical YAML, exactly six canonical H2 sections, and `CANONICAL_MARKDOWN`. Open `## Analysis` with `### Credit screen`; any reader-facing synthesis must remain traceable to the complete appendix. Preserve the four module-owned tables below `### Analytical appendix — complete canonical registers`.
+Binding export: `../../CANON_SHARED.md § CP_AB_EXPORT_SPEC.md`. Filename: `[IssuerID]_CP-L10_[YYYYMMDD].md`. Use canonical YAML, exactly six canonical H2 sections, and `CANONICAL_MARKDOWN`. Present this screen within `## Analysis` under `### Credit screen`, after the artifact's opening `### Financial change screen` (one artifact, one opening); any reader-facing synthesis must remain traceable to the complete appendix. Preserve the four module-owned tables below `### Analytical appendix — complete canonical registers`.
 
 #### Reading order
 
@@ -468,7 +468,7 @@ Lead with the screen conclusion, strongest support, primary pressure, and monito
     - presentation_fixture; screening_run
 - **decision_role**: screening
 - **deployment_scope**: V
-- **opening_h3**: ### Credit screen
+- **opening_h3**: none of its own; the artifact opens with `### Financial change screen`, and this screen's section heading is `### Credit screen`
 - **permitted_front_table**: name=Credit screen; optional=True; values_must_come_from_appendix_registers=True
 - **prohibited_conclusions**: No FULL CP-2 synthesis, governance or ESG score, legal conclusion, rating, or instrument recommendation.
 - **reader_question**: What is the credit-screen posture, what transmits to credit risk, and which FULL owner must resolve the remaining question?
@@ -552,12 +552,12 @@ Emit exactly one `screening_posture`: `ADEQUATE_SCREEN | WATCH | PRESSURED | MIX
 4. Apply `REF_CP-L23_ADAPTIVE_METHOD.md` for deterministic ranking and evidence-proportionate depth.
 5. Keep observations, calculations, assumptions, and screening interpretations distinct.
 6. Create targeted FULL upgrades for every `DEEPEN` and material `GAP_ONLY` row.
-7. Synthesize the directional posture in `TL23.3` and gaps/upgrades in `TL23.4`.
+7. Synthesize the directional posture in `TL23.3` and gaps/upgrades in `TL23.4`; when no topic is `DEEPEN` or decision-material `GAP_ONLY` (outcome `LITE_COMPLETE`) the gaps register has no entries, as the payload's `gap_upgrade_register` may be empty: write one row saying no gap or FULL upgrade is needed.
 8. Author and validate one canonical Markdown artifact.
 
 #### Output contract
 
-Binding export: `../../CANON_SHARED.md § CP_AB_EXPORT_SPEC.md`. Filename: `[IssuerID]_CP-L10_[YYYYMMDD].md`. Use canonical YAML, exactly six canonical H2 sections, and `CANONICAL_MARKDOWN`. Open `## Analysis` with `### Liquidity and forward-risk screen`. Preserve the four module-owned tables below `### Analytical appendix — complete canonical registers`.
+Binding export: `../../CANON_SHARED.md § CP_AB_EXPORT_SPEC.md`. Filename: `[IssuerID]_CP-L10_[YYYYMMDD].md`. Use canonical YAML, exactly six canonical H2 sections, and `CANONICAL_MARKDOWN`. Present this screen within `## Analysis` under `### Liquidity and forward-risk screen`, after the artifact's opening `### Financial change screen` (one artifact, one opening). Preserve the four module-owned tables below `### Analytical appendix — complete canonical registers`.
 
 #### Reading order
 
@@ -658,7 +658,7 @@ Lead with the directional screen, liquidity support, primary sensitivity, breakp
     - presentation_fixture; screening_run
 - **decision_role**: screening
 - **deployment_scope**: V
-- **opening_h3**: ### Liquidity and forward-risk screen
+- **opening_h3**: none of its own; the artifact opens with `### Financial change screen`, and this screen's section heading is `### Liquidity and forward-risk screen`
 - **permitted_front_table**: name=Liquidity and forward-risk screen; optional=True; values_must_come_from_appendix_registers=True
 - **prohibited_conclusions**: No twelve-month liquidity bridge, full forecast, assumed facility or hedge access, plug, or CP-MODEL table.
 - **reader_question**: Which liquidity and sensitivity signals require escalation, and which evidence prevents a complete forward assessment?
@@ -742,12 +742,12 @@ Emit exactly one `screening_posture`: `ESCALATE_FOR_FULL_SELECTION | MONITOR | D
 4. Apply `REF_CP-L30_ADAPTIVE_METHOD.md` for deterministic ranking and evidence-proportionate depth.
 5. Keep observations, calculations, interpretations, and screening posture distinct.
 6. Create targeted FULL upgrades for every `DEEPEN` and material `GAP_ONLY` row.
-7. Synthesize the screening posture in `TL30.3` and gaps/upgrades in `TL30.4`.
+7. Synthesize the screening posture in `TL30.3` and gaps/upgrades in `TL30.4`; when no topic is `DEEPEN` or decision-material `GAP_ONLY` (outcome `LITE_COMPLETE`) the gaps register has no entries, as the payload's `gap_upgrade_register` may be empty: write one row saying no gap or FULL upgrade is needed.
 8. Author and validate one canonical Markdown artifact.
 
 #### Output contract
 
-Binding export: `../../CANON_SHARED.md § CP_AB_EXPORT_SPEC.md`. Filename: `[IssuerID]_CP-L10_[YYYYMMDD].md`. Use canonical YAML, exactly six canonical H2 sections, and `CANONICAL_MARKDOWN`. Open `## Analysis` with `### Security opportunity screen`. Preserve the four module-owned tables below `### Analytical appendix — complete canonical registers`.
+Binding export: `../../CANON_SHARED.md § CP_AB_EXPORT_SPEC.md`. Filename: `[IssuerID]_CP-L10_[YYYYMMDD].md`. Use canonical YAML, exactly six canonical H2 sections, and `CANONICAL_MARKDOWN`. Present this screen within `## Analysis` under `### Security opportunity screen`, after the artifact's opening `### Financial change screen` (one artifact, one opening). Preserve the four module-owned tables below `### Analytical appendix — complete canonical registers`.
 
 #### Reading order
 
@@ -848,7 +848,7 @@ Lead with the screening posture, dated compensation signal, primary protection i
     - presentation_fixture; screening_run
 - **decision_role**: screening
 - **deployment_scope**: V
-- **opening_h3**: ### Security opportunity screen
+- **opening_h3**: none of its own; the artifact opens with `### Financial change screen`, and this screen's section heading is `### Security opportunity screen`
 - **permitted_front_table**: name=Security opportunity screen; optional=True; values_must_come_from_appendix_registers=True
 - **prohibited_conclusions**: No Buy/Sell/Hold, preferred instrument, fair value, rank, composite score, recovery value, or position size.
 - **reader_question**: Does the dated market and recovery screen warrant FULL selection work, monitoring, or deprioritisation?
@@ -932,12 +932,12 @@ Emit exactly one `screening_posture`: `LOWER_CONCERN | WATCH | HEIGHTENED_CONCER
 4. Apply `REF_CP-L40_ADAPTIVE_METHOD.md` for deterministic ranking and evidence-proportionate depth.
 5. Separate documentary fact, screening interpretation, and gap; never calculate capacity.
 6. Create targeted FULL upgrades for every `DEEPEN` and material `GAP_ONLY` row.
-7. Synthesize the triage posture in `TL40.3` and gaps/upgrades in `TL40.4`.
+7. Synthesize the triage posture in `TL40.3` and gaps/upgrades in `TL40.4`; when no topic is `DEEPEN` or decision-material `GAP_ONLY` (outcome `LITE_COMPLETE`) the gaps register has no entries, as the payload's `gap_upgrade_register` may be empty: write one row saying no gap or FULL upgrade is needed.
 8. Author and validate one canonical Markdown artifact.
 
 #### Output contract
 
-Binding export: `../../CANON_SHARED.md § CP_AB_EXPORT_SPEC.md`. Filename: `[IssuerID]_CP-L10_[YYYYMMDD].md`. Use canonical YAML, exactly six canonical H2 sections, and `CANONICAL_MARKDOWN`. Open `## Analysis` with `### Creditor-document screen`. Preserve the four module-owned tables below `### Analytical appendix — complete canonical registers`.
+Binding export: `../../CANON_SHARED.md § CP_AB_EXPORT_SPEC.md`. Filename: `[IssuerID]_CP-L10_[YYYYMMDD].md`. Use canonical YAML, exactly six canonical H2 sections, and `CANONICAL_MARKDOWN`. Present this screen within `## Analysis` under `### Creditor-document screen`, after the artifact's opening `### Financial change screen` (one artifact, one opening). Preserve the four module-owned tables below `### Analytical appendix — complete canonical registers`.
 
 #### Reading order
 
@@ -1038,7 +1038,7 @@ Lead with document readiness, primary creditor concern, missing controlling evid
     - presentation_fixture; screening_run
 - **decision_role**: screening
 - **deployment_scope**: V
-- **opening_h3**: ### Creditor-document screen
+- **opening_h3**: none of its own; the artifact opens with `### Financial change screen`, and this screen's section heading is `### Creditor-document screen`
 - **permitted_front_table**: name=Creditor-document screen; optional=True; values_must_come_from_appendix_registers=True
 - **prohibited_conclusions**: No legal advice, definitive legal interpretation, structural-priority ranking, exact capacity or headroom, compliance conclusion, or recovery dollars.
 - **reader_question**: Which document and structural signals need legal or capacity escalation before a creditor conclusion can be made?
@@ -1094,6 +1094,6 @@ For the absorbed `CP-L40` phase on every run:
 
 ## Research questions and adoption — binding when applicable
 
-Before finalizing an assumption or conclusion, identify any unresolved material evidence question. If existing sources answer it, continue. Otherwise use `../cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md` to add a bounded request naming this module as consumer and a factual predecessor. The host authors the control brief under the user's existing task authorization; CP-OS remains read-only. Do not create a self-dependency from this module back through CP-DR. For a late challenge, retain the current CP-0 anchor and archive superseded research attempts outside the active snapshot.
+Before finalizing an assumption or conclusion, identify any unresolved material evidence question. If existing sources answer it, continue. Otherwise, where `../cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md` is delivered with this module, use it to add a bounded request naming this module as consumer and a factual predecessor; where it is not delivered, record the question as a gap with its FULL upgrade in the owning `TL*.4` register and do not request research. The host authors the control brief under the user's existing task authorization; CP-OS remains read-only. Do not create a self-dependency from this module back through CP-DR. For a late challenge, retain the current CP-0 anchor and archive superseded research attempts outside the active snapshot.
 
 Run the invocation helper against the fresh snapshot. If it returns `research_adoption_rows`, complete the tagged `cpdr.adoptions` table in the analytical appendix: `question_id`, `research_sha256`, `disposition` (ACCEPTED / REJECTED / QUALIFIED), `reason`, `analytical_effect`. Record one row per assigned question, with the exact current research hash. Rejection or qualification still explains the consequence. CP-DR supplies evidence; this module remains responsible for source applicability, numerical extraction, assumptions and conclusions. Unresolved research blocks its named consumer, not unrelated modules. A changed research dossier invalidates its declared consumers and their dependents; research is versioned per bounded batch, not per claim.

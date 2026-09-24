@@ -256,6 +256,13 @@ def verified_bytes(bundle: Bundle, module_id: str, relative_path: str) -> bytes:
 
 
 def _read_verified(bundle: Bundle, path: Path, expected: dict[str, Any]) -> bytes:
+    data = _verified_file(path, expected)
+    bundle.verify_manifest()
+    return data
+
+
+def _verified_file(path: Path, expected: dict[str, Any]) -> bytes:
+    """One file's bytes, proven against its manifest size and digest."""
     if not path.is_file():
         raise Refusal(RefusalCode.AUTHORITY_BYTES_MISMATCH)
     try:
@@ -267,8 +274,28 @@ def _read_verified(bundle: Bundle, path: Path, expected: dict[str, Any]) -> byte
 
     if len(data) != expected["bytes"] or sha256(data).hexdigest() != expected["sha256"]:
         raise Refusal(RefusalCode.AUTHORITY_BYTES_MISMATCH)
-    bundle.verify_manifest()
     return data
+
+
+def verify_every_file(bundle: Bundle) -> None:
+    """Every file the manifest lists -- the root's and every skill's -- read
+    and proven against its size and digest, then the manifest against itself
+    (CF-093).
+
+    `verify_pinned` proves the manifest and a reader proves the files its own
+    module reads; this proves all of them, for a caller that must know the
+    whole bundle is the one pinned. `AUTHORITY_BYTES_MISMATCH` for the first
+    file that moved, went missing or escapes the root, and nothing about which.
+    """
+    manifest = bundle._manifest
+    for name, expected in manifest["root_file_hashes"].items():
+        _verified_file(_contained_path(bundle.root, name), expected)
+    skills = _contained_path(bundle.root, SKILLS_DIR)
+    for skill in manifest["skills"]:
+        folder = _contained_path(skills, skill["folder_slug"])
+        for name, expected in skill["relative_file_hashes"].items():
+            _verified_file(_contained_path(folder, name), expected)
+    bundle.verify_manifest()
 
 
 def verified_root_bytes(bundle: Bundle, name: str) -> bytes:
@@ -311,6 +338,22 @@ CROSS_SKILL_AUTHORITY: dict[str, tuple[tuple[str, str], ...]] = {
     "CP-DR": (("CP-OS", "references/CP_DR_RESEARCH_BRIEF_V1.md"),),
 }
 
+# Workbooks a module's manifest lists that the host never delivers (G1-12, D38).
+# The bundle ships each as sample or placeholder data for a reference the
+# enterprise maintains -- CP-3B's first sheet reads "SAMPLE DATA", the Sector RV
+# workbook is empty by design, CP-6A describes a test CLO -- so none is a case's
+# portfolio, and as base64 of a zip no model could read it. A case supplies its
+# own portfolio, mandate, constraint and sector data as sources.
+WITHHELD_AUTHORITY: dict[str, frozenset[str]] = {
+    "CP-3": frozenset(
+        {
+            "references/REF_CP-3B_Portfolio_Constraints.xlsx",
+            "references/REF_CP-3_Sector_RV.xlsx",
+        }
+    ),
+    "CP-6": frozenset({"references/REF_CP-6A_Portfolio_Debate_Inputs.xlsx"}),
+}
+
 
 @dataclass(frozen=True, slots=True)
 class DeliveredAuthority:
@@ -319,12 +362,14 @@ class DeliveredAuthority:
     `SKILL.md` first, then the module's non-script manifest files by name, then
     any declared file of another skill its `SKILL.md` names (§101), then the
     root files `SKILL.md` names, each under its `../../` literal
-    (`docs/DECISIONS.md` §45.1).
+    (`docs/DECISIONS.md` §45.1). `withheld` names the manifest files the host
+    keeps back (`WITHHELD_AUTHORITY`), for the prompt to say so.
     """
 
     module_id: str
     build_id: str
     files: tuple[tuple[str, bytes], ...]
+    withheld: tuple[str, ...] = ()
 
 
 def _named_root_files(bundle: Bundle, skill: bytes) -> list[str]:
@@ -361,12 +406,14 @@ def delivered_authority(bundle: Bundle, module_id: str) -> DeliveredAuthority:
     verified `SKILL.md`, never from a caller, a source or a model."""
     build_id = bundle.build_id
     skill = verified_bytes(bundle, module_id, "SKILL.md")
-    references = sorted(
+    listed = sorted(
         name
         for name in bundle.skill_of(module_id)["relative_file_hashes"]
         if name != "SKILL.md"
         and (module_id == MODEL_MODULE or not name.startswith("scripts/"))
     )
+    kept_back = WITHHELD_AUTHORITY.get(module_id, frozenset())
+    references = [name for name in listed if name not in kept_back]
     files = [("SKILL.md", skill)]
     files += [(name, verified_bytes(bundle, module_id, name)) for name in references]
     files += _cross_skill_files(bundle, module_id, skill)
@@ -376,7 +423,10 @@ def delivered_authority(bundle: Bundle, module_id: str) -> DeliveredAuthority:
     ]
     # Every read above re-verified the manifest bound when `build_id` was read.
     return DeliveredAuthority(
-        module_id=module_id, build_id=build_id, files=tuple(files)
+        module_id=module_id,
+        build_id=build_id,
+        files=tuple(files),
+        withheld=tuple(name for name in listed if name in kept_back),
     )
 
 

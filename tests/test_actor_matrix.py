@@ -21,6 +21,7 @@ from __future__ import annotations
 from pathlib import Path
 from uuid import UUID, uuid4
 
+import anyio
 import pytest
 from command_fixtures import command_client, command_headers, member
 from fastapi.testclient import TestClient
@@ -30,10 +31,10 @@ from test_execution_freshness import _Harness
 
 from caos.api.app import app, methodology_bundle
 from caos.api.identity import (
-    EDGE_TOKEN_ENV,
     TRUST_SWITCH,
     GlobalRole,
     actor_from_headers,
+    role_from_groups,
 )
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
@@ -56,37 +57,13 @@ def _headers(**extra: str) -> dict[str, str]:
     return {"x-caos-user": str(USER), **extra}
 
 
-def test_production_never_trusts_role_header(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A named test. The client says it is an administrator; production does not
-    care what the client says.
-
-    The role is derived from the groups the proxy asserts and from nothing the
-    caller can set. A role header that escalated would make every other authority
-    check in this system a formality.
-
-    Production is edge mode, so the token is set: without it the floor would be
-    READER whatever either header said, and this test would pass for a reason
-    that is not its name.
-    """
-    monkeypatch.delenv(TRUST_SWITCH, raising=False)
-    monkeypatch.setenv(EDGE_TOKEN_ENV, "x" * 32)
-
-    actor = actor_from_headers(
-        _headers(**{"x-caos-role": "ADMIN", "x-forwarded-groups": "caos-readers"})
-    )
-
-    assert actor.role is GlobalRole.READER, "the group decided, not the header"
-
-
 def test_the_role_header_is_trusted_only_when_explicitly_switched_on(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Development's convenience, and it has to be asked for by name."""
     monkeypatch.setenv(TRUST_SWITCH, "1")
 
-    actor = actor_from_headers(_headers(**{"x-caos-role": "ADMIN"}))
+    actor = anyio.run(actor_from_headers, _headers(**{"x-caos-role": "ADMIN"}))
 
     assert actor.role is GlobalRole.ADMIN
 
@@ -99,8 +76,9 @@ def test_anything_but_one_leaves_the_switch_off(
     would eventually accept something a deployment set for another purpose."""
     monkeypatch.setenv(TRUST_SWITCH, value)
 
-    actor = actor_from_headers(
-        _headers(**{"x-caos-role": "ADMIN", "x-forwarded-groups": "caos-readers"})
+    actor = anyio.run(
+        actor_from_headers,
+        _headers(**{"x-caos-role": "ADMIN", "x-forwarded-groups": "caos-readers"}),
     )
 
     assert actor.role is GlobalRole.READER
@@ -114,7 +92,7 @@ def test_an_unknown_role_name_under_trust_is_still_the_lowest_role(
     header being trusted twice over."""
     monkeypatch.setenv(TRUST_SWITCH, "1")
 
-    actor = actor_from_headers(_headers(**{"x-caos-role": "SUPERUSER"}))
+    actor = anyio.run(actor_from_headers, _headers(**{"x-caos-role": "SUPERUSER"}))
 
     assert actor.role is GlobalRole.READER
 
@@ -126,7 +104,7 @@ def test_no_groups_and_no_trust_is_the_lowest_role(
     administrator by default."""
     monkeypatch.delenv(TRUST_SWITCH, raising=False)
 
-    actor = actor_from_headers(_headers())
+    actor = anyio.run(actor_from_headers, _headers())
 
     assert actor.role is GlobalRole.READER
 
@@ -137,7 +115,7 @@ def test_a_request_with_no_user_at_all_is_refused(
     monkeypatch.delenv(TRUST_SWITCH, raising=False)
 
     with pytest.raises(Refusal) as caught:
-        actor_from_headers({"x-forwarded-groups": "caos-admins"})
+        anyio.run(actor_from_headers, {"x-forwarded-groups": "caos-admins"})
 
     assert caught.value.code is RefusalCode.NOT_AUTHENTICATED
 
@@ -150,7 +128,7 @@ def test_a_user_that_is_not_an_identifier_is_refused(
     monkeypatch.delenv(TRUST_SWITCH, raising=False)
 
     with pytest.raises(Refusal) as caught:
-        actor_from_headers({"x-caos-user": "../../etc/passwd"})
+        anyio.run(actor_from_headers, {"x-caos-user": "../../etc/passwd"})
 
     assert caught.value.code is RefusalCode.NOT_AUTHENTICATED
 
@@ -164,7 +142,7 @@ def test_something_that_is_not_even_a_headers_object_is_refused(
     monkeypatch.delenv(TRUST_SWITCH, raising=False)
 
     with pytest.raises(Refusal) as caught:
-        actor_from_headers(None)
+        anyio.run(actor_from_headers, None)
 
     assert caught.value.code is RefusalCode.NOT_AUTHENTICATED
 
@@ -176,7 +154,7 @@ def test_trust_switched_on_with_no_role_header_at_all_is_the_lowest_role(
     answer as one asserting a role outside the closed set: the floor."""
     monkeypatch.setenv(TRUST_SWITCH, "1")
 
-    actor = actor_from_headers(_headers())
+    actor = anyio.run(actor_from_headers, _headers())
 
     assert actor.role is GlobalRole.READER
 
@@ -185,7 +163,7 @@ def test_the_refusal_carries_no_part_of_what_was_sent() -> None:
     """§ refusals: the code travels, the offending text never does. An identity
     header is exactly the string that must not reach a log line."""
     with pytest.raises(Refusal) as caught:
-        actor_from_headers({"x-caos-user": "mallory@example.test"})
+        anyio.run(actor_from_headers, {"x-caos-user": "mallory@example.test"})
 
     assert "mallory" not in str(caught.value)
     assert "mallory" not in repr(caught.value)
@@ -194,30 +172,23 @@ def test_the_refusal_carries_no_part_of_what_was_sent() -> None:
 @pytest.mark.parametrize(
     ("groups", "expected"),
     [
-        ("caos-admins", GlobalRole.ADMIN),
-        ("caos-analysts", GlobalRole.ANALYST),
-        ("caos-readers", GlobalRole.READER),
-        ("something-else", GlobalRole.READER),
-        ("caos-readers,caos-admins", GlobalRole.ADMIN),
-        ("caos-analysts,caos-readers", GlobalRole.ANALYST),
-        (" caos-admins , caos-readers ", GlobalRole.ADMIN),
+        ({"caos-admins"}, GlobalRole.ADMIN),
+        ({"caos-analysts"}, GlobalRole.ANALYST),
+        ({"caos-readers"}, GlobalRole.READER),
+        ({"something-else"}, GlobalRole.READER),
+        ({"caos-readers", "caos-admins"}, GlobalRole.ADMIN),
+        ({"caos-analysts", "caos-readers"}, GlobalRole.ANALYST),
     ],
 )
-def test_the_highest_group_wins(
-    monkeypatch: pytest.MonkeyPatch, groups: str, expected: GlobalRole
-) -> None:
+def test_the_highest_group_wins(groups: set[str], expected: GlobalRole) -> None:
     """Someone in two groups holds the greater of them, and a group this system
     does not know grants nothing.
 
-    In edge mode, which is the only mode that reads the header at all: an edge
-    stood between the client and this process and asserted the list.
+    `role_from_groups` is the pure mapping platform mode feeds the workspace's
+    SCIM group list through (D10): it is the only mode a group list ever
+    decides a role in, now that the HMAC edge assertion is gone.
     """
-    monkeypatch.delenv(TRUST_SWITCH, raising=False)
-    monkeypatch.setenv(EDGE_TOKEN_ENV, "x" * 32)
-
-    actor = actor_from_headers(_headers(**{"x-forwarded-groups": groups}))
-
-    assert actor.role is expected
+    assert role_from_groups(groups) is expected
 
 
 def test_an_actor_is_a_subject_and_a_role_and_nothing_else() -> None:
@@ -235,10 +206,10 @@ def test_the_switch_is_read_at_the_request_not_at_import(
     """A process started in one mode must not keep behaving that way after the
     environment is corrected."""
     monkeypatch.delenv(TRUST_SWITCH, raising=False)
-    before = actor_from_headers(_headers(**{"x-caos-role": "ADMIN"}))
+    before = anyio.run(actor_from_headers, _headers(**{"x-caos-role": "ADMIN"}))
 
     monkeypatch.setenv(TRUST_SWITCH, "1")
-    after = actor_from_headers(_headers(**{"x-caos-role": "ADMIN"}))
+    after = anyio.run(actor_from_headers, _headers(**{"x-caos-role": "ADMIN"}))
 
     assert (before.role, after.role) == (GlobalRole.READER, GlobalRole.ADMIN)
 
@@ -438,20 +409,17 @@ def test_a_commit_time_revocation_answers_the_private_404(
 def test_without_a_token_or_the_switch_groups_grant_nothing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """C3: a loopback peer cannot pick ADMIN by sending groups to a tokenless API."""
+    """C3: a loopback peer cannot pick ADMIN by sending groups to a tokenless API.
+
+    Dev mode never reads a groups header at all -- it is not even a header
+    `actor_from_headers` looks at outside platform mode (D10) -- so a client
+    sending one grants nothing whatever its value.
+    """
     monkeypatch.delenv(TRUST_SWITCH, raising=False)
-    monkeypatch.delenv("CAOS_EDGE_TOKEN", raising=False)
-    actor = actor_from_headers(_headers(**{"x-forwarded-groups": "caos-admins"}))
+    actor = anyio.run(
+        actor_from_headers, _headers(**{"x-forwarded-groups": "caos-admins"})
+    )
     assert actor.role is GlobalRole.READER
-
-
-def test_in_edge_mode_groups_still_decide_the_role(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.delenv(TRUST_SWITCH, raising=False)
-    monkeypatch.setenv("CAOS_EDGE_TOKEN", "x" * 32)
-    actor = actor_from_headers(_headers(**{"x-forwarded-groups": "caos-analysts"}))
-    assert actor.role is GlobalRole.ANALYST
 
 
 # Task 12.1's other four commands, in the same table but not the same fixture:

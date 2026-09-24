@@ -62,7 +62,7 @@ from caos.qualification.harness import (
 from caos.qualification.matrix import QualificationSet
 from caos.qualification.on_disk import load_qualification_set
 from caos.qualification.store import performed_evidence, record_evidence
-from caos.refusals import Refusal
+from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection, apply_schema, connect
 from caos.store.gates import Gate, GateApproval, approve_gate, gate_preview
 from caos.store.members import Standing, grant
@@ -450,7 +450,18 @@ def main(argv: list[str] | None = None) -> int:
     if planned is None:
         return 2
     qualification, harness, admin_url, blob_root = planned
-    database, run_url = _create_database(admin_url)
+    try:
+        database, run_url = _create_database(admin_url)
+    except psycopg.Error:
+        # CF-078: a DSN psycopg itself refuses to parse -- bad percent-encoding
+        # in a password included -- quotes the whole string, password and all,
+        # in its own message; only the typed code is ever printed here.
+        print(
+            f"{RefusalCode.STORE_UNAVAILABLE.value}: the set was refused;"
+            " nothing was spent",
+            file=sys.stderr,
+        )
+        return 2
     # Printed before the call, not after: a driver that dies mid-run must still
     # leave the operator the two names that hold the evidence it paid for, and
     # the dated price every reservation it is about to take will be priced on
@@ -482,6 +493,13 @@ def main(argv: list[str] | None = None) -> int:
         print(
             f"{refused.code.value}: the set stopped; {database} keeps what it"
             " performed",
+            file=sys.stderr,
+        )
+        return 2
+    except psycopg.Error:
+        print(
+            f"{RefusalCode.STORE_UNAVAILABLE.value}: the set stopped; {database}"
+            " keeps what it performed",
             file=sys.stderr,
         )
         return 2

@@ -65,7 +65,12 @@ from caos.store.outcomes import execution_reads
 # derivation the saved path proves, less the stored revision's own reads.
 # Every path that finds a revision lists the run's revisions too (1), so a
 # committee member can reach a frozen one from Report; "unsaved" has none.
-IO_BUDGET = {"report": 46, "committee": 20, "frozen": 53, "unsaved": 42}
+# FP-34: `read_filed_receipt` now re-checks OPINION_SIGNED and
+# DELIVERABLE_FROZEN provenance itself rather than trusting `_publication`'s
+# own pass alone, one more `payload_digests` read per signer and the freezer
+# -- the same one signer, one freezer shape the rest of this budget is stated
+# for -- so "committee" pays two more for a filed revision.
+IO_BUDGET = {"report": 46, "committee": 22, "frozen": 53, "unsaved": 42}
 router = APIRouter()
 
 
@@ -372,6 +377,18 @@ def _publication(
         frozen_by=freezer,
         filed_by=filer,
         receipt=None,
+        **_links(case_id, revision, filed=filer is not None),
+    )
+
+
+def _links(case_id: UUID, revision: UUID, *, filed: bool) -> dict[str, str | None]:
+    """Where this revision's render and, once filed, its package are read
+    (`caos/api/reads/deliverable.py`, N4). Proven nowhere here: opening either
+    link runs that module's own proof."""
+    base = f"/api/v1/cases/{case_id}/revisions/{revision}"
+    return dict(
+        render_url=f"{base}/render",
+        package_url=f"{base}/package" if filed else None,
     )
 
 

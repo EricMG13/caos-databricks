@@ -4,7 +4,7 @@
 module_id: CP-6A | module_name: PortfolioDebateChallenge | schema_family: Nested | layer: L6
 
 ## Dependencies
-UP: CP-0, CP-1, CP-1B, CP-1C, CP-2, CP-2A, CP-2B, CP-2C, CP-2D, CP-2E, CP-3, CP-3A, CP-3B, CP-3C, CP-4, CP-4A, CP-6 | DOWN (Analytical): (terminal L6 module) | DOWN (QA): CP-5, CP-5A
+UP: CP-0, CP-1, CP-1B, CP-1C, CP-2, CP-2A, CP-2B, CP-2C, CP-2D, CP-2E, CP-3, CP-3A, CP-3B, CP-3C, CP-4, CP-4A, CP-6 | UP (QA gate): CP-5, CP-5A | DOWN (Analytical): (terminal L6 module)
 
 ## Governance Rules
 1. CP-6A is the terminal portfolio debate module — output must force a definitive sizing and posture decision, not produce balanced narrative.

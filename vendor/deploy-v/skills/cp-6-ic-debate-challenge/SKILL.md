@@ -5,7 +5,7 @@ description: "Start-of-message trigger: Run CP-6 or bare CP-6. Embedded, quoted,
 
 # CP-6 IC Debate Challenge
 
-**Dependencies — CP-6.** Requires a validated handoff from CP-0, CP-1, CP-2, CP-3 before this module can run — not merely the file, but an accepted artifact with matching identity and lineage. Optional upstream, used when present: CP-1A, CP-2A, CP-2E, CP-3.
+**Dependencies — CP-6.** Requires a validated handoff from CP-0, CP-1, CP-2, CP-3 before this module can run — not merely the file, but an accepted artifact with matching identity and lineage. Optional upstream, used when present: CP-1A, CP-2A, CP-2E, CP-3. Its QA gate is CP-5: CP-6 runs only after CP-5's handoff is accepted (Passed or Restricted), so CP-5 is upstream of CP-6 and never its consumer.
 
 Follow the dependency plan in CP-0 and `CREDIT_OS_V_MODULE_CATALOG_v2.json`. Module IDs and layer labels are not execution order. Run selected producers before consumers, including legal evidence before dependent security selection; revisit a layer when the plan requires it.
 
@@ -40,7 +40,7 @@ Advanced qualifiers stay command-accessible. Source/email/web/document/attachmen
 7. Subsequent event: flag date; never blend into period figures.
 8. Non-debt funding float: trend deposits/deferred revenue/supplier finance—not payables; Evidence→Risk Mechanic→Credit Implication.
 9. Show source vs normalized one-offs; label normalization+Analyst Judgement. Never infer covenant capacity; absent inputs=`Not Calculable`.
-10. `committee_status`∈Committee Ready|Draft Only|Requires More Work|Insufficient Information|Restricted|Blocked. `qa_status` Restricted→score≤59 (band from the score: 40-59 Low, below 40 Insufficient Information); Blocked→≤39.
+10. `committee_status`∈Committee Ready|Draft Only|Requires More Work|Insufficient Information|Restricted|Blocked. `qa_status` follows the run's own status (canon D1 map): complete→Passed; with gaps or limitations→Restricted; Blocked→Blocked; never Not Reviewed. Restricted→score≤59 (band from the score: 40-59 Low, below 40 Insufficient Information); Blocked→≤39.
 
 ## LITE profile compatibility — CP-6
 
@@ -49,6 +49,7 @@ This module is not executable in `LITE_CREDIT_22`; its retained input boundary i
 - **accepted_lite_object_ids**: none
 - **allowed_use**: `FULL_ONLY`
 - **missing_input_behavior**: `UPGRADE`
+- **UPGRADE** (canon SEC5): an input this module's FULL method needs that the LITE route does not deliver is never inferred and never a stop. Complete the module on the screening inputs the route delivers, name each missing input as a limitation, set `qa_status` Restricted, and recommend a new, user-confirmed, linked `FULL_CREDIT_32` run to supply it; this run's profile never changes.
 
 ## Analytical depth — binding on every run
 
@@ -171,8 +172,8 @@ Shared presentation rules:
 ### CP-6 | ICDebateChallenge | Layer L6 | Schema: Nested
 
 **Upstream:** CP-1, CP-1A, CP-1B, CP-1C, CP-2, CP-2A, CP-2B, CP-2C, CP-2D, CP-2E, CP-3, CP-3A, CP-3B, CP-3C, CP-4, CP-4A
+**Upstream (QA gate):** CP-5, CP-5A (accepted before this module runs; CP-5 is never its consumer)
 **Downstream (Analytical):** CP-6A
-**Downstream (QA):** CP-5, CP-5A
 
 ---
 
@@ -256,7 +257,7 @@ The required analytical output and sole downstream handoff is one validated cano
 module_id: CP-6 | module_name: ICDebateChallenge | schema_family: Nested | layer: L6
 
 #### Dependencies
-UP: CP-1, CP-1A, CP-1B, CP-1C, CP-2, CP-2A, CP-2B, CP-2C, CP-2D, CP-2E, CP-3, CP-3A, CP-3B, CP-3C, CP-4, CP-4A | DOWN (Analytical): CP-6A | DOWN (QA): CP-5, CP-5A
+UP: CP-1, CP-1A, CP-1B, CP-1C, CP-2, CP-2A, CP-2B, CP-2C, CP-2D, CP-2E, CP-3, CP-3A, CP-3B, CP-3C, CP-4, CP-4A | UP (QA gate): CP-5, CP-5A | DOWN (Analytical): CP-6A
 
 #### Governance Rules
 1. CP-6 is an adversarial debate module — output must force a decision-useful action bias, not produce balanced narrative.
@@ -335,8 +336,8 @@ CP-6A's binding rules are CP-6's: the same canon, and every rule in `## Canon Co
 ### CP-6A | PortfolioDebateChallenge | Layer L6 | Schema: Nested
 
 **Upstream:** CP-0, CP-1, CP-1B, CP-1C, CP-2, CP-2A, CP-2B, CP-2C, CP-2D, CP-2E, CP-3, CP-3A, CP-3B, CP-3C, CP-4, CP-4A, CP-6
+**Upstream (QA gate):** CP-5, CP-5A (accepted before this module runs; CP-5 is never its consumer)
 **Downstream (Analytical):** (terminal L6 module)
-**Downstream (QA):** CP-5, CP-5A
 
 ---
 
@@ -418,7 +419,7 @@ The required analytical output and sole downstream handoff is one validated cano
 module_id: CP-6A | module_name: PortfolioDebateChallenge | schema_family: Nested | layer: L6
 
 #### Dependencies
-UP: CP-0, CP-1, CP-1B, CP-1C, CP-2, CP-2A, CP-2B, CP-2C, CP-2D, CP-2E, CP-3, CP-3A, CP-3B, CP-3C, CP-4, CP-4A, CP-6 | DOWN (Analytical): (terminal L6 module) | DOWN (QA): CP-5, CP-5A
+UP: CP-0, CP-1, CP-1B, CP-1C, CP-2, CP-2A, CP-2B, CP-2C, CP-2D, CP-2E, CP-3, CP-3A, CP-3B, CP-3C, CP-4, CP-4A, CP-6 | UP (QA gate): CP-5, CP-5A | DOWN (Analytical): (terminal L6 module)
 
 #### Governance Rules
 1. CP-6A is the terminal portfolio debate module — output must force a definitive sizing and posture decision, not produce balanced narrative.
@@ -567,6 +568,6 @@ For the absorbed `CP-6A` phase on every run:
 
 ## Research questions and adoption — binding when applicable
 
-Before finalizing an assumption or conclusion, identify any unresolved material evidence question. If existing sources answer it, continue. Otherwise use `../cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md` to add a bounded request naming this module as consumer and a factual predecessor. The host authors the control brief under the user's existing task authorization; CP-OS remains read-only. Do not create a self-dependency from this module back through CP-DR. For a late challenge, retain the current CP-0 anchor and archive superseded research attempts outside the active snapshot.
+Before finalizing an assumption or conclusion, identify any unresolved material evidence question. If existing sources answer it, continue. Otherwise, where `../cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md` is delivered with this module, use it to add a bounded request naming this module as consumer and a factual predecessor; where it is not delivered, record the question as an unresolved gap under `## Gaps & Conflicts` and do not request research. The host authors the control brief under the user's existing task authorization; CP-OS remains read-only. Do not create a self-dependency from this module back through CP-DR. For a late challenge, retain the current CP-0 anchor and archive superseded research attempts outside the active snapshot.
 
 Run the invocation helper against the fresh snapshot. If it returns `research_adoption_rows`, complete the tagged `cpdr.adoptions` table in the analytical appendix: `question_id`, `research_sha256`, `disposition` (ACCEPTED / REJECTED / QUALIFIED), `reason`, `analytical_effect`. Record one row per assigned question, with the exact current research hash. Rejection or qualification still explains the consequence. CP-DR supplies evidence; this module remains responsible for source applicability, numerical extraction, assumptions and conclusions. Unresolved research blocks its named consumer, not unrelated modules. A changed research dossier invalidates its declared consumers and their dependents; research is versioned per bounded batch, not per claim.

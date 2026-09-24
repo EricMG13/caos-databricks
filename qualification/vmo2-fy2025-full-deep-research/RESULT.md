@@ -2,7 +2,7 @@
 
 This set is prepared offline for `FULL_CREDIT_32 / DEEP_RESEARCH`; it does not
 record or claim qualification. Its qualification-set digest is
-`1f15f91b746ee2bc58a9719ff5b5f0cb6a4328c827642bb384f8040ba8cfe3c2`.
+`6e617e8ced5f874ecef59f30bd813f9be06de8c6a2674a2f9c461f2346964f23`.
 
 The set reuses the qualified LITE set's supplied-only research brief and exact
 release bytes:

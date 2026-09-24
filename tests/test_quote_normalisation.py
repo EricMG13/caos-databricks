@@ -372,3 +372,63 @@ def test_a_region_boundary_still_splits_a_run_found_by_the_new_search() -> None:
     assert _located(page, "x y z") == "x y z"
     run = _unique_run(page, "x y z")
     assert run == page[3:6]
+
+
+def test_one_index_derives_a_pages_search_keys_once(
+    case: tuple[StoreConnection, UUID], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N41: every citation of a page rebuilt the page's search keys -- its
+    words' NFC and, for a tracking extractor, the page with tracked letters
+    joined -- so 512 citations of a 240,000-token page spent 18 s rebuilding
+    them. One `TokenIndex` now derives them once per page, and each citation
+    anchors where a fresh index anchors it."""
+    from conftest import every_block
+
+    from caos.evidence import citations
+    from caos.evidence.citations import Citation, TokenIndex, verify_citations
+
+    conn, case_id = case
+    document = minimal_pdf([FIRST_LINE, "Cash and equivalents stood at USD 310.5m"])
+    source_id = _ingest_pdf(conn, case_id, tmp_path, document)
+    delivered = every_block(conn, source_id)
+    # Each ends in a full stop the page does not carry: the normalised pass.
+    quotes = [
+        Citation(source_id, 1, text)
+        for text in (
+            "Total debt at 31 December.",
+            "at USD 310.5m.",
+            "was USD 1,240.0m.",
+        )
+    ]
+    joins: list[int] = []
+    normalised: list[int] = []
+    join, nfc = citations._joined_tracking, citations._nfc
+
+    def counted_join(tokens: list[_Token]) -> list[_Token]:
+        joins.append(len(tokens))
+        return join(tokens)
+
+    def counted_nfc(text: str) -> str:
+        normalised.append(1)
+        return nfc(text)
+
+    monkeypatch.setattr(citations, "_joined_tracking", counted_join)
+    monkeypatch.setattr(citations, "_nfc", counted_nfc)
+    index = TokenIndex()
+    shared = [
+        verify_citations(conn, delivered=delivered, citations=[quote], index=index)
+        for quote in quotes
+    ]
+    shared_calls = len(normalised)
+    assert len(joins) == 1
+    [tokens] = joins
+
+    normalised.clear()
+    fresh = [
+        verify_citations(conn, delivered=delivered, citations=[quote])
+        for quote in quotes
+    ]
+    assert fresh == shared
+    assert len(joins) == 1 + len(quotes)
+    # A fresh index derived the page's NFC keys once per citation.
+    assert shared_calls + (len(quotes) - 1) * tokens <= len(normalised)

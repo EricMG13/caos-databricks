@@ -17,6 +17,14 @@ are two regions, so a phrase cannot be assembled across the gutter between them 
 which is what a naive scan of page text does, and what it silently produces is a
 quote that exists nowhere on the page.
 
+*One whole line, where an answer is accepted* (N28, `WHOLE_LINE`). The final
+check tells a module that `matched_text` is the complete text of one evidence
+line, and the host now holds it to that: a quote anchors only on a line as the
+module was shown it, first token first and last token last. Any unique run
+anchored before, so a fragment that dropped a "not" was shown as a
+host-verified source fact (AI-4). A record accepted under that rule names none
+and is re-anchored by it (`ANY_RUN`), so no stored record starts refusing.
+
 The result is one rectangle per line the quote covers, the shape a PDF
 highlight's QuadPoints uses and for the same reason: selected text wraps, and a
 single enclosing rectangle would cover text the quote does not contain.
@@ -30,9 +38,15 @@ import unicodedata
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from itertools import groupby
+from typing import Literal
 from uuid import UUID
 
-from caos.evidence.ingest import GROUP_WIDTH, block_ids_by_line
+from caos.evidence.ingest import (
+    GROUP_WIDTH,
+    PACKING_BY_TOKEN,
+    PACKING_BY_WIDTH,
+    block_ids_by_line,
+)
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
 
@@ -105,6 +119,22 @@ EDGE_PUNCTUATION = "\"'\u201c\u201d\u2018\u2019()[]{}.,;:!?"
 # sentence's full stop and still goes.
 _FIGURE_LEFT = EDGE_PUNCTUATION.replace("(", "").replace(".", "")
 _FIGURE_RIGHT = EDGE_PUNCTUATION.replace(")", "")
+
+# How a citation is located (N28, D39). `WHOLE_LINE` is the rule an answer is
+# accepted under: the quote is one whole evidence line as the module was shown
+# it -- a block of the page, which is its line wherever the line fits and a
+# token-cut piece of it where it did not (`_shown`) -- first token first and
+# last token last, allowing only the edge punctuation the normalised pass
+# already forgives; and it must be the only such line on the page. `ANY_RUN`
+# is the rule every record accepted before it was located by, any unique run
+# of the page, and the one such a record is re-anchored by: a record names the
+# rule it was accepted under (`CanonicalRecord.citation_rule`), so the rule
+# tightening never refuses a record accepted before it. `anchor_citation`, the
+# extractor suites' probe of where a quote is, stays `ANY_RUN`.
+type CitationRule = Literal["any-run", "whole-line"]
+ANY_RUN: CitationRule = "any-run"
+WHOLE_LINE: CitationRule = "whole-line"
+CITATION_RULES: frozenset[CitationRule] = frozenset({ANY_RUN, WHOLE_LINE})
 
 # Glyphs tracked past pdfminer's `word_margin` come back one token per letter
 # (section 44.5), so a heading tracked for display cannot be quoted as a word.
@@ -190,13 +220,67 @@ def anchor_citation(
 
     No server path calls this: it judges no delivery, so a run's citations go
     through `verify_citations`. It remains the extractor suites' probe of the
-    search rule alone (`tests/test_pdf_extraction.py`). Refuses
+    search rule alone (`tests/test_pdf_extraction.py`), `ANY_RUN`: where a
+    quote is, not whether an answer could cite it (`WHOLE_LINE`). Refuses
     `CITATION_NOT_LOCATED` when the quote is not there and `CITATION_AMBIGUOUS`
     when it is there more than once. Neither refusal carries the quote.
     """
-    _digest, tracking = _source_facts(conn, source_id)
+    _digest, tracking, _packing = _source_facts(conn, source_id)
     tokens = _page_tokens(conn, source_id, page)
     return _rectangles(_unique_run(tokens, matched_text, tracking=tracking), page)
+
+
+@dataclass(slots=True)
+class _Page:
+    """One page's tokens and the lists the search derives from them, each
+    derived the first time a search asks for it and kept with the page.
+
+    They depend on the page alone: its words as compared (their bytes, or
+    their NFC) and, for a tracking extractor, the page with its tracked
+    letters joined. Rebuilt per citation, 512 citations of one 240,000-token
+    page spent 18 s on them (N41); a `TokenIndex` holds its pages as these.
+    """
+
+    tokens: list[_Token]
+    exact: list[str] | None = None
+    nfc: list[str] | None = None
+    tracked: _Page | None = None
+    # The page's evidence lines as a module was shown them, by word count:
+    # as stored (`False`) and with tracked letters joined within each (`True`).
+    shown_lines: dict[bool, dict[int, list[list[_Token]]]] = field(default_factory=dict)
+
+    def keys(self, *, normalised: bool) -> list[str]:
+        """The page's words as `_starts` compares them."""
+        if self.exact is None:
+            self.exact = [token.text for token in self.tokens]
+        if not normalised:
+            return self.exact
+        if self.nfc is None:
+            self.nfc = list(map(_nfc, self.exact))
+        return self.nfc
+
+    def joined(self) -> _Page:
+        """This page with its tracked letters joined (`_joined_tracking`)."""
+        if self.tracked is None:
+            self.tracked = _Page(_joined_tracking(self.tokens))
+        return self.tracked
+
+    def shown(
+        self, cuts: Mapping[int, tuple[int, ...]] | None, *, joined: bool
+    ) -> dict[int, list[list[_Token]]]:
+        """The page's evidence lines as a module was shown them (`_shown`),
+        keyed by how many words each holds, derived once per page. `cuts` is
+        the source's packing-2 cut per line, `None` for packing 1. Joined, a
+        line's tracked letters are joined within it and never across two."""
+        if joined not in self.shown_lines:
+            lines = _shown(self.tokens, cuts)
+            if joined:
+                lines = [_joined_tracking(line) for line in lines]
+            by_width: dict[int, list[list[_Token]]] = {}
+            for line in lines:
+                by_width.setdefault(len(line), []).append(line)
+            self.shown_lines[joined] = by_width
+        return self.shown_lines[joined]
 
 
 def _unique_run(
@@ -212,21 +296,161 @@ def _unique_run(
     the second pass exists, so every quote that anchored before these rules
     were written anchors to the same rectangles.
     """
+    return _page_run(_Page(tokens), matched_text, tracking=tracking)
+
+
+def _page_run(page: _Page, matched_text: str, *, tracking: bool) -> list[_Token]:
+    """`_unique_run` over a page whose derived keys may already be in hand."""
     words = matched_text.split()
     if not words:
         raise Refusal(RefusalCode.CITATION_NOT_LOCATED)
-    exact = _one_match(tokens, words, normalised=False)
+    exact = _one_match(page.tokens, words, normalised=False, page=page)
     if exact is not None:
         return exact
-    candidates = _joined_tracking(tokens) if tracking else tokens
-    run = _one_match(candidates, words, normalised=True)
+    candidates = page.joined() if tracking else page
+    run = _one_match(candidates.tokens, words, normalised=True, page=candidates)
     if run is None:
         raise Refusal(RefusalCode.CITATION_NOT_LOCATED)
     return run
 
 
+def _line_run(
+    page: _Page,
+    cuts: Mapping[int, tuple[int, ...]] | None,
+    matched_text: str,
+    *,
+    tracking: bool,
+) -> list[_Token]:
+    """`WHOLE_LINE`: the one evidence line of the page `matched_text` is,
+    whole -- exactly, and only where no line is, under the declared
+    normalisations -- in the order `_page_run` keeps and for its reason.
+
+    A candidate is a line as the module was shown it with as many words as
+    the quote, so the search compares a handful of lines where the run search
+    proposes every token of the page: 64 one- and two-word quotes of a
+    240,000-token page through the normalised pass took 20.7 s by run and
+    0.08 s by line, on one host under load (F206's author measured 13.9 s by
+    run). Two such lines are
+    `CITATION_AMBIGUOUS`; a quote that is part of a line, or that runs onto
+    the next, is no line at all: `CITATION_NOT_LOCATED`, which the second
+    attempt reads back as "not one evidence line of its cited page".
+    """
+    words = matched_text.split()
+    if not words:
+        raise Refusal(RefusalCode.CITATION_NOT_LOCATED)
+    width = len(words)
+    exact = _one_line(page.shown(cuts, joined=False).get(width, ()), words, False)
+    if exact is not None:
+        return exact
+    lines = page.shown(cuts, joined=tracking).get(width, ())
+    run = _one_line(lines, words, True)
+    if run is None:
+        raise Refusal(RefusalCode.CITATION_NOT_LOCATED)
+    return run
+
+
+def _one_line(
+    lines: Iterable[list[_Token]], words: Sequence[str], normalised: bool
+) -> list[_Token] | None:
+    """The single line `words` is whole (`_match_at` from its first token
+    over a line exactly as long), `None` for none, a refusal for two."""
+    found: list[_Token] | None = None
+    for line in lines:
+        if not _match_at(line, 0, words, normalised=normalised):
+            continue
+        if found is not None:
+            raise Refusal(RefusalCode.CITATION_AMBIGUOUS)
+        found = line
+    return found
+
+
+def _shown(
+    tokens: list[_Token], cuts: Mapping[int, tuple[int, ...]] | None
+) -> list[list[_Token]]:
+    """The page's evidence lines as the evidence section showed them: each
+    token line, cut into the blocks admission wrote for it.
+
+    A line that fits `GROUP_WIDTH` is one block, so it is itself. A wider
+    line was shown as several, and each is a line of its own to the module:
+    packing 2 cut it between tokens, and `cuts` holds how many space-separated
+    pieces each of its blocks carries (`_token_spans`); packing 1 cut it at
+    the width (`_width_spans`)."""
+    shown: list[list[_Token]] = []
+    for line_id, group in groupby(tokens, key=lambda token: token.line_id):
+        line = list(group)
+        spans = (
+            _width_spans(line)
+            if cuts is None
+            else _token_spans(line, cuts.get(line_id))
+        )
+        shown.extend(line[start:end] for start, end in spans)
+    return shown
+
+
+def _token_spans(
+    line: list[_Token], pieces: tuple[int, ...] | None
+) -> list[tuple[int, int]]:
+    """Packing 2: each block of `line` as the run of its tokens, found as
+    `_walk` numbers them -- by the space-separated pieces each block holds --
+    so a block quoted whole is one run however admission measured it
+    (CF-013). A line the blocks do not tile is this host's own rows failing
+    to read as they were written: `EVIDENCE_PACKING_MISMATCH`."""
+    if pieces is None:
+        raise Refusal(RefusalCode.EVIDENCE_PACKING_MISMATCH)
+    spans: list[tuple[int, int]] = []
+    at = 0
+    for wanted in pieces:
+        (start, held) = (at, 0)
+        while held < wanted and at < len(line):
+            held += line[at].text.count(" ") + 1
+            at += 1
+        if held != wanted:
+            raise Refusal(RefusalCode.EVIDENCE_PACKING_MISMATCH)
+        spans.append((start, at))
+    if at != len(line):
+        raise Refusal(RefusalCode.EVIDENCE_PACKING_MISMATCH)
+    return spans
+
+
+def _width_spans(line: list[_Token]) -> list[tuple[int, int]]:
+    """Packing 1: the whole line while it fits `GROUP_WIDTH`; past it, each
+    block `line_groups` cut at the width whose two edges fall between
+    tokens, as its run of whole tokens.
+
+    Measured as `line_groups` measured it, on the NFC line the tokens make
+    joined by one space. A block whose edge fell inside a word began or ended
+    with part of one, which no run of tokens is (F204), so it is no line a
+    quote can be; every source admitted since CF-013 is cut between tokens
+    instead, and re-admission is how an older one gains that."""
+    bounds: list[tuple[int, int]] = []
+    at = 0
+    for token in line:
+        size = len(_nfc(token.text))
+        bounds.append((at, at + size))
+        at += size + 1
+    if at - 1 <= GROUP_WIDTH:
+        return [(0, len(line))]
+    held: dict[int, list[int]] = {}
+    torn: set[int] = set()
+    for index, (start, end) in enumerate(bounds):
+        (first, last) = (start // GROUP_WIDTH, (end - 1) // GROUP_WIDTH)
+        if first == last:
+            held.setdefault(first, []).append(index)
+        else:
+            torn.update(range(first, last + 1))
+    return [
+        (indexes[0], indexes[-1] + 1)
+        for block, indexes in sorted(held.items())
+        if block not in torn
+    ]
+
+
 def _one_match(
-    tokens: list[_Token], words: Sequence[str], *, normalised: bool
+    tokens: list[_Token],
+    words: Sequence[str],
+    *,
+    normalised: bool,
+    page: _Page | None = None,
 ) -> list[_Token] | None:
     """The single run matching `words`, `None` for no run, a refusal for two.
 
@@ -246,7 +470,7 @@ def _one_match(
     width = len(words)
     found: int | None = None
     region_end = 0
-    for start in _starts(tokens, words, normalised=normalised):
+    for start in _starts(tokens, words, normalised=normalised, page=page):
         if start >= region_end:
             # Starts ascend, so one scan per region serves every start in it.
             region_end = _region_end(tokens, start)
@@ -264,12 +488,17 @@ def _one_match(
 
 
 def _starts(
-    tokens: list[_Token], words: Sequence[str], *, normalised: bool
+    tokens: list[_Token],
+    words: Sequence[str],
+    *,
+    normalised: bool,
+    page: _Page | None = None,
 ) -> Iterable[int]:
     """Every start, ascending, at which the words compared by equality alone
     match: the whole quote in the exact pass, its interior in the normalised
     one, whose edge words `_one_match` compares itself. With no interior every
-    start is a candidate."""
+    start is a candidate. `page`, when given, is `tokens` with the keys an
+    earlier search of it already derived."""
     width = len(words)
     last = len(tokens) - width
     if last < 0:
@@ -281,9 +510,9 @@ def _starts(
     if not pattern:
         return range(last + 1)
     # The page's keys in one comprehension each, not a call per token: on a
-    # long page this is most of what the search costs.
-    texts = [token.text for token in tokens]
-    keys = list(map(_nfc, texts)) if inner else texts
+    # long page this is most of what the search costs, so a page derives them
+    # once for every search of it (N41).
+    keys = (page or _Page(tokens)).keys(normalised=normalised)
     return (
         at - inner for at in _occurrences(keys, pattern) if inner <= at <= last + inner
     )
@@ -356,14 +585,53 @@ class TokenIndex:
     """What `verify_citations` read from the token index, keyed per page and
     per source, so several calls inside one read unit read each once.
 
-    Holds only what the store returned; delivery is judged per call against
-    that call's `delivered`, never cached.
+    Holds only what the store returned, and what the search derives from a
+    page it returned (`_Page`); delivery is judged per call against that
+    call's `delivered`, never cached.
     """
 
-    pages: dict[tuple[UUID, int], list[_Token]] = field(default_factory=dict)
+    pages: dict[tuple[UUID, int], _Page] = field(default_factory=dict)
     digests: dict[UUID, str] = field(default_factory=dict)
     tracking: dict[UUID, bool] = field(default_factory=dict)
+    packing: dict[UUID, int] = field(default_factory=dict)
     line_blocks: dict[UUID, dict[int, tuple[str, ...]]] = field(default_factory=dict)
+    # A packing-2 source's pieces per block, per line (`_walked_cuts`), read
+    # in the one query that numbers its blocks.
+    cuts: dict[UUID, dict[int, tuple[int, ...]]] = field(default_factory=dict)
+
+    def page(self, conn: StoreConnection, source_id: UUID, page: int) -> _Page:
+        """One page of a live source, read once."""
+        key = (source_id, page)
+        if key not in self.pages:
+            self.pages[key] = _Page(_page_tokens(conn, source_id, page))
+        return self.pages[key]
+
+    def facts(self, conn: StoreConnection, source_id: UUID) -> tuple[str, bool]:
+        """A live source's digest and whether it tracks (`_source_facts`),
+        read once with the packing its blocks were written under."""
+        if source_id not in self.digests:
+            (digest, tracking, packing) = _source_facts(conn, source_id)
+            self.digests[source_id], self.tracking[source_id] = digest, tracking
+            self.packing[source_id] = packing
+        return self.digests[source_id], self.tracking[source_id]
+
+    def lines(
+        self, conn: StoreConnection, source_id: UUID
+    ) -> dict[int, tuple[str, ...]]:
+        """Line id to the blocks admission wrote for it (`_line_blocks`),
+        read once per source, under the packing `facts` read -- and, for a
+        packing-2 source, each block's pieces from the same query."""
+        if source_id not in self.line_blocks:
+            self.facts(conn, source_id)
+            if self.packing[source_id] == PACKING_BY_TOKEN:
+                (self.line_blocks[source_id], self.cuts[source_id]) = _split_cuts(
+                    _walked_cuts(conn, source_id)
+                )
+            else:
+                self.line_blocks[source_id] = _line_blocks(
+                    conn, source_id, self.packing[source_id]
+                )
+        return self.line_blocks[source_id]
 
 
 def verify_citations(
@@ -372,8 +640,13 @@ def verify_citations(
     delivered: Mapping[UUID, frozenset[str]],
     citations: Sequence[Citation],
     index: TokenIndex | None = None,
+    rule: CitationRule = ANY_RUN,
 ) -> list[AnchoredCitation]:
     """Re-derive every citation, or refuse the set.
+
+    `rule` is how each is located (`CitationRule`): an answer being accepted
+    is held to `WHOLE_LINE`, what its final check told it; a stored record
+    is re-anchored by the rule it names.
 
     Called before an artifact is written, never after: an artifact naming a quote
     nobody can find is the thing invariant 11 exists to prevent, and one that has
@@ -386,7 +659,9 @@ def verify_citations(
     their lines: a quote on an undelivered page, or wrapping onto an undelivered
     line, refuses `CITATION_NOT_DELIVERED`. Ambiguity is still counted over the
     whole page (`docs/DECISIONS.md` section 44.5), so a quote repeated on a line
-    the node never saw is ambiguous rather than resolved to the copy it did.
+    the node never saw is ambiguous rather than resolved to the copy it did --
+    over every run of the page under `ANY_RUN`, over every line of it under
+    `WHOLE_LINE`.
 
     An artifact carries many citations and they cluster: several quotes from one
     page of one source is the normal shape. Both lookups are therefore fetched
@@ -397,36 +672,28 @@ def verify_citations(
     """
     if index is None:
         index = TokenIndex()
-    pages, digests, ordinals = index.pages, index.digests, index.line_blocks
-    tracking = index.tracking
-
     anchored = []
     for citation in citations:
         blocks = delivered.get(citation.source_id)
         if blocks is None:
             raise Refusal(RefusalCode.CITATION_NOT_DELIVERED)
-        key = (citation.source_id, citation.page)
-        if key not in pages:
-            pages[key] = _page_tokens(conn, citation.source_id, citation.page)
-        if citation.source_id not in digests:
-            digests[citation.source_id], tracking[citation.source_id] = _source_facts(
-                conn, citation.source_id
-            )
-        run = _unique_run(
-            pages[key], citation.matched_text, tracking=tracking[citation.source_id]
-        )
-        if citation.source_id not in ordinals:
-            ordinals[citation.source_id] = _line_blocks(conn, citation.source_id)
-        lines = ordinals[citation.source_id]
+        searched = index.page(conn, citation.source_id, citation.page)
+        digest, tracking = index.facts(conn, citation.source_id)
+        if rule == WHOLE_LINE:
+            index.lines(conn, citation.source_id)
+            cuts = index.cuts.get(citation.source_id)
+            run = _line_run(searched, cuts, citation.matched_text, tracking=tracking)
+        else:
+            run = _page_run(searched, citation.matched_text, tracking=tracking)
+        lines = index.lines(conn, citation.source_id)
         if any(not _delivered(lines.get(token.line_id), blocks) for token in run):
             raise Refusal(RefusalCode.CITATION_NOT_DELIVERED)
-        boxes = _rectangles(run, citation.page)
         anchored.append(
             AnchoredCitation(
-                document_sha256=digests[citation.source_id],
+                document_sha256=digest,
                 page=citation.page,
                 matched_text=citation.matched_text,
-                bboxes=tuple(boxes),
+                bboxes=tuple(_rectangles(run, citation.page)),
             )
         )
     return anchored
@@ -446,11 +713,16 @@ def _page_tokens(conn: StoreConnection, source_id: UUID, page: int) -> list[_Tok
     return [_Token(*row) for row in rows]
 
 
-def _line_blocks(conn: StoreConnection, source_id: UUID) -> dict[int, tuple[str, ...]]:
+def _line_blocks(
+    conn: StoreConnection, source_id: UUID, packing: int = PACKING_BY_WIDTH
+) -> dict[int, tuple[str, ...]]:
     """Line id to the blocks admission wrote for it, once per source: admission's
     own numbering (`block_ids_by_line`) over the token index's line ids.
 
-    A line past `GROUP_WIDTH` was split, so a line may own more than one block.
+    A source packed between tokens (`PACKING_BY_TOKEN`) is read back instead
+    (`_walked_cuts`). What follows is `PACKING_BY_WIDTH`'s reading, which
+    every source admitted before CF-013 was written under and still verifies
+    by. A line past `GROUP_WIDTH` was split, so a line may own more than one block.
     Which lines were split is not guessed, and the direction of the count is
     what says whether to ask. Splitting only ever writes **more** blocks than
     lines, so a source with more stored blocks than lines carries a split and
@@ -463,6 +735,8 @@ def _line_blocks(conn: StoreConnection, source_id: UUID) -> dict[int, tuple[str,
     reading is right and the missing block is simply not among the delivered,
     which is `CITATION_NOT_DELIVERED` and not this function's to answer.
     """
+    if packing == PACKING_BY_TOKEN:
+        return _split_cuts(_walked_cuts(conn, source_id))[0]
     rows = conn.execute(
         "SELECT lines.line_id, blocks.stored FROM"
         " (SELECT DISTINCT line_id FROM source_tokens WHERE source_id = %s) AS lines,"
@@ -486,6 +760,91 @@ def _line_blocks(conn: StoreConnection, source_id: UUID) -> dict[int, tuple[str,
         # source" cannot clear it, and re-admission under this build can.
         raise Refusal(RefusalCode.EVIDENCE_PACKING_MISMATCH)
     return block_ids_by_line(counts)
+
+
+# Each line's and each block's space-separated pieces -- one more than the
+# spaces its text holds -- in one statement. A line's pieces are its tokens'
+# summed (the tokens are joined by one space), and NFC neither adds nor
+# removes U+0020, so a block's pieces are the pieces of the tokens it holds.
+_WALK_QUERY = (
+    "SELECT 0, line_id::text,"
+    " sum(length(text) - length(replace(text, ' ', '')) + 1)"
+    " FROM source_tokens WHERE source_id = %s GROUP BY line_id"
+    " UNION ALL SELECT 1, block_id,"
+    " length(text) - length(replace(text, ' ', '')) + 1"
+    " FROM source_blocks WHERE source_id = %s"
+)
+
+
+def _walked_cuts(
+    conn: StoreConnection, source_id: UUID
+) -> dict[int, tuple[tuple[str, int], ...]]:
+    """`PACKING_BY_TOKEN`'s numbering, read back from the blocks admission
+    wrote rather than re-derived from a rule (CF-013): each line's blocks, in
+    order, each with the pieces it holds -- which is also where a block's
+    run of the line's tokens ends (`_token_spans`).
+
+    A packing-2 block is a run of a line's whole tokens joined by one space,
+    so its space-separated pieces are exactly its tokens' pieces. Walking the
+    blocks in id order against the lines in line order, each line takes blocks
+    until their pieces sum to its own: what admission wrote, found without
+    measuring a length on either side's Unicode tables (N40) and without
+    `GROUP_WIDTH`. One round trip, the lines' and the blocks' counts together.
+    Blocks that do not tile the lines exactly -- a block gone, a line that
+    ends inside one -- are this host's own rows failing to read as they were
+    written: `EVIDENCE_PACKING_MISMATCH`.
+    """
+    lines: list[tuple[int, int]] = []
+    blocks: list[tuple[int, str, int]] = []
+    for kind, key, pieces in conn.execute(
+        _WALK_QUERY, (source_id, source_id)
+    ).fetchall():
+        if kind == 0:
+            lines.append((int(key), int(pieces)))
+        else:
+            blocks.append((_ordinal(str(key)), str(key), int(pieces)))
+    return _walk(sorted(lines), sorted(blocks))
+
+
+def _split_cuts(
+    walked: Mapping[int, tuple[tuple[str, int], ...]],
+) -> tuple[dict[int, tuple[str, ...]], dict[int, tuple[int, ...]]]:
+    """A walked numbering (`_walked_cuts`) as each line's block ids, which
+    delivery is judged by, and each line's pieces per block, which its
+    blocks' runs of tokens are cut by (`_token_spans`)."""
+    ids = {line: tuple(block for block, _held in cut) for line, cut in walked.items()}
+    pieces = {line: tuple(held for _block, held in cut) for line, cut in walked.items()}
+    return ids, pieces
+
+
+def _ordinal(block_id: str) -> int:
+    digits = block_id[1:]
+    if not (digits.isascii() and digits.isdigit()):
+        raise Refusal(RefusalCode.EVIDENCE_PACKING_MISMATCH)
+    return int(digits)
+
+
+def _walk(
+    lines: list[tuple[int, int]], blocks: list[tuple[int, str, int]]
+) -> dict[int, tuple[tuple[str, int], ...]]:
+    """Each line, in order, with the blocks whose pieces sum to its own, each
+    block with its pieces."""
+    numbering: dict[int, tuple[tuple[str, int], ...]] = {}
+    at = 0
+    for line_id, wanted in lines:
+        taken: list[tuple[str, int]] = []
+        pieces = 0
+        while pieces < wanted and at < len(blocks):
+            (_ordinal_at, block_id, held) = blocks[at]
+            taken.append((block_id, held))
+            pieces += held
+            at += 1
+        if pieces != wanted:
+            raise Refusal(RefusalCode.EVIDENCE_PACKING_MISMATCH)
+        numbering[line_id] = tuple(taken)
+    if at != len(blocks):
+        raise Refusal(RefusalCode.EVIDENCE_PACKING_MISMATCH)
+    return numbering
 
 
 def _group_counts(conn: StoreConnection, source_id: UUID) -> dict[int, int]:
@@ -615,11 +974,12 @@ def _rectangles(run: list[_Token], page: int) -> list[Rect]:
     ]
 
 
-def _source_facts(conn: StoreConnection, source_id: UUID) -> tuple[str, bool]:
-    """A live source's document digest, and whether its extractor is one whose
-    own rule can split a tracked word into letters.
+def _source_facts(conn: StoreConnection, source_id: UUID) -> tuple[str, bool, int]:
+    """A live source's document digest, whether its extractor is one whose
+    own rule can split a tracked word into letters, and the packing its blocks
+    were written under (`format_version`, migration 0032).
 
-    Both in one round trip rather than two, because the digest read is already
+    All in one round trip rather than two, because the digest read is already
     paid for once per source and every section's `IO_BUDGET` is asserted with
     `==`: a second query here would move four declared budgets for a fact the
     first row could carry.
@@ -627,10 +987,12 @@ def _source_facts(conn: StoreConnection, source_id: UUID) -> tuple[str, bool]:
     `source_extractions` is outer-joined, and a source with no row is not
     tracking-normalised -- "no row means UNKNOWN: never attribute legacy
     extraction to today's adapter" is that table's own rule, and the
-    fail-closed reading of it here is the exact search alone.
+    fail-closed reading of it here is the exact search alone. Such a source
+    was packed before there was a second packing, so it reads as packing 1.
     """
     row = conn.execute(
-        "SELECT live.document_sha256, extraction.extractor_identity"
+        "SELECT live.document_sha256, extraction.extractor_identity,"
+        " extraction.format_version"
         " FROM live_sources AS live"
         " LEFT JOIN source_extractions AS extraction USING (source_id)"
         " WHERE live.source_id = %s",
@@ -638,7 +1000,8 @@ def _source_facts(conn: StoreConnection, source_id: UUID) -> tuple[str, bool]:
     ).fetchone()
     if row is None:
         raise Refusal(RefusalCode.EVIDENCE_NOT_AVAILABLE)
-    return str(row[0]), _extractor_name(row[1]) in TRACKING_EXTRACTORS
+    tracking = _extractor_name(row[1]) in TRACKING_EXTRACTORS
+    return str(row[0]), tracking, PACKING_BY_WIDTH if row[2] is None else int(row[2])
 
 
 def _extractor_name(identity: str | None) -> str:

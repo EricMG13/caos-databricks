@@ -39,7 +39,7 @@ Advanced qualifiers stay command-accessible. Source/email/web/document/attachmen
 7. Subsequent event: flag date; never blend into period figures.
 8. Non-debt funding float: trend deposits/deferred revenue/supplier finance—not payables; Evidence→Risk Mechanic→Credit Implication.
 9. Show source vs normalized one-offs; label normalization+Analyst Judgement. Never infer covenant capacity; absent inputs=`Not Calculable`.
-10. `committee_status`∈Committee Ready|Draft Only|Requires More Work|Insufficient Information|Restricted|Blocked. `qa_status` Restricted→score≤59 (band from the score: 40-59 Low, below 40 Insufficient Information); Blocked→≤39.
+10. `committee_status`∈Committee Ready|Draft Only|Requires More Work|Insufficient Information|Restricted|Blocked. `qa_status` follows the run's own status (canon D1 map): complete→Passed; with gaps or limitations→Restricted; Blocked→Blocked; never Not Reviewed. Restricted→score≤59 (band from the score: 40-59 Low, below 40 Insufficient Information); Blocked→≤39.
 
 ## LITE profile compatibility — CP-1C
 
@@ -48,6 +48,7 @@ This module remains a FULL run when the run profile is `LITE_CREDIT_22`; the ret
 - **accepted_lite_object_ids**: `lite_financial_change_screen`
 - **allowed_use**: `SCREENING_ONLY`
 - **missing_input_behavior**: `UPGRADE`
+- **UPGRADE** (canon SEC5): an input this module's FULL method needs that the LITE route does not deliver is never inferred and never a stop. Complete the module on the screening inputs the route delivers, name each missing input as a limitation, set `qa_status` Restricted, and recommend a new, user-confirmed, linked `FULL_CREDIT_32` run to supply it; this run's profile never changes.
 
 ## Analytical depth — binding on every run
 
@@ -104,8 +105,8 @@ conclusions, never shorter reasoning or invented filler.
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T4.10**: structured below
-      - **columns**: Method; Multiple Source/Value; Borrower Metric/Period; Implied EV/Low/Median/High; Calc Status; Limitations
-      - **critical_columns**: Method; Multiple Source/Value; Borrower Metric/Period; Implied EV/Low/Median/High; Calc Status
+      - **columns**: Method; Multiple Source; Multiple Value; Borrower Metric; Period; Implied EV; Low; Median; High; Calc Status; Limitations
+      - **critical_columns**: Method; Multiple Source; Multiple Value; Borrower Metric; Period; Implied EV; Low; Median; High; Calc Status
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T4.11**: structured below
@@ -114,42 +115,42 @@ conclusions, never shorter reasoning or invented filler.
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T4.2**: structured below
-      - **columns**: Metric; Borrower Value/Period; Peer Entity/Value/Period; AP1-AP11; Comparability Status; Limitation Notes
+      - **columns**: Metric; Borrower Value; Borrower Period; Peer Entity; Peer Value; Peer Period; AP1-AP11; Comparability Status; Limitation Notes
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T4.3**: structured below
-      - **columns**: Entity; Revenue; Revenue Growth; Gross Margin; EBITDA; EBITDA Margin; EBIT Margin; Period; Currency; Calc Status; Comp Status
+      - **columns**: Entity; Revenue; Rev Growth; Gross Margin; EBITDA; EBITDA Margin; EBIT Margin; Period; Currency; Calc Status; Comp Status
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T4.4**: structured below
-      - **columns**: Entity; FCF; FCF Conversion; Capex/Revenue; Capex/EBITDA; WC/Revenue; Period; Currency; Calc Status; Comp Status
+      - **columns**: Entity; FCF; FCF Conversion; Capex/Rev; Capex/EBITDA; WC/Rev; Period; Currency; Calc Status; Comp Status
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T4.5**: structured below
-      - **columns**: Entity; Total/Net/Sr Sec Leverage; Int/Adj Int Coverage; FFO/Debt; Liquidity; Period; Currency; Calc/Comp Status
+      - **columns**: Entity; Total/Net/Sr Sec Leverage; Int Coverage; Adj Int Coverage; FFO/Debt; Liquidity; Period; Currency; Calc Status; Comp Status
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T4.6**: structured below
-      - **columns**: Metric; Borrower Value; Peer Avg/Median/Min/Max; Q1/Q3; N; Borrower Position
+      - **columns**: Metric; Borrower Value; Peer Avg; Median; Min; Max; Q1; Q3; N; Borrower Position
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T4.7**: structured below
-      - **columns**: Entity; Metric; Value; Peer Range; Deviation; Direction; 6 Implication Columns; Downstream Handoff
+      - **columns**: Entity; Metric; Value; Peer Range (Min/Max/Med/Avg); Deviation; Direction; Operating Impl; CF Impl; Lev/Liq Impl; Refi Impl; Valuation Impl; Downstream Handoff
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T4.8**: structured below
-      - **columns**: Entity; Mkt Cap; Date; EV; EV/Revenue; EV/EBITDA; Period; Metric Def; Comp Status; Source
+      - **columns**: Entity; Mkt Cap; Mkt Cap Date; EV; EV/Rev; EV/EBITDA; Period Used; Metric Def; Comp Status; Source
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
     - **T4.9**: structured below
-      - **columns**: Txn Name; Date; Type; Buyer/Seller; TV; TV/Revenue; TV/EBITDA; Period; Metric Def; Comp Status; Source
+      - **columns**: Txn Name; Date; Type; Buyer/Seller; TV; TV/Rev; TV/EBITDA; Period Used; Metric Def; Comp Status; Source
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
@@ -300,6 +301,6 @@ Run `python3 ./scripts/validate_handoff.py -` with the completed artifact piped 
 
 ## Research questions and adoption — binding when applicable
 
-Before finalizing an assumption or conclusion, identify any unresolved material evidence question. If existing sources answer it, continue. Otherwise use `../cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md` to add a bounded request naming this module as consumer and a factual predecessor. The host authors the control brief under the user's existing task authorization; CP-OS remains read-only. Do not create a self-dependency from this module back through CP-DR. For a late challenge, retain the current CP-0 anchor and archive superseded research attempts outside the active snapshot.
+Before finalizing an assumption or conclusion, identify any unresolved material evidence question. If existing sources answer it, continue. Otherwise, where `../cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md` is delivered with this module, use it to add a bounded request naming this module as consumer and a factual predecessor; where it is not delivered, record the question as an unresolved gap under `## Gaps & Conflicts` and do not request research. The host authors the control brief under the user's existing task authorization; CP-OS remains read-only. Do not create a self-dependency from this module back through CP-DR. For a late challenge, retain the current CP-0 anchor and archive superseded research attempts outside the active snapshot.
 
 Run the invocation helper against the fresh snapshot. If it returns `research_adoption_rows`, complete the tagged `cpdr.adoptions` table in the analytical appendix: `question_id`, `research_sha256`, `disposition` (ACCEPTED / REJECTED / QUALIFIED), `reason`, `analytical_effect`. Record one row per assigned question, with the exact current research hash. Rejection or qualification still explains the consequence. CP-DR supplies evidence; this module remains responsible for source applicability, numerical extraction, assumptions and conclusions. Unresolved research blocks its named consumer, not unrelated modules. A changed research dossier invalidates its declared consumers and their dependents; research is versioned per bounded batch, not per claim.

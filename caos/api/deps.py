@@ -38,6 +38,7 @@ from pathlib import Path
 from typing import Annotated
 from uuid import UUID
 
+import psycopg
 from fastapi import Depends, Request
 from psycopg import OperationalError
 
@@ -72,6 +73,12 @@ def store_connection() -> Iterator[StoreConnection]:
     A store that does not answer is refused like any other store fault. The
     refusal is raised outside the `except`, so psycopg's message -- the host,
     the port and the role -- is neither chained behind it nor logged with it.
+
+    A fault after connect (CF-022) -- a dropped session, a statement timeout --
+    is refused the same way rather than escaping as a bare `psycopg.Error` for
+    the edge guard to answer generically `INTERNAL_FAULT`: the store not
+    answering mid-request is the same fact as it not answering at connect, and
+    callers should be told the same thing (503, retryable) either way.
     """
     conn: StoreConnection | None
     try:
@@ -80,8 +87,11 @@ def store_connection() -> Iterator[StoreConnection]:
         conn = None
     if conn is None:
         raise Refusal(RefusalCode.STORE_UNAVAILABLE)
-    with conn:
-        yield conn
+    try:
+        with conn:
+            yield conn
+    except psycopg.Error:
+        raise Refusal(RefusalCode.STORE_UNAVAILABLE) from None
 
 
 def blob_store() -> BlobStore:
@@ -99,7 +109,7 @@ def request_blobs(blobs: Annotated[BlobStore, Depends(blob_store)]) -> BlobStore
     return blobs.remembering()
 
 
-def actor_from_request(request: Request) -> Actor:
+async def actor_from_request(request: Request) -> Actor:
     """Who is asking. A dependency rather than a line in a route body.
 
     Every store-touching route declares it on its decorator as
@@ -116,8 +126,13 @@ def actor_from_request(request: Request) -> Actor:
     any well-formed subject still reaches the connection, because whether that
     subject is real is the edge's question rather than this process's
     (`caos/api/identity.py`).
+
+    Async so that FastAPI solves it on the event loop rather than one of
+    AnyIO's worker threads (N36): dev mode awaits nothing, and behind the
+    platform only the request actually making a cold SCIM lookup ever leaves
+    it, in `caos.api.identity._resolved`.
     """
-    return actor_from_headers(request.headers)
+    return await actor_from_headers(request.headers)
 
 
 def methodology_bundle() -> Bundle:

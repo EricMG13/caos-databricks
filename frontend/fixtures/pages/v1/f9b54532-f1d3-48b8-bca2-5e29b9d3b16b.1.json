@@ -7,20 +7,22 @@
     "page": 1,
     "frame": { "x0": 0.0, "y0": 0.0, "x1": 612.0, "y1": 792.0, "y_axis": "down" },
     "lines": [
-      { "text": "PART I", "x0": 72.0, "y0": 90.0, "x1": 118.0, "y1": 103.5 },
+      { "text": "PART I", "x0": 72.0, "y0": 90.0, "x1": 118.0, "y1": 103.5, "hidden": [] },
       {
         "text": "Carvana Co. is an e-commerce platform for buying and selling used cars.",
         "x0": 72.0,
         "y0": 120.5,
         "x1": 460.2,
-        "y1": 134.0
+        "y1": 134.0,
+        "hidden": []
       },
       {
         "text": "We are transforming the used car buying and selling experience.",
         "x0": 72.0,
         "y0": 140.0,
         "x1": 430.0,
-        "y1": 153.5
+        "y1": 153.5,
+        "hidden": []
       }
     ]
   },

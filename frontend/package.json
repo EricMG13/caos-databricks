@@ -17,8 +17,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --mode demo",
     "a11y": "node scripts/a11y-axe.mjs",
-    "test:workbench": "playwright test",
-    "test:journey": "playwright test -c playwright.journey.config.ts"
+    "test:workbench": "playwright test"
   },
   "dependencies": {
     "@base-ui/react": "1.8.0",

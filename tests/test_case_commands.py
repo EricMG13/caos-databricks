@@ -9,10 +9,12 @@ one governed unit (decisions 2, 4 and 6).
 
 from __future__ import annotations
 
+import threading
 from collections.abc import Callable, Iterator
 from typing import Any
 from uuid import UUID, uuid4
 
+import anyio
 import psycopg
 import pytest
 from command_fixtures import command_client, command_headers, member
@@ -312,11 +314,6 @@ def test_parts_other_than_named_documents_are_request_invalid(
         ),
         command_client.post(
             path,
-            headers=command_headers(writer),
-            files=[("document", ("a.txt", TEXT))] * 51,
-        ),
-        command_client.post(
-            path,
             headers={**command_headers(writer), "content-type": "multipart/form-data"},
             content=b"no boundary",
         ),
@@ -324,7 +321,32 @@ def test_parts_other_than_named_documents_are_request_invalid(
 
     assert [(a.status_code, a.json()["code"]) for a in answers] == [
         (400, "REQUEST_INVALID")
-    ] * 4
+    ] * 3
+    assert seen["prepare"] == 0
+    assert _sources(conn, case_id) == 0
+
+
+def test_a_pack_over_the_document_ceiling_is_source_too_large(
+    case: tuple[StoreConnection, UUID],
+    command_client: TestClient,
+    seen: dict[str, int],
+) -> None:
+    """CF-075. The form parser's own `max_files` answered a generic
+    `REQUEST_INVALID` the instant the ceiling was exceeded, indistinguishable
+    from any other malformed multipart body. Parsed with one file past the
+    ceiling instead, a count over it now answers the specific
+    `SOURCE_TOO_LARGE` a pack this size deserves."""
+    conn, case_id = case
+    writer = member(conn, case_id)
+    path = f"/api/v1/cases/{case_id}/sources"
+
+    over = command_client.post(
+        path,
+        headers=command_headers(writer),
+        files=[("document", ("a.txt", TEXT))] * (DEFAULT_LIMITS.max_documents + 1),
+    )
+
+    assert (over.status_code, over.json()["code"]) == (413, "SOURCE_TOO_LARGE")
     assert seen["prepare"] == 0
     assert _sources(conn, case_id) == 0
 
@@ -428,6 +450,99 @@ def test_admission_actor_matrix(  # noqa: PLR0913 -- one matrix row
         401,
         "NOT_AUTHENTICATED",
     )
+
+
+def _one_slot(monkeypatch: pytest.MonkeyPatch) -> threading.BoundedSemaphore:
+    """The process's admission slots, narrowed to one the test can hold."""
+    slots = threading.BoundedSemaphore(1)
+    monkeypatch.setattr(cases, "_SLOTS", slots)
+    return slots
+
+
+def _in_thread(send: Callable[[], Response]) -> tuple[threading.Thread, list[Response]]:
+    answers: list[Response] = []
+    thread = threading.Thread(target=lambda: answers.append(send()), daemon=True)
+    thread.start()
+    return thread, answers
+
+
+def test_an_admission_waits_for_a_slot_before_it_reads_its_pack(
+    case: tuple[StoreConnection, UUID],
+    command_client: TestClient,
+    seen: dict[str, int],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """N5: an admission holds its pack twice -- spooled by the form parser and
+    read into memory -- then its extraction, for up to fifty documents, in the
+    process that also runs the worker. Only `ADMISSION_SLOTS` do at once; the
+    rest wait before a byte of their pack is read, holding no thread."""
+    conn, case_id = case
+    writer = member(conn, case_id)
+    slots = _one_slot(monkeypatch)
+    waiting = threading.Event()
+
+    async def watched(seconds: float) -> None:
+        waiting.set()
+        await anyio.sleep(seconds)
+
+    monkeypatch.setattr("caos.api.commands.cases.sleep", watched)
+    assert slots.acquire(blocking=False), "the one slot, held by another admission"
+    thread, answers = _in_thread(
+        lambda: _admit(command_client, case_id, writer, [("a.txt", TEXT)])
+    )
+    try:
+        assert waiting.wait(timeout=30), "the admission never waited for a slot"
+        assert seen == {"form": 0, "prepare": 0}, "no byte of a waiting pack is read"
+    finally:
+        slots.release()
+        thread.join(timeout=60)
+    assert [answer.status_code for answer in answers] == [201]
+    assert seen == {"form": 1, "prepare": 1}
+    assert slots.acquire(blocking=False), "the slot is given back"
+    slots.release()
+
+
+def test_a_refused_admission_gives_its_slot_back(
+    case: tuple[StoreConnection, UUID],
+    command_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A refusal after the slot was taken -- here the document itself -- keeps
+    its code and releases the slot, so the next admission is not left waiting."""
+    conn, case_id = case
+    writer = member(conn, case_id)
+    slots = _one_slot(monkeypatch)
+    broken = [("broken.pdf", b"%PDF-1.4\nnot a document")]
+
+    refused = _admit(command_client, case_id, writer, broken)
+
+    assert (refused.status_code, refused.json()["code"]) == (400, "SOURCE_NOT_READABLE")
+    assert slots.acquire(blocking=False)
+    slots.release()
+    admitted = _admit(command_client, case_id, writer, [("a.txt", TEXT)])
+    assert admitted.status_code == 201
+
+
+def test_a_stranger_is_answered_without_waiting_for_a_slot(
+    case: tuple[StoreConnection, UUID],
+    command_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The slots are a writer's cost: identity, the envelope and standing are
+    answered before one is asked for, so a stranger's upload never queues."""
+    _conn, case_id = case
+    slots = _one_slot(monkeypatch)
+    assert slots.acquire(blocking=False)
+    try:
+        thread, answers = _in_thread(
+            lambda: _admit(command_client, case_id, uuid4(), [("a.txt", TEXT)])
+        )
+        thread.join(timeout=30)
+        assert not thread.is_alive(), "a stranger's upload waited for a slot"
+    finally:
+        slots.release()
+    [answer] = answers
+    assert (answer.status_code, answer.json()["code"]) == (404, "CASE_NOT_FOUND")
 
 
 def test_extraction_holds_no_case_lock(

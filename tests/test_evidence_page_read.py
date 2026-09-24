@@ -19,6 +19,7 @@ from typing import Any, cast
 from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
+import psycopg
 import pytest
 from test_extraction_provenance import Reader
 from test_pdf_extraction import (
@@ -548,6 +549,58 @@ def test_frame_children_never_run_past_their_process_bound(
     assert answers == {page: (0.0, 0.0, 1.0, float(page)) for page in range(1, 13)}
 
 
+def test_one_actor_cannot_hold_both_frame_children_slots(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """N38. `FRAME_CHILDREN` bounds the whole process, not one reader: nothing
+    kept a single READER's own concurrent page requests from racing for every
+    slot, so a different reader's read waited out its own deadline for a
+    resource one actor was hoarding. Each actor now holds at most
+    `ACTOR_FRAME_CHILDREN` of the global slots at once, the way
+    `ACTOR_STREAM_LIMIT` shares `caos/api/stream.py`'s `STREAM_LIMIT`: the
+    hog's own second read now waits on its own share instead of ever
+    contending for the slot a different actor needs.
+    """
+    import threading
+
+    first_entered, release = threading.Event(), threading.Event()
+
+    def slow(data: bytes, page: int, **bounds: object) -> pdf_module.Frame:
+        first_entered.set()
+        release.wait(5)
+        return (0.0, 0.0, 1.0, float(page))
+
+    monkeypatch.setattr(pdf_module, "page_frame", slow)
+    hog = uuid4()
+    deadline = time.monotonic() + 30.0
+
+    def hog_read(page: int) -> None:
+        crop = page_module._Crop("h" * 64, b"", DEFAULT_LIMITS, deadline, hog)
+        page_module._page_crop(crop, page)
+
+    # Two concurrent reads from the same actor: the first takes a global slot,
+    # and the second -- free before this fix to race for the other one -- is
+    # given time here to have done exactly that.
+    threads = [threading.Thread(target=hog_read, args=(page,)) for page in (1, 2)]
+    for thread in threads:
+        thread.start()
+    try:
+        assert first_entered.wait(5), "the hog's own read never started"
+        time.sleep(0.2)
+
+        other = uuid4()
+        crop = page_module._Crop(
+            "o" * 64, b"", DEFAULT_LIMITS, time.monotonic() + 1.0, other
+        )
+        answer = page_module._page_crop(crop, 1)
+
+        assert answer == (0.0, 0.0, 1.0, 1.0), "a different actor was starved"
+    finally:
+        release.set()
+        for thread in threads:
+            thread.join(5)
+
+
 def test_a_read_whose_deadline_passes_waiting_for_a_slot_starts_no_child(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -582,6 +635,7 @@ def test_a_read_whose_deadline_passes_waiting_for_a_slot_starts_no_child(
 # only observable is the typed code it raises (invariant 2).
 
 _TEXT_CONFIG: dict[str, Any] = {
+    "encoding": "utf-8",
     "cell_width": 6.0,
     "cell_height": 12.0,
     "margin": 18.0,
@@ -607,6 +661,31 @@ def test_a_stored_identity_that_is_not_the_declared_shape_is_refused(
         page_module._identity(stored)
 
 
+def test_a_document_blob_that_is_gone_is_page_not_available(tmp_path: Path) -> None:
+    """CF-071: `_document` swallows `BlobStore.get`'s own typed refusal
+    (`BLOB_NOT_FOUND`, `BLOB_DIGEST_MISMATCH`) and re-raises
+    `PAGE_NOT_AVAILABLE` -- a page read fails closed on what it is missing,
+    not on why the blob layer beneath it failed."""
+    store = BlobStore(tmp_path / "blobs")
+    with pytest.raises(Refusal, match=r"^PAGE_NOT_AVAILABLE$"):
+        page_module._document(store, "0" * 64)
+
+
+def test_a_row_query_that_errors_is_page_not_available() -> None:
+    """CF-071: `_rows` catches `psycopg.Error` itself -- raised fresh as
+    `PAGE_NOT_AVAILABLE` rather than chained, so a database's own error text
+    never reaches a reader (invariant 2)."""
+
+    class _BrokenConnection:
+        def execute(self, *_args: object, **_kwargs: object) -> None:
+            raise psycopg.OperationalError("boom")
+
+    with pytest.raises(Refusal, match=r"^PAGE_NOT_AVAILABLE$"):
+        page_module._rows(
+            cast(Any, _BrokenConnection()), (uuid4(), uuid4(), uuid4(), 1)
+        )
+
+
 @pytest.mark.parametrize("value", [None, "1", float("nan"), -1, 0])
 def test_a_cell_size_that_is_not_a_positive_finite_number_is_refused(
     value: object,
@@ -619,7 +698,13 @@ def test_a_cell_size_that_is_not_a_positive_finite_number_is_refused(
 
 @pytest.mark.parametrize(
     "over",
-    [{"lines_per_page": 0}, {"lines_per_page": "2"}, {"coordinates": "elsewhere"}],
+    [
+        {"lines_per_page": 0},
+        {"lines_per_page": "2"},
+        {"coordinates": "elsewhere"},
+        {"encoding": "latin-1"},
+        {"encoding": None},
+    ],
 )
 def test_a_text_frame_refuses_a_configuration_it_cannot_draw_in(
     over: dict[str, Any],
@@ -634,6 +719,22 @@ def test_a_text_page_with_no_lines_is_unavailable_rather_than_empty(
 ) -> None:
     with pytest.raises(Refusal, match=r"^PAGE_NOT_AVAILABLE$"):
         page_module._text_frame(_TEXT_CONFIG, data, page)
+
+
+@pytest.mark.parametrize(
+    "encoding,cells", [("utf-8", len("\ufeffabcd")), ("utf-8-sig", len("abcd"))]
+)
+def test_a_text_frame_decodes_the_document_as_its_identity_recorded(
+    encoding: str, cells: int
+) -> None:
+    """CF-017: a v4 row dropped a leading byte order mark before it drew a
+    cell, and a v3 row drew one for it. Each frame is re-read under the
+    encoding its row recorded, so its width is the page its tokens were
+    measured on, and a v3 source keeps the frame it always had."""
+    data = "\ufeffabcd\nab\n".encode()
+    frame = page_module._text_frame({**_TEXT_CONFIG, "encoding": encoding}, data, 1)
+    assert frame.x1 == 2 * 18.0 + cells * 6.0
+    assert page_module.TEXT_ENCODINGS == {"utf-8", "utf-8-sig"}
 
 
 def test_a_text_frame_is_as_wide_as_its_widest_line_and_as_tall_as_its_rows() -> None:

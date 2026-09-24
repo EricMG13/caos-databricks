@@ -30,7 +30,7 @@ provider: CP-0's whole request is 555,007 bytes, and CP-L10's, handed pages
 
 ## Run
 
-- Qualification-set digest: `a30533b3530ed1e609ce33df67e50b4ce5e4f80167be4efc29f398b4c24a7bba`
+- Qualification-set digest: `300a680d0c3f8e4d5e207ce4e80d1d46390d7e28b6d88eadb4f70cb9ca19ec61`
 - Route: `LITE_CREDIT_22 / LITE_EARNINGS_UPDATE` (`CP-0`, `CP-L10`, `CP-5`)
 - **Not run.** No live provider call was authorized for this set; nothing here
   is qualified.

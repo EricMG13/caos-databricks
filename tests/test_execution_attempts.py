@@ -79,9 +79,18 @@ def provider(
     )
 
 
-def _reserve(provider: ModuleProvider, node: RouteNode) -> UUID:
+def _reserve(
+    provider: ModuleProvider, node: RouteNode, price: ModelPrice | None = None
+) -> UUID:
+    """An attempt at `node` with a reservation: ESTIMATE under its own price,
+    or, under `price`, enough for any prompt this route builds."""
     attempt = start_attempt(provider.conn, provider.run_id, node.route_node_id)
-    reserve(provider.conn, attempt, ESTIMATE)
+    if price is None:
+        reserve(provider.conn, attempt, ESTIMATE)
+    else:
+        from caos.store.budget import reserve as reserve_under
+
+        reserve_under(provider.conn, attempt, Decimal("2.00"), price=price)
     return attempt
 
 
@@ -165,7 +174,11 @@ def test_two_attempts_are_attributed_explicitly_and_transport_reads_are_idle(
     provider: ModuleProvider,
 ) -> None:
     first, second = provider.route.nodes[:2]
-    a1, a2 = _reserve(provider, first), _reserve(provider, second)
+    # One input token at REPORTED per token: the ledger records exactly
+    # REPORTED. The reservation is taken under that same price, as the call is
+    # charged under it (CF-089).
+    charging = ModelPrice(MODEL, REPORTED, Decimal(0), PRICE.as_of)
+    a1, a2 = _reserve(provider, first, charging), _reserve(provider, second, charging)
     answers = provider.completions
     conn = provider.conn
 
@@ -179,14 +192,8 @@ def test_two_attempts_are_attributed_explicitly_and_transport_reads_are_idle(
         assert conn.info.transaction_status is TransactionStatus.IDLE
 
     chat = ScriptedChat(answer=reply, before=idle)
-    # One input token at REPORTED per token: the ledger records exactly REPORTED.
     provider = replace(
-        provider,
-        completions=fake_completions(
-            chat,
-            model=MODEL,
-            price=ModelPrice(MODEL, REPORTED, Decimal(0), PRICE.as_of),
-        ),
+        provider, completions=fake_completions(chat, model=MODEL, price=charging)
     )
     result = provider.execute(first.route_node_id, first.module_id, attempt_id=a1)
     accept_attempt(provider.conn, attempt_id=a1, accepted=_accepted(result))
@@ -440,6 +447,10 @@ def test_only_an_expired_or_queued_row_is_claimable_and_each_claim_advances_the_
     assert second == Lease(run_id, 2, 60)
     assert stop(conn, second, RefusalCode.CONTEXT_OVER_CEILING) is True
     conn.commit()
+    # CF-044: a genuine park (the run stays RUNNING, recoverable) appends its
+    # own event, the one thing that otherwise made a parked run invisible on
+    # the audit trail and the SSE tail.
+    assert [e.name for e in events_of(conn, run_id)] == [RunEvent.RUN_PARKED.value]
     assert _work(conn, run_id) == ("STOPPED", 2, None, "CONTEXT_OVER_CEILING", False)
     assert claim_run(conn, worker=WORKER, lease_seconds=60) is None, "stopped"
     assert requeue_run(conn, run_id) is True
@@ -534,6 +545,40 @@ def test_a_cancel_on_a_queued_run_ends_it_cancelled_once_with_its_event(
         requeue_run(conn, claimed)
     conn.rollback()
     assert request_cancel(conn, claimed) is False
+    conn.rollback()
+
+
+def test_a_cancel_on_an_abandoned_claimed_run_ends_it_cancelled_now(
+    work_run: tuple[StoreConnection, UUID, UUID],
+) -> None:
+    """CF-039: a CLAIMED row whose lease has expired is claimable again --
+    `claim_run` treats it exactly like QUEUED -- so nobody is coming back to
+    read `require_lease` and act on a recorded cancel. A cancel on it must end
+    the run now, the same as a QUEUED run, instead of recording a request an
+    abandoned holder will never see."""
+    conn, run_id, case_id = work_run
+    enqueue_run(conn, run_id)
+    conn.commit()
+    lease = claim_run(conn, worker=WORKER, lease_seconds=60)
+    assert lease is not None
+    _expire(conn, run_id)
+    assert request_cancel(conn, run_id) is True
+    conn.commit()
+    assert run_status(conn, run_id) is RunStatus.CANCELLED
+    assert [e.name for e in events_of(conn, run_id)] == [RunEvent.RUN_CANCELLED.value]
+    assert _work(conn, run_id) == ("DONE", lease.token, None, None, True)
+    assert request_cancel(conn, run_id) is False
+    conn.rollback()
+    # A live lease is untouched: only an expired one is treated as abandoned.
+    claimed = start_run(conn, case_id)
+    enqueue_run(conn, claimed)
+    conn.commit()
+    live = claim_run(conn, worker=WORKER, lease_seconds=60)
+    assert live is not None
+    assert request_cancel(conn, claimed) is True
+    conn.commit()
+    assert run_status(conn, claimed) is RunStatus.RUNNING
+    assert events_of(conn, claimed) == []
     conn.rollback()
 
 

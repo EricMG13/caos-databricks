@@ -60,25 +60,21 @@ def _report(tmp_path: Path, *, files: list[str], errors: list[str]) -> str:
 
 def test_scan_floor_refuses_a_report_that_covered_no_files(tmp_path: Path) -> None:
     report = _report(tmp_path, files=[], errors=[])
-    result = _run("scan_floors.py", report, "--min-files", "1", cwd=tmp_path)
+    result = _run("scan_floors.py", report, cwd=tmp_path)
     assert result.returncode != 0
     assert "0 files" in result.stdout + result.stderr
 
 
 def test_scan_floor_refuses_a_report_with_parse_errors(tmp_path: Path) -> None:
     report = _report(tmp_path, files=["caos/api.py"], errors=["syntax error"])
-    result = _run(
-        "scan_floors.py", report, "--min-files", "1", "--no-parse-errors", cwd=tmp_path
-    )
+    result = _run("scan_floors.py", report, "--no-parse-errors", cwd=tmp_path)
     assert result.returncode != 0
     assert "parse error" in result.stdout + result.stderr
 
 
 def test_scan_floor_accepts_a_report_that_covered_a_file(tmp_path: Path) -> None:
     report = _report(tmp_path, files=["caos/api.py"], errors=[])
-    result = _run(
-        "scan_floors.py", report, "--min-files", "1", "--no-parse-errors", cwd=tmp_path
-    )
+    result = _run("scan_floors.py", report, "--no-parse-errors", cwd=tmp_path)
     assert result.returncode == 0, result.stdout + result.stderr
 
 
@@ -114,7 +110,7 @@ def test_scan_floor_refuses_a_report_outside_the_invocation_directory(
     report = _report(outside, files=["caos/api.py"], errors=[])
     inside = tmp_path / "inside"
     inside.mkdir()
-    result = _run("scan_floors.py", report, "--min-files", "1", cwd=inside)
+    result = _run("scan_floors.py", report, cwd=inside)
     assert result.returncode != 0
     assert "is outside" in result.stdout + result.stderr
 
@@ -199,7 +195,7 @@ def test_main_accepts_a_report_covering_a_file(
         encoding="utf-8",
     )
     monkeypatch.chdir(tmp_path)
-    assert scan_floors.main([str(report), "--min-files", "1"]) == 0
+    assert scan_floors.main([str(report)]) == 0
 
 
 def test_main_refuses_a_report_outside_the_current_directory(
@@ -433,6 +429,63 @@ def test_tracked_python_keeps_a_path_containing_a_space(tmp_path: Path) -> None:
     assert tracked.tracked_python(tmp_path) == [tmp_path / "my file.py"]
 
 
+def _committed(repo: Path, name: str, text: str, message: str) -> str:
+    (repo / name).write_text(text, encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo), "add", name], check=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-qm", message], check=True)
+    return subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
+def test_tracked_python_at_reads_an_earlier_commit_not_the_working_tree(
+    tmp_path: Path,
+) -> None:
+    """FP-11: a gate re-measuring a base branch's own files, rather than
+    trusting a number that commit computed for itself, needs the base
+    commit's *text*, not whatever the working tree holds now."""
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "config", "user.email", "t@e.invalid"])
+    subprocess.run(["git", "-C", str(tmp_path), "config", "user.name", "t"])
+    base = _committed(tmp_path, "m.py", "x = 1\n", "base")
+    (tmp_path / "vendor").mkdir()
+    _committed(tmp_path, "vendor/skip.py", "y = 2\n", "vendor file")
+    _committed(tmp_path, "m.py", "x = 1\nz = 3\n", "changed after base")
+
+    at_base = tracked.tracked_python_at(tmp_path, base)
+
+    assert at_base == {"m.py": "x = 1\n"}
+
+
+def test_tracked_python_at_refuses_an_unresolvable_revision(tmp_path: Path) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    with pytest.raises(RuntimeError, match="could not list"):
+        tracked.tracked_python_at(tmp_path, "not-a-real-revision")
+
+
+def test_tracked_python_at_refuses_when_git_is_not_on_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(shutil, "which", lambda _name: None)
+    with pytest.raises(RuntimeError, match="git is not on PATH"):
+        tracked.tracked_python_at(tmp_path, "HEAD")
+
+
+def test_blob_at_reads_one_file_and_is_none_for_a_path_the_revision_lacks(
+    tmp_path: Path,
+) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "config", "user.email", "t@e.invalid"])
+    subprocess.run(["git", "-C", str(tmp_path), "config", "user.name", "t"])
+    base = _committed(tmp_path, "snapshot.json", "[]\n", "base")
+
+    assert tracked.blob_at(tmp_path, base, "snapshot.json") == "[]\n"
+    assert tracked.blob_at(tmp_path, base, "never-existed.json") is None
+
+
 def test_io_budget_reports_without_asserting(tmp_path: Path) -> None:
     api = tmp_path / "caos" / "api"
     api.mkdir(parents=True)
@@ -574,8 +627,68 @@ def test_main_prints_a_failure_line_per_floor_failed(
     report.write_text(json.dumps({"errors": [], "metrics": {}}), encoding="utf-8")
     monkeypatch.chdir(tmp_path)
 
-    assert scan_floors.main([str(report), "--min-files", "1"]) == 1
+    assert scan_floors.main([str(report)]) == 1
     assert "0 files" in capsys.readouterr().err
+
+
+def test_main_fails_on_a_bandit_report_carrying_findings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """N29: CI ran bandit twice, once to a JSON report this floor checked
+    and once bare so its own exit code could be the verdict. The floor is
+    the verdict now: a report that measured files and still carries a
+    finding fails here, so the bare second run is redundant."""
+    report = tmp_path / "bandit.json"
+    report.write_text(
+        json.dumps(
+            {
+                "errors": [],
+                "metrics": {"caos/api.py": {}},
+                "results": [{"issue_text": "hardcoded password"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    assert scan_floors.main([str(report)]) == 1
+    assert "found 1 issue" in capsys.readouterr().err
+
+
+def test_a_cobertura_report_never_carries_bandit_findings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The Cobertura-reshaped report this same floor checks for coverage.xml
+    has no `results` key at all, so the bandit-findings check never fires
+    on it."""
+    report = tmp_path / "coverage.xml"
+    report.write_text(
+        "<coverage><packages><package><classes>"
+        '<class filename="caos/api.py"></class>'
+        "</classes></package></packages></coverage>",
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    assert scan_floors.main([str(report), "--cobertura"]) == 0
+
+
+def test_main_refuses_a_bare_cover_flag_with_no_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """N46: `nargs="*"` let a bare `--cover` (no directory after it) leave
+    `args.cover` empty, so `if args.cover:` in `main` took the false branch
+    and skipped the claim check silently -- a scan claimed to cover nothing
+    passed as though nothing needed claiming."""
+    report = tmp_path / "bandit.json"
+    report.write_text(json.dumps({"errors": [], "metrics": {}}), encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(SystemExit) as caught:
+        scan_floors.main([str(report), "--cover"])
+
+    assert caught.value.code == 2
+    assert "--cover" in capsys.readouterr().err
 
 
 def test_check_tested_module_guard_exits_with_mains_return_code(
@@ -601,10 +714,7 @@ def test_scan_floors_module_guard_exits_with_mains_return_code(
     )
     monkeypatch.chdir(tmp_path)
 
-    assert (
-        _run_as_main("scan_floors.py", [str(report), "--min-files", "1"], monkeypatch)
-        == 0
-    )
+    assert _run_as_main("scan_floors.py", [str(report)], monkeypatch) == 0
 
 
 def test_tracked_python_fails_closed_on_an_unreadable_path(tmp_path: Path) -> None:
@@ -624,68 +734,6 @@ def test_tracked_python_fails_closed_on_an_unreadable_path(tmp_path: Path) -> No
             tracked.tracked_python(tmp_path)
     finally:
         locked.chmod(0o755)
-
-
-def test_the_image_floor_refuses_a_scan_that_examined_nothing(tmp_path: Path) -> None:
-    """An image report with no Results is the same failure as a bandit report
-    with no metrics: it ran, exited zero, and looked at nothing."""
-    report = tmp_path / "trivy.json"
-    report.write_text(json.dumps({"Results": []}), encoding="utf-8")
-
-    result = _run("scan_floors.py", str(report), "--trivy", cwd=tmp_path)
-
-    assert result.returncode != 0
-    assert "scanned nothing" in result.stdout + result.stderr
-
-
-def test_the_image_floor_accepts_a_scan_with_targets(tmp_path: Path) -> None:
-    report = tmp_path / "trivy.json"
-    report.write_text(
-        json.dumps(
-            {"Results": [{"Target": "caos:ci (debian 13)", "Vulnerabilities": []}]}
-        ),
-        encoding="utf-8",
-    )
-
-    result = _run("scan_floors.py", str(report), "--trivy", cwd=tmp_path)
-
-    assert result.returncode == 0, result.stdout + result.stderr
-
-
-def test_main_refuses_a_trivy_scan_that_examined_nothing(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    # In-process, unlike the _run() tests above: coverage.py cannot trace a
-    # subprocess, and the --trivy branch of main()'s body was otherwise
-    # measured nowhere.
-    report = tmp_path / "trivy.json"
-    report.write_text(json.dumps({"Results": []}), encoding="utf-8")
-    monkeypatch.chdir(tmp_path)
-
-    assert scan_floors.main([str(report), "--trivy"]) == 1
-    assert "scanned nothing" in capsys.readouterr().err
-
-
-def test_main_accepts_a_trivy_scan_with_targets(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    report = tmp_path / "trivy.json"
-    report.write_text(
-        json.dumps(
-            {"Results": [{"Target": "caos:ci (debian 13)", "Vulnerabilities": []}]}
-        ),
-        encoding="utf-8",
-    )
-    monkeypatch.chdir(tmp_path)
-
-    assert scan_floors.main([str(report), "--trivy"]) == 0
-    assert "examined 1 target" in capsys.readouterr().out
-
-
-def test_scanned_targets_ignores_a_result_with_no_target() -> None:
-    report: dict[str, object] = {"Results": [{"Class": "lang-pkgs"}, {"Target": "app"}]}
-
-    assert scan_floors.scanned_targets(report) == ["app"]
 
 
 def test_io_budget_refuses_a_second_route_module_that_declares_no_budget(
@@ -838,6 +886,119 @@ def test_io_budget_refuses_a_value_that_is_not_a_bounded_count(
     (api / "routes.py").write_text(source, encoding="utf-8")
     assert io_budget.main(["--assert", "--root", str(tmp_path)]) == 1
     assert not io_budget.within(io_budget.declared_value(api / "routes.py", tmp_path))
+
+
+def test_record_measurements_snapshots_the_measured_modules(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F123, N35: `--record` snapshots `MEASURED_MODULES`' own current
+    IO_BUDGET and, where declared, BLOB_BUDGET -- the blob dimension, which
+    only a route that downloads verified bytes declares at all."""
+    api = tmp_path / "caos" / "api" / "reads"
+    api.mkdir(parents=True)
+    (api / "analysis.py").write_text(
+        "IO_BUDGET = 249\nBLOB_BUDGET = 40\n", encoding="utf-8"
+    )
+    (api / "run.py").write_text("IO_BUDGET = 7\n", encoding="utf-8")
+    monkeypatch.setattr(
+        io_budget,
+        "MEASURED_MODULES",
+        (Path("caos/api/reads/analysis.py"), Path("caos/api/reads/run.py")),
+    )
+
+    recorded = io_budget.record_measurements(tmp_path)
+
+    assert recorded == {
+        "caos/api/reads/analysis.py": {"io": 249, "blob": 40},
+        "caos/api/reads/run.py": {"io": 7},
+    }
+
+
+def test_measured_problems_refuses_a_declaration_fallen_below_its_floor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F123: a declared 37 once cost 149 round trips on the route that
+    actually reached it. A number in range and a number anyone measured
+    are different claims; this is the check that holds a module to the
+    second one, not only the first."""
+    api = tmp_path / "caos" / "api" / "reads"
+    api.mkdir(parents=True)
+    (api / "analysis.py").write_text(
+        "IO_BUDGET = 30\nBLOB_BUDGET = 5\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(
+        io_budget, "MEASURED_MODULES", (Path("caos/api/reads/analysis.py"),)
+    )
+    measured = tmp_path / "measured.json"
+    measured.write_text(
+        json.dumps({"caos/api/reads/analysis.py": {"io": 37, "blob": 10}})
+    )
+
+    problems = io_budget.measured_problems(tmp_path, measured)
+
+    assert any("IO_BUDGET is 30, below the 37" in p for p in problems)
+    assert any("BLOB_BUDGET is 5, below the 10" in p for p in problems)
+
+    (api / "analysis.py").write_text(
+        "IO_BUDGET = 37\nBLOB_BUDGET = 10\n", encoding="utf-8"
+    )
+    assert io_budget.measured_problems(tmp_path, measured) == []
+
+
+def test_measured_problems_names_a_recorded_module_no_longer_present(
+    tmp_path: Path,
+) -> None:
+    measured = tmp_path / "measured.json"
+    measured.write_text(json.dumps({"caos/api/reads/gone.py": {"io": 5}}))
+
+    problems = io_budget.measured_problems(tmp_path, measured)
+
+    assert problems == [
+        "caos/api/reads/gone.py: recorded in measured.json but no longer a file"
+    ]
+
+
+def test_measured_problems_refuses_an_unreadable_file(tmp_path: Path) -> None:
+    assert io_budget.measured_problems(tmp_path, tmp_path / "absent.json") == [
+        f"{tmp_path / 'absent.json'}: unreadable"
+    ]
+
+
+def test_measured_problems_matches_what_is_committed() -> None:
+    assert io_budget.measured_problems() == []
+
+
+def test_main_record_writes_the_measurements_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    api = tmp_path / "caos" / "api" / "reads"
+    api.mkdir(parents=True)
+    (api / "analysis.py").write_text("IO_BUDGET = 12\n", encoding="utf-8")
+    analysis = Path("caos/api/reads/analysis.py")
+    monkeypatch.setattr(io_budget, "MEASURED_MODULES", (analysis,))
+
+    assert io_budget.main(["--record", "--root", str(tmp_path)]) == 0
+
+    written = tmp_path / "tests" / "io_measurements.json"
+    assert json.loads(written.read_text()) == {"caos/api/reads/analysis.py": {"io": 12}}
+
+
+def test_main_refuses_when_a_measured_module_fell_below_its_recorded_floor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    api = tmp_path / "caos" / "api" / "reads"
+    api.mkdir(parents=True)
+    (api / "analysis.py").write_text("IO_BUDGET = 12\n", encoding="utf-8")
+    analysis = Path("caos/api/reads/analysis.py")
+    monkeypatch.setattr(io_budget, "MEASURED_MODULES", (analysis,))
+    measured = tmp_path / "tests"
+    measured.mkdir()
+    (measured / "io_measurements.json").write_text(
+        json.dumps({"caos/api/reads/analysis.py": {"io": 249}})
+    )
+
+    assert io_budget.main(["--root", str(tmp_path)]) == 0
+    assert io_budget.main(["--assert", "--root", str(tmp_path)]) == 1
 
 
 def test_io_budget_reads_a_package_module_too(tmp_path: Path) -> None:

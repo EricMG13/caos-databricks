@@ -35,6 +35,9 @@ STREAM_NAMES: Mapping[str, EventName | None] = MappingProxyType(
         RunEvent.RUN_FAILED.value: "run_terminal",
         RunEvent.RUN_BLOCKED.value: "run_terminal",
         RunEvent.RUN_CANCELLED.value: "run_terminal",
+        # CF-044: the run itself stays RUNNING (parked, not ended), so this
+        # is a refetch like any other in-flight update, not a terminal frame.
+        RunEvent.RUN_PARKED.value: "run_progress",
         "SOURCE_WITHDRAWN": "sources_changed",
         "SOURCES_ADMITTED": "sources_changed",
         "GATE_RELEASED:SOURCE_SET": "runs_changed",

@@ -131,6 +131,7 @@ class QualificationRead(BaseModel):
     provider: Id | None
     model: Id | None
     reviewer: Text | None
+    reviewer_id: UUID | None
     decided_at: AwareDatetime | None
     expires_at: AwareDatetime | None
 
@@ -182,24 +183,30 @@ CLEARS: Mapping[RefusalCode, str] = {
     _C.PROVIDER_RESPONSE_INVALID: "Retry the attempt.",
     _C.AUTHORITY_BYTES_MISMATCH: "An operator must restore the pinned bundle.",
     _C.AUTHORITY_MODULE_UNKNOWN: "Name a module the bundle declares.",
-    _C.ENVELOPE_INVALID: "Retry the attempt.",
-    _C.ENVELOPE_UNDECLARED_FIELD: "Retry the attempt.",
-    _C.ENVELOPE_UNCITED_CLAIM: "Retry the attempt.",
-    _C.HANDOFF_MALFORMED: "An operator must verify the stored handoff.",
-    _C.HANDOFF_BLOCKED: "Change the input that blocked the module.",
-    _C.HANDOFF_IDENTITY_MISMATCH: "An operator must verify the stored handoff.",
-    _C.HANDOFF_INCOMPLETE: "An operator must verify the stored handoff.",
-    _C.HANDOFF_UNDECLARED_FIELD: "An operator must verify the stored handoff.",
+    _C.HANDOFF_MALFORMED: (
+        "Retry the attempt; an operator must verify a stored handoff refused on read."
+    ),
+    _C.HANDOFF_BLOCKED: (
+        "Supply what the module's stated blocker names, then start a new run."
+    ),
+    _C.HANDOFF_IDENTITY_MISMATCH: (
+        "Retry the attempt; an operator must verify a stored handoff refused on read."
+    ),
+    _C.HANDOFF_INCOMPLETE: (
+        "Retry the attempt; an operator must verify a stored handoff refused on read."
+    ),
+    _C.HANDOFF_UNDECLARED_FIELD: (
+        "Retry the attempt; an operator must verify a stored handoff refused on read."
+    ),
     _C.HANDOFF_MODULE_UNSUPPORTED: "Select a route the adapter executes.",
     _C.CALL_OUTCOME_UNEXPLAINED: "An operator must decide whether to pay again.",
     _C.ARTIFACT_RECORD_MISMATCH: "An operator must verify the stored record.",
-    _C.READINESS_INVALID: "An operator must verify the gate artifact.",
-    _C.READINESS_INCOMPLETE: "Retry the gate attempt.",
     _C.NOT_AUTHENTICATED: "Sign in.",
     _C.ENDPOINT_NOT_FOUND: "Use a declared path and method.",
     _C.EDGE_NOT_TRUSTED: "Reach the service through its edge.",
     _C.ORIGIN_REFUSED: "Send the request from the service's own origin.",
     _C.EDGE_CONFIG_INVALID: "An operator must correct the edge configuration.",
+    _C.CONCURRENCY_LIMIT_REACHED: "Retry shortly.",
     _C.INTERNAL_FAULT: "Retry; an operator must investigate if it persists.",
     _C.NOT_AUTHORISED: "Obtain the required standing on the case.",
     _C.REQUEST_INVALID: "Send a well-formed request body.",
@@ -208,11 +215,12 @@ CLEARS: Mapping[RefusalCode, str] = {
     _C.RUN_INPUT_NOT_PINNED: "Pin the run input first.",
     _C.RUN_ALREADY_STARTED: "Nothing; the run is already started.",
     _C.RUN_NOT_STOPPED: "Retry only a stopped run.",
+    _C.QUEUED_RUNS_LIMIT_REACHED: (
+        "Wait for one of your queued or running runs to end, or cancel one."
+    ),
     _C.ROUTE_NOT_ENABLED: "Select a route the adapter executes.",
     _C.COMMAND_EXPECTATION_STALE: "Re-read the run and act on what it shows.",
     _C.METHODOLOGY_INPUT_INVALID: "Correct the calculation inputs.",
-    _C.FORECAST_CHAIN_BROKEN: "Link each period to the one before it.",
-    _C.FORECAST_RESIDUAL_UNRECONCILED: "Reconcile the balances within tolerance.",
     _C.FORECAST_DRIVER_NOT_READY: "Complete the driver first.",
     _C.DELIVERABLE_PAYLOAD_INVALID: "Correct the deliverable payload.",
     _C.DELIVERABLE_NOT_FOUND: "Name a saved revision of this case.",
@@ -374,6 +382,12 @@ class RunSummary(BaseModel):
     created_at: AwareDatetime
     profile_id: Id | None
     selection_id: Id | None
+    # CF-044: a run parked by its worker (`run_work.state = 'STOPPED'`) still
+    # reads `status: RUNNING` here -- the run itself is recoverable, not
+    # ended -- so this is the one field that tells a list apart from a run
+    # nobody is currently driving. `None` for a run never enqueued or still
+    # being worked.
+    stop_code: RefusalCode | None
 
 
 class MemberRow(BaseModel):
@@ -559,6 +573,11 @@ class RunView(BaseModel):
     route_digest: Sha256 | None
     build_id: Id | None
     source_set_version: int | None
+    # The run's own pinned input, when one is pinned (N48): Start and Retry
+    # both take it back, so a client that reloaded without an open preview
+    # still has what it needs to send either, rather than only a client that
+    # kept a preview's answer in memory.
+    input_fingerprint: Sha256 | None
     subject: RunSubjectView | None
     gates: Annotated[list[GateView], Field(max_length=len(Gate))]
     nodes: Annotated[list[NodeView], Field(max_length=ROUTE_NODES_MAX)]
@@ -978,6 +997,13 @@ class CommitteeBody(ReportBody):
     frozen_by: UUID
     filed_by: UUID | None
     receipt: FiledReceipt | None
+    # Committee never serves a revision `caos/api/reads/deliverable.py` would
+    # refuse `DELIVERABLE_NOT_FROZEN` (N4): every revision it names is already
+    # proven frozen, so `render_url` is never a dead link. `package_url` names
+    # the same revision's audit package once `state` is "filed", and is null
+    # until then -- there is no receipt for `read_deliverable_package` to prove.
+    render_url: Text
+    package_url: Text | None
 
 
 SectionStatus = Literal["complete", "partial"]
@@ -1105,8 +1131,16 @@ class FrameView(BaseModel):
     y_axis: Literal["down", "up"]
 
 
+# Why a reader of the rendered page may not see a line's text (N27): drawn in
+# text render mode 3 (a scan's OCR layer), painted near the colour behind it,
+# or in glyphs under 2 pt. `caos.evidence.extract.HIDDEN_REASONS`, as the wire
+# names them; a line with nothing to note -- every line of a source extracted
+# before there were marks -- carries none.
+HiddenReason = Literal["near_background", "render_mode_3", "under_2pt"]
+
+
 class PageLine(BaseModel):
-    """One line of the token index: joined text and its union rectangle."""
+    """One line of the token index: joined text, union rectangle, hidden marks."""
 
     model_config = _CLOSED
 
@@ -1115,6 +1149,7 @@ class PageLine(BaseModel):
     y0: float
     x1: float
     y1: float
+    hidden: Annotated[list[HiddenReason], Field(max_length=3)]
 
 
 class PageBody(BaseModel):
@@ -1263,11 +1298,14 @@ class RunWork(BaseModel):
 
 
 class SignVerdict(BaseModel):
-    """A reviewer's verdict document: the six bindings `read_verdict` declares,
-    and nothing else. The shape is closed here; what the document *means* --
-    a naive or future `decided_at`, a passed expiry -- is the reader's to
-    decide, so the moments travel as text and are parsed once, there. The
-    reviewer's identity is not a field: the host derives it from the actor.
+    """A reviewer's verdict document: the seven bindings `read_verdict`
+    declares, and nothing else. The shape is closed here; what the document
+    *means* -- a naive or future `decided_at`, a passed expiry -- is the
+    reader's to decide, so the moments travel as text and are parsed once,
+    there. The reviewer's identity is not a field: the host derives it from
+    the actor. `evidence_sha256` names the exact evidence identity the
+    document was read against (N44): the other six can agree for two
+    different snapshots of the same set, build and provider.
     """
 
     model_config = _CLOSED
@@ -1278,6 +1316,7 @@ class SignVerdict(BaseModel):
     decided_at: Moment
     expires_at: Moment
     reviewer: Id
+    evidence_sha256: Sha256
 
 
 class VerdictRecorded(BaseModel):

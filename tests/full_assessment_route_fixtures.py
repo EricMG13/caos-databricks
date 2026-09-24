@@ -62,6 +62,7 @@ from lite_route_fixtures import (
     realistic_handoff_markdown,
 )
 
+from caos.evidence.extract import LINES_PER_PAGE
 from caos.graph.route import resolve_route
 from caos.methodology.handoff import (
     HostIdentity,
@@ -97,10 +98,16 @@ ROUTE_QUOTES = {
     "CP-5": QA_QUOTE,
     "CP-6": CP6_QUOTE,
 }
+# Each quoted line once, on a page of its own: two modules citing one line
+# cite the one line, and a line shown twice on a page is ambiguous (N28).
+_QUOTED_LINES = tuple(dict.fromkeys(ROUTE_QUOTES.values()))
 _QUOTE_PAGE = "\n".join(
     (
-        *ROUTE_QUOTES.values(),
-        *(f"Full assessment evidence-page spacer {index}" for index in range(41)),
+        *_QUOTED_LINES,
+        *(
+            f"Full assessment evidence-page spacer {index}"
+            for index in range(LINES_PER_PAGE - len(_QUOTED_LINES))
+        ),
     )
 ).encode()
 ROUTE_PACK = b"\n".join(

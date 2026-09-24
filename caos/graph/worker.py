@@ -35,6 +35,7 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
 from caos.graph.checkpoint import checkpointer, close_checkpointer
+from caos.graph.route import ResolvedRoute, route_digest
 from caos.graph.runtime import Execution, Provider, ProviderResult, run_route
 from caos.methodology.bundle import Bundle
 from caos.methodology.runner import ModuleProvider
@@ -44,6 +45,7 @@ from caos.pricing import price_from_environment as price_from_environment
 from caos.provider import CompletionProvider, resend_checked
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection, apply_schema, connect, rollback_or_close
+from caos.store.budget import configured_ceiling
 from caos.store.gates import execution_input
 from caos.store.lakebase import note_connect_failure, store_url
 from caos.store.outcomes import execution_reads
@@ -83,6 +85,13 @@ ExecutionFor = Callable[[StoreConnection, UUID, Lease], Execution]
 # The idle heartbeat cadence (DL-10) and the most the backoff ever doubles.
 BEAT_SECONDS = 10.0
 MAX_DOUBLINGS = 30
+# CF-041: well under LEASE_SECONDS, so a single wedged statement -- lock
+# contention, a stuck autovacuum -- cannot hold the worker's own connection
+# past the point its lease has already been reclaimed and a second worker is
+# free to claim the same run; every query this loop makes is a handful of
+# short reads and writes, never a model call, which is not sent over this
+# connection at all.
+STATEMENT_TIMEOUT_MS = 30_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,6 +118,11 @@ class _Stoppable:
     @property
     def model(self) -> str:
         return self.inner.model
+
+    @property
+    def price(self) -> object:
+        """The price the inner provider states it bills at (`pricing.bills_at`)."""
+        return getattr(self.inner, "price", None)
 
     def check_context(self, route_node_id: str, module_id: str) -> int:
         if self.stopping.is_set():
@@ -175,6 +189,7 @@ def work_once(
     # `claim_run` commits alone, so this beat is its own unit too.
     _beat(conn, config, "WORKING", 0)
     execution: Execution | None = None
+    route: ResolvedRoute | None = None
     try:
         execution = execution_for(conn, lease.run_id, lease)
         with execution_reads(conn):
@@ -206,7 +221,7 @@ def work_once(
         raise Refusal(RefusalCode.STORE_UNAVAILABLE) from None
     except Refusal as refused:
         if _refused(conn, lease, refused):
-            _forget(execution, lease.run_id)
+            _forget(execution, lease.run_id, route)
     except Exception as fault:  # noqa: BLE001 -- neither a refusal nor a store error
         # Parked, not raised: a worker that died holding the claim would find the
         # same run first after every lease expiry and never reach the rest of the
@@ -216,21 +231,30 @@ def work_once(
         where = f"{frames[-1].filename}:{frames[-1].lineno}" if frames else "?"
         print(f"{type(fault).__name__} at {where}", file=sys.stderr)
         if _settle(conn, lambda: stop(conn, lease, RefusalCode.INTERNAL_FAULT)):
-            _forget(execution, lease.run_id)
+            _forget(execution, lease.run_id, route)
     return lease.run_id
 
 
-def _forget(execution: Execution | None, run_id: UUID) -> None:
+def _forget(
+    execution: Execution | None, run_id: UUID, route: ResolvedRoute | None
+) -> None:
     """Drop the checkpoint thread of a run this worker just parked or ended
     (DL-8): the thread holds position only (D6), a requeued run re-derives
     its frontier from the ledger, and a thread nobody will resume is rows
     nothing reads. Best effort: the run's status is already committed. Only
     after this worker's own write moved the run (ST-5): a worker whose lease
-    was lost would otherwise delete the thread its successor is driving."""
-    if execution is None or execution.checkpointer is None:
+    was lost would otherwise delete the thread its successor is driving.
+
+    `route` names the same pinned route `run_route` bound the thread to
+    (CF-037): a pass that never resolved one -- the claim's own read refused
+    before `run_route` was ever called -- opened no thread, so there is
+    nothing here to forget.
+    """
+    if execution is None or execution.checkpointer is None or route is None:
         return
+    thread = f"{run_id}:{route_digest(route)}"
     with suppress(psycopg.Error, OSError, Refusal):
-        execution.checkpointer.delete_thread(str(run_id))
+        execution.checkpointer.delete_thread(thread)
 
 
 def _refused(conn: StoreConnection, lease: Lease, refused: Refusal) -> bool:
@@ -268,6 +292,10 @@ def _refused(conn: StoreConnection, lease: Lease, refused: Refusal) -> bool:
     if code in STORE_FAULTS:
         _settle(conn, lambda: release(conn, lease))
         raise Refusal(code)
+    # CF-044: the code alone, the same shape the sibling branch above already
+    # prints for the same reason -- a run parked with nothing on stderr is a
+    # worker that went quiet for a reason nobody watching the process learns.
+    print(code.value, file=sys.stderr)
     return _settle(conn, lambda: stop(conn, lease, code))
 
 
@@ -383,8 +411,22 @@ def run_worker(
             if claimed is None:
                 stopping.wait(pause_seconds(config, failures))
     finally:
+        _beat_stopped(conn, config, failures)
         _closed(conn)
     return 0
+
+
+def _beat_stopped(
+    conn: StoreConnection | None, config: WorkerConfig, failures: int
+) -> None:
+    """N37: a beat of STOPPED, distinct from BACKOFF or a merely stale
+    POLLING/WORKING, so a fleet read tells a worker that ended here on
+    purpose from one whose last word just went quiet. Best effort, on
+    whatever connection the loop still holds when it stops; `_beat` never
+    raises. Its own function so `run_worker`'s `finally` costs no added
+    branch (C901)."""
+    if conn is not None and not conn.closed:
+        _beat(conn, config, "STOPPED", failures)
 
 
 def _closed(conn: StoreConnection | None) -> None:
@@ -428,6 +470,11 @@ class Configured:
 
 def _configured() -> Configured:
     """Configure from the environment, or refuse having made no call."""
+    # CF-048: checked first, before the provider or the store, the same way a
+    # malformed CAOS_MODEL_PRICE refuses below -- so a CAOS_RUN_CEILING nobody
+    # could price refuses the worker at boot instead of sitting invisible
+    # until the first run a caller starts under it.
+    configured_ceiling()
     completions = from_environment()
     url, root = _store_configuration()
     bundle = Bundle(VENDORED_BUNDLE)
@@ -472,7 +519,9 @@ def _drive(configured: Configured, blobs: BlobStore, stopping: Event) -> int:
         # Minted at connect time, as the API and the checkpoint pool do (F30,
         # F37): a URL frozen at boot dies with its credential, and the loop's
         # reconnect would then fail forever without ever re-minting.
-        conn_factory=lambda: connect(store_url()),
+        conn_factory=lambda: connect(
+            store_url(), statement_timeout_ms=STATEMENT_TIMEOUT_MS
+        ),
         blobs=blobs,
     )
 

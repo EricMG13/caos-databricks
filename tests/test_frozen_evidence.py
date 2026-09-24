@@ -18,7 +18,7 @@ from caos.evidence.citations import Citation, verify_citations
 from caos.evidence.ingest import Document, admit_pack
 from caos.evidence.read import read_block
 from caos.refusals import Refusal
-from caos.store import StoreConnection, connect
+from caos.store import STORE_SCHEMA, StoreConnection, connect
 from caos.store.run_inputs import load_run_input, pin_run_input
 
 __all__ = ["prepared"]
@@ -119,7 +119,7 @@ def test_sealed_source_refuses_valid_unique_late_insert(
         conn.execute(
             "CREATE SCHEMA shadow; CREATE TABLE shadow.sources (LIKE sources);"
             " CREATE TABLE shadow.source_extractions (LIKE source_extractions);"
-            " SET search_path TO shadow, public"
+            f" SET search_path TO shadow, {STORE_SCHEMA}"
         )
     with pytest.raises(psycopg.errors.CheckViolation, match="sealed"):
         if path == "copy":
@@ -135,7 +135,9 @@ def test_sealed_source_refuses_valid_unique_late_insert(
         elif path == "select":
             conn.execute(f"INSERT INTO {table} SELECT {placeholders}", row)
         else:
-            _insert(conn, "public." + table if path == "shadow" else table, source)
+            _insert(
+                conn, f"{STORE_SCHEMA}.{table}" if path == "shadow" else table, source
+            )
     conn.rollback()
     assert conn.execute(f"SELECT count(*) FROM {table}").fetchone() == (1,)
 

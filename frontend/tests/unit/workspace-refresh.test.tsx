@@ -67,6 +67,8 @@ const committee = () => ({
     signed_by: [CASE],
     frozen_by: RUN,
     filed_by: null,
+    render_url: "/render",
+    package_url: null,
     receipt: null,
   },
 });

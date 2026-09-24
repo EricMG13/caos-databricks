@@ -8,7 +8,11 @@ on:
   push:
     branches: [main, rebuild/databricks]
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    # `edited` too (FP-11): retargeting a PR's base branch is an "edited"
+    # event, and every gate that reads `github.base_ref` -- this one
+    # included -- must re-run against the new base rather than leave a
+    # result computed against the old one showing as still current.
+    types: [opened, synchronize, reopened, ready_for_review, edited]
 
 permissions:
   contents: read
@@ -50,8 +54,12 @@ jobs:
         run: |
           base=HEAD^
           if [ -n "$BASE_REF" ]; then base="origin/$BASE_REF"; elif git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then base="$BEFORE"; fi
-          git show "$base:tests/gate_baseline.json" > "$RUNNER_TEMP/base.json"
-          uv run python scripts/check_gate_config.py --against "$RUNNER_TEMP/base.json"
+          # `--against` measures $base's own tracked files fresh, under this
+          # commit's SUPPRESSIONS patterns (FP-11), rather than trusting its
+          # committed tests/gate_baseline.json at face value -- a PR that
+          # only weakened a pattern could otherwise make its own count look
+          # like a fall against a base measured under the old, stronger one.
+          uv run python scripts/check_gate_config.py --against "$base"
 
   types:
     runs-on: ubuntu-latest
@@ -105,12 +113,14 @@ jobs:
         with: {version: "0.12.5", enable-cache: true}
       - run: uv sync --locked --all-groups
       # `|| true` so the floor check, not bandit's exit code, is the verdict:
-      # a report that parsed nothing must fail even when it found nothing.
+      # a report that parsed nothing must fail even when it found nothing,
+      # and one that carries a finding fails on that finding below (N29) --
+      # a second, bare `bandit -r caos scripts icm` once ran the same scan
+      # again just to let its own exit code be the verdict too.
       - run: uv run bandit -r caos scripts icm -f json -o bandit.json || true
       - run: |
           uv run python scripts/scan_floors.py bandit.json --no-parse-errors \
                  --cover caos scripts icm --unscanned tests
-      - run: uv run bandit -r caos scripts icm
       # The environment `uv sync --locked` built from the hashed lock is what runs.
       - run: uv run pip-audit --strict
       # The whole history, as gate A12 runs it locally. The action scans only
@@ -194,7 +204,12 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: {fetch-depth: 0}
-      - run: python3 scripts/check_pr_size.py "origin/${{ github.base_ref }}"
+      # FP-40: github.base_ref is a PR's own base-branch name and travels
+      # through env:, not spliced into the run: script -- the other job's
+      # own pattern for the same value.
+      - run: python3 scripts/check_pr_size.py "origin/$BASE_REF"
+        env:
+          BASE_REF: ${{ github.base_ref }}
 
   frontend:
     runs-on: ubuntu-latest
@@ -213,6 +228,24 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      # FP-21 / CF-063: these two security tests (the dev proxy strips a
+      # forged client identity; a production build carries no fixture or
+      # demo route) skip without Node, the `test` job installs no Node,
+      # and this job never ran pytest -- so neither ever ran anywhere.
+      # CAOS_REQUIRE_NODE turns that skip into a failure (-rs also prints
+      # the reason if one somehow still fires), the same pattern
+      # CAOS_REQUIRE_POSTGRES already uses for the store suite.
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with: {version: "0.12.5", enable-cache: true}
+      - name: frontend security tests that need a real Node and build
+        working-directory: .
+        env:
+          CAOS_REQUIRE_NODE: "1"
+        run: |
+          uv sync --locked --all-groups
+          uv run pytest -rs --no-cov \
+            "tests/test_frontend_modes.py::test_the_dev_proxy_strips_client_identity_and_injects_the_local_actor" \
+            "tests/test_frontend_modes.py::test_production_build_contains_no_fixture_or_demo_route"
       - name: nine section routes in the export
         run: |
           for s in directory upload analysis book run model report committee admin; do

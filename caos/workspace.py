@@ -53,6 +53,12 @@ def _client(identity: tuple[str, ...]) -> WorkspaceClient:
         config = Config(
             http_timeout_seconds=HTTP_TIMEOUT_SECONDS,
             retry_timeout_seconds=RETRY_TIMEOUT_SECONDS,
+            # `FilesExt.download()` tries a presigned-URL mode first (SDK
+            # 0.140.0, `mixins/files.py`) that no local test exercises and
+            # this workspace's Apps proxy has never been proven against
+            # (CF-095); this pins every download to the plain Files API path
+            # `caos/blobs.py`'s tests cover instead.
+            disable_experimental_files_api_client=True,
         )
         return WorkspaceClient(config=config)
     except (ValueError, OSError):

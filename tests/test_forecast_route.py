@@ -10,19 +10,31 @@ from typing import Any
 from uuid import UUID
 
 import pytest
-from canonical_fixtures import AUTHORED, CATALOG, CONTRACT, fields_from_prompt, wire
+from canonical_fixtures import (
+    AUTHORED,
+    CATALOG,
+    CONTRACT,
+    fields_from_prompt,
+    skill,
+    wire,
+)
 from canonical_route_fixtures import LIMITATION, PACK, RouteCompletions
+from conftest import tamper
 from forecast_fixtures import forecast_request
 from lite_route_fixtures import _yaml
+from test_canonical_execution import _node
 from test_canonical_runtime import _module_provider, _run_route, _status
 from test_execution_freshness import _Harness
 from test_relative_value_route import harness as _harness
 
 from caos.boundary_text import BoundaryText
 from caos.calculators.cash_flow import cash_flow_forecast
+from caos.deliverable.canonical import Revision, canonical_payload
 from caos.evidence.ingest import Document
 from caos.graph.route import ResolvedRoute, RouteExtensions, resolve_route
 from caos.methodology.forecast import forecast_projection
+from caos.methodology.handoff import read_record, record_bytes, validate_markdown
+from caos.methodology.invocation import host_identity
 from caos.provider import Completion
 from caos.qualification.matrix import (
     ExpectedCitation,
@@ -33,7 +45,7 @@ from caos.qualification.matrix import (
     build_matrix,
 )
 from caos.qualification.proof import assert_orchestration_proof
-from caos.refusals import RefusalCode
+from caos.refusals import Refusal, RefusalCode
 
 harness = _harness
 
@@ -124,9 +136,8 @@ class ForecastCompletions(RouteCompletions):
             return super().complete(prompt, json_object=json_object)
         self.prompts.append(prompt)
         request = request_data()
-        bindings = {
-            p: {"module_id": OWNER[p], "quote": OWNER_QUOTES[OWNER[p]]} for p in ROWS
-        }
+        # Each binding quotes its owner's one anchored line (N28).
+        bindings = {p: {"module_id": OWNER[p], "quote": ROWS[p]} for p in ROWS}
         result = cash_flow_forecast(request)
         if self.defect == "missing":
             del bindings["/opening/cash"]
@@ -170,7 +181,7 @@ class ForecastCompletions(RouteCompletions):
                 markdown,
                 [
                     {"source_id": str(self.source_id), "page": 1, "matched_text": q}
-                    for q in OWNER_QUOTES.values()
+                    for q in ROWS.values()
                 ],
             ),
             Decimal("0.0000041"),
@@ -267,6 +278,98 @@ def test_forecast_retains_an_accepted_owner_restriction(harness: _Harness) -> No
     answers.qa_by_module = {"CP-1": "Restricted"}
     assert _run_route(harness, _module_provider(harness, answers)) is None
     assert _status(harness) == "COMPLETE"
+
+
+def _forge_cp_cf(harness: _Harness, answers: ForecastCompletions) -> None:
+    """Replace the accepted, restriction-retaining CP-CF artifact with a
+    self-consistent forgery that drops the restriction it was accepted having
+    kept, built by the exact same completion code with the defect off, so it
+    is vendor-valid -- just no longer honest about what CP-1 restricted."""
+    node = _node(harness, "CP-CF")
+    row = harness.conn.execute(
+        "SELECT attempt_id, artifact_sha256, record_sha256 FROM artifacts"
+        " WHERE run_id=%s AND route_node_id=%s",
+        (harness.run_id, node.route_node_id),
+    ).fetchone()
+    assert row is not None
+    attempt, old_artifact, old_record = row
+    identity = host_identity(
+        harness.conn,
+        harness.bundle,
+        run_id=harness.run_id,
+        route=harness.route,
+        node=node,
+        attempt_id=attempt,
+    )
+    record = read_record(
+        harness.blobs,
+        artifact_sha256=old_artifact,
+        record_sha256=old_record,
+        expected=identity,
+    )
+    [prompt] = [
+        p for p in answers.prompts if fields_from_prompt(p)["module_id"] == "CP-CF"
+    ]
+    passed = ForecastCompletions(harness.source_id)
+    passed.complete(prompt)
+    markdown = passed.answers[-1]
+    artifact = harness.blobs.put(markdown)
+    projections = validate_markdown(
+        CONTRACT,
+        CATALOG,
+        skill("CP-CF"),
+        markdown,
+        identity=identity,
+        gate_expects=frozenset(),
+    )
+    record_sha = harness.blobs.put(
+        record_bytes(replace(record, artifact_sha256=artifact, projections=projections))
+    )
+    tamper(
+        harness.conn,
+        "UPDATE artifacts SET artifact_sha256=%s, record_sha256=%s"
+        " WHERE run_id=%s AND route_node_id=%s",
+        (artifact, record_sha, harness.run_id, node.route_node_id),
+    )
+    harness.conn.commit()
+
+
+def test_proof_and_payload_reject_a_self_consistent_cp_cf_restriction_forgery(
+    harness: _Harness,
+) -> None:
+    """FP-32: `assert_orchestration_proof` and `canonical_payload` re-verify
+    owner restrictions only when a node's `module_id == "CP-5"`; CP-CF (the
+    forecast module, `MODEL_MODULE`) is the other module `_forecast_inputs`
+    holds to the same rule at acceptance, and both proof callers must hold a
+    later, forged artifact to it too."""
+    answers = ForecastCompletions(harness.source_id, defect="retain-restriction")
+    answers.qa_by_module = {"CP-1": "Restricted"}
+    assert _run_route(harness, _module_provider(harness, answers)) is None
+    assert _status(harness) == "COMPLETE"
+
+    _forge_cp_cf(harness, answers)
+
+    with pytest.raises(Refusal) as proof_refused:
+        assert_orchestration_proof(
+            harness.conn, harness.blobs, harness.bundle, run_id=harness.run_id
+        )
+    harness.conn.rollback()
+    assert proof_refused.value.code is RefusalCode.ARTIFACT_RECORD_MISMATCH
+
+    with pytest.raises(Refusal) as payload_refused:
+        canonical_payload(
+            harness.conn,
+            harness.blobs,
+            harness.bundle,
+            Revision(
+                harness.case_id,
+                harness.run_id,
+                BoundaryText.of("Acme Holdings plc"),
+                BoundaryText.of("00000000-0000-0000-0000-000000000000"),
+            ),
+        )
+    harness.conn.rollback()
+    assert payload_refused.value.code is RefusalCode.ARTIFACT_RECORD_MISMATCH
 
 
 def test_qualification_checks_host_recomputed_forecast_not_its_citation(
@@ -375,3 +478,94 @@ def test_qualification_checks_host_recomputed_forecast_not_its_citation(
         ).rows
         assert mismatch.met == case.expects
         assert mismatch.forecast_met is False
+
+
+_NET_EQUITY = (
+    "| net_equity_issue_repay |  | BASE | FY2026 | 2026 | {value} | CURRENCY_MM"
+    " | A-BASE-2026-net_equity_issue_repay- | {status} |"
+)
+
+
+class _NotApplicableDriver(ForecastCompletions):
+    """CP-2G marks the `net_equity_issue_repay` row CP-CF needs NOT_APPLICABLE
+    with a blank value: the status its own steps permit (G3-9)."""
+
+    def complete(self, prompt: str, *, json_object: bool = False) -> Completion:
+        done = super().complete(prompt, json_object=json_object)
+        if fields_from_prompt(prompt)["module_id"] != "CP-2G":
+            return done
+        assert done.content is not None
+        answer = json.loads(done.content)
+        ready = _NET_EQUITY.format(value="0", status="READY")
+        assert ready in answer["canonical_markdown"]
+        answer["canonical_markdown"] = answer["canonical_markdown"].replace(
+            ready, _NET_EQUITY.format(value="", status="NOT_APPLICABLE"), 1
+        )
+        return replace(done, content=json.dumps(answer))
+
+
+def test_a_not_applicable_cp2g_driver_stops_cp_cf_as_not_ready(
+    harness: _Harness,
+) -> None:
+    """G3-9: CP-2G's permitted NOT_APPLICABLE row is accepted as CP-2G's, and
+    CP-CF then stops `FORECAST_DRIVER_NOT_READY` -- "Complete the driver
+    first." -- with no second attempt, which could not change CP-2G's row. It
+    was refused `HANDOFF_INCOMPLETE`, a malformed handoff, before."""
+    answers = _NotApplicableDriver(harness.source_id)
+    code = _run_route(harness, _module_provider(harness, answers))
+    assert code is RefusalCode.FORECAST_DRIVER_NOT_READY
+    called = [fields_from_prompt(p)["module_id"] for p in answers.prompts]
+    assert called.count("CP-2G") == 1 and called.count("CP-CF") == 1
+    assert _status(harness) != "COMPLETE"
+
+
+class _MisMappedOnce(ForecastCompletions):
+    """CP-CF's first answer puts 4 in the request's distributions, where
+    CP-2G's `dividends_paid` row says 0; its second answer is right."""
+
+    flawed: bool = False
+
+    def complete(self, prompt: str, *, json_object: bool = False) -> Completion:
+        done = super().complete(prompt, json_object=json_object)
+        if fields_from_prompt(prompt)["module_id"] != "CP-CF" or self.flawed:
+            return done
+        self.flawed = True
+        assert done.content is not None
+        answer = json.loads(done.content)
+        markdown = answer["canonical_markdown"]
+        assert '"distributions": "0"' in markdown
+        answer["canonical_markdown"] = markdown.replace(
+            '"distributions": "0"', '"distributions": "4"', 1
+        )
+        return replace(done, content=json.dumps(answer))
+
+
+def test_cp_cf_second_attempt_names_the_driver_row_it_could_not_map(
+    harness: _Harness,
+) -> None:
+    """G3-9: CP-CF's one second attempt is told which CP-2G driver row its
+    request did not match, by driver ID, case and period -- never a value.
+    Priced at half the usual estimate, so the run's default ceiling covers the
+    eleventh call the second attempt is."""
+    from conftest import priced
+
+    from caos.graph.runtime import Execution, run_route
+
+    answers = _MisMappedOnce(harness.source_id)
+    run_route(
+        harness.conn,
+        harness.blobs,
+        run_id=harness.run_id,
+        route=harness.route,
+        execution=Execution(
+            _module_provider(harness, answers), priced(Decimal("0.25")), harness.bundle
+        ),
+    )
+    cf = [p for p in answers.prompts if fields_from_prompt(p)["module_id"] == "CP-CF"]
+    assert len(cf) == 2
+    assert "host driver check" not in cf[0]
+    assert (
+        "host driver check: CP-2G's `dividends_paid` row for BASE FY2026 does not"
+        " equal the request's distributions" in cf[1]
+    )
+    assert _status(harness) == "COMPLETE"

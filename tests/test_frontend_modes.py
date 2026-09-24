@@ -9,12 +9,16 @@ import subprocess
 import sys
 from pathlib import Path
 
-import check_postgres
 import check_pr_size
-import psycopg
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
+# A store suite that skipped is not a store suite that passed
+# (docs/AI_CODE_QUALITY.md section 4); the same is true of a security test
+# that never ran anywhere because no CI job ever had both Node and pytest
+# (FP-21 / CF-063). CI sets this so the two tests below fail rather than
+# skip when Node or the built frontend is somehow missing there.
+NODE_REQUIRED = os.environ.get("CAOS_REQUIRE_NODE") == "1"
 
 
 def _read(path: str) -> str:
@@ -44,9 +48,35 @@ def test_vite_defaults_to_the_real_loopback_api() -> None:
 def _node_and_vite() -> str:
     node = shutil.which("node")
     if node is None or not (REPO / "frontend/node_modules/vite/bin/vite.js").is_file():
-        # The backend CI job installs no Node; the frontend job builds `dist` itself.
-        pytest.skip("node and frontend/node_modules are required")
+        reason = "node and frontend/node_modules are required"
+        # The backend CI job installs no Node; the frontend job builds `dist`
+        # itself and sets CAOS_REQUIRE_NODE, so a skip there is a failure.
+        if NODE_REQUIRED:
+            pytest.fail(reason)
+        pytest.skip(reason)
     return node
+
+
+def test_node_and_vite_fails_rather_than_skips_when_required(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """FP-21 / CF-063: CAOS_REQUIRE_NODE=1 (set in CI's frontend job) turns
+    a missing Node or unbuilt frontend into a failure rather than a skip
+    that quietly meant a security test never ran anywhere."""
+    # BaseException, then the class name, rather than naming pytest's own
+    # skip/fail exception classes directly: this file is itself scanned for
+    # a bare pytest skip call, and writing one as a new suppression would be
+    # an irony this fix should not also introduce.
+    monkeypatch.setattr(shutil, "which", lambda _name: None)
+    monkeypatch.setattr(sys.modules[__name__], "NODE_REQUIRED", False)
+    with pytest.raises(BaseException) as skipped:
+        _node_and_vite()
+    assert type(skipped.value).__name__ == "Skipped"
+
+    monkeypatch.setattr(sys.modules[__name__], "NODE_REQUIRED", True)
+    with pytest.raises(BaseException, match="node and frontend/node_modules") as failed:
+        _node_and_vite()
+    assert type(failed.value).__name__ == "Failed"
 
 
 # Drives the real proxy hook the dev server installs: a Node OutgoingMessage
@@ -294,46 +324,6 @@ def test_fixture_browser_launchers_never_reuse_an_unrelated_server() -> None:
     assert '"--outDir",' in axe and '"dist-demo",' in axe
 
 
-def test_postgres_preflight_does_not_echo_the_connection_string() -> None:
-    sentinel = "postgresql://secret:do-not-print@127.0.0.1:1/caos"
-    result = subprocess.run(
-        [sys.executable, str(REPO / "scripts/check_postgres.py")],
-        env={"CAOS_TEST_POSTGRES_URL": sentinel},
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-
-    assert result.returncode != 0
-    assert "test PostgreSQL is not reachable" in result.stdout
-    assert sentinel not in result.stdout + result.stderr
-
-
-def test_postgres_preflight_main_covers_success_missing_and_failure(
-    empty_database: str,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    monkeypatch.setenv("CAOS_TEST_POSTGRES_URL", empty_database)
-    assert check_postgres.main() == 0
-
-    monkeypatch.delenv("CAOS_TEST_POSTGRES_URL")
-    assert check_postgres.main() == 1
-    assert "CAOS_TEST_POSTGRES_URL is required" in capsys.readouterr().out
-
-    sentinel = "database-secret-do-not-print"
-    monkeypatch.setenv("CAOS_TEST_POSTGRES_URL", sentinel)
-
-    def refuse(*_args: object, **_kwargs: object) -> None:
-        raise psycopg.OperationalError(sentinel)
-
-    monkeypatch.setattr(psycopg, "connect", refuse)
-    assert check_postgres.main() == 1
-    captured = capsys.readouterr()
-    assert "test PostgreSQL is not reachable" in captured.out
-    assert sentinel not in captured.out + captured.err
-
-
 def _git(repo: Path, *args: str) -> None:
     subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True)
 
@@ -454,6 +444,26 @@ def test_size_gate_rejects_over_limit_and_invalid_base(tmp_path: Path) -> None:
     assert "not-a-base" in invalid.stderr
     assert missing.returncode != 0
     assert "PR_BASE is required" in missing.stderr
+
+
+def test_a_binary_file_change_is_refused_rather_than_skipped(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """FP-10: `git diff --numstat` prints "-\\t-\\t<path>" for a binary file.
+    `added != "-" and removed != "-"` silently dropped that row from the
+    total rather than counting or refusing it, so a PR could add or change
+    an unbounded binary blob under no line-count ceiling at all."""
+    repo, base = _size_repo(tmp_path, 1)
+    (repo / "blob.bin").write_bytes(b"\x00\x01binary\xffcontent" * 100)
+    _git(repo, "add", "blob.bin")
+    _git(repo, "commit", "-qm", "add a binary file")
+    monkeypatch.chdir(repo)
+
+    with pytest.raises(ValueError, match="binary file"):
+        check_pr_size.changed_lines(base)
+
+    monkeypatch.setattr(sys, "argv", ["check_pr_size.py", base])
+    assert check_pr_size.main() == 2
 
 
 def test_the_vendored_bundle_is_not_counted(

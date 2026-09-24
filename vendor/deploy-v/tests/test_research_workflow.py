@@ -214,6 +214,21 @@ class ResearchWorkflowTests(unittest.TestCase):
         snapshot[name]=text.replace('Primary evidence applies with scope limitations','REQUIRES_ANALYST_DECISION')
         self.assertNotIn('CP-2A',navigate(snapshot).discovery.contexts[0].completed)
 
+    def test_gap_row_has_a_defined_shape_and_an_unresolved_finding_cites_it(self):
+        # Fork r3 (G1-4): a gap row's date, family and perimeter take the canon's null `—`,
+        # its claim_type is `gap`, and the UNRESOLVED finding cites it; no source is invented.
+        snapshot,brief=self.initial();name,text=author(snapshot,'CP-DR',unresolved=True)
+        row='| Demand evidence | fact | disclosure.md | p12 | 2026-09-01 | gap | Original issuer | Example / FY2025 / units / consolidated |'
+        self.assertIn(row,text)
+        gap=text.replace(row,'| Demand evidence was not found | gap | disclosure.md | whole document searched | — | gap | — | — |')
+        dossier=lambda t:SimpleNamespace(fields=validate_text(t).fields,text=t)
+        research.validate_dossier(dossier(gap),brief)
+        for why,bad in (('null outside a gap row',gap.replace('| gap | disclosure.md','| fact | disclosure.md').replace('| — | gap | — | — |','| — | primary | — | — |')),
+                        ('gap claim on a primary row',gap.replace('| — | gap | — | — |','| 2026-09-01 | primary | Original issuer | Example / FY2025 |')),
+                        ('null as the claim',gap.replace('| Demand evidence was not found |','| — |'))):
+            with self.subTest(why=why),self.assertRaises(ValueError):
+                research.validate_dossier(dossier(bad),brief)
+
     def test_public_clis_validate_linked_and_standalone_research(self):
         from unittest.mock import patch
         authority=json.loads((ROOT/'skills/cp-os-credit-os/references/CREDIT_OS_V_AUTHORITY_BUNDLE_v2.json').read_text())['authority_bundle_sha256']

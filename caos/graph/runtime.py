@@ -39,6 +39,7 @@ from caos.graph.route import (
     ResolvedRoute,
     frontier,
     node_states,
+    route_digest,
 )
 from caos.methodology.bundle import Bundle
 from caos.methodology.canonical import (
@@ -53,7 +54,7 @@ from caos.methodology.canonical import (
 )
 from caos.methodology.invocation import named_objects
 from caos.methodology.verification import AcceptedRow
-from caos.pricing import ModelPrice, priced_request, worst_case
+from caos.pricing import ModelPrice, bills_at, priced_request, worst_case
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
 from caos.store.budget import ceiling_of, reserve
@@ -167,8 +168,9 @@ def run_route(
     owns its frontier reads and never adopts pending caller writes.
     """
     require_idle(conn)
-    # Priced for the configured model, or no attempt at all.
-    if execution.price.model != getattr(execution.provider, "model", None):
+    # Priced for the configured model at the price it bills at, or no attempt
+    # at all (CF-089).
+    if not bills_at(execution.provider, execution.price):
         raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
     _affordable(conn, run_id, execution.price)
     route = _execution_route(conn, run_id, route, execution.bundle)
@@ -210,7 +212,15 @@ def run_route(
         finish=terminal,
         checkpointer=execution.checkpointer,
     )
-    thread = str(run_id)
+    # CF-037: bound to the pinned route's own digest, not the run alone, so a
+    # thread whose graph shape no longer matches what this pass just verified
+    # pinned (a build upgraded mid-run, `dependency_order`'s ordering changed)
+    # is treated as absent rather than resumed into a mismatch. Invariant 6:
+    # the checkpoint only ever remembers position, so starting over from
+    # `START` under a fresh thread costs nothing this pass's own re-derived,
+    # store-backed frontier does not already make safe -- every node it
+    # revisits reports SKIPPED for whatever the ledger already accepted.
+    thread = f"{run_id}:{route_digest(route)}"
     try:
         ended = graph.invoke(
             resume_input(graph, thread),
@@ -604,8 +614,9 @@ def _run_node(  # noqa: PLR0913 -- one node of one run, keyword-only
     module_id = next(
         node.module_id for node in route.nodes if node.route_node_id == route_node_id
     )
-    # Per call as well as per run: a provider whose model moved is unpriced.
-    if execution.price.model != getattr(execution.provider, "model", None):
+    # Per call as well as per run: a provider whose model or price moved is
+    # unpriced (CF-089).
+    if not bills_at(execution.provider, execution.price):
         raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
     # The whole prompt is built and bounded while nothing is started or set
     # aside: an over-ceiling context costs no attempt, reservation or call.

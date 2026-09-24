@@ -11,7 +11,7 @@ Capture rating agency, legal issuer, rated instrument, rating type, rating, outl
 
 Prefer current agency actions and criteria. Issuer presentations may report ratings but are secondary evidence and must be labelled. Third-party databases require an observation timestamp and do not override the agency's own action. If current evidence cannot be verified, mark the rating field `[Insufficient Information]` rather than using model memory.
 
-Respect source licensing and quotation limits. Store paraphrased triggers with exact locators; short quotations are used only when necessary to preserve a defined threshold.
+Respect source licensing and quotation limits in prose and registers: store paraphrased triggers with exact locators, and use short quotations only when necessary to preserve a defined threshold. A citation is different: it quotes, verbatim, the complete evidence line it relies on.
 
 ## REF_CP-2H_B_MethodologyAndMetricBridge.md
 # CP-2H B — Methodology and metric bridge
@@ -32,7 +32,7 @@ Qualitative triggers must identify the cited factor and evidence: financial poli
 ## REF_CP-2H_D_MigrationAndDivergence.md
 # CP-2H D — Migration and divergence
 
-Map each CP-2G case to the canonical transition classes without converting a threshold result directly into a rating notch. Agency committees consider multiple factors and timing. State the earliest supported review catalyst and whether pressure is temporary, sustained or contingent.
+Map each CP-2G case to the canonical transition classes without converting a threshold result directly into a rating notch. On a LITE route, which delivers no CP-2G case, the latest reported period is the one case mapped. Agency committees consider multiple factors and timing. State the earliest supported review catalyst and whether pressure is temporary, sustained or contingent.
 
 Agency divergence is evidence, not an error. Explain differences through rated entity, instrument, methodology, metric adjustments, sector treatment, country ceiling, recovery/notching, event timing or qualitative modifiers. Never average ratings or choose a preferred agency silently.
 

@@ -247,6 +247,208 @@ class RegressionTests(unittest.TestCase):
                 verify_package.verify_metadata()
 
 
+def skill_text(slug):
+    return (ROOT / 'skills' / slug / 'SKILL.md').read_text(encoding='utf-8')
+
+
+def register(reg, columns, rows):
+    return (f'### {reg}\n| ' + ' | '.join(columns) + ' |\n| ' + ' | '.join('---' for _ in columns) + ' |\n'
+            + ''.join('| ' + ' | '.join(row) + ' |\n' for row in rows) + '\n')
+
+
+def about(violations, reg):
+    return [v for v in violations if v.startswith(reg + ':') or v.startswith(reg + ' row')]
+
+
+class ForkR3Tests(unittest.TestCase):
+    """Deployment fork r3: a register written as the method specifies it passes the method's own check."""
+
+    def test_method_columns_pass_the_checker(self):
+        # G2-6: the checker follows the step specs, and keeps a column a downstream reader reads.
+        pipes = lambda text: text.split(' | ')
+        cases = (
+            ('cp-1-canonical-data-foundation', 'CP-1', 'T4.1', ['Source File Name', 'Document Type', 'Period Coverage', 'Currency', 'Unit',
+                                                              'Perimeter', 'Accounting Basis', 'Evidence Quality Tier', 'Analytical Use', 'Limitations']),
+            ('cp-1-canonical-data-foundation', 'CP-1', 'T4.10', ['KPI Category', 'Metric Name', 'FY2025', 'FY2024', 'Trend Direction', 'Analyst Note']),
+            ('cp-1-canonical-data-foundation', 'CP-1', 'T4.14', pipes('period_id | fiscal_year | fiscal_quarter | period_type | start_date | end_date | day_count | audit_status | currency | unit | accounting_basis | entity_perimeter | source_id | source_locator | component_period_ids')),
+            ('cp-1-canonical-data-foundation', 'CP-1', 'T4.18', pipes('facility_id | facility_name | period_id | facility_type | carrying_value | principal | drawn_amount | commitment | secured_status | seniority | currency | margin_or_coupon | maturity_date | lease_classification | source_id | source_locator')),
+            ('cp-1b-earnings-delta', 'CP-1B', 'T4.6', ['Metric', 'Comparison Basis', 'Prior Value', 'Current Value', 'Abs Change', '% Change', 'Mgmt Driver', 'Analyst Driver', 'Credit Implication']),
+            ('cp-1b-earnings-delta', 'CP-1B', 'T4.12', pipes('metric_id | current_period_id | reference_period_id | comparison_basis | current_value | reference_value | absolute_change | percentage_change | calculation_status | restatement_flag | basis_change_flag | perimeter_change_flag | definition_change_flag | values | changes')),
+            ('cp-1b-earnings-delta', 'CP-1B', 'T4.15', pipes('downstream_module | status | blocking_metric_ids | blocking_period_ids | conflict_refs | explanation')),
+            ('cp-1c-peer-benchmark', 'CP-1C', 'T4.5', ['Entity', 'Total/Net/Sr Sec Leverage', 'Int Coverage', 'Adj Int Coverage', 'FFO/Debt', 'Liquidity', 'Period', 'Currency', 'Calc Status', 'Comp Status']),
+            ('cp-1c-peer-benchmark', 'CP-1C', 'T4.10', ['Method', 'Multiple Source', 'Multiple Value', 'Borrower Metric', 'Period', 'Implied EV', 'Low', 'Median', 'High', 'Calc Status', 'Limitations']),
+        )
+        for slug, module_id, reg, columns in cases:
+            with self.subTest(module=module_id, register=reg):
+                violations, contract, _ = complete.check(skill_text(slug), register(reg, columns, [['x'] * len(columns)]), module_id)
+                self.assertEqual(about(violations, reg), [])
+        kept = complete.load_contract(skill_text('cp-1b-earnings-delta'), 'CP-1B')['registers']['T4.12']['columns']
+        self.assertTrue({'metric_id', 'values', 'changes'} <= set(kept))
+        kept = complete.load_contract(skill_text('cp-1c-peer-benchmark'), 'CP-1C')['registers']['T4.5']['columns']
+        self.assertIn('Total/Net/Sr Sec Leverage', kept)
+
+    def test_forecast_cases_match_as_the_method_writes_them(self):
+        # G3-13: `Base case` holds `base`; a word that only starts with it does not.
+        columns = ['assumption_id', 'driver', 'case', 'period', 'value/range', 'unit', 'class', 'source', 'rationale']
+        rows = [['A-1', 'Revenue', 'Base case', 'FY2026', '2%', 'pct', 'management_guidance', 'Guidance p4', 'Guided'],
+                ['A-2', 'Revenue', 'DOWNSIDE (volume)', 'FY2026', '-5%', 'pct', 'analyst_judgment', 'Analysis', 'Stress']]
+        text = register('T2H.3', columns, rows)
+        violations, _, _ = complete.check(skill_text('cp-2g-forward-credit-model'), text, 'CP-2G')
+        self.assertEqual(about(violations, 'T2H.3'), [])
+        violations, _, _ = complete.check(skill_text('cp-2g-forward-credit-model'), text.replace('Base case', 'Baseline'), 'CP-2G')
+        self.assertEqual(about(violations, 'T2H.3'),
+                         ["T2H.3: cp2g.requires_base_and_downside_cases -- column 'case' lacks 'base'"])
+
+    def test_a_direction_with_no_supported_driver_takes_one_row(self):
+        # G2-15: CP-2's T2.10 needs Positive and Negative; a none-supported row states the missing one.
+        columns = ['Rank', 'Driver', 'Evidence', 'Risk Mechanic', 'Credit Implication', 'Direction', 'Confidence']
+        rows = [['1', 'Maturity wall', '10-K note 9', 'Refinancing need', 'Higher PD', 'Negative', 'High'],
+                ['2', 'None supported', 'Filings reviewed; no supported positive driver', '—', '—', 'Positive', 'Not Assessable']]
+        violations, _, _ = complete.check(skill_text('cp-2-fundamental-credit-synthesizer'), register('T2.10', columns, rows), 'CP-2')
+        self.assertEqual(about(violations, 'T2.10'), [])
+
+    def test_months_to_empty_is_a_register_with_columns(self):
+        # G2-14: T2E.6 has the method's columns; a result it cannot calculate is still a row.
+        contract = complete.load_contract(skill_text('cp-2d-liquidity-cash-flow-bridge'), 'CP-2D')
+        columns = contract['registers']['T2E.6']['columns']
+        self.assertEqual(columns, ['Calculation', 'Result', 'Formula / Inputs', 'Cash-Burn Basis', 'Status', 'Source Trace'])
+        row = ['Months to Empty', 'Not Calculable', '250 / -4.0', 'FY2025, recurring; cash-generative, no runway to exhaust', 'Calculated', 'T2E.5']
+        violations, _, _ = complete.check(skill_text('cp-2d-liquidity-cash-flow-bridge'), register('T2E.6', columns, [row]), 'CP-2D')
+        self.assertEqual(about(violations, 'T2E.6'), [])
+
+    def test_an_empty_upstream_bridge_is_carried_in_one_row(self):
+        # G2-10: CP-1D carries CP-1's permitted empty bridge as one NONE row per register.
+        contract = complete.load_contract(skill_text('cp-1d-earnings-quality'), 'CP-1D')
+        text = ''
+        for reg in ('T1D.1', 'T1D.2', 'T1D.3', 'T1D.4'):
+            columns = contract['registers'][reg]['columns']
+            text += register(reg, columns, [['NONE' if c in ('Add-Back ID', 'Step') else '—' for c in columns]])
+        violations, _, _ = complete.check(skill_text('cp-1d-earnings-quality'), text, 'CP-1D')
+        for reg in ('T1D.1', 'T1D.2', 'T1D.3', 'T1D.4'):
+            self.assertEqual(about(violations, reg), [], reg)
+
+    def test_absorbed_catalyst_rules_are_enforced(self):
+        # G2-18: CP-2B's rules and table bind in CP-2A's own profile, as CP-2C's do in CP-1A's.
+        contract = complete.load_contract(skill_text('cp-2a-downside-pathway'), 'CP-2A')
+        self.assertIn('cp2b.cp_model_catalysts', contract['unconditional_stable_tables'])
+        columns = contract['registers']['T5.3']['columns']
+        row = {c: 'x' for c in columns}
+        row.update({'Probability': 'Very likely', 'Risk Direction': 'Negative', 'Event ID': 'E-1'})
+        violations, _, _ = complete.check(skill_text('cp-2a-downside-pathway'), register('T5.3', columns, [[row[c] for c in columns]]), 'CP-2A')
+        self.assertTrue(any('cp2b.risk_probability_enum' in v for v in about(violations, 'T5.3')), violations)
+
+    def test_screen_gap_register_may_be_empty(self):
+        # G1-18: TL*.4 matches the payload's gap register, which may be empty.
+        contract = complete.load_contract(skill_text('cp-l10-financial-change-screen'), 'CP-L10')
+        for reg in ('TL10.4', 'TL20.4', 'TL23.4', 'TL30.4', 'TL40.4'):
+            self.assertEqual(contract['registers'][reg]['minimum_body_rows'], 0, reg)
+        violations, _, _ = complete.check(skill_text('cp-l10-financial-change-screen'),
+                                          register('TL10.4', contract['registers']['TL10.4']['columns'], []), 'CP-L10')
+        self.assertEqual(about(violations, 'TL10.4'), [])
+
+    def test_one_opening_heading_per_artifact(self):
+        # G2-18, G3-17, G1-18: an absorbed phase heads a later section, never a second opening.
+        for slug in ('cp-1a-business-transaction-fact-pack', 'cp-2a-downside-pathway', 'cp-1d-earnings-quality',
+                     'cp-2e-macro-fx-hedging-sensitivity', 'cp-l10-financial-change-screen'):
+            text = skill_text(slug)
+            with self.subTest(slug=slug):
+                self.assertEqual(text.count('- **opening_h3**: ###'), 1)
+                self.assertLessEqual(text.count('open `## Analysis` with `###') + text.count('Open `## Analysis` with `###'), 1)
+
+    def test_canon_maps_status_and_defines_upgrade(self):
+        # G3-12, G3-8, G2-18: the status map, UPGRADE and Not Reviewed are stated once, in the canon.
+        canon = (ROOT / 'CANON_SHARED.md').read_text(encoding='utf-8')
+        self.assertIn('D1 FROM MODULE STATUS', canon)
+        self.assertIn('SEC5 UPGRADE', canon)
+        self.assertIn("front-matter qa_status is always Passed, Restricted or Blocked, never Not Reviewed", canon)
+        for path in (ROOT / 'skills').glob('*/SKILL.md'):
+            text = path.read_text(encoding='utf-8')
+            if '- **missing_input_behavior**: `UPGRADE`' in text:
+                self.assertIn('- **UPGRADE** (canon SEC5)', text, path.parent.name)
+
+    def test_qa_gate_order_and_deep_research_t8(self):
+        # G1-14: CP-5 is CP-6's QA gate; G1-6: CP-DR is a T8 row on the routes that carry it.
+        runbook = (ROOT / 'skills/cp-5-evidence-trace-validator/references/CP-5_RUNBOOK.md').read_text(encoding='utf-8')
+        self.assertNotIn('CP-6, CP-6A)', runbook)
+        cp6 = skill_text('cp-6-ic-debate-challenge')
+        self.assertNotIn('**Downstream (QA):** CP-5', cp6)
+        self.assertIn('**Upstream (QA gate):** CP-5', cp6)
+        steps = (ROOT / 'skills/cp-0-source-readiness/references/REF_CP-0_STEPS.md').read_text(encoding='utf-8')
+        self.assertIn('CP-8, CP-L10, CP-DR. Never recommend CP-X, CP-PARSE, a retired alias, CP-MODEL or CP-MEMO.', steps)
+
+    def test_scripts_emit_no_bare_placeholder(self):
+        # G3-15: an output the method says to transcribe never lands a refused placeholder.
+        missing = covenant.headroom({'test': 'L', 'test_type': 'max-ratio', 'threshold': None, 'current_ratio': 4})
+        self.assertEqual((missing['status'], missing['headroom_display']),
+                         ('Not Calculable', '[Insufficient Information] — missing: threshold'))
+        gap = covenant.trigger_headroom({'trigger': 'L', 'trigger_direction': 'max-ratio', 'threshold': 5,
+                                         'cases': [{'period': 'FY26', 'value': None}]})
+        self.assertEqual(gap['periods'][0]['status'], 'Not Calculable')
+        result = recovery.waterfall(100, [dict(claim_id='S', amount=None)])
+        self.assertEqual(result['allocation_state'], 'Not Calculable')
+
+    def test_figure_spaces_range_and_percent_conventions(self):
+        # N57: every digit-group space alike; an out-of-range exponent refused; the two percent readings documented.
+        for spaced in ('1 234', '1 234', '1 234', '1 234'):
+            self.assertEqual(tables.parse_figure(spaced), 1234.0, repr(spaced))
+        for tiny in ('1e-400', '1e-310'):
+            with self.subTest(value=tiny), self.assertRaises(ValueError):
+                tables.parse_figure(tiny)
+        self.assertEqual(tables.parse_figure('0e-400'), 0.0)
+        self.assertEqual(tables.parse_figure('10.4%'), 10.4)
+        errors = []
+        self.assertAlmostEqual(model_inputs._number('10.4%', field='f', errors=errors), 0.104)
+        self.assertIsNone(model_inputs._number('1e-400', field='f', errors=errors))
+        self.assertEqual(len(errors), 1)
+
+
+class ForkR4Tests(unittest.TestCase):
+    """Deployment fork r4: what fork r3 left outside its rows (N70)."""
+
+    def test_a_driver_that_cuts_both_ways_is_split_never_mixed(self):
+        # N70: the canon deprecates Mixed (split); CP-2's method and checker allowed it.
+        columns = ['Rank', 'Driver', 'Evidence', 'Risk Mechanic', 'Credit Implication', 'Direction', 'Confidence']
+        split = [['1', 'Asset sale', 'Release p2', 'Debt paydown', 'Positive — Deleveraging', 'Positive', 'High'],
+                 ['2', 'Asset sale', 'Release p2', 'Lost EBITDA', 'Negative — Revenue Decline', 'Negative', 'High']]
+        slug = 'cp-2-fundamental-credit-synthesizer'
+        violations, _, _ = complete.check(skill_text(slug), register('T2.10', columns, split), 'CP-2')
+        self.assertEqual(about(violations, 'T2.10'), [])
+        mixed = split + [['3', 'Asset sale', 'Release p2', 'Both', 'Neutral — Stable', 'Mixed', 'Low']]
+        violations, _, _ = complete.check(skill_text(slug), register('T2.10', columns, mixed), 'CP-2')
+        self.assertTrue(any('cp2.materiality_direction_enum' in v for v in about(violations, 'T2.10')), violations)
+        for name in ('references/REF_CP-2_STEPS.md', 'references/CP-2_SCHEMA_REFERENCE.md',
+                     'references/CP-2_SYSTEM_REFERENCE.md'):
+            text = (ROOT / 'skills' / slug / name).read_text(encoding='utf-8')
+            with self.subTest(name=name):
+                self.assertNotIn('Negative / Mixed', text)
+                self.assertNotIn('Negative | Mixed', text)
+                self.assertIn('Mixed->split', text)
+
+    def test_cp_model_tables_are_unconditional_only(self):
+        # N70: each was listed as a conditional appendix register and an unconditional stable table.
+        for slug, module_id, table in (('cp-2-fundamental-credit-synthesizer', 'CP-2', 'cp2.cp_model_strengths_weaknesses'),
+                                       ('cp-2g-forward-credit-model', 'CP-2G', 'cp2g.cp_model_forecast_drivers')):
+            text = skill_text(slug)
+            with self.subTest(module=module_id):
+                self.assertIn('  - **conditional_register_ids**: none\n', text)
+                self.assertNotIn('**conditional_register_ids**: ' + table, text)
+                self.assertIn(table, complete.load_contract(text, module_id)['unconditional_stable_tables'])
+
+    def test_the_research_brief_is_followed_only_where_it_is_delivered(self):
+        # N70: every module but CP-L10 was told to use a brief only CP-DR is delivered.
+        pointer = 'where `../cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md` is delivered with this module'
+        unconditioned = 'Otherwise use `../cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md`'
+        paragraphs = 0
+        for path in sorted((ROOT / 'skills').glob('*/SKILL.md')):
+            text = path.read_text(encoding='utf-8')
+            with self.subTest(skill=path.parent.name):
+                self.assertNotIn(unconditioned, text)
+            paragraphs += pointer in text
+        self.assertEqual(paragraphs, 20)
+        canon = (ROOT / 'CANON_SHARED.md').read_text(encoding='utf-8')
+        self.assertIn('Where `skills/cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md` is delivered with a module, follow it', canon)
+
+
 @unittest.skipUnless(os.environ.get('DEPLOY_V_INTEGRATION') == '1', 'enable integration for native PDF and DOCX dependencies')
 class IntegrationTests(unittest.TestCase):
     def test_exporter_binds_current_catalyst_owner(self):

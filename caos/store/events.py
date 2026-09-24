@@ -38,6 +38,10 @@ class RunEvent(StrEnum):
     RUN_FAILED = "RUN_FAILED"
     RUN_BLOCKED = "RUN_BLOCKED"
     RUN_CANCELLED = "RUN_CANCELLED"
+    # CF-044: a worker parked the run (`run_work.state = 'STOPPED'`) rather
+    # than ending it; the run itself stays RUNNING, recoverable by a retry
+    # that requeues it.
+    RUN_PARKED = "RUN_PARKED"
 
 
 @dataclass(frozen=True, slots=True)

@@ -1,9 +1,11 @@
 """Case standing: who may do what, on which case.
 
-`SYSTEM_SPEC.md` §8. Case standing and global role are separate and both are
-rechecked at commit time. This module answers the first question; the recheck
-happens inside `caos/store/audit.py`'s `governed_write`, because a check
-anywhere else is a check at request time wearing a different name.
+`SYSTEM_SPEC.md` §8. Case standing and global role are separate, and only
+standing is rechecked at commit time: `caos/store/audit.py`'s `governed_write`
+calls `_require_standing` for the same reason a check anywhere else is a check
+at request time wearing a different name. The global role is not re-read
+there; it is whatever `caos/api/identity.py` cached for up to `CACHE_SECONDS`
+(300 s) when the request began (D10/F13, accepted).
 
 Standing is ordered. An ADMIN can do what a WRITER can, which is why `requires`
 is a floor rather than an equality -- an authority model that demanded the exact
@@ -99,6 +101,10 @@ class RunListing:
     created_at: datetime
     profile_id: str | None
     selection_id: str | None
+    # CF-044: a run a worker parked, or None -- never enqueued, or still
+    # being driven -- the one field that tells a list a run stopped RUNNING
+    # apart from one that never will on its own.
+    stop_code: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -137,6 +143,7 @@ def cases_for_member(
         "SELECT c.case_id, c.title, c.created_at, m.standing,"
         " (SELECT count(*) FROM live_sources s WHERE s.case_id = c.case_id),"
         " r.run_id, r.status, r.created_at, rr.profile_id, rr.selection_id,"
+        " w.stop_code,"
         " CASE WHEN %s AND m.standing = 'ADMIN' THEN (SELECT coalesce(json_agg("
         "  json_build_array(x.user_id, x.standing) ORDER BY x.user_id), '[]')"
         "  FROM (SELECT o.user_id, o.standing FROM case_members o"
@@ -147,6 +154,7 @@ def cases_for_member(
         "  WHERE runs.case_id = c.case_id"
         "  ORDER BY created_at DESC, run_id DESC LIMIT 1) r ON true"
         " LEFT JOIN run_routes rr ON rr.run_id = r.run_id"
+        " LEFT JOIN run_work w ON w.run_id = r.run_id"
         " WHERE m.user_id = %s AND m.revoked_at IS NULL"
         " ORDER BY c.created_at DESC, c.case_id DESC LIMIT %s",
         (members_limit is not None, members_limit or 0, user_id, limit),
@@ -160,10 +168,10 @@ def cases_for_member(
             live_sources=int(row[4]),
             latest_run=None
             if row[5] is None
-            else RunListing(row[5], row[6], row[7], row[8], row[9]),
+            else RunListing(row[5], row[6], row[7], row[8], row[9], row[10]),
             members=None
-            if row[10] is None
-            else tuple((UUID(member), Standing(held)) for member, held in row[10]),
+            if row[11] is None
+            else tuple((UUID(member), Standing(held)) for member, held in row[11]),
         )
         for row in rows
     ]

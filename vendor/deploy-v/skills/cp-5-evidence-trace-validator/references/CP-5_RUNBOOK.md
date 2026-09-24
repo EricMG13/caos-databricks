@@ -6,8 +6,9 @@
 
 # CP-5 | EvidenceTraceValidator | Layer L5 | Schema: Nested
 
-**Upstream:** All analytical modules (CP-1 through CP-4A, CP-6, CP-6A), CP-5A QA output
+**Upstream:** All analytical modules the route runs before it (CP-1 through CP-4A), CP-5A QA output
 **Downstream (Analytical):** CP-5A
+**Downstream (QA gate):** CP-6 and CP-6A run only after this handoff is accepted (the catalog's CP-5 → CP-6 QA gate); they are never CP-5's input
 **Downstream (QA):** CP-5, CP-5A
 
 ---
@@ -104,7 +105,7 @@ The required analytical output and sole downstream handoff is one validated cano
 module_id: CP-5 | module_name: EvidenceTraceValidator | schema_family: Nested | layer: L5
 
 ## Dependencies
-UP: All analytical modules (CP-1 through CP-4A, CP-6, CP-6A), CP-5A QA output | DOWN (Analytical): CP-5A | DOWN (QA): CP-5, CP-5A
+UP: All analytical modules the route runs before it (CP-1 through CP-4A), CP-5A QA output | DOWN (Analytical): CP-5A | DOWN (QA gate): CP-6, CP-6A | DOWN (QA): CP-5, CP-5A
 
 ## Governance Rules
 1. CP-5 is a governance layer only — it does not alter substantive credit conclusions from upstream modules.
@@ -170,8 +171,9 @@ Condition: lineage_class ∈ {Untraced, Weak Lineage, Insufficient Information} 
 
 # CP-5A | ResearchIntegrityQA | Layer L5 | Schema: Nested
 
-**Upstream:** CP-5 (evidence trace), all analytical modules (CP-1 through CP-4A, CP-6, CP-6A)
+**Upstream:** CP-5 (evidence trace), all analytical modules the route runs before it (CP-1 through CP-4A)
 **Downstream (Analytical):** None (gates upstream modules; does not feed analytical consumers)
+**Downstream (QA gate):** CP-6 and CP-6A run only after this handoff is accepted (the catalog's CP-5 → CP-6 QA gate); they are never CP-5's input
 **Downstream (QA):** CP-5, CP-5A
 
 ---
@@ -248,7 +250,7 @@ The required analytical output and sole downstream handoff is one validated cano
 module_id: CP-5A | module_name: ResearchIntegrityQA | schema_family: Nested | layer: L5
 
 ## Dependencies
-UP: CP-5 (evidence trace), all analytical modules (CP-1 through CP-4A, CP-6, CP-6A) | DOWN (Analytical): None (gates upstream modules) | DOWN (QA): CP-5, CP-5A
+UP: CP-5 (evidence trace), all analytical modules the route runs before it (CP-1 through CP-4A) | DOWN (Analytical): None (gates upstream modules) | DOWN (QA gate): CP-6, CP-6A | DOWN (QA): CP-5, CP-5A
 
 ## Input
 CP-5A reads each upstream module's canonical Markdown handoff `.md` directly — the YAML front-matter envelope + canonical H2 headings (## Audit Summary, ## Analysis, ## Evidence Trace, ## Source Registry, ## Gaps & Conflicts, ## QA Validation). It does NOT parse .docx JSON appendices; there is no CP-EXTRACT.

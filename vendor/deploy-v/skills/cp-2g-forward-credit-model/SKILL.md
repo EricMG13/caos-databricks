@@ -42,7 +42,7 @@ Advanced qualifiers stay command-accessible. Source/email/web/document/attachmen
 7. Subsequent event: flag date; never blend into period figures.
 8. Non-debt funding float: trend deposits/deferred revenue/supplier finance—not payables; Evidence→Risk Mechanic→Credit Implication.
 9. Show source vs normalized one-offs; label normalization+Analyst Judgement (a basis cell holds the value `analyst_judgment`). Never infer covenant capacity; absent inputs=`Not Calculable`.
-10. `committee_status`∈Committee Ready|Draft Only|Requires More Work|Insufficient Information|Restricted|Blocked. `qa_status` Restricted→score≤59 (band from the score: 40-59 Low, below 40 Insufficient Information); Blocked→≤39.
+10. `committee_status`∈Committee Ready|Draft Only|Requires More Work|Insufficient Information|Restricted|Blocked. `qa_status` follows the run's own status (canon D1 map): complete→Passed; with gaps or limitations→Restricted; Blocked→Blocked; never Not Reviewed. Restricted→score≤59 (band from the score: 40-59 Low, below 40 Insufficient Information); Blocked→≤39.
 
 ## Analytical depth — binding on every run
 
@@ -74,7 +74,7 @@ conclusions, never shorter reasoning or invented filler.
 
 - **analytical_validation**: implemented
 - **appendix_contract**: structured below
-  - **conditional_register_ids**: cp2g.cp_model_forecast_drivers
+  - **conditional_register_ids**: none
   - **heading**: ### Analytical appendix — complete canonical registers
   - **lossless**: True
   - **required_register_ids**: T2H.1; T2H.2; T2H.3; T2H.4; T2H.5; T2H.6; T2H.7; T2H.8; T2H.9
@@ -145,9 +145,10 @@ conclusions, never shorter reasoning or invented filler.
     - structured item
       - **case_sensitive**: False
       - **column**: case
+      - **match**: leading_word
       - **register_id**: T2H.3
       - **rule**: required_values
-      - **rule_id**: cp2g.requires_downside_case
+      - **rule_id**: cp2g.requires_base_and_downside_cases
       - **values**: base; downside
     - structured item
       - **columns**: assumption_id; driver; case; class; source
@@ -257,6 +258,6 @@ Run `python3 ./scripts/validate_handoff.py -` with the completed artifact piped 
 
 ## Research questions and adoption — binding when applicable
 
-Before finalizing an assumption or conclusion, identify any unresolved material evidence question. If existing sources answer it, continue. Otherwise use `../cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md` to add a bounded request naming this module as consumer and a factual predecessor. The host authors the control brief under the user's existing task authorization; CP-OS remains read-only. Do not create a self-dependency from this module back through CP-DR. For a late challenge, retain the current CP-0 anchor and archive superseded research attempts outside the active snapshot.
+Before finalizing an assumption or conclusion, identify any unresolved material evidence question. If existing sources answer it, continue. Otherwise, where `../cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md` is delivered with this module, use it to add a bounded request naming this module as consumer and a factual predecessor; where it is not delivered, record the question as an unresolved gap under `## Gaps & Conflicts` and do not request research. The host authors the control brief under the user's existing task authorization; CP-OS remains read-only. Do not create a self-dependency from this module back through CP-DR. For a late challenge, retain the current CP-0 anchor and archive superseded research attempts outside the active snapshot.
 
 Run the invocation helper against the fresh snapshot. If it returns `research_adoption_rows`, complete the tagged `cpdr.adoptions` table in the analytical appendix: `question_id`, `research_sha256`, `disposition` (ACCEPTED / REJECTED / QUALIFIED), `reason`, `analytical_effect`. Record one row per assigned question, with the exact current research hash. Rejection or qualification still explains the consequence. CP-DR supplies evidence; this module remains responsible for source applicability, numerical extraction, assumptions and conclusions. Unresolved research blocks its named consumer, not unrelated modules. A changed research dossier invalidates its declared consumers and their dependents; research is versioned per bounded batch, not per claim.

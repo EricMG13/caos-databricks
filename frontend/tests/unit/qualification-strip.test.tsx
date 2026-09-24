@@ -15,6 +15,7 @@ function response(state: "QUALIFIED" | "UNQUALIFIED" | "RESTRICTED" | "UNAVAILAB
       provider: state === "QUALIFIED" ? "openrouter" : null,
       model: state === "QUALIFIED" ? "model" : null,
       reviewer: state === "QUALIFIED" ? "Reviewer" : null,
+      reviewer_id: null,
       decided_at: state === "QUALIFIED" ? "2026-09-15T10:00:00Z" : null,
       expires_at: state === "QUALIFIED" ? "2026-09-16T10:00:00Z" : null,
     }),

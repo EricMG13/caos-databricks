@@ -3,13 +3,17 @@
 `docs/REBUILD_PLAN.md` Phase 10: "A verdict is bound to provider identity,
 qualification-set digest, build, date, expiry and reviewer." Six bindings, and a
 verdict missing any of them is refused rather than read with a hole in it.
+N44 adds a seventh, `evidence_sha256`: the six above can agree for two
+different snapshots of the same set, build and provider, so the document also
+names the one exact evidence identity it was read against.
 
-The six are not decoration. A reviewer's signature that says the outputs met the
-answer keys means nothing unless it also says *whose* outputs, measured against
-*which* cases, produced by *which* build, signed *when*, current *until when*,
-and by *whom*. Drop any one and the signature stops being checkable: the same
-sentence would cover a different provider, a different qualification set, or a
-build shipped a year later.
+The seven are not decoration. A reviewer's signature that says the outputs met
+the answer keys means nothing unless it also says *whose* outputs, measured
+against *which* cases, produced by *which* build, over *which exact evidence*,
+signed *when*, current *until when*, and by *whom*. Drop any one and the
+signature stops being checkable: the same sentence would cover a different
+provider, a different qualification set, a different snapshot, or a build
+shipped a year later.
 """
 
 from __future__ import annotations
@@ -27,6 +31,7 @@ EXPIRES = datetime(2027, 9, 11, 9, 0, tzinfo=UTC)
 NOW = DECIDED + timedelta(days=30)
 
 SET_DIGEST = "b" * 64
+EVIDENCE_DIGEST = "e" * 64
 
 
 def document(**overrides: str) -> dict[str, str]:
@@ -38,6 +43,7 @@ def document(**overrides: str) -> dict[str, str]:
         "decided_at": DECIDED.isoformat(),
         "expires_at": EXPIRES.isoformat(),
         "reviewer": "R. Mehta, credit risk",
+        "evidence_sha256": EVIDENCE_DIGEST,
     }
     complete.update(overrides)
     return complete
@@ -48,7 +54,7 @@ def test_verdict_binds_provider_qualification_set_build_date_expiry_and_reviewer
 ):
     """Phase 10's first exit test.
 
-    Over the whole binding surface rather than one field: each of the six is
+    Over the whole binding surface rather than one field: each of the seven is
     dropped, then blanked, and the verdict is refused both ways. A test that
     checked one representative field would pass against a reader that validated
     only that one.
@@ -61,10 +67,12 @@ def test_verdict_binds_provider_qualification_set_build_date_expiry_and_reviewer
     assert verdict.decided_at == DECIDED
     assert verdict.expires_at == EXPIRES
     assert verdict.reviewer.value == "R. Mehta, credit risk"
+    assert verdict.evidence_sha256 == EVIDENCE_DIGEST
     # The reviewer's word, and the only place in this repository it is spoken.
     assert verdict.assurance is Assurance.QUALIFIED
 
-    # The list the reader validates against is the list the plan names.
+    # The list the reader validates against is the list the plan names, plus
+    # N44's evidence_sha256.
     assert BINDINGS == (
         "provider",
         "qualification_set_sha256",
@@ -72,6 +80,7 @@ def test_verdict_binds_provider_qualification_set_build_date_expiry_and_reviewer
         "decided_at",
         "expires_at",
         "reviewer",
+        "evidence_sha256",
     )
 
     for binding in BINDINGS:
@@ -119,8 +128,8 @@ def test_a_verdict_is_what_it_was_read_as_and_stays_that() -> None:
     """A signature that can be edited after it is read is not a signature.
 
     `deliverable_opinions` is append-only for the same reason
-    (`SYSTEM_SPEC.md` §2): the six bindings a reader checked and the six a
-    later caller acts on have to be the same six, or the check was of a
+    (`SYSTEM_SPEC.md` §2): the seven bindings a reader checked and the seven a
+    later caller acts on have to be the same seven, or the check was of a
     different document.
     """
     verdict = read_verdict(document(), now=NOW)
@@ -128,7 +137,7 @@ def test_a_verdict_is_what_it_was_read_as_and_stays_that() -> None:
 
     with pytest.raises(AttributeError):
         verdict.build_id = "b0000000"  # type: ignore[misc]
-    # And no instance dictionary, so there is nowhere to hang a seventh
+    # And no instance dictionary, so there is nowhere to hang an eighth
     # binding the reader never checked.
     assert not hasattr(verdict, "__dict__")
 
@@ -144,6 +153,8 @@ def test_a_verdict_refuses_a_binding_it_cannot_read_as_what_it_claims() -> None:
         {"qualification_set_sha256": "not-a-digest"},
         {"qualification_set_sha256": "b" * 63},
         {"qualification_set_sha256": "B" * 64},
+        {"evidence_sha256": "not-a-digest"},
+        {"evidence_sha256": "e" * 63},
         {"decided_at": "the eleventh of September"},
         {"expires_at": "2027-13-01T00:00:00+00:00"},
     ]
@@ -184,10 +195,10 @@ def test_a_verdict_refuses_an_expiry_that_does_not_follow_its_date() -> None:
         assert refused.value.code is RefusalCode.VERDICT_BINDING_INVALID
 
 
-def test_a_verdict_refuses_a_field_the_six_do_not_declare() -> None:
+def test_a_verdict_refuses_a_field_the_seven_do_not_declare() -> None:
     """`extra="forbid"`, for the same reason the canonical envelope has it.
 
-    A seventh key is either a binding nobody agreed to or a note the reader
+    An eighth key is either a binding nobody agreed to or a note the reader
     would silently drop, and a verdict carrying an unread condition is a
     verdict whose meaning depends on who read it.
     """

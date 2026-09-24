@@ -8,7 +8,7 @@ costs real money and calls a real model.
 ## The set
 
 - Qualification-set digest:
-  `a8df0ccf6d8fd735886c584951f7ca82e460f483a4f235a5ad31143fd3f60ac8`
+  `fb20188605c957ec7b91079bd98f0002a627d15f633586eb39f7349e1f4bbf4b`
 - Route: `LITE_CREDIT_22 / LITE_RELATIVE_VALUE` (`CP-0` → `CP-L10` → `CP-1C`,
   three REQUIRED edges, `decision_scope: SCREENING_ONLY`). CP-1C is a FULL
   module held behind the named-LITE-object boundary until CP-L10's

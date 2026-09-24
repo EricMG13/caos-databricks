@@ -12,15 +12,17 @@ import psycopg
 import pytest
 from test_deliverable_canonical import harness, lite, route
 from test_execution_freshness import _Harness
-from test_filing_chain import _actor, _freeze, _sign
+from test_filing_chain import _actor, _default_signer, _freeze, _sign
 from test_revisions import _save
 
 from caos.blobs import BlobStore
 from caos.deliverable.filing import (
     Receipt,
     file_deliverable,
+    freeze_in,
     receipt_bytes,
     revision_signatures,
+    sign_opinion_in,
 )
 from caos.deliverable.receipts import read_filed_receipt
 from caos.refusals import Refusal
@@ -214,6 +216,50 @@ def test_receipt_refuses_corrupt_audit_linkage(lite: _Harness, damage: str) -> N
         _read(lite, receipt)
 
 
+def test_read_filed_receipt_refuses_a_signature_or_freeze_never_audited(
+    lite: _Harness,
+) -> None:
+    """FP-34: `read_filed_receipt`'s one caller, `_publication`
+    (`caos/api/reads/reports.py`), checks that an `OPINION_SIGNED` event for
+    every signer and a `DELIVERABLE_FROZEN` event for the freezer are in the
+    case's own audit trail; this reader did not. `sign_opinion_in`/`freeze_in`
+    write the `deliverable_opinions`/`deliverable_publications` rows this
+    checks for consistency, but -- called outside `governed_write`, as they
+    are meant to be composed by a caller with its own envelope -- write no
+    audit event at all. Filed normally afterward, the receipt was self
+    consistent and read back as genuine although no signature or freeze was
+    ever on the record.
+    """
+    revision = _save(lite)
+    signer, freezer, filer = _actor(lite), _actor(lite), _actor(lite)
+    sign_opinion_in(
+        lite.conn, case_id=lite.case_id, actor_id=signer, revision_id=revision
+    )
+    freeze_in(
+        lite.conn,
+        lite.blobs,
+        lite.bundle,
+        case_id=lite.case_id,
+        actor_id=freezer,
+        revision_id=revision,
+    )
+    lite.conn.commit()
+    receipt = file_deliverable(
+        lite.conn,
+        lite.blobs,
+        case_id=lite.case_id,
+        actor_id=filer,
+        revision_id=revision,
+    )
+    # The audit trail is genuinely valid and holds the filing event, but never
+    # an OPINION_SIGNED or a DELIVERABLE_FROZEN one.
+    actions = {entry.action for entry in audit_trail(lite.conn, lite.case_id)}
+    assert "DELIVERABLE_FILED" in actions
+    assert not actions & {"OPINION_SIGNED", "DELIVERABLE_FROZEN"}
+    with pytest.raises(Refusal, match="DELIVERABLE_PAYLOAD_INVALID"):
+        _read(lite, receipt)
+
+
 def test_receipt_rows_are_immutable(lite: _Harness) -> None:
     receipt = _file(lite)
     for statement in (
@@ -306,7 +352,9 @@ def test_filing_rechecks_every_signer_and_freezer_independence(
     _freeze(lite, revision)
     if fault == "freezer_is_signer":
         _corrupt(
-            lite, "UPDATE deliverable_publications SET frozen_by=%s", lite.approver
+            lite,
+            "UPDATE deliverable_publications SET frozen_by=%s",
+            _default_signer(lite),
         )
     else:
         _corrupt(

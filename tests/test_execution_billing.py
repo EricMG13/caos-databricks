@@ -12,7 +12,7 @@ from uuid import UUID, uuid4
 
 import psycopg
 import pytest
-from conftest import _url_for
+from conftest import _url_for, priced
 from fake_chat import ScriptedChat, StatusError, answer, fake_completions
 from langchain_core.messages import AIMessage
 from psycopg.pq import TransactionStatus
@@ -22,8 +22,10 @@ from test_loop_charges import ESTIMATE, MODEL, REPORTED, _Completions
 
 from caos.blobs import BlobStore
 from caos.evidence.citations import (
+    ANY_RUN,
     AnchoredCitation,
     Citation,
+    CitationRule,
     TokenIndex,
     verify_citations,
 )
@@ -36,6 +38,16 @@ from caos.store.outcomes import CallOutcome, record_outcome
 from caos.store.runs import fail_run
 
 __all__ = ["provider", "ready", "route"]
+
+# What `_invoke` reserves each call at, and so -- the charge is the provider's
+# own, at the provider's price (CF-089) -- what the provider must charge at:
+# nothing an input token, ESTIMATE's worth over the completion cap an output one.
+AT_ESTIMATE = priced(ESTIMATE)
+
+
+def _for_output(tokens: int) -> Decimal:
+    """What `tokens` output tokens are billed at `AT_ESTIMATE`, exactly."""
+    return tokens * AT_ESTIMATE.output_per_token
 
 
 def _bill(
@@ -88,22 +100,27 @@ def _bills(
 @pytest.mark.parametrize(
     "response,code,charge",
     [
-        (answer(), "PROVIDER_OUTPUT_TRUNCATED", Decimal("0.25")),
-        (answer(finish="content_filter"), "PROVIDER_REFUSED", Decimal("0.25")),
+        (answer(), "PROVIDER_OUTPUT_TRUNCATED", _for_output(1500)),
+        (answer(finish="content_filter"), "PROVIDER_REFUSED", _for_output(1500)),
         (StatusError(402), "PROVIDER_CALL_INVALID", None),
         (StatusError(503), "PROVIDER_UNAVAILABLE", None),
-        (answer(finish="stop"), "HANDOFF_MALFORMED", Decimal("0.25")),
+        (answer(finish="stop"), "HANDOFF_MALFORMED", _for_output(1500)),
         # A request billed no input is a count the provider never stated: the
         # client reads a null or absent one as zero (ST-11). Unknown.
         (answer(tokens=(0, 0)), "PROVIDER_OUTPUT_TRUNCATED", None),
-        # An empty answer may bill no output; the input is still charged.
-        (answer("", tokens=(1000, 0)), "PROVIDER_OUTPUT_TRUNCATED", Decimal("0.1")),
+        # An empty answer may bill no output; its input is still a known
+        # charge, here at the input rate the run reserved at: zero.
+        (answer("", tokens=(1000, 0)), "PROVIDER_OUTPUT_TRUNCATED", Decimal(0)),
         # No generation id: the host mints one and the bill still commits.
-        (answer(generation=None), "PROVIDER_OUTPUT_TRUNCATED", Decimal("0.25")),
+        (answer(generation=None), "PROVIDER_OUTPUT_TRUNCATED", _for_output(1500)),
         # No usage: the charge is unknown, never zero.
         (answer(tokens=None), "PROVIDER_OUTPUT_TRUNCATED", None),
         (answer(finish="stop", tokens=None), "PROVIDER_RESPONSE_INVALID", None),
-        (answer(finish="something-else"), "PROVIDER_RESPONSE_INVALID", Decimal("0.25")),
+        (
+            answer(finish="something-else"),
+            "PROVIDER_RESPONSE_INVALID",
+            _for_output(1500),
+        ),
         (TimeoutError("private"), "PROVIDER_UNAVAILABLE", None),
         (ValueError("private"), "PROVIDER_UNAVAILABLE", None),
     ],
@@ -120,7 +137,9 @@ def test_native_refusal_records_only_independently_known_money(
         assert conn.info.transaction_status is TransactionStatus.IDLE
 
     chat = ScriptedChat(answer=response, before=idle)
-    provider = replace(provider, completions=fake_completions(chat, model=MODEL))
+    provider = replace(
+        provider, completions=fake_completions(chat, model=MODEL, price=AT_ESTIMATE)
+    )
     with pytest.raises(Refusal, match=f"^{code}$") as caught:
         _invoke(provider, uuid4(), "runtime", provider.route.nodes[0])
     assert "private" not in str(caught.value) + repr(caught.value)
@@ -246,9 +265,10 @@ def test_postbilling_citation_cleanup_preserves_money_and_original_refusal(
         delivered: Mapping[UUID, frozenset[str]],
         citations: Sequence[Citation],
         index: TokenIndex | None = None,
+        rule: CitationRule = ANY_RUN,
     ) -> list[AnchoredCitation]:
         anchored = verify_citations(
-            conn, delivered=delivered, citations=citations, index=index
+            conn, delivered=delivered, citations=citations, index=index, rule=rule
         )
         if broken_cleanup:
             monkeypatch.setattr(psycopg.Connection, "rollback", broken)
@@ -338,9 +358,11 @@ def test_late_known_refusal_is_billed_after_inflight_run_cancellation(
             assert fail_run(cancellation, run_id)
 
     chat = ScriptedChat(answer=answer(), before=cancel_in_flight)
-    provider = replace(provider, completions=fake_completions(chat, model=MODEL))
+    provider = replace(
+        provider, completions=fake_completions(chat, model=MODEL, price=AT_ESTIMATE)
+    )
     with pytest.raises(Refusal, match=r"^PROVIDER_OUTPUT_TRUNCATED$"):
         _invoke(provider, uuid4(), "runtime", provider.route.nodes[0])
     assert chat.calls == 1
     assert provider.conn.info.transaction_status is TransactionStatus.IDLE
-    _bill(dsn, provider.run_id, Decimal("0.25"), status="FAILED")
+    _bill(dsn, provider.run_id, _for_output(1500), status="FAILED")

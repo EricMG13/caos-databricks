@@ -250,52 +250,58 @@ def test_a_module_expected_both_ready_and_blocked_is_refused(tmp_path: Path) -> 
 # The digest each committed set binds. A set's digest moves only when its own
 # manifest or documents move; a change to the loader or the digest that moved
 # one of these would silently orphan every verdict and snapshot bound to it.
+#
+# N8/FP-25: every optional field a case can carry is now tagged in `_digested`
+# with its own name before its value, closing a real ambiguity -- a set naming
+# a subject and a set naming, say, an equal-shaped `expects_ready` list could
+# digest identically. Every one of these moved because every committed set
+# carries at least one of the fields that used to go in untagged.
 COMMITTED_SET_DIGESTS = {
-    "ba-fy2025": ("a30533b3530ed1e609ce33df67e50b4ce5e4f80167be4efc29f398b4c24a7bba"),
-    "ccl-fy2025": "f5555753cf7b39868fa4885d95a0b80847c61204a4b3ebe5fffe8345587c327e",
+    "ba-fy2025": ("300a680d0c3f8e4d5e207ce4e80d1d46390d7e28b6d88eadb4f70cb9ca19ec61"),
+    "ccl-fy2025": "85d50a252f3158fe8a4bd8e4cd0747409f1b559460c16bdc1761b8745d381eb5",
     "ccl-fy2025-covenant-refinancing": (
-        "726e28dad1498a56ed6692d09819834c9727ebbd23ec8bac619f31e61ba4ab8a"
+        "813a9182f25b51814e97ab9b5ce924b21c313471e6557d2486f2599f175806df"
     ),
     "ccl-fy2025-earnings-update": (
-        "7f3619434a2697f10f5ea78d64a2e3e87c67691272037034235289a87507e275"
+        "36aafade247e6c98811e23be6a5c9ccb6bd17c975b77075b6a7d58a62012be61"
     ),
     "ccl-fy2025-liquidity": (
-        "117dcda7edad142dc3ae4a33fc06376690f990eefc87f53fc2804d194d65a8c8"
+        "f98bf8cc077e7fca0e347a34ef8f29adc9dbd4a2a9e51e985fc7118d645335e1"
     ),
     "ccl-fy2025-portfolio": (
-        "7dcfa84602ff94a38fcc2627d15b7922acb08c23a871f7280e16bfe4a92d6a6c"
+        "504fcb0641cb445d6413b0824b2482013f862b739594b0b80fdb3dfa82ae7532"
     ),
     "ccl-fy2025-full-relative-value": (
-        "c834105e7c6e12d6e11996c3744eb414715aef07b549df11bbc9f7ba741977f2"
+        "f4205e4e3606ef68aece138696ea630c7632d2e184a067edce13eebf88e22e79"
     ),
     "ccl-fy2025-relative-value": (
-        "a8df0ccf6d8fd735886c584951f7ca82e460f483a4f235a5ad31143fd3f60ac8"
+        "fb20188605c957ec7b91079bd98f0002a627d15f633586eb39f7349e1f4bbf4b"
     ),
     "ccl-fy2025-lite-covenant-refinancing": (
-        "4bc8aceaa622a76e930fa8aa419a349ffedd8ca681360571f5c8f2ee38c3aa9e"
+        "85fd43d537432db2a5a805ab5855ca2dda28d4b8b8b4e04fe91e0b78421fc2a9"
     ),
     "ccl-fy2025-lite-full-credit-screen": (
-        "a033b1f59bec2d61c887ab018fac8ef7ca22f048cf52c0c0d0f873d0bd53f13e"
+        "f1647d3b593d4a3ec66a001969346f9411da30091b618383a1076b4cefda9608"
     ),
     "ccl-fy2025-market-dislocation": (
-        "502ca79ca3cda068f4621698f45f979e34e78945261b284c2ee232b2f57e11fe"
+        "c01b06c9c09b1ced76c297e0d7bf81ad07ace9e03f3e3322da81b3f85840db35"
     ),
     "save-2024-distressed-restructuring": (
-        "befe19de18cbf6374305882e7a812abeb2ec153038a1dff2a0e80e5674312166"
+        "5a6fb829e945143cf3b6593231dbb2b6d181b7feaca2b60906f3222faf313f6b"
     ),
     "save-2024-lite-distressed-restructuring": (
-        "f53523a15053a2d4f191408cddc600c1667837cbacade354468e0f58fb03c391"
+        "3dcc0176be623c26b6da7d734c6a1a9ea2f1244beab0ca69de29e8228a05903c"
     ),
-    "f-fy2025": ("f7659a750e559db22b97ee3175aa5660819a65fef2d6735fae172126782a2fc2"),
-    "vmo2-fy2025": "27b7df72963c877f707750adfb9e21d2bd42fbcdc1d8ac726cd5c2b53b4e4b07",
+    "f-fy2025": ("645e5829dcee868d58e4c8997014a6d9351e7245fe64727d9c01f04ba9e2206f"),
+    "vmo2-fy2025": "ff9dc7ecc2229ae0d7a114bb8f50e8c30ac9fdd05d62191447c63c8a4dee6b41",
     "vmo2-fy2025-deep-research": (
-        "09807efb1a3d5d40680d1a9d0e054333537781d7bb4013ecd7670323f817fd9b"
+        "1881fcf6818e623322b52679268906a624d9ad4b4026c759f74bdcf9435e9bdd"
     ),
     "vmo2-fy2025-full-deep-research": (
-        "1f15f91b746ee2bc58a9719ff5b5f0cb6a4328c827642bb384f8040ba8cfe3c2"
+        "6e617e8ced5f874ecef59f30bd813f9be06de8c6a2674a2f9c461f2346964f23"
     ),
     "vmo2-fy2025-portfolio": (
-        "a46a1b4f597885e8f6937b47f9da7eba5ec266f4a43818d5f9fa1d42337b87ea"
+        "7215b7c7c41697cc6464adc9cf2f3fe57fa520faf3d2a83c5ea800160f3f1ae2"
     ),
 }
 

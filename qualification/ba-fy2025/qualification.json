@@ -17,17 +17,17 @@
         {
           "module_id": "CP-0",
           "document_sha256": "0446b367110afddcc0d66bc531d70324091b5bd1a96be56b7494ccdb7472f719",
-          "matched_text": "Cash and cash equivalents | $10,921 | | | $13,801 |"
+          "matched_text": "| Cash and cash equivalents | $10,921 | | | $13,801 | |"
         },
         {
           "module_id": "CP-L10",
           "document_sha256": "0446b367110afddcc0d66bc531d70324091b5bd1a96be56b7494ccdb7472f719",
-          "matched_text": "Total revenues | 89,463 | | | 66,517 | | | 77,794 |"
+          "matched_text": "| Total revenues | 89,463 | | | 66,517 | | | 77,794 | |"
         },
         {
           "module_id": "CP-5",
           "document_sha256": "0446b367110afddcc0d66bc531d70324091b5bd1a96be56b7494ccdb7472f719",
-          "matched_text": "Long-term debt | 45,637 | | | 52,586 |"
+          "matched_text": "| Long-term debt | 45,637 | | | 52,586 | |"
         }
       ]
     }

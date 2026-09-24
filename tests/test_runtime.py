@@ -75,7 +75,7 @@ ESTIMATE = Decimal("0.10")
 REPORTED = Decimal("0.0000041")
 LITE_ORDER = ["CP-0", "CP-L10", "CP-5"]
 # One line, so the fixtures' quote anchors on page 1 of the one source.
-REPORT = QUOTE.encode() + b" was USD 1,240.0m\n"
+REPORT = QUOTE.encode() + b"\n"
 
 
 class _Boom(Exception):
@@ -704,9 +704,11 @@ class _Uncallable:
 
 @dataclass
 class _DiesAfterItsBill:
-    """Dies after the call's bill and diagnostic commit, whatever it answered."""
+    """Dies after the call's bill and diagnostic commit, whatever it answered;
+    the first `spare` calls end as they would have, refusals included."""
 
     inner: _Provider
+    spare: int = 0
 
     @property
     def model(self) -> str:
@@ -718,6 +720,9 @@ class _DiesAfterItsBill:
     def execute(
         self, route_node_id: str, module_id: str, *, attempt_id: UUID
     ) -> ProviderResult:
+        if self.spare > 0:
+            self.spare -= 1
+            return self.inner.execute(route_node_id, module_id, attempt_id=attempt_id)
         try:
             return self.inner.execute(route_node_id, module_id, attempt_id=attempt_id)
         except Refusal:
@@ -806,9 +811,18 @@ def test_crash_after_a_billed_answer_accepts_from_the_stored_body_without_a_call
 
 def _another_issuer(fields: dict[str, Any]) -> dict[str, Any]:
     """An answer about someone else: billed, then refused
-    `HANDOFF_IDENTITY_MISMATCH`, a code that earns no second attempt (D30), so
-    these two tests watch replay and retry alone."""
+    `HANDOFF_IDENTITY_MISMATCH`. That earns the node its one second attempt
+    (D30, owner-approved 2026-09-23), which answers the same way, so these two
+    tests watch replay and retry once that attempt is spent."""
     return {**fields, "issuer_name": "Someone Else"}
+
+
+def _attempts(run: _Run) -> list[UUID]:
+    rows = run.conn.execute(
+        "SELECT attempt_id FROM run_attempts WHERE run_id=%s ORDER BY ordinal",
+        (run.run_id,),
+    ).fetchall()
+    return [UUID(str(row[0])) for row in rows]
 
 
 def test_crash_after_a_billed_refused_answer_records_it_and_stops_without_a_call(
@@ -820,27 +834,29 @@ def test_crash_after_a_billed_refused_answer_records_it_and_stops_without_a_call
     conn, case_id = case
     run = _approved_run(conn, case_id, route, bundle, blobs)
     answers = CanonicalCompletions(run.source_id, mutate=_another_issuer)
+    # The first answer is refused and explained live; the process dies after
+    # the bill of the second, the node's one second attempt.
     with pytest.raises(_Boom):
-        run.run(_DiesAfterItsBill(run.provider(answers=answers)))
-    [(attempt,)] = conn.execute(
-        "SELECT attempt_id FROM run_attempts WHERE run_id=%s", (run.run_id,)
-    ).fetchall()
-    assert _count(run, "budget_ledger") == 1
-    assert _refusals(run) == []
+        run.run(_DiesAfterItsBill(run.provider(answers=answers), spare=1))
+    first, second = _attempts(run)
+    assert _count(run, "budget_ledger") == 2
+    assert _refusals(run) == [(first, "HANDOFF_IDENTITY_MISMATCH")]
     conn.rollback()
 
     with pytest.raises(Refusal) as caught:
         run.run(_Uncallable())
 
     assert caught.value.code is RefusalCode.HANDOFF_IDENTITY_MISMATCH
-    assert _refusals(run) == [(attempt, "HANDOFF_IDENTITY_MISMATCH")]
+    assert sorted(_refusals(run)) == sorted(
+        [(first, "HANDOFF_IDENTITY_MISMATCH"), (second, "HANDOFF_IDENTITY_MISMATCH")]
+    )
     conn.rollback()
     # Written once; a store fault is never an explanation of an answer.
     for code in (RefusalCode.ROUTE_IDENTITY_INVALID, RefusalCode.STORE_UNAVAILABLE):
-        assert not record_refusal(conn, attempt_id=attempt, code=code)
-    assert _refusals(run) == [(attempt, "HANDOFF_IDENTITY_MISMATCH")]
-    assert _attempts_per_module(conn, run.run_id) == {_node_id(route, "CP-0"): 1}
-    assert _count(run, "budget_ledger") == 1
+        assert not record_refusal(conn, attempt_id=second, code=code)
+    assert (second, "HANDOFF_IDENTITY_MISMATCH") in _refusals(run)
+    assert _attempts_per_module(conn, run.run_id) == {_node_id(route, "CP-0"): 2}
+    assert _count(run, "budget_ledger") == 2
     assert run_status(conn, run.run_id) is RunStatus.RUNNING
 
 
@@ -856,9 +872,10 @@ def test_a_retry_skips_a_recorded_refusal_and_makes_one_new_attempt(
     with pytest.raises(Refusal) as caught:
         run.run(run.provider(answers=answers))
     assert caught.value.code is RefusalCode.HANDOFF_IDENTITY_MISMATCH
-    # The live path explains the billed answer, so no retry replays it.
-    [(refused, code)] = _refusals(run)
-    assert code == "HANDOFF_IDENTITY_MISMATCH"
+    # The live path explains each billed answer -- the first and the node's one
+    # second attempt -- so no retry replays either.
+    refused = sorted(_refusals(run))
+    assert [code for _attempt, code in refused] == ["HANDOFF_IDENTITY_MISMATCH"] * 2
     conn.rollback()
 
     retry = run.provider()
@@ -867,12 +884,12 @@ def test_a_retry_skips_a_recorded_refusal_and_makes_one_new_attempt(
     assert retry.calls == LITE_ORDER
     assert run_status(conn, run.run_id) is RunStatus.COMPLETE
     assert _attempts_per_module(conn, run.run_id) == {
-        _node_id(route, "CP-0"): 2,
+        _node_id(route, "CP-0"): 3,
         _node_id(route, "CP-L10"): 1,
         _node_id(route, "CP-5"): 1,
     }
-    assert _refusals(run) == [(refused, "HANDOFF_IDENTITY_MISMATCH")]
-    assert _count(run, "budget_ledger") == 4
+    assert sorted(_refusals(run)) == refused
+    assert _count(run, "budget_ledger") == 5
 
 
 def test_a_stored_answer_predating_a_later_soft_input_is_explained_not_accepted(

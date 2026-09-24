@@ -17,17 +17,17 @@
         {
           "module_id": "CP-0",
           "document_sha256": "97a38bc17e505cd1c000aa833d55e4dcfdbaedc5a75ce03a39474b9467fe4b43",
-          "matched_text": "Net cash provided by/(used in) operating activities | 14,918 | | | 15,423 | | | 21,282 |"
+          "matched_text": "| Net cash provided by/(used in) operating activities | 14,918 | | | 15,423 | | | 21,282 | |"
         },
         {
           "module_id": "CP-L10",
           "document_sha256": "97a38bc17e505cd1c000aa833d55e4dcfdbaedc5a75ce03a39474b9467fe4b43",
-          "matched_text": "Net cash provided by/(used in) operating activities | $ | 8,351 | | | $ | 12,931 |"
+          "matched_text": "| Net cash provided by/(used in) operating activities | $ | 8,351 | | | $ | 12,931 | | | $ | — | | | $ | 21,282 | |"
         },
         {
           "module_id": "CP-5",
           "document_sha256": "97a38bc17e505cd1c000aa833d55e4dcfdbaedc5a75ce03a39474b9467fe4b43",
-          "matched_text": "Total Ford Credit | $ | 137,868 | | | $ | 141,417 |"
+          "matched_text": "| Total Ford Credit | $ | 137,868 | | | $ | 141,417 | | | | | | |"
         }
       ]
     }

@@ -12,6 +12,10 @@ dependencies = [
   "fastapi==0.141.1",
   "uvicorn==0.52.4",
   "python-multipart==0.0.32",
+  # The shared-wait primitives identity resolution and admission use
+  # directly (F196); already locked transitively through fastapi/starlette,
+  # named here because production code now imports it on its own (Dn).
+  "anyio==4.15.1",
   # Runtime orchestration and its Lakebase checkpointer (spec section 3, D6).
   "langgraph>=1.1",
   "langgraph-checkpoint-postgres>=2.0.5",

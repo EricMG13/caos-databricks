@@ -51,6 +51,7 @@ that omits the cases after the stop reads as complete.
 from __future__ import annotations
 
 import json
+from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, fields
 from decimal import Decimal
@@ -63,6 +64,7 @@ import psycopg
 
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
+from caos.evidence.extract import dispatch_by_content
 from caos.evidence.ingest import admit_pack
 from caos.graph.route import (
     GATE_MODULE,
@@ -81,10 +83,12 @@ from caos.methodology.runner import ModuleProvider
 from caos.pricing import ModelPrice, worst_case
 from caos.provider import CompletionProvider
 from caos.qualification.matrix import (
+    _LABEL_LIMIT,
     DECLARABLE_REFUSALS,
     Matrix,
     QualificationCase,
     QualificationSet,
+    _accepted_rows,
     assert_measurable,
     assert_unambiguous,
     build_matrix,
@@ -101,10 +105,6 @@ from caos.store.routes import pin_route, resolved_route
 from caos.store.run_inputs import RunInput, pin_run_input, valid_subject
 from caos.store.runs import create_case, run_status, start_run
 from caos.store.source_sets import snapshot_source_set
-
-# The label a case is admitted under. A qualification case is a case like any
-# other in the store, which is what lets the proof read it like any other.
-_LABEL_LIMIT = 128
 
 
 @dataclass(frozen=True, slots=True)
@@ -762,34 +762,80 @@ def _accepted(
     try:
         return accepted_artifacts(conn, blobs, route, run_id, bundle=bundle)
     except (Refusal, ValueError):
-        rows = conn.execute(
-            "SELECT t.route_node_id FROM artifacts a"
-            " JOIN run_attempts t ON t.attempt_id = a.attempt_id"
-            " WHERE a.run_id = %s",
-            (run_id,),
-        ).fetchall()
-        return {str(row[0]): NodeResult() for row in rows}
+        # FP-30: the same per-node artifact read `_accepted_rows` already
+        # makes; only the node names are needed here.
+        return {node: NodeResult() for node in _accepted_rows(conn, run_id)}
+
+
+def _locatable(data: bytes, matched_text: str) -> bool:
+    """Whether `matched_text` occurs, in order, in some page of `data` (FP-26).
+
+    Deliberately not the full search a real citation is verified by
+    (`caos/evidence/citations.py`'s region-scoped, normalising `_unique_run`):
+    that module's search machinery is private to it, and
+    `test_package_boundaries.py` refuses a private name imported across a
+    package for exactly the reason this one stays local -- only the public
+    `dispatch_by_content`/`Token` (`caos/evidence/extract.py`) are used here.
+    A plain, honest word-run check is enough for what this guards: a key
+    naming a quote the document could not possibly produce. The real search's
+    finer rules (normalisation, edge punctuation, tracked-glyph joining) can
+    only ever find *more* than this does, so this never refuses a quote the
+    real search would anchor -- it only catches the ones neither could.
+
+    A document with no extracted text at all is a different, more specific
+    problem than a wrong key -- `SOURCE_HAS_NO_TEXT`, raised moments later by
+    admission -- so it answers `True` here and lets that check run instead of
+    masking it. Unreadable bytes (`SOURCE_NOT_READABLE` and the like) are left
+    to raise from here: the same refusal admission would give them anyway.
+    """
+    words = matched_text.split()
+    if not words:
+        return False
+    tokens = dispatch_by_content(data).extract(data)
+    if not tokens:
+        return True
+    by_page: dict[int, list[str]] = defaultdict(list)
+    for token in tokens:
+        by_page[token.page].append(token.text)
+    width = len(words)
+    return any(
+        texts[start : start + width] == words
+        for texts in by_page.values()
+        for start in range(len(texts) - width + 1)
+    )
 
 
 def _answerable(bundle: Bundle, qualification: QualificationSet) -> None:
-    """Every key names input the case carries and the adapter can locate.
+    """Every key names input the case carries, at a quote the adapter can
+    locate.
 
     Only checkable now that the set holds both halves. Before, a key could name
     any digest at all and the row would simply always miss — indistinguishable
     from a system that failed to find it. A set that no correct run could
     satisfy is a defect in the set, and it is refused before the first call
-    rather than after paying for every one of them.
+    rather than after paying for every one of them. FP-26: a document's digest
+    being carried said nothing about whether its declared quote was ever in the
+    document at all -- a typo in an answer key was indistinguishable from a
+    model that could not find a real quote, until a run had already paid to
+    discover which.
     """
     for case in qualification.cases:
-        carried = {sha256(document.data).hexdigest() for document in case.documents}
+        by_digest = {
+            sha256(document.data).hexdigest(): document.data
+            for document in case.documents
+        }
         if (
-            any(expect.document_sha256 not in carried for expect in case.expects)
+            any(expect.document_sha256 not in by_digest for expect in case.expects)
             or (case.forecast is not None and not case.model_extension)
             # A refusal outside the methodology's own is a key about the host or
             # its infrastructure, which no run can be measured against (FP-01).
             or (
                 case.expected_refusal is not None
                 and case.expected_refusal not in DECLARABLE_REFUSALS
+            )
+            or any(
+                not _locatable(by_digest[expect.document_sha256], expect.matched_text)
+                for expect in case.expects
             )
         ):
             raise Refusal(RefusalCode.QUALIFICATION_KEY_UNANSWERABLE)

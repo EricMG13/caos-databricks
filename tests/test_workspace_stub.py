@@ -4,6 +4,7 @@ repository's code. What a real workspace grants stays with the deployer."""
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import sys
@@ -12,6 +13,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 from uuid import UUID
 
+import anyio
 import gateway_smoke
 import preflight
 import pytest
@@ -147,7 +149,7 @@ def test_the_forwarded_token_resolves_through_scim_over_http(
     monkeypatch.setenv(identity.WORKSPACE_ENV, "1234")
     monkeypatch.setattr(identity, "_CACHE", {})
     monkeypatch.setattr(identity, "_NEGATIVE", {})
-    actor = actor_from_token("a-forwarded-token")
+    actor = anyio.run(actor_from_token, "a-forwarded-token")
     assert actor.role is GlobalRole.ADMIN
     assert isinstance(actor.user_id, UUID)
     assert ("GET", "/api/2.0/preview/scim/v2/Me") in stub.requests
@@ -156,20 +158,20 @@ def test_the_forwarded_token_resolves_through_scim_over_http(
     stub.groups = frozenset({"caos-analysts"})
     monkeypatch.setattr(identity, "_CACHE", {})
     monkeypatch.setattr(identity, "_NEGATIVE", {})
-    assert actor_from_token("another").role is GlobalRole.ANALYST
+    assert anyio.run(actor_from_token, "another").role is GlobalRole.ANALYST
     # A token the workspace refuses is remembered briefly (F43): one round
     # trip, not one per request.
     stub.identities["refused"] = ("", frozenset())
     asked = len(stub.requests)
     for _ in range(3):
         with pytest.raises(Refusal, match=r"^NOT_AUTHENTICATED$"):
-            actor_from_token("refused")
+            anyio.run(actor_from_token, "refused")
     assert len(stub.requests) == asked + 1
     # The cache is bounded: past its capacity nothing more is remembered.
     monkeypatch.setattr(identity, "CACHE_CAPACITY", 1)
     monkeypatch.setattr(identity, "_CACHE", {})
-    actor_from_token("first")
-    actor_from_token("second")
+    anyio.run(actor_from_token, "first")
+    anyio.run(actor_from_token, "second")
     assert len(identity._CACHE) == 1
 
 
@@ -188,7 +190,9 @@ def test_the_volume_backend_round_trips_bytes_through_the_files_api(
     assert name == f"/Volumes/main/caos/caos_blobs/{digest[:2]}/{digest}"
     assert data == b"source bytes"
     methods = {m for m, p in stub.requests if p.startswith("/api/2.0/fs/")}
-    assert methods == {"HEAD", "PUT", "POST", "GET"}
+    # CF-095: no presigned-URL negotiation (that mode's own POST) -- the
+    # plain Files API path only ever GETs, PUTs and HEADs.
+    assert methods == {"HEAD", "PUT", "GET"}
     with pytest.raises(Refusal, match=r"^BLOB_NOT_FOUND$"):
         store.get("0" * 64)
 
@@ -276,7 +280,32 @@ def test_the_bounded_workspace_client_reaches_the_stub_with_its_budgets(
     client = workspace_client()
     assert client.config.http_timeout_seconds == HTTP_TIMEOUT_SECONDS
     assert client.config.retry_timeout_seconds == RETRY_TIMEOUT_SECONDS
+    # CF-095: the presigned-URL download mode is never taken; the plain
+    # Files API path `caos.blobs` covers stays the one in force.
+    assert client.config.disable_experimental_files_api_client is True
     assert client.apps.get("caos").name == "caos"
+
+
+def test_a_client_the_sdk_refuses_to_build_is_store_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """N68: a construction the SDK itself refuses -- unresolved credentials, a
+    host that will not parse -- is the typed `STORE_UNAVAILABLE` (CR-1),
+    never the SDK's own `ValueError` reaching a caller."""
+    from caos.workspace import forget_clients, workspace_client
+
+    monkeypatch.delenv("DATABRICKS_HOST", raising=False)
+
+    def broken(*args: object, **kwargs: object) -> object:
+        raise ValueError("no")
+
+    monkeypatch.setattr("databricks.sdk.WorkspaceClient", broken)
+    forget_clients()
+    try:
+        with pytest.raises(Refusal, match=r"^STORE_UNAVAILABLE$"):
+            workspace_client()
+    finally:
+        forget_clients()
 
 
 def test_a_workspace_that_does_not_answer_is_unavailable_not_unauthenticated(
@@ -292,10 +321,10 @@ def test_a_workspace_that_does_not_answer_is_unavailable_not_unauthenticated(
     monkeypatch.setattr(identity, "_CACHE", {})
     monkeypatch.setattr(identity, "_NEGATIVE", {})
     with pytest.raises(Refusal, match=r"^IDENTITY_UNAVAILABLE$"):
-        actor_from_token("a-token")
+        anyio.run(actor_from_token, "a-token")
     monkeypatch.delenv("DATABRICKS_HOST")
     with pytest.raises(Refusal, match=r"^IDENTITY_UNAVAILABLE$"):
-        actor_from_token("a-token")
+        anyio.run(actor_from_token, "a-token")
 
 
 def test_the_stub_serves_exports_and_refuses_a_duplicate_app(
@@ -382,6 +411,44 @@ def test_the_stub_refuses_what_the_platform_refuses(stub: WorkspaceStub) -> None
     stub.app_state, stub.deployment_state = "CRASHED", "FAILED"
     assert stub.app("caos-dev-42")["app_status"]["state"] == "CRASHED"
     assert stub.deployment("caos-dev-42")["status"]["state"] == "FAILED"
+
+
+def test_the_token_endpoint_refuses_a_malformed_exchange(stub: WorkspaceStub) -> None:
+    """N7: the client-credentials exchange the SDK's oauth-m2m strategy makes
+    over Basic auth -- a missing or malformed pair, or a grant that is not
+    `client_credentials`, is refused `invalid_client`; a well-formed one
+    mints the same bearer every other route already accepts."""
+    import urllib.error
+    import urllib.request
+
+    def token(headers: dict[str, str], body: bytes) -> tuple[int, dict[str, object]]:
+        request = urllib.request.Request(
+            stub.host + "/oidc/v1/token", data=body, method="POST", headers=headers
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=5) as answered:
+                return int(answered.status), json.loads(answered.read())
+        except urllib.error.HTTPError as refused:
+            return refused.code, json.loads(refused.read())
+
+    body = b"grant_type=client_credentials"
+    assert token({}, body) == (400, {"error": "invalid_client"})
+    basic = "Basic " + base64.b64encode(b"id:secret").decode()
+    assert token({"Authorization": basic}, b"grant_type=authorization_code") == (
+        400,
+        {"error": "invalid_client"},
+    )
+    assert (
+        token({"Authorization": "Basic " + base64.b64encode(b"noid").decode()}, body)[0]
+        == 400
+    )
+    status, answer = token({"Authorization": basic}, body)
+    assert status == 200
+    assert answer == {
+        "access_token": BEARER,
+        "token_type": "Bearer",
+        "expires_in": 3600,
+    }
 
 
 def test_a_stand_in_run_starts_from_no_bundle_state_of_its_own(
@@ -544,3 +611,31 @@ def test_the_smoke_parses_the_json_answer_it_asked_for(
     stub.reply = lambda prompt, json_object: "definitely not JSON"
     assert gateway_smoke.main() == 1
     assert capsys.readouterr().out.rstrip().endswith("json_mode=not JSON")
+
+
+def test_an_answer_in_content_parts_prints_no_warning_quoting_it(
+    stub: WorkspaceStub,
+) -> None:
+    """CF-077: an endpoint that answers with a list of content parts made the
+    client's message dump raise Pydantic's serializer `UserWarning`, whose
+    text quotes the answer -- the model's words, which quote the evidence --
+    and Python prints a warning to stderr. Through the real `ChatDatabricks`
+    over HTTP it is contained around the call, and nothing of it is left."""
+    import warnings
+
+    from caos.models import from_environment
+
+    said = "SECRET-PART-TEXT from the model"
+    stub.reply = lambda _prompt, _json_object: said
+    stub.content_parts = True
+    provider = from_environment()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        completion = provider.complete("q" * 200)
+    assert completion.charge is not None
+    # The warning shortens the value it quotes, so its own words and the
+    # answer's tail are what is looked for.
+    messages = [str(w.message) for w in caught]
+    assert not [m for m in messages if "serializer warnings" in m], messages
+    assert not [m for m in messages if "from the model" in m], messages
+    assert stub.completions == 1

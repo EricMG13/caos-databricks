@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import re
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
+import bundle_defaults
 import preflight
 import pytest
 from canonical_fixtures import BUNDLE, CATALOG
@@ -41,7 +41,13 @@ def test_the_environment_names_the_ceiling_or_the_store_default_stands(
 
 def test_preflight_refuses_a_ceiling_below_one_worst_case_call(
     capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # CF-092: `None` here means "no ceiling named", which is only true when
+    # the ambient environment does not already name one -- an inherited
+    # CAOS_RUN_CEILING (a developer's shell, a CI runner) otherwise decides
+    # this assertion instead of the store default under test.
+    monkeypatch.delenv(CEILING_ENV, raising=False)
     price = "databricks-claude-opus-5,0.000005,0.000025,2026-09-22"
     assert preflight.affordable(price, "25.00")
     assert "ok      run ceiling 25.00" in capsys.readouterr().out
@@ -71,15 +77,6 @@ def test_preflight_refuses_a_ceiling_below_one_worst_case_call(
         )
         == 1
     )
-
-
-def _bundle_default(name: str) -> str:
-    """A variable's default as `databricks.yml` declares it."""
-    text = (REPO / "databricks.yml").read_text(encoding="utf-8")
-    block = text[text.index(f"\n  {name}:\n") :]
-    found = re.search(r"\n    default: \"?([^\"\n]+)\"?\n", block)
-    assert found is not None, name
-    return found.group(1)
 
 
 def _widest_profile_spend(price: ModelPrice) -> Decimal:
@@ -113,16 +110,23 @@ def test_the_default_run_ceiling_finishes_the_widest_profile() -> None:
     """D29 (CF-008): the bundle's default ceiling covers the widest profile at
     its section bounds plus one worst-case call (the gate's evidence, or one
     D30 second attempt) at the bundle's default price; 25.00 could not finish
-    a LITE_CREDIT_22 route. Every copy of the default is the bundle's."""
-    price = price_from_environment(
-        _bundle_default("model_endpoint"), _bundle_default("model_price")
-    )
-    default = Decimal(_bundle_default("run_ceiling"))
+    a LITE_CREDIT_22 route. N23: `databricks.yml` is the one source, and the
+    scripts and the stub read it back through `bundle_defaults` rather than
+    each keeping their own copy."""
+    values = bundle_defaults.defaults()
+    price = price_from_environment(values["model_endpoint"], values["model_price"])
+    default = Decimal(values["run_ceiling"])
     assert default >= _widest_profile_spend(price) + worst_case(price), default
     deploy_sh = (REPO / "scripts" / "enterprise_deploy.sh").read_text(encoding="utf-8")
-    deploy_py = (REPO / "scripts" / "enterprise_deploy.py").read_text(encoding="utf-8")
-    assert f'CEILING="${{7:-{default}}}"' in deploy_sh
-    assert f'"--run-ceiling", default="{default}"' in deploy_py
+    assert 'CEILING="${7:-$RUN_CEILING}"' in deploy_sh
+    assert "scripts/bundle_defaults.py --shell" in deploy_sh
+    import enterprise_deploy
+
+    assert enterprise_deploy._DEFAULTS["run_ceiling"] == values["run_ceiling"]
+    from workspace_stub import ENDPOINT, PRICE
+
+    assert ENDPOINT == values["model_endpoint"]
+    assert PRICE == values["model_price"]
 
 
 @pytest.mark.parametrize(

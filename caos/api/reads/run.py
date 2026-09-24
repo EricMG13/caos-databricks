@@ -166,8 +166,10 @@ def read_run_section(  # noqa: PLR0913 -- identity, two ids, store, blobs, bundl
     title, standing, live_sources, observed_at = _visible_case(conn, case_id, actor)
 
     rows = conn.execute(
-        "SELECT r.run_id, r.status, r.created_at, p.profile_id, p.selection_id"
+        "SELECT r.run_id, r.status, r.created_at, p.profile_id, p.selection_id,"
+        " w.stop_code"
         " FROM runs r LEFT JOIN run_routes p ON p.run_id = r.run_id"
+        " LEFT JOIN run_work w ON w.run_id = r.run_id"
         " WHERE r.case_id = %s ORDER BY r.created_at DESC, r.run_id DESC LIMIT %s",
         (case_id, RUNS_MAX + 1),
     ).fetchall()
@@ -236,6 +238,7 @@ def _summary(row: tuple[Any, ...]) -> RunSummary:
         created_at=row[2],
         profile_id=row[3],
         selection_id=row[4],
+        stop_code=row[5],
     )
 
 
@@ -245,8 +248,10 @@ def _displayed_beyond_the_list(
     """A run of this case older than the bounded list, or `RUN_NOT_FOUND` --
     the same answer for an unknown run and another case's."""
     row = conn.execute(
-        "SELECT r.run_id, r.status, r.created_at, p.profile_id, p.selection_id"
+        "SELECT r.run_id, r.status, r.created_at, p.profile_id, p.selection_id,"
+        " w.stop_code"
         " FROM runs r LEFT JOIN run_routes p ON p.run_id = r.run_id"
+        " LEFT JOIN run_work w ON w.run_id = r.run_id"
         " WHERE r.run_id = %s AND r.case_id = %s",
         (run_id, case_id),
     ).fetchone()
@@ -341,6 +346,7 @@ def _run_view(
         route_digest=None if pin_of_route is None else pin_of_route[1],
         build_id=None if pin is None else pin.build_id,
         source_set_version=None if pin is None else pin.source_version,
+        input_fingerprint=None if pin is None else pin.input_fingerprint,
         subject=None
         if pin is None or pin.subject is None
         else RunSubjectView(

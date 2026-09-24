@@ -30,6 +30,7 @@ import psycopg
 from caos import methodology
 from caos.blobs import BlobStore
 from caos.evidence.citations import (
+    WHOLE_LINE,
     AnchoredCitation,
     Citation,
     TokenIndex,
@@ -61,6 +62,7 @@ from caos.methodology.handoff import (
     UpstreamRef,
     anchoring_line,
     answer_citations,
+    answer_markdown,
     capped,
     feedback_lines,
     parse_response,
@@ -87,6 +89,7 @@ from caos.methodology.selection import (
 )
 from caos.methodology.vendor import VendorContract, cached_contract, catalog
 from caos.methodology.verification import (
+    CREDIT_SCREEN_SELECTION,
     AcceptedRow,
     Step,
     VendorAuthority,
@@ -113,6 +116,7 @@ from caos.store.outcomes import (
     require_idle,
 )
 from caos.store.run_inputs import load_run_input
+from caos.store.runs import attempt_ordinal
 from caos.store.source_sets import SourceSet, load_source_set
 from caos.store.work import require_resendable
 
@@ -186,14 +190,16 @@ def _within_reservation(
     A missing reservation refuses here as well as in `check_call`: the unit that
     spends checks it, not only the unit that ordered it.
     """
-    from caos.pricing import priced_request
+    from caos.pricing import bills_at, priced_request
 
     measured = request_size(provider, prompt)
     with execution_reads(conn):
         taken = reserved_for(conn, attempt_id)
     if taken is None:
         raise Refusal(RefusalCode.BUDGET_NOT_RESERVED)
-    if taken.price.model != provider.model:
+    # The whole price, not its model alone: the charge is the provider's, at
+    # the provider's own price (CF-089).
+    if not bills_at(provider, taken.price):
         raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
     if priced_request(taken.price, measured) > taken.amount:
         raise Refusal(RefusalCode.RESERVATION_BELOW_REQUEST)
@@ -374,8 +380,11 @@ def _answer(  # noqa: PLR0913 -- one recorded answer, keyword-only
         )
     )
     # A Blocked verdict ends the run only once its quotes are verified: an
-    # unanchorable Blocked handoff is an ordinary refusal (c-5b, P3-2).
-    anchored = verify_citations(conn, delivered=blocks, citations=citations)
+    # unanchorable Blocked handoff is an ordinary refusal (c-5b, P3-2). Each
+    # quote must be one whole evidence line, as the final check says (N28).
+    anchored = verify_citations(
+        conn, delivered=blocks, citations=citations, rule=WHOLE_LINE
+    )
     if projections is None:
         raise Refusal(RefusalCode.HANDOFF_BLOCKED)
     _forecast_inputs(bundle, assignment.module_id, markdown, context)
@@ -391,6 +400,7 @@ def _answer(  # noqa: PLR0913 -- one recorded answer, keyword-only
         lineage=context.lineage,
         projections=projections,
         citations=tuple(anchored),
+        citation_rule=WHOLE_LINE,
     )
     return markdown, record_bytes(record)
 
@@ -582,9 +592,10 @@ def _prompt_context(
     node's one second attempt carries (D30). Replay and the readers never
     build a prompt, so they never pay for the ledger read this adds."""
     context = _context(conn, blobs, bundle, assignment, identity)
-    body = _feedback_body(conn, blobs, assignment)
-    if body is None:
+    fed = _feedback_body(conn, blobs, assignment)
+    if fed is None:
         return context
+    body, refused = fed
     skill = assemble_authority(bundle, assignment.module_id).files[SKILL]
     contract, pathways = _contract(bundle), catalog(bundle)
     host = (
@@ -597,11 +608,35 @@ def _prompt_context(
             body,
             gate_expects(assignment.route, assignment.node),
         ),
+        _driver_line(contract, assignment, context, body),
     )
+    # Judged under the identity the refused answer was asked under: its
+    # ordinal, not this attempt's, fixes the attempt id and invocation digest
+    # it had to copy, so only a field it really copied wrong is named.
+    with suppress(Refusal):  # an attempt from before ordinals: this identity
+        identity = replace(identity, ordinal=attempt_ordinal(conn, refused))
     lines = feedback_lines(contract, pathways, identity, body, skill=skill)
     return replace(
         context, feedback=capped([line for line in host if line] + list(lines))
     )
+
+
+def _driver_line(
+    contract: VendorContract, assignment: Assignment, context: _Context, body: str
+) -> str | None:
+    """CP-CF's second attempt told which of CP-2G's driver rows its refused
+    request cannot map, by row (G3-9); None for every other module."""
+    if assignment.module_id != MODEL_MODULE:
+        return None
+    owner = next(
+        (data for ref, data in context.upstream if ref.module_id == "CP-2G"), None
+    )
+    markdown = answer_markdown(body)
+    if owner is None or markdown is None:
+        return None
+    from caos.methodology.forecast import driver_line
+
+    return driver_line(contract, markdown, owner)
 
 
 # Anchoring's own refusals: a quote not on its cited page, on it more than
@@ -615,9 +650,18 @@ _ANCHORING_CODES = frozenset(
 )
 # The refusals whose checks a second attempt can be told of (D30, N52): the
 # validator's and the host's own (`HANDOFF_MALFORMED`), the completeness
-# checker's (`HANDOFF_INCOMPLETE`) and anchoring's.
+# checker's (`HANDOFF_INCOMPLETE`), anchoring's, and -- owner-approved on
+# 2026-09-23 (G1-16) -- a host-owned field copied wrong or a field no handoff
+# may carry, each told by field name (`handoff._front_matter_lines`).
 SECOND_ATTEMPT_CODES = (
-    frozenset({RefusalCode.HANDOFF_MALFORMED, RefusalCode.HANDOFF_INCOMPLETE})
+    frozenset(
+        {
+            RefusalCode.HANDOFF_MALFORMED,
+            RefusalCode.HANDOFF_INCOMPLETE,
+            RefusalCode.HANDOFF_IDENTITY_MISMATCH,
+            RefusalCode.HANDOFF_UNDECLARED_FIELD,
+        }
+    )
     | _ANCHORING_CODES
 )
 
@@ -644,9 +688,9 @@ def second_attempt_due(
 
 def _feedback_body(
     conn: StoreConnection, blobs: BlobStore, assignment: Assignment
-) -> str | None:
-    """The refused answer this attempt answers, when it is the node's one
-    second attempt (D30), else None.
+) -> tuple[str, UUID] | None:
+    """The refused answer this attempt answers and the attempt that gave it,
+    when this is the node's one second attempt (D30), else None.
 
     Counted from the attempts before this one, so the prospective prompt that
     is priced and the attempt's own rebuilt prompt carry the same lines. A body
@@ -659,12 +703,13 @@ def _feedback_body(
     source = _feedback_source(attempts[:before])
     if source is None or source.diagnostic_sha256 is None:
         return None
+    body: str | None = None
     try:
-        return _stored_body(blobs, source.diagnostic_sha256)
+        body = _stored_body(blobs, source.diagnostic_sha256)
     except Refusal as lost:
         if lost.code not in _BLOB_LOST:
             raise
-    return None
+    return None if body is None else (body, source.attempt_id)
 
 
 def _anchoring(
@@ -678,7 +723,13 @@ def _anchoring(
     verdicts: list[RefusalCode | None] = []
     for citation in citations:
         try:
-            verify_citations(conn, delivered=blocks, citations=(citation,), index=index)
+            verify_citations(
+                conn,
+                delivered=blocks,
+                citations=(citation,),
+                index=index,
+                rule=WHOLE_LINE,
+            )
         except Refusal as refused:
             if refused.code not in _ANCHORING_CODES:
                 raise
@@ -1074,8 +1125,7 @@ def _verified_accepted(  # noqa: PLR0913 -- the unit's handles, its row, its pai
     identity = verified.record.identity
     if node.module_id == MODEL_MODULE or (
         node.module_id == "CP-5"
-        and (identity.profile_id, identity.selection_id)
-        == ("LITE_CREDIT_22", "LITE_FULL_CREDIT_SCREEN")
+        and (identity.profile_id, identity.selection_id) == CREDIT_SCREEN_SELECTION
     ):
         assignment = Assignment(node.module_id, row.run_id, node, route, row.attempt_id)
         _forecast_inputs(
@@ -1111,9 +1161,7 @@ def _forecast_inputs(
         markdown,
         upstream.values(),
         refuse=RefusalCode.HANDOFF_INCOMPLETE,
-        selection=(
-            ("LITE_CREDIT_22", "LITE_FULL_CREDIT_SCREEN") if module == "CP-5" else None
-        ),
+        selection=(CREDIT_SCREEN_SELECTION if module == "CP-5" else None),
     )
 
 

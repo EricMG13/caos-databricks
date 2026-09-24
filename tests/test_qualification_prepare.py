@@ -659,9 +659,11 @@ def test_the_harness_admits_pdfs_through_the_pdf_extractor(ready: Fixture) -> No
     """The harness passes no extractor; before per-document dispatch a PDF case
     was read as UTF-8 text and refused, or tokenised as PDF syntax."""
     conn, blobs, harness, _ = ready
-    pdf = minimal_pdf(["Total debt at 31 December 2026 was USD 1,240.0m"])
-    # `_case` names every document `report.txt`: the name must not decide.
-    case = _case("pdf", pdf)
+    line = "Total debt at 31 December 2026 was USD 1,240.0m"
+    pdf = minimal_pdf([line])
+    # `_case` names every document `report.txt`: the name must not decide. Its
+    # quote is the extracted line, not a line of the PDF's own syntax.
+    case = _case("pdf", pdf, quote=line)
     assert [document.filename.value for document in case.documents] == ["report.txt"]
     subject.prepare(conn, blobs, harness, qualification=QualificationSet((case,)))
     rows = conn.execute("SELECT extractor_identity FROM source_extractions").fetchall()

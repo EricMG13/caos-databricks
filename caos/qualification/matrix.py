@@ -2,8 +2,8 @@
 
 `docs/REBUILD_PLAN.md` Phase 10. A **qualification set** is the immutable cases
 and answer keys one verdict is measured against (`CONTEXT.md`); its digest is
-one of the six bindings `read_verdict` requires, and this module is where that
-digest is computed.
+one of the seven bindings `read_verdict` requires, and this module is where
+that digest is computed.
 
 **The matrix reports; it does not conclude.** Comparing a run against an answer
 key is mechanical, and the host may do it. Deciding that the comparison is good
@@ -25,7 +25,7 @@ leverage is 4.2x" has nothing to compare against until the record carries the
 figure as a number, which is the known-gaps entry this module ships with.
 
 Beside the citations a key may also ask what a module *concluded*
-(`ExpectedProjection`, over the seven fields the host projects) and what it
+(`ExpectedProjection`, over the eight fields the host projects) and what it
 *wrote in a named register cell* (`ExpectedRegister`, read through the vendor's
 own register reader). None of the three is the conclusion's soundness, and a
 reviewer still reads the rows.
@@ -197,7 +197,7 @@ class ExpectedRegister:
 
     The third question an answer key can ask, and the first that reaches the
     analysis itself. A citation key asks which quotes a module drew; a
-    projection key asks what its seven host-projected scalars said; this asks
+    projection key asks what its eight host-projected scalars said; this asks
     what it *wrote in a named register cell* -- a liquidity bridge's figure, a
     covenant term, a topic's materiality. Those live in the appendix registers
     the vendor's own contract declares, and the vendor ships the reader
@@ -375,10 +375,17 @@ def _digested(case: QualificationCase) -> list[object]:
             for expect in case.expects
         ),
     ]
+    # N8/FP-25: every optional field below is tagged with its own name before
+    # its value, not appended bare. Two of the nine were already tagged
+    # (`expects_blocked`, `research_brief`) for exactly this reason --
+    # untagged, a set differing only in which optional field it carries could
+    # digest identically to one that carries a different field of the same
+    # shape. Tagging all nine closes that the same way for the rest.
     if case.subject is not None:
         subject = case.subject
         entry.append(
             [
+                "subject",
                 subject.issuer_id,
                 subject.issuer_name,
                 subject.reporting_period,
@@ -390,6 +397,7 @@ def _digested(case: QualificationCase) -> list[object]:
     if case.forecast is not None:
         entry.append(
             [
+                "forecast",
                 case.forecast.scenario,
                 case.forecast.period_id,
                 sorted([value.name, value.value] for value in case.forecast.values),
@@ -402,37 +410,44 @@ def _digested(case: QualificationCase) -> list[object]:
             ]
         )
     if case.expected_refusal is not None:
-        entry.append(case.expected_refusal.value)
+        entry.append(["expected_refusal", case.expected_refusal.value])
     if case.expects_ready:
-        entry.append(sorted(case.expects_ready))
+        entry.append(["expects_ready", sorted(case.expects_ready)])
     if case.expects_blocked:
         # Tagged, because the same ids appended bare would digest exactly as an
         # `expects_ready` key does -- two opposite sets, one digest.
         entry.append(["expects_blocked", sorted(case.expects_blocked)])
     if case.expects_projection:
         entry.append(
-            sorted(
-                [expect.module_id, expect.field, expect.value]
-                for expect in case.expects_projection
-            )
+            [
+                "expects_projection",
+                sorted(
+                    [expect.module_id, expect.field, expect.value]
+                    for expect in case.expects_projection
+                ),
+            ]
         )
     if case.research_brief is not None:
         entry.append(["research_brief", case.research_brief])
     if case.expects_register:
         entry.append(
-            sorted(
-                [
-                    expect.module_id,
-                    expect.register_id,
-                    # The row key is a set of cell conditions, not a sequence:
-                    # two authors naming the same row in either order name the
-                    # same row, and the digest has to agree with them.
-                    sorted([column, value] for column, value in expect.row_key),
-                    expect.column,
-                    expect.expected,
-                ]
-                for expect in case.expects_register
-            )
+            [
+                "expects_register",
+                sorted(
+                    [
+                        expect.module_id,
+                        expect.register_id,
+                        # The row key is a set of cell conditions, not a
+                        # sequence: two authors naming the same row in either
+                        # order name the same row, and the digest has to
+                        # agree with them.
+                        sorted([column, value] for column, value in expect.row_key),
+                        expect.column,
+                        expect.expected,
+                    ]
+                    for expect in case.expects_register
+                ),
+            ]
         )
     return entry
 

@@ -41,6 +41,8 @@ from time import monotonic, sleep
 from typing import Literal, overload
 from uuid import UUID
 
+import psycopg
+
 from caos.api.events import STREAM_NAMES, Marker, parse_marker
 from caos.api.wire import EventName
 from caos.refusals import Refusal, RefusalCode
@@ -244,6 +246,12 @@ def case_tail(  # noqa: PLR0913 -- the stream's identity, then its lifetime
     `after` is the raw `Last-Event-ID`; it is parsed against the heads read
     here. A deadline of zero is one poll. Yields nothing at all to an actor
     who cannot read the case.
+
+    A store fault reaches a caller here as the bare `psycopg.Error` it is;
+    `guarded(case_tail(...))` is what every caller outside this module and
+    its own tests should hold instead (CF-022). Kept apart from this
+    function's own body -- rather than a `try` wrapped around it -- so the
+    fix costs this already-baselined function no added nesting (C901).
     """
     started = monotonic()
     audit_head, run_head, terminal = _heads(conn, case_id, run_id)
@@ -270,6 +278,26 @@ def case_tail(  # noqa: PLR0913 -- the stream's identity, then its lifetime
         sleep(poll)
         if heartbeat:
             yield None
+
+
+def guarded(tail: Iterator[StreamEvent | None]) -> Iterator[StreamEvent | None]:
+    """Any `case_tail(...)`-shaped generator, with a store fault (CF-022)
+    refused `STORE_UNAVAILABLE` rather than left to escape as the bare
+    `psycopg.Error` an unhandled exception elsewhere would be logged with,
+    its own message included.
+
+    The response has long since started by the time any query `case_tail`
+    makes runs, so no fresh status reaches the wire either way; what changes
+    is what is safe to raise and to log. Generic over the generator rather
+    than over `case_tail`'s own eight parameters, so it adds no second copy
+    of its signature (and no second `PLR0913`) beside it -- every caller
+    outside this module's own tests of `case_tail` itself should hold this
+    wrapped around it.
+    """
+    try:
+        yield from tail
+    except psycopg.Error:
+        raise Refusal(RefusalCode.STORE_UNAVAILABLE) from None
 
 
 def _pending(

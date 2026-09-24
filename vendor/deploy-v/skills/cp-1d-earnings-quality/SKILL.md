@@ -26,10 +26,10 @@ Use `../cp-os-credit-os/scripts/prepare_invocation.py` from this skill folder wi
 3. Filename=`[SubjectKey]_CP-1D_[YYYYMMDD].md` from front-matter `issuer_id`/`module_id`/`analysis_date`; never period/name/alias. Validate name pre-completion; cannot create→Blocked. YAML=`qa_status`, Confidence Score/band, six H2s. `## Analysis` leads conclusion-first with compact tables; complete registers lossless below `### Analytical appendix — complete canonical registers`. No DOCX/PDF/HTML/slide/JSON/dashboard.
 4. upstream re-anchor module/run/entity/period scope/values. Delivered but Blocked/mismatch→`[Insufficient Information] — ` reason+stop that step/no inference; an upstream the route does not include→named limitation, not a stop. Figure=file+locator or null+gap; null≠zero; keep rows/`—`; never fabricate/reconcile.
 5. CP-1 owns the recorded bridge and CP-1B owns its transcription check. CP-1D never re-extracts or re-states a figure either has established; it assesses whether the adjustment is supportable and restates the consequence.
-6. An add-back is challenged on evidence, never on preference. Absent evidence produces `[Insufficient Information]` and a gap row — never a silent acceptance and never an invented haircut.
+6. An add-back is challenged on evidence, never on preference. Absent evidence produces `[Insufficient Information] — ` plus what is missing, and a gap row — never a silent acceptance and never an invented haircut.
 7. Never present a quality-adjusted figure as the issuer's reported or covenant EBITDA. Covenant-permitted capacity is CP-4A's; this module's restatement is analytical.
 8. Multi-figure event: all figures+roles, one conflict row; never silently choose.
-9. `committee_status`∈Committee Ready|Draft Only|Requires More Work|Insufficient Information|Restricted|Blocked. `qa_status` Restricted→score≤59 (band from the score: 40-59 Low, below 40 Insufficient Information); Blocked→≤39.
+9. `committee_status`∈Committee Ready|Draft Only|Requires More Work|Insufficient Information|Restricted|Blocked. `qa_status` follows the run's own status (canon D1 map): complete→Passed; with gaps or limitations→Restricted; Blocked→Blocked; never Not Reviewed. Restricted→score≤59 (band from the score: 40-59 Low, below 40 Insufficient Information); Blocked→≤39.
 
 ## Analytical depth — binding on every run
 
@@ -160,8 +160,9 @@ The add-back challenge. Take the bridge CP-1 recorded and CP-1B transcription-ch
 2. `Supported` requires evidence of the action taken, not of the intention. A signed plan is intention; a headcount reduction already executed is action.
 3. A cost claimed non-recurring that appears in two or more prior periods is recurring. State the periods.
 4. Quality-adjusted EBITDA is an analytical restatement. Never present it as reported or covenant EBITDA, and never feed it to CP-4A as covenant capacity.
-5. Where evidence cannot settle an add-back, mark `[Insufficient Information]`, log the gap, and carry the amount as unresolved — not as accepted and not as rejected.
+5. Where evidence cannot settle an add-back, mark it `[Insufficient Information] — ` plus what is missing, log the gap, and carry the amount as unresolved — not as accepted and not as rejected.
 6. Cash conversion is a test, not a conclusion: a gap between adjusted EBITDA and CFO is evidence about the add-backs, and its explanation must be sourced.
+7. An empty CP-1 bridge is a permitted upstream, not a missing one: CP-1 emits it when the issuer reports no add-backs. T1D.1–T1D.4 then each carry one row stating that no add-back exists (`Add-Back ID` `NONE`, its amount, category and assessment cells `—`, CP-1's empty `adjusted_ebitda_bridge` as the source), T1D.4 bridges reported EBITDA to itself, and Steps 5–7 still run. Never invent an add-back to fill a register. A null CP-1 figure (`—` or `Not Calculable`) is carried as it stands with a gap row, never as zero and never as a stop.
 </hard_rules>
 
 <workflow priority="critical">
@@ -179,7 +180,7 @@ The add-back challenge. Take the bridge CP-1 recorded and CP-1B transcription-ch
 
 <verification priority="critical">
 #### Verification — fail closed
-Record PASS/FAIL/NA for: CP-1 bridge inherited without restatement; every add-back in CP-1's bridge present in T1D.1; achievability assessed on evidence of action; recurrence tested against named prior periods; quality-adjusted bridge arithmetic reconciles to T1D.4's cumulative column; leverage restated on all three bases; every unresolved add-back carried as a gap.
+Record PASS/FAIL/NA for: CP-1 bridge inherited without restatement; every add-back in CP-1's bridge present in T1D.1 (one `NONE` row when the bridge is empty); achievability assessed on evidence of action; recurrence tested against named prior periods; quality-adjusted bridge arithmetic reconciles to T1D.4's cumulative column; leverage restated on all three bases; every unresolved add-back carried as a gap.
 </verification>
 
 #### Export
@@ -200,7 +201,7 @@ CP-1E's binding rules are CP-1D's: the same canon, and every rule in `## Canon C
 1. Every adjustment is evidence-led. An obligation is treated as debt-like because the disclosure supports it, never because a convention says so by default.
 2. State the convention applied per item and where it diverges from the rating agencies' treatment (CP-2H carries theirs). Divergence is permitted and must be reasoned, not silent.
 3. Never present adjusted debt as reported or covenant debt. The restatement is analytical; covenant-permitted capacity is CP-4A's.
-4. Where disclosure cannot support a quantum, mark `[Insufficient Information]`, log the gap, and carry the item unquantified — never apply a default multiple to an undisclosed obligation.
+4. Where disclosure cannot support a quantum, mark it `[Insufficient Information] — ` plus what is missing, log the gap, and carry the item unquantified — never apply a default multiple to an undisclosed obligation.
 5. Operating-lease treatment states the standard in force (IFRS 16 / ASC 842) and whether the figure is already on balance sheet, to avoid double counting.
 
 ### CP-1E method
@@ -255,7 +256,7 @@ Follow `../../CANON_SHARED.md § CP_AB_EXPORT_SPEC.md`. Every run authors and va
     - **critical_cell_values_casefold**: ; [insufficient information]; n/a; tbd; not calculable from provided materials; unavailable
   - **required_registers**: merged into the host's `## Output profile` above; not restated here
   - **semantic_rules**: none
-- **opening_h3**: ### Adjusted debt read-through
+- **opening_h3**: none of its own; the artifact opens with `### Earnings quality read-through`, and this phase's section heading is `### Adjusted debt read-through`
 - **opening_view_word_range**: maximum=150; minimum=90
 - **permitted_front_table**: max_body_rows=8; max_columns=6; optional=True; values_must_come_from_appendix_registers=True
 - **prohibited_conclusions**: No covenant-capacity conclusion, no restatement presented as reported or covenant debt, no investment opinion.
@@ -291,6 +292,6 @@ For the absorbed `CP-1E` phase on every run:
 
 ## Research questions and adoption — binding when applicable
 
-Before finalizing an assumption or conclusion, identify any unresolved material evidence question. If existing sources answer it, continue. Otherwise use `../cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md` to add a bounded request naming this module as consumer and a factual predecessor. The host authors the control brief under the user's existing task authorization; CP-OS remains read-only. Do not create a self-dependency from this module back through CP-DR. For a late challenge, retain the current CP-0 anchor and archive superseded research attempts outside the active snapshot.
+Before finalizing an assumption or conclusion, identify any unresolved material evidence question. If existing sources answer it, continue. Otherwise, where `../cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md` is delivered with this module, use it to add a bounded request naming this module as consumer and a factual predecessor; where it is not delivered, record the question as an unresolved gap under `## Gaps & Conflicts` and do not request research. The host authors the control brief under the user's existing task authorization; CP-OS remains read-only. Do not create a self-dependency from this module back through CP-DR. For a late challenge, retain the current CP-0 anchor and archive superseded research attempts outside the active snapshot.
 
 Run the invocation helper against the fresh snapshot. If it returns `research_adoption_rows`, complete the tagged `cpdr.adoptions` table in the analytical appendix: `question_id`, `research_sha256`, `disposition` (ACCEPTED / REJECTED / QUALIFIED), `reason`, `analytical_effect`. Record one row per assigned question, with the exact current research hash. Rejection or qualification still explains the consequence. CP-DR supplies evidence; this module remains responsible for source applicability, numerical extraction, assumptions and conclusions. Unresolved research blocks its named consumer, not unrelated modules. A changed research dossier invalidates its declared consumers and their dependents; research is versioned per bounded batch, not per claim.

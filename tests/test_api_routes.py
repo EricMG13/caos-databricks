@@ -27,7 +27,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from canonical_fixtures import CanonicalCompletions
-from conftest import route_fault
+from conftest import route_fault, tamper
 from fastapi import FastAPI, HTTPException
 from fastapi.dependencies.utils import get_dependant
 from fastapi.exceptions import RequestValidationError
@@ -83,6 +83,7 @@ from caos.methodology.bundle import Bundle
 from caos.methodology.handoff import _decoded_record, record_bytes
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
+from caos.store.budget import CEILING_ENV
 from caos.store.commands import request_digest
 from caos.store.members import Standing, grant, revoke
 from caos.store.routes import pin_route, pinned_route
@@ -557,7 +558,8 @@ def test_a_stored_gate_record_the_markdown_does_not_bind_is_a_server_fault(
         stored,
         projections=replace(stored.projections, readiness=(("CP-5", "READY"),)),
     )
-    harness.conn.execute(
+    tamper(
+        harness.conn,
         "UPDATE artifacts SET record_sha256 = %s WHERE attempt_id = %s",
         (harness.blobs.put(record_bytes(lying)), attempt),
     )
@@ -569,7 +571,8 @@ def test_a_stored_gate_record_the_markdown_does_not_bind_is_a_server_fault(
         500,
         _refused("ARTIFACT_RECORD_MISMATCH"),
     )
-    harness.conn.execute(
+    tamper(
+        harness.conn,
         "UPDATE artifacts SET record_sha256 = %s WHERE attempt_id = %s",
         (harness.blobs.put(record_bytes(lying)), attempt),
     )
@@ -808,6 +811,26 @@ def test_every_refusal_code_has_a_constant_clearance() -> None:
         assert "{" not in clears and "}" not in clears and "%" not in clears, code
 
 
+def test_the_handoff_clearances_name_the_right_fix() -> None:
+    """G2-17. `HANDOFF_BLOCKED` names a stored module blocker a caller can act
+    on directly; the other four are a stored handoff that failed to re-parse
+    on read, which no caller's retry alone repairs without an operator's own
+    look -- and neither used to say either thing."""
+    assert CLEARS[RefusalCode.HANDOFF_BLOCKED] == (
+        "Supply what the module's stated blocker names, then start a new run."
+    )
+    verify_on_read = (
+        "Retry the attempt; an operator must verify a stored handoff refused on read."
+    )
+    for code in (
+        RefusalCode.HANDOFF_MALFORMED,
+        RefusalCode.HANDOFF_IDENTITY_MISMATCH,
+        RefusalCode.HANDOFF_INCOMPLETE,
+        RefusalCode.HANDOFF_UNDECLARED_FIELD,
+    ):
+        assert CLEARS[code] == verify_on_read, code
+
+
 def test_every_refusal_code_has_an_explicit_http_status() -> None:
     """`_STATUS` is total over `RefusalCode`, the way `CLEARS` beside it is.
 
@@ -822,17 +845,15 @@ def test_every_refusal_code_has_an_explicit_http_status() -> None:
 # answered 400 -- "your request was wrong" -- while its clearance told the
 # caller to retry: time wearing blame, the mirror of what §75 fixed. §75's one
 # question decides each. The provider not answering is the only one waiting
-# repairs; the other seven are an answer the provider already gave, which the
-# identical request later meets again, and a new attempt is the discharge.
+# repairs; the other three are an answer the provider already gave, which the
+# identical request later meets again, and a new attempt is the discharge. Four
+# more the owner decided -- the envelope and readiness codes -- were retired,
+# since nothing raised them (CF-099).
 RETRY_SHAPED_400_DECIDED = {
     RefusalCode.PROVIDER_UNAVAILABLE: 503,
     RefusalCode.PROVIDER_OUTPUT_TRUNCATED: 500,
     RefusalCode.PROVIDER_REFUSED: 500,
     RefusalCode.PROVIDER_RESPONSE_INVALID: 500,
-    RefusalCode.ENVELOPE_INVALID: 500,
-    RefusalCode.ENVELOPE_UNDECLARED_FIELD: 500,
-    RefusalCode.ENVELOPE_UNCITED_CLAIM: 500,
-    RefusalCode.READINESS_INCOMPLETE: 500,
 }
 
 
@@ -860,7 +881,7 @@ def test_every_refusal_is_classed_transient_or_permanent_and_none_is_both() -> N
 
 def test_no_400_tells_the_caller_to_retry() -> None:
     """A 400 whose clearance says retry is a claim about time wearing a status
-    about blame, and none is left: the eight the owner decided (§88) carry the
+    about blame, and none is left: the ones the owner decided (§88) carry the
     status decided for them, and a new retry-shaped 400 fails here until
     someone asks §75's question of it.
 
@@ -922,7 +943,7 @@ def test_every_code_the_edge_answers_carries_the_apps_status() -> None:
     }
     answered = {code.name for code in EDGE_STATUS}
     assert named == answered | {RefusalCode.EDGE_CONFIG_INVALID.name}
-    assert len(answered) == 4
+    assert len(answered) == 5
 
 
 def test_an_unhandled_fault_is_logged_as_its_class_and_frame_never_its_message(
@@ -1082,6 +1103,13 @@ def test_the_surface_is_exactly_the_routes_it_declares(
         "/api/v1/cases/{case_id}/revisions/{revision_id}/signature": "sign",
         "/api/v1/cases/{case_id}/revisions/{revision_id}/freeze": "freeze",
         "/api/v1/cases/{case_id}/revisions/{revision_id}/filing": "file",
+        # N4: the deliverable's own render and audit-package downloads.
+        "/api/v1/cases/{case_id}/revisions/{revision_id}/render": (
+            "read_deliverable_render"
+        ),
+        "/api/v1/cases/{case_id}/revisions/{revision_id}/package": (
+            "read_deliverable_package"
+        ),
     }
 
 
@@ -1270,12 +1298,54 @@ def test_a_process_with_no_database_refuses_to_start(
     assert caught.value.code is RefusalCode.STORE_NOT_CONFIGURED
 
 
+def test_a_malformed_database_url_refuses_to_start_without_the_password(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """CF-078: a DSN psycopg's own parser refuses -- bad percent-encoding in
+    the password -- raises `ProgrammingError` with the whole connection
+    string, password included, quoted in its message. The lifespan's
+    unguarded `connect(_database_url())` let that string reach stderr
+    verbatim; it must fail at boot with the typed code alone instead."""
+    monkeypatch.setenv(
+        app_module.DATABASE_URL,
+        "postgresql://baduser:SuperSecretPw%2passwordZZZ@127.0.0.1:1/nodb",
+    )
+
+    with pytest.raises(Refusal) as caught, TestClient(app):
+        pass
+
+    assert caught.value.code is RefusalCode.STORE_UNAVAILABLE
+    logged = capsys.readouterr().err
+    assert logged.strip() == "STORE_UNAVAILABLE"
+    assert "SuperSecretPw" not in logged
+
+
+def test_a_malformed_run_ceiling_refuses_to_start(
+    empty_database: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """CF-048: `CAOS_RUN_CEILING` was only ever read lazily, when a caller
+    started a run, so a value nobody could price sat invisible from boot
+    until the first such request. Checked at the same point the store is,
+    the same way a malformed `CAOS_MODEL_PRICE` already refuses the worker."""
+    monkeypatch.setenv(app_module.DATABASE_URL, empty_database)
+    monkeypatch.setenv(CEILING_ENV, "not-a-number")
+
+    with pytest.raises(Refusal) as caught, TestClient(app):
+        pass
+
+    assert caught.value.code is RefusalCode.PROVIDER_NOT_CONFIGURED
+    assert capsys.readouterr().err.strip() == "PROVIDER_NOT_CONFIGURED"
+
+
 def test_startup_applies_the_declared_schema(
     empty_database: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """ "Postgres schema in full at startup". The database here has had nothing
-    applied to it, and after the app has started it holds the store's tables."""
-    from caos.store import connect
+    applied to it, and after the app has started it holds the store's tables,
+    in the store's own schema and not `public` (DL-1)."""
+    from caos.store import STORE_SCHEMA, connect
 
     monkeypatch.setenv(app_module.DATABASE_URL, empty_database)
 
@@ -1284,12 +1354,12 @@ def test_startup_applies_the_declared_schema(
 
     with connect(empty_database) as conn:
         applied = conn.execute(
-            "SELECT count(*) FROM information_schema.tables"
-            " WHERE table_schema = 'public' AND table_name IN"
+            "SELECT table_schema, count(*) FROM information_schema.tables"
+            " WHERE table_name IN"
             " ('runs', 'run_events', 'case_members', 'audit_events')"
-        ).fetchone()
-    assert applied is not None
-    assert applied[0] == 4
+            " GROUP BY table_schema"
+        ).fetchall()
+    assert applied == [(STORE_SCHEMA, 4)]
 
 
 class _CountingConnection:

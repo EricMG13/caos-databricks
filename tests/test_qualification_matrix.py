@@ -31,7 +31,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from canonical_fixtures import LITE_PROFILE, LITE_SELECTION, CanonicalCompletions
-from conftest import approve_run, priced, route_fault
+from conftest import approve_run, priced, route_fault, tamper
 from test_canonical_proof import _token_fault
 
 from caos.blobs import BlobStore
@@ -44,8 +44,10 @@ from caos.methodology.handoff import Projections
 from caos.methodology.runner import ModuleProvider
 from caos.qualification.matrix import (
     ExpectedCitation,
+    ExpectedForecast,
     ExpectedProjection,
     ExpectedRegister,
+    ForecastValue,
     Matrix,
     MatrixRow,
     QualificationCase,
@@ -60,6 +62,7 @@ from caos.store import RunStatus, StoreConnection
 from caos.store.gates import withdraw_source
 from caos.store.members import Standing, grant
 from caos.store.routes import resolved_route
+from caos.store.run_inputs import RunSubject
 from caos.store.runs import run_status, start_run
 
 REPO = Path(__file__).resolve().parents[1]
@@ -68,7 +71,8 @@ PROFILE = LITE_PROFILE
 SELECTION = LITE_SELECTION
 ESTIMATE = Decimal("0.50")
 
-QUOTE = "Total debt at 31 December 2026"
+# The whole report line a handoff cites (N28).
+QUOTE = "Total debt at 31 December 2026 was USD 1,240.0m"
 REPORT = b"""Acme Holdings plc annual report 2026
 Total debt at 31 December 2026 was USD 1,240.0m
 """
@@ -227,7 +231,7 @@ def test_the_matrix_reports_every_case_and_concludes_nothing(ran: Ran) -> None:
     matrix = _matrix(ran, qualification)
 
     assert matrix.qualification_set_sha256 == qualification_set_digest(qualification)
-    assert matrix.build_id.startswith("b160c75e")
+    assert matrix.build_id.startswith("820dfc7c")
     [row] = matrix.rows
     assert row.case_label == "acme-2026-refinancing"
     assert row.proven is True
@@ -411,6 +415,118 @@ def test_the_digest_does_not_depend_on_the_order_keys_were_written_in(
     ) == qualification_set_digest(QualificationSet(cases=(second, first)))
 
 
+@dataclass(frozen=True, slots=True)
+class _Optional:
+    """The six optional fields the two tests below vary one at a time.
+
+    A single parameter object, not six keyword arguments -- `QualificationCase`
+    mixes enough field types (`RunSubject | None`, tuples of different element
+    types, a bare `RefusalCode | None`) that a plain `object`-typed catch-all
+    cannot be handed to the dataclass, or to `dataclasses.replace`, without
+    mypy correctly refusing it as untyped per-field; naming each field here
+    keeps every one of them checked at its own type.
+    """
+
+    subject: RunSubject | None = None
+    forecast: ExpectedForecast | None = None
+    expected_refusal: RefusalCode | None = None
+    expects_ready: tuple[str, ...] = ()
+    expects_projection: tuple[ExpectedProjection, ...] = ()
+    expects_register: tuple[ExpectedRegister, ...] = ()
+
+
+def _plain_case(optional: _Optional | None = None) -> QualificationCase:
+    """A case naming no optional field but whichever `optional` supplies."""
+    optional = optional or _Optional()
+    return QualificationCase(
+        label="acme-2026",
+        documents=(Document(filename=BoundaryText.of("report.txt"), data=REPORT),),
+        profile_id=PROFILE,
+        selection_id=SELECTION,
+        expects=(
+            ExpectedCitation(
+                module_id="CP-0", document_sha256="a" * 64, matched_text=QUOTE
+            ),
+        ),
+        subject=optional.subject,
+        forecast=optional.forecast,
+        expected_refusal=optional.expected_refusal,
+        expects_ready=optional.expects_ready,
+        expects_projection=optional.expects_projection,
+        expects_register=optional.expects_register,
+    )
+
+
+def test_a_subject_and_a_same_shaped_expects_ready_used_to_share_a_digest() -> None:
+    """N8/FP-25: before every optional field carried its own tag, a case
+    naming a four-part subject and a case naming four ready modules whose
+    sorted ids happened to equal the subject's four fields, in that order,
+    digested identically -- two different answer keys binding one verdict.
+    """
+    subject = RunSubject("Alpha", "Bravo", "Charlie", "Delta")
+    with_subject = QualificationSet(cases=(_plain_case(_Optional(subject=subject)),))
+    with_ready = QualificationSet(
+        cases=(
+            _plain_case(
+                _Optional(expects_ready=("Delta", "Bravo", "Charlie", "Alpha"))
+            ),
+        )
+    )
+
+    assert qualification_set_digest(with_subject) != qualification_set_digest(
+        with_ready
+    )
+
+
+def test_every_optional_field_digests_distinctly_from_every_other_field() -> None:
+    """N8/FP-25: a set differing only in *which* optional field it carries
+    must digest differently for every one of the six fields the tagging
+    fixed -- not only differently from a set naming none."""
+    variants = {
+        "subject": _plain_case(_Optional(subject=RunSubject("A", "B", "C", "D"))),
+        "forecast": _plain_case(
+            _Optional(
+                forecast=ExpectedForecast(
+                    scenario="BASE",
+                    period_id="FY2026",
+                    values=(ForecastValue("cash.closing", "1"),),
+                    currency="USD",
+                    scale="millions",
+                    perimeter="Consolidated",
+                    qa_status="Passed",
+                    limitation_flags=(),
+                    readiness=(),
+                )
+            )
+        ),
+        "expected_refusal": _plain_case(
+            _Optional(expected_refusal=RefusalCode.SOURCE_PACK_EMPTY)
+        ),
+        "expects_ready": _plain_case(_Optional(expects_ready=("CP-1",))),
+        "expects_projection": _plain_case(
+            _Optional(
+                expects_projection=(ExpectedProjection("CP-1", "qa_status", "Passed"),)
+            )
+        ),
+        "expects_register": _plain_case(
+            _Optional(
+                expects_register=(
+                    ExpectedRegister(
+                        "CP-1", "register", (("column", "value"),), "column", "value"
+                    ),
+                )
+            )
+        ),
+    }
+    digests = {
+        name: qualification_set_digest(QualificationSet(cases=(case,)))
+        for name, case in variants.items()
+    }
+    assert len(set(digests.values())) == len(digests), digests
+    plain = qualification_set_digest(QualificationSet(cases=(_plain_case(),)))
+    assert plain not in digests.values()
+
+
 def test_a_matrix_row_is_immutable_once_reported(ran: Ran) -> None:
     """Evidence a reader can edit after the fact is not evidence."""
     [row] = _matrix(ran, QualificationSet(cases=(_one_case(ran),))).rows
@@ -449,7 +565,8 @@ def test_an_unreadable_artifact_cites_nothing_and_does_not_end_the_matrix(
     """
     # Bytes no record binds: the proof refuses, and nothing is read as claims.
     digest = ran.blobs.put(b"{]not json at all")
-    ran.conn.execute(
+    tamper(
+        ran.conn,
         "UPDATE artifacts SET artifact_sha256 = %s WHERE run_id = %s",
         (digest, ran.run_id),
     )
@@ -510,7 +627,7 @@ def test_a_record_that_moves_after_the_proof_does_not_change_the_score(
     _after_proof(
         monkeypatch,
         lambda: None,
-        lambda: ran.conn.execute("UPDATE run_attempts SET ordinal = ordinal + 1"),
+        lambda: tamper(ran.conn, "UPDATE run_attempts SET ordinal = ordinal + 1"),
     )
     key = _one_case(ran)
     [row] = _matrix(ran, QualificationSet(cases=(key,))).rows
@@ -559,9 +676,10 @@ def test_an_artifact_accepted_after_the_proof_is_not_scored(
 
     def hold() -> None:
         ran.conn.execute("CREATE TEMP TABLE held_cp5 AS " + held, (ran.run_id, cp5))
-        ran.conn.execute(
+        tamper(
+            ran.conn,
             "DELETE FROM artifacts"
-            " WHERE attempt_id IN (SELECT attempt_id FROM held_cp5)"
+            " WHERE attempt_id IN (SELECT attempt_id FROM held_cp5)",
         )
 
     def accept() -> None:
@@ -1063,8 +1181,8 @@ def test_register_key_columns_and_values_are_normalised_like_runtime() -> None:
     expect = ExpectedRegister(
         module_id="CP-1",
         register_id="T4.1",
-        row_key=(("File   Name", "annual\n report.pdf"),),
-        column="Doc   Type",
+        row_key=(("Source   File\n Name", "annual\n report.pdf"),),
+        column="Document   Type",
         expected="10-\n K",
     )
     case = replace(_register_case(), expects_register=(expect,))
@@ -1121,11 +1239,11 @@ def test_register_key_with_pipe_is_unlocatable(part: str) -> None:
         register_id="T4.1",
         row_key=(
             (
-                "File|Name" if part == "selector-column" else "File Name",
+                "Source File|Name" if part == "selector-column" else "Source File Name",
                 "annual|report.pdf" if part == "selector" else "annual report.pdf",
             ),
         ),
-        column="Doc|Type" if part == "expected-column" else "Doc Type",
+        column="Document|Type" if part == "expected-column" else "Document Type",
         expected="10|K" if part == "expected" else "10-K",
     )
     case = replace(_register_case(), expects_register=(expect,))

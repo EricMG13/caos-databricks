@@ -16,9 +16,11 @@ import time
 import weakref
 from collections.abc import Callable, Generator, Iterator, Mapping
 from pathlib import Path
+from typing import cast
 from uuid import UUID, uuid4
 
 import httpx2 as httpx
+import psycopg
 import pytest
 import uvicorn
 
@@ -111,7 +113,14 @@ def _refused(code: RefusalCode) -> dict[str, str]:
 
 
 def _frames(response: httpx.Response) -> Iterator[Frame]:
-    """Each SSE frame as its fields, in order, as they arrive."""
+    """Each SSE frame as its fields, in order, as they arrive.
+
+    `retry` is dropped: it is on every cursor frame (N48,
+    `test_the_cursor_frame_carries_a_short_reconnect_retry` names it
+    directly), transport-level like the keepalive comment below it, and
+    asserting it on every other cursor-frame check in this file would be
+    noise repeated for no reason.
+    """
     fields: Frame = {}
     for line in response.iter_lines():
         if line == "":
@@ -122,6 +131,8 @@ def _frames(response: httpx.Response) -> Iterator[Frame]:
         if line.startswith(":"):  # an SSE comment: the keepalive, not a field
             continue
         key, _, value = line.partition(": ")
+        if key == "retry":
+            continue
         fields[key] = value
     if fields:
         yield fields
@@ -294,6 +305,27 @@ def test_the_first_frame_is_a_cursor_at_the_current_heads(
 
     assert frames == [{"id": "2.1"}]
     assert audit_only == [{"id": "2.0"}]
+
+
+def test_the_cursor_frame_carries_a_short_reconnect_retry(
+    served: str, case: tuple[StoreConnection, UUID]
+) -> None:
+    """N48. `TAIL_DEADLINE` (300 s) closes every tail, expected reconnect
+    included; with no `retry` ever sent, the browser's own default reconnect
+    delay is what a watcher saw as the gap, and a UI that reads a dropped
+    connection as "paused" had no way to tell the two apart. Every cursor
+    frame -- the first of any connection, this reconnect's included -- now
+    carries one explicitly, short enough that the gap is not the read."""
+    conn, case_id = case
+    reader = _reader(conn, case_id, Standing.READER)
+    with (
+        httpx.Client(base_url=served, timeout=10) as http,
+        http.stream("GET", _path(case_id), headers=_as(reader)) as response,
+    ):
+        lines = list(response.iter_lines())
+    cursor = lines[: lines.index("")]
+    assert f"retry: {int(app_module.POLL_INTERVAL * 1000)}" in cursor
+    assert any(line.startswith("id: ") for line in cursor)
 
 
 def test_frames_carry_only_a_cursor_a_name_and_empty_data(
@@ -509,6 +541,7 @@ def test_the_http_stream_writes_the_keepalive_as_a_comment(
         http.stream("GET", _path(case_id), headers=_as(reader)) as response,
     ):
         lines = response.iter_lines()
+        assert next(lines) == f"retry: {int(app_module.POLL_INTERVAL * 1000)}"
         assert next(lines) == "id: 0.0"
         assert next(lines) == ""
         assert next(lines) == ":"
@@ -643,6 +676,45 @@ def test_the_event_stream_costs_its_declared_budget(
     assert first_poll == stream.IO_BUDGET == CONNECT_IO + CURSOR_IO + POLL_IO
     assert app_module.EVENTS_IO_BUDGET == 2 + stream.IO_BUDGET
     assert app_module.IO_BUDGET == app_module.EVENTS_IO_BUDGET
+
+
+def test_guarded_case_tail_refuses_a_post_connect_fault_as_store_unavailable(
+    case: tuple[StoreConnection, UUID],
+) -> None:
+    """CF-022: a store fault mid-poll -- a dropped session, a statement
+    timeout -- refuses `STORE_UNAVAILABLE` rather than escaping as the bare
+    `psycopg.Error` an unhandled exception elsewhere would be logged with,
+    its own message included. The response has long since started by the
+    time any query here runs, so no fresh status reaches the wire either
+    way; what changes is what is safe to raise and to log. `case_tail` itself
+    is left as the bare generator this same file's other tests drive
+    directly; `guarded(case_tail(...))` is what `app.py` and every other
+    caller hold instead.
+    """
+    conn, case_id = case
+    reader = _reader(conn, case_id, Standing.READER)
+    conn.commit()
+    tail = stream.guarded(
+        stream.case_tail(
+            conn,
+            case_id=case_id,
+            run_id=None,
+            actor_id=reader,
+            after=None,
+            deadline=5.0,
+            poll=0.01,
+            heartbeat=True,
+        )
+    )
+
+    assert next(tail) is not None  # the cursor frame
+
+    with pytest.raises(Refusal) as caught:
+        cast("Generator[object]", tail).throw(
+            psycopg.OperationalError("server closed the connection")
+        )
+
+    assert caught.value.code is RefusalCode.STORE_UNAVAILABLE
 
 
 def test_a_tail_slot_is_returned_however_the_stream_ends() -> None:

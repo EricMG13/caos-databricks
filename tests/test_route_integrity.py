@@ -184,7 +184,17 @@ def test_normal_sql_cannot_mutate_pins(
     run = start_run(conn, case_id)
     digest = routes.pin_route(conn, run, route)
     before = _records(conn)
-    subject = "(?:route pins|call records)" if " runs " in mutation else "route pins"
+    # CF-091: `TRUNCATE runs CASCADE` also reaches `run_events`,
+    # `budget_reservations`, `run_attempts` and `artifacts` now that they
+    # refuse their own truncation (`0033`, `0037`), and Postgres does not
+    # promise which cascaded table's trigger fires first -- so any of the six
+    # is an acceptable refusal, not just the two this test first tolerated.
+    subject = (
+        "(?:route pins|call records|run_events rows|budget_reservations rows"
+        "|run_attempts rows|artifacts rows)"
+        if " runs " in mutation
+        else "route pins"
+    )
     with pytest.raises(psycopg.Error, match=f"{subject} are immutable"):
         conn.execute(mutation)
     conn.rollback()

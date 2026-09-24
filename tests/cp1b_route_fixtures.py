@@ -17,6 +17,7 @@ from canonical_fixtures import (
     conforming_rows,
     fields_from_prompt,
     skill,
+    whole_line,
     wire,
 )
 from lite_route_fixtures import _table, _yaml
@@ -122,13 +123,11 @@ def earnings_pack(facts: EarningsFacts) -> bytes:
 
 
 PACK = earnings_pack(EARNINGS_FACTS)
-QUOTES = {
-    "CP-0": "FY2025 revenue 1100 EBITDA 220 operating cash flow 155",
-    "CP-1": "FY2025 revenue 1100 EBITDA 220",
-    "CP-1B": "FY2025 revenue 1100 EBITDA 220 operating cash flow 155",
-    "CP-2": "FY2025 revenue 1100 EBITDA 220 operating cash flow 155",
-    "CP-5": "FY2025 revenue 1100 EBITDA 220 operating cash flow 155",
-}
+# The whole line each module cites (N28).
+QUOTES = dict.fromkeys(
+    ("CP-0", "CP-1", "CP-1B", "CP-2", "CP-5"),
+    whole_line(PACK, "FY2025 revenue 1100 EBITDA 220 operating cash flow 155"),
+)
 
 
 def cp1b_identity(
@@ -179,12 +178,15 @@ def _rows(facts: EarningsFacts) -> dict[str, list[list[str]]]:
         ("Cash", facts.prior_cash, facts.current_cash),
         ("Debt", facts.prior_debt, facts.current_debt),
     )
+    # The method's own columns (fork r3, G2-6): T4.12 keeps the `values` and
+    # `changes` a qualification key reads beside the keyed comparator's columns.
     return {
         "T4.4": [
             [
                 name,
                 f"FY2024 {prior}; FY2025 {current}",
-                f"{current - prior} / {(current - prior) / prior:.1%}",
+                str(current - prior),
+                f"{(current - prior) / prior:.1%}",
                 "same annual basis",
             ]
             for name, prior, current in metrics
@@ -193,9 +195,12 @@ def _rows(facts: EarningsFacts) -> dict[str, list[list[str]]]:
             [
                 name,
                 "YoY",
-                f"{prior}/{current}",
+                str(prior),
+                str(current),
                 str(current - prior),
+                f"{(current - prior) / prior:.1%}",
                 "reported annual results",
+                "annual comparison",
                 "period-specific credit signal",
             ]
             for name, prior, current in metrics
@@ -203,12 +208,20 @@ def _rows(facts: EarningsFacts) -> dict[str, list[list[str]]]:
         "T4.12": [
             [
                 name.lower().replace(" ", "_"),
-                "FY2025/FY2024",
-                "YoY",
+                "FY2025",
+                "FY2024",
+                "LTM_PRIOR",
+                str(current),
+                str(prior),
+                str(current - prior),
+                f"{(current - prior) / prior:.1%}",
+                "Supported",
+                "false",
+                "false",
+                "false",
+                "false",
                 f"{current}/{prior}",
                 str(current - prior),
-                "SUPPORTED",
-                "same annual basis",
             ]
             for name, prior, current in metrics
         ],
@@ -222,22 +235,29 @@ def _rows(facts: EarningsFacts) -> dict[str, list[list[str]]]:
                 "0",
                 "PASS",
                 "CP-1 canonical value retained",
+                "annual-results",
             ]
         ],
         "T4.14": [
             [
-                "none disclosed",
+                "NONE",
                 "FY2025",
-                "null/null",
-                "null",
-                "NOT AVAILABLE",
-                "No add-backs disclosed; gap retained",
+                "—",
+                "—",
+                "—",
+                "—",
+                "—",
+                "—",
+                "—",
+                "No add-backs disclosed; adjusted EBITDA equals EBITDA",
+                "annual-results",
             ]
         ],
         "T4.15": [
             [
                 "CP-MODEL",
                 "READY",
+                "none",
                 "none",
                 "none",
                 "two-period historical snapshot supplied",
@@ -514,9 +534,11 @@ def _t8(readiness: dict[str, str]) -> list[list[str]]:
 
 
 def _quote(facts: EarningsFacts) -> str:
-    return (
+    """The whole current-year line of the pack `facts` make (N28)."""
+    return whole_line(
+        earnings_pack(facts),
         f"FY2025 revenue {facts.current_revenue} EBITDA {facts.current_ebitda} "
-        f"operating cash flow {facts.current_operating_cash_flow}"
+        f"operating cash flow {facts.current_operating_cash_flow}",
     )
 
 

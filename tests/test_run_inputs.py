@@ -703,3 +703,74 @@ def test_observed_blocking_first_inputs_and_independent_case(
             pin = pin_run_input(conn, run, source.version, bundle, subject=SUBJECT)
     assert load_run_input(conn, run) == pin
     assert [e.name for e in events_of(conn, run)] == ["ROUTE_PINNED", "INPUT_PINNED"]
+
+
+def _softened(route: ResolvedRoute) -> ResolvedRoute:
+    """`route` with its first edge's type changed: not the catalog's route."""
+    edge = route.edges[0]
+    other = (
+        EdgeType.ADVISORY if edge.type is not EdgeType.ADVISORY else EdgeType.OPTIONAL
+    )
+    return replace(route, edges=(replace(edge, type=other), *route.edges[1:]))
+
+
+def test_a_route_the_catalog_does_not_resolve_is_refused_at_input_pin(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> None:
+    """CF-025: `pin_route_in` stores whatever route it is given, and the input
+    pin binds the build that route then runs under. A route that is not that
+    build's own catalog resolution of its pathway -- one edge's type changed
+    here -- refuses `ROUTE_IDENTITY_INVALID` and pins nothing."""
+    conn, case_id = case
+    _admit(conn, case_id, tmp_path)
+    conn.commit()
+    source = snapshot_source_set(conn, case_id)
+    run = start_run(conn, case_id)
+    route = resolve_route(
+        json.loads(CATALOG_PATH.read_text()), PROFILE, "MARKET_DISLOCATION"
+    )
+    pin_route(conn, run, _softened(route))
+    before = events_of(conn, run)
+    conn.commit()
+    with pytest.raises(Refusal, match=r"^ROUTE_IDENTITY_INVALID$"):
+        pin_run_input(
+            conn, run, source.version, Bundle(CATALOG_PATH.parents[3]), subject=SUBJECT
+        )
+    assert conn.info.transaction_status is TransactionStatus.IDLE
+    assert load_run_input(conn, run) is None and events_of(conn, run) == before
+
+
+def test_execution_refuses_a_pinned_route_the_catalog_does_not_resolve(
+    case: tuple[StoreConnection, UUID],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CF-025, where the pin is read for execution: a run whose input was
+    pinned before inputs were checked against the catalog -- stood in for by
+    the check switched off while it is pinned and approved -- is refused
+    `ROUTE_IDENTITY_INVALID` by `execution_input`, before any attempt, where
+    `invocation._upstream` would have trusted its edges."""
+    from conftest import approve_run
+
+    from caos.store.gates import execution_input
+
+    conn, case_id = case
+    _admit(conn, case_id, tmp_path)
+    conn.commit()
+    run = start_run(conn, case_id)
+    conn.commit()
+    route = resolve_route(
+        json.loads(CATALOG_PATH.read_text()), "LITE_CREDIT_22", "LITE_EARNINGS_UPDATE"
+    )
+    bundle = Bundle(CATALOG_PATH.parents[3])
+    monkeypatch.setattr(run_inputs, "require_catalog_route", lambda *_: None)
+    approve_run(
+        conn, case_id=case_id, run_id=run, route=_softened(route), bundle=bundle
+    )
+    monkeypatch.undo()
+    with pytest.raises(Refusal, match=r"^ROUTE_IDENTITY_INVALID$"):
+        execution_input(conn, run, bundle)
+    conn.rollback()
+    assert conn.execute(
+        "SELECT count(*) FROM run_attempts WHERE run_id = %s", (run,)
+    ).fetchone() == (0,)

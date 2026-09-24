@@ -20,7 +20,8 @@
         "status": "RUNNING",
         "created_at": "2026-09-09T15:00:00Z",
         "profile_id": "FULL_CREDIT_32",
-        "selection_id": "SET-v4"
+        "selection_id": "SET-v4",
+        "stop_code": null
       }
     ],
     "run": {
@@ -30,6 +31,7 @@
       "route_digest": null,
       "build_id": null,
       "source_set_version": 4,
+      "input_fingerprint": null,
       "subject": {
         "issuer_id": "CVNA",
         "issuer_name": "Carvana Co. (NYSE: CVNA)",

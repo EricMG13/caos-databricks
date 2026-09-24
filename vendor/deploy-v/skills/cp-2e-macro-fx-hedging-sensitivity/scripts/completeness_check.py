@@ -485,6 +485,12 @@ def check(skill_text, handoff_text, module_id=None):
     return violations, contract, present
 
 
+def _leads_with(cell, value):
+    """Whether `value` is `cell`'s leading word: `base case` and `base (lender
+    view)` lead with `base`; `baseline` does not."""
+    return bool(value) and re.match(rf"{re.escape(value)}(?:[\s(\-–—]|$)", cell) is not None
+
+
 def _semantic_violations(rules, present, blocklist=frozenset()):
     """The profile's `semantic_rules`, each over one located register.
 
@@ -494,9 +500,12 @@ def _semantic_violations(rules, present, blocklist=frozenset()):
     `exact_values` (the column holds each declared value exactly once and
     nothing else); `at_least_one_row_populates` (some row fills every named
     column with a value that is not a disqualifying placeholder). Comparison
-    is case-sensitive unless the rule says otherwise. A register the handoff
-    lacks is already a violation above and is not judged twice; a rule kind
-    this script does not implement is a violation, never a silent pass.
+    is case-sensitive unless the rule says otherwise. A `required_values` rule
+    declaring `match: leading_word` also finds a value as a cell's leading
+    word, as the method writes it (`Base case` holds `base`), fork r3. A
+    register the handoff lacks is already a violation above and is not judged
+    twice; a rule kind this script does not implement is a violation, never a
+    silent pass.
     """
     out = []
     for rule in rules:
@@ -519,8 +528,10 @@ def _semantic_violations(rules, present, blocklist=frozenset()):
                         break
                     seen.add(cell)
         elif kind == "required_values":
+            leading = str(rule.get("match", "")).strip().casefold() == "leading_word"
             for value in rule.get("values", []):
-                if fold(value) not in cells:
+                want = fold(value)
+                if not any(cell == want or (leading and _leads_with(cell, want)) for cell in cells):
                     out.append(f"{reg_id}: {rule_id} -- column {col!r} lacks {value!r}")
         elif kind == "allowed_values":
             for n, cell in enumerate(cells, 1):
@@ -737,6 +748,15 @@ def _self_check():
     assert v == ["T1.1: cpx.items_unique -- column 'Item' repeats 'Leverage'",
                  "T1.1: cpx.coverage_present -- column 'Item' lacks 'Coverage'"], v
     v, _, _ = check(ruled, good.replace("| Coverage |", "| coverage |"))
+    assert v == ["T1.1: cpx.coverage_present -- column 'Item' lacks 'Coverage'"], v
+    # a rule declaring `match: leading_word` finds its value as a cell's leading word (fork r3)
+    leading = ruled.replace("      - **case_sensitive**: True\n      - **column**: Item\n",
+                            "      - **case_sensitive**: False\n      - **column**: Item\n      - **match**: leading_word\n")
+    assert leading != ruled
+    v, _, _ = check(leading, good.replace("| Leverage |", "| Leverage ratio |")
+                    .replace("| Coverage |", "| coverage (interest) |"))
+    assert v == [], v
+    v, _, _ = check(leading, good.replace("| Coverage |", "| Coverages |"))
     assert v == ["T1.1: cpx.coverage_present -- column 'Item' lacks 'Coverage'"], v
     v, _, _ = check(ruled.replace("      - **rule**: unique_columns\n", "      - **rule**: novel_rule\n"), good)
     assert v == ["T1.1: cpx.items_unique -- semantic rule kind 'novel_rule' is not implemented"], v

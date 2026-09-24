@@ -28,7 +28,7 @@ Use `../cp-os-credit-os/scripts/prepare_invocation.py` from this skill folder wi
 7. Subsequent event: flag date; never blend into period figures.
 8. Non-debt funding float: trend deposits/deferred revenue/supplier finance—not payables; Evidence→Risk Mechanic→Credit Implication.
 9. Show source vs normalized one-offs; label normalization+Analyst Judgement. Never infer covenant capacity; absent inputs=`Not Calculable`.
-10. `committee_status`∈Committee Ready|Draft Only|Requires More Work|Insufficient Information|Restricted|Blocked. `qa_status` Restricted→score≤59 (band from the score: 40-59 Low, below 40 Insufficient Information); Blocked→≤39.
+10. `committee_status`∈Committee Ready|Draft Only|Requires More Work|Insufficient Information|Restricted|Blocked. `qa_status` follows the run's own status (canon D1 map): complete→Passed; with gaps or limitations→Restricted; Blocked→Blocked; never Not Reviewed. Restricted→score≤59 (band from the score: 40-59 Low, below 40 Insufficient Information); Blocked→≤39.
 
 ## Analytical depth — binding on every run
 
@@ -60,7 +60,7 @@ conclusions, never shorter reasoning or invented filler.
 
 - **analytical_validation**: implemented
 - **appendix_contract**: structured below
-  - **conditional_register_ids**: cp2.cp_model_strengths_weaknesses
+  - **conditional_register_ids**: none
   - **heading**: ### Analytical appendix — complete canonical registers
   - **lossless**: True
   - **required_register_ids**: T2.1; T2.7; T2.10; T2.11; T2.12
@@ -141,7 +141,7 @@ conclusions, never shorter reasoning or invented filler.
       - **register_id**: T2.10
       - **rule**: allowed_values
       - **rule_id**: cp2.materiality_direction_enum
-      - **values**: Positive; Negative; Mixed
+      - **values**: Positive; Negative
     - structured item
       - **case_sensitive**: True
       - **column**: Confidence
@@ -280,7 +280,7 @@ Full table per `REF_CP-2_Workflow.md`.
 7. Financial Profile & Credit Quality → REF_CP-2_07
 8. Outlook, Tailwinds & Headwinds → REF_CP-2_08
 9. Qualitative Downside / Stress Scenario → REF_CP-2_09
-10. Materiality Filter → REF_CP-2_10
+10. Materiality Filter → REF_CP-2_10 (a direction with no supported driver takes one `None supported` row; never an invented driver; a driver that cuts both ways is split into a Positive and a Negative row, never `Mixed`)
 11. Issuer Matrix → REF_CP-2_11
 12. Monitoring Triggers → REF_CP-2_12
 13. Overall Credit View → REF_CP-2_13
@@ -325,6 +325,6 @@ Run `python3 ./scripts/validate_handoff.py -` with the completed artifact piped 
 
 ## Research questions and adoption — binding when applicable
 
-Before finalizing an assumption or conclusion, identify any unresolved material evidence question. If existing sources answer it, continue. Otherwise use `../cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md` to add a bounded request naming this module as consumer and a factual predecessor. The host authors the control brief under the user's existing task authorization; CP-OS remains read-only. Do not create a self-dependency from this module back through CP-DR. For a late challenge, retain the current CP-0 anchor and archive superseded research attempts outside the active snapshot.
+Before finalizing an assumption or conclusion, identify any unresolved material evidence question. If existing sources answer it, continue. Otherwise, where `../cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md` is delivered with this module, use it to add a bounded request naming this module as consumer and a factual predecessor; where it is not delivered, record the question as an unresolved gap under `## Gaps & Conflicts` and do not request research. The host authors the control brief under the user's existing task authorization; CP-OS remains read-only. Do not create a self-dependency from this module back through CP-DR. For a late challenge, retain the current CP-0 anchor and archive superseded research attempts outside the active snapshot.
 
 Run the invocation helper against the fresh snapshot. If it returns `research_adoption_rows`, complete the tagged `cpdr.adoptions` table in the analytical appendix: `question_id`, `research_sha256`, `disposition` (ACCEPTED / REJECTED / QUALIFIED), `reason`, `analytical_effect`. Record one row per assigned question, with the exact current research hash. Rejection or qualification still explains the consequence. CP-DR supplies evidence; this module remains responsible for source applicability, numerical extraction, assumptions and conclusions. Unresolved research blocks its named consumer, not unrelated modules. A changed research dossier invalidates its declared consumers and their dependents; research is versioned per bounded batch, not per claim.

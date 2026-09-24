@@ -9,7 +9,7 @@ from uuid import uuid4
 
 import pytest
 from canonical_fixtures import BUNDLE, CATALOG, CONTRACT, fields_from_prompt, skill
-from conftest import priced
+from conftest import priced, tamper
 from cp1a_contract_fixtures import LIMITATION as SPONSOR_LIMITATION
 from cp2h_contract_fixtures import LIMITATION as RATINGS_LIMITATION
 from cp3c_route_fixtures import LIMITATION as REFINANCING_LIMITATION
@@ -199,7 +199,8 @@ def _forge_cp5(harness: _Harness) -> AcceptedRow:
     record_sha = harness.blobs.put(
         record_bytes(replace(record, artifact_sha256=artifact, projections=projections))
     )
-    harness.conn.execute(
+    tamper(
+        harness.conn,
         "UPDATE artifacts SET artifact_sha256=%s, record_sha256=%s"
         " WHERE run_id=%s AND route_node_id=%s",
         (artifact, record_sha, harness.run_id, node.route_node_id),
@@ -313,10 +314,20 @@ def test_lite_full_credit_screen_completes_proves_and_freezes(
     )
     harness.conn.rollback()
     data = payload_bytes(payload)
+    # FP-33: the signer must be independent of the actor who saved the
+    # narrative (`harness.approver`), so a fresh approver signs here.
+    signer = uuid4()
+    grant(
+        harness.conn,
+        case_id=harness.case_id,
+        user_id=signer,
+        standing=Standing.APPROVER,
+    )
+    harness.conn.commit()
     sign_opinion(
         harness.conn,
         case_id=harness.case_id,
-        actor_id=harness.approver,
+        actor_id=signer,
         revision_id=saved,
     )
     freezer = uuid4()
@@ -434,10 +445,20 @@ def test_payload_and_freeze_reject_a_self_consistent_cp5_restriction_forgery(
         actor_id=harness.approver,
         narrative=[],
     )
+    # FP-33: the signer must be independent of the actor who saved the
+    # narrative (`harness.approver`), so a fresh approver signs here.
+    signer = uuid4()
+    grant(
+        harness.conn,
+        case_id=harness.case_id,
+        user_id=signer,
+        standing=Standing.APPROVER,
+    )
+    harness.conn.commit()
     sign_opinion(
         harness.conn,
         case_id=harness.case_id,
-        actor_id=harness.approver,
+        actor_id=signer,
         revision_id=saved,
     )
     freezer = uuid4()

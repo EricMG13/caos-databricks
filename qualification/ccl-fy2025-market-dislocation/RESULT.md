@@ -5,7 +5,7 @@ Status: **OFFLINE / UNVERIFIED / NOT QUALIFIED**.
 This immutable set prepares `FULL_CREDIT_32 / MARKET_DISLOCATION` from the CCL
 FY2025 10-K and the governed FINRA observation made at
 `2026-09-19T16:51:57Z`. Its qualification-set digest is
-`502ca79ca3cda068f4621698f45f979e34e78945261b284c2ee232b2f57e11fe`.
+`c01b06c9c09b1ced76c297e0d7bf81ad07ace9e03f3e3322da81b3f85840db35`.
 
 The key expects CP-0 to clear CP-3D, CP-3D to retain FULL decision scope, and
 the result to be `Restricted`. FINRA reports a last trade of `$99.34`; it does

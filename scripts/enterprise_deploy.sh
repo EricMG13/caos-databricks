@@ -10,7 +10,7 @@
 # BUNDLE_STATE (.databricks/bundle/<target>).
 # An empty profile means the SDK's ambient auth (DATABRICKS_HOST and a token).
 #
-# Steps E1..E9 are described in scripts/enterprise_deploy.py; the three
+# Steps E1..E10 are described in scripts/enterprise_deploy.py; the three
 # `databricks bundle` commands run here and are recorded as E2, E3 and E4.
 # The script stops at the first step that fails. Nothing secret is printed.
 set -euo pipefail
@@ -22,13 +22,17 @@ PROFILE="${1?profile (may be empty: '')}"
 CATALOG="${2:?catalog}"
 SCHEMA="${3:?schema}"
 INSTANCE="${4:?lakebase instance}"
-ENDPOINT="${5:-databricks-claude-opus-5}"
-PRICE="${6:-databricks-claude-opus-5,0.000005,0.000025,2026-09-22}"
-CEILING="${7:-100.00}"
+# One source (N23): databricks.yml's own variable defaults, read back
+# rather than repeated here. `: "${NAME:=...}"` only fills a name this
+# shell does not already have, so an inherited GROUP_ADMIN etc. still wins.
+eval "$(uv run python scripts/bundle_defaults.py --shell)"
+ENDPOINT="${5:-$MODEL_ENDPOINT}"
+PRICE="${6:-$MODEL_PRICE}"
+CEILING="${7:-$RUN_CEILING}"
 TARGET="${TARGET:-prod}"
 LAKEBASE_DATABASE="${LAKEBASE_DATABASE:-databricks_postgres}"
-GROUP_ADMIN="${GROUP_ADMIN:-caos-admins}"
-GROUP_ANALYST="${GROUP_ANALYST:-caos-analysts}"
+# GROUP_ADMIN and GROUP_ANALYST are already set by the eval above (their own
+# bundle default, or an inherited value it left alone).
 PG_PORT="${PG_PORT:-5432}"
 PG_SSLMODE="${PG_SSLMODE:-require}"
 # Where the CLI keeps the target's state, its deployment record among it.

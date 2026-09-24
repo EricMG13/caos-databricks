@@ -12,6 +12,7 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import date
 from decimal import Decimal
+from typing import cast
 from uuid import UUID
 
 import pytest
@@ -22,7 +23,7 @@ from caos.blobs import BlobStore
 from caos.graph.route import ResolvedRoute
 from caos.graph.runtime import Execution, run_route
 from caos.methodology.bundle import Bundle
-from caos.pricing import ModelPrice, priced_request, worst_case
+from caos.pricing import ModelPrice, price_from_environment, priced_request, worst_case
 from caos.provider import MAX_COMPLETION_TOKENS, MAX_REQUEST_BYTES
 from caos.refusals import Refusal, RefusalCode
 from caos.store import RunStatus, StoreConnection
@@ -58,6 +59,37 @@ def test_invalid_prices_refuse(field: str, value: object, code: RefusalCode) -> 
     with pytest.raises(Refusal) as caught:
         worst_case(replace(PRICE, **{field: value}))  # type: ignore[arg-type]
     assert caught.value.code is code
+
+
+@pytest.mark.parametrize(
+    "request_bytes,code",
+    [
+        (1.5, RefusalCode.MONEY_NOT_DECIMAL),
+        (True, RefusalCode.MONEY_NOT_DECIMAL),
+        (-1, RefusalCode.MONEY_INVALID),
+        (MAX_REQUEST_BYTES + 1, RefusalCode.CONTEXT_OVER_CEILING),
+    ],
+)
+def test_priced_request_refuses_a_malformed_or_oversized_byte_count(
+    request_bytes: object, code: RefusalCode
+) -> None:
+    """N68: `worst_case` only ever calls this at exactly `MAX_REQUEST_BYTES`,
+    which never exercises `priced_request`'s own guards on the count a direct
+    caller supplies."""
+    with pytest.raises(Refusal) as caught:
+        priced_request(PRICE, cast(int, request_bytes))
+    assert caught.value.code is code
+
+
+def test_price_from_environment_refuses_a_price_for_another_model() -> None:
+    """N68: `caos.models.from_environment` names the endpoint twice -- once as
+    the model `price_from_environment` must match, once again to build the
+    provider -- so a `CAOS_MODEL_PRICE` for some other endpoint is refused
+    here, before either the provider or its own later, redundant check."""
+    with pytest.raises(Refusal, match=r"^PROVIDER_NOT_CONFIGURED$"):
+        price_from_environment(
+            "databricks-claude-opus-5", "other-model,0.000005,0.000025,2026-09-22"
+        )
 
 
 def test_a_free_price_refuses_rather_than_reserving_nothing() -> None:
@@ -268,3 +300,28 @@ def test_a_run_that_spent_past_one_worst_case_still_resumes(
     # says the money was there all along: `reserve` priced each node and none
     # of them needed a worst case.
     assert run_status(conn, run.run_id) is RunStatus.COMPLETE
+
+
+def test_bills_at_compares_the_whole_price_a_provider_states() -> None:
+    """CF-089: the reservation is priced at the run's price and the charge at
+    the provider's own, so the two must be one price -- model, rates and date
+    -- not only one model. A provider that states no price (one that reports
+    money) is still held to the model."""
+    from types import SimpleNamespace
+
+    from caos.pricing import bills_at
+
+    assert bills_at(SimpleNamespace(model=MODEL, price=PRICE), PRICE)
+    assert bills_at(SimpleNamespace(model=MODEL), PRICE)
+    assert bills_at(SimpleNamespace(model=MODEL, price=None), PRICE)
+    for moved in (
+        replace(PRICE, input_per_token=Decimal("0.0000002")),
+        replace(PRICE, output_per_token=Decimal("0.000001")),
+        replace(PRICE, as_of=date(2026, 9, 12)),
+    ):
+        assert not bills_at(SimpleNamespace(model=MODEL, price=moved), PRICE)
+    assert not bills_at(SimpleNamespace(model="another-model", price=PRICE), PRICE)
+    assert not bills_at(SimpleNamespace(), PRICE)
+    # The same rate spelled with another exponent is the same price.
+    same = replace(PRICE, output_per_token=Decimal("0.0000020"))
+    assert bills_at(SimpleNamespace(model=MODEL, price=same), PRICE)
