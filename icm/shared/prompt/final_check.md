@@ -14,4 +14,4 @@ cited page; the same words appear verbatim in the Markdown body after the
 front matter. Cite only lines that support a claim you wrote. Valid
 `source_id` values are exactly: {source_ids}, and `page` is the page shown in
 that line's evidence header. Include at least one citation.
---- END FINAL RESPONSE CHECK {tag} ---
+{host_text}--- END FINAL RESPONSE CHECK {tag} ---

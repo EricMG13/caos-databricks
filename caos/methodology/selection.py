@@ -45,16 +45,18 @@ import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any, Protocol
+from typing import Any
 from uuid import UUID
 
-from caos.boundary_text import BoundaryText
-from caos.methodology.invocation import _printable
+from caos.methodology.executor import Delivery
+from caos.methodology.invocation import _printable, evidence_sizes
 from caos.provider import MAX_REQUEST_BYTES
 from caos.refusals import Refusal, RefusalCode
 from caos.store.source_sets import SourceSetMember
 
-# What the gate may be shown of one source whole. Three eighths of the request
+# What the gate may be shown of one source whole, in the evidence section's
+# bytes: its lines, and the headers, notes and blank lines the host puts around
+# them (`invocation.evidence_sizes`, W3). Three eighths of the request
 # ceiling, so two sources at the bound beside CP-0's own delivered authority
 # (147,345 bytes at build 91c219fb) still leave the instructions and the
 # preparation metadata room under `MAX_REQUEST_BYTES`. Past it a source is
@@ -129,37 +131,31 @@ class Selection:
         return named is None or page in named
 
 
-class _Block(Protocol):
-    """What `gate_view` reads of a delivered block (`executor.Delivery`)."""
-
-    @property
-    def source_id(self) -> UUID: ...
-    @property
-    def page(self) -> int: ...
-    @property
-    def text(self) -> BoundaryText: ...
-
-
-def gate_view[B: _Block](
-    delivered: Sequence[B], budget: int | None = None
-) -> tuple[list[B], dict[UUID, dict[str, int]]]:
+def gate_view(
+    delivered: Sequence[Delivery], budget: int | None = None
+) -> tuple[list[Delivery], dict[UUID, dict[str, int]]]:
     """What CP-0 is shown of the whole pin (§98, the bundle's Step I rule 8).
 
-    A source whose blocks' UTF-8 text fits `budget` (`GATE_SOURCE_BYTES` when
-    None, read at the call) is shown whole, exactly as before. Past it the
-    source is shown as its page map: the largest uniform number `k` of leading
-    blocks of every page whose total still fits, each block whole, in the
-    delivered order, so every page appears. A map that cannot hold one whole
-    block a page refuses `CONTEXT_OVER_CEILING` -- the prompt's own refusal,
-    never a trimmed line. Pure over the pinned delivery, so every reader of the
-    gate's context shows it the same lines. Returns the shown blocks and, per
-    mapped source, what its map shows, for the prompt to say.
+    A source whose share of the evidence section fits `budget`
+    (`GATE_SOURCE_BYTES` when None, read at the call) is shown whole, exactly
+    as before. The share is every byte the section spends on it
+    (`invocation.evidence_sizes`, W3): each block's UTF-8 text and the host's
+    text around it -- a header per run, a run's `hidden` note, the blank
+    lines. It was the text alone, and a scan, whose every line carried a note,
+    passed the bound and then the ceiling. Past it the source is shown as its
+    page map: the largest uniform number `k` of leading blocks of every page
+    whose total still fits, each block whole, in the delivered order, so every
+    page appears. A map that cannot hold one whole block a page refuses
+    `CONTEXT_OVER_CEILING` -- the prompt's own refusal, never a trimmed line.
+    Pure over the pinned delivery, so every reader of the gate's context shows
+    it the same lines. Returns the shown blocks and, per mapped source, what
+    its map shows, for the prompt to say.
     """
     bound = GATE_SOURCE_BYTES if budget is None else budget
     by_page: dict[UUID, dict[int, list[int]]] = {}
-    for item in delivered:
+    for item, size in zip(delivered, evidence_sizes(delivered), strict=True):
         pages = by_page.setdefault(item.source_id, {})
-        pages.setdefault(item.page, []).append(len(item.text.value.encode("utf-8")))
+        pages.setdefault(item.page, []).append(size)
     leading: dict[UUID, int] = {}
     maps: dict[UUID, dict[str, int]] = {}
     for source_id, pages in by_page.items():
@@ -175,7 +171,7 @@ def gate_view[B: _Block](
             "lines_shown": sum(min(k, len(sizes)) for sizes in pages.values()),
             "lines": sum(map(len, pages.values())),
         }
-    shown: list[B] = []
+    shown: list[Delivery] = []
     seen: dict[tuple[UUID, int], int] = {}
     for item in delivered:
         cap = leading.get(item.source_id)
