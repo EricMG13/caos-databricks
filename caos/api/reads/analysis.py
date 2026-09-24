@@ -18,6 +18,8 @@ A run of another case, an unknown and a malformed run are one `RUN_NOT_FOUND`.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter
@@ -32,6 +34,7 @@ from caos.api.deps import (
     Store,
     VisibleCase,
 )
+from caos.api.identity import Actor
 from caos.api.wire import (
     AnalysisBody,
     AnalysisDocument,
@@ -67,6 +70,7 @@ from caos.methodology.vendor import cached_contract
 from caos.methodology.verification import AcceptedRow
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
+from caos.store.members import Standing
 from caos.store.routes import resolved_route
 
 # Fixed: standing; the case title, `now()`, latest run and the displayed run's
@@ -101,6 +105,23 @@ BLOB_BUDGET = LONGEST_ROUTE_NODES * PER_HANDOFF_BLOBS
 router = APIRouter()
 
 
+@dataclass(frozen=True)
+class AnalysisQuery:
+    """Identity, the path, the query and the caller's visibility of the
+    case, then the store's three handles -- the seven values `read_analysis`
+    takes as FastAPI dependencies, carried as one parameter so Model and Book
+    (`read_analysis_without_tables`) can ask for the same document without a
+    call whose argument count this module's own ceiling would refuse."""
+
+    actor: Actor
+    case_id: UUID
+    run: UUID | None
+    standing: Standing
+    conn: StoreConnection
+    blobs: BlobStore
+    bundle: Bundle
+
+
 @router.get(
     "/api/v1/cases/{case_id}/analysis",
     response_model=AnalysisDocument,
@@ -117,6 +138,25 @@ def read_analysis(  # noqa: PLR0913 -- identity, path, query, then the stores
 ) -> AnalysisDocument:
     """The order of the parameters is load-bearing: identity, the path, the
     query and the caller's visibility of the case, then the store."""
+    query = AnalysisQuery(actor, case_id, run, standing, conn, blobs, bundle)
+    return _analysis_document(query, with_tables=True)
+
+
+def read_analysis_without_tables(query: AnalysisQuery) -> AnalysisDocument:
+    """The document Model and Book each read (N58): every accepted handoff's
+    Markdown and source facts, without deriving the tagged tables neither
+    keeps -- `ModelBody` excludes `handoffs` outright and `BookResearch`
+    carries no `tables` field, so the derivation those two readers used to
+    pay for was computed only to be dropped."""
+    return _analysis_document(query, with_tables=False)
+
+
+def _case_row(
+    conn: StoreConnection, case_id: UUID, run: UUID | None
+) -> tuple[str, Any, UUID | None, UUID | None]:
+    """The case's title and `now()`, its latest run, and the run this request
+    displays -- `run` when pinned, else the latest. A case row that is gone
+    is `CASE_NOT_FOUND`; a pinned run of another case is `RUN_NOT_FOUND`."""
     row = conn.execute(
         "SELECT title, now(),"
         " (SELECT run_id FROM runs WHERE case_id = c.case_id"
@@ -130,49 +170,66 @@ def read_analysis(  # noqa: PLR0913 -- identity, path, query, then the stores
     title, observed_at, latest, owned = row
     if run is not None and not owned:
         raise Refusal(RefusalCode.RUN_NOT_FOUND)
-    displayed = run if run is not None else latest
+    return title, observed_at, latest, run if run is not None else latest
 
+
+def _displayed_status(
+    conn: StoreConnection, displayed: UUID | None
+) -> tuple[Any, tuple[Any, Any] | None]:
+    """The displayed run's own status, and its blocking verdict if any --
+    read as the stored string, the way `reads/run.py` reads it: the column
+    holds exactly the five the wire declares. The blocking verdict rides the
+    same row rather than a second round trip -- it is one left join against a
+    table with at most one row per run, and reading it here keeps the
+    declared budget the shape it was measured in."""
+    if displayed is None:
+        return None, None
+    found = conn.execute(
+        "SELECT r.status, v.attempt_id, a.route_node_id FROM runs r"
+        " LEFT JOIN run_blocking_verdicts v ON v.run_id = r.run_id"
+        " LEFT JOIN run_attempts a ON a.attempt_id = v.attempt_id"
+        " WHERE r.run_id = %s",
+        (displayed,),
+    ).fetchone()
+    if found is None:
+        return None, None
+    return found[0], None if found[1] is None else (found[1], found[2])
+
+
+def _analysis_document(query: AnalysisQuery, *, with_tables: bool) -> AnalysisDocument:
+    conn = query.conn
+    title, observed_at, latest, displayed = _case_row(conn, query.case_id, query.run)
     handoffs: list[HandoffView] = []
     pending: list[PendingNode] = []
     subject: RunSubjectView | None = None
     notes: list[SectionNote] = []
     route = None if displayed is None else resolved_route(conn, displayed)
-    # Read as the stored string, the way `reads/run.py` reads it: the column
-    # holds exactly the five the wire declares. The blocking verdict rides the
-    # same row rather than a second round trip -- it is one left join against a
-    # table with at most one row per run, and reading it here keeps the
-    # declared budget the shape it was measured in.
-    displayed_status = None
-    blocking: tuple[object, object] | None = None
-    if displayed is not None:
-        found = conn.execute(
-            "SELECT r.status, v.attempt_id, a.route_node_id FROM runs r"
-            " LEFT JOIN run_blocking_verdicts v ON v.run_id = r.run_id"
-            " LEFT JOIN run_attempts a ON a.attempt_id = v.attempt_id"
-            " WHERE r.run_id = %s",
-            (displayed,),
-        ).fetchone()
-        if found is not None:
-            displayed_status = found[0]
-            blocking = None if found[1] is None else (found[1], found[2])
+    displayed_status, blocking = _displayed_status(conn, displayed)
     blocked_by = None
     if displayed is not None and route is None:
         notes.append(SectionNote.ROUTE_NOT_PINNED)
     elif displayed is not None and route is not None:
         subject = _subject(conn, displayed)
-        handoffs, pending = _handoffs(conn, blobs, bundle, route, displayed)
+        handoffs, pending = _handoffs(
+            _Handles(conn, query.blobs, query.bundle),
+            route,
+            displayed,
+            with_tables=with_tables,
+        )
         if pending:
             notes.append(SectionNote.HANDOFFS_PENDING)
         if displayed_status == "BLOCKED" and blocking is not None:
             blocked_by = _blocked_by(route, blocking)
     return AnalysisDocument(
         chrome=Chrome(
-            subject=Subject(case_id=case_id, title=title),
-            served_role=ServedRole(global_role=actor.role, standing=standing),
+            subject=Subject(case_id=query.case_id, title=title),
+            served_role=ServedRole(
+                global_role=query.actor.role, standing=query.standing
+            ),
             actions=[],
         ),
         body=AnalysisBody(
-            case_id=case_id,
+            case_id=query.case_id,
             latest_run_id=latest,
             displayed_run_id=displayed,
             subject=subject,
@@ -224,18 +281,31 @@ def _subject(conn: StoreConnection, run_id: UUID) -> RunSubjectView | None:
     )
 
 
+@dataclass(frozen=True)
+class _Handles:
+    """The store connection, the blob store and the methodology bundle: the
+    three handles `_handoffs` and `accepted_handoff` beneath it always thread
+    together, carried as one parameter so a fourth, `with_tables`, fits the
+    same argument ceiling every other reader in this module keeps to."""
+
+    conn: StoreConnection
+    blobs: BlobStore
+    bundle: Bundle
+
+
 def _handoffs(
-    conn: StoreConnection,
-    blobs: BlobStore,
-    bundle: Bundle,
+    handles: _Handles,
     route: ResolvedRoute,
     run_id: UUID,
+    *,
+    with_tables: bool,
 ) -> tuple[list[HandoffView], list[PendingNode]]:
     """Accepted handoffs in route order, then every other node with its state.
 
     A row without its record, or whose record no longer binds, refuses
     `ARTIFACT_RECORD_MISMATCH` (503): the server's own bytes failed.
     """
+    conn, blobs, bundle = handles.conn, handles.blobs, handles.bundle
     rows = {
         str(node): (UUID(str(attempt)), str(artifact), record, created)
         for node, attempt, artifact, record, created in conn.execute(
@@ -274,7 +344,14 @@ def _handoffs(
     documents = _cited_documents(conn, run_id, [r for _n, _s, r, _m, _c in read])
     handoffs = [
         _handoff_view(
-            node_id, sha, record, markdown.decode("utf-8"), created, documents, bundle
+            node_id,
+            sha,
+            record,
+            markdown.decode("utf-8"),
+            created,
+            documents,
+            bundle,
+            with_tables=with_tables,
         )
         for node_id, sha, record, markdown, created in read
     ]
@@ -338,10 +415,21 @@ def _handoff_view(  # noqa: PLR0913 -- one accepted handoff and its lookups
     accepted_at: object,
     documents: dict[str, tuple[UUID, str, object]],
     bundle: Bundle,
+    *,
+    with_tables: bool,
 ) -> HandoffView:
     projections = record.projections
-    # The contract `accepted_handoff` compiled for this manifest, read again.
-    derived = handoff_tables(cached_contract(bundle), markdown)
+    # The contract `accepted_handoff` compiled for this manifest, read again --
+    # only when the caller keeps tables (N58): Model and Book each drop this
+    # handoff's tables before the wire is built, so deriving them for those
+    # two readers spent CPU on a value nothing serves.
+    if with_tables:
+        derived = handoff_tables(cached_contract(bundle), markdown)
+        tables = [_table_view(table) for table in derived.tables]
+        tables_unavailable_reason = derived.unavailable_reason
+    else:
+        tables = []
+        tables_unavailable_reason = None
     return HandoffView(
         route_node_id=route_node_id,
         module_id=projections.module_id,
@@ -362,8 +450,8 @@ def _handoff_view(  # noqa: PLR0913 -- one accepted handoff and its lookups
         host_calculation=(
             "CP_CF_FORECAST" if projections.module_id == MODEL_MODULE else "NONE"
         ),
-        tables=[_table_view(table) for table in derived.tables],
-        tables_unavailable_reason=derived.unavailable_reason,
+        tables=tables,
+        tables_unavailable_reason=tables_unavailable_reason,
     )
 
 

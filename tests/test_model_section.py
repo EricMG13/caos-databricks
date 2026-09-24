@@ -25,10 +25,13 @@ from test_forecast_route import ForecastCompletions, harness
 from test_forecast_route import route as forecast_route
 
 from caos.api.app import app, store_connection
+from caos.api.identity import Actor, GlobalRole
+from caos.api.reads import analysis as analysis_read
 from caos.boundary_text import BoundaryText
 from caos.graph.route import ResolvedRoute
 from caos.methodology import tables
 from caos.methodology.handoff import _decoded_record, record_bytes
+from caos.methodology.vendor import VendorContract
 from caos.store.gates import withdraw_source
 from caos.store.members import Standing, grant, revoke
 from caos.store.runs import create_case, start_run
@@ -190,6 +193,67 @@ def test_analysis_serves_the_tagged_tables_each_owner_wrote(
     assert bounded["CP-2G"]["tables"] == []
     assert bounded["CP-2G"]["tables_unavailable_reason"] == "TABLES_TOO_LARGE"
     assert bounded["CP-1"]["tables"] == cp1["tables"]
+
+
+def test_read_analysis_without_tables_matches_read_analysis_but_the_tables(
+    harness: _Harness,
+) -> None:
+    """`read_analysis_without_tables` is `read_analysis` (N58): every field
+    matches except each handoff's tagged tables, which it never derives."""
+    _complete(harness)
+    actor = Actor(harness.approver, GlobalRole.ANALYST)
+    args = (
+        actor,
+        harness.case_id,
+        None,
+        Standing.APPROVER,
+        harness.conn,
+        harness.blobs,
+        harness.bundle,
+    )
+    served = analysis_read.read_analysis(*args)
+    harness.conn.rollback()
+    lean = analysis_read.read_analysis_without_tables(
+        analysis_read.AnalysisQuery(*args)
+    )
+    harness.conn.rollback()
+
+    assert lean.body.model_dump(exclude={"handoffs"}) == served.body.model_dump(
+        exclude={"handoffs"}
+    )
+    assert len(lean.body.handoffs) == len(served.body.handoffs)
+    for bare, full in zip(lean.body.handoffs, served.body.handoffs, strict=True):
+        stripped = {"tables", "tables_unavailable_reason"}
+        assert bare.model_dump(exclude=stripped) == full.model_dump(exclude=stripped)
+        assert (bare.tables, bare.tables_unavailable_reason) == ([], None)
+    assert any(h.tables for h in served.body.handoffs)
+
+
+def test_model_reads_the_analysis_route_without_deriving_its_tables(
+    client: TestClient, harness: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N58: the Model section reads every accepted handoff through
+    `read_analysis_without_tables`, not `read_analysis` -- `ModelBody`
+    excludes `handoffs` outright, so deriving each handoff's tagged tables for
+    this route only ever produced a value the wire then dropped."""
+    _complete(harness)
+    calls: list[None] = []
+
+    def counting(contract: VendorContract, markdown: str) -> tables.HandoffTables:
+        calls.append(None)
+        return tables.handoff_tables(contract, markdown)
+
+    monkeypatch.setattr(analysis_read, "handoff_tables", counting)
+    served = _get(client, harness)
+    assert served["body"]["forecast"] is not None
+    assert calls == []
+
+    analysis_response = client.get(
+        f"/api/v1/cases/{harness.case_id}/analysis", headers=_as(harness.approver)
+    )
+    harness.conn.rollback()
+    assert analysis_response.status_code == 200, analysis_response.json()
+    assert calls  # the direct Analysis read still derives them
 
 
 @pytest.mark.parametrize("change", ["owner", "record", "pin", "source", "blob"])

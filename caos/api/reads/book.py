@@ -25,7 +25,7 @@ from fastapi import APIRouter
 
 from caos.api.deps import IDENTITY_FIRST, Blobs, Caller, Methodology, Store
 from caos.api.identity import Actor
-from caos.api.reads.analysis import read_analysis
+from caos.api.reads.analysis import AnalysisQuery, read_analysis_without_tables
 from caos.api.reads.model import BLOB_BUDGET as MODEL_BLOBS
 from caos.api.reads.model import IO_BUDGET as MODEL_IO
 from caos.api.reads.model import accepted_forecast
@@ -223,8 +223,10 @@ def _row(
 ) -> tuple[BookRow, bool]:
     """One credit, and whether its periods were cut at `BOOK_PERIODS_MAX`."""
     try:
-        analysis = read_analysis(
-            actor, listing.case_id, None, listing.standing, conn, blobs, bundle
+        analysis = read_analysis_without_tables(
+            AnalysisQuery(
+                actor, listing.case_id, None, listing.standing, conn, blobs, bundle
+            )
         ).body
         forecast = accepted_forecast(conn, analysis)
     except Refusal as refusal:

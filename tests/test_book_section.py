@@ -25,7 +25,9 @@ from caos.api.reads.analysis import read_analysis
 from caos.api.reads.model import accepted_forecast
 from caos.api.wire import CLEARS, BookDocument
 from caos.boundary_text import BoundaryText
+from caos.methodology import tables
 from caos.methodology.forecast import forecast_inputs
+from caos.methodology.vendor import VendorContract
 from caos.refusals import RefusalCode
 from caos.store.gates import withdraw_source
 from caos.store.members import Standing, grant
@@ -167,6 +169,26 @@ def test_the_book_reads_within_its_declared_io_budget(
     assert one_credit <= book_read.PER_ROW_IO == analysis_read.IO_BUDGET
     assert book_read.IO_BUDGET == book_read.FIXED_IO + 4 * book_read.PER_ROW_IO
     assert book_read.BLOB_BUDGET == 4 * analysis_read.BLOB_BUDGET
+
+
+def test_the_book_does_not_derive_the_tagged_tables_analysis_drops_for_it(
+    client: TestClient, harness: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N58: the Book reads every accepted handoff through
+    `read_analysis_without_tables`, not `read_analysis` -- `BookResearch`
+    carries no `tables` field, so deriving each handoff's tagged tables for
+    this row only ever produced a value the wire then dropped."""
+    _complete(harness)
+    calls: list[None] = []
+
+    def counting(contract: VendorContract, markdown: str) -> tables.HandoffTables:
+        calls.append(None)
+        return tables.handoff_tables(contract, markdown)
+
+    monkeypatch.setattr(analysis_read, "handoff_tables", counting)
+    document = _book(client, harness, harness.approver)
+    assert document.body.rows[0].unavailable_reason is None
+    assert calls == []
 
 
 @pytest.mark.parametrize("path", [PATH, f"{PATH}?case=x"])
