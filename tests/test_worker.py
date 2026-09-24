@@ -9,6 +9,7 @@ from __future__ import annotations
 import ast
 import signal
 import sys
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -1596,3 +1597,90 @@ def test_a_bill_on_a_closed_connection_is_written_on_a_fresh_one(
     assert count(run.conn, "budget_ledger", run.run_id) == 1
     canonical.bill(run.conn, attempt, outcome)  # an exact replay is a no-op
     assert count(run.conn, "call_outcomes", run.run_id) == 1
+
+
+# How long another session holds the run's case row in the test below: past
+# every try the bill would get under a 300 ms bound (`canonical.BILL_TRIES`,
+# its pause patched out), with room for a loaded server.
+_CASE_LOCK_SECONDS = 2.5
+
+
+def _case_lock_held(url: str, run_id: UUID, held: Event) -> threading.Thread:
+    """Another session holding the run's case row for `_CASE_LOCK_SECONDS`:
+    what a freeze's proof, a filing's upload or a large admission holds for
+    as long as it takes."""
+
+    def hold() -> None:
+        with connect(url) as other:
+            other.execute(
+                "SELECT 1 FROM cases WHERE case_id ="
+                " (SELECT case_id FROM runs WHERE run_id = %s) FOR UPDATE",
+                (run_id,),
+            )
+            held.set()
+            time.sleep(_CASE_LOCK_SECONDS)
+            other.rollback()
+
+    holder = threading.Thread(target=hold, daemon=True)
+    holder.start()
+    return holder
+
+
+@pytest.mark.parametrize("bound", ["statement_timeout", "lock_timeout"])
+def test_a_paid_call_s_bill_outwaits_a_held_case_lock_under_the_worker_s_bounds(
+    enqueued: _Run,
+    empty_database: str,
+    monkeypatch: pytest.MonkeyPatch,
+    bound: str,
+) -> None:
+    """W1 (invariant 6): the bill's first write waits on the case row lock, and
+    the worker's connection bounds every statement (CF-041) -- a DBA's
+    `lock_timeout` bounds every lock wait the same way. Cancelled there, each
+    of `BILL_TRIES` failed, the run was released with no `call_outcomes` row,
+    neither `replay_billed` nor `unexplained_charge` could see the answer, and
+    the next claim paid for the node again. The bill's own unit lifts both
+    bounds for itself alone, so it waits the lock out and the node is paid for
+    once; the session keeps its bound for everything after it."""
+    from caos.methodology import canonical
+
+    run = enqueued
+    monkeypatch.setattr(canonical, "_pause", lambda _seconds: None)
+    if bound == "lock_timeout":
+        with psycopg.connect(empty_database, autocommit=True) as admin:
+            admin.execute(
+                f'ALTER DATABASE "{run.conn.info.dbname}" SET lock_timeout = 300'
+            )
+        worker_conn = connect(empty_database)
+    else:
+        worker_conn = connect(empty_database, statement_timeout_ms=300)
+    holders: list[threading.Thread] = []
+
+    def lock_during_the_first_call() -> None:
+        if not holders:
+            held = Event()
+            holders.append(_case_lock_held(empty_database, run.run_id, held))
+            assert held.wait(5)
+
+    completions = CanonicalCompletions(run.source_id, during=lock_during_the_first_call)
+    try:
+        claimed = work_once(
+            worker_conn,
+            run.blobs,
+            execution_for=module_execution(
+                completions, priced(ESTIMATE), run.bundle, run.blobs
+            ),
+            config=CONFIG,
+            stopping=Event(),
+        )
+        kept = worker_conn.execute(f"SHOW {bound}").fetchone()
+    finally:
+        worker_conn.close()
+        for holder in holders:
+            holder.join(10)
+    assert claimed == run.run_id
+    assert kept == ("300ms",), "lifted for the bill's unit alone"
+    assert run_status(run.conn, run.run_id) is RunStatus.COMPLETE
+    run.conn.rollback()
+    assert len(completions.prompts) == len(run.route.nodes), "one paid call a node"
+    assert count(run.conn, "call_outcomes", run.run_id) == len(run.route.nodes)
+    assert count(run.conn, "budget_ledger", run.run_id) == len(run.route.nodes)
