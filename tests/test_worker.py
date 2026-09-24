@@ -916,6 +916,101 @@ def test_a_parked_run_s_checkpoint_thread_is_forgotten(
         close_checkpointer(saver)
 
 
+def _thread_rows(url: str, run_id: UUID) -> dict[str, int]:
+    """Rows in each checkpoint table under any thread of `run_id`, whatever
+    the thread key is suffixed with (the scan the test above makes).
+
+    Every table LangGraph keys by thread, read from the catalog: the store
+    names them itself (`work.CHECKPOINT_TABLES`), and one LangGraph adds
+    later would otherwise go unforgotten and unnoticed.
+    """
+    from caos.graph import checkpoint as checkpoint_module
+
+    assert work_module.CHECKPOINT_SCHEMA == checkpoint_module.SCHEMA
+    counted: dict[str, int] = {}
+    with psycopg.connect(url, autocommit=True) as conn:
+        keyed = conn.execute(
+            "SELECT table_name FROM information_schema.columns"
+            " WHERE table_schema = %s AND column_name = 'thread_id'",
+            (checkpoint_module.SCHEMA,),
+        ).fetchall()
+        assert {str(row[0]) for row in keyed} == set(work_module.CHECKPOINT_TABLES)
+        for table in work_module.CHECKPOINT_TABLES:
+            row = conn.execute(
+                f"SELECT count(*) FROM {checkpoint_module.SCHEMA}.{table}"
+                " WHERE thread_id LIKE %s",
+                (f"{run_id}%",),
+            ).fetchone()
+            assert row is not None
+            counted[table] = int(row[0])
+    return counted
+
+
+def test_a_run_cancelled_while_queued_leaves_no_checkpoint_thread(
+    enqueued: _Run, empty_database: str
+) -> None:
+    """N21 (DL-8): a run released mid-route keeps its thread for the next
+    holder to resume. Cancelled while QUEUED, no worker holds it, so no
+    worker ever called `_forget`: the cancel that ends it drops the thread in
+    its own unit, and every checkpoint table is left with nothing of it."""
+    from caos.graph.checkpoint import checkpointer, close_checkpointer
+    from caos.store.work import request_cancel
+
+    run = enqueued
+    saver = checkpointer(empty_database)
+    stopping = Event()
+    try:
+        completions = CanonicalCompletions(run.source_id, during=stopping.set)
+        driven = work_once(
+            run.conn,
+            run.blobs,
+            execution_for=module_execution(
+                completions, priced(ESTIMATE), run.bundle, run.blobs, saver
+            ),
+            config=CONFIG,
+            stopping=stopping,
+        )
+        assert driven == run.run_id
+        assert work_row(run.conn, run.run_id)[0] == "QUEUED", "released"
+        assert sum(_thread_rows(empty_database, run.run_id).values()) > 0
+
+        assert _cancel_from_elsewhere(empty_database, run.run_id) is True
+        assert run_status(run.conn, run.run_id) is RunStatus.CANCELLED
+        assert _thread_rows(empty_database, run.run_id) == dict.fromkeys(
+            work_module.CHECKPOINT_TABLES, 0
+        )
+        run.conn.rollback()
+        assert request_cancel(run.conn, run.run_id) is False, "already ended"
+        run.conn.rollback()
+    finally:
+        close_checkpointer(saver)
+
+
+def test_a_cancel_with_no_checkpoint_schema_still_ends_the_run(
+    enqueued: _Run, empty_database: str
+) -> None:
+    """N21: a store no worker has ever set a checkpointer up on has no
+    `caos_graph` schema; forgetting a claimed run's threads there is nothing
+    to do, never a refusal that keeps the run from ending."""
+    from caos.graph import checkpoint as checkpoint_module
+    from caos.store.work import claim_run, release
+
+    run = enqueued
+    lease = claim_run(run.conn, worker=BoundaryText.of("w"), lease_seconds=60)
+    assert lease is not None
+    assert release(run.conn, lease)
+    run.conn.commit()
+    row = run.conn.execute(
+        "SELECT to_regnamespace(%s)", (checkpoint_module.SCHEMA,)
+    ).fetchone()
+    run.conn.rollback()
+    assert row == (None,), "no checkpointer was ever set up here"
+
+    assert _cancel_from_elsewhere(empty_database, run.run_id) is True
+    assert run_status(run.conn, run.run_id) is RunStatus.CANCELLED
+    run.conn.rollback()
+
+
 def test_a_lost_or_corrupt_stored_body_parks_the_run_with_its_own_code() -> None:
     """DL-5: a blob that is gone or corrupt is not a store fault. As one it
     released the run to the head of the queue, and every other run waited

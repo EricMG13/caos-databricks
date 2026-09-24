@@ -18,6 +18,8 @@ from datetime import datetime
 from typing import Literal, cast
 from uuid import UUID
 
+from psycopg import sql
+
 from caos.boundary_text import BoundaryText
 from caos.refusals import Refusal, RefusalCode
 from caos.store import RunStatus, StoreConnection, committed_unit
@@ -265,13 +267,14 @@ def request_cancel(conn: StoreConnection, run_id: UUID) -> bool:
         return False
     row = conn.execute(
         "SELECT state, cancel_requested_at IS NULL,"
-        " state = 'CLAIMED' AND lease_expires_at <= clock_timestamp()"
+        " state = 'CLAIMED' AND lease_expires_at <= clock_timestamp(),"
+        " lease_token > 0"
         " FROM run_work WHERE run_id = %s FOR UPDATE",
         (run_id,),
     ).fetchone()
     if row is None or row[0] == "DONE":
         return False
-    state, unrequested, abandoned = row
+    state, unrequested, abandoned, claimed = row
     if unrequested:
         conn.execute(
             "UPDATE run_work SET cancel_requested_at = now() WHERE run_id = %s",
@@ -279,7 +282,42 @@ def request_cancel(conn: StoreConnection, run_id: UUID) -> bool:
         )
     if state not in ("QUEUED", "STOPPED") and not abandoned:
         return bool(unrequested)
-    return _end_cancelled(conn, run_id)
+    ended = _end_cancelled(conn, run_id)
+    if ended and claimed:
+        _forget_threads(conn, run_id)
+    return ended
+
+
+# LangGraph's own schema and the tables of it keyed by thread
+# (`caos.graph.checkpoint`, `langgraph.checkpoint.postgres.base`). Named here
+# rather than imported: the store does not depend on the graph package.
+CHECKPOINT_SCHEMA = "caos_graph"
+CHECKPOINT_TABLES = ("checkpoints", "checkpoint_blobs", "checkpoint_writes")
+
+
+def _forget_threads(conn: StoreConnection, run_id: UUID) -> None:
+    """Drop the checkpoint thread of a run this unit just ended CANCELLED with
+    no worker holding it (N21, DL-8), in the caller's transaction.
+
+    A run is checkpointed only under a claim, so only a claimed run has a
+    thread; one released or parked and then cancelled while QUEUED or STOPPED
+    was never forgotten by a worker (`caos.graph.worker._forget`). The key is
+    the one `run_route` binds, `<run_id>:<route_digest>`, from the pinned
+    route. A table the checkpointer never set up is nothing to forget.
+    """
+    present = conn.execute(
+        "SELECT t FROM unnest(%s::text[]) AS t"
+        " WHERE to_regclass(quote_ident(%s) || '.' || quote_ident(t)) IS NOT NULL",
+        (list(CHECKPOINT_TABLES), CHECKPOINT_SCHEMA),
+    ).fetchall()
+    for (table,) in present:
+        conn.execute(
+            sql.SQL(
+                "DELETE FROM {} WHERE thread_id = (SELECT run_id::text || ':'"
+                " || route_digest FROM run_routes WHERE run_id = %s)"
+            ).format(sql.Identifier(CHECKPOINT_SCHEMA, str(table))),
+            (run_id,),
+        )
 
 
 def _end_cancelled(conn: StoreConnection, run_id: UUID) -> bool:
