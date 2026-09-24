@@ -128,3 +128,56 @@ def test_a_store_that_cannot_answer_at_boot_is_asked_again_off_the_boot_path(
     thread.join(timeout=5)
     assert not thread.is_alive()
     assert capsys.readouterr().err.split() == ["STORE_UNAVAILABLE"] * 2
+
+
+def test_a_session_the_server_ends_during_the_schema_check_is_asked_again(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, empty_database: str
+) -> None:
+    """R24-05: `apply_schema` answered a session the server ended (SQLSTATE
+    57P01) as drift, which the boot loop treats as final -- one interruption
+    left the process with no worker for its whole life. It is a store that
+    could not answer, and the loop asks again."""
+    import psycopg
+
+    from caos.store import apply_schema, connect
+
+    monkeypatch.setenv(worker.IN_PROCESS, "1")
+    monkeypatch.setenv(worker.MODEL_PRICE, "set, so only the code is printed")
+    monkeypatch.setattr(worker, "pause_seconds", lambda _config, _failures: 0.01)
+    tries: list[str] = []
+
+    def interrupted_once() -> Configured:
+        tries.append("try")
+        with connect(empty_database) as conn:
+            if len(tries) == 1:
+                with psycopg.connect(empty_database, autocommit=True) as admin:
+                    admin.execute(
+                        "SELECT pg_terminate_backend(%s, 5000)",
+                        (conn.info.backend_pid,),
+                    )
+            apply_schema(conn)
+        return Configured(
+            completions=fake_completions(),
+            url=empty_database,
+            root=str(tmp_path),
+            bundle=Bundle(VENDORED),
+            saver=MemorySaver(),
+        )
+
+    ran = Event()
+
+    def run(configured_worker: Configured, stopping: Event) -> int:
+        ran.set()
+        stopping.wait(5)
+        return 0
+
+    monkeypatch.setattr(worker, "_configured", interrupted_once)
+    monkeypatch.setattr(worker, "_worker", run)
+    stopping = Event()
+    thread = start_in_process(stopping)
+    assert thread is not None
+    assert ran.wait(10), "configured on the second try"
+    assert tries == ["try", "try"]
+    stopping.set()
+    thread.join(timeout=5)
+    assert not thread.is_alive()
