@@ -30,6 +30,7 @@ from canonical_fixtures import (
     CanonicalCompletions,
 )
 from conftest import _url_for, approve_run, priced
+from fake_chat import ScriptedChat
 
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
@@ -488,3 +489,79 @@ def test_a_prompt_rebuilt_larger_than_the_one_priced_is_refused_before_the_call(
     assert completions.prompts == [], "the provider was reached"
     assert conn.execute("SELECT count(*) FROM budget_ledger").fetchone() == (0,)
     assert conn.execute("SELECT count(*) FROM call_outcomes").fetchone() == (0,)
+
+
+def _priced_provider(
+    ready: tuple[StoreConnection, UUID, UUID, BlobStore],
+    route: ResolvedRoute,
+    price: ModelPrice,
+) -> tuple[ModuleProvider, ScriptedChat]:
+    """The module provider over the production seam, charging at `price`."""
+    from fake_chat import ScriptedChat, answer, fake_completions
+
+    conn, run_id, _source_id, blobs = ready
+    chat = ScriptedChat(answer=answer(finish="stop"))
+    provider = ModuleProvider(
+        conn=conn,
+        bundle=Bundle(root=VENDORED),
+        blobs=blobs,
+        completions=fake_completions(chat, model=MODEL, price=price),
+        route=route,
+        run_id=run_id,
+    )
+    return provider, chat
+
+
+def test_a_provider_charging_at_another_price_is_refused_before_any_attempt(
+    ready: tuple[StoreConnection, UUID, UUID, BlobStore],
+    route: ResolvedRoute,
+) -> None:
+    """CF-089: the run reserves at `execution.price` and the adapter charges at
+    its own dated price. Compared by model alone, a run priced at one rate was
+    billed at another; now the whole price must agree before any attempt."""
+    from dataclasses import replace
+
+    conn, run_id, _source_id, blobs = ready
+    provider, chat = _priced_provider(ready, route, TERRA)
+    assert provider.price == TERRA
+    for moved in (
+        replace(TERRA, output_per_token=Decimal("0.000016")),
+        replace(TERRA, as_of=date(2026, 9, 16)),
+    ):
+        with pytest.raises(Refusal, match=r"^PROVIDER_NOT_CONFIGURED$"):
+            run_route(
+                conn,
+                blobs,
+                run_id=run_id,
+                route=route,
+                execution=Execution(provider, moved, provider.bundle),
+            )
+    assert chat.calls == 0
+    assert conn.execute(
+        "SELECT count(*) FROM run_attempts WHERE run_id = %s", (run_id,)
+    ).fetchone() == (0,)
+
+
+def test_a_reservation_at_another_price_is_refused_before_the_call(
+    ready: tuple[StoreConnection, UUID, UUID, BlobStore],
+    route: ResolvedRoute,
+) -> None:
+    """CF-089, in the unit that spends: the reservation is read back with the
+    price it was taken under, and a provider that would charge at another --
+    same model, other rate -- is refused before it is called."""
+    from dataclasses import replace
+
+    from caos.store.budget import reserve
+
+    conn, run_id, _source_id, _blobs = ready
+    provider, chat = _priced_provider(ready, route, TERRA)
+    node = route.nodes[0]
+    attempt = start_attempt(conn, run_id, node.route_node_id)
+    cheaper = replace(TERRA, input_per_token=Decimal("0.000001"))
+    reserve(conn, attempt, worst_case(cheaper), price=cheaper)
+    with pytest.raises(Refusal, match=r"^PROVIDER_NOT_CONFIGURED$"):
+        provider.execute(node.route_node_id, node.module_id, attempt_id=attempt)
+    assert chat.calls == 0
+    assert conn.execute(
+        "SELECT count(*) FROM call_outcomes WHERE run_id = %s", (run_id,)
+    ).fetchone() == (0,)

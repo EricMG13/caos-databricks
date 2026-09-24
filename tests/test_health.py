@@ -124,13 +124,23 @@ def test_each_failed_probe_names_its_code_and_answers_503(
     assert health.probe_bundle(root, lambda: Bundle(VENDORED_BUNDLE)) == (
         "BUNDLE_INVALID"
     )
+    # A root holding the pinned manifest and nothing it lists is not the
+    # bundle (CF-093): this passed as OK when the pin was all that was read.
     shutil.copy(VENDORED_BUNDLE / MANIFEST_NAME, root / MANIFEST_NAME)
     held = Bundle(root)
-    assert health.probe_bundle(root, lambda: held) == "OK"
+    assert health.probe_bundle(root, lambda: held, health.FileCheck()) == (
+        "BUNDLE_MOVED"
+    )
+    shutil.rmtree(root)
+    shutil.copytree(VENDORED_BUNDLE, root)
+    held = Bundle(root)
+    assert health.probe_bundle(root, lambda: held, health.FileCheck()) == "OK"
     (root / MANIFEST_NAME).write_bytes(
         (root / MANIFEST_NAME).read_bytes().replace(b"{", b"{ ", 1)
     )
-    assert health.probe_bundle(root, lambda: held) == "BUNDLE_MOVED"
+    assert health.probe_bundle(root, lambda: held, health.FileCheck()) == (
+        "BUNDLE_MOVED"
+    )
 
     monkeypatch.delenv(BLOB_ROOT, raising=False)
     assert health.probe_blobs() == "BLOB_ROOT_UNAVAILABLE"
@@ -601,3 +611,44 @@ def test_an_in_process_worker_answers_for_itself_not_the_fleet(
         if thread is not None:
             thread.join(10)
     assert health.probe_workers() == "WORKERS_ABSENT", "its row outlives it"
+
+
+def test_the_bundle_probe_proves_every_listed_file_at_most_every_ttl(
+    tmp_path: Path,
+) -> None:
+    """CF-093: the probe read only the manifest pin, so a file swapped under an
+    unchanged manifest reported OK. Every file the manifest lists is proven
+    now -- root files and every skill's -- at a cost (about 70 ms, 350 files)
+    the ten-second round should not pay, so an OK stands for `ttl` seconds per
+    root and manifest; a failure is never kept, so a restored file clears on
+    the next round."""
+    from caos.methodology.bundle import verify_every_file
+
+    root = tmp_path / "bundle"
+    shutil.copytree(VENDORED_BUNDLE, root)
+    held = Bundle(root)
+    now = [0.0]
+    files = health.FileCheck(ttl=300.0, clock=lambda: now[0])
+    assert health.probe_bundle(root, lambda: held, files) == "OK"
+    for listed in (
+        Path("skills/cp-0-source-readiness/SKILL.md"),
+        Path("CANON_SHARED.md"),
+    ):
+        original = (root / listed).read_bytes()
+        (root / listed).write_bytes(original + b"\n")
+        with pytest.raises(Refusal) as caught:
+            verify_every_file(held)
+        assert caught.value.code is RefusalCode.AUTHORITY_BYTES_MISMATCH
+        # The last proof stands inside the TTL, then the pass runs again.
+        assert health.probe_bundle(root, lambda: held, files) == "OK"
+        now[0] += 301.0
+        assert health.probe_bundle(root, lambda: held, files) == "BUNDLE_MOVED"
+        (root / listed).write_bytes(original)
+        assert health.probe_bundle(root, lambda: held, files) == "OK"
+    (root / "skills/cp-0-source-readiness/SKILL.md").unlink()
+    now[0] += 301.0
+    assert health.probe_bundle(root, lambda: held, files) == "BUNDLE_MOVED"
+    # A second root under the same manifest is proven on its own.
+    other = tmp_path / "other"
+    shutil.copytree(VENDORED_BUNDLE, other)
+    assert health.probe_bundle(other, lambda: Bundle(other), files) == "OK"

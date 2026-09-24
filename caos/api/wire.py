@@ -183,9 +183,6 @@ CLEARS: Mapping[RefusalCode, str] = {
     _C.PROVIDER_RESPONSE_INVALID: "Retry the attempt.",
     _C.AUTHORITY_BYTES_MISMATCH: "An operator must restore the pinned bundle.",
     _C.AUTHORITY_MODULE_UNKNOWN: "Name a module the bundle declares.",
-    _C.ENVELOPE_INVALID: "Retry the attempt.",
-    _C.ENVELOPE_UNDECLARED_FIELD: "Retry the attempt.",
-    _C.ENVELOPE_UNCITED_CLAIM: "Retry the attempt.",
     _C.HANDOFF_MALFORMED: (
         "Retry the attempt; an operator must verify a stored handoff refused on read."
     ),
@@ -204,8 +201,6 @@ CLEARS: Mapping[RefusalCode, str] = {
     _C.HANDOFF_MODULE_UNSUPPORTED: "Select a route the adapter executes.",
     _C.CALL_OUTCOME_UNEXPLAINED: "An operator must decide whether to pay again.",
     _C.ARTIFACT_RECORD_MISMATCH: "An operator must verify the stored record.",
-    _C.READINESS_INVALID: "An operator must verify the gate artifact.",
-    _C.READINESS_INCOMPLETE: "Retry the gate attempt.",
     _C.NOT_AUTHENTICATED: "Sign in.",
     _C.ENDPOINT_NOT_FOUND: "Use a declared path and method.",
     _C.EDGE_NOT_TRUSTED: "Reach the service through its edge.",
@@ -223,8 +218,6 @@ CLEARS: Mapping[RefusalCode, str] = {
     _C.ROUTE_NOT_ENABLED: "Select a route the adapter executes.",
     _C.COMMAND_EXPECTATION_STALE: "Re-read the run and act on what it shows.",
     _C.METHODOLOGY_INPUT_INVALID: "Correct the calculation inputs.",
-    _C.FORECAST_CHAIN_BROKEN: "Link each period to the one before it.",
-    _C.FORECAST_RESIDUAL_UNRECONCILED: "Reconcile the balances within tolerance.",
     _C.FORECAST_DRIVER_NOT_READY: "Complete the driver first.",
     _C.DELIVERABLE_PAYLOAD_INVALID: "Correct the deliverable payload.",
     _C.DELIVERABLE_NOT_FOUND: "Name a saved revision of this case.",

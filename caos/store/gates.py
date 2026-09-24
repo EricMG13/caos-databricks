@@ -18,11 +18,13 @@ from caos import methodology
 from caos.graph.route import RESEARCH_STAGE, ResolvedRoute
 from caos.methodology.bundle import Bundle
 from caos.methodology.handoff import ADAPTER_MODULES, ADAPTER_ROUTES, RESEARCH_MODULE
+from caos.methodology.vendor import catalog
 from caos.refusals import Refusal, RefusalCode
 from caos.store import RunStatus, StoreConnection, rollback_or_close
 from caos.store.audit import GovernedAction, governed_write
 from caos.store.events import lock_run
 from caos.store.members import Standing, satisfies, standing_of
+from caos.store.routes import require_catalog_route
 from caos.store.run_inputs import RunInput, _load_run_input, input_fields
 from caos.store.source_sets import SourceSet
 
@@ -262,8 +264,10 @@ def execution_input(
 
     `RUN_INPUT_INVALID` for a pin of another build, manifest or adapter (a
     `claims-json-v1` pin among them); `HANDOFF_MODULE_UNSUPPORTED` for a route
-    with a module the adapter does not own (§42.2) -- before any attempt,
-    reservation or call, since every executing caller reads this first.
+    with a module the adapter does not own (§42.2); `ROUTE_IDENTITY_INVALID`
+    for a pinned route that is not the pinned build's own catalog resolution
+    of its pathway (CF-025) -- before any attempt, reservation or call, since
+    every executing caller reads this first.
     """
     pin, route = approved_run_input(conn, run_id)
     if not isinstance(bundle, Bundle):
@@ -275,6 +279,7 @@ def execution_input(
     ):
         raise Refusal(RefusalCode.RUN_INPUT_INVALID)
     require_adapter_route(route)
+    require_catalog_route(route, catalog(bundle))
     return pin, route
 
 

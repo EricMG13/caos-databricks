@@ -2,8 +2,8 @@
 
 `graph.route.resolve_route` (legacy `engine.route`) for every `ADAPTER_ROUTES`
 pair, plain and with the research and model extensions: node order, typed
-edges, predicates, `route_digest`, `frontier`, `node_states`, `predecessors`
-and `reachable`. The host pin predicate is masked (see `parity.cases`).
+edges, predicates, `route_digest`, `frontier`, `node_states` and
+`predecessors`. The host pin predicate is masked (see `parity.cases`).
 """
 
 from __future__ import annotations

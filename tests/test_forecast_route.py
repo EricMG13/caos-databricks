@@ -375,3 +375,94 @@ def test_qualification_checks_host_recomputed_forecast_not_its_citation(
         ).rows
         assert mismatch.met == case.expects
         assert mismatch.forecast_met is False
+
+
+_NET_EQUITY = (
+    "| net_equity_issue_repay |  | BASE | FY2026 | 2026 | {value} | CURRENCY_MM"
+    " | A-BASE-2026-net_equity_issue_repay- | {status} |"
+)
+
+
+class _NotApplicableDriver(ForecastCompletions):
+    """CP-2G marks the `net_equity_issue_repay` row CP-CF needs NOT_APPLICABLE
+    with a blank value: the status its own steps permit (G3-9)."""
+
+    def complete(self, prompt: str, *, json_object: bool = False) -> Completion:
+        done = super().complete(prompt, json_object=json_object)
+        if fields_from_prompt(prompt)["module_id"] != "CP-2G":
+            return done
+        assert done.content is not None
+        answer = json.loads(done.content)
+        ready = _NET_EQUITY.format(value="0", status="READY")
+        assert ready in answer["canonical_markdown"]
+        answer["canonical_markdown"] = answer["canonical_markdown"].replace(
+            ready, _NET_EQUITY.format(value="", status="NOT_APPLICABLE"), 1
+        )
+        return replace(done, content=json.dumps(answer))
+
+
+def test_a_not_applicable_cp2g_driver_stops_cp_cf_as_not_ready(
+    harness: _Harness,
+) -> None:
+    """G3-9: CP-2G's permitted NOT_APPLICABLE row is accepted as CP-2G's, and
+    CP-CF then stops `FORECAST_DRIVER_NOT_READY` -- "Complete the driver
+    first." -- with no second attempt, which could not change CP-2G's row. It
+    was refused `HANDOFF_INCOMPLETE`, a malformed handoff, before."""
+    answers = _NotApplicableDriver(harness.source_id)
+    code = _run_route(harness, _module_provider(harness, answers))
+    assert code is RefusalCode.FORECAST_DRIVER_NOT_READY
+    called = [fields_from_prompt(p)["module_id"] for p in answers.prompts]
+    assert called.count("CP-2G") == 1 and called.count("CP-CF") == 1
+    assert _status(harness) != "COMPLETE"
+
+
+class _MisMappedOnce(ForecastCompletions):
+    """CP-CF's first answer puts 4 in the request's distributions, where
+    CP-2G's `dividends_paid` row says 0; its second answer is right."""
+
+    flawed: bool = False
+
+    def complete(self, prompt: str, *, json_object: bool = False) -> Completion:
+        done = super().complete(prompt, json_object=json_object)
+        if fields_from_prompt(prompt)["module_id"] != "CP-CF" or self.flawed:
+            return done
+        self.flawed = True
+        assert done.content is not None
+        answer = json.loads(done.content)
+        markdown = answer["canonical_markdown"]
+        assert '"distributions": "0"' in markdown
+        answer["canonical_markdown"] = markdown.replace(
+            '"distributions": "0"', '"distributions": "4"', 1
+        )
+        return replace(done, content=json.dumps(answer))
+
+
+def test_cp_cf_second_attempt_names_the_driver_row_it_could_not_map(
+    harness: _Harness,
+) -> None:
+    """G3-9: CP-CF's one second attempt is told which CP-2G driver row its
+    request did not match, by driver ID, case and period -- never a value.
+    Priced at half the usual estimate, so the run's default ceiling covers the
+    eleventh call the second attempt is."""
+    from conftest import priced
+
+    from caos.graph.runtime import Execution, run_route
+
+    answers = _MisMappedOnce(harness.source_id)
+    run_route(
+        harness.conn,
+        harness.blobs,
+        run_id=harness.run_id,
+        route=harness.route,
+        execution=Execution(
+            _module_provider(harness, answers), priced(Decimal("0.25")), harness.bundle
+        ),
+    )
+    cf = [p for p in answers.prompts if fields_from_prompt(p)["module_id"] == "CP-CF"]
+    assert len(cf) == 2
+    assert "host driver check" not in cf[0]
+    assert (
+        "host driver check: CP-2G's `dividends_paid` row for BASE FY2026 does not"
+        " equal the request's distributions" in cf[1]
+    )
+    assert _status(harness) == "COMPLETE"

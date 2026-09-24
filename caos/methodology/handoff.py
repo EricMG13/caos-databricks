@@ -33,6 +33,7 @@ from caos.digest import canonical_json
 from caos.evidence.citations import AnchoredCitation, Citation, Rect
 from caos.graph.route import MODEL_MODULE
 from caos.methodology.vendor import VendorContract
+from caos.provider import MAX_RESPONSE_BYTES
 from caos.refusals import Refusal, RefusalCode
 
 # Both sets are enforced together at one point, `gates.require_adapter_route`
@@ -116,6 +117,13 @@ ZERO_SHA256 = "0" * 64
 MAX_FILE_BYTES = 26_214_400
 MAX_FRONTMATTER_BYTES = 262_144
 MAX_LINE_BYTES = 65_536
+# The most Markdown the host accepts as a handoff, on model output and on
+# stored reads alike (`_text`): the response bound the transport accepts
+# (N39, owner-approved). No answer is longer than that, and a handoff's
+# Markdown is never longer than the JSON body it arrived in, since an escape
+# only ever shortens when read. The vendor's reader goes to `MAX_FILE_BYTES`,
+# where validation took 6-22 s on every read of an accepted handoff.
+MAX_HANDOFF_BYTES = MAX_RESPONSE_BYTES
 # The longest run of spaces or tabs any line of a handoff may carry.
 #
 # The vendor's heading expressions are `^ {0,3}##(?!#)[ \t]+(.+?)[ \t]*$` and
@@ -356,44 +364,86 @@ def _text(markdown: bytes) -> str:
     Everything here is a bound on what the *host* will hand on -- size, LF-only
     lines, the invisible separators, text no reader can see, and the whitespace
     run the vendor's own expressions cannot read in linear time. It runs before
-    any vendor call and on stored bytes as well as model output.
+    any vendor call and on stored bytes as well as model output. Which bound
+    refused is named to a node's one second attempt (`_text_bound`), never the
+    text.
     """
-    malformed = Refusal(RefusalCode.HANDOFF_MALFORMED)
-    if len(markdown) > MAX_FILE_BYTES:
-        raise malformed
+    text, _bound = _text_bound(markdown)
+    if text is None:
+        raise Refusal(RefusalCode.HANDOFF_MALFORMED)
+    return text
+
+
+def _text_bound(markdown: bytes) -> tuple[str | None, str]:
+    """`_text`'s reading: the text and `""`, or None and the host bound the
+    bytes break, in the words a second attempt is told (G1-16). One reading
+    serves both, so the bound named is the one that refused."""
+    if len(markdown) > MAX_HANDOFF_BYTES:
+        return None, f"the Markdown is longer than {MAX_HANDOFF_BYTES} bytes"
     try:
         text = markdown.decode("utf-8")
     except UnicodeDecodeError:
-        text = None
+        return None, "the Markdown is not UTF-8"
+    bound = _broken_bound(text)
+    return (None, bound) if bound else (text, "")
+
+
+def _broken_bound(text: str) -> str:
+    """The first of `_text`'s bounds on decoded text that `text` breaks, named;
+    `""` when it breaks none."""
     # Canonical Markdown is LF-only; a CR would let the host and the vendor
     # disagree about where lines, and so the front matter, end.
-    if text is None or "\r" in text or INVISIBLE.intersection(text):
-        raise malformed
+    if "\r" in text:
+        return (
+            "a line ends in a carriage return; canonical Markdown ends every line"
+            " with a line feed alone"
+        )
+    if INVISIBLE.intersection(text):
+        return (
+            "the Markdown carries a line separator (U+2028), paragraph separator"
+            " (U+2029) or byte order mark (U+FEFF)"
+        )
     # Tags, a zero-width space, a word joiner: text a reviewer of the committee
     # page cannot see and the next module reads as an instruction (AI-2).
     if hides_text(text):
-        raise malformed
+        return (
+            "the Markdown carries a character no reader can see (a zero-width,"
+            " tag, variation-selector or other invisible code point)"
+        )
     # One C-level substring search, whatever the document does. Tabs are read
     # as spaces so that a run mixing the two is one run, and `str.replace`
     # gives back the same object when there is no tab to replace.
     spaced = text.replace("\t", " ")
-    if " " * (MAX_WHITESPACE_RUN + 1) in spaced or _heading_backtracks(text, spaced):
-        raise malformed
-    try:
-        clean = BoundaryText.of(text, limit=len(text)).value == text
-    except Refusal:
-        clean = False
+    if " " * (MAX_WHITESPACE_RUN + 1) in spaced:
+        return f"a line carries a run of more than {MAX_WHITESPACE_RUN} spaces or tabs"
+    if _heading_backtracks(text, spaced):
+        return (
+            f"a heading's title carries a run of more than {MAX_HEADING_RUN}"
+            " spaces, tabs or # characters"
+        )
+    if not _clean(text):
+        return (
+            "the Markdown carries a control character other than a line feed or"
+            " tab, or text that is not in Unicode NFC form"
+        )
     lines = text.split("\n")
+    if any(len(line.encode()) > MAX_LINE_BYTES for line in lines):
+        return f"a line is longer than {MAX_LINE_BYTES} bytes"
     closing = (
         lines.index("---", 1) if lines[:1] == ["---"] and "---" in lines[1:] else 0
     )
-    if (
-        not clean
-        or any(len(line.encode()) > MAX_LINE_BYTES for line in lines)
-        or len("\n".join(lines[: closing + 1]).encode()) > MAX_FRONTMATTER_BYTES
-    ):
-        raise malformed
-    return text
+    if len("\n".join(lines[: closing + 1]).encode()) > MAX_FRONTMATTER_BYTES:
+        return f"the front matter is longer than {MAX_FRONTMATTER_BYTES} bytes"
+    return ""
+
+
+def _clean(text: str) -> bool:
+    """Whether `BoundaryText` keeps `text` exactly: NFC already, and no control
+    but CR, LF and tab, lone surrogate or bidirectional control."""
+    try:
+        return BoundaryText.of(text, limit=len(text)).value == text
+    except Refusal:
+        return False
 
 
 def _heading_backtracks(text: str, spaced: str) -> bool:
@@ -877,17 +927,158 @@ def feedback_lines(
     skill: bytes = b"",
 ) -> tuple[str, ...]:
     """`retry_feedback`'s lines before the cap, most telling first: the
-    transport, the quotes, the missing IDs, then the vendor's own messages."""
+    transport, the host's own bounds on the text, the quotes, the front
+    matter's host-owned and undeclared fields, the missing IDs, CP-0's blocker
+    cells, then the vendor's own messages."""
     parsed, reason = _transport_or_reason(body)
     if parsed is None:
         return (reason,)
-    _markdown, text, citations = parsed
-    quote = _quote_line(text, citations)
-    lines = [quote] if quote else []
-    absent = _absent_ids_line(contract, identity.module_id, text, skill)
-    lines += [absent] if absent else []
-    lines += _vendor_lines(contract, catalog, identity, text, skill)
+    markdown, text, citations = parsed
+    checked = _checked(contract, catalog, identity, markdown)
+    host = (
+        _text_line(markdown),
+        _quote_line(text, citations),
+        *_front_matter_lines(contract, identity, getattr(checked, "fields", None)),
+        _absent_ids_line(contract, identity.module_id, text, skill),
+        _blocker_line(contract, catalog, text)
+        if identity.module_id == GATE_MODULE
+        else None,
+    )
+    lines = [line for line in host if line]
+    lines += _vendor_lines(contract, catalog, identity, (text, checked), skill)
     return tuple(lines)
+
+
+def _checked(
+    contract: VendorContract,
+    catalog: Mapping[str, Any],
+    identity: HostIdentity,
+    markdown: bytes,
+) -> object:
+    """The vendor validator's result on an answer within the host's bounds,
+    or None: past a bound the validator never reads it (`validate_markdown`),
+    and a validator that raises is nothing to report."""
+    with suppress(Exception):
+        text = _text(markdown)
+        scope = _decision_scope(catalog, identity)
+        return contract.validate_handoff.validate_text(text, decision_scope=scope)
+    return None
+
+
+def _text_line(markdown: bytes) -> str | None:
+    """The host bound the answer's Markdown breaks (`_text`), named and never
+    quoted (G1-16): no validator ever read such an answer, so nothing else
+    says why it was refused."""
+    _text_read, bound = _text_bound(markdown)
+    return f"host text check: {bound}" if bound else None
+
+
+# A front matter field name a line may show: the vendor's own key grammar
+# (`TOP_LEVEL_KEY_RE`), at most 64 characters. Anything else is counted.
+_FIELD_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_-]{0,63}")
+
+
+def _front_matter_lines(
+    contract: VendorContract, identity: HostIdentity, fields: object
+) -> list[str]:
+    """What `validate_markdown` refuses in the front matter, by field name only
+    (owner-approved 2026-09-23, G1-16): a host-owned field missing or not the
+    host's, value and JSON type (`HANDOFF_IDENTITY_MISMATCH`), an upgrade key
+    set on a run that upgrades nothing, and a field no handoff may carry
+    (`HANDOFF_UNDECLARED_FIELD`). Never a value, which is the model's text or
+    another run's. Nothing about host-owned fields for an identity the host
+    itself cannot build: no answer can fix that."""
+    if not isinstance(fields, dict):
+        return []
+    lines: list[str] = []
+    with suppress(Refusal):
+        host = invocation_fields(contract, identity)
+        differ = sorted(
+            key
+            for key, value in host.items()
+            if key not in fields or not _same(fields[key], value)
+        )
+        if differ:
+            one = len(differ) == 1
+            lines.append(
+                f"host identity check: the host-owned {_plural('field', differ)}"
+                f" {_field_names(differ)} {'is' if one else 'are'} missing or not"
+                f" the {'one' if one else 'ones'} the HOST-OWNED FRONT MATTER block"
+                f" gives; copy {'it' if one else 'them'} exactly, value and type"
+            )
+    upgraded = sorted(key for key in _UPGRADE_KEYS if fields.get(key) is not None)
+    if upgraded:
+        lines.append(
+            f"host identity check: {_field_names(upgraded)} must be absent or"
+            " null: this run upgrades no earlier run"
+        )
+    undeclared = sorted(
+        str(key) for key in set(fields) - _declared_keys(contract, identity.module_id)
+    )
+    if undeclared:
+        one = len(undeclared) == 1
+        lines.append(
+            f"host front matter check: the front matter carries"
+            f" {_field_names(undeclared)}, {'a field' if one else 'fields'} no"
+            f" handoff may carry; remove {'it' if one else 'them'}"
+        )
+    return lines
+
+
+def _plural(noun: str, names: Sequence[str]) -> str:
+    return noun if len(names) == 1 else noun + "s"
+
+
+def _field_names(names: Sequence[str]) -> str:
+    """`a`, `b` and 3 more: at most `MAX_FEEDBACK_CITATIONS` field names, each
+    in the vendor's key grammar and at most 64 characters; the rest counted."""
+    shown = [name for name in names if _FIELD_NAME.fullmatch(name)]
+    shown = shown[:MAX_FEEDBACK_CITATIONS]
+    rest = len(names) - len(shown)
+    parts = [f"`{name}`" for name in shown] + ([f"{rest} more"] if rest else [])
+    if len(parts) == 1:
+        return parts[0]
+    return ", ".join(parts[:-1]) + " and " + parts[-1]
+
+
+def _blocker_line(
+    contract: VendorContract, catalog: Mapping[str, Any], text: str
+) -> str | None:
+    """The CONDITIONAL and BLOCKED T8 rows whose `Why now / blocker` cell
+    `_blocker` refuses -- past `MAX_BLOCKER_CHARS`, or carrying a control or
+    bidirectional character -- by module ID, the cell never quoted (G1-16).
+    A row the gate cleared is held to nothing here, as `_readiness` holds it."""
+    nav = contract.navigation
+    try:
+        rows = nav.parse_t8(text, nav.validate_catalog(catalog))
+    except ValueError:  # the parser's own line already says why
+        return None
+    refused = sorted(
+        str(row.module_id)
+        for row in rows
+        if row.readiness in UNCLEARED_READINESS
+        and not _blocker_kept(row.why_now_or_blocker)
+    )
+    if not refused:
+        return None
+    one = len(refused) == 1
+    return (
+        "host readiness check: a CONDITIONAL or BLOCKED row's `Why now / blocker`"
+        f" cell holds at most {MAX_BLOCKER_CHARS} characters and no control or"
+        f" bidirectional character; the {_plural('row', refused)} for"
+        f" {', '.join(refused)} {'breaks' if one else 'break'} it"
+    )
+
+
+def _blocker_kept(cell: object) -> bool:
+    """Whether `_blocker` keeps this cell."""
+    if not isinstance(cell, str):
+        return False
+    try:
+        BoundaryText.of(cell, limit=MAX_BLOCKER_CHARS)
+    except Refusal:
+        return False
+    return True
 
 
 def capped(lines: Sequence[str]) -> tuple[str, ...]:
@@ -1055,22 +1246,29 @@ def answer_citations(body: str) -> tuple[Citation, ...]:
     return () if parsed is None else parsed[2]
 
 
+def answer_markdown(body: str) -> bytes | None:
+    """The Markdown a stored answer carried; None when it is not the
+    transport, whose reason `retry_feedback` gives."""
+    parsed, _reason = _transport_or_reason(body)
+    return None if parsed is None else parsed[0]
+
+
 def _vendor_lines(
     contract: VendorContract,
     catalog: Mapping[str, Any],
     identity: HostIdentity,
-    text: str,
+    read: tuple[str, object],
     skill: bytes,
 ) -> list[str]:
-    """The vendor's own messages on the answer, labelled, bounded, as written."""
+    """The vendor's own messages on the answer, labelled, bounded, as written.
+    `read` is the answer's text and the validator's result on it (`_checked`),
+    None when the validator never read it."""
+    text, checked = read
     found: list[tuple[str, object]] = []
-    fields: object = None
-    with suppress(Exception):  # the vendor's checker raising is nothing to report
-        _text(text.encode("utf-8"))
-        scope = _decision_scope(catalog, identity)
-        checked = contract.validate_handoff.validate_text(text, decision_scope=scope)
-        found += [("validate_handoff", error) for error in checked.errors or ()]
-        fields = checked.fields
+    with suppress(Exception):  # a result the host cannot read is nothing to report
+        errors = getattr(checked, "errors", None) or ()
+        found += [("validate_handoff", error) for error in errors]
+    fields = getattr(checked, "fields", None)
     if identity.module_id == GATE_MODULE:
         found += _t8_messages(contract, catalog, text)
     if identity.module_id == RESEARCH_MODULE and fields is not None:

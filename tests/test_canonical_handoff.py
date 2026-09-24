@@ -530,3 +530,31 @@ def test_strict_json_refuses_nan_and_infinity() -> None:
         strict_json("[NaN]")
     with pytest.raises(ValueError):
         strict_json("[Infinity]")
+
+
+def test_a_handoff_past_the_response_bound_is_malformed_at_once() -> None:
+    """N39 (owner-approved 2026-09-23): the host accepted up to the vendor's 26
+    MB reader limit, and validation took 6-22 s on every read at that size,
+    yet no answer can be longer than the response the transport takes
+    (`provider.MAX_RESPONSE_BYTES`, 4 MiB), whose Markdown is never longer than
+    the JSON body it came in. Handoffs are bounded by that response bound, for
+    model output and stored reads alike, and refused before any validator."""
+    from caos.methodology.handoff import MAX_HANDOFF_BYTES, _text
+    from caos.provider import MAX_RESPONSE_BYTES
+
+    assert MAX_HANDOFF_BYTES == MAX_RESPONSE_BYTES
+    note = b"Recorded source p1. " * 3 + b"\n\n"
+    tail = note * ((MAX_RESPONSE_BYTES - len(CP0_MD)) // len(note) + 1)
+    over = CP0_MD + tail
+    assert MAX_RESPONSE_BYTES < len(over) < 26_214_400
+    started = time.perf_counter()
+    assert _refused(CP0, over).code is RefusalCode.HANDOFF_MALFORMED
+    assert time.perf_counter() - started < 1.0
+    # The bound itself is accepted text, one byte past it is not.
+    line = b"x" * 1023 + b"\n"
+    exact = line * (MAX_RESPONSE_BYTES // len(line))
+    assert len(exact) == MAX_RESPONSE_BYTES
+    assert _text(exact) == exact.decode()
+    with pytest.raises(Refusal) as caught:
+        _text(exact + b"x")
+    assert caught.value.code is RefusalCode.HANDOFF_MALFORMED

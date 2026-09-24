@@ -79,9 +79,18 @@ def provider(
     )
 
 
-def _reserve(provider: ModuleProvider, node: RouteNode) -> UUID:
+def _reserve(
+    provider: ModuleProvider, node: RouteNode, price: ModelPrice | None = None
+) -> UUID:
+    """An attempt at `node` with a reservation: ESTIMATE under its own price,
+    or, under `price`, enough for any prompt this route builds."""
     attempt = start_attempt(provider.conn, provider.run_id, node.route_node_id)
-    reserve(provider.conn, attempt, ESTIMATE)
+    if price is None:
+        reserve(provider.conn, attempt, ESTIMATE)
+    else:
+        from caos.store.budget import reserve as reserve_under
+
+        reserve_under(provider.conn, attempt, Decimal("2.00"), price=price)
     return attempt
 
 
@@ -165,7 +174,11 @@ def test_two_attempts_are_attributed_explicitly_and_transport_reads_are_idle(
     provider: ModuleProvider,
 ) -> None:
     first, second = provider.route.nodes[:2]
-    a1, a2 = _reserve(provider, first), _reserve(provider, second)
+    # One input token at REPORTED per token: the ledger records exactly
+    # REPORTED. The reservation is taken under that same price, as the call is
+    # charged under it (CF-089).
+    charging = ModelPrice(MODEL, REPORTED, Decimal(0), PRICE.as_of)
+    a1, a2 = _reserve(provider, first, charging), _reserve(provider, second, charging)
     answers = provider.completions
     conn = provider.conn
 
@@ -179,14 +192,8 @@ def test_two_attempts_are_attributed_explicitly_and_transport_reads_are_idle(
         assert conn.info.transaction_status is TransactionStatus.IDLE
 
     chat = ScriptedChat(answer=reply, before=idle)
-    # One input token at REPORTED per token: the ledger records exactly REPORTED.
     provider = replace(
-        provider,
-        completions=fake_completions(
-            chat,
-            model=MODEL,
-            price=ModelPrice(MODEL, REPORTED, Decimal(0), PRICE.as_of),
-        ),
+        provider, completions=fake_completions(chat, model=MODEL, price=charging)
     )
     result = provider.execute(first.route_node_id, first.module_id, attempt_id=a1)
     accept_attempt(provider.conn, attempt_id=a1, accepted=_accepted(result))

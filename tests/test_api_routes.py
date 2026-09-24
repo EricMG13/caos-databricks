@@ -843,17 +843,15 @@ def test_every_refusal_code_has_an_explicit_http_status() -> None:
 # answered 400 -- "your request was wrong" -- while its clearance told the
 # caller to retry: time wearing blame, the mirror of what §75 fixed. §75's one
 # question decides each. The provider not answering is the only one waiting
-# repairs; the other seven are an answer the provider already gave, which the
-# identical request later meets again, and a new attempt is the discharge.
+# repairs; the other three are an answer the provider already gave, which the
+# identical request later meets again, and a new attempt is the discharge. Four
+# more the owner decided -- the envelope and readiness codes -- were retired,
+# since nothing raised them (CF-099).
 RETRY_SHAPED_400_DECIDED = {
     RefusalCode.PROVIDER_UNAVAILABLE: 503,
     RefusalCode.PROVIDER_OUTPUT_TRUNCATED: 500,
     RefusalCode.PROVIDER_REFUSED: 500,
     RefusalCode.PROVIDER_RESPONSE_INVALID: 500,
-    RefusalCode.ENVELOPE_INVALID: 500,
-    RefusalCode.ENVELOPE_UNDECLARED_FIELD: 500,
-    RefusalCode.ENVELOPE_UNCITED_CLAIM: 500,
-    RefusalCode.READINESS_INCOMPLETE: 500,
 }
 
 
@@ -881,7 +879,7 @@ def test_every_refusal_is_classed_transient_or_permanent_and_none_is_both() -> N
 
 def test_no_400_tells_the_caller_to_retry() -> None:
     """A 400 whose clearance says retry is a claim about time wearing a status
-    about blame, and none is left: the eight the owner decided (§88) carry the
+    about blame, and none is left: the ones the owner decided (§88) carry the
     status decided for them, and a new retry-shaped 400 fails here until
     someone asks §75's question of it.
 

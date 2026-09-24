@@ -1,6 +1,8 @@
-"""D30 (N32, the owner's choice; widened by N52): a node whose answer is
-refused `HANDOFF_MALFORMED` or `HANDOFF_INCOMPLETE` gets exactly one second
-attempt, reserved and priced like
+"""D30 (N32, the owner's choice; widened by N52 and, on 23 September 2026, to a
+host-owned field copied wrong or a field no handoff may carry): a node whose
+answer is refused `HANDOFF_MALFORMED`, `HANDOFF_INCOMPLETE`,
+`HANDOFF_IDENTITY_MISMATCH`, `HANDOFF_UNDECLARED_FIELD` or by anchoring gets
+exactly one second attempt, reserved and priced like
 any other, carrying what the checks reported on the refused answer. The ledger
 decides it, so a crash between the refusal and the second attempt changes
 nothing, and a second refusal stops the run as before.
@@ -12,6 +14,7 @@ MATERIAL and still writes `qa_status: Passed`.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from typing import Any
@@ -298,14 +301,262 @@ def test_one_second_attempt_per_node_whichever_code_refused_first(
     assert sorted(codes) == ["HANDOFF_INCOMPLETE", "HANDOFF_MALFORMED"]
 
 
-def test_any_other_refusal_gets_no_second_attempt(harness: _Harness) -> None:
-    def tamper(fields: dict[str, Any]) -> dict[str, Any]:
-        return {**fields, "issuer_name": "Someone Else"}
+@dataclass
+class _Withheld:
+    """CanonicalCompletions whose CP-0 answer the provider withholds: billed,
+    then refused `PROVIDER_REFUSED`, a code no second attempt can answer."""
 
-    answers = CanonicalCompletions(harness.source_id, mutate=tamper)
-    assert _run(harness, answers) is RefusalCode.HANDOFF_IDENTITY_MISMATCH
+    delegate: CanonicalCompletions
+
+    @property
+    def model(self) -> str:
+        return self.delegate.model
+
+    def request_bytes(self, prompt: str, *, json_object: bool = False) -> bytes:
+        return self.delegate.request_bytes(prompt, json_object=json_object)
+
+    def complete(self, prompt: str, *, json_object: bool = False) -> Completion:
+        done = self.delegate.complete(prompt, json_object=json_object)
+        return replace(done, content=None, refusal=RefusalCode.PROVIDER_REFUSED)
+
+
+def test_any_other_refusal_gets_no_second_attempt(harness: _Harness) -> None:
+    answers = CanonicalCompletions(harness.source_id)
+    assert _run(harness, _Withheld(answers)) is RefusalCode.PROVIDER_REFUSED
     assert len(answers.prompts) == 1
-    assert _cp0_ledger(harness) == (1, 1, ["HANDOFF_IDENTITY_MISMATCH"], 0)
+    assert _cp0_ledger(harness) == (1, 1, ["PROVIDER_REFUSED"], 0)
+
+
+def _about_someone_else(body: str) -> str:
+    """The same answer about another issuer: a host-owned field copied wrong."""
+    wire = json.loads(body)
+    markdown = wire["canonical_markdown"]
+    changed = re.sub(
+        r"^issuer_name: .*$",
+        'issuer_name: "Someone Else"',
+        markdown,
+        count=1,
+        flags=re.MULTILINE,
+    )
+    assert changed != markdown
+    wire["canonical_markdown"] = changed
+    return json.dumps(wire)
+
+
+def _with_undeclared_field(body: str) -> str:
+    """The same answer carrying a front matter field no handoff may carry."""
+    wire = json.loads(body)
+    markdown = wire["canonical_markdown"]
+    assert "validation_warnings: []\n" in markdown
+    wire["canonical_markdown"] = markdown.replace(
+        "validation_warnings: []\n",
+        'validation_warnings: []\nfavourite_colour: "SECRETBLUE"\n',
+        1,
+    )
+    return json.dumps(wire)
+
+
+def test_an_identity_mismatch_gets_the_second_attempt_naming_the_field(
+    harness: _Harness,
+) -> None:
+    """G1-16 (owner-approved 2026-09-23): a host-owned field copied wrong earns
+    the one second attempt, told which field by name, never the value."""
+    answers = CanonicalCompletions(harness.source_id)
+    assert _run(harness, _Flawed(answers, flaw=_about_someone_else)) is None
+    assert [_module(prompt) for prompt in answers.prompts[:2]] == ["CP-0", "CP-0"]
+    second = answers.prompts[1]
+    assert (
+        "host identity check: the host-owned field `issuer_name` is missing or not"
+        " the one the HOST-OWNED FRONT MATTER block gives" in second
+    )
+    assert "Someone Else" not in second
+    assert _cp0_ledger(harness) == (2, 2, ["HANDOFF_IDENTITY_MISMATCH"], 1)
+
+
+def test_an_undeclared_field_gets_the_second_attempt_naming_it(
+    harness: _Harness,
+) -> None:
+    """G1-16 (owner-approved 2026-09-23): a field no handoff may carry earns
+    the one second attempt, told the field's name, never its value."""
+    answers = CanonicalCompletions(harness.source_id)
+    assert _run(harness, _Flawed(answers, flaw=_with_undeclared_field)) is None
+    second = answers.prompts[1]
+    assert (
+        "host front matter check: the front matter carries `favourite_colour`,"
+        " a field no handoff may carry" in second
+    )
+    assert "SECRETBLUE" not in second
+    assert _cp0_ledger(harness) == (2, 2, ["HANDOFF_UNDECLARED_FIELD"], 1)
+
+
+def test_the_front_matter_lines_name_fields_only_and_at_most_twenty() -> None:
+    """Every host-owned field that differs, every upgrade key set, and at most
+    `MAX_FEEDBACK_CITATIONS` undeclared names -- a name past 64 characters is
+    counted, never shown -- and nothing for a module whose host identity would
+    not build."""
+    from canonical_fixtures import CONTRACT, identity
+
+    from caos.methodology.handoff import _front_matter_lines, invocation_fields
+
+    cp0 = identity("CP-0")
+    fields: dict[str, Any] = {
+        **invocation_fields(CONTRACT, cp0),
+        "qa_status": "Passed",
+        "credit_os_parent_run_id": "COS-SECRETRUN",
+    }
+    del fields["run_id"]
+    fields["issuer_id"] = 12345  # the right text in the wrong JSON type
+    fields.update({f"extra_{n:02d}": "SECRETVALUE" for n in range(24)})
+    fields["x" * 65] = "SECRETVALUE"
+    identity_line, upgrade_line, undeclared_line = _front_matter_lines(
+        CONTRACT, cp0, fields
+    )
+    assert identity_line.startswith(
+        "host identity check: the host-owned fields `issuer_id` and `run_id` are"
+    )
+    assert upgrade_line == (
+        "host identity check: `credit_os_parent_run_id` must be absent or null:"
+        " this run upgrades no earlier run"
+    )
+    assert "`extra_19`" in undeclared_line and "`extra_20`" not in undeclared_line
+    assert "and 5 more" in undeclared_line and "x" * 65 not in undeclared_line
+    said = " ".join((identity_line, upgrade_line, undeclared_line))
+    assert "SECRET" not in said and "12345" not in said
+    assert _front_matter_lines(CONTRACT, cp0, None) == []
+    # A CP-DR identity carrying no brief builds no host front matter: the host's
+    # own fault, which the answer cannot fix, so no identity line is made up.
+    research = replace(cp0, module_id="CP-DR")
+    assert _front_matter_lines(CONTRACT, research, {"module_id": "CP-DR"}) == []
+
+
+def _gate_body(markdown: bytes) -> str:
+    from uuid import UUID
+
+    from canonical_fixtures import wire
+
+    cited = {"source_id": str(UUID(int=1)), "page": 1, "matched_text": QUOTE}
+    return wire(markdown, [cited])
+
+
+def _gate_markdown(
+    readiness: dict[str, str] | None = None, blockers: dict[str, str] | None = None
+) -> str:
+    from canonical_fixtures import handoff_markdown, identity
+
+    return handoff_markdown(
+        identity("CP-0"),
+        body_note=f"{QUOTE} was recorded.",
+        readiness=readiness,
+        blockers=blockers,
+    ).decode()
+
+
+def _padded_past_the_handoff_bound(markdown: str) -> str:
+    from caos.methodology.handoff import MAX_HANDOFF_BYTES
+
+    line = "SECRETMARK " + "p" * 60_000 + "\n"
+    count = MAX_HANDOFF_BYTES // len(line) + 1
+    return markdown + line * count
+
+
+@pytest.mark.parametrize(
+    ("damage", "named"),
+    [
+        (
+            lambda md: md.replace("was recorded.", "SECRETMARK\r", 1),
+            "a line ends in a carriage return",
+        ),
+        (
+            lambda md: md.replace("was recorded.", "SECRETMARK\u2028", 1),
+            "a line separator (U+2028), paragraph separator (U+2029) or byte order"
+            " mark (U+FEFF)",
+        ),
+        (
+            lambda md: md.replace("was recorded.", "SECRET\u200bMARK", 1),
+            "a character no reader can see",
+        ),
+        (
+            lambda md: md.replace("was recorded.", "SECRETMARK" + " " * 257 + "x", 1),
+            "a run of more than 256 spaces or tabs",
+        ),
+        (
+            lambda md: md.replace(
+                "## Analysis", "## Analysis" + " " * 9 + "SECRETMARK"
+            ),
+            "a heading's title carries a run of more than 8 spaces, tabs or #",
+        ),
+        (
+            lambda md: md.replace("was recorded.", "SECRETMARK\x07", 1),
+            "a control character other than a line feed or tab",
+        ),
+        (
+            lambda md: md.replace("was recorded.", "SECRETMARK" + "y" * 65_536, 1),
+            "a line is longer than 65536 bytes",
+        ),
+        (
+            lambda md: md.replace(
+                "\n---\n",
+                "".join(f'\nnote_{n}: "SECRETMARK {"z" * 60_000}"' for n in range(5))
+                + "\n---\n",
+                1,
+            ),
+            "the front matter is longer than 262144 bytes",
+        ),
+        (_padded_past_the_handoff_bound, "the Markdown is longer than"),
+    ],
+)
+def test_a_host_text_bound_is_named_for_the_second_attempt_never_quoted(
+    damage: Callable[[str], str], named: str
+) -> None:
+    """G1-16: `_text` refuses these before any vendor validator reads the
+    answer, so nothing else says why. The second attempt is told which bound,
+    in the host's words, and never the text that broke it."""
+    from canonical_fixtures import CATALOG, CONTRACT, identity
+
+    markdown = _gate_markdown()
+    damaged = damage(markdown)
+    assert damaged != markdown
+    lines = feedback_lines(
+        CONTRACT, CATALOG, identity("CP-0"), _gate_body(damaged.encode())
+    )
+    bounds = [line for line in lines if line.startswith("host text check: ")]
+    assert len(bounds) == 1 and named in bounds[0], lines
+    assert not any("SECRET" in line for line in lines)
+    # An answer within every bound gets no such line.
+    clean = feedback_lines(
+        CONTRACT, CATALOG, identity("CP-0"), _gate_body(markdown.encode())
+    )
+    assert not any(line.startswith("host text check: ") for line in clean)
+
+
+def test_a_blocker_cell_past_its_bound_is_named_by_its_row_never_quoted() -> None:
+    """G1-16: a CONDITIONAL or BLOCKED row's `Why now / blocker` cell past
+    `MAX_BLOCKER_CHARS` refuses the handoff; the second attempt is told which
+    row and the bound, never the cell."""
+    from canonical_fixtures import CATALOG, CONTRACT, identity
+
+    from caos.methodology.handoff import MAX_BLOCKER_CHARS
+
+    cp0 = identity("CP-0")
+    long = "SECRETMARK " + "x" * MAX_BLOCKER_CHARS
+    markdown = _gate_markdown(
+        readiness={"CP-5": "CONDITIONAL"}, blockers={"CP-5": long}
+    )
+    lines = feedback_lines(CONTRACT, CATALOG, cp0, _gate_body(markdown.encode()))
+    assert (
+        "host readiness check: a CONDITIONAL or BLOCKED row's `Why now / blocker`"
+        f" cell holds at most {MAX_BLOCKER_CHARS} characters and no control or"
+        " bidirectional character; the row for CP-5 breaks it"
+    ) in lines
+    assert not any("SECRETMARK" in line for line in lines)
+    # Within the bound, or on a row the gate cleared, there is nothing to say.
+    for readiness in ({"CP-5": "CONDITIONAL"}, {}):
+        within = _gate_markdown(
+            readiness=readiness,
+            blockers={"CP-5": "x" * (MAX_BLOCKER_CHARS if readiness else 600)},
+        )
+        others = feedback_lines(CONTRACT, CATALOG, cp0, _gate_body(within.encode()))
+        assert not any(line.startswith("host readiness check:") for line in others)
 
 
 def test_the_ledger_read_orders_a_nodes_attempts_oldest_first(
@@ -327,11 +578,31 @@ def test_the_ledger_read_orders_a_nodes_attempts_oldest_first(
     )
 
 
-def _feedback(harness: _Harness, body: str) -> tuple[str, ...]:
-    from canonical_fixtures import identity
+def _cp0_identity(harness: _Harness) -> HostIdentity:
+    """The identity CP-0's accepted answer was written under, read from its
+    record: a body of this run is judged against its own host-owned fields."""
+    from caos.methodology.handoff import _decoded_record
 
+    node = _node(harness, "CP-0").route_node_id
+    with connect(harness.url) as observer:
+        row = observer.execute(
+            "SELECT record_sha256 FROM artifacts WHERE run_id=%s AND route_node_id=%s",
+            (harness.run_id, node),
+        ).fetchone()
+    assert row is not None
+    return _decoded_record(harness.blobs.get(str(row[0]))).identity
+
+
+def _feedback(
+    harness: _Harness, body: str, ident: HostIdentity | None = None
+) -> tuple[str, ...]:
+    """The lines a second attempt would carry for `body`, judged under
+    `ident`, or under the identity CP-0's accepted answer was written under."""
     return retry_feedback(
-        cached_contract(harness.bundle), catalog(harness.bundle), identity("CP-0"), body
+        cached_contract(harness.bundle),
+        catalog(harness.bundle),
+        ident or _cp0_identity(harness),
+        body,
     )
 
 
@@ -362,11 +633,12 @@ def test_retry_feedback_says_why_a_body_is_not_the_transport(
 ) -> None:
     """N50: an answer that is not the JSON object gets the host's own reason,
     in the parser's fixed words, never the answer's text."""
-    [line] = _feedback(harness, "not json")
+    gate = _identity_cp0()
+    [line] = _feedback(harness, "not json", gate)
     assert line.startswith("host transport check: the answer is not one JSON object")
-    [raw] = _feedback(harness, '{"canonical_markdown": "---\nmodule_id: X\n"}')
+    [raw] = _feedback(harness, '{"canonical_markdown": "---\nmodule_id: X\n"}', gate)
     assert "control character" in raw and "\\n" in raw and "module_id" not in raw
-    [shape] = _feedback(harness, json.dumps({"canonical_markdown": "x"}))
+    [shape] = _feedback(harness, json.dumps({"canonical_markdown": "x"}), gate)
     assert shape.startswith("host transport check: the answer is not the JSON object")
 
 
@@ -417,7 +689,7 @@ def test_retry_feedback_carries_the_completeness_and_t8_checks_too(
     lines = retry_feedback(
         contract,
         catalog(harness.bundle),
-        _identity_cp0(),
+        _cp0_identity(harness),
         json.dumps(wire),
         skill=_skill(harness),
     )
@@ -446,7 +718,7 @@ def test_retry_feedback_says_which_register_ids_the_answer_never_writes(
     lines = retry_feedback(
         cached_contract(harness.bundle),
         catalog(harness.bundle),
-        _identity_cp0(),
+        _cp0_identity(harness),
         json.dumps(wire),
         skill=_skill(harness),
     )
@@ -458,7 +730,7 @@ def test_retry_feedback_says_which_register_ids_the_answer_never_writes(
     clean = retry_feedback(
         cached_contract(harness.bundle),
         catalog(harness.bundle),
-        _identity_cp0(),
+        _cp0_identity(harness),
         answers.bodies[0],
         skill=_skill(harness),
     )
@@ -486,7 +758,7 @@ def test_retry_feedback_is_feedback_lines_capped(harness: _Harness) -> None:
     args = (
         cached_contract(harness.bundle),
         catalog(harness.bundle),
-        _identity_cp0(),
+        _cp0_identity(harness),
         json.dumps(wire),
     )
     lines = feedback_lines(*args, skill=_skill(harness))
