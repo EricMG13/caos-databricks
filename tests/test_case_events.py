@@ -23,6 +23,7 @@ import httpx2 as httpx
 import psycopg
 import pytest
 import uvicorn
+from run_terminals import fail_run
 
 from caos.api import app as app_module
 from caos.api import stream, wire
@@ -33,6 +34,7 @@ from caos.api.stream import (
     CURSOR_IO,
     FRAME_IO,
     POLL_IO,
+    StreamEvent,
     case_tail,
     take_stream_slot,
 )
@@ -46,7 +48,7 @@ from caos.store.audit import GovernedAction, actions_after, governed_write
 from caos.store.events import RunEvent
 from caos.store.gates import withdraw_source
 from caos.store.members import Standing, grant, revoke
-from caos.store.runs import create_case, fail_run, start_attempt, start_run
+from caos.store.runs import create_case, start_attempt, start_run
 
 Frame = dict[str, str]
 Headers = Mapping[str, str] | httpx.Headers
@@ -163,6 +165,14 @@ def _reader(conn: StoreConnection, case_id: UUID, standing: Standing) -> UUID:
     grant(conn, case_id=case_id, user_id=user, standing=standing)
     conn.commit()
     return user
+
+
+def _next_event(stream: Iterator[StreamEvent | None]) -> StreamEvent:
+    """`next(stream)`, narrowed: called only where `heartbeat` is not set, so
+    no frame is ever `None`."""
+    event = next(stream)
+    assert event is not None
+    return event
 
 
 def _audit(conn: StoreConnection, case_id: UUID, action: str) -> None:
@@ -453,11 +463,11 @@ def test_membership_revoked_mid_stream_closes_before_the_next_frame(
     stream = case_tail(
         conn, case_id=case_id, run_id=run_id, actor_id=reader, after=None
     )
-    assert next(stream).name is None
+    assert _next_event(stream).name is None
     _audit(conn, case_id, "SOURCE_WITHDRAWN")
     start_attempt(conn, run_id, "CP-1")
     conn.commit()
-    assert next(stream).name == "sources_changed"
+    assert _next_event(stream).name == "sources_changed"
     revoke(conn, case_id=case_id, user_id=reader)
     conn.commit()
     assert list(stream) == []

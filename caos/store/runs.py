@@ -422,13 +422,6 @@ def block_run(
     )
 
 
-def fail_run(
-    conn: StoreConnection, run_id: UUID, *, lease: Lease | None = None
-) -> bool:
-    """End a run without an artifact. Returns whether this call ended it."""
-    return _transition(conn, run_id, RunStatus.FAILED, RunEvent.RUN_FAILED, lease)
-
-
 def cancel_run(
     conn: StoreConnection, run_id: UUID, *, lease: Lease | None = None
 ) -> bool:

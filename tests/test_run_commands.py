@@ -14,6 +14,7 @@ import pytest
 from command_fixtures import command_client, command_headers, member
 from fastapi.testclient import TestClient
 from httpx2 import Response
+from run_terminals import fail_run
 
 from caos.api import app as app_module
 from caos.api.commands import runs as runs_command
@@ -45,7 +46,7 @@ from caos.store.gates import (
 from caos.store.members import Standing, grant, revoke
 from caos.store.routes import pinned_route, resolved_route
 from caos.store.run_inputs import load_run_input
-from caos.store.runs import block_run, create_case, fail_run, start_run
+from caos.store.runs import block_run, create_case, start_run
 from caos.store.source_sets import snapshot_source_set
 
 __all__ = ["command_client"]

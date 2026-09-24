@@ -9,11 +9,14 @@ held exactly; `tests/test_case_events.py` drives the same rules over a socket.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from decimal import Decimal
 from pathlib import Path
+from typing import cast
 from uuid import UUID, uuid4
 
 import pytest
+from run_terminals import fail_run
 from test_run_events import RECORD, accept_nodes, approved_nodes
 
 from caos.api.events import Marker
@@ -27,7 +30,6 @@ from caos.store.runs import (
     block_run,
     complete_attempt,
     complete_run,
-    fail_run,
     start_attempt,
     start_run,
 )
@@ -63,16 +65,25 @@ def _approved(conn: StoreConnection, run_id: UUID, blobs: Path) -> str:
     return last
 
 
+def _next_event(stream: Iterator[StreamEvent | None]) -> StreamEvent:
+    """`next(stream)`, narrowed: none of this module's tails run with
+    `heartbeat`, so no frame is ever `None`."""
+    event = next(stream)
+    assert event is not None
+    return event
+
+
 def _tail(
     watched: tuple[StoreConnection, UUID, UUID, UUID], after: str | None = "0.0"
 ) -> list[StreamEvent]:
     """One pass of the stream after `after`, without its cursor frame."""
     conn, case_id, run_id, viewer = watched
-    cursor, *events = case_tail(
-        conn, case_id=case_id, run_id=run_id, actor_id=viewer, after=after
+    cursor, *events = list(
+        case_tail(conn, case_id=case_id, run_id=run_id, actor_id=viewer, after=after)
     )
-    assert cursor.name is None
-    return events
+    assert cursor is not None and cursor.name is None
+    assert all(event is not None for event in events)
+    return cast(list[StreamEvent], events)
 
 
 def _run_names(events: list[StreamEvent]) -> list[str | None]:
@@ -238,8 +249,8 @@ def test_membership_is_rechecked_before_each_event(
     stream = case_tail(
         conn, case_id=case_id, run_id=run_id, actor_id=viewer, after="0.0"
     )
-    assert next(stream).name is None
-    first = next(stream)
+    assert _next_event(stream).name is None
+    first = _next_event(stream)
 
     revoke(conn, case_id=case_id, user_id=viewer)
     conn.commit()

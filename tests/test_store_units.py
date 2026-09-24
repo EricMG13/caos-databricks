@@ -22,6 +22,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from psycopg.pq import TransactionStatus
+from run_terminals import fail_run
 from test_gates import _approval, gated
 from test_route_pinning import CATALOG_PATH, PROFILE
 
@@ -52,7 +53,7 @@ from caos.store.gates import (
 from caos.store.outcomes import _require_attempt
 from caos.store.routes import pin_route, pin_route_in
 from caos.store.run_inputs import RunSubject, pin_run_input_in
-from caos.store.runs import create_case, fail_run, start_attempt, start_run
+from caos.store.runs import create_case, start_attempt, start_run
 from caos.store.source_sets import snapshot_in, snapshot_source_set
 from caos.store.work import require_running
 

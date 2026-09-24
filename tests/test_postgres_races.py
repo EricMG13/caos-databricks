@@ -26,6 +26,7 @@ from canonical_fixtures import (
 )
 from conftest import priced
 from conftest import reserve_at as reserve
+from run_terminals import fail_run
 from test_run_events import RECORD, accept_nodes, approved_nodes
 
 from caos.blobs import BlobStore
@@ -45,7 +46,6 @@ from caos.store.runs import (
     complete_attempt,
     complete_run,
     create_case,
-    fail_run,
     run_status,
     start_attempt,
     start_run,

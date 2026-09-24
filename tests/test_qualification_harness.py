@@ -1357,9 +1357,11 @@ def test_the_last_attempt_is_the_last_by_ordinal_not_by_clock(
     """DQ-2's second half: `_refusal_met` chose the node's last attempt by
     `started_at` and a random id, so a retry whose clock read earlier let the
     stale refusal of an earlier attempt match. The run lock numbers attempts."""
+    from run_terminals import fail_run
+
     from caos.qualification.matrix import _refusal_met
     from caos.store import apply_schema, connect
-    from caos.store.runs import fail_run, start_attempt
+    from caos.store.runs import start_attempt
 
     no_quote = b"Acme Holdings plc annual report 2026\nRevenue grew in the year\n"
     with connect(empty_database) as conn:

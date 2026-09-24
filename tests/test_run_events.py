@@ -23,6 +23,7 @@ import pytest
 from canonical_fixtures import CATALOG, LITE_PROFILE, LITE_SELECTION
 from conftest import _checked_values, approve_run
 from psycopg.pq import TransactionStatus
+from run_terminals import fail_run
 from test_loop_charges import VENDORED
 
 from caos.blobs import BlobStore
@@ -40,7 +41,6 @@ from caos.store.runs import (
     complete_attempt,
     complete_run,
     create_case,
-    fail_run,
     run_status,
     start_attempt,
     start_run,

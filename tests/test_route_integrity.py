@@ -10,6 +10,7 @@ import psycopg
 import pytest
 from conftest import route_fault
 from psycopg.pq import TransactionStatus
+from run_terminals import fail_run
 from test_case_ordering import _blocked
 from test_route_pinning import CATALOG_PATH, PROFILE
 from test_store_schema import _records
@@ -29,7 +30,7 @@ from caos.refusals import Refusal
 from caos.store import StoreConnection, connect
 from caos.store.cases import lock_case
 from caos.store.events import RunEvent, append, events_of
-from caos.store.runs import create_case, fail_run, start_attempt, start_run
+from caos.store.runs import create_case, start_attempt, start_run
 
 
 @pytest.fixture

@@ -21,6 +21,7 @@ import pytest
 from conftest import _url_for, approve_run, priced, tamper
 from conftest import reserve_at as reserve
 from psycopg.pq import TransactionStatus
+from run_terminals import fail_run
 from test_loop_charges import (
     ESTIMATE,
     MODEL,
@@ -72,7 +73,6 @@ from caos.store.runs import (
     accept_attempt,
     block_run,
     create_case,
-    fail_run,
     start_attempt,
     start_run,
 )
