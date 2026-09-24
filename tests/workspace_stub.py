@@ -31,6 +31,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -668,8 +669,12 @@ def fresh_state(root: Path) -> list[str]:
     Each stand-in run is a new, empty workspace, while `.databricks/bundle`
     outlives it: a deploy planned against the last run's state looks for an
     app this workspace never had, and CLI 1.17.0 panics when that config has
-    changed (DF-13). State is the stand-in's when every sync snapshot in it
-    names a loopback host; state it cannot read is not assumed to be.
+    changed (DF-13). State is the stand-in's only when it holds a sync
+    snapshot and every one names a loopback host (R24-N02): no snapshot at
+    all -- `bundle summary` can leave exactly that, a `resources.json` with
+    nothing under `sync-snapshots` -- is not positive evidence either way,
+    `all()` of nothing is `True`, and this is deleted state, not a refusal;
+    it is kept, the same as state this cannot read.
     """
     kept: list[str] = []
     state = root / ".databricks" / "bundle"
@@ -682,27 +687,58 @@ def fresh_state(root: Path) -> list[str]:
             }
         except (OSError, ValueError, AttributeError):
             hosts = {"unreadable"}
-        if all(host.startswith(LOOPBACK) for host in hosts):
+        if hosts and all(host.startswith(LOOPBACK) for host in hosts):
             shutil.rmtree(target)
         else:
             kept.append(target.name)
     return kept
 
 
+# R24-02: real CLI 1.17.0 resolves an explicit `-p`/`--profile` flag's own
+# host and credentials ahead of `DATABRICKS_HOST`/`DATABRICKS_TOKEN`, so a
+# copied manual command that still carries one (docs/DEPLOYMENT.md) would
+# reach the workspace that profile names instead of this loopback stub, even
+# with `DATABRICKS_CONFIG_PROFILE` stripped. Matched inside a whole `sh -c
+# "..."` argument too, the same way the `bundle` guard below is. The CLI
+# name is bounded by whitespace or a path separator, not `\b`: this repo's
+# own checkout path can read "...-caos-databricks/...", and `\b` alone
+# would treat that hyphenated segment as the CLI too.
+_DATABRICKS_CLI = re.compile(r"(?:^|[\s/])databricks(?:[\s/]|$)")
+_PROFILE_FLAG = re.compile(r"(?:^|[\s\"'])(-p(?:[=\s\"']|$)|--profile\b)")
+
+
+def _forwards_profile(args: list[str]) -> bool:
+    """Whether a `databricks` command in `args` carries `-p`/`--profile`."""
+    joined = " ".join(args)
+    return bool(_DATABRICKS_CLI.search(joined) and _PROFILE_FLAG.search(joined))
+
+
 def main(argv: list[str] | None = None) -> int:
     """`workspace_stub.py -- <command...>`: run the command against the stub.
 
-    The child inherits the environment with the stub as its workspace and no
-    CLI profile; the exit code is the child's. Afterwards the paths the child
-    asked for are printed, one per line, so a run shows what it exercised. A
-    `bundle` command starts from no bundle state but a real workspace's,
-    and refuses to run over that (`fresh_state`, DF-13).
+    The child inherits the environment with the stub as its workspace, no
+    ambient CLI profile and no `.databrickscfg` of its own -- an explicit
+    `-p`/`--profile` is refused outright (R24-02), and the config file the
+    CLI would otherwise read is a private, empty one, so nothing named by a
+    profile or left over in an inherited config can be reached; only this
+    loopback stub can. The exit code is the child's. Afterwards the paths
+    the child asked for are printed, one per line, so a run shows what it
+    exercised. A `bundle` command starts from no bundle state but a real
+    workspace's, and refuses to run over that (`fresh_state`, DF-13).
     """
     args = sys.argv[1:] if argv is None else argv
     if args[:1] == ["--"]:
         args = args[1:]
     if not args:
         print("usage: workspace_stub.py -- <command> [args...]", file=sys.stderr)
+        return 2
+    if _forwards_profile(args):
+        print(
+            "stub: -p/--profile would let the CLI resolve a workspace of its "
+            "own; omit it -- this stand-in already points the CLI at the "
+            "loopback stub",
+            file=sys.stderr,
+        )
         return 2
     if any(re.search(r"\bbundle\b", arg) for arg in args):
         kept = fresh_state(Path.cwd())
@@ -714,9 +750,12 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 2
     stub = WorkspaceStub()
-    with stub.serving():
+    with stub.serving(), tempfile.TemporaryDirectory() as private:
+        config_file = Path(private) / "empty.databrickscfg"
+        config_file.write_text("", encoding="utf-8")
         env = {**os.environ, **stub.environment(), "DATABRICKS_BUNDLE_ENGINE": "direct"}
         env.pop("DATABRICKS_CONFIG_PROFILE", None)
+        env["DATABRICKS_CONFIG_FILE"] = str(config_file)
         code = subprocess.run(args, env=env, check=False).returncode
     for method, path in stub.requests:
         print(f"stub: {method} {path}")

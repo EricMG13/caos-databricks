@@ -48,13 +48,16 @@ VALUES=(--evidence "$EVIDENCE" --profile "$PROFILE" --target "$TARGET"
   --endpoint "$ENDPOINT" --price "$PRICE" --run-ceiling "$CEILING"
   --group-admin "$GROUP_ADMIN" --group-analyst "$GROUP_ANALYST"
   --pg-port "$PG_PORT" --pg-sslmode "$PG_SSLMODE")
-# The price holds commas, and the CLI splits a `--var` value on commas (C1);
-# the environment form carries it whole.
+# The price and the group names may hold commas (a group such as
+# "Research, Credit"), and the CLI's `--var` parser splits a value on commas
+# even when the shell argument is quoted (C1, R24-15); the environment form
+# carries each whole.
 export BUNDLE_VAR_model_price="$PRICE"
+export BUNDLE_VAR_group_admin="$GROUP_ADMIN"
+export BUNDLE_VAR_group_analyst="$GROUP_ANALYST"
 VARS=(--var "model_endpoint=$ENDPOINT" --var "run_ceiling=$CEILING"
   --var "uc_catalog=$CATALOG" --var "uc_schema=$SCHEMA" --var "lakebase_instance=$INSTANCE"
-  --var "lakebase_database=$LAKEBASE_DATABASE" --var "group_admin=$GROUP_ADMIN"
-  --var "group_analyst=$GROUP_ANALYST")
+  --var "lakebase_database=$LAKEBASE_DATABASE")
 PROFILE_FLAG=()
 if [ -n "$PROFILE" ]; then PROFILE_FLAG=(-p "$PROFILE"); fi
 
