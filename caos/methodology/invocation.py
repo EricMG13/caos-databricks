@@ -1009,10 +1009,11 @@ def _research_section(identity: HostIdentity, tag: str = "") -> str:
 
 # N27: what the host says before a delivered line the extractor kept though a
 # reader of the rendered page may not see it -- a scan's OCR layer (render mode
-# 3), text painted near the colour behind it, glyphs under 2 pt -- so the model
-# can weigh it. Host-owned and on marked lines only, so every other prompt is
-# byte for byte what it was; the line after it is the delivered text, citable
-# as it is and never with this note.
+# 3), text painted near the colour behind it, glyphs under 2 pt, optional
+# content switched off -- so the model can weigh it, each reason by its
+# `HIDDEN_REASONS` word. Host-owned and on marked lines only, so every other
+# prompt is byte for byte what it was; the line after it is the delivered text,
+# citable as it is and never with this note.
 _HIDDEN_LINE = "[host: not visible on the rendered page: {reasons}] "
 
 

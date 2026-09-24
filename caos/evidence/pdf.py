@@ -103,12 +103,21 @@ UNENCRYPTED = ""
 INVISIBLE_RENDER_MODE = 3
 # N27's remainder: render mode 7 -- add to the clip path, neither filled nor
 # stroked -- is the same "nothing is drawn" as mode 3, so the same glyph is
-# marked `render_mode_3` under it. Not declared in `PdfExtractor.identity`'s
-# config: no admitted fixture's tokens change under it (checked directly,
-# `tests/test_hidden_text.py`), and the config is part of the identity a
-# stored source's own record must still verify against, so it is left to name
-# only what a change in it would actually move.
+# marked `render_mode_3` under it. Landed under v4 undeclared; declared from
+# v5 on, as everything that decides a mark is.
 CLIP_ONLY_RENDER_MODE = 7
+# Text inside optional content (ISO 32000-1, 8.11) whose group the document's
+# default configuration switches off -- `/D /OFF`, or `/BaseState /OFF` with
+# no `/D /ON` -- is drawn by no viewer (`visibility.OptionalContent`). Only a
+# state every conforming viewer agrees on marks a line.
+OPTIONAL_CONTENT = "default-configuration-off"
+# The bounds that reading is taken within, each past which nothing is marked:
+# the groups one list of the configuration may name, the entries a membership
+# dictionary's `/OCGs` or the configuration's `/AS` may hold, and the
+# marked-content sequences a glyph may be nested in.
+OPTIONAL_CONTENT_GROUPS = 4096
+OPTIONAL_CONTENT_TERMS = 32
+MARKED_CONTENT_DEPTH = 256
 # A glyph whose em is smaller than this on the page, in points, is not read.
 SMALLEST_READABLE_PT = 2.0
 # How far a glyph's paint may be from what is behind it, per channel of an RGB
@@ -132,10 +141,12 @@ class PdfExtractor:
             # v3: a run whose NFC is past `max_token_chars` is cut on its NFC
             # form, each piece taking its share of the run's rectangle by
             # character (CF-072, CF-073). v4: a line a reader of the rendered
-            # page may not see is kept and marked with why (N27). Earlier rows
-            # keep their stored identity and verify as recorded; readmission
-            # is how a source gains the new tokens (section 44.4's rule).
-            "4",
+            # page may not see is kept and marked with why (N27). v5: text in
+            # optional content the document switches off is marked too, and
+            # render mode 7 is declared. Earlier rows keep their stored
+            # identity and verify as recorded; readmission is how a source
+            # gains the new tokens (section 44.4's rule).
+            "5",
             {
                 "pdfminer_version": version("pdfminer.six"),
                 "line_overlap": LAYOUT["line_overlap"],
@@ -154,9 +165,14 @@ class PdfExtractor:
                 "max_token_chars": MAX_TOKEN_CHARS,
                 "token_cut": RUN_CUT,
                 "hidden_render_mode": INVISIBLE_RENDER_MODE,
+                "hidden_clip_render_mode": CLIP_ONLY_RENDER_MODE,
                 "hidden_under_pt": SMALLEST_READABLE_PT,
                 "hidden_near_background": NEAR_BACKGROUND_DISTANCE,
                 "hidden_backdrop": BACKDROP,
+                "hidden_optional_content": OPTIONAL_CONTENT,
+                "hidden_optional_content_groups": OPTIONAL_CONTENT_GROUPS,
+                "hidden_optional_content_terms": OPTIONAL_CONTENT_TERMS,
+                "hidden_marked_content_depth": MARKED_CONTENT_DEPTH,
             },
         )
 
@@ -371,10 +387,10 @@ def _pages(data: bytes) -> Iterator[tuple[Frame | None, LTPage, dict[LTChar, str
     """
     # Imported here rather than at module scope: the interpreter pulls in most
     # of pdfminer, and nothing that merely imports this module should pay for it.
-    from pdfminer.pdfinterp import PDFPageInterpreter, PDFResourceManager
+    from pdfminer.pdfinterp import PDFResourceManager
     from pdfminer.pdfpage import PDFPage
 
-    from caos.evidence.visibility import MarkingAggregator
+    from caos.evidence.visibility import MarkingAggregator, MarkingInterpreter
 
     # Yielding inside this try keeps the whole walk lazy -- a caller that stops
     # asking for pages (the page ceiling above) never drives pdfminer's
@@ -383,7 +399,7 @@ def _pages(data: bytes) -> Iterator[tuple[Frame | None, LTPage, dict[LTChar, str
     try:
         resources = PDFResourceManager(caching=True)
         device = MarkingAggregator(resources, LAParams(**LAYOUT))
-        interpreter = PDFPageInterpreter(resources, device)
+        interpreter = MarkingInterpreter(resources, device)
         for page in PDFPage.get_pages(BytesIO(data), caching=True):
             frame = _crop_frame(page)
             interpreter.process_page(page)

@@ -104,9 +104,10 @@ _PAGE_QUERY = (
 )
 PDF_V2_COORDINATES = "crop-top-left-rotated-pt"
 # The `caos.pdfminer` versions whose rectangles are crop-relative with y down:
-# v2 introduced the convention, v3 cuts long runs within it (CF-072) and v4
-# marks the lines a reader may not see (N27).
-PDF_CROP_VERSIONS = frozenset({"2", "3", "4"})
+# v2 introduced the convention, v3 cuts long runs within it (CF-072), v4
+# marks the lines a reader may not see (N27) and v5 reads more of what hides
+# them.
+PDF_CROP_VERSIONS = frozenset({"2", "3", "4", "5"})
 TEXT_COORDINATES = "cell-top-left-pt"
 # The encodings a `caos.plain-text` identity records: v1-v3 `utf-8`, v4
 # `utf-8-sig` (`extract.TEXT_ENCODING`). Each is also the codec's name.
