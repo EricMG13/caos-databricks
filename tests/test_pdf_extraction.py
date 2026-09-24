@@ -690,7 +690,7 @@ def test_the_pdf_identity_records_effective_layout_and_convention() -> None:
     identity = PdfExtractor().identity
     effective = LAParams(**LAYOUT)
 
-    assert (identity.name, identity.version) == ("caos.pdfminer", "5")
+    assert (identity.name, identity.version) == ("caos.pdfminer", "6")
     assert identity.config["max_token_chars"] == MAX_TOKEN_CHARS
     assert (
         identity.config["hidden_render_mode"],
@@ -705,6 +705,10 @@ def test_the_pdf_identity_records_effective_layout_and_convention() -> None:
         identity.config["hidden_optional_content_terms"],
         identity.config["hidden_marked_content_depth"],
     ) == ("default-configuration-off", 4096, 32, 256)
+    assert (
+        identity.config["hidden_painted_over"],
+        identity.config["hidden_painted_over_work"],
+    ) == ("later-opaque-rectangle-holding-the-glyph-box", 4_000_000)
     assert "laparams" not in identity.config
     for field in (
         "line_overlap",
@@ -761,7 +765,7 @@ def test_v1_pdf_extractions_still_verify_and_reanchor_as_recorded(
         dispatch=lambda data: cast(Extractor, _V1Reader()),
     )
     conn.commit()
-    assert PdfExtractor().identity.version == "5"
+    assert PdfExtractor().identity.version == "6"
 
     [member] = snapshot_source_set(conn, case_id).members
     assert json.loads(member.extractor_identity)["version"] == "1"

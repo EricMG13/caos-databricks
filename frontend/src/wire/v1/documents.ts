@@ -600,8 +600,14 @@ const PageLine = object({
   x1: number,
   y1: number,
   hidden: array(
-    enumOf(["near_background", "optional_content_off", "render_mode_3", "under_2pt"]),
-    4,
+    enumOf([
+      "near_background",
+      "optional_content_off",
+      "painted_over",
+      "render_mode_3",
+      "under_2pt",
+    ]),
+    5,
   ),
 });
 const PageBody = object({

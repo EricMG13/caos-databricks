@@ -118,6 +118,17 @@ OPTIONAL_CONTENT = "default-configuration-off"
 OPTIONAL_CONTENT_GROUPS = 4096
 OPTIONAL_CONTENT_TERMS = 32
 MARKED_CONTENT_DEPTH = 256
+# Text the page paints over later, with one fill that holds the glyph's whole
+# box: a rectangle on the page itself, opaque and normally blended, in a colour
+# the backdrop reads, under a clip that is a rectangle this reading follows
+# (`visibility.Covers`). A fill in a form, under any other clip, transparency
+# or optional content, or drawn where pdfminer's own matrix is stale, is not;
+# nor is a stroked or Type3 glyph ever found covered, pdfminer's box not
+# bounding its ink.
+PAINTED_OVER_COVER = "later-opaque-rectangle-holding-the-glyph-box"
+# What one document may spend comparing glyphs with the fills painted over
+# them and noting those fills, one unit each; past it nothing more is marked.
+PAINTED_OVER_WORK = 4_000_000
 # A glyph whose em is smaller than this on the page, in points, is not read.
 SMALLEST_READABLE_PT = 2.0
 # How far a glyph's paint may be from what is behind it, per channel of an RGB
@@ -143,10 +154,11 @@ class PdfExtractor:
             # character (CF-072, CF-073). v4: a line a reader of the rendered
             # page may not see is kept and marked with why (N27). v5: text in
             # optional content the document switches off is marked too, and
-            # render mode 7 is declared. Earlier rows keep their stored
-            # identity and verify as recorded; readmission is how a source
-            # gains the new tokens (section 44.4's rule).
-            "5",
+            # render mode 7 is declared. v6: so is text an opaque fill paints
+            # over later. Earlier rows keep their stored identity and verify
+            # as recorded; readmission is how a source gains the new tokens
+            # (section 44.4's rule).
+            "6",
             {
                 "pdfminer_version": version("pdfminer.six"),
                 "line_overlap": LAYOUT["line_overlap"],
@@ -173,6 +185,8 @@ class PdfExtractor:
                 "hidden_optional_content_groups": OPTIONAL_CONTENT_GROUPS,
                 "hidden_optional_content_terms": OPTIONAL_CONTENT_TERMS,
                 "hidden_marked_content_depth": MARKED_CONTENT_DEPTH,
+                "hidden_painted_over": PAINTED_OVER_COVER,
+                "hidden_painted_over_work": PAINTED_OVER_WORK,
             },
         )
 

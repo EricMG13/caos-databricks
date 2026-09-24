@@ -1,28 +1,31 @@
 """Why a glyph a PDF lays out may not be seen on the rendered page (N27).
 
 pdfminer lays out every glyph a content stream shows, however it is painted,
-so four kinds of text a reader of the rendered page does not see arrive as
+so five kinds of text a reader of the rendered page does not see arrive as
 ordinary words: text in render mode 3, painted neither filled nor stroked --
 which is also the text layer every OCR'd scan carries over its image -- text
-painted in the colour already behind it, glyphs too small to read, and text
-inside optional content the document switches off. They stay evidence,
-because a scan's only text is its invisible layer, and the extractor marks
-each line that carries one with why (`pdf._line_tokens`), so the approver and
-the model can weigh it.
+painted in the colour already behind it, glyphs too small to read, text
+inside optional content the document switches off, and text the page paints
+over later. They stay evidence, because a scan's only text is its invisible
+layer, and the extractor marks each line that carries one with why
+(`pdf._line_tokens`), so the approver and the model can weigh it.
 
 `MarkingAggregator` is pdfminer's page aggregator watching the paint in
 drawing order: each string's render mode and em on the page, the colours it is
 painted in, what the page's filled paths had painted under each glyph when it
-was drawn, and the marked-content sequences it is drawn in. Behind a glyph no
-filled path covers is paper, white; an image's colours are not read, so what
-is behind a glyph drawn on one is not compared. `MarkingInterpreter` is
-pdfminer's interpreter deciding what that device cannot see: whether an `/OC`
-sequence is optional content the document's default configuration switches
-off (`OptionalContent`), read against the resources in force.
+was drawn, the marked-content sequences it is drawn in, and -- looking
+forward -- the opaque rectangles the page fills over it afterwards. Behind a
+glyph no filled path covers is paper, white; an image's colours are not read,
+so what is behind a glyph drawn on one is not compared. `MarkingInterpreter`
+is pdfminer's interpreter deciding what that device cannot see: whether an
+`/OC` sequence is optional content the document's default configuration
+switches off (`OptionalContent`), read against the resources in force, and
+the clip and transparency a fill is painted under (`PaintState`).
 
-It is a reading of the paint, not a rendering: a clip, a transparency group
-and a shape painted over the glyph later are not read here, where a viewer
-could differ nothing is marked, and a mark is a note to weigh, never a refusal.
+It is a reading of the paint, not a rendering: where a viewer could differ --
+a clip of any shape but a rectangle, a transparency group, a soft mask, a
+shading, an image -- nothing is marked, and a mark is a note to weigh, never a
+refusal.
 """
 
 from __future__ import annotations
@@ -37,6 +40,7 @@ from pdfminer.converter import PDFPageAggregator
 from pdfminer.layout import LAParams, LTChar
 from pdfminer.pdfcolor import PDFColorSpace
 from pdfminer.pdfdevice import PDFDevice, PDFTextSeq
+from pdfminer.pdffont import PDFType3Font
 from pdfminer.pdfinterp import (
     PDFGraphicState,
     PDFPageInterpreter,
@@ -47,12 +51,20 @@ from pdfminer.pdfinterp import (
 from pdfminer.pdfpage import PDFPage
 from pdfminer.pdftypes import PDFObjRef, PDFStream
 from pdfminer.psexceptions import PSException
-from pdfminer.psparser import PSLiteral, literal_name
-from pdfminer.utils import Matrix, PathSegment, Rect, apply_matrix_pt, mult_matrix
+from pdfminer.psparser import LIT, PSLiteral, literal_name
+from pdfminer.utils import (
+    Matrix,
+    PathSegment,
+    Point,
+    Rect,
+    apply_matrix_pt,
+    mult_matrix,
+)
 
 from caos.evidence.extract import (
     NEAR_BACKGROUND,
     OPTIONAL_CONTENT_OFF,
+    PAINTED_OVER,
     RENDER_MODE_3,
     UNDER_2PT,
 )
@@ -63,6 +75,7 @@ from caos.evidence.pdf import (
     NEAR_BACKGROUND_DISTANCE,
     OPTIONAL_CONTENT_GROUPS,
     OPTIONAL_CONTENT_TERMS,
+    PAINTED_OVER_WORK,
     SMALLEST_READABLE_PT,
 )
 
@@ -90,6 +103,18 @@ _READ_SPACES = frozenset(
 # states of a default configuration this reading decides (ISO 32000-1, 8.11.4).
 _VIEW = frozenset({"View"})
 _BASE_STATES = frozenset({"ON", "OFF"})
+# The whole plane: the clip before any clipping path narrows it.
+PLANE: Box = (-math.inf, -math.inf, math.inf, math.inf)
+# How a single filled rectangle is drawn: `re` (m l l l h), or its corners
+# spelled out, closed by `h` or by the fill itself.
+_RECTANGLE_SHAPES = frozenset({"mlll", "mlllh", "mllll", "mllllh"})
+# The text render modes that add nothing to the clip (ISO 32000-1, 9.3.6).
+_UNCLIPPING_RENDER_MODES = frozenset({0, 1, 2, 3})
+# What an ExtGState leaves a fill as when it names nothing else: normally
+# blended, with no soft mask.
+_NORMAL = LIT("Normal")
+_NORMAL_BLENDS = frozenset({"Normal", "Compatible"})
+_NO_MASK = LIT("None")
 # What an object pdfminer cannot read raises as it is resolved: pdfminer's own
 # errors and the builtins a broken object store surfaces as -- never the
 # decoded-bytes budget or memory, which the extraction child answers itself.
@@ -238,6 +263,7 @@ class MarkedContent:
         self.deeper = 0
         self.floors: list[int] = []
         self.off = 0
+        self.unsure = 0
         self.tangled = False
 
     @property
@@ -250,6 +276,12 @@ class MarkedContent:
         """Whether an open sequence is switched off: nothing drawn now is seen."""
         return self.off > 0 and not self.tangled
 
+    @property
+    def draws(self) -> bool:
+        """Whether every open sequence is known to be drawn, so what is painted
+        now is painted in every viewer."""
+        return not self.tangled and self.off == self.unsure == self.deeper == 0
+
     def begin(self, drawn: bool | None) -> None:
         """A sequence opens (`BMC`, `BDC`)."""
         if len(self.levels) == MARKED_CONTENT_DEPTH:
@@ -257,6 +289,7 @@ class MarkedContent:
             return
         self.levels.append(drawn)
         self.off += drawn is False
+        self.unsure += drawn is None
 
     def end(self) -> None:
         """The innermost open sequence closes (`EMC`); one with nothing open
@@ -279,17 +312,35 @@ class MarkedContent:
         deeper = min(max(count, 0), self.deeper)
         self.deeper -= deeper
         for _ in range(max(count, 0) - deeper):
-            self.off -= self.levels.pop() is False
+            drawn = self.levels.pop()
+            self.off -= drawn is False
+            self.unsure -= drawn is None
 
 
-class Backdrop:
-    """What the filled paths of one page had painted where, in drawing order.
+class PaintState(PDFGraphicState):
+    """pdfminer's graphics state, and what it does not keep that decides
+    whether a fill hides what is under it: the clip while it is one rectangle
+    this reading follows (`None` once it is any other shape), the path a `W`
+    has named as the next clip before its `n` applies it, and whether an
+    ExtGState has made fills other than opaque and normally blended. Saved
+    and restored with the rest by `q` and `Q`."""
 
-    Each path is noted in the grid cells its box overlaps, and a later path
-    that covers a whole cell leaves only itself there: nothing painted before
-    it can be seen through it at a point it covers. `None` is a colour this
-    reading does not know (an image, a pattern, a spot colour).
-    """
+    def __init__(self) -> None:
+        super().__init__()
+        self.clip: Box | None = PLANE
+        self.clipping: tuple[list[PathSegment], int] | None = None
+        self.translucent = False
+
+    @override
+    def copy(self) -> PaintState:
+        state = PaintState()
+        vars(state).update(vars(self))
+        return state
+
+
+class _Grid:
+    """One page cut into `BACKDROP_CELLS` cells a side, so what the page
+    painted is compared only with what lies in the same cell."""
 
     def __init__(self, page: Box) -> None:
         (x0, y0, x1, y1) = page
@@ -298,25 +349,19 @@ class Backdrop:
             max((x1 - x0) / BACKDROP_CELLS, 1.0),
             max((y1 - y0) / BACKDROP_CELLS, 1.0),
         )
-        self.cells: dict[tuple[int, int], list[tuple[Box, Rgb | None]]] = {}
 
-    def paint(self, box: Box, colour: Rgb | None) -> None:
-        """Note one filled path, or an image, over the cells it overlaps."""
+    def keys(self, box: Box) -> list[tuple[int, int]]:
+        """The cells `box` overlaps on the page; none for a box off it."""
         clipped = _clip(box, self.page)
         if clipped is None:
-            return
+            return []
         (left, bottom) = self._index(clipped[0], clipped[1])
         (right, top) = self._index(clipped[2], clipped[3])
-        for column in range(left, right + 1):
-            for row in range(bottom, top + 1):
-                self._note((column, row), clipped, colour)
-
-    def under(self, x: float, y: float) -> Rgb | None:
-        """The colour last painted under the point, paper if nothing was."""
-        for (x0, y0, x1, y1), colour in reversed(self.cells.get(self._index(x, y), [])):
-            if x0 <= x <= x1 and y0 <= y <= y1:
-                return colour
-        return PAPER
+        return [
+            (column, row)
+            for column in range(left, right + 1)
+            for row in range(bottom, top + 1)
+        ]
 
     def _index(self, x: float, y: float) -> tuple[int, int]:
         (width, height) = self.cell
@@ -326,6 +371,35 @@ class Backdrop:
             min(max(column, 0), BACKDROP_CELLS - 1),
             min(max(row, 0), BACKDROP_CELLS - 1),
         )
+
+
+class Backdrop(_Grid):
+    """What the filled paths of one page had painted where, in drawing order.
+
+    Each path is noted in the grid cells its box overlaps, and a later path
+    that covers a whole cell leaves only itself there: nothing painted before
+    it can be seen through it at a point it covers. `None` is a colour this
+    reading does not know (an image, a pattern, a spot colour).
+    """
+
+    def __init__(self, page: Box) -> None:
+        super().__init__(page)
+        self.cells: dict[tuple[int, int], list[tuple[Box, Rgb | None]]] = {}
+
+    def paint(self, box: Box, colour: Rgb | None) -> None:
+        """Note one filled path, or an image, over the cells it overlaps."""
+        clipped = _clip(box, self.page)
+        if clipped is None:
+            return
+        for key in self.keys(clipped):
+            self._note(key, clipped, colour)
+
+    def under(self, x: float, y: float) -> Rgb | None:
+        """The colour last painted under the point, paper if nothing was."""
+        for (x0, y0, x1, y1), colour in reversed(self.cells.get(self._index(x, y), [])):
+            if x0 <= x <= x1 and y0 <= y <= y1:
+                return colour
+        return PAPER
 
     def _note(self, key: tuple[int, int], box: Box, colour: Rgb | None) -> None:
         (column, row) = key
@@ -342,11 +416,49 @@ class Backdrop:
             self.cells.setdefault(key, []).append((box, colour))
 
 
+class Covers(_Grid):
+    """The opaque rectangles a page filled over text it had already drawn,
+    noted in the grid cells they overlap, so a glyph is compared only with
+    the rectangles over its centre -- and exactly: its whole box inside one of
+    them, never a cell standing in for either. Each note and each comparison
+    spends one of `work`; once it is spent nothing more is noted or found,
+    which bounds a page of many fills over many glyphs."""
+
+    def __init__(self, page: Box, work: int) -> None:
+        super().__init__(page)
+        self.cells: dict[tuple[int, int], list[Box]] = {}
+        self.work = work
+
+    def add(self, box: Box) -> None:
+        """Note one rectangle over the cells it overlaps."""
+        for key in self.keys(box):
+            if self.work <= 0:
+                return
+            self.work -= 1
+            self.cells.setdefault(key, []).append(box)
+
+    def hide(self, box: Box) -> bool:
+        """Whether a noted rectangle holds all of `box`."""
+        centre = self._index((box[0] + box[2]) / 2, (box[1] + box[3]) / 2)
+        for cover in self.cells.get(centre, []):
+            if self.work <= 0:
+                return False
+            self.work -= 1
+            if _covers(cover, box):
+                return True
+        return False
+
+
 class MarkingAggregator(PDFPageAggregator):
     """pdfminer's page aggregator, noting for each glyph it lays out why a
     reader of the rendered page may not see it: `hidden[glyph]`, the reasons
     sorted and joined by a comma, for the glyphs that have one. A new page
     begins a new record, so the one a page's layout is walked with is its own.
+
+    Most reasons are read as a glyph is drawn. Being painted over is read as
+    the page ends: the glyphs the page itself drew (`drawn`) against the
+    rectangles it filled after them (`covers`, each beside how many glyphs
+    came before it), within the document's `work`.
     """
 
     def __init__(self, resources: PDFResourceManager, laparams: LAParams) -> None:
@@ -354,6 +466,13 @@ class MarkingAggregator(PDFPageAggregator):
         self.hidden: dict[LTChar, str] = {}
         self.backdrop = Backdrop((0.0, 0.0, 0.0, 0.0))
         self.marked = MarkedContent()
+        self.drawn: list[LTChar] = []
+        self.covers: list[tuple[Box, int]] = []
+        self.work = PAINTED_OVER_WORK
+        self._least = (math.inf, math.inf)
+        self._figures: list[tuple[Matrix, bool]] = []
+        self._stale = False
+        self._compound = 0
 
     @override
     def begin_page(self, page: PDFPage, ctm: Matrix) -> None:
@@ -361,6 +480,19 @@ class MarkingAggregator(PDFPageAggregator):
         self.hidden = {}
         self.backdrop = Backdrop(self.cur_item.bbox)
         self.marked = MarkedContent()
+        (self.drawn, self.covers, self._figures) = ([], [], [])
+        (self._least, self._stale, self._compound) = ((math.inf, math.inf), False, 0)
+
+    @override
+    def end_page(self, page: PDFPage) -> None:
+        for glyph in self._painted_over():
+            self.hidden[glyph] = _with(self.hidden.get(glyph, ""), PAINTED_OVER)
+        super().end_page(page)
+
+    @override
+    def set_ctm(self, ctm: Matrix) -> None:
+        super().set_ctm(ctm)
+        self._stale = False
 
     @override
     def begin_tag(self, tag: PSLiteral, props: PDFStackT | None = None) -> None:
@@ -383,6 +515,7 @@ class MarkingAggregator(PDFPageAggregator):
 
     @override
     def begin_figure(self, name: str, bbox: Rect, matrix: Matrix) -> None:
+        self._figures.append((self.ctm, self._stale))
         super().begin_figure(name, bbox, matrix)
         self.marked.enter()
 
@@ -390,6 +523,11 @@ class MarkingAggregator(PDFPageAggregator):
     def end_figure(self, _: str) -> None:
         super().end_figure(_)
         self.marked.leave()
+        (ctm, stale) = self._figures.pop() if self._figures else (self.ctm, True)
+        # pdfminer leaves this device at a form's own matrix until the page
+        # next sets one, so until then it places a path or a glyph where a
+        # viewer may not: neither covers nor is covered.
+        self._stale = stale or self.ctm != ctm
 
     @override
     def paint_path(
@@ -400,10 +538,48 @@ class MarkingAggregator(PDFPageAggregator):
         evenodd: bool,
         path: Sequence[PathSegment],
     ) -> None:
+        # pdfminer paints each subpath of a path of several through this same
+        # method; none of them is a cover, since together they may leave holes.
+        compound = sum(1 for segment in path if segment[0] == "m") > 1
+        self._compound += compound
         super().paint_path(gstate, stroke, fill, evenodd, path)
+        self._compound -= compound
         box = _path_box(self.ctm, path)
         if fill and box is not None:
             self.backdrop.paint(box, _rgb(gstate.ncs, gstate.ncolor))
+        clip = self._painting_over(gstate, fill)
+        rectangle = None if clip is None else _rectangle(self.ctm, path)
+        cover = None if rectangle is None or clip is None else _clip(rectangle, clip)
+        if cover is not None and self._worth_noting(cover):
+            self.covers.append((cover, len(self.drawn)))
+
+    def _painting_over(self, gstate: PDFGraphicState, fill: bool) -> Box | None:
+        """The clip a fill is painted under when it can hide what the page
+        drew before it: an opaque, normally blended fill in a colour this
+        reading reads, of one subpath, on the page itself -- a form's box
+        clips its own -- where every open marked-content sequence is drawn,
+        with pdfminer's matrix in step, after the page drew some glyph. A
+        paint the pending `W` of its own path clips leaves the clip unknown."""
+        if not isinstance(gstate, PaintState):
+            return None
+        if gstate.clipping is not None:
+            (gstate.clip, gstate.clipping) = (None, None)
+        if not fill or gstate.translucent or _rgb(gstate.ncs, gstate.ncolor) is None:
+            return None
+        if self._compound or self._figures or self._stale or not self.marked.draws:
+            return None
+        return gstate.clip if self.drawn else None
+
+    def _worth_noting(self, cover: Box) -> bool:
+        """Whether a cover has room for the smallest glyph drawn so far -- a
+        rule or a hairline never does -- and the page's covers are still
+        fewer than the work left to note them."""
+        (width, height) = self._least
+        return (
+            cover[2] - cover[0] >= width
+            and cover[3] - cover[1] >= height
+            and len(self.covers) < self.work
+        )
 
     @override
     def render_image(self, name: str, stream: PDFStream) -> None:
@@ -427,14 +603,55 @@ class MarkingAggregator(PDFPageAggregator):
         (_a, _b, c, d, _e, _f) = mult_matrix(textstate.matrix, self.ctm)
         em = textstate.fontsize * math.hypot(c, d)
         switched_off = self.marked.hides
+        # Only a page's own glyphs are its lines (a form's are a figure's),
+        # only where pdfminer's matrix is the one a viewer draws with, and only
+        # where pdfminer's box bounds the ink: a stroke reaches past it by its
+        # width, and further at a mitre; a Type3 glyph draws what its
+        # procedure draws.
+        coverable = (
+            not self._figures
+            and not self._stale
+            and self.work > 0
+            and textstate.render not in _STROKED
+            and not isinstance(textstate.font, PDFType3Font)
+        )
         # pdfminer's `render_char` appends each glyph it makes to the container
         # being laid out and hands back only its advance, so this string's
         # glyphs are that container's objects past `before`.
         for glyph in self.cur_item._objs[before:]:
-            if isinstance(glyph, LTChar):
-                reasons = self._reasons(glyph, textstate.render, em, switched_off)
-                if reasons:
-                    self.hidden[glyph] = reasons
+            if not isinstance(glyph, LTChar):
+                continue
+            reasons = self._reasons(glyph, textstate.render, em, switched_off)
+            if reasons:
+                self.hidden[glyph] = reasons
+            if coverable and _inked(glyph):
+                self._draw(glyph)
+
+    def _draw(self, glyph: LTChar) -> None:
+        """Keep a glyph a later fill may paint over, and the least room one
+        needs to."""
+        self.drawn.append(glyph)
+        (width, height) = self._least
+        self._least = (min(width, glyph.width), min(height, glyph.height))
+
+    def _painted_over(self) -> list[LTChar]:
+        """The glyphs this page drew that a rectangle it filled after them
+        holds whole, latest glyph first, as far as the document's `work`
+        reaches; what that work does not reach is not marked."""
+        if not self.covers:
+            return []
+        covers = Covers(self.cur_item.bbox, self.work)
+        pending = list(self.covers)
+        hidden: list[LTChar] = []
+        for position in range(len(self.drawn) - 1, -1, -1):
+            while pending and pending[-1][1] > position:
+                covers.add(pending.pop()[0])
+            if covers.work <= 0:
+                break
+            if covers.hide(self.drawn[position].bbox):
+                hidden.append(self.drawn[position])
+        self.work = covers.work
+        return hidden
 
     def _reasons(
         self, glyph: LTChar, render: int, em: float, switched_off: bool
@@ -458,7 +675,9 @@ class MarkingInterpreter(PDFPageInterpreter):
     that device cannot: whether an `/OC` marked-content sequence encloses
     optional content the document switches off, read against the document's
     default configuration and the `/Properties` of the resources in force --
-    the page's, or a form XObject's own."""
+    the page's, or a form XObject's own -- and, on its `PaintState`, the clip
+    and the transparency each fill is painted under, which pdfminer does not
+    keep (its `W`, `W*` and `gs` do nothing)."""
 
     def __init__(self, rsrcmgr: PDFResourceManager, device: PDFDevice) -> None:
         super().__init__(rsrcmgr, device)
@@ -490,6 +709,58 @@ class MarkingInterpreter(PDFPageInterpreter):
             layers = self.layers
             drawn = None if layers is None else layers.drawn(self.resources, props)
         device.begin_sequence(drawn)
+
+    @override
+    def init_state(self, ctm: Matrix) -> None:
+        super().init_state(ctm)
+        self.graphicstate = PaintState()
+
+    @override
+    def do_W(self) -> None:
+        super().do_W()
+        self._name_clip()
+
+    @override
+    def do_W_a(self) -> None:
+        super().do_W_a()
+        self._name_clip()
+
+    @override
+    def do_n(self) -> None:
+        """End the path; a clip `W` named on exactly this path is applied."""
+        state = self.graphicstate
+        if isinstance(state, PaintState) and state.clipping is not None:
+            (path, length) = state.clipping
+            named = path is self.curpath and len(path) == length
+            box = _rectangle(self.ctm, path) if named else None
+            state.clip = (
+                None if box is None or state.clip is None else _clip(box, state.clip)
+            )
+            state.clipping = None
+        super().do_n()
+
+    @override
+    def do_gs(self, name: PDFStackT) -> None:
+        super().do_gs(name)
+        state = self.graphicstate
+        if isinstance(state, PaintState) and not _opaque(self.resources, name):
+            state.translucent = True
+
+    @override
+    def do_TJ(self, seq: PDFStackT) -> None:
+        """Show text; in a render mode that adds its glyphs to the clip, the
+        clip becomes a shape this reading does not follow."""
+        state = self.graphicstate
+        clips = self.textstate.render not in _UNCLIPPING_RENDER_MODES
+        if isinstance(state, PaintState) and clips:
+            state.clip = None
+        super().do_TJ(seq)
+
+    def _name_clip(self) -> None:
+        """`W` names the current path the next clip, for the `n` after it."""
+        state = self.graphicstate
+        if isinstance(state, PaintState):
+            state.clipping = (self.curpath, len(self.curpath))
 
 
 def _paints(render: int, graphicstate: PDFGraphicState) -> list[Rgb | None]:
@@ -555,17 +826,84 @@ def _path_box(ctm: Matrix, path: Sequence[PathSegment]) -> Box | None:
     """
     if sum(1 for segment in path if segment[0] == "m") != 1:
         return None
-    points = [
-        apply_matrix_pt(ctm, (float(coords[at]), float(coords[at + 1])))
-        for segment in path
-        for coords in (segment[1:],)
-        for at in range(0, len(coords) - 1, 2)
-    ]
+    points = _points(ctm, path)
     if not points:
         return None
     xs = [x for x, _y in points]
     ys = [y for _x, y in points]
     return (min(xs), min(ys), max(xs), max(ys))
+
+
+def _points(ctm: Matrix, path: Sequence[PathSegment]) -> list[Point]:
+    """Every point a path names, end and control points alike, on the page."""
+    return [
+        apply_matrix_pt(ctm, (float(coords[at]), float(coords[at + 1])))
+        for segment in path
+        for coords in (segment[1:],)
+        for at in range(0, len(coords) - 1, 2)
+    ]
+
+
+def _rectangle(ctm: Matrix, path: Sequence[PathSegment]) -> Box | None:
+    """The box a path fills when it is exactly one rectangle with its sides
+    along the page's axes -- `re`, or its four corners spelled out -- and
+    `None` for anything else: a curve, a rotated or skewed shape, a second
+    subpath, a corner off the plane."""
+    if "".join(str(segment[0]) for segment in path) not in _RECTANGLE_SHAPES:
+        return None
+    corners = _points(ctm, path)
+    if len(corners) == 5 and corners[-1] == corners[0]:
+        corners.pop()
+    xs = {x for x, _y in corners}
+    ys = {y for _x, y in corners}
+    sides = zip(corners, [*corners[1:], *corners[:1]], strict=True)
+    if (
+        len(corners) != 4
+        or len(set(corners)) != 4
+        or len(xs) != 2
+        or len(ys) != 2
+        or not all(math.isfinite(value) for value in (*xs, *ys))
+        or not all((ax == bx) != (ay == by) for (ax, ay), (bx, by) in sides)
+    ):
+        return None
+    return (min(xs), min(ys), max(xs), max(ys))
+
+
+def _inked(glyph: LTChar) -> bool:
+    """Whether a fill could hide a glyph at all: a finite box of some area,
+    around a character that is not white space."""
+    (x0, y0, x1, y1) = glyph.bbox
+    return (
+        all(math.isfinite(value) for value in glyph.bbox)
+        and x0 < x1
+        and y0 < y1
+        and not glyph.get_text().isspace()
+    )
+
+
+def _with(reasons: str, reason: str) -> str:
+    """`reasons` and `reason`, sorted and joined by a comma."""
+    return ",".join(sorted({*filter(None, reasons.split(",")), reason}))
+
+
+def _opaque(resources: object, name: object) -> bool:
+    """Whether the ExtGState `name` names in `resources` leaves fills opaque
+    and normally blended: no fill alpha under 1, no blend mode but Normal,
+    no soft mask, no overprint. One this reading cannot find or read is not."""
+    if not isinstance(name, PSLiteral):
+        return False
+    params = _dict(_entry(_entry(resources, "ExtGState"), literal_name(name)))
+    if params is None:
+        return False
+    alpha = _resolved(params.get("ca", 1))
+    return (
+        isinstance(alpha, int | float)
+        and not isinstance(alpha, bool)
+        and alpha >= 1
+        and _name(params.get("BM", _NORMAL)) in _NORMAL_BLENDS
+        and _name(params.get("SMask", _NO_MASK)) == "None"
+        and not any(_resolved(params.get(key)) is True for key in ("op", "OP"))
+    )
 
 
 def _clip(box: Box, page: Box) -> Box | None:

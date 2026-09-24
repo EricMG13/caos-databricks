@@ -3,12 +3,13 @@
 pdfminer lays out every glyph a content stream shows, so text drawn in render
 mode 3 -- neither filled nor stroked, and the text layer every OCR'd scan
 carries over its image -- text painted in the colour behind it, glyphs under
-2 pt and text inside optional content the document switches off were admitted
-as ordinary evidence with nothing to tell an approver or a model that no
-reader of the page sees them. They stay evidence, because a scan's only text
-is its invisible layer; each line carrying one is marked with why, the
-approver reads the mark on the page read, and the model is told before the
-line. The text stays citable, and anchoring is unchanged.
+2 pt, text inside optional content the document switches off and text the
+page paints over later were admitted as ordinary evidence with nothing to
+tell an approver or a model that no reader of the page sees them. They stay
+evidence, because a scan's only text is its invisible layer; each line
+carrying one is marked with why, the approver reads the mark on the page
+read, and the model is told before the line. The text stays citable, and
+anchoring is unchanged.
 """
 
 from __future__ import annotations
@@ -61,10 +62,12 @@ from caos.evidence.pdf import (
 from caos.evidence.visibility import (
     PAPER,
     Backdrop,
+    Covers,
     MarkedContent,
     MarkingAggregator,
     MarkingInterpreter,
     OptionalContent,
+    PaintState,
 )
 from caos.methodology.executor import Delivery
 from caos.refusals import Refusal, RefusalCode
@@ -356,10 +359,11 @@ def test_the_marks_are_every_sorted_combination_of_the_reasons() -> None:
     assert HIDDEN_REASONS == (
         "near_background",
         "optional_content_off",
+        "painted_over",
         "render_mode_3",
         "under_2pt",
     )
-    assert len(HIDDEN_MARKS) == 15
+    assert len(HIDDEN_MARKS) == 31
     assert all(mark.split(",") == sorted(set(mark.split(","))) for mark in HIDDEN_MARKS)
 
 
@@ -448,11 +452,12 @@ def shown(y: int, text: str) -> bytes:
     return f"BT /F1 12 Tf 1 0 0 1 72 {y} Tm ({text}) Tj ET\n".encode()
 
 
-def form(content: bytes, resources: bytes = NAMED) -> bytes:
+def form(content: bytes, resources: bytes = NAMED, matrix: bytes = b"") -> bytes:
     """A form XObject drawing `content`, with its own `/Properties`."""
     return (
-        b"<< /Type /XObject /Subtype /Form /BBox [0 0 612 792] /Resources << /Font"
-        b" << /F1 5 0 R >> "
+        b"<< /Type /XObject /Subtype /Form /BBox [0 0 612 792] "
+        + matrix
+        + b" /Resources << /Font << /F1 5 0 R >> "
         + resources
         + b" >> /Length "
         + str(len(content)).encode()
@@ -874,3 +879,252 @@ def test_every_crop_relative_pdf_version_reads_as_recorded(
 
     assert read.body.frame.y_axis == "down"
     assert [line.text for line in read.body.lines] == ["Recorded"]
+
+
+# Painted over (N27's remainder): a line drawn first, then what the page
+# paints afterwards. Helvetica's 12pt glyph boxes on the baseline y=700 run
+# from 697.516 to 709.516, and "Kept" from x=72.
+PAINTED = "painted_over"
+
+
+COVERS = raw_pdf(
+    b"".join(
+        [
+            shown(700, "White box over"),
+            shown(660, "Black box over"),
+            shown(620, "Spelled corners"),
+            shown(580, "Drawn before"),
+            shown(460, "Never covered"),
+            b"1 g 60 690 300 30 re f\n",
+            b"0 g 60 650 300 30 re f\n",
+            # Four corners spelled out, closed by the fill, in CMYK white.
+            b"0 0 0 0 k 60 610 m 360 610 l 360 640 l 60 640 l f\n",
+            # Drawn clockwise, over one line drawn before it and one after.
+            b"1 g 360 530 -300 80 re f 0 g\n",
+            shown(540, "Drawn after on the cover"),
+        ]
+    )
+)
+
+
+def test_text_an_opaque_fill_paints_over_later_is_kept_and_marked() -> None:
+    """A rectangle the page fills after a line, holding each glyph's whole
+    box, hides it in every viewer -- white-out and black redaction alike --
+    so the line is kept, citable, and marked; a line drawn after the fill, on
+    top of it, is seen and is not."""
+    assert _marks(COVERS) == {
+        "White box over": PAINTED,
+        "Black box over": PAINTED,
+        "Spelled corners": PAINTED,
+        "Drawn before": PAINTED,
+        "Drawn after on the cover": "",
+        "Never covered": "",
+    }
+
+
+def test_the_extraction_child_marks_what_is_painted_over() -> None:
+    """The same marks from the killed, budgeted child admission runs (§47)."""
+    marks = _lines(PdfExtractor().extract(COVERS))
+
+    assert marks["White box over"] == PAINTED and marks["Never covered"] == ""
+
+
+def covered(
+    cover: bytes,
+    *,
+    resources: bytes = b"",
+    layers: bytes = b"",
+    more: tuple[bytes, ...] = (),
+) -> dict[str, str]:
+    """The marks of a page drawing one line, "Kept visible", then `cover`."""
+    page = shown(700, "Kept visible") + cover
+    return _marks(layered_pdf(page, layers=layers, resources=resources, more=more))
+
+
+GS = b"/ExtGState << /Half << /ca 0.5 >> /Mul << /BM /Multiply >> /Over << /op true"
+GS += b" >> /Mask << /SMask << /S /Luminosity /G 9 0 R >> >> /Blends << /BM"
+GS += b" [/Normal] >> /Opaque << /ca 1 /CA 0.5 /BM /Normal /SMask /None /op false"
+GS += b" >> >> /XObject << /Fm 8 0 R /Up 9 0 R >>"
+FORMS = (form(b"1 g 0 0 612 792 re f"), form(b"", matrix=b"/Matrix [1 0 0 1 0 600]"))
+
+
+@pytest.mark.parametrize(
+    "cover",
+    [
+        # A fill that holds the glyphs' boxes but for a hair, or only some of
+        # their height; a stroke however wide.
+        b"1 g 60 697.6 300 30 re f\n",
+        b"1 g 60 703 300 30 re f\n",
+        b"1 G 30 w 60 704 m 400 704 l S\n",
+        # Clipped: to a rectangle elsewhere, to a triangle, by a `W` whose own
+        # fill applies it, by a `W` whose path grows before its `n`.
+        b"q 0 0 612 100 re W n 1 g 0 0 612 792 re f Q\n",
+        b"q 60 690 m 400 690 l 230 800 l h W n 1 g 0 0 612 792 re f Q\n",
+        b"1 g 0 0 612 792 re W f\n",
+        b"q 0 0 612 792 re W 0 0 m 1 1 l n 1 g 0 0 612 792 re f Q\n",
+        # Not opaque, not normally blended, soft-masked, overprinted, a blend
+        # given as a list, an ExtGState that is not there.
+        b"q /Half gs 1 g 0 0 612 792 re f Q\n",
+        b"q /Mul gs 1 g 0 0 612 792 re f Q\n",
+        b"q /Mask gs 1 g 0 0 612 792 re f Q\n",
+        b"q /Over gs 1 g 0 0 612 792 re f Q\n",
+        b"q /Blends gs 1 g 0 0 612 792 re f Q\n",
+        b"q /Nope gs 1 g 0 0 612 792 re f Q\n",
+        # A pattern, a hole left by even-odd or by a counter-wound subpath, a
+        # curve, a rectangle turned off the axes.
+        b"/Pattern cs /P1 scn 0 0 612 792 re f\n",
+        b"1 g 0 0 612 792 re 60 690 300 30 re f*\n",
+        b"1 g 0 0 612 792 re 360 690 -300 30 re f\n",
+        b"1 g 0 0 m 612 0 l 612 792 l 0 792 c f\n",
+        b"q 0.8 0.6 -0.6 0.8 300 300 cm 1 g -900 -900 1800 1800 re f Q\n",
+        # Painted in a form, whose box clips it; or where pdfminer, after a
+        # form that moved its matrix, places the fill over the line while a
+        # viewer paints it 600 pt lower.
+        b"/Fm Do\n",
+        b"/Up Do 1 g 60 90 300 30 re f\n",
+        # Glyphs added to the clip leave the next fill clipped to them.
+        b"BT /F1 12 Tf 7 Tr 1 0 0 1 72 400 Tm (Clip) Tj ET 1 g 0 0 612 792 re f\n",
+        # In optional content switched off, or undecided.
+        b"/OC /off BDC 1 g 0 0 612 792 re f EMC\n",
+        b"/OC /absent BDC 1 g 0 0 612 792 re f EMC\n",
+    ],
+)
+def test_a_fill_that_may_not_hide_the_glyphs_marks_nothing(cover: bytes) -> None:
+    """Only a fill every viewer paints, opaque and whole over each glyph's box,
+    marks a line: what may leave any of the glyph seen marks nothing, and
+    pdfminer follows no clip, transparency or optional content of its own."""
+    marks = covered(cover, resources=GS + b" " + NAMED, layers=LAYERS, more=FORMS)
+
+    assert marks["Kept visible"] == ""
+    assert PAINTED not in ",".join(marks.values())
+
+
+@pytest.mark.parametrize(
+    "cover",
+    [
+        # Held with room to spare, a hair under the glyphs' boxes.
+        b"1 g 60 697.4 300 30 re f\n",
+        # A clip restored by `Q`, a clip that is the page, an ExtGState that
+        # leaves fills opaque, a matrix a `Q` set back in step.
+        b"q 0 0 10 10 re W n Q 1 g 60 690 300 30 re f\n",
+        b"q 0 0 612 792 re W* n 1 g 60 690 300 30 re f Q\n",
+        b"q /Opaque gs 1 g 60 690 300 30 re f Q\n",
+        b"/Up Do q Q 1 g 60 690 300 30 re f\n",
+        # In a sequence that is not optional content, or that is switched on.
+        b"/Artifact BMC 1 g 60 690 300 30 re f EMC\n",
+        b"/OC /on BDC 1 g 60 690 300 30 re f EMC\n",
+        # Filled and stroked.
+        b"1 g 0 G 60 690 300 30 re B\n",
+    ],
+)
+def test_a_fill_this_reading_follows_hides_what_it_holds(cover: bytes) -> None:
+    """The clip, transparency and optional content a fill is painted under are
+    followed where they leave no doubt: then the fill hides what it holds."""
+    marks = covered(cover, resources=GS + b" " + NAMED, layers=LAYERS, more=FORMS)
+
+    assert marks == {"Kept visible": PAINTED}
+
+
+# A Type3 font whose one glyph, `a`, a procedure draws as a full em square.
+TYPE3 = (
+    b"<< /Type /Font /Subtype /Type3 /FontBBox [0 0 1000 1000] /FontMatrix"
+    b" [0.001 0 0 0.001 0 0] /CharProcs << /a 9 0 R >> /Encoding << /Type"
+    b" /Encoding /Differences [97 /a] >> /FirstChar 97 /LastChar 97 /Widths"
+    b" [1000] /Resources << >> >>"
+)
+SQUARE = b"<< /Length 30 >>\nstream\n1000 0 d0 0 0 1000 1000 re f\nendstream"
+
+
+def test_a_glyph_whose_ink_its_box_may_not_bound_is_never_found_covered() -> None:
+    """A stroke reaches past the glyph box by its width, and further at a
+    mitre; a Type3 glyph draws whatever its procedure draws. pdfminer's box
+    bounds neither, so neither is compared with a later fill, which a plain
+    filled glyph beside them is."""
+    stroked = b"BT /F1 12 Tf 2 Tr 3 w 1 0 0 1 72 700 Tm (Stroked) Tj 0 Tr ET\n"
+    type3 = b"BT /F3 12 Tf 1 0 0 1 72 650 Tm (aaaa) Tj ET\n"
+    plain = shown(600, "Filled")
+    cover = b"1 g 60 590 300 130 re f\n"
+    fonts = b"/Font << /F1 5 0 R /F3 8 0 R >>"
+
+    data = layered_pdf(
+        stroked + type3 + plain + cover,
+        layers=b"",
+        resources=fonts,
+        more=(TYPE3, SQUARE),
+    )
+
+    assert _marks(data) == {"Stroked": "", "aaaa": "", "Filled": PAINTED}
+
+
+def test_reasons_join_sorted_on_one_line() -> None:
+    """Text in optional content switched off and painted over as well carries
+    both reasons, sorted."""
+    page = (
+        b"/OC /off BDC " + shown(700, "Twice hidden") + b"EMC 1 g 60 690 300 30 re f\n"
+    )
+
+    assert _marks(layered_pdf(page)) == {"Twice hidden": f"{OFF},{PAINTED}"}
+
+
+def test_painted_over_is_read_within_the_documents_work(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Each note of a fill and each comparison with a glyph spends one unit of
+    the document's work; past it nothing more is marked, however many fills
+    and glyphs a page holds, and the extraction still answers."""
+    from caos.evidence import visibility
+
+    covers = Covers((0.0, 0.0, 800.0, 800.0), 3)
+    covers.add((0.0, 0.0, 800.0, 200.0))
+    assert (covers.work, sum(map(len, covers.cells.values()))) == (0, 3)
+    assert not covers.hide((10.0, 10.0, 20.0, 20.0))
+
+    # Two thousand fills beside the line, then one over it: within the
+    # document's work the line is found painted over; with a thousand units
+    # the fills beside it spend them first, and it is not.
+    many = b"".join(b"1 g 140 600 20 120 re f\n" for _ in range(2000))
+    data = raw_pdf(shown(700, "Kept visible") + many + b"1 g 60 690 300 30 re f\n")
+    assert _marks(data) == {"Kept visible": PAINTED}
+    monkeypatch.setattr(visibility, "PAINTED_OVER_WORK", 1000)
+    resources = PDFResourceManager()
+    device = MarkingAggregator(resources, LAParams())
+    interpreter = MarkingInterpreter(resources, device)
+    [page] = PDFPage.get_pages(BytesIO(data))
+    interpreter.process_page(page)
+
+    assert device.work <= 0
+    assert PAINTED not in device.hidden.values()
+    monkeypatch.setattr(visibility, "PAINTED_OVER_WORK", 0)
+    assert _marks(COVERS)["White box over"] == ""
+
+
+def test_the_graphics_state_is_saved_and_restored_whole() -> None:
+    """`PaintState` travels through `q` and `Q` as pdfminer's own state does:
+    a copy carries the clip, the pending clip and the transparency."""
+    state = PaintState()
+    (state.clip, state.translucent) = ((1.0, 2.0, 3.0, 4.0), True)
+    state.clipping = ([("m", 0.0, 0.0)], 1)
+
+    copy = state.copy()
+
+    assert (copy.clip, copy.clipping, copy.translucent) == (
+        state.clip,
+        state.clipping,
+        True,
+    )
+    assert PaintState().clip == (-inf, -inf, inf, inf)
+
+
+def test_the_approver_reads_painted_over_on_the_page(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> None:
+    """Admitted, stored and served: the page read names the reason."""
+    blobs = BlobStore(tmp_path / "blobs")
+    pinned = pin(*case, blobs, [("covered.pdf", COVERS)])
+
+    lines = {
+        line.text: line.hidden for line in page_of(pinned, pinned.sources[0]).body.lines
+    }
+
+    assert lines["Black box over"] == [PAINTED]
+    assert lines["Never covered"] == []
