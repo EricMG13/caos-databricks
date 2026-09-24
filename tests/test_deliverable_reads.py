@@ -507,7 +507,7 @@ def test_a_filed_revisions_page_is_the_one_stored_at_filing(
     receipt = _file(lite)
     stored = _stored_package(lite, receipt.revision_id)
     assert stored is not None
-    page = deliverable_reads.packed_export(lite.blobs.get(stored))
+    page = package_module.packed_export(lite.blobs.get(stored))
     assert page is not None
 
     def moved(*_args: object, **_kwargs: object) -> bytes:

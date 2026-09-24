@@ -606,6 +606,36 @@ Round 4 (2026-09-23): five adversarial reviewers (Claude Opus 5.5 at effort max)
 
 - F352 — The filed-receipt and publication chain checks answered 400 `DELIVERABLE_PAYLOAD_INVALID` for the server's own records (review 5: N-1, N74): they answer 500 `ARTIFACT_RECORD_MISMATCH`.
 
+- D50 (2026-09-24; review 4: W2, W7) — PyYAML is a direct dev dependency (`pyyaml==6.0.3`, already locked through langchain-core and bandit): the gate checker and the stand-in read `ci.yml`, the pre-commit config and `databricks.yml` structurally, since text windows let a moved `if:`, a quoted key, a `defaults.run` shell or an `exit 0` switch a gate off unnoticed.
+
+- F353 — The documented rollback (check out the previous commit, run the one command) boots `STORE_SCHEMA_DRIFT` across a migration, and a commit from before F219 boots on an empty store in `public` (review 4: C1): `DEPLOYMENT.md` and `ENTERPRISE_HANDOFF.md` allow a redeploy only across no migration and no schema move, and otherwise roll forward or restore the database.
+
+- F354 — E10 counted any two progress frames as proof, so a gateway that refused the app's own call (403, 404, 429) or a park passed (review 4: W1): E10 requires an answered call and names the outcome code otherwise.
+
+- F355 — `check_gate_config` read `ci.yml` and the pre-commit config in text windows, so a moved or quoted `if`, `defaults.run`, `exit 0`, a trap, a heredoc, `working-directory`, a races step without its environment, and pre-commit's `exclude`, `default_stages`, `types` or a forked repo all passed while switching gates off; the gitleaks gate was checked by any mention; F171's `${{` check read raw text (review 4: W2, W3, N3): both files are read as YAML and every required step is pinned, the gitleaks command included.
+
+- F356 — A bare or aliased `skip` and a `live_provider` marker were never counted (review 4: W4): both are counted, `live_provider` as its own kind at its current count.
+
+- F357 — `--against` ran the change's own checker, so a change could loosen a pattern and a suppression with it (review 4: W5): it also holds both trees to the base revision's own checker, loaded with its own `scripts/` siblings.
+
+- F358 — `io_budget --assert` passed when its record, or a measured module's entry in it, was missing (review 4: W6): either is refused.
+
+- F359 — A `workspace.host` in `databricks.yml`, an attached `-pNAME` or `--profile=`, or inherited Databricks auth variables took the stand-in off loopback (review 4: W7, N1): the stand-in and `check_gate_config` refuse host and auth keys and every attached profile form, and clear the inherited variables.
+
+- F360 — E2 did not hold the group names F276 moved onto `BUNDLE_VAR_`, and accepted any Postgres branch or database path (review 4: W8, N2): E2 holds the groups, commas included, and the bound branch and database to what was given.
+
+- F361 — The vocabulary gate missed star captures in match patterns and digit-suffixed names (review 4: N4): both are read.
+
+- F362 — F245's single source had gaps: literal group defaults in `preflight.py`, an inherited `MODEL_ENDPOINT`, `MODEL_PRICE` or `RUN_CEILING` silently winning, and an inline comment read into a default (review 4: N5): `databricks.yml` is the one source and the environment sets only what the header lists.
+
+- F363 — A paid attempt's bill could still land after its lease was taken over, so a new paid attempt for the same node could start beside it (review 1 residual; invariant 6): no new paid attempt starts while an earlier one may still bill.
+
+- F364 — The health store probe did not check who owns the store's schemas (review 1 residual, F297): it refuses a schema another role owns; the runbook says database CREATE is needed for the first boot only.
+
+- F365 — Text in a Separation's `/None` colorant, or a DeviceN whose colorants are all `/None`, paints nothing (ISO 32000-1 §8.6.6.4) and was admitted unmarked (N27): it is marked `colorant_none`, decided by the colour each render mode paints with; `PdfExtractor` v8 (an existing fixture's mark moved; earlier rows verify as recorded); migration `0042`; `PageLine.hidden` holds up to six reasons. Tests `test_text_in_a_colorant_that_paints_nothing_is_marked`, `test_a_spot_ink_is_still_read_by_its_tint`.
+
+- F366 — The approver's page read showed a pre-v7 token's stored line breaks (F290's remainder): `read_page` shows each line through `extract.one_line`, as the prompt does; stored tokens and digests are unchanged. Test `test_the_page_read_shows_a_line_stored_with_a_break_as_one_line`.
+
 ### Design critique plan, 2026-09-23 (the `/impeccable critique` of `frontend/src`, 16/40, and the owner's plan built on it; branch `impeccable/plan`)
 
 - D32 (2026-09-23) — The Analysis read serves each accepted handoff's `<!-- table-id: -->`-tagged tables as typed data, derived at request time from the Markdown it already verified, by the bundle's own reader: `caos.methodology.tables.handoff_tables` calls `cp_tables.parse_tables` from the verified contract (`VendorContract.cp_tables`, the module the completeness checker imports), in document order, each cell its text as that reader splits it. Nothing is stored; the Markdown stays the authority and the tables are model-authored as it is (§46.3); no store or blob read is added. A cell has a value only where the bundle's `parse_figure` reads a figure (its null vocabulary is null, `5,2` is no value), and the value is that spelling re-read with `Decimal`, never the vendor's float (invariant 7), in plain notation (`^-?[0-9]+(\.[0-9]+)?$`); a figure past 64 characters has no value and keeps its text. Bounds: 64 tables, 32 columns, 2,000 rows, 4,096 characters a cell, 256 a table id; past one, or where the reader raises, the handoff serves no table and `tables_unavailable_reason` `TABLES_TOO_LARGE` or `TABLES_MALFORMED`. Alternatives: store tables at acceptance (a record change and a second authority); parse Markdown in the browser (the frontend never does); a host-only figure grammar (the bundle is the authority on what a figure is, invariant 4); the vendor's float (invariant 7). Evidence: `tests/test_handoff_tables.py`, `tests/test_model_section.py::test_analysis_serves_the_tagged_tables_each_owner_wrote`, `tests/test_wire_contract.py::test_a_table_cell_is_its_text_and_a_plain_decimal_string_or_null`.
