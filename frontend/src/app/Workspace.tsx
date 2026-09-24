@@ -1,5 +1,13 @@
 // One screen. The chrome never changes; only the body does (IA_SPEC.md 1).
-import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from "react";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentType,
+} from "react";
 import { useSearchParams } from "react-router";
 import {
   INITIAL,
@@ -28,7 +36,7 @@ import {
   type RegionStatus,
   type WorkspaceDocument,
 } from "./transport";
-import { SECTION_VIEWS } from "./views";
+import { SECTION_VIEWS, preloadView } from "./views";
 import { AppShell } from "@/chrome/AppShell";
 import { AppSidebar } from "@/chrome/AppSidebar";
 import { QualificationStrip } from "@/chrome/QualificationStrip";
@@ -42,6 +50,7 @@ import { Announcer } from "@/states/Announcer";
 import { NotLive, PageAlert } from "@/states/PageAlert";
 import { RegionState } from "@/states/RegionState";
 import { SectionBoundary } from "@/states/SectionBoundary";
+import { SurfaceState } from "@/ds/SurfaceState";
 import type { Chrome, Section } from "@/wire";
 
 const LOADING: RegionStatus = { kind: "loading" };
@@ -138,6 +147,10 @@ export function Workspace({ section }: { section: Section }) {
   const key = `${section}|${caseId ?? ""}|${runId ?? ""}|${revisionId ?? ""}|${fixture ?? ""}`;
   const [held, setHeld] = useState<Keyed<Held> | null>(null);
   const [tabChoice, setTabChoice] = useState<Keyed<string> | null>(null);
+  // The section's chunk is fetched beside its document, not after it (N65).
+  useEffect(() => {
+    void preloadView(section);
+  }, [section]);
   const [tail, setTail] = useState<Keyed<boolean> | null>(null);
   const authority = useRef<Authority>(INITIAL);
 
@@ -423,9 +436,13 @@ export function Workspace({ section }: { section: Section }) {
                   // the next one served clears it, without waiting for a
                   // navigation to unmount the boundary.
                   <SectionBoundary key={mountKey} resetOn={doc.observed_at}>
-                    <SectionPanel tab={activeTab}>
-                      <View key={mountKey} document={doc} tab={activeTab} />
-                    </SectionPanel>
+                    {/* A view whose chunk is still in flight reads as the
+                        region loading, and a failed one meets the boundary. */}
+                    <Suspense fallback={<SurfaceState kind="loading" />}>
+                      <SectionPanel tab={activeTab}>
+                        <View key={mountKey} document={doc} tab={activeTab} />
+                      </SectionPanel>
+                    </Suspense>
                   </SectionBoundary>
                 )}
               </RegionState>

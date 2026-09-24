@@ -182,7 +182,10 @@ function resolveSpecifier(importer, specifier, src) {
 // nothing and is exactly what this rule is for. A specifier that resolves to
 // nothing is left to `tsc`, which refuses it with a better message. Only
 // TypeScript files are parsed; a stylesheet or JSON file is reached and
-// stops there.
+// stops there. A dynamic `import("…")` of a string literal is an edge too:
+// the bundler ships its target as a chunk (N65's lazy section views), so it
+// is reached exactly as a static import is. A computed specifier names no
+// file and reaches nothing, so it cannot vouch for one.
 export function importGraph(entry, src) {
   const reached = new Set();
   const pending = [resolve(entry)];
@@ -209,8 +212,30 @@ export function importGraph(entry, src) {
       const target = resolveSpecifier(file, specifier.text, src);
       if (target) pending.push(target);
     }
+    for (const specifier of dynamicImports(tree)) {
+      const target = resolveSpecifier(file, specifier, src);
+      if (target) pending.push(target);
+    }
   }
   return reached;
+}
+
+/** Every `import("…")` in a file whose specifier is a string literal. */
+function dynamicImports(tree) {
+  const found = [];
+  const visit = (node) => {
+    if (
+      ts.isCallExpression(node) &&
+      node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+      node.arguments.length > 0 &&
+      ts.isStringLiteralLike(node.arguments[0])
+    ) {
+      found.push(node.arguments[0].text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(tree);
+  return found;
 }
 
 // A file that declares only interfaces, type aliases and type-only imports or
