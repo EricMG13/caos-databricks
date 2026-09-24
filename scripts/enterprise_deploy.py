@@ -51,11 +51,16 @@ from typing import Any
 from urllib.parse import urlsplit
 from uuid import uuid4
 
+import bundle_defaults
 from openai import OpenAIError
 
 REPO = Path(__file__).resolve().parents[1]
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
+
+# The bundle's own defaults (N23): `databricks.yml` states each once, and
+# this script reads them back rather than repeating them.
+_DEFAULTS = bundle_defaults.defaults()
 
 STREAM_SECONDS = 20.0
 # After the first frame, how long frames must keep coming to count as a live
@@ -164,13 +169,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--schema", default="")
     parser.add_argument("--lakebase-instance", default="")
     parser.add_argument("--lakebase-database", default="databricks_postgres")
-    parser.add_argument("--endpoint", default="databricks-claude-opus-5")
-    parser.add_argument(
-        "--price", default="databricks-claude-opus-5,0.000005,0.000025,2026-09-22"
-    )
-    parser.add_argument("--run-ceiling", default="100.00")
-    parser.add_argument("--group-admin", default="caos-admins")
-    parser.add_argument("--group-analyst", default="caos-analysts")
+    parser.add_argument("--endpoint", default=_DEFAULTS["model_endpoint"])
+    parser.add_argument("--price", default=_DEFAULTS["model_price"])
+    parser.add_argument("--run-ceiling", default=_DEFAULTS["run_ceiling"])
+    parser.add_argument("--group-admin", default=_DEFAULTS["group_admin"])
+    parser.add_argument("--group-analyst", default=_DEFAULTS["group_analyst"])
     parser.add_argument("--pg-port", default="5432", help="Lakebase listens on 5432")
     parser.add_argument("--pg-sslmode", default="require")
     parser.add_argument("--step", default="", help="record: the row id (E2, E3, E4)")

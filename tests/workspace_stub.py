@@ -42,11 +42,23 @@ from socketserver import BaseServer
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlparse
 
+try:
+    from bundle_defaults import defaults as _bundle_defaults
+except ImportError:
+    # Standalone (`python tests/workspace_stub.py -- ...`) has no conftest to
+    # put the gate scripts on the path first, the way pytest's always has.
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from bundle_defaults import defaults as _bundle_defaults
+
 # What the SDK is handed as a token. It is a placeholder the stub never
-# compares against; any non-empty bearer passes.
+# compares against; any non-empty bearer passes. The rest are the bundle's
+# own defaults (N23): `databricks.yml` states each once.
 BEARER = "local-stub"
-ENDPOINT = "databricks-claude-opus-5"
-PRICE = f"{ENDPOINT},0.000005,0.000025,2026-09-22"
+_DEFAULTS = _bundle_defaults()
+ENDPOINT = _DEFAULTS["model_endpoint"]
+PRICE = _DEFAULTS["model_price"]
+GROUP_ADMIN = _DEFAULTS["group_admin"]
+GROUP_ANALYST = _DEFAULTS["group_analyst"]
 USER = {"id": "42", "userName": "stub@example.com", "displayName": "Stub User"}
 FILES = "/api/2.0/fs/files"
 DIRECTORIES = "/api/2.0/fs/directories"
@@ -74,7 +86,7 @@ class WorkspaceStub:
     # Answer with the content as a list of text parts, the shape some serving
     # endpoints send where the client's model declares a string (CF-077).
     content_parts: bool = False
-    groups: frozenset[str] = frozenset({"caos-admins", "caos-analysts"})
+    groups: frozenset[str] = frozenset({GROUP_ADMIN, GROUP_ANALYST})
     # A profile that may not list groups is answered 403 (preflight's W5).
     groups_forbidden: bool = False
     # What the serving endpoint's `ai_gateway` reads back (preflight's DP-3),
