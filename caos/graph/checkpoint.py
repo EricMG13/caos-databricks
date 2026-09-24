@@ -170,10 +170,12 @@ def _bounded_set_up(conn: psycopg.Connection[DictRow]) -> None:
     conn.execute(sql.SQL("SET statement_timeout = {}").format(bound))
     conn.execute(sql.SQL("SET lock_timeout = {}").format(bound))
     try:
-        conn.execute(f"CREATE SCHEMA IF NOT EXISTS {SCHEMA}")
         # W2: a schema another role created first, or holds anything in, is
-        # refused `STORE_SCHEMA_DRIFT` before a table of it is read or written.
-        owned_schema(conn, SCHEMA)
+        # refused `STORE_SCHEMA_DRIFT` before a table of it is read or written;
+        # one this role owns is not created again (N3), which would take
+        # CREATE on the database, and a least-privilege role holds only CONNECT.
+        if not owned_schema(conn, SCHEMA):
+            conn.execute(f"CREATE SCHEMA {SCHEMA}")
         _search_path(conn)
         _drop_invalid_indexes(conn)
         PostgresSaver(conn, serde=serializer()).setup()

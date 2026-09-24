@@ -1023,6 +1023,34 @@ def test_a_store_schema_holding_anything_of_another_role_s_is_refused(
                     store.verify_schema(conn)
 
 
+def test_a_role_without_database_create_boots_on_the_schemas_it_owns(
+    empty_database: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """N3: both boots ran `CREATE SCHEMA IF NOT EXISTS` every time, which needs
+    CREATE on the database even when the schema is there, so a deployment
+    that withdrew that grant after the first boot -- least privilege, N16 --
+    was refused 42501 on every boot after. With both schemas present and
+    owned (W2), neither boot creates them, and the role boots on CONNECT."""
+    from caos.graph.checkpoint import checkpointer, close_checkpointer
+
+    database = urlsplit(empty_database).path.lstrip("/")
+    with login_role(empty_database) as app:
+        with connect(app) as conn:
+            apply_schema(conn)  # the first boot, on CAN_CONNECT_AND_CREATE
+        close_checkpointer(checkpointer(app))
+        with psycopg.connect(empty_database, autocommit=True) as admin:
+            admin.execute(
+                f'REVOKE CREATE ON DATABASE "{database}"'
+                f' FROM "{urlsplit(app).username}", PUBLIC'
+            )
+        capsys.readouterr()
+        with connect(app) as conn:
+            apply_schema(conn)
+            store.verify_schema(conn)
+        close_checkpointer(checkpointer(app))
+        assert capsys.readouterr().err == ""
+
+
 def test_committed_unit_commits_the_body_on_a_clean_exit(empty_database: str) -> None:
     with connect(empty_database) as conn:
         apply_schema(conn)

@@ -533,13 +533,15 @@ def _migrate(conn: StoreConnection, sql: str) -> None:
         raise Refusal(RefusalCode.STORE_SCHEMA_DRIFT)
     expected = _expected_history()
     conn.execute("SELECT pg_advisory_xact_lock(%s)", (_SCHEMA_LOCK,))
-    # Under the lock: two processes' `IF NOT EXISTS` can otherwise both miss
-    # the schema and one fail on the catalog's unique name.
-    conn.execute(f"CREATE SCHEMA IF NOT EXISTS {STORE_SCHEMA}")
     # Before anything is created or read in it (W2): a schema another role
     # made first is not adopted, and the checkpoint schema is checked here as
-    # well, because the API process writes to it and never sets it up.
-    owned_schema(conn, STORE_SCHEMA)
+    # well, because the API process writes to it and never sets it up. Created
+    # only when it is not there (N3): `CREATE SCHEMA`, `IF NOT EXISTS` or not,
+    # takes CREATE on the database, and a role that owns both needs no more
+    # than CONNECT to boot. Under the lock, so two processes cannot both miss
+    # it; plain `CREATE`, so one another role made since is refused (42P06).
+    if not owned_schema(conn, STORE_SCHEMA):
+        conn.execute(f"CREATE SCHEMA {STORE_SCHEMA}")
     owned_schema(conn, CHECKPOINT_SCHEMA)
     conn.execute(_BOOKKEEPING)
     conn.execute(_HISTORY)
