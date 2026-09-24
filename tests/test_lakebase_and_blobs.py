@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import BinaryIO
 
 import pytest
+from psycopg.conninfo import conninfo_to_dict
 
 from caos import blobs as blobs_module
 from caos.blobs import VOLUME_SCHEME, BlobStore, FilesService, VolumeBackend
@@ -41,8 +42,9 @@ def test_store_url_prefers_the_explicit_url_then_the_injected_pg_names(
     lakebase.invalidate_credential()
     url = store_url()
     assert url == (
-        "postgresql://0000-client-id:tok%2Fen%2Bwith%3Dchars@instance.database.cloud"
-        ":5432/databricks_postgres?sslmode=require"
+        "user=0000-client-id password=tok/en+with=chars"
+        " host=instance.database.cloud port=5432 dbname=databricks_postgres"
+        " sslmode=require"
     )
     assert store_url() == url and minted == [1], "a fresh token is cached"
 
@@ -230,14 +232,17 @@ def test_the_injected_names_are_quoted_and_the_port_must_be_a_number(
     for name, value in {
         "PGHOST": "instance.database.cloud",
         "PGPORT": "5432",
-        "PGDATABASE": "odd?name&here",
+        "PGDATABASE": "odd name's here",
         "PGUSER": "0000-client-id",
         "PGSSLMODE": "require",
     }.items():
         monkeypatch.setenv(name, value)
     monkeypatch.setattr(lakebase, "_mint", lambda: ("tok", float("inf")))
     lakebase.invalidate_credential()
-    assert "/odd%3Fname%26here?sslmode=require" in store_url()
+    # Round-tripped through psycopg's own parser rather than matched as a
+    # substring, so what is asserted is that the odd name survives quoting
+    # intact -- not one particular quoting spelling of it.
+    assert conninfo_to_dict(store_url())["dbname"] == "odd name's here"
     monkeypatch.setenv("PGPORT", "54 32")
     with pytest.raises(Refusal, match=r"^STORE_NOT_CONFIGURED$"):
         store_url()

@@ -27,10 +27,10 @@ import threading
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from urllib.parse import quote
 from uuid import uuid4
 
 import psycopg
+from psycopg.conninfo import make_conninfo
 
 from caos.refusals import Refusal, RefusalCode
 
@@ -77,14 +77,17 @@ def store_url() -> str:
     port = str(values["PGPORT"])
     if not (port.isascii() and port.isdigit()):
         raise Refusal(RefusalCode.STORE_NOT_CONFIGURED)
-    user = quote(str(values["PGUSER"]), safe="")
-    password = quote(_credential(), safe="")
-    host = quote(str(values["PGHOST"]), safe="")
-    database = quote(str(values["PGDATABASE"]), safe="")
     # `verify-full` with `PGSSLROOTCERT` authenticates the server (MX-7);
     # libpq reads that variable itself, so only the mode travels here.
-    sslmode = quote(os.environ.get("PGSSLMODE", "require"), safe="")
-    return f"postgresql://{user}:{password}@{host}:{port}/{database}?sslmode={sslmode}"
+    return make_conninfo(
+        "",
+        user=str(values["PGUSER"]),
+        password=_credential(),
+        host=str(values["PGHOST"]),
+        port=port,
+        dbname=str(values["PGDATABASE"]),
+        sslmode=os.environ.get("PGSSLMODE", "require"),
+    )
 
 
 def invalidate_credential() -> None:

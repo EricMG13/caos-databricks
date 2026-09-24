@@ -106,11 +106,19 @@ class VolumeBackend:
 
 def _not_found(failed: OSError) -> bool:
     """Whether the SDK said the file is not there (F41): its `NotFound` is a
-    family (`ResourceDoesNotExist` answers a missing file), and the error code
-    is carried beside the class, so both are read rather than one class name."""
-    names = {cls.__name__ for cls in type(failed).__mro__}
+    family (`ResourceDoesNotExist` answers a missing file, `issubclass`d from
+    it), checked by `isinstance` against the SDK's own class rather than by
+    matching a class name across `__mro__`. The error code is still read as a
+    fallback, for a double that raises the shape without the class. Imported
+    lazily, like `_service`'s workspace client: this module carries no SDK
+    import until Databricks is actually in use."""
+    from databricks.sdk.errors import NotFound
+
     code = getattr(failed, "error_code", "")
-    return "NotFound" in names or code in {"NOT_FOUND", "RESOURCE_DOES_NOT_EXIST"}
+    return isinstance(failed, NotFound) or code in {
+        "NOT_FOUND",
+        "RESOURCE_DOES_NOT_EXIST",
+    }
 
 
 @dataclass(frozen=True, slots=True)
