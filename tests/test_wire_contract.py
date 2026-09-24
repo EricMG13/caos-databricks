@@ -94,6 +94,7 @@ from caos.api.wire import (
     WorkView,
     wire_schema,
 )
+from caos.evidence.extract import HIDDEN_REASONS
 from caos.methodology.handoff import MAX_FILE_BYTES
 
 REPO = Path(__file__).resolve().parents[1]
@@ -334,7 +335,7 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
     ),
     # Evidence pages (Task 4.4, decision 7).
     FrameView: frozenset({"x0", "y0", "x1", "y1", "y_axis"}),
-    PageLine: frozenset({"text", "x0", "y0", "x1", "y1"}),
+    PageLine: frozenset({"text", "x0", "y0", "x1", "y1", "hidden"}),
     PageBody: frozenset(
         {"case_id", "run_id", "source_id", "document_sha256", "page", "frame", "lines"}
     ),
@@ -605,6 +606,11 @@ def test_event_names_and_the_page_document_are_in_the_committed_schema() -> None
     assert frame == {"enum": ["down", "up"], "title": "Y Axis", "type": "string"}
     line = defs["PageLine"]["properties"]["text"]
     assert line["maxLength"] == wire.QUOTE_CHARS
+    # N27: why a reader of the rendered page may not see the line, as the
+    # extractor names it.
+    hidden = defs["PageLine"]["properties"]["hidden"]
+    assert hidden["items"]["enum"] == list(HIDDEN_REASONS)
+    assert hidden["maxItems"] == len(HIDDEN_REASONS)
 
     body: dict[str, Any] = {
         "case_id": str(uuid4()),
@@ -613,7 +619,9 @@ def test_event_names_and_the_page_document_are_in_the_committed_schema() -> None
         "document_sha256": "a" * 64,
         "page": 1,
         "frame": {"x0": 0, "y0": 0, "x1": 612, "y1": 792, "y_axis": "down"},
-        "lines": [{"text": "net leverage", "x0": 1, "y0": 2, "x1": 3, "y1": 4}],
+        "lines": [
+            {"text": "net leverage", "x0": 1, "y0": 2, "x1": 3, "y1": 4, "hidden": []}
+        ],
     }
     document = {
         "body": body,
@@ -629,6 +637,10 @@ def test_event_names_and_the_page_document_are_in_the_committed_schema() -> None
         {**document, "body": {**body, "lines": [body["lines"][0]] * 2001}},
         {**document, "body": {**body, "frame": {**body["frame"], "y_axis": "left"}}},
         {**document, "body": {**body, "lines": None}},
+        {
+            **document,
+            "body": {**body, "lines": [{**body["lines"][0], "hidden": ["x"]}]},
+        },
     ):
         with pytest.raises(ValidationError):
             PageDocument.model_validate(bad)

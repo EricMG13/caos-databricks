@@ -40,6 +40,9 @@ class Delivery:
     block_id: str
     page: int
     text: BoundaryText
+    # Why a reader of the rendered page may not see the block's line (N27):
+    # its stored mark, or "" when nothing is noted.
+    hidden: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,8 +96,10 @@ def _delivered(conn: StoreConnection, run_id: UUID) -> list[Delivery]:
     built from what a withdrawal left behind.
     """
     return [
-        Delivery(source_id, block_id, page, text)
-        for source_id, block_id, page, text in read_run_blocks(conn, run_id=run_id)
+        Delivery(source_id, block_id, page, text, hidden)
+        for source_id, block_id, page, text, hidden in read_run_blocks(
+            conn, run_id=run_id
+        )
     ]
 
 

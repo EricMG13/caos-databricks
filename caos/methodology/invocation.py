@@ -1003,20 +1003,39 @@ def _research_section(identity: HostIdentity, tag: str = "") -> str:
     )
 
 
+# N27: what the host says before a delivered line the extractor kept though a
+# reader of the rendered page may not see it -- a scan's OCR layer (render mode
+# 3), text painted near the colour behind it, glyphs under 2 pt -- so the model
+# can weigh it. Host-owned and on marked lines only, so every other prompt is
+# byte for byte what it was; the line after it is the delivered text, citable
+# as it is and never with this note.
+_HIDDEN_LINE = "[host: not visible on the rendered page: {reasons}] "
+
+
+def _shown(item: Delivery) -> str:
+    """One delivered line as the evidence section shows it."""
+    if not item.hidden:
+        return item.text.value
+    reasons = ", ".join(item.hidden.split(","))
+    return _HIDDEN_LINE.format(reasons=reasons) + item.text.value
+
+
 def _evidence_section(delivered: Sequence[Delivery]) -> str:
     """Every delivered line under one `source_id`/`page` header per run.
 
     Blocks are separated by one blank line and groups by two, so a line is
     never cut or merged and the header is paid once per page rather than
     once per line. Grouping follows the delivered order (source, then block),
-    so a page's lines stay together as the store ordered them.
+    so a page's lines stay together as the store ordered them. A line whose
+    text a reader of the rendered page may not see carries the host's note
+    first (`_shown`, N27).
     """
     groups: list[tuple[tuple[UUID, int], list[str]]] = []
     for item in delivered:
         key = (item.source_id, item.page)
         if not groups or groups[-1][0] != key:
             groups.append((key, []))
-        groups[-1][1].append(item.text.value)
+        groups[-1][1].append(_shown(item))
     return "\n\n\n".join(
         f"source_id: {source_id}\npage: {page}\n\n" + "\n\n".join(lines)
         for (source_id, page), lines in groups

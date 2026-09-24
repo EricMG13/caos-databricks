@@ -43,7 +43,7 @@ import threading
 import time
 from collections import OrderedDict
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, cast
 from uuid import UUID
 
 import psycopg
@@ -53,11 +53,12 @@ from caos.api.wire import (
     PAGE_MAX,
     QUOTE_CHARS,
     FrameView,
+    HiddenReason,
     PageBody,
     PageLine,
 )
 from caos.blobs import BlobStore
-from caos.evidence.extract import DEFAULT_LIMITS, AdmissionLimits
+from caos.evidence.extract import DEFAULT_LIMITS, HIDDEN_REASONS, AdmissionLimits
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
 
@@ -86,10 +87,11 @@ _PAGE_QUERY = (
     " AND members.extraction_sha256 = extraction.extraction_sha256)"
     " SELECT member.document_sha256, member.extractor_identity,"
     " left(line.text, %s), length(line.text) > %s,"
-    " line.x0, line.y0, line.x1, line.y1"
+    " line.x0, line.y0, line.x1, line.y1, line.hidden"
     " FROM member LEFT JOIN LATERAL (SELECT"
     " string_agg(t.text, ' ' ORDER BY t.token_id) AS text,"
     " min(t.x0) AS x0, min(t.y0) AS y0, max(t.x1) AS x1, max(t.y1) AS y1,"
+    " max(t.hidden) AS hidden,"
     " min(t.token_id) AS first FROM source_tokens AS t"
     " WHERE t.source_id = member.source_id AND t.page = %s"
     " GROUP BY t.region_id, t.line_id ORDER BY first LIMIT %s) AS line ON true"
@@ -97,8 +99,9 @@ _PAGE_QUERY = (
 )
 PDF_V2_COORDINATES = "crop-top-left-rotated-pt"
 # The `caos.pdfminer` versions whose rectangles are crop-relative with y down:
-# v2 introduced the convention and v3 cuts long runs within it (CF-072).
-PDF_CROP_VERSIONS = frozenset({"2", "3"})
+# v2 introduced the convention, v3 cuts long runs within it (CF-072) and v4
+# marks the lines a reader may not see (N27).
+PDF_CROP_VERSIONS = frozenset({"2", "3", "4"})
 TEXT_COORDINATES = "cell-top-left-pt"
 
 
@@ -153,12 +156,31 @@ def read_page(  # noqa: PLR0913 -- the store, the blobs and one page's four ids
         page=page,
         frame=frame,
         lines=[
-            PageLine(text=row[2], x0=row[4], y0=row[5], x1=row[6], y1=row[7])
+            PageLine(
+                text=row[2],
+                x0=row[4],
+                y0=row[5],
+                x1=row[6],
+                y1=row[7],
+                hidden=_reasons(row[8]),
+            )
             for row in lines[:PAGE_LINES_MAX]
         ],
     )
     truncated = len(lines) > PAGE_LINES_MAX or any(row[3] for row in lines)
     return PageRead(body=body, truncated=truncated)
+
+
+def _reasons(mark: object) -> list[HiddenReason]:
+    """A line's stored mark (N27) as the reasons the page read names: none for
+    a line with nothing to note, or a row written before there were marks. A
+    mark this build does not name is the server's own row failing."""
+    if mark is None:
+        return []
+    reasons = str(mark).split(",")
+    if not all(reason in HIDDEN_REASONS for reason in reasons):
+        raise Refusal(RefusalCode.SOURCE_IDENTITY_INVALID)
+    return [cast(HiddenReason, reason) for reason in reasons]
 
 
 def _rows(conn: StoreConnection, ids: tuple[UUID, UUID, UUID, int]) -> list[Any]:

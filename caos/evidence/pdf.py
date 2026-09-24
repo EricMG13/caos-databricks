@@ -57,6 +57,7 @@ from caos.evidence.extract import (
     MAX_TOKEN_CHARS,
     AdmissionLimits,
     ExtractorIdentity,
+    MarkedToken,
     Token,
     nfc_pieces,
 )
@@ -97,6 +98,18 @@ UNENCRYPTED = ""
 # How a run past `MAX_TOKEN_CHARS` is cut (`extract.nfc_pieces`): on its NFC
 # form, each piece's rectangle its share of the run's by character.
 RUN_CUT = "nfc-proportional"
+# What marks a line a reader of the rendered page may not see (N27,
+# `caos/evidence/visibility.py`), declared because it decides the tokens' marks.
+# Text render mode 3 paints a glyph neither filled nor stroked (ISO 32000-1,
+# 9.3.6): it lays out, and nothing is drawn.
+INVISIBLE_RENDER_MODE = 3
+# A glyph whose em is smaller than this on the page, in points, is not read.
+SMALLEST_READABLE_PT = 2.0
+# How far a glyph's paint may be from what is behind it, per channel of an RGB
+# colour on 0..1, and still be the same colour to a reader.
+NEAR_BACKGROUND_DISTANCE = 0.1
+# What is behind a glyph: the last filled path under its centre, or white.
+BACKDROP = "last-filled-path-over-white"
 
 Frame = tuple[float, float, float, float]
 
@@ -112,10 +125,11 @@ class PdfExtractor:
             "caos.pdfminer",
             # v3: a run whose NFC is past `max_token_chars` is cut on its NFC
             # form, each piece taking its share of the run's rectangle by
-            # character (CF-072, CF-073). v2 rows keep their stored identity
-            # and verify as recorded; readmission is how a source gains the
-            # new tokenisation (section 44.4's rule).
-            "3",
+            # character (CF-072, CF-073). v4: a line a reader of the rendered
+            # page may not see is kept and marked with why (N27). Earlier rows
+            # keep their stored identity and verify as recorded; readmission
+            # is how a source gains the new tokens (section 44.4's rule).
+            "4",
             {
                 "pdfminer_version": version("pdfminer.six"),
                 "line_overlap": LAYOUT["line_overlap"],
@@ -133,6 +147,10 @@ class PdfExtractor:
                 "caching": True,
                 "max_token_chars": MAX_TOKEN_CHARS,
                 "token_cut": RUN_CUT,
+                "hidden_render_mode": INVISIBLE_RENDER_MODE,
+                "hidden_under_pt": SMALLEST_READABLE_PT,
+                "hidden_near_background": NEAR_BACKGROUND_DISTANCE,
+                "hidden_backdrop": BACKDROP,
             },
         )
 
@@ -262,7 +280,7 @@ def _answer(out: bytes, returncode: int) -> list[Token]:
     try:
         answer = json.loads(out)
         if "tokens" in answer:
-            tokens = [Token(*row) for row in answer["tokens"]]
+            tokens = [MarkedToken(*row) for row in answer["tokens"]]
         elif RefusalCode(answer["refused"]) in _CHILD_CODES:
             code = RefusalCode(answer["refused"])
     except (ValueError, TypeError, KeyError):
@@ -312,7 +330,7 @@ def walk_pages(data: bytes, *, limits: AdmissionLimits, deadline: float) -> list
     tokens: list[Token] = []
     region_id = 0
     line_id = 0
-    for page_number, (frame, page) in enumerate(_pages(data), start=1):
+    for page_number, (frame, page, hidden) in enumerate(_pages(data), start=1):
         if page_number > limits.max_pages:
             raise Refusal(RefusalCode.SOURCE_TOO_LARGE)
         # Checked per page (§44.2): cooperative, not preemptive -- one
@@ -322,15 +340,14 @@ def walk_pages(data: bytes, *, limits: AdmissionLimits, deadline: float) -> list
         if frame is None:
             # Nothing on the page is visible, so nothing on it is citable.
             continue
+        sheet = _Sheet(page_number, frame, hidden)
         for box in page:
             if not isinstance(box, LTTextBox):
                 continue
             for line in box:
                 if not isinstance(line, LTTextLine):
                     continue
-                tokens.extend(
-                    _line_tokens(line, frame, page_number, region_id, line_id)
-                )
+                tokens.extend(_line_tokens(line, sheet, region_id, line_id))
                 if len(tokens) > limits.max_tokens:
                     raise Refusal(RefusalCode.SOURCE_TOO_LARGE)
                 line_id += 1
@@ -338,17 +355,20 @@ def walk_pages(data: bytes, *, limits: AdmissionLimits, deadline: float) -> list
     return tokens
 
 
-def _pages(data: bytes) -> Iterator[tuple[Frame | None, LTPage]]:
-    """Each page's layout beside its visible crop in the layout's own space.
+def _pages(data: bytes) -> Iterator[tuple[Frame | None, LTPage, dict[LTChar, str]]]:
+    """Each page's layout beside its visible crop in the layout's own space,
+    and why a reader of the rendered page may not see each glyph that has a
+    reason (`visibility.MarkingAggregator`).
 
     `extract_pages`, written out so the `PDFPage` -- which carries the crop and
     the rotation, and which `extract_pages` does not hand back -- stays in hand.
     """
     # Imported here rather than at module scope: the interpreter pulls in most
     # of pdfminer, and nothing that merely imports this module should pay for it.
-    from pdfminer.converter import PDFPageAggregator
     from pdfminer.pdfinterp import PDFPageInterpreter, PDFResourceManager
     from pdfminer.pdfpage import PDFPage
+
+    from caos.evidence.visibility import MarkingAggregator
 
     # Yielding inside this try keeps the whole walk lazy -- a caller that stops
     # asking for pages (the page ceiling above) never drives pdfminer's
@@ -356,12 +376,12 @@ def _pages(data: bytes) -> Iterator[tuple[Frame | None, LTPage]]:
     # malformed file however far into the walk it turns up malformed.
     try:
         resources = PDFResourceManager(caching=True)
-        device = PDFPageAggregator(resources, laparams=LAParams(**LAYOUT))
+        device = MarkingAggregator(resources, LAParams(**LAYOUT))
         interpreter = PDFPageInterpreter(resources, device)
         for page in PDFPage.get_pages(BytesIO(data), caching=True):
             frame = _crop_frame(page)
             interpreter.process_page(page)
-            yield frame, device.get_result()
+            yield frame, device.get_result(), device.hidden
     except (PDFSyntaxError, ValueError, TypeError, AssertionError):
         # pdfminer reports a malformed file in several shapes. None of them may
         # travel: the message quotes the bytes it choked on.
@@ -423,8 +443,18 @@ def _ordered(rect: Frame) -> Frame:
     return (min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1))
 
 
+@dataclass(frozen=True, slots=True)
+class _Sheet:
+    """One page as its lines are read: its number, its visible crop and why a
+    reader may not see each glyph that has a reason."""
+
+    number: int
+    frame: Frame
+    hidden: dict[LTChar, str]
+
+
 def _line_tokens(
-    line: LTTextLine, frame: Frame, page: int, region_id: int, line_id: int
+    line: LTTextLine, sheet: _Sheet, region_id: int, line_id: int
 ) -> list[Token]:
     """Whitespace-separated runs of one line, each under the union of its
     characters' rectangles, measured from the crop's top-left corner.
@@ -436,28 +466,50 @@ def _line_tokens(
     the MediaBox has no frame and never reaches here (`extract` skips it).
     Membership uses pdfminer's full glyph box, descent included, so a word
     whose baseline is inside the edge but whose box crosses it is dropped.
+
+    Every token carries its line's mark (N27): why a reader of the rendered
+    page may not see some of the text the line keeps, gathered over the
+    glyphs of its kept runs -- one note a line, as the line is what a module
+    and the approver are shown.
     """
-    (left, bottom, right, top) = frame
+    (left, _bottom, _right, top) = sheet.frame
+    boxed = [(run, _box(run)) for run in _runs(line)]
+    kept = [(run, box) for run, box in boxed if _within(box, sheet.frame)]
+    mark = _mark([character for run, _box in kept for character in run], sheet)
     tokens: list[Token] = []
-    for run in _runs(line):
-        (x0, y0, x1, y1) = _box(run)
-        if not (left <= x0 and x1 <= right and bottom <= y0 and y1 <= top):
-            continue
+    for run, (x0, y0, x1, y1) in kept:
         text = "".join(character.get_text() for character in run)
         tokens.extend(
-            Token(
+            MarkedToken(
                 text=piece,
-                page=page,
+                page=sheet.number,
                 region_id=region_id,
                 line_id=line_id,
                 x0=_along(x0, x1, start, of) - left,
                 y0=top - y1,
                 x1=_along(x0, x1, end, of) - left,
                 y1=top - y0,
+                hidden=mark,
             )
             for piece, start, end, of in nfc_pieces(text)
         )
     return tokens
+
+
+def _mark(characters: list[LTChar], sheet: _Sheet) -> str:
+    """The reasons any of `characters` may not be seen, sorted and joined."""
+    reasons: set[str] = set()
+    for character in characters:
+        noted = sheet.hidden.get(character)
+        if noted:
+            reasons.update(noted.split(","))
+    return ",".join(sorted(reasons))
+
+
+def _within(box: Frame, frame: Frame) -> bool:
+    """Whether `box` lies wholly inside the visible `frame`."""
+    (left, bottom, right, top) = frame
+    return left <= box[0] and box[2] <= right and bottom <= box[1] and box[3] <= top
 
 
 def _box(run: list[LTChar]) -> Frame:

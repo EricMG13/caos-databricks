@@ -26,10 +26,12 @@ from caos.boundary_text import DEFAULT_LIMIT, BoundaryText, hides_text
 from caos.digest import canonical_digest
 from caos.evidence.extract import (
     DEFAULT_LIMITS,
+    HIDDEN_MARKS,
     AdmissionLimits,
     Extractor,
     ExtractorDispatch,
     ExtractorIdentity,
+    MarkedToken,
     Token,
     dispatch_by_content,
 )
@@ -56,7 +58,9 @@ GROUP_WIDTH = DEFAULT_LIMIT
 # (`line_groups`) -- every source admitted before CF-013. 2: between tokens only
 # (`token_groups`). Both write a line that fits as one block, byte for byte, so a
 # source whose lines all fit is recorded as 1 and keeps the digests every
-# earlier admission of it wrote.
+# earlier admission of it wrote. Format 2 is also the one that carries a line's
+# hidden-text mark (N27, migration 0033): a source with a mark is written as 2
+# whether or not a line was cut, and packing 2 cuts nothing that fits.
 PACKING_BY_WIDTH = 1
 PACKING_BY_TOKEN = 2
 
@@ -81,6 +85,8 @@ class _Block:
     block_id: str
     page: int
     text: BoundaryText
+    # Why a reader of the rendered page may not see its line (N27), or "".
+    hidden: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -354,22 +360,8 @@ def _refuse_unassigned(blocks: list[_Block]) -> None:
 
 
 def _prepare(document: Document, tokens: list[Token], identity: str) -> _Packed:
-    prepared: list[Token] = []
     try:
-        for token in tokens:
-            indices = (token.page, token.region_id, token.line_id)
-            coords = (token.x0, token.y0, token.x1, token.y1)
-            if any(type(i) is not int or not -(2**31) <= i < 2**31 for i in indices):
-                raise Refusal(RefusalCode.SOURCE_IDENTITY_INVALID)
-            if any(
-                type(c) not in (int, float) or not isfinite(c) or float(c) != c
-                for c in coords
-            ):
-                raise Refusal(RefusalCode.SOURCE_IDENTITY_INVALID)
-            if type(token.text) is not str:
-                raise Refusal(RefusalCode.SOURCE_IDENTITY_INVALID)
-            BoundaryText.of(token.text)
-            prepared.append(Token(token.text, *indices, *map(float, coords)))
+        prepared = [_prepared(token) for token in tokens]
     except (AttributeError, TypeError, ValueError, OverflowError):
         raise Refusal(RefusalCode.SOURCE_IDENTITY_INVALID) from None
     blocks, packing = _blocks(prepared)
@@ -383,9 +375,7 @@ def _prepare(document: Document, tokens: list[Token], identity: str) -> _Packed:
         {
             "format_version": packing,
             "tokens": [asdict(token) for token in prepared],
-            "blocks": [
-                [block.block_id, block.page, block.text.value] for block in blocks
-            ],
+            "blocks": [_block_record(block) for block in blocks],
         }
     )
     extraction = canonical_digest(
@@ -397,6 +387,37 @@ def _prepare(document: Document, tokens: list[Token], identity: str) -> _Packed:
         }
     )
     return _Packed(document, prepared, blocks, identity, output, extraction, packing)
+
+
+def _prepared(token: Token) -> Token:
+    """One extracted token, checked field by field and rebuilt, so what is
+    written is exactly what was checked -- a `MarkedToken` only when its line
+    carries a mark (N27), so an unmarked token's record is the one it always
+    was. Raises `TypeError` and friends for `_prepare` to reduce to a code."""
+    indices = (token.page, token.region_id, token.line_id)
+    coords = (token.x0, token.y0, token.x1, token.y1)
+    if any(type(i) is not int or not -(2**31) <= i < 2**31 for i in indices):
+        raise Refusal(RefusalCode.SOURCE_IDENTITY_INVALID)
+    if any(
+        type(c) not in (int, float) or not isfinite(c) or float(c) != c for c in coords
+    ):
+        raise Refusal(RefusalCode.SOURCE_IDENTITY_INVALID)
+    if type(token.text) is not str:
+        raise Refusal(RefusalCode.SOURCE_IDENTITY_INVALID)
+    BoundaryText.of(token.text)
+    (x0, y0, x1, y1) = map(float, coords)
+    hidden = token.hidden if isinstance(token, MarkedToken) else ""
+    if hidden == "":
+        return Token(token.text, *indices, x0, y0, x1, y1)
+    if hidden not in HIDDEN_MARKS:
+        raise Refusal(RefusalCode.SOURCE_IDENTITY_INVALID)
+    return MarkedToken(token.text, *indices, x0, y0, x1, y1, hidden)
+
+
+def _block_record(block: _Block) -> list[object]:
+    """A block as the output digest holds it: its mark only when it has one."""
+    record: list[object] = [block.block_id, block.page, block.text.value]
+    return [*record, block.hidden] if block.hidden else record
 
 
 def _require_case(conn: StoreConnection, case_id: UUID) -> None:
@@ -441,36 +462,44 @@ def _admit_one(
     return source_id
 
 
+# The column a mark is written to, named in a `COPY` only when there is one.
+_MARKED = {False: "", True: ", hidden"}
+
+
 def _store_tokens(conn: StoreConnection, source_id: UUID, tokens: list[Token]) -> None:
     """One COPY, so one statement carries the document.
 
     A row at a time cost a round trip and a seal check each: 100,000 tokens took
     13 s of a 14 s admission. `COPY` makes it one of each, which is also what
     the statement-level seal trigger (migration 0027) is counted by.
+
+    `hidden` (migration 0033) is named only for a document with a mark to
+    write, so an unmarked one is written with exactly the columns every
+    earlier admission wrote (`_MARKED`).
     """
+    marked = any(isinstance(token, MarkedToken) for token in tokens)
     with (
         conn.cursor() as cursor,
         cursor.copy(
-            "COPY source_tokens"
-            " (source_id, token_id, page, region_id, line_id, text, x0, y0, x1, y1)"
-            " FROM STDIN"
+            "COPY source_tokens (source_id, token_id, page, region_id, line_id,"
+            f" text, x0, y0, x1, y1{_MARKED[marked]}) FROM STDIN"
         ) as copy,
     ):
         for token_id, token in enumerate(tokens):
-            copy.write_row(
-                (
-                    source_id,
-                    token_id,
-                    token.page,
-                    token.region_id,
-                    token.line_id,
-                    token.text,
-                    token.x0,
-                    token.y0,
-                    token.x1,
-                    token.y1,
-                )
+            row = (
+                source_id,
+                token_id,
+                token.page,
+                token.region_id,
+                token.line_id,
+                token.text,
+                token.x0,
+                token.y0,
+                token.x1,
+                token.y1,
             )
+            mark = token.hidden if isinstance(token, MarkedToken) else None
+            copy.write_row((*row, mark) if marked else row)
 
 
 def _blocks(tokens: list[Token]) -> tuple[list[_Block], int]:
@@ -499,18 +528,32 @@ def _blocks(tokens: list[Token]) -> tuple[list[_Block], int]:
         line_id: token_groups([token.text for token in line])
         for line_id, line in lines.items()
     }
+    marks = {line_id: _line_mark(line) for line_id, line in lines.items()}
     block_ids = block_ids_by_line({line_id: len(g) for line_id, g in groups.items()})
-    split = any(len(group) > 1 for group in groups.values())
     blocks = [
         _Block(
             block_id=block_id,
             page=lines[line_id][0].page,
             text=BoundaryText.of(text),
+            hidden=marks[line_id],
         )
         for line_id in sorted(lines)
         for block_id, text in zip(block_ids[line_id], groups[line_id], strict=True)
     ]
-    return blocks, PACKING_BY_TOKEN if split else PACKING_BY_WIDTH
+    written = any(len(group) > 1 for group in groups.values()) or any(marks.values())
+    return blocks, PACKING_BY_TOKEN if written else PACKING_BY_WIDTH
+
+
+def _line_mark(line: list[Token]) -> str:
+    """Why a reader of the rendered page may not see some of `line` (N27):
+    its tokens' reasons, sorted and joined by a comma, or ""."""
+    reasons = {
+        reason
+        for token in line
+        if isinstance(token, MarkedToken) and token.hidden
+        for reason in token.hidden.split(",")
+    }
+    return ",".join(sorted(reasons))
 
 
 def token_groups(words: Sequence[str]) -> list[str]:
@@ -587,12 +630,16 @@ def block_ids_by_line(groups: Mapping[int, int]) -> dict[int, tuple[str, ...]]:
 
 def _store_blocks(conn: StoreConnection, source_id: UUID, blocks: list[_Block]) -> None:
     """By `COPY` for the same reason `_store_tokens` is: one statement, one seal
-    check. A block per line means a tenth of the rows, not a different shape."""
+    check. A block per line means a tenth of the rows, not a different shape,
+    and `hidden` is named only when a block has a mark to write."""
+    marked = any(block.hidden for block in blocks)
     with (
         conn.cursor() as cursor,
         cursor.copy(
-            "COPY source_blocks (source_id, block_id, page, text) FROM STDIN"
+            f"COPY source_blocks (source_id, block_id, page, text{_MARKED[marked]})"
+            " FROM STDIN"
         ) as copy,
     ):
         for block in blocks:
-            copy.write_row((source_id, block.block_id, block.page, block.text.value))
+            row = (source_id, block.block_id, block.page, block.text.value)
+            copy.write_row((*row, block.hidden or None) if marked else row)
