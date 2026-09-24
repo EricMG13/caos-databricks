@@ -31,7 +31,7 @@ from pdfminer.layout import LAParams
 from pdfminer.pdfdocument import PDFDocument
 from pdfminer.pdfinterp import PDFPageInterpreter, PDFResourceManager
 from pdfminer.pdfpage import PDFPage
-from pdfminer.pdftypes import PDFObjRef
+from pdfminer.pdftypes import PDFObjRef, PDFStream
 from pdfminer.psparser import LIT
 from test_evidence_page_read import Pinned, page_of, pin
 from test_extraction_provenance import Reader
@@ -71,11 +71,14 @@ from caos.evidence.visibility import (
     PAPER,
     Backdrop,
     Covers,
+    IndexedSpace,
     MarkedContent,
     MarkingAggregator,
     MarkingInterpreter,
     OptionalContent,
     PaintState,
+    SeparationSpace,
+    read_space,
 )
 from caos.methodology.executor import Delivery
 from caos.methodology.invocation import _HOST_TEXT, _evidence_section, evidence_sizes
@@ -1408,6 +1411,69 @@ def test_a_colour_space_this_reading_decides_is_compared_with_the_paper(
     )
 
     assert _marks(data) == {"Line": mark}
+
+
+def _exponential(**entries: object) -> dict[str, object]:
+    """A Type 2 function dictionary over `[0 1]`, with `entries` beside."""
+    return {"FunctionType": 2, "Domain": [0, 1], **entries}
+
+
+def test_the_colour_space_reader_decides_only_what_it_can() -> None:
+    """`read_space` decides an `Indexed` table over a space read by count and
+    a `Separation` with an exponential tint transform into one; everything
+    else -- a malformed table or function, the `None` colorant, a stitching
+    function, a base or alternate it does not read -- is `None`, undecided.
+    Indices are rounded and held to the table, tints to their domain and
+    outputs to their range; a tint with no real value is undecided."""
+    gray, rgb = LIT("DeviceGray"), LIT("DeviceRGB")
+    table = read_space([LIT("Indexed"), gray, 2, bytes([0, 128, 255])])
+    assert isinstance(table, IndexedSpace)
+    assert [table.rgb(value) for value in (-3.0, 0.6, 2.0, 9.0)] == [
+        (0.0, 0.0, 0.0),
+        (128 / 255, 128 / 255, 128 / 255),
+        (1.0, 1.0, 1.0),
+        (1.0, 1.0, 1.0),
+    ]
+    profile = PDFStream({"N": 3}, b"")
+    spot = read_space(
+        [
+            LIT("Separation"),
+            LIT("Spot"),
+            [LIT("ICCBased"), profile],
+            _exponential(
+                C0=[1, 1, 1], C1=[0, 0.5, 1], N=2, Range=[0, 1, 0, 0.25, 0, 1]
+            ),
+        ]
+    )
+    assert isinstance(spot, SeparationSpace)
+    assert spot.rgb(0.5) == (0.75, 0.25, 1.0)
+    assert spot.rgb(4.0) == (0.0, 0.25, 1.0)
+    rooted = read_space(
+        [
+            LIT("Separation"),
+            LIT("Spot"),
+            gray,
+            _exponential(Domain=[-1, 1], C0=[1], C1=[0], N=-1),
+        ]
+    )
+    assert isinstance(rooted, SeparationSpace)
+    assert rooted.rgb(0.0) is None and rooted.rgb(-0.5) is None
+    two = PDFStream({"N": 2}, b"")
+    for undecided in (
+        [LIT("Indexed"), gray, 256, bytes(257)],
+        [LIT("Indexed"), gray, True, bytes([0, 255])],
+        [LIT("Indexed"), [LIT("ICCBased"), two], 0, bytes(2)],
+        [LIT("Indexed"), LIT("Pattern"), 0, bytes(1)],
+        [LIT("Indexed"), rgb, 1, bytes(5)],
+        [LIT("Separation"), LIT("None"), gray, _exponential(N=1)],
+        [LIT("Separation"), LIT("Spot"), gray, {"FunctionType": 3, "Domain": [0, 1]}],
+        [LIT("Separation"), LIT("Spot"), rgb, _exponential(N=1)],
+        [LIT("Separation"), LIT("Spot"), LIT("Lab"), _exponential(N=1)],
+        [LIT("Separation"), LIT("Spot"), gray, _exponential(N=1, Range=[0, 1, 0])],
+        [LIT("DeviceN"), [LIT("A"), LIT("B")], gray, _exponential(N=1)],
+        [LIT("Indexed"), gray, 0],
+    ):
+        assert read_space(undecided) is None, undecided
 
 
 def test_a_fill_in_an_indexed_space_covers_what_it_holds() -> None:
