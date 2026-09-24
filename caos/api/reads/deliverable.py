@@ -25,11 +25,8 @@ the same private `CASE_NOT_FOUND` every other section serves them.
 
 from __future__ import annotations
 
-import json
-import zipfile
 from collections.abc import Callable
 from dataclasses import dataclass
-from io import BytesIO
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -47,7 +44,7 @@ from caos.api.deps import (
 )
 from caos.api.reads.reports import ProvenRevision, proven_filing, proven_revision
 from caos.blobs import BlobStore
-from caos.deliverable.package import RECEIPT
+from caos.deliverable.package import packed_receipt
 from caos.deliverable.render import RenderRefused, render
 from caos.methodology.bundle import Bundle
 from caos.refusals import Refusal, RefusalCode
@@ -168,12 +165,7 @@ def package_revision(selection: Selection) -> bytes:
     carries that filing's own proven receipt."""
     receipt, digest = _proven(selection, _packaged)
     archive = selection.stores.blobs.get(digest)
-    try:
-        with zipfile.ZipFile(BytesIO(archive)) as opened:
-            packed = json.loads(opened.read(RECEIPT))
-    except (zipfile.BadZipFile, KeyError, ValueError):
-        packed = None
-    if packed != receipt:
+    if packed_receipt(archive) != receipt:
         raise Refusal(RefusalCode.ARTIFACT_RECORD_MISMATCH)
     return archive
 

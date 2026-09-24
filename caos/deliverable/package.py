@@ -6,6 +6,7 @@ Its archived verifier retains the renderer pin for that build.
 
 from __future__ import annotations
 
+import json
 import os
 import secrets
 import zipfile
@@ -56,6 +57,16 @@ def build_package(payload: bytes, receipt: bytes, export: bytes) -> bytes:
                 info, data, compress_type=_compression(data), compresslevel=9
             )
     return buffer.getvalue()
+
+
+def packed_receipt(archive_bytes: bytes) -> object:
+    """The receipt a package carries, decoded, or `None` for bytes that are not
+    a package carrying one. Checks nothing else: `verify_package` does that."""
+    try:
+        with zipfile.ZipFile(BytesIO(archive_bytes)) as archive:
+            return json.loads(archive.read(RECEIPT))
+    except (zipfile.BadZipFile, KeyError, ValueError):
+        return None
 
 
 def verify_package(archive_bytes: bytes) -> Verification:
