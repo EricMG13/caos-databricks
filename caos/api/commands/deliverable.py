@@ -100,6 +100,8 @@ IO_BUDGET = max(SAVE_IO, SIGN_IO, FREEZE_IO, FILE_IO)
 SAVE_BLOBS = 6
 SIGN_BLOBS = 0
 FREEZE_BLOBS = 7
+# The package filing stores (W1) is built from the payload `prove_revision`
+# already read, which the request's blob store remembers: no eighth download.
 FILE_BLOBS = 7
 BLOB_BUDGET = max(SAVE_BLOBS, SIGN_BLOBS, FREEZE_BLOBS, FILE_BLOBS)
 
@@ -357,7 +359,9 @@ def file(  # noqa: PLR0913 -- decision 2's dependency order, keyword-only
 
     The detached receipt names the audit link this unit writes, so it is
     persisted in `after_event` -- after the command receipt, which therefore
-    cannot carry it. The Committee section serves it.
+    cannot carry it -- with the audit package it pins, built there once (W1).
+    The Committee section serves the receipt, and the package download those
+    stored bytes.
     """
     filed: list[Any] = []
     payload: dict[str, str] = {"revision_id": str(revision_id)}

@@ -150,6 +150,9 @@ _STATUS = {
     RefusalCode.RUN_NOT_FOUND: 404,
     RefusalCode.CASE_NOT_FOUND: 404,
     RefusalCode.DELIVERABLE_NOT_FOUND: 404,
+    # W1: the filing exists and is proven; the package it would need does not,
+    # and nothing the caller or an operator does later brings it into being.
+    RefusalCode.DELIVERABLE_PACKAGE_NOT_STORED: 404,
     # Every unavailable evidence page is one private answer (decision 7).
     RefusalCode.PAGE_NOT_AVAILABLE: 404,
     RefusalCode.STORE_NOT_CONFIGURED: 500,

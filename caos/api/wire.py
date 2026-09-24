@@ -241,6 +241,9 @@ CLEARS: Mapping[RefusalCode, str] = {
     _C.DELIVERABLE_ALREADY_FILED: "Nothing; the deliverable is filed.",
     _C.DELIVERABLE_ALREADY_FROZEN: "Nothing; the deliverable is frozen.",
     _C.DELIVERABLE_ALREADY_SIGNED: "Nothing; you have signed this revision.",
+    _C.DELIVERABLE_PACKAGE_NOT_STORED: (
+        "Nothing; this filing predates stored packages."
+    ),
     _C.APPROVER_NOT_INDEPENDENT: "Ask an approver who did not author it.",
     _C.CASE_NOT_FOUND: "Name a case you may read.",
     _C.SOURCE_PACK_EMPTY: "Supply at least one document.",

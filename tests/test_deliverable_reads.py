@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import html
+import io
 import json
+import zipfile
 from uuid import UUID, uuid4
 
 import pytest
@@ -19,6 +21,7 @@ from test_run_commands import _Counting
 
 from caos.api.app import app, store_connection
 from caos.api.edge import SECURITY_HEADERS
+from caos.api.reads import deliverable as deliverable_reads
 from caos.api.reads.deliverable import (
     BLOB_BUDGET,
     IO_BUDGET,
@@ -29,7 +32,10 @@ from caos.api.reads.deliverable import (
     render_revision,
 )
 from caos.api.reads.reports import ProvenRevision, proven_filing, proven_revision
+from caos.api.wire import CLEARS
 from caos.blobs import BlobStore
+from caos.deliverable import package as package_module
+from caos.deliverable.filing import receipt_bytes
 from caos.deliverable.package import verify_package
 from caos.deliverable.render import render
 from caos.refusals import Refusal, RefusalCode
@@ -448,3 +454,84 @@ def test_proven_filing_names_no_filing_for_an_unfiled_revision(
         proven_filing(_proof(lite, revision))
     lite.conn.rollback()
     assert saved.value.code is frozen.value.code is RefusalCode.DELIVERABLE_NOT_FOUND
+
+
+def _stored_package(lite: _Harness, revision: UUID) -> str | None:
+    row = lite.conn.execute(
+        "SELECT package_sha256 FROM deliverable_receipts WHERE revision_id=%s",
+        (str(revision),),
+    ).fetchone()
+    lite.conn.rollback()
+    assert row is not None
+    return None if row[0] is None else str(row[0])
+
+
+def test_the_package_is_the_archive_stored_at_filing(
+    client: TestClient, lite: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """W1. The route packed the *current* renderer, so a revision filed under
+    an earlier one -- its receipt pinning that renderer's digest -- was served
+    an archive its own verifier refuses. Filing now stores the archive the
+    receipt pins, and the download serves those bytes, whatever this build's
+    renderer or packer would make today."""
+    receipt = _file(lite)
+    stored = _stored_package(lite, receipt.revision_id)
+    assert stored is not None
+    archive = lite.blobs.get(stored)
+    assert verify_package(archive).verified
+
+    def moved(*_args: object, **_kwargs: object) -> bytes:
+        raise AssertionError
+
+    monkeypatch.setattr(package_module, "build_package", moved)
+    monkeypatch.setattr(deliverable_reads, "render", moved)
+    response = client.get(
+        _package_path(lite, receipt.revision_id), headers=_as(lite.approver)
+    )
+    assert response.status_code == 200
+    assert response.content == archive
+    with zipfile.ZipFile(io.BytesIO(archive)) as opened:
+        assert opened.read("receipt.json") == receipt_bytes(receipt)
+
+
+def test_a_filing_with_no_stored_package_is_refused_not_served(
+    client: TestClient, lite: _Harness
+) -> None:
+    """W1. A filing made before packages were stored has nothing verifiable to
+    serve: its package is refused with its own code, and Committee offers no
+    link to it."""
+    receipt = _file(lite)
+    _corrupt(lite, "UPDATE deliverable_receipts SET package_sha256=%s", None)
+    lite.conn.commit()
+
+    response = client.get(
+        _package_path(lite, receipt.revision_id), headers=_as(lite.approver)
+    )
+    lite.conn.rollback()
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "code": "DELIVERABLE_PACKAGE_NOT_STORED",
+        "clears": CLEARS[RefusalCode.DELIVERABLE_PACKAGE_NOT_STORED],
+    }
+    assert _get(client, lite, receipt.revision_id, "committee")["package_url"] is None
+
+
+def test_a_package_pointer_to_another_filing_is_refused(
+    client: TestClient, lite: _Harness
+) -> None:
+    """The stored archive is served only when it carries this filing's own
+    proven receipt: a pointer moved to any other archive is the store
+    disagreeing with itself, never another filing's package served here."""
+    receipt = _file(lite)
+    other = lite.blobs.put(b"PK\x05\x06" + bytes(18))
+    _corrupt(lite, "UPDATE deliverable_receipts SET package_sha256=%s", other)
+    lite.conn.commit()
+
+    response = client.get(
+        _package_path(lite, receipt.revision_id), headers=_as(lite.approver)
+    )
+    lite.conn.rollback()
+
+    assert response.status_code == 500
+    assert response.json()["code"] == "ARTIFACT_RECORD_MISMATCH"

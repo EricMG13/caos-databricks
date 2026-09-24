@@ -106,6 +106,10 @@ class RefusalCode(StrEnum):
     # `0029_one_opinion_per_signer`: this approver has already signed this
     # revision. Its own code so a second press is not read as a wrong binding.
     DELIVERABLE_ALREADY_SIGNED = "DELIVERABLE_ALREADY_SIGNED"
+    # W1: a filing made before packages were stored at filing (`0041`). Its
+    # receipt pins a renderer this build may not carry, so no archive built
+    # now would verify, and none is served in its place.
+    DELIVERABLE_PACKAGE_NOT_STORED = "DELIVERABLE_PACKAGE_NOT_STORED"
     APPROVER_NOT_INDEPENDENT = "APPROVER_NOT_INDEPENDENT"
     CASE_NOT_FOUND = "CASE_NOT_FOUND"
     SOURCE_PACK_EMPTY = "SOURCE_PACK_EMPTY"

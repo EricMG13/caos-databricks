@@ -399,6 +399,7 @@ def _publication(
         " AND e.action='DELIVERABLE_FILED' AND r.revision_id IS NULL"
         " AND NOT EXISTS (SELECT 1 FROM legacy_filing_events l"
         " WHERE l.case_id=e.case_id AND l.filed_event_sha256=e.entry_sha256))"
+        ",c.package_sha256 IS NOT NULL"
         " FROM deliverable_publications p LEFT JOIN deliverable_receipts c"
         " USING (case_id,revision_id)"
         " WHERE case_id=%s AND revision_id=%s",
@@ -406,7 +407,7 @@ def _publication(
     ).fetchone()
     if row is None:
         raise Refusal(RefusalCode.DELIVERABLE_NOT_FROZEN)
-    frozen_digest, freezer, filer, filed_at, filing_evidence = row
+    frozen_digest, freezer, filer, filed_at, filing_evidence, packaged = row
     signatures = revision_signatures(conn, case_id, revision)
     signers = [who for who, _ in signatures]
     if (
@@ -457,18 +458,18 @@ def _publication(
         frozen_by=freezer,
         filed_by=filer,
         receipt=None,
-        **_links(case_id, revision, filed=filer is not None),
+        **_links(case_id, revision, packaged=filer is not None and packaged),
     )
 
 
-def _links(case_id: UUID, revision: UUID, *, filed: bool) -> dict[str, str | None]:
-    """Where this revision's render and, once filed, its package are read
-    (`caos/api/reads/deliverable.py`, N4). Proven nowhere here: opening either
-    link runs that module's own proof."""
+def _links(case_id: UUID, revision: UUID, *, packaged: bool) -> dict[str, str | None]:
+    """Where this revision's render and, once filed with its package stored
+    (W1), that package are read (`caos/api/reads/deliverable.py`, N4). Proven
+    nowhere here: opening either link runs that module's own proof."""
     base = f"/api/v1/cases/{case_id}/revisions/{revision}"
     return dict(
         render_url=f"{base}/render",
-        package_url=f"{base}/package" if filed else None,
+        package_url=f"{base}/package" if packaged else None,
     )
 
 
