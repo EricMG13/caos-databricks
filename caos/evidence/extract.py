@@ -201,16 +201,33 @@ def dispatch_by_content(data: bytes) -> Extractor:
     will actually meet. Bytes that begin with the header declare a PDF
     (§44.6). A header further into the first kilobyte is a PDF's only when
     the document also ends as one, so a memo naming `%PDF-1.7` in its first
-    lines is read as the text it is rather than refused as a broken PDF.
+    lines is read as the text it is rather than refused as a broken PDF --
+    and one naming `%%EOF` too is read as text when no PDF parses
+    (`text_fallback`).
     """
-    at = data.find(PDF_HEADER, 0, PDF_HEADER_WINDOW)
-    if at == 0 or (at > 0 and PDF_EOF in data[-PDF_EOF_WINDOW:]):
+    if data.startswith(PDF_HEADER) or text_fallback(data):
         # Imported here: `pdf` imports this module, and plain-text admission
         # should not pay for pdfminer.
         from caos.evidence.pdf import PdfExtractor
 
         return PdfExtractor()
     return PlainTextExtractor()
+
+
+def text_fallback(data: bytes) -> bool:
+    """Whether `dispatch_by_content` reads `data` as a PDF only on a header
+    past its first byte and an end marker in its last kilobyte -- and so
+    reads it as plain text when no PDF parses (N8).
+
+    Bytes that begin with the header declare a PDF, and are refused when
+    they are not one: a corrupt PDF is never admitted as garbage tokens. A
+    header further in is a reader's leniency for leading junk, and a short
+    memo naming both markers -- "our files start with %PDF-1.7 and end with
+    %%EOF" -- met it and was refused `SOURCE_NOT_READABLE`: a readable
+    document no one could admit for one sentence in it.
+    """
+    at = data.find(PDF_HEADER, 0, PDF_HEADER_WINDOW)
+    return at > 0 and PDF_EOF in data[-PDF_EOF_WINDOW:]
 
 
 # The widest token this extractor emits. `BoundaryText`'s own limit, which is
@@ -225,6 +242,23 @@ RUN_CUT = "nfc-proportional"
 # How the plain-text extractor decodes a document, and how a frame re-reads it
 # (`page._text_frame`): UTF-8, a leading byte order mark dropped (CF-017).
 TEXT_ENCODING = "utf-8-sig"
+
+# Every character `str.splitlines` ends a line at, in code point order: LF,
+# VT, FF, CR, the ASCII file, group and record separators, NEL, and U+2028 and
+# U+2029. A token is one run of one line, and its line is one line of the
+# evidence section, so no token may hold one (W4): a PDF glyph whose ToUnicode
+# maps to text with a line feed in it broke its line there, and what followed
+# read as the host's own header -- a `source_id` and `page` of the document's
+# choosing. The plain-text extractor splits at them; the PDF extractor writes
+# each as a space (`one_line`).
+LINE_BREAKS = "\n\x0b\x0c\r\x1c\x1d\x1e\x85\u2028\u2029"
+_ONE_LINE = str.maketrans(dict.fromkeys(LINE_BREAKS, " "))
+
+
+def one_line(text: str) -> str:
+    """`text` with each of `LINE_BREAKS` written as a space, and nothing else
+    changed: one character for one, so a run keeps its length and its cut."""
+    return text.translate(_ONE_LINE)
 
 
 @dataclass(frozen=True, slots=True)

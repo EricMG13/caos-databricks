@@ -20,10 +20,11 @@ nowhere on the page.
 *One whole line, where an answer is accepted* (N28, `WHOLE_LINE`). The final
 check tells a module that `matched_text` is the complete text of one evidence
 line, and the host now holds it to that: a quote anchors only on a line as the
-module was shown it, first token first and last token last. Any unique run
-anchored before, so a fragment that dropped a "not" was shown as a
-host-verified source fact (AI-4). A record accepted under that rule names none
-and is re-anchored by it (`ANY_RUN`), so no stored record starts refusing.
+module was shown it, word for word (W6, N13). Any unique run anchored before,
+so a fragment that dropped a "not" was shown as a host-verified source fact
+(AI-4). A record names the rule it was accepted under and is re-anchored by
+it (`ANY_RUN` when it names none, `WHOLE_LINE_AS_STORED` for N28's first
+reading), so no stored record starts refusing.
 
 The result is one rectangle per line the quote covers, the shape a PDF
 highlight's QuadPoints uses and for the same reason: selected text wraps, and a
@@ -121,20 +122,32 @@ _FIGURE_LEFT = EDGE_PUNCTUATION.replace("(", "").replace(".", "")
 _FIGURE_RIGHT = EDGE_PUNCTUATION.replace(")", "")
 
 # How a citation is located (N28, D39). `WHOLE_LINE` is the rule an answer is
-# accepted under: the quote is one whole evidence line as the module was shown
-# it -- a block of the page, which is its line wherever the line fits and a
-# token-cut piece of it where it did not (`_shown`) -- first token first and
-# last token last, allowing only the edge punctuation the normalised pass
-# already forgives; and it must be the only such line on the page. `ANY_RUN`
-# is the rule every record accepted before it was located by, any unique run
-# of the page, and the one such a record is re-anchored by: a record names the
-# rule it was accepted under (`CanonicalRecord.citation_rule`), so the rule
-# tightening never refuses a record accepted before it. `anchor_citation`, the
-# extractor suites' probe of where a quote is, stays `ANY_RUN`.
-type CitationRule = Literal["any-run", "whole-line"]
+# accepted under: the quote is one whole evidence line as the evidence section
+# showed it -- a block of the page, which is its line wherever the line fits
+# and a token-cut piece of it where it did not (`_shown`), read word by word
+# as the module read it, NFC -- and it must be the only such line on the page:
+# two lines shown alike are ambiguous, however each is stored (N13). Only
+# where no line is, the edge punctuation the normalised pass forgives, and
+# then, on a tracking extractor, the line with its tracked letters joined
+# (`_shown_line_run`, W6). `WHOLE_LINE_AS_STORED` is that rule as N28 first
+# accepted answers under it -- the line's stored tokens byte for byte first,
+# and past them, on a tracking extractor, only the tracked-letter line -- which
+# refused a line copied exactly as shown when a PDF stored an accent
+# decomposed or tracked a `$`, and anchored the stored form of one of two
+# lines shown alike. `ANY_RUN` is
+# the rule every record accepted before either was located by, any unique run
+# of the page. A record names the rule it was accepted under
+# (`CanonicalRecord.citation_rule`) and is re-anchored by it, so a rule
+# changing never refuses or moves a record accepted before it.
+# `anchor_citation`, the extractor suites' probe of where a quote is, stays
+# `ANY_RUN`.
+type CitationRule = Literal["any-run", "whole-line", "whole-line-as-shown"]
 ANY_RUN: CitationRule = "any-run"
-WHOLE_LINE: CitationRule = "whole-line"
-CITATION_RULES: frozenset[CitationRule] = frozenset({ANY_RUN, WHOLE_LINE})
+WHOLE_LINE_AS_STORED: CitationRule = "whole-line"
+WHOLE_LINE: CitationRule = "whole-line-as-shown"
+CITATION_RULES: frozenset[CitationRule] = frozenset(
+    {ANY_RUN, WHOLE_LINE_AS_STORED, WHOLE_LINE}
+)
 
 # Glyphs tracked past pdfminer's `word_margin` come back one token per letter
 # (section 44.5), so a heading tracked for display cannot be quoted as a word.
@@ -251,6 +264,9 @@ class _Page:
     shown_lines: dict[bool, dict[int, list[tuple[list[_Token], str]]]] = field(
         default_factory=dict
     )
+    # The same lines as the evidence section shows them, word by word (W6),
+    # keyed by how many words each shows.
+    shown_as: dict[int, list[_ShownLine]] | None = None
 
     def keys(self, *, normalised: bool) -> list[str]:
         """The page's words as `_starts` compares them."""
@@ -290,6 +306,39 @@ class _Page:
                 by_width.setdefault(len(span), []).append((span, block_id))
             self.shown_lines[joined] = by_width
         return self.shown_lines[joined]
+
+    def shown_words(
+        self,
+        cuts: Mapping[int, tuple[int, ...]] | None,
+        lines: Mapping[int, tuple[str, ...]],
+    ) -> dict[int, list[_ShownLine]]:
+        """The page's evidence lines as the evidence section shows them (W6),
+        keyed by how many words each shows, derived once per page: each
+        line's tokens NFC, joined by one space as admission packed them, then
+        split into words as a quote is -- so a token the extractor gave a
+        space of its own is the words the module read, not one."""
+        if self.shown_as is None:
+            by_width: dict[int, list[_ShownLine]] = {}
+            for spans in self.shown(cuts, lines, joined=False).values():
+                for span, block_id in spans:
+                    words = tuple(
+                        word for token in span for word in _nfc(token.text).split()
+                    )
+                    by_width.setdefault(len(words), []).append(
+                        _ShownLine(words, span, block_id)
+                    )
+            self.shown_as = by_width
+        return self.shown_as
+
+
+@dataclass(frozen=True, slots=True)
+class _ShownLine:
+    """One evidence line as the evidence section shows it: its words, the
+    tokens it is, and the one block id it is."""
+
+    words: tuple[str, ...]
+    span: list[_Token]
+    block_id: str
 
 
 def _unique_run(
@@ -331,10 +380,12 @@ def _line_run(
     *,
     tracking: bool,
 ) -> tuple[list[_Token], str]:
-    """`WHOLE_LINE`: the one evidence line of the page `matched_text` is,
-    whole -- exactly, and only where no line is, under the declared
-    normalisations -- in the order `_page_run` keeps and for its reason, and
-    the one block id that line is (R24-16): what delivery is judged against.
+    """`WHOLE_LINE_AS_STORED`, the whole-line rule as N28 first accepted
+    answers under it, by which their records are re-anchored: the one
+    evidence line of the page `matched_text` is, whole -- its stored tokens
+    exactly, and only where no line is, under the declared normalisations --
+    in the order `_page_run` keeps and for its reason, and the one block id
+    that line is (R24-16): what delivery is judged against.
 
     A candidate is a line as the module was shown it with as many words as
     the quote, so the search compares a handful of lines where the run search
@@ -360,6 +411,81 @@ def _line_run(
     if run is None:
         raise Refusal(RefusalCode.CITATION_NOT_LOCATED)
     return run
+
+
+def _shown_line_run(
+    page: _Page,
+    cuts: Mapping[int, tuple[int, ...]] | None,
+    lines: Mapping[int, tuple[str, ...]],
+    matched_text: str,
+    *,
+    tracking: bool,
+) -> tuple[list[_Token], str]:
+    """`WHOLE_LINE`: the one evidence line of the page `matched_text` is,
+    compared with the line as the evidence section showed it -- its words,
+    NFC -- and the one block id that line is.
+
+    Three passes, each reached only where the one before found no line, and
+    each counting every line of the page, so none can pick between two:
+
+    - as shown: every word NFC-equal to the line's. Two lines shown alike are
+      two, `CITATION_AMBIGUOUS`, whichever form each is stored in (N13): the
+      module saw one text twice.
+    - its edges forgiven: the first and last word less the punctuation a
+      sentence puts around them (`_edge_equal`). It used to be tried only on
+      a tracking extractor's joined line, so on a PDF a line with three
+      one-character tokens (`$ -- $`) lost it, and a decomposed accent
+      refused the NFC text the module was shown (W6).
+    - on a tracking extractor, the line with its tracked letters joined
+      (`_joined_tracking`), so a heading drawn letter by letter is quoted as
+      the word a reader sees, as it was.
+
+    A quote that is part of a line, or that runs onto the next, is no line:
+    `CITATION_NOT_LOCATED`.
+    """
+    words = tuple(map(_nfc, matched_text.split()))
+    if not words:
+        raise Refusal(RefusalCode.CITATION_NOT_LOCATED)
+    shown = page.shown_words(cuts, lines).get(len(words), ())
+    found = _one_shown(shown, words, edges=False)
+    if found is None:
+        found = _one_shown(shown, words, edges=True)
+    if found is None and tracking:
+        joined = page.shown(cuts, lines, joined=True).get(len(words), ())
+        found = _one_line(joined, words, True)
+    if found is None:
+        raise Refusal(RefusalCode.CITATION_NOT_LOCATED)
+    return found
+
+
+def _one_shown(
+    lines: Iterable[_ShownLine], words: tuple[str, ...], *, edges: bool
+) -> tuple[list[_Token], str] | None:
+    """The single shown line whose words are `words` -- equal, or with the
+    edge words forgiven -- with the block id it is; `None` for none, a
+    refusal for two."""
+    found: tuple[list[_Token], str] | None = None
+    for line in lines:
+        if not _same_words(line.words, words, edges=edges):
+            continue
+        if found is not None:
+            raise Refusal(RefusalCode.CITATION_AMBIGUOUS)
+        found = (line.span, line.block_id)
+    return found
+
+
+def _same_words(shown: tuple[str, ...], words: tuple[str, ...], *, edges: bool) -> bool:
+    """Whether a shown line's words are the quote's, both NFC and as many:
+    every one equal, or -- with `edges` -- the interior equal and the first
+    and last standing for the quote's there (`_edge_equal`)."""
+    if not edges:
+        return shown == words
+    last = len(words) - 1
+    return (
+        shown[1:last] == words[1:last]
+        and _edge_equal(shown[0], words[0], normalised=True)
+        and _edge_equal(shown[last], words[last], normalised=True)
+    )
 
 
 def _one_line(
@@ -744,19 +870,20 @@ def _located(
     """One citation's run under `rule`, already checked delivered, and its
     source's digest.
 
-    Under `WHOLE_LINE` a match is exactly one block (R24-16): delivery is
-    judged against the block its match is, not every block its source line
-    was split into -- a page map showing that one block whole withholds
-    nothing this match needs, even when the line continues past it. Under
-    `ANY_RUN` a match is not confined to one block, so delivery is judged
-    against every block of every line its tokens touch.
+    Under either whole-line rule a match is exactly one block (R24-16):
+    delivery is judged against the block its match is, not every block its
+    source line was split into -- a page map showing that one block whole
+    withholds nothing this match needs, even when the line continues past
+    it. Under `ANY_RUN` a match is not confined to one block, so delivery is
+    judged against every block of every line its tokens touch.
     """
     digest, tracking = index.facts(conn, citation.source_id)
     searched = index.page(conn, citation.source_id, citation.page)
     lines = index.lines(conn, citation.source_id)
-    if rule == WHOLE_LINE:
+    if rule in (WHOLE_LINE, WHOLE_LINE_AS_STORED):
         cuts = index.cuts.get(citation.source_id)
-        run, block_id = _line_run(
+        locate = _shown_line_run if rule == WHOLE_LINE else _line_run
+        run, block_id = locate(
             searched, cuts, lines, citation.matched_text, tracking=tracking
         )
         if block_id not in blocks:

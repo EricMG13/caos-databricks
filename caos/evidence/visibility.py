@@ -11,16 +11,18 @@ layer, and the extractor marks each line that carries one with why
 (`pdf._line_tokens`), so the approver and the model can weigh it.
 
 `MarkingAggregator` is pdfminer's page aggregator watching the paint in
-drawing order: each string's render mode and em on the page, the colours it is
-painted in, what the page's filled paths had painted under each glyph when it
-was drawn, the marked-content sequences it is drawn in, and -- looking
-forward -- the opaque rectangles the page fills over it afterwards. Behind a
-glyph no filled path covers is paper, white; an image's colours are not read,
-so what is behind a glyph drawn on one is not compared. `MarkingInterpreter`
-is pdfminer's interpreter deciding what that device cannot see: whether an
-`/OC` sequence is optional content the document's default configuration
-switches off (`OptionalContent`), read against the resources in force, and
-the clip and transparency a fill is painted under (`PaintState`).
+drawing order: each string's render mode and em on the page -- on its
+narrower axis (N9) -- the colours it is painted in, what the page's filled
+paths had painted under each glyph when it was drawn, the marked-content
+sequences it is drawn in, and -- looking forward -- the opaque rectangles the
+page fills over it afterwards. Behind a glyph no filled path covers is paper,
+white; an image's colours are not read, so what is behind a glyph drawn on one
+is not compared. `MarkingInterpreter` is pdfminer's interpreter deciding what
+that device cannot see: whether an `/OC` sequence is optional content the
+document's default configuration switches off (`OptionalContent`), read
+against the resources in force; the clip and transparency a fill is painted
+under (`PaintState`); and the colours of an `Indexed` or `Separation` space
+pdfminer names without reading (`read_space`, N9).
 
 It is a reading of the paint, not a rendering: where a viewer could differ --
 a clip of any shape but a rectangle, a transparency group, a soft mask, a
@@ -47,6 +49,7 @@ from pdfminer.pdfinterp import (
     PDFResourceManager,
     PDFStackT,
     PDFTextState,
+    StandardColor,
 )
 from pdfminer.pdfpage import PDFPage
 from pdfminer.pdftypes import PDFObjRef, PDFStream
@@ -95,7 +98,8 @@ PAPER: Rgb = (1.0, 1.0, 1.0)
 # The render modes that fill a glyph, and those that stroke it.
 _FILLED = frozenset({0, 2, 4, 6})
 _STROKED = frozenset({1, 2, 5, 6})
-# The colour spaces whose values are read as gray, RGB or CMYK by their count.
+# The colour spaces whose values are read as gray, RGB or CMYK by their count;
+# `IndexedSpace` and `SeparationSpace` read theirs through their own tables.
 _READ_SPACES = frozenset(
     {"DeviceGray", "CalGray", "DeviceRGB", "CalRGB", "DeviceCMYK", "ICCBased"}
 )
@@ -465,6 +469,13 @@ class MarkingAggregator(PDFPageAggregator):
     the page ends: the glyphs the page itself drew (`drawn`) against the
     rectangles it filled after them (`covers`, each beside how many glyphs
     came before it), within the document's `work`.
+
+    It also draws with the matrix a viewer draws with after a form XObject.
+    pdfminer's form sets this device's matrix to its own and nothing sets it
+    back until the page's next `cm` or `Q`, so text drawn in between was laid
+    out -- and its citation rectangle stored -- where no viewer draws it: 600
+    pt off after a form whose `/Matrix` moved it 600 pt (invariant 11). The
+    matrix a figure began under is restored when it ends (`end_figure`).
     """
 
     def __init__(self, resources: PDFResourceManager, laparams: LAParams) -> None:
@@ -476,8 +487,7 @@ class MarkingAggregator(PDFPageAggregator):
         self.covers: list[tuple[Box, int]] = []
         self.work = PAINTED_OVER_WORK
         self._least = (math.inf, math.inf)
-        self._figures: list[tuple[Matrix, bool]] = []
-        self._stale = False
+        self._figures: list[Matrix] = []
         self._compound = 0
 
     @override
@@ -487,18 +497,13 @@ class MarkingAggregator(PDFPageAggregator):
         self.backdrop = Backdrop(self.cur_item.bbox)
         self.marked = MarkedContent()
         (self.drawn, self.covers, self._figures) = ([], [], [])
-        (self._least, self._stale, self._compound) = ((math.inf, math.inf), False, 0)
+        (self._least, self._compound) = ((math.inf, math.inf), 0)
 
     @override
     def end_page(self, page: PDFPage) -> None:
         for glyph in self._painted_over():
             self.hidden[glyph] = _with(self.hidden.get(glyph, ""), PAINTED_OVER)
         super().end_page(page)
-
-    @override
-    def set_ctm(self, ctm: Matrix) -> None:
-        super().set_ctm(ctm)
-        self._stale = False
 
     @override
     def begin_tag(self, tag: PSLiteral, props: PDFStackT | None = None) -> None:
@@ -521,19 +526,18 @@ class MarkingAggregator(PDFPageAggregator):
 
     @override
     def begin_figure(self, name: str, bbox: Rect, matrix: Matrix) -> None:
-        self._figures.append((self.ctm, self._stale))
+        self._figures.append(self.ctm)
         super().begin_figure(name, bbox, matrix)
         self.marked.enter()
 
     @override
     def end_figure(self, _: str) -> None:
+        """The figure ends, and so does its matrix: the one it began under,
+        which is the drawing's own, is this device's again."""
         super().end_figure(_)
         self.marked.leave()
-        (ctm, stale) = self._figures.pop() if self._figures else (self.ctm, True)
-        # pdfminer leaves this device at a form's own matrix until the page
-        # next sets one, so until then it places a path or a glyph where a
-        # viewer may not: neither covers nor is covered.
-        self._stale = stale or self.ctm != ctm
+        if self._figures:
+            self.set_ctm(self._figures.pop())
 
     @override
     def paint_path(
@@ -564,15 +568,15 @@ class MarkingAggregator(PDFPageAggregator):
         drew before it: an opaque, normally blended fill in a colour this
         reading reads, of one subpath, on the page itself -- a form's box
         clips its own -- where every open marked-content sequence is drawn,
-        with pdfminer's matrix in step, after the page drew some glyph. A
-        paint the pending `W` of its own path clips leaves the clip unknown."""
+        after the page drew some glyph. A paint the pending `W` of its own
+        path clips leaves the clip unknown."""
         if not isinstance(gstate, PaintState):
             return None
         if gstate.clipping is not None:
             (gstate.clip, gstate.clipping) = (None, None)
         if not fill or gstate.translucent or _rgb(gstate.ncs, gstate.ncolor) is None:
             return None
-        if self._compound or self._figures or self._stale or not self.marked.draws:
+        if self._compound or self._figures or not self.marked.draws:
             return None
         return gstate.clip if self.drawn else None
 
@@ -606,17 +610,14 @@ class MarkingAggregator(PDFPageAggregator):
         no path is painted between its glyphs."""
         before = len(self.cur_item)
         super().render_string(textstate, seq, ncs, graphicstate)
-        (_a, _b, c, d, _e, _f) = mult_matrix(textstate.matrix, self.ctm)
-        em = textstate.fontsize * math.hypot(c, d)
+        em = _em(textstate, mult_matrix(textstate.matrix, self.ctm))
         switched_off = self.marked.hides
-        # Only a page's own glyphs are its lines (a form's are a figure's),
-        # only where pdfminer's matrix is the one a viewer draws with, and only
-        # where pdfminer's box bounds the ink: a stroke reaches past it by its
-        # width, and further at a mitre; a Type3 glyph draws what its
+        # Only a page's own glyphs are its lines (a form's are a figure's), and
+        # only where pdfminer's box bounds the ink: a stroke reaches past it by
+        # its width, and further at a mitre; a Type3 glyph draws what its
         # procedure draws.
         coverable = (
             not self._figures
-            and not self._stale
             and self.work > 0
             and textstate.render not in _STROKED
             and not isinstance(textstate.font, PDFType3Font)
@@ -722,6 +723,35 @@ class MarkingInterpreter(PDFPageInterpreter):
         self.graphicstate = PaintState()
 
     @override
+    def init_resources(self, resources: dict[object, object]) -> None:
+        """pdfminer's resources, and each `Indexed` or `Separation` colour
+        space among them this reading decides (`read_space`, N9) in place of
+        the bare name pdfminer keeps for it."""
+        super().init_resources(resources)
+        spaces = _dict(_entry(resources, "ColorSpace"))
+        for name, spec in (spaces or {}).items():
+            read = read_space(spec)
+            if read is not None:
+                self.csmap[str(name)] = read
+
+    @override
+    def do_CS(self, name: PDFStackT) -> None:
+        super().do_CS(name)
+        state = self.graphicstate
+        if self.csmap.get(literal_name(name)) is state.scs:
+            state.scolor = _initial(state.scs)
+
+    @override
+    def do_cs(self, name: PDFStackT) -> None:
+        """Set the fill colour space and, as a viewer does and pdfminer does
+        not, its initial colour (`_initial`); a name the resources lack
+        changes neither."""
+        super().do_cs(name)
+        state = self.graphicstate
+        if self.csmap.get(literal_name(name)) is state.ncs:
+            state.ncolor = _initial(state.ncs)
+
+    @override
     def do_W(self) -> None:
         super().do_W()
         self._name_clip()
@@ -792,10 +822,24 @@ def _near(paints: list[Rgb | None], behind: Rgb | None) -> bool:
 
 
 def _rgb(space: PDFColorSpace, value: object) -> Rgb | None:
-    """A gray, RGB or CMYK colour as RGB on 0..1; `None` for any other."""
+    """A gray, RGB or CMYK colour as RGB on 0..1, or what an index or a tint
+    of a space this reading decides paints (N9); `None` for any other, and
+    for a colour whose components are not as many as its space's."""
+    if isinstance(space, IndexedSpace | SeparationSpace):
+        number = _finite(value)
+        return None if number is None else space.rgb(number)
     components = _components(value)
-    if components is None or space.name not in _READ_SPACES:
+    if (
+        components is None
+        or space.name not in _READ_SPACES
+        or len(components) != space.ncomponents
+    ):
         return None
+    return _counted(components)
+
+
+def _counted(components: tuple[float, ...]) -> Rgb | None:
+    """Gray, RGB or CMYK on 0..1, told apart by their count, as RGB."""
     if len(components) == 1:
         return (components[0], components[0], components[0])
     if len(components) == 3:
@@ -808,6 +852,218 @@ def _rgb(space: PDFColorSpace, value: object) -> Rgb | None:
             1.0 - min(1.0, yellow + black),
         )
     return None
+
+
+def _em(textstate: PDFTextState, matrix: Matrix) -> float:
+    """A glyph's em on the page, on its narrower axis (N9): the text space's
+    x axis scaled by the font size and the horizontal scaling (`Tz`), its y
+    axis by the font size alone (ISO 32000-1, 9.4.4). A negative size or
+    scaling mirrors the glyph, and is measured by its magnitude."""
+    (a, b, c, d, _e, _f) = matrix
+    size = abs(textstate.fontsize)
+    across = size * abs(textstate.scaling) / 100 * math.hypot(a, b)
+    return min(across, size * math.hypot(c, d))
+
+
+def _initial(space: PDFColorSpace) -> StandardColor:
+    """The colour `cs` or `CS` sets with its space (ISO 32000-1, 8.6.8):
+    every tint 1 for a separation, and otherwise every component 0 -- index
+    0, black, and for DeviceCMYK black ink alone."""
+    if space.name in ("Separation", "DeviceN"):
+        return 1.0
+    if space.name == "DeviceCMYK":
+        return (0.0, 0.0, 0.0, 1.0)
+    if space.ncomponents == 3:
+        return (0.0, 0.0, 0.0)
+    if space.ncomponents == 4:
+        return (0.0, 0.0, 0.0, 0.0)
+    return 0.0
+
+
+# The components of each space `_counted` reads by count, by its family name;
+# an ICC profile's count is its stream's `/N`.
+_COUNTS = {"DeviceGray": 1, "CalGray": 1, "DeviceRGB": 3, "CalRGB": 3, "DeviceCMYK": 4}
+
+
+class IndexedSpace(PDFColorSpace):
+    """An `Indexed` colour space over a base `_counted` reads (N9): each
+    index's colour, looked up once from the space's table."""
+
+    def __init__(self, table: tuple[Rgb | None, ...]) -> None:
+        super().__init__("Indexed", 1)
+        self.table = table
+
+    def rgb(self, value: float) -> Rgb | None:
+        """The colour index `value` paints, rounded and held to the table as
+        a viewer holds it (ISO 32000-1, 8.6.6.3)."""
+        return self.table[min(max(round(value), 0), len(self.table) - 1)]
+
+
+@dataclass(frozen=True, slots=True)
+class _Exponential:
+    """A Type 2 function (ISO 32000-1, 7.10.3): `low + t ** exponent *
+    (high - low)` for `t` held to `domain`, each output held to `bounds`."""
+
+    low: tuple[float, ...]
+    high: tuple[float, ...]
+    exponent: float
+    domain: tuple[float, float]
+    bounds: tuple[float, ...] | None
+
+
+class SeparationSpace(PDFColorSpace):
+    """A `Separation` colour space whose tint transform is an exponential
+    function into a space `_counted` reads (N9): each tint's colour, as that
+    function gives it."""
+
+    def __init__(self, tint: _Exponential) -> None:
+        super().__init__("Separation", 1)
+        self.tint = tint
+
+    def rgb(self, value: float) -> Rgb | None:
+        """The colour tint `value` paints; `None` where the function has no
+        real value -- a root of a negative tint, zero to a negative power."""
+        function = self.tint
+        t = min(max(value, function.domain[0]), function.domain[1])
+        if t < 0 or (t == 0 and function.exponent < 0):
+            return None
+        try:
+            scale = t**function.exponent
+            outputs = [
+                lo + scale * (hi - lo)
+                for lo, hi in zip(function.low, function.high, strict=True)
+            ]
+        except ArithmeticError:
+            return None
+        bounds = function.bounds
+        if bounds is not None:
+            outputs = [
+                min(max(one, bounds[2 * at]), bounds[2 * at + 1])
+                for at, one in enumerate(outputs)
+            ]
+        components = _components(tuple(outputs))
+        return None if components is None else _counted(components)
+
+
+def read_space(spec: object) -> IndexedSpace | SeparationSpace | None:
+    """The colour space `spec` declares, when it is an `Indexed` or a
+    `Separation` one whose colours this reading decides (N9); `None` for any
+    other, and for one it cannot read."""
+    entries = _list(spec, 4)
+    if entries is None or len(entries) != 4:
+        return None
+    family = _name(entries[0])
+    if family == "Indexed":
+        return _indexed(entries[1], entries[2], entries[3])
+    if family == "Separation":
+        return _separation(entries[1], entries[2], entries[3])
+    return None
+
+
+def _indexed(base: object, top: object, lookup: object) -> IndexedSpace | None:
+    """An `Indexed` space's table: `top` + 1 colours of the base's count
+    each, as bytes 0..255 of `lookup`, a string or a stream."""
+    count = _count(base)
+    highest = _resolved(top)
+    table = _lookup(lookup)
+    if (
+        count is None
+        or type(highest) is not int
+        or not 0 <= highest <= 255
+        or table is None
+        or len(table) < count * (highest + 1)
+    ):
+        return None
+    return IndexedSpace(
+        tuple(
+            _counted(tuple(byte / 255 for byte in table[at * count : (at + 1) * count]))
+            for at in range(highest + 1)
+        )
+    )
+
+
+def _separation(
+    colorant: object, alternate: object, transform: object
+) -> SeparationSpace | None:
+    """A `Separation` space whose colorant paints -- `None` paints nothing,
+    for which no reason here is the word -- and whose tint transform is an
+    exponential function into an alternate space `_counted` reads."""
+    count = _count(alternate)
+    function = _dict(transform)
+    if (
+        _name(colorant) in (None, "None")
+        or count is None
+        or function is None
+        or _resolved(function.get("FunctionType")) != 2
+    ):
+        return None
+    domain = _floats(function.get("Domain"), 2)
+    low = _floats(function.get("C0", [0.0]), count)
+    high = _floats(function.get("C1", [1.0]), count)
+    exponent = _finite(_resolved(function.get("N")))
+    bounds = _floats(function["Range"], 2 * count) if "Range" in function else ()
+    if (
+        domain is None
+        or low is None
+        or high is None
+        or exponent is None
+        or bounds is None
+    ):
+        return None
+    return SeparationSpace(
+        _Exponential(low, high, exponent, (domain[0], domain[1]), bounds or None)
+    )
+
+
+def _count(space: object) -> int | None:
+    """How many components a base or alternate space has, when `_counted`
+    reads it: a device or CIE-based gray, RGB or CMYK named or given as an
+    array, or an ICC profile of 1, 3 or 4 components."""
+    named = _name(space)
+    if named is not None:
+        return _COUNTS.get(named)
+    entries = _list(space, 2)
+    family = _name(entries[0]) if entries else None
+    if family in ("CalGray", "CalRGB"):
+        return _COUNTS[family]
+    if family != "ICCBased" or entries is None or len(entries) != 2:
+        return None
+    profile = _resolved(entries[1])
+    components = profile.get("N") if isinstance(profile, PDFStream) else None
+    return components if type(components) is int and components in (1, 3, 4) else None
+
+
+def _lookup(value: object) -> bytes | None:
+    """An `Indexed` space's table: a string's bytes, or a stream's decoded
+    data; `None` for anything else, or for a stream that will not decode."""
+    table = _resolved(value)
+    if isinstance(table, bytes):
+        return table
+    if not isinstance(table, PDFStream):
+        return None
+    try:
+        return table.get_data()
+    except _UNREADABLE:
+        return None
+
+
+def _floats(value: object, count: int) -> tuple[float, ...] | None:
+    """An array of exactly `count` finite numbers, `None` for anything else."""
+    entries = _list(value, count)
+    if entries is None or len(entries) != count:
+        return None
+    numbers = [_finite(_resolved(entry)) for entry in entries]
+    if any(number is None for number in numbers):
+        return None
+    return tuple(number for number in numbers if number is not None)
+
+
+def _finite(value: object) -> float | None:
+    """A finite number, `None` for anything else -- a boolean included."""
+    if not isinstance(value, int | float) or isinstance(value, bool):
+        return None
+    number = float(value)
+    return number if math.isfinite(number) else None
 
 
 def _components(value: object) -> tuple[float, ...] | None:

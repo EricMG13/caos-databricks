@@ -61,6 +61,7 @@ from caos.evidence.extract import (
     MarkedToken,
     Token,
     nfc_pieces,
+    one_line,
 )
 from caos.refusals import Refusal, RefusalCode
 
@@ -96,6 +97,9 @@ CROP_POLICY = "drop-outside"
 # pdfminer opens an unencrypted document with the empty password; the identity
 # record names the parameter as pdfminer does and carries that value.
 UNENCRYPTED = ""
+# What a token makes of a line break in its glyphs' text (`extract.LINE_BREAKS`,
+# W4): a space, so a token is never more than one line.
+TOKEN_LINE_BREAKS = "space"
 # What marks a line a reader of the rendered page may not see (N27,
 # `caos/evidence/visibility.py`), declared because it decides the tokens' marks.
 # Text render mode 3 paints a glyph neither filled nor stroked (ISO 32000-1,
@@ -121,19 +125,38 @@ MARKED_CONTENT_DEPTH = 256
 # Text the page paints over later, with one fill that holds the glyph's whole
 # box: a rectangle on the page itself, opaque and normally blended, in a colour
 # the backdrop reads, under a clip that is a rectangle this reading follows
-# (`visibility.Covers`). A fill in a form, under any other clip, transparency
-# or optional content, or drawn where pdfminer's own matrix is stale, is not;
-# nor is a stroked or Type3 glyph ever found covered, pdfminer's box not
-# bounding its ink.
+# (`visibility.Covers`). A fill in a form, or under any other clip,
+# transparency or optional content, is not; nor is a stroked or Type3 glyph
+# ever found covered, pdfminer's box not bounding its ink.
 PAINTED_OVER_COVER = "later-opaque-rectangle-holding-the-glyph-box"
 # What one document may spend comparing glyphs with the fills painted over
 # them and noting those fills, one unit each; past it nothing more is marked.
 PAINTED_OVER_WORK = 4_000_000
+# The matrix text and paths are laid out in after a form XObject: the one the
+# form began under, as every viewer draws them (`visibility.MarkingAggregator`)
+# -- pdfminer left its device at the form's own until the page's next `cm` or
+# `Q`, and laid out what came between where no viewer draws it.
+FORM_MATRIX = "restored-when-the-form-ends"
 # A glyph whose em is smaller than this on the page, in points, is not read.
 SMALLEST_READABLE_PT = 2.0
+# On which axis a glyph's em is measured (N9): the narrower of the two. The
+# text space's x axis is scaled by the font size and the horizontal scaling
+# (`Tz`), its y axis by the font size alone; measured on y only, text squeezed
+# to a hairline by `1 Tz`, or by a text matrix 0.01 wide, read as 12 pt.
+SMALLEST_READABLE_AXIS = "narrower-of-width-and-height"
 # How far a glyph's paint may be from what is behind it, per channel of an RGB
 # colour on 0..1, and still be the same colour to a reader.
 NEAR_BACKGROUND_DISTANCE = 0.1
+# The colour spaces whose paint is compared with what is behind a glyph (N9):
+# gray, RGB and CMYK -- the device spaces, the CIE-based gray and RGB and an
+# ICC profile -- read by their count; an `Indexed` table over one of them; and
+# a `Separation` whose tint transform is an exponential (Type 2) function into
+# one of them. Any other -- Lab, a pattern, DeviceN, the `None` colorant, a
+# sampled, stitching or PostScript tint transform -- is not decided, and a
+# glyph painted in one is never found near the background. A `cs` or `CS`
+# sets its space's initial colour (ISO 32000-1, 8.6.8), which pdfminer does
+# not: it kept the colour before, so `1 g /CS0 cs` read black text as white.
+READ_COLOUR_SPACES = "gray-rgb-cmyk-by-count,indexed,separation-exponential"
 # What is behind a glyph: the last filled path under its centre, or white.
 BACKDROP = "last-filled-path-over-white"
 
@@ -155,10 +178,15 @@ class PdfExtractor:
             # page may not see is kept and marked with why (N27). v5: text in
             # optional content the document switches off is marked too, and
             # render mode 7 is declared. v6: so is text an opaque fill paints
-            # over later. Earlier rows keep their stored identity and verify
-            # as recorded; readmission is how a source gains the new tokens
-            # (section 44.4's rule).
-            "6",
+            # over later. v7: a line break a glyph's text carries is a space
+            # in its token (W4); a glyph's size is its em on its narrower
+            # axis, and Indexed and exponential Separation colours are read
+            # (N9); text drawn after a form XObject is laid out in the matrix
+            # a viewer draws it in, where pdfminer placed it by the form's.
+            # Earlier rows keep their stored identity and verify as recorded;
+            # readmission is how a source gains the new tokens (section
+            # 44.4's rule).
+            "7",
             {
                 "pdfminer_version": version("pdfminer.six"),
                 "line_overlap": LAYOUT["line_overlap"],
@@ -176,10 +204,13 @@ class PdfExtractor:
                 "caching": True,
                 "max_token_chars": MAX_TOKEN_CHARS,
                 "token_cut": RUN_CUT,
+                "token_line_breaks": TOKEN_LINE_BREAKS,
                 "hidden_render_mode": INVISIBLE_RENDER_MODE,
                 "hidden_clip_render_mode": CLIP_ONLY_RENDER_MODE,
                 "hidden_under_pt": SMALLEST_READABLE_PT,
+                "hidden_under_pt_axis": SMALLEST_READABLE_AXIS,
                 "hidden_near_background": NEAR_BACKGROUND_DISTANCE,
+                "hidden_colour_spaces": READ_COLOUR_SPACES,
                 "hidden_backdrop": BACKDROP,
                 "hidden_optional_content": OPTIONAL_CONTENT,
                 "hidden_optional_content_groups": OPTIONAL_CONTENT_GROUPS,
@@ -187,6 +218,7 @@ class PdfExtractor:
                 "hidden_marked_content_depth": MARKED_CONTENT_DEPTH,
                 "hidden_painted_over": PAINTED_OVER_COVER,
                 "hidden_painted_over_work": PAINTED_OVER_WORK,
+                "form_matrix": FORM_MATRIX,
             },
         )
 
@@ -507,6 +539,10 @@ def _line_tokens(
     page may not see some of the text the line keeps, gathered over the
     glyphs of its kept runs -- one note a line, as the line is what a module
     and the approver are shown.
+
+    A glyph's text is whatever the font's ToUnicode maps it to, line breaks
+    included; each is written as a space (`one_line`, W4), so the token and
+    its line stay one line wherever they are shown.
     """
     (left, _bottom, _right, top) = sheet.frame
     boxed = [(run, _box(run)) for run in _runs(line)]
@@ -514,7 +550,7 @@ def _line_tokens(
     mark = _mark([character for run, _box in kept for character in run], sheet)
     tokens: list[Token] = []
     for run, (x0, y0, x1, y1) in kept:
-        text = "".join(character.get_text() for character in run)
+        text = one_line("".join(character.get_text() for character in run))
         tokens.extend(
             MarkedToken(
                 text=piece,

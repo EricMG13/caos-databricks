@@ -32,8 +32,10 @@ from caos.evidence.extract import (
     ExtractorDispatch,
     ExtractorIdentity,
     MarkedToken,
+    PlainTextExtractor,
     Token,
     dispatch_by_content,
+    text_fallback,
 )
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
@@ -263,6 +265,11 @@ def _extract(
     Whatever the dispatch or the extractor raises is reduced to a code and
     raised again outside the handler, so no message, cause or context -- all of
     which can quote the bytes an extractor choked on -- travels with it.
+
+    Bytes the content dispatch read as a PDF only for a header past their
+    first byte (`text_fallback`, N8) and that no PDF parse can read are read
+    again as plain text, under its identity: text that names both markers is
+    text, and a PDF behind leading junk that does parse is still a PDF.
     """
     code: RefusalCode | None = None
     try:
@@ -276,9 +283,23 @@ def _extract(
         raise  # the process, not the document
     except Exception as failure:  # noqa: BLE001 -- untrusted bytes; any failure is a code
         code = _code_for(failure)
+    if code is RefusalCode.SOURCE_NOT_READABLE and _as_text(dispatch, document):
+        return _extract(_plain_text, document, limits, pack_deadline)
     if code is not None:
         raise Refusal(code) from None
     return identity, tokens
+
+
+def _as_text(dispatch: ExtractorDispatch, document: Document) -> bool:
+    """Whether a document the content dispatch sent to the PDF reader is
+    read again as text when that reader cannot parse it (`text_fallback`).
+    A caller's own dispatch is its own answer."""
+    return dispatch is dispatch_by_content and text_fallback(document.data)
+
+
+def _plain_text(data: bytes) -> Extractor:
+    """The dispatch a text fallback reads through, whatever `data` holds."""
+    return PlainTextExtractor()
 
 
 def _code_for(failure: Exception) -> RefusalCode:

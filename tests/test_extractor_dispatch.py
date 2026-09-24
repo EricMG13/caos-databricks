@@ -27,8 +27,9 @@ from caos.evidence.extract import (
     PlainTextExtractor,
     Token,
     dispatch_by_content,
+    text_fallback,
 )
-from caos.evidence.ingest import Document, admit_pack
+from caos.evidence.ingest import Document, admit_pack, prepare_pack
 from caos.evidence.pdf import PdfExtractor
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
@@ -287,3 +288,72 @@ def test_a_pdf_with_leading_junk_before_its_header_is_still_read_as_pdf(
         (sources[0],),
     ).fetchone()
     assert first == ("Confidential",)
+
+
+# N8: a short note that names both markers, the header past its first byte.
+MARKERS_NOTE = (
+    b"IT note: every PDF file starts with %PDF-1.7 and ends with %%EOF.\n"
+    b"No action needed.\n"
+)
+
+
+def test_a_text_naming_both_pdf_markers_is_read_as_text_when_no_pdf_parses(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> None:
+    """N8: a note under a kilobyte that names `%PDF-` and `%%EOF` meets both
+    of CF-074's tests, so it went to the PDF reader and was refused
+    `SOURCE_NOT_READABLE`: a readable document no one could admit. Its
+    header is past its first byte, so when no PDF parses it is read as the
+    text it is, under the plain-text identity."""
+    assert isinstance(dispatch_by_content(MARKERS_NOTE), PdfExtractor)
+    assert text_fallback(MARKERS_NOTE)
+    conn, case_id = case
+
+    sources = admit_pack(
+        conn,
+        BlobStore(tmp_path),
+        case_id=case_id,
+        documents=[_document("it-note.txt", MARKERS_NOTE)],
+    )
+
+    assert _identities(conn, sources) == ["caos.plain-text"]
+    blocks = conn.execute(
+        "SELECT text FROM source_blocks WHERE source_id = %s ORDER BY block_id",
+        (sources[0],),
+    ).fetchall()
+    assert [row[0] for row in blocks] == MARKERS_NOTE.decode().splitlines()
+
+
+def test_only_a_header_past_the_first_byte_falls_back_to_text() -> None:
+    """Bytes that begin as a PDF are refused when they are not one (§44.6),
+    never admitted as garbage tokens; bytes that are neither a PDF nor UTF-8
+    are refused by both readers; and a caller's own dispatch is its own
+    answer, with no fallback behind it."""
+    assert not text_fallback(b"%PDF-1.7 as our template says. %%EOF")
+    assert not text_fallback(TEXT) and not text_fallback(PDF)
+    unreadable = b"\xff\xfe junk %PDF-1.4 \x00\x81 trailer %%EOF"
+    assert text_fallback(unreadable)
+    forced = cast(ExtractorDispatch, lambda data: PdfExtractor())
+    for data, dispatch in (
+        (CORRUPT, dispatch_by_content),
+        (unreadable, dispatch_by_content),
+        (MARKERS_NOTE, forced),
+    ):
+        with pytest.raises(Refusal) as refused:
+            prepare_pack([_document("x", data)], dispatch=dispatch)
+        assert refused.value.code is RefusalCode.SOURCE_NOT_READABLE
+        assert refused.value.__context__ is None and refused.value.__cause__ is None
+
+
+def test_the_pre_spend_check_reads_a_document_as_admission_does() -> None:
+    """The qualification harness's key check reads each document to judge
+    whether a key could anchor in it, and raises what admission would refuse:
+    a note naming both markers is text to both now, and a corrupt PDF is
+    refused by both."""
+    from caos.qualification.harness import _extracted
+
+    tokens = _extracted(MARKERS_NOTE)
+    assert tokens == PlainTextExtractor().extract(MARKERS_NOTE)
+    with pytest.raises(Refusal) as refused:
+        _extracted(CORRUPT)
+    assert refused.value.code is RefusalCode.SOURCE_NOT_READABLE

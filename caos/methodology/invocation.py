@@ -31,6 +31,7 @@ from caos.blobs import BlobStore
 from caos.boundary_text import visible
 from caos.digest import canonical_json
 from caos.evidence.citations import AnchoredCitation
+from caos.evidence.extract import one_line
 from caos.graph.route import (
     BLOCKING,
     MODEL_MODULE,
@@ -1007,43 +1008,88 @@ def _research_section(identity: HostIdentity, tag: str = "") -> str:
     )
 
 
-# N27: what the host says before a delivered line the extractor kept though a
-# reader of the rendered page may not see it -- a scan's OCR layer (render mode
-# 3), text painted near the colour behind it, glyphs under 2 pt, optional
-# content switched off -- so the model can weigh it, each reason by its
-# `HIDDEN_REASONS` word. Host-owned and on marked lines only, so every other
-# prompt is byte for byte what it was; the line after it is the delivered text,
-# citable as it is and never with this note.
-_HIDDEN_LINE = "[host: not visible on the rendered page: {reasons}] "
+# N27: what the host says of delivered lines the extractor kept though a reader
+# of the rendered page may not see them -- a scan's OCR layer (render mode 3),
+# text painted near the colour behind it, glyphs under 2 pt, optional content
+# switched off, text painted over -- so the model can weigh them, each reason
+# by its `HIDDEN_REASONS` word. It is a line of the header over the run of a
+# page's lines that share one mark (C1): host text a document cannot reach,
+# since every delivered line is one line and follows a blank one, and never on
+# a line a quote copies. It used to open each marked line, so on a scan, whose
+# every line is marked, no line could be quoted as it was shown and every
+# quote was refused; and a line of a text document could open with the same
+# words and read exactly like one (W4). A run of lines with no mark has no such
+# line, so a prompt without a mark is byte for byte what it was.
+_HIDDEN_NOTE = (
+    "hidden: the lines under this header are not visible on the rendered page"
+    " ({reasons})"
+)
+
+# C1: said in the final check only when the evidence carries a `hidden` line,
+# for the same reason.
+_HOST_TEXT = (
+    "An evidence header's `hidden` line is host text, as its `source_id` and"
+    " `page` lines are, and a quote never includes host text.\n"
+)
 
 
-def _shown(item: Delivery) -> str:
-    """One delivered line as the evidence section shows it."""
-    if not item.hidden:
-        return item.text.value
-    reasons = ", ".join(item.hidden.split(","))
-    return _HIDDEN_LINE.format(reasons=reasons) + item.text.value
+def _evidence_header(source_id: UUID, page: int, hidden: str) -> str:
+    """The host's header over one run of a page's delivered lines, blank line
+    included: its source and page and, when the run's lines carry a mark,
+    why a reader of the rendered page may not see them (`_HIDDEN_NOTE`)."""
+    if not hidden:
+        return f"source_id: {source_id}\npage: {page}\n\n"
+    note = _HIDDEN_NOTE.format(reasons=", ".join(hidden.split(",")))
+    return f"source_id: {source_id}\npage: {page}\n{note}\n\n"
+
+
+def evidence_sizes(delivered: Sequence[Delivery]) -> list[int]:
+    """What each delivered line adds to the evidence section, in UTF-8 bytes
+    (W3): its text and the blank line after it and, where it begins a run
+    (`_evidence_section`), the run's header -- its note included -- and the
+    blank lines before it.
+
+    Summed over any delivery they are the section `_evidence_section` renders
+    for it and 2 bytes a run and 3 more: every host byte the section adds is
+    counted, never fewer. A line's size depends only on the line before it, so
+    the sizes of a delivery are the sizes of any leading lines of each of its
+    pages (`selection.gate_view`): a page's first line begins a run either way.
+    """
+    sizes: list[int] = []
+    previous: tuple[UUID, int, str] | None = None
+    for item in delivered:
+        key = (item.source_id, item.page, item.hidden)
+        size = len(one_line(item.text.value).encode("utf-8")) + 2
+        if key != previous:
+            size += len(_evidence_header(*key).encode("utf-8")) + 3
+        sizes.append(size)
+        previous = key
+    return sizes
 
 
 def _evidence_section(delivered: Sequence[Delivery]) -> str:
-    """Every delivered line under one `source_id`/`page` header per run.
+    """Every delivered line under one header per run of a page's lines.
 
-    Blocks are separated by one blank line and groups by two, so a line is
-    never cut or merged and the header is paid once per page rather than
-    once per line. Grouping follows the delivered order (source, then block),
-    so a page's lines stay together as the store ordered them. A line whose
-    text a reader of the rendered page may not see carries the host's note
-    first (`_shown`, N27).
+    Blocks are separated by one blank line and runs by two, so a line is
+    never cut or merged and a header is paid once per run rather than once
+    per line. A run is the delivered lines of one page that carry one mark
+    (N27): a page's lines all seen, or a scan's all marked, are one run, and
+    its header names the mark (`_evidence_header`). Grouping follows the
+    delivered order (source, then block), so a page's lines stay together as
+    the store ordered them. `evidence_sizes` counts what this adds.
+
+    A line is shown as one line (`one_line`, W4): a block stored before the
+    PDF extractor's v7 can carry a glyph's line feed, and past it the rest of
+    the block would read as a line of its own -- or as a header.
     """
-    groups: list[tuple[tuple[UUID, int], list[str]]] = []
+    groups: list[tuple[tuple[UUID, int, str], list[str]]] = []
     for item in delivered:
-        key = (item.source_id, item.page)
+        key = (item.source_id, item.page, item.hidden)
         if not groups or groups[-1][0] != key:
             groups.append((key, []))
-        groups[-1][1].append(_shown(item))
+        groups[-1][1].append(one_line(item.text.value))
     return "\n\n\n".join(
-        f"source_id: {source_id}\npage: {page}\n\n" + "\n\n".join(lines)
-        for (source_id, page), lines in groups
+        _evidence_header(*key) + "\n\n".join(lines) for key, lines in groups
     )
 
 
@@ -1079,16 +1125,18 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
     receives its host-verified pinned source metadata as context, never as
     evidence; it must still author and validate its P1-P8 workflow. Nothing is
     cut or summarised; the caller bounds it with `within_request_ceiling`.
-    Evidence carries one header per `(source_id, page)` run of `delivered`
-    (ordered by source then block) and nothing per line: the citation rule is
-    stated once, in the final check -- each quote one whole evidence line, once
-    on its page -- and it is the rule `verify_citations` holds the answer to
-    when it is accepted (`WHOLE_LINE`, N28); before N28 the host accepted any
-    unique run of the page, and a record accepted then is re-anchored by that
-    rule, which it names. `retry_feedback` is non-empty only on a node's one second
-    attempt (D30): the checks its refused answer failed, rendered last and
-    folded into the tag, so a first attempt's bytes are exactly what they were
-    and the refused answer could not have known the markers around them.
+    Evidence carries one header per `(source_id, page, mark)` run of
+    `delivered` (ordered by source then block) and nothing per line: the
+    citation rule is stated once, in the final check -- each quote one whole
+    evidence line, once on its page, and never host text, which the check
+    says when a header carries a mark -- and it is the rule `verify_citations`
+    holds the answer to when it is accepted (`WHOLE_LINE`, N28); before N28 the
+    host accepted any unique run of the page, and a record accepted then is
+    re-anchored by that rule, which it names. `retry_feedback` is non-empty
+    only on a node's one second attempt (D30): the checks its refused answer
+    failed, rendered last and folded into the tag, so a first attempt's bytes
+    are exactly what they were and the refused answer could not have known the
+    markers around them.
     """
     if identity.module_id not in ADAPTER_MODULES:
         raise Refusal(RefusalCode.HANDOFF_MODULE_UNSUPPORTED)
@@ -1193,6 +1241,7 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
         source_ids=json.dumps(
             sorted({str(item.source_id) for item in delivered}), separators=(",", ":")
         ),
+        host_text=_HOST_TEXT if any(item.hidden for item in delivered) else "",
     )
     if identity.module_id == GATE_MODULE:
         t8_header = "| " + " | ".join(contract.navigation.NEW_HEADERS) + " |"

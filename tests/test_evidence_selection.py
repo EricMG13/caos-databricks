@@ -10,7 +10,6 @@ any attempt. The rule is pure over pinned inputs, so every reader selects alike.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from uuid import UUID, uuid4
 
 import pytest
@@ -30,8 +29,12 @@ from test_loop_charges import REPORTED
 from caos.boundary_text import BoundaryText
 from caos.methodology import canonical
 from caos.methodology.canonical import check_context
-from caos.methodology.executor import Assignment
-from caos.methodology.invocation import prospective_identity
+from caos.methodology.executor import Assignment, Delivery
+from caos.methodology.invocation import (
+    _evidence_section,
+    evidence_sizes,
+    prospective_identity,
+)
 from caos.methodology.selection import (
     GATE_SOURCE_BYTES,
     Basis,
@@ -375,19 +378,9 @@ def test_a_page_range_naming_nothing_pinned_counts_as_unmapped() -> None:
         select_sources((a,), "a.txt; b.txt pages 1-2", last_pages=last)
 
 
-@dataclass(frozen=True, slots=True)
-class _Block:
-    """The fields `gate_view` reads, as `Delivery` carries them."""
-
-    source_id: UUID
-    block_id: str
-    page: int
-    text: BoundaryText
-
-
-def _paged(source_id: UUID, pages: int, per_page: int, width: int) -> list[_Block]:
+def _paged(source_id: UUID, pages: int, per_page: int, width: int) -> list[Delivery]:
     return [
-        _Block(
+        Delivery(
             source_id,
             f"b{n:06d}",
             n // per_page + 1,
@@ -397,10 +390,25 @@ def _paged(source_id: UUID, pages: int, per_page: int, width: int) -> list[_Bloc
     ]
 
 
+# What the evidence section spends on a page of these fixtures beside its
+# lines: its header -- `source_id: <36>`, `page: <one digit>`, the blank line
+# -- and the two blank lines before it. A line spends its text and one blank.
+PAGE_BYTES = len("source_id: \npage: 1\n\n") + 36 + 3
+
+
 def test_the_gate_is_shown_a_source_within_the_bound_whole() -> None:
+    """Whole while the source's share of the evidence section fits: 3 pages,
+    each its header and 4 lines of 10 bytes and a blank line -- 324 bytes."""
     small = _paged(uuid4(), 3, 4, 10)
-    shown, maps = gate_view(small, budget=120)
+    assert 3 * (PAGE_BYTES + 4 * 12) == 324
+    shown, maps = gate_view(small, budget=324)
     assert shown == small and maps == {}
+    assert gate_view(small, budget=323)[1][small[0].source_id] == {
+        "leading_lines_per_page": 3,
+        "pages": 3,
+        "lines_shown": 9,
+        "lines": 12,
+    }
 
 
 def test_a_source_past_the_bound_is_shown_as_the_leading_lines_of_every_page() -> None:
@@ -408,8 +416,10 @@ def test_a_source_past_the_bound_is_shown_as_the_leading_lines_of_every_page() -
     budget, every page present, each block whole, the order kept."""
     big, small = uuid4(), uuid4()
     blocks = _paged(big, 5, 6, 10) + _paged(small, 1, 2, 10)
-    shown, maps = gate_view(blocks, budget=110)
-    # 5 pages x 2 blocks x 10 bytes = 100 fits; 3 per page = 150 does not.
+    shown, maps = gate_view(blocks, budget=450)
+    # 5 pages x (a header and 2 lines of 12 bytes) = 420 fits; 3 lines = 480
+    # does not.
+    assert 5 * (PAGE_BYTES + 2 * 12) == 420 and 5 * (PAGE_BYTES + 3 * 12) == 480
     assert maps == {
         big: {"leading_lines_per_page": 2, "pages": 5, "lines_shown": 10, "lines": 30}
     }
@@ -427,6 +437,69 @@ def test_a_source_whose_first_lines_alone_pass_the_bound_is_refused() -> None:
         gate_view(_paged(uuid4(), 5, 2, 30), budget=100)
     assert refused.value.code is RefusalCode.CONTEXT_OVER_CEILING
     assert refused.value.__context__ is None and refused.value.__cause__ is None
+
+
+# A scanned statement's line; an OCR'd page is marked on every line (N27).
+SCANNED = "Total revenue for the year rose four percent to 1,240 million."
+
+
+def _scanned(mark: str) -> list[Delivery]:
+    """One source whose lines' text alone is just inside `GATE_SOURCE_BYTES`,
+    fifty lines a page, every line carrying `mark`."""
+    source_id = uuid4()
+    count = GATE_SOURCE_BYTES // len(SCANNED.encode())
+    return [
+        Delivery(source_id, f"b{n:06d}", n // 50 + 1, BoundaryText.of(SCANNED), mark)
+        for n in range(count)
+    ]
+
+
+@pytest.mark.parametrize("mark", ["", "render_mode_3"])
+def test_the_gate_bound_counts_every_host_byte_of_the_evidence_section(
+    mark: str,
+) -> None:
+    """W3: the bound measured the lines' text alone, and the evidence section
+    adds the host's own -- a header a run, the blank lines, and N27's note,
+    which opened every line of a scan: two scans whose text fitted were shown
+    whole in a 6.1 MB section, over the 4 MiB request ceiling, and CP-0 was
+    refused `CONTEXT_OVER_CEILING` before any call. Every byte the section
+    spends on a source is counted now, so each is its page map and the
+    section stays within the two sources' bounds."""
+    pin = _scanned(mark) + _scanned(mark)
+
+    shown, maps = gate_view(pin)
+    section = _evidence_section(shown).encode()
+
+    assert sum(len(item.text.value.encode()) for item in pin[: len(pin) // 2]) <= (
+        GATE_SOURCE_BYTES
+    )
+    assert len(maps) == 2
+    assert len(section) <= 2 * GATE_SOURCE_BYTES < MAX_REQUEST_BYTES
+
+
+def test_each_lines_size_is_its_share_of_the_evidence_section() -> None:
+    """`evidence_sizes` is the section, and 2 bytes a run and 3 more: never
+    fewer bytes than the host renders. A line's size depends only on the one
+    before it, so the sizes of a pin are the sizes of any leading lines of its
+    pages, which is what the gate's page map is cut by."""
+    source = uuid4()
+    lines = [
+        Delivery(source, "b000000", 1, BoundaryText.of("Seen")),
+        Delivery(source, "b000001", 1, BoundaryText.of("Unseen"), "render_mode_3"),
+        Delivery(source, "b000002", 1, BoundaryText.of("Also unseen"), "render_mode_3"),
+        Delivery(source, "b000003", 2, BoundaryText.of("Seen again")),
+        Delivery(source, "b000004", 2, BoundaryText.of("Café")),
+    ]
+    runs = 3
+
+    sizes = evidence_sizes(lines)
+
+    assert sum(sizes) == len(_evidence_section(lines).encode()) + 2 * runs + 3
+    leading = [lines[0], lines[1], lines[3]]
+    assert evidence_sizes(leading) == [sizes[0], sizes[1], sizes[3]]
+    assert sum(evidence_sizes(leading)) == len(_evidence_section(leading).encode()) + (
+        2 * runs + 3
+    )
 
 
 def test_the_gate_bound_leaves_two_mapped_sources_and_the_authority_room() -> None:

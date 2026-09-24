@@ -695,7 +695,9 @@ class CanonicalRecord:
     upstream, ordered by route node id, each pair read from the stored records
     (§45.4). `citation_rule` is how `citations` were located when it was
     accepted (N28), and so how a reader re-anchors them: `ANY_RUN` for every
-    record written before the whole-line rule, which carries no such field.
+    record written before the whole-line rule, which carries no such field,
+    `WHOLE_LINE_AS_STORED` for one accepted under that rule's first reading,
+    and `WHOLE_LINE` for one accepted since (W6, N13).
     """
 
     artifact_sha256: str
@@ -1334,11 +1336,30 @@ def _research_messages(
         )
     except ValueError as refused:  # the vendor's own message, bounded
         # As text, here at the vendor's boundary: `_bounded` passes strings
-        # alone, and the exception itself was dropped there (R24-07).
-        return [("research", _vendor_said(refused))]
+        # alone, and the exception itself was dropped there (R24-07). Every
+        # value it quotes is withheld (N7): the dossier's checks call Python's
+        # own parsers on the answer's cells, whose messages quote the cell.
+        return [("research", _without_values(_vendor_said(refused)))]
     except Refusal:  # no bound brief: a help line never stops a run
         return []
     return []
+
+
+# A value a message quotes the way Python's `repr` writes one: in single
+# quotes, or in double quotes when it holds a single one, with backslash
+# escapes inside and never a line break. A quote with a letter or digit just
+# before it is an apostrophe in the message's own words, not a value.
+_QUOTED = re.compile(r"""(?<!\w)(?:'(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*")""")
+WITHHELD_VALUE = "<value withheld>"
+
+
+def _without_values(message: str | None) -> str | None:
+    """A relayed vendor message with every value it quotes withheld (N7):
+    the field it names and the fault it states stay, so the second attempt
+    knows what to fix, and no cell of the answer is quoted back into the
+    host's section. `date.fromisoformat` over a `source_date` cell said
+    `Invalid isoformat string: '<the cell>'`, and a cell can say anything."""
+    return None if message is None else _QUOTED.sub(WITHHELD_VALUE, message)
 
 
 def _t8_messages(

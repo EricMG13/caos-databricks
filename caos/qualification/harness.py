@@ -65,7 +65,12 @@ import psycopg
 
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
-from caos.evidence.extract import dispatch_by_content
+from caos.evidence.extract import (
+    PlainTextExtractor,
+    Token,
+    dispatch_by_content,
+    text_fallback,
+)
 from caos.evidence.ingest import admit_pack
 from caos.graph.route import (
     GATE_MODULE,
@@ -795,11 +800,13 @@ def _locatable(data: bytes, matched_text: str) -> bool:
     problem than a wrong key -- `SOURCE_HAS_NO_TEXT`, raised moments later by
     admission -- so it answers `True` here and lets that check run instead of
     masking it. Unreadable bytes (`SOURCE_NOT_READABLE` and the like) are left
-    to raise from here: the same refusal admission would give them anyway.
+    to raise from here: the same refusal admission would give them anyway --
+    and bytes admission reads as text when no PDF parses (`text_fallback`,
+    N8) are read as text here too.
     """
     if not matched_text.split():
         return False
-    tokens = dispatch_by_content(data).extract(data)
+    tokens = _extracted(data)
     if not tokens:
         return True
     by_page: dict[int, list[str]] = defaultdict(list)
@@ -807,6 +814,20 @@ def _locatable(data: bytes, matched_text: str) -> bool:
         by_page[token.page].append(_letters(token.text))
     wanted = _letters(matched_text)
     return any(wanted in "".join(texts) for texts in by_page.values())
+
+
+def _extracted(data: bytes) -> list[Token]:
+    """`data`'s tokens as admission reads them: by the extractor its content
+    calls for, and as plain text where that is a PDF reader that cannot parse
+    bytes whose header is not at their first byte (`text_fallback`)."""
+    try:
+        return dispatch_by_content(data).extract(data)
+    except Refusal as refused:
+        if refused.code is not RefusalCode.SOURCE_NOT_READABLE or not text_fallback(
+            data
+        ):
+            raise
+    return PlainTextExtractor().extract(data)
 
 
 def _letters(text: str) -> str:
