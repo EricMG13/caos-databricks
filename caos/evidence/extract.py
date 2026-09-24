@@ -201,16 +201,33 @@ def dispatch_by_content(data: bytes) -> Extractor:
     will actually meet. Bytes that begin with the header declare a PDF
     (§44.6). A header further into the first kilobyte is a PDF's only when
     the document also ends as one, so a memo naming `%PDF-1.7` in its first
-    lines is read as the text it is rather than refused as a broken PDF.
+    lines is read as the text it is rather than refused as a broken PDF --
+    and one naming `%%EOF` too is read as text when no PDF parses
+    (`text_fallback`).
     """
-    at = data.find(PDF_HEADER, 0, PDF_HEADER_WINDOW)
-    if at == 0 or (at > 0 and PDF_EOF in data[-PDF_EOF_WINDOW:]):
+    if data.startswith(PDF_HEADER) or text_fallback(data):
         # Imported here: `pdf` imports this module, and plain-text admission
         # should not pay for pdfminer.
         from caos.evidence.pdf import PdfExtractor
 
         return PdfExtractor()
     return PlainTextExtractor()
+
+
+def text_fallback(data: bytes) -> bool:
+    """Whether `dispatch_by_content` reads `data` as a PDF only on a header
+    past its first byte and an end marker in its last kilobyte -- and so
+    reads it as plain text when no PDF parses (N8).
+
+    Bytes that begin with the header declare a PDF, and are refused when
+    they are not one: a corrupt PDF is never admitted as garbage tokens. A
+    header further in is a reader's leniency for leading junk, and a short
+    memo naming both markers -- "our files start with %PDF-1.7 and end with
+    %%EOF" -- met it and was refused `SOURCE_NOT_READABLE`: a readable
+    document no one could admit for one sentence in it.
+    """
+    at = data.find(PDF_HEADER, 0, PDF_HEADER_WINDOW)
+    return at > 0 and PDF_EOF in data[-PDF_EOF_WINDOW:]
 
 
 # The widest token this extractor emits. `BoundaryText`'s own limit, which is
