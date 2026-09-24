@@ -61,6 +61,8 @@ from caos.api.wire import (
     PinRunInput,
     RectView,
     RefusalBody,
+    ResearchBrief,
+    ResearchBriefQuestion,
     RetryRun,
     RevisionSaved,
     RevokeStanding,
@@ -350,7 +352,29 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
         {"profile_id", "selection_id", "supersedes", "model_extension"}
     ),
     RunCreated: frozenset({"case_id", "run_id", "route_digest"}),
-    PinRunInput: frozenset({"subject"}),
+    ResearchBriefQuestion: frozenset(
+        {
+            "question_id",
+            "question",
+            "decision_relevance",
+            "consumer_module_id",
+            "after_module_id",
+            "evidence_needed",
+            "completion_test",
+        }
+    ),
+    ResearchBrief: frozenset(
+        {
+            "decision_context",
+            "as_of_date",
+            "time_horizon",
+            "budget",
+            "authorization_basis",
+            "exclusions",
+            "questions",
+        }
+    ),
+    PinRunInput: frozenset({"subject", "research"}),
     RunInputPinned: frozenset({"run_id", "source_set_version", "input_fingerprint"}),
     GatePreviewDocument: frozenset(
         {

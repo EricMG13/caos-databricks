@@ -56,7 +56,12 @@ from caos.store.gates import (
 )
 from caos.store.members import Standing
 from caos.store.routes import pin_route_in
-from caos.store.run_inputs import RunSubject, pin_run_input_in, valid_subject
+from caos.store.run_inputs import (
+    RunSubject,
+    linked_research_brief,
+    pin_run_input_in,
+    valid_subject,
+)
 from caos.store.runs import start_run
 from caos.store.source_sets import snapshot_in
 
@@ -196,12 +201,21 @@ def pin_input(  # noqa: PLR0913 -- identity, key, floor, body, path, store, bund
     subject = RunSubject(**body.subject.model_dump())
     if not valid_subject(subject):
         raise Refusal(RefusalCode.REQUEST_INVALID)
+    research = (
+        None
+        if body.research is None
+        else linked_research_brief(
+            body.research.model_dump(mode="json"), subject=subject
+        )
+    )
 
     def write(unit: StoreConnection) -> tuple[int, RunInputPinned]:
         if _owned_run(unit, case_id, run)[0]:
             raise Refusal(RefusalCode.RUN_INPUT_ALREADY_PINNED)
         source = snapshot_in(unit, case_id)
-        pin = pin_run_input_in(unit, run, source.version, bundle, subject=subject)
+        pin = pin_run_input_in(
+            unit, run, source.version, bundle, research, subject=subject
+        )
         return 200, RunInputPinned(
             run_id=run,
             source_set_version=pin.source_version,

@@ -230,7 +230,7 @@ def test_a_governed_run_completes_through_the_platform_surface(
     assert run.status == 201, run.body
     run_id = run.body["run_id"]
     base = f"/api/v1/cases/{case}/runs/{run_id}"
-    pinned = analyst.post(f"{base}/input", {"subject": SUBJECT})
+    pinned = analyst.post(f"{base}/input", {"subject": SUBJECT, "research": None})
     assert pinned.status in (200, 201), pinned.body
     fingerprint = pinned.body["input_fingerprint"]
     for gate in GATES:

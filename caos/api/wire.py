@@ -89,6 +89,7 @@ NARRATIVE_SPANS = 64
 BOOK_CASES_MAX = 4  # "Two to four credits side by side" (IA_SPEC.md 4.4)
 BOOK_COLUMNS_MAX = 16  # the host-declared columns of the CP-CF projection
 BOOK_PERIODS_MAX = 8  # beyond it a row is partial, `LIST_TRUNCATED`
+BRIEF_QUESTIONS_MAX = 32  # `CP_DR_RESEARCH_BRIEF_V1.md`'s bounded batch
 
 Id = Annotated[str, Field(max_length=ID_CHARS)]
 Text = Annotated[str, Field(max_length=TEXT_CHARS)]
@@ -1227,10 +1228,52 @@ class RunCreated(BaseModel):
     route_digest: Sha256
 
 
+class ResearchBriefQuestion(BaseModel):
+    """One row of a CP-DR brief's bounded question batch
+    (`CP_DR_RESEARCH_BRIEF_V1.md`'s `questions`)."""
+
+    model_config = _CLOSED
+
+    question_id: Id
+    question: Text
+    decision_relevance: Text
+    consumer_module_id: Id
+    after_module_id: Id
+    evidence_needed: Text
+    completion_test: Text
+
+
+class ResearchBrief(BaseModel):
+    """The caller-authored fields of a run-linked CP-DR brief
+    (`CP_DR_RESEARCH_BRIEF_V1.md`). The host supplies the rest -- `schema`,
+    `mode: linked`, the CP-0 `scope_type`/`scope_key`/`subject_name` identity
+    (from the pinned subject) and `source_mode: supplied_only` (invariant 1)
+    -- before `bound_research_brief` judges the whole against the pinned
+    route and subject; this model states only what the vendor schema leaves
+    to the caller. A route that does not carry CP-DR, or one that requires a
+    brief this pin omits, still refuses in the store (invariant 4)."""
+
+    model_config = _CLOSED
+
+    decision_context: Text
+    as_of_date: Annotated[str, Field(max_length=10, pattern=r"^\d{4}-\d{2}-\d{2}$")]
+    time_horizon: Text
+    budget: Literal["standard", "extended"]
+    authorization_basis: Text
+    exclusions: Text
+    questions: Annotated[
+        list[ResearchBriefQuestion], Field(max_length=BRIEF_QUESTIONS_MAX)
+    ]
+
+
 class PinRunInput(BaseModel):
     model_config = _CLOSED
 
     subject: RunSubjectView
+    # Required on every advertised research route (`DEEP_RESEARCH`,
+    # `LITE_DEEP_RESEARCH`); null elsewhere. Stated on every request, as every
+    # request field is: an absent key is a malformed body, not a default.
+    research: ResearchBrief | None
 
 
 class RunInputPinned(BaseModel):

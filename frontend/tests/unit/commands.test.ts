@@ -122,10 +122,10 @@ describe("the command transport", () => {
       reporting_period: "FY2025Q4",
       analysis_date: "2026-09-14",
     };
-    await pinRunInput(CASE, RUN, subject);
+    await pinRunInput(CASE, RUN, subject, null);
     expect(fetchSpy.mock.calls[2]![0]).toBe(`/api/v1/cases/${CASE}/runs/${RUN}/input`);
     expect(fetchSpy.mock.calls[2]![1].method).toBe("POST");
-    expect(fetchSpy.mock.calls[2]![1].body).toBe(JSON.stringify({ subject }));
+    expect(fetchSpy.mock.calls[2]![1].body).toBe(JSON.stringify({ subject, research: null }));
 
     await fetchGatePreview(CASE, RUN, "SOURCE_SET");
     expect(fetchSpy.mock.calls[3]![0]).toBe(

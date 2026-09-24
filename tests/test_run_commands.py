@@ -69,7 +69,32 @@ SUBJECT = {
     "reporting_period": "FY2025",
     "analysis_date": "2026-09-08",
 }
-PIN = {"subject": SUBJECT}
+PIN = {"subject": SUBJECT, "research": None}
+# One of the two advertised research routes (R24-01): CP-0 -> CP-DR,
+# anchored, so the vendor's own placement is consumer `NONE` after `CP-0`
+# (`CP_DR_RESEARCH_BRIEF_V1.md`). The caller-authored fields only -- `schema`,
+# `mode`, the CP-0 scope/subject identity and `source_mode` are the host's,
+# filled in by `linked_research_brief` from the pinned `SUBJECT`.
+RESEARCH_ROUTE = {**ROUTE, "selection_id": "LITE_DEEP_RESEARCH"}
+RESEARCH_BRIEF = {
+    "decision_context": "Test the liquidity assumption before the screen",
+    "as_of_date": "2026-09-08",
+    "time_horizon": "Next 12 months",
+    "budget": "standard",
+    "authorization_basis": "The task instruction to research this issuer",
+    "exclusions": "No web or model-memory sources; no trade recommendation",
+    "questions": [
+        {
+            "question_id": "RQ-headroom",
+            "question": "What undrawn committed facilities did the issuer report at year end?",
+            "decision_relevance": "Sets the liquidity headroom assumption",
+            "consumer_module_id": "NONE",
+            "after_module_id": "CP-0",
+            "evidence_needed": "The issuer's own year-end disclosure",
+            "completion_test": "A supported answer with contrary evidence",
+        }
+    ],
+}
 SOURCE_SET, RESEARCH_PLAN = "gates/source-set/", "gates/research-plan/"
 TABLES = "runs run_routes run_inputs source_set_versions run_gates audit_events"
 
@@ -432,7 +457,7 @@ def test_the_subject_pin_snapshots_live_sources_once(
     foreign = start_run(conn, create_case(conn, BoundaryText.of("Other 2026")))
     conn.commit()
     before = _effects(conn)
-    invalid = {"subject": {**SUBJECT, "analysis_date": "2026-02-30"}}
+    invalid = {"subject": {**SUBJECT, "analysis_date": "2026-02-30"}, "research": None}
     for run, body, outcome in [
         (run_id, invalid, "400 REQUEST_INVALID"),
         (foreign, PIN, "404 RUN_NOT_FOUND"),
@@ -463,6 +488,50 @@ def test_the_subject_pin_snapshots_live_sources_once(
     again = _send(client, _path(case_id, run_id, "input"), writer, PIN)
     assert _outcome(again) == "409 RUN_INPUT_ALREADY_PINNED"
     assert _effects(conn) == before
+
+
+def test_a_research_route_requires_and_accepts_a_bound_brief(
+    client: TestClient, case: tuple[StoreConnection, UUID], sourced: UUID
+) -> None:
+    """R24-01: the store requires a research brief for the two advertised
+    research routes before it will pin their input, but Pin input accepted
+    only a subject -- neither the command nor its wire model could carry one,
+    so both research workflows stopped before execution. The wire model, the
+    command, its request digest/idempotency (`body.model_dump` unchanged) and
+    the store's `pin_run_input_in` now carry a caller's brief through, while
+    the store's own route-specific validation is untouched: a subject alone
+    on this route still refuses, exactly as before."""
+    conn, case_id = case
+    writer = member(conn, case_id)
+    approver = member(conn, case_id, Standing.APPROVER)
+    created = _send(client, _path(case_id), writer, RESEARCH_ROUTE)
+    assert created.status_code == 201, created.text
+    run_id = UUID(created.json()["run_id"])
+
+    subject_only = _send(client, _path(case_id, run_id, "input"), writer, PIN)
+    assert _outcome(subject_only) == "500 RUN_INPUT_INVALID"
+
+    pinned = _send(
+        client,
+        _path(case_id, run_id, "input"),
+        writer,
+        {"subject": SUBJECT, "research": RESEARCH_BRIEF},
+    )
+    assert pinned.status_code == 200, pinned.text
+    stored = load_run_input(conn, run_id)
+    assert stored is not None and stored.research_json is not None
+    conn.rollback()
+
+    # Both gates -- SOURCE_SET and the research route's own RESEARCH_PLAN --
+    # now preview and approve: the pinned run is no longer stuck before
+    # execution.
+    for slug in (SOURCE_SET, RESEARCH_PLAN):
+        digests = _digests(client, case_id, run_id, approver, slug)
+        approved = _send(
+            client, _path(case_id, run_id, slug + "approval"), approver, digests
+        )
+        assert approved.status_code == 200, approved.text
+    assert {gate_state(conn, run_id, gate) for gate in Gate} == {GateState.RELEASED}
 
 
 def test_approval_of_a_stale_or_transplanted_preview_is_a_conflict(

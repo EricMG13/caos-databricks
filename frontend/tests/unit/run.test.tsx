@@ -486,7 +486,10 @@ describe("Run", () => {
         expect(note).not.toBeNull();
       });
       const [, init] = fetchSpy.mock.calls[0]!;
-      expect(JSON.parse((init as RequestInit).body as string)).toEqual({ subject: run.subject });
+      expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+        subject: run.subject,
+        research: null,
+      });
       expect(
         UUID.test(
           ((init as RequestInit).headers as Record<string, string>)["Idempotency-Key"] ?? "",
@@ -497,6 +500,129 @@ describe("Run", () => {
       await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(2));
       const [refetchUrl] = fetchSpy.mock.calls[1]!;
       expect(refetchUrl).toBe(`/api/v1/cases/${caseId}/run?run=${run.run_id}`);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  // R24-01: the store requires a validated CP-DR research brief on the two
+  // advertised research routes (`LITE_DEEP_RESEARCH`, `DEEP_RESEARCH`) before
+  // it will pin their input; the Run section must carry one through, not
+  // just a subject. A CP-DR node on the resolved route (pinned at Create run,
+  // before any input pin) is the one signal the reader has for "this route
+  // needs a brief" -- no new wire field names the route family.
+  test("test_a_research_route_shows_and_sends_a_linked_brief", async () => {
+    const run = running.body.run!;
+    const researchRun = {
+      ...run,
+      nodes: [
+        ...run.nodes,
+        {
+          route_node_id: "CP-DR",
+          module_id: "CP-DR",
+          stage: 99,
+          state: "RUNNABLE" as NodeState,
+          waiting_on: [],
+          awaiting_gate: false,
+          gate_verdict: null,
+          gate_reason: null,
+        },
+      ],
+    };
+    const doc = withActions(
+      { ...running, body: { ...running.body, run: researchRun } },
+      [{ action: "PIN_RUN_INPUT", refusal: null }],
+    );
+    const receipt = {
+      run_id: run.run_id,
+      source_set_version: run.source_set_version,
+      input_fingerprint: "f".repeat(64),
+    };
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(receipt))
+      .mockResolvedValueOnce(jsonResponse(doc));
+    vi.stubGlobal("fetch", fetchSpy);
+    try {
+      const { container } = mount(doc);
+      expect(container.querySelector("[data-research-brief]")).not.toBeNull();
+
+      const set = (field: string, value: string) => {
+        fireEvent.change(container.querySelector(`[data-field="${field}"]`)!, {
+          target: { value },
+        });
+      };
+      set("decision_context", "Test the demand assumption before setting downside");
+      set("as_of_date", "2026-09-08");
+      set("time_horizon", "Next 12 months");
+      set("authorization_basis", "Existing task instruction to research this issuer");
+      set("exclusions", "No confidential inputs in public searches; no trade recommendation");
+      set("question_id", "RQ-demand");
+      set("question", "Does independent evidence support the claimed end of destocking?");
+      set("decision_relevance", "Affects the downside demand assumption");
+      set("evidence_needed", "Current customer, competitor and industry disclosures");
+      set(
+        "completion_test",
+        "Evidence-weighted answer with contrary evidence and remaining uncertainty",
+      );
+
+      fireEvent.click(container.querySelector('[data-action="PIN_RUN_INPUT"]')!);
+      await waitFor(() => {
+        expect(container.querySelector("[data-command-success]")).not.toBeNull();
+      });
+
+      const [, init] = fetchSpy.mock.calls[0]!;
+      const sent = JSON.parse((init as RequestInit).body as string);
+      expect(sent.subject).toEqual(run.subject);
+      expect(sent.research).toEqual({
+        decision_context: "Test the demand assumption before setting downside",
+        as_of_date: "2026-09-08",
+        time_horizon: "Next 12 months",
+        budget: "standard",
+        authorization_basis: "Existing task instruction to research this issuer",
+        exclusions: "No confidential inputs in public searches; no trade recommendation",
+        questions: [
+          {
+            question_id: "RQ-demand",
+            question: "Does independent evidence support the claimed end of destocking?",
+            decision_relevance: "Affects the downside demand assumption",
+            consumer_module_id: "NONE",
+            after_module_id: "CP-0",
+            evidence_needed: "Current customer, competitor and industry disclosures",
+            completion_test:
+              "Evidence-weighted answer with contrary evidence and remaining uncertainty",
+          },
+        ],
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  // A non-research route shows no brief fields at all, and the field the
+  // form does not render cannot be filled in and sent by mistake.
+  test("test_an_ordinary_route_shows_no_brief_fields_and_sends_a_null_research", async () => {
+    const run = running.body.run!;
+    const doc = withActions(running, [{ action: "PIN_RUN_INPUT", refusal: null }]);
+    const receipt = {
+      run_id: run.run_id,
+      source_set_version: run.source_set_version,
+      input_fingerprint: "f".repeat(64),
+    };
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(receipt))
+      .mockResolvedValueOnce(jsonResponse(doc));
+    vi.stubGlobal("fetch", fetchSpy);
+    try {
+      const { container } = mount(doc);
+      expect(container.querySelector("[data-research-brief]")).toBeNull();
+      fireEvent.click(container.querySelector('[data-action="PIN_RUN_INPUT"]')!);
+      await waitFor(() => {
+        expect(container.querySelector("[data-command-success]")).not.toBeNull();
+      });
+      const [, init] = fetchSpy.mock.calls[0]!;
+      expect(JSON.parse((init as RequestInit).body as string).research).toBeNull();
     } finally {
       vi.unstubAllGlobals();
     }

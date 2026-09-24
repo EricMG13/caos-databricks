@@ -219,6 +219,12 @@ export function RunSection({ document }: { document: RunSectionDocument; tab: st
             runId={run.run_id}
             action={actionOf(actions, "PIN_RUN_INPUT")}
             initial={run.subject}
+            // The resolved route is pinned at Create run (§ create_run), so a
+            // CP-DR node is already on `run.nodes` before any input is
+            // pinned: the one signal this reader needs to require a research
+            // brief on the advertised research routes (R24-01), without a
+            // new wire field naming the route family.
+            requiresResearch={run.nodes.some((node) => node.module_id === "CP-DR")}
             onPinned={learn}
             onRefetch={refetch}
           />
