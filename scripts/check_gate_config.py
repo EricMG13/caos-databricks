@@ -574,19 +574,25 @@ def _bundle_problems(root: Path) -> list[str]:
     return problems
 
 
-def ci_commands(ci_text: str) -> list[str]:
-    """Every command a CI file's `run:` steps execute, whitespace collapsed:
-    a folded block is one command, a literal block one per line (with its
-    backslash continuations joined)."""
+def _ci_spans(ci_text: str) -> list[tuple[str, int, int]]:
+    """Every command a CI file's `run:` steps execute, whitespace collapsed
+    (a folded block is one command, a literal block one per line, with its
+    backslash continuations joined), each paired with the line owning its
+    `run:` key and the line marking its step's start (`- `) -- so a `run:`
+    guarded by an `if:` on its own step, or on the job around it, can still
+    be found (R24-11) without touching what `ci_commands` reads."""
     lines = ci_text.splitlines()
-    commands: list[str] = []
+    spans: list[tuple[str, int, int]] = []
+    step_start = 0
     for index, line in enumerate(lines):
+        if re.match(r"^\s*-\s", line):
+            step_start = index
         step = re.match(r"^(\s*)(-\s+)?run:\s*(.*?)\s*$", line)
         if step is None:
             continue
         value = step.group(3)
         if value not in ("|", "|-", ">", ">-"):
-            commands.append(value)
+            spans.append((value, index, step_start))
             continue
         indent = len(step.group(1)) + len(step.group(2) or "")
         block: list[str] = []
@@ -595,10 +601,54 @@ def ci_commands(ci_text: str) -> list[str]:
                 break
             block.append(follow.strip())
         joined = "\n".join(block).replace("\\\n", " ")
-        commands += (
+        commands = (
             [joined.replace("\n", " ")] if value[0] == ">" else joined.split("\n")
         )
-    return [" ".join(command.split()) for command in commands if command.strip()]
+        spans += [(command, index, step_start) for command in commands]
+    return [
+        (" ".join(command.split()), run_line, step_start)
+        for command, run_line, step_start in spans
+        if command.strip()
+    ]
+
+
+def ci_commands(ci_text: str) -> list[str]:
+    """Every command a CI file's `run:` steps execute, whitespace collapsed:
+    a folded block is one command, a literal block one per line (with its
+    backslash continuations joined)."""
+    return [command for command, _run_line, _step_start in _ci_spans(ci_text)]
+
+
+_STEP_IF = re.compile(r"^\s*(?:-\s+)?if:\s*\S")
+_JOB_IF = re.compile(r"^ {4}if:\s*\S")
+_JOB_HEADER = re.compile(r"^ {2}[\w-]+:\s*$")
+
+
+def _job_start(lines: list[str], step_start: int) -> int:
+    for index in range(step_start, -1, -1):
+        if _JOB_HEADER.match(lines[index]):
+            return index
+    return 0
+
+
+def _ci_condition_problems(ci_text: str) -> list[str]:
+    """R24-11: `if:` on a required gate's own step, or on the job around it,
+    can stop it from ever running while its `run:` text -- all
+    `ci_commands` reads -- stays exactly as committed, so the old check
+    still saw it as present. Any `if:` there is refused outright; a
+    required gate step or job may not carry one at all."""
+    lines = ci_text.splitlines()
+    problems: list[str] = []
+    for command, run_line, step_start in _ci_spans(ci_text):
+        if command not in CI_GATES:
+            continue
+        if any(_STEP_IF.match(line) for line in lines[step_start : run_line + 1]):
+            problems.append(f"ci: {command!r} runs only when its step's if: allows it")
+            continue
+        job_start = _job_start(lines, step_start)
+        if any(_JOB_IF.match(line) for line in lines[job_start:step_start]):
+            problems.append(f"ci: {command!r} runs only when its job's if: allows it")
+    return problems
 
 
 STAND_IN = "uv run python tests/workspace_stub.py --"
@@ -682,6 +732,7 @@ def _ci_problems(root: Path) -> list[str]:
         for command in commands
         if "${{" in command
     ]
+    problems += _ci_condition_problems(ci_text)
     for key in ("continue-on-error", "PYTEST_ADDOPTS"):
         if key in ci_text:
             problems.append(f"ci: {key} is set; a gate would pass whatever it finds")
