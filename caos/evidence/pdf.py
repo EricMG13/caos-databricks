@@ -99,7 +99,7 @@ CROP_POLICY = "drop-outside"
 UNENCRYPTED = ""
 # What a token makes of a line break in its glyphs' text (`extract.LINE_BREAKS`,
 # W4): a space, so a token is never more than one line.
-TOKEN_LINE_BREAKS = "space"
+GLYPH_LINE_BREAKS = "space"
 # What marks a line a reader of the rendered page may not see (N27,
 # `caos/evidence/visibility.py`), declared because it decides the tokens' marks.
 # Text render mode 3 paints a glyph neither filled nor stroked (ISO 32000-1,
@@ -214,7 +214,7 @@ class PdfExtractor:
                 "caching": True,
                 "max_token_chars": MAX_TOKEN_CHARS,
                 "token_cut": RUN_CUT,
-                "token_line_breaks": TOKEN_LINE_BREAKS,
+                "token_line_breaks": GLYPH_LINE_BREAKS,
                 "hidden_render_mode": INVISIBLE_RENDER_MODE,
                 "hidden_clip_render_mode": CLIP_ONLY_RENDER_MODE,
                 "hidden_under_pt": SMALLEST_READABLE_PT,

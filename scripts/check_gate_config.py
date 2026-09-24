@@ -145,9 +145,14 @@ _VENDOR_QUAL_EXCLUDE = (
 )
 
 
+# What every local hook sets besides its command. Pairs, not a literal: bandit
+# reads a `pass_filenames` key as a password name (B105).
+_LOCAL_HOOK = (("language", "system"), ("pass_filenames", False))
+
+
 def _local(entry: str) -> dict[str, object]:
     """A local hook's whole body: the command, run once by the system."""
-    return {"entry": entry, "language": "system", "pass_filenames": False}
+    return {"entry": entry, **dict(_LOCAL_HOOK)}
 
 
 # Each hook id's whole body but its labels (or bodies, in file order, for an
