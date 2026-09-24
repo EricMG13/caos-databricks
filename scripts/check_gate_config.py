@@ -574,13 +574,31 @@ def _bundle_problems(root: Path) -> list[str]:
     return problems
 
 
+def _block_lines(lines: list[str], start: int, indent: int) -> list[str]:
+    """The indented lines following a `run: |`/`run: >` key, up to the first
+    that dedents to `indent` or less -- the keys after the block, not part
+    of it."""
+    block: list[str] = []
+    for follow in lines[start:]:
+        if follow.strip() and len(follow) - len(follow.lstrip()) <= indent:
+            break
+        block.append(follow.strip())
+    return block
+
+
+def _block_commands(value: str, block: list[str]) -> list[str]:
+    """A folded block (`>`/`>-`) is one command; a literal block (`|`/`|-`)
+    is one per line, its backslash continuations joined first."""
+    joined = "\n".join(block).replace("\\\n", " ")
+    return [joined.replace("\n", " ")] if value[0] == ">" else joined.split("\n")
+
+
 def _ci_spans(ci_text: str) -> list[tuple[str, int, int]]:
-    """Every command a CI file's `run:` steps execute, whitespace collapsed
-    (a folded block is one command, a literal block one per line, with its
-    backslash continuations joined), each paired with the line owning its
-    `run:` key and the line marking its step's start (`- `) -- so a `run:`
-    guarded by an `if:` on its own step, or on the job around it, can still
-    be found (R24-11) without touching what `ci_commands` reads."""
+    """Every command a CI file's `run:` steps execute, whitespace collapsed,
+    each paired with the line owning its `run:` key and the line marking
+    its step's start (`- `) -- so a `run:` guarded by an `if:` on its own
+    step, or on the job around it, can still be found (R24-11) without
+    touching what `ci_commands` reads."""
     lines = ci_text.splitlines()
     spans: list[tuple[str, int, int]] = []
     step_start = 0
@@ -595,16 +613,8 @@ def _ci_spans(ci_text: str) -> list[tuple[str, int, int]]:
             spans.append((value, index, step_start))
             continue
         indent = len(step.group(1)) + len(step.group(2) or "")
-        block: list[str] = []
-        for follow in lines[index + 1 :]:
-            if follow.strip() and len(follow) - len(follow.lstrip()) <= indent:
-                break
-            block.append(follow.strip())
-        joined = "\n".join(block).replace("\\\n", " ")
-        commands = (
-            [joined.replace("\n", " ")] if value[0] == ">" else joined.split("\n")
-        )
-        spans += [(command, index, step_start) for command in commands]
+        block = _block_lines(lines, index + 1, indent)
+        spans += [(c, index, step_start) for c in _block_commands(value, block)]
     return [
         (" ".join(command.split()), run_line, step_start)
         for command, run_line, step_start in spans
