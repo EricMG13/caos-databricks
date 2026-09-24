@@ -357,3 +357,35 @@ def test_a_checkpoint_schema_another_role_made_first_refuses_both_boots(
                 (checkpoint.SCHEMA,),
             ).fetchone()
         assert held == (0,), "no LangGraph table was set up in it"
+
+
+@pytest.mark.parametrize("platform", [False, True], ids=["local", "platform"])
+def test_a_pooled_checkpoint_connection_carries_socket_and_statement_bounds(
+    empty_database: str, monkeypatch: pytest.MonkeyPatch, platform: bool
+) -> None:
+    """W4: the pool opens its own connections -- a `MintedConnection` on the
+    platform, a plain one elsewhere -- and so never passed through
+    `caos.store.connect`: no keepalives, no `tcp_user_timeout`, no statement
+    bound, and a half-open socket stalled a checkpoint write, or the pool's
+    own check, for the kernel's timeout. Every pooled connection carries the
+    store's socket bounds now, and `STATEMENT_TIMEOUT_MS`, which set-up's own
+    longer bound does not outlive."""
+    from caos import store
+
+    if platform:
+        monkeypatch.setenv(lakebase.LAKEBASE_INSTANCE, "caos-lb")
+        monkeypatch.setattr(checkpoint, "store_url", lambda: empty_database)
+    saver = checkpointer(None if platform else empty_database)
+    try:
+        pool = getattr(saver, "conn", None)
+        assert isinstance(pool, ConnectionPool)
+        with pool.connection() as pooled:
+            parameters = pooled.info.get_parameters()
+            bound = pooled.execute("SHOW statement_timeout").fetchone()
+    finally:
+        close_checkpointer(saver)
+    assert {name: parameters.get(name) for name in store.SOCKET_BOUNDS} == {
+        name: str(value) for name, value in store.SOCKET_BOUNDS.items()
+    }
+    assert checkpoint.STATEMENT_TIMEOUT_MS == 30_000
+    assert bound == {"statement_timeout": "30s"}

@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import json
 import sys
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from enum import StrEnum
 from hashlib import sha256
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 import psycopg
@@ -311,6 +312,18 @@ KEEPALIVES_IDLE_SECONDS = 30
 KEEPALIVES_INTERVAL_SECONDS = 10
 KEEPALIVES_COUNT = 3
 TCP_USER_TIMEOUT_MS = 30_000
+# The connection parameters that carry them, for every connection to the
+# store's database: `connect`'s own, and the checkpointer pool's (W4), which
+# opens its connections itself and so never passed through `connect`.
+SOCKET_BOUNDS: Mapping[str, int] = MappingProxyType(
+    {
+        "keepalives": 1,
+        "keepalives_idle": KEEPALIVES_IDLE_SECONDS,
+        "keepalives_interval": KEEPALIVES_INTERVAL_SECONDS,
+        "keepalives_count": KEEPALIVES_COUNT,
+        "tcp_user_timeout": TCP_USER_TIMEOUT_MS,
+    }
+)
 
 
 def connect(
@@ -343,13 +356,7 @@ def connect(
     """
     from caos.store.lakebase import note_connect_failure
 
-    kwargs: dict[str, Any] = {
-        "keepalives": 1,
-        "keepalives_idle": KEEPALIVES_IDLE_SECONDS,
-        "keepalives_interval": KEEPALIVES_INTERVAL_SECONDS,
-        "keepalives_count": KEEPALIVES_COUNT,
-        "tcp_user_timeout": TCP_USER_TIMEOUT_MS,
-    }
+    kwargs: dict[str, Any] = dict(SOCKET_BOUNDS)
     if connect_timeout is not None:
         kwargs["connect_timeout"] = connect_timeout
     options = [SEARCH_PATH_OPTION]
