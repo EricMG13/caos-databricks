@@ -6,7 +6,7 @@ import type { NodeState, Severity } from "@/wire";
 export const NODE_SEVERITY: Record<NodeState, Severity> = {
   COMPLETE: "SUCCESS",
   RUNNABLE: "RUNNING",
-  RESTRICTED: "WARNING",
+  RESTRICTED: "RESTRICTED",
   BLOCKED: "CRITICAL",
 };
 

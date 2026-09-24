@@ -49,7 +49,6 @@ export function WithdrawSource({
           digest: row.document_sha256,
         }}
         onConfirm={action ? () => void submit() : undefined}
-        className="rb"
         reasonDisplay={reasonDisplay}
         action="WITHDRAW_SOURCE"
         aria-label={`Withdraw ${row.filename}`}

@@ -8,6 +8,7 @@ import { toFraction, type Box } from "./geometry";
 import { OFFLINE_WORDING, UNAVAILABLE_WORDING, fetchPage, type PageStatus } from "@/app/transport";
 import { useModalA11y } from "@/ds/use-modal-a11y";
 import type { CitationView, PageDocument } from "@/wire/v1";
+import { Button } from "@/components/ui/button";
 
 const place = (box: Box) => ({
   left: `${box.left * 100}%`,
@@ -151,9 +152,12 @@ export function SourceDrawer({
           <h2 id={titleId}>
             {fact.filename} · page {fact.page}
           </h2>
-          <button type="button" className="close focus-ring" onClick={onClose}>
-            ESC · CLOSE
-          </button>
+          <Button type="button" variant="ghost" size="sm" className="ml-auto" onClick={onClose}>
+            Close
+            <kbd className="rounded border px-1 font-mono text-[11px] text-muted-foreground">
+              Esc
+            </kbd>
+          </Button>
         </div>
         <div className="db">
           {withdrawnAt !== null ? (

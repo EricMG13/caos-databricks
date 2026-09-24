@@ -27,6 +27,8 @@ import {
   type Intent,
 } from "@/app/commands";
 import { sectionUrl } from "@/app/transport";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { ConfirmedControl } from "@/controls/ConfirmedControl";
 import { RefusedControl } from "@/controls/RefusedControl";
 import { CommandOutcome, useCommand } from "@/sections/run/controls";
@@ -143,9 +145,9 @@ function FigurePicker({
           </option>
         ))}
       </select>
-      <button type="button" className="rb" onClick={() => onInsert(chosen)}>
+      <Button type="button" variant="outline" size="sm" onClick={() => onInsert(chosen)}>
         Insert figure
-      </button>
+      </Button>
     </div>
   );
 }
@@ -172,7 +174,7 @@ function FilingAct({
   const refusal = action?.refusal ?? null;
   const verb = label.split(" ")[0]!;
   return (
-    <div className="fld">
+    <div className="grid justify-items-start gap-1">
       {/* Signing, freezing and filing bind an approver to exact bytes and the
           v1 wire has no reverse command, so each asks once more and names the
           revision and the digest it would bind (finding FE-7). */}
@@ -205,7 +207,6 @@ function FilingAct({
               }
             : undefined
         }
-        className="rb"
         action={name}
         aria-label={label}
       >
@@ -272,15 +273,15 @@ export function FilingControls({
     <section className="pnl" data-filing-controls>
       <header>
         <h2>Filing</h2>
-        <span className="cp">SAVE · SIGN · FREEZE · FILE</span>
+        <span className="cp">Save · sign · freeze · file</span>
       </header>
       <div className="pb">
         <label className="fld" htmlFor="narrative-draft">
           Narrative draft
         </label>
-        <textarea
+        <Textarea
           id="narrative-draft"
-          className="tin tarea"
+          className="min-h-24"
           ref={editor}
           value={draft}
           rows={4}
@@ -294,73 +295,75 @@ export function FilingControls({
         </p>
         <FigurePicker key={choices.map(choiceKey).join(" ")} choices={choices} onInsert={insert} />
         <DraftPreview narrative={narrative} choices={choices} />
-        <div className="fld">
-          <RefusedControl
-            refusal={saveAction?.refusal ?? null}
-            onClick={
-              saveAction
-                ? () => {
-                    if (saveAction.refusal || save.pending) return;
-                    void save
-                      .run(request, (intent) =>
-                        saveRevision(body.case_id, body.displayed_run_id, request, intent),
-                      )
-                      .then((outcome) => {
-                        if (outcome?.kind !== "ok") return;
-                        setDraft("");
-                        // The address is corrected, not navigated: the reader
-                        // did not move, the run gained a newer revision, and a
-                        // reload shows the one they are looking at.
-                        setParams(
-                          (current) => {
-                            const next = new URLSearchParams(current);
-                            next.set("revision", outcome.receipt.revision_id);
-                            return next;
-                          },
-                          { replace: true },
-                        );
-                      });
-                  }
-                : undefined
-            }
-            busy={save.pending}
-            className="rb solid"
-            reasonDisplay="inline"
-            data-action="SAVE_REVISION"
-            aria-label="Save revision"
-          >
-            {save.pending ? "Saving…" : "Save revision"}
-          </RefusedControl>
-          <CommandOutcome
-            result={save.result}
-            success={(receipt) => `Revision ${receipt.revision_id} saved.`}
-            mark="revision-saved"
+        <div className="flex flex-wrap items-start gap-x-6 gap-y-3" data-filing-acts>
+          <div className="grid justify-items-start gap-1">
+            <RefusedControl
+              refusal={saveAction?.refusal ?? null}
+              onClick={
+                saveAction
+                  ? () => {
+                      if (saveAction.refusal || save.pending) return;
+                      void save
+                        .run(request, (intent) =>
+                          saveRevision(body.case_id, body.displayed_run_id, request, intent),
+                        )
+                        .then((outcome) => {
+                          if (outcome?.kind !== "ok") return;
+                          setDraft("");
+                          // The address is corrected, not navigated: the reader
+                          // did not move, the run gained a newer revision, and a
+                          // reload shows the one they are looking at.
+                          setParams(
+                            (current) => {
+                              const next = new URLSearchParams(current);
+                              next.set("revision", outcome.receipt.revision_id);
+                              return next;
+                            },
+                            { replace: true },
+                          );
+                        });
+                    }
+                  : undefined
+              }
+              busy={save.pending}
+              variant="default"
+              reasonDisplay="inline"
+              data-action="SAVE_REVISION"
+              aria-label="Save revision"
+            >
+              {save.pending ? "Saving…" : "Save revision"}
+            </RefusedControl>
+            <CommandOutcome
+              result={save.result}
+              success={(receipt) => `Revision ${receipt.revision_id} saved.`}
+              mark="revision-saved"
+            />
+          </div>
+          <FilingAct
+            name="SIGN_OPINION"
+            saved={saved}
+            action={actionOf("SIGN_OPINION")}
+            label="Sign opinion"
+            send={(on, intent) => signOpinion(body.case_id, on.id, on.digest, intent)}
+            onDone={(on) => void reread(on)}
+          />
+          <FilingAct
+            name="FREEZE_DELIVERABLE"
+            saved={saved}
+            action={actionOf("FREEZE_DELIVERABLE")}
+            label="Freeze deliverable"
+            send={(on, intent) => freezeDeliverable(body.case_id, on.id, on.digest, intent)}
+            onDone={(on) => void reread(on)}
+          />
+          <FilingAct
+            name="FILE_DELIVERABLE"
+            saved={saved}
+            action={actionOf("FILE_DELIVERABLE")}
+            label="File deliverable"
+            send={(on, intent) => fileDeliverable(body.case_id, on.id, on.digest, intent)}
+            onDone={(on) => void reread(on)}
           />
         </div>
-        <FilingAct
-          name="SIGN_OPINION"
-          saved={saved}
-          action={actionOf("SIGN_OPINION")}
-          label="Sign opinion"
-          send={(on, intent) => signOpinion(body.case_id, on.id, on.digest, intent)}
-          onDone={(on) => void reread(on)}
-        />
-        <FilingAct
-          name="FREEZE_DELIVERABLE"
-          saved={saved}
-          action={actionOf("FREEZE_DELIVERABLE")}
-          label="Freeze deliverable"
-          send={(on, intent) => freezeDeliverable(body.case_id, on.id, on.digest, intent)}
-          onDone={(on) => void reread(on)}
-        />
-        <FilingAct
-          name="FILE_DELIVERABLE"
-          saved={saved}
-          action={actionOf("FILE_DELIVERABLE")}
-          label="File deliverable"
-          send={(on, intent) => fileDeliverable(body.case_id, on.id, on.digest, intent)}
-          onDone={(on) => void reread(on)}
-        />
         {refreshFailed ? (
           <p className="note warn" role="alert" data-filing-refresh-failed>
             The act landed, but the report could not be re-read. Reload to see it.

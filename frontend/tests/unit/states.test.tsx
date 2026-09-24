@@ -60,7 +60,7 @@ describe("the states", () => {
     );
     expect(document.querySelector("[data-surface-state='stale']")).not.toBeNull();
     expect(screen.getByText("body d")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "RELOAD" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reload" })).toBeInTheDocument();
   });
 
   test("test_refused_control_stays_visible_with_reason", () => {

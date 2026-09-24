@@ -1,97 +1,138 @@
 # DESIGN.md — visual language
 
-**North star: the committee terminal.** A refined institutional terminal for
-buy-side credit analysts. Calm enough for committee work, live enough for desk
-posture, exact enough that every number reads as traceable rather than
-decorative.
+**North star: a calm, exact workspace for credit committee work.** shadcn/ui's
+Nova style on Base UI, in light and dark, with Emil Kowalski's motion. Quiet
+surfaces, one type family, figures that line up, and colour only where it
+means something. Every number reads as traceable rather than decorative.
 
-Dark, dense, single mode. Filed output inverts to paper — ink on
-cream — because filed output is a different object from the live surface.
+Light and dark are both first-class and the reader's system chooses until they
+pick (the header's theme menu). Filed output and evidence pages are paper —
+ink on cream — in either theme, because they are a different object from the
+live surface.
 
-Rejected outright: friendly consumer SaaS, marketing dashboards, pastel cards,
-decorative gradients, glow, glassmorphism, raw terminal dumps. Dense is allowed.
-Disorganised is not.
+Rejected outright: marketing dashboards, pastel cards, decorative gradients,
+glow, glassmorphism, hero-metric templates, raw terminal dumps, all-caps
+labels. Dense is allowed. Disorganised is not.
 
 ## Tokens
 
-Bound design system: **CAOS (caos-frontend)**. The bundle declares `--caos-*`
-but **not** `--font-sans|mono|display` — the app declares those, or every
-`font:` shorthand using one is invalid at computed-value time and silently
-falls back to 16px.
+The theme lives in `frontend/src/styles/tokens.css` (D35–D37): shadcn's
+semantic tokens (`--background`, `--foreground`, `--card`, `--popover`,
+`--primary`, `--secondary`, `--muted`, `--accent`, `--destructive`,
+`--border`, `--input`, `--ring`, `--sidebar-*`, `--radius` 0.625rem) plus the
+workspace's own. Each is defined once for light on `:root` and once for dark
+in `@variant dark`, which matches `.dark` and a system dark with no pick.
 
 ```
---caos-bg #0a0a0f   --caos-panel #12121a   --caos-elevated #1a1a24
---caos-border #262633   --caos-text #e6e6ef   --caos-muted #8a8a9a
---caos-accent #4f8cff
---caos-success #22c55e   --caos-warning #f5a524   --caos-critical #ef4444
---caos-idle #3f3f46   --field-edge #63636f (3:1 on panel; a field's edge)
---tranche-1l #2dd4bf  --tranche-2l #4f8cff  --tranche-unsec #f5a524
---tranche-sub #a855f7  --tranche-eq #64748b
+status    --success --warning --destructive --info --idle   (text-safe, 4.5:1)
+tint      --tint 10% light, 15% dark                          (status washes)
+field     --input  3:1 on its card; --field-bg                (WCAG 1.4.11)
+seniority --tranche-1l --tranche-2l --tranche-unsec --tranche-sub --tranche-eq
+charts    --chart-1..5 --chart-neutral --chart-zero           (per theme)
+paper     --paper-bg --paper-ink --paper-rule --paper-cite …  (both themes)
+motion    --ease-out cubic-bezier(0.23,1,0.32,1)
+          --ease-in-out cubic-bezier(0.77,0,0.175,1)
+          --ease-drawer cubic-bezier(0.32,0.72,0,1)
 ```
 
-Type scale: `3xs 10` `2xs 10` `xs 11` `sm 11` `md 12` `lg 12.5` `xl 13`
-`2xl 14` `metric 18` `hero 24`. Body text is 12px.
-
-**Type floors.** Labels and captions are never below 10px, tabular mono data
-never below 11px, body and prose never below 12px. Density comes from fewer,
-better-chosen things, not from smaller text (raised from an 8px floor after
-the 2026-09-23 critique).
+Type is Geist and Geist Mono, bundled with the app (D36): `font-src 'self'`
+holds and no request goes to a font host. The scale is shadcn's: 14px body,
+13px figures and secondary text, 12px labels and captions, 16–18px headings;
+chart ticks 11px, chart values 12px, a route node's state line 11px. Nothing
+reads below 11px.
 
 ## Named rules
 
-**Signal-only colour.** Accent and semantic colours mean action, selection,
-status, seniority or lineage. Never decoration.
+**Signal-only colour.** Primary is ink (near black in light, near white in
+dark). Hue means status, selection, seniority, lineage or a link — never
+decoration. Blue (`--info`) is running, selected and focused.
 
-**Numeric truth.** Financial values, ids, ratings, dates and confidence scores
-are mono and tabular so columns scan and decimals align.
+**Measured, not eyeballed.** Text is 4.5:1 on every surface it sits on,
+tinted status chips included; fields and every chart hue 3:1; the chart ramp
+passes the dataviz validator per theme. `charts.test.tsx` holds the ramp and
+the text tokens to it in both themes, and the a11y matrix scans both.
+
+**Numeric truth.** Financial values, ids, digests, ratings, dates and
+confidence scores are Geist Mono and tabular so columns scan and decimals
+align; figure columns are right-aligned.
 
 **Severity is shape and hue.** Success and running are a disc, warning a
-triangle, critical a rounded square, idle a flat dot. Colour alone never carries
-status.
+triangle, critical a rounded square, idle a flat dot, and a restricted node —
+ran, carrying its limitation — a ring (F159). Colour alone never carries
+status; a badge's tone always sits beside its word.
 
-**Paper is for filed output only.** Ink on cream inside the deliverable. It
-must not leak into navigation, buttons, panel headers or
-analytical tables.
+**Sentence case.** Labels, buttons, badges, captions and status words are
+sentence case, node and attempt states included ("Runnable · frontier",
+"Blocked · not accepted"). Codes stay verbatim only where they are quoted as
+codes: refusal codes, edge types (`REQUIRED`, `QA_GATE`) and ids. Mono is for
+figures, ids, digests and times, never for words.
 
-**Motion only for live state.** No entrance animation, no hover flourish.
-Reduced motion is honoured.
+**Paper is for filed output and evidence pages only.** Ink on cream inside the
+deliverable and the evidence page render. It must not leak into navigation,
+buttons, panel headers or analytical tables.
 
-**One evidence surface.** The context drawer and the per-surface evidence rail.
-There is no second inspector.
+**Motion answers the reader, and marks live state.** Custom ease-out, under
+300 ms: buttons press to `scale(0.97)`, menus and tooltips grow from their
+trigger (origin-aware), the drawer slides with the drawer curve, the sidebar
+collapses in 200 ms. Transitions, not keyframes, so every motion can be
+interrupted; the first tooltip waits 400 ms and the next ones are instant.
+Running states pulse; loading shows skeletons. No entrance choreography, no
+hover flourish. Reduced motion keeps fades only.
 
-## Chrome
+**One evidence surface.** The evidence drawer (a sheet) and the per-surface
+evidence rail. There is no second inspector.
 
-Four bands, in order, on every section: ribbon → decision brief
-(CHANGE · IMPACT · ACTION · EVIDENCE + one headline figure) → tabs →
-verdict strip. Then the rail, the body, and a right column that is always about
-the selected thing, never a second menu.
+## The shell
 
-**Bands say only what the document supports.** Every cell is composed from the
-section's own body facts (run status, open gates, the conclusion module's
-committee status, withdrawn citations, revision state). A cell with nothing to
-say is not drawn, a brief with nothing to say is no band, and the ribbon names
-the issuer, not the case id. Never "—", never "No action is offered", never the
-section's own name as the headline figure. The verdict wash is flat, not a
-gradient.
+A shadcn app shell (D37), inset variant:
 
-Panels: hairline border, 6–10px radius, one faint resting shadow, a 29–30px
-sentence-case header. A larger shadow means the object floats above the
-workflow.
+- **Sidebar** — collapsible to icons (⌘/Ctrl-B), a sheet on a phone. The case
+  switcher heads it (the directory's read, asked for when it opens); then the
+  nine sections with their icons, each named with its count and state (a
+  section this deployment does not serve says "Unavailable" in the link); the
+  section-local group where a document has one; the served role, read-only;
+  and Ask and Sign out, refused and visible. It is the only `nav`.
+- **Header** — sticky: the sidebar trigger, the trail (the case's issuer, then
+  the section as the page's h1, where focus lands after a navigation), then the
+  document's warnings as toned badges, the run's state as mark and word, at
+  most three actions with exactly one primary, and the theme menu. The trail is
+  not a second navigation landmark.
+- **Summary** — the first card of the body, drawn only over a document: the
+  verdict (severity mark, conclusion, what blocks it), revision and approval
+  where the document says them, one headline figure with what it counts
+  ("6/10 modules complete") unless the conclusion already states it, then
+  Change, Impact, Next step and Evidence. A cell with nothing to say is not
+  drawn; never "—".
+- **Views** — a section's own views are pills under the summary (the active
+  one filled), wrapping to a second row rather than scrolling out of sight —
+  the 2026-09-23 critique's rule that every view stays in sight, which is why
+  they are not shadcn's line tabs, whose underline cannot survive a wrap;
+  arrows move and select; a native select on a phone. Never navigation
+  between sections.
 
-The ribbon carries at most three actions and exactly one primary.
+A section with no document says its state in the header badge and in the
+region (shadcn's empty pattern: mark, title, sentence, the one action that
+helps), and draws no summary.
+
+Panels are shadcn cards (`.pnl`): radius-xl, a 1px ring, a 44px header with a
+sentence-case title and a muted caption. A larger shadow means the object
+floats above the workflow (menus, the drawer, the passport). A table wider
+than its card scrolls inside it and fades at the edge it continues past; the
+page never scrolls sideways. Counts by state are one badge per state, each
+with its mark.
 
 ## Analysis
 
-The legacy desk's three panes, on this frame. The route's modules are the
-section's tabs, in route order, each with its QA state as shape and hue; the
+The legacy desk's three panes on this frame. The route's modules are the
+section's views, in route order, each with its QA state as shape and hue; the
 address names the one shown (`?tab=<route node>`), and the section opens on
-its conclusion (the last module that reasons, never the CP-CF calculator). The
-body is the evidence rail (what the run rests on: each cited document once,
-its pages and citation count, withdrawn marked; then the module's own source
-facts), the module (name first, code second; status, limitations, figures,
-the model's prose as text at 72ch, the host-calculation note), and the right
-column, which is always the selected thing's provenance. Pending nodes follow.
-The decision lives in the bands, not in a third pane.
+its conclusion (the last module that reasons, never the CP-CF calculator).
+The body is the evidence rail (what the run rests on: each cited document
+once, its pages and citation count, withdrawn marked; then the module's own
+source facts), the module (name first, code second; status, limitations,
+figures, the model's prose as text at 72ch, the host-calculation note), and
+the right column, which is always the selected thing's provenance. On a phone
+the module comes first.
 
 ## Charts
 
@@ -100,33 +141,36 @@ Nothing writes `innerHTML`, so every chart holds under the production CSP.
 
 - **Provenance is drawn in the mark.** Host-verified figures are solid;
   model-authored ones are outlined and hatched (a model line is dashed with
-  hollow points). A value the document does not carry is a gap marked n/a
-  with its reason, never zero and never interpolated. A bridge that does not
+  hollow points). A value the document does not carry is a gap marked n/a with
+  its reason, never zero and never interpolated. A bridge that does not
   reconcile draws its unexplained residual in the critical hue and says so.
 - **Figures are printed as served.** Labels, names and table twins print the
   API's exact decimals; sums are exact; a float only places a mark.
 - **Every chart is a figure:** a title, one plain summary line, and a table
   twin behind a Table toggle. Every mark is a button named for its series,
   category, value and origin; pressing it fills the right column.
-- **Colour:** `--chart-series-1..5` (validated on the panel), the tranche
-  tokens for seniority, `--chart-neutral` for stated totals; a sixth series is
-  neutral, never a recycled hue.
-- **Type at the floors:** ticks 10px and values 11px mono tabular, titles 12px.
-- No motion, gradients, shadows, glow or rounded bar ends; bars start at zero;
-  no dual axes.
+- **Colour:** `--chart-1..5` per theme, the tranche tokens for seniority,
+  `--chart-neutral` for stated totals; a sixth series is neutral, never a
+  recycled hue.
+- No gradients, shadows, glow or rounded bar ends; bars start at zero; no dual
+  axes. The route canvas alone carries a faint dot grid.
 
 ## Rules with teeth
 
-- A refused control stays **visible and refused, with its reason named**.
-  Hiding it teaches the wrong model of the system.
+- A refused control stays **visible and refused, with its reason named**:
+  `aria-disabled`, never `disabled`, dashed and quiet, its plain reason beside
+  or under it. Hiding it teaches the wrong model of the system.
 - Every ready conclusion carries observation time, origin, method, approval and
   freshness.
 - A private 404 and an absent route share one neutral wording:
   "Unavailable or not permitted."
 - Dialog openers are passed explicitly, never inferred from
   `document.activeElement` — WebKit does not focus a button on click.
-- No web font. No emoji in product chrome.
+- Command outcomes are said inline beside the control that sent them and
+  announced; no toasts (D35).
+- No emoji in product chrome; icons are Lucide, one stroke weight.
 
 ## Reference
 
-Design source: https://claude.ai/design/p/69d37748-8595-4309-9b06-bc5f9529a29c
+shadcn/ui (Nova, Base UI): https://ui.shadcn.com — motion: Emil Kowalski's
+design-engineering notes, https://emilkowal.ski

@@ -5,6 +5,7 @@ import { useId, type ReactNode } from "react";
 import { CitationChip } from "./CitationChip";
 import { useModalA11y } from "@/ds/use-modal-a11y";
 import { PASSPORT_FIELDS, type Passport, type PassportField } from "@/wire";
+import { Button } from "@/components/ui/button";
 
 export const PASSPORT_LABELS: Record<PassportField, string> = {
   definition: "Definition",
@@ -98,14 +99,17 @@ export function MetricPassport({
       <div ref={ref} role="dialog" aria-modal="true" aria-labelledby={titleId} className="modal">
         <div className="dhead">
           <h2 id={titleId}>Passport · {passport.label}</h2>
-          <button type="button" className="close focus-ring" onClick={onClose}>
-            ESC · CLOSE
-          </button>
+          <Button type="button" variant="ghost" size="sm" className="ml-auto" onClick={onClose}>
+            Close
+            <kbd className="rounded border px-1 font-mono text-[11px] text-muted-foreground">
+              Esc
+            </kbd>
+          </Button>
         </div>
         <div className="ppval">
           <span className="v">{passport.value}</span>
           {passport.unit ? <span className="u">{passport.unit}</span> : null}
-          {passport.driver ? <span className="tag acc badge">PROJECTED</span> : null}
+          {passport.driver ? <span className="tag acc badge">Projected</span> : null}
         </div>
         <PassportFields passport={passport} />
       </div>

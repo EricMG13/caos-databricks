@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { OFFLINE_WORDING } from "@/app/transport";
+import { sentence } from "@/chrome/compose";
 import { DirectorySection } from "@/sections/directory/DirectorySection";
 import {
   parseDirectoryDocument,
@@ -47,7 +48,6 @@ describe("Directory", () => {
       const links = within(row).getAllByRole("link");
       expect(links).toHaveLength(1);
       expect(links[0]).toHaveTextContent("Open case");
-      expect(links[0]).toHaveClass("rowact");
       expect(within(row).queryAllByRole("button")).toHaveLength(0);
     }
     // No batch state: no checkboxes, no select-all, no "n selected".
@@ -84,9 +84,9 @@ describe("Directory", () => {
     const row = fixture.body.cases[0]!;
     const tr = container.querySelector<HTMLElement>(`tr[data-case="${row.case_id}"]`)!;
     expect(tr).toHaveTextContent(row.title);
-    expect(tr).toHaveTextContent(row.standing);
+    expect(tr).toHaveTextContent(sentence(row.standing));
     expect(tr).toHaveTextContent(String(row.live_sources));
-    expect(tr).toHaveTextContent(row.latest_run!.status);
+    expect(tr).toHaveTextContent(sentence(row.latest_run!.status));
     expect(tr).toHaveTextContent(row.latest_run!.profile_id!);
     expect(tr).toHaveTextContent(row.latest_run!.selection_id!);
     expect(tr.querySelector("time")).toHaveAttribute("dateTime", row.created_at);

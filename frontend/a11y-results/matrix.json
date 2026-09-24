@@ -13,6 +13,10 @@
     "firefox",
     "webkit"
   ],
+  "schemes": [
+    "light",
+    "dark"
+  ],
   "viewports": [
     {
       "width": 1440,
@@ -59,8 +63,8 @@
     "/analysis/",
     "/nothing/"
   ],
-  "entries": 312,
-  "expected_entries": 312,
+  "entries": 624,
+  "expected_entries": 624,
   "violation_nodes": 0,
   "scan_errors": 0,
   "layout_failures": 0,

@@ -16,7 +16,9 @@ export const SECTIONS = [
 ] as const;
 export type Section = (typeof SECTIONS)[number];
 
-export type Severity = "SUCCESS" | "RUNNING" | "WARNING" | "CRITICAL" | "IDLE";
+/** `RESTRICTED` is a node state's own mark: ran, carrying its limitation
+    forward, never a warning (CONTEXT.md, CF-036). */
+export type Severity = "SUCCESS" | "RUNNING" | "WARNING" | "CRITICAL" | "IDLE" | "RESTRICTED";
 export type NodeState = "COMPLETE" | "RUNNABLE" | "RESTRICTED" | "BLOCKED";
 export type EdgeType = "REQUIRED" | "CONDITIONAL" | "QA_GATE" | "OPTIONAL" | "ADVISORY";
 export type Standing = "READER" | "WRITER" | "APPROVER" | "ADMIN";
@@ -84,6 +86,9 @@ export interface Brief {
   action: string | null;
   evidence: string | null;
   headline: string | null;
+  /** What the headline figure counts ("modules complete"); composed, never
+      served. */
+  headline_label?: string | null;
 }
 export interface Verdict {
   severity: Severity;

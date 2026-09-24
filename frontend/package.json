@@ -21,9 +21,15 @@
     "test:journey": "playwright test -c playwright.journey.config.ts"
   },
   "dependencies": {
+    "@base-ui/react": "1.8.0",
+    "@fontsource-variable/geist": "5.3.0",
+    "@fontsource-variable/geist-mono": "5.3.0",
     "@tailwindcss/vite": "4.3.3",
+    "class-variance-authority": "0.7.1",
+    "cn": "0.4.0",
     "d3-scale": "4.0.2",
     "d3-shape": "3.2.0",
+    "lucide-react": "1.47.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-router": "7.18.3",

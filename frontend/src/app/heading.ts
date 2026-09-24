@@ -15,7 +15,7 @@ export function pageTitle(section: string, subject: string | null): string {
 /** Move focus to the section heading. A heading is not focusable by default,
     so it is made programmatically focusable and never a tab stop. */
 export function focusSectionHeading(): void {
-  const heading = globalThis.document?.querySelector<HTMLElement>(".ap h1");
+  const heading = globalThis.document?.querySelector<HTMLElement>("[data-workspace] h1");
   if (!heading) return;
   if (!heading.hasAttribute("tabindex")) heading.tabIndex = -1;
   heading.focus();

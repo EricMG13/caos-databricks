@@ -15,6 +15,8 @@ import {
 } from "react";
 import { RefusedControl } from "./RefusedControl";
 import { focusSectionHeading } from "@/app/heading";
+import { Button } from "@/components/ui/button";
+import type { ControlLook } from "@/ds/ActionReason";
 import { shortDigest } from "@/ds/format";
 import type { Refusal } from "@/wire";
 
@@ -56,9 +58,11 @@ export function ConfirmedControl({
   onConfirm,
   className = "",
   reasonDisplay = "inline",
+  variant,
+  size,
   children,
   ...rest
-}: {
+}: ControlLook & {
   /** The command's name, on the control and on its confirm step, so both
       halves of one act are found the same way. */
   action: string;
@@ -122,34 +126,40 @@ export function ConfirmedControl({
           data-confirm={action}
         >
           <p data-confirm-sentence>{confirmSentence(step)}</p>
-          <button
-            type="button"
-            ref={confirm}
-            className="rb crit"
-            data-confirm-yes
-            onKeyDown={escape}
-            onClick={() => {
-              setArmed(false);
-              onConfirm?.();
-            }}
-          >
-            Confirm {step.act}
-          </button>
-          <button
-            type="button"
-            className="rb"
-            data-confirm-no
-            onKeyDown={escape}
-            onClick={() => setArmed(false)}
-          >
-            Go back
-          </button>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button
+              type="button"
+              ref={confirm}
+              variant="destructive"
+              size="sm"
+              data-confirm-yes
+              onKeyDown={escape}
+              onClick={() => {
+                setArmed(false);
+                onConfirm?.();
+              }}
+            >
+              Confirm {step.act}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              data-confirm-no
+              onKeyDown={escape}
+              onClick={() => setArmed(false)}
+            >
+              Go back
+            </Button>
+          </div>
         </div>
       ) : (
         <RefusedControl
           refusal={refusal}
           busy={busy}
           className={className}
+          variant={variant}
+          size={size}
           reasonDisplay={reasonDisplay}
           data-action={action}
           data-confirm-open=""

@@ -48,7 +48,7 @@ async function mount(section: Section, path: string, fetch: ReturnType<typeof vi
 const serving = (body: unknown) =>
   vi.fn(async () => new Response(JSON.stringify(body), { status: 200 }));
 const railHref = (container: HTMLElement, section: Section) =>
-  container.querySelector(`nav.rail a[data-section='${section}']`)?.getAttribute("href");
+  container.querySelector(`nav a[data-section='${section}']`)?.getAttribute("href");
 const region = (container: HTMLElement) => container.querySelector("main#body")!;
 
 afterEach(() => {
@@ -135,9 +135,8 @@ describe("a section waiting on the reader", () => {
     expect(state).toHaveTextContent("Choose a run");
     expect(state!.querySelector("a")).toHaveAttribute("href", `/run/?case=${CASE}`);
     expect(container).not.toHaveTextContent("Unavailable or not permitted.");
-    expect(container.querySelector(".verdict")).toHaveTextContent(
-      "Choose a run to open this section.",
-    );
+    // The header says what the section waits on; the region says where.
+    expect(container.querySelector("header [data-chip]")).toHaveTextContent("Choose a run");
   });
 
   test("Committee with no revision says to choose a frozen one in Report", async () => {
@@ -171,7 +170,7 @@ describe("a region that received nothing", () => {
         {() => null}
       </RegionState>,
     );
-    expect(container.querySelector("button")).toHaveTextContent("TRY AGAIN");
+    expect(container.querySelector("button")).toHaveTextContent("Try again");
     rerender(
       <RegionState status={{ kind: "unavailable" }} onRetry={retry}>
         {() => null}

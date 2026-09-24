@@ -14,7 +14,8 @@ import {
 } from "@/app/transport";
 import { ENABLED_SECTIONS, isEnabledSection } from "@/app/sections";
 import { Workspace } from "@/app/Workspace";
-import { Rail } from "@/chrome/Rail";
+import { AppSidebar } from "@/chrome/AppSidebar";
+import { SidebarProvider } from "@/components/ui/sidebar";
 import { composeChrome, markDisabled } from "@/chrome/compose";
 import { SECTIONS } from "@/wire";
 import {
@@ -434,13 +435,19 @@ describe("the transport", () => {
       createElement(
         MemoryRouter,
         null,
-        createElement(Rail, {
-          section: "committee",
-          entries: null,
-          local: null,
-          servedRole: null,
-          searchFor: () => `?case=${CASE}&run=${RUN}&revision=${REVISION}`,
-        }),
+        createElement(
+          SidebarProvider,
+          null,
+          createElement(AppSidebar, {
+            section: "committee",
+            entries: null,
+            local: null,
+            servedRole: null,
+            searchFor: () => `?case=${CASE}&run=${RUN}&revision=${REVISION}`,
+            subject: null,
+            caseId: CASE,
+          }),
+        ),
       ),
     );
     for (const link of screen.getAllByRole("link")) {
@@ -463,16 +470,22 @@ describe("the transport", () => {
       createElement(
         MemoryRouter,
         null,
-        createElement(Rail, {
-          section: "upload",
-          entries: asAdmin.rail,
-          local: null,
-          servedRole: asAdmin.served_role,
-          searchFor: () => "",
-        }),
+        createElement(
+          SidebarProvider,
+          null,
+          createElement(AppSidebar, {
+            section: "upload",
+            entries: asAdmin.rail,
+            local: null,
+            servedRole: asAdmin.served_role,
+            searchFor: () => "",
+            subject: asAdmin.subject,
+            caseId: CASE,
+          }),
+        ),
       ),
     );
-    const role = screen.getByText(/ADMIN · APPROVER/).closest("[data-served-role]");
+    const role = screen.getByRole("group", { name: "Served role: Admin, Approver" });
     expect(role).not.toBeNull();
     expect(role!.querySelector("button, a, select, input")).toBeNull();
 

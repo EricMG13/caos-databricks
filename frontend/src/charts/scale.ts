@@ -7,14 +7,14 @@ import { formatDecimal, isDecimal } from "./decimal";
     wherever there is nothing to measure with (jsdom). */
 export const FALLBACK_WIDTH = 640;
 
-/** Type floors (DESIGN.md): ticks 10px mono, data labels 11px mono, titles
-    12px sans. SVG text is drawn at these pixel sizes and never scaled. */
-export const TICK_SIZE = 10;
-export const VALUE_SIZE = 11;
+/** Chart type (DESIGN.md): ticks 11px mono, data labels 12px mono, titles
+    14px sans. SVG text is drawn at these pixel sizes and never scaled. */
+export const TICK_SIZE = 11;
+export const VALUE_SIZE = 12;
 
-// Every face in --font-mono advances within 0.62em per glyph (SF Mono and
-// Menlo 0.60, Consolas 0.55, Courier New 0.60), so a width estimated at 0.62
-// is never short. Estimated, not measured: jsdom has no layout to measure.
+// Every face in --font-mono advances within 0.62em per glyph (Geist Mono,
+// SF Mono and Menlo 0.60, Consolas 0.55), so a width estimated at 0.62 is
+// never short. Estimated, not measured: jsdom has no layout to measure.
 const ADVANCE = 0.62;
 
 /** The width `text` takes in the mono face at `size` px. */

@@ -29,12 +29,12 @@ import {
   type WorkspaceDocument,
 } from "./transport";
 import { SECTION_VIEWS } from "./views";
-import { DecisionBrief } from "@/chrome/DecisionBrief";
-import { Rail } from "@/chrome/Rail";
-import { Ribbon } from "@/chrome/Ribbon";
-import { SectionPanel, SectionTabs } from "@/chrome/SectionTabs";
-import { VerdictStrip } from "@/chrome/VerdictStrip";
+import { AppShell } from "@/chrome/AppShell";
+import { AppSidebar } from "@/chrome/AppSidebar";
 import { QualificationStrip } from "@/chrome/QualificationStrip";
+import { SectionPanel, SectionTabs } from "@/chrome/SectionTabs";
+import { SectionSummary } from "@/chrome/SectionSummary";
+import { SiteHeader } from "@/chrome/SiteHeader";
 import { composeChrome, markDisabled } from "@/chrome/compose";
 import { fallbackChrome } from "@/chrome/fallback";
 import { EvidenceProvider } from "@/evidence/EvidenceContext";
@@ -45,6 +45,8 @@ import { SectionBoundary } from "@/states/SectionBoundary";
 import type { Chrome, Section } from "@/wire";
 
 const LOADING: RegionStatus = { kind: "loading" };
+/** Sections about the book as a whole rather than one case. */
+const PORTFOLIO = new Set<Section>(["directory", "book"]);
 const UNAVAILABLE: RegionStatus = { kind: "unavailable" };
 
 /** The chrome composed for a v1 document. A disabled section never fetches,
@@ -355,68 +357,82 @@ export function Workspace({ section }: { section: Section }) {
     document: WorkspaceDocument;
     tab: string | null;
   }>;
-  // With no document there is still a section: the bands carry its state.
+  // With no document there is still a section: the header carries its state.
   const fallback = fallbackChrome(status);
 
+  const label = SECTION_LABELS[section];
   return (
-    <div className="ap" data-section={section}>
-      <Ribbon
-        ribbon={(chrome ?? fallback).ribbon}
-        subject={chrome?.subject ?? null}
-        tabs={chrome?.tabs.map((tab) => tab.id)}
-        onTab={chooseTab}
-      />
-      <DecisionBrief brief={(chrome ?? fallback).brief} />
-      <SectionTabs
-        label={SECTION_LABELS[section]}
-        tabs={chrome?.tabs ?? []}
-        active={activeTab}
-        onSelect={chooseTab}
-      />
-      <VerdictStrip verdict={(chrome ?? fallback).verdict} />
-      <QualificationStrip evidenceSha256={qualificationEvidence} />
-      <div className="frame">
-        <Rail
+    <AppShell
+      section={section}
+      label={label}
+      sidebar={
+        <AppSidebar
           section={section}
           entries={markDisabled(chrome?.rail ?? null)}
           local={chrome?.rail_local ?? null}
           servedRole={chrome?.served_role ?? null}
           searchFor={railSearch}
+          subject={chrome?.subject ?? null}
+          caseId={caseId}
         />
-        <main className="body" id="body" aria-label={SECTION_LABELS[section]}>
-          <Announcer>
-            {status.kind === "offline" ? <PageAlert sentence={OFFLINE_WORDING} /> : null}
-            {/* Neither replaces the document: they say it is not live. */}
-            {interrupted ? <NotLive mark="refresh" sentence={interruption(interrupted)} /> : null}
-            {paused ? <NotLive mark="tail" sentence={PAUSED_WORDING} /> : null}
-            <VisibleSnapshotContext.Provider value={snapshot}>
-              {/* The evidence surface is bound to the section it was opened
-                  on (brief 4.4, decision 9): the key closes it on a section
-                  change, which the workspace itself no longer does -- the rail
-                  outlives a navigation so the link that was activated keeps
-                  its place (finding FE-4). */}
-              <EvidenceProvider key={section}>
-                {/* The snapshot ledger outlives the documents a section renders,
-                    so it sits above the boundary and the mount key. */}
-                <LedgerProvider>
-                  <RegionState status={status} onReload={reload} onRetry={retry}>
-                    {(doc) => (
-                      // A render failure is about the document that caused it:
-                      // the next one served clears it, without waiting for a
-                      // navigation to unmount the boundary.
-                      <SectionBoundary key={mountKey} resetOn={doc.observed_at}>
-                        <SectionPanel tab={activeTab}>
-                          <View key={mountKey} document={doc} tab={activeTab} />
-                        </SectionPanel>
-                      </SectionBoundary>
-                    )}
-                  </RegionState>
-                </LedgerProvider>
-              </EvidenceProvider>
-            </VisibleSnapshotContext.Provider>
-          </Announcer>
-        </main>
-      </div>
-    </div>
+      }
+      header={
+        <SiteHeader
+          label={label}
+          crumb={
+            chrome?.subject?.issuer ??
+            (caseId ? `Case ${caseId.slice(0, 8)}` : PORTFOLIO.has(section) ? "Portfolio" : null)
+          }
+          subject={chrome?.subject ?? null}
+          ribbon={(chrome ?? fallback).ribbon}
+          tabs={chrome?.tabs.map((tab) => tab.id)}
+          onTab={chooseTab}
+        />
+      }
+    >
+      {/* With no document there is nothing to summarise: the header carries
+          the state, and the region below says it in full. */}
+      {chrome ? (
+        <SectionSummary verdict={chrome.verdict} brief={chrome.brief} ribbon={chrome.ribbon} />
+      ) : null}
+      <QualificationStrip evidenceSha256={qualificationEvidence} />
+      <SectionTabs
+        label={label}
+        tabs={chrome?.tabs ?? []}
+        active={activeTab}
+        onSelect={chooseTab}
+      />
+      <Announcer>
+        {status.kind === "offline" ? <PageAlert sentence={OFFLINE_WORDING} /> : null}
+        {/* Neither replaces the document: they say it is not live. */}
+        {interrupted ? <NotLive mark="refresh" sentence={interruption(interrupted)} /> : null}
+        {paused ? <NotLive mark="tail" sentence={PAUSED_WORDING} /> : null}
+        <VisibleSnapshotContext.Provider value={snapshot}>
+          {/* The evidence surface is bound to the section it was opened
+              on (brief 4.4, decision 9): the key closes it on a section
+              change, which the workspace itself no longer does -- the sidebar
+              outlives a navigation so the link that was activated keeps
+              its place (finding FE-4). */}
+          <EvidenceProvider key={section}>
+            {/* The snapshot ledger outlives the documents a section renders,
+                so it sits above the boundary and the mount key. */}
+            <LedgerProvider>
+              <RegionState status={status} onReload={reload} onRetry={retry}>
+                {(doc) => (
+                  // A render failure is about the document that caused it:
+                  // the next one served clears it, without waiting for a
+                  // navigation to unmount the boundary.
+                  <SectionBoundary key={mountKey} resetOn={doc.observed_at}>
+                    <SectionPanel tab={activeTab}>
+                      <View key={mountKey} document={doc} tab={activeTab} />
+                    </SectionPanel>
+                  </SectionBoundary>
+                )}
+              </RegionState>
+            </LedgerProvider>
+          </EvidenceProvider>
+        </VisibleSnapshotContext.Provider>
+      </Announcer>
+    </AppShell>
   );
 }

@@ -833,7 +833,7 @@ test.describe.serial("journey", () => {
     await expect(detail).not.toContainText("in the frontier");
     const attempts = page.locator("section.pnl", { hasText: "Attempts — CP-5" });
     await expect(attempts.locator("[data-attempt]")).toHaveCount(1);
-    await expect(attempts.locator("[data-attempt]")).toContainText("BLOCKED · NOT ACCEPTED");
+    await expect(attempts.locator("[data-attempt]")).toContainText("Blocked · not accepted");
     await expect(attempts.locator("[data-blocking-attempt]")).toHaveCount(1);
     const blockedBy = page.locator("dt:text-is('Blocked by') + dd");
     await expect(blockedBy).toHaveAttribute("data-blocked-by", "CP-5");

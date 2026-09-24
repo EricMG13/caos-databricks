@@ -1,298 +1,294 @@
 /* Chart primitives (src/charts). Signal-only colour (DESIGN.md): a hue here
    means a series' identity, a debt tranche's seniority, a change's sign or an
-   unreconciled bridge; never decoration. Every chart hue is declared once,
-   below, and reached through a `chart-tone-*` class, so no mark carries a
-   literal colour and no style string is written (the CSP's style-src).
+   unreconciled bridge; never decoration. Every chart hue is a theme token
+   (tokens.css: `--chart-1..5`, the tranches, `--chart-neutral`,
+   `--chart-zero`), each validated per theme against its card, and reached
+   through a `chart-tone-*` class, so no mark carries a literal colour and no
+   style string is written (the CSP's style-src). Past the fifth series no
+   hue stays distinct from every other, so a sixth is neutral: fold the tail
+   instead. */
+@layer components {
+  :root {
+    /* Diverging: above zero, below zero. The sign is also in every label. */
+    --chart-positive: var(--chart-1);
+    --chart-negative: var(--chart-2);
+    --chart-grid: var(--border);
+  }
 
-   The categorical ramp and the two poles were run through the dataviz skill's
-   validator against the panel, dark mode:
-     validate_palette.js "#09a3bf,#b45700,#6a5bc6,#af3e7c,#9f9530"
-       --mode dark --surface "#12121a" [--pairs all]
-   Adjacent and all pairs pass: lightness band, chroma floor, CVD separation
-   (worst all-pairs 9.3 deutan), normal-vision floor (worst all-pairs 15.3)
-   and 3:1 contrast. Past the fifth series no hue stays distinct from every
-   other, so a sixth is neutral: fold the tail instead. No slot is within
-   12 (OKLab x100) of the accent or a status hue. */
-:root {
-  /* Categorical: a series' identity, assigned in this order, never cycled. */
-  --chart-series-1: #09a3bf; /* cyan */
-  --chart-series-2: #b45700; /* rust */
-  --chart-series-3: #6a5bc6; /* indigo */
-  --chart-series-4: #af3e7c; /* raspberry */
-  --chart-series-5: #9f9530; /* olive */
-  /* A stated total, or a series with no identity hue left: no hue at all,
-     and lighter than every slot so it parts from the poles without one
-     (CVD 11.0 from the positive pole, 26.4 from the negative). */
-  --chart-neutral: #b8beca;
-  /* Diverging: above zero, below zero. The sign is also in every label. */
-  --chart-positive: var(--chart-series-1);
-  --chart-negative: var(--chart-series-2);
-  /* Furniture: hairline gridlines; the zero baseline one step brighter (3.1:1). */
-  --chart-grid: var(--caos-border);
-  --chart-zero: #62626f;
-}
+  .chart-tone-series-1 {
+    --tone: var(--chart-1);
+  }
+  .chart-tone-series-2 {
+    --tone: var(--chart-2);
+  }
+  .chart-tone-series-3 {
+    --tone: var(--chart-3);
+  }
+  .chart-tone-series-4 {
+    --tone: var(--chart-4);
+  }
+  .chart-tone-series-5 {
+    --tone: var(--chart-5);
+  }
+  .chart-tone-neutral {
+    --tone: var(--chart-neutral);
+  }
+  .chart-tone-positive {
+    --tone: var(--chart-positive);
+  }
+  .chart-tone-negative {
+    --tone: var(--chart-negative);
+  }
+  .chart-tone-tranche-1l {
+    --tone: var(--tranche-1l);
+  }
+  .chart-tone-tranche-2l {
+    --tone: var(--tranche-2l);
+  }
+  .chart-tone-tranche-unsec {
+    --tone: var(--tranche-unsec);
+  }
+  .chart-tone-tranche-sub {
+    --tone: var(--tranche-sub);
+  }
+  .chart-tone-tranche-eq {
+    --tone: var(--tranche-eq);
+  }
+  /* The unreconciled residual is status: the critical hue, cross-hatched. */
+  .chart-tone-residual {
+    --tone: var(--destructive);
+  }
 
-.chart-tone-series-1 {
-  --tone: var(--chart-series-1);
-}
-.chart-tone-series-2 {
-  --tone: var(--chart-series-2);
-}
-.chart-tone-series-3 {
-  --tone: var(--chart-series-3);
-}
-.chart-tone-series-4 {
-  --tone: var(--chart-series-4);
-}
-.chart-tone-series-5 {
-  --tone: var(--chart-series-5);
-}
-.chart-tone-neutral {
-  --tone: var(--chart-neutral);
-}
-.chart-tone-positive {
-  --tone: var(--chart-positive);
-}
-.chart-tone-negative {
-  --tone: var(--chart-negative);
-}
-.chart-tone-tranche-1l {
-  --tone: var(--tranche-1l);
-}
-.chart-tone-tranche-2l {
-  --tone: var(--tranche-2l);
-}
-.chart-tone-tranche-unsec {
-  --tone: var(--tranche-unsec);
-}
-.chart-tone-tranche-sub {
-  --tone: var(--tranche-sub);
-}
-.chart-tone-tranche-eq {
-  --tone: var(--tranche-eq);
-}
-/* The unreconciled residual is status: the critical hue, cross-hatched. */
-.chart-tone-residual {
-  --tone: var(--caos-critical);
-}
+  /* ---- the figure ---- */
+  .chart {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-width: 0;
+    margin: 0;
+    color: var(--foreground);
+  }
+  .chart-caption {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    min-width: 0;
+  }
+  /* The legend line, and the "Table" toggle at its end. */
+  .chart-keys {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  .chart-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--foreground);
+  }
+  .chart-summary {
+    font-size: 0.8125rem;
+    color: var(--muted-foreground);
+  }
+  .chart-note {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--destructive);
+  }
+  .chart-toggle {
+    flex: none;
+    min-height: 24px;
+    padding: 0 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--foreground);
+    font-size: 0.75rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition:
+      background-color 150ms var(--ease-out),
+      scale 150ms var(--ease-out);
+  }
+  .chart-toggle:hover {
+    background: var(--muted);
+  }
+  .chart-toggle:active {
+    scale: 0.97;
+  }
+  .chart-toggle[aria-pressed="true"] {
+    border-color: transparent;
+    background: var(--primary);
+    color: var(--primary-foreground);
+  }
+  .chart-legend {
+    display: flex;
+    flex: 1;
+    flex-wrap: wrap;
+    align-self: center;
+    gap: 0.25rem 0.75rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: 0.75rem;
+    color: var(--foreground);
+  }
+  .chart-legend li {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+  }
+  .chart-legend .chart-provenance {
+    color: var(--muted-foreground);
+  }
+  .chart-swatch {
+    flex: none;
+  }
+  .chart-plot {
+    position: relative;
+  }
+  .chart-svg {
+    display: block;
+  }
+  /* Nothing a reader needs is only in the SVG: the readout says the active
+     mark in full, the table twin says every value. */
+  .chart-readout {
+    min-height: 1rem;
+    margin: 0;
+    font: 400 0.75rem var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    color: var(--foreground);
+  }
 
-/* ---- the figure ---- */
-.chart {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-  margin: 0;
-  color: var(--caos-text);
-}
-.chart-caption {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-/* The legend line, and the "Table" toggle at its end. */
-.chart-keys {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-}
-.chart-title {
-  font: 600 12px var(--font-sans);
-  color: var(--caos-text);
-}
-.chart-summary {
-  font: 400 11px var(--font-sans);
-  color: var(--caos-muted);
-}
-.chart-note {
-  font: 600 11px var(--font-sans);
-  color: var(--caos-critical-bright);
-}
-.chart-toggle {
-  flex: none;
-  min-height: 24px;
-  padding: 0 8px;
-  border: 1px solid var(--caos-border);
-  border-radius: var(--radius-sm);
-  background: var(--caos-elevated);
-  color: var(--caos-muted);
-  font: 600 10px var(--font-mono);
-  letter-spacing: 0.06em;
-  cursor: pointer;
-}
-.chart-toggle[aria-pressed="true"] {
-  border-color: color-mix(in srgb, var(--caos-accent) 48%, transparent);
-  background: color-mix(in srgb, var(--caos-accent) 12%, transparent);
-  color: var(--caos-accent-bright);
-}
-.chart-legend {
-  display: flex;
-  flex: 1;
-  flex-wrap: wrap;
-  align-self: center;
-  gap: 4px 12px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  font: 400 11px var(--font-sans);
-  color: var(--caos-text);
-}
-.chart-legend li {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-.chart-legend .chart-provenance {
-  color: var(--caos-muted);
-}
-.chart-swatch {
-  flex: none;
-}
-.chart-plot {
-  position: relative;
-}
-.chart-svg {
-  display: block;
-}
-/* Nothing a reader needs is only in the SVG: the readout says the active
-   mark in full, the table twin says every value. */
-.chart-readout {
-  min-height: 15px;
-  margin: 0;
-  font: 400 11px var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  color: var(--caos-text);
-}
+  /* ---- text: mono and tabular, drawn at TICK_SIZE and VALUE_SIZE, never scaled ---- */
+  .chart-svg text {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+  .chart-tick,
+  .chart-gap text {
+    font-size: 11px;
+    fill: var(--muted-foreground);
+  }
+  .chart-value {
+    font-size: 12px;
+    fill: var(--foreground);
+  }
+  .chart-alarm {
+    fill: var(--destructive);
+  }
 
-/* ---- text: at the floors, mono and tabular, never scaled ---- */
-.chart-svg text {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum" 1;
-}
-.chart-tick,
-.chart-gap text {
-  font-size: 10px;
-  fill: var(--caos-muted);
-}
-.chart-value {
-  font-size: 11px;
-  fill: var(--caos-text);
-}
-.chart-alarm {
-  fill: var(--caos-critical-bright);
-}
+  /* ---- furniture ---- */
+  .chart-grid line {
+    stroke: var(--chart-grid);
+    stroke-width: 1;
+    shape-rendering: crispEdges;
+  }
+  .chart-zero,
+  .chart-connector {
+    stroke: var(--chart-zero);
+    stroke-width: 1;
+    shape-rendering: crispEdges;
+  }
+  .chart-gap line,
+  .chart-guide {
+    stroke: var(--muted-foreground);
+    stroke-width: 1;
+  }
+  .chart-guide {
+    shape-rendering: crispEdges;
+  }
 
-/* ---- furniture ---- */
-.chart-grid line {
-  stroke: var(--chart-grid);
-  stroke-width: 1;
-  shape-rendering: crispEdges;
-}
-.chart-zero,
-.chart-connector {
-  stroke: var(--chart-zero);
-  stroke-width: 1;
-  shape-rendering: crispEdges;
-}
-.chart-gap line {
-  stroke: var(--caos-muted);
-  stroke-width: 1;
-}
-.chart-guide {
-  stroke: var(--caos-muted);
-  stroke-width: 1;
-  shape-rendering: crispEdges;
-}
+  /* ---- marks: the host solid, the model outlined and hatched ---- */
+  .chart-host {
+    fill: var(--tone);
+  }
+  .chart-outline {
+    stroke: var(--tone);
+    stroke-width: 1.5;
+  }
+  .chart-hatch {
+    stroke: var(--tone);
+    stroke-width: 1.25;
+    stroke-opacity: 0.6;
+  }
+  .chart-line {
+    fill: none;
+    stroke: var(--tone);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .chart-dashed {
+    stroke-dasharray: 5 4;
+  }
+  /* A point is edged 2px in the card's colour, so it reads where lines cross. */
+  .chart-point {
+    fill: var(--tone);
+    stroke: var(--card);
+    stroke-width: 2;
+  }
+  .chart-point.chart-hollow {
+    fill: var(--card);
+    stroke: var(--tone);
+  }
+  .chart-ring {
+    fill: none;
+    stroke: var(--ring);
+    stroke-width: 2;
+  }
 
-/* ---- marks: the host solid, the model outlined and hatched ---- */
-.chart-host {
-  fill: var(--tone);
-}
-.chart-outline {
-  stroke: var(--tone);
-  stroke-width: 1.5;
-}
-.chart-hatch {
-  stroke: var(--tone);
-  stroke-width: 1.25;
-  stroke-opacity: 0.6;
-}
-.chart-line {
-  fill: none;
-  stroke: var(--tone);
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.chart-dashed {
-  stroke-dasharray: 5 4;
-}
-/* A point is edged 2px in the panel colour, so it reads where lines cross. */
-.chart-point {
-  fill: var(--tone);
-  stroke: var(--caos-panel);
-  stroke-width: 2;
-}
-.chart-point.chart-hollow {
-  fill: var(--caos-panel);
-  stroke: var(--tone);
-}
-.chart-ring {
-  fill: none;
-  stroke: var(--caos-accent);
-  stroke-width: 2;
-}
+  /* ---- the buttons over the marks ---- */
+  .chart-hit {
+    position: absolute;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    cursor: pointer;
+  }
+  .chart-hit:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 0;
+  }
 
-/* ---- the buttons over the marks ---- */
-.chart-hit {
-  position: absolute;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  cursor: pointer;
-}
-.chart-hit:focus-visible {
-  outline: 2px solid var(--caos-accent);
-  outline-offset: 0;
-}
-
-/* ---- the table twin: the exact data, at the same floors ---- */
-.chart-table-wrap {
-  overflow-x: auto;
-}
-.chart-table-wrap:focus-visible {
-  outline: 2px solid var(--caos-accent);
-  outline-offset: -2px;
-}
-.chart-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-.chart-table th,
-.chart-table td {
-  padding: 4px 8px;
-  border-bottom: 1px solid var(--caos-border);
-  text-align: right;
-  white-space: nowrap;
-}
-.chart-table thead th {
-  font: 600 10px var(--font-mono);
-  color: var(--caos-muted);
-}
-.chart-table thead th:first-child,
-.chart-table tbody th {
-  text-align: left;
-}
-.chart-table tbody th {
-  font: 400 11px var(--font-sans);
-  color: var(--caos-text);
-}
-.chart-table td {
-  font: 400 11px var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  color: var(--caos-text);
+  /* ---- the table twin: the exact data ---- */
+  .chart-table-wrap {
+    overflow-x: auto;
+  }
+  .chart-table-wrap:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: -2px;
+  }
+  .chart-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .chart-table th,
+  .chart-table td {
+    padding: 0.375rem 0.625rem;
+    border-bottom: 1px solid var(--border);
+    text-align: right;
+    white-space: nowrap;
+  }
+  .chart-table thead th {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--muted-foreground);
+  }
+  .chart-table thead th:first-child,
+  .chart-table tbody th {
+    text-align: left;
+  }
+  .chart-table tbody th {
+    font-size: 0.8125rem;
+    font-weight: 400;
+    color: var(--foreground);
+  }
+  .chart-table td {
+    font: 400 0.8125rem var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    color: var(--foreground);
+  }
 }

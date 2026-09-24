@@ -4,7 +4,10 @@
 // or leverage; this table draws only what the host holds (brief 4.1,
 // "Fixture fields dropped rather than faked").
 import { Link } from "react-router";
-import { Tag } from "@/ds/atoms";
+import { SEVERITY_BADGE, SeverityMark } from "@/chrome/SeverityMark";
+import { RUN_SEVERITY, sentence } from "@/chrome/compose";
+import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import { stamp } from "@/ds/format";
 import type { CaseRow } from "@/wire/v1";
 
@@ -16,19 +19,14 @@ export function caseHref(caseId: string): string {
   return `/analysis/?case=${encodeURIComponent(caseId)}`;
 }
 
-const RUN_TONE: Record<RunSummary["status"], string> = {
-  COMPLETE: "ok",
-  RUNNING: "acc",
-  BLOCKED: "warn",
-  FAILED: "crit",
-  CANCELLED: "warn",
-};
-
 function LatestRunCell({ run }: { run: RunSummary | null }) {
   if (!run) return <span className="m">No runs yet</span>;
   return (
     <span className="m">
-      <Tag sev={RUN_TONE[run.status]}>{run.status}</Tag>
+      <Badge variant={SEVERITY_BADGE[RUN_SEVERITY[run.status]]} className="gap-1.5">
+        <SeverityMark severity={RUN_SEVERITY[run.status]} decorative />
+        {sentence(run.status)}
+      </Badge>
       {run.profile_id ? <span className="sub"> {run.profile_id}</span> : null}
       {run.selection_id ? <span className="sub"> · {run.selection_id}</span> : null}
     </span>
@@ -67,12 +65,14 @@ export function CaseRegister({ rows }: { rows: CaseRow[] }) {
         <tbody>
           {rows.map((row) => (
             <tr key={row.case_id} data-case={row.case_id}>
-              <td className="m">{row.case_id}</td>
+              <td className="m" title={row.case_id}>
+                {row.case_id.slice(0, 8)}…{row.case_id.slice(-4)}
+              </td>
               <td className="wrap">{row.title}</td>
               <td className="m r">
                 <time dateTime={row.created_at}>{stamp(row.created_at)}</time>
               </td>
-              <td>{row.standing}</td>
+              <td>{sentence(row.standing)}</td>
               <td className="m r">{row.live_sources}</td>
               <td>
                 <LatestRunCell run={row.latest_run} />
@@ -80,7 +80,7 @@ export function CaseRegister({ rows }: { rows: CaseRow[] }) {
               <td className="r">
                 {/* Four links all named "Open case" told a screen reader nothing. */}
                 <Link
-                  className="rowact"
+                  className={buttonVariants({ variant: "outline", size: "sm" })}
                   to={caseHref(row.case_id)}
                   // The visible label leads the name, so speech input finds it
                   // (WCAG 2.5.3); the case follows so a list of four is told apart.

@@ -16,11 +16,19 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
+import type { VariantProps } from "class-variance-authority";
+import { Button, type buttonVariants } from "@/components/ui/button";
 
-interface ActionReasonProps extends Omit<
-  ButtonHTMLAttributes<HTMLButtonElement>,
-  "onClick" | "title" | "aria-disabled" | "aria-describedby" | "aria-busy"
-> {
+/** A control's weight: shadcn's button variants and sizes (D35). */
+export type ControlLook = VariantProps<typeof buttonVariants>;
+
+interface ActionReasonProps
+  extends
+    Omit<
+      ButtonHTMLAttributes<HTMLButtonElement>,
+      "onClick" | "title" | "aria-disabled" | "aria-describedby" | "aria-busy"
+    >,
+    ControlLook {
   /** Non-empty → the action is inert and this explains why. Null/undefined → live. */
   reason?: string | null;
   /** The pointer's fuller detail for an inert action (the refusal code and what
@@ -41,16 +49,22 @@ interface ActionReasonProps extends Omit<
 const FLASH_MS = 4000;
 const FLASH_MAX_WIDTH = 280;
 
+/** Room a flashed reason needs below its control; with less (the sidebar's
+    foot sits on the viewport's edge) it opens above instead. */
+const FLASH_ROOM = 48;
+
 const flashPosition = (button: HTMLButtonElement | null): CSSProperties => {
   const rect = button?.getBoundingClientRect();
-  return rect
+  if (!rect) return {};
+  const left = Math.max(8, rect.right - FLASH_MAX_WIDTH);
+  return window.innerHeight - rect.bottom < FLASH_ROOM
     ? {
         position: "fixed",
-        top: rect.bottom + 6,
-        left: Math.max(8, rect.right - FLASH_MAX_WIDTH),
+        bottom: window.innerHeight - rect.top + 6,
+        left,
         maxWidth: FLASH_MAX_WIDTH,
       }
-    : {};
+    : { position: "fixed", top: rect.bottom + 6, left, maxWidth: FLASH_MAX_WIDTH };
 };
 
 const useReasonFlash = (reasonDisplay: "inline" | "hidden") => {
@@ -93,7 +107,11 @@ function ActionReasonMessage({
       id={reasonId}
       role={flash ? "status" : undefined}
       className={
-        showInline ? `caos-action-reason${flash ? " caos-action-reason-pop" : ""}` : "sr-only"
+        showInline
+          ? flash
+            ? "z-50 rounded-md bg-foreground px-3 py-1.5 text-xs text-background shadow-md"
+            : "mt-1 block basis-full text-xs text-muted-foreground"
+          : "sr-only"
       }
       style={flash ? (flashPos ?? undefined) : undefined}
     >
@@ -111,6 +129,8 @@ export function ActionReason({
   onClick,
   children,
   type = "button",
+  variant = "outline",
+  size = "sm",
   ...rest
 }: ActionReasonProps) {
   const reasonId = useId();
@@ -126,8 +146,10 @@ export function ActionReason({
   const { "aria-label": label, ...attributes } = rest;
   return (
     <>
-      <button
+      <Button
         ref={buttonRef}
+        variant={variant}
+        size={size}
         type={type}
         aria-disabled={inert || busy || undefined}
         aria-busy={busy || undefined}
@@ -138,7 +160,7 @@ export function ActionReason({
         {...attributes}
       >
         {children}
-      </button>
+      </Button>
       <ActionReasonMessage
         inert={inert}
         reasonId={reasonId}
