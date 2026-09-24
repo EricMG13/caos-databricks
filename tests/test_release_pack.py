@@ -356,6 +356,29 @@ def test_a_malformed_database_url_refuses_the_pack_without_the_password(
     assert "SuperSecretPw" not in logged
 
 
+def test_a_store_whose_schema_is_undescribed_refuses_the_pack_without_a_traceback(
+    empty_database: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """CF-094: `main`'s `connect(url)`/`read_store(...)` call also raises a
+    typed `Refusal` directly -- `verify_schema` over a store no migration has
+    touched, here -- and not only the untyped `psycopg.Error` CF-078 guarded.
+    An uncaught one would have printed a traceback instead of the code."""
+    monkeypatch.setenv("CAOS_DATABASE_URL", empty_database)
+
+    code = release_pack.main(
+        ["--out", str(tmp_path), "--store", "--as-of", NOW.isoformat()]
+    )
+
+    assert code == 2
+    logged = capsys.readouterr()
+    assert logged.err.strip() == "STORE_SCHEMA_DRIFT"
+    assert "Traceback" not in logged.err
+    assert not (tmp_path / release_pack.JSON_NAME).exists()
+
+
 def test_a_store_its_migrations_do_not_describe_refuses_the_pack(
     empty_database: str,
 ) -> None:
