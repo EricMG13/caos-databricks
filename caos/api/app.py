@@ -422,6 +422,12 @@ app = FastAPI(
     docs_url=None,
     redoc_url=None,
     openapi_url=None,
+    # C1: routing answered a declared path asked for with a trailing slash
+    # with a 307 built from the request's own `Host`, over the `http` that
+    # `proxy_headers=False` leaves in scope -- the export's CF-086 echo, on
+    # the API. The API redirects nothing; another spelling of a path is
+    # `ENDPOINT_NOT_FOUND`, as any undeclared one is.
+    redirect_slashes=False,
 )
 app.add_middleware(EdgeGuard)
 # One router per section read (Task 4.1), so each slice adds its route in its

@@ -209,6 +209,30 @@ def test_no_request_target_redirects_off_the_app_origin(
         thread.join(10)
 
 
+@pytest.mark.parametrize("platform", [False, True], ids=["dev", "platform"])
+def test_no_api_path_redirects_either(
+    site: Path, monkeypatch: pytest.MonkeyPatch, platform: bool
+) -> None:
+    """C1's sibling on the API: routing answered a declared path asked for with
+    a trailing slash with a 307 to the same path without it, built from the
+    request's own `Host` over `http` -- behind the platform, whatever `Host`
+    the request named, and a downgrade from the TLS the proxy terminated. The
+    API redirects nothing: an undeclared spelling is `ENDPOINT_NOT_FOUND`."""
+    if platform:
+        monkeypatch.setenv(PLATFORM_ENV, "caos")
+        monkeypatch.setenv(WORKSPACE_ENV, "1")
+    server, thread, port = _served_on_a_socket()
+    host = "evil.example" if platform else f"127.0.0.1:{port}"
+    try:
+        for target in ("/api/health/", "/api/v1/directory/", "/api/v1/cases/"):
+            status, location = _raw_get(port, target, host)
+            assert location is None, (target, status, location)
+            assert status.split()[1] == "404", (target, status)
+    finally:
+        server.should_exit = True
+        thread.join(10)
+
+
 def test_section_deep_links_serve_the_export_with_their_query(site: Path) -> None:
     client = TestClient(application)
     for link in (
