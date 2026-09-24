@@ -55,12 +55,22 @@ class Token:
 
 # Why a line's text may not be seen on the rendered page (N27): drawn in text
 # render mode 3 -- every OCR'd scan's text layer -- painted near the colour
-# behind it, or in glyphs under 2 pt. Such text is kept as evidence and its
-# line marked, never dropped.
+# behind it, in glyphs under 2 pt, inside optional content the document's
+# default configuration switches off, or under an opaque fill the page paints
+# over it later. Such text is kept as evidence and its line marked, never
+# dropped. Sorted, so a mark is its reasons in this order.
 NEAR_BACKGROUND = "near_background"
+OPTIONAL_CONTENT_OFF = "optional_content_off"
+PAINTED_OVER = "painted_over"
 RENDER_MODE_3 = "render_mode_3"
 UNDER_2PT = "under_2pt"
-HIDDEN_REASONS = (NEAR_BACKGROUND, RENDER_MODE_3, UNDER_2PT)
+HIDDEN_REASONS = (
+    NEAR_BACKGROUND,
+    OPTIONAL_CONTENT_OFF,
+    PAINTED_OVER,
+    RENDER_MODE_3,
+    UNDER_2PT,
+)
 # Every mark a line can carry: its reasons, sorted and joined by a comma.
 HIDDEN_MARKS = frozenset(
     ",".join(reasons)

@@ -626,7 +626,16 @@ const PageLine = object({
   y0: number,
   x1: number,
   y1: number,
-  hidden: array(enumOf(["near_background", "render_mode_3", "under_2pt"]), 3),
+  hidden: array(
+    enumOf([
+      "near_background",
+      "optional_content_off",
+      "painted_over",
+      "render_mode_3",
+      "under_2pt",
+    ]),
+    5,
+  ),
 });
 const PageBody = object({
   case_id: uuid,

@@ -203,6 +203,18 @@ MIGRATIONS = (
         .with_name("0038_queued_runs_per_actor.sql")
         .read_text(encoding="utf-8"),
     ),
+    (
+        "0039_hidden_optional_content",
+        Path(__file__)
+        .with_name("0039_hidden_optional_content.sql")
+        .read_text(encoding="utf-8"),
+    ),
+    (
+        "0040_hidden_painted_over",
+        Path(__file__)
+        .with_name("0040_hidden_painted_over.sql")
+        .read_text(encoding="utf-8"),
+    ),
 )
 
 # DL-1: the store's own schema, beside LangGraph's `caos_graph`
