@@ -16,6 +16,12 @@ Committee. The render only looked for the publication row, and served a
 withdrawn source's quotes after Report and Committee refused them.
 `caos.deliverable.render.render` stays the pure function it always was.
 
+The package is not built here: it is the archive filing stored beside the
+receipt (W1, `caos.deliverable.filing.persist_receipt`), so it packs the
+renderer the receipt pins rather than whichever this build deploys. A filing
+made before that is `DELIVERABLE_PACKAGE_NOT_STORED`, never an archive built
+now that its own verifier would refuse.
+
 Standing is the floor Report and Committee already read at
 (`caos.api.deps.readable`, `Standing.READER`), read inside the same read unit
 as the proof: a case member reads either download of a revision they could
