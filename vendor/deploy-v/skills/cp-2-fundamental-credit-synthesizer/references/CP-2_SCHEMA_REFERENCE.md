@@ -30,7 +30,7 @@ Positive — Deleveraging | Positive — Margin Expansion | Positive — Revenue
 Strong / Average / Weak / Not Assessable
 
 ## Materiality Filter Values
-- Direction: Positive / Negative / Mixed
+- Direction: Positive / Negative. A driver that cuts both ways is two rows, one Positive and one Negative, each with its own Credit Implication (canon: Mixed->split).
 - Confidence: High / Medium / Low / Not Assessable
 - T2.10 holds a Positive and a Negative row. A direction with no supported driver takes one row saying so (`Driver` `None supported`, `Confidence` `Not Assessable`), never an invented driver.
 

@@ -53,7 +53,7 @@ CATALOG = (
 
 # docs/DECISIONS.md §96 and §98 together moved the §13 pin last (after §61,
 # §63, §92). A run pinned to one build never executes under another.
-BUILD_ID = "e6fc797861b802099f7741bfb203f3d3b76d41bd1477a37371c4aba29fd1a47e"
+BUILD_ID = "820dfc7c624af6ef920eefff9e809c9cb41c83be230e374e481a814e7953ac8a"
 
 
 def _load(path: Path) -> dict[str, object]:

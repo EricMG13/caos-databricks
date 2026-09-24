@@ -25,7 +25,7 @@ UP: CP-1, CP-1A, CP-1B, CP-1C | DOWN (Analytical): CP-2A, CP-2B, CP-2C, CP-2D, C
 
 ## Enumerated Label Sets
 - **Financial Profile Assessment:** Strong | Average | Weak | Not Assessable
-- **Materiality Direction:** Positive | Negative | Mixed
+- **Materiality Direction:** Positive | Negative (a driver that cuts both ways is split into one of each; canon: Mixed->split)
 - **Materiality Confidence:** High | Medium | Low | Not Assessable
 - **Module Status:** Full Run | Ready with Limitations | Blocked
 - **Credit Implication (13):** See Schema Reference

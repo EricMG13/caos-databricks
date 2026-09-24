@@ -402,6 +402,53 @@ class ForkR3Tests(unittest.TestCase):
         self.assertEqual(len(errors), 1)
 
 
+class ForkR4Tests(unittest.TestCase):
+    """Deployment fork r4: what fork r3 left outside its rows (N70)."""
+
+    def test_a_driver_that_cuts_both_ways_is_split_never_mixed(self):
+        # N70: the canon deprecates Mixed (split); CP-2's method and checker allowed it.
+        columns = ['Rank', 'Driver', 'Evidence', 'Risk Mechanic', 'Credit Implication', 'Direction', 'Confidence']
+        split = [['1', 'Asset sale', 'Release p2', 'Debt paydown', 'Positive — Deleveraging', 'Positive', 'High'],
+                 ['2', 'Asset sale', 'Release p2', 'Lost EBITDA', 'Negative — Revenue Decline', 'Negative', 'High']]
+        slug = 'cp-2-fundamental-credit-synthesizer'
+        violations, _, _ = complete.check(skill_text(slug), register('T2.10', columns, split), 'CP-2')
+        self.assertEqual(about(violations, 'T2.10'), [])
+        mixed = split + [['3', 'Asset sale', 'Release p2', 'Both', 'Neutral — Stable', 'Mixed', 'Low']]
+        violations, _, _ = complete.check(skill_text(slug), register('T2.10', columns, mixed), 'CP-2')
+        self.assertTrue(any('cp2.materiality_direction_enum' in v for v in about(violations, 'T2.10')), violations)
+        for name in ('references/REF_CP-2_STEPS.md', 'references/CP-2_SCHEMA_REFERENCE.md',
+                     'references/CP-2_SYSTEM_REFERENCE.md'):
+            text = (ROOT / 'skills' / slug / name).read_text(encoding='utf-8')
+            with self.subTest(name=name):
+                self.assertNotIn('Negative / Mixed', text)
+                self.assertNotIn('Negative | Mixed', text)
+                self.assertIn('Mixed->split', text)
+
+    def test_cp_model_tables_are_unconditional_only(self):
+        # N70: each was listed as a conditional appendix register and an unconditional stable table.
+        for slug, module_id, table in (('cp-2-fundamental-credit-synthesizer', 'CP-2', 'cp2.cp_model_strengths_weaknesses'),
+                                       ('cp-2g-forward-credit-model', 'CP-2G', 'cp2g.cp_model_forecast_drivers')):
+            text = skill_text(slug)
+            with self.subTest(module=module_id):
+                self.assertIn('  - **conditional_register_ids**: none\n', text)
+                self.assertNotIn('**conditional_register_ids**: ' + table, text)
+                self.assertIn(table, complete.load_contract(text, module_id)['unconditional_stable_tables'])
+
+    def test_the_research_brief_is_followed_only_where_it_is_delivered(self):
+        # N70: every module but CP-L10 was told to use a brief only CP-DR is delivered.
+        pointer = 'where `../cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md` is delivered with this module'
+        unconditioned = 'Otherwise use `../cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md`'
+        paragraphs = 0
+        for path in sorted((ROOT / 'skills').glob('*/SKILL.md')):
+            text = path.read_text(encoding='utf-8')
+            with self.subTest(skill=path.parent.name):
+                self.assertNotIn(unconditioned, text)
+            paragraphs += pointer in text
+        self.assertEqual(paragraphs, 20)
+        canon = (ROOT / 'CANON_SHARED.md').read_text(encoding='utf-8')
+        self.assertIn('Where `skills/cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md` is delivered with a module, follow it', canon)
+
+
 @unittest.skipUnless(os.environ.get('DEPLOY_V_INTEGRATION') == '1', 'enable integration for native PDF and DOCX dependencies')
 class IntegrationTests(unittest.TestCase):
     def test_exporter_binds_current_catalyst_owner(self):

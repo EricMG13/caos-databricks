@@ -885,4 +885,4 @@ Aliases invoke the complete physical owner's workflow and artifact. CP-2D, CP-3C
 
 ## CP-DR workflow integration
 
-CP-DR can be inserted by a run-specific research brief before a named consumer. Follow `skills/cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md`. The sole analytical output remains canonical Markdown; brief JSON is a workflow control. Research evidence must pass the receiving owner's source/definition checks and explicit adoption register. Standalone dossiers carry their own research scope and cannot silently become same-run upstream handoffs.
+CP-DR can be inserted by a run-specific research brief before a named consumer. Where `skills/cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md` is delivered with a module, follow it; where it is not, an unresolved research question is recorded as that module's gap and no research is requested. The sole analytical output remains canonical Markdown; brief JSON is a workflow control. Research evidence must pass the receiving owner's source/definition checks and explicit adoption register. Standalone dossiers carry their own research scope and cannot silently become same-run upstream handoffs.

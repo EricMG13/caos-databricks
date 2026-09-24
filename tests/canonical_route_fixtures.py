@@ -307,8 +307,9 @@ def _cp3d() -> dict[str, list[list[str]]]:
 
 def _cp2() -> dict[str, list[list[str]]]:
     return {
-        # `Direction` is the vendor's own enum (Positive | Negative | Mixed) and
-        # the register must carry both a support and a risk (§92).
+        # `Direction` is the vendor's own enum (Positive | Negative; fork r4
+        # splits a `Mixed` driver, N70) and the register must carry both a
+        # support and a risk (§92).
         "T2.10": [
             [str(i), driver, evidence, mechanic, implication, direction, "Medium"]
             for i, driver, evidence, mechanic, implication, direction in (
@@ -888,6 +889,9 @@ Drawings are permitted while net leverage is below 4.0 times
 """,
 }
 RESEARCH_FILENAMES = {"release": "results-release.txt", "facility": "facility.txt"}
+# What the dossier's `Complete with Gaps` sets `qa_status` to under the canon's
+# `D1 FROM MODULE STATUS` map (D40); `test_vendor_fork` holds it to the canon.
+RESEARCH_GAPS_QA_STATUS = "Restricted"
 # Whole lines of the pack (invariant 11). CP-DR cites the line that answers the
 # first question and the facility line its contrary search read.
 RESEARCH_QUOTES: dict[str, tuple[tuple[str, str], ...]] = {
@@ -1072,6 +1076,11 @@ def research_markdown(
     `ident` carries, so TDR.1 is the locked brief exactly.
     """
     knobs = knobs or HandoffKnobs()
+    qa_status = knobs.qa_status
+    if ident.module_id == "CP-DR" and qa_status != "Blocked":
+        # One UNRESOLVED finding makes the run `Complete with Gaps`, which the
+        # canon's status map reports as Restricted (D40, N70).
+        qa_status = RESEARCH_GAPS_QA_STATUS
     front = {
         **fields,
         "confidence_score": 90,
@@ -1080,11 +1089,11 @@ def research_markdown(
         "limitation_flags": [],
         "validation_warnings": [],
         "downstream_consumers": [],
-        **AUTHORED[knobs.qa_status],
-        "qa_status": knobs.qa_status,
+        **AUTHORED[qa_status],
+        "qa_status": qa_status,
     }
     if ident.module_id == "CP-DR":
-        blocked = knobs.qa_status == "Blocked"
+        blocked = qa_status == "Blocked"
         front.update(
             coverage_score=0 if blocked else 50,
             research_status="Blocked" if blocked else "Complete with Gaps",
