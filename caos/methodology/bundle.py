@@ -256,6 +256,13 @@ def verified_bytes(bundle: Bundle, module_id: str, relative_path: str) -> bytes:
 
 
 def _read_verified(bundle: Bundle, path: Path, expected: dict[str, Any]) -> bytes:
+    data = _verified_file(path, expected)
+    bundle.verify_manifest()
+    return data
+
+
+def _verified_file(path: Path, expected: dict[str, Any]) -> bytes:
+    """One file's bytes, proven against its manifest size and digest."""
     if not path.is_file():
         raise Refusal(RefusalCode.AUTHORITY_BYTES_MISMATCH)
     try:
@@ -267,8 +274,28 @@ def _read_verified(bundle: Bundle, path: Path, expected: dict[str, Any]) -> byte
 
     if len(data) != expected["bytes"] or sha256(data).hexdigest() != expected["sha256"]:
         raise Refusal(RefusalCode.AUTHORITY_BYTES_MISMATCH)
-    bundle.verify_manifest()
     return data
+
+
+def verify_every_file(bundle: Bundle) -> None:
+    """Every file the manifest lists -- the root's and every skill's -- read
+    and proven against its size and digest, then the manifest against itself
+    (CF-093).
+
+    `verify_pinned` proves the manifest and a reader proves the files its own
+    module reads; this proves all of them, for a caller that must know the
+    whole bundle is the one pinned. `AUTHORITY_BYTES_MISMATCH` for the first
+    file that moved, went missing or escapes the root, and nothing about which.
+    """
+    manifest = bundle._manifest
+    for name, expected in manifest["root_file_hashes"].items():
+        _verified_file(_contained_path(bundle.root, name), expected)
+    skills = _contained_path(bundle.root, SKILLS_DIR)
+    for skill in manifest["skills"]:
+        folder = _contained_path(skills, skill["folder_slug"])
+        for name, expected in skill["relative_file_hashes"].items():
+            _verified_file(_contained_path(folder, name), expected)
+    bundle.verify_manifest()
 
 
 def verified_root_bytes(bundle: Bundle, name: str) -> bytes:
