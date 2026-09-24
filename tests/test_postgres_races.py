@@ -98,19 +98,25 @@ def test_concurrent_sign_freeze_and_file_across_two_cases_keep_one_chain_each(
             held = make_harness((conn, case_id), tmp_path / str(index), LITE)
             for module in ("CP-0", "CP-L10", "CP-5"):
                 _accept(held, module)
-            cases.append((held, _save(held), _actor(held), _actor(held)))
+            # FP-33: `_save` drafts as `held.approver`, so the two racing sign
+            # attempts need their own, independent signer minted up front --
+            # `_sign`'s own default is memoized lazily, which two threads
+            # racing its very first call could double-grant.
+            cases.append(
+                (held, _save(held), _actor(held), _actor(held), _actor(held))
+            )
 
         for stage in ("sign", "freeze", "file"):
             barrier = Barrier(4)
 
             def race(index: int, stage: str = stage, barrier: Barrier = barrier) -> str:
-                held, revision, freezer, filer = cases[index // 2]
+                held, revision, signer, freezer, filer = cases[index // 2]
                 with connect(empty_database) as other:
                     current = replace(held, conn=other)
                     barrier.wait(10)
                     try:
                         if stage == "sign":
-                            _sign(current, revision)
+                            _sign(current, revision, signer)
                         elif stage == "freeze":
                             _freeze(current, revision, freezer)
                         else:
@@ -139,7 +145,7 @@ def test_concurrent_sign_freeze_and_file_across_two_cases_keep_one_chain_each(
             }[stage]
             for pair in (outcomes[:2], outcomes[2:]):
                 assert sorted(pair) == sorted(expected)
-        for held, revision, _, _ in cases:
+        for held, revision, _, _, _ in cases:
             actions = [entry.action for entry in audit_trail(conn, held.case_id)]
             assert (
                 actions.count("OPINION_SIGNED")

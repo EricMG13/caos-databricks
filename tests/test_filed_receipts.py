@@ -12,7 +12,7 @@ import psycopg
 import pytest
 from test_deliverable_canonical import harness, lite, route
 from test_execution_freshness import _Harness
-from test_filing_chain import _actor, _freeze, _sign
+from test_filing_chain import _actor, _default_signer, _freeze, _sign
 from test_revisions import _save
 
 from caos.blobs import BlobStore
@@ -306,7 +306,9 @@ def test_filing_rechecks_every_signer_and_freezer_independence(
     _freeze(lite, revision)
     if fault == "freezer_is_signer":
         _corrupt(
-            lite, "UPDATE deliverable_publications SET frozen_by=%s", lite.approver
+            lite,
+            "UPDATE deliverable_publications SET frozen_by=%s",
+            _default_signer(lite),
         )
     else:
         _corrupt(

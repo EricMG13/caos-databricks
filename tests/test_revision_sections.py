@@ -13,7 +13,7 @@ from test_analysis_section import _as, client
 from test_deliverable_canonical import QUOTE, harness, lite, route
 from test_execution_freshness import _Harness
 from test_filed_receipts import _corrupt, _file
-from test_filing_chain import _actor, _freeze, _sign
+from test_filing_chain import _actor, _default_signer, _freeze, _sign
 from test_revisions import _read, _save
 from test_run_commands import _Counting
 
@@ -101,14 +101,14 @@ def test_committee_reads_the_exact_frozen_payload_and_receipt(
     assert body["payload_sha256"] == receipt.payload_sha256
     assert body["frozen_by"] == str(receipt.frozen_by)
     assert body["filed_by"] == str(receipt.filed_by)
-    assert body["signed_by"] == [str(receipt.signed_by), str(lite.approver)]
+    assert body["signed_by"] == [str(receipt.signed_by), str(_default_signer(lite))]
     assert body["artifacts"][0]["markdown"] == saved["artifacts"][0]["markdown"]
     if damage == "secondary":
         _corrupt(
             lite,
             "UPDATE deliverable_opinions SET signed_by=gen_random_uuid()"
             " WHERE signed_by=%s",
-            lite.approver,
+            _default_signer(lite),
         )
     elif damage == "injected":
         _corrupt(
@@ -117,7 +117,7 @@ def test_committee_reads_the_exact_frozen_payload_and_receipt(
             " SELECT revision_id,case_id,payload_sha256,gen_random_uuid(),"
             " signed_at-interval '1 day' FROM deliverable_opinions"
             " WHERE signed_by=%s",
-            lite.approver,
+            _default_signer(lite),
         )
     else:
         _corrupt(
