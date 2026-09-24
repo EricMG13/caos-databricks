@@ -10,8 +10,7 @@ from uuid import UUID
 
 from caos.blobs import BlobStore
 from caos.deliverable.package import build_package
-from caos.deliverable.render import RenderRefused, render
-from caos.deliverable.revisions import prove_revision
+from caos.deliverable.revisions import prove_revision, renderable
 from caos.methodology.bundle import Bundle
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
@@ -164,6 +163,7 @@ def freeze_in(  # noqa: PLR0913 -- exact revision and authority for its re-proof
     data = prove_revision(conn, blobs, bundle, case_id=case_id, revision_id=revision_id)
     if sha256(data).hexdigest() != digest:
         raise Refusal(RefusalCode.DELIVERABLE_MOVED_SINCE_SIGNING)
+    renderable(data)
     conn.execute(
         "INSERT INTO deliverable_publications"
         " (revision_id,case_id,payload_sha256,frozen_by) VALUES (%s,%s,%s,%s)",
@@ -283,10 +283,7 @@ def persist_receipt(
     data = receipt_bytes(filed)
     digest = blobs.put(data)
     payload = blobs.get(receipt.payload_sha256)
-    try:
-        export = render(json.loads(payload))
-    except RenderRefused as refused:
-        raise Refusal(RefusalCode(refused.code)) from None
+    export = renderable(payload)
     package = blobs.put(build_package(payload, data, export))
     conn.execute(
         "INSERT INTO deliverable_receipts"

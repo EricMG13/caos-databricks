@@ -92,6 +92,12 @@ class FilingFacts:
     # The revision is the run's newest. The save posts the served revision as
     # the head its draft was composed against, so on any other it is refused.
     head: bool
+    # The caller saved this revision: its author is no independent signer
+    # (FP-33, N78).
+    actor_saved: bool = False
+    # A frozen head that still re-proves and renders; one that does not takes
+    # a draft that supersedes it (N77).
+    fileable: bool = True
 
 
 def report_actions(
@@ -134,8 +140,12 @@ def report_actions(
             [
                 *writer,
                 (not filing.head, _C.COMMAND_EXPECTATION_STALE),
-                # W5: a frozen head takes no draft until it is filed.
-                (filing.frozen and not filing.filed, _C.DELIVERABLE_ALREADY_FROZEN),
+                # W5: a frozen head takes no draft until it is filed, unless
+                # it can no longer be filed (N77).
+                (
+                    filing.frozen and not filing.filed and filing.fileable,
+                    _C.DELIVERABLE_ALREADY_FROZEN,
+                ),
             ],
         ),
         _view(
@@ -145,6 +155,7 @@ def report_actions(
                 # CF-026: the route checks this first, before any signature
                 # state, so a superseded revision is refused the same way here.
                 (not filing.head, _C.COMMAND_EXPECTATION_STALE),
+                (filing.actor_saved, _C.APPROVER_NOT_INDEPENDENT),
                 (filing.frozen, _C.DELIVERABLE_ALREADY_FROZEN),
                 (filing.actor_signed, _C.DELIVERABLE_ALREADY_SIGNED),
             ],

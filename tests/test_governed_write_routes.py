@@ -401,6 +401,88 @@ def test_a_frozen_head_takes_no_new_draft_until_it_is_filed(
     assert superseding.status_code == 201, superseding.text
 
 
+def test_a_payload_the_renderer_refuses_is_refused_before_it_can_wedge_a_run(
+    filing_client: TestClient, lite: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """N77. Save, sign and freeze never rendered, so a payload the renderer
+    refuses was refused only at filing, after two approvals, and W5 then closed
+    the frozen head to the draft that could replace it. Save and freeze now
+    refuse with the render's own code, and a frozen head that no longer renders
+    -- a renderer tightened after its freeze -- is offered, and takes, a draft
+    that supersedes it."""
+    from caos.deliverable import revisions
+    from caos.deliverable.render import RenderRefused, render
+
+    refused_ids: set[str] = set()
+
+    def tightened(payload: dict[str, Any]) -> bytes:
+        if "*" in refused_ids or payload["revision_id"] in refused_ids:
+            raise RenderRefused("DELIVERABLE_MARKDOWN_UNSUPPORTED")
+        return render(payload)
+
+    monkeypatch.setattr(revisions, "render", tightened)
+    writer = member(lite.conn, lite.case_id, Standing.WRITER)
+    runs = f"{_case(lite)}/runs/{lite.run_id}/revisions"
+    code = (400, "DELIVERABLE_MARKDOWN_UNSUPPORTED")
+
+    refused_ids.add("*")
+    with pytest.raises(Refusal, match=r"^DELIVERABLE_MARKDOWN_UNSUPPORTED$"):
+        revisions.renderable(b"{}")
+    saved = _post(
+        filing_client, runs, writer, {"narrative": [], "expected_revision_id": None}
+    )
+    assert (saved.status_code, saved.json()["code"]) == code, saved.text
+    refused_ids.clear()
+
+    frozen = _save(lite)
+    digest = _digest(lite, frozen)
+    signature = f"{_case(lite)}/revisions/{frozen}/signature"
+    signed = _post(
+        filing_client, signature, _approver(lite), {"payload_sha256": digest}
+    )
+    assert signed.status_code == 200, signed.text
+    freeze = f"{_case(lite)}/revisions/{frozen}/freeze"
+    refused_ids.add(str(frozen))
+    unfrozen = _post(filing_client, freeze, _approver(lite), {"payload_sha256": digest})
+    assert (unfrozen.status_code, unfrozen.json()["code"]) == code, unfrozen.text
+    refused_ids.clear()
+    froze = _post(filing_client, freeze, _approver(lite), {"payload_sha256": digest})
+    assert froze.status_code == 200, froze.text
+
+    draft = {"narrative": [], "expected_revision_id": str(frozen)}
+    assert _shown(filing_client, lite, frozen, writer)["SAVE_REVISION"] == (
+        "DELIVERABLE_ALREADY_FROZEN"
+    )
+    refused_ids.add(str(frozen))
+    assert _shown(filing_client, lite, frozen, writer)["SAVE_REVISION"] is None
+    filing = f"{_case(lite)}/revisions/{frozen}/filing"
+    unfiled = _post(filing_client, filing, _approver(lite), {"payload_sha256": digest})
+    assert (unfiled.status_code, unfiled.json()["code"]) == code, unfiled.text
+    superseding = _post(filing_client, runs, writer, draft)
+    assert superseding.status_code == 201, superseding.text
+
+
+def test_the_narratives_author_is_not_offered_the_signature(
+    filing_client: TestClient, lite: _Harness
+) -> None:
+    """N78: `sign_opinion_in` refuses the revision's author
+    `APPROVER_NOT_INDEPENDENT` (FP-33), and the Report now says so rather than
+    offering a signature its commit refuses."""
+    author = member(lite.conn, lite.case_id, Standing.APPROVER)
+    runs = f"{_case(lite)}/runs/{lite.run_id}/revisions"
+    saved = _post(
+        filing_client, runs, author, {"narrative": [], "expected_revision_id": None}
+    )
+    assert saved.status_code == 201, saved.text
+    revision = UUID(saved.json()["revision_id"])
+    assert _shown(filing_client, lite, revision, author)["SIGN_OPINION"] == (
+        "APPROVER_NOT_INDEPENDENT"
+    )
+    assert (
+        _shown(filing_client, lite, revision, _approver(lite))["SIGN_OPINION"] is None
+    )
+
+
 def test_a_filing_against_a_digest_that_is_no_longer_the_frozen_one_refuses(
     filing_client: TestClient, lite: _Harness
 ) -> None:
@@ -675,7 +757,8 @@ def test_a_run_with_no_revision_is_served_a_report_that_offers_its_first_save(
     assert head["body"]["revision_id"] == saved.json()["revision_id"]
     assert head["observed_empty"] is False
     assert _judged(head)["SAVE_REVISION"] is None
-    assert _judged(head)["SIGN_OPINION"] is None
+    # The approver who saved it is its author, no independent signer (N78).
+    assert _judged(head)["SIGN_OPINION"] == "APPROVER_NOT_INDEPENDENT"
 
 
 def test_a_first_save_the_run_cannot_derive_is_shown_refused_with_its_code(

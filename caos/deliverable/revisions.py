@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
 from caos.deliverable.canonical import Revision, canonical_payload, payload_bytes
+from caos.deliverable.render import RenderRefused, render
 from caos.methodology.bundle import Bundle
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
@@ -163,6 +164,7 @@ def save_revision_in(  # noqa: PLR0913 -- authority, owner and narrative boundar
         revision_id=revision_id,
         narrative=narrative,
     )
+    renderable(data)
     digest = blobs.put(data)
     conn.execute(
         "INSERT INTO deliverable_revisions"
@@ -192,6 +194,18 @@ def read_revision(
     ):
         raise Refusal(RefusalCode.DELIVERABLE_PAYLOAD_INVALID)
     return dict(payload)
+
+
+def renderable(data: bytes) -> bytes:
+    """The page this build's renderer draws from these payload bytes, or its
+    refusal as the render's own code (N77). Save and freeze ask it, not only
+    filing: a payload the renderer refuses was saved, signed and frozen, and
+    refused only at filing, after two approvals, with the head then closed to
+    the draft that could fix it."""
+    try:
+        return render(json.loads(data))
+    except RenderRefused as refused:
+        raise Refusal(RefusalCode(refused.code)) from None
 
 
 def prove_revision(

@@ -33,10 +33,10 @@ from caos.api.deps import (
 from caos.api.wire import REVISIONS_MAX, CommitteeDocument, ReportDocument
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
-from caos.deliverable.canonical import Revision, canonical_payload
+from caos.deliverable.canonical import Revision, canonical_payload, payload_bytes
 from caos.deliverable.filing import revision_signatures
 from caos.deliverable.receipts import read_filed_receipt
-from caos.deliverable.revisions import prove_revision, read_revision
+from caos.deliverable.revisions import prove_revision, read_revision, renderable
 from caos.methodology.bundle import Bundle
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
@@ -185,7 +185,7 @@ def _read(  # noqa: PLR0913 -- both documents share one authorization/proof unit
                 actions=report_actions(
                     actor.role,
                     standing,
-                    _filing_facts(conn, case_id, revision, actor, head=head),
+                    _filing_facts(proof, actor, head=head, payload=payload),
                 ),
             ),
             body={
@@ -362,7 +362,7 @@ def _revisions(conn: Store, case_id: UUID, run: UUID) -> list[dict[str, Any]]:
 
 
 def _filing_facts(
-    conn: Store, case_id: UUID, revision: UUID, actor: Caller, *, head: object
+    proof: ProvenRevision, actor: Caller, *, head: object, payload: dict[str, Any]
 ) -> FilingFacts:
     """What the section can say about this revision's filing, and no more.
 
@@ -371,21 +371,37 @@ def _filing_facts(
     controls exist for. Availability grants nothing, so it reads the two rows
     and judges from them.
     """
+    conn, case_id, revision = proof.conn, proof.case_id, proof.revision
     row = conn.execute(
-        "SELECT frozen_by,filed_by FROM deliverable_publications"
-        " WHERE case_id=%s AND revision_id=%s",
-        (case_id, str(revision)),
+        "SELECT p.frozen_by,p.filed_by,r.saved_by FROM deliverable_revisions r"
+        " LEFT JOIN deliverable_publications p"
+        " ON p.case_id=r.case_id AND p.revision_id=r.revision_key"
+        " WHERE r.case_id=%s AND r.revision_id=%s",
+        (case_id, revision),
     ).fetchone()
     signers = {who for who, _ in revision_signatures(conn, case_id, revision)}
-    frozen_by = None if row is None else UUID(str(row[0]))
+    frozen = row is not None and row[0] is not None
+    filed = frozen and row is not None and row[1] is not None
     return FilingFacts(
         signed=bool(signers),
-        frozen=row is not None,
-        filed=row is not None and row[1] is not None,
+        frozen=frozen,
+        filed=filed,
         actor_signed=actor.user_id in signers,
-        actor_froze=actor.user_id == frozen_by,
+        actor_froze=frozen and row is not None and actor.user_id == UUID(str(row[0])),
         head=head is not None and UUID(str(head)) == revision,
+        actor_saved=row is not None and actor.user_id == UUID(str(row[2])),
+        fileable=filed or not frozen or _renders(payload),
     )
+
+
+def _renders(payload: dict[str, Any]) -> bool:
+    """Whether the proven payload renders: the save command's `_fileable`
+    asks the same of a frozen head (N77)."""
+    try:
+        renderable(payload_bytes(payload))
+    except Refusal:
+        return False
+    return True
 
 
 def _publication(

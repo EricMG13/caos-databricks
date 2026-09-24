@@ -70,7 +70,7 @@ from caos.deliverable.filing import (
     persist_receipt,
     sign_opinion_in,
 )
-from caos.deliverable.revisions import prove_revision, save_revision_in
+from caos.deliverable.revisions import prove_revision, renderable, save_revision_in
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
 from caos.store.audit import GovernedAction
@@ -172,6 +172,35 @@ def _open_head(
     return (None, False) if row is None else (UUID(str(row[0])), bool(row[1]))
 
 
+def _fileable(
+    conn: StoreConnection,
+    blobs: BlobStore,
+    bundle: Methodology,
+    case_id: UUID,
+    revision_id: UUID,
+) -> bool:
+    """Whether a frozen head can still be filed: it re-proves and renders.
+
+    W5 closes a frozen head to new drafts so no writer can block its filing,
+    but a head that no longer re-proves or renders -- a renderer or rule
+    tightened after the freeze, a cited source withdrawn -- is refused at
+    filing with nothing left to correct, and a closed head then wedged the
+    run for good (N77). Such a head takes a draft that supersedes it; the
+    freeze and its signatures stay recorded. A store fault is not an answer.
+    """
+    try:
+        renderable(
+            prove_revision(
+                conn, blobs, bundle, case_id=case_id, revision_id=revision_id
+            )
+        )
+    except Refusal as refused:
+        if refused.code is RefusalCode.STORE_UNAVAILABLE:
+            raise
+        return False
+    return True
+
+
 def _owned_run(conn: StoreConnection, case_id: UUID, run_id: UUID) -> None:
     """A run of another case is as unknown as a run that does not exist."""
     row = conn.execute(
@@ -240,7 +269,11 @@ def save(  # noqa: PLR0913 -- decision 2's dependency order, keyword-only
         head, closed = _open_head(unit, case_id, run_id)
         if head != body.expected_revision_id:
             raise Refusal(RefusalCode.COMMAND_EXPECTATION_STALE)
-        if closed:
+        if (
+            closed
+            and head is not None
+            and _fileable(unit, blobs, bundle, case_id, head)
+        ):
             raise Refusal(RefusalCode.DELIVERABLE_ALREADY_FROZEN)
         digest = save_revision_in(
             unit,
