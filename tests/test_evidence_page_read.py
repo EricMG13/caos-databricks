@@ -19,6 +19,7 @@ from typing import Any, cast
 from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
+import psycopg
 import pytest
 from test_extraction_provenance import Reader
 from test_pdf_extraction import (
@@ -605,6 +606,31 @@ def test_a_stored_identity_that_is_not_the_declared_shape_is_refused(
 ) -> None:
     with pytest.raises(Refusal, match=r"^SOURCE_IDENTITY_INVALID$"):
         page_module._identity(stored)
+
+
+def test_a_document_blob_that_is_gone_is_page_not_available(tmp_path: Path) -> None:
+    """CF-071: `_document` swallows `BlobStore.get`'s own typed refusal
+    (`BLOB_NOT_FOUND`, `BLOB_DIGEST_MISMATCH`) and re-raises
+    `PAGE_NOT_AVAILABLE` -- a page read fails closed on what it is missing,
+    not on why the blob layer beneath it failed."""
+    store = BlobStore(tmp_path / "blobs")
+    with pytest.raises(Refusal, match=r"^PAGE_NOT_AVAILABLE$"):
+        page_module._document(store, "0" * 64)
+
+
+def test_a_row_query_that_errors_is_page_not_available() -> None:
+    """CF-071: `_rows` catches `psycopg.Error` itself -- raised fresh as
+    `PAGE_NOT_AVAILABLE` rather than chained, so a database's own error text
+    never reaches a reader (invariant 2)."""
+
+    class _BrokenConnection:
+        def execute(self, *_args: object, **_kwargs: object) -> None:
+            raise psycopg.OperationalError("boom")
+
+    with pytest.raises(Refusal, match=r"^PAGE_NOT_AVAILABLE$"):
+        page_module._rows(
+            cast(Any, _BrokenConnection()), (uuid4(), uuid4(), uuid4(), 1)
+        )
 
 
 @pytest.mark.parametrize("value", [None, "1", float("nan"), -1, 0])
