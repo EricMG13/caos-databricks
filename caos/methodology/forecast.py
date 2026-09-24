@@ -196,7 +196,10 @@ def driver_value(cell: str) -> Decimal:
     if _PLAIN.fullmatch(plain) is None:
         raise ValueError
     value = Decimal(plain)
-    return -value if negative else value
+    # `copy_negate`, not unary minus (F271): unary minus is an arithmetic
+    # operation, rounded to the ambient context's precision and signalling
+    # under its traps; the sign flip is exact whatever the context says.
+    return value.copy_negate() if negative else value
 
 
 def validate_driver_mapping(

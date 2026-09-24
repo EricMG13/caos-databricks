@@ -145,6 +145,21 @@ def test_a_driver_value_reads_comma_groups_and_parentheses_exactly(
     assert str(read) == value
 
 
+def test_a_parenthesised_driver_value_is_negated_exactly_in_any_context() -> None:
+    """N14: `driver_value` negated with unary minus, an arithmetic operation
+    rounded to the ambient context: at three digits `(1,250,000.25)` read as
+    -1.25E+6. It flips the sign with `copy_negate`, as F271's reader does."""
+    from decimal import Decimal, Inexact, localcontext
+
+    from caos.methodology.forecast import driver_value
+
+    with localcontext() as context:
+        context.prec = 3
+        context.traps[Inexact] = True
+        read = driver_value("(1,250,000.25)")
+    assert str(read) == "-1250000.25" and read == Decimal("-1250000.25")
+
+
 @pytest.mark.parametrize(
     "cell",
     [
