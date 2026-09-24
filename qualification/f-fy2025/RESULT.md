@@ -31,7 +31,7 @@ pages 22-64, is 555,512, both under the 1,048,576-byte ceiling
 
 ## Run
 
-- Qualification-set digest: `d4de5cfcee4d8ac032f5658594a7602e0544c60d6c79e6786592f661fe355063`
+- Qualification-set digest: `645e5829dcee868d58e4c8997014a6d9351e7245fe64727d9c01f04ba9e2206f`
 - Route: `LITE_CREDIT_22 / LITE_EARNINGS_UPDATE` (`CP-0`, `CP-L10`, `CP-5`)
 - **Not run.** No live provider call was authorized for this set; nothing here
   is qualified.

@@ -135,9 +135,8 @@ class ForecastCompletions(RouteCompletions):
             return super().complete(prompt, json_object=json_object)
         self.prompts.append(prompt)
         request = request_data()
-        bindings = {
-            p: {"module_id": OWNER[p], "quote": OWNER_QUOTES[OWNER[p]]} for p in ROWS
-        }
+        # Each binding quotes its owner's one anchored line (N28).
+        bindings = {p: {"module_id": OWNER[p], "quote": ROWS[p]} for p in ROWS}
         result = cash_flow_forecast(request)
         if self.defect == "missing":
             del bindings["/opening/cash"]
@@ -181,7 +180,7 @@ class ForecastCompletions(RouteCompletions):
                 markdown,
                 [
                     {"source_id": str(self.source_id), "page": 1, "matched_text": q}
-                    for q in OWNER_QUOTES.values()
+                    for q in ROWS.values()
                 ],
             ),
             Decimal("0.0000041"),

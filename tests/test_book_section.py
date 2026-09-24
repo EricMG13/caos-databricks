@@ -102,8 +102,10 @@ def test_the_book_row_carries_the_accepted_projection_cells_and_their_passports(
     # anchored where that module cited it, all from the one source document.
     assert passport.citations, "a projected cell names the evidence of its driver"
     assert len({citation.document_sha256 for citation in passport.citations}) == 1
-    for citation in passport.citations:
-        assert "/drivers/0/ebitda = " in citation.matched_text
+    # One anchored line per driver the cell reads (N28: a quote is one line).
+    assert sorted(
+        citation.matched_text.split(" = ")[0] for citation in passport.citations
+    ) == ["/drivers/0/ebitda", "/drivers/0/revenue"]
     assert {research.module_id for research in passport.supporting_research} >= {
         "CP-1",
         "CP-2G",

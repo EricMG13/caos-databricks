@@ -265,6 +265,31 @@ def test_an_unanchored_citation_gets_the_second_attempt_naming_it(
     assert _cp0_ledger(harness) == (2, 2, ["CITATION_NOT_LOCATED"], 1)
 
 
+def _cites_part_of_a_line(body: str) -> str:
+    """The same answer with its first citation cut to part of its line: every
+    word still verbatim in the body and in the evidence (N28)."""
+    wire = json.loads(body)
+    words = wire["citations"][0]["matched_text"].split()
+    wire["citations"][0]["matched_text"] = " ".join(words[1:])
+    return json.dumps(wire)
+
+
+def test_part_of_a_line_gets_the_second_attempt_naming_it(
+    harness: _Harness,
+) -> None:
+    """N28: part of an evidence line is no longer accepted as a quote of it,
+    and the refusal is the anchoring one the second attempt already reads
+    back as the rule the final check stated."""
+    answers = CanonicalCompletions(harness.source_id)
+    assert _run(harness, _Flawed(answers, flaw=_cites_part_of_a_line)) is None
+    total = len(json.loads(answers.bodies[0])["citations"])
+    assert (
+        f"host anchoring check: citation 1 of {total} is not one evidence line of its"
+        in answers.prompts[1]
+    )
+    assert _cp0_ledger(harness) == (2, 2, ["CITATION_NOT_LOCATED"], 1)
+
+
 def test_the_anchoring_line_names_each_failed_citation_by_number_and_reason() -> None:
     line = anchoring_line(
         [

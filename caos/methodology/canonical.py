@@ -30,6 +30,7 @@ import psycopg
 from caos import methodology
 from caos.blobs import BlobStore
 from caos.evidence.citations import (
+    WHOLE_LINE,
     AnchoredCitation,
     Citation,
     TokenIndex,
@@ -379,8 +380,11 @@ def _answer(  # noqa: PLR0913 -- one recorded answer, keyword-only
         )
     )
     # A Blocked verdict ends the run only once its quotes are verified: an
-    # unanchorable Blocked handoff is an ordinary refusal (c-5b, P3-2).
-    anchored = verify_citations(conn, delivered=blocks, citations=citations)
+    # unanchorable Blocked handoff is an ordinary refusal (c-5b, P3-2). Each
+    # quote must be one whole evidence line, as the final check says (N28).
+    anchored = verify_citations(
+        conn, delivered=blocks, citations=citations, rule=WHOLE_LINE
+    )
     if projections is None:
         raise Refusal(RefusalCode.HANDOFF_BLOCKED)
     _forecast_inputs(bundle, assignment.module_id, markdown, context)
@@ -396,6 +400,7 @@ def _answer(  # noqa: PLR0913 -- one recorded answer, keyword-only
         lineage=context.lineage,
         projections=projections,
         citations=tuple(anchored),
+        citation_rule=WHOLE_LINE,
     )
     return markdown, record_bytes(record)
 
@@ -718,7 +723,13 @@ def _anchoring(
     verdicts: list[RefusalCode | None] = []
     for citation in citations:
         try:
-            verify_citations(conn, delivered=blocks, citations=(citation,), index=index)
+            verify_citations(
+                conn,
+                delivered=blocks,
+                citations=(citation,),
+                index=index,
+                rule=WHOLE_LINE,
+            )
         except Refusal as refused:
             if refused.code not in _ANCHORING_CODES:
                 raise

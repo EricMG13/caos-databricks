@@ -9,6 +9,7 @@ follow the prompt review's ledger rows (`docs/rebuild/prompt-review-2026-09-23.m
 
 from __future__ import annotations
 
+import re
 import runpy
 from pathlib import Path
 from types import SimpleNamespace
@@ -709,3 +710,140 @@ def test_figures_read_every_digit_group_space_and_refuse_underflow() -> None:
     assert "stays in\n    percentage points" in (
         verified_bytes(BUNDLE, "CP-OS", "scripts/cp_tables.py").decode()
     )
+
+
+# --- Fork r4: what fork r3 left outside its rows (N70) -------------------------
+
+_T210 = [
+    "Rank",
+    "Driver",
+    "Evidence",
+    "Risk Mechanic",
+    "Credit Implication",
+    "Direction",
+    "Confidence",
+]
+
+
+def test_a_driver_that_cuts_both_ways_is_split_never_mixed() -> None:
+    """N70: the canon deprecates `Mixed` (split), and CP-2's method and
+    checker allowed it as a T2.10 direction beside a directional credit
+    implication. Both now split it into a Positive and a Negative row."""
+    split = [
+        [
+            "1",
+            "Asset sale",
+            "p2",
+            "Paydown",
+            "Positive — Deleveraging",
+            "Positive",
+            "High",
+        ],
+        [
+            "2",
+            "Asset sale",
+            "p2",
+            "Lost EBITDA",
+            "Negative — Revenue Decline",
+            "Negative",
+            "High",
+        ],
+    ]
+    assert _about(_violations("CP-2", _register("T2.10", _T210, split)), "T2.10") == []
+    mixed = [
+        *split,
+        ["3", "Asset sale", "p2", "Both", "Neutral — Stable", "Mixed", "Low"],
+    ]
+    assert any(
+        "cp2.materiality_direction_enum" in v
+        for v in _about(_violations("CP-2", _register("T2.10", _T210, mixed)), "T2.10")
+    )
+    assert "DEPRECATED: Positive(unqualified)->specify | Mixed->split" in _canon()
+    for name in (
+        "references/REF_CP-2_STEPS.md",
+        "references/CP-2_SCHEMA_REFERENCE.md",
+        "references/CP-2_SYSTEM_REFERENCE.md",
+    ):
+        text = _authority("CP-2", name)
+        assert "Mixed->split" in text and "Negative / Mixed" not in text, name
+
+
+def test_the_cp_model_tables_are_unconditional_and_listed_once() -> None:
+    """N70: CP-2's and CP-2G's CP-MODEL tables were listed as conditional
+    appendix registers and as unconditional stable tables; the checker
+    requires them on every run, as each `SKILL.md`'s own prose says."""
+    for module, table in (
+        ("CP-2", "cp2.cp_model_strengths_weaknesses"),
+        ("CP-2G", "cp2g.cp_model_forecast_drivers"),
+    ):
+        text = skill(module).decode()
+        assert "  - **conditional_register_ids**: none\n" in text, module
+        assert f"**conditional_register_ids**: {table}" not in text, module
+        contract = CHECK.load_contract(text, module)
+        assert table in contract["unconditional_stable_tables"], module
+
+
+def test_the_research_brief_is_followed_only_where_it_is_delivered() -> None:
+    """N70: every module's research paragraph but CP-L10's told a model to use
+    CP-OS's research brief, which the host delivers to CP-DR alone. Each now
+    uses it where it is delivered and otherwise records the question as a
+    gap; the canon says the same."""
+    from caos.methodology.bundle import delivered_authority
+    from caos.methodology.handoff import ADAPTER_MODULES
+
+    brief = "../cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md"
+    conditioned = f"where `{brief}` is delivered with this module"
+    for module in sorted(ADAPTER_MODULES):
+        text = skill(module).decode()
+        delivered = {name for name, _ in delivered_authority(BUNDLE, module).files}
+        assert (brief in delivered) == (module == "CP-DR"), module
+        assert f"Otherwise use `{brief}`" not in text, module
+        if "Research questions and adoption" in text:
+            assert conditioned in text, module
+    assert "is delivered with a module, follow it; where it is not" in _canon()
+
+
+def _module_status_map() -> dict[str, str]:
+    """The canon's `D1 FROM MODULE STATUS` map (D40): each run-status word
+    to the `qa_status` it sets, read from the delivered canon's own line."""
+    [line] = [
+        text
+        for text in _canon().splitlines()
+        if text.startswith("D1 FROM MODULE STATUS:")
+    ]
+    mapped = line.split("hard caps): ", 1)[1].split(". ", 1)[0]
+    status: dict[str, str] = {}
+    for clause in mapped.split("; "):
+        words, qa_status = clause.split(" -> ")
+        status.update(dict.fromkeys(words.split(" | "), qa_status))
+    return status
+
+
+def test_the_cp_dr_fixture_reports_its_status_by_the_canon_map() -> None:
+    """N70: the host's CP-DR fixture answered `Complete with Gaps` beside
+    `qa_status: Passed`, and nothing held it to D40's map. It follows the
+    canon now, and this pins the map's rows the fixture relies on."""
+    from canonical_route_fixtures import (
+        RESEARCH_GAPS_QA_STATUS,
+        HandoffKnobs,
+        bound_research_brief_text,
+        research_identity,
+        research_markdown,
+    )
+
+    from caos.methodology.handoff import invocation_fields
+
+    status = _module_status_map()
+    assert status["Complete"] == "Passed"
+    assert status["Complete with Gaps"] == RESEARCH_GAPS_QA_STATUS == "Restricted"
+    assert status["Blocked"] == "Blocked"
+    ident = research_identity(
+        "CP-DR", research_brief=bound_research_brief_text("a" * 64)
+    )
+    fields = invocation_fields(CONTRACT, ident)
+    for knobs in (HandoffKnobs(), HandoffKnobs(qa_status="Blocked")):
+        front = research_markdown(ident, fields, knobs).decode().split("\n---\n")[0]
+        research = re.search(r'^research_status: "([^"]+)"$', front, re.MULTILINE)
+        qa = re.search(r'^qa_status: "([^"]+)"$', front, re.MULTILINE)
+        assert research is not None and qa is not None
+        assert status[research.group(1)] == qa.group(1)

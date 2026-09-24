@@ -74,7 +74,8 @@ class TenK:
     """One committed 10-K and the facts about it this module asserts."""
 
     path: Path
-    # The set's CP-0 key, which sits inside the gate's page map, and its page.
+    # The set's CP-0 key, which sits inside the gate's page map, and its page:
+    # a whole line of the 10-K, as an accepted quote is (N28).
     gate_quote: str
     gate_page: int
     # What the gate names for the screen, and the set's CP-L10 key inside it.
@@ -89,22 +90,22 @@ class TenK:
 TEN_KS = {
     "BA": TenK(
         REPO / "qualification/ba-fy2025/documents/BA_FY2025_10K.txt",
-        "Cash and cash equivalents | $10,921 | | | $13,801 |",
+        "| Cash and cash equivalents | $10,921 | | | $13,801 | |",
         36,
         "pages 13-40",
-        "Total revenues | 89,463 | | | 66,517 | | | 77,794 |",
+        "| Total revenues | 89,463 | | | 66,517 | | | 77,794 | |",
         33,
         16,
         108,
     ),
     "F": TenK(
         REPO / "qualification/f-fy2025/documents/F_FY2025_10K.txt",
-        "Net cash provided by/(used in) operating activities"
-        " | 14,918 | | | 15,423 | | | 21,282 |",
+        "| Net cash provided by/(used in) operating activities"
+        " | 14,918 | | | 15,423 | | | 21,282 | |",
         81,
         "pages 22-64",
-        "Net cash provided by/(used in) operating activities"
-        " | $ | 8,351 | | | $ | 12,931 |",
+        "| Net cash provided by/(used in) operating activities"
+        " | $ | 8,351 | | | $ | 12,931 | | | $ | — | | | $ | 21,282 | |",
         57,
         10,
         146,

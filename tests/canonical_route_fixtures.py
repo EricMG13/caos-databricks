@@ -25,6 +25,7 @@ from canonical_fixtures import (
     fields_from_prompt,
     research_brief,
     skill,
+    whole_line,
     wire,
 )
 from lite_route_fixtures import _table, _yaml
@@ -51,16 +52,20 @@ Acme peer and market table dated 2026-09-08
 Beta plc revenue 900 EBITDA 180 debt 500 cash 80 FY2025 USD million
 Acme loan mid price 98 spread 350 basis points Beta loan spread 320 basis points
 """
+# Each module cites the whole line of the pack its fact is on (N28).
 QUOTES = {
-    "CP-0": "Acme Holdings plc FY2025 annual report extract",
-    "CP-1": "Revenue 1000 EBITDA 200 cash 100 debt 600",
-    "CP-1C": "Beta plc revenue 900 EBITDA 180 debt 500 cash 80",
-    "CP-2": "Operating cash flow 140 and free cash flow 100",
-    "CP-4": "Maximum net leverage 4.0 times tested annually against covenant EBITDA",
-    "CP-3D": "Acme loan mid price 98 spread 350 basis points",
-    "CP-2A": "downside revenue growth minus 10 percent",
-    "CP-2G": "FY2026 base revenue growth 5 percent",
-    "CP-3": "Beta loan spread 320 basis points",
+    module: whole_line(PACK, words)
+    for module, words in {
+        "CP-0": "Acme Holdings plc FY2025 annual report extract",
+        "CP-1": "Revenue 1000 EBITDA 200 cash 100 debt 600",
+        "CP-1C": "Beta plc revenue 900 EBITDA 180 debt 500 cash 80",
+        "CP-2": "Operating cash flow 140 and free cash flow 100",
+        "CP-4": "Maximum net leverage 4.0 times tested annually against covenant",
+        "CP-3D": "Acme loan mid price 98 spread 350 basis points",
+        "CP-2A": "downside revenue growth minus 10 percent",
+        "CP-2G": "FY2026 base revenue growth 5 percent",
+        "CP-3": "Beta loan spread 320 basis points",
+    }.items()
 }
 LIMITATION = (
     "Peer sample contains one comparable issuer; sizing requires portfolio data"
@@ -307,8 +312,9 @@ def _cp3d() -> dict[str, list[list[str]]]:
 
 def _cp2() -> dict[str, list[list[str]]]:
     return {
-        # `Direction` is the vendor's own enum (Positive | Negative | Mixed) and
-        # the register must carry both a support and a risk (§92).
+        # `Direction` is the vendor's own enum (Positive | Negative; fork r4
+        # splits a `Mixed` driver, N70) and the register must carry both a
+        # support and a risk (§92).
         "T2.10": [
             [str(i), driver, evidence, mechanic, implication, direction, "Medium"]
             for i, driver, evidence, mechanic, implication, direction in (
@@ -522,17 +528,16 @@ class RouteCompletions:
             ),
         )
         self.answers.append(markdown)
+        # One citation per line of the module's quote: an accepted quote is
+        # one whole evidence line (N28), so the forecast owners cite each
+        # assignment line on its own.
+        quote = self.quotes_by_module.get(module, QUOTES[module])
         return Completion(
             wire(
                 markdown,
                 [
-                    {
-                        "source_id": str(self.source_id),
-                        "page": 1,
-                        "matched_text": self.quotes_by_module.get(
-                            module, QUOTES[module]
-                        ),
-                    }
+                    {"source_id": str(self.source_id), "page": 1, "matched_text": line}
+                    for line in quote.splitlines()
                 ],
             ),
             self.charge,
@@ -888,6 +893,9 @@ Drawings are permitted while net leverage is below 4.0 times
 """,
 }
 RESEARCH_FILENAMES = {"release": "results-release.txt", "facility": "facility.txt"}
+# What the dossier's `Complete with Gaps` sets `qa_status` to under the canon's
+# `D1 FROM MODULE STATUS` map (D40); `test_vendor_fork` holds it to the canon.
+RESEARCH_GAPS_QA_STATUS = "Restricted"
 # Whole lines of the pack (invariant 11). CP-DR cites the line that answers the
 # first question and the facility line its contrary search read.
 RESEARCH_QUOTES: dict[str, tuple[tuple[str, str], ...]] = {
@@ -1072,6 +1080,11 @@ def research_markdown(
     `ident` carries, so TDR.1 is the locked brief exactly.
     """
     knobs = knobs or HandoffKnobs()
+    qa_status = knobs.qa_status
+    if ident.module_id == "CP-DR" and qa_status != "Blocked":
+        # One UNRESOLVED finding makes the run `Complete with Gaps`, which the
+        # canon's status map reports as Restricted (D40, N70).
+        qa_status = RESEARCH_GAPS_QA_STATUS
     front = {
         **fields,
         "confidence_score": 90,
@@ -1080,11 +1093,11 @@ def research_markdown(
         "limitation_flags": [],
         "validation_warnings": [],
         "downstream_consumers": [],
-        **AUTHORED[knobs.qa_status],
-        "qa_status": knobs.qa_status,
+        **AUTHORED[qa_status],
+        "qa_status": qa_status,
     }
     if ident.module_id == "CP-DR":
-        blocked = knobs.qa_status == "Blocked"
+        blocked = qa_status == "Blocked"
         front.update(
             coverage_score=0 if blocked else 50,
             research_status="Blocked" if blocked else "Complete with Gaps",

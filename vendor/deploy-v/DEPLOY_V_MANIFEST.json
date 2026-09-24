@@ -308,14 +308,14 @@
     {
       "aliases": [],
       "companion_count": 9,
-      "entry_bytes": 21427,
-      "entry_sha256": "430fdd3c86045ae60640231cccc2246e0a760daaddfd636eae0da883dd2fe22b",
+      "entry_bytes": 21593,
+      "entry_sha256": "d74957bc4da761c2ba9c25c8455ba52c71bd90e9e154ae95a87113894a2c767b",
       "folder_slug": "cp-1-canonical-data-foundation",
       "module_id": "CP-1",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 21427,
-          "sha256": "430fdd3c86045ae60640231cccc2246e0a760daaddfd636eae0da883dd2fe22b"
+          "bytes": 21593,
+          "sha256": "d74957bc4da761c2ba9c25c8455ba52c71bd90e9e154ae95a87113894a2c767b"
         },
         "references/CP-1_RUNBOOK.md": {
           "bytes": 12020,
@@ -360,14 +360,14 @@
         "CP-2C"
       ],
       "companion_count": 11,
-      "entry_bytes": 42269,
-      "entry_sha256": "a89d4390c6632e61f36157bc955bb660481d9870790ab5fb126f72fd393c3212",
+      "entry_bytes": 42435,
+      "entry_sha256": "3bed15de27d3c6e1b7bc2cf38ff1a99c0500b9ada55c71686b08d8e8353cc4d8",
       "folder_slug": "cp-1a-business-transaction-fact-pack",
       "module_id": "CP-1A",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 42269,
-          "sha256": "a89d4390c6632e61f36157bc955bb660481d9870790ab5fb126f72fd393c3212"
+          "bytes": 42435,
+          "sha256": "3bed15de27d3c6e1b7bc2cf38ff1a99c0500b9ada55c71686b08d8e8353cc4d8"
         },
         "references/CP-1A_SCHEMA_REFERENCE.md": {
           "bytes": 2607,
@@ -418,14 +418,14 @@
     {
       "aliases": [],
       "companion_count": 8,
-      "entry_bytes": 26121,
-      "entry_sha256": "edfafbbeb8c2a58d8eb73598be04d05f2bdd82adfe75cb64d6febfb988bd8303",
+      "entry_bytes": 26287,
+      "entry_sha256": "99e0f5b02f276ffea6948393f895f693a7a9619c5bc9734549ffd611c7b02af4",
       "folder_slug": "cp-1b-earnings-delta",
       "module_id": "CP-1B",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 26121,
-          "sha256": "edfafbbeb8c2a58d8eb73598be04d05f2bdd82adfe75cb64d6febfb988bd8303"
+          "bytes": 26287,
+          "sha256": "99e0f5b02f276ffea6948393f895f693a7a9619c5bc9734549ffd611c7b02af4"
         },
         "references/CP-1B_SCHEMA_REFERENCE.md": {
           "bytes": 3866,
@@ -464,14 +464,14 @@
     {
       "aliases": [],
       "companion_count": 9,
-      "entry_bytes": 25073,
-      "entry_sha256": "8b9a27df7deeae13ff8eea14813db38352cbc2b222abf8035ab0993a9e73c365",
+      "entry_bytes": 25239,
+      "entry_sha256": "2dd9d390423f8734627bc641ea26d83d6d73ee4226d211f0057c9bddbb7c4149",
       "folder_slug": "cp-1c-peer-benchmark",
       "module_id": "CP-1C",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 25073,
-          "sha256": "8b9a27df7deeae13ff8eea14813db38352cbc2b222abf8035ab0993a9e73c365"
+          "bytes": 25239,
+          "sha256": "2dd9d390423f8734627bc641ea26d83d6d73ee4226d211f0057c9bddbb7c4149"
         },
         "references/CP-1C_SCHEMA_REFERENCE.md": {
           "bytes": 3280,
@@ -516,14 +516,14 @@
         "CP-1E"
       ],
       "companion_count": 6,
-      "entry_bytes": 23720,
-      "entry_sha256": "7b692e55d14c9555f3f70b685da76f0f72488221f75d1501b9fe25f722529577",
+      "entry_bytes": 23886,
+      "entry_sha256": "7af4fbb16286f555714eab62e323aeeb3416434ffad361a254b2a0df7d90c664",
       "folder_slug": "cp-1d-earnings-quality",
       "module_id": "CP-1D",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 23720,
-          "sha256": "7b692e55d14c9555f3f70b685da76f0f72488221f75d1501b9fe25f722529577"
+          "bytes": 23886,
+          "sha256": "7af4fbb16286f555714eab62e323aeeb3416434ffad361a254b2a0df7d90c664"
         },
         "references/CP-1D_SCHEMA_REFERENCE.md": {
           "bytes": 2577,
@@ -554,30 +554,30 @@
     {
       "aliases": [],
       "companion_count": 8,
-      "entry_bytes": 25384,
-      "entry_sha256": "d0e179665e05a2666fe2b0afa3357131a15b1833228d9e6c792e6443fa77a3a9",
+      "entry_bytes": 25603,
+      "entry_sha256": "96291c4421c7e9f9826a6bf0ce9630ca0841bbaa0bd661bd87bc3637caf85c3e",
       "folder_slug": "cp-2-fundamental-credit-synthesizer",
       "module_id": "CP-2",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 25384,
-          "sha256": "d0e179665e05a2666fe2b0afa3357131a15b1833228d9e6c792e6443fa77a3a9"
+          "bytes": 25603,
+          "sha256": "96291c4421c7e9f9826a6bf0ce9630ca0841bbaa0bd661bd87bc3637caf85c3e"
         },
         "references/CP-2_SCHEMA_REFERENCE.md": {
-          "bytes": 3757,
-          "sha256": "6859cf7104c0e07c8428064efcf980ab050c0b165e62ede7ea95efa09ff72921"
+          "bytes": 3883,
+          "sha256": "98a31cf798f5efca7e3ea076b8b7db975f72b48ad68b9f57fadd53eb8b4815c0"
         },
         "references/CP-2_SYSTEM_REFERENCE.md": {
-          "bytes": 1898,
-          "sha256": "5dd2153da9c3075d63cd276aa85aba9bc0a7a8fdcfb46ab3bb07c132fb7eea6a"
+          "bytes": 1968,
+          "sha256": "dca01e9a906c1feb913ee13e28cf1fd3f275d56f0918575321e296ef0bfdd166"
         },
         "references/CP-2__FundamentalCreditSynthesizer__payload.schema.txt": {
           "bytes": 3307,
           "sha256": "2e686c0cd7f245ea6da1b261a0bc8ead7f17e5a18b510214a975f8e88b1d1fa7"
         },
         "references/REF_CP-2_STEPS.md": {
-          "bytes": 23467,
-          "sha256": "9768c01679051f234934cdc9ff2eddbed964174dae1878e95db9d62a65f07c4f"
+          "bytes": 23630,
+          "sha256": "9200f6b0ab977c454176d7f78f6c55d39e41cfcccfa04a1b772f8c4c18f08bfe"
         },
         "scripts/completeness_check.py": {
           "bytes": 39039,
@@ -602,14 +602,14 @@
         "CP-2B"
       ],
       "companion_count": 12,
-      "entry_bytes": 41434,
-      "entry_sha256": "5aabca515fdf6a067a09e4259d695b8595a20f8796b60d4ab2a593db62c020ea",
+      "entry_bytes": 41600,
+      "entry_sha256": "87e95344f56fd5d227c409d6687bd098ef4852e07283f126ccae07bb571702b1",
       "folder_slug": "cp-2a-downside-pathway",
       "module_id": "CP-2A",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 41434,
-          "sha256": "5aabca515fdf6a067a09e4259d695b8595a20f8796b60d4ab2a593db62c020ea"
+          "bytes": 41600,
+          "sha256": "87e95344f56fd5d227c409d6687bd098ef4852e07283f126ccae07bb571702b1"
         },
         "references/CP-2A_SCHEMA_REFERENCE.md": {
           "bytes": 4737,
@@ -666,14 +666,14 @@
         "CP-2F"
       ],
       "companion_count": 13,
-      "entry_bytes": 39432,
-      "entry_sha256": "535a0edc4af1ebd37001b2fd6049c6c3c18ce028daff27ceb5855a56f4ca0f19",
+      "entry_bytes": 39598,
+      "entry_sha256": "b445e6e805de100cc4fa7569fed6999b36041a1af5d9417dc00343e40652b7c0",
       "folder_slug": "cp-2e-macro-fx-hedging-sensitivity",
       "module_id": "CP-2E",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 39432,
-          "sha256": "535a0edc4af1ebd37001b2fd6049c6c3c18ce028daff27ceb5855a56f4ca0f19"
+          "bytes": 39598,
+          "sha256": "b445e6e805de100cc4fa7569fed6999b36041a1af5d9417dc00343e40652b7c0"
         },
         "references/CP-2E_SCHEMA_REFERENCE.md": {
           "bytes": 4314,
@@ -732,14 +732,14 @@
     {
       "aliases": [],
       "companion_count": 9,
-      "entry_bytes": 23264,
-      "entry_sha256": "368922145a4f94fc1fb6dd204134fc63963f2b6b3c6b869cf592b483829eca5d",
+      "entry_bytes": 23404,
+      "entry_sha256": "bcfd234705ec7d107295f3a70f805dcf00b47105959e9b48865e1cd7baeda06d",
       "folder_slug": "cp-2g-forward-credit-model",
       "module_id": "CP-2G",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 23264,
-          "sha256": "368922145a4f94fc1fb6dd204134fc63963f2b6b3c6b869cf592b483829eca5d"
+          "bytes": 23404,
+          "sha256": "bcfd234705ec7d107295f3a70f805dcf00b47105959e9b48865e1cd7baeda06d"
         },
         "references/CP-2G_ForwardCreditModel.schema.md": {
           "bytes": 3518,
@@ -782,14 +782,14 @@
     {
       "aliases": [],
       "companion_count": 9,
-      "entry_bytes": 23710,
-      "entry_sha256": "ffb0f182b3878466cb7a25e285c934ff5e8d070251b58d3091ff18ec54b44ae1",
+      "entry_bytes": 23876,
+      "entry_sha256": "d42d369730d9b3b6d9a6bd45f00b25601f3ce1549e917a892099b08d34769339",
       "folder_slug": "cp-2h-ratings-migration-trigger",
       "module_id": "CP-2H",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 23710,
-          "sha256": "ffb0f182b3878466cb7a25e285c934ff5e8d070251b58d3091ff18ec54b44ae1"
+          "bytes": 23876,
+          "sha256": "d42d369730d9b3b6d9a6bd45f00b25601f3ce1549e917a892099b08d34769339"
         },
         "references/CP-2H_RatingTransition.schema.md": {
           "bytes": 1993,
@@ -835,14 +835,14 @@
         "CP-3B"
       ],
       "companion_count": 18,
-      "entry_bytes": 57202,
-      "entry_sha256": "c8772274635e4998eee6e173522c482a9df1444d88985d7dd302264c85a82e50",
+      "entry_bytes": 57368,
+      "entry_sha256": "a5c19a4a2da56964bcbe5cd025802a2750d3cf2b721bb99f4346ec9e684983ce",
       "folder_slug": "cp-3-relative-value-security-selection",
       "module_id": "CP-3",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 57202,
-          "sha256": "c8772274635e4998eee6e173522c482a9df1444d88985d7dd302264c85a82e50"
+          "bytes": 57368,
+          "sha256": "a5c19a4a2da56964bcbe5cd025802a2750d3cf2b721bb99f4346ec9e684983ce"
         },
         "references/CP-3A_RUNBOOK.md": {
           "bytes": 11981,
@@ -925,14 +925,14 @@
         "CP-4D"
       ],
       "companion_count": 18,
-      "entry_bytes": 41981,
-      "entry_sha256": "8a9c75781f08c60eeb0cb5fe62ce0c8e9f292ad47f4df73b578290e87fd1da92",
+      "entry_bytes": 42147,
+      "entry_sha256": "9a0bad83c3e01115e3db502a402c77b9f2ee40b60f54a69ee2f9edc119679866",
       "folder_slug": "cp-4-legal-covenant-interpreter",
       "module_id": "CP-4",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 41981,
-          "sha256": "8a9c75781f08c60eeb0cb5fe62ce0c8e9f292ad47f4df73b578290e87fd1da92"
+          "bytes": 42147,
+          "sha256": "9a0bad83c3e01115e3db502a402c77b9f2ee40b60f54a69ee2f9edc119679866"
         },
         "references/CP-4A_RUNBOOK.md": {
           "bytes": 11568,
@@ -1011,14 +1011,14 @@
     {
       "aliases": [],
       "companion_count": 9,
-      "entry_bytes": 24691,
-      "entry_sha256": "7da63510d7b2aa70968f62a4d78d32f8c74569dc0265093666509e6470eae7f8",
+      "entry_bytes": 24857,
+      "entry_sha256": "cfb5be8b2e872f7bd73eaa1f2550ce3b00abec32afc5fdff08082422645c01f4",
       "folder_slug": "cp-4c-restructuring-fulcrum",
       "module_id": "CP-4C",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 24691,
-          "sha256": "7da63510d7b2aa70968f62a4d78d32f8c74569dc0265093666509e6470eae7f8"
+          "bytes": 24857,
+          "sha256": "cfb5be8b2e872f7bd73eaa1f2550ce3b00abec32afc5fdff08082422645c01f4"
         },
         "references/CP-4C_RestructuringScenario.schema.md": {
           "bytes": 2095,
@@ -1063,14 +1063,14 @@
         "CP-5A"
       ],
       "companion_count": 11,
-      "entry_bytes": 23667,
-      "entry_sha256": "dafed628ce0e96f95d32cef095de289066dc21553095570153a3423c6025f1cc",
+      "entry_bytes": 23833,
+      "entry_sha256": "76b4d6631a21955c43e280f18281c2357e5f09cab363de2688e730f973f76853",
       "folder_slug": "cp-5-evidence-trace-validator",
       "module_id": "CP-5",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 23667,
-          "sha256": "dafed628ce0e96f95d32cef095de289066dc21553095570153a3423c6025f1cc"
+          "bytes": 23833,
+          "sha256": "76b4d6631a21955c43e280f18281c2357e5f09cab363de2688e730f973f76853"
         },
         "references/CP-5A_SCHEMA_REFERENCE.md": {
           "bytes": 4633,
@@ -1123,14 +1123,14 @@
         "CP-6A"
       ],
       "companion_count": 11,
-      "entry_bytes": 47419,
-      "entry_sha256": "2ba3b6efdab48f74765c8aceeaa992ce59cac98b8ffb1fc186030c27d67982fd",
+      "entry_bytes": 47585,
+      "entry_sha256": "73e73646c969ca32949d0074d3e9876fe7bc79d87a8e946b0e1a228b79f31389",
       "folder_slug": "cp-6-ic-debate-challenge",
       "module_id": "CP-6",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 47419,
-          "sha256": "2ba3b6efdab48f74765c8aceeaa992ce59cac98b8ffb1fc186030c27d67982fd"
+          "bytes": 47585,
+          "sha256": "73e73646c969ca32949d0074d3e9876fe7bc79d87a8e946b0e1a228b79f31389"
         },
         "references/CP-6A_SCHEMA_REFERENCE.md": {
           "bytes": 3936,
@@ -1181,14 +1181,14 @@
     {
       "aliases": [],
       "companion_count": 8,
-      "entry_bytes": 22370,
-      "entry_sha256": "580fc32c44f8d53b855218c3f665bc38dc200c3fdb3277a66b2ae364116bd9c6",
+      "entry_bytes": 22536,
+      "entry_sha256": "1ace999e7224a0f003d09e045c331cadef89ca4a3d64ecfe5ec971029eee2248",
       "folder_slug": "cp-8-decision-ledger-post-mortem",
       "module_id": "CP-8",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 22370,
-          "sha256": "580fc32c44f8d53b855218c3f665bc38dc200c3fdb3277a66b2ae364116bd9c6"
+          "bytes": 22536,
+          "sha256": "1ace999e7224a0f003d09e045c331cadef89ca4a3d64ecfe5ec971029eee2248"
         },
         "references/CP-8_SCHEMA_REFERENCE.md": {
           "bytes": 3486,
@@ -1698,14 +1698,14 @@
     {
       "aliases": [],
       "companion_count": 9,
-      "entry_bytes": 20852,
-      "entry_sha256": "900327d92aec77c563f86a637adad4e11f881daf71a911b6e73d61370257f648",
+      "entry_bytes": 21018,
+      "entry_sha256": "6acc036e3ad1555b81312d3ce68e1937185813dbdeeeaa2a2d342064178578b4",
       "folder_slug": "cp-2d-liquidity-cash-flow-bridge",
       "module_id": "CP-2D",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 20852,
-          "sha256": "900327d92aec77c563f86a637adad4e11f881daf71a911b6e73d61370257f648"
+          "bytes": 21018,
+          "sha256": "6acc036e3ad1555b81312d3ce68e1937185813dbdeeeaa2a2d342064178578b4"
         },
         "references/CP-2D_SCHEMA_REFERENCE.md": {
           "bytes": 4041,
@@ -1748,14 +1748,14 @@
     {
       "aliases": [],
       "companion_count": 8,
-      "entry_bytes": 18896,
-      "entry_sha256": "471accc5ca004c713346a9617900d8708bbc1a806b1121f0dbea8a523c0c2448",
+      "entry_bytes": 19062,
+      "entry_sha256": "655a8bd7445545a42ecfdde3e270bee72936eb06a5be2f13d6534978052ba6c6",
       "folder_slug": "cp-3d-market-implied-risk",
       "module_id": "CP-3D",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 18896,
-          "sha256": "471accc5ca004c713346a9617900d8708bbc1a806b1121f0dbea8a523c0c2448"
+          "bytes": 19062,
+          "sha256": "655a8bd7445545a42ecfdde3e270bee72936eb06a5be2f13d6534978052ba6c6"
         },
         "references/CP-3D_MarketImpliedRisk.schema.md": {
           "bytes": 2131,
@@ -1794,14 +1794,14 @@
     {
       "aliases": [],
       "companion_count": 9,
-      "entry_bytes": 18422,
-      "entry_sha256": "f91bfec84cfe33ae47bb16652a2eeafd4211f6daa38fbc1c1a904b22ed48652d",
+      "entry_bytes": 18588,
+      "entry_sha256": "7c7b94f65dacd1ce1e0cd1fb9dbd1e834dc77c1f0f4bc6aeeb94a21bda9439a9",
       "folder_slug": "cp-3c-refinancing-lme-risk",
       "module_id": "CP-3C",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 18422,
-          "sha256": "f91bfec84cfe33ae47bb16652a2eeafd4211f6daa38fbc1c1a904b22ed48652d"
+          "bytes": 18588,
+          "sha256": "7c7b94f65dacd1ce1e0cd1fb9dbd1e834dc77c1f0f4bc6aeeb94a21bda9439a9"
         },
         "references/CP-3C_RUNBOOK.md": {
           "bytes": 13826,

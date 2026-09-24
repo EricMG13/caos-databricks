@@ -257,10 +257,10 @@ def test_a_module_expected_both_ready_and_blocked_is_refused(tmp_path: Path) -> 
 # digest identically. Every one of these moved because every committed set
 # carries at least one of the fields that used to go in untagged.
 COMMITTED_SET_DIGESTS = {
-    "ba-fy2025": ("8c171f02920822dfd4928f544af51f0e0ccb945b672004ed744d2f4f1c9539c5"),
+    "ba-fy2025": ("300a680d0c3f8e4d5e207ce4e80d1d46390d7e28b6d88eadb4f70cb9ca19ec61"),
     "ccl-fy2025": "85d50a252f3158fe8a4bd8e4cd0747409f1b559460c16bdc1761b8745d381eb5",
     "ccl-fy2025-covenant-refinancing": (
-        "7535bd63d52e2d4f1cdd9f3f81fc88864e37ea160b20f624a4e8ce92fb7f0538"
+        "813a9182f25b51814e97ab9b5ce924b21c313471e6557d2486f2599f175806df"
     ),
     "ccl-fy2025-earnings-update": (
         "36aafade247e6c98811e23be6a5c9ccb6bd17c975b77075b6a7d58a62012be61"
@@ -272,16 +272,16 @@ COMMITTED_SET_DIGESTS = {
         "504fcb0641cb445d6413b0824b2482013f862b739594b0b80fdb3dfa82ae7532"
     ),
     "ccl-fy2025-full-relative-value": (
-        "4875d1be13ee7d55f1e3f1e1aecce0a8b7bf9f538e1d3c4308811e7ae6f3d182"
+        "f4205e4e3606ef68aece138696ea630c7632d2e184a067edce13eebf88e22e79"
     ),
     "ccl-fy2025-relative-value": (
         "fb20188605c957ec7b91079bd98f0002a627d15f633586eb39f7349e1f4bbf4b"
     ),
     "ccl-fy2025-lite-covenant-refinancing": (
-        "6a14610c39f4b16bd68a2a6fa7d36e1cfe9a446de9c8c2130fa6c628e32928f0"
+        "85fd43d537432db2a5a805ab5855ca2dda28d4b8b8b4e04fe91e0b78421fc2a9"
     ),
     "ccl-fy2025-lite-full-credit-screen": (
-        "991b3063b1cc782c6ed51c759d88702f84bc6d3ee1ea3195092d4723a5662d00"
+        "f1647d3b593d4a3ec66a001969346f9411da30091b618383a1076b4cefda9608"
     ),
     "ccl-fy2025-market-dislocation": (
         "c01b06c9c09b1ced76c297e0d7bf81ad07ace9e03f3e3322da81b3f85840db35"
@@ -292,7 +292,7 @@ COMMITTED_SET_DIGESTS = {
     "save-2024-lite-distressed-restructuring": (
         "3dcc0176be623c26b6da7d734c6a1a9ea2f1244beab0ca69de29e8228a05903c"
     ),
-    "f-fy2025": ("d4de5cfcee4d8ac032f5658594a7602e0544c60d6c79e6786592f661fe355063"),
+    "f-fy2025": ("645e5829dcee868d58e4c8997014a6d9351e7245fe64727d9c01f04ba9e2206f"),
     "vmo2-fy2025": "ff9dc7ecc2229ae0d7a114bb8f50e8c30ac9fdd05d62191447c63c8a4dee6b41",
     "vmo2-fy2025-deep-research": (
         "1881fcf6818e623322b52679268906a624d9ad4b4026c759f74bdcf9435e9bdd"
@@ -301,7 +301,7 @@ COMMITTED_SET_DIGESTS = {
         "6e617e8ced5f874ecef59f30bd813f9be06de8c6a2674a2f9c461f2346964f23"
     ),
     "vmo2-fy2025-portfolio": (
-        "011afb84cd2915e27d3927c938e59e362f020d8307b4c8117648cb36af6d1cb1"
+        "7215b7c7c41697cc6464adc9cf2f3fe57fa520faf3d2a83c5ea800160f3f1ae2"
     ),
 }
 

@@ -231,7 +231,7 @@ def test_the_artifact_is_the_handoff_and_the_record_the_host_built(
 
     assert stored.identity.module_id == "CP-0", "the host's module id, not the module's"
     assert stored.artifact_sha256 == artifact
-    assert stored.build_id.startswith("e6fc7978")
+    assert stored.build_id.startswith("820dfc7c")
     assert len(stored.authority_digest) == 64
     [citation] = stored.citations
     assert citation.matched_text == QUOTE and citation.bboxes, "anchored by the host"

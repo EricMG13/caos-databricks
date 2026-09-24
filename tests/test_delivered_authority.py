@@ -43,8 +43,10 @@ LITE_BASE = "../../CP_DEPLOY_V_LITE_MODULE_PAYLOAD_BASE_v1.schema.txt"
 # for evidence.
 # Re-measured on the deployment fork's build b160c75e (D31, D34), and on fork
 # r3's build e6fc7978, whose canon gained the status map, UPGRADE and the
-# absorbed-phase heading rule and whose three modules' texts were aligned.
-MEASURED = {"CP-0": 151_778, "CP-L10": 205_707, "CP-5": 169_178}
+# absorbed-phase heading rule and whose three modules' texts were aligned; and
+# on fork r4's build 820dfc7c, whose canon and research paragraphs condition
+# the research brief on its delivery (N70).
+MEASURED = {"CP-0": 151_927, "CP-L10": 205_856, "CP-5": 169_493}
 AUTHORITY_SHARE_OF_REQUEST = 0.25
 FOLDERS = {
     "CP-0": "cp-0-source-readiness",

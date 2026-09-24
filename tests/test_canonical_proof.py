@@ -38,7 +38,7 @@ from tracked import tracked_python
 from caos import methodology
 from caos.boundary_text import BoundaryText
 from caos.deliverable.canonical import Revision, canonical_payload
-from caos.evidence.citations import Citation, verify_citations
+from caos.evidence.citations import ANY_RUN, WHOLE_LINE, Citation, verify_citations
 from caos.evidence.ingest import Document, admit_pack
 from caos.graph.route import route_digest
 from caos.graph.runtime import Execution, run_route
@@ -195,7 +195,7 @@ def test_a_host_control_reads_orchestration_proof_never_qualified(
     """
     proof = _prove(ran)
     assert proof.assurance is Assurance.ORCHESTRATION_PROOF
-    assert proof.build_id.startswith("e6fc7978")
+    assert proof.build_id.startswith("820dfc7c")
     assert proof.route_digest == route_digest(ran.route)
     assert proof.artifacts == len(ran.route.nodes)
     assert names_qualified() == {
@@ -422,6 +422,35 @@ def test_a_source_admitted_after_the_pin_cannot_support_the_proof(
     _rewrite(ran, "CP-5", lambda r: replace(r, citations=(moved,)))
     assert _refusal(ran) is RefusalCode.ORCHESTRATION_SOURCE_NOT_PINNED
     assert _delivered(ran) is MISMATCH
+
+
+def test_a_record_is_re_anchored_by_the_rule_it_was_accepted_under(
+    ran: _Harness,
+) -> None:
+    """N28: the run's records were accepted whole-line and say so. One
+    rewritten as accepted before the rule, citing part of a line the run rule
+    located, still proves -- a stored record never starts refusing because the
+    rule tightened -- and the same part under the whole-line rule does not."""
+    _attempt, _artifact, record = _stored(ran, "CP-5")
+    stored = _decoded_record(ran.blobs.get(record))
+    assert stored.citation_rule == WHOLE_LINE
+    [cited] = stored.citations
+    part = " ".join(cited.matched_text.split()[1:])
+    request = Citation(ran.source_id, cited.page, part)
+    [located] = verify_citations(
+        ran.conn,
+        delivered=every_block(ran.conn, ran.source_id),
+        citations=[request],
+        rule=ANY_RUN,
+    )
+    ran.conn.rollback()
+
+    _rewrite(
+        ran, "CP-5", lambda r: replace(r, citations=(located,), citation_rule=ANY_RUN)
+    )
+    assert _prove(ran).citations == 3
+    _rewrite(ran, "CP-5", lambda r: replace(r, citation_rule=WHOLE_LINE))
+    assert _refusal(ran) is RefusalCode.ORCHESTRATION_CITATION_LOST
 
 
 @pytest.mark.parametrize(

@@ -24,7 +24,12 @@ import pytest
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
 from caos.evidence import ingest
-from caos.evidence.citations import Citation, _line_blocks, verify_citations
+from caos.evidence.citations import (
+    WHOLE_LINE,
+    Citation,
+    _line_blocks,
+    verify_citations,
+)
 from caos.evidence.extract import Token
 from caos.evidence.ingest import (
     GROUP_WIDTH,
@@ -161,6 +166,65 @@ def test_each_block_of_a_split_line_can_be_quoted_whole(
     assert _line_blocks(conn, source_id, PACKING_BY_TOKEN) == block_ids_by_line(
         {0: 1, 1: 2, 2: 1}
     )
+
+
+def _whole_line(
+    conn: StoreConnection, source_id: UUID, quote: str
+) -> RefusalCode | int:
+    """What the whole-line rule an answer is held to makes of `quote` (N28):
+    its refusal, or how many rectangles it anchored to."""
+    delivered = {source_id: frozenset(block for block, _ in _blocks(conn, source_id))}
+    try:
+        [anchored] = verify_citations(
+            conn,
+            delivered=delivered,
+            citations=[Citation(source_id, 1, quote)],
+            rule=WHOLE_LINE,
+        )
+    except Refusal as refused:
+        return refused.code
+    return len(anchored.bboxes)
+
+
+def test_each_block_of_a_split_line_anchors_whole_and_nothing_less(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> None:
+    """N28 on CF-013's blocks: each block of a token-cut line is a line of
+    its own to the module shown it, so quoted whole it anchors under the
+    whole-line rule, and part of one -- or the two read as one -- does not."""
+    conn, case_id = case
+    source_id = _admit(conn, case_id, tmp_path, DOCUMENT)
+    blocks = _blocks(conn, source_id)
+
+    assert [_whole_line(conn, source_id, text) for _id, text in blocks] == [1] * 4
+    for quote in (
+        " ".join(WIDE_WORDS[1:5]),
+        " ".join(WIDE_WORDS[681:684]),
+        WIDE_LINE,
+    ):
+        assert _whole_line(conn, source_id, quote) is RefusalCode.CITATION_NOT_LOCATED
+
+
+EVEN_WORDS = [f"x{n:06d}" for n in range(600)]
+
+
+def test_a_width_cut_source_anchors_the_blocks_it_cut_between_tokens(
+    case: tuple[StoreConnection, UUID], tmp_path: Path, by_width: None
+) -> None:
+    """N28 on a source packed before CF-013 (packing 1): a block whose two
+    edges the width cut between tokens is a line of its own and anchors
+    whole; one the cut tore inside a word never could (F204), and still
+    does not -- re-admission packs it between tokens."""
+    conn, case_id = case
+    data = "Heading\n" + " ".join(EVEN_WORDS) + "\n" + WIDE_LINE + "\n"
+    source_id = _admit(conn, case_id, tmp_path, data.encode())
+    assert _packing(conn, source_id) == PACKING_BY_WIDTH
+    blocks = [text for _id, text in _blocks(conn, source_id)]
+
+    assert len(blocks) == 5
+    assert [_whole_line(conn, source_id, text) for text in blocks[:3]] == [1] * 3
+    for torn in blocks[3:]:
+        assert _whole_line(conn, source_id, torn) is RefusalCode.CITATION_NOT_LOCATED
 
 
 def test_a_source_whose_lines_all_fit_keeps_packing_one(

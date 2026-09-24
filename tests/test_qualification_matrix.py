@@ -71,7 +71,8 @@ PROFILE = LITE_PROFILE
 SELECTION = LITE_SELECTION
 ESTIMATE = Decimal("0.50")
 
-QUOTE = "Total debt at 31 December 2026"
+# The whole report line a handoff cites (N28).
+QUOTE = "Total debt at 31 December 2026 was USD 1,240.0m"
 REPORT = b"""Acme Holdings plc annual report 2026
 Total debt at 31 December 2026 was USD 1,240.0m
 """
@@ -230,7 +231,7 @@ def test_the_matrix_reports_every_case_and_concludes_nothing(ran: Ran) -> None:
     matrix = _matrix(ran, qualification)
 
     assert matrix.qualification_set_sha256 == qualification_set_digest(qualification)
-    assert matrix.build_id.startswith("e6fc7978")
+    assert matrix.build_id.startswith("820dfc7c")
     [row] = matrix.rows
     assert row.case_label == "acme-2026-refinancing"
     assert row.proven is True

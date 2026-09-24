@@ -58,7 +58,7 @@ class _Run:
             documents=[
                 Document(
                     filename=BoundaryText.of("report.txt"),
-                    data=QUOTE.encode() + b" was USD 1,240.0m\n",
+                    data=QUOTE.encode() + b"\n",
                 )
             ],
         )

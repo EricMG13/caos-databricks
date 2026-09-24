@@ -109,7 +109,8 @@ ESTIMATE = Decimal("0.50")
 # Enough for any set these tests build: the per-run ceiling times ten.
 SET_CEILING = CEILING * 10
 
-QUOTE = "Total debt at 31 December 2026"
+# The whole report line a handoff cites (N28).
+QUOTE = "Total debt at 31 December 2026 was USD 1,240.0m"
 REPORT = b"""Acme Holdings plc annual report 2026
 Total debt at 31 December 2026 was USD 1,240.0m
 """
@@ -145,12 +146,16 @@ class _Completions:
         self.prompts.append(prompt)
         if len(self.prompts) == self.refuses_call:
             return Completion(None, None, None, RefusalCode.PROVIDER_UNAVAILABLE)
-        # The evidence section is last, so its source is the last one named.
+        # The evidence section is last, so its source is the last one named,
+        # and the debt line it shows is the whole line the answer cites (N28).
         source_id = re.findall(r"^source_id: (\S+)$", prompt, re.MULTILINE)[-1]
+        line = re.findall(r"^Total debt at 31 December 2026 .*$", prompt, re.MULTILINE)
         return CanonicalCompletions(
             UUID(source_id),
             generation_id="gen-harness-test",
             qa_by_module=self.qa_by_module,
+            quotes=(),
+            cited=((UUID(source_id), line[-1] if line else QUOTE),),
         ).complete(prompt, json_object=json_object)
 
 
@@ -261,8 +266,14 @@ def _approve(
     return actors
 
 
-def _case(label: str, data: bytes, *, quote: str = QUOTE) -> QualificationCase:
+def _case(label: str, data: bytes, *, quote: str | None = None) -> QualificationCase:
+    """A case keyed on the document's debt line, the whole line its answer
+    cites (N28), unless told another."""
     from hashlib import sha256
+
+    if quote is None:
+        lines = [line for line in data.decode().splitlines() if "Total debt" in line]
+        quote = lines[0] if lines else QUOTE
 
     return QualificationCase(
         label=label,

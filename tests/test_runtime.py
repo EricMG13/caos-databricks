@@ -75,7 +75,7 @@ ESTIMATE = Decimal("0.10")
 REPORTED = Decimal("0.0000041")
 LITE_ORDER = ["CP-0", "CP-L10", "CP-5"]
 # One line, so the fixtures' quote anchors on page 1 of the one source.
-REPORT = QUOTE.encode() + b" was USD 1,240.0m\n"
+REPORT = QUOTE.encode() + b"\n"
 
 
 class _Boom(Exception):

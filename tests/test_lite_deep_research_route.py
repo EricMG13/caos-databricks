@@ -506,7 +506,7 @@ def test_cp_dr_contract_validates_identifies_and_projects() -> None:
     projection = _validated(ident, markdown)
     assert projection.module_id == "CP-DR"
     assert projection.decision_scope == "SCREENING_ONLY"
-    assert projection.qa_status == "Passed"
+    assert projection.qa_status == "Restricted"
     findings = CONTRACT.research.rows(
         markdown.decode(), "cpdr.findings", CONTRACT.research.FINDING_COLUMNS
     )
