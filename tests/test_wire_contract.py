@@ -371,9 +371,8 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
     RetryRun: frozenset({"input_fingerprint"}),
     CancelRun: frozenset(),
     RunWork: frozenset({"run_id", "run_status", "work"}),
-    # A verdict (F17's producer, `docs/DECISIONS.md` §65): the reviewer's
-    # seven bindings in (N44's `evidence_sha256` the newest), and the host's
-    # receipt out.
+    # A verdict: the reviewer's seven bindings in (N44's `evidence_sha256`
+    # the newest), and the host's receipt out.
     SignVerdict: frozenset(
         (
             "provider qualification_set_sha256 build_id decided_at expires_at"

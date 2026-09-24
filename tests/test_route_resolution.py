@@ -1,7 +1,6 @@
 """Phase 3 exit tests: the phase the predecessor got wrong.
 
-`docs/DECISIONS.md` §2 records what it got wrong and how it was measured. Route
-resolution read `navigation.dependencies` -- 97 untyped pairs meant for display --
+Route resolution read `navigation.dependencies` -- 97 untyped pairs meant for display --
 instead of `profile["edges"]`. The consequences were exact: 25 OPTIONAL and 22
 ADVISORY edges were enforced as mandatory, the single QA_GATE did not gate, and
 RESTRICTED could not occur at all.
@@ -13,9 +12,8 @@ the one worth stating twice: OPTIONAL and ADVISORY degrade a target to RESTRICTE
 module is READY or READY_WITH_LIMITATIONS in the accepted CP-0 artifact, at which
 point the evidence exists and the edge blocks.
 
-Readiness is read from that artifact and never passed in (`docs/DECISIONS.md`
-§12, adopting CAOS-Final §18): a caller that could assert readiness could assert
-its way past the gate that exists to measure it.
+Readiness is read from that artifact and never passed in: a caller that could
+assert readiness could assert its way past the gate that exists to measure it.
 """
 
 from __future__ import annotations
@@ -268,7 +266,7 @@ def test_an_extension_naming_a_module_the_pathway_already_runs_is_refused(
 
 
 def test_readiness_is_read_only_from_the_cp0_artifact(catalog: dict[str, Any]) -> None:
-    """`docs/DECISIONS.md` §12, adopting CAOS-Final §18: readiness is read from
+    """Readiness is read from
     the accepted CP-0 artifact and never passed in.
 
     A readiness claim inside some other module's artifact is not readiness. If it
@@ -422,7 +420,7 @@ def test_the_research_extension_appends_cp_dr_without_editing_the_catalog(
 
 
 def test_cp_cf_waits_for_all_required_owners(catalog: dict[str, Any]) -> None:
-    """`SYSTEM_SPEC.md` §6.2: the extension synthesises REQUIRED edges from
+    """The extension synthesises REQUIRED edges from
     CP-1, CP-2G and CP-4, which name every artifact owner CP-CF reads. CP-2G
     completing alone does not release it."""
     route = resolve_route(
@@ -446,10 +444,10 @@ def test_cp_cf_waits_for_all_required_owners(catalog: dict[str, Any]) -> None:
 def test_the_extension_appends_cp_cf_alone(catalog: dict[str, Any]) -> None:
     """Phase 7's named test. CP-CF is placed; CP-MODEL is not.
 
-    `docs/DECISIONS.md` §14 (adopting CAOS-Final §48) is why: no workbook build,
-    so no CP-MODEL, and the model extension that once placed both now places one.
-    A route that quietly carried CP-MODEL would be pinned into the digest the
-    plan gate binds, and every replay would carry a module the host cannot run.
+    No workbook build, so no CP-MODEL: the model extension that once placed
+    both now places one. A route that quietly carried CP-MODEL would be
+    pinned into the digest the plan gate binds, and every replay would carry
+    a module the host cannot run.
     """
     plain = resolve_route(catalog, PROFILE, "FULL_CREDIT_ASSESSMENT")
     extended = resolve_route(

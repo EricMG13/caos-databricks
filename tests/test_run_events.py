@@ -1,8 +1,8 @@
 """Phase 1 exit test: a crash in the commit gap yields one of everything.
 
-Invariant 6 (CLAUDE.md): execution is durable and exactly-once. `SYSTEM_SPEC.md`
-section 2 says how -- a run-state transition commits its state and its event in
-one transaction, every event insert rides a conditional update whose zero rows
+Invariant 6 (CLAUDE.md): execution is durable and exactly-once. That holds
+because a run-state transition commits its state and its event in one
+transaction, every event insert rides a conditional update whose zero rows
 mean no event, and `run_events.seq` is allocated under the run row lock.
 
 The commit gap is the window between the work being done and the transaction

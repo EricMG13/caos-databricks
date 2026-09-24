@@ -1,10 +1,10 @@
 """Tokens carry where they were, and a region is what a quote may not leave.
 
-`SYSTEM_SPEC.md` section 5: matching joins tokens within a line and continues
-only onto the next line of the same region, so a quote cannot be assembled across
-a column gutter -- the two columns are different regions and the phrase never
-forms. Everything invariant 11 refuses rests on the region boundary being drawn
-here, at extraction, by whatever produced the tokens.
+Matching joins tokens within a line and continues only onto the next line of
+the same region, so a quote cannot be assembled across a column gutter -- the
+two columns are different regions and the phrase never forms. Everything
+invariant 11 refuses rests on the region boundary being drawn here, at
+extraction, by whatever produced the tokens.
 """
 
 from __future__ import annotations
@@ -64,7 +64,7 @@ def test_lines_of_one_paragraph_keep_their_own_line_ids() -> None:
 def test_a_token_measures_the_columns_it_occupies() -> None:
     """A rectangle that is wider than the word would highlight text the quote
     does not contain, which is the predecessor's line-range defect wearing
-    coordinates (`SYSTEM_SPEC.md` section 5)."""
+    coordinates."""
     [token] = PlainTextExtractor().extract(b"Leverage\n")
 
     assert token.x0 == MARGIN

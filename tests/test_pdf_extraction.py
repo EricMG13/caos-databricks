@@ -1,7 +1,7 @@
 """The Phase 2 debt Phase 6 owes: a real PDF, a real extractor, real coordinates.
 
-`docs/REBUILD_PLAN.md` lists `test_citations_anchor_in_an_extracted_pdf` under
-Phase 6, owed by Phase 2. Phase 2 built the token index and the anchoring against
+`test_citations_anchor_in_an_extracted_pdf` is Phase 6 debt owed by Phase 2:
+Phase 2 built the token index and the anchoring against
 a plain-text extractor whose rectangles are derived from a declared fixed pitch --
 honest for a `.txt` file, and a fiction for a page. This closes it with
 coordinates that came out of the document.

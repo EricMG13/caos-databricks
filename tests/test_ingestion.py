@@ -1,14 +1,13 @@
 """Phase 2: bytes enter a case one way, and the whole pack enters or none of it.
 
-`SYSTEM_SPEC.md` section 5: ingestion is the only way bytes enter a case, web
-discovery is structurally absent, and a pack is admitted or refused in one
-transaction. Invariant 1 is that runs execute against pinned sources; a pack that
-half-landed is a source set nobody pinned.
+Ingestion is the only way bytes enter a case, web discovery is structurally
+absent, and a pack is admitted or refused in one transaction. Invariant 1 is
+that runs execute against pinned sources; a pack that half-landed is a source
+set nobody pinned.
 
-The block shape is the other subject here. `docs/AI_CODE_QUALITY.md` section 1
-measures excessive I/O at ~8x, the largest multiple in the report, and the
-predecessor had exactly that defect: evidence blocks lived in one JSON column, so
-every `read_evidence` parsed every block of a source. Blocks are one row each,
+The block shape is the other subject here. The predecessor measured
+excessive I/O from evidence blocks that lived in one JSON column, so every
+`read_evidence` parsed every block of a source. Blocks are one row each,
 keyed by `(source_id, block_id)`, and `test_a_block_is_one_row_not_a_column`
 is what stops that coming back.
 """
@@ -185,7 +184,7 @@ def test_every_token_carries_its_page_region_line_and_rectangle(
     case: tuple[StoreConnection, UUID], blobs: BlobStore
 ) -> None:
     """Invariant 11 rests on these four. A token without a region cannot stop a
-    quote being assembled across a column gutter (`SYSTEM_SPEC.md` section 5)."""
+    quote being assembled across a column gutter."""
     conn, case_id = case
     [source_id] = admit_pack(
         conn, blobs, case_id=case_id, documents=[_document("memo.txt", MEMO)]
@@ -205,7 +204,7 @@ def test_every_token_carries_its_page_region_line_and_rectangle(
 def test_a_withdrawn_source_leaves_the_live_view(
     case: tuple[StoreConnection, UUID], blobs: BlobStore
 ) -> None:
-    """`live_sources` is how sources are read (`docs/DECISIONS.md` §45).
+    """`live_sources` is how sources are read.
 
     Withdrawal's full contract -- refused at every use, re-opening the plan gate
     -- is owed by Phase 6 with its own named test. What is here is the view the

@@ -35,8 +35,8 @@ sys.dont_write_bytecode = True
 
 # The store suite needs a real PostgreSQL. Absent, it skips with its reason;
 # CAOS_REQUIRE_POSTGRES=1 turns that skip into a failure, which is what CI sets,
-# so that a store suite that skipped can never read as a store suite that passed
-# (docs/AI_CODE_QUALITY.md section 4).
+# so that a store suite that skipped can never read as a store suite that
+# passed.
 POSTGRES_URL = os.environ.get("CAOS_TEST_POSTGRES_URL")
 POSTGRES_REQUIRED = os.environ.get("CAOS_REQUIRE_POSTGRES") == "1"
 _UNSET = "CAOS_TEST_POSTGRES_URL is unset: no database to run the store suite against"

@@ -1,8 +1,8 @@
 """The qualification set, its answer keys, and the matrix a reviewer reads.
 
-`docs/REBUILD_PLAN.md` Phase 10, the part it named no test for. A **qualification
-set** is the immutable cases and answer keys one verdict is measured against
-(`CONTEXT.md`); its digest is one of the six bindings `read_verdict` requires.
+A **qualification set** is the immutable cases and answer keys one verdict is
+measured against (`CONTEXT.md`); its digest is one of the six bindings
+`read_verdict` requires.
 The matrix is what the host can put in front of a reviewer: per case, what it
 could prove on its own, and which of that case's expected citations the run
 actually produced.

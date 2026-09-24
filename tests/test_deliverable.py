@@ -28,7 +28,7 @@ NFC_LABEL = BoundaryText.of("rev-caf\u00e9")
 NFD_SPELLING = "rev-cafe\u0301"
 
 # The canonical shape `render()` understands since the claims render path was
-# deleted (f-2a; `docs/DECISIONS.md` decision 42.1): one artifact carries a
+# deleted (f-2a): one artifact carries a
 # Markdown handoff and its host record, each addressed by digest, bound by
 # hand -- these tests only need bytes `render()` accepts, not a store-produced
 # record.

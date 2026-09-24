@@ -1,15 +1,14 @@
 """The two request paths: the run document, the tail over a socket, and privacy.
 
-`docs/REBUILD_PLAN.md` Phase 6: "The run endpoint serves node states with their
-reasons, and the one QA_GATE reads as a gate". The one QA_GATE in the catalog is
+The run endpoint serves node states with their reasons, and the one QA_GATE
+reads as a gate. The one QA_GATE in the catalog is
 `CP-5 -> CP-6`, and a node held by it is not in the same situation as a node held
 by an ordinary REQUIRED edge: one is waiting for a person, the other for a
 module. A surface that rendered both as "BLOCKED" would leave a reviewer with no
 way to see that the run is waiting on them.
 
-`test_unauthorised_case_is_private_404` is the second of the named pair from the
-plan's standing rules. The first, identity derivation, is in
-`tests/test_actor_matrix.py`.
+`test_unauthorised_case_is_private_404` is the second of a matched pair. The
+first, identity derivation, is in `tests/test_actor_matrix.py`.
 """
 
 from __future__ import annotations

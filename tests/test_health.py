@@ -1,6 +1,6 @@
 """Repair Phase 4, slice 4.5b: `GET /api/health`.
 
-`SYSTEM_SPEC.md` §11: liveness and readiness on one strict model -- store,
+Liveness and readiness on one strict model -- store,
 bundle, blob store -- 200 when all hold, 503 otherwise. The probes really run,
 at most once per interval, on one background task with a deadline; the request
 path only reads what the last round left, so it does no I/O of its own.

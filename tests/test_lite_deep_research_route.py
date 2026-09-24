@@ -13,9 +13,8 @@ fit the request ceiling; a CP-0 verdict that blocks CP-DR stops the run before
 any further call.
 
 The pathway was dead as authored until build `6a5f1050`: the bundle's
-`parse_t8` refused the CP-DR row CP-0's own contract asks for
-(`docs/requests/2026-09-18-t8-cp-dr-row.md`). Every provider is
-deterministic; no live call is made.
+`parse_t8` refused the CP-DR row CP-0's own contract asks for. Every
+provider is deterministic; no live call is made.
 """
 
 from __future__ import annotations

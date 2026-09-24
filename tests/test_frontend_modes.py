@@ -13,11 +13,11 @@ import check_pr_size
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
-# A store suite that skipped is not a store suite that passed
-# (docs/AI_CODE_QUALITY.md section 4); the same is true of a security test
-# that never ran anywhere because no CI job ever had both Node and pytest
-# (FP-21 / CF-063). CI sets this so the two tests below fail rather than
-# skip when Node or the built frontend is somehow missing there.
+# A store suite that skipped is not a store suite that passed; the same is
+# true of a security test that never ran anywhere because no CI job ever had
+# both Node and pytest (FP-21 / CF-063). CI sets this so the two tests below
+# fail rather than skip when Node or the built frontend is somehow missing
+# there.
 NODE_REQUIRED = os.environ.get("CAOS_REQUIRE_NODE") == "1"
 
 
@@ -470,7 +470,7 @@ def test_the_vendored_bundle_is_not_counted(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """`vendor/deploy-v/` is read-only and pinned; a diff that only touches it is
-    not work this policy is measuring (docs/AI_CODE_QUALITY.md). Git's default
+    not work this policy is measuring. Git's default
     pathspec matching needs a `/` before the name, so `**/vendor/**` alone never
     matched a root-level `vendor/...` path and the bundle was counted in full."""
     repo, base = _size_repo(tmp_path, 1)

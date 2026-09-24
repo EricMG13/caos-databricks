@@ -1,6 +1,6 @@
 """Phase 1: bytes are content-addressed, and the address is checked on the way out.
 
-`SYSTEM_SPEC.md` section 2: bytes live in a content-addressed blob store keyed by
+Bytes live in a content-addressed blob store keyed by
 `sha256`; the database holds the digest, never the bytes. That is a guarantee
 only if the store re-derives the digest from what it is about to return. A store
 that trusts its own filenames is a naming convention, and the citation chain of

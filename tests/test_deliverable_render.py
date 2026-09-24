@@ -1,8 +1,7 @@
 """Phase 8 exit: the page renders from frozen bytes and nothing else.
 
-`docs/REBUILD_PLAN.md` Phase 8 names
-`test_the_deliverable_renders_from_the_frozen_payload_alone` among its three.
-`SYSTEM_SPEC.md` §7 says the render *originates nothing*: it is a function of
+`test_the_deliverable_renders_from_the_frozen_payload_alone` is one of three
+tests for this exit. The render *originates nothing*: it is a function of
 frozen bytes, so there is no editorial boundary to police.
 
 A test that rendered with a live connection to hand would pass whether or not
@@ -11,7 +10,7 @@ alone. The other two exit tests -- the filing chain and the audit package --
 arrive with the chain they check.
 
 The payload below is the canonical shape `render()` understands since the
-claims render path was deleted (f-2a; `docs/DECISIONS.md` §42.1): one artifact
+claims render path was deleted (f-2a): one artifact
 carries a Markdown handoff and its host record, each addressed by digest, in
 place of the retired `module_id`/`claims` shape. `_artifact` builds one with
 correct digests by hand -- standard library only, like the render itself.

@@ -1,6 +1,6 @@
 """Phase 6 exit: the stream stops reading a run once its terminal is delivered.
 
-`SYSTEM_SPEC.md` §9, as brief 4.4 decisions 3 and 4 restate it for the case
+Brief 4.4 decisions 3 and 4 restate it for the case
 stream. A frame carries a composite cursor and a name, and nothing else: the
 client never reads a payload -- a name triggers a refetch. These tests drive
 `case_tail` as a generator, which is where a pause between two frames can be

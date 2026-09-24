@@ -1,5 +1,5 @@
 """A canonical Markdown handoff is judged by the vendor's validators, then held to
-the host's identity (Phase 3 Task 3.1a; `docs/DECISIONS.md` §41).
+the host's identity (Phase 3 Task 3.1a).
 
 Documents are generated the way `vendor/deploy-v/tests/test_module_workflow.py`
 builds them: structural scenarios over the LITE earnings route, not analysis.
@@ -121,7 +121,7 @@ def test_restricted_is_accepted_with_limitations() -> None:
 
 
 # A QA finding register: a header named Severity, and CRITICAL | MATERIAL |
-# MINOR in its cells (`docs/DECISIONS.md` §61). Since the deployment fork
+# MINOR in its cells. Since the deployment fork
 # (D31) only a table in QA Validation is read as findings; the same table in
 # Gaps & Conflicts is an analytical register (`tests/test_vendor_fork.py`).
 def _with_findings(

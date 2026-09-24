@@ -1,7 +1,7 @@
 """Phase 6 debt: the loop meets a real module and charges what was reported.
 
-`docs/REBUILD_PLAN.md` lists `test_the_loop_charges_what_the_provider_reported`
-under Phase 6, owed by Phase 4. Phase 4's loop reserved an estimate and charged
+`test_the_loop_charges_what_the_provider_reported` is Phase 6 debt owed by
+Phase 4: Phase 4's loop reserved an estimate and charged
 whatever its stub handed back; Phase 5 built the real module execution and the
 real provider, which reports `usage.cost`. This is the join, on the canonical
 LITE route (Task 3.1 slice f-1a): CP-0, CP-L10, CP-5.
@@ -76,9 +76,9 @@ Total debt at 31 December 2026 was USD 1,240.0m
 class _Completions(CanonicalCompletions):
     """Valid LITE handoffs at a known cost, the gate saying `verdict` of the rest.
 
-    Whole prompts are kept: the predecessor-chain test below
-    (`docs/REBUILD_PLAN.md` Phase 11, "The chain") reads the upstream handoff
-    back out of a later node's prompt, and a truncated copy would not carry it.
+    Whole prompts are kept: the predecessor-chain test below reads the
+    upstream handoff back out of a later node's prompt, and a truncated copy
+    would not carry it.
     """
 
     charge: Decimal | None = REPORTED

@@ -6,9 +6,9 @@ which is what puts a rectangle over rendered words in the evidence drawer. The
 PDF is written out by hand, as `tests/test_pdf_extraction.py` writes its
 fixtures, so it needs no library.
 
-`insufficient_pack` is the deliberately insufficient-evidence case
-(`docs/REPAIR_PLAN.md` Phase 6 exit): one earnings note and no covenant
-certificate. It carries the same quote once, so CP-0 and CP-L10 still anchor
+`insufficient_pack` is the deliberately insufficient-evidence case: one
+earnings note and no covenant certificate. It carries the same quote once,
+so CP-0 and CP-L10 still anchor
 what they cite; what it lacks is what CP-5 blocks on, and the journey worker
 keys its `Blocked` verdict on this document being the evidence pinned.
 """

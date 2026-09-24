@@ -1,10 +1,9 @@
 """The actor matrix: what a client may assert about itself.
 
-`docs/REBUILD_PLAN.md`'s standing rules: "the first phase exposing an HTTP route
-ships identity derivation and the actor matrix
-(`test_production_never_trusts_role_header`,
-`test_unauthorised_case_is_private_404`)". This is that phase; the second of the
-pair lives with the route it is about, in `tests/test_api_routes.py`.
+The first phase exposing an HTTP route shipped identity derivation and the
+actor matrix together (`test_production_never_trusts_role_header`,
+`test_unauthorised_case_is_private_404`). This is that phase; the second of
+the pair lives with the route it is about, in `tests/test_api_routes.py`.
 
 Both are the same instinct and the same refusal to indulge it. A role header is
 convenient in development and is a client asserting its own authority; a 403 is
@@ -192,7 +191,7 @@ def test_the_highest_group_wins(groups: set[str], expected: GlobalRole) -> None:
 
 
 def test_an_actor_is_a_subject_and_a_role_and_nothing_else() -> None:
-    """Persona is not authority (`SYSTEM_SPEC.md` §8). Which section a user is
+    """Persona is not authority (spec §7). Which section a user is
     looking at composes a view and grants nothing, so it is not on the actor --
     and per-case standing lives in `case_members`, not in a header."""
     from caos.api.identity import Actor

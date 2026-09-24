@@ -51,7 +51,8 @@ def test_a_beat_is_one_row_per_worker_however_often_it_beats(
     """A heartbeat is the one deliberately mutable row in this store: it
     records *now*, not a history. Upserting keeps the table the size of the
     fleet rather than the size of the uptime -- `command_requests` already
-    carries the "kept forever" known-gaps entry and nothing wants a second."""
+    grows without bound by design, to replay idempotent retries, and nothing
+    wants a second such table."""
     for _ in range(3):
         beat(migrated, worker_id="worker-a", state="POLLING", faults=0)
     beat(migrated, worker_id="worker-b", state="WORKING", faults=0)

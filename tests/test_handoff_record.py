@@ -1,5 +1,5 @@
 """The closed provider transport and the host record beside the Markdown
-(Phase 3 Task 3.1 c-1; `docs/DECISIONS.md` §41).
+(Phase 3 Task 3.1 c-1).
 
 The Markdown is the authority; the record is a host-written attachment bound to
 it by digest. Neither the transport nor the record tolerates a key, a type or a

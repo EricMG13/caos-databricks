@@ -1,15 +1,15 @@
 """Phase 1: the store applies the schema it declares, and says so when it cannot.
 
-`docs/REBUILD_PLAN.md` Phase 1 asks for the Postgres schema "in full at startup".
-The failure that phrasing invites is `CREATE TABLE IF NOT EXISTS` over a database
-an older build created: every statement succeeds, the missing column is never
-mentioned, and the first write to it fails in production instead of at boot. So
-startup records which declared schema it applied and refuses a database that was
-built from a different one.
+The Postgres schema must apply in full at startup. The failure that invites
+is `CREATE TABLE IF NOT EXISTS` over a database an older build created: every
+statement succeeds, the missing column is never mentioned, and the first
+write to it fails in production instead of at boot. So startup records which
+declared schema it applied and refuses a database that was built from a
+different one.
 
-Invariants protected: `SYSTEM_SPEC.md` section 2 -- PostgreSQL owns everything
-transactional, and what it owns is the declared shape rather than whatever the
-first deployment happened to create.
+Invariant protected: PostgreSQL owns everything transactional, and what it
+owns is the declared shape rather than whatever the first deployment
+happened to create.
 """
 
 from __future__ import annotations
@@ -1542,8 +1542,7 @@ def test_apply_schema_keeps_a_store_fault_and_flattens_every_other_refusal(
     schema, and saying `STORE_SCHEMA_DRIFT` sends an operator to the migration
     history for a fault that is not there. Everything else a migration refuses
     -- including a malformed row its own verification finds, which raises codes
-    from outside this module -- is a drift finding and keeps saying so
-    (`docs/DECISIONS.md` §20a)."""
+    from outside this module -- is a drift finding and keeps saying so."""
 
     def refusing(conn: StoreConnection, sql: str) -> None:
         raise Refusal(raised)

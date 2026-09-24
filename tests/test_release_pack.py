@@ -1,7 +1,7 @@
 """The release pack: emitted from the suite, the tree and the store, never typed.
 
-`docs/COMPLETION_PLAN.md` Phase 13's exit check asks for two things of it, and
-each has a test here. "The release pack reproduces without editing a checksum"
+Two things are asked of it, and each has a test here. "The release pack
+reproduces without editing a checksum"
 is byte equality between two emissions over one tree, one of them from a fresh
 interpreter so that nothing an in-process cache or a hash seed decides can
 leak into the bytes. "Every advertised pathway has a current verdict or is
