@@ -59,11 +59,12 @@ from caos.qualification.harness import (
     perform,
     prepare,
 )
-from caos.qualification.matrix import QualificationSet
+from caos.qualification.matrix import QualificationSet, assert_measurable
 from caos.qualification.on_disk import load_qualification_set
 from caos.qualification.store import performed_evidence, record_evidence
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection, apply_schema, connect
+from caos.store.budget import validate_spend
 from caos.store.gates import Gate, GateApproval, approve_gate, gate_preview
 from caos.store.members import Standing, grant
 
@@ -368,6 +369,12 @@ def _planned(
     # the operator capped at nothing spent (DQ-7). A named value goes to the
     # harness as given, which refuses one it cannot afford a call under.
     if args.run_ceiling is None:
+        # What admission would refuse is refused before the arithmetic too
+        # (R24-N03): a set of no cases divided by zero, and a ceiling that is
+        # no amount (`Infinity`, `sNaN`) failed to quantize -- a bare Decimal
+        # error where every pre-spend refusal is a typed code.
+        assert_measurable(qualification)
+        validate_spend(args.ceiling)
         args.run_ceiling = (args.ceiling / len(qualification.cases)).quantize(
             Decimal("0.000001"), rounding=ROUND_DOWN
         )
