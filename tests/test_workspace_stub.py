@@ -20,8 +20,20 @@ import pytest
 from conftest import priced
 from langgraph.checkpoint.postgres import PostgresSaver
 from openai import NotFoundError
+from platform_app import BINDINGS
 from test_loop_charges import ESTIMATE, _Completions, ready, route
-from workspace_stub import BEARER, ENDPOINT, WorkspaceStub, fresh_state, main
+from workspace_stub import (
+    BEARER,
+    ENDPOINT,
+    LAKEBASE_BRANCH,
+    LAKEBASE_DATABASE,
+    LAKEBASE_ENDPOINT,
+    LAKEBASE_INSTANCE,
+    LAKEBASE_PROJECT,
+    WorkspaceStub,
+    fresh_state,
+    main,
+)
 
 from caos.api import edge, identity
 from caos.api.identity import GlobalRole, actor_from_token
@@ -39,11 +51,18 @@ from caos.methodology.bundle import Bundle
 from caos.methodology.runner import ModuleProvider
 from caos.models import completions
 from caos.refusals import Refusal
-from caos.store import RunStatus, StoreConnection
+from caos.store import RunStatus, StoreConnection, lakebase
+from caos.store.lakebase import LakebaseKind
 from caos.store.runs import run_status
 from caos.workspace import workspace_client
 
 __all__ = ["ready", "route"]
+
+# Each Lakebase kind's credential route: the Postgres API's, the database API's.
+CREDENTIALS = {
+    LakebaseKind.AUTOSCALING: ("POST", "/api/2.0/postgres/credentials"),
+    LakebaseKind.PROVISIONED: ("POST", "/api/2.0/database/credentials"),
+}
 
 CHAT = "/serving-endpoints/chat/completions"
 VENDORED = Path(__file__).resolve().parents[1] / "vendor/deploy-v"
@@ -86,16 +105,61 @@ def test_the_smoke_refuses_an_endpoint_the_workspace_does_not_serve(
 def test_preflight_names_each_resource_and_the_fix_for_a_missing_one(
     stub: WorkspaceStub, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """R24-14: the default kind is looked up through the Postgres API -- the
+    project, its read-write endpoint and its database -- and a Provisioned
+    instance, asked for by name, through the database API."""
+    import bundle_defaults
+
+    # The paths preflight and E8 compose from the ids are the ones
+    # `databricks.yml` composes, and the ones the stub holds.
+    defaults = bundle_defaults.defaults()
+    assert preflight.autoscaling_paths(
+        LAKEBASE_PROJECT,
+        defaults["lakebase_branch"],
+        defaults["lakebase_endpoint"],
+        defaults["lakebase_database_id"],
+    ) == preflight.LakebasePaths(
+        f"projects/{LAKEBASE_PROJECT}",
+        LAKEBASE_BRANCH,
+        LAKEBASE_ENDPOINT,
+        LAKEBASE_DATABASE,
+    )
     flags = ["--endpoint", ENDPOINT, "--catalog", "main", "--schema", "caos"]
-    assert preflight.main([*flags, "--lakebase-instance", "caos-lb"]) == 0
+    assert preflight.main([*flags, "--lakebase-project", LAKEBASE_PROJECT]) == 0
     lines = capsys.readouterr().out.splitlines()
-    assert len(lines) == 6 and all(line.startswith("ok") for line in lines)
+    assert len(lines) == 8 and all(line.startswith("ok") for line in lines)
+    assert f"ok      lakebase endpoint {LAKEBASE_ENDPOINT}" in lines
+    assert f"ok      lakebase database {LAKEBASE_DATABASE}" in lines
+    assert preflight.main([*flags, "--lakebase-instance", LAKEBASE_INSTANCE]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert len(lines) == 6 and f"ok      lakebase instance {LAKEBASE_INSTANCE}" in lines
+    assert not any("lakebase project" in line for line in lines)
 
     assert preflight.main([*flags, "--lakebase-instance", "absent"]) == 1
     out = capsys.readouterr().out
-    assert "MISSING lakebase instance absent: create a Lakebase instance" in out
+    assert "MISSING lakebase instance absent: name an existing Provisioned" in out
     assert out.count("ok ") == 5
+    assert preflight.main([*flags, "--lakebase-project", "absent"]) == 1
+    out = capsys.readouterr().out
+    assert (
+        "MISSING lakebase project projects/absent: "
+        "databricks postgres create-project absent"
+    ) in out
+    assert out.count("MISSING") == 3 and out.count("ok ") == 5
+    # A branch, endpoint or database id the project does not hold is named
+    # with the listing that shows the right one.
+    unheld = ["--lakebase-project", LAKEBASE_PROJECT]
+    unheld += ["--lakebase-database-id", "databricks_postgres"]
+    assert preflight.main([*flags, *unheld]) == 1
+    out = capsys.readouterr().out
+    assert f"'databricks postgres list-databases {LAKEBASE_BRANCH}'" in out
+    stub.endpoint_type = "ENDPOINT_TYPE_READ_ONLY"
+    assert preflight.main([*flags, "--lakebase-project", LAKEBASE_PROJECT]) == 1
+    out = capsys.readouterr().out
+    assert f"MISSING lakebase endpoint {LAKEBASE_ENDPOINT}: a read-only" in out
     assert stub.host not in out
+    with pytest.raises(SystemExit):  # exactly one kind is given
+        preflight.main([*flags, "--lakebase-project", "p", "--lakebase-instance", "i"])
 
 
 def test_the_documented_preflight_command_runs_as_its_own_process(
@@ -109,7 +173,7 @@ def test_the_documented_preflight_command_runs_as_its_own_process(
     repo = Path(__file__).resolve().parents[1]
     env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
     flags = ["--endpoint", ENDPOINT, "--catalog", "main", "--schema", "caos"]
-    flags += ["--lakebase-instance", "caos-lb", "--run-ceiling", "25.00"]
+    flags += ["--lakebase-project", LAKEBASE_PROJECT, "--run-ceiling", "25.00"]
     price = f"{ENDPOINT},0.000005,0.000025,2026-09-22"
     done = subprocess.run(
         [
@@ -245,13 +309,24 @@ def test_main_runs_a_command_against_the_stub_and_lists_what_it_asked(
     assert "DATABRICKS_HOST" not in os.environ
 
 
+@pytest.mark.parametrize("kind", list(LakebaseKind), ids=str)
 def test_the_lakebase_checkpointer_mints_each_connection_over_the_platform_values(
-    stub: WorkspaceStub, empty_database: str, monkeypatch: pytest.MonkeyPatch
+    stub: WorkspaceStub,
+    empty_database: str,
+    monkeypatch: pytest.MonkeyPatch,
+    kind: LakebaseKind,
 ) -> None:
+    """Either kind's credential, minted over HTTP by the SDK through that
+    kind's own API (R24-14), opens the checkpointer's pooled connections."""
     parts = urlparse(empty_database)
     stub.database_credential = parts.password or ""
     monkeypatch.delenv("CAOS_DATABASE_URL", raising=False)
-    monkeypatch.setenv("CAOS_LAKEBASE_INSTANCE", "caos-lb")
+    for name in (lakebase.LAKEBASE_ENDPOINT, lakebase.LAKEBASE_INSTANCE):
+        monkeypatch.delenv(name, raising=False)
+    [(name, value)] = BINDINGS[kind].items()
+    monkeypatch.setenv(name, value)
+    assert lakebase.lakebase_database() == lakebase.LakebaseDatabase(kind, value)
+    lakebase.invalidate_credential()
     monkeypatch.setenv("PGHOST", parts.hostname or "127.0.0.1")
     monkeypatch.setenv("PGPORT", str(parts.port))
     monkeypatch.setenv("PGDATABASE", parts.path.lstrip("/"))
@@ -259,7 +334,8 @@ def test_the_lakebase_checkpointer_mints_each_connection_over_the_platform_value
     monkeypatch.setenv("PGSSLMODE", "disable")
     saver = checkpointer()
     assert saver.get(thread_config("nobody")) is None
-    assert ("POST", "/api/2.0/database/credentials") in stub.requests
+    minted = {kind for kind, route in CREDENTIALS.items() if route in stub.requests}
+    assert minted == {kind}, minted
     with MintedConnection.connect(autocommit=True) as conn:
         [(schema,)] = conn.execute(
             "SELECT schema_name FROM information_schema.schemata"
@@ -269,6 +345,71 @@ def test_the_lakebase_checkpointer_mints_each_connection_over_the_platform_value
     assert schema == SCHEMA
     close_checkpointer(saver)
     assert isinstance(saver, PostgresSaver) and saver.conn.closed, "pool released"
+
+
+def test_the_postgres_api_answers_what_the_sdk_reads(stub: WorkspaceStub) -> None:
+    """R24-14: the Autoscaling lookups and credential, through the SDK's own
+    `postgres` service against the stub -- a project, an endpoint with its
+    host and type, a database with its Postgres name, a credential with its
+    `Timestamp` expiry -- and a path the workspace does not hold is the
+    SDK's `NotFound`, which preflight reads as a MISSING row."""
+    from databricks.sdk.errors import NotFound
+
+    client = workspace_client()
+    project = client.postgres.get_project(f"projects/{LAKEBASE_PROJECT}")
+    assert project.status is not None and project.status.pg_version == 17
+    endpoint = client.postgres.get_endpoint(LAKEBASE_ENDPOINT)
+    assert endpoint.status is not None and endpoint.status.hosts is not None
+    assert endpoint.status.hosts.host == stub.instance_host
+    assert endpoint.status.endpoint_type is not None
+    assert endpoint.status.endpoint_type.value == "ENDPOINT_TYPE_READ_WRITE"
+    database = client.postgres.get_database(LAKEBASE_DATABASE)
+    assert database.status is not None
+    assert database.status.postgres_database == "databricks_postgres"
+    issued = client.postgres.generate_database_credential(endpoint=LAKEBASE_ENDPOINT)
+    assert issued.token == BEARER and issued.expire_time is not None
+    for missing in (
+        lambda: client.postgres.get_project("projects/absent"),
+        lambda: client.postgres.get_endpoint(LAKEBASE_BRANCH + "/endpoints/absent"),
+        lambda: client.postgres.get_database(LAKEBASE_BRANCH + "/databases/absent"),
+        lambda: client.postgres.generate_database_credential(endpoint="projects/x"),
+    ):
+        with pytest.raises(NotFound):
+            missing()
+
+
+def test_an_app_bound_to_a_lakebase_the_workspace_lacks_is_refused(
+    stub: WorkspaceStub,
+) -> None:
+    """R24-14: as the Apps API checks a database resource at create, so a
+    stand-in deploy proves the paths each target composes name a Lakebase
+    that is there, in either form."""
+    import urllib.error
+    import urllib.request
+
+    def create(name: str, database: dict[str, object]) -> int:
+        body = {"name": name, "resources": [{"name": "database", **database}]}
+        request = urllib.request.Request(
+            stub.host + "/api/2.0/apps",
+            data=json.dumps(body).encode(),
+            method="POST",
+            headers={"Authorization": f"Bearer {BEARER}"},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=5) as answered:
+                return int(answered.status)
+        except urllib.error.HTTPError as refused:
+            return refused.code
+
+    postgres = {"branch": LAKEBASE_BRANCH, "database": LAKEBASE_DATABASE}
+    assert create("a", {"postgres": postgres}) == 200
+    assert create("b", {"database": {"instance_name": LAKEBASE_INSTANCE}}) == 200
+    elsewhere = {**postgres, "branch": f"projects/{LAKEBASE_PROJECT}/branches/dev"}
+    assert create("c", {"postgres": elsewhere}) == 400
+    assert create("d", {"postgres": {**postgres, "database": "x"}}) == 400
+    assert create("e", {"database": {"instance_name": "absent"}}) == 400
+    assert stub.apps == {"a", "b"}
+    assert stub.holds_lakebase(None) and stub.holds_lakebase([{"name": "model"}])
 
 
 def test_the_bounded_workspace_client_reaches_the_stub_with_its_budgets(

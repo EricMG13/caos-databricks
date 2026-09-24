@@ -4,8 +4,10 @@ Every call this repository makes to a Databricks workspace goes through the
 SDK or the CLI over HTTPS, so the same code runs unchanged against this
 server when `DATABRICKS_HOST` names it: the model factory's chat completion
 (`/serving-endpoints/chat/completions`), SCIM `Me` and `Groups`, the Files
-API the volume backend uses, the Lakebase credential the store mints, the
-Unity Catalog, serving-endpoint, Lakebase-instance and Apps lookups
+API the volume backend uses, the Lakebase credential the store mints for
+either kind (the Postgres API's for an Autoscaling endpoint, the database
+API's for a Provisioned instance), the Unity Catalog, serving-endpoint,
+Lakebase (project, endpoint, database, instance) and Apps lookups
 `scripts/preflight.py` and the runbook make, and the workspace-tree, file
 import and Apps calls `databricks bundle validate|deploy|run` make (D28).
 
@@ -60,6 +62,15 @@ ENDPOINT = _DEFAULTS["model_endpoint"]
 PRICE = _DEFAULTS["model_price"]
 GROUP_ADMIN = _DEFAULTS["group_admin"]
 GROUP_ANALYST = _DEFAULTS["group_analyst"]
+# The one Lakebase of each kind this workspace holds (R24-14): an Autoscaling
+# project on the bundle's own default branch, endpoint and database id, and
+# a Provisioned instance.
+LAKEBASE_PROJECT = "caos"
+LAKEBASE_BRANCH = f"projects/{LAKEBASE_PROJECT}/branches/{_DEFAULTS['lakebase_branch']}"
+LAKEBASE_ENDPOINT = f"{LAKEBASE_BRANCH}/endpoints/{_DEFAULTS['lakebase_endpoint']}"
+LAKEBASE_DATABASE = f"{LAKEBASE_BRANCH}/databases/{_DEFAULTS['lakebase_database_id']}"
+LAKEBASE_INSTANCE = "caos-lb"
+POSTGRES = "/api/2.0/postgres/"
 # N7: the platform hands the app a service principal's client id and secret,
 # not a token; the process trades them for one itself, through the SDK's
 # oauth-m2m credential strategy over these two placeholders. Never a real
@@ -107,10 +118,21 @@ class WorkspaceStub:
     endpoints: frozenset[str] = frozenset({ENDPOINT})
     schemas: frozenset[str] = frozenset({"main.caos"})
     volumes: frozenset[str] = frozenset({"main.caos.caos_blobs"})
-    instances: frozenset[str] = frozenset({"caos-lb"})
+    instances: frozenset[str] = frozenset({LAKEBASE_INSTANCE})
+    # Autoscaling endpoints by resource path, and databases by resource path
+    # with the Postgres name each answers (`status.postgres_database`).
+    postgres_endpoints: frozenset[str] = frozenset({LAKEBASE_ENDPOINT})
+    postgres_databases: dict[str, str] = field(
+        default_factory=lambda: {LAKEBASE_DATABASE: _DEFAULTS["lakebase_database"]}
+    )
+    endpoint_type: str = "ENDPOINT_TYPE_READ_WRITE"
+    # The host an instance's `read_write_dns` and an endpoint's
+    # `status.hosts.host` both name.
     instance_host: str = "127.0.0.1"
-    # What `POST /api/2.0/database/credentials` mints: the local password in
-    # a platform-mode boot, so `store_url()` reaches the Docker Postgres.
+    # What either credential route mints (`POST /api/2.0/database/credentials`
+    # for an instance, `POST /api/2.0/postgres/credentials` for an endpoint):
+    # the local password in a platform-mode boot, so `store_url()` reaches the
+    # Docker Postgres.
     database_credential: str = BEARER
     # No app until a deploy creates one: a name already taken answers 409
     # (DP-6), so a stand-in run creates the app the way the platform does.
@@ -254,6 +276,27 @@ class WorkspaceStub:
             for item in sent.get("env_vars") or []
             if isinstance(item, dict)
         }
+
+    def holds_lakebase(self, resources: object) -> bool:
+        """Whether every Lakebase an app's resources bind is here, as the
+        Apps API checks at create: a `postgres` resource's branch and
+        database paths, a `database` resource's instance (R24-14)."""
+        listed = resources if isinstance(resources, list) else []
+        for resource in listed:
+            postgres = resource.get("postgres") if isinstance(resource, dict) else None
+            database = resource.get("database") if isinstance(resource, dict) else None
+            if isinstance(postgres, dict):
+                branch = f"{postgres.get('branch')}/endpoints/"
+                held = postgres.get("database") in self.postgres_databases and any(
+                    path.startswith(branch) for path in self.postgres_endpoints
+                )
+            elif isinstance(database, dict):
+                held = database.get("instance_name") in self.instances
+            else:
+                continue
+            if not held:
+                return False
+        return True
 
     def known(self, path: str) -> str | None:
         """`DIRECTORY`, `FILE` or None for a workspace-tree path."""
@@ -422,6 +465,16 @@ class _Handler(BaseHTTPRequestHandler):
         token = self.stub.database_credential
         self._send(200, {"token": token, "expiration_time": "2099-01-01T00:00:00Z"})
 
+    def _postgres_credential(self, rest: str, query: Query, raw: bytes) -> None:
+        """`POST /api/2.0/postgres/credentials`: the Autoscaling form, for one
+        endpoint by resource path, its expiry an RFC 3339 `expire_time`."""
+        body = json.loads(raw or b"{}")
+        if body.get("endpoint") not in self.stub.postgres_endpoints:
+            self._missing()
+            return
+        token = self.stub.database_credential
+        self._send(200, {"token": token, "expire_time": "2099-01-01T00:00:00Z"})
+
     # -- lookups preflight and the runbook make ---------------------------
 
     def _known(
@@ -445,6 +498,21 @@ class _Handler(BaseHTTPRequestHandler):
     def _instance_get(self, rest: str, query: Query, raw: bytes) -> None:
         shape = partial(_instance, self.stub.instance_host)
         self._known(rest, self.stub.instances, shape)
+
+    def _postgres_get(self, rest: str, query: Query, raw: bytes) -> None:
+        """`GET /api/2.0/postgres/<resource path>`: a project, an endpoint or
+        a database, each in the shape the SDK's `postgres` service reads."""
+        stub = self.stub
+        projects = {"/".join(path.split("/")[:2]) for path in stub.postgres_endpoints}
+        if rest in stub.postgres_endpoints:
+            host, kind = stub.instance_host, stub.endpoint_type
+            self._send(200, _postgres_endpoint(rest, host, kind))
+        elif rest in stub.postgres_databases:
+            self._send(200, _postgres_database(rest, stub.postgres_databases[rest]))
+        elif rest in projects:
+            self._send(200, _postgres_project(rest))
+        else:
+            self._missing()
 
     # -- the volume's Files API -------------------------------------------
 
@@ -576,6 +644,13 @@ class _Handler(BaseHTTPRequestHandler):
             # As the platform answers a name already taken (DP-6).
             self._send(409, {"error_code": "ALREADY_EXISTS", "message": "taken"})
             return
+        if not stub.holds_lakebase(body.get("resources")):
+            # As the Apps API answers a database resource naming a Lakebase
+            # the workspace does not hold (R24-14).
+            self._send(
+                400, {"error_code": "INVALID_PARAMETER_VALUE", "message": "resource"}
+            )
+            return
         stub.apps.add(created)
         stub.app_bodies[created] = body
         self._send(200, stub.app(created))
@@ -615,10 +690,12 @@ _ROUTES: list[tuple[str, str, bool, Route]] = [
     ("GET", "/api/2.0/preview/scim/v2/Groups", True, _Handler._groups),
     ("POST", "/serving-endpoints/chat/completions", True, _Handler._chat),
     ("POST", "/api/2.0/database/credentials", True, _Handler._credential),
+    ("POST", POSTGRES + "credentials", True, _Handler._postgres_credential),
     ("GET", "/api/2.0/serving-endpoints/", False, _Handler._endpoint_get),
     ("GET", "/api/2.1/unity-catalog/schemas/", False, _Handler._schema_get),
     ("GET", "/api/2.1/unity-catalog/volumes/", False, _Handler._volume_get),
     ("GET", "/api/2.0/database/instances/", False, _Handler._instance_get),
+    ("GET", POSTGRES, False, _Handler._postgres_get),
     ("GET", FILES + "/", False, _Handler._file_get),
     ("PUT", FILES + "/", False, _Handler._file_put),
     ("PUT", DIRECTORIES + "/", False, _Handler._directory_put),
@@ -658,6 +735,42 @@ def _instance(host: str, name: str) -> dict[str, Any]:
         "state": "AVAILABLE",
         "pg_version": "PG_VERSION_16",
         "read_write_dns": host,
+    }
+
+
+def _postgres_endpoint(path: str, host: str, kind: str) -> dict[str, Any]:
+    branch, _, endpoint_id = path.rpartition("/endpoints/")
+    return {
+        "name": path,
+        "parent": branch,
+        "endpoint_id": endpoint_id,
+        "status": {
+            "current_state": "ACTIVE",
+            "endpoint_type": kind,
+            "hosts": {"host": host},
+        },
+    }
+
+
+def _postgres_database(path: str, postgres_name: str) -> dict[str, Any]:
+    branch, _, database_id = path.rpartition("/databases/")
+    return {
+        "name": path,
+        "parent": branch,
+        "database_id": database_id,
+        "status": {"database_id": database_id, "postgres_database": postgres_name},
+    }
+
+
+def _postgres_project(path: str) -> dict[str, Any]:
+    project_id = path.removeprefix("projects/")
+    return {
+        "name": path,
+        "project_id": project_id,
+        "status": {
+            "pg_version": 17,
+            "default_branch": f"{path}/branches/{_DEFAULTS['lakebase_branch']}",
+        },
     }
 
 

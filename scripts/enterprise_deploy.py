@@ -17,7 +17,11 @@ in `<evidence>/<id>.log`:
                         the first probe round and the worker have reported (C4)
                      E7 the gateway smoke, JSON mode included (A31)
                      E8 Lakebase `SELECT version()` as the deployer, for D17
-                        (the app's own access is E6's `store` code)
+                        (the app's own access is E6's `store` code), reached
+                        through the kind the target binds: an Autoscaling
+                        endpoint through the Postgres API by default, a
+                        `-provisioned` target's instance through the
+                        database API (R24-14)
                      E9 the event stream delivers through the Apps proxy (C42):
                         an event-stream content type, a first frame, then
                         frames for `LIVE_SECONDS` with no silence longer than
@@ -52,12 +56,22 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 from uuid import uuid4
 
 import bundle_defaults
+from check_gate_config import (
+    LAKEBASE_BINDINGS,
+    LAKEBASE_ENDPOINT,
+    LAKEBASE_INSTANCE,
+    PROVISIONED_SUFFIX,
+)
 from openai import OpenAIError
+
+if TYPE_CHECKING:
+    from databricks.sdk import WorkspaceClient
+    from preflight import LakebasePaths
 
 REPO = Path(__file__).resolve().parents[1]
 if str(REPO) not in sys.path:
@@ -83,6 +97,10 @@ SSE_PREFIXES = ("id:", "event:", "data:", "retry:", ":")
 HEALTH_CODES = ("store", "bundle", "blobs", "identity", "workers")
 # The app's key under `resources.apps` in databricks.yml.
 APP_KEY = "caos"
+# The targets that deploy the production app `caos`: one per Lakebase kind.
+PRODUCTION_TARGETS = frozenset({"prod", "prod" + PROVISIONED_SUFFIX})
+# The app's resource that binds Lakebase, in either kind's form.
+DATABASE_RESOURCE = "database"
 # How a wait for the next frame ends.
 FRAME, CLOSED, SILENT = "frame", "closed", "silent"
 # What a read of an answer can raise: the socket's errors, and http.client's
@@ -138,6 +156,24 @@ def resolved_app(document: object) -> tuple[str, dict[str, str]]:
     return (name if isinstance(name, str) else ""), env
 
 
+def resolved_form(document: object) -> str:
+    """Which form the app's `database` resource resolved to -- `postgres`
+    (Lakebase Autoscaling) or `database` (Provisioned) -- or `""`."""
+    apps = _mapping(_mapping(document).get("resources")).get("apps")
+    listed = _mapping(_mapping(apps).get(APP_KEY)).get("resources")
+    for resource in listed if isinstance(listed, list) else []:
+        named = _mapping(resource)
+        if named.get("name") == DATABASE_RESOURCE:
+            forms = [key for key in LAKEBASE_BINDINGS.values() if key in named]
+            return forms[0] if len(forms) == 1 else ""
+    return ""
+
+
+def _mapping(value: object) -> dict[str, object]:
+    """`value` when it is a JSON object, else an empty one."""
+    return value if isinstance(value, dict) else {}
+
+
 def resolution_problems(
     document: object, *, target: str, endpoint: str, price: str, run_ceiling: str
 ) -> list[str]:
@@ -146,7 +182,7 @@ def resolution_problems(
     target with no name rule of its own resolves to the production app."""
     name, env = resolved_app(document)
     problems = [] if name else ["no app resolved"]
-    if name == "caos" and target != "prod":
+    if name == "caos" and target not in PRODUCTION_TARGETS:
         problems.append(f"target {target} resolves to the production app")
     given = {
         "CAOS_MODEL_ENDPOINT": endpoint,
@@ -159,6 +195,50 @@ def resolution_problems(
         if env.get(key) != value
     ]
     return problems
+
+
+def binding_problems(document: object, lakebase: tuple[str, str]) -> list[str]:
+    """A Lakebase binding the CLI resolved that is not the one given
+    (R24-14): `lakebase` is the variable the target's kind sets and its
+    value. The other kind's variable, a value that is not the one given (a
+    misspelt `BUNDLE_VAR_lakebase_branch` validates on the default branch)
+    or a `database` resource of the other form would connect the app as
+    some other role."""
+    bound, value = lakebase
+    _, env = resolved_app(document)
+    problems = (
+        [] if env.get(bound) == value else [f"resolved {bound} is not the value given"]
+    )
+    problems += [
+        f"resolved app also binds {other}"
+        for other in LAKEBASE_BINDINGS
+        if other != bound and other in env
+    ]
+    form = LAKEBASE_BINDINGS[bound]
+    if resolved_form(document) != form:
+        problems.append(f"resolved database resource is not the {form} form")
+    return problems
+
+
+def lakebase_binding(args: argparse.Namespace) -> tuple[str, str]:
+    """The variable the target's Lakebase binding sets, and the value given
+    for it: an Autoscaling endpoint's resource path, or a `-provisioned`
+    target's instance name."""
+    if args.target.endswith(PROVISIONED_SUFFIX):
+        return LAKEBASE_INSTANCE, args.lakebase_instance
+    return LAKEBASE_ENDPOINT, _paths(args).endpoint
+
+
+def _paths(args: argparse.Namespace) -> LakebasePaths:
+    """The Autoscaling resource paths the given ids compose (preflight's)."""
+    from preflight import autoscaling_paths
+
+    return autoscaling_paths(
+        args.lakebase_project,
+        args.lakebase_branch,
+        args.lakebase_endpoint,
+        args.lakebase_database_id,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -197,8 +277,17 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--target", default="prod", help="the bundle target")
     parser.add_argument("--catalog", default="")
     parser.add_argument("--schema", default="")
+    # The target names the Lakebase kind (R24-14): these for the default,
+    # Lakebase Autoscaling...
+    parser.add_argument("--lakebase-project", default="")
+    parser.add_argument("--lakebase-branch", default=_DEFAULTS["lakebase_branch"])
+    parser.add_argument("--lakebase-endpoint", default=_DEFAULTS["lakebase_endpoint"])
+    parser.add_argument(
+        "--lakebase-database-id", default=_DEFAULTS["lakebase_database_id"]
+    )
+    # ...these for a `-provisioned` target's existing instance.
     parser.add_argument("--lakebase-instance", default="")
-    parser.add_argument("--lakebase-database", default="databricks_postgres")
+    parser.add_argument("--lakebase-database", default=_DEFAULTS["lakebase_database"])
     parser.add_argument("--endpoint", default=_DEFAULTS["model_endpoint"])
     parser.add_argument("--price", default=_DEFAULTS["model_price"])
     parser.add_argument("--run-ceiling", default=_DEFAULTS["run_ceiling"])
@@ -281,11 +370,11 @@ def _resolution(args: argparse.Namespace) -> tuple[int, str]:
         endpoint=args.endpoint,
         price=args.price,
         run_ceiling=args.run_ceiling,
-    )
+    ) + binding_problems(document, lakebase_binding(args))
     name, _ = resolved_app(document)
     if problems:
         return 1, "; ".join(problems)
-    return 0, f"resolved app {name}: endpoint, price and run ceiling as given"
+    return 0, f"resolved app {name}: endpoint, price, run ceiling and Lakebase as given"
 
 
 def _shipped(args: argparse.Namespace) -> tuple[int, str]:
@@ -311,7 +400,7 @@ def _preflight(args: argparse.Namespace, evidence: Evidence) -> int:
 
     flags = [
         "--endpoint", args.endpoint, "--catalog", args.catalog,
-        "--schema", args.schema, "--lakebase-instance", args.lakebase_instance,
+        "--schema", args.schema, *_lakebase_flags(args),
         "--group-admin", args.group_admin, "--group-analyst", args.group_analyst,
         "--price", args.price, "--run-ceiling", args.run_ceiling,
     ]  # fmt: skip
@@ -320,6 +409,18 @@ def _preflight(args: argparse.Namespace, evidence: Evidence) -> int:
         code = preflight.main(flags)
     command = "scripts/preflight.py " + " ".join(flags)
     return evidence.record("E1", command, code, out.getvalue())
+
+
+def _lakebase_flags(args: argparse.Namespace) -> list[str]:
+    """Preflight's Lakebase flags for the kind the target binds."""
+    if args.target.endswith(PROVISIONED_SUFFIX):
+        return ["--lakebase-instance", args.lakebase_instance]
+    return [
+        "--lakebase-project", args.lakebase_project,
+        "--lakebase-branch", args.lakebase_branch,
+        "--lakebase-endpoint", args.lakebase_endpoint,
+        "--lakebase-database-id", args.lakebase_database_id,
+    ]  # fmt: skip
 
 
 def _app_url(evidence: Evidence, name: str) -> str:
@@ -452,30 +553,61 @@ def _lakebase_version(args: argparse.Namespace, evidence: Evidence) -> int:
 
     step, command = "E8", "SELECT version()"
     try:
-        client = WorkspaceClient()
-        instance = client.database.get_database_instance(args.lakebase_instance)
-        user = client.current_user.me().user_name or ""
+        environment = _lakebase_environment(args, WorkspaceClient())
     except (OSError, ValueError) as failed:
         return evidence.record(step, command, 1, type(failed).__name__)
-    os.environ.update(
-        PGHOST=instance.read_write_dns or "",
-        PGPORT=args.pg_port,
-        PGDATABASE=args.lakebase_database,
-        PGUSER=user,
-        PGSSLMODE=args.pg_sslmode,
-        CAOS_LAKEBASE_INSTANCE=args.lakebase_instance,
-    )
-    os.environ.pop("CAOS_DATABASE_URL", None)
+    # Exactly the one Lakebase the target binds, the way the app is given it.
+    for name in (*LAKEBASE_BINDINGS, "CAOS_DATABASE_URL"):
+        os.environ.pop(name, None)
+    os.environ.update(environment)
     try:
         with psycopg.connect(store_url(), connect_timeout=20) as conn:
             row = conn.execute(command).fetchone()
     except Refusal as refused:
-        # An instance with no read-write host, or a credential the deployer
+        # A Lakebase with no read-write host, or a credential the deployer
         # cannot mint, is its typed code (N1).
         return evidence.record(step, command, 1, refused.code.value)
     except (psycopg.Error, OSError) as failed:
         return evidence.record(step, command, 1, type(failed).__name__)
     return evidence.record(step, command, 0, str(row[0]) if row else "")
+
+
+def _lakebase_environment(
+    args: argparse.Namespace, client: WorkspaceClient
+) -> dict[str, str]:
+    """The `PG*` values and the one Lakebase variable E8 connects with, read
+    as the deployer through the API of the kind the target binds."""
+    bound, value = lakebase_binding(args)
+    user = client.current_user.me().user_name or ""
+    if bound == LAKEBASE_INSTANCE:
+        instance = client.database.get_database_instance(value)
+        host, database = instance.read_write_dns, args.lakebase_database
+    else:
+        host, database = _autoscaling_host(args, client)
+    return {
+        "PGHOST": host or "",
+        "PGPORT": args.pg_port,
+        "PGDATABASE": database or "",
+        "PGUSER": user,
+        "PGSSLMODE": args.pg_sslmode,
+        bound: value,
+    }
+
+
+def _autoscaling_host(
+    args: argparse.Namespace, client: WorkspaceClient
+) -> tuple[str, str]:
+    """The endpoint's host and the database's Postgres name, from the
+    Postgres API: the bundle binds the database by resource id, which is not
+    always the name Postgres knows it by."""
+    paths = _paths(args)
+    status = client.postgres.get_endpoint(paths.endpoint).status
+    hosts = getattr(status, "hosts", None)
+    found = getattr(client.postgres.get_database(paths.database), "status", None)
+    return (
+        str(getattr(hosts, "host", None) or ""),
+        str(getattr(found, "postgres_database", None) or ""),
+    )
 
 
 def _forwarded(url: str, headers: dict[str, str]) -> dict[str, str]:

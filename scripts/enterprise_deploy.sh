@@ -1,12 +1,20 @@
 #!/usr/bin/env bash
 # From workspace values to a verified deployment, in one command (F31).
 #
-#   scripts/enterprise_deploy.sh <profile> <catalog> <schema> <lakebase_instance> \
+#   scripts/enterprise_deploy.sh [--provisioned] <profile> <catalog> <schema> <lakebase> \
 #       [endpoint] [price] [run_ceiling]
 #
-# Optional, by environment: TARGET (prod), LAKEBASE_DATABASE (databricks_postgres),
-# GROUP_ADMIN (caos-admins), GROUP_ANALYST (caos-analysts), PG_PORT (5432),
-# PG_SSLMODE (require), EVIDENCE (docs/rebuild/runs/<today>/enterprise/<time>),
+# <lakebase> is the Lakebase Autoscaling project id, the default kind (targets
+# dev and prod). With --provisioned it is an existing Lakebase Provisioned
+# instance's name instead, and the target is TARGET's Provisioned pair
+# (dev-provisioned, prod-provisioned); R24-14.
+#
+# Optional, by environment: TARGET (prod: dev or prod, never a -provisioned
+# name, which the flag chooses), for Autoscaling LAKEBASE_BRANCH (production),
+# LAKEBASE_ENDPOINT (primary) and LAKEBASE_DATABASE_ID (databricks-postgres),
+# for Provisioned LAKEBASE_DATABASE (databricks_postgres), GROUP_ADMIN
+# (caos-admins), GROUP_ANALYST (caos-analysts), PG_PORT (5432), PG_SSLMODE
+# (require), EVIDENCE (docs/rebuild/runs/<today>/enterprise/<time>),
 # BUNDLE_STATE (.databricks/bundle/<target>).
 # An empty profile means the SDK's ambient auth (DATABRICKS_HOST and a token).
 #
@@ -18,10 +26,15 @@ cd "$(dirname "$0")/.."
 # The engine every stand-in run used; the other one needs a Terraform download.
 export DATABRICKS_BUNDLE_ENGINE=direct
 
+KIND=autoscaling
+case "${1:-}" in
+  --provisioned) KIND=provisioned; shift ;;
+  --*) echo "unknown flag ${1}: the one flag is --provisioned" >&2; exit 2 ;;
+esac
 PROFILE="${1?profile (may be empty: '')}"
 CATALOG="${2:?catalog}"
 SCHEMA="${3:?schema}"
-INSTANCE="${4:?lakebase instance}"
+LAKEBASE="${4:?lakebase project (or, with --provisioned, the instance)}"
 # One source (N23): databricks.yml's own variable defaults, read back
 # rather than repeated here. `: "${NAME:=...}"` only fills a name this
 # shell does not already have, so an inherited GROUP_ADMIN etc. still wins.
@@ -30,9 +43,22 @@ ENDPOINT="${5:-$MODEL_ENDPOINT}"
 PRICE="${6:-$MODEL_PRICE}"
 CEILING="${7:-$RUN_CEILING}"
 TARGET="${TARGET:-prod}"
-LAKEBASE_DATABASE="${LAKEBASE_DATABASE:-databricks_postgres}"
-# GROUP_ADMIN and GROUP_ANALYST are already set by the eval above (their own
-# bundle default, or an inherited value it left alone).
+case "$TARGET" in
+  *-provisioned) echo "TARGET names dev or prod; --provisioned chooses its Provisioned pair" >&2; exit 2 ;;
+esac
+# GROUP_ADMIN, GROUP_ANALYST and the LAKEBASE_* defaults are already set by
+# the eval above (their own bundle default, or an inherited value it left
+# alone). The target binds the kind (databricks.yml); each kind takes its own.
+if [ "$KIND" = provisioned ]; then
+  TARGET="$TARGET-provisioned"
+  LAKEBASE_VALUES=(--lakebase-instance "$LAKEBASE" --lakebase-database "$LAKEBASE_DATABASE")
+  LAKEBASE_VARS=(--var "lakebase_instance=$LAKEBASE" --var "lakebase_database=$LAKEBASE_DATABASE")
+else
+  LAKEBASE_VALUES=(--lakebase-project "$LAKEBASE" --lakebase-branch "$LAKEBASE_BRANCH"
+    --lakebase-endpoint "$LAKEBASE_ENDPOINT" --lakebase-database-id "$LAKEBASE_DATABASE_ID")
+  LAKEBASE_VARS=(--var "lakebase_project=$LAKEBASE" --var "lakebase_branch=$LAKEBASE_BRANCH"
+    --var "lakebase_endpoint=$LAKEBASE_ENDPOINT" --var "lakebase_database_id=$LAKEBASE_DATABASE_ID")
+fi
 PG_PORT="${PG_PORT:-5432}"
 PG_SSLMODE="${PG_SSLMODE:-require}"
 # Where the CLI keeps the target's state, its deployment record among it.
@@ -44,7 +70,7 @@ mkdir -p "$EVIDENCE"
 
 VALUES=(--evidence "$EVIDENCE" --profile "$PROFILE" --target "$TARGET"
   --catalog "$CATALOG" --schema "$SCHEMA"
-  --lakebase-instance "$INSTANCE" --lakebase-database "$LAKEBASE_DATABASE"
+  "${LAKEBASE_VALUES[@]}"
   --endpoint "$ENDPOINT" --price "$PRICE" --run-ceiling "$CEILING"
   --group-admin "$GROUP_ADMIN" --group-analyst "$GROUP_ANALYST"
   --pg-port "$PG_PORT" --pg-sslmode "$PG_SSLMODE")
@@ -52,8 +78,8 @@ VALUES=(--evidence "$EVIDENCE" --profile "$PROFILE" --target "$TARGET"
 # the environment form carries it whole.
 export BUNDLE_VAR_model_price="$PRICE"
 VARS=(--var "model_endpoint=$ENDPOINT" --var "run_ceiling=$CEILING"
-  --var "uc_catalog=$CATALOG" --var "uc_schema=$SCHEMA" --var "lakebase_instance=$INSTANCE"
-  --var "lakebase_database=$LAKEBASE_DATABASE" --var "group_admin=$GROUP_ADMIN"
+  --var "uc_catalog=$CATALOG" --var "uc_schema=$SCHEMA" "${LAKEBASE_VARS[@]}"
+  --var "group_admin=$GROUP_ADMIN"
   --var "group_analyst=$GROUP_ANALYST")
 PROFILE_FLAG=()
 if [ -n "$PROFILE" ]; then PROFILE_FLAG=(-p "$PROFILE"); fi

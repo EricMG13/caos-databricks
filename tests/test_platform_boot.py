@@ -1,7 +1,9 @@
 """The App booted the way the platform boots it, driven through its own HTTP
 surface end to end (D28): health on minted credentials and the volume, a case,
 its pack, a LITE run through `ChatDatabricks`, the event stream, the report.
-Nothing below HTTP is injected; the workspace is the loopback stub."""
+Nothing below HTTP is injected; the workspace is the loopback stub, and the
+Lakebase either kind the bundle binds (R24-14): an Autoscaling endpoint, the
+default, or a Provisioned instance."""
 
 from __future__ import annotations
 
@@ -20,13 +22,22 @@ from uuid import UUID, uuid4, uuid5
 
 import pytest
 from canonical_fixtures import CATALOG, LITE_PROFILE, LITE_SELECTION
-from platform_app import VOLUME, PlatformApp, platform_app, platform_environment
+from platform_app import (
+    BINDINGS,
+    VOLUME,
+    BootFailed,
+    PlatformApp,
+    platform_app,
+    platform_environment,
+)
 from test_loop_charges import REPORT, _Completions
-from test_workspace_stub import stub
-from workspace_stub import WorkspaceStub
+from test_workspace_stub import CREDENTIALS, stub
+from workspace_stub import LAKEBASE_ENDPOINT, LAKEBASE_INSTANCE, WorkspaceStub
 
 from caos.api.identity import NAMESPACE
 from caos.graph.route import resolve_route
+from caos.store import lakebase
+from caos.store.lakebase import LakebaseKind
 
 __all__ = ["stub"]
 
@@ -41,6 +52,9 @@ SUBJECT = {
 }
 RUN_SECONDS = 240
 ROUTE = resolve_route(CATALOG, LITE_PROFILE, LITE_SELECTION)
+BOTH_KINDS = pytest.mark.parametrize(
+    "app", list(LakebaseKind), indirect=True, ids=[kind.value for kind in LakebaseKind]
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,13 +146,20 @@ class Stream:
 
 @pytest.fixture
 def app(
-    stub: WorkspaceStub, empty_database: str, tmp_path: Path
+    request: pytest.FixtureRequest,
+    stub: WorkspaceStub,
+    empty_database: str,
+    tmp_path: Path,
 ) -> Iterator[PlatformApp]:
+    """The booted app, bound to Lakebase Autoscaling unless a test asks for
+    another kind (`BOTH_KINDS`)."""
+    kind = getattr(request, "param", LakebaseKind.AUTOSCALING)
     stub.identities = {
         ANALYST: (ANALYST_ID, frozenset({"caos-analysts"})),
         APPROVER: (APPROVER_ID, frozenset({"caos-admins"})),
     }
-    with platform_app(stub, empty_database, tmp_path / "caos.serve.log") as served:
+    log = tmp_path / "caos.serve.log"
+    with platform_app(stub, empty_database, log, kind) as served:
         yield served
 
 
@@ -153,6 +174,12 @@ def test_the_boot_environment_is_the_bundle_s_and_what_the_deploy_sent(
     database = "postgresql://u:p@127.0.0.1:5432/db"
     env = platform_environment(stub, database, 8000, tmp_path)
     assert {name for name in env if name.startswith("CAOS_")} >= APP_ENVIRONMENT
+    # Exactly one Lakebase, the default kind's unless another is asked for.
+    assert env[lakebase.LAKEBASE_ENDPOINT] == LAKEBASE_ENDPOINT
+    assert lakebase.LAKEBASE_INSTANCE not in env
+    env = platform_environment(stub, database, 8000, tmp_path, LakebaseKind.PROVISIONED)
+    assert env[lakebase.LAKEBASE_INSTANCE] == LAKEBASE_INSTANCE
+    assert lakebase.LAKEBASE_ENDPOINT not in env
     sent = [
         {"name": "CAOS_RUN_CEILING", "value": "30.00"},
         {"name": "CAOS_BIND_HOST", "value": "0.0.0.0"},
@@ -165,8 +192,15 @@ def test_the_boot_environment_is_the_bundle_s_and_what_the_deploy_sent(
         "127.0.0.1",
         str(tmp_path),
     )
+    # A deployment's own Lakebase binding is the one the process boots with.
+    bound = {"name": lakebase.LAKEBASE_INSTANCE, "value": LAKEBASE_INSTANCE}
+    stub.deployment_bodies.append({"env_vars": [*sent, bound]})
+    env = platform_environment(stub, database, 8000, tmp_path)
+    assert env[lakebase.LAKEBASE_INSTANCE] == LAKEBASE_INSTANCE
+    assert lakebase.LAKEBASE_ENDPOINT not in env
 
 
+@BOTH_KINDS
 def test_the_platform_process_boots_ready_on_minted_credentials_and_the_volume(
     app: PlatformApp, stub: WorkspaceStub
 ) -> None:
@@ -174,7 +208,9 @@ def test_the_platform_process_boots_ready_on_minted_credentials_and_the_volume(
     assert health["status"] == "ready", health
     assert str(health["python_version"]).startswith("3.13")
     assert health["store"] == health["blobs"] == health["bundle"], health
-    assert ("POST", "/api/2.0/database/credentials") in stub.requests
+    # R24-14: the credential is minted through the bound kind's own API only.
+    minted = {kind for kind, route in CREDENTIALS.items() if route in stub.requests}
+    assert minted == {app.kind}, (minted, app.kind)
     assert ("HEAD", "/api/2.0/fs/directories" + VOLUME) in stub.requests
     # N7: the platform hands the process a service principal's client id and
     # secret, not a token; the app traded them for one itself, through the
@@ -191,6 +227,7 @@ def test_the_platform_process_boots_ready_on_minted_credentials_and_the_volume(
     assert refused.value.code == 401
 
 
+@BOTH_KINDS
 def test_a_governed_run_completes_through_the_platform_surface(
     app: PlatformApp, stub: WorkspaceStub
 ) -> None:
@@ -271,6 +308,34 @@ def test_a_governed_run_completes_through_the_platform_surface(
     assert report.status == 200, report.body
     # Everything the run accepted is in the volume, by digest.
     assert len(stub.files) > 1
+
+
+@pytest.mark.parametrize(
+    "bound",
+    [
+        {**BINDINGS[LakebaseKind.AUTOSCALING], **BINDINGS[LakebaseKind.PROVISIONED]},
+        {lakebase.LAKEBASE_ENDPOINT: ""},
+    ],
+    ids=["both-kinds", "neither-kind"],
+)
+def test_a_process_bound_to_no_one_lakebase_refuses_at_boot(
+    stub: WorkspaceStub,
+    empty_database: str,
+    tmp_path: Path,
+    bound: dict[str, str],
+) -> None:
+    """R24-14: a deployment that binds both kinds (the instance used to win)
+    or neither does not start: the lifespan prints `STORE_NOT_CONFIGURED`
+    and the process exits, and no credential is minted for either kind."""
+    sent = [{"name": name, "value": value} for name, value in bound.items()]
+    stub.deployment_bodies.append({"env_vars": sent})
+    with (
+        pytest.raises(BootFailed) as failed,
+        platform_app(stub, empty_database, tmp_path / "caos.serve.log"),
+    ):
+        pytest.fail("the process answered ready")
+    assert "STORE_NOT_CONFIGURED" in str(failed.value)
+    assert not set(CREDENTIALS.values()) & set(stub.requests)
 
 
 def _wait_for_end(
