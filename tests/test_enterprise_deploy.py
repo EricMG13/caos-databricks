@@ -110,7 +110,7 @@ def test_the_one_command_runs_the_cli_and_verifies_the_deployment(
         line.split("\t")
         for line in (evidence / "evidence.tsv").read_text().splitlines()
     ]
-    assert [row[0] for row in rows] == [f"E{n}" for n in range(1, 10)]
+    assert [row[0] for row in rows] == [f"E{n}" for n in range(1, 11)]
     assert all(row[2] == "0" for row in rows), rows
     assert (
         rows[1][3]
@@ -130,7 +130,8 @@ def test_the_one_command_runs_the_cli_and_verifies_the_deployment(
     assert "answered 200 status=ready" in rows[5][3] and "workers=OK" in rows[5][3]
     assert "json_mode=accepted" in (evidence / "E7.log").read_text()
     assert "PostgreSQL" in (evidence / "E8.log").read_text()
-    assert "with the stream open" in rows[-1][3]
+    assert "with the stream open" in rows[8][3]
+    assert "one model call recorded" in rows[-1][3]
     assert f"deployed: {app.url}" in done.stdout
     # No credential in any row, log or line: the bearer the SDK was handed,
     # and the minted password in the only shape it could leak in, a URL.
@@ -375,21 +376,23 @@ def test_the_stream_row_needs_frames_for_the_whole_interval(
     }
     for label, (answer, said) in streams.items():
         with _scripted([CASE, answer]) as url:
-            code = enterprise_deploy._stream(url, evidence)
+            code, case_id = enterprise_deploy._stream(url, evidence)
         assert said in evidence.rows[-1].summary, (label, evidence.rows[-1])
-        assert code == (0 if label == "heartbeats" else 1), label
+        ok = label == "heartbeats"
+        assert code == (0 if ok else 1), label
+        assert case_id == ("c1" if ok else ""), label
     refused: Scripted = (403, JSON, [(0, b'{"code": "ORIGIN_REFUSED"}')], True)
     with _scripted([refused]) as url:
-        assert enterprise_deploy._stream(url, evidence) == 1
+        assert enterprise_deploy._stream(url, evidence) == (1, "")
     assert "answered 403 ORIGIN_REFUSED" in evidence.rows[-1].summary
     unauthorised: Scripted = (403, JSON, [(0, b'{"code": "NOT_AUTHORISED"}')], True)
     with _scripted([unauthorised]) as url:
-        assert enterprise_deploy._stream(url, evidence) == 0
+        assert enterprise_deploy._stream(url, evidence) == (0, "")
     assert evidence.rows[-1].summary.startswith("unverified")
     # A case answer cut short is a row with its class, not a traceback (MAX-17).
     short: Scripted = (201, {**JSON, "Content-Length": "100"}, [(0, b"{}")], True)
     with _scripted([short]) as url:
-        assert enterprise_deploy._stream(url, evidence) == 1
+        assert enterprise_deploy._stream(url, evidence) == (1, "")
     assert evidence.rows[-1] == Row("E9", "POST /api/v1/cases", 1, "IncompleteRead")
 
 
@@ -421,3 +424,35 @@ def test_a_truncated_health_answer_is_a_row_not_a_traceback(
     with _scripted([short]) as url:
         assert enterprise_deploy._health(url, evidence) == 1
     assert evidence.rows == [Row("E6", "GET /api/health", 1, "IncompleteRead")]
+
+
+def test_open_forwards_the_query_string() -> None:
+    """CF-054: `urlsplit` gives `path` and `query` separately, and `_open`
+    once sent only the first -- so E10's own `?run=<id>` reached the app as
+    the whole case's stream, never the one run's."""
+    seen: list[str] = []
+
+    class _Handler(http.server.BaseHTTPRequestHandler):
+        def log_message(self, format: str, *args: object) -> None:
+            del format, args
+
+        def do_GET(self) -> None:
+            seen.append(self.path)
+            self.send_response(200)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+    server = http.server.HTTPServer(("127.0.0.1", 0), _Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        url = f"http://127.0.0.1:{server.server_port}"
+        status, response, _ = enterprise_deploy._open(
+            url + "/api/v1/cases/x/events?run=abc", "GET", {}
+        )
+        response.read()
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert status == 200
+    assert seen == ["/api/v1/cases/x/events?run=abc"]

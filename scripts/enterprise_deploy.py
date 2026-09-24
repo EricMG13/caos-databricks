@@ -22,6 +22,11 @@ in `<evidence>/<id>.log`:
                         an event-stream content type, a first frame, then
                         frames for `LIVE_SECONDS` with no silence longer than
                         `FRAME_GAP_SECONDS` and no close (AR-05, DF-2, MAX-08)
+                     E10 one model call through the app's own HTTP surface,
+                        not this script's process or credentials (CF-054): a
+                        tiny text source admitted (a blob write) to the case
+                        E9 left behind, a LITE run started, and the event
+                        stream watched for the first node's call outcome
 
 Every step ends in a row, never a traceback (N1): a failure is its class or
 its typed code. No secret is printed or written: the bearer the app calls
@@ -84,6 +89,31 @@ FRAME, CLOSED, SILENT = "frame", "closed", "silent"
 # own for a body shorter than it declared or a status line that is not one
 # (MAX-17). Both are a row, never a traceback.
 READ_FAILURES = (OSError, http.client.HTTPException)
+
+# E9 and E10 share one case (N22): an operator who opens it sees this title,
+# not a machine-generated id, and knows it is a deploy's own check, safe to
+# keep or to have an admin archive (docs/DEPLOYMENT.md's operator notes).
+DEPLOYMENT_CASE_TITLE = "CAOS deployment check (safe to archive)"
+# CF-054: the smallest enabled route, so E10 spends and waits as little as
+# a real model call can. `caos.methodology.handoff.ADAPTER_ROUTES` enables
+# this pair in production, not only in tests.
+MODEL_CALL_PROFILE = "LITE_CREDIT_22"
+MODEL_CALL_SELECTION = "LITE_EARNINGS_UPDATE"
+MODEL_CALL_GATES = ("source-set", "research-plan")
+MODEL_CALL_SOURCE = b"Revenue grew 4% year over year to $12.4 million.\n"
+MODEL_CALL_SUBJECT = {
+    "issuer_id": "CAOS-DEPLOY-CHECK",
+    "issuer_name": "CAOS Deployment Check",
+    "reporting_period": "FY2025",
+    "analysis_date": "2026-09-22",
+}
+# `caos.provider.TIMEOUT_SECONDS` (240) is the model call's own deadline;
+# E10 waits comfortably past it rather than racing it.
+MODEL_CALL_SECONDS = 260.0
+# Two `run_progress` frames after `start` are `ATTEMPT_STARTED` then
+# `CALL_OUTCOME_RECORDED` (`caos/api/events.py`): the second is the model
+# call's outcome written to the ledger, whatever the outcome was.
+CALL_OUTCOME_AT = 2
 
 
 def resolved_app(document: object) -> tuple[str, dict[str, str]]:
@@ -208,11 +238,15 @@ def main(argv: list[str] | None = None) -> int:
         lambda: _health(url, evidence),
         lambda: _smoke(evidence),
         lambda: _lakebase_version(args, evidence),
-        lambda: _stream(url, evidence),
     ]
     for step in later:
         if (code := step()) != 0:
             return code
+    code, case_id = _stream(url, evidence)
+    if code != 0:
+        return code
+    if (code := _model_call(url, case_id, evidence)) != 0:
+        return code
     print(f"deployed: {url}")
     return 0
 
@@ -333,7 +367,11 @@ def _open(
         connection = http.client.HTTPConnection(
             parts.hostname or "", parts.port, timeout=timeout
         )
-    connection.request(method, parts.path, body=body, headers=headers)
+    # `urlsplit` separates the query from the path; a caller's `?run=<id>`
+    # (CF-054's own events read) reached the app as no query at all without
+    # this, silently answering the case's stream, not the run's.
+    request_target = parts.path + (f"?{parts.query}" if parts.query else "")
+    connection.request(method, request_target, body=body, headers=headers)
     response = connection.getresponse()
     return response.status, response, connection
 
@@ -440,43 +478,53 @@ def _lakebase_version(args: argparse.Namespace, evidence: Evidence) -> int:
     return evidence.record(step, command, 0, str(row[0]) if row else "")
 
 
-def _stream(url: str, evidence: Evidence) -> int:
+def _forwarded(url: str, headers: dict[str, str]) -> dict[str, str]:
+    """The caller's own headers, plus a command's origin and, only where
+    there is no proxy to do it, the caller's bearer forwarded as the
+    platform would forward it (W4)."""
+    forwarded = {**headers, "origin": url}
+    if os.environ.get(FORWARD_CALLER_ENV) == "1":
+        token = headers.get("Authorization", "").removeprefix("Bearer ")
+        forwarded["x-forwarded-access-token"] = token
+    return forwarded
+
+
+def _stream(url: str, evidence: Evidence) -> tuple[int, str]:
     """A case, then its stream: an event-stream content type, a first frame
     within `STREAM_SECONDS`, then frames (heartbeats count) for
     `LIVE_SECONDS`, none more than `FRAME_GAP_SECONDS` apart, mean the proxy
     passes frames as they come (C42, AR-05, DF-2). A case the deployer may
     not create is recorded as unverified, and only for the one code that
-    says so (W1)."""
+    says so (W1). Its exit code, and the case's id for E10 to reuse (N22),
+    empty when there is none to reuse."""
     step, path = "E9", "GET /api/v1/cases/<id>/events"
     try:
         headers = _headers()
     except ValueError as failed:
-        return evidence.record(step, path, 1, type(failed).__name__)
-    forwarded = {**headers, "origin": url}
-    if os.environ.get(FORWARD_CALLER_ENV) == "1":
-        token = headers.get("Authorization", "").removeprefix("Bearer ")
-        forwarded["x-forwarded-access-token"] = token
+        return evidence.record(step, path, 1, type(failed).__name__), ""
+    forwarded = _forwarded(url, headers)
     command = {
         **forwarded,
         "content-type": "application/json",
         "idempotency-key": str(uuid4()),
     }
-    title = json.dumps({"title": "deployment stream check"}).encode()
+    title = json.dumps({"title": DEPLOYMENT_CASE_TITLE}).encode()
     try:
         status, response, _ = _open(url + "/api/v1/cases", "POST", command, body=title)
         created = _document(response.read())
     except READ_FAILURES as failed:
-        return evidence.record(step, "POST /api/v1/cases", 1, type(failed).__name__)
+        return evidence.record(step, "POST /api/v1/cases", 1, type(failed).__name__), ""
     if status == 403:
         code = str(created.get("code", "")) or "no code"
         if code == "NOT_AUTHORISED":
             note = "unverified: creating a case answered 403 NOT_AUTHORISED; "
-            return evidence.record(step, path, 0, note + "needs writer standing")
-        return evidence.record(step, "POST /api/v1/cases", 1, f"answered 403 {code}")
+            return evidence.record(step, path, 0, note + "needs writer standing"), ""
+        summary = f"answered 403 {code}"
+        return evidence.record(step, "POST /api/v1/cases", 1, summary), ""
     case_id = created.get("case_id")
     if status != 201 or not isinstance(case_id, str):
         # Any other answer is the app failing, not a standing question (F55).
-        return evidence.record(step, "POST /api/v1/cases", 1, f"answered {status}")
+        return evidence.record(step, "POST /api/v1/cases", 1, f"answered {status}"), ""
     events = f"/api/v1/cases/{case_id}/events"
     try:
         status, response, _ = _open(
@@ -484,9 +532,10 @@ def _stream(url: str, evidence: Evidence) -> int:
         )
     except READ_FAILURES as failed:
         note = f"no answer within {STREAM_SECONDS}s ({type(failed).__name__}), C42"
-        return evidence.record(step, path, 1, note)
+        return evidence.record(step, path, 1, note), ""
     kind = response.getheader("content-type") or ""
-    return evidence.record(step, path, *_streamed(status, kind, response))
+    exit_code = evidence.record(step, path, *_streamed(status, kind, response))
+    return exit_code, (case_id if exit_code == 0 else "")
 
 
 def _streamed(
@@ -559,6 +608,186 @@ def _held_open(lines: queue.Queue[bytes]) -> str:
         if ended == SILENT and time.monotonic() < end:
             return f"no frame for {FRAME_GAP_SECONDS}s"
     return ""
+
+
+def _json_call(
+    url: str,
+    method: str,
+    path: str,
+    headers: dict[str, str],
+    body: dict[str, Any] | None = None,
+) -> tuple[int, dict[str, Any]]:
+    """One command or read against the app: a command carries its own
+    idempotency key, every call its content type, the answer parsed as a
+    document whatever it was."""
+    sent = dict(headers)
+    data = None
+    if body is not None:
+        sent["content-type"] = "application/json"
+        sent["idempotency-key"] = str(uuid4())
+        data = json.dumps(body).encode()
+    status, response, _ = _open(url + path, method, sent, body=data)
+    return status, _document(response.read())
+
+
+def _admitted(
+    url: str, case_id: str, headers: dict[str, str]
+) -> tuple[int, dict[str, Any]]:
+    """A tiny text source admitted the way a caller's own upload is: a blob
+    write through the app's own multipart parsing (CF-054), not a shortcut
+    around it."""
+    boundary = "caos-deploy-" + uuid4().hex
+    disposition = 'form-data; name="document"; filename="deployment-check.txt"'
+    body = (
+        f"--{boundary}\r\nContent-Disposition: {disposition}\r\n"
+        "Content-Type: text/plain\r\n\r\n"
+    ).encode()
+    body += MODEL_CALL_SOURCE + f"\r\n--{boundary}--\r\n".encode()
+    sent = {
+        **headers,
+        "content-type": f"multipart/form-data; boundary={boundary}",
+        "idempotency-key": str(uuid4()),
+    }
+    status, response, _ = _open(
+        url + f"/api/v1/cases/{case_id}/sources", "POST", sent, body=body
+    )
+    return status, _document(response.read())
+
+
+@dataclass(frozen=True, slots=True)
+class _Prepared:
+    """Everything `start` needs, or the first answer that was not one
+    (`ok` false): the step it happened at, the status, the run id once
+    created and the pinned input's fingerprint once pinned."""
+
+    ok: bool
+    step: str
+    status: int
+    run_id: str = ""
+    fingerprint: str = ""
+
+
+def _prepared_run(url: str, case_id: str, headers: dict[str, str]) -> _Prepared:
+    """A tiny source admitted, a run created against it, its input pinned
+    and both gates approved -- everything short of starting it."""
+    status, _ = _admitted(url, case_id, headers)
+    if status != 201:
+        return _Prepared(False, "POST .../sources", status)
+    selection = {
+        "profile_id": MODEL_CALL_PROFILE,
+        "selection_id": MODEL_CALL_SELECTION,
+        "supersedes": None,
+        "model_extension": False,
+    }
+    status, run = _json_call(
+        url, "POST", f"/api/v1/cases/{case_id}/runs", headers, selection
+    )
+    if status != 201:
+        return _Prepared(False, "POST .../runs", status)
+    run_id = str(run.get("run_id", ""))
+    base = f"/api/v1/cases/{case_id}/runs/{run_id}"
+    status, pinned = _json_call(
+        url, "POST", f"{base}/input", headers, {"subject": MODEL_CALL_SUBJECT}
+    )
+    if status not in (200, 201):
+        return _Prepared(False, "POST .../input", status, run_id)
+    for gate in MODEL_CALL_GATES:
+        status = _gate_approved(url, base, gate, headers)
+        if status not in (200, 201):
+            return _Prepared(False, f"POST .../gates/{gate}/approval", status, run_id)
+    fingerprint = str(pinned.get("input_fingerprint", ""))
+    return _Prepared(True, "", status, run_id, fingerprint)
+
+
+def _gate_approved(url: str, base: str, gate: str, headers: dict[str, str]) -> int:
+    """One gate released: the preview re-read, then approved over its own
+    digests, as an approver's browser would (no state carried between)."""
+    status, preview = _json_call(url, "GET", f"{base}/gates/{gate}/preview", headers)
+    if status != 200:
+        return status
+    approval = {
+        "preview_sha256": preview.get("preview_sha256"),
+        "input_fingerprint": preview.get("input_fingerprint"),
+    }
+    status, _ = _json_call(
+        url, "POST", f"{base}/gates/{gate}/approval", headers, approval
+    )
+    return status
+
+
+def _progress_events(lines: queue.Queue[bytes], seconds: float) -> int:
+    """How many `run_progress` frames arrived before a terminal frame, a
+    close or the deadline. Two mean the first node's attempt started and its
+    call outcome was recorded (`caos.store.outcomes.record_outcome`) --
+    proof of one model call, whatever the call answered (CF-054)."""
+    seen = 0
+    until = time.monotonic() + seconds
+    while seen < CALL_OUTCOME_AT:
+        ended, frame = _next_frame(lines, until)
+        if ended != FRAME:
+            return seen
+        if "event: run_progress" in frame:
+            seen += 1
+        elif "event: run_terminal" in frame:
+            return seen  # ended early, but not before a call was recorded
+    return seen
+
+
+def _started_and_watched(
+    url: str,
+    case_id: str,
+    prepared: _Prepared,
+    headers: dict[str, str],
+    evidence: Evidence,
+) -> int:
+    """The stream opened before `start` so no early frame is missed, the run
+    started, then watched for the first node's call outcome."""
+    step = "E10"
+    run_id = prepared.run_id
+    events = f"/api/v1/cases/{case_id}/events?run={run_id}"
+    try:
+        status, response, _ = _open(
+            url + events, "GET", headers, timeout=MODEL_CALL_SECONDS
+        )
+        kind = response.getheader("content-type") or ""
+        if status != 200 or not kind.startswith("text/event-stream"):
+            note = f"status {status}, content-type {kind!r}: not an event stream"
+            return evidence.record(step, f"GET {events}", 1, note)
+        lines = _lines(response)
+        base = f"/api/v1/cases/{case_id}/runs/{run_id}"
+        pin = {"input_fingerprint": prepared.fingerprint}
+        status, _ = _json_call(url, "POST", f"{base}/start", headers, pin)
+        if status != 202:
+            return evidence.record(step, f"POST {base}/start", 1, f"answered {status}")
+        seen = _progress_events(lines, MODEL_CALL_SECONDS)
+    except READ_FAILURES as failed:
+        return evidence.record(step, f"GET {events}", 1, type(failed).__name__)
+    if seen < CALL_OUTCOME_AT:
+        note = f"no model call recorded within {MODEL_CALL_SECONDS}s"
+        return evidence.record(step, f"GET {events}", 1, note)
+    note = "one model call recorded through the app's own HTTP surface"
+    return evidence.record(step, f"GET {events}", 0, note)
+
+
+def _model_call(url: str, case_id: str, evidence: Evidence) -> int:
+    """One model call driven entirely through the deployed app's own HTTP
+    surface, never this script's own process or credentials (CF-054): admit
+    a tiny text source (a blob write), start the smallest enabled route, and
+    watch the event stream for the first node's call outcome. Reuses the
+    case E9 leaves behind (N22, `DEPLOYMENT_CASE_TITLE`); a case the
+    deployer could not create was already reported there, and there is
+    nothing here to admit a source to."""
+    step, path = "E10", "POST .../sources"
+    if not case_id:
+        return evidence.record(step, path, 0, "unverified: needs writer standing")
+    try:
+        headers = _forwarded(url, _headers())
+        prepared = _prepared_run(url, case_id, headers)
+    except (ValueError, *READ_FAILURES) as failed:
+        return evidence.record(step, path, 1, type(failed).__name__)
+    if not prepared.ok:
+        return evidence.record(step, prepared.step, 1, f"answered {prepared.status}")
+    return _started_and_watched(url, case_id, prepared, headers, evidence)
 
 
 if __name__ == "__main__":
