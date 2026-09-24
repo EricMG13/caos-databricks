@@ -15,6 +15,15 @@ from caos.refusals import Refusal, RefusalCode
 from caos.store import lakebase
 from caos.store.lakebase import store_url
 
+# An Autoscaling endpoint's resource path, the default kind's binding.
+ENDPOINT_PATH = "projects/caos/branches/production/endpoints/primary"
+
+
+def _name_the_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The one Lakebase a platform process mints for: the default kind."""
+    monkeypatch.setenv(lakebase.LAKEBASE_ENDPOINT, ENDPOINT_PATH)
+    monkeypatch.delenv(lakebase.LAKEBASE_INSTANCE, raising=False)
+
 
 def test_store_url_prefers_the_explicit_url_then_the_injected_pg_names(
     monkeypatch: pytest.MonkeyPatch,
@@ -31,6 +40,7 @@ def test_store_url_prefers_the_explicit_url_then_the_injected_pg_names(
     monkeypatch.setenv("PGDATABASE", "databricks_postgres")
     monkeypatch.setenv("PGUSER", "0000-client-id")
     monkeypatch.setenv("PGSSLMODE", "require")
+    _name_the_endpoint(monkeypatch)
     minted: list[int] = []
 
     def mint() -> tuple[str, float]:
@@ -45,6 +55,96 @@ def test_store_url_prefers_the_explicit_url_then_the_injected_pg_names(
         ":5432/databricks_postgres?sslmode=require"
     )
     assert store_url() == url and minted == [1], "a fresh token is cached"
+
+
+def test_exactly_one_lakebase_is_named_or_the_store_is_not_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """R24-14: the instance was preferred over the endpoint, so a process
+    handed both minted for whichever came first. Now exactly one names the
+    Lakebase: neither, both, or an endpoint that is not an endpoint's
+    resource path is `STORE_NOT_CONFIGURED` from the store URL, the
+    checkpointer and the health probe alike, before anything is minted."""
+    from caos.api.health import probe_store
+    from caos.graph.checkpoint import checkpointer
+    from caos.store.lakebase import LakebaseDatabase, LakebaseKind, lakebase_database
+
+    monkeypatch.delenv("CAOS_DATABASE_URL", raising=False)
+    for name, value in {
+        "PGHOST": "h",
+        "PGPORT": "5432",
+        "PGDATABASE": "d",
+        "PGUSER": "u",
+    }.items():
+        monkeypatch.setenv(name, value)
+    minted: list[int] = []
+
+    def mint() -> tuple[str, float]:
+        minted.append(1)
+        return "tok", float("inf")
+
+    monkeypatch.setattr(lakebase, "_mint", mint)
+    lakebase.invalidate_credential()
+    monkeypatch.delenv(lakebase.LAKEBASE_ENDPOINT, raising=False)
+    monkeypatch.delenv(lakebase.LAKEBASE_INSTANCE, raising=False)
+    assert lakebase_database() is None
+    refused: list[tuple[str, str]] = [
+        ("", ""),  # neither: nothing says which database the role lives in
+        (ENDPOINT_PATH, "caos-lb"),  # both: never guessed
+        ("primary", ""),  # an endpoint id, not its resource path
+        (ENDPOINT_PATH + "/", ""),
+    ]
+    for endpoint, instance in refused:
+        monkeypatch.setenv(lakebase.LAKEBASE_ENDPOINT, endpoint)
+        monkeypatch.setenv(lakebase.LAKEBASE_INSTANCE, instance)
+        with pytest.raises(Refusal, match=r"^STORE_NOT_CONFIGURED$"):
+            store_url()
+        assert probe_store() == "STORE_NOT_CONFIGURED"
+        with pytest.raises(Refusal, match=r"^STORE_NOT_CONFIGURED$"):
+            checkpointer()
+    assert minted == [], "nothing is minted for a refused configuration"
+    monkeypatch.setenv(lakebase.LAKEBASE_ENDPOINT, ENDPOINT_PATH)
+    monkeypatch.setenv(lakebase.LAKEBASE_INSTANCE, "")
+    assert lakebase_database() == LakebaseDatabase(
+        LakebaseKind.AUTOSCALING, ENDPOINT_PATH
+    )
+    monkeypatch.setenv(lakebase.LAKEBASE_ENDPOINT, "")
+    monkeypatch.setenv(lakebase.LAKEBASE_INSTANCE, "caos-lb")
+    assert lakebase_database() == LakebaseDatabase(LakebaseKind.PROVISIONED, "caos-lb")
+    assert "tok" in store_url() and minted == [1]
+
+
+def test_each_kind_mints_through_its_own_api(monkeypatch: pytest.MonkeyPatch) -> None:
+    """R24-14: an Autoscaling endpoint through the Postgres API, a Provisioned
+    instance through the database API, and neither through the other's."""
+    from types import SimpleNamespace
+
+    import caos.workspace
+
+    asked: list[tuple[str, object]] = []
+
+    def postgres(endpoint: str) -> object:
+        asked.append(("postgres", endpoint))
+        return SimpleNamespace(token="autoscaling", expire_time=None)
+
+    def database(request_id: str, instance_names: list[str]) -> object:
+        asked.append(("database", instance_names))
+        return SimpleNamespace(token="provisioned", expiration_time=None)
+
+    fake = SimpleNamespace(
+        postgres=SimpleNamespace(generate_database_credential=postgres),
+        database=SimpleNamespace(generate_database_credential=database),
+    )
+    monkeypatch.setattr(caos.workspace, "workspace_client", lambda: fake)
+    _name_the_endpoint(monkeypatch)
+    assert lakebase._mint()[0] == "autoscaling"
+    monkeypatch.delenv(lakebase.LAKEBASE_ENDPOINT)
+    monkeypatch.setenv(lakebase.LAKEBASE_INSTANCE, "caos-lb")
+    assert lakebase._mint()[0] == "provisioned"
+    assert asked == [("postgres", ENDPOINT_PATH), ("database", ["caos-lb"])]
+    monkeypatch.delenv(lakebase.LAKEBASE_INSTANCE)
+    with pytest.raises(Refusal, match=r"^STORE_NOT_CONFIGURED$"):
+        lakebase._mint()
 
 
 class _Files:
@@ -163,6 +263,7 @@ def test_minting_is_single_flight_bounded_and_falls_back_to_a_live_token(
     }.items():
         monkeypatch.setenv(name, value)
     monkeypatch.delenv("CAOS_DATABASE_URL", raising=False)
+    _name_the_endpoint(monkeypatch)
     lakebase.invalidate_credential()
     calls: list[str] = []
     gate = threading.Event()
@@ -235,6 +336,7 @@ def test_the_injected_names_are_quoted_and_the_port_must_be_a_number(
         "PGSSLMODE": "require",
     }.items():
         monkeypatch.setenv(name, value)
+    _name_the_endpoint(monkeypatch)
     monkeypatch.setattr(lakebase, "_mint", lambda: ("tok", float("inf")))
     lakebase.invalidate_credential()
     assert "/odd%3Fname%26here?sslmode=require" in store_url()
@@ -284,6 +386,7 @@ def test_the_workspace_client_is_one_per_identity_and_refuses_typed(
         workspace_client()
     assert workspace._client.cache_info().currsize == 2, "a failure is not cached"
     # And through the mint, with the instance named: typed, never ValueError.
+    monkeypatch.delenv(lakebase.LAKEBASE_ENDPOINT, raising=False)
     monkeypatch.setenv(lakebase.LAKEBASE_INSTANCE, "caos-lb")
     with pytest.raises(Refusal, match=r"^STORE_UNAVAILABLE$"):
         lakebase._mint()
@@ -306,6 +409,7 @@ def test_a_live_token_is_handed_out_while_another_caller_mints(
         hang.wait(10)
         return "fresh", float("inf")
 
+    _name_the_endpoint(monkeypatch)
     monkeypatch.setattr(lakebase, "_mint", hung_mint)
     monkeypatch.setattr(lakebase, "MINT_SECONDS", 3.0)
     now = time.monotonic()
@@ -362,8 +466,7 @@ def test_the_autoscaling_credential_s_stated_expiry_is_read(
         postgres=SimpleNamespace(generate_database_credential=lambda endpoint: issued)
     )
     monkeypatch.setattr(caos.workspace, "workspace_client", lambda: fake)
-    monkeypatch.delenv(lakebase.LAKEBASE_INSTANCE, raising=False)
-    monkeypatch.setenv(lakebase.AUTOSCALING_ENDPOINT, "projects/p/branches/b/e")
+    _name_the_endpoint(monkeypatch)
     token, expires_at = lakebase._mint()
     left = expires_at - time.monotonic()
     assert token == "autoscaling"
@@ -382,6 +485,7 @@ def test_a_short_lived_credential_is_refreshed_by_its_stated_expiry(
     import time
 
     lakebase.invalidate_credential()
+    _name_the_endpoint(monkeypatch)
     minted: list[int] = []
 
     def short_lived() -> tuple[str, float]:

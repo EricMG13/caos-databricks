@@ -7,6 +7,14 @@ the password is a short-lived credential the SDK mints for the app's service
 principal. Tokens live about an hour, so one is refreshed well before that and
 every new connection gets a fresh one after it ages out.
 
+The bundle names which Lakebase the credential is for, and exactly one (R24-14):
+a Lakebase Autoscaling endpoint (`CAOS_LAKEBASE_ENDPOINT`, the default kind,
+minted through the Postgres API) or an existing Provisioned instance
+(`CAOS_LAKEBASE_INSTANCE`, through the database API). Neither is preferred:
+both, neither, or an endpoint that is not an endpoint's resource path is
+`STORE_NOT_CONFIGURED` before anything is minted, so a process configured for
+the wrong database refuses at boot rather than connecting as someone else.
+
 Minting is single-flight and bounded (MX-3, DL-4): one caller mints; a caller
 that arrives while that mint is in flight is handed the held token when the
 server still accepts it (ST-1) and waits for the mint only when there is none;
@@ -23,10 +31,12 @@ handed straight to the driver.
 from __future__ import annotations
 
 import os
+import re
 import threading
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from enum import StrEnum
 from urllib.parse import quote
 from uuid import uuid4
 
@@ -35,8 +45,13 @@ import psycopg
 from caos.refusals import Refusal, RefusalCode
 
 DATABASE_URL = "CAOS_DATABASE_URL"
+# Exactly one of these names the database the credential is minted for.
+LAKEBASE_ENDPOINT = "CAOS_LAKEBASE_ENDPOINT"
 LAKEBASE_INSTANCE = "CAOS_LAKEBASE_INSTANCE"
-AUTOSCALING_ENDPOINT = "LAKEBASE_AUTOSCALING_ENDPOINT"
+# An Autoscaling endpoint's resource path; each id is RFC 1123 (1-63 of
+# lowercase letters, digits and hyphens).
+_ID = r"[a-z0-9][a-z0-9-]{0,62}"
+ENDPOINT_PATH = re.compile(rf"projects/{_ID}/branches/{_ID}/endpoints/{_ID}")
 # Databricks Apps inject these for the first database resource (R11).
 PG_ENV = ("PGHOST", "PGPORT", "PGDATABASE", "PGUSER")
 # Below the credential life the vendor library plans for (a 15-minute cache
@@ -58,6 +73,40 @@ class _Credential:
     refresh_at: float  # monotonic: mint a fresh one after this
     expires_at: float  # monotonic: the server stops accepting it here
     minted_at: float = 0.0  # monotonic: when it was minted
+
+
+class LakebaseKind(StrEnum):
+    """Which Lakebase the app's database resource binds (R24-14)."""
+
+    AUTOSCALING = "autoscaling"
+    PROVISIONED = "provisioned"
+
+
+@dataclass(frozen=True, slots=True)
+class LakebaseDatabase:
+    """The one Lakebase this process mints credentials for: an Autoscaling
+    endpoint's resource path, or a Provisioned instance's name."""
+
+    kind: LakebaseKind
+    name: str
+
+
+def lakebase_database() -> LakebaseDatabase | None:
+    """The configured Lakebase, or None when neither name is set (a store at
+    a URL of its own). Both set, or an endpoint that is not an endpoint's
+    resource path, is `STORE_NOT_CONFIGURED`: the kind is never guessed,
+    because each binds the app to a different Postgres role."""
+    endpoint = os.environ.get(LAKEBASE_ENDPOINT, "")
+    instance = os.environ.get(LAKEBASE_INSTANCE, "")
+    if endpoint and instance:
+        raise Refusal(RefusalCode.STORE_NOT_CONFIGURED)
+    if endpoint:
+        if ENDPOINT_PATH.fullmatch(endpoint) is None:
+            raise Refusal(RefusalCode.STORE_NOT_CONFIGURED)
+        return LakebaseDatabase(LakebaseKind.AUTOSCALING, endpoint)
+    if instance:
+        return LakebaseDatabase(LakebaseKind.PROVISIONED, instance)
+    return None
 
 
 _LOCK = threading.Lock()  # guards `_CACHED` and `_REFUSED_UNTIL`; never held on I/O
@@ -114,7 +163,10 @@ def note_connect_failure(failed: psycopg.OperationalError) -> None:
 
 
 def _credential() -> str:
-    """A Lakebase credential for the app's service principal, cached briefly."""
+    """A Lakebase credential for the app's service principal, cached briefly;
+    `STORE_NOT_CONFIGURED` before any mint when no one Lakebase is named."""
+    if lakebase_database() is None:
+        raise Refusal(RefusalCode.STORE_NOT_CONFIGURED)
     held = _held()
     now = time.monotonic()
     if held is not None and held.refresh_at > now:
@@ -198,23 +250,26 @@ def _mint_bounded() -> tuple[str, float]:
 
 
 def _mint() -> tuple[str, float]:
-    """One credential from the SDK's unified auth: instance or endpoint form,
-    with the monotonic instant the server stops accepting it."""
+    """One credential from the SDK's unified auth for the configured kind --
+    the Postgres API for an Autoscaling endpoint, the database API for a
+    Provisioned instance -- with the monotonic instant the server stops
+    accepting it."""
     from caos.workspace import workspace_client
 
-    instance = os.environ.get(LAKEBASE_INSTANCE)
-    endpoint = os.environ.get(AUTOSCALING_ENDPOINT)
+    database = lakebase_database()
+    if database is None:
+        raise Refusal(RefusalCode.STORE_NOT_CONFIGURED)
     issued: object
     try:
         client = workspace_client()
-        if instance:
-            issued = client.database.generate_database_credential(
-                request_id=str(uuid4()), instance_names=[instance]
+        if database.kind is LakebaseKind.AUTOSCALING:
+            issued = client.postgres.generate_database_credential(
+                endpoint=database.name
             )
-        elif endpoint:
-            issued = client.postgres.generate_database_credential(endpoint=endpoint)
         else:
-            raise Refusal(RefusalCode.STORE_NOT_CONFIGURED)
+            issued = client.database.generate_database_credential(
+                request_id=str(uuid4()), instance_names=[database.name]
+            )
     except (OSError, ValueError):
         # `DatabricksError` is an `IOError` and the SDK's auth failures are
         # `ValueError`s; either message may name the host (CR-1).
