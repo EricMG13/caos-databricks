@@ -2,7 +2,7 @@
 
 For the agent (Claude Code or equivalent) or the person who has a Databricks CLI profile for the enterprise workspace. Everything else has been built and verified without a workspace: the process boots the way Databricks Apps boots it, a governed run completes through the gateway seam, the bundle validates, deploys and runs, and the deployment command itself has been exercised, all against a loopback stand-in for the workspace (D28) and a Docker Postgres for Lakebase. Your job is to run that one command against the real workspace and report what it wrote.
 
-Read first if anything is unclear: `docs/DEPLOYMENT.md` (the runbook the command follows), `docs/rebuild/blockers.md` (B2, B9), `docs/rebuild/decisions.md` (D17, D23, D28, F27–F31).
+Read first if anything is unclear: `docs/DEPLOYMENT.md` (the runbook the command follows), `docs/rebuild/blockers.md` (B2, B9), `docs/rebuild/decisions.md` (D17, D23, D28, F27–F31, D29–D45), `qualification/PROVIDER_RUNBOOK.md` (what has and has not been qualified live).
 
 ## Hard limits
 
@@ -42,7 +42,7 @@ It stops at the first step that fails and writes `docs/rebuild/runs/<today>/ente
 |---|---|---|
 | E1 | The endpoint, schema, volume, instance and both groups exist; the ceiling covers one call | The log names the missing resource and the command an administrator runs to create it; the volume you may create yourself once the schema exists. |
 | E2 | `databricks bundle validate -o json` resolved the app's name, and the endpoint, price and run ceiling you gave (`bundle.json` beside the rows) | The bundle or a variable value; the log is the CLI's own message, or names the resolved value that is not the one given. |
-| E3 | `databricks bundle deploy` | Usually a grant the app's service principal lacks (`CAN_QUERY`, `CAN_CONNECT_AND_CREATE`, `WRITE_VOLUME`). Record it as a blocker; do not edit `databricks.yml` to drop a resource. A deploy lock held by another deployer, or a CLI panic after the app was deleted out of band, has its recovery in `docs/DEPLOYMENT.md` section 6; run it only after asking the owner. |
+| E3 | `databricks bundle deploy` | Usually a grant the app's service principal lacks (`CAN_QUERY`, `CAN_CONNECT_AND_CREATE`, `WRITE_VOLUME`). Record it as a blocker; do not edit `databricks.yml` to drop a resource. A deploy lock held by another deployer, or a CLI panic after the app was deleted out of band, has its recovery in `docs/DEPLOYMENT.md` section 7; run it only after asking the owner. |
 | E4 | `databricks bundle run caos` | The app failed to start; `databricks apps logs caos -p <profile>` has the process output. |
 | E5 | The app is RUNNING, has a URL, and reports `forward_user_access_token=True` | Same as E4; `forward_user_access_token=False` means the workspace has not enabled the preview feature (F53): ask Databricks to enable it, then `databricks apps stop caos` and `start`. |
 | E6 | `/api/health` answers ready with `python_version` 3.13 and every code `OK`: store, bundle, blobs, identity, workers | A `python_version` that is not 3.13 means the platform did not install from `uv.lock`: check that no `requirements.txt` was added at the root. `store` not `OK` on a first deploy is most often the schema grant above. |
@@ -52,8 +52,16 @@ It stops at the first step that fails and writes `docs/rebuild/runs/<today>/ente
 
 ## Afterwards
 
-1. Open the app URL (row E5), upload a small public document, approve the run's gates, watch the Run section reach COMPLETE, open the deliverable. That is the one thing no stand-in can do for you. Every model measured so far wrote CP-0 answers the vendor's validator refuses (F111); since D30 a refused node gets one second attempt carrying the validator's own messages, which no live model has been measured against yet. If CP-0 is refused twice, the Run section shows `HANDOFF_MALFORMED`: report it with the run id; do not retry more than once.
-2. Update `docs/rebuild/blockers.md` (B2 and B9 resolved, quoting the rows' last lines; the profile name is fine, the host and any token are not) and `docs/rebuild/decisions.md` (D17; any `Fn`), then:
+1. Open the app URL (row E5), upload a small public document, approve the run's gates, watch the Run section reach COMPLETE, open the deliverable. That is the one thing no stand-in can do for you.
+
+   The live record so far (`qualification/PROVIDER_RUNBOOK.md`, D29–D45): one qualification set, `ccl-fy2025-market-dislocation`, qualified end to end on `openai/gpt-6-luna-pro` (D30's second attempt, widened by N52); CP-0, CP-3D and CP-5 have each been accepted live at least once (CP-5 as a validated `Blocked`, a legitimate terminal answer, not a refusal); stored CP-1 and CP-1A answers, also GPT-6 Luna Pro, pass under the current vendor fork on replay -- the first either module has produced that the contract accepts, though neither has been re-run live since the fork landed. No module past those five has been reached by a real model: every set to date stopped at or before CP-0, CP-1, CP-1A, CP-3D or CP-5, so CP-2 through CP-2H, CP-3 (other than CP-3D), CP-4/CP-4C, CP-5A, CP-6/CP-6A, CP-CF, CP-L10 and CP-DR remain untested against a real model.
+
+   Every cheap or mid-tier model measured (GPT-5.6 luna, Claude Haiku 4.5, Gemini 2.5 Flash, Claude Opus 5 and 5.5) failed CP-0's own severity or confidence-cap rule on nearly every attempt; a capable model is expected to be needed past CP-0 (GPT-6 Luna Pro, the one model that has cleared it repeatedly, runs in its costlier reasoning mode, about $0.05 and three minutes a call). Since D30 a refused node gets one second attempt carrying the validator's own messages; if the node is still refused after it, the Run section shows the stop code (`HANDOFF_MALFORMED` or whichever it was): report it with the run id and do not retry more than once.
+
+   D38: CP-3 and CP-6 take their portfolio, mandate, constraint and sector relative-value inputs only from the case's own sources (the bundle's sample workbooks are withheld from every prompt, named but never delivered); supply the enterprise's maintained workbook as a case source -- a CSV export or a PDF -- never as a live constraint or a placeholder.
+
+2. If this release needs a rollback, it is a redeploy of the previous commit through the same one command (`docs/DEPLOYMENT.md` section 6); it does not undo any migration the release already applied, since migrations are forward-only with no corresponding "down" migration (same section).
+3. Update `docs/rebuild/blockers.md` (B2 and B9 resolved, quoting the rows' last lines; the profile name is fine, the host and any token are not) and `docs/rebuild/decisions.md` (D17; any `Fn`), then:
 
 ```bash
 uv run pre-commit run --all-files
