@@ -112,6 +112,8 @@ function v1Committee({
       signed_by: [CASE],
       frozen_by: RUN,
       filed_by: REVISION,
+      render_url: "/render",
+      package_url: "/package",
       receipt: {
         case_id: caseId,
         run_id: runId,

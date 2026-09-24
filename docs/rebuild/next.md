@@ -5,7 +5,7 @@ A new feature or requirement beyond the ledgers is written here, not built. One 
 - N1 (spec author, 2026-09-22; closed by D42) — Runs stay sequential; the unused frontier helpers are deleted.
 - N2 (spec author, 2026-09-22) — Reasoning-effort passthrough to Databricks Claude endpoints (`extra_params`), once the endpoint's accepted parameters are confirmed; v1 records `none` in the qualification identity when the parameter is not sent.
 - N3 (spec author, 2026-09-22) — Lakebase-hosted test databases for CI (instead of the local Docker Postgres) once a Databricks profile exists in CI.
-- N4 (review, 2026-09-23) — A read that renders the deliverable (`render.py`) and a download that builds the audit package (`package.py`): both are produced only by the suite today, while filing receipts pin the renderer's digest. Route shape and standing to be decided by the owner.
+- N4 (review, 2026-09-23; closed by F221) — The deliverable's rendered page and its audit package are served; the frontend offers them from Committee (design session).
 - N5 (review, 2026-09-23; closed by F207) — Concurrent admissions share a process-wide slot.
 - N6 (review, 2026-09-23; closed by D43) — `FORECAST_CHAIN_BROKEN` and `_check_chain` are retired.
 - N7 (review, 2026-09-23) — The stand-in still hands the process a token where the platform hands it a client id and secret; a stub OAuth token endpoint would let the harness run the service principal's own authentication.

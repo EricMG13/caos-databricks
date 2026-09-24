@@ -551,6 +551,8 @@ const CommitteeBody = object({
   frozen_by: uuid,
   filed_by: nullable(uuid),
   receipt: nullable(FiledReceipt),
+  render_url: text,
+  package_url: nullable(text),
 });
 const CommitteeDocument = sectionDocument(CommitteeBody);
 

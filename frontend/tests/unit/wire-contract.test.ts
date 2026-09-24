@@ -63,6 +63,8 @@ test("Report and Committee bind case/run/revision and exact receipt identity", (
     signed_by: [CASE],
     frozen_by: RUN,
     filed_by: SOURCE,
+    render_url: "/render",
+    package_url: "/package",
     receipt: {
       case_id: CASE,
       run_id: RUN,

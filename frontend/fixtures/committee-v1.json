@@ -70,7 +70,9 @@
       "filed_by": "00000000-0000-4000-8000-0000000000f1",
       "renderer_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
       "filed_event_sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-    }
+    },
+    "render_url": "/api/v1/cases/00000000-0000-4000-8000-000000000001/revisions/00000000-0000-4000-8000-0000000000c3/render",
+    "package_url": "/api/v1/cases/00000000-0000-4000-8000-000000000001/revisions/00000000-0000-4000-8000-0000000000c3/package"
   },
   "observed_at": "2026-09-14T10:00:00Z",
   "observed_empty": false,
