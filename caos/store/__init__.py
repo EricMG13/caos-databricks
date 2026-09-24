@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 import sys
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from enum import StrEnum
 from hashlib import sha256
@@ -332,7 +332,7 @@ SOCKET_BOUNDS: Mapping[str, int] = MappingProxyType(
 )
 
 
-def startup_options(url: str, *options: str) -> str:
+def startup_options(url: str, options: Sequence[str]) -> str:
     """The `options` a connection to `url` starts with (N4): the operator's
     first -- the DSN's own, or `PGOPTIONS` where the DSN names none, which is
     how libpq reads them -- then `options`, this process's, which the server
@@ -384,7 +384,7 @@ def connect(
     options = [SEARCH_PATH_OPTION]
     if statement_timeout_ms is not None:
         options.append(f"-c statement_timeout={statement_timeout_ms}")
-    kwargs["options"] = startup_options(url, *options)
+    kwargs["options"] = startup_options(url, options)
     try:
         return psycopg.connect(url, autocommit=False, **kwargs)
     except psycopg.OperationalError as failed:

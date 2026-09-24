@@ -230,7 +230,7 @@ def _pooled(
             "row_factory": dict_row,
             **SOCKET_BOUNDS,
             "options": startup_options(
-                conninfo, f"-c statement_timeout={STATEMENT_TIMEOUT_MS}"
+                conninfo, [f"-c statement_timeout={STATEMENT_TIMEOUT_MS}"]
             ),
         },
         configure=_search_path,

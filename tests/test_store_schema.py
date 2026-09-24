@@ -161,11 +161,11 @@ def test_startup_options_put_the_operator_s_first_as_libpq_reads_them(
     and this process's after them."""
     ours = "-c search_path=caos_store"
     monkeypatch.setenv("PGOPTIONS", "-c work_mem=64MB")
-    assert store.startup_options("host=h", ours) == f"-c work_mem=64MB {ours}"
-    assert store.startup_options("host=h options='-c a=1'", ours) == f"-c a=1 {ours}"
-    assert store.startup_options("host=h options=''", ours) == ours
+    assert store.startup_options("host=h", [ours]) == f"-c work_mem=64MB {ours}"
+    assert store.startup_options("host=h options='-c a=1'", [ours]) == f"-c a=1 {ours}"
+    assert store.startup_options("host=h options=''", [ours]) == ours
     monkeypatch.delenv("PGOPTIONS")
-    assert store.startup_options("", ours, "-c b=2") == f"{ours} -c b=2"
+    assert store.startup_options("", [ours, "-c b=2"]) == f"{ours} -c b=2"
 
 
 def test_connect_keeps_the_operator_s_options_and_its_own_win(
