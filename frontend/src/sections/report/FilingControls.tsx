@@ -32,14 +32,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ConfirmedControl } from "@/controls/ConfirmedControl";
 import { RefusedControl } from "@/controls/RefusedControl";
 import { CommandOutcome, useCommand } from "@/sections/run/controls";
-import {
-  citationsOf,
-  figureMarker,
-  paragraphs,
-  withFigure,
-  type CitationChoice,
-  type FigureRef,
-} from "./figures";
+import { citationsOf, figureMarker, paragraphs, type CitationChoice } from "./figures";
 import {
   parseReportDocument,
   type ActionView,
@@ -85,39 +78,34 @@ const choiceKey = (choice: { route_node_id: string; citation_index: number }) =>
 const choiceLabel = (choice: CitationChoice) =>
   `${choice.route_node_id} · p.${choice.page} · ${choice.matched_text}`;
 
-/** The draft's figures as footnotes (N90): each marker the text uses, and the
-    citation it names -- or that it names none the served records carry, which
-    the server will then refuse. What is read back after a save is the host's
-    resolution, not this. */
+/** The draft's figures (N90): each marker the text uses, once, and the
+    citation it names -- or that it names none the served records carry,
+    which the server will then refuse. What is read back after a save is the
+    host's resolution, not this. */
 function DraftFigures({
   narrative,
-  figures,
   choices,
 }: {
   narrative: NarrativeDraft[][];
-  figures: readonly FigureRef[];
   choices: CitationChoice[];
 }) {
-  const used = new Set(
-    narrative.flat().flatMap((span) => (span.figure ? [choiceKey(span.figure)] : [])),
-  );
-  const listed = figures
-    .map((figure, index) => ({ figure, marker: figureMarker(index + 1) }))
-    .filter(({ figure }) => used.has(choiceKey(figure)));
-  if (listed.length === 0) return null;
+  const used = new Map<string, { route_node_id: string; citation_index: number }>();
+  for (const span of narrative.flat()) {
+    if (span.figure) used.set(choiceKey(span.figure), span.figure);
+  }
+  if (used.size === 0) return null;
   const byKey = new Map(choices.map((choice) => [choiceKey(choice), choice]));
   return (
     <div className="note" data-draft-figures>
       <p>Figures in this draft:</p>
       <ul className="plain">
-        {listed.map(({ figure, marker }) => {
-          const choice = byKey.get(choiceKey(figure));
+        {[...used].map(([key, figure]) => {
+          const marker = figureMarker(figure.route_node_id, figure.citation_index);
+          const choice = byKey.get(key);
           return (
-            <li key={marker} data-draft-figure={marker}>
+            <li key={key} data-draft-figure={marker}>
               <b className="font-mono">{marker}</b>{" "}
-              {choice
-                ? choiceLabel(choice)
-                : `${figure.route_node_id} · no such citation in this report`}
+              {choice ? choiceLabel(choice) : "names no citation this report carries"}
             </li>
           );
         })}
@@ -240,9 +228,6 @@ export function FilingControls({
 }) {
   const { body } = document;
   const [draft, setDraft] = useState("");
-  // The citations the draft's `[n]` markers name, in the order they were
-  // first inserted: the draft's own list, which a refetch does not reorder.
-  const [figures, setFigures] = useState<FigureRef[]>([]);
   const editor = useRef<HTMLTextAreaElement>(null);
   // Where the caret goes after a figure is inserted: set with the draft, and
   // placed once React has written the new value, which moves the caret.
@@ -282,17 +267,24 @@ export function FilingControls({
   }
 
   const saveAction = actionOf("SAVE_REVISION");
-  const narrative = paragraphs(draft, figures);
+  const narrative = paragraphs(draft);
   // Parsed once per served document, not per keystroke: a record may be large.
   const choices = useMemo(() => citationsOf(body.artifacts), [body.artifacts]);
 
   function insert(choice: CitationChoice) {
-    const { figures: next, marker } = withFigure(figures, choice);
+    const marker = figureMarker(choice.route_node_id, choice.citation_index);
     const start = editor.current?.selectionStart ?? draft.length;
     const end = editor.current?.selectionEnd ?? start;
+    const next = draft.slice(0, start) + marker + draft.slice(end);
+    if (next === draft) {
+      // The same marker over itself: nothing to re-render, so place the caret
+      // now rather than leave it pending for the next keystroke to trip.
+      editor.current?.focus();
+      editor.current?.setSelectionRange(start + marker.length, start + marker.length);
+      return;
+    }
     caret.current = start + marker.length;
-    setFigures(next);
-    setDraft(draft.slice(0, start) + marker + draft.slice(end));
+    setDraft(next);
   }
   // The served revision is the head this draft was composed against; on a run
   // with none it is null, which is what a first save names.
@@ -324,7 +316,7 @@ export function FilingControls({
           it names; prose carrying a digit is refused at save.
         </p>
         <FigurePicker key={choices.map(choiceKey).join(" ")} choices={choices} onInsert={insert} />
-        <DraftFigures narrative={narrative} figures={figures} choices={choices} />
+        <DraftFigures narrative={narrative} choices={choices} />
         <div className="flex flex-wrap items-start gap-x-6 gap-y-3" data-filing-acts>
           <div className="grid justify-items-start gap-1">
             <RefusedControl
@@ -333,14 +325,16 @@ export function FilingControls({
                 saveAction
                   ? () => {
                       if (saveAction.refusal || save.pending) return;
+                      const sent = draft;
                       void save
                         .run(request, (intent) =>
                           saveRevision(body.case_id, body.displayed_run_id, request, intent),
                         )
                         .then((outcome) => {
                           if (outcome?.kind !== "ok" || !mounted.current) return;
-                          setDraft("");
-                          setFigures([]);
+                          // Cleared only if it is still what was saved: words
+                          // typed while the save was in flight were never sent.
+                          setDraft((current) => (current === sent ? "" : current));
                           // The address is corrected, not navigated: the reader
                           // did not move, the run gained a newer revision, and a
                           // reload shows the one they are looking at.

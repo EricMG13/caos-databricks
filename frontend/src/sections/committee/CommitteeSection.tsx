@@ -15,23 +15,50 @@ const PACKAGE_NOT_FILED: Refusal = {
   clears: "the revision is filed",
 };
 
-/** The saved paper as the renderer draws it, and once filed, the package
-    (N4). Both are the host's own reads; the page only links them. */
+/** A link the host serves for another revision, or anywhere else. */
+const LINK_NOT_OWN: Refusal = {
+  code: "LINK_NOT_OWN",
+  clears: "the host links this revision's own read",
+};
+
+/** The URL if it is exactly the host's own read of this revision
+    (`/api/v1/cases/{case}/revisions/{revision}/{kind}`, as
+    `caos/api/reads/reports.py` builds it), else null: a link to another
+    origin, case or revision, or a script, is never followed from here. */
+function ownRead(
+  body: CommitteeDocument["body"],
+  url: string | null,
+  kind: "render" | "package",
+): string | null {
+  const expected = `/api/v1/cases/${body.case_id}/revisions/${body.revision_id}/${kind}`;
+  return url === expected ? url : null;
+}
+
+/** The revision as the renderer draws it, and once filed, the package (N4).
+    Both are the host's own reads; the page only links them. */
 function Downloads({ body }: { body: CommitteeDocument["body"] }) {
   const look = buttonVariants({ variant: "outline", size: "sm" });
+  const render = ownRead(body, body.render_url, "render");
+  const pkg = ownRead(body, body.package_url, "package");
   return (
     <div className="flex flex-wrap items-start gap-2" data-committee-downloads>
-      <a className={look} href={body.render_url} data-committee-render>
-        <FileTextIcon aria-hidden="true" />
-        Open the rendered paper
-      </a>
-      {body.package_url ? (
-        <a className={look} href={body.package_url} download data-committee-package>
+      {render ? (
+        <a className={look} href={render} data-committee-render>
+          <FileTextIcon aria-hidden="true" />
+          Open the rendered page
+        </a>
+      ) : (
+        <RefusedControl refusal={LINK_NOT_OWN}>Open the rendered page</RefusedControl>
+      )}
+      {pkg ? (
+        <a className={look} href={pkg} download data-committee-package>
           <DownloadIcon aria-hidden="true" />
           Download the package (.zip)
         </a>
       ) : (
-        <RefusedControl refusal={PACKAGE_NOT_FILED}>Download the package (.zip)</RefusedControl>
+        <RefusedControl refusal={body.package_url === null ? PACKAGE_NOT_FILED : LINK_NOT_OWN}>
+          Download the package (.zip)
+        </RefusedControl>
       )}
     </div>
   );
@@ -151,7 +178,7 @@ function Short({ value, prefix = "" }: { value: string; prefix?: string }) {
 function Paper({ body }: { body: CommitteeDocument["body"] }) {
   const receipt = body.receipt;
   return (
-    <article className="paper" data-paper data-committee-narrative aria-labelledby="paper-title">
+    <article className="paper" data-paper aria-labelledby="paper-title">
       <header className="paper-mast">
         <span>Credit committee paper</span>
         <Short value={body.case_id} />
@@ -162,7 +189,7 @@ function Paper({ body }: { body: CommitteeDocument["body"] }) {
         Revision <Short value={body.revision_id} /> · run <Short value={body.displayed_run_id} />
       </p>
       <h3>Narrative</h3>
-      <div className="paper-body">
+      <div className="paper-body" data-committee-narrative>
         <Narrative narrative={body.narrative} />
       </div>
       <dl className="paper-sign">

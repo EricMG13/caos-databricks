@@ -510,11 +510,12 @@ const EMPTY_RESEARCH: ResearchBrief = {
     it will accept the pin (R24-01): the wire model, the request digest and
     idempotency all carry it through `research`, additive beside `subject`.
     The subject reuses `RunSubjectView`; the receipt's `input_fingerprint` is
-    what a gate approval and start/retry must carry, and the document never
-    re-serves it, so the caller is handed it here to hold for the session —
-    and a change to it invalidates any preview already read (`RunSection`
-    remounts each gate panel on a fingerprint change, clearing a digest that
-    would else point at the old input). */
+    what a gate approval and start/retry must carry. The run read serves it
+    too since N48, but only once the run is read again, so the caller is
+    handed it here at once — and a change to it invalidates any preview
+    already read (`RunSection` remounts each gate panel when the input's
+    fingerprint moves, clearing a digest that would else point at the old
+    input). */
 export function PinInputControl({
   caseId,
   runId,
@@ -688,8 +689,9 @@ const APPROVE_ACTION: Record<GateView["gate"], ActionName> = {
     `preview_sha256` and `input_fingerprint` are what the approval sends —
     never a value the caller types or edits — so the content shown here is
     the only thing this gate can be approved on. `RunSection` remounts this
-    component whenever the pinned fingerprint changes, so a stale preview
-    read under an earlier input cannot be approved after the fact. */
+    component whenever the input's fingerprint moves (on the run read, or by
+    a pin or approval in this session), so a stale preview read under an
+    earlier input cannot be approved after the fact. */
 export function GatePanelControl({
   caseId,
   runId,
@@ -804,8 +806,10 @@ function StopCode({ state, code }: { state: WorkView["state"]; code: string }) {
   );
 }
 
+// With no fingerprint read in this session and none on the run read, the
+// input is not pinned: the host's own code for that, and its remedy.
 const NO_FINGERPRINT = {
-  code: "COMMAND_EXPECTATION_STALE",
+  code: "RUN_INPUT_NOT_PINNED",
   clears: "the run's input is pinned — start and retry send the pinned input's fingerprint",
 };
 

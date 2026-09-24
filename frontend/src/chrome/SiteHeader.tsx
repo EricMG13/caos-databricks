@@ -21,6 +21,8 @@ export const TONE_BADGE = {
 } as const satisfies Record<Tone, string>;
 
 function runSeverity(status: string): Severity {
+  // A parked run (CF-044) is not moving and wants a retry.
+  if (status === "PARKED") return "WARNING";
   return (RUN_SEVERITY as Record<string, Severity>)[status] ?? "IDLE";
 }
 

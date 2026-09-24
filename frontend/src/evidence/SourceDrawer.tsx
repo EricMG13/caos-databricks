@@ -7,8 +7,7 @@ import { useEffect, useState } from "react";
 import { toFraction, type Box } from "./geometry";
 import { Overlay } from "./Overlay";
 import { OFFLINE_WORDING, UNAVAILABLE_WORDING, fetchPage, type PageStatus } from "@/app/transport";
-import { words } from "@/chrome/compose";
-import type { CitationView, PageDocument } from "@/wire/v1";
+import type { CitationView, PageDocument, PageLine } from "@/wire/v1";
 
 const place = (box: Box) => ({
   left: `${box.left * 100}%`,
@@ -17,18 +16,22 @@ const place = (box: Box) => ({
   height: `${box.height * 100}%`,
 });
 
+type HiddenReason = PageLine["hidden"][number];
+
 /** Why a line is not visible on the rendered page, in the reader's words
-    (N27). A reason the host adds later reads as its own words until it is
-    named here, so a new one is shown, never dropped. */
-const HIDDEN: Record<string, string> = {
+    (N27), for every reason the wire names. The wire's list is closed: a
+    reason the host adds later fails the page read whole (it is refused, not
+    shown unmarked) until the wire and this map name it, and the compiler
+    asks for its words here the moment the wire does. */
+const HIDDEN: Record<HiddenReason, string> = {
   render_mode_3: "drawn invisible (render mode 3)",
   near_background: "the colour of its background",
   under_2pt: "under 2 pt",
   optional_content_off: "on a layer switched off",
   painted_over: "painted over",
 };
-const hiddenWords = (reasons: readonly string[]) =>
-  reasons.map((reason) => HIDDEN[reason] ?? words(reason)).join(", ");
+const hiddenWords = (reasons: readonly HiddenReason[]) =>
+  reasons.map((reason) => HIDDEN[reason]).join(", ");
 
 function TextLayer({ page, fact }: { page: PageDocument; fact: CitationView }) {
   const { frame, lines } = page.body;
@@ -118,10 +121,20 @@ function TextLayer({ page, fact }: { page: PageDocument; fact: CitationView }) {
   );
 }
 
-function PageState({ status }: { status: PageStatus | null }) {
+function PageState({ status, saved }: { status: PageStatus | null; saved: boolean }) {
   if (status === null) return <div data-page-state="loading">Reading the page…</div>;
   if (status.kind === "unavailable") {
-    return <div data-page-state="unavailable">{UNAVAILABLE_WORDING}</div>;
+    return (
+      <div data-page-state="unavailable">
+        {UNAVAILABLE_WORDING}
+        {saved
+          ? // A saved narrative's figure carries no withdrawal of its own (the
+            // wire does not serve one), and the host no longer reads a
+            // withdrawn source's pages: say which that may be.
+            " Its source may have been withdrawn since this revision was saved."
+          : null}
+      </div>
+    );
   }
   if (status.kind === "offline") return <div data-page-state="offline">{OFFLINE_WORDING}</div>;
   if (status.kind === "error") return <div data-page-state="error">{status.refusal.code}</div>;
@@ -137,6 +150,7 @@ export function SourceDrawer({
   fact,
   address,
   withdrawnAt,
+  saved = false,
   opener,
   onClose,
 }: {
@@ -144,6 +158,8 @@ export function SourceDrawer({
   /** Null when the view names no case or run: no page can be addressed. */
   address: PageAddress | null;
   withdrawnAt: string | null;
+  /** A saved narrative's figure (N59), whose withdrawal the wire does not serve. */
+  saved?: boolean;
   opener: HTMLElement;
   onClose: () => void;
 }) {
@@ -200,9 +216,15 @@ export function SourceDrawer({
           <div data-page-layer>
             <div className="lbl">Text layer from the token index</div>
             {status !== null && "document" in status ? (
-              <TextLayer page={status.document} fact={fact} />
+              // The read is bound to case, run, source and page; the page must
+              // also be of the document the citation names, or it is not shown.
+              status.document.body.document_sha256 === fact.document_sha256 ? (
+                <TextLayer page={status.document} fact={fact} />
+              ) : (
+                <div data-page-state="error">WIRE_IDENTITY_MISMATCH</div>
+              )
             ) : (
-              <PageState status={status} />
+              <PageState status={status} saved={saved} />
             )}
           </div>
         )}

@@ -322,4 +322,42 @@ describe("a narrative figure (N59)", () => {
     expect(dialog()!.querySelector("[data-no-rects]")).not.toBeNull();
     expect(dialog()).toHaveTextContent("Coverage 2.1x");
   });
+
+  const openFigure = async (page: () => { status: number; body: unknown }) => {
+    sectionBody = () => JSON.parse(text("../../fixtures/committee-v1.json"));
+    pageAnswer = page;
+    render(
+      <MemoryRouter initialEntries={[`/committee/?case=${CASE}&run=${RUN_B}&revision=${REVISION}`]}>
+        <Workspace section="committee" />
+      </MemoryRouter>,
+    );
+    await settle();
+    act(() =>
+      fireEvent.click(screen.getByRole("button", { name: "Evidence CP-1 p.7: Coverage 2.1x" })),
+    );
+    await settle();
+  };
+
+  // Security review note 2: the read binds case, run, source and page; the
+  // page must also be of the document the figure names.
+  test("a page of another document is refused, and none of its text is shown", async () => {
+    await openFigure(() => {
+      const doc = pageDoc();
+      Object.assign(doc["body"], { run_id: RUN_B, source_id: FIGURE_SOURCE, page: 7 });
+      return { status: 200, body: doc };
+    });
+    expect(dialog()!.querySelector("[data-page-state='error']")).toHaveTextContent(
+      "WIRE_IDENTITY_MISMATCH",
+    );
+    expect(lines()).toHaveLength(0);
+  });
+
+  // Every reviewer: a saved figure carries no withdrawal of its own, so an
+  // unavailable page says it may be one rather than only "not permitted".
+  test("an unavailable page of a saved figure says its source may have been withdrawn", async () => {
+    await openFigure(() => ({ status: 404, body: { code: "PAGE_NOT_AVAILABLE", clears: "x" } }));
+    expect(dialog()!.querySelector("[data-page-state='unavailable']")).toHaveTextContent(
+      "Its source may have been withdrawn since this revision was saved.",
+    );
+  });
 });

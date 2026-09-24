@@ -79,7 +79,8 @@ describe("the book", () => {
   test("a refused cell value shows its typed reason, never a blank", () => {
     const doc = document();
     const cell = doc.body.rows[0]!.periods[0]!.cells[0]!;
-    // Rounded for reading; the passport keeps the exact decimal.
+    // Rounded for reading, in the cell and its passport alike; the exact
+    // decimal is the served cell value.
     expect(shownValue(cell, "currency")).toBe("500.00");
     expect(cell.value).toBe("500.000000");
     expect(

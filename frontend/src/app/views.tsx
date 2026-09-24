@@ -6,6 +6,7 @@
 // asks for the document (`preloadView`), so the two travel together rather
 // than one after the other.
 import { lazy, type ComponentType } from "react";
+import { ViewNotLoaded } from "@/states/SectionBoundary";
 import type { Section } from "@/wire";
 import type {
   AnalysisDocument,
@@ -52,8 +53,38 @@ const LOADERS: { [S in Section]: () => Promise<ViewFor<S>> } = {
   admin: () => import("@/sections/admin/AdminSection").then((m) => m.AdminSection),
 };
 
+/** A view that loads its code when first mounted and asks again after a
+    failure (W7 of the API review). React keeps a failed lazy view's error
+    for good, and a section boundary retrying re-renders the element it
+    already holds, so the component it names must stay the same: this one
+    does, and draws the current lazy view. A failure throws `ViewNotLoaded`
+    carrying `retry`, which puts a fresh lazy view in place; only the section
+    boundary calls it, on "Try again" or the next document. Not on its own:
+    React re-renders a suspended view when its load settles, and a fresh one
+    there would ask again at once, and again, for a file that is gone. */
+export function retryingView<P extends object>(
+  load: () => Promise<ComponentType<P>>,
+): ComponentType<P> {
+  const fresh = () =>
+    lazy(() =>
+      load().then(
+        (view) => ({ default: view }),
+        () => {
+          throw new ViewNotLoaded(() => {
+            current = fresh();
+          });
+        },
+      ),
+    );
+  let current = fresh();
+  return function RetryingView(props: P) {
+    const Current = current;
+    return <Current {...props} />;
+  };
+}
+
 function lazyView<S extends Section>(section: S): ViewFor<S> {
-  return lazy(() => LOADERS[section]().then((view) => ({ default: view }))) as ViewFor<S>;
+  return retryingView(LOADERS[section]) as ViewFor<S>;
 }
 
 /** The views the workspace mounts, each suspending until its chunk is in.

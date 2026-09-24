@@ -106,6 +106,23 @@ test("isParked: a running run with a stop code is parked, and the Directory says
   });
 });
 
+test("a parked run says so on its own Run section, where the Directory sends the reader", () => {
+  const document = load("run.json");
+  document.body.run.status = "RUNNING";
+  document.body.run.work = {
+    state: "STOPPED",
+    stop_code: "PROVIDER_UNAVAILABLE",
+    cancel_requested: false,
+  };
+  const chrome = composeChrome("run", parseRunSectionDocument(document));
+  expect(chrome.ribbon.execution).toBe("PARKED");
+  expect(chrome.verdict).toMatchObject({
+    severity: "WARNING",
+    conclusion: "Parked · PROVIDER_UNAVAILABLE",
+  });
+  expect(chrome.brief.action).toBe("Retry the run once what stopped it is cleared.");
+});
+
 test("a partial document with no notes says so in words, never 'Partial: .'", () => {
   const document = load("analysis.json");
   document.status = "partial";
