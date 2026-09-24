@@ -25,6 +25,7 @@ from uuid import UUID, uuid4
 
 import pytest
 import release_pack
+from conftest import tamper
 from qualification_fixtures import (
     qualification_performed,
     record_performed_earlier,
@@ -614,7 +615,7 @@ def test_a_forged_snapshot_over_a_run_that_never_ran_refuses_the_pack(
         conn.execute(
             "UPDATE runs SET status='RUNNING' WHERE run_id=%s", (case.input.run_id,)
         )
-        conn.execute("DELETE FROM artifacts WHERE run_id=%s", (case.input.run_id,))
+        tamper(conn, "DELETE FROM artifacts WHERE run_id=%s", (case.input.run_id,))
         _direct_verdict(conn, performed)
         with pytest.raises(Refusal, match=r"^VERDICT_BINDING_INVALID$"):
             release_pack.qualified_pathways(

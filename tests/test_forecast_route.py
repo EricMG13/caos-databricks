@@ -19,6 +19,7 @@ from canonical_fixtures import (
     wire,
 )
 from canonical_route_fixtures import LIMITATION, PACK, RouteCompletions
+from conftest import tamper
 from forecast_fixtures import forecast_request
 from lite_route_fixtures import _yaml
 from test_canonical_execution import _node
@@ -324,7 +325,8 @@ def _forge_cp_cf(harness: _Harness, answers: ForecastCompletions) -> None:
     record_sha = harness.blobs.put(
         record_bytes(replace(record, artifact_sha256=artifact, projections=projections))
     )
-    harness.conn.execute(
+    tamper(
+        harness.conn,
         "UPDATE artifacts SET artifact_sha256=%s, record_sha256=%s"
         " WHERE run_id=%s AND route_node_id=%s",
         (artifact, record_sha, harness.run_id, node.route_node_id),

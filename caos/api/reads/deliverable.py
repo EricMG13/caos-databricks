@@ -56,8 +56,9 @@ RENDER_IO = 4
 # asked what it is written to answer, not left to derive it), and that read's
 # own six: the filed join, its signatures, the audit trail read twice -- once
 # directly and once inside `verify_chain` -- the payload digests it rebuilds,
-# and the chain's current head. Measured in `tests/test_deliverable_reads.py`.
-PACKAGE_IO = 8
+# and the chain's current head, and the sign and freeze events it now proves
+# itself (F231). Measured in `tests/test_deliverable_reads.py`.
+PACKAGE_IO = 10
 IO_BUDGET = {"render": RENDER_IO, "package": PACKAGE_IO}
 # The render downloads one blob: the revision's own payload, inside
 # `read_revision`. The package downloads two: the receipt `read_filed_receipt`

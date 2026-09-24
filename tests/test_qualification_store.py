@@ -431,8 +431,9 @@ def test_verdict_reviewer_id_is_the_authenticated_signer_or_none(
         apply_schema(conn)
         performed = _performed()
         evidence = performed.evidence
-        record_performed_earlier(conn, performed)
+        # Runs, then the snapshot: the order production records them in (F227).
         record_runs(conn, performed)
+        record_performed_earlier(conn, performed)
 
         assert verdict_reviewer_id(conn, evidence_sha256=evidence.sha256) is None
 
