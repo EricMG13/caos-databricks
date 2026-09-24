@@ -76,6 +76,8 @@ MODEL_MODULE = "CP-CF"
 MODEL_STAGE = 100
 MODEL_OWNERS = ("CP-1", "CP-2G", "CP-4")
 RESEARCH_STAGE = 99
+# The predicate the model extension pins the host manifest under.
+HOST_PIN = "host_manifest_sha256"
 
 
 @dataclass(frozen=True, slots=True)
@@ -217,7 +219,7 @@ def resolve_route(
         )
     frozen = dict(predicates or {})
     if extended.model_extension:
-        frozen["host_manifest_sha256"] = HOST_MANIFEST_SHA256
+        frozen[HOST_PIN] = HOST_MANIFEST_SHA256
         edges += (Edge(GATE_MODULE, MODEL_MODULE, EdgeType.REQUIRED),)
     return ResolvedRoute(
         profile_id=profile_id,

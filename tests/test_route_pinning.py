@@ -199,3 +199,68 @@ def test_route_digest_bytes_are_unchanged_by_the_shared_serialiser(
         ["CP-0", "CP-5", "REQUIRED"],
         ["CP-0", "CP-6", "ADVISORY"],
     ]
+
+
+def test_require_catalog_route_accepts_only_the_catalog_s_own_resolution(
+    catalog: dict[str, Any],
+) -> None:
+    """CF-025: a pinned route is re-resolved from the catalog under the
+    extensions it carries and its caller's predicates, and must digest the
+    same. Anything else -- a node, stage or edge the catalog does not resolve,
+    a pathway it lacks, a host pin it did not write -- is
+    `ROUTE_IDENTITY_INVALID`."""
+    from dataclasses import replace
+
+    from caos.graph.route import HOST_PIN, RouteExtensions
+    from caos.store.routes import require_catalog_route
+
+    plain = _route(catalog, "FULL_CREDIT_ASSESSMENT")
+    for good in (
+        plain,
+        resolve_route(
+            catalog, PROFILE, "FULL_CREDIT_ASSESSMENT", predicates={"x": "caller's"}
+        ),
+        resolve_route(
+            catalog,
+            PROFILE,
+            "RELATIVE_VALUE",
+            extensions=RouteExtensions(model_extension=True),
+        ),
+        resolve_route(
+            catalog,
+            PROFILE,
+            "FULL_CREDIT_ASSESSMENT",
+            extensions=RouteExtensions(research_brief={}),
+        ),
+    ):
+        require_catalog_route(good, catalog)
+    first, *rest = plain.edges
+    stale = resolve_route(
+        catalog,
+        PROFILE,
+        "RELATIVE_VALUE",
+        extensions=RouteExtensions(model_extension=True),
+    )
+    stale = replace(
+        stale,
+        predicates=tuple(
+            (key, "0" * 64 if key == HOST_PIN else value)
+            for key, value in stale.predicates
+        ),
+    )
+    for bad in (
+        replace(plain, edges=(replace(first, type=EdgeType.ADVISORY), *rest)),
+        replace(plain, edges=tuple(rest)),
+        replace(plain, edges=(*plain.edges, Edge("CP-0", "CP-1", EdgeType.REQUIRED))),
+        replace(plain, nodes=(replace(plain.nodes[0], stage=5), *plain.nodes[1:])),
+        replace(
+            plain,
+            nodes=(replace(plain.nodes[0], route_node_id="n-1"), *plain.nodes[1:]),
+        ),
+        replace(plain, selection_id="NO_SUCH_PATHWAY"),
+        replace(plain, predicates=((HOST_PIN, "0" * 64),)),
+        stale,
+    ):
+        with pytest.raises(Refusal) as caught:
+            require_catalog_route(bad, catalog)
+        assert caught.value.code is RefusalCode.ROUTE_IDENTITY_INVALID

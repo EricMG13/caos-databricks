@@ -13,6 +13,7 @@ what that run is.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from json import dumps, loads
 from re import fullmatch
 from typing import Any
@@ -23,12 +24,17 @@ import psycopg
 from caos.boundary_text import BoundaryText
 from caos.graph.route import (
     EDGE_FIELDS,
+    HOST_PIN,
+    MODEL_STAGE,
     NODE_FIELDS,
+    RESEARCH_STAGE,
     Edge,
     EdgeType,
     ResolvedRoute,
+    RouteExtensions,
     RouteNode,
     dependency_order,
+    resolve_route,
     route_digest,
     route_json,
 )
@@ -79,6 +85,39 @@ def pin_route_in(conn: StoreConnection, run_id: UUID, resolved: ResolvedRoute) -
     )
     append(conn, run_id, RunEvent.ROUTE_PINNED)
     return digest
+
+
+def require_catalog_route(route: ResolvedRoute, catalog: Mapping[str, Any]) -> None:
+    """Refuse a pinned route the bundle's catalog does not itself resolve to
+    (CF-025): `ROUTE_IDENTITY_INVALID`, the pinned route's own code.
+
+    `pin_route_in` stores whatever route it is given and `invocation._upstream`
+    trusts the stored edges, so a pin that was never the catalog's resolution
+    -- a node, stage or edge type another than the catalog's, a pathway it has
+    no longer -- would run on edges nobody resolved. Resolved again from the
+    pinned build's catalog, under the extensions the route itself carries (a
+    node at the research stage, one at the model stage) and its predicates,
+    which nothing evaluates and resolution freezes as given, save the host pin
+    it writes itself; equal digests are the proof (invariant 10). Pure.
+    """
+    stages = {node.stage for node in route.nodes}
+    extensions = RouteExtensions(
+        research_brief={} if RESEARCH_STAGE in stages else None,
+        model_extension=MODEL_STAGE in stages,
+    )
+    predicates = {key: value for key, value in route.predicates if key != HOST_PIN}
+    try:
+        resolved = resolve_route(
+            catalog,
+            route.profile_id,
+            route.selection_id,
+            extensions=extensions,
+            predicates=predicates,
+        )
+    except Refusal:
+        resolved = None
+    if resolved is None or route_digest(resolved) != route_digest(route):
+        raise Refusal(RefusalCode.ROUTE_IDENTITY_INVALID)
 
 
 def pinned_route(conn: StoreConnection, run_id: UUID) -> str | None:
