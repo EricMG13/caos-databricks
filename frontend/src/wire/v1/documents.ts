@@ -541,6 +541,8 @@ const NarrativeFigure = object({
   source_id: uuid,
   page: int({ min: 1 }),
   matched_text: string({ max: 65536 }),
+  rects: array(RectView, 256),
+  withdrawn_at: nullable(datetime),
 });
 const NarrativeSpan = object({
   text: nullable(string({ max: 2000 })),

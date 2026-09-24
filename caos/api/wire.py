@@ -956,6 +956,8 @@ class NarrativeFigure(BaseModel):
     source_id: UUID
     page: Annotated[int, Field(ge=1)]
     matched_text: Annotated[str, Field(max_length=QUOTE_CHARS)]
+    rects: Annotated[list[RectView], Field(max_length=RECTS_MAX)]
+    withdrawn_at: AwareDatetime | None
 
 
 class NarrativeSpan(BaseModel):

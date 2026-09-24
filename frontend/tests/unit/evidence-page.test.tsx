@@ -352,12 +352,12 @@ describe("a narrative figure (N59)", () => {
     expect(lines()).toHaveLength(0);
   });
 
-  // Every reviewer: a saved figure carries no withdrawal of its own, so an
-  // unavailable page says it may be one rather than only "not permitted".
-  test("an unavailable page of a saved figure says its source may have been withdrawn", async () => {
+  // N93: a saved figure carries its source's withdrawal, so an unavailable
+  // page no longer guesses at one; the drawer states a withdrawal it is served.
+  test("an unavailable page of a saved figure states only what it is served", async () => {
     await openFigure(() => ({ status: 404, body: { code: "PAGE_NOT_AVAILABLE", clears: "x" } }));
-    expect(dialog()!.querySelector("[data-page-state='unavailable']")).toHaveTextContent(
-      "Its source may have been withdrawn since this revision was saved.",
+    expect(dialog()!.querySelector("[data-page-state='unavailable']")).not.toHaveTextContent(
+      "may have been withdrawn",
     );
   });
 });

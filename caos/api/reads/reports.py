@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import datetime
 from hashlib import sha256
 from typing import Annotated, Any
 from uuid import UUID
@@ -496,8 +497,11 @@ def _links(case_id: UUID, revision: UUID, *, packaged: bool) -> dict[str, str | 
 def _body(conn: Store, payload: dict[str, Any], digest: str | None) -> dict[str, Any]:
     artifacts = []
     digests: dict[str, str] = {}
+    records: dict[str, dict[str, Any]] = {}
     for artifact in payload["artifacts"]:
-        projections = json.loads(artifact["record"])["projections"]
+        record = json.loads(artifact["record"])
+        records[artifact["route_node_id"]] = record
+        projections = record["projections"]
         artifacts.append(dict(artifact))
         digests[artifact["route_node_id"]] = artifact["record_sha256"]
         for key in (
@@ -509,7 +513,7 @@ def _body(conn: Store, payload: dict[str, Any], digest: str | None) -> dict[str,
         ):
             artifacts[-1][key] = projections[key]
     narrative = _narrative_view(
-        conn, UUID(payload["run_id"]), payload["narrative"], digests
+        conn, UUID(payload["run_id"]), payload["narrative"], digests, records
     )
     return dict(
         case_id=payload["case_id"],
@@ -527,12 +531,16 @@ def _narrative_view(
     run_id: UUID,
     narrative: list[list[dict[str, Any]]],
     digests: dict[str, str],
+    records: dict[str, dict[str, Any]],
 ) -> list[list[dict[str, Any]]]:
     """Each paragraph's spans, a bracketed figure filled out with the record
     digest its own node already carries (`digests`, from this same payload's
     artifacts) and the source its document resolves to, live preferred
     (N59) -- the two fields the evidence drawer needs to open a figure's
-    source without cross-referencing `ReportBody.artifacts` itself."""
+    source without cross-referencing `ReportBody.artifacts` itself -- and, as
+    a `CitationView` carries them, the citation's rectangles from its record
+    and its source's live withdrawal (N93). A hidden-text mark is the page's
+    to show: the drawer reads it with the page's lines (F315)."""
     documents = {
         span["figure"]["document_sha256"]
         for paragraph in narrative
@@ -544,7 +552,7 @@ def _narrative_view(
         [
             dict(
                 text=span.get("text"),
-                figure=_figure(span.get("figure"), digests, sources),
+                figure=_figure(span.get("figure"), digests, records, sources),
             )
             for span in paragraph
         ]
@@ -553,12 +561,23 @@ def _narrative_view(
 
 
 def _figure(
-    figure: dict[str, Any] | None, digests: dict[str, str], sources: dict[str, UUID]
+    figure: dict[str, Any] | None,
+    digests: dict[str, str],
+    records: dict[str, dict[str, Any]],
+    sources: dict[str, tuple[UUID, datetime | None]],
 ) -> dict[str, Any] | None:
     if figure is None:
         return None
+    node = figure["route_node_id"]
+    citation = records[node]["citations"][figure["citation_index"]]
+    source_id, withdrawn_at = sources[figure["document_sha256"]]
     return {
         **figure,
-        "record_sha256": digests[figure["route_node_id"]],
-        "source_id": sources[figure["document_sha256"]],
+        "record_sha256": digests[node],
+        "source_id": source_id,
+        "rects": [
+            {key: box[key] for key in ("x0", "y0", "x1", "y1")}
+            for box in citation["bboxes"]
+        ],
+        "withdrawn_at": withdrawn_at,
     }

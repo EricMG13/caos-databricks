@@ -79,17 +79,17 @@ function figureFact(figure: NarrativeFigure): CitationView {
     filename: `${figure.route_node_id} source ${shortDigest(figure.document_sha256)}`,
     page: figure.page,
     matched_text: figure.matched_text,
-    rects: [],
-    withdrawn_at: null,
+    rects: figure.rects,
+    withdrawn_at: figure.withdrawn_at,
   };
 }
 
-/** The citation a fact identity names in the visible snapshot, and whether it
-    is a saved narrative's figure (whose withdrawal the wire does not serve). */
+/** The citation a fact identity names in the visible snapshot; a saved
+    narrative's figure carries its rectangles and withdrawal as a citation does (N93). */
 function resolveFact(
   snapshot: VisibleSnapshot,
   identity: FactIdentity,
-): { fact: CitationView; saved: boolean } | null {
+): { fact: CitationView } | null {
   const body = snapshot.document.body;
   if ("narrative" in body) {
     const figure = body.narrative
@@ -101,14 +101,14 @@ function resolveFact(
           figure.source_id === identity.source_id &&
           figure.page === identity.page,
       )?.figure;
-    return figure ? { fact: figureFact(figure), saved: true } : null;
+    return figure ? { fact: figureFact(figure) } : null;
   }
   if (!("handoffs" in body)) return null;
   for (const handoff of body.handoffs) {
     if (handoff.record_sha256 !== identity.record_sha256) continue;
     const fact = handoff.source_facts[identity.index];
     if (fact && fact.source_id === identity.source_id && fact.page === identity.page) {
-      return { fact, saved: false };
+      return { fact };
     }
   }
   return null;
@@ -198,7 +198,6 @@ export function EvidenceProvider({ children }: { children: ReactNode }) {
         <SourceDrawer
           key={`${snapshot.key}|${shown.id}`}
           fact={resolved.fact}
-          saved={resolved.saved}
           address={address}
           withdrawnAt={
             snapshot.withdrawals.get(resolved.fact.source_id) ?? resolved.fact.withdrawn_at

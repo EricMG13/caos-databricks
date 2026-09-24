@@ -116,7 +116,7 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
     ),
     wire.NarrativeFigure: frozenset(
         "route_node_id record_sha256 citation_index document_sha256 source_id"
-        " page matched_text".split()
+        " page matched_text rects withdrawn_at".split()
     ),
     wire.NarrativeSpan: frozenset({"text", "figure"}),
     wire.ReportArtifact: frozenset(

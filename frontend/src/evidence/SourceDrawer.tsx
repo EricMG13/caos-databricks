@@ -122,20 +122,10 @@ function TextLayer({ page, fact }: { page: PageDocument; fact: CitationView }) {
   );
 }
 
-function PageState({ status, saved }: { status: PageStatus | null; saved: boolean }) {
+function PageState({ status }: { status: PageStatus | null }) {
   if (status === null) return <div data-page-state="loading">Reading the page…</div>;
   if (status.kind === "unavailable") {
-    return (
-      <div data-page-state="unavailable">
-        {UNAVAILABLE_WORDING}
-        {saved
-          ? // A saved narrative's figure carries no withdrawal of its own (the
-            // wire does not serve one), and the host no longer reads a
-            // withdrawn source's pages: say which that may be.
-            " Its source may have been withdrawn since this revision was saved."
-          : null}
-      </div>
-    );
+    return <div data-page-state="unavailable">{UNAVAILABLE_WORDING}</div>;
   }
   if (status.kind === "offline") return <div data-page-state="offline">{OFFLINE_WORDING}</div>;
   if (status.kind === "error") return <div data-page-state="error">{status.refusal.code}</div>;
@@ -151,7 +141,6 @@ export function SourceDrawer({
   fact,
   address,
   withdrawnAt,
-  saved = false,
   opener,
   onClose,
 }: {
@@ -159,8 +148,6 @@ export function SourceDrawer({
   /** Null when the view names no case or run: no page can be addressed. */
   address: PageAddress | null;
   withdrawnAt: string | null;
-  /** A saved narrative's figure (N59), whose withdrawal the wire does not serve. */
-  saved?: boolean;
   opener: HTMLElement;
   onClose: () => void;
 }) {
@@ -225,7 +212,7 @@ export function SourceDrawer({
                 <div data-page-state="error">WIRE_IDENTITY_MISMATCH</div>
               )
             ) : (
-              <PageState status={status} saved={saved} />
+              <PageState status={status} />
             )}
           </div>
         )}

@@ -205,21 +205,23 @@ def pinned_live_sources(conn: StoreConnection, run_id: UUID) -> dict[str, UUID]:
 
 def cited_source_ids(
     conn: StoreConnection, run_id: UUID, documents: Iterable[str]
-) -> dict[str, UUID]:
-    """Document digest to the run's pinned source, for exactly the documents
-    named -- a live source preferred, so a document withdrawn under one
-    pinned copy and still live under another resolves to the live one (as
-    `caos.api.reads.analysis._cited_documents` resolves the same choice for a
-    handoff's own citations). A document no member of the run names is the
-    caller's own record disagreeing with the store: `ARTIFACT_RECORD_MISMATCH`.
+) -> dict[str, tuple[UUID, datetime | None]]:
+    """Document digest to the run's pinned source and its `withdrawn_at`
+    (N93), for exactly the documents named -- a live source preferred, so a
+    document withdrawn under one pinned copy and still live under another
+    resolves to the live one (as `caos.api.reads.analysis._cited_documents`
+    resolves the same choice for a handoff's own citations). A document no
+    member of the run names is the caller's own record disagreeing with the
+    store: `ARTIFACT_RECORD_MISMATCH`.
     """
     cited = sorted(set(documents))
     if not cited:
         return {}
     found = {
-        str(document): UUID(str(source_id))
-        for document, source_id in conn.execute(
-            "SELECT DISTINCT ON (s.document_sha256) s.document_sha256, s.source_id"
+        str(document): (UUID(str(source_id)), withdrawn_at)
+        for document, source_id, withdrawn_at in conn.execute(
+            "SELECT DISTINCT ON (s.document_sha256) s.document_sha256, s.source_id,"
+            " s.withdrawn_at"
             " FROM run_inputs i JOIN source_set_members m"
             " ON (m.case_id, m.version) = (i.case_id, i.source_version)"
             " JOIN sources s ON (s.case_id, s.source_id) = (m.case_id, m.source_id)"

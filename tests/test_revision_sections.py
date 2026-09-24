@@ -75,6 +75,17 @@ def test_report_reads_the_exact_saved_revision(
     assert {k: figure[k] for k in saved_figure} == saved_figure
     assert figure["matched_text"] == QUOTE
     assert figure["source_id"] == str(lite.source_id)
+    # N93: its rectangles from the record, as a `CitationView` carries them,
+    # and its source's live withdrawal.
+    record = json.loads(
+        next(a["record"] for a in saved["artifacts"] if a["route_node_id"] == node)
+    )
+    assert figure["rects"] == [
+        {key: box[key] for key in ("x0", "y0", "x1", "y1")}
+        for box in record["citations"][0]["bboxes"]
+    ]
+    assert figure["rects"]
+    assert figure["withdrawn_at"] is None
     assert figure["record_sha256"] == next(
         a["record_sha256"] for a in saved["artifacts"] if a["route_node_id"] == node
     )
@@ -104,12 +115,24 @@ def test_cited_source_ids_resolves_the_run_pin_and_refuses_an_uncited_document(
     body = _get(client, lite, revision, "report")
     document = body["narrative"][0][0]["figure"]["document_sha256"]
     assert cited_source_ids(lite.conn, lite.run_id, [document]) == {
-        document: lite.source_id
+        document: (lite.source_id, None)
     }
     assert cited_source_ids(lite.conn, lite.run_id, []) == {}
     with pytest.raises(Refusal) as excinfo:
         cited_source_ids(lite.conn, lite.run_id, [document, "0" * 64])
     assert excinfo.value.code is RefusalCode.ARTIFACT_RECORD_MISMATCH
+    lite.conn.rollback()
+    # N93: the withdrawal is read live, so a figure can say its source went.
+    withdraw_source(
+        lite.conn,
+        case_id=lite.case_id,
+        source_id=lite.source_id,
+        actor_id=lite.approver,
+    )
+    [(source, withdrawn_at)] = cited_source_ids(
+        lite.conn, lite.run_id, [document]
+    ).values()
+    assert (source, withdrawn_at is not None) == (lite.source_id, True)
 
 
 @pytest.mark.parametrize(

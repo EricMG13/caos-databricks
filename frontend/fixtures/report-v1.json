@@ -45,7 +45,9 @@
             "document_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
             "source_id": "00000000-0000-4000-8000-0000000000a1",
             "page": 7,
-            "matched_text": "Coverage 2.1x"
+            "matched_text": "Coverage 2.1x",
+            "rects": [],
+            "withdrawn_at": null
           }
         }
       ]
