@@ -1655,6 +1655,28 @@ def test_text_after_a_form_is_placed_where_a_viewer_draws_it(before: bytes) -> N
     )
 
 
+# What PdfExtractor v7 and v8 added to the identity's configuration: without
+# them, the current configuration is the one a v6 row recorded.
+SINCE_V7 = (
+    "token_line_breaks",
+    "hidden_under_pt_axis",
+    "hidden_colour_spaces",
+    "form_matrix",
+    "hidden_colorant_none",
+    "hidden_device_n_colorants",
+)
+
+
+def _v6_identity() -> ExtractorIdentity:
+    """The identity a row admitted under PdfExtractor v6 recorded."""
+    config = {
+        key: value
+        for key, value in PdfExtractor().identity.config.items()
+        if key not in SINCE_V7
+    }
+    return ExtractorIdentity("caos.pdfminer", "6", config)
+
+
 def test_a_row_placed_by_a_forms_matrix_before_v7_keeps_its_rectangles(
     case: tuple[StoreConnection, UUID], tmp_path: Path
 ) -> None:
@@ -1668,18 +1690,11 @@ def test_a_row_placed_by_a_forms_matrix_before_v7_keeps_its_rectangles(
         resources=MOVING,
         more=(*FORMS, NESTED),
     )
-    config = {
-        key: value
-        for key, value in PdfExtractor().identity.config.items()
-        if key not in ("token_line_breaks", "hidden_under_pt_axis")
-        and key not in ("hidden_colour_spaces", "form_matrix")
-        and key not in ("hidden_colorant_none", "hidden_device_n_colorants")
-    }
     recorded = [
         replace(token, y0=token.y0 - 600, y1=token.y1 - 600)
         for token in PdfExtractor().extract(data)
     ]
-    reader = Reader(ExtractorIdentity("caos.pdfminer", "6", config), recorded)
+    reader = Reader(_v6_identity(), recorded)
     blobs = BlobStore(tmp_path / "blobs")
     pinned = pin(*case, blobs, [("moved.pdf", data)], reader)
 
@@ -1690,6 +1705,34 @@ def test_a_row_placed_by_a_forms_matrix_before_v7_keeps_its_rectangles(
 
     assert (line.y0, line.y1) == (recorded[0].y0, recorded[0].y1)
     assert (box.y0, box.y1) == (recorded[0].y0, recorded[0].y1)
+
+
+def test_the_page_read_shows_a_line_stored_with_a_break_as_one_line(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> None:
+    """A token admitted before v7 can hold a glyph's line breaks. The prompt
+    shows its line as one line (F290), but the approver's page read served
+    the stored breaks as they were, so one line of the token index -- here
+    one carrying a header of the document's choosing -- read as several in
+    the drawer. It is shown as one line now, as the prompt shows it; what is
+    stored, the token and the digests over it, is untouched."""
+    data = raw_pdf(shown(700, "Recorded"))
+    [token] = PdfExtractor().extract(data)
+    reader = Reader(_v6_identity(), [replace(token, text=DETACHED)])
+    blobs = BlobStore(tmp_path / "blobs")
+    pinned = pin(*case, blobs, [("stored.pdf", data)], reader)
+    query = (
+        "SELECT t.text, e.output_sha256, e.extraction_sha256 FROM source_tokens t"
+        " JOIN source_extractions e USING (source_id) WHERE source_id = %s"
+    )
+    stored = pinned.conn.execute(query, (pinned.sources[0],)).fetchall()
+
+    [line] = page_of(pinned, pinned.sources[0]).body.lines
+
+    assert line.text == one_line(DETACHED)
+    assert not set(line.text) & set(LINE_BREAKS)
+    assert stored[0][0] == DETACHED
+    assert pinned.conn.execute(query, (pinned.sources[0],)).fetchall() == stored
 
 
 def test_reasons_join_sorted_on_one_line() -> None:

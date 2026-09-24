@@ -63,6 +63,7 @@ from caos.evidence.extract import (
     HIDDEN_REASONS,
     TEXT_ENCODING,
     AdmissionLimits,
+    one_line,
 )
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
@@ -163,6 +164,9 @@ def read_page(  # noqa: PLR0913 -- the store, the blobs, one page's four ids, th
     crop = _Crop(document, data, limits, deadline, actor_id)
     frame = _frame(name, version, config, crop, page)
     lines = [row for row in rows if row[2] is not None]
+    # Each line shown as one line (`one_line`, W4), as the prompt shows it: a
+    # token stored before `caos.pdfminer` v7 can hold a glyph's line breaks,
+    # and the stored bytes and their digests stay as recorded.
     body = PageBody(
         case_id=case_id,
         run_id=run_id,
@@ -172,7 +176,7 @@ def read_page(  # noqa: PLR0913 -- the store, the blobs, one page's four ids, th
         frame=frame,
         lines=[
             PageLine(
-                text=row[2],
+                text=one_line(row[2]),
                 x0=row[4],
                 y0=row[5],
                 x1=row[6],
