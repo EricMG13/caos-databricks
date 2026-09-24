@@ -16,13 +16,13 @@ A new feature or requirement beyond the ledgers is written here, not built. One 
 - N12 (review, 2026-09-23; closed by F188) — The HMAC edge-assertion mode is deleted.
 - N13 (review, 2026-09-23) — Carry a Lakebase Autoscaling endpoint through preflight, the bundle's database resource and E8; the deployment path binds a provisioned instance only (AR-21).
 - N14 (review, 2026-09-23) — Stream completions with an idle deadline and renew the lease during a call from a bounded thread, so `MAX_COMPLETION_TOKENS` is deliverable rather than a reservation ceiling under a 240 s generation budget (MX-4, CR-3, DP-8).
-- N15 (review, 2026-09-23) — An aggregate spend ceiling per actor, case or day beside the per-run one, and a cap on queued runs per actor (AS-4).
-- N16 (review, 2026-09-23) — Refuse-mutation triggers on `artifacts`, `run_attempts`, `budget_reservations` and `run_events`, a `runs.status` transition trigger, and migrations run as an owner role the runtime cannot assume (TM-2, DL-6); today the app's principal owns the tables it audits.
+- N15 (review, 2026-09-23; closed by D46) — A per-actor cap on queued runs; aggregate spend limits are the AI Gateway's (enterprise).
+- N16 (review, 2026-09-23; triggers closed by F185 and F220; enterprise) — Migrations should run as an owner role the runtime cannot assume, so the app's principal no longer owns the tables it audits (TM-2, DL-6): a Lakebase role grant for the enterprise DBA.
 - N17 (review, 2026-09-23) — A zero-token `model` health probe reading the endpoint's state, config update and permission (DP-9).
 - N18 (review, 2026-09-23) — Record CP-0's evidence selection (basis, delivered sources and pages) on the canonical record and show it in the Run and Analysis reads and the deliverable; give CP-5 and any audit module the whole pin (AI-3). A record-shape change: parity goldens and the wire.
 - N19 (review, 2026-09-23) — Send the envelope as a `json_schema` response format in strict mode once the gateway smoke confirms the endpoint accepts it, and move the invariant blocks into a system message (AI-7).
 - N20 (review, 2026-09-23; closed by D44) — A relative reconciliation tolerance, fiscal-year period order, `MAX_WORK` removed, `cfo` documented.
-- N21 (review, 2026-09-23) — Sweep `caos_graph` threads of runs cancelled while QUEUED, which no worker holds and so nothing forgets (DL-8).
+- N21 (review, 2026-09-23; closed by F218) — A cancel forgets the run's checkpoint thread.
 - N22 (review, 2026-09-23) — E9 leaves one governed case per deploy titled "deployment stream check"; a stream check that needs no case, or an operator note in the book (N3).
 - N23 (review, 2026-09-23) — The endpoint, price, ceiling and group defaults are copied in `enterprise_deploy.sh`, `enterprise_deploy.py`, `databricks.yml` and the stub; one source (N5).
 - N24 (review, 2026-09-23) — Deploy prod as a dedicated service principal with top-level `permissions` so the source folder and the app share one ACL (W3, DP-10).
