@@ -41,7 +41,7 @@ from caos.refusals import RefusalCode
 from caos.store import StoreConnection
 from caos.store.gates import sources_live
 from caos.store.members import Standing, revoke
-from caos.store.work import claim_run, stop
+from caos.store.work import MAX_QUEUED_RUNS_PER_ACTOR, claim_run, stop
 
 __all__ = ["command_client"]
 
@@ -322,7 +322,7 @@ def test_the_pure_judgements_follow_each_command_order() -> None:
 
     judged = {
         view.action: view.refusal and view.refusal.code
-        for view in run_actions(GlobalRole.ANALYST, Standing.APPROVER, facts, 1)
+        for view in run_actions(GlobalRole.ANALYST, Standing.APPROVER, facts, 1, 0)
     }
 
     assert judged == {
@@ -347,7 +347,7 @@ def test_the_pure_judgements_follow_each_command_order() -> None:
     )
     [retry] = [
         view
-        for view in run_actions(GlobalRole.ANALYST, Standing.WRITER, ready, 1)
+        for view in run_actions(GlobalRole.ANALYST, Standing.WRITER, ready, 1, 0)
         if view.action is A.RETRY_RUN
     ]
     # `requeue_run` requeues only a stopped run with no cancel requested.
@@ -358,6 +358,55 @@ def test_the_pure_judgements_follow_each_command_order() -> None:
     assert withdraw.refusal is not None and withdraw.refusal.code == "NOT_AUTHORISED"
     [_admit, empty] = upload_actions(GlobalRole.ADMIN, Standing.WRITER, 0)
     assert empty.refusal is not None and empty.refusal.code == "EVIDENCE_NOT_AVAILABLE"
+
+
+def test_a_full_queue_refuses_start_and_retry_as_the_commands_would() -> None:
+    """N5's remainder (D46): `enqueue_run`/`requeue_run` refuse
+    `QUEUED_RUNS_LIMIT_REACHED` once the actor already holds
+    `MAX_QUEUED_RUNS_PER_ACTOR` runs queued or claimed -- the section now
+    names that refusal instead of offering a Start or Retry the command
+    would then refuse."""
+    startable = RunFacts(
+        running=True,
+        route_pinned=True,
+        input_pinned=True,
+        this_build=True,
+        sources_live=True,
+        gates_released=True,
+        adapter_route=True,
+        work_state=None,
+        cancel_requested=False,
+    )
+    retryable = RunFacts(
+        running=True,
+        route_pinned=True,
+        input_pinned=True,
+        this_build=True,
+        sources_live=True,
+        gates_released=True,
+        adapter_route=True,
+        work_state="STOPPED",
+        cancel_requested=False,
+    )
+    for facts, action in ((startable, A.START_RUN), (retryable, A.RETRY_RUN)):
+        under_cap = {
+            view.action: view.refusal
+            for view in run_actions(
+                GlobalRole.ANALYST,
+                Standing.WRITER,
+                facts,
+                1,
+                MAX_QUEUED_RUNS_PER_ACTOR - 1,
+            )
+        }
+        assert under_cap[action] is None
+        at_cap = {
+            view.action: view.refusal and view.refusal.code
+            for view in run_actions(
+                GlobalRole.ANALYST, Standing.WRITER, facts, 1, MAX_QUEUED_RUNS_PER_ACTOR
+            )
+        }
+        assert at_cap[action] == "QUEUED_RUNS_LIMIT_REACHED"
 
 
 def test_membership_is_offered_to_a_case_administrator_that_may_write() -> None:

@@ -18,6 +18,7 @@ from caos.api.identity import GlobalRole
 from caos.api.wire import CLEARS, ActionName, ActionView, RefusalBody
 from caos.refusals import RefusalCode
 from caos.store.members import Standing, satisfies
+from caos.store.work import MAX_QUEUED_RUNS_PER_ACTOR
 
 IO_BUDGET = 0
 
@@ -171,7 +172,11 @@ def report_actions(
 
 
 def run_actions(
-    role: GlobalRole, standing: Standing, run: RunFacts | None, live_sources: int
+    role: GlobalRole,
+    standing: Standing,
+    run: RunFacts | None,
+    live_sources: int,
+    queued_runs: int,
 ) -> list[ActionView]:
     """The Run section's seven actions; run-scoped ones need a displayed run."""
     writer = _floor(role, standing, Standing.WRITER)
@@ -180,7 +185,7 @@ def run_actions(
     if run is None:
         scoped = {action: missing for action in _RUN_SCOPED}
     else:
-        scoped = _run_checks(run, live_sources)
+        scoped = _run_checks(run, live_sources, queued_runs)
     return [
         _view(_A.CREATE_RUN, writer),
         *(
@@ -201,7 +206,9 @@ _RUN_SCOPED = (
 )
 
 
-def _run_checks(run: RunFacts, live_sources: int) -> dict[ActionName, _Checks]:
+def _run_checks(
+    run: RunFacts, live_sources: int, queued_runs: int
+) -> dict[ActionName, _Checks]:
     pin: _Checks = [
         (run.input_pinned, _C.RUN_INPUT_ALREADY_PINNED),  # `pin_input`'s ownership
         (live_sources == 0, _C.SOURCE_PACK_EMPTY),  # `snapshot_in`
@@ -221,11 +228,21 @@ def _run_checks(run: RunFacts, live_sources: int) -> dict[ActionName, _Checks]:
         (not run.gates_released, _C.GATE_APPROVAL_MISMATCH),
         (not run.adapter_route, _C.HANDOFF_MODULE_UNSUPPORTED),
     ]
+    # N5's remainder (D46): `enqueue_run`/`requeue_run`'s own last check, so a
+    # queue already at `MAX_QUEUED_RUNS_PER_ACTOR` is named here rather than
+    # offered as available and refused only at commit.
+    full: _Checks = [
+        (queued_runs >= MAX_QUEUED_RUNS_PER_ACTOR, _C.QUEUED_RUNS_LIMIT_REACHED)
+    ]
     return {
         _A.PIN_RUN_INPUT: pin,
         _A.APPROVE_SOURCE_SET: approve,
         _A.APPROVE_RESEARCH_PLAN: approve,
-        _A.START_RUN: [*queue, (run.work_state is not None, _C.RUN_ALREADY_STARTED)],
+        _A.START_RUN: [
+            *queue,
+            (run.work_state is not None, _C.RUN_ALREADY_STARTED),
+            *full,
+        ],
         _A.RETRY_RUN: [
             *queue,
             # `requeue_run`: a stopped row with no cancel requested.
@@ -233,6 +250,7 @@ def _run_checks(run: RunFacts, live_sources: int) -> dict[ActionName, _Checks]:
                 run.work_state != "STOPPED" or run.cancel_requested,
                 _C.RUN_NOT_STOPPED,
             ),
+            *full,
         ],
         _A.CANCEL_RUN: [
             (not run.running or run.work_state == "DONE", _C.RUN_NOT_RUNNING),
