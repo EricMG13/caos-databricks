@@ -112,12 +112,14 @@ def client(
     with connect(empty_database) as conn:
         apply_schema(conn)
         performed = qualification_performed()
-        record_performed_earlier(conn, performed)
-        record_evidence(conn, performed.evidence)
         # The runs behind the snapshot, each accepted artifact recording the
         # model the harness configured: what `record_verdict` compares the
-        # reviewer's `provider` against.
+        # reviewer's `provider` against. Recorded before the snapshot, as
+        # production's run-then-persist order has it -- `record_performed`'s
+        # own completeness check (FP-24) now reads these rows too.
         record_runs(conn, performed)
+        record_performed_earlier(conn, performed)
+        record_evidence(conn, performed.evidence)
         conn.commit()
         app.dependency_overrides[store_connection] = lambda: conn
         try:

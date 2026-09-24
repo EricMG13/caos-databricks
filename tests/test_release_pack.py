@@ -172,8 +172,9 @@ def _pin(
     """
     route = resolve_route(catalog(Bundle(VENDORED_BUNDLE)), profile_id, selection_id)
     performed = _on_route(route, performed)
-    record_performed_earlier(conn, performed)
+    # FP-24: recorded first, as production's run-then-persist order has it.
     record_runs(conn, performed, accepted_nothing=accepted_nothing)
+    record_performed_earlier(conn, performed)
     # `pin_route_in`'s own row, written without its lock: the fixture's runs are
     # rows, not runs a worker drove, so they are not RUNNING.
     for case in performed.prepared:
@@ -472,8 +473,8 @@ def test_a_pin_the_store_cannot_read_names_no_pathway(empty_database: str) -> No
     performed = qualification_performed()
     with connect(empty_database) as conn:
         apply_schema(conn)
-        record_performed_earlier(conn, performed)
         record_runs(conn, performed)
+        record_performed_earlier(conn, performed)
         [case] = performed.prepared
         conn.execute(
             "INSERT INTO run_routes (run_id,profile_id,selection_id,route_digest,"
@@ -576,7 +577,11 @@ def test_a_forged_snapshot_over_a_run_that_never_ran_refuses_the_pack(
     profile_id, selection_id = sorted(ADAPTER_ROUTES)[0]
     with connect(empty_database) as conn:
         apply_schema(conn)
-        performed = _pin(conn, profile_id, selection_id, accepted_nothing="case")
+        # FP-24: recorded with its real artifact and call outcome, so the
+        # snapshot's producer is confirmed and it persists complete; the "no
+        # artifact" the docstring names is live drift since then, not a fact
+        # about how the snapshot was recorded.
+        performed = _pin(conn, profile_id, selection_id)
         [case] = performed.prepared
         # CF-091: runs.status is guarded against a terminal move now; this
         # forges exactly that move to prove the app's own read still catches
@@ -586,6 +591,7 @@ def test_a_forged_snapshot_over_a_run_that_never_ran_refuses_the_pack(
         conn.execute(
             "UPDATE runs SET status='RUNNING' WHERE run_id=%s", (case.input.run_id,)
         )
+        conn.execute("DELETE FROM artifacts WHERE run_id=%s", (case.input.run_id,))
         _direct_verdict(conn, performed)
         with pytest.raises(Refusal, match=r"^VERDICT_BINDING_INVALID$"):
             release_pack.qualified_pathways(

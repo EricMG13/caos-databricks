@@ -264,10 +264,24 @@ def performed_evidence(
 
 
 def record_performed(conn: StoreConnection, performed: PerformedEvidence) -> str:
-    """Persist one immutable performed snapshot before its evidence is recorded."""
+    """Persist one immutable performed snapshot before its evidence is recorded.
+
+    FP-24: `PerformedEvidence.complete` is a pure property -- it cannot read
+    `call_outcomes` -- so it does not know whether each run's recorded
+    producer agrees with the prepared model. That comparison used to run only
+    at signing (`_models_recorded`, via `assert_store_agrees`); the same rule
+    now also gates the `complete` flag persisted here, so a case whose
+    producer never matches does not count complete before any reviewer ever
+    sees it.
+    """
     evidence = performed.evidence
     document = performed.document
     digest = evidence.performed_sha256
+    complete = performed.complete and _models_confirmed(
+        conn,
+        runs=tuple(record.run_id for record in performed.performed.performed),
+        model=evidence.model,
+    )
     conn.execute(
         "INSERT INTO qualification_performed"
         " (performed_sha256,qualification_set_sha256,build_id,adapter_version,"
@@ -280,7 +294,7 @@ def record_performed(conn: StoreConnection, performed: PerformedEvidence) -> str
             evidence.adapter_version,
             evidence.provider,
             evidence.model,
-            performed.complete,
+            complete,
             json.dumps(
                 document, sort_keys=True, separators=(",", ":"), allow_nan=False
             ),
@@ -298,7 +312,7 @@ def record_performed(conn: StoreConnection, performed: PerformedEvidence) -> str
         evidence.adapter_version,
         evidence.provider,
         evidence.model,
-        performed.complete,
+        complete,
         document,
     ):
         raise Refusal(RefusalCode.VERDICT_BINDING_INVALID)
@@ -635,6 +649,19 @@ def _models_recorded(
     ).fetchall()
     if not rows or any(row[1] != model for row in rows):
         raise Refusal(RefusalCode.VERDICT_BINDING_INVALID)
+
+
+def _models_confirmed(
+    conn: StoreConnection, *, runs: tuple[UUID, ...], model: str
+) -> bool:
+    """`_models_recorded`'s rule, answered rather than raised (FP-24): whether
+    every run's recorded producer agrees with the prepared model, reused so
+    `record_performed` can hold the persisted `complete` flag to it too."""
+    try:
+        _models_recorded(conn, runs=runs, model=model)
+    except Refusal:
+        return False
+    return True
 
 
 def record_verdict(

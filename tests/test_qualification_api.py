@@ -55,10 +55,13 @@ def client(
 def _record(conn: StoreConnection, *, expires_at: datetime) -> Evidence:
     evidence = _evidence()
     performed = qualification_performed()
-    record_performed_earlier(conn, performed)
-    # The runs behind the snapshot: `record_verdict` refuses a verdict naming
-    # a model no accepted artifact of them recorded.
+    # The runs behind the snapshot, recorded first as production has it:
+    # `record_verdict` refuses a verdict naming a model no accepted artifact
+    # of them recorded, and `record_performed`'s own completeness check
+    # (FP-24) now reads the same `call_outcomes` rows before the snapshot is
+    # ever persisted.
     record_runs(conn, performed)
+    record_performed_earlier(conn, performed)
     decided_at = expires_at - timedelta(days=1)
     verdict = read_verdict(
         {
