@@ -386,6 +386,30 @@ Round 4 (2026-09-23): five adversarial reviewers (Claude Opus 5.5 at effort max)
 
 - F221 — N4 (owner-approved in D39): the deliverable's page and audit package were produced only by the suite. `caos/api/reads/deliverable.py` serves `GET /api/v1/cases/{case_id}/revisions/{revision_id}/render` (a frozen or filed revision's page, byte for byte what `render` makes of its own stored payload; `DELIVERABLE_NOT_FROZEN` before an unfrozen one, a render refusal's own code otherwise) and `.../package` (a filed revision's audit package, built from `read_filed_receipt`'s proven bytes and passing `verify_package`, as an attachment); both at `VisibleCase`, the floor Report and Committee read at. The render answers a narrower Content-Security-Policy of its own (its inline stylesheet needs `'unsafe-inline'`, which the workspace policy refuses; no image, script, form, base or frame is allowed). Committee's body carries `render_url` and, once filed, `package_url` (wire, `documents.ts` and the committee fixture follow). `IO_BUDGET` 4 and 8, `BLOB_BUDGET` 1 and 2. Tests in `tests/test_deliverable_reads.py` (22).
 
+- F222 — A superseded revision could still be signed, frozen and filed (CF-026, D39: one head per run): `deliverable._reviewed` checks the run's live head and refuses `COMMAND_EXPECTATION_STALE`, and the Report section's availability says the same for SIGN, FREEZE and FILE. `SIGN_IO`, `FREEZE_IO` and `FILE_IO` each rise by the one read (15, 56, 57). Tests in `tests/test_governed_write_routes.py` and `tests/test_command_availability.py`.
+
+- F223 — The narrative's author could sign it (FP-33, D39): `sign_opinion_in` refuses `APPROVER_NOT_INDEPENDENT` when the signer saved the revision being signed; the tests that signed as the saver now mint a separate signer.
+
+- F224 — The deliverable proof re-checked owner restrictions for CP-5 only (FP-32, D39): the node selection is one constant, `CREDIT_SCREEN_SELECTION`, beside `verify_owner_restrictions`, and CP-CF is checked as CP-5 is in the deliverable and qualification proofs. Test `test_proof_and_payload_reject_a_self_consistent_cp_cf_restriction_forgery`.
+
+- F225 — A qualification set's digest tagged two of its nine optional fields, so two different sets could share one (N8, FP-25, D39): `matrix._digested` tags all nine; the 18 committed set digests and their `RESULT.md` files are recomputed, before any enterprise verdict binds one.
+
+- F226 — The reviewer's document did not name the evidence it signs (N44's first half, D39): verdict `BINDINGS` gain `evidence_sha256`, checked by `read_verdict`, `record_verdict` and `current_verdict`, and `SignVerdict` carries it (wire regenerated; `commands.ts` follows).
+
+- F227 — Recorded producers were compared with the prepared model only at signing (FP-24): `record_performed` compares them before a snapshot counts complete (`_models_confirmed`).
+
+- F228 — A qualification case could spend a run on a quote its document cannot contain (FP-26): `_answerable` refuses `QUALIFICATION_KEY_UNANSWERABLE` before any spend, by a word-run check over the public extractor that is looser than the real search, so it never refuses a quote the search would anchor, and defers to `SOURCE_HAS_NO_TEXT` for a document with no text.
+
+- F229 — `qualification/ba-fy2025-covenant-refinancing/` held documents and no set (FP-29): every route that set could take needs a financial-statement module its three debt-instrument documents cannot supply, so the directory is removed rather than given an invented key; `documents.json` and `DOCUMENTS.md` follow.
+
+- F230 — Qualification tidiness (FP-30): docstring counts corrected, one `_LABEL_LIMIT`, one accepted-rows fallback, named fields for `Evidence`; behaviour unchanged.
+
+- F231 — `read_filed_receipt` trusted its one caller to have checked the sign and freeze events (FP-34): it verifies that provenance itself; Committee's `IO_BUDGET` 20 to 22.
+
+- F232 — A package's three-people check compared role names case-sensitively (CF-084): `_receipt_role_error` compares them case-folded, so one identity under two spellings is one.
+
+- F233 — `release_pack.py` could print a Refusal's traceback (CF-094): already handled by F178's guard; a regression test pins the refusal-only exit.
+
 ### Design critique plan, 2026-09-23 (the `/impeccable critique` of `frontend/src`, 16/40, and the owner's plan built on it; branch `impeccable/plan`)
 
 - D32 (2026-09-23) — The Analysis read serves each accepted handoff's `<!-- table-id: -->`-tagged tables as typed data, derived at request time from the Markdown it already verified, by the bundle's own reader: `caos.methodology.tables.handoff_tables` calls `cp_tables.parse_tables` from the verified contract (`VendorContract.cp_tables`, the module the completeness checker imports), in document order, each cell its text as that reader splits it. Nothing is stored; the Markdown stays the authority and the tables are model-authored as it is (§46.3); no store or blob read is added. A cell has a value only where the bundle's `parse_figure` reads a figure (its null vocabulary is null, `5,2` is no value), and the value is that spelling re-read with `Decimal`, never the vendor's float (invariant 7), in plain notation (`^-?[0-9]+(\.[0-9]+)?$`); a figure past 64 characters has no value and keeps its text. Bounds: 64 tables, 32 columns, 2,000 rows, 4,096 characters a cell, 256 a table id; past one, or where the reader raises, the handoff serves no table and `tables_unavailable_reason` `TABLES_TOO_LARGE` or `TABLES_MALFORMED`. Alternatives: store tables at acceptance (a record change and a second authority); parse Markdown in the browser (the frontend never does); a host-only figure grammar (the bundle is the authority on what a figure is, invariant 4); the vendor's float (invariant 7). Evidence: `tests/test_handoff_tables.py`, `tests/test_model_section.py::test_analysis_serves_the_tagged_tables_each_owner_wrote`, `tests/test_wire_contract.py::test_a_table_cell_is_its_text_and_a_plain_decimal_string_or_null`.

@@ -9,7 +9,7 @@ A new feature or requirement beyond the ledgers is written here, not built. One 
 - N5 (review, 2026-09-23; closed by F207) — Concurrent admissions share a process-wide slot.
 - N6 (review, 2026-09-23; closed by D43) — `FORECAST_CHAIN_BROKEN` and `_check_chain` are retired.
 - N7 (review, 2026-09-23) — The stand-in still hands the process a token where the platform hands it a client id and secret; a stub OAuth token endpoint would let the harness run the service principal's own authentication.
-- N8 (review, 2026-09-23) — `matrix._digested` tags three of nine optional fields; tag the rest so two different sets cannot share a digest.
+- N8 (review, 2026-09-23; closed by F225) — Every optional field is tagged in a set's digest.
 - N9 (review, 2026-09-23; closed by F201) — The three declared `IO_BUDGET` numbers are measured.
 - N10 (review, 2026-09-23) — A `host_prompt_digest` on `CanonicalRecord`, so a record says which host instructions the call carried (a record-shape change: parity goldens and the wire).
 - N11 (review, 2026-09-23) — Replace `databricks-langchain` (one class, 97 transitive packages, an undeclared `openai` import) with one SDK `POST` of the bytes `encode_request` already prices; reverses D7, so a `Dn` (SI-1).
@@ -45,7 +45,7 @@ A new feature or requirement beyond the ledgers is written here, not built. One 
 - N41 (round 4; closed by F206) — `TokenIndex` derives a page's keys once.
 - N42 (round 4) — Give a declared node refusal a terminal outcome, recorded as `run_blocking_verdicts` records a Blocked answer, so `DECLARABLE_REFUSALS` can grow past `HANDOFF_BLOCKED` (DQ-2).
 - N43 (round 4) — A keyed digest (HMAC under a workspace or KMS secret) over `performed_json` and the evidence row: `assert_store_agrees` compares against rows the app's principal also writes (DQ-3, FP-03, N16).
-- N44 (round 4) — The reviewer's document should name the evidence digest it signs, and verdicts need revocation, an append-only row `current_verdict` reads (DQ-13, FP-13).
+- N44 (round 4; the digest half closed by F226; recorded, D39) — Verdicts need revocation: an append-only row `current_verdict` reads (DQ-13, FP-13).
 - N45 (round 4) — Lakebase Autoscaling on the deployment path (MAX-09, N13, AR-21). CLI 1.17.0 carries `apps.AppResourcePostgres` and SDK 0.140.0 `postgres.get_endpoint`/`generate_database_credential(endpoint=)`, but a bundle variable cannot choose between the `database` and `postgres` resource types (a complex variable or a target of its own changes the one command's interface), the runtime prefers `CAOS_LAKEBASE_INSTANCE` over `LAKEBASE_AUTOSCALING_ENDPOINT` and nothing supplies the endpoint path, preflight and E8 need an Autoscaling lookup, and what the platform injects for a `postgres` resource cannot be observed on the stand-in.
 - N46 (round 4; closed by F167, F168, F169) — Gate integrity: pre-commit hook bodies, per-function complexity, collection hooks and a bare `--cover` are checked (MAX-13).
 - N47 (round 4) — Stand-in fidelity: no test deploys with the real CLI and then boots from the recorded environment (the test job has no CLI), and the stub answers every endpoint and instance ready (DF-12). Raise `databricks_cli_version` once a CLI release no longer panics in `OverrideChangeDesc` (DF-13).
