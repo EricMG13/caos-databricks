@@ -38,7 +38,6 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from threading import Lock
 from time import monotonic, sleep
-from typing import Literal, overload
 from uuid import UUID
 
 import psycopg
@@ -199,34 +198,6 @@ class StreamEvent:
 
     id: Marker
     name: EventName | None
-
-
-@overload
-def case_tail(
-    conn: StoreConnection,
-    *,
-    case_id: UUID,
-    run_id: UUID | None,
-    actor_id: UUID,
-    after: str | None,
-    deadline: float = ...,
-    poll: float = ...,
-    heartbeat: Literal[False] = ...,
-) -> Iterator[StreamEvent]: ...
-
-
-@overload
-def case_tail(
-    conn: StoreConnection,
-    *,
-    case_id: UUID,
-    run_id: UUID | None,
-    actor_id: UUID,
-    after: str | None,
-    deadline: float = ...,
-    poll: float = ...,
-    heartbeat: Literal[True],
-) -> Iterator[StreamEvent | None]: ...
 
 
 def case_tail(  # noqa: PLR0913 -- the stream's identity, then its lifetime
