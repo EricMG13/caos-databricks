@@ -1035,6 +1035,74 @@ def test_measured_problems_refuses_an_unreadable_file(tmp_path: Path) -> None:
     ]
 
 
+def test_a_measured_module_missing_from_the_record_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """W6: the ratchet checked only the entries the record lists, so a
+    measured module whose entry was dropped -- or a dimension dropped from
+    its entry -- could fall to any number unseen."""
+    api = tmp_path / "caos" / "api" / "reads"
+    api.mkdir(parents=True)
+    (api / "analysis.py").write_text("IO_BUDGET = 30\n", encoding="utf-8")
+    (api / "run.py").write_text("IO_BUDGET = 42\nBLOB_BUDGET = 2\n", encoding="utf-8")
+    run, analysis = Path("caos/api/reads/run.py"), Path("caos/api/reads/analysis.py")
+    monkeypatch.setattr(io_budget, "MEASURED_MODULES", (analysis, run))
+    measured = tmp_path / "measured.json"
+    measured.write_text(json.dumps({"caos/api/reads/analysis.py": {"io": 30}}))
+
+    assert io_budget.measured_problems(tmp_path, measured) == [
+        "caos/api/reads/run.py: in MEASURED_MODULES but not recorded in measured.json"
+    ]
+
+    measured.write_text(
+        json.dumps(
+            {
+                "caos/api/reads/analysis.py": {"io": 30},
+                "caos/api/reads/run.py": {"io": 42},
+            }
+        )
+    )
+    assert io_budget.measured_problems(tmp_path, measured) == [
+        "caos/api/reads/run.py: BLOB_BUDGET is declared but not recorded in "
+        "measured.json"
+    ]
+
+
+def test_a_missing_record_is_refused_where_a_measured_module_exists(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """W6: a missing tests/io_measurements.json read as "nothing recorded"
+    and passed; with a measured module present it is every entry missing."""
+    api = tmp_path / "caos" / "api" / "reads"
+    api.mkdir(parents=True)
+    (api / "run.py").write_text("IO_BUDGET = 42\n", encoding="utf-8")
+    monkeypatch.setattr(io_budget, "MEASURED_MODULES", (Path("caos/api/reads/run.py"),))
+
+    assert io_budget.measured_problems(tmp_path) == [
+        "caos/api/reads/run.py: in MEASURED_MODULES but not recorded in "
+        "io_measurements.json"
+    ]
+    assert io_budget.main(["--assert", "--root", str(tmp_path)]) == 1
+
+
+def test_the_reviewed_readiness_cut_is_refused_without_its_record(
+    tmp_path: Path,
+) -> None:
+    """Review 4: READINESS_ROWS cut from 2 to 1 in reads/run.py (IO 52 to 42,
+    blob 4 to 2) passed once run.py's entry, or the whole file, was gone.
+    Against the committed tree, the record without that entry is refused."""
+    committed = json.loads(
+        (REPO / "tests" / "io_measurements.json").read_text(encoding="utf-8")
+    )
+    del committed["caos/api/reads/run.py"]
+    measured = tmp_path / "io_measurements.json"
+    measured.write_text(json.dumps(committed))
+    assert io_budget.measured_problems(REPO, measured) == [
+        "caos/api/reads/run.py: in MEASURED_MODULES but not recorded in "
+        "io_measurements.json"
+    ]
+
+
 def test_measured_problems_matches_what_is_committed() -> None:
     assert io_budget.measured_problems() == []
 
