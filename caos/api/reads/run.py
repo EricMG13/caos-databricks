@@ -70,7 +70,7 @@ from caos.graph.route import (
     waiting_on,
 )
 from caos.graph.runtime import accepted_artifacts
-from caos.methodology.bundle import Bundle
+from caos.methodology.bundle import Bundle, module_display_names
 from caos.methodology.handoff import ADAPTER_ROUTES
 from caos.methodology.invocation import named_objects
 from caos.methodology.vendor import catalog
@@ -470,9 +470,18 @@ def _node_views(
     readiness = readiness_from(route, accepted)
     # From the same accepted gate artifact as `readiness`, so no further read.
     reasons = blockers_from(route, accepted)
+    # The bundle catalog's own names, read once and shared by every node (N61).
+    names = module_display_names(bundle)
     views = (
         _node_view(
-            route, accepted, node, states, readiness, reasons=reasons, named=named
+            route,
+            accepted,
+            node,
+            states,
+            readiness,
+            reasons=reasons,
+            named=named,
+            names=names,
         )
         for node in route.nodes
     )
@@ -542,6 +551,7 @@ def _node_view(  # noqa: PLR0913 -- one node of one run document
     *,
     reasons: Mapping[str, str] | None = None,
     named: NamedObjects | None = None,
+    names: Mapping[str, str] | None = None,
 ) -> NodeView:
     unmet, awaiting_gate, gate_verdict = node_readiness(
         route, accepted, node, states, readiness, named=named
@@ -549,6 +559,7 @@ def _node_view(  # noqa: PLR0913 -- one node of one run document
     return NodeView(
         route_node_id=node.route_node_id,
         module_id=node.module_id,
+        module_name=(names or {}).get(node.module_id, node.module_id),
         stage=node.stage,
         state=states[node.route_node_id],
         waiting_on=[EdgeView(source=edge.source, type=edge.type) for edge in unmet],

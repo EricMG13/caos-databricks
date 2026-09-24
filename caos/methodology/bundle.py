@@ -122,6 +122,47 @@ class Bundle:
         raise Refusal(RefusalCode.AUTHORITY_MODULE_UNKNOWN)
 
 
+# The host's own model extension is absent from the manifest (§6.2): CP-CF
+# runs the host's own calculator, never a vendor skill, so no folder slug
+# names it. A `Dn`-level rename of the extension renames this too.
+_MODEL_EXTENSION_NAME = "Cash-flow forecast"
+
+
+def _display_name(module_id: str, folder_slug: str) -> str:
+    """A folder slug read as prose (N61): `cp-2g-forward-credit-model` for
+    CP-2G reads `Forward credit model` -- the module's own numbering
+    stripped, hyphens as spaces, sentence case. A slug with nothing left
+    after its own id (`cp-model` for CP-MODEL) reads by the bundle's own
+    generic prefix instead, and a slug that carries neither is the module
+    id itself: never a blank name."""
+    own = f"{module_id.lower()}-"
+    tail = (
+        folder_slug.removeprefix(own)
+        if folder_slug.startswith(own)
+        else folder_slug.removeprefix("cp-")
+    )
+    words = tail.replace("-", " ").strip()
+    return f"{words[0].upper()}{words[1:]}" if words else module_id
+
+
+def module_display_names(bundle: Bundle) -> dict[str, str]:
+    """Every module's display name, read from the bundle catalog (N61): the
+    frontend used to mirror `icm/stages` slugs by hand, which is what this
+    reads instead. CP-PARSE shares CP-0's name -- the manifest carries one
+    skill for both, the host's own carve-out (§5) -- and the host's own
+    model extension, absent from the manifest, keeps its host-declared one.
+    """
+    names = {
+        module: _display_name(module, slug)
+        for module, slug in bundle.physical_modules().items()
+    }
+    for carved, owner in _CARVE_OUTS.items():
+        if owner in names:
+            names[carved] = names[owner]
+    names[MODEL_MODULE] = _MODEL_EXTENSION_NAME
+    return names
+
+
 def _authority_name(value: object) -> str:
     """A canonical relative POSIX name, never a filesystem instruction."""
     if not isinstance(value, str) or not value or value != value.strip():

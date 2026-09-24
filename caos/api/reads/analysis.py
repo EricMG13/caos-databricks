@@ -61,7 +61,7 @@ from caos.graph.route import (
     ResolvedRoute,
     node_states,
 )
-from caos.methodology.bundle import Bundle
+from caos.methodology.bundle import Bundle, module_display_names
 from caos.methodology.canonical import accepted_handoff
 from caos.methodology.handoff import CanonicalRecord
 from caos.methodology.invocation import named_objects
@@ -306,6 +306,7 @@ def _handoffs(
     `ARTIFACT_RECORD_MISMATCH` (503): the server's own bytes failed.
     """
     conn, blobs, bundle = handles.conn, handles.blobs, handles.bundle
+    names = module_display_names(bundle)
     rows = {
         str(node): (UUID(str(attempt)), str(artifact), record, created)
         for node, attempt, artifact, record, created in conn.execute(
@@ -351,6 +352,7 @@ def _handoffs(
             created,
             documents,
             bundle,
+            names,
             with_tables=with_tables,
         )
         for node_id, sha, record, markdown, created in read
@@ -367,6 +369,7 @@ def _handoffs(
         PendingNode(
             route_node_id=node.route_node_id,
             module_id=node.module_id,
+            module_name=names.get(node.module_id, node.module_id),
             state=states[node.route_node_id],
         )
         for node in route.nodes
@@ -415,6 +418,7 @@ def _handoff_view(  # noqa: PLR0913 -- one accepted handoff and its lookups
     accepted_at: object,
     documents: dict[str, tuple[UUID, str, object]],
     bundle: Bundle,
+    names: dict[str, str],
     *,
     with_tables: bool,
 ) -> HandoffView:
@@ -433,6 +437,7 @@ def _handoff_view(  # noqa: PLR0913 -- one accepted handoff and its lookups
     return HandoffView(
         route_node_id=route_node_id,
         module_id=projections.module_id,
+        module_name=names.get(projections.module_id, projections.module_id),
         artifact_sha256=record.artifact_sha256,
         record_sha256=record_sha256,
         accepted_at=accepted_at,  # type: ignore[arg-type]

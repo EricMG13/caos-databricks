@@ -498,6 +498,7 @@ class NodeView(BaseModel):
 
     route_node_id: Id
     module_id: Id
+    module_name: Text
     stage: int
     state: NodeState
     waiting_on: Annotated[list[EdgeView], Field(max_length=ROUTE_NODES_MAX)]
@@ -680,6 +681,9 @@ class HandoffView(BaseModel):
 
     route_node_id: Id
     module_id: Id
+    # The bundle catalog's own name for `module_id` (N61), so a reader is
+    # never the one mirroring `icm/stages` slugs into prose.
+    module_name: Text
     artifact_sha256: Sha256
     record_sha256: Sha256
     accepted_at: AwareDatetime
@@ -706,6 +710,7 @@ class PendingNode(BaseModel):
 
     route_node_id: Id
     module_id: Id
+    module_name: Text
     state: NodeState
 
 

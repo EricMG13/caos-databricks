@@ -249,6 +249,7 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
         {
             "route_node_id",
             "module_id",
+            "module_name",
             "stage",
             "state",
             "waiting_on",
@@ -303,6 +304,7 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
         {
             "route_node_id",
             "module_id",
+            "module_name",
             "artifact_sha256",
             "record_sha256",
             "accepted_at",
@@ -323,7 +325,7 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
     ),
     TableView: frozenset({"table_id", "columns", "rows"}),
     CellView: frozenset({"text", "value"}),
-    PendingNode: frozenset({"route_node_id", "module_id", "state"}),
+    PendingNode: frozenset({"route_node_id", "module_id", "module_name", "state"}),
     AnalysisBody: frozenset(
         {
             "case_id",

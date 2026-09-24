@@ -60,6 +60,7 @@
         {
           "route_node_id": "rn-cp-0",
           "module_id": "CP-0",
+          "module_name": "Source readiness",
           "stage": 0,
           "state": "COMPLETE",
           "waiting_on": [],
@@ -70,6 +71,7 @@
         {
           "route_node_id": "rn-cp-1",
           "module_id": "CP-1",
+          "module_name": "Canonical data foundation",
           "stage": 1,
           "state": "COMPLETE",
           "waiting_on": [
@@ -85,6 +87,7 @@
         {
           "route_node_id": "rn-cp-1c",
           "module_id": "CP-1C",
+          "module_name": "Peer benchmark",
           "stage": 1,
           "state": "RESTRICTED",
           "waiting_on": [
@@ -100,6 +103,7 @@
         {
           "route_node_id": "rn-cp-2",
           "module_id": "CP-2",
+          "module_name": "Fundamental credit synthesizer",
           "stage": 2,
           "state": "COMPLETE",
           "waiting_on": [
@@ -119,6 +123,7 @@
         {
           "route_node_id": "rn-cp-4",
           "module_id": "CP-4",
+          "module_name": "Legal covenant interpreter",
           "stage": 3,
           "state": "COMPLETE",
           "waiting_on": [
@@ -134,6 +139,7 @@
         {
           "route_node_id": "rn-cp-5",
           "module_id": "CP-5",
+          "module_name": "Evidence trace validator",
           "stage": 4,
           "state": "COMPLETE",
           "waiting_on": [
@@ -153,6 +159,7 @@
         {
           "route_node_id": "rn-cp-6",
           "module_id": "CP-6",
+          "module_name": "Ic debate challenge",
           "stage": 5,
           "state": "RUNNABLE",
           "waiting_on": [
@@ -172,6 +179,7 @@
         {
           "route_node_id": "rn-cp-6a",
           "module_id": "CP-6A",
+          "module_name": "CP-6A",
           "stage": 5,
           "state": "BLOCKED",
           "waiting_on": [
@@ -187,6 +195,7 @@
         {
           "route_node_id": "rn-cp-7",
           "module_id": "CP-7",
+          "module_name": "CP-7",
           "stage": 5,
           "state": "BLOCKED",
           "waiting_on": [
@@ -206,6 +215,7 @@
         {
           "route_node_id": "rn-cp-cf",
           "module_id": "CP-CF",
+          "module_name": "Cash-flow forecast",
           "stage": 100,
           "state": "COMPLETE",
           "waiting_on": [

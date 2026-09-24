@@ -269,6 +269,8 @@ const EdgeView = object({ source: short, type: EdgeType });
 const NodeView = object({
   route_node_id: short,
   module_id: short,
+  // The bundle catalog's own name for `module_id` (N61).
+  module_name: text,
   stage: int(),
   state: NodeState,
   waiting_on: array(EdgeView, 256),
@@ -360,6 +362,7 @@ const TableView = object({
 const HandoffView = object({
   route_node_id: short,
   module_id: short,
+  module_name: text,
   artifact_sha256: hash,
   record_sha256: hash,
   accepted_at: datetime,
@@ -377,7 +380,12 @@ const HandoffView = object({
   tables: array(TableView, 64),
   tables_unavailable_reason: nullable(enumOf(["TABLES_MALFORMED", "TABLES_TOO_LARGE"])),
 });
-const PendingNode = object({ route_node_id: short, module_id: short, state: NodeState });
+const PendingNode = object({
+  route_node_id: short,
+  module_id: short,
+  module_name: text,
+  state: NodeState,
+});
 const AnalysisBody = object({
   case_id: uuid,
   latest_run_id: nullable(uuid),

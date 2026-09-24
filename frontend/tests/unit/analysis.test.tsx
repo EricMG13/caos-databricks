@@ -217,6 +217,7 @@ describe("Analysis", () => {
     const forecast: HandoffView = {
       ...complete.body.handoffs[0]!,
       module_id: "CP-CF",
+      module_name: "Cash-flow forecast",
       host_calculation: "CP_CF_FORECAST",
     };
     const { container: forecastPage } = mount({

@@ -338,6 +338,7 @@ function runSection(): { [key: string]: Json } {
           {
             route_node_id: "CP-5",
             module_id: "CP-5",
+            module_name: "Evidence trace validator",
             stage: 2,
             state: "BLOCKED",
             waiting_on: [{ source: "CP-0", type: "REQUIRED" }],
@@ -384,6 +385,7 @@ function analysis(): { [key: string]: Json } {
         {
           route_node_id: "CP-0",
           module_id: "CP-0",
+          module_name: "Source readiness",
           artifact_sha256: SHA,
           record_sha256: SHA,
           accepted_at: AT,
