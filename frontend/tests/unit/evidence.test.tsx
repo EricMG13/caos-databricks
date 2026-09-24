@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { CitationChip } from "@/evidence/CitationChip";
 import { EvidenceProvider } from "@/evidence/EvidenceContext";
 import { MetricPassport } from "@/evidence/MetricPassport";
@@ -48,7 +48,7 @@ const PROJECTED: Passport = {
 };
 
 describe("the evidence surface", () => {
-  test("test_dialog_opener_is_explicit", () => {
+  test("test_dialog_opener_is_explicit", async () => {
     render(
       <EvidenceProvider>
         <button type="button">elsewhere</button>
@@ -63,9 +63,14 @@ describe("the evidence surface", () => {
     expect(dialog).toHaveAttribute("aria-modal", "true");
     expect(dialog.querySelector("img")).toHaveAttribute("src", "/api/pages/D-04-p68.svg");
     expect(dialog.querySelectorAll(".bbox")).toHaveLength(1);
-    fireEvent.keyDown(window, { key: "Escape" });
+    // A key event targets what has focus and bubbles to the document, where
+    // the overlay listens (N64); one dispatched at `window` alone reaches no
+    // element and no browser sends it.
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(document.activeElement).toBe(chip);
+    // To the chip that was passed, not back to where focus sat before the
+    // click; the dialog places it a tick after it closes.
+    await waitFor(() => expect(document.activeElement).toBe(chip));
   });
 
   test("a citation of a withdrawn source is marked on the chip and in the drawer", () => {

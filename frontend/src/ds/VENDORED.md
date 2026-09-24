@@ -33,15 +33,15 @@ local clone `Alpha/Final @ f454c654f`, path `caos/frontend/src/` (`docs/DECISION
 The blob hash is `git hash-object` of the source file at that commit. Nothing loads the
 `_ds_bundle.js` runtime and nothing depends on the private `caos-frontend` package.
 
-| File here           | Source path                          | Blob       | Changes                                                                                                                                                                                                              |
-| ------------------- | ------------------------------------ | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ActionReason.tsx`  | `components/shared/ActionReason.tsx` | `85ad0516` | `"use client"` dropped; `data-*` passes through unchanged; `reasonTitle` carries the pointer's fuller detail (the code) while the reason stays the plain sentence; the control is shadcn's `Button` (D35)            |
-| `SurfaceState.tsx`  | `components/shared/SurfaceState.tsx` | `eb6f56b8` | kinds are the seven of `IA_SPEC.md` §6 (`empty` → `observed-empty`; `checking`, `not-run` dropped) plus `choose`, a case section waiting on the reader's selection; the glyph is `SeverityMark` (`DESIGN.md` shapes) |
-| `atoms.tsx`         | `components/pipeline/atoms.tsx`      | `66370ae1` | `Tag` only, now a shadcn `Badge` in the severity's tone (D35); `Dot`, `Bar`, `ToggleGroup` and `SimControls` are not carried (`docs/design/BRIEF.md`, Run: simulation discarded)                                     |
-| `use-modal-a11y.ts` | `lib/use-modal-a11y.ts`              | `58d58f47` | the opener is a required argument and focus returns to it; `document.activeElement` is never read (`IA_SPEC.md` §7); only the topmost overlay traps Tab                                                              |
+| File here          | Source path                          | Blob       | Changes                                                                                                                                                                                                              |
+| ------------------ | ------------------------------------ | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ActionReason.tsx` | `components/shared/ActionReason.tsx` | `85ad0516` | `"use client"` dropped; `data-*` passes through unchanged; `reasonTitle` carries the pointer's fuller detail (the code) while the reason stays the plain sentence; the control is shadcn's `Button` (D35)            |
+| `SurfaceState.tsx` | `components/shared/SurfaceState.tsx` | `eb6f56b8` | kinds are the seven of `IA_SPEC.md` §6 (`empty` → `observed-empty`; `checking`, `not-run` dropped) plus `choose`, a case section waiting on the reader's selection; the glyph is `SeverityMark` (`DESIGN.md` shapes) |
+| `atoms.tsx`        | `components/pipeline/atoms.tsx`      | `66370ae1` | `Tag` only, now a shadcn `Badge` in the severity's tone (D35); `Dot`, `Bar`, `ToggleGroup` and `SimControls` are not carried (`docs/design/BRIEF.md`, Run: simulation discarded)                                     |
 
 `TextInput.tsx` (now shadcn's `Input`) and `sev.ts` (now the badge's tones) were removed
-with D35. Not carried, because no section uses them: `Panel` (sections draw `.pnl` from
+with D35, and `use-modal-a11y.ts` with N64: the evidence overlays are Base UI's Dialog
+(`evidence/Overlay.tsx`), told to return focus to the opener it is passed. Not carried, because no section uses them: `Panel` (sections draw `.pnl` from
 `caos.css`, styled as shadcn's card), `StatCard`, `SectionHeader`, `StatusGlyph`
 (`locked`/`held` have no surface yet), `lib/a11y.ts` (`onActivate`: every clickable row is a
 real button or link).
