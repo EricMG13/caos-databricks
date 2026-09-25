@@ -9,7 +9,7 @@ import { MemoryRouter } from "react-router";
 import { SectionSummary, headlineOf, keepStamps } from "@/chrome/SectionSummary";
 import { SectionTabs } from "@/chrome/SectionTabs";
 import { SiteHeader } from "@/chrome/SiteHeader";
-import { RUN_SEVERITY, composeChrome, isParked, sentence, words } from "@/chrome/compose";
+import { RUN_SEVERITY, composeChrome, isParked, scopeOf, sentence, words } from "@/chrome/compose";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import {
   parseAnalysisDocument,
@@ -35,13 +35,15 @@ test("test_words_reads_a_code_as_words", () => {
 test("Analysis names the conclusion, the module to review and the evidence it rests on", () => {
   const chrome = composeChrome("analysis", parseAnalysisDocument(load("analysis.json")));
   // CP-CF, the host's own calculation, runs last but concludes nothing.
-  expect(chrome.brief.impact).toBe("Committee Ready · full committee");
+  // The bundle's committee status as the bundle spells it, and its decision
+  // scope in words (D65).
+  expect(chrome.brief.impact).toBe("Committee Ready · full scope");
   expect(chrome.brief.action).toBe("Review CP-1C before committee.");
   expect(chrome.brief.evidence).toBe("4 citations across 4 documents, 1 withdrawn.");
   expect(chrome.brief.headline).toBe("12/12");
   expect(chrome.verdict).toEqual({
     severity: "WARNING",
-    conclusion: "Committee Ready · full committee, with 1 module to review",
+    conclusion: "Committee Ready · full scope, with 1 module to review",
     blocked_on: null,
   });
   expect(chrome.ribbon.execution).toBe("COMPLETE");
@@ -51,7 +53,7 @@ test("Analysis names the conclusion, the module to review and the evidence it re
 test("Run names what it waits on: an open gate, else a module held at its gate", () => {
   const chrome = composeChrome("run", parseRunSectionDocument(load("run.json")));
   expect(chrome.ribbon.execution).toBe("RUNNING");
-  expect(chrome.ribbon.approval).toBe("gates released");
+  expect(chrome.ribbon.approval).toBe("Gates released");
   expect(chrome.brief.change).toMatch(/^6 of 10 modules complete\. Observed /);
   expect(chrome.brief.impact).toBe("1 module restricted.");
   expect(chrome.verdict.conclusion).toBe("In progress · CP-6 at its gate");
@@ -76,7 +78,7 @@ test("Upload's verdict agrees with its count of withdrawn sources", () => {
 test("Report says how far the shown revision has gone and what comes next", () => {
   const document = parseReportDocument(load("states/report.acts.json"));
   const chrome = composeChrome("report", document);
-  expect(chrome.ribbon.persistence).toBe("saved");
+  expect(chrome.ribbon.persistence).toBe("Saved");
   expect(chrome.ribbon.approval).toBeNull();
   expect(chrome.brief.action).toBe("Sign, then freeze, to send it to committee.");
   expect(chrome.verdict).toMatchObject({ severity: "IDLE", conclusion: "Saved, not yet frozen." });
@@ -85,6 +87,37 @@ test("Report says how far the shown revision has gone and what comes next", () =
     severity: "SUCCESS",
     conclusion: "Filed.",
   });
+});
+
+test("a limitation carried forward is RESTRICTED's ring, a validation warning a warning (D71)", () => {
+  // CP-1C is QA Restricted with a stated limitation and one validation
+  // warning: the warning decides. Without it, the only module to review is
+  // restricted, and the verdict wears the ring.
+  const analysis = load("analysis.json");
+  expect(composeChrome("analysis", parseAnalysisDocument(analysis)).verdict.severity).toBe(
+    "WARNING",
+  );
+  for (const handoff of analysis.body.handoffs) handoff.validation_warnings = [];
+  const restricted = composeChrome("analysis", parseAnalysisDocument(analysis));
+  expect(restricted.verdict.severity).toBe("RESTRICTED");
+  expect(restricted.verdict.conclusion).toBe(
+    "Committee Ready · full scope, with 1 module to review",
+  );
+  expect(restricted.tabs.find((tab) => tab.label === "CP-1C")?.severity).toBe("RESTRICTED");
+  // Model: an accepted forecast stating a limitation is restricted, not a warning.
+  const model = load("model.json");
+  model.body.forecast.limitation_flags = ["LIMITED_HISTORY"];
+  model.body.forecast.validation_warnings = [];
+  expect(composeChrome("model", parseModelDocument(model)).verdict.severity).toBe("RESTRICTED");
+  model.body.forecast.validation_warnings = ["A check did not reconcile"];
+  expect(composeChrome("model", parseModelDocument(model)).verdict.severity).toBe("WARNING");
+  model.body.forecast.limitation_flags = [];
+  model.body.forecast.validation_warnings = [];
+  expect(composeChrome("model", parseModelDocument(model)).verdict.severity).toBe("SUCCESS");
+  // The bundle's two scopes in words; any other code as its words.
+  expect(scopeOf("FULL")).toBe("full scope");
+  expect(scopeOf("SCREENING_ONLY")).toBe("screening only");
+  expect(scopeOf("SOMETHING_ELSE")).toBe("something else");
 });
 
 test("an empty directory and a run with no forecast say so, and what to do", () => {

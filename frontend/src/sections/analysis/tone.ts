@@ -36,19 +36,29 @@ export function conclusionOf(handoffs: readonly HandoffView[]): HandoffView | nu
   return reasoning.at(-1) ?? handoffs.at(-1) ?? null;
 }
 
-/** A handoff's state as a severity: passed and clean is success; restricted,
-    screening only or carrying flags or warnings is a warning; a QA status
-    that did not pass is critical. */
-export function handoffSeverity(handoff: HandoffView): Severity {
-  const qa = handoff.qa_status.toUpperCase();
+/** What a QA reading needs: a handoff, or CP-CF's accepted forecast. */
+export type QaRecord = Pick<
+  HandoffView,
+  "qa_status" | "limitation_flags" | "validation_warnings"
+> & {
+  screening_only?: boolean;
+};
+
+/** A handoff's state as a severity, in the bundle's own terms (D71). A QA
+    status that did not pass is critical. A validation warning is a warning:
+    `validation_warnings` is the bundle's field for it. A module that ran
+    carrying a limitation forward -- QA `Restricted`, the normalised word for
+    every "with limitations" (CANON_SHARED D1), or a stated limitation flag, or
+    a screening-only scope that can never be Committee Ready -- is RESTRICTED's
+    ring, never a warning. A QA word the bundle does not declare is a warning. */
+export function handoffSeverity(record: QaRecord): Severity {
+  const qa = record.qa_status.toUpperCase();
   if (qa === "FAILED" || qa === "BLOCKED") return "CRITICAL";
-  if (
-    qa !== "PASSED" ||
-    handoff.screening_only ||
-    handoff.limitation_flags.length > 0 ||
-    handoff.validation_warnings.length > 0
-  ) {
+  if (record.validation_warnings.length > 0 || (qa !== "PASSED" && qa !== "RESTRICTED")) {
     return "WARNING";
+  }
+  if (qa === "RESTRICTED" || record.limitation_flags.length > 0 || record.screening_only) {
+    return "RESTRICTED";
   }
   return "SUCCESS";
 }

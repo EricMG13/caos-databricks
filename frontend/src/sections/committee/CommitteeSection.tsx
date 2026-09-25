@@ -1,5 +1,5 @@
 import { DownloadIcon, FileTextIcon } from "lucide-react";
-import { sentence } from "@/chrome/compose";
+import { scopeOf, sentence } from "@/chrome/compose";
 import { cn } from "cn";
 import { buttonVariants } from "@/components/ui/button";
 import { RefusedControl } from "@/controls/RefusedControl";
@@ -73,7 +73,7 @@ function Artifact({ artifact }: { artifact: CommitteeDocument["body"]["artifacts
       <header>
         <h2>{artifact.route_node_id}</h2>
         <span className="cp">
-          {sentence(artifact.qa_status)} · {sentence(artifact.committee_status)}
+          {artifact.qa_status} · {artifact.committee_status}
         </span>
       </header>
       <div className="pb">
@@ -87,7 +87,7 @@ function Artifact({ artifact }: { artifact: CommitteeDocument["body"]["artifacts
             <Digest value={artifact.record_sha256} prefix="sha256:" />
           </dd>
           <dt>Scope</dt>
-          <dd className="prose">{artifact.decision_scope}</dd>
+          <dd className="prose">{sentence(scopeOf(artifact.decision_scope))}</dd>
           <NoteRows label="Limitations" values={artifact.limitation_flags} />
           <NoteRows label="Validation warnings" values={artifact.validation_warnings} />
         </dl>

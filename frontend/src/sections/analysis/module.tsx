@@ -22,7 +22,7 @@ import {
   type Shape,
 } from "./parts";
 import { formatDecimal } from "@/charts";
-import { words } from "@/chrome/compose";
+import { scopeOf, words } from "@/chrome/compose";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MarkdownBlocks, MdCell, MdHead, MdInline, MdTableView } from "@/ds/ModelMarkdown";
@@ -346,7 +346,7 @@ export function ModuleFacts({
     <ul className="modfacts">
       {subject ? <li data-subject>{subject}</li> : null}
       <li data-committee-status>
-        {handoff.committee_status} · {words(handoff.decision_scope)}
+        {handoff.committee_status} · {scopeOf(handoff.decision_scope)}
       </li>
       <li>
         Confidence{" "}
@@ -484,7 +484,7 @@ function caveatsOf(handoff: HandoffView, read: Read | null, screening: string): 
   if (handoff.qa_status !== "Passed") {
     out.push({
       key: "qa",
-      title: `QA ${handoff.qa_status.toLowerCase()}.`,
+      title: `QA ${handoff.qa_status}.`,
       text: "Read the module's limitations before relying on it.",
       origin: host,
     });

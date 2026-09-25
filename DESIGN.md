@@ -65,14 +65,20 @@ confidence scores are Geist Mono and tabular so columns scan and decimals
 align; figure columns are right-aligned.
 
 **Severity is shape and hue.** Success and running are a disc, warning a
-triangle, critical a rounded square, idle a flat dot, and a restricted node —
-ran, carrying its limitation — a ring (F159). Colour alone never carries
-status; a badge's tone always sits beside its word.
+triangle, critical a rounded square, idle a flat dot, and whatever ran
+carrying its limitation forward a ring: a restricted node (F159), and a
+module or forecast whose QA is `Restricted`, that states a limitation, or
+whose scope is screening only (D71). A warning is what the bundle calls one,
+a validation warning. Colour alone never carries status; a badge's tone
+always sits beside its word.
 
 **Sentence case.** Labels, buttons, badges, captions and status words are
 sentence case, node and attempt states included ("Runnable · frontier",
 "Blocked · not accepted"). Codes stay verbatim only where they are quoted as
-codes: refusal codes, edge types (`REQUIRED`, `QA_GATE`) and ids. Mono is for
+codes: refusal codes, edge types (`REQUIRED`, `QA_GATE`), ids, and the
+bundle's QA and committee statuses ("Passed", "Committee Ready", "Draft
+Only"), which are its enumerated values and read as it spells them (D65). A
+decision scope reads in words ("full scope", "screening only"). Mono is for
 figures, ids, digests and times, never for words.
 
 **Paper is for filed output and evidence pages only.** Ink on cream inside the

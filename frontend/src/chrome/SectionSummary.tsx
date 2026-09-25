@@ -5,7 +5,6 @@
 // cell with nothing to say is not drawn (critique P1).
 import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
 import { SeverityMark, toneOf } from "./SeverityMark";
-import { sentence } from "./compose";
 import { Button } from "@/components/ui/button";
 import type { Brief, Ribbon, Verdict } from "@/wire";
 
@@ -136,7 +135,9 @@ export function SectionSummary({
               ) : null}
               {states.map(({ key, label }) => (
                 <span key={key} data-state-cell={key}>
-                  {label} <span className="text-foreground">{sentence(ribbon[key] ?? "")}</span>
+                  {/* As composed: the section's own words in sentence case, the
+                      bundle's statuses as the bundle spells them (D65). */}
+                  {label} <span className="text-foreground">{ribbon[key]}</span>
                 </span>
               ))}
             </p>

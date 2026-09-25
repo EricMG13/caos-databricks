@@ -439,7 +439,7 @@ describe("severity", () => {
       <SectionSummary
         verdict={{ severity: "WARNING", conclusion: "Conditional", blocked_on: "CP-6" }}
         brief={{ change: "Changed.", impact: null, action: null, evidence: null, headline: "3" }}
-        ribbon={{ ...QUIET, approval: "FULL_COMMITTEE" }}
+        ribbon={{ ...QUIET, approval: "Committee Ready" }}
       />,
     );
     const verdict = container.querySelector("[data-verdict]")!;
@@ -447,8 +447,10 @@ describe("severity", () => {
     expect(within(verdict as HTMLElement).getByRole("img", { name: "WARNING" })).toBeVisible();
     expect(verdict).toHaveTextContent("Conditional");
     expect(verdict.querySelector("[data-blocked-on]")).toHaveTextContent("Blocked on CP-6");
+    // Printed as composed: the bundle's status as the bundle spells it, never
+    // "Committee ready" beside a "Committee Ready" elsewhere on the page (D65).
     expect(verdict.querySelector("[data-state-cell='approval']")).toHaveTextContent(
-      "Approval Full committee",
+      "Approval Committee Ready",
     );
   });
 });

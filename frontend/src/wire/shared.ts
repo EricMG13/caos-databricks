@@ -16,8 +16,9 @@ export const SECTIONS = [
 ] as const;
 export type Section = (typeof SECTIONS)[number];
 
-/** `RESTRICTED` is a node state's own mark: ran, carrying its limitation
-    forward, never a warning (CONTEXT.md, CF-036). */
+/** `RESTRICTED` is the mark of whatever ran carrying its limitation forward --
+    a node state (CONTEXT.md, CF-036), and a handoff or forecast whose QA is
+    Restricted or that states a limitation (D71) -- never a warning. */
 export type Severity = "SUCCESS" | "RUNNING" | "WARNING" | "CRITICAL" | "IDLE" | "RESTRICTED";
 export type NodeState = "COMPLETE" | "RUNNABLE" | "RESTRICTED" | "BLOCKED";
 export type EdgeType = "REQUIRED" | "CONDITIONAL" | "QA_GATE" | "OPTIONAL" | "ADVISORY";

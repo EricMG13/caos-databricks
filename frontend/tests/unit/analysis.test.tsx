@@ -488,8 +488,20 @@ describe("Analysis", () => {
 
   test("test_handoffSeverity_and_conclusionOf", () => {
     const cp1c = complete.body.handoffs.find((h) => h.module_id === "CP-1C")!;
+    // In the bundle's terms (D71): a validation warning is a warning; QA
+    // Restricted, a stated limitation or a screening-only scope is carried
+    // forward, RESTRICTED's ring; a QA word the bundle does not declare is a
+    // warning; one that did not pass is critical.
     expect(handoffSeverity(cp1c)).toBe("WARNING");
-    expect(handoffSeverity(complete.body.handoffs[0]!)).toBe("SUCCESS");
+    expect(handoffSeverity({ ...cp1c, validation_warnings: [] })).toBe("RESTRICTED");
+    const passed = complete.body.handoffs[0]!;
+    expect(handoffSeverity(passed)).toBe("SUCCESS");
+    expect(handoffSeverity({ ...passed, limitation_flags: ["LIMITED_HISTORY"] })).toBe(
+      "RESTRICTED",
+    );
+    expect(handoffSeverity({ ...passed, screening_only: true })).toBe("RESTRICTED");
+    expect(handoffSeverity({ ...passed, validation_warnings: ["x"] })).toBe("WARNING");
+    expect(handoffSeverity({ ...passed, qa_status: "Ready" })).toBe("WARNING");
     expect(handoffSeverity({ ...cp1c, qa_status: "Failed" })).toBe("CRITICAL");
     expect(conclusionOf(complete.body.handoffs)?.module_id).toBe("CP-7");
     expect(conclusionOf([])).toBeNull();

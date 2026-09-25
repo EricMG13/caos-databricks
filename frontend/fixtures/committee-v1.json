@@ -23,9 +23,9 @@
         "record_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
         "markdown": "<img src=x onerror=\"window.pwned=1\">",
         "record": "{\"coverage\":\"2.1x\"}",
-        "qa_status": "ACCEPTED",
-        "committee_status": "READY",
-        "decision_scope": "Credit review",
+        "qa_status": "Passed",
+        "committee_status": "Committee Ready",
+        "decision_scope": "FULL",
         "limitation_flags": ["<script>limit</script>"],
         "validation_warnings": ["<img src=x onerror=\"window.warned=1\">"]
       }

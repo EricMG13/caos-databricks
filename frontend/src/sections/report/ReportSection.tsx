@@ -7,7 +7,7 @@ import { Link } from "react-router";
 import { FilingControls } from "./FilingControls";
 import { sectionPath } from "@/app/sections";
 import { SeverityMark } from "@/chrome/SeverityMark";
-import { sentence } from "@/chrome/compose";
+import { scopeOf, sentence } from "@/chrome/compose";
 import { ArtifactTexts } from "@/ds/ArtifactMarkdown";
 import { NoteRows } from "@/ds/atoms";
 import { shortDigest, stamp } from "@/ds/format";
@@ -22,7 +22,7 @@ function Artifact({ artifact }: { artifact: ReportDocument["body"]["artifacts"][
       <header>
         <h2>{artifact.route_node_id}</h2>
         <span className="cp">
-          {sentence(artifact.qa_status)} · {sentence(artifact.committee_status)}
+          {artifact.qa_status} · {artifact.committee_status}
         </span>
       </header>
       <div className="pb">
@@ -36,7 +36,7 @@ function Artifact({ artifact }: { artifact: ReportDocument["body"]["artifacts"][
             <Digest value={artifact.record_sha256} prefix="sha256:" />
           </dd>
           <dt>Scope</dt>
-          <dd className="prose">{sentence(artifact.decision_scope)}</dd>
+          <dd className="prose">{sentence(scopeOf(artifact.decision_scope))}</dd>
           <NoteRows
             label="Limitations"
             values={artifact.limitation_flags}

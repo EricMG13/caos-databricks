@@ -16,7 +16,7 @@
       "artifact_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "record_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
       "accepted_at": "2026-09-14T10:00:00Z",
-      "qa_status": "ACCEPTED",
+      "qa_status": "Passed",
       "limitation_flags": ["LIMITED_HISTORY"],
       "validation_warnings": [],
       "currency": "USD",

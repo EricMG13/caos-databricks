@@ -57,6 +57,14 @@ export function words(code: string): string {
   return code.replaceAll("_", " ").toLowerCase();
 }
 
+/** A decision scope in words: the bundle's two (`FULL`, `SCREENING_ONLY`),
+    and any other code as its words. */
+export function scopeOf(code: string): string {
+  if (code === "FULL") return "full scope";
+  if (code === "SCREENING_ONLY") return "screening only";
+  return words(code);
+}
+
 /** `FULL_COMMITTEE` reads "Full committee": a code shown as a label. */
 export function sentence(code: string): string {
   const said = words(code);
@@ -209,7 +217,7 @@ function run(document: RunSectionDocument): Facts {
     ribbon: {
       ...QUIET,
       execution: parked ? "PARKED" : view.status,
-      approval: open.length ? `${plural(open.length, "gate")} open` : "gates released",
+      approval: open.length ? `${plural(open.length, "gate")} open` : "Gates released",
     },
     brief: {
       change: `${done} of ${plural(view.nodes.length, "module")} complete.`,
@@ -243,19 +251,22 @@ function run(document: RunSectionDocument): Facts {
 function analysis(document: AnalysisDocument): Facts {
   const { handoffs, pending, displayed_run_status: status, blocked_by: blocked } = document.body;
   const conclusion = conclusionOf(handoffs);
-  const weak = handoffs
-    .filter((handoff) => handoffSeverity(handoff) !== "SUCCESS")
-    .map((handoff) => handoff.module_id);
+  const weak = handoffs.filter((handoff) => handoffSeverity(handoff) !== "SUCCESS");
   const citations = handoffs.flatMap((handoff) => handoff.source_facts);
   const documents = new Set(citations.map((fact) => fact.document_sha256)).size;
   const withdrawn = citations.filter((fact) => fact.withdrawn_at !== null).length;
   const ready = conclusion
-    ? `${conclusion.committee_status} · ${words(conclusion.decision_scope)}`
+    ? `${conclusion.committee_status} · ${scopeOf(conclusion.decision_scope)}`
     : null;
+  // Only restricted modules to review is a ring; any warning or failure among
+  // them is the warning it always was.
+  const worst = weak.every((handoff) => handoffSeverity(handoff) === "RESTRICTED")
+    ? "RESTRICTED"
+    : "WARNING";
   const severity: Verdict["severity"] = blocked
     ? "CRITICAL"
     : weak.length
-      ? "WARNING"
+      ? worst
       : pending.length
         ? "RUNNING"
         : conclusion
@@ -278,7 +289,7 @@ function analysis(document: AnalysisDocument): Facts {
       change: `${plural(handoffs.length, "module")} accepted, ${pending.length} pending.`,
       impact: ready,
       action: weak.length
-        ? `Review ${weak.join(", ")} before committee.`
+        ? `Review ${weak.map((handoff) => handoff.module_id).join(", ")} before committee.`
         : pending.length
           ? `Waiting on ${pending[0]!.module_name}.`
           : conclusion
@@ -337,6 +348,9 @@ function model(document: ModelDocument): Facts {
     };
   }
   const flags = forecast.limitation_flags.length;
+  // The same reading as a handoff's (D71): a stated limitation carried
+  // forward is RESTRICTED's ring, a validation warning a warning.
+  const severity = handoffSeverity(forecast);
   return {
     ribbon: { ...QUIET, approval: forecast.qa_status },
     brief: {
@@ -347,7 +361,7 @@ function model(document: ModelDocument): Facts {
       headline: String(forecast.periods.length),
       headline_label: noun(forecast.periods.length, "period"),
     },
-    verdict: verdict(flags ? "WARNING" : "SUCCESS", "Accepted CP-CF projection."),
+    verdict: verdict(severity, "Accepted CP-CF projection."),
   };
 }
 
@@ -365,8 +379,8 @@ function report(document: ReportDocument): Facts {
   return {
     ribbon: {
       ...QUIET,
-      persistence: shown ? "saved" : "not saved",
-      approval: state && state !== "saved" ? state : null,
+      persistence: shown ? "Saved" : "Not saved",
+      approval: state && state !== "saved" ? sentence(state) : null,
     },
     brief: {
       change: row
@@ -392,7 +406,7 @@ function report(document: ReportDocument): Facts {
 function committee(document: CommitteeDocument): Facts {
   const { state, signed_by: signers, receipt } = document.body;
   return {
-    ribbon: { ...QUIET, persistence: "saved", approval: state },
+    ribbon: { ...QUIET, persistence: "Saved", approval: sentence(state) },
     brief: {
       change: state === "filed" ? "Filed." : "Frozen for committee.",
       impact: `${plural(signers.length, "signature")}.`,
