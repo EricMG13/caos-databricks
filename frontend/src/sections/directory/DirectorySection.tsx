@@ -1,4 +1,4 @@
-// Directory (IA_SPEC.md 4.1): the case register, v1 wire. Search and filter
+// Directory: the case register, v1 wire. Search and filter
 // are fields the v1 Directory document does not carry (brief 4.1, decisions 1
 // and 9); this section draws exactly the cases the actor holds live standing
 // on and nothing else. Create case is a governed write this section owns

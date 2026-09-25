@@ -1,4 +1,4 @@
-// One region, nine ways: the seven states of IA_SPEC.md 6 rendered distinctly,
+// One region, nine ways: the seven region states rendered distinctly,
 // `choose`, which says what the reader must pick and where, and `ready`, which
 // renders its children with no marker of its own.
 import type { ReactNode } from "react";

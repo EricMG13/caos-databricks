@@ -431,7 +431,7 @@ def test_expected_filename_is_the_vendor_canonical_name() -> None:
 
 @pytest.mark.parametrize("status", ["NOT-A-STATUS", "", "READY|BLOCKED"])
 def test_a_malformed_readiness_map_refuses_rather_than_raising(status: str) -> None:
-    """REBUILD_PLAN Phase 11 exit, on CP-0's T8 register since f-1c: a status
+    """On CP-0's T8 register since f-1c: a status
     the vendor does not know refuses typed, with no context carried."""
     refused = _refused(
         CP0, _markdown(CP0, readiness={"CP-L10": status}), gate_expects=PINNED

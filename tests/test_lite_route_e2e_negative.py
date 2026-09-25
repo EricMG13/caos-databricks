@@ -9,7 +9,7 @@ kept only as attempt evidence: CP-5 is never called, nothing downstream is
 accepted, the proof covers only CP-0 and the deliverable refuses. Injected
 source text changes no host-owned route, authority, front matter or identity.
 
-REPAIR_PLAN Phase 3 exit checks: blocked/invalid output is retained only as
+The exit checks: blocked/invalid output is retained only as
 diagnostic attempt evidence, never as usable downstream analysis; a missing or
 changed predecessor prevents acceptance; source text carries no authority.
 """

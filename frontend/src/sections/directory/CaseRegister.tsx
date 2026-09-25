@@ -1,4 +1,4 @@
-// The case register (IA_SPEC.md 4.1, card 5a): one action per row and it is
+// The case register (card 5a): one action per row and it is
 // the same action — open the case. No batch state, no checkboxes, no second
 // selection model. The v1 wire carries no sector, rating, pathway, snapshot
 // or leverage; this table draws only what the host holds (brief 4.1,

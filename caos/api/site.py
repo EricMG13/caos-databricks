@@ -44,7 +44,7 @@ from caos.refusals import Refusal, RefusalCode
 IO_BUDGET = 0
 
 SITE_ROOT_ENV = "CAOS_SITE_ROOT"
-# The nine sections of `frontend/src/app/sections.ts` (IA_SPEC.md 1). A disabled
+# The nine sections of `frontend/src/app/sections.ts`. A disabled
 # section still loads the workspace, which renders it unavailable.
 SECTIONS = (
     "directory",

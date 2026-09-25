@@ -1,6 +1,6 @@
 // Every governed action renders visible and, when refused, refused with its
 // typed code and what clears it. aria-disabled, never disabled, never hidden
-// (IA_SPEC.md 2; DESIGN.md "Rules with teeth").
+// (DESIGN.md "Rules with teeth").
 import type { ReactNode } from "react";
 import { ActionReason, type ControlLook } from "@/ds/ActionReason";
 import type { Refusal } from "@/wire";

@@ -1,5 +1,5 @@
 // The snapshot-binding ledger a section reads through: one accepted snapshot
-// per compared case on screen (IA_SPEC.md 5). It outlives the documents a
+// per compared case on screen. It outlives the documents a
 // section renders, so a later document carrying a different snapshot for a
 // bound case is refused, and only an explicit lens switch moves the binding.
 import { createContext, useContext, useMemo, useRef, type ReactNode } from "react";

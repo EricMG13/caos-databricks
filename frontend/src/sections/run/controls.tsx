@@ -412,7 +412,7 @@ export function CreateRunControl({
                 data-model-extension
                 checked={accepts && extension}
                 // Refused, not removed: it stays focusable and says why
-                // (IA_SPEC.md 2), and a press on it changes nothing.
+                // (DESIGN.md "Rules with teeth"), and a press on it changes nothing.
                 aria-disabled={accepts ? undefined : true}
                 aria-describedby={accepts ? undefined : extensionWhy}
                 onChange={(event: ChangeEvent<HTMLInputElement>) => {

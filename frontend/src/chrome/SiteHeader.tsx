@@ -1,7 +1,7 @@
 // What am I looking at, and is it trustworthy? The case and the section as a
 // trail, the section's name as the page heading, then the document's warnings
 // and the run's state, the section's actions (at most three, exactly one
-// primary; IA_SPEC.md 3) and the reader's theme.
+// primary) and the reader's theme.
 import { SeverityMark } from "./SeverityMark";
 import { ThemeToggle } from "./ThemeToggle";
 import { RUN_SEVERITY, sentence } from "./compose";

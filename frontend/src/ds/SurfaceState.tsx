@@ -3,7 +3,7 @@ import { SeverityMark } from "@/chrome/SeverityMark";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Severity } from "@/wire";
 
-/** The seven states of IA_SPEC.md 6. `ready` is not a state of this component:
+/** The seven region states. `ready` is not a state of this component:
     a ready region renders its children with no marker. */
 export type SurfaceStateKind =
   | "loading"

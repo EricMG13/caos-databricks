@@ -470,7 +470,7 @@ const ModelBody = object({
 });
 const ModelDocument = sectionDocument(ModelBody);
 
-// Book, `/api/v1/book` (IA_SPEC.md 4.4): the credit across the portfolio. No
+// Book, `/api/v1/book`: the credit across the portfolio. No
 // case in its body, so it is the one section document beside Directory's that
 // answers for no single case.
 // What the column's own figure is (N60): a plain fraction and a currency
@@ -481,7 +481,7 @@ const BookColumn = object({
   unit: enumOf(["percent", "currency", "multiple", "count", "none"]),
 });
 const BookResearch = object({ route_node_id: short, module_id: short, qa_status: short });
-/** The ten fields of IA_SPEC.md 4.4, in its order and closed to them. */
+/** The ten passport fields, in their order and closed to them. */
 const BookPassport = object({
   definition: text,
   period: text,

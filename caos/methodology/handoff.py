@@ -74,8 +74,8 @@ ADAPTER_MODULES = frozenset(
         "CP-6",
     }
 )
-# The catalog pathways a contract test proves end to end (REPAIR_PLAN Phase 3
-# work item 6): adapter modules on any other pathway stay disabled.
+# The catalog pathways a contract test proves end to end: adapter modules on
+# any other pathway stay disabled.
 ADAPTER_ROUTES = frozenset(
     {
         ("LITE_CREDIT_22", "LITE_EARNINGS_UPDATE"),

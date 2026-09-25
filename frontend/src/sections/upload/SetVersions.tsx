@@ -1,4 +1,4 @@
-// Set versions are immutable (IA_SPEC.md 4.2). The v1 wire carries no pin
+// Set versions are immutable. The v1 wire carries no pin
 // state or pinning action -- pinning is a governed command, out of scope for
 // 4.1 (brief 4.1, decision 5: "4.1 has no actions") -- so this panel lists
 // each version's fingerprint and member count and nothing more.

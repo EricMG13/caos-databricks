@@ -1,5 +1,5 @@
 // One transport for every section document. A response becomes a RegionStatus,
-// never an exception: the seven states of IA_SPEC.md 6 plus `ready`.
+// never an exception: the seven region states (`@/ds/SurfaceState`) plus `ready`.
 //
 // URLs are versioned and case-scoped (brief 4.1, decision 1). Every enabled
 // section reads the v1 wire (Directory and Upload since slice 4.1h, Run since

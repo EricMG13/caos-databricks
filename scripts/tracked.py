@@ -3,7 +3,7 @@
 Shared by the vocabulary and untested-definition gates. `git ls-files` rather
 than a tree walk, because .gitignore already answers "is this ours" and a walk
 would re-answer it differently. Vendored trees are excluded: the methodology
-bundle is authority we never edit (DECISIONS.md 6), so a vocabulary or coverage
+bundle is authority we never edit (CLAUDE.md invariant 4), so a vocabulary or coverage
 finding inside it names something no PR is allowed to fix.
 
 The home for every call in this repository that shells to git: a resolved

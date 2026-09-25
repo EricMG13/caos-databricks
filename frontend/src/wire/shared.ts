@@ -77,7 +77,7 @@ export interface Ribbon {
   execution: string | null;
   persistence: string | null;
   approval: string | null;
-  /** At most three; exactly one primary (IA_SPEC.md 3). */
+  /** At most three; exactly one primary. */
   actions: RibbonAction[];
 }
 /** A cell with nothing the document supports is null and is not drawn. */
@@ -148,7 +148,7 @@ export interface SectionDocument<B> {
   notes?: string[];
 }
 
-/** The ten passport fields, IA_SPEC.md 4.4. Rendering is keyed on this list. */
+/** The ten passport fields. Rendering is keyed on this list. */
 export const PASSPORT_FIELDS = [
   "definition",
   "period",

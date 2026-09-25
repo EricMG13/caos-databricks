@@ -1,4 +1,4 @@
-// The metric passport: exactly the ten fields of IA_SPEC.md 4.4, for an actual
+// The metric passport: exactly the ten passport fields (`@/wire/shared`), for an actual
 // and for a projected cell alike. A projected cell also names its driver and
 // the driver's evidence.
 import type { ReactNode } from "react";

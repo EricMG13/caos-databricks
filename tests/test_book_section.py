@@ -88,7 +88,7 @@ def test_the_book_row_carries_the_accepted_projection_cells_and_their_passports(
     assert cells["operating.ebitda"].value == "100.000000"
     assert cells["operating.margin"].value == "0.2000"
 
-    # The ten fields of IA_SPEC 4.4, each answered from what the record says.
+    # The ten passport fields, each answered from what the record says.
     passport = cells["operating.margin"].passport
     assert passport.period == "FY2026 · FY2026 · 365 days"
     # The scenario is the record's own `case`, not a constant: two cases

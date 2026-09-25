@@ -5,7 +5,7 @@
 // and the page behind made inert. What it is told here is where focus goes on
 // close: the opener the caller passed, never one inferred from where focus
 // happened to be (WebKit does not focus a clicked button), and only while
-// that opener is still on the page (IA_SPEC.md 7, FE-4); otherwise nothing,
+// that opener is still on the page (FE-4); otherwise nothing,
 // and the caller's own fallback places it.
 import { useState, type ReactNode } from "react";
 import { Dialog } from "@base-ui/react/dialog";
