@@ -515,6 +515,45 @@ def test_a_filing_against_a_digest_that_is_no_longer_the_frozen_one_refuses(
     assert answer.json()["code"] == "DELIVERABLE_MOVED_SINCE_SIGNING", answer.text
 
 
+def test_filing_re_proves_the_revision_and_refuses_after_a_cited_source_goes(
+    filing_client: TestClient, lite: _Harness
+) -> None:
+    """FP-04: filing is the act that enters the permanent audit chain, and it
+    compared rows only, so a deliverable whose cited source a writer withdrew
+    after the freeze was filed although the host could no longer prove it. It
+    re-proves the revision under the case lock first, as the freeze does, and
+    nothing is filed."""
+    revision = _save(lite)
+    digest = _digest(lite, revision)
+    for step in ("signature", "freeze"):
+        answer = _post(
+            filing_client,
+            f"{_case(lite)}/revisions/{revision}/{step}",
+            _approver(lite),
+            {"payload_sha256": digest},
+        )
+        assert answer.status_code in (200, 201), answer.text
+    writer = member(lite.conn, lite.case_id, Standing.WRITER)
+    withdrawn = _post(
+        filing_client, f"{_case(lite)}/sources/{lite.source_id}/withdrawal", writer
+    )
+    assert withdrawn.status_code == 200, withdrawn.text
+
+    answer = _post(
+        filing_client,
+        f"{_case(lite)}/revisions/{revision}/filing",
+        _approver(lite),
+        {"payload_sha256": digest},
+    )
+
+    assert answer.status_code >= 400, answer.text
+    filed = lite.conn.execute(
+        "SELECT count(*) FROM audit_events WHERE action = 'DELIVERABLE_FILED'"
+    ).fetchone()
+    lite.conn.rollback()
+    assert filed == (0,)
+
+
 # --- receipts ---------------------------------------------------------------
 
 
