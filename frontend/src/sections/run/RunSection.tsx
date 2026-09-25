@@ -15,7 +15,7 @@ import {
 } from "./controls";
 import { NodeDetail } from "./NodeDetail";
 import { blockedByOf } from "./reason";
-import { RouteGraph } from "./RouteGraph";
+import { RouteGraph, focusOf } from "./RouteGraph";
 import type { GateView } from "./types";
 import { SEVERITY_BADGE, SeverityMark } from "@/chrome/SeverityMark";
 import { isParked, sentence, words } from "@/chrome/compose";
@@ -108,8 +108,7 @@ export function RunSection({ document }: { document: RunSectionDocument; tab: st
   const chosen = choice?.run === run.run_id ? choice.node : null;
   const selectedId =
     (chosen && run.nodes.some((node) => node.route_node_id === chosen) ? chosen : null) ??
-    run.nodes[0]?.route_node_id ??
-    null;
+    focusOf(run.nodes, run.attempts, run.status, run.blocked_by);
   const selected = run.nodes.find((node) => node.route_node_id === selectedId) ?? null;
   const tally = STATES.map((state) => ({
     state,
@@ -187,21 +186,34 @@ export function RunSection({ document }: { document: RunSectionDocument; tab: st
               ))}
             </span>
           </header>
-          {run.route_digest === null ? (
-            <div className="note" data-route-not-pinned>
-              The route is not yet pinned; nothing has run.
+          {run.nodes.length === 0 ? (
+            // Nothing to draw: the empty pattern, not a canvas of dot grid.
+            <div className="pb route-empty" data-route-not-pinned>
+              <SeverityMark severity="IDLE" decorative />
+              <p className="route-empty-title">Route not pinned</p>
+              <p className="note">
+                The route is resolved and pinned once its gates are released; nothing has run.
+              </p>
             </div>
-          ) : null}
-          <div className="pb flush">
-            <RouteGraph
-              nodes={run.nodes}
-              attempts={run.attempts}
-              status={run.status}
-              blockedBy={run.blocked_by}
-              selected={selectedId}
-              onSelect={(routeNodeId) => setChoice({ run: run.run_id, node: routeNodeId })}
-            />
-          </div>
+          ) : (
+            <>
+              {run.route_digest === null ? (
+                <div className="note" data-route-not-pinned>
+                  The route is not yet pinned; nothing has run.
+                </div>
+              ) : null}
+              <div className="pb flush">
+                <RouteGraph
+                  nodes={run.nodes}
+                  attempts={run.attempts}
+                  status={run.status}
+                  blockedBy={run.blocked_by}
+                  selected={selectedId}
+                  onSelect={(routeNodeId) => setChoice({ run: run.run_id, node: routeNodeId })}
+                />
+              </div>
+            </>
+          )}
         </section>
         <details className="help">
           <summary>What the module states mean</summary>

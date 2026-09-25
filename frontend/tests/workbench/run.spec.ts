@@ -24,7 +24,9 @@ test("the route reads as a DAG, the QA gate as a gate, and the stream advances a
 test("the route is a preview, not yet pinned", async ({ page }) => {
   await page.goto(`/run/?case=${CASE}&fixture=gate`);
   await expect(page.locator("[data-route-not-pinned]")).toBeVisible();
-  await expect(page.locator(".dag[data-route]")).toHaveAttribute("data-route", "0 nodes · 0 edges");
+  await expect(page.locator("[data-route-not-pinned]")).toContainText("Route not pinned");
+  // Nothing to draw: the empty pattern, no canvas of dot grid (brief 6.6).
+  await expect(page.locator(".dag")).toHaveCount(0);
 });
 
 test("a displayed run behind the latest is labelled, never silently swapped", async ({ page }) => {

@@ -3,7 +3,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { render } from "@testing-library/react";
-import { layoutRoute, RouteGraph, stageLabel } from "@/sections/run/RouteGraph";
+import { focusOf, layoutRoute, routeOf, RouteGraph, stageLabel } from "@/sections/run/RouteGraph";
 import { parseRunSectionDocument } from "@/wire/v1";
 
 const run = () => {
@@ -47,4 +47,26 @@ test("a stage column is numbered, and the host's CP-CF extension is named", () =
   const heads = [...container.querySelectorAll(".stagehdr")].map((head) => head.textContent);
   expect(heads).toContain("Extension");
   expect(heads).not.toContain("Stage 100");
+});
+
+test("an edge is drawn square, through gutters and row gaps, never through a node", () => {
+  const view = run();
+  const layout = layoutRoute(view.nodes);
+  const placed = (id: string) => layout.nodes.find((node) => node.route_node_id === id)!;
+  // Adjacent columns: out, down the gutter before the target, in.
+  const next = routeOf(placed("rn-cp-5"), placed("rn-cp-6"));
+  expect(next.d).toMatch(/^M [\d.]+ [\d.]+ H [\d.]+ V [\d.]+ H [\d.]+$/);
+  expect(next.at.x).toBe(placed("rn-cp-6").x - 20);
+  // Across a column: along the gap above the target's row, never a diagonal.
+  const across = routeOf(placed("rn-cp-4"), placed("rn-cp-7"));
+  expect(across.d).not.toMatch(/ L /);
+  const lane = placed("rn-cp-7").y - 6;
+  expect(across.d).toContain(`V ${lane} H`);
+  // The same column: straight down.
+  expect(routeOf(placed("rn-cp-6"), placed("rn-cp-6a")).d).toMatch(/^M [\d.]+ [\d.]+ V [\d.]+$/);
+  // Drawn as paths, the gate's diamond in the gutter before the node it holds.
+  const { container } = render(graph(view));
+  expect(container.querySelectorAll("svg.edges path").length).toBeGreaterThan(0);
+  expect(container.querySelectorAll("svg.edges line")).toHaveLength(0);
+  expect(focusOf(view.nodes, view.attempts, view.status, view.blocked_by)).toBe("rn-cp-6");
 });

@@ -197,9 +197,9 @@ describe("Run", () => {
     expect(mark).toHaveTextContent("QA_GATE");
     expect(mark.querySelector(".gatebox")).not.toBeNull();
     expect(mark.getAttribute("data-gate")).toBe("CP-5 → CP-6");
-    expect(container.querySelectorAll("svg.edges line.gate").length).toBe(1);
-    expect(container.querySelectorAll("svg.edges line.req").length).toBeGreaterThan(0);
-    expect(container.querySelectorAll("svg.edges line.cond").length).toBe(1);
+    expect(container.querySelectorAll("svg.edges path.gate").length).toBe(1);
+    expect(container.querySelectorAll("svg.edges path.req").length).toBeGreaterThan(0);
+    expect(container.querySelectorAll("svg.edges path.cond").length).toBe(1);
   });
 
   test("test_layout_places_nodes_by_stage_without_overlap", () => {
@@ -233,6 +233,17 @@ describe("Run", () => {
     for (const edge of edges) {
       expect(nodes.some((node) => node.route_node_id === edge.to)).toBe(true);
     }
+  });
+
+  // The rail named CP-0 while the canvas opened scrolled to CP-6, where the
+  // work waits: both now open on where the work is (brief 6.6).
+  test("test_the_rail_and_the_canvas_open_on_where_the_work_is", () => {
+    const { container } = mount(running);
+    expect(container.querySelector('button.node[aria-pressed="true"]')).toHaveAttribute(
+      "data-node",
+      "CP-6",
+    );
+    expect(container.querySelector('[data-node-detail="CP-6"]')).not.toBeNull();
   });
 
   test("the selected node's edges, attempts and gate verdict are in the right column", () => {
@@ -284,12 +295,14 @@ describe("Run", () => {
     expect(routeNotPinned.status).toBe("partial");
     expect(routeNotPinned.notes).toContain("ROUTE_NOT_PINNED");
     const { container } = mount(routeNotPinned);
-    expect(container.querySelector("[data-route-not-pinned]")).not.toBeNull();
-    expect(container.querySelectorAll("button.node").length).toBe(0);
-    expect(container.querySelector(".dag[data-route]")).toHaveAttribute(
-      "data-route",
-      "0 nodes · 0 edges",
+    expect(container.querySelector("[data-route-not-pinned]")).toHaveTextContent(
+      "Route not pinned",
     );
+    expect(container.querySelectorAll("button.node").length).toBe(0);
+    // Nothing to draw is the empty pattern, not a canvas of dot grid and a key
+    // for edges that are not there (brief 6.6).
+    expect(container.querySelector(".dag")).toBeNull();
+    expect(container.querySelector(".legend")).toBeNull();
   });
 
   test("test_run_null_renders_the_defensive_empty_state_rather_than_crashing", () => {

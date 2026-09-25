@@ -101,23 +101,33 @@ export function severityOf(
   return by[node.state];
 }
 
-interface Segment {
-  x1: number;
-  y1: number;
-  x2: number;
-  y2: number;
+/** An edge drawn square (brief 6.6): out of its source's right side, down or
+    up in the gutter after it, along the gap above its target's row when it
+    passes other columns, and into its target's left side from the gutter
+    before it -- never through another node. `at` is where the gutter before
+    the target meets the target's row: a gate's diamond sits there. */
+export interface EdgeRoute {
+  d: string;
+  at: { x: number; y: number };
 }
-function segment(from: PlacedNode, to: PlacedNode): Segment {
+
+export function routeOf(from: PlacedNode, to: PlacedNode): EdgeRoute {
   if (from.col === to.col) {
+    const x = from.x + NODE_W / 2;
     const down = to.row > from.row;
-    return {
-      x1: from.x + NODE_W / 2,
-      y1: down ? from.y + NODE_H : from.y,
-      x2: to.x + NODE_W / 2,
-      y2: down ? to.y : to.y + NODE_H,
-    };
+    const y1 = down ? from.y + NODE_H : from.y;
+    const y2 = down ? to.y : to.y + NODE_H;
+    return { d: `M ${x} ${y1} V ${y2}`, at: { x, y: (y1 + y2) / 2 } };
   }
-  return { x1: from.x + NODE_W, y1: from.y + NODE_H / 2, x2: to.x, y2: to.y + NODE_H / 2 };
+  const x1 = from.x + NODE_W;
+  const y1 = from.y + NODE_H / 2;
+  const y2 = to.y + NODE_H / 2;
+  const before = to.x - COL_GAP / 2;
+  const at = { x: before, y: y2 };
+  if (to.col === from.col + 1) return { d: `M ${x1} ${y1} H ${before} V ${y2} H ${to.x}`, at };
+  const after = x1 + COL_GAP / 2;
+  const lane = to.y - (ROW_H - NODE_H) / 2;
+  return { d: `M ${x1} ${y1} H ${after} V ${lane} H ${before} V ${y2} H ${to.x}`, at };
 }
 
 interface EdgeLine {
@@ -140,8 +150,9 @@ export function edgesOf(
 }
 
 /** Where the work is: a running node, then a blocking one, then one waiting on
-    a gate, then the frontier; a finished route shows its end. */
-function focusOf(
+    a gate, then the frontier; a finished route shows its end. The canvas
+    opens scrolled to it, and Run's rail opens on it, so the two agree. */
+export function focusOf(
   nodes: NodeView[],
   attempts: AttemptView[],
   status: RunView["status"],
@@ -177,25 +188,22 @@ export function RouteGraph({
   const at = new Map(layout.nodes.map((placed) => [placed.route_node_id, placed]));
   const moduleOf = new Map(nodes.map((node) => [node.route_node_id, node.module_id]));
   const edges = edgesOf(nodes);
-  const lines: { key: string; cls: string; seg: Segment }[] = [];
-  let gate: { seg: Segment; from: string; to: string } | null = null;
+  const lines: { key: string; cls: string; d: string }[] = [];
+  let gate: { at: EdgeRoute["at"]; from: string; to: string } | null = null;
   for (const edge of edges) {
     const from = at.get(edge.from);
     const to = at.get(edge.to);
     if (!from || !to) continue;
-    const seg = segment(from, to);
+    const route = routeOf(from, to);
     if (edge.type === "QA_GATE" && !gate) {
       gate = {
-        seg,
+        at: route.at,
         from: moduleOf.get(edge.from) ?? edge.from,
         to: moduleOf.get(edge.to) ?? edge.to,
       };
     }
-    lines.push({ key: `${edge.from}→${edge.to}`, cls: EDGE_CLASS[edge.type], seg });
+    lines.push({ key: `${edge.from}→${edge.to}`, cls: EDGE_CLASS[edge.type], d: route.d });
   }
-  const gateMid = gate
-    ? { x: (gate.seg.x1 + gate.seg.x2) / 2, y: (gate.seg.y1 + gate.seg.y2) / 2 }
-    : null;
   // A wide route hid its frontier past the panel's right edge (critique): the
   // stages where the work is are brought into view once per route, and never
   // again, so a reader's own scrolling is left alone.
@@ -220,8 +228,8 @@ export function RouteGraph({
             preserveAspectRatio="none"
             aria-hidden="true"
           >
-            {lines.map(({ key, cls, seg }) => (
-              <line key={key} className={cls} x1={seg.x1} y1={seg.y1} x2={seg.x2} y2={seg.y2} />
+            {lines.map(({ key, cls, d }) => (
+              <path key={key} className={cls} d={d} />
             ))}
           </svg>
           {layout.columns.map((column) => (
@@ -269,14 +277,16 @@ export function RouteGraph({
               </button>
             );
           })}
-          {gate && gateMid ? (
+          {gate ? (
             <div
               className="gatemark"
               data-gate={`${gate.from} → ${gate.to}`}
-              style={{ left: gateMid.x, top: gateMid.y }}
+              style={{ left: gate.at.x, top: gate.at.y }}
             >
               <span className="gatebox" aria-hidden="true" />
-              <span className="gatelbl">QA_GATE</span>
+              {/* The legend keys the diamond; its name is said, not printed
+                  across the gutter where it ran into both nodes. */}
+              <span className="gatelbl sr-only">QA_GATE</span>
             </div>
           ) : null}
         </div>
