@@ -347,22 +347,30 @@ export function FilingControls({
         <label className="fld" htmlFor="narrative-draft">
           Narrative draft
         </label>
-        <Textarea
-          id="narrative-draft"
-          className="min-h-24"
-          ref={editor}
-          value={draft}
-          rows={4}
-          placeholder="One paragraph per line."
-          aria-describedby="narrative-draft-rule"
-          onChange={(event) => setDraft(event.target.value)}
-        />
-        <p className="note" id="narrative-draft-rule">
-          Type prose only. Every figure goes in through the citation picker, which puts a numbered
-          marker such as [1] at the caret and lists it below with the citation of a verified record
-          it names; prose carrying a digit is refused at save.
+        {/* The rule as a caption; the refusal at save carries the detail
+            (brief 5, Report). */}
+        <p className="fld-hint" id="narrative-draft-rule">
+          Prose only: every figure goes in through the citation picker, as a marker.
         </p>
-        <FigurePicker key={choices.map(choiceKey).join(" ")} choices={choices} onInsert={insert} />
+        {/* The draft and the row that puts figures into it are one control:
+            one edge, the picker its foot (brief 6.10). */}
+        <div className="composer" data-narrative-composer>
+          <Textarea
+            id="narrative-draft"
+            className="min-h-24 rounded-b-none border-0 bg-transparent focus-visible:ring-0 dark:bg-transparent"
+            ref={editor}
+            value={draft}
+            rows={4}
+            placeholder="One paragraph per line."
+            aria-describedby="narrative-draft-rule"
+            onChange={(event) => setDraft(event.target.value)}
+          />
+          <FigurePicker
+            key={choices.map(choiceKey).join(" ")}
+            choices={choices}
+            onInsert={insert}
+          />
+        </div>
         <DraftFigures narrative={narrative} choices={choices} />
         <ol className="filing-steps" data-filing-acts aria-label="Filing steps">
           <li className="filing-step" data-step="SAVE_REVISION" data-step-state={steps[0]}>

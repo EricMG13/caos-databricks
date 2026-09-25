@@ -30,6 +30,9 @@ const PLAIN: Record<string, string> = {
   GATE_PREVIEW_NOT_READ: "Read the preview before approving.",
   COMMAND_EXPECTATION_STALE: "Preview again: the run changed since you looked.",
   CAPABILITY_UNAVAILABLE: "Not available in this deployment.",
+  // The narrative editor's rule is a caption; its refusal carries the detail.
+  NARRATIVE_FIGURE_UNREFERENCED:
+    "The prose carries a figure. Type prose only; each figure goes in through the citation picker.",
 };
 
 /** One plain sentence: the curated one, else the server's own instruction

@@ -53,3 +53,18 @@ test("a dropped stream resumes after its Last-Event-ID", async ({ page }) => {
     { timeout: 10_000 },
   );
 });
+
+test("the subject's four fields are two pairs, never three and a stray", async ({ page }) => {
+  // At 1440 the card held three columns of fields and put the fourth alone
+  // on a row (brief 6.10); four fields are two pairs at any width that holds two.
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto(`/run/?case=${CASE}&fixture=acts`);
+  const fields = page.locator("[data-pin-input] > .pb > label.fld");
+  await expect(fields).toHaveCount(4);
+  const tops = await fields.evaluateAll((labels) =>
+    labels.map((label) => Math.round(label.getBoundingClientRect().top)),
+  );
+  expect(new Set(tops).size).toBe(2);
+  expect(tops[0]).toBe(tops[1]);
+  expect(tops[2]).toBe(tops[3]);
+});

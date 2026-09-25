@@ -120,6 +120,8 @@ describe("Report figure picker", () => {
     // Labelled, native and so keyboard operable: a select and a button.
     const picker = screen.getByLabelText("Citation");
     expect(picker.tagName).toBe("SELECT");
+    // One control: the picker is the draft's own foot (brief 6.10).
+    expect(draft.closest("[data-narrative-composer]")).toContainElement(picker);
     fireEvent.change(picker, { target: { value: "CP-0#1" } });
     fireEvent.click(screen.getByRole("button", { name: "Insert figure" }));
     // A marker the author can read, naming its citation in the text (N90).

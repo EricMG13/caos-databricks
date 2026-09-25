@@ -63,6 +63,11 @@ describe("the wire contract and the states around it", () => {
     expect(refusalText({ code: "NOT_AUTHENTICATED", clears: "Sign in." })).toBe("Sign in.");
     // The workspace's own refusals have their sentence.
     expect(refusalText(ACTION_UNPLACED)).toBe("Not offered on this page yet.");
+    // The narrative editor's rule is a one-line caption; a save it refuses
+    // says the rest (brief 5, Report).
+    expect(
+      refusalText({ code: "NARRATIVE_FIGURE_UNREFERENCED", clears: "the prose carries no figure" }),
+    ).toMatch(/^The prose carries a figure\..*citation picker\.$/);
   });
 
   it("names the refusal a control is drawn with, and the one a group shares (brief 6.3)", () => {
