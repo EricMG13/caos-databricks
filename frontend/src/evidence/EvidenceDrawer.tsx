@@ -1,6 +1,7 @@
 // The one evidence surface: the page render with its rectangle(s), the matched
 // text, the observation time. Opened from a chip with its opener passed;
 // Escape returns focus to that opener (IA_SPEC.md 5, 7).
+import { Digest } from "@/ds/Digest";
 import { Overlay } from "./Overlay";
 import type { BBox, Citation } from "@/wire";
 
@@ -75,7 +76,9 @@ export function EvidenceDrawer({
         </blockquote>
         <dl className="kv">
           <dt>Document</dt>
-          <dd title={citation.document_sha256}>sha256 {citation.document_sha256.slice(0, 12)}…</dd>
+          <dd>
+            <Digest value={citation.document_sha256} prefix="sha256:" />
+          </dd>
           <dt>Observed</dt>
           <dd>
             <time dateTime={citation.observed_at}>{citation.observed_at}</time>

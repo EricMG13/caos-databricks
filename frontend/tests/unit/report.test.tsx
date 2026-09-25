@@ -90,6 +90,13 @@ describe("Report v1", () => {
     expect(root.querySelector("[data-report-warnings]")).toHaveTextContent(
       document.body.artifacts[0]!.validation_warnings[0]!,
     );
+    // Rows of the artifact's own list, not loose sentences under its texts
+    // (brief 5, Report): a label beside its values, "none" when there are none.
+    for (const marker of ["[data-report-limitations]", "[data-report-warnings]"]) {
+      const note = root.querySelector(marker)!;
+      expect(note.closest("dl.kv")).not.toBeNull();
+      expect(note.previousElementSibling?.tagName).toBe("DT");
+    }
     expect(root).toHaveTextContent(document.body.narrative[0]![1]!.figure!.matched_text);
     expect(root.querySelectorAll("[data-report-artifact]")).toHaveLength(
       document.body.artifacts.length,

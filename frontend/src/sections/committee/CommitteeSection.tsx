@@ -4,7 +4,7 @@ import { cn } from "cn";
 import { buttonVariants } from "@/components/ui/button";
 import { RefusedControl } from "@/controls/RefusedControl";
 import { ArtifactTexts } from "@/ds/ArtifactMarkdown";
-import { NoteList } from "@/ds/atoms";
+import { NoteRows } from "@/ds/atoms";
 import { Narrative } from "@/evidence/Narrative";
 import type { Refusal } from "@/wire";
 import type { CommitteeDocument } from "@/wire/v1";
@@ -88,6 +88,8 @@ function Artifact({ artifact }: { artifact: CommitteeDocument["body"]["artifacts
           </dd>
           <dt>Scope</dt>
           <dd>{artifact.decision_scope}</dd>
+          <NoteRows label="Limitations" values={artifact.limitation_flags} />
+          <NoteRows label="Validation warnings" values={artifact.validation_warnings} />
         </dl>
         <ArtifactTexts
           markdown={artifact.markdown}
@@ -95,8 +97,6 @@ function Artifact({ artifact }: { artifact: CommitteeDocument["body"]["artifacts
           label={`${artifact.route_node_id} saved artifact`}
           section="committee"
         />
-        <NoteList label="Limitations." values={artifact.limitation_flags} />
-        <NoteList label="Validation warnings." values={artifact.validation_warnings} />
       </div>
     </section>
   );
@@ -266,13 +266,21 @@ export function CommitteeSection({
           <div className="pb">
             <dl className="kv">
               <dt>Case</dt>
-              <dd>{body.case_id}</dd>
+              <dd>
+                <Digest value={body.case_id} />
+              </dd>
               <dt>Run</dt>
-              <dd>{body.displayed_run_id}</dd>
+              <dd>
+                <Digest value={body.displayed_run_id} />
+              </dd>
               <dt>Revision</dt>
-              <dd>{body.revision_id}</dd>
+              <dd>
+                <Digest value={body.revision_id} />
+              </dd>
               <dt>Payload</dt>
-              <dd>sha256:{body.payload_sha256}</dd>
+              <dd>
+                <Digest value={body.payload_sha256} prefix="sha256:" />
+              </dd>
             </dl>
             <Downloads body={body} />
           </div>

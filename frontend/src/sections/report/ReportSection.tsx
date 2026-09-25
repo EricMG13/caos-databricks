@@ -9,7 +9,7 @@ import { sectionPath } from "@/app/sections";
 import { SeverityMark } from "@/chrome/SeverityMark";
 import { sentence } from "@/chrome/compose";
 import { ArtifactTexts } from "@/ds/ArtifactMarkdown";
-import { NoteList } from "@/ds/atoms";
+import { NoteRows } from "@/ds/atoms";
 import { shortDigest, stamp } from "@/ds/format";
 import { Narrative } from "@/evidence/Narrative";
 import type { Severity } from "@/wire";
@@ -37,18 +37,22 @@ function Artifact({ artifact }: { artifact: ReportDocument["body"]["artifacts"][
           </dd>
           <dt>Scope</dt>
           <dd className="prose">{sentence(artifact.decision_scope)}</dd>
+          <NoteRows
+            label="Limitations"
+            values={artifact.limitation_flags}
+            data-report-limitations
+          />
+          <NoteRows
+            label="Validation warnings"
+            values={artifact.validation_warnings}
+            data-report-warnings
+          />
         </dl>
         <ArtifactTexts
           markdown={artifact.markdown}
           record={artifact.record}
           label={`${artifact.route_node_id} saved artifact`}
           section="report"
-        />
-        <NoteList label="Limitations." values={artifact.limitation_flags} data-report-limitations />
-        <NoteList
-          label="Validation warnings."
-          values={artifact.validation_warnings}
-          data-report-warnings
         />
       </div>
     </section>

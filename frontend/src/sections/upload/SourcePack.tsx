@@ -5,6 +5,7 @@
 // and the envelope's own `observed_at` is when this document's check ran
 // (brief 4.1, "Fixture fields dropped rather than faked").
 import { WithdrawSource } from "./WithdrawSource";
+import { Digest } from "@/ds/Digest";
 import { stamp } from "@/ds/format";
 import type { ActionView, SourceRow } from "@/wire/v1";
 import { ACTION_UNPLACED, SharedRefusal } from "@/controls/RefusedControl";
@@ -79,9 +80,7 @@ function SourceLine({
     <tr data-source={row.source_id} className={row.withdrawn_at ? "wd" : undefined}>
       <td className="wrap">{row.filename}</td>
       <td className="m">
-        <code title={row.document_sha256} data-digest={row.document_sha256}>
-          {row.document_sha256.slice(0, 12)}
-        </code>
+        <Digest value={row.document_sha256} />
       </td>
       <td className="m r">
         <time dateTime={row.admitted_at}>{stamp(row.admitted_at)}</time>

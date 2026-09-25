@@ -1,7 +1,7 @@
 // The accepted CP-CF projection, read only. Values are server strings: this
 // view deliberately performs no model arithmetic or evidence navigation.
 import { LineChart, type ChartSeries } from "@/charts";
-import { NoteList } from "@/ds/atoms";
+import { NoteRows } from "@/ds/atoms";
 import type { ModelDocument } from "@/wire/v1";
 import { displayDecimal } from "@/ds/format";
 import { Digest } from "@/ds/Digest";
@@ -115,9 +115,9 @@ export function ModelSection({ document }: { document: ModelDocument; tab: strin
             </dd>
             <dt>Perimeter</dt>
             <dd>{forecast.perimeter}</dd>
+            <NoteRows label="Limitations" values={forecast.limitation_flags} />
+            <NoteRows label="Validation warnings" values={forecast.validation_warnings} />
           </dl>
-          <NoteList label="Limitations." values={forecast.limitation_flags} />
-          <NoteList label="Validation warnings." values={forecast.validation_warnings} />
         </div>
       </section>
       {forecastSeries(forecast).map((chart) => (

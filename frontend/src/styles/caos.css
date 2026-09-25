@@ -603,9 +603,11 @@
     margin: 0;
     font-size: 0.875rem;
   }
+  /* A label keeps to one line while its value fits beside it, and breaks
+     between its words only when the value needs the room: "Validation
+     warnings" beside a digest chip at 320px. */
   .kv dt {
     color: var(--muted-foreground);
-    white-space: nowrap;
   }
   .kv dd {
     margin: 0;

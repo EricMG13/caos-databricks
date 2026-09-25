@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { ModelSection, forecastSeries } from "@/sections/model/ModelSection";
 import { parseModelDocument, type ModelDocument } from "@/wire/v1";
 
@@ -71,6 +71,10 @@ describe("Model v1", () => {
     expect(container).toHaveTextContent("ZERO_OR_NEGATIVE_DENOMINATOR");
     expect(container).toHaveTextContent("A required input is unavailable");
     expect(container).toHaveTextContent("LIMITED_HISTORY");
+    // A row of the forecast's own list (NoteRows), not a loose sentence below it.
+    const limits = within(container).getByText("Limitations");
+    expect(limits.tagName).toBe("DT");
+    expect(limits.nextElementSibling).toHaveTextContent("LIMITED_HISTORY");
     expect(container.querySelector("[data-qa-status]")).toHaveTextContent("ACCEPTED");
   });
 

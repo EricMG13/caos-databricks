@@ -5,6 +5,7 @@
 // the server refuses shows its state and no text.
 import { useEffect, useState } from "react";
 import { toFraction, type Box } from "./geometry";
+import { Digest } from "@/ds/Digest";
 import { Overlay } from "./Overlay";
 import { OFFLINE_WORDING, UNAVAILABLE_WORDING, fetchPage, type PageStatus } from "@/app/transport";
 import type { CitationView, PageDocument, PageLine } from "@/wire/v1";
@@ -222,7 +223,9 @@ export function SourceDrawer({
         </blockquote>
         <dl className="kv">
           <dt>Document</dt>
-          <dd title={fact.document_sha256}>sha256 {fact.document_sha256.slice(0, 12)}…</dd>
+          <dd>
+            <Digest value={fact.document_sha256} prefix="sha256:" />
+          </dd>
           <dt>Rectangles</dt>
           <dd>{fact.rects.length}</dd>
         </dl>

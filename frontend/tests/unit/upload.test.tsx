@@ -40,9 +40,13 @@ describe("Upload", () => {
     const row = sourceRow(container, source.source_id);
     expect(row).toHaveTextContent(source.filename);
     expect(row).toHaveTextContent(source.extractor_identity!);
+    // One treatment for a digest (brief 6.1): 8…4 shown, whole in its title.
     const digest = row.querySelector("[data-digest]")!;
-    expect(digest).toHaveTextContent(source.document_sha256.slice(0, 12));
-    expect(digest).toHaveAttribute("title", source.document_sha256);
+    expect(digest).toHaveAttribute("data-digest", source.document_sha256);
+    expect(digest.querySelector("[title]")).toHaveAttribute("title", source.document_sha256);
+    expect(digest).toHaveTextContent(
+      `${source.document_sha256.slice(0, 8)}…${source.document_sha256.slice(-4)}`,
+    );
     const pills = Array.from(row.querySelectorAll(".pill")).map((pill) => pill.textContent);
     expect(pills).toEqual(source.set_versions.map(String));
     // No disposition tag, grade, page count, label or family on the row
@@ -84,7 +88,7 @@ describe("Upload", () => {
     const top = fixture.body.set_versions[0]!;
     const row = container.querySelector<HTMLElement>(`[data-set-version="${top.version}"]`)!;
     expect(row).toHaveTextContent(String(top.member_count));
-    expect(row).toHaveTextContent(top.fingerprint.slice(0, 12));
+    expect(row.querySelector("[data-digest]")).toHaveAttribute("data-digest", top.fingerprint);
     // No pinning affordance: 4.1 offers no actions (brief decision 5).
     expect(container.querySelectorAll("[data-set-versions] button")).toHaveLength(0);
   });
