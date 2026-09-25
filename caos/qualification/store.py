@@ -695,7 +695,7 @@ def record_verdict(
 ) -> None:
     """Store one reviewer decision over already-persisted exact evidence."""
     # Split once, from the left, and compare the pair: `provider + ":" + model`
-    # is not injective, so `("openrouter:x", "m")` and `("openrouter", "x:m")`
+    # is not injective, so `("gateway:x", "m")` and `("gateway", "x:m")`
     # produced one string and each satisfied the other's binding (FP-13).
     signed = verdict.provider.value.split(":", 1)
     if (
