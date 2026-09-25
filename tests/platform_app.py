@@ -119,12 +119,16 @@ def platform_environment(
 
 
 def export_root(scratch: Path, root: Path | None = None) -> Path:
-    """The built export when it is here -- under `root`, the tree the process
-    boots from, the repository unless a caller names another -- else a
-    stand-in -- an index and the build manifest the boot check reads (N92) --
-    so the boot is the platform's (`CAOS_SITE_ROOT` set) and not the local
-    404 mode."""
-    built = (REPO if root is None else root) / "frontend" / "dist"
+    """The export the process serves. A shipped tree (`root`) serves its own,
+    whether or not the sync carried it: the process then refuses to boot
+    (`EDGE_CONFIG_INVALID`), as the platform's would, rather than boot on a
+    stand-in (S7). From the repository, the built export when it is here,
+    else a stand-in -- an index and the build manifest the boot check reads
+    (N92) -- so the boot is the platform's (`CAOS_SITE_ROOT` set) and not the
+    local 404 mode."""
+    if root is not None:
+        return root / "frontend" / "dist"
+    built = REPO / "frontend" / "dist"
     if (built / "index.html").is_file():
         return built
     stand_in = scratch / "site"

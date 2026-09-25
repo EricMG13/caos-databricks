@@ -141,9 +141,11 @@ def main() -> int:
             journey = governed_run(app, stub)
             print(
                 f"shipped: governed LITE run {journey.status}, "
-                f"{stub.completions} completions through ChatDatabricks"
+                f"{stub.completions} completions through ChatDatabricks, "
+                f"report {journey.report.status}"
             )
-            return 0 if journey.status == "COMPLETE" else 1
+            done = journey.status == "COMPLETE" and journey.report.status == 200
+            return 0 if done else 1
 
 
 if __name__ == "__main__":
