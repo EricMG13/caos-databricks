@@ -67,6 +67,11 @@ const ASK_SCOPE: Record<Section, string> = {
   admin: "the deployment",
 };
 
+/** The foot's two controls, refused on every page: quiet, with no dashed edge
+    to read as unfinished chrome, their reason on hover and focus (brief 5). */
+const FOOT_CONTROL =
+  "flex-1 justify-start aria-disabled:border-transparent group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:p-0";
+
 /** What a section entry says: the section, what it holds, and its one-line
     state. A section the document does not serve says only its name. */
 export function railLabel(id: Section, entry: RailEntry | undefined): string {
@@ -169,8 +174,8 @@ export function AppSidebar({
             <RefusedControl
               variant="ghost"
               size="sm"
-              className="flex-1 justify-start group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:p-0"
-              reasonDisplay="hidden"
+              className={FOOT_CONTROL}
+              reasonDisplay="tooltip"
               refusal={{
                 code: "ASK_UNPLACED",
                 // Its own reason, no longer borrowed from `ACTION_UNPLACED`'s:
@@ -186,8 +191,8 @@ export function AppSidebar({
             <RefusedControl
               variant="ghost"
               size="sm"
-              className="flex-1 justify-start group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:p-0"
-              reasonDisplay="hidden"
+              className={FOOT_CONTROL}
+              reasonDisplay="tooltip"
               refusal={{
                 code: "SIGN_OUT_UNPLACED",
                 clears:

@@ -64,7 +64,7 @@ export function RefusedControl({
   refusal: Refusal | null;
   onClick?: () => void;
   className?: string;
-  reasonDisplay?: "inline" | "hidden";
+  reasonDisplay?: "inline" | "hidden" | "tooltip";
   /** A command this control sent has not answered yet. */
   busy?: boolean;
   children: ReactNode;

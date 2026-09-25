@@ -3,12 +3,14 @@ import { MemoryRouter } from "react-router";
 import { App } from "@/app/App";
 import { UNAVAILABLE_WORDING } from "@/app/transport";
 import { RefusedControl } from "@/controls/RefusedControl";
-import { RegionState } from "@/states/RegionState";
+import { RegionState, UNAVAILABLE_NEXT } from "@/states/RegionState";
 
 describe("the states", () => {
   test("test_unavailable_and_absent_route_share_one_wording", () => {
     const { unmount } = render(
-      <RegionState status={{ kind: "unavailable" }}>{() => <p>never</p>}</RegionState>,
+      <MemoryRouter>
+        <RegionState status={{ kind: "unavailable" }}>{() => <p>never</p>}</RegionState>
+      </MemoryRouter>,
     );
     expect(screen.getByText(UNAVAILABLE_WORDING)).toBeInTheDocument();
     expect(screen.queryByText("never")).toBeNull();
@@ -17,6 +19,32 @@ describe("the states", () => {
     render(<App />);
     expect(screen.getByRole("main")).toHaveTextContent(UNAVAILABLE_WORDING);
     expect(UNAVAILABLE_WORDING).toBe("Unavailable or not permitted.");
+  });
+
+  test("an unavailable region says what to do and offers the way out", () => {
+    // Mark, title, one sentence, one action: the sentence adds what the title
+    // does not (brief 5, Admin and the absent route), and says no more about
+    // which of the two it was than the title does.
+    const { unmount } = render(
+      <MemoryRouter>
+        <RegionState status={{ kind: "unavailable" }} section="analysis">
+          {() => null}
+        </RegionState>
+      </MemoryRouter>,
+    );
+    expect(screen.getByText(UNAVAILABLE_NEXT)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "All cases" })).toHaveAttribute("href", "/directory/");
+    unmount();
+    // On the directory the way out would lead back to where the reader is.
+    render(
+      <MemoryRouter>
+        <RegionState status={{ kind: "unavailable" }} section="directory">
+          {() => null}
+        </RegionState>
+      </MemoryRouter>,
+    );
+    expect(screen.getByText(UNAVAILABLE_NEXT)).toBeInTheDocument();
+    expect(screen.queryByRole("link")).toBeNull();
   });
 
   test("test_observed_empty_requires_timestamp", () => {

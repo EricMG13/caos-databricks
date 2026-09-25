@@ -4,13 +4,14 @@ import type { ReactNode } from "react";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { AppSidebar, railLabel } from "@/chrome/AppSidebar";
-import { caseTarget } from "@/chrome/CaseSwitcher";
+import { caseTarget, switcherLines } from "@/chrome/CaseSwitcher";
 import { SectionPanel, SectionTabs } from "@/chrome/SectionTabs";
 import { SectionSummary } from "@/chrome/SectionSummary";
 import { SEVERITY_BADGE, SeverityMark } from "@/chrome/SeverityMark";
 import { SiteHeader, TONE_BADGE } from "@/chrome/SiteHeader";
 import { isEnabledSection } from "@/app/sections";
 import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { SECTIONS, type AnyDocument, type Ribbon, type Severity } from "@/wire";
 
 const FIXTURES = `${resolve(process.cwd(), "fixtures")}/`;
@@ -78,6 +79,37 @@ describe("the sidebar", () => {
     for (const control of foot) expect(control).toHaveAttribute("aria-disabled", "true");
   });
 
+  test("the foot's refused controls are quiet and say why on focus", async () => {
+    render(
+      shell(
+        <TooltipProvider delay={0}>
+          <AppSidebar
+            section="analysis"
+            entries={null}
+            local={null}
+            servedRole={null}
+            searchFor={() => ""}
+            subject={null}
+            caseId={null}
+          />
+        </TooltipProvider>,
+      ),
+    );
+    const ask = screen.getByRole("button", { name: /^Ask about/ });
+    // No dashed edge in chrome on every page, and no title to draw a second
+    // tooltip over the first (brief 5, the chrome).
+    expect(ask.className).toContain("aria-disabled:border-transparent");
+    expect(ask).not.toHaveAttribute("title");
+    // The reason is still its description, and a keyboard reaches it.
+    expect(ask).toHaveAccessibleDescription("Ask is not part of this workspace yet.");
+    fireEvent.focus(ask);
+    const tip = await screen.findByText("Ask is not part of this workspace yet.", {
+      selector: "[data-reason-tip] span",
+    });
+    // With what a title gave a pointer: the code and what clears it.
+    expect(tip.closest("[data-reason-tip]")).toHaveTextContent("ASK_UNPLACED — clears when");
+  });
+
   // FE-12: the count and the one-line state are the point of an entry, and
   // with the sidebar collapsed to icons they are all its name carries.
   test("an entry reads its count and state, not only its name", () => {
@@ -116,6 +148,26 @@ describe("the sidebar", () => {
     expect(caseTarget("report", CASE)).toBe(`/analysis/?case=${CASE}`);
     expect(caseTarget("directory", CASE)).toBe(`/analysis/?case=${CASE}`);
     expect(caseTarget(null, CASE)).toBe(`/analysis/?case=${CASE}`);
+  });
+
+  test("the case switcher names the issuer and its listing, never a cut title", () => {
+    const CASE = "00000000-0000-4000-8000-000000000001";
+    // The listing a title carries is the second line; the trail has the whole.
+    expect(switcherLines("Carvana Co. (NYSE: CVNA)", CASE)).toEqual({
+      name: "Carvana Co.",
+      detail: "NYSE: CVNA",
+    });
+    // A parenthesis that is not a listing stays in the name; the short id is beneath.
+    expect(switcherLines("Terra Firma (Holdings) plc", CASE)).toEqual({
+      name: "Terra Firma (Holdings) plc",
+      detail: "Case 00000000",
+    });
+    expect(switcherLines("Northwind (UK)", CASE)).toEqual({
+      name: "Northwind (UK)",
+      detail: "Case 00000000",
+    });
+    expect(switcherLines(null, CASE)).toEqual({ name: "Case", detail: "Case 00000000" });
+    expect(switcherLines(null, null)).toEqual({ name: "CAOS", detail: "Credit workspace" });
   });
 
   test("the trigger in the header opens and closes the sidebar", () => {
@@ -283,9 +335,13 @@ describe("the chrome's refusals", () => {
         ),
       );
       for (const control of container.querySelectorAll("[aria-disabled='true']")) {
-        expect(control.getAttribute("title"), name).not.toMatch(
-          /Phase \d|REBUILD_PLAN|backend phase/,
-        );
+        // Its title, or where a tooltip carries the reason instead, its description.
+        const described = control.getAttribute("aria-describedby");
+        const said =
+          control.getAttribute("title") ??
+          (described ? document.getElementById(described)?.textContent : null);
+        expect(said, name).toBeTruthy();
+        expect(said, name).not.toMatch(/Phase \d|REBUILD_PLAN|backend phase/);
       }
       unmount();
     }

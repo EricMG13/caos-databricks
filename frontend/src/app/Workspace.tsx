@@ -435,7 +435,7 @@ export function Workspace({ section }: { section: Section }) {
             {/* The snapshot ledger outlives the documents a section renders,
                 so it sits above the boundary and the mount key. */}
             <LedgerProvider>
-              <RegionState status={status} onReload={reload} onRetry={retry}>
+              <RegionState status={status} onReload={reload} onRetry={retry} section={section}>
                 {(doc) => (
                   // A render failure is about the document that caused it:
                   // the next one served clears it, without waiting for a

@@ -6,7 +6,8 @@ import { Link } from "react-router";
 import { UNAVAILABLE_WORDING, type RegionStatus, type SelectionNeed } from "@/app/transport";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { refusalText } from "@/controls/RefusedControl";
-import type { Refusal } from "@/wire";
+import { sectionPath } from "@/app/sections";
+import type { Refusal, Section } from "@/wire";
 import { SurfaceState } from "@/ds/SurfaceState";
 
 const CHOICES: Record<SelectionNeed, { title: string; detail: string; link: string }> = {
@@ -34,6 +35,12 @@ const REGION_PLAIN: Record<string, string> = {
   VIEW_NOT_LOADED: "This part of the workspace did not load.",
 };
 
+/** What an unavailable read leaves the reader to do. The title is the one
+    neutral wording a private 404 shares with an absent route, so this says
+    nothing about which it was either (brief 5, Admin and the absent route). */
+export const UNAVAILABLE_NEXT =
+  "Either nothing is here or you hold no standing on it; a case's owner grants standing.";
+
 export function regionSentence(refusal: Refusal): string {
   return REGION_PLAIN[refusal.code] ?? "This section could not be read.";
 }
@@ -52,11 +59,15 @@ export function RegionState<D>({
   children,
   onReload,
   onRetry,
+  section = null,
 }: {
   status: RegionStatus<D>;
   children: (document: D) => ReactNode;
   onReload?: () => void;
   onRetry?: () => void;
+  /** Where the region is: the way out of an unavailable one is the directory,
+      except on the directory itself. */
+  section?: Section | null;
 }) {
   switch (status.kind) {
     case "ready":
@@ -82,7 +93,20 @@ export function RegionState<D>({
         </>
       );
     case "unavailable":
-      return <SurfaceState kind="unavailable" title={UNAVAILABLE_WORDING} />;
+      return (
+        <SurfaceState
+          kind="unavailable"
+          title={UNAVAILABLE_WORDING}
+          detail={UNAVAILABLE_NEXT}
+          supporting={
+            section === "directory" ? null : (
+              <Link className={buttonVariants({ size: "sm" })} to={sectionPath("directory")}>
+                All cases
+              </Link>
+            )
+          }
+        />
+      );
     case "offline":
       // The one sentence lives in the page-level alert; the region carries the
       // marker and the way to ask again.

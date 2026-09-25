@@ -152,10 +152,12 @@ describe("a section waiting on the reader", () => {
 describe("a region that received nothing", () => {
   test("offline and refused regions offer to try again; others do not", () => {
     const retry = vi.fn();
+    // In a router: the unavailable region's way out is a link (F402).
     const { container, rerender } = render(
       <RegionState status={{ kind: "offline" }} onRetry={retry}>
         {() => null}
       </RegionState>,
+      { wrapper: MemoryRouter },
     );
     fireEvent.click(container.querySelector("button")!);
     expect(retry).toHaveBeenCalledTimes(1);

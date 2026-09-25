@@ -38,6 +38,23 @@ export function caseTarget(section: Section | null, caseId: string): string {
   return `${sectionPath(where)}?case=${encodeURIComponent(caseId)}`;
 }
 
+/** The switcher's two lines: the issuer's name and, beneath it, the listing
+    its title carries ("Carvana Co. (NYSE: CVNA)") or else the case's short
+    id -- never the title cut at the sidebar's width, since the whole of it is
+    in the trail (brief 5, the chrome). */
+export function switcherLines(
+  issuer: string | null,
+  caseId: string | null,
+): { name: string; detail: string } {
+  const short = caseId ? `Case ${caseId.slice(0, 8)}` : "Credit workspace";
+  if (issuer === null) return { name: caseId ? "Case" : "CAOS", detail: short };
+  const open = issuer.lastIndexOf(" (");
+  const listing = open > 0 && issuer.endsWith(")") ? issuer.slice(open + 2, -1) : "";
+  return listing.includes(":")
+    ? { name: issuer.slice(0, open), detail: listing }
+    : { name: issuer, detail: short };
+}
+
 export function CaseSwitcher({
   section,
   subject,
@@ -67,8 +84,7 @@ export function CaseSwitcher({
         flight.current = null;
       });
   };
-  const title = subject?.issuer ?? (caseId ? "Case" : "CAOS");
-  const detail = caseId ? `Case ${caseId.slice(0, 8)}` : "Credit workspace";
+  const lines = switcherLines(subject?.issuer ?? null, caseId);
   const leave = () => setOpenMobile(false);
   return (
     <SidebarMenu>
@@ -85,10 +101,10 @@ export function CaseSwitcher({
             </span>
             <span className="grid min-w-0 flex-1 text-left leading-tight">
               <span className="sr-only">Switch case, now </span>
-              <span className="truncate font-semibold" title={subject?.case_id}>
-                {title}
+              <span className="truncate font-semibold" title={subject?.issuer}>
+                {lines.name}
               </span>
-              <span className="truncate text-xs text-muted-foreground">{detail}</span>
+              <span className="truncate text-xs text-muted-foreground">{lines.detail}</span>
             </span>
             <ChevronsUpDownIcon className="ml-auto text-muted-foreground" />
           </DropdownMenuTrigger>

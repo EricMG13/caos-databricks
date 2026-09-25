@@ -18,6 +18,7 @@ import {
 } from "react";
 import type { VariantProps } from "class-variance-authority";
 import { Button, type buttonVariants } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 /** A control's weight: shadcn's button variants and sizes (D35). */
 export type ControlLook = VariantProps<typeof buttonVariants>;
@@ -37,8 +38,10 @@ interface ActionReasonProps
   /** Pointer explanation for a live action. An inert reason always takes precedence. */
   actionTitle?: string;
   /** "inline" renders the visible reason line; "hidden" keeps it sr-only for
-   * tight toolbars where title + screen-reader coverage must suffice. */
-  reasonDisplay?: "inline" | "hidden";
+   * tight toolbars where title + screen-reader coverage must suffice;
+   * "tooltip" keeps it sr-only too and shows it on hover and on keyboard
+   * focus, which a title never reaches (brief 5, the chrome). */
+  reasonDisplay?: "inline" | "hidden" | "tooltip";
   /** A request this control started is still in flight: the control is inert
    * until it answers, and says so rather than looking idle. */
   busy?: boolean;
@@ -67,7 +70,7 @@ const flashPosition = (button: HTMLButtonElement | null): CSSProperties => {
     : { position: "fixed", top: rect.bottom + 6, left, maxWidth: FLASH_MAX_WIDTH };
 };
 
-const useReasonFlash = (reasonDisplay: "inline" | "hidden") => {
+const useReasonFlash = (reasonDisplay: "inline" | "hidden" | "tooltip") => {
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const [flashPos, setFlashPos] = useState<CSSProperties | null>(null);
   const flashTimer = useRef<number | null>(null);
@@ -77,8 +80,10 @@ const useReasonFlash = (reasonDisplay: "inline" | "hidden") => {
     },
     [],
   );
+  // A press still flashes the reason where no line shows it: touch has no
+  // hover and no focus ring to open a tooltip with.
   const reveal = () => {
-    if (reasonDisplay !== "hidden") return;
+    if (reasonDisplay === "inline") return;
     setFlashPos(flashPosition(buttonRef.current));
     if (flashTimer.current !== null) window.clearTimeout(flashTimer.current);
     flashTimer.current = window.setTimeout(() => setFlashPos(null), FLASH_MS);
@@ -97,7 +102,7 @@ function ActionReasonMessage({
   reasonId: string;
   reason?: string | null;
   flashPos: CSSProperties | null;
-  reasonDisplay: "inline" | "hidden";
+  reasonDisplay: "inline" | "hidden" | "tooltip";
 }) {
   if (!inert) return null;
   const flash = flashPos !== null;
@@ -144,23 +149,39 @@ export function ActionReason({
   // so a fixed aria-label would override the one thing that changed. The
   // label returns with the idle text.
   const { "aria-label": label, ...attributes } = rest;
+  // A tooltip carries the reason and its detail, so no title draws a second
+  // one over it.
+  const tip = inert && reasonDisplay === "tooltip";
+  const button = (
+    <Button
+      ref={buttonRef}
+      variant={variant}
+      size={size}
+      type={type}
+      aria-disabled={inert || busy || undefined}
+      aria-busy={busy || undefined}
+      aria-label={busy ? undefined : label}
+      title={tip ? undefined : (reason && (reasonTitle || reason)) || actionTitle || undefined}
+      aria-describedby={inert ? reasonId : undefined}
+      onClick={busy ? undefined : handleClick}
+      {...attributes}
+    >
+      {children}
+    </Button>
+  );
   return (
     <>
-      <Button
-        ref={buttonRef}
-        variant={variant}
-        size={size}
-        type={type}
-        aria-disabled={inert || busy || undefined}
-        aria-busy={busy || undefined}
-        aria-label={busy ? undefined : label}
-        title={(reason && (reasonTitle || reason)) || actionTitle || undefined}
-        aria-describedby={inert ? reasonId : undefined}
-        onClick={busy ? undefined : handleClick}
-        {...attributes}
-      >
-        {children}
-      </Button>
+      {tip ? (
+        <Tooltip>
+          <TooltipTrigger render={button} />
+          <TooltipContent data-reason-tip="" className="flex-col items-start gap-0.5">
+            <span>{reason}</span>
+            {reasonTitle ? <span className="font-mono opacity-80">{reasonTitle}</span> : null}
+          </TooltipContent>
+        </Tooltip>
+      ) : (
+        button
+      )}
       <ActionReasonMessage
         inert={inert}
         reasonId={reasonId}
