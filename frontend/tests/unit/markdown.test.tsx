@@ -396,6 +396,21 @@ describe("a module's text in the places every module shares", () => {
     }
   });
 
+  test("a run of stars after a sentence's end costs one pass, not one per way to pair them", () => {
+    // `**` was one alternative and `*` another, so each run of stars split in
+    // a Fibonacci number of ways before the space failed: 44 stars took 15 s
+    // and 60 never finished, freezing Analysis on one accepted handoff.
+    const text = `The credit is sound and the covenant holds.${"*".repeat(80)}x`;
+    const started = performance.now();
+    expect(splitLede(text)).toEqual({ lede: text, continuation: null });
+    expect(performance.now() - started).toBeLessThan(1000);
+    // Closers after the stop still end the sentence with it.
+    expect(splitLede('The credit is sound and the "covenant holds.") Cash builds.')).toEqual({
+      lede: 'The credit is sound and the "covenant holds.")',
+      continuation: "Cash builds.",
+    });
+  });
+
   test("the opening reads in the canon's order: first sentence, the rest, the drivers", () => {
     expect(
       splitLede(

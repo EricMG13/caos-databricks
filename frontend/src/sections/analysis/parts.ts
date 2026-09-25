@@ -394,7 +394,10 @@ export interface Opening {
 
 const LEDE_MIN = 40;
 const LEDE_MAX = 360;
-const SENTENCE_END = /[.!?](?:\*\*|\*|["”’)])*\s+(?=["“(*]*[A-Z0-9$])/g;
+// The closers after a sentence's end are one character class, never `**` and
+// `*` as two alternatives: a run of stars then paired in a Fibonacci number
+// of ways before a failed match gave up, and 44 stars froze the page.
+const SENTENCE_END = /[.!?][*"”’)]*\s+(?=["“(*]*[A-Z0-9$])/g;
 // A period that ends an abbreviation or an initial ends no sentence.
 const ABBREVIATION =
   /(?:\b(?:e\.g|i\.e|vs|No|Inc|Ltd|Co|Corp|approx|cf|St|Mr|Ms|Dr|pp?|etc|U\.S|U\.K)|\b[A-Z])\.$/;
