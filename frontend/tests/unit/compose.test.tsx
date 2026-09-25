@@ -63,7 +63,8 @@ test("Run names what it waits on: an open gate, else a module held at its gate",
 test("Upload's verdict agrees with its count of withdrawn sources", () => {
   const fixture = load("upload.json");
   const one = composeChrome("upload", parseUploadDocument(fixture));
-  expect(one.verdict.conclusion).toBe("1 withdrawn source stays cited where it was used.");
+  // A warning leads with what is wrong, as a headline: no closing stop (D70).
+  expect(one.verdict.conclusion).toBe("1 withdrawn source · still cited where it was used");
   const [first] = fixture.body.sources;
   const withdrawnAt = fixture.body.sources.find(
     (row: { withdrawn_at: string | null }) => row.withdrawn_at,
@@ -71,7 +72,7 @@ test("Upload's verdict agrees with its count of withdrawn sources", () => {
   const two = { ...fixture, body: { ...fixture.body } };
   two.body.sources = [{ ...first, withdrawn_at: withdrawnAt }, ...fixture.body.sources.slice(1)];
   expect(composeChrome("upload", parseUploadDocument(two)).verdict.conclusion).toBe(
-    "2 withdrawn sources stay cited where they were used.",
+    "2 withdrawn sources · still cited where they were used",
   );
 });
 
@@ -81,11 +82,11 @@ test("Report says how far the shown revision has gone and what comes next", () =
   expect(chrome.ribbon.persistence).toBe("Saved");
   expect(chrome.ribbon.approval).toBeNull();
   expect(chrome.brief.action).toBe("Sign, then freeze, to send it to committee.");
-  expect(chrome.verdict).toMatchObject({ severity: "IDLE", conclusion: "Saved, not yet frozen." });
+  expect(chrome.verdict).toMatchObject({ severity: "IDLE", conclusion: "Saved · not yet frozen" });
   const filed = parseReportDocument(load("report-v1.json"));
   expect(composeChrome("report", filed).verdict).toMatchObject({
     severity: "SUCCESS",
-    conclusion: "Filed.",
+    conclusion: "Filed",
   });
 });
 
@@ -125,7 +126,7 @@ test("an empty directory and a run with no forecast say so, and what to do", () 
   directory.body.cases = [];
   const empty = composeChrome("directory", parseDirectoryDocument(directory));
   expect(empty.brief.change).toMatch(/^You hold standing on no case yet\./);
-  expect(empty.verdict.conclusion).toBe("No cases yet.");
+  expect(empty.verdict.conclusion).toBe("No cases yet");
   const model = load("model.json");
   model.body.forecast = null;
   model.body.unavailable_reason = "NO_ACCEPTED_FORECAST";
@@ -152,8 +153,16 @@ test("isParked: a running run with a stop code is parked, and the Directory says
   expect(parked.brief.action).toBe("Retry a parked run from its case's Run section.");
   expect(parked.verdict).toMatchObject({
     severity: "WARNING",
-    conclusion: "1 run parked, waiting on a retry.",
+    conclusion: "1 run parked · waiting on a retry",
   });
+  // One case and one parked run: the verdict's 1 counts runs, so a headline
+  // of 1 case is still drawn (D70; it used to vanish on the equal number).
+  expect(
+    headlineOf(
+      { ...parked.brief, headline: "1", headline_label: "case" },
+      { ...parked.verdict, conclusion: "1 run parked · waiting on a retry" },
+    ),
+  ).toBe("1");
 });
 
 test("a parked run says so on its own Run section, where the Directory sends the reader", () => {
@@ -201,7 +210,20 @@ test("a brief cell with nothing to say is not drawn, and an empty brief draws no
   expect(
     headlineOf(
       { change: null, impact: null, action: null, evidence: null, headline: "4" },
-      { severity: "IDLE", conclusion: "4 cases.", blocked_on: null },
+      { severity: "IDLE", conclusion: "4 cases", blocked_on: null },
+    ),
+  ).toBeNull();
+  expect(
+    headlineOf(
+      {
+        change: null,
+        impact: null,
+        action: null,
+        evidence: null,
+        headline: "4",
+        headline_label: "cases",
+      },
+      { severity: "IDLE", conclusion: "4 cases", blocked_on: null },
     ),
   ).toBeNull();
   expect(
@@ -255,7 +277,7 @@ test("the summary marks the page while it is in view, and unmarks it when it goe
   try {
     const verdict = {
       severity: "WARNING" as const,
-      conclusion: "Partial · 3 credits.",
+      conclusion: "Partial · 3 credits",
       blocked_on: null,
     };
     const quiet = { chips: [], execution: null, persistence: null, approval: null, actions: [] };

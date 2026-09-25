@@ -123,7 +123,12 @@ A shadcn app shell (D37), inset variant:
   where the document says them, one headline figure with what it counts
   ("6/10 modules complete") unless the conclusion already states it, then
   Change, Impact, Next step and Evidence. A cell with nothing to say is not
-  drawn; never "—".
+  drawn; never "—". The verdict is a headline, not a sentence (D70): one line,
+  sentence case, no closing full stop; "State · detail" where it has a subject
+  ("In progress · CP-6 at its gate", "Frozen · awaiting committee"); a count
+  alone is the count and its noun ("4 cases"), with no headline figure beside
+  it; a warning leads with what is wrong ("1 run parked · waiting on a
+  retry"). The cells are the sentences, with their full stops.
 - **Views** — a section's own views are pills under the summary (the active
   one filled), wrapping to a second row rather than scrolling out of sight —
   the 2026-09-23 critique's rule that every view stays in sight, which is why

@@ -15,12 +15,16 @@ const CELLS: { key: keyof Omit<Brief, "headline">; label: string }[] = [
   { key: "evidence", label: "Evidence" },
 ];
 
-/** The headline figure, unless the conclusion already says it ("4 cases."
-    beside a bare 4 is the same fact twice). */
+/** The headline figure, unless the conclusion already says it ("4 cases"
+    beside a bare 4 is the same fact twice). Said means said with what it
+    counts: "1 run parked" does not state a headline of 1 case (D70). */
 export function headlineOf(brief: Brief, verdict: Verdict): string | null {
   const figure = brief.headline;
   if (figure === null) return null;
-  const said = verdict.conclusion.split(/[^0-9/.,]+/).some((token) => token === figure);
+  const label = brief.headline_label;
+  const said = label
+    ? verdict.conclusion.includes(`${figure} ${label}`)
+    : verdict.conclusion.split(/[^0-9/.,]+/).some((token) => token === figure);
   return said ? null : figure;
 }
 

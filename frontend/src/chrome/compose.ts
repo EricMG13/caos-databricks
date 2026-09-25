@@ -91,6 +91,10 @@ const QUIET: Omit<Ribbon, "actions"> = {
   persistence: null,
   approval: null,
 };
+/** A verdict is a headline, not a sentence (D70): one line, sentence case,
+    no closing full stop; "State · detail" where it has a subject; a count
+    alone is the count and its noun; a warning leads with what is wrong. The
+    brief's cells below it are the sentences. */
 const verdict = (severity: Verdict["severity"], conclusion: string): Verdict => ({
   severity,
   conclusion,
@@ -129,8 +133,8 @@ function directory(document: DirectoryDocument): Facts {
       headline_label: noun(cases.length, "case"),
     },
     verdict: parked
-      ? verdict("WARNING", `${plural(parked, "run")} parked, waiting on a retry.`)
-      : verdict("IDLE", cases.length ? `${plural(cases.length, "case")}.` : "No cases yet."),
+      ? verdict("WARNING", `${plural(parked, "run")} parked · waiting on a retry`)
+      : verdict("IDLE", cases.length ? plural(cases.length, "case") : "No cases yet"),
   };
 }
 
@@ -157,9 +161,9 @@ function upload(document: UploadDocument): Facts {
     verdict: withdrawn
       ? verdict(
           "WARNING",
-          `${plural(withdrawn, "withdrawn source")} ${noun(withdrawn, "stays", "stay")} cited where ${noun(withdrawn, "it was", "they were")} used.`,
+          `${plural(withdrawn, "withdrawn source")} · still cited where ${noun(withdrawn, "it was", "they were")} used`,
         )
-      : verdict("IDLE", `${plural(admitted, "source")} admitted.`),
+      : verdict("IDLE", `${plural(admitted, "source")} admitted`),
   };
 }
 
@@ -193,7 +197,7 @@ function run(document: RunSectionDocument): Facts {
         evidence: null,
         headline: null,
       },
-      verdict: verdict("IDLE", "No run yet."),
+      verdict: verdict("IDLE", "No run yet"),
     };
   }
   const done = view.nodes.filter((node) => node.state === "COMPLETE").length;
@@ -305,11 +309,11 @@ function analysis(document: AnalysisDocument): Facts {
       severity,
       conclusion: conclusion
         ? conclusion.screening_only
-          ? "Screening only: not committee clearance."
+          ? "Screening only · not committee clearance"
           : weak.length
             ? `${ready ?? ""}, with ${plural(weak.length, "module")} to review`
             : (ready ?? "")
-        : "Nothing accepted yet.",
+        : "Nothing accepted yet",
       blocked_on: blocked?.module_id ?? null,
     },
   };
@@ -328,7 +332,7 @@ function book(document: BookDocument): Facts {
       headline: String(rows.length),
       headline_label: noun(rows.length, "credit"),
     },
-    verdict: verdict("IDLE", `${plural(rows.length, "credit")}.`),
+    verdict: verdict("IDLE", plural(rows.length, "credit")),
   };
 }
 
@@ -344,7 +348,7 @@ function model(document: ModelDocument): Facts {
         evidence: null,
         headline: null,
       },
-      verdict: verdict("IDLE", "No accepted forecast."),
+      verdict: verdict("IDLE", "No accepted forecast"),
     };
   }
   const flags = forecast.limitation_flags.length;
@@ -361,7 +365,7 @@ function model(document: ModelDocument): Facts {
       headline: String(forecast.periods.length),
       headline_label: noun(forecast.periods.length, "period"),
     },
-    verdict: verdict(severity, "Accepted CP-CF projection."),
+    verdict: verdict(severity, "Accepted · CP-CF projection"),
   };
 }
 
@@ -396,10 +400,10 @@ function report(document: ReportDocument): Facts {
     },
     verdict:
       state === "filed"
-        ? verdict("SUCCESS", "Filed.")
+        ? verdict("SUCCESS", "Filed")
         : state === "frozen"
-          ? verdict("RUNNING", "Frozen, awaiting committee.")
-          : verdict("IDLE", state ? "Saved, not yet frozen." : "Not yet saved."),
+          ? verdict("RUNNING", "Frozen · awaiting committee")
+          : verdict("IDLE", state ? "Saved · not yet frozen" : "Not yet saved"),
   };
 }
 
@@ -417,8 +421,8 @@ function committee(document: CommitteeDocument): Facts {
     },
     verdict:
       state === "filed"
-        ? verdict("SUCCESS", "Filed deliverable.")
-        : verdict("RUNNING", "Frozen, awaiting filing."),
+        ? verdict("SUCCESS", "Filed · deliverable of record")
+        : verdict("RUNNING", "Frozen · awaiting filing"),
   };
 }
 
