@@ -6,7 +6,7 @@ Three read-only reviews of what each module's model is delivered (the host promp
 - G2: CP-1, CP-1A, CP-1B, CP-1C, CP-1D, CP-2, CP-2A, CP-2D.
 - G3: CP-2E, CP-2G, CP-2H, CP-3, CP-3C, CP-3D, CP-4, CP-4C.
 
-Status is as of `e4e4e01`. FIXED names the entry that closed it; OPEN rows are the final sweep's to register (host rows) or wait on the owner (vendor rows, OD-8).
+Status is as of `9393940`: no row is OPEN. FIXED names the entry that closed it; DECIDED and NOT-A-DEFECT say why a row needs no fix.
 
 | ID | Module(s) | Conflict | Severity | Status |
 |---|---|---|---|---|
