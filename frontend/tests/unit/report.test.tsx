@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router";
+import { filingSteps } from "@/sections/report/FilingControls";
 import { ReportSection } from "@/sections/report/ReportSection";
 import { parseReportDocument, type ActionView, type ReportDocument } from "@/wire/v1";
 
@@ -423,4 +424,53 @@ describe("Report v1", () => {
     expect(JSON.parse(filing[1].body)).toEqual({ payload_sha256: receipt.payload_sha256 });
     vi.unstubAllGlobals();
   });
+});
+
+// Save, sign, freeze and file were four equal buttons; they read as the
+// sequence they are, done steps from what the document says and the first
+// offered step not done the one primary (brief 6.11).
+test("filing reads as its sequence, with one current step", () => {
+  const all = () => true;
+  expect(filingSteps(null, all)).toEqual(["current", "open", "open", "open"]);
+  expect(filingSteps("saved", all)).toEqual(["done", "current", "open", "open"]);
+  expect(filingSteps("frozen", all)).toEqual(["done", "done", "done", "current"]);
+  expect(filingSteps("filed", all)).toEqual(["done", "done", "done", "done"]);
+  expect(filingSteps("saved", () => false)).toEqual(["done", "open", "open", "open"]);
+  expect(filingSteps("saved", (action) => action === "FREEZE_DELIVERABLE")).toEqual([
+    "done",
+    "open",
+    "current",
+    "open",
+  ]);
+
+  const shown = withActions(AVAILABLE);
+  const { container } = mount({
+    ...shown,
+    body: {
+      ...shown.body,
+      revisions: shown.body.revisions.map((revision) =>
+        revision.revision_id === shown.body.revision_id
+          ? { ...revision, state: "saved" }
+          : revision,
+      ),
+    },
+  });
+  const steps = [...container.querySelectorAll("[data-filing-acts] > li")];
+  expect(steps.map((step) => step.getAttribute("data-step"))).toEqual([
+    "SAVE_REVISION",
+    "SIGN_OPINION",
+    "FREEZE_DELIVERABLE",
+    "FILE_DELIVERABLE",
+  ]);
+  expect(steps.map((step) => step.getAttribute("data-step-state"))).toEqual([
+    "done",
+    "current",
+    "open",
+    "open",
+  ]);
+  expect(steps[0]).toHaveTextContent("Done");
+  // Every control stays on the page; only the current step's is primary.
+  for (const name of ["SAVE_REVISION", "SIGN_OPINION", "FREEZE_DELIVERABLE", "FILE_DELIVERABLE"]) {
+    expect(container.querySelector(`[data-filing-acts] [data-action="${name}"]`)).not.toBeNull();
+  }
 });

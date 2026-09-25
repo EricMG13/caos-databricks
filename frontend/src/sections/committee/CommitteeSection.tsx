@@ -1,5 +1,6 @@
 import { DownloadIcon, FileTextIcon } from "lucide-react";
 import { sentence } from "@/chrome/compose";
+import { cn } from "cn";
 import { buttonVariants } from "@/components/ui/button";
 import { RefusedControl } from "@/controls/RefusedControl";
 import { ArtifactTexts } from "@/ds/ArtifactMarkdown";
@@ -37,7 +38,9 @@ function ownRead(
 /** The revision as the renderer draws it, and once filed, the package (N4).
     Both are the host's own reads; the page only links them. */
 function Downloads({ body }: { body: CommitteeDocument["body"] }) {
-  const look = buttonVariants({ variant: "outline", size: "sm" });
+  // Merged as the Button merges them: unmerged, the base border-transparent
+  // won over the outline's border and the links drew no edge.
+  const look = cn(buttonVariants({ variant: "outline", size: "sm" }));
   const render = ownRead(body, body.render_url, "render");
   const pkg = ownRead(body, body.package_url, "package");
   return (

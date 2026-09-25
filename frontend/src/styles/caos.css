@@ -137,6 +137,68 @@
     align-items: center;
     gap: 0.5rem;
   }
+  /* Save, sign, freeze, file as the sequence it is (brief 6.11): each step
+     under a rule that is the success hue once done and ink while current,
+     its control beneath, the current one the section's one primary. */
+  .filing-steps {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(12rem, 100%), 1fr));
+    gap: 1rem;
+    margin: 0.25rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .filing-step {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding-top: 0.75rem;
+    border-top: 2px solid var(--border);
+  }
+  .filing-step[data-step-state="done"] {
+    border-top-color: var(--success);
+  }
+  .filing-step[data-step-state="current"] {
+    border-top-color: var(--primary);
+  }
+  .filing-step-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--foreground);
+  }
+  .filing-step-n {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.25rem;
+    height: 1.25rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font: 500 0.6875rem var(--font-mono);
+    color: var(--muted-foreground);
+  }
+  .filing-step[data-step-state="current"] .filing-step-n {
+    border-color: var(--primary);
+    background: var(--primary);
+    color: var(--primary-foreground);
+  }
+  .filing-step[data-step-state="done"] .filing-step-n {
+    border-color: var(--success);
+    color: var(--success);
+  }
+  .filing-step-n svg {
+    width: 0.75rem;
+    height: 0.75rem;
+  }
+  .filing-step-done {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--success);
+  }
   pre.preview {
     max-height: 20rem;
     margin: 0;
@@ -1543,27 +1605,22 @@
   .admitsources > .note {
     flex-basis: 100%;
   }
-  .admitsources input[type="file"] {
+  /* What is chosen: each file a chip, or the plain sentence that none is. */
+  .admit-chosen {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem;
     min-width: 0;
-    max-width: 100%;
     font-size: 0.875rem;
     color: var(--muted-foreground);
   }
-  /* The browser's own file button wears the outline button. */
-  .admitsources input[type="file"]::file-selector-button {
-    height: 2rem;
-    margin-right: 0.75rem;
-    padding: 0 0.625rem;
-    border: 1px solid var(--input);
-    border-radius: var(--radius-lg);
-    background: var(--field-bg);
-    color: var(--foreground);
-    font: 500 0.875rem var(--font-sans);
-    cursor: pointer;
-    transition: background-color 150ms var(--ease-out);
-  }
-  .admitsources input[type="file"]::file-selector-button:hover {
-    background: var(--muted);
+  .admit-chosen .tag {
+    max-width: 100%;
+    overflow: hidden;
+    font: 400 0.75rem var(--font-mono);
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   /* ---- model prose, help, access ---- */

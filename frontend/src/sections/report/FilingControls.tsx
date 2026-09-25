@@ -18,6 +18,7 @@
 // "Freeze" is refused there, and that refusal is what this surface shows.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
+import { CheckIcon } from "lucide-react";
 import {
   fileDeliverable,
   freezeDeliverable,
@@ -70,6 +71,43 @@ async function refetchReport(
 interface Saved {
   id: string;
   digest: string;
+}
+
+/** The chain's four acts in the order they happen. */
+const FILING = ["SAVE_REVISION", "SIGN_OPINION", "FREEZE_DELIVERABLE", "FILE_DELIVERABLE"] as const;
+export type FilingStep = "done" | "current" | "open";
+
+/** How far the shown revision has gone along save, sign, freeze and file
+    (brief 6.11), from what the document says and nothing else: saved once a
+    revision exists, signed and frozen once it is frozen (the Report carries
+    no signatures, and a frozen revision was signed), filed once filed. The
+    current step is the first not done that is offered; there is none when
+    nothing is. */
+export function filingSteps(
+  state: "saved" | "frozen" | "filed" | null,
+  offered: (action: (typeof FILING)[number]) => boolean,
+): FilingStep[] {
+  const done = [
+    state !== null,
+    state !== null && state !== "saved",
+    state !== null && state !== "saved",
+    state === "filed",
+  ];
+  const current = FILING.findIndex((action, at) => !done[at] && offered(action));
+  return FILING.map((_, at) => (done[at] ? "done" : at === current ? "current" : "open"));
+}
+
+/** One step of the chain: its number, or a check once done, and its name. */
+function StepHead({ at, name, step }: { at: number; name: string; step: FilingStep }) {
+  return (
+    <span className="filing-step-head">
+      <span className="filing-step-n" aria-hidden="true">
+        {step === "done" ? <CheckIcon /> : at + 1}
+      </span>
+      {name}
+      {step === "done" ? <span className="filing-step-done">Done</span> : null}
+    </span>
+  );
 }
 
 const choiceKey = (choice: { route_node_id: string; citation_index: number }) =>
@@ -161,6 +199,7 @@ function FilingAct({
   saved,
   send,
   onDone,
+  primary,
 }: {
   /** The command this control is for, named whether or not the document
       judges it: a control drawn for an action `chrome.actions` omits is
@@ -171,6 +210,8 @@ function FilingAct({
   saved: Saved | null;
   send: (saved: Saved, intent: Intent) => Promise<CommandResult<{ payload_sha256: string }>>;
   onDone: (saved: Saved) => void;
+  /** The chain's current step: its control is the section's one primary. */
+  primary: boolean;
 }) {
   const { pending, result, run } = useCommand<{ payload_sha256: string }>();
   const refusal = action?.refusal ?? null;
@@ -211,6 +252,7 @@ function FilingAct({
         }
         action={name}
         aria-label={label}
+        variant={primary ? "default" : "outline"}
       >
         {pending ? `${verb}…` : label}
       </ConfirmedControl>
@@ -267,6 +309,11 @@ export function FilingControls({
   }
 
   const saveAction = actionOf("SAVE_REVISION");
+  const shown = body.revisions.find((revision) => revision.revision_id === body.revision_id);
+  const steps = filingSteps(saved ? (shown?.state ?? "saved") : null, (name) => {
+    const action = actionOf(name);
+    return action !== undefined && action.refusal === null;
+  });
   const narrative = paragraphs(draft);
   // Parsed once per served document, not per keystroke: a record may be large.
   const choices = useMemo(() => citationsOf(body.artifacts), [body.artifacts]);
@@ -317,8 +364,9 @@ export function FilingControls({
         </p>
         <FigurePicker key={choices.map(choiceKey).join(" ")} choices={choices} onInsert={insert} />
         <DraftFigures narrative={narrative} choices={choices} />
-        <div className="flex flex-wrap items-start gap-x-6 gap-y-3" data-filing-acts>
-          <div className="grid justify-items-start gap-1">
+        <ol className="filing-steps" data-filing-acts aria-label="Filing steps">
+          <li className="filing-step" data-step="SAVE_REVISION" data-step-state={steps[0]}>
+            <StepHead at={0} name="Save" step={steps[0]!} />
             <RefusedControl
               refusal={saveAction?.refusal ?? null}
               onClick={
@@ -351,7 +399,7 @@ export function FilingControls({
                   : undefined
               }
               busy={save.pending}
-              variant="default"
+              variant={steps[0] === "current" ? "default" : "outline"}
               reasonDisplay="inline"
               data-action="SAVE_REVISION"
               aria-label="Save revision"
@@ -363,32 +411,44 @@ export function FilingControls({
               success={(receipt) => `Revision ${receipt.revision_id} saved.`}
               mark="revision-saved"
             />
-          </div>
-          <FilingAct
-            name="SIGN_OPINION"
-            saved={saved}
-            action={actionOf("SIGN_OPINION")}
-            label="Sign opinion"
-            send={(on, intent) => signOpinion(body.case_id, on.id, on.digest, intent)}
-            onDone={(on) => void reread(on)}
-          />
-          <FilingAct
-            name="FREEZE_DELIVERABLE"
-            saved={saved}
-            action={actionOf("FREEZE_DELIVERABLE")}
-            label="Freeze deliverable"
-            send={(on, intent) => freezeDeliverable(body.case_id, on.id, on.digest, intent)}
-            onDone={(on) => void reread(on)}
-          />
-          <FilingAct
-            name="FILE_DELIVERABLE"
-            saved={saved}
-            action={actionOf("FILE_DELIVERABLE")}
-            label="File deliverable"
-            send={(on, intent) => fileDeliverable(body.case_id, on.id, on.digest, intent)}
-            onDone={(on) => void reread(on)}
-          />
-        </div>
+          </li>
+          <li className="filing-step" data-step="SIGN_OPINION" data-step-state={steps[1]}>
+            <StepHead at={1} name="Sign" step={steps[1]!} />
+            <FilingAct
+              name="SIGN_OPINION"
+              saved={saved}
+              action={actionOf("SIGN_OPINION")}
+              label="Sign opinion"
+              send={(on, intent) => signOpinion(body.case_id, on.id, on.digest, intent)}
+              onDone={(on) => void reread(on)}
+              primary={steps[1] === "current"}
+            />
+          </li>
+          <li className="filing-step" data-step="FREEZE_DELIVERABLE" data-step-state={steps[2]}>
+            <StepHead at={2} name="Freeze" step={steps[2]!} />
+            <FilingAct
+              name="FREEZE_DELIVERABLE"
+              saved={saved}
+              action={actionOf("FREEZE_DELIVERABLE")}
+              label="Freeze deliverable"
+              send={(on, intent) => freezeDeliverable(body.case_id, on.id, on.digest, intent)}
+              onDone={(on) => void reread(on)}
+              primary={steps[2] === "current"}
+            />
+          </li>
+          <li className="filing-step" data-step="FILE_DELIVERABLE" data-step-state={steps[3]}>
+            <StepHead at={3} name="File" step={steps[3]!} />
+            <FilingAct
+              name="FILE_DELIVERABLE"
+              saved={saved}
+              action={actionOf("FILE_DELIVERABLE")}
+              label="File deliverable"
+              send={(on, intent) => fileDeliverable(body.case_id, on.id, on.digest, intent)}
+              onDone={(on) => void reread(on)}
+              primary={steps[3] === "current"}
+            />
+          </li>
+        </ol>
         {refreshFailed ? (
           <p className="note warn" role="alert" data-filing-refresh-failed>
             The act landed, but the report could not be re-read. Reload to see it.

@@ -162,7 +162,13 @@ describe("Upload", () => {
     mount(live);
     const file = new File(["contents"], "new-filing.pdf", { type: "application/pdf" });
     const input = screen.getByLabelText("Documents to admit");
+    // The workspace's own button and the names chosen, not the browser's
+    // "No file chosen"; still the file input it labels (brief 6.10).
+    const chosen = document.querySelector("[data-admit-chosen]")!;
+    expect(chosen).toHaveTextContent("No documents chosen");
     fireEvent.change(input, { target: { files: [file] } });
+    expect(chosen).toHaveTextContent("new-filing.pdf");
+    expect(input).toHaveAttribute("type", "file");
     const control = screen.getByRole("button", { name: "Admit sources" });
     expect(control).not.toHaveAttribute("aria-disabled");
     fireEvent.click(control);

@@ -11,8 +11,11 @@
 // nothing happened: the success stands (the pack was admitted) beside a
 // distinct, visible refresh failure.
 import { useId, useRef, useState } from "react";
+import { UploadIcon } from "lucide-react";
 import { admitSources } from "@/app/commands";
 import { sectionUrl } from "@/app/transport";
+import { cn } from "cn";
+import { buttonVariants } from "@/components/ui/button";
 import { RefusedControl } from "@/controls/RefusedControl";
 import { CommandOutcome, useCommand } from "@/sections/run/controls";
 import {
@@ -81,6 +84,9 @@ export function AdmitSources({
 
   return (
     <div className="admitsources" data-admit-sources>
+      {/* Still an <input type="file">, focused and labelled as one; the
+          browser's own "Choose Files / No file chosen" gives way to the
+          workspace's button and the names chosen (brief 6.10). */}
       <label className="sr-only" htmlFor={inputId}>
         Documents to admit
       </label>
@@ -89,8 +95,29 @@ export function AdmitSources({
         id={inputId}
         type="file"
         multiple
+        className="peer sr-only"
         onChange={(event) => setFiles(Array.from(event.target.files ?? []))}
       />
+      <label
+        htmlFor={inputId}
+        aria-hidden="true"
+        className={cn(
+          buttonVariants({ variant: "outline", size: "sm" }),
+          "cursor-pointer peer-focus-visible:ring-3 peer-focus-visible:ring-ring/50",
+        )}
+      >
+        <UploadIcon />
+        Choose documents
+      </label>
+      <span className="admit-chosen" data-admit-chosen>
+        {files.length
+          ? files.map((file) => (
+              <span key={`${file.name}:${file.size}`} className="tag">
+                {file.name}
+              </span>
+            ))
+          : "No documents chosen"}
+      </span>
       <RefusedControl
         refusal={refusal}
         onClick={action ? () => void submit() : undefined}
