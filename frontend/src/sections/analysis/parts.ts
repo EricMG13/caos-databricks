@@ -9,7 +9,7 @@
 //
 // Placement is display only. Every block is drawn somewhere, and "As written"
 // keeps the exact text; no figure is read from any of it (D32).
-import type { Block, MdTable } from "@/ds/markdown";
+import { tableTag, type Block, type MdTable } from "@/ds/markdown";
 
 export interface Part {
   title: string;
@@ -105,7 +105,6 @@ function labelOf(entry: Block, next: Block | undefined): string | null {
     ? text
     : null;
 }
-const TABLE_ID = /table-id:\s*([^\s]+)/;
 
 // A register's shape from its title and columns, first rule first. The
 // patterns name the columns the methodology's registers carry (their output
@@ -233,8 +232,12 @@ function registersOf(blocks: readonly Block[]): { registers: Register[]; rest: B
       notes = [];
       heading = registerHeading(label ?? (entry as { text: string }).text);
       tagged = null;
-    } else if (entry.kind === "comment" && TABLE_ID.test(entry.text)) {
-      tagged = TABLE_ID.exec(entry.text)![1]!;
+    } else if (entry.kind === "comment" && tableTag(entry.text) !== null) {
+      const tag = tableTag(entry.text)!;
+      tagged = tag.id;
+      // A caveat the model wrote beside the tag is its own text: it stays a
+      // note of the register the tag labels, never consumed with the tag.
+      if (!tag.bare) notes.push(entry);
     } else if (entry.kind === "table") {
       const id = tagged ?? heading?.id ?? null;
       const stable = tagged === null ? undefined : STABLE_TABLES[tagged];
@@ -337,7 +340,7 @@ export function moduleParts(blocks: readonly Block[]): ModuleParts {
   const tagged = front_.flatMap((entry, index) =>
     entry.kind === "table" &&
     front_[index - 1]?.kind === "comment" &&
-    TABLE_ID.test((front_[index - 1] as { text: string }).text)
+    tableTag((front_[index - 1] as { text: string }).text) !== null
       ? [index - 1, index]
       : [],
   );

@@ -8,6 +8,7 @@ import {
   readInline,
   readMarkdown,
   readRefs,
+  tableTag,
   type Block,
   type Inline,
   type MdList,
@@ -211,8 +212,6 @@ function headingLevels(blocks: readonly Block[], base: number): Map<number, numb
   return levels;
 }
 
-const TABLE_ID = /table-id:\s*([^\s]+)/;
-
 /** Each table's place among the tables, from 1: it names the table's region. */
 function tableNumbers(blocks: readonly Block[]): Map<number, number> {
   const numbers = new Map<number, number>();
@@ -278,12 +277,13 @@ export function MarkdownBlocks({
           </figure>
         );
       case "comment": {
-        // A table's id labels the table under it; any other comment is shown
+        // A bare table tag labels the table under it by its id; any other
+        // comment, a tag with the model's caveat beside it included, is shown
         // as the characters written, never dropped (render.py `_comment`).
-        const id = TABLE_ID.exec(entry.text)?.[1];
+        const tag = tableTag(entry.text);
         return (
-          <p key={index} className="md-comment" data-table-id={id}>
-            {id ?? entry.text}
+          <p key={index} className="md-comment" data-table-id={tag?.id}>
+            {tag?.bare ? tag.id : entry.text}
           </p>
         );
       }

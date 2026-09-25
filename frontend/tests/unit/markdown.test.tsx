@@ -6,7 +6,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { render, renderHook } from "@testing-library/react";
 import { plainHead, plainName } from "@/ds/format";
-import { readInline, readMarkdown, readRefs, type Block } from "@/ds/markdown";
+import { readInline, readMarkdown, readRefs, tableTag, type Block } from "@/ds/markdown";
 import { Markdown } from "@/ds/ModelMarkdown";
 import { keyFigures } from "@/sections/analysis/figures";
 import { PROSE_SHOWN, registerOfHash, useModuleParts } from "@/sections/analysis/module";
@@ -229,6 +229,37 @@ describe("a module's text in the places every module shares", () => {
     );
     expect(parts.lead!.title).toBe("Normalised financials");
     expect(parts.registers.map((register) => register.id)).toEqual(["cp1.x"]);
+  });
+
+  test("a caveat written beside a table's tag is shown, never consumed with the tag", () => {
+    const tagged = md(
+      "<!-- table-id: cp1.debt_facility_register MATERIAL: amounts unaudited -->",
+      "| a | b |",
+      "| - | - |",
+      "| 1 | 2 |",
+    );
+    // The signed artifact's default view (render.py `_comment` shows it whole).
+    const { container } = render(<Markdown text={tagged} base={2} label="Artifact" />);
+    expect(container.textContent).toContain("MATERIAL: amounts unaudited");
+    expect(container.querySelector("[data-table-id]")?.getAttribute("data-table-id")).toBe(
+      "cp1.debt_facility_register",
+    );
+    // A bare tag still reads as the table's id alone.
+    const bare = render(
+      <Markdown
+        text={md("<!-- table-id: cp1.x -->", "| a |", "| - |", "| 1 |")}
+        base={2}
+        label="A"
+      />,
+    );
+    expect(bare.container.querySelector(".md-comment")?.textContent).toBe("cp1.x");
+    expect(tableTag("<!-- table-id: cp1.x -->")).toEqual({ id: "cp1.x", bare: true });
+    expect(tableTag("<!-- note -->")).toBeNull();
+    // Analysis keeps it as a note of the register the tag labels.
+    const parts = moduleParts(readMarkdown(md("## Normalised financials", "Prose.", tagged))!);
+    expect(parts.registers.map((register) => register.id)).toEqual(["cp1.debt_facility_register"]);
+    const notes = parts.registers[0]!.notes;
+    expect(notes.some((note) => "text" in note && note.text.includes("unaudited"))).toBe(true);
   });
 
   test("register headings and shapes read the methodology's own ids and columns", () => {
