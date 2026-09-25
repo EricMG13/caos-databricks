@@ -359,6 +359,8 @@ describe("Directory", () => {
     expect(document.querySelector("[data-demo-command-note]")).toHaveTextContent(
       "Available means the command would answer",
     );
+    // Said once as the field's caption, not a disclosure in the register's flow.
+    expect(document.querySelector("[data-demo-command-note]")).toHaveClass("fld-hint");
     const fetchSpy = vi
       .fn()
       .mockResolvedValueOnce(

@@ -109,13 +109,12 @@ export function NewCase({
         mark="new-case-success"
       />
       {import.meta.env.MODE === "demo" ? (
-        <details className="help" data-demo-command-note>
-          <summary>Available means the command would answer, not that it will succeed.</summary>
-          This demonstration serves fixtures and reads only: its API refuses every command with
-          READ_ONLY_DEMO, a code the v1 wire does not declare, so the answer this control shows is
-          RESPONSE_INVALID. That is the workspace refusing an undeclared answer, which is what it
-          would do to any server that sent one.
-        </details>
+        // Said once, as the field's caption rather than a disclosure in the
+        // register's flow (brief 5, Directory).
+        <p className="fld-hint" data-demo-command-note>
+          Available means the command would answer, not that it will succeed: this demonstration
+          refuses every command, so a press shows RESPONSE_INVALID.
+        </p>
       ) : null}
       {refreshFailed ? (
         <p className="note warn" role="alert" data-new-case-refresh-failed>

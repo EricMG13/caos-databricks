@@ -253,10 +253,12 @@ export function CommitteeSection({
       data-payload={body.payload_sha256}
     >
       {filed ? (
-        <>
+        // The paper and its two links as one page width, centred in the body
+        // rather than stopping short of the cards' right edge (brief 5).
+        <div className="paper-desk" data-paper-desk>
           <Paper body={body} />
           <Downloads body={body} />
-        </>
+        </div>
       ) : (
         <section className="pnl">
           <header>

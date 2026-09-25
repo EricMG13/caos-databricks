@@ -138,6 +138,10 @@ describe("Committee v1", () => {
       });
       const { container, unmount } = render(<CommitteeSection document={odd} tab={null} />);
       const downloads = container.querySelector("[data-committee-downloads]")!;
+      // The paper and its links are one centred page width (brief 5).
+      const desk = container.querySelector("[data-paper-desk]")!;
+      expect(desk.querySelector("[data-paper]")).not.toBeNull();
+      expect(desk).toContainElement(downloads as HTMLElement);
       expect(downloads.querySelector("a")).toBeNull();
       expect(downloads.querySelectorAll('[data-refusal="LINK_NOT_OWN"]')).toHaveLength(2);
       unmount();
