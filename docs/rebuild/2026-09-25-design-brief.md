@@ -3,6 +3,10 @@
 *2026-09-25. For Claude Design. A refine-and-polish pass over the nine-section
 workspace as built; not a redesign. The owner edits this before it is sent.*
 
+*Status, later on 2026-09-25: CAOS is desktop only (decisions.md D63). Every
+phone and 390px item below is withdrawn; the 320px reflow at 400% zoom stays,
+under the a11y matrix. The questions in 9 are answered by D64–D69.*
+
 ## 1. The ask
 
 Take the workspace as it stands — shadcn/ui's Nova style on Base UI, light and
@@ -475,7 +479,7 @@ in Run, the active pill's edge, chart neutrals against `--card`, the paper
 (which stays cream in dark) and its drop shadow on a dark body, the demo
 banner.
 
-**6.13 Phone.** At 390px: the banner wraps to two lines; the summary stacks
+**6.13 Phone.** *Withdrawn: desktop only (D63).* At 390px: the banner wraps to two lines; the summary stacks
 its cells with the headline figure between them; the host-facts line runs on.
 Show Analysis (a module with figures), Run and Directory at 390 in dark.
 

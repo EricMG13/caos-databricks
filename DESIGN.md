@@ -10,6 +10,14 @@ pick (the header's theme menu). Filed output and evidence pages are paper —
 ink on cream — in either theme, because they are a different object from the
 live surface.
 
+**Desktop only (D63).** CAOS is used at a desk: a PC, a pointer, a keyboard,
+a window 1024 px wide or wider. No screen is designed, polished or checked for
+a phone or a tablet. A narrow layout remains for one reason: a desktop reader
+at 400% zoom sees 320 CSS px, which WCAG 1.4.10 asks to reflow and the a11y
+matrix measures (320×640). Below 768 px the sidebar is a sheet and below 640
+px a section's views are a native select — reflow for zoom, kept to what
+reflow needs, not a phone design.
+
 Rejected outright: marketing dashboards, pastel cards, decorative gradients,
 glow, glassmorphism, hero-metric templates, raw terminal dumps, all-caps
 labels. Dense is allowed. Disorganised is not.
@@ -93,7 +101,7 @@ tab away ("As written"), and nothing it says reaches the page as markup.
 
 A shadcn app shell (D37), inset variant:
 
-- **Sidebar** — collapsible to icons (⌘/Ctrl-B), a sheet on a phone. The case
+- **Sidebar** — collapsible to icons (⌘/Ctrl-B), a sheet at zoomed widths. The case
   switcher heads it (the directory's read, asked for when it opens); then the
   nine sections with their icons, each named with its count and state (a
   section this deployment does not serve says "Unavailable" in the link); the
@@ -114,7 +122,7 @@ A shadcn app shell (D37), inset variant:
   one filled), wrapping to a second row rather than scrolling out of sight —
   the 2026-09-23 critique's rule that every view stays in sight, which is why
   they are not shadcn's line tabs, whose underline cannot survive a wrap;
-  arrows move and select; a native select on a phone. Never navigation
+  arrows move and select; a native select at zoomed widths. Never navigation
   between sections.
 
 A section with no document says its state in the header badge and in the
@@ -170,7 +178,7 @@ thing in the same place in every module:
    on, then the model's audit summary, evidence trace, source registry, gaps
    and conflicts, and QA validation.
 
-On a phone the lead stacks: view, key figures, caveats.
+At zoomed widths the lead stacks: view, key figures, caveats.
 
 ## Charts
 

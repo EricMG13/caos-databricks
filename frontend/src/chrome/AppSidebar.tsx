@@ -1,7 +1,7 @@
 // The only navigation: the nine sections, each with its count and its one-line
 // state, then the section-local group; the case switcher heads it and the foot
 // carries the served role and two refused controls (IA_SPEC.md 3), all inside
-// the one landmark. On a phone the same sidebar is a sheet.
+// the one landmark. At a zoomed width (400%, D63) the same sidebar is a sheet.
 import { NavLink } from "react-router";
 import {
   ChartSplineIcon,

@@ -81,3 +81,29 @@ test("a case section with no case is unavailable and sends no request", async ({
   await expect(page.locator("main#body [data-surface-state='unavailable']")).toHaveCount(1);
   expect(requests).toEqual([]);
 });
+
+test("on a wide desk screen the summary stops at its reading measure", async ({ page }) => {
+  // Desktop only (D63), and a wide screen is the ordinary case: the summary
+  // card spans the body, but its verdict, headline and cells stop at 78rem
+  // rather than sitting 400px apart (D64).
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.goto(sectionRoute("run"));
+  const summary = page.locator("main#body section[aria-label='Summary']");
+  await expect(summary).toBeVisible();
+  const measure = await summary.evaluate((card) => {
+    const left = card.getBoundingClientRect().left;
+    const right = (selector: string) =>
+      Math.max(
+        ...[...card.querySelectorAll(selector)].map((el) => el.getBoundingClientRect().right),
+      );
+    return {
+      card: card.getBoundingClientRect().width,
+      headline: right("[data-headline]") - left,
+      cells: right("[data-cell]") - left,
+    };
+  });
+  const limit = 78 * 16;
+  expect(measure.card).toBeGreaterThan(limit);
+  expect(measure.headline).toBeLessThanOrEqual(limit);
+  expect(measure.cells).toBeLessThanOrEqual(limit);
+});

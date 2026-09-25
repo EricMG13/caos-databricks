@@ -2,7 +2,7 @@
 // stays focusable (aria-disabled, never the native disabled attribute), the
 // click is guarded, and the *why* is announced three ways — title for pointer
 // hover, aria-describedby for assistive tech, and (by default) a visible
-// adjacent reason line for sighted keyboard/touch users, who a title alone
+// adjacent reason line for sighted keyboard users, who a title alone
 // never reaches. The reason text must never enter the button's accessible
 // name: name-based queries and muscle memory both depend on the label staying
 // stable whether or not the action is currently available.
@@ -80,8 +80,8 @@ const useReasonFlash = (reasonDisplay: "inline" | "hidden" | "tooltip") => {
     },
     [],
   );
-  // A press still flashes the reason where no line shows it: touch has no
-  // hover and no focus ring to open a tooltip with.
+  // A press still flashes the reason where no line shows it: a click is an
+  // attempt, and a refused one must never look ignored.
   const reveal = () => {
     if (reasonDisplay === "inline") return;
     setFlashPos(flashPosition(buttonRef.current));

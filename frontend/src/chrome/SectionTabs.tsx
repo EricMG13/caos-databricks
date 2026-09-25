@@ -1,6 +1,6 @@
 // The section's own views. Never navigation between sections. Arrow keys move
-// between them and select as they go; on a phone they are a native select,
-// since a dozen wrapped tabs were taller than the screen.
+// between them and select as they go; at a zoomed width (400%, D63) they are a
+// native select, since a dozen wrapped tabs were taller than the window.
 import type { ReactNode } from "react";
 import { SeverityMark } from "./SeverityMark";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";

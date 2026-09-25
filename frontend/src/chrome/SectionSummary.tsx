@@ -29,8 +29,8 @@ export function headlineOf(brief: Brief, verdict: Verdict): string | null {
     "2026-09-09 14:33Z"). */
 const STAMP = /(\d{4}-\d{2}-\d{2}(?: \d{2}:\d{2}(?::\d{2})?Z)?)/;
 
-/** A cell's text with each date or stamp kept whole: a phone broke
-    "2026-09-09" after its hyphen, mid-date (brief 6.13). */
+/** A cell's text with each date or stamp kept whole: a narrow cell broke
+    "2026-09-09" after its hyphen, mid-date. */
 export function keepStamps(text: string): ReactNode[] {
   return text.split(STAMP).map((part, index) =>
     index % 2 ? (
@@ -103,12 +103,16 @@ export function SectionSummary({
       data-summary
       data-compact={compact || undefined}
     >
+      {/* A reading measure (D64): the card spans the body like every card
+          under it, but its verdict, headline and cells stop at 78rem rather
+          than spreading across a wide desk screen. */}
       <div
         className={
           compact
-            ? "flex flex-wrap items-center gap-x-6 gap-y-1 px-4 py-2"
-            : "flex flex-wrap items-start gap-x-8 gap-y-3 p-4"
+            ? "flex max-w-[78rem] flex-wrap items-center gap-x-6 gap-y-1 px-4 py-2"
+            : "flex max-w-[78rem] flex-wrap items-start gap-x-8 gap-y-3 p-4"
         }
+        data-summary-measure
       >
         <div
           className={`min-w-0 flex-1 basis-80 ${compact ? "flex flex-wrap items-baseline gap-x-4" : ""}`}
@@ -145,7 +149,7 @@ export function SectionSummary({
           </p>
         ) : (
           // Beside the verdict it closes the row, right-aligned; wrapped under it
-          // on a phone it aligns with the verdict's words (brief 6.13).
+          // at a zoomed width it aligns with the verdict's words.
           <p className="pl-5 text-left sm:pl-0 sm:text-right" data-headline>
             <span className="block font-mono text-2xl leading-none font-semibold tracking-tight tabular-nums">
               {headline}
@@ -174,7 +178,7 @@ export function SectionSummary({
       {briefShown ? (
         <dl
           id={briefId}
-          className="grid gap-x-8 gap-y-3 border-t bg-muted/40 px-4 py-3 sm:grid-cols-2 xl:grid-cols-4"
+          className="grid gap-x-8 gap-y-3 border-t bg-muted/40 px-4 py-3 sm:grid-cols-2 xl:grid-cols-[repeat(4,minmax(0,17.5rem))]"
           data-brief
         >
           {cells.map((cell) => (

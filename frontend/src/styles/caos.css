@@ -2707,8 +2707,8 @@
 
 /* The header's warning chips say what the summary's verdict says: while the
    summary is on screen they give way to it (SectionSummary.tsx), and carry
-   the warning once it scrolls away. A phone always shows them, its summary
-   being below the fold. Outside the layer, so a badge's own display utility
+   the warning once it scrolls away. A zoomed window (400%, D63) always shows
+   them, its summary being below the fold. Outside the layer, so a badge's own display utility
    cannot win over it. */
 @media (min-width: 48rem) {
   :root[data-summary-in-view] .header-chip {
