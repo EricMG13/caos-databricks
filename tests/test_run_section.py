@@ -110,6 +110,18 @@ def test_the_run_section_carries_node_states_with_their_reasons(
     assert by_module["CP-L10"].gate_verdict is None
     assert by_module["CP-0"].stage < by_module["CP-L10"].stage
     assert view.attempts == []
+    # The route's own edges, met or not, both ends by module and in the
+    # route's order (D73): the canvas draws the graph from these, where
+    # `waiting_on` carries only what is still unmet (N106).
+    route = resolve_route(catalog, *LITE)
+    assert [(e.source, e.target, e.type) for e in view.edges] == [
+        (e.source, e.target, e.type) for e in route.edges
+    ]
+    modules = {node.module_id for node in view.nodes}
+    assert all(e.source in modules and e.target in modules for e in view.edges)
+    assert ("CP-0", "CP-L10", "REQUIRED") in {
+        (e.source, e.target, e.type) for e in view.edges
+    }
 
 
 def test_a_run_with_no_pinned_route_is_noted(
@@ -122,6 +134,7 @@ def test_a_run_with_no_pinned_route_is_noted(
 
     assert document.body.run is not None
     assert (document.body.run.nodes, document.body.run.route_digest) == ([], None)
+    assert document.body.run.edges == []
     assert document.notes == ["ROUTE_NOT_PINNED"]
     assert document.status == "partial"
 

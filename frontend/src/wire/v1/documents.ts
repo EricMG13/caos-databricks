@@ -290,6 +290,9 @@ const ResearchBrief = object({
 });
 const GateView = object({ gate: Gate, state: GateState });
 const EdgeView = object({ source: short, type: EdgeType });
+// One edge of the pinned route, both ends by module, met or not (D73): the
+// route's shape, where a node's `waiting_on` is only what it still waits for.
+const RouteEdgeView = object({ source: short, target: short, type: EdgeType });
 const NodeView = object({
   route_node_id: short,
   module_id: short,
@@ -340,6 +343,7 @@ const RunView = object({
   subject: nullable(RunSubjectView),
   gates: array(GateView, 2),
   nodes: array(NodeView, 256),
+  edges: array(RouteEdgeView, 4096),
   attempts: array(AttemptView, 4096),
   work: nullable(WorkView),
   blocked_by: nullable(BlockedByView),
@@ -739,6 +743,7 @@ export const V1_SHAPES = {
   ResearchBrief,
   ResearchBriefQuestion,
   RouteChoice,
+  RouteEdgeView,
   RunBody,
   RunSectionDocument,
   RunSubjectView,

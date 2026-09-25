@@ -67,7 +67,14 @@ from caos.api.reads import reports as reports_read
 from caos.api.reads import run as run_read
 from caos.api.reads import upload as upload_read
 from caos.api.reads.run import _node_view, node_readiness, read_run_section
-from caos.api.wire import CLEARS, EdgeView, NodeView, RefusalBody, RunSectionDocument
+from caos.api.wire import (
+    CLEARS,
+    EdgeView,
+    NodeView,
+    RefusalBody,
+    RouteEdgeView,
+    RunSectionDocument,
+)
 from caos.blobs import BlobStore
 from caos.graph.route import (
     EdgeType,
@@ -741,7 +748,9 @@ def test_the_run_document_refuses_an_undeclared_field(
         )
 
 
-@pytest.mark.parametrize("model", [RunSectionDocument, NodeView, EdgeView, RefusalBody])
+@pytest.mark.parametrize(
+    "model", [RunSectionDocument, NodeView, EdgeView, RouteEdgeView, RefusalBody]
+)
 def test_every_wire_model_forbids_an_undeclared_field(
     model: type[BaseModel],
 ) -> None:
@@ -767,6 +776,8 @@ def test_the_wire_key_sets_are_pinned() -> None:
         "gate_reason",
     }
     assert set(EdgeView.model_fields) == {"source", "type"}
+    # The route's own edges, both ends by module (D73, N106).
+    assert set(RouteEdgeView.model_fields) == {"source", "target", "type"}
     assert set(RefusalBody.model_fields) == {"code", "clears"}
 
 

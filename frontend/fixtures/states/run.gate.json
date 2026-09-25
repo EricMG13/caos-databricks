@@ -49,6 +49,7 @@
         }
       ],
       "nodes": [],
+      "edges": [],
       "attempts": [],
       "work": null,
       "blocked_by": null,

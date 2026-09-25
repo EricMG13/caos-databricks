@@ -67,6 +67,7 @@ from caos.api.wire import (
     RevisionSaved,
     RevokeStanding,
     RouteChoice,
+    RouteEdgeView,
     RunBody,
     RunCreated,
     RunInputPinned,
@@ -247,6 +248,8 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
         {"attempt_id", "route_node_id", "ordinal", "started_at", "accepted"}
     ),
     EdgeView: frozenset({"source", "type"}),
+    # The pinned route's own edges, both ends by module (D73).
+    RouteEdgeView: frozenset({"source", "target", "type"}),
     NodeView: frozenset(
         {
             "route_node_id",
@@ -273,6 +276,7 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
             "subject",
             "gates",
             "nodes",
+            "edges",
             "attempts",
             "work",
             "blocked_by",

@@ -11,6 +11,8 @@ import type { AttemptView, BlockedByView } from "./types";
 import type { EdgeType, NodeState, Severity } from "@/wire";
 import type { NodeView, RunView } from "@/wire/v1";
 
+type RouteEdgeView = RunView["edges"][number];
+
 // Sized for the type floors (DESIGN.md: 10px labels, 11px mono data): the id,
 // the state and two whole lines of reason. At the old 7.5px text the node was
 // 128 x 76; at 62 tall the second reason line was cut through the middle. Both
@@ -136,24 +138,25 @@ interface EdgeLine {
   type: EdgeType;
 }
 
-/** Every edge the route carries, derived from each node's own `waiting_on`.
-    The host names an edge's source by its module (`CP-5`) and a node by its
-    route node id (`RN-…-CP-5`); a route holds each module once
-    (`ROUTE_DUPLICATE_MODULE`), so a source resolves to its node either way.
-    Read by route node id alone, no line or gate was drawn from a real host. */
+/** Every edge the route carries, as the route's own list serves it (D73) --
+    met or not, so a finished route still draws as its graph; a node's
+    `waiting_on` is only what it still waits for, and is its reason, not the
+    route's shape. The host names both ends by module (`CP-5`) and a node by
+    its route node id (`RN-…-CP-5`); a route holds each module once
+    (`ROUTE_DUPLICATE_MODULE`), so an end resolves to its node either way
+    (F415). */
 export function edgesOf(
-  nodes: readonly Pick<NodeView, "route_node_id" | "module_id" | "waiting_on">[],
+  nodes: readonly Pick<NodeView, "route_node_id" | "module_id">[],
+  edges: readonly RouteEdgeView[],
 ): EdgeLine[] {
   const ids = new Set(nodes.map((node) => node.route_node_id));
   const byModule = new Map(nodes.map((node) => [node.module_id, node.route_node_id]));
-  const nodeOf = (source: string) => (ids.has(source) ? source : (byModule.get(source) ?? source));
-  const lines: EdgeLine[] = [];
-  for (const node of nodes) {
-    for (const edge of node.waiting_on) {
-      lines.push({ from: nodeOf(edge.source), to: node.route_node_id, type: edge.type });
-    }
-  }
-  return lines;
+  const nodeOf = (end: string) => (ids.has(end) ? end : (byModule.get(end) ?? end));
+  return edges.map((edge) => ({
+    from: nodeOf(edge.source),
+    to: nodeOf(edge.target),
+    type: edge.type,
+  }));
 }
 
 /** Where the work is: a running node, then a blocking one, then one waiting on
@@ -178,6 +181,7 @@ export function focusOf(
 
 export function RouteGraph({
   nodes,
+  edges: routeEdges,
   attempts,
   status,
   blockedBy,
@@ -185,6 +189,8 @@ export function RouteGraph({
   onSelect,
 }: {
   nodes: NodeView[];
+  /** The pinned route's own edges (D73). */
+  edges: readonly RouteEdgeView[];
   attempts: AttemptView[];
   status: RunView["status"];
   blockedBy: BlockedByView | null;
@@ -194,7 +200,7 @@ export function RouteGraph({
   const layout = layoutRoute(nodes);
   const at = new Map(layout.nodes.map((placed) => [placed.route_node_id, placed]));
   const moduleOf = new Map(nodes.map((node) => [node.route_node_id, node.module_id]));
-  const edges = edgesOf(nodes);
+  const edges = edgesOf(nodes, routeEdges);
   const lines: { key: string; cls: string; d: string }[] = [];
   let gate: { at: EdgeRoute["at"]; from: string; to: string } | null = null;
   for (const edge of edges) {

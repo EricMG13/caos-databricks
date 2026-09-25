@@ -25,6 +25,7 @@ function graph(view: ReturnType<typeof run>) {
   return (
     <RouteGraph
       nodes={view.nodes}
+      edges={view.edges}
       attempts={view.attempts}
       status={view.status}
       blockedBy={view.blocked_by}
@@ -52,20 +53,19 @@ test("an edge the host names by its module is drawn to that module's node", () =
   // The host names a node `RN-{profile}-{selection}-{stage}-{module}` and an
   // edge's source by its module (`EdgeView(source="CP-5")`): read by route
   // node id alone, the canvas drew no line and no gate from a real host.
+  // The fixture is the host's form now (N106): ends by module, nodes by an
+  // `RN-…` id of their own here, as the host names them.
   const view = run();
-  const rn = (module: string) => `RN-FULL_CREDIT_32-RELATIVE_VALUE-${module}`;
   const host = view.nodes.map((node) => ({
     ...node,
-    route_node_id: rn(node.module_id),
-    waiting_on: node.waiting_on.map((edge) => ({
-      ...edge,
-      source: view.nodes.find((n) => n.route_node_id === edge.source)?.module_id ?? edge.source,
-    })),
+    route_node_id: `RN-FULL_CREDIT_32-RELATIVE_VALUE-${node.stage}-${node.module_id}`,
   }));
-  const edges = edgesOf(host);
-  expect(edges.length).toBeGreaterThan(0);
-  for (const edge of edges)
+  const edges = edgesOf(host, view.edges);
+  expect(edges.length).toBe(view.edges.length);
+  for (const edge of edges) {
     expect(host.some((node) => node.route_node_id === edge.from)).toBe(true);
+    expect(host.some((node) => node.route_node_id === edge.to)).toBe(true);
+  }
   const { container } = render(graph({ ...view, nodes: host }));
   expect(container.querySelectorAll(".dag .edges path").length).toBe(edges.length);
   expect(container.querySelector("[data-gate]")).toHaveAttribute("data-gate", "CP-5 → CP-6");

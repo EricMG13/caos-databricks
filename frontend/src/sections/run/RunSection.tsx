@@ -205,6 +205,7 @@ export function RunSection({ document }: { document: RunSectionDocument; tab: st
               <div className="pb flush">
                 <RouteGraph
                   nodes={run.nodes}
+                  edges={run.edges}
                   attempts={run.attempts}
                   status={run.status}
                   blockedBy={run.blocked_by}
@@ -293,6 +294,7 @@ export function RunSection({ document }: { document: RunSectionDocument; tab: st
         {selected ? (
           <NodeDetail
             node={selected}
+            edges={run.edges}
             attempts={run.attempts}
             status={run.status}
             blockedBy={run.blocked_by}

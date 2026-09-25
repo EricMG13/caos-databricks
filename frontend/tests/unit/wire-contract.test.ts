@@ -348,6 +348,8 @@ function runSection(): { [key: string]: Json } {
             gate_reason: null,
           },
         ],
+        // The route's own edges, met or not, both ends by module (D73).
+        edges: [{ source: "CP-0", target: "CP-5", type: "REQUIRED" }],
         attempts: [
           { attempt_id: RUN, route_node_id: "CP-0", ordinal: 1, started_at: AT, accepted: true },
         ],
@@ -781,6 +783,11 @@ describe("the v1 wire contract", () => {
     const nodes = JSON.parse(JSON.stringify(runSection()));
     nodes.body.run.nodes[0].waiting_on = null;
     refuses(() => parseRunSectionDocument(nodes), "$.body.run.nodes[0].waiting_on");
+    // The route's edges are a list the canvas draws; null is refused, never
+    // drawn as a route with no edges (D73).
+    const edges = JSON.parse(JSON.stringify(runSection()));
+    edges.body.run.edges = null;
+    refuses(() => parseRunSectionDocument(edges), "$.body.run.edges");
     const lines = JSON.parse(JSON.stringify(page()));
     lines.body.lines = null;
     refuses(() => parsePageDocument(lines), "$.body.lines");

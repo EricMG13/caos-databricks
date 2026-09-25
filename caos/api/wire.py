@@ -69,6 +69,10 @@ MEMBERS_MAX = 64
 SOURCES_MAX = 1000
 SET_VERSIONS_MAX = 1000
 ROUTE_NODES_MAX = 256
+# A route's edges join its own nodes (`resolve_route` skips any other), each
+# pair at most once per type: sixteen per node bounds every pathway the
+# catalog carries (116 edges across all of them) with room to spare.
+ROUTE_EDGES_MAX = ROUTE_NODES_MAX * 16
 ATTEMPTS_MAX = 4096
 CITATIONS_MAX = 1024
 RECTS_MAX = 256
@@ -505,6 +509,22 @@ class EdgeView(BaseModel):
     type: EdgeType
 
 
+class RouteEdgeView(BaseModel):
+    """One typed edge of the pinned route, both ends named by module (D73).
+
+    Every edge the route carries, met or not. `NodeView.waiting_on` says which
+    of a node's are still unmet and is a node's reason; this is the route's
+    shape, so a finished route still reads as the graph it is rather than a
+    canvas with no line on it (N106).
+    """
+
+    model_config = _CLOSED
+
+    source: Id
+    target: Id
+    type: EdgeType
+
+
 class NodeView(BaseModel):
     """A node's state and the reason for it."""
 
@@ -596,6 +616,9 @@ class RunView(BaseModel):
     subject: RunSubjectView | None
     gates: Annotated[list[GateView], Field(max_length=len(Gate))]
     nodes: Annotated[list[NodeView], Field(max_length=ROUTE_NODES_MAX)]
+    # The pinned route's own edges, in the route's order; empty while no route
+    # is pinned, as `nodes` is (D73).
+    edges: Annotated[list[RouteEdgeView], Field(max_length=ROUTE_EDGES_MAX)]
     attempts: Annotated[list[AttemptView], Field(max_length=ATTEMPTS_MAX)]
     work: WorkView | None
     # Why the run ended, when a node's verdict is why. `None` on every run that

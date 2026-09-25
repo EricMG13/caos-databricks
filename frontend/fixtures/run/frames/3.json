@@ -74,12 +74,7 @@
           "module_name": "Canonical data foundation",
           "stage": 1,
           "state": "COMPLETE",
-          "waiting_on": [
-            {
-              "source": "rn-cp-0",
-              "type": "REQUIRED"
-            }
-          ],
+          "waiting_on": [],
           "awaiting_gate": false,
           "gate_verdict": null,
           "gate_reason": null
@@ -90,12 +85,7 @@
           "module_name": "Peer benchmark",
           "stage": 1,
           "state": "RESTRICTED",
-          "waiting_on": [
-            {
-              "source": "rn-cp-1",
-              "type": "OPTIONAL"
-            }
-          ],
+          "waiting_on": [],
           "awaiting_gate": false,
           "gate_verdict": "READY_WITH_LIMITATIONS",
           "gate_reason": null
@@ -106,16 +96,7 @@
           "module_name": "Fundamental credit synthesizer",
           "stage": 2,
           "state": "COMPLETE",
-          "waiting_on": [
-            {
-              "source": "rn-cp-1",
-              "type": "REQUIRED"
-            },
-            {
-              "source": "rn-cp-1c",
-              "type": "ADVISORY"
-            }
-          ],
+          "waiting_on": [],
           "awaiting_gate": false,
           "gate_verdict": null,
           "gate_reason": null
@@ -126,12 +107,7 @@
           "module_name": "Legal covenant interpreter",
           "stage": 3,
           "state": "COMPLETE",
-          "waiting_on": [
-            {
-              "source": "rn-cp-1",
-              "type": "CONDITIONAL"
-            }
-          ],
+          "waiting_on": [],
           "awaiting_gate": false,
           "gate_verdict": null,
           "gate_reason": null
@@ -142,16 +118,7 @@
           "module_name": "Evidence trace validator",
           "stage": 4,
           "state": "COMPLETE",
-          "waiting_on": [
-            {
-              "source": "rn-cp-2",
-              "type": "REQUIRED"
-            },
-            {
-              "source": "rn-cp-4",
-              "type": "REQUIRED"
-            }
-          ],
+          "waiting_on": [],
           "awaiting_gate": false,
           "gate_verdict": null,
           "gate_reason": null
@@ -162,16 +129,7 @@
           "module_name": "Ic debate challenge",
           "stage": 5,
           "state": "COMPLETE",
-          "waiting_on": [
-            {
-              "source": "rn-cp-5",
-              "type": "QA_GATE"
-            },
-            {
-              "source": "rn-cp-2",
-              "type": "REQUIRED"
-            }
-          ],
+          "waiting_on": [],
           "awaiting_gate": false,
           "gate_verdict": null,
           "gate_reason": null
@@ -182,12 +140,7 @@
           "module_name": "CP-6A",
           "stage": 5,
           "state": "RUNNABLE",
-          "waiting_on": [
-            {
-              "source": "rn-cp-6",
-              "type": "REQUIRED"
-            }
-          ],
+          "waiting_on": [],
           "awaiting_gate": false,
           "gate_verdict": null,
           "gate_reason": null
@@ -198,16 +151,7 @@
           "module_name": "CP-7",
           "stage": 5,
           "state": "RUNNABLE",
-          "waiting_on": [
-            {
-              "source": "rn-cp-6",
-              "type": "REQUIRED"
-            },
-            {
-              "source": "rn-cp-4",
-              "type": "REQUIRED"
-            }
-          ],
+          "waiting_on": [],
           "awaiting_gate": false,
           "gate_verdict": null,
           "gate_reason": null
@@ -218,15 +162,77 @@
           "module_name": "Cash-flow forecast",
           "stage": 100,
           "state": "COMPLETE",
-          "waiting_on": [
-            {
-              "source": "rn-cp-1",
-              "type": "REQUIRED"
-            }
-          ],
+          "waiting_on": [],
           "awaiting_gate": false,
           "gate_verdict": null,
           "gate_reason": null
+        }
+      ],
+      "edges": [
+        {
+          "source": "CP-0",
+          "target": "CP-1",
+          "type": "REQUIRED"
+        },
+        {
+          "source": "CP-1",
+          "target": "CP-1C",
+          "type": "OPTIONAL"
+        },
+        {
+          "source": "CP-1",
+          "target": "CP-2",
+          "type": "REQUIRED"
+        },
+        {
+          "source": "CP-1C",
+          "target": "CP-2",
+          "type": "ADVISORY"
+        },
+        {
+          "source": "CP-1",
+          "target": "CP-4",
+          "type": "REQUIRED"
+        },
+        {
+          "source": "CP-2",
+          "target": "CP-5",
+          "type": "REQUIRED"
+        },
+        {
+          "source": "CP-4",
+          "target": "CP-5",
+          "type": "REQUIRED"
+        },
+        {
+          "source": "CP-5",
+          "target": "CP-6",
+          "type": "QA_GATE"
+        },
+        {
+          "source": "CP-2",
+          "target": "CP-6",
+          "type": "REQUIRED"
+        },
+        {
+          "source": "CP-6",
+          "target": "CP-6A",
+          "type": "REQUIRED"
+        },
+        {
+          "source": "CP-6",
+          "target": "CP-7",
+          "type": "REQUIRED"
+        },
+        {
+          "source": "CP-4",
+          "target": "CP-7",
+          "type": "REQUIRED"
+        },
+        {
+          "source": "CP-1",
+          "target": "CP-CF",
+          "type": "REQUIRED"
         }
       ],
       "attempts": [

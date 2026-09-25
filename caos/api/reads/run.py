@@ -42,6 +42,7 @@ from caos.api.wire import (
     GateView,
     NodeView,
     RouteChoice,
+    RouteEdgeView,
     RunBody,
     RunSectionDocument,
     RunSubjectView,
@@ -384,6 +385,14 @@ def _run_view(
         ),
         gates=gates,
         nodes=nodes,
+        # The route's shape, met edges included (D73): `waiting_on` carries only
+        # the unmet, so a finished route drew with no line on it.
+        edges=[]
+        if route is None
+        else [
+            RouteEdgeView(source=edge.source, target=edge.target, type=edge.type)
+            for edge in route.edges
+        ],
         attempts=[
             AttemptView(
                 attempt_id=row[0],

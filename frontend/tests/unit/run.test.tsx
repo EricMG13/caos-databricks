@@ -203,7 +203,9 @@ describe("Run", () => {
     expect(mark.getAttribute("data-gate")).toBe("CP-5 → CP-6");
     expect(container.querySelectorAll("svg.edges path.gate").length).toBe(1);
     expect(container.querySelectorAll("svg.edges path.req").length).toBeGreaterThan(0);
-    expect(container.querySelectorAll("svg.edges path.cond").length).toBe(1);
+    // The host refuses a CONDITIONAL edge (`ROUTE_EDGE_UNSUPPORTED`) and the
+    // catalog carries none; the fixture's was invented (N106).
+    expect(container.querySelectorAll("svg.edges path.cond").length).toBe(0);
   });
 
   test("test_layout_places_nodes_by_stage_without_overlap", () => {
@@ -229,14 +231,27 @@ describe("Run", () => {
     expect(layoutRoute([])).toEqual({ nodes: [], columns: [], width: 28, height: 46 });
   });
 
-  test("test_edges_are_derived_from_each_node_s_waiting_on_not_a_separate_list", () => {
-    const nodes = running.body.run!.nodes;
-    const edges = edgesOf(nodes);
-    expect(edges.length).toBe(nodes.reduce((n, node) => n + node.waiting_on.length, 0));
+  test("test_edges_are_the_route_s_own_met_or_not", () => {
+    // The route's own list (D73), not pieced together from each node's
+    // `waiting_on`: the host serves only a node's unmet edges there, and a
+    // finished route drew with no line on it (N106).
+    const view = running.body.run!;
+    const edges = edgesOf(view.nodes, view.edges);
+    expect(edges.length).toBe(view.edges.length);
+    expect(edges.length).toBeGreaterThan(
+      view.nodes.reduce((n, node) => n + node.waiting_on.length, 0),
+    );
     expect(edges.filter((edge) => edge.type === "QA_GATE").length).toBe(1);
     for (const edge of edges) {
-      expect(nodes.some((node) => node.route_node_id === edge.to)).toBe(true);
+      expect(view.nodes.some((node) => node.route_node_id === edge.from)).toBe(true);
+      expect(view.nodes.some((node) => node.route_node_id === edge.to)).toBe(true);
     }
+    // A completed node waits on nothing, as the host serves it, and is still
+    // drawn into the graph by the route's edges.
+    for (const node of view.nodes.filter((n) => n.state === "COMPLETE")) {
+      expect(node.waiting_on).toEqual([]);
+    }
+    expect(edges.some((edge) => edge.to === "rn-cp-1")).toBe(true);
   });
 
   // The rail named CP-0 while the canvas opened scrolled to CP-6, where the
@@ -254,12 +269,24 @@ describe("Run", () => {
     const { container } = mount(running);
     fireEvent.click(container.querySelector('button.node[data-node="CP-6"]')!);
     const detail = container.querySelector('[data-node-detail="CP-6"]')!;
-    expect(detail).toHaveTextContent("QA_GATE rn-cp-5");
+    // Both ends by module, as the host names them (N106): every edge that
+    // places the node, then the ones it still waits for.
+    expect(detail.querySelector("[data-edges-in]")).toHaveTextContent(
+      "QA_GATE CP-5 · REQUIRED CP-2",
+    );
+    expect(detail.querySelector("[data-waiting-on]")).toHaveTextContent("QA_GATE CP-5");
     const attempts = container.querySelectorAll(".att[data-attempt]");
     expect(attempts.length).toBe(2);
     expect(attempts[0]).toHaveTextContent("Attempt 1");
     expect(attempts[0]).toHaveTextContent("Not accepted");
     expect(attempts[1]).toHaveTextContent("Attempt unassigned");
+    // A completed node still names what placed it, and waits on nothing.
+    fireEvent.click(container.querySelector('button.node[data-node="CP-5"]')!);
+    const done = container.querySelector('[data-node-detail="CP-5"]')!;
+    expect(done.querySelector("[data-edges-in]")).toHaveTextContent(
+      "REQUIRED CP-2 · REQUIRED CP-4",
+    );
+    expect(done.querySelector("[data-waiting-on]")).toHaveTextContent("nothing");
   });
 
   test("test_displayed_run_is_labelled_separately_from_latest", () => {

@@ -1,5 +1,6 @@
 // The right column is about the selected node: its state and reason, the
-// edges in, the gate's own verdict when it named one, and its attempts.
+// edges that place it and those it still waits on, the gate's own verdict
+// when it named one, and its attempts.
 // No accept action here (brief 4.1: commands are 4.2).
 import { severityOf } from "./RouteGraph";
 import { blockingOf, reasonOf, runningOf } from "./reason";
@@ -11,15 +12,20 @@ import type { NodeView, RunView } from "@/wire/v1";
 
 export function NodeDetail({
   node,
+  edges,
   attempts,
   status,
   blockedBy,
 }: {
   node: NodeView;
+  /** The pinned route's own edges (D73): this node's incoming ones are its
+      placing edges, met or not. */
+  edges: RunView["edges"];
   attempts: AttemptView[];
   status: RunView["status"];
   blockedBy: BlockedByView | null;
 }) {
+  const incoming = edges.filter((edge) => edge.target === node.module_id);
   const running = runningOf(node, attempts, status);
   const blocking = blockingOf(node, blockedBy);
   const severity = severityOf(node, running, blocking);
@@ -44,11 +50,20 @@ export function NodeDetail({
             <dd className="wrap">{reasonOf(node, status, blocking)}</dd>
             <dt>Stage</dt>
             <dd>{node.stage}</dd>
+            {/* Every edge that places the node on the route, and apart from
+                them the ones it still waits for: the wire's `waiting_on` is
+                only the unmet, so a completed node read "none" here (N106). */}
             <dt>Edges in</dt>
-            <dd>
+            <dd data-edges-in>
+              {incoming.length
+                ? incoming.map((edge) => `${edge.type} ${edge.source}`).join(" · ")
+                : "none"}
+            </dd>
+            <dt>Waiting on</dt>
+            <dd data-waiting-on>
               {node.waiting_on.length
                 ? node.waiting_on.map((edge) => `${edge.type} ${edge.source}`).join(" · ")
-                : "none"}
+                : "nothing"}
             </dd>
             <dt>Awaiting gate</dt>
             <dd>{node.awaiting_gate ? "yes" : "no"}</dd>
