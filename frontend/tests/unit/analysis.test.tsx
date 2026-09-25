@@ -34,6 +34,11 @@ function mountAt(document: AnalysisDocument, moduleId: string) {
   return routed(<AnalysisSection document={document} tab={handoff.route_node_id} />);
 }
 
+/** Opens one of the module's three tabs: Appendix, Audit, As written. */
+function openTab(container: HTMLElement, tab: "appendix" | "audit" | "written") {
+  fireEvent.click(container.querySelector(`[data-depth-tab="${tab}"]`)!);
+}
+
 describe("Analysis", () => {
   test("test_every_enabled_demo_fixture_is_a_valid_v1_document", () => {
     const fixtures = [
@@ -45,25 +50,41 @@ describe("Analysis", () => {
     }
   });
 
-  test("test_analysis_renders_markdown_as_text_with_limitations_visible", () => {
+  test("test_analysis_renders_markdown_formatted_with_limitations_visible", () => {
     const { container } = mountAt(complete, "CP-1");
     const { container: restricted } = mountAt(complete, "CP-1C");
     const cp1c = restricted.querySelector('[data-handoff="CP-1C"]')!;
-    // The model's own prose (headings, emphasis, code) is a `<pre>`'s literal
-    // text content, never parsed into markup: no heading, strong or em tag
-    // reaches the page, and the raw markdown characters survive verbatim.
+    // The model's prose is drawn as the host renderer's closed element set
+    // (D60): its opening heading heads the view, its emphasis is <strong>,
+    // its numbered list a list, its code a code span -- and no Markdown
+    // delimiter is left on the page.
     const cp1 = container.querySelector('[data-handoff="CP-1"]')!;
-    const pre = cp1.querySelector("[data-model-analysis] pre.model-text")!;
-    expect(pre.textContent).toContain("## Normalised financials");
-    expect(pre.textContent).toContain("**$769M**");
-    expect(pre.querySelector("h1,h2,h3,h4,h5,h6,strong,em,code,ul,ol,li")).toBeNull();
+    const view = cp1.querySelector("[data-model-analysis]")!;
+    expect(view.querySelector("header h3")).toHaveTextContent("Normalised financials");
+    expect(view.querySelector("strong")).toHaveTextContent("$769M");
+    expect(view.querySelectorAll("ol > li")).toHaveLength(2);
+    expect(view.querySelector("code")).toHaveTextContent("net_leverage");
+    expect(view.textContent).not.toContain("**");
+    expect(view.textContent).not.toContain("##");
+    // The exact text stays one tab away, every character as written.
+    openTab(container, "written");
+    const written = cp1.querySelector("[data-as-written]")!;
+    expect(written.textContent).toContain("## Normalised financials");
+    expect(written.textContent).toContain("**$769M**");
+    expect(written.querySelector("h1,h2,h3,h4,h5,h6,strong,em,code,ul,ol,li")).toBeNull();
     // Limitation flags are always visible, whether empty or carrying a flag.
     const cp1Flags = cp1.querySelector("[data-limitation-flags]")!;
     expect(cp1Flags.textContent).toContain("none");
     const cp1cFlags = cp1c.querySelector("[data-limitation-flags]")!;
-    expect(cp1cFlags.textContent).toContain("PEER_SET_INCOMPLETE");
+    expect(cp1cFlags.textContent).toContain("1");
+    // Each flag is a caveat, in words, its identifier kept on hover.
+    expect(cp1c.querySelector('[data-limitation-flag="PEER_SET_INCOMPLETE"]')).toHaveTextContent(
+      "Peer set incomplete",
+    );
     expect(cp1cFlags).toBeVisible();
     expect(cp1Flags).toBeVisible();
+    // A warning written as prose stands as written; only identifiers are renamed.
+    expect(cp1c.textContent).toContain("one peer's most recent filing is more than 200 days old");
   });
 
   test("test_the_demo_tables_arrive_as_typed_data_the_section_can_chart", () => {
@@ -105,28 +126,54 @@ describe("Analysis", () => {
     expect([cf.tables, cf.tables_unavailable_reason]).toEqual([[], "TABLES_MALFORMED"]);
   });
 
-  test("the three labelled parts render for every handoff, in their panes", () => {
+  test("the three labelled parts render for every handoff, in their places", () => {
     for (const handoff of complete.body.handoffs) {
       const { container, unmount } = mountAt(complete, handoff.module_id);
-      // Its citations in the evidence rail, its prose and its calculation note
-      // in the module, and where it came from in the right column.
-      const rail = container.querySelector(".pane.evidence")!;
-      expect(rail.querySelector("[data-source-facts] h3")).toHaveTextContent(
-        "Source facts (host-verified citations)",
-      );
       const card = container.querySelector(`[data-handoff="${handoff.module_id}"]`)!;
-      // CP-1's figures come first when its tables are served; the prose after.
-      expect(card.querySelector("[data-model-analysis] h3")).toHaveTextContent(
-        "Analysis (model-authored, not host-verified)",
+      // The model's view, labelled as the model's; the host's calculation
+      // note; and the node it came from, in the header's facts.
+      expect(card.querySelector("[data-model-analysis] header")).toHaveTextContent(
+        "model-authored, not host-verified",
       );
       expect(card.querySelector("[data-host-calculation]")).toHaveTextContent(
         "Deterministic calculations: none performed by the host",
       );
-      expect(container.querySelector(".pane.context [data-provenance]")).toHaveTextContent(
-        handoff.route_node_id,
+      expect(card.querySelector("[data-route-node]")).toHaveTextContent(handoff.route_node_id);
+      // Its host-verified citations lead the Audit tab, in every module.
+      openTab(container, "audit");
+      const audit = card.querySelector('[data-depth-panel="audit"]')!;
+      expect(audit.querySelector('[data-audit-part="Source facts"] h3')).toHaveTextContent(
+        "Source facts",
       );
+      expect(audit.querySelector("[data-source-facts]")).not.toBeNull();
       unmount();
     }
+  });
+
+  test("model markup reaches the page as its own text, never as an element", () => {
+    const hostile = [
+      '# Heading <img src=x onerror="window.pwned=1">',
+      "",
+      "Text with <script>window.pwned=2</script> and <svg onload=alert(1)> in it.",
+      "",
+      "| Metric | Value |",
+      "| --- | --- |",
+      '| <a href="javascript:alert(1)">link</a> | 3.5x |',
+    ].join("\n");
+    const handoff = { ...complete.body.handoffs[0]!, model_analysis: hostile };
+    const { container } = routed(
+      <AnalysisSection
+        document={{ ...complete, body: { ...complete.body, handoffs: [handoff] } }}
+        tab={handoff.route_node_id}
+      />,
+    );
+    expect(container.querySelector("img, script, svg[onload], a[href^='javascript']")).toBeNull();
+    expect(container.textContent).toContain("<script>window.pwned=2</script>");
+    expect(container.textContent).toContain('<img src=x onerror="window.pwned=1">');
+    expect(container.querySelector("[data-model-analysis] table td")).toHaveTextContent(
+      '<a href="javascript:alert(1)">link</a>',
+    );
+    expect((window as { pwned?: number }).pwned).toBeUndefined();
   });
 
   test("the section opens on its conclusion, not on the calculator that runs after it", () => {
@@ -145,8 +192,19 @@ describe("Analysis", () => {
     expect(register.find((entry) => entry.digest === withdrawn.document_sha256)!.withdrawn).toBe(
       true,
     );
+    // Counted in the module's header; listed whole in the evidence drawer and
+    // in the Audit tab (the rail they once filled is gone).
     const { container } = mount(complete);
-    expect(container.querySelectorAll("[data-register-document]")).toHaveLength(register.length);
+    const count = container.querySelector("[data-documents-open]")!;
+    expect(count).toHaveTextContent(`${register.length} documents · ${facts.length} citations`);
+    expect(count).toHaveTextContent("1 withdrawn");
+    fireEvent.click(count);
+    const drawer = document.querySelector("[data-documents-drawer]")!;
+    expect(drawer.querySelectorAll("[data-register-document]")).toHaveLength(register.length);
+    openTab(container, "audit");
+    expect(container.querySelectorAll("[data-depth-panel] [data-register-document]")).toHaveLength(
+      register.length,
+    );
   });
 
   test("long model prose is shown in part, and the rest on request", () => {
@@ -157,10 +215,154 @@ describe("Analysis", () => {
         tab={long.route_node_id}
       />,
     );
-    const pre = container.querySelector("pre.model-text")!;
+    openTab(container, "written");
+    const pre = container.querySelector("[data-as-written]")!;
     expect(pre.textContent).toHaveLength(PROSE_SHOWN);
     fireEvent.click(container.querySelector("[data-prose-rest]")!);
-    expect(container.querySelector("pre.model-text")!.textContent).toHaveLength(PROSE_SHOWN + 5);
+    expect(container.querySelector("[data-as-written]")!.textContent).toHaveLength(PROSE_SHOWN + 5);
+  });
+
+  test("the appendix is an index: a register a line, opened one at a time, eight rows first", () => {
+    const rows = Array.from({ length: 10 }, (_, index) => `| FY${index} | ${index} |`);
+    const indexed = {
+      ...complete.body.handoffs[0]!,
+      model_analysis: [
+        "## Analysis",
+        "### View",
+        "Prose.",
+        "### Analytical appendix — complete canonical registers",
+        "#### T4.14 — Period register",
+        "| period_id | Revenue |",
+        "| --- | --- |",
+        ...rows,
+        "<!-- table-id: cp1.adjusted_ebitda_bridge -->",
+        "| addback_id | source_definition |",
+        "| --- | --- |",
+        "| A1 | as defined |",
+      ].join("\n"),
+    };
+    const { container } = routed(
+      <AnalysisSection
+        document={{ ...complete, body: { ...complete.body, handoffs: [indexed] } }}
+        tab={indexed.route_node_id}
+      />,
+    );
+    const panel = container.querySelector('[data-depth-panel="appendix"]')!;
+    // Opens on the index, every register closed: no table until one is asked
+    // for. The bridge is Financials; a register no rule knows is last.
+    const entries = [...panel.querySelectorAll("[data-register-entry]")];
+    expect(entries.map((entry) => entry.textContent)).toEqual([
+      "cp1.adjusted_ebitda_bridgeAdjusted EBITDA bridge1 row",
+      "T4.14Period register10 rows",
+    ]);
+    expect(panel.querySelector("table")).toBeNull();
+    const [bridge, period] = [...panel.querySelectorAll<HTMLElement>("[data-register-open]")];
+    fireEvent.click(period!);
+    expect(period).toHaveAttribute("aria-expanded", "true");
+    expect(panel.querySelectorAll("tbody tr")).toHaveLength(8);
+    // Its column heads read in words; the identifier stays on hover.
+    expect(panel.querySelector("th span[title='period_id']")).toHaveTextContent("Period ID");
+    fireEvent.click(panel.querySelector("[data-register-rest]")!);
+    expect(panel.querySelectorAll("tbody tr")).toHaveLength(10);
+    // Opening another closes the first.
+    fireEvent.click(bridge!);
+    expect(period).toHaveAttribute("aria-expanded", "false");
+    expect(panel.querySelectorAll("table")).toHaveLength(1);
+    expect(panel.querySelector("[data-register-rest]")).toBeNull();
+  });
+
+  test("the opening leads, its drivers are key points, the contrary view sits beside it", () => {
+    const [cp1b, target] = [complete.body.handoffs[0]!, complete.body.handoffs[1]!];
+    const opening = {
+      ...cp1b,
+      model_analysis: [
+        "## Analysis",
+        "### Credit view",
+        "A single first-lien LBO whose credit is defined by leverage. It delevers slowly.",
+        "",
+        "Three facts govern:",
+        "",
+        `1. **Leverage is a spread.** 4.0x against 7.3x on one balance sheet. [${target.module_id} T9 / CP-99]`,
+        "2. **Deleveraging is slow.** ~22% conversion.",
+        "",
+        "### Strongest contrary view",
+        "On the management basis this is a ~4.0x credit.",
+        "### Risks",
+        "Consulting timing.",
+      ].join("\n"),
+    };
+    const { container } = routed(
+      <AnalysisSection
+        document={{ ...complete, body: { ...complete.body, handoffs: [opening, target] } }}
+        tab={opening.route_node_id}
+      />,
+    );
+    const view = container.querySelector("[data-model-analysis]")!;
+    expect(view.querySelector("[data-opening] .lede")).toHaveTextContent(
+      "A single first-lien LBO whose credit is defined by leverage.",
+    );
+    const points = [...view.querySelectorAll("[data-key-point] .claim")];
+    expect(points.map((point) => point.textContent)).toEqual([
+      "Leverage is a spread.",
+      "Deleveraging is slow.",
+    ]);
+    // Beside the view, not among the sections after it.
+    expect(container.querySelector(".side [data-contrary] h3")).toHaveTextContent(
+      "Strongest contrary view",
+    );
+    expect(container.querySelector('[data-reader-part="Strongest contrary view"]')).toBeNull();
+    expect(container.querySelector('[data-reader-part="Risks"]')).not.toBeNull();
+    // A reference is a way to the module it names, and to its register; a
+    // module this run did not accept reads as its name alone.
+    const link = view.querySelector<HTMLAnchorElement>(`a.ref[data-ref="${target.module_id}"]`)!;
+    expect(link).toHaveTextContent(`${target.module_id} · T9`);
+    expect(link.getAttribute("href")).toContain(`tab=${target.route_node_id}`);
+    expect(link.getAttribute("href")).toContain("#register-T9");
+    expect(view.querySelector('span.ref[data-ref="CP-99"]')).toHaveTextContent("CP-99");
+  });
+
+  test("an address naming a register opens it in the module's appendix", () => {
+    const rows = ["| FY24 | 1 |", "| FY25 | 2 |"];
+    const handoff = {
+      ...complete.body.handoffs[0]!,
+      model_analysis: [
+        "## Analysis",
+        "### View",
+        "Prose.",
+        "### Analytical appendix — complete canonical registers",
+        "#### B2 — EBITDA walk",
+        "| Period | Value |",
+        "| --- | --- |",
+        ...rows,
+        "#### B3 — Build",
+        "| Period | Value |",
+        "| --- | --- |",
+        ...rows,
+      ].join("\n"),
+    };
+    const { container } = render(
+      <MemoryRouter initialEntries={["/analysis/#register-B3"]}>
+        <AnalysisSection
+          document={{ ...complete, body: { ...complete.body, handoffs: [handoff] } }}
+          tab={handoff.route_node_id}
+        />
+      </MemoryRouter>,
+    );
+    const opened = [...container.querySelectorAll('[data-register-open][aria-expanded="true"]')];
+    expect(opened.map((button) => button.textContent)).toEqual(["B3Build2 rows"]);
+  });
+
+  test("a module with no appendix register opens on its audit; asked for, the appendix says so", () => {
+    const { container } = mountAt(complete, "CP-4");
+    expect(container.querySelector('[data-depth-tab="appendix"]')).toHaveTextContent("0");
+    expect(container.querySelector('[data-depth-tab="audit"]')).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    openTab(container, "appendix");
+    expect(container.querySelector('[data-depth-panel="appendix"]')).toHaveTextContent(
+      "This module's text carries no appendix register.",
+    );
   });
 
   test("a screening-only handoff shows the screening notice; a full-committee one does not", () => {
@@ -185,6 +387,7 @@ describe("Analysis", () => {
 
   test("source facts name the file, page, matched text and withdrawn state", () => {
     const { container } = mountAt(complete, "CP-4");
+    openTab(container, "audit");
     const fact = container.querySelector("[data-source-facts] [data-citation]")!;
     const withdrawn = complete.body.handoffs.find((h) => h.module_id === "CP-4")!.source_facts[0]!;
     expect(fact).toHaveTextContent(withdrawn.filename);
@@ -194,12 +397,14 @@ describe("Analysis", () => {
     expect(fact).toHaveTextContent(stamp(withdrawn.withdrawn_at!));
 
     const { container: cp0 } = mountAt(complete, "CP-0");
+    openTab(cp0, "audit");
     const notWithdrawn = cp0.querySelector("[data-source-facts] [data-citation]")!;
     expect(notWithdrawn.getAttribute("data-withdrawn")).toBe("false");
   });
 
   test("a handoff with no citation says so rather than rendering nothing", () => {
     const { container } = mountAt(complete, "CP-5");
+    openTab(container, "audit");
     expect(container.querySelector("[data-source-facts]")).toHaveTextContent(
       "No citation is carried on this handoff.",
     );

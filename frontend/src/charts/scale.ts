@@ -1,6 +1,7 @@
-// Scales and type metrics. d3-scale is maths only (decision: charts are drawn
-// by React as SVG); nothing here touches the DOM.
-import { scaleLinear } from "d3-scale";
+// Scales and type metrics: plain maths, no DOM. Recharts draws the axes
+// (D61); the ticks it draws are the ones chosen here, so a chart's axis reads
+// the same nice numbers whatever library places them.
+
 import { formatDecimal, isDecimal } from "./decimal";
 
 /** The width a chart draws at before its container has been measured, and
@@ -33,21 +34,85 @@ export function fitText(text: string, room: number, size: number): string {
   return fits <= 1 ? "…" : `${text.slice(0, fits - 1)}…`;
 }
 
-/** A linear scale over `extent` with nice ends, and its ticks. An extent with
-    no length (every value zero, or none) is widened to [0, 1] so it draws. */
+// The nice-number step: 1, 2 or 5 times a power of ten, whichever puts about
+// `count` ticks across the extent. A port of d3-array's `tickSpec` (ISC), so
+// the axes read as they did when d3 drew them (D33, D61).
+const E10 = Math.sqrt(50);
+const E5 = Math.sqrt(10);
+const E2 = Math.sqrt(2);
+
+function tickSpec(start: number, stop: number, count: number): [number, number, number] {
+  const step = (stop - start) / Math.max(0, count);
+  const power = Math.floor(Math.log10(step));
+  const error = step / 10 ** power;
+  const factor = error >= E10 ? 10 : error >= E5 ? 5 : error >= E2 ? 2 : 1;
+  let i1: number;
+  let i2: number;
+  let inc: number;
+  if (power < 0) {
+    inc = 10 ** -power / factor;
+    i1 = Math.round(start * inc);
+    i2 = Math.round(stop * inc);
+    if (i1 / inc < start) i1 += 1;
+    if (i2 / inc > stop) i2 -= 1;
+    inc = -inc;
+  } else {
+    inc = 10 ** power * factor;
+    i1 = Math.round(start / inc);
+    i2 = Math.round(stop / inc);
+    if (i1 * inc < start) i1 += 1;
+    if (i2 * inc > stop) i2 -= 1;
+  }
+  if (i2 < i1 && count >= 0.5 && count < 2) return tickSpec(start, stop, count * 2);
+  return [i1, i2, inc];
+}
+
+/** The step between nice ticks: positive a whole step, negative the
+    reciprocal of a fractional one (d3's convention, which keeps 0.1 exact). */
+function tickIncrement(start: number, stop: number, count: number): number {
+  return tickSpec(start, stop, count)[2];
+}
+
+function ticksOf(start: number, stop: number, count: number): number[] {
+  if (start === stop) return [start];
+  const [i1, i2, inc] = tickSpec(start, stop, count);
+  if (!(i2 >= i1)) return [];
+  return Array.from({ length: i2 - i1 + 1 }, (_, i) =>
+    inc < 0 ? (i1 + i) / -inc : (i1 + i) * inc,
+  );
+}
+
+/** A linear scale over `extent` with nice ends, its ticks, and the map from
+    value to pixel along `range`. An extent with no length (every value zero,
+    or none) is widened to [0, 1] so it draws. d3-scale's `nice`, ported. */
 export function valueScale(
   extent: readonly [number, number],
   range: readonly [number, number],
   count: number,
 ) {
-  const [low, high] = extent[0] === extent[1] ? [Math.min(0, extent[0]), 1] : extent;
-  const scale = scaleLinear().domain([low, high]).range(range).nice(count);
-  return { scale, ticks: scale.ticks(count) };
+  let [start, stop] = extent[0] === extent[1] ? [Math.min(0, extent[0]), 1] : extent;
+  let previous: number | undefined;
+  for (let tries = 0; tries < 10; tries += 1) {
+    const step = tickIncrement(start, stop, count);
+    if (step === previous || step === 0 || !Number.isFinite(step)) break;
+    if (step > 0) {
+      start = Math.floor(start / step) * step;
+      stop = Math.ceil(stop / step) * step;
+    } else {
+      start = Math.ceil(start * step) / step;
+      stop = Math.floor(stop * step) / step;
+    }
+    previous = step;
+  }
+  const domain: [number, number] = [start, stop];
+  const at = (value: number) =>
+    range[0] + ((value - start) / (stop - start || 1)) * (range[1] - range[0]);
+  return { domain, at, ticks: ticksOf(start, stop, count) };
 }
 
 /** Tick labels at the fewest decimals that state every tick: `toFixed` prints
-    the nice number d3 meant, not its float residue, so 0.30000000000000004
-    on a 0.1 step reads "0.3". Digits grouped like every other figure. */
+    the nice number meant, not its float residue, so 0.30000000000000004 on a
+    0.1 step reads "0.3". Digits grouped like every other figure. */
 export function tickLabels(ticks: readonly number[]): string[] {
   let places = 0;
   while (

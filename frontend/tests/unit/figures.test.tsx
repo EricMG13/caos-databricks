@@ -76,12 +76,58 @@ test("test_addbacks_and_maturityLadder_read_the_latest_period", () => {
   const ladder = maturityLadder(cp1.tables)!;
   expect(ladder.categories).toEqual([...ladder.categories].sort());
   expect(ladder.series.find((series) => series.key === "SECURED SENIOR")?.color).toBe("tranche-1l");
+  // Every underscore goes, and a status stated twice is said once.
+  expect(ladder.series.find((series) => series.key === "NOT_STATED NOT_STATED")?.label).toBe(
+    "Not stated",
+  );
   expect(figuresOf(cp1).map((figure) => figure.key)[0]).toBe("segment-mix");
   // A module with no tables draws nothing.
   expect(figuresOf({ ...cp1, tables: [] })).toEqual([]);
 });
 
-test("pressing a mark names it in the right column, with its stated source", () => {
+test("the change chart is drawn only past what the key figures already print", () => {
+  const cp1b = document.body.handoffs.find((handoff) => handoff.module_id === "CP-1B")!;
+  const register = cp1b.tables.find(
+    (table) => table.table_id === "cp1b.model_comparator_register",
+  )!;
+  // Six comparisons: every one is a key figure beside the view.
+  expect(register.rows).toHaveLength(6);
+  expect(figuresOf(cp1b).map((figure) => figure.key)).not.toContain("comparator");
+  const seven = {
+    ...cp1b,
+    tables: cp1b.tables.map((table) =>
+      table === register ? { ...table, rows: [...table.rows, table.rows[0]!] } : table,
+    ),
+  };
+  expect(figuresOf(seven).map((figure) => figure.key)).toContain("comparator");
+  // The figures share one key, in their header, with what the host calculated.
+  const { container } = render(
+    <MemoryRouter>
+      <AnalysisSection document={document} tab={cp1b.route_node_id} />
+    </MemoryRouter>,
+  );
+  const head = container.querySelector("[data-figures] > header")!;
+  expect(head.querySelector("[data-figures-key]")).toHaveTextContent(
+    "Outlined: model-authored, not host-verified",
+  );
+  expect(head.querySelector("[data-host-calculation]")).not.toBeNull();
+  expect(container.querySelector("[data-figures] .chart .chart-provenance")).toBeNull();
+  // A module whose tables draw nothing has no Figures heading, only the
+  // host's calculation statement.
+  const only = { ...cp1b, tables: [register] };
+  const { container: bare } = render(
+    <MemoryRouter>
+      <AnalysisSection
+        document={{ ...document, body: { ...document.body, handoffs: [only] } }}
+        tab={only.route_node_id}
+      />
+    </MemoryRouter>,
+  );
+  expect(bare.querySelector("[data-figures]")).toBeNull();
+  expect(bare.querySelector("[data-host-calculation]")).not.toBeNull();
+});
+
+test("pressing a mark names it beside the figures, with its stated source", () => {
   const { container } = render(
     <MemoryRouter>
       <AnalysisSection document={document} tab={cp1.route_node_id} />
@@ -90,7 +136,7 @@ test("pressing a mark names it in the right column, with its stated source", () 
   const figure = container.querySelector("[data-figure='segment-mix']")!;
   const mark = within(figure as HTMLElement).getAllByRole("button", { name: /Q2-2026/ })[0]!;
   fireEvent.click(mark);
-  const picked = container.querySelector(".pane.context [data-picked]")!;
+  const picked = container.querySelector("[data-figures] ~ [data-picked]")!;
   expect(picked).toHaveTextContent("Revenue by segment");
   expect(picked).toHaveTextContent("Model-authored, not host-verified");
   expect(picked.querySelector("[data-picked-value]")!.textContent).toMatch(/USD m$/);

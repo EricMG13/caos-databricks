@@ -133,14 +133,24 @@ export interface MarkHit {
 /** The fill that hatches a model-authored mark of `tone`, as a `url(#…)`. */
 export type Hatch = (tone: Tone) => string;
 
+/** What the frame lends a chart to draw with (D61). */
+export interface PlotKit {
+  /** The container's width in CSS pixels: the chart draws at it, unscaled. */
+  width: number;
+  hatch: Hatch;
+  /** The `<pattern>` id a hatched tone's fill refers to. */
+  patternId: (tone: Tone) => string;
+  /** The picture's role and name, for the chart's SVG. */
+  svg: { role: "img"; "aria-labelledby": string };
+}
+
+/** A chart as drawn: Recharts' element, its height, and the order Tab and the
+    arrow keys take through its marks, which report themselves from inside it. */
 export interface Plot {
   height: number;
-  /** The plotting area inside the axes. */
-  area: Box;
-  body: ReactNode;
-  marks: readonly MarkHit[];
-  /** Tones some outlined mark is hatched in: the frame defines their patterns. */
-  hatched: readonly Tone[];
+  chart: ReactNode;
+  /** Mark keys in reading order: category by category, slot by slot. */
+  order: readonly string[];
 }
 
 export interface LegendEntry {

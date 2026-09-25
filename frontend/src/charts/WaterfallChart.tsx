@@ -130,11 +130,10 @@ export function WaterfallChart({
       legend={legend}
       provenance="fill"
       table={tableOf(bridge, unit)}
-      plot={(width, hatch) =>
+      plot={(kit) =>
         bandPlot(
           { orientation: "vertical", categories, slots: 1, bars, connect: true, height },
-          width,
-          hatch,
+          kit,
         )
       }
       onSelect={onSelect}

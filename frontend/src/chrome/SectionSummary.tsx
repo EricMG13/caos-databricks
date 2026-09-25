@@ -3,8 +3,10 @@
 // figure; then what changed, what it means, what to do and on what evidence
 // (IA_SPEC.md 3). Every cell is composed from the document's own facts, and a
 // cell with nothing to say is not drawn (critique P1).
+import { useId, useState } from "react";
 import { SeverityMark, toneOf } from "./SeverityMark";
 import { sentence } from "./compose";
+import { Button } from "@/components/ui/button";
 import type { Brief, Ribbon, Verdict } from "@/wire";
 
 const CELLS: { key: keyof Omit<Brief, "headline">; label: string }[] = [
@@ -34,32 +36,50 @@ export function SectionSummary({
   verdict,
   brief,
   ribbon,
+  compact = false,
 }: {
   verdict: Verdict;
   brief: Brief;
   ribbon: Ribbon;
+  /** One line, the brief on request: a section whose view is open (an
+      Analysis module) gives the first screen to the view. */
+  compact?: boolean;
 }) {
   const cells = CELLS.filter((cell) => brief[cell.key]);
   const states = STATE_CELLS.filter(({ key }) => ribbon[key] !== null);
   const headline = headlineOf(brief, verdict);
+  const [opened, setOpened] = useState(false);
+  const briefId = useId();
+  const briefShown = cells.length > 0 && (!compact || opened);
   return (
     <section
       aria-label="Summary"
       className="overflow-hidden rounded-xl bg-card text-card-foreground ring-1 ring-foreground/10"
       data-summary
+      data-compact={compact || undefined}
     >
-      <div className="flex flex-wrap items-start gap-x-8 gap-y-3 p-4">
+      <div
+        className={
+          compact
+            ? "flex flex-wrap items-center gap-x-6 gap-y-1 px-4 py-2"
+            : "flex flex-wrap items-start gap-x-8 gap-y-3 p-4"
+        }
+      >
         <div
-          className="min-w-0 flex-1 basis-80"
+          className={`min-w-0 flex-1 basis-80 ${compact ? "flex flex-wrap items-baseline gap-x-4" : ""}`}
           data-verdict={verdict.severity}
           data-tone={toneOf(verdict.severity)}
         >
-          <p className="flex items-baseline gap-2.5 text-base font-semibold tracking-tight text-balance">
+          <p
+            className={`flex items-baseline gap-2.5 font-semibold tracking-tight text-balance ${compact ? "text-sm" : "text-base"}`}
+          >
             <SeverityMark severity={verdict.severity} pulse />
             <span>{verdict.conclusion}</span>
           </p>
           {verdict.blocked_on || states.length ? (
-            <p className="mt-1 flex flex-wrap gap-x-4 gap-y-1 pl-5 text-sm text-muted-foreground">
+            <p
+              className={`flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground ${compact ? "" : "mt-1 pl-5"}`}
+            >
               {verdict.blocked_on ? (
                 <span data-blocked-on>
                   Blocked on <span className="font-mono text-foreground">{verdict.blocked_on}</span>
@@ -73,7 +93,12 @@ export function SectionSummary({
             </p>
           ) : null}
         </div>
-        {headline === null ? null : (
+        {headline === null ? null : compact ? (
+          <p className="text-sm text-muted-foreground" data-headline>
+            <span className="font-mono font-semibold text-foreground tabular-nums">{headline}</span>
+            {brief.headline_label ? ` ${brief.headline_label}` : null}
+          </p>
+        ) : (
           <p className="text-right" data-headline>
             <span className="block font-mono text-2xl leading-none font-semibold tracking-tight tabular-nums">
               {headline}
@@ -85,9 +110,23 @@ export function SectionSummary({
             ) : null}
           </p>
         )}
+        {compact && cells.length ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-expanded={opened}
+            aria-controls={opened ? briefId : undefined}
+            data-brief-toggle
+            onClick={() => setOpened((open) => !open)}
+          >
+            {opened ? "Hide brief" : "Brief"}
+          </Button>
+        ) : null}
       </div>
-      {cells.length ? (
+      {briefShown ? (
         <dl
+          id={briefId}
           className="grid gap-x-8 gap-y-3 border-t bg-muted/40 px-4 py-3 sm:grid-cols-2 xl:grid-cols-4"
           data-brief
         >

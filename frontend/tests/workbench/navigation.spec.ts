@@ -80,7 +80,11 @@ test("demo Model, Report, and Committee routes render parsed v1 content", async 
   // Read only: no field, and the one kind of button is a narrative figure's
   // chip, which opens its source page (N59) with its hidden line marked (N27).
   await expect(page.locator("[data-committee-v1] input")).toHaveCount(0);
-  await expect(page.locator("[data-committee-v1] button:not([data-figure-chip])")).toHaveCount(0);
+  await expect(
+    page.locator(
+      "[data-committee-v1] button:not([data-figure-chip]):not([data-artifact-view-tab])",
+    ),
+  ).toHaveCount(0);
   await page.locator("[data-figure-chip]").click();
   const drawer = page.locator("[data-evidence-drawer]");
   await expect(drawer).toContainText("page 7");
@@ -104,6 +108,8 @@ test("saved artifacts preserve canonical tables in contained scroll viewers", as
 
   for (const [route, selectors] of routes) {
     await page.goto(route);
+    // The artifact reads formatted first (D60); its exact text is a tab away.
+    await page.locator("[data-artifact-view-tab='written']").first().click();
     for (const selector of selectors) {
       const viewer = page.locator(selector).first();
       await viewer.evaluate((element, text) => {

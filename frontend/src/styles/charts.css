@@ -74,11 +74,13 @@
     gap: 0.125rem;
     min-width: 0;
   }
-  /* The legend line, and the "Table" toggle at its end. */
+  /* The card's foot: the legend line, and the "Table" toggle at its end. */
   .chart-keys {
     display: flex;
     align-items: flex-start;
     gap: 0.5rem;
+    padding-top: 0.625rem;
+    border-top: 1px solid var(--hairline);
   }
   .chart-title {
     font-size: 0.875rem;
@@ -97,6 +99,7 @@
   }
   .chart-toggle {
     flex: none;
+    margin-left: auto;
     min-height: 24px;
     padding: 0 0.5rem;
     border: 1px solid var(--border);
@@ -179,7 +182,8 @@
   }
 
   /* ---- furniture ---- */
-  .chart-grid line {
+  .chart-grid line,
+  line.chart-grid {
     stroke: var(--chart-grid);
     stroke-width: 1;
     shape-rendering: crispEdges;

@@ -58,13 +58,20 @@ describe("Report v1", () => {
     // The one other interactive markup is the revision list's navigation,
     // whose targets are built from decoded UUIDs and never from payload text,
     // and a narrative figure's chip (N59): a button that opens the drawer by
-    // the figure's typed identity, its quote only ever text.
+    // the figure's typed identity, its quote only ever text. An artifact's
+    // Formatted / As written tabs (D60) are the page's own, and their words
+    // are the host's, never the payload's.
     for (const node of root.querySelectorAll(
       "img, script, a, button, input, textarea, [contenteditable]",
     )) {
       expect(
-        node.closest("[data-filing-controls], [data-report-revisions], [data-figure-chip]"),
+        node.closest(
+          "[data-filing-controls], [data-report-revisions], [data-figure-chip], [data-artifact-view-tab]",
+        ),
       ).not.toBeNull();
+    }
+    for (const tab of root.querySelectorAll("[data-artifact-view-tab]")) {
+      expect(["Formatted", "As written"]).toContain(tab.textContent);
     }
     for (const chip of root.querySelectorAll("[data-figure-chip]")) {
       expect(chip.tagName).toBe("BUTTON");
@@ -93,6 +100,10 @@ describe("Report v1", () => {
   test("test_each_artifact_region_is_named_by_the_route_node_it_is_about", () => {
     const document = report();
     const { container } = mount(document);
+    // Each artifact's exact text is its As written tab (D60).
+    for (const tab of container.querySelectorAll("[data-artifact-view-tab='written']")) {
+      fireEvent.click(tab);
+    }
     const named = Array.from(container.querySelectorAll("[role='region'][aria-label]")).map(
       (region) => region.getAttribute("aria-label"),
     );

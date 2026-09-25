@@ -2,11 +2,13 @@
 // bundle's own reader (D32). The tables are the model's, like its prose, so
 // every mark is model-authored: outlined and hatched, printed exactly as
 // served. Sums are exact (BigInt); a float only places a mark.
-import { useMemo, useState } from "react";
+import { useMemo, type ReactNode } from "react";
 import {
   DivergingBarChart,
   LineChart,
+  ProvenanceKeyed,
   StackedBarChart,
+  Swatch,
   formatDecimal,
   type ChartColor,
   type ChartSelection,
@@ -14,7 +16,7 @@ import {
   type Datum,
 } from "@/charts";
 import { fromScaled, placesOf, toScaled } from "@/charts/decimal";
-import { hundredfold } from "@/ds/format";
+import { hundredfold, plainName } from "@/ds/format";
 import type { HandoffView } from "@/wire/v1";
 
 type Table = HandoffView["tables"][number];
@@ -106,7 +108,7 @@ function oversized(key: string, table: string, title: string, marks: number): Fi
     table,
     kind: "stack",
     title,
-    summary: `${marks} marks: too many to draw. The module's tables below list every row.`,
+    summary: `${marks} marks: too many to draw. The Appendix tab lists every row.`,
     categories: [],
     series: [],
     sourceOf: () => null,
@@ -379,7 +381,9 @@ export function maturityLadder(tables: readonly Table[]): Figure | null {
     categories: years,
     series: classes.map((klass) => ({
       key: klass,
-      label: sentence(klass.replace("_", " ")),
+      // Every underscore, and a status said once: `NOT_STATED NOT_STATED`
+      // reads "Not stated".
+      label: sentence(unique(klass.split(" ")).join(" ").replaceAll("_", " ")),
       origin: "model" as const,
       color: TRANCHE[klass] ?? "neutral",
       data: years.map((year) => cell(klass, year)),
@@ -413,21 +417,6 @@ const BASIS: Record<string, [string, string]> = {
   YTD_PRIOR: ["year to date", "YTD"],
   LTM_PRIOR: ["last twelve months", "LTM"],
 };
-const ACRONYMS = new Set(["ebitda", "cfo", "ncfo", "fcf", "sbc", "sga", "ltm", "ytd"]);
-/** `adjusted_ebitda` reads "Adjusted EBITDA": a register id as a label. */
-const idLabel = (id: string) =>
-  id
-    .toLowerCase()
-    .split("_")
-    .map((word, index) =>
-      ACRONYMS.has(word)
-        ? word.toUpperCase()
-        : index === 0
-          ? word.charAt(0).toUpperCase() + word.slice(1)
-          : word,
-    )
-    .join(" ");
-
 /** Each metric's change on its reference period, in percent (N56): the one
     unit a revenue change and a debt change share, so they sit on one axis.
     A change the bundle could not calculate is a gap with its status, not a
@@ -443,7 +432,7 @@ export function comparatorChanges(tables: readonly Table[]): Figure | null {
   const bases = unique(rows.map((row) => text(row, "comparison_basis")));
   const [said] = BASIS[bases[0]!] ?? [bases[0]!.toLowerCase()];
   const named = rows.map((row) => {
-    const metric = idLabel(text(row, "metric_id"));
+    const metric = plainName(text(row, "metric_id"));
     const basis = text(row, "comparison_basis");
     return bases.length === 1 ? metric : `${metric} ${BASIS[basis]?.[1] ?? basis}`;
   });
@@ -494,6 +483,48 @@ export function comparatorChanges(tables: readonly Table[]): Figure | null {
   };
 }
 
+/** One headline figure: the value now, what it is compared with, and the
+    change, each printed as served. */
+export interface KeyFigure {
+  key: string;
+  label: string;
+  value: string;
+  reference: string | null;
+  change: Datum;
+}
+
+/** Headline tiles past this many would crowd the view they sit beside; the
+    appendix and the figure below carry every row. */
+const KEY_FIGURES = 6;
+
+/** CP-1B's comparator register as the headline figures beside the module's
+    view (D60). The host's reader typed it, so each value is the served
+    decimal, never one read from the prose (D32). */
+export function keyFigures(tables: readonly Table[]): KeyFigure[] {
+  const rows = (tableOf(tables, "cp1b.model_comparator_register") ?? []).slice(0, KEY_FIGURES);
+  const served = (cell: Cell | undefined) =>
+    cell?.value == null ? cell?.text || "n/a" : formatDecimal(cell.value);
+  // A metric compared over two periods would print two identical labels.
+  const repeated = (metric: string) =>
+    rows.filter((row) => text(row, "metric_id") === metric).length > 1;
+  return rows.map((row, index) => ({
+    key: `${text(row, "metric_id")}-${index}`,
+    label: [
+      plainName(text(row, "metric_id")),
+      repeated(text(row, "metric_id")) ? plainName(text(row, "current_period_id")) : "",
+    ]
+      .filter(Boolean)
+      .join(" · "),
+    value: served(row.current_value),
+    reference: row.reference_value ? served(row.reference_value) : null,
+    // A change the host could not type ("(5.1%) reported") prints as written.
+    change: percentDatum(
+      row.percentage_change,
+      text(row, "percentage_change") || text(row, "calculation_status") || "not calculable",
+    ),
+  }));
+}
+
 /** CP-1B's comparison of each add-back less CP-1's, every period it
     validated (N56): zero where they agree. Every period, not a "latest" one:
     this register carries no period order of its own (CP-1's register is
@@ -527,7 +558,9 @@ export function addbackValidation(tables: readonly Table[]): Figure | null {
       ` across ${periods.length === 1 ? periods[0] : `${periods.length} periods`}.`,
     // The register names an add-back by its id (its label is CP-1's table),
     // and each bar by its period too, so no two read alike.
-    categories: rows.map((row) => `${idLabel(text(row, "addback_id"))}, ${text(row, "period_id")}`),
+    categories: rows.map(
+      (row) => `${plainName(text(row, "addback_id"))}, ${text(row, "period_id")}`,
+    ),
     series: [
       {
         key: "difference",
@@ -604,12 +637,15 @@ export function forecastDrivers(tables: readonly Table[]): Figure[] {
 /** Every figure a handoff's tables support, in reading order. */
 export function figuresOf(handoff: HandoffView): Figure[] {
   const tables = handoff.tables;
+  // The key figures beside the view already print every comparison when
+  // there are no more than they hold; the chart would say them again.
+  const compared = tableOf(tables, "cp1b.model_comparator_register")?.length ?? 0;
   const figures = [
     segmentMix(tables),
     ...kpiLines(tables),
     addbacks(tables),
     maturityLadder(tables),
-    comparatorChanges(tables),
+    compared > KEY_FIGURES ? comparatorChanges(tables) : null,
     addbackValidation(tables),
     ...forecastDrivers(tables),
   ].filter((figure): figure is Figure => figure !== null);
@@ -619,7 +655,7 @@ export function figuresOf(handoff: HandoffView): Figure[] {
     ...figures.slice(0, MAX_FIGURES - 1),
     {
       ...oversized("more", figures[MAX_FIGURES - 1]!.table, `${rest} more figures`, 0),
-      summary: `${rest} more figures are not drawn. The module's tables below list every row.`,
+      summary: `${rest} more figures are not drawn. The Appendix tab lists every row.`,
     },
   ];
 }
@@ -700,56 +736,35 @@ function Chart({
   return <StackedBarChart {...common} categories={figure.categories} series={figure.series} />;
 }
 
-/** The module's own tables, as served, for whoever needs every cell. */
-function RawTables({ tables }: { tables: HandoffView["tables"] }) {
-  const [open, setOpen] = useState(false);
+/** Every figure here is the model's, so one key says so for all of them. */
+function ModelKey({ figures }: { figures: readonly Figure[] }) {
+  const drawn = figures.filter((figure) => !figure.oversized);
+  const shapes = [
+    ...(drawn.some((figure) => figure.kind !== "line") ? (["fill"] as const) : []),
+    ...(drawn.some((figure) => figure.kind === "line") ? (["line"] as const) : []),
+  ];
+  if (shapes.length === 0) return null;
   return (
-    <details className="help tables" onToggle={(event) => setOpen(event.currentTarget.open)}>
-      <summary>The module&apos;s tables ({tables.length})</summary>
-      {open
-        ? tables.map((table) => (
-            <div
-              key={table.table_id}
-              className="tscroll"
-              tabIndex={0}
-              role="region"
-              aria-label={table.table_id}
-            >
-              <table className="tbl raw" data-raw-table={table.table_id}>
-                <caption>{table.table_id}</caption>
-                <thead>
-                  <tr>
-                    {table.columns.map((column) => (
-                      <th key={column} scope="col" className="l">
-                        {column}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {table.rows.map((row, index) => (
-                    <tr key={index}>
-                      {row.map((cell, column) => (
-                        <td key={column} className={cell.value === null ? "l" : undefined}>
-                          {cell.text}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ))
-        : null}
-    </details>
+    <ul className="chart-legend" aria-label="Key" data-figures-key>
+      {shapes.map((shape) => (
+        <li key={shape} className="chart-provenance">
+          <Swatch tone="neutral" shape={shape} origin="model" />
+          {shape === "fill" ? "Outlined" : "Dashed, hollow point"}: model-authored, not
+          host-verified
+        </li>
+      ))}
+    </ul>
   );
 }
 
 export function Figures({
   handoff,
+  calculation,
   onPick,
 }: {
   handoff: HandoffView;
+  /** What the host calculated for this module, said where its figures are. */
+  calculation: ReactNode;
   onPick: (pick: FigurePick, opener: HTMLElement) => void;
 }) {
   // Once a document, not once a render: pressing a mark re-renders the
@@ -760,35 +775,44 @@ export function Figures({
   );
   if (handoff.tables_unavailable_reason) {
     return (
-      <p className="note" data-tables-unavailable={handoff.tables_unavailable_reason}>
-        This module&apos;s tables could not be read ({handoff.tables_unavailable_reason}), so it
-        shows no figures. Its prose below is unaffected.
-      </p>
+      <>
+        <p className="note" data-tables-unavailable={handoff.tables_unavailable_reason}>
+          This module&apos;s tables could not be read ({handoff.tables_unavailable_reason}), so it
+          shows no figures. Its prose below is unaffected.
+        </p>
+        {calculation}
+      </>
     );
   }
-  if (figures.length === 0 && handoff.tables.length === 0) return null;
+  // Tables that draw nothing here (a comparator the key figures print) leave
+  // no empty Figures heading behind.
+  const catalysts = tableOf(handoff.tables, "cp2b.cp_model_catalysts")?.length ?? 0;
+  if (figures.length === 0 && catalysts === 0) return calculation;
   return (
     <section className="figures" aria-labelledby="figures-heading" data-figures>
-      <h3 id="figures-heading" className="grouphead">
-        Figures <span className="cp">model-authored, drawn outlined</span>
-      </h3>
+      <header className="grouphead">
+        <h3 id="figures-heading">Figures</h3>
+        <ModelKey figures={figures} />
+        {calculation}
+      </header>
       {figures.length ? (
-        <div className="figgrid">
-          {figures.map((figure) => (
-            <div key={figure.key} className={`fig ${figure.kind}`} data-figure={figure.key}>
-              {figure.oversized ? (
-                <p className="note" data-figure-oversized>
-                  <b>{figure.title}.</b> {figure.summary}
-                </p>
-              ) : (
-                <Chart figure={figure} onPick={onPick} />
-              )}
-            </div>
-          ))}
-        </div>
+        <ProvenanceKeyed value={false}>
+          <div className="figgrid">
+            {figures.map((figure) => (
+              <div key={figure.key} className={`fig ${figure.kind}`} data-figure={figure.key}>
+                {figure.oversized ? (
+                  <p className="note" data-figure-oversized>
+                    <b>{figure.title}.</b> {figure.summary}
+                  </p>
+                ) : (
+                  <Chart figure={figure} onPick={onPick} />
+                )}
+              </div>
+            ))}
+          </div>
+        </ProvenanceKeyed>
       ) : null}
       <Catalysts tables={handoff.tables} />
-      {handoff.tables.length ? <RawTables tables={handoff.tables} /> : null}
     </section>
   );
 }

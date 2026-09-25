@@ -1,8 +1,7 @@
-// Axes, minimal: one value axis of hairline gridlines with its tick labels,
-// a zero baseline, and category labels thinned to what fits. Shared by the
-// band charts and the line chart so the two read alike.
+// Axes, minimal: one value axis whose nice ticks are chosen here and drawn by
+// Recharts (D61), and category labels thinned to what fits, each cut to its
+// room. Shared by the band charts and the line chart so the two read alike.
 import { TICK_SIZE, fitText, textWidth, tickLabels, valueScale } from "./scale";
-import type { Box } from "./types";
 
 /** A text placed in plot pixels. */
 export interface Placed {
@@ -13,6 +12,7 @@ export interface Placed {
 }
 
 export interface Tick {
+  value: number;
   position: number;
   text: string;
 }
@@ -25,8 +25,8 @@ export function Label({ placed, className }: { placed: Placed; className: string
   );
 }
 
-/** A nice value scale over `extent` along `range`, its ticks placed and
-    labelled, and the widest label's width (the room a left axis needs). */
+/** A nice value axis over `extent` along `range`: its domain, its ticks placed
+    and labelled, and the widest label's width (the room a left axis needs). */
 export function valueTicks(
   extent: readonly [number, number],
   range: readonly [number, number],
@@ -34,14 +34,15 @@ export function valueTicks(
   percent = false,
 ) {
   const count = Math.max(2, Math.round(Math.abs(range[1] - range[0]) / spacing));
-  const { scale, ticks } = valueScale(extent, range, count);
+  const { domain, at, ticks } = valueScale(extent, range, count);
   const texts = tickLabels(ticks);
   const placed: Tick[] = ticks.map((tick, index) => ({
-    position: scale(tick),
+    value: tick,
+    position: at(tick),
     text: `${texts[index] ?? ""}${percent ? "%" : ""}`,
   }));
   const widest = Math.max(0, ...placed.map((tick) => textWidth(tick.text, TICK_SIZE)));
-  return { at: (value: number) => scale(value), ticks: placed, widest };
+  return { at, domain, ticks: placed, widest };
 }
 
 /** Category labels along a horizontal axis at `y`: every one that fits, the
@@ -68,67 +69,57 @@ export function acrossLabels(
   );
 }
 
-/** Gridlines across `area` at each tick, the tick labels outside it, and the
-    zero baseline one step brighter. `vertical`: values run up the left edge;
-    otherwise along the bottom. */
-export function ValueGrid({
-  ticks,
-  area,
-  vertical,
-  zero,
+/** The label each category shows under a vertical axis, or `null` where it
+    is skipped so its neighbours fit. */
+export function shownCategories(categories: readonly string[], step: number): (string | null)[] {
+  const shown = new Map(
+    acrossLabels(categories, (index) => index, step, 0).map((placed) => [placed.x, placed.text]),
+  );
+  return categories.map((_, index) => shown.get(index) ?? null);
+}
+
+interface TickProps {
+  x?: number | string;
+  y?: number | string;
+  payload?: { value?: unknown };
+}
+
+/** A value axis's tick for Recharts, labelled as `valueTicks` labelled it:
+    beside a left axis, or under a bottom one. */
+export function valueTick(ticks: readonly Tick[], side: "left" | "bottom") {
+  const text = new Map(ticks.map((tick) => [tick.value, tick.text]));
+  return function ValueTick(props: TickProps) {
+    return (
+      <TickText
+        x={props.x}
+        y={props.y}
+        dy={side === "left" ? TICK_SIZE / 2 - 1.5 : 10}
+        anchor={side === "left" ? "end" : "middle"}
+        text={text.get(Number(props.payload?.value)) ?? null}
+      />
+    );
+  };
+}
+
+/** Recharts' tick, drawn in the chart's own type: `text` is the label to
+    print, already cut to fit, or nothing. */
+export function TickText({
+  x,
+  y,
+  text,
+  anchor,
+  dy = 0,
 }: {
-  ticks: readonly Tick[];
-  area: Box;
-  vertical: boolean;
-  /** Where zero sits, when the axis holds it. */
-  zero: number | null;
+  x?: number | string;
+  y?: number | string;
+  text: string | null;
+  anchor: Placed["anchor"];
+  dy?: number;
 }) {
-  const right = area.x + area.width;
-  const bottom = area.y + area.height;
+  if (text === null) return null;
   return (
-    <>
-      <g className="chart-grid">
-        {ticks.map((tick) =>
-          vertical ? (
-            <line
-              key={tick.position}
-              x1={area.x}
-              x2={right}
-              y1={tick.position}
-              y2={tick.position}
-            />
-          ) : (
-            <line
-              key={tick.position}
-              x1={tick.position}
-              x2={tick.position}
-              y1={area.y}
-              y2={bottom}
-            />
-          ),
-        )}
-      </g>
-      {ticks.map((tick) => (
-        <Label
-          key={`tick-${tick.position}`}
-          className="chart-tick"
-          placed={
-            vertical
-              ? {
-                  text: tick.text,
-                  x: area.x - 6,
-                  y: tick.position + TICK_SIZE / 2 - 1.5,
-                  anchor: "end",
-                }
-              : { text: tick.text, x: tick.position, y: bottom + 14, anchor: "middle" }
-          }
-        />
-      ))}
-      {zero === null ? null : vertical ? (
-        <line className="chart-zero" x1={area.x} x2={right} y1={zero} y2={zero} />
-      ) : (
-        <line className="chart-zero" x1={zero} x2={zero} y1={area.y} y2={bottom} />
-      )}
-    </>
+    <text className="chart-tick" x={Number(x)} y={Number(y) + dy} textAnchor={anchor}>
+      {text}
+    </text>
   );
 }

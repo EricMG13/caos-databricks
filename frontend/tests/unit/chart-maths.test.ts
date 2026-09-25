@@ -2,7 +2,8 @@
 // bridge's running level and residual, a stack's shares, tick labels, and
 // how a mark is named. Every figure a chart prints comes through here, so
 // these hold it to the string the API served -- never a float's rendering.
-import { acrossLabels, valueTicks } from "@/charts/axes";
+import { render } from "@testing-library/react";
+import { acrossLabels, shownCategories, valueTick, valueTicks } from "@/charts/axes";
 import { bandPlot, cellBar } from "@/charts/band";
 import { UNRECONCILED, bridgeOf } from "@/charts/bridge";
 import { hitBox } from "@/charts/ChartFrame";
@@ -278,10 +279,13 @@ describe("axes print nice numbers, not float residue", () => {
   });
 
   test("a value scale is nice, holds its extent, and widens an empty one", () => {
-    const { scale, ticks } = valueScale([-3, 17], [200, 0], 5);
-    expect(scale.domain()).toEqual([-5, 20]);
+    const { domain, ticks, at } = valueScale([-3, 17], [200, 0], 5);
+    expect(domain).toEqual([-5, 20]);
     expect(ticks).toContain(0);
-    expect(valueScale([0, 0], [100, 0], 5).scale.domain()).toEqual([0, 1]);
+    expect([at(-5), at(20)]).toEqual([200, 0]);
+    expect(valueScale([0, 0], [100, 0], 5).domain).toEqual([0, 1]);
+    // d3's nice numbers, ported (D61): a 0.1 step stays exact, not 0.30000000000000004.
+    expect(valueScale([0, 0.3], [100, 0], 3).ticks).toEqual([0, 0.1, 0.2, 0.3]);
     const axis = valueTicks([0, 1500], [200, 0], 44, true);
     expect(axis.ticks.every((tick) => tick.text.endsWith("%"))).toBe(true);
     expect(axis.widest).toBe(textWidth("1,500%", TICK_SIZE));
@@ -310,6 +314,28 @@ describe("axes print nice numbers, not float residue", () => {
       0,
     );
     expect(labels.map((label) => label.x)).toEqual([0, 100]);
+    // The axis Recharts draws shows the same thinning: the skipped label is null.
+    expect(shownCategories(["January 2026", "February 2026", "March 2026"], 50)).toEqual([
+      "January 2026",
+      null,
+      "March 2026",
+    ]);
+  });
+
+  test("a value tick prints the label chosen here, beside or under its axis", () => {
+    const axis = valueTicks([0, 1500], [200, 0], 44);
+    const Left = valueTick(axis.ticks, "left");
+    const Bottom = valueTick(axis.ticks, "bottom");
+    const left = render(Left({ x: 30, y: 100, payload: { value: 1000 } }));
+    const text = left.container.querySelector("text")!;
+    expect(text.textContent).toBe("1,000");
+    expect(text.getAttribute("text-anchor")).toBe("end");
+    const bottom = render(Bottom({ x: 30, y: 100, payload: { value: 1000 } }));
+    expect(bottom.container.querySelector("text")!.getAttribute("text-anchor")).toBe("middle");
+    // A value the axis did not choose prints nothing.
+    expect(
+      render(Left({ x: 0, y: 0, payload: { value: 7 } })).container.querySelector("text"),
+    ).toBeNull();
   });
 });
 
@@ -396,24 +422,46 @@ describe("a mark says what it is", () => {
   test("a band plot lays bars up or along, and hatches only what the model authored", () => {
     const cells = cellsOf(PERIODS, [REVENUE, { ...REVENUE, key: "host", origin: "host" }]);
     const bars = cells.map((cell) => cellBar(cell, "USD m"));
-    const hatch = (tone: string) => `url(#${tone})`;
-    const up = bandPlot(
-      { orientation: "vertical", categories: PERIODS, slots: 2, bars },
-      600,
-      hatch,
-    );
-    const along = bandPlot(
-      { orientation: "horizontal", categories: PERIODS, slots: 2, bars },
-      600,
-      hatch,
-    );
-    expect(up.marks).toHaveLength(6);
-    expect(up.hatched).toEqual(["series-1"]);
-    const [upFirst, upSecond] = up.marks;
-    const [alongFirst] = along.marks;
+    const kit = {
+      width: 600,
+      hatch: (tone: string) => `url(#${tone})`,
+      patternId: (tone: string) => tone,
+      svg: { role: "img" as const, "aria-labelledby": "" },
+    };
+    const drawn = (orientation: "vertical" | "horizontal") => {
+      const plot = bandPlot({ orientation, categories: PERIODS, slots: 2, bars }, kit);
+      const { container } = render(plot.chart);
+      const rect = (key: string) => {
+        const node = container.querySelector(`rect[data-mark="${key}"]`)!;
+        return {
+          node,
+          width: Number(node.getAttribute("width")),
+          height: Number(node.getAttribute("height")),
+        };
+      };
+      return { plot, container, rect };
+    };
+    const up = drawn("vertical");
+    // Tab order is category by category, slot by slot; the unavailable one is a gap.
+    expect(up.plot.order).toEqual([
+      "revenue:0",
+      "host:0",
+      "revenue:1",
+      "host:1",
+      "revenue:2",
+      "host:2",
+    ]);
+    expect(up.container.querySelectorAll("rect.chart-bar")).toHaveLength(4);
+    expect(up.container.querySelectorAll("[data-gap]")).toHaveLength(2);
+    // Only the model's marks are hatched: one pattern, for the model's tone.
+    expect([...up.container.querySelectorAll("pattern")].map((node) => node.id)).toEqual([
+      "series-1",
+    ]);
+    expect(up.rect("host:0").node).not.toHaveAttribute("fill");
     // Standing up, value is height; running along, value is width.
-    expect(upFirst && upSecond && upFirst.box.width === upSecond.box.width).toBe(true);
-    expect(upFirst && upFirst.box.height > upFirst.box.width).toBe(true);
-    expect(alongFirst && alongFirst.box.width > alongFirst.box.height).toBe(true);
+    expect(up.rect("revenue:0").width).toBe(up.rect("revenue:1").width);
+    expect(up.rect("revenue:1").height).toBeGreaterThan(up.rect("revenue:1").width);
+    const along = drawn("horizontal");
+    expect(along.rect("revenue:1").width).toBeGreaterThan(along.rect("revenue:1").height);
   });
 });

@@ -85,7 +85,7 @@ export function StackedBarChart({
       legend={seriesLegend(series, "fill")}
       provenance="fill"
       table={table}
-      plot={(width, hatch) =>
+      plot={(kit) =>
         bandPlot(
           {
             orientation,
@@ -96,8 +96,7 @@ export function StackedBarChart({
             percent: normalised,
             height,
           },
-          width,
-          hatch,
+          kit,
         )
       }
       onSelect={onSelect}
