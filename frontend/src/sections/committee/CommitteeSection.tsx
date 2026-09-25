@@ -87,7 +87,7 @@ function Artifact({ artifact }: { artifact: CommitteeDocument["body"]["artifacts
             <Digest value={artifact.record_sha256} prefix="sha256:" />
           </dd>
           <dt>Scope</dt>
-          <dd>{artifact.decision_scope}</dd>
+          <dd className="prose">{artifact.decision_scope}</dd>
           <NoteRows label="Limitations" values={artifact.limitation_flags} />
           <NoteRows label="Validation warnings" values={artifact.validation_warnings} />
         </dl>

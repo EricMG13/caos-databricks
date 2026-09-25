@@ -67,7 +67,9 @@ export function SectionTabs({
               id={`tab-${tab.id}`}
               aria-controls={`tabpanel-${tab.id}`}
               title={dense && tab.cp ? `${tab.label} · ${tab.cp}` : undefined}
-              className="h-8 flex-none px-2.5 after:hidden data-active:bg-muted! data-active:shadow-none"
+              // A hairline edge on the active pill: its muted fill alone all but
+              // vanished against the dark page (brief 6.12).
+              className="h-8 flex-none px-2.5 after:hidden data-active:border-border! data-active:bg-muted! data-active:shadow-none"
             >
               {tab.severity ? <SeverityMark severity={tab.severity} decorative /> : null}
               <span className="font-mono text-[13px]">{tab.label}</span>

@@ -3,7 +3,7 @@
 // figure; then what changed, what it means, what to do and on what evidence
 // (IA_SPEC.md 3). Every cell is composed from the document's own facts, and a
 // cell with nothing to say is not drawn (critique P1).
-import { useEffect, useId, useRef, useState, type RefObject } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
 import { SeverityMark, toneOf } from "./SeverityMark";
 import { sentence } from "./compose";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,24 @@ export function headlineOf(brief: Brief, verdict: Verdict): string | null {
   if (figure === null) return null;
   const said = verdict.conclusion.split(/[^0-9/.,]+/).some((token) => token === figure);
   return said ? null : figure;
+}
+
+/** A date or a stamp, as the brief's cells print them ("2026-09-09",
+    "2026-09-09 14:33Z"). */
+const STAMP = /(\d{4}-\d{2}-\d{2}(?: \d{2}:\d{2}(?::\d{2})?Z)?)/;
+
+/** A cell's text with each date or stamp kept whole: a phone broke
+    "2026-09-09" after its hyphen, mid-date (brief 6.13). */
+export function keepStamps(text: string): ReactNode[] {
+  return text.split(STAMP).map((part, index) =>
+    index % 2 ? (
+      <span key={index} className="whitespace-nowrap">
+        {part}
+      </span>
+    ) : (
+      part
+    ),
+  );
 }
 
 /** Persistence and approval: each drawn only when the document says something
@@ -126,7 +144,9 @@ export function SectionSummary({
             {brief.headline_label ? ` ${brief.headline_label}` : null}
           </p>
         ) : (
-          <p className="text-right" data-headline>
+          // Beside the verdict it closes the row, right-aligned; wrapped under it
+          // on a phone it aligns with the verdict's words (brief 6.13).
+          <p className="pl-5 text-left sm:pl-0 sm:text-right" data-headline>
             <span className="block font-mono text-2xl leading-none font-semibold tracking-tight tabular-nums">
               {headline}
             </span>
@@ -160,7 +180,7 @@ export function SectionSummary({
           {cells.map((cell) => (
             <div key={cell.key} className="min-w-0" data-cell={cell.key}>
               <dt className="text-xs font-medium text-muted-foreground">{cell.label}</dt>
-              <dd className="mt-0.5 text-sm text-pretty">{brief[cell.key]}</dd>
+              <dd className="mt-0.5 text-sm text-pretty">{keepStamps(brief[cell.key] ?? "")}</dd>
             </div>
           ))}
         </dl>

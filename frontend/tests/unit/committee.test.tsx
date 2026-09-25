@@ -39,6 +39,11 @@ describe("Committee v1", () => {
     expect(root.querySelectorAll("[data-committee-artifact]")).toHaveLength(
       document.body.artifacts.length,
     );
+    // A scope is words, so it reads in the body face as Report's does.
+    const scope = [...root.querySelectorAll("[data-committee-artifact] dt")].find(
+      (term) => term.textContent === "Scope",
+    );
+    expect(scope?.nextElementSibling).toHaveClass("prose");
     expect(root.querySelector("[data-committee-filing]")).toHaveAttribute("data-state", "filed");
     for (const signer of document.body.signed_by) expect(root).toHaveTextContent(signer);
     for (const value of Object.values(document.body.receipt!))

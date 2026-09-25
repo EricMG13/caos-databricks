@@ -6,7 +6,7 @@ import { resolve } from "node:path";
 import { act, fireEvent, render } from "@testing-library/react";
 import { vi } from "vitest";
 import { MemoryRouter } from "react-router";
-import { SectionSummary, headlineOf } from "@/chrome/SectionSummary";
+import { SectionSummary, headlineOf, keepStamps } from "@/chrome/SectionSummary";
 import { SectionTabs } from "@/chrome/SectionTabs";
 import { SiteHeader } from "@/chrome/SiteHeader";
 import { RUN_SEVERITY, composeChrome, isParked, sentence, words } from "@/chrome/compose";
@@ -186,6 +186,21 @@ test("a brief cell with nothing to say is not drawn, and an empty brief draws no
   );
   expect(container.querySelector("[data-brief]")).toBeNull();
   expect(container.querySelector("[data-headline]")).toBeNull();
+});
+
+test("a brief cell keeps each date and stamp whole, and the rest of its words as they are", () => {
+  // A phone broke "2026-09-09" after a hyphen, mid-date (brief 6.13).
+  const { container } = render(
+    <p>{keepStamps("6 of 10 modules complete. Observed 2026-09-09 14:33Z; due 2026-10-01.")}</p>,
+  );
+  expect(container).toHaveTextContent(
+    "6 of 10 modules complete. Observed 2026-09-09 14:33Z; due 2026-10-01.",
+  );
+  expect([...container.querySelectorAll(".whitespace-nowrap")].map((s) => s.textContent)).toEqual([
+    "2026-09-09 14:33Z",
+    "2026-10-01",
+  ]);
+  expect(keepStamps("No date here.")).toEqual(["No date here."]);
 });
 
 // The header's warning chips said what the verdict says, on every section:
