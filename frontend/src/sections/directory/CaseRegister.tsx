@@ -51,7 +51,7 @@ export function CaseRegister({ rows }: { rows: CaseRow[] }) {
     // it is a landmark already, and two landmarks with one name is what axe's
     // landmark-unique refuses.
     <div className="tscroll" tabIndex={0} role="region" aria-label="Case register rows">
-      <table className="reg" data-register>
+      <table className="reg pin-first" data-register>
         <thead>
           <tr>
             <th scope="col">Case</th>

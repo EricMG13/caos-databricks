@@ -24,6 +24,7 @@ import {
   FALLBACK_WIDTH,
   TICK_SIZE,
   VALUE_SIZE,
+  fitLines,
   fitText,
   textWidth,
   tickLabels,
@@ -306,6 +307,30 @@ describe("axes print nice numbers, not float residue", () => {
     for (const label of ["Restructuring", "Adjusted EBITDA", "Other income"]) {
       expect(fitText(label, textWidth(label, TICK_SIZE), TICK_SIZE)).toBe(label);
     }
+    // A category name wraps between words before anything is cut: three
+    // lines at most, and only what three cannot hold ends in an ellipsis.
+    const room = textWidth("Share-based compe", TICK_SIZE);
+    expect(fitLines("Revenue", room, TICK_SIZE)).toEqual(["Revenue"]);
+    expect(fitLines("Share-based compensation expense", room, TICK_SIZE)).toEqual([
+      "Share-based",
+      "compensation",
+      "expense",
+    ]);
+    expect(fitLines("Share-based compensation expense", room, TICK_SIZE, 2)).toEqual([
+      "Share-based",
+      fitText("compensation expense", room, TICK_SIZE),
+    ]);
+    const long = fitLines(
+      "Change in fair value of warrant liabilities and other items",
+      room,
+      TICK_SIZE,
+    );
+    expect(long).toHaveLength(3);
+    expect(long[2]!.endsWith("…")).toBe(true);
+    for (const line of long) expect(textWidth(line, TICK_SIZE)).toBeLessThanOrEqual(room);
+    expect(fitLines("Supercalifragilistic", 40, TICK_SIZE)).toEqual([
+      fitText("Supercalifragilistic", 40, TICK_SIZE),
+    ]);
     // Labels too wide for their step are thinned at an even step, never overlapped.
     const labels = acrossLabels(
       ["January 2026", "February 2026", "March 2026"],

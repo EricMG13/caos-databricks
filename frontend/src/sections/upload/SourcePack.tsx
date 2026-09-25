@@ -137,7 +137,7 @@ export function SourcePack({
         <SharedRefusal refusal={refused} lead="Withdraw" />
       ) : null}
       <div className="tscroll" tabIndex={0} role="region" aria-label="Admitted source rows">
-        <table className="reg" data-source-pack>
+        <table className="reg pin-first" data-source-pack>
           <thead>
             <tr>
               <th scope="col">Filename</th>

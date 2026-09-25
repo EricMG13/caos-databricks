@@ -193,6 +193,25 @@
       animation-timeline: scroll(self inline);
     }
   }
+  /* A register wider than its card keeps each row's name in view as it
+     scrolls (brief 6.5): its first column holds at the left, on the card's
+     own ground so nothing shows through it. Not on a narrow screen, where a
+     held column would leave the rest too little room to scroll into. */
+  @media (min-width: 48rem) {
+    .tscroll > table.pin-first > * > tr > :first-child {
+      position: sticky;
+      left: 0;
+      z-index: 1;
+      background: var(--card);
+      box-shadow: inset -1px 0 0 var(--hairline);
+    }
+    .tscroll > table.pin-first > tbody > tr:hover > :first-child {
+      background: color-mix(in oklab, var(--muted) 60%, var(--card));
+    }
+    .tscroll > table.pin-first > tbody > tr.on > :first-child {
+      background: color-mix(in oklab, var(--info) 8%, var(--card));
+    }
+  }
   /* Report's saved artifact is a keyboard-focusable scroll region (WCAG 2.5.8);
      its content is one text line, so nothing else gives it a 24px target. */
   .artifact-scroll {
@@ -1617,8 +1636,11 @@
     flex: 0 1 auto;
     color: var(--muted-foreground);
   }
+  /* What the host calculated is the key's caption, on its own line beneath
+     it: `.analysis .note`'s 50ch cap let it sit beside the key instead. */
   .analysis .figures .grouphead .note {
     flex-basis: 100%;
+    max-width: none;
     font-size: 0.8125rem;
   }
   .analysis .figgrid {
@@ -1630,11 +1652,30 @@
     gap: 1rem;
   }
   .analysis .fig {
+    display: flex;
+    flex-direction: column;
     min-width: 0;
     padding: 1rem;
     border-radius: var(--radius-xl);
     background: var(--card);
     box-shadow: var(--ring-card);
+  }
+  /* A row of cards reads as one (brief 6.4): every summary takes two lines,
+     so the plots start level, and the readout, legend and Table toggle sit
+     at the card's foot whatever the legend's length. */
+  .analysis .fig > .chart {
+    flex: 1;
+  }
+  .analysis .fig .chart-summary {
+    display: -webkit-box;
+    min-height: 2.5rem;
+    overflow: hidden;
+    line-height: 1.25rem;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+  .analysis .fig .chart-readout {
+    margin-top: auto;
   }
   /* CP-2B's catalysts (N56): a card like a figure's, the date in its own
      column so the list reads down time, the event over what it means. */

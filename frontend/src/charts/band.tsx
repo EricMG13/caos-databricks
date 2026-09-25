@@ -20,7 +20,7 @@ import {
 } from "./axes";
 import { formatDecimal, toNumber } from "./decimal";
 import { BarShape, GapMark, HatchPatterns } from "./marks";
-import { TICK_SIZE, VALUE_SIZE, fitText, textWidth } from "./scale";
+import { TICK_SIZE, VALUE_SIZE, fitLines, textWidth } from "./scale";
 import { cellName, cellSelection, type Cell } from "./series";
 import type { Box, ChartSelection, Orientation, Origin, Plot, PlotKit, Tone } from "./types";
 
@@ -175,7 +175,12 @@ function layoutOf(spec: BandSpec, width: number): Layout {
   const down = labelRoom(spec, false, width);
   const axis = valueTicks(extentOf(spec), [left + down, width - EDGE - up], 90, spec.percent);
   const top = 6;
-  const row = Math.max(ROW, spec.slots * 14 + 10);
+  // A row is tall enough for the most lines any category name wraps to.
+  const lines = Math.max(
+    1,
+    ...spec.categories.map((category) => fitLines(category, left - 10, TICK_SIZE).length),
+  );
+  const row = Math.max(ROW, spec.slots * 14 + 10, lines * (TICK_SIZE + 1) + 6);
   const area = { x: left, y: top, width: width - EDGE - left, height: count * row };
   return {
     vertical,
@@ -437,7 +442,7 @@ export function bandPlot(spec: BandSpec, kit: PlotKit): Plot {
   const tickText = (index: number) =>
     vertical
       ? (shown?.[index] ?? null)
-      : fitText(spec.categories[index] ?? "", layout.across - 10, TICK_SIZE);
+      : fitLines(spec.categories[index] ?? "", layout.across - 10, TICK_SIZE);
   const values = {
     type: "number" as const,
     domain: layout.axis.domain,

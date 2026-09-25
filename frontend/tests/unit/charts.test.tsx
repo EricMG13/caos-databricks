@@ -486,6 +486,32 @@ describe("a waterfall chart", () => {
 });
 
 describe("a diverging bar chart", () => {
+  test("wraps a long category name to two lines rather than cutting it (brief 6.4)", () => {
+    const { container } = render(
+      <DivergingBarChart
+        title="Add-backs to EBITDA"
+        summary="Net +11 USD m across 2 add-backs."
+        unit="USD m"
+        categoryLabel="Add-back"
+        categories={["Share-based compensation and related payroll taxes", "Other"]}
+        series={{
+          key: "addback",
+          label: "Add-back",
+          origin: "model",
+          data: [{ value: "27" }, { value: "-6" }],
+        }}
+      />,
+    );
+    const ticks = [...plotOf(container).querySelectorAll("text.chart-tick")];
+    const wrapped = ticks.find((tick) => tick.querySelectorAll("tspan").length === 2);
+    expect(wrapped).toBeDefined();
+    expect(wrapped!.textContent).not.toContain("…");
+    expect([...wrapped!.querySelectorAll("tspan")].map((line) => line.textContent)).toEqual([
+      "Share-based compensation and",
+      "related payroll taxes",
+    ]);
+  });
+
   test("carries the sign in position, pole and every label", () => {
     const { container } = render(
       <DivergingBarChart

@@ -102,7 +102,8 @@ export function valueTick(ticks: readonly Tick[], side: "left" | "bottom") {
 }
 
 /** Recharts' tick, drawn in the chart's own type: `text` is the label to
-    print, already cut to fit, or nothing. */
+    print, already cut to fit, or its lines (`fitLines`), or nothing. Two
+    lines sit centred on the tick, one above it and one below. */
 export function TickText({
   x,
   y,
@@ -112,14 +113,26 @@ export function TickText({
 }: {
   x?: number | string;
   y?: number | string;
-  text: string | null;
+  text: string | readonly string[] | null;
   anchor: Placed["anchor"];
   dy?: number;
 }) {
   if (text === null) return null;
+  const lines = typeof text === "string" ? [text] : text;
+  const leading = TICK_SIZE + 1;
   return (
     <text className="chart-tick" x={Number(x)} y={Number(y) + dy} textAnchor={anchor}>
-      {text}
+      {lines.length === 1
+        ? lines[0]
+        : lines.map((line, index) => (
+            <tspan
+              key={index}
+              x={Number(x)}
+              dy={index === 0 ? (-(lines.length - 1) * leading) / 2 : leading}
+            >
+              {line}
+            </tspan>
+          ))}
     </text>
   );
 }

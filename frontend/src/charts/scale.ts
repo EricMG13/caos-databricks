@@ -34,6 +34,25 @@ export function fitText(text: string, room: number, size: number): string {
   return fits <= 1 ? "…" : `${text.slice(0, fits - 1)}…`;
 }
 
+/** `text` in at most `most` lines of `room` px, broken between words; only
+    what still does not fit is cut, the last line ending in an ellipsis. A
+    category name reads whole where a single line would have cut it. */
+export function fitLines(text: string, room: number, size: number, most = 3): string[] {
+  const fits = Math.floor(room / (size * ADVANCE) + 1e-9);
+  const words = text.split(" ");
+  const lines: string[] = [];
+  while (words.length && lines.length < most - 1) {
+    let line = "";
+    while (words.length && `${line} ${words[0]}`.trim().length <= fits) {
+      line = `${line} ${words.shift()}`.trim();
+    }
+    // A word longer than the line: the rest is one cut line, as `fitText` draws it.
+    if (!line) break;
+    lines.push(line);
+  }
+  return words.length ? [...lines, fitText(words.join(" "), room, size)] : lines;
+}
+
 // The nice-number step: 1, 2 or 5 times a power of ten, whichever puts about
 // `count` ticks across the extent. A port of d3-array's `tickSpec` (ISC), so
 // the axes read as they did when d3 drew them (D33, D61).

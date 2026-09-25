@@ -250,7 +250,8 @@ export function ChartFrame({
         <span id={`${uid}title`} className="chart-title">
           {title}
         </span>
-        <span id={`${uid}summary`} className="chart-summary">
+        {/* Whole in its title where a row of cards clamps it to two lines. */}
+        <span id={`${uid}summary`} className="chart-summary" title={summary}>
           {summary}
         </span>
         {note ? (

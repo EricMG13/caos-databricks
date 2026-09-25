@@ -12,6 +12,7 @@ import { useEffect, useState } from "react";
 import { MetricCell } from "./MetricCell";
 import { passportOf } from "./passport";
 import { useLedger } from "@/app/ledger";
+import { Digest } from "@/ds/Digest";
 import { useEvidence } from "@/evidence/EvidenceContext";
 import type { Refusal } from "@/wire";
 import type { BookColumn, BookDocument, BookPeriod, BookRow } from "@/wire/v1";
@@ -126,7 +127,9 @@ export function BookSection({ document }: { document: BookDocument; tab: string 
               {rows.map((row) => (
                 <li key={row.case_id} data-case={row.case_id}>
                   {row.title}
-                  <div className="lbl">{row.snapshot ?? reasonOf(row)}</div>
+                  <div className="lbl">
+                    {row.snapshot ? <Digest value={row.snapshot} /> : reasonOf(row)}
+                  </div>
                 </li>
               ))}
             </ul>
@@ -144,7 +147,7 @@ export function BookSection({ document }: { document: BookDocument; tab: string 
             role="region"
             aria-label={`Credits compared on ${key}`}
           >
-            <table className="tbl">
+            <table className="tbl pin-first">
               <caption className="lbl">Credits compared on {key}</caption>
               <thead>
                 <tr>
@@ -166,7 +169,9 @@ export function BookSection({ document }: { document: BookDocument; tab: string 
                     <tr key={row.case_id} data-case={row.case_id}>
                       <th scope="row" className="l wrap">
                         {row.title}
-                        <div className="lbl">{row.snapshot ?? reasonOf(row)}</div>
+                        <div className="lbl">
+                          {row.snapshot ? <Digest value={row.snapshot} /> : reasonOf(row)}
+                        </div>
                         {refusedLens[row.case_id] ? (
                           <div className="note" data-lens-refused={row.case_id}>
                             {refusedLens[row.case_id]?.clears}{" "}
