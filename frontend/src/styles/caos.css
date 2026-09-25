@@ -1518,73 +1518,6 @@
     flex-direction: column;
     gap: 1rem;
   }
-  .analysis .panes {
-    display: grid;
-    grid-template-columns: minmax(220px, 280px) minmax(0, 1fr) minmax(240px, 300px);
-    align-items: start;
-    gap: 1rem;
-  }
-  .analysis .pane {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    min-width: 0;
-  }
-  @media (max-width: 1279px) {
-    .analysis .panes {
-      grid-template-columns: minmax(200px, 260px) minmax(0, 1fr);
-    }
-    .analysis .pane.context {
-      grid-column: 2;
-    }
-  }
-  @media (max-width: 767px) {
-    .analysis .panes {
-      grid-template-columns: minmax(0, 1fr);
-    }
-    /* On a phone the module comes first; its evidence follows it. */
-    .analysis .pane.main {
-      order: -1;
-    }
-    .analysis .pane.context {
-      grid-column: auto;
-    }
-  }
-  .analysis .issuer {
-    margin: 0;
-    font-size: 0.875rem;
-    color: var(--muted-foreground);
-  }
-  .analysis .issuer b {
-    font-weight: 600;
-    color: var(--foreground);
-  }
-  .analysis .module {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    min-width: 0;
-  }
-  .analysis .modhead {
-    display: flex;
-    align-items: baseline;
-    gap: 0.5rem;
-    min-width: 0;
-  }
-  .analysis .modhead h2 {
-    margin: 0;
-    font-size: 1.125rem;
-    font-weight: 600;
-    letter-spacing: -0.015em;
-    color: var(--foreground);
-  }
-  .analysis .modhead .code {
-    font: 400 0.8125rem var(--font-mono);
-    color: var(--muted-foreground);
-  }
-  .analysis .modhead .right {
-    margin-left: auto;
-  }
   .analysis .register li {
     display: grid;
     gap: 0.25rem;
@@ -1606,24 +1539,6 @@
   .analysis .register .meta .tag {
     margin-right: 0.375rem;
   }
-  /* A count, drawn: the text beside it says the number, so the bar only helps
-     the eye rank the documents. */
-  .analysis .register .bar {
-    display: block;
-    height: 4px;
-    overflow: hidden;
-    border-radius: 999px;
-    background: var(--muted);
-  }
-  .analysis .register .bar > span {
-    display: block;
-    height: 100%;
-    border-radius: 999px;
-    background: color-mix(in oklab, var(--foreground) 45%, transparent);
-  }
-  .analysis .register li[data-withdrawn="true"] .bar > span {
-    background: var(--warning);
-  }
   /* A section's acts, grouped in the order they happen. */
   .actgroup {
     display: flex;
@@ -1631,7 +1546,7 @@
     gap: 1rem;
   }
   .actgroup > .grouphead,
-  .analysis .figures .grouphead {
+  .analysis .figures .grouphead h3 {
     margin: 0.25rem 0 0;
     font-size: 0.9375rem;
     font-weight: 600;
@@ -1644,11 +1559,21 @@
     flex-direction: column;
     gap: 0.75rem;
   }
-  .analysis .figures .grouphead .cp {
-    margin-left: 0.5rem;
-    font-size: 0.8125rem;
-    font-weight: 400;
+  /* The figures' header: its heading, the one key every figure shares, and
+     what the host calculated -- said once, not under every chart. */
+  .analysis .figures .grouphead {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.25rem 1.25rem;
+  }
+  .analysis .figures .grouphead .chart-legend {
+    flex: 0 1 auto;
     color: var(--muted-foreground);
+  }
+  .analysis .figures .grouphead .note {
+    flex-basis: 100%;
+    font-size: 0.8125rem;
   }
   .analysis .figgrid {
     display: grid;
@@ -1711,13 +1636,798 @@
     color: var(--muted-foreground);
     overflow-wrap: break-word;
   }
-  .analysis details.tables table.raw {
-    margin-top: 0.5rem;
+
+  /* ---- a module, in the five places every module shares (D60) ---- */
+  .analysis .module {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    min-width: 0;
   }
-  .analysis details.tables caption {
-    padding: 0.25rem 0;
+  .analysis .modhead {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    min-width: 0;
+  }
+  .analysis .modhead h2 {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    color: var(--foreground);
+  }
+  .analysis .modhead .code {
+    font: 400 0.8125rem var(--font-mono);
+    color: var(--muted-foreground);
+  }
+  .analysis .modhead .right {
+    margin-left: auto;
+  }
+  /* The header's facts: one line where four rows were. */
+  .modfacts {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 1.25rem;
+    margin: -0.5rem 0 0;
+    padding: 0;
+    list-style: none;
+    font-size: 0.8125rem;
+    color: var(--muted-foreground);
+  }
+  .modfacts b {
+    font-weight: 500;
+    color: var(--foreground);
+  }
+  .modfacts .mono,
+  .modfacts time {
+    font-family: var(--font-mono);
+    color: var(--foreground);
+  }
+  /* What the run rests on, counted; it opens in the evidence drawer. */
+  .evidence-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    min-height: 24px;
+    padding: 0 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--card);
+    box-shadow: 0 1px 0 color-mix(in oklab, var(--foreground) 6%, transparent);
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--foreground);
+    cursor: pointer;
+    transition:
+      background-color 150ms var(--ease-out),
+      scale 150ms var(--ease-out);
+  }
+  .evidence-count:hover {
+    background: var(--muted);
+  }
+  .evidence-count:active {
+    scale: 0.97;
+  }
+  /* It opens a drawer, and says so. */
+  .evidence-count::after {
+    content: "";
+    width: 0.375rem;
+    height: 0.375rem;
+    margin-left: 0.25rem;
+    border-top: 1.5px solid currentColor;
+    border-right: 1.5px solid currentColor;
+    rotate: 45deg;
+    opacity: 0.6;
+  }
+  .evidence-count .withdrawn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    color: var(--warning);
+  }
+  /* A panel caption that says the model wrote it carries the model's mark:
+     outlined and hatched, as its figures are. */
+  .pnl > header .cp.model::before {
+    content: "";
+    display: inline-block;
+    width: 0.625rem;
+    height: 0.625rem;
+    margin-right: 0.375rem;
+    vertical-align: -1px;
+    border: 1.25px solid var(--muted-foreground);
+    border-radius: 2px;
+    background: repeating-linear-gradient(
+      135deg,
+      transparent 0 2px,
+      color-mix(in oklab, var(--muted-foreground) 55%, transparent) 2px 3px
+    );
+  }
+
+  /* The lead: the model's view beside the figures and caveats that qualify it. */
+  .analysis .lead {
+    display: grid;
+    grid-template-columns: minmax(0, 1.65fr) minmax(17rem, 1fr);
+    align-items: start;
+    gap: 1rem;
+  }
+  /* Nothing to set beside the view: it takes the width. */
+  .analysis .lead[data-solo] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .analysis .lead > .side {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    min-width: 0;
+  }
+  @media (max-width: 1199px) {
+    .analysis .lead {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+  .analysis .lead .view > .pb {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  /* The opening's first sentence is the page's first sentence (D62): large,
+     the rest of its paragraph quieter beneath it. */
+  .analysis .thesis .lede {
+    max-width: 34em;
+    font-size: 1.1875rem;
+    font-weight: 500;
+    line-height: 1.45;
+    letter-spacing: -0.012em;
+    text-wrap: pretty;
+  }
+  .analysis .thesis .lede strong {
+    font-weight: 600;
+  }
+  .analysis .thesis .cont {
+    max-width: 60ch;
+    margin-top: 0.625rem;
+    color: var(--muted-foreground);
+  }
+  .analysis .thesis .cont strong {
+    color: var(--foreground);
+  }
+  /* The decision drivers, one claim a line, what supports it beneath. */
+  .analysis .keypoints {
+    margin-top: 0.25rem;
+    padding-top: 0.875rem;
+    border-top: 1px solid var(--hairline);
+  }
+  .analysis .md .keypoints > h4 {
+    margin: 0;
+    font-size: 0.8125rem;
+    font-weight: 600;
+  }
+  .analysis .keypoints > .intro {
+    margin-top: 0.125rem;
+    font-size: 0.8125rem;
+    color: var(--muted-foreground);
+  }
+  .analysis .md .keypoints > ol {
+    display: grid;
+    gap: 0.875rem;
+    margin: 0.75rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .analysis .keypoints li {
+    display: grid;
+    grid-template-columns: 1.375rem minmax(0, 1fr);
+    gap: 0.625rem;
+    max-width: 66ch;
+  }
+  .analysis .keypoints .n {
+    display: inline-grid;
+    place-items: center;
+    width: 1.375rem;
+    height: 1.375rem;
+    border-radius: 999px;
+    background: var(--muted);
+    font: 500 0.6875rem var(--font-mono);
+    color: var(--muted-foreground);
+  }
+  .analysis .keypoints .claim {
+    font-weight: 600;
+    line-height: 1.45;
+  }
+  .analysis .keypoints .claim strong {
+    font-weight: inherit;
+  }
+  .analysis .keypoints .support {
+    margin-top: 0.25rem;
+    font-size: 0.8125rem;
+    line-height: 1.55;
+    color: var(--muted-foreground);
+  }
+  .analysis .keypoints .support[data-clamped] {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+  }
+  .analysis .keypoints .more {
+    margin-top: 0.25rem;
+    padding: 0;
+    border: 0;
+    background: none;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--foreground);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    cursor: pointer;
+  }
+  /* A module reference, as a way to it. */
+  .md-refs {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    vertical-align: 1px;
+  }
+  .md .ref,
+  .ref {
+    display: inline-flex;
+    align-items: center;
+    height: 1.25rem;
+    padding: 0 0.375rem;
+    border: 1px solid var(--border);
+    border-radius: 0.3125rem;
+    background: var(--card);
+    font: 500 0.6875rem/1 var(--font-mono);
+    color: var(--foreground);
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background-color 150ms var(--ease-out);
+  }
+  a.ref:hover {
+    background: var(--muted);
+  }
+  span.ref {
+    color: var(--muted-foreground);
+  }
+
+  /* Model Markdown, formatted: render.py's closed element set as elements. */
+  .md {
+    min-width: 0;
+    font-size: 0.875rem;
+    line-height: 1.65;
+    color: var(--foreground);
+  }
+  .md > * + * {
+    margin-top: 0.75rem;
+  }
+  /* A reading measure: Geist's "0" is wider than its average letter, so
+     60ch holds about 65 characters a line. */
+  .md > p,
+  .md > ul,
+  .md > ol,
+  .md > blockquote,
+  .md > h4,
+  .md > h5,
+  .md > h6 {
+    max-width: 60ch;
+  }
+  .md p {
+    margin: 0;
+    text-wrap: pretty;
+  }
+  .md h4,
+  .md h5,
+  .md h6 {
+    margin: 1.5rem 0 0;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    line-height: 1.4;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+  .md h5,
+  .md h6 {
+    font-size: 0.875rem;
+  }
+  .md > :is(h4, h5, h6):first-child {
+    margin-top: 0;
+  }
+  .md > :is(h4, h5, h6) + * {
+    margin-top: 0.375rem;
+  }
+  .md ul,
+  .md ol {
+    margin: 0;
+    padding-left: 1.25rem;
+  }
+  .md ul {
+    list-style: disc;
+  }
+  .md ol {
+    list-style: decimal;
+  }
+  .md li + li {
+    margin-top: 0.375rem;
+  }
+  .md li::marker {
+    font: 400 0.8125rem var(--font-mono);
+    color: var(--muted-foreground);
+  }
+  /* A list whose ordinals are not a consecutive run prints each as written. */
+  .md :is(ol, ul).md-literal {
+    padding-left: 0;
+    list-style: none;
+  }
+  .md .md-marker {
+    display: inline-block;
+    min-width: 1.5rem;
+    margin-right: 0.25rem;
+    font: 400 0.8125rem var(--font-mono);
+    color: var(--muted-foreground);
+  }
+  .md strong {
+    font-weight: 600;
+  }
+  .md code {
+    padding: 0.0625rem 0.3125rem;
+    border-radius: var(--radius-sm);
+    background: var(--muted);
+    font: 400 0.8125rem var(--font-mono);
+  }
+  .md blockquote {
+    margin: 0;
+    padding-left: 0.875rem;
+    border-left: 2px solid var(--border);
+    color: var(--muted-foreground);
+  }
+  .md hr {
+    border: 0;
+    border-top: 1px solid var(--border);
+  }
+  .md .md-comment {
     font: 400 0.75rem var(--font-mono);
     color: var(--muted-foreground);
+    overflow-wrap: anywhere;
+  }
+  .md .md-code,
+  .md-front {
+    margin: 0;
+  }
+  .md .md-code figcaption {
+    font: 400 0.75rem var(--font-mono);
+    color: var(--muted-foreground);
+  }
+  .md .md-code pre,
+  .md-front,
+  pre.model-text.written {
+    max-width: none;
+    margin: 0;
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-lg);
+    background: var(--muted);
+    font: 400 0.8125rem/1.6 var(--font-mono);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  /* An authored table: a text column wraps in the body face; a column whose
+     every cell is a figure is mono and right aligned (Numeric truth). */
+  /* Words wrap; an identifier or a file name keeps its line and widens its
+     column, which the table's own scroll then carries. */
+  table.md-table td.l {
+    min-width: 18ch;
+    max-width: 44ch;
+    white-space: normal;
+    line-height: 1.5;
+    overflow-wrap: break-word;
+  }
+  table.md-table td {
+    vertical-align: top;
+  }
+  table.md-table td .tag {
+    font-family: var(--font-mono);
+  }
+
+  /* Key figures: the host-typed headline numbers, two across. */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .stats > li {
+    display: grid;
+    gap: 0.125rem;
+    min-width: 0;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .stats > li:nth-child(odd) {
+    border-right: 1px solid var(--hairline);
+  }
+  .stats > li:nth-last-child(-n + 2):nth-child(odd),
+  .stats > li:last-child {
+    border-bottom: 0;
+  }
+  .stats .k {
+    font-size: 0.75rem;
+    color: var(--muted-foreground);
+  }
+  .stats .v {
+    font: 600 1.25rem/1.3 var(--font-sans);
+    letter-spacing: -0.01em;
+    overflow-wrap: anywhere;
+  }
+  .stats .d {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.125rem 0.375rem;
+    font-size: 0.75rem;
+    color: var(--muted-foreground);
+  }
+  .stats .delta {
+    font: 500 0.75rem var(--font-mono);
+    color: var(--foreground);
+  }
+
+  /* Caveats: what qualifies the view, read before the figures. */
+  ul.caveats {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  ul.caveats > li {
+    display: grid;
+    grid-template-columns: 0.75rem minmax(0, 1fr);
+    align-items: baseline;
+    gap: 0.5rem;
+    padding: 0.625rem 1rem;
+    border-bottom: 1px solid var(--hairline);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+  }
+  ul.caveats > li:last-child {
+    border-bottom: 0;
+  }
+  ul.caveats > li > span:last-child {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  ul.caveats b {
+    font-weight: 600;
+  }
+  ul.caveats .src {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--muted-foreground);
+  }
+
+  /* The reader-facing sections: a labelled list reads as columns. */
+  .analysis .cols {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(15rem, 100%), 1fr));
+  }
+  .analysis .cols > div {
+    padding: 1rem;
+    border-right: 1px solid var(--hairline);
+  }
+  .analysis .cols > div:last-child {
+    border-right: 0;
+  }
+  .analysis .cols h4 {
+    margin: 0 0 0.25rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+  .analysis .cols p {
+    margin: 0;
+    font-size: 0.8125rem;
+    line-height: 1.55;
+  }
+
+  /* Depth: one card of tabs, the same three in every module. */
+  .analysis .depth > [data-slot="tabs"] {
+    gap: 0;
+  }
+  .analysis .depth header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .analysis .depth header .cp {
+    font-size: 0.75rem;
+    color: var(--muted-foreground);
+  }
+  .analysis .depth .count {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font: 400 0.75rem var(--font-mono);
+    color: var(--muted-foreground);
+  }
+  .analysis .depthpanel {
+    display: flex;
+    flex-direction: column;
+    gap: 1.75rem;
+    padding: 1rem;
+  }
+  .analysis .depthpanel > .group > h3 {
+    margin: 0 0 0.75rem;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .analysis .depthpanel h3 .cp {
+    margin-left: 0.375rem;
+    font-size: 0.75rem;
+    font-weight: 400;
+    color: var(--muted-foreground);
+  }
+  .analysis .depthpanel .md + .regs {
+    margin-top: 1rem;
+  }
+  /* A note is read, not scanned: about 72 characters a line. */
+  .analysis .note {
+    max-width: 50ch;
+  }
+  /* The appendix as an index: a register a line -- id, name, rows -- opened
+     in place, one at a time. */
+  .analysis .regindex {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border-top: 1px solid var(--hairline);
+  }
+  .analysis .regindex > li {
+    border-bottom: 1px solid var(--hairline);
+  }
+  .analysis .regindex h4 {
+    margin: 0;
+    font: inherit;
+  }
+  .analysis .regindex button {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    width: 100%;
+    min-height: 2.5rem;
+    padding: 0.625rem 0.5rem;
+    border: 0;
+    background: transparent;
     text-align: left;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--foreground);
+    cursor: pointer;
+    transition: background-color 150ms var(--ease-out);
+  }
+  .analysis .regindex button:hover {
+    background: var(--muted);
+  }
+  .analysis .regindex .nm {
+    display: flex;
+    flex: 1;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.25rem 0.625rem;
+    min-width: 0;
+  }
+  .analysis .regindex .id,
+  .analysis .regindex .n {
+    font: 400 0.75rem var(--font-mono);
+    color: var(--muted-foreground);
+    font-variant-numeric: tabular-nums;
+  }
+  .analysis .regindex .chev {
+    flex: none;
+    align-self: center;
+    width: 0.4375rem;
+    height: 0.4375rem;
+    margin: 0 0.25rem;
+    border-right: 1.5px solid var(--muted-foreground);
+    border-bottom: 1.5px solid var(--muted-foreground);
+    rotate: -45deg;
+    transition: rotate 150ms var(--ease-out);
+  }
+  .analysis .regindex button[aria-expanded="true"] .chev {
+    rotate: 45deg;
+  }
+  .analysis .regindex .reg {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.25rem 0.5rem 1.25rem;
+  }
+  .analysis .regindex .reg > * {
+    max-width: 100%;
+  }
+  .analysis .regindex .reg[data-shape="findings"] > *,
+  .analysis .regindex .reg[data-shape="triggers"] > *,
+  .analysis .regindex .reg[data-shape="debate"] > *,
+  .analysis .regindex .reg[data-shape="timeline"] > * {
+    align-self: stretch;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .analysis .regindex .chev {
+      transition: none;
+    }
+  }
+  /* Registers pack at their natural width: side by side when both fit whole,
+     stacked when not, so no table is squeezed into a scroll it does not need. */
+  .analysis .regs {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 1.5rem 2rem;
+  }
+  .analysis .regs > .reg {
+    flex: 1 0 auto;
+    min-width: 0;
+    max-width: 100%;
+  }
+  /* By `data-shape`, never a class: a shape named "table" would meet
+     Tailwind's `.table` utility and lay the register out as a table. */
+  .analysis .regs > .reg[data-shape="findings"],
+  .analysis .regs > .reg[data-shape="triggers"],
+  .analysis .regs > .reg[data-shape="debate"],
+  .analysis .regs > .reg[data-shape="timeline"] {
+    flex-basis: 100%;
+  }
+  .analysis .reghead {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin: 0 0 0.375rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+  }
+  .analysis .reghead .id {
+    font: 400 0.75rem var(--font-mono);
+    color: var(--muted-foreground);
+  }
+  .analysis .reg > .md {
+    margin-bottom: 0.5rem;
+  }
+  /* An evidence chain read down, two across where there is room: what, so
+     what, why, on what. */
+  .analysis ol.items {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(22rem, 100%), 1fr));
+    gap: 0 2rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .analysis ol.items > li {
+    display: grid;
+    align-content: start;
+    gap: 0.375rem;
+    min-width: 0;
+    padding: 0.875rem 0;
+    border-top: 1px solid var(--hairline);
+  }
+  .analysis ol.items .ih {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.375rem 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+  .analysis ol.items .ih .tag {
+    font-weight: 500;
+  }
+  .analysis ol.items .ih .st {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--muted-foreground);
+  }
+  .analysis ol.items .im {
+    margin: 0;
+    font-size: 0.875rem;
+    line-height: 1.6;
+  }
+  .analysis ol.items dl {
+    display: grid;
+    gap: 0.25rem;
+    margin: 0;
+    font-size: 0.8125rem;
+    line-height: 1.5;
+  }
+  .analysis ol.items dl > div {
+    display: grid;
+    grid-template-columns: minmax(6rem, 30%) minmax(0, 1fr);
+    gap: 0 0.75rem;
+  }
+  .analysis ol.items dt {
+    color: var(--muted-foreground);
+  }
+  .analysis ol.items dd {
+    margin: 0;
+  }
+  .analysis ol.items .iw {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 0.75rem;
+    margin: 0;
+    font-size: 0.75rem;
+    color: var(--muted-foreground);
+    overflow-wrap: anywhere;
+  }
+  .analysis ol.items .iw:empty {
+    display: none;
+  }
+  /* A dated register, read down time (the Catalysts card's shape). */
+  .analysis ol.dated {
+    display: grid;
+    gap: 0.625rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .analysis ol.dated li {
+    display: grid;
+    grid-template-columns: minmax(6.5rem, max-content) minmax(0, 1fr);
+    gap: 0.125rem 1rem;
+    font-size: 0.875rem;
+    line-height: 1.5;
+  }
+  .analysis ol.dated .when {
+    font: 400 0.8125rem/1.6 var(--font-mono);
+    color: var(--muted-foreground);
+  }
+  .analysis ol.dated .what {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    min-width: 0;
+  }
+  .analysis ol.dated .more {
+    font-size: 0.8125rem;
+    color: var(--muted-foreground);
+  }
+  /* The Audit tab's lists of what the run rests on and the module's citations. */
+  .analysis ul.register,
+  .analysis ul.facts {
+    margin: 0;
+    padding: 0;
+  }
+  .analysis ul.facts > li {
+    display: grid;
+    gap: 0.375rem;
+    padding: 0.625rem 0;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .analysis ul.facts > li:last-child {
+    border-bottom: 0;
+  }
+  .analysis ul.facts blockquote.matched {
+    margin: 0;
+  }
+  .drawer ul.register li {
+    display: grid;
+    gap: 0.25rem;
+    padding: 0.625rem 0;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .drawer ul.register .nm {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+  .drawer ul.register .meta {
+    font: 400 0.8125rem var(--font-mono);
+    color: var(--muted-foreground);
+  }
+  .drawer ul.register .meta .tag {
+    margin-right: 0.375rem;
   }
 }

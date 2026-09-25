@@ -80,7 +80,14 @@ async function mount(path: string) {
   return view;
 }
 
+/** The module's citations lead its Audit tab (D60). */
+function openAudit() {
+  const tab = document.querySelector<HTMLElement>("[data-depth-tab='audit']");
+  if (tab && tab.getAttribute("aria-selected") !== "true") act(() => fireEvent.click(tab));
+}
+
 async function openFirstFact() {
+  openAudit();
   const chip = document.querySelector<HTMLButtonElement>(`[data-fact-chip='${SOURCE}']`)!;
   act(() => fireEvent.click(chip));
   await settle();
@@ -171,6 +178,7 @@ describe("the evidence drawer", () => {
       window.dispatchEvent(new PopStateEvent("popstate"));
     });
     await settle();
+    openAudit();
     expect(document.querySelector(`[data-fact-chip='${SOURCE}']`)).not.toBeNull();
     expect(dialog()).toBeNull();
   });

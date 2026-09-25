@@ -31,12 +31,8 @@ export function BarChart({
       legend={seriesLegend(series, "fill")}
       provenance="fill"
       table={seriesTable(categoryLabel, categories, series, cells, unit)}
-      plot={(width, hatch) =>
-        bandPlot(
-          { orientation, categories, slots: Math.max(1, series.length), bars, height },
-          width,
-          hatch,
-        )
+      plot={(kit) =>
+        bandPlot({ orientation, categories, slots: Math.max(1, series.length), bars, height }, kit)
       }
       onSelect={onSelect}
     />

@@ -79,8 +79,15 @@ interrupted; the first tooltip waits 400 ms and the next ones are instant.
 Running states pulse; loading shows skeletons. No entrance choreography, no
 hover flourish. Reduced motion keeps fades only.
 
-**One evidence surface.** The evidence drawer (a sheet) and the per-surface
-evidence rail. There is no second inspector.
+**One evidence surface.** The evidence drawer (a sheet). What a surface rests
+on is counted where it is read and opens in the drawer; there is no second
+inspector.
+
+**Model text is formatted, never injected.** The model's Markdown is drawn as
+the host renderer's closed element set in React elements (D60): headings,
+paragraphs at 72ch, lists, tables whose figure columns are mono and right
+aligned, status words as badges with their shape. Its exact text is always one
+tab away ("As written"), and nothing it says reaches the page as markup.
 
 ## The shell
 
@@ -123,21 +130,55 @@ with its mark.
 
 ## Analysis
 
-The legacy desk's three panes on this frame. The route's modules are the
-section's views, in route order, each with its QA state as shape and hue; the
-address names the one shown (`?tab=<route node>`), and the section opens on
-its conclusion (the last module that reasons, never the CP-CF calculator).
-The body is the evidence rail (what the run rests on: each cited document
-once, its pages and citation count, withdrawn marked; then the module's own
-source facts), the module (name first, code second; status, limitations,
-figures, the model's prose as text at 72ch, the host-calculation note), and
-the right column, which is always the selected thing's provenance. On a phone
-the module comes first.
+The route's modules are the section's views, in route order, each with its
+QA state as shape and hue; the address names the one shown
+(`?tab=<route node>`), and the section opens on its conclusion (the last
+module that reasons, never the CP-CF calculator). Past eight views the tabs
+are one row of module codes that stays under the header, each name on hover
+and to a screen reader; with a view open, the section's summary is one line
+and its brief opens on request. The module fills the width,
+in the five places every module shares (D60), so a reader finds the same
+thing in the same place in every module:
+
+1. **Header** — name first, code second, QA state; one line of host facts
+   (committee status, confidence, limitations, accepted, route node) and a
+   count of what the run rests on that opens it in the evidence drawer.
+2. **Lead** — the model's conclusion-first view and its drivers, beside the
+   module's argument against itself (when it heads one), the key figures
+   (host-typed tables only) and the caveats (the host's facts,
+   then the audit's gap and conflict counts; a passing QA is the header's
+   tag, not a caveat). With nothing to set beside it, the view takes the
+   width. Prose runs about 65 characters a line, notes about 72. The view's
+   first sentence is set large (19px, 500) with the rest of its paragraph
+   quieter beneath; drivers written as a bold-led list are key points,
+   numbered, each support clamped to three lines with "Read in full". A
+   bracketed module reference is a small mono chip linking to that module
+   and register (D62).
+3. **Figures** — one chart card per host-typed table, under one header that
+   carries the only provenance key and what the host calculated; a chart
+   that would repeat the key figures is not drawn. A pressed mark is said in
+   the card below them.
+4. **Reader sections** — the model's risks, catalysts and triggers; a list of
+   labelled items reads as columns.
+5. **Depth** — one card of tabs, Appendix · Audit · As written, whose choice
+   holds from module to module. The appendix is an index, grouped by what
+   the registers are: each a line of id, name (the schema reference's, for a
+   tagged table) and row count, opened in place one at a time, eight rows
+   first. A module with no appendix register opens on Audit. Column heads
+   the model wrote as identifiers read in words, the identifier on hover and
+   in As written. The Audit tab is always host-verified citations, what the run rests
+   on, then the model's audit summary, evidence trace, source registry, gaps
+   and conflicts, and QA validation.
+
+On a phone the lead stacks: view, key figures, caveats.
 
 ## Charts
 
-Drawn by React as SVG; `d3-scale` and `d3-shape` do the maths only (D33).
-Nothing writes `innerHTML`, so every chart holds under the production CSP.
+Drawn by Recharts (D61), shadcn/ui's chart primitive, in this app's marks
+and nice ticks; laid out as shadcn's chart card (title and summary, the chart,
+then the legend and the Table toggle). shadcn's `ChartStyle` is not used: it
+injects a style element the CSP refuses. Nothing writes `innerHTML`, so every
+chart holds under the production CSP.
 
 - **Provenance is drawn in the mark.** Host-verified figures are solid;
   model-authored ones are outlined and hatched (a model line is dashed with
@@ -147,8 +188,9 @@ Nothing writes `innerHTML`, so every chart holds under the production CSP.
 - **Figures are printed as served.** Labels, names and table twins print the
   API's exact decimals; sums are exact; a float only places a mark.
 - **Every chart is a figure:** a title, one plain summary line, and a table
-  twin behind a Table toggle. Every mark is a button named for its series,
-  category, value and origin; pressing it fills the right column.
+  twin behind a Table toggle. A chart keys its own provenance unless the
+  page keys it once for all its figures (`ProvenanceKeyed`, Analysis). Every mark is a button named for its series,
+  category, value and origin; pressing it says the mark below the figures.
 - **Colour:** `--chart-1..5` per theme, the tranche tokens for seniority,
   `--chart-neutral` for stated totals; a sixth series is neutral, never a
   recycled hue.

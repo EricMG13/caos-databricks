@@ -171,6 +171,47 @@ test("a brief cell with nothing to say is not drawn, and an empty brief draws no
   expect(container.querySelector("[data-headline]")).toBeNull();
 });
 
+test("a compact summary is one line, its brief on request", () => {
+  const verdict = { severity: "SUCCESS" as const, conclusion: "Ready.", blocked_on: null };
+  const quiet = { chips: [], execution: null, persistence: null, approval: null, actions: [] };
+  const { container } = render(
+    <SectionSummary
+      verdict={verdict}
+      ribbon={quiet}
+      brief={{ change: "Changed.", impact: null, action: null, evidence: null, headline: "13/13" }}
+      compact
+    />,
+  );
+  expect(container.querySelector("[data-summary]")).toHaveAttribute("data-compact", "true");
+  expect(container.querySelector("[data-headline]")).toHaveTextContent("13/13");
+  expect(container.querySelector("[data-brief]")).toBeNull();
+  const toggle = container.querySelector("[data-brief-toggle]")!;
+  fireEvent.click(toggle);
+  expect(toggle).toHaveAttribute("aria-expanded", "true");
+  expect(container.querySelector("[data-brief]")).toHaveTextContent("Changed.");
+  expect(toggle).toHaveAttribute("aria-controls", container.querySelector("[data-brief]")!.id);
+});
+
+test("more than eight section views are one row of labels, each named in full", () => {
+  const tabs = Array.from({ length: 9 }, (_, index) => ({
+    id: `n${index}`,
+    label: `CP-${index}`,
+    cp: `Module ${index}`,
+  }));
+  const { container, rerender } = render(
+    <SectionTabs label="Analysis" tabs={tabs} active="n0" onSelect={() => undefined} />,
+  );
+  expect(container.querySelector("[data-section-tabs]")).toHaveAttribute("data-dense", "true");
+  const first = container.querySelector("#tab-n0")!;
+  expect(first).toHaveAttribute("title", "CP-0 · Module 0");
+  expect(first.querySelector(".sr-only")).toHaveTextContent(", Module 0");
+  rerender(
+    <SectionTabs label="Analysis" tabs={tabs.slice(0, 3)} active="n0" onSelect={() => undefined} />,
+  );
+  expect(container.querySelector("[data-section-tabs]")).not.toHaveAttribute("data-dense");
+  expect(container.querySelector("#tab-n0")).not.toHaveAttribute("title");
+});
+
 test("the header names the issuer and draws only the state it has", () => {
   const { container } = render(
     <MemoryRouter>

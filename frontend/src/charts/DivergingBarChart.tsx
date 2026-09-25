@@ -44,9 +44,7 @@ export function DivergingBarChart({
       table={seriesTable(categoryLabel, categories, [series], cells, unit, (cell) =>
         cellText(cell, "", true),
       )}
-      plot={(width, hatch) =>
-        bandPlot({ orientation, categories, slots: 1, bars, height }, width, hatch)
-      }
+      plot={(kit) => bandPlot({ orientation, categories, slots: 1, bars, height }, kit)}
       onSelect={onSelect}
     />
   );

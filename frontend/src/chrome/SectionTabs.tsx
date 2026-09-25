@@ -21,8 +21,17 @@ export function SectionTabs({
   // A tab list of no tabs is a widget with nothing in it, announced on every
   // page for nothing: a v1 document declares none (FE-11).
   if (tabs.length === 0) return null;
+  // Past eight views (Analysis's thirteen modules) the names wrapped the list
+  // to three rows above the view: each tab is its label, one row that stays
+  // in reach under the header, and its name is said on hover and to a
+  // screen reader.
+  const dense = tabs.length > 8;
   return (
-    <div data-section-tabs>
+    <div
+      data-section-tabs
+      data-dense={dense || undefined}
+      className={dense ? "sticky top-14 z-10 -mx-1 bg-background px-1 py-1" : undefined}
+    >
       <label className="block sm:hidden">
         <span className="sr-only">{label} view</span>
         <NativeSelect
@@ -49,7 +58,7 @@ export function SectionTabs({
           variant="line"
           aria-label={`${label} views`}
           activateOnFocus
-          className="w-full flex-wrap justify-start gap-1 group-data-horizontal/tabs:h-auto"
+          className={`w-full justify-start gap-1 group-data-horizontal/tabs:h-auto ${dense ? "flex-nowrap overflow-x-auto" : "flex-wrap"}`}
         >
           {tabs.map((tab) => (
             <TabsTrigger
@@ -57,11 +66,16 @@ export function SectionTabs({
               value={tab.id}
               id={`tab-${tab.id}`}
               aria-controls={`tabpanel-${tab.id}`}
+              title={dense && tab.cp ? `${tab.label} · ${tab.cp}` : undefined}
               className="h-8 flex-none px-2.5 after:hidden data-active:bg-muted! data-active:shadow-none"
             >
               {tab.severity ? <SeverityMark severity={tab.severity} decorative /> : null}
               <span className="font-mono text-[13px]">{tab.label}</span>
-              {tab.cp ? <span className="font-normal text-muted-foreground">{tab.cp}</span> : null}
+              {tab.cp ? (
+                <span className={dense ? "sr-only" : "font-normal text-muted-foreground"}>
+                  {dense ? `, ${tab.cp}` : tab.cp}
+                </span>
+              ) : null}
               {tab.severity ? (
                 <span className="sr-only">, {tab.severity.toLowerCase()}</span>
               ) : null}

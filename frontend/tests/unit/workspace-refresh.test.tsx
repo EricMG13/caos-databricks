@@ -425,6 +425,9 @@ describe("the workspace under its event tail", () => {
   test("test_withdrawal_applies_to_a_stale_view_without_advancing_its_figures", async () => {
     const { container } = await mount("analysis", `/analysis/?case=${CASE}&tab=rn-cp-0`);
     await answer(0, analysis());
+    // The module's citations lead its Audit tab (D60), which stays open
+    // across the refresh.
+    act(() => fireEvent.click(region(container).querySelector("[data-depth-tab='audit']")!));
     const cited = () => region(container).querySelector("[data-citation]");
     expect(cited()).toHaveAttribute("data-withdrawn", "false");
     await fire("sources_changed");

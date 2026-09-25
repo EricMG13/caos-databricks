@@ -1,15 +1,28 @@
 // Band charts: bars on a band axis against one linear value axis, either way
 // up. The bar, stacked, waterfall and diverging charts are this one geometry
 // with different bars: each chart says what its bars mean, this says where
-// they go. One value axis always, holding zero (no dual axis, no floating
-// baseline); bars no thicker than 24px, with square ends.
-import { scaleBand, type ScaleBand } from "d3-scale";
-import { Label, ValueGrid, acrossLabels, valueTicks, type Placed, type Tick } from "./axes";
+// they go. Recharts draws the axes, grid and bars (D61); the bars are this
+// module's shapes, so provenance stays in the mark, and what Recharts has no
+// word for -- an unavailable value's "n/a", a label that is left out rather
+// than clipped, a stack's total, a bridge's joins -- is drawn here from the
+// same geometry. One value axis always, holding zero (no dual axis, no
+// floating baseline); bars no thicker than 24px, with square ends.
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
+import { Focus, Reported, useMarks } from "./ChartFrame";
+import {
+  Label,
+  TickText,
+  shownCategories,
+  valueTick,
+  valueTicks,
+  type Placed,
+  type Tick,
+} from "./axes";
 import { formatDecimal, toNumber } from "./decimal";
-import { BarShape, GapMark } from "./marks";
+import { BarShape, GapMark, HatchPatterns } from "./marks";
 import { TICK_SIZE, VALUE_SIZE, fitText, textWidth } from "./scale";
 import { cellName, cellSelection, type Cell } from "./series";
-import type { Box, ChartSelection, Hatch, MarkHit, Orientation, Origin, Plot, Tone } from "./types";
+import type { Box, ChartSelection, Orientation, Origin, Plot, PlotKit, Tone } from "./types";
 
 /** One bar, in value space. */
 export interface BandBar {
@@ -60,6 +73,7 @@ const LABEL_GAP = 4;
 const ROW = 26; // a horizontal chart's least row
 const AXIS_BAND = 22; // the band beside the plot its tick labels sit in
 const EDGE = 8;
+const BAND_FILL = 0.8; // a band's share its bars may take; the rest parts them
 // How far each further gap in one slot steps off the baseline: past the one
 // before it, "n/a" and its tick.
 const GAP_STEP = { vertical: 14, horizontal: 34 };
@@ -87,8 +101,6 @@ export function cellBar(
   };
 }
 
-const indices = (count: number) => Array.from({ length: count }, (_, index) => index);
-
 /** Which way a bar grows: towards larger values. */
 function grows(bar: BandBar): boolean {
   return bar.to >= bar.from;
@@ -103,18 +115,6 @@ function labelRoom(spec: BandSpec, larger: boolean, width: number): number {
   return texts.length ? Math.min(Math.max(...texts) + LABEL_GAP + GAP, width * 0.28) : 0;
 }
 
-interface Layout {
-  vertical: boolean;
-  height: number;
-  area: Box;
-  /** Value to pixel along the value axis. */
-  at: (value: number) => number;
-  ticks: readonly Tick[];
-  band: ScaleBand<number>;
-  /** Room kept for labels past the bars, towards larger and smaller values. */
-  room: { up: number; down: number };
-}
-
 function extentOf(spec: BandSpec): [number, number] {
   if (spec.percent) return [0, 100];
   const values = [
@@ -125,83 +125,119 @@ function extentOf(spec: BandSpec): [number, number] {
   return [Math.min(...values), Math.max(...values)];
 }
 
-function bandOf(count: number, range: [number, number]): ScaleBand<number> {
-  return scaleBand<number>()
-    .domain(indices(count))
-    .range(range)
-    .paddingInner(0.2)
-    .paddingOuter(0.1);
+/** Where everything goes: the plot area Recharts lays out from the same
+    margins and axis sizes, the value axis, and the band geometry. */
+interface Layout {
+  vertical: boolean;
+  width: number;
+  height: number;
+  /** The plot area inside the axes. */
+  area: Box;
+  /** The category axis's width beside a horizontal chart. */
+  across: number;
+  /** Room kept inside the plot for labels past the bars. */
+  room: { up: number; down: number };
+  axis: { domain: [number, number]; ticks: readonly Tick[]; at: (value: number) => number };
+  /** A category band's length, and a bar's thickness. */
+  step: number;
+  thick: number;
 }
 
-function verticalLayout(spec: BandSpec, width: number): Layout {
-  const height = spec.height ?? 240;
-  const above = spec.bars.some((bar) => bar.gap || (bar.label && grows(bar)));
-  const up = above || spec.totals?.length ? 16 : 4;
-  const down = spec.bars.some((bar) => bar.label && !grows(bar)) ? 16 : 0;
-  const top = 4;
-  const bottom = height - AXIS_BAND;
-  const axis = valueTicks(extentOf(spec), [bottom - down, top + up], 44, spec.percent);
-  const left = axis.widest + 10;
-  return {
-    vertical: true,
-    height,
-    area: { x: left, y: top, width: width - EDGE - left, height: bottom - top },
-    at: axis.at,
-    ticks: axis.ticks,
-    band: bandOf(spec.categories.length, [left, width - EDGE]),
-    room: { up, down },
-  };
-}
-
-function horizontalLayout(spec: BandSpec, width: number): Layout {
+function layoutOf(spec: BandSpec, width: number): Layout {
+  const vertical = spec.orientation === "vertical";
+  const count = Math.max(1, spec.categories.length);
+  if (vertical) {
+    const height = spec.height ?? 240;
+    const above = spec.bars.some((bar) => bar.gap || (bar.label && grows(bar)));
+    const up = above || spec.totals?.length ? 16 : 4;
+    const down = spec.bars.some((bar) => bar.label && !grows(bar)) ? 16 : 0;
+    const top = 4;
+    const bottom = height - AXIS_BAND;
+    const axis = valueTicks(extentOf(spec), [bottom - down, top + up], 44, spec.percent);
+    const left = axis.widest + 10;
+    const area = { x: left, y: top, width: width - EDGE - left, height: bottom - top };
+    const step = area.width / count;
+    return {
+      vertical,
+      width,
+      height,
+      area,
+      across: left,
+      room: { up, down },
+      axis,
+      step,
+      thick: Math.max(1, Math.min(THICK, (step * BAND_FILL) / spec.slots - GAP)),
+    };
+  }
   const widest = Math.max(0, ...spec.categories.map((category) => textWidth(category, TICK_SIZE)));
   const left = Math.min(widest, width * 0.38) + 10;
   const up = labelRoom(spec, true, width);
   const down = labelRoom(spec, false, width);
   const axis = valueTicks(extentOf(spec), [left + down, width - EDGE - up], 90, spec.percent);
   const top = 6;
-  const bottom = top + spec.categories.length * Math.max(ROW, spec.slots * 14 + 10);
+  const row = Math.max(ROW, spec.slots * 14 + 10);
+  const area = { x: left, y: top, width: width - EDGE - left, height: count * row };
   return {
-    vertical: false,
-    height: bottom + AXIS_BAND,
-    area: { x: left, y: top, width: width - EDGE - left, height: bottom - top },
-    at: axis.at,
-    ticks: axis.ticks,
-    band: bandOf(spec.categories.length, [top, bottom]),
+    vertical,
+    width,
+    height: top + area.height + AXIS_BAND,
+    area,
+    across: left,
     room: { up, down },
+    axis,
+    step: row,
+    thick: Math.max(1, Math.min(THICK, (row * BAND_FILL) / spec.slots - GAP)),
   };
 }
 
-/** The drawn box of a bar: centred in its slot, no thicker than 24px, never
-    shorter than a 1px hairline (a zero still shows), less the 2px surface
-    gap where it sits on another segment. */
-function barBox(bar: BandBar, layout: Layout, slots: number): Box {
-  const sub = layout.band.bandwidth() / slots;
-  const thick = Math.max(1, Math.min(THICK, sub - GAP));
-  const along = (layout.band(bar.category) ?? 0) + bar.slot * sub + (sub - thick) / 2;
-  let start = layout.at(bar.from);
-  let end = layout.at(bar.to);
-  if (bar.stacked && Math.abs(end - start) > GAP) start += Math.sign(end - start) * GAP;
-  if (Math.abs(end - start) < 1) end = start + (layout.vertical ? -1 : 1);
-  const low = Math.min(start, end);
-  const length = Math.abs(end - start);
-  return layout.vertical
-    ? { x: along, y: low, width: thick, height: length }
-    : { x: low, y: along, width: length, height: thick };
+/** The centre of a category's band, across the band axis. */
+function centreOf(layout: Layout, category: number): number {
+  const start = layout.vertical ? layout.area.x : layout.area.y;
+  return start + layout.step * (category + 0.5);
+}
+
+/** The centre of a slot within its category's band, as Recharts places a
+    group of bars `thick` wide, `GAP` apart, centred. */
+function slotCentre(layout: Layout, category: number, slot: number, slots: number): number {
+  const group = slots * layout.thick + (slots - 1) * GAP;
+  return centreOf(layout, category) - group / 2 + slot * (layout.thick + GAP) + layout.thick / 2;
+}
+
+/** The drawn box of a bar from Recharts' rectangle: never shorter than a 1px
+    hairline (a zero still shows), less the 2px surface gap where it sits on
+    another segment. */
+function drawnBox(bar: BandBar, rect: Box, vertical: boolean): Box {
+  let x = Math.min(rect.x, rect.x + rect.width);
+  let y = Math.min(rect.y, rect.y + rect.height);
+  let width = Math.abs(rect.width);
+  let height = Math.abs(rect.height);
+  const up = grows(bar);
+  if (bar.stacked) {
+    if (vertical && height > GAP) {
+      height -= GAP;
+      if (!up) y += GAP;
+    } else if (!vertical && width > GAP) {
+      width -= GAP;
+      if (up) x += GAP;
+    }
+  }
+  if (vertical && height < 1) {
+    if (up) y -= 1 - height;
+    height = 1;
+  }
+  if (!vertical && width < 1) {
+    if (!up) x -= 1 - width;
+    width = 1;
+  }
+  return { x, y, width, height };
 }
 
 /** Where an unavailable bar's gap is marked: its slot, on the baseline, or
     stepped off it past the `earlier` gaps already marked in that slot (two
     segments of one stack), so no two "n/a" marks overprint. */
-function gapPoint(
-  bar: BandBar,
-  layout: Layout,
-  slots: number,
-  earlier: number,
-): { x: number; y: number } {
-  const sub = layout.band.bandwidth() / slots;
-  const along = (layout.band(bar.category) ?? 0) + (bar.slot + 0.5) * sub;
-  const base = layout.at(0);
+function gapPoint(bar: BandBar, layout: Layout, slots: number, earlier: number) {
+  const along = slotCentre(layout, bar.category, bar.slot, slots);
+  const base = layout.axis.at(0);
   return layout.vertical
     ? { x: along, y: base - earlier * GAP_STEP.vertical }
     : { x: base + earlier * GAP_STEP.horizontal, y: along };
@@ -220,7 +256,7 @@ function labelOf(bar: BandBar, box: Box, layout: Layout, slots: number): Placed 
   const up = grows(bar);
   const wide = textWidth(bar.label, VALUE_SIZE);
   if (layout.vertical) {
-    const room = slots === 1 ? layout.band.step() : layout.band.bandwidth() / slots;
+    const room = slots === 1 ? layout.step : (layout.step * BAND_FILL) / slots;
     if (wide > room - GAP) return null;
     const x = box.x + box.width / 2;
     const y = up ? box.y - LABEL_GAP : box.y + box.height + LABEL_GAP + VALUE_SIZE - 2;
@@ -237,29 +273,13 @@ function totalOf(
   total: { category: number; at: number; text: string },
   layout: Layout,
 ): Placed | null {
-  const centre = (layout.band(total.category) ?? 0) + layout.band.bandwidth() / 2;
-  const end = layout.at(total.at);
+  const centre = centreOf(layout, total.category);
+  const end = layout.axis.at(total.at);
   if (layout.vertical) {
-    if (textWidth(total.text, VALUE_SIZE) > layout.band.step() - GAP) return null;
+    if (textWidth(total.text, VALUE_SIZE) > layout.step - GAP) return null;
     return { text: total.text, x: centre, y: end - LABEL_GAP, anchor: "middle" };
   }
   return { text: total.text, x: end + LABEL_GAP, y: centre + VALUE_SIZE / 2 - 2, anchor: "start" };
-}
-
-/** Category labels: along a vertical chart's axis, thinned to what fits;
-    beside a horizontal chart's rows, each cut to its room. */
-function categoryLabels(spec: BandSpec, layout: Layout): Placed[] {
-  const { band, area } = layout;
-  const centre = (index: number) => (band(index) ?? 0) + band.bandwidth() / 2;
-  if (layout.vertical) {
-    return acrossLabels(spec.categories, centre, band.step(), area.y + area.height + 14);
-  }
-  return spec.categories.map((category, index) => ({
-    text: fitText(category, area.x - 10, TICK_SIZE),
-    x: area.x - 8,
-    y: centre(index) + TICK_SIZE / 2 - 1.5,
-    anchor: "end",
-  }));
 }
 
 /** A bridge's running level, carried from each bar to the next that spans it. */
@@ -271,7 +291,7 @@ function connectors(spec: BandSpec, boxes: ReadonlyMap<string, Box>, layout: Lay
     const to = boxes.get(next.key);
     if (!bar || !from || !to || next.category !== bar.category + 1) return [];
     if (bar.to < Math.min(next.from, next.to) || bar.to > Math.max(next.from, next.to)) return [];
-    const level = layout.at(bar.to);
+    const level = layout.axis.at(bar.to);
     return [
       layout.vertical
         ? { key: bar.key, x1: from.x + from.width, x2: to.x, y1: level, y2: level }
@@ -280,86 +300,257 @@ function connectors(spec: BandSpec, boxes: ReadonlyMap<string, Box>, layout: Lay
   });
 }
 
-/** Lay out and draw a band chart at `width`. */
-export function bandPlot(spec: BandSpec, width: number, hatch: Hatch): Plot {
-  const vertical = spec.orientation === "vertical";
-  const layout = vertical ? verticalLayout(spec, width) : horizontalLayout(spec, width);
-  const boxes = new Map<string, Box>();
-  const gaps = new Map<string, { x: number; y: number }>();
+/** Everything drawn past the bars: gaps, labels, totals, joins and the zero
+    baseline. Labels and joins follow the bars' boxes as Recharts drew them. */
+function Annotations({ spec, layout }: { spec: BandSpec; layout: Layout }) {
+  const marks = useMarks();
+  const boxes = new Map(
+    spec.bars.flatMap((bar) => {
+      const mark = marks.get(bar.key);
+      return !bar.gap && mark ? [[bar.key, mark.box] as const] : [];
+    }),
+  );
   const marked = new Map<string, number>();
-  for (const bar of spec.bars) {
-    if (!bar.gap) {
-      boxes.set(bar.key, barBox(bar, layout, spec.slots));
-      continue;
-    }
+  const gaps = spec.bars.flatMap((bar) => {
+    if (!bar.gap) return [];
     const slot = `${bar.category}:${bar.slot}`;
     const earlier = marked.get(slot) ?? 0;
     marked.set(slot, earlier + 1);
-    gaps.set(bar.key, gapPoint(bar, layout, spec.slots, earlier));
-  }
-  // Tab follows the eye: category by category, and slot by slot within one.
-  const marks: MarkHit[] = [...spec.bars]
-    .sort((a, b) => a.category - b.category || a.slot - b.slot)
-    .flatMap((bar) => {
-      const point = gaps.get(bar.key);
-      const box = point ? gapBox(point, vertical) : boxes.get(bar.key);
-      if (!box) return [];
-      return [
-        { key: bar.key, name: bar.name, readout: bar.readout, box, selection: bar.selection },
-      ];
-    });
-  const shapes = spec.bars.map((bar) => {
-    const point = gaps.get(bar.key);
-    if (point) {
-      return <GapMark key={bar.key} mark={bar.key} x={point.x} y={point.y} vertical={vertical} />;
-    }
-    const box = boxes.get(bar.key);
-    return box ? (
-      <BarShape
-        key={bar.key}
-        mark={bar.key}
-        box={box}
-        tone={bar.tone}
-        origin={bar.origin}
-        hatch={hatch}
-      />
-    ) : null;
+    return [{ bar, point: gapPoint(bar, layout, spec.slots, earlier) }];
   });
-  const labels = spec.bars.flatMap((bar) => {
-    const box = boxes.get(bar.key);
-    const placed = box ? labelOf(bar, box, layout, spec.slots) : null;
-    return placed ? [{ key: bar.key, alarm: bar.alarm, placed }] : [];
-  });
-  const totals = (spec.totals ?? []).flatMap((total) => {
-    const placed = totalOf(total, layout);
-    return placed ? [{ key: `${total.category}`, placed }] : [];
-  });
-  const hatched = [
-    ...new Set(spec.bars.filter((bar) => !bar.gap && bar.origin !== "host").map((bar) => bar.tone)),
-  ];
-  const body = (
-    <>
-      <ValueGrid ticks={layout.ticks} area={layout.area} vertical={vertical} zero={layout.at(0)} />
-      {categoryLabels(spec, layout).map((placed, index) => (
-        <Label key={`category-${index}`} className="chart-tick" placed={placed} />
-      ))}
+  const { area, vertical } = layout;
+  const zero = layout.axis.at(0);
+  return (
+    <g className="chart-annotations">
+      {vertical ? (
+        <line className="chart-zero" x1={area.x} x2={area.x + area.width} y1={zero} y2={zero} />
+      ) : (
+        <line className="chart-zero" x1={zero} x2={zero} y1={area.y} y2={area.y + area.height} />
+      )}
       {spec.connect
         ? connectors(spec, boxes, layout).map(({ key, ...ends }) => (
             <line key={`join-${key}`} className="chart-connector" {...ends} />
           ))
         : null}
-      {shapes}
-      {labels.map(({ key, alarm, placed }) => (
-        <Label
-          key={`label-${key}`}
-          className={alarm ? "chart-value chart-alarm" : "chart-value"}
-          placed={placed}
-        />
+      {gaps.map(({ bar, point }) => (
+        <g key={bar.key}>
+          <GapMark mark={bar.key} x={point.x} y={point.y} vertical={vertical} />
+          <Reported
+            mark={{
+              key: bar.key,
+              name: bar.name,
+              readout: bar.readout,
+              box: gapBox(point, vertical),
+              selection: bar.selection,
+            }}
+          />
+        </g>
       ))}
-      {totals.map(({ key, placed }) => (
-        <Label key={`total-${key}`} className="chart-value" placed={placed} />
-      ))}
+      {spec.bars.map((bar) => {
+        const box = boxes.get(bar.key);
+        const placed = box ? labelOf(bar, box, layout, spec.slots) : null;
+        return placed ? (
+          <Label
+            key={`label-${bar.key}`}
+            className={bar.alarm ? "chart-value chart-alarm" : "chart-value"}
+            placed={placed}
+          />
+        ) : null;
+      })}
+      {(spec.totals ?? []).map((total) => {
+        const placed = totalOf(total, layout);
+        return placed ? (
+          <Label key={`total-${total.category}`} className="chart-value" placed={placed} />
+        ) : null;
+      })}
+    </g>
+  );
+}
+
+/** A bar as Recharts places it, drawn in this module's shape and reported to
+    the frame so a button can be laid over it. */
+function BandMark({
+  bar,
+  rect,
+  vertical,
+  hatch,
+}: {
+  bar: BandBar;
+  rect: Box;
+  vertical: boolean;
+  hatch: PlotKit["hatch"];
+}) {
+  const box = drawnBox(bar, rect, vertical);
+  return (
+    <>
+      <BarShape mark={bar.key} box={box} tone={bar.tone} origin={bar.origin} hatch={hatch} />
+      <Reported
+        mark={{
+          key: bar.key,
+          name: bar.name,
+          readout: bar.readout,
+          box,
+          selection: bar.selection,
+        }}
+      />
     </>
   );
-  return { height: layout.height, area: layout.area, body, marks, hatched };
+}
+
+interface RectProps {
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  payload?: Record<string, unknown>;
+}
+
+/** Lay out and draw a band chart. */
+export function bandPlot(spec: BandSpec, kit: PlotKit): Plot {
+  const layout = layoutOf(spec, kit.width);
+  const { vertical } = layout;
+  const byKey = new Map(spec.bars.map((bar) => [bar.key, bar]));
+  // A lane is one Recharts `<Bar>`: a slot of a group, and within a slot one
+  // layer of a stack. A category holds at most one bar per lane; stacked
+  // layers share their slot's place, so they are laid over one another.
+  const layers = new Map<string, number>();
+  const laneOf = new Map<string, string>();
+  for (const bar of spec.bars) {
+    const at = `${bar.category}:${bar.slot}`;
+    const layer = layers.get(at) ?? 0;
+    layers.set(at, layer + 1);
+    laneOf.set(bar.key, `l${bar.slot}_${layer}`);
+  }
+  const lanes = [...new Set(laneOf.values())].sort();
+  const stacked = Math.max(0, ...layers.values()) > 1;
+  const rows = spec.categories.map((category, index) => {
+    const row: Record<string, unknown> = { category, index };
+    for (const bar of spec.bars) {
+      if (bar.category !== index || bar.gap) continue;
+      const lane = laneOf.get(bar.key)!;
+      row[lane] = [bar.from, bar.to];
+      row[`${lane}_key`] = bar.key;
+    }
+    return row;
+  });
+  const shown = vertical ? shownCategories(spec.categories, layout.step) : null;
+  const tickText = (index: number) =>
+    vertical
+      ? (shown?.[index] ?? null)
+      : fitText(spec.categories[index] ?? "", layout.across - 10, TICK_SIZE);
+  const values = {
+    type: "number" as const,
+    domain: layout.axis.domain,
+    ticks: layout.axis.ticks.map((tick) => tick.value),
+    tick: valueTick(layout.axis.ticks, vertical ? "left" : "bottom"),
+    axisLine: false,
+    tickLine: false,
+    allowDataOverflow: true,
+    interval: 0 as const,
+  };
+  const categoryTick = (props: {
+    x?: number | string;
+    y?: number | string;
+    payload?: { value?: unknown };
+  }) => {
+    const index = spec.categories.indexOf(String(props.payload?.value ?? ""));
+    return vertical ? (
+      <TickText x={props.x} y={props.y} dy={10} text={tickText(index)} anchor="middle" />
+    ) : (
+      <TickText
+        x={props.x}
+        y={props.y}
+        dy={TICK_SIZE / 2 - 1.5}
+        text={tickText(index)}
+        anchor="end"
+      />
+    );
+  };
+  const hatched = [
+    ...new Set(spec.bars.filter((bar) => !bar.gap && bar.origin !== "host").map((bar) => bar.tone)),
+  ];
+  const chart = (
+    <BarChart
+      {...kit.svg}
+      className="chart-svg"
+      width={layout.width}
+      height={layout.height}
+      data={rows}
+      layout={vertical ? "horizontal" : "vertical"}
+      margin={{ top: layout.area.y, right: EDGE, bottom: 0, left: 0 }}
+      barSize={layout.thick}
+      barGap={stacked ? -layout.thick : GAP}
+      accessibilityLayer={false}
+    >
+      <HatchPatterns id={kit.patternId} tones={hatched} />
+      <CartesianGrid
+        className="chart-grid"
+        horizontal={vertical}
+        vertical={!vertical}
+        horizontalPoints={vertical ? layout.axis.ticks.map((tick) => tick.position) : undefined}
+        verticalPoints={vertical ? undefined : layout.axis.ticks.map((tick) => tick.position)}
+      />
+      {vertical ? (
+        <>
+          <XAxis
+            dataKey="category"
+            type="category"
+            height={AXIS_BAND}
+            axisLine={false}
+            tickLine={false}
+            interval={0}
+            tick={categoryTick}
+          />
+          <YAxis
+            {...values}
+            width={layout.across}
+            padding={{ top: layout.room.up, bottom: layout.room.down }}
+          />
+        </>
+      ) : (
+        <>
+          <XAxis
+            {...values}
+            height={AXIS_BAND}
+            padding={{ left: layout.room.down, right: layout.room.up }}
+          />
+          <YAxis
+            dataKey="category"
+            type="category"
+            width={layout.across}
+            axisLine={false}
+            tickLine={false}
+            interval={0}
+            tick={categoryTick}
+          />
+        </>
+      )}
+      {lanes.map((lane) => (
+        <Bar
+          key={lane}
+          dataKey={lane}
+          isAnimationActive={false}
+          minPointSize={1}
+          shape={(props: RectProps) => {
+            const bar = byKey.get(String(props.payload?.[`${lane}_key`] ?? ""));
+            if (!bar) return <g />;
+            const rect = {
+              x: props.x ?? 0,
+              y: props.y ?? 0,
+              width: props.width ?? 0,
+              height: props.height ?? 0,
+            };
+            return <BandMark bar={bar} rect={rect} vertical={vertical} hatch={kit.hatch} />;
+          }}
+        />
+      ))}
+      <Annotations spec={spec} layout={layout} />
+      <Focus />
+    </BarChart>
+  );
+  // Tab follows the eye: category by category, and slot by slot within one.
+  const order = [...spec.bars]
+    .sort((a, b) => a.category - b.category || a.slot - b.slot)
+    .map((bar) => bar.key);
+  return { height: layout.height, chart, order };
 }

@@ -31,7 +31,10 @@ describe("Committee v1", () => {
       "[data-committee-artifact], [data-committee-narrative]",
     )) {
       expect(saved.querySelector("img, script, a, input, textarea, [contenteditable]")).toBeNull();
-      expect(saved.querySelector("button:not([data-figure-chip])")).toBeNull();
+      // Its only other buttons are the host's Formatted / As written tabs (D60).
+      expect(
+        saved.querySelector("button:not([data-figure-chip]):not([data-artifact-view-tab])"),
+      ).toBeNull();
     }
     expect(root.querySelectorAll("[data-committee-artifact]")).toHaveLength(
       document.body.artifacts.length,

@@ -1,12 +1,12 @@
-// Change across periods: one line per series. A missing value is a gap in its
-// line (`line().defined()`), never a value drawn in between; it is marked
-// "n/a" on the axis below, its reason in the mark's name. The host's lines
-// are solid with filled points, the model's dashed with hollow ones. Hovering
-// or focusing a point reads out every series at that period.
-import { scalePoint } from "d3-scale";
-import { line } from "d3-shape";
+// Change across periods: one line per series, drawn by Recharts (D61). A
+// missing value is a gap in its line, never a value drawn in between; it is
+// marked "n/a" on the axis below, its reason in the mark's name. The host's
+// lines are solid with filled points, the model's dashed with hollow ones.
+// Hovering or focusing a point reads out every series at that period.
+import { CartesianGrid, Curve, Line, LineChart as Chart, XAxis, YAxis } from "recharts";
+import { Focus, Reported } from "./ChartFrame";
 import { ChartFrame } from "./ChartFrame";
-import { Label, ValueGrid, acrossLabels, valueTicks } from "./axes";
+import { Label, TickText, shownCategories, valueTick, valueTicks, type Tick } from "./axes";
 import { formatDecimal, toNumber } from "./decimal";
 import { GapMark } from "./marks";
 import { VALUE_SIZE, textWidth } from "./scale";
@@ -20,7 +20,7 @@ import {
   valueText,
   type Cell,
 } from "./series";
-import type { ChartSeries, MarkHit, Plot, SeriesChartProps } from "./types";
+import type { Box, ChartSeries, Plot, PlotKit, SeriesChartProps } from "./types";
 
 const AXIS_BAND = 22;
 const EDGE = 8;
@@ -58,7 +58,19 @@ function extentOf(spec: LineSpec): [number, number] {
   return values.length ? [Math.min(...values), Math.max(...values)] : [0, 0];
 }
 
-function linePlot(spec: LineSpec, width: number): Plot {
+interface Layout {
+  area: Box;
+  axis: { domain: [number, number]; ticks: readonly Tick[]; at: (value: number) => number };
+  /** A period's place along the axis: the centre of its share of the width. */
+  x: (index: number) => number;
+  step: number;
+  bottom: number;
+  ends: { cell: Cell; y: number; text: string }[];
+  apart: boolean;
+  room: number;
+}
+
+function layoutOf(spec: LineSpec, width: number): Layout {
   const bottom = spec.height - AXIS_BAND;
   const axis = valueTicks(extentOf(spec), [bottom, TOP], 44);
   const left = axis.widest + 10;
@@ -73,101 +85,210 @@ function linePlot(spec: LineSpec, width: number): Plot {
   const apart = heights.every((y, at) => at === 0 || y - (heights[at - 1] ?? y) >= APART);
   const room =
     apart && ends.length ? Math.max(...ends.map((end) => textWidth(end.text, VALUE_SIZE))) + 10 : 0;
-  const x = scalePoint<number>()
-    .domain(spec.categories.map((_, index) => index))
-    .range([left, width - EDGE - room])
-    .padding(0.5);
-  const at = (cell: Cell) => x(cell.index) ?? left;
   const area = { x: left, y: TOP, width: width - EDGE - room - left, height: bottom - TOP };
-  const path = line<Cell>()
-    .defined((cell) => cell.value !== null)
-    .x(at)
-    .y((cell) => axis.at(toNumber(cell.value ?? "0")));
+  const step = area.width / Math.max(1, spec.categories.length);
+  return {
+    area,
+    axis,
+    x: (index) => area.x + step * (index + 0.5),
+    step,
+    bottom,
+    ends,
+    apart,
+    room,
+  };
+}
+
+/** A point Recharts placed, drawn solid for the host and hollow for the model,
+    and reported so a button can be laid over it. */
+function Point({ cell, cx, cy, spec }: { cell: Cell; cx: number; cy: number; spec: LineSpec }) {
+  const key = `${cell.series.key}:${cell.index}`;
+  return (
+    <>
+      <circle
+        className={`chart-point chart-tone-${cell.color}${cell.origin === "model" ? " chart-hollow" : ""}`}
+        data-mark={key}
+        data-origin={cell.origin}
+        cx={cx}
+        cy={cy}
+        r={POINT}
+      />
+      <Reported
+        mark={{
+          key,
+          name: cellName(cell, spec.unit),
+          readout: readoutAt(spec, cell.index),
+          box: { x: cx - POINT, y: cy - POINT, width: 2 * POINT, height: 2 * POINT },
+          round: true,
+          guide: cx,
+          selection: cellSelection(cell),
+        }}
+      />
+    </>
+  );
+}
+
+/** What Recharts has no word for: each unavailable value's "n/a", the end
+    labels, and the zero baseline. */
+function Annotations({ spec, layout }: { spec: LineSpec; layout: Layout }) {
   const gapsBefore = (cell: Cell) =>
     spec.cells.filter(
       (other) => other.index === cell.index && other.value === null && other.slot < cell.slot,
     ).length;
-  const marks: MarkHit[] = spec.cells.map((cell) => {
-    const cx = at(cell);
-    const box =
-      cell.value === null
-        ? { x: cx - 10, y: bottom - gapsBefore(cell) * STACKED_GAP - 20, width: 20, height: 20 }
-        : {
-            x: cx - POINT,
-            y: axis.at(toNumber(cell.value)) - POINT,
-            width: 2 * POINT,
-            height: 2 * POINT,
-          };
-    return {
-      key: `${cell.series.key}:${cell.index}`,
-      name: cellName(cell, spec.unit),
-      readout: readoutAt(spec, cell.index),
-      box,
-      round: cell.value !== null,
-      guide: cx,
-      selection: cellSelection(cell),
-    };
-  });
-  const body = (
-    <>
-      <ValueGrid
-        ticks={axis.ticks}
-        area={area}
-        vertical
-        zero={spec.includeZero ? axis.at(0) : null}
-      />
-      {acrossLabels(spec.categories, (index) => x(index) ?? left, x.step(), bottom + 14).map(
-        (placed, index) => (
-          <Label key={`category-${index}`} className="chart-tick" placed={placed} />
-        ),
-      )}
-      {spec.series.map((one, slot) => {
-        const own = spec.cells.filter((cell) => cell.slot === slot);
-        const tone = own[0]?.color ?? "neutral";
-        return (
-          <path
-            key={one.key}
-            className={`chart-line chart-tone-${tone}${one.origin === "model" ? " chart-dashed" : ""}`}
-            data-series={one.key}
-            d={path(own) ?? undefined}
-          />
-        );
-      })}
+  const { area } = layout;
+  return (
+    <g className="chart-annotations">
+      {spec.includeZero ? (
+        <line
+          className="chart-zero"
+          x1={area.x}
+          x2={area.x + area.width}
+          y1={layout.axis.at(0)}
+          y2={layout.axis.at(0)}
+        />
+      ) : null}
       {spec.cells.map((cell) => {
+        if (cell.value !== null) return null;
         const key = `${cell.series.key}:${cell.index}`;
-        if (cell.value === null) {
-          const y = bottom - gapsBefore(cell) * STACKED_GAP;
-          return <GapMark key={key} mark={key} x={at(cell)} y={y} vertical />;
-        }
+        const x = layout.x(cell.index);
+        const y = layout.bottom - gapsBefore(cell) * STACKED_GAP;
         return (
-          <circle
-            key={key}
-            className={`chart-point chart-tone-${cell.color}${cell.origin === "model" ? " chart-hollow" : ""}`}
-            data-mark={key}
-            data-origin={cell.origin}
-            cx={at(cell)}
-            cy={axis.at(toNumber(cell.value))}
-            r={POINT}
-          />
+          <g key={key}>
+            <GapMark mark={key} x={x} y={y} vertical />
+            <Reported
+              mark={{
+                key,
+                name: cellName(cell, spec.unit),
+                readout: readoutAt(spec, cell.index),
+                box: { x: x - 10, y: y - 20, width: 20, height: 20 },
+                guide: x,
+                selection: cellSelection(cell),
+              }}
+            />
+          </g>
         );
       })}
-      {apart
-        ? ends.map((end) => (
+      {layout.apart
+        ? layout.ends.map((end) => (
             <Label
               key={`end-${end.cell.series.key}`}
               className="chart-value"
               placed={{
                 text: end.text,
-                x: at(end.cell) + POINT + 6,
+                x: layout.x(end.cell.index) + POINT + 6,
                 y: end.y + VALUE_SIZE / 2 - 2,
                 anchor: "start",
               }}
             />
           ))
         : null}
-    </>
+    </g>
   );
-  return { height: spec.height, area, body, marks, hatched: [] };
+}
+
+function linePlot(spec: LineSpec, kit: PlotKit): Plot {
+  const layout = layoutOf(spec, kit.width);
+  const rows = spec.categories.map((category, index) => {
+    const row: Record<string, unknown> = { category, index };
+    spec.series.forEach((_, slot) => {
+      const cell = spec.cells.find((entry) => entry.slot === slot && entry.index === index);
+      row[`v${slot}`] = cell?.value == null ? null : toNumber(cell.value);
+    });
+    return row;
+  });
+  const cellAt = new Map(spec.cells.map((cell) => [`${cell.slot}:${cell.index}`, cell]));
+  const shown = shownCategories(spec.categories, layout.step);
+  const chart = (
+    <Chart
+      {...kit.svg}
+      className="chart-svg"
+      width={kit.width}
+      height={spec.height}
+      data={rows}
+      margin={{ top: TOP, right: EDGE + layout.room, bottom: 0, left: 0 }}
+      accessibilityLayer={false}
+    >
+      <CartesianGrid
+        className="chart-grid"
+        vertical={false}
+        horizontalPoints={layout.axis.ticks.map((tick) => tick.position)}
+      />
+      <XAxis
+        dataKey="category"
+        type="category"
+        scale="point"
+        padding={{ left: layout.step / 2, right: layout.step / 2 }}
+        height={AXIS_BAND}
+        axisLine={false}
+        tickLine={false}
+        interval={0}
+        tick={(props: {
+          x?: number | string;
+          y?: number | string;
+          payload?: { value?: unknown };
+        }) => (
+          <TickText
+            x={props.x}
+            y={props.y}
+            dy={10}
+            anchor="middle"
+            text={shown[spec.categories.indexOf(String(props.payload?.value ?? ""))] ?? null}
+          />
+        )}
+      />
+      <YAxis
+        type="number"
+        domain={layout.axis.domain}
+        ticks={layout.axis.ticks.map((tick) => tick.value)}
+        tick={valueTick(layout.axis.ticks, "left")}
+        width={layout.area.x}
+        axisLine={false}
+        tickLine={false}
+        interval={0}
+        allowDataOverflow
+      />
+      {spec.series.map((one, slot) => {
+        const tone = spec.cells.find((cell) => cell.slot === slot)?.color ?? "neutral";
+        return (
+          <Line
+            key={one.key}
+            dataKey={`v${slot}`}
+            isAnimationActive={false}
+            connectNulls={false}
+            activeDot={false}
+            shape={(props: object) => (
+              <Curve
+                {...props}
+                className={`chart-line chart-tone-${tone}${one.origin === "model" ? " chart-dashed" : ""}`}
+                data-series={one.key}
+              />
+            )}
+            dot={(props: { cx?: number; cy?: number; payload?: { index?: number } }) => {
+              const cell = cellAt.get(`${slot}:${props.payload?.index ?? -1}`);
+              if (!cell || cell.value === null || props.cx == null || props.cy == null) {
+                return <g key={`${one.key}-${props.payload?.index ?? "none"}`} />;
+              }
+              return (
+                <Point
+                  key={`${one.key}-${cell.index}`}
+                  cell={cell}
+                  cx={props.cx}
+                  cy={props.cy}
+                  spec={spec}
+                />
+              );
+            }}
+          />
+        );
+      })}
+      <Annotations spec={spec} layout={layout} />
+      <Focus />
+    </Chart>
+  );
+  const order = [...spec.cells]
+    .sort((a, b) => a.index - b.index || a.slot - b.slot)
+    .map((cell) => `${cell.series.key}:${cell.index}`);
+  return { height: spec.height, chart, order };
 }
 
 export function LineChart({
@@ -197,7 +318,7 @@ export function LineChart({
       legend={seriesLegend(series, "line")}
       provenance="line"
       table={seriesTable(categoryLabel, categories, series, cells, unit)}
-      plot={(width) => linePlot(spec, width)}
+      plot={(kit) => linePlot(spec, kit)}
       onSelect={onSelect}
     />
   );

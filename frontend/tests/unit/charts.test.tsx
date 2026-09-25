@@ -10,6 +10,7 @@ import {
   BarChart,
   DivergingBarChart,
   LineChart,
+  ProvenanceKeyed,
   StackedBarChart,
   WaterfallChart,
   type ChartSeries,
@@ -39,8 +40,10 @@ const EBITDA: ChartSeries = {
 const marks = (root: HTMLElement) => [
   ...root.querySelectorAll<HTMLButtonElement>("button.chart-hit"),
 ];
-/** The plot, not the legend's swatches (which draw marks of their own). */
-const plotOf = (root: HTMLElement) => root.querySelector("svg.chart-svg") as unknown as HTMLElement;
+/** The plot, not the legend's swatches (which draw marks of their own):
+    the picture Recharts draws (D61). */
+const plotOf = (root: HTMLElement) =>
+  root.querySelector(".chart-plot svg[role='img']") as unknown as HTMLElement;
 const rects = (root: HTMLElement) => [
   ...plotOf(root).querySelectorAll<SVGRectElement>("rect.chart-bar"),
 ];
@@ -76,7 +79,11 @@ describe("a bar chart", () => {
       screen.getByRole("button", { name: "Revenue, Q3 2026: n/a (ZERO_OR_NEGATIVE_DENOMINATOR)" }),
     ).toBeInTheDocument();
     // The label on the bar is the served string, grouped: never a float's rendering.
-    expect(within(plotOf(container)).getByText("3,412.0")).toHaveClass("chart-value");
+    const label = within(plotOf(container)).getByText("3,412.0");
+    expect(label).toHaveClass("chart-value");
+    // Placed past the bar's end as Recharts drew the bar (`useMarks`, D61).
+    const bar = container.querySelector('rect[data-mark="revenue:1"]')!;
+    expect(numberOf(label, "y")).toBeLessThan(numberOf(bar, "y"));
   });
 
   test("is a figure: a captioned picture, drawn at real pixels and never scaled", () => {
@@ -90,10 +97,15 @@ describe("a bar chart", () => {
     const picture = screen.getByRole("img", {
       name: "Revenue and EBITDA Quarterly, first three quarters of 2026.",
     });
-    expect(picture).not.toHaveAttribute("viewBox");
+    // Drawn at its real pixels: the viewBox is the drawing's own size, so
+    // nothing is scaled and the text stays at the type floors.
     expect(picture).toHaveAttribute("width", String(FALLBACK_WIDTH));
-    // Nothing inside the picture is focusable: the marks are the buttons over it.
-    expect(picture.querySelector("[tabindex], button, a")).toBeNull();
+    expect(picture.getAttribute("viewBox")).toBe(
+      `0 0 ${FALLBACK_WIDTH} ${picture.getAttribute("height")}`,
+    );
+    // Nothing inside the picture is in the tab order: the marks are the
+    // buttons over it (Recharts' own layers carry tabindex -1, out of it).
+    expect(picture.querySelector("[tabindex]:not([tabindex='-1']), button, a")).toBeNull();
     expect(container.querySelector("style")).toBeNull();
     expect(container.querySelector(".chart-zero")).not.toBeNull();
   });
@@ -114,6 +126,23 @@ describe("a bar chart", () => {
     const legend = screen.getByRole("list", { name: "Legend" });
     expect(within(legend).getByText("Revenue")).toBeInTheDocument();
     expect(within(legend).getByText("EBITDA")).toBeInTheDocument();
+  });
+
+  test("a page that keys provenance once turns each chart's own key off", () => {
+    render(
+      <ProvenanceKeyed value={false}>
+        <BarChart
+          title="Revenue and EBITDA"
+          summary="Quarterly."
+          categories={PERIODS}
+          series={[REVENUE, EBITDA]}
+        />
+      </ProvenanceKeyed>,
+    );
+    expect(screen.queryByText("Solid: host-verified")).toBeNull();
+    // The series legend stays: it says which colour is which, not who wrote it.
+    const legend = screen.getByRole("list", { name: "Legend" });
+    expect(within(legend).getByText("Revenue")).toBeInTheDocument();
   });
 
   test("stands up or runs along: value is height upright and width sideways", () => {
@@ -328,7 +357,7 @@ describe("a stacked bar chart", () => {
     expect(fromScaled(total, places)).toBe("100.0");
     // The stack's top meets the 100% gridline; the top segment is the model's,
     // whose outlined edge is drawn half its 1.5px stroke inside the mark's box.
-    const gridlines = [...container.querySelectorAll(".chart-grid line")].map((line) =>
+    const gridlines = [...container.querySelectorAll("line.chart-grid")].map((line) =>
       numberOf(line, "y1"),
     );
     const top = Math.min(...rects(container).map((rect) => numberOf(rect, "y")));
@@ -578,12 +607,12 @@ describe("drawn at the container's width", () => {
       },
     );
     const { container } = bars();
-    const svg = container.querySelector("svg.chart-svg");
-    expect(svg).toHaveAttribute("width", String(FALLBACK_WIDTH));
+    const svg = () => container.querySelector(".chart-plot svg[role='img']");
+    expect(svg()).toHaveAttribute("width", String(FALLBACK_WIDTH));
     act(() =>
       report([{ contentRect: { width: 480.6 } } as ResizeObserverEntry], {} as ResizeObserver),
     );
-    expect(svg).toHaveAttribute("width", "480");
+    expect(svg()).toHaveAttribute("width", "480");
     vi.unstubAllGlobals();
   });
 });

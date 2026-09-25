@@ -406,7 +406,12 @@ export function Workspace({ section }: { section: Section }) {
       {/* With no document there is nothing to summarise: the header carries
           the state, and the region below says it in full. */}
       {chrome ? (
-        <SectionSummary verdict={chrome.verdict} brief={chrome.brief} ribbon={chrome.ribbon} />
+        <SectionSummary
+          verdict={chrome.verdict}
+          brief={chrome.brief}
+          ribbon={chrome.ribbon}
+          compact={activeTab !== null}
+        />
       ) : null}
       <QualificationStrip evidenceSha256={qualificationEvidence} />
       <SectionTabs
