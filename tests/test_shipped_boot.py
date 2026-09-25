@@ -4,11 +4,13 @@ source path holds, nothing from this checkout, and nothing outside the tree."""
 
 from __future__ import annotations
 
+from email.message import Message
 from pathlib import Path
+from urllib.error import HTTPError
 
 import pytest
 from platform_app import REPO, BootFailed, export_root, platform_app
-from shipped_boot import shipped_tree
+from shipped_boot import every_code_ok, shipped_tree
 from test_workspace_stub import stub
 from workspace_stub import WorkspaceStub
 
@@ -77,3 +79,26 @@ def test_a_shipped_tree_without_the_export_refuses_to_boot(
     ):
         pytest.fail("the process answered ready")
     assert "EDGE_CONFIG_INVALID" in str(failed.value)
+
+
+def test_health_is_polled_past_a_read_that_fails() -> None:
+    """S7: a 503 while a probe still answered `not_ready` ended the shipped
+    boot with a traceback, though its docstring said it waits as E6 waits;
+    a failed read is polled past, as E6 polls past it (C4)."""
+    answers: list[dict[str, object] | OSError] = [
+        HTTPError("http://127.0.0.1/api/health", 503, "not ready", Message(), None),
+        {"store": "OK", "workers": "WORKERS_ABSENT"},
+        {"store": "OK", "workers": "OK"},
+    ]
+
+    class Probed:
+        def health(self) -> dict[str, object]:
+            answer = answers.pop(0)
+            if isinstance(answer, OSError):
+                raise answer
+            return answer
+
+    assert every_code_ok(Probed(), ("store", "workers")) == {
+        "store": "OK",
+        "workers": "OK",
+    }

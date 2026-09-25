@@ -24,12 +24,11 @@ import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
 
 if TYPE_CHECKING:
-    from platform_app import PlatformApp
     from workspace_stub import WorkspaceStub
 
 REPO = Path(__file__).resolve().parents[1]
@@ -84,14 +83,26 @@ def fresh_database(server_url: str) -> Iterator[str]:
             admin.execute(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
 
 
-def every_code_ok(app: PlatformApp, names: tuple[str, ...]) -> dict[str, object]:
+class Probed(Protocol):
+    """What `every_code_ok` reads: a booted app's health."""
+
+    def health(self) -> dict[str, object]: ...
+
+
+def every_code_ok(app: Probed, names: tuple[str, ...]) -> dict[str, object]:
     """Health's codes once every one reads `OK`, or as they last read after
     `HEALTH_SECONDS`: `ready` needs only the first four, and the in-process
-    worker's first beat lands just after it, as E6 waits for it."""
+    worker's first beat lands just after it, as E6 waits for it. A read that
+    fails -- a 503 while a probe answers `not_ready`, a refused connection --
+    is polled past, as E6 polls past it (C4)."""
     deadline = time.monotonic() + HEALTH_SECONDS
+    codes: dict[str, object] = dict.fromkeys(names)
     while True:
-        health = app.health()
-        codes = {name: health.get(name) for name in names}
+        try:
+            health = app.health()
+        except OSError:  # `HTTPError` and `URLError` are both `OSError`s
+            health = {}
+        codes = {name: health.get(name) for name in names} if health else codes
         if set(codes.values()) == {"OK"} or time.monotonic() > deadline:
             return codes
         time.sleep(1.0)
