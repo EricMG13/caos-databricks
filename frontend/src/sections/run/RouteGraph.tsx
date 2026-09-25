@@ -4,7 +4,7 @@
 // `waiting_on` (v1 carries no separate edge list — brief 4.1, slice 4.1i).
 import { useLayoutEffect, useRef } from "react";
 import { RouteLegend } from "./RouteLegend";
-import { blockingOf, reasonOf, runningOf, stateWordOf } from "./reason";
+import { blockingOf, cardReasonOf, reasonOf, runningOf, stateWordOf } from "./reason";
 import { SeverityMark } from "@/chrome/SeverityMark";
 import { sentence } from "@/chrome/compose";
 import type { AttemptView, BlockedByView } from "./types";
@@ -136,14 +136,21 @@ interface EdgeLine {
   type: EdgeType;
 }
 
-/** Every edge the route carries, derived from each node's own `waiting_on`. */
+/** Every edge the route carries, derived from each node's own `waiting_on`.
+    The host names an edge's source by its module (`CP-5`) and a node by its
+    route node id (`RN-…-CP-5`); a route holds each module once
+    (`ROUTE_DUPLICATE_MODULE`), so a source resolves to its node either way.
+    Read by route node id alone, no line or gate was drawn from a real host. */
 export function edgesOf(
-  nodes: readonly Pick<NodeView, "route_node_id" | "waiting_on">[],
+  nodes: readonly Pick<NodeView, "route_node_id" | "module_id" | "waiting_on">[],
 ): EdgeLine[] {
+  const ids = new Set(nodes.map((node) => node.route_node_id));
+  const byModule = new Map(nodes.map((node) => [node.module_id, node.route_node_id]));
+  const nodeOf = (source: string) => (ids.has(source) ? source : (byModule.get(source) ?? source));
   const lines: EdgeLine[] = [];
   for (const node of nodes) {
     for (const edge of node.waiting_on) {
-      lines.push({ from: edge.source, to: node.route_node_id, type: edge.type });
+      lines.push({ from: nodeOf(edge.source), to: node.route_node_id, type: edge.type });
     }
   }
   return lines;
@@ -256,8 +263,15 @@ export function RouteGraph({
                 className={cls}
                 data-node={node.module_id}
                 data-route-node={node.route_node_id}
-                // The card is sized for the id; the catalog's name is the tooltip.
-                title={node.module_name}
+                // The card is sized for the id and its state; the catalog's
+                // name and the whole reason, edges named, are its tooltip and
+                // description (D72).
+                title={[
+                  node.module_name === node.module_id ? null : node.module_name,
+                  reasonOf(node, status, blocking),
+                ]
+                  .filter(Boolean)
+                  .join("\n")}
                 data-state={node.state}
                 data-blocking={blocking ? "yes" : "no"}
                 aria-pressed={on}
@@ -273,7 +287,7 @@ export function RouteGraph({
                   />
                   {sentence(stateWordOf(node, status, running, blocking))}
                 </span>
-                <span className="why">{reasonOf(node, status, blocking)}</span>
+                <span className="why">{cardReasonOf(node, status, blocking)}</span>
               </button>
             );
           })}

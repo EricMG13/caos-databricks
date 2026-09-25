@@ -5,7 +5,7 @@ workspace as built; not a redesign. The owner edits this before it is sent.*
 
 *Status, later on 2026-09-25: CAOS is desktop only (decisions.md D63). Every
 phone and 390px item below is withdrawn; the 320px reflow at 400% zoom stays,
-under the a11y matrix. The questions in 9 are answered by D64–D69.*
+under the a11y matrix. The questions in 9 are answered by D64–D69, and N100, N101 and N105 by D70–D72.*
 
 ## 1. The ask
 

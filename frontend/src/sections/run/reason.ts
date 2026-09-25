@@ -61,6 +61,24 @@ export function reasonOf(
   return edges || "restricted";
 }
 
+/** What a node card says (D72): the reason without the edges it names. The
+    card is a code and a state; the edges are the canvas's lines, listed in
+    full in the Selected node card and on the card's own tooltip. Where the
+    edges are all the reason has, the card counts them. */
+export function cardReasonOf(
+  node: Pick<NodeView, "state" | "waiting_on" | "gate_verdict" | "awaiting_gate">,
+  status: RunView["status"],
+  blocking = false,
+): string {
+  const count = node.waiting_on.length;
+  const edges = `${count} ${count === 1 ? "edge" : "edges"}`;
+  if (!blocking && !node.gate_verdict && count) {
+    if (node.state === "BLOCKED") return `waits on ${edges}`;
+    if (node.state === "RESTRICTED") return `runs without ${edges}`;
+  }
+  return reasonOf({ ...node, waiting_on: [] }, status, blocking);
+}
+
 /** A node is drawn running while it holds an attempt not yet accepted —
     recomputed from the attempts the wire carries, never a stored flag.
 

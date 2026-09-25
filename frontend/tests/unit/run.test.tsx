@@ -135,10 +135,14 @@ describe("Run", () => {
     const cp6 = container.querySelector('button.node[data-node="CP-6"]');
     expect(cp6).toHaveAttribute("data-state", "RUNNABLE");
     expect(cp6?.querySelector(".glyph")).toHaveAttribute("data-severity", "RUNNING");
-    // Every BLOCKED reason names the upstream and the edge type.
+    // Every BLOCKED reason names the upstream and the edge type: in the
+    // card's tooltip and description, while the card itself counts what it
+    // waits on (D72) rather than clamping the names mid-word.
     for (const blocked of container.querySelectorAll('button.node[data-state="BLOCKED"]')) {
-      const why = blocked.querySelector(".why")?.textContent ?? "";
-      expect(why).toMatch(/REQUIRED|OPTIONAL|ADVISORY|QA_GATE|CONDITIONAL/);
+      expect(blocked.querySelector(".why")?.textContent).toMatch(/^waits on \d+ edges?$/);
+      expect(blocked.getAttribute("title")).toMatch(
+        /REQUIRED|OPTIONAL|ADVISORY|QA_GATE|CONDITIONAL/,
+      );
     }
     const restricted = container.querySelector('button.node[data-state="RESTRICTED"]');
     // Ran, carrying its limitation: its own ring, never a warning (CF-036).
