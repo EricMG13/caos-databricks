@@ -1553,29 +1553,51 @@ def stored_lineage(
     def chain() -> tuple[LineageRef, ...]:
         found: dict[str, LineageRef] = {}
         for ref in upstream:
-            artifact, record_sha256 = accepted[ref.route_node_id]
-            if artifact != ref.sha256 or record_sha256 is None:
-                raise ValueError
-            record = known.get(record_sha256)
-            if record is None:
-                data = blobs.get(record_sha256)
-                record = _decoded_record(data)
-                if record_bytes(record) != data:
-                    raise ValueError
-            if record.artifact_sha256 != artifact:
-                raise ValueError
-            direct = LineageRef(
-                ref.route_node_id, ref.module_id, artifact, record_sha256
-            )
+            direct, record = _direct_link(blobs, known, ref, accepted)
             for link in (direct, *record.lineage):
-                pair = (link.artifact_sha256, link.record_sha256)
-                if accepted.get(link.route_node_id) != pair:
-                    raise ValueError  # an ancestor whose accepted pair moved
-                if found.setdefault(link.route_node_id, link) != link:
-                    raise ValueError
+                _admit_link(found, link, accepted)
         return tuple(found[key] for key in sorted(found))
 
     return _or_refuse(RefusalCode.ARTIFACT_RECORD_MISMATCH, chain)
+
+
+def _direct_link(
+    blobs: BlobStore,
+    known: Mapping[str, CanonicalRecord],
+    ref: UpstreamRef,
+    accepted: Mapping[str, tuple[str, str | None]],
+) -> tuple[LineageRef, CanonicalRecord]:
+    """`ref`'s own link, from its node's accepted pair, and the record that
+    names the rest of its chain: read from the store in its canonical form,
+    unless `known` already holds it. `ValueError` for a pair that is not the
+    accepted one, or a record that will not read or binds another artifact;
+    `KeyError` for a node with no accepted pair."""
+    artifact, record_sha256 = accepted[ref.route_node_id]
+    if artifact != ref.sha256 or record_sha256 is None:
+        raise ValueError
+    record = known.get(record_sha256)
+    if record is None:
+        data = blobs.get(record_sha256)
+        record = _decoded_record(data)
+        if record_bytes(record) != data:
+            raise ValueError
+    if record.artifact_sha256 != artifact:
+        raise ValueError
+    direct = LineageRef(ref.route_node_id, ref.module_id, artifact, record_sha256)
+    return direct, record
+
+
+def _admit_link(
+    found: dict[str, LineageRef],
+    link: LineageRef,
+    accepted: Mapping[str, tuple[str, str | None]],
+) -> None:
+    """Add `link` to the chain: `ValueError` for an ancestor whose accepted
+    pair moved, or a second pair for a node already in it."""
+    if accepted.get(link.route_node_id) != (link.artifact_sha256, link.record_sha256):
+        raise ValueError  # an ancestor whose accepted pair moved
+    if found.setdefault(link.route_node_id, link) != link:
+        raise ValueError
 
 
 def read_record(
