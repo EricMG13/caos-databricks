@@ -118,11 +118,13 @@ def platform_environment(
     return env
 
 
-def export_root(scratch: Path) -> Path:
-    """The built export when it is here, else a stand-in -- an index and the
-    build manifest the boot check reads (N92) -- so the boot is the
-    platform's (`CAOS_SITE_ROOT` set) and not the local 404 mode."""
-    built = REPO / "frontend" / "dist"
+def export_root(scratch: Path, root: Path | None = None) -> Path:
+    """The built export when it is here -- under `root`, the tree the process
+    boots from, the repository unless a caller names another -- else a
+    stand-in -- an index and the build manifest the boot check reads (N92) --
+    so the boot is the platform's (`CAOS_SITE_ROOT` set) and not the local
+    404 mode."""
+    built = (REPO if root is None else root) / "frontend" / "dist"
     if (built / "index.html").is_file():
         return built
     stand_in = scratch / "site"
@@ -145,22 +147,25 @@ def platform_app(
     database_url: str,
     log: Path,
     kind: LakebaseKind = LakebaseKind.AUTOSCALING,
+    root: Path | None = None,
 ) -> Iterator[PlatformApp]:
     """`python -m caos.serve` under the platform's environment, ready or refused.
 
-    Its output goes to `log`, never to a pipe nobody drains: a full pipe would
-    block the process on its next log line and look exactly like a stalled run.
+    It starts in `root`, the tree a deployment ships (`shipped_boot.py`), or
+    in the repository. Its output goes to `log`, never to a pipe nobody
+    drains: a full pipe would block the process on its next log line and look
+    exactly like a stalled run.
     """
     stub.database_credential = urlparse(database_url).password or BEARER
     stub.directories.add(VOLUME)
     port = free_port()
     url = f"http://127.0.0.1:{port}"
     stub.app_url = url
-    site_root = export_root(log.parent)
+    site_root = export_root(log.parent, root)
     with log.open("wb") as sink:
         process = subprocess.Popen(
             [sys.executable, "-m", "caos.serve"],
-            cwd=REPO,
+            cwd=REPO if root is None else root,
             env=platform_environment(stub, database_url, port, site_root, kind),
             stdout=sink,
             stderr=subprocess.STDOUT,

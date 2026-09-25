@@ -840,6 +840,8 @@ PYTEST_GATE = (
     "-o faulthandler_timeout=600 -ra --durations=25"
 )
 RACES_GATE = "uv run pytest --no-cov tests/test_postgres_races.py"
+# The shipped set booted from the stub's copy of it (CF-001), on a store.
+SHIPPED_BOOT = "uv run python tests/shipped_boot.py"
 GITLEAKS_GATE = (
     'docker run --rm -u "$(id -u):$(id -g)" -e GIT_CONFIG_COUNT=1 '
     "-e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=/repo "
@@ -933,6 +935,7 @@ CI_STEPS: dict[tuple[str, ...], dict[str, str]] = {
     **{(gate,): {} for gate in CI_GATES},
     (PYTEST_GATE,): _POSTGRES,
     (RACES_GATE,): _POSTGRES,
+    (SHIPPED_BOOT,): {"CAOS_TEST_POSTGRES_URL": _POSTGRES["CAOS_TEST_POSTGRES_URL"]},
     BASELINE_SCRIPT: {
         "BASE_REF": "${{ github.base_ref }}",
         "BEFORE": "${{ github.event.before }}",

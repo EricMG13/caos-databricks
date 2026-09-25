@@ -908,6 +908,22 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 2
+    stub = WorkspaceStub()
+    with stub.serving():
+        code = run_against(stub, args)
+    for method, path in stub.requests:
+        print(f"stub: {method} {path}")
+    return code
+
+
+def run_against(stub: WorkspaceStub, args: list[str]) -> int:
+    """Run `args` against `stub`, which is serving, the way `main` does: no
+    profile, no inherited way into another workspace, a private empty config
+    file, and a `bundle` command only over no bundle state but a stand-in's
+    (`fresh_state`, DF-13). The child's exit code; 2, with nothing run, over a
+    real workspace's state. `main` runs one command per stub; a caller that
+    reads the stub afterwards, as `shipped_boot.py` reads the synced files,
+    runs several against the one it holds."""
     if any(re.search(r"\bbundle\b", arg) for arg in args):
         kept = fresh_state(Path.cwd())
         if kept:
@@ -917,16 +933,12 @@ def main(argv: list[str] | None = None) -> int:
                 file=sys.stderr,
             )
             return 2
-    stub = WorkspaceStub()
-    with stub.serving(), tempfile.TemporaryDirectory() as private:
+    with tempfile.TemporaryDirectory() as private:
         config_file = Path(private) / "empty.databrickscfg"
         config_file.write_text("", encoding="utf-8")
         env = stand_in_environment(dict(os.environ), stub)
         env["DATABRICKS_CONFIG_FILE"] = str(config_file)
-        code = subprocess.run(args, env=env, check=False).returncode
-    for method, path in stub.requests:
-        print(f"stub: {method} {path}")
-    return code
+        return subprocess.run(args, env=env, check=False).returncode
 
 
 if __name__ == "__main__":
