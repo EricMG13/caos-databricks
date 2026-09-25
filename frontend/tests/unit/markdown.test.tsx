@@ -6,7 +6,14 @@ import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { render, renderHook } from "@testing-library/react";
 import { plainHead, plainName } from "@/ds/format";
-import { readInline, readMarkdown, readRefs, tableTag, type Block } from "@/ds/markdown";
+import {
+  FORMATTED_MAX,
+  readInline,
+  readMarkdown,
+  readRefs,
+  tableTag,
+  type Block,
+} from "@/ds/markdown";
 import { Markdown } from "@/ds/ModelMarkdown";
 import { keyFigures } from "@/sections/analysis/figures";
 import { PROSE_SHOWN, registerOfHash, useModuleParts } from "@/sections/analysis/module";
@@ -229,6 +236,31 @@ describe("a module's text in the places every module shares", () => {
     );
     expect(parts.lead!.title).toBe("Normalised financials");
     expect(parts.registers.map((register) => register.id)).toEqual(["cp1.x"]);
+  });
+
+  test("model text of any length costs the page one pass per pattern", () => {
+    const timed = (run: () => unknown) => {
+      const started = performance.now();
+      run();
+      return performance.now() - started;
+    };
+    // A cell no figure fits: 1.9 s at 40,000 spaces before, figures unchanged.
+    const cell = `(${" ".repeat(60_000)}a`;
+    const wide = md("| a | b |", "| - | - |", `| ${cell} | 1 |`);
+    expect(timed(() => render(<Markdown text={wide} base={2} label="W" />))).toBeLessThan(1000);
+    // A heading of one letter and 40,000 digits: 6.5 s before; ids unchanged.
+    const heading = `A${"1".repeat(40_000)}!`;
+    expect(timed(() => registerHeading(heading))).toBeLessThan(1000);
+    expect(registerHeading(heading).id).toBeNull();
+    expect(registerHeading("TL40.2 — Liquidity").id).toBe("TL40.2");
+    expect(registerHeading("B8 Peers").id).toBe("B8");
+    // A title of 120,000 characters of `:: x`: seconds before.
+    expect(timed(() => shapeOf(":: x".repeat(30_000), ["a"]))).toBeLessThan(1000);
+    // An artifact past the formatting ceiling is shown as written, as Analysis is.
+    const huge = render(<Markdown text={"x".repeat(FORMATTED_MAX + 1)} base={2} label="H" />);
+    expect(huge.container.querySelector("[data-markdown]")?.getAttribute("data-markdown")).toBe(
+      "as-written",
+    );
   });
 
   test("a caveat written beside a table's tag is shown, never consumed with the tag", () => {

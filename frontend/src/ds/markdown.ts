@@ -60,6 +60,11 @@ const MAX_NESTING = 4;
 
 class Unsupported extends Error {}
 
+/** Past this many characters a text is not formatted at all, an artifact's
+    as a handoff's: drawing a 25 MB text as elements stalls the page as surely
+    as printing it did, and it is shown as written instead. */
+export const FORMATTED_MAX = 500_000;
+
 const TABLE_ID = /table-id:\s*([^\s]+)/;
 
 /** A `<!-- table-id: -->` comment's id, and whether the comment says nothing

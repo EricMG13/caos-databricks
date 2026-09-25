@@ -27,17 +27,12 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MarkdownBlocks, MdCell, MdHead, MdInline, MdTableView } from "@/ds/ModelMarkdown";
 import { plainHead, plainName, stamp } from "@/ds/format";
-import { readMarkdown, type Block, type MdTable } from "@/ds/markdown";
+import { FORMATTED_MAX, readMarkdown, type Block, type MdTable } from "@/ds/markdown";
 import type { HandoffView } from "@/wire/v1";
 
 /** Model prose beyond this many characters is shown on request: a handoff may
     carry 25 MB, and drawing all of it at once stalls the page. */
 export const PROSE_SHOWN = 20_000;
-
-/** Past this many characters the text is not formatted at all: drawing a
-    25 MB handoff as elements stalls the page as surely as printing it did.
-    The As written tab shows it, a part at a time. */
-const FORMATTED_MAX = 500_000;
 
 /** The module's Markdown read once per handoff, and where each register goes;
     `null` when it is not formatted (too long, or a construct the host would

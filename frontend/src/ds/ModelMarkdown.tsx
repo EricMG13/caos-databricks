@@ -2,13 +2,14 @@
 // reads, each authored character a text node. Nothing here writes HTML, so
 // the page holds under the CSP's Trusted Types whatever the model wrote.
 import * as React from "react";
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { plainHead } from "./format";
 import {
   readInline,
   readMarkdown,
   readRefs,
   tableTag,
+  FORMATTED_MAX,
   type Block,
   type Inline,
   type MdList,
@@ -67,12 +68,17 @@ export function MdHead({ text }: { text: string }) {
 // currency, digits with grouping, a unit. Only the cell's alignment and face
 // follow from it; the page never reads the number (D32).
 const FIGURE = /^[(−–-]?\s*[$€£]?\s*[0-9][0-9,]*(\.[0-9]+)?\s*(%|x|bps?|pts?|[kmb]n?|mm)?\)?$/i;
+// Longer than any figure a column carries: tested past this, a cell of spaces
+// cost the pattern's two adjacent `\s*` a pass per split, seconds a cell.
+const FIGURE_MAX = 64;
 const EMPTY = /^(|n\/a|na|—|–|-|none|null)$/i;
 
 function figureColumns(table: MdTable): boolean[] {
   return table.head.map((_, column) => {
     const cells = table.rows.map((row) => row[column] ?? "").filter((cell) => !EMPTY.test(cell));
-    return cells.length > 0 && cells.every((cell) => FIGURE.test(cell));
+    return (
+      cells.length > 0 && cells.every((cell) => cell.length <= FIGURE_MAX && FIGURE.test(cell))
+    );
   });
 }
 
@@ -303,13 +309,15 @@ export function MarkdownBlocks({
 /** A whole Markdown text, formatted; where the host would refuse it, the text
     as written with the reason, so nothing the model wrote is hidden. */
 export function Markdown({ text, base, label }: { text: string; base: number; label: string }) {
-  const blocks = readMarkdown(text);
+  const long = text.length > FORMATTED_MAX;
+  const blocks = useMemo(() => (long ? null : readMarkdown(text)), [long, text]);
   if (blocks === null) {
     return (
       <div className="md" data-markdown="as-written">
         <p className="note">
-          This text uses a construct the page does not format (an unclosed block, a table row that
-          does not fit its header, or lists nested past four levels), so it is shown as written.
+          {long
+            ? "This text is too long to format, so it is shown as written."
+            : "This text uses a construct the page does not format (an unclosed block, a table row that does not fit its header, or lists nested past four levels), so it is shown as written."}
         </p>
         <pre className="model-text">{text}</pre>
       </div>

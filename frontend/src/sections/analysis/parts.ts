@@ -87,7 +87,9 @@ const auditOf = (title: string) => H2_AUDIT.find(([rule]) => rule.test(title.toL
 const APPENDIX = /^analytical appendix\b/i;
 // `T4C.4`, `TL40.2`, `TDR.1`, and the one-letter series deployed modules
 // write (`A1`, `B8`, `R10`).
-const REGISTER_ID = /^((?:TDR|TL[0-9]+|[A-Z][0-9]+[A-Z]?)[0-9A-Z]*(?:\.[0-9A-Z]+)*)(?=$|[\s.:—–-])/;
+// `[A-Z][0-9]+[A-Z]?[0-9A-Z]*` read as `[A-Z][0-9][0-9A-Z]*`, the same ids: two
+// quantifiers over one run of digits cost a pass per split, seconds a heading.
+const REGISTER_ID = /^((?:TDR|TL[0-9]|[A-Z][0-9])[0-9A-Z]*(?:\.[0-9A-Z]+)*)(?=$|[\s.:—–-])/;
 // A line that is nothing but bold labels the table under it, as a heading
 // would: `**T1 — CP-PARSE handoff / lineage validation**`, a parenthetical
 // after it kept.
@@ -109,6 +111,7 @@ function labelOf(entry: Block, next: Block | undefined): string | null {
 // A register's shape from its title and columns, first rule first. The
 // patterns name the columns the methodology's registers carry (their output
 // profiles, `vendor/deploy-v/skills/*/SKILL.md`).
+const SHAPE_TITLE_MAX = 300;
 const SHAPES: [Shape, RegExp][] = [
   [
     "sources",
@@ -203,7 +206,9 @@ export const STABLE_TABLES: Readonly<Record<string, { title: string; shape: Shap
 
 /** A register's shape, from its title and its columns. */
 export function shapeOf(title: string, head: readonly string[]): Shape {
-  const key = `${title} :: ${head.join("; ")}`.toLowerCase();
+  // A title past a sentence names no shape, and the rules' `[^;]+` runs cost a
+  // pass per `::` in it: 120,000 characters of `:: x` took seconds.
+  const key = `${title.slice(0, SHAPE_TITLE_MAX)} :: ${head.join("; ")}`.toLowerCase();
   return SHAPES.find(([, rule]) => rule.test(key))?.[0] ?? "table";
 }
 
