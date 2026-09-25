@@ -39,6 +39,12 @@ describe("the book", () => {
   test("a credit is one row per accepted period, on its own units", () => {
     mount();
     const table = screen.getByRole("table", { name: /BASE · FY2026/ });
+    // Named by its caption; seen as the card's own left-aligned caption, not a
+    // centred line over the header row (brief 5, Book).
+    expect(table.querySelector("caption")).toHaveClass("sr-only");
+    expect(table.closest(".pnl")!.querySelector("header .cp")).toHaveTextContent(
+      "Credits compared",
+    );
     const row = within(table).getByRole("row", { name: /Carvana/ });
     expect(within(row).getByRole("button", { name: /EBITDA margin.*20\.0%$/ })).toBeVisible();
     expect(row).toHaveTextContent("USD · millions");
@@ -224,6 +230,9 @@ describe("the book", () => {
       expect(note).not.toBeNull();
       expect(note).toHaveTextContent("FULL_CREDIT_32 / RELATIVE_VALUE");
       expect(note).toHaveTextContent("model extension");
+      // The card's caption, not a bold-led paragraph among the figures.
+      expect(note).toHaveClass("card-note");
+      expect(note!.querySelector("b")).toBeNull();
       demo.unmount();
 
       vi.stubEnv("MODE", "production");

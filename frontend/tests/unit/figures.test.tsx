@@ -124,7 +124,8 @@ test("the change chart is drawn only past what the key figures already print", (
     </MemoryRouter>,
   );
   expect(bare.querySelector("[data-figures]")).toBeNull();
-  expect(bare.querySelector("[data-host-calculation]")).not.toBeNull();
+  // Drawn as a caveat on the module, not a loose line between its cards.
+  expect(bare.querySelector(".calc-caveat > [data-host-calculation]")).not.toBeNull();
 });
 
 test("pressing a mark names it beside the figures, with its stated source", () => {

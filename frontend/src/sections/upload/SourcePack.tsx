@@ -79,7 +79,7 @@ function SourceLine({
   return (
     <tr data-source={row.source_id} className={row.withdrawn_at ? "wd" : undefined}>
       <td className="wrap">{row.filename}</td>
-      <td className="m">
+      <td className="m l">
         <Digest value={row.document_sha256} />
       </td>
       <td className="m r">
@@ -117,12 +117,15 @@ export function SourcePack({
   action,
   caseId,
   onWithdrawn,
+  reasonSaid = false,
 }: {
   rows: SourceRow[];
   observedAt: string;
   action: ActionView | undefined;
   caseId: string;
   onWithdrawn: () => void;
+  /** The section already said the reason once for the pack's commands. */
+  reasonSaid?: boolean;
 }) {
   // One section action judges every row, so a refusal is the same on each:
   // it is said once above the pack, not repeated down the Withdraw column,
@@ -132,7 +135,7 @@ export function SourcePack({
   const reasonDisplay = refused ? "hidden" : "inline";
   return (
     <>
-      {refused && rows.some((row) => !row.withdrawn_at) ? (
+      {refused && !reasonSaid && rows.some((row) => !row.withdrawn_at) ? (
         <SharedRefusal refusal={refused} lead="Withdraw" />
       ) : null}
       <div className="tscroll" tabIndex={0} role="region" aria-label="Admitted source rows">

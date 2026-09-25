@@ -104,11 +104,12 @@ export function BookSection({ document }: { document: BookDocument; tab: string 
           {import.meta.env.MODE === "demo" ? (
             // The fixture is fuller than any run a workspace press makes by
             // default; the demonstration says which runs alone can fill it.
-            <p className="note" data-demo-book-note>
-              <b>A forecast reaches the Book only from one kind of run.</b> The figures shown here
-              are demonstration fixtures. The server serves a Book cell only for a run on
-              FULL_CREDIT_32 / RELATIVE_VALUE created with the model extension (CP-CF); a run on any
-              other pathway, or created without the extension, has no accepted forecast to compare.
+            // Said as the card's caption, not a bold-led paragraph among the
+            // figures (brief 5, Book).
+            <p className="card-note" data-demo-book-note>
+              Demonstration fixtures. The server serves a Book cell only for a run on FULL_CREDIT_32
+              / RELATIVE_VALUE created with the model extension (CP-CF); any other run has no
+              accepted forecast to compare.
             </p>
           ) : null}
         </div>
@@ -140,6 +141,7 @@ export function BookSection({ document }: { document: BookDocument; tab: string 
         <section className="pnl" key={key}>
           <header>
             <h2>{key}</h2>
+            <span className="cp">Credits compared</span>
           </header>
           <div
             className="pb tscroll"
@@ -148,7 +150,8 @@ export function BookSection({ document }: { document: BookDocument; tab: string 
             aria-label={`Credits compared on ${key}`}
           >
             <table className="tbl pin-first">
-              <caption className="lbl">Credits compared on {key}</caption>
+              {/* The table's name; the card's header shows it, left-aligned. */}
+              <caption className="sr-only">Credits compared on {key}</caption>
               <thead>
                 <tr>
                   <th scope="col">Credit</th>

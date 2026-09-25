@@ -58,10 +58,13 @@ export function AdmitSources({
   action,
   caseId,
   onAdmitted,
+  reasonDisplay = "inline",
 }: {
   action: ActionView | undefined;
   caseId: string;
   onAdmitted: (document: UploadDocument) => void;
+  /** Hidden where the pack says the reason once for both its commands. */
+  reasonDisplay?: "inline" | "hidden";
 }) {
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -123,7 +126,7 @@ export function AdmitSources({
         onClick={action ? () => void submit() : undefined}
         busy={pending}
         variant="default"
-        reasonDisplay="inline"
+        reasonDisplay={reasonDisplay}
         aria-label="Admit sources"
       >
         {pending ? "Admitting…" : `Admit${files.length ? ` ${files.length}` : ""}`}

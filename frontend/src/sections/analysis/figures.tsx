@@ -773,21 +773,25 @@ export function Figures({
     () => (handoff.tables_unavailable_reason ? [] : figuresOf(handoff)),
     [handoff],
   );
+  // With no figures to head, what the host calculated is a caveat on the
+  // module, drawn as one -- not a loose line between its cards (brief 5).
   if (handoff.tables_unavailable_reason) {
     return (
-      <>
+      <div className="calc-caveat">
         <p className="note" data-tables-unavailable={handoff.tables_unavailable_reason}>
           This module&apos;s tables could not be read ({handoff.tables_unavailable_reason}), so it
           shows no figures. Its prose below is unaffected.
         </p>
         {calculation}
-      </>
+      </div>
     );
   }
   // Tables that draw nothing here (a comparator the key figures print) leave
   // no empty Figures heading behind.
   const catalysts = tableOf(handoff.tables, "cp2b.cp_model_catalysts")?.length ?? 0;
-  if (figures.length === 0 && catalysts === 0) return calculation;
+  if (figures.length === 0 && catalysts === 0) {
+    return <div className="calc-caveat">{calculation}</div>;
+  }
   return (
     <section className="figures" aria-labelledby="figures-heading" data-figures>
       <header className="grouphead">

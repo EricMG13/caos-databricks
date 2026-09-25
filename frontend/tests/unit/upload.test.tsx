@@ -345,6 +345,19 @@ describe("Upload", () => {
     expect(control).toHaveAccessibleDescription("Available once the actor holds WRITER standing.");
   });
 
+  test("the pack's two commands refused for one reason say it once", () => {
+    // Admit's reason under its button and Withdraw's over the table read one
+    // over the other, the same words twice (brief 5, Upload; 6.3).
+    const { container } = mount({ ...fixture, chrome: { ...fixture.chrome, actions: [] } });
+    const shared = container.querySelectorAll("[data-shared-refusal]");
+    expect(shared).toHaveLength(1);
+    expect(shared[0]).toHaveTextContent("Admit and withdraw: Not offered on this page yet.");
+    const admit = screen.getByRole("button", { name: "Admit sources" });
+    expect(admit).toHaveAttribute("data-refusal", "ACTION_UNPLACED");
+    expect(admit).toHaveAccessibleDescription("Not offered on this page yet.");
+    expect(document.getElementById(admit.getAttribute("aria-describedby")!)).toHaveClass("sr-only");
+  });
+
   test("an absent withdrawal action is ACTION_UNPLACED, and a click sends nothing", () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal("fetch", fetchSpy);

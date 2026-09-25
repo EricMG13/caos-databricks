@@ -7,6 +7,12 @@ import { useState } from "react";
 import { AdmitSources, refetchUpload } from "./AdmitSources";
 import { SetVersions } from "./SetVersions";
 import { SourcePack } from "./SourcePack";
+import {
+  ACTION_UNPLACED,
+  SharedRefusal,
+  drawnRefusal,
+  sharedRefusal,
+} from "@/controls/RefusedControl";
 import type { UploadDocument } from "@/wire/v1";
 
 export function UploadSection({ document }: { document: UploadDocument; tab: string | null }) {
@@ -26,6 +32,16 @@ export function UploadSection({ document }: { document: UploadDocument; tab: str
   const withdrawn = rows.filter((row) => row.withdrawn_at !== null).length;
   const admitAction = live.chrome.actions.find((a) => a.action === "ADMIT_SOURCES");
   const withdrawAction = live.chrome.actions.find((a) => a.action === "WITHDRAW_SOURCE");
+  // The pack's two commands, refused for one reason, say it once and each
+  // keeps it as its description (brief 5, Upload; 6.3). Withdraw counts only
+  // where a row could be withdrawn.
+  const withdrawable = rows.some((row) => row.withdrawn_at === null);
+  const packRefusal = withdrawable
+    ? sharedRefusal([
+        drawnRefusal(admitAction?.refusal ?? null, admitAction !== undefined),
+        withdrawAction ? withdrawAction.refusal : ACTION_UNPLACED,
+      ])
+    : null;
   // A withdrawal changes a row this section is already drawing, so the pack is
   // re-read whole rather than edited here: what a source's standing is now is
   // the server's answer, never this component's (invariant 1).
@@ -49,7 +65,13 @@ export function UploadSection({ document }: { document: UploadDocument; tab: str
             </span>
           </header>
           <div className="pb flush">
-            <AdmitSources action={admitAction} caseId={body.case_id} onAdmitted={setLive} />
+            <AdmitSources
+              action={admitAction}
+              caseId={body.case_id}
+              onAdmitted={setLive}
+              reasonDisplay={packRefusal ? "hidden" : "inline"}
+            />
+            {packRefusal ? <SharedRefusal refusal={packRefusal} lead="Admit and withdraw" /> : null}
             {rows.length ? (
               <SourcePack
                 rows={rows}
@@ -57,6 +79,7 @@ export function UploadSection({ document }: { document: UploadDocument; tab: str
                 action={withdrawAction}
                 caseId={body.case_id}
                 onWithdrawn={() => void reread()}
+                reasonSaid={packRefusal !== null}
               />
             ) : (
               <p className="pb note">The pack holds no source.</p>

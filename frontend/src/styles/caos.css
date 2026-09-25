@@ -160,6 +160,27 @@
   .pb:not(.flush) > .fld-hint + .composer {
     margin-top: 0.5rem;
   }
+  /* A card's caption at its foot: what the card's figures are, said once,
+     under a hairline and in the caption's size. */
+  .card-note {
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--hairline);
+    font-size: 0.75rem;
+    line-height: 1.5;
+    color: var(--muted-foreground);
+  }
+  .calc-caveat {
+    padding: 0.625rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    background: color-mix(in oklab, var(--muted) 40%, transparent);
+  }
+  .calc-caveat > .note {
+    margin: 0;
+  }
+  .calc-caveat > * + * {
+    margin-top: 0.5rem;
+  }
   .composer {
     border: 1px solid var(--input);
     border-radius: var(--radius-lg);
@@ -700,6 +721,21 @@
     height: 0.8125rem;
     color: var(--muted-foreground);
   }
+  /* A table row keeps its digest and control on one line; the table
+     scrolls rather than the row doubling its height. */
+  :is(td, th) .digest,
+  :is(td, th) .digest-copy {
+    flex-wrap: nowrap;
+  }
+  /* In a left-aligned cell the chip hangs into the left gutter instead, so
+     its digest lines up with the words above it. */
+  .l .digest {
+    justify-content: flex-start;
+  }
+  .l .digest-copy {
+    margin-right: 0;
+    margin-left: -0.375rem;
+  }
   .digest-said {
     font: 400 0.75rem var(--font-sans);
     color: var(--success);
@@ -1214,9 +1250,10 @@
   }
   /* A stamp, set once: a ruled box in the paper's green, turned a little as
      a hand would, and never animated. */
+  /* Beside the title, clear of the mast's rule it used to cross. */
   .paper-stamp {
     position: absolute;
-    top: 3.25rem;
+    top: 4.25rem;
     right: 2.25rem;
     margin: 0;
     padding: 0.25rem 0.75rem;
@@ -1727,8 +1764,10 @@
   .analysis .register li:last-child {
     border-bottom: 0;
   }
+  /* A filename is an id: mono and regular, lighter than the headings over
+     it; its pages and citation count carry the weight (brief 5, Analysis). */
   .analysis .register .nm {
-    font-weight: 600;
+    font: 400 0.8125rem var(--font-mono);
     overflow-wrap: anywhere;
   }
   .analysis .register .meta {
