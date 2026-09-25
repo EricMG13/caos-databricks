@@ -74,7 +74,12 @@ export function SiteHeader({
       </BreadcrumbList>
       <div className="ml-auto flex shrink-0 items-center gap-2">
         {ribbon.chips.map((chip, index) => (
-          <Badge key={index} variant={TONE_BADGE[chip.tone]} data-chip={chip.tone}>
+          <Badge
+            key={index}
+            variant={TONE_BADGE[chip.tone]}
+            className="header-chip"
+            data-chip={chip.tone}
+          >
             {chip.label}
           </Badge>
         ))}

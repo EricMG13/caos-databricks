@@ -3,7 +3,7 @@
 // figure; then what changed, what it means, what to do and on what evidence
 // (IA_SPEC.md 3). Every cell is composed from the document's own facts, and a
 // cell with nothing to say is not drawn (critique P1).
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState, type RefObject } from "react";
 import { SeverityMark, toneOf } from "./SeverityMark";
 import { sentence } from "./compose";
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,30 @@ const STATE_CELLS = [
   { key: "approval", label: "Approval" },
 ] as const;
 
+/** While the summary is on screen below the sticky header (3.5rem), the
+    page says so on its root (`data-summary-in-view`), and the header's
+    warning chips, which say what the verdict says, give way to it. Where
+    there is no observer the root is never marked and the chips stay. */
+function useInView(target: RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    const node = target.current;
+    if (!node || typeof IntersectionObserver === "undefined") return;
+    const root = document.documentElement;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) root.dataset["summaryInView"] = "";
+        else delete root.dataset["summaryInView"];
+      },
+      { rootMargin: "-56px 0px 0px 0px" },
+    );
+    observer.observe(node);
+    return () => {
+      observer.disconnect();
+      delete root.dataset["summaryInView"];
+    };
+  }, [target]);
+}
+
 export function SectionSummary({
   verdict,
   brief,
@@ -51,8 +75,11 @@ export function SectionSummary({
   const [opened, setOpened] = useState(false);
   const briefId = useId();
   const briefShown = cells.length > 0 && (!compact || opened);
+  const self = useRef<HTMLElement>(null);
+  useInView(self);
   return (
     <section
+      ref={self}
       aria-label="Summary"
       className="overflow-hidden rounded-xl bg-card text-card-foreground ring-1 ring-foreground/10"
       data-summary

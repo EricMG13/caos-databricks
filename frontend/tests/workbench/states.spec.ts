@@ -39,7 +39,11 @@ test("a typed refusal shows its code and what clears it", async ({ page }) => {
 
 test("partial renders through warning status with its notes and the body", async ({ page }) => {
   await page.goto(`/analysis/?case=${CASE}&fixture=partial`);
-  await expect(page.locator("main#body [data-surface-state='partial']")).toBeVisible();
+  // Said once, in the summary: its verdict and its notes (brief 6.2); the
+  // region draws the document rather than a third telling of the warning.
+  const summary = page.locator("main#body [data-summary]");
+  await expect(summary).toContainText("Partial");
+  await expect(page.locator("main#body [data-surface-state='partial']")).toHaveCount(0);
   await expect(page.locator("[data-handoff]").first()).toBeVisible();
   await expect(page.locator("[data-pending-node]").first()).toBeVisible();
 });

@@ -169,6 +169,13 @@ export function BookSection({ document }: { document: BookDocument; tab: string 
                     <tr key={row.case_id} data-case={row.case_id}>
                       <th scope="row" className="l wrap">
                         {row.title}
+                        {/* A credit with no period here is one fact about the
+                            row, said once beside its name (brief 5, Book). */}
+                        {period ? null : (
+                          <span className="tag ml-2" data-row-not-served>
+                            Not served
+                          </span>
+                        )}
                         <div className="lbl">
                           {row.snapshot ? <Digest value={row.snapshot} /> : reasonOf(row)}
                         </div>
@@ -200,8 +207,13 @@ export function BookSection({ document }: { document: BookDocument; tab: string 
                                 selected={selected === `${row.case_id}|${key}|${column.key}`}
                                 onSelect={(opener) => select(row, column, key, opener)}
                               />
-                            ) : (
+                            ) : period ? (
                               <span className="tag">Not served</span>
+                            ) : (
+                              <span className="m">
+                                <span aria-hidden="true">—</span>
+                                <span className="sr-only">Not served</span>
+                              </span>
                             )}
                           </td>
                         );

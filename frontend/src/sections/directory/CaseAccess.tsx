@@ -8,7 +8,7 @@
 // document, which is what says the membership changed.
 import { useState } from "react";
 import { grantStanding, revokeStanding } from "@/app/commands";
-import { words } from "@/chrome/compose";
+import { sentence } from "@/chrome/compose";
 import { ConfirmedControl } from "@/controls/ConfirmedControl";
 import { RefusedControl } from "@/controls/RefusedControl";
 import { Input } from "@/components/ui/input";
@@ -145,7 +145,7 @@ function CaseMembers({ row, onChanged }: { row: CaseRow; onChanged: () => void }
         <span className="nm">{row.title}</span>{" "}
         <span className="m">
           {row.members === null
-            ? `your standing: ${words(row.standing)}`
+            ? `Your standing · ${sentence(row.standing)}`
             : `${row.members.length} ${row.members.length === 1 ? "member" : "members"}`}
         </span>
       </summary>

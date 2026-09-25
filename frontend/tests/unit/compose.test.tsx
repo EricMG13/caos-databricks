@@ -3,7 +3,8 @@
 // the headline figure, and a cell with nothing to say is not drawn.
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { fireEvent, render } from "@testing-library/react";
+import { act, fireEvent, render } from "@testing-library/react";
+import { vi } from "vitest";
 import { MemoryRouter } from "react-router";
 import { SectionSummary, headlineOf } from "@/chrome/SectionSummary";
 import { SectionTabs } from "@/chrome/SectionTabs";
@@ -185,6 +186,45 @@ test("a brief cell with nothing to say is not drawn, and an empty brief draws no
   );
   expect(container.querySelector("[data-brief]")).toBeNull();
   expect(container.querySelector("[data-headline]")).toBeNull();
+});
+
+// The header's warning chips said what the verdict says, on every section:
+// the summary marks the page while it is in view, and CSS lets the chips
+// give way to it until it scrolls away (brief 6.2).
+test("the summary marks the page while it is in view, and unmarks it when it goes", () => {
+  let report: (entries: { isIntersecting: boolean }[]) => void = () => {};
+  const disconnect = vi.fn();
+  vi.stubGlobal(
+    "IntersectionObserver",
+    class {
+      constructor(callback: typeof report) {
+        report = callback;
+      }
+      observe() {}
+      disconnect = disconnect;
+    },
+  );
+  try {
+    const verdict = {
+      severity: "WARNING" as const,
+      conclusion: "Partial · 3 credits.",
+      blocked_on: null,
+    };
+    const quiet = { chips: [], execution: null, persistence: null, approval: null, actions: [] };
+    const brief = { change: null, impact: null, action: null, evidence: null, headline: null };
+    const { unmount } = render(<SectionSummary verdict={verdict} ribbon={quiet} brief={brief} />);
+    const root = document.documentElement;
+    act(() => report([{ isIntersecting: true }]));
+    expect(root).toHaveAttribute("data-summary-in-view");
+    act(() => report([{ isIntersecting: false }]));
+    expect(root).not.toHaveAttribute("data-summary-in-view");
+    act(() => report([{ isIntersecting: true }]));
+    unmount();
+    expect(disconnect).toHaveBeenCalled();
+    expect(root).not.toHaveAttribute("data-summary-in-view");
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });
 
 test("a compact summary is one line, its brief on request", () => {

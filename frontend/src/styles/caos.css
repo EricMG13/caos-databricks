@@ -461,6 +461,17 @@
     color: var(--muted-foreground);
     overflow-wrap: anywhere;
   }
+  /* A case's latest run on one line: its state, its route, its set. */
+  table.reg td .latest-run {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.375rem;
+  }
+  table.reg td .latest-run .sub {
+    display: inline;
+    margin-top: 0;
+  }
   /* The state cell is shape and word, never hue alone. */
   table.reg td .state,
   .revstate {
@@ -2541,5 +2552,16 @@
   }
   .drawer ul.register .meta .tag {
     margin-right: 0.375rem;
+  }
+}
+
+/* The header's warning chips say what the summary's verdict says: while the
+   summary is on screen they give way to it (SectionSummary.tsx), and carry
+   the warning once it scrolls away. A phone always shows them, its summary
+   being below the fold. Outside the layer, so a badge's own display utility
+   cannot win over it. */
+@media (min-width: 48rem) {
+  :root[data-summary-in-view] .header-chip {
+    display: none;
   }
 }

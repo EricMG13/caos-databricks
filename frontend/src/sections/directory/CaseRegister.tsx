@@ -24,8 +24,9 @@ function LatestRunCell({ run }: { run: RunSummary | null }) {
   // A parked run reads RUNNING on the wire; the register says it is not moving.
   const parked = isParked(run);
   const severity = parked ? "WARNING" : RUN_SEVERITY[run.status];
+  // One line: the state, then the route and set it ran on (brief 5, Directory).
   return (
-    <span className="m">
+    <span className="m latest-run">
       <Badge variant={SEVERITY_BADGE[severity]} className="gap-1.5">
         <SeverityMark severity={severity} decorative />
         {parked ? "Parked" : sentence(run.status)}

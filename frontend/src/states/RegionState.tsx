@@ -146,26 +146,9 @@ export function RegionState<D>({
         </>
       );
     case "partial":
-      return (
-        <>
-          <SurfaceState
-            kind="partial"
-            detail={
-              status.notes.length ? (
-                <>
-                  {status.notes.map((note) => (
-                    <span key={note} className="block">
-                      {note}
-                    </span>
-                  ))}
-                </>
-              ) : (
-                "Rendered with warning status."
-              )
-            }
-          />
-          {children(status.document)}
-        </>
-      );
+      // Said once (brief 6.2): the summary above carries "Partial · …" in
+      // its verdict and the notes in its Evidence cell, so the region draws
+      // the document, not a third telling of the same warning.
+      return children(status.document);
   }
 }

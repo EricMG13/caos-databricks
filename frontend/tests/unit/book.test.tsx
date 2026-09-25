@@ -51,6 +51,13 @@ describe("the book", () => {
     expect(row).toHaveTextContent("NO_ACCEPTED_FORECAST");
     expect(row).toHaveTextContent("the run ended BLOCKED");
     expect(within(row).queryAllByRole("button")).toEqual([]);
+    // One fact about the row, said once beside its name, not a chip per cell;
+    // each empty cell still says it to a screen reader (brief 5, Book).
+    expect(row.querySelectorAll("[data-row-not-served]")).toHaveLength(1);
+    expect(row.querySelectorAll("td .tag")).toHaveLength(0);
+    for (const cell of row.querySelectorAll("td.num")) {
+      expect(cell.querySelector(".sr-only")).toHaveTextContent("Not served");
+    }
   });
 
   test("selecting a cell opens the passport with its ten fields", () => {
