@@ -812,28 +812,35 @@ def test_a_cached_caller_is_served_while_a_cold_burst_waits(
     while not server.started:
         time.sleep(0.01)
 
-    def read(token: str) -> float:
+    def read(http: httpx.Client, token: str) -> float:
         started = time.monotonic()
-        with httpx.Client(base_url=base, timeout=30) as http:
-            http.get(
-                "/api/v1/directory",
-                headers={
-                    "x-forwarded-access-token": token,
-                    "sec-fetch-site": "same-origin",
-                },
-            )
+        http.get(
+            "/api/v1/directory",
+            headers={
+                "x-forwarded-access-token": token,
+                "sec-fetch-site": "same-origin",
+            },
+        )
         return time.monotonic() - started
 
+    # Every client is built before any clock starts: building one reads the CA
+    # bundle into a TLS context, 0.07 s alone but 1.5 s while forty-five are
+    # built at once on one host, which timed the test's own clients rather
+    # than the server's answer to the cached caller.
+    # Each request still opens a connection of its own, as before.
+    warm, cached, *cold = (httpx.Client(base_url=base, timeout=30) for _ in range(47))
     try:
-        read("cached")
-        burst = [threading.Thread(target=read, args=("slow",)) for _ in range(45)]
+        read(warm, "cached")
+        burst = [threading.Thread(target=read, args=(one, "slow")) for one in cold]
         for one in burst:
             one.start()
         time.sleep(0.5)
-        during = read("cached")
+        during = read(cached, "cached")
         for one in burst:
             one.join(30)
     finally:
+        for client in (warm, cached, *cold):
+            client.close()
         server.should_exit = True
         thread.join(10)
         listener.close()
