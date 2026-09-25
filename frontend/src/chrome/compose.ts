@@ -149,7 +149,7 @@ function upload(document: UploadDocument): Facts {
     verdict: withdrawn
       ? verdict(
           "WARNING",
-          `${plural(withdrawn, "withdrawn source")} stay cited where they were used.`,
+          `${plural(withdrawn, "withdrawn source")} ${noun(withdrawn, "stays", "stay")} cited where ${noun(withdrawn, "it was", "they were")} used.`,
         )
       : verdict("IDLE", `${plural(admitted, "source")} admitted.`),
   };

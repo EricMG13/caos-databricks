@@ -1294,6 +1294,31 @@ describe("Run", () => {
     expect(none.querySelector("[data-stop-code]")).toBeNull();
   });
 
+  // Start, Retry and Cancel refused for one reason said it three times, once
+  // under each; the card says it once and each control keeps it as its
+  // description (brief 6.3).
+  test("test_work_controls_refused_for_one_reason_say_it_once", () => {
+    const { container } = mount(running);
+    const panel = container.querySelector("[data-work-controls]")!;
+    const shared = panel.querySelectorAll("[data-shared-refusal]");
+    expect(shared).toHaveLength(1);
+    expect(shared[0]).toHaveTextContent("Not offered on this page yet.");
+    for (const action of ["START_RUN", "RETRY_RUN", "CANCEL_RUN"]) {
+      const control = panel.querySelector(`button[data-action="${action}"]`)!;
+      expect(control).toHaveAttribute("aria-disabled", "true");
+      expect(control).toHaveAccessibleDescription("Not offered on this page yet.");
+    }
+    expect(panel.querySelectorAll(".mt-1.block")).toHaveLength(0);
+
+    const differing = withActions(running, [
+      { action: "START_RUN", refusal: { code: "RUN_ALREADY_STARTED", clears: "never" } },
+    ]);
+    const { container: mixed } = mount(differing);
+    expect(
+      mixed.querySelector("[data-work-controls]")!.querySelector("[data-shared-refusal]"),
+    ).toBeNull();
+  });
+
   test("test_the_preview_text_is_shown_exactly_before_approval", async () => {
     const run = routeNotPinned.body.run!;
     const CONTENT = "RESEARCH PLAN PREVIEW\n\n  - line with leading spaces\n  - and a second\n";

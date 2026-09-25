@@ -14,15 +14,17 @@ export function SetVersions({ versions }: { versions: SetVersion[] }) {
         <h2 id="set-versions-heading">Set versions</h2>
         <span className="cp">Immutable</span>
         <span className="right">
-          <span className="tag">{versions.length} versions</span>
+          <span className="tag">
+            {versions.length} {versions.length === 1 ? "version" : "versions"}
+          </span>
         </span>
       </header>
       <div className="pb flush">
         {versions.map((version) => (
           <div key={version.version} className="setrow" data-set-version={version.version}>
-            <span className="nm">{version.version}</span>
+            <span className="nm">Version {version.version}</span>
             <span className="mt">
-              {version.member_count} sources ·{" "}
+              {version.member_count} {version.member_count === 1 ? "source" : "sources"} ·{" "}
               <code title={version.fingerprint}>{version.fingerprint.slice(0, 12)}</code>
             </span>
           </div>

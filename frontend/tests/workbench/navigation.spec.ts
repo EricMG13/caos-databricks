@@ -77,12 +77,13 @@ test("demo Model, Report, and Committee routes render parsed v1 content", async 
   );
   await expect(page.locator("[data-committee-v1]")).toBeVisible();
   await expect(page.locator("[data-committee-filing]")).toHaveAttribute("data-state", "filed");
-  // Read only: no field, and the one kind of button is a narrative figure's
-  // chip, which opens its source page (N59) with its hidden line marked (N27).
+  // Read only: no field, and the buttons are a narrative figure's chip, which
+  // opens its source page (N59) with its hidden line marked (N27), an
+  // artifact's view tabs, and a digest's copy chip, which changes nothing.
   await expect(page.locator("[data-committee-v1] input")).toHaveCount(0);
   await expect(
     page.locator(
-      "[data-committee-v1] button:not([data-figure-chip]):not([data-artifact-view-tab])",
+      "[data-committee-v1] button:not([data-figure-chip]):not([data-artifact-view-tab]):not([data-digest-copy])",
     ),
   ).toHaveCount(0);
   await page.locator("[data-figure-chip]").click();

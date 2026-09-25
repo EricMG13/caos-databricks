@@ -16,6 +16,7 @@ import {
   parseModelDocument,
   parseReportDocument,
   parseRunSectionDocument,
+  parseUploadDocument,
 } from "@/wire/v1";
 
 const load = (name: string) =>
@@ -54,6 +55,21 @@ test("Run names what it waits on: an open gate, else a module held at its gate",
   expect(chrome.brief.impact).toBe("1 module restricted.");
   expect(chrome.verdict.conclusion).toBe("In progress · CP-6 at its gate");
   expect(chrome.verdict.severity).toBe("RUNNING");
+});
+
+test("Upload's verdict agrees with its count of withdrawn sources", () => {
+  const fixture = load("upload.json");
+  const one = composeChrome("upload", parseUploadDocument(fixture));
+  expect(one.verdict.conclusion).toBe("1 withdrawn source stays cited where it was used.");
+  const [first] = fixture.body.sources;
+  const withdrawnAt = fixture.body.sources.find(
+    (row: { withdrawn_at: string | null }) => row.withdrawn_at,
+  ).withdrawn_at;
+  const two = { ...fixture, body: { ...fixture.body } };
+  two.body.sources = [{ ...first, withdrawn_at: withdrawnAt }, ...fixture.body.sources.slice(1)];
+  expect(composeChrome("upload", parseUploadDocument(two)).verdict.conclusion).toBe(
+    "2 withdrawn sources stay cited where they were used.",
+  );
 });
 
 test("Report says how far the shown revision has gone and what comes next", () => {

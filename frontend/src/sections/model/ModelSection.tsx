@@ -4,6 +4,7 @@ import { LineChart, type ChartSeries } from "@/charts";
 import { NoteList } from "@/ds/atoms";
 import type { ModelDocument } from "@/wire/v1";
 import { displayDecimal } from "@/ds/format";
+import { Digest } from "@/ds/Digest";
 
 type Forecast = NonNullable<ModelDocument["body"]["forecast"]>;
 type ForecastValue = Forecast["periods"][number]["values"][number];
@@ -99,9 +100,13 @@ export function ModelSection({ document }: { document: ModelDocument; tab: strin
               <time dateTime={forecast.accepted_at}>{forecast.accepted_at}</time>
             </dd>
             <dt>Artifact</dt>
-            <dd>sha256:{forecast.artifact_sha256}</dd>
+            <dd>
+              <Digest value={forecast.artifact_sha256} prefix="sha256:" />
+            </dd>
             <dt>Record</dt>
-            <dd>sha256:{forecast.record_sha256}</dd>
+            <dd>
+              <Digest value={forecast.record_sha256} prefix="sha256:" />
+            </dd>
             <dt>QA</dt>
             <dd data-qa-status>{forecast.qa_status}</dd>
             <dt>Units</dt>

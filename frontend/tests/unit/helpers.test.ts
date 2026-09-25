@@ -8,7 +8,13 @@ import { sectionPath } from "@/app/sections";
 import { OFFLINE_WORDING, UNAVAILABLE_WORDING } from "@/app/transport";
 import { toneOf } from "@/chrome/SeverityMark";
 import { fallbackChrome } from "@/chrome/fallback";
-import { ACTION_UNPLACED, refusalDetail, refusalText } from "@/controls/RefusedControl";
+import {
+  ACTION_UNPLACED,
+  drawnRefusal,
+  refusalDetail,
+  refusalText,
+  sharedRefusal,
+} from "@/controls/RefusedControl";
 import { scrollArtifact } from "@/controls/scroll";
 import { regionSentence } from "@/states/RegionState";
 import { displayDecimal, hundredfold, shortDigest, stamp } from "@/ds/format";
@@ -57,6 +63,22 @@ describe("the wire contract and the states around it", () => {
     expect(refusalText({ code: "NOT_AUTHENTICATED", clears: "Sign in." })).toBe("Sign in.");
     // The workspace's own refusals have their sentence.
     expect(refusalText(ACTION_UNPLACED)).toBe("Not offered on this page yet.");
+  });
+
+  it("names the refusal a control is drawn with, and the one a group shares (brief 6.3)", () => {
+    const withdrawn = { code: "SOURCE_ALREADY_WITHDRAWN", clears: "it is re-admitted" };
+    // Its own refusal wins; else nothing to perform it is ACTION_UNPLACED; else live.
+    expect(drawnRefusal(withdrawn, true)).toBe(withdrawn);
+    expect(drawnRefusal(null, false)).toBe(ACTION_UNPLACED);
+    expect(drawnRefusal(null, true)).toBeNull();
+    // Shared only when two or more are all refused for the same words.
+    expect(sharedRefusal([ACTION_UNPLACED, ACTION_UNPLACED, ACTION_UNPLACED])).toBe(
+      ACTION_UNPLACED,
+    );
+    expect(sharedRefusal([ACTION_UNPLACED])).toBeNull();
+    expect(sharedRefusal([ACTION_UNPLACED, null])).toBeNull();
+    expect(sharedRefusal([ACTION_UNPLACED, withdrawn])).toBeNull();
+    expect(sharedRefusal([])).toBeNull();
   });
 
   test("fallback chrome carries the state and invents no subject, action or role", () => {

@@ -4,10 +4,10 @@ import { buttonVariants } from "@/components/ui/button";
 import { RefusedControl } from "@/controls/RefusedControl";
 import { ArtifactTexts } from "@/ds/ArtifactMarkdown";
 import { NoteList } from "@/ds/atoms";
-import { shortDigest } from "@/ds/format";
 import { Narrative } from "@/evidence/Narrative";
 import type { Refusal } from "@/wire";
 import type { CommitteeDocument } from "@/wire/v1";
+import { Digest } from "@/ds/Digest";
 
 /** The package is the filed revision's: a frozen one has none to download. */
 const PACKAGE_NOT_FILED: Refusal = {
@@ -76,9 +76,13 @@ function Artifact({ artifact }: { artifact: CommitteeDocument["body"]["artifacts
       <div className="pb">
         <dl className="kv">
           <dt>Artifact</dt>
-          <dd>sha256:{artifact.artifact_sha256}</dd>
+          <dd>
+            <Digest value={artifact.artifact_sha256} prefix="sha256:" />
+          </dd>
           <dt>Record</dt>
-          <dd>sha256:{artifact.record_sha256}</dd>
+          <dd>
+            <Digest value={artifact.record_sha256} prefix="sha256:" />
+          </dd>
           <dt>Scope</dt>
           <dd>{artifact.decision_scope}</dd>
         </dl>
@@ -107,46 +111,65 @@ function Filing({ document }: { document: CommitteeDocument }) {
       <div className="pb">
         <dl className="kv">
           <dt>Signers</dt>
-          <dd>{body.signed_by.join(", ")}</dd>
+          <dd>
+            {body.signed_by.map((signer, index) => (
+              <span key={`${signer}-${index}`}>
+                {index ? ", " : null}
+                <Digest value={signer} />
+              </span>
+            ))}
+          </dd>
           <dt>Frozen by</dt>
-          <dd>{body.frozen_by}</dd>
+          <dd>
+            <Digest value={body.frozen_by} />
+          </dd>
           <dt>Filed by</dt>
-          <dd>{body.filed_by ?? "—"}</dd>
+          <dd>
+            <Digest value={body.filed_by} />
+          </dd>
         </dl>
         {receipt ? (
           <dl className="kv" data-committee-receipt>
             <dt>Receipt case</dt>
-            <dd>{receipt.case_id}</dd>
+            <dd>
+              <Digest value={receipt.case_id} />
+            </dd>
             <dt>Receipt run</dt>
-            <dd>{receipt.run_id}</dd>
+            <dd>
+              <Digest value={receipt.run_id} />
+            </dd>
             <dt>Receipt revision</dt>
-            <dd>{receipt.revision_id}</dd>
+            <dd>
+              <Digest value={receipt.revision_id} />
+            </dd>
             <dt>Receipt payload</dt>
-            <dd>sha256:{receipt.payload_sha256}</dd>
+            <dd>
+              <Digest value={receipt.payload_sha256} prefix="sha256:" />
+            </dd>
             <dt>Receipt signer</dt>
-            <dd>{receipt.signed_by}</dd>
+            <dd>
+              <Digest value={receipt.signed_by} />
+            </dd>
             <dt>Receipt freezer</dt>
-            <dd>{receipt.frozen_by}</dd>
+            <dd>
+              <Digest value={receipt.frozen_by} />
+            </dd>
             <dt>Receipt filer</dt>
-            <dd>{receipt.filed_by}</dd>
+            <dd>
+              <Digest value={receipt.filed_by} />
+            </dd>
             <dt>Renderer</dt>
-            <dd>sha256:{receipt.renderer_sha256}</dd>
+            <dd>
+              <Digest value={receipt.renderer_sha256} prefix="sha256:" />
+            </dd>
             <dt>Filed event</dt>
-            <dd>sha256:{receipt.filed_event_sha256}</dd>
+            <dd>
+              <Digest value={receipt.filed_event_sha256} prefix="sha256:" />
+            </dd>
           </dl>
         ) : null}
       </div>
     </section>
-  );
-}
-
-/** An id or digest short on the page, whole in its title. */
-function Short({ value, prefix = "" }: { value: string; prefix?: string }) {
-  return (
-    <span className="font-mono" title={`${prefix}${value}`}>
-      {prefix}
-      {shortDigest(value)}
-    </span>
   );
 }
 
@@ -160,12 +183,13 @@ function Paper({ body }: { body: CommitteeDocument["body"] }) {
     <article className="paper" data-paper aria-labelledby="paper-title">
       <header className="paper-mast">
         <span>Credit committee paper</span>
-        <Short value={body.case_id} />
+        <Digest value={body.case_id} copy={false} />
       </header>
       <p className="paper-stamp">Filed</p>
       <h2 id="paper-title">{body.case_title}</h2>
       <p className="paper-sub">
-        Revision <Short value={body.revision_id} /> · run <Short value={body.displayed_run_id} />
+        Revision <Digest value={body.revision_id} copy={false} /> · run{" "}
+        <Digest value={body.displayed_run_id} copy={false} />
       </p>
       <h3>Narrative</h3>
       <div className="paper-body" data-committee-narrative>
@@ -177,29 +201,30 @@ function Paper({ body }: { body: CommitteeDocument["body"] }) {
           {body.signed_by.map((signer, index) => (
             <span key={`${signer}-${index}`}>
               {index ? ", " : null}
-              <Short value={signer} />
+              <Digest value={signer} copy={false} />
             </span>
           ))}
         </dd>
         <dt>Frozen by</dt>
         <dd>
-          <Short value={body.frozen_by} />
+          <Digest value={body.frozen_by} copy={false} />
         </dd>
         {body.filed_by ? (
           <>
             <dt>Filed by</dt>
             <dd>
-              <Short value={body.filed_by} />
+              <Digest value={body.filed_by} copy={false} />
             </dd>
           </>
         ) : null}
       </dl>
       <footer className="paper-filed">
-        Payload <Short value={body.payload_sha256} prefix="sha256:" />
+        Payload <Digest value={body.payload_sha256} prefix="sha256:" copy={false} />
         {receipt ? (
           <>
             {" "}
-            · filed event <Short value={receipt.filed_event_sha256} prefix="sha256:" />
+            · filed event{" "}
+            <Digest value={receipt.filed_event_sha256} prefix="sha256:" copy={false} />
           </>
         ) : null}
       </footer>

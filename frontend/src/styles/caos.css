@@ -505,6 +505,8 @@
   .kv {
     display: grid;
     grid-template-columns: auto 1fr;
+    /* A label sits on its value's line, a copy chip's included. */
+    align-items: baseline;
     gap: 0.375rem 1rem;
     margin: 0;
     font-size: 0.875rem;
@@ -528,6 +530,45 @@
   .kv dd.wrap,
   .kv dd.prose {
     font: 400 0.875rem var(--font-sans);
+  }
+  /* An id or digest (ds/Digest.tsx): short, mono, one press to copy. */
+  /* In a narrow value column the prefix, the digest and the control each take
+     a line of their own rather than running past the card (320px reflow). */
+  .digest {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.25rem;
+    font: 400 0.8125rem var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+  .digest-copy {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.25rem;
+    min-height: 1.5rem;
+    padding: 0 0.375rem;
+    margin-right: -0.375rem;
+    border-radius: var(--radius-sm);
+    font: inherit;
+    color: var(--foreground);
+    text-align: inherit;
+    transition: background-color 150ms var(--ease-out);
+  }
+  .digest-copy:hover {
+    background: var(--accent);
+  }
+  .digest-copy svg {
+    width: 0.8125rem;
+    height: 0.8125rem;
+    color: var(--muted-foreground);
+  }
+  .digest-said {
+    font: 400 0.75rem var(--font-sans);
+    color: var(--success);
   }
   .note {
     font-size: 0.875rem;
@@ -1076,6 +1117,11 @@
     font-size: 0.75rem;
     color: var(--paper-note);
     overflow-wrap: anywhere;
+  }
+  /* The paper quotes its ids in its own size, inline in its lines. */
+  .paper .digest {
+    display: inline;
+    font-size: inherit;
   }
   @media (max-width: 40rem) {
     .paper {

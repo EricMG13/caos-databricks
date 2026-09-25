@@ -7,7 +7,7 @@
 import { WithdrawSource } from "./WithdrawSource";
 import { stamp } from "@/ds/format";
 import type { ActionView, SourceRow } from "@/wire/v1";
-import { ACTION_UNPLACED, refusalDetail, refusalText } from "@/controls/RefusedControl";
+import { ACTION_UNPLACED, SharedRefusal } from "@/controls/RefusedControl";
 
 /** The clock part alone: `14:30Z`. */
 export function clock(iso: string): string {
@@ -134,9 +134,7 @@ export function SourcePack({
   return (
     <>
       {refused && rows.some((row) => !row.withdrawn_at) ? (
-        <p className="note" data-shared-refusal={refused.code} title={refusalDetail(refused)}>
-          Withdraw: {refusalText(refused)}
-        </p>
+        <SharedRefusal refusal={refused} lead="Withdraw" />
       ) : null}
       <div className="tscroll" tabIndex={0} role="region" aria-label="Admitted source rows">
         <table className="reg" data-source-pack>

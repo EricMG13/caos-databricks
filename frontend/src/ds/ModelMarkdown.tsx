@@ -1,7 +1,8 @@
 // The model's Markdown drawn as React elements (D60): the blocks `markdown.ts`
 // reads, each authored character a text node. Nothing here writes HTML, so
 // the page holds under the CSP's Trusted Types whatever the model wrote.
-import { Fragment, createContext, useContext, type ReactNode } from "react";
+import * as React from "react";
+import { createContext, useContext, type ReactNode } from "react";
 import { plainHead } from "./format";
 import {
   readInline,
@@ -28,7 +29,7 @@ function WithRefs({ text }: { text: string }) {
     ) : (
       <span key={index} className="md-refs" data-refs={piece.text}>
         {piece.refs.map((ref, at) => (
-          <Fragment key={at}>{link(ref)}</Fragment>
+          <React.Fragment key={at}>{link(ref)}</React.Fragment>
         ))}
       </span>
     ),

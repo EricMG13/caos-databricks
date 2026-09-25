@@ -16,6 +16,15 @@ import type { NodeView, RunView } from "@/wire/v1";
 // 128 x 76; at 62 tall the second reason line was cut through the middle. Both
 // sizes are set on each node and stage header here, not in caos.css, so each
 // is one number.
+/** The stage `caos/graph/route.py` appends the host's CP-CF extension at
+    (`MODEL_STAGE`); on the canvas it is named, not numbered. */
+const MODEL_STAGE = 100;
+
+/** A stage column's heading: "Stage n" for the bundle's, a word for the host's. */
+export function stageLabel(stage: number): string {
+  return stage === MODEL_STAGE ? "Extension" : `Stage ${stage}`;
+}
+
 export const NODE_W = 152;
 export const NODE_H = 92;
 export const COL_GAP = 40;
@@ -220,9 +229,9 @@ export function RouteGraph({
               key={column.stage}
               className="stagehdr"
               style={{ left: column.x, width: NODE_W }}
-              title={`Stage ${column.stage}`}
+              title={stageLabel(column.stage)}
             >
-              {`Stage ${column.stage}`}
+              {stageLabel(column.stage)}
             </span>
           ))}
           {nodes.map((node) => {

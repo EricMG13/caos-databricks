@@ -70,7 +70,7 @@ export function RefusedControl({
   children: ReactNode;
   "aria-label"?: string;
 } & ControlLook) {
-  const effective = refusal ?? (onClick ? null : ACTION_UNPLACED);
+  const effective = drawnRefusal(refusal, onClick !== undefined);
   return (
     <ActionReason
       reason={effective ? refusalText(effective) : null}
@@ -86,6 +86,33 @@ export function RefusedControl({
     >
       {children}
     </ActionReason>
+  );
+}
+
+/** What a control resolves to when drawn: its own refusal, else
+    `ACTION_UNPLACED` when nothing would perform it, else live (null). */
+export function drawnRefusal(refusal: Refusal | null, live: boolean): Refusal | null {
+  return refusal ?? (live ? null : ACTION_UNPLACED);
+}
+
+/** The one refusal a group of controls shares, or null: two or more, every
+    one refused, all for the same reason in the reader's words. Such a group
+    says it once and each control keeps it as its description (brief 6.3). */
+export function sharedRefusal(refusals: readonly (Refusal | null)[]): Refusal | null {
+  const [first, ...rest] = refusals;
+  if (!first || rest.length === 0) return null;
+  const text = refusalText(first);
+  return rest.every((refusal) => refusal !== null && refusalText(refusal) === text) ? first : null;
+}
+
+/** A shared refusal said once, beside the controls it covers, whose own
+    reason lines are then hidden (`reasonDisplay="hidden"`). */
+export function SharedRefusal({ refusal, lead }: { refusal: Refusal; lead?: string }) {
+  return (
+    <p className="note" data-shared-refusal={refusal.code} title={refusalDetail(refusal)}>
+      {lead ? `${lead}: ` : ""}
+      {refusalText(refusal)}
+    </p>
   );
 }
 

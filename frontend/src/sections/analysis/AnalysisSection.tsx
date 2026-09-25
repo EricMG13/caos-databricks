@@ -300,9 +300,11 @@ function PendingList({
             ? `the run ended ${runStatus}${blockedBy ? ` on ${blockedBy.module_id}` : ""}`
             : "not yet accepted"}
         </span>
-        <span className="right">
-          <span className="tag">{pending.length}</span>
-        </span>
+        {pending.length ? (
+          <span className="right">
+            <span className="tag">{pending.length}</span>
+          </span>
+        ) : null}
       </header>
       {pending.length === 0 ? (
         <div className="pb note">Every pinned node on this run has been accepted.</div>

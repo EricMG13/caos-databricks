@@ -25,6 +25,7 @@ import { NODE_SEVERITY } from "@/sections/analysis/tone";
 import { useAnnouncer } from "@/states/Announcer";
 import type { NodeState } from "@/wire";
 import type { RunSectionDocument } from "@/wire/v1";
+import { Digest } from "@/ds/Digest";
 
 const STATES: NodeState[] = ["COMPLETE", "RUNNABLE", "RESTRICTED", "BLOCKED"];
 const GATE_LABEL: Record<GateView["gate"], string> = {
@@ -123,7 +124,7 @@ export function RunSection({ document }: { document: RunSectionDocument; tab: st
           <section className="pnl" data-run-selector>
             <header>
               <h2>Runs</h2>
-              <span className="cp">displayed and latest are named separately</span>
+              <span className="cp">{body.runs.length} on this case</span>
             </header>
             <div className="pb flush">
               {body.runs.map((summary) => {
@@ -288,7 +289,7 @@ export function RunSection({ document }: { document: RunSectionDocument; tab: st
         <section className="pnl">
           <header>
             <h2>Run</h2>
-            <span className="cp">{run.run_id}</span>
+            <Digest value={run.run_id} />
           </header>
           <div className="pb">
             <dl className="kv">

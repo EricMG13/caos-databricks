@@ -286,6 +286,9 @@
     scrollbar-color: color-mix(in oklab, var(--foreground) 22%, transparent) transparent;
     accent-color: var(--primary);
     caret-color: var(--info);
+    /* The sticky header is 3.5rem (h-14): scrolling to a focused control
+       stops below it, never under it (WCAG 2.4.11, 2.5.8). */
+    scroll-padding-top: 3.5rem;
   }
   body {
     @apply bg-background text-sm text-foreground;

@@ -33,7 +33,13 @@ import { OFFLINE_WORDING } from "@/app/transport";
 import { sentence } from "@/chrome/compose";
 import { fetchSection } from "@/app/transport";
 import { ConfirmedControl } from "@/controls/ConfirmedControl";
-import { RefusalNote, RefusedControl } from "@/controls/RefusedControl";
+import {
+  RefusalNote,
+  RefusedControl,
+  SharedRefusal,
+  drawnRefusal,
+  sharedRefusal,
+} from "@/controls/RefusedControl";
 import { useAnnouncer } from "@/states/Announcer";
 import type {
   ActionView,
@@ -850,6 +856,13 @@ export function WorkControls({
     ? (retryAction.refusal ?? (fingerprint ? null : NO_FINGERPRINT))
     : null;
   const cancelRefusal = cancelAction ? cancelAction.refusal : null;
+  // Three controls refused for one reason say it once, under the row.
+  const shared = sharedRefusal([
+    drawnRefusal(startRefusal, Boolean(startAction && fingerprint)),
+    drawnRefusal(retryRefusal, Boolean(retryAction && fingerprint)),
+    drawnRefusal(cancelRefusal, Boolean(cancelAction)),
+  ]);
+  const reasonDisplay = shared ? "hidden" : "inline";
   return (
     <section className="pnl" data-work-controls>
       <header>
@@ -863,6 +876,7 @@ export function WorkControls({
               refusal={startRefusal}
               busy={start.pending}
               variant="default"
+              reasonDisplay={reasonDisplay}
               data-action="START_RUN"
               onClick={
                 startAction && fingerprint
@@ -885,6 +899,7 @@ export function WorkControls({
             <RefusedControl
               refusal={retryRefusal}
               busy={retry.pending}
+              reasonDisplay={reasonDisplay}
               data-action="RETRY_RUN"
               onClick={
                 retryAction && fingerprint
@@ -911,6 +926,7 @@ export function WorkControls({
               busy={cancel.pending}
               step={{ act: "Cancel run", subject: `run ${runId}`, digest: null }}
               variant="destructive"
+              reasonDisplay={reasonDisplay}
               action="CANCEL_RUN"
               onConfirm={
                 cancelAction
@@ -929,6 +945,7 @@ export function WorkControls({
             <CommandOutcome result={cancel.result} success="Cancellation requested." />
           </div>
         </div>
+        {shared ? <SharedRefusal refusal={shared} /> : null}
       </div>
     </section>
   );

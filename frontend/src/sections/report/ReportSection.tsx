@@ -14,6 +14,7 @@ import { shortDigest, stamp } from "@/ds/format";
 import { Narrative } from "@/evidence/Narrative";
 import type { Severity } from "@/wire";
 import type { ReportDocument, RevisionSummary } from "@/wire/v1";
+import { Digest } from "@/ds/Digest";
 
 function Artifact({ artifact }: { artifact: ReportDocument["body"]["artifacts"][number] }) {
   return (
@@ -27,9 +28,13 @@ function Artifact({ artifact }: { artifact: ReportDocument["body"]["artifacts"][
       <div className="pb">
         <dl className="kv">
           <dt>Artifact</dt>
-          <dd>sha256:{artifact.artifact_sha256}</dd>
+          <dd>
+            <Digest value={artifact.artifact_sha256} prefix="sha256:" />
+          </dd>
           <dt>Record</dt>
-          <dd>sha256:{artifact.record_sha256}</dd>
+          <dd>
+            <Digest value={artifact.record_sha256} prefix="sha256:" />
+          </dd>
           <dt>Scope</dt>
           <dd className="prose">{sentence(artifact.decision_scope)}</dd>
         </dl>
@@ -176,13 +181,21 @@ export function ReportSection({ document }: { document: ReportDocument; tab: str
         <div className="pb">
           <dl className="kv">
             <dt>Case</dt>
-            <dd>{body.case_id}</dd>
+            <dd>
+              <Digest value={body.case_id} />
+            </dd>
             <dt>Run</dt>
-            <dd>{body.displayed_run_id}</dd>
+            <dd>
+              <Digest value={body.displayed_run_id} />
+            </dd>
             <dt>Revision</dt>
-            <dd>{body.revision_id ?? "Not yet saved"}</dd>
+            <dd>
+              <Digest value={body.revision_id} fallback="Not yet saved" />
+            </dd>
             <dt>Payload</dt>
-            <dd>{body.payload_sha256 === null ? "None" : `sha256:${body.payload_sha256}`}</dd>
+            <dd>
+              <Digest value={body.payload_sha256} prefix="sha256:" fallback="None" />
+            </dd>
           </dl>
         </div>
       </section>

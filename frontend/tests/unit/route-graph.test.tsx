@@ -3,7 +3,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { render } from "@testing-library/react";
-import { layoutRoute, RouteGraph } from "@/sections/run/RouteGraph";
+import { layoutRoute, RouteGraph, stageLabel } from "@/sections/run/RouteGraph";
 import { parseRunSectionDocument } from "@/wire/v1";
 
 const run = () => {
@@ -38,4 +38,13 @@ test("the route opens scrolled to the node the work waits on, and only once", ()
   dag.scrollLeft = 0;
   rerender(graph(run()));
   expect(dag.scrollLeft).toBe(0);
+});
+
+test("a stage column is numbered, and the host's CP-CF extension is named", () => {
+  expect(stageLabel(3)).toBe("Stage 3");
+  expect(stageLabel(100)).toBe("Extension");
+  const { container } = render(graph(run()));
+  const heads = [...container.querySelectorAll(".stagehdr")].map((head) => head.textContent);
+  expect(heads).toContain("Extension");
+  expect(heads).not.toContain("Stage 100");
 });
