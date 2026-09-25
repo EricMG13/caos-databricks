@@ -112,6 +112,8 @@ function labelOf(entry: Block, next: Block | undefined): string | null {
 // patterns name the columns the methodology's registers carry (their output
 // profiles, `vendor/deploy-v/skills/*/SKILL.md`).
 const SHAPE_TITLE_MAX = 300;
+// The bundle's widest register head joins to 261 characters (CP-3's T3.7).
+const SHAPE_HEAD_MAX = 2_000;
 const SHAPES: [Shape, RegExp][] = [
   [
     "sources",
@@ -206,9 +208,17 @@ export const STABLE_TABLES: Readonly<Record<string, { title: string; shape: Shap
 
 /** A register's shape, from its title and its columns. */
 export function shapeOf(title: string, head: readonly string[]): Shape {
-  // A title past a sentence names no shape, and the rules' `[^;]+` runs cost a
-  // pass per `::` in it: 120,000 characters of `:: x` took seconds.
-  const key = `${title.slice(0, SHAPE_TITLE_MAX)} :: ${head.join("; ")}`.toLowerCase();
+  // A title past a sentence, and the columns past the bound, name no shape:
+  // the rules' `[^;]+` and `.*` runs cost a pass per `::` or per column, and
+  // 120,000 characters of `:: x` in either took seconds. A title cut short
+  // instead could end on half a word (`walkthrough` read as a walk).
+  const named = title.length > SHAPE_TITLE_MAX ? "" : title;
+  let columns = 0;
+  for (let length = -2; columns < head.length; columns += 1) {
+    length += head[columns]!.length + 2;
+    if (length > SHAPE_HEAD_MAX) break;
+  }
+  const key = `${named} :: ${head.slice(0, columns).join("; ")}`.toLowerCase();
   return SHAPES.find(([, rule]) => rule.test(key))?.[0] ?? "table";
 }
 

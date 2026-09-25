@@ -256,6 +256,12 @@ describe("a module's text in the places every module shares", () => {
     expect(registerHeading("B8 Peers").id).toBe("B8");
     // A title of 120,000 characters of `:: x`: seconds before.
     expect(timed(() => shapeOf(":: x".repeat(30_000), ["a"]))).toBeLessThan(1000);
+    // The same text as one column, and 30,000 columns of `threshold`: 3.7 s
+    // and 11 s before; columns past the bound name no shape, as a title does.
+    expect(timed(() => shapeOf("R", [":: x".repeat(30_000)]))).toBeLessThan(1000);
+    const many = Array.from({ length: 30_000 }, () => "threshold");
+    expect(timed(() => shapeOf("R", many))).toBeLessThan(1000);
+    expect(shapeOf("Covenant tests", ["threshold", "current"])).toBe("tests");
     // An artifact past the formatting ceiling is shown as written, as Analysis is.
     const huge = render(<Markdown text={"x".repeat(FORMATTED_MAX + 1)} base={2} label="H" />);
     expect(huge.container.querySelector("[data-markdown]")?.getAttribute("data-markdown")).toBe(
@@ -311,6 +317,13 @@ describe("a module's text in the places every module shares", () => {
     expect(shapeOf("", ["Date / window", "Event", "Status"])).toBe("timeline");
     expect(shapeOf("", ["Bull Claim Attacked", "Bear Counter-Evidence"])).toBe("debate");
     expect(shapeOf("", ["anything", "else"])).toBe("table");
+    // A title past a sentence names no shape: cut short, `walkthrough` read as
+    // a walk and `debtors` as debt.
+    const past = (word: string) => `${"x ".repeat(148)}${word} of the year`;
+    expect(shapeOf("A walkthrough", ["anything"])).toBe("table");
+    expect(shapeOf(past("walkthrough"), ["anything"])).toBe("table");
+    expect(shapeOf(past("debtors"), ["anything"])).toBe("table");
+    expect(shapeOf("Leverage walk", ["anything"])).toBe("bridge");
   });
 
   test("every table the bundle tags is placed by its id, under its schema reference's name", () => {
