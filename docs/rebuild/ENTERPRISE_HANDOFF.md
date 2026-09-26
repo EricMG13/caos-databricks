@@ -2,7 +2,7 @@
 
 For the agent (Claude Code or equivalent) or the person who has a Databricks CLI profile for the enterprise workspace. Everything else has been built and verified without a workspace: the process boots the way Databricks Apps boots it, a governed run completes through the gateway seam, the bundle validates, deploys and runs, and the deployment command itself has been exercised, all against a loopback stand-in for the workspace (D28) and a Docker Postgres for Lakebase. Your job is to run that one command against the real workspace and report what it wrote.
 
-Read first if anything is unclear: `docs/DEPLOYMENT.md` (the runbook the command follows), `docs/rebuild/blockers.md` (B2, B9), `docs/rebuild/decisions.md` (D17, D23, D28, F27–F31, D29–D45), `qualification/PROVIDER_RUNBOOK.md` (what has and has not been qualified live).
+Read first if anything is unclear: `docs/DEPLOYMENT.md` (the runbook the command follows), `docs/rebuild/blockers.md` (B2, B9), `docs/rebuild/decisions.md` (D17, D23, D28, F27–F31, D29–D73; the final sweep's F416 onward), `qualification/PROVIDER_RUNBOOK.md` (what has and has not been qualified live).
 
 ## Hard limits
 
@@ -62,7 +62,7 @@ It stops at the first step that fails and writes `docs/rebuild/runs/<today>/ente
 
 1. Open the app URL (row E5), upload a small public document, approve the run's gates, watch the Run section reach COMPLETE, open the deliverable. That is the one thing no stand-in can do for you.
 
-   The live record so far (`qualification/PROVIDER_RUNBOOK.md`, D29–D45): one qualification set, `ccl-fy2025-market-dislocation`, qualified end to end on `openai/gpt-6-luna-pro` (D30's second attempt, widened by N52); CP-0, CP-3D and CP-5 have each been accepted live at least once (CP-5 as a validated `Blocked`, a legitimate terminal answer, not a refusal); stored CP-1 and CP-1A answers, also GPT-6 Luna Pro, pass under the current vendor fork on replay -- the first either module has produced that the contract accepts, though neither has been re-run live since the fork landed. No module past those five has been reached by a real model: every set to date stopped at or before CP-0, CP-1, CP-1A, CP-3D or CP-5, so CP-2 through CP-2H, CP-3 (other than CP-3D), CP-4/CP-4C, CP-5A, CP-6/CP-6A, CP-CF, CP-L10 and CP-DR remain untested against a real model.
+   The live record so far (`qualification/PROVIDER_RUNBOOK.md`, unchanged since 23 September): one qualification set, `ccl-fy2025-market-dislocation`, qualified end to end on `openai/gpt-6-luna-pro` (D30's second attempt, widened by N52 and D41; the bundle is the owner-authorised fork r4, D47); CP-0, CP-3D and CP-5 have each been accepted live at least once (CP-5 as a validated `Blocked`, a legitimate terminal answer, not a refusal); stored CP-1 and CP-1A answers, also GPT-6 Luna Pro, pass under the current vendor fork on replay -- the first either module has produced that the contract accepts, though neither has been re-run live since the fork landed. No module past those five has been reached by a real model: every set to date stopped at or before CP-0, CP-1, CP-1A, CP-3D or CP-5, so CP-2 through CP-2H, CP-3 (other than CP-3D), CP-4/CP-4C, CP-5A, CP-6/CP-6A, CP-CF, CP-L10 and CP-DR remain untested against a real model.
 
    Every cheap or mid-tier model measured (GPT-5.6 luna, Claude Haiku 4.5, Gemini 2.5 Flash, Claude Opus 5 and 5.5) failed CP-0's own severity or confidence-cap rule on nearly every attempt; a capable model is expected to be needed past CP-0 (GPT-6 Luna Pro, the one model that has cleared it repeatedly, runs in its costlier reasoning mode, about $0.05 and three minutes a call). Since D30 a refused node gets one second attempt carrying the validator's own messages; if the node is still refused after it, the Run section shows the stop code (`HANDOFF_MALFORMED` or whichever it was): report it with the run id and do not retry more than once.
 
@@ -77,6 +77,19 @@ git add -A && git commit -m "Enterprise deploy: E1-E10 against <profile>, D17 re
 ```
 
 Do not push unless told.
+
+## What is proven here and what only the workspace can prove
+
+Proven without a workspace, against the loopback stand-in and a Docker Postgres (D28, `docs/DEPLOYMENT.md` section 8): the bundle validates, deploys and runs for all four targets; the file set a deploy ships boots `python -m caos.serve` from its own tree with every health code OK and completes a governed LITE run through `ChatDatabricks` (`tests/shipped_boot.py`); this command runs E1–E10 against that app (`tests/test_enterprise_deploy.py`). Only the workspace can prove what the gap table at the end of that section lists, each with the row that shows it: grants and the app's Lakebase role, the forwarded-token preview (E5), the proxy's treatment of the event stream (E9), the app's own model call answered by the gateway (E10), the Lakebase version (E8) and the platform's install of Python (E6).
+
+## Owner decisions still open
+
+None of these blocks this command; each is the owner's (`docs/rebuild/final-sweep/CONTRACT.md` section 0):
+
+- OD-10 (N73): whether the second attempt stops relaying values from the model's own answer in the T8 parser's lines.
+- OD-11 (N95, N98): the form a register of ten or more columns takes, and which columns of a wide table give way first.
+- OD-5's remainder (N16): a migration role the runtime cannot assume, for the enterprise DBA.
+- OD-6: account credit, if the modules no real model has reached are to be proven live before the gateway is.
 
 ## Report back
 

@@ -140,6 +140,14 @@ jobs:
     # never needed here; the enterprise deploy is scripts/enterprise_deploy.py.
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    services:
+      postgres:
+        # The shipped set's boot below needs a store. Digest-pinned, as in test.
+        image: postgres@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
+        env: {POSTGRES_PASSWORD: caos, POSTGRES_DB: caos}
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-retries 10
+        ports: ["5432:5432"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
@@ -199,6 +207,13 @@ jobs:
       # What the deploy synced is what the app needs (F48): the check reads the
       # CLI's own record of the files it uploaded.
       - run: uv run python scripts/check_gate_config.py --shipped .databricks/bundle/dev/deployment.json
+      # The file set a deploy ships, read back from the stub rather than this
+      # checkout, booted as the platform boots it: every health code OK and one
+      # governed LITE run through ChatDatabricks (CF-001). A file the sync
+      # leaves out that the process needs fails here, not on the workspace.
+      - run: uv run python tests/shipped_boot.py
+        env:
+          CAOS_TEST_POSTGRES_URL: postgresql://postgres:caos@localhost:5432/caos
       # The production target, lock and all, in one stub (C3): validate,
       # deploy and run the way the one command does; then the Provisioned
       # pair the same way (R24-14).

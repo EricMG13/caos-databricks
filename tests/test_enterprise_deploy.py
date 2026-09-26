@@ -816,6 +816,38 @@ def test_a_truncated_health_answer_is_a_row_not_a_traceback(
     assert evidence.rows == [Row("E6", "GET /api/health", 1, "IncompleteRead")]
 
 
+def test_e6_polls_past_a_not_ready_answer_and_records_the_ready_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """C4 (the deployment review): E6 was one probe issued before the app
+    could be ready, and its 503 threw away the codes that said why. It polls
+    until every code is OK or `HEALTH_SECONDS` pass, and records the answer
+    it stopped on with its codes."""
+    monkeypatch.setattr(
+        enterprise_deploy, "_headers", lambda: {"Authorization": "Bearer x"}
+    )
+    monkeypatch.setattr(enterprise_deploy, "HEALTH_POLL_SECONDS", 0.0)
+    codes = dict.fromkeys(enterprise_deploy.HEALTH_CODES, "OK")
+    early = {**codes, "status": "not_ready", "workers": "WORKERS_ABSENT"}
+    ready = {**codes, "status": "ready", "python_version": "3.13.12"}
+    answers: list[Scripted] = [
+        (503, JSON, [(0, json.dumps(early).encode())], True),
+        (200, JSON, [(0, json.dumps(ready).encode())], True),
+    ]
+    evidence = Evidence(tmp_path / "ev")
+    with _scripted(answers) as url:
+        assert enterprise_deploy._health(url, evidence) == 0
+    [row] = evidence.rows
+    assert (row.id, row.code) == ("E6", 0)
+    assert "status=ready" in row.summary and "workers=OK" in row.summary
+    # Past the deadline the last answer is the row, its codes named.
+    monkeypatch.setattr(enterprise_deploy, "HEALTH_SECONDS", 0.0)
+    evidence = Evidence(tmp_path / "late")
+    with _scripted([(503, JSON, [(0, json.dumps(early).encode())], True)]) as url:
+        assert enterprise_deploy._health(url, evidence) == 1
+    assert "workers=WORKERS_ABSENT" in evidence.rows[-1].summary
+
+
 def test_open_forwards_the_query_string() -> None:
     """CF-054: `urlsplit` gives `path` and `query` separately, and `_open`
     once sent only the first -- so E10's own `?run=<id>` reached the app as
