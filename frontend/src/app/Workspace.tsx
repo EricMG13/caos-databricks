@@ -1,4 +1,4 @@
-// One screen. The chrome never changes; only the body does (IA_SPEC.md 1).
+// One screen. The chrome never changes; only the body does.
 import {
   Suspense,
   useCallback,

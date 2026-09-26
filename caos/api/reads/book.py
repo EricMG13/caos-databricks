@@ -1,4 +1,4 @@
-"""Book, `/api/v1/book` (IA_SPEC.md 4.4): the credit, across the portfolio.
+"""Book, `/api/v1/book`: the credit, across the portfolio.
 
 Portfolio-scoped, so the path names no case. The rows are the cases the caller
 holds live standing on, read exactly as Directory reads them, and each row's
@@ -92,7 +92,7 @@ class _Column:
 
     `drivers` are the fields of the period's accepted driver row the
     expression reads, which is what lets a cell name the driver behind it and
-    that driver's evidence (IA_SPEC.md 4.6). A column whose operands are not
+    that driver's evidence. A column whose operands are not
     that period's own drivers is not declared here: the roll-forward's closing
     balances reduce to every earlier period, and a passport that named only
     the local drivers for them would understate the lineage.
@@ -316,7 +316,7 @@ def _periods(analysis: AnalysisBody, forecast: ModelForecast) -> list[BookPeriod
         ],
         forecast=forecast,
         # The pinned subject's reporting period, which the analyst declared
-        # when the run was created. Named as that rather than as IA_SPEC 4.4's
+        # when the run was created. Named as that rather than as the legacy spec's
         # "evidence date": the host derives no date from any admitted document,
         # so a field claiming one would be a host fact it does not hold.
         reporting_period=(
@@ -388,7 +388,7 @@ def _operands(
 
 
 def _derivation(column: _Column, operands: dict[str, str]) -> str:
-    """The expression, with its operands (IA_SPEC.md 4.4)."""
+    """The expression, with its operands."""
     if not operands:
         return f"{column.expression} \u2014 operands not stated by the accepted request"
     stated = ", ".join(f"{name} = {value}" for name, value in operands.items())

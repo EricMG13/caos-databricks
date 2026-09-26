@@ -1,4 +1,4 @@
-// The nine sections and the forwarding table (IA_SPEC.md 1). A pre-v2 slug
+// The nine sections and the forwarding table. A pre-v2 slug
 // forwards to its new home with the query string intact, replacing history so
 // the entry stays router-owned.
 import routes from "./routes.json";

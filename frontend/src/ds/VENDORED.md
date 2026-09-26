@@ -29,15 +29,15 @@ Changes from the CLI's output:
 ## The predecessor's primitives
 
 Copied from the predecessor frontend, `github.com/EricMG13/Credit-Operating-System`,
-local clone `Alpha/Final @ f454c654f`, path `caos/frontend/src/` (`docs/DECISIONS.md` §18).
+local clone `Alpha/Final @ f454c654f`, path `caos/frontend/src/`.
 The blob hash is `git hash-object` of the source file at that commit. Nothing loads the
 `_ds_bundle.js` runtime and nothing depends on the private `caos-frontend` package.
 
-| File here          | Source path                          | Blob       | Changes                                                                                                                                                                                                              |
-| ------------------ | ------------------------------------ | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ActionReason.tsx` | `components/shared/ActionReason.tsx` | `85ad0516` | `"use client"` dropped; `data-*` passes through unchanged; `reasonTitle` carries the pointer's fuller detail (the code) while the reason stays the plain sentence; the control is shadcn's `Button` (D35)            |
-| `SurfaceState.tsx` | `components/shared/SurfaceState.tsx` | `eb6f56b8` | kinds are the seven of `IA_SPEC.md` §6 (`empty` → `observed-empty`; `checking`, `not-run` dropped) plus `choose`, a case section waiting on the reader's selection; the glyph is `SeverityMark` (`DESIGN.md` shapes) |
-| `atoms.tsx`        | `components/pipeline/atoms.tsx`      | `66370ae1` | `Tag` only, now a shadcn `Badge` in the severity's tone (D35); `Dot`, `Bar`, `ToggleGroup` and `SimControls` are not carried (`docs/design/BRIEF.md`, Run: simulation discarded)                                     |
+| File here          | Source path                          | Blob       | Changes                                                                                                                                                                                                         |
+| ------------------ | ------------------------------------ | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ActionReason.tsx` | `components/shared/ActionReason.tsx` | `85ad0516` | `"use client"` dropped; `data-*` passes through unchanged; `reasonTitle` carries the pointer's fuller detail (the code) while the reason stays the plain sentence; the control is shadcn's `Button` (D35)       |
+| `SurfaceState.tsx` | `components/shared/SurfaceState.tsx` | `eb6f56b8` | kinds are the seven region states (`empty` → `observed-empty`; `checking`, `not-run` dropped) plus `choose`, a case section waiting on the reader's selection; the glyph is `SeverityMark` (`DESIGN.md` shapes) |
+| `atoms.tsx`        | `components/pipeline/atoms.tsx`      | `66370ae1` | `Tag` only, now a shadcn `Badge` in the severity's tone (D35); `Dot`, `Bar`, `ToggleGroup` and `SimControls` are not carried (the legacy design brief's Run: simulation discarded)                              |
 
 `TextInput.tsx` (now shadcn's `Input`) and `sev.ts` (now the badge's tones) were removed
 with D35, and `use-modal-a11y.ts` with N64: the evidence overlays are Base UI's Dialog

@@ -1,4 +1,4 @@
-// The source pack (IA_SPEC.md 4.2, card 5c): per source its filename, digest,
+// The source pack (card 5c): per source its filename, digest,
 // admission time, live withdrawal and the extractor identity that predicts
 // its tokens. The v1 wire carries no label, family, grade, disposition,
 // pages or per-row check time -- withdrawal is checked live at every use,

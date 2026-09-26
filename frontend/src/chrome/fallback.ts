@@ -1,4 +1,4 @@
-// The header is on every section (IA_SPEC.md 3), including the states in which
+// The header is on every section, including the states in which
 // there is no document to fill it. This chrome carries the state and invents
 // nothing: no subject, no actions, no role, and no run, revision or approval.
 import { OFFLINE_WORDING, UNAVAILABLE_WORDING, type RegionStatus } from "@/app/transport";
@@ -81,7 +81,7 @@ function sentenceOf(clause: string): string {
 export function fallbackChrome(status: RegionStatus): FallbackChrome {
   const state = describe(status);
   // One sentence per state, in one place: the verdict strip for an observed
-  // 404 or a refusal, the page-level alert for offline (IA_SPEC.md 6). The
+  // 404 or a refusal, the page-level alert for offline. The
   // brief's four cells say what was observed, which is nothing.
   const conclusion = status.kind === "offline" ? "Offline" : state.sentence;
   return {

@@ -352,7 +352,11 @@ def _refused(conn: StoreConnection, lease: Lease, refused: Refusal) -> bool:
             print(unmet.value, file=sys.stderr)
             return _settle(conn, lambda: stop(conn, lease, unmet))
     if code in RELEASED:
-        _settle(conn, lambda: release(conn, lease))
+        # An unsettled attempt is this run's own wait, so it goes behind the
+        # queue: at its old place it was the head of every claim, each worker
+        # took it and was refused, and no other actor's run was claimed.
+        behind = code is RefusalCode.ATTEMPT_UNSETTLED
+        _settle(conn, lambda: release(conn, lease, behind=behind))
         raise Refusal(code)
     # CF-044: the code alone, the same shape the sibling branch above already
     # prints for the same reason -- a run parked with nothing on stderr is a

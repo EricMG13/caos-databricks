@@ -1033,7 +1033,7 @@
     margin-left: auto;
   }
 
-  /* ---- region and page states (IA_SPEC.md 6): shadcn's empty ---- */
+  /* ---- region and page states: shadcn's empty ---- */
   .rs {
     padding: 1.25rem 1.5rem;
     border: 1px dashed var(--border);
@@ -1372,7 +1372,7 @@
     color: var(--foreground);
   }
 
-  /* ---- the route as a DAG (IA_SPEC.md 4.5) ---- */
+  /* ---- the route as a DAG ---- */
   /* .dag is the scrolling window; .dagbox is sized to the layout, so the route
      scrolls in its panel and never widens the page. */
   .dag {

@@ -90,7 +90,7 @@ MOMENT_CHARS = 64  # an ISO-8601 instant with its offset, as `read_verdict` read
 # what refuses a draft past them.
 NARRATIVE_CHARS = 2000
 NARRATIVE_SPANS = 64
-BOOK_CASES_MAX = 4  # "Two to four credits side by side" (IA_SPEC.md 4.4)
+BOOK_CASES_MAX = 4  # "Two to four credits side by side"
 BOOK_COLUMNS_MAX = 16  # the host-declared columns of the CP-CF projection
 BOOK_PERIODS_MAX = 8  # beyond it a row is partial, `LIST_TRUNCATED`
 BRIEF_QUESTIONS_MAX = 32  # `CP_DR_RESEARCH_BRIEF_V1.md`'s bounded batch
@@ -870,14 +870,14 @@ class BookResearch(BaseModel):
 
 
 class BookPassport(BaseModel):
-    """The ten fields IA_SPEC.md 4.4 says a passport always carries, in its
+    """The ten fields a passport always carries, in its
     order. Every one is read from the accepted record, the pinned run subject
     or the host's declaration of its own calculator; none is a judgement about
     the run. `scenario` is the accepted projection's own `case` -- the name
     `caos-forecast-v1` gives a scenario, and the one
     `caos/qualification/matrix.py` already reads as `ExpectedForecast.scenario`
     -- so a base case and a downside are told apart in the field whose only job
-    is to tell them apart. IA_SPEC's "evidence date" is served as
+    is to tell them apart. The legacy spec's "evidence date" is served as
     `reporting_period`, the analyst's declared period from the pinned subject,
     because the host derives no date from any admitted document."""
 
@@ -945,7 +945,7 @@ class BookRow(BaseModel):
 
 
 class BookBasis(BaseModel):
-    """The one basis the comparison is stated on (IA_SPEC.md 4.4)."""
+    """The one basis the comparison is stated on."""
 
     model_config = _CLOSED
 

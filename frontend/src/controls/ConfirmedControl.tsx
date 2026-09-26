@@ -4,7 +4,7 @@
 // same reading order, and it names what the press would bind: the act, the
 // thing it acts on and the short form of the digest the server will compare.
 // Confirm takes focus when the step opens; Cancel and Escape put it back on
-// the control that opened it (IA_SPEC.md 7, the opener rule).
+// the control that opened it (the opener rule).
 import {
   useEffect,
   useLayoutEffect,

@@ -1,4 +1,4 @@
-// Analysis (IA_SPEC.md 4.3), v1 wire (brief 4.1, slice 4.1j). The modules are
+// Analysis, v1 wire (brief 4.1, slice 4.1j). The modules are
 // the section's tabs; the selected module fills the width in the five places
 // every module shares (D60, `module.tsx`): its host facts, the model's view
 // beside its key figures and caveats, the figures, the reader-facing

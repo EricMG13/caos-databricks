@@ -1,5 +1,5 @@
-// Flat config. Three rule families, one per measured failure mode
-// (docs/AI_CODE_QUALITY.md section 1): type-aware correctness, the rules of
+// Flat config. Three rule families, one per measured failure mode:
+// type-aware correctness, the rules of
 // hooks, and the a11y basics that the axe gate would otherwise catch late.
 import tseslint from "typescript-eslint";
 import reactHooks from "eslint-plugin-react-hooks";
@@ -33,13 +33,13 @@ export default tseslint.config(
         "error",
         { tags: [], roles: ["tabpanel", "region"], allowExpressionValues: true },
       ],
-      // A refused control is aria-disabled, never disabled (IA_SPEC.md 2).
+      // A refused control is aria-disabled, never disabled (DESIGN.md "Rules with teeth").
       "no-restricted-syntax": [
         "error",
         {
           selector: "JSXAttribute[name.name='disabled']",
           message:
-            "A refused control stays visible and focusable: use RefusedControl (IA_SPEC.md 2).",
+            'A refused control stays visible and focusable: use RefusedControl (DESIGN.md "Rules with teeth").',
         },
       ],
     },

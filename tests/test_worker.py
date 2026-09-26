@@ -65,6 +65,7 @@ from caos.store.work import (
     LEASE_SECONDS,
     Lease,
     checkpoint_thread,
+    claim_run,
     enqueue_run,
     worker_states,
 )
@@ -121,6 +122,33 @@ def drive(
         config=CONFIG,
         stopping=stopping or Event(),
     )
+
+
+def test_an_unsettled_run_goes_behind_the_queue_rather_than_ahead_of_it(
+    case: tuple[StoreConnection, UUID],
+    route: ResolvedRoute,
+    bundle: Bundle,
+    blobs: BlobStore,
+) -> None:
+    """A run released on `ATTEMPT_UNSETTLED` waits on another session's call,
+    which can hold it for up to `CALL_HOLD_SECONDS`. Given back at its old
+    place it was the head of every claim, so each worker took it, was refused
+    and backed off, and no other actor's queued run was claimed meanwhile; it
+    goes behind the runs already queued now, as a requeue does. A store fault
+    keeps its place: that fault is every run's, not this one's."""
+    first = queued_run(case, route, bundle, blobs)
+    second = queued_run(case, route, bundle, blobs)
+    conn = first.conn
+    lease = claim_run(conn, worker=CONFIG.worker, lease_seconds=LEASE_SECONDS)
+    assert lease is not None and lease.run_id == first.run_id
+    with pytest.raises(Refusal):
+        worker._refused(conn, lease, Refusal(RefusalCode.ATTEMPT_UNSETTLED))
+    claimed = claim_run(conn, worker=CONFIG.worker, lease_seconds=LEASE_SECONDS)
+    assert claimed is not None and claimed.run_id == second.run_id
+    with pytest.raises(Refusal):
+        worker._refused(conn, claimed, Refusal(RefusalCode.STORE_UNAVAILABLE))
+    again = claim_run(conn, worker=CONFIG.worker, lease_seconds=LEASE_SECONDS)
+    assert again is not None and again.run_id == second.run_id
 
 
 def test_worker_drives_an_enqueued_lite_run_to_complete_with_a_deterministic_provider(

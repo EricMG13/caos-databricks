@@ -9,7 +9,7 @@
 //
 // Placement is display only. Every block is drawn somewhere, and "As written"
 // keeps the exact text; no figure is read from any of it (D32).
-import type { Block, MdTable } from "@/ds/markdown";
+import { tableTag, type Block, type MdTable } from "@/ds/markdown";
 
 export interface Part {
   title: string;
@@ -87,7 +87,9 @@ const auditOf = (title: string) => H2_AUDIT.find(([rule]) => rule.test(title.toL
 const APPENDIX = /^analytical appendix\b/i;
 // `T4C.4`, `TL40.2`, `TDR.1`, and the one-letter series deployed modules
 // write (`A1`, `B8`, `R10`).
-const REGISTER_ID = /^((?:TDR|TL[0-9]+|[A-Z][0-9]+[A-Z]?)[0-9A-Z]*(?:\.[0-9A-Z]+)*)(?=$|[\s.:—–-])/;
+// `[A-Z][0-9]+[A-Z]?[0-9A-Z]*` read as `[A-Z][0-9][0-9A-Z]*`, the same ids: two
+// quantifiers over one run of digits cost a pass per split, seconds a heading.
+const REGISTER_ID = /^((?:TDR|TL[0-9]|[A-Z][0-9])[0-9A-Z]*(?:\.[0-9A-Z]+)*)(?=$|[\s.:—–-])/;
 // A line that is nothing but bold labels the table under it, as a heading
 // would: `**T1 — CP-PARSE handoff / lineage validation**`, a parenthetical
 // after it kept.
@@ -105,11 +107,11 @@ function labelOf(entry: Block, next: Block | undefined): string | null {
     ? text
     : null;
 }
-const TABLE_ID = /table-id:\s*([^\s]+)/;
 
 // A register's shape from its title and columns, first rule first. The
 // patterns name the columns the methodology's registers carry (their output
 // profiles, `vendor/deploy-v/skills/*/SKILL.md`).
+const SHAPE_TITLE_MAX = 300;
 const SHAPES: [Shape, RegExp][] = [
   [
     "sources",
@@ -204,7 +206,9 @@ export const STABLE_TABLES: Readonly<Record<string, { title: string; shape: Shap
 
 /** A register's shape, from its title and its columns. */
 export function shapeOf(title: string, head: readonly string[]): Shape {
-  const key = `${title} :: ${head.join("; ")}`.toLowerCase();
+  // A title past a sentence names no shape, and the rules' `[^;]+` runs cost a
+  // pass per `::` in it: 120,000 characters of `:: x` took seconds.
+  const key = `${title.slice(0, SHAPE_TITLE_MAX)} :: ${head.join("; ")}`.toLowerCase();
   return SHAPES.find(([, rule]) => rule.test(key))?.[0] ?? "table";
 }
 
@@ -233,8 +237,12 @@ function registersOf(blocks: readonly Block[]): { registers: Register[]; rest: B
       notes = [];
       heading = registerHeading(label ?? (entry as { text: string }).text);
       tagged = null;
-    } else if (entry.kind === "comment" && TABLE_ID.test(entry.text)) {
-      tagged = TABLE_ID.exec(entry.text)![1]!;
+    } else if (entry.kind === "comment" && tableTag(entry.text) !== null) {
+      const tag = tableTag(entry.text)!;
+      tagged = tag.id;
+      // A caveat the model wrote beside the tag is its own text: it stays a
+      // note of the register the tag labels, never consumed with the tag.
+      if (!tag.bare) notes.push(entry);
     } else if (entry.kind === "table") {
       const id = tagged ?? heading?.id ?? null;
       const stable = tagged === null ? undefined : STABLE_TABLES[tagged];
@@ -337,7 +345,7 @@ export function moduleParts(blocks: readonly Block[]): ModuleParts {
   const tagged = front_.flatMap((entry, index) =>
     entry.kind === "table" &&
     front_[index - 1]?.kind === "comment" &&
-    TABLE_ID.test((front_[index - 1] as { text: string }).text)
+    tableTag((front_[index - 1] as { text: string }).text) !== null
       ? [index - 1, index]
       : [],
   );
@@ -394,7 +402,10 @@ export interface Opening {
 
 const LEDE_MIN = 40;
 const LEDE_MAX = 360;
-const SENTENCE_END = /[.!?](?:\*\*|\*|["”’)])*\s+(?=["“(*]*[A-Z0-9$])/g;
+// The closers after a sentence's end are one character class, never `**` and
+// `*` as two alternatives: a run of stars then paired in a Fibonacci number
+// of ways before a failed match gave up, and 44 stars froze the page.
+const SENTENCE_END = /[.!?][*"”’)]*\s+(?=["“(*]*[A-Z0-9$])/g;
 // A period that ends an abbreviation or an initial ends no sentence.
 const ABBREVIATION =
   /(?:\b(?:e\.g|i\.e|vs|No|Inc|Ltd|Co|Corp|approx|cf|St|Mr|Ms|Dr|pp?|etc|U\.S|U\.K)|\b[A-Z])\.$/;

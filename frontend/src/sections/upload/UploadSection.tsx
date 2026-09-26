@@ -1,4 +1,4 @@
-// Upload (IA_SPEC.md 4.2, card 5c): the admitted sources and their set
+// Upload (card 5c): the admitted sources and their set
 // versions, v1 wire. Withdrawal is checked live at every use, not at pin
 // time; pinning and withdrawing are governed commands the v1 document does
 // not carry (brief 4.1, decision 5). Admit sources is the one governed write

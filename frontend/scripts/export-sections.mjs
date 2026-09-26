@@ -1,7 +1,7 @@
 // Static export: one SPA build, copied to dist/<slug>/index.html for the nine
 // trailing-slash section URLs and for every pre-v2 slug, so a static host
-// serves the workspace at each path and the router owns the forward
-// (IA_SPEC.md section 1). No Node in production.
+// serves the workspace at each path and the router owns the forward. No Node
+// in production.
 import { copyFile, mkdir, readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 

@@ -6,8 +6,8 @@ an unknown, malformed, unauthorised or revoked case is one private
 `CASE_NOT_FOUND`, and a `run` this case does not own -- unknown, malformed or
 another case's -- is one `RUN_NOT_FOUND`, asked only once the case is visible.
 
-The displayed run and the latest run are separate identities on the wire
-(REPAIR_PLAN Phase 4 item 1). Node states are recomputed from the pinned route
+The displayed run and the latest run are separate identities on the wire.
+Node states are recomputed from the pinned route
 and the accepted artifacts, never stored; each carries the reason for it.
 """
 

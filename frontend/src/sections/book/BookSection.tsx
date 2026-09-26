@@ -1,4 +1,4 @@
-// Book, /book/ (IA_SPEC.md 4.4): the credit, across the portfolio. One table
+// Book, /book/: the credit, across the portfolio. One table
 // per accepted period, credits down the side and the served columns across;
 // selecting any cell opens the metric passport. The section composes a view
 // and grants nothing: every figure and every passport field is read from the
@@ -7,7 +7,7 @@
 // Each credit binds the accepted snapshot this document names it under, so a
 // later document carrying a different snapshot for a bound credit is refused
 // and said so on the row; only the explicit switch moves the lens
-// (IA_SPEC.md 5, `@/app/authority`'s `bind` and `release`).
+// (`@/app/authority`'s `bind` and `release`).
 import { useEffect, useState } from "react";
 import { MetricCell } from "./MetricCell";
 import { passportOf } from "./passport";

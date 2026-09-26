@@ -386,37 +386,56 @@ def _list(lines: list[str], index: int, out: list[str]) -> int:
         if item is None or not lines[index].strip():
             break
         indent, ordered, marker, text = item
-        tag = "ol" if ordered else "ul"
-        while levels and indent < levels[-1][0]:
-            out.append(f"</{levels.pop()[1]}>\n")
+        _close_deeper(levels, indent, out)
         if not levels or indent > levels[-1][0]:
-            if len(levels) == _MAX_NESTING:
-                raise RenderRefused("DELIVERABLE_MARKDOWN_UNSUPPORTED")
-            levels.append((indent, tag))
-            start = ""
-            if ordered:
-                first = marker[:-1]
-                start = f' start="{escape(first)}"' if first != "1" else ""
-                expected[indent] = marker
-            out.append(f"<{tag}{start}>\n")
-        # An `<ol start="N">` numbers sequentially from N, so it draws the
-        # ordinals the model wrote only while they *are* sequential. A register
-        # numbered 7, 9 would be drawn 7, 8 -- a number on the page that nobody
-        # authored, which is the fabrication class. Where the run is not
-        # consecutive each marker is written as its own characters instead.
-        prefix = ""
-        if ordered and marker != expected.get(levels[-1][0]):
-            prefix = f"{escape(marker)} "
-        if ordered:
-            head = marker[:-1]
-            expected[levels[-1][0]] = (
-                f"{int(head) + 1}{marker[-1]}" if head.isdigit() else ""
-            )
+            _open_level(levels, expected, item, out)
+        prefix = _ordinal(expected, levels[-1][0], marker) if ordered else ""
         out.append(f"<li>{prefix}{_inline(text)}</li>\n")
         index += 1
-    while levels:
-        out.append(f"</{levels.pop()[1]}>\n")
+    _close_deeper(levels, -1, out)
     return index
+
+
+def _close_deeper(levels: list[tuple[int, str]], indent: int, out: list[str]) -> None:
+    """Close every open level deeper than `indent`, innermost first."""
+    while levels and indent < levels[-1][0]:
+        out.append(f"</{levels.pop()[1]}>\n")
+
+
+def _open_level(
+    levels: list[tuple[int, str]],
+    expected: dict[int, str],
+    item: tuple[int, bool, str, str],
+    out: list[str],
+) -> None:
+    """Open a level for `item`'s indent, an ordered one starting where its
+    first marker does; nesting past `_MAX_NESTING` is refused, not flattened."""
+    indent, ordered, marker, _ = item
+    if len(levels) == _MAX_NESTING:
+        raise RenderRefused("DELIVERABLE_MARKDOWN_UNSUPPORTED")
+    tag = "ol" if ordered else "ul"
+    levels.append((indent, tag))
+    start = ""
+    if ordered:
+        first = marker[:-1]
+        start = f' start="{escape(first)}"' if first != "1" else ""
+        expected[indent] = marker
+    out.append(f"<{tag}{start}>\n")
+
+
+def _ordinal(expected: dict[int, str], level: int, marker: str) -> str:
+    """The marker to write before an ordered item's text, and the marker the
+    level's run expects next.
+
+    An `<ol start="N">` numbers sequentially from N, so it draws the ordinals
+    the model wrote only while they *are* sequential. A register numbered 7, 9
+    would be drawn 7, 8 -- a number on the page that nobody authored, which is
+    the fabrication class. Where the run is not consecutive each marker is
+    written as its own characters instead."""
+    prefix = f"{escape(marker)} " if marker != expected.get(level) else ""
+    head = marker[:-1]
+    expected[level] = f"{int(head) + 1}{marker[-1]}" if head.isdigit() else ""
+    return prefix
 
 
 def _table(lines: list[str], index: int, out: list[str]) -> int:

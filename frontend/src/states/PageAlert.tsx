@@ -1,4 +1,4 @@
-// The page-level alert: one sentence, never engine text (IA_SPEC.md 6).
+// The page-level alert: one sentence, never engine text.
 import { CloudOffIcon, PauseIcon } from "lucide-react";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 

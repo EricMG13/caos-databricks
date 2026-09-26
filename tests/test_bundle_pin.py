@@ -130,7 +130,7 @@ def test_the_catalog_carries_eighteen_pathways(catalog: dict[str, object]) -> No
 def test_cp_parse_is_superseded_upstream_and_stage_zero_is_not_runnable(
     catalog: dict[str, object],
 ) -> None:
-    # Both premises of the DECISIONS.md §5 carve-out. If upstream ever stops
+    # Both premises of the superseded-modules carve-out. If upstream ever stops
     # saying either, the carve-out needs revisiting rather than carrying on.
     superseded = catalog["superseded_module_ids"]
     assert isinstance(superseded, dict)

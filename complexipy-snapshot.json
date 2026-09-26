@@ -10,52 +10,12 @@
     ]
   },
   {
-    "path": "caos/api/stream.py",
-    "file_name": "stream.py",
-    "functions": [
-      {
-        "name": "case_tail",
-        "complexity": 22
-      }
-    ]
-  },
-  {
-    "path": "caos/deliverable/render.py",
-    "file_name": "render.py",
-    "functions": [
-      {
-        "name": "_list",
-        "complexity": 31
-      }
-    ]
-  },
-  {
     "path": "caos/deliverable/revisions.py",
     "file_name": "revisions.py",
     "functions": [
       {
         "name": "_span",
         "complexity": 16
-      }
-    ]
-  },
-  {
-    "path": "caos/evidence/pdf.py",
-    "file_name": "pdf.py",
-    "functions": [
-      {
-        "name": "walk_pages",
-        "complexity": 23
-      }
-    ]
-  },
-  {
-    "path": "caos/methodology/handoff.py",
-    "file_name": "handoff.py",
-    "functions": [
-      {
-        "name": "stored_lineage",
-        "complexity": 30
       }
     ]
   },

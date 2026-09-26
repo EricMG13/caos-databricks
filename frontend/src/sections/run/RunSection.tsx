@@ -1,4 +1,4 @@
-// Run — the resolved route and its frontier (IA_SPEC.md 4.5), cut over to the
+// Run — the resolved route and its frontier, cut over to the
 // v1 wire (brief 4.1, slice 4.1i). No stages list, no selection state on the
 // wire, no charge or generation id, no plan-gate approve/reserve and no
 // accept action: those arrive with commands (4.2). `displayed_run_id` and

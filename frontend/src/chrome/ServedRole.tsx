@@ -1,5 +1,5 @@
 // The served role, read-only at the sidebar's foot and never a control.
-// Persona is composition, not authority (IA_SPEC.md 2).
+// Persona is composition, not authority.
 import { sentence } from "./compose";
 import type { ServedRole as ServedRoleWire } from "@/wire";
 

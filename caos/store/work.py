@@ -219,14 +219,20 @@ def holds_lease(conn: StoreConnection, run_id: UUID, lease: Lease | None) -> boo
     )
 
 
-def release(conn: StoreConnection, lease: Lease) -> bool:
-    """Give a held run back to the queue. False when the lease is not held."""
+def release(conn: StoreConnection, lease: Lease, *, behind: bool = False) -> bool:
+    """Give a held run back to the queue. False when the lease is not held.
+
+    At its old place by default, the head of the next claim; `behind` puts it
+    after every run queued now, as `requeue_run` does, for a run that is
+    waiting on something of its own rather than on the store every run shares
+    (`ATTEMPT_UNSETTLED`: another session's call on its node)."""
     return bool(
         conn.execute(
             "UPDATE run_work SET state = 'QUEUED', worker = NULL,"
-            " lease_expires_at = NULL"
+            " lease_expires_at = NULL,"
+            " requested_at = CASE WHEN %s THEN now() ELSE requested_at END"
             " WHERE run_id = %s AND state = 'CLAIMED' AND lease_token = %s",
-            (lease.run_id, lease.token),
+            (behind, lease.run_id, lease.token),
         ).rowcount
     )
 

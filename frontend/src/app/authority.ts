@@ -1,4 +1,4 @@
-// The one authority machine (IA_SPEC.md 5, "Route replay"). A forwarded slug,
+// The one authority machine ("Route replay"). A forwarded slug,
 // a back navigation and a cross-case race are all resolved here against stale
 // responses: a late response for a case the user has left is discarded. Pure;
 // no I/O.

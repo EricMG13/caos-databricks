@@ -1,7 +1,7 @@
 // The section at a glance: the single conclusion it supports, with its
 // severity as shape and hue and the one thing blocking it; one headline
 // figure; then what changed, what it means, what to do and on what evidence
-// (IA_SPEC.md 3). Every cell is composed from the document's own facts, and a
+// Every cell is composed from the document's own facts, and a
 // cell with nothing to say is not drawn (critique P1).
 import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
 import { SeverityMark, toneOf } from "./SeverityMark";

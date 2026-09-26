@@ -60,6 +60,27 @@ const MAX_NESTING = 4;
 
 class Unsupported extends Error {}
 
+/** Past this many characters a text is not formatted at all, an artifact's
+    as a handoff's: drawing a 25 MB text as elements stalls the page as surely
+    as printing it did, and it is shown as written instead. */
+export const FORMATTED_MAX = 500_000;
+
+const TABLE_ID = /table-id:\s*([^\s]+)/;
+
+/** A `<!-- table-id: -->` comment's id, and whether the comment says nothing
+    else; `null` for any other text. Only a bare tag may be drawn as its id: a
+    caveat the model wrote beside the tag is its own text, which the reader
+    must see as the host's rendering shows it (render.py `_comment`). */
+export function tableTag(text: string): { id: string; bare: boolean } | null {
+  const id = TABLE_ID.exec(text)?.[1];
+  if (id === undefined) return null;
+  const rest = text
+    .replace(TABLE_ID, "")
+    .replace(/<!--|-->/g, "")
+    .trim();
+  return { id, bare: rest === "" };
+}
+
 /** The Markdown as blocks, or `null` where the host would refuse it. */
 export function readMarkdown(text: string): Block[] | null {
   const lines = text.split("\n");

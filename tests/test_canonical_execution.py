@@ -322,8 +322,8 @@ def test_a_wrong_adapter_cannot_become_authority(harness: _Harness) -> None:
 
 
 def test_an_upstream_statement_is_not_citable_evidence(harness: _Harness) -> None:
-    """Invariant 11 does not soften for the chain (REBUILD_PLAN Phase 11 exit,
-    on the canonical adapter since f-1c): CP-L10 quoting a sentence that only
+    """Invariant 11 does not soften for the chain (on the canonical adapter
+    since f-1c): CP-L10 quoting a sentence that only
     CP-0's accepted handoff carries is refused, although that handoff reached
     its prompt verbatim."""
     attempt, gate = _run(harness, "CP-0", CanonicalCompletions(harness.source_id))

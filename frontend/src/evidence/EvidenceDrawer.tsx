@@ -1,6 +1,6 @@
 // The one evidence surface: the page render with its rectangle(s), the matched
 // text, the observation time. Opened from a chip with its opener passed;
-// Escape returns focus to that opener (IA_SPEC.md 5, 7).
+// Escape returns focus to that opener.
 import { Digest } from "@/ds/Digest";
 import { Overlay } from "./Overlay";
 import type { BBox, Citation } from "@/wire";

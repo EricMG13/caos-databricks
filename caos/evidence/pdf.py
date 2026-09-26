@@ -411,28 +411,39 @@ def walk_pages(data: bytes, *, limits: AdmissionLimits, deadline: float) -> list
     region_id = 0
     line_id = 0
     for page_number, (frame, page, hidden) in enumerate(_pages(data), start=1):
-        if page_number > limits.max_pages:
-            raise Refusal(RefusalCode.SOURCE_TOO_LARGE)
-        # Checked per page (§44.2): cooperative, not preemptive -- one
-        # pathological page can still overrun it (CLAUDE.md ledger).
-        if time.monotonic() > deadline:
-            raise Refusal(RefusalCode.SOURCE_EXTRACTION_TIMEOUT)
+        _within_limits(page_number, limits, deadline)
         if frame is None:
             # Nothing on the page is visible, so nothing on it is citable.
             continue
         sheet = _Sheet(page_number, frame, hidden)
-        for box in page:
-            if not isinstance(box, LTTextBox):
-                continue
-            for line in box:
-                if not isinstance(line, LTTextLine):
-                    continue
+        for lines in _text_boxes(page):
+            for line in lines:
                 tokens.extend(_line_tokens(line, sheet, region_id, line_id))
                 if len(tokens) > limits.max_tokens:
                     raise Refusal(RefusalCode.SOURCE_TOO_LARGE)
                 line_id += 1
             region_id += 1
     return tokens
+
+
+def _within_limits(page_number: int, limits: AdmissionLimits, deadline: float) -> None:
+    """Refuse before a page's boxes are walked: `SOURCE_TOO_LARGE` past
+    `max_pages`, `SOURCE_EXTRACTION_TIMEOUT` past the deadline.
+
+    Checked per page (§44.2): cooperative, not preemptive -- one pathological
+    page can still overrun it (CLAUDE.md ledger)."""
+    if page_number > limits.max_pages:
+        raise Refusal(RefusalCode.SOURCE_TOO_LARGE)
+    if time.monotonic() > deadline:
+        raise Refusal(RefusalCode.SOURCE_EXTRACTION_TIMEOUT)
+
+
+def _text_boxes(page: LTPage) -> Iterator[list[LTTextLine]]:
+    """Each text box of a laid-out page, as its text lines; a box of any
+    other kind is not text and is passed over, a line of any other kind too."""
+    for box in page:
+        if isinstance(box, LTTextBox):
+            yield [line for line in box if isinstance(line, LTTextLine)]
 
 
 def _pages(data: bytes) -> Iterator[tuple[Frame | None, LTPage, dict[LTChar, str]]]:

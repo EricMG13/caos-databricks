@@ -1,5 +1,5 @@
 // The chip shows `D-04 p.68 ¶2`, not a document name. Its click passes the
-// opener to the one evidence drawer (IA_SPEC.md 4.3, 5).
+// opener to the one evidence drawer.
 import type { MouseEvent } from "react";
 import { useEvidence } from "./EvidenceContext";
 import type { Citation } from "@/wire";

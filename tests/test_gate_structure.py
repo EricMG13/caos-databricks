@@ -13,6 +13,7 @@ from pathlib import Path
 import check_gate_config
 import pytest
 from test_check_gate_config import _tree
+from tracked import tracked_files
 
 CI = ".github/workflows/ci.yml"
 HOOKS = ".pre-commit-config.yaml"
@@ -311,3 +312,21 @@ def test_a_committed_host_or_auth_key_in_the_bundle_is_refused(tmp_path: Path) -
     ):
         bundle.write_text(written + extra, encoding="utf-8")
         assert any(named in p for p in check_gate_config._bundle_problems(root)), extra
+
+
+# Acceptance row A28's scope: the package the App runs, the agent definitions
+# and vendored skills its prompts are built from, and the App's own config.
+OPENROUTER_FREE = ("caos", "icm", ".claude/skills", "databricks.yml", "app.yaml")
+
+
+def test_openrouter_is_named_only_under_tests() -> None:
+    """A28, which no CI step runs: the test provider exists only under
+    `tests/` (CLAUDE.md), so no file the App ships or its prompts are built
+    from names it -- a comment included, which is how one reached `caos/`."""
+    root = check_gate_config.REPO
+    named = [
+        name
+        for name in tracked_files(root, *OPENROUTER_FREE)
+        if b"openrouter" in (root / name).read_bytes().lower()
+    ]
+    assert named == []

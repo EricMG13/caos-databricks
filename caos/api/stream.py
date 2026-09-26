@@ -34,7 +34,7 @@ frame.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
 from dataclasses import dataclass, field
 from threading import Lock
 from time import monotonic, sleep
@@ -222,33 +222,56 @@ def case_tail(  # noqa: PLR0913 -- the stream's identity, then its lifetime
     `guarded(case_tail(...))` is what every caller outside this module and
     its own tests should hold instead (CF-022). Kept apart from this
     function's own body -- rather than a `try` wrapped around it -- so the
-    fix costs this already-baselined function no added nesting (C901).
+    fix costs this function no added nesting (C901).
     """
     started = monotonic()
     audit_head, run_head, terminal = _heads(conn, case_id, run_id)
     at = parse_marker(after, Marker(audit_head, run_head))
     run_open = run_id is not None and (terminal is None or at.run_seq < terminal)
+    cursor = _Cursor(at, run_open)
 
     if not _may_watch(conn, case_id, actor_id):
         return
     yield StreamEvent(at, None)
 
     while True:
-        for event, closes in _pending(conn, case_id, run_id if run_open else None, at):
-            at = event.id
-            if event.name is not None:
-                if not _may_watch(conn, case_id, actor_id):
-                    return
-                yield event
-            run_open = run_open and not closes
-
-        if not _may_watch(conn, case_id, actor_id):
-            return
-        if monotonic() - started >= deadline:
+        standing = yield from _poll(conn, case_id, run_id, actor_id, cursor)
+        if not standing or monotonic() - started >= deadline:
             return
         sleep(poll)
         if heartbeat:
             yield None
+
+
+@dataclass(slots=True)
+class _Cursor:
+    """Where a tail has read to, and whether its run half is still open."""
+
+    at: Marker
+    run_open: bool
+
+
+def _poll(
+    conn: StoreConnection,
+    case_id: UUID,
+    run_id: UUID | None,
+    actor_id: UUID,
+    cursor: _Cursor,
+) -> Generator[StreamEvent, None, bool]:
+    """One poll's named frames after the cursor, moving it past every row,
+    silent ones included; whether the actor may still watch afterwards.
+    Standing is read again before each named frame, and a frame is never
+    sent once it is lost."""
+    for event, closes in _pending(
+        conn, case_id, run_id if cursor.run_open else None, cursor.at
+    ):
+        cursor.at = event.id
+        if event.name is not None:
+            if not _may_watch(conn, case_id, actor_id):
+                return False
+            yield event
+        cursor.run_open = cursor.run_open and not closes
+    return _may_watch(conn, case_id, actor_id)
 
 
 def guarded(tail: Iterator[StreamEvent | None]) -> Iterator[StreamEvent | None]:
