@@ -892,22 +892,6 @@ def main(argv: list[str] | None = None) -> int:
     if not args:
         print("usage: workspace_stub.py -- <command> [args...]", file=sys.stderr)
         return 2
-    if _forwards_profile(args):
-        print(
-            "stub: -p/--profile would let the CLI resolve a workspace of its "
-            "own; omit it -- this stand-in already points the CLI at the "
-            "loopback stub",
-            file=sys.stderr,
-        )
-        return 2
-    own = _own_workspace(args)
-    if own:
-        print(
-            f"stub: {'; '.join(own)} -- the CLI would prefer it to the loopback "
-            "stub; a stand-in run takes the workspace from the stub alone",
-            file=sys.stderr,
-        )
-        return 2
     stub = WorkspaceStub()
     with stub.serving():
         code = run_against(stub, args)
@@ -916,14 +900,37 @@ def main(argv: list[str] | None = None) -> int:
     return code
 
 
+def _refused(args: list[str]) -> str | None:
+    """Why `args` may not run against a stand-in, or None: an explicit
+    profile (R24-02, N1) or a bundle naming a workspace of its own (W7)."""
+    if _forwards_profile(args):
+        return (
+            "stub: -p/--profile would let the CLI resolve a workspace of its "
+            "own; omit it -- this stand-in already points the CLI at the "
+            "loopback stub"
+        )
+    own = _own_workspace(args)
+    if own:
+        return (
+            f"stub: {'; '.join(own)} -- the CLI would prefer it to the loopback "
+            "stub; a stand-in run takes the workspace from the stub alone"
+        )
+    return None
+
+
 def run_against(stub: WorkspaceStub, args: list[str]) -> int:
-    """Run `args` against `stub`, which is serving, the way `main` does: no
-    profile, no inherited way into another workspace, a private empty config
-    file, and a `bundle` command only over no bundle state but a stand-in's
-    (`fresh_state`, DF-13). The child's exit code; 2, with nothing run, over a
-    real workspace's state. `main` runs one command per stub; a caller that
+    """Run `args` against `stub`, which is serving: never with an explicit
+    profile or in a bundle naming a workspace of its own, and with no
+    inherited way into another workspace, a private empty config file, and a
+    `bundle` command only over no bundle state but a stand-in's
+    (`fresh_state`, DF-13). The child's exit code; 2, with nothing run, for
+    any of those refusals. `main` runs one command per stub; a caller that
     reads the stub afterwards, as `shipped_boot.py` reads the synced files,
-    runs several against the one it holds."""
+    runs several against the one it holds, under the same refusals."""
+    refused = _refused(args)
+    if refused:
+        print(refused, file=sys.stderr)
+        return 2
     if any(re.search(r"\bbundle\b", arg) for arg in args):
         kept = fresh_state(Path.cwd())
         if kept:

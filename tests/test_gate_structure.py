@@ -321,8 +321,10 @@ OPENROUTER_FREE = ("caos", "icm", ".claude/skills", "databricks.yml", "app.yaml"
 
 def test_openrouter_is_named_only_under_tests() -> None:
     """A28, which no CI step runs: the test provider exists only under
-    `tests/` (CLAUDE.md), so no file the App ships or its prompts are built
-    from names it -- a comment included, which is how one reached `caos/`."""
+    `tests/` (CLAUDE.md), so none of A28's paths -- the App's code, its
+    prompts' sources and its config -- names it, a comment included, which is
+    how one reached `caos/`. `pyproject.toml` ships too and names the adapter
+    and its marker, which is the dependency list's to do."""
     root = check_gate_config.REPO
     named = [
         name

@@ -34,6 +34,7 @@ from workspace_stub import (
     bundle_config,
     fresh_state,
     main,
+    run_against,
     stand_in_environment,
 )
 
@@ -429,6 +430,33 @@ def test_a_bundle_naming_a_workspace_of_its_own_never_leaves_loopback(
         assert main(["--", "databricks", "bundle", "validate", "-t", "dev"]) == 2
         assert named in capsys.readouterr().err
         assert attacker.requests == []
+
+
+def test_a_caller_holding_its_own_stub_meets_the_same_refusals(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """S7: `shipped_boot.py` runs its deploy through `run_against` on a stub it
+    holds, and the profile and W7 refusals lived in `main` alone: a bundle
+    edited to name its own host was deployed to that host. Both refuse there
+    too, before any child runs."""
+    with WorkspaceStub().serving() as attacker, WorkspaceStub().serving() as own:
+        (tmp_path / "databricks.yml").write_text(
+            BUNDLE + f"    workspace:\n      host: {attacker.host}\n", encoding="utf-8"
+        )
+        monkeypatch.chdir(tmp_path)
+        ran = tmp_path / "ran"
+        child = f"touch {ran}; exit 7"
+        deploy = ["sh", "-c", f"{child} # databricks bundle deploy"]
+        assert run_against(own, deploy) == 2
+        assert "target dev sets workspace.host" in capsys.readouterr().err
+        (tmp_path / "databricks.yml").write_text(BUNDLE, encoding="utf-8")
+        profile = ["sh", "-c", f"{child} # databricks bundle deploy -p attacker"]
+        assert run_against(own, profile) == 2
+        assert "-p/--profile" in capsys.readouterr().err
+        assert not ran.exists()
+        assert attacker.requests == own.requests == []
 
 
 def test_inherited_auth_never_reaches_the_child(
