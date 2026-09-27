@@ -142,6 +142,7 @@ export function SourceDrawer({
   fact,
   address,
   withdrawnAt,
+  sourcesEpoch = 0,
   opener,
   onClose,
 }: {
@@ -149,6 +150,7 @@ export function SourceDrawer({
   /** Null when the view names no case or run: no page can be addressed. */
   address: PageAddress | null;
   withdrawnAt: string | null;
+  sourcesEpoch?: number;
   opener: HTMLElement;
   onClose: () => void;
 }) {
@@ -170,21 +172,22 @@ export function SourceDrawer({
     address && withdrawnAt === null
       ? `${address.caseId}|${address.runId}|${fact.source_id}|${fact.page}`
       : null;
+  const requestKey = pageKey === null ? null : `${pageKey}|${sourcesEpoch}`;
   const [page, setPage] = useState<{ key: string; status: PageStatus } | null>(null);
   const caseId = address?.caseId ?? null;
   const runId = address?.runId ?? null;
   useEffect(() => {
-    if (pageKey === null || caseId === null || runId === null) return undefined;
+    if (requestKey === null || caseId === null || runId === null) return undefined;
     const controller = new AbortController();
     void fetchPage(
       { caseId, runId, sourceId: fact.source_id, page: fact.page },
       controller.signal,
     ).then((status) => {
-      if (!controller.signal.aborted) setPage({ key: pageKey, status });
+      if (!controller.signal.aborted) setPage({ key: requestKey, status });
     });
     return () => controller.abort();
-  }, [pageKey, caseId, runId, fact.source_id, fact.page]);
-  const status = pageKey !== null && page?.key === pageKey ? page.status : null;
+  }, [requestKey, caseId, runId, fact.source_id, fact.page]);
+  const status = requestKey !== null && page?.key === requestKey ? page.status : null;
 
   return (
     <Overlay

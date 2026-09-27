@@ -46,6 +46,7 @@ import { SiteHeader } from "@/chrome/SiteHeader";
 import { composeChrome, markDisabled } from "@/chrome/compose";
 import { fallbackChrome } from "@/chrome/fallback";
 import { EvidenceProvider } from "@/evidence/EvidenceContext";
+import { ReportDraftProvider } from "@/sections/report/draft";
 import { Announcer } from "@/states/Announcer";
 import { NotLive, PageAlert } from "@/states/PageAlert";
 import { RegionState } from "@/states/RegionState";
@@ -146,6 +147,7 @@ export function Workspace({ section }: { section: Section }) {
   // the section down — and its open tail with it — for a label change.
   const key = `${section}|${caseId ?? ""}|${runId ?? ""}|${revisionId ?? ""}|${fixture ?? ""}`;
   const [held, setHeld] = useState<Keyed<Held> | null>(null);
+  const [sourceEvents, setSourceEvents] = useState<Keyed<number> | null>(null);
   const [tabChoice, setTabChoice] = useState<Keyed<string> | null>(null);
   // The section's chunk is fetched beside its document, not after it (N65).
   useEffect(() => {
@@ -215,6 +217,11 @@ export function Workspace({ section }: { section: Section }) {
       open && loadRef.current ? loadRef.current() : Promise.resolve(null);
     const stream = openTail(eventsUrl(caseId, tailRun, fixture), {
       onEvent: (name) => {
+        if (open && name === "sources_changed")
+          setSourceEvents((current) => ({
+            key,
+            value: current?.key === key ? current.value + 1 : 1,
+          }));
         if (refetches(name, section)) void load();
       },
       // Every open, the first included: an event landing between the
@@ -318,9 +325,10 @@ export function Workspace({ section }: { section: Section }) {
             document,
             withdrawals:
               latest && "document" in latest ? withdrawalsOf(latest.document) : new Map(),
+            sourcesEpoch: sourceEvents?.key === key ? sourceEvents.value : 0,
           }
         : null,
-    [document, section, caseId, displayedRunId, displayedRevisionId, latest],
+    [document, section, caseId, displayedRunId, displayedRevisionId, latest, sourceEvents, key],
   );
   // A tail the server refused says so while there is still a document it was
   // following; a region with none is already saying more than that (FE-3).
@@ -432,28 +440,30 @@ export function Workspace({ section }: { section: Section }) {
               outlives a navigation so the link that was activated keeps
               its place (finding FE-4). */}
           <EvidenceProvider key={section}>
-            {/* The snapshot ledger outlives the documents a section renders,
+            <ReportDraftProvider key={`${caseId ?? ""}|${runId ?? displayedRunId ?? ""}`}>
+              {/* The snapshot ledger outlives the documents a section renders,
                 so it sits above the boundary and the mount key. */}
-            <LedgerProvider>
-              <RegionState status={status} onReload={reload} onRetry={retry} section={section}>
-                {(doc) => (
-                  // A render failure is about the document that caused it:
-                  // the next one served clears it, without waiting for a
-                  // navigation to unmount the boundary.
-                  <SectionBoundary key={mountKey} resetOn={doc.observed_at}>
-                    {/* A view whose chunk is still in flight reads as the
+              <LedgerProvider>
+                <RegionState status={status} onReload={reload} onRetry={retry} section={section}>
+                  {(doc) => (
+                    // A render failure is about the document that caused it:
+                    // the next one served clears it, without waiting for a
+                    // navigation to unmount the boundary.
+                    <SectionBoundary key={mountKey} resetOn={doc.observed_at}>
+                      {/* A view whose chunk is still in flight reads as the
                         region loading, and a failed one meets the boundary.
                         Inside the panel, so the tabs never name a panel that
                         is not on the page while it loads. */}
-                    <SectionPanel tab={activeTab}>
-                      <Suspense fallback={<SurfaceState kind="loading" />}>
-                        <View key={mountKey} document={doc} tab={activeTab} />
-                      </Suspense>
-                    </SectionPanel>
-                  </SectionBoundary>
-                )}
-              </RegionState>
-            </LedgerProvider>
+                      <SectionPanel tab={activeTab}>
+                        <Suspense fallback={<SurfaceState kind="loading" />}>
+                          <View key={mountKey} document={doc} tab={activeTab} />
+                        </Suspense>
+                      </SectionPanel>
+                    </SectionBoundary>
+                  )}
+                </RegionState>
+              </LedgerProvider>
+            </ReportDraftProvider>
           </EvidenceProvider>
         </VisibleSnapshotContext.Provider>
       </Announcer>

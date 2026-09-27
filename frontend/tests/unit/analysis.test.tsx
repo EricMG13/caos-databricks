@@ -9,6 +9,8 @@ import { fireEvent, render } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { composeChrome, words } from "@/chrome/compose";
 import { stamp } from "@/ds/format";
+import { readMarkdown } from "@/ds/markdown";
+import { ReaderParts } from "@/sections/analysis/module";
 import { AnalysisSection, PROSE_SHOWN, sourceRegister } from "@/sections/analysis/AnalysisSection";
 import { conclusionOf, handoffSeverity } from "@/sections/analysis/tone";
 import { parseAnalysisDocument } from "@/wire/v1";
@@ -40,6 +42,15 @@ function openTab(container: HTMLElement, tab: "appendix" | "audit" | "written") 
 }
 
 describe("Analysis", () => {
+  test("labelled columns retain nested caveats as a list", () => {
+    const blocks = readMarkdown(
+      "- **Strength** Core cash flow\n  - Subject to refinancing\n- **Risk** Leverage",
+    )!;
+    const { container } = routed(<ReaderParts parts={[{ title: "Assessment", blocks }]} />);
+    expect(container.querySelector("[data-reader-part] .cols")).toBeNull();
+    expect(container).toHaveTextContent("Subject to refinancing");
+  });
+
   test("test_every_enabled_demo_fixture_is_a_valid_v1_document", () => {
     const fixtures = [
       "../../fixtures/analysis.json",

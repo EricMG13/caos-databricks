@@ -14,6 +14,8 @@ export interface VisibleSnapshot {
   readonly document: SectionDocument;
   /** Live withdrawals by `source_id` (withdrawn_at), applied even to a stale view. */
   readonly withdrawals: ReadonlyMap<string, string>;
+  /** Source events revalidate an open page even when the section refresh fails. */
+  readonly sourcesEpoch?: number;
 }
 
 /** No provider means no snapshot: a consumer must render nothing it cannot bind. */

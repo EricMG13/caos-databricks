@@ -16,7 +16,7 @@
 // digest each act binds and the head a draft was composed against are all
 // checked at commit, under the case lock. A signer whose browser still offers
 // "Freeze" is refused there, and that refusal is what this surface shows.
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { CheckIcon } from "lucide-react";
 import {
@@ -34,6 +34,7 @@ import { ConfirmedControl } from "@/controls/ConfirmedControl";
 import { RefusedControl } from "@/controls/RefusedControl";
 import { CommandOutcome, useCommand } from "@/sections/run/controls";
 import { citationsOf, figureMarker, paragraphs, type CitationChoice } from "./figures";
+import { DraftContext } from "./draft";
 import {
   parseReportDocument,
   type ActionView,
@@ -269,7 +270,10 @@ export function FilingControls({
   onRefreshed: (next: ReportDocument) => void;
 }) {
   const { body } = document;
-  const [draft, setDraft] = useState("");
+  const sharedDraft = useContext(DraftContext);
+  const [localDraft, setLocalDraft] = useState("");
+  const draft = sharedDraft?.draft ?? localDraft;
+  const setDraft = sharedDraft?.setDraft ?? setLocalDraft;
   const editor = useRef<HTMLTextAreaElement>(null);
   // Where the caret goes after a figure is inserted: set with the draft, and
   // placed once React has written the new value, which moves the caret.

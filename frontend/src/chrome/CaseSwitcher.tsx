@@ -68,7 +68,7 @@ export function CaseSwitcher({
   const [listed, setListed] = useState<Listed>({ kind: "idle" });
   const flight = useRef<AbortController | null>(null);
   const open = (next: boolean) => {
-    if (!next || flight.current || listed.kind === "ready") return;
+    if (!next || flight.current) return;
     const controller = new AbortController();
     flight.current = controller;
     setListed({ kind: "loading" });

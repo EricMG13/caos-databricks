@@ -227,12 +227,14 @@ def _approved(conn: StoreConnection, preview: GatePreview) -> bool:
 
 
 def approved_run_input(
-    conn: StoreConnection, run_id: UUID
+    conn: StoreConnection, run_id: UUID, *, allow_finished_for_review: bool = False
 ) -> tuple[RunInput, ResolvedRoute]:
     """Live authority under case/run locks; caller owns the whole transaction.
 
     Runtime and acceptance integration remain separate. This read is not an
     atomic provider-call claim and does not prove frozen block/token contents.
+    `allow_finished_for_review` admits a completed or blocked qualification
+    case for verification only; ordinary execution still requires RUNNING.
     """
     try:
         try:
@@ -241,7 +243,10 @@ def approved_run_input(
             if refused.code is RefusalCode.RUN_NOT_FOUND:
                 raise Refusal(RefusalCode.RUN_INPUT_INVALID) from None
             raise
-        if status is not RunStatus.RUNNING:
+        if status is not RunStatus.RUNNING and not (
+            allow_finished_for_review
+            and status in (RunStatus.COMPLETE, RunStatus.BLOCKED)
+        ):
             raise Refusal(RefusalCode.RUN_NOT_RUNNING)
         loaded = _load_run_input(conn, run_id)
         if loaded is None:
@@ -258,7 +263,11 @@ def approved_run_input(
 
 
 def execution_input(
-    conn: StoreConnection, run_id: UUID, bundle: Bundle
+    conn: StoreConnection,
+    run_id: UUID,
+    bundle: Bundle,
+    *,
+    allow_finished_for_review: bool = False,
 ) -> tuple[RunInput, ResolvedRoute]:
     """Require the actual executing Bundle/host adapter beside live authority.
 
@@ -267,9 +276,12 @@ def execution_input(
     with a module the adapter does not own (§42.2); `ROUTE_IDENTITY_INVALID`
     for a pinned route that is not the pinned build's own catalog resolution
     of its pathway (CF-025) -- before any attempt, reservation or call, since
-    every executing caller reads this first.
+    every executing caller reads this first. The review flag changes which
+    stored status can be checked, not `run_route`'s execution authority.
     """
-    pin, route = approved_run_input(conn, run_id)
+    pin, route = approved_run_input(
+        conn, run_id, allow_finished_for_review=allow_finished_for_review
+    )
     if not isinstance(bundle, Bundle):
         raise Refusal(RefusalCode.RUN_INPUT_INVALID)
     if (pin.build_id, pin.manifest_sha256, pin.adapter_version) != (

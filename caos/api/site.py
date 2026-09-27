@@ -57,7 +57,26 @@ SECTIONS = (
     "committee",
     "admin",
 )
-_WORKSPACE = re.compile(r"^/(?:(?:" + "|".join(SECTIONS) + r")/?)?$")
+# Paths still forwarded by the client router after a direct browser request.
+FORWARDS = (
+    "issuers",
+    "issuers/profile",
+    "deepdive",
+    "research",
+    "pipeline",
+    "command",
+    "portfolios",
+    "query",
+    "sector",
+    "sector-rv",
+    "sponsors",
+    "monitor",
+    "decisions",
+    "reports",
+    "settings",
+    "login",
+)
+_WORKSPACE = re.compile(r"^/(?:(?:" + "|".join((*SECTIONS, *FORWARDS)) + r")/?)?$")
 _SAFE = frozenset({"GET", "HEAD"})
 
 

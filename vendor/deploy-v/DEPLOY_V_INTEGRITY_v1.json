@@ -1,6 +1,6 @@
 {
   "authority": "DEPLOY_V_INTEGRITY_v1",
-  "build_id": "820dfc7c624af6ef920eefff9e809c9cb41c83be230e374e481a814e7953ac8a",
+  "build_id": "15b00c648367d1207ca06fb2caf4fd99ac7aca3f35759aab770c4807b2dc7cb4",
   "root_file_hashes": {
     ".gitignore": {
       "bytes": 83,
@@ -24,7 +24,7 @@
     },
     "CP_DEPLOY_V_RETRIEVAL_INDEX_v1.json": {
       "bytes": 5437,
-      "sha256": "04f11751e1c1cab19b5334954e15d4054dd12591d5d390ec411dc910d6489df0"
+      "sha256": "a9a51c9ddc2d5a8d1c5f62ae4d538bee76a443055a3add145a75770adcf1f73e"
     },
     "CP_MODULE_PAYLOAD_BASE.schema.txt": {
       "bytes": 1930,
@@ -32,19 +32,19 @@
     },
     "DEPLOY_V_BASELINE.json": {
       "bytes": 58204,
-      "sha256": "53f54e75c52367f2660003b8b35fde79849f552c5874be2d7a453b0723b74bb3"
+      "sha256": "2f0dc47d6aad1084f0e71c5d92110a97ba3b59c869f78551cb9080c7f8d8d253"
     },
     "DEPLOY_V_COPILOT_MEMORY_PROMPT.md": {
       "bytes": 11934,
-      "sha256": "19b37ab6b4b344304b65ae1a63aa298df5016db16ea3ff69a0813c16e9a9ab18"
+      "sha256": "27aa92d417580e3e6f25f9a0fa5736062056b446bcd518c155723c04fdbbb344"
     },
     "DEPLOY_V_COPILOT_MEMORY_PROMPT_URL_BOUND.md": {
       "bytes": 12653,
-      "sha256": "93bf5f71e4bee3ca2cd289b1353f4fdadbc6c3aee0595e66eb92452bc2c494ab"
+      "sha256": "af6fdbb94ac0764b629e12eb3267977403de29f938f0fa7a5dc4b85b56a8dbbc"
     },
     "DEPLOY_V_MANIFEST.json": {
       "bytes": 70399,
-      "sha256": "12f9c64845a837e5c33a7e67856b654a1b2d68a432d7451c13f520ced7b07918"
+      "sha256": "265613e1106fd1cd0c58a31202946ebc2daa6b09019a655181de4aef1d42feb1"
     },
     "README.md": {
       "bytes": 7233,
@@ -135,8 +135,8 @@
           "sha256": "27e82db7f58967c311357684a71026646777021b9d8d54da7b9d90236d518e50"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 39964,
-          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
+          "bytes": 40085,
+          "sha256": "84009899fa457b1cea35180dbc136e7288b1d3b8341b33a0a7d78658bffaf607"
         }
       }
     },
@@ -187,8 +187,8 @@
           "sha256": "8f90ad05f99ffe09ea6f223cbd67827bb4ab36f4d243e12645eac628dbff9233"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 39964,
-          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
+          "bytes": 40085,
+          "sha256": "84009899fa457b1cea35180dbc136e7288b1d3b8341b33a0a7d78658bffaf607"
         }
       }
     },
@@ -249,8 +249,8 @@
           "sha256": "27e82db7f58967c311357684a71026646777021b9d8d54da7b9d90236d518e50"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 39964,
-          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
+          "bytes": 40085,
+          "sha256": "84009899fa457b1cea35180dbc136e7288b1d3b8341b33a0a7d78658bffaf607"
         }
       }
     },
@@ -297,8 +297,8 @@
           "sha256": "8f90ad05f99ffe09ea6f223cbd67827bb4ab36f4d243e12645eac628dbff9233"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 39964,
-          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
+          "bytes": 40085,
+          "sha256": "84009899fa457b1cea35180dbc136e7288b1d3b8341b33a0a7d78658bffaf607"
         }
       }
     },
@@ -349,8 +349,8 @@
           "sha256": "3073ed168e8f89b422b3421df4255a48a0875b1d44a90a53414ce078c2f7015b"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 39964,
-          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
+          "bytes": 40085,
+          "sha256": "84009899fa457b1cea35180dbc136e7288b1d3b8341b33a0a7d78658bffaf607"
         }
       }
     },
@@ -391,8 +391,8 @@
           "sha256": "27e82db7f58967c311357684a71026646777021b9d8d54da7b9d90236d518e50"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 39964,
-          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
+          "bytes": 40085,
+          "sha256": "84009899fa457b1cea35180dbc136e7288b1d3b8341b33a0a7d78658bffaf607"
         }
       }
     },
@@ -439,8 +439,8 @@
           "sha256": "27e82db7f58967c311357684a71026646777021b9d8d54da7b9d90236d518e50"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 39964,
-          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
+          "bytes": 40085,
+          "sha256": "84009899fa457b1cea35180dbc136e7288b1d3b8341b33a0a7d78658bffaf607"
         }
       }
     },
@@ -505,8 +505,8 @@
           "sha256": "27e82db7f58967c311357684a71026646777021b9d8d54da7b9d90236d518e50"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 39964,
-          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
+          "bytes": 40085,
+          "sha256": "84009899fa457b1cea35180dbc136e7288b1d3b8341b33a0a7d78658bffaf607"
         }
       }
     },
@@ -575,8 +575,8 @@
           "sha256": "48eedacfa17fcb75ac17f67e3141639973aec1e7e0f00f3491896f702d27158f"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 39964,
-          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
+          "bytes": 40085,
+          "sha256": "84009899fa457b1cea35180dbc136e7288b1d3b8341b33a0a7d78658bffaf607"
         }
       }
     },
@@ -627,8 +627,8 @@
           "sha256": "3bb7fd7ea167ccb154ac92e819aaa6640c63a08648a3808ccaa7283e8a595722"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 39964,
-          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
+          "bytes": 40085,
+          "sha256": "84009899fa457b1cea35180dbc136e7288b1d3b8341b33a0a7d78658bffaf607"
         }
       }
     },
@@ -679,8 +679,8 @@
           "sha256": "27e82db7f58967c311357684a71026646777021b9d8d54da7b9d90236d518e50"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 39964,
-          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
+          "bytes": 40085,
+          "sha256": "84009899fa457b1cea35180dbc136e7288b1d3b8341b33a0a7d78658bffaf607"
         }
       }
     },
@@ -770,8 +770,8 @@
           "sha256": "59d50580a150328ff03f16703d22f70cd03534e840d15d03f4d0ed3147d8c6eb"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 39964,
-          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
+          "bytes": 40085,
+          "sha256": "84009899fa457b1cea35180dbc136e7288b1d3b8341b33a0a7d78658bffaf607"
         }
       }
     },
@@ -862,8 +862,8 @@
           "sha256": "27e82db7f58967c311357684a71026646777021b9d8d54da7b9d90236d518e50"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 39964,
-          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
+          "bytes": 40085,
+          "sha256": "84009899fa457b1cea35180dbc136e7288b1d3b8341b33a0a7d78658bffaf607"
         }
       }
     },
@@ -914,8 +914,8 @@
           "sha256": "59d50580a150328ff03f16703d22f70cd03534e840d15d03f4d0ed3147d8c6eb"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 39964,
-          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
+          "bytes": 40085,
+          "sha256": "84009899fa457b1cea35180dbc136e7288b1d3b8341b33a0a7d78658bffaf607"
         }
       }
     },
@@ -976,8 +976,8 @@
           "sha256": "27e82db7f58967c311357684a71026646777021b9d8d54da7b9d90236d518e50"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 39964,
-          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
+          "bytes": 40085,
+          "sha256": "84009899fa457b1cea35180dbc136e7288b1d3b8341b33a0a7d78658bffaf607"
         }
       }
     },
@@ -1038,8 +1038,8 @@
           "sha256": "27e82db7f58967c311357684a71026646777021b9d8d54da7b9d90236d518e50"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 39964,
-          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
+          "bytes": 40085,
+          "sha256": "84009899fa457b1cea35180dbc136e7288b1d3b8341b33a0a7d78658bffaf607"
         }
       }
     },
@@ -1086,8 +1086,8 @@
           "sha256": "27e82db7f58967c311357684a71026646777021b9d8d54da7b9d90236d518e50"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 39964,
-          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
+          "bytes": 40085,
+          "sha256": "84009899fa457b1cea35180dbc136e7288b1d3b8341b33a0a7d78658bffaf607"
         }
       }
     },
@@ -1126,8 +1126,8 @@
           "sha256": "27e82db7f58967c311357684a71026646777021b9d8d54da7b9d90236d518e50"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 39964,
-          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
+          "bytes": 40085,
+          "sha256": "84009899fa457b1cea35180dbc136e7288b1d3b8341b33a0a7d78658bffaf607"
         },
         "scripts/validate_research.py": {
           "bytes": 4145,
@@ -1231,8 +1231,8 @@
           "sha256": "27e82db7f58967c311357684a71026646777021b9d8d54da7b9d90236d518e50"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 39964,
-          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
+          "bytes": 40085,
+          "sha256": "84009899fa457b1cea35180dbc136e7288b1d3b8341b33a0a7d78658bffaf607"
         }
       }
     },
@@ -1391,8 +1391,8 @@
           "sha256": "908d14944a3241a5253cdac98ba6c1bdcc1a3a454acc0a3c24bed13eeab3d6d0"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 39964,
-          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
+          "bytes": 40085,
+          "sha256": "84009899fa457b1cea35180dbc136e7288b1d3b8341b33a0a7d78658bffaf607"
         }
       }
     },
@@ -1567,8 +1567,8 @@
           "sha256": "558b7812f2445b90d6835566c0efffab86a2dda0bb085531477635d85663dc0d"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 39964,
-          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
+          "bytes": 40085,
+          "sha256": "84009899fa457b1cea35180dbc136e7288b1d3b8341b33a0a7d78658bffaf607"
         }
       }
     },
@@ -1617,8 +1617,8 @@
           "sha256": "3bb7fd7ea167ccb154ac92e819aaa6640c63a08648a3808ccaa7283e8a595722"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 39964,
-          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
+          "bytes": 40085,
+          "sha256": "84009899fa457b1cea35180dbc136e7288b1d3b8341b33a0a7d78658bffaf607"
         }
       }
     },
@@ -1663,8 +1663,8 @@
           "sha256": "27e82db7f58967c311357684a71026646777021b9d8d54da7b9d90236d518e50"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 39964,
-          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
+          "bytes": 40085,
+          "sha256": "84009899fa457b1cea35180dbc136e7288b1d3b8341b33a0a7d78658bffaf607"
         }
       }
     },
@@ -1713,15 +1713,15 @@
           "sha256": "19fbf04ce2c909dacc43037081e5da95c539ef4ac3e7e3839a1d70d5c13cd18b"
         },
         "scripts/validate_handoff.py": {
-          "bytes": 39964,
-          "sha256": "a54fb284ad6c1d5669b4fb3e215a439f484a856b46728a95ac1dce99ab330754"
+          "bytes": 40085,
+          "sha256": "84009899fa457b1cea35180dbc136e7288b1d3b8341b33a0a7d78658bffaf607"
         }
       }
     }
   ],
   "source_hashes": {
-    "deployed_baseline": "53f54e75c52367f2660003b8b35fde79849f552c5874be2d7a453b0723b74bb3",
+    "deployed_baseline": "2f0dc47d6aad1084f0e71c5d92110a97ba3b59c869f78551cb9080c7f8d8d253",
     "deployed_child_schema_registry": "6b1766e5698632e277ede71037bee2fcd3e02b726c43b76fc4fe0f8b47c5ef48",
-    "deployed_manifest": "12f9c64845a837e5c33a7e67856b654a1b2d68a432d7451c13f520ced7b07918"
+    "deployed_manifest": "265613e1106fd1cd0c58a31202946ebc2daa6b09019a655181de4aef1d42feb1"
   }
 }

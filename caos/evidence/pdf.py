@@ -48,7 +48,15 @@ from io import BytesIO
 from pathlib import Path
 from typing import TYPE_CHECKING, TypedDict
 
-from pdfminer.layout import LAParams, LTAnno, LTChar, LTPage, LTTextBox, LTTextLine
+from pdfminer.layout import (
+    LAParams,
+    LTAnno,
+    LTChar,
+    LTContainer,
+    LTPage,
+    LTTextBox,
+    LTTextLine,
+)
 from pdfminer.pdfparser import PDFSyntaxError
 from pdfminer.utils import apply_matrix_rect
 
@@ -89,7 +97,7 @@ LAYOUT: _Layout = {
     "word_margin": 0.1,
     "boxes_flow": 0.5,
     "detect_vertical": False,
-    "all_texts": False,
+    "all_texts": True,
 }
 COORDINATES = "crop-top-left-rotated-pt"
 # A token not wholly inside the crop is text no reader sees: dropped, not clipped.
@@ -165,8 +173,9 @@ READ_COLOUR_SPACES = "gray-rgb-cmyk-by-count,indexed,separation-exponential"
 # is drawn by no conforming viewer, whatever the tints.
 COLORANT_NONE_SPACES = "separation-none,devicen-all-none"
 DEVICE_N_COLORANTS = 32
-# What is behind a glyph: the last filled path under its centre, or white.
-BACKDROP = "last-filled-path-over-white"
+# What is behind a glyph: the last known rectangular fill, an unknown
+# nonrectangular fill or image, or white paper.
+BACKDROP = "last-rectangular-fill,other-fills-unknown-over-white"
 
 Frame = tuple[float, float, float, float]
 
@@ -193,10 +202,12 @@ class PdfExtractor:
             # a viewer draws it in, where pdfminer placed it by the form's.
             # v8: text painted in a colorant that paints nothing -- the
             # `None` of a Separation, or of every colorant of a DeviceN -- is
-            # marked. Earlier rows keep their stored identity and verify as
+            # marked. v9: form XObject text is read, and nonrectangular
+            # fills have an unknown backdrop instead of their box's colour.
+            # Earlier rows keep their stored identity and verify as
             # recorded; readmission is how a source gains the new tokens
             # (section 44.4's rule).
-            "8",
+            "9",
             {
                 "pdfminer_version": version("pdfminer.six"),
                 "line_overlap": LAYOUT["line_overlap"],
@@ -439,11 +450,14 @@ def _within_limits(page_number: int, limits: AdmissionLimits, deadline: float) -
 
 
 def _text_boxes(page: LTPage) -> Iterator[list[LTTextLine]]:
-    """Each text box of a laid-out page, as its text lines; a box of any
-    other kind is not text and is passed over, a line of any other kind too."""
-    for box in page:
+    """Read ordinary and form XObject text boxes in page order."""
+    stack = list(reversed(list(page)))
+    while stack:
+        box = stack.pop()
         if isinstance(box, LTTextBox):
             yield [line for line in box if isinstance(line, LTTextLine)]
+        elif isinstance(box, LTContainer):
+            stack.extend(reversed(list(box)))
 
 
 def _pages(data: bytes) -> Iterator[tuple[Frame | None, LTPage, dict[LTChar, str]]]:

@@ -427,6 +427,14 @@ def test_a_quote_the_body_ends_a_sentence_with_is_still_quoted(marks: str) -> No
     assert citations[0].matched_text == QUOTE
 
 
+def test_a_quote_starting_with_its_own_punctuation_survives_outer_quotes() -> None:
+    from caos.methodology.handoff import _openings, _quoted
+
+    words = "“(Unaudited) revenue was 100 million.”".split()
+    assert _quoted(words, _openings(words), "(Unaudited) revenue was 100 million.")
+    assert not _quoted(words, _openings(words), "(Unaudited) revenue was 101 million.")
+
+
 @pytest.mark.parametrize("marks", ['\\"{}\\".', "\\({}\\)", "\\[{}\\]:"])
 def test_a_quote_the_body_writes_with_markdown_escapes_is_still_quoted(
     marks: str,

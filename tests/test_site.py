@@ -29,6 +29,7 @@ from caos.api.deps import DATABASE_URL
 from caos.api.edge import PLATFORM_ENV, SECURITY_HEADERS
 from caos.api.identity import WORKSPACE_ENV
 from caos.api.site import (
+    FORWARDS,
     MANIFEST,
     MANIFEST_CAP,
     SECTIONS,
@@ -274,6 +275,19 @@ def test_section_deep_links_serve_the_export_with_their_query(site: Path) -> Non
     _secured(asset)
     # An unknown section is not quietly the workspace.
     assert client.get("/not-a-section/").status_code == 404
+
+
+def test_client_forwards_reach_the_shell_without_a_redirect(site: Path) -> None:
+    routes_path = Path(__file__).resolve().parents[1] / "frontend/src/app/routes.json"
+    routes = json.loads(routes_path.read_text())
+    assert {f"/{slug}" for slug in FORWARDS} == set(routes["forwards"])
+    client = TestClient(application)
+    for path in routes["forwards"]:
+        for suffix in ("", "/"):
+            response = client.get(f"{path}{suffix}?case={CASE}", follow_redirects=False)
+            assert response.status_code == 200, path
+            assert response.content == INDEX
+            assert "location" not in response.headers
 
 
 def test_a_wrong_method_on_an_api_path_still_answers_endpoint_not_found(

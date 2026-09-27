@@ -184,6 +184,17 @@ def test_a_critical_finding_requires_blocked() -> None:
     assert _refused(CP0, over_blocked).code is RefusalCode.HANDOFF_BLOCKED
 
 
+@pytest.mark.parametrize("severity", ["CRITICAL", "MATERIAL"])
+def test_a_single_column_qa_finding_applies_its_cap(severity: str) -> None:
+    table = f"| Severity |\n| --- |\n| {severity} — unresolved |\n"
+    markdown = CP0_MD.replace(
+        b"## QA Validation\n\n", b"## QA Validation\n\n" + table.encode() + b"\n", 1
+    )
+    result = CONTRACT.validate_handoff.validate_text(markdown.decode())
+    assert any(severity in error for error in result.errors)
+    assert _refused(CP0, markdown).code is RefusalCode.HANDOFF_MALFORMED
+
+
 def test_a_material_finding_over_restricted_or_blocked_is_conformant() -> None:
     restricted = _with_findings(
         _markdown(CP0, authored=RESTRICTED), "MATERIAL", "MINOR"

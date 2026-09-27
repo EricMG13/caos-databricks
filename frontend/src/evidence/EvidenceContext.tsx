@@ -202,6 +202,7 @@ export function EvidenceProvider({ children }: { children: ReactNode }) {
           withdrawnAt={
             snapshot.withdrawals.get(resolved.fact.source_id) ?? resolved.fact.withdrawn_at
           }
+          sourcesEpoch={snapshot.sourcesEpoch ?? 0}
           opener={shown.opener}
           onClose={closing(setFact, shown.id)}
         />

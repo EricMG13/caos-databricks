@@ -478,7 +478,10 @@ def _eligible(
     prepared: PreparedCase,
 ) -> ResolvedRoute:
     """Compare expectations with current authority inside the caller's owned unit."""
-    pin, route = execution_input(conn, prepared.input.run_id, harness.bundle)
+    run_id = prepared.input.run_id
+    pin, route = execution_input(
+        conn, run_id, harness.bundle, allow_finished_for_review=True
+    )
     if (
         any(
             type(getattr(pin, f.name)) is not type(getattr(prepared.input, f.name))
@@ -625,6 +628,9 @@ def _perform_one(
     """Recheck one prepared case, execute it, and retain its typed stopped record."""
     run_id = prepared.input.run_id
     stopped: RefusalCode | None = None
+    with execution_reads(conn):
+        if run_status(conn, run_id) in (RunStatus.COMPLETE, RunStatus.BLOCKED):
+            return _record(conn, blobs, harness, prepared, None)
     try:
         with execution_reads(conn):
             route = _eligible(conn, harness, case, prepared)

@@ -1,10 +1,10 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import type { ReactNode } from "react";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { AppSidebar, railLabel } from "@/chrome/AppSidebar";
-import { caseTarget, switcherLines } from "@/chrome/CaseSwitcher";
+import { CaseSwitcher, caseTarget, switcherLines } from "@/chrome/CaseSwitcher";
 import { SectionPanel, SectionTabs } from "@/chrome/SectionTabs";
 import { SectionSummary } from "@/chrome/SectionSummary";
 import { SEVERITY_BADGE, SeverityMark } from "@/chrome/SeverityMark";
@@ -47,6 +47,39 @@ const QUIET: Ribbon = {
 };
 
 describe("the sidebar", () => {
+  test("reopening the case switcher reads newly granted cases", async () => {
+    const directory = JSON.parse(readFileSync(`${FIXTURES}directory.json`, "utf8"));
+    const newCase = {
+      ...directory.body.cases[0],
+      case_id: "00000000-0000-4000-8000-0000000000ff",
+      title: "New case",
+    };
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(directory)))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            ...directory,
+            body: { ...directory.body, cases: [...directory.body.cases, newCase] },
+          }),
+        ),
+      );
+    vi.stubGlobal("fetch", fetch);
+    try {
+      render(shell(<CaseSwitcher section="analysis" subject={null} caseId={null} />));
+      const trigger = screen.getByRole("button", { name: /CAOS/ });
+      fireEvent.click(trigger);
+      await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+      fireEvent.keyDown(document, { key: "Escape" });
+      fireEvent.click(trigger);
+      await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+      expect(await screen.findByText("New case")).toBeInTheDocument();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   test("lists the nine sections, each named with its count and one-line state", () => {
     const [, doc] = documents()[0]!;
     render(
