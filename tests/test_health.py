@@ -565,7 +565,7 @@ def test_a_probe_that_never_returns_cannot_starve_the_others() -> None:
 
     probes = _all("OK")
     probes["identity"] = hangs
-    state = health.ProbeState(probes=probes, deadline=0.05, clock=_racing_clock())
+    state = health.ProbeState(probes=probes, clock=_racing_clock())
 
     async def rounds() -> None:
         asyncio.get_running_loop().set_default_executor(ThreadPoolExecutor(4))
@@ -579,6 +579,11 @@ def test_a_probe_that_never_returns_cannot_starve_the_others() -> None:
                     "OK",
                 )
                 assert state.identity == "PROBE_TIMEOUT"
+                # These rounds skip the production interval; retire healthy threads.
+                for name, thread in state.threads.items():
+                    if name != "identity":
+                        thread.join(health.PROBE_DEADLINE)
+                        assert not thread.is_alive()
         finally:
             never.set()
 
