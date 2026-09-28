@@ -5,6 +5,7 @@
 // (brief 4.2, slice 4.2i); grant and revoke are the other two (O21), in their
 // own panel so the register keeps one action per row.
 import { useState } from "react";
+import { useDocumentRefetch } from "@/app/useDocumentRefetch";
 import { CaseAccess } from "./CaseAccess";
 import { CaseRegister } from "./CaseRegister";
 import { NewCase, refetchDirectory } from "./NewCase";
@@ -16,24 +17,13 @@ export function DirectorySection({
   document: DirectoryDocument;
   tab: string | null;
 }) {
-  // 4.2 owns only this control's own refetch (decision 12); the SSE-driven
-  // refresh every other section gets is 4.4's. A new document from the
-  // parent (navigation, a future poll) always wins over a stale local one --
-  // adjusted during render (React's documented pattern for this), never in
-  // an effect, so there is no cascading extra render.
-  const [live, setLive] = useState(document);
-  const [seen, setSeen] = useState(document);
-  if (document !== seen) {
-    setSeen(document);
-    setLive(document);
-  }
+  const { live, refetch } = useDocumentRefetch(document);
   const { cases } = live.body;
   const createCaseAction = live.chrome.actions.find((a) => a.action === "CREATE_CASE");
   const [refreshFailed, setRefreshFailed] = useState(false);
   async function refresh() {
-    const refreshed = await refetchDirectory();
-    setRefreshFailed(refreshed === null);
-    if (refreshed) setLive(refreshed);
+    const refreshed = await refetch(refetchDirectory);
+    if (refreshed !== null) setRefreshFailed(!refreshed);
   }
   return (
     <div className="col">
@@ -46,7 +36,7 @@ export function DirectorySection({
           </span>
         </header>
         <div className="pb flush">
-          <NewCase action={createCaseAction} onCreated={setLive} />
+          <NewCase action={createCaseAction} onRefetch={refetch} />
           <CaseRegister rows={cases} />
           {cases.length === 0 ? <p className="pb note">No case matches.</p> : null}
         </div>

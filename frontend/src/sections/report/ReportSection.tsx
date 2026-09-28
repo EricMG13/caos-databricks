@@ -2,7 +2,7 @@
 // elements, never markup (D60), with its exact text a tab away; this surface
 // offers no legacy draft action. A narrative figure is
 // a chip that opens its source page (N59).
-import { useState } from "react";
+import { useDocumentRefetch } from "@/app/useDocumentRefetch";
 import { Link } from "react-router";
 import { FilingControls } from "./FilingControls";
 import { sectionPath } from "@/app/sections";
@@ -158,15 +158,7 @@ function Revisions({ body }: { body: ReportDocument["body"] }) {
 }
 
 export function ReportSection({ document }: { document: ReportDocument; tab: string | null }) {
-  // The filing controls re-read this section's own document after an act, and
-  // a fresh document from the parent always supersedes that local copy --
-  // adjusted during render, React's own pattern, as Directory and Upload do.
-  const [live, setLive] = useState(document);
-  const [seen, setSeen] = useState(document);
-  if (document !== seen) {
-    setSeen(document);
-    setLive(document);
-  }
+  const { live, refetch } = useDocumentRefetch(document);
   const { body } = live;
   return (
     <div
@@ -223,7 +215,7 @@ export function ReportSection({ document }: { document: ReportDocument; tab: str
           )}
         </div>
       </section>
-      <FilingControls document={live} onRefreshed={setLive} />
+      <FilingControls document={live} onRefetch={refetch} />
       <Revisions body={body} />
       {body.artifacts.map((artifact) => (
         <Artifact key={artifact.route_node_id} artifact={artifact} />

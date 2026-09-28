@@ -6,15 +6,7 @@
 // commit, so an advisory `null` refusal here is never trusted as the last
 // word. A success is shown, and the caller is handed one refetch to run
 // (`onRefetch`); the control never claims a write took effect on its own say.
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type ChangeEvent,
-} from "react";
+import { useCallback, useEffect, useId, useRef, useState, type ChangeEvent } from "react";
 import { flushSync } from "react-dom";
 import { useSearchParams } from "react-router";
 import {
@@ -32,6 +24,7 @@ import {
 import { OFFLINE_WORDING } from "@/app/transport";
 import { sentence } from "@/chrome/compose";
 import { fetchSection } from "@/app/transport";
+import { useDocumentRefetch } from "@/app/useDocumentRefetch";
 import { ConfirmedControl } from "@/controls/ConfirmedControl";
 import {
   RefusalNote,
@@ -85,44 +78,17 @@ function isRunSectionDocument(document: { body: object }): document is RunSectio
     `[data-refetch-failed]` note on a failed one) through the mounted
     section, never by importing the hook directly. */
 export function useRunRefetch(initial: RunSectionDocument, caseId: string) {
-  const [live, setLive] = useState(initial);
-  const [failed, setFailed] = useState(false);
-  // Adjusted during render, not in an effect (React's own pattern for
-  // syncing state from a prop): a fresh `initial` — a navigation, or the
-  // workspace's own SSE-triggered load — always supersedes a local refetch.
-  const [seenInitial, setSeenInitial] = useState(initial);
-  if (initial !== seenInitial) {
-    setSeenInitial(initial);
-    setLive(initial);
-    // The note said this view was behind the run. A document the workspace
-    // has since served is that view caught up, so the note goes with it
-    // rather than standing beside every later live update (finding FE-10).
-    setFailed(false);
-  }
-  // One sequence over both sources of a document: a refetch applies only while
-  // it is still the latest. An earlier refetch that answers late, or one still
-  // in flight when the workspace serves a fresher document, is dropped rather
-  // than putting an older run back on screen. Bumped in a layout effect, not
-  // in the render above it: a passive effect is scheduled after the commit, so
-  // a refetch resolving in between would still read the superseded sequence.
-  const sequence = useRef(0);
-  useLayoutEffect(() => {
-    sequence.current += 1;
-  }, [initial]);
+  const { live, failed, refetch: refresh } = useDocumentRefetch(initial);
   const refetch = useCallback(
     (runId: string | null) => {
-      const mine = (sequence.current += 1);
-      void fetchSection("run", { case: caseId, run: runId }).then((status) => {
-        if (mine !== sequence.current) return;
-        if ("document" in status && isRunSectionDocument(status.document)) {
-          setLive(status.document);
-          setFailed(false);
-        } else {
-          setFailed(true);
-        }
+      void refresh(async () => {
+        const status = await fetchSection("run", { case: caseId, run: runId });
+        return "document" in status && isRunSectionDocument(status.document)
+          ? status.document
+          : null;
       });
     },
-    [caseId],
+    [caseId, refresh],
   );
   return { live, failed, refetch };
 }

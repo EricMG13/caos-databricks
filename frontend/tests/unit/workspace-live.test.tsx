@@ -12,7 +12,7 @@ import { focusSectionHeading, pageTitle } from "@/app/heading";
 import { Announcer, useAnnouncer } from "@/states/Announcer";
 import { CommandOutcome } from "@/sections/run/controls";
 import { RunSection } from "@/sections/run/RunSection";
-import { parseRunSectionDocument } from "@/wire/v1";
+import { parseRunSectionDocument, parseUploadDocument } from "@/wire/v1";
 import type { Section } from "@/wire";
 
 const text = (path: string): string => readFileSync(new URL(path, import.meta.url), "utf8");
@@ -117,6 +117,124 @@ async function mount(section: Section, path: string, to = `/analysis/?case=${OTH
 const region = (container: HTMLElement) => container.querySelector("main#body")!;
 
 describe("a workspace that has stopped being live", () => {
+  // DocumentReadContext orders Workspace and useDocumentRefetch reads together.
+  test.each([true, false])(
+    "an older workspace read cannot supersede a command refresh (parent answers first: %s)",
+    async (parentFirst) => {
+      const fixture = parseUploadDocument(json("../../fixtures/upload.json"));
+      const original = {
+        ...fixture,
+        chrome: { ...fixture.chrome, actions: [{ action: "WITHDRAW_SOURCE", refusal: null }] },
+      };
+      const source = original.body.sources.find((row) => row.withdrawn_at === null)!;
+      const { container } = await mount("upload", `/upload/?case=${original.body.case_id}`);
+      await answer(0, original);
+      await fire("open");
+      fireEvent.click(screen.getByRole("button", { name: `Withdraw ${source.filename}` }));
+      fireEvent.click(screen.getByRole("button", { name: "Confirm Withdraw source" }));
+      await answer(2, { case_id: original.body.case_id, source_id: source.source_id });
+      expect(sent).toHaveLength(4);
+      const newer = {
+        ...original,
+        body: {
+          ...original.body,
+          sources: original.body.sources.map((row) =>
+            row.source_id === source.source_id
+              ? { ...row, withdrawn_at: "2026-09-28T09:00:00Z" }
+              : row,
+          ),
+        },
+      };
+      // Equal timestamps are intentional: request order must not depend on clock precision.
+      if (parentFirst) await answer(1, original);
+      await answer(3, newer);
+      if (!parentFirst) await answer(1, original);
+      expect(container.querySelector(`[data-source="${source.source_id}"]`)).toHaveClass("wd");
+      // A discarded parent read must release its flight so the next event can refresh.
+      await fire("sources_changed");
+      expect(sent).toHaveLength(5);
+      await answer(4, newer);
+    },
+  );
+
+  test.each([true, false])(
+    "a newer workspace read supersedes an older command refresh (parent answers first: %s)",
+    async (parentFirst) => {
+      const fixture = parseUploadDocument(json("../../fixtures/upload.json"));
+      const original = {
+        ...fixture,
+        chrome: { ...fixture.chrome, actions: [{ action: "WITHDRAW_SOURCE", refusal: null }] },
+      };
+      const source = original.body.sources.find((row) => row.withdrawn_at === null)!;
+      const { container } = await mount("upload", `/upload/?case=${original.body.case_id}`);
+      await answer(0, original);
+      fireEvent.click(screen.getByRole("button", { name: `Withdraw ${source.filename}` }));
+      fireEvent.click(screen.getByRole("button", { name: "Confirm Withdraw source" }));
+      await answer(1, { case_id: original.body.case_id, source_id: source.source_id });
+      await fire("sources_changed");
+      const newer = {
+        ...original,
+        body: {
+          ...original.body,
+          sources: original.body.sources.map((row) =>
+            row.source_id === source.source_id
+              ? { ...row, withdrawn_at: "2026-09-28T09:00:00Z" }
+              : row,
+          ),
+        },
+      };
+      if (parentFirst) await answer(3, newer);
+      await answer(2, original);
+      if (!parentFirst) await answer(3, newer);
+      expect(container.querySelector(`[data-source="${source.source_id}"]`)).toHaveClass("wd");
+    },
+  );
+
+  test("a failed command refresh still reports failure after discarding an older workspace read", async () => {
+    const fixture = parseUploadDocument(json("../../fixtures/upload.json"));
+    const original = {
+      ...fixture,
+      chrome: { ...fixture.chrome, actions: [{ action: "WITHDRAW_SOURCE", refusal: null }] },
+    };
+    const source = original.body.sources.find((row) => row.withdrawn_at === null)!;
+    const { container } = await mount("upload", `/upload/?case=${original.body.case_id}`);
+    await answer(0, original);
+    await fire("open");
+    fireEvent.click(screen.getByRole("button", { name: `Withdraw ${source.filename}` }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm Withdraw source" }));
+    await answer(2, { case_id: original.body.case_id, source_id: source.source_id });
+    await answer(1, original);
+    sent[3]!.fail();
+    await settle();
+    expect(container.querySelector("[data-withdraw-refresh-failed]")).not.toBeNull();
+  });
+
+  test("reloading a pending run does not discard a workspace read already in flight", async () => {
+    const initial = parseRunSectionDocument(json("../../fixtures/run/frames/1.json"));
+    const { container } = await mount("run", `/run/?case=${initial.body.case_id}`);
+    await answer(0, initial);
+    const next = {
+      ...initial,
+      body: {
+        ...initial.body,
+        displayed_run_id: OTHER,
+        latest_run_id: OTHER,
+        run: { ...initial.body.run!, run_id: OTHER },
+        runs: initial.body.runs.map((run) =>
+          run.run_id === initial.body.displayed_run_id ? { ...run, run_id: OTHER } : run,
+        ),
+      },
+    };
+    await fire("runs_changed");
+    await answer(1, next);
+    await fire("run_progress");
+    fireEvent.click(container.querySelector("[data-surface-state='stale'] button")!);
+    await settle();
+    // An authoritative refusal must still replace the newly mounted Run reader.
+    await answer(2, {}, 404);
+    expect(container.querySelector("[data-surface-state='unavailable']")).not.toBeNull();
+  });
+
   // FE-2: the reader keeps what the server last served. Replacing it with
   // "Offline" throws away the document and every unsaved field under it.
   test("test_a_failed_refetch_keeps_the_displayed_document_and_marks_it_not_live", async () => {

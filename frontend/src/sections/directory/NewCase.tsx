@@ -13,6 +13,7 @@
 import { useState } from "react";
 import { createCase } from "@/app/commands";
 import { sectionUrl } from "@/app/transport";
+import type { DocumentRefetch } from "@/app/useDocumentRefetch";
 import { RefusedControl } from "@/controls/RefusedControl";
 import { Input } from "@/components/ui/input";
 import { CommandOutcome, useCommand } from "@/sections/run/controls";
@@ -48,10 +49,10 @@ export async function refetchDirectory(): Promise<DirectoryDocument | null> {
 
 export function NewCase({
   action,
-  onCreated,
+  onRefetch,
 }: {
   action: ActionView | undefined;
-  onCreated: (document: DirectoryDocument) => void;
+  onRefetch: DocumentRefetch<DirectoryDocument>;
 }) {
   const [title, setTitle] = useState("");
   // The intent's key is reused only for a retry of the same title after an
@@ -67,10 +68,9 @@ export function NewCase({
     setRefreshFailed(false);
     const outcome = await run(trimmed, (intent) => createCase(trimmed, intent));
     if (outcome?.kind !== "ok") return;
-    setTitle("");
-    const refreshed = await refetchDirectory();
-    if (refreshed) onCreated(refreshed);
-    else setRefreshFailed(true);
+    setTitle((current) => (current === title ? "" : current));
+    const refreshed = await onRefetch(refetchDirectory);
+    if (refreshed !== null) setRefreshFailed(!refreshed);
   }
 
   return (

@@ -6,7 +6,7 @@
 // (CLAUDE.md "Persona is not authority"). The commands recheck at commit
 // whatever this panel shows, and on success the section re-reads its own
 // document, which is what says the membership changed.
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { grantStanding, revokeStanding } from "@/app/commands";
 import { sentence } from "@/chrome/compose";
 import { ConfirmedControl } from "@/controls/ConfirmedControl";
@@ -77,6 +77,7 @@ function GrantMember({
 }) {
   const [userId, setUserId] = useState("");
   const [standing, setStanding] = useState<Standing>("READER");
+  const edits = useRef(0);
   const { pending, result, run } = useCommand<StandingGranted>();
   const refusal = action?.refusal ?? null;
   const inputId = `grant-user-${caseId}`;
@@ -85,11 +86,12 @@ function GrantMember({
   async function submit() {
     const trimmed = userId.trim();
     if (refusal || pending || trimmed.length === 0) return;
+    const submitted = edits.current;
     const outcome = await run({ trimmed, standing }, (intent) =>
       grantStanding(caseId, trimmed, standing, intent),
     );
     if (outcome?.kind !== "ok") return;
-    setUserId("");
+    if (edits.current === submitted) setUserId("");
     onChanged();
   }
 
@@ -102,13 +104,19 @@ function GrantMember({
         type="text"
         value={userId}
         placeholder="User id (UUID)"
-        onChange={(event) => setUserId(event.target.value)}
+        onChange={(event) => {
+          edits.current += 1;
+          setUserId(event.target.value);
+        }}
       />
       <label htmlFor={selectId}>Standing</label>
       <select
         id={selectId}
         value={standing}
-        onChange={(event) => setStanding(event.target.value as Standing)}
+        onChange={(event) => {
+          edits.current += 1;
+          setStanding(event.target.value as Standing);
+        }}
       >
         {STANDINGS.map((value) => (
           <option key={value} value={value}>

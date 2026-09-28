@@ -578,6 +578,44 @@ describe("Report v1", () => {
     expect(JSON.parse(filing[1].body)).toEqual({ payload_sha256: receipt.payload_sha256 });
     vi.unstubAllGlobals();
   });
+
+  test("a delayed filing refresh cannot replace a newer report document", async () => {
+    const document = withActions(AVAILABLE);
+    let answer!: (response: Response) => void;
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          case_id: document.body.case_id,
+          revision_id: document.body.revision_id,
+          payload_sha256: document.body.payload_sha256,
+          signed_by: "00000000-0000-4000-8000-00000000000a",
+        }),
+      )
+      .mockImplementationOnce(() => new Promise<Response>((resolve) => (answer = resolve)));
+    vi.stubGlobal("fetch", fetchSpy);
+    const { container, rerender } = mount(document);
+    fireEvent.click(screen.getByRole("button", { name: "Sign opinion" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm Sign opinion" }));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(2));
+    const newer = withActions([
+      {
+        action: "SIGN_OPINION",
+        refusal: { code: "DELIVERABLE_ALREADY_FROZEN", clears: "a later revision is saved" },
+      },
+    ]);
+    rerender(
+      <MemoryRouter>
+        <ReportSection document={newer} tab={null} />
+      </MemoryRouter>,
+    );
+    await act(async () => answer(jsonResponse(document)));
+    expect(container.querySelector("button[data-action='SIGN_OPINION']")).toHaveAttribute(
+      "data-refusal",
+      "DELIVERABLE_ALREADY_FROZEN",
+    );
+    vi.unstubAllGlobals();
+  });
 });
 
 // Save, sign, freeze and file were four equal buttons; they read as the

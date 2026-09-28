@@ -33,6 +33,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ConfirmedControl } from "@/controls/ConfirmedControl";
 import { RefusedControl } from "@/controls/RefusedControl";
 import { CommandOutcome, useCommand } from "@/sections/run/controls";
+import type { DocumentRefetch } from "@/app/useDocumentRefetch";
 import { citationsOf, figureMarker, paragraphs, type CitationChoice } from "./figures";
 import { DraftContext } from "./draft";
 import {
@@ -264,10 +265,10 @@ function FilingAct({
 
 export function FilingControls({
   document,
-  onRefreshed,
+  onRefetch,
 }: {
   document: ReportDocument;
-  onRefreshed: (next: ReportDocument) => void;
+  onRefetch: DocumentRefetch<ReportDocument>;
 }) {
   const { body } = document;
   const sharedDraft = useContext(DraftContext);
@@ -307,9 +308,10 @@ export function FilingControls({
 
   async function reread(acted: Saved) {
     setRefreshFailed(false);
-    const next = await refetchReport(body.case_id, body.displayed_run_id, acted.id);
-    if (next) onRefreshed(next);
-    else setRefreshFailed(true);
+    const refreshed = await onRefetch(() =>
+      refetchReport(body.case_id, body.displayed_run_id, acted.id),
+    );
+    if (refreshed !== null) setRefreshFailed(!refreshed);
   }
 
   const saveAction = actionOf("SAVE_REVISION");

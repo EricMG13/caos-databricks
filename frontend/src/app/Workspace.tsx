@@ -37,6 +37,7 @@ import {
   type WorkspaceDocument,
 } from "./transport";
 import { SECTION_VIEWS, preloadView } from "./views";
+import { DocumentReadContext } from "./useDocumentRefetch";
 import { AppShell } from "@/chrome/AppShell";
 import { AppSidebar } from "@/chrome/AppSidebar";
 import { QualificationStrip } from "@/chrome/QualificationStrip";
@@ -146,7 +147,15 @@ export function Workspace({ section }: { section: Section }) {
   // reads for itself and names no section request, so keying on it would tear
   // the section down — and its open tail with it — for a label change.
   const key = `${section}|${caseId ?? ""}|${runId ?? ""}|${revisionId ?? ""}|${fixture ?? ""}`;
-  const [held, setHeld] = useState<Keyed<Held> | null>(null);
+  const [held, setHeld] = useState<(Keyed<Held> & { version: number }) | null>(null);
+  const readSequence = useRef(0);
+  const reads = useMemo(
+    () => ({
+      begin: () => (readSequence.current += 1),
+      isCurrent: (version: number) => version === readSequence.current,
+    }),
+    [],
+  );
   const [sourceEvents, setSourceEvents] = useState<Keyed<number> | null>(null);
   const [tabChoice, setTabChoice] = useState<Keyed<string> | null>(null);
   // The section's chunk is fetched beside its document, not after it (N65).
@@ -161,6 +170,7 @@ export function Workspace({ section }: { section: Section }) {
       current?.value.pending
         ? {
             key: current.key,
+            version: current.version,
             value: { displayed: current.value.pending, pending: null, interrupted: null },
           }
         : current,
@@ -171,6 +181,10 @@ export function Workspace({ section }: { section: Section }) {
   }, []);
 
   const current = requested && held?.key === key ? held.value : null;
+  const readOrder = useMemo(
+    () => ({ reads, version: held?.key === key ? held.version : 0 }),
+    [reads, held, key],
+  );
   const status = useMemo<RegionStatus>(() => {
     if (requested) return current ? visible(current) : LOADING;
     if (need === null) return UNAVAILABLE;
@@ -253,8 +267,6 @@ export function Workspace({ section }: { section: Section }) {
     // At most one fetch in flight; a name arriving mid-flight marks it dirty
     // and exactly one more fetch follows (decision 5).
     let flight: { controller: AbortController; dirty: boolean } | null = null;
-    const put = (next: (current: Held | null) => Held) =>
-      setHeld((current) => ({ key, value: next(current?.key === key ? current.value : null) }));
 
     // Answers with what the read said, so a refused reconnect can be decided
     // on the document rather than on the stream EventSource will not describe.
@@ -267,6 +279,7 @@ export function Workspace({ section }: { section: Section }) {
       flight = mine;
       authority.current = issue(authority.current);
       const sent = ticket(authority.current);
+      const version = reads.begin();
       return fetchSection(
         section,
         { case: caseId, run: runId, revision: revisionId, fixture },
@@ -275,23 +288,27 @@ export function Workspace({ section }: { section: Section }) {
         // A late response, for a case or run the user has left, is discarded.
         if (!accepts(authority.current, sent)) return null;
         flight = null;
-        put((current) => adopt(section, current, next));
+        const latestRead = reads.isCurrent(version);
+        if (latestRead) {
+          setHeld((current) => ({
+            key,
+            version,
+            value: adopt(section, current?.key === key ? current.value : null, next),
+          }));
+        }
         if (mine.dirty) load();
-        return next;
+        return latestRead ? next : null;
       });
-    };
-    const cancel = () => {
-      flight?.controller.abort();
-      flight = null;
-      authority.current = issue(authority.current);
     };
     loadRef.current = load;
     void load();
     return () => {
       if (loadRef.current === load) loadRef.current = null;
-      cancel();
+      flight?.controller.abort();
+      flight = null;
+      authority.current = issue(authority.current);
     };
-  }, [requested, section, caseId, runId, revisionId, fixture, key]);
+  }, [requested, section, caseId, runId, revisionId, fixture, key, reads]);
 
   // The view is mounted under what it is about, never under `observed_at`, so
   // an ordinary refresh keeps its local selection (R5).
@@ -470,7 +487,9 @@ export function Workspace({ section }: { section: Section }) {
                         is not on the page while it loads. */}
                       <SectionPanel tab={activeTab}>
                         <Suspense fallback={<SurfaceState kind="loading" />}>
-                          <View key={mountKey} document={doc} tab={activeTab} />
+                          <DocumentReadContext.Provider value={readOrder}>
+                            <View key={mountKey} document={doc} tab={activeTab} />
+                          </DocumentReadContext.Provider>
                         </Suspense>
                       </SectionPanel>
                     </SectionBoundary>

@@ -522,4 +522,136 @@ describe("Upload", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   });
+
+  test("a later withdrawal refresh wins over an earlier admission refresh", async () => {
+    const live: UploadDocument = {
+      ...fixture,
+      chrome: {
+        ...fixture.chrome,
+        actions: [
+          { action: "ADMIT_SOURCES", refusal: null },
+          { action: "WITHDRAW_SOURCE", refusal: null },
+        ],
+      },
+    };
+    const alive = live.body.sources.find((source) => source.withdrawn_at === null)!;
+    const newer: UploadDocument = {
+      ...live,
+      body: {
+        ...live.body,
+        sources: live.body.sources.map((source) =>
+          source.source_id === alive.source_id
+            ? { ...source, withdrawn_at: "2026-09-28T00:00:00Z" }
+            : source,
+        ),
+      },
+    };
+    let answer!: (response: Response) => void;
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ case_id: live.body.case_id, source_ids: [] }, 201))
+      .mockImplementationOnce(() => new Promise<Response>((resolve) => (answer = resolve)))
+      .mockResolvedValueOnce(
+        jsonResponse({ case_id: live.body.case_id, source_id: alive.source_id }),
+      )
+      .mockResolvedValueOnce(jsonResponse(newer));
+    vi.stubGlobal("fetch", fetchSpy);
+    const { container } = mount(live);
+    fireEvent.change(screen.getByLabelText("Documents to admit"), {
+      target: { files: [new File(["a"], "first.txt")] },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Admit sources" }));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(2));
+    fireEvent.click(screen.getByRole("button", { name: `Withdraw ${alive.filename}` }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Confirm Withdraw source" }));
+    });
+    expect(sourceRow(container, alive.source_id)).toHaveClass("wd");
+    await act(async () => answer(jsonResponse(live)));
+    expect(sourceRow(container, alive.source_id)).toHaveClass("wd");
+    vi.unstubAllGlobals();
+  });
+
+  test("an admission completed after leaving Upload starts no refresh", async () => {
+    const live: UploadDocument = {
+      ...fixture,
+      chrome: { ...fixture.chrome, actions: [{ action: "ADMIT_SOURCES", refusal: null }] },
+    };
+    let answer!: (response: Response) => void;
+    const fetchSpy = vi.fn(() => new Promise<Response>((resolve) => (answer = resolve)));
+    vi.stubGlobal("fetch", fetchSpy);
+    const { unmount } = mount(live);
+    fireEvent.change(screen.getByLabelText("Documents to admit"), {
+      target: { files: [new File(["a"], "first.txt")] },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Admit sources" }));
+    unmount();
+    await act(async () =>
+      answer(jsonResponse({ case_id: live.body.case_id, source_ids: [] }, 201)),
+    );
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
+  });
+
+  test("a delayed admission refresh cannot undo a newer withdrawal", async () => {
+    const live: UploadDocument = {
+      ...fixture,
+      chrome: { ...fixture.chrome, actions: [{ action: "ADMIT_SOURCES", refusal: null }] },
+    };
+    let answer!: (response: Response) => void;
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ case_id: live.body.case_id, source_ids: [] }, 201))
+      .mockImplementationOnce(() => new Promise<Response>((resolve) => (answer = resolve)));
+    vi.stubGlobal("fetch", fetchSpy);
+    const { container, rerender } = mount(live);
+    fireEvent.change(screen.getByLabelText("Documents to admit"), {
+      target: { files: [new File(["a"], "first.txt")] },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Admit sources" }));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(2));
+    const newer: UploadDocument = {
+      ...live,
+      body: {
+        ...live.body,
+        sources: live.body.sources.map((row, i) =>
+          i === 0 ? { ...row, withdrawn_at: "2026-09-28T00:00:00Z" } : row,
+        ),
+      },
+    };
+    rerender(
+      <MemoryRouter>
+        <UploadSection document={newer} tab={null} />
+      </MemoryRouter>,
+    );
+    expect(sourceRow(container, newer.body.sources[0]!.source_id)).toHaveClass("wd");
+    await act(async () => answer(jsonResponse(live)));
+    expect(sourceRow(container, newer.body.sources[0]!.source_id)).toHaveClass("wd");
+    vi.unstubAllGlobals();
+  });
+
+  test("admitting one selection preserves files chosen while its request is pending", async () => {
+    const live: UploadDocument = {
+      ...fixture,
+      chrome: { ...fixture.chrome, actions: [{ action: "ADMIT_SOURCES", refusal: null }] },
+    };
+    let answer!: (response: Response) => void;
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockImplementationOnce(() => new Promise<Response>((resolve) => (answer = resolve)))
+        .mockResolvedValueOnce(jsonResponse(live)),
+    );
+    const { container } = mount(live);
+    const input = screen.getByLabelText("Documents to admit");
+    fireEvent.change(input, { target: { files: [new File(["a"], "first.txt")] } });
+    fireEvent.click(screen.getByRole("button", { name: "Admit sources" }));
+    fireEvent.change(input, { target: { files: [new File(["b"], "second.txt")] } });
+    await act(async () =>
+      answer(jsonResponse({ case_id: live.body.case_id, source_ids: [] }, 201)),
+    );
+    expect(container.querySelector("[data-admit-chosen]")).toHaveTextContent("second.txt");
+    vi.unstubAllGlobals();
+  });
 });

@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { OFFLINE_WORDING } from "@/app/transport";
 import { sentence } from "@/chrome/compose";
@@ -502,5 +502,127 @@ describe("Directory", () => {
       expect(control).toHaveAttribute("aria-disabled", "true");
       expect(control).toHaveAttribute("data-refusal", "NOT_AUTHORISED");
     }
+  });
+
+  test.each([false, true])(
+    "a grant preserves its recipient after editing standing (edit back: %s)",
+    async (editBack) => {
+      const row = {
+        ...fixture.body.cases[0]!,
+        members: [],
+        actions: [{ action: "GRANT_STANDING" as const, refusal: null }],
+      };
+      const live: DirectoryDocument = { ...fixture, body: { cases: [row] } };
+      let answer!: (response: Response) => void;
+      vi.stubGlobal(
+        "fetch",
+        vi
+          .fn()
+          .mockImplementationOnce(() => new Promise<Response>((resolve) => (answer = resolve)))
+          .mockResolvedValueOnce(jsonResponse(live)),
+      );
+      try {
+        mount(live);
+        const recipient = "00000000-0000-4000-8000-000000000001";
+        fireEvent.change(screen.getByLabelText("Member id"), { target: { value: recipient } });
+        fireEvent.click(screen.getByRole("button", { name: "Grant standing" }));
+        fireEvent.change(screen.getByLabelText("Standing"), { target: { value: "WRITER" } });
+        if (editBack) {
+          fireEvent.change(screen.getByLabelText("Standing"), { target: { value: "READER" } });
+        }
+        await act(async () =>
+          answer(jsonResponse({ case_id: row.case_id, user_id: recipient, standing: "READER" })),
+        );
+        expect(screen.getByLabelText("Standing")).toHaveValue(editBack ? "READER" : "WRITER");
+        expect(screen.getByLabelText("Member id")).toHaveValue(recipient);
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    },
+  );
+
+  test("creating a case preserves the title entered while its request is pending", async () => {
+    const live: DirectoryDocument = {
+      ...fixture,
+      chrome: { ...fixture.chrome, actions: [{ action: "CREATE_CASE", refusal: null }] },
+    };
+    let answer!: (response: Response) => void;
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockImplementationOnce(() => new Promise<Response>((resolve) => (answer = resolve)))
+        .mockResolvedValueOnce(jsonResponse(live)),
+    );
+    mount(live);
+    const input = screen.getByLabelText("New case title");
+    fireEvent.change(input, { target: { value: "First case" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create case" }));
+    fireEvent.change(input, { target: { value: "Second case" } });
+    await act(async () => answer(jsonResponse({ case_id: fixture.body.cases[0]!.case_id }, 201)));
+    expect(input).toHaveValue("Second case");
+    vi.unstubAllGlobals();
+  });
+
+  test("granting standing preserves the member id entered while its request is pending", async () => {
+    const row = {
+      ...fixture.body.cases[0]!,
+      members: [],
+      actions: [{ action: "GRANT_STANDING" as const, refusal: null }],
+    };
+    const live: DirectoryDocument = { ...fixture, body: { cases: [row] } };
+    let answer!: (response: Response) => void;
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockImplementationOnce(() => new Promise<Response>((resolve) => (answer = resolve)))
+        .mockResolvedValueOnce(jsonResponse(live)),
+    );
+    mount(live);
+    const first = "00000000-0000-4000-8000-000000000001";
+    const second = "00000000-0000-4000-8000-000000000002";
+    const input = screen.getByLabelText("Member id");
+    fireEvent.change(input, { target: { value: first } });
+    fireEvent.click(screen.getByRole("button", { name: "Grant standing" }));
+    fireEvent.change(input, { target: { value: second } });
+    await act(async () =>
+      answer(jsonResponse({ case_id: row.case_id, user_id: first, standing: "READER" })),
+    );
+    expect(input).toHaveValue(second);
+    vi.unstubAllGlobals();
+  });
+
+  test("a delayed creation refresh cannot replace a newer directory document", async () => {
+    const live: DirectoryDocument = {
+      ...fixture,
+      chrome: { ...fixture.chrome, actions: [{ action: "CREATE_CASE", refusal: null }] },
+    };
+    let answer!: (response: Response) => void;
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ case_id: fixture.body.cases[0]!.case_id }, 201))
+      .mockImplementationOnce(() => new Promise<Response>((resolve) => (answer = resolve)));
+    vi.stubGlobal("fetch", fetchSpy);
+    const { container, rerender } = mount(live);
+    fireEvent.change(screen.getByLabelText("New case title"), { target: { value: "First case" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create case" }));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(2));
+    const newer: DirectoryDocument = {
+      ...live,
+      body: {
+        cases: live.body.cases.map((row, i) =>
+          i === 0 ? { ...row, title: "Newer directory title" } : row,
+        ),
+      },
+    };
+    rerender(
+      <MemoryRouter>
+        <DirectorySection document={newer} tab={null} />
+      </MemoryRouter>,
+    );
+    await act(async () => answer(jsonResponse(live)));
+    expect(rowsOf(container)[0]).toHaveTextContent("Newer directory title");
+    vi.unstubAllGlobals();
   });
 });

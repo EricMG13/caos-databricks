@@ -18,6 +18,7 @@ import { cn } from "cn";
 import { buttonVariants } from "@/components/ui/button";
 import { RefusedControl } from "@/controls/RefusedControl";
 import { CommandOutcome, useCommand } from "@/sections/run/controls";
+import type { DocumentRefetch } from "@/app/useDocumentRefetch";
 import {
   parseUploadDocument,
   type ActionView,
@@ -57,30 +58,35 @@ function fileSetKey(files: readonly File[]): string {
 export function AdmitSources({
   action,
   caseId,
-  onAdmitted,
+  onRefetch,
   reasonDisplay = "inline",
 }: {
   action: ActionView | undefined;
   caseId: string;
-  onAdmitted: () => Promise<boolean>;
+  onRefetch: DocumentRefetch<UploadDocument>;
   /** Hidden where the pack says the reason once for both its commands. */
   reasonDisplay?: "inline" | "hidden";
 }) {
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<File[]>([]);
+  const selection = useRef(0);
   const { pending, result, run } = useCommand<SourcesAdmitted>();
   const [refreshFailed, setRefreshFailed] = useState(false);
   const refusal = action?.refusal ?? null;
 
   async function submit() {
     if (refusal || pending || files.length === 0) return;
+    const sentSelection = selection.current;
     setRefreshFailed(false);
     const outcome = await run(fileSetKey(files), (intent) => admitSources(caseId, files, intent));
     if (outcome?.kind !== "ok") return;
-    setFiles([]);
-    if (inputRef.current) inputRef.current.value = "";
-    if (!(await onAdmitted())) setRefreshFailed(true);
+    if (selection.current === sentSelection) {
+      setFiles([]);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+    const refreshed = await onRefetch(() => refetchUpload(caseId));
+    if (refreshed !== null) setRefreshFailed(!refreshed);
   }
 
   return (
@@ -97,7 +103,10 @@ export function AdmitSources({
         type="file"
         multiple
         className="peer sr-only"
-        onChange={(event) => setFiles(Array.from(event.target.files ?? []))}
+        onChange={(event) => {
+          selection.current += 1;
+          setFiles(Array.from(event.target.files ?? []));
+        }}
       />
       <label
         htmlFor={inputId}
