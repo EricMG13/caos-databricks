@@ -48,7 +48,7 @@ test("timestamps never wrap inside themselves", async ({ page }) => {
   // Report's module-id rule and the prose-wrap rule rode Model and Committee,
   // which are unavailable in every mode (brief 4.1, decision 9). Upload reads
   // the v1 wire since slice 4.1h, whose case is a UUID.
-  await page.goto("/upload/?case=ff1fbf5a-e56f-4f84-a983-2f5a507675f0");
+  await page.goto("/upload/?case=00000000-0000-4000-8000-000000000001");
   const stamp = page.locator("tr.wd [data-withdrawal] time").first();
   await expect(stamp).toBeVisible();
   expect(await lines(stamp)).toBe(1);

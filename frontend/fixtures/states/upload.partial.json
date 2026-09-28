@@ -1,14 +1,14 @@
 {
   "chrome": {
     "subject": {
-      "case_id": "ff1fbf5a-e56f-4f84-a983-2f5a507675f0",
+      "case_id": "00000000-0000-4000-8000-000000000001",
       "title": "Carvana Co. (NYSE: CVNA)"
     },
     "served_role": { "global_role": "ANALYST", "standing": "APPROVER" },
     "actions": []
   },
   "body": {
-    "case_id": "ff1fbf5a-e56f-4f84-a983-2f5a507675f0",
+    "case_id": "00000000-0000-4000-8000-000000000001",
     "sources": [
       {
         "source_id": "f9b54532-f1d3-48b8-bca2-5e29b9d3b16b",

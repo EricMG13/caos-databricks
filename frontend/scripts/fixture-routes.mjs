@@ -31,10 +31,9 @@ export const DISABLED_SECTIONS = SECTIONS.filter((section) => !ENABLED_SECTIONS.
     section with no case sends no request. */
 export const DEMO_CASE = "CASE-2026-CVNA01";
 
-/** Every enabled section's v1 fixture carries the case as a UUID. Run,
-    Analysis and Model (slices 4.1i-k) share one case id; Upload pins its own. */
+/** Every enabled section's v1 fixture carries the same demo case UUID. */
 export const DEMO_CASE_BY_SECTION = {
-  upload: "ff1fbf5a-e56f-4f84-a983-2f5a507675f0",
+  upload: "00000000-0000-4000-8000-000000000001",
   run: "00000000-0000-4000-8000-000000000001",
   analysis: "00000000-0000-4000-8000-000000000001",
   model: "00000000-0000-4000-8000-000000000001",

@@ -14,7 +14,7 @@ import {
   useRunRefetch,
 } from "./controls";
 import { NodeDetail } from "./NodeDetail";
-import { blockedByOf } from "./reason";
+import { blockedByOf, blockingOf, reasonOf } from "./reason";
 import { RouteGraph, focusOf } from "./RouteGraph";
 import type { GateView } from "./types";
 import { SEVERITY_BADGE, SeverityMark } from "@/chrome/SeverityMark";
@@ -117,8 +117,8 @@ export function RunSection({ document }: { document: RunSectionDocument; tab: st
   const blockedBy = blockedByOf(run);
 
   return (
-    <div className="cols two" data-run={run.run_id}>
-      <div className="col">
+    <div className="run-layout" data-run={run.run_id}>
+      <div className="col run-route">
         {body.runs.length > 1 ? (
           <section className="pnl" data-run-selector>
             <header>
@@ -203,6 +203,17 @@ export function RunSection({ document }: { document: RunSectionDocument; tab: st
                 </div>
               ) : null}
               <div className="pb flush">
+                {selected ? (
+                  <div className="run-focus" data-run-focus={selected.module_id}>
+                    <strong>
+                      {selected.module_name} · {selected.module_id}
+                    </strong>
+                    <span>
+                      {sentence(selected.state)} ·{" "}
+                      {reasonOf(selected, run.status, blockingOf(selected, run.blocked_by))}
+                    </span>
+                  </div>
+                ) : null}
                 <RouteGraph
                   nodes={run.nodes}
                   edges={run.edges}
@@ -223,73 +234,8 @@ export function RunSection({ document }: { document: RunSectionDocument; tab: st
           says. RESTRICTED ran and carries its limitation forward. BLOCKED names what it waits on.
           States are worked out from accepted attempts each time; they are never stored.
         </details>
-        {/* The run's acts, in the order they happen, beside the route they act
-            on -- not stacked in the right column, which is always about the
-            selected thing (DESIGN.md; critique: a nine-panel second menu). */}
-        <section className="actgroup" aria-labelledby="run-acts-heading">
-          <h2 id="run-acts-heading" className="grouphead">
-            Act on this run
-          </h2>
-          <PinInputControl
-            caseId={body.case_id}
-            runId={run.run_id}
-            action={actionOf(actions, "PIN_RUN_INPUT")}
-            initial={run.subject}
-            // The resolved route is pinned at Create run (§ create_run), so a
-            // CP-DR node is already on `run.nodes` before any input is
-            // pinned: the one signal this reader needs to require a research
-            // brief on the advertised research routes (R24-01), without a
-            // new wire field naming the route family.
-            requiresResearch={run.nodes.some((node) => node.module_id === "CP-DR")}
-            onPinned={learn}
-            onRefetch={refetch}
-          />
-          {run.gates.map((gate) => (
-            // Keyed on the input's fingerprint: a pin (or an approval that
-            // moved it), here or by someone else as the run read shows it,
-            // remounts the panel, clearing any preview read under the input
-            // that changed rather than leaving a stale digest approvable
-            // (brief 4.2 review finding 3). A preview moves neither (MAX-18).
-            <GatePanelControl
-              key={`${gate.gate}:${run.input_fingerprint ?? "none"}:${pinned ?? "none"}`}
-              caseId={body.case_id}
-              runId={run.run_id}
-              gate={gate.gate}
-              state={gate.state}
-              action={actionOf(
-                actions,
-                gate.gate === "SOURCE_SET" ? "APPROVE_SOURCE_SET" : "APPROVE_RESEARCH_PLAN",
-              )}
-              onFingerprint={learn}
-              onPreviewed={setKnown}
-              onRefetch={refetch}
-            />
-          ))}
-          <WorkControls
-            caseId={body.case_id}
-            runId={run.run_id}
-            // What this session last read first: a start after a preview
-            // asserts the input that preview showed, and a re-pin by someone
-            // else since is then refused, not silently sent. The run read's
-            // own is what a reload has (N48).
-            fingerprint={known ?? run.input_fingerprint}
-            work={run.work}
-            actions={actions}
-            onRefetch={refetch}
-          />
-          <CreateRunControl
-            // A BLOCKED run nobody has answered is what a successor is for
-            // (§72): offer it pre-filled. Keyed on the run so the offer follows
-            // the displayed run rather than the first one this panel mounted for.
-            key={run.run_id}
-            caseId={body.case_id}
-            action={actionOf(actions, "CREATE_RUN")}
-            choices={body.route_choices}
-            supersedes={run.status === "BLOCKED" && run.superseded_by === null ? run.run_id : null}
-          />
-        </section>
       </div>
-      <div className="col right">
+      <div className="col run-detail">
         {refetchNote}
         {selected ? (
           <NodeDetail
@@ -389,6 +335,53 @@ export function RunSection({ document }: { document: RunSectionDocument; tab: st
           </div>
         </section>
       </div>
+      {/* Actions follow the selected detail in reading order; the grid keeps
+          them beside the route on wide desktops. */}
+      <section className="actgroup run-actions" aria-labelledby="run-acts-heading">
+        <h2 id="run-acts-heading" className="grouphead">
+          Act on this run
+        </h2>
+        <PinInputControl
+          caseId={body.case_id}
+          runId={run.run_id}
+          action={actionOf(actions, "PIN_RUN_INPUT")}
+          initial={run.subject}
+          requiresResearch={run.nodes.some((node) => node.module_id === "CP-DR")}
+          onPinned={learn}
+          onRefetch={refetch}
+        />
+        {run.gates.map((gate) => (
+          <GatePanelControl
+            key={`${gate.gate}:${run.input_fingerprint ?? "none"}:${pinned ?? "none"}`}
+            caseId={body.case_id}
+            runId={run.run_id}
+            gate={gate.gate}
+            state={gate.state}
+            action={actionOf(
+              actions,
+              gate.gate === "SOURCE_SET" ? "APPROVE_SOURCE_SET" : "APPROVE_RESEARCH_PLAN",
+            )}
+            onFingerprint={learn}
+            onPreviewed={setKnown}
+            onRefetch={refetch}
+          />
+        ))}
+        <WorkControls
+          caseId={body.case_id}
+          runId={run.run_id}
+          fingerprint={known ?? run.input_fingerprint}
+          work={run.work}
+          actions={actions}
+          onRefetch={refetch}
+        />
+        <CreateRunControl
+          key={run.run_id}
+          caseId={body.case_id}
+          action={actionOf(actions, "CREATE_RUN")}
+          choices={body.route_choices}
+          supersedes={run.status === "BLOCKED" && run.superseded_by === null ? run.run_id : null}
+        />
+      </section>
     </div>
   );
 }

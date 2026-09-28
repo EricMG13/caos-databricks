@@ -1,5 +1,25 @@
 import { expect, test } from "@playwright/test";
 
+test("the served Directory case opens matching Analysis, Run and Upload views", async ({
+  page,
+}) => {
+  const caseId = "00000000-0000-4000-8000-000000000001";
+  await page.route("**/api/v1/cases/*/events*", (route) => route.abort("connectionfailed"));
+  await page.goto("/directory/");
+  await expect(page.locator("[data-demo-unavailable]")).toHaveCount(3);
+  await page
+    .locator(`tr[data-case='${caseId}']`)
+    .getByRole("link", { name: /Open case/ })
+    .click();
+  await expect(page.locator("[data-analysis]")).toBeVisible();
+  await expect(page.locator("header [data-case]")).toHaveAttribute("data-case", caseId);
+  await page.locator("nav a[data-section='run']").click();
+  await expect(page.locator("[data-run='00000000-0000-4000-8000-0000000000b2']")).toBeVisible();
+  await page.locator("nav a[data-section='upload']").click();
+  await expect(page.getByRole("heading", { name: "Source pack" })).toBeVisible();
+  await expect(page.locator("main#body")).not.toContainText("WIRE_IDENTITY_MISMATCH");
+});
+
 test("the rail is the only navigation and reaches all nine sections", async ({ page }) => {
   await page.goto("/directory/");
   const links = page.locator("nav a[data-section]");
@@ -43,7 +63,7 @@ test("demo fixture HTTP is read-only before fixture selection", async ({ request
   const get = await request.get("/api/v1/directory");
   expect(get.status()).toBe(200);
   expect(await get.json()).toHaveProperty("chrome");
-  const run = await request.get("/api/v1/cases/CASE-2026-CVNA01/run");
+  const run = await request.get("/api/v1/cases/00000000-0000-4000-8000-000000000001/run");
   expect(run.status()).toBe(200);
   const model = await request.get("/api/v1/cases/00000000-0000-4000-8000-000000000001/model");
   expect(model.status()).toBe(200);

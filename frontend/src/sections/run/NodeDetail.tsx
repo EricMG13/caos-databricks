@@ -46,8 +46,8 @@ export function NodeDetail({
         </header>
         <div className="pb">
           <dl className="kv">
-            <dt>Reason</dt>
-            <dd className="wrap">{reasonOf(node, status, blocking)}</dd>
+            <dt className="node-reason-label">Reason</dt>
+            <dd className="wrap node-reason">{reasonOf(node, status, blocking)}</dd>
             <dt>Stage</dt>
             <dd>{node.stage}</dd>
             {/* Every edge that places the node on the route, and apart from

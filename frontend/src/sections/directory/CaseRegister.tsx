@@ -13,6 +13,8 @@ import type { CaseRow } from "@/wire/v1";
 
 /** Not exported by `@/wire/v1` on its own; the shape lives only on `CaseRow`. */
 type RunSummary = NonNullable<CaseRow["latest_run"]>;
+// ponytail: one served demo case; add a fixture manifest when more journeys are served.
+const DEMO_CASE_ID = "00000000-0000-4000-8000-000000000001";
 
 /** The one action a row has: open the case in Analysis. */
 export function caseHref(caseId: string): string {
@@ -55,10 +57,10 @@ export function CaseRegister({ rows }: { rows: CaseRow[] }) {
       <table className="reg pin-first" data-register>
         <thead>
           <tr>
-            <th scope="col">Case</th>
             <th scope="col" className="wrap">
               Title
             </th>
+            <th scope="col">Case</th>
             <th scope="col" className="r">
               Created
             </th>
@@ -75,10 +77,12 @@ export function CaseRegister({ rows }: { rows: CaseRow[] }) {
         <tbody>
           {rows.map((row) => (
             <tr key={row.case_id} data-case={row.case_id}>
+              <td className="wrap">
+                <span className="register-title">{row.title}</span>
+              </td>
               <td className="m" title={row.case_id}>
                 {row.case_id.slice(0, 8)}…{row.case_id.slice(-4)}
               </td>
-              <td className="wrap">{row.title}</td>
               <td className="m r">
                 <time dateTime={row.created_at}>{stamp(row.created_at)}</time>
               </td>
@@ -88,16 +92,19 @@ export function CaseRegister({ rows }: { rows: CaseRow[] }) {
                 <LatestRunCell run={row.latest_run} />
               </td>
               <td className="r">
-                {/* Four links all named "Open case" told a screen reader nothing. */}
-                <Link
-                  className={buttonVariants({ variant: "outline", size: "sm" })}
-                  to={caseHref(row.case_id)}
-                  // The visible label leads the name, so speech input finds it
-                  // (WCAG 2.5.3); the case follows so a list of four is told apart.
-                  aria-label={`Open case ${row.title}`}
-                >
-                  Open case
-                </Link>
+                {import.meta.env.MODE === "demo" && row.case_id !== DEMO_CASE_ID ? (
+                  <span className="note" data-demo-unavailable>
+                    Unavailable in demo
+                  </span>
+                ) : (
+                  <Link
+                    className={buttonVariants({ variant: "outline", size: "sm" })}
+                    to={caseHref(row.case_id)}
+                    aria-label={`Open case ${row.title}`}
+                  >
+                    Open case
+                  </Link>
+                )}
               </td>
             </tr>
           ))}

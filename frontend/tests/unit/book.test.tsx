@@ -36,6 +36,18 @@ describe("the book", () => {
     expect(doc.body.columns.map((column) => column.key)).toContain("operating.margin");
   });
 
+  test("the comparison basis is readable with exact wire values on request", () => {
+    const { container } = mount();
+    const basis = container.querySelector("[data-book-basis]")!;
+    expect(basis).toHaveTextContent(
+      "All accepted periods · All accepted scenarios · Accepted projections only",
+    );
+    const details = container.querySelector("details[data-book-basis-codes]")!;
+    expect(details).toHaveTextContent("EVERY_ACCEPTED_PERIOD");
+    expect(details).toHaveTextContent("EVERY_ACCEPTED_CASE");
+    expect(details).toHaveTextContent("true");
+  });
+
   test("a credit is one row per accepted period, on its own units", () => {
     mount();
     const table = screen.getByRole("table", { name: /BASE · FY2026/ });
