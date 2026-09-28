@@ -12,6 +12,70 @@ import {
 // section never reaches a ribbon at all.
 const V1_SECTIONS = ENABLED_SECTIONS;
 
+test("a refreshed case menu keeps native focus and keyboard navigation aligned", async ({
+  page,
+}) => {
+  const response = await page.request.get("/api/v1/directory");
+  const directory = await response.json();
+  const first = directory.body.cases[0];
+  const granted = {
+    ...first,
+    case_id: "00000000-0000-4000-8000-0000000000ff",
+    title: "Newly granted case",
+  };
+  let release: (() => void) | null = null;
+  const waiting = () =>
+    new Promise<void>((resolve) => {
+      release = resolve;
+    });
+  let hold = false;
+  await page.route("**/api/v1/directory", async (route) => {
+    if (hold) await waiting();
+    await route.fulfill({
+      json: hold
+        ? { ...directory, body: { ...directory.body, cases: [granted, ...directory.body.cases] } }
+        : directory,
+    });
+  });
+  await page.goto("/model/");
+  const trigger = page.getByRole("button", { name: /Switch case/ });
+  await trigger.press("Enter");
+  const choice = page.locator(`[data-case-option='${first.case_id}']`);
+  await expect(choice).toBeVisible();
+  await page.keyboard.press("Escape");
+  hold = true;
+  await trigger.press("ArrowDown");
+  await expect(choice).toBeFocused();
+  await expect.poll(() => release !== null).toBe(true);
+  release!();
+  const newChoice = page.locator(`[data-case-option='${granted.case_id}']`);
+  await expect(newChoice).toBeVisible();
+  await page.keyboard.press("Home");
+  await expect(newChoice).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(new RegExp(`/model/\\?case=${granted.case_id}`));
+});
+
+test("a first case read reconciles focus before Home selects its first case", async ({ page }) => {
+  const directory = await (await page.request.get("/api/v1/directory")).json();
+  let release: (() => void) | null = null;
+  await page.route("**/api/v1/directory", async (route) => {
+    await new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await route.fulfill({ json: directory });
+  });
+  await page.goto("/model/");
+  await page.getByRole("button", { name: /Switch case/ }).press("ArrowDown");
+  await expect(page.getByRole("menuitem", { name: "All cases" })).toBeFocused();
+  await expect.poll(() => release !== null).toBe(true);
+  release!();
+  const first = page.locator(`[data-case-option='${directory.body.cases[0].case_id}']`);
+  await expect(first).toBeVisible();
+  await page.keyboard.press("Home");
+  await expect(first).toBeFocused();
+});
+
 /** The API paths a page asked for while it loaded. */
 function apiRequests(page: Page): string[] {
   const seen: string[] = [];

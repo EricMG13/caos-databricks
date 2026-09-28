@@ -229,19 +229,25 @@ export function Workspace({ section }: { section: Section }) {
     let open = true;
     const load = (): Promise<RegionStatus | null> =>
       open && loadRef.current ? loadRef.current() : Promise.resolve(null);
+    const recheckSources = () => {
+      if (open)
+        setSourceEvents((current) => ({
+          key,
+          value: current?.key === key ? current.value + 1 : 1,
+        }));
+    };
     const stream = openTail(eventsUrl(caseId, tailRun, fixture), {
       onEvent: (name) => {
-        if (open && name === "sources_changed")
-          setSourceEvents((current) => ({
-            key,
-            value: current?.key === key ? current.value + 1 : 1,
-          }));
+        if (name === "sources_changed") recheckSources();
         if (refetches(name, section)) void load();
       },
       // Every open, the first included: an event landing between the
       // document read and the stream's head is not replayed, and the
       // one-flight rule coalesces the read this doubles (finding FE-9).
-      onOpen: () => void load(),
+      onOpen: () => {
+        recheckSources();
+        void load();
+      },
       // A closed stream is a refusal or, in Firefox, a connection that
       // never opened: EventSource cannot tell them apart. The document
       // read can, so it decides: a case that is gone stops the tail, and

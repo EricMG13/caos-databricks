@@ -1,7 +1,7 @@
 // The evidence drawer bound to the visible snapshot, its text layer and the
 // highlight geometry (brief 4.4, decisions 7-9; R1 and R2).
 import { readFileSync } from "node:fs";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { App } from "@/app/App";
 import { Workspace } from "@/app/Workspace";
@@ -260,6 +260,34 @@ describe("the evidence drawer", () => {
     expect(lines()).toHaveLength(3);
     stale = true;
     await fire("sources_changed");
+    expect(dialog()).not.toBeNull();
+    expect(lines()).toHaveLength(0);
+    expect(dialog()!.querySelector('[data-page-state="unavailable"]')).toBeInTheDocument();
+  });
+
+  test("a replacement stream rechecks withdrawn evidence when the section read fails", async () => {
+    let withdrawn = false;
+    const firstFetch = globalThis.fetch;
+    vi.stubGlobal("fetch", async (...args: Parameters<typeof fetch>) => {
+      const url = String(args[0]);
+      if (withdrawn && url.includes("/pages/")) return new Response("", { status: 404 });
+      if (withdrawn)
+        return new Response(JSON.stringify({ code: "STORE_UNAVAILABLE", clears: "retry" }), {
+          status: 500,
+        });
+      return firstFetch(...args);
+    });
+    await mount(`/analysis/?case=${CASE}&tab=rn-cp-0`);
+    FakeSource.all[0]!.readyState = FakeSource.OPEN;
+    await fire("open");
+    await openFirstFact();
+    expect(lines()).toHaveLength(3);
+    withdrawn = true;
+    FakeSource.all[0]!.readyState = FakeSource.CLOSED;
+    await fire("error");
+    await waitFor(() => expect(FakeSource.all).toHaveLength(2), { timeout: 2500 });
+    FakeSource.all[1]!.readyState = FakeSource.OPEN;
+    await fire("open");
     expect(dialog()).not.toBeNull();
     expect(lines()).toHaveLength(0);
     expect(dialog()!.querySelector('[data-page-state="unavailable"]')).toBeInTheDocument();
