@@ -111,9 +111,10 @@ PDF_V2_COORDINATES = "crop-top-left-rotated-pt"
 # a space (W4), measures a glyph on both axes and reads Indexed and Separation
 # colours (N9), and lays text out after a form XObject in the page's matrix;
 # v8 marks text painted in a colorant that paints nothing; v9 reads form text
-# and treats nonrectangular fills as an unknown backdrop. Coordinates stay the
+# and treats nonrectangular fills as an unknown backdrop; v10 inherits form
+# state, applies form bounds, and marks overpainted form glyphs. Coordinates stay the
 # same throughout.
-PDF_CROP_VERSIONS = frozenset({"2", "3", "4", "5", "6", "7", "8", "9"})
+PDF_CROP_VERSIONS = frozenset({"2", "3", "4", "5", "6", "7", "8", "9", "10"})
 TEXT_COORDINATES = "cell-top-left-pt"
 # The encodings a `caos.plain-text` identity records: v1-v3 `utf-8`, v4
 # `utf-8-sig` (`extract.TEXT_ENCODING`). Each is also the codec's name.

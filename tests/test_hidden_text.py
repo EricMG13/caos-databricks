@@ -487,7 +487,7 @@ def test_no_token_carries_a_line_break() -> None:
     assert not any(set(token.text) & set(LINE_BREAKS) for token in tokens)
     assert one_line(DETACHED) in [token.text for token in tokens]
     identity = PdfExtractor().identity
-    assert (identity.version, identity.config["token_line_breaks"]) == ("9", "space")
+    assert (identity.version, identity.config["token_line_breaks"]) == ("10", "space")
 
 
 def test_a_glyphs_line_breaks_cannot_detach_the_host_note() -> None:
@@ -1582,7 +1582,7 @@ def test_the_extraction_child_marks_the_none_colorant() -> None:
         "Line": COLORANT
     }
     assert (identity.version, identity.config["hidden_colorant_none"]) == (
-        "9",
+        "10",
         "separation-none,devicen-all-none",
     )
 
@@ -1655,7 +1655,7 @@ def test_text_after_a_form_is_placed_where_a_viewer_draws_it(before: bytes) -> N
     )
 
 
-# What PdfExtractor v7 and v8 added to the identity's configuration: without
+# What PdfExtractor v7 onward added to the identity's configuration: without
 # them, the current configuration is the one a v6 row recorded.
 SINCE_V7 = (
     "token_line_breaks",
@@ -1664,6 +1664,9 @@ SINCE_V7 = (
     "form_matrix",
     "hidden_colorant_none",
     "hidden_device_n_colorants",
+    "form_state",
+    "form_clip",
+    "hidden_painted_over_glyphs",
 )
 
 

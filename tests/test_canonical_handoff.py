@@ -185,8 +185,18 @@ def test_a_critical_finding_requires_blocked() -> None:
 
 
 @pytest.mark.parametrize("severity", ["CRITICAL", "MATERIAL"])
-def test_a_single_column_qa_finding_applies_its_cap(severity: str) -> None:
-    table = f"| Severity |\n| --- |\n| {severity} — unresolved |\n"
+@pytest.mark.parametrize("borders", [("| ", " |"), ("| ", ""), ("", " |")])
+def test_a_single_column_qa_finding_applies_its_cap(
+    severity: str, borders: tuple[str, str]
+) -> None:
+    left, right = borders
+    table = (
+        "\n".join(
+            f"{left}{cell}{right}"
+            for cell in ("Severity", "---", f"{severity} — unresolved")
+        )
+        + "\n"
+    )
     markdown = CP0_MD.replace(
         b"## QA Validation\n\n", b"## QA Validation\n\n" + table.encode() + b"\n", 1
     )
