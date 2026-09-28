@@ -19,3 +19,5 @@ Fixed: the stale Upload test URL (F447).
 Verified fine: fixture consumers, merged stylesheet, shared matcher and frontend checks.
 By-design: graph appearance and motion changes remain in the final patch.
 Still open: the fresh hosted checks on the updated workflow head must pass before merge.
+
+Hosted closure: all seven jobs passed in run `36392593716`, including 526 unit tests, 108 browser tests and the accessibility matrix with zero findings. PR #7 merged into `rebuild/databricks` as `3e05c85`.

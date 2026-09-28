@@ -117,7 +117,8 @@ A shadcn app shell (D37), inset variant:
   the section as the page's h1, where focus lands after a navigation), then the
   document's warnings as toned badges, the run's state as mark and word, at
   most three actions with exactly one primary, and the theme menu. The trail is
-  not a second navigation landmark.
+  not a second navigation landmark. At zoomed widths below 640 px, hide the
+  issuer crumb and separator so the full section title remains visible.
 - **Summary** — the first card of the body, drawn only over a document: the
   verdict (severity mark, conclusion, what blocks it), revision and approval
   where the document says them, one headline figure with what it counts
@@ -125,7 +126,8 @@ A shadcn app shell (D37), inset variant:
   Change, Impact, Next step and Evidence. A cell with nothing to say is not
   drawn; never "—". The verdict is a headline, not a sentence (D70): one line,
   sentence case, no closing full stop; "State · detail" where it has a subject
-  ("In progress · CP-6 at its gate", "Frozen · awaiting committee"); a count
+  ("In progress · CP-6 at its QA gate", "Frozen · awaiting committee"); input
+  approval gates are named separately from route QA gates. A count
   alone is the count and its noun ("4 cases"), with no headline figure beside
   it; a warning leads with what is wrong ("1 run parked · waiting on a
   retry"). The cells are the sentences, with their full stops.
@@ -153,9 +155,13 @@ The route's modules are the section's views, in route order, each with its
 QA state as shape and hue; the address names the one shown
 (`?tab=<route node>`), and the section opens on its conclusion (the last
 module that reasons, never the CP-CF calculator). Past eight views the tabs
-are one row of module codes that stays under the header, each name on hover
-and to a screen reader; with a view open, the section's summary is one line
-and its brief opens on request. The module fills the width,
+are one row of module names that stays under the header, with the selected
+module's name and served warning or limitation beside the selector. Names
+are Geist at 13px in 28px tabs with 6px horizontal padding; a missing catalog
+name keeps its module code in Geist Mono, and the full code remains on hover. With a
+view open, the summary names any module to review and links to it; pending
+work leads with accepted and pending counts, and the brief opens on request.
+The module fills the width,
 in the five places every module shares (D60), so a reader finds the same
 thing in the same place in every module:
 
@@ -190,6 +196,16 @@ thing in the same place in every module:
    and conflicts, and QA validation.
 
 At zoomed widths the lead stacks: view, key figures, caveats.
+
+## Run
+
+The route keeps its stage columns and square dependency lines. Arrowheads
+show direction; selecting a node emphasises its connected lines at 3px,
+with other lines at 1.75px. Active dependency flow follows accepted inputs
+and actual execution state. State changes transition in 180ms; running work
+pulses in 1.92s and pauses while the graph is offscreen or the document is
+hidden. Reduced motion keeps state and selection visible without pulses.
+The QA diamond retains its warning colour until its target is accepted.
 
 ## Charts
 

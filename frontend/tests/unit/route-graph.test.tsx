@@ -2,7 +2,7 @@
 // a wide route hid its frontier past the panel's right edge), once per route.
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { render } from "@testing-library/react";
+import { act, fireEvent, render } from "@testing-library/react";
 import {
   edgesOf,
   focusOf,
@@ -21,7 +21,7 @@ const run = () => {
   return document.body.run;
 };
 
-function graph(view: ReturnType<typeof run>) {
+function graph(view: ReturnType<typeof run>, selected: string | null = null, onSelect = () => {}) {
   return (
     <RouteGraph
       nodes={view.nodes}
@@ -29,8 +29,8 @@ function graph(view: ReturnType<typeof run>) {
       attempts={view.attempts}
       status={view.status}
       blockedBy={view.blocked_by}
-      selected={null}
-      onSelect={() => {}}
+      selected={selected}
+      onSelect={onSelect}
     />
   );
 }
@@ -126,4 +126,90 @@ test("an edge is drawn square, through gutters and row gaps, never through a nod
   expect(container.querySelectorAll("svg.edges path").length).toBeGreaterThan(0);
   expect(container.querySelectorAll("svg.edges line")).toHaveLength(0);
   expect(focusOf(view.nodes, view.attempts, view.status, view.blocked_by)).toBe("rn-cp-6");
+});
+
+test("dependency flow follows accepted work, gate waits, selection and ended runs", () => {
+  const view = run();
+  const active = {
+    ...view,
+    nodes: view.nodes.map((node) =>
+      node.module_id === "CP-6" ? { ...node, awaiting_gate: false } : node,
+    ),
+  };
+  const onSelect = vi.fn();
+  const { container, rerender } = render(graph(active, "rn-cp-6", onSelect));
+  const gate = () => container.querySelector(".edges path.gate")!;
+  expect(gate()).toHaveAttribute("data-progress", "active");
+  expect(gate()).toHaveClass("caos-running");
+  expect(gate()).toHaveAttribute("data-connected", "true");
+  expect(container.querySelector("[data-gate]")).toHaveAttribute("data-gate", "CP-5 → CP-6");
+  const marker = container.querySelector("marker")!;
+  expect(gate()).toHaveAttribute("marker-end", `url(#${marker.id})`);
+  fireEvent.click(container.querySelector('button[data-node="CP-5"]')!);
+  expect(onSelect).toHaveBeenCalledWith("rn-cp-5");
+
+  rerender(graph(view));
+  expect(gate()).toHaveAttribute("data-progress", "waiting");
+  expect(gate()).not.toHaveClass("caos-running");
+  expect(gate()).not.toHaveAttribute("data-connected");
+  expect(container.querySelector("[data-gate]")).toHaveAttribute("title", "Awaiting QA gate");
+
+  const accepted = {
+    ...active,
+    nodes: active.nodes.map((node) =>
+      ["CP-5", "CP-6"].includes(node.module_id) ? { ...node, state: "RESTRICTED" as const } : node,
+    ),
+  };
+  rerender(graph(accepted));
+  expect(gate()).toHaveAttribute("data-progress", "accepted");
+  expect(container.querySelector("[data-gate]")).toHaveAttribute("data-cleared", "true");
+  expect(container.querySelector("[data-gate]")).toHaveAttribute("title", "QA gate accepted");
+  expect(container.querySelectorAll(".edges path")).toHaveLength(view.edges.length);
+
+  for (const status of ["COMPLETE", "FAILED", "BLOCKED", "CANCELLED"] as const) {
+    rerender(graph({ ...active, status }));
+    expect(container.querySelectorAll(".caos-running")).toHaveLength(0);
+    expect(gate()).toHaveAttribute("data-progress", "waiting");
+  }
+});
+
+test("graph motion pauses offscreen and in hidden documents and cleans up its observer", () => {
+  let report: (entries: { isIntersecting: boolean }[]) => void = () => {};
+  const disconnect = vi.fn();
+  const observe = vi.fn();
+  vi.stubGlobal(
+    "IntersectionObserver",
+    class {
+      constructor(callback: typeof report) {
+        report = callback;
+      }
+      observe = observe;
+      disconnect = disconnect;
+    },
+  );
+  const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("visible");
+  const remove = vi.spyOn(document, "removeEventListener");
+  const { container, unmount } = render(graph(run()));
+  try {
+    const flow = container.querySelector(".route-flow")!;
+    expect(observe).toHaveBeenCalledWith(container.querySelector(".dag"));
+    expect(flow).toHaveAttribute("data-motion", "paused");
+    act(() => report([{ isIntersecting: true }]));
+    expect(flow).toHaveAttribute("data-motion", "active");
+    act(() => report([{ isIntersecting: false }]));
+    expect(flow).toHaveAttribute("data-motion", "paused");
+    act(() => report([{ isIntersecting: true }]));
+    visibility.mockReturnValue("hidden");
+    fireEvent(document, new Event("visibilitychange"));
+    expect(flow).toHaveAttribute("data-motion", "paused");
+    visibility.mockReturnValue("visible");
+    fireEvent(document, new Event("visibilitychange"));
+    expect(flow).toHaveAttribute("data-motion", "active");
+  } finally {
+    unmount();
+    expect(disconnect).toHaveBeenCalledOnce();
+    expect(remove).toHaveBeenCalledWith("visibilitychange", expect.any(Function));
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  }
 });
