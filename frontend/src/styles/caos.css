@@ -36,6 +36,41 @@
       grid-column: 1 / -1;
     }
   }
+  .run-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    grid-template-areas: "route detail" "actions detail";
+    align-items: start;
+    gap: 1rem;
+    min-width: 0;
+  }
+  .run-route {
+    grid-area: route;
+  }
+  .run-detail {
+    grid-area: detail;
+  }
+  .run-actions {
+    grid-area: actions;
+    min-width: 0;
+  }
+  .run-focus {
+    display: none;
+  }
+  @media (max-width: 1080px) {
+    .run-layout {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-areas: "route" "detail" "actions";
+    }
+    .run-focus {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.25rem 0.75rem;
+      padding: 0.625rem 1rem;
+      border-bottom: 1px solid var(--hairline);
+      font-size: 0.875rem;
+    }
+  }
   .lbl {
     font-size: 0.75rem;
     font-weight: 500;
@@ -576,6 +611,13 @@
     padding-right: 0.5rem;
     padding-left: 0.5rem;
   }
+  /* Directory pins its first column: an unbroken title must not make that
+     sticky cell cover the action after horizontal scrolling. */
+  table.reg[data-register] .register-title {
+    display: block;
+    width: 14rem;
+    overflow-wrap: anywhere;
+  }
   /* A file name is one word; it may break anywhere so the row need not widen. */
   table.reg td .sub {
     display: block;
@@ -685,6 +727,13 @@
   .kv dd.wrap,
   .kv dd.prose {
     font: 400 0.875rem var(--font-sans);
+  }
+  [data-node-detail] .kv .node-reason-label,
+  [data-node-detail] .kv .node-reason {
+    grid-column: 1 / -1;
+  }
+  [data-node-detail] .kv .node-reason {
+    text-align: left;
   }
   /* An id or digest (ds/Digest.tsx): short, mono, one press to copy. */
   /* In a narrow value column the prefix, the digest and the control each take

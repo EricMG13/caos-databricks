@@ -748,11 +748,11 @@ export function GatePanelControl({
             // does tell start and retry what the pinned input is: after a
             // reload, with both gates released and the subject already
             // pinned, a preview is the one read left that says (MAX-18).
-            void preview
-              .run(null, (intent) => fetchGatePreview(caseId, runId, gate, intent))
-              .then((outcome) => {
-                if (outcome?.kind === "ok") onPreviewed(outcome.receipt.input_fingerprint);
-              });
+            void preview.run(null, async (intent) => {
+              const outcome = await fetchGatePreview(caseId, runId, gate, intent);
+              if (outcome.kind === "ok") onPreviewed(outcome.receipt.input_fingerprint);
+              return outcome;
+            });
           }}
         >
           {preview.pending ? "Loading…" : "Preview"}

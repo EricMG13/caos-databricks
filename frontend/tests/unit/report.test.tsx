@@ -173,7 +173,7 @@ describe("Report v1", () => {
     )) {
       expect(
         node.closest(
-          "[data-filing-controls], [data-report-revisions], [data-figure-chip], [data-artifact-view-tab]",
+          "[data-filing-controls], [data-report-revisions], [data-report-identities], [data-figure-chip], [data-artifact-view-tab]",
         ),
       ).not.toBeNull();
     }
@@ -206,6 +206,47 @@ describe("Report v1", () => {
     expect(root).toHaveTextContent(document.body.narrative[0]![1]!.figure!.matched_text);
     expect(root.querySelectorAll("[data-report-artifact]")).toHaveLength(
       document.body.artifacts.length,
+    );
+  });
+
+  test("the saved narrative and filing precede revision history and artifacts", () => {
+    const { container } = mount(report());
+    const root = container.querySelector("[data-report-v1]")!;
+    const positions = [
+      "[data-report-narrative]",
+      "[data-filing-controls]",
+      "[data-report-revisions]",
+      "[data-report-artifact]",
+    ].map((selector) => Array.from(root.children).indexOf(root.querySelector(selector)!));
+    expect(positions.every((position) => position >= 0)).toBe(true);
+    expect(positions).toEqual([...positions].sort((a, b) => a - b));
+    const identities = root.querySelector("details[data-report-identities]")!;
+    expect(identities).toHaveTextContent(report().body.payload_sha256!);
+    expect(identities).not.toHaveAttribute("open");
+  });
+
+  test("an empty narrative says whether this is an unsaved or saved revision", () => {
+    const saved = report();
+    const { container, rerender } = mount({
+      ...saved,
+      body: { ...saved.body, narrative: [] },
+    });
+    expect(container.querySelector("[data-report-narrative]")).toHaveTextContent(
+      "This revision contains no saved narrative.",
+    );
+    rerender(
+      <MemoryRouter>
+        <ReportSection
+          document={{
+            ...saved,
+            body: { ...saved.body, revision_id: null, narrative: [], revisions: [] },
+          }}
+          tab={null}
+        />
+      </MemoryRouter>,
+    );
+    expect(container.querySelector("[data-report-narrative]")).toHaveTextContent(
+      "No saved narrative yet. Write the draft below and save a revision.",
     );
   });
 

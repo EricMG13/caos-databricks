@@ -39,17 +39,23 @@ const rowsOf = (container: HTMLElement) =>
   Array.from(container.querySelectorAll<HTMLElement>("table.reg[data-register] tbody tr"));
 
 describe("Directory", () => {
-  test("test_register_has_one_action_per_row_and_no_batch_state", () => {
+  test("the demo register opens only its served case and has no batch state", () => {
     const { container } = mount(fixture);
-    expect(container.querySelector("table.reg[data-register]")).not.toBeNull();
+    const register = container.querySelector("table.reg[data-register]")!;
+    expect(register).not.toBeNull();
+    expect(register.querySelector("thead th:first-child")).toHaveTextContent("Title");
+    expect(register.querySelector("thead th:nth-child(2)")).toHaveTextContent("Case");
+    expect(register.querySelector("tbody tr:first-child td:first-child")).toHaveTextContent(
+      fixture.body.cases[0]!.title,
+    );
     const rows = rowsOf(container);
     expect(rows).toHaveLength(fixture.body.cases.length);
-    for (const row of rows) {
-      const links = within(row).getAllByRole("link");
-      expect(links).toHaveLength(1);
-      expect(links[0]).toHaveTextContent("Open case");
-      expect(within(row).queryAllByRole("button")).toHaveLength(0);
+    expect(within(rows[0]!).getByRole("link", { name: /^Open case/ })).toBeVisible();
+    for (const row of rows.slice(1)) {
+      expect(within(row).queryByRole("link")).toBeNull();
+      expect(row.querySelector("[data-demo-unavailable]")).toHaveTextContent("Unavailable in demo");
     }
+    for (const row of rows) expect(within(row).queryAllByRole("button")).toHaveLength(0);
     // No batch state: no checkboxes, no select-all, no "n selected".
     expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
     expect(screen.queryByText(/select all|selected/i)).toBeNull();

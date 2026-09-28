@@ -183,40 +183,51 @@ export function ReportSection({ document }: { document: ReportDocument; tab: str
           <span className="cp">{body.revision_id === null ? "Not yet saved" : "Saved report"}</span>
         </header>
         <div className="pb">
-          <dl className="kv">
-            <dt>Case</dt>
-            <dd>
-              <Digest value={body.case_id} />
-            </dd>
-            <dt>Run</dt>
-            <dd>
-              <Digest value={body.displayed_run_id} />
-            </dd>
-            <dt>Revision</dt>
-            <dd>
-              <Digest value={body.revision_id} fallback="Not yet saved" />
-            </dd>
-            <dt>Payload</dt>
-            <dd>
-              <Digest value={body.payload_sha256} prefix="sha256:" fallback="None" />
-            </dd>
-          </dl>
+          <details className="help" data-report-identities>
+            <summary>Revision identities</summary>
+            <dl className="kv">
+              <dt>Case</dt>
+              <dd>
+                <Digest value={body.case_id} />
+              </dd>
+              <dt>Run</dt>
+              <dd>
+                <Digest value={body.displayed_run_id} />
+              </dd>
+              <dt>Revision</dt>
+              <dd>
+                <Digest value={body.revision_id} fallback="Not yet saved" />
+              </dd>
+              <dt>Payload</dt>
+              <dd>
+                <Digest value={body.payload_sha256} prefix="sha256:" fallback="None" />
+              </dd>
+            </dl>
+          </details>
         </div>
       </section>
-      <Revisions body={body} />
-      {body.artifacts.map((artifact) => (
-        <Artifact key={artifact.route_node_id} artifact={artifact} />
-      ))}
-      <FilingControls document={live} onRefreshed={setLive} />
       <section className="pnl" data-report-narrative>
         <header>
           <h2>Narrative</h2>
           <span className="tag">{body.narrative.length}</span>
         </header>
         <div className="pb">
-          <Narrative narrative={body.narrative} />
+          {body.narrative.length ? (
+            <Narrative narrative={body.narrative} />
+          ) : (
+            <p className="note">
+              {body.revision_id === null
+                ? "No saved narrative yet. Write the draft below and save a revision."
+                : "This revision contains no saved narrative."}
+            </p>
+          )}
         </div>
       </section>
+      <FilingControls document={live} onRefreshed={setLive} />
+      <Revisions body={body} />
+      {body.artifacts.map((artifact) => (
+        <Artifact key={artifact.route_node_id} artifact={artifact} />
+      ))}
     </div>
   );
 }

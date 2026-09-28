@@ -93,14 +93,20 @@ export function BookSection({ document }: { document: BookDocument; tab: string 
           <span className="cp">{body.rows.length} credits</span>
         </header>
         <div className="pb">
-          <dl className="kv">
-            <dt>Period</dt>
-            <dd data-basis-period>{body.basis.period}</dd>
-            <dt>Scenario</dt>
-            <dd>{body.basis.scenario}</dd>
-            <dt>Accepted only</dt>
-            <dd>{String(body.basis.accepted_only)}</dd>
-          </dl>
+          <p className="note" data-book-basis>
+            All accepted periods · All accepted scenarios · Accepted projections only
+          </p>
+          <details className="help" data-book-basis-codes>
+            <summary>Exact comparison basis</summary>
+            <dl className="kv">
+              <dt>Period</dt>
+              <dd data-basis-period>{body.basis.period}</dd>
+              <dt>Scenario</dt>
+              <dd>{body.basis.scenario}</dd>
+              <dt>Accepted only</dt>
+              <dd>{String(body.basis.accepted_only)}</dd>
+            </dl>
+          </details>
           {import.meta.env.MODE === "demo" ? (
             // The fixture is fuller than any run a workspace press makes by
             // default; the demonstration says which runs alone can fill it.
