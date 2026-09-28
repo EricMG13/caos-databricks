@@ -640,10 +640,11 @@ def _one_match(
             # Starts ascend, so one scan per region serves every start in it.
             region_end = _region_end(tokens, start)
         end = start + width - 1
+        # Near matches commonly fail at the end; avoid normalising both edges.
         if (
             region_end <= end
-            or not _edge_equal(tokens[start].text, words[0], normalised=normalised)
             or not _edge_equal(tokens[end].text, words[-1], normalised=normalised)
+            or not _edge_equal(tokens[start].text, words[0], normalised=normalised)
         ):
             continue
         if found is not None:
