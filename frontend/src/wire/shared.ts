@@ -102,6 +102,8 @@ export interface Tab {
   cp: string | null;
   /** The view's state as shape and hue (Analysis: a module's QA state). */
   severity?: Severity;
+  /** A served reason for the selected view's warning or limitation. */
+  note?: string | null;
   /** The view a section opens on when the address names none. */
   opens?: boolean;
 }

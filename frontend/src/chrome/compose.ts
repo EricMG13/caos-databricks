@@ -212,16 +212,23 @@ function run(document: RunSectionDocument): Facts {
   // says so first, since the Directory sends the reader here to retry it.
   const stop = view.work?.stop_code ?? null;
   const parked = isParked({ status: view.status, stop_code: stop });
-  const waiting = open.length
-    ? `waiting on the ${words(open[0]!.gate)} gate`
-    : gated.length
-      ? `${gated.join(", ")} at ${gated.length === 1 ? "its" : "their"} gate`
-      : null;
+  const waiting =
+    view.status !== "RUNNING"
+      ? null
+      : open.length
+        ? `waiting on the ${words(open[0]!.gate)} gate`
+        : gated.length
+          ? `${gated.join(", ")} at ${gated.length === 1 ? "its" : "their"} QA gate`
+          : null;
   return {
     ribbon: {
       ...QUIET,
       execution: parked ? "PARKED" : view.status,
-      approval: open.length ? `${plural(open.length, "gate")} open` : "Gates released",
+      approval: open.length
+        ? `${open.length} input ${noun(open.length, "gate")} open`
+        : view.gates.length
+          ? "Input gates released"
+          : null,
     },
     brief: {
       change: `${done} of ${plural(view.nodes.length, "module")} complete.`,
@@ -232,9 +239,11 @@ function run(document: RunSectionDocument): Facts {
           : null,
       action: parked
         ? "Retry the run once what stopped it is cleared."
-        : open.length
+        : view.status === "RUNNING" && open.length
           ? `Review the ${words(open[0]!.gate)} gate.`
-          : null,
+          : view.status === "RUNNING" && gated.length
+            ? `Select ${gated[0]} to inspect its QA gate.`
+            : null,
       evidence: null,
       headline: `${done}/${view.nodes.length}`,
       headline_label: "modules complete",
@@ -282,8 +291,14 @@ function analysis(document: AnalysisDocument): Facts {
     id: handoff.route_node_id,
     label: handoff.module_id,
     // A module the catalog names only by its id reads as its id once, not twice.
-    cp: handoff.module_name === handoff.module_id ? null : handoff.module_name,
+    cp:
+      !handoff.module_name.trim() || handoff.module_name === handoff.module_id
+        ? null
+        : handoff.module_name,
     severity: handoffSeverity(handoff),
+    note:
+      handoff.validation_warnings[0] ??
+      (handoff.limitation_flags[0] ? sentence(handoff.limitation_flags[0]) : null),
     opens: handoff === conclusion,
   }));
   return {
@@ -291,7 +306,8 @@ function analysis(document: AnalysisDocument): Facts {
     ribbon: { ...QUIET, execution: status, approval: conclusion?.committee_status ?? null },
     brief: {
       change: `${plural(handoffs.length, "module")} accepted, ${pending.length} pending.`,
-      impact: ready,
+      impact:
+        pending.length && conclusion ? `Latest accepted ${conclusion.module_id}: ${ready}.` : ready,
       action: weak.length
         ? `Review ${weak.map((handoff) => handoff.module_id).join(", ")} before committee.`
         : pending.length
@@ -308,11 +324,13 @@ function analysis(document: AnalysisDocument): Facts {
     verdict: {
       severity,
       conclusion: conclusion
-        ? conclusion.screening_only
-          ? "Screening only · not committee clearance"
-          : weak.length
-            ? `${ready ?? ""}, with ${plural(weak.length, "module")} to review`
-            : (ready ?? "")
+        ? pending.length
+          ? `${plural(handoffs.length, "module")} accepted · ${plural(pending.length, "module")} pending`
+          : conclusion.screening_only
+            ? "Screening only · not committee clearance"
+            : weak.length
+              ? `${ready ?? ""}, with ${plural(weak.length, "module")} to review`
+              : (ready ?? "")
         : "Nothing accepted yet",
       blocked_on: blocked?.module_id ?? null,
     },
@@ -321,14 +339,19 @@ function analysis(document: AnalysisDocument): Facts {
 
 function book(document: BookDocument): Facts {
   const rows = document.body.rows;
-  const without = rows.filter((row) => row.unavailable_reason !== null).length;
+  const available = rows.filter(
+    (row) => row.snapshot !== null && row.unavailable_reason === null && row.refusal === null,
+  ).length;
+  const unavailable = rows.length - available;
   return {
     ribbon: QUIET,
     brief: {
-      change: `${plural(rows.length, "credit")} on accepted projections.`,
+      change: rows.length
+        ? `${plural(rows.length, "credit")} · ${plural(available, "accepted forecast")} · ${plural(unavailable, "credit")} unavailable.`
+        : "No credits to compare.",
       impact: null,
       action: null,
-      evidence: without ? `${without} without an accepted forecast.` : null,
+      evidence: unavailable ? `${plural(unavailable, "credit")} unavailable for comparison.` : null,
       headline: String(rows.length),
       headline_label: noun(rows.length, "credit"),
     },
@@ -470,7 +493,7 @@ export function composeChrome(section: EnabledSection, document: SectionDocument
     brief: {
       ...facts.brief,
       change: `${facts.brief.change ?? ""} Observed ${stamp(document.observed_at)}.`.trim(),
-      evidence: notes ?? facts.brief.evidence,
+      evidence: [facts.brief.evidence, notes].filter(Boolean).join(" ") || null,
     },
     tabs: facts.tabs ?? [],
     verdict: partial

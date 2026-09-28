@@ -64,7 +64,7 @@ const said = (container: HTMLElement) => container.querySelector("[data-announce
 
 afterEach(() => vi.unstubAllGlobals());
 
-const CASE = "ff1fbf5a-e56f-4f84-a983-2f5a507675f0";
+const CASE = "00000000-0000-4000-8000-000000000001";
 const WRITER = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 
 function inDirectory(document: DirectoryDocument) {

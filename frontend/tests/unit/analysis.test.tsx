@@ -207,7 +207,9 @@ describe("Analysis", () => {
     // in the Audit tab (the rail they once filled is gone).
     const { container } = mount(complete);
     const count = container.querySelector("[data-documents-open]")!;
-    expect(count).toHaveTextContent(`${register.length} documents · ${facts.length} citations`);
+    expect(count).toHaveTextContent(
+      `Run evidence · ${register.length} documents · ${facts.length} citations`,
+    );
     expect(count).toHaveTextContent("1 withdrawn");
     fireEvent.click(count);
     const drawer = document.querySelector("[data-documents-drawer]")!;
@@ -216,6 +218,97 @@ describe("Analysis", () => {
     expect(container.querySelectorAll("[data-depth-panel] [data-register-document]")).toHaveLength(
       register.length,
     );
+  });
+
+  test("a grouped source retains each citation's record and local index", () => {
+    const base = complete.body.handoffs.find((handoff) => handoff.source_facts.length > 0)!;
+    const other = complete.body.handoffs.find(
+      (handoff) =>
+        handoff.source_facts[0]?.document_sha256 !== base.source_facts[0]!.document_sha256,
+    )!;
+    const cited = base.source_facts[0]!;
+    const first = { ...base, record_sha256: "a".repeat(64), source_facts: [cited] };
+    const second = {
+      ...base,
+      module_id: "CP-X",
+      record_sha256: "b".repeat(64),
+      source_facts: [other.source_facts[0]!, cited],
+    };
+    const grouped = sourceRegister([first, second]).find(
+      (entry) => entry.digest === cited.document_sha256,
+    )!;
+    expect(grouped.count).toBe(2);
+    expect(grouped.citations).toEqual([
+      {
+        moduleId: base.module_id,
+        withdrawn: cited.withdrawn_at !== null,
+        identity: {
+          record_sha256: first.record_sha256,
+          source_id: cited.source_id,
+          page: cited.page,
+          index: 0,
+        },
+      },
+      {
+        moduleId: "CP-X",
+        withdrawn: cited.withdrawn_at !== null,
+        identity: {
+          record_sha256: second.record_sha256,
+          source_id: cited.source_id,
+          page: cited.page,
+          index: 1,
+        },
+      },
+    ]);
+  });
+
+  test("same-page citations have distinct visible and accessible register labels", () => {
+    const base = complete.body.handoffs.find((handoff) => handoff.source_facts.length > 0)!;
+    const fact = base.source_facts[0]!;
+    const changed = {
+      ...complete,
+      body: {
+        ...complete.body,
+        handoffs: complete.body.handoffs.map((handoff) =>
+          handoff === base
+            ? { ...handoff, source_facts: [fact, { ...fact, matched_text: "Another quote" }] }
+            : handoff,
+        ),
+      },
+    };
+    const { container } = mountAt(changed, base.module_id);
+    fireEvent.click(container.querySelector("[data-documents-open]")!);
+    const chips = [
+      ...document.querySelectorAll<HTMLButtonElement>(
+        `[data-documents-drawer] [data-register-fact='${fact.source_id}']`,
+      ),
+    ];
+    expect(chips).toHaveLength(2);
+    expect(new Set(chips.map((chip) => chip.textContent)).size).toBe(2);
+    expect(new Set(chips.map((chip) => chip.getAttribute("aria-label"))).size).toBe(2);
+  });
+
+  test("grouped citations retain their own withdrawal state", () => {
+    const base = complete.body.handoffs.find((handoff) => handoff.source_facts.length > 0)!;
+    const cited = base.source_facts[0]!;
+    const other = {
+      ...base,
+      module_id: "CP-X",
+      source_facts: [
+        {
+          ...cited,
+          source_id: "different-admission",
+          withdrawn_at: cited.withdrawn_at === null ? "2026-09-01T00:00:00Z" : null,
+        },
+      ],
+    };
+    const citations = sourceRegister([base, other]).find(
+      (entry) => entry.digest === cited.document_sha256,
+    )!.citations;
+    expect(citations.map((citation) => citation.withdrawn)).toEqual([
+      cited.withdrawn_at !== null,
+      cited.withdrawn_at === null,
+    ]);
   });
 
   test("long model prose is shown in part, and the rest on request", () => {
