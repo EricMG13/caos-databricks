@@ -4,6 +4,7 @@
 // Every cell is composed from the document's own facts, and a
 // cell with nothing to say is not drawn (critique P1).
 import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
+import { Link } from "react-router";
 import { SeverityMark, toneOf } from "./SeverityMark";
 import { Button } from "@/components/ui/button";
 import type { Brief, Ribbon, Verdict } from "@/wire";
@@ -82,6 +83,7 @@ export function SectionSummary({
   brief,
   ribbon,
   compact = false,
+  review,
 }: {
   verdict: Verdict;
   brief: Brief;
@@ -89,6 +91,7 @@ export function SectionSummary({
   /** One line, the brief on request: a section whose view is open (an
       Analysis module) gives the first screen to the view. */
   compact?: boolean;
+  review?: { code: string; name: string; note: string | null; to: string };
 }) {
   const cells = CELLS.filter((cell) => brief[cell.key]);
   const states = STATE_CELLS.filter(({ key }) => ribbon[key] !== null);
@@ -144,6 +147,19 @@ export function SectionSummary({
                   {label} <span className="text-foreground">{ribbon[key]}</span>
                 </span>
               ))}
+            </p>
+          ) : null}
+          {compact && review ? (
+            <p
+              className="w-full text-sm font-normal tracking-normal text-muted-foreground"
+              data-summary-review
+            >
+              <span className="text-foreground">{review.name}</span> ({review.code}) was accepted
+              with a review point{review.note ? `: ${review.note}` : "."}
+              {" · "}
+              <Link className="text-foreground underline underline-offset-2" to={review.to}>
+                Review {review.code}
+              </Link>
             </p>
           ) : null}
         </div>

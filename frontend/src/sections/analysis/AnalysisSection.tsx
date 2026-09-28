@@ -10,7 +10,8 @@
 // Each source fact opens the evidence drawer by its identity (brief 4.4,
 // decision 9); the drawer reads the page's text layer and places the stored
 // rectangles over it. The model's Markdown is drawn as elements, never markup.
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { Dialog } from "@base-ui/react/dialog";
 import { Link, useLocation, useSearchParams } from "react-router";
 import { Figures, type FigurePick } from "./figures";
 import { Depth, Lead, ModuleFacts, ReaderParts, useModuleParts, type DepthTab } from "./module";
@@ -21,7 +22,7 @@ import { formatDecimal } from "@/charts";
 import { ModuleRefLink } from "@/ds/ModelMarkdown";
 import { stamp } from "@/ds/format";
 import type { ModuleRef } from "@/ds/markdown";
-import { useEvidence } from "@/evidence/EvidenceContext";
+import { useEvidence, type FactIdentity } from "@/evidence/EvidenceContext";
 import { Overlay } from "@/evidence/Overlay";
 import type { AnalysisDocument, CitationView, HandoffView, PendingNode } from "@/wire/v1";
 
@@ -36,26 +37,55 @@ type Handoffs = AnalysisDocument["body"]["handoffs"];
 export function sourceRegister(handoffs: Handoffs) {
   const byDocument = new Map<
     string,
-    { filename: string; pages: Set<number>; count: number; withdrawn: boolean }
+    {
+      filename: string;
+      pages: Set<number>;
+      count: number;
+      withdrawn: boolean;
+      citations: { moduleId: string; identity: FactIdentity; withdrawn: boolean }[];
+    }
   >();
-  for (const fact of handoffs.flatMap((handoff) => handoff.source_facts)) {
-    const entry = byDocument.get(fact.document_sha256) ?? {
-      filename: fact.filename,
-      pages: new Set<number>(),
-      count: 0,
-      withdrawn: false,
-    };
-    entry.pages.add(fact.page);
-    entry.count += 1;
-    entry.withdrawn ||= fact.withdrawn_at !== null;
-    byDocument.set(fact.document_sha256, entry);
+  for (const handoff of handoffs) {
+    for (const [index, fact] of handoff.source_facts.entries()) {
+      const entry = byDocument.get(fact.document_sha256) ?? {
+        filename: fact.filename,
+        pages: new Set<number>(),
+        count: 0,
+        withdrawn: false,
+        citations: [],
+      };
+      entry.pages.add(fact.page);
+      entry.count += 1;
+      entry.withdrawn ||= fact.withdrawn_at !== null;
+      entry.citations.push({
+        moduleId: handoff.module_id,
+        withdrawn: fact.withdrawn_at !== null,
+        identity: {
+          record_sha256: handoff.record_sha256,
+          source_id: fact.source_id,
+          page: fact.page,
+          index,
+        },
+      });
+      byDocument.set(fact.document_sha256, entry);
+    }
   }
   return [...byDocument.entries()]
     .map(([digest, entry]) => ({ digest, ...entry, pages: [...entry.pages].sort((a, b) => a - b) }))
     .sort((a, b) => b.count - a.count || a.filename.localeCompare(b.filename));
 }
 
-function SourceRegister({ register }: { register: ReturnType<typeof sourceRegister> }) {
+function SourceRegister({
+  register,
+  onOpen,
+  closeOnOpen = false,
+}: {
+  register: ReturnType<typeof sourceRegister>;
+  onOpen?: (identity: FactIdentity, opener: HTMLElement) => void;
+  closeOnOpen?: boolean;
+}) {
+  const { openFact } = useEvidence();
+  const open = onOpen ?? openFact;
   if (register.length === 0) {
     return <p className="note">No accepted module cites a source yet.</p>;
   }
@@ -74,6 +104,27 @@ function SourceRegister({ register }: { register: ReturnType<typeof sourceRegist
             {entry.withdrawn ? <span className="tag warn">Withdrawn</span> : null}p.
             {entry.pages.join(", ")} · {entry.count} {entry.count === 1 ? "citation" : "citations"}
           </span>
+          <ul className="plain register-citations">
+            {entry.citations.map(({ moduleId, identity, withdrawn }, citationIndex) => {
+              const button = (
+                <button
+                  type="button"
+                  className={`chip${withdrawn ? " withdrawn" : ""}`}
+                  aria-label={`Read ${entry.filename} p.${identity.page} cited by ${moduleId}, citation ${citationIndex + 1}${withdrawn ? " · source withdrawn" : ""}`}
+                  aria-haspopup="dialog"
+                  data-register-fact={identity.source_id}
+                  onClick={(event) => open(identity, event.currentTarget)}
+                >
+                  {moduleId} · p.{identity.page} · citation {citationIndex + 1}
+                </button>
+              );
+              return (
+                <li key={`${identity.record_sha256}-${identity.index}`}>
+                  {closeOnOpen ? <Dialog.Close render={button} /> : button}
+                </li>
+              );
+            })}
+          </ul>
         </li>
       ))}
     </ul>
@@ -192,9 +243,11 @@ function ModuleView({
   const read = useModuleParts(handoff);
   const reader = (read?.parts.reader ?? []).filter((part) => part !== read?.contrary);
   const { hash } = useLocation();
+  const { openFact } = useEvidence();
   const register = sourceRegister(handoffs);
   const [pick, setPick] = useState<FigurePick | null>(null);
   const [opener, setOpener] = useState<HTMLElement | null>(null);
+  const pendingFact = useRef<FactIdentity | null>(null);
   const citations = register.reduce((sum, entry) => sum + entry.count, 0);
   const withdrawn = register.filter((entry) => entry.withdrawn).length;
   return (
@@ -222,8 +275,8 @@ function ModuleView({
             data-documents-open
             onClick={(event) => setOpener(event.currentTarget)}
           >
-            {register.length} {register.length === 1 ? "document" : "documents"} · {citations}{" "}
-            {citations === 1 ? "citation" : "citations"}
+            Run evidence · {register.length} {register.length === 1 ? "document" : "documents"} ·{" "}
+            {citations} {citations === 1 ? "citation" : "citations"}
             {withdrawn ? (
               <span className="withdrawn">
                 {" "}
@@ -254,15 +307,28 @@ function ModuleView({
         <Overlay
           look="drawer"
           opener={opener}
-          onClose={() => setOpener(null)}
+          onClose={() => {
+            const selectedFact = pendingFact.current;
+            pendingFact.current = null;
+            setOpener(null);
+            if (selectedFact && opener?.isConnected) openFact(selectedFact, opener);
+          }}
           title="What this run rests on"
           data-documents-drawer
         >
-          <p className="note">
-            Every document the run&apos;s accepted modules cite, once, with the pages cited. Counts
-            are the host&apos;s.
-          </p>
-          <SourceRegister register={register} />
+          <div className="db">
+            <p className="note">
+              Every document the run&apos;s accepted modules cite, once, with the pages cited.
+              Counts are the host&apos;s.
+            </p>
+            <SourceRegister
+              register={register}
+              closeOnOpen
+              onOpen={(identity) => {
+                pendingFact.current = identity;
+              }}
+            />
+          </div>
         </Overlay>
       ) : null}
     </article>

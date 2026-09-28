@@ -53,3 +53,60 @@ test("Escape returns focus to the chip that opened the drawer", async ({ page })
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(chip).toBeFocused();
 });
+
+test("the run register opens one source drawer and returns focus to its opener", async ({
+  page,
+}) => {
+  await page.goto(`/analysis/?case=${CASE}&tab=rn-cp-0`);
+  const count = page.locator("[data-documents-open]");
+  await count.click();
+  await expect(page.locator("[data-documents-drawer] .db")).toBeVisible();
+  await page.locator(`[data-documents-drawer] [data-register-fact='${SOURCE}']`).click();
+  await expect(page.locator("[data-documents-drawer]")).toHaveCount(0);
+  await expect(page.locator("[data-evidence-drawer]")).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(1);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(count).toBeFocused();
+});
+
+test("a withdrawn register citation keeps its quote without reading a page", async ({ page }) => {
+  const withdrawn = "216ec234-c70c-4a5f-8ae6-f4a0262bbe84";
+  const pageRequests: string[] = [];
+  page.on("request", (request) => {
+    if (request.url().includes(`/sources/${withdrawn}/pages/`)) pageRequests.push(request.url());
+  });
+  await page.goto(`/analysis/?case=${CASE}&tab=rn-cp-0`);
+  await page.locator("[data-documents-open]").click();
+  await page.locator(`[data-documents-drawer] [data-register-fact='${withdrawn}']`).click();
+  const drawer = page.locator("[data-evidence-drawer]");
+  await expect(drawer.locator("[data-withdrawn]")).toBeVisible();
+  await expect(drawer).toContainText("Consolidated Net Leverage Ratio to exceed 3.50");
+  expect(pageRequests).toEqual([]);
+});
+
+test("switching cases during inventory close cannot open the old source", async ({ page }) => {
+  const other = "00000000-0000-4000-8000-000000000002";
+  const pageRequests: string[] = [];
+  page.on("request", (request) => {
+    if (request.url().includes(`/sources/${SOURCE}/pages/`)) pageRequests.push(request.url());
+  });
+  await page.route(`**/api/v1/cases/${other}/analysis*`, async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({ response, body: (await response.text()).replaceAll(CASE, other) });
+  });
+  await page.goto(`/analysis/?case=${CASE}&tab=rn-cp-0`);
+  await page.locator("[data-documents-open]").click();
+  await page.locator(`[data-documents-drawer] [data-register-fact='${SOURCE}']`).click();
+  await expect(page.locator("[data-documents-drawer]")).toHaveAttribute("data-ending-style", "");
+  await page.evaluate((caseId) => {
+    const next = new URL(location.href);
+    next.searchParams.set("case", caseId);
+    history.pushState({}, "", next);
+    dispatchEvent(new PopStateEvent("popstate"));
+  }, other);
+  await expect(page.locator("header h1")).toBeFocused();
+  await page.waitForTimeout(350);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(pageRequests).toEqual([]);
+});
