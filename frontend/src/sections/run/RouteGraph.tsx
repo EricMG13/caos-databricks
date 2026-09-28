@@ -2,7 +2,7 @@
 // stage, typed edges as SVG lines, the one QA_GATE drawn through a diamond.
 // Node states are the bundle's four; edges come from each node's own
 // `waiting_on` (v1 carries no separate edge list — brief 4.1, slice 4.1i).
-import { useLayoutEffect, useRef } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { RouteLegend } from "./RouteLegend";
 import { blockingOf, cardReasonOf, reasonOf, runningOf, stateWordOf } from "./reason";
 import { SeverityMark } from "@/chrome/SeverityMark";
@@ -199,29 +199,83 @@ export function RouteGraph({
 }) {
   const layout = layoutRoute(nodes);
   const at = new Map(layout.nodes.map((placed) => [placed.route_node_id, placed]));
-  const moduleOf = new Map(nodes.map((node) => [node.route_node_id, node.module_id]));
+  const nodeById = new Map(nodes.map((node) => [node.route_node_id, node]));
   const edges = edgesOf(nodes, routeEdges);
-  const lines: { key: string; cls: string; d: string }[] = [];
-  let gate: { at: EdgeRoute["at"]; from: string; to: string } | null = null;
+  const lines: {
+    key: string;
+    cls: string;
+    d: string;
+    from: string;
+    to: string;
+    progress: "accepted" | "active" | "waiting";
+  }[] = [];
+  let gate: {
+    at: EdgeRoute["at"];
+    from: string;
+    to: string;
+    cleared: boolean;
+    waiting: boolean;
+  } | null = null;
   for (const edge of edges) {
     const from = at.get(edge.from);
     const to = at.get(edge.to);
-    if (!from || !to) continue;
+    const source = nodeById.get(edge.from);
+    const target = nodeById.get(edge.to);
+    if (!from || !to || !source || !target) continue;
+    const delivered = source.state === "COMPLETE" || source.state === "RESTRICTED";
+    const accepted = target.state === "COMPLETE" || target.state === "RESTRICTED";
+    const active =
+      delivered &&
+      runningOf(target, attempts, status) &&
+      !target.awaiting_gate &&
+      !blockingOf(target, blockedBy);
     const route = routeOf(from, to);
     if (edge.type === "QA_GATE" && !gate) {
       gate = {
         at: route.at,
-        from: moduleOf.get(edge.from) ?? edge.from,
-        to: moduleOf.get(edge.to) ?? edge.to,
+        from: source.module_id,
+        to: target.module_id,
+        cleared: accepted,
+        waiting: target.awaiting_gate,
       };
     }
-    lines.push({ key: `${edge.from}→${edge.to}`, cls: EDGE_CLASS[edge.type], d: route.d });
+    lines.push({
+      key: `${edge.from}→${edge.to}`,
+      cls: EDGE_CLASS[edge.type],
+      d: route.d,
+      from: edge.from,
+      to: edge.to,
+      progress: accepted && delivered ? "accepted" : active ? "active" : "waiting",
+    });
   }
   // A wide route hid its frontier past the panel's right edge (critique): the
   // stages where the work is are brought into view once per route, and never
   // again, so a reader's own scrolling is left alone.
   const box = useRef<HTMLDivElement>(null);
   const shown = useRef<string | null>(null);
+  const arrowId = useId();
+  const [motionActive, setMotionActive] = useState(false);
+  useEffect(() => {
+    const dag = box.current;
+    if (!dag) return;
+    const doc = dag.ownerDocument;
+    let inView = typeof IntersectionObserver === "undefined";
+    const update = () => setMotionActive(inView && doc.visibilityState !== "hidden");
+    const observer =
+      typeof IntersectionObserver === "undefined"
+        ? null
+        : new IntersectionObserver(([entry]) => {
+            inView = entry?.isIntersecting ?? false;
+            update();
+          });
+    observer?.observe(dag);
+    doc.addEventListener("visibilitychange", update);
+    update();
+    return () => {
+      observer?.disconnect();
+      doc.removeEventListener("visibilitychange", update);
+    };
+  }, []);
   const focus = focusOf(nodes, attempts, status, blockedBy);
   const focusX = focus === null ? null : (at.get(focus)?.x ?? null);
   const routeKey = nodes.map((node) => node.route_node_id).join("|");
@@ -234,15 +288,39 @@ export function RouteGraph({
   return (
     <>
       <div ref={box} className="dag" data-route={`${nodes.length} nodes · ${edges.length} edges`}>
-        <div className="dagbox" style={{ width: layout.width, height: layout.height }}>
+        <div
+          className="dagbox route-flow"
+          data-motion={motionActive ? "active" : "paused"}
+          style={{ width: layout.width, height: layout.height }}
+        >
           <svg
             className="edges"
             viewBox={`0 0 ${layout.width} ${layout.height}`}
             preserveAspectRatio="none"
             aria-hidden="true"
           >
-            {lines.map(({ key, cls, d }) => (
-              <path key={key} className={cls} d={d} />
+            <defs>
+              <marker
+                id={`${arrowId}-arrow`}
+                markerWidth="6"
+                markerHeight="6"
+                refX="6"
+                refY="3"
+                orient="auto"
+                markerUnits="userSpaceOnUse"
+              >
+                <polygon className="route-arrow" points="0,0 6,3 0,6" />
+              </marker>
+            </defs>
+            {lines.map(({ key, cls, d, progress, from, to }) => (
+              <path
+                key={key}
+                className={`${cls}${progress === "active" ? " caos-running" : ""}`}
+                d={d}
+                data-progress={progress}
+                data-connected={from === selected || to === selected ? "true" : undefined}
+                markerEnd={`url(#${arrowId}-arrow)`}
+              />
             ))}
           </svg>
           {layout.columns.map((column) => (
@@ -288,7 +366,7 @@ export function RouteGraph({
                 <span className="st">
                   <SeverityMark
                     severity={severityOf(node, running, blocking)}
-                    pulse={running}
+                    pulse={running && motionActive}
                     decorative
                   />
                   {sentence(stateWordOf(node, status, running, blocking))}
@@ -301,6 +379,10 @@ export function RouteGraph({
             <div
               className="gatemark"
               data-gate={`${gate.from} → ${gate.to}`}
+              data-cleared={gate.cleared ? "true" : undefined}
+              title={
+                gate.waiting ? "Awaiting QA gate" : gate.cleared ? "QA gate accepted" : "QA gate"
+              }
               style={{ left: gate.at.x, top: gate.at.y }}
             >
               <span className="gatebox" aria-hidden="true" />

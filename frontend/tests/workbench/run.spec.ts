@@ -68,3 +68,69 @@ test("the subject's four fields are two pairs, never three and a stray", async (
   expect(tops[0]).toBe(tops[1]);
   expect(tops[2]).toBe(tops[3]);
 });
+
+test("dependency flow preserves keyboard selection and reduced motion at desk and zoom widths", async ({
+  page,
+}, testInfo) => {
+  await page.route("**/live.js?*", (route) => route.abort());
+  await page.route("**/api/v1/cases/*/events*", (route) => route.abort("connectionfailed"));
+  await page.route("**/api/v1/cases/*/run*", async (route) => {
+    const response = await route.fetch();
+    const document = await response.json();
+    document.body.run.nodes.find(
+      (node: { module_id: string }) => node.module_id === "CP-6",
+    ).awaiting_gate = false;
+    await route.fulfill({ response, json: document });
+  });
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme, reducedMotion: "no-preference" });
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto(`/run/?case=${CASE}`);
+    const dag = page.locator(".dag");
+    await dag.scrollIntoViewIfNeeded();
+    const flow = page.locator(".route-flow");
+    await expect(flow).toHaveAttribute("data-motion", "active");
+    const active = page.locator('.edges path[data-progress="active"]:not(.gate)');
+    await expect(active).toHaveCount(1);
+    await expect(active).toHaveClass(/caos-running/);
+    expect(
+      await active.evaluate((path) => {
+        const style = getComputedStyle(path);
+        return { animation: style.animationName, duration: style.animationDuration };
+      }),
+    ).toEqual({ animation: "caos-pulse", duration: "1.92s" });
+    const cp5 = page.locator('button.node[data-node="CP-5"]');
+    await cp5.press("Enter");
+    await expect(cp5).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator('[data-node-detail="CP-5"]')).toBeVisible();
+    const gate = page.locator(".edges path.gate");
+    await expect(gate).toHaveAttribute("data-connected", "true");
+    expect(await gate.evaluate((path) => getComputedStyle(path).strokeWidth)).toBe("3px");
+    expect(await gate.getAttribute("marker-end")).toBe(
+      `url(#${await page.locator(".edges marker").getAttribute("id")})`,
+    );
+    if (testInfo.project.name === "chromium") {
+      await page.screenshot({ path: testInfo.outputPath(`route-${colorScheme}-desk.png`) });
+    }
+
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    expect(await active.evaluate((path) => getComputedStyle(path).animationName)).toBe("none");
+    expect(await gate.evaluate((path) => getComputedStyle(path).strokeWidth)).toBe("3px");
+    await expect(cp5).toHaveAttribute("aria-pressed", "true");
+    await page.setViewportSize({ width: 320, height: 640 });
+    await dag.scrollIntoViewIfNeeded();
+    const box = await dag.boundingBox();
+    expect(box).toBeTruthy();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(320);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      ),
+    ).toBeLessThanOrEqual(1);
+    await expect(cp5).toHaveAttribute("aria-pressed", "true");
+    if (testInfo.project.name === "chromium") {
+      await page.screenshot({ path: testInfo.outputPath(`route-${colorScheme}-zoom.png`) });
+    }
+  }
+});

@@ -55,19 +55,23 @@ export function SiteHeader({
       <BreadcrumbList className="min-w-0 flex-nowrap">
         {crumb ? (
           <>
-            <BreadcrumbItem className="max-w-[38vw] min-w-0 shrink-[4] sm:max-w-none">
+            <BreadcrumbItem className="hidden max-w-[38vw] min-w-0 shrink-[4] sm:inline-flex sm:max-w-none">
               {/* The issuer is what a reader recognises; the case id stays reachable. */}
-              <span className="truncate" title={subject?.case_id} data-case={subject?.case_id}>
+              <span
+                className="block truncate text-base font-medium text-foreground"
+                title={subject?.case_id}
+                data-case={subject?.case_id}
+              >
                 {crumb}
               </span>
             </BreadcrumbItem>
-            <BreadcrumbSeparator />
+            <BreadcrumbSeparator className="hidden sm:block" />
           </>
         ) : null}
-        <BreadcrumbItem className="min-w-0">
+        <BreadcrumbItem className="shrink-0">
           {/* Focusable, never a tab stop: it is where focus lands after a
               navigation, a Reload, or a drawer whose opener has gone (FE-4). */}
-          <h1 tabIndex={-1} className="truncate text-sm font-medium text-foreground">
+          <h1 tabIndex={-1} className="whitespace-nowrap text-sm font-medium text-foreground">
             {label}
           </h1>
         </BreadcrumbItem>

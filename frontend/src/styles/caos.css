@@ -1598,6 +1598,73 @@
     top: 12px;
     left: -24px;
   }
+  /* State and selection clarify the dependency flow; only active work pulses. */
+  .dag .route-flow .edges path {
+    transition:
+      stroke 180ms var(--ease-out),
+      stroke-width 180ms var(--ease-out),
+      opacity 180ms var(--ease-out);
+    stroke-width: 1.75;
+  }
+  .dag .route-flow .edges path[data-progress="waiting"]:not(.gate) {
+    stroke: var(--muted-foreground);
+  }
+  .dag .route-flow .edges path[data-progress="active"]:not(.gate) {
+    stroke: var(--info);
+  }
+  .dag .route-flow .route-arrow {
+    fill: var(--muted-foreground);
+  }
+  .dag .route-flow .caos-running {
+    animation-duration: 1.92s;
+  }
+  .dag .route-flow[data-motion="paused"] .caos-running {
+    animation-play-state: paused;
+  }
+  .dag .route-flow .node {
+    transition:
+      border-color 180ms var(--ease-out),
+      background-color 180ms var(--ease-out),
+      box-shadow 180ms var(--ease-out),
+      scale 150ms var(--ease-out);
+  }
+  .dag .route-flow .node.runnable:not(.running) {
+    border-color: var(--border);
+  }
+  .dag .route-flow .node.runnable:not(.running) .st {
+    color: var(--muted-foreground);
+  }
+  .dag .route-flow .node.running:not([aria-pressed="true"]) {
+    box-shadow: none;
+    border-color: var(--info);
+  }
+  .dag .route-flow .gatemark[data-cleared="true"] .gatebox {
+    border-color: var(--muted-foreground);
+    background: var(--card);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .dag .route-flow .caos-running {
+      animation: none;
+    }
+    .dag .route-flow .edges path {
+      transition-property: stroke, opacity;
+      transition-duration: 100ms;
+    }
+    .dag .route-flow .node {
+      transition-property: color, background-color, border-color;
+      transition-duration: 100ms;
+    }
+  }
+
+  .dag .route-flow .edges path[data-connected="true"]:not(.gate) {
+    stroke: var(--info);
+  }
+  .dag .route-flow .edges path[data-connected="true"] {
+    stroke-width: 3;
+  }
+  .dag .route-flow .node[aria-pressed="true"] {
+    background: var(--muted);
+  }
   /* A route with nothing to draw: mark, title, one sentence. */
   .route-empty {
     display: flex;
