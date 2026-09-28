@@ -13,6 +13,7 @@ import { RUN_SEVERITY, composeChrome, isParked, scopeOf, sentence, words } from 
 import { SidebarProvider } from "@/components/ui/sidebar";
 import {
   parseAnalysisDocument,
+  parseBookDocument,
   parseDirectoryDocument,
   parseModelDocument,
   parseReportDocument,
@@ -47,17 +48,78 @@ test("Analysis names the conclusion, the module to review and the evidence it re
     blocked_on: null,
   });
   expect(chrome.ribbon.execution).toBe("COMPLETE");
+  expect(chrome.tabs.find((tab) => tab.label === "CP-1C")?.note).toBe(
+    "one peer's most recent filing is more than 200 days old",
+  );
   expect(JSON.stringify(chrome)).not.toMatch(/No action is offered|"—"/);
 });
 
-test("Run names what it waits on: an open gate, else a module held at its gate", () => {
+test("Run distinguishes input gates from a module held at its QA gate", () => {
   const chrome = composeChrome("run", parseRunSectionDocument(load("run.json")));
   expect(chrome.ribbon.execution).toBe("RUNNING");
-  expect(chrome.ribbon.approval).toBe("Gates released");
+  expect(chrome.ribbon.approval).toBe("Input gates released");
   expect(chrome.brief.change).toMatch(/^6 of 10 modules complete\. Observed /);
   expect(chrome.brief.impact).toBe("1 module restricted.");
-  expect(chrome.verdict.conclusion).toBe("In progress · CP-6 at its gate");
+  expect(chrome.verdict.conclusion).toBe("In progress · CP-6 at its QA gate");
+  expect(chrome.brief.action).toBe("Select CP-6 to inspect its QA gate.");
   expect(chrome.verdict.severity).toBe("RUNNING");
+});
+
+test("Run's input gate copy does not invent approvals or future work", () => {
+  const fixture = load("run.json");
+  fixture.body.run.gates[0].state = "OPEN";
+  const open = composeChrome("run", parseRunSectionDocument(fixture));
+  expect(open.ribbon.approval).toBe("1 input gate open");
+  expect(open.brief.action).toMatch(/Review the .* gate/);
+
+  fixture.body.run.gates = [];
+  fixture.body.run.status = "COMPLETE";
+  const ended = composeChrome("run", parseRunSectionDocument(fixture));
+  expect(ended.ribbon.approval).toBeNull();
+  expect(ended.brief.action).toBeNull();
+  expect(ended.verdict.conclusion).toBe("Complete");
+
+  fixture.body.run.gates[0] = { gate: "SOURCE_SET", state: "OPEN" };
+  const endedWithOpenGate = composeChrome("run", parseRunSectionDocument(fixture));
+  expect(endedWithOpenGate.brief.action).toBeNull();
+  expect(endedWithOpenGate.verdict.conclusion).toBe("Complete");
+});
+
+test("Book separates listed credits from accepted forecasts, including partial reads", () => {
+  const mixed = composeChrome("book", parseBookDocument(load("book.json")));
+  expect(mixed.brief.change).toMatch(
+    /^3 credits · 2 accepted forecasts · 1 credit unavailable\. Observed /,
+  );
+  expect(mixed.brief.evidence).toBe(
+    "1 credit unavailable for comparison. Some parts of this document could not be read.",
+  );
+  expect(mixed.brief.headline).toBe("3");
+
+  const fixture = load("book.json");
+  fixture.body.rows = [fixture.body.rows[2]];
+  const unavailable = composeChrome("book", parseBookDocument(fixture));
+  expect(unavailable.brief.change).toMatch(
+    /^1 credit · 0 accepted forecasts · 1 credit unavailable\. Observed /,
+  );
+
+  fixture.body.rows = [];
+  const empty = composeChrome("book", parseBookDocument(fixture));
+  expect(empty.brief.change).toMatch(/^No credits to compare\. Observed /);
+  expect(empty.brief.evidence).toBe("Some parts of this document could not be read.");
+});
+
+test("a refused Book row is unavailable without being called a missing forecast", () => {
+  const fixture = load("book.json");
+  fixture.body.rows[0].refusal = {
+    code: "NOT_AUTHORISED",
+    clears: "Obtain the required standing on the case.",
+  };
+  const chrome = composeChrome("book", parseBookDocument(fixture));
+  expect(chrome.brief.change).toMatch(
+    /^3 credits · 1 accepted forecast · 2 credits unavailable\. Observed /,
+  );
+  expect(chrome.brief.evidence).toContain("2 credits unavailable for comparison.");
+  expect(chrome.brief.evidence).not.toContain("without an accepted forecast");
 });
 
 test("Upload's verdict agrees with its count of withdrawn sources", () => {
@@ -105,6 +167,7 @@ test("a limitation carried forward is RESTRICTED's ring, a validation warning a 
     "Committee Ready · full scope, with 1 module to review",
   );
   expect(restricted.tabs.find((tab) => tab.label === "CP-1C")?.severity).toBe("RESTRICTED");
+  expect(restricted.tabs.find((tab) => tab.label === "CP-1C")?.note).toBe("Peer set incomplete");
   // Model: an accepted forecast stating a limitation is restricted, not a warning.
   const model = load("model.json");
   model.body.forecast.limitation_flags = ["LIMITED_HISTORY"];
@@ -119,6 +182,16 @@ test("a limitation carried forward is RESTRICTED's ring, a validation warning a 
   expect(scopeOf("FULL")).toBe("full scope");
   expect(scopeOf("SCREENING_ONLY")).toBe("screening only");
   expect(scopeOf("SOMETHING_ELSE")).toBe("something else");
+});
+
+test("a partial Analysis names pending work instead of claiming final readiness", () => {
+  const partial = composeChrome(
+    "analysis",
+    parseAnalysisDocument(load("states/analysis.partial.json")),
+  );
+  expect(partial.verdict.conclusion).toBe("Partial · 7 modules accepted · 3 modules pending");
+  expect(partial.brief.impact).toBe("Latest accepted CP-5: Committee Ready · full scope.");
+  expect(partial.tabs.find((tab) => tab.label === "CP-1C")?.note).toBe("Peer set incomplete");
 });
 
 test("an empty directory and a run with no forecast say so, and what to do", () => {
@@ -187,7 +260,9 @@ test("a partial document with no notes says so in words, never 'Partial: .'", ()
   document.status = "partial";
   document.notes = [];
   const chrome = composeChrome("analysis", parseAnalysisDocument(document));
-  expect(chrome.brief.evidence).toBe("Some parts of this document could not be read.");
+  expect(chrome.brief.evidence).toBe(
+    "4 citations across 4 documents, 1 withdrawn. Some parts of this document could not be read.",
+  );
   expect(chrome.verdict.severity).toBe("WARNING");
   expect(chrome.ribbon.chips[0]).toEqual({ label: "Partial", tone: "warn" });
 });
@@ -229,7 +304,7 @@ test("a brief cell with nothing to say is not drawn, and an empty brief draws no
   expect(
     headlineOf(
       { change: null, impact: null, action: null, evidence: null, headline: "6/10" },
-      { severity: "RUNNING", conclusion: "In progress · CP-6 at its gate", blocked_on: null },
+      { severity: "RUNNING", conclusion: "In progress · CP-6 at its QA gate", blocked_on: null },
     ),
   ).toBe("6/10");
   rerender(
@@ -318,7 +393,7 @@ test("a compact summary is one line, its brief on request", () => {
   expect(toggle).toHaveAttribute("aria-controls", container.querySelector("[data-brief]")!.id);
 });
 
-test("more than eight section views are one row of labels, each named in full", () => {
+test("more than eight section views show module names in one compact row", () => {
   const tabs = Array.from({ length: 9 }, (_, index) => ({
     id: `n${index}`,
     label: `CP-${index}`,
@@ -329,8 +404,18 @@ test("more than eight section views are one row of labels, each named in full", 
   );
   expect(container.querySelector("[data-section-tabs]")).toHaveAttribute("data-dense", "true");
   const first = container.querySelector("#tab-n0")!;
-  expect(first).toHaveAttribute("title", "CP-0 · Module 0");
-  expect(first.querySelector(".sr-only")).toHaveTextContent(", Module 0");
+  expect(first).toHaveAttribute("title", "Module 0 · CP-0");
+  expect(first).toHaveTextContent("Module 0");
+  expect(first).not.toHaveTextContent("CP-0");
+  rerender(
+    <SectionTabs
+      label="Analysis"
+      tabs={tabs.map((tab) => ({ ...tab, severity: "WARNING", note: " " }))}
+      active="n0"
+      onSelect={() => undefined}
+    />,
+  );
+  expect(container.querySelector("[data-selected-view]")).toHaveTextContent("Needs review");
   rerender(
     <SectionTabs label="Analysis" tabs={tabs.slice(0, 3)} active="n0" onSelect={() => undefined} />,
   );
@@ -380,9 +465,31 @@ test("a phone picks a view from a native select; a desktop from the tabs", () =>
   );
   const select = container.querySelector<HTMLSelectElement>("[data-tab-select]")!;
   expect([...select.options].map((option) => option.text)).toEqual([
-    "CP-0 · Source readiness",
-    "CP-1C · Peer benchmark · warning",
+    "Source readiness",
+    "Peer benchmark · warning",
   ]);
   fireEvent.change(select, { target: { value: "rn-cp-1c" } });
   expect(picked).toEqual(["rn-cp-1c"]);
+});
+
+test("blank catalog names fall back to module IDs in both tab controls", () => {
+  const raw = load("analysis.json");
+  raw.body.handoffs[0].module_name = " ";
+  const document = parseAnalysisDocument(raw);
+  const handoff = document.body.handoffs[0]!;
+  const tabs = composeChrome("analysis", document).tabs;
+  const { container } = render(
+    <SectionTabs
+      label="Analysis"
+      tabs={tabs}
+      active={handoff.route_node_id}
+      onSelect={() => undefined}
+    />,
+  );
+  expect(container.querySelector(`#tab-${handoff.route_node_id}`)).toHaveTextContent(
+    handoff.module_id,
+  );
+  expect(
+    container.querySelector<HTMLSelectElement>("[data-tab-select]")!.selectedOptions[0]!.text,
+  ).toBe(handoff.module_id);
 });

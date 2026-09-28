@@ -1816,13 +1816,13 @@
     flex-direction: column;
     gap: 1rem;
   }
-  .analysis .register li {
+  .analysis .register > li {
     display: grid;
     gap: 0.25rem;
     padding: 0.625rem 1rem;
     border-bottom: 1px solid var(--hairline);
   }
-  .analysis .register li:last-child {
+  .analysis .register > li:last-child {
     border-bottom: 0;
   }
   /* A filename is an id: mono and regular, lighter than the headings over
@@ -2735,11 +2735,19 @@
   .analysis ul.facts blockquote.matched {
     margin: 0;
   }
-  .drawer ul.register li {
+  .drawer ul.register > li {
     display: grid;
     gap: 0.25rem;
     padding: 0.625rem 0;
     border-bottom: 1px solid var(--hairline);
+  }
+  .register-citations {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
   }
   .drawer ul.register .nm {
     font-weight: 600;

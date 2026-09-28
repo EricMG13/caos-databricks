@@ -345,6 +345,10 @@ export function Workspace({ section }: { section: Section }) {
     tabs.find((tab) => tab.opens)?.id ??
     tabs[0]?.id ??
     null;
+  const reviewTab =
+    section === "analysis" ? tabs.find((tab) => tab.severity && tab.severity !== "SUCCESS") : null;
+  const reviewParams = new URLSearchParams(params);
+  if (reviewTab) reviewParams.set("tab", reviewTab.id);
   const chooseTab = (id: string) => {
     setTabChoice({ key, value: id });
     setParams(
@@ -419,6 +423,16 @@ export function Workspace({ section }: { section: Section }) {
           brief={chrome.brief}
           ribbon={chrome.ribbon}
           compact={activeTab !== null}
+          review={
+            reviewTab
+              ? {
+                  code: reviewTab.label,
+                  name: reviewTab.cp ?? reviewTab.label,
+                  note: reviewTab.note ?? null,
+                  to: `?${reviewParams.toString()}`,
+                }
+              : undefined
+          }
         />
       ) : null}
       <QualificationStrip evidenceSha256={qualificationEvidence} />

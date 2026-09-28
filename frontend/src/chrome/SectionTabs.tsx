@@ -21,11 +21,20 @@ export function SectionTabs({
   // A tab list of no tabs is a widget with nothing in it, announced on every
   // page for nothing: a v1 document declares none (FE-11).
   if (tabs.length === 0) return null;
-  // Past eight views (Analysis's thirteen modules) the names wrapped the list
-  // to three rows above the view: each tab is its label, one row that stays
-  // in reach under the header, and its name is said on hover and to a
-  // screen reader.
+  // Past eight views, module names stay in a compact strip under the header.
+  // The selected name and review reason remain visible below it.
   const dense = tabs.length > 8;
+  const tabSize = dense ? "h-7 px-1.5 text-[13px] text-muted-foreground" : "h-8 px-2.5";
+  const selected = tabs.find((tab) => tab.id === active);
+  const meaning =
+    selected?.note?.trim() ||
+    (selected?.severity === "RESTRICTED"
+      ? "Accepted with limitations"
+      : selected?.severity === "WARNING"
+        ? "Needs review"
+        : selected?.severity === "CRITICAL"
+          ? "Blocked or failed"
+          : null);
   return (
     <div
       data-section-tabs
@@ -42,8 +51,7 @@ export function SectionTabs({
         >
           {tabs.map((tab) => (
             <NativeSelectOption key={tab.id} value={tab.id}>
-              {tab.label}
-              {tab.cp ? ` · ${tab.cp}` : ""}
+              {tab.cp ?? tab.label}
               {tab.severity && tab.severity !== "SUCCESS" ? ` · ${tab.severity.toLowerCase()}` : ""}
             </NativeSelectOption>
           ))}
@@ -66,25 +74,25 @@ export function SectionTabs({
               value={tab.id}
               id={`tab-${tab.id}`}
               aria-controls={`tabpanel-${tab.id}`}
-              title={dense && tab.cp ? `${tab.label} · ${tab.cp}` : undefined}
-              // A hairline edge on the active pill: its muted fill alone all but
-              // vanished against the dark page (brief 6.12).
-              className="h-8 flex-none px-2.5 after:hidden data-active:border-border! data-active:bg-muted! data-active:shadow-none"
+              title={dense && tab.cp ? `${tab.cp} · ${tab.label}` : undefined}
+              // Keep the accepted density in existing utilities, with no preview CSS.
+              className={`flex-none after:hidden data-active:border-border! data-active:bg-muted! data-active:shadow-none ${tabSize}`}
             >
-              {tab.severity ? <SeverityMark severity={tab.severity} decorative /> : null}
-              <span className="font-mono text-[13px]">{tab.label}</span>
-              {tab.cp ? (
-                <span className={dense ? "sr-only" : "font-normal text-muted-foreground"}>
-                  {dense ? `, ${tab.cp}` : tab.cp}
-                </span>
-              ) : null}
-              {tab.severity ? (
-                <span className="sr-only">, {tab.severity.toLowerCase()}</span>
-              ) : null}
+              {tab.severity && <SeverityMark severity={tab.severity} decorative />}
+              <span className={tab.cp ? "font-normal" : "font-mono text-[13px]"}>
+                {tab.cp ?? tab.label}
+              </span>
+              {tab.severity && <span className="sr-only">, {tab.severity.toLowerCase()}</span>}
             </TabsTrigger>
           ))}
         </TabsList>
       </Tabs>
+      {dense && selected && (
+        <p className="px-2 pt-1 text-sm text-foreground" data-selected-view aria-live="polite">
+          {selected.cp ?? selected.label}
+          {meaning ? ` · ${meaning}` : null}
+        </p>
+      )}
     </div>
   );
 }

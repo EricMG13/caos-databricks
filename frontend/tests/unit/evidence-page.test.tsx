@@ -183,6 +183,28 @@ describe("the evidence drawer", () => {
     expect(dialog()).toBeNull();
   });
 
+  test("switching cases during inventory close cannot open the old source", async () => {
+    sectionBody = (url) =>
+      url.includes(OTHER)
+        ? JSON.parse(text("../../fixtures/analysis.json").replaceAll(CASE, OTHER))
+        : analysis();
+    window.history.pushState({}, "", `/analysis/?case=${CASE}&tab=rn-cp-0`);
+    render(<App />);
+    await settle();
+    act(() => fireEvent.click(document.querySelector("[data-documents-open]")!));
+    const source = document.querySelector(
+      `[data-documents-drawer] [data-register-fact='${SOURCE}']`,
+    )!;
+    act(() => fireEvent.click(source));
+    act(() => {
+      window.history.pushState({}, "", `/analysis/?case=${OTHER}&tab=rn-cp-0`);
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    await settle();
+    expect(urls.some((url) => url.includes(OTHER))).toBe(true);
+    expect(dialog()).toBeNull();
+  });
+
   test("test_focus_returns_to_the_section_heading_when_the_opener_disappears", async () => {
     sectionBody = (url) =>
       url.includes(OTHER)
