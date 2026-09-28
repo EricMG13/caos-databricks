@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { OFFLINE_WORDING } from "@/app/transport";
 import { UploadSection } from "@/sections/upload/UploadSection";
@@ -32,6 +32,95 @@ const sourceRow = (container: HTMLElement, id: string) =>
   container.querySelector<HTMLElement>(`table.reg[data-source-pack] tr[data-source="${id}"]`)!;
 
 describe("Upload", () => {
+  test("an older admission refresh cannot replace a newer source pack", async () => {
+    const live: UploadDocument = {
+      ...fixture,
+      chrome: { ...fixture.chrome, actions: [{ action: "ADMIT_SOURCES", refusal: null }] },
+    };
+    const added = {
+      ...live.body.sources[0]!,
+      source_id: "66666666-6666-4666-8666-666666666666",
+      filename: "second-new.txt",
+    };
+    const newer = { ...live, body: { ...live.body, sources: [...live.body.sources, added] } };
+    let olderAnswer!: (response: Response) => void;
+    let newerAnswer!: (response: Response) => void;
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ case_id: live.body.case_id, source_ids: [] }, 201))
+      .mockImplementationOnce(
+        () =>
+          new Promise<Response>((resolve) => {
+            olderAnswer = resolve;
+          }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ case_id: live.body.case_id, source_ids: [] }, 201))
+      .mockImplementationOnce(
+        () =>
+          new Promise<Response>((resolve) => {
+            newerAnswer = resolve;
+          }),
+      );
+    vi.stubGlobal("fetch", fetch);
+    try {
+      mount(live);
+      const input = screen.getByLabelText("Documents to admit");
+      const submit = screen.getByRole("button", { name: "Admit sources" });
+      fireEvent.change(input, { target: { files: [new File(["one"], "first.txt")] } });
+      fireEvent.click(submit);
+      await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+      fireEvent.change(input, { target: { files: [new File(["two"], "second.txt")] } });
+      fireEvent.click(submit);
+      await waitFor(() => expect(fetch).toHaveBeenCalledTimes(4));
+      await act(async () => newerAnswer(jsonResponse(newer)));
+      await act(async () => olderAnswer(jsonResponse(live)));
+      expect(screen.getByText("second-new.txt")).toBeInTheDocument();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  test("a parent source pack wins over a late local refresh", async () => {
+    const live: UploadDocument = {
+      ...fixture,
+      chrome: { ...fixture.chrome, actions: [{ action: "ADMIT_SOURCES", refusal: null }] },
+    };
+    const added = {
+      ...live.body.sources[0]!,
+      source_id: "77777777-7777-4777-8777-777777777777",
+      filename: "parent-new.txt",
+    };
+    const parent = { ...live, body: { ...live.body, sources: [...live.body.sources, added] } };
+    let answer!: (response: Response) => void;
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ case_id: live.body.case_id, source_ids: [] }, 201))
+      .mockImplementationOnce(
+        () =>
+          new Promise<Response>((resolve) => {
+            answer = resolve;
+          }),
+      );
+    vi.stubGlobal("fetch", fetch);
+    try {
+      const view = mount(live);
+      fireEvent.change(screen.getByLabelText("Documents to admit"), {
+        target: { files: [new File(["one"], "first.txt")] },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Admit sources" }));
+      await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+      view.rerender(
+        <MemoryRouter>
+          <UploadSection document={parent} tab={null} />
+        </MemoryRouter>,
+      );
+      await act(async () => answer(jsonResponse(live)));
+      expect(screen.getByText("parent-new.txt")).toBeInTheDocument();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   test("test_source_rows_show_filename_digest_admitted_time_extractor_identity_and_set_versions", () => {
     const { container } = mount(fixture);
     expect(container.querySelector("table.reg[data-source-pack]")).not.toBeNull();

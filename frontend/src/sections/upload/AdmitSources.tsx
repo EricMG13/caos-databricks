@@ -62,7 +62,7 @@ export function AdmitSources({
 }: {
   action: ActionView | undefined;
   caseId: string;
-  onAdmitted: (document: UploadDocument) => void;
+  onAdmitted: () => Promise<boolean>;
   /** Hidden where the pack says the reason once for both its commands. */
   reasonDisplay?: "inline" | "hidden";
 }) {
@@ -80,9 +80,7 @@ export function AdmitSources({
     if (outcome?.kind !== "ok") return;
     setFiles([]);
     if (inputRef.current) inputRef.current.value = "";
-    const refreshed = await refetchUpload(caseId);
-    if (refreshed) onAdmitted(refreshed);
-    else setRefreshFailed(true);
+    if (!(await onAdmitted())) setRefreshFailed(true);
   }
 
   return (

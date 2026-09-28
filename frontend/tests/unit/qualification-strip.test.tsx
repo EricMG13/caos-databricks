@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import { QualificationStrip } from "@/chrome/QualificationStrip";
 
 const EVIDENCE = "a".repeat(64);
@@ -51,4 +51,28 @@ test("unverifiable persisted evidence is unavailable, not unqualified", async ()
   expect(screen.getByLabelText("Qualification")).toHaveTextContent(
     "Qualification evidence cannot be verified.",
   );
+});
+
+test("a mounted qualified verdict stops claiming success at expiry", async () => {
+  vi.useFakeTimers();
+  const now = Date.parse("2026-09-15T10:00:00Z");
+  vi.setSystemTime(now);
+  const qualified = async () =>
+    new Response(
+      await response("QUALIFIED")
+        .text()
+        .then((text) => text.replace("2026-09-16T10:00:00Z", "2026-09-15T10:00:01Z")),
+    );
+  const fetch = vi.fn().mockImplementation(qualified);
+  vi.stubGlobal("fetch", fetch);
+  try {
+    await act(async () => render(<QualificationStrip evidenceSha256={EVIDENCE} />));
+    expect(screen.getByText("Qualified")).toBeInTheDocument();
+    await act(async () => vi.advanceTimersByTimeAsync(1001));
+    expect(screen.queryByText("Qualified")).not.toBeInTheDocument();
+    expect(screen.getByText("Expired")).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledTimes(2);
+  } finally {
+    vi.useRealTimers();
+  }
 });

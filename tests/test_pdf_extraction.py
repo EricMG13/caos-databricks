@@ -34,6 +34,7 @@ from caos.evidence.extract import (
     MAX_TOKEN_CHARS,
     Extractor,
     ExtractorIdentity,
+    MarkedToken,
     Token,
 )
 from caos.evidence.ingest import Document, admit_pack
@@ -243,6 +244,43 @@ def test_lines_are_separate_lines_and_sit_a_line_apart() -> None:
     # Rectangles count down from the top of the displayed page (§44.3), so the
     # second line is lower on the page and larger in y.
     assert second.y0 - first.y0 == pytest.approx(LINE_GAP, abs=0.5)
+
+
+def test_form_xobject_text_is_read_and_can_be_admitted() -> None:
+    content = b"BT /F1 12 Tf 72 700 Td (Total debt 100 million) Tj ET"
+    objects = _objects(b"/Fm Do")
+    objects[2] = objects[2].replace(
+        b"/Font << /F1 5 0 R >> >>",
+        b"/Font << /F1 5 0 R >> /XObject << /Fm 6 0 R >> >>",
+    )
+    objects.append(
+        b"<< /Type /XObject /Subtype /Form /BBox [0 0 612 792]"
+        b" /Resources << /Font << /F1 5 0 R >> >> /Length "
+        + str(len(content)).encode()
+        + b" >>\nstream\n"
+        + content
+        + b"\nendstream"
+    )
+    data = _assemble(objects)
+    assert " ".join(token.text for token in PdfExtractor().extract(data)) == (
+        "Total debt 100 million"
+    )
+
+
+def test_a_nonrectangular_fill_does_not_make_text_outside_its_ink_hidden() -> None:
+    text = b"BT /F1 12 Tf 1 0 0 1 300 700 Tm (Revenue increased) Tj ET"
+    triangle = b"0 g 50 50 m 550 50 l 50 750 l h f\n"
+    rectangle = b"0 g 50 50 500 700 re f\n"
+    triangle_marks = {
+        cast(MarkedToken, token).hidden
+        for token in PdfExtractor().extract(raw_pdf(triangle + text))
+    }
+    rectangle_marks = {
+        cast(MarkedToken, token).hidden
+        for token in PdfExtractor().extract(raw_pdf(rectangle + text))
+    }
+    assert triangle_marks == {""}
+    assert rectangle_marks == {"near_background"}
 
 
 def test_a_pdf_that_is_not_a_pdf_is_refused_without_quoting_it() -> None:
@@ -690,7 +728,7 @@ def test_the_pdf_identity_records_effective_layout_and_convention() -> None:
     identity = PdfExtractor().identity
     effective = LAParams(**LAYOUT)
 
-    assert (identity.name, identity.version) == ("caos.pdfminer", "8")
+    assert (identity.name, identity.version) == ("caos.pdfminer", "9")
     assert identity.config["max_token_chars"] == MAX_TOKEN_CHARS
     assert identity.config["token_line_breaks"] == "space"
     assert (
@@ -709,7 +747,7 @@ def test_the_pdf_identity_records_effective_layout_and_convention() -> None:
         2.0,
         "narrower-of-width-and-height",
         0.1,
-        "last-filled-path-over-white",
+        "last-rectangular-fill,other-fills-unknown-over-white",
         "gray-rgb-cmyk-by-count,indexed,separation-exponential",
         "separation-none,devicen-all-none",
         32,
@@ -780,7 +818,7 @@ def test_v1_pdf_extractions_still_verify_and_reanchor_as_recorded(
         dispatch=lambda data: cast(Extractor, _V1Reader()),
     )
     conn.commit()
-    assert PdfExtractor().identity.version == "8"
+    assert PdfExtractor().identity.version == "9"
 
     [member] = snapshot_source_set(conn, case_id).members
     assert json.loads(member.extractor_identity)["version"] == "1"

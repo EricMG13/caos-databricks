@@ -427,6 +427,14 @@ def test_a_quote_the_body_ends_a_sentence_with_is_still_quoted(marks: str) -> No
     assert citations[0].matched_text == QUOTE
 
 
+def test_a_quote_starting_with_its_own_punctuation_survives_outer_quotes() -> None:
+    from caos.methodology.handoff import _openings, _quoted
+
+    words = "“(Unaudited) revenue was 100 million.”".split()
+    assert _quoted(words, _openings(words), "(Unaudited) revenue was 100 million.")
+    assert not _quoted(words, _openings(words), "(Unaudited) revenue was 101 million.")
+
+
 @pytest.mark.parametrize("marks", ['\\"{}\\".', "\\({}\\)", "\\[{}\\]:"])
 def test_a_quote_the_body_writes_with_markdown_escapes_is_still_quoted(
     marks: str,
@@ -592,25 +600,35 @@ def test_the_bounded_quote_check_finds_what_every_start_found() -> None:
         )
 
 
-def test_the_public_parser_answers_repeated_near_matches_in_linear_time() -> None:
+def test_the_public_parser_answers_repeated_near_matches_in_linear_work(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """R24-09 at the public boundary: quotes that each match only at the body's
     end, after a near match at every earlier word, used to cost about half a
     second each here, and `MAX_CITATIONS` of them far longer. Typography is
     judged as before: the edge words may wear quotation marks, the inner words
     match exactly."""
-    size = 20_000
+    from caos.methodology import handoff
+
+    # Count work at the public boundary without measuring CI scheduling time.
+    body_words = handoff._body_words
+    monkeypatch.setattr(
+        handoff,
+        "_body_words",
+        lambda text: [_Counted(word) for word in body_words(text)],
+    )
+    size = 600
     body = "---\nmodule_id: CP-0\n---\n\n" + " ".join(["a"] * size) + " b.\n"
     quotes = [
         _citation(matched_text=" ".join(["a"] * (size // 2 + n) + ["b"]))
         for n in range(8)
     ]
-    started = time.perf_counter()
+    _Counted.compared = 0
     _markdown, citations = parse_response(
         wire(body.encode(), quotes), delivered=DELIVERED
     )
-    spent = time.perf_counter() - started
     assert len(citations) == len(quotes)
-    assert spent < 1.0, spent
+    assert _Counted.compared <= 4 * len(quotes) * (size + size // 2 + len(quotes))
     missing = _citation(matched_text=" ".join(["a"] * (size // 2) + ["c"]))
     assert (
         _parse_refused(wire(body.encode(), [missing])) is RefusalCode.HANDOFF_MALFORMED

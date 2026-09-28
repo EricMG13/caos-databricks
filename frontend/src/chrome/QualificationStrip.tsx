@@ -35,9 +35,19 @@ function display(status: QualificationStatus | null): {
   }
   const { state, expires_at: expiresAt } = status.document;
   if (state === "QUALIFIED") {
+    if (
+      expiresAt === null ||
+      !Number.isFinite(Date.parse(expiresAt)) ||
+      Date.parse(expiresAt) <= Date.now()
+    )
+      return {
+        label: "EXPIRED",
+        sentence: "The authenticated review has expired.",
+        severity: "WARNING",
+      };
     return {
       label: state,
-      sentence: `Current authenticated review expires ${expiresAt ?? "unavailable"}.`,
+      sentence: `Current authenticated review expires ${expiresAt}.`,
       severity: "SUCCESS",
     };
   }
@@ -71,10 +81,33 @@ export function QualificationStrip({ evidenceSha256 }: { evidenceSha256: string 
   useEffect(() => {
     if (!bound || evidenceSha256 === null) return undefined;
     const controller = new AbortController();
-    void fetchQualification(evidenceSha256, controller.signal).then((status) => {
-      if (!controller.signal.aborted) setHeld({ evidenceSha256, status });
-    });
-    return () => controller.abort();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const refresh = () => {
+      void fetchQualification(evidenceSha256, controller.signal).then((status) => {
+        if (controller.signal.aborted) return;
+        setHeld({ evidenceSha256, status });
+        const expiresAt =
+          status.kind === "ready" && status.document.state === "QUALIFIED"
+            ? Date.parse(status.document.expires_at ?? "")
+            : NaN;
+        if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) return;
+        const wait = () => {
+          if (controller.signal.aborted) return;
+          const remaining = expiresAt - Date.now();
+          if (remaining > 0) timer = setTimeout(wait, Math.min(remaining, 2_147_483_647));
+          else {
+            setHeld({ evidenceSha256, status });
+            refresh();
+          }
+        };
+        wait();
+      });
+    };
+    refresh();
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
   }, [bound, evidenceSha256]);
 
   const status = held?.evidenceSha256 === evidenceSha256 ? held.status : null;

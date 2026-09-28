@@ -217,7 +217,30 @@ describe("the evidence drawer", () => {
     expect(dialog()!.querySelector("[data-withdrawn]")).toHaveTextContent("2026-09-14T10:00:00Z");
     expect(dialog()!.querySelector("[data-page-layer]")).toBeNull();
     expect(lines()).toHaveLength(0);
-    expect(urls.filter((url) => url.includes("/pages/"))).toHaveLength(pageReads);
+    // The event independently rechecks an open page while the section reloads.
+    expect(urls.filter((url) => url.includes("/pages/")).length).toBeGreaterThan(pageReads);
+  });
+
+  test("a source event rechecks the open page even when the section read fails", async () => {
+    let stale = false;
+    const firstFetch = globalThis.fetch;
+    vi.stubGlobal("fetch", async (...args: Parameters<typeof fetch>) => {
+      const url = String(args[0]);
+      if (stale && url.includes("/pages/")) return new Response("", { status: 404 });
+      if (stale)
+        return new Response(JSON.stringify({ code: "STORE_UNAVAILABLE", clears: "retry" }), {
+          status: 500,
+        });
+      return firstFetch(...args);
+    });
+    await mount(`/analysis/?case=${CASE}&tab=rn-cp-0`);
+    await openFirstFact();
+    expect(lines()).toHaveLength(3);
+    stale = true;
+    await fire("sources_changed");
+    expect(dialog()).not.toBeNull();
+    expect(lines()).toHaveLength(0);
+    expect(dialog()!.querySelector('[data-page-state="unavailable"]')).toBeInTheDocument();
   });
 
   test("a refused page shows its state and no text", async () => {

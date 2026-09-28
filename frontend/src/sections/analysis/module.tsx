@@ -680,6 +680,7 @@ function asColumns(blocks: readonly Block[]): { label: string; text: string }[] 
   if (blocks.length !== 1 || blocks[0]!.kind !== "list") return null;
   const items = blocks[0]!.list.items;
   if (items.length < 2 || items.length > 4) return null;
+  if (items.some((item) => item.lists.length > 0)) return null;
   const labelled = items.map((item) => /^\*\*(.+?)\*\*\s*(.*)$/s.exec(item.text));
   if (labelled.some((match) => match === null)) return null;
   return labelled.map((match) => ({ label: match![1]!.replace(/[.:]$/, ""), text: match![2]! }));

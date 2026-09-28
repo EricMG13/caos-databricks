@@ -811,22 +811,16 @@ def _wears(token: str, word: str, before: str, after: str) -> bool:
 def _openings(words: list[str]) -> dict[str, tuple[int, ...]]:
     """Where in the body a quote's first word could begin.
 
-    A run matches at `start` only if `words[start]` is the quote's first word
-    as written, or is that word wearing an opening quotation mark, or -- for a
-    one-word quote -- wearing one at either end. So the three spellings of each
-    body word are the whole key, and the positions under them are a superset of
-    the starts `_quoted` has to look at: the predicate below is unchanged, it
-    is simply asked about a handful of positions rather than about every
-    position in the body once per citation (AI-5).
-
-    A word wearing no quotation mark has one spelling, so an ordinary body
-    holds one entry per distinct word and one integer per word.
+    Both the body's and the quote's first token drop only their edge
+    typography for the lookup. It is a superset of every match `_carried`
+    permits, including a quote that itself begins with a bracket. `_carried`
+    still judges the exact words; this index only avoids scanning the body
+    once per citation (AI-5).
     """
     found: dict[str, list[int]] = {}
     for position, word in enumerate(words):
-        opened = word.lstrip(_OPENING)
-        for key in {word, opened, opened.rstrip(_CLOSING)}:
-            found.setdefault(key, []).append(position)
+        key = word.lstrip(_OPENING).rstrip(_CLOSING)
+        found.setdefault(key, []).append(position)
     return {key: tuple(positions) for key, positions in found.items()}
 
 
@@ -858,7 +852,9 @@ def _quoted(words: list[str], openings: dict[str, tuple[int, ...]], quote: str) 
         return False
     span = len(wanted)
     starts = [
-        start for start in openings.get(wanted[0], ()) if start + span <= len(words)
+        start
+        for start in openings.get(wanted[0].lstrip(_OPENING).rstrip(_CLOSING), ())
+        if start + span <= len(words)
     ]
     if span <= 2 or len(starts) * span <= len(words):
         return any(_carried(words[start : start + span], wanted) for start in starts)

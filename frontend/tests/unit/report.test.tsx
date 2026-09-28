@@ -2,7 +2,9 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router";
+import { Workspace } from "@/app/Workspace";
 import { filingSteps } from "@/sections/report/FilingControls";
+import { ReportDraftProvider } from "@/sections/report/draft";
 import { ReportSection } from "@/sections/report/ReportSection";
 import { parseReportDocument, type ActionView, type ReportDocument } from "@/wire/v1";
 
@@ -40,7 +42,111 @@ function jsonResponse(body: unknown, status = 200) {
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+function RevisionKeyedReport({ document }: { document: ReportDocument }) {
+  const revision = new URLSearchParams(useLocation().search).get("revision");
+  const shown = revision
+    ? { ...document, body: { ...document.body, revision_id: revision } }
+    : document;
+  return <ReportSection key={shown.body.revision_id} document={shown} tab={null} />;
+}
+
 describe("Report v1", () => {
+  test("draft text typed during save survives the revision-keyed remount", async () => {
+    const document = withActions([{ action: "SAVE_REVISION", refusal: null }]);
+    const revisionId = "00000000-0000-4000-8000-0000000000c4";
+    let answer!: (response: Response) => void;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        () =>
+          new Promise<Response>((resolve) => {
+            answer = resolve;
+          }),
+      ),
+    );
+    render(
+      <MemoryRouter>
+        <ReportDraftProvider>
+          <RevisionKeyedReport document={document} />
+        </ReportDraftProvider>
+      </MemoryRouter>,
+    );
+    fireEvent.change(screen.getByLabelText("Narrative draft"), {
+      target: { value: "Saved prose." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save revision" }));
+    fireEvent.change(screen.getByLabelText("Narrative draft"), {
+      target: { value: "Saved prose. New unsaved work." },
+    });
+    await act(async () => {
+      answer(
+        jsonResponse(
+          {
+            case_id: document.body.case_id,
+            run_id: document.body.displayed_run_id,
+            revision_id: revisionId,
+            payload_sha256: "b".repeat(64),
+          },
+          201,
+        ),
+      );
+      await settle();
+    });
+    expect(screen.getByLabelText("Narrative draft")).toHaveValue("Saved prose. New unsaved work.");
+    vi.unstubAllGlobals();
+  });
+
+  test("Workspace keeps the unsaved continuation through revision URL reload", async () => {
+    const document = withActions([{ action: "SAVE_REVISION", refusal: null }]);
+    const revisionId = "00000000-0000-4000-8000-0000000000c4";
+    let answer!: (response: Response) => void;
+    const fetch = vi.fn((url: string, init?: RequestInit) => {
+      if (init?.method === "POST")
+        return new Promise<Response>((resolve) => {
+          answer = resolve;
+        });
+      const next = url.includes(revisionId)
+        ? { ...document, body: { ...document.body, revision_id: revisionId } }
+        : document;
+      return Promise.resolve(jsonResponse(next));
+    });
+    vi.stubGlobal("fetch", fetch);
+    try {
+      render(
+        <MemoryRouter
+          initialEntries={[
+            `/report/?case=${document.body.case_id}&run=${document.body.displayed_run_id}&revision=${document.body.revision_id}`,
+          ]}
+        >
+          <Workspace section="report" />
+        </MemoryRouter>,
+      );
+      const draft = await screen.findByLabelText("Narrative draft");
+      fireEvent.change(draft, { target: { value: "Saved prose." } });
+      fireEvent.click(screen.getByRole("button", { name: "Save revision" }));
+      fireEvent.change(draft, { target: { value: "Saved prose. New unsaved work." } });
+      await act(async () => {
+        answer(
+          jsonResponse(
+            {
+              case_id: document.body.case_id,
+              run_id: document.body.displayed_run_id,
+              revision_id: revisionId,
+              payload_sha256: "b".repeat(64),
+            },
+            201,
+          ),
+        );
+        await settle();
+      });
+      expect(await screen.findByLabelText("Narrative draft")).toHaveValue(
+        "Saved prose. New unsaved work.",
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   test("renders only the exact saved payload as escaped read-only text", () => {
     const document = report();
     const hostile = '<img src=x onerror="window.pwned=1">';

@@ -560,7 +560,9 @@ class MarkingAggregator(PDFPageAggregator):
         self._compound -= compound
         box = _path_box(self.ctm, path)
         if fill and box is not None:
-            self.backdrop.paint(box, _rgb(gstate.ncs, gstate.ncolor))
+            rectangle = _rectangle(self.ctm, path)
+            colour = _rgb(gstate.ncs, gstate.ncolor) if rectangle else None
+            self.backdrop.paint(box, colour)
         clip = self._painting_over(gstate, fill)
         rectangle = None if clip is None else _rectangle(self.ctm, path)
         cover = None if rectangle is None or clip is None else _clip(rectangle, clip)

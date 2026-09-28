@@ -388,6 +388,36 @@ def test_the_harness_performs_every_case_and_reports_one_row_each(
         ).fetchall() == [(True, 1)]
 
 
+def test_retry_preserves_a_completed_earlier_case(
+    empty_database: str, tmp_path: Path
+) -> None:
+    from caos.store import apply_schema, connect
+
+    completions = _Completions(refuses_call=4)
+    harness = Harness(
+        Bundle(root=VENDORED), CATALOG, completions, priced(ESTIMATE), SET_CEILING
+    )
+    qualification = QualificationSet(
+        cases=(_case("acme-2026", REPORT), _case("borealis-2026", OTHER))
+    )
+    with connect(empty_database) as conn:
+        apply_schema(conn)
+        conn.commit()
+        blobs = BlobStore(tmp_path / "blobs")
+        prepared = prepare(conn, blobs, harness, qualification=qualification)
+        _approve(conn, prepared)
+        first = perform(
+            conn, blobs, harness, qualification=qualification, prepared=prepared
+        )
+        assert first.performed[-1].stopped is RefusalCode.PROVIDER_UNAVAILABLE
+        result = perform(
+            conn, blobs, harness, qualification=qualification, prepared=prepared
+        )
+        assert result.matrix is not None
+        assert all(record.stopped is None for record in result.performed)
+        assert len(completions.prompts) == 7
+
+
 def test_the_harness_runs_through_the_same_loop_as_everything_else(
     empty_database: str, tmp_path: Path
 ) -> None:

@@ -478,11 +478,12 @@ def _section_lines(body: str, section: str) -> list[tuple[int, str]]:
 
 def _table_cells(line: str) -> tuple[str, ...]:
     stripped = line.strip()
+    one_column = stripped.startswith("|") and stripped.endswith("|") and not stripped.endswith(r"\|")
     if stripped.startswith("|"):
         stripped = stripped[1:]
     if stripped.endswith("|") and not stripped.endswith(r"\|"):
         stripped = stripped[:-1]
-    if "|" not in stripped:
+    if "|" not in stripped and not one_column:
         return ()
     return tuple(cell.strip().replace(r"\|", "|") for cell in re.split(r"(?<!\\)\|", stripped))
 

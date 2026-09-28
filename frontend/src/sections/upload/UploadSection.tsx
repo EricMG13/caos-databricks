@@ -3,7 +3,7 @@
 // time; pinning and withdrawing are governed commands the v1 document does
 // not carry (brief 4.1, decision 5). Admit sources is the one governed write
 // this section owns (brief 4.2, slice 4.2i).
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AdmitSources, refetchUpload } from "./AdmitSources";
 import { SetVersions } from "./SetVersions";
 import { SourcePack } from "./SourcePack";
@@ -17,16 +17,14 @@ import type { UploadDocument } from "@/wire/v1";
 
 export function UploadSection({ document }: { document: UploadDocument; tab: string | null }) {
   // 4.2 owns only this control's own refetch (decision 12); the SSE-driven
-  // refresh every other section gets is 4.4's. A new document from the
-  // parent (navigation, a future poll) always wins over a stale local one --
-  // adjusted during render (React's documented pattern for this), never in
-  // an effect, so there is no cascading extra render.
-  const [live, setLive] = useState(document);
-  const [seen, setSeen] = useState(document);
-  if (document !== seen) {
-    setSeen(document);
-    setLive(document);
-  }
+  // refresh every other section gets is 4.4's. A local refresh is displayed
+  // only under the parent document that started it, so a newer parent wins.
+  const [local, setLocal] = useState({ parent: document, value: document });
+  const live = local.parent === document ? local.value : document;
+  const refreshSequence = useRef(0);
+  useEffect(() => {
+    refreshSequence.current++;
+  }, [document]);
   const { body } = live;
   const rows = body.sources;
   const withdrawn = rows.filter((row) => row.withdrawn_at !== null).length;
@@ -46,11 +44,16 @@ export function UploadSection({ document }: { document: UploadDocument; tab: str
   // re-read whole rather than edited here: what a source's standing is now is
   // the server's answer, never this component's (invariant 1).
   const [withdrawRefreshFailed, setWithdrawRefreshFailed] = useState(false);
-  async function reread() {
-    setWithdrawRefreshFailed(false);
+  async function reread(): Promise<boolean> {
+    const sequence = ++refreshSequence.current;
     const refreshed = await refetchUpload(body.case_id);
-    if (refreshed) setLive(refreshed);
-    else setWithdrawRefreshFailed(true);
+    if (sequence !== refreshSequence.current) return true;
+    if (refreshed) setLocal({ parent: document, value: refreshed });
+    return refreshed !== null;
+  }
+  async function afterWithdrawal() {
+    setWithdrawRefreshFailed(false);
+    if (!(await reread())) setWithdrawRefreshFailed(true);
   }
   return (
     <div className="cols two">
@@ -68,7 +71,7 @@ export function UploadSection({ document }: { document: UploadDocument; tab: str
             <AdmitSources
               action={admitAction}
               caseId={body.case_id}
-              onAdmitted={setLive}
+              onAdmitted={reread}
               reasonDisplay={packRefusal ? "hidden" : "inline"}
             />
             {packRefusal ? <SharedRefusal refusal={packRefusal} lead="Admit and withdraw" /> : null}
@@ -78,7 +81,7 @@ export function UploadSection({ document }: { document: UploadDocument; tab: str
                 observedAt={live.observed_at}
                 action={withdrawAction}
                 caseId={body.case_id}
-                onWithdrawn={() => void reread()}
+                onWithdrawn={() => void afterWithdrawal()}
                 reasonSaid={packRefusal !== null}
               />
             ) : (
