@@ -30,6 +30,7 @@ from workspace_stub import (
     LAKEBASE_ENDPOINT,
     LAKEBASE_INSTANCE,
     LAKEBASE_PROJECT,
+    PRICE,
     WorkspaceStub,
     bundle_config,
     fresh_state,
@@ -876,6 +877,34 @@ def test_preflight_reads_the_gateway_posture_and_the_price_s_endpoint(
     out = capsys.readouterr().out
     assert out.startswith("MISSING price names other-endpoint, not endpoint")
     assert stub.host not in out
+
+
+def test_preflight_holds_every_approved_model_to_the_configured_one_s_rules(
+    stub: WorkspaceStub, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """F468: each of `model_choices` must afford one call under the run
+    ceiling and name an endpoint that is served and fit, and none may price
+    an endpoint a second time -- the app would refuse every model for it."""
+    flags = [
+        *("--endpoint", ENDPOINT, "--catalog", "main", "--schema", "caos"),
+        *("--lakebase-instance", "caos-lb", "--price", PRICE, "--run-ceiling", "100"),
+    ]
+    unserved = "not-served,0.000001,0.000002,2026-09-22"
+    assert preflight.main([*flags, "--choices", unserved]) == 1
+    out = capsys.readouterr().out
+    assert "MISSING serving endpoint not-served" in out
+    assert f"ok      serving endpoint {ENDPOINT}" in out
+    twice = ENDPOINT + ",0.000001,0.000002,2026-09-22"
+    assert preflight.main([*flags, "--choices", twice]) == 1
+    assert f"MISSING {ENDPOINT} is priced twice" in capsys.readouterr().out
+    assert preflight.main([*flags, "--choices", "dear,1,1,2026-09-22"]) == 1
+    assert (
+        "MISSING run ceiling 100 covers no worst-case call" in capsys.readouterr().out
+    )
+    assert preflight.approved_choices("", "100", endpoint=ENDPOINT) == []
+    assert preflight.approved_choices(
+        f"{unserved};b,0.000001,0.000002,2026-09-22", "100", endpoint=ENDPOINT
+    ) == ["not-served", "b"]
 
 
 ONE_ENTITY = {

@@ -11,15 +11,19 @@ here, under the same gates as everything else it calls.
 It creates a database of its own, so a performed set can be kept for
 re-checking without touching a developer's own store, and it prints where that
 and the blobs are. Configuration is the caller's environment and nothing else:
-`OPENROUTER_*` for the provider (§16), `CAOS_MODEL_PRICE` for the dated price
+the provider is `caos.models.from_environment` -- `ChatDatabricks` on
+`CAOS_MODEL_ENDPOINT` through the caller's Databricks CLI profile
+(`DATABRICKS_CONFIG_PROFILE`), the production path -- unless the test-only
+`tests/qualify_openrouter.py` wraps this script with `OPENROUTER_*` (§16);
+`CAOS_MODEL_PRICE` for the dated price
 the reservation is computed from, `CAOS_QUALIFY_POSTGRES_URL` for the
 persistent server to keep the run database on -- never the in-memory test
 server, whose restart erases it -- and `CAOS_QUALIFY_BLOB_ROOT` for the
 directory the run's blobs are kept in, for the same reason: the proof re-reads
 them, and `$TMPDIR` is purged (FP-16).
 
-    scripts/qualify.py qualification/vmo2-fy2025 \
-        --expect-identity openrouter/openai/flex/high/65536 --ceiling 22.00
+    scripts/qualify.py qualification/ccl-fy2025-market-dislocation \
+        --expect-identity databricks/claude-opus-5-5/none/65536 --ceiling 60.00
 
 `--expect-identity` is not a convenience. A verdict binds the execution profile
 it was measured under, so the run refuses before spending anything if the

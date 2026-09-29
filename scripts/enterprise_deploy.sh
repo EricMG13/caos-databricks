@@ -2,7 +2,12 @@
 # From workspace values to a verified deployment, in one command (F31).
 #
 #   scripts/enterprise_deploy.sh [--provisioned] <profile> <catalog> <schema> <lakebase> \
-#       [endpoint] [price] [run_ceiling]
+#       <endpoint> <price> [run_ceiling] [model_choices]
+#
+# The endpoint and its dated price are the workspace's own and have no
+# default here: the bundle's names a public endpoint at a public list price,
+# which is not the contract a deployment is billed on (F469). model_choices
+# is the other approved endpoints' dated prices joined by ';' (F468).
 #
 # <lakebase> is the Lakebase Autoscaling project id, the default kind (targets
 # dev and prod). With --provisioned it is an existing Lakebase Provisioned
@@ -16,9 +21,9 @@
 # (caos-admins), GROUP_ANALYST (caos-analysts), PG_PORT (5432), PG_SSLMODE
 # (require), EVIDENCE (docs/rebuild/runs/<today>/enterprise/<time>),
 # BUNDLE_STATE (.databricks/bundle/<target>). Nothing else is read from the
-# environment: the endpoint, price and run ceiling are arguments 5 to 7
-# only, and an inherited MODEL_ENDPOINT, MODEL_PRICE or RUN_CEILING is
-# ignored (N5).
+# environment: the endpoint, price, run ceiling and model choices are
+# arguments 5 to 8 only, and an inherited MODEL_ENDPOINT, MODEL_PRICE,
+# RUN_CEILING or MODEL_CHOICES is ignored (N5).
 # An empty profile means the SDK's ambient auth (DATABRICKS_HOST and a token).
 #
 # Steps E1..E10 are described in scripts/enterprise_deploy.py; the three
@@ -41,16 +46,21 @@ LAKEBASE="${4:?lakebase project (or, with --provisioned, the instance)}"
 # One source (N23): databricks.yml's own variable defaults, read back
 # rather than repeated here. A name the header lists (GROUP_ADMIN, the
 # LAKEBASE_* names) is filled only when this shell does not already have
-# it; MODEL_ENDPOINT, MODEL_PRICE and RUN_CEILING are always the bundle's,
-# the defaults of arguments 5 to 7 (N5).
+# it; RUN_CEILING and MODEL_CHOICES are always the bundle's, the defaults
+# of arguments 7 and 8 (N5).
 eval "$(uv run python scripts/bundle_defaults.py --shell)"
-ENDPOINT="${5:-$MODEL_ENDPOINT}"
-PRICE="${6:-$MODEL_PRICE}"
 CEILING="${7:-$RUN_CEILING}"
+CHOICES="${8:-$MODEL_CHOICES}"
 TARGET="${TARGET:-prod}"
 case "$TARGET" in
   *-provisioned) echo "TARGET names dev or prod; --provisioned chooses its Provisioned pair" >&2; exit 2 ;;
 esac
+if [ -z "${5:-}" ] || [ -z "${6:-}" ]; then
+  echo "arguments 5 and 6 name the workspace's endpoint and its dated contract price" >&2
+  exit 2
+fi
+ENDPOINT="$5"
+PRICE="$6"
 # GROUP_ADMIN, GROUP_ANALYST and the LAKEBASE_* defaults are already set by
 # the eval above (their own bundle default, or an inherited value it left
 # alone). The target binds the kind (databricks.yml); each kind takes its own.
@@ -76,7 +86,7 @@ mkdir -p "$EVIDENCE"
 VALUES=(--evidence "$EVIDENCE" --profile "$PROFILE" --target "$TARGET"
   --catalog "$CATALOG" --schema "$SCHEMA"
   "${LAKEBASE_VALUES[@]}"
-  --endpoint "$ENDPOINT" --price "$PRICE" --run-ceiling "$CEILING"
+  --endpoint "$ENDPOINT" --price "$PRICE" --run-ceiling "$CEILING" --choices "$CHOICES"
   --group-admin "$GROUP_ADMIN" --group-analyst "$GROUP_ANALYST"
   --pg-port "$PG_PORT" --pg-sslmode "$PG_SSLMODE")
 # The price and the group names may hold commas (a group such as
@@ -84,6 +94,7 @@ VALUES=(--evidence "$EVIDENCE" --profile "$PROFILE" --target "$TARGET"
 # even when the shell argument is quoted (C1, R24-15); the environment form
 # carries each whole.
 export BUNDLE_VAR_model_price="$PRICE"
+export BUNDLE_VAR_model_choices="$CHOICES"
 export BUNDLE_VAR_group_admin="$GROUP_ADMIN"
 export BUNDLE_VAR_group_analyst="$GROUP_ANALYST"
 VARS=(--var "model_endpoint=$ENDPOINT" --var "run_ceiling=$CEILING"

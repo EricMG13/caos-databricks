@@ -175,11 +175,13 @@ def _mapping(value: object) -> dict[str, object]:
 
 def given_values(args: argparse.Namespace) -> dict[str, str]:
     """The app environment E2 holds to the values given (DF-4, W8): the
-    endpoint, price and run ceiling, and the two groups, which travel as
+    endpoint, price, model choices and run ceiling, and the two groups, which travel as
     `BUNDLE_VAR_` (F276) with the same silent fall-back to the default."""
     return {
         "CAOS_MODEL_ENDPOINT": args.endpoint,
         "CAOS_MODEL_PRICE": args.price,
+        # As the bundle composes it: the configured price, then the others.
+        "CAOS_MODEL_CHOICES": f"{args.price};{args.choices}",
         "CAOS_RUN_CEILING": args.run_ceiling,
         "CAOS_GROUP_ADMIN": args.group_admin,
         "CAOS_GROUP_ANALYST": args.group_analyst,
@@ -353,6 +355,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--lakebase-database", default=_DEFAULTS["lakebase_database"])
     parser.add_argument("--endpoint", default=_DEFAULTS["model_endpoint"])
     parser.add_argument("--price", default=_DEFAULTS["model_price"])
+    parser.add_argument("--choices", default=_DEFAULTS["model_choices"])
     parser.add_argument("--run-ceiling", default=_DEFAULTS["run_ceiling"])
     parser.add_argument("--group-admin", default=_DEFAULTS["group_admin"])
     parser.add_argument("--group-analyst", default=_DEFAULTS["group_analyst"])
@@ -375,6 +378,7 @@ def main(argv: list[str] | None = None) -> int:
         os.environ["DATABRICKS_CONFIG_PROFILE"] = args.profile
     os.environ["CAOS_MODEL_ENDPOINT"] = args.endpoint
     os.environ["CAOS_MODEL_PRICE"] = args.price
+    os.environ["CAOS_MODEL_CHOICES"] = args.choices
     evidence = Evidence(Path(args.evidence))
     if args.stage == "before":
         return _preflight(args, evidence)
@@ -465,6 +469,7 @@ def _preflight(args: argparse.Namespace, evidence: Evidence) -> int:
         "--schema", args.schema, *_lakebase_flags(args),
         "--group-admin", args.group_admin, "--group-analyst", args.group_analyst,
         "--price", args.price, "--run-ceiling", args.run_ceiling,
+        "--choices", args.choices,
     ]  # fmt: skip
     out = io.StringIO()
     with contextlib.redirect_stdout(out):
@@ -933,7 +938,16 @@ def call_verdict(document: object) -> tuple[int, str] | None:
         return 0, "one model call answered: its validated verdict ended the run BLOCKED"
     work = _mapping(run.get("work"))
     if work.get("state") == "STOPPED":
-        return 1, f"the run parked {work.get('stop_code')}: no model call answered"
+        code = str(work.get("stop_code"))
+        # A `PROVIDER_*` park is the gateway's; any other is the host refusing
+        # an answer the model did give (HANDOFF_MALFORMED, a citation), which
+        # proves the gateway answered and the model did not meet the contract.
+        said = (
+            "no model call answered"
+            if code.startswith("PROVIDER_")
+            else "the model answered and the host refused the answer"
+        )
+        return 1, f"the run parked {code}: {said}"
     if status in ENDED:
         return 1, f"the run ended {status}: no model call answered"
     return None

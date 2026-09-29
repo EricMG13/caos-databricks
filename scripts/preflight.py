@@ -101,11 +101,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--group-analyst", default=_DEFAULTS["group_analyst"])
     parser.add_argument("--price", help="the bundle's model_price value")
     parser.add_argument("--run-ceiling", help="the bundle's run_ceiling value")
+    parser.add_argument(
+        "--choices", default="", help="the bundle's model_choices value (F468)"
+    )
     args = parser.parse_args(argv)
 
     if args.price is not None and not affordable(
         args.price, args.run_ceiling, endpoint=args.endpoint
     ):
+        return 1
+    chosen = approved_choices(args.choices, args.run_ceiling, endpoint=args.endpoint)
+    if chosen is None:
         return 1
 
     from databricks.sdk import WorkspaceClient
@@ -122,10 +128,13 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
     checks: list[Check] = [
-        (
-            f"serving endpoint {args.endpoint}",
-            lambda: _fit_endpoint(client, args.endpoint),
-            "create or enable the endpoint under Serving > AI Gateway",
+        *(
+            (
+                f"serving endpoint {name}",
+                lambda name=name: _fit_endpoint(client, name),
+                "create or enable the endpoint under Serving > AI Gateway",
+            )
+            for name in (args.endpoint, *chosen)
         ),
         (
             f"schema {args.catalog}.{args.schema}",
@@ -166,6 +175,28 @@ def main(argv: list[str] | None = None) -> int:
             continue  # said already, and not a reason to stop (W5)
         print(f"ok      {name}")
     return 1 if missing else 0
+
+
+def approved_choices(
+    choices: str, run_ceiling: str | None, *, endpoint: str
+) -> list[str] | None:
+    """The endpoints `model_choices` names (D75), each held to the configured
+    one's price rules -- one worst-case call under the ceiling -- and none
+    priced twice, the configured one included; or None, having said why.
+
+    Their endpoints are then looked up like the configured one's, so an
+    approved model is never less fit than the model a run gets by default.
+    """
+    from caos.pricing import CHOICES_SEPARATOR
+
+    listed = choices.split(CHOICES_SEPARATOR) if choices else []
+    if not all([affordable(choice, run_ceiling) for choice in listed]):
+        return None
+    names = [choice.split(",", 1)[0] for choice in listed]
+    twice = sorted({name for name in names if [endpoint, *names].count(name) > 1})
+    for name in twice:
+        print(f"MISSING {name} is priced twice: name it once in model_choices")
+    return None if twice else names
 
 
 def affordable(

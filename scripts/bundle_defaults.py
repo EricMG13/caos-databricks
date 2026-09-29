@@ -24,6 +24,7 @@ REPO = Path(__file__).resolve().parents[1]
 NAMES = (
     "model_endpoint",
     "model_price",
+    "model_choices",
     "run_ceiling",
     "group_admin",
     "group_analyst",

@@ -18,6 +18,14 @@ variables:
       The dated per-token price for exactly that endpoint, as
       endpoint,input_per_token,output_per_token,YYYY-MM-DD (budgets fail closed on it).
     default: databricks-claude-opus-5,0.000005,0.000025,2026-09-22
+  model_choices:
+    description: >-
+      The other approved endpoints a run may be started on (F468), each as a
+      dated price in model_price's form, joined by ';'; empty, model_endpoint
+      is the only one. The bundle grants CAN_QUERY on model_endpoint alone: a
+      workspace administrator grants it on each of these to the app's service
+      principal (docs/DEPLOYMENT.md section 1).
+    default: ""
   uc_catalog:
     description: The Unity Catalog catalog holding the caos schema and its blob volume.
   uc_schema:
@@ -90,6 +98,11 @@ resources:
             value: ${var.model_endpoint}
           - name: CAOS_MODEL_PRICE
             value: ${var.model_price}
+          # The configured price first: an empty variable resolves to an
+          # entry with no value at all, which E2 and the platform would read
+          # as missing (D75).
+          - name: CAOS_MODEL_CHOICES
+            value: ${var.model_price};${var.model_choices}
           - name: CAOS_RUN_CEILING
             value: ${var.run_ceiling}
           - name: CAOS_BLOB_ROOT
