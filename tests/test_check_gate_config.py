@@ -522,8 +522,9 @@ def test_the_gitleaks_dir_scan_of_the_uncommitted_tree_is_required(
 ) -> None:
     """CF-064: the staged-scan gitleaks hook never sees an unstaged or
     untracked file, so a second `gitleaks dir` invocation of the same
-    pinned hook covers the working tree as it sits on disk. Dropping it,
-    or weakening what it runs, is refused the same as any other hook."""
+    pinned hook covers the working tree as git would commit it (F466).
+    Dropping it, or weakening what it runs, is refused the same as any
+    other hook."""
     root = _tree(tmp_path)
     assert check_gate_config._hook_problems(root) == []
     config = root / ".pre-commit-config.yaml"
@@ -532,7 +533,7 @@ def test_the_gitleaks_dir_scan_of_the_uncommitted_tree_is_required(
     dropped = original.replace(
         "      - id: gitleaks\n"
         "        name: gitleaks (uncommitted tree)\n"
-        "        entry: gitleaks dir --no-banner --redact -v .\n",
+        "        entry: bash scripts/gitleaks_tree.sh\n",
         "",
     )
     assert dropped != original
@@ -543,14 +544,14 @@ def test_the_gitleaks_dir_scan_of_the_uncommitted_tree_is_required(
     )
 
     weakened = original.replace(
+        "entry: bash scripts/gitleaks_tree.sh",
         "entry: gitleaks dir --no-banner --redact -v .",
-        "entry: gitleaks dir --no-banner --redact -v . --no-git",
     )
     assert weakened != original
     config.write_text(weakened, encoding="utf-8")
     assert (
         "pre-commit: gitleaks[1].entry is 'gitleaks dir --no-banner --redact "
-        "-v . --no-git', not 'gitleaks dir --no-banner --redact -v .'"
+        "-v .', not 'bash scripts/gitleaks_tree.sh'"
         in check_gate_config._hook_problems(root)
     )
 
