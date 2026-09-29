@@ -22,43 +22,96 @@ const UNIT_LABEL: Record<ForecastUnit, (forecast: Forecast) => string> = {
   RATIO: () => "ratio",
 };
 
-/** One line per projected value, across the periods of one case, drawn only
-    where there are two periods to join. These are the host's own figures
-    (CP-CF), so the marks are solid: host-verified. Each line carries its own
-    `unit` -- every period's value of the same name shares one dimension, so
-    the first one served names it. */
+/** One figure per projected value and unit, with one line per case. A missing
+    case value stays a gap. These are CP-CF host figures; each line carries its
+    own `unit`, and needs two distinct periods before it is drawn. */
 export function forecastSeries(
   forecast: Forecast,
-): { categories: string[]; series: ChartSeries[]; unit: ForecastUnit }[] {
+): { title: string; categories: string[]; series: ChartSeries[]; unit: ForecastUnit }[] {
   const cases = [...new Set(forecast.periods.map((period) => period.case))];
-  return cases.flatMap((name) => {
-    const periods = forecast.periods.filter((period) => period.case === name);
-    if (periods.length < 2) return [];
-    const lines = [
-      ...new Set(periods.flatMap((period) => period.values.map((value) => value.name))),
-    ];
-    return lines.map((line) => {
-      const named = (value: ForecastValue) => value.name === line;
-      const unit = periods.flatMap((period) => period.values).find(named)?.unit ?? "MONEY";
+  const periodsByCase = new Map(
+    cases.map((name) => [name, forecast.periods.filter((period) => period.case === name)]),
+  );
+  const periodKey = (period: Forecast["periods"][number]) =>
+    `${period.fiscal_year}\0${period.period_id}`;
+  const labels = (periods: readonly Forecast["periods"][number][]) => {
+    const counts = new Map<string, number>();
+    for (const period of periods)
+      counts.set(period.period_id, (counts.get(period.period_id) ?? 0) + 1);
+    return periods.map((period) =>
+      counts.get(period.period_id)! > 1
+        ? `${period.period_id} · FY${period.fiscal_year}`
+        : period.period_id,
+    );
+  };
+  const valueOf = (period: Forecast["periods"][number], name: string, unit: ForecastUnit) => {
+    const value = period.values.find((entry) => entry.name === name && entry.unit === unit);
+    return value?.value != null
+      ? { value: value.value }
+      : {
+          value: null,
+          reason: value?.unavailable_reason ?? period.unavailable_reason ?? "not served",
+        };
+  };
+  const dimensions = [
+    ...new Map(
+      forecast.periods.flatMap((period) =>
+        period.values.map((value) => [`${value.name}\0${value.unit}`, value] as const),
+      ),
+    ).values(),
+  ];
+  const reference = periodsByCase.get(cases[0]!) ?? [];
+  const referenceSchedule = reference.map(periodKey);
+  const schedulesAlign = cases.every((name) => {
+    const own = periodsByCase.get(name) ?? [];
+    const schedule = own.map(periodKey);
+    return (
+      new Set(schedule).size === schedule.length &&
+      schedule.length === referenceSchedule.length &&
+      schedule.every((key, index) => key === referenceSchedule[index])
+    );
+  });
+  return dimensions.flatMap((dimension) => {
+    const hasValue = (period: Forecast["periods"][number]) =>
+      period.values.some((value) => value.name === dimension.name && value.unit === dimension.unit);
+    const populated = forecast.periods.filter(hasValue);
+    if (new Set(populated.map(periodKey)).size < 2) return [];
+    if (schedulesAlign) {
+      const series = cases.map((name) => {
+        const own = periodsByCase.get(name) ?? [];
+        return {
+          key: `${name}:${dimension.name}:${dimension.unit}`,
+          label: `${dimension.name} · ${name}`,
+          origin: "host" as const,
+          data: own.map((period) => valueOf(period, dimension.name, dimension.unit)),
+        };
+      });
+      return [
+        {
+          // Several cases name themselves in the legend; one case has no
+          // legend, so the title names it.
+          title: cases.length > 1 ? dimension.name : `${dimension.name} · ${cases[0]}`,
+          categories: labels(reference),
+          series,
+          unit: dimension.unit,
+        },
+      ];
+    }
+    return cases.flatMap((name) => {
+      const own = periodsByCase.get(name) ?? [];
+      if (new Set(own.filter(hasValue).map(periodKey)).size < 2) return [];
       return {
-        categories: periods.map((period) => period.period_id),
-        unit,
+        title: `${dimension.name} · ${name}`,
+        categories: labels(own),
         series: [
           {
-            key: `${name}:${line}`,
-            label: `${line} · ${name}`,
+            key: `${name}:${dimension.name}:${dimension.unit}`,
+            label: `${dimension.name} · ${name}`,
             origin: "host" as const,
-            data: periods.map((period) => {
-              const value = period.values.find(named);
-              return value?.value
-                ? { value: value.value }
-                : {
-                    value: null,
-                    reason: value?.unavailable_reason ?? period.unavailable_reason ?? "not served",
-                  };
-            }),
+            data: own.map((period) => valueOf(period, dimension.name, dimension.unit)),
           },
         ],
+        unit: dimension.unit,
       };
     });
   });
@@ -128,7 +181,7 @@ export function ModelSection({ document }: { document: ModelDocument; tab: strin
         >
           <div className="pb">
             <LineChart
-              title={chart.series[0]!.label}
+              title={chart.title}
               summary={`The host's projection over ${chart.categories.length} periods, ${chart.categories[0]} to ${chart.categories.at(-1)}.`}
               unit={UNIT_LABEL[chart.unit](forecast)}
               categories={chart.categories}

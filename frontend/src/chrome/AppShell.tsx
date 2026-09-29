@@ -1,6 +1,6 @@
 // The frame every page shares: the sidebar, then the inset that holds the
 // header and the body. A demo build says so above the header, on every page.
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { SeverityMark } from "./SeverityMark";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 
@@ -20,7 +20,14 @@ export function AppShell({
   children: ReactNode;
 }) {
   return (
-    <SidebarProvider data-workspace data-section={section}>
+    // `module-workbench` is every section's density (body padding and gaps, the
+    // 13rem sidebar) and the module index's wide layout: its rules are in caos.css.
+    <SidebarProvider
+      data-workspace
+      data-section={section}
+      className="module-workbench"
+      style={{ "--sidebar-width": "13rem" } as CSSProperties}
+    >
       {sidebar}
       <SidebarInset className="min-w-0">
         {import.meta.env.MODE === "demo" ? (
@@ -37,11 +44,7 @@ export function AppShell({
           </aside>
         ) : null}
         {header}
-        <main
-          id="body"
-          aria-label={label}
-          className="flex min-w-0 flex-1 flex-col gap-4 p-4 md:p-6"
-        >
+        <main id="body" aria-label={label} className="flex min-w-0 flex-1 flex-col">
           {children}
         </main>
       </SidebarInset>

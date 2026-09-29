@@ -23,7 +23,7 @@ Changes from the CLI's output:
 | `dropdown-menu.tsx` | transitions on Base UI's starting and ending styles, origin-aware, a faster exit                                                                                                                                                                                 |
 | `sheet.tsx`         | the drawer curve (`ease-drawer`)                                                                                                                                                                                                                                 |
 | `skeleton.tsx`      | no pulse under reduced motion                                                                                                                                                                                                                                    |
-| `tabs.tsx`          | `tabsListVariants` not exported                                                                                                                                                                                                                                  |
+| `tabs.tsx`          | `tabsListVariants` not exported; orientation forwarded to Base UI so keyboard behavior matches vertical indices                                                                                                                                                  |
 | everything          | formatted by the repository's Prettier                                                                                                                                                                                                                           |
 
 ## The predecessor's primitives
