@@ -26,7 +26,7 @@ DATABRICKS_CONFIG_PROFILE=<profile> uv run python scripts/preflight.py \
   --endpoint <endpoint> --catalog <catalog> --schema <schema> \
   --lakebase-project <project> \
   --price <endpoint>,<in>,<out>,<YYYY-MM-DD> --run-ceiling 100.00 \
-  --choices '<endpoint>,<in>,<out>,<YYYY-MM-DD>;<endpoint>,<in>,<out>,<YYYY-MM-DD>' 
+  --choices '<endpoint>,<in>,<out>,<YYYY-MM-DD>;<endpoint>,<in>,<out>,<YYYY-MM-DD>'
 ```
 
 `--lakebase-branch`, `--lakebase-endpoint` and `--lakebase-database-id` take the bundle's defaults when not given. It looks up the project, the endpoint (refused if read-only or disabled) and the database through the Postgres API; for an existing Provisioned instance pass `--lakebase-instance <instance>` instead of `--lakebase-project`, and the instance is looked up through the database API.
