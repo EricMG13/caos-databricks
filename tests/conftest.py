@@ -146,6 +146,29 @@ def _loopback_test_client() -> None:
 _loopback_test_client()
 
 
+# What `scripts/enterprise_deploy.py`'s `main` writes into its own process so the
+# scripts it calls read the deployment's values. A suite that calls it in
+# process leaves them behind, and `create_run` reads them (F473), so what one
+# test wrote decided the next one's audit payload.
+_MODEL_ENVIRONMENT = ("CAOS_MODEL_ENDPOINT", "CAOS_MODEL_PRICE", "CAOS_MODEL_CHOICES")
+
+
+@pytest.fixture(autouse=True)
+def _model_environment_stays_the_tests_own() -> Iterator[None]:
+    """Whatever a test writes to the model environment is gone after it.
+
+    Restored, not cleared first: the live-provider suites read these names from
+    the caller's environment, so they are left as found. Not through
+    `monkeypatch`, for `_development_edge`'s reason.
+    """
+    saved = {name: os.environ.get(name) for name in _MODEL_ENVIRONMENT}
+    yield
+    for name, value in saved.items():
+        os.environ.pop(name, None)
+        if value is not None:
+            os.environ[name] = value
+
+
 @pytest.fixture(autouse=True)
 def _development_edge() -> Iterator[None]:
     """No suite inherits an edge token, public origin or trust switch.
