@@ -466,17 +466,20 @@ export function Workspace({ section }: { section: Section }) {
         />
       ) : null}
       <QualificationStrip evidenceSha256={qualificationEvidence} />
-      <SectionTabs
-        label={label}
-        tabs={chrome?.tabs ?? []}
-        active={activeTab}
-        onSelect={chooseTab}
-      />
       <Announcer>
         {status.kind === "offline" ? <PageAlert sentence={OFFLINE_WORDING} /> : null}
         {/* Neither replaces the document: they say it is not live. */}
         {interrupted ? <NotLive mark="refresh" sentence={interruption(interrupted)} /> : null}
         {paused ? <NotLive mark="tail" sentence={PAUSED_WORDING} /> : null}
+        {/* After the banners, directly before the panel: the wide layout puts the
+            index beside the panel, and a banner between them left the panel
+            below a blank column. */}
+        <SectionTabs
+          label={label}
+          tabs={chrome?.tabs ?? []}
+          active={activeTab}
+          onSelect={chooseTab}
+        />
         <VisibleSnapshotContext.Provider value={snapshot}>
           {/* The evidence surface is bound to the section it was opened
               on (brief 4.4, decision 9): the key closes it on a section

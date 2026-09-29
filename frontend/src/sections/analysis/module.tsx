@@ -5,6 +5,8 @@
 // model's Markdown is drawn by `ds/ModelMarkdown`, never injected.
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "react-router";
+import { Clock3 } from "lucide-react";
+import { Digest } from "@/ds/Digest";
 import { keyFigures, type KeyFigure } from "./figures";
 import {
   APPENDIX_GROUPS,
@@ -340,24 +342,33 @@ export function ModuleFacts({
   return (
     <ul className="modfacts">
       {subject ? <li data-subject>{subject}</li> : null}
-      <li data-committee-status>
-        {handoff.committee_status} · {scopeOf(handoff.decision_scope)}
+      <li className="fact-item" data-committee-status>
+        <span className="fact-signal fact-chip" data-status={handoff.committee_status}>
+          {handoff.committee_status}
+        </span>
+        <span className="fact-scope" data-scope={handoff.decision_scope}>
+          {scopeOf(handoff.decision_scope)}
+        </span>
       </li>
-      <li>
+      <li className="fact-item">
         Confidence{" "}
-        <span data-confidence>
+        <span
+          className="fact-signal fact-chip"
+          data-band={words(handoff.confidence_band)}
+          data-confidence
+        >
           <b className="mono">{handoff.confidence_score}</b> · {words(handoff.confidence_band)}
         </span>
       </li>
-      {/* How many; the caveats name each. */}
-      <li data-limitation-flags>
-        Limitations <b>{handoff.limitation_flags.length || "none"}</b>
+      <li className="fact-item" data-limitation-flags>
+        Limitations{" "}
+        <b className="fact-signal fact-chip" data-count={handoff.limitation_flags.length}>
+          {handoff.limitation_flags.length || "none"}
+        </b>
       </li>
-      <li>
+      <li className="fact-item">
+        <Clock3 className="fact-icon" aria-hidden="true" />
         Accepted <time dateTime={handoff.accepted_at}>{stamp(handoff.accepted_at)}</time>
-      </li>
-      <li className="mono" title={handoff.artifact_sha256} data-route-node>
-        {handoff.route_node_id}
       </li>
       <li>{documents}</li>
     </ul>
@@ -883,6 +894,25 @@ export function Depth({
               What this run rests on <span className="cp">host-verified</span>
             </h3>
             {documents}
+          </section>
+          {/* What the header's facts no longer carry: which node accepted this
+              handoff and the digests its accepted record stands on. */}
+          <section className="group" data-audit-part="Record">
+            <h3>
+              This handoff <span className="cp">host-verified</span>
+            </h3>
+            <dl className="kv">
+              <dt>Route node</dt>
+              <dd className="mono">{handoff.route_node_id}</dd>
+              <dt>Artifact</dt>
+              <dd>
+                <Digest value={handoff.artifact_sha256} prefix="sha256:" />
+              </dd>
+              <dt>Record</dt>
+              <dd>
+                <Digest value={handoff.record_sha256} prefix="sha256:" />
+              </dd>
+            </dl>
           </section>
           {AUDIT_SECTIONS.map((name) => {
             const written = parts?.audit.find((part) => part.title === name)?.blocks ?? [];

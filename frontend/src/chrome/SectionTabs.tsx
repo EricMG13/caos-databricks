@@ -1,6 +1,7 @@
 // The section's own views. Never navigation between sections. Arrow keys move
-// between them and select as they go; at a zoomed width (400%, D63) they are a
-// native select, since a dozen wrapped tabs were taller than the window.
+// between them and select as they go. The index is vertical at every desk width
+// (1024px and up, D63, D74); below that only a zoomed reader goes, and there the
+// views reflow into a native select.
 import type { ReactNode } from "react";
 import { SeverityMark } from "./SeverityMark";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -21,10 +22,9 @@ export function SectionTabs({
   // A tab list of no tabs is a widget with nothing in it, announced on every
   // page for nothing: a v1 document declares none (FE-11).
   if (tabs.length === 0) return null;
-  // Past eight views, module names stay in a compact strip under the header.
-  // The selected name and review reason remain visible below it.
+  // Past eight views, keep the selected name and review reason above the index.
   const dense = tabs.length > 8;
-  const tabSize = dense ? "h-7 px-1.5 text-[13px] text-muted-foreground" : "h-8 px-2.5";
+  const tabText = dense ? "text-[13px] text-muted-foreground" : "";
   const selected = tabs.find((tab) => tab.id === active);
   const meaning =
     selected?.note?.trim() ||
@@ -36,12 +36,10 @@ export function SectionTabs({
           ? "Blocked or failed"
           : null);
   return (
-    <div
-      data-section-tabs
-      data-dense={dense || undefined}
-      className={dense ? "sticky top-14 z-10 -mx-1 bg-background px-1 py-1" : undefined}
-    >
-      <label className="block sm:hidden">
+    // Placement, density and wrapping are `.module-workbench`'s, in caos.css:
+    // those rules sit outside the components layer and win over any utility here.
+    <div data-section-tabs data-dense={dense || undefined}>
+      <label className="block min-[1024px]:hidden">
         <span className="sr-only">{label} view</span>
         <NativeSelect
           className="w-full"
@@ -57,16 +55,23 @@ export function SectionTabs({
           ))}
         </NativeSelect>
       </label>
+      {dense && selected && (
+        <p className="px-2 pt-1 text-sm text-foreground" data-selected-view aria-live="polite">
+          {selected.cp ?? selected.label}
+          {meaning ? ` · ${meaning}` : null}
+        </p>
+      )}
       <Tabs
         value={active}
+        orientation="vertical"
         onValueChange={(value) => onSelect(String(value))}
-        className="max-sm:hidden"
+        className="max-[1024px]:hidden"
       >
         <TabsList
           variant="line"
           aria-label={`${label} views`}
           activateOnFocus
-          className={`w-full justify-start gap-1 group-data-horizontal/tabs:h-auto ${dense ? "flex-nowrap overflow-x-auto" : "flex-wrap"}`}
+          className="w-full justify-start"
         >
           {tabs.map((tab) => (
             <TabsTrigger
@@ -75,8 +80,7 @@ export function SectionTabs({
               id={`tab-${tab.id}`}
               aria-controls={`tabpanel-${tab.id}`}
               title={dense && tab.cp ? `${tab.cp} · ${tab.label}` : undefined}
-              // Keep the accepted density in existing utilities, with no preview CSS.
-              className={`flex-none after:hidden data-active:border-border! data-active:bg-muted! data-active:shadow-none ${tabSize}`}
+              className={`flex-none after:hidden data-active:border-border! data-active:bg-muted! data-active:shadow-none ${tabText}`}
             >
               {tab.severity && <SeverityMark severity={tab.severity} decorative />}
               <span className={tab.cp ? "font-normal" : "font-mono text-[13px]"}>
@@ -87,12 +91,6 @@ export function SectionTabs({
           ))}
         </TabsList>
       </Tabs>
-      {dense && selected && (
-        <p className="px-2 pt-1 text-sm text-foreground" data-selected-view aria-live="polite">
-          {selected.cp ?? selected.label}
-          {meaning ? ` · ${meaning}` : null}
-        </p>
-      )}
     </div>
   );
 }
