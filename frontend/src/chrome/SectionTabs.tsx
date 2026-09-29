@@ -1,6 +1,6 @@
 // The section's own views. Never navigation between sections. Arrow keys move
-// between them and select as they go; at a zoomed width (400%, D63) they are a
-// native select, since a dozen wrapped tabs were taller than the window.
+// between them and select as they go. The module index is vertical on wide
+// desks; a native select keeps narrower windows and zoom reflow compact.
 import type { ReactNode } from "react";
 import { SeverityMark } from "./SeverityMark";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -21,8 +21,7 @@ export function SectionTabs({
   // A tab list of no tabs is a widget with nothing in it, announced on every
   // page for nothing: a v1 document declares none (FE-11).
   if (tabs.length === 0) return null;
-  // Past eight views, module names stay in a compact strip under the header.
-  // The selected name and review reason remain visible below it.
+  // Past eight views, keep the selected name and review reason above the index.
   const dense = tabs.length > 8;
   const tabSize = dense ? "h-7 px-1.5 text-[13px] text-muted-foreground" : "h-8 px-2.5";
   const selected = tabs.find((tab) => tab.id === active);
@@ -41,7 +40,7 @@ export function SectionTabs({
       data-dense={dense || undefined}
       className={dense ? "sticky top-14 z-10 -mx-1 bg-background px-1 py-1" : undefined}
     >
-      <label className="block sm:hidden">
+      <label className="block min-[1200px]:hidden">
         <span className="sr-only">{label} view</span>
         <NativeSelect
           className="w-full"
@@ -57,10 +56,17 @@ export function SectionTabs({
           ))}
         </NativeSelect>
       </label>
+      {dense && selected && (
+        <p className="px-2 pt-1 text-sm text-foreground" data-selected-view aria-live="polite">
+          {selected.cp ?? selected.label}
+          {meaning ? ` · ${meaning}` : null}
+        </p>
+      )}
       <Tabs
         value={active}
+        orientation="vertical"
         onValueChange={(value) => onSelect(String(value))}
-        className="max-sm:hidden"
+        className="max-[1200px]:hidden"
       >
         <TabsList
           variant="line"
@@ -87,12 +93,6 @@ export function SectionTabs({
           ))}
         </TabsList>
       </Tabs>
-      {dense && selected && (
-        <p className="px-2 pt-1 text-sm text-foreground" data-selected-view aria-live="polite">
-          {selected.cp ?? selected.label}
-          {meaning ? ` · ${meaning}` : null}
-        </p>
-      )}
     </div>
   );
 }

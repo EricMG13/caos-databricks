@@ -142,14 +142,15 @@ describe("Analysis", () => {
       const { container, unmount } = mountAt(complete, handoff.module_id);
       const card = container.querySelector(`[data-handoff="${handoff.module_id}"]`)!;
       // The model's view, labelled as the model's; the host's calculation
-      // note; and the node it came from, in the header's facts.
+      // note; route identifiers stay out of the header's facts.
       expect(card.querySelector("[data-model-analysis] header")).toHaveTextContent(
         "model-authored, not host-verified",
       );
       expect(card.querySelector("[data-host-calculation]")).toHaveTextContent(
         "Deterministic calculations: none performed by the host",
       );
-      expect(card.querySelector("[data-route-node]")).toHaveTextContent(handoff.route_node_id);
+      expect(card.querySelector(".modfacts [data-route-node]")).toBeNull();
+      expect(card.querySelector(".modfacts")).not.toHaveTextContent(handoff.route_node_id);
       // Its host-verified citations lead the Audit tab, in every module.
       openTab(container, "audit");
       const audit = card.querySelector('[data-depth-panel="audit"]')!;

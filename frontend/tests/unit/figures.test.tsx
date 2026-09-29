@@ -10,6 +10,7 @@ import {
   addbackValidation,
   addbacks,
   comparatorChanges,
+  Figures,
   figuresOf,
   forecastDrivers,
   kpiLines,
@@ -519,4 +520,241 @@ test("CP-2B's catalysts are a ranked, dated list, not a chart", () => {
   expect(items[0]).toHaveTextContent("Springing leverage test on the revolver");
   expect(items[0]).toHaveTextContent("p.22, Note 9 Debt, financial covenants");
   expect(container.querySelector("[data-figure]")).toBeNull();
+});
+
+const handoffFor = (module_id: string, tables: ReturnType<typeof table>[]) => ({
+  ...cp1,
+  module_id,
+  tables,
+});
+
+test("vendor peer and quality tables map to unit-safe comparison and bridge charts", () => {
+  const peers = table(
+    "vendor.T4.3",
+    [
+      "Entity",
+      "Revenue",
+      "Rev Growth",
+      "Gross Margin",
+      "EBITDA",
+      "EBITDA Margin",
+      "EBIT Margin",
+      "Period",
+      "Currency",
+      "Calc Status",
+      "Comp Status",
+    ],
+    [
+      [
+        "Borrower",
+        "100",
+        "12%",
+        "20%",
+        "20",
+        "20%",
+        "10%",
+        "FY2026",
+        "USD",
+        "Reported",
+        "Comparable",
+      ],
+      [
+        "Peer",
+        "80",
+        "10%",
+        "25%",
+        "16",
+        "20%",
+        "8%",
+        "FY2026",
+        "USD",
+        "Reported",
+        "Comparable with Limitations",
+      ],
+      ["Peer EUR", "70", "9%", "18%", "14", "18%", "7%", "FY2026", "EUR", "Reported", "Comparable"],
+    ],
+  );
+  const peerFigures = figuresOf(handoffFor("CP-1C", [peers]));
+  const growth = peerFigures.find((figure) => figure.key === "peer-revgrowth-0")!;
+  expect(growth.kind).toBe("bar");
+  expect(growth.unit).toBe("%");
+  expect(growth.series[0]!.data.map((datum) => datum.value)).toEqual(["12", "10"]);
+  expect(growth.categories[1]).toContain("Comparable with Limitations");
+  expect(peerFigures.find((figure) => figure.key === "peer-revenue-1")!.unit).toBe("EUR");
+
+  const quality = table(
+    "vendor.T1D.4",
+    [
+      "Step",
+      "Amount",
+      "Basis",
+      "Supported / Challenged / Rejected",
+      "Cumulative EBITDA",
+      "Evidence ID",
+    ],
+    [
+      ["Reported EBITDA", "100", "Issuer reported", "Supported", "100", "E-1"],
+      ["Restructuring", "3", "One-time site cost", "Challenged", "103", "E-2"],
+      ["Other income", "-1", "Non-operating", "Rejected", "102", "E-3"],
+    ],
+  );
+  const qualityFigures = figuresOf(handoffFor("CP-1D", [quality]));
+  expect(qualityFigures.map((figure) => figure.kind)).toEqual(["diverging", "line"]);
+  expect(qualityFigures[0]!.series[0]!.data.map((datum) => datum.value)).toEqual([
+    "100",
+    "3",
+    "-1",
+  ]);
+  expect(qualityFigures[1]!.series[0]!.data.map((datum) => datum.value)).toEqual([
+    "100",
+    "103",
+    "102",
+  ]);
+});
+
+test("CP-2D uses the vendor cash-use signs and falls back on unrecognized bridge rows", () => {
+  const columns = [
+    "Bridge Item",
+    "Amount",
+    "Source / Calculation",
+    "Status",
+    "Credit Comment",
+    "Source Trace",
+  ];
+  const rows = [
+    ["Beginning Cash", "80", "Cash register", "Supported", "", "E-1"],
+    ["Accessible Revolver Availability", "20", "Availability", "Supported", "", "E-2"],
+    ["Beginning Accessible Liquidity", "100", "Cash plus revolver", "Supported", "", "E-3"],
+    ["Operating Cash Inflow/Outflow", "10", "Operating forecast", "Supported", "", "E-4"],
+    ["Working Capital Impact", "-5", "Seasonal use", "Supported", "", "E-5"],
+    ["Cash Interest", "4", "Cash interest forecast", "Supported", "", "E-6"],
+    ["Committed Inflows", "1", "Executed inflow", "Supported", "", "E-7"],
+    ["Ending Accessible Liquidity", "102", "Bridge formula", "Supported", "", "E-8"],
+  ];
+  const bridge = table("vendor.T2E.5", columns, rows);
+  const figure = figuresOf(handoffFor("CP-2D", [bridge]))[0]!;
+  expect(figure.kind).toBe("waterfall");
+  expect(figure.steps?.map((step) => step.value)).toEqual(["100", "10", "-5", "-4", "1", "102"]);
+  expect(figure.summary).toContain("Currency and scale are not stated");
+  expect(
+    figure.sourceOf({
+      series: "5",
+      category: "Cash Interest",
+      index: 5,
+      value: "-4",
+      origin: "model",
+    }),
+  ).toContain("Outflow direction applied from the vendor formula");
+
+  const withUnknown = table("vendor.T2E.5", columns, [
+    ...rows,
+    ["Unclassified movement", "2", "", "Supported", "", "E-9"],
+  ]);
+  const fallback = figuresOf(handoffFor("CP-2D", [withUnknown]))[0]!;
+  expect(fallback.kind).toBe("bar");
+  // The fallback reports served values and does not infer an unknown sign.
+  expect(fallback.series[0]!.data[5]!.value).toBe("4");
+
+  const { container } = render(
+    <Figures handoff={handoffFor("CP-2D", [bridge])} calculation={null} onPick={() => {}} />,
+  );
+  expect(container.querySelector('[data-chart="waterfall"]')).not.toBeNull();
+});
+
+test("vendor debt, trigger, covenant, and post-mortem tables map to bounded single-unit charts", () => {
+  const exposure = table(
+    "vendor.T2F.2",
+    ["Debt Instrument", "Amount", "Fixed / Floating", "Currency", "Hedge Status"],
+    [
+      ["Notes", "100", "Fixed", "USD", "Unhedged"],
+      ["Term loan", "50", "Floating", "USD", "Swapped"],
+      ["Loan", "40", "Floating", "EUR", "Unhedged"],
+    ],
+  );
+  const exposureFigures = figuresOf(handoffFor("CP-2E", [exposure]));
+  expect(exposureFigures.map((figure) => figure.kind)).toEqual(["bar", "bar"]);
+  expect(exposureFigures.map((figure) => figure.unit)).toEqual(["USD", "EUR"]);
+  expect(exposureFigures[0]!.categories[0]).toContain("Fixed · Hedge: Unhedged");
+
+  const triggers = table(
+    "vendor.T2R.4",
+    [
+      "Agency",
+      "Trigger Direction",
+      "Metric",
+      "Threshold",
+      "Case / Period Value",
+      "Headroom",
+      "Status",
+      "Evidence ID",
+    ],
+    [
+      ["Moody's", "Downgrade", "Net leverage", "6.0", "Base FY2026", "0.5", "Clear", "E-1"],
+      ["Moody's", "Downgrade", "Net leverage", "6.0", "Downside FY2026", "-0.2", "Breach", "E-2"],
+    ],
+  );
+  const trigger = figuresOf(handoffFor("CP-2H", [triggers]))[0]!;
+  expect(trigger.kind).toBe("diverging");
+  expect(trigger.series[0]!.data.map((datum) => datum.value)).toEqual(["0.5", "-0.2"]);
+
+  const maturities = table(
+    "vendor.T3D.2",
+    ["Instrument", "Amount", "Currency", "Maturity Date", "Seniority / Lien"],
+    [
+      ["Notes", "100", "USD", "2028-06-01", "Senior secured"],
+      ["Bonds", "50", "USD", "2030-01-15", "Senior unsecured"],
+    ],
+  );
+  const maturity = figuresOf(handoffFor("CP-3C", [maturities]))[0]!;
+  expect(maturity.kind).toBe("bar");
+  expect(maturity.categories.map((category) => category.slice(0, 10))).toEqual([
+    "2028-06-01",
+    "2030-01-15",
+  ]);
+
+  const covenants = table(
+    "vendor.T4C.4",
+    ["Test", "Test Type", "Threshold", "Current Basis", "Headroom", "Status"],
+    [
+      ["Net leverage", "Maximum leverage", "5.0x", "4.2x", "0.8", "Pass"],
+      ["Interest coverage", "Minimum coverage", "2.0x", "1.8x", "-0.2", "Watch"],
+    ],
+  );
+  const covenantFigures = figuresOf(handoffFor("CP-4A", [covenants]));
+  expect(covenantFigures.map((figure) => figure.kind)).toEqual(["diverging", "diverging"]);
+  expect(covenantFigures.map((figure) => figure.categories[0])).toEqual([
+    "Net leverage · Pass",
+    "Interest coverage · Watch",
+  ]);
+
+  const postMortem = table(
+    "vendor.T7.4",
+    [
+      "Metric",
+      "Expected",
+      "Realized",
+      "Variance (direction + magnitude)",
+      "Confidence",
+      "Evidence ID",
+    ],
+    [["Revenue", "100", "95", "-5 unfavorable", "Medium", "E-1"]],
+  );
+  const comparison = figuresOf(handoffFor("CP-8", [postMortem]))[0]!;
+  expect(comparison.kind).toBe("bar");
+  expect(comparison.categories).toEqual(["Expected", "Realized"]);
+  expect(comparison.series[0]!.data.map((datum) => datum.value)).toEqual(["100", "95"]);
+  expect(comparison.summary).toContain("-5 unfavorable");
+  expect(
+    comparison.sourceOf({
+      series: "Revenue",
+      category: "Realized",
+      index: 1,
+      value: "95",
+      origin: "model",
+    }),
+  ).toBe("E-1");
+  const { container } = render(
+    <Figures handoff={handoffFor("CP-8", [postMortem])} calculation={null} onPick={() => {}} />,
+  );
+  expect(container.querySelector('[data-chart="bar"]')).not.toBeNull();
 });

@@ -198,13 +198,16 @@ test("Analysis module names support keyboard selection and zoom reflow in both t
     const source = tabs.getByRole("tab", { name: /^Source readiness\s*, success$/ });
     await expect(source).toBeVisible();
     await expect(source).toHaveAttribute("aria-selected", "true");
-    expect(
-      await source.evaluate((node) => ({
-        height: node.getBoundingClientRect().height,
-        padding: getComputedStyle(node).paddingLeft,
-      })),
-    ).toEqual({ height: 28, padding: "6px" });
-    await source.press("ArrowRight");
+    const tabSize = await source.evaluate((node) => ({
+      height: node.getBoundingClientRect().height,
+      padding: getComputedStyle(node).paddingLeft,
+    }));
+    // A minimum target, not a fixed height: wrapped names and each engine's
+    // fractional line metrics can make a row taller.
+    expect(tabSize.height).toBeGreaterThanOrEqual(36);
+    expect(tabSize.padding).toBe("8px");
+    await expect(tabs).toHaveAttribute("aria-orientation", "vertical");
+    await source.press("ArrowDown");
     await expect(page).toHaveURL(/tab=rn-cp-1$/);
     await expect(
       tabs.getByRole("tab", { name: /^Canonical data foundation\s*, success$/ }),
@@ -212,6 +215,9 @@ test("Analysis module names support keyboard selection and zoom reflow in both t
     await tabs.getByRole("tab", { name: /^Canonical data foundation\s*, success$/ }).press("End");
     await expect(page).toHaveURL(/tab=rn-cp-cf$/);
     await expect(tabs.getByRole("tab", { name: /^Cash-flow forecast\s*, success$/ })).toBeVisible();
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await expect(tabs).not.toBeVisible();
+    await expect(page.getByRole("combobox", { name: "Analysis view", exact: true })).toBeVisible();
     await page.setViewportSize({ width: 320, height: 640 });
     await expect(issuer).not.toBeVisible();
     await expect(page.getByRole("heading", { name: "Analysis", level: 1 })).toBeVisible();

@@ -434,6 +434,10 @@ describe("the section's views", () => {
     );
     const first = screen.getByRole("tab", { name: "CP-0" });
     const second = screen.getByRole("tab", { name: "CP-1" });
+    expect(screen.getByRole("tablist", { name: "Analysis views" })).toHaveAttribute(
+      "aria-orientation",
+      "vertical",
+    );
     // One tab stop: the selected view; the others are reached by arrows.
     expect(first).toHaveAttribute("tabindex", "0");
     expect(second).toHaveAttribute("tabindex", "-1");

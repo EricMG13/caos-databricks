@@ -177,7 +177,10 @@ describe("the host's forecast, drawn", () => {
     };
     const two = { ...single, periods: [single.periods[0]!, second] };
     const charts = forecastSeries(two);
-    expect(charts.map((chart) => chart.series[0]!.key)).toEqual(["Base:cash", "Base:coverage"]);
+    expect(charts.map((chart) => chart.series[0]!.key)).toEqual([
+      "Base:cash:MONEY",
+      "Base:coverage:MULTIPLE",
+    ]);
     expect(charts[0]!.series[0]!.origin).toBe("host");
     expect(charts[0]!.series[0]!.data).toEqual([{ value: "123.45" }, { value: "130.00" }]);
     // A value the host could not compute is a gap with its reason, never zero.
@@ -200,8 +203,60 @@ describe("the host's forecast, drawn", () => {
       Array.from(container.querySelectorAll(`[data-mark="${mark}"]`))
         .map((el) => el.getAttribute("aria-label"))
         .find((label): label is string => label !== null);
-    expect(labelled("Base:cash:0")).toContain("USD millions");
-    expect(labelled("Base:coverage:1")).toContain("multiple");
-    expect(labelled("Base:coverage:1")).not.toContain("USD");
+    expect(labelled("Base:cash:MONEY:0")).toContain("USD millions");
+    expect(labelled("Base:coverage:MULTIPLE:1")).toContain("multiple");
+    expect(labelled("Base:coverage:MULTIPLE:1")).not.toContain("USD");
+  });
+
+  test("compares cases only when their forecast period schedules align", () => {
+    const forecast = model().body.forecast!;
+    const baseQ1 = forecast.periods[0]!;
+    const baseQ2 = {
+      ...baseQ1,
+      period_id: "Q2",
+      fiscal_year: "2027",
+      values: [{ name: "cash", unit: "MONEY" as const, value: "140", unavailable_reason: null }],
+      unavailable_reason: null,
+    };
+    const downsideQ1 = { ...baseQ1, case: "Downside", values: [baseQ1.values[0]!] };
+    const downsideQ2 = {
+      ...baseQ2,
+      case: "Downside",
+      values: [
+        {
+          name: "cash",
+          unit: "MONEY" as const,
+          value: "0",
+          unavailable_reason: null,
+        },
+      ],
+    };
+    const aligned = forecastSeries({
+      ...forecast,
+      periods: [baseQ1, baseQ2, downsideQ1, downsideQ2],
+    });
+    expect(aligned).toHaveLength(1);
+    expect(aligned[0]!.categories).toEqual(["Q1", "Q2"]);
+    expect(aligned[0]!.series.map((series) => series.label)).toEqual([
+      "cash · Base",
+      "cash · Downside",
+    ]);
+    expect(aligned[0]!.series[1]!.data).toEqual([{ value: "123.45" }, { value: "0" }]);
+
+    const mismatched = forecastSeries({
+      ...forecast,
+      periods: [
+        baseQ1,
+        baseQ2,
+        { ...downsideQ1, period_id: "D-Q1" },
+        { ...downsideQ2, period_id: "D-Q2" },
+      ],
+    });
+    expect(mismatched).toHaveLength(2);
+    expect(mismatched.map((chart) => chart.categories)).toEqual([
+      ["Q1", "Q2"],
+      ["D-Q1", "D-Q2"],
+    ]);
+    expect(mismatched.every((chart) => chart.series.length === 1)).toBe(true);
   });
 });
