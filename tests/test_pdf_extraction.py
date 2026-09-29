@@ -392,6 +392,23 @@ def test_form_state_changes_do_not_escape_to_the_page() -> None:
             None,
             "",
         ),
+        # Cropped to its ink: Helvetica's caps reach 8.6 pt above the
+        # baseline, its em box 9.5 pt. Viewers draw the whole line.
+        (
+            b"0 0 200 8.7",
+            b"1 0 0 1 72 700",
+            b"BT /F1 12 Tf 0 0 Td (Total debt 100) Tj ET",
+            None,
+            "Total debt 100",
+        ),
+        # Opposite corners name the same rectangle (ISO 32000-1, 7.9.5).
+        (
+            b"612 792 0 0",
+            b"1 0 0 1 0 0",
+            b"BT /F1 12 Tf 72 700 Td (Reversed debt) Tj ET",
+            None,
+            "Reversed debt",
+        ),
     ],
 )
 def test_form_bounds_drop_whole_clipped_words(
@@ -883,7 +900,7 @@ def test_the_pdf_identity_records_effective_layout_and_convention() -> None:
     identity = PdfExtractor().identity
     effective = LAParams(**LAYOUT)
 
-    assert (identity.name, identity.version) == ("caos.pdfminer", "10")
+    assert (identity.name, identity.version) == ("caos.pdfminer", "11")
     assert identity.config["max_token_chars"] == MAX_TOKEN_CHARS
     assert identity.config["token_line_breaks"] == "space"
     assert (
@@ -923,7 +940,7 @@ def test_the_pdf_identity_records_effective_layout_and_convention() -> None:
         identity.config["hidden_painted_over_glyphs"],
     ) == (
         "inherited-parameters-local-text-matrix",
-        "drop-whole-runs-outside-active-form-bounds",
+        "drop-runs-with-a-glyph-centre-outside-form-bounds",
         "page-and-form-filled-non-type3",
     )
     assert "laparams" not in identity.config
@@ -982,7 +999,7 @@ def test_v1_pdf_extractions_still_verify_and_reanchor_as_recorded(
         dispatch=lambda data: cast(Extractor, _V1Reader()),
     )
     conn.commit()
-    assert PdfExtractor().identity.version == "10"
+    assert PdfExtractor().identity.version == "11"
 
     [member] = snapshot_source_set(conn, case_id).members
     assert json.loads(member.extractor_identity)["version"] == "1"
