@@ -14,10 +14,9 @@ live surface.
 a window 1024 px wide or wider. No screen is designed, polished or checked for
 a phone or a tablet. A narrow layout remains for one reason: a desktop reader
 at 400% zoom sees 320 CSS px, which WCAG 1.4.10 asks to reflow and the a11y
-matrix measures (320×640). Below 768 px the sidebar is a sheet. Below 1200 px
-a section's views are a native select: that includes the 1024 px floor, where
-the 13rem index and the module would crowd each other, so it is a choice of
-the module workbench (D74), not only reflow for zoom.
+matrix measures (320×640). Below 768 px the sidebar is a sheet and below 1024
+px a section's views are a native select — reflow for zoom, kept to what
+reflow needs, not a phone design.
 
 Rejected outright: marketing dashboards, pastel cards, decorative gradients,
 glow, glassmorphism, hero-metric templates, raw terminal dumps, all-caps
@@ -134,10 +133,13 @@ A shadcn app shell (D37), inset variant:
   retry"). The cells are the sentences, with their full stops.
 - **Views** — the accepted Module workbench layout (2026-09-29): below the
   full-width summary, a 13rem vertical index sits beside the selected view
-  at widths of 1200px and above. It stays below the sticky header, scrolls
+  at every desk width, 1024px and above (D74). It stays below the sticky header, scrolls
   vertically when needed, and keeps the selected name and review reason
   above the list. The active view has an edge and fill; Up/Down arrows move
-  and select. Below 1200px, use a native select. Never navigation between
+  and select. At 1024px the view is about 540px beside the open sidebar: the
+  prose keeps its measure and the figures take one column, and the sidebar's
+  icon rail (⌘/Ctrl-B) is the reader's way to widen it. Below 1024px, which
+  only a zoomed reader reaches, a native select. Never navigation between
   sections. Body padding is 1.2rem, section gaps 0.8rem, and the index-to-view
   gap 1.5rem; zoomed widths below 768px retain 1rem body padding.
 
