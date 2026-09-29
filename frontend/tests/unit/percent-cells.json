@@ -1,0 +1,65 @@
+{
+  "about": "Percent cells as the host reads them (figure_value) and as the Analysis figures draw them (percentDatum): a bare figure is a fraction, a written % is already points. tests/test_handoff_tables.py holds the host to `value`; frontend/tests/unit/figures.test.tsx holds the chart to `percent` (F464).",
+  "cells": [
+    {
+      "text": "12%",
+      "value": "12",
+      "percent": "12"
+    },
+    {
+      "text": "(5.1%)",
+      "value": "-5.1",
+      "percent": "-5.1"
+    },
+    {
+      "text": "-5.1%",
+      "value": "-5.1",
+      "percent": "-5.1"
+    },
+    {
+      "text": "( 5.1 % )",
+      "value": "-5.1",
+      "percent": "-5.1"
+    },
+    {
+      "text": "12 %",
+      "value": "12",
+      "percent": "12"
+    },
+    {
+      "text": "0.08",
+      "value": "0.08",
+      "percent": "8"
+    },
+    {
+      "text": "(0.05)",
+      "value": "-0.05",
+      "percent": "-5"
+    },
+    {
+      "text": "12",
+      "value": "12",
+      "percent": "1200"
+    },
+    {
+      "text": "1,234.5%",
+      "value": "1234.5",
+      "percent": "1234.5"
+    },
+    {
+      "text": "5.2x / 4.1x / 3.0x",
+      "value": null,
+      "percent": null
+    },
+    {
+      "text": "n/a",
+      "value": null,
+      "percent": null
+    },
+    {
+      "text": "(5.1%) reported",
+      "value": null,
+      "percent": null
+    }
+  ]
+}

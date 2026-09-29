@@ -6,6 +6,7 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "react-router";
 import { Clock3 } from "lucide-react";
+import { Digest } from "@/ds/Digest";
 import { keyFigures, type KeyFigure } from "./figures";
 import {
   APPENDIX_GROUPS,
@@ -893,6 +894,25 @@ export function Depth({
               What this run rests on <span className="cp">host-verified</span>
             </h3>
             {documents}
+          </section>
+          {/* What the header's facts no longer carry: which node accepted this
+              handoff and the digests its accepted record stands on. */}
+          <section className="group" data-audit-part="Record">
+            <h3>
+              This handoff <span className="cp">host-verified</span>
+            </h3>
+            <dl className="kv">
+              <dt>Route node</dt>
+              <dd className="mono">{handoff.route_node_id}</dd>
+              <dt>Artifact</dt>
+              <dd>
+                <Digest value={handoff.artifact_sha256} prefix="sha256:" />
+              </dd>
+              <dt>Record</dt>
+              <dd>
+                <Digest value={handoff.record_sha256} prefix="sha256:" />
+              </dd>
+            </dl>
           </section>
           {AUDIT_SECTIONS.map((name) => {
             const written = parts?.audit.find((part) => part.title === name)?.blocks ?? [];

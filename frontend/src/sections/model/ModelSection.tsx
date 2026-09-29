@@ -27,7 +27,7 @@ const UNIT_LABEL: Record<ForecastUnit, (forecast: Forecast) => string> = {
     own `unit`, and needs two distinct periods before it is drawn. */
 export function forecastSeries(
   forecast: Forecast,
-): { categories: string[]; series: ChartSeries[]; unit: ForecastUnit }[] {
+): { title: string; categories: string[]; series: ChartSeries[]; unit: ForecastUnit }[] {
   const cases = [...new Set(forecast.periods.map((period) => period.case))];
   const periodsByCase = new Map(
     cases.map((name) => [name, forecast.periods.filter((period) => period.case === name)]),
@@ -88,6 +88,9 @@ export function forecastSeries(
       });
       return [
         {
+          // Several cases name themselves in the legend; one case has no
+          // legend, so the title names it.
+          title: cases.length > 1 ? dimension.name : `${dimension.name} · ${cases[0]}`,
           categories: labels(reference),
           series,
           unit: dimension.unit,
@@ -98,6 +101,7 @@ export function forecastSeries(
       const own = periodsByCase.get(name) ?? [];
       if (new Set(own.filter(hasValue).map(periodKey)).size < 2) return [];
       return {
+        title: `${dimension.name} · ${name}`,
         categories: labels(own),
         series: [
           {
@@ -177,7 +181,7 @@ export function ModelSection({ document }: { document: ModelDocument; tab: strin
         >
           <div className="pb">
             <LineChart
-              title={chart.series[0]!.label}
+              title={chart.title}
               summary={`The host's projection over ${chart.categories.length} periods, ${chart.categories[0]} to ${chart.categories.at(-1)}.`}
               unit={UNIT_LABEL[chart.unit](forecast)}
               categories={chart.categories}

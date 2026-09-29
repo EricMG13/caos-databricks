@@ -158,6 +158,15 @@ describe("Analysis", () => {
         "Source facts",
       );
       expect(audit.querySelector("[data-source-facts]")).not.toBeNull();
+      // The node and the digests left the header's facts; the Audit tab names them.
+      const record = audit.querySelector('[data-audit-part="Record"]')!;
+      expect(record).toHaveTextContent(handoff.route_node_id);
+      expect(
+        record.querySelector(`[data-digest="sha256:${handoff.artifact_sha256}"]`),
+      ).not.toBeNull();
+      expect(
+        record.querySelector(`[data-digest="sha256:${handoff.record_sha256}"]`),
+      ).not.toBeNull();
       unmount();
     }
   });

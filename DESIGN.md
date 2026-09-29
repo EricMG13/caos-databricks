@@ -14,9 +14,10 @@ live surface.
 a window 1024 px wide or wider. No screen is designed, polished or checked for
 a phone or a tablet. A narrow layout remains for one reason: a desktop reader
 at 400% zoom sees 320 CSS px, which WCAG 1.4.10 asks to reflow and the a11y
-matrix measures (320×640). Below 768 px the sidebar is a sheet and below 1200
-px a section's views are a native select — reflow for zoom, kept to what
-reflow needs, not a phone design.
+matrix measures (320×640). Below 768 px the sidebar is a sheet. Below 1200 px
+a section's views are a native select: that includes the 1024 px floor, where
+the 13rem index and the module would crowd each other, so it is a choice of
+the module workbench (D74), not only reflow for zoom.
 
 Rejected outright: marketing dashboards, pastel cards, decorative gradients,
 glow, glassmorphism, hero-metric templates, raw terminal dumps, all-caps
@@ -171,8 +172,9 @@ thing in the same place in every module:
    (committee status, confidence, limitations, accepted) and a
    count of what the run rests on that opens it in the evidence drawer.
    Facts use compact, unfilled status badges: green for ready/high/none, amber
-   for draft/restricted/medium/stated limitations, red for blocked/low; unknown
-   values stay neutral. Keep served words beside colour, the issuer and
+   for draft/restricted/requires more work/medium/stated limitations, red for
+   blocked/insufficient information/low; a word the bundle does not define
+   stays neutral. Keep served words beside colour, the issuer and
    acceptance time neutral, and internal route IDs out of this strip. The Run
    evidence control retains its own presentation and warning signals.
 2. **Lead** — the model's conclusion-first view and its drivers, followed by the
@@ -200,7 +202,8 @@ thing in the same place in every module:
    first. A module with no appendix register opens on Audit. Column heads
    the model wrote as identifiers read in words, the identifier on hover and
    in As written. The Audit tab is always host-verified citations, what the run rests
-   on, then the model's audit summary, evidence trace, source registry, gaps
+   on, the handoff's own record (route node, artifact and record digests),
+   then the model's audit summary, evidence trace, source registry, gaps
    and conflicts, and QA validation.
 
 At zoomed widths the lead stacks: view, key figures, caveats.

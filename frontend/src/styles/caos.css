@@ -401,6 +401,10 @@
     --fact-color: var(--foreground);
     color: var(--fact-color);
   }
+  /* The bundle's whole vocabularies (CANON_SHARED.md), exactly as its
+     validator admits them (validate_handoff.py refuses any other spelling):
+     "Insufficient Information" is worse than "Low" and than "Requires More
+     Work", so it is red, not neutral. */
   .modfacts .fact-signal[data-status="Committee Ready"],
   .modfacts .fact-signal[data-band="high"],
   .modfacts .fact-signal[data-count="0"] {
@@ -408,12 +412,15 @@
   }
   .modfacts .fact-signal[data-status="Draft Only"],
   .modfacts .fact-signal[data-status="Restricted"],
+  .modfacts .fact-signal[data-status="Requires More Work"],
   .modfacts .fact-signal[data-band="medium"],
   .modfacts .fact-signal[data-count]:not([data-count="0"]) {
     --fact-color: var(--warning);
   }
   .modfacts .fact-signal[data-status="Blocked"],
-  .modfacts .fact-signal[data-band="low"] {
+  .modfacts .fact-signal[data-status="Insufficient Information"],
+  .modfacts .fact-signal[data-band="low"],
+  .modfacts .fact-signal[data-band="insufficient information"] {
     --fact-color: var(--destructive);
   }
   .modfacts .fact-signal b,
@@ -2967,6 +2974,12 @@
 .module-workbench .analysis .fig {
   padding: 0.7rem;
 }
+/* The index spans two rows in the first column and the view takes the second,
+   in document order: nothing may stand between `[data-section-tabs]` and the
+   tabpanel, or the view drops below a blank column (F460). Workspace.tsx renders
+   the page banners before the tabs for that reason; a state drawn between them
+   (RegionState's observed-empty notice) is safe only while no such document
+   has views. */
 @media (min-width: 1200px) {
   .module-workbench main:has(> [data-section-tabs]) {
     display: grid;

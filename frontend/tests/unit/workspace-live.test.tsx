@@ -322,6 +322,11 @@ describe("a workspace that has stopped being live", () => {
       expect(paused).not.toBeNull();
       expect(paused).toHaveAttribute("role", "status");
       expect(paused).toHaveTextContent("Live updates paused");
+      // The banner sits above the index, which is directly before its panel:
+      // the wide layout sets those two side by side.
+      const tabs = view.container.querySelector("[data-section-tabs]")!;
+      expect(paused.compareDocumentPosition(tabs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(tabs.nextElementSibling).toHaveAttribute("role", "tabpanel");
       expect(FakeSource.all).toHaveLength(1);
       await act(async () => {
         await vi.advanceTimersByTimeAsync(1_000);

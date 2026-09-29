@@ -182,6 +182,8 @@ describe("the host's forecast, drawn", () => {
       "Base:coverage:MULTIPLE",
     ]);
     expect(charts[0]!.series[0]!.origin).toBe("host");
+    // One case draws one line and no legend, so the title names the case.
+    expect(charts.map((chart) => chart.title)).toEqual(["cash · Base", "coverage · Base"]);
     expect(charts[0]!.series[0]!.data).toEqual([{ value: "123.45" }, { value: "130.00" }]);
     // A value the host could not compute is a gap with its reason, never zero.
     expect(charts[1]!.series[0]!.data[0]).toEqual({
@@ -242,6 +244,8 @@ describe("the host's forecast, drawn", () => {
       "cash · Downside",
     ]);
     expect(aligned[0]!.series[1]!.data).toEqual([{ value: "123.45" }, { value: "0" }]);
+    // One chart carries both cases, so its title is the value, not the first case.
+    expect(aligned[0]!.title).toBe("cash");
 
     const mismatched = forecastSeries({
       ...forecast,
@@ -258,5 +262,6 @@ describe("the host's forecast, drawn", () => {
       ["D-Q1", "D-Q2"],
     ]);
     expect(mismatched.every((chart) => chart.series.length === 1)).toBe(true);
+    expect(mismatched.map((chart) => chart.title)).toEqual(["cash · Base", "cash · Downside"]);
   });
 });

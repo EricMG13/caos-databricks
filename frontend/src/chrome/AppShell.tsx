@@ -20,6 +20,8 @@ export function AppShell({
   children: ReactNode;
 }) {
   return (
+    // `module-workbench` is every section's density (body padding and gaps, the
+    // 13rem sidebar) and the module index's wide layout: its rules are in caos.css.
     <SidebarProvider
       data-workspace
       data-section={section}
@@ -42,11 +44,7 @@ export function AppShell({
           </aside>
         ) : null}
         {header}
-        <main
-          id="body"
-          aria-label={label}
-          className="flex min-w-0 flex-1 flex-col gap-4 p-4 md:p-6"
-        >
+        <main id="body" aria-label={label} className="flex min-w-0 flex-1 flex-col">
           {children}
         </main>
       </SidebarInset>

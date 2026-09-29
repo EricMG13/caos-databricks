@@ -193,8 +193,28 @@ const pair = (a: string, b: string) => `${a}\u0000${b}`;
 const priority = (row: Row) => Number(text(row, "display_priority")) || Number.MAX_SAFE_INTEGER;
 const byPriority = (rows: readonly Row[], key: string) =>
   unique([...rows].sort((a, b) => priority(a) - priority(b)).map((row) => text(row, key)));
+/** Served cells as one line, or null when none was stated. */
+const joined = (...parts: (string | null)[]) => parts.filter(Boolean).join(" · ") || null;
 const locate = (row: Row | undefined) =>
   row ? [text(row, "source_id"), text(row, "source_locator")].filter(Boolean).join(", ") : null;
+
+const PEER_PERCENT = new Set([
+  "Rev Growth",
+  "Gross Margin",
+  "EBITDA Margin",
+  "EBIT Margin",
+  "FCF Conversion",
+  "Capex/Rev",
+  "WC/Rev",
+  "FFO/Debt",
+  "Capex/EBITDA",
+]);
+const PEER_MULTIPLE = new Set(["Int Coverage", "Adj Int Coverage"]);
+/** One cell holds total, net and senior secured leverage, ` / ` apart (the
+    vendor's T4.5): the host types it only when it is a single figure, and then
+    it does not say which. It is required of the table but never charted; the
+    Appendix lists it as written. */
+const PEER_UNCHARTED = new Set(["Total/Net/Sr Sec Leverage"]);
 
 /** CP-1C's borrower/peer comparison. Each metric is its own horizontal
     chart so revenue, margins and leverage never share a numeric axis. */
@@ -214,81 +234,80 @@ function peerComparisonFigures(tables: readonly Table[]): Figure[] {
       ],
     },
   ];
-  const figures = specs.flatMap(({ headers }) => {
+  const figures = specs.flatMap(({ headers }, specIndex): Figure[] => {
     const table = tableWithColumns(tables, "Entity", "Period", "Currency", ...headers);
     if (!table) return [];
     const rows = recordsOf(table);
     const byCurrency = groupBy(rows, (row) => text(row, "Currency"));
-    return headers.flatMap((metric) => {
-      const currencies = [...byCurrency.keys()].filter(Boolean);
-      return currencies.flatMap((currency, currencyIndex) => {
-        const own = byCurrency.get(currency)!.filter((row) => field(row, metric));
-        if (!own.length) return [];
-        const categories = distinctLabels(own, (row) => {
-          const entity = text(row, "Entity") || "Unnamed entity";
+    const currencies = [...byCurrency.keys()].filter(Boolean);
+    // Bounded like the other currency partitions: a model-written table of
+    // distinct currencies is one figure each, per metric (F327).
+    if (currencies.length > MAX_FIGURES) {
+      return [
+        {
+          ...oversized(
+            `peer-currencies-${specIndex}`,
+            table.table_id,
+            "Peer comparison",
+            rows.length,
+          ),
+          summary: `${currencies.length} currencies: figures are not drawn on mixed axes. The Appendix tab lists every row.`,
+        },
+      ];
+    }
+    const missingCurrency = byCurrency.get("")?.length ?? 0;
+    return headers
+      .filter((metric) => !PEER_UNCHARTED.has(metric))
+      .flatMap((metric) =>
+        currencies.flatMap((currency, currencyIndex) => {
+          const own = byCurrency.get(currency)!.filter((row) => field(row, metric));
+          if (!own.length) return [];
+          const categories = distinctLabels(own, (row) => {
+            const entity = text(row, "Entity") || "Unnamed entity";
+            return [
+              entity,
+              text(row, "Period") || "period not stated",
+              text(row, "Comp Status") || "comparison status not stated",
+            ].join(" · ");
+          });
+          const unit = PEER_PERCENT.has(metric) ? "%" : PEER_MULTIPLE.has(metric) ? "x" : currency;
+          const values = own.map((row) =>
+            PEER_PERCENT.has(metric)
+              ? percentDatum(field(row, metric), "not stated")
+              : datum(field(row, metric)),
+          );
+          if (values.every((value) => value.value === null)) return [];
+          const sourceColumn =
+            table.columns.find((column) => heading(column) === heading(metric)) ?? metric;
           return [
-            entity,
-            text(row, "Period") || "period not stated",
-            text(row, "Comp Status") || "comparison status not stated",
-          ].join(" · ");
-        });
-        const percentages = new Set([
-          "Rev Growth",
-          "Gross Margin",
-          "EBITDA Margin",
-          "EBIT Margin",
-          "FCF Conversion",
-          "Capex/Rev",
-          "WC/Rev",
-          "FFO/Debt",
-          "Capex/EBITDA",
-        ]);
-        const multiples = new Set([
-          "Total/Net/Sr Sec Leverage",
-          "Int Coverage",
-          "Adj Int Coverage",
-        ]);
-        const unit = percentages.has(metric) ? "%" : multiples.has(metric) ? "x" : currency;
-        const values = own.map((row) =>
-          percentages.has(metric)
-            ? percentDatum(field(row, metric), "not stated")
-            : datum(field(row, metric)),
-        );
-        if (values.every((value) => value.value === null)) return [];
-        const sourceColumn =
-          table.columns.find((column) => heading(column) === heading(metric)) ?? metric;
-        const missingCurrency = rows.filter((row) => !text(row, "Currency")).length;
-        return [
-          {
-            key: `peer-${heading(metric)}-${currencyIndex}`,
-            table: table.table_id,
-            kind: "bar" as const,
-            title: `${metric} by peer, ${currency}`,
-            summary: `Values as served by period and comparison status${missingCurrency ? `; ${missingCurrency} rows without currency remain in the table` : ""}${percentages.has(metric) || multiples.has(metric) ? "" : "; currency scale is not specified"}.`,
-            unit,
-            categories,
-            categoryLabel: "Entity · period · comparison status",
-            orientation: "horizontal" as const,
-            series: [
-              {
-                key: sourceColumn,
-                label: metric,
-                origin: "model" as const,
-                data: values,
+            {
+              key: `peer-${heading(metric)}-${currencyIndex}`,
+              table: table.table_id,
+              kind: "bar" as const,
+              title: `${metric} by peer, ${currency}`,
+              summary: `Values as served by period and comparison status${missingCurrency ? `; ${missingCurrency} rows without currency remain in the table` : ""}${PEER_PERCENT.has(metric) || PEER_MULTIPLE.has(metric) ? "" : "; currency scale is not specified"}.`,
+              unit,
+              categories,
+              categoryLabel: "Entity · period · comparison status",
+              orientation: "horizontal" as const,
+              series: [
+                {
+                  key: sourceColumn,
+                  label: metric,
+                  origin: "model" as const,
+                  data: values,
+                },
+              ],
+              sourceOf: (selection: ChartSelection) => {
+                const row = own[selection.index];
+                return row
+                  ? joined(text(row, "Comp Status"), text(row, "Calc Status"), locate(row))
+                  : null;
               },
-            ],
-            sourceOf: (selection: ChartSelection) => {
-              const row = own[selection.index];
-              return row
-                ? [text(row, "Comp Status"), text(row, "Calc Status"), locate(row)]
-                    .filter(Boolean)
-                    .join(" · ") || null
-                : null;
             },
-          },
-        ];
-      });
-    });
+          ];
+        }),
+      );
   });
   if (figures.length > MAX_FIGURES) {
     const omitted = figures.length - MAX_FIGURES + 1;
@@ -390,9 +409,7 @@ function qualityBridgeFigures(tables: readonly Table[]): Figure[] {
       ],
       sourceOf: (selection) => {
         const row = rows[selection.index];
-        return row
-          ? [text(row, "Basis"), text(row, "Evidence ID")].filter(Boolean).join(" · ") || null
-          : null;
+        return row ? joined(text(row, "Basis"), text(row, "Evidence ID")) : null;
       },
     });
   }
@@ -416,13 +433,11 @@ function qualityBridgeFigures(tables: readonly Table[]): Figure[] {
       sourceOf: (selection: ChartSelection) => {
         const row = rows[selection.index];
         return row
-          ? [
+          ? joined(
               text(row, "Supported / Challenged / Rejected"),
               text(row, "Basis"),
               text(row, "Evidence ID"),
-            ]
-              .filter(Boolean)
-              .join(" · ") || null
+            )
           : null;
       },
     });
@@ -530,16 +545,14 @@ function liquidityBridgeFigures(tables: readonly Table[]): Figure[] {
         sourceOf: (selection) => {
           const row = rows[Number(selection.series)];
           return row
-            ? [
+            ? joined(
                 `Served amount: ${text(row, "Amount") || "not stated"}`,
                 uses.has(item(row)) ? "Outflow direction applied from the vendor formula" : "",
                 text(row, "Status"),
                 text(row, "Source / Calculation"),
                 text(row, "Credit Comment"),
                 text(row, "Source Trace"),
-              ]
-                .filter(Boolean)
-                .join(" · ") || null
+              )
             : null;
         },
       },
@@ -567,14 +580,12 @@ function liquidityBridgeFigures(tables: readonly Table[]): Figure[] {
       sourceOf: (selection) => {
         const row = rows[selection.index];
         return row
-          ? [
+          ? joined(
               text(row, "Status"),
               text(row, "Source / Calculation"),
               text(row, "Credit Comment"),
               text(row, "Source Trace"),
-            ]
-              .filter(Boolean)
-              .join(" · ") || null
+            )
           : null;
       },
     },
@@ -637,15 +648,13 @@ function rateExposureFigures(tables: readonly Table[]): Figure[] {
         sourceOf: (selection: ChartSelection) => {
           const row = own[selection.index];
           return row
-            ? [
+            ? joined(
                 text(row, "Base Rate"),
                 text(row, "Margin / Coupon"),
                 text(row, "Maturity"),
                 text(row, "Source Trace"),
                 text(row, "Credit Implication"),
-              ]
-                .filter(Boolean)
-                .join(" · ") || null
+              )
             : null;
         },
       },
@@ -711,15 +720,13 @@ function ratingTriggerFigures(tables: readonly Table[]): Figure[] {
         sourceOf: (selection: ChartSelection) => {
           const row = own[selection.index];
           return row
-            ? [
+            ? joined(
                 text(row, "Threshold"),
                 text(row, "Case / Period Value"),
                 text(row, "Status"),
                 text(row, "Evidence ID"),
                 locate(row),
-              ]
-                .filter(Boolean)
-                .join(" · ") || null
+              )
             : null;
         },
       };
@@ -741,6 +748,14 @@ function refinancingMaturityFigures(tables: readonly Table[]): Figure[] {
   const rows = recordsOf(table);
   const byCurrency = groupBy(rows, (row) => text(row, "Currency"));
   const currencies = [...byCurrency.keys()].filter(Boolean);
+  if (currencies.length > MAX_FIGURES) {
+    return [
+      {
+        ...oversized("refinancing-wall", table.table_id, "Maturity wall", rows.length),
+        summary: `${currencies.length} currencies: figures are not drawn on mixed axes. The Appendix tab lists every row.`,
+      },
+    ];
+  }
   return currencies.flatMap((currency, currencyIndex) => {
     const own = byCurrency.get(currency)!;
     if (!own.some((row) => field(row, "Amount")?.value != null)) return [];
@@ -783,15 +798,13 @@ function refinancingMaturityFigures(tables: readonly Table[]): Figure[] {
         sourceOf: (selection: ChartSelection) => {
           const row = own[selection.index];
           return row
-            ? [
+            ? joined(
                 text(row, "Years to Maturity"),
                 text(row, "Coupon / Margin"),
                 text(row, "Fixed / Floating"),
                 text(row, "Refinancing Pressure"),
                 text(row, "Source Trace"),
-              ]
-                .filter(Boolean)
-                .join(" · ") || null
+              )
             : null;
         },
       },
@@ -829,11 +842,15 @@ function covenantHeadroomFigures(tables: readonly Table[]): Figure[] {
     ];
   }
   return [...groups]
-    .map(([testType, own], index) => ({
+    .map(([, own], index) => ({
       key: `covenant-headroom-${index}`,
       table: table.table_id,
       kind: "diverging" as const,
-      title: `Covenant headroom · ${testType}`,
+      // A row with no test type is its own figure, so its test names it.
+      title: `Covenant headroom · ${
+        text(own[0]!, "Test Type") ||
+        `${text(own[0]!, "Test") || "test not named"} (test type not stated)`
+      }`,
       summary:
         "Signed headroom and status as served; maximum and minimum test direction is retained.",
       categories: distinctLabels(own, (row) =>
@@ -850,16 +867,14 @@ function covenantHeadroomFigures(tables: readonly Table[]): Figure[] {
       sourceOf: (selection: ChartSelection) => {
         const row = own[selection.index];
         return row
-          ? [
+          ? joined(
               text(row, "Threshold"),
               text(row, "Current Basis"),
               text(row, "Formula"),
               text(row, "Status"),
               text(row, "Limitation"),
               text(row, "Evidence ID"),
-            ]
-              .filter(Boolean)
-              .join(" · ") || null
+            )
           : null;
       },
     }))
@@ -1157,7 +1172,12 @@ export function maturityLadder(tables: readonly Table[]): Figure | null {
     value is `8`, and scaling it again drew 800%. */
 const percentDatum = (cell: Cell | undefined, reason: string): Datum => {
   if (cell?.value == null) return { value: null, reason };
-  return { value: cell.text.trim().endsWith("%") ? cell.value : hundredfold(cell.value) };
+  // `(5.1%)` is the accountant's minus: the host read it as -5.1 already.
+  const written = cell.text
+    .trim()
+    .replace(/^\((.*)\)$/, "$1")
+    .trim();
+  return { value: written.endsWith("%") ? cell.value : hundredfold(cell.value) };
 };
 
 /** A comparison basis in words for a title, and short for a bar that needs

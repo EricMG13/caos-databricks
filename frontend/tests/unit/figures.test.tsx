@@ -758,3 +758,284 @@ test("vendor debt, trigger, covenant, and post-mortem tables map to bounded sing
   );
   expect(container.querySelector('[data-chart="bar"]')).not.toBeNull();
 });
+
+test("a bracketed negative percent is read once, not scaled a second time", () => {
+  const headers = [
+    "Entity",
+    "Revenue",
+    "Rev Growth",
+    "Gross Margin",
+    "EBITDA",
+    "EBITDA Margin",
+    "EBIT Margin",
+    "Period",
+    "Currency",
+  ];
+  const cell = (text: string, value: string | null) => ({ text, value });
+  const row = (growth: ReturnType<typeof cell>) =>
+    headers.map((name) =>
+      name === "Rev Growth"
+        ? growth
+        : cell(name === "Currency" ? "USD" : name === "Entity" ? "Peer" : "1", null),
+    );
+  const peers = {
+    table_id: "vendor.T4.3",
+    columns: headers,
+    rows: [row(cell("(5.1%)", "-5.1")), row(cell("-5.1%", "-5.1")), row(cell("0.08", "0.08"))],
+  };
+  const growth = figuresOf(handoffFor("CP-1C", [peers])).find(
+    (figure) => figure.key === "peer-revgrowth-0",
+  )!;
+  expect(growth.series[0]!.data.map((datum) => datum.value)).toEqual(["-5.1", "-5.1", "8"]);
+});
+
+test("peer figures are bounded when a table names too many currencies", () => {
+  const headers = [
+    "Entity",
+    "Revenue",
+    "Rev Growth",
+    "Gross Margin",
+    "EBITDA",
+    "EBITDA Margin",
+    "EBIT Margin",
+    "Period",
+    // A different case: the header is matched by its letters, not its spelling.
+    "CURRENCY",
+  ];
+  const rows = Array.from({ length: 60 }, (_, index) =>
+    headers.map((name) => ({
+      text: name === "CURRENCY" ? `C${index}` : name === "Entity" ? `E${index}` : "1",
+      value: null,
+    })),
+  );
+  const figures = figuresOf(
+    handoffFor("CP-1C", [{ table_id: "vendor.T4.3", columns: headers, rows }]),
+  );
+  const notice = figures.find((figure) => figure.oversized)!;
+  expect(figures.filter((figure) => !figure.oversized)).toHaveLength(0);
+  expect(notice.summary).toContain("60 currencies");
+});
+
+const many = (count: number) => Array.from({ length: count }, (_, index) => index);
+
+test("every new per-partition figure set is bounded, and says so", () => {
+  const exposure = table(
+    "vendor.T2F.2",
+    ["Debt Instrument", "Amount", "Fixed / Floating", "Currency", "Hedge Status"],
+    many(30).map((index) => [`Loan ${index}`, "1", "Fixed", `C${index}`, "None"]),
+  );
+  const triggers = table(
+    "vendor.T2R.4",
+    [
+      "Agency",
+      "Trigger Direction",
+      "Metric",
+      "Threshold",
+      "Case / Period Value",
+      "Headroom",
+      "Status",
+    ],
+    many(30).map((index) => ["Moody's", "Downgrade", `Metric ${index}`, "6", "Base", "1", "Clear"]),
+  );
+  const maturities = table(
+    "vendor.T3D.2",
+    ["Instrument", "Amount", "Currency", "Maturity Date", "Seniority / Lien"],
+    many(30).map((index) => [`Note ${index}`, "1", `C${index}`, "2030-01-01", "Senior"]),
+  );
+  const covenants = table(
+    "vendor.T4C.4",
+    ["Test", "Test Type", "Threshold", "Current Basis", "Headroom", "Status"],
+    many(30).map((index) => [`Test ${index}`, `Type ${index}`, "5", "4", "1", "Pass"]),
+  );
+  const expected: [string, ReturnType<typeof table>, string][] = [
+    ["CP-2E", exposure, "30 currencies"],
+    ["CP-2H", triggers, "30 agency/metric combinations"],
+    ["CP-3C", maturities, "30 currencies"],
+    ["CP-4A", covenants, "30 covenant test types"],
+  ];
+  for (const [module, source, said] of expected) {
+    const figures = figuresOf(handoffFor(module, [source]));
+    expect(figures.filter((figure) => !figure.oversized)).toHaveLength(0);
+    expect(figures.find((figure) => figure.oversized)!.summary).toContain(said);
+  }
+});
+
+test("past the figure budget the peer comparison says how many it left out", () => {
+  const columns = [
+    "Entity",
+    "Revenue",
+    "Rev Growth",
+    "Gross Margin",
+    "EBITDA",
+    "EBITDA Margin",
+    "EBIT Margin",
+    "Period",
+    "Currency",
+  ];
+  // Six metrics across five currencies is thirty figures against a budget of 24.
+  const rows = many(5).map((index) =>
+    columns.map((name) =>
+      name === "Currency"
+        ? `C${index}`
+        : name === "Period"
+          ? "FY26"
+          : name === "Entity"
+            ? "P"
+            : "1",
+    ),
+  );
+  const figures = figuresOf(handoffFor("CP-1C", [table("vendor.T4.3", columns, rows)]));
+  expect(figures).toHaveLength(24);
+  expect(figures.at(-1)!.oversized).toBe(true);
+  expect(figures.at(-1)!.summary).toContain("7 more peer figures");
+});
+
+test("headers match by their letters, and each figure names the cells behind a mark", () => {
+  const pick = (index: number, series = "s", category = "c") => ({
+    series,
+    category,
+    index,
+    value: "1",
+    origin: "model" as const,
+  });
+  const peers = table(
+    "vendor.T4.3",
+    [
+      "entity",
+      "revenue",
+      "rev_growth",
+      "gross margin",
+      "ebitda",
+      "ebitda-margin",
+      "ebit margin",
+      "period",
+      "currency",
+      "calc status",
+      "comp status",
+      "source_id",
+      "source_locator",
+    ],
+    [
+      [
+        "Borrower",
+        "100",
+        "12%",
+        "20%",
+        "20",
+        "20%",
+        "10%",
+        "FY26",
+        "USD",
+        "Reported",
+        "Comparable",
+        "S1",
+        "p.4",
+      ],
+    ],
+  );
+  const peer = figuresOf(handoffFor("CP-1C", [peers])).find(
+    (figure) => figure.key === "peer-revenue-0",
+  )!;
+  expect(peer.sourceOf(pick(0))).toBe("Comparable · Reported · S1, p.4");
+  expect(peer.sourceOf(pick(9))).toBeNull();
+
+  const quality = table(
+    "vendor.T1D.4",
+    [
+      "Step",
+      "Amount",
+      "Basis",
+      "Supported / Challenged / Rejected",
+      "Cumulative EBITDA",
+      "Evidence ID",
+    ],
+    [
+      ["A", "1", "One-time", "Supported", "1", "E-1"],
+      ["B", "2", "Recurring", "Challenged", "3", "E-2"],
+    ],
+  );
+  const [amounts, cumulative] = figuresOf(handoffFor("CP-1D", [quality]));
+  expect(amounts!.sourceOf(pick(1))).toBe("Recurring · E-2");
+  expect(cumulative!.sourceOf(pick(1))).toBe("Challenged · Recurring · E-2");
+
+  const covenants = table(
+    "vendor.T4C.4",
+    [
+      "Test",
+      "Test Type",
+      "Threshold",
+      "Current Basis",
+      "Formula",
+      "Headroom",
+      "Status",
+      "Limitation",
+      "Evidence ID",
+    ],
+    [["Net leverage", "Maximum", "5.0x", "4.2x", "T - C", "0.8", "Pass", "", "E-9"]],
+  );
+  expect(figuresOf(handoffFor("CP-4A", [covenants]))[0]!.sourceOf(pick(0))).toBe(
+    "5.0x · 4.2x · T - C · Pass · E-9",
+  );
+  const blank = table(
+    "vendor.T4C.4",
+    ["Test", "Test Type", "Threshold", "Current Basis", "Headroom", "Status"],
+    [["Net leverage", "", "5.0x", "4.2x", "0.8", "Pass"]],
+  );
+  expect(figuresOf(handoffFor("CP-4A", [blank]))[0]!.title).toBe(
+    "Covenant headroom · Net leverage (test type not stated)",
+  );
+});
+
+test("the peer leverage cell is required of the table but never drawn as one metric", () => {
+  const columns = [
+    "Entity",
+    "Total/Net/Sr Sec Leverage",
+    "Int Coverage",
+    "Adj Int Coverage",
+    "FFO/Debt",
+    "Liquidity",
+    "Period",
+    "Currency",
+    "Calc Status",
+    "Comp Status",
+  ];
+  const peers = table("vendor.T4.5", columns, [
+    ["Borrower", "5.2x / 4.1x / 3.0x", "3.0", "2.8", "12%", "100", "FY26", "USD", "R", "C"],
+  ]);
+  const keys = figuresOf(handoffFor("CP-1C", [peers])).map((figure) => figure.key);
+  expect(keys).toContain("peer-intcoverage-0");
+  expect(keys.some((key) => key.includes("leverage"))).toBe(false);
+});
+
+test("percent cells draw as the host's reader and the shared vector say", () => {
+  const { cells } = JSON.parse(
+    readFileSync(resolve(process.cwd(), "tests/unit/percent-cells.json"), "utf8"),
+  ) as { cells: { text: string; value: string | null; percent: string | null }[] };
+  const columns = [
+    "Entity",
+    "Revenue",
+    "Rev Growth",
+    "Gross Margin",
+    "EBITDA",
+    "EBITDA Margin",
+    "EBIT Margin",
+    "Period",
+    "Currency",
+  ];
+  const rows = cells.map(({ text, value }, index) =>
+    columns.map((name) =>
+      name === "Rev Growth"
+        ? { text, value }
+        : {
+            text: name === "Entity" ? `P${index}` : name === "Currency" ? "USD" : "1",
+            value: null,
+          },
+    ),
+  );
+  const growth = figuresOf(handoffFor("CP-1C", [{ table_id: "vendor.T4.3", columns, rows }])).find(
+    (figure) => figure.key === "peer-revgrowth-0",
+  )!;
+  expect(growth.series[0]!.data.map((datum) => datum.value)).toEqual(
+    cells.map((cell) => cell.percent),
+  );
+});

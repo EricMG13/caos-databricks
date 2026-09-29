@@ -23,7 +23,7 @@ export function SectionTabs({
   if (tabs.length === 0) return null;
   // Past eight views, keep the selected name and review reason above the index.
   const dense = tabs.length > 8;
-  const tabSize = dense ? "h-7 px-1.5 text-[13px] text-muted-foreground" : "h-8 px-2.5";
+  const tabText = dense ? "text-[13px] text-muted-foreground" : "";
   const selected = tabs.find((tab) => tab.id === active);
   const meaning =
     selected?.note?.trim() ||
@@ -35,11 +35,9 @@ export function SectionTabs({
           ? "Blocked or failed"
           : null);
   return (
-    <div
-      data-section-tabs
-      data-dense={dense || undefined}
-      className={dense ? "sticky top-14 z-10 -mx-1 bg-background px-1 py-1" : undefined}
-    >
+    // Placement, density and wrapping are `.module-workbench`'s, in caos.css:
+    // those rules sit outside the components layer and win over any utility here.
+    <div data-section-tabs data-dense={dense || undefined}>
       <label className="block min-[1200px]:hidden">
         <span className="sr-only">{label} view</span>
         <NativeSelect
@@ -72,7 +70,7 @@ export function SectionTabs({
           variant="line"
           aria-label={`${label} views`}
           activateOnFocus
-          className={`w-full justify-start gap-1 group-data-horizontal/tabs:h-auto ${dense ? "flex-nowrap overflow-x-auto" : "flex-wrap"}`}
+          className="w-full justify-start"
         >
           {tabs.map((tab) => (
             <TabsTrigger
@@ -81,8 +79,7 @@ export function SectionTabs({
               id={`tab-${tab.id}`}
               aria-controls={`tabpanel-${tab.id}`}
               title={dense && tab.cp ? `${tab.cp} · ${tab.label}` : undefined}
-              // Keep the accepted density in existing utilities, with no preview CSS.
-              className={`flex-none after:hidden data-active:border-border! data-active:bg-muted! data-active:shadow-none ${tabSize}`}
+              className={`flex-none after:hidden data-active:border-border! data-active:bg-muted! data-active:shadow-none ${tabText}`}
             >
               {tab.severity && <SeverityMark severity={tab.severity} decorative />}
               <span className={tab.cp ? "font-normal" : "font-mono text-[13px]"}>
