@@ -103,6 +103,7 @@ def _resolved(
     values = {
         "CAOS_MODEL_ENDPOINT": ENDPOINT,
         "CAOS_MODEL_PRICE": PRICE,
+        "CAOS_MODEL_CHOICES": f"{PRICE};",  # the price, then no other model
         "CAOS_RUN_CEILING": "100.00",  # the bundle default (D29)
         "CAOS_GROUP_ADMIN": groups[0],
         "CAOS_GROUP_ANALYST": groups[1],
@@ -360,6 +361,12 @@ def test_e10_passes_only_on_a_call_the_gateway_answered() -> None:
     assert enterprise_deploy.call_verdict(parked) == (
         1,
         "the run parked PROVIDER_UNAVAILABLE: no model call answered",
+    )
+    refused = run(work={"state": "STOPPED", "stop_code": "HANDOFF_MALFORMED"})
+    assert enterprise_deploy.call_verdict(refused) == (
+        1,
+        "the run parked HANDOFF_MALFORMED: "
+        "the model answered and the host refused the answer",
     )
     # A BLOCKED run no verdict ended (an empty frontier) answered nothing.
     assert enterprise_deploy.call_verdict(run(status="BLOCKED", blocked_by=None)) == (
@@ -672,6 +679,27 @@ def test_the_flag_chooses_the_kind_and_the_target_never_does(tmp_path: Path) -> 
         check=False,
     )
     assert refused.returncode == 2 and "TARGET names dev or prod" in refused.stderr
+    assert not (tmp_path / "ev").exists()
+
+
+@pytest.mark.parametrize("given", [(), ("databricks-claude-opus-5",)])
+def test_the_endpoint_and_its_contract_price_are_never_defaulted(
+    tmp_path: Path, given: tuple[str, ...]
+) -> None:
+    """F469: the bundle's defaults name a public endpoint at a public list
+    price; a deployment names its own, so arguments 5 and 6 are required and
+    their absence is refused before anything runs."""
+    env = {**os.environ, "EVIDENCE": str(tmp_path / "ev")}
+    script = str(REPO / "scripts/enterprise_deploy.sh")
+    refused = subprocess.run(
+        [script, "", "main", "caos", "x", *given],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert refused.returncode == 2
+    assert "arguments 5 and 6 name the workspace's endpoint" in refused.stderr
     assert not (tmp_path / "ev").exists()
 
 
