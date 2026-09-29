@@ -14,9 +14,10 @@ live surface.
 a window 1024 px wide or wider. No screen is designed, polished or checked for
 a phone or a tablet. A narrow layout remains for one reason: a desktop reader
 at 400% zoom sees 320 CSS px, which WCAG 1.4.10 asks to reflow and the a11y
-matrix measures (320×640). Below 768 px the sidebar is a sheet and below 640
-px a section's views are a native select — reflow for zoom, kept to what
-reflow needs, not a phone design.
+matrix measures (320×640). Below 768 px the sidebar is a sheet. Below 1200 px
+a section's views are a native select: that includes the 1024 px floor, where
+the 13rem index and the module would crowd each other, so it is a choice of
+the module workbench (D74), not only reflow for zoom.
 
 Rejected outright: marketing dashboards, pastel cards, decorative gradients,
 glow, glassmorphism, hero-metric templates, raw terminal dumps, all-caps
@@ -107,7 +108,7 @@ tab away ("As written"), and nothing it says reaches the page as markup.
 
 A shadcn app shell (D37), inset variant:
 
-- **Sidebar** — collapsible to icons (⌘/Ctrl-B), a sheet at zoomed widths. The case
+- **Sidebar** — 13rem wide, collapsible to icons (⌘/Ctrl-B), a sheet at zoomed widths. The case
   switcher heads it (the directory's read, asked for when it opens); then the
   nine sections with their icons, each named with its count and state (a
   section this deployment does not serve says "Unavailable" in the link); the
@@ -131,12 +132,14 @@ A shadcn app shell (D37), inset variant:
   alone is the count and its noun ("4 cases"), with no headline figure beside
   it; a warning leads with what is wrong ("1 run parked · waiting on a
   retry"). The cells are the sentences, with their full stops.
-- **Views** — a section's own views are pills under the summary (the active
-  one filled), wrapping to a second row rather than scrolling out of sight —
-  the 2026-09-23 critique's rule that every view stays in sight, which is why
-  they are not shadcn's line tabs, whose underline cannot survive a wrap;
-  arrows move and select; a native select at zoomed widths. Never navigation
-  between sections.
+- **Views** — the accepted Module workbench layout (2026-09-29): below the
+  full-width summary, a 13rem vertical index sits beside the selected view
+  at widths of 1200px and above. It stays below the sticky header, scrolls
+  vertically when needed, and keeps the selected name and review reason
+  above the list. The active view has an edge and fill; Up/Down arrows move
+  and select. Below 1200px, use a native select. Never navigation between
+  sections. Body padding is 1.2rem, section gaps 0.8rem, and the index-to-view
+  gap 1.5rem; zoomed widths below 768px retain 1rem body padding.
 
 A section with no document says its state in the header badge and in the
 region (shadcn's empty pattern: mark, title, sentence, the one action that
@@ -154,26 +157,33 @@ with its mark.
 The route's modules are the section's views, in route order, each with its
 QA state as shape and hue; the address names the one shown
 (`?tab=<route node>`), and the section opens on its conclusion (the last
-module that reasons, never the CP-CF calculator). Past eight views the tabs
-are one row of module names that stays under the header, with the selected
-module's name and served warning or limitation beside the selector. Names
-are Geist at 13px in 28px tabs with 6px horizontal padding; a missing catalog
-name keeps its module code in Geist Mono, and the full code remains on hover. With a
+module that reasons, never the CP-CF calculator). The vertical module index
+uses Geist at 13px in rows at least 36px tall with 8px padding. Past eight
+views, the selected module's name and served warning or limitation appear
+above the index (below the native selector on narrower windows). A missing
+catalog name keeps its module code in Geist Mono, and the full code remains on hover. With a
 view open, the summary names any module to review and links to it; pending
 work leads with accepted and pending counts, and the brief opens on request.
-The module fills the width,
+The module fills the width beside the index,
 in the five places every module shares (D60), so a reader finds the same
 thing in the same place in every module:
 
 1. **Header** — name first, code second, QA state; one line of host facts
-   (committee status, confidence, limitations, accepted, route node) and a
+   (committee status, confidence, limitations, accepted) and a
    count of what the run rests on that opens it in the evidence drawer.
-2. **Lead** — the model's conclusion-first view and its drivers, beside the
+   Facts use compact, unfilled status badges: green for ready/high/none, amber
+   for draft/restricted/requires more work/medium/stated limitations, red for
+   blocked/insufficient information/low; a word the bundle does not define
+   stays neutral. Keep served words beside colour, the issuer and
+   acceptance time neutral, and internal route IDs out of this strip. The Run
+   evidence control retains its own presentation and warning signals.
+2. **Lead** — the model's conclusion-first view and its drivers, followed by the
    module's argument against itself (when it heads one), the key figures
    (host-typed tables only) and the caveats (the host's facts,
    then the audit's gap and conflict counts; a passing QA is the header's
-   tag, not a caveat). With nothing to set beside it, the view takes the
-   width. Prose runs about 65 characters a line, notes about 72. The view's
+   tag, not a caveat). The view takes the full width; supporting material
+   forms a row beneath it where space permits and stacks when narrow.
+   Prose runs about 65 characters a line, notes about 72. The view's
    first sentence is set large (19px, 500) with the rest of its paragraph
    quieter beneath; drivers written as a bold-led list are key points,
    numbered, each support clamped to three lines with "Read in full". A
@@ -192,7 +202,8 @@ thing in the same place in every module:
    first. A module with no appendix register opens on Audit. Column heads
    the model wrote as identifiers read in words, the identifier on hover and
    in As written. The Audit tab is always host-verified citations, what the run rests
-   on, then the model's audit summary, evidence trace, source registry, gaps
+   on, the handoff's own record (route node, artifact and record digests),
+   then the model's audit summary, evidence trace, source registry, gaps
    and conflicts, and QA validation.
 
 At zoomed widths the lead stacks: view, key figures, caveats.

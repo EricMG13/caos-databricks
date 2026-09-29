@@ -198,13 +198,16 @@ test("Analysis module names support keyboard selection and zoom reflow in both t
     const source = tabs.getByRole("tab", { name: /^Source readiness\s*, success$/ });
     await expect(source).toBeVisible();
     await expect(source).toHaveAttribute("aria-selected", "true");
-    expect(
-      await source.evaluate((node) => ({
-        height: node.getBoundingClientRect().height,
-        padding: getComputedStyle(node).paddingLeft,
-      })),
-    ).toEqual({ height: 28, padding: "6px" });
-    await source.press("ArrowRight");
+    const tabSize = await source.evaluate((node) => ({
+      height: node.getBoundingClientRect().height,
+      padding: getComputedStyle(node).paddingLeft,
+    }));
+    // A minimum target, not a fixed height: wrapped names and each engine's
+    // fractional line metrics can make a row taller.
+    expect(tabSize.height).toBeGreaterThanOrEqual(36);
+    expect(tabSize.padding).toBe("8px");
+    await expect(tabs).toHaveAttribute("aria-orientation", "vertical");
+    await source.press("ArrowDown");
     await expect(page).toHaveURL(/tab=rn-cp-1$/);
     await expect(
       tabs.getByRole("tab", { name: /^Canonical data foundation\s*, success$/ }),
@@ -212,6 +215,9 @@ test("Analysis module names support keyboard selection and zoom reflow in both t
     await tabs.getByRole("tab", { name: /^Canonical data foundation\s*, success$/ }).press("End");
     await expect(page).toHaveURL(/tab=rn-cp-cf$/);
     await expect(tabs.getByRole("tab", { name: /^Cash-flow forecast\s*, success$/ })).toBeVisible();
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await expect(tabs).not.toBeVisible();
+    await expect(page.getByRole("combobox", { name: "Analysis view", exact: true })).toBeVisible();
     await page.setViewportSize({ width: 320, height: 640 });
     await expect(issuer).not.toBeVisible();
     await expect(page.getByRole("heading", { name: "Analysis", level: 1 })).toBeVisible();
@@ -226,5 +232,63 @@ test("Analysis module names support keyboard selection and zoom reflow in both t
         () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
       ),
     ).toBeLessThanOrEqual(1);
+  }
+});
+
+test("a banner above the module index leaves the view beside it, and each fact wears its hue", async ({
+  page,
+}) => {
+  await page.route("**/live.js?*", (route) => route.abort());
+  // A refused tail while the document still answers: "Live updates paused"
+  // stands above the index (F458).
+  await page.route("**/api/v1/cases/*/events*", (route) =>
+    route.fulfill({ status: 503, body: "" }),
+  );
+  await page.setViewportSize({ width: 1280, height: 800 });
+  for (const tab of ["rn-cp-0", "rn-cp-1c", "rn-cp-cf"]) {
+    await page.goto(`/analysis/?case=00000000-0000-4000-8000-000000000001&tab=${tab}`);
+    await expect(page.locator("main#body [data-not-live='tail']")).toBeVisible();
+    await expect(page.locator("main#body [role='tabpanel'] .modfacts")).toBeVisible();
+    const index = (await page.locator("main#body > [data-section-tabs]").boundingBox())!;
+    const panel = (await page.locator("main#body > [role='tabpanel']").boundingBox())!;
+    expect(panel.x).toBeGreaterThanOrEqual(index.x + index.width);
+    expect(Math.abs(panel.y - index.y)).toBeLessThan(8);
+    // The bundle's words and their hues (DESIGN.md "Header"); a served word
+    // with no rule would be neutral and fail here.
+    // `evaluateAll` does not wait: the module's facts arrive with its chunk.
+    const signals = page.locator("main#body [role='tabpanel'] .modfacts .fact-signal");
+    await expect(signals.first()).toBeVisible();
+    const worn = await signals.evaluateAll((nodes) => {
+      const HUE: Record<string, string> = {
+        "Committee Ready": "success",
+        "Draft Only": "warning",
+        Restricted: "warning",
+        "Requires More Work": "warning",
+        Blocked: "destructive",
+        "Insufficient Information": "destructive",
+        high: "success",
+        medium: "warning",
+        low: "destructive",
+        "insufficient information": "destructive",
+      };
+      return nodes.map((signal) => {
+        const count = signal.getAttribute("data-count");
+        const word = signal.getAttribute("data-status") ?? signal.getAttribute("data-band") ?? "";
+        const hue = count !== null ? (count === "0" ? "success" : "warning") : HUE[word];
+        const probe = document.createElement("span");
+        probe.style.color = `var(--${hue ?? "unmapped"})`;
+        signal.parentElement!.append(probe);
+        const expected = getComputedStyle(probe).color;
+        probe.remove();
+        return {
+          word: word || `count ${count}`,
+          hue,
+          same: getComputedStyle(signal).color === expected,
+        };
+      });
+    });
+    expect(worn.length).toBeGreaterThanOrEqual(3);
+    for (const signal of worn) expect(signal, signal.word).toMatchObject({ same: true });
+    expect(worn.every((signal) => signal.hue !== undefined)).toBe(true);
   }
 });
