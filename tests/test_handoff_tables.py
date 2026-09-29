@@ -359,3 +359,17 @@ def test_the_demo_cp1_tables_carry_the_bundles_column_names_literally() -> None:
         # In the order and spelling REF_CP-1_13 declares them.
         assert "`" + " | ".join(columns) + "`" in reference, table_id
         assert set(columns) == stable.get(table_id, set(columns)), table_id
+
+
+PERCENT_VECTOR = Path(__file__).parents[1] / "frontend/tests/unit/percent-cells.json"
+PERCENT_CELLS = json.loads(PERCENT_VECTOR.read_text("utf-8"))["cells"]
+
+
+@pytest.mark.parametrize("cell", PERCENT_CELLS, ids=lambda cell: cell["text"])
+def test_the_percent_cells_the_figures_scale_read_as_the_frontend_expects(
+    cell: dict[str, str | None],
+) -> None:
+    """F463: the figures decide whether to scale a served percent by re-reading
+    its text; the value they are handed is this reader's. The two readers share
+    one set of cells, so a change here cannot silently rescale a chart."""
+    assert figure_value(CONTRACT, str(cell["text"])) == cell["value"]
