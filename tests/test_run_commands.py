@@ -60,6 +60,7 @@ ROUTE = {
     "selection_id": "LITE_EARNINGS_UPDATE",
     "supersedes": None,
     "model_extension": False,
+    "model": None,
 }
 # The one enabled pathway that runs every owner CP-CF reads (`MODEL_OWNERS`).
 MODEL_ROUTE = {

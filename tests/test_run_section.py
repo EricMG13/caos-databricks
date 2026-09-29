@@ -254,6 +254,9 @@ def test_a_case_with_no_run_is_observed_empty(
                 "accepts_model_extension": False,
             },
         ],
+        # This process configures no model (`CAOS_MODEL_PRICE` unset), so it
+        # offers none; a create then pins none (F468).
+        "model_choices": [],
     }
     actions = {str(view.action): view.refusal for view in document.chrome.actions}
     assert actions["CREATE_RUN"] is not None  # the header named no writing group

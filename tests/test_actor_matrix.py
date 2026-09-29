@@ -311,6 +311,7 @@ def _target(
             "selection_id": ROUTE.selection_id,
             "supersedes": None,
             "model_extension": False,
+            "model": None,
         }
     if endpoint == "admit":
         return f"/api/v1/cases/{case_id}/sources", None

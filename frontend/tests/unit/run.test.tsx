@@ -105,6 +105,7 @@ const EMPTY_RUN: RunSectionDocument = withActions(
           accepts_model_extension: false,
         },
       ],
+      model_choices: [],
     },
   },
   [{ action: "CREATE_RUN", refusal: null }],
@@ -346,6 +347,7 @@ describe("Run", () => {
         runs: [],
         run: null,
         route_choices: [],
+        model_choices: [],
       },
       observed_empty: true,
     };
@@ -419,6 +421,7 @@ describe("Run", () => {
               accepts_model_extension: false,
             },
           ],
+          model_choices: [],
         },
       },
       [{ action: "CREATE_RUN", refusal: null }],
@@ -465,13 +468,14 @@ describe("Run", () => {
       fireEvent.click(container.querySelector('[data-action="CREATE_RUN"]')!);
       await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
       const [, init] = fetchSpy.mock.calls[0]!;
-      // The request is `CreateRun`'s four fields exactly: the choice's own
+      // The request is `CreateRun`'s five fields exactly: the choice's own
       // advisory flag is read, never forwarded (the wire forbids it).
       expect(JSON.parse((init as RequestInit).body as string)).toEqual({
         profile_id: "FULL_CREDIT_32",
         selection_id: "RELATIVE_VALUE",
         supersedes: null,
         model_extension: true,
+        model: null,
       });
     } finally {
       vi.unstubAllGlobals();
@@ -969,6 +973,7 @@ describe("Run", () => {
         selection_id: "default",
         supersedes: null,
         model_extension: false,
+        model: null,
       });
       expect(
         UUID.test(

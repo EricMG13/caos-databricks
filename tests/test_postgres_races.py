@@ -72,6 +72,8 @@ from caos.store.work import (
 if TYPE_CHECKING:
     from test_runtime import _Run
 
+    from caos.provider import CompletionProvider
+
 # The producer the store records beside every accepted artifact: what the
 # host configured, and the provider's own handle for the call.
 MODEL = "a-model/for-the-test"
@@ -794,6 +796,8 @@ def test_a_stale_terminal_decision_runs_one_more_pass_then_raises(
 
 
 def _work(url: str, run: object, completions: object, blobs: BlobStore) -> UUID | None:
+    from typing import cast
+
     from test_worker import CONFIG
 
     from caos.graph.worker import module_execution, work_once
@@ -803,7 +807,7 @@ def _work(url: str, run: object, completions: object, blobs: BlobStore) -> UUID 
             conn,
             blobs,
             execution_for=module_execution(
-                completions,  # type: ignore[arg-type]
+                lambda _price: cast("CompletionProvider", completions),
                 priced(RESERVED),
                 Bundle(VENDORED),
                 blobs,
@@ -1008,7 +1012,9 @@ bundle = Bundle(VENDORED)
 completions = Recording(UUID(os.environ["SOURCE"]), price=priced(Decimal("0.10")))
 sys.exit(run_worker(
     WorkerConfig(BoundaryText.of("worker-subprocess")),
-    execution_for=module_execution(completions, priced(Decimal("0.10")), bundle, blobs),
+    execution_for=module_execution(
+        lambda _price: completions, priced(Decimal("0.10")), bundle, blobs
+    ),
     stopping=Once(),
     conn_factory=lambda: connect(os.environ["URL"]),
     blobs=blobs,
@@ -1339,7 +1345,7 @@ def _drive(url: str, run: _Run, completions: _PricedCompletions) -> UUID | None:
             conn,
             run.blobs,
             execution_for=module_execution(
-                completions, completions.price, run.bundle, run.blobs
+                lambda _price: completions, completions.price, run.bundle, run.blobs
             ),
             config=CONFIG,
             stopping=Event(),

@@ -628,7 +628,7 @@ def test_an_in_process_worker_answers_for_itself_not_the_fleet(
 
     def configured() -> worker.Configured:
         return worker.Configured(
-            completions=fake_completions(),
+            choices={fake_completions().price.model: fake_completions().price},
             url=empty_database,
             root=str(tmp_path),
             bundle=Bundle(VENDORED_BUNDLE),

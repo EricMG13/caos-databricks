@@ -117,7 +117,7 @@ def drive(
         run.conn,
         run.blobs,
         execution_for=module_execution(
-            completions, priced(ESTIMATE), run.bundle, run.blobs
+            lambda _price: completions, priced(ESTIMATE), run.bundle, run.blobs
         ),
         config=CONFIG,
         stopping=stopping or Event(),
@@ -420,7 +420,7 @@ def test_a_malformed_run_ceiling_refuses_the_worker_at_boot(
     def never(*_args: object, **_kwargs: object) -> object:
         pytest.fail("no provider, store, bundle or call before the ceiling")
 
-    monkeypatch.setattr(worker, "from_environment", never)
+    monkeypatch.setattr(worker, "model_choices", never)
     monkeypatch.setattr(worker, "connect", never)
     monkeypatch.setattr(worker, "run_worker", never)
     # Set so `_report`'s "unset" tag -- which names CAOS_MODEL_PRICE alone,
@@ -762,7 +762,7 @@ def test_a_worker_drives_runs_one_node_at_a_time_without_a_checkpointer(
             run.conn,
             blobs,
             execution_for=module_execution(
-                CanonicalCompletions(run.source_id, price=RUN_AT),
+                lambda _price: CanonicalCompletions(run.source_id, price=RUN_AT),
                 priced(ESTIMATE),
                 bundle,
                 blobs,
@@ -956,7 +956,11 @@ def test_a_parked_run_s_checkpoint_thread_is_forgotten(
             run.conn,
             run.blobs,
             execution_for=module_execution(
-                completions, priced(ESTIMATE), run.bundle, run.blobs, saver
+                lambda _price: completions,
+                priced(ESTIMATE),
+                run.bundle,
+                run.blobs,
+                saver,
             ),
             config=CONFIG,
             stopping=Event(),
@@ -1029,7 +1033,11 @@ def test_a_run_cancelled_while_queued_leaves_no_checkpoint_thread(
             run.conn,
             run.blobs,
             execution_for=module_execution(
-                completions, priced(ESTIMATE), run.bundle, run.blobs, saver
+                lambda _price: completions,
+                priced(ESTIMATE),
+                run.bundle,
+                run.blobs,
+                saver,
             ),
             config=CONFIG,
             stopping=stopping,
@@ -1352,7 +1360,7 @@ def test_a_worker_that_lost_its_lease_leaves_the_holder_s_thread(
         saver.put(position, empty_checkpoint(), {}, {})
 
     base = module_execution(
-        CanonicalCompletions(run.source_id, price=RUN_AT),
+        lambda _price: CanonicalCompletions(run.source_id, price=RUN_AT),
         priced(ESTIMATE),
         run.bundle,
         run.blobs,
@@ -1453,7 +1461,7 @@ def test_a_late_checkpoint_write_after_an_abandoned_cancel_is_still_forgotten(
         )
 
     base = module_execution(
-        CanonicalCompletions(run.source_id, price=RUN_AT),
+        lambda _price: CanonicalCompletions(run.source_id, price=RUN_AT),
         priced(ESTIMATE),
         run.bundle,
         run.blobs,
@@ -1548,7 +1556,7 @@ def test_a_straggler_is_forgotten_when_the_pass_stops_or_its_store_faults(
 
     fault = worker._Stopping if ending == "stopping" else psycopg.OperationalError
     base = module_execution(
-        CanonicalCompletions(run.source_id, price=RUN_AT),
+        lambda _price: CanonicalCompletions(run.source_id, price=RUN_AT),
         priced(ESTIMATE),
         run.bundle,
         run.blobs,
@@ -1641,7 +1649,7 @@ def test_a_rate_limited_call_is_not_sent_again_after_a_cancel_or_a_stop(
         run.conn,
         run.blobs,
         execution_for=module_execution(
-            provider, priced(ESTIMATE), run.bundle, run.blobs
+            lambda _price: provider, priced(ESTIMATE), run.bundle, run.blobs
         ),
         config=CONFIG,
         stopping=stopping,
@@ -1887,7 +1895,7 @@ def test_a_paid_call_s_bill_outwaits_a_held_case_lock_under_the_worker_s_bounds(
             worker_conn,
             run.blobs,
             execution_for=module_execution(
-                completions, priced(ESTIMATE), run.bundle, run.blobs
+                lambda _price: completions, priced(ESTIMATE), run.bundle, run.blobs
             ),
             config=CONFIG,
             stopping=Event(),

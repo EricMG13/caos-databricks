@@ -213,12 +213,15 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
     ActionView: frozenset({"action", "refusal"}),
     WorkView: frozenset({"state", "stop_code", "cancel_requested"}),
     RouteChoice: frozenset({"profile_id", "selection_id", "accepts_model_extension"}),
+    wire.ModelChoice: frozenset(
+        {"model", "input_per_token", "output_per_token", "as_of", "configured"}
+    ),
     DirectoryDocument: ENVELOPE,
     UploadDocument: ENVELOPE,
     RunSectionDocument: ENVELOPE,
     AnalysisDocument: ENVELOPE,
     RunSummary: frozenset(
-        {"run_id", "status", "created_at", "profile_id", "selection_id", "stop_code"}
+        ("run_id status created_at profile_id selection_id stop_code model").split()
     ),
     CaseRow: frozenset(
         (
@@ -292,6 +295,7 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
             "runs",
             "run",
             "route_choices",
+            "model_choices",
         }
     ),
     RectView: frozenset({"x0", "y0", "x1", "y1"}),
@@ -356,7 +360,7 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
     CaseCreated: frozenset({"case_id"}),
     SourcesAdmitted: frozenset({"case_id", "source_ids"}),
     CreateRun: frozenset(
-        {"profile_id", "selection_id", "supersedes", "model_extension"}
+        {"profile_id", "selection_id", "supersedes", "model_extension", "model"}
     ),
     RunCreated: frozenset({"case_id", "run_id", "route_digest"}),
     ResearchBriefQuestion: frozenset(

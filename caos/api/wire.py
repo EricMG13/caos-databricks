@@ -48,6 +48,7 @@ from caos.methodology.tables import (
     TABLES_MAX,
     TablesUnavailable,
 )
+from caos.pricing import MAX_MODEL_CHOICES
 from caos.refusals import RefusalCode
 from caos.store.gates import Gate, GateState
 from caos.store.members import Standing
@@ -82,6 +83,7 @@ REVISIONS_MAX = 64
 TITLE_CHARS = 256  # a case title a command sets
 SOURCE_IDS_MAX = 50  # `AdmissionLimits.max_documents`
 ROUTE_CHOICES_MAX = 18
+MODEL_CHOICES_MAX = MAX_MODEL_CHOICES
 PREVIEW_CHARS = MAX_HANDOFF_BYTES  # a gate preview, bounded as a handoff is
 PAGE_LINES_MAX = 2000  # beyond it a page is partial, `LIST_TRUNCATED`
 PAGE_MAX = 500  # a page outside 1..PAGE_MAX is `PAGE_NOT_AVAILABLE`
@@ -104,6 +106,11 @@ BRIEF_BYTES = 65_536
 Id = Annotated[str, Field(max_length=ID_CHARS)]
 Text = Annotated[str, Field(max_length=TEXT_CHARS)]
 Sha256 = Annotated[str, Field(max_length=64, pattern="^[0-9a-f]{64}$")]
+# An exact decimal in plain notation, never a float (invariant 7): a figure a
+# handoff's table states, or a price's per-token rate.
+DecimalText = Annotated[
+    str, Field(max_length=FIGURE_CHARS, pattern=r"^-?[0-9]+(\.[0-9]+)?$")
+]
 Moment = Annotated[str, Field(max_length=MOMENT_CHARS)]
 Blocker = Annotated[str, Field(max_length=MAX_BLOCKER_CHARS)]
 RunStatus = Literal["RUNNING", "COMPLETE", "FAILED", "BLOCKED", "CANCELLED"]
@@ -406,6 +413,9 @@ class RunSummary(BaseModel):
     # nobody is currently driving. `None` for a run never enqueued or still
     # being worked.
     stop_code: RefusalCode | None
+    # The model the run was started on (F468); null for a run started before
+    # its model was pinned, which runs on the deployment's configured model.
+    model: Id | None
 
 
 class MemberRow(BaseModel):
@@ -576,6 +586,21 @@ class RouteChoice(BaseModel):
     accepts_model_extension: StrictBool
 
 
+class ModelChoice(BaseModel):
+    """A model the deployment approves for a new run (`CAOS_MODEL_CHOICES`),
+    at the dated price a run started on it is pinned to (F468). `configured`
+    marks the deployment's own model, the one a `CreateRun` naming none gets.
+    Rates are per token, in plain notation (invariant 7)."""
+
+    model_config = _CLOSED
+
+    model: Id
+    input_per_token: DecimalText
+    output_per_token: DecimalText
+    as_of: Annotated[str, Field(max_length=10, pattern=r"^\d{4}-\d{2}-\d{2}$")]
+    configured: StrictBool
+
+
 class BlockedByView(BaseModel):
     """The node whose validated Blocked verdict ended the run, and the attempt
     that answered it.
@@ -649,6 +674,7 @@ class RunBody(BaseModel):
     runs: Annotated[list[RunSummary], Field(max_length=RUNS_MAX)]
     run: RunView | None
     route_choices: Annotated[list[RouteChoice], Field(max_length=ROUTE_CHOICES_MAX)]
+    model_choices: Annotated[list[ModelChoice], Field(max_length=MODEL_CHOICES_MAX)]
 
 
 class RectView(BaseModel):
@@ -679,9 +705,6 @@ class CitationView(BaseModel):
 
 # A handoff's tagged tables (`caos.methodology.tables`), whose bounds these are.
 CellText = Annotated[str, Field(max_length=CELL_CHARS)]
-DecimalText = Annotated[
-    str, Field(max_length=FIGURE_CHARS, pattern=r"^-?[0-9]+(\.[0-9]+)?$")
-]
 
 
 class CellView(BaseModel):
@@ -1300,6 +1323,11 @@ class CreateRun(BaseModel):
     # every artifact owner CP-CF reads. Strict: `"true"` or `1` is a malformed
     # body, not a coerced yes, because the answer changes what the run pays for.
     model_extension: StrictBool
+    # The approved model the run is started on (`ModelChoice.model`), pinned
+    # with the run at its dated price (F468); null is the deployment's
+    # configured model. A model the deployment does not approve is refused
+    # `PROVIDER_NOT_CONFIGURED`.
+    model: Id | None
 
 
 class RunCreated(BaseModel):

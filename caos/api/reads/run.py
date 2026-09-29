@@ -40,6 +40,7 @@ from caos.api.wire import (
     Chrome,
     EdgeView,
     GateView,
+    ModelChoice,
     NodeView,
     RouteChoice,
     RouteEdgeView,
@@ -75,6 +76,7 @@ from caos.methodology.bundle import Bundle, module_display_names
 from caos.methodology.handoff import ADAPTER_ROUTES
 from caos.methodology.invocation import named_objects
 from caos.methodology.vendor import catalog
+from caos.pricing import configured_endpoint, model_choices
 from caos.refusals import Refusal, RefusalCode
 from caos.store import RunStatus, StoreConnection
 from caos.store.gates import (
@@ -180,7 +182,7 @@ def read_run_section(  # noqa: PLR0913 -- identity, two ids, store, blobs, bundl
 
     rows = conn.execute(
         "SELECT r.run_id, r.status, r.created_at, p.profile_id, p.selection_id,"
-        " w.stop_code"
+        " w.stop_code, r.price_model"
         " FROM runs r LEFT JOIN run_routes p ON p.run_id = r.run_id"
         " LEFT JOIN run_work w ON w.run_id = r.run_id"
         " WHERE r.case_id = %s ORDER BY r.created_at DESC, r.run_id DESC LIMIT %s",
@@ -212,6 +214,7 @@ def read_run_section(  # noqa: PLR0913 -- identity, two ids, store, blobs, bundl
             runs=runs,
             run=view,
             route_choices=_route_choices(bundle),
+            model_choices=_model_choices(),
         ),
         observed_at=observed_at,
         observed_empty=not runs,
@@ -267,6 +270,7 @@ def _summary(row: tuple[Any, ...]) -> RunSummary:
         profile_id=row[3],
         selection_id=row[4],
         stop_code=row[5],
+        model=row[6],
     )
 
 
@@ -277,7 +281,7 @@ def _displayed_beyond_the_list(
     the same answer for an unknown run and another case's."""
     row = conn.execute(
         "SELECT r.run_id, r.status, r.created_at, p.profile_id, p.selection_id,"
-        " w.stop_code"
+        " w.stop_code, r.price_model"
         " FROM runs r LEFT JOIN run_routes p ON p.run_id = r.run_id"
         " LEFT JOIN run_work w ON w.run_id = r.run_id"
         " WHERE r.run_id = %s AND r.case_id = %s",
@@ -320,6 +324,28 @@ def _route_choices(bundle: Bundle) -> list[RouteChoice]:
             )
         )
     return choices
+
+
+def _model_choices() -> list[ModelChoice]:
+    """Every model the deployment approves for a new run (F468), the
+    configured one first; none when the process configures no model, or one
+    it cannot read -- the create command then refuses `PROVIDER_NOT_CONFIGURED`
+    on its own, and health reports the worker that could not start."""
+    try:
+        choices = model_choices()
+    except Refusal:
+        return []
+    configured = configured_endpoint()
+    return [
+        ModelChoice(
+            model=price.model,
+            input_per_token=format(price.input_per_token, "f"),
+            output_per_token=format(price.output_per_token, "f"),
+            as_of=price.as_of.isoformat(),
+            configured=price.model == configured,
+        )
+        for price in choices.values()
+    ]
 
 
 def _run_view(

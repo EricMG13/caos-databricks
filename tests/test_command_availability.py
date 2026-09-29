@@ -51,6 +51,7 @@ ROUTE = {
     "selection_id": "LITE_EARNINGS_UPDATE",
     "supersedes": None,
     "model_extension": False,
+    "model": None,
 }
 SUBJECT = {
     "issuer_id": "EXAMPLE",

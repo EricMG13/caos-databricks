@@ -208,6 +208,27 @@ def ceiling_of(conn: StoreConnection, run_id: UUID) -> Decimal:
     return ceiling
 
 
+def price_of(conn: StoreConnection, run_id: UUID) -> ModelPrice | None:
+    """The model and dated price the run was started on (0043), or None for a
+    run started before its model was pinned, which runs on the deployment's
+    configured model."""
+    from caos.pricing import ModelPrice
+
+    try:
+        row = conn.execute(
+            "SELECT price_model, price_input, price_output, price_as_of"
+            " FROM runs WHERE run_id = %s",
+            (run_id,),
+        ).fetchone()
+    except psycopg.Error:
+        raise Refusal(RefusalCode.STORE_UNAVAILABLE) from None
+    if row is None:
+        raise Refusal(RefusalCode.RUN_NOT_FOUND)
+    if row[0] is None:
+        return None
+    return ModelPrice(*row)
+
+
 def reserved_for(conn: StoreConnection, attempt_id: UUID) -> Reservation | None:
     """What this attempt set aside and under which price, or None if it never
     reserved. A legacy row (`0024_reservation_price`) reads back as the

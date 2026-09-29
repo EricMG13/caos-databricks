@@ -105,6 +105,9 @@ class RunListing:
     # being driven -- the one field that tells a list a run stopped RUNNING
     # apart from one that never will on its own.
     stop_code: str | None
+    # The model the run was started on (0043), or None for a run that
+    # predates the pin.
+    model: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,14 +146,14 @@ def cases_for_member(
         "SELECT c.case_id, c.title, c.created_at, m.standing,"
         " (SELECT count(*) FROM live_sources s WHERE s.case_id = c.case_id),"
         " r.run_id, r.status, r.created_at, rr.profile_id, rr.selection_id,"
-        " w.stop_code,"
+        " w.stop_code, r.price_model,"
         " CASE WHEN %s AND m.standing = 'ADMIN' THEN (SELECT coalesce(json_agg("
         "  json_build_array(x.user_id, x.standing) ORDER BY x.user_id), '[]')"
         "  FROM (SELECT o.user_id, o.standing FROM case_members o"
         "   WHERE o.case_id = c.case_id AND o.revoked_at IS NULL"
         "   ORDER BY o.user_id LIMIT %s) x) END"
         " FROM case_members m JOIN cases c ON c.case_id = m.case_id"
-        " LEFT JOIN LATERAL (SELECT run_id, status, created_at FROM runs"
+        " LEFT JOIN LATERAL (SELECT run_id, status, created_at, price_model FROM runs"
         "  WHERE runs.case_id = c.case_id"
         "  ORDER BY created_at DESC, run_id DESC LIMIT 1) r ON true"
         " LEFT JOIN run_routes rr ON rr.run_id = r.run_id"
@@ -166,12 +169,10 @@ def cases_for_member(
             created_at=row[2],
             standing=Standing(row[3]),
             live_sources=int(row[4]),
-            latest_run=None
-            if row[5] is None
-            else RunListing(row[5], row[6], row[7], row[8], row[9], row[10]),
+            latest_run=None if row[5] is None else RunListing(*row[5:12]),
             members=None
-            if row[11] is None
-            else tuple((UUID(member), Standing(held)) for member, held in row[11]),
+            if row[12] is None
+            else tuple((UUID(member), Standing(held)) for member, held in row[12]),
         )
         for row in rows
     ]

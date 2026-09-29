@@ -21,7 +21,8 @@
         "created_at": "2026-09-08T13:00:00Z",
         "profile_id": "FULL_CREDIT_32",
         "selection_id": "SET-v4",
-        "stop_code": null
+        "stop_code": null,
+        "model": null
       },
       {
         "run_id": "00000000-0000-4000-8000-0000000000b2",
@@ -29,7 +30,8 @@
         "created_at": "2026-09-09T13:00:00Z",
         "profile_id": "FULL_CREDIT_32",
         "selection_id": "SET-v4",
-        "stop_code": null
+        "stop_code": null,
+        "model": null
       }
     ],
     "run": {
@@ -319,7 +321,23 @@
       "supersedes": null,
       "superseded_by": null
     },
-    "route_choices": []
+    "route_choices": [],
+    "model_choices": [
+      {
+        "model": "databricks-claude-opus-5",
+        "input_per_token": "0.000005",
+        "output_per_token": "0.000025",
+        "as_of": "2026-09-22",
+        "configured": true
+      },
+      {
+        "model": "databricks-claude-sonnet-5",
+        "input_per_token": "0.000002",
+        "output_per_token": "0.00001",
+        "as_of": "2026-09-22",
+        "configured": false
+      }
+    ]
   },
   "observed_at": "2026-09-09T15:10:00Z",
   "observed_empty": false,

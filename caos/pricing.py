@@ -21,6 +21,7 @@ so a row can be read back to the dated price that produced it.
 
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
@@ -38,6 +39,29 @@ from decimal import (
 from caos.provider import MAX_COMPLETION_TOKENS, MAX_REQUEST_BYTES
 from caos.refusals import Refusal, RefusalCode
 from caos.store.budget import validate_spend
+
+# The serving endpoint the gateway routes to. A bundle target sets it per
+# workspace; the default is the pay-per-token Claude endpoint the spec names.
+ENDPOINT_ENV = "CAOS_MODEL_ENDPOINT"
+DEFAULT_ENDPOINT = "databricks-claude-opus-5"
+# `model,input_per_token,output_per_token,YYYY-MM-DD` for exactly that endpoint.
+MODEL_PRICE_ENV = "CAOS_MODEL_PRICE"
+# The models a run may be started on (D75): dated prices in the form of
+# `CAOS_MODEL_PRICE`, joined by `;`, beside the configured one. The bundle
+# sends the configured price first (`${var.model_price};${var.model_choices}`),
+# because the CLI drops a variable that resolves to nothing; so an entry equal
+# to the configured price is that one, and an empty entry is nothing. Unset,
+# the configured endpoint is the only choice. The deployment's list is the
+# allowlist: a model it does not name is never called, whatever a request
+# asks for.
+MODEL_CHOICES_ENV = "CAOS_MODEL_CHOICES"
+CHOICES_SEPARATOR = ";"
+# The most models one deployment offers, the configured one included: the
+# bound the Run section's `model_choices` is read under.
+MAX_MODEL_CHOICES = 16
+# Reserved for the effort passthrough (next.md N2): refused while it is not
+# sent, so no identity ever names an effort the model did not receive (AR-15).
+REASONING_EFFORT_ENV = "CAOS_REASONING_EFFORT"
 
 
 @dataclass(frozen=True, slots=True)
@@ -165,3 +189,37 @@ def price_from_environment(model: str, value: str) -> ModelPrice:
     ):
         raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
     return price
+
+
+def configured_endpoint() -> str:
+    """The endpoint the environment names, else the default."""
+    return os.environ.get(ENDPOINT_ENV) or DEFAULT_ENDPOINT
+
+
+def model_choices() -> dict[str, ModelPrice]:
+    """Every model a run may be started on, by endpoint, each at its dated
+    price, the configured endpoint first; or `PROVIDER_NOT_CONFIGURED`.
+
+    Four names and nothing else; read at the call, never at import. Values
+    are never printed. An endpoint priced twice is refused rather than
+    resolved: the two prices would disagree on what its calls cost.
+    """
+    if os.environ.get(REASONING_EFFORT_ENV):
+        # Not sent to the endpoint (next.md N2), so not configurable: an
+        # identity naming an effort the model never received would bind
+        # qualification verdicts to a profile that was not run (AR-15).
+        raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
+    endpoint = configured_endpoint()
+    configured = os.environ.get(MODEL_PRICE_ENV, "")
+    choices = {endpoint: price_from_environment(endpoint, configured)}
+    listed = os.environ.get(MODEL_CHOICES_ENV, "").split(CHOICES_SEPARATOR)
+    for value in listed:
+        if value in ("", configured):
+            continue
+        name = value.split(",", 1)[0]
+        if name in choices:
+            raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
+        choices[name] = price_from_environment(name, value)
+    if len(choices) > MAX_MODEL_CHOICES:
+        raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
+    return choices

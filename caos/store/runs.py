@@ -16,9 +16,11 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from decimal import Decimal
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 import psycopg
+from psycopg import sql
 
 from caos import methodology
 from caos.boundary_text import BoundaryText
@@ -44,6 +46,9 @@ from caos.store.work import (
     require_lease,
     require_running,
 )
+
+if TYPE_CHECKING:
+    from caos.pricing import ModelPrice
 
 # The vendor's `envelope.MAX_ATTEMPT_ORDINAL`: a run folder holds at most 256.
 MAX_ATTEMPT_ORDINAL = 256
@@ -105,6 +110,7 @@ def start_run(
     *,
     budget_ceiling: Decimal | None = None,
     supersedes: UUID | None = None,
+    price: ModelPrice | None = None,
 ) -> UUID:
     """Start a run against a case. RUNNING is the only state a run starts in.
 
@@ -122,6 +128,11 @@ def start_run(
     successor is `RUN_ALREADY_SUPERSEDED`, refused by the partial unique index
     in the unit that tried to write it. A refusal leaves the unit failed, and
     the caller rolls it back as it does every other refusal from its unit.
+
+    `price` is the model the run is started on and its dated price, pinned
+    with the row (F468) so the worker executes the run on that model or not at
+    all; None leaves the columns null, a run on the deployment's configured
+    model.
     """
     ceiling = CEILING if budget_ceiling is None else budget_ceiling
     validate_spend(ceiling)
@@ -129,23 +140,32 @@ def start_run(
     if supersedes is not None:
         _require_answerable(conn, case_id, supersedes)
     run_id = uuid4()
-    row = (run_id, case_id, RunStatus.RUNNING.value, ceiling)
-    if supersedes is None:
-        # The column is named only when it is written: a database at a
-        # migration prefix before 0025 still starts an ordinary run, which is
-        # what the populated-upgrade tests rely on.
-        conn.execute(
-            "INSERT INTO runs (run_id, case_id, status, budget_ceiling)"
-            " VALUES (%s, %s, %s, %s)",
-            row,
-        )
-        return run_id
+    # A column is named only when it is written: a database at a migration
+    # prefix before 0025 or 0043 still starts an ordinary run, which is what
+    # the populated-upgrade tests rely on.
+    written: dict[str, object] = {
+        "run_id": run_id,
+        "case_id": case_id,
+        "status": RunStatus.RUNNING.value,
+        "budget_ceiling": ceiling,
+    }
+    if price is not None:
+        written |= {
+            "price_model": price.model,
+            "price_input": price.input_per_token,
+            "price_output": price.output_per_token,
+            "price_as_of": price.as_of,
+        }
+    if supersedes is not None:
+        written["supersedes_run_id"] = supersedes
+    insert = sql.SQL("INSERT INTO runs ({}) VALUES ({})").format(
+        sql.SQL(", ").join(map(sql.Identifier, written)),
+        sql.SQL(", ").join(sql.Placeholder() * len(written)),
+    )
     try:
-        conn.execute(
-            "INSERT INTO runs (run_id, case_id, status, budget_ceiling,"
-            " supersedes_run_id) VALUES (%s, %s, %s, %s, %s)",
-            (*row, supersedes),
-        )
+        # Sent as its text, as every other statement here is: the suite's
+        # statement recorders read a query as a string.
+        conn.execute(insert.as_string(conn), tuple(written.values()))
     except psycopg.errors.UniqueViolation as violation:
         if violation.diag.constraint_name != ONE_SUCCESSOR_PER_RUN:
             raise
