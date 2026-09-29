@@ -10,12 +10,14 @@ import {
   ProvenanceKeyed,
   StackedBarChart,
   Swatch,
+  WaterfallChart,
   formatDecimal,
   type ChartColor,
   type ChartSelection,
   type ChartSeries,
   type Datum,
   type Orientation,
+  type WaterfallStep,
 } from "@/charts";
 import { fromScaled, placesOf, toScaled } from "@/charts/decimal";
 import { hundredfold, plainName } from "@/ds/format";
@@ -91,7 +93,7 @@ export function unitOf(currency: string, scale: string): string | undefined {
 export interface Figure {
   key: string;
   table: string;
-  kind: "stack" | "line" | "diverging" | "bar";
+  kind: "stack" | "line" | "diverging" | "bar" | "waterfall";
   title: string;
   summary: string;
   unit?: string;
@@ -99,6 +101,7 @@ export interface Figure {
   series: ChartSeries[];
   orientation?: Orientation;
   categoryLabel?: string;
+  steps?: WaterfallStep[];
   /** Where the model says a mark's figure came from: its source locator. */
   sourceOf: (selection: ChartSelection) => string | null;
   /** Past `MAX_MARKS`: stated, not drawn. */
@@ -440,6 +443,489 @@ function qualityBridgeFigures(tables: readonly Table[]): Figure[] {
     });
   }
   return figures;
+}
+
+/** CP-2D liquidity bridge values, applying only its published outflow formula. */
+function liquidityBridgeFigures(tables: readonly Table[]): Figure[] {
+  const table = tableWithColumns(
+    tables,
+    "Bridge Item",
+    "Amount",
+    "Source / Calculation",
+    "Status",
+    "Source Trace",
+  );
+  if (!table) return [];
+  const rows = recordsOf(table);
+  if (!rows.length) return [];
+  if (rows.every((row) => field(row, "Amount")?.value == null)) return [];
+  const item = (row: Row) => heading(text(row, "Bridge Item"));
+  const openings = rows.filter((row) => item(row) === "beginningaccessibleliquidity");
+  const closings = rows.filter((row) => item(row) === "endingaccessibleliquidity");
+  const opening = openings[0];
+  const closing = closings[0];
+  const component = new Set([
+    "beginningcash",
+    "accessiblerevolveravailability",
+    "othercommittedaccessibleliquidity",
+  ]);
+  const uses = new Set([
+    "cashinterest",
+    "cashtaxes",
+    "mandatorycapex",
+    "debtamortizationmaturities",
+    "othercashuses",
+  ]);
+  const flows = new Set([
+    "operatingcashinflowoutflow",
+    "workingcapitalimpact",
+    "committedinflows",
+    ...uses,
+  ]);
+  const deltas = rows.filter((row) => flows.has(item(row)));
+  const known = new Set([
+    "beginningaccessibleliquidity",
+    "endingaccessibleliquidity",
+    ...component,
+    ...flows,
+  ]);
+  const unknown = rows.some((row) => !known.has(item(row)));
+  if (
+    opening &&
+    closing &&
+    field(opening, "Amount")?.value != null &&
+    field(closing, "Amount")?.value != null &&
+    openings.length === 1 &&
+    closings.length === 1 &&
+    !unknown
+  ) {
+    const amountFor = (row: Row, asOutflow = false): Datum => {
+      const cell = field(row, "Amount");
+      if (cell?.value == null || !asOutflow) return datum(cell);
+      const places = placesOf(cell.value);
+      const value = toScaled(cell.value, places);
+      return { value: fromScaled(-(value < 0n ? -value : value), places) };
+    };
+    const steps: WaterfallStep[] = [
+      {
+        key: String(rows.indexOf(opening)),
+        label: text(opening, "Bridge Item"),
+        kind: "total",
+        value: field(opening, "Amount")?.value ?? null,
+        reason: field(opening, "Amount")?.text || "not stated",
+        origin: "model",
+      },
+      ...deltas.map((row) => ({
+        key: String(rows.indexOf(row)),
+        label: text(row, "Bridge Item"),
+        kind: "delta" as const,
+        ...amountFor(row, uses.has(item(row))),
+        origin: "model" as const,
+      })),
+      {
+        key: String(rows.indexOf(closing)),
+        label: text(closing, "Bridge Item"),
+        kind: "total",
+        value: field(closing, "Amount")?.value ?? null,
+        reason: field(closing, "Amount")?.text || "not stated",
+        origin: "model",
+      },
+    ];
+    return [
+      {
+        key: "liquidity-bridge-waterfall",
+        table: table.table_id,
+        kind: "waterfall",
+        title: "12-month liquidity bridge",
+        summary:
+          "Cash uses follow the vendor formula; opening-liquidity components are not added twice. Currency and scale are not stated in this bridge; totals, status, calculation basis and evidence remain explicit.",
+        steps,
+        categories: [],
+        series: [],
+        sourceOf: (selection) => {
+          const row = rows[Number(selection.series)];
+          return row
+            ? joined(
+                `Served amount: ${text(row, "Amount") || "not stated"}`,
+                uses.has(item(row)) ? "Outflow direction applied from the vendor formula" : "",
+                text(row, "Status"),
+                text(row, "Source / Calculation"),
+                text(row, "Credit Comment"),
+                text(row, "Source Trace"),
+              )
+            : null;
+        },
+      },
+    ];
+  }
+  return [
+    {
+      key: "liquidity-bridge-items",
+      table: table.table_id,
+      kind: "bar",
+      title: "12-month liquidity bridge items",
+      summary:
+        "Amounts as served; currency and scale are not stated in this bridge. A waterfall is withheld when stated totals are missing or a row is unrecognized.",
+      categories: distinctLabels(rows, (row) => text(row, "Bridge Item")),
+      categoryLabel: "Bridge item",
+      orientation: "horizontal",
+      series: [
+        {
+          key: "amount",
+          label: "Amount",
+          origin: "model",
+          data: rows.map((row) => datum(field(row, "Amount"))),
+        },
+      ],
+      sourceOf: (selection) => {
+        const row = rows[selection.index];
+        return row
+          ? joined(
+              text(row, "Status"),
+              text(row, "Source / Calculation"),
+              text(row, "Credit Comment"),
+              text(row, "Source Trace"),
+            )
+          : null;
+      },
+    },
+  ];
+}
+
+/** CP-2E floating/fixed debt exposure, partitioned by the served currency. */
+function rateExposureFigures(tables: readonly Table[]): Figure[] {
+  const table = tableWithColumns(
+    tables,
+    "Debt Instrument",
+    "Amount",
+    "Fixed / Floating",
+    "Currency",
+    "Hedge Status",
+  );
+  if (!table) return [];
+  const rows = recordsOf(table);
+  const byCurrency = groupBy(rows, (row) => text(row, "Currency"));
+  const currencies = [...byCurrency.keys()].filter(Boolean);
+  const missingCurrency = rows.filter((row) => !text(row, "Currency")).length;
+  if (currencies.length > MAX_FIGURES) {
+    return [
+      {
+        ...oversized("rate-exposure", table.table_id, "Debt rate exposure", rows.length),
+        summary: `${currencies.length} currencies: figures are not drawn on mixed axes. The Appendix tab lists every row.`,
+      },
+    ];
+  }
+  return currencies.flatMap((currency, currencyIndex) => {
+    const own = byCurrency.get(currency)!;
+    if (!own.some((row) => field(row, "Amount")?.value != null)) return [];
+    return [
+      {
+        key: `rate-exposure-${currencyIndex}`,
+        table: table.table_id,
+        kind: "bar" as const,
+        title: `Debt rate exposure, ${currency}`,
+        summary: `${own.length} instruments; fixed/floating and hedge labels are shown as served${missingCurrency ? `; ${missingCurrency} without currency are left in the table` : ""}. Amount scale is not specified.`,
+        unit: currency,
+        categories: distinctLabels(own, (row) =>
+          [
+            text(row, "Debt Instrument"),
+            text(row, "Fixed / Floating") || "Rate type not stated",
+            `Hedge: ${text(row, "Hedge Status") || "not stated"}`,
+          ]
+            .filter(Boolean)
+            .join(" · "),
+        ),
+        categoryLabel: "Instrument and rate status",
+        orientation: "horizontal" as const,
+        series: [
+          {
+            key: "amount",
+            label: "Amount",
+            origin: "model" as const,
+            data: own.map((row) => datum(field(row, "Amount"))),
+          },
+        ],
+        sourceOf: (selection: ChartSelection) => {
+          const row = own[selection.index];
+          return row
+            ? joined(
+                text(row, "Base Rate"),
+                text(row, "Margin / Coupon"),
+                text(row, "Maturity"),
+                text(row, "Source Trace"),
+                text(row, "Credit Implication"),
+              )
+            : null;
+        },
+      },
+    ];
+  });
+}
+
+/** CP-2H numeric trigger buffers; never converts headroom into rating notches. */
+function ratingTriggerFigures(tables: readonly Table[]): Figure[] {
+  const table = tableWithColumns(
+    tables,
+    "Agency",
+    "Trigger Direction",
+    "Metric",
+    "Threshold",
+    "Case / Period Value",
+    "Headroom",
+    "Status",
+  );
+  if (!table) return [];
+  const rows = recordsOf(table);
+  const groups = new Map<string, Row[]>();
+  rows.forEach((row, index) => {
+    const labels = [text(row, "Agency"), text(row, "Metric"), text(row, "Trigger Direction")];
+    const key = labels.map(heading).join("\u0000");
+    const uniqueKey = labels.every((label) => label.trim()) ? key : `${key}\u0000${index}`;
+    const group = groups.get(uniqueKey);
+    if (group) group.push(row);
+    else groups.set(uniqueKey, [row]);
+  });
+  if (groups.size > MAX_FIGURES) {
+    return [
+      {
+        ...oversized("rating-headroom", table.table_id, "Agency trigger headroom", rows.length),
+        summary: `${groups.size} agency/metric combinations: too many figures to draw. The Appendix tab lists every row.`,
+      },
+    ];
+  }
+  return [...groups]
+    .map(([, own], index) => {
+      const [agency, metric, direction] = [
+        text(own[0]!, "Agency"),
+        text(own[0]!, "Metric"),
+        text(own[0]!, "Trigger Direction"),
+      ];
+      return {
+        key: `rating-headroom-${index}`,
+        table: table.table_id,
+        kind: "diverging" as const,
+        title: `${agency || "Agency not stated"} · ${metric || "Metric not stated"} headroom`,
+        summary: `${direction || "Trigger direction not stated"}; signed headroom as served across case/period values.`,
+        categories: distinctLabels(own, (row) =>
+          [text(row, "Case / Period Value")].filter(Boolean).join(" · "),
+        ),
+        series: [
+          {
+            key: "headroom",
+            label: "Headroom",
+            origin: "model" as const,
+            data: own.map((row) => datum(field(row, "Headroom"))),
+          },
+        ],
+        sourceOf: (selection: ChartSelection) => {
+          const row = own[selection.index];
+          return row
+            ? joined(
+                text(row, "Threshold"),
+                text(row, "Case / Period Value"),
+                text(row, "Status"),
+                text(row, "Evidence ID"),
+                locate(row),
+              )
+            : null;
+        },
+      };
+    })
+    .filter((figure) => figure.series[0]?.data.some((point) => point.value !== null));
+}
+
+/** CP-3C canonical carrying-value maturities, preserving vendor date order. */
+function refinancingMaturityFigures(tables: readonly Table[]): Figure[] {
+  const table = tableWithColumns(
+    tables,
+    "Instrument",
+    "Amount",
+    "Currency",
+    "Maturity Date",
+    "Seniority / Lien",
+  );
+  if (!table) return [];
+  const rows = recordsOf(table);
+  const byCurrency = groupBy(rows, (row) => text(row, "Currency"));
+  const currencies = [...byCurrency.keys()].filter(Boolean);
+  if (currencies.length > MAX_FIGURES) {
+    return [
+      {
+        ...oversized("refinancing-wall", table.table_id, "Maturity wall", rows.length),
+        summary: `${currencies.length} currencies: figures are not drawn on mixed axes. The Appendix tab lists every row.`,
+      },
+    ];
+  }
+  return currencies.flatMap((currency, currencyIndex) => {
+    const own = byCurrency.get(currency)!;
+    if (!own.some((row) => field(row, "Amount")?.value != null)) return [];
+    if (own.length > MAX_MARKS)
+      return [
+        oversized(
+          `refinancing-wall-${currencyIndex}`,
+          table.table_id,
+          `Maturity wall, ${currency}`,
+          own.length,
+        ),
+      ];
+    return [
+      {
+        key: `refinancing-wall-${currencyIndex}`,
+        table: table.table_id,
+        kind: "bar" as const,
+        title: `Maturity wall by instrument, ${currency}`,
+        summary: `Carrying values as served on the module's balance-date basis; currency scale is not specified${rows.some((row) => !text(row, "Currency")) ? "; rows without currency remain in the table" : ""}, and subsequent events remain separate.`,
+        unit: currency,
+        categories: distinctLabels(own, (row) =>
+          [
+            text(row, "Maturity Date") || "Date not stated",
+            text(row, "Instrument"),
+            text(row, "Seniority / Lien"),
+          ]
+            .filter(Boolean)
+            .join(" · "),
+        ),
+        categoryLabel: "Maturity and instrument",
+        orientation: "horizontal" as const,
+        series: [
+          {
+            key: "amount",
+            label: "Carrying value",
+            origin: "model" as const,
+            data: own.map((row) => datum(field(row, "Amount"))),
+          },
+        ],
+        sourceOf: (selection: ChartSelection) => {
+          const row = own[selection.index];
+          return row
+            ? joined(
+                text(row, "Years to Maturity"),
+                text(row, "Coupon / Margin"),
+                text(row, "Fixed / Floating"),
+                text(row, "Refinancing Pressure"),
+                text(row, "Source Trace"),
+              )
+            : null;
+        },
+      },
+    ];
+  });
+}
+
+/** CP-4A headroom stays partitioned by test type; signs follow the vendor value. */
+function covenantHeadroomFigures(tables: readonly Table[]): Figure[] {
+  const table = tableWithColumns(
+    tables,
+    "Test",
+    "Test Type",
+    "Threshold",
+    "Current Basis",
+    "Headroom",
+    "Status",
+  );
+  if (!table) return [];
+  const rows = recordsOf(table);
+  const groups = new Map<string, Row[]>();
+  rows.forEach((row, index) => {
+    const testType = text(row, "Test Type");
+    const key = testType || `unclassified-${index}`;
+    const group = groups.get(key);
+    if (group) group.push(row);
+    else groups.set(key, [row]);
+  });
+  if (groups.size > MAX_FIGURES) {
+    return [
+      {
+        ...oversized("covenant-headroom", table.table_id, "Covenant headroom", rows.length),
+        summary: `${groups.size} covenant test types: too many figures to draw. The Appendix tab lists every row.`,
+      },
+    ];
+  }
+  return [...groups]
+    .map(([, own], index) => ({
+      key: `covenant-headroom-${index}`,
+      table: table.table_id,
+      kind: "diverging" as const,
+      // A row with no test type is its own figure, so its test names it.
+      title: `Covenant headroom · ${
+        text(own[0]!, "Test Type") ||
+        `${text(own[0]!, "Test") || "test not named"} (test type not stated)`
+      }`,
+      summary:
+        "Signed headroom and status as served; maximum and minimum test direction is retained.",
+      categories: distinctLabels(own, (row) =>
+        [text(row, "Test"), text(row, "Status")].filter(Boolean).join(" · "),
+      ),
+      series: [
+        {
+          key: "headroom",
+          label: "Headroom",
+          origin: "model" as const,
+          data: own.map((row) => datum(field(row, "Headroom"))),
+        },
+      ],
+      sourceOf: (selection: ChartSelection) => {
+        const row = own[selection.index];
+        return row
+          ? joined(
+              text(row, "Threshold"),
+              text(row, "Current Basis"),
+              text(row, "Formula"),
+              text(row, "Status"),
+              text(row, "Limitation"),
+              text(row, "Evidence ID"),
+            )
+          : null;
+      },
+    }))
+    .filter((figure) => figure.series[0]?.data.some((point) => point.value !== null));
+}
+
+/** CP-8's expected and realized values, charted one metric at a time. */
+function postMortemFigures(tables: readonly Table[]): Figure[] {
+  const table = tableWithColumns(
+    tables,
+    "Metric",
+    "Expected",
+    "Realized",
+    "Variance (direction + magnitude)",
+    "Confidence",
+    "Evidence ID",
+  );
+  if (!table) return [];
+  const rows = recordsOf(table);
+  if (rows.length > MAX_FIGURES) {
+    return [oversized("post-mortem-variance", table.table_id, "Expected vs realized", rows.length)];
+  }
+  return rows.flatMap((row, index) => {
+    const metric = text(row, "Metric");
+    if (!metric || (field(row, "Expected")?.value == null && field(row, "Realized")?.value == null))
+      return [];
+    return [
+      {
+        key: `post-mortem-${heading(metric)}-${index}`,
+        table: table.table_id,
+        kind: "bar" as const,
+        title: `${metric} · expected vs realized`,
+        summary:
+          [text(row, "Variance (direction + magnitude)"), text(row, "Confidence")]
+            .filter(Boolean)
+            .join(" · ") || "Expected and realized values as served.",
+        categories: ["Expected", "Realized"],
+        categoryLabel: "Measure",
+        orientation: "horizontal" as const,
+        series: [
+          {
+            key: metric,
+            label: metric,
+            origin: "model" as const,
+            data: [datum(field(row, "Expected")), datum(field(row, "Realized"))],
+          },
+        ],
+        sourceOf: () => text(row, "Evidence ID") || null,
+      },
+    ];
+  });
 }
 
 /** Revenue by segment, stacked by period. */
@@ -932,6 +1418,12 @@ export function figuresOf(handoff: HandoffView): Figure[] {
     maturityLadder(tables),
     ...(handoff.module_id === "CP-1C" ? peerComparisonFigures(tables) : []),
     ...(handoff.module_id === "CP-1D" ? qualityBridgeFigures(tables) : []),
+    ...(handoff.module_id === "CP-2D" ? liquidityBridgeFigures(tables) : []),
+    ...(handoff.module_id === "CP-2E" ? rateExposureFigures(tables) : []),
+    ...(handoff.module_id === "CP-2H" ? ratingTriggerFigures(tables) : []),
+    ...(handoff.module_id === "CP-3C" ? refinancingMaturityFigures(tables) : []),
+    ...(handoff.module_id === "CP-4A" ? covenantHeadroomFigures(tables) : []),
+    ...(handoff.module_id === "CP-8" ? postMortemFigures(tables) : []),
     compared > KEY_FIGURES ? comparatorChanges(tables) : null,
     addbackValidation(tables),
     ...forecastDrivers(tables),
@@ -1014,6 +1506,9 @@ function Chart({
   const common = { title: figure.title, summary: figure.summary, unit: figure.unit, onSelect };
   if (figure.kind === "line") {
     return <LineChart {...common} categories={figure.categories} series={figure.series} />;
+  }
+  if (figure.kind === "waterfall") {
+    return <WaterfallChart {...common} steps={figure.steps ?? []} />;
   }
   if (figure.kind === "bar") {
     return (

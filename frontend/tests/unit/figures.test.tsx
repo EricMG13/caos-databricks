@@ -136,7 +136,9 @@ test("pressing a mark names it beside the figures, with its stated source", () =
     </MemoryRouter>,
   );
   const figure = container.querySelector("[data-figure='segment-mix']")!;
-  const mark = within(figure as HTMLElement).getAllByRole("button", { name: /Q2-2026/ })[0]!;
+  const mark = within(figure as HTMLElement).getAllByRole("button", {
+    name: /Q2-2026/,
+  })[0]!;
   fireEvent.click(mark);
   const picked = container.querySelector("[data-figures] ~ [data-picked]")!;
   expect(picked).toHaveTextContent("Revenue by segment");
@@ -146,11 +148,18 @@ test("pressing a mark names it beside the figures, with its stated source", () =
 });
 
 test("a module whose tables could not be read says so and draws none", () => {
-  const refused = { ...cp1, tables: [], tables_unavailable_reason: "TABLES_MALFORMED" as const };
+  const refused = {
+    ...cp1,
+    tables: [],
+    tables_unavailable_reason: "TABLES_MALFORMED" as const,
+  };
   const { container } = render(
     <MemoryRouter>
       <AnalysisSection
-        document={{ ...document, body: { ...document.body, handoffs: [refused] } }}
+        document={{
+          ...document,
+          body: { ...document.body, handoffs: [refused] },
+        }}
         tab={refused.route_node_id}
       />
     </MemoryRouter>,
@@ -243,7 +252,10 @@ test("an unstated principal keeps its facility on the ladder instead of vanishin
   expect(ladder.categories).toContain("Undated");
   const unstatedClass = ladder.series.find((series) => series.key === "NOT_STATED NOT_STATED")!;
   const index = ladder.categories.indexOf("Undated");
-  expect(unstatedClass.data[index]).toEqual({ value: null, reason: "not stated" });
+  expect(unstatedClass.data[index]).toEqual({
+    value: null,
+    reason: "not stated",
+  });
   expect(
     ladder.sourceOf({
       series: unstatedClass.key,
@@ -439,7 +451,10 @@ test("the catalyst list sorts by rank, whatever order the model wrote", () => {
       ...document.body,
       handoffs: document.body.handoffs.map((handoff) =>
         handoff === cp2b
-          ? { ...handoff, tables: [{ ...catalysts!, rows: [...catalysts!.rows].reverse() }] }
+          ? {
+              ...handoff,
+              tables: [{ ...catalysts!, rows: [...catalysts!.rows].reverse() }],
+            }
           : handoff,
       ),
     },
@@ -512,7 +527,9 @@ test("CP-2B's catalysts are a ranked, dated list, not a chart", () => {
   );
   const list = container.querySelector("[data-catalysts]")!;
   expect(
-    within(list as HTMLElement).getByRole("heading", { name: "Catalysts, ranked" }),
+    within(list as HTMLElement).getByRole("heading", {
+      name: "Catalysts, ranked",
+    }),
   ).toBeVisible();
   const items = [...list.querySelectorAll("li")];
   expect(items.map((item) => item.getAttribute("data-catalyst"))).toEqual(["1", "2", "3", "4"]);
@@ -616,6 +633,153 @@ test("vendor peer and quality tables map to unit-safe comparison and bridge char
   ]);
 });
 
+test("CP-2D uses the vendor cash-use signs and falls back on unrecognized bridge rows", () => {
+  const columns = [
+    "Bridge Item",
+    "Amount",
+    "Source / Calculation",
+    "Status",
+    "Credit Comment",
+    "Source Trace",
+  ];
+  const rows = [
+    ["Beginning Cash", "80", "Cash register", "Supported", "", "E-1"],
+    ["Accessible Revolver Availability", "20", "Availability", "Supported", "", "E-2"],
+    ["Beginning Accessible Liquidity", "100", "Cash plus revolver", "Supported", "", "E-3"],
+    ["Operating Cash Inflow/Outflow", "10", "Operating forecast", "Supported", "", "E-4"],
+    ["Working Capital Impact", "-5", "Seasonal use", "Supported", "", "E-5"],
+    ["Cash Interest", "4", "Cash interest forecast", "Supported", "", "E-6"],
+    ["Committed Inflows", "1", "Executed inflow", "Supported", "", "E-7"],
+    ["Ending Accessible Liquidity", "102", "Bridge formula", "Supported", "", "E-8"],
+  ];
+  const bridge = table("vendor.T2E.5", columns, rows);
+  const figure = figuresOf(handoffFor("CP-2D", [bridge]))[0]!;
+  expect(figure.kind).toBe("waterfall");
+  expect(figure.steps?.map((step) => step.value)).toEqual(["100", "10", "-5", "-4", "1", "102"]);
+  expect(figure.summary).toContain("Currency and scale are not stated");
+  expect(
+    figure.sourceOf({
+      series: "5",
+      category: "Cash Interest",
+      index: 5,
+      value: "-4",
+      origin: "model",
+    }),
+  ).toContain("Outflow direction applied from the vendor formula");
+
+  const withUnknown = table("vendor.T2E.5", columns, [
+    ...rows,
+    ["Unclassified movement", "2", "", "Supported", "", "E-9"],
+  ]);
+  const fallback = figuresOf(handoffFor("CP-2D", [withUnknown]))[0]!;
+  expect(fallback.kind).toBe("bar");
+  // The fallback reports served values and does not infer an unknown sign.
+  expect(fallback.series[0]!.data[5]!.value).toBe("4");
+
+  const { container } = render(
+    <Figures handoff={handoffFor("CP-2D", [bridge])} calculation={null} onPick={() => {}} />,
+  );
+  expect(container.querySelector('[data-chart="waterfall"]')).not.toBeNull();
+});
+
+test("vendor debt, trigger, covenant, and post-mortem tables map to bounded single-unit charts", () => {
+  const exposure = table(
+    "vendor.T2F.2",
+    ["Debt Instrument", "Amount", "Fixed / Floating", "Currency", "Hedge Status"],
+    [
+      ["Notes", "100", "Fixed", "USD", "Unhedged"],
+      ["Term loan", "50", "Floating", "USD", "Swapped"],
+      ["Loan", "40", "Floating", "EUR", "Unhedged"],
+    ],
+  );
+  const exposureFigures = figuresOf(handoffFor("CP-2E", [exposure]));
+  expect(exposureFigures.map((figure) => figure.kind)).toEqual(["bar", "bar"]);
+  expect(exposureFigures.map((figure) => figure.unit)).toEqual(["USD", "EUR"]);
+  expect(exposureFigures[0]!.categories[0]).toContain("Fixed · Hedge: Unhedged");
+
+  const triggers = table(
+    "vendor.T2R.4",
+    [
+      "Agency",
+      "Trigger Direction",
+      "Metric",
+      "Threshold",
+      "Case / Period Value",
+      "Headroom",
+      "Status",
+      "Evidence ID",
+    ],
+    [
+      ["Moody's", "Downgrade", "Net leverage", "6.0", "Base FY2026", "0.5", "Clear", "E-1"],
+      ["Moody's", "Downgrade", "Net leverage", "6.0", "Downside FY2026", "-0.2", "Breach", "E-2"],
+    ],
+  );
+  const trigger = figuresOf(handoffFor("CP-2H", [triggers]))[0]!;
+  expect(trigger.kind).toBe("diverging");
+  expect(trigger.series[0]!.data.map((datum) => datum.value)).toEqual(["0.5", "-0.2"]);
+
+  const maturities = table(
+    "vendor.T3D.2",
+    ["Instrument", "Amount", "Currency", "Maturity Date", "Seniority / Lien"],
+    [
+      ["Notes", "100", "USD", "2028-06-01", "Senior secured"],
+      ["Bonds", "50", "USD", "2030-01-15", "Senior unsecured"],
+    ],
+  );
+  const maturity = figuresOf(handoffFor("CP-3C", [maturities]))[0]!;
+  expect(maturity.kind).toBe("bar");
+  expect(maturity.categories.map((category) => category.slice(0, 10))).toEqual([
+    "2028-06-01",
+    "2030-01-15",
+  ]);
+
+  const covenants = table(
+    "vendor.T4C.4",
+    ["Test", "Test Type", "Threshold", "Current Basis", "Headroom", "Status"],
+    [
+      ["Net leverage", "Maximum leverage", "5.0x", "4.2x", "0.8", "Pass"],
+      ["Interest coverage", "Minimum coverage", "2.0x", "1.8x", "-0.2", "Watch"],
+    ],
+  );
+  const covenantFigures = figuresOf(handoffFor("CP-4A", [covenants]));
+  expect(covenantFigures.map((figure) => figure.kind)).toEqual(["diverging", "diverging"]);
+  expect(covenantFigures.map((figure) => figure.categories[0])).toEqual([
+    "Net leverage · Pass",
+    "Interest coverage · Watch",
+  ]);
+
+  const postMortem = table(
+    "vendor.T7.4",
+    [
+      "Metric",
+      "Expected",
+      "Realized",
+      "Variance (direction + magnitude)",
+      "Confidence",
+      "Evidence ID",
+    ],
+    [["Revenue", "100", "95", "-5 unfavorable", "Medium", "E-1"]],
+  );
+  const comparison = figuresOf(handoffFor("CP-8", [postMortem]))[0]!;
+  expect(comparison.kind).toBe("bar");
+  expect(comparison.categories).toEqual(["Expected", "Realized"]);
+  expect(comparison.series[0]!.data.map((datum) => datum.value)).toEqual(["100", "95"]);
+  expect(comparison.summary).toContain("-5 unfavorable");
+  expect(
+    comparison.sourceOf({
+      series: "Revenue",
+      category: "Realized",
+      index: 1,
+      value: "95",
+      origin: "model",
+    }),
+  ).toBe("E-1");
+  const { container } = render(
+    <Figures handoff={handoffFor("CP-8", [postMortem])} calculation={null} onPick={() => {}} />,
+  );
+  expect(container.querySelector('[data-chart="bar"]')).not.toBeNull();
+});
+
 test("a bracketed negative percent is read once, not scaled a second time", () => {
   const headers = [
     "Entity",
@@ -674,6 +838,48 @@ test("peer figures are bounded when a table names too many currencies", () => {
 });
 
 const many = (count: number) => Array.from({ length: count }, (_, index) => index);
+
+test("every new per-partition figure set is bounded, and says so", () => {
+  const exposure = table(
+    "vendor.T2F.2",
+    ["Debt Instrument", "Amount", "Fixed / Floating", "Currency", "Hedge Status"],
+    many(30).map((index) => [`Loan ${index}`, "1", "Fixed", `C${index}`, "None"]),
+  );
+  const triggers = table(
+    "vendor.T2R.4",
+    [
+      "Agency",
+      "Trigger Direction",
+      "Metric",
+      "Threshold",
+      "Case / Period Value",
+      "Headroom",
+      "Status",
+    ],
+    many(30).map((index) => ["Moody's", "Downgrade", `Metric ${index}`, "6", "Base", "1", "Clear"]),
+  );
+  const maturities = table(
+    "vendor.T3D.2",
+    ["Instrument", "Amount", "Currency", "Maturity Date", "Seniority / Lien"],
+    many(30).map((index) => [`Note ${index}`, "1", `C${index}`, "2030-01-01", "Senior"]),
+  );
+  const covenants = table(
+    "vendor.T4C.4",
+    ["Test", "Test Type", "Threshold", "Current Basis", "Headroom", "Status"],
+    many(30).map((index) => [`Test ${index}`, `Type ${index}`, "5", "4", "1", "Pass"]),
+  );
+  const expected: [string, ReturnType<typeof table>, string][] = [
+    ["CP-2E", exposure, "30 currencies"],
+    ["CP-2H", triggers, "30 agency/metric combinations"],
+    ["CP-3C", maturities, "30 currencies"],
+    ["CP-4A", covenants, "30 covenant test types"],
+  ];
+  for (const [module, source, said] of expected) {
+    const figures = figuresOf(handoffFor(module, [source]));
+    expect(figures.filter((figure) => !figure.oversized)).toHaveLength(0);
+    expect(figures.find((figure) => figure.oversized)!.summary).toContain(said);
+  }
+});
 
 test("past the figure budget the peer comparison says how many it left out", () => {
   const columns = [
@@ -800,7 +1006,9 @@ test("the peer leverage cell is required of the table but never drawn as one met
 test("percent cells draw as the host's reader and the shared vector say", () => {
   const { cells } = JSON.parse(
     readFileSync(resolve(process.cwd(), "tests/unit/percent-cells.json"), "utf8"),
-  ) as { cells: { text: string; value: string | null; percent: string | null }[] };
+  ) as {
+    cells: { text: string; value: string | null; percent: string | null }[];
+  };
   const columns = [
     "Entity",
     "Revenue",
@@ -827,5 +1035,34 @@ test("percent cells draw as the host's reader and the shared vector say", () => 
   )!;
   expect(growth.series[0]!.data.map((datum) => datum.value)).toEqual(
     cells.map((cell) => cell.percent),
+  );
+});
+
+test("a covenant mark names its cells, and a row with no test type is named by its test", () => {
+  const covenants = table(
+    "vendor.T4C.4",
+    [
+      "Test",
+      "Test Type",
+      "Threshold",
+      "Current Basis",
+      "Formula",
+      "Headroom",
+      "Status",
+      "Limitation",
+      "Evidence ID",
+    ],
+    [["Net leverage", "Maximum", "5.0x", "4.2x", "T - C", "0.8", "Pass", "", "E-9"]],
+  );
+  expect(figuresOf(handoffFor("CP-4A", [covenants]))[0]!.sourceOf(pick(0))).toBe(
+    "5.0x · 4.2x · T - C · Pass · E-9",
+  );
+  const blank = table(
+    "vendor.T4C.4",
+    ["Test", "Test Type", "Threshold", "Current Basis", "Headroom", "Status"],
+    [["Net leverage", "", "5.0x", "4.2x", "0.8", "Pass"]],
+  );
+  expect(figuresOf(handoffFor("CP-4A", [blank]))[0]!.title).toBe(
+    "Covenant headroom · Net leverage (test type not stated)",
   );
 });
