@@ -487,7 +487,7 @@ def test_no_token_carries_a_line_break() -> None:
     assert not any(set(token.text) & set(LINE_BREAKS) for token in tokens)
     assert one_line(DETACHED) in [token.text for token in tokens]
     identity = PdfExtractor().identity
-    assert (identity.version, identity.config["token_line_breaks"]) == ("10", "space")
+    assert (identity.version, identity.config["token_line_breaks"]) == ("11", "space")
 
 
 def test_a_glyphs_line_breaks_cannot_detach_the_host_note() -> None:
@@ -1582,7 +1582,7 @@ def test_the_extraction_child_marks_the_none_colorant() -> None:
         "Line": COLORANT
     }
     assert (identity.version, identity.config["hidden_colorant_none"]) == (
-        "10",
+        "11",
         "separation-none,devicen-all-none",
     )
 
