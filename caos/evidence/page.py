@@ -112,9 +112,10 @@ PDF_V2_COORDINATES = "crop-top-left-rotated-pt"
 # colours (N9), and lays text out after a form XObject in the page's matrix;
 # v8 marks text painted in a colorant that paints nothing; v9 reads form text
 # and treats nonrectangular fills as an unknown backdrop; v10 inherits form
-# state, applies form bounds, and marks overpainted form glyphs. Coordinates stay the
-# same throughout.
-PDF_CROP_VERSIONS = frozenset({"2", "3", "4", "5", "6", "7", "8", "9", "10"})
+# state, applies form bounds, and marks overpainted form glyphs; v11 tests a
+# glyph's centre against normalised form bounds. Coordinates stay the same
+# throughout.
+PDF_CROP_VERSIONS = frozenset({"2", "3", "4", "5", "6", "7", "8", "9", "10", "11"})
 TEXT_COORDINATES = "cell-top-left-pt"
 # The encodings a `caos.plain-text` identity records: v1-v3 `utf-8`, v4
 # `utf-8-sig` (`extract.TEXT_ENCODING`). Each is also the codec's name.
