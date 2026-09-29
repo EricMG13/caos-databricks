@@ -20,5 +20,7 @@ paths = [
   '''^complexipy-snapshot\.json$''',
   '''^qualification/.*\.json$''',
   '''^caos/qualification/documents\.json$''',
+  # A review's integrity manifests: file path -> SHA-256 of that file (F465).
+  '''^docs/rebuild/gitnexus-review/[0-9a-f]{40}/(?:baseline|evidence/(?:prepublication|final)-integrity)\.json$''',
 ]
 regexes = ['''^finish_reason=(?:stop|length)$''']
