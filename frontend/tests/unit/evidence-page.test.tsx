@@ -293,6 +293,30 @@ describe("the evidence drawer", () => {
     expect(dialog()!.querySelector('[data-page-state="unavailable"]')).toBeInTheDocument();
   });
 
+  test("a recheck keeps the open page on screen, and one that never answers keeps it", async () => {
+    await mount(`/analysis/?case=${CASE}&tab=rn-cp-0`);
+    await openFirstFact();
+    expect(lines()).toHaveLength(3);
+    let drop: () => void = () => {};
+    const firstFetch = globalThis.fetch;
+    vi.stubGlobal("fetch", (...args: Parameters<typeof fetch>) =>
+      String(args[0]).includes("/pages/")
+        ? new Promise<Response>((_resolve, reject) => {
+            drop = () => reject(new TypeError("offline"));
+          })
+        : firstFetch(...args),
+    );
+    // The server ends every tail after five minutes; the browser reopens it.
+    FakeSource.all[0]!.readyState = FakeSource.OPEN;
+    await fire("open");
+    expect(lines()).toHaveLength(3);
+    expect(dialog()!.querySelector("[data-page-state]")).toBeNull();
+    await act(async () => drop());
+    await settle();
+    expect(lines()).toHaveLength(3);
+    expect(dialog()!.querySelector("[data-page-state]")).toBeNull();
+  });
+
   test("a refused page shows its state and no text", async () => {
     pageAnswer = () => ({ status: 404, body: { code: "PAGE_NOT_AVAILABLE", clears: "x" } });
     await mount(`/analysis/?case=${CASE}&tab=rn-cp-0`);
