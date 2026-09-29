@@ -368,14 +368,8 @@ export function Workspace({ section }: { section: Section }) {
     tabs.find((tab) => tab.opens)?.id ??
     tabs[0]?.id ??
     null;
-  // The worst module leads: one QA blocked or failed before one accepted with
-  // a warning, and that before one accepted with a limitation.
   const reviewTab =
-    section === "analysis"
-      ? (tabs.find((tab) => tab.severity === "CRITICAL") ??
-        tabs.find((tab) => tab.severity === "WARNING") ??
-        tabs.find((tab) => tab.severity === "RESTRICTED"))
-      : undefined;
+    section === "analysis" ? tabs.find((tab) => tab.severity && tab.severity !== "SUCCESS") : null;
   const reviewParams = new URLSearchParams(params);
   if (reviewTab) reviewParams.set("tab", reviewTab.id);
   const chooseTab = (id: string) => {
@@ -458,7 +452,6 @@ export function Workspace({ section }: { section: Section }) {
                   code: reviewTab.label,
                   name: reviewTab.cp ?? reviewTab.label,
                   note: reviewTab.note ?? null,
-                  failed: reviewTab.severity === "CRITICAL",
                   to: `?${reviewParams.toString()}`,
                 }
               : undefined

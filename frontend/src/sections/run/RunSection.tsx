@@ -95,6 +95,7 @@ export function RunSection({ document }: { document: RunSectionDocument; tab: st
           caseId={body.case_id}
           action={actionOf(actions, "CREATE_RUN")}
           choices={body.route_choices}
+          models={body.model_choices}
         />
       </>
     );
@@ -151,6 +152,9 @@ export function RunSection({ document }: { document: RunSectionDocument; tab: st
                         : sentence(summary.status)}
                     </span>
                     <time dateTime={summary.created_at}>{stamp(summary.created_at)}</time>
+                    <span data-run-model={summary.model ?? undefined}>
+                      {summary.model ?? "configured model"}
+                    </span>
                     <span>{label}</span>
                   </Link>
                 );
@@ -379,6 +383,7 @@ export function RunSection({ document }: { document: RunSectionDocument; tab: st
           caseId={body.case_id}
           action={actionOf(actions, "CREATE_RUN")}
           choices={body.route_choices}
+          models={body.model_choices}
           supersedes={run.status === "BLOCKED" && run.superseded_by === null ? run.run_id : null}
         />
       </section>

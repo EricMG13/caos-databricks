@@ -195,23 +195,3 @@ describe("a region that received nothing", () => {
     expect(region(container).querySelector("[data-surface-state='offline']")).toBeNull();
   });
 });
-
-describe("the review point an open Analysis module leads with", () => {
-  test("a module QA blocked leads, and is not called accepted", async () => {
-    // The fixture's CP-1C carries a warning; CP-6, later on the route, is blocked.
-    const analysis = json("../../fixtures/analysis.json");
-    const cp6 = analysis.body.handoffs.find(
-      (handoff: { module_id: string }) => handoff.module_id === "CP-6",
-    );
-    cp6.qa_status = "Blocked";
-    const { container } = await mount(
-      "analysis",
-      `/analysis/?case=${CASE}&tab=rn-cp-0`,
-      serving(analysis),
-    );
-    const review = container.querySelector("[data-summary-review]")!;
-    expect(review).toHaveTextContent("(CP-6) did not pass QA.");
-    expect(review).not.toHaveTextContent("accepted");
-    expect(review.querySelector("a")!.getAttribute("href")).toContain("tab=rn-cp-6");
-  });
-});

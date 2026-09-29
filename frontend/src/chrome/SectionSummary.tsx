@@ -91,8 +91,7 @@ export function SectionSummary({
   /** One line, the brief on request: a section whose view is open (an
       Analysis module) gives the first screen to the view. */
   compact?: boolean;
-  /** The module to review first; `failed` when QA blocked or failed it. */
-  review?: { code: string; name: string; note: string | null; failed: boolean; to: string };
+  review?: { code: string; name: string; note: string | null; to: string };
 }) {
   const cells = CELLS.filter((cell) => brief[cell.key]);
   const states = STATE_CELLS.filter(({ key }) => ribbon[key] !== null);
@@ -155,9 +154,8 @@ export function SectionSummary({
               className="w-full text-sm font-normal tracking-normal text-muted-foreground"
               data-summary-review
             >
-              <span className="text-foreground">{review.name}</span> ({review.code}){" "}
-              {review.failed ? "did not pass QA" : "was accepted with a review point"}
-              {review.note ? `: ${review.note}` : "."}
+              <span className="text-foreground">{review.name}</span> ({review.code}) was accepted
+              with a review point{review.note ? `: ${review.note}` : "."}
               {" · "}
               <Link className="text-foreground underline underline-offset-2" to={review.to}>
                 Review {review.code}

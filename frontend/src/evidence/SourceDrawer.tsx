@@ -177,26 +177,17 @@ export function SourceDrawer({
   const caseId = address?.caseId ?? null;
   const runId = address?.runId ?? null;
   useEffect(() => {
-    if (requestKey === null || pageKey === null || caseId === null || runId === null) {
-      return undefined;
-    }
+    if (requestKey === null || caseId === null || runId === null) return undefined;
     const controller = new AbortController();
     void fetchPage(
       { caseId, runId, sourceId: fact.source_id, page: fact.page },
       controller.signal,
     ).then((status) => {
-      if (controller.signal.aborted) return;
-      // A recheck that never reached the server says nothing new about the
-      // page, so the page it was rechecking stays up.
-      setPage((shown) =>
-        status.kind === "offline" && shown?.key === pageKey ? shown : { key: pageKey, status },
-      );
+      if (!controller.signal.aborted) setPage({ key: requestKey, status });
     });
     return () => controller.abort();
-  }, [requestKey, pageKey, caseId, runId, fact.source_id, fact.page]);
-  // Every stream open rechecks the page (the server ends each tail after five
-  // minutes); the page stays on screen until the recheck answers.
-  const status = pageKey !== null && page?.key === pageKey ? page.status : null;
+  }, [requestKey, caseId, runId, fact.source_id, fact.page]);
+  const status = requestKey !== null && page?.key === requestKey ? page.status : null;
 
   return (
     <Overlay
