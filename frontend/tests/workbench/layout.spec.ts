@@ -215,9 +215,10 @@ test("Analysis module names support keyboard selection and zoom reflow in both t
     await tabs.getByRole("tab", { name: /^Canonical data foundation\s*, success$/ }).press("End");
     await expect(page).toHaveURL(/tab=rn-cp-cf$/);
     await expect(tabs.getByRole("tab", { name: /^Cash-flow forecast\s*, success$/ })).toBeVisible();
+    // Every view stays in sight at the desk floor (D63, D74): the index, not a select.
     await page.setViewportSize({ width: 1024, height: 768 });
-    await expect(tabs).not.toBeVisible();
-    await expect(page.getByRole("combobox", { name: "Analysis view", exact: true })).toBeVisible();
+    await expect(tabs).toBeVisible();
+    await expect(page.getByRole("combobox", { name: "Analysis view", exact: true })).toBeHidden();
     await page.setViewportSize({ width: 320, height: 640 });
     await expect(issuer).not.toBeVisible();
     await expect(page.getByRole("heading", { name: "Analysis", level: 1 })).toBeVisible();
@@ -244,8 +245,14 @@ test("a banner above the module index leaves the view beside it, and each fact w
   await page.route("**/api/v1/cases/*/events*", (route) =>
     route.fulfill({ status: 503, body: "" }),
   );
-  await page.setViewportSize({ width: 1280, height: 800 });
-  for (const tab of ["rn-cp-0", "rn-cp-1c", "rn-cp-cf"]) {
+  for (const [width, tab] of [
+    [1280, "rn-cp-0"],
+    [1280, "rn-cp-1c"],
+    [1280, "rn-cp-cf"],
+    // The desk floor (D63): the index still stands beside the view (D74).
+    [1024, "rn-cp-1c"],
+  ] as const) {
+    await page.setViewportSize({ width, height: 800 });
     await page.goto(`/analysis/?case=00000000-0000-4000-8000-000000000001&tab=${tab}`);
     await expect(page.locator("main#body [data-not-live='tail']")).toBeVisible();
     await expect(page.locator("main#body [role='tabpanel'] .modfacts")).toBeVisible();
@@ -253,6 +260,9 @@ test("a banner above the module index leaves the view beside it, and each fact w
     const panel = (await page.locator("main#body > [role='tabpanel']").boundingBox())!;
     expect(panel.x).toBeGreaterThanOrEqual(index.x + index.width);
     expect(Math.abs(panel.y - index.y)).toBeLessThan(8);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      width,
+    );
     // The bundle's words and their hues (DESIGN.md "Header"); a served word
     // with no rule would be neutral and fail here.
     // `evaluateAll` does not wait: the module's facts arrive with its chunk.

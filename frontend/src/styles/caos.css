@@ -2898,7 +2898,7 @@
   }
 }
 
-/* Accepted Module workbench: compact spacing, a 13rem module index on a wide desk.
+/* Accepted Module workbench (D74): compact spacing, a 13rem module index at every desk width.
    Outside the components layer so these layout rules override shell utilities. */
 
 .module-workbench > [data-slot="sidebar-inset"] {
@@ -2980,7 +2980,7 @@
    the page banners before the tabs for that reason; a state drawn between them
    (RegionState's observed-empty notice) is safe only while no such document
    has views. */
-@media (min-width: 1200px) {
+@media (min-width: 1024px) {
   .module-workbench main:has(> [data-section-tabs]) {
     display: grid;
     grid-template-columns: 13rem minmax(0, 1fr);
