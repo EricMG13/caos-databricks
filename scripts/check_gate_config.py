@@ -173,7 +173,7 @@ PRE_COMMIT_HOOK_BODY: dict[str, list[dict[str, object]]] = {
     "io-budget": [_local("uv run python scripts/io_budget.py --assert")],
     "gitleaks": [
         {},
-        {"entry": "gitleaks dir --no-banner --redact -v ."},
+        {"entry": "bash scripts/gitleaks_tree.sh"},
     ],
 }
 # A conftest.py can drop a test from the run with nothing in the output to
