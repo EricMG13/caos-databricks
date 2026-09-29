@@ -1,6 +1,7 @@
 // The section's own views. Never navigation between sections. Arrow keys move
-// between them and select as they go. The module index is vertical on wide
-// desks; a native select keeps narrower windows and zoom reflow compact.
+// between them and select as they go. The index is vertical at every desk width
+// (1024px and up, D63, D74); below that only a zoomed reader goes, and there the
+// views reflow into a native select.
 import type { ReactNode } from "react";
 import { SeverityMark } from "./SeverityMark";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -38,7 +39,7 @@ export function SectionTabs({
     // Placement, density and wrapping are `.module-workbench`'s, in caos.css:
     // those rules sit outside the components layer and win over any utility here.
     <div data-section-tabs data-dense={dense || undefined}>
-      <label className="block min-[1200px]:hidden">
+      <label className="block min-[1024px]:hidden">
         <span className="sr-only">{label} view</span>
         <NativeSelect
           className="w-full"
@@ -64,7 +65,7 @@ export function SectionTabs({
         value={active}
         orientation="vertical"
         onValueChange={(value) => onSelect(String(value))}
-        className="max-[1200px]:hidden"
+        className="max-[1024px]:hidden"
       >
         <TabsList
           variant="line"
