@@ -478,7 +478,7 @@ def _section_lines(body: str, section: str) -> list[tuple[int, str]]:
 
 def _table_cells(line: str) -> tuple[str, ...]:
     stripped = line.strip()
-    one_column = stripped.startswith("|") and stripped.endswith("|") and not stripped.endswith(r"\|")
+    one_column = stripped.startswith("|") or (stripped.endswith("|") and not stripped.endswith(r"\|"))
     if stripped.startswith("|"):
         stripped = stripped[1:]
     if stripped.endswith("|") and not stripped.endswith(r"\|"):

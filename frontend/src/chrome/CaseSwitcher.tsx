@@ -1,7 +1,7 @@
 // The case the workspace is about, and the way to another one. The list is the
 // directory's own read, asked for when the menu opens and never before: a page
 // that is not switching cases sends nothing for it.
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { ChevronsUpDownIcon, FolderOpenIcon } from "lucide-react";
 import { sectionPath } from "@/app/sections";
@@ -66,20 +66,37 @@ export function CaseSwitcher({
 }) {
   const { isMobile, setOpenMobile } = useSidebar();
   const [listed, setListed] = useState<Listed>({ kind: "idle" });
+  const menu = useRef<HTMLDivElement | null>(null);
+  const focusAfterRead = useRef(false);
+  useEffect(() => {
+    const before = focusAfterRead.current;
+    focusAfterRead.current = false;
+    const popup = menu.current;
+    if (!before || !popup) return;
+    const current = document.activeElement;
+    if (current !== document.body && !popup.contains(current)) return;
+    const target = popup.contains(current)
+      ? (current as HTMLElement)
+      : popup.querySelector<HTMLElement>('[role="menuitem"]');
+    // Reconcile the menu's roving index with native focus after rows change.
+    popup.focus({ preventScroll: true });
+    target?.focus({ preventScroll: true });
+  }, [listed]);
   const flight = useRef<AbortController | null>(null);
   const open = (next: boolean) => {
     if (!next || flight.current) return;
     const controller = new AbortController();
     flight.current = controller;
-    setListed({ kind: "loading" });
+    setListed((current) => (current.kind === "ready" ? current : { kind: "loading" }));
     void fetchSection("directory", { case: null, run: null, revision: null }, controller.signal)
-      .then((status) =>
+      .then((status) => {
+        focusAfterRead.current = Boolean(menu.current?.contains(document.activeElement));
         setListed(
           "document" in status
             ? { kind: "ready", cases: (status.document as DirectoryDocument).body.cases }
             : { kind: "failed" },
-        ),
-      )
+        );
+      })
       .finally(() => {
         flight.current = null;
       });
@@ -109,6 +126,7 @@ export function CaseSwitcher({
             <ChevronsUpDownIcon className="ml-auto text-muted-foreground" />
           </DropdownMenuTrigger>
           <DropdownMenuContent
+            ref={menu}
             className="w-(--anchor-width) min-w-60"
             side={isMobile ? "bottom" : "right"}
             align="start"

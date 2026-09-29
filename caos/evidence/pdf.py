@@ -204,10 +204,12 @@ class PdfExtractor:
             # `None` of a Separation, or of every colorant of a DeviceN -- is
             # marked. v9: form XObject text is read, and nonrectangular
             # fills have an unknown backdrop instead of their box's colour.
+            # v10: forms inherit their invoking state; runs crossing a form's
+            # bounds are dropped; a later page fill can mark form glyphs.
             # Earlier rows keep their stored identity and verify as
             # recorded; readmission is how a source gains the new tokens
             # (section 44.4's rule).
-            "9",
+            "10",
             {
                 "pdfminer_version": version("pdfminer.six"),
                 "line_overlap": LAYOUT["line_overlap"],
@@ -242,6 +244,9 @@ class PdfExtractor:
                 "hidden_painted_over": PAINTED_OVER_COVER,
                 "hidden_painted_over_work": PAINTED_OVER_WORK,
                 "form_matrix": FORM_MATRIX,
+                "form_state": "inherited-parameters-local-text-matrix",
+                "form_clip": "drop-whole-runs-outside-active-form-bounds",
+                "hidden_painted_over_glyphs": "page-and-form-filled-non-type3",
             },
         )
 
@@ -421,12 +426,12 @@ def walk_pages(data: bytes, *, limits: AdmissionLimits, deadline: float) -> list
     tokens: list[Token] = []
     region_id = 0
     line_id = 0
-    for page_number, (frame, page, hidden) in enumerate(_pages(data), start=1):
+    for page_number, (frame, page, hidden, clipped) in enumerate(_pages(data), start=1):
         _within_limits(page_number, limits, deadline)
         if frame is None:
             # Nothing on the page is visible, so nothing on it is citable.
             continue
-        sheet = _Sheet(page_number, frame, hidden)
+        sheet = _Sheet(page_number, frame, hidden, clipped)
         for lines in _text_boxes(page):
             for line in lines:
                 tokens.extend(_line_tokens(line, sheet, region_id, line_id))
@@ -460,7 +465,9 @@ def _text_boxes(page: LTPage) -> Iterator[list[LTTextLine]]:
             stack.extend(reversed(list(box)))
 
 
-def _pages(data: bytes) -> Iterator[tuple[Frame | None, LTPage, dict[LTChar, str]]]:
+def _pages(
+    data: bytes,
+) -> Iterator[tuple[Frame | None, LTPage, dict[LTChar, str], set[LTChar]]]:
     """Each page's layout beside its visible crop in the layout's own space,
     and why a reader of the rendered page may not see each glyph that has a
     reason (`visibility.MarkingAggregator`).
@@ -486,7 +493,7 @@ def _pages(data: bytes) -> Iterator[tuple[Frame | None, LTPage, dict[LTChar, str
         for page in PDFPage.get_pages(BytesIO(data), caching=True):
             frame = _crop_frame(page)
             interpreter.process_page(page)
-            yield frame, device.get_result(), device.hidden
+            yield frame, device.get_result(), device.hidden, device.clipped
     except (PDFSyntaxError, ValueError, TypeError, AssertionError):
         # pdfminer reports a malformed file in several shapes. None of them may
         # travel: the message quotes the bytes it choked on.
@@ -556,6 +563,7 @@ class _Sheet:
     number: int
     frame: Frame
     hidden: dict[LTChar, str]
+    clipped: set[LTChar]
 
 
 def _line_tokens(
@@ -583,7 +591,11 @@ def _line_tokens(
     """
     (left, _bottom, _right, top) = sheet.frame
     boxed = [(run, _box(run)) for run in _runs(line)]
-    kept = [(run, box) for run, box in boxed if _within(box, sheet.frame)]
+    kept = [
+        (run, box)
+        for run, box in boxed
+        if _within(box, sheet.frame) and sheet.clipped.isdisjoint(run)
+    ]
     mark = _mark([character for run, _box in kept for character in run], sheet)
     tokens: list[Token] = []
     for run, (x0, y0, x1, y1) in kept:

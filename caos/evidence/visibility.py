@@ -58,11 +58,13 @@ from pdfminer.pdftypes import PDFObjRef, PDFStream
 from pdfminer.psexceptions import PSException
 from pdfminer.psparser import LIT, PSLiteral, literal_name
 from pdfminer.utils import (
+    MATRIX_IDENTITY,
     Matrix,
     PathSegment,
     Point,
     Rect,
     apply_matrix_pt,
+    apply_matrix_rect,
     mult_matrix,
 )
 
@@ -485,19 +487,21 @@ class MarkingAggregator(PDFPageAggregator):
     def __init__(self, resources: PDFResourceManager, laparams: LAParams) -> None:
         super().__init__(resources, laparams=laparams)
         self.hidden: dict[LTChar, str] = {}
+        self.clipped: set[LTChar] = set()
         self.backdrop = Backdrop((0.0, 0.0, 0.0, 0.0))
         self.marked = MarkedContent()
         self.drawn: list[LTChar] = []
         self.covers: list[tuple[Box, int]] = []
         self.work = PAINTED_OVER_WORK
         self._least = (math.inf, math.inf)
-        self._figures: list[Matrix] = []
+        self._figures: list[tuple[Matrix, Rect, Matrix | None]] = []
         self._compound = 0
 
     @override
     def begin_page(self, page: PDFPage, ctm: Matrix) -> None:
         super().begin_page(page, ctm)
         self.hidden = {}
+        self.clipped = set()
         self.backdrop = Backdrop(self.cur_item.bbox)
         self.marked = MarkedContent()
         (self.drawn, self.covers, self._figures) = ([], [], [])
@@ -530,7 +534,7 @@ class MarkingAggregator(PDFPageAggregator):
 
     @override
     def begin_figure(self, name: str, bbox: Rect, matrix: Matrix) -> None:
-        self._figures.append(self.ctm)
+        self._figures.append((self.ctm, bbox, _inverse(mult_matrix(matrix, self.ctm))))
         super().begin_figure(name, bbox, matrix)
         self.marked.enter()
 
@@ -541,7 +545,7 @@ class MarkingAggregator(PDFPageAggregator):
         super().end_figure(_)
         self.marked.leave()
         if self._figures:
-            self.set_ctm(self._figures.pop())
+            self.set_ctm(self._figures.pop()[0])
 
     @override
     def paint_path(
@@ -603,6 +607,40 @@ class MarkingAggregator(PDFPageAggregator):
         # The image is its figure's box; its colours are not read.
         self.backdrop.paint(self.cur_item.bbox, None)
 
+    def _clip_string(
+        self, glyphs: Sequence[LTChar], textstate: PDFTextState, seq: PDFTextSeq
+    ) -> None:
+        font = textstate.font
+        if not self._figures or font is None:
+            return
+        # Match native rendering's character order, including multibyte fonts.
+        cids = (
+            cid for part in seq if isinstance(part, bytes) for cid in font.decode(part)
+        )
+        for glyph, cid in zip(glyphs, cids, strict=True):
+            # The native untransformed box includes vertical-font displacement.
+            # Its corners in form space avoid inflating a rotated glyph.
+            local = LTChar(
+                MATRIX_IDENTITY,
+                font,
+                textstate.fontsize,
+                textstate.scaling * 0.01,
+                textstate.rise,
+                glyph.get_text(),
+                font.char_width(cid),
+                font.char_disp(cid),
+                glyph.ncs,
+                glyph.graphicstate,
+            ).bbox
+            if any(
+                inverse is None
+                or not _covers(
+                    bbox, apply_matrix_rect(mult_matrix(glyph.matrix, inverse), local)
+                )
+                for _ctm, bbox, inverse in self._figures
+            ):
+                self.clipped.add(glyph)
+
     @override
     def render_string(
         self,
@@ -618,21 +656,23 @@ class MarkingAggregator(PDFPageAggregator):
         super().render_string(textstate, seq, ncs, graphicstate)
         em = _em(textstate, mult_matrix(textstate.matrix, self.ctm))
         switched_off = self.marked.hides
-        # Only a page's own glyphs are its lines (a form's are a figure's), and
-        # only where pdfminer's box bounds the ink: a stroke reaches past it by
+        # Only where pdfminer's box bounds the ink: a stroke reaches past it by
         # its width, and further at a mitre; a Type3 glyph draws what its
         # procedure draws.
         coverable = (
-            not self._figures
-            and self.work > 0
+            self.work > 0
             and textstate.render not in _STROKED
             and not isinstance(textstate.font, PDFType3Font)
         )
         # pdfminer's `render_char` appends each glyph it makes to the container
         # being laid out and hands back only its advance, so this string's
         # glyphs are that container's objects past `before`.
-        for glyph in self.cur_item._objs[before:]:
-            if not isinstance(glyph, LTChar):
+        glyphs = [
+            glyph for glyph in self.cur_item._objs[before:] if isinstance(glyph, LTChar)
+        ]
+        self._clip_string(glyphs, textstate, seq)
+        for glyph in glyphs:
+            if glyph in self.clipped:
                 continue
             reasons = self._reasons(glyph, textstate.render, em, switched_off)
             if reasons:
@@ -698,12 +738,14 @@ class MarkingInterpreter(PDFPageInterpreter):
         super().__init__(rsrcmgr, device)
         self.document: object = None
         self.layers: OptionalContent | None = None
+        self._inherited: tuple[PDFTextState, PDFGraphicState] | None = None
 
     @override
     def dup(self) -> MarkingInterpreter:
-        """A form XObject's interpreter, reading the same configuration."""
+        """A form inherits the invoking graphics and text parameters."""
         twin = MarkingInterpreter(self.rsrcmgr, self.device)
         (twin.document, twin.layers) = (self.document, self.layers)
+        twin._inherited = (self.textstate.copy(), self.graphicstate.copy())
         return twin
 
     @override
@@ -729,6 +771,10 @@ class MarkingInterpreter(PDFPageInterpreter):
     def init_state(self, ctm: Matrix) -> None:
         super().init_state(ctm)
         self.graphicstate = PaintState()
+        if self._inherited is not None:
+            text, graphics = self._inherited
+            self.textstate, self.graphicstate = text.copy(), graphics.copy()
+            self.textstate.reset()
 
     @override
     def init_resources(self, resources: dict[object, object]) -> None:
@@ -805,6 +851,23 @@ class MarkingInterpreter(PDFPageInterpreter):
         state = self.graphicstate
         if isinstance(state, PaintState):
             state.clipping = (self.curpath, len(self.curpath))
+
+
+def _inverse(matrix: Matrix) -> Matrix | None:
+    """Invert a finite form-to-page matrix, or refuse a collapsed transform."""
+    a, b, c, d, e, f = matrix
+    determinant = a * d - b * c
+    if not math.isfinite(determinant) or determinant == 0:
+        return None
+    inverse = (
+        d / determinant,
+        -b / determinant,
+        -c / determinant,
+        a / determinant,
+        (c * f - d * e) / determinant,
+        (b * e - a * f) / determinant,
+    )
+    return inverse if all(map(math.isfinite, inverse)) else None
 
 
 def _painted_in(

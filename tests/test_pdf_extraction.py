@@ -246,25 +246,180 @@ def test_lines_are_separate_lines_and_sit_a_line_apart() -> None:
     assert second.y0 - first.y0 == pytest.approx(LINE_GAP, abs=0.5)
 
 
-def test_form_xobject_text_is_read_and_can_be_admitted() -> None:
-    content = b"BT /F1 12 Tf 72 700 Td (Total debt 100 million) Tj ET"
-    objects = _objects(b"/Fm Do")
+def form_pdf(
+    content: bytes,
+    *,
+    page: bytes = b"/Fm Do",
+    bbox: bytes = b"0 0 612 792",
+    matrix: bytes = b"1 0 0 1 0 0",
+    outer_bbox: bytes | None = None,
+) -> bytes:
+    """A form and optionally an enclosing form, under real page resources."""
+    objects = _objects(page)
     objects[2] = objects[2].replace(
         b"/Font << /F1 5 0 R >> >>",
         b"/Font << /F1 5 0 R >> /XObject << /Fm 6 0 R >> >>",
     )
     objects.append(
-        b"<< /Type /XObject /Subtype /Form /BBox [0 0 612 792]"
-        b" /Resources << /Font << /F1 5 0 R >> >> /Length "
+        b"<< /Type /XObject /Subtype /Form /BBox ["
+        + bbox
+        + b"] /Matrix ["
+        + matrix
+        + b"] /Resources << /Font << /F1 5 0 R >> >> /Length "
         + str(len(content)).encode()
         + b" >>\nstream\n"
         + content
         + b"\nendstream"
     )
-    data = _assemble(objects)
+    if outer_bbox is not None:
+        objects[2] = objects[2].replace(b"/Fm 6 0 R", b"/Fm 7 0 R")
+        inner = b"/Inner Do"
+        objects.append(
+            b"<< /Type /XObject /Subtype /Form /BBox ["
+            + outer_bbox
+            + b"] /Resources << /XObject << /Inner 6 0 R >> >> /Length "
+            + str(len(inner)).encode()
+            + b" >>\nstream\n"
+            + inner
+            + b"\nendstream"
+        )
+    return _assemble(objects)
+
+
+def test_form_xobject_text_is_read_and_can_be_admitted() -> None:
+    content = b"BT /F1 12 Tf 72 700 Td (Total debt 100 million) Tj ET"
+    data = form_pdf(content)
     assert " ".join(token.text for token in PdfExtractor().extract(data)) == (
         "Total debt 100 million"
     )
+
+
+@pytest.mark.parametrize(
+    ("state", "hidden"),
+    [(b"", ""), (b"1 g", "near_background"), (b"3 Tr", "render_mode_3")],
+)
+@pytest.mark.parametrize("nested", [False, True])
+def test_form_text_inherits_the_callers_font_and_paint(
+    state: bytes, hidden: str, nested: bool
+) -> None:
+    data = form_pdf(
+        b"BT 72 700 Td (Inherited debt) Tj ET",
+        page=b"BT /F1 12 Tf " + state + b" ET /Fm Do",
+        outer_bbox=b"0 0 612 792" if nested else None,
+    )
+    tokens = PdfExtractor().extract(data)
+    assert " ".join(token.text for token in tokens) == "Inherited debt"
+    assert {cast(MarkedToken, token).hidden for token in tokens} == {hidden}
+
+
+def test_form_state_changes_do_not_escape_to_the_page() -> None:
+    data = form_pdf(
+        b"q 0 g BT 0 Tr 72 680 Td (Form debt) Tj ET Q",
+        page=b"1 g BT /F1 12 Tf 3 Tr ET /Fm Do BT 72 700 Td (Page debt) Tj ET",
+    )
+    tokens = PdfExtractor().extract(data)
+    assert {
+        cast(MarkedToken, token).hidden for token in tokens if token.text == "Form"
+    } == {""}
+    assert {
+        cast(MarkedToken, token).hidden for token in tokens if token.text == "Page"
+    } == {"render_mode_3"}
+
+
+@pytest.mark.parametrize(
+    ("bbox", "matrix", "content", "outer_bbox", "expected"),
+    [
+        (
+            b"0 0 50 20",
+            b".707 .707 -.707 .707 200 200",
+            b"BT /F1 12 Tf 10 8 Td (Debt) Tj ET",
+            None,
+            "Debt",
+        ),
+        (
+            b"0 0 50 50",
+            b"1 0 0 1 0 0",
+            b"BT /F1 12 Tf 72 700 Td (Outside) Tj ET",
+            None,
+            "",
+        ),
+        (
+            b"0 0 50 50",
+            b"1 0 0 1 0 0",
+            b"BT /F1 12 Tf 10 20 Td (Debt HiddenWord) Tj ET",
+            None,
+            "Debt",
+        ),
+        (
+            b"0 0 100 100",
+            b".707 .707 -.707 .707 200 200",
+            b"BT /F1 5 Tf 103 50 Td (Outside) Tj ET",
+            None,
+            "",
+        ),
+        (
+            b"0 0 100 100",
+            b".707 .707 -.707 .707 200 200",
+            b"BT /F1 12 Tf 30 30 Td (Inside) Tj ET",
+            None,
+            "Inside",
+        ),
+        (
+            b"0 0 100 100",
+            b"1 .5 .3 1 100 100",
+            b"BT /F1 5 Tf 103 50 Td (Outside) Tj ET",
+            None,
+            "",
+        ),
+        (
+            b"0 0 200 200",
+            b"1 0 0 1 0 0",
+            b"BT /F1 12 Tf 40 20 Td (Outside) Tj ET",
+            b"0 0 30 100",
+            "",
+        ),
+        (
+            b"0 0 100 100",
+            b"-1 0 0 1 200 200",
+            b"BT /F1 12 Tf 30 30 Td (Inside) Tj ET",
+            None,
+            "Inside",
+        ),
+        (
+            b"0 0 100 100",
+            b"0 0 0 1 200 200",
+            b"BT /F1 12 Tf 30 30 Td (Collapsed) Tj ET",
+            None,
+            "",
+        ),
+    ],
+)
+def test_form_bounds_drop_whole_clipped_words(
+    bbox: bytes, matrix: bytes, content: bytes, outer_bbox: bytes | None, expected: str
+) -> None:
+    tokens = PdfExtractor().extract(
+        form_pdf(content, bbox=bbox, matrix=matrix, outer_bbox=outer_bbox)
+    )
+    assert " ".join(token.text for token in tokens) == expected
+
+
+def test_form_clipping_ends_before_page_text_is_drawn() -> None:
+    data = form_pdf(
+        b"BT /F1 12 Tf 72 700 Td (Outside) Tj ET",
+        bbox=b"0 0 50 50",
+        page=b"/Fm Do BT /F1 12 Tf 72 680 Td (Page debt) Tj ET",
+    )
+    assert " ".join(token.text for token in PdfExtractor().extract(data)) == "Page debt"
+
+
+def test_page_overpaint_marks_form_text() -> None:
+    data = form_pdf(
+        b"BT /F1 12 Tf 72 700 Td (Covered debt) Tj ET",
+        page=b"/Fm Do 1 g 50 680 500 60 re f",
+    )
+    tokens = PdfExtractor().extract(data)
+    assert " ".join(token.text for token in tokens) == "Covered debt"
+    assert {cast(MarkedToken, token).hidden for token in tokens} == {"painted_over"}
 
 
 def test_a_nonrectangular_fill_does_not_make_text_outside_its_ink_hidden() -> None:
@@ -728,7 +883,7 @@ def test_the_pdf_identity_records_effective_layout_and_convention() -> None:
     identity = PdfExtractor().identity
     effective = LAParams(**LAYOUT)
 
-    assert (identity.name, identity.version) == ("caos.pdfminer", "9")
+    assert (identity.name, identity.version) == ("caos.pdfminer", "10")
     assert identity.config["max_token_chars"] == MAX_TOKEN_CHARS
     assert identity.config["token_line_breaks"] == "space"
     assert (
@@ -762,6 +917,15 @@ def test_the_pdf_identity_records_effective_layout_and_convention() -> None:
         identity.config["hidden_painted_over"],
         identity.config["hidden_painted_over_work"],
     ) == ("later-opaque-rectangle-holding-the-glyph-box", 4_000_000)
+    assert (
+        identity.config["form_state"],
+        identity.config["form_clip"],
+        identity.config["hidden_painted_over_glyphs"],
+    ) == (
+        "inherited-parameters-local-text-matrix",
+        "drop-whole-runs-outside-active-form-bounds",
+        "page-and-form-filled-non-type3",
+    )
     assert "laparams" not in identity.config
     for field in (
         "line_overlap",
@@ -818,7 +982,7 @@ def test_v1_pdf_extractions_still_verify_and_reanchor_as_recorded(
         dispatch=lambda data: cast(Extractor, _V1Reader()),
     )
     conn.commit()
-    assert PdfExtractor().identity.version == "9"
+    assert PdfExtractor().identity.version == "10"
 
     [member] = snapshot_source_set(conn, case_id).members
     assert json.loads(member.extractor_identity)["version"] == "1"
