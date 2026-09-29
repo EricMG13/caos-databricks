@@ -40,6 +40,7 @@ import type {
   GateApproved,
   GatePreviewDocument,
   Infer,
+  ModelChoice,
   RouteChoice,
   RunCreated,
   RunInputPinned,
@@ -278,6 +279,21 @@ export function CommandOutcome<R>({
   );
 }
 
+/** A per-token rate as the price of a million tokens, by moving the decimal
+    point in the server's exact string: money is never a float (invariant 7). */
+function perMillion(rate: string): string {
+  const [whole = "0", fraction = ""] = rate.split(".");
+  const padded = fraction.padEnd(6, "0");
+  const integer = `${whole}${padded.slice(0, 6)}`.replace(/^0+(?=\d)/, "");
+  const rest = padded.slice(6).replace(/0+$/, "");
+  return rest ? `${integer}.${rest}` : integer;
+}
+
+/** The dated price a run on this model is pinned to, per million tokens. */
+function modelPrice(choice: ModelChoice): string {
+  return `${perMillion(choice.input_per_token)} in / ${perMillion(choice.output_per_token)} out per 1M tokens, priced ${choice.as_of}`;
+}
+
 /** A run with no route is useless (brief 4.2, decision 1): select and pin one
     in the same command that creates the run. Available with no displayed
     run, and again afterwards to start a fresh one. A success names the new run
@@ -293,11 +309,15 @@ export function CreateRunControl({
   caseId,
   action,
   choices,
+  models,
   supersedes = null,
 }: {
   caseId: string;
   action: ActionView | undefined;
   choices: readonly RouteChoice[];
+  /** The models the deployment approves (F468), the configured one marked;
+      the run is pinned to the one chosen here and cannot move after. */
+  models: readonly ModelChoice[];
   /** The BLOCKED run the new run would answer (§72), offered pre-filled
       when the displayed run ended BLOCKED and nothing has answered it yet.
       The analyst may clear it: a successor is an ordinary new run that names
@@ -305,6 +325,12 @@ export function CreateRunControl({
   supersedes?: string | null;
 }) {
   const [pick, setPick] = useState(0);
+  const [modelPick, setModelPick] = useState(() =>
+    Math.max(
+      models.findIndex((model) => model.configured),
+      0,
+    ),
+  );
   const [predecessor, setPredecessor] = useState(supersedes ?? "");
   const [extension, setExtension] = useState(false);
   const [, setParams] = useSearchParams();
@@ -332,8 +358,9 @@ export function CreateRunControl({
         selection_id: chosen.selection_id,
         supersedes: named === "" ? null : named,
         model_extension: accepts && extension,
-        // The deployment's configured model, pinned with the run (F468).
-        model: null,
+        // None offered: the process configures no model, and the server pins
+        // none rather than one it cannot price.
+        model: models[modelPick]?.model ?? null,
       }
     : null;
   return (
@@ -363,6 +390,24 @@ export function CreateRunControl({
                 ))}
               </select>
             </label>
+            {models.length ? (
+              <label className="fld">
+                Model
+                <select
+                  data-model-select
+                  value={modelPick}
+                  onChange={(event: ChangeEvent<HTMLSelectElement>) =>
+                    setModelPick(Number(event.target.value))
+                  }
+                >
+                  {models.map((model, index) => (
+                    <option key={model.model} value={index}>
+                      {model.configured ? `${model.model} (configured)` : model.model}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
             <label className="fld">
               Supersedes run
               <input
@@ -374,6 +419,13 @@ export function CreateRunControl({
                 }
               />
             </label>
+            {models[modelPick] ? (
+              // The chosen model's price on a row of its own: a closed select
+              // shows only as much of its option as fits.
+              <div className="fld-hint" data-model-price>
+                {models[modelPick].model}: {modelPrice(models[modelPick])}
+              </div>
+            ) : null}
             <label className="fopt">
               <input
                 type="checkbox"

@@ -87,6 +87,25 @@ function mountAt(document: RunSectionDocument, path: string) {
   );
 }
 
+/** The deployment's approved models (F468): the configured one second, so
+    a default that fell to the first entry would show. */
+const MODEL_CHOICES = [
+  {
+    model: "databricks-claude-sonnet-5",
+    input_per_token: "0.000002",
+    output_per_token: "0.00001",
+    as_of: "2026-09-22",
+    configured: false,
+  },
+  {
+    model: "databricks-claude-opus-5",
+    input_per_token: "0.000005",
+    output_per_token: "0.000025",
+    as_of: "2026-09-22",
+    configured: true,
+  },
+];
+
 /** A case whose run has yet to be created: the one state that serves the
     create form on its own. */
 const EMPTY_RUN: RunSectionDocument = withActions(
@@ -105,7 +124,7 @@ const EMPTY_RUN: RunSectionDocument = withActions(
           accepts_model_extension: false,
         },
       ],
-      model_choices: [],
+      model_choices: MODEL_CHOICES,
     },
   },
   [{ action: "CREATE_RUN", refusal: null }],
@@ -304,6 +323,26 @@ describe("Run", () => {
     expect(stale).toHaveTextContent(superseded.body.latest_run_id!);
   });
 
+  test("test_each_run_in_the_list_names_the_model_it_was_started_on", () => {
+    const [first, ...rest] = superseded.body.runs;
+    const listed: RunSectionDocument = {
+      ...superseded,
+      body: {
+        ...superseded.body,
+        runs: [{ ...first!, model: "gpt-6-luna" }, ...rest.map((run) => ({ ...run, model: null }))],
+      },
+    };
+    const { container } = mount(listed);
+    const models = [...container.querySelectorAll("[data-run-row] > span:nth-of-type(2)")];
+    expect(models.map((span) => span.textContent)).toEqual([
+      "gpt-6-luna",
+      ...rest.map(() => "configured model"),
+    ]);
+    expect(
+      container.querySelector(`[data-run-row="${first!.run_id}"] [data-run-model]`),
+    ).toHaveAttribute("data-run-model", "gpt-6-luna");
+  });
+
   test("a parked run in the runs list reads parked, with its stop code (CF-044)", () => {
     const latest = superseded.body.latest_run_id!;
     const parked: RunSectionDocument = {
@@ -475,7 +514,7 @@ describe("Run", () => {
         selection_id: "RELATIVE_VALUE",
         supersedes: null,
         model_extension: true,
-        model: null,
+        model: "databricks-claude-opus-5",
       });
     } finally {
       vi.unstubAllGlobals();
@@ -973,7 +1012,7 @@ describe("Run", () => {
         selection_id: "default",
         supersedes: null,
         model_extension: false,
-        model: null,
+        model: "databricks-claude-opus-5",
       });
       expect(
         UUID.test(
@@ -986,6 +1025,76 @@ describe("Run", () => {
       // would either read the wrong run or duplicate that one.
       await waitFor(() => expect(new URLSearchParams(address()).get("run")).toBe(newRunId));
       expect(fetchSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  // F468: the run is pinned to one approved model, chosen before it exists.
+  test("test_the_model_select_offers_every_approved_model_and_sends_the_one_chosen", async () => {
+    const caseId = routeNotPinned.body.case_id;
+    const created = { case_id: caseId, run_id: RUN_B, route_digest: "f".repeat(64) };
+    const fetchSpy = vi.fn().mockResolvedValueOnce(jsonResponse(created, 201));
+    vi.stubGlobal("fetch", fetchSpy);
+    try {
+      const { container } = mountAt(EMPTY_RUN, `/run/?case=${caseId}`);
+      const select = container.querySelector("[data-model-select]") as HTMLSelectElement;
+      // Rates are read off the server's exact strings, never through a float.
+      expect([...select.options].map((option) => option.textContent)).toEqual([
+        "databricks-claude-sonnet-5",
+        "databricks-claude-opus-5 (configured)",
+      ]);
+      expect(select.value).toBe("1");
+      const price = container.querySelector("[data-model-price]")!;
+      expect(price).toHaveTextContent("5 in / 25 out per 1M tokens, priced 2026-09-22");
+      fireEvent.change(select, { target: { value: "0" } });
+      expect(price).toHaveTextContent("2 in / 10 out per 1M tokens, priced 2026-09-22");
+      fireEvent.click(container.querySelector('[data-action="CREATE_RUN"]')!);
+      await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
+      const [, init] = fetchSpy.mock.calls[0]!;
+      expect(JSON.parse((init as RequestInit).body as string).model).toBe(
+        "databricks-claude-sonnet-5",
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  test("test_with_no_model_offered_there_is_no_select_and_none_is_named", async () => {
+    const caseId = routeNotPinned.body.case_id;
+    const doc: RunSectionDocument = {
+      ...EMPTY_RUN,
+      body: {
+        ...EMPTY_RUN.body,
+        model_choices: [
+          {
+            model: "tiny",
+            input_per_token: "0.0000001",
+            output_per_token: "5",
+            as_of: "2026-09-22",
+            configured: true,
+          },
+        ],
+      },
+    };
+    const { container, unmount } = mountAt(doc, `/run/?case=${caseId}`);
+    const [option] = (container.querySelector("[data-model-select]") as HTMLSelectElement).options;
+    expect(option!.textContent).toBe("tiny (configured)");
+    expect(container.querySelector("[data-model-price]")).toHaveTextContent(
+      "0.1 in / 5000000 out per 1M tokens, priced 2026-09-22",
+    );
+    unmount();
+    const created = { case_id: caseId, run_id: RUN_B, route_digest: "f".repeat(64) };
+    const fetchSpy = vi.fn().mockResolvedValueOnce(jsonResponse(created, 201));
+    vi.stubGlobal("fetch", fetchSpy);
+    try {
+      const none = { ...doc, body: { ...doc.body, model_choices: [] } };
+      const mounted = mountAt(none, `/run/?case=${caseId}`);
+      expect(mounted.container.querySelector("[data-model-select]")).toBeNull();
+      fireEvent.click(mounted.container.querySelector('[data-action="CREATE_RUN"]')!);
+      await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
+      const [, init] = fetchSpy.mock.calls[0]!;
+      expect(JSON.parse((init as RequestInit).body as string).model).toBeNull();
     } finally {
       vi.unstubAllGlobals();
     }
