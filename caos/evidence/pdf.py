@@ -206,12 +206,10 @@ class PdfExtractor:
             # fills have an unknown backdrop instead of their box's colour.
             # v10: forms inherit their invoking state; runs crossing a form's
             # bounds are dropped; a later page fill can mark form glyphs.
-            # v11: a glyph is inside a form's bounds when its centre is, and
-            # the bounds may name either pair of corners.
             # Earlier rows keep their stored identity and verify as
             # recorded; readmission is how a source gains the new tokens
             # (section 44.4's rule).
-            "11",
+            "10",
             {
                 "pdfminer_version": version("pdfminer.six"),
                 "line_overlap": LAYOUT["line_overlap"],
@@ -247,7 +245,7 @@ class PdfExtractor:
                 "hidden_painted_over_work": PAINTED_OVER_WORK,
                 "form_matrix": FORM_MATRIX,
                 "form_state": "inherited-parameters-local-text-matrix",
-                "form_clip": "drop-runs-with-a-glyph-centre-outside-form-bounds",
+                "form_clip": "drop-whole-runs-outside-active-form-bounds",
                 "hidden_painted_over_glyphs": "page-and-form-filled-non-type3",
             },
         )

@@ -228,6 +228,9 @@ const RunSummary = object({
   profile_id: nullable(short),
   selection_id: nullable(short),
   stop_code: nullable(RefusalCode),
+  // The model the run was started on (F468); null for a run that predates
+  // the pin and runs on the deployment's configured model.
+  model: nullable(short),
 });
 // A case's live members, served only to its ADMIN (O21); null is "not served".
 const MemberRow = object({ user_id: uuid, standing: Standing });
@@ -328,6 +331,17 @@ const RouteChoice = object({
   selection_id: short,
   accepts_model_extension: bool,
 });
+// A model the deployment approves for a new run, at the dated per-token price
+// a run started on it is pinned to (F468). `configured` marks the model a
+// create naming none gets. Rates are the server's exact decimal strings.
+const perToken = string({ max: 64, pattern: "^-?[0-9]+(\\.[0-9]+)?$" });
+const ModelChoice = object({
+  model: short,
+  input_per_token: perToken,
+  output_per_token: perToken,
+  as_of: string({ max: 10, pattern: "^\\d{4}-\\d{2}-\\d{2}$" }),
+  configured: bool,
+});
 // The node whose validated Blocked verdict ended the run, as the transition
 // recorded it (§68). Nullable on `RunView`: a run the frontier emptied is
 // BLOCKED with no node to name, and the wire never claims one.
@@ -361,6 +375,7 @@ const RunBody = object({
   runs: array(RunSummary, 200),
   run: nullable(RunView),
   route_choices: array(RouteChoice, 18),
+  model_choices: array(ModelChoice, 16),
 });
 const RunSectionDocument = sectionDocument(RunBody);
 
@@ -743,6 +758,7 @@ export const V1_SHAPES = {
   ResearchBrief,
   ResearchBriefQuestion,
   RouteChoice,
+  ModelChoice,
   RouteEdgeView,
   RunBody,
   RunSectionDocument,
@@ -797,6 +813,7 @@ export type PageDocument = Infer<typeof PageDocument>;
 export type ActionView = Infer<typeof ActionView>;
 export type WorkView = Infer<typeof WorkView>;
 export type RouteChoice = Infer<typeof RouteChoice>;
+export type ModelChoice = Infer<typeof ModelChoice>;
 export type SectionDocument =
   | DirectoryDocument
   | UploadDocument

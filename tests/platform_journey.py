@@ -203,6 +203,7 @@ def _approved_run(analyst: Surface, approver: Surface, case: str) -> tuple[str, 
             "selection_id": LITE_SELECTION,
             "supersedes": None,
             "model_extension": False,
+            "model": None,
         },
     )
     assert run.status == 201, run.body

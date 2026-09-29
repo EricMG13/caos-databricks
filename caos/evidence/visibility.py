@@ -64,6 +64,7 @@ from pdfminer.utils import (
     Point,
     Rect,
     apply_matrix_pt,
+    apply_matrix_rect,
     mult_matrix,
 )
 
@@ -533,12 +534,7 @@ class MarkingAggregator(PDFPageAggregator):
 
     @override
     def begin_figure(self, name: str, bbox: Rect, matrix: Matrix) -> None:
-        # A rectangle may name either pair of its corners (ISO 32000-1, 7.9.5).
-        (x0, y0, x1, y1) = bbox
-        bounds = (min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1))
-        self._figures.append(
-            (self.ctm, bounds, _inverse(mult_matrix(matrix, self.ctm)))
-        )
+        self._figures.append((self.ctm, bbox, _inverse(mult_matrix(matrix, self.ctm))))
         super().begin_figure(name, bbox, matrix)
         self.marked.enter()
 
@@ -623,10 +619,8 @@ class MarkingAggregator(PDFPageAggregator):
         )
         for glyph, cid in zip(glyphs, cids, strict=True):
             # The native untransformed box includes vertical-font displacement.
-            # Its centre is tested, not its corners: the box is the em, taller
-            # than the ink, and a form cropped to its artwork is bounded by the
-            # ink, so a corner test drops text a viewer draws whole.
-            (x0, y0, x1, y1) = LTChar(
+            # Its corners in form space avoid inflating a rotated glyph.
+            local = LTChar(
                 MATRIX_IDENTITY,
                 font,
                 textstate.fontsize,
@@ -638,11 +632,10 @@ class MarkingAggregator(PDFPageAggregator):
                 glyph.ncs,
                 glyph.graphicstate,
             ).bbox
-            centre = ((x0 + x1) / 2, (y0 + y1) / 2)
             if any(
                 inverse is None
-                or not _holds(
-                    bbox, apply_matrix_pt(mult_matrix(glyph.matrix, inverse), centre)
+                or not _covers(
+                    bbox, apply_matrix_rect(mult_matrix(glyph.matrix, inverse), local)
                 )
                 for _ctm, bbox, inverse in self._figures
             ):
@@ -1308,10 +1301,6 @@ def _covers(box: Box, cell: Box) -> bool:
         and cell[2] <= box[2]
         and cell[3] <= box[3]
     )
-
-
-def _holds(box: Box, point: Point) -> bool:
-    return box[0] <= point[0] <= box[2] and box[1] <= point[1] <= box[3]
 
 
 def _resolved(value: object) -> object:

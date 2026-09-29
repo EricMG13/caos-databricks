@@ -14,6 +14,8 @@ from caos.graph.worker import Configured, start_in_process
 from caos.methodology.bundle import Bundle
 from caos.refusals import Refusal, RefusalCode
 
+PRICE = fake_completions().price
+
 VENDORED = Path(__file__).resolve().parents[1] / "vendor/deploy-v"
 
 
@@ -52,7 +54,7 @@ def test_a_configured_worker_runs_on_a_daemon_thread_until_stopped(
 
     def configured() -> Configured:
         return Configured(
-            completions=fake_completions(),
+            choices={PRICE.model: PRICE},
             url="postgresql://unused.invalid/none",
             root=str(tmp_path),
             bundle=Bundle(VENDORED),
@@ -100,7 +102,7 @@ def test_a_store_that_cannot_answer_at_boot_is_asked_again_off_the_boot_path(
         if len(tries) == 2:
             raise psycopg.OperationalError
         return Configured(
-            completions=fake_completions(),
+            choices={PRICE.model: PRICE},
             url="postgresql://unused.invalid/none",
             root=str(tmp_path),
             bundle=Bundle(VENDORED),
@@ -157,7 +159,7 @@ def test_a_session_the_server_ends_during_the_schema_check_is_asked_again(
                     )
             apply_schema(conn)
         return Configured(
-            completions=fake_completions(),
+            choices={PRICE.model: PRICE},
             url=empty_database,
             root=str(tmp_path),
             bundle=Bundle(VENDORED),

@@ -21,7 +21,6 @@ from __future__ import annotations
 import contextvars
 import hashlib
 import math
-import os
 import threading
 import time
 import warnings
@@ -35,7 +34,14 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage
 from openai import OpenAIError
 
-from caos.pricing import ModelPrice, exact_context, price_from_environment
+# The configuration names live beside the price they configure, so the API,
+# which may not import this module (D4), reads them too.
+from caos.pricing import DEFAULT_ENDPOINT as DEFAULT_ENDPOINT
+from caos.pricing import ENDPOINT_ENV as ENDPOINT_ENV
+from caos.pricing import MODEL_PRICE_ENV as MODEL_PRICE_ENV
+from caos.pricing import REASONING_EFFORT_ENV as REASONING_EFFORT_ENV
+from caos.pricing import ModelPrice, exact_context, model_choices
+from caos.pricing import configured_endpoint as configured_endpoint
 from caos.provider import (
     MAX_COMPLETION_TOKENS,
     MAX_REQUEST_BYTES,
@@ -51,15 +57,6 @@ from caos.provider import (
 from caos.refusals import Refusal, RefusalCode
 from caos.store.outcomes import producer_identifier
 
-# The serving endpoint the gateway routes to. A bundle target sets it per
-# workspace; the default is the pay-per-token Claude endpoint the spec names.
-ENDPOINT_ENV = "CAOS_MODEL_ENDPOINT"
-DEFAULT_ENDPOINT = "databricks-claude-opus-5"
-# `model,input_per_token,output_per_token,YYYY-MM-DD` for exactly that endpoint.
-MODEL_PRICE_ENV = "CAOS_MODEL_PRICE"
-# Reserved for the effort passthrough (next.md N2): refused while it is not
-# sent, so no identity ever names an effort the model did not receive (AR-15).
-REASONING_EFFORT_ENV = "CAOS_REASONING_EFFORT"
 PLATFORM = "databricks"
 HOST_MINTED = "host-"
 # A 429 reached no model, so it is asked again under the same reservation
@@ -86,11 +83,6 @@ def identity_of(model: str, reasoning_effort: str | None = None) -> str:
     return "/".join(
         (PLATFORM, model, reasoning_effort or "none", str(MAX_COMPLETION_TOKENS))
     )
-
-
-def configured_endpoint() -> str:
-    """The endpoint the environment names, else the default."""
-    return os.environ.get(ENDPOINT_ENV) or DEFAULT_ENDPOINT
 
 
 def chat_model(*, endpoint: str | None = None) -> BaseChatModel:
@@ -445,16 +437,7 @@ def completions(
 
 
 def from_environment() -> ChatCompletions:
-    """The provider the environment configures, or `PROVIDER_NOT_CONFIGURED`.
-
-    Three names and nothing else; read at the call, never at import. Values
-    are never printed.
-    """
+    """The provider for the configured endpoint, or `PROVIDER_NOT_CONFIGURED`
+    for it or for any malformed choice beside it (`model_choices`)."""
     endpoint = configured_endpoint()
-    price = price_from_environment(endpoint, os.environ.get(MODEL_PRICE_ENV, ""))
-    if os.environ.get(REASONING_EFFORT_ENV):
-        # Not sent to the endpoint (next.md N2), so not configurable: an
-        # identity naming an effort the model never received would bind
-        # qualification verdicts to a profile that was not run (AR-15).
-        raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
-    return completions(price, endpoint=endpoint)
+    return completions(model_choices()[endpoint], endpoint=endpoint)

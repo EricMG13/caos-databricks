@@ -9,6 +9,7 @@ re-derives the preview under the case and run locks (`release_gate_in`).
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import Annotated, Any
 from uuid import UUID
@@ -51,6 +52,12 @@ from caos.methodology.vendor import (
     authority_bundle_sha256,
     cached_contract,
     catalog,
+)
+from caos.pricing import (
+    MODEL_PRICE_ENV,
+    ModelPrice,
+    configured_endpoint,
+    model_choices,
 )
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
@@ -163,6 +170,10 @@ def create_run(  # noqa: PLR0913 -- identity, key, floor, body, path, store, bun
     answers (`supersedes`, §72, null for an ordinary run) and the route digest;
     the run id is in the receipt committed beside it under the same
     `request_sha256`. The link's own checks are `start_run`'s, inside the unit.
+
+    The run is pinned to its model at that model's dated price (F468,
+    `started_on`), and the audit payload's `model` names the model it was
+    pinned to, the configured one when the request named none.
     """
     if (body.profile_id, body.selection_id) not in ADAPTER_ROUTES:
         raise Refusal(RefusalCode.ROUTE_NOT_ENABLED)
@@ -174,11 +185,16 @@ def create_run(  # noqa: PLR0913 -- identity, key, floor, body, path, store, bun
     )
     require_adapter_route(route)
     ceiling = configured_ceiling()
+    price = started_on(body.model)
     selection = body.model_dump(mode="json")
 
     def write(unit: StoreConnection) -> tuple[int, RunCreated]:
         run_id = start_run(
-            unit, case_id, supersedes=body.supersedes, budget_ceiling=ceiling
+            unit,
+            case_id,
+            supersedes=body.supersedes,
+            budget_ceiling=ceiling,
+            price=price,
         )
         pinned = pin_route_in(unit, run_id, route)
         return 201, RunCreated(case_id=case_id, run_id=run_id, route_digest=pinned)
@@ -193,11 +209,33 @@ def create_run(  # noqa: PLR0913 -- identity, key, floor, body, path, store, bun
             actor_id=actor.user_id,
             action="RUN_CREATED",
             requires=Standing.WRITER,
-            payload={**selection, "route_digest": route_digest(route)},
+            payload={
+                **selection,
+                "model": None if price is None else price.model,
+                "route_digest": route_digest(route),
+            },
         ),
         write=write,
         model=RunCreated,
     )
+
+
+def started_on(model: str | None) -> ModelPrice | None:
+    """The approved model a new run is pinned to, at its dated price (F468):
+    the one named, or the configured one for null; `PROVIDER_NOT_CONFIGURED`
+    for a model the deployment does not approve (`model_choices`).
+
+    A process configuring no model at all (`CAOS_MODEL_PRICE` unset) pins
+    none when none is named: the run then takes the model of the worker that
+    first executes it, as every run did before the pin existed.
+    """
+    if model is None and not os.environ.get(MODEL_PRICE_ENV):
+        return None
+    choices = model_choices()
+    chosen = choices.get(model if model is not None else configured_endpoint())
+    if chosen is None:
+        raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
+    return chosen
 
 
 @router.post(

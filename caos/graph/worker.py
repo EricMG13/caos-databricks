@@ -22,7 +22,7 @@ import sys
 import threading
 import time
 import traceback
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from contextlib import suppress
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -39,8 +39,8 @@ from caos.graph.route import ResolvedRoute, route_digest
 from caos.graph.runtime import Execution, Provider, ProviderResult, run_route
 from caos.methodology.bundle import Bundle
 from caos.methodology.runner import ModuleProvider
-from caos.models import ChatCompletions, from_environment
-from caos.pricing import ModelPrice
+from caos.models import ChatCompletions, completions
+from caos.pricing import ModelPrice, model_choices
 from caos.pricing import price_from_environment as price_from_environment
 from caos.provider import CompletionProvider, resend_checked
 from caos.refusals import Refusal, RefusalCode
@@ -51,7 +51,7 @@ from caos.store import (
     connect,
     rollback_or_close,
 )
-from caos.store.budget import configured_ceiling
+from caos.store.budget import configured_ceiling, price_of
 from caos.store.gates import execution_input
 from caos.store.lakebase import note_connect_failure, store_url
 from caos.store.outcomes import execution_reads
@@ -157,8 +157,11 @@ class _Stoppable:
             raise _Stopping
 
 
+ProviderFor = Callable[[ModelPrice], CompletionProvider]
+
+
 def module_execution(
-    completions: CompletionProvider,
+    provider_for: ProviderFor,
     price: ModelPrice,
     bundle: Bundle,
     blobs: BlobStore,
@@ -167,17 +170,40 @@ def module_execution(
     """Each claimed run executes its pinned route through the real module
     provider, on the worker's connection and under its lease, one node at a
     time (next.md N1), checkpointed by `saver` when the worker has one.
+
+    On the model and at the price the run was started on (F468), asked of
+    `provider_for`, which refuses a model the deployment no longer approves:
+    the run then parks with that code rather than moving to another model.
+    `price` is what a run started before its model was pinned runs at.
     """
 
     def execution_for(conn: StoreConnection, run_id: UUID, lease: Lease) -> Execution:
         with execution_reads(conn):
             _pin, route = execution_input(conn, run_id, bundle)
+            pinned = price_of(conn, run_id) or price
         provider = ModuleProvider(
-            conn, bundle, blobs, completions, route, run_id, lease
+            conn, bundle, blobs, provider_for(pinned), route, run_id, lease
         )
-        return Execution(provider, price, bundle, lease=lease, checkpointer=saver)
+        return Execution(provider, pinned, bundle, lease=lease, checkpointer=saver)
 
     return execution_for
+
+
+def approved(choices: Mapping[str, ModelPrice]) -> ProviderFor:
+    """The gateway provider for a run's model, at the run's own price, when
+    the deployment approves that model (`model_choices`); otherwise
+    `PROVIDER_NOT_CONFIGURED`, before any client is built.
+
+    The price is the run's, not today's: a price rotated since the run started
+    does not move it (docs/DEPLOYMENT.md section 7), while a model the
+    deployment dropped stops it."""
+
+    def provider_for(price: ModelPrice) -> ChatCompletions:
+        if price.model not in choices:
+            raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
+        return completions(price, endpoint=price.model)
+
+    return provider_for
 
 
 def work_once(
@@ -527,7 +553,8 @@ def install_stop_handler(stopping: Event) -> None:
 class Configured:
     """Everything a worker needs, read from the environment and verified."""
 
-    completions: ChatCompletions
+    # Every approved model at its dated price, the configured endpoint first.
+    choices: dict[str, ModelPrice]
     url: str
     root: str
     bundle: Bundle
@@ -541,14 +568,14 @@ def _configured() -> Configured:
     # could price refuses the worker at boot instead of sitting invisible
     # until the first run a caller starts under it.
     configured_ceiling()
-    completions = from_environment()
+    choices = model_choices()
     url, root = _store_configuration()
     bundle = Bundle(VENDORED_BUNDLE)
     bundle.verify_manifest()
     bundle.verify_pinned()
     with connect(url) as conn:
         apply_schema(conn)
-    return Configured(completions, url, root, bundle, checkpointer())
+    return Configured(choices, url, root, bundle, checkpointer())
 
 
 def _report(refused: Refusal, unset: str) -> None:
@@ -575,8 +602,8 @@ def _drive(configured: Configured, blobs: BlobStore, stopping: Event) -> int:
     return run_worker(
         WorkerConfig(BoundaryText.of(f"worker-{os.getpid()}")),
         execution_for=module_execution(
-            configured.completions,
-            configured.completions.price,
+            approved(configured.choices),
+            next(iter(configured.choices.values())),
             configured.bundle,
             blobs,
             configured.saver,

@@ -78,6 +78,7 @@ def read_directory(actor: Caller, conn: Store) -> DirectoryDocument:
                         stop_code=None
                         if row.latest_run.stop_code is None
                         else RefusalCode(row.latest_run.stop_code),
+                        model=row.latest_run.model,
                     ),
                     members=None
                     if row.members is None

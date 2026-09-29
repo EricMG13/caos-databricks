@@ -36,6 +36,6 @@
   "noqa:TRY003": 1,
   "nosec": 16,
   "skip": 7,
-  "type_ignore": 142,
+  "type_ignore": 141,
   "xfail": 0
 }

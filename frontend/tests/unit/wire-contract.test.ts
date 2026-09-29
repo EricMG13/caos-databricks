@@ -272,6 +272,7 @@ const RUN_SUMMARY = {
   profile_id: "LITE",
   selection_id: null,
   stop_code: null,
+  model: "databricks-claude-opus-5",
 };
 
 function directory(): { [key: string]: Json } {
@@ -363,6 +364,15 @@ function runSection(): { [key: string]: Json } {
           profile_id: "LITE_CREDIT_22",
           selection_id: "LITE_EARNINGS_UPDATE",
           accepts_model_extension: false,
+        },
+      ],
+      model_choices: [
+        {
+          model: "databricks-claude-opus-5",
+          input_per_token: "0.000005",
+          output_per_token: "0.000025",
+          as_of: "2026-09-22",
+          configured: true,
         },
       ],
     },

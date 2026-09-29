@@ -131,7 +131,7 @@ Then do one of these instead:
 - The worker runs inside the app process (one run at a time). A queued run waits while the app restarts; leases expire and the run is reclaimed.
 - Secrets: the app reads none. Model calls use the service principal's OAuth; Lakebase credentials are minted per connection and never logged.
 - Logs never carry document text: refusals are typed codes (`caos/refusals.py`).
-- To rotate the model: change `model_endpoint` and `model_price` together and redeploy; runs pinned under the old price finish under it.
+- To rotate the model: change `model_endpoint` and `model_price` together and redeploy. Every run is pinned at creation to its model and that model's dated price (0043, F468): it finishes on them while the deployment still approves the model (as `CAOS_MODEL_ENDPOINT` or in `CAOS_MODEL_CHOICES`), and parks `PROVIDER_NOT_CONFIGURED` before its next call once it does not, rather than moving to another model part way through. To let running runs finish on the old model, keep it in `CAOS_MODEL_CHOICES` for one release. A run started before 0043 has no pin and runs on whatever the deployment configures.
 
 ## 8. Before the workspace exists: the loopback stand-in
 

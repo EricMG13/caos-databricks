@@ -332,6 +332,8 @@ export function CreateRunControl({
         selection_id: chosen.selection_id,
         supersedes: named === "" ? null : named,
         model_extension: accepts && extension,
+        // The deployment's configured model, pinned with the run (F468).
+        model: null,
       }
     : null;
   return (

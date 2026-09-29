@@ -872,6 +872,7 @@ def _prepared_run(url: str, case_id: str, headers: dict[str, str]) -> _Prepared:
         "selection_id": MODEL_CALL_SELECTION,
         "supersedes": None,
         "model_extension": False,
+        "model": None,
     }
     status, run = _json_call(
         url, "POST", f"/api/v1/cases/{case_id}/runs", headers, selection

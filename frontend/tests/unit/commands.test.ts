@@ -104,6 +104,7 @@ describe("the command transport", () => {
       selection_id: "S1",
       supersedes: null,
       model_extension: false,
+      model: null,
     });
     expect(fetchSpy.mock.calls[1]![0]).toBe(`/api/v1/cases/${CASE}/runs`);
     expect(fetchSpy.mock.calls[1]![1].method).toBe("POST");
@@ -113,6 +114,7 @@ describe("the command transport", () => {
         selection_id: "S1",
         supersedes: null,
         model_extension: false,
+        model: null,
       }),
     );
 
