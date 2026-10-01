@@ -104,7 +104,6 @@
 - Money is `Decimal`, never `float` (invariant 7). No model call without a reservation (invariant 8).
 - A new dependency needs a `Dn` entry in `docs/rebuild/decisions.md` (D77 here).
 - IDs: **D77** (the direction) and **B12** (the gateway disabled) were recorded when the build was initialised on 2026-10-01; Task 2 adds "D77, addendum". Still free: **D78, D79, N121–N125, B13**. Another session may take some meanwhile, so re-read the tail of each log before writing.
-- **On the enterprise PC** (downloads from GitHub only, `docs/ENTERPRISE_BUILD.md`), read `docker compose up -d --wait` as that guide's §4, read "the full gate list" as its §6 "On the PC" column, and leave `pyproject.toml` and `uv.lock` alone (the wheelhouse is built from them). §6's other column runs in CI on GitHub after the owner pushes.
 - PRs stay ≤ 800 changed lines (`docs/**`, `vendor/**` and lockfiles excluded; check with `uv run python scripts/check_pr_size.py <base>`). Ship three stacked PRs:
   - **Copilot 1/3**, the SDK transport (Tasks 2–3);
   - **Copilot 2/3**, the CLI fallback (Task 4);
@@ -377,7 +376,7 @@ Nothing is committed, because the folder is git-ignored.
 
 - [ ] **Step 1: Check the dependency (already locked)**
 
-`github-copilot-sdk==1.0.16` was added to `pyproject.toml` and `uv.lock` when the build was initialised (D77, addendum: dependency), because the enterprise PC cannot reach PyPI to lock it. Do not edit either file.
+`github-copilot-sdk==1.0.16` was added to `pyproject.toml` and `uv.lock` when the build was initialised (D77, addendum: dependency), with the documentation, so the build starts from a lock `pip-audit` has cleared (F474). Do not edit either file.
 
 Run: `uv run python -c "import copilot; print('sdk ok')"`
 
