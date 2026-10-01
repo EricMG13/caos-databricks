@@ -104,6 +104,7 @@
 - Money is `Decimal`, never `float` (invariant 7). No model call without a reservation (invariant 8).
 - A new dependency needs a `Dn` entry in `docs/rebuild/decisions.md` (D77 here).
 - IDs: **D77** (the direction) and **B12** (the gateway disabled) were recorded when the build was initialised on 2026-10-01; Task 2 adds "D77, addendum". Still free: **D78, D79, N121–N125, B13**. Another session may take some meanwhile, so re-read the tail of each log before writing.
+- **On the enterprise PC** (downloads from GitHub only, `docs/ENTERPRISE_BUILD.md`), read `docker compose up -d --wait` as that guide's §4, read "the full gate list" as its §6 "On the PC" column, and leave `pyproject.toml` and `uv.lock` alone (the wheelhouse is built from them). §6's other column runs in CI on GitHub after the owner pushes.
 - PRs stay ≤ 800 changed lines (`docs/**`, `vendor/**` and lockfiles excluded; check with `uv run python scripts/check_pr_size.py <base>`). Ship three stacked PRs:
   - **Copilot 1/3**, the SDK transport (Tasks 2–3);
   - **Copilot 2/3**, the CLI fallback (Task 4);
@@ -287,7 +288,7 @@ if __name__ == "__main__":
 Sign in first by running the IT-installed CLI once (`copilot`, then `/login`). Then run, with `S=docs/rebuild/runs/copilot-spike-<date>`:
 
 ```bash
-uv run --with github-copilot-sdk==1.0.16 python $S/copilot_spike.py list | tee -a $S/facts.jsonl
+uv run python $S/copilot_spike.py list | tee -a $S/facts.jsonl
 copilot --version > $S/help.txt && copilot --help >> $S/help.txt
 ```
 
@@ -306,12 +307,12 @@ copilot --version > $S/help.txt && copilot --help >> $S/help.txt
 The candidates are the cheapest listed GPT-6 Luna id, Claude Sonnet 5.5, and Claude Opus 5.5 at the effort the owner wants, using the exact ids from Step 2. Replace the CLI flags below with Step 2's spellings:
 
 ```bash
-uv run --with github-copilot-sdk==1.0.16 python $S/copilot_spike.py sdk <luna-id> | tee -a $S/facts.jsonl
-uv run --with github-copilot-sdk==1.0.16 python $S/copilot_spike.py sdk <opus-id> high | tee -a $S/facts.jsonl
-uv run --with github-copilot-sdk==1.0.16 python $S/copilot_spike.py cli <luna-id> none -- \
+uv run python $S/copilot_spike.py sdk <luna-id> | tee -a $S/facts.jsonl
+uv run python $S/copilot_spike.py sdk <opus-id> high | tee -a $S/facts.jsonl
+uv run python $S/copilot_spike.py cli <luna-id> none -- \
   --output-format json --available-tools= --no-custom-instructions --no-auto-update \
   --stream off --context long_context | tee -a $S/facts.jsonl
-uv run --with github-copilot-sdk==1.0.16 python $S/copilot_spike.py cli <opus-id> high -- \
+uv run python $S/copilot_spike.py cli <opus-id> high -- \
   --output-format json --available-tools= --no-custom-instructions --no-auto-update \
   --stream off --context long_context | tee -a $S/facts.jsonl
 ```
@@ -332,9 +333,9 @@ Apply the stop rules in **Gating risks**. If the CLI's `assistant.usage` is miss
 - [ ] **Step 4: Cache semantics and the over-limit behaviour (cheapest model, SDK)**
 
 ```bash
-uv run --with github-copilot-sdk==1.0.16 python $S/copilot_spike.py sdk-fill <luna-id> 200000 | tee -a $S/facts.jsonl
-uv run --with github-copilot-sdk==1.0.16 python $S/copilot_spike.py sdk-fill <luna-id> 200000 | tee -a $S/facts.jsonl
-uv run --with github-copilot-sdk==1.0.16 python $S/copilot_spike.py sdk-fill <luna-id> <5 × its max_prompt_tokens> | tee -a $S/facts.jsonl
+uv run python $S/copilot_spike.py sdk-fill <luna-id> 200000 | tee -a $S/facts.jsonl
+uv run python $S/copilot_spike.py sdk-fill <luna-id> 200000 | tee -a $S/facts.jsonl
+uv run python $S/copilot_spike.py sdk-fill <luna-id> <5 × its max_prompt_tokens> | tee -a $S/facts.jsonl
 ```
 
 Record:
@@ -374,20 +375,13 @@ Nothing is committed, because the folder is git-ignored.
   - `def _data(seen: Sequence[Event], kind: str) -> list[Mapping[str, Any]]` (private; Task 4 uses it);
   - `def ask_copilot(prompt: str, target: CopilotModel, seconds: float) -> list[Event]`, a stub raising `NotImplementedError` that Task 3 implements in the same PR.
 
-- [ ] **Step 1: Add the dependency**
+- [ ] **Step 1: Check the dependency (already locked)**
 
-In `pyproject.toml`, add to `[project] dependencies` after `"databricks-sdk>=0.89.0",`:
+`github-copilot-sdk==1.0.16` was added to `pyproject.toml` and `uv.lock` when the build was initialised (D77, addendum: dependency), because the enterprise PC cannot reach PyPI to lock it. Do not edit either file.
 
-```toml
-  # GitHub Copilot as a model where AI Gateway is disabled (D77): the SDK
-  # drives the Copilot runtime on the worker's machine. Pinned exactly: the
-  # runtime it provisions is pinned by the SDK release.
-  "github-copilot-sdk==1.0.16",
-```
+Run: `uv run python -c "import copilot; print('sdk ok')"`
 
-Run: `uv lock && uv sync --locked --all-groups && uv run pip-audit --strict`
-
-Expected: the lock adds `github-copilot-sdk` only, since its dependencies are already locked, and pip-audit reports no known vulnerabilities.
+Expected: `sdk ok`.
 
 - [ ] **Step 2: Write the failing tests**
 
@@ -942,7 +936,7 @@ Expected: clean. If `ruff format` would reflow, run `uv run ruff format` on the 
 D77 (the direction) was recorded when the build was initialised. Re-read the tail of `docs/rebuild/decisions.md`, then append this under D77's section `## GitHub Copilot as the model, 2026-10-01`:
 
 ```markdown
-- D77, addendum (<YYYY-MM-DD>) — The SDK transport as built. A model named `copilot:<model>[@<effort>]` (`caos/copilot.py`) is answered by the Copilot runtime through `github-copilot-sdk` 1.0.16 on the machine the worker runs on: `caos.models.chat_model` returns `ChatCopilot` for such a name, and `ChatCompletions` prices, bounds and refuses its answer exactly as a gateway answer, so CAOS stays the orchestrator and Copilot is only the model. Each call is one empty-mode client, session and private directory, all removed afterwards: no tool (`available_tools=[]`, invariant 1); no custom instruction, skill or memory; the system message replaced by nothing; infinite sessions off (nothing compacted); the long-context tier (CP-0 sends whole filings, D29); output capped at `MAX_COMPLETION_TOKENS`; `response_format` not sent (the executor validates the envelope, invariant 9). Answers are read from the runtime's session events in wire form, so any transport that delivers them shares one mapping: a finish reason is stated only for exactly one model call on the pinned model at the pinned effort, offered no tool, with no tool request, no server tool and nothing truncated or compacted; anything else is billed and refused as an invalid response (F34). The charge is every prompt token (input, cache read, cache write) at the dated input rate plus output at the output rate; the owner prices a Copilot model at max(input, cache write) per token, so the charge is never below GitHub's bill (1 AI credit = $0.01). The effort is part of the name because the runtime applies a model's default effort when none is sent (AR-15). The identity is `copilot/<model>/<effort|none>/65536`, so a Copilot-served model qualifies separately from the same model on a gateway. Alternatives: Copilot CLI as the orchestrator with one skill per module and Delta over ODBC (run order, the ledger, the envelope and citations would rest on instructions, not code; rejected); a `CompletionProvider` of its own (duplicates the deadline, charge and refusal logic `ChatCompletions` already proves); RAI (needs use-case onboarding; a later provider behind the same factory). Dependency: `github-copilot-sdk==1.0.16` (MIT); its dependencies `python-dateutil`, `pydantic>=2.11` and `httpx>=0.24` were already locked; no standard-library module or pinned dependency speaks the runtime's protocol. Measured first: `docs/rebuild/runs/copilot-spike-<date>/SUMMARY.md` (git-ignored). Evidence: `tests/test_copilot.py`.
+- D77, addendum (<YYYY-MM-DD>) — The SDK transport as built. A model named `copilot:<model>[@<effort>]` (`caos/copilot.py`) is answered by the Copilot runtime through `github-copilot-sdk` 1.0.16 on the machine the worker runs on: `caos.models.chat_model` returns `ChatCopilot` for such a name, and `ChatCompletions` prices, bounds and refuses its answer exactly as a gateway answer, so CAOS stays the orchestrator and Copilot is only the model. Each call is one empty-mode client, session and private directory, all removed afterwards: no tool (`available_tools=[]`, invariant 1); no custom instruction, skill or memory; the system message replaced by nothing; infinite sessions off (nothing compacted); the long-context tier (CP-0 sends whole filings, D29); output capped at `MAX_COMPLETION_TOKENS`; `response_format` not sent (the executor validates the envelope, invariant 9). Answers are read from the runtime's session events in wire form, so any transport that delivers them shares one mapping: a finish reason is stated only for exactly one model call on the pinned model at the pinned effort, offered no tool, with no tool request, no server tool and nothing truncated or compacted; anything else is billed and refused as an invalid response (F34). The charge is every prompt token (input, cache read, cache write) at the dated input rate plus output at the output rate; the owner prices a Copilot model at max(input, cache write) per token, so the charge is never below GitHub's bill (1 AI credit = $0.01). The effort is part of the name because the runtime applies a model's default effort when none is sent (AR-15). The identity is `copilot/<model>/<effort|none>/65536`, so a Copilot-served model qualifies separately from the same model on a gateway. Alternatives: Copilot CLI as the orchestrator with one skill per module and Delta over ODBC (run order, the ledger, the envelope and citations would rest on instructions, not code; rejected); a `CompletionProvider` of its own (duplicates the deadline, charge and refusal logic `ChatCompletions` already proves); RAI (needs use-case onboarding; a later provider behind the same factory). Measured first: `docs/rebuild/runs/copilot-spike-<date>/SUMMARY.md` (git-ignored). Evidence: `tests/test_copilot.py`.
 ```
 
 - [ ] **Step 7: Commit**

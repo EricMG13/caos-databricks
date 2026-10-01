@@ -21,6 +21,10 @@ dependencies = [
   "langgraph-checkpoint-postgres>=2.0.5",
   "databricks-langchain[memory]>=0.20.0",
   "databricks-sdk>=0.89.0",
+  # GitHub Copilot as a model where AI Gateway is disabled (D77): the SDK
+  # drives the Copilot runtime on the worker's machine. Pinned exactly: the
+  # runtime it provisions is pinned by the SDK release.
+  "github-copilot-sdk==1.0.16",
 ]
 
 [dependency-groups]
