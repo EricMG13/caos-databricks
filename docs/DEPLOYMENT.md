@@ -2,6 +2,8 @@
 
 This repository deploys as one Databricks App from an asset bundle. Nothing in the tree names a workspace: every value that differs per deployment is a bundle variable, and authentication comes from the Databricks CLI profile of whoever deploys. The steps below are what a workspace administrator runs once, then what a deployer runs per release. The gateway path is marked unverified in `docs/rebuild/blockers.md` until step 5 has been run in a real workspace.
 
+> **Status, 2026-10-01.** AI Gateway is disabled in the enterprise workspace (`docs/rebuild/blockers.md` B12), so the serving-endpoint prerequisite below and the smoke in section 5 cannot be met there. The bundle still names a serving endpoint, so it cannot deploy there as it stands (the plan's N124). Model calls are moving to GitHub Copilot from a worker on the analyst's PC (D77), built from `docs/superpowers/plans/2026-10-01-copilot-sdk-adapter.md`; its runbook will be `docs/COPILOT_WORKER.md`. Lakebase and the volume are unchanged.
+
 ## 1. Prerequisites in the workspace
 
 | Resource | Bundle variable | Notes |

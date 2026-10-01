@@ -10,7 +10,7 @@
 
 **Spec:** the **Design** section below, which extends spec §3 (`docs/rebuild/2026-09-22-caos-databricks-spec.md`: the one model factory, D7, D8) and D75 (a run is pinned to its model and price, `docs/rebuild/decisions.md`).
 
-**Base:** `origin/rebuild/databricks` at `25b4ca2`, where the enterprise-models series (D75, D76) is merged. The owner's local `rebuild/databricks` was 27 commits behind on 2026-10-01, so fetch first. Work happens in a worktree branch, and the owner merges.
+**Base:** `origin/rebuild/databricks`, where this plan merged as `dfd64ad` and the documentation was then brought in line with it (D77, B12, and the goal reissued as D76's addendum). The owner's local `rebuild/databricks` was 27 commits behind on 2026-10-01, so fetch first. Work happens in worktree branches, and the owner merges. The goal file `docs/rebuild/2026-09-22-goal.txt` runs this plan.
 
 ---
 
@@ -103,13 +103,13 @@
 - Typed refusals only. Never `str(exc)`. Never print or log a prompt, an answer, an error message, the CLI's stderr, a path under a user's home, or a credential. A model name, a count and a status code are host facts.
 - Money is `Decimal`, never `float` (invariant 7). No model call without a reservation (invariant 8).
 - A new dependency needs a `Dn` entry in `docs/rebuild/decisions.md` (D77 here).
-- IDs free at `25b4ca2`: **D77, D78, D79, N121–N124, B12**. Another session may take some meanwhile, so re-read the tail of each log before writing.
+- IDs: **D77** (the direction) and **B12** (the gateway disabled) were recorded when the build was initialised on 2026-10-01; Task 2 adds "D77, addendum". Still free: **D78, D79, N121–N125, B13**. Another session may take some meanwhile, so re-read the tail of each log before writing.
 - PRs stay ≤ 800 changed lines (`docs/**`, `vendor/**` and lockfiles excluded; check with `uv run python scripts/check_pr_size.py <base>`). Ship three stacked PRs:
   - **Copilot 1/3**, the SDK transport (Tasks 2–3);
   - **Copilot 2/3**, the CLI fallback (Task 4);
   - **Copilot 3/3**, the worker on the PC (Tasks 5–7).
 - Task 4's review is adversarial and security-focused: the `adversarial-reviewer` skill inline, or `mx-adversary` if the owner allows agents. The reason is that bandit does not scan its process start.
-- Make paid calls (Task 1, Task 7) only within an amount the owner authorises in chat for that task. Copilot bills AI credits at $0.01 each.
+- Make paid calls (Task 1, Task 7) only within an amount the owner authorises for that task, in chat or in the goal's VALUES line (`docs/rebuild/2026-09-22-goal.txt`, default none). Copilot bills AI credits at $0.01 each.
 - End every commit message with the session's attribution trailer.
 
 ## File structure
@@ -125,11 +125,10 @@
 | `scripts/qualify.py` (modify) | Docstring: the Copilot identity examples | 5 |
 | `caos/evidence/pdf.py` (modify) | No `resource` module on Windows | 6 |
 | `.gitattributes` (modify) | Byte-verified trees never converted | 6 |
-| `.github/workflows/ci.yml` (modify) | `pc-worker` job on `windows-latest` | 6 |
 | `tests/test_copilot.py` (create) | Grammar, mapping, `ChatCopilot` through `ChatCompletions`, both transports, dispatch, readiness, smoke | 2, 3, 4, 5 |
 | `tests/test_pc_worker.py` (create) | Stop signals, the `resource` guard, byte pins | 6 |
 | `docs/COPILOT_WORKER.md` (create) | The analyst-PC runbook, the CLI fallback included | 7 |
-| `docs/rebuild/decisions.md`, `next.md`, `ENTERPRISE_HANDOFF.md`, `CLAUDE.md`, `docs/DEPLOYMENT.md` (modify) | D77–D79, N121–N124, pointers | 2, 4, 6, 7 |
+| `docs/rebuild/decisions.md`, `next.md`, `ENTERPRISE_HANDOFF.md`, `CLAUDE.md`, `docs/DEPLOYMENT.md` (modify) | D77–D79, N121–N125, pointers | 2, 4, 6, 7 |
 
 ---
 
@@ -938,12 +937,12 @@ Expected: all pass.
 Run: `uv run ruff check caos/copilot.py tests/test_copilot.py && uv run ruff format --check caos/copilot.py tests/test_copilot.py && uv run mypy caos scripts tests`
 Expected: clean. If `ruff format` would reflow, run `uv run ruff format` on the two files and re-run.
 
-- [ ] **Step 6: Record D77**
+- [ ] **Step 6: Record D77's addendum**
 
-Re-read the tail of `docs/rebuild/decisions.md` and use the next free D. Append a section `## GitHub Copilot as a model, <YYYY-MM-DD>` with:
+D77 (the direction) was recorded when the build was initialised. Re-read the tail of `docs/rebuild/decisions.md`, then append this under D77's section `## GitHub Copilot as the model, 2026-10-01`:
 
 ```markdown
-- D77 (<YYYY-MM-DD>) — GitHub Copilot as a model where AI Gateway is disabled. The enterprise workspace has AI Gateway off and Lakebase on, and GitHub Copilot is the AI layer the firm already approves. A model named `copilot:<model>[@<effort>]` (`caos/copilot.py`) is answered by the Copilot runtime through `github-copilot-sdk` 1.0.16 on the machine the worker runs on: `caos.models.chat_model` returns `ChatCopilot` for such a name, and `ChatCompletions` prices, bounds and refuses its answer exactly as a gateway answer, so CAOS stays the orchestrator and Copilot is only the model. Each call is one empty-mode client, session and private directory, all removed afterwards: no tool (`available_tools=[]`, invariant 1); no custom instruction, skill or memory; the system message replaced by nothing; infinite sessions off (nothing compacted); the long-context tier (CP-0 sends whole filings, D29); output capped at `MAX_COMPLETION_TOKENS`; `response_format` not sent (the executor validates the envelope, invariant 9). Answers are read from the runtime's session events in wire form, so any transport that delivers them shares one mapping: a finish reason is stated only for exactly one model call on the pinned model at the pinned effort, offered no tool, with no tool request, no server tool and nothing truncated or compacted; anything else is billed and refused as an invalid response (F34). The charge is every prompt token (input, cache read, cache write) at the dated input rate plus output at the output rate; the owner prices a Copilot model at max(input, cache write) per token, so the charge is never below GitHub's bill (1 AI credit = $0.01). The effort is part of the name because the runtime applies a model's default effort when none is sent (AR-15). The identity is `copilot/<model>/<effort|none>/65536`, so a Copilot-served model qualifies separately from the same model on a gateway. Alternatives: Copilot CLI as the orchestrator with one skill per module and Delta over ODBC (run order, the ledger, the envelope and citations would rest on instructions, not code; rejected); a `CompletionProvider` of its own (duplicates the deadline, charge and refusal logic `ChatCompletions` already proves); RAI (needs use-case onboarding; a later provider behind the same factory). Dependency: `github-copilot-sdk==1.0.16` (MIT); its dependencies `python-dateutil`, `pydantic>=2.11` and `httpx>=0.24` were already locked; no standard-library module or pinned dependency speaks the runtime's protocol. Measured first: `docs/rebuild/runs/copilot-spike-<date>/SUMMARY.md` (git-ignored). Evidence: `tests/test_copilot.py`.
+- D77, addendum (<YYYY-MM-DD>) — The SDK transport as built. A model named `copilot:<model>[@<effort>]` (`caos/copilot.py`) is answered by the Copilot runtime through `github-copilot-sdk` 1.0.16 on the machine the worker runs on: `caos.models.chat_model` returns `ChatCopilot` for such a name, and `ChatCompletions` prices, bounds and refuses its answer exactly as a gateway answer, so CAOS stays the orchestrator and Copilot is only the model. Each call is one empty-mode client, session and private directory, all removed afterwards: no tool (`available_tools=[]`, invariant 1); no custom instruction, skill or memory; the system message replaced by nothing; infinite sessions off (nothing compacted); the long-context tier (CP-0 sends whole filings, D29); output capped at `MAX_COMPLETION_TOKENS`; `response_format` not sent (the executor validates the envelope, invariant 9). Answers are read from the runtime's session events in wire form, so any transport that delivers them shares one mapping: a finish reason is stated only for exactly one model call on the pinned model at the pinned effort, offered no tool, with no tool request, no server tool and nothing truncated or compacted; anything else is billed and refused as an invalid response (F34). The charge is every prompt token (input, cache read, cache write) at the dated input rate plus output at the output rate; the owner prices a Copilot model at max(input, cache write) per token, so the charge is never below GitHub's bill (1 AI credit = $0.01). The effort is part of the name because the runtime applies a model's default effort when none is sent (AR-15). The identity is `copilot/<model>/<effort|none>/65536`, so a Copilot-served model qualifies separately from the same model on a gateway. Alternatives: Copilot CLI as the orchestrator with one skill per module and Delta over ODBC (run order, the ledger, the envelope and citations would rest on instructions, not code; rejected); a `CompletionProvider` of its own (duplicates the deadline, charge and refusal logic `ChatCompletions` already proves); RAI (needs use-case onboarding; a later provider behind the same factory). Dependency: `github-copilot-sdk==1.0.16` (MIT); its dependencies `python-dateutil`, `pydantic>=2.11` and `httpx>=0.24` were already locked; no standard-library module or pinned dependency speaks the runtime's protocol. Measured first: `docs/rebuild/runs/copilot-spike-<date>/SUMMARY.md` (git-ignored). Evidence: `tests/test_copilot.py`.
 ```
 
 - [ ] **Step 7: Commit**
@@ -1974,7 +1973,7 @@ git commit -m "Copilot 3/3: the worker refuses a Copilot model this machine cann
 **Files:**
 - Modify: `caos/graph/worker.py:547-549` (`install_stop_handler`; add `STOP_SIGNALS`)
 - Modify: `caos/evidence/pdf.py:786` (`_limit_address_space`)
-- Modify: `.gitattributes`, `.github/workflows/ci.yml` (new job `pc-worker`)
+- Modify: `.gitattributes`
 - Create: `tests/test_pc_worker.py`
 - Modify: `docs/rebuild/decisions.md` (D79)
 
@@ -2095,25 +2094,7 @@ icm/** -text
 
 Then check that nothing in the index changes: `git add --renormalize . && git status --short`. Expected: only the files this task edited.
 
-In `.github/workflows/ci.yml`, add a job after `types`, copying the `actions/checkout` and `astral-sh/setup-uv` pins exactly as the `types` job has them at execution time:
-
-```yaml
-  pc-worker:
-    # The worker on an analyst's Windows PC (D79): a checkout that converts line
-    # endings, as Git for Windows does by default, still verifies the bundle and
-    # the host prompts, and the PC worker's own tests pass there.
-    runs-on: windows-latest
-    timeout-minutes: 30
-    steps:
-      - run: git config --global core.autocrlf true
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
-        with: {version: "0.12.5", enable-cache: true}
-      - run: uv sync --locked --all-groups
-      - run: uv run python -B vendor/deploy-v/verify_package.py
-      - run: uv run python scripts/check_icm.py
-      - run: uv run pytest --no-cov -p no:xdist tests/test_pc_worker.py tests/test_copilot.py
-```
+Do not add a Windows CI job. `scripts/check_gate_config.py` pins every job to `RUNS_ON = "ubuntu-latest"`, and widening that is a gate change only the owner can make (N125). The tests above run on Linux. Task 7's start of the worker on the analyst's PC is the Windows proof, because `_configured()` verifies the bundle manifest and the host prompts on that clone.
 
 - [ ] **Step 4: Run the tests and the gate checks**
 
@@ -2121,20 +2102,20 @@ Run: `uv run pytest --no-cov -p no:xdist tests/test_pc_worker.py -q`
 Expected: all pass.
 
 Run: `CAOS_TEST_POSTGRES_URL=postgresql://postgres:local-test-admin-only@127.0.0.1:55437/postgres CAOS_REQUIRE_POSTGRES=1 uv run pytest --no-cov -n auto tests/test_worker.py tests/test_pdf_extraction.py -q && uv run python scripts/check_gate_config.py && uv run pre-commit run --all-files`
-Expected: all exit 0. If `check_gate_config.py`, or a test that reads `ci.yml` (for example `tests/test_gate_scripts.py`), objects to the new job, satisfy its stated rule rather than loosen it, and name the rule in the commit message.
+Expected: all exit 0.
 
 - [ ] **Step 5: Record D79**
 
 Append to `docs/rebuild/decisions.md`, using the next free D:
 
 ```markdown
-- D79 (<YYYY-MM-DD>) — The worker on an analyst's Windows PC, where the Copilot seat is (D77, D78). Three facts stopped it: `install_stop_handler` handled SIGTERM only, which a console never sends, so Ctrl+C raised `KeyboardInterrupt` mid-module (it now handles SIGTERM, SIGINT and, on Windows, SIGBREAK, and only sets `stopping`); `caos/evidence/pdf.py` imported the POSIX-only `resource` module unguarded in the extraction child (it now returns, as on macOS, and the child stays bounded by its deadline and decoded-bytes budget); and `vendor/deploy-v/**` and `icm/**` were `text: unspecified`, so Git for Windows' default `core.autocrlf=true` changed the bytes the bundle manifest and `HOST_INTEGRITY_v1.json` verify (both are now `-text`). A `pc-worker` CI job checks out on `windows-latest` with `autocrlf` on, verifies the package and the host prompts, and runs the PC worker's and the Copilot transports' tests. Alternatives: WSL (one more install for IT to approve, and blocked on many managed PCs); a clone-time instruction alone (forgotten once, the worker refuses with an opaque bytes mismatch). Evidence: `tests/test_pc_worker.py`, the `pc-worker` job.
+- D79 (<YYYY-MM-DD>) — The worker on an analyst's Windows PC, where the Copilot seat is (D77, D78). Three facts stopped it: `install_stop_handler` handled SIGTERM only, which a console never sends, so Ctrl+C raised `KeyboardInterrupt` mid-module (it now handles SIGTERM, SIGINT and, on Windows, SIGBREAK, and only sets `stopping`); `caos/evidence/pdf.py` imported the POSIX-only `resource` module unguarded in the extraction child (it now returns, as on macOS, and the child stays bounded by its deadline and decoded-bytes budget); and `vendor/deploy-v/**` and `icm/**` were `text: unspecified`, so Git for Windows' default `core.autocrlf=true` changed the bytes the bundle manifest and `HOST_INTEGRITY_v1.json` verify (both are now `-text`). There is no Windows CI job: `scripts/check_gate_config.py` pins every job to `ubuntu-latest`, and widening it is the owner's call (N125). The worker's first start on the analyst's PC, which verifies the bundle and the host prompts on a Windows clone, is the Windows proof. Alternatives: WSL (one more install for IT to approve, and blocked on many managed PCs); a clone-time instruction alone (forgotten once, the worker refuses with an opaque bytes mismatch). Evidence: `tests/test_pc_worker.py`, and the PC run in the plan's Task 7.
 ```
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add caos/graph/worker.py caos/evidence/pdf.py .gitattributes .github/workflows/ci.yml tests/test_pc_worker.py docs/rebuild/decisions.md
+git add caos/graph/worker.py caos/evidence/pdf.py .gitattributes tests/test_pc_worker.py docs/rebuild/decisions.md
 git commit -m "Copilot 3/3: the worker runs on an analyst's Windows PC (D79)"
 ```
 
@@ -2144,8 +2125,8 @@ git commit -m "Copilot 3/3: the worker runs on an analyst's Windows PC (D79)"
 
 **Files:**
 - Create: `docs/COPILOT_WORKER.md`
-- Modify: `docs/rebuild/next.md` (N121–N124), `docs/rebuild/ENTERPRISE_HANDOFF.md` (§1), `docs/DEPLOYMENT.md` (section 1), `CLAUDE.md` (Layer 0 sentence, repo map)
-- Modify (only if Step 4 hits a missing external resource): `docs/rebuild/blockers.md` (B12)
+- Modify: `docs/rebuild/next.md` (N121–N125), `docs/rebuild/ENTERPRISE_HANDOFF.md` (§1), `docs/DEPLOYMENT.md` (section 1), `CLAUDE.md` (Layer 0 sentence, repo map)
+- Modify (only if Step 4 hits a missing external resource): `docs/rebuild/blockers.md` (B13)
 
 **Interfaces:**
 - Consumes: Task 1's `SUMMARY.md` (auth methods, model ids, prompt limits, prices, CLI flags, over-limit behaviour).
@@ -2258,12 +2239,14 @@ Append to `docs/rebuild/next.md`, re-reading it first for the next free N (ids a
 - N122 (<date>; D77) — One long-lived Copilot client per worker if the runtime's start-up (Task 1: seconds per call) shows in node latency.
 - N123 (<date>; D77) — Reconcile each call's charge against GitHub's own figure (`copilotUsage.totalNanoAiu` on `assistant.usage`), stored per attempt.
 - N124 (<date>; D77) — Hosting with Copilot models: the bundle's `model_endpoint` serving-endpoint resource and `CAN_QUERY` grant, `scripts/preflight.py`'s endpoint checks and `scripts/enterprise_deploy.sh` rows E1/E10 assume a gateway endpoint; an App whose approved models are Copilot's needs them made conditional. Pending the hosting answer.
+- N125 (<date>; D79) — A Windows CI runner for the PC worker's tests: `scripts/check_gate_config.py` pins every job to `ubuntu-latest` (`RUNS_ON`), so a `windows-latest` job is a gate change for the owner to approve. Until then, the worker's start on the analyst's PC is the Windows proof (D79).
 ```
 
 Then update the pointers:
-- In `docs/rebuild/ENTERPRISE_HANDOFF.md` §1, change "**No other provider.** Production calls go through `caos.models` to AI Gateway." to "**No other provider.** Production calls go through `caos.models`: to AI Gateway, or to GitHub Copilot on the worker's machine for a Copilot model (D77, D78, `docs/COPILOT_WORKER.md`)." Append "A Copilot model's effort is part of its name (D77)." to "No reasoning-effort setting".
-- In `docs/DEPLOYMENT.md` section 1, add a row after the endpoint rows: "Workspace without AI Gateway | — | Module calls go to GitHub Copilot from a worker on the analyst's PC: `docs/COPILOT_WORKER.md` (D77–D79)."
-- In `CLAUDE.md`, change "every model call goes through Databricks AI Gateway behind one factory" to "every model call goes through one factory: Databricks AI Gateway, or GitHub Copilot on the worker's machine for a Copilot model (D77, D78)". In the repo map, after `models.py` (the model factory), add `copilot.py` (the Copilot transports).
+The 2026-10-01 initialisation already wrote status notes and the "No other provider" bullet that say Copilot is *being built*. Now say it is built:
+- In `docs/rebuild/ENTERPRISE_HANDOFF.md`, replace the 2026-10-01 status note with: "AI Gateway is disabled in the enterprise workspace (B12). Model calls go to GitHub Copilot from a worker on the analyst's PC: follow `docs/COPILOT_WORKER.md` in place of the steps here that need a serving endpoint (D77–D79)." In "No other provider", replace "once D77 is built, " with nothing. Append "A Copilot model's effort is part of its name (D77)." to "No reasoning-effort setting".
+- In `docs/DEPLOYMENT.md`, replace the status note's last two sentences with a pointer to `docs/COPILOT_WORKER.md` (D77–D79), and add a row to section 1 after the endpoint rows: "Workspace without AI Gateway | — | Module calls go to GitHub Copilot from a worker on the analyst's PC: `docs/COPILOT_WORKER.md` (D77–D79)."
+- In `CLAUDE.md`, change Layer 0's "so the factory is gaining GitHub Copilot as the model, answered on the worker's machine (D77); that build is `docs/superpowers/plans/2026-10-01-copilot-sdk-adapter.md`" to "so GitHub Copilot is the model there, answered on the worker's machine (D77–D79, `docs/COPILOT_WORKER.md`)". In the repo map, after `models.py` (the model factory), add `copilot.py` (the Copilot transports).
 
 - [ ] **Step 3: Gates and Copilot 3/3**
 
@@ -2282,7 +2265,7 @@ Ask the owner for an amount first: pennies for the smokes, plus a ceiling for on
 
 1. Follow `docs/COPILOT_WORKER.md` §2–§4 on the PC. Expected:
    - the smoke prints `model=ChatCopilot`, a known charge and `json_mode=accepted`;
-   - the worker prints `copilot <model> max_prompt_tokens=<n>` and runs;
+   - the worker prints `copilot <model> max_prompt_tokens=<n>` and runs. Its start verifies the bundle and the host prompts on this Windows clone, which is D79's Windows proof;
    - `/api/health` reports workers OK wherever the API runs.
 2. Repeat the smoke with `CAOS_MODEL_ENDPOINT` and `CAOS_MODEL_PRICE` naming `copilot-cli:<the same model>`. Expected: the same three facts.
 3. On a machine with Docker Postgres and the same Copilot sign-in, run:
@@ -2297,7 +2280,7 @@ Ask the owner for an amount first: pennies for the smokes, plus a ceiling for on
    ```
 
    Record the outcome in `qualification/PROVIDER_RUNBOOK.md`: per node, the code, the charge, and the largest prompt's tokens against the model's limit.
-4. If an external resource is missing (port 5432 blocked, Lakebase role absent, Copilot CLI policy off), add **B12** to `docs/rebuild/blockers.md` with the exact command and error. Correct the runbook to the commands that actually ran, then commit:
+4. If an external resource is missing (port 5432 blocked, Lakebase role absent, Copilot CLI policy off), add **B13** to `docs/rebuild/blockers.md` with the exact command and error. Correct the runbook to the commands that actually ran, then commit:
 
 ```bash
 git add docs/COPILOT_WORKER.md qualification/PROVIDER_RUNBOOK.md docs/rebuild/blockers.md
