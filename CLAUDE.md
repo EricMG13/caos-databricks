@@ -1,6 +1,6 @@
 # CAOS on Databricks — Layer 0
 
-Governed source documents to committee-ready credit conclusions, as one Databricks App: FastAPI serves the nine-section workspace and the API, LangGraph runs each pinned methodology route one node at a time, Lakebase Postgres holds the store and the graph checkpoints, a Unity Catalog volume holds every byte by digest, and every model call goes through Databricks AI Gateway behind one factory. The build contract is `docs/rebuild/2026-09-22-caos-databricks-spec.md`; decisions are `docs/rebuild/decisions.md`.
+Governed source documents to committee-ready credit conclusions, as one Databricks App: FastAPI serves the nine-section workspace and the API, LangGraph runs each pinned methodology route one node at a time, Lakebase Postgres holds the store and the graph checkpoints, a Unity Catalog volume holds every byte by digest, and every model call goes through one factory. The enterprise workspace has AI Gateway disabled (`docs/rebuild/blockers.md` B12), so the factory is gaining GitHub Copilot as the model, answered on the worker's machine (D77); that build is `docs/superpowers/plans/2026-10-01-copilot-sdk-adapter.md`. The build contract is `docs/rebuild/2026-09-22-caos-databricks-spec.md` (amended by D77); decisions are `docs/rebuild/decisions.md`.
 
 ## Repo map
 
