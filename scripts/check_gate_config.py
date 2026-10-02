@@ -165,6 +165,10 @@ _LARGE_FILES_EXCLUDE = (
     r"qualification/czr-2026q2-portfolio/documents/"
     r"CZR_2020_Credit_Agreement\.txt$|"
     r"qualification/czr-2026q2-portfolio/documents/"
+    r"CZR_2024_650_Senior_Secured_Notes_2032_Indenture\.txt$|"
+    r"qualification/czr-2026q2-full-credit-assessment/documents/"
+    r"CZR_2020_Credit_Agreement\.txt$|"
+    r"qualification/czr-2026q2-full-credit-assessment/documents/"
     r"CZR_2024_650_Senior_Secured_Notes_2032_Indenture\.txt$)"
 )
 _VENDOR_QUAL_EXCLUDE = (
