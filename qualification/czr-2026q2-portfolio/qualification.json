@@ -1,0 +1,132 @@
+{
+  "cases": [
+    {
+      "label": "czr-2026q2-portfolio",
+      "profile_id": "FULL_CREDIT_32",
+      "selection_id": "PORTFOLIO_DECISION",
+      "subject": {
+        "issuer_id": "CZR",
+        "issuer_name": "Caesars Entertainment, Inc.",
+        "reporting_period": "Q2 2026",
+        "analysis_date": "2026-10-02"
+      },
+      "documents": [
+        "documents/CZR_Q2_2026_10Q.txt",
+        "documents/CZR_FY2025_10K.txt",
+        "documents/CZR_2020_Credit_Agreement.txt",
+        "documents/CZR_2024_650_Senior_Secured_Notes_2032_Indenture.txt",
+        "documents/CZR_FINRA_TRACE_12769GAC4_2026-10-02.txt",
+        "documents/CZR_FINRA_TRACE_12769GAD2_2026-10-02.txt",
+        "documents/TEST_CLO_I_Mandate_and_Exposures_2026-10-02.txt"
+      ],
+      "expects": [
+        {
+          "module_id": "CP-1",
+          "document_sha256": "1b2027659f255471d41243180c9b550c6915348b7aea79619634c5a9d7b0187c",
+          "matched_text": "Cash and cash equivalents | $965 | $887 |"
+        },
+        {
+          "module_id": "CP-2",
+          "document_sha256": "1b2027659f255471d41243180c9b550c6915348b7aea79619634c5a9d7b0187c",
+          "matched_text": "Net cash provided by operating activities | 675 | 680 |"
+        },
+        {
+          "module_id": "CP-2",
+          "document_sha256": "204904832a3a51442a5c33d791ea35265586f43fac34530cd4d051787d0c0874",
+          "matched_text": "Net cash provided by operating activities | 1,302 | 1,075 | 1,809 |"
+        },
+        {
+          "module_id": "CP-4",
+          "document_sha256": "1b2027659f255471d41243180c9b550c6915348b7aea79619634c5a9d7b0187c",
+          "matched_text": "The CEI Revolving Credit Facility, the CEI Term Loan A, the CEI Term Loan B, the CEI Term Loan B-1, the CEI Senior Secured Notes due 2030 and the CEI Senior Secured Notes due 2032 are guaranteed on a senior secured basis by each existing and future material wholly-owned domestic subsidiary of the Company and are secured by substantially all of the existing and future property and assets of the Company and its subsidiary guarantors (subject to certain exceptions). The CEI Senior Notes due 2029 and the CEI Senior Notes due 2032 are guaranteed on a senior unsecured basis by such subsidiaries."
+        },
+        {
+          "module_id": "CP-4",
+          "document_sha256": "62fbb236862a09f068f8bdcab86459fa7eed0fc0f2501297b85f41029c4e431c",
+          "matched_text": "Section 2.01 Amount of Notes. The aggregate principal amount of Notes which may be authenticated and delivered under this Indenture on the Issue Date is $1,500,000,000."
+        },
+        {
+          "module_id": "CP-4",
+          "document_sha256": "62fbb236862a09f068f8bdcab86459fa7eed0fc0f2501297b85f41029c4e431c",
+          "matched_text": "(a) Upon the occurrence of a Change of Control, each holder shall have the right to require the Company to repurchase all or any part of such holder’s Notes at a purchase price in cash equal to 101% of the principal amount thereof, plus accrued and unpaid interest, if any, to, but excluding, the date of repurchase (subject to the right of the holders of record on the relevant Record Date to receive interest due on the relevant Interest Payment Date), in accordance with the terms contemplated in this Section 4.08; provided, however, that notwithstanding the occurrence of a Change of Control, the Company shall not be obligated to purchase any Notes pursuant to this Section 4.08 in the event that it has exercised its right to redeem such Notes in accordance with Article III of this Indenture."
+        },
+        {
+          "module_id": "CP-4",
+          "document_sha256": "b4f124cb0e058b06453f2037bb70e4455600a6006b6559c03721918b5e36f2e2",
+          "matched_text": "(g) there shall have occurred a Change in Control;"
+        },
+        {
+          "module_id": "CP-3D",
+          "document_sha256": "4018aaa62309df6cd66a9b5fc766c4a9429e886e649023de2bad8673baf8aa51",
+          "matched_text": "Last trade price: $93.28"
+        },
+        {
+          "module_id": "CP-3D",
+          "document_sha256": "256c646128b7b670ebeb2e795aaced255373b488261b7f5c9111f933e2226b24",
+          "matched_text": "Last trade price: $84.94"
+        },
+        {
+          "module_id": "CP-3",
+          "document_sha256": "4018aaa62309df6cd66a9b5fc766c4a9429e886e649023de2bad8673baf8aa51",
+          "matched_text": "Last trade yield: 8.063520%"
+        },
+        {
+          "module_id": "CP-3",
+          "document_sha256": "256c646128b7b670ebeb2e795aaced255373b488261b7f5c9111f933e2226b24",
+          "matched_text": "Last trade yield: 9.318398%"
+        },
+        {
+          "module_id": "CP-5",
+          "document_sha256": "1b2027659f255471d41243180c9b550c6915348b7aea79619634c5a9d7b0187c",
+          "matched_text": "Total debt | 11,807 | 11,705 | 11,792 |"
+        },
+        {
+          "module_id": "CP-6",
+          "document_sha256": "864ee90ab21372bcf89c8b27e02cd5d691d9095a64d507c7f656d5963cfe3207",
+          "matched_text": "Proposed position: Caesars Entertainment, Inc. 6.50% Senior Secured Notes due 2032, CUSIP 12769GAC4, par USD 5,000,000."
+        },
+        {
+          "module_id": "CP-6",
+          "document_sha256": "864ee90ab21372bcf89c8b27e02cd5d691d9095a64d507c7f656d5963cfe3207",
+          "matched_text": "Position weight on par: 5,000,000 / 630,928,502 = 0.7925% of NAV."
+        },
+        {
+          "module_id": "CP-6",
+          "document_sha256": "864ee90ab21372bcf89c8b27e02cd5d691d9095a64d507c7f656d5963cfe3207",
+          "matched_text": "C-01 | Single Name | Max single issuer exposure (largest: Asurion) | ≤ 2.5% NAV | Hard | Indenture §7.11 | 2.37% | 0.13% | Watch | 29-May-2026 | E. Guei |"
+        }
+      ],
+      "expects_ready": [
+        "CP-1",
+        "CP-2",
+        "CP-4",
+        "CP-3D",
+        "CP-3",
+        "CP-5",
+        "CP-6"
+      ],
+      "expects_projection": [
+        {
+          "module_id": "CP-3D",
+          "field": "qa_status",
+          "value": "Restricted"
+        },
+        {
+          "module_id": "CP-3",
+          "field": "qa_status",
+          "value": "Restricted"
+        },
+        {
+          "module_id": "CP-6",
+          "field": "decision_scope",
+          "value": "FULL"
+        },
+        {
+          "module_id": "CP-6",
+          "field": "qa_status",
+          "value": "Restricted"
+        }
+      ]
+    }
+  ]
+}

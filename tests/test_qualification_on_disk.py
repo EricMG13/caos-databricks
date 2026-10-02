@@ -311,6 +311,9 @@ COMMITTED_SET_DIGESTS = {
     "czr-2026q2-lite-portfolio": (
         "9eb021fef0096c80817a638bf4892ebacfe4bd53f04111b0ed491bec118ab892"
     ),
+    "czr-2026q2-portfolio": (
+        "b32d4b2b649670e11da2f9b0e805174e74c89bfa355098b27ba0c86e3fef2789"
+    ),
     "save-2024-distressed-restructuring": (
         "5a6fb829e945143cf3b6593231dbb2b6d181b7feaca2b60906f3222faf313f6b"
     ),
