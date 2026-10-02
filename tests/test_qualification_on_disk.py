@@ -291,7 +291,7 @@ COMMITTED_SET_DIGESTS = {
         "42a2439e6b8be320c6c3ef8d91b4baa88e2fc34a72402528d65144f37c2b373f"
     ),
     "czr-2026q2-liquidity": (
-        "fbc85fcd4980003730d908a56626387689a79bfc9c120335367c8a5289ef5021"
+        "e4d02a674e1df2be9e100a1a21374da9b8dc2307ab357f0de3075cbfe03fc723"
     ),
     "save-2024-distressed-restructuring": (
         "5a6fb829e945143cf3b6593231dbb2b6d181b7feaca2b60906f3222faf313f6b"
