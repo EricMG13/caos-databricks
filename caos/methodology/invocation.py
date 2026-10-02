@@ -510,7 +510,7 @@ _HOST_STEPS = prompt_block("host_steps")
 
 _GATE_INSTRUCTION = prompt_block("gate_instruction")
 
-# A node's one second attempt after a refused answer (D30): what the checks
+# A node's guided retry after a refused answer (D30, D82): what the checks
 # reported, as written. The host adds no rule of its own here (invariant 4).
 _RETRY_FEEDBACK = prompt_block("validator_feedback")
 
@@ -1158,7 +1158,7 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
     holds the answer to when it is accepted (`WHOLE_LINE`, N28); before N28 the
     host accepted any unique run of the page, and a record accepted then is
     re-anchored by that rule, which it names. `retry_feedback` is non-empty
-    only on a node's one second attempt (D30): the checks its refused answer
+    only on a node's guided retry (D30, D82): the checks its refused answer
     failed, rendered last and folded into the tag, so a first attempt's bytes
     are exactly what they were and the refused answer could not have known the
     markers around them.
@@ -1280,7 +1280,7 @@ def _feedback_lines(lines: Sequence[str]) -> str:
 
 
 def _retry_section(tag: str, feedback: str) -> str:
-    """The last section of a node's one second attempt (D30), or nothing."""
+    """The last section of a node's guided retry (D30, D82), or nothing."""
     return _RETRY_FEEDBACK.format(tag=tag, messages=feedback) if feedback else ""
 
 

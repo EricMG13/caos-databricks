@@ -896,6 +896,113 @@ def _located(
     return run, digest
 
 
+@dataclass(frozen=True, slots=True)
+class LineFinding:
+    """Where this module's own search finds a quote that `WHOLE_LINE` refused
+    `CITATION_NOT_LOCATED` (D82), among the blocks one node was given. At
+    most one field is set; none is "found, but not in a way that names one
+    line" (a run on two lines, or twice on a page), never a guess.
+
+    `block_id`: the one delivered evidence line of the cited page the quote
+    is part of, longer than the quote. `pages`: the other delivered pages of
+    its source on which the quote is one whole delivered evidence line.
+    `absent`: no page of its source the node was given, nor the cited page,
+    holds the quote as any run (`ANY_RUN`).
+    """
+
+    block_id: str | None = None
+    pages: tuple[int, ...] = ()
+    absent: bool = False
+
+
+def find_line(
+    conn: StoreConnection,
+    *,
+    blocks: frozenset[str],
+    pages: Iterable[int],
+    citation: Citation,
+    index: TokenIndex,
+) -> LineFinding:
+    """`LineFinding` for a citation `WHOLE_LINE` refused `CITATION_NOT_LOCATED`.
+
+    `blocks` are the blocks of the citation's source the node was given and
+    `pages` the pages they are on. The cited page is searched by `ANY_RUN`
+    (`_page_run`): a unique run inside one delivered shown line longer than
+    it is that line. Failing that, each other delivered page is asked
+    `verify_citations` under `WHOLE_LINE` with the citation moved there, and
+    by `ANY_RUN` whether the quote is on it at all. Reads go through `index`.
+    """
+    source_id, text = citation.source_id, citation.matched_text
+    tracking = index.facts(conn, source_id)[1]
+    cited = index.page(conn, source_id, citation.page)
+    run = _any_run(cited, text, tracking=tracking)
+    if isinstance(run, list):
+        lines = index.lines(conn, source_id)
+        shown = (cited, index.cuts.get(source_id), lines)
+        block_id = _longer_line(*shown, run, tracking=tracking)
+        if block_id in blocks:
+            return LineFinding(block_id=block_id)
+    seen = run is not RefusalCode.CITATION_NOT_LOCATED
+    whole: list[int] = []
+    for number in sorted(set(pages) - {citation.page}):
+        moved = Citation(source_id, number, text)
+        try:
+            verify_citations(
+                conn,
+                delivered={source_id: blocks},
+                citations=(moved,),
+                index=index,
+                rule=WHOLE_LINE,
+            )
+        except Refusal as refused:
+            if refused.code not in _NOT_ANCHORED:
+                raise
+            on = _any_run(index.page(conn, source_id, number), text, tracking=tracking)
+            seen = seen or on is not RefusalCode.CITATION_NOT_LOCATED
+            continue
+        whole.append(number)
+    if whole:
+        return LineFinding(pages=tuple(whole))
+    return LineFinding(absent=not seen)
+
+
+_NOT_ANCHORED = frozenset(
+    {
+        RefusalCode.CITATION_NOT_LOCATED,
+        RefusalCode.CITATION_AMBIGUOUS,
+        RefusalCode.CITATION_NOT_DELIVERED,
+    }
+)
+
+
+def _any_run(page: _Page, text: str, *, tracking: bool) -> list[_Token] | RefusalCode:
+    """`_page_run`'s unique run, or the anchoring code it refused with."""
+    try:
+        return _page_run(page, text, tracking=tracking)
+    except Refusal as refused:
+        return refused.code
+
+
+def _longer_line(
+    page: _Page,
+    cuts: Mapping[int, tuple[int, ...]] | None,
+    lines: Mapping[int, tuple[str, ...]],
+    run: list[_Token],
+    *,
+    tracking: bool,
+) -> str | None:
+    """The block id of the one shown line (`_Page.shown`) that holds all of
+    `run` and more, or None. On a tracking extractor the line with its
+    tracked letters joined is asked first, so a run `_page_run` found joined
+    is measured against the line in the same form."""
+    for joined in (True, False) if tracking else (False,):
+        for spans in page.shown(cuts, lines, joined=joined).values():
+            for span, block_id in spans:
+                if len(span) > len(run) and run[0] in span and run[-1] in span:
+                    return block_id
+    return None
+
+
 def _page_tokens(conn: StoreConnection, source_id: UUID, page: int) -> list[_Token]:
     """The page's tokens in reading order, from a live source only."""
     rows = conn.execute(

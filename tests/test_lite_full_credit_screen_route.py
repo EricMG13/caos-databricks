@@ -397,14 +397,14 @@ def test_billed_cp5_replay_cannot_strip_restricted_direct_upstream_limits(
             _DiesAfterItsBill(_module_provider(harness, answers)),  # type: ignore[arg-type]
         )
     assert _modules(answers).count("CP-5") == 1
-    # The replay itself makes no call; N52 then gives CP-5 its one second
-    # attempt, which strips the same limits and is refused the same way.
+    # The replay itself makes no call; N52 then gives CP-5 its guided retries
+    # (two since D82), each stripping the same limits, refused the same way.
     assert (
         _run_route(harness, _module_provider(harness, answers))
         is RefusalCode.HANDOFF_INCOMPLETE
     )
-    assert _modules(answers).count("CP-5") == 2
-    assert _attempts(harness, "CP-5") == (2, 2)
+    assert _modules(answers).count("CP-5") == 3
+    assert _attempts(harness, "CP-5") == (3, 3)
 
 
 def test_accepted_cp5_reads_reject_a_self_consistent_restriction_forgery(

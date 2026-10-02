@@ -251,14 +251,14 @@ def test_a_module_that_cannot_be_anchored_stops_the_run(
         _run(ready, route, completions)
 
     with connect(_url_for(conn.info.dbname)) as observer:
-        # N52: the refusal earns one second attempt, refused the same way;
-        # both keep their reservation and bill.
+        # N52, D82: the refusal earns two guided retries, refused the same
+        # way; each keeps its reservation and bill.
         assert run_status(observer, run_id) is RunStatus.RUNNING
-        assert _reserved(observer, run_id) == [ESTIMATE, ESTIMATE]
-        assert _charges(observer, run_id) == [REPORTED, REPORTED]
-        assert observer.execute("SELECT count(*) FROM call_outcomes").fetchone() == (2,)
+        assert _reserved(observer, run_id) == [ESTIMATE] * 3
+        assert _charges(observer, run_id) == [REPORTED] * 3
+        assert observer.execute("SELECT count(*) FROM call_outcomes").fetchone() == (3,)
         assert observer.execute("SELECT count(*) FROM artifacts").fetchone() == (0,)
-    assert len(completions.prompts) == 2
+    assert len(completions.prompts) == 3
 
 
 def test_the_loop_hands_each_node_its_predecessors_results(
