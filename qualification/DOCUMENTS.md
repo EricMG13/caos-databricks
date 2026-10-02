@@ -290,6 +290,32 @@ issuer pack. What remains needs private owner data or a real prior decision.
    in hand. The separate backstop agreement was not admitted because these two
    documents already establish the distress trigger and plan evidence needed
    for the smallest honest CP-4C qualification pack.
+9. ~~**A second public issuer, with peers and a mandate.**~~ The 2 October 2026
+   CZR tranche. **Source:** eleven official SEC EDGAR documents (Caesars
+   Entertainment's FY2025 10-K, Q2 2026 10-Q and earnings release, the 2020
+   credit agreement with its Fourth and Fifth Amendments, the 6.50% 2032 notes
+   indenture, the 27 May 2026 merger 8-K and its press release, and the MGM
+   and PENN Q2 2026 earnings releases), fetched on 2 October 2026 with the SEC
+   CDN's injected script tag stripped, each matching the size in its filing's
+   `index.json`, converted from HTML to plain text the same day; and four FINRA
+   TRACE observations transcribed from the official public pages that day.
+   Each set's `RESULT.md` records every URL, accession, raw and text SHA-256.
+   **The owner's choices:** CZR, with peers MGM and PENN, from the owner's
+   "Public Leveraged Loan Issuers Benchmark" (FYBR excluded: it no longer
+   files); the synthetic "Test CLO I" mandate adapted to carry a CZR position,
+   labelled SYNTHETIC everywhere and never to ground a real decision (D80); no
+   CZR rating action, so CP-2H runs restricted on FINRA's displayed ratings and
+   last-rated dates; and an analysis date of 2026-10-02 for every case.
+   **SEC fair access:** SEC asks every automated request to declare a
+   User-Agent naming the requester and a contact email address. That address
+   is not recorded anywhere in this repository; whoever re-fetches supplies
+   their own. **What remains:** `DECISION_LEDGER` and `LITE_DECISION_LEDGER`
+   still need a real, dated decision record (to author, item 6), and CZR is not
+   a distressed issuer, so the two distressed pathways keep only the Spirit
+   sets (item 8); a distressed issuer's pack beyond Spirit remains to source.
+   `DEEP_RESEARCH` still waits on the owner's confirmation of its FULL brief
+   (item 7), and the CZR portfolio sets' eligible-security universe is owner
+   content (N127).
 
 ## Route qualification inventory
 
@@ -301,24 +327,24 @@ not qualified.
 
 | Profile | Pathway | Set or explicit reason | Phase 2 state |
 |---|---|---|---|
-| `FULL_CREDIT_32` | `COVENANT_REFINANCING` | `ccl-fy2025-covenant-refinancing` | offline |
+| `FULL_CREDIT_32` | `COVENANT_REFINANCING` | `ccl-fy2025-covenant-refinancing`, `czr-2026q2-covenant-refinancing` | offline |
 | `FULL_CREDIT_32` | `DECISION_LEDGER` | No genuine dated T0 decision record; retrospective reconstruction is prohibited | no set / owner input |
 | `FULL_CREDIT_32` | `DEEP_RESEARCH` | `vmo2-fy2025-full-deep-research`; FULL brief confirmation outstanding | offline / owner confirmation |
 | `FULL_CREDIT_32` | `DISTRESSED_RESTRUCTURING` | `save-2024-distressed-restructuring` | blocked set |
-| `FULL_CREDIT_32` | `EARNINGS_UPDATE` | `ccl-fy2025-earnings-update` | offline |
-| `FULL_CREDIT_32` | `FULL_CREDIT_ASSESSMENT` | Current mandate, holdings/exposures, limits and proposed-position inputs are absent | no set / owner input |
-| `FULL_CREDIT_32` | `LIQUIDITY_REVIEW` | `ccl-fy2025-liquidity` | offline |
+| `FULL_CREDIT_32` | `EARNINGS_UPDATE` | `ccl-fy2025-earnings-update`, `czr-2026q2-earnings-update` | offline |
+| `FULL_CREDIT_32` | `FULL_CREDIT_ASSESSMENT` | `czr-2026q2-full-credit-assessment`, over the SYNTHETIC Test CLO I mandate (D80); no eligible-security universe (N127) | offline, restricted / synthetic mandate |
+| `FULL_CREDIT_32` | `LIQUIDITY_REVIEW` | `ccl-fy2025-liquidity`, `czr-2026q2-liquidity` | offline |
 | `FULL_CREDIT_32` | `MARKET_DISLOCATION` | `ccl-fy2025-market-dislocation` | offline, market-restricted |
-| `FULL_CREDIT_32` | `PORTFOLIO_DECISION` | Current mandate, holdings/exposures, limits and proposed-position inputs are absent | no set / owner input |
-| `FULL_CREDIT_32` | `RELATIVE_VALUE` | `ccl-fy2025-full-relative-value` | offline, market-restricted |
-| `LITE_CREDIT_22` | `LITE_COVENANT_REFINANCING` | `ccl-fy2025-lite-covenant-refinancing` | offline |
+| `FULL_CREDIT_32` | `PORTFOLIO_DECISION` | `czr-2026q2-portfolio`, over the SYNTHETIC Test CLO I mandate (D80); no eligible-security universe (N127) | offline, market-restricted / synthetic mandate |
+| `FULL_CREDIT_32` | `RELATIVE_VALUE` | `ccl-fy2025-full-relative-value`, `czr-2026q2-relative-value` | offline, market-restricted |
+| `LITE_CREDIT_22` | `LITE_COVENANT_REFINANCING` | `ccl-fy2025-lite-covenant-refinancing`, `czr-2026q2-lite-covenant-refinancing` | offline |
 | `LITE_CREDIT_22` | `LITE_DECISION_LEDGER` | No genuine dated T0 decision record; retrospective reconstruction is prohibited | no set / owner input |
 | `LITE_CREDIT_22` | `LITE_DEEP_RESEARCH` | `vmo2-fy2025-deep-research` | retained historical run; current release status is store-derived |
 | `LITE_CREDIT_22` | `LITE_DISTRESSED_RESTRUCTURING` | `save-2024-lite-distressed-restructuring` | blocked set |
-| `LITE_CREDIT_22` | `LITE_EARNINGS_UPDATE` | `vmo2-fy2025`, `ccl-fy2025`, `ba-fy2025`, `f-fy2025` | current VMO2 set offline; historical runs retained |
-| `LITE_CREDIT_22` | `LITE_FULL_CREDIT_SCREEN` | `ccl-fy2025-lite-full-credit-screen` | offline, restricted |
-| `LITE_CREDIT_22` | `LITE_PORTFOLIO_DECISION` | `ccl-fy2025-portfolio`, `vmo2-fy2025-portfolio` | blocked and historical-run cases retained |
-| `LITE_CREDIT_22` | `LITE_RELATIVE_VALUE` | `ccl-fy2025-relative-value` | historical runs retained; no signed verdict |
+| `LITE_CREDIT_22` | `LITE_EARNINGS_UPDATE` | `vmo2-fy2025`, `ccl-fy2025`, `ba-fy2025`, `f-fy2025`, `czr-2026q2` | current VMO2 and CZR sets offline; historical runs retained |
+| `LITE_CREDIT_22` | `LITE_FULL_CREDIT_SCREEN` | `ccl-fy2025-lite-full-credit-screen`, `czr-2026q2-lite-full-credit-screen` | offline, restricted |
+| `LITE_CREDIT_22` | `LITE_PORTFOLIO_DECISION` | `ccl-fy2025-portfolio`, `vmo2-fy2025-portfolio`, `czr-2026q2-lite-portfolio` (SYNTHETIC mandate, D80) | blocked and historical-run cases retained; CZR set offline / synthetic mandate |
+| `LITE_CREDIT_22` | `LITE_RELATIVE_VALUE` | `ccl-fy2025-relative-value`, `czr-2026q2-lite-relative-value` | historical runs retained; CZR set offline; no signed verdict |
 
 ## Size
 
