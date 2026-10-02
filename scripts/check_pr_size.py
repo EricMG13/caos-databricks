@@ -33,6 +33,7 @@ EXCLUSIONS = (
     ":!qualification/ccl-fy2025-liquidity/documents/**",
     ":!qualification/f-fy2025/documents/**",
     ":!qualification/vmo2-fy2025-full-deep-research/documents/**",
+    ":!qualification/czr-2026q2/documents/**",
     ":!qualification/ccl-fy2025-relative-value/documents/CCL_FY2025_10K.txt",
     ":!qualification/ccl-fy2025-relative-value/documents/NCLH_Q4_2025_Earnings_Release.txt",
     ":!qualification/ccl-fy2025-relative-value/documents/RCL_Q4_2025_Earnings_Release.txt",

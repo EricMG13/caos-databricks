@@ -91,13 +91,17 @@ a row typed here is a row that fails. -->
 | `ccl-finra-full-relative-value` | CCL | FINRA CCL 5.75% 2030 note observation at 19 September 2026 (FULL relative-value set copy) | in_hand | CP-3D, CP-3 | RELATIVE_VALUE | 1304 | yes | `28f9289818978608…` |
 | `rcl-full-relative-value` | RCL | Royal Caribbean Group FY2025 results (FULL relative-value set copy) | in_hand | CP-1C, CP-3 | RELATIVE_VALUE | 41861 | yes | `43005bdbd3a05fd6…` |
 | `nclh-full-relative-value` | NCLH | Norwegian Cruise Line Holdings FY2025 results (FULL relative-value set copy) | in_hand | CP-1C, CP-3 | RELATIVE_VALUE | 52268 | yes | `dd9a0eb7211c111b…` |
+| `czr-fy2025-10k` | CZR | Caesars Entertainment, Inc. FY2025 Form 10-K (SEC filing text extract) | in_hand | CP-0, CP-L10 | LITE_EARNINGS_UPDATE | 408146 | yes | `204904832a3a5144…` |
+| `czr-q2-2026-10q` | CZR | Caesars Entertainment, Inc. Form 10-Q for the quarter ended 30 June 2026 (SEC filing text extract) | in_hand | CP-0, CP-5 | LITE_EARNINGS_UPDATE | 168366 | yes | `1b2027659f255471…` |
+| `czr-q2-2026-earnings` | CZR | Caesars Entertainment, Inc. second quarter 2026 earnings release, Exhibit 99.1, 28 July 2026 (SEC exhibit text extract) | in_hand | CP-0, CP-L10 | LITE_EARNINGS_UPDATE | 15825 | yes | `17f1795b42b4b7aa…` |
 | `answer-key-3issuer` | CCL, BA, F | ANSWER_KEY_3ISSUER.md — human-authored core facts, derived values and 24 traps per issuer | **key source, never admitted** | — | — | — | — | — |
 <!-- /emitted -->
 
-Fifty documents: forty-five `in_hand`, four `to_source`, and one
-`to_author`; plus one key source. Thirty of the forty-five in hand are
+Fifty-three documents: forty-eight `in_hand`, four `to_source`, and one
+`to_author`; plus one key source. Thirty of the forty-eight in hand are
 byte-identical route-local copies of already admitted evidence: eleven from the
-earlier sets and nineteen added for the Phase 2 route inventory. The on-disk
+earlier sets and nineteen added for the Phase 2 route inventory. Three are the
+CZR Q2 2026 EDGAR filings admitted on 2 October 2026 (`czr-2026q2`). The on-disk
 loader requires those copies because it refuses a declared path resolving
 outside its set root. Two more, `cp-dr-research-brief` and
 `cp-dr-full-research-brief`, are the

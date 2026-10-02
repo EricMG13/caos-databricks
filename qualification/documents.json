@@ -748,6 +748,45 @@
       "external_path": null,
       "demand_verified": false,
       "note": "Byte-identical to nclh-q4-2025-earnings and copied for set isolation."
+    },
+    {
+      "id": "czr-fy2025-10k",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. FY2025 Form 10-K (SEC filing text extract)",
+      "modules": ["CP-0", "CP-L10"],
+      "pathways": ["LITE_EARNINGS_UPDATE"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000159089526000011/czr-20251231.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2/documents/CZR_FY2025_10K.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Official EDGAR filing (Form 10-K primary document) converted from HTML to plain text on 2 October 2026 (accession 0001590895-26-000011, raw HTML SHA-256 41328bdfa2486cfb53b831c2ddba6009528d8dca3a0d868c98c2cb113142b05f). Fiscal year ended 31 December 2025; it supplies the annual base (net revenues, total debt). 408,146 bytes, inside MAX_REQUEST_BYTES."
+    },
+    {
+      "id": "czr-q2-2026-10q",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. Form 10-Q for the quarter ended 30 June 2026 (SEC filing text extract)",
+      "modules": ["CP-0", "CP-5"],
+      "pathways": ["LITE_EARNINGS_UPDATE"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000159089526000028/czr-20260630.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2/documents/CZR_Q2_2026_10Q.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Official EDGAR filing (Form 10-Q primary document) converted from HTML to plain text on 2 October 2026 (accession 0001590895-26-000028, raw HTML SHA-256 9dd3fca867c49936c65c9729bd7f9478d4c98b7c60569b74864a839bdeed8500). It supplies the interim statements, the Note 6 debt table and maturities, and the pending Fertitta Gaming merger disclosure. 168,366 bytes."
+    },
+    {
+      "id": "czr-q2-2026-earnings",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. second quarter 2026 earnings release, Exhibit 99.1, 28 July 2026 (SEC exhibit text extract)",
+      "modules": ["CP-0", "CP-L10"],
+      "pathways": ["LITE_EARNINGS_UPDATE"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000159089526000027/ex991-2026q2ceiearningsrel.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2/documents/CZR_Q2_2026_Earnings_Release.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Official EDGAR exhibit converted from HTML to plain text on 2 October 2026 (accession 0001590895-26-000027, raw HTML SHA-256 a8982154b99b023b526261f7626022e96ac642834d1d65704629946acecc8a1f). It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,825 bytes."
     }
   ],
   "key_sources": [
