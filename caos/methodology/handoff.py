@@ -786,8 +786,10 @@ def _body_words(text: str) -> list[str]:
 
 
 # Marks a body may put around a quotation without making it a different quote.
-# The backtick is Markdown's code span, which a module uses the same way.
-_QUOTATION = "\"'`\u2018\u2019\u201c\u201d\u201e\u201f\u00ab\u00bb"
+# The backtick is Markdown's code span, which a module uses the same way, and
+# `*` and `_` are its emphasis (`**quote**`, `__quote__`), typography around a
+# quote and never inside it (F476). Like the quote marks, they are not paired.
+_QUOTATION = "\"'`*_\u2018\u2019\u201c\u201d\u201e\u201f\u00ab\u00bb"
 # And what prose puts before and after one: an opening bracket; a closing
 # bracket or the sentence's own punctuation (F148).
 _OPENING = _QUOTATION + "([{"

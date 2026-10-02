@@ -396,6 +396,32 @@ def test_a_quote_the_body_wraps_in_quotation_marks_is_still_quoted(
 
 
 @pytest.mark.parametrize(
+    "marks", ["*{}*", "**{}**", "_{}_", "__{}__", "**{}**.", "**{}*", "(**{}**),"]
+)
+def test_a_quote_the_body_wraps_in_markdown_emphasis_is_still_quoted(
+    marks: str,
+) -> None:
+    """Emphasis markers are typography around a quote, never inside it (F476).
+
+    A live run wrote `**For the period 2026**.`, carried when written with
+    quotation marks. A changed inner word is still refused.
+    """
+    body = wire(
+        f"---\nmodule_id: CP-0\n---\n\n## Evidence Trace\n\n- "
+        f"{marks.format(QUOTE)}\n".encode(),
+        [_citation()],
+    )
+    _markdown, citations = parse_response(body, delivered=DELIVERED)
+    assert citations[0].matched_text == QUOTE
+    changed = wire(
+        f"---\nmodule_id: CP-0\n---\n\n## Evidence Trace\n\n- "
+        f"{marks.format('Recorded other p1')}\n".encode(),
+        [_citation()],
+    )
+    assert _parse_refused(changed) is RefusalCode.HANDOFF_MALFORMED
+
+
+@pytest.mark.parametrize(
     "marks",
     [
         '"{}".',
