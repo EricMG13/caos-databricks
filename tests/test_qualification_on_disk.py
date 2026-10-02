@@ -299,6 +299,12 @@ COMMITTED_SET_DIGESTS = {
     "czr-2026q2-lite-covenant-refinancing": (
         "35eb452da5a30ccddc768b707f9c3239526931498d58e0568ded03a09c590fe0"
     ),
+    "czr-2026q2-lite-relative-value": (
+        "ba0182157d2446afaff381bbe777645dfff81fc2fc5a4549d02025df503024c8"
+    ),
+    "czr-2026q2-relative-value": (
+        "c6c886f840b9e63f631700c1cf46c2e27ec06f545cf6cd281a6c04b5d18972de"
+    ),
     "save-2024-distressed-restructuring": (
         "5a6fb829e945143cf3b6593231dbb2b6d181b7feaca2b60906f3222faf313f6b"
     ),
