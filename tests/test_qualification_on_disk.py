@@ -309,7 +309,7 @@ COMMITTED_SET_DIGESTS = {
         "fa9d786255442e681e13cec6c219990b8de063f8b9f0362ea1881dbb7d4117af"
     ),
     "czr-2026q2-lite-portfolio": (
-        "bdd14c50113c6f4a49f1ce4b9f214791e2e3982573c9ea351af542ab7024cb52"
+        "9eb021fef0096c80817a638bf4892ebacfe4bd53f04111b0ed491bec118ab892"
     ),
     "save-2024-distressed-restructuring": (
         "5a6fb829e945143cf3b6593231dbb2b6d181b7feaca2b60906f3222faf313f6b"

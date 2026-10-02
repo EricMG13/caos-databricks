@@ -144,15 +144,16 @@ a row typed here is a row that fails. -->
 | `czr-finra-trace-12769gad2-2026-10-02-lite-full-credit-screen` | CZR | FINRA TRACE observation for Caesars Entertainment 6.00% notes due 2032, CUSIP 12769GAD2 (LITE full-credit-screen set copy) | in_hand | CP-2H | LITE_FULL_CREDIT_SCREEN | 1364 | yes | `256c646128b7b670…` |
 | `czr-q2-2026-10q-lite-portfolio` | CZR | Caesars Entertainment, Inc. Form 10-Q for the quarter ended 30 June 2026 (SEC filing text extract, LITE portfolio set copy) | in_hand | CP-0, CP-L10 | LITE_PORTFOLIO_DECISION | 168366 | yes | `1b2027659f255471…` |
 | `czr-q2-2026-earnings-lite-portfolio` | CZR | Caesars Entertainment, Inc. second quarter 2026 earnings release, Exhibit 99.1, 28 July 2026 (SEC exhibit text extract, LITE portfolio set copy) | in_hand | CP-0, CP-L10 | LITE_PORTFOLIO_DECISION | 15825 | yes | `17f1795b42b4b7aa…` |
-| `test-clo-i-mandate-2026-10-02` | Test CLO I (synthetic) | SYNTHETIC test mandate: Test CLO I Ltd mandate, exposure report and compliance monitor, with the owner-adopted CZR position adaptation of 2 October 2026 (text extract) | in_hand | CP-0, CP-L10 | LITE_PORTFOLIO_DECISION | 10864 | yes | `44903b2c253cdd73…` |
+| `test-clo-i-mandate-2026-10-02` | Test CLO I (synthetic) | SYNTHETIC test mandate: Test CLO I Ltd mandate, exposure report and compliance monitor, with the owner-adopted CZR position adaptation of 2 October 2026 (text extract) | in_hand | CP-0, CP-L10 | LITE_PORTFOLIO_DECISION | 10979 | yes | `864ee90ab21372bc…` |
 | `czr-finra-trace-12769gac4-2026-10-02-lite-portfolio` | CZR | FINRA TRACE observation for Caesars Entertainment 6.50% notes due 2032, CUSIP 12769GAC4 (LITE portfolio set copy) | in_hand | CP-0, CP-L10 | LITE_PORTFOLIO_DECISION | 1361 | yes | `4018aaa62309df6c…` |
+| `czr-2024-650-notes-2032-indenture-lite-portfolio` | CZR | Caesars Entertainment, Inc. Indenture for the 6.500% Senior Secured Notes due 2032, dated 6 February 2024, U.S. Bank Trust Company, N.A. as trustee (SEC exhibit text extract, LITE portfolio set copy) | in_hand | CP-0, CP-L10 | LITE_PORTFOLIO_DECISION | 759535 | yes | `62fbb236862a09f0…` |
 | `answer-key-3issuer` | CCL, BA, F | ANSWER_KEY_3ISSUER.md — human-authored core facts, derived values and 24 traps per issuer | **key source, never admitted** | — | — | — | — | — |
 <!-- /emitted -->
 
-One hundred and five documents: one hundred `in_hand`, four `to_source`, and one
-`to_author`; plus one key source. Sixty-nine of the one hundred in hand are
-byte-identical route-local copies of already admitted evidence: eleven from the
-earlier sets, nineteen added for the Phase 2 route inventory, and thirty-nine in
+One hundred and six documents: one hundred and one `in_hand`, four `to_source`,
+and one `to_author`; plus one key source. Seventy of the one hundred and one in
+hand are byte-identical route-local copies of already admitted evidence: eleven
+from the earlier sets, nineteen added for the Phase 2 route inventory, and forty in
 the CZR earnings-update, liquidity, FULL and LITE covenant-refinancing, FULL
 and LITE relative-value, LITE full-credit-screen and LITE portfolio sets.
 Sixteen more are the documents admitted on 2 October 2026: the three CZR Q2

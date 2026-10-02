@@ -152,3 +152,4 @@ Headroom to the limit on par: 1.7075 percentage points; the weight is within the
 Derived figure, labelled as such: market value at the last trade price of $93.28 on 10/1/2026 (FINRA observation CZR_FINRA_TRACE_12769GAC4_2026-10-02.txt, last trade, not a bid, mid or evaluated price) = USD 4,664,000.00, 0.7392% of NAV.
 As-of mismatch: the workbook's NAV and compliance check are dated 29 May 2026, while the price is dated 1 October 2026.
 Security description (same FINRA observation): CAESARS ENTMT INC NEW, coupon 6.5%, maturity 2/15/2032, CUSIP 12769GAC4, next call date 2/15/2027.
+SYNTHETIC: Indenture §7.11 in the compliance monitor is the CLO's own indenture, not the Caesars notes indenture.

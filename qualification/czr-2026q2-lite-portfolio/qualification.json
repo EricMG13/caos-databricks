@@ -14,7 +14,8 @@
         "documents/CZR_Q2_2026_10Q.txt",
         "documents/CZR_Q2_2026_Earnings_Release.txt",
         "documents/TEST_CLO_I_Mandate_and_Exposures_2026-10-02.txt",
-        "documents/CZR_FINRA_TRACE_12769GAC4_2026-10-02.txt"
+        "documents/CZR_FINRA_TRACE_12769GAC4_2026-10-02.txt",
+        "documents/CZR_2024_650_Senior_Secured_Notes_2032_Indenture.txt"
       ],
       "expects": [
         {
@@ -29,17 +30,17 @@
         },
         {
           "module_id": "CP-L10",
-          "document_sha256": "44903b2c253cdd731ee9d1355427e4601a1d109fe64a58b61efca8b1fc848c49",
+          "document_sha256": "864ee90ab21372bcf89c8b27e02cd5d691d9095a64d507c7f656d5963cfe3207",
           "matched_text": "Proposed position: Caesars Entertainment, Inc. 6.50% Senior Secured Notes due 2032, CUSIP 12769GAC4, par USD 5,000,000."
         },
         {
           "module_id": "CP-L10",
-          "document_sha256": "44903b2c253cdd731ee9d1355427e4601a1d109fe64a58b61efca8b1fc848c49",
+          "document_sha256": "864ee90ab21372bcf89c8b27e02cd5d691d9095a64d507c7f656d5963cfe3207",
           "matched_text": "Position weight on par: 5,000,000 / 630,928,502 = 0.7925% of NAV."
         },
         {
           "module_id": "CP-L10",
-          "document_sha256": "44903b2c253cdd731ee9d1355427e4601a1d109fe64a58b61efca8b1fc848c49",
+          "document_sha256": "864ee90ab21372bcf89c8b27e02cd5d691d9095a64d507c7f656d5963cfe3207",
           "matched_text": "C-01 | Single Name | Max single issuer exposure (largest: Asurion) | ≤ 2.5% NAV | Hard | Indenture §7.11 | 2.37% | 0.13% | Watch | 29-May-2026 | E. Guei |"
         },
         {
