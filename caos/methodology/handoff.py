@@ -1259,6 +1259,10 @@ _ABSENT = (
 )
 # How many words of the longer line a citation is part of are shown (D82).
 HINT_WORDS = 12
+# The most the anchoring line may hold once it places citations (D82): the
+# room of four vendor check lines, so a retry's prompt grows by a bounded
+# amount however many or long the placed lines are.
+MAX_ANCHORING_CHARS = 4 * MAX_FEEDBACK_CHARS
 
 
 @dataclass(frozen=True, slots=True)
@@ -1289,7 +1293,9 @@ def anchoring_line(
     words of that delivered line and told to quote the whole line, and one
     that is a whole line of another delivered page is told that page. At
     most `MAX_FEEDBACK_CITATIONS` citations are placed; the rest, and any the
-    search could not place, keep the rule's wording.
+    search could not place, keep the rule's wording. Past
+    `MAX_ANCHORING_CHARS`, placements are dropped from the last back, each
+    citation keeping its number under the rule's wording.
     """
     total = len(verdicts)
     lost = [
@@ -1304,6 +1310,20 @@ def anchoring_line(
         if (hint := told.get(n)) is not None
         and (hint.begins or hint.pages or hint.absent)
     }
+    line = _anchoring_text(verdicts, lost, placed)
+    while placed and line is not None and len(line) > MAX_ANCHORING_CHARS:
+        del placed[next(reversed(placed))]
+        line = _anchoring_text(verdicts, lost, placed)
+    return line
+
+
+def _anchoring_text(
+    verdicts: Sequence[RefusalCode | None],
+    lost: Sequence[int],
+    placed: Mapping[int, LineHint],
+) -> str | None:
+    """`anchoring_line` with exactly the citations in `placed` placed."""
+    total = len(verdicts)
     parts = [_placed(n, total, hint) for n, hint in placed.items() if not hint.absent]
     absent = [n for n, hint in placed.items() if hint.absent]
     if absent:

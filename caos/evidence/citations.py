@@ -902,13 +902,14 @@ class LineFinding:
     """Where this module's own search finds a quote that `WHOLE_LINE` refused
     `CITATION_NOT_LOCATED` (D82), among the blocks one node was given. At
     most one field is set; none is "found, but not in a way that names one
-    line" (a run on two lines, or twice on a page), never a guess.
+    line" (a run on two lines, twice on a page, or part of a line of another
+    page), never a guess.
 
     `block_id`: the one delivered evidence line of the cited page the quote
     is part of, longer than the quote. `pages`: the other delivered pages of
     its source on which the quote is one whole delivered evidence line.
-    `absent`: no page of its source the node was given, nor the cited page,
-    holds the quote as any run (`ANY_RUN`).
+    `absent`: no page of its source the node was given holds the quote as a
+    run wholly within its delivered lines (`ANY_RUN`).
     """
 
     block_id: str | None = None
@@ -927,44 +928,74 @@ def find_line(
     """`LineFinding` for a citation `WHOLE_LINE` refused `CITATION_NOT_LOCATED`.
 
     `blocks` are the blocks of the citation's source the node was given and
-    `pages` the pages they are on. The cited page is searched by `ANY_RUN`
-    (`_page_run`): a unique run inside one delivered shown line longer than
-    it is that line. Failing that, each other delivered page is asked
-    `verify_citations` under `WHOLE_LINE` with the citation moved there, and
-    by `ANY_RUN` whether the quote is on it at all. Reads go through `index`.
+    `pages` the pages they are on; no other page is read, so a cited page the
+    node was not given is never probed. A delivered cited page is searched
+    by `ANY_RUN` (`_page_run`): a unique run inside one delivered shown line
+    longer than it is that line. Failing that, each other delivered page is
+    asked `verify_citations` under `WHOLE_LINE` with the citation moved
+    there, and every delivered page under `ANY_RUN` whether a run of the
+    quote lies within its delivered lines at all. Reads go through `index`;
+    a refusal that is not anchoring's is raised, for the caller to leave the
+    citation unplaced.
     """
     source_id, text = citation.source_id, citation.matched_text
-    tracking = index.facts(conn, source_id)[1]
-    cited = index.page(conn, source_id, citation.page)
-    run = _any_run(cited, text, tracking=tracking)
-    if isinstance(run, list):
-        lines = index.lines(conn, source_id)
-        shown = (cited, index.cuts.get(source_id), lines)
-        block_id = _longer_line(*shown, run, tracking=tracking)
+    given = sorted(set(pages))
+    if citation.page in given:
+        block_id = _part_of(conn, index, citation)
         if block_id in blocks:
             return LineFinding(block_id=block_id)
-    seen = run is not RefusalCode.CITATION_NOT_LOCATED
     whole: list[int] = []
-    for number in sorted(set(pages) - {citation.page}):
+    seen = False
+    for number in given:
         moved = Citation(source_id, number, text)
-        try:
-            verify_citations(
-                conn,
-                delivered={source_id: blocks},
-                citations=(moved,),
-                index=index,
-                rule=WHOLE_LINE,
-            )
-        except Refusal as refused:
-            if refused.code not in _NOT_ANCHORED:
-                raise
-            on = _any_run(index.page(conn, source_id, number), text, tracking=tracking)
-            seen = seen or on is not RefusalCode.CITATION_NOT_LOCATED
+        if number != citation.page and _verdict(conn, index, moved, blocks) is None:
+            whole.append(number)
             continue
-        whole.append(number)
+        found = _verdict(conn, index, moved, blocks, rule=ANY_RUN)
+        seen = seen or found in (None, RefusalCode.CITATION_AMBIGUOUS)
     if whole:
         return LineFinding(pages=tuple(whole))
     return LineFinding(absent=not seen)
+
+
+def _part_of(
+    conn: StoreConnection, index: TokenIndex, citation: Citation
+) -> str | None:
+    """The block id of the one shown line of the cited page holding the
+    quote's unique run (`_page_run`) and more, delivered or not, or None."""
+    tracking = index.facts(conn, citation.source_id)[1]
+    cited = index.page(conn, citation.source_id, citation.page)
+    run = _any_run(cited, citation.matched_text, tracking=tracking)
+    if not isinstance(run, list):
+        return None
+    lines = index.lines(conn, citation.source_id)
+    cuts = index.cuts.get(citation.source_id)
+    return _longer_line(cited, cuts, lines, run, tracking=tracking)
+
+
+def _verdict(
+    conn: StoreConnection,
+    index: TokenIndex,
+    citation: Citation,
+    blocks: frozenset[str],
+    *,
+    rule: CitationRule = WHOLE_LINE,
+) -> RefusalCode | None:
+    """`verify_citations`' anchoring refusal for one citation over `blocks`,
+    or None when it anchors; any other refusal is raised."""
+    try:
+        verify_citations(
+            conn,
+            delivered={citation.source_id: blocks},
+            citations=(citation,),
+            index=index,
+            rule=rule,
+        )
+    except Refusal as refused:
+        if refused.code not in _NOT_ANCHORED:
+            raise
+        return refused.code
+    return None
 
 
 _NOT_ANCHORED = frozenset(

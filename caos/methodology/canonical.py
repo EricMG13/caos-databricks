@@ -56,6 +56,7 @@ from caos.methodology.executor import (
 from caos.methodology.handoff import (
     GATE_MODULE,
     HINT_WORDS,
+    MAX_FEEDBACK_CITATIONS,
     MAX_TRANSPORT_CHARS,
     CanonicalRecord,
     HostIdentity,
@@ -750,12 +751,15 @@ def _anchoring_line(
     index = TokenIndex()
     blocks = _by_source(delivered)
     verdicts = _anchoring(conn, blocks, citations, index)
-    hints = [
-        _line_hint(conn, delivered, blocks, citation, index)
+    # Only the citations the line can place are searched (`anchoring_line`).
+    lost = [
+        n
+        for n, verdict in enumerate(verdicts)
         if verdict is RefusalCode.CITATION_NOT_LOCATED
-        else None
-        for citation, verdict in zip(citations, verdicts, strict=True)
-    ]
+    ][:MAX_FEEDBACK_CITATIONS]
+    hints: list[LineHint | None] = [None] * len(verdicts)
+    for n in lost:
+        hints[n] = _line_hint(conn, delivered, blocks, citations[n], index)
     return anchoring_line(verdicts, hints)
 
 
@@ -796,15 +800,20 @@ def _line_hint(
     """Where `find_line` places a citation refused `CITATION_NOT_LOCATED`
     (D82). The longer line's first `HINT_WORDS` words are read from the
     delivered block itself -- its own words, one space between -- so nothing
-    the node was not given is shown."""
+    the node was not given is shown. The search is help, not a verdict: a
+    refusal from it (a source whose blocks no longer read as written, say)
+    leaves the citation unplaced rather than costing the retry."""
     source = citation.source_id
-    found = find_line(
-        conn,
-        blocks=blocks.get(source, frozenset()),
-        pages={d.page for d in delivered if d.source_id == source},
-        citation=citation,
-        index=index,
-    )
+    try:
+        found = find_line(
+            conn,
+            blocks=blocks.get(source, frozenset()),
+            pages={d.page for d in delivered if d.source_id == source},
+            citation=citation,
+            index=index,
+        )
+    except Refusal:
+        return LineHint()
     line = next(
         (
             d.text.value

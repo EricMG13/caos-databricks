@@ -414,13 +414,24 @@ def test_find_line_places_a_quote_the_whole_line_rule_refused(
     assert found(1, part) == LineFinding(block_id=covenant)
     assert found(1, elsewhere) == LineFinding(pages=(2,))
     assert found(1, "Leverage was unchanged") == LineFinding(absent=True)
+    # Part of a longer line of another delivered page: found, but not as one
+    # line of any page, so never told absent (I1).
+    assert found(1, "Net leverage was 3.4x") == LineFinding()
     # Twice on its page as a run: found, but not one line.
     assert found(3, "Cash interest cover was") == LineFinding()
-    # The longer line withheld: never shown, so never named.
-    assert found(1, part, every - {covenant}) == LineFinding()
+    # The longer line withheld: never shown, so never named, and no line the
+    # node was given holds the quote.
+    assert found(1, part, every - {covenant}) == LineFinding(absent=True)
     # Page 2 not given: no delivered line holds the quote.
     unpaged = every - frozenset(by_page[2])
     assert found(1, elsewhere, unpaged, {1, 3}) == LineFinding(absent=True)
+    # A cited page the node was not given is never read (M2): what it holds
+    # cannot change the answer.
+    index = TokenIndex()
+    cited = Citation(source_id, 2, "Net leverage was 3.4x")
+    given = find_line(conn, blocks=unpaged, pages={1, 3}, citation=cited, index=index)
+    assert given == LineFinding(absent=True)
+    assert (source_id, 2) not in index.pages
 
 
 def test_a_placed_line_is_shown_by_its_first_words_as_delivered(
@@ -452,3 +463,34 @@ def test_a_placed_line_is_shown_by_its_first_words_as_delivered(
     assert hint("breach its leverage covenant") == LineHint(begins=begins)
     assert hint("Net leverage was 3.4x at year end.") == LineHint(pages=(2,))
     assert hint("Leverage was unchanged") == LineHint(absent=True)
+
+
+def test_a_search_that_cannot_read_a_page_leaves_the_citation_unplaced(
+    case: tuple[StoreConnection, UUID],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """D82 (M3): the search is help, not a verdict. A page whose blocks no
+    longer read as written refuses inside `find_line`; the retry still goes
+    out, the citation told by the rule alone."""
+    from caos.evidence import citations
+    from caos.evidence.citations import TokenIndex
+    from caos.methodology.canonical import _line_hint
+    from caos.methodology.executor import Delivery
+    from caos.methodology.handoff import LineHint
+
+    conn, case_id = case
+    source_id = _ingest_pdf(conn, case_id, tmp_path, _pages_pdf())
+    delivered = [
+        Delivery(source_id, block_id, page, BoundaryText.of(text))
+        for page, blocks in _blocks_by_page(conn, source_id).items()
+        for block_id, text in blocks.items()
+    ]
+    blocks = {source_id: frozenset(d.block_id for d in delivered)}
+
+    def unreadable(*_args: object, **_kwargs: object) -> None:
+        raise Refusal(RefusalCode.EVIDENCE_PACKING_MISMATCH)
+
+    monkeypatch.setattr(citations, "_verdict", unreadable)
+    citation = Citation(source_id, 1, "Net leverage was 3.4x at year end.")
+    assert _line_hint(conn, delivered, blocks, citation, TokenIndex()) == LineHint()
