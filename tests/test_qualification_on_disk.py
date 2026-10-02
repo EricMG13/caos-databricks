@@ -33,7 +33,7 @@ from canonical_fixtures import BUNDLE, CATALOG, research_brief
 from caos.boundary_text import BoundaryText
 from caos.evidence.citations import _match_at, _Token
 from caos.evidence.extract import DEFAULT_LIMITS, dispatch_by_content
-from caos.evidence.ingest import Document
+from caos.evidence.ingest import Document, token_groups
 from caos.graph.route import resolve_route
 from caos.qualification.matrix import (
     ExpectedCitation,
@@ -343,8 +343,24 @@ def test_every_committed_set_binds_its_recorded_digest() -> None:
     assert pending == PENDING_SET_DOCUMENTS
 
 
+def _evidence_lines(tokens: list[_Token]) -> list[tuple[str, ...]]:
+    """A page's evidence lines as admission writes them: each token line cut
+    into its `PACKING_BY_TOKEN` blocks (`token_groups`), each block as words."""
+    lines: dict[int, list[str]] = {}
+    for token in tokens:
+        lines.setdefault(token.line_id, []).append(token.text)
+    return [
+        tuple(block.split())
+        for words in lines.values()
+        for block in token_groups(words)
+    ]
+
+
 def test_every_committed_answer_key_names_its_route_and_exact_source() -> None:
-    """No key can name an off-route module or an unreadable source quote."""
+    """No key can name an off-route module or an unreadable source quote, and
+    every key is one whole evidence line (F475): an answer is accepted under
+    `WHOLE_LINE` and scored by exact equality, so a fragment or a quote that
+    runs onto the next line is a key no run can meet."""
     root = Path(__file__).resolve().parents[1] / "qualification"
     extracted: dict[str, dict[int, list[_Token]]] = {}
 
@@ -397,6 +413,12 @@ def test_every_committed_answer_key_names_its_route_and_exact_source() -> None:
                     for start in range(len(tokens))
                 )
                 assert hits == 1, expected
+                whole = sum(
+                    line == tuple(words)
+                    for tokens in extracted[expected.document_sha256].values()
+                    for line in _evidence_lines(tokens)
+                )
+                assert whole == 1, expected
 
 
 def test_ccl_liquidity_set_is_a_complete_offline_copy_with_pinned_keys() -> None:
