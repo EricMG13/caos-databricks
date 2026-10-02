@@ -33,7 +33,7 @@ from canonical_fixtures import BUNDLE, CATALOG, research_brief
 from caos.boundary_text import BoundaryText
 from caos.evidence.citations import _match_at, _Token
 from caos.evidence.extract import DEFAULT_LIMITS, dispatch_by_content
-from caos.evidence.ingest import Document
+from caos.evidence.ingest import Document, token_groups
 from caos.graph.route import resolve_route
 from caos.qualification.matrix import (
     ExpectedCitation,
@@ -288,10 +288,16 @@ COMMITTED_SET_DIGESTS = {
     ),
     "czr-2026q2": ("f32370aa8e4ed3b367073ed11fbf858fae1f13b0069bd8cbfb57617664a04339"),
     "czr-2026q2-earnings-update": (
-        "42a2439e6b8be320c6c3ef8d91b4baa88e2fc34a72402528d65144f37c2b373f"
+        "967b03678141430e263396337f2020fc79655faa4c44c1f99cebe35f10d02c55"
     ),
     "czr-2026q2-liquidity": (
-        "e4d02a674e1df2be9e100a1a21374da9b8dc2307ab357f0de3075cbfe03fc723"
+        "5856a33c19be398edb84a3106729400fb7b531dcccb95603f96b32cbc714eaf0"
+    ),
+    "czr-2026q2-covenant-refinancing": (
+        "a7b16072cbc8540d14a655b20bfe0c7bd5d84eb3d847c00191ee9c0d05f961c1"
+    ),
+    "czr-2026q2-lite-covenant-refinancing": (
+        "35eb452da5a30ccddc768b707f9c3239526931498d58e0568ded03a09c590fe0"
     ),
     "save-2024-distressed-restructuring": (
         "5a6fb829e945143cf3b6593231dbb2b6d181b7feaca2b60906f3222faf313f6b"
@@ -337,8 +343,24 @@ def test_every_committed_set_binds_its_recorded_digest() -> None:
     assert pending == PENDING_SET_DOCUMENTS
 
 
+def _evidence_lines(tokens: list[_Token]) -> list[tuple[str, ...]]:
+    """A page's evidence lines as admission writes them: each token line cut
+    into its `PACKING_BY_TOKEN` blocks (`token_groups`), each block as words."""
+    lines: dict[int, list[str]] = {}
+    for token in tokens:
+        lines.setdefault(token.line_id, []).append(token.text)
+    return [
+        tuple(block.split())
+        for words in lines.values()
+        for block in token_groups(words)
+    ]
+
+
 def test_every_committed_answer_key_names_its_route_and_exact_source() -> None:
-    """No key can name an off-route module or an unreadable source quote."""
+    """No key can name an off-route module or an unreadable source quote, and
+    every key is one whole evidence line (F475): an answer is accepted under
+    `WHOLE_LINE` and scored by exact equality, so a fragment or a quote that
+    runs onto the next line is a key no run can meet."""
     root = Path(__file__).resolve().parents[1] / "qualification"
     extracted: dict[str, dict[int, list[_Token]]] = {}
 
@@ -391,6 +413,12 @@ def test_every_committed_answer_key_names_its_route_and_exact_source() -> None:
                     for start in range(len(tokens))
                 )
                 assert hits == 1, expected
+                whole = sum(
+                    line == tuple(words)
+                    for tokens in extracted[expected.document_sha256].values()
+                    for line in _evidence_lines(tokens)
+                )
+                assert whole == 1, expected
 
 
 def test_ccl_liquidity_set_is_a_complete_offline_copy_with_pinned_keys() -> None:

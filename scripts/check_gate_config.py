@@ -139,7 +139,15 @@ _LARGE_FILES_EXCLUDE = (
     r"qualification/save-2024-lite-distressed-restructuring/documents/"
     r"SAVE_2024_RSA_with_Chapter_11_Plan\.txt$|"
     r"qualification/czr-2026q2-liquidity/documents/"
-    r"CZR_2020_Credit_Agreement\.txt$)"
+    r"CZR_2020_Credit_Agreement\.txt$|"
+    r"qualification/czr-2026q2-covenant-refinancing/documents/"
+    r"CZR_2020_Credit_Agreement\.txt$|"
+    r"qualification/czr-2026q2-covenant-refinancing/documents/"
+    r"CZR_2024_650_Senior_Secured_Notes_2032_Indenture\.txt$|"
+    r"qualification/czr-2026q2-lite-covenant-refinancing/documents/"
+    r"CZR_2020_Credit_Agreement\.txt$|"
+    r"qualification/czr-2026q2-lite-covenant-refinancing/documents/"
+    r"CZR_2024_650_Senior_Secured_Notes_2032_Indenture\.txt$)"
 )
 _VENDOR_QUAL_EXCLUDE = (
     r"^(vendor/|qualification/.*/documents/|\.claude/skills/|"
