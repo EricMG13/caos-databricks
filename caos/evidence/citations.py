@@ -394,8 +394,9 @@ def _line_run(
     0.08 s by line, on one host under load (F206's author measured 13.9 s by
     run). Two such lines are
     `CITATION_AMBIGUOUS`; a quote that is part of a line, or that runs onto
-    the next, is no line at all: `CITATION_NOT_LOCATED`, which the second
-    attempt reads back as "not one evidence line of its cited page".
+    the next, is no line at all: `CITATION_NOT_LOCATED`, which a guided retry
+    is told of by where `find_line` places the quote, or else as "not one
+    evidence line of its cited page" (D82).
     """
     words = matched_text.split()
     if not words:
