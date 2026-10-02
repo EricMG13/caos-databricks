@@ -1,0 +1,58 @@
+{
+  "cases": [
+    {
+      "label": "czr-2026q2-lite-credit-22",
+      "profile_id": "LITE_CREDIT_22",
+      "selection_id": "LITE_EARNINGS_UPDATE",
+      "subject": {
+        "issuer_id": "CZR",
+        "issuer_name": "Caesars Entertainment, Inc.",
+        "reporting_period": "Q2 2026",
+        "analysis_date": "2026-10-02"
+      },
+      "documents": [
+        "documents/CZR_FY2025_10K.txt",
+        "documents/CZR_Q2_2026_10Q.txt",
+        "documents/CZR_Q2_2026_Earnings_Release.txt"
+      ],
+      "expects": [
+        {
+          "module_id": "CP-0",
+          "document_sha256": "17f1795b42b4b7aa32ef72582813986c3b98ea9c205d2b4cb446944bcf494ffc",
+          "matched_text": "Caesars | $2,993 | $2,907 | 3.0% |"
+        },
+        {
+          "module_id": "CP-L10",
+          "document_sha256": "17f1795b42b4b7aa32ef72582813986c3b98ea9c205d2b4cb446944bcf494ffc",
+          "matched_text": "Adjusted EBITDA | $920 | $955 | $1,807 | $1,839 |"
+        },
+        {
+          "module_id": "CP-L10",
+          "document_sha256": "17f1795b42b4b7aa32ef72582813986c3b98ea9c205d2b4cb446944bcf494ffc",
+          "matched_text": "Total outstanding indebtedness | $11,807 | $11,905 |"
+        },
+        {
+          "module_id": "CP-L10",
+          "document_sha256": "204904832a3a51442a5c33d791ea35265586f43fac34530cd4d051787d0c0874",
+          "matched_text": "Net revenues | 11,486 | 11,245 | 11,528 |"
+        },
+        {
+          "module_id": "CP-5",
+          "document_sha256": "1b2027659f255471d41243180c9b550c6915348b7aea79619634c5a9d7b0187c",
+          "matched_text": "Total debt | 11,807 | 11,705 | 11,792 |"
+        }
+      ],
+      "expects_ready": [
+        "CP-L10",
+        "CP-5"
+      ],
+      "expects_projection": [
+        {
+          "module_id": "CP-L10",
+          "field": "decision_scope",
+          "value": "SCREENING_ONLY"
+        }
+      ]
+    }
+  ]
+}
