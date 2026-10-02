@@ -305,6 +305,9 @@ COMMITTED_SET_DIGESTS = {
     "czr-2026q2-relative-value": (
         "c6c886f840b9e63f631700c1cf46c2e27ec06f545cf6cd281a6c04b5d18972de"
     ),
+    "czr-2026q2-lite-full-credit-screen": (
+        "fa9d786255442e681e13cec6c219990b8de063f8b9f0362ea1881dbb7d4117af"
+    ),
     "save-2024-distressed-restructuring": (
         "5a6fb829e945143cf3b6593231dbb2b6d181b7feaca2b60906f3222faf313f6b"
     ),
