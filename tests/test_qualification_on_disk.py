@@ -361,17 +361,13 @@ def test_every_committed_set_binds_its_recorded_digest() -> None:
     assert pending == PENDING_SET_DOCUMENTS
 
 
-def _evidence_lines(tokens: list[_Token]) -> list[tuple[str, ...]]:
+def _evidence_lines(tokens: list[_Token]) -> list[str]:
     """A page's evidence lines as admission writes them: each token line cut
-    into its `PACKING_BY_TOKEN` blocks (`token_groups`), each block as words."""
+    into its `PACKING_BY_TOKEN` blocks (`token_groups`), each block a string."""
     lines: dict[int, list[str]] = {}
     for token in tokens:
         lines.setdefault(token.line_id, []).append(token.text)
-    return [
-        tuple(block.split())
-        for words in lines.values()
-        for block in token_groups(words)
-    ]
+    return [block for words in lines.values() for block in token_groups(words)]
 
 
 def test_every_committed_answer_key_names_its_route_and_exact_source() -> None:
@@ -432,11 +428,14 @@ def test_every_committed_answer_key_names_its_route_and_exact_source() -> None:
                 )
                 assert hits == 1, expected
                 whole = sum(
-                    line == tuple(words)
+                    block == expected.matched_text
                     for tokens in extracted[expected.document_sha256].values()
-                    for line in _evidence_lines(tokens)
+                    for block in _evidence_lines(tokens)
                 )
-                assert whole == 1, expected
+                assert whole == 1, (
+                    f"{expected.matched_text!r} is not exactly one evidence line"
+                    f" of its document (found {whole}): {expected}"
+                )
 
 
 def test_ccl_liquidity_set_is_a_complete_offline_copy_with_pinned_keys() -> None:

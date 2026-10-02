@@ -32,7 +32,7 @@ and drifts; with it, one artefact holds the evidence boundary to the tree.
 
 Each row's `demand_verified` says whether the module's own `SKILL.md` states a
 document gate, or whether the demand is inferred from its purpose and register
-names. Two rows are inferred; the note says from what.
+names. Seventeen rows are inferred; the note says from what.
 
 ## The register
 
@@ -290,8 +290,9 @@ issuer pack. What remains needs private owner data or a real prior decision.
    in hand. The separate backstop agreement was not admitted because these two
    documents already establish the distress trigger and plan evidence needed
    for the smallest honest CP-4C qualification pack.
-9. ~~**A second public issuer, with peers and a mandate.**~~ The 2 October 2026
-   CZR tranche. **Source:** eleven official SEC EDGAR documents (Caesars
+9. ~~**A second public issuer, with peers.**~~ The public-issuer part is closed
+   by the 2 October 2026 CZR tranche; the real portfolio mandate is not (see
+   below). **Source:** eleven official SEC EDGAR documents (Caesars
    Entertainment's FY2025 10-K, Q2 2026 10-Q and earnings release, the 2020
    credit agreement with its Fourth and Fifth Amendments, the 6.50% 2032 notes
    indenture, the 27 May 2026 merger 8-K and its press release, and the MGM
@@ -303,7 +304,9 @@ issuer pack. What remains needs private owner data or a real prior decision.
    **The owner's choices:** CZR, with peers MGM and PENN, from the owner's
    "Public Leveraged Loan Issuers Benchmark" (FYBR excluded: it no longer
    files); the synthetic "Test CLO I" mandate adapted to carry a CZR position,
-   labelled SYNTHETIC everywhere and never to ground a real decision (D80); no
+   labelled SYNTHETIC everywhere and never to ground a real decision (D80). It
+   is owner-adopted test input and does not close the real-portfolio row
+   `ccl-portfolio-mandate-exposures`, which stays `to_source`; no
    CZR rating action, so CP-2H runs restricted on FINRA's displayed ratings and
    last-rated dates; and an analysis date of 2026-10-02 for every case.
    **SEC fair access:** SEC asks every automated request to declare a
@@ -312,7 +315,9 @@ issuer pack. What remains needs private owner data or a real prior decision.
    their own. **What remains:** `DECISION_LEDGER` and `LITE_DECISION_LEDGER`
    still need a real, dated decision record (to author, item 6), and CZR is not
    a distressed issuer, so the two distressed pathways keep only the Spirit
-   sets (item 8); a distressed issuer's pack beyond Spirit remains to source.
+   sets (item 8); a distressed issuer's pack beyond Spirit remains to source. The real
+   portfolio mandate (`ccl-portfolio-mandate-exposures`) also remains to
+   source; the synthetic mandate stands in for tests only.
    `DEEP_RESEARCH` still waits on the owner's confirmation of its FULL brief
    (item 7), and the CZR portfolio sets' eligible-security universe is owner
    content (N127).
