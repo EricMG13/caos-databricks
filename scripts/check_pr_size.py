@@ -43,6 +43,7 @@ EXCLUSIONS = (
     ":!qualification/czr-2026q2-lite-full-credit-screen/documents/**",
     ":!qualification/czr-2026q2-lite-portfolio/documents/**",
     ":!qualification/czr-2026q2-portfolio/documents/**",
+    ":!qualification/czr-2026q2-full-credit-assessment/documents/**",
     ":!qualification/ccl-fy2025-relative-value/documents/CCL_FY2025_10K.txt",
     ":!qualification/ccl-fy2025-relative-value/documents/NCLH_Q4_2025_Earnings_Release.txt",
     ":!qualification/ccl-fy2025-relative-value/documents/RCL_Q4_2025_Earnings_Release.txt",
