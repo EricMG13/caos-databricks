@@ -137,7 +137,9 @@ _LARGE_FILES_EXCLUDE = (
     r"qualification/save-2024-distressed-restructuring/documents/"
     r"SAVE_2024_RSA_with_Chapter_11_Plan\.txt$|"
     r"qualification/save-2024-lite-distressed-restructuring/documents/"
-    r"SAVE_2024_RSA_with_Chapter_11_Plan\.txt$)"
+    r"SAVE_2024_RSA_with_Chapter_11_Plan\.txt$|"
+    r"qualification/czr-2026q2-liquidity/documents/"
+    r"CZR_2020_Credit_Agreement\.txt$)"
 )
 _VENDOR_QUAL_EXCLUDE = (
     r"^(vendor/|qualification/.*/documents/|\.claude/skills/|"

@@ -826,6 +826,58 @@
       "external_path": null,
       "demand_verified": true,
       "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,825 bytes."
+    },
+    {
+      "id": "czr-fy2025-10k-liquidity",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. FY2025 Form 10-K (SEC filing text extract, FULL liquidity set copy)",
+      "modules": ["CP-0"],
+      "pathways": ["LIQUIDITY_REVIEW"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000159089526000011/czr-20251231.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-liquidity/documents/CZR_FY2025_10K.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. Fiscal year ended 31 December 2025; it supplies the annual base (net revenues, total debt). 408,146 bytes, inside MAX_REQUEST_BYTES."
+    },
+    {
+      "id": "czr-q2-2026-10q-liquidity",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. Form 10-Q for the quarter ended 30 June 2026 (SEC filing text extract, FULL liquidity set copy)",
+      "modules": ["CP-0", "CP-1", "CP-2", "CP-2D"],
+      "pathways": ["LIQUIDITY_REVIEW"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000159089526000028/czr-20260630.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-liquidity/documents/CZR_Q2_2026_10Q.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table and maturities, and the pending Fertitta Gaming merger disclosure. 168,366 bytes."
+    },
+    {
+      "id": "czr-q2-2026-earnings-liquidity",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. second quarter 2026 earnings release, Exhibit 99.1, 28 July 2026 (SEC exhibit text extract, FULL liquidity set copy)",
+      "modules": ["CP-0", "CP-2D"],
+      "pathways": ["LIQUIDITY_REVIEW"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000159089526000027/ex991-2026q2ceiearningsrel.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-liquidity/documents/CZR_Q2_2026_Earnings_Release.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,825 bytes."
+    },
+    {
+      "id": "czr-2020-credit-agreement",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. (formerly Eldorado Resorts, Inc.) Credit Agreement dated 20 July 2020, JPMorgan Chase Bank, N.A. as administrative agent (SEC exhibit text extract)",
+      "modules": ["CP-2D"],
+      "pathways": ["LIQUIDITY_REVIEW"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312520196232/d940333dex101.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-liquidity/documents/CZR_2020_Credit_Agreement.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Official EDGAR exhibit converted from HTML to plain text on 2 October 2026 (accession 0001193125-20-196232, raw HTML SHA-256 6600ab5bec479091f68dc04b2db65a54ef1013944c94af0ec135335b374c7dba). It supplies the revolving facility's controlling terms as executed; its stated commitment is at the 2020 signing date, and the Fourth (9 May 2024) and Fifth (25 November 2024) Amendments are not in this set, so no current commitment is inferred from it. 936,079 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
     }
   ],
   "key_sources": [

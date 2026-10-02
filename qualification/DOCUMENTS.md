@@ -97,15 +97,20 @@ a row typed here is a row that fails. -->
 | `czr-fy2025-10k-earnings-update` | CZR | Caesars Entertainment, Inc. FY2025 Form 10-K (SEC filing text extract, FULL earnings-update set copy) | in_hand | CP-0, CP-1B | EARNINGS_UPDATE | 408146 | yes | `204904832a3a5144…` |
 | `czr-q2-2026-10q-earnings-update` | CZR | Caesars Entertainment, Inc. Form 10-Q for the quarter ended 30 June 2026 (SEC filing text extract, FULL earnings-update set copy) | in_hand | CP-0, CP-1, CP-2, CP-5 | EARNINGS_UPDATE | 168366 | yes | `1b2027659f255471…` |
 | `czr-q2-2026-earnings-earnings-update` | CZR | Caesars Entertainment, Inc. second quarter 2026 earnings release, Exhibit 99.1, 28 July 2026 (SEC exhibit text extract, FULL earnings-update set copy) | in_hand | CP-0, CP-1B | EARNINGS_UPDATE | 15825 | yes | `17f1795b42b4b7aa…` |
+| `czr-fy2025-10k-liquidity` | CZR | Caesars Entertainment, Inc. FY2025 Form 10-K (SEC filing text extract, FULL liquidity set copy) | in_hand | CP-0 | LIQUIDITY_REVIEW | 408146 | yes | `204904832a3a5144…` |
+| `czr-q2-2026-10q-liquidity` | CZR | Caesars Entertainment, Inc. Form 10-Q for the quarter ended 30 June 2026 (SEC filing text extract, FULL liquidity set copy) | in_hand | CP-0, CP-1, CP-2, CP-2D | LIQUIDITY_REVIEW | 168366 | yes | `1b2027659f255471…` |
+| `czr-q2-2026-earnings-liquidity` | CZR | Caesars Entertainment, Inc. second quarter 2026 earnings release, Exhibit 99.1, 28 July 2026 (SEC exhibit text extract, FULL liquidity set copy) | in_hand | CP-0, CP-2D | LIQUIDITY_REVIEW | 15825 | yes | `17f1795b42b4b7aa…` |
+| `czr-2020-credit-agreement` | CZR | Caesars Entertainment, Inc. (formerly Eldorado Resorts, Inc.) Credit Agreement dated 20 July 2020, JPMorgan Chase Bank, N.A. as administrative agent (SEC exhibit text extract) | in_hand | CP-2D | LIQUIDITY_REVIEW | 936079 | yes | `b4f124cb0e058b06…` |
 | `answer-key-3issuer` | CCL, BA, F | ANSWER_KEY_3ISSUER.md — human-authored core facts, derived values and 24 traps per issuer | **key source, never admitted** | — | — | — | — | — |
 <!-- /emitted -->
 
-Fifty-six documents: fifty-one `in_hand`, four `to_source`, and one
-`to_author`; plus one key source. Thirty-three of the fifty-one in hand are
+Sixty documents: fifty-five `in_hand`, four `to_source`, and one
+`to_author`; plus one key source. Thirty-six of the fifty-five in hand are
 byte-identical route-local copies of already admitted evidence: eleven from the
-earlier sets, nineteen added for the Phase 2 route inventory, and three in the
-CZR earnings-update set. Three more are the CZR Q2 2026 EDGAR filings admitted
-on 2 October 2026 (`czr-2026q2`). The on-disk
+earlier sets, nineteen added for the Phase 2 route inventory, and six in the
+CZR earnings-update and liquidity sets. Four more are the CZR EDGAR documents
+admitted on 2 October 2026: the three Q2 2026 filings (`czr-2026q2`) and the
+2020 credit agreement (`czr-2026q2-liquidity`). The on-disk
 loader requires those copies because it refuses a declared path resolving
 outside its set root. Two more, `cp-dr-research-brief` and
 `cp-dr-full-research-brief`, are the
