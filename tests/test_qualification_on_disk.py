@@ -287,6 +287,9 @@ COMMITTED_SET_DIGESTS = {
         "c01b06c9c09b1ced76c297e0d7bf81ad07ace9e03f3e3322da81b3f85840db35"
     ),
     "czr-2026q2": ("f32370aa8e4ed3b367073ed11fbf858fae1f13b0069bd8cbfb57617664a04339"),
+    "czr-2026q2-earnings-update": (
+        "42a2439e6b8be320c6c3ef8d91b4baa88e2fc34a72402528d65144f37c2b373f"
+    ),
     "save-2024-distressed-restructuring": (
         "5a6fb829e945143cf3b6593231dbb2b6d181b7feaca2b60906f3222faf313f6b"
     ),
