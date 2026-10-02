@@ -55,6 +55,7 @@ Admit them byte for byte.
   - `qualification.json` follows the closest existing set for that pathway; copy its shape, never its figures.
   - `RESULT.md` follows the existing sets' header style: provenance per document (URL, accession, SHA-256), "keys authored from the documents; material figures pending owner confirmation", and the statement that no run has been performed.
 - **Every key quote** is copied from the converted text. It must pass `tests/test_qualification_on_disk.py::test_every_committed_answer_key_names_its_route_and_exact_source`: whole tokens, a unique match, one page.
+  - Every key's `matched_text` is **one whole evidence line** of its page (F235, `caos/evidence/citations.py` `WHOLE_LINE`). The matrix compares keys by exact equality with accepted citations (`caos/qualification/matrix.py` `_matches`), so a fragment or a two-line key can never be met.
   - `expects_ready` lists the route's pinned consumers of CP-0 (read the route in `vendor/deploy-v/skills/cp-os-credit-os/references/CREDIT_OS_V_MODULE_CATALOG_v2.json`).
   - `expects_projection` gives `decision_scope` as the catalog pathway states it.
   - `expects_register` keys are optional. Add them only where the figure is a single unambiguous cell, and state the arithmetic in `RESULT.md`.
