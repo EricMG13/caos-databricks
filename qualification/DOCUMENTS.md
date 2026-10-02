@@ -109,18 +109,25 @@ a row typed here is a row that fails. -->
 | `czr-2024-650-notes-2032-indenture` | CZR | Caesars Entertainment, Inc. Indenture for the 6.500% Senior Secured Notes due 2032, dated 6 February 2024, U.S. Bank Trust Company, N.A. as trustee (SEC exhibit text extract) | in_hand | CP-4, CP-3C | COVENANT_REFINANCING | 759535 | yes | `62fbb236862a09f0…` |
 | `czr-2026-merger-8k` | CZR | Caesars Entertainment, Inc. Form 8-K, Item 1.01, Agreement and Plan of Merger with Fertitta Gaming Holdco, LLC, 27 May 2026 (SEC filing text extract) | in_hand | CP-3C | COVENANT_REFINANCING | 30845 | yes | `b583f857bec68d0c…` |
 | `czr-2026-merger-press-release` | CZR | Caesars Entertainment, Inc. press release announcing the Fertitta Entertainment merger agreement, Exhibit 99.1, 28 May 2026 (SEC exhibit text extract) | in_hand | CP-3C | COVENANT_REFINANCING | 19050 | yes | `3fd2159de768b997…` |
+| `czr-q2-2026-10q-lite-covenant-refinancing` | CZR | Caesars Entertainment, Inc. Form 10-Q for the quarter ended 30 June 2026 (SEC filing text extract, LITE covenant-refinancing set copy) | in_hand | CP-0, CP-L10, CP-3C, CP-5 | LITE_COVENANT_REFINANCING | 168366 | yes | `1b2027659f255471…` |
+| `czr-2020-credit-agreement-lite-covenant-refinancing` | CZR | Caesars Entertainment, Inc. (formerly Eldorado Resorts, Inc.) Credit Agreement dated 20 July 2020, JPMorgan Chase Bank, N.A. as administrative agent (SEC exhibit text extract, LITE covenant-refinancing set copy) | in_hand | CP-3C | LITE_COVENANT_REFINANCING | 936079 | yes | `b4f124cb0e058b06…` |
+| `czr-2024-credit-agreement-fourth-amendment-lite-covenant-refinancing` | CZR | Caesars Entertainment, Inc. Fourth Amendment to Credit Agreement dated 9 May 2024 (SEC exhibit text extract, LITE covenant-refinancing set copy) | in_hand | CP-3C | LITE_COVENANT_REFINANCING | 25473 | yes | `41ade7909f87770d…` |
+| `czr-2024-credit-agreement-fifth-amendment-lite-covenant-refinancing` | CZR | Caesars Entertainment, Inc. Fifth Amendment to Credit Agreement dated 25 November 2024 (SEC exhibit text extract, LITE covenant-refinancing set copy) | in_hand | CP-3C | LITE_COVENANT_REFINANCING | 38841 | yes | `ffe543a0655c0400…` |
+| `czr-2024-650-notes-2032-indenture-lite-covenant-refinancing` | CZR | Caesars Entertainment, Inc. Indenture for the 6.500% Senior Secured Notes due 2032, dated 6 February 2024, U.S. Bank Trust Company, N.A. as trustee (SEC exhibit text extract, LITE covenant-refinancing set copy) | in_hand | CP-3C | LITE_COVENANT_REFINANCING | 759535 | yes | `62fbb236862a09f0…` |
+| `czr-2026-merger-8k-lite-covenant-refinancing` | CZR | Caesars Entertainment, Inc. Form 8-K, Item 1.01, Agreement and Plan of Merger with Fertitta Gaming Holdco, LLC, 27 May 2026 (SEC filing text extract, LITE covenant-refinancing set copy) | in_hand | CP-3C | LITE_COVENANT_REFINANCING | 30845 | yes | `b583f857bec68d0c…` |
 | `answer-key-3issuer` | CCL, BA, F | ANSWER_KEY_3ISSUER.md — human-authored core facts, derived values and 24 traps per issuer | **key source, never admitted** | — | — | — | — | — |
 <!-- /emitted -->
 
-Sixty-eight documents: sixty-three `in_hand`, four `to_source`, and one
-`to_author`; plus one key source. Thirty-nine of the sixty-three in hand are
+Seventy-four documents: sixty-nine `in_hand`, four `to_source`, and one
+`to_author`; plus one key source. Forty-five of the sixty-nine in hand are
 byte-identical route-local copies of already admitted evidence: eleven from the
-earlier sets, nineteen added for the Phase 2 route inventory, and nine in the
-CZR earnings-update, liquidity and covenant-refinancing sets. Nine more are the
-CZR EDGAR documents admitted on 2 October 2026: the three Q2 2026 filings
-(`czr-2026q2`), the 2020 credit agreement (`czr-2026q2-liquidity`), and the
-Fourth and Fifth Amendments, the 6.50% 2032 notes indenture, and the merger
-8-K and its press release (`czr-2026q2-covenant-refinancing`). The on-disk
+earlier sets, nineteen added for the Phase 2 route inventory, and fifteen in the
+CZR earnings-update, liquidity and FULL and LITE covenant-refinancing sets.
+Nine more are the CZR EDGAR documents admitted on 2 October 2026: the three
+Q2 2026 filings (`czr-2026q2`), the 2020 credit agreement
+(`czr-2026q2-liquidity`), and the Fourth and Fifth Amendments, the 6.50% 2032
+notes indenture, and the merger 8-K and its press release
+(`czr-2026q2-covenant-refinancing`). The on-disk
 loader requires those copies because it refuses a declared path resolving
 outside its set root. Two more, `cp-dr-research-brief` and
 `cp-dr-full-research-brief`, are the
