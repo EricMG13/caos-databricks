@@ -115,19 +115,26 @@ a row typed here is a row that fails. -->
 | `czr-2024-credit-agreement-fifth-amendment-lite-covenant-refinancing` | CZR | Caesars Entertainment, Inc. Fifth Amendment to Credit Agreement dated 25 November 2024 (SEC exhibit text extract, LITE covenant-refinancing set copy) | in_hand | CP-3C | LITE_COVENANT_REFINANCING | 38841 | yes | `ffe543a0655c0400…` |
 | `czr-2024-650-notes-2032-indenture-lite-covenant-refinancing` | CZR | Caesars Entertainment, Inc. Indenture for the 6.500% Senior Secured Notes due 2032, dated 6 February 2024, U.S. Bank Trust Company, N.A. as trustee (SEC exhibit text extract, LITE covenant-refinancing set copy) | in_hand | CP-3C | LITE_COVENANT_REFINANCING | 759535 | yes | `62fbb236862a09f0…` |
 | `czr-2026-merger-8k-lite-covenant-refinancing` | CZR | Caesars Entertainment, Inc. Form 8-K, Item 1.01, Agreement and Plan of Merger with Fertitta Gaming Holdco, LLC, 27 May 2026 (SEC filing text extract, LITE covenant-refinancing set copy) | in_hand | CP-3C | LITE_COVENANT_REFINANCING | 30845 | yes | `b583f857bec68d0c…` |
+| `czr-q2-2026-10q-lite-relative-value` | CZR | Caesars Entertainment, Inc. Form 10-Q for the quarter ended 30 June 2026 (SEC filing text extract, LITE relative-value set copy) | in_hand | CP-0, CP-L10, CP-1C | LITE_RELATIVE_VALUE | 168366 | yes | `1b2027659f255471…` |
+| `czr-q2-2026-earnings-lite-relative-value` | CZR | Caesars Entertainment, Inc. second quarter 2026 earnings release, Exhibit 99.1, 28 July 2026 (SEC exhibit text extract, LITE relative-value set copy) | in_hand | CP-0, CP-1C | LITE_RELATIVE_VALUE | 15825 | yes | `17f1795b42b4b7aa…` |
+| `czr-2020-credit-agreement-lite-relative-value` | CZR | Caesars Entertainment, Inc. (formerly Eldorado Resorts, Inc.) Credit Agreement dated 20 July 2020, JPMorgan Chase Bank, N.A. as administrative agent (SEC exhibit text extract, LITE relative-value set copy) | in_hand | CP-0 | LITE_RELATIVE_VALUE | 936079 | yes | `b4f124cb0e058b06…` |
+| `czr-2024-650-notes-2032-indenture-lite-relative-value` | CZR | Caesars Entertainment, Inc. Indenture for the 6.500% Senior Secured Notes due 2032, dated 6 February 2024, U.S. Bank Trust Company, N.A. as trustee (SEC exhibit text extract, LITE relative-value set copy) | in_hand | CP-0 | LITE_RELATIVE_VALUE | 759535 | yes | `62fbb236862a09f0…` |
+| `mgm-q2-2026-earnings` | MGM | MGM Resorts International second quarter 2026 earnings release, Exhibit 99.1, 29 July 2026 (SEC exhibit text extract) | in_hand | CP-1C | LITE_RELATIVE_VALUE | 29623 | yes | `2126412c1cc842c5…` |
+| `penn-q2-2026-earnings` | PENN | PENN Entertainment, Inc. second quarter 2026 earnings release, Exhibit 99.1, 6 August 2026 (SEC exhibit text extract) | in_hand | CP-1C | LITE_RELATIVE_VALUE | 33859 | yes | `006ca2051fd54855…` |
 | `answer-key-3issuer` | CCL, BA, F | ANSWER_KEY_3ISSUER.md — human-authored core facts, derived values and 24 traps per issuer | **key source, never admitted** | — | — | — | — | — |
 <!-- /emitted -->
 
-Seventy-four documents: sixty-nine `in_hand`, four `to_source`, and one
-`to_author`; plus one key source. Forty-five of the sixty-nine in hand are
+Eighty documents: seventy-five `in_hand`, four `to_source`, and one
+`to_author`; plus one key source. Forty-nine of the seventy-five in hand are
 byte-identical route-local copies of already admitted evidence: eleven from the
-earlier sets, nineteen added for the Phase 2 route inventory, and fifteen in the
-CZR earnings-update, liquidity and FULL and LITE covenant-refinancing sets.
-Nine more are the CZR EDGAR documents admitted on 2 October 2026: the three
-Q2 2026 filings (`czr-2026q2`), the 2020 credit agreement
-(`czr-2026q2-liquidity`), and the Fourth and Fifth Amendments, the 6.50% 2032
+earlier sets, nineteen added for the Phase 2 route inventory, and nineteen in the
+CZR earnings-update, liquidity, FULL and LITE covenant-refinancing and LITE
+relative-value sets. Eleven more are the EDGAR documents admitted on 2 October
+2026: the three CZR Q2 2026 filings (`czr-2026q2`), the 2020 credit agreement
+(`czr-2026q2-liquidity`), the Fourth and Fifth Amendments, the 6.50% 2032
 notes indenture, and the merger 8-K and its press release
-(`czr-2026q2-covenant-refinancing`). The on-disk
+(`czr-2026q2-covenant-refinancing`), and the MGM and PENN Q2 2026 earnings
+releases (`czr-2026q2-lite-relative-value`). The on-disk
 loader requires those copies because it refuses a declared path resolving
 outside its set root. Two more, `cp-dr-research-brief` and
 `cp-dr-full-research-brief`, are the
