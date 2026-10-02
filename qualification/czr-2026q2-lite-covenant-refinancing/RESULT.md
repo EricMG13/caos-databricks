@@ -5,7 +5,7 @@ Status: **OFFLINE / UNVERIFIED / NOT QUALIFIED**.
 This immutable set prepares `LITE_CREDIT_22 / LITE_COVENANT_REFINANCING` for
 Caesars Entertainment, Inc. (CZR) at an analysis date of 2026-10-02. Its
 qualification-set digest is
-`b1c118508c1a5dd7ab6b01938c159d33cf6cf5c2a731c75bb4afc6317d8bec66`.
+`35eb452da5a30ccddc768b707f9c3239526931498d58e0568ded03a09c590fe0`.
 
 ## Corpus provenance
 
@@ -53,6 +53,11 @@ commitment, margins and financial covenant were changed by amendments not in
 this set; the Fourth Amendment's Term B margin is superseded by the Fifth's.
 Both are admitted for the facility's controlling terms.
 
+Every key is one whole evidence line of its page, unique in its document: an
+answer is accepted only as a whole line (`WHOLE_LINE`) and scored by exact
+equality, so a fragment could never be met (F235, F475). Where a fact sits
+inside a longer line, the key is that whole line.
+
 The readiness key expects CP-0 to clear CP-L10, CP-3C and CP-5, with CP-L10
 and CP-3C at `SCREENING_ONLY` decision scope, and CP-3C and CP-5 to remain
 `Restricted`: this pack holds no market or LME evidence, and screening scope
@@ -85,7 +90,8 @@ The documents state the following; this set draws no conclusion from them.
   interest".
 - The credit agreement lists "(g) there shall have occurred a Change in
   Control;" among its events of default, its Change in Control definition
-  covering any person or group, other than Permitted Holders, acquiring "more
+  (as executed; Amendments 1–3, which the 10-K's exhibit index lists, are not
+  in this set) covering any person or group, other than Permitted Holders, acquiring "more
   than 50% of the Equity Interests of the Borrower entitled to vote".
 - The 10-Q's risk factors say: "The Company may incur additional costs or
   suffer loss of business under third-party contracts that are terminated or

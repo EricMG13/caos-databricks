@@ -32,7 +32,7 @@
         {
           "module_id": "CP-3C",
           "document_sha256": "1b2027659f255471d41243180c9b550c6915348b7aea79619634c5a9d7b0187c",
-          "matched_text": "which, as amended, provides for the CEI Revolving Credit Facility in an aggregate principal amount of $2.25 billion (the “CEI Revolving Credit Facility”) and will mature on January 31, 2028."
+          "matched_text": "CEI is party to a credit agreement, dated as of July 20, 2020, with JPMorgan Chase Bank, N.A., as administrative agent, U.S. Bank National Association, as collateral agent, and certain banks and other financial institutions and lenders party thereto (the “CEI Credit Agreement”), which, as amended, provides for the CEI Revolving Credit Facility in an aggregate principal amount of $2.25 billion (the “CEI Revolving Credit Facility”) and will mature on January 31, 2028. The CEI Revolving Credit Facility includes a letter of credit sub-facility of $388 million and contains reserves of $40 million which are available only for certain permitted uses."
         },
         {
           "module_id": "CP-3C",
@@ -42,12 +42,12 @@
         {
           "module_id": "CP-3C",
           "document_sha256": "62fbb236862a09f068f8bdcab86459fa7eed0fc0f2501297b85f41029c4e431c",
-          "matched_text": "(a) Upon the occurrence of a Change of Control, each holder shall have the right to require the Company to repurchase all or any part of such holder’s Notes at a purchase price in cash equal to 101% of the principal amount thereof, plus accrued and unpaid interest, if any, to, but excluding, the date of repurchase"
+          "matched_text": "(a) Upon the occurrence of a Change of Control, each holder shall have the right to require the Company to repurchase all or any part of such holder’s Notes at a purchase price in cash equal to 101% of the principal amount thereof, plus accrued and unpaid interest, if any, to, but excluding, the date of repurchase (subject to the right of the holders of record on the relevant Record Date to receive interest due on the relevant Interest Payment Date), in accordance with the terms contemplated in this Section 4.08; provided, however, that notwithstanding the occurrence of a Change of Control, the Company shall not be obligated to purchase any Notes pursuant to this Section 4.08 in the event that it has exercised its right to redeem such Notes in accordance with Article III of this Indenture."
         },
         {
           "module_id": "CP-3C",
           "document_sha256": "b583f857bec68d0c027b571b14c1280530e602c124e052f4a8ca3fc1e2b6a808",
-          "matched_text": "pursuant to which Merger Sub will merge with and into the Company, with the Company continuing as the surviving corporation and direct wholly owned subsidiary of Parent (the “Merger”)."
+          "matched_text": "On May 27, 2026, Caesars Entertainment, Inc., a Delaware corporation (the “Company”), Fertitta Gaming Holdco, LLC, a Texas limited liability company (“Parent”), Empire Merger Sub, Inc., a Delaware corporation and direct wholly owned subsidiary of Parent (“Merger Sub”), Landry’s Fertitta, LLC, a Texas limited liability company (“Parent Guarantor”) solely for the purposes of Section 9.14 therein, and Hospitality Headquarters, Inc., a Texas corporation, solely for the purposes of Section 9.14(j) therein, entered into an Agreement and Plan of Merger (the “Merger Agreement”), pursuant to which Merger Sub will merge with and into the Company, with the Company continuing as the surviving corporation and direct wholly owned subsidiary of Parent (the “Merger”)."
         },
         {
           "module_id": "CP-5",

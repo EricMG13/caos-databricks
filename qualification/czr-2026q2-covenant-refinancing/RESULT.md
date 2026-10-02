@@ -5,7 +5,7 @@ Status: **OFFLINE / UNVERIFIED / NOT QUALIFIED**.
 This immutable set prepares `FULL_CREDIT_32 / COVENANT_REFINANCING` for
 Caesars Entertainment, Inc. (CZR) at an analysis date of 2026-10-02. Its
 qualification-set digest is
-`115574a0658ae38d043c029f2f7287804fc5c75761404c0d980d88d4bbc50a7d`.
+`a7b16072cbc8540d14a655b20bfe0c7bd5d84eb3d847c00191ee9c0d05f961c1`.
 
 ## Corpus provenance
 
@@ -44,10 +44,11 @@ Keys authored from the documents; material figures pending owner confirmation.
   `$767` / `$1,574` / `$3,962` / `$5,335` million for the rest of 2026,
   2027–2030 and thereafter, totalling `$11,807` million; and its `$1.9 billion`
   of available CEI revolver capacity at 30 June 2026.
-- CP-4: the 10-Q's financial covenants (maximum net total leverage `6.50:1`
-  and minimum fixed charge coverage `2.0:1` on the CEI Revolving Credit
-  Facility and Term Loan A; `4:1` net total leverage on the CVA facilities);
-  the credit agreement's event of default `(g) there shall have occurred a
+- CP-4: the 10-Q's Note 6 statement that the Company was in compliance with
+  all of the applicable financial covenants at 30 June 2026 (the covenant
+  levels themselves, `6.50:1` net total leverage and `2.0:1` fixed charge
+  coverage, sit on a line the 10-Q repeats in its MD&A, so neither copy is a
+  unique whole line); the credit agreement's event of default `(g) there shall have occurred a
   Change in Control;`; the Fourth Amendment's restated Term SOFR Adjustment
   (`0.10%` for Term A and the Initial Revolving Facility, `0.00%` for Term B
   and Term B-1); the Fifth Amendment's restated Applicable Margin (`2.25%` Term
@@ -70,7 +71,13 @@ current terms (a `0.10%` adjustment on the revolver and Term Loan A, a
 commitment, margins and financial covenant are not keyed: the First to Third
 Amendments and the incremental assumption agreements that changed them are
 not in this set. Its Change in Control event of default is keyed as executed;
+Amendments 1–3 are not in this set (the 10-K's exhibit index lists them), and
 neither amendment in the set alters it.
+
+Every key is one whole evidence line of its page, unique in its document: an
+answer is accepted only as a whole line (`WHOLE_LINE`) and scored by exact
+equality, so a fragment could never be met (F235, F475). Where a fact sits
+inside a longer line, the key is that whole line.
 
 The readiness key expects CP-0 to clear CP-1, CP-4, CP-2, CP-2D, CP-3C and
 CP-5, and CP-4 and CP-3C to carry `FULL` decision scope. No register key is
@@ -107,7 +114,8 @@ The documents state the following; this set draws no conclusion from them.
   interest".
 - The credit agreement lists "(g) there shall have occurred a Change in
   Control;" among its events of default. Its Change in Control definition
-  covers a "“change of control” (or similar event)" under the notes
+  (as executed; Amendments 1–3, which the 10-K's exhibit index lists, are not
+  in this set) covers a "“change of control” (or similar event)" under the notes
   indentures it names (those of 6 July 2020, and indentures for Permitted
   Refinancing Indebtedness or Junior Financing constituting Material
   Indebtedness) and any person or group, other than Permitted Holders,

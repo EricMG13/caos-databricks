@@ -5,7 +5,7 @@ Status: **OFFLINE / UNVERIFIED / NOT QUALIFIED**.
 This immutable set prepares `FULL_CREDIT_32 / EARNINGS_UPDATE` for Caesars
 Entertainment, Inc. (CZR) at an analysis date of 2026-10-02. Its
 qualification-set digest is
-`42a2439e6b8be320c6c3ef8d91b4baa88e2fc34a72402528d65144f37c2b373f`.
+`967b03678141430e263396337f2020fc79655faa4c44c1f99cebe35f10d02c55`.
 
 ## Corpus provenance
 
@@ -38,7 +38,8 @@ Keys authored from the documents; material figures pending owner confirmation.
 - CP-2: the 10-Q's six-month operating cash flow, `675` / `680` million, and
   purchase of property and equipment, `(335)` / `(453)` million; and its
   statement that the pending Merger may have significant effects on the
-  company.
+  company, keyed as its whole line (which goes on to name the diversion of
+  management and employee attention; F475).
 - CP-5: the 10-Q's Note 6 total debt, `11,807` face and `11,705` book at
   30 June 2026, `11,792` book at 31 December 2025.
 
