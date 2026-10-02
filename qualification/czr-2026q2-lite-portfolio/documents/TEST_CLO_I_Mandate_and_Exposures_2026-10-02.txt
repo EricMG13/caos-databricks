@@ -1,0 +1,154 @@
+SYNTHETIC TEST MANDATE: Test CLO I Ltd, mandate, exposure report and compliance monitor
+
+This is a SYNTHETIC test mandate. The workbook describes itself as packaged sample data only.
+The owner adopted it for CAOS qualification on 2 October 2026.
+Source path: /Users/ericguei/Documents/Co-Pilot Agents/Co-Pilot Agents/CP-6A/REF_CP-6A_Portfolio_Debate_Inputs.xlsx
+No figure in this document is a real holding.
+
+## Sheet: Source Map (6 rows)
+Control | Worksheet | Source / Notes |
+Status | All | LIVE REFERENCE SLOT — packaged sample data only; replace workbook contents with the current enterprise .xlsx using this filename. Use data only when identity, measurement basis and as-of match the active run. |
+Module boundary | All | Consolidates reference data only; CP-3B and CP-6A remain separate modules. |
+Source | Mandate | CP-6A_-_Mandate_File_-_Test_CLO_I_Ltd.csv |
+Source | Exposure Report | CP-6A___Exposure_Report__Test_CLO_I_Ltd__29-May-2026_.csv |
+Source | Compliance Monitor | CP-6A_-_Portfolio_Constraints_Compliance_Monitor_-_Test_CLO_I_Ltd.csv |
+
+## Sheet: Mandate (30 rows)
+Section | Field | Value | Notes |
+Strategy | Non-Call Period | 15-Mar-2025 to 15-Mar-2027 | 2 years |
+Strategy | Legal Final Maturity | 15-Mar-2038 |
+Key Parties | Collateral Manager | Test Asset Management LLP |
+Key Parties | Portfolio Manager(s) | E. Guei / M. Smith |
+Key Parties | Trustee | Bank of New York Mellon |
+Key Parties | Collateral Administrator | Bank of New York Mellon |
+Key Parties | Placement Agent | Test Securities Inc. |
+Key Parties | Legal Counsel (Manager) | Cadwalader, Wickersham & Taft LLP |
+Key Parties | Legal Counsel (Placement) | Milbank LLP |
+Key Parties | Rating Agencies | Moody's / S&P |
+Capital Structure | Class A-1 (AAA/Aaa) | $280,000,000 — SOFR + 130bps | Senior-most tranche |
+Capital Structure | Class A-2 (AA/Aa2) | $50,000,000 — SOFR + 175bps |
+Capital Structure | Class B (A/A2) | $30,000,000 — SOFR + 210bps |
+Capital Structure | Class C (BBB/Baa2) | $30,000,000 — SOFR + 300bps |
+Capital Structure | Class D (BB/Ba2) | $25,000,000 — SOFR + 600bps |
+Capital Structure | Class E (B/B2) | $15,000,000 — SOFR + 900bps |
+Capital Structure | Subordinated Notes (Equity) | $50,000,000 | First loss; residual |
+Capital Structure | Total Liabilities + Equity | $480,000,000 |
+Mandate Constraints | Cross-reference | See CP-3C_Constraints & CP-6A_Constraints sheets |
+Mandate Constraints | Constraint Schedule Version | v1.0 dated 15-Mar-2025 |
+Mandate Constraints | Last IC Approval Date | 10-Mar-2025 |
+Reporting | Investor Reporting Frequency | Monthly (trustee report) |
+Reporting | Internal Risk Report Frequency | Weekly |
+Reporting | Regulatory Reporting | SEC Form PF (quarterly); AIFMD Annex IV (semi-annual) |
+Fees | Senior Management Fee | 15bps p.a. on collateral balance |
+Fees | Subordinated Management Fee | 35bps p.a. on collateral balance |
+Fees | Incentive Fee | 20% above 12% IRR hurdle on equity |
+Liquidity Terms | Redemption | N/A — CLO structure (no redemptions) | Callable after NC period |
+Liquidity Terms | Optional Redemption | After 15-Mar-2027 at par | Subject to make-whole prior |
+
+## Sheet: Exposure Report (72 rows)
+CP-6A — Exposure Report: Test CLO I Ltd (29-May-2026) |
+SECTION A — Portfolio Summary |
+Metric | Value |
+Total NAV (Collateral Pool MV) | $630,928,502 |
+Total Par | $634,000,000 |
+Number of Obligors | 350 |
+Number of Positions | 383 |
+Number of Sectors | 52 |
+Weighted Average Rating (WAR) | B1 (14.3) |
+Weighted Average Margin (bps) | 313 |
+Weighted Average YTM (%) | 3.29% |
+Weighted Average Life (yrs) | 4.82 |
+Weighted Average Price | 99.578 |
+1st Lien Exposure (% NAV) | 99.39% |
+Max Single Issuer | Asurion (2.37%) |
+Max Single Sector | Health Care Facilities & Services (7.16%) |
+Top 10 Concentration (% NAV) | 11.05% |
+SECTION B — Rating Distribution |
+Rating Bucket | % NAV | # Issuers |
+IG (Baa+) | 0.32% | 1 |
+BB (Ba) | 25.02% | 70 |
+B | 67.30% | 259 |
+CCC (Caa+) | 0.14% | 1 |
+Other | 3.50% | 11 |
+Unrated | 3.73% | 10 |
+Total | 100.00% | 350 |
+SECTION C — Sector Exposure (Top 20 Sectors) |
+Sector | % NAV | # Issuers | Limit | Headroom | Status |
+Health Care Facilities & Services | 7.16% | 25 | ≤ 10.0% | 2.84% | Pass |
+Commercial Support Services | 6.74% | 36 | ≤ 10.0% | 3.26% | Pass |
+Insurance | 5.63% | 11 | ≤ 10.0% | 4.37% | Pass |
+Software | 5.31% | 39 | ≤ 10.0% | 4.69% | Pass |
+Electrical Equipment Manufacturing | 4.62% | 13 | ≤ 10.0% | 5.38% | Pass |
+Leisure Facilities & Services | 4.57% | 19 | ≤ 10.0% | 5.43% | Pass |
+Containers & Packaging Manufacturing | 4.52% | 10 | ≤ 10.0% | 5.48% | Pass |
+Asset Management | 3.79% | 16 | ≤ 10.0% | 6.21% | Pass |
+Transportation & Logistics | 3.77% | 9 | ≤ 10.0% | 6.23% | Pass |
+Chemicals | 3.72% | 11 | ≤ 10.0% | 6.28% | Pass |
+Oil & Gas Supply Chain | 3.50% | 8 | ≤ 10.0% | 6.50% | Pass |
+Retail - Consumer Discretionary | 3.24% | 12 | ≤ 10.0% | 6.76% | Pass |
+Aerospace & Defense | 3.18% | 5 | ≤ 10.0% | 6.82% | Pass |
+Cable & Satellite | 3.10% | 7 | ≤ 10.0% | 6.90% | Pass |
+Biotechnology & Pharmaceuticals | 2.71% | 7 | ≤ 10.0% | 7.29% | Pass |
+Telecommunications | 2.52% | 10 | ≤ 10.0% | 7.48% | Pass |
+Medical Equipment & Devices Manufacturing | 2.18% | 7 | ≤ 10.0% | 7.82% | Pass |
+Machinery Manufacturing | 2.15% | 11 | ≤ 10.0% | 7.85% | Pass |
+Engineering & Construction | 2.07% | 6 | ≤ 10.0% | 7.93% | Pass |
+Electric Utilities | 1.91% | 5 | ≤ 10.0% | 8.09% | Pass |
+Top 20 Subtotal | 76.40% |
+Other Sectors | 23.60% |
+Total | 100.00% | 350 |
+SECTION D — Top 10 Holdings (Issuer Level) |
+Rank | Issuer | # Positions | Rating | Sector | MV ($) | % NAV | Rating Bucket |
+1 | Asurion | 5 | B3 / B | Insurance | $14,951,250 | 2.37% | B |
+2 | TransDigm | 4 | Ba3 / BB- | Aerospace & Defense | $12,043,500 | 1.91% | BB (Ba) |
+3 | TelevisaUnivision | 3 | B2 / B | Entertainment Content | $8,990,625 | 1.42% | B |
+4 | Directv | 2 | B1 / B+ | Cable & Satellite | $6,031,875 | 0.96% | B |
+5 | Signature Aviation | 2 | B2 / B+ | Transportation & Logistics | $6,026,250 | 0.96% | B |
+6 | Novolex | 2 | B2 / B+ | Containers & Packaging Manufacturing | $5,763,750 | 0.91% | B |
+7 | Quikrete | 2 | Ba3 / BB | Construction Materials Manufacturing | $4,007,500 | 0.64% | BB (Ba) |
+8 | Froneri | 2 | B1 / BB- | Food Production | $3,980,000 | 0.63% | B |
+9 | White Cap Supply Holdings | 2 | B3 / B | Retail - Consumer Discretionary | $3,980,000 | 0.63% | B |
+10 | Zelis | 2 | B2 / B | Software | $3,950,000 | 0.63% | B |
+ | Top 10 Total |  |  |  | $69,724,750 | 11.05% |
+SECTION E — Maturity Profile |
+Maturity Bucket | % NAV | MV ($) |
+< 1 Year | 0.15% | $968,750 |
+1–2 Years | 3.78% | $23,825,312 |
+2–3 Years | 12.56% | $79,241,250 |
+3–5 Years | 29.20% | $184,247,875 |
+5–7 Years | 54.31% | $342,645,315 |
+Total | 100.00% | $630,928,502 |
+
+## Sheet: Compliance Monitor (18 rows)
+ID | Constraint Category | Parameter | Limit | Breach Type | Source Document | Current Value | Headroom | Status | Last Checked | Checked By |
+C-01 | Single Name | Max single issuer exposure (largest: Asurion) | ≤ 2.5% NAV | Hard | Indenture §7.11 | 2.37% | 0.13% | Watch | 29-May-2026 | E. Guei |
+C-02 | Top 10 Concentration | Aggregate top 10 issuers | ≤ 15.0% NAV | Soft | Indenture §7.11 | 11.05% | 3.95% | Pass | 29-May-2026 | E. Guei |
+C-03 | Rating — Floor | Min portfolio WAR | ≥ Caa1 (numeric ≤ 17) | Hard | Indenture §7.11 | B1 (14.3) | 2.7 notches | Pass | 29-May-2026 | E. Guei |
+C-04 | Rating — CCC Bucket | Max CCC+ and below (incl. Unrated & Other) | ≤ 7.5% NAV | Hard | Indenture §7.11 | 7.36% | 0.14% | Watch | 29-May-2026 | E. Guei |
+C-05 | Rating — Unrated | Max unrated exposure | ≤ 5.0% NAV | Soft | Indenture §7.11 | 3.73% | 1.27% | Pass | 29-May-2026 | E. Guei |
+C-06 | Sector | Max single sector (largest: Health Care Facilities & Services) | ≤ 10.0% NAV | Soft | Indenture §7.11 | 7.16% | 2.84% | Pass | 29-May-2026 | E. Guei |
+C-07 | Sector | 2nd largest sector: Commercial Support Services | ≤ 10.0% NAV | Soft | Indenture §7.11 | 6.74% | 3.26% | Pass | 29-May-2026 | E. Guei |
+C-08 | Sector | 3rd largest sector: Insurance | ≤ 10.0% NAV | Soft | Indenture §7.11 | 5.63% | 4.37% | Pass | 29-May-2026 | E. Guei |
+C-09 | Instrument | Min 1st Lien / Senior Secured | ≥ 90.0% NAV | Hard | Indenture §7.11 | 99.39% | 9.39% | Pass | 29-May-2026 | E. Guei |
+C-10 | Instrument | Max 2nd Lien / Unsecured | ≤ 10.0% NAV | Soft | Indenture §7.11 | 0.61% | 9.39% | Pass | 29-May-2026 | E. Guei |
+C-11 | Duration / Maturity | Max WAL (weighted avg life) | ≤ 8.0 years | Soft | Indenture §7.11 | 4.82 yrs | 3.18 yrs | Pass | 29-May-2026 | E. Guei |
+C-12 | Diversification | Min number of obligors | ≥ 100 | Hard | Indenture §7.11 | 350 | 250 | Pass | 29-May-2026 | E. Guei |
+C-13 | Diversification | Smallest position (% NAV) | Info only | — | — | 0.0654% | — | Pass | 29-May-2026 | E. Guei |
+C-14 | Yield / Spread | WA Margin (bps over SOFR) | Info only | — | — | 313 bps | — | Pass | 29-May-2026 | E. Guei |
+C-15 | Pricing | WA Mid Price | Info only | — | — | 99.578 | — | Pass | 29-May-2026 | E. Guei |
+C-16 | Covenant | Covenant-Lite % (est.) | Info only | — | — | ~100% | — | Pass | 29-May-2026 | E. Guei |
+C-17 | ESG / Exclusion | Excluded sectors (Tobacco, Contr. Weapons, Thermal Coal) | 0% NAV | Hard | Indenture §7.11 | 0% | 0% | Pass | 29-May-2026 | E. Guei |
+
+## Owner-adopted test adaptation (2 October 2026)
+The following is an owner-adopted test adaptation, not part of the workbook. It is synthetic.
+Existing Caesars Entertainment exposure: none.
+The position is synthetic; the price is a real FINRA last-trade observation (public, dated 1 October 2026).
+Proposed position: Caesars Entertainment, Inc. 6.50% Senior Secured Notes due 2032, CUSIP 12769GAC4, par USD 5,000,000.
+Workbook NAV (Exposure Report, Total NAV (Collateral Pool MV)): USD 630,928,502
+NAV is the workbook's 29-May-2026 figure and is not restated pro forma for the proposed position.
+Position weight on par: 5,000,000 / 630,928,502 = 0.7925% of NAV.
+Single-name limit tested against (Compliance Monitor, C-01): Max single issuer exposure (largest: Asurion), limit '≤ 2.5% NAV', Hard breach type, Indenture §7.11.
+Headroom to the limit on par: 1.7075 percentage points; the weight is within the limit.
+Derived figure, labelled as such: market value at the last trade price of $93.28 on 10/1/2026 (FINRA observation CZR_FINRA_TRACE_12769GAC4_2026-10-02.txt, last trade, not a bid, mid or evaluated price) = USD 4,664,000.00, 0.7392% of NAV.
+As-of mismatch: the workbook's NAV and compliance check are dated 29 May 2026, while the price is dated 1 October 2026.
+Security description (same FINRA observation): CAESARS ENTMT INC NEW, coupon 6.5%, maturity 2/15/2032, CUSIP 12769GAC4, next call date 2/15/2027.
