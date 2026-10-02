@@ -132,21 +132,40 @@ a row typed here is a row that fails. -->
 | `penn-q2-2026-earnings-relative-value` | PENN | PENN Entertainment, Inc. second quarter 2026 earnings release, Exhibit 99.1, 6 August 2026 (SEC exhibit text extract, FULL relative-value set copy) | in_hand | CP-1C | RELATIVE_VALUE | 33859 | yes | `006ca2051fd54855…` |
 | `mgm-finra-trace-552953ck5-2026-10-02` | MGM | FINRA TRACE observation for MGM Resorts International 6.125% notes due 2029, CUSIP 552953CK5 | in_hand | CP-3D, CP-3 | RELATIVE_VALUE | 1277 | yes | `e17cea1bb90debde…` |
 | `penn-finra-trace-707569av1-2026-10-02` | PENN | FINRA TRACE observation for PENN Entertainment 4.125% notes due 2029, CUSIP 707569AV1 | in_hand | CP-3D, CP-3 | RELATIVE_VALUE | 1354 | yes | `666c0f36ace32336…` |
+| `czr-q2-2026-10q-lite-full-credit-screen` | CZR | Caesars Entertainment, Inc. Form 10-Q for the quarter ended 30 June 2026 (SEC filing text extract, LITE full-credit-screen set copy) | in_hand | CP-0, CP-L10, CP-3C, CP-4C, CP-5 | LITE_FULL_CREDIT_SCREEN | 168366 | yes | `1b2027659f255471…` |
+| `czr-q2-2026-earnings-lite-full-credit-screen` | CZR | Caesars Entertainment, Inc. second quarter 2026 earnings release, Exhibit 99.1, 28 July 2026 (SEC exhibit text extract, LITE full-credit-screen set copy) | in_hand | CP-0, CP-L10 | LITE_FULL_CREDIT_SCREEN | 15825 | yes | `17f1795b42b4b7aa…` |
+| `czr-2026-merger-8k-lite-full-credit-screen` | CZR | Caesars Entertainment, Inc. Form 8-K, Item 1.01, Agreement and Plan of Merger with Fertitta Gaming Holdco, LLC, 27 May 2026 (SEC filing text extract, LITE full-credit-screen set copy) | in_hand | CP-1A | LITE_FULL_CREDIT_SCREEN | 30845 | yes | `b583f857bec68d0c…` |
+| `czr-2026-merger-press-release-lite-full-credit-screen` | CZR | Caesars Entertainment, Inc. press release announcing the Fertitta Entertainment merger agreement, Exhibit 99.1, 28 May 2026 (SEC exhibit text extract, LITE full-credit-screen set copy) | in_hand | CP-1A | LITE_FULL_CREDIT_SCREEN | 19050 | yes | `3fd2159de768b997…` |
+| `mgm-q2-2026-earnings-lite-full-credit-screen` | MGM | MGM Resorts International second quarter 2026 earnings release, Exhibit 99.1, 29 July 2026 (SEC exhibit text extract, LITE full-credit-screen set copy) | in_hand | CP-1C | LITE_FULL_CREDIT_SCREEN | 29623 | yes | `2126412c1cc842c5…` |
+| `penn-q2-2026-earnings-lite-full-credit-screen` | PENN | PENN Entertainment, Inc. second quarter 2026 earnings release, Exhibit 99.1, 6 August 2026 (SEC exhibit text extract, LITE full-credit-screen set copy) | in_hand | CP-1C | LITE_FULL_CREDIT_SCREEN | 33859 | yes | `006ca2051fd54855…` |
+| `czr-2020-credit-agreement-lite-full-credit-screen` | CZR | Caesars Entertainment, Inc. (formerly Eldorado Resorts, Inc.) Credit Agreement dated 20 July 2020, JPMorgan Chase Bank, N.A. as administrative agent (SEC exhibit text extract, LITE full-credit-screen set copy) | in_hand | CP-0, CP-3C | LITE_FULL_CREDIT_SCREEN | 936079 | yes | `b4f124cb0e058b06…` |
+| `czr-2024-650-notes-2032-indenture-lite-full-credit-screen` | CZR | Caesars Entertainment, Inc. Indenture for the 6.500% Senior Secured Notes due 2032, dated 6 February 2024, U.S. Bank Trust Company, N.A. as trustee (SEC exhibit text extract, LITE full-credit-screen set copy) | in_hand | CP-0, CP-3C | LITE_FULL_CREDIT_SCREEN | 759535 | yes | `62fbb236862a09f0…` |
+| `czr-finra-trace-12769gac4-2026-10-02-lite-full-credit-screen` | CZR | FINRA TRACE observation for Caesars Entertainment 6.50% notes due 2032, CUSIP 12769GAC4 (LITE full-credit-screen set copy) | in_hand | CP-2H | LITE_FULL_CREDIT_SCREEN | 1361 | yes | `4018aaa62309df6c…` |
+| `czr-finra-trace-12769gad2-2026-10-02-lite-full-credit-screen` | CZR | FINRA TRACE observation for Caesars Entertainment 6.00% notes due 2032, CUSIP 12769GAD2 (LITE full-credit-screen set copy) | in_hand | CP-2H | LITE_FULL_CREDIT_SCREEN | 1364 | yes | `256c646128b7b670…` |
+| `czr-q2-2026-10q-lite-portfolio` | CZR | Caesars Entertainment, Inc. Form 10-Q for the quarter ended 30 June 2026 (SEC filing text extract, LITE portfolio set copy) | in_hand | CP-0, CP-L10 | LITE_PORTFOLIO_DECISION | 168366 | yes | `1b2027659f255471…` |
+| `czr-q2-2026-earnings-lite-portfolio` | CZR | Caesars Entertainment, Inc. second quarter 2026 earnings release, Exhibit 99.1, 28 July 2026 (SEC exhibit text extract, LITE portfolio set copy) | in_hand | CP-0, CP-L10 | LITE_PORTFOLIO_DECISION | 15825 | yes | `17f1795b42b4b7aa…` |
+| `test-clo-i-mandate-2026-10-02` | Test CLO I (synthetic) | SYNTHETIC test mandate: Test CLO I Ltd mandate, exposure report and compliance monitor, with the owner-adopted CZR position adaptation of 2 October 2026 (text extract) | in_hand | CP-0, CP-L10 | LITE_PORTFOLIO_DECISION | 10979 | yes | `864ee90ab21372bc…` |
+| `czr-finra-trace-12769gac4-2026-10-02-lite-portfolio` | CZR | FINRA TRACE observation for Caesars Entertainment 6.50% notes due 2032, CUSIP 12769GAC4 (LITE portfolio set copy) | in_hand | CP-0, CP-L10 | LITE_PORTFOLIO_DECISION | 1361 | yes | `4018aaa62309df6c…` |
+| `czr-2024-650-notes-2032-indenture-lite-portfolio` | CZR | Caesars Entertainment, Inc. Indenture for the 6.500% Senior Secured Notes due 2032, dated 6 February 2024, U.S. Bank Trust Company, N.A. as trustee (SEC exhibit text extract, LITE portfolio set copy) | in_hand | CP-0, CP-L10 | LITE_PORTFOLIO_DECISION | 759535 | yes | `62fbb236862a09f0…` |
 | `answer-key-3issuer` | CCL, BA, F | ANSWER_KEY_3ISSUER.md — human-authored core facts, derived values and 24 traps per issuer | **key source, never admitted** | — | — | — | — | — |
 <!-- /emitted -->
 
-Ninety-one documents: eighty-six `in_hand`, four `to_source`, and one
-`to_author`; plus one key source. Fifty-six of the eighty-six in hand are
-byte-identical route-local copies of already admitted evidence: eleven from the
-earlier sets, nineteen added for the Phase 2 route inventory, and twenty-six in
-the CZR earnings-update, liquidity, FULL and LITE covenant-refinancing and FULL
-and LITE relative-value sets. Fifteen more are the documents admitted on
-2 October 2026: the three CZR Q2 2026 filings (`czr-2026q2`), the 2020 credit
-agreement (`czr-2026q2-liquidity`), the Fourth and Fifth Amendments, the 6.50%
-2032 notes indenture, and the merger 8-K and its press release
+One hundred and six documents: one hundred and one `in_hand`, four `to_source`,
+and one `to_author`; plus one key source. Seventy of the one hundred and one in
+hand are byte-identical route-local copies of already admitted evidence: eleven
+from the earlier sets, nineteen added for the Phase 2 route inventory, and forty in
+the CZR earnings-update, liquidity, FULL and LITE covenant-refinancing, FULL
+and LITE relative-value, LITE full-credit-screen and LITE portfolio sets.
+Sixteen more are the documents admitted on 2 October 2026: the three CZR Q2
+2026 filings (`czr-2026q2`), the 2020 credit agreement
+(`czr-2026q2-liquidity`), the Fourth and Fifth Amendments, the 6.50% 2032
+notes indenture, and the merger 8-K and its press release
 (`czr-2026q2-covenant-refinancing`), the MGM and PENN Q2 2026 earnings
-releases (`czr-2026q2-lite-relative-value`), and the four FINRA TRACE
-observations of the CZR, MGM and PENN notes (`czr-2026q2-relative-value`). The on-disk
+releases (`czr-2026q2-lite-relative-value`), the four FINRA TRACE
+observations of the CZR, MGM and PENN notes (`czr-2026q2-relative-value`), and
+the SYNTHETIC Test CLO I mandate (`test-clo-i-mandate-2026-10-02`,
+`czr-2026q2-lite-portfolio`), owner-adopted test input that may never ground a
+real decision (D80). The on-disk
 loader requires those copies because it refuses a declared path resolving
 outside its set root. Two more, `cp-dr-research-brief` and
 `cp-dr-full-research-brief`, are the

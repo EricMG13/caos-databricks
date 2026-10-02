@@ -1,0 +1,80 @@
+{
+  "cases": [
+    {
+      "label": "czr-2026q2-lite-portfolio",
+      "profile_id": "LITE_CREDIT_22",
+      "selection_id": "LITE_PORTFOLIO_DECISION",
+      "subject": {
+        "issuer_id": "CZR",
+        "issuer_name": "Caesars Entertainment, Inc.",
+        "reporting_period": "Q2 2026",
+        "analysis_date": "2026-10-02"
+      },
+      "documents": [
+        "documents/CZR_Q2_2026_10Q.txt",
+        "documents/CZR_Q2_2026_Earnings_Release.txt",
+        "documents/TEST_CLO_I_Mandate_and_Exposures_2026-10-02.txt",
+        "documents/CZR_FINRA_TRACE_12769GAC4_2026-10-02.txt",
+        "documents/CZR_2024_650_Senior_Secured_Notes_2032_Indenture.txt"
+      ],
+      "expects": [
+        {
+          "module_id": "CP-L10",
+          "document_sha256": "1b2027659f255471d41243180c9b550c6915348b7aea79619634c5a9d7b0187c",
+          "matched_text": "As of June 30, 2026, the Company had $1.9 billion of available borrowing capacity under the CEI Revolving Credit Facility, after consideration of $96 million in outstanding letters of credit, $56 million committed for regulatory purposes, the outstanding amount, and the reserves described above."
+        },
+        {
+          "module_id": "CP-L10",
+          "document_sha256": "17f1795b42b4b7aa32ef72582813986c3b98ea9c205d2b4cb446944bcf494ffc",
+          "matched_text": "Adjusted EBITDA | $920 | $955 | $1,807 | $1,839 |"
+        },
+        {
+          "module_id": "CP-L10",
+          "document_sha256": "864ee90ab21372bcf89c8b27e02cd5d691d9095a64d507c7f656d5963cfe3207",
+          "matched_text": "Proposed position: Caesars Entertainment, Inc. 6.50% Senior Secured Notes due 2032, CUSIP 12769GAC4, par USD 5,000,000."
+        },
+        {
+          "module_id": "CP-L10",
+          "document_sha256": "864ee90ab21372bcf89c8b27e02cd5d691d9095a64d507c7f656d5963cfe3207",
+          "matched_text": "Position weight on par: 5,000,000 / 630,928,502 = 0.7925% of NAV."
+        },
+        {
+          "module_id": "CP-L10",
+          "document_sha256": "864ee90ab21372bcf89c8b27e02cd5d691d9095a64d507c7f656d5963cfe3207",
+          "matched_text": "C-01 | Single Name | Max single issuer exposure (largest: Asurion) | ≤ 2.5% NAV | Hard | Indenture §7.11 | 2.37% | 0.13% | Watch | 29-May-2026 | E. Guei |"
+        },
+        {
+          "module_id": "CP-L10",
+          "document_sha256": "4018aaa62309df6cd66a9b5fc766c4a9429e886e649023de2bad8673baf8aa51",
+          "matched_text": "Last trade price: $93.28"
+        }
+      ],
+      "expects_ready": [
+        "CP-L10"
+      ],
+      "expects_projection": [
+        {
+          "module_id": "CP-L10",
+          "field": "decision_scope",
+          "value": "SCREENING_ONLY"
+        },
+        {
+          "module_id": "CP-L10",
+          "field": "qa_status",
+          "value": "Restricted"
+        }
+      ],
+      "expects_register": [
+        {
+          "module_id": "CP-L10",
+          "register_id": "TL10.2",
+          "row_key": {
+            "topic_id": "LIQUIDITY_MATURITIES"
+          },
+          "column": "evidence_status",
+          "expected": "SUFFICIENT"
+        }
+      ]
+    }
+  ]
+}
