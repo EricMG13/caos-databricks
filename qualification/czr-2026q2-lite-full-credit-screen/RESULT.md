@@ -92,9 +92,12 @@ CP-3C, CP-4C and CP-5 are expected `Restricted`:
   2024-02-02; for the 6.00% 2032 notes, Moody's `Caa1` last rated 2026-09-28
   and S&P `B-` last rated 2024-10-02. A displayed rating and a last-rated date
   are not a dated agency action: no outlook, watch, criteria or agency
-  publication is in the pack. CP-2H can
-  record the displayed ratings, but its agency, outlook and criteria registers
-  have no source, so it cannot complete without limitations.
+  publication is in the pack. CP-2H can record the displayed ratings, but its
+  agency, outlook and criteria registers have no source, so it cannot complete
+  without limitations. CP-2H's blocking rule is security identity (its
+  `SKILL.md` blocks a security-specific rating case whose identity is missing,
+  ambiguous or conflicted), and the pack carries two CZR notes with different
+  ratings, so a run that names no instrument could block rather than restrict.
 - **CP-1A** has its named transaction, but only as the 8-K's summary and the
   press release: the Merger Agreement itself (the 8-K's Exhibit 2.1), the
   financing commitments and a pro forma capital structure are not admitted.
@@ -126,9 +129,9 @@ The documents state the following; this set draws no conclusion from them.
   Permitted Holders and does not treat a merger agreement as beneficial
   ownership until consummation.
 - **Seniority.** The 10-Q lists the 6.50% 2032 notes under "Secured Debt" and
-  the 6.00% 2032 notes under "Unsecured Debt", and FINRA displayed
-  different ratings for the two notes. No admitted document states the seniority of any MGM or
-  PENN note.
+  the 6.00% 2032 notes under "Unsecured Debt", and FINRA displayed different
+  ratings for the two notes. No admitted document states the seniority of any
+  MGM or PENN note.
 - **As-of dates.** The 10-Q and the releases report the quarter ended
   30 June 2026; the FINRA observations are dated 2 October 2026.
 
