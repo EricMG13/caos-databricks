@@ -159,9 +159,18 @@ def test_compare_records_holds_a_baseline_answer_against_itself_quiet(
     [compared] = quality_compare.compare_records([baseline], [baseline])
 
     assert compared["large"] == []
-    # Distinct figures are reported on every comparison; nothing else moved.
-    figures = baseline["distinct_figures"]
-    assert compared["changes"] == [f"distinct figures {figures} (baseline {figures})"]
+    # Distinct figures are reported on every comparison, over the registers
+    # the module still requires (F482); nothing else moved.
+    figures = len(
+        {
+            digest
+            for digests in baseline["figures_by_register"].values()
+            for digest in digests
+        }
+    )
+    assert compared["changes"] == [
+        f"distinct figures in required registers {figures} (baseline {figures})"
+    ]
     assert "LARGE\n  none" in quality_compare.render_report([compared])
 
 
@@ -268,3 +277,89 @@ def test_a_fall_of_fewer_than_five_figures_is_never_large() -> None:
         [big], [{**big, "distinct_figures": 15}]
     )
     assert compared["large"] == ["distinct figures 15 below 80% of baseline low 20"]
+
+
+def test_figures_are_counted_only_in_registers_still_required() -> None:
+    """F482: 5d-4 retired CP-0's P4, whose triage scores were most of a
+    baseline answer's figures, so counting every table flagged each later
+    answer LARGE for figures no register holds any more. Counted over the new
+    answer's required registers on both sides, a retired register's figures
+    leave the baseline too, while a fact lost from a kept register still
+    flags."""
+    kept = [f"t{n}" for n in range(6)]
+    scores = [f"p{n}" for n in range(10)]
+    baseline = {
+        **_answer("Passed", "Draft Only", 80, 8),
+        "required_registers": ["P4", "T1"],
+        "distinct_figures": 16,
+        "figures_by_register": {"P4": scores, "T1": kept},
+    }
+    later = {
+        **baseline,
+        "required_registers": ["T1"],
+        "distinct_figures": 6,
+        "figures_by_register": {"T1": kept},
+    }
+    [compared] = quality_compare.compare_records([baseline], [later])
+    assert compared["large"] == []
+    assert compared["changes"] == [
+        "distinct figures in required registers 6 (baseline 6)"
+    ]
+    # The whole-table count would have flagged it: 6 is below 80% of 16.
+    whole = {k: v for k, v in later.items() if k != "figures_by_register"}
+    [before] = quality_compare.compare_records([baseline], [whole])
+    assert before["large"] == ["distinct figures 6 below 80% of baseline low 16"]
+    # A fact lost from a register still required is still LARGE.
+    lost = {**later, "figures_by_register": {"T1": kept[:1]}}
+    [flagged] = quality_compare.compare_records(
+        [{**baseline, "figures_by_register": {"P4": scores, "T1": kept * 2 + scores}}],
+        [lost],
+    )
+    assert flagged["large"] == [
+        "distinct figures in required registers 1 below 80% of baseline low 16"
+    ]
+
+
+def test_extract_record_keeps_each_register_s_figures_as_digests(
+    tmp_path: Path,
+) -> None:
+    """F482: one digest per distinct figure per located register; the figure
+    itself is never written."""
+    record = _extracted(_set(tmp_path), quotes=(CITED,))
+    by_register = record["figures_by_register"]
+    assert set(by_register) == set(record["registers"])
+    digests = [digest for found in by_register.values() for digest in found]
+    assert all(len(digest) == 16 and int(digest, 16) >= 0 for digest in digests)
+    assert all(found == sorted(set(found)) for found in by_register.values())
+    found = {
+        "T1": (
+            ["Item", "Value"],
+            [{"Item": "Debt", "Value": "(1,240)"}, {"Item": "Cash", "Value": "1240"}],
+        )
+    }
+    assert quality_compare.register_figures(found) == {
+        "T1": [sha256(b"1240").hexdigest()[:16]]
+    }
+    assert "1240" not in json.dumps(quality_compare.register_figures(found))
+    assert quality_compare.register_figures(None) is None
+
+
+def test_compare_says_answer_keys_unmeasured_without_a_record(
+    tmp_path: Path,
+) -> None:
+    """F482 (5d-0 review): without the host record the citation, readiness and
+    projection keys are unchecked, and the report says so by kind, not only
+    "citations unmeasured"."""
+    root = _set(tmp_path)
+    baseline = _extracted(root, quotes=(CITED,))
+    markdown = handoff_markdown(identity("CP-0"), readiness={"CP-5": "READY"})
+    alone = quality_compare.extract_record(markdown, root, bundle=BUNDLE)
+    [compared] = quality_compare.compare_records([baseline], [alone])
+    assert "citations unmeasured (no record given)" in compared["changes"]
+    assert (
+        "answer keys unmeasured: 3 (no record given): expects 2, expects_ready 1"
+        in compared["changes"]
+    )
+    assert compared["large"] == []
+    [measured] = quality_compare.compare_records([baseline], [baseline])
+    assert not any("unmeasured" in line for line in measured["changes"])

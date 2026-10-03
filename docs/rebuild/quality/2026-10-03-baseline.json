@@ -40,6 +40,28 @@
         "count": 2
       },
       "distinct_figures": 6,
+      "figures_by_register": {
+        "P3": [],
+        "P5": [],
+        "T1": [],
+        "T2": [],
+        "T3": [
+          "4b227777d4dd1fc6",
+          "4e07408562bedb8b",
+          "6b86b273ff34fce1",
+          "d4735e3a265e16ee"
+        ],
+        "T4": [],
+        "T5": [],
+        "T6": [],
+        "T7": [],
+        "T8": [
+          "4b227777d4dd1fc6",
+          "4e07408562bedb8b",
+          "6b86b273ff34fce1",
+          "d4735e3a265e16ee"
+        ]
+      },
       "front_matter": {
         "committee_status": "Requires More Work",
         "confidence_band": "Low",
@@ -156,6 +178,28 @@
         "count": 1
       },
       "distinct_figures": 6,
+      "figures_by_register": {
+        "P3": [],
+        "P5": [],
+        "T1": [],
+        "T2": [],
+        "T3": [
+          "4b227777d4dd1fc6",
+          "4e07408562bedb8b",
+          "6b86b273ff34fce1",
+          "d4735e3a265e16ee"
+        ],
+        "T4": [],
+        "T5": [],
+        "T6": [],
+        "T7": [],
+        "T8": [
+          "4b227777d4dd1fc6",
+          "4e07408562bedb8b",
+          "6b86b273ff34fce1",
+          "d4735e3a265e16ee"
+        ]
+      },
       "front_matter": {
         "committee_status": "Requires More Work",
         "confidence_band": "Low",
@@ -286,6 +330,32 @@
         "count": 3
       },
       "distinct_figures": 8,
+      "figures_by_register": {
+        "P3": [],
+        "P5": [],
+        "T1": [],
+        "T2": [],
+        "T3": [
+          "4b227777d4dd1fc6",
+          "4e07408562bedb8b",
+          "6b86b273ff34fce1",
+          "d4735e3a265e16ee"
+        ],
+        "T4": [],
+        "T5": [],
+        "T6": [
+          "2f1d593cd98cb5bf"
+        ],
+        "T7": [],
+        "T8": [
+          "4b227777d4dd1fc6",
+          "4e07408562bedb8b",
+          "6b86b273ff34fce1",
+          "d4735e3a265e16ee",
+          "e7f6c011776e8db7",
+          "ef2d127de37b942b"
+        ]
+      },
       "front_matter": {
         "committee_status": "Restricted",
         "confidence_band": "Low",
@@ -400,6 +470,28 @@
         "count": 3
       },
       "distinct_figures": 8,
+      "figures_by_register": {
+        "P3": [],
+        "P5": [],
+        "T1": [],
+        "T2": [],
+        "T3": [
+          "4b227777d4dd1fc6",
+          "4e07408562bedb8b",
+          "6b86b273ff34fce1",
+          "d4735e3a265e16ee"
+        ],
+        "T4": [],
+        "T5": [],
+        "T6": [],
+        "T7": [],
+        "T8": [
+          "4b227777d4dd1fc6",
+          "4e07408562bedb8b",
+          "6b86b273ff34fce1",
+          "d4735e3a265e16ee"
+        ]
+      },
       "front_matter": {
         "committee_status": "Requires More Work",
         "confidence_band": "Low",
@@ -507,6 +599,245 @@
         "count": 4
       },
       "distinct_figures": 170,
+      "figures_by_register": {
+        "T4.1": [],
+        "T4.10": [
+          "04ff14276199969c",
+          "0e64685c548b3f0e",
+          "2f1d593cd98cb5bf",
+          "4652614c4d8778e5",
+          "58bdcfb2c72536d2",
+          "6793f9e266ce6ebd",
+          "728bf33aab1d32d4",
+          "81b8a03f97e8787c",
+          "83bcafb1853ce1c1",
+          "8bcbb4c131df56f7",
+          "9589262630f775d9",
+          "a440868cf4311953",
+          "a46e37632fa6ca51",
+          "a4c6af0cb6f02dff",
+          "a512db2741cd2069",
+          "c2c55e2769e84562",
+          "d8ed6dce12debd77",
+          "dff17949eb4f9ecd",
+          "e2e61e0963a50e16",
+          "f87ff9f55f70af66"
+        ],
+        "T4.11": [],
+        "T4.12": [],
+        "T4.13": [],
+        "T4.14": [
+          "158a323a7ba44870",
+          "1da51b8d8ff98f6a",
+          "4e47eb5525df25f9",
+          "580811fa95269f3e",
+          "b2b2f104d32c6389"
+        ],
+        "T4.15": [
+          "04ff14276199969c",
+          "109605b9bd377f6c",
+          "2abaca4911e68fa9",
+          "2f1d593cd98cb5bf",
+          "4652614c4d8778e5",
+          "4fc82b26aecb47d2",
+          "58bdcfb2c72536d2",
+          "6208ef0f7750c111",
+          "728bf33aab1d32d4",
+          "7acc684a848a9b95",
+          "8e6aee9efac8086e",
+          "a440868cf4311953",
+          "a4c6af0cb6f02dff",
+          "a73b320dc0d3a57c",
+          "d83c7ee736be931d",
+          "d8ed6dce12debd77",
+          "f87ff9f55f70af66"
+        ],
+        "T4.16": [
+          "04a8708c3a481ced",
+          "3a481e728390d89c",
+          "3c15285c04fff400",
+          "4b227777d4dd1fc6",
+          "4e07408562bedb8b",
+          "6b86b273ff34fce1",
+          "7d7179c146d0d6af",
+          "b0ab628c9e146218",
+          "c837649cce43f272",
+          "d4735e3a265e16ee",
+          "eb624dbe56eb6620",
+          "f10d342ce63e0d2d"
+        ],
+        "T4.17": [
+          "35135aaa6cc23891",
+          "355d8c0ee4e5698e",
+          "4b227777d4dd1fc6",
+          "4e07408562bedb8b",
+          "535fa30d7e25dd8a",
+          "5b4afb8d2ed60a57",
+          "6b51d431df5d7f14",
+          "6b86b273ff34fce1",
+          "6f4b6612125fb3a0",
+          "7902699be42c8a8e",
+          "d4735e3a265e16ee",
+          "e7f6c011776e8db7",
+          "ef2d127de37b942b"
+        ],
+        "T4.18": [
+          "109605b9bd377f6c",
+          "12e2c8df501501b2",
+          "15197cf7214b58e6",
+          "152e69cf3c8e76c8",
+          "26d228663f13a885",
+          "2abaca4911e68fa9",
+          "3f67e79db5278423",
+          "62f77e7d6197863a",
+          "6b86b273ff34fce1",
+          "6bd44ccbcb332868",
+          "744b93f9950fc38d",
+          "7902699be42c8a8e",
+          "81a83544cf93c245",
+          "86a3f9b13a5b652f",
+          "8e71b24534e9f3fb",
+          "9dacbde326501c9f",
+          "9f69998560dcfd80",
+          "a22eea496bce0154",
+          "ab9828ca390581b7",
+          "aea92132c4cbeb26",
+          "cf0cdaad3303f6f4",
+          "dfaab096bd212005",
+          "e0c7bfa5b8e4ae0c",
+          "e7f6c011776e8db7",
+          "ee14860f6bd0506d",
+          "ee377871c73631fd"
+        ],
+        "T4.19": [
+          "04ff14276199969c",
+          "58bdcfb2c72536d2",
+          "5e12fecf37fa71ce",
+          "5feceb66ffc86f38",
+          "61d48b97f06dc91e",
+          "6e4001871c0cf27c",
+          "728bf33aab1d32d4",
+          "a440868cf4311953",
+          "e7f6c011776e8db7"
+        ],
+        "T4.2": [],
+        "T4.3": [],
+        "T4.4": [
+          "04ff14276199969c",
+          "0ab847ee0dd9fd88",
+          "108c995b953c8a35",
+          "13d182f2d86098fa",
+          "18167da210996cf3",
+          "25b7c81e770034ae",
+          "2858dcd1057d3eae",
+          "2ec42bc1f3e672fc",
+          "314e9ad1bb068ed1",
+          "328c58f0f1726122",
+          "355d8c0ee4e5698e",
+          "39700d452c77592c",
+          "3d3286f7cd19074f",
+          "3d914f9348c9cc0f",
+          "3fdba35f04dc8c46",
+          "41cfc0d1f2d127b0",
+          "4652614c4d8778e5",
+          "47fec9f491173c57",
+          "4abe558a726429ea",
+          "535838060adb8730",
+          "58bdcfb2c72536d2",
+          "59b524f8de039389",
+          "5b4afb8d2ed60a57",
+          "607f6bfaff663e8e",
+          "6793f9e266ce6ebd",
+          "6affdae3b3c1aa6a",
+          "6b51d431df5d7f14",
+          "6b86b273ff34fce1",
+          "728bf33aab1d32d4",
+          "73401dfc9377b9ed",
+          "74de057f768beb42",
+          "7902699be42c8a8e",
+          "7ffc2066e20c16e9",
+          "81b8a03f97e8787c",
+          "8bcbb4c131df56f7",
+          "8d27ba37c5d81010",
+          "8efbbe9bc19ad2e0",
+          "9589262630f775d9",
+          "9be3da431e0a833d",
+          "a05198938c6ca8cd",
+          "a46e37632fa6ca51",
+          "a512db2741cd2069",
+          "ac1270c5058af650",
+          "b3dfdc6efe322a6f",
+          "c2356069e9d1e79c",
+          "c28474616c0273f2",
+          "c403741c4121989a",
+          "c62ce8b4e927f02f",
+          "cbf2f7864f1c9883",
+          "d8ed6dce12debd77",
+          "df4865fca1f15916",
+          "dff17949eb4f9ecd",
+          "ef2d127de37b942b",
+          "f32828acecb4282c",
+          "f57b8252cea0e3ca",
+          "f7c2599681e9284c",
+          "f87ff9f55f70af66"
+        ],
+        "T4.5": [
+          "084ae23e6996e701",
+          "12f26af0dcdfae8f",
+          "162753c27c8b3297",
+          "31489056e0916d59",
+          "41cfc0d1f2d127b0",
+          "4fc82b26aecb47d2",
+          "6208ef0f7750c111",
+          "6e4001871c0cf27c",
+          "7a61b53701befdae",
+          "7acc684a848a9b95",
+          "8b940be7fb78aaa6",
+          "8e6aee9efac8086e",
+          "a440868cf4311953",
+          "a4c6af0cb6f02dff",
+          "a73b320dc0d3a57c",
+          "bcce03f625c22998",
+          "c2356069e9d1e79c",
+          "d029fa3a95e174a1",
+          "d83c7ee736be931d",
+          "ff5a1ae012afa5d4"
+        ],
+        "T4.6": [
+          "023998ba5a1bc02b",
+          "09895de0407bcb03",
+          "0e17daca5f3e175f",
+          "23e8b0175874e1bb",
+          "27522760cfaeb606",
+          "2bdf394d67584970",
+          "2f1d593cd98cb5bf",
+          "44cb730c420480a0",
+          "4c15f47afe7f817f",
+          "56d97f67e9f3b784",
+          "576c85c584f60555",
+          "5844a72aee9269a6",
+          "602d528c05ad668f",
+          "68e476b5d5aeca7b",
+          "77438da3f3c4aae9",
+          "7b1a278f5abe8e9d",
+          "996aa130712ec702",
+          "9f1f9dce319c4700",
+          "ac3fb2fa9b7d7b30",
+          "ae92bee5080ffa35",
+          "b4944c6ff08dc6f4",
+          "be4b2f45069c180e",
+          "bfcedb35246befeb",
+          "c53d9534e7c47018",
+          "e64474fd91f16a08",
+          "e73cb135243c08ab",
+          "ee0d6c299a70d209"
+        ],
+        "T4.8": [],
+        "T4.9": [
+          "7acc684a848a9b95",
+          "a440868cf4311953"
+        ]
+      },
       "front_matter": {
         "committee_status": "Requires More Work",
         "confidence_band": "Low",
@@ -634,6 +965,27 @@
         "count": 4
       },
       "distinct_figures": 10,
+      "figures_by_register": {
+        "P3": [],
+        "P5": [],
+        "T1": [],
+        "T2": [],
+        "T3": [
+          "4b227777d4dd1fc6",
+          "4e07408562bedb8b",
+          "6b86b273ff34fce1",
+          "d4735e3a265e16ee"
+        ],
+        "T4": [],
+        "T5": [],
+        "T6": [],
+        "T7": [],
+        "T8": [
+          "4e07408562bedb8b",
+          "6b86b273ff34fce1",
+          "d4735e3a265e16ee"
+        ]
+      },
       "front_matter": {
         "committee_status": "Requires More Work",
         "confidence_band": "Low",
@@ -736,6 +1088,26 @@
         "count": 6
       },
       "distinct_figures": 4,
+      "figures_by_register": {
+        "P3": [],
+        "P5": [],
+        "T1": [],
+        "T2": [],
+        "T3": [
+          "4b227777d4dd1fc6",
+          "4e07408562bedb8b",
+          "6b86b273ff34fce1",
+          "d4735e3a265e16ee"
+        ],
+        "T4": [],
+        "T5": [],
+        "T6": [],
+        "T7": [],
+        "T8": [
+          "6b86b273ff34fce1",
+          "d4735e3a265e16ee"
+        ]
+      },
       "front_matter": {
         "committee_status": "Restricted",
         "confidence_band": "Low",
@@ -852,6 +1224,30 @@
         "count": 8
       },
       "distinct_figures": 8,
+      "figures_by_register": {
+        "P3": [],
+        "P5": [],
+        "T1": [],
+        "T2": [],
+        "T3": [
+          "4b227777d4dd1fc6",
+          "4e07408562bedb8b",
+          "6b86b273ff34fce1",
+          "d4735e3a265e16ee"
+        ],
+        "T4": [],
+        "T5": [],
+        "T6": [],
+        "T7": [
+          "4e07408562bedb8b"
+        ],
+        "T8": [
+          "4b227777d4dd1fc6",
+          "4e07408562bedb8b",
+          "6b86b273ff34fce1",
+          "d4735e3a265e16ee"
+        ]
+      },
       "front_matter": {
         "committee_status": "Requires More Work",
         "confidence_band": "Low",
@@ -968,6 +1364,28 @@
         "count": 7
       },
       "distinct_figures": 6,
+      "figures_by_register": {
+        "P3": [],
+        "P5": [],
+        "T1": [],
+        "T2": [],
+        "T3": [
+          "4b227777d4dd1fc6",
+          "4e07408562bedb8b",
+          "6b86b273ff34fce1",
+          "d4735e3a265e16ee"
+        ],
+        "T4": [],
+        "T5": [],
+        "T6": [],
+        "T7": [],
+        "T8": [
+          "4b227777d4dd1fc6",
+          "4e07408562bedb8b",
+          "6b86b273ff34fce1",
+          "d4735e3a265e16ee"
+        ]
+      },
       "front_matter": {
         "committee_status": "Requires More Work",
         "confidence_band": "Low",
