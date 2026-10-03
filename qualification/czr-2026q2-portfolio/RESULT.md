@@ -6,7 +6,7 @@ This immutable set prepares `FULL_CREDIT_32 / PORTFOLIO_DECISION` for
 Caesars Entertainment, Inc. (CZR) at an analysis date of 2026-10-02, with a
 proposed position in the CZR 6.50% Senior Secured Notes due 2032 held against a
 **SYNTHETIC** test mandate. Its qualification-set digest is
-`1ca41a9655ac9b1f7b3fc43f9492a8c242da6ea53c81d200f996882687262721`.
+`e578ae27b949dc3e5f8e3d943a245caea6fbfecc0de955ad539c8a2a3a9947df`.
 
 ## The mandate is synthetic (D80)
 
@@ -64,9 +64,9 @@ Keys authored from the documents; material figures pending owner confirmation.
   and `1,302` for FY2025 (10-K).
 - CP-4: the 10-Q's sentence that the revolver, term loans and both secured
   note series are guaranteed on a senior secured basis and secured by
-  substantially all assets (the next sentence, that the CEI Senior Notes due
-  2029 and 2032 are guaranteed on a senior unsecured basis, is unkeyed since
-  the F492 sentence split); the
+  substantially all assets, and its next sentence, that the CEI Senior Notes
+  due 2029 and 2032 are guaranteed on a senior unsecured basis (one key each
+  since the F492 sentence split); the
   indenture's Section 2.01 issue amount (`$1,500,000,000`) and its Section
   4.08(a) Change of Control repurchase offer at `101%`; the credit agreement's
   "(g) there shall have occurred a Change in Control;" event of default.

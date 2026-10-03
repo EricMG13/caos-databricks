@@ -90,9 +90,19 @@
           "matched_text": "As of June 30, 2026, long-term variable-rate borrowings totaled $6.0 billion under the CEI Term Loans, the CVA Delayed Draw Term Loan and the CEI Revolving Credit Facility, and no amounts were outstanding under the CVA Revolving Credit Facility."
         },
         {
+          "module_id": "CP-2E",
+          "document_sha256": "f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a",
+          "matched_text": "As of June 30, 2026, long-term variable-rate borrowings under the CEI Term Loans, the CVA Delayed Draw Term Loan and the CEI Revolving Credit Facility represented approximately 51% of consolidated long-term debt and the weighted average interest rates on our variable and fixed rate debt were 5.87% and 6.18%, respectively."
+        },
+        {
           "module_id": "CP-4",
           "document_sha256": "f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a",
           "matched_text": "The CEI Revolving Credit Facility, the CEI Term Loan A, the CEI Term Loan B, the CEI Term Loan B-1, the CEI Senior Secured Notes due 2030 and the CEI Senior Secured Notes due 2032 are guaranteed on a senior secured basis by each existing and future material wholly-owned domestic subsidiary of the Company and are secured by substantially all of the existing and future property and assets of the Company and its subsidiary guarantors (subject to certain exceptions)."
+        },
+        {
+          "module_id": "CP-4",
+          "document_sha256": "f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a",
+          "matched_text": "The CEI Senior Notes due 2029 and the CEI Senior Notes due 2032 are guaranteed on a senior unsecured basis by such subsidiaries."
         },
         {
           "module_id": "CP-4",

@@ -71,6 +71,11 @@
         },
         {
           "module_id": "CP-4",
+          "document_sha256": "f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a",
+          "matched_text": "The CEI Senior Notes due 2029 and the CEI Senior Notes due 2032 are guaranteed on a senior unsecured basis by such subsidiaries."
+        },
+        {
+          "module_id": "CP-4",
           "document_sha256": "2f3530b8034d89d47165530014e0541cbe4778893dac5411207cbaf2b3c82f97",
           "matched_text": "The aggregate principal amount of Notes which may be authenticated and delivered under this Indenture on the Issue Date is $1,500,000,000."
         },

@@ -5,7 +5,7 @@ Status: **OFFLINE / UNVERIFIED / NOT QUALIFIED**.
 This immutable set prepares `FULL_CREDIT_32 / LIQUIDITY_REVIEW` for Caesars
 Entertainment, Inc. (CZR) at an analysis date of 2026-10-02. Its
 qualification-set digest is
-`f34b647df830ef51ef674f365a5d6e338fd69ff00bd582c0846135d79f955107`.
+`07a2448f639da45c386b296fc68c5f321cc8ae7f6f386801546e861451bb6044`.
 
 ## Corpus provenance
 
@@ -42,9 +42,9 @@ Keys authored from the documents; material figures pending owner confirmation.
   / `$5,335` million for the rest of 2026, 2027–2030 and thereafter, totalling
   `$11,807` million; and the 10-Q's statement that the CEI Credit Agreement,
   as amended, provides for a `$2.25 billion` CEI Revolving Credit Facility
-  maturing on 31 January 2028 (keyed as that whole Note 6 sentence; the
-  `$388` million letter-of-credit sub-facility and `$40` million of reserves
-  are the next sentence, unkeyed; F475, F492).
+  maturing on 31 January 2028, and its next sentence, the `$388` million
+  letter-of-credit sub-facility and `$40` million of reserves (each keyed as
+  its whole Note 6 sentence; F475, F492).
 
 The credit agreement carries no key. Its revolving commitment is stated as at
 the 2020 signing date, and the Fourth (9 May 2024) and Fifth (25 November 2024)

@@ -8,7 +8,7 @@ peers MGM Resorts International (MGM) and PENN Entertainment, Inc. (PENN) from
 the owner's "Public Leveraged Loan Issuers Benchmark", with a proposed position
 in the CZR 6.50% Senior Secured Notes due 2032 held against a **SYNTHETIC**
 test mandate. Its qualification-set digest is
-`cc013ed9a91061ed6df61d1f6372badbe01cd63014fbe5ac10def210d62ffbf9`.
+`d5524f3bbda225ddee0c47cd28d1c6324ee5b20fc387bc1eb8cb1929605c6b87`.
 
 ## The mandate is synthetic (D80)
 
@@ -86,12 +86,13 @@ Keys authored from the documents; material figures pending owner confirmation.
   leverage of `2.9x` at 30 June 2026.
 - CP-2: operating cash flow, `675` for the six months (10-Q) and `1,302` for
   FY2025 (10-K).
-- CP-2E: the 10-Q's Item 3 sentence: `$6.0 billion` of long-term
-  variable-rate borrowings at 30 June 2026 (the next sentence, about `51%` of
-  consolidated long-term debt at weighted average rates of `5.87%` variable
-  and `6.18%` fixed, is unkeyed since the F492 sentence split).
-- CP-4: the 10-Q's senior secured guarantee and lien sentence; the indenture's
-  Section 2.01
+- CP-2E: the 10-Q's two Item 3 sentences: `$6.0 billion` of long-term
+  variable-rate borrowings at 30 June 2026, and about `51%` of consolidated
+  long-term debt at weighted average rates of `5.87%` variable and `6.18%`
+  fixed (one key each since the F492 sentence split).
+- CP-4: the 10-Q's senior secured guarantee and lien sentence and its next
+  sentence, the senior unsecured guarantee of the CEI Senior Notes due 2029
+  and 2032 (one key each); the indenture's Section 2.01
   issue amount (`$1,500,000,000`); the credit agreement's Change in Control
   event of default; the Fifth Amendment's Term B and B-1 margins (`2.25%` Term
   Benchmark, `1.25%` ABR).

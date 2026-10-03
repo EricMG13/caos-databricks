@@ -7,7 +7,7 @@ Entertainment, Inc. (CZR) at an analysis date of 2026-10-02, against peers
 MGM Resorts International (MGM) and PENN Entertainment, Inc. (PENN) from the
 owner's "Public Leveraged Loan Issuers Benchmark". Its qualification-set
 digest is
-`fa80f39ccb33fa816cc04a97df04472df4d778226ffe31922f184d2a4421a5d6`.
+`f15500fd4973de201cf1ac577c67157d63f45bd819ca469629073ab195fc5d37`.
 
 ## Corpus provenance
 
@@ -60,9 +60,9 @@ Keys authored from the documents; material figures pending owner confirmation.
   and `1,302` for FY2025 (10-K).
 - CP-4: the 10-Q's sentence that the revolver, term loans and both secured
   note series are guaranteed on a senior secured basis and secured by
-  substantially all assets (the next sentence, that the CEI Senior Notes due
-  2029 and 2032 are guaranteed on a senior unsecured basis, is unkeyed since
-  the F492 sentence split); the
+  substantially all assets, and its next sentence, that the CEI Senior Notes
+  due 2029 and 2032 are guaranteed on a senior unsecured basis (one key each
+  since the F492 sentence split); the
   indenture's Section 2.01 issue amount (`$1,500,000,000`); the credit
   agreement's "(g) there shall have occurred a Change in Control;" event of
   default.
