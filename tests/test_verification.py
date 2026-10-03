@@ -171,35 +171,18 @@ def test_only_a_reanchoring_reader_returns_citations(ran: _Harness) -> None:
 def test_refuse_maps_each_step_to_the_callers_code_or_lets_it_through(
     ran: _Harness,
 ) -> None:
-    """A citation whose quote no delivered page holds: the step's own code
-    when the caller maps it to nothing (the deliverable), the caller's code
-    otherwise (the proof). No text in the chain either way.
-
-    One moved to a page it is not on is located again at its true page (D94),
-    which the record does not say: `CITATION_MOVED`, never accepted."""
+    """A citation moved to a page it is not on: the step's own code when the
+    caller maps it to nothing (the deliverable), the caller's code otherwise
+    (the proof). No text in the chain either way. A stored page is checked,
+    never searched for again (D94), so the true page elsewhere rescues
+    nothing."""
     row = _row(ran, "CP-5")
     record = _decoded_record(ran.blobs.get(row.record_sha256))
     moved = replace(
         record,
         citations=(replace(record.citations[0], page=2), *record.citations[1:]),
     )
-    with pytest.raises(Refusal) as relocated:
-        _verify(
-            ran,
-            replace(row, record_sha256=ran.blobs.put(record_bytes(moved))),
-            reanchor=True,
-            refuse=lambda step: None,
-        )
-    ran.conn.rollback()
-    assert relocated.value.code is RefusalCode.ARTIFACT_RECORD_MISMATCH
-    absent = replace(
-        record,
-        citations=(
-            replace(record.citations[0], matched_text="No delivered line says so."),
-            *record.citations[1:],
-        ),
-    )
-    row = replace(row, record_sha256=ran.blobs.put(record_bytes(absent)))
+    row = replace(row, record_sha256=ran.blobs.put(record_bytes(moved)))
     with pytest.raises(Refusal) as own:
         _verify(ran, row, reanchor=True, refuse=lambda step: None)
     ran.conn.rollback()

@@ -33,6 +33,7 @@ from caos.digest import canonical_json
 from caos.evidence.citations import (
     ANY_RUN,
     CITATION_RULES,
+    WHOLE_LINE,
     AnchoredCitation,
     Citation,
     CitationRule,
@@ -1623,6 +1624,11 @@ def _decoded_record(data: bytes) -> CanonicalRecord:
         raise ValueError
     citations = _each(_anchored)(document.get("citations"))
     if not citations:
+        raise ValueError
+    # Only `WHOLE_LINE` re-anchors (D94): a `cited_page` under any other rule
+    # is not one this host wrote.
+    reanchored = any(citation.cited_page is not None for citation in citations)
+    if reanchored and _with_rule(document)["citation_rule"] != WHOLE_LINE:
         raise ValueError
     return _typed(
         CanonicalRecord,

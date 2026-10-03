@@ -36,7 +36,7 @@ from caos.evidence.citations import (
     AnchoredCitation,
     Citation,
     TokenIndex,
-    verify_citations,
+    verify_stored_citations,
 )
 from caos.graph.route import MODEL_MODULE, ResolvedRoute, RouteNode
 from caos.methodology.bundle import Bundle, verified_bytes
@@ -336,14 +336,16 @@ def _reanchored(
                 Step.SOURCE_NOT_PINNED,
                 RefusalCode.ORCHESTRATION_SOURCE_NOT_PINNED,
             )
-        # The page the module named, so a quote the host re-anchored at its
-        # true page (D94) is located again exactly as it was accepted.
-        cited = citation.page if citation.cited_page is None else citation.cited_page
-        requests.append(Citation(source_id, cited, citation.matched_text))
+        requests.append(
+            (
+                Citation(source_id, citation.page, citation.matched_text),
+                citation.cited_page,
+            )
+        )
     anchored = _step(
         refuse,
         Step.CITATION_ANCHOR,
-        lambda: verify_citations(
+        lambda: verify_stored_citations(
             conn,
             delivered=evidence.delivered,
             citations=requests,
@@ -353,7 +355,9 @@ def _reanchored(
     )
     # Same quotes, same rectangles, inside the captured blocks -- located by
     # the rule the record was accepted under (N28), so a record accepted
-    # before the whole-line rule re-anchors as it always has.
+    # before the whole-line rule re-anchors as it always has; each at the
+    # page the record stores, never searched for, and a re-anchoring kept
+    # only where its cited page holds no such line (D94).
     if tuple(anchored) != record.citations:
         raise _refusal(refuse, Step.CITATION_MOVED, _MISMATCH)
     return record.citations
