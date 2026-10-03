@@ -55,31 +55,31 @@ SECTION 11. Tax Matters.
 [Remainder of Page Intentionally Left Blank]
 9
 IN WITNESS WHEREOF, the parties hereto have caused this Agreement to be duly executed as of the date first above written.
-BORROWER: |
-CAESARS ENTERTAINMENT, INC., as Borrower |
-By: | /s/ Bret Yunker |
-Name: Bret Yunker |
-Title: Chief Financial Officer |
+BORROWER:
+CAESARS ENTERTAINMENT, INC., as Borrower
+By: | /s/ Bret Yunker
+Name: Bret Yunker
+Title: Chief Financial Officer
 [Signature Page to Fifth Amendment]
-ADMINISTRATIVE AGENT: |
-JPMORGAN CHASE BANK, N.A., as Administrative Agent, Replacement Term B Lender and Replacement Term B-1 Lender |
-By: | /s/ David Glenn |
-Name: David Glenn |
-Title: Authorized Signatory |
+ADMINISTRATIVE AGENT:
+JPMORGAN CHASE BANK, N.A., as Administrative Agent, Replacement Term B Lender and Replacement Term B-1 Lender
+By: | /s/ David Glenn
+Name: David Glenn
+Title: Authorized Signatory
 [Signature Page to Fifth Amendment]
 Annex I
 [Attached]
 CONSENT TO FIFTH AMENDMENT TO CREDIT AGREEMENT
-CONSENT (this “Consent”) to Fifth Amendment (the “Amendment”) to the Credit Agreement, dated as of July 20, 2020 (as modified by that certain Incremental Assumption Agreement No. 1, dated as of July 20, 2020, as amended by that certain First Amendment to Credit Agreement, dated as of November 10, 2021, as amended by that certain Second Amendment to Credit Agreement, dated as of January 26, 2022, as amended by that certain Third Amendment to Credit Agreement, dated as of October 5, 2022, as modified by that certain Incremental Assumption Agreement No. 2, dated as of February 6, 2023, as modified by that certain Incremental Assumption Agreement No. 3, dated as of February 6, 2024, as amended by that certain Fourth Amendment to Credit Agreement, dated as of May 9, 2024, and as further amended, restated, supplemented, waived or otherwise modified from time to time, the “Credit Agreement”), among Caesars Entertainment, Inc., as Borrower, the lending institutions from time to time party thereto, JPMorgan Chase Bank, N.A., as Administrative Agent, and U.S. Bank National Association, as Collateral Agent. Capitalized terms used in this Consent but not defined in this Consent have the meanings assigned to such terms in the Credit Agreement or the Amendment, as applicable. |
-Existing Lenders of Term B Loans. The undersigned Lender hereby irrevocably and unconditionally approves the Amendment and consents as follows (check ONE option): |
-Cashless Consent Option ☐ to continue to hold 100% of the outstanding principal amount of your Term B Loans (or such lesser principal amount allocated to you by the Borrower and JPMCB in their sole discretion) as Amended Term B Loans | Assign and Reallocation Consent Option ☐ to (i) assign 100% of the outstanding principal amount of your Term B Loans to the Replacement Term B Lender on the Fifth Amendment Effective Date and (ii) purchase by assignment (or cause one or more Affiliates of such Assigning Consenting Term B Lender to purchase by assignment) from the Replacement Term B Lender a like principal amount of Amended Term B Loans (or such lesser principal amount allocated to you or your Affiliates by the Borrower and JPMCB) |
-Existing Lenders of Term B-1 Loans. The undersigned Lender hereby irrevocably and unconditionally approves the Amendment and consents as follows (check ONE option): |
-Cashless Consent Option ☐ to continue to hold 100% of the outstanding principal amount of your Term B-1 Loans (or such lesser principal amount allocated to you by the Borrower and JPMCB in their sole discretion) as Amended Term B-1 Loans | Assign and Reallocation Consent Option ☐ to (i) assign 100% of the outstanding principal amount of your Term B-1 Loans to the Replacement Term B-1 Lender on the Fifth Amendment Effective Date and (ii) purchase by assignment (or cause one or more Affiliates of such Assigning Consenting Term B-1 Lender to purchase by assignment) from the Replacement Term B-1 Lender a like principal amount of Amended Term B-1 Loans (or such lesser principal amount allocated to you or your Affiliates by the Borrower JPMCB) |
+CONSENT (this “Consent”) to Fifth Amendment (the “Amendment”) to the Credit Agreement, dated as of July 20, 2020 (as modified by that certain Incremental Assumption Agreement No. 1, dated as of July 20, 2020, as amended by that certain First Amendment to Credit Agreement, dated as of November 10, 2021, as amended by that certain Second Amendment to Credit Agreement, dated as of January 26, 2022, as amended by that certain Third Amendment to Credit Agreement, dated as of October 5, 2022, as modified by that certain Incremental Assumption Agreement No. 2, dated as of February 6, 2023, as modified by that certain Incremental Assumption Agreement No. 3, dated as of February 6, 2024, as amended by that certain Fourth Amendment to Credit Agreement, dated as of May 9, 2024, and as further amended, restated, supplemented, waived or otherwise modified from time to time, the “Credit Agreement”), among Caesars Entertainment, Inc., as Borrower, the lending institutions from time to time party thereto, JPMorgan Chase Bank, N.A., as Administrative Agent, and U.S. Bank National Association, as Collateral Agent. Capitalized terms used in this Consent but not defined in this Consent have the meanings assigned to such terms in the Credit Agreement or the Amendment, as applicable.
+Existing Lenders of Term B Loans. The undersigned Lender hereby irrevocably and unconditionally approves the Amendment and consents as follows (check ONE option):
+Cashless Consent Option ☐ to continue to hold 100% of the outstanding principal amount of your Term B Loans (or such lesser principal amount allocated to you by the Borrower and JPMCB in their sole discretion) as Amended Term B Loans | Assign and Reallocation Consent Option ☐ to (i) assign 100% of the outstanding principal amount of your Term B Loans to the Replacement Term B Lender on the Fifth Amendment Effective Date and (ii) purchase by assignment (or cause one or more Affiliates of such Assigning Consenting Term B Lender to purchase by assignment) from the Replacement Term B Lender a like principal amount of Amended Term B Loans (or such lesser principal amount allocated to you or your Affiliates by the Borrower and JPMCB)
+Existing Lenders of Term B-1 Loans. The undersigned Lender hereby irrevocably and unconditionally approves the Amendment and consents as follows (check ONE option):
+Cashless Consent Option ☐ to continue to hold 100% of the outstanding principal amount of your Term B-1 Loans (or such lesser principal amount allocated to you by the Borrower and JPMCB in their sole discretion) as Amended Term B-1 Loans | Assign and Reallocation Consent Option ☐ to (i) assign 100% of the outstanding principal amount of your Term B-1 Loans to the Replacement Term B-1 Lender on the Fifth Amendment Effective Date and (ii) purchase by assignment (or cause one or more Affiliates of such Assigning Consenting Term B-1 Lender to purchase by assignment) from the Replacement Term B-1 Lender a like principal amount of Amended Term B-1 Loans (or such lesser principal amount allocated to you or your Affiliates by the Borrower JPMCB)
 IN WITNESS WHEREOF, the undersigned has caused this Consent to be executed and delivered by a duly authorized signatory.
-______________________________________, |
-as a Lender (type name of the legal entity) |
-By: |
-Name: Title: |
-If a second signature is necessary: |
-By: |
-Name: Title: |
+______________________________________,
+as a Lender (type name of the legal entity)
+By:
+Name: Title:
+If a second signature is necessary:
+By:
+Name: Title:

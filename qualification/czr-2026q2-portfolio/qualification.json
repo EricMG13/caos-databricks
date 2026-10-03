@@ -22,37 +22,37 @@
       "expects": [
         {
           "module_id": "CP-1",
-          "document_sha256": "1b2027659f255471d41243180c9b550c6915348b7aea79619634c5a9d7b0187c",
-          "matched_text": "Cash and cash equivalents | $965 | $887 |"
+          "document_sha256": "9af04315eddd61ee7655445939d21bc91780c57c3689134c7c77d85c3dfb7e01",
+          "matched_text": "Cash and cash equivalents | $965 | $887"
         },
         {
           "module_id": "CP-2",
-          "document_sha256": "1b2027659f255471d41243180c9b550c6915348b7aea79619634c5a9d7b0187c",
-          "matched_text": "Net cash provided by operating activities | 675 | 680 |"
+          "document_sha256": "9af04315eddd61ee7655445939d21bc91780c57c3689134c7c77d85c3dfb7e01",
+          "matched_text": "Net cash provided by operating activities | 675 | 680"
         },
         {
           "module_id": "CP-2",
-          "document_sha256": "204904832a3a51442a5c33d791ea35265586f43fac34530cd4d051787d0c0874",
-          "matched_text": "Net cash provided by operating activities | 1,302 | 1,075 | 1,809 |"
+          "document_sha256": "4738e21322c565366a5e68be47fbacb894b869611ba9b52a353ed69b648abc48",
+          "matched_text": "Net cash provided by operating activities | 1,302 | 1,075 | 1,809"
         },
         {
           "module_id": "CP-4",
-          "document_sha256": "1b2027659f255471d41243180c9b550c6915348b7aea79619634c5a9d7b0187c",
+          "document_sha256": "9af04315eddd61ee7655445939d21bc91780c57c3689134c7c77d85c3dfb7e01",
           "matched_text": "The CEI Revolving Credit Facility, the CEI Term Loan A, the CEI Term Loan B, the CEI Term Loan B-1, the CEI Senior Secured Notes due 2030 and the CEI Senior Secured Notes due 2032 are guaranteed on a senior secured basis by each existing and future material wholly-owned domestic subsidiary of the Company and are secured by substantially all of the existing and future property and assets of the Company and its subsidiary guarantors (subject to certain exceptions). The CEI Senior Notes due 2029 and the CEI Senior Notes due 2032 are guaranteed on a senior unsecured basis by such subsidiaries."
         },
         {
           "module_id": "CP-4",
-          "document_sha256": "62fbb236862a09f068f8bdcab86459fa7eed0fc0f2501297b85f41029c4e431c",
+          "document_sha256": "85ca330865d6ed47de838cbd3e45a69d29b57640e91782a71f2639721ac665db",
           "matched_text": "Section 2.01 Amount of Notes. The aggregate principal amount of Notes which may be authenticated and delivered under this Indenture on the Issue Date is $1,500,000,000."
         },
         {
           "module_id": "CP-4",
-          "document_sha256": "62fbb236862a09f068f8bdcab86459fa7eed0fc0f2501297b85f41029c4e431c",
+          "document_sha256": "85ca330865d6ed47de838cbd3e45a69d29b57640e91782a71f2639721ac665db",
           "matched_text": "(a) Upon the occurrence of a Change of Control, each holder shall have the right to require the Company to repurchase all or any part of such holder’s Notes at a purchase price in cash equal to 101% of the principal amount thereof, plus accrued and unpaid interest, if any, to, but excluding, the date of repurchase (subject to the right of the holders of record on the relevant Record Date to receive interest due on the relevant Interest Payment Date), in accordance with the terms contemplated in this Section 4.08; provided, however, that notwithstanding the occurrence of a Change of Control, the Company shall not be obligated to purchase any Notes pursuant to this Section 4.08 in the event that it has exercised its right to redeem such Notes in accordance with Article III of this Indenture."
         },
         {
           "module_id": "CP-4",
-          "document_sha256": "b4f124cb0e058b06453f2037bb70e4455600a6006b6559c03721918b5e36f2e2",
+          "document_sha256": "4b3013342047cf6928ad18a3518180bb160c2e5251b5414eee71d95e8b95cf97",
           "matched_text": "(g) there shall have occurred a Change in Control;"
         },
         {
@@ -77,8 +77,8 @@
         },
         {
           "module_id": "CP-5",
-          "document_sha256": "1b2027659f255471d41243180c9b550c6915348b7aea79619634c5a9d7b0187c",
-          "matched_text": "Total debt | 11,807 | 11,705 | 11,792 |"
+          "document_sha256": "9af04315eddd61ee7655445939d21bc91780c57c3689134c7c77d85c3dfb7e01",
+          "matched_text": "Total debt | 11,807 | 11,705 | 11,792"
         },
         {
           "module_id": "CP-6",

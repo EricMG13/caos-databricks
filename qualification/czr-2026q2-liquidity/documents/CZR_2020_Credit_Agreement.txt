@@ -20,205 +20,205 @@ as Joint Lead Arrangers and Joint Bookrunners,
 KEYBANC CAPITAL MARKETS INC. and FIFTH THIRD BANK, NATIONAL ASSOCIATION,
 as Syndication Agents
 TABLE OF CONTENTS
-Page |
-ARTICLE I |
-Definitions |
-SECTION 1.01. | Defined Terms | 2 |
-SECTION 1.02. | Terms Generally | 87 |
-SECTION 1.03. | Effectuation of Transactions | 88 |
-SECTION 1.04. | Exchange Rates; Currency Equivalents | 88 |
-SECTION 1.05. | Times of Day | 88 |
-SECTION 1.06. | Timing of Payment or Performance | 88 |
-SECTION 1.07. | Limited Condition Transactions | 88 |
-SECTION 1.08. | Additional Alternate Currencies for Loans and Letters of Credit | 89 |
-SECTION 1.09. | Change of Currency | 90 |
-SECTION 1.10. | Letter of Credit Amounts | 91 |
-SECTION 1.11. | Basket and Ratio Calculations | 91 |
-SECTION 1.12. | Divisions | 91 |
-ARTICLE II |
-The Credits |
-SECTION 2.01. | Commitments | 91 |
-SECTION 2.02. | Loans and Borrowings | 92 |
-SECTION 2.03. | Requests for Borrowings | 93 |
-SECTION 2.04. | [Reserved] | 93 |
-SECTION 2.05. | The Letter of Credit Commitment | 93 |
-SECTION 2.06. | Funding of Borrowings | 102 |
-SECTION 2.07. | Interest Elections | 102 |
-SECTION 2.08. | Termination and Reduction of Commitments | 104 |
-SECTION 2.09. | Repayment of Loans; Evidence of Debt | 104 |
-SECTION 2.10. | Repayment of Term Loans and Revolving Facility Loans | 105 |
-SECTION 2.11. | Prepayment of Loans | 106 |
-SECTION 2.12. | Fees | 111 |
-SECTION 2.13. | Interest | 112 |
-SECTION 2.14. | Alternate Rate of Interest | 113 |
-SECTION 2.15. | Increased Costs | 114 |
-SECTION 2.16. | Break Funding Payments | 115 |
-SECTION 2.17. | Taxes | 116 |
-SECTION 2.18. | Payments Generally; Pro Rata Treatment; Sharing of Set-offs | 118 |
-SECTION 2.19. | Mitigation Obligations; Replacement of Lenders | 120 |
-SECTION 2.20. | Illegality | 121 |
-SECTION 2.21. | Incremental Commitments | 121 |
-SECTION 2.22. | Defaulting Lenders | 130 |
+Page
+ARTICLE I
+Definitions
+SECTION 1.01. | Defined Terms | 2
+SECTION 1.02. | Terms Generally | 87
+SECTION 1.03. | Effectuation of Transactions | 88
+SECTION 1.04. | Exchange Rates; Currency Equivalents | 88
+SECTION 1.05. | Times of Day | 88
+SECTION 1.06. | Timing of Payment or Performance | 88
+SECTION 1.07. | Limited Condition Transactions | 88
+SECTION 1.08. | Additional Alternate Currencies for Loans and Letters of Credit | 89
+SECTION 1.09. | Change of Currency | 90
+SECTION 1.10. | Letter of Credit Amounts | 91
+SECTION 1.11. | Basket and Ratio Calculations | 91
+SECTION 1.12. | Divisions | 91
+ARTICLE II
+The Credits
+SECTION 2.01. | Commitments | 91
+SECTION 2.02. | Loans and Borrowings | 92
+SECTION 2.03. | Requests for Borrowings | 93
+SECTION 2.04. | [Reserved] | 93
+SECTION 2.05. | The Letter of Credit Commitment | 93
+SECTION 2.06. | Funding of Borrowings | 102
+SECTION 2.07. | Interest Elections | 102
+SECTION 2.08. | Termination and Reduction of Commitments | 104
+SECTION 2.09. | Repayment of Loans; Evidence of Debt | 104
+SECTION 2.10. | Repayment of Term Loans and Revolving Facility Loans | 105
+SECTION 2.11. | Prepayment of Loans | 106
+SECTION 2.12. | Fees | 111
+SECTION 2.13. | Interest | 112
+SECTION 2.14. | Alternate Rate of Interest | 113
+SECTION 2.15. | Increased Costs | 114
+SECTION 2.16. | Break Funding Payments | 115
+SECTION 2.17. | Taxes | 116
+SECTION 2.18. | Payments Generally; Pro Rata Treatment; Sharing of Set-offs | 118
+SECTION 2.19. | Mitigation Obligations; Replacement of Lenders | 120
+SECTION 2.20. | Illegality | 121
+SECTION 2.21. | Incremental Commitments | 121
+SECTION 2.22. | Defaulting Lenders | 130
 ii
-ARTICLE III |
-Representations and Warranties |
-SECTION 3.01. | Organization; Powers | 132 |
-SECTION 3.02. | Authorization | 132 |
-SECTION 3.03. | Enforceability | 133 |
-SECTION 3.04. | Governmental Approvals | 133 |
-SECTION 3.05. | Financial Statements | 133 |
-SECTION 3.06. | No Material Adverse Effect | 134 |
-SECTION 3.07. | Title to Properties; Possession Under Leases | 134 |
-SECTION 3.08. | Subsidiaries | 134 |
-SECTION 3.09. | Litigation; Compliance with Laws | 135 |
-SECTION 3.10. | Federal Reserve Regulations | 135 |
-SECTION 3.11. | Investment Company Act | 135 |
-SECTION 3.12. | Use of Proceeds | 135 |
-SECTION 3.13. | Tax Returns | 136 |
-SECTION 3.14. | No Material Misstatements | 136 |
-SECTION 3.15. | Employee Benefit Plans | 137 |
-SECTION 3.16. | Environmental Matters | 137 |
-SECTION 3.17. | Security Documents | 137 |
-SECTION 3.18. | Location of Real Property and Leased Premises | 138 |
-SECTION 3.19. | Solvency | 139 |
-SECTION 3.20. | Labor Matters | 139 |
-SECTION 3.21. | Intellectual Property; Licenses, Etc. | 139 |
-SECTION 3.22. | Anti-Money Laundering; Anti-Corruption and Sanctions Laws | 139 |
-SECTION 3.23. | Insurance | 140 |
-SECTION 3.24. | Affected Financial Institution | 140 |
-ARTICLE IV |
-Conditions of Lending |
-SECTION 4.01. | Conditions to All Credit Events After the Closing Date | 140 |
-SECTION 4.02. | Conditions to Initial Credit Events | 141 |
-ARTICLE V |
-Affirmative Covenants |
-SECTION 5.01. | Existence; Businesses and Properties | 145 |
-SECTION 5.02. | Insurance | 145 |
-SECTION 5.03. | Taxes | 146 |
-SECTION 5.04. | Financial Statements, Reports, etc. | 147 |
-SECTION 5.05. | Litigation and Other Notices | 149 |
-SECTION 5.06. | Compliance with Laws | 149 |
-SECTION 5.07. | Maintaining Records; Access to Properties and Inspections | 149 |
-SECTION 5.08. | Use of Proceeds | 150 |
-SECTION 5.09. | Compliance with Environmental Laws | 150 |
-SECTION 5.10. | Further Assurances; Additional Security | 150 |
+ARTICLE III
+Representations and Warranties
+SECTION 3.01. | Organization; Powers | 132
+SECTION 3.02. | Authorization | 132
+SECTION 3.03. | Enforceability | 133
+SECTION 3.04. | Governmental Approvals | 133
+SECTION 3.05. | Financial Statements | 133
+SECTION 3.06. | No Material Adverse Effect | 134
+SECTION 3.07. | Title to Properties; Possession Under Leases | 134
+SECTION 3.08. | Subsidiaries | 134
+SECTION 3.09. | Litigation; Compliance with Laws | 135
+SECTION 3.10. | Federal Reserve Regulations | 135
+SECTION 3.11. | Investment Company Act | 135
+SECTION 3.12. | Use of Proceeds | 135
+SECTION 3.13. | Tax Returns | 136
+SECTION 3.14. | No Material Misstatements | 136
+SECTION 3.15. | Employee Benefit Plans | 137
+SECTION 3.16. | Environmental Matters | 137
+SECTION 3.17. | Security Documents | 137
+SECTION 3.18. | Location of Real Property and Leased Premises | 138
+SECTION 3.19. | Solvency | 139
+SECTION 3.20. | Labor Matters | 139
+SECTION 3.21. | Intellectual Property; Licenses, Etc. | 139
+SECTION 3.22. | Anti-Money Laundering; Anti-Corruption and Sanctions Laws | 139
+SECTION 3.23. | Insurance | 140
+SECTION 3.24. | Affected Financial Institution | 140
+ARTICLE IV
+Conditions of Lending
+SECTION 4.01. | Conditions to All Credit Events After the Closing Date | 140
+SECTION 4.02. | Conditions to Initial Credit Events | 141
+ARTICLE V
+Affirmative Covenants
+SECTION 5.01. | Existence; Businesses and Properties | 145
+SECTION 5.02. | Insurance | 145
+SECTION 5.03. | Taxes | 146
+SECTION 5.04. | Financial Statements, Reports, etc. | 147
+SECTION 5.05. | Litigation and Other Notices | 149
+SECTION 5.06. | Compliance with Laws | 149
+SECTION 5.07. | Maintaining Records; Access to Properties and Inspections | 149
+SECTION 5.08. | Use of Proceeds | 150
+SECTION 5.09. | Compliance with Environmental Laws | 150
+SECTION 5.10. | Further Assurances; Additional Security | 150
 iii
-SECTION 5.11. | Real Property Development Matters | 154 |
-SECTION 5.12. | Rating | 156 |
-ARTICLE VI |
-Negative Covenants |
-SECTION 6.01. | Indebtedness | 156 |
-SECTION 6.02. | Liens | 164 |
-SECTION 6.03. | Sale and Lease-Back Transactions | 171 |
-SECTION 6.04. | Investments, Loans and Advances | 171 |
-SECTION 6.05. | Mergers, Consolidations, Sales of Assets and Acquisitions | 176 |
-SECTION 6.06. | Restricted Payments | 181 |
-SECTION 6.07. | Transactions with Affiliates | 183 |
-SECTION 6.08. | Business of the Borrower and the Subsidiaries | 186 |
-SECTION 6.09. | Limitation on Payments and Modifications of Indebtedness; Modifications of Governing Documents and Lease Arrangements; etc. | 186 |
-SECTION 6.10. | Fiscal Year | 189 |
-SECTION 6.11. | Financial Performance Covenant | 189 |
-ARTICLE VII |
-Events of Default |
-SECTION 7.01. | Events of Default | 190 |
-SECTION 7.02. | Right to Cure | 193 |
-SECTION 7.03. | Treatment of Certain Payments | 194 |
-ARTICLE VIII |
-The Agents |
-SECTION 8.01. | Appointment | 194 |
-SECTION 8.02. | Delegation of Duties | 195 |
-SECTION 8.03. | Exculpatory Provisions | 195 |
-SECTION 8.04. | Reliance by Agents | 196 |
-SECTION 8.05. | Notice of Default | 196 |
-SECTION 8.06. | Non-Reliance on Administrative Agent, Joint Lead Arrangers, Collateral Agent and Other Lenders | 196 |
-SECTION 8.07. | Indemnification | 197 |
-SECTION 8.08. | Agents in their Individual Capacity | 197 |
-SECTION 8.09. | Successor Agents | 197 |
-SECTION 8.10. | Payments Set Aside | 198 |
-SECTION 8.11. | Administrative Agent May File Proofs of Claim | 199 |
-SECTION 8.12. | Collateral and Guaranty Matters | 199 |
-SECTION 8.13. | Agents and Arrangers | 200 |
-SECTION 8.14. | Intercreditor Agreements and Collateral Matters | 200 |
-SECTION 8.15. | Withholding Tax | 200 |
-SECTION 8.16. | Interest Rates; LIBOR Notification | 200 |
+SECTION 5.11. | Real Property Development Matters | 154
+SECTION 5.12. | Rating | 156
+ARTICLE VI
+Negative Covenants
+SECTION 6.01. | Indebtedness | 156
+SECTION 6.02. | Liens | 164
+SECTION 6.03. | Sale and Lease-Back Transactions | 171
+SECTION 6.04. | Investments, Loans and Advances | 171
+SECTION 6.05. | Mergers, Consolidations, Sales of Assets and Acquisitions | 176
+SECTION 6.06. | Restricted Payments | 181
+SECTION 6.07. | Transactions with Affiliates | 183
+SECTION 6.08. | Business of the Borrower and the Subsidiaries | 186
+SECTION 6.09. | Limitation on Payments and Modifications of Indebtedness; Modifications of Governing Documents and Lease Arrangements; etc. | 186
+SECTION 6.10. | Fiscal Year | 189
+SECTION 6.11. | Financial Performance Covenant | 189
+ARTICLE VII
+Events of Default
+SECTION 7.01. | Events of Default | 190
+SECTION 7.02. | Right to Cure | 193
+SECTION 7.03. | Treatment of Certain Payments | 194
+ARTICLE VIII
+The Agents
+SECTION 8.01. | Appointment | 194
+SECTION 8.02. | Delegation of Duties | 195
+SECTION 8.03. | Exculpatory Provisions | 195
+SECTION 8.04. | Reliance by Agents | 196
+SECTION 8.05. | Notice of Default | 196
+SECTION 8.06. | Non-Reliance on Administrative Agent, Joint Lead Arrangers, Collateral Agent and Other Lenders | 196
+SECTION 8.07. | Indemnification | 197
+SECTION 8.08. | Agents in their Individual Capacity | 197
+SECTION 8.09. | Successor Agents | 197
+SECTION 8.10. | Payments Set Aside | 198
+SECTION 8.11. | Administrative Agent May File Proofs of Claim | 199
+SECTION 8.12. | Collateral and Guaranty Matters | 199
+SECTION 8.13. | Agents and Arrangers | 200
+SECTION 8.14. | Intercreditor Agreements and Collateral Matters | 200
+SECTION 8.15. | Withholding Tax | 200
+SECTION 8.16. | Interest Rates; LIBOR Notification | 200
 iv
-ARTICLE IX |
-Miscellaneous |
-SECTION 9.01. | Notices; Communications | 201 |
-SECTION 9.02. | Survival of Agreement | 202 |
-SECTION 9.03. | Binding Effect | 203 |
-SECTION 9.04. | Successors and Assigns | 203 |
-SECTION 9.05. | Expenses; Indemnity | 208 |
-SECTION 9.06. | Right of Set-off | 210 |
-SECTION 9.07. | Governing Law | 210 |
-SECTION 9.08. | Waivers; Amendment | 210 |
-SECTION 9.09. | Interest Rate Limitation | 214 |
-SECTION 9.10. | Entire Agreement | 214 |
-SECTION 9.11. | WAIVER OF JURY TRIAL | 214 |
-SECTION 9.12. | Severability | 215 |
-SECTION 9.13. | Counterparts; Electronic Execution of Documents | 215 |
-SECTION 9.14. | Headings | 215 |
-SECTION 9.15. | Jurisdiction; Consent to Service of Process | 215 |
-SECTION 9.16. | Confidentiality | 216 |
-SECTION 9.17. | Platform; Borrower Materials | 217 |
-SECTION 9.18. | Release of Liens, Guarantees and Pledges | 218 |
-SECTION 9.19. | Judgment Currency | 220 |
-SECTION 9.20. | USA PATRIOT Act Notice | 221 |
-SECTION 9.21. | No Advisory or Fiduciary Responsibility | 221 |
-SECTION 9.22. | Application of Gaming Laws | 221 |
-SECTION 9.23. | Affiliate Lenders | 222 |
-SECTION 9.24. | Acknowledgement and Consent to Bail-In of Affected Financial Institutions | 223 |
-SECTION 9.25. | MIRE Events | 224 |
-SECTION 9.26. | Certain ERISA Matters. | 224 |
-SECTION 9.27. | Acknowledgement Regarding Any Supported QFCs | 225 |
+ARTICLE IX
+Miscellaneous
+SECTION 9.01. | Notices; Communications | 201
+SECTION 9.02. | Survival of Agreement | 202
+SECTION 9.03. | Binding Effect | 203
+SECTION 9.04. | Successors and Assigns | 203
+SECTION 9.05. | Expenses; Indemnity | 208
+SECTION 9.06. | Right of Set-off | 210
+SECTION 9.07. | Governing Law | 210
+SECTION 9.08. | Waivers; Amendment | 210
+SECTION 9.09. | Interest Rate Limitation | 214
+SECTION 9.10. | Entire Agreement | 214
+SECTION 9.11. | WAIVER OF JURY TRIAL | 214
+SECTION 9.12. | Severability | 215
+SECTION 9.13. | Counterparts; Electronic Execution of Documents | 215
+SECTION 9.14. | Headings | 215
+SECTION 9.15. | Jurisdiction; Consent to Service of Process | 215
+SECTION 9.16. | Confidentiality | 216
+SECTION 9.17. | Platform; Borrower Materials | 217
+SECTION 9.18. | Release of Liens, Guarantees and Pledges | 218
+SECTION 9.19. | Judgment Currency | 220
+SECTION 9.20. | USA PATRIOT Act Notice | 221
+SECTION 9.21. | No Advisory or Fiduciary Responsibility | 221
+SECTION 9.22. | Application of Gaming Laws | 221
+SECTION 9.23. | Affiliate Lenders | 222
+SECTION 9.24. | Acknowledgement and Consent to Bail-In of Affected Financial Institutions | 223
+SECTION 9.25. | MIRE Events | 224
+SECTION 9.26. | Certain ERISA Matters. | 224
+SECTION 9.27. | Acknowledgement Regarding Any Supported QFCs | 225
 Exhibits and Schedules
-Exhibit A | Form of Assignment and Acceptance |
-Exhibit B | Form of Borrowing Request |
-Exhibit C | Form of Interest Election Request |
-Exhibit D-1 | Form of Mortgage |
-Exhibit D-2 | Form of Leasehold Mortgage |
-Exhibit D-3 | Form of Deed of Trust |
-Exhibit D-4 | Form of Leasehold Deed of Trust |
-Exhibit D-5 | Form of Vessel Mortgage |
-Exhibit E | Form of Permitted Loan Purchase Assignment and Acceptance |
-Exhibit F | Form of Discounted Prepayment Option Notice |
-Exhibit G | Form of Lender Participation Notice |
-Exhibit H | Form of Discounted Voluntary Prepayment Notice |
-Exhibit I | Form of Solvency Certificate |
-Exhibit J | Form of Global Intercompany Note |
+Exhibit A | Form of Assignment and Acceptance
+Exhibit B | Form of Borrowing Request
+Exhibit C | Form of Interest Election Request
+Exhibit D-1 | Form of Mortgage
+Exhibit D-2 | Form of Leasehold Mortgage
+Exhibit D-3 | Form of Deed of Trust
+Exhibit D-4 | Form of Leasehold Deed of Trust
+Exhibit D-5 | Form of Vessel Mortgage
+Exhibit E | Form of Permitted Loan Purchase Assignment and Acceptance
+Exhibit F | Form of Discounted Prepayment Option Notice
+Exhibit G | Form of Lender Participation Notice
+Exhibit H | Form of Discounted Voluntary Prepayment Notice
+Exhibit I | Form of Solvency Certificate
+Exhibit J | Form of Global Intercompany Note
 v
-Exhibit K | Form of Subordination, Non-Disturbance and Attornment Agreement |
-Exhibit L | Form of Collateral Agreement |
-Exhibit M | Form of Guarantee Agreement |
-Exhibit N | Form of First Lien Intercreditor Agreement |
-Exhibit O | Form of Second Lien Intercreditor Agreement |
-Schedule 1.01(A) | Existing Letters of Credit |
-Schedule 1.01(B) | Subsidiary Loan Parties |
-Schedule 1.01(C) | Undeveloped Land |
-Schedule 1.01(D) | Closing Date Unrestricted Subsidiaries |
-Schedule 1.01(E) | Non-Core Land |
-Schedule 1.01(F) | Pompano Park Real Property |
-Schedule 2.01 | Commitments |
-Schedule 3.01 | Organization; Powers |
-Schedule 3.04 | Governmental Approvals |
-Schedule 3.05 | Financial Statements |
-Schedule 3.07(a) | Mortgaged Properties |
-Schedule 3.08(a) | Subsidiaries |
-Schedule 3.08(b) | Subscriptions |
-Schedule 3.09 | Litigation |
-Schedule 3.15 | Employee Benefit Plans |
-Schedule 3.16 | Environmental Matters |
-Schedule 3.21 | Intellectual Property Rights |
-Schedule 3.23 | Insurance |
-Schedule 4.02(b) | Local Counsel |
-Schedule 5.10 | Post-Closing Items |
-Schedule 6.01 | Existing Indebtedness |
-Schedule 6.02 | Existing Liens |
-Schedule 6.04 | Existing Investments |
-Schedule 6.05 | Dispositions |
-Schedule 6.06 | Restricted Payments |
-Schedule 6.07 | Transactions with Affiliates |
-Schedule 9.01 | Notice Information |
+Exhibit K | Form of Subordination, Non-Disturbance and Attornment Agreement
+Exhibit L | Form of Collateral Agreement
+Exhibit M | Form of Guarantee Agreement
+Exhibit N | Form of First Lien Intercreditor Agreement
+Exhibit O | Form of Second Lien Intercreditor Agreement
+Schedule 1.01(A) | Existing Letters of Credit
+Schedule 1.01(B) | Subsidiary Loan Parties
+Schedule 1.01(C) | Undeveloped Land
+Schedule 1.01(D) | Closing Date Unrestricted Subsidiaries
+Schedule 1.01(E) | Non-Core Land
+Schedule 1.01(F) | Pompano Park Real Property
+Schedule 2.01 | Commitments
+Schedule 3.01 | Organization; Powers
+Schedule 3.04 | Governmental Approvals
+Schedule 3.05 | Financial Statements
+Schedule 3.07(a) | Mortgaged Properties
+Schedule 3.08(a) | Subsidiaries
+Schedule 3.08(b) | Subscriptions
+Schedule 3.09 | Litigation
+Schedule 3.15 | Employee Benefit Plans
+Schedule 3.16 | Environmental Matters
+Schedule 3.21 | Intellectual Property Rights
+Schedule 3.23 | Insurance
+Schedule 4.02(b) | Local Counsel
+Schedule 5.10 | Post-Closing Items
+Schedule 6.01 | Existing Indebtedness
+Schedule 6.02 | Existing Liens
+Schedule 6.04 | Existing Investments
+Schedule 6.05 | Dispositions
+Schedule 6.06 | Restricted Payments
+Schedule 6.07 | Transactions with Affiliates
+Schedule 9.01 | Notice Information
 vi
 CREDIT AGREEMENT, dated as of July 20, 2020 (this “Agreement”), among ELDORADO RESORTS, INC., a Nevada corporation (to be renamed CAESARS ENTERTAINMENT, INC. and converted to a Delaware corporation on the Closing Date) (the “Borrower”), the LENDERS party hereto from time to time, JPMORGAN CHASE BANK, N.A., as administrative agent for the Lenders (in such capacity, together with its successors and assigns in such capacity, the “Administrative Agent”), and U.S. BANK NATIONAL ASSOCIATION, as collateral agent for the Secured Parties (in such capacity, together with its successors and assigns in such capacity, the “Collateral Agent”).
 WHEREAS, the Borrower has entered into that certain Agreement and Plan of Merger, dated as of June 24, 2019 (as amended by Amendment No. 1 to Agreement and Plan of Merger, dated as of August 15, 2019, and as otherwise amended, restated, amended and restated or otherwise modified prior to the date hereof, the “CEC Acquisition Agreement”), by and among the Borrower, Colt Merger Sub, Inc., a Delaware corporation and wholly-owned subsidiary of the Borrower (“Merger Sub”), and Caesars Entertainment Corporation, a Delaware corporation (“CEC”), pursuant to which Merger Sub will merge with and into CEC on the Closing Date with CEC as the surviving entity of such merger and to be renamed Caesars Holdings, Inc. (the “CEC Acquisition”).
@@ -399,8 +399,8 @@ of ownership with respect to such Vessel and (B) an abstract of title report, in
 “Consolidated Total Assets” shall mean, as of any date of determination, the total assets of the Borrower and the consolidated Subsidiaries without giving effect to any amortization of the amount of intangible assets since December 31, 2019, determined in accordance with GAAP, as set forth on the consolidated balance sheet of the Borrower as of the last day of the fiscal quarter most recently ended for which financial statements have been (or were required to be) delivered pursuant to Section 5.04(a) or 5.04(b), as applicable, calculated on a Pro Forma Basis after giving effect to any acquisition or disposition of a person or assets that have occurred on or after the last day of such fiscal quarter.
 “Control” shall mean the possession, directly or indirectly, of the power to direct or cause the direction of the management or policies of a person, whether through the ownership of voting securities, by contract or otherwise, and “Controlling” and “Controlled” shall have meanings correlative thereto.
 “Compounded SOFR” shall mean the compounded average of SOFRs for the applicable Corresponding Tenor, with the rate, or methodology for this rate, and conventions for this rate (which may include compounding in arrears with a lookback and/or suspension period as a mechanism to determine the interest amount payable prior to the end of each Interest Period) being established by the Administrative Agent in accordance with:
-(1) | the rate, or methodology for this rate, and conventions for this rate selected or recommended by the Relevant Governmental Body for determining compounded SOFR; provided that: |
-(2) | if, and to the extent that, the Administrative Agent determines that Compounded SOFR cannot be determined in accordance with clause (1) above, then the rate, or methodology for this rate, and conventions for this rate that the Administrative Agent determines in its reasonable discretion are substantially consistent with any evolving or then-prevailing market convention for determining compounded SOFR for U.S. dollar-denominated syndicated credit facilities at such time; |
+(1) | the rate, or methodology for this rate, and conventions for this rate selected or recommended by the Relevant Governmental Body for determining compounded SOFR; provided that:
+(2) | if, and to the extent that, the Administrative Agent determines that Compounded SOFR cannot be determined in accordance with clause (1) above, then the rate, or methodology for this rate, and conventions for this rate that the Administrative Agent determines in its reasonable discretion are substantially consistent with any evolving or then-prevailing market convention for determining compounded SOFR for U.S. dollar-denominated syndicated credit facilities at such time;
 provided, further, that if the Administrative Agent decides that any such rate, methodology or convention determined in accordance with clause (1) or clause (2) is not administratively feasible for the Administrative Agent, then Compounded SOFR will be deemed unable to be determined for purposes of the definition of “Benchmark Replacement.”
 “Convention Center Lease” shall mean any lease pursuant to which a Convention Center Unrestricted Subsidiary leases the property commonly known as the Caesars Forum Convention Center (which lease may include any related personal property, fixtures, furniture and equipment) to the Borrower or a Subsidiary of the Borrower, as may be amended, restated, amended and restated, supplemented or otherwise modified or replaced from time to time.
 18
@@ -869,12 +869,12 @@ in each case in the preceding clauses (a) through (f), for amounts which are not
 “Pre-Opening Expenses” shall mean, with respect to any fiscal period, the amount of expenses (other than interest expense) incurred with respect to capital projects which are classified as “pre-opening expenses” or “project opening costs” (or any similar or equivalent caption) on the applicable financial statements of the Borrower and the Subsidiaries for such period, prepared in accordance with GAAP.
 67
 “Pricing Grid” shall mean, with respect to the Loans, the applicable table set forth below:
-Pricing Grid for Revolving Facility Loans and Revolving Facility Commitments |
-Total Leverage Ratio | Applicable Margin for ABR Loans | Applicable Margin for Eurocurrency Loans | Applicable Commitment Fee |
-Greater than 4.75 to 1.00 | 2.25% | 3.25% | 0.50% |
-Less than or equal to 4.75 to 1.00 but greater than 4.25 to 1.00 | 2.00% | 3.00% | 0.50% |
-Less than or equal to 4.25 to 1.00 but greater than 3.75 to 1.00 | 1.75% | 2.75% | 0.50% |
-Less than or equal to 3.75 to 1.00 | 1.50% | 2.50% | 0.375% |
+Pricing Grid for Revolving Facility Loans and Revolving Facility Commitments
+Total Leverage Ratio | Applicable Margin for ABR Loans | Applicable Margin for Eurocurrency Loans | Applicable Commitment Fee
+Greater than 4.75 to 1.00 | 2.25% | 3.25% | 0.50%
+Less than or equal to 4.75 to 1.00 but greater than 4.25 to 1.00 | 2.00% | 3.00% | 0.50%
+Less than or equal to 4.25 to 1.00 but greater than 3.75 to 1.00 | 1.75% | 2.75% | 0.50%
+Less than or equal to 3.75 to 1.00 | 1.50% | 2.50% | 0.375%
 For the purposes of the Pricing Grid, changes in the Applicable Margin and Applicable Commitment Fee resulting from changes in the Total Leverage Ratio shall become effective on the date (the “Adjustment Date”) of delivery of the relevant financial statements pursuant to Section 5.04 for each fiscal quarter beginning with the first full fiscal quarter of the Borrower after the Closing Date, and shall remain in effect until the next change to be effected pursuant to this paragraph. If any financial statements referred to above are not delivered within the time periods specified in Section 5.04, then, at the option of the Administrative Agent or the Required Lenders, until the date that is three Business Days after the date on which such financial statements are delivered, the pricing level that is one pricing level higher than the pricing level theretofore in effect shall apply as of the first Business Day after the date on which such financial statements were to have been delivered but were not delivered. Each determination of the Total Leverage Ratio pursuant to the Pricing Grid shall be made in a manner consistent with the determination thereof pursuant to Section 6.11.
 Notwithstanding anything to the contrary contained above in this definition or elsewhere in this Agreement, if it is subsequently determined that the Total Leverage Ratio set forth in any compliance certificate delivered to the Administrative Agent pursuant to Section 5.04(c) is inaccurate as a result of any fraud, intentional misrepresentation or willful misconduct of the Borrower or any officer thereof and the result is that the Lenders received interest or fees for any period based on an Applicable Margin and the Applicable Commitment Fee that is less than that which would have been applicable had the Total Leverage Ratio been accurately determined, then, for all purposes of this Agreement, the “Applicable Margin” and the “Applicable Commitment Fee” for any day occurring within the period covered by such compliance certificate shall retroactively be deemed to be the relevant percentage as based upon the accurately determined Total Leverage Ratio for such period, and any shortfall in the interest or fees theretofore paid by the Borrower for the relevant period pursuant to this Agreement as a result of the miscalculation of the Total Leverage Ratio shall be deemed to be (and shall be) due and payable under the relevant provisions of this Agreement, as applicable, at the time the interest or fees for such period were required to be paid pursuant to said Section (and shall remain due and payable until paid in full, together with all amounts owing under Section 2.13, in accordance with the terms of this Agreement).
 “primary obligor” shall have the meaning given such term in the definition of the term “Guarantee.”
@@ -2082,96 +2082,96 @@ SECTION 9.27. Acknowledgement Regarding Any Supported QFCs. To the extent that t
 [Signature Pages Follow]
 225
 IN WITNESS WHEREOF, the parties hereto have caused this Agreement to be duly executed by their respective authorized officers as of the day and year first written above.
-ELDORADO RESORTS, INC., |
-as Borrower |
-By: | /s/ Edmund L. Quatmann, Jr. |
-Name: | Edmund L. Quatmann, Jr. |
-Title: | Secretary |
+ELDORADO RESORTS, INC.,
+as Borrower
+By: | /s/ Edmund L. Quatmann, Jr.
+Name: | Edmund L. Quatmann, Jr.
+Title: | Secretary
 [Signature Page to Credit Agreement]
-JPMORGAN CHASE BANK, N.A., |
-as Administrative Agent, an L/C Issuer and a Lender |
-By: | /s/ Brian Smolowitz |
-Name: | Brian Smolowitz |
-Title: | Vice President |
+JPMORGAN CHASE BANK, N.A.,
+as Administrative Agent, an L/C Issuer and a Lender
+By: | /s/ Brian Smolowitz
+Name: | Brian Smolowitz
+Title: | Vice President
 [Signature Page to Credit Agreement]
-U.S. BANK NATIONAL ASSOCIATION, |
-as Collateral Agent |
-By: | /s/ Laurel Casasanta |
-Name: | Laurel Casasanta |
-Title: | Vice President |
+U.S. BANK NATIONAL ASSOCIATION,
+as Collateral Agent
+By: | /s/ Laurel Casasanta
+Name: | Laurel Casasanta
+Title: | Vice President
 [Signature Page to Credit Agreement]
-U.S. BANK NATIONAL ASSOCIATION, |
-as an L/C Issuer and a Lender |
-By: | /s/ Chad T. Orrock |
-Name: | Chad T. Orrock |
-Title: | Senior Vice President |
+U.S. BANK NATIONAL ASSOCIATION,
+as an L/C Issuer and a Lender
+By: | /s/ Chad T. Orrock
+Name: | Chad T. Orrock
+Title: | Senior Vice President
 [Signature Page to Credit Agreement]
-CREDIT SUISSE AG, CAYMAN ISLANDS BRANCH, |
-as an L/C Issuer and a Lender |
-By: | /s/ Whitney Gaston |
-Name: | Whitney Gaston |
-Title: | Authorized Signatory |
-By: | /s/ Andrew Griffin |
-Name: | Andrew Griffin |
-Title: | Authorized Signatory |
+CREDIT SUISSE AG, CAYMAN ISLANDS BRANCH,
+as an L/C Issuer and a Lender
+By: | /s/ Whitney Gaston
+Name: | Whitney Gaston
+Title: | Authorized Signatory
+By: | /s/ Andrew Griffin
+Name: | Andrew Griffin
+Title: | Authorized Signatory
 [Signature Page to Credit Agreement]
-MACQUARIE CAPITAL FUNDING LLC, |
-as an L/C Issuer and a Lender |
-By: | /s/ Lisa Grushkin |
-Name: | Lisa Grushkin |
-Title: | Authorized Signatory |
-By: | /s/ Jeff Abt |
-Name: | Jeff Abt |
-Title: | Authorized Signatory |
+MACQUARIE CAPITAL FUNDING LLC,
+as an L/C Issuer and a Lender
+By: | /s/ Lisa Grushkin
+Name: | Lisa Grushkin
+Title: | Authorized Signatory
+By: | /s/ Jeff Abt
+Name: | Jeff Abt
+Title: | Authorized Signatory
 [Signature Page to Credit Agreement]
-BANK OF AMERICA, N.A., |
-as an L/C Issuer and a Lender |
-By: | /s/ Brian D. Corum |
-Name: | Brian D. Corum |
-Title: | Managing Director |
+BANK OF AMERICA, N.A.,
+as an L/C Issuer and a Lender
+By: | /s/ Brian D. Corum
+Name: | Brian D. Corum
+Title: | Managing Director
 [Signature Page to Credit Agreement]
-DEUTSCHE BANK AG NEW YORK BRANCH, |
-as an L/C Issuer and a Lender |
-By: | /s/ Michael Strobel |
-Name: | Michael Strobel |
-Title: | Vice President |
-By: | /s/ Susan Onal |
-Name: | Susan Onal |
-Title: | Vice President |
+DEUTSCHE BANK AG NEW YORK BRANCH,
+as an L/C Issuer and a Lender
+By: | /s/ Michael Strobel
+Name: | Michael Strobel
+Title: | Vice President
+By: | /s/ Susan Onal
+Name: | Susan Onal
+Title: | Vice President
 [Signature Page to Credit Agreement]
-GOLDMAN SACHS BANK USA, |
-as an L/C Issuer and a Lender |
-By: | /s/ Charles Johnston |
-Name: | Charles Johnston |
-Title: | Authorized Signatory |
+GOLDMAN SACHS BANK USA,
+as an L/C Issuer and a Lender
+By: | /s/ Charles Johnston
+Name: | Charles Johnston
+Title: | Authorized Signatory
 [Signature Page to Credit Agreement]
-GOLDMAN SACHS LENDING PARTNERS LLC, |
-as an L/C Issuer and a Lender |
-By: | /s/ Charles Johnston |
-Name: | Charles Johnston |
-Title: | Authorized Signatory |
+GOLDMAN SACHS LENDING PARTNERS LLC,
+as an L/C Issuer and a Lender
+By: | /s/ Charles Johnston
+Name: | Charles Johnston
+Title: | Authorized Signatory
 [Signature Page to Credit Agreement]
-TRUIST BANK, |
-as an L/C Issuer and a Lender |
-By: | /s/ Ben Cumming |
-Name: | Ben Cumming |
-Title: | Managing Director |
+TRUIST BANK,
+as an L/C Issuer and a Lender
+By: | /s/ Ben Cumming
+Name: | Ben Cumming
+Title: | Managing Director
 [Signature Page to Credit Agreement]
-KEYBANK NATIONAL ASSOCIATION, |
-as an L/C Issuer and a Lender |
-By: | /s/ Matthew J. Bradley |
-Name: | Matthew J. Bradley |
-Title: | Senior Vice President |
+KEYBANK NATIONAL ASSOCIATION,
+as an L/C Issuer and a Lender
+By: | /s/ Matthew J. Bradley
+Name: | Matthew J. Bradley
+Title: | Senior Vice President
 [Signature Page to Credit Agreement]
-FIFTH THIRD BANK, NATIONAL ASSOCIATION, |
-as an L/C Issuer and a Lender |
-By: | /s/ Andy Tessema |
-Name: | Andy Tessema |
-Title: | Vice President |
+FIFTH THIRD BANK, NATIONAL ASSOCIATION,
+as an L/C Issuer and a Lender
+By: | /s/ Andy Tessema
+Name: | Andy Tessema
+Title: | Vice President
 [Signature Page to Credit Agreement]
-CITIZENS BANK, NATIONAL ASSOCIATION, |
-as an L/C Issuer and a Lender |
-By: | /s/ Sean McWhinnie |
-Name: | Sean McWhinnie |
-Title: | Director |
+CITIZENS BANK, NATIONAL ASSOCIATION,
+as an L/C Issuer and a Lender
+By: | /s/ Sean McWhinnie
+Name: | Sean McWhinnie
+Title: | Director
 [Signature Page to Credit Agreement]

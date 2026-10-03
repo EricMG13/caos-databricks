@@ -21,38 +21,38 @@
       "expects": [
         {
           "module_id": "CP-L10",
-          "document_sha256": "1b2027659f255471d41243180c9b550c6915348b7aea79619634c5a9d7b0187c",
+          "document_sha256": "9af04315eddd61ee7655445939d21bc91780c57c3689134c7c77d85c3dfb7e01",
           "matched_text": "As of June 30, 2026, the Company had $1.9 billion of available borrowing capacity under the CEI Revolving Credit Facility, after consideration of $96 million in outstanding letters of credit, $56 million committed for regulatory purposes, the outstanding amount, and the reserves described above."
         },
         {
           "module_id": "CP-L10",
-          "document_sha256": "1b2027659f255471d41243180c9b550c6915348b7aea79619634c5a9d7b0187c",
-          "matched_text": "Annual maturities of long-term debt | $55 | $114 | $767 | $1,574 | $3,962 | $5,335 | $11,807 |"
+          "document_sha256": "9af04315eddd61ee7655445939d21bc91780c57c3689134c7c77d85c3dfb7e01",
+          "matched_text": "Annual maturities of long-term debt | $55 | $114 | $767 | $1,574 | $3,962 | $5,335 | $11,807"
         },
         {
           "module_id": "CP-3C",
-          "document_sha256": "1b2027659f255471d41243180c9b550c6915348b7aea79619634c5a9d7b0187c",
+          "document_sha256": "9af04315eddd61ee7655445939d21bc91780c57c3689134c7c77d85c3dfb7e01",
           "matched_text": "CEI is party to a credit agreement, dated as of July 20, 2020, with JPMorgan Chase Bank, N.A., as administrative agent, U.S. Bank National Association, as collateral agent, and certain banks and other financial institutions and lenders party thereto (the “CEI Credit Agreement”), which, as amended, provides for the CEI Revolving Credit Facility in an aggregate principal amount of $2.25 billion (the “CEI Revolving Credit Facility”) and will mature on January 31, 2028. The CEI Revolving Credit Facility includes a letter of credit sub-facility of $388 million and contains reserves of $40 million which are available only for certain permitted uses."
         },
         {
           "module_id": "CP-3C",
-          "document_sha256": "ffe543a0655c04005e4f4db2cc14fcfb9340656d3dc2e96f6536678fbf096288",
+          "document_sha256": "b8be9d490d38741e866df7ee6b8dce6d7333259801f34b56cd834aa6cc256b99",
           "matched_text": "“(a) with respect to any Term B Loan, 2.25% per annum in the case of any Term Benchmark Loan and 1.25% per annum in the case of any ABR Loan, (b) with respect to any Term B-1 Loan, 2.25% per annum in the case of any Term Benchmark Loan and 1.25% per annum in the case of any ABR Loan and”"
         },
         {
           "module_id": "CP-3C",
-          "document_sha256": "62fbb236862a09f068f8bdcab86459fa7eed0fc0f2501297b85f41029c4e431c",
+          "document_sha256": "85ca330865d6ed47de838cbd3e45a69d29b57640e91782a71f2639721ac665db",
           "matched_text": "(a) Upon the occurrence of a Change of Control, each holder shall have the right to require the Company to repurchase all or any part of such holder’s Notes at a purchase price in cash equal to 101% of the principal amount thereof, plus accrued and unpaid interest, if any, to, but excluding, the date of repurchase (subject to the right of the holders of record on the relevant Record Date to receive interest due on the relevant Interest Payment Date), in accordance with the terms contemplated in this Section 4.08; provided, however, that notwithstanding the occurrence of a Change of Control, the Company shall not be obligated to purchase any Notes pursuant to this Section 4.08 in the event that it has exercised its right to redeem such Notes in accordance with Article III of this Indenture."
         },
         {
           "module_id": "CP-3C",
-          "document_sha256": "b583f857bec68d0c027b571b14c1280530e602c124e052f4a8ca3fc1e2b6a808",
+          "document_sha256": "d3eb5081cd288bbf43894e0de441c23d6d44f176c2e538bd75e1561a0e4dfb74",
           "matched_text": "On May 27, 2026, Caesars Entertainment, Inc., a Delaware corporation (the “Company”), Fertitta Gaming Holdco, LLC, a Texas limited liability company (“Parent”), Empire Merger Sub, Inc., a Delaware corporation and direct wholly owned subsidiary of Parent (“Merger Sub”), Landry’s Fertitta, LLC, a Texas limited liability company (“Parent Guarantor”) solely for the purposes of Section 9.14 therein, and Hospitality Headquarters, Inc., a Texas corporation, solely for the purposes of Section 9.14(j) therein, entered into an Agreement and Plan of Merger (the “Merger Agreement”), pursuant to which Merger Sub will merge with and into the Company, with the Company continuing as the surviving corporation and direct wholly owned subsidiary of Parent (the “Merger”)."
         },
         {
           "module_id": "CP-5",
-          "document_sha256": "1b2027659f255471d41243180c9b550c6915348b7aea79619634c5a9d7b0187c",
-          "matched_text": "Total debt | 11,807 | 11,705 | 11,792 |"
+          "document_sha256": "9af04315eddd61ee7655445939d21bc91780c57c3689134c7c77d85c3dfb7e01",
+          "matched_text": "Total debt | 11,807 | 11,705 | 11,792"
         }
       ],
       "expects_ready": [

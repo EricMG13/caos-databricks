@@ -9,8 +9,8 @@ May 27, 2026
 Date of Report (Date of earliest event reported)
 CAESARS ENTERTAINMENT, INC.
 (Exact name of registrant as specified in its charter)
-Delaware | 001-36629 | 46-3657681 |
-(State or other jurisdiction of incorporation) | (Commission File Number) | (IRS Employer Identification Number) |
+Delaware | 001-36629 | 46-3657681
+(State or other jurisdiction of incorporation) | (Commission File Number) | (IRS Employer Identification Number)
 100 West Liberty Street, 12th Floor, Reno, Nevada 89501
 (Address of principal executive offices) (Zip Code)
 (775) 328-0100
@@ -18,13 +18,13 @@ Delaware | 001-36629 | 46-3657681 |
 N/A
 (Former name or former address, if changed since last report)
 Check the appropriate box below if the Form 8-K filing is intended to simultaneously satisfy the filing obligation of the registrant under any of the following provisions:
-☐ | Written communications pursuant to Rule 425 under the Securities Act (17 CFR 230.425) |
-☒ | Soliciting material pursuant to Rule 14a-12 under the Exchange Act (17 CFR 240.14a-12) |
-☐ | Pre-commencement communications pursuant to Rule 14d-2(b) under the Exchange Act (17 CFR 240.14d-2(b)) |
-☐ | Pre-commencement communications pursuant to Rule 13e-4(c) under the Exchange Act (17 CFR 240.13e-4(c)) |
+☐ | Written communications pursuant to Rule 425 under the Securities Act (17 CFR 230.425)
+☒ | Soliciting material pursuant to Rule 14a-12 under the Exchange Act (17 CFR 240.14a-12)
+☐ | Pre-commencement communications pursuant to Rule 14d-2(b) under the Exchange Act (17 CFR 240.14d-2(b))
+☐ | Pre-commencement communications pursuant to Rule 13e-4(c) under the Exchange Act (17 CFR 240.13e-4(c))
 Securities registered pursuant to Section 12(b) of the Act:
-Title of each class | Trading Symbol(s) | Name of each exchange on which registered |
-Common stock, $0.00001 par value | CZR | NASDAQ Stock Market |
+Title of each class | Trading Symbol(s) | Name of each exchange on which registered
+Common stock, $0.00001 par value | CZR | NASDAQ Stock Market
 Indicate by check mark whether the registrant is an emerging growth company as defined in Rule 405 of the Securities Act of 1933 (§230.405 of this chapter) or Rule 12b-2 of the Securities Exchange Act of 1934 (§240.12b-2 of this chapter).
 Emerging growth company ☐
 If an emerging growth company, indicate by check mark if the registrant has elected not to use the extended transition period for complying with any new or revised financial accounting standards provided pursuant to Section 13(a) of the Securities Exchange Act of 1934, as amended (the “Exchange Act”). ☐
@@ -38,8 +38,8 @@ Rollover Agreement
 Recreational Enterprises, Inc., a Nevada corporation owned by members of the Carano family and which owns approximately 5% of the outstanding shares of Company common stock (“Recreational Enterprises”), has agreed to roll a portion of its equity interests into Fertitta Entertainment.
 Treatment of Equity Awards
 The Merger Agreement also provides that, at the Effective Time, by virtue of the Merger:
-(a) | Each restricted stock unit award granted under the Company’s stock plan (subject to specifications in the Merger Agreement) (“Company RSU Award”), whether vested or unvested, that is outstanding immediately prior to the Effective Time, will be fully cancelled and converted into the right to receive an amount in cash, without interest, equal to the product of (a) the aggregate number of shares of Company Common Stock subject to such Company RSU Award, multiplied by (b) the Merger Consideration. |
-(b) | Each restricted stock unit award subject to performance or market-based vesting conditions granted under the Company’s stock plan (subject to specifications in the Merger Agreement) (“Company PSU Award”), whether vested or unvested, that is outstanding as of immediately prior to the Effective Time, will be cancelled and converted into the right to receive an amount in cash, without interest, equal to the product of (a) the number of restricted units underlying such Company PSU Award (subject to specifications in the Merger Agreement), multiplied by (b) the Merger Consideration. |
+(a) | Each restricted stock unit award granted under the Company’s stock plan (subject to specifications in the Merger Agreement) (“Company RSU Award”), whether vested or unvested, that is outstanding immediately prior to the Effective Time, will be fully cancelled and converted into the right to receive an amount in cash, without interest, equal to the product of (a) the aggregate number of shares of Company Common Stock subject to such Company RSU Award, multiplied by (b) the Merger Consideration.
+(b) | Each restricted stock unit award subject to performance or market-based vesting conditions granted under the Company’s stock plan (subject to specifications in the Merger Agreement) (“Company PSU Award”), whether vested or unvested, that is outstanding as of immediately prior to the Effective Time, will be cancelled and converted into the right to receive an amount in cash, without interest, equal to the product of (a) the number of restricted units underlying such Company PSU Award (subject to specifications in the Merger Agreement), multiplied by (b) the Merger Consideration.
 Representations and Warranties; Covenants
 The Merger Agreement contains customary representations, warranties and covenants from each of the Company and Parent, including representations and warranties from the Company regarding organization and standing, capitalization, authority, regulatory approvals, financial statements, absence of certain changes, litigation, compliance with laws, material contracts, real property, environmental matters, employee benefit plans and labor matters, taxes, takeover laws, intellectual property, insurance, and internal controls and its present debt financing and covenants obligating the Company to use commercially reasonable efforts to conduct its business in all material respects in the ordinary course of business and to use reasonable best efforts to cooperate in seeking regulatory approvals and to not engage in certain specified activities without Parent’s prior consent.
 Non-Solicitation; Go-Shop and No-Shop
@@ -74,13 +74,13 @@ On May 28, 2026, the Company issued a press release announcing its entry into th
 The information provided pursuant to this Item 7.01, including Exhibit 99.1, is being “furnished” and shall not be deemed to be “filed” with the SEC or incorporated by reference in any filing under the Exchange Act or the Securities Act, except as shall be expressly set forth by specific reference in any such filings.
 Item 9.01. Financial Statements and Exhibits.
 (d) Exhibits. The following documents are herewith furnished or filed as exhibits to this report:
-Exhibit No. | Description |
-2.1* | Agreement and Plan of Merger, dated as of May 27, 2026, by and among Caesars Entertainment, Inc., Fertitta Gaming Holdco, LLC, Empire Merger Sub, Inc., Landry’s Fertitta, LLC, solely for the purposes of Section 9.14 therein and Hospitality Headquarters, Inc., solely for the purposes of Section 9.14(j) therein. |
-99.1 | Press Release, dated May 28, 2026. |
-104 | Cover Page Interactive Data File (embedded within Inline XBRL document). |
-* | Schedules have been omitted pursuant to Item 601(b)(2) of Regulation S-K. The Company hereby undertakes to furnish supplementally copies of any of the omitted schedules upon request by the SEC. |
+Exhibit No. | Description
+2.1* | Agreement and Plan of Merger, dated as of May 27, 2026, by and among Caesars Entertainment, Inc., Fertitta Gaming Holdco, LLC, Empire Merger Sub, Inc., Landry’s Fertitta, LLC, solely for the purposes of Section 9.14 therein and Hospitality Headquarters, Inc., solely for the purposes of Section 9.14(j) therein.
+99.1 | Press Release, dated May 28, 2026.
+104 | Cover Page Interactive Data File (embedded within Inline XBRL document).
+* | Schedules have been omitted pursuant to Item 601(b)(2) of Regulation S-K. The Company hereby undertakes to furnish supplementally copies of any of the omitted schedules upon request by the SEC.
 SIGNATURE
 Pursuant to the requirements of the Exchange Act, the registrant has duly caused this report to be signed on its behalf by the undersigned hereunto duly authorized.
-Date: May 28, 2026 | CAESARS ENTERTAINMENT, INC. |
-By: | /s/ Thomas R. Reeg |
-Name: Thomas R. Reeg Title: Chief Executive Officer |
+Date: May 28, 2026 | CAESARS ENTERTAINMENT, INC.
+By: | /s/ Thomas R. Reeg
+Name: Thomas R. Reeg Title: Chief Executive Officer

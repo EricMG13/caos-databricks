@@ -1,5 +1,5 @@
 Exhibit 10.1
-CONFIDENTIAL | Execution Version |
+CONFIDENTIAL | Execution Version
 CAESARS ENTERTAINMENT, INC.,
 as the Company
 Subsidiary Guarantors
@@ -13,154 +13,154 @@ and
 U.S. BANK NATIONAL ASSOCIATION,
 as Collateral Agent
 TABLE OF CONTENTS
-Page |
-ARTICLE I. DEFINITIONS AND INCORPORATION BY REFERENCE | 1 |
-Section 1.01 | Definitions | 1 |
-Section 1.02 | Other Definitions | 61 |
-Section 1.03 | [Reserved] | 62 |
-Section 1.04 | Rules of Construction | 62 |
-Section 1.05 | Limited Condition Transactions | 63 |
-Section 1.06 | Basket and Ratio Calculations | 64 |
-Section 1.07 | Master Leases and Gaming Leases | 64 |
-ARTICLE II. THE NOTES | 65 |
-Section 2.01 | Amount of Notes | 65 |
-Section 2.02 | Form and Dating | 66 |
-Section 2.03 | Execution and Authentication | 66 |
-Section 2.04 | Registrar and Paying Agent | 66 |
-Section 2.05 | Paying Agent to Hold Money in Trust | 67 |
-Section 2.06 | Holder Lists | 67 |
-Section 2.07 | Transfer and Exchange | 67 |
-Section 2.08 | Replacement Notes | 68 |
-Section 2.09 | Outstanding Notes | 68 |
-Section 2.10 | [Reserved] | 69 |
-Section 2.11 | Cancellation | 69 |
-Section 2.12 | Defaulted Interest | 69 |
-Section 2.13 | CUSIP Numbers, ISINs, Etc. | 69 |
-Section 2.14 | Calculation of Principal Amount of Notes | 69 |
-Section 2.15 | Mandatory Disposition Pursuant to Gaming Laws | 70 |
-ARTICLE III. REDEMPTION | 70 |
-Section 3.01 | Redemption | 70 |
-Section 3.02 | Applicability of Article | 70 |
-Section 3.03 | Notices to Trustee | 70 |
-Section 3.04 | Selection of Notes to Be Redeemed | 71 |
-Section 3.05 | Notice of Optional Redemption | 71 |
-Section 3.06 | Effect of Notice of Redemption | 72 |
-Section 3.07 | Deposit of Redemption Price | 72 |
-Section 3.08 | Notes Redeemed in Part | 72 |
-Section 3.09 | Mandatory Redemption | 72 |
-ARTICLE IV. COVENANTS | 73 |
-Section 4.01 | Payment of Notes | 73 |
-Section 4.02 | Reports and Other Information | 73 |
-Section 4.03 | Limitation on Incurrence of Indebtedness and Issuance of Disqualified Stock and Preferred Stock | 74 |
-Section 4.04 | Limitation on Restricted Payments | 82 |
-Section 4.05 | Dividend and Other Payment Restrictions Affecting Subsidiaries | 87 |
-Section 4.06 | Asset Sales | 90 |
+Page
+ARTICLE I. DEFINITIONS AND INCORPORATION BY REFERENCE | 1
+Section 1.01 | Definitions | 1
+Section 1.02 | Other Definitions | 61
+Section 1.03 | [Reserved] | 62
+Section 1.04 | Rules of Construction | 62
+Section 1.05 | Limited Condition Transactions | 63
+Section 1.06 | Basket and Ratio Calculations | 64
+Section 1.07 | Master Leases and Gaming Leases | 64
+ARTICLE II. THE NOTES | 65
+Section 2.01 | Amount of Notes | 65
+Section 2.02 | Form and Dating | 66
+Section 2.03 | Execution and Authentication | 66
+Section 2.04 | Registrar and Paying Agent | 66
+Section 2.05 | Paying Agent to Hold Money in Trust | 67
+Section 2.06 | Holder Lists | 67
+Section 2.07 | Transfer and Exchange | 67
+Section 2.08 | Replacement Notes | 68
+Section 2.09 | Outstanding Notes | 68
+Section 2.10 | [Reserved] | 69
+Section 2.11 | Cancellation | 69
+Section 2.12 | Defaulted Interest | 69
+Section 2.13 | CUSIP Numbers, ISINs, Etc. | 69
+Section 2.14 | Calculation of Principal Amount of Notes | 69
+Section 2.15 | Mandatory Disposition Pursuant to Gaming Laws | 70
+ARTICLE III. REDEMPTION | 70
+Section 3.01 | Redemption | 70
+Section 3.02 | Applicability of Article | 70
+Section 3.03 | Notices to Trustee | 70
+Section 3.04 | Selection of Notes to Be Redeemed | 71
+Section 3.05 | Notice of Optional Redemption | 71
+Section 3.06 | Effect of Notice of Redemption | 72
+Section 3.07 | Deposit of Redemption Price | 72
+Section 3.08 | Notes Redeemed in Part | 72
+Section 3.09 | Mandatory Redemption | 72
+ARTICLE IV. COVENANTS | 73
+Section 4.01 | Payment of Notes | 73
+Section 4.02 | Reports and Other Information | 73
+Section 4.03 | Limitation on Incurrence of Indebtedness and Issuance of Disqualified Stock and Preferred Stock | 74
+Section 4.04 | Limitation on Restricted Payments | 82
+Section 4.05 | Dividend and Other Payment Restrictions Affecting Subsidiaries | 87
+Section 4.06 | Asset Sales | 90
 i
-Section 4.07 | Transactions with Affiliates | 94 |
-Section 4.08 | Change of Control | 98 |
-Section 4.09 | Compliance Certificate | 99 |
-Section 4.10 | Further Instruments and Acts | 99 |
-Section 4.11 | Future Subsidiary Guarantors | 99 |
-Section 4.12 | Liens | 100 |
-Section 4.13 | Maintenance of Office or Agency | 101 |
-Section 4.14 | Covenant Suspension | 101 |
-Section 4.15 | Maintenance of Insurance | 102 |
-Section 4.16 | After-Acquired Property | 102 |
-Section 4.17 | Security Documents | 102 |
-Section 4.18 | Further Assurances | 102 |
-Section 4.19 | Maintenance of Properties | 103 |
-ARTICLE V. SUCCESSOR COMPANY | 103 |
-Section 5.01 | When the Company May Merge or Transfer Assets | 103 |
-ARTICLE VI. DEFAULTS AND REMEDIES | 105 |
-Section 6.01 | Events of Default | 105 |
-Section 6.02 | Acceleration | 107 |
-Section 6.03 | Other Remedies | 107 |
-Section 6.04 | Waiver of Past Defaults | 108 |
-Section 6.05 | Control by Majority | 108 |
-Section 6.06 | Limitation on Suits | 108 |
-Section 6.07 | Rights of the Holders to Receive Payment | 108 |
-Section 6.08 | Collection Suit by Trustee | 109 |
-Section 6.09 | Trustee May File Proofs of Claim | 109 |
-Section 6.10 | Priorities | 109 |
-Section 6.11 | Undertaking for Costs | 109 |
-Section 6.12 | Waiver of Stay or Extension Laws | 109 |
-ARTICLE VII. TRUSTEE | 110 |
-Section 7.01 | Duties of Trustee | 110 |
-Section 7.02 | Rights of Trustee | 111 |
-Section 7.03 | Individual Rights of Trustee | 113 |
-Section 7.04 | Trustee’s Disclaimer | 113 |
-Section 7.05 | Notice of Defaults | 113 |
-Section 7.06 | [Reserved] | 113 |
-Section 7.07 | Compensation and Indemnity | 113 |
-Section 7.08 | Replacement of Trustee | 114 |
-Section 7.09 | Successor Trustee by Merger | 115 |
-Section 7.10 | Eligibility; Disqualification | 115 |
-ARTICLE VIII. DISCHARGE OF INDENTURE; DEFEASANCE | 115 |
-Section 8.01 | Discharge of Liability on Notes; Defeasance | 115 |
-Section 8.02 | Conditions to Defeasance | 117 |
-Section 8.03 | Application of Trust Money | 118 |
-Section 8.04 | Repayment to the Company | 118 |
-Section 8.05 | Indemnity for U.S. Government Obligations | 118 |
-Section 8.06 | Reinstatement | 118 |
+Section 4.07 | Transactions with Affiliates | 94
+Section 4.08 | Change of Control | 98
+Section 4.09 | Compliance Certificate | 99
+Section 4.10 | Further Instruments and Acts | 99
+Section 4.11 | Future Subsidiary Guarantors | 99
+Section 4.12 | Liens | 100
+Section 4.13 | Maintenance of Office or Agency | 101
+Section 4.14 | Covenant Suspension | 101
+Section 4.15 | Maintenance of Insurance | 102
+Section 4.16 | After-Acquired Property | 102
+Section 4.17 | Security Documents | 102
+Section 4.18 | Further Assurances | 102
+Section 4.19 | Maintenance of Properties | 103
+ARTICLE V. SUCCESSOR COMPANY | 103
+Section 5.01 | When the Company May Merge or Transfer Assets | 103
+ARTICLE VI. DEFAULTS AND REMEDIES | 105
+Section 6.01 | Events of Default | 105
+Section 6.02 | Acceleration | 107
+Section 6.03 | Other Remedies | 107
+Section 6.04 | Waiver of Past Defaults | 108
+Section 6.05 | Control by Majority | 108
+Section 6.06 | Limitation on Suits | 108
+Section 6.07 | Rights of the Holders to Receive Payment | 108
+Section 6.08 | Collection Suit by Trustee | 109
+Section 6.09 | Trustee May File Proofs of Claim | 109
+Section 6.10 | Priorities | 109
+Section 6.11 | Undertaking for Costs | 109
+Section 6.12 | Waiver of Stay or Extension Laws | 109
+ARTICLE VII. TRUSTEE | 110
+Section 7.01 | Duties of Trustee | 110
+Section 7.02 | Rights of Trustee | 111
+Section 7.03 | Individual Rights of Trustee | 113
+Section 7.04 | Trustee’s Disclaimer | 113
+Section 7.05 | Notice of Defaults | 113
+Section 7.06 | [Reserved] | 113
+Section 7.07 | Compensation and Indemnity | 113
+Section 7.08 | Replacement of Trustee | 114
+Section 7.09 | Successor Trustee by Merger | 115
+Section 7.10 | Eligibility; Disqualification | 115
+ARTICLE VIII. DISCHARGE OF INDENTURE; DEFEASANCE | 115
+Section 8.01 | Discharge of Liability on Notes; Defeasance | 115
+Section 8.02 | Conditions to Defeasance | 117
+Section 8.03 | Application of Trust Money | 118
+Section 8.04 | Repayment to the Company | 118
+Section 8.05 | Indemnity for U.S. Government Obligations | 118
+Section 8.06 | Reinstatement | 118
 ii
-ARTICLE IX. AMENDMENTS AND WAIVERS | 119 |
-Section 9.01 | Without Consent of the Holders | 119 |
-Section 9.02 | With Consent of the Holders | 120 |
-Section 9.03 | [Reserved] | 121 |
-Section 9.04 | Revocation and Effect of Consents and Waivers | 121 |
-Section 9.05 | Notation on or Exchange of Notes | 121 |
-Section 9.06 | Trustee to Sign Amendments | 122 |
-Section 9.07 | Additional Voting Terms; Calculation of Principal Amount | 122 |
-ARTICLE X. [RESERVED.] | 122 |
-ARTICLE XI. RANKING OF NOTE LIENS | 122 |
-Section 11.01 | Relative Rights | 122 |
-ARTICLE XII. COLLATERAL | 123 |
-Section 12.01 | Security Documents | 123 |
-Section 12.02 | Collateral Agent | 124 |
-Section 12.03 | Authorization of Action to Be Taken | 125 |
-Section 12.04 | Release of Collateral | 126 |
-Section 12.05 | Confirmation of Security Interests | 128 |
-Section 12.06 | Release Upon Termination of the Company’s Obligations | 128 |
-Section 12.07 | Designations | 128 |
-Section 12.08 | Taking and Destruction | 128 |
-ARTICLE XIII. GUARANTEE | 129 |
-Section 13.01 | Guarantee | 129 |
-Section 13.02 | Limitation on Liability | 131 |
-Section 13.03 | Successors and Assigns | 131 |
-Section 13.04 | No Waiver | 132 |
-Section 13.05 | Modification | 132 |
-Section 13.06 | Execution of Supplemental Indenture for Future Guarantors | 132 |
-Section 13.07 | Non-Impairment | 132 |
-ARTICLE XIV. MISCELLANEOUS | 132 |
-Section 14.01 | [Reserved] | 132 |
-Section 14.02 | Notices | 132 |
-Section 14.03 | [Reserved] | 134 |
-Section 14.04 | Certificate and Opinion as to Conditions Precedent | 134 |
-Section 14.05 | Statements Required in Certificate or Opinion | 134 |
-Section 14.06 | When Notes Disregarded | 134 |
-Section 14.07 | Rules by Trustee, Paying Agent and Registrar | 135 |
-Section 14.08 | Legal Holidays | 135 |
-Section 14.09 | GOVERNING LAW | 135 |
-Section 14.10 | No Recourse Against Others | 135 |
-Section 14.11 | Successors | 135 |
-Section 14.12 | Multiple Originals | 135 |
-Section 14.13 | Table of Contents; Headings | 136 |
-Section 14.14 | Indenture Controls | 136 |
-Section 14.15 | Severability | 136 |
-Section 14.16 | Intercreditor Agreements | 136 |
-Section 14.17 | Acts of Holders | 136 |
-Section 14.18 | Security Advice Waiver | 137 |
-Section 14.19 | USA PATRIOT Act | 137 |
+ARTICLE IX. AMENDMENTS AND WAIVERS | 119
+Section 9.01 | Without Consent of the Holders | 119
+Section 9.02 | With Consent of the Holders | 120
+Section 9.03 | [Reserved] | 121
+Section 9.04 | Revocation and Effect of Consents and Waivers | 121
+Section 9.05 | Notation on or Exchange of Notes | 121
+Section 9.06 | Trustee to Sign Amendments | 122
+Section 9.07 | Additional Voting Terms; Calculation of Principal Amount | 122
+ARTICLE X. [RESERVED.] | 122
+ARTICLE XI. RANKING OF NOTE LIENS | 122
+Section 11.01 | Relative Rights | 122
+ARTICLE XII. COLLATERAL | 123
+Section 12.01 | Security Documents | 123
+Section 12.02 | Collateral Agent | 124
+Section 12.03 | Authorization of Action to Be Taken | 125
+Section 12.04 | Release of Collateral | 126
+Section 12.05 | Confirmation of Security Interests | 128
+Section 12.06 | Release Upon Termination of the Company’s Obligations | 128
+Section 12.07 | Designations | 128
+Section 12.08 | Taking and Destruction | 128
+ARTICLE XIII. GUARANTEE | 129
+Section 13.01 | Guarantee | 129
+Section 13.02 | Limitation on Liability | 131
+Section 13.03 | Successors and Assigns | 131
+Section 13.04 | No Waiver | 132
+Section 13.05 | Modification | 132
+Section 13.06 | Execution of Supplemental Indenture for Future Guarantors | 132
+Section 13.07 | Non-Impairment | 132
+ARTICLE XIV. MISCELLANEOUS | 132
+Section 14.01 | [Reserved] | 132
+Section 14.02 | Notices | 132
+Section 14.03 | [Reserved] | 134
+Section 14.04 | Certificate and Opinion as to Conditions Precedent | 134
+Section 14.05 | Statements Required in Certificate or Opinion | 134
+Section 14.06 | When Notes Disregarded | 134
+Section 14.07 | Rules by Trustee, Paying Agent and Registrar | 135
+Section 14.08 | Legal Holidays | 135
+Section 14.09 | GOVERNING LAW | 135
+Section 14.10 | No Recourse Against Others | 135
+Section 14.11 | Successors | 135
+Section 14.12 | Multiple Originals | 135
+Section 14.13 | Table of Contents; Headings | 136
+Section 14.14 | Indenture Controls | 136
+Section 14.15 | Severability | 136
+Section 14.16 | Intercreditor Agreements | 136
+Section 14.17 | Acts of Holders | 136
+Section 14.18 | Security Advice Waiver | 137
+Section 14.19 | USA PATRIOT Act | 137
 iii
-Appendix A | – | Provisions Relating to Initial Notes and Additional Notes |
-EXHIBIT INDEX |
-Exhibit A | – | Form of Initial Note |
-Exhibit B | – | Form of Transferee Letter of Representation |
-Exhibit C | – | Form of Supplemental Indenture to be Delivered by Subsequent Guarantors |
-Exhibit D | – | Form of Junior Lien Intercreditor Agreement |
-SCHEDULE INDEX |
-Schedule I | – | Permitted Dispositions |
-Schedule II | – | Unrestricted Subsidiaries as of the Issue Date |
+Appendix A | – | Provisions Relating to Initial Notes and Additional Notes
+EXHIBIT INDEX
+Exhibit A | – | Form of Initial Note
+Exhibit B | – | Form of Transferee Letter of Representation
+Exhibit C | – | Form of Supplemental Indenture to be Delivered by Subsequent Guarantors
+Exhibit D | – | Form of Junior Lien Intercreditor Agreement
+SCHEDULE INDEX
+Schedule I | – | Permitted Dispositions
+Schedule II | – | Unrestricted Subsidiaries as of the Issue Date
 iv
 INDENTURE dated as of February 6, 2024, among CAESARS ENTERTAINMENT, INC., a Delaware corporation (the “Company”), the Subsidiary Guarantors party hereto from time to time, U.S. BANK TRUST COMPANY, NATIONAL ASSOCIATION, as trustee (in such capacity, the “Trustee”), and the Collateral Agent (as defined herein).
 The provisions of the Trust Indenture Act will not apply to this Indenture.
@@ -776,69 +776,69 @@ The entities listed in Schedule II hereto are designated Unrestricted Subsidiari
 “Wholly Owned Subsidiary” of any Person means a Subsidiary of such Person 100% of the outstanding Capital Stock or other ownership interests of which (other than directors’ qualifying shares or shares required to be held by Foreign Subsidiaries) shall at the time be owned by such Person or by one or more Wholly Owned Subsidiaries of such Person.
 “WSOP Rio Agreements” means any circuit event agreements, tournament rights agreements, trademark license agreements, marketing and promotion agreements and similar agreements among CEC and certain of its Affiliates as may be in effect from time to time in connection with the World Series of Poker, on substantially similar terms to those in effect prior to September 1, 2017 or on such other terms as the Company reasonably believes to reflect then current market terms for such agreements.
 Section 1.02 Other Definitions.
-Term | Defined in Section |
-“Act” | 14.17 |
-“Affiliate Transaction” | 4.07(a) |
-“Agent Members” | Appendix A |
-“Applicable AML Law” | 14.19 |
-“Asset Sale Offer” | 4.06(b) |
-“bankruptcy provision” | 6.01(f) |
-“Change of Control Offer” | 4.08(b) |
-“Collateral Asset Sale Offer” | 4.06(b) |
-“Collateral Excess Proceeds” | 4.06(b) |
-“Company” | Preamble |
-“covenant defeasance option” | 8.01(b) |
-“Covenant Suspension Event” | 4.14 |
-“cross-acceleration provision” | 6.01(d) |
-“Definitive Note” | Appendix A |
-“Depository” | Appendix A |
-“Disqualified Holder” | 2.15 |
-“Event of Default” | 6.01 |
-“Excess Proceeds” | 4.06(b) |
-“Global Note” | Appendix A |
-“Global Notes Legend” | Appendix A |
-“Guaranteed Obligations” | 13.01(a) |
-“IAI” | Appendix A |
-“Increased Amount” | 4.12(c) |
-“Initial Notes” | Preamble |
+Term | Defined in Section
+“Act” | 14.17
+“Affiliate Transaction” | 4.07(a)
+“Agent Members” | Appendix A
+“Applicable AML Law” | 14.19
+“Asset Sale Offer” | 4.06(b)
+“bankruptcy provision” | 6.01(f)
+“Change of Control Offer” | 4.08(b)
+“Collateral Asset Sale Offer” | 4.06(b)
+“Collateral Excess Proceeds” | 4.06(b)
+“Company” | Preamble
+“covenant defeasance option” | 8.01(b)
+“Covenant Suspension Event” | 4.14
+“cross-acceleration provision” | 6.01(d)
+“Definitive Note” | Appendix A
+“Depository” | Appendix A
+“Disqualified Holder” | 2.15
+“Event of Default” | 6.01
+“Excess Proceeds” | 4.06(b)
+“Global Note” | Appendix A
+“Global Notes Legend” | Appendix A
+“Guaranteed Obligations” | 13.01(a)
+“IAI” | Appendix A
+“Increased Amount” | 4.12(c)
+“Initial Notes” | Preamble
 61
-“Initial Purchasers” | Appendix A |
-“judgment default provision” | 6.01(g) |
-“LCT Election” | 1.05 |
-“LCT Test Date” | 1.05 |
-“legal defeasance option” | 8.01(b) |
-“Limited Condition Transaction” | 1.05 |
-“Notes” | Preamble |
-“Notes Custodian” | Appendix A |
-“Notice of Default” | 6.01 |
-“Paying Agent” | 2.04(a) |
-“protected purchaser” | 2.08 |
-“Purchase Agreement” | Appendix A |
-“QIB” | Appendix A |
-“Refinancing Indebtedness” | 4.03(b) |
-“Refunding Capital Stock” | 4.04(b) |
-“Registrar” | 2.04(a) |
-“Regulation S” | Appendix A |
-“Regulation S Global Notes” | Appendix A |
-“Regulation S Notes” | Appendix A |
-“Restricted Notes Legend” | Appendix A |
-“Restricted Payments” | 4.04(a) |
-“Restricted Period” | Appendix A |
-“Retired Capital Stock” | 4.04(b) |
-“Reversion Date” | 4.14 |
-“Rule 144A” | Appendix A |
-“Rule 144A Global Notes” | Appendix A |
-“Rule 144A Notes” | Appendix A |
-“Rule 501” | Appendix A |
-“Second Commitment” | 4.06(b) |
-“Successor Entity” | 5.01(b) |
-“Successor Issuer” | 5.01(a) |
-“Suspended Covenants” | 4.14 |
-“Transfer” | 5.01 |
-“Transfer Restricted Definitive Notes” | Appendix A |
-“Transfer Restricted Global Notes” | Appendix A |
-“Unrestricted Definitive Notes” | Appendix A |
-“Unrestricted Global Notes” | Appendix A |
+“Initial Purchasers” | Appendix A
+“judgment default provision” | 6.01(g)
+“LCT Election” | 1.05
+“LCT Test Date” | 1.05
+“legal defeasance option” | 8.01(b)
+“Limited Condition Transaction” | 1.05
+“Notes” | Preamble
+“Notes Custodian” | Appendix A
+“Notice of Default” | 6.01
+“Paying Agent” | 2.04(a)
+“protected purchaser” | 2.08
+“Purchase Agreement” | Appendix A
+“QIB” | Appendix A
+“Refinancing Indebtedness” | 4.03(b)
+“Refunding Capital Stock” | 4.04(b)
+“Registrar” | 2.04(a)
+“Regulation S” | Appendix A
+“Regulation S Global Notes” | Appendix A
+“Regulation S Notes” | Appendix A
+“Restricted Notes Legend” | Appendix A
+“Restricted Payments” | 4.04(a)
+“Restricted Period” | Appendix A
+“Retired Capital Stock” | 4.04(b)
+“Reversion Date” | 4.14
+“Rule 144A” | Appendix A
+“Rule 144A Global Notes” | Appendix A
+“Rule 144A Notes” | Appendix A
+“Rule 501” | Appendix A
+“Second Commitment” | 4.06(b)
+“Successor Entity” | 5.01(b)
+“Successor Issuer” | 5.01(a)
+“Suspended Covenants” | 4.14
+“Transfer” | 5.01
+“Transfer Restricted Definitive Notes” | Appendix A
+“Transfer Restricted Global Notes” | Appendix A
+“Unrestricted Definitive Notes” | Appendix A
+“Unrestricted Global Notes” | Appendix A
 Section 1.03 [Reserved].
 Section 1.04 Rules of Construction. Unless the context otherwise requires:
 (a) a term has the meaning assigned to it;
@@ -1591,95 +1591,95 @@ Section 14.19 USA PATRIOT Act. In order to comply with the laws, rules, regulati
 [Remainder of page intentionally left blank]
 137
 IN WITNESS WHEREOF, the parties hereto have caused this Indenture to be duly executed as of the date first written above.
-CAESARS ENTERTAINMENT, INC., as Company |
-By: | /s/ Edmund L. Quatmann, Jr. |
-Name: Edmund L. Quatmann, Jr. |
-Title: Executive Vice President, Chief Legal Officer and Secretary |
+CAESARS ENTERTAINMENT, INC., as Company
+By: | /s/ Edmund L. Quatmann, Jr.
+Name: Edmund L. Quatmann, Jr.
+Title: Executive Vice President, Chief Legal Officer and Secretary
 [Signature Page to Indenture]
-AMERICAN WAGERING, INC. |
-AWI GAMING, INC. |
-AWI MANUFACTURING, INC. |
-AZTAR RIVERBOAT HOLDING COMPANY, LLC |
-BLACK HAWK HOLDINGS, L.L.C. |
-BRANDYWINE BOOKMAKING LLC |
-BW SUB CO. |
-CAESARS CONVENTION CENTER OWNER, LLC |
-CAESARS DUBAI, LLC |
-CAESARS GROWTH PARTNERS, LLC |
-CAESARS HOLDINGS, INC. |
-CAESARS HOSPITALITY, LLC |
-CAESARS INTERNATIONAL HOSPITALITY, LLC |
-CAESARS PARLAY HOLDING, LLC |
-CCR NEWCO, LLC |
-CCSC/BLACKHAWK, INC. |
-CIE GROWTH, LLC |
-CIRCUS AND ELDORADO JOINT VENTURE, LLC |
-COMPUTERIZED BOOKMAKING SYSTEMS, INC. |
-CRS ANNEX, LLC |
-DIGITAL HOLDCO LLC |
-EASTSIDE CONVENTION CENTER, LLC |
-ELDO FIT, LLC |
-ELDORADO HOLDCO LLC |
-ELDORADO LIMITED LIABILITY COMPANY |
-ELDORADO SHREVEPORT #1, LLC |
-ELDORADO SHREVEPORT #2, LLC |
-ELGIN HOLDINGS I LLC |
-ELGIN HOLDINGS II LLC |
-ELGIN RIVERBOAT RESORT–RIVERBOAT CASINO |
-GB INVESTOR, LLC |
-By: | /s/ Bret Yunker |
-Name: Bret Yunker |
-Title: Chief Financial Officer |
+AMERICAN WAGERING, INC.
+AWI GAMING, INC.
+AWI MANUFACTURING, INC.
+AZTAR RIVERBOAT HOLDING COMPANY, LLC
+BLACK HAWK HOLDINGS, L.L.C.
+BRANDYWINE BOOKMAKING LLC
+BW SUB CO.
+CAESARS CONVENTION CENTER OWNER, LLC
+CAESARS DUBAI, LLC
+CAESARS GROWTH PARTNERS, LLC
+CAESARS HOLDINGS, INC.
+CAESARS HOSPITALITY, LLC
+CAESARS INTERNATIONAL HOSPITALITY, LLC
+CAESARS PARLAY HOLDING, LLC
+CCR NEWCO, LLC
+CCSC/BLACKHAWK, INC.
+CIE GROWTH, LLC
+CIRCUS AND ELDORADO JOINT VENTURE, LLC
+COMPUTERIZED BOOKMAKING SYSTEMS, INC.
+CRS ANNEX, LLC
+DIGITAL HOLDCO LLC
+EASTSIDE CONVENTION CENTER, LLC
+ELDO FIT, LLC
+ELDORADO HOLDCO LLC
+ELDORADO LIMITED LIABILITY COMPANY
+ELDORADO SHREVEPORT #1, LLC
+ELDORADO SHREVEPORT #2, LLC
+ELGIN HOLDINGS I LLC
+ELGIN HOLDINGS II LLC
+ELGIN RIVERBOAT RESORT–RIVERBOAT CASINO
+GB INVESTOR, LLC
+By: | /s/ Bret Yunker
+Name: Bret Yunker
+Title: Chief Financial Officer
 [Signature Page to Indenture]
-IC HOLDINGS COLORADO, INC. |
-IOC - BLACK HAWK DISTRIBUTION COMPANY, LLC |
-IOC - BOONVILLE, INC. |
-IOC - LULA, INC. |
-IOC BLACK HAWK COUNTY, INC. |
-IOC HOLDINGS, L.L.C. |
-IOC-VICKSBURG, INC. |
-IOC-VICKSBURG, L.L.C. |
-ISLE OF CAPRI BETTENDORF, L.C. |
-ISLE OF CAPRI BLACK HAWK, L.L.C. |
-ISLE OF CAPRI CASINOS LLC |
-LIGHTHOUSE POINT, LLC |
-MTR GAMING GROUP, INC. |
-NEW JAZZ ENTERPRISES, L.L.C. |
-OLD PID, INC. |
-POMPANO PARK HOLDINGS, L.L.C. |
-PPI DEVELOPMENT HOLDINGS LLC |
-PPI DEVELOPMENT LLC |
-PPI, INC. |
-ROMULUS RISK AND INSURANCE COMPANY, INC. |
-SCIOTO DOWNS, INC. |
-ST. CHARLES GAMING COMPANY, L.L.C. |
-TEI (ES), LLC |
-TEI (ST. LOUIS RE), LLC |
-TEI (STLH), LLC |
-TROPICANA ENTERTAINMENT INC. |
-TROPICANA LAUGHLIN, LLC |
-TROPICANA ST. LOUIS LLC |
-VEGAS DEVELOPMENT LAND OWNER LLC |
-WH NV III, LLC |
-WILLIAM HILL DFSB, INC. |
-WILLIAM HILL NEVADA I |
-WILLIAM HILL NEVADA II |
-WILLIAM HILL NEW JERSEY, INC. |
-WILLIAM HILL U.S. HOLDCO, INC. |
-By: | /s/ Bret Yunker |
-Name: Bret Yunker |
-Title: Chief Financial Officer |
+IC HOLDINGS COLORADO, INC.
+IOC - BLACK HAWK DISTRIBUTION COMPANY, LLC
+IOC - BOONVILLE, INC.
+IOC - LULA, INC.
+IOC BLACK HAWK COUNTY, INC.
+IOC HOLDINGS, L.L.C.
+IOC-VICKSBURG, INC.
+IOC-VICKSBURG, L.L.C.
+ISLE OF CAPRI BETTENDORF, L.C.
+ISLE OF CAPRI BLACK HAWK, L.L.C.
+ISLE OF CAPRI CASINOS LLC
+LIGHTHOUSE POINT, LLC
+MTR GAMING GROUP, INC.
+NEW JAZZ ENTERPRISES, L.L.C.
+OLD PID, INC.
+POMPANO PARK HOLDINGS, L.L.C.
+PPI DEVELOPMENT HOLDINGS LLC
+PPI DEVELOPMENT LLC
+PPI, INC.
+ROMULUS RISK AND INSURANCE COMPANY, INC.
+SCIOTO DOWNS, INC.
+ST. CHARLES GAMING COMPANY, L.L.C.
+TEI (ES), LLC
+TEI (ST. LOUIS RE), LLC
+TEI (STLH), LLC
+TROPICANA ENTERTAINMENT INC.
+TROPICANA LAUGHLIN, LLC
+TROPICANA ST. LOUIS LLC
+VEGAS DEVELOPMENT LAND OWNER LLC
+WH NV III, LLC
+WILLIAM HILL DFSB, INC.
+WILLIAM HILL NEVADA I
+WILLIAM HILL NEVADA II
+WILLIAM HILL NEW JERSEY, INC.
+WILLIAM HILL U.S. HOLDCO, INC.
+By: | /s/ Bret Yunker
+Name: Bret Yunker
+Title: Chief Financial Officer
 [Signature Page to Indenture]
-U.S. BANK TRUST COMPANY, NATIONAL ASSOCIATION, |
-as Trustee |
-By: | /s/ Laurel A. Melody-Casasanta |
-Name: Laurel A. Melody-Casasanta |
-Title: Vice President |
-U.S. BANK NATIONAL ASSOCIATION, |
-as Collateral Agent |
-By: | /s/ Laurel A. Melody-Casasanta |
-Name: Laurel A. Melody-Casasanta |
-Title: Vice President |
+U.S. BANK TRUST COMPANY, NATIONAL ASSOCIATION,
+as Trustee
+By: | /s/ Laurel A. Melody-Casasanta
+Name: Laurel A. Melody-Casasanta
+Title: Vice President
+U.S. BANK NATIONAL ASSOCIATION,
+as Collateral Agent
+By: | /s/ Laurel A. Melody-Casasanta
+Name: Laurel A. Melody-Casasanta
+Title: Vice President
 [Signature Page to Indenture]
 APPENDIX A
 PROVISIONS RELATING TO INITIAL NOTES AND ADDITIONAL NOTES
@@ -1708,11 +1708,11 @@ Appendix A-1
 “Unrestricted Definitive Notes” means Definitive Notes that are not required to bear, or are not subject to, the Restricted Notes Legend.
 “Unrestricted Global Notes” means Global Notes that are not required to bear, or are not subject to, the Restricted Notes Legend.
 1.2 Other Definitions.
-Term: | Defined in Section: |
-Agent Members | 2.1(b) |
-Global Notes | 2.1(b) |
-Regulation S Global Notes | 2.1(b) |
-Rule 144A Global Notes | 2.1(b) |
+Term: | Defined in Section:
+Agent Members | 2.1(b)
+Global Notes | 2.1(b)
+Regulation S Global Notes | 2.1(b)
+Rule 144A Global Notes | 2.1(b)
 2. The Notes.
 2.1 Form and Dating; Global Notes.
 (a) The Initial Notes issued on the date hereof will be (i) privately placed by the Company pursuant to the Offering Memorandum and (ii) sold, initially only to (1) QIBs in reliance on Rule 144A and (2) Persons other than U.S. Persons (as defined in Regulation S) in reliance on Regulation S. Such Initial Notes may thereafter be transferred to, among others, QIBs, purchasers in reliance on Regulation S and, except as set forth below, IAIs in accordance with Rule 501. Additional Notes offered after the date hereof may be offered and sold by the Company from time to time pursuant to one or more agreements in accordance with applicable law.
@@ -1815,7 +1815,7 @@ Each Definitive Note shall bear the following additional legends:
 IN CONNECTION WITH ANY TRANSFER, THE HOLDER WILL DELIVER TO THE REGISTRAR AND TRANSFER AGENT SUCH CERTIFICATES AND OTHER INFORMATION AS SUCH TRANSFER AGENT MAY REASONABLY REQUIRE TO CONFIRM THAT THE TRANSFER COMPLIES WITH THE FOREGOING RESTRICTIONS.
 A-2
 [FORM OF INITIAL NOTE]
-No. | 144A CUSIP No. 12769G AC4 144A ISIN No. US12769GAC42 REG S CUSIP No. U1230P AC5 REG S ISIN No. USU1230PAC50 |
+No. | 144A CUSIP No. 12769G AC4 144A ISIN No. US12769GAC42 REG S CUSIP No. U1230P AC5 REG S ISIN No. USU1230PAC50
 6.500% Senior Secured Note due 2032
 CAESARS ENTERTAINMENT, INC., a Delaware corporation (and its successors and assigns under the Indenture hereinafter referred), promises to pay to Cede & Co., or registered assigns, the principal sum set forth on the Schedule of Increases or Decreases in Global Security attached hereto on February 15, 2032.
 Interest Payment Dates: February 15 and August 15, commencing August 15, 2024
@@ -1823,20 +1823,20 @@ Record Dates: February 1 and August 1
 Additional provisions of this Note are set forth on the other side of this Note.
 A-3
 IN WITNESS WHEREOF, the Company has caused this instrument to be duly executed.
-CAESARS ENTERTAINMENT, INC., as the Company |
-By: |
-Name: |
-Title: |
+CAESARS ENTERTAINMENT, INC., as the Company
+By:
+Name:
+Title:
 Dated:
 A-4
 TRUSTEE’S CERTIFICATE OF
 AUTHENTICATION
 U.S. BANK TRUST COMPANY, NATIONAL ASSOCIATION, as Trustee, certifies that this is
 one of the Notes referred to in the Indenture.
-By: |
-Authorized Signatory |
-*/ | If the Note is to be issued in global form, add the Global Notes Legend and the attachment from Exhibit A captioned “TO BE ATTACHED TO GLOBAL SECURITIES |
-- | SCHEDULE OF INCREASES OR DECREASES IN GLOBAL SECURITY.” |
+By:
+Authorized Signatory
+*/ | If the Note is to be issued in global form, add the Global Notes Legend and the attachment from Exhibit A captioned “TO BE ATTACHED TO GLOBAL SECURITIES
+- | SCHEDULE OF INCREASES OR DECREASES IN GLOBAL SECURITY.”
 A-5
 [FORM OF REVERSE SIDE OF INITIAL NOTE]
 6.500% SENIOR SECURED NOTES DUE 2032
@@ -1854,10 +1854,10 @@ The Notes are senior secured obligations of the Company. This Note is one of the
 To guarantee the due and punctual payment of the principal and interest on the Notes and all other amounts payable by the Company under the Indenture and the Notes when and as the same shall be due and payable, whether at maturity, by acceleration or otherwise, according to the terms of the Notes and the Indenture, any Subsidiary Guarantor that executes a Note Guarantee pursuant to Section 4.11 of the Indenture will unconditionally guarantee the Guaranteed Obligations pursuant to the terms of the Indenture.
 5. Optional Redemption.
 On or after February 15, 2027, the Company may redeem the Notes at its option, in whole at any time or in part from time to time, upon not less than 10 nor more than 60 days’ prior notice mailed by first-class mail, or delivered electronically if held by DTC, to each holder’s registered address, which in the case of Global Notes shall be the Depository, at the following redemption prices (expressed as a percentage of principal amount), plus accrued and unpaid interest, if any, to, but excluding, the redemption date (subject to the right of holders of record on the relevant Record Date to receive interest due on the relevant Interest Payment Date), if redeemed during the 12-month period commencing on February 15 of the years set forth below:
-Period | Redemption Price |
-2027 | 103.250% |
-2028 | 101.625% |
-2029 and thereafter | 100.000% |
+Period | Redemption Price
+2027 | 103.250%
+2028 | 101.625%
+2029 and thereafter | 100.000%
 In addition, prior to February 15, 2027, the Company may redeem the Notes at its option, in whole at any time or in part from time to time, upon not less than 10 nor more than 60 days’ prior notice mailed by first-class mail, or delivered electronically to the Depository if held by DTC, to each holder’s registered address, which in the case of Global Notes shall be the Depository, at a redemption price equal to 100% of the principal amount of the Notes redeemed plus the Applicable Premium as of, and accrued and unpaid interest, if any, to, but excluding, the applicable redemption date (subject to the right of holders of record on the relevant Record Date to receive interest due on the relevant Interest Payment Date).
 A-7
 Notwithstanding the foregoing, at any time and from time to time on or prior to February 15, 2027, the Company may redeem in the aggregate up to 40% of the original aggregate principal amount of the Notes (calculated after giving effect to any issuance of Additional Notes) with the net cash proceeds of one or more Equity Offerings by the Company at a redemption price (expressed as a percentage of principal amount thereof) of 106.500%, plus accrued and unpaid interest, if any, to, but excluding, the redemption date (subject to the right of holders of record on the relevant Record Date to receive interest due on the relevant Interest Payment Date); provided, however, that at least 50% of the original aggregate principal amount of the Notes (calculated after giving effect to any issuance of Additional Notes) must remain outstanding after each such redemption; provided, further, that such redemption shall occur within 120 days after the date on which any such Equity Offering is consummated upon not less than 10 nor more than 60 days’ notice mailed, or delivered electronically if held by DTC, to each holder of Notes being redeemed and otherwise in accordance with the procedures set forth in the Indenture.
@@ -1921,67 +1921,67 @@ and irrevocably appoint _______________ agent to transfer this Note on the books
 Date: Your Signature: ____________________________________
 Sign exactly as your name appears on the other side of this Note.
 Signature Guarantee:
-Date: _______________________ |
-Signature must be guaranteed | Signature of Signature Guarantee |
-by a participant in a |
-recognized signature guaranty |
-medallion program or other |
-signature guarantor program |
-reasonably acceptable to the |
-Trustee |
+Date: _______________________
+Signature must be guaranteed | Signature of Signature Guarantee
+by a participant in a
+recognized signature guaranty
+medallion program or other
+signature guarantor program
+reasonably acceptable to the
+Trustee
 A-14
 CERTIFICATE TO BE DELIVERED UPON EXCHANGE OR
 REGISTRATION OF TRANSFER RESTRICTED SECURITIES
 This certificate relates to $___________ principal amount of Notes held in (check applicable space) book-entry or _____________ definitive form by the undersigned.
 The undersigned (check one box below):
-☐ | has requested the Trustee by written order to deliver in exchange for its beneficial interest in the Global Note held by the Depository a Note or Notes in definitive, registered form of authorized denominations and an aggregate principal amount equal to its beneficial interest in such Global Note (or the portion thereof indicated above); |
-☐ | has requested the Trustee by written order to exchange or register the transfer of a Note or Notes. |
+☐ | has requested the Trustee by written order to deliver in exchange for its beneficial interest in the Global Note held by the Depository a Note or Notes in definitive, registered form of authorized denominations and an aggregate principal amount equal to its beneficial interest in such Global Note (or the portion thereof indicated above);
+☐ | has requested the Trustee by written order to exchange or register the transfer of a Note or Notes.
 In connection with any transfer of any of the Notes evidenced by this certificate occurring while this Note is still a Transfer Restricted Definitive Note or a Transfer Restricted Global Note, the undersigned confirms that such Notes are being transferred in accordance with its terms:
 CHECK ONE BOX BELOW
-(1) | ☐ to the Company; or |
-(2) | ☐ to the Registrar for registration in the name of the holder, without transfer; or |
-(3) | ☐ inside the United States to a “qualified institutional buyer” (as defined in Rule 144A under the Securities Act of 1933) that purchases for its own account or for the account of a qualified institutional buyer to whom notice is given that such transfer is being made in reliance on Rule 144A, in each case pursuant to and in compliance with Rule 144A under the Securities Act of 1933; or |
-(4) | ☐ outside the United States in an offshore transaction within the meaning of Regulation S under the Securities Act in compliance with Rule 904 under the Securities Act of 1933 and such Note shall be held immediately after the transfer through Euroclear or Clearstream until the expiration of the Restricted Period (as defined in the Indenture); or |
-(5) | ☐ to an institutional “accredited investor” (as defined in Rule 501(a)(1), (2), (3) or under the Securities Act of 1933) that has furnished to the Trustee a signed letter containing certain representations and agreements; or |
-(6) | ☐ pursuant to another available exemption from registration provided by Rule 144 under the Securities Act of 1933. |
+(1) | ☐ to the Company; or
+(2) | ☐ to the Registrar for registration in the name of the holder, without transfer; or
+(3) | ☐ inside the United States to a “qualified institutional buyer” (as defined in Rule 144A under the Securities Act of 1933) that purchases for its own account or for the account of a qualified institutional buyer to whom notice is given that such transfer is being made in reliance on Rule 144A, in each case pursuant to and in compliance with Rule 144A under the Securities Act of 1933; or
+(4) | ☐ outside the United States in an offshore transaction within the meaning of Regulation S under the Securities Act in compliance with Rule 904 under the Securities Act of 1933 and such Note shall be held immediately after the transfer through Euroclear or Clearstream until the expiration of the Restricted Period (as defined in the Indenture); or
+(5) | ☐ to an institutional “accredited investor” (as defined in Rule 501(a)(1), (2), (3) or under the Securities Act of 1933) that has furnished to the Trustee a signed letter containing certain representations and agreements; or
+(6) | ☐ pursuant to another available exemption from registration provided by Rule 144 under the Securities Act of 1933.
 A-15
 Unless one of the boxes is checked, the Trustee will refuse to register any of the Notes evidenced by this certificate in the name of any Person other than the registered holder thereof; provided, however, that if box (4), (5) or (6) is checked, the Company or the Trustee may require, prior to registering any such transfer of the Notes, such legal opinions, certifications and other information as the Company or the Trustee have reasonably requested to confirm that such transfer is being made pursuant to an exemption from, or in a transaction not subject to, the registration requirements of the Securities Act of 1933.
 Date: Your Signature: ____________________________________
 Sign exactly as your name appears on the other side of this Note.
 Signature Guarantee:
-Date: _______________________ |
-Signature must be guaranteed | Signature of Signature Guarantee |
-by a participant in a |
-recognized signature guaranty |
-medallion program or other |
-signature guarantor program |
-reasonably acceptable to the |
-Trustee |
+Date: _______________________
+Signature must be guaranteed | Signature of Signature Guarantee
+by a participant in a
+recognized signature guaranty
+medallion program or other
+signature guarantor program
+reasonably acceptable to the
+Trustee
 A-16
 TO BE COMPLETED BY PURCHASER IF (3) ABOVE IS CHECKED.
 The undersigned represents and warrants that it is purchasing this Note for its own account or an account with respect to which it exercises sole investment discretion and that it and any such account is a “qualified institutional buyer” within the meaning of Rule 144A under the Securities Act of 1933, and is aware that the sale to it is being made in reliance on Rule 144A and acknowledges that it has received such information regarding the Company as the undersigned has requested pursuant to Rule 144A or has determined not to request such information and that it is aware that the transferor is relying upon the undersigned’s foregoing representations in order to claim the exemption from registration provided by Rule 144A.
-Date: |
-NOTICE: To be executed by an executive officer |
+Date:
+NOTICE: To be executed by an executive officer
 A-17
 [TO BE ATTACHED TO GLOBAL SECURITIES]
 SCHEDULE OF INCREASES OR DECREASES IN GLOBAL SECURITY
 The initial principal amount of this Global Note is $ . The following increases or decreases in this Global Note have been made:
-Date of Exchange | Amount of decrease in Principal Amount of this Global Note | Amount of increase in Principal Amount of this Global Note | Principal amount of this Global Note following such decrease or increase | Signature of authorized signatory of Trustee or Notes Custodian |
+Date of Exchange | Amount of decrease in Principal Amount of this Global Note | Amount of increase in Principal Amount of this Global Note | Principal amount of this Global Note following such decrease or increase | Signature of authorized signatory of Trustee or Notes Custodian
 A-18
 OPTION OF HOLDER TO ELECT PURCHASE
 If you want to elect to have this Note purchased by the Company pursuant to Section 4.06 (Asset Sale) or 4.08 (Change of Control) of the Indenture, check the box:
-Asset Sale ☐ | Change of Control ☐ |
+Asset Sale ☐ | Change of Control ☐
 If you want to elect to have only part of this Note purchased by the Company pursuant to Section 4.06 (Asset Sale) or 4.08 (Change of Control) of the Indenture, state the amount ($2,000 or any integral multiple of $1,000 in excess thereof):
 $
-Date: | Your Signature: | ____________________________________ |
-Sign exactly as your name appears on the |
-other side of this Note. |
-Signature Guarantee: |
-Signature must be guaranteed by a |
-participant in a recognized signature |
-guaranty medallion program or other |
-signature guarantor program reasonably |
-acceptable to the Trustee |
+Date: | Your Signature: | ____________________________________
+Sign exactly as your name appears on the
+other side of this Note.
+Signature Guarantee:
+Signature must be guaranteed by a
+participant in a recognized signature
+guaranty medallion program or other
+signature guarantor program reasonably
+acceptable to the Trustee
 A-19
 EXHIBIT B
 [FORM OF]
@@ -2002,8 +2002,8 @@ Taxpayer ID Number: ____________________
 B-1
 Resale Restriction Termination Date. If any resale or other transfer of the Notes is proposed to be made to an institutional “accredited investor” prior to the Resale Restriction Termination Date, the transferor shall deliver a letter from the transferee substantially in the form of this letter to the Company and the Trustee, which shall provide, among other things, that the transferee is an institutional “accredited investor” within the meaning of Rule 501(a)(1), (2), (3) or (7) under the Securities Act and that it is acquiring such Notes for investment purposes and not for distribution in violation of the Securities Act. Each purchaser acknowledges that the Company and the Trustee reserve the right prior to the offer, sale or other transfer prior to the Resale Restriction Termination Date of the Notes pursuant to clause (b) or (c) above to require the delivery of an opinion of counsel, certifications or other information satisfactory to the Company and the Trustee.
 Date:
-TRANSFEREE:______________________, |
-By: |
+TRANSFEREE:______________________,
+By:
 B-2
 EXHIBIT C
 [FORM OF SUPPLEMENTAL INDENTURE TO BE DELIVERED BY SUBSEQUENT GUARANTORS]
@@ -2026,30 +2026,30 @@ C-1
 10. Effect of Headings. The Section headings herein are for convenience only and shall not effect the construction thereof.
 C-2
 IN WITNESS WHEREOF, the parties hereto have caused this Supplemental Indenture to be duly executed as of the date first above written.
-CAESARS ENTERTAINMENT, INC., |
-as Company |
-By: |
-Name: |
-Title: |
-[SUBSIDIARY GUARANTORS], |
-as a Subsidiary Guarantor |
-By: |
-Name: |
-Title: |
-[NEW GUARANTOR], |
-as a Subsidiary Guarantor |
-By: |
-Name: |
-Title: |
-U.S. BANK TRUST COMPANY, NATIONAL ASSOCIATION, |
-as Trustee |
-By: |
-Name: |
-Title: |
-U.S. BANK NATIONAL ASSOCIATION, as Collateral Agent |
-By: |
-Name: |
-Title: |
+CAESARS ENTERTAINMENT, INC.,
+as Company
+By:
+Name:
+Title:
+[SUBSIDIARY GUARANTORS],
+as a Subsidiary Guarantor
+By:
+Name:
+Title:
+[NEW GUARANTOR],
+as a Subsidiary Guarantor
+By:
+Name:
+Title:
+U.S. BANK TRUST COMPANY, NATIONAL ASSOCIATION,
+as Trustee
+By:
+Name:
+Title:
+U.S. BANK NATIONAL ASSOCIATION, as Collateral Agent
+By:
+Name:
+Title:
 C-3
 EXHIBIT D
 [FORM OF JUNIOR LIEN INTERCREDITOR AGREEMENT]
@@ -2078,76 +2078,76 @@ and
 the Subsidiaries of the Borrower from time to time party hereto
 1
 TABLE OF CONTENTS
-Page |
-Section 1. | Definitions | 6 |
-1.1 | Defined Terms | 6 |
-1.2 | Terms Generally | 16 |
-Section 2. | Lien Priorities | 16 |
-2.1 | Subordination of Liens | 16 |
-2.2 | Prohibition on Contesting Liens | 17 |
-2.3 | No New Liens | 17 |
-2.4 | Perfection of Liens | 18 |
-2.5 | Waiver of Marshalling | 18 |
-2.6 | Nature Of Senior Creditor Claims | 18 |
-2.7 | Certain Cash Collateral | 18 |
-Section 3. | Enforcement | 19 |
-3.1 | Exercise of Remedies | 19 |
-3.2 | Cooperation | 21 |
-3.3 | Actions Upon Breach | 21 |
-Section 4. | Payments | 21 |
-4.1 | Application of Proceeds | 21 |
-4.2 | Payments Over | 22 |
-Section 5. | Other Agreements | 22 |
-5.1 | Releases | 22 |
-5.2 | Insurance | 23 |
-5.3 | Amendments to Second Priority Collateral Documents and Senior Collateral Documents | 24 |
-5.4 | Rights As Unsecured Creditors | 25 |
-5.5 | First Lien Agents as Gratuitous Bailees for Perfection | 26 |
-5.6 | Second Priority Designated Agent as Gratuitous Bailee for Perfection | 27 |
-5.7 | No Release If Event of Default; Reinstatement; When Discharge of Senior Creditor Claims Deemed to Not Have Occurred | 28 |
-5.8 | Purchase Right | 29 |
+Page
+Section 1. | Definitions | 6
+1.1 | Defined Terms | 6
+1.2 | Terms Generally | 16
+Section 2. | Lien Priorities | 16
+2.1 | Subordination of Liens | 16
+2.2 | Prohibition on Contesting Liens | 17
+2.3 | No New Liens | 17
+2.4 | Perfection of Liens | 18
+2.5 | Waiver of Marshalling | 18
+2.6 | Nature Of Senior Creditor Claims | 18
+2.7 | Certain Cash Collateral | 18
+Section 3. | Enforcement | 19
+3.1 | Exercise of Remedies | 19
+3.2 | Cooperation | 21
+3.3 | Actions Upon Breach | 21
+Section 4. | Payments | 21
+4.1 | Application of Proceeds | 21
+4.2 | Payments Over | 22
+Section 5. | Other Agreements | 22
+5.1 | Releases | 22
+5.2 | Insurance | 23
+5.3 | Amendments to Second Priority Collateral Documents and Senior Collateral Documents | 24
+5.4 | Rights As Unsecured Creditors | 25
+5.5 | First Lien Agents as Gratuitous Bailees for Perfection | 26
+5.6 | Second Priority Designated Agent as Gratuitous Bailee for Perfection | 27
+5.7 | No Release If Event of Default; Reinstatement; When Discharge of Senior Creditor Claims Deemed to Not Have Occurred | 28
+5.8 | Purchase Right | 29
 2
-Section 6. | Insolvency or Liquidation Proceedings | 30 |
-6.1 | Financing Issues | 30 |
-6.2 | Relief from the Automatic Stay | 31 |
-6.3 | Adequate Protection | 31 |
-6.4 | Avoidance Issues | 32 |
-6.5 | Application | 32 |
-6.6 | Waivers | 32 |
-6.7 | Separate Grants Of Security And Separate Classifications | 33 |
-6.8 | Reorganization Securities; Voting | 33 |
-Section 7. | Reliance; Waivers; etc. | 33 |
-7.1 | Reliance | 33 |
-7.2 | No Warranties or Liability | 34 |
-7.3 | Obligations Unconditional | 34 |
-Section 8. | Miscellaneous | 35 |
-8.1 | Conflicts | 35 |
-8.2 | Continuing Nature of this Agreement; Severability | 35 |
-8.3 | Amendments; Waivers | 35 |
-8.4 | Information Concerning Financial Condition of the Borrower and its Subsidiaries | 36 |
-8.5 | Subrogation | 37 |
-8.6 | Application of Payments | 37 |
-8.7 | Consent to Jurisdiction; Waivers | 37 |
-8.8 | Notices | 37 |
-8.9 | Further Assurances | 38 |
-8.10 | Governing Law | 38 |
-8.11 | Binding on Successors and Assigns | 38 |
-8.12 | Specific Performance | 38 |
-8.13 | Section Titles | 38 |
-8.14 | Counterparts | 38 |
-8.15 | Authorization | 39 |
-8.16 | No Third Party Beneficiaries; Successors and Assigns | 39 |
-8.17 | Effectiveness | 39 |
-8.18 | First Lien Agents and Second Priority Agents | 39 |
-8.19 | Relative Rights | 40 |
-8.20 | References | 40 |
+Section 6. | Insolvency or Liquidation Proceedings | 30
+6.1 | Financing Issues | 30
+6.2 | Relief from the Automatic Stay | 31
+6.3 | Adequate Protection | 31
+6.4 | Avoidance Issues | 32
+6.5 | Application | 32
+6.6 | Waivers | 32
+6.7 | Separate Grants Of Security And Separate Classifications | 33
+6.8 | Reorganization Securities; Voting | 33
+Section 7. | Reliance; Waivers; etc. | 33
+7.1 | Reliance | 33
+7.2 | No Warranties or Liability | 34
+7.3 | Obligations Unconditional | 34
+Section 8. | Miscellaneous | 35
+8.1 | Conflicts | 35
+8.2 | Continuing Nature of this Agreement; Severability | 35
+8.3 | Amendments; Waivers | 35
+8.4 | Information Concerning Financial Condition of the Borrower and its Subsidiaries | 36
+8.5 | Subrogation | 37
+8.6 | Application of Payments | 37
+8.7 | Consent to Jurisdiction; Waivers | 37
+8.8 | Notices | 37
+8.9 | Further Assurances | 38
+8.10 | Governing Law | 38
+8.11 | Binding on Successors and Assigns | 38
+8.12 | Specific Performance | 38
+8.13 | Section Titles | 38
+8.14 | Counterparts | 38
+8.15 | Authorization | 39
+8.16 | No Third Party Beneficiaries; Successors and Assigns | 39
+8.17 | Effectiveness | 39
+8.18 | First Lien Agents and Second Priority Agents | 39
+8.19 | Relative Rights | 40
+8.20 | References | 40
 3
-8.21 | Joinder Requirements | 40 |
-8.22 | Intercreditor Agreements | 41 |
-8.23 | Additional Grantors | 42 |
-Exhibits |
-Exhibit A | Form of Joinder Agreement (Other First Priority Lien Obligations) |
-Exhibit B | Form of Joinder Agreement (Other Second Priority Lien Obligations) |
+8.21 | Joinder Requirements | 40
+8.22 | Intercreditor Agreements | 41
+8.23 | Additional Grantors | 42
+Exhibits
+Exhibit A | Form of Joinder Agreement (Other First Priority Lien Obligations)
+Exhibit B | Form of Joinder Agreement (Other Second Priority Lien Obligations)
 4
 [FORM OF]
 SECOND LIEN INTERCREDITOR AGREEMENT
@@ -2403,60 +2403,60 @@ Creditor Documents or Second Priority Documents, and the provisions of this Agre
 [Remainder of page intentionally left blank]
 42
 IN WITNESS WHEREOF, the parties hereto have executed this Agreement as of the date first written above.
-[JPMORGAN CHASE BANK, N.A.] |
-as Credit Agreement Agent |
-By: |
-Name: |
-Title: |
-[NOTICE ADDRESS] |
+[JPMORGAN CHASE BANK, N.A.]
+as Credit Agreement Agent
+By:
+Name:
+Title:
+[NOTICE ADDRESS]
 43
-[U.S. BANK NATIONAL ASSOCIATION] |
-as First Priority Collateral Agent |
-By: |
-Name: |
-Title: |
-[NOTICE ADDRESS] |
+[U.S. BANK NATIONAL ASSOCIATION]
+as First Priority Collateral Agent
+By:
+Name:
+Title:
+[NOTICE ADDRESS]
 44
-[U.S. BANK TRUST COMPANY, NATIONAL ASSOCIATION] |
-as [2020 Initial Other First Priority Agent] |
-By: |
-Name: |
-Title: |
-[NOTICE ADDRESS] |
+[U.S. BANK TRUST COMPANY, NATIONAL ASSOCIATION]
+as [2020 Initial Other First Priority Agent]
+By:
+Name:
+Title:
+[NOTICE ADDRESS]
 45
-[U.S. BANK TRUST COMPANY, NATIONAL ASSOCIATION] |
-as [2023 Initial Other First Priority Agent] |
-By: |
-Name: |
-Title: |
-[NOTICE ADDRESS] |
+[U.S. BANK TRUST COMPANY, NATIONAL ASSOCIATION]
+as [2023 Initial Other First Priority Agent]
+By:
+Name:
+Title:
+[NOTICE ADDRESS]
 46
-[U.S. BANK TRUST COMPANY, NATIONAL ASSOCIATION] |
-as [2024 Initial Other First Priority Agent] |
-By: |
-Name: |
-Title: |
-[NOTICE ADDRESS] |
+[U.S. BANK TRUST COMPANY, NATIONAL ASSOCIATION]
+as [2024 Initial Other First Priority Agent]
+By:
+Name:
+Title:
+[NOTICE ADDRESS]
 47
-[INITIAL SECOND PRIORITY AGENT] |
-as Initial Second Priority Agent |
-By: |
-Name: |
-Title: |
-[NOTICE ADDRESS] |
+[INITIAL SECOND PRIORITY AGENT]
+as Initial Second Priority Agent
+By:
+Name:
+Title:
+[NOTICE ADDRESS]
 48
-CAESARS ENTERTAINMENT, INC. |
-as Borrower |
-By: |
-Name: |
-Title: |
-[NOTICE ADDRESS] |
-[OTHER GRANTORS] |
-as a Grantor |
-By: |
-Name: |
-Title: |
-[NOTICE ADDRESS] |
+CAESARS ENTERTAINMENT, INC.
+as Borrower
+By:
+Name:
+Title:
+[NOTICE ADDRESS]
+[OTHER GRANTORS]
+as a Grantor
+By:
+Name:
+Title:
+[NOTICE ADDRESS]
 49
 EXHIBIT A
 Joinder Agreement
@@ -2480,34 +2480,34 @@ SECTION 3.01 THIS AGREEMENT AND ANY CLAIMS, CONTROVERSY, DISPUTE OR CAUSES OF AC
 SECTION 3.02 This Agreement may be executed in counterparts, each of which shall constitute an original but all of which when taken together shall constitute a single contract. Delivery of an executed signature page to this Agreement by facsimile transmission shall be as effective as delivery of a manually signed counterpart of this Agreement.
 [Signature Pages Follow]
 IN WITNESS WHEREOF, the parties hereto have caused this Agreement to be duly executed by their respective authorized officers as of the day and year first above written.
-[NEW AGENT], as New Agent |
-By: |
-Name: |
-Title: |
-[JPMORGAN CHASE BANK, N.A.], as Credit Agreement Agent |
-By: |
-Name: |
-Title: |
-[U.S. BANK TRUST COMPANY, NATIONAL ASSOCIATION], as [2020 Initial Other First Priority Agent] |
-By: |
-Name: |
-Title: |
-[U.S. BANK TRUST COMPANY, NATIONAL ASSOCIATION], as [2023 Initial Other First Priority Agent] |
-By: |
-Name: |
-Title: |
-[U.S. BANK TRUST COMPANY, NATIONAL ASSOCIATION], as [2024 Initial Other First Priority Agent] |
-By: |
-Name: |
-Title: |
-[INITIAL SECOND PRIORITY AGENT], as Initial Second Priority Agent |
-By: |
-Name: |
-Title: |
-CAESARS ENTERTAINMENT, INC., as Borrower |
-By: |
-Name: |
-Title: |
+[NEW AGENT], as New Agent
+By:
+Name:
+Title:
+[JPMORGAN CHASE BANK, N.A.], as Credit Agreement Agent
+By:
+Name:
+Title:
+[U.S. BANK TRUST COMPANY, NATIONAL ASSOCIATION], as [2020 Initial Other First Priority Agent]
+By:
+Name:
+Title:
+[U.S. BANK TRUST COMPANY, NATIONAL ASSOCIATION], as [2023 Initial Other First Priority Agent]
+By:
+Name:
+Title:
+[U.S. BANK TRUST COMPANY, NATIONAL ASSOCIATION], as [2024 Initial Other First Priority Agent]
+By:
+Name:
+Title:
+[INITIAL SECOND PRIORITY AGENT], as Initial Second Priority Agent
+By:
+Name:
+Title:
+CAESARS ENTERTAINMENT, INC., as Borrower
+By:
+Name:
+Title:
 EXHIBIT B
 Joinder Agreement
 JOINDER AGREEMENT
@@ -2530,64 +2530,64 @@ SECTION 3.01 THIS AGREEMENT AND ANY CLAIMS, CONTROVERSY, DISPUTE OR CAUSES OF AC
 SECTION 3.02 This Agreement may be executed in counterparts, each of which shall constitute an original but all of which when taken together shall constitute a single contract. Delivery of an executed signature page to this Agreement by facsimile transmission shall be as effective as delivery of a manually signed counterpart of this Agreement.
 [Signature Pages Follow]
 IN WITNESS WHEREOF, the parties hereto have caused this Agreement to be duly executed by their respective authorized officers as of the day and year first above written.
-[NEW AGENT], as New Agent |
-By: |
-Name: |
-Title: |
-[JPMORGAN CHASE BANK, N.A.], as Credit Agreement Agent |
-By: |
-Name: |
-Title: |
-[U.S. BANK TRUST COMPANY, NATIONAL ASSOCIATION], as [2020 Initial Other First Priority Agent] |
-By: |
-Name: |
-Title: |
-[U.S. BANK TRUST COMPANY, NATIONAL ASSOCIATION], as [2023 Initial Other First Priority Agent] |
-By: |
-Name: |
-Title: |
-[U.S. BANK TRUST COMPANY, NATIONAL ASSOCIATION], as [2024 Initial Other First Priority Agent] |
-By: |
-Name: |
-Title: |
-[INITIAL SECOND PRIORITY AGENT], as Initial Second Priority Agent |
-By: |
-Name: |
-Title: |
-CAESARS ENTERTAINMENT, INC., as Borrower |
-By: |
-Name: |
-Title: |
+[NEW AGENT], as New Agent
+By:
+Name:
+Title:
+[JPMORGAN CHASE BANK, N.A.], as Credit Agreement Agent
+By:
+Name:
+Title:
+[U.S. BANK TRUST COMPANY, NATIONAL ASSOCIATION], as [2020 Initial Other First Priority Agent]
+By:
+Name:
+Title:
+[U.S. BANK TRUST COMPANY, NATIONAL ASSOCIATION], as [2023 Initial Other First Priority Agent]
+By:
+Name:
+Title:
+[U.S. BANK TRUST COMPANY, NATIONAL ASSOCIATION], as [2024 Initial Other First Priority Agent]
+By:
+Name:
+Title:
+[INITIAL SECOND PRIORITY AGENT], as Initial Second Priority Agent
+By:
+Name:
+Title:
+CAESARS ENTERTAINMENT, INC., as Borrower
+By:
+Name:
+Title:
 SCHEDULE I
 PERMITTED DISPOSITIONS
 None.
 SCHEDULE II
 UNRESTRICTED SUBSIDIARIES AS OF THE ISSUE DATE
-Legal Name | Jurisdiction of Organization |
-1. | Bally’s Las Vegas Manager, LLC | Delaware |
-2. | Caesars Baltimore Management Company, LLC | Delaware |
-3. | Caesars Enterprise Services, LLC | Delaware |
-4. | Caesars Entertainment Japan, LLC | Delaware |
-5. | Caesars Joint IP Company Limited | UK |
-6. | Caesars Korea Holding Company, LLC | Delaware |
-7. | Caesars Korea Services, LLC | Delaware |
-8. | Caesars License Company, LLC | Nevada |
-9. | Caesars Massachusetts Investment Company, LLC | Delaware |
-10. | Caesars Trademark LicenseCo, LLC | Delaware |
-11. | Cromwell Manager, LLC | Delaware |
-12. | CZR Maryland Mobile Opportunity, LLC | Delaware |
-13. | Horseshoe Cincinnati Management, LLC | Delaware |
-14. | IOC Manufacturing, Inc. | Mississippi |
-15. | IOC Services, LLC | Delaware |
-16. | IOC-Natchez, Inc. | Mississippi |
-17. | IOC-PA, L.L.C. | Pennsylvania |
-18. | Isle of Capri Bettendorf Marina Corporation | Iowa |
-19. | Isle Philadelphia Manager LLC | Delaware |
-20. | Isle Promotional Association, Inc. | Colorado |
-21. | Keystone State Development, Inc. | Pennsylvania |
-22. | Lady Luck Gaming Corporation | Delaware |
-23. | Lady Luck Vicksburg, Inc. | Mississippi |
-24. | PHW Las Vegas, LLC | Nevada |
-25. | RacelineBet, Inc. | Oregon |
-26. | SDRS, Inc. | Ohio |
-27. | The Quad Manager, LLC | Delaware |
+Legal Name | Jurisdiction of Organization
+1. | Bally’s Las Vegas Manager, LLC | Delaware
+2. | Caesars Baltimore Management Company, LLC | Delaware
+3. | Caesars Enterprise Services, LLC | Delaware
+4. | Caesars Entertainment Japan, LLC | Delaware
+5. | Caesars Joint IP Company Limited | UK
+6. | Caesars Korea Holding Company, LLC | Delaware
+7. | Caesars Korea Services, LLC | Delaware
+8. | Caesars License Company, LLC | Nevada
+9. | Caesars Massachusetts Investment Company, LLC | Delaware
+10. | Caesars Trademark LicenseCo, LLC | Delaware
+11. | Cromwell Manager, LLC | Delaware
+12. | CZR Maryland Mobile Opportunity, LLC | Delaware
+13. | Horseshoe Cincinnati Management, LLC | Delaware
+14. | IOC Manufacturing, Inc. | Mississippi
+15. | IOC Services, LLC | Delaware
+16. | IOC-Natchez, Inc. | Mississippi
+17. | IOC-PA, L.L.C. | Pennsylvania
+18. | Isle of Capri Bettendorf Marina Corporation | Iowa
+19. | Isle Philadelphia Manager LLC | Delaware
+20. | Isle Promotional Association, Inc. | Colorado
+21. | Keystone State Development, Inc. | Pennsylvania
+22. | Lady Luck Gaming Corporation | Delaware
+23. | Lady Luck Vicksburg, Inc. | Mississippi
+24. | PHW Las Vegas, LLC | Nevada
+25. | RacelineBet, Inc. | Oregon
+26. | SDRS, Inc. | Ohio
+27. | The Quad Manager, LLC | Delaware

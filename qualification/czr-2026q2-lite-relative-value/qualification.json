@@ -21,43 +21,43 @@
       "expects": [
         {
           "module_id": "CP-L10",
-          "document_sha256": "1b2027659f255471d41243180c9b550c6915348b7aea79619634c5a9d7b0187c",
+          "document_sha256": "9af04315eddd61ee7655445939d21bc91780c57c3689134c7c77d85c3dfb7e01",
           "matched_text": "As of June 30, 2026, the Company had $1.9 billion of available borrowing capacity under the CEI Revolving Credit Facility, after consideration of $96 million in outstanding letters of credit, $56 million committed for regulatory purposes, the outstanding amount, and the reserves described above."
         },
         {
           "module_id": "CP-L10",
-          "document_sha256": "1b2027659f255471d41243180c9b550c6915348b7aea79619634c5a9d7b0187c",
-          "matched_text": "Annual maturities of long-term debt | $55 | $114 | $767 | $1,574 | $3,962 | $5,335 | $11,807 |"
+          "document_sha256": "9af04315eddd61ee7655445939d21bc91780c57c3689134c7c77d85c3dfb7e01",
+          "matched_text": "Annual maturities of long-term debt | $55 | $114 | $767 | $1,574 | $3,962 | $5,335 | $11,807"
         },
         {
           "module_id": "CP-1C",
-          "document_sha256": "1b2027659f255471d41243180c9b550c6915348b7aea79619634c5a9d7b0187c",
-          "matched_text": "Total debt | 11,807 | 11,705 | 11,792 |"
+          "document_sha256": "9af04315eddd61ee7655445939d21bc91780c57c3689134c7c77d85c3dfb7e01",
+          "matched_text": "Total debt | 11,807 | 11,705 | 11,792"
         },
         {
           "module_id": "CP-1C",
-          "document_sha256": "1b2027659f255471d41243180c9b550c6915348b7aea79619634c5a9d7b0187c",
-          "matched_text": "CEI Senior Secured Notes due 2032 | 2032 | 6.50% | 1,500 | 1,487 | 1,486 |"
+          "document_sha256": "9af04315eddd61ee7655445939d21bc91780c57c3689134c7c77d85c3dfb7e01",
+          "matched_text": "CEI Senior Secured Notes due 2032 | 2032 | 6.50% | 1,500 | 1,487 | 1,486"
         },
         {
           "module_id": "CP-1C",
-          "document_sha256": "17f1795b42b4b7aa32ef72582813986c3b98ea9c205d2b4cb446944bcf494ffc",
-          "matched_text": "Adjusted EBITDA | $920 | $955 | $1,807 | $1,839 |"
+          "document_sha256": "98f970cb6b12ade42729b4d926792a5e866a724878d1ce4f76de06cf4aa58d1d",
+          "matched_text": "Adjusted EBITDA | $920 | $955 | $1,807 | $1,839"
         },
         {
           "module_id": "CP-1C",
-          "document_sha256": "2126412c1cc842c5a3cb7e1b616a7e1e6a8be16342b4660bd95a4ee591043337",
-          "matched_text": "Long-term debt, net | 6,068,442 | 6,230,141 |"
+          "document_sha256": "e1b78fe31d332f0aa176cb34bc7e534d8653af5655f556add085bb4b24414902",
+          "matched_text": "Long-term debt, net | 6,068,442 | 6,230,141"
         },
         {
           "module_id": "CP-1C",
-          "document_sha256": "2126412c1cc842c5a3cb7e1b616a7e1e6a8be16342b4660bd95a4ee591043337",
-          "matched_text": "•Consolidated Adjusted EBITDA of $610 million in the current quarter compared to $648 million in the prior year quarter"
+          "document_sha256": "e1b78fe31d332f0aa176cb34bc7e534d8653af5655f556add085bb4b24414902",
+          "matched_text": "Consolidated Adjusted EBITDA of $610 million in the current quarter compared to $648 million in the prior year quarter"
         },
         {
           "module_id": "CP-1C",
-          "document_sha256": "006ca2051fd5485557a9389513568bb8bb0f3b3a859c46ed8a7eb9a1de9b4eeb",
-          "matched_text": "Traditional net leverage (1) | 2.9x | 4.5x |"
+          "document_sha256": "8b28aee4b06aee46e9f99486ca71608149c1fb5544d7f915c3b287bb0f31a5d1",
+          "matched_text": "Traditional net leverage (1) | 2.9x | 4.5x"
         }
       ],
       "expects_ready": [
