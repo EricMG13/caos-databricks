@@ -1274,14 +1274,14 @@
         "CP-L40"
       ],
       "companion_count": 20,
-      "entry_bytes": 69079,
-      "entry_sha256": "bca91f98fafb267819a6086615c1115ac49a335ea87beec2841003d7ca2ed65b",
+      "entry_bytes": 70150,
+      "entry_sha256": "56d558abda533ecc59500eeb9e472c53946b5111ee01280bae157ee0a251e881",
       "folder_slug": "cp-l10-financial-change-screen",
       "module_id": "CP-L10",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 69079,
-          "sha256": "bca91f98fafb267819a6086615c1115ac49a335ea87beec2841003d7ca2ed65b"
+          "bytes": 70150,
+          "sha256": "56d558abda533ecc59500eeb9e472c53946b5111ee01280bae157ee0a251e881"
         },
         "references/CP-L10_CP_LITE_ANALYSIS_POLICY_v1.md": {
           "bytes": 3992,
