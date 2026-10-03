@@ -4,9 +4,11 @@
 `extract <artifact> --set <set-dir> [--record <record>]` prints one handoff's
 JSON record: front matter, H2 headings, the registers its module's contract
 requires and the rows of each found, tagged interface tables, citations and how
-many anchor, which of the set's answer keys it meets, and how many distinct
-figures its tables hold. `compare <baseline> <records>` reports per module what
-moved, LARGE differences under their own heading (the rules are in
+many anchor, which of the set's answer keys it meets, how many distinct figures
+its tables hold, and each table's figures as truncated hashes under the
+register ID its heading leads with.
+`compare <baseline> <records>` reports per module what moved, LARGE
+differences under their own heading (the rules are in
 `docs/rebuild/quality/2026-10-03-baseline.md`). It informs; it exits non-zero
 only on a usage error.
 
@@ -16,7 +18,9 @@ private names called from here -- `matrix._matches`, `matrix._matches_projection
 and `matrix._matches_register` (the matrix's key predicates) and
 `handoff._decoded_record` (the host record: anchored citations, projections,
 CP-0's readiness). No document text is written beyond the quotes the set's own
-answer keys carry; a citation is counted, never copied.
+answer keys carry; a citation is counted, never copied, and a table's figure is
+recorded as a truncated hash, not printed (a small number is recoverable from
+its hash by trying every candidate; the corpus is public).
 """
 
 from __future__ import annotations
@@ -73,6 +77,12 @@ FIGURES_FLOOR = 5
 _FIGURE = re.compile(r"\(?\s*[-\u2212]?\s*\$?\s*\d[\d,]*(?:\.\d+)?\s*%?\s*\)?")
 _CELL_SPLIT = re.compile(r"(?<!\\)\|")
 _SEPARATOR_CELL = re.compile(r":?-+:?")
+# A heading led by a register ID ("#### T4.7 Normalized", "### **P4** —",
+# "#### TL20.2"), as the vendor's `completeness_check.LEADING_ID_RE` reads one.
+_LEADING_ID = re.compile(
+    r"#+\s*[*_`]*\s*([PT][0-9][A-Za-z0-9.]*?|TL[0-9]+\.[0-9]+)\.?"
+    r"(?![A-Za-z0-9]|\.[A-Za-z0-9])"
+)
 
 _H2 = re.compile(r"^## +(.+?)\s*$", re.MULTILINE)
 _FRONT_MATTER = (
@@ -142,6 +152,9 @@ def extract_record(
         "distinct_figures": distinct_figures(
             contract.validate_handoff.unfenced_markdown(body)
         ),
+        "figures_by_table": table_figures(
+            contract.validate_handoff.unfenced_markdown(body)
+        ),
         "citations": _citations(stored),
         "answer_keys": _answer_keys(case, module_id, stored, registers_found=found),
     }
@@ -155,19 +168,40 @@ def distinct_figures(markdown: str) -> int:
     only repeats figures held elsewhere adds none: removing a duplicate never
     lowers the count, losing a fact found nowhere else does.
     """
-    figures: set[str] = set()
-    header = True
+    return len(set().union(*_figures_by_table(markdown).values()))
+
+
+def table_figures(markdown: str) -> dict[str, list[str]]:
+    """The tables' figures by the register ID their heading leads with (F482).
+
+    Read from the headings alone, never from a module's contract, so a register
+    the module has since retired keeps its label ("#### P4 — Triage" is `P4`).
+    A table whose nearest heading leads with no ID (a front table, a tagged
+    interface table) is under "". Each figure is a truncated hash, not printed.
+    """
+    return {
+        label: sorted({sha256(figure.encode()).hexdigest()[:16] for figure in found})
+        for label, found in sorted(_figures_by_table(markdown).items())
+    }
+
+
+def _figures_by_table(markdown: str) -> dict[str, set[str]]:
+    figures: dict[str, set[str]] = {}
+    header, label = True, ""
     for line in markdown.splitlines():
         row = line.strip()
         if not row.startswith("|"):
             header = True
+            if row.startswith("#"):
+                led = _LEADING_ID.match(row)
+                label = led.group(1) if led else ""
             continue
         cells = [cell.strip() for cell in _CELL_SPLIT.split(row.strip("|"))]
         if header or all(_SEPARATOR_CELL.fullmatch(cell) for cell in cells):
             header = False
             continue
-        figures.update(filter(None, map(_figure, cells)))
-    return len(figures)
+        figures.setdefault(label, set()).update(filter(None, map(_figure, cells)))
+    return figures
 
 
 def _figure(cell: str) -> str | None:
@@ -532,28 +566,104 @@ def _key_moves(
         for key in sorted((ever - always) & missed_now)
     ]
     changes += [f"answer key gained: {key}" for key in sorted(met_now - ever)]
+    unmeasured = _unmeasured_keys(record)
+    if unmeasured:
+        changes.append(f"answer keys unmeasured: {unmeasured}")
     return changes, [f"answer key lost: {key}" for key in lost]
+
+
+def _unmeasured_keys(record: Mapping[str, Any]) -> str:
+    """The keys this record could not check, by kind (F482): without the host
+    record no citation, readiness or projection key is answered, so a lost key
+    is unseen rather than kept."""
+    kinds: dict[str, int] = {}
+    for key in record.get("answer_keys") or ():
+        if key.get("met") is None:
+            kinds[str(key.get("kind"))] = kinds.get(str(key.get("kind")), 0) + 1
+    if not kinds:
+        return ""
+    reason = " (no record given)" if record.get("citations") is None else ""
+    return f"{sum(kinds.values())}{reason}: " + ", ".join(
+        f"{kind} {count}" for kind, count in sorted(kinds.items())
+    )
 
 
 def _figure_moves(
     record: Mapping[str, Any], references: Sequence[Mapping[str, Any]]
 ) -> Moves:
     """Always reported; LARGE below `FIGURES_FALL` of the baseline's lowest and
-    at least `FIGURES_FLOOR` under it."""
-    now = record.get("distinct_figures")
-    was = [
-        item["distinct_figures"]
-        for item in references
-        if isinstance(item.get("distinct_figures"), int)
-    ]
+    at least `FIGURES_FLOOR` under it.
+
+    When every record carries its figures by table (F482), the total is every
+    table's figures less those found only in a register the new answer's
+    module no longer requires (retired, as CP-0's P4 triage scores, D97), on
+    both sides; the count in the registers it still requires is shown beside
+    it. Otherwise the whole-table count, as before.
+    """
+    counts = _figure_counts(record, references)
+    if counts is None:
+        now = record.get("distinct_figures")
+        was = [
+            item["distinct_figures"]
+            for item in references
+            if isinstance(item.get("distinct_figures"), int)
+        ]
+        detail = ""
+    else:
+        (now, required_now), was_pairs = counts
+        was = [total for total, _required in was_pairs]
+        detail = (
+            f"; in required registers {required_now} "
+            f"(baseline {_span([required for _total, required in was_pairs])})"
+        )
     if not isinstance(now, int):
         return ["distinct figures unmeasured"], []
     if not was:
         return [f"distinct figures {now} (baseline unmeasured)"], []
-    line = f"distinct figures {now} (baseline {_span(was)})"
+    line = f"distinct figures {now} (baseline {_span(was)}){detail}"
     if now < FIGURES_FALL * min(was) and now <= min(was) - FIGURES_FLOOR:
         return [line], [f"distinct figures {now} below 80% of baseline low {min(was)}"]
     return [line], []
+
+
+Counts = tuple[int, int]
+
+
+def _figure_counts(
+    record: Mapping[str, Any], references: Sequence[Mapping[str, Any]]
+) -> tuple[Counts, list[Counts]] | None:
+    """(total, required) for the record and each baseline answer, or None when
+    a record lacks `figures_by_table`."""
+    items = [record, *references]
+    if not all(isinstance(item.get("figures_by_table"), dict) for item in items):
+        return None
+    required = set(record.get("required_registers") or ())
+    # A register some record's contract named that the new answer's no longer
+    # requires; an ID no contract named (a cross-module "T4.18 (from CP-1)")
+    # is never one, so its figures always count.
+    named = set().union(
+        *(
+            set(item.get("registers") or ()) | set(item.get("required_registers") or ())
+            for item in items
+        )
+    )
+    dropped = named - required
+    now, *was = [
+        _counted(item["figures_by_table"], required, dropped) for item in items
+    ]
+    return now, was
+
+
+def _counted(
+    by_table: Mapping[str, Sequence[str]], required: set[str], dropped: set[str]
+) -> Counts:
+    kept = {
+        f for label, found in by_table.items() if label not in dropped for f in found
+    }
+    in_required = {
+        f for label, found in by_table.items() if label in required for f in found
+    }
+    return len(kept), len(in_required)
 
 
 def _byte_moves(
