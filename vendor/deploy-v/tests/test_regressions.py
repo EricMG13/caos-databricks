@@ -449,6 +449,31 @@ class ForkR4Tests(unittest.TestCase):
         self.assertIn('Where `skills/cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md` is delivered with a module, follow it', canon)
 
 
+class ForkR5Tests(unittest.TestCase):
+    """Deployment fork r5: the method states the rules its checkers enforce (2 October 2026 live runs)."""
+
+    def test_cp1_audit_sections_are_the_validators_h2s(self):
+        # CP-1's method said Evidence Trace and Source Registry were appendix sub-sections;
+        # the validator requires each once at H2, and a model demoted both to ####.
+        steps = (ROOT / 'skills/cp-1-canonical-data-foundation/references/REF_CP-1_STEPS.md').read_text(encoding='utf-8')
+        self.assertNotIn('holds ALL audit items as sub-sections', steps)
+        rule = 'H2 headings must be exactly once and in canonical order: ' + ' -> '.join(handoff.CANONICAL_HEADINGS)
+        self.assertIn(f'("{rule}")', steps)
+        demoted = markdown().replace('## Evidence Trace', '#### Evidence Trace')
+        errors = handoff.validate_text(demoted, filename='EXAMPLE_CP-1_20260907.md').errors
+        self.assertTrue(any(error.startswith(rule + ';') for error in errors), errors)
+
+    def test_a_register_heading_binds_within_four_non_blank_lines(self):
+        # CP-0 T6 was refused as missing: five blockquote lines sat between its heading and table.
+        canon = (ROOT / 'CANON_SHARED.md').read_text(encoding='utf-8')
+        self.assertIn('is one of the four non-blank lines directly above the table', canon)
+        table = '| Evidence | Locator |\n| --- | --- |\n| Cash | p1 |\n'
+        for notes, found in ((3, True), (4, False)):
+            text = '#### T6 — Evidence Trace\n\n' + ''.join(f'> note {n}\n\n' for n in range(notes)) + table
+            with self.subTest(notes=notes):
+                self.assertEqual('T6' in complete.find_registers(text, ['T6']), found)
+
+
 @unittest.skipUnless(os.environ.get('DEPLOY_V_INTEGRATION') == '1', 'enable integration for native PDF and DOCX dependencies')
 class IntegrationTests(unittest.TestCase):
     def test_exporter_binds_current_catalyst_owner(self):

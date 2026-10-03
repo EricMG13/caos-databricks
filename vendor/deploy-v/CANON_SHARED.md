@@ -835,6 +835,14 @@ The appendix may exceed the reader-facing size limits because its job is
 completeness and machine use. Moving a table to the appendix never authorizes
 summarisation, deletion, recalculation, or analytical rewriting.
 
+Register binding (what `completeness_check.py` reads): a register table is
+found only when the heading or caption naming its ID (`#### T6 — Evidence
+Trace`) is one of the four non-blank lines directly above the table's header
+row. Every non-blank line in between counts — prose, a blockquote, a
+`<!-- table-id: -->` comment — so write the heading, at most the table-id
+comment, then the table, and put any note below the table. A heading five or
+more non-blank lines above its table leaves the register missing.
+
 #### Required analytical table fields
 (Inherited from CP_REASONING_STANDARD_v2.0.txt and CP_CORE_SYSTEM_PROMPT_v2.1.txt)
 
