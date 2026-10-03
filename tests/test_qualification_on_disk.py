@@ -294,7 +294,7 @@ COMMITTED_SET_DIGESTS = {
         "07a2448f639da45c386b296fc68c5f321cc8ae7f6f386801546e861451bb6044"
     ),
     "czr-2026q2-covenant-refinancing": (
-        "1f0daed5f7816dbab161a48391509c0fc0accbe14cad73947030be6dd891e34e"
+        "8676446073592db6ee7db407e0f48ece5090620d1955a4be3561da8283f6e6f9"
     ),
     "czr-2026q2-lite-covenant-refinancing": (
         "664e62d85f89bbb324f16f5487fd848aacc2f1b5742f34c872423ced26ddf005"

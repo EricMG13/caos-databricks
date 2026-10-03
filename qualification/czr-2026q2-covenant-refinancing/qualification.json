@@ -112,6 +112,11 @@
           "matched_text": "The proposed transaction is not subject to a financing condition."
         },
         {
+          "module_id": "CP-3C",
+          "document_sha256": "4fbecbd5f5a10b15911b5749daee41b3e40090e43ed54bf33aee07a21877e68b",
+          "matched_text": "The transaction will be financed through a combination of equity contributed by Fertitta Entertainment, assumed Caesars’ debt, and new committed debt financing arranged by a group consisting of 10 banks."
+        },
+        {
           "module_id": "CP-5",
           "document_sha256": "f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a",
           "matched_text": "Total debt | 11,807 | 11,705 | 11,792"

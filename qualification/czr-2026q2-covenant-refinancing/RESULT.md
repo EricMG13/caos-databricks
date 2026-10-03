@@ -5,7 +5,7 @@ Status: **OFFLINE / UNVERIFIED / NOT QUALIFIED**.
 This immutable set prepares `FULL_CREDIT_32 / COVENANT_REFINANCING` for
 Caesars Entertainment, Inc. (CZR) at an analysis date of 2026-10-02. Its
 qualification-set digest is
-`1f0daed5f7816dbab161a48391509c0fc0accbe14cad73947030be6dd891e34e`.
+`8676446073592db6ee7db407e0f48ece5090620d1955a4be3561da8283f6e6f9`.
 
 ## Corpus provenance
 
