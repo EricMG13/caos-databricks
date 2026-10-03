@@ -74,6 +74,7 @@ conclusions, never shorter reasoning or invented filler.
   - **heading**: ### Analytical appendix — complete canonical registers
   - **lossless**: True
   - **required_register_ids**: T4.1; T4.2; T4.3; T4.4; T4.5; T4.6; T4.8; T4.9; T4.10; T4.11; T4.12; T4.13; T4.14; T4.15; T4.16; T4.17; T4.18; T4.19
+  - **retired_register_ids**: T4.7
   - **schema_path**: ./references/CP-1_SCHEMA_REFERENCE.md
 - **completeness_contract**: structured below
   - **unconditional_stable_tables_cp_model**: cp1.model_period_register; cp1.model_account_register; cp1.segment_revenue_schedule; cp1.adjusted_ebitda_bridge; cp1.debt_facility_register; cp1.model_reconciliation_register; cp1.downstream_readiness

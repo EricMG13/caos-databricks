@@ -923,8 +923,11 @@ def module_registers(
     """
     skill = verified_bytes(bundle, module_id, "SKILL.md").decode("utf-8")
     checker = contract.completeness_check
-    declared = checker.load_contract(skill, module_id)["registers"]
-    found = checker.find_registers(text, declared)
+    loaded = checker.load_contract(skill, module_id)
+    # With the module's retired ids too, as `check()` asks it (fork r7, D95).
+    found = checker.find_registers(
+        text, loaded["registers"], loaded.get("retired_registers", ())
+    )
     return found if isinstance(found, dict) else {}
 
 
