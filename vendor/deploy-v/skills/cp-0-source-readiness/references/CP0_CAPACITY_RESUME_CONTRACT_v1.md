@@ -3,7 +3,7 @@
 # CP-0 capacity, batching and resume contract
 
 This contract is injected only into the generated Deploy V CP-0 package. It is
-binding whenever the complete triage set cannot be parsed safely within one
+binding whenever the complete source set cannot be parsed safely within one
 execution window. It changes neither CP-0's module identity nor its output
 ownership: `module_id=CP-0` remains the sole analytical handoff identity.
 For `IN_PROGRESS` and `READY_FOR_FINALIZATION` only, this narrower Deploy V
@@ -12,7 +12,8 @@ run emit canonical Markdown; final or blocked readiness remains governed below.
 
 ## Capacity preflight
 
-After inventory and frozen triage, but before extraction, record the immutable
+After inventory (each source's delivery is the host's preparation record's;
+no triage is frozen), but before extraction, record the immutable
 logical `run_id`, the SHA-256 of the ordered original-source inventory, the
 host/tool limits used for planning, the selected parse-job count and the
 estimated bytes/pages/work units. Classify the plan as `SINGLE_WINDOW`,
@@ -21,7 +22,7 @@ a labelled conservative default, but every active limit must be a positive
 integer and its source must be recorded.
 
 Page count and file size are capacity inputs, never evidence-value proxies.
-Triage remains downstream-aware: short controlling documents may outrank large
+Selection remains downstream-aware: short controlling documents may outrank large
 appendices, and unique lender presentations retain their narrative requirement.
 
 ## Deploy V runtime payload addendum
@@ -56,9 +57,8 @@ Parse jobs and execution batches use `QUEUED`, `IN_PROGRESS`, `COMPLETE`,
 Pending work has no active content representation and supplies no readiness
 content. A required parse never silently falls back to the original.
 
-Execution batches are not evidence ZIP batches. Evidence ZIPs remain final,
-reconciled supporting packages and keep one source's complete output set
-together; do not emit them while the logical run is in progress.
+Execution batches are not evidence packages, and CP-0 writes none: the host's
+preparation record stands for them (P8 is retired).
 
 ## Checkpoint and resume
 

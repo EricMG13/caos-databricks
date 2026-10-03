@@ -1185,11 +1185,18 @@ class ForkR9Tests(unittest.TestCase):
                      'Freeze one decision per source', 'batch-reconciliation', 'ZIP-verification',
                      'BATCH-[NNN]-of-[NNN].zip` packages', 'the host\'s record carries them',
                      'active_content_artifact_id', '`PASS_THROUGH` attaches its original',
-                     'package validation', 'package status', 'same-run preparation validation')
+                     'package validation', 'package status', 'same-run preparation validation',
+                     # Fork r11 fix round 1: the residual triage, workspace and package text.
+                     '| Case | Expected decision | Reason |', '## ZIP batching', '## Triage-only run',
+                     'TRIAGE_REGISTER.md', 'CHECKSUMS.sha256', '| State | Original role | Parsed role |',
+                     'sha256_before', 'checksums and packages only in the workspace',
+                     'Keep source roots immutable', 'Package or fidelity validation failure', 'unsafe package',
+                     'frozen triage', 'Evidence ZIPs remain', 'evidence packages use')
         for path in (ROOT / 'skills/cp-0-source-readiness/SKILL.md', ROOT / 'CANON_SHARED.md',
                      references / 'REF_CP-0_STEPS.md', references / 'CP-PARSE_SCHEMA_REFERENCE.md',
                      references / 'REF_CP-PARSE_STEPS.md', references / 'CP-0_SCHEMA_REFERENCE.md',
                      references / 'CP0_PROFILE_ANCHOR_CONTRACT_v1.md',
+                     references / 'CP0_CAPACITY_RESUME_CONTRACT_v1.md',
                      ROOT / 'skills/cp-os-credit-os/references/CP-OS_MIRROR_CP0_PROFILE_ANCHOR_CONTRACT_v1.md'):
             text = path.read_text(encoding='utf-8')
             for stale in ('P1-P8', 'P1–P8', 'Triage it `PARSE_TARGETED`', '| P7 | Representation Catalog |') + stale_r11:

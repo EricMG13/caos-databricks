@@ -30,17 +30,7 @@ Score nothing: the host's preparation record holds each source's delivery, `WHOL
 
 ## Calibration cases
 
-| Case | Expected decision | Reason |
-|---|---|---|
-| 180-page annual report with tables and notes | `PARSE_FULL` | Broad authoritative evidence and strong structural benefit. |
-| 12-slide lender presentation with leverage and sources & uses | `PARSE_FULL` | Short but dense, unique financing evidence. |
-| Two-page covenant waiver | `PARSE_FULL` | Critical-document override; every clause matters. |
-| Clean four-page earnings release | `PASS_THROUGH` or `PARSE_TARGETED` | Useful; parse only if tables/layout need normalization or the user requests it. |
-| 80-page brand/ESG brochure with no issuer-credit evidence | `SKIP_LOW_VALUE` | Length does not create relevance. |
-| Identical annual-report download with a different filename | `SKIP_DUPLICATE` | Hash/content duplicate; reference selected copy. |
-| Scanned credit agreement | `PARSE_FULL` using `OCR_SCAN` + `LEGAL_CLAUSE` | High value and high structural benefit. |
-| Mixed investor deck with 10 evidence slides and 30 decorative slides | `PARSE_TARGETED` | Preserve evidence slides and map all excluded slides. |
-| Password-protected offering memorandum | `BLOCKED` | Request unlocked source; never guess contents. |
+None: no decision is calibrated, since the host's preparation record holds each source's delivery and P5 records it (P4 is retired).
 
 ## User overrides
 
@@ -126,32 +116,9 @@ For every source reconcile total inspectable units to retained + excluded + unre
 ## REF_CP-PARSE_D_PackagingAndQA.md
 # CP-PARSE — Packaging and QA
 
-## Per-source output set
+## Packaging
 
-For each parsed source, author and validate canonical Markdown first:
-
-- required `[SourceKey]_CP-PARSE_[YYYYMMDD].md`;
-
-The Markdown front matter records module/run/source IDs, source name/hash, document family/profile, decision, parse mode, period/date, locator type, coverage, limitations, `qa_status`, confidence score/band and package batch. Markdown is the only analytical file type in the package.
-
-## ZIP batching
-
-Name batches `[PackKey]_CP-PARSE_[YYYYMMDD]_BATCH-[NNN]-of-[NNN].zip`. Sort sources deterministically by issuer/entity, document date, document family and source ID. Keep each source's canonical Markdown together. Default limits are 20 parsed sources or 250 MB uncompressed per batch; reduce for tenant/runtime constraints and record the effective limit.
-
-Every ZIP contains:
-
-1. `PACKAGE_INDEX.md` — pack/run identity, total batches, counts by decision/profile, limitations and next step.
-2. `TRIAGE_REGISTER.md` — every input and its scores, decision, selected replacement/related base and reason.
-3. `BATCH_INDEX.md` — entries in this batch and links/names for other batches.
-4. `CHECKSUMS.sha256` — SHA-256 for every packaged file other than the checksum file itself.
-5. `parsed/[SourceKey]/...` — canonical Markdown.
-6. `originals/...` only when the user explicitly requests originals and the runtime permits it.
-
-Reject absolute paths, `..`, hidden/secret files, executable content and duplicate ZIP member names. Do not nest ZIPs. Filenames use safe ASCII slugs while indexes preserve original names.
-
-## Triage-only run
-
-If no source is parsed, produce canonical `TRIAGE_REGISTER.md` plus the required indexes and checksum in a triage-only ZIP. State `NO_PARSE_CANDIDATES`; do not create alternate analytical exports or empty placeholder parsed files.
+Write no per-source file, ZIP, index or checksum file: the host's preparation record holds each source's extraction and hashes (P6 and P8 are retired), and P3 and P5 sit inside the one CP-0 handoff.
 
 ## Verification gates
 

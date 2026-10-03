@@ -111,16 +111,7 @@ Do not stage CP-PARSE or ask the user to copy prepared documents into the source
 
 Freeze one Representation Catalog after parse QA. It is the sole source of content attachments and readiness inputs. Where the host prepared the sources, its record is that catalog, each host extraction the one active content representation of its source, and CP-0 does not restate it (P7 is retired).
 
-| State | Original role | Parsed role | Readiness input |
-|---|---|---|---|
-| `PASS_THROUGH` | `ACTIVE_CONTENT` | `NOT_PRESENT` | `ORIGINAL` |
-| Parse `COMPLETE` | `PROVENANCE_AND_VERIFICATION_ONLY` | `ACTIVE_CONTENT` | `PARSED` |
-| Parse `DEGRADED` | `PROVENANCE_AND_VERIFICATION_ONLY` | `ACTIVE_CONTENT` | `PARSED` |
-| Required parse `BLOCKED` | `PROVENANCE_AND_VERIFICATION_ONLY` | `NOT_PRESENT` | `NONE` |
-| `SKIP_DUPLICATE` | `EXCLUDED` | `NOT_PRESENT` | `NONE` |
-| `SKIP_LOW_VALUE` | `INVENTORY_ONLY` | `NOT_PRESENT` | `NONE` |
-
-Exactly one representation may have `ACTIVE_CONTENT` for every retained logical source. Parsed content requires a selected artifact ID, path and SHA-256. Degraded content requires limitations. Duplicate rows require a replacement source. Base documents and amendments remain distinct rows. Every derived path must be outside every original source root.
+Each retained logical source has one active content representation, its host extraction, and its original stays the authority; a source whose P5 row is `BLOCKED` supplies no readiness input. A degraded extraction carries its limitations in P5. Base documents and amendments remain distinct P3 rows.
 
 Map each effective representation—not both versions—to downstream modules. Record content basis, specific evidence demand, mapping status, readiness effect and limitation. Authority citations still point to the original source and its locator; the prepared artifact is the active content vehicle and carries lineage back to that original.
 
@@ -236,11 +227,9 @@ The next executable action is the first runnable canonical live host row in T8. 
 <step_reference module="CP-0" step="J" name="MasterIndexAndWorkspace">
 # Master Index and managed workspace
 
-Initialize or update Master Index state with run ID, issuer, objective, requested/resolved mode, source roots, managed workspace, original/prepared counts, entities, periods, version families, validation warnings, canonical handoff, evidence packages and downstream consumers.
+Initialize or update Master Index state (T7) with run ID, issuer, objective, requested/resolved mode, the host's preparation record as the preparation record, source counts, entities, periods, version families, validation warnings, canonical handoff and downstream consumers.
 
-The workspace is a unique run-owned directory outside every source root. Original roots are read-only. Store derivatives, indexes, registers, checksums and packages only in the workspace; validate all resolved paths and reject traversal, links outside the workspace, duplicate members and unsafe archive paths.
-
-Before completion, compare every original `sha256_before` with `sha256_after`. A changed, missing or unexpectedly added original fails immutability verification. Record package hashes and the final active representation count so later consumers can prove they used the frozen effective-source set.
+The host's preparation record holds the pinned source set and each original's SHA-256; CP-0 keeps no workspace, checksum or package (P2 and P8 are retired).
 </step_reference>
 ## REF_CP-0_K_ExportAssembly.md
 <!-- REF_CP-0_K_ExportAssembly (Tier 2) | 2026-08-02 | Markdown-only handoff contract -->
@@ -255,7 +244,7 @@ slide, JSON, dashboard or presentation-view exports. No lettered appendices,
 embedded machine payloads, auxiliary manifest, renderer/parser agent, or
 database.
 
-When parsing occurs, supporting evidence packages use `[PackKey]_CP-0_[YYYYMMDD]_BATCH-[NNN]-of-[NNN].zip`. Each contains prepared per-source Markdown plus `PACKAGE_INDEX.md`, `TRIAGE_REGISTER.md`, `REPRESENTATION_CATALOG.md`, `BATCH_INDEX.md` and `CHECKSUMS.sha256`. Keep one source's output set together. Validate safe relative members, unique names, declared/actual checksums and reconciliation across batches. A ZIP validation failure blocks parsed packaging.
+Write no supporting evidence package: the host's preparation record stands for it (P8 is retired).
 
 Prepared source Markdown is evidence, not another canonical handoff. Exclude original source files unless explicitly requested; retain original paths/hashes and locators in lineage metadata. The user never returns prepared files to the source folder.
 </step_reference>
