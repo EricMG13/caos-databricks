@@ -1276,12 +1276,14 @@ class LineHint:
     (`absent`). Nothing set: found, but not as one line, so nothing is said
     beyond the rule. `near`: the page of the one delivered line of its
     source the quote nearly matches (F493, `near_line`), `begins` then that
-    line's first words."""
+    line's first words, and `moved` whether that page is not the cited
+    one."""
 
     begins: str = ""
     pages: tuple[int, ...] = ()
     absent: bool = False
     near: int | None = None
+    moved: bool = False
 
 
 def anchoring_line(
@@ -1297,7 +1299,8 @@ def anchoring_line(
     words of that delivered line and told to quote the whole line, and one
     that is a whole line of another delivered page is told that page; one
     that nearly matches exactly one delivered line of its source is shown
-    that line's page and first words and told to copy it exactly (F493). At
+    that line's page and first words and told to copy it exactly, and to
+    cite that page when it is not the cited one (F493). At
     most `MAX_FEEDBACK_CITATIONS` citations are placed; the rest, and any the
     search could not place, keep the rule's wording. Past
     `MAX_ANCHORING_CHARS`, placements are dropped from the last back, each
@@ -1392,10 +1395,12 @@ def _placed(number: int, total: int, hint: LineHint) -> str:
     (F493), the longer line it is part of, or the other pages it is one
     whole line of, at most `MAX_FEEDBACK_CITATIONS` of them named."""
     if hint.near is not None:
+        where = f"page {hint.near}" + (", not its cited page," if hint.moved else "")
         return (
             f"citation {number} of {total} nearly matches the evidence line of"
-            f' page {hint.near} that begins "{hint.begins}" but differs in'
-            " wording; copy that line exactly, character for character"
+            f' {where} that begins "{hint.begins}" but differs in wording; copy'
+            " that line exactly, character for character"
+            + (f", and cite page {hint.near}" if hint.moved else "")
         )
     if hint.begins:
         return (

@@ -845,7 +845,7 @@ def _near_hint(delivered: Sequence[Delivery], citation: Citation) -> LineHint | 
         return None
     line = lines[found]
     begins = " ".join(line.text.value.split()[:HINT_WORDS])
-    return LineHint(begins=begins, near=line.page)
+    return LineHint(begins=begins, near=line.page, moved=line.page != citation.page)
 
 
 def _lineage_moved(

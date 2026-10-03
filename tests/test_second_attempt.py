@@ -569,7 +569,8 @@ def test_the_anchoring_line_names_the_citations_to_keep_and_the_rule() -> None:
 
 def test_the_anchoring_line_names_the_line_a_near_miss_should_copy() -> None:
     """F493: a citation that nearly matches one delivered line is told that
-    line's page and first words and to copy it exactly; it is still counted
+    line's page and first words and to copy it exactly, and to cite that
+    page when it is not the cited one (fix round 1); it is still counted
     among the refused, the kept list goes first past `MAX_ANCHORING_CHARS`,
     and then the near miss is dropped like any placement."""
     lost = RefusalCode.CITATION_NOT_LOCATED
@@ -581,6 +582,16 @@ def test_the_anchoring_line_names_the_line_a_near_miss_should_copy() -> None:
         " differs in wording; copy that line exactly, character for character;"
         " keep citation 1 exactly as it was; any citation you add or change must"
         " be one entire evidence line of its cited page"
+        " (numbered from 1 in the order given)"
+    )
+    moved = LineHint(begins="On May 27, 2026, Caesars", near=5, moved=True)
+    elsewhere = anchoring_line([lost], [moved])
+    assert elsewhere == (
+        "host anchoring check: citation 1 of 1 nearly matches the evidence line"
+        ' of page 5, not its cited page, that begins "On May 27, 2026, Caesars"'
+        " but differs in wording; copy that line exactly, character for"
+        " character, and cite page 5; any citation you add or change must be"
+        " one entire evidence line of its cited page"
         " (numbered from 1 in the order given)"
     )
     long = LineHint(begins=" ".join(["w" * 40] * HINT_WORDS), near=3)

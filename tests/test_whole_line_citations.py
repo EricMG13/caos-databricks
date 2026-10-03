@@ -740,7 +740,7 @@ def test_a_near_miss_is_hinted_from_delivered_lines_only(
         return _line_hint(conn, delivered, blocks, citation, index)
 
     begins = " ".join(NEAR_PAGES[1][0].split()[:HINT_WORDS])
-    assert hint(every, TokenIndex()) == LineHint(begins=begins, near=2)
+    assert hint(every, TokenIndex()) == LineHint(begins=begins, near=2, moved=True)
     index = TokenIndex()
     withheld = [d for d in every if d.page != 2]
     assert hint(withheld, index) == LineHint(absent=True)
@@ -789,3 +789,54 @@ def test_placing_a_near_miss_stays_linear_in_the_lines_delivered(
     alike = time.perf_counter() - started
     assert len(measured) == NEAR_MEASURED
     assert unrelated < 0.5 and alike < 0.5
+
+
+def test_a_near_miss_never_measures_a_long_line() -> None:
+    """F493 fix round 1: the word ratio is quadratic in words, so neither a
+    quote nor a candidate past `NEAR_MEASURED_WORDS` is measured: 64
+    look-alikes of 5,000 words give no hint, fast; a long line is still
+    named when it shares both ends. At the cap, 64 look-alikes of
+    `NEAR_MEASURED_WORDS` words from a small vocabulary are the ceiling."""
+    import random
+    import time
+
+    from caos.evidence.citations import (
+        NEAR_MEASURED,
+        NEAR_MEASURED_WORDS,
+        NEAR_WORDS,
+        near_line,
+    )
+
+    rows = random.Random(0)
+
+    def lookalikes(count: int) -> tuple[list[str], list[str]]:
+        """A line of `count` words from 40, and `NEAR_MEASURED` lines with
+        its ends and its middle shuffled."""
+        base = [f"w{rows.randrange(40)}" for _ in range(count)]
+        middle = base[NEAR_WORDS:-NEAR_WORDS]
+        lines = [
+            " ".join(
+                base[:NEAR_WORDS]
+                + rows.sample(middle, len(middle))
+                + base[-NEAR_WORDS:]
+            )
+            for _ in range(NEAR_MEASURED)
+        ]
+        return base, lines
+
+    def timed(quote: str, lines: list[str]) -> tuple[int | None, float]:
+        started = time.perf_counter()
+        found = near_line(quote, lines)
+        return found, time.perf_counter() - started
+
+    # Sharing only the last words, each look-alike would need the ratio.
+    base, lines = lookalikes(5000)
+    found, long = timed(" ".join(["Opening", *base[1:]]), lines)
+    assert found is None
+    # Both ends shared: named without a ratio, however long.
+    slipped = [*base[:100], "slipped", *base[101:]]
+    assert near_line(" ".join(slipped), [" ".join(base)]) == 0
+    base, lines = lookalikes(NEAR_MEASURED_WORDS)
+    _found, capped = timed(" ".join(["Opening", *base[1:]]), lines)
+    assert long < 0.5 and capped < 0.5
+    assert NEAR_MEASURED_WORDS == 300

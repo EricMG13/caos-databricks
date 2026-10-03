@@ -1176,12 +1176,16 @@ def _part_of(
 
 # A near miss (F493): the words a candidate line must share with the quote
 # at its start or its end, the least word similarity, how far apart their
-# lengths may be, and how many candidates are measured before the search
-# gives up (so a page of look-alike rows costs a bounded amount).
+# lengths may be, how many candidates are measured before the search gives
+# up, and the most words either side of a measured pair may hold: the ratio
+# is quadratic in words, so both bounds together cap its cost (fix round 1).
+# 300 words is past the 99th percentile of the CZR v3 lines (248 words);
+# a longer line is named only by sharing both ends.
 NEAR_WORDS = 6
 NEAR_RATIO = 0.9
 NEAR_LENGTH = 0.15
 NEAR_MEASURED = 64
+NEAR_MEASURED_WORDS = 300
 
 
 def near_line(text: str, lines: Sequence[str]) -> int | None:
@@ -1194,10 +1198,12 @@ def near_line(text: str, lines: Sequence[str]) -> int | None:
     A candidate shares the quote's first or last `NEAR_WORDS` words
     (whitespace-split) and its length is within `NEAR_LENGTH` of the
     quote's; it is near when it shares both ends or its words match at
-    least `NEAR_RATIO` (`difflib`, over words, never characters, which is
-    quadratic in a 5,000-character line). Two near lines are no answer, and
-    so is a search that would measure more than `NEAR_MEASURED` candidates:
-    one pass over the lines, never a guess.
+    least `NEAR_RATIO` (`difflib` over words; quadratic in them, so it is
+    asked only when neither side passes `NEAR_MEASURED_WORDS`). Two near
+    lines are no answer, and so is a search that would measure more than
+    `NEAR_MEASURED` candidates: one pass over the lines, at most
+    `NEAR_MEASURED` ratios of at most `NEAR_MEASURED_WORDS` words each,
+    never a guess.
     """
     words = text.split()
     if not words:
@@ -1235,7 +1241,10 @@ def _candidate(
 
 
 def _similar(words: list[str], split: list[str]) -> bool:
-    """Whether two word lists match at least `NEAR_RATIO` (`near_line`)."""
+    """Whether two word lists match at least `NEAR_RATIO` (`near_line`);
+    never measured past `NEAR_MEASURED_WORDS` on either side."""
+    if max(len(words), len(split)) > NEAR_MEASURED_WORDS:
+        return False
     matcher = difflib.SequenceMatcher(None, words, split, autojunk=False)
     return (
         matcher.real_quick_ratio() >= NEAR_RATIO
