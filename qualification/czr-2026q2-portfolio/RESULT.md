@@ -6,7 +6,7 @@ This immutable set prepares `FULL_CREDIT_32 / PORTFOLIO_DECISION` for
 Caesars Entertainment, Inc. (CZR) at an analysis date of 2026-10-02, with a
 proposed position in the CZR 6.50% Senior Secured Notes due 2032 held against a
 **SYNTHETIC** test mandate. Its qualification-set digest is
-`e578ae27b949dc3e5f8e3d943a245caea6fbfecc0de955ad539c8a2a3a9947df`.
+`05b4ce08a23f51061c833e04099bc7d03b1ffc3b6093b622f8e8a96abcec534d`.
 
 ## The mandate is synthetic (D80)
 
@@ -85,6 +85,27 @@ Keys authored from the documents; material figures pending owner confirmation.
 The 2020 credit agreement's commitment, margins and covenant were changed by
 amendments not in this set and are not keyed; the current revolver
 (`$2.25 billion`, maturing 31 January 2028) is stated in the 10-Q.
+
+Alternative lines (D101). A figure key is also met by another whole evidence
+line, cited under the same module, that states the key's lead figures -- the
+current figure and the comparative the key line leads with -- for the same
+measure, period and consolidated scope; a % change, a further period or a third
+year on the key line need not be on it. Prose keys have none: a statement is
+its sentence. Each alternative is one whole evidence line, unique in its
+document (F475), and is listed with why it states the key's figures:
+
+- CP-2, the 10-Q's `Net cash provided by operating activities | 675 | 680`:
+  - the 10-Q's `During the six months ended June 30, 2026, our operating
+    activities generated operating cash inflows of $675 million, as compared to
+    operating cash inflows of $680 million during the six months ended June 30,
+    2025, primarily due to changes in working capital, coupled with the results
+    of operations described above.`, its liquidity sentence, the six months
+    against the prior six months.
+
+The other figure keys (`Cash and cash equivalents`, `Net cash provided by
+operating activities`, `Total debt`, `C-01`) have none: no other whole line
+states their figures for the same measure, period and basis (rounded prose such
+as `$11.8 billion` or `$1.3 billion` is not the figure).
 
 Every key is one whole evidence line of its page, unique in its document: an
 answer is accepted only as a whole line (`WHOLE_LINE`) and scored by exact
