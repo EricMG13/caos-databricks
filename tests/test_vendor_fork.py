@@ -1142,3 +1142,23 @@ def test_a_short_interface_row_names_only_its_table(tmp_path: Path) -> None:
     ), interface
     assert handoff_tables(CONTRACT, short).unavailable_reason == "TABLES_MALFORMED"
     assert _cp_model_reads(tmp_path, short) != 0
+
+
+def test_cp_l10_writes_a_gap_once_and_keeps_every_screen_s_rows() -> None:
+    """D96 (V8): on the six stored CP-L10 answers no absorbed screen's
+    source-and-scope table repeated another's (0 of 60 pairs shared a row) and
+    every evidence-less topic row held a materiality and rank no other register
+    holds, so all twenty registers, each screen's scope rows and its six topic
+    rows stay required; only the restated gap and prohibitions are dropped."""
+    lite = skill("CP-L10").decode()
+    assert lite.count("## Written once — binding on all five screens") == 1
+    assert "not again in the summary" in lite
+    assert "no cell or line repeats that no conclusion" in lite
+    contract = CHECK.load_contract(lite, "CP-L10")
+    assert contract["retired_registers"] == []
+    registers = contract["registers"]
+    for phase in ("10", "20", "23", "30", "40"):
+        assert registers[f"TL{phase}.1"]["minimum_body_rows"] == 1, phase
+        assert registers[f"TL{phase}.2"]["minimum_body_rows"] == 6, phase
+    rules = {rule["rule_id"] for rule in contract["semantic_rules"]}
+    assert "cp_l10.topic_ids_complete" in rules

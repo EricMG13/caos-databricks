@@ -294,6 +294,15 @@ Lead with the screen conclusion, primary support, primary risk, and monitoring t
 
 </module>
 
+## Written once — binding on all five screens
+
+Each screen keeps its own four registers and all six of its topic rows: a topic without evidence is still assessed, and its materiality and priority rank are held by no other register. Each screen's source-and-scope register keeps its own rows, since its owners, topics and limitations are its own. The common LITE policy forbids filler; in this one artifact that means:
+
+- A `GAP_ONLY` topic row's `summary` names the missing evidence in one sentence. Its missing inputs, decision impact, required source and FULL upgrade module are written once, in that screen's gaps register (`TL10.4`, `TL20.4`, `TL23.4`, `TL30.4` or `TL40.4`), not again in the summary.
+- The authority prohibitions bind without being restated: no cell or line repeats that no conclusion, calculation, forecast or inference is made.
+- A screen's posture, status and outcome are its decision-screen `OVERALL` row; no line in the appendix restates them.
+- A sourced figure or finding is never dropped to save space; it stays where the method puts it.
+
 ## Absorbed phase — CP-L20, binding on every CP-L10 run
 
 CP-L10 absorbs the fundamental credit screen. No CP-L screen has a single incoming edge, and no module running between two screens feeds a later one, so the interleaving was presentational — two LITE pathways already ran the screens back to back. Screening is one pass over one source set producing one escalation decision. CP-L20 is no longer a separate stage: its registers are part of this module's output contract and are authored on every CP-L10 run, not on request. `Run CP-L20` still dispatches here, and a handoff that names CP-L20 as upstream resolves to this module's artifact.
