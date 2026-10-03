@@ -6,7 +6,7 @@ This immutable set prepares `LITE_CREDIT_22 / LITE_PORTFOLIO_DECISION` for
 Caesars Entertainment, Inc. (CZR) at an analysis date of 2026-10-02, with a
 proposed position in the CZR 6.50% Senior Secured Notes due 2032 held against a
 **SYNTHETIC** test mandate. Its qualification-set digest is
-`4cc7bd8a37a04f7ad59274feda5b049ed8e2f9a66782a7f6c3821fe028fc6f1b`.
+`5fc86774755b0426171d5b58e58f47e14dc585fbd7b93099c623ff9a0362ea51`.
 
 ## The mandate is synthetic (D80)
 
@@ -67,6 +67,33 @@ Keys authored from the documents; material figures pending owner confirmation.
   (`5,000,000 / 630,928,502 = 0.7925%` of NAV); the compliance monitor's C-01
   row (single name, `≤ 2.5% NAV`, hard, largest current exposure `2.37%`,
   status `Watch` at 29 May 2026); and FINRA's last trade price, `$93.28`.
+
+Alternative lines (D101). A figure key is also met by another whole evidence
+line, cited under the same module, that states the key's lead figures -- the
+current figure and the comparative the key line leads with -- for the same
+measure, period and consolidated scope; a % change, a further period or a third
+year on the key line need not be on it. Prose keys have none: a statement is
+its sentence. Each alternative is one whole evidence line, unique in its
+document (F475), and is listed with why it states the key's figures:
+
+- CP-L10, the release's `Adjusted EBITDA | $920 | $955 | $1,807 | $1,839`:
+  - the 10-Q's `Total | $920 | $955 | $1,807 | $1,839`, the total of its
+    segment table's Adjusted EBITDA, the consolidated figure;
+  - the 10-Q's `Total Adjusted EBITDA | $920 | $955 | $1,807 | $1,839`, its
+    MD&A reconciliation's total;
+  - the release's `Consolidated Adjusted EBITDA of $920 million versus $955
+    million for the comparable prior-year period.`, its highlight sentence:
+    consolidated, the quarter against the prior-year quarter;
+  - the release's `Caesars | $920 | $955 | (3.7)%`, the consolidated row of its
+    quarterly Adjusted EBITDA table.
+  Not alternatives: the 10-Q's `Adjusted EBITDA | $920 | $955 | $1,807 |
+    $1,839` (its words recur inside the 10-Q's `Total Adjusted EBITDA` row, so
+    it is not a unique run, F475) and the release's six-month `Caesars | $1,807
+    | $1,839 | (1.7)%` (the six months alone).
+
+The other figure keys (`C-01`) have none: no other whole line states their
+figures for the same measure, period and basis (rounded prose such as `$11.8
+billion` or `$1.3 billion` is not the figure).
 
 Every key is one whole evidence line of its page, unique in its document: an
 answer is accepted only as a whole line (`WHOLE_LINE`) and scored by exact

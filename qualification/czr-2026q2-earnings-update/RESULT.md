@@ -5,7 +5,7 @@ Status: **OFFLINE / UNVERIFIED / NOT QUALIFIED**.
 This immutable set prepares `FULL_CREDIT_32 / EARNINGS_UPDATE` for Caesars
 Entertainment, Inc. (CZR) at an analysis date of 2026-10-02. Its
 qualification-set digest is
-`ca88a4b66b3a8b1a16d93fd9529d1f4d78b7ba9d9be5cf22f5a226c788b53099`.
+`7b0a36f3fb6d5a779d612aebb795695e98d49b6ed9bbd827546a65553b28650d`.
 
 ## Corpus provenance
 
@@ -42,6 +42,81 @@ Keys authored from the documents; material figures pending owner confirmation.
   management and employee attention (F475; one sentence per line, F492).
 - CP-5: the 10-Q's Note 6 total debt, `11,807` face and `11,705` book at
   30 June 2026, `11,792` book at 31 December 2025.
+
+Alternative lines (D101). A figure key is also met by another whole evidence
+line, cited under the same module, that states the key's lead figures -- the
+current figure and the comparative the key line leads with -- for the same
+measure, period and consolidated scope; a % change, a further period or a third
+year on the key line need not be on it. Prose keys have none: a statement is
+its sentence. Each alternative is one whole evidence line, unique in its
+document (F475), and is listed with why it states the key's figures:
+
+- CP-1, the 10-Q's `Net revenues | 2,993 | 2,907 | 5,863 | 5,701`:
+  - the 10-Q's `Total | $2,993 | $2,907 | $5,863 | $5,701`, the total of its
+    segment table's net revenues, the consolidated figure;
+  - the 10-Q's `Net revenues | $2,993 | $2,907 | $86 | 3.0% | $5,863 | $5,701 |
+    $162 | 2.8%`, its MD&A net revenues row;
+  - the release's `Net revenues | 2,993 | 2,907 | 5,863 | 5,701`, its
+    consolidated statement of operations row;
+  - the release's `Caesars | $2,993 | $2,907 | 3.0%`, the consolidated row of
+    its quarterly net revenues table.
+  Not alternatives: the release's `GAAP net revenues of $3.0 billion versus
+    $2.9 billion` (rounded, not the figures) and its six-month `Caesars |
+    $5,863 | $5,701 | 2.8%` (the six months alone).
+- CP-1, the 10-Q's `Operating income | 513 | 526 | 1,013 | 1,014`:
+  - the release's `Operating income | 513 | 526 | 1,013 | 1,014`, its
+    consolidated statement of operations row.
+- CP-1B, the release's `Caesars | $2,993 | $2,907 | 3.0%`:
+  - the 10-Q's `Net revenues | 2,993 | 2,907 | 5,863 | 5,701`, its consolidated
+    statement of operations row;
+  - the 10-Q's `Total | $2,993 | $2,907 | $5,863 | $5,701`, the total of its
+    segment table's net revenues, the consolidated figure;
+  - the 10-Q's `Net revenues | $2,993 | $2,907 | $86 | 3.0% | $5,863 | $5,701 |
+    $162 | 2.8%`, its MD&A net revenues row;
+  - the release's `Net revenues | 2,993 | 2,907 | 5,863 | 5,701`, its
+    consolidated statement of operations row.
+  Not alternatives: the release's `GAAP net revenues of $3.0 billion versus
+    $2.9 billion` (rounded, not the figures) and its six-month `Caesars |
+    $5,863 | $5,701 | 2.8%` (another period).
+- CP-1B, the release's `Adjusted EBITDA | $920 | $955 | $1,807 | $1,839`:
+  - the 10-Q's `Total | $920 | $955 | $1,807 | $1,839`, the total of its
+    segment table's Adjusted EBITDA, the consolidated figure;
+  - the 10-Q's `Total Adjusted EBITDA | $920 | $955 | $1,807 | $1,839`, its
+    MD&A reconciliation's total;
+  - the release's `Consolidated Adjusted EBITDA of $920 million versus $955
+    million for the comparable prior-year period.`, its highlight sentence:
+    consolidated, the quarter against the prior-year quarter;
+  - the release's `Caesars | $920 | $955 | (3.7)%`, the consolidated row of its
+    quarterly Adjusted EBITDA table.
+  Not alternatives: the 10-Q's `Adjusted EBITDA | $920 | $955 | $1,807 |
+    $1,839` (its words recur inside the 10-Q's `Total Adjusted EBITDA` row, so
+    it is not a unique run, F475) and the release's six-month `Caesars | $1,807
+    | $1,839 | (1.7)%` (the six months alone).
+- CP-1B, the 10-K's `Net revenues | 11,486 | 11,245 | 11,528`:
+  - the 10-K's `Total | $11,486 | $11,245 | $11,528`, the total of its segment
+    table's net revenues, the consolidated figure;
+  - the 10-K's `Net Revenues | $11,486 | $11,245 | $11,528 | $241 | 2.1% |
+    $(283) | (2.5)%`, its MD&A net revenues row.
+- CP-2, the 10-Q's `Net cash provided by operating activities | 675 | 680`:
+  - the 10-Q's `During the six months ended June 30, 2026, our operating
+    activities generated operating cash inflows of $675 million, as compared to
+    operating cash inflows of $680 million during the six months ended June 30,
+    2025, primarily due to changes in working capital, coupled with the results
+    of operations described above.`, its liquidity sentence, the six months
+    against the prior six months.
+- CP-2, the 10-Q's `Purchase of property and equipment | (335) | (453)`:
+  - the 10-Q's `Cash used for capital expenditures totaled $335 million and
+    $453 million for the six months ended June 30, 2026 and 2025, respectively,
+    related to our growth, renovation, maintenance, and other capital
+    projects.`, its capital-expenditure sentence: the same cash measure and six
+    months.
+  Not alternatives: the 10-Q's `Total | $167 | $230 | $335 | $453` under
+    `Capital Expenditures, Net - By Segment` (a net segment measure, not the
+    cash-flow line, though the figures agree).
+
+The other figure keys (`Total debt`) have none: no other whole line states
+their figures for the same measure, period and basis (rounded prose such as
+`$11.8 billion` or `$1.3 billion` is not the figure).
 
 The readiness key expects CP-0 to clear CP-1, CP-1B, CP-2 and CP-5, and CP-5
 to carry `FULL` decision scope. No register key is set: a Q2 update has more

@@ -34,7 +34,13 @@
         {
           "module_id": "CP-2",
           "document_sha256": "f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a",
-          "matched_text": "Net cash provided by operating activities | 675 | 680"
+          "matched_text": "Net cash provided by operating activities | 675 | 680",
+          "alternatives": [
+            {
+              "document_sha256": "f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a",
+              "matched_text": "During the six months ended June 30, 2026, our operating activities generated operating cash inflows of $675 million, as compared to operating cash inflows of $680 million during the six months ended June 30, 2025, primarily due to changes in working capital, coupled with the results of operations described above."
+            }
+          ]
         },
         {
           "module_id": "CP-2D",

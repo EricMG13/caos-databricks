@@ -22,6 +22,9 @@ the canonical handoff's record can be checked against today, because a record
 carries projections and citations and not typed figures. A key saying "net
 leverage is 4.2x" has nothing to compare against until the record carries the
 figure as a number, which is the known-gaps entry this module ships with.
+A figure key may also name the other whole lines that state its figures
+(`AlternativeLine`, D101); a cited alternative meets it, under its own module,
+by the same exact comparison.
 
 Beside the citations a key may also ask what a module *concluded*
 (`ExpectedProjection`, over the eight fields the host projects) and what it
@@ -109,17 +112,38 @@ SCALAR_PROJECTION_FIELDS = frozenset(
 
 
 @dataclass(frozen=True, slots=True)
+class AlternativeLine:
+    """Another whole evidence line that states a figure key's confirmed figures.
+
+    Named, never inferred: the matrix compares exact strings and does no fuzzy
+    matching, so an equivalent line counts only where the set's author wrote it
+    down beside the key (D101) -- and is held to the key's own rule, one whole
+    evidence line of the document it names (F475).
+    """
+
+    document_sha256: str
+    matched_text: str
+
+
+@dataclass(frozen=True, slots=True)
 class ExpectedCitation:
     """One thing a correct run of this case must have cited.
 
     The document is named by digest rather than by filename, because a
     qualification set outlives any one case's admission of it and a filename is
     not an identity.
+
+    `alternatives` are the other lines that answer the same key (D101, the
+    owner's ruling of 3 October): a figure stated in a release's segment table
+    and in the 10-Q's statement of operations is one figure, and a module
+    citing either has cited it. Each is met only under the key's own module.
+    Prose keys carry none -- a statement is its sentence.
     """
 
     module_id: str
     document_sha256: str
     matched_text: str
+    alternatives: tuple[AlternativeLine, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -369,10 +393,7 @@ def _digested(case: QualificationCase) -> list[object]:
             [document.filename.value, sha256(document.data).hexdigest()]
             for document in case.documents
         ),
-        sorted(
-            [expect.module_id, expect.document_sha256, expect.matched_text]
-            for expect in case.expects
-        ),
+        sorted(_digested_key(expect) for expect in case.expects),
     ]
     # N8/FP-25: every optional field below is tagged with its own name before
     # its value, not appended bare. Two of the nine were already tagged
@@ -449,6 +470,37 @@ def _digested(case: QualificationCase) -> list[object]:
             ]
         )
     return entry
+
+
+def _digested_key(expect: ExpectedCitation) -> list[object]:
+    """One citation key's digested form. Its alternatives are appended, tagged
+    and sorted, only when declared, so a key without any digests exactly as it
+    did before keys could carry them (D101)."""
+    entry: list[object] = [
+        expect.module_id,
+        expect.document_sha256,
+        expect.matched_text,
+    ]
+    if expect.alternatives:
+        entry.append(
+            [
+                "alternatives",
+                sorted(
+                    [line.document_sha256, line.matched_text]
+                    for line in expect.alternatives
+                ),
+            ]
+        )
+    return entry
+
+
+def key_lines(expect: ExpectedCitation) -> tuple[tuple[str, str], ...]:
+    """Every `(document, quote)` that answers `expect`: its own line first, then
+    each alternative the set names (D101)."""
+    return (
+        (expect.document_sha256, expect.matched_text),
+        *((line.document_sha256, line.matched_text) for line in expect.alternatives),
+    )
 
 
 def build_matrix(
@@ -1255,9 +1307,14 @@ def _readiness(
 
 def _matches(expect: ExpectedCitation, cited: set[tuple[str, str, str]]) -> bool:
     """An expectation is met by the same quote, from the same document, under the
-    same module. The right quote under the wrong module answers a different
-    question and is not this key's answer."""
-    return (expect.module_id, expect.document_sha256, expect.matched_text) in cited
+    same module -- the key's own line or one of the alternatives the set names
+    for it (D101), each compared as the exact string (F475). The right quote
+    under the wrong module answers a different question and is not this key's
+    answer."""
+    return any(
+        (expect.module_id, document_sha256, matched_text) in cited
+        for document_sha256, matched_text in key_lines(expect)
+    )
 
 
 # A row's own uncertainty, not a reason to end the matrix: a pin that no longer
@@ -1447,11 +1504,26 @@ def _projections_ambiguous(expects: tuple[ExpectedProjection, ...]) -> bool:
     return False
 
 
+def _citations_ambiguous(expects: tuple[ExpectedCitation, ...]) -> bool:
+    """Whether one cited line could answer two keys, or one key twice.
+
+    A key's alternatives are other lines stating the same figures (D101). If one
+    of them were another key's line, or another key's alternative, under the
+    same module, a single citation would meet two keys and the matrix would
+    count one finding twice.
+    """
+    lines = [
+        (expect.module_id, *line) for expect in expects for line in key_lines(expect)
+    ]
+    return len(set(lines)) != len(lines)
+
+
 def assert_unambiguous(qualification: QualificationSet) -> None:
     """Refuse duplicate case labels or answer keys before either can be scored."""
     labels = [case_label(case) for case in qualification.cases]
     if len(set(labels)) != len(labels) or any(
         len(set(case.expects)) != len(case.expects)
+        or _citations_ambiguous(case.expects)
         or len(set(case.expects_register)) != len(case.expects_register)
         or _registers_ambiguous(case.expects_register)
         or _projections_ambiguous(case.expects_projection)
