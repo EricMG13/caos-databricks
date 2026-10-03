@@ -33,6 +33,7 @@ single enclosing rectangle would cover text the quote does not contain.
 
 from __future__ import annotations
 
+import difflib
 import functools
 import json
 import unicodedata
@@ -1171,6 +1172,76 @@ def _part_of(
     lines = index.lines(conn, citation.source_id)
     cuts = index.cuts.get(citation.source_id)
     return _longer_line(cited, cuts, lines, run, tracking=tracking)
+
+
+# A near miss (F493): the words a candidate line must share with the quote
+# at its start or its end, the least word similarity, how far apart their
+# lengths may be, and how many candidates are measured before the search
+# gives up (so a page of look-alike rows costs a bounded amount).
+NEAR_WORDS = 6
+NEAR_RATIO = 0.9
+NEAR_LENGTH = 0.15
+NEAR_MEASURED = 64
+
+
+def near_line(text: str, lines: Sequence[str]) -> int | None:
+    """The index in `lines` of the one line `text` nearly matches, else None
+    (F493): a quote `WHOLE_LINE` refused that slipped on a word or a letter
+    while copying a long line. Pure over the texts it is handed -- the
+    caller hands only lines the node was delivered -- so it reads nothing,
+    and it never anchors or accepts: a near miss is still refused.
+
+    A candidate shares the quote's first or last `NEAR_WORDS` words
+    (whitespace-split) and its length is within `NEAR_LENGTH` of the
+    quote's; it is near when it shares both ends or its words match at
+    least `NEAR_RATIO` (`difflib`, over words, never characters, which is
+    quadratic in a 5,000-character line). Two near lines are no answer, and
+    so is a search that would measure more than `NEAR_MEASURED` candidates:
+    one pass over the lines, never a guess.
+    """
+    words = text.split()
+    if not words:
+        return None
+    ends = (tuple(words[:NEAR_WORDS]), tuple(words[-NEAR_WORDS:]))
+    size = len(" ".join(words))
+    found: list[int] = []
+    measured = 0
+    for number, line in enumerate(lines):
+        split = line.split()
+        shared = _candidate(split, ends, size)
+        if shared is None:
+            continue
+        if not shared:
+            measured += 1
+            if measured > NEAR_MEASURED:
+                return None
+            if not _similar(words, split):
+                continue
+        found.append(number)
+    return found[0] if len(found) == 1 else None
+
+
+def _candidate(
+    split: list[str], ends: tuple[tuple[str, ...], tuple[str, ...]], size: int
+) -> bool | None:
+    """None for a line `near_line` passes over (neither end of the quote, or
+    a length past `NEAR_LENGTH`), else whether it shares both ends."""
+    shared = (tuple(split[:NEAR_WORDS]), tuple(split[-NEAR_WORDS:]))
+    if shared[0] != ends[0] and shared[1] != ends[1]:
+        return None
+    if abs(len(" ".join(split)) - size) > NEAR_LENGTH * size:
+        return None
+    return shared == ends
+
+
+def _similar(words: list[str], split: list[str]) -> bool:
+    """Whether two word lists match at least `NEAR_RATIO` (`near_line`)."""
+    matcher = difflib.SequenceMatcher(None, words, split, autojunk=False)
+    return (
+        matcher.real_quick_ratio() >= NEAR_RATIO
+        and matcher.quick_ratio() >= NEAR_RATIO
+        and matcher.ratio() >= NEAR_RATIO
+    )
 
 
 def _verdict(

@@ -655,3 +655,137 @@ def test_placing_a_quote_reads_each_page_once_and_never_re_anchors(
     )
     assert found.absent
     assert len(searched) <= len(by_page)
+
+
+# R2's CP-0 shape (F493): a long sentence copied whole with one phrase
+# rewritten, or one letter added.
+MERGER = (
+    "On March 4, 2026, the Company entered into the Merger Agreement with"
+    " Parent and Merger Sub, pursuant to which, on the terms and subject to the"
+    " conditions of the Merger Agreement (as defined below), Merger Sub will"
+    " merge with and into the Company, with the Company surviving the merger"
+    " as a wholly owned subsidiary of Parent, and each share of common stock"
+    " outstanding immediately prior to the effective time will be converted"
+    " into the right to receive the merger consideration in cash."
+)
+SUBSTITUTED = MERGER.replace("of the Merger Agreement (as defined below),", "therein,")
+ONE_LETTER = MERGER.replace("each share", "each shares")
+
+
+def test_near_line_names_the_one_line_a_slipped_quote_nearly_matches() -> None:
+    """F493: a quote that copied a long line with a phrase rewritten or a
+    letter added is near that line -- the same first or last `NEAR_WORDS`
+    words, a length within `NEAR_LENGTH` and the same ends or a word
+    similarity of at least `NEAR_RATIO`; two such lines, an unrelated quote
+    or a line far shorter are no answer."""
+    from caos.evidence.citations import NEAR_LENGTH, NEAR_RATIO, NEAR_WORDS, near_line
+
+    lines = [
+        "Revenue grew 4% in FY2025.",
+        MERGER,
+        "The Company expects the merger to close in the second half of 2026.",
+    ]
+    assert near_line(SUBSTITUTED, lines) == 1
+    assert near_line(ONE_LETTER, lines) == 1
+    # A slip in the opening words still matches by the closing ones.
+    assert near_line(MERGER.replace("On March 4", "On 4 March"), lines) == 1
+    # Two near lines: no answer, never a guess.
+    assert near_line(ONE_LETTER, [*lines, MERGER.replace("cash.", "cash")]) is None
+    assert near_line("Liquidity was USD 310.5m at year end.", lines) is None
+    assert near_line("", lines) is None
+    # Same first words, far shorter: a fragment, not a near miss.
+    assert near_line(" ".join(MERGER.split()[:20]), lines) is None
+    # Same first words, the rest rewritten: below the similarity floor.
+    head = " ".join(MERGER.split()[:NEAR_WORDS])
+    rewritten = head + " " + " ".join(f"word{n}" for n in range(60))
+    assert (
+        near_line(rewritten, [head + " " + " ".join(f"other{n}" for n in range(60))])
+        is None
+    )
+    assert (NEAR_WORDS, NEAR_RATIO, NEAR_LENGTH) == (6, 0.9, 0.15)
+
+
+NEAR_PAGES = (
+    ("Revenue grew 4% in FY2025.",),
+    ("The facility matures in 2029 and bears interest at SOFR plus 2.75% per annum.",),
+    ("Cover was 2.1x.",),
+)
+
+
+def test_a_near_miss_is_hinted_from_delivered_lines_only(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> None:
+    """F493: a quote one letter off a delivered line of another page is
+    still refused (invariant 11), and the retry is told that line's page
+    and first words; with that page not delivered, the quote is absent and
+    the page is never read (D82's M2)."""
+    from caos.evidence.citations import TokenIndex
+    from caos.methodology.canonical import _line_hint
+    from caos.methodology.executor import Delivery
+    from caos.methodology.handoff import HINT_WORDS, LineHint
+
+    conn, case_id = case
+    source_id = _ingest_pdf(conn, case_id, tmp_path, _pages_pdf(NEAR_PAGES))
+    every = [
+        Delivery(source_id, block_id, page, BoundaryText.of(text))
+        for page, blocks in _blocks_by_page(conn, source_id).items()
+        for block_id, text in blocks.items()
+    ]
+    slipped = NEAR_PAGES[1][0].replace("matures", "matured")
+    citation = Citation(source_id, 1, slipped)
+    assert _code(conn, source_id, slipped) is RefusalCode.CITATION_NOT_LOCATED
+
+    def hint(delivered: list[Delivery], index: TokenIndex) -> LineHint:
+        blocks = {source_id: frozenset(d.block_id for d in delivered)}
+        return _line_hint(conn, delivered, blocks, citation, index)
+
+    begins = " ".join(NEAR_PAGES[1][0].split()[:HINT_WORDS])
+    assert hint(every, TokenIndex()) == LineHint(begins=begins, near=2)
+    index = TokenIndex()
+    withheld = [d for d in every if d.page != 2]
+    assert hint(withheld, index) == LineHint(absent=True)
+    assert (source_id, 2) not in index.pages
+
+
+def test_placing_a_near_miss_stays_linear_in_the_lines_delivered(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """F493 (D94's I1 lesson): 360 delivered pages of 30 lines each are
+    searched for a near miss in one pass. Lines that share neither end of
+    the quote cost one comparison; when every line shares its first words
+    at a near length, at most `NEAR_MEASURED` are measured and the search
+    gives up -- no hint, never a quadratic cost."""
+    import random
+    import time
+
+    from caos.evidence import citations
+    from caos.evidence.citations import NEAR_MEASURED, NEAR_WORDS, near_line
+
+    measured: list[int] = []
+    similar = citations._similar
+
+    def counted(words: list[str], split: list[str]) -> bool:
+        measured.append(1)
+        return similar(words, split)
+
+    monkeypatch.setattr(citations, "_similar", counted)
+    lines = [
+        f"Page {page} line {line} " + " ".join(f"w{n}" for n in range(70))
+        for page in range(360)
+        for line in range(30)
+    ]
+    lines[5000] = MERGER
+    started = time.perf_counter()
+    assert near_line(ONE_LETTER, lines) == 5000
+    unrelated = time.perf_counter() - started
+    words = MERGER.split()
+    rows = random.Random(0)
+    lookalikes = [
+        " ".join(words[:NEAR_WORDS] + rows.sample(words[NEAR_WORDS:], 70))
+        for _ in range(360 * 30)
+    ]
+    started = time.perf_counter()
+    assert near_line(ONE_LETTER, [*lookalikes, MERGER]) is None
+    alike = time.perf_counter() - started
+    assert len(measured) == NEAR_MEASURED
+    assert unrelated < 0.5 and alike < 0.5
