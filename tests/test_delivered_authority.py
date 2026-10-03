@@ -20,6 +20,7 @@ import pytest
 
 from caos.methodology.bundle import (
     MANIFEST_NAME,
+    PAYLOAD_SCHEMA_SUFFIX,
     Bundle,
     DeliveredAuthority,
     delivered_authority,
@@ -49,8 +50,9 @@ LITE_BASE = "../../CP_DEPLOY_V_LITE_MODULE_PAYLOAD_BASE_v1.schema.txt"
 # whose canon states the register binding rule (D84, +519 bytes); fork r5's
 # single-table CP-1 (D85, build 3fb5cf14) moves none of the three; and on fork
 # r6's build fa90657d, whose canon states the QA severity rule, the null
-# spelling and the nearest-heading binding (D89, D91, D92; +732 bytes).
-MEASURED = {"CP-0": 153_178, "CP-L10": 207_107, "CP-5": 170_744}
+# spelling and the nearest-heading binding (D89, D91, D92; +732 bytes); and
+# with the payload schemas withheld (D93): CP-0 -11,628 bytes, CP-L10 -54,133.
+MEASURED = {"CP-0": 141_550, "CP-L10": 152_974, "CP-5": 170_744}
 AUTHORITY_SHARE_OF_REQUEST = 0.25
 FOLDERS = {
     "CP-0": "cp-0-source-readiness",
@@ -110,11 +112,12 @@ def test_every_required_reference_byte_is_delivered(
     references = sorted(
         name
         for name in manifest
-        if name != "SKILL.md" and not name.startswith("scripts/")
+        if name != "SKILL.md"
+        and not name.startswith("scripts/")
+        and not name.endswith(PAYLOAD_SCHEMA_SUFFIX)
     )
-    roots = sorted({CANON, LITE_BASE} if module_id == "CP-L10" else {CANON})
 
-    assert names == ["SKILL.md", *references, *roots]
+    assert names == ["SKILL.md", *references, CANON]
     assert not any("scripts/" in name for name in names)
     assert delivered.module_id == module_id
     assert delivered.build_id == bundle.build_id
@@ -128,6 +131,29 @@ def test_every_required_reference_byte_is_delivered(
     total = sum(len(data) for _, data in delivered.files)
     assert total == MEASURED[module_id]
     assert total < AUTHORITY_SHARE_OF_REQUEST * MAX_REQUEST_BYTES
+
+
+def test_no_module_is_delivered_a_payload_schema(bundle: Bundle) -> None:
+    """D93: the adapter never receives a payload, so no module is handed the
+    JSON schema of one -- neither a manifest file nor a root file its
+    `SKILL.md` names -- and each is named as withheld for the prompt."""
+    from caos.methodology.invocation import _authority_sections
+
+    for entry in json.loads((VENDORED / MANIFEST_NAME).read_bytes())["skills"]:
+        module_id = entry["module_id"]
+        delivered = delivered_authority(bundle, module_id)
+        assert not [n for n, _ in delivered.files if n.endswith(PAYLOAD_SCHEMA_SUFFIX)]
+        listed = {n for n in entry["relative_file_hashes"] if n.endswith(".schema.txt")}
+        assert listed <= set(delivered.withheld)
+    lite = delivered_authority(bundle, "CP-L10")
+    assert LITE_BASE in lite.withheld
+    assert len([n for n in lite.withheld if n.endswith(PAYLOAD_SCHEMA_SUFFIX)]) == 6
+    prompt = _authority_sections(lite, "test")
+    assert "--- AUTHORITY test PAYLOAD SCHEMAS WITHHELD (host-owned note) ---" in prompt
+    assert all(f"`{name}`" in prompt for name in lite.withheld)
+    assert "sample or placeholder" not in prompt
+    base = verified_root_bytes(bundle, LITE_BASE.removeprefix("../../"))
+    assert base.decode() not in prompt
 
 
 def test_every_module_in_the_build_delivers_its_named_root_files(

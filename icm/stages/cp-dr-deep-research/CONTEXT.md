@@ -10,7 +10,6 @@ Bundle folder `vendor/deploy-v/skills/cp-dr-deep-research/`, read through the ve
 |---|---|---|---|
 | bundle | vendor/deploy-v/skills/cp-dr-deep-research/SKILL.md | whole | the module's authority, delivered first |
 | bundle | vendor/deploy-v/skills/cp-dr-deep-research/references/CP-DR_DeepResearch.schema.md | whole | delivered authority file |
-| bundle | vendor/deploy-v/skills/cp-dr-deep-research/references/CP-DR__DeepResearch__payload.schema.txt | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-dr-deep-research/references/REF_CP-DR_STEPS.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/CANON_SHARED.md | whole | delivered authority file |

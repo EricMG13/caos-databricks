@@ -11,22 +11,16 @@ Bundle folder `vendor/deploy-v/skills/cp-l10-financial-change-screen/`, read thr
 | bundle | vendor/deploy-v/skills/cp-l10-financial-change-screen/SKILL.md | whole | the module's authority, delivered first |
 | bundle | vendor/deploy-v/skills/cp-l10-financial-change-screen/references/CP-L10_CP_LITE_ANALYSIS_POLICY_v1.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-l10-financial-change-screen/references/CP-L10_SCHEMA_REFERENCE.md | whole | delivered authority file |
-| bundle | vendor/deploy-v/skills/cp-l10-financial-change-screen/references/CP-L10__lite_financial_change_screen__payload.schema.txt | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-l10-financial-change-screen/references/CP-L20_SCHEMA_REFERENCE.md | whole | delivered authority file |
-| bundle | vendor/deploy-v/skills/cp-l10-financial-change-screen/references/CP-L20__lite_fundamental_credit_screen__payload.schema.txt | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-l10-financial-change-screen/references/CP-L23_SCHEMA_REFERENCE.md | whole | delivered authority file |
-| bundle | vendor/deploy-v/skills/cp-l10-financial-change-screen/references/CP-L23__lite_liquidity_sensitivity_screen__payload.schema.txt | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-l10-financial-change-screen/references/CP-L30_SCHEMA_REFERENCE.md | whole | delivered authority file |
-| bundle | vendor/deploy-v/skills/cp-l10-financial-change-screen/references/CP-L30__lite_market_recovery_opportunity_screen__payload.schema.txt | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-l10-financial-change-screen/references/CP-L40_SCHEMA_REFERENCE.md | whole | delivered authority file |
-| bundle | vendor/deploy-v/skills/cp-l10-financial-change-screen/references/CP-L40__lite_legal_structure_capacity_screen__payload.schema.txt | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-l10-financial-change-screen/references/REF_CP-L10_ADAPTIVE_METHOD.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-l10-financial-change-screen/references/REF_CP-L20_ADAPTIVE_METHOD.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-l10-financial-change-screen/references/REF_CP-L23_ADAPTIVE_METHOD.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-l10-financial-change-screen/references/REF_CP-L30_ADAPTIVE_METHOD.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-l10-financial-change-screen/references/REF_CP-L40_ADAPTIVE_METHOD.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/CANON_SHARED.md | whole | delivered authority file |
-| bundle | vendor/deploy-v/CP_DEPLOY_V_LITE_MODULE_PAYLOAD_BASE_v1.schema.txt | whole | delivered authority file |
 | prompt | icm/shared/prompt/instruction.md | whole | prompt block |
 | prompt | icm/shared/prompt/tagged.md | whole | prompt block |
 | prompt | icm/shared/prompt/host_steps.md | whole | prompt block |

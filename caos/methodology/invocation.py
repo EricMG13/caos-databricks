@@ -41,6 +41,7 @@ from caos.graph.route import (
 )
 from caos.icm import prompt_block
 from caos.methodology.bundle import (
+    PAYLOAD_SCHEMA_SUFFIX,
     Bundle,
     DeliveredAuthority,
     assemble_authority,
@@ -864,6 +865,17 @@ _WITHHELD = (
     "--- END AUTHORITY {tag} WITHHELD ---\n"
 )
 
+# D93: what the host says of the payload schemas it keeps back.
+_WITHHELD_SCHEMAS = (
+    "\n--- AUTHORITY {tag} PAYLOAD SCHEMAS WITHHELD (host-owned note) ---\n"
+    "Not delivered: {names}. Each is the JSON schema of a payload this host"
+    " never takes: your handoff is the canonical Markdown alone, held to the"
+    " registers, columns and values your SKILL.md and its delivered references"
+    " state. A payload schema your SKILL.md names is neither a gap nor a step"
+    " to perform.\n"
+    "--- END AUTHORITY {tag} PAYLOAD SCHEMAS WITHHELD ---\n"
+)
+
 
 def _authority_sections(authority: DeliveredAuthority, tag: str) -> str:
     # Every delivered file is text: the only binary references are withheld.
@@ -874,10 +886,12 @@ def _authority_sections(authority: DeliveredAuthority, tag: str) -> str:
         f"\n--- END AUTHORITY {tag} FILE {name} ---\n"
         for name, data in authority.files
     )
-    if not authority.withheld:
-        return files
-    names = ", ".join(f"`{name}`" for name in authority.withheld)
-    return files + _WITHHELD.format(tag=tag, names=names)
+    schemas = [n for n in authority.withheld if n.endswith(PAYLOAD_SCHEMA_SUFFIX)]
+    samples = [n for n in authority.withheld if n not in schemas]
+    for note, names in ((_WITHHELD, samples), (_WITHHELD_SCHEMAS, schemas)):
+        if names:
+            files += note.format(tag=tag, names=", ".join(f"`{n}`" for n in names))
+    return files
 
 
 def _printable(value: str) -> str:

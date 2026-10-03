@@ -9,13 +9,7 @@ Bundle folder `vendor/deploy-v/skills/cp-os-credit-os/`, read through the verifi
 | Source | File | Section | Why |
 |---|---|---|---|
 | bundle | vendor/deploy-v/skills/cp-os-credit-os/SKILL.md | whole | the module's authority, delivered first |
-| bundle | vendor/deploy-v/skills/cp-os-credit-os/references/CP-OS_MIRROR_CP-L10__lite_financial_change_screen__payload.schema.txt | whole | delivered authority file |
-| bundle | vendor/deploy-v/skills/cp-os-credit-os/references/CP-OS_MIRROR_CP-L20__lite_fundamental_credit_screen__payload.schema.txt | whole | delivered authority file |
-| bundle | vendor/deploy-v/skills/cp-os-credit-os/references/CP-OS_MIRROR_CP-L23__lite_liquidity_sensitivity_screen__payload.schema.txt | whole | delivered authority file |
-| bundle | vendor/deploy-v/skills/cp-os-credit-os/references/CP-OS_MIRROR_CP-L30__lite_market_recovery_opportunity_screen__payload.schema.txt | whole | delivered authority file |
-| bundle | vendor/deploy-v/skills/cp-os-credit-os/references/CP-OS_MIRROR_CP-L40__lite_legal_structure_capacity_screen__payload.schema.txt | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-os-credit-os/references/CP-OS_MIRROR_CP0_PROFILE_ANCHOR_CONTRACT_v1.md | whole | delivered authority file |
-| bundle | vendor/deploy-v/skills/cp-os-credit-os/references/CP-OS_MIRROR_LITE_MODULE_PAYLOAD_BASE_v1.schema.txt | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-os-credit-os/references/CP_DEPLOY_V_CHILD_SCHEMA_REGISTRY_v1.json | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-os-credit-os/references/CP_DEPLOY_V_CHILD_SCHEMA_REGISTRY_v1.schema.json | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-os-credit-os/references/CP_DR_RESEARCH_BRIEF_V1.md | whole | delivered authority file |

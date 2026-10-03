@@ -10,7 +10,6 @@ Bundle folder `vendor/deploy-v/skills/cp-4c-restructuring-fulcrum/`, read throug
 |---|---|---|---|
 | bundle | vendor/deploy-v/skills/cp-4c-restructuring-fulcrum/SKILL.md | whole | the module's authority, delivered first |
 | bundle | vendor/deploy-v/skills/cp-4c-restructuring-fulcrum/references/CP-4C_RestructuringScenario.schema.md | whole | delivered authority file |
-| bundle | vendor/deploy-v/skills/cp-4c-restructuring-fulcrum/references/CP-4C__RestructuringScenario__payload.schema.txt | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-4c-restructuring-fulcrum/references/REF_CP-4C_STEPS.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/CANON_SHARED.md | whole | delivered authority file |
 | prompt | icm/shared/prompt/instruction.md | whole | prompt block |

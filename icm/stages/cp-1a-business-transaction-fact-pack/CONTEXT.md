@@ -13,7 +13,6 @@ Bundle folder `vendor/deploy-v/skills/cp-1a-business-transaction-fact-pack/`, re
 | bundle | vendor/deploy-v/skills/cp-1a-business-transaction-fact-pack/references/CP-1A_SYSTEM_REFERENCE.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-1a-business-transaction-fact-pack/references/CP-2C_SCHEMA_REFERENCE.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-1a-business-transaction-fact-pack/references/CP-2C_SYSTEM_REFERENCE.md | whole | delivered authority file |
-| bundle | vendor/deploy-v/skills/cp-1a-business-transaction-fact-pack/references/CP-2C__GovernanceSponsorScore__payload.schema.txt | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-1a-business-transaction-fact-pack/references/REF_CP-1A_STEPS.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-1a-business-transaction-fact-pack/references/REF_CP-2C_STEPS.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/CANON_SHARED.md | whole | delivered authority file |

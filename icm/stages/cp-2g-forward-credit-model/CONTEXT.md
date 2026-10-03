@@ -10,7 +10,6 @@ Bundle folder `vendor/deploy-v/skills/cp-2g-forward-credit-model/`, read through
 |---|---|---|---|
 | bundle | vendor/deploy-v/skills/cp-2g-forward-credit-model/SKILL.md | whole | the module's authority, delivered first |
 | bundle | vendor/deploy-v/skills/cp-2g-forward-credit-model/references/CP-2G_ForwardCreditModel.schema.md | whole | delivered authority file |
-| bundle | vendor/deploy-v/skills/cp-2g-forward-credit-model/references/CP-2G__ForwardCreditModel__payload.schema.txt | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-2g-forward-credit-model/references/REF_CP-2G_STEPS.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/CANON_SHARED.md | whole | delivered authority file |
 | prompt | icm/shared/prompt/instruction.md | whole | prompt block |

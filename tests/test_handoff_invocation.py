@@ -1181,9 +1181,10 @@ def test_section_markers_cannot_be_forged_by_evidence() -> None:
     prompt = _prompt(gate, delivered)
     tag = _tag(prompt)
     files = len(delivered_authority(BUNDLE, "CP-0").files)
-    # The tag rule (2), front matter (2), host steps (2), each file (2), source
-    # prep (2), evidence (2), final check (2), CP-0 final check (2).
-    assert prompt.count(tag) == 14 + 2 * files and tag not in forged
+    # The tag rule (2), front matter (2), host steps (2), each file (2), the
+    # payload schemas' withheld note (2, D93), source prep (2), evidence (2),
+    # final check (2), CP-0 final check (2).
+    assert prompt.count(tag) == 16 + 2 * files and tag not in forged
     assert _front_matter(prompt).count("issuer_name") == 1
 
 

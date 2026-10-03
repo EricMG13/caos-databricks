@@ -11,10 +11,8 @@ Bundle folder `vendor/deploy-v/skills/cp-2a-downside-pathway/`, read through the
 | bundle | vendor/deploy-v/skills/cp-2a-downside-pathway/SKILL.md | whole | the module's authority, delivered first |
 | bundle | vendor/deploy-v/skills/cp-2a-downside-pathway/references/CP-2A_SCHEMA_REFERENCE.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-2a-downside-pathway/references/CP-2A_SYSTEM_REFERENCE.md | whole | delivered authority file |
-| bundle | vendor/deploy-v/skills/cp-2a-downside-pathway/references/CP-2A__DownsidePathway__payload.schema.txt | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-2a-downside-pathway/references/CP-2B_SCHEMA_REFERENCE.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-2a-downside-pathway/references/CP-2B_SYSTEM_REFERENCE.md | whole | delivered authority file |
-| bundle | vendor/deploy-v/skills/cp-2a-downside-pathway/references/CP-2B__EventCatalystRegister__payload.schema.txt | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-2a-downside-pathway/references/REF_CP-2A_STEPS.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-2a-downside-pathway/references/REF_CP-2B_STEPS.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/CANON_SHARED.md | whole | delivered authority file |
