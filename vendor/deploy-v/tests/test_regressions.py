@@ -598,6 +598,72 @@ def _r5_find_registers(text):
     return out
 
 
+def _r6_find_registers(text, ids):
+    """`completeness_check.find_registers(text, ids)` as fork r6 shipped it (snake_case titles aside)."""
+    import re
+    alternatives = '|'.join(re.escape(i) for i in sorted(set(ids), key=lambda v: (-len(v), v)))
+    id_re = re.compile(rf'(?<![A-Za-z0-9_.])({alternatives})(?![A-Za-z0-9_]|\.[A-Za-z0-9])')
+
+    def label(line):
+        match = id_re.search(line)
+        return match.group(1) if match else None
+    lines = handoff.unfenced_markdown(text).splitlines()
+    out, distant, recent, heading, i = {}, [], [], None, 0
+    while i < len(lines):
+        s = lines[i].strip()
+        if s.startswith('|') and s.count('|') >= 2 and not tables.SEPARATOR_RE.match(s):
+            header, j = tables._split_row(s), i + 1
+            if j < len(lines) and tables.SEPARATOR_RE.match(lines[j].strip()) and '|' in lines[j]:
+                j += 1
+            rows = []
+            while j < len(lines) and lines[j].strip().startswith('|'):
+                cells = complete._row_cells(lines[j].strip(), len(header))
+                cells += [''] * (len(header) - len(cells))
+                rows.append(dict(zip(header, cells[:len(header)])))
+                j += 1
+            labels = [x for x in reversed(recent) if x.startswith('#')] + [x for x in reversed(recent) if not x.startswith('#')]
+            reg = next((found for found in map(label, labels) if found), None)
+            if reg:
+                out.setdefault(reg, (header, rows))
+            elif heading is not None and heading not in recent and label(heading):
+                distant.append((label(heading), (header, rows)))
+            i, recent, heading = j, [], None
+            continue
+        if s:
+            recent = (recent + [s])[-4:]
+            heading = s if s.startswith('#') else heading
+        i += 1
+    for reg, table in distant:
+        out.setdefault(reg, table)
+    return out
+
+
+def _r7_expected(text, ids):
+    """What fork r7 must bind: r6's reading, once the prose in the window of a table whose heading is led by
+    an unlisted ID of a listed ID's family ("#### T4.7 ..." with T4.14 listed) is made a plain note."""
+    import re
+    stems = {i.rstrip('0123456789') for i in ids}
+    led = re.compile(r'#+\s*[*_]*\s*(TL\d+\.\d+|[PT]\d+(?:\.\d+)?)(?![A-Za-z0-9])')
+
+    def retired(line):
+        match = led.match(line)
+        return bool(match) and match.group(1) not in ids and match.group(1).rstrip('0123456789') in stems
+    lines, window = text.split('\n'), []
+    for n, line in enumerate(lines):
+        s = line.strip()
+        if s.startswith('|') and s.count('|') >= 2 and not tables.SEPARATOR_RE.match(s):
+            if window and not (n and lines[n - 1].strip().startswith('|')):
+                near = window[-4:]
+                if any(retired(lines[k].strip()) for k in near if lines[k].strip().startswith('#')):
+                    for k in near:
+                        if not lines[k].strip().startswith('#'):
+                            lines[k] = 'A note.'
+            window = []
+        elif s:
+            window.append(n)
+    return _r6_find_registers('\n'.join(lines), ids)
+
+
 class ForkR6Tests(unittest.TestCase):
     """Deployment fork r6: the readers tolerate what well-meaning answers wrote, and refuse what they did before."""
 
@@ -819,7 +885,10 @@ class ForkR6Tests(unittest.TestCase):
         generator = random.Random(4102026)
         rows = ['| r{k} | 1 |', '| r{k} \\| s | 2 |', '|| r{k} | 3 |', '| r{k} | TBD |', '| r{k} \\| s | |',
                 '| r{k} |', '| r{k} | 4 ||']
-        headings = ['#### T{k} — Register', '#### Section {k}', '#### CP-MODEL Readiness', '## H2', 'A note.', '']
+        headings = ['#### T{k} — Register', '#### Section {k}', '#### CP-MODEL Readiness', '## H2', 'A note.', '',
+                    # Fork r7 (M1): IDs inside a heading, an umbrella or another family's token, prose naming IDs.
+                    '### Inputs (CP-1 T4.6, T{k})', '### T4 — Statements', '#### LTM / T12M build', '### P90 case',
+                    'Restated from T{k} above.', 'Upstream CP-1 T4.6 and T{k}.']
         placements = ['above heading', 'below heading', 'below table', 'none', 'twice', 'twice bad']
         fresh_docs = 0
         for _ in range(20000):
@@ -866,6 +935,8 @@ class ForkR6Tests(unittest.TestCase):
                 found = complete.find_registers(text, [register]).get(register)
                 if found and found[0] == table.columns:
                     self.assertEqual([list(r.values()) for r in found[1]], [list(r.values()) for r in table.rows], text)
+                # Fork r7 (M1): the locator binds exactly what r6 bound, but for a retired heading's table.
+                self.assertEqual(found, _r7_expected(text, [register]).get(register), text)
             try:
                 model = model_inputs.parse_stable_tables(text)
             except model_inputs.ContractError:
@@ -933,6 +1004,68 @@ class ForkR7Tests(unittest.TestCase):
         # A heading naming no register still lets the prose line bind (fork r2).
         notes = text.replace('#### T4.7 Normalized Financials', '#### Notes')
         self.assertEqual(complete.find_registers(notes, ['T4.6', 'T4.18'])['T4.18'][0], ['Line Item', 'Statement Source', 'FY2025'])
+
+    def test_an_id_inside_a_heading_never_stops_the_prose(self):
+        # Review fix round 1 (I2): an upstream citation in a heading ("Inputs (CP-1 T4.6, T4.18)")
+        # stopped the prose binding, so a TBD copy passed while a clean copy bound, and a lone
+        # register written under such a heading was refused as missing.
+        skill = skill_text('cp-2d-liquidity-cash-flow-bridge')
+        contract = complete.load_contract(skill, 'CP-2D')
+        first = list(contract['registers'])[0]
+        columns = contract['registers'][first]['columns']
+        head = '| ' + ' | '.join(columns) + ' |\n|' + '---|' * len(columns) + '\n'
+        bad = head + '| ' + ' | '.join(['TBD'] + ['x'] * (len(columns) - 1)) + ' |\n'
+        good = head + '| ' + ' | '.join('x' for _ in columns) + ' |\n'
+        lead = f'### Liquidity inputs (CP-1 T4.6, T4.18)\n\n**{first} — register**\n\n'
+        two = lead + bad + f'\n### Summary\n\nRestated from {first} above.\n\n' + good
+        self.assertEqual([v for v in complete.check(skill, two, 'CP-2D')[0] if v.startswith(first)],
+                         [f"{first} row 1: critical column '{columns[0]}' holds a disqualifying placeholder 'TBD'"])
+        one = lead + good
+        self.assertIn(first, complete.find_registers(one, list(contract['registers'])))
+        self.assertFalse([v for v in complete.check(skill, one, 'CP-2D')[0] if v.startswith(first + ':')])
+
+    def test_an_umbrella_or_another_familys_heading_never_stops_the_prose(self):
+        # Review fix round 1 (I2): "### T4 — ..." over "**T4.4 — Income Statement**", "T12M", "P90".
+        ids = list(complete.load_contract(skill_text('cp-1-canonical-data-foundation'), 'CP-1')['registers'])
+        table = '| Line Item | FY2025 | FY2024 |\n| --- | --- | --- |\n| Revenue | 10 | 9 |\n'
+        docs = {
+            '### T4 — Historical financial statements\n\n**T4.4 — Income Statement**\n\n': 'T4.4',
+            '#### LTM / T12M build\n\nT4.4 Income statement (USD m):\n\n': 'T4.4',
+            '### Downside P90 case\nTable T4.9 KPIs\n': 'T4.9',
+            '#### T12M build\n\nT4.4 Income statement:\n\n': 'T4.4',
+        }
+        for lead, register in docs.items():
+            with self.subTest(lead=lead):
+                self.assertEqual(sorted(complete.find_registers(lead + table, ids)), [register])
+        # A heading led by a retired ID of the same family keeps its table.
+        self.assertEqual(complete.find_registers('#### T4.7 Normalized\nSee T4.18.\n' + table, ids), {})
+        self.assertEqual(complete.find_registers('### **T4.7** Normalized\nSee T4.18.\n' + table, ids), {})
+
+    def test_the_locator_binds_as_r6_but_under_a_retired_heading(self):
+        # Review fix round 1 (M1): over documents mixing listed, retired, umbrella and cited IDs in headings
+        # and prose, every binding is r6's, but a retired heading's table, which no prose claims; nothing
+        # else unbinds or moves.
+        import random
+        ids = ['T4.4', 'T4.6', 'T4.9', 'T4.18']
+        lines_from = ['#### T4.4 — Income', '#### T4.18 Debt', '#### T4.7 Normalized Financials', '#### T4.10 KPI Dashboard',
+                      '### **T4.7** Retired', '### T4 — Statements', '### Inputs (CP-1 T4.6, T4.18)', '#### LTM / T12M build',
+                      '### Downside P90 case', '#### Notes', '## Analysis', 'See T4.18.', 'Restated from T4.4 above.',
+                      '**T4.6 — Balance Sheet**', 'T4.4 Income statement (USD m):', 'A note.', 'Table T4.9 KPIs', '> quote',
+                      'Upstream CP-1 T4.6 and T4.18.', '']
+        generator = random.Random(5102026)
+        retired_docs = moved = 0
+        for _ in range(20000):
+            parts = []
+            for k in range(1, generator.randint(1, 4) + 1):
+                parts += [generator.choice(lines_from) for _ in range(generator.randint(0, 5))]
+                parts += [f'| c{k} | v{k} |', '| --- | --- |', f'| r{k} | 1 |', '']
+            text = '\n'.join(parts)
+            now, before = complete.find_registers(text, ids), _r6_find_registers(text, ids)
+            self.assertEqual(now, _r7_expected(text, ids), text)
+            retired_docs += now != before
+            moved += any(now.get(r) not in (None, before.get(r)) for r in ids)
+        self.assertGreater(retired_docs, 500)
+        self.assertGreater(moved, 100)
 
     def test_cp_model_reads_the_canons_dash_as_null(self):
         # The canon renders an absent value `—`; CP-MODEL read it as text, so one dash in a tagged
