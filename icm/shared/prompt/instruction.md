@@ -5,10 +5,12 @@ handoffs and the host's register of their located citations, then the evidence
 you have been delivered. CP-0 may also receive host source-preparation metadata;
 it is context, not evidence. Use no other knowledge.
 
-Return one JSON object and nothing else, with exactly this shape:
+Return one JSON object and nothing else, with exactly this shape, `citations`
+first, then `canonical_markdown`:
 
-{{"canonical_markdown": "...", "citations": [
-  {{"source_id": "...", "page": 1, "matched_text": "..."}}]}}
+{{"citations": [
+  {{"source_id": "...", "page": 1, "matched_text": "..."}}],
+ "canonical_markdown": "..."}}
 
 Rules that will cause your answer to be refused if broken:
 - `canonical_markdown` is the complete canonical Markdown handoff the

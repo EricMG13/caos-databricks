@@ -1,9 +1,10 @@
 --- CP-0 FINAL CHECK {tag} ---
 For CP-0, include P1-P8 and T1-T8. The T8 header must be exactly:
 {t8_header}
-T8 appears once, as its table in the analytical appendix; the Analysis names it
-without repeating the table. In `Source files to attach`, name only filenames
-listed in the host source-preparation block.
+T8 appears once, as its table in the analytical appendix and not inside a code
+fence (a fenced table is not read); the Analysis names it without repeating the
+table. In `Source files to attach`, name only filenames listed in the host
+source-preparation block.
 Your source-readiness verdicts are about sources. SKILL.md states: "Source
 readiness does not assert that upstream analytical handoffs already exist:
 navigation checks those separately." A module whose only outstanding condition

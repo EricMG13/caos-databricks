@@ -1,5 +1,6 @@
 --- FINAL RESPONSE CHECK {tag} ---
-Return exactly one JSON object with only `canonical_markdown` and `citations`.
+Return exactly one JSON object with only `citations` and `canonical_markdown`,
+`citations` first, then `canonical_markdown`.
 Inside `canonical_markdown`, copy the host-owned front matter exactly and use
 exactly these {heading_count} H2 headings once, in this order: {headings}.
 Add only these model-authored front-matter fields: {authored_fields}. Do not add
@@ -9,7 +10,10 @@ Include every register required by the authority. `committee_status` must be
 one of {committee_statuses}: what this pathway's decision scope
 ({decision_scope}) permits.
 An evidence line is all the text between two blank lines in the EVIDENCE
-section; it may be a whole paragraph or a whole table row. For every citation,
+section, other than an evidence header (its `source_id:` and `page:` lines);
+it may be a whole paragraph or a whole table row. The section's last line,
+directly above its END EVIDENCE marker with no blank line between, is an
+evidence line too. For every citation,
 `matched_text` copies one entire evidence line character for character,
 including any leading bullet or footnote marker and any trailing `|`, never
 only a sentence of it; that line must appear exactly once on its cited page;
