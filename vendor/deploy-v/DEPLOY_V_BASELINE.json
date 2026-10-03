@@ -1,6 +1,6 @@
 {
   "authority": "DEPLOY_V_BASELINE",
-  "baseline_digest": "d5339e6839a91551eb3c307e6718680cbee532a3287d60c23a6052e072cd9a63",
+  "baseline_digest": "cc8600b71fbbf6cbbbfd1f1bde9c25038ad0699e07106b492fb1bf9cb80372fd",
   "packages": {
     "cp-0-source-readiness": {
       "files": {
@@ -45,16 +45,16 @@
           "sha256": "bacd9bc112fdef8b7207f5362490bb893d4451fee5075a5b1029f9a7c2fe6b75"
         },
         "scripts/completeness_check.py": {
-          "bytes": 39039,
-          "sha256": "30afd11e4a03c1e11c70d5aa9d00650c0c74a6315743d59b4e3fc59625a1419d"
+          "bytes": 39796,
+          "sha256": "694b33b32df23c36be4437c4dd33ff7c9594d00de9712316dddc0d99a24b204c"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
           "sha256": "6e88bc8c70f65cd9478d4e5c7f460c13d4b49f8e3dc5f540e28ec8acc0648b3f"
         },
         "scripts/cp_tables.py": {
-          "bytes": 10726,
-          "sha256": "27e82db7f58967c311357684a71026646777021b9d8d54da7b9d90236d518e50"
+          "bytes": 14482,
+          "sha256": "5d47919b2e9071b2bdb518ff6810216857189161545d41cdcc9460608bf3fdd2"
         },
         "scripts/validate_handoff.py": {
           "bytes": 40086,
@@ -65,8 +65,8 @@
     "cp-1-canonical-data-foundation": {
       "files": {
         "SKILL.md": {
-          "bytes": 22040,
-          "sha256": "b8a6c9995152fda692f25fd9ffadb4420efb23a1805901c8603ff89bda7b6357"
+          "bytes": 22243,
+          "sha256": "d765a9b013db53b6434681e54e9ccf51011c5bc7cc461ba0334e7102b37fe8a1"
         },
         "references/CP-1_RUNBOOK.md": {
           "bytes": 12020,
@@ -81,20 +81,20 @@
           "sha256": "7af64a9047ffa05e996dbb4cb1741b9a815744ecb7eb7bd3b134a4bccf9d2cd0"
         },
         "references/REF_CP-1_STEPS.md": {
-          "bytes": 37994,
-          "sha256": "45b479627ec6e7d91b1e78a9c4f30e873ce9ddce45d049c8e1e01f1a74c6b9cd"
+          "bytes": 39150,
+          "sha256": "81767851a01bce75b02efed827fba1326da69084fa741a4cb07bb50198ee2129"
         },
         "scripts/completeness_check.py": {
-          "bytes": 39039,
-          "sha256": "30afd11e4a03c1e11c70d5aa9d00650c0c74a6315743d59b4e3fc59625a1419d"
+          "bytes": 39796,
+          "sha256": "694b33b32df23c36be4437c4dd33ff7c9594d00de9712316dddc0d99a24b204c"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
           "sha256": "6e88bc8c70f65cd9478d4e5c7f460c13d4b49f8e3dc5f540e28ec8acc0648b3f"
         },
         "scripts/cp_tables.py": {
-          "bytes": 10726,
-          "sha256": "27e82db7f58967c311357684a71026646777021b9d8d54da7b9d90236d518e50"
+          "bytes": 14482,
+          "sha256": "5d47919b2e9071b2bdb518ff6810216857189161545d41cdcc9460608bf3fdd2"
         },
         "scripts/credit_metrics.py": {
           "bytes": 13974,
@@ -141,16 +141,16 @@
           "sha256": "8e738d43447219ab8cf7f46b4ca97cd32c67eb7831aaae683b365a9f3514ad45"
         },
         "scripts/completeness_check.py": {
-          "bytes": 39039,
-          "sha256": "30afd11e4a03c1e11c70d5aa9d00650c0c74a6315743d59b4e3fc59625a1419d"
+          "bytes": 39796,
+          "sha256": "694b33b32df23c36be4437c4dd33ff7c9594d00de9712316dddc0d99a24b204c"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
           "sha256": "6e88bc8c70f65cd9478d4e5c7f460c13d4b49f8e3dc5f540e28ec8acc0648b3f"
         },
         "scripts/cp_tables.py": {
-          "bytes": 10726,
-          "sha256": "27e82db7f58967c311357684a71026646777021b9d8d54da7b9d90236d518e50"
+          "bytes": 14482,
+          "sha256": "5d47919b2e9071b2bdb518ff6810216857189161545d41cdcc9460608bf3fdd2"
         },
         "scripts/validate_handoff.py": {
           "bytes": 40086,
@@ -177,16 +177,16 @@
           "sha256": "d2e1928fc317decaf4549c6a9388dcaea54a4924456e0d95e6bf7b501b44db3a"
         },
         "scripts/completeness_check.py": {
-          "bytes": 39039,
-          "sha256": "30afd11e4a03c1e11c70d5aa9d00650c0c74a6315743d59b4e3fc59625a1419d"
+          "bytes": 39796,
+          "sha256": "694b33b32df23c36be4437c4dd33ff7c9594d00de9712316dddc0d99a24b204c"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
           "sha256": "6e88bc8c70f65cd9478d4e5c7f460c13d4b49f8e3dc5f540e28ec8acc0648b3f"
         },
         "scripts/cp_tables.py": {
-          "bytes": 10726,
-          "sha256": "27e82db7f58967c311357684a71026646777021b9d8d54da7b9d90236d518e50"
+          "bytes": 14482,
+          "sha256": "5d47919b2e9071b2bdb518ff6810216857189161545d41cdcc9460608bf3fdd2"
         },
         "scripts/credit_metrics.py": {
           "bytes": 13974,
@@ -221,16 +221,16 @@
           "sha256": "b07b22b5b8057c2e08b9cb3112893ad7b589fda44efb7c8a1480ec919aac4991"
         },
         "scripts/completeness_check.py": {
-          "bytes": 39039,
-          "sha256": "30afd11e4a03c1e11c70d5aa9d00650c0c74a6315743d59b4e3fc59625a1419d"
+          "bytes": 39796,
+          "sha256": "694b33b32df23c36be4437c4dd33ff7c9594d00de9712316dddc0d99a24b204c"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
           "sha256": "6e88bc8c70f65cd9478d4e5c7f460c13d4b49f8e3dc5f540e28ec8acc0648b3f"
         },
         "scripts/cp_tables.py": {
-          "bytes": 10726,
-          "sha256": "27e82db7f58967c311357684a71026646777021b9d8d54da7b9d90236d518e50"
+          "bytes": 14482,
+          "sha256": "5d47919b2e9071b2bdb518ff6810216857189161545d41cdcc9460608bf3fdd2"
         },
         "scripts/peer_statistics.py": {
           "bytes": 27298,
@@ -257,16 +257,16 @@
           "sha256": "709dd5cb14cab3fbd2d73f586be4349a06e8b5e785b43176b70b5e47cf476582"
         },
         "scripts/completeness_check.py": {
-          "bytes": 39039,
-          "sha256": "30afd11e4a03c1e11c70d5aa9d00650c0c74a6315743d59b4e3fc59625a1419d"
+          "bytes": 39796,
+          "sha256": "694b33b32df23c36be4437c4dd33ff7c9594d00de9712316dddc0d99a24b204c"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
           "sha256": "6e88bc8c70f65cd9478d4e5c7f460c13d4b49f8e3dc5f540e28ec8acc0648b3f"
         },
         "scripts/cp_tables.py": {
-          "bytes": 10726,
-          "sha256": "27e82db7f58967c311357684a71026646777021b9d8d54da7b9d90236d518e50"
+          "bytes": 14482,
+          "sha256": "5d47919b2e9071b2bdb518ff6810216857189161545d41cdcc9460608bf3fdd2"
         },
         "scripts/validate_handoff.py": {
           "bytes": 40086,
@@ -297,16 +297,16 @@
           "sha256": "9200f6b0ab977c454176d7f78f6c55d39e41cfcccfa04a1b772f8c4c18f08bfe"
         },
         "scripts/completeness_check.py": {
-          "bytes": 39039,
-          "sha256": "30afd11e4a03c1e11c70d5aa9d00650c0c74a6315743d59b4e3fc59625a1419d"
+          "bytes": 39796,
+          "sha256": "694b33b32df23c36be4437c4dd33ff7c9594d00de9712316dddc0d99a24b204c"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
           "sha256": "6e88bc8c70f65cd9478d4e5c7f460c13d4b49f8e3dc5f540e28ec8acc0648b3f"
         },
         "scripts/cp_tables.py": {
-          "bytes": 10726,
-          "sha256": "27e82db7f58967c311357684a71026646777021b9d8d54da7b9d90236d518e50"
+          "bytes": 14482,
+          "sha256": "5d47919b2e9071b2bdb518ff6810216857189161545d41cdcc9460608bf3fdd2"
         },
         "scripts/validate_handoff.py": {
           "bytes": 40086,
@@ -353,16 +353,16 @@
           "sha256": "75434b4a5602c97f001d144ee5934a6601105f76aad9ea0ed2d71638726d7415"
         },
         "scripts/completeness_check.py": {
-          "bytes": 39039,
-          "sha256": "30afd11e4a03c1e11c70d5aa9d00650c0c74a6315743d59b4e3fc59625a1419d"
+          "bytes": 39796,
+          "sha256": "694b33b32df23c36be4437c4dd33ff7c9594d00de9712316dddc0d99a24b204c"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
           "sha256": "6e88bc8c70f65cd9478d4e5c7f460c13d4b49f8e3dc5f540e28ec8acc0648b3f"
         },
         "scripts/cp_tables.py": {
-          "bytes": 10726,
-          "sha256": "27e82db7f58967c311357684a71026646777021b9d8d54da7b9d90236d518e50"
+          "bytes": 14482,
+          "sha256": "5d47919b2e9071b2bdb518ff6810216857189161545d41cdcc9460608bf3fdd2"
         },
         "scripts/validate_handoff.py": {
           "bytes": 40086,
@@ -393,16 +393,16 @@
           "sha256": "c708146b7ac90f773d631e6742857713b38ad806eb1798b76bce95cc1e706d19"
         },
         "scripts/completeness_check.py": {
-          "bytes": 39039,
-          "sha256": "30afd11e4a03c1e11c70d5aa9d00650c0c74a6315743d59b4e3fc59625a1419d"
+          "bytes": 39796,
+          "sha256": "694b33b32df23c36be4437c4dd33ff7c9594d00de9712316dddc0d99a24b204c"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
           "sha256": "6e88bc8c70f65cd9478d4e5c7f460c13d4b49f8e3dc5f540e28ec8acc0648b3f"
         },
         "scripts/cp_tables.py": {
-          "bytes": 10726,
-          "sha256": "27e82db7f58967c311357684a71026646777021b9d8d54da7b9d90236d518e50"
+          "bytes": 14482,
+          "sha256": "5d47919b2e9071b2bdb518ff6810216857189161545d41cdcc9460608bf3fdd2"
         },
         "scripts/liquidity_bridge.py": {
           "bytes": 8667,
@@ -453,16 +453,16 @@
           "sha256": "312301c620990d3810d19125cde30224f9696860c3ef5f04b3f9473652555e08"
         },
         "scripts/completeness_check.py": {
-          "bytes": 39039,
-          "sha256": "30afd11e4a03c1e11c70d5aa9d00650c0c74a6315743d59b4e3fc59625a1419d"
+          "bytes": 39796,
+          "sha256": "694b33b32df23c36be4437c4dd33ff7c9594d00de9712316dddc0d99a24b204c"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
           "sha256": "6e88bc8c70f65cd9478d4e5c7f460c13d4b49f8e3dc5f540e28ec8acc0648b3f"
         },
         "scripts/cp_tables.py": {
-          "bytes": 10726,
-          "sha256": "27e82db7f58967c311357684a71026646777021b9d8d54da7b9d90236d518e50"
+          "bytes": 14482,
+          "sha256": "5d47919b2e9071b2bdb518ff6810216857189161545d41cdcc9460608bf3fdd2"
         },
         "scripts/rate_fx_sensitivity.py": {
           "bytes": 9621,
@@ -493,16 +493,16 @@
           "sha256": "7db9c915f31c6d9722da13551053c7c4830c2e183097df4c33c92a674fd7ff13"
         },
         "scripts/completeness_check.py": {
-          "bytes": 39039,
-          "sha256": "30afd11e4a03c1e11c70d5aa9d00650c0c74a6315743d59b4e3fc59625a1419d"
+          "bytes": 39796,
+          "sha256": "694b33b32df23c36be4437c4dd33ff7c9594d00de9712316dddc0d99a24b204c"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
           "sha256": "6e88bc8c70f65cd9478d4e5c7f460c13d4b49f8e3dc5f540e28ec8acc0648b3f"
         },
         "scripts/cp_tables.py": {
-          "bytes": 10726,
-          "sha256": "27e82db7f58967c311357684a71026646777021b9d8d54da7b9d90236d518e50"
+          "bytes": 14482,
+          "sha256": "5d47919b2e9071b2bdb518ff6810216857189161545d41cdcc9460608bf3fdd2"
         },
         "scripts/credit_metrics.py": {
           "bytes": 13974,
@@ -541,8 +541,8 @@
           "sha256": "b51b375a1a1c0aff668f85a9550e2d272f5f9a9be142407a68ba7bced0d4bced"
         },
         "scripts/completeness_check.py": {
-          "bytes": 39039,
-          "sha256": "30afd11e4a03c1e11c70d5aa9d00650c0c74a6315743d59b4e3fc59625a1419d"
+          "bytes": 39796,
+          "sha256": "694b33b32df23c36be4437c4dd33ff7c9594d00de9712316dddc0d99a24b204c"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
@@ -553,8 +553,8 @@
           "sha256": "7c4c08c205cd69d60ce43b81580d13852f939dafe2c058d9c34e812f760979ca"
         },
         "scripts/cp_tables.py": {
-          "bytes": 10726,
-          "sha256": "27e82db7f58967c311357684a71026646777021b9d8d54da7b9d90236d518e50"
+          "bytes": 14482,
+          "sha256": "5d47919b2e9071b2bdb518ff6810216857189161545d41cdcc9460608bf3fdd2"
         },
         "scripts/validate_handoff.py": {
           "bytes": 40086,
@@ -621,16 +621,16 @@
           "sha256": "ea7e76a2b05134c1746695c643b3cf5ac2c27fc7d1886704c5f086a5a120c69a"
         },
         "scripts/completeness_check.py": {
-          "bytes": 39039,
-          "sha256": "30afd11e4a03c1e11c70d5aa9d00650c0c74a6315743d59b4e3fc59625a1419d"
+          "bytes": 39796,
+          "sha256": "694b33b32df23c36be4437c4dd33ff7c9594d00de9712316dddc0d99a24b204c"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
           "sha256": "6e88bc8c70f65cd9478d4e5c7f460c13d4b49f8e3dc5f540e28ec8acc0648b3f"
         },
         "scripts/cp_tables.py": {
-          "bytes": 10726,
-          "sha256": "27e82db7f58967c311357684a71026646777021b9d8d54da7b9d90236d518e50"
+          "bytes": 14482,
+          "sha256": "5d47919b2e9071b2bdb518ff6810216857189161545d41cdcc9460608bf3fdd2"
         },
         "scripts/recovery_waterfall.py": {
           "bytes": 14082,
@@ -665,16 +665,16 @@
           "sha256": "a0b1abe8f5ce28cf7d962aa26e72ae12326c102fba34f4d66f52b620dd40bf84"
         },
         "scripts/completeness_check.py": {
-          "bytes": 39039,
-          "sha256": "30afd11e4a03c1e11c70d5aa9d00650c0c74a6315743d59b4e3fc59625a1419d"
+          "bytes": 39796,
+          "sha256": "694b33b32df23c36be4437c4dd33ff7c9594d00de9712316dddc0d99a24b204c"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
           "sha256": "6e88bc8c70f65cd9478d4e5c7f460c13d4b49f8e3dc5f540e28ec8acc0648b3f"
         },
         "scripts/cp_tables.py": {
-          "bytes": 10726,
-          "sha256": "27e82db7f58967c311357684a71026646777021b9d8d54da7b9d90236d518e50"
+          "bytes": 14482,
+          "sha256": "5d47919b2e9071b2bdb518ff6810216857189161545d41cdcc9460608bf3fdd2"
         },
         "scripts/funding_gap.py": {
           "bytes": 17880,
@@ -709,16 +709,16 @@
           "sha256": "b51b375a1a1c0aff668f85a9550e2d272f5f9a9be142407a68ba7bced0d4bced"
         },
         "scripts/completeness_check.py": {
-          "bytes": 39039,
-          "sha256": "30afd11e4a03c1e11c70d5aa9d00650c0c74a6315743d59b4e3fc59625a1419d"
+          "bytes": 39796,
+          "sha256": "694b33b32df23c36be4437c4dd33ff7c9594d00de9712316dddc0d99a24b204c"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
           "sha256": "6e88bc8c70f65cd9478d4e5c7f460c13d4b49f8e3dc5f540e28ec8acc0648b3f"
         },
         "scripts/cp_tables.py": {
-          "bytes": 10726,
-          "sha256": "27e82db7f58967c311357684a71026646777021b9d8d54da7b9d90236d518e50"
+          "bytes": 14482,
+          "sha256": "5d47919b2e9071b2bdb518ff6810216857189161545d41cdcc9460608bf3fdd2"
         },
         "scripts/validate_handoff.py": {
           "bytes": 40086,
@@ -785,8 +785,8 @@
           "sha256": "ef5eb569be59ec30dd3a66c1bcc81c5cc0bcc2e9d2ac3909b04caa23339b6b94"
         },
         "scripts/completeness_check.py": {
-          "bytes": 39039,
-          "sha256": "30afd11e4a03c1e11c70d5aa9d00650c0c74a6315743d59b4e3fc59625a1419d"
+          "bytes": 39796,
+          "sha256": "694b33b32df23c36be4437c4dd33ff7c9594d00de9712316dddc0d99a24b204c"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
@@ -797,8 +797,8 @@
           "sha256": "7c4c08c205cd69d60ce43b81580d13852f939dafe2c058d9c34e812f760979ca"
         },
         "scripts/cp_tables.py": {
-          "bytes": 10726,
-          "sha256": "27e82db7f58967c311357684a71026646777021b9d8d54da7b9d90236d518e50"
+          "bytes": 14482,
+          "sha256": "5d47919b2e9071b2bdb518ff6810216857189161545d41cdcc9460608bf3fdd2"
         },
         "scripts/validate_handoff.py": {
           "bytes": 40086,
@@ -825,16 +825,16 @@
           "sha256": "1483f4fe9e37d593bdf0cab58ac8eb0674aaa22745579bd9430380c57e763e97"
         },
         "scripts/completeness_check.py": {
-          "bytes": 39039,
-          "sha256": "30afd11e4a03c1e11c70d5aa9d00650c0c74a6315743d59b4e3fc59625a1419d"
+          "bytes": 39796,
+          "sha256": "694b33b32df23c36be4437c4dd33ff7c9594d00de9712316dddc0d99a24b204c"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
           "sha256": "6e88bc8c70f65cd9478d4e5c7f460c13d4b49f8e3dc5f540e28ec8acc0648b3f"
         },
         "scripts/cp_tables.py": {
-          "bytes": 10726,
-          "sha256": "27e82db7f58967c311357684a71026646777021b9d8d54da7b9d90236d518e50"
+          "bytes": 14482,
+          "sha256": "5d47919b2e9071b2bdb518ff6810216857189161545d41cdcc9460608bf3fdd2"
         },
         "scripts/funding_gap.py": {
           "bytes": 17880,
@@ -885,16 +885,16 @@
           "sha256": "0b5beddbc0a5d3c99065379b7110e3b87fbc5392d38ed243ccbf7fdce70e506a"
         },
         "scripts/completeness_check.py": {
-          "bytes": 39039,
-          "sha256": "30afd11e4a03c1e11c70d5aa9d00650c0c74a6315743d59b4e3fc59625a1419d"
+          "bytes": 39796,
+          "sha256": "694b33b32df23c36be4437c4dd33ff7c9594d00de9712316dddc0d99a24b204c"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
           "sha256": "6e88bc8c70f65cd9478d4e5c7f460c13d4b49f8e3dc5f540e28ec8acc0648b3f"
         },
         "scripts/cp_tables.py": {
-          "bytes": 10726,
-          "sha256": "27e82db7f58967c311357684a71026646777021b9d8d54da7b9d90236d518e50"
+          "bytes": 14482,
+          "sha256": "5d47919b2e9071b2bdb518ff6810216857189161545d41cdcc9460608bf3fdd2"
         },
         "scripts/validate_handoff.py": {
           "bytes": 40086,
@@ -937,16 +937,16 @@
           "sha256": "6141d27e800d45d2d0208173f38060c75d97005ee9b93013e24a16a40570f1e1"
         },
         "scripts/completeness_check.py": {
-          "bytes": 39039,
-          "sha256": "30afd11e4a03c1e11c70d5aa9d00650c0c74a6315743d59b4e3fc59625a1419d"
+          "bytes": 39796,
+          "sha256": "694b33b32df23c36be4437c4dd33ff7c9594d00de9712316dddc0d99a24b204c"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
           "sha256": "6e88bc8c70f65cd9478d4e5c7f460c13d4b49f8e3dc5f540e28ec8acc0648b3f"
         },
         "scripts/cp_tables.py": {
-          "bytes": 10726,
-          "sha256": "27e82db7f58967c311357684a71026646777021b9d8d54da7b9d90236d518e50"
+          "bytes": 14482,
+          "sha256": "5d47919b2e9071b2bdb518ff6810216857189161545d41cdcc9460608bf3fdd2"
         },
         "scripts/validate_handoff.py": {
           "bytes": 40086,
@@ -977,16 +977,16 @@
           "sha256": "54e85dad34e3a2e30e9ad89d5e335bc780097d582a277259c14a7c4f666c54bc"
         },
         "scripts/completeness_check.py": {
-          "bytes": 39039,
-          "sha256": "30afd11e4a03c1e11c70d5aa9d00650c0c74a6315743d59b4e3fc59625a1419d"
+          "bytes": 39796,
+          "sha256": "694b33b32df23c36be4437c4dd33ff7c9594d00de9712316dddc0d99a24b204c"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
           "sha256": "6e88bc8c70f65cd9478d4e5c7f460c13d4b49f8e3dc5f540e28ec8acc0648b3f"
         },
         "scripts/cp_tables.py": {
-          "bytes": 10726,
-          "sha256": "27e82db7f58967c311357684a71026646777021b9d8d54da7b9d90236d518e50"
+          "bytes": 14482,
+          "sha256": "5d47919b2e9071b2bdb518ff6810216857189161545d41cdcc9460608bf3fdd2"
         },
         "scripts/validate_handoff.py": {
           "bytes": 40086,
@@ -1017,8 +1017,8 @@
           "sha256": "6e88bc8c70f65cd9478d4e5c7f460c13d4b49f8e3dc5f540e28ec8acc0648b3f"
         },
         "scripts/cp_tables.py": {
-          "bytes": 10726,
-          "sha256": "27e82db7f58967c311357684a71026646777021b9d8d54da7b9d90236d518e50"
+          "bytes": 14482,
+          "sha256": "5d47919b2e9071b2bdb518ff6810216857189161545d41cdcc9460608bf3fdd2"
         },
         "scripts/validate_handoff.py": {
           "bytes": 40086,
@@ -1101,16 +1101,16 @@
           "sha256": "f80e3cb4f91c8fef9c2ea83c6af385864876d8683f65d79e9895a2f1ed8e0874"
         },
         "scripts/completeness_check.py": {
-          "bytes": 39039,
-          "sha256": "30afd11e4a03c1e11c70d5aa9d00650c0c74a6315743d59b4e3fc59625a1419d"
+          "bytes": 39796,
+          "sha256": "694b33b32df23c36be4437c4dd33ff7c9594d00de9712316dddc0d99a24b204c"
         },
         "scripts/confidence_score.py": {
           "bytes": 8792,
           "sha256": "6e88bc8c70f65cd9478d4e5c7f460c13d4b49f8e3dc5f540e28ec8acc0648b3f"
         },
         "scripts/cp_tables.py": {
-          "bytes": 10726,
-          "sha256": "27e82db7f58967c311357684a71026646777021b9d8d54da7b9d90236d518e50"
+          "bytes": 14482,
+          "sha256": "5d47919b2e9071b2bdb518ff6810216857189161545d41cdcc9460608bf3fdd2"
         },
         "scripts/validate_handoff.py": {
           "bytes": 40086,
@@ -1253,8 +1253,8 @@
           "sha256": "9bba605fd7b6ea23038de15e5a1ae6714b3d3fb14ed2d6e6bedbfb0665ca2122"
         },
         "scripts/validate_cp_model_inputs.py": {
-          "bytes": 74727,
-          "sha256": "908d14944a3241a5253cdac98ba6c1bdcc1a3a454acc0a3c24bed13eeab3d6d0"
+          "bytes": 75800,
+          "sha256": "6439f8fc0bcaa1872204eeba59fe6465f882c8f1a06f4b6ed5699c2f6779419f"
         },
         "scripts/validate_handoff.py": {
           "bytes": 40086,
@@ -1345,12 +1345,12 @@
           "sha256": "4ca68d044594d0e5777e4af01646be2df66597dd6e8dfcba754b799deef60242"
         },
         "scripts/completeness_check.py": {
-          "bytes": 39039,
-          "sha256": "30afd11e4a03c1e11c70d5aa9d00650c0c74a6315743d59b4e3fc59625a1419d"
+          "bytes": 39796,
+          "sha256": "694b33b32df23c36be4437c4dd33ff7c9594d00de9712316dddc0d99a24b204c"
         },
         "scripts/cp_tables.py": {
-          "bytes": 10726,
-          "sha256": "27e82db7f58967c311357684a71026646777021b9d8d54da7b9d90236d518e50"
+          "bytes": 14482,
+          "sha256": "5d47919b2e9071b2bdb518ff6810216857189161545d41cdcc9460608bf3fdd2"
         },
         "scripts/credit_os/__init__.py": {
           "bytes": 229,

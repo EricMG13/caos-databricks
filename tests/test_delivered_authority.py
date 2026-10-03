@@ -47,8 +47,10 @@ LITE_BASE = "../../CP_DEPLOY_V_LITE_MODULE_PAYLOAD_BASE_v1.schema.txt"
 # on fork r4's build 820dfc7c, whose canon and research paragraphs condition
 # the research brief on its delivery (N70); and on fork r5's build 3715187a,
 # whose canon states the register binding rule (D84, +519 bytes); fork r5's
-# single-table CP-1 (D85, build 3fb5cf14) moves none of the three.
-MEASURED = {"CP-0": 152_446, "CP-L10": 206_375, "CP-5": 170_012}
+# single-table CP-1 (D85, build 3fb5cf14) moves none of the three; and on fork
+# r6's build 43d79461, whose canon states the QA severity rule, the null
+# spelling and the nearest-heading binding (D89, D91, D92; +723 bytes).
+MEASURED = {"CP-0": 153_169, "CP-L10": 207_098, "CP-5": 170_735}
 AUTHORITY_SHARE_OF_REQUEST = 0.25
 FOLDERS = {
     "CP-0": "cp-0-source-readiness",
