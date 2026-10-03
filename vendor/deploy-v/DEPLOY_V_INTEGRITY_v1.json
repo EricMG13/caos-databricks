@@ -1,14 +1,14 @@
 {
   "authority": "DEPLOY_V_INTEGRITY_v1",
-  "build_id": "643c38eb54cf49111aada95265e8fbca80e9cadaa80068090af9e7df8bc30881",
+  "build_id": "2cbabcdbed77220146ad618fe073eec74bb04ca494ea5a93b15e1203038bda6f",
   "root_file_hashes": {
     ".gitignore": {
       "bytes": 83,
       "sha256": "185f903395dfbacbee9b0ef5e7a5cf2d495920a5432ade4674eb73029f85fc63"
     },
     "CANON_SHARED.md": {
-      "bytes": 53534,
-      "sha256": "fec0f30fe9d0f3f04f544df34615fb657481b3d520b5bbba99e14f0f6347eb91"
+      "bytes": 53538,
+      "sha256": "8af51354e7c235917d311e7937d4893d8d5e1a639d95a1de1ee7f26f61262365"
     },
     "CP_DEPLOY_V_CHILD_SCHEMA_REGISTRY_v1.json": {
       "bytes": 2614,
@@ -24,7 +24,7 @@
     },
     "CP_DEPLOY_V_RETRIEVAL_INDEX_v1.json": {
       "bytes": 5437,
-      "sha256": "9f44df33857ec12bb5084c6ebdef833b45fc2bfc50757189e24cb68f6943ad47"
+      "sha256": "22c8ed44ffdf5395525ad8a912dd7edccd3a214dd99f6b751ee324ddb2b3ecf0"
     },
     "CP_MODULE_PAYLOAD_BASE.schema.txt": {
       "bytes": 1930,
@@ -32,19 +32,19 @@
     },
     "DEPLOY_V_BASELINE.json": {
       "bytes": 58204,
-      "sha256": "80ef6b1df72c96aaf485cefa5ed0b2ef644b9a47d8101d6977be836c3ffd171b"
+      "sha256": "5fd39756cfe8de365712bf5ec2e213ffb0a7658a57c8f2f86f9bedfd6518985d"
     },
     "DEPLOY_V_COPILOT_MEMORY_PROMPT.md": {
       "bytes": 11934,
-      "sha256": "a969491eef01731d19926812be6f0bc783d53d3f721f0e6cd36ad29fd050b20d"
+      "sha256": "db20a20869afdc434ab98eb458a5bc3bbaa19302e800cd94401dbc7d3c55bafb"
     },
     "DEPLOY_V_COPILOT_MEMORY_PROMPT_URL_BOUND.md": {
       "bytes": 12653,
-      "sha256": "44a3887f99c77bdcabdaead27de1da7716b282c19f4fae331b8a483174e2c2f5"
+      "sha256": "3892037bdcbd170cfb237b1a79c056fa63a04d0903b11bfc6a7857eff558d2dd"
     },
     "DEPLOY_V_MANIFEST.json": {
       "bytes": 70399,
-      "sha256": "5ff8c28f7cf0a5678751e8f00610da3c199ae29e3c0565bc1198aa9b5a19ad24"
+      "sha256": "b6d94f64fa8199d4a8f316ad26faf705ee2642571f9952224809fb014693ab7c"
     },
     "README.md": {
       "bytes": 7233,
@@ -55,8 +55,8 @@
       "sha256": "71fc109b3f90aaba15712c3a80b185115a016a583e827fd50accba1d1a223fc6"
     },
     "tests/test_regressions.py": {
-      "bytes": 82004,
-      "sha256": "3c0250a4471b66c934bebb8c1053c760d2c7b653e87992e00e9ef1c1f2e9fe86"
+      "bytes": 85770,
+      "sha256": "51655d009efcbe2de931144d21c339ed452babc877557c308af7ea69f00da872"
     },
     "tests/test_research_workflow.py": {
       "bytes": 19397,
@@ -77,14 +77,14 @@
       "companion_count": 13,
       "companion_limit": 20,
       "companion_limit_exception": false,
-      "entry_bytes": 35438,
-      "entry_sha256": "0cf2e8e9a5975d414678779051bf673666b4d185e36ff0a65989390d54a27d71",
+      "entry_bytes": 36257,
+      "entry_sha256": "f7f44ef6d48b299954d2461c1243d9809bd265e1d3d3f3cfbdc661ba45142354",
       "folder_slug": "cp-0-source-readiness",
       "module_id": "CP-0",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 35438,
-          "sha256": "0cf2e8e9a5975d414678779051bf673666b4d185e36ff0a65989390d54a27d71"
+          "bytes": 36257,
+          "sha256": "f7f44ef6d48b299954d2461c1243d9809bd265e1d3d3f3cfbdc661ba45142354"
         },
         "references/CP-0_SCHEMA_REFERENCE.md": {
           "bytes": 3237,
@@ -99,8 +99,8 @@
           "sha256": "5730b9120ab4415007b3c07b6bf4ba77121ad740e1028848a0687d4749db96ac"
         },
         "references/CP-PARSE_SCHEMA_REFERENCE.md": {
-          "bytes": 2020,
-          "sha256": "1790ab8edd56e1d3cdaa5c357a0acf09fb50fc1ec141a2e12976e9499a3d6d98"
+          "bytes": 1790,
+          "sha256": "dea0da31b5c5a97e88974786ecd9cbd13f6803db75751b5266bbddfea2f5fd37"
         },
         "references/CP-PARSE__DataPreparation__payload.schema.txt": {
           "bytes": 4788,
@@ -111,12 +111,12 @@
           "sha256": "bed5d23e11ef87912fe2fdd5cac8682038788dae9fb37816e9156d611a455a7d"
         },
         "references/CP0_PROFILE_ANCHOR_CONTRACT_v1.md": {
-          "bytes": 1387,
-          "sha256": "45ad6ab2eeeb754ae46a716b7e947e3acac214ea2696ef5e072f10ef7d36451a"
+          "bytes": 1391,
+          "sha256": "866bea362bb05c80bc4d288b30da41119780ac35ffc7cb098fe3004a42f21f51"
         },
         "references/REF_CP-0_STEPS.md": {
-          "bytes": 24164,
-          "sha256": "509d13dcc75c56e3ba984f3fe93b9ed3d7ad0468999b76c1c67da61f4da9ad65"
+          "bytes": 24921,
+          "sha256": "9d2e670153c590745fd5206bb845195ae1872234ad18e9247d0224df9d97b877"
         },
         "references/REF_CP-PARSE_STEPS.md": {
           "bytes": 14038,
@@ -1145,14 +1145,14 @@
       "companion_count": 20,
       "companion_limit": 20,
       "companion_limit_exception": false,
-      "entry_bytes": 70150,
-      "entry_sha256": "56d558abda533ecc59500eeb9e472c53946b5111ee01280bae157ee0a251e881",
+      "entry_bytes": 70418,
+      "entry_sha256": "f053c6c20e7e84e2aba4c087a40fded572d3d38bb4b792fa7f480c1303c581de",
       "folder_slug": "cp-l10-financial-change-screen",
       "module_id": "CP-L10",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 70150,
-          "sha256": "56d558abda533ecc59500eeb9e472c53946b5111ee01280bae157ee0a251e881"
+          "bytes": 70418,
+          "sha256": "f053c6c20e7e84e2aba4c087a40fded572d3d38bb4b792fa7f480c1303c581de"
         },
         "references/CP-L10_CP_LITE_ANALYSIS_POLICY_v1.md": {
           "bytes": 3992,
@@ -1431,8 +1431,8 @@
           "sha256": "bdf3b97a9889dae953a11aac88d1f3d483810f00ddb8a5bf961c5c7d8f57a842"
         },
         "references/CP-OS_MIRROR_CP0_PROFILE_ANCHOR_CONTRACT_v1.md": {
-          "bytes": 1387,
-          "sha256": "45ad6ab2eeeb754ae46a716b7e947e3acac214ea2696ef5e072f10ef7d36451a"
+          "bytes": 1391,
+          "sha256": "866bea362bb05c80bc4d288b30da41119780ac35ffc7cb098fe3004a42f21f51"
         },
         "references/CP-OS_MIRROR_LITE_MODULE_PAYLOAD_BASE_v1.schema.txt": {
           "bytes": 10452,
@@ -1464,15 +1464,15 @@
         },
         "references/CREDIT_OS_V_AUTHORITY_BUNDLE_v2.json": {
           "bytes": 7491,
-          "sha256": "751bf3fb806bca7431715c937696fd3647303a512f03f95ce22044516223c1d1"
+          "sha256": "45d1527da04e9c7a1bd1099fd3b836a109626951fb05deb4d1a31f5d7ed7ea97"
         },
         "references/CREDIT_OS_V_INVOCATION.schema.json": {
           "bytes": 3071,
           "sha256": "109e4978940130fc8d7b9fd50cf6beb43dcc4d77a4e94a60ada8e3849f98f8a7"
         },
         "references/CREDIT_OS_V_MODULE_CATALOG_v2.json": {
-          "bytes": 86260,
-          "sha256": "40298a9cb7be05685d5172fac893585ada938ccf71a41a12fa39e1f1f0cef544"
+          "bytes": 86164,
+          "sha256": "43331ab157f808330b300f1134ac381bb06bc2bfd42c96177da727e8e9577fb9"
         },
         "references/CREDIT_OS_V_NUMBERED_UX_v2.md": {
           "bytes": 1426,
@@ -1720,8 +1720,8 @@
     }
   ],
   "source_hashes": {
-    "deployed_baseline": "80ef6b1df72c96aaf485cefa5ed0b2ef644b9a47d8101d6977be836c3ffd171b",
+    "deployed_baseline": "5fd39756cfe8de365712bf5ec2e213ffb0a7658a57c8f2f86f9bedfd6518985d",
     "deployed_child_schema_registry": "6b1766e5698632e277ede71037bee2fcd3e02b726c43b76fc4fe0f8b47c5ef48",
-    "deployed_manifest": "5ff8c28f7cf0a5678751e8f00610da3c199ae29e3c0565bc1198aa9b5a19ad24"
+    "deployed_manifest": "b6d94f64fa8199d4a8f316ad26faf705ee2642571f9952224809fb014693ab7c"
   }
 }

@@ -1,12 +1,12 @@
 {
   "authority": "DEPLOY_V_BASELINE",
-  "baseline_digest": "408e7fef4d931b8e9268745a63ad14dba120415c59b117584a04953f49182a9c",
+  "baseline_digest": "bd77f4d77723c3fca0a1a9bf674eb9cd33c6bdef503e8c8cc4cbfd6109171b53",
   "packages": {
     "cp-0-source-readiness": {
       "files": {
         "SKILL.md": {
-          "bytes": 35438,
-          "sha256": "0cf2e8e9a5975d414678779051bf673666b4d185e36ff0a65989390d54a27d71"
+          "bytes": 36257,
+          "sha256": "f7f44ef6d48b299954d2461c1243d9809bd265e1d3d3f3cfbdc661ba45142354"
         },
         "references/CP-0_SCHEMA_REFERENCE.md": {
           "bytes": 3237,
@@ -21,8 +21,8 @@
           "sha256": "5730b9120ab4415007b3c07b6bf4ba77121ad740e1028848a0687d4749db96ac"
         },
         "references/CP-PARSE_SCHEMA_REFERENCE.md": {
-          "bytes": 2020,
-          "sha256": "1790ab8edd56e1d3cdaa5c357a0acf09fb50fc1ec141a2e12976e9499a3d6d98"
+          "bytes": 1790,
+          "sha256": "dea0da31b5c5a97e88974786ecd9cbd13f6803db75751b5266bbddfea2f5fd37"
         },
         "references/CP-PARSE__DataPreparation__payload.schema.txt": {
           "bytes": 4788,
@@ -33,12 +33,12 @@
           "sha256": "bed5d23e11ef87912fe2fdd5cac8682038788dae9fb37816e9156d611a455a7d"
         },
         "references/CP0_PROFILE_ANCHOR_CONTRACT_v1.md": {
-          "bytes": 1387,
-          "sha256": "45ad6ab2eeeb754ae46a716b7e947e3acac214ea2696ef5e072f10ef7d36451a"
+          "bytes": 1391,
+          "sha256": "866bea362bb05c80bc4d288b30da41119780ac35ffc7cb098fe3004a42f21f51"
         },
         "references/REF_CP-0_STEPS.md": {
-          "bytes": 24164,
-          "sha256": "509d13dcc75c56e3ba984f3fe93b9ed3d7ad0468999b76c1c67da61f4da9ad65"
+          "bytes": 24921,
+          "sha256": "9d2e670153c590745fd5206bb845195ae1872234ad18e9247d0224df9d97b877"
         },
         "references/REF_CP-PARSE_STEPS.md": {
           "bytes": 14038,
@@ -1033,8 +1033,8 @@
     "cp-l10-financial-change-screen": {
       "files": {
         "SKILL.md": {
-          "bytes": 70150,
-          "sha256": "56d558abda533ecc59500eeb9e472c53946b5111ee01280bae157ee0a251e881"
+          "bytes": 70418,
+          "sha256": "f053c6c20e7e84e2aba4c087a40fded572d3d38bb4b792fa7f480c1303c581de"
         },
         "references/CP-L10_CP_LITE_ANALYSIS_POLICY_v1.md": {
           "bytes": 3992,
@@ -1289,8 +1289,8 @@
           "sha256": "bdf3b97a9889dae953a11aac88d1f3d483810f00ddb8a5bf961c5c7d8f57a842"
         },
         "references/CP-OS_MIRROR_CP0_PROFILE_ANCHOR_CONTRACT_v1.md": {
-          "bytes": 1387,
-          "sha256": "45ad6ab2eeeb754ae46a716b7e947e3acac214ea2696ef5e072f10ef7d36451a"
+          "bytes": 1391,
+          "sha256": "866bea362bb05c80bc4d288b30da41119780ac35ffc7cb098fe3004a42f21f51"
         },
         "references/CP-OS_MIRROR_LITE_MODULE_PAYLOAD_BASE_v1.schema.txt": {
           "bytes": 10452,
@@ -1322,15 +1322,15 @@
         },
         "references/CREDIT_OS_V_AUTHORITY_BUNDLE_v2.json": {
           "bytes": 7491,
-          "sha256": "751bf3fb806bca7431715c937696fd3647303a512f03f95ce22044516223c1d1"
+          "sha256": "45d1527da04e9c7a1bd1099fd3b836a109626951fb05deb4d1a31f5d7ed7ea97"
         },
         "references/CREDIT_OS_V_INVOCATION.schema.json": {
           "bytes": 3071,
           "sha256": "109e4978940130fc8d7b9fd50cf6beb43dcc4d77a4e94a60ada8e3849f98f8a7"
         },
         "references/CREDIT_OS_V_MODULE_CATALOG_v2.json": {
-          "bytes": 86260,
-          "sha256": "40298a9cb7be05685d5172fac893585ada938ccf71a41a12fa39e1f1f0cef544"
+          "bytes": 86164,
+          "sha256": "43331ab157f808330b300f1134ac381bb06bc2bfd42c96177da727e8e9577fb9"
         },
         "references/CREDIT_OS_V_NUMBERED_UX_v2.md": {
           "bytes": 1426,

@@ -54,8 +54,10 @@ LITE_BASE = "../../CP_DEPLOY_V_LITE_MODULE_PAYLOAD_BASE_v1.schema.txt"
 # with the payload schemas withheld (D93): CP-0 -11,628 bytes, CP-L10 -54,133;
 # fork r7's CP-1 registers and CP-MODEL null words (D95, build e58407e7) move
 # none of the three; fork r8's CP-L10 "Written once" section (D96, build
-# 643c38eb) adds 1,071 bytes to CP-L10.
-MEASURED = {"CP-0": 141_550, "CP-L10": 154_045, "CP-5": 170_744}
+# 643c38eb) adds 1,071 bytes to CP-L10; fork r9 (D97, build 2cbabcdb) adds
+# CP-0's host-preparation section less its six retired registers (+1,354),
+# CP-L10's reworded OVERALL line (+268) and the canon's "P3 and P5" (+4 each).
+MEASURED = {"CP-0": 142_904, "CP-L10": 154_317, "CP-5": 170_748}
 AUTHORITY_SHARE_OF_REQUEST = 0.25
 FOLDERS = {
     "CP-0": "cp-0-source-readiness",
