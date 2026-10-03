@@ -13,6 +13,8 @@ unchanged: same store, same blobs, same ceilings, same proof.
     uv run python tests/qualify_openrouter.py qualification/ccl-fy2025 \\
         --expect-identity openrouter/anthropic/claude-opus-5/none/65536 --ceiling 14.00
 
+`OPENROUTER_REASONING_EFFORT` and `OPENROUTER_PROVIDER` (F479) add an effort and
+a provider pin, and the identity then names them (see `openrouter_adapter`).
 The identity names OpenRouter, never the gateway: a verdict measured here is
 not gateway coverage (AR-22), and the key is read by the adapter at call time
 and never stored or printed.
@@ -26,7 +28,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-PLATFORM = "openrouter"
 REPO = Path(__file__).resolve().parents[1]
 
 
@@ -37,19 +38,17 @@ def main(argv: list[str]) -> int:
     # The driver is a script, not a package member: loaded by name once the
     # path holds `scripts/`, the way `tests/conftest.py` lets the suite do.
     qualify: Any = importlib.import_module("qualify")
-    from openrouter_adapter import openrouter_chat_model
+    from openrouter_adapter import openrouter_chat_model, qualification_identity
 
     from caos.models import ChatCompletions
     from caos.pricing import price_from_environment
-    from caos.provider import MAX_COMPLETION_TOKENS
 
     class OpenRouterCompletions(ChatCompletions):
         """The seam's provider with the identity a test measurement must carry."""
 
         @property
         def qualification_identity(self) -> str:
-            effort = self.reasoning_effort or "none"
-            return "/".join((PLATFORM, self.model, effort, str(MAX_COMPLETION_TOKENS)))
+            return qualification_identity(self.model)
 
     def from_environment() -> ChatCompletions:
         """The adapter's model, priced from the same two names the worker reads."""
