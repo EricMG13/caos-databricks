@@ -284,6 +284,16 @@ def load_contract(skill_text, module_id=None):
 # --------------------------------------------------------------------------
 
 
+# A heading whose first word is a register ID ("#### T4.7 Normalized
+# Financials", "### **T4.7** ..."), and the family an ID belongs to ("T4." for
+# T4.7 and T4.14, "TL23." for TL23.2), fork r7.
+LEADING_ID_RE = re.compile(r"#+\s*[*_]*\s*([PT][0-9][A-Za-z0-9.]*?|TL[0-9]+\.[0-9]+)\.?(?![A-Za-z0-9]|\.[A-Za-z0-9])")
+
+
+def _stem(reg_id):
+    return reg_id.rstrip("0123456789")
+
+
 def find_registers(handoff_text, register_ids=None):
     """{register_id: (header, [rows])} for pipe tables labelled with an ID.
 
@@ -324,6 +334,12 @@ def find_registers(handoff_text, register_ids=None):
                 + r")(?![A-Za-z0-9])",
                 re.IGNORECASE,
             )
+    stems = {_stem(reg_id) for reg_id in register_ids or ()}
+
+    def retired(head):
+        led = LEADING_ID_RE.match(head)
+        return bool(led) and _stem(led.group(1)) in stems and led.group(1) not in unique_ids
+
     def label_id(label):
         match = id_re.search(label)
         if match:
@@ -356,12 +372,12 @@ def find_registers(handoff_text, register_ids=None):
             # ("reconciles to the T4.4 revenue base" under "### T4.5"), fork r2.
             heads = [s for s in reversed(recent) if s.startswith("#")]
             reg_id = next((found for found in map(label_id, heads) if found), None)
-            # A heading naming a register this contract does not list (CP-1's
-            # retired "#### T4.7 Normalized Financials") is that register's, as
-            # `cp_tables` reads it: a prose mention never claims its table (fork r7).
-            if reg_id is None and not (
-                register_ids is not None and any(REGISTER_ID_RE.search(h) for h in heads)
-            ):
+            # A heading led by an unlisted ID of a listed register's family
+            # (CP-1's retired "#### T4.7 Normalized Financials") is that
+            # register's: a prose mention never claims its table (fork r7). An
+            # ID elsewhere in a heading ("Inputs (CP-1 T4.6)") or of another
+            # family ("### T4 — Statements", "T12M") does not stop the prose.
+            if reg_id is None and not any(map(retired, heads)):
                 prose = [s for s in reversed(recent) if not s.startswith("#")]
                 reg_id = next((found for found in map(label_id, prose) if found), None)
             if reg_id:
