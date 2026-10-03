@@ -64,8 +64,11 @@ COMMITTEE_ORDER = (
 CONFIDENCE_DROP = 10
 ANCHORED_FALL = 0.5
 # A later answer whose distinct figures fall below this share of the baseline's
-# lowest has lost facts, not duplicates (5d-2 fix round 1, M2).
+# lowest, and by at least `FIGURES_FLOOR`, has lost facts, not duplicates (5d-2
+# review, M2). The floor keeps one year or page cell from flagging an answer
+# with few figures (CP-0's baseline holds 4 to 10).
 FIGURES_FALL = 0.8
+FIGURES_FLOOR = 5
 # A table cell that is one figure: `2,993`, `(573)`, `-335`, `$1,240.0`, `30.7%`.
 _FIGURE = re.compile(r"\(?\s*[-\u2212]?\s*\$?\s*\d[\d,]*(?:\.\d+)?\s*%?\s*\)?")
 _CELL_SPLIT = re.compile(r"(?<!\\)\|")
@@ -535,7 +538,8 @@ def _key_moves(
 def _figure_moves(
     record: Mapping[str, Any], references: Sequence[Mapping[str, Any]]
 ) -> Moves:
-    """Always reported; LARGE below `FIGURES_FALL` of the baseline's lowest."""
+    """Always reported; LARGE below `FIGURES_FALL` of the baseline's lowest and
+    at least `FIGURES_FLOOR` under it."""
     now = record.get("distinct_figures")
     was = [
         item["distinct_figures"]
@@ -547,7 +551,7 @@ def _figure_moves(
     if not was:
         return [f"distinct figures {now} (baseline unmeasured)"], []
     line = f"distinct figures {now} (baseline {_span(was)})"
-    if now < FIGURES_FALL * min(was):
+    if now < FIGURES_FALL * min(was) and now <= min(was) - FIGURES_FLOOR:
         return [line], [f"distinct figures {now} below 80% of baseline low {min(was)}"]
     return [line], []
 

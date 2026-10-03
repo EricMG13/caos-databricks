@@ -251,3 +251,20 @@ def test_compare_records_flags_a_fall_in_distinct_figures() -> None:
     del unmeasured["distinct_figures"]
     [old] = quality_compare.compare_records([unmeasured], [kept])
     assert old["changes"] == ["distinct figures 96 (baseline unmeasured)"]
+
+
+def test_a_fall_of_fewer_than_five_figures_is_never_large() -> None:
+    """5d-2 review, round 2: CP-0's baselines hold 4 to 10 figures, where one
+    year or page cell is 10-25%; a fall must also be at least five figures."""
+    baseline = {**_answer("Passed", "Draft Only", 80, 8), "distinct_figures": 6}
+    for now, large in ((4, False), (2, False), (1, True), (0, True)):
+        [compared] = quality_compare.compare_records(
+            [baseline], [{**baseline, "distinct_figures": now}]
+        )
+        assert bool(compared["large"]) is large, now
+        assert f"distinct figures {now} (baseline 6)" in compared["changes"]
+    big = {**baseline, "distinct_figures": 20}
+    [compared] = quality_compare.compare_records(
+        [big], [{**big, "distinct_figures": 15}]
+    )
+    assert compared["large"] == ["distinct figures 15 below 80% of baseline low 20"]
