@@ -55,7 +55,7 @@ def tampered(tmp_path: Path) -> Bundle:
 def test_the_build_id_is_the_one_the_repository_pinned(bundle: Bundle) -> None:
     """The repository pins the build id. A run pinned to one build never
     executes under another (invariant 4)."""
-    assert bundle.build_id.startswith("43d79461")
+    assert bundle.build_id.startswith("fa90657d")
 
 
 def test_authority_is_the_whole_skill_and_its_references(bundle: Bundle) -> None:
@@ -197,7 +197,7 @@ def test_the_manifest_itself_is_pinned(bundle: Bundle) -> None:
     )
 
     assert recorded["build_id"] == bundle.build_id
-    assert bundle.manifest_sha256.startswith("bf3851ff")
+    assert bundle.manifest_sha256.startswith("0f1b7c9b")
 
 
 def test_module_display_names_reads_the_bundle_catalog(bundle: Bundle) -> None:
