@@ -40,9 +40,19 @@
         "count": 2
       },
       "distinct_figures": 6,
-      "figures_by_register": {
+      "figures_by_table": {
+        "": [],
+        "P1": [],
+        "P2": [],
         "P3": [],
+        "P4": [
+          "19581e27de7ced00",
+          "7902699be42c8a8e"
+        ],
         "P5": [],
+        "P6": [],
+        "P7": [],
+        "P8": [],
         "T1": [],
         "T2": [],
         "T3": [
@@ -178,9 +188,23 @@
         "count": 1
       },
       "distinct_figures": 6,
-      "figures_by_register": {
+      "figures_by_table": {
+        "": [],
+        "P1": [],
+        "P2": [],
         "P3": [],
+        "P4": [
+          "4b227777d4dd1fc6",
+          "4e07408562bedb8b",
+          "5feceb66ffc86f38",
+          "6b86b273ff34fce1",
+          "d4735e3a265e16ee",
+          "ef2d127de37b942b"
+        ],
         "P5": [],
+        "P6": [],
+        "P7": [],
+        "P8": [],
         "T1": [],
         "T2": [],
         "T3": [
@@ -330,9 +354,16 @@
         "count": 3
       },
       "distinct_figures": 8,
-      "figures_by_register": {
+      "figures_by_table": {
+        "": [],
+        "P1": [],
+        "P2": [],
         "P3": [],
+        "P4": [],
         "P5": [],
+        "P6": [],
+        "P7": [],
+        "P8": [],
         "T1": [],
         "T2": [],
         "T3": [
@@ -344,7 +375,8 @@
         "T4": [],
         "T5": [],
         "T6": [
-          "2f1d593cd98cb5bf"
+          "2f1d593cd98cb5bf",
+          "be4b2f45069c180e"
         ],
         "T7": [],
         "T8": [
@@ -470,9 +502,26 @@
         "count": 3
       },
       "distinct_figures": 8,
-      "figures_by_register": {
+      "figures_by_table": {
+        "P1": [],
+        "P2": [
+          "6b86b273ff34fce1"
+        ],
         "P3": [],
+        "P4": [
+          "4a44dc15364204a8",
+          "4b227777d4dd1fc6",
+          "4e07408562bedb8b",
+          "5feceb66ffc86f38",
+          "6b86b273ff34fce1",
+          "7902699be42c8a8e",
+          "d4735e3a265e16ee",
+          "ef2d127de37b942b"
+        ],
         "P5": [],
+        "P6": [],
+        "P7": [],
+        "P8": [],
         "T1": [],
         "T2": [],
         "T3": [
@@ -599,7 +648,20 @@
         "count": 4
       },
       "distinct_figures": 170,
-      "figures_by_register": {
+      "figures_by_table": {
+        "": [
+          "04ff14276199969c",
+          "050a010ce24d0896",
+          "2f1d593cd98cb5bf",
+          "4652614c4d8778e5",
+          "48449a14a4ff7d79",
+          "58bdcfb2c72536d2",
+          "612111a352a571cb",
+          "728bf33aab1d32d4",
+          "a21855da08cb102d",
+          "a77b6cbdf6fae167",
+          "c6bd343ae0007cdb"
+        ],
         "T4.1": [],
         "T4.10": [
           "04ff14276199969c",
@@ -667,16 +729,29 @@
           "f10d342ce63e0d2d"
         ],
         "T4.17": [
+          "163c820d95764120",
+          "234666d765f4c0a2",
+          "2c624232cdd22177",
+          "317a95f2e3c80887",
           "35135aaa6cc23891",
+          "35254aa9a21444e5",
           "355d8c0ee4e5698e",
+          "48edac0718a29c11",
           "4b227777d4dd1fc6",
           "4e07408562bedb8b",
+          "534ec9aa7d5c487e",
           "535fa30d7e25dd8a",
           "5b4afb8d2ed60a57",
           "6b51d431df5d7f14",
           "6b86b273ff34fce1",
           "6f4b6612125fb3a0",
           "7902699be42c8a8e",
+          "8afb0bb35e730fd3",
+          "ab9828ca390581b7",
+          "ad4307e08817613d",
+          "ae8077b3a8781c11",
+          "c745b79afd666fe9",
+          "d41faf2b02624edb",
           "d4735e3a265e16ee",
           "e7f6c011776e8db7",
           "ef2d127de37b942b"
@@ -832,6 +907,34 @@
           "e73cb135243c08ab",
           "ee0d6c299a70d209"
         ],
+        "T4.7": [
+          "04ff14276199969c",
+          "108c995b953c8a35",
+          "2ec42bc1f3e672fc",
+          "2f1d593cd98cb5bf",
+          "39700d452c77592c",
+          "3d3286f7cd19074f",
+          "3d914f9348c9cc0f",
+          "4652614c4d8778e5",
+          "58bdcfb2c72536d2",
+          "6793f9e266ce6ebd",
+          "6affdae3b3c1aa6a",
+          "728bf33aab1d32d4",
+          "7acc684a848a9b95",
+          "81b8a03f97e8787c",
+          "8bcbb4c131df56f7",
+          "9589262630f775d9",
+          "a440868cf4311953",
+          "a46e37632fa6ca51",
+          "a4c6af0cb6f02dff",
+          "a512db2741cd2069",
+          "d83c7ee736be931d",
+          "d8ed6dce12debd77",
+          "df4865fca1f15916",
+          "dff17949eb4f9ecd",
+          "f7c2599681e9284c",
+          "f87ff9f55f70af66"
+        ],
         "T4.8": [],
         "T4.9": [
           "7acc684a848a9b95",
@@ -965,9 +1068,26 @@
         "count": 4
       },
       "distinct_figures": 10,
-      "figures_by_register": {
+      "figures_by_table": {
+        "": [],
+        "P1": [],
+        "P2": [],
         "P3": [],
+        "P4": [
+          "19581e27de7ced00",
+          "4a44dc15364204a8",
+          "4b227777d4dd1fc6",
+          "4e07408562bedb8b",
+          "4fc82b26aecb47d2",
+          "5feceb66ffc86f38",
+          "6b86b273ff34fce1",
+          "d4735e3a265e16ee",
+          "ef2d127de37b942b"
+        ],
         "P5": [],
+        "P6": [],
+        "P7": [],
+        "P8": [],
         "T1": [],
         "T2": [],
         "T3": [
@@ -978,7 +1098,9 @@
         ],
         "T4": [],
         "T5": [],
-        "T6": [],
+        "T6": [
+          "98c53df687f2e9b9"
+        ],
         "T7": [],
         "T8": [
           "4e07408562bedb8b",
@@ -1088,9 +1210,16 @@
         "count": 6
       },
       "distinct_figures": 4,
-      "figures_by_register": {
+      "figures_by_table": {
+        "": [],
+        "P1": [],
+        "P2": [],
         "P3": [],
+        "P4": [],
         "P5": [],
+        "P6": [],
+        "P7": [],
+        "P8": [],
         "T1": [],
         "T2": [],
         "T3": [
@@ -1224,9 +1353,25 @@
         "count": 8
       },
       "distinct_figures": 8,
-      "figures_by_register": {
+      "figures_by_table": {
+        "": [],
+        "P1": [],
+        "P2": [],
         "P3": [],
+        "P4": [
+          "4a44dc15364204a8",
+          "4b227777d4dd1fc6",
+          "4e07408562bedb8b",
+          "5feceb66ffc86f38",
+          "6b86b273ff34fce1",
+          "7902699be42c8a8e",
+          "d4735e3a265e16ee",
+          "ef2d127de37b942b"
+        ],
         "P5": [],
+        "P6": [],
+        "P7": [],
+        "P8": [],
         "T1": [],
         "T2": [],
         "T3": [
@@ -1364,9 +1509,21 @@
         "count": 7
       },
       "distinct_figures": 6,
-      "figures_by_register": {
+      "figures_by_table": {
+        "": [
+          "4e07408562bedb8b"
+        ],
+        "P1": [],
+        "P2": [],
         "P3": [],
+        "P4": [
+          "19581e27de7ced00",
+          "4a44dc15364204a8"
+        ],
         "P5": [],
+        "P6": [],
+        "P7": [],
+        "P8": [],
         "T1": [],
         "T2": [],
         "T3": [
