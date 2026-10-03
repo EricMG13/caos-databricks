@@ -8,14 +8,10 @@ Phase identity: `document_parse_manifest`, within owner `module_id=CP-0`, `modul
 
 | ID | Object | Purpose |
 |---|---|---|
-| P1 | Pipeline | run identity, objective and preparation status |
-| P2 | Workspace Record | immutable source roots, managed workspace and original hashes |
 | P3 | Input Sources | original identity, authority, entity, period and version links |
-| P4 | Triage Register | scores, frozen decisions, rationale, overrides and profiles |
-| P5 | Parse Jobs | methods, status, fidelity, coverage and limitations |
-| P6 | Prepared Artifacts | artifact paths/hashes, locators and original lineage |
-| P7 | Representation Catalog | one active content representation per retained logical source |
-| P8 | Package Record | batches, members, indexes, checksums and safe-path validation |
+| P5 | Parse Jobs | the host extraction's delivery, status, fidelity, coverage and limitations |
+
+Retired: P1 Pipeline, P2 Workspace Record, P4 Triage Register, P6 Prepared Artifacts, P7 Representation Catalog and P8 Package Record. The host performs that work before the call, and its `HOST SOURCE PREPARATION` record holds it; CP-0 does not restate it.
 
 ## Representation invariants
 

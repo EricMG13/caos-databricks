@@ -300,7 +300,7 @@ Each screen keeps its own four registers and all six of its topic rows: a topic 
 
 - A `GAP_ONLY` topic row's `summary` names the missing evidence in one sentence. Its missing inputs, decision impact, required source and FULL upgrade module are written once, in that screen's gaps register (`TL10.4`, `TL20.4`, `TL23.4`, `TL30.4` or `TL40.4`), not again in the summary.
 - The authority prohibitions bind without being restated: no cell or line repeats that no conclusion, calculation, forecast or inference is made.
-- A screen's posture, status and outcome are its decision-screen `OVERALL` row; no line in the appendix restates them.
+- A screen's posture is the `assessment` of its decision-screen `OVERALL` row, and the run's status and outcome are stated where the Audit Summary states them; no other line in the appendix restates them, except the one row Workflow step 7 requires in a `LITE_COMPLETE` screen's gaps register (`TL10.4`, `TL20.4`, `TL23.4`, `TL30.4` or `TL40.4`) to say no gap or FULL upgrade is needed.
 - A sourced figure or finding is never dropped to save space; it stays where the method puts it.
 
 ## Absorbed phase — CP-L20, binding on every CP-L10 run

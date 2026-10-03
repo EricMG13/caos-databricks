@@ -273,7 +273,7 @@ Word and Microsoft 365 renderers do not handle them consistently.
 ##### CP-PARSE prepared evidence
 
 CP-PARSE retains pack inventory, triage, parsing, fidelity, representation,
-safe-path, checksum, batch-reconciliation and ZIP-verification gates. The P1-P8 preparation registers are retained inside the single
+safe-path, checksum, batch-reconciliation and ZIP-verification gates. The P3 and P5 preparation registers are retained inside the single
 `[IssuerID]_CP-0_[YYYYMMDD].md` handoff. Parsed per-source
 Markdown and validated CP-PARSE ZIP batches are supporting prepared evidence,
 not additional analytical handoffs. Pass-through originals remain direct active

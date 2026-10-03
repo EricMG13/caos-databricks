@@ -1157,6 +1157,60 @@ class ForkR7Tests(unittest.TestCase):
         self.assertNotIn('null', complete.load_contract(skill, 'CP-1')['blocklist'])
 
 
+class ForkR9Tests(unittest.TestCase):
+    """Deployment fork r9 (D97): CP-0 writes only the preparation registers that hold its own findings."""
+
+    RETIRED = ['P1', 'P2', 'P4', 'P6', 'P7', 'P8']
+
+    def test_cp0_keeps_its_findings_and_leaves_the_host_record_to_the_host(self):
+        # 90 stored CP-0 answers: P3 held identity, period and version facts found nowhere else (110 dates in
+        # 46) and P5 the fidelity findings (64 cells in 35); the other six restated the host's record or said
+        # NA about workspaces and ZIPs this host never makes.
+        skill = skill_text('cp-0-source-readiness')
+        contract = complete.load_contract(skill, 'CP-0')
+        self.assertEqual(sorted(contract['registers']), ['P3', 'P5'] + [f'T{n}' for n in range(1, 9)])
+        self.assertEqual(contract['retired_registers'], self.RETIRED)
+        catalog = json.loads((ROOT / 'skills/cp-os-credit-os/references/CREDIT_OS_V_MODULE_CATALOG_v2.json')
+                             .read_text(encoding='utf-8'))
+        [cp0] = [m['artifact_contract'] for m in catalog['modules'] if m['module_id'] == 'CP-0']
+        self.assertEqual((set(cp0['required_table_ids']), cp0['required_table_count']), (set(contract['registers']), 10))
+        self.assertIn('### Host preparation — the record CP-0 does not restate', skill)
+        self.assertIn('**P3 — Input Sources**', skill)
+        self.assertIn('**P5 — Parse Jobs**', skill)
+        references = ROOT / 'skills/cp-0-source-readiness/references'
+        for path in (ROOT / 'skills/cp-0-source-readiness/SKILL.md', ROOT / 'CANON_SHARED.md',
+                     references / 'REF_CP-0_STEPS.md', references / 'CP-PARSE_SCHEMA_REFERENCE.md',
+                     references / 'CP0_PROFILE_ANCHOR_CONTRACT_v1.md',
+                     ROOT / 'skills/cp-os-credit-os/references/CP-OS_MIRROR_CP0_PROFILE_ANCHOR_CONTRACT_v1.md'):
+            text = path.read_text(encoding='utf-8')
+            for stale in ('P1-P8', 'P1–P8', 'Triage it `PARSE_TARGETED`', '| P7 | Representation Catalog |'):
+                with self.subTest(file=path.name, stale=stale):
+                    self.assertNotIn(stale, text)
+
+    def test_an_answer_with_the_retired_registers_still_reads_the_same(self):
+        # Every stored CP-0 answer writes all sixteen. A retired heading keeps its table, so the prose under
+        # it ("feeds T2") never claims a table as a T register, and nothing is refused for the extra tables.
+        skill = skill_text('cp-0-source-readiness')
+        def table(*cells):
+            return '| ' + ' | '.join(cells) + ' |\n|' + '---|' * len(cells) + '\n| ' + ' | '.join(['x'] * len(cells)) + ' |\n\n'
+        parts = []
+        for n in range(1, 9):
+            parts.append(f'#### P{n} — Preparation\n\nThe selected artifact feeds T2.\n\n' + table(f'p{n}_id', 'value'))
+        for n in range(1, 9):
+            parts.append(f'#### T{n} — Readiness\n\n' + table(f't{n}_id', 'value'))
+        text = ''.join(parts)
+        ids = list(complete.load_contract(skill, 'CP-0')['registers'])
+        found = complete.find_registers(text, ids, self.RETIRED)
+        self.assertEqual({rid: found[rid][0][0] for rid in found},
+                         {rid: rid.lower() + '_id' for rid in ids})
+        self.assertEqual(complete.check(skill, text, 'CP-0')[0], [])
+        # Without its retired tables the answer is complete; without P3 it is not.
+        lean = ''.join(p for p in parts if not any(p.startswith(f'#### {rid} ') for rid in self.RETIRED))
+        self.assertEqual(complete.check(skill, lean, 'CP-0')[0], [])
+        self.assertIn('P3: required register missing from the handoff',
+                      complete.check(skill, lean.replace('#### P3 — Preparation', '#### Inputs'), 'CP-0')[0])
+
+
 @unittest.skipUnless(os.environ.get('DEPLOY_V_INTEGRATION') == '1', 'enable integration for native PDF and DOCX dependencies')
 class IntegrationTests(unittest.TestCase):
     def test_exporter_binds_current_catalyst_owner(self):

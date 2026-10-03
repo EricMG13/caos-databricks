@@ -708,7 +708,7 @@ def test_the_prompt_repeats_the_closed_contract_after_evidence(
     )
     assert f"Valid `source_id` values are exactly: {source_ids}," in compact
     assert " -> ".join(CONTRACT.validate_handoff.CANONICAL_HEADINGS) in reminder
-    assert ("P1-P8 and T1-T8" in reminder) is (module_id == "CP-0")
+    assert ("include P3, P5 and T1-T8" in reminder) is (module_id == "CP-0")
     t8_header = "| " + " | ".join(CONTRACT.navigation.NEW_HEADERS) + " |"
     assert (t8_header in reminder) is (module_id == "CP-0")
     assert ("not inside a code fence (a fenced table is not read)" in compact) is (

@@ -65,7 +65,8 @@ conclusions, never shorter reasoning or invented filler.
   - **conditional_register_ids**: none
   - **heading**: ### Analytical appendix — complete canonical registers
   - **lossless**: True
-  - **required_register_ids**: T1; T2; T3; T4; T5; T6; T7; T8; P1; P2; P3; P4; P5; P6; P7; P8
+  - **required_register_ids**: T1; T2; T3; T4; T5; T6; T7; T8; P3; P5
+  - **retired_register_ids**: P1; P2; P4; P6; P7; P8
   - **schema_path**: ./references/CP-0_SCHEMA_REFERENCE.md
 - **completeness_contract**: structured below
   - **conditional_stable_tables_by_consumer**: structured below
@@ -81,42 +82,12 @@ conclusions, never shorter reasoning or invented filler.
     - **frontmatter_limitation_flags**: SOURCE_LIMITED_NOT_COMMITTEE_READY
     - **frontmatter_validation_warnings**: FULL_UNDERWRITING_SOURCE_SET_NOT_RETAINED
   - **required_registers**: structured below
-    - **P1**: structured below
-      - **columns**: none
-      - **critical_columns**: identical to columns
-      - **disqualifier_exempt_columns**: none
-      - **minimum_body_rows**: 1
-    - **P2**: structured below
-      - **columns**: none
-      - **critical_columns**: identical to columns
-      - **disqualifier_exempt_columns**: none
-      - **minimum_body_rows**: 1
     - **P3**: structured below
       - **columns**: none
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
-    - **P4**: structured below
-      - **columns**: none
-      - **critical_columns**: identical to columns
-      - **disqualifier_exempt_columns**: none
-      - **minimum_body_rows**: 1
     - **P5**: structured below
-      - **columns**: none
-      - **critical_columns**: identical to columns
-      - **disqualifier_exempt_columns**: none
-      - **minimum_body_rows**: 1
-    - **P6**: structured below
-      - **columns**: none
-      - **critical_columns**: identical to columns
-      - **disqualifier_exempt_columns**: none
-      - **minimum_body_rows**: 1
-    - **P7**: structured below
-      - **columns**: none
-      - **critical_columns**: identical to columns
-      - **disqualifier_exempt_columns**: none
-      - **minimum_body_rows**: 1
-    - **P8**: structured below
       - **columns**: none
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
@@ -188,6 +159,13 @@ CP-0 absorbs the document parse and fidelity-verification phase that used to run
 
 The phase keeps its own method and its own registers. Those registers are already in `## Output profile` above — merged into CP-0's single contract, which is what makes this one module with one export. They are deliberately NOT restated here: two copies of a register definition in one entry is one copy too many, and the second is the one that goes stale.
 
+### Host preparation — the record CP-0 does not restate
+
+The host performs the preparation work itself, before the call: it pins the source set and each original's SHA-256, extracts every admitted source with the extractor its record names, anchors every delivered line to its page in the original, and delivers each source `WHOLE` or as a `PAGE_MAP`. Its record is the request's `HOST SOURCE PREPARATION` section, and each source's host extraction is that source's one active content representation; no ZIP package exists. CP-0 does not copy that record into its handoff: the registers that held it (P1 pipeline, P2 workspace record, P4 triage register, P6 prepared artifacts, P7 representation catalog, P8 package record) are retired, and T1 and T7 name the host's record as the preparation record. CP-0 authors the two preparation registers that hold its own findings, one row per source each:
+
+- **P3 — Input Sources**: the source as its content identifies it (filenames are hints only): issuer or entity, document family and title, reporting period or as-of date, filing, signing or effective date, version status, and its relationships, such as the base document an amendment, waiver or supplement modifies, a superseded or restated version, or a peer's document.
+- **P5 — Parse Jobs**: the host's extraction of the source as the evidence shows it: the extractor its record names; its delivery, `WHOLE` or `PAGE_MAP` (lines shown of lines; a page-mapped source is `PARSE_TARGETED`); its status, `COMPLETE`, `DEGRADED` or `BLOCKED`; its extraction confidence; the pages it covers; and every fidelity limitation the evidence shows, such as a page, table, chart, schedule, exhibit or clause it lost, flattened or left out.
+
 ### CP-PARSE binding rules
 
 CP-PARSE's binding rules are CP-0's: the same canon, and every rule in `## Canon Core` above governs this phase. The one line that differed named `CP-PARSE` in the filename rule, which is no longer true — this run authors CP-0's artifact, under CP-0's name. Nothing further is specific to this phase.
@@ -230,13 +208,13 @@ Execute this preparation phase first on every CP-0 run. Triage the whole pack be
 2. Translate the stated objective into extraction demand only; score and freeze the per-source decisions.
 3. Apply every relevant document profile and extraction method (`REF_CP-PARSE_B_DocumentProfiles.md`).
 4. Verify text, tables, charts, clauses, locators and coverage against originals (`REF_CP-PARSE_C_ExtractionAndFidelity.md`).
-5. Freeze the representation catalog and prove one active content representation per retained logical source.
-6. Author the same-run preparation registers and validate packages, checksums and batch reconciliation (`REF_CP-PARSE_D_PackagingAndQA.md`).
+5. Take the host's record as the representation catalog: one active content representation, the host extraction, per retained logical source.
+6. Author P3 and P5; the host's record stands for packages, checksums and batch reconciliation (`REF_CP-PARSE_D_PackagingAndQA.md`).
 </workflow>
 
 <output priority="critical">
 #### Output and packaging
-Author P1-P8 inside the single `[IssuerID]_CP-0_[YYYYMMDD].md` handoff: pipeline, workspace record, input inventory, triage register, parse jobs, prepared-artifact register, representation catalog and package record.
+Author P3 and P5 inside the single `[IssuerID]_CP-0_[YYYYMMDD].md` handoff: the input inventory and the parse jobs. The host's preparation record stands for the retired pipeline, workspace, triage, prepared-artifact, representation-catalog and package registers (P1, P2, P4, P6, P7, P8).
 
 When parsing occurs, deliver supporting `[PackKey]_CP-PARSE_[YYYYMMDD]_BATCH-[NNN]-of-[NNN].zip` packages. Prepared per-source Markdown is evidence inside those packages, not a second analytical handoff. The readiness phase consumes these same-run registers and their active representations.
 </output>
@@ -247,7 +225,7 @@ Record PASS/FAIL/NA for inventory completeness; original hashes; identity/period
 </verification>
 
 #### Export
-Follow `CP_AB_EXPORT_SPEC.md`. Preserve the canonical YAML plus six H2 sections. Record the preparation summary within CP-0 and retain its P1-P8 registers below `### Analytical appendix — complete canonical registers`. Continue directly to the readiness phase. Return the CP-0 status, limitations, Markdown link and validated package links only after both phases complete.
+Follow `CP_AB_EXPORT_SPEC.md`. Preserve the canonical YAML plus six H2 sections. Record the preparation summary within CP-0 and retain its P3 and P5 registers below `### Analytical appendix — complete canonical registers`. Continue directly to the readiness phase. Return the CP-0 status, limitations, Markdown link and validated package links only after both phases complete.
 </phase>
 
 
@@ -260,7 +238,9 @@ Follow `CP_AB_EXPORT_SPEC.md`. Preserve the canonical YAML plus six H2 sections.
   - **heading**: ### Analytical appendix — complete canonical registers
   - **lossless**: True
   - **required_register_ids**: structured below
-    - P1; P2; P3; P4; P5; P6; P7; P8
+    - P3; P5
+  - **retired_register_ids**: structured below
+    - P1; P2; P4; P6; P7; P8
   - **schema_path**: ./references/CP-PARSE_SCHEMA_REFERENCE.md
 - **completeness_contract**: structured below
   - **conditional_stable_tables_by_consumer**: structured below
@@ -327,7 +307,7 @@ Preparation, readiness and source-to-module mapping only. **Do not make a credit
 
 <entry_contract priority="critical" enforcement="hard">
 #### Entry contract
-Every invocation is one CP-0 run with two ordered phases: preparation, then readiness. First execute the preparation method above and validate its P1-P8 registers and supporting packages. Then assess readiness against that frozen representation catalog. Refresh changed or newly supplied sources inside the preparation phase before rebuilding readiness. A blocked required parse blocks its dependent readiness claims; name the missing source or failed check. Never require a separate CP-PARSE handoff or a second command.
+Every invocation is one CP-0 run with two ordered phases: preparation, then readiness. First execute the preparation method above and author its P3 and P5 registers against the host's preparation record. Then assess readiness against that frozen representation catalog. Refresh changed or newly supplied sources inside the preparation phase before rebuilding readiness. A blocked required parse blocks its dependent readiness claims; name the missing source or failed check. Never require a separate CP-PARSE handoff or a second command.
 
 Ask for the strongest available files first: controlling primary documents; then issuer or agency materials; then dated market or external evidence; then user summaries as context only. State the minimum missing documents for the user's objective; never request every possible source by default.
 </entry_contract>
@@ -381,7 +361,7 @@ CP-0 may declare only `SOURCE_READY_FOR_MODEL_ROUTE` with `assertion_scope=SOURC
 
 <output priority="critical">
 #### Output and packaging
-Author exactly one canonical handoff: `[IssuerID]_CP-0_[YYYYMMDD].md`, containing the input gate, effective-source register, source hierarchy, content-to-module map, gaps/conflicts, evidence trace, Master Index and command sheet. Include P1-P8 preparation registers alongside T1-T8 readiness registers in this one CP-0 handoff; link validated supporting packages.
+Author exactly one canonical handoff: `[IssuerID]_CP-0_[YYYYMMDD].md`, containing the input gate, effective-source register, source hierarchy, content-to-module map, gaps/conflicts, evidence trace, Master Index and command sheet. Include the P3 and P5 preparation registers alongside the T1-T8 readiness registers in this one CP-0 handoff; link validated supporting packages.
 </output>
 
 <verification priority="critical">
