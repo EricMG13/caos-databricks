@@ -46,7 +46,10 @@ MODEL = "anthropic/claude-opus-5"
 
 
 def effort_from_environment() -> str | None:
-    """The reasoning effort to send, or None; anything outside `EFFORTS` is refused."""
+    """The reasoning effort to send, or None; anything outside `EFFORTS` is refused.
+
+    An empty or whitespace-only value counts as unset, and matching is
+    case-sensitive: `High` is refused, not folded to `high`."""
     effort = os.environ.get(EFFORT_ENV, "").strip()
     if not effort:
         return None

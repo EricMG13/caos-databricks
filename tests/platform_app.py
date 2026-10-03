@@ -27,7 +27,13 @@ from pathlib import Path
 from socket import socket
 from urllib.parse import urlparse
 
-from workspace_stub import BEARER, LAKEBASE_ENDPOINT, LAKEBASE_INSTANCE, WorkspaceStub
+from workspace_stub import (
+    BEARER,
+    LAKEBASE_ENDPOINT,
+    LAKEBASE_INSTANCE,
+    RUN_CEILING,
+    WorkspaceStub,
+)
 
 from caos.api.site import MANIFEST
 from caos.store import lakebase
@@ -104,7 +110,7 @@ def platform_environment(
         PGUSER=parts.username or "postgres",
         PGSSLMODE="disable",  # the test Postgres speaks no TLS; Lakebase requires it
         CAOS_BLOB_ROOT=f"volume://{VOLUME}",
-        CAOS_RUN_CEILING="120.00",
+        CAOS_RUN_CEILING=RUN_CEILING,
         CAOS_MODEL_CHOICES="",  # read as none; the stub's deployment has the bundle's
         CAOS_WORKER_IN_PROCESS="1",
         CAOS_GROUP_ADMIN="caos-admins",

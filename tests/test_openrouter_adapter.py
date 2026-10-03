@@ -15,6 +15,7 @@ from openrouter_adapter import (
     qualification_identity,
 )
 
+from caos.models import ChatCompletions
 from caos.provider import MAX_COMPLETION_TOKENS
 
 MODEL = "openai/gpt-6-luna"
@@ -80,3 +81,47 @@ def test_identity_for_each_combination(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv(EFFORT_ENV)
     monkeypatch.setenv(PROVIDER_ENV, "a,b")
     assert qualification_identity(MODEL) == f"openrouter/{MODEL}@a,b/none/{top}"
+
+
+def test_the_qualify_wrapper_carries_the_adapter_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`tests/qualify_openrouter.py` hands `qualify` a provider whose
+    `qualification_identity` is the adapter's, effort and pin included."""
+    import importlib
+
+    import qualify_openrouter
+
+    qualify = importlib.import_module("qualify")
+
+    seen: list[ChatCompletions] = []
+
+    def capture(argv: list[str]) -> int:
+        seen.append(qualify.from_environment())
+        return 0
+
+    monkeypatch.setattr(qualify, "from_environment", qualify.from_environment)
+    monkeypatch.setattr(qualify, "main", capture)
+    monkeypatch.setenv("CAOS_MODEL_ENDPOINT", MODEL)
+    monkeypatch.setenv("CAOS_MODEL_PRICE", f"{MODEL},0.000005,0.000025,2026-09-22")
+    monkeypatch.setenv(EFFORT_ENV, "high")
+    monkeypatch.setenv(PROVIDER_ENV, "openai/flex")
+    assert qualify_openrouter.main([]) == 0
+    top = str(MAX_COMPLETION_TOKENS)
+    assert (
+        seen[0].qualification_identity == f"openrouter/{MODEL}@openai/flex/high/{top}"
+    )
+
+
+@pytest.mark.parametrize("raw", ["", "  "])
+def test_an_empty_or_blank_effort_counts_as_unset(
+    monkeypatch: pytest.MonkeyPatch, raw: str
+) -> None:
+    monkeypatch.setenv(EFFORT_ENV, raw)
+    assert effort_from_environment() is None
+
+
+def test_effort_matching_is_case_sensitive(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(EFFORT_ENV, "High")
+    with pytest.raises(RuntimeError, match=EFFORT_ENV):
+        effort_from_environment()
