@@ -192,7 +192,7 @@ Execute this preparation phase first on every CP-0 run. Triage the whole pack be
 <hard_rules priority="critical" enforcement="hard">
 #### Hard rules
 1. Inventory, content-classify, version-map and hash-deduplicate every original; page count alone never determines evidence value.
-2. Freeze one decision per source: `PARSE_FULL`, `PARSE_TARGETED`, `PASS_THROUGH`, `SKIP_DUPLICATE`, `SKIP_LOW_VALUE` or `BLOCKED`.
+2. Score and freeze no per-source decision: the host's preparation record holds each source's delivery, `WHOLE` or `PAGE_MAP` (`PARSE_TARGETED`), which its P5 row records (P4 is retired).
 3. Keep source roots immutable. Derivatives remain in a unique managed workspace; verify original hashes before and after preparation.
 4. Skip only contained duplicates. Keep every base legal document, amendment, waiver and supplement as a separate linked source.
 5. Preserve wording, values, signs, units, periods, entities, structure, footnotes and page/slide/sheet/clause locators. Never fabricate, normalize, reconcile or infer during parsing.
@@ -205,7 +205,7 @@ Execute this preparation phase first on every CP-0 run. Triage the whole pack be
 <workflow priority="critical">
 #### Workflow
 1. Inventory originals, hashes, entity/period/version relationships and duplicates (`REF_CP-PARSE_A_TriageAndSelection.md`).
-2. Translate the stated objective into extraction demand only; score and freeze the per-source decisions.
+2. Translate the stated objective into extraction demand only; each source's delivery is the host's preparation record's, recorded in its P5 row.
 3. Apply every relevant document profile and extraction method (`REF_CP-PARSE_B_DocumentProfiles.md`).
 4. Verify text, tables, charts, clauses, locators and coverage against originals (`REF_CP-PARSE_C_ExtractionAndFidelity.md`).
 5. Take the host's record as the representation catalog: one active content representation, the host extraction, per retained logical source.
@@ -216,12 +216,12 @@ Execute this preparation phase first on every CP-0 run. Triage the whole pack be
 #### Output and packaging
 Author P3 and P5 inside the single `[IssuerID]_CP-0_[YYYYMMDD].md` handoff: the input inventory and the parse jobs. The host's preparation record stands for the retired pipeline, workspace, triage, prepared-artifact, representation-catalog and package registers (P1, P2, P4, P6, P7, P8).
 
-When parsing occurs, deliver supporting `[PackKey]_CP-PARSE_[YYYYMMDD]_BATCH-[NNN]-of-[NNN].zip` packages. Prepared per-source Markdown is evidence inside those packages, not a second analytical handoff. The readiness phase consumes these same-run registers and their active representations.
+Deliver no supporting package: the host's preparation record stands for it (P8 is retired), and each source's host extraction is its active representation. The readiness phase consumes P3, P5 and that record.
 </output>
 
 <verification priority="critical">
 #### Verification — fail closed
-Record PASS/FAIL/NA for inventory completeness; original hashes; identity/period/version map; frozen triage; duplicate/amendment handling; extraction fidelity; locator and coverage integrity; representation uniqueness; source-root immutability; safe ZIP paths; unique members; checksums; batch reconciliation; and canonical Markdown validation.
+Record PASS/FAIL/NA for inventory completeness, the identity/period/version map and duplicate/amendment handling (P3); extraction fidelity and locator and coverage integrity (P5); and canonical Markdown validation. Every other preparation check is the host's preparation record's: record no result for it.
 </verification>
 
 #### Export
@@ -314,7 +314,7 @@ Ask for the strongest available files first: controlling primary documents; then
 
 <hard_rules priority="critical" enforcement="hard">
 #### Hard rules
-1. Validate the internal preparation identity, package status, complete inventory and representation uniqueness before assessing readiness.
+1. Validate the internal preparation identity and that P3 and P5 cover every source the host's preparation record names before assessing readiness.
 2. Consume exactly one active content representation per retained logical source. Preserve the original as authority and provenance when prepared content is active.
 3. A blocked required preparation supplies no readiness content and never silently falls back to the original.
 4. Keep base legal documents and every amendment, waiver or supplement separately active and linked.
@@ -332,7 +332,7 @@ Ask for the strongest available files first: controlling primary documents; then
 
 <workflow priority="critical">
 #### Workflow
-1. Complete and validate the internal preparation phase, hashes, package status, inventory coverage and one-active-representation invariant.
+1. Complete and validate the internal preparation phase: P3 and P5 cover every source the host's preparation record names.
 2. Translate the objective and proposed route into explicit evidence demands by module.
 3. Assess source authority, freshness, entity/period fit, definition coverage and prepared-representation limitations.
 4. Freeze the effective-source catalog using the validated preparation phase's representation decisions.
@@ -366,7 +366,7 @@ Author exactly one canonical handoff: `[IssuerID]_CP-0_[YYYYMMDD].md`, containin
 
 <verification priority="critical">
 #### Verification — fail closed
-Record PASS/FAIL/NA for preparation identity and internal phase ordering; inventory coverage; original hashes; package validation; locator coverage; representation uniqueness; quality/authority separation; entity/period/definition fit; gaps/conflicts; downstream readiness; model-route assertion scope; and canonical Markdown.
+Record PASS/FAIL/NA for preparation identity and internal phase ordering; inventory coverage; locator coverage; quality/authority separation; entity/period/definition fit; gaps/conflicts; downstream readiness; model-route assertion scope; and canonical Markdown. Hashes, packages and the one active representation per source are the host's preparation record's.
 </verification>
 
 #### Export

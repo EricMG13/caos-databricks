@@ -23,9 +23,9 @@ Retired: P1 Pipeline, P2 Workspace Record, P4 Triage Register, P6 Prepared Artif
 
 ## Analysis sections
 
-Preparation summary; pack inventory and version map; triage rationale; extraction/fidelity assessment; representation catalog; package status; limitations; CP-0 handoff.
+Preparation summary; pack inventory and version map (P3); extraction/fidelity assessment (P5); limitations; CP-0 handoff. The host's preparation record stands for triage, the representation catalog and packages.
 
 ## QA and export
 
-The preparation registers belong inside `[IssuerID]_CP-0_[YYYYMMDD].md`, the only module handoff. Supporting prepared Markdown and ZIP batches remain evidence artifacts. Preserve the canonical YAML and six H2 sections defined by `CP_AB_EXPORT_SPEC.md`; fail closed on fidelity, representation, checksum, package or Markdown validation failure.
+The preparation registers belong inside `[IssuerID]_CP-0_[YYYYMMDD].md`, the only module handoff. Preserve the canonical YAML and six H2 sections defined by `CP_AB_EXPORT_SPEC.md`; fail closed on fidelity or Markdown validation failure.
 </schema_reference>

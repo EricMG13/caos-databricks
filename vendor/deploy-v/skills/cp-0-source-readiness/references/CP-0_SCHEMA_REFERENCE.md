@@ -8,18 +8,18 @@ Stable identity: `module_id=CP-0`, `module_name=SourceReadiness`, `owned_object=
 
 | ID | Object | Purpose |
 |---|---|---|
-| T1 | Input Gate | objective, issuer, period, same-run preparation validation and validation status |
+| T1 | Input Gate | objective, issuer, period, the host's preparation record as the preparation record, and validation status |
 | T2 | Source Register | original authority plus active-representation quality and usability |
 | T3 | Source Hierarchy | source class, authority rule, presence and missing minimum |
 | T4 | Content-to-Module Map | active representation, evidence demand and readiness effect |
 | T5 | Gaps/Conflicts | gaps, conflicts, severity, affected modules and remediation |
 | T6 | Evidence Trace | evidence ID, original source, active representation and locator |
-| T7 | Master Index State | run, upstream preparation, outputs, warnings and consumers |
+| T7 | Master Index State | run, the host's preparation record as the preparation record, outputs, warnings and consumers |
 | T8 | Recommended Run Command Sheet | live host ID, candidate command, safe exact command, upstream handoff and active source attachments |
 
 ## Readiness invariants
 
-- same-run preparation validation, inventory coverage, hashes, package validation and representation uniqueness pass before readiness begins.
+- P3 and P5 cover every source the host's preparation record names before readiness begins; that record holds the hashes and the one active representation per source.
 - Readiness consumes the frozen same-run preparation catalog; changed sources return to preparation before readiness.
 - A blocked preparation has no content fallback; changed or absent sources return to the internal preparation phase.
 - Authority belongs to the original source; extraction confidence and fidelity belong to the active representation.

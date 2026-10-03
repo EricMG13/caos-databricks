@@ -3,6 +3,7 @@ import ast
 import importlib
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -1178,14 +1179,44 @@ class ForkR9Tests(unittest.TestCase):
         self.assertIn('**P3 — Input Sources**', skill)
         self.assertIn('**P5 — Parse Jobs**', skill)
         references = ROOT / 'skills/cp-0-source-readiness/references'
+        # Fork r11 (D99): nothing CP-0 is handed asks for work on a retired register -- no triage
+        # scores or register, no ZIP, checksum or batch gate, no column the host's record lacks.
+        stale_r11 = ('once in the triage register', 'inventory and triage register', 'Scores add correctly', '## Scoring rubric', 'score and freeze',
+                     'Freeze one decision per source', 'batch-reconciliation', 'ZIP-verification',
+                     'BATCH-[NNN]-of-[NNN].zip` packages', 'the host\'s record carries them',
+                     'active_content_artifact_id', '`PASS_THROUGH` attaches its original',
+                     'package validation', 'package status', 'same-run preparation validation')
         for path in (ROOT / 'skills/cp-0-source-readiness/SKILL.md', ROOT / 'CANON_SHARED.md',
                      references / 'REF_CP-0_STEPS.md', references / 'CP-PARSE_SCHEMA_REFERENCE.md',
+                     references / 'REF_CP-PARSE_STEPS.md', references / 'CP-0_SCHEMA_REFERENCE.md',
                      references / 'CP0_PROFILE_ANCHOR_CONTRACT_v1.md',
                      ROOT / 'skills/cp-os-credit-os/references/CP-OS_MIRROR_CP0_PROFILE_ANCHOR_CONTRACT_v1.md'):
             text = path.read_text(encoding='utf-8')
-            for stale in ('P1-P8', 'P1–P8', 'Triage it `PARSE_TARGETED`', '| P7 | Representation Catalog |'):
+            for stale in ('P1-P8', 'P1–P8', 'Triage it `PARSE_TARGETED`', '| P7 | Representation Catalog |') + stale_r11:
                 with self.subTest(file=path.name, stale=stale):
                     self.assertNotIn(stale, text)
+
+    def test_cp0_verifies_only_what_its_own_registers_hold(self):
+        # Fork r11 (D99): the preparation phase's Verification block asked PASS/FAIL/NA of 14 checks, 8 of
+        # them on what P2, P4, P7 and P8 held (frozen triage, ZIP paths, checksums, batches). Each block
+        # now keeps the checks P3, P5 and T1-T8 hold and points at the host's preparation record.
+        skill = skill_text('cp-0-source-readiness')
+        blocks = re.findall(r'#### Verification — fail closed\n(.*?)</verification>', skill, re.S)
+        self.assertEqual(len(blocks), 2)
+        preparation, readiness = blocks
+        for block in blocks:
+            for retired in ('triage', 'ZIP', 'checksum', 'batch', 'original hashes', 'package validation',
+                            'representation uniqueness', 'source-root immutability', 'unique members'):
+                with self.subTest(retired=retired):
+                    self.assertNotIn(retired, block)
+            self.assertIn("the host's preparation record", block.replace('host’s', "host's"))
+        self.assertIn('(P3)', preparation)
+        self.assertIn('(P5)', preparation)
+        self.assertIn('downstream readiness', readiness)
+        parse = (ROOT / 'skills/cp-0-source-readiness/references/REF_CP-PARSE_STEPS.md').read_text(encoding='utf-8')
+        gates = parse.split('## Verification gates\n', 1)[1]
+        self.assertEqual(re.findall(r'^(\d+)\. ', gates, re.M), [str(n) for n in range(1, 8)])
+        self.assertIn("appears exactly once in P3 and in P5", gates)
 
     def test_an_answer_with_the_retired_registers_still_reads_the_same(self):
         # Every stored CP-0 answer writes all sixteen. A retired heading keeps its table, so the prose under

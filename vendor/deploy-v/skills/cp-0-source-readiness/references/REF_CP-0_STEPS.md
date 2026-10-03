@@ -124,7 +124,7 @@ Exactly one representation may have `ACTIVE_CONTENT` for every retained logical 
 
 Map each effective representation—not both versions—to downstream modules. Record content basis, specific evidence demand, mapping status, readiness effect and limitation. Authority citations still point to the original source and its locator; the prepared artifact is the active content vehicle and carries lineage back to that original.
 
-Generate `active_content_file_name` and `active_content_artifact_id` directly from this frozen catalog. Do not use a raw file registry to assemble downstream attachments.
+Take each attachment's file name from the `filename` the host's preparation record gives its source; the host extraction it stands for has no separate artifact ID. Do not use a raw file registry to assemble downstream attachments.
 </step_reference>
 ## REF_CP-0_ExampleOutputPattern.md
 <!-- REF_CP-0_ExampleOutputPattern.md (T2 Example Library) | 2026-08-02 | Markdown-only handoff contract -->
@@ -166,14 +166,9 @@ The analysis includes:
 - gaps, conflicts and source-readiness summary;
 - `SOURCE_READY_FOR_MODEL_ROUTE`/`SOURCE_SUFFICIENCY_ONLY` assessment when applicable;
 - Recommended Run Command Sheet sourced only from active representations; and
-- Master Index and evidence-package status.
+- Master Index.
 
-Example representation states (the host's record carries them under host preparation; no P7 table is written):
-
-| logical source | triage | parse status | original role | parsed role | readiness input | active file |
-|---|---|---|---|---|---|---|
-| Annual report | `PASS_THROUGH` | `NOT_REQUIRED` | `ACTIVE_CONTENT` | `NOT_PRESENT` | `ORIGINAL` | `annual-report.pdf` |
-| Lender deck | `PARSE_FULL` | `COMPLETE` | `PROVENANCE_AND_VERIFICATION_ONLY` | `ACTIVE_CONTENT` | `PARSED` | `prepared/lender-deck.md` |
+No P7 table is written: the host's preparation record names each source's `filename`, its host extraction and its delivery, `WHOLE` or `PAGE_MAP`, and P5 records the parse status.
 
 The supporting evidence ZIP, if any, is not a second analytical handoff. Users do not copy prepared artifacts back into the source folder.
 ## REF_CP-0_F_GapLogging.md
@@ -225,7 +220,7 @@ Rules:
 2. `candidate_command` is `Run <module_id>` plus only objective, issuer/entity and period qualifiers supported by this run. Its command module must match the row module exactly.
 3. READY and READY_WITH_LIMITATIONS rows set `exact_command` equal to `candidate_command` and carry every limitation into the row.
 4. CONDITIONAL and BLOCKED rows set `exact_command` to exactly `DO NOT RUN`; retain the candidate only as a non-executable preview and state the missing or unusable evidence briefly. A CONDITIONAL row is discharged only when the named source is supplied and CP-0 is re-run; it never waits on an upstream analytical handoff.
-5. Source filenames come only from the effective-source set (the host's preparation record). `PASS_THROUGH` attaches its original; `COMPLETE` or `DEGRADED` attaches its managed prepared artifact; `BLOCKED` and skipped rows attach nothing. Never attach both original and parsed content for one logical source. A `PARSE_TARGETED` source attaches only its retained pages, written after the filename as `<filename> pages <first>-<last>` or `<filename> page <n>`, one range per item; name the file again for another range. Pages are the `page` locators the evidence shows. A filename written alone attaches the whole source.
+5. Source filenames come only from the effective-source set (the host's preparation record): a source attaches the `filename` that record names, which stands for its host extraction; a source whose P5 row is `BLOCKED` attaches nothing. A `PARSE_TARGETED` source attaches only its retained pages, written after the filename as `<filename> pages <first>-<last>` or `<filename> page <n>`, one range per item; name the file again for another range. Pages are the `page` locators the evidence shows. A filename written alone attaches the whole source.
 6. Every receiving module retains this CP-0 handoff's `run_id` in canonical `upstream_artifacts_used`, even when another handoff is its immediate analytical dependency.
 7. CP-0 passes managed artifacts directly to downstream modules. The user does not copy derivatives back into the source folder or reattach them between parsing and readiness.
 8. A source the host delivers as a page map -- the leading lines of each of its pages, because the whole source is larger than one request can carry -- is evidence only in the lines shown. Record it `PARSE_TARGETED` in its P5 row, or `BLOCKED` when the map cannot locate what a module needs; attach each receiving module the pages it needs in the rule 5 form, never the file alone; and carry the page-map limitation into every row it affects.

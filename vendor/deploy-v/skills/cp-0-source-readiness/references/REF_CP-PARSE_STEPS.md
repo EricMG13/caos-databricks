@@ -15,16 +15,9 @@ Select documents on downstream evidence value and the benefit of restructuring t
 
 For every supplied file record: stable `source_id`, original file name, format, byte size, page/slide/sheet count when available, issuer/entity, title, date/period, document family, version status, language, native-text/OCR status, source hash when available, related/base document and access condition.
 
-## Scoring rubric
+## Decision
 
-| Component | Score | Guide |
-|---|---:|---|
-| Evidence value | 0–5 | 0 no HY-credit evidence; 1 contextual; 2 limited operating/market context; 3 useful issuer/transaction evidence; 4 material debt/liquidity/legal/financial evidence; 5 authoritative or potentially decision-critical evidence. |
-| Authority and uniqueness | 0–3 | 0 derivative/repeated; 1 useful secondary or partly overlapping; 2 primary or meaningfully incremental; 3 definitive/current/unique. |
-| Structural benefit | 0–3 | 0 clean direct-use file; 1 minor normalization helps; 2 tables/slides/clauses/layout materially impede use; 3 scan/OCR, complex legal/table structure or fragmented pack requires preparation. |
-| Duplication/noise penalty | 0–4 | 0 no penalty; 1 modest repeated matter; 2 predominantly noise/overlap; 3 almost fully duplicated; 4 exact duplicate or no evidence-bearing content. |
-
-The arithmetic supports, but does not replace, the decision rules in the active prompt. Apply accessibility and duplicate gates first. Next apply `PASS_THROUGH` to useful, native-text-complete, structurally simple and bounded evidence—unless exact legal structure is itself material. Use score/complexity to choose full versus targeted parsing after that. A high-value clean earnings release may therefore be `PASS_THROUGH`; a two-page waiver may be `PARSE_FULL`; a 200-page glossy brochure may be `SKIP_LOW_VALUE`.
+Score nothing: the host's preparation record holds each source's delivery, `WHOLE` or `PAGE_MAP` (`PARSE_TARGETED`), which its P5 row records (P4 is retired).
 
 ## Version and duplicate rules
 
@@ -129,7 +122,7 @@ Every Markdown heading, paragraph, table, chart record and extracted clause carr
 
 ## Coverage reconciliation
 
-For every source reconcile total inspectable units to retained + excluded + unreadable units. Units are pages, slides or sheets/ranges. `PASS_THROUGH`, skipped and blocked files remain in the pack inventory and triage register even though they have no parsed body.
+For every source reconcile total inspectable units to retained + excluded + unreadable units. Units are pages, slides or sheets/ranges. A blocked or unreadable source keeps its P3 and P5 rows although it has no parsed body; the host's preparation record holds the rest.
 ## REF_CP-PARSE_D_PackagingAndQA.md
 # CP-PARSE — Packaging and QA
 
@@ -162,15 +155,12 @@ If no source is parsed, produce canonical `TRIAGE_REGISTER.md` plus the required
 
 ## Verification gates
 
-1. All intake files appear exactly once in the triage register.
-2. Scores add correctly and critical overrides/user overrides are disclosed.
+1. Every source the host's preparation record names appears exactly once in P3 and in P5; user overrides are disclosed.
+2. The host's preparation record holds hashes, delivery, packages and the one active representation per source: record no result for them.
 3. Duplicate decisions name the selected copy and document non-overlap inspection.
 4. Every parsed block/table/chart/clause has a valid locator or explicit limitation.
 5. Visible values and text match the source; no invented calculations or interpretation.
 6. Coverage reconciles for every selected source.
-7. Every selected source has valid canonical Markdown; the Markdown handoff validates.
-8. Every declared source output set occurs in exactly one batch and is not split.
-9. Batch indexes, counts and names agree across all ZIPs.
-10. Checksums match extracted bytes; safe paths and unique members pass.
+7. The Markdown handoff validates.
 
-Any unresolved failure in inventory, fidelity, canonical Markdown completeness, ZIP safety, checksum or batch reconciliation blocks package delivery. Lower-severity OCR/table degradation may ship only with per-source and package-level limitations.
+Any unresolved failure in inventory, fidelity or canonical Markdown completeness blocks the handoff. Lower-severity OCR/table degradation may ship only with per-source and package-level limitations.
