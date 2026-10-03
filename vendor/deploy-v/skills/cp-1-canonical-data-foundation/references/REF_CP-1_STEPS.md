@@ -332,6 +332,28 @@ CP-MODEL row; T4.13's Downstream Readiness Matrix (Step 12) covers every
 consumer. The segment allocation, operating KPI schedule and readiness table
 have no T4 register: each is written once, tagged.
 
+Worked skeleton of one interface register, as the handoff writes it (unfenced
+there; T4.15–T4.19 take the same shape with their own columns):
+
+```markdown
+#### T4.14 — Model Period Register
+
+<!-- table-id: cp1.model_period_register -->
+
+| period_id | fiscal_year | fiscal_quarter | period_type | start_date | end_date | day_count | audit_status | currency | unit | accounting_basis | entity_perimeter | source_id | source_locator | component_period_ids |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| FY2025 | 2025 | null | FY | 2025-01-01 | 2025-12-31 | 365 | AUDITED | USD | MILLIONS | US GAAP | Consolidated | S1 | 10-K p. 53 | null |
+| Q2_2026 | 2026 | 2 | QUARTER | 2026-04-01 | 2026-06-30 | 91 | UNAUDITED | USD | MILLIONS | US GAAP | Consolidated | S2 | 10-Q p. 4 | null |
+
+## Gaps & Conflicts
+
+- T4.14, FY2025, `fiscal_quarter`: null — a fiscal year has no quarter.
+- T4.14, FY2025 and Q2_2026, `component_period_ids`: null — both are reported directly, not built from other periods.
+```
+
+T4.4–T4.7 hold line-item rows only: never a note row inside them (its empty
+cells fail the register check); a note goes to T4.12.
+
 ## Period register
 
 Columns:

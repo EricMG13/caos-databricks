@@ -468,7 +468,8 @@ class ForkR5Tests(unittest.TestCase):
     def test_a_register_heading_binds_within_four_non_blank_lines(self):
         # CP-0 T6 was refused as missing: five blockquote lines sat between its heading and table.
         canon = (ROOT / 'CANON_SHARED.md').read_text(encoding='utf-8')
-        self.assertIn('is one of the four non-blank lines directly above the table', canon)
+        self.assertIn('found by the nearest heading above the table, with no other table between,', canon)
+        self.assertNotIn('A heading five or\nmore non-blank lines above its table leaves the register missing', canon)
         table = '| Evidence | Locator |\n| --- | --- |\n| Cash | p1 |\n'
         # Fork r6: past the four lines, the nearest heading above the table still binds it.
         for notes in (3, 4):
@@ -683,6 +684,53 @@ class ForkR6Tests(unittest.TestCase):
             self.assertEqual({k: now.get(k) for k in before}, before, text)
             added += len(now) > len(before)
         self.assertGreater(added, 50)
+
+    def test_the_cp1_skeleton_reads_as_every_reader_requires(self):
+        # No CP-1 answer of 2-3 October had a worked example of heading, tag, table and its nulls' gap lines.
+        import re
+        from datetime import date
+        steps = (ROOT / 'skills/cp-1-canonical-data-foundation/references/REF_CP-1_STEPS.md').read_text(encoding='utf-8')
+        [skeleton] = re.findall(r'^```markdown\n(#### T4\.14 .*?)^```$', steps, re.M | re.S)
+        skill = skill_text('cp-1-canonical-data-foundation')
+        self.assertIn('A worked skeleton is in `references/REF_CP-1_STEPS.md` § REF_CP-1_13.', skill)
+        self.assertIn('never a note row inside them (its empty cells fail the register check); a note goes to T4.12', skill)
+        violations, _, present = complete.check(skill, skeleton, 'CP-1')
+        self.assertEqual(about(violations, 'T4.14'), [])
+        self.assertEqual(len(present['T4.14'][1]), 2)
+        self.assertEqual(complete.load_contract(skill, 'CP-1')['registers']['T4.14']['columns'], present['T4.14'][0])
+        self.assertFalse([v for v in violations if v.startswith('cp1.model_period_register')], violations)
+        rows = model_inputs.parse_stable_tables(skeleton)['cp1.model_period_register']
+        self.assertEqual([r for r in tables.parse_tables(skeleton)['cp1.model_period_register'].rows], list(rows))
+        gaps = skeleton.split('## Gaps & Conflicts', 1)[1]
+        for row in rows:
+            self.assertIn(row['period_type'], model_inputs.PERIOD_TYPES)
+            self.assertIn(row['audit_status'], model_inputs.AUDIT_STATUSES)
+            self.assertIn(row['unit'], model_inputs.PERIOD_UNITS)
+            start, end = date.fromisoformat(row['start_date']), date.fromisoformat(row['end_date'])
+            self.assertEqual(int(row['day_count']), (end - start).days + 1)
+            self.assertEqual(model_inputs._list(row['component_period_ids']), [])
+            for column, value in row.items():
+                if value == 'null':
+                    self.assertRegex(gaps, rf'T4\.14, [^\n]*{re.escape(row["period_id"])}[^\n]*`{column}`: null — ')
+
+    def test_the_canon_spells_null_and_qa_status_as_the_checkers_read_them(self):
+        canon = (ROOT / 'CANON_SHARED.md').read_text(encoding='utf-8')
+        # `blank` is on every critical-cell blocklist and `Not Reviewed` is not a handoff's qa_status.
+        self.assertNotIn('null/blank', canon)
+        self.assertNotIn('null / blank', canon)
+        self.assertNotIn('| Not Reviewed / Passed', canon)
+        self.assertEqual(canon.count('| QA status | Passed / Restricted / Blocked (never Not Reviewed) |'), 4)
+        self.assertEqual(canon.count('never an empty cell: `—` in an untagged register, `null` in a tagged table'), 3)
+        self.assertNotIn('Not Reviewed', handoff.QA_STATUSES)
+        # The QA severity rule the validator enforces (`_finding_severities`) is stated beside the caps.
+        self.assertIn('The validator reads every table under `## QA Validation` with a Severity column as findings\n'
+                      '  against this handoff', canon)
+        table = '| Finding | Severity |\n| --- | --- |\n| Source gap | MATERIAL |\n'
+        body = markdown().replace('## QA Validation\nSupported conclusion.\n', '## QA Validation\n' + table)
+        errors = handoff.validate_text(body, filename='EXAMPLE_CP-1_20260907.md').errors
+        self.assertTrue(any(e.startswith('a MATERIAL finding requires qa_status Restricted') for e in errors), errors)
+        moved = markdown().replace('## Analysis\nSupported conclusion.\n', '## Analysis\n' + table)
+        self.assertEqual(handoff.validate_text(moved, filename='EXAMPLE_CP-1_20260907.md').exit_code, 0)
 
     def test_the_nearest_heading_binds_its_next_table_at_any_distance(self):
         # N4 CP-0 #5: five blockquote lines sat between `#### T6 — Evidence Trace` and its table.
