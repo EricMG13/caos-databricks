@@ -868,7 +868,7 @@ _WITHHELD = (
 # D93: what the host says of the payload schemas it keeps back.
 _WITHHELD_SCHEMAS = (
     "\n--- AUTHORITY {tag} PAYLOAD SCHEMAS WITHHELD (host-owned note) ---\n"
-    "Not delivered: {names}. Each is the JSON schema of a payload this host"
+    "Not delivered: {names}. Each is the schema of a payload this host"
     " never takes: your handoff is the canonical Markdown alone, held to the"
     " registers, columns and values your SKILL.md and its delivered references"
     " state. A payload schema your SKILL.md names is neither a gap nor a step"
