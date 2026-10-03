@@ -102,9 +102,12 @@ _CATALOG = "references/CREDIT_OS_V_MODULE_CATALOG_v2.json"
 # than the work. The catalog's widest node is CP-5, 16 direct upstreams: 16
 # sections at this bound beside its 169,493 bytes of delivered authority encode
 # to 1,750,342 bytes, leaving 2,443,962 of the 4 MiB request (D29) for evidence
-# (the widest-node test in `tests/test_handoff_invocation.py`). The bound is on
-# raw bytes and the ceiling on the JSON encoding, so a node whose real sections
-# escape heavier and still reaches the ceiling fails closed there, typed.
+# and for the upstream citation register, which this figure excludes and which
+# is unbounded (it grows with answer size); a request over the ceiling still
+# fails closed, typed (the widest-node test in
+# `tests/test_handoff_invocation.py`). The bound is on raw bytes and the
+# ceiling on the JSON encoding, so a node whose real sections escape heavier and
+# still reaches the ceiling fails closed there, typed.
 # Nothing is ever truncated: per-node evidence selection (§95,
 # `caos/methodology/selection.py`) narrows a node's evidence to the members its
 # gate row names, but a named member is delivered whole and the upstream

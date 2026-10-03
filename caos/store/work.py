@@ -28,9 +28,11 @@ from caos.store.events import RunEvent, append, lock_run
 from caos.store.outcomes import require_idle
 
 # Renewed by every fenced write, the reservation included, so it outlives one
-# provider call deadline (`caos.provider.TIMEOUT_SECONDS`, 420 s since D83)
-# with 180 s left to bill, check and accept; brief D5's two deadlines held
-# until D83.
+# provider call deadline (`caos.provider.TIMEOUT_SECONDS`, 420 s since D83).
+# The 180 s left are a liveness budget shared with the work before the call
+# and after it (bill, checks, accept), not a safety invariant: exactly-once
+# rests on `call_hold`, `_UNSETTLED` and `replay_billed`. Brief D5's two
+# deadlines held until D83.
 LEASE_SECONDS = 600
 MAX_WORKER_BYTES = 128
 # N15 (D39): the most runs one actor may hold queued or in a worker's hands at

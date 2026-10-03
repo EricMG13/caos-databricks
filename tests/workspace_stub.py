@@ -62,6 +62,7 @@ BEARER = "local-stub"
 _DEFAULTS = _bundle_defaults()
 ENDPOINT = _DEFAULTS["model_endpoint"]
 PRICE = _DEFAULTS["model_price"]
+RUN_CEILING = _DEFAULTS["run_ceiling"]
 GROUP_ADMIN = _DEFAULTS["group_admin"]
 GROUP_ANALYST = _DEFAULTS["group_analyst"]
 # The one Lakebase of each kind this workspace holds (R24-14): an Autoscaling

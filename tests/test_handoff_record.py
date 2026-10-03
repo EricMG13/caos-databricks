@@ -509,12 +509,15 @@ def test_a_quote_the_body_writes_with_markdown_escapes_is_still_quoted(
     assert citations[0].matched_text == QUOTE
 
 
-@pytest.mark.parametrize("marks", ["{}s", "x{}", "{}-1", "({}x)", "\\{}"])
+@pytest.mark.parametrize(
+    "marks", ["{}s", "x{}", "{}-1", "({}x)", "\\{}", "{}_x", "x_{}", "{}*1"]
+)
 def test_a_quote_whose_edge_word_is_a_different_word_is_not_quoted(
     marks: str,
 ) -> None:
     """Only punctuation is forgiven at the edges: a letter, digit or dash
-    touching the quote makes the edge word a different word."""
+    touching the quote makes the edge word a different word, and `_` or `*`
+    between word characters is inside a word, never an edge."""
     body = wire(
         f"---\nmodule_id: CP-0\n---\n\n## Evidence Trace\n\n- "
         f"{marks.format(QUOTE)}\n".encode(),

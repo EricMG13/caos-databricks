@@ -31,12 +31,16 @@ if TYPE_CHECKING:
 
 # The most one `complete` may take, every rate-limit re-send and wait included
 # (ST-9): nothing arrives until generation ends, so this is the generation
-# budget (MX-4), sized inside the 600 s lease (`caos.store.work.LEASE_SECONDS`)
-# with room to bill and accept: the reservation renews the lease just before
-# the call, so 180 s are left for the bill, the answer's checks and the fenced
-# acceptance (D83). 420 s since D83: 5 of 19 default-tier calls ran past 240 s
-# on 2 October. `MAX_COMPLETION_TOKENS` is what the reservation covers, not
-# what this deadline promises to deliver.
+# budget (MX-4), sized inside the 600 s lease (`caos.store.work.LEASE_SECONDS`).
+# The 180 s that remain are a liveness budget, not a safety invariant: the
+# reservation renews the lease just before the call, but the same 180 s also
+# cover the work before it (the call check, reading upstreams and evidence,
+# the re-encode) and after it (the bill, the answer's checks, the fenced
+# acceptance). A lease lost anyway pays nothing twice: exactly-once rests on
+# `call_hold`, `_UNSETTLED` and `replay_billed` (D83).
+# 420 s since D83: 5 of 19 default-tier calls ran past 240 s on 2 October.
+# `MAX_COMPLETION_TOKENS` is what the reservation covers, not what this
+# deadline promises to deliver.
 TIMEOUT_SECONDS = 420.0
 # Host resource ceilings, not guarantees that every canonical handoff fits.
 # Oversized requests/responses refuse; no prefix is accepted as a whole answer.
