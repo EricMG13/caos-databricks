@@ -15,11 +15,10 @@ Retired: P1 Pipeline, P2 Workspace Record, P4 Triage Register, P6 Prepared Artif
 
 ## Representation invariants
 
-- `PASS_THROUGH` selects the immutable original as `ACTIVE_CONTENT`.
-- `COMPLETE` or `DEGRADED` parsing selects the prepared representation as `ACTIVE_CONTENT`; the original remains authority and verification provenance.
+- A source whose P5 row is `COMPLETE` or `DEGRADED` has its host extraction as `ACTIVE_CONTENT`; the original remains authority and verification provenance.
 - `BLOCKED` has no active content and no silent fallback.
-- `SKIP_DUPLICATE` names a valid selected source; `SKIP_LOW_VALUE` remains inventory only.
-- Each retained logical source has exactly one active representation.
+- A contained duplicate names its selected source in P3; a base document and each amendment, waiver or supplement stay separate P3 rows.
+- Each retained logical source has exactly one active representation, its host extraction.
 
 ## Analysis sections
 

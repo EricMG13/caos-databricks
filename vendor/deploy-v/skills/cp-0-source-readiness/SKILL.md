@@ -179,14 +179,14 @@ CP-PARSE's binding rules are CP-0's: the same canon, and every rule in `## Canon
 
 <role priority="critical">
 ### Role
-The first internal phase of CP-0. Inventory and triage the complete pack, select the effective extraction method for each source, preserve provenance and locators, verify fidelity, and package one validated `document_parse_manifest` for CP-0.
+The first internal phase of CP-0. The host has pinned, extracted and delivered every source before the call; against the host's preparation record, identify each source from its content (P3), record its host extraction's delivery, status, coverage and fidelity as the evidence shows them (P5), and preserve provenance and locators. P3, P5 and that record are the phase's `document_parse_manifest`.
 
 Selection, extraction, structuring and source QA only. **Do not assess source sufficiency for a credit objective, route analytical modules, make a credit conclusion, interpret legal effect or express an investment opinion. CP-0 owns readiness.**
 </role>
 
 <entry_contract priority="critical" enforcement="hard">
 #### Entry contract
-Execute this preparation phase first on every CP-0 run. Triage the whole pack before extracting any file. A clean source may be `PASS_THROUGH`; it still appears in the manifest. A mixed or structurally difficult pack is parsed inside one managed run workspace. Never ask the user to copy derivatives back into the source folder.
+Execute this preparation phase first on every CP-0 run. Author P3 and P5 for every source the host's preparation record names before any readiness work; a source the host delivers `WHOLE` or as a `PAGE_MAP` has both rows. Never ask the user to copy derivatives back into the source folder.
 </entry_contract>
 
 <hard_rules priority="critical" enforcement="hard">
@@ -204,7 +204,7 @@ Execute this preparation phase first on every CP-0 run. Triage the whole pack be
 
 <workflow priority="critical">
 #### Workflow
-1. Inventory originals, hashes, entity/period/version relationships and duplicates (`REF_CP-PARSE_A_TriageAndSelection.md`).
+1. Inventory originals, entity/period/version relationships and duplicates; the host's preparation record holds their hashes (`REF_CP-PARSE_A_TriageAndSelection.md`).
 2. Translate the stated objective into extraction demand only; each source's delivery is the host's preparation record's, recorded in its P5 row.
 3. Apply every relevant document profile and extraction method (`REF_CP-PARSE_B_DocumentProfiles.md`).
 4. Verify text, tables, charts, clauses, locators and coverage against originals (`REF_CP-PARSE_C_ExtractionAndFidelity.md`).
@@ -225,7 +225,7 @@ Record PASS/FAIL/NA for inventory completeness, the identity/period/version map 
 </verification>
 
 #### Export
-Follow `CP_AB_EXPORT_SPEC.md`. Preserve the canonical YAML plus six H2 sections. Record the preparation summary within CP-0 and retain its P3 and P5 registers below `### Analytical appendix — complete canonical registers`. Continue directly to the readiness phase. Return the CP-0 status, limitations, Markdown link and validated package links only after both phases complete.
+Follow `CP_AB_EXPORT_SPEC.md`. Preserve the canonical YAML plus six H2 sections. Record the preparation summary within CP-0 and retain its P3 and P5 registers below `### Analytical appendix — complete canonical registers`. Continue directly to the readiness phase. Return the CP-0 status, limitations and Markdown link only after both phases complete.
 </phase>
 
 
@@ -361,7 +361,7 @@ CP-0 may declare only `SOURCE_READY_FOR_MODEL_ROUTE` with `assertion_scope=SOURC
 
 <output priority="critical">
 #### Output and packaging
-Author exactly one canonical handoff: `[IssuerID]_CP-0_[YYYYMMDD].md`, containing the input gate, effective-source register, source hierarchy, content-to-module map, gaps/conflicts, evidence trace, Master Index and command sheet. Include the P3 and P5 preparation registers alongside the T1-T8 readiness registers in this one CP-0 handoff; link validated supporting packages.
+Author exactly one canonical handoff: `[IssuerID]_CP-0_[YYYYMMDD].md`, containing the input gate, effective-source register, source hierarchy, content-to-module map, gaps/conflicts, evidence trace, Master Index and command sheet. Include the P3 and P5 preparation registers alongside the T1-T8 readiness registers in this one CP-0 handoff.
 </output>
 
 <verification priority="critical">
@@ -370,7 +370,7 @@ Record PASS/FAIL/NA for preparation identity and internal phase ordering; invent
 </verification>
 
 #### Export
-Follow `CP_AB_EXPORT_SPEC.md`. Every pipeline or readiness-only run authors and validates one complete canonical Markdown handoff. **Markdown only** is the analytical handoff contract. Parsed evidence ZIPs are supporting source packages, not alternate analytical exports. Return concise status, confidence, limitations, the recommended next command, the Markdown link and, when created, validated package links.
+Follow `CP_AB_EXPORT_SPEC.md`. Every pipeline or readiness-only run authors and validates one complete canonical Markdown handoff. **Markdown only** is the analytical handoff contract, and nothing else is written: the host's preparation record stands for the retired evidence files. Return concise status, confidence, limitations, the recommended next command and the Markdown link.
 
 <!-- READING_ORDER:BEGIN -->
 #### Reading Order

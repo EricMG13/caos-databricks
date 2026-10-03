@@ -38,5 +38,5 @@ Readiness conclusion; validated preparation lineage; source authority and covera
 
 ## QA and export
 
-Canonical `[IssuerID]_CP-0_[YYYYMMDD].md` is the only CP-0 handoff. Preserve the canonical YAML plus six H2 sections in `CP_AB_EXPORT_SPEC.md`; retain T1-T8 losslessly in the analytical appendix. Validated prepared packages remain supporting evidence for the one CP-0 handoff.
+Canonical `[IssuerID]_CP-0_[YYYYMMDD].md` is the only CP-0 handoff. Preserve the canonical YAML plus six H2 sections in `CP_AB_EXPORT_SPEC.md`; retain T1-T8 losslessly in the analytical appendix. Nothing else is written: the host's preparation record stands for the retired evidence files.
 </schema_reference>

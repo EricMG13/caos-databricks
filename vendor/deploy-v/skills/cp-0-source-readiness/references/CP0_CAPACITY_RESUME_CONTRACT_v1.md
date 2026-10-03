@@ -35,7 +35,7 @@ these additional required runtime fields:
 | `pipeline.execution_state` | `IN_PROGRESS`, `READY_FOR_FINALIZATION`, `FINALIZED` or `BLOCKED` |
 | `capacity_plan` | command-safe `run_id` (`[A-Za-z0-9][A-Za-z0-9._:-]{0,127}`), frozen `source_set_sha256` and `batch_plan_sha256`, `limit_source`, recognized positive-integer limits (`max_source_bytes`, `max_batch_bytes`, `max_batch_pages`, `max_batch_sources`, `max_execution_seconds`, `max_work_units`), estimates, `capacity_outcome`, required-job count, planned-batch count and `all_required_jobs_terminal` |
 | `parse_batches[]` | contiguous `BATCH-NNN`, sequence, status, logical source IDs and non-empty auditable work boundaries |
-| `checkpoint` | matching run/source/batch-plan identities, managed `checkpoint_path`, positive sequence, state/previous hashes, exact completed batches, next batch and exact resume command |
+| `checkpoint` | matching run/source/batch-plan identities, `checkpoint_path`, positive sequence, state/previous hashes, exact completed batches, next batch and exact resume command |
 | `parse_jobs[]` extension | `batch_ids`, positive `work_unit_count`, bounded `completed_work_unit_count`; status also permits `QUEUED`/`IN_PROGRESS`, with `coverage_status=PENDING` |
 | `representation_catalog[]` extension | parse status also permits `QUEUED`/`IN_PROGRESS`; pending rows have no active or selected content |
 | `readiness_summary.finalized` | true only for `FINALIZED` or `BLOCKED` |
@@ -62,13 +62,14 @@ preparation record stands for them (P8 is retired).
 
 ## Checkpoint and resume
 
-After every execution batch, atomically persist a checkpoint in the managed run
-workspace. It records `run_id`, source-set SHA-256, monotonic checkpoint sequence,
-state SHA-256, previous-checkpoint SHA-256, completed batch IDs, next batch ID and
-the exact resume command. Reject a resume if the run ID, source-set hash,
-checkpoint chain, original hashes or batch plan differs from the frozen values.
-The resume command must match the grammar below in full—with no suffix—and its
-absolute checkpoint path must resolve inside the managed run workspace.
+After every execution batch, record a checkpoint. It records `run_id`,
+source-set SHA-256, monotonic checkpoint sequence, state SHA-256,
+previous-checkpoint SHA-256, completed batch IDs, next batch ID and the exact
+resume command. Reject a resume if the run ID, source-set hash, checkpoint chain
+or batch plan differs from the frozen values. CP-0 keeps no workspace and
+re-checks no original hash: the host's preparation record pins the originals and
+their SHA-256 (P2 is retired). The resume command must match the grammar below
+in full—with no suffix.
 
 For pending parse work, the exact command starts:
 

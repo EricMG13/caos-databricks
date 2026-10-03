@@ -1191,9 +1191,22 @@ class ForkR9Tests(unittest.TestCase):
                      'TRIAGE_REGISTER.md', 'CHECKSUMS.sha256', '| State | Original role | Parsed role |',
                      'sha256_before', 'checksums and packages only in the workspace',
                      'Keep source roots immutable', 'Package or fidelity validation failure', 'unsafe package',
-                     'frozen triage', 'Evidence ZIPs remain', 'evidence packages use')
+                     'frozen triage', 'Evidence ZIPs remain', 'evidence packages use',
+                     # Fork r11 fix round 2: the role, entry contract, export and step text that still asked
+                     # for triage, a managed workspace, original-hash re-checks or supporting packages.
+                     'Inventory and triage the complete pack', 'package one validated', 'Triage the whole pack',
+                     'it still appears in the manifest', 'managed run workspace', 'Parsed evidence ZIPs',
+                     'validated package links', 'link validated supporting packages', 'Validated prepared packages',
+                     'owns triage, extraction, fidelity and packaging', 'changed hashes, failed package',
+                     '## Frozen decision', '## Calibration defaults', 'evidence_value 0-5', 're-triage',
+                     'Verify the original SHA-256 again', 'original-hash verification', 'supporting evidence ZIP',
+                     'selected artifact hash present', 'original hashes', 'derivative paths outside source roots',
+                     'PASS_THROUGH', 'SKIP_DUPLICATE', 'SKIP_LOW_VALUE', 'package-level limitations',
+                     'source hash when available', 'Master Index and managed workspace', 'original paths/hashes',
+                     'their own artifact ID, path, hash', 'Every prepared artifact records')
         for path in (ROOT / 'skills/cp-0-source-readiness/SKILL.md', ROOT / 'CANON_SHARED.md',
                      references / 'REF_CP-0_STEPS.md', references / 'CP-PARSE_SCHEMA_REFERENCE.md',
+                     references / 'CP-0_SYSTEM_REFERENCE.md',
                      references / 'REF_CP-PARSE_STEPS.md', references / 'CP-0_SCHEMA_REFERENCE.md',
                      references / 'CP0_PROFILE_ANCHOR_CONTRACT_v1.md',
                      references / 'CP0_CAPACITY_RESUME_CONTRACT_v1.md',
@@ -1202,6 +1215,15 @@ class ForkR9Tests(unittest.TestCase):
             for stale in ('P1-P8', 'P1–P8', 'Triage it `PARSE_TARGETED`', '| P7 | Representation Catalog |') + stale_r11:
                 with self.subTest(file=path.name, stale=stale):
                     self.assertNotIn(stale, text)
+        # What CP-0 still owes stays: execution batching and resume (capacity), and the eight T8 rules.
+        capacity = (references / 'CP0_CAPACITY_RESUME_CONTRACT_v1.md').read_text(encoding='utf-8')
+        for kept in ('## Deterministic parse work', '`BATCH-NNN`', '[resume_from: <checkpoint>]',
+                     'CP-0 keeps no workspace', '`READY_FOR_FINALIZATION`'):
+            with self.subTest(kept=kept):
+                self.assertIn(kept, capacity)
+        steps = (references / 'REF_CP-0_STEPS.md').read_text(encoding='utf-8')
+        rules = steps.split('step="I" name="DownstreamReadiness">', 1)[1].split('## CP-MODEL boundary', 1)[0]
+        self.assertEqual(re.findall(r'^(\d+)\. ', rules, re.M), [str(n) for n in range(1, 9)])
 
     def test_cp0_verifies_only_what_its_own_registers_hold(self):
         # Fork r11 (D99): the preparation phase's Verification block asked PASS/FAIL/NA of 14 checks, 8 of

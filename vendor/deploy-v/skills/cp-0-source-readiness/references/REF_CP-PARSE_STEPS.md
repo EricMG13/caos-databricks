@@ -9,11 +9,11 @@ Original files, in this bundle: REF_CP-PARSE_A_TriageAndSelection.md, REF_CP-PAR
 
 ## Objective
 
-Select documents on downstream evidence value and the benefit of restructuring them, not on page count. Triage is pack-level because duplication, versioning and amendments cannot be judged reliably one file at a time.
+Judge sources on downstream evidence value, not page count, and judge duplication, versioning and amendments across the whole pack: they cannot be judged reliably one file at a time. The host's preparation record holds each source's delivery.
 
 ## Required inventory fields
 
-For every supplied file record: stable `source_id`, original file name, format, byte size, page/slide/sheet count when available, issuer/entity, title, date/period, document family, version status, language, native-text/OCR status, source hash when available, related/base document and access condition.
+For every supplied file record: stable `source_id`, original file name, format, byte size, page/slide/sheet count when available, issuer/entity, title, date/period, document family, version status, language, native-text/OCR status, related/base document and access condition. The host's preparation record holds each source's hash.
 
 ## Decision
 
@@ -21,7 +21,7 @@ Score nothing: the host's preparation record holds each source's delivery, `WHOL
 
 ## Version and duplicate rules
 
-- Hash-identical file: select one copy and mark the rest `SKIP_DUPLICATE`.
+- Hash-identical file (the host's record gives each source's SHA-256): name the selected copy in P3 and record the rest as its duplicates.
 - Near duplicate: compare titles, dates, page/slide counts, section map and extracted text. Skip only after confirming the selected version contains all evidence-bearing differences.
 - Draft/final: prefer final, but retain the draft when changes or removed provisions may matter.
 - Restatement: do not silently replace the original; retain both and label supersession/affected periods.
@@ -130,4 +130,4 @@ Write no per-source file, ZIP, index or checksum file: the host's preparation re
 6. Coverage reconciles for every selected source.
 7. The Markdown handoff validates.
 
-Any unresolved failure in inventory, fidelity or canonical Markdown completeness blocks the handoff. Lower-severity OCR/table degradation may ship only with per-source and package-level limitations.
+Any unresolved failure in inventory, fidelity or canonical Markdown completeness blocks the handoff. Lower-severity OCR/table degradation may ship only with its per-source limitations in P5.
