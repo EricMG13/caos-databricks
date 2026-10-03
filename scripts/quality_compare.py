@@ -176,8 +176,10 @@ def table_figures(markdown: str) -> dict[str, list[str]]:
 
     Read from the headings alone, never from a module's contract, so a register
     the module has since retired keeps its label ("#### P4 — Triage" is `P4`).
-    A table whose nearest heading leads with no ID (a front table, a tagged
-    interface table) is under "". Each figure is a truncated hash, not printed.
+    A table with no heading of its own takes the nearest heading above it, so
+    a tagged interface table after another register's table counts under that
+    register's ID; a table is under "" only when that nearest heading leads
+    with no ID (a front table). Each figure is a truncated hash, not printed.
     """
     return {
         label: sorted({sha256(figure.encode()).hexdigest()[:16] for figure in found})
