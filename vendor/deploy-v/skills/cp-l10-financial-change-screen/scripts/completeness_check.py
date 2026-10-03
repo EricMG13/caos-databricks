@@ -215,12 +215,16 @@ def load_contract(skill_text, module_id=None):
             (the thin-evidence markers under `projected_evidence_limitations`;
             projected for a reader and enforced by nothing here),
         'semantic_rules': [{rule_id, rule, register_id, ...}],
-        'required_payload_fields': list (the payload contract's, for check_payload)}"""
+        'required_payload_fields': list (the payload contract's, for check_payload),
+        'retired_registers': list (register IDs the module no longer writes, fork r7)}"""
     body = _profile_body(skill_text, module_id)
     if not body.strip():
         raise ValueError("SKILL.md has no `## Output profile` section")
     tree = _parse_tree(body.splitlines())
     completeness = tree.get("completeness_contract", {})
+    # Beside `required_register_ids`: a register the module retired, whose
+    # heading still keeps its table from prose in an older answer (fork r7).
+    retired = _list(tree.get("appendix_contract", {}).get("retired_register_ids", {}))
 
     registers = {}
     for reg_id, node in completeness.get("required_registers", {}).items():
@@ -276,6 +280,7 @@ def load_contract(skill_text, module_id=None):
         "semantic_rules": _semantic_rules(completeness.get("semantic_rules", {})),
         "required_payload_fields": _list(payload.get("required_payload_fields", {})),
         "unconditional_stable_tables": stable_tables,
+        "retired_registers": retired,
     }
 
 
@@ -285,16 +290,11 @@ def load_contract(skill_text, module_id=None):
 
 
 # A heading whose first word is a register ID ("#### T4.7 Normalized
-# Financials", "### **T4.7** ..."), and the family an ID belongs to ("T4." for
-# T4.7 and T4.14, "TL23." for TL23.2), fork r7.
+# Financials", "### **T4.7** ..."), fork r7.
 LEADING_ID_RE = re.compile(r"#+\s*[*_]*\s*([PT][0-9][A-Za-z0-9.]*?|TL[0-9]+\.[0-9]+)\.?(?![A-Za-z0-9]|\.[A-Za-z0-9])")
 
 
-def _stem(reg_id):
-    return reg_id.rstrip("0123456789")
-
-
-def find_registers(handoff_text, register_ids=None):
+def find_registers(handoff_text, register_ids=None, retired_ids=()):
     """{register_id: (header, [rows])} for pipe tables labelled with an ID.
 
     A register is located by its ID appearing in a heading or caption line
@@ -334,11 +334,11 @@ def find_registers(handoff_text, register_ids=None):
                 + r")(?![A-Za-z0-9])",
                 re.IGNORECASE,
             )
-    stems = {_stem(reg_id) for reg_id in register_ids or ()}
+    retired_ids = set(retired_ids)
 
     def retired(head):
         led = LEADING_ID_RE.match(head)
-        return bool(led) and _stem(led.group(1)) in stems and led.group(1) not in unique_ids
+        return bool(led) and led.group(1) in retired_ids
 
     def label_id(label):
         match = id_re.search(label)
@@ -372,11 +372,11 @@ def find_registers(handoff_text, register_ids=None):
             # ("reconciles to the T4.4 revenue base" under "### T4.5"), fork r2.
             heads = [s for s in reversed(recent) if s.startswith("#")]
             reg_id = next((found for found in map(label_id, heads) if found), None)
-            # A heading led by an unlisted ID of a listed register's family
-            # (CP-1's retired "#### T4.7 Normalized Financials") is that
-            # register's: a prose mention never claims its table (fork r7). An
-            # ID elsewhere in a heading ("Inputs (CP-1 T4.6)") or of another
-            # family ("### T4 — Statements", "T12M") does not stop the prose.
+            # A heading led by one of the module's retired IDs (CP-1's
+            # "#### T4.7 Normalized Financials") is that register's: a prose
+            # mention never claims its table (fork r7). Any other heading,
+            # whatever IDs it names ("Inputs (CP-1 T4.6)", "#### T4.18 Debt
+            # (from CP-1)" in CP-1B, "### T4 — Statements"), leaves the prose.
             if reg_id is None and not any(map(retired, heads)):
                 prose = [s for s in reversed(recent) if not s.startswith("#")]
                 reg_id = next((found for found in map(label_id, prose) if found), None)
@@ -474,7 +474,7 @@ def _cell(row, column):
 
 def check(skill_text, handoff_text, module_id=None):
     contract = load_contract(skill_text, module_id or module_id_of(handoff_text))
-    present = find_registers(handoff_text, contract["registers"])
+    present = find_registers(handoff_text, contract["registers"], contract["retired_registers"])
     violations = []
 
     for reg_id, spec in sorted(contract["registers"].items()):
