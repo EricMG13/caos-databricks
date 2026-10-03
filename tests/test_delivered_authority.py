@@ -51,7 +51,9 @@ LITE_BASE = "../../CP_DEPLOY_V_LITE_MODULE_PAYLOAD_BASE_v1.schema.txt"
 # single-table CP-1 (D85, build 3fb5cf14) moves none of the three; and on fork
 # r6's build fa90657d, whose canon states the QA severity rule, the null
 # spelling and the nearest-heading binding (D89, D91, D92; +732 bytes); and
-# with the payload schemas withheld (D93): CP-0 -11,628 bytes, CP-L10 -54,133.
+# with the payload schemas withheld (D93): CP-0 -11,628 bytes, CP-L10 -54,133;
+# fork r7's CP-1 registers and CP-MODEL null words (D95, build b88b2855) move
+# none of the three.
 MEASURED = {"CP-0": 141_550, "CP-L10": 152_974, "CP-5": 170_744}
 AUTHORITY_SHARE_OF_REQUEST = 0.25
 FOLDERS = {

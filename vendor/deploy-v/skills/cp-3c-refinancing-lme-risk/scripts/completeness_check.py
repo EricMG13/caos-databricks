@@ -354,9 +354,16 @@ def find_registers(handoff_text, register_ids=None):
                 j += 1
             # A heading binds before a prose line that merely mentions an ID
             # ("reconciles to the T4.4 revenue base" under "### T4.5"), fork r2.
-            labels = [s for s in reversed(recent) if s.startswith("#")]
-            labels += [s for s in reversed(recent) if not s.startswith("#")]
-            reg_id = next((found for found in map(label_id, labels) if found), None)
+            heads = [s for s in reversed(recent) if s.startswith("#")]
+            reg_id = next((found for found in map(label_id, heads) if found), None)
+            # A heading naming a register this contract does not list (CP-1's
+            # retired "#### T4.7 Normalized Financials") is that register's, as
+            # `cp_tables` reads it: a prose mention never claims its table (fork r7).
+            if reg_id is None and not (
+                register_ids is not None and any(REGISTER_ID_RE.search(h) for h in heads)
+            ):
+                prose = [s for s in reversed(recent) if not s.startswith("#")]
+                reg_id = next((found for found in map(label_id, prose) if found), None)
             if reg_id:
                 out.setdefault(reg_id, (header, rows))
             elif heading is not None and heading not in recent and label_id(heading):
