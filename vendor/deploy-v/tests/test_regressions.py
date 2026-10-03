@@ -1,4 +1,5 @@
 """Regressions for the September 2026 package review; stdlib unless integration is enabled."""
+import ast
 import importlib
 import json
 import os
@@ -269,9 +270,11 @@ class ForkR3Tests(unittest.TestCase):
         cases = (
             ('cp-1-canonical-data-foundation', 'CP-1', 'T4.1', ['Source File Name', 'Document Type', 'Period Coverage', 'Currency', 'Unit',
                                                               'Perimeter', 'Accounting Basis', 'Evidence Quality Tier', 'Analytical Use', 'Limitations']),
-            ('cp-1-canonical-data-foundation', 'CP-1', 'T4.10', ['KPI Category', 'Metric Name', 'FY2025', 'FY2024', 'Trend Direction', 'Analyst Note']),
+            ('cp-1-canonical-data-foundation', 'CP-1', 'T4.4', ['Line Item', 'FY2025', 'FY2024']),
             ('cp-1-canonical-data-foundation', 'CP-1', 'T4.14', pipes('period_id | fiscal_year | fiscal_quarter | period_type | start_date | end_date | day_count | audit_status | currency | unit | accounting_basis | entity_perimeter | source_id | source_locator | component_period_ids')),
             ('cp-1-canonical-data-foundation', 'CP-1', 'T4.18', pipes('facility_id | facility_name | period_id | facility_type | carrying_value | principal | drawn_amount | commitment | secured_status | seniority | currency | margin_or_coupon | maturity_date | lease_classification | source_id | source_locator')),
+            ('cp-1b-earnings-delta', 'CP-1B', 'T4.5', ['KPI Category', 'Metric Name', 'FY2025', 'FY2024', 'YoY Change', 'Trend Direction',
+                                                       'Calculation Status', 'Analyst Note']),
             ('cp-1b-earnings-delta', 'CP-1B', 'T4.6', ['Metric', 'Comparison Basis', 'Prior Value', 'Current Value', 'Abs Change', '% Change', 'Mgmt Driver', 'Analyst Driver', 'Credit Implication']),
             ('cp-1b-earnings-delta', 'CP-1B', 'T4.12', pipes('metric_id | current_period_id | reference_period_id | comparison_basis | current_value | reference_value | absolute_change | percentage_change | calculation_status | restatement_flag | basis_change_flag | perimeter_change_flag | definition_change_flag | values | changes')),
             ('cp-1b-earnings-delta', 'CP-1B', 'T4.15', pipes('downstream_module | status | blocking_metric_ids | blocking_period_ids | conflict_refs | explanation')),
@@ -482,8 +485,9 @@ class ForkR5Tests(unittest.TestCase):
         # copies drifted from the registers. One tagged table serves the register check, the
         # interface parser and CP-MODEL; the two-copy form still reads the same.
         skill = skill_text('cp-1-canonical-data-foundation')
-        self.assertIn('Never repeat a register as a second, tagged copy. An absent value in these tables is `null`, '
-                      "not the canon's `—`, and every such `null` is also listed in `## Gaps & Conflicts`", skill)
+        self.assertIn('Never repeat a register as a second, tagged copy. An absent value in these tables is `null` '
+                      "(every reader also accepts the canon's `—` as null, but write `null`). Every `null` in a "
+                      'value-bearing column is also listed in `## Gaps & Conflicts`', skill)
         columns = complete.load_contract(skill, 'CP-1')['registers']['T4.14']['columns']
         row = ['FY2025', '2025', 'null', 'FY', '2025-01-01', '2025-12-31', '365', 'Audited', 'USD', 'millions',
                'US GAAP', 'Consolidated', 'S1', '10-K p. 53', 'null']
@@ -710,9 +714,13 @@ class ForkR6Tests(unittest.TestCase):
             start, end = date.fromisoformat(row['start_date']), date.fromisoformat(row['end_date'])
             self.assertEqual(int(row['day_count']), (end - start).days + 1)
             self.assertEqual(model_inputs._list(row['component_period_ids']), [])
+            # Fork r7 (D95): the skeleton's nulls are all reference columns, so none has a gap line.
             for column, value in row.items():
                 if value == 'null':
-                    self.assertRegex(gaps, rf'T4\.14, [^\n]*{re.escape(row["period_id"])}[^\n]*`{column}`: null — ')
+                    self.assertIn(column, ('fiscal_quarter', 'component_period_ids'))
+                    self.assertNotIn(f'`{column}`', gaps)
+        # The gap line shown is the form for a value-bearing null.
+        self.assertRegex(gaps, r'\n- T4\.15, cash_taxes_paid / Q2_2026, `value`: null — ')
 
     def test_the_canon_spells_null_and_qa_status_as_the_checkers_read_them(self):
         canon = (ROOT / 'CANON_SHARED.md').read_text(encoding='utf-8')
@@ -881,6 +889,94 @@ class ForkR6Tests(unittest.TestCase):
         # A binding made the near way, anywhere, is never displaced by a distant heading.
         near = '#### T6\n\n' + notes + other + '#### T6 — again\n' + self.GOOD
         self.assertEqual(complete.find_registers(near, ['T6'])['T6'][0], ['a', 'b'])
+
+
+class ForkR7Tests(unittest.TestCase):
+    """Deployment fork r7 (D95): one CP-1 register per figure, CP-MODEL reads the canon's dash as null,
+    and only a value-bearing null is a gap."""
+
+    def test_cp1_keeps_one_register_per_figure(self):
+        # T4.7 repeated T4.4-T4.6 (its own step said "consolidation only -- no new data") and T4.10
+        # repeated T4.9's values; neither is read by any other module, script or host reader by id.
+        skill = skill_text('cp-1-canonical-data-foundation')
+        contract = complete.load_contract(skill, 'CP-1')
+        self.assertEqual(sorted(contract['registers'], key=lambda r: int(r.split('.')[1])),
+                         [f'T4.{n}' for n in (1, 2, 3, 4, 5, 6, 8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19)])
+        catalog = json.loads((ROOT / 'skills/cp-os-credit-os/references/CREDIT_OS_V_MODULE_CATALOG_v2.json')
+                             .read_text(encoding='utf-8'))
+        [cp1] = [m['artifact_contract'] for m in catalog['modules'] if m['module_id'] == 'CP-1']
+        self.assertEqual((set(cp1['required_table_ids']), cp1['required_table_count']), (set(contract['registers']), 17))
+        self.assertIn('T4.9 is the one KPI register, one row per KPI and period', skill)
+        self.assertIn("T4.15 is the CP-MODEL account interface: keep it complete", skill)
+        for name in ('REF_CP-1_STEPS.md', 'CP-1_RUNBOOK.md', 'CP-1_SCHEMA_REFERENCE.md'):
+            text = (ROOT / 'skills/cp-1-canonical-data-foundation/references' / name).read_text(encoding='utf-8')
+            for retired in ('T4.7 Normalized', 'T4.7 Consolidated', 'T4.10 KPI', '| T4.7 |', '| T4.10 |'):
+                with self.subTest(file=name, retired=retired):
+                    self.assertNotIn(retired, text)
+        # An answer that still writes the retired tables is not refused for them.
+        violations = complete.check(skill, '#### T4.7 — Normalized Financials\n\n| Line Item | FY2025 |\n| --- | --- |\n'
+                                    '| Revenue | 1 |\n', 'CP-1')[0]
+        self.assertFalse([v for v in violations if v.startswith(('T4.7', 'T4.10'))], violations)
+        self.assertIn('T4.4: required register missing from the handoff', violations)
+
+    def test_a_retired_register_heading_keeps_its_table(self):
+        # N2's accepted CP-1 still wrote `#### T4.7`; with T4.7 unlisted, the T4.6 note's mention of
+        # T4.18 claimed the T4.7 table as T4.18, and 5 of 21 stored CP-1 answers newly failed.
+        def table(*cells):
+            return '| ' + ' | '.join(cells) + ' |\n|' + '---|' * len(cells) + '\n| ' + ' | '.join('x' * len(cells)) + ' |\n\n'
+        text = ('#### T4.6 Balance Sheet\n\n' + table('Line Item', 'FY2025') + 'Debt detail is in T4.18.\n\n'
+                '#### T4.7 Normalized Financials\n\n' + table('Line Item', 'Statement Source', 'FY2025')
+                + '#### T4.18 Debt Facility Register\n\n' + table('facility_id', 'facility_name'))
+        found = complete.find_registers(text, ['T4.6', 'T4.18'])
+        self.assertEqual(found['T4.18'][0], ['facility_id', 'facility_name'])
+        self.assertEqual(complete.find_registers(text)['T4.7'][0], ['Line Item', 'Statement Source', 'FY2025'])
+        # A heading naming no register still lets the prose line bind (fork r2).
+        notes = text.replace('#### T4.7 Normalized Financials', '#### Notes')
+        self.assertEqual(complete.find_registers(notes, ['T4.6', 'T4.18'])['T4.18'][0], ['Line Item', 'Statement Source', 'FY2025'])
+
+    def test_cp_model_reads_the_canons_dash_as_null(self):
+        # The canon renders an absent value `—`; CP-MODEL read it as text, so one dash in a tagged
+        # CP-1 table broke a period's components or a figure.
+        for dash in ('\u2014', '\u2013', ' \u2014 '):
+            with self.subTest(dash=dash):
+                errors = []
+                self.assertIsNone(model_inputs._number(dash, field='f', errors=errors))
+                self.assertEqual(errors, [])
+                self.assertEqual(model_inputs._list(dash), [])
+                self.assertIn(dash.strip(), model_inputs.NULL_TEXT)
+                self.assertTrue(tables.is_null(dash))
+        errors = []
+        self.assertIsNone(model_inputs._number('n.a.', field='f', errors=errors))
+        self.assertEqual(errors, ["f: invalid numeric value 'n.a.'"])
+        source = (ROOT / 'skills/cp-model/scripts/cp_model_v3/domain.py').read_text(encoding='utf-8')
+        [line] = [l for l in source.splitlines() if l.startswith('NULL_TEXT = ')]
+        self.assertEqual(ast.literal_eval(line.split('=', 1)[1].strip()), model_inputs.NULL_TEXT)
+        period = {'period_id': 'FY2025', 'fiscal_year': '2025', 'fiscal_quarter': '\u2014', 'period_type': 'FY',
+                  'start_date': '2025-01-01', 'end_date': '2025-12-31', 'day_count': '365', 'audit_status': 'AUDITED',
+                  'currency': 'USD', 'unit': 'MILLIONS', 'accounting_basis': 'US GAAP', 'entity_perimeter': 'Group',
+                  'source_id': 'S1', 'source_locator': '10-K p. 53', 'component_period_ids': '\u2014'}
+        header = '| ' + ' | '.join(period) + ' |\n|' + '---|' * len(period) + '\n'
+        text = '<!-- table-id: cp1.model_period_register -->\n' + header + '| ' + ' | '.join(period.values()) + ' |\n'
+        rows = model_inputs.parse_stable_tables(text)['cp1.model_period_register']
+        result = model_inputs.validate_cp_model_inputs(text, '')
+        # Before fork r7: 'FY must not set fiscal_quarter' and an unknown component period '—'.
+        self.assertFalse([e for e in result.errors if 'fiscal_quarter' in e or 'component' in e], result.errors)
+        self.assertEqual(model_inputs._list(rows[0]['component_period_ids']), [])
+
+    def test_only_a_value_bearing_null_is_a_gap(self):
+        # D85 listed every critical null in Gaps & Conflicts; a reference column's null means none applies.
+        skill = skill_text('cp-1-canonical-data-foundation')
+        steps = (ROOT / 'skills/cp-1-canonical-data-foundation/references/REF_CP-1_STEPS.md').read_text(encoding='utf-8')
+        self.assertIn('a `null` in a reference column means none applies, is not a gap and is not listed: '
+                      '`conflict_refs`, `limitation_refs`, `component_period_ids` on a directly reported period, '
+                      '`fiscal_quarter` on a row that is not a QUARTER.', skill)
+        self.assertIn('The\nreference columns are `conflict_refs` and `limitation_refs` (T4.15),\n`component_period_ids` on a '
+                      'directly reported period and `fiscal_quarter` on a\nrow that is not a QUARTER (T4.14).', steps)
+        columns = complete.load_contract(skill, 'CP-1')['registers']
+        self.assertTrue({'conflict_refs', 'limitation_refs'} <= set(columns['T4.15']['columns']))
+        self.assertTrue({'component_period_ids', 'fiscal_quarter'} <= set(columns['T4.14']['columns']))
+        # Still critical: a reference column's `null` passes, its blank or n/a does not.
+        self.assertNotIn('null', complete.load_contract(skill, 'CP-1')['blocklist'])
 
 
 @unittest.skipUnless(os.environ.get('DEPLOY_V_INTEGRATION') == '1', 'enable integration for native PDF and DOCX dependencies')

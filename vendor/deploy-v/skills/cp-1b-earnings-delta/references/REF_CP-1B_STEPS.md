@@ -82,7 +82,7 @@ T4.3: `Row Label`|`Value / Observation`
 ## REF_CP-1B_05_FinancialPerformanceTable.md
 <!-- REF_CP-1B_05 (T2) | 2026-06-02 -->
 <step_reference module="CP-1B" step="05" name="Financial Performance Table">
-<input>CP-1 normalized financials</input>
+<input>CP-1 normalized financials (CP-1's T4.4–T4.6)</input>
 <gate>Normalized data available</gate>
 
 ## Instructions
@@ -96,7 +96,7 @@ T4.4: `Line Item`|`Period 1`…`N`|`YoY Change (Abs)`|`YoY Change (%)`|`Analyst 
 ## REF_CP-1B_06_KPIDashboard.md
 <!-- REF_CP-1B_06 (T2) | 2026-06-02 -->
 <step_reference module="CP-1B" step="06" name="KPI Dashboard">
-<input>T4.4 + CP-1 KPIs</input>
+<input>T4.4 + CP-1 KPIs (CP-1's T4.9)</input>
 <gate>Step 5 complete</gate>
 
 ## Instructions

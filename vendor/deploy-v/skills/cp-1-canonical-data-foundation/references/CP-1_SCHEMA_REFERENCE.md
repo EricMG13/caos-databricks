@@ -1,6 +1,6 @@
 <!-- CP-1 Schema Reference (Tier 3) | 2026-06-02 | rev 2026-06-26: Markdown handoff+canonical Markdown export contract + numeric Confidence Score -->
 <schema_reference module="CP-1" tier="3">
-## Required Tables (19)
+## Required Tables (17)
 | ID | Name | Key Columns |
 |----|------|-------------|
 | T4.1 | Source Register | Source File Name, Document Type, Period Coverage, Currency, Unit, Perimeter, Accounting Basis, Evidence Quality Tier, Analytical Use, Limitations |
@@ -9,10 +9,8 @@
 | T4.4 | Income Statement | Line Item, Period 1…N |
 | T4.5 | Cash Flow Statement | Line Item, Period 1…N |
 | T4.6 | Balance Sheet | Line Item, Period 1…N |
-| T4.7 | Normalized Financials | Line Item, Statement Source, Period 1…N |
 | T4.8 | Constructed Period Reg | Metric Name, Derived Period Type, Full-Year Component, Current Stub, Prior-Year Stub, Derived Value, Calculation Status, Source Files, Limitations |
 | T4.9 | Calculation Register | Metric Name, Formula, Numerator Value, Numerator Source, Denominator Value, Denominator Source, Period, Currency, Unit, Calculated Value, Calculation Status, Evidence Quality Tier, Limitations |
-| T4.10 | KPI Dashboard | KPI Category, Metric Name, Period 1…N, Trend Direction, Analyst Note |
 | T4.11 | Def Conflict Reg | Metric Name, Canonical Definition, Issuer-Reported Definition, Source of Conflict, Periods Affected, Materiality, Downstream Modules Affected, Resolution / Recommendation |
 | T4.12 | Gaps & Warnings | Gap Description, Affected Line Item or Metric, Affected Period(s), Downstream Impact, Severity, Recommended Action |
 | T4.13 | Downstream Readiness | Downstream Module, Readiness Status, Gaps or Limitations, Recommended Actions |
@@ -25,6 +23,9 @@
 
 Exact table-ID comments, row shapes, controlled IDs and CP-MODEL readiness
 rules are binding per `REF_CP-1_13_ModelWorkbookInterface.md`.
+
+One register per figure: T4.4–T4.6 are the normalized financials (no
+consolidated T4.7 copy) and T4.9 is the one KPI register (no T4.10 dashboard).
 
 ## Contextual CP-MODEL Schedules
 
@@ -47,13 +48,13 @@ Operating KPI `value_type` is `PERIOD_END`, `PERIOD_FLOW` or `RATE`. A rate is
 never averaged to construct YTD/LTM; only a directly sourced exact-period
 aggregate may populate a derived aggregate column.
 
-## 17-Section Output (analysis narrative = canonical Markdown → projected Markdown handoff §3)
+## 16-Section Output (analysis narrative = canonical Markdown → projected Markdown handoff §3)
 1. Source Register  2. Entity Period Key  3. FS Coverage  4. Normalized IS
 5. Normalized BS  6. Normalized CFS  7. Normalization Register  8. Calculation Register
-9. Constructed Period Register  10. KPI Dashboard  11. Definition Conflict Register
-12. Gaps & Warnings  13. Downstream Readiness  14. Evidence Trace  15. QA Status
-16. Limitation Flags  17. Module Handoff
-> §15 QA Status carries the numeric **Confidence Score** (0–100) + derived band, `qa_status`, `committee_status` per `../../../CANON_SHARED.md § CP_CONFIDENCE_SCORE.md`; this is surfaced in the Audit Summary *before* the narrative in Markdown/export. §17 Module Handoff is the canonical `.md` envelope (YAML front-matter + canonical H2 headings), not a JSON block.
+9. Constructed Period Register  10. Definition Conflict Register
+11. Gaps & Warnings  12. Downstream Readiness  13. Evidence Trace  14. QA Status
+15. Limitation Flags  16. Module Handoff
+> §14 QA Status carries the numeric **Confidence Score** (0–100) + derived band, `qa_status`, `committee_status` per `../../../CANON_SHARED.md § CP_CONFIDENCE_SCORE.md`; this is surfaced in the Audit Summary *before* the narrative in Markdown/export. §16 Module Handoff is the canonical `.md` envelope (YAML front-matter + canonical H2 headings), not a JSON block.
 
 ## Canonical Extraction Types (13)
 sourced_fact | quoted_text | table_value | calculated_metric | analyst_inference |

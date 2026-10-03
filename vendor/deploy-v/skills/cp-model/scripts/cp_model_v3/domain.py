@@ -27,7 +27,8 @@ from validate_cp_model_inputs import (
 
 
 V3_CONTRACT_VERSION = "3.0"
-NULL_TEXT = {"", "null", "n/a", "not available", "not calculable", "-"}
+# The validator's null words, the canon's em and en dash among them (fork r7, D95).
+NULL_TEXT = {"", "null", "n/a", "not available", "not calculable", "-", "\u2014", "\u2013"}
 SAFE_OUTPUT_TOKEN = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$")
 REQUIRED_ACCOUNT_METRICS = frozenset(
     {

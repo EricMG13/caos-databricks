@@ -114,9 +114,9 @@ Undrawn Committed Facilities, WC Change
 | 4 | Income Statement | REF_CP-1_04_IncomeStatementCoverage | Always (gaps logged) | T4.4 IS + FS Coverage |
 | 5 | Cash Flow Statement | REF_CP-1_05_CashFlowStatementCoverage | Always (gaps logged) | T4.5 CFS |
 | 6 | Balance Sheet | REF_CP-1_06_BalanceSheetCoverage | Always (gaps logged); flag non-debt funding float | T4.6 BS |
-| 7 | Normalized Financials | REF_CP-1_07_NormalizedFinancialsTable | ≥1 of Steps 4-6 produced data | T4.7 Consolidated |
+| 7 | Normalized Financials | REF_CP-1_07_NormalizedFinancialsTable | ≥1 of Steps 4-6 produced data | Cross-check (gaps to T4.12) |
 | 8 | LTM/YTD/Derived Periods | REF_CP-1_08_DerivedPeriodConstruction | Sub-period data; missing → null | T4.8 Constructed Period Reg |
-| 9 | Calculation & KPI Build | REF_CP-1_09_CalculationRegisterKPIBuild | Normalized data available | T4.9 Calc Reg + T4.10 KPI |
+| 9 | Calculation & KPI Build | REF_CP-1_09_CalculationRegisterKPIBuild | Normalized data available | T4.9 Calc Reg (KPIs) |
 | 10 | Definition Conflicts | REF_CP-1_10_DefinitionConflictRegister | Always (confirm or log); multi-figure events = ONE row, all figures | T4.11 Def Conflict Reg |
 | 11 | Evidence→Risk→Credit | REF_CP-1_11_EvidenceRiskCreditAnalysis | ≥1 KPI from Step 9; float + subsequent-event stories required where present | Analytical narrative |
 | 12 | Readiness Assessment | REF_CP-1_12_CoverageGateDownstreamReadiness | Always | T4.12 Gaps + T4.13 Readiness |
