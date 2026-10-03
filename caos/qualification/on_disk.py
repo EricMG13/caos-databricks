@@ -55,6 +55,7 @@ from caos.qualification.matrix import (
     _LABEL_LIMIT,
     DECLARABLE_REFUSALS,
     PROJECTION_FIELDS,
+    AlternativeLine,
     ExpectedCitation,
     ExpectedForecast,
     ExpectedProjection,
@@ -109,6 +110,11 @@ _OPTIONAL_CASE_KEYS = frozenset(
     }
 )
 _EXPECT_KEYS = frozenset({"module_id", "document_sha256", "matched_text"})
+# Optional on a key, closed when present (D101): the other whole lines that
+# state a figure key's confirmed figures. Absent is no alternative, so every
+# manifest written before them loads, and digests, as it did.
+_ALTERNATIVES_KEY = "alternatives"
+_ALTERNATIVE_KEYS = frozenset({"document_sha256", "matched_text"})
 _FORECAST_KEYS = frozenset(
     {
         "scenario",
@@ -291,12 +297,49 @@ def _document(root: Path, declared: object, held: _Materialised) -> Document:
 
 def _expect(item: object) -> ExpectedCitation:
     """One expected citation from the answer key."""
-    fields = _closed(item, _EXPECT_KEYS)
-    return ExpectedCitation(
-        module_id=_bounded(fields.get("module_id")),
+    declared = isinstance(item, dict) and _ALTERNATIVES_KEY in item
+    fields = _closed(
+        item, _EXPECT_KEYS | {_ALTERNATIVES_KEY} if declared else _EXPECT_KEYS
+    )
+    own = AlternativeLine(
         document_sha256=_bounded(fields.get("document_sha256")),
         matched_text=_quote(fields.get("matched_text")),
     )
+    return ExpectedCitation(
+        module_id=_bounded(fields.get("module_id")),
+        document_sha256=own.document_sha256,
+        matched_text=own.matched_text,
+        alternatives=(
+            _alternatives(fields[_ALTERNATIVES_KEY], own) if declared else ()
+        ),
+    )
+
+
+def _alternatives(item: object, own: AlternativeLine) -> tuple[AlternativeLine, ...]:
+    """A key's alternative lines (D101), each bounded as the key's own quote is.
+
+    Declared means at least one: an empty list says nothing an absent one does
+    not, and a repeated line, or the key's own line restated, is the author
+    believing they named a second answer when they did not. The document is
+    checked where the key's line is: before a set is spent on,
+    `harness._answerable` refuses a line whose document the case does not carry
+    or whose words no page holds, and the committed-set test holds every set in
+    the repository to one whole evidence line per line (F475).
+    """
+    if not isinstance(item, list) or not item:
+        raise Refusal(RefusalCode.QUALIFICATION_SET_FILE_INVALID)
+    lines = []
+    for value in item:
+        fields = _closed(value, _ALTERNATIVE_KEYS)
+        lines.append(
+            AlternativeLine(
+                document_sha256=_bounded(fields.get("document_sha256")),
+                matched_text=_quote(fields.get("matched_text")),
+            )
+        )
+    if len(set(lines)) != len(lines) or own in lines:
+        raise Refusal(RefusalCode.QUALIFICATION_SET_FILE_INVALID)
+    return tuple(lines)
 
 
 def _quote(value: object) -> str:

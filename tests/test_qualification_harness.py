@@ -592,6 +592,51 @@ def test_the_pre_spend_key_check_never_refuses_what_the_answer_rule_anchors(
             assert_admissible(harness, qualification=qualification)
 
 
+@pytest.mark.parametrize(
+    ("document", "line", "answerable"),
+    [
+        ("report", "Acme Holdings plc annual report 2026", True),
+        ("other", "Acme Holdings plc annual report 2026", False),
+        ("report", "Acme Holdings plc interim report 2026", False),
+    ],
+)
+def test_an_alternative_line_is_held_to_its_keys_pre_spend_check(
+    document: str, line: str, answerable: bool
+) -> None:
+    """D101: an alternative is answerable on the key's own terms -- its document
+    carried by the case, its words on a page -- or the set is refused
+    `QUALIFICATION_KEY_UNANSWERABLE` before any call, as a bad key is."""
+    from hashlib import sha256
+
+    from caos.qualification.harness import assert_admissible
+    from caos.qualification.matrix import AlternativeLine
+
+    case = _case("acme-2026", REPORT)
+    [key] = case.expects
+    data = {"report": REPORT, "other": OTHER}[document]
+    keyed = replace(
+        case,
+        expects=(
+            replace(
+                key, alternatives=(AlternativeLine(sha256(data).hexdigest(), line),)
+            ),
+        ),
+    )
+    harness = Harness(
+        bundle=Bundle(root=VENDORED),
+        catalog=CATALOG,
+        completions=_Completions(),
+        price=priced(ESTIMATE),
+        ceiling=SET_CEILING,
+    )
+    qualification = QualificationSet(cases=(keyed,))
+    if answerable:
+        assert assert_admissible(harness, qualification=qualification)
+    else:
+        with pytest.raises(Refusal, match=r"^QUALIFICATION_KEY_UNANSWERABLE$"):
+            assert_admissible(harness, qualification=qualification)
+
+
 def test_a_set_that_could_outspend_its_ceiling_is_refused_before_it_starts(
     empty_database: str, tmp_path: Path
 ) -> None:
