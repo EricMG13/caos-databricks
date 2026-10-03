@@ -144,7 +144,7 @@
   },
   "local_rebuild": {
     "method": "verify_package.py --rebuild-authorities; unavailable upstream provenance retained",
-    "previous_authority_bundle_sha256": "d870a1cd4b97172aee9c90b6e49f65fb9351fb4b47f76f1c0c49a71fa20f39ba"
+    "previous_authority_bundle_sha256": "90b6c5e2f13816f5df14c8357d7466442fd30b988fc9b284e06603ac989597fd"
   },
   "schema_version": "1.0",
   "target_profile": null

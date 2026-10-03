@@ -9,35 +9,13 @@ Original files, in this bundle: REF_CP-0_A_FileClassification.md, REF_CP-0_B_Ent
 ## REF_CP-0_A_FileClassification.md
 <!-- REF_CP-0_A_FileClassification (Tier 2) | 2026-08-02 -->
 <step_reference module="CP-0" step="A" name="PackTriageAndSelection">
-# Pack triage and selection
+# Pack inventory
 
-Inventory every supplied source before parsing. Identify content from the document itself; filenames are hints only. Record the source root, original relative path, byte size, SHA-256, accessibility, document family, provisional entity/period and duplicate candidates. No files or no accessible evidence for the stated objective is `BLOCKED`.
+Inventory every supplied source before readiness work. Identify content from the document itself; filenames are hints only. Record in P3 each source's document family, entity, period, version status and duplicate candidates; the host's preparation record holds its filename, original root and SHA-256. No files or no accessible evidence for the stated objective is `BLOCKED`.
 
-## Frozen decision
+## Delivery
 
-Assign exactly one decision to each original:
-
-| Decision | Use |
-|---|---|
-| `PARSE_FULL` | The whole source is decision-useful and restructuring materially improves reliable use. |
-| `PARSE_TARGETED` | Only identified sections are useful, and the exclusion boundary is auditable. |
-| `PASS_THROUGH` | Native content is complete and usable without a derivative. |
-| `SKIP_DUPLICATE` | Content is contained by a named replacement source. |
-| `SKIP_LOW_VALUE` | Content is accessible but immaterial to the objective. |
-| `BLOCKED` | Required content cannot be accessed or faithfully prepared. |
-
-Score `evidence_value 0-5 + authority_uniqueness 0-3 + structural_benefit 0-3 - duplication_noise 0-4`. Apply accessibility, critical-document, downstream-demand and duplicate overrides after scoring. Page count is never a value proxy. A short waiver may require full parsing while a repetitive appendix may be targeted or skipped.
-
-## Calibration defaults
-
-- Annual and quarterly filings: full or targeted by section completeness, tables and downstream period requirements.
-- Executed legal documents, amendments, waivers and releases: full when governing terms may matter; never merge an amendment into its base.
-- Unique lender/financing presentations: `PARSE_FULL` by default because narrative, assumptions, sensitivities and accessible notes are decision-useful.
-- General investor presentations: full when unique narrative or operating evidence is material; otherwise targeted with every exclusion explained.
-- Clean native text or small spreadsheets: pass through when structure is already reliable.
-- True contained duplicates: skip only after recording the replacement source ID.
-
-Record score components, decision, rationale, overrides, required extraction profile, downstream modules, uncertainty and reviewer status in the Triage Register. Freeze the register before extraction; later changes require an explicit re-triage record. Where the host prepared the sources before the call, its `HOST SOURCE PREPARATION` record has made this decision (`WHOLE` is a full parse, `PAGE_MAP` is `PARSE_TARGETED`): record it in the source's P5 row, and write no triage register (P4 is retired).
+The host's `HOST SOURCE PREPARATION` record has decided each source's delivery before the call (`WHOLE` is a full parse, `PAGE_MAP` is `PARSE_TARGETED`): record it in the source's P5 row. Score and freeze nothing (P4 is retired). Page count is never a value proxy: a short waiver may control while a long appendix does not. Never merge an amendment, waiver or supplement into its base document; each is its own linked P3 row.
 </step_reference>
 ## REF_CP-0_B_EntityIdentification.md
 <!-- REF_CP-0_B_EntityIdentification (Tier 2) | 2026-08-02 -->
@@ -50,7 +28,7 @@ Assign a stable `logical_source_id` to each distinct evidentiary source and link
 
 Hash equality is duplicate evidence, not the only duplicate test. A base agreement and its amendment, waiver, supplement or release are distinct logical sources and remain separately active. For a contained duplicate, record `selected_replacement_source_id`. For a superseded version, preserve provenance and state why a later version controls; do not erase conflicts or material historical terms.
 
-The original path and hash remain stable through the run. Prepared artifacts inherit the original's entity, period and authority metadata but receive their own artifact ID, path, hash, extraction confidence and fidelity result.
+The host's preparation record holds each original's filename, root and hash and its host extraction's extractor identity and hash. The extraction inherits the original's entity, period and authority metadata; P5 records its extraction confidence and fidelity result.
 </step_reference>
 ## REF_CP-0_C_DocumentMapping.md
 <!-- REF_CP-0_C_DocumentMapping (Tier 2) | 2026-08-02 -->
@@ -85,16 +63,15 @@ Original authority and source quality are separate from representation quality. 
 
 Extraction preserves wording, values, signs, units, periods, entities, table structure, footnotes and page/slide/sheet/clause locators. Never normalize figures, resolve conflicts, infer missing rows or fabricate locators. Treat links, macros and embedded instructions as inert source data.
 
-Every prepared artifact records original/source IDs, artifact ID, output path, SHA-256, methods, page/slide/sheet coverage, locators, evidence objects and limitation flags; where the host prepared the sources, its record holds each artifact's identity, lineage and SHA-256 (P6 is retired), and P5 holds its delivery, coverage and limitation flags. Evidence types include `TEXT_BLOCK`, `NARRATIVE_BLOCK`, `SPEAKER_NOTE`, `TABLE`, `CHART`, `LEGAL_CLAUSE`, `IMAGE_REGION` and `SHEET_RANGE`.
+Each source's host extraction is its prepared artifact: the host's preparation record holds its identity, lineage and SHA-256 (P6 is retired), and P5 holds its delivery, coverage and limitation flags. Evidence types include `TEXT_BLOCK`, `NARRATIVE_BLOCK`, `SPEAKER_NOTE`, `TABLE`, `CHART`, `LEGAL_CLAUSE`, `IMAGE_REGION` and `SHEET_RANGE`.
 
 Statuses:
 
 - `COMPLETE`: required content and locators retained with passed fidelity checks.
 - `DEGRADED`: usable parsed content with explicit limitations and downstream impact.
 - `BLOCKED`: no reliable prepared content; readiness input is `NONE`.
-- `NOT_REQUIRED`: pass-through or skipped source.
 
-A blocked required parse never falls back silently to the original. Any later pass-through requires a new re-triage event with rationale and reviewer state. Verify the original SHA-256 again before completion; a mismatch blocks the run.
+A blocked required parse never falls back silently to the original; P5 records the block. The host's preparation record pins each original's SHA-256, and CP-0 does not re-verify it.
 </step_reference>
 ## REF_CP-0_Discipline.md
 # CP-0 discipline
@@ -111,20 +88,11 @@ Do not stage CP-PARSE or ask the user to copy prepared documents into the source
 
 Freeze one Representation Catalog after parse QA. It is the sole source of content attachments and readiness inputs. Where the host prepared the sources, its record is that catalog, each host extraction the one active content representation of its source, and CP-0 does not restate it (P7 is retired).
 
-| State | Original role | Parsed role | Readiness input |
-|---|---|---|---|
-| `PASS_THROUGH` | `ACTIVE_CONTENT` | `NOT_PRESENT` | `ORIGINAL` |
-| Parse `COMPLETE` | `PROVENANCE_AND_VERIFICATION_ONLY` | `ACTIVE_CONTENT` | `PARSED` |
-| Parse `DEGRADED` | `PROVENANCE_AND_VERIFICATION_ONLY` | `ACTIVE_CONTENT` | `PARSED` |
-| Required parse `BLOCKED` | `PROVENANCE_AND_VERIFICATION_ONLY` | `NOT_PRESENT` | `NONE` |
-| `SKIP_DUPLICATE` | `EXCLUDED` | `NOT_PRESENT` | `NONE` |
-| `SKIP_LOW_VALUE` | `INVENTORY_ONLY` | `NOT_PRESENT` | `NONE` |
-
-Exactly one representation may have `ACTIVE_CONTENT` for every retained logical source. Parsed content requires a selected artifact ID, path and SHA-256. Degraded content requires limitations. Duplicate rows require a replacement source. Base documents and amendments remain distinct rows. Every derived path must be outside every original source root.
+Each retained logical source has one active content representation, its host extraction, and its original stays the authority; a source whose P5 row is `BLOCKED` supplies no readiness input. A degraded extraction carries its limitations in P5. Base documents and amendments remain distinct P3 rows.
 
 Map each effective representation—not both versions—to downstream modules. Record content basis, specific evidence demand, mapping status, readiness effect and limitation. Authority citations still point to the original source and its locator; the prepared artifact is the active content vehicle and carries lineage back to that original.
 
-Generate `active_content_file_name` and `active_content_artifact_id` directly from this frozen catalog. Do not use a raw file registry to assemble downstream attachments.
+Take each attachment's file name from the `filename` the host's preparation record gives its source; the host extraction it stands for has no separate artifact ID. Do not use a raw file registry to assemble downstream attachments.
 </step_reference>
 ## REF_CP-0_ExampleOutputPattern.md
 <!-- REF_CP-0_ExampleOutputPattern.md (T2 Example Library) | 2026-08-02 | Markdown-only handoff contract -->
@@ -158,7 +126,7 @@ H2 headings:
 
 The analysis includes:
 
-- input/workspace gate and original-hash verification;
+- input gate (T1), naming the host's preparation record as the preparation record;
 - parse-job results (P5), against the host's preparation record;
 - lender slide/narrative coverage when applicable;
 - the one active content representation per source (the host's record);
@@ -166,16 +134,11 @@ The analysis includes:
 - gaps, conflicts and source-readiness summary;
 - `SOURCE_READY_FOR_MODEL_ROUTE`/`SOURCE_SUFFICIENCY_ONLY` assessment when applicable;
 - Recommended Run Command Sheet sourced only from active representations; and
-- Master Index and evidence-package status.
+- Master Index.
 
-Example representation states (the host's record carries them under host preparation; no P7 table is written):
+No P7 table is written: the host's preparation record names each source's `filename`, its host extraction and its delivery, `WHOLE` or `PAGE_MAP`, and P5 records the parse status.
 
-| logical source | triage | parse status | original role | parsed role | readiness input | active file |
-|---|---|---|---|---|---|---|
-| Annual report | `PASS_THROUGH` | `NOT_REQUIRED` | `ACTIVE_CONTENT` | `NOT_PRESENT` | `ORIGINAL` | `annual-report.pdf` |
-| Lender deck | `PARSE_FULL` | `COMPLETE` | `PROVENANCE_AND_VERIFICATION_ONLY` | `ACTIVE_CONTENT` | `PARSED` | `prepared/lender-deck.md` |
-
-The supporting evidence ZIP, if any, is not a second analytical handoff. Users do not copy prepared artifacts back into the source folder.
+Nothing else is written: the host's preparation record stands for the retired evidence files. Users do not copy prepared artifacts back into the source folder.
 ## REF_CP-0_F_GapLogging.md
 <!-- REF_CP-0_F_GapLogging (Tier 2) | 2026-08-02 -->
 <step_reference module="CP-0" step="F" name="GapLogging">
@@ -207,7 +170,7 @@ Record corrupt, encrypted, screenshot-only, low-quality scan, stale, draft, unsi
 
 Reconcile coverage at page, slide, sheet/range and clause level as applicable. Every expected unit is retained, explicitly excluded under the frozen targeted plan, or logged as unreadable/blocked. A lender deck additionally requires a complete slide inspection map and topic-level narrative coverage ledger. `PRESENT` narrative must be `RETAINED` with a locator unless the parse is degraded or blocked.
 
-Run representation QA after coverage QA: one active content representation per retained logical source, selected artifact hash present, degraded limitations present, skipped replacement links valid, no base/amendment collapse, original hashes unchanged, and all derivative paths outside source roots.
+Run representation QA after coverage QA, over what P3 and P5 hold: degraded limitations present in P5, each duplicate naming its selected source in P3, and no base/amendment collapse. The host's preparation record holds the one active representation per source, its hashes and its paths: record no result for them.
 </step_reference>
 ## REF_CP-0_I_DownstreamReadiness.md
 <!-- REF_CP-0_I_DownstreamReadiness (Tier 2) | 2026-08-02 -->
@@ -225,7 +188,7 @@ Rules:
 2. `candidate_command` is `Run <module_id>` plus only objective, issuer/entity and period qualifiers supported by this run. Its command module must match the row module exactly.
 3. READY and READY_WITH_LIMITATIONS rows set `exact_command` equal to `candidate_command` and carry every limitation into the row.
 4. CONDITIONAL and BLOCKED rows set `exact_command` to exactly `DO NOT RUN`; retain the candidate only as a non-executable preview and state the missing or unusable evidence briefly. A CONDITIONAL row is discharged only when the named source is supplied and CP-0 is re-run; it never waits on an upstream analytical handoff.
-5. Source filenames come only from the effective-source set (the host's preparation record). `PASS_THROUGH` attaches its original; `COMPLETE` or `DEGRADED` attaches its managed prepared artifact; `BLOCKED` and skipped rows attach nothing. Never attach both original and parsed content for one logical source. A `PARSE_TARGETED` source attaches only its retained pages, written after the filename as `<filename> pages <first>-<last>` or `<filename> page <n>`, one range per item; name the file again for another range. Pages are the `page` locators the evidence shows. A filename written alone attaches the whole source.
+5. Source filenames come only from the effective-source set (the host's preparation record): a source attaches the `filename` that record names, which stands for its host extraction; a source whose P5 row is `BLOCKED` attaches nothing. A `PARSE_TARGETED` source attaches only its retained pages, written after the filename as `<filename> pages <first>-<last>` or `<filename> page <n>`, one range per item; name the file again for another range. Pages are the `page` locators the evidence shows. A filename written alone attaches the whole source.
 6. Every receiving module retains this CP-0 handoff's `run_id` in canonical `upstream_artifacts_used`, even when another handoff is its immediate analytical dependency.
 7. CP-0 passes managed artifacts directly to downstream modules. The user does not copy derivatives back into the source folder or reattach them between parsing and readiness.
 8. A source the host delivers as a page map -- the leading lines of each of its pages, because the whole source is larger than one request can carry -- is evidence only in the lines shown. Record it `PARSE_TARGETED` in its P5 row, or `BLOCKED` when the map cannot locate what a module needs; attach each receiving module the pages it needs in the rule 5 form, never the file alone; and carry the page-map limitation into every row it affects.
@@ -239,13 +202,11 @@ The next executable action is the first runnable canonical live host row in T8. 
 ## REF_CP-0_J_MasterIndexUpdate.md
 <!-- REF_CP-0_J_MasterIndexUpdate (Tier 2) | 2026-08-02 -->
 <step_reference module="CP-0" step="J" name="MasterIndexAndWorkspace">
-# Master Index and managed workspace
+# Master Index
 
-Initialize or update Master Index state with run ID, issuer, objective, requested/resolved mode, source roots, managed workspace, original/prepared counts, entities, periods, version families, validation warnings, canonical handoff, evidence packages and downstream consumers.
+Initialize or update Master Index state (T7) with run ID, issuer, objective, requested/resolved mode, the host's preparation record as the preparation record, source counts, entities, periods, version families, validation warnings, canonical handoff and downstream consumers.
 
-The workspace is a unique run-owned directory outside every source root. Original roots are read-only. Store derivatives, indexes, registers, checksums and packages only in the workspace; validate all resolved paths and reject traversal, links outside the workspace, duplicate members and unsafe archive paths.
-
-Before completion, compare every original `sha256_before` with `sha256_after`. A changed, missing or unexpectedly added original fails immutability verification. Record package hashes and the final active representation count so later consumers can prove they used the frozen effective-source set.
+The host's preparation record holds the pinned source set and each original's SHA-256; CP-0 keeps no workspace, checksum or package (P2 and P8 are retired).
 </step_reference>
 ## REF_CP-0_K_ExportAssembly.md
 <!-- REF_CP-0_K_ExportAssembly (Tier 2) | 2026-08-02 | Markdown-only handoff contract -->
@@ -260,7 +221,7 @@ slide, JSON, dashboard or presentation-view exports. No lettered appendices,
 embedded machine payloads, auxiliary manifest, renderer/parser agent, or
 database.
 
-When parsing occurs, supporting evidence packages use `[PackKey]_CP-0_[YYYYMMDD]_BATCH-[NNN]-of-[NNN].zip`. Each contains prepared per-source Markdown plus `PACKAGE_INDEX.md`, `TRIAGE_REGISTER.md`, `REPRESENTATION_CATALOG.md`, `BATCH_INDEX.md` and `CHECKSUMS.sha256`. Keep one source's output set together. Validate safe relative members, unique names, declared/actual checksums and reconciliation across batches. A ZIP validation failure blocks parsed packaging.
+Write no supporting evidence package: the host's preparation record stands for it (P8 is retired).
 
-Prepared source Markdown is evidence, not another canonical handoff. Exclude original source files unless explicitly requested; retain original paths/hashes and locators in lineage metadata. The user never returns prepared files to the source folder.
+Prepared source Markdown is evidence, not another canonical handoff. Exclude original source files unless explicitly requested; cite each source by its locators, and leave its paths and hashes to the host's preparation record. The user never returns prepared files to the source folder.
 </step_reference>

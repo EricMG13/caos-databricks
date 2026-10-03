@@ -9,26 +9,19 @@ Original files, in this bundle: REF_CP-PARSE_A_TriageAndSelection.md, REF_CP-PAR
 
 ## Objective
 
-Select documents on downstream evidence value and the benefit of restructuring them, not on page count. Triage is pack-level because duplication, versioning and amendments cannot be judged reliably one file at a time.
+Judge sources on downstream evidence value, not page count, and judge duplication, versioning and amendments across the whole pack: they cannot be judged reliably one file at a time. The host's preparation record holds each source's delivery.
 
 ## Required inventory fields
 
-For every supplied file record: stable `source_id`, original file name, format, byte size, page/slide/sheet count when available, issuer/entity, title, date/period, document family, version status, language, native-text/OCR status, source hash when available, related/base document and access condition.
+For every supplied file record: stable `source_id`, original file name, format, byte size, page/slide/sheet count when available, issuer/entity, title, date/period, document family, version status, language, native-text/OCR status, related/base document and access condition. The host's preparation record holds each source's hash.
 
-## Scoring rubric
+## Decision
 
-| Component | Score | Guide |
-|---|---:|---|
-| Evidence value | 0–5 | 0 no HY-credit evidence; 1 contextual; 2 limited operating/market context; 3 useful issuer/transaction evidence; 4 material debt/liquidity/legal/financial evidence; 5 authoritative or potentially decision-critical evidence. |
-| Authority and uniqueness | 0–3 | 0 derivative/repeated; 1 useful secondary or partly overlapping; 2 primary or meaningfully incremental; 3 definitive/current/unique. |
-| Structural benefit | 0–3 | 0 clean direct-use file; 1 minor normalization helps; 2 tables/slides/clauses/layout materially impede use; 3 scan/OCR, complex legal/table structure or fragmented pack requires preparation. |
-| Duplication/noise penalty | 0–4 | 0 no penalty; 1 modest repeated matter; 2 predominantly noise/overlap; 3 almost fully duplicated; 4 exact duplicate or no evidence-bearing content. |
-
-The arithmetic supports, but does not replace, the decision rules in the active prompt. Apply accessibility and duplicate gates first. Next apply `PASS_THROUGH` to useful, native-text-complete, structurally simple and bounded evidence—unless exact legal structure is itself material. Use score/complexity to choose full versus targeted parsing after that. A high-value clean earnings release may therefore be `PASS_THROUGH`; a two-page waiver may be `PARSE_FULL`; a 200-page glossy brochure may be `SKIP_LOW_VALUE`.
+Score nothing: the host's preparation record holds each source's delivery, `WHOLE` or `PAGE_MAP` (`PARSE_TARGETED`), which its P5 row records (P4 is retired).
 
 ## Version and duplicate rules
 
-- Hash-identical file: select one copy and mark the rest `SKIP_DUPLICATE`.
+- Hash-identical file (the host's record gives each source's SHA-256): name the selected copy in P3 and record the rest as its duplicates.
 - Near duplicate: compare titles, dates, page/slide counts, section map and extracted text. Skip only after confirming the selected version contains all evidence-bearing differences.
 - Draft/final: prefer final, but retain the draft when changes or removed provisions may matter.
 - Restatement: do not silently replace the original; retain both and label supersession/affected periods.
@@ -37,17 +30,7 @@ The arithmetic supports, but does not replace, the decision rules in the active 
 
 ## Calibration cases
 
-| Case | Expected decision | Reason |
-|---|---|---|
-| 180-page annual report with tables and notes | `PARSE_FULL` | Broad authoritative evidence and strong structural benefit. |
-| 12-slide lender presentation with leverage and sources & uses | `PARSE_FULL` | Short but dense, unique financing evidence. |
-| Two-page covenant waiver | `PARSE_FULL` | Critical-document override; every clause matters. |
-| Clean four-page earnings release | `PASS_THROUGH` or `PARSE_TARGETED` | Useful; parse only if tables/layout need normalization or the user requests it. |
-| 80-page brand/ESG brochure with no issuer-credit evidence | `SKIP_LOW_VALUE` | Length does not create relevance. |
-| Identical annual-report download with a different filename | `SKIP_DUPLICATE` | Hash/content duplicate; reference selected copy. |
-| Scanned credit agreement | `PARSE_FULL` using `OCR_SCAN` + `LEGAL_CLAUSE` | High value and high structural benefit. |
-| Mixed investor deck with 10 evidence slides and 30 decorative slides | `PARSE_TARGETED` | Preserve evidence slides and map all excluded slides. |
-| Password-protected offering memorandum | `BLOCKED` | Request unlocked source; never guess contents. |
+None: no decision is calibrated, since the host's preparation record holds each source's delivery and P5 records it (P4 is retired).
 
 ## User overrides
 
@@ -129,48 +112,22 @@ Every Markdown heading, paragraph, table, chart record and extracted clause carr
 
 ## Coverage reconciliation
 
-For every source reconcile total inspectable units to retained + excluded + unreadable units. Units are pages, slides or sheets/ranges. `PASS_THROUGH`, skipped and blocked files remain in the pack inventory and triage register even though they have no parsed body.
+For every source reconcile total inspectable units to retained + excluded + unreadable units. Units are pages, slides or sheets/ranges. A blocked or unreadable source keeps its P3 and P5 rows although it has no parsed body; the host's preparation record holds the rest.
 ## REF_CP-PARSE_D_PackagingAndQA.md
 # CP-PARSE — Packaging and QA
 
-## Per-source output set
+## Packaging
 
-For each parsed source, author and validate canonical Markdown first:
-
-- required `[SourceKey]_CP-PARSE_[YYYYMMDD].md`;
-
-The Markdown front matter records module/run/source IDs, source name/hash, document family/profile, decision, parse mode, period/date, locator type, coverage, limitations, `qa_status`, confidence score/band and package batch. Markdown is the only analytical file type in the package.
-
-## ZIP batching
-
-Name batches `[PackKey]_CP-PARSE_[YYYYMMDD]_BATCH-[NNN]-of-[NNN].zip`. Sort sources deterministically by issuer/entity, document date, document family and source ID. Keep each source's canonical Markdown together. Default limits are 20 parsed sources or 250 MB uncompressed per batch; reduce for tenant/runtime constraints and record the effective limit.
-
-Every ZIP contains:
-
-1. `PACKAGE_INDEX.md` — pack/run identity, total batches, counts by decision/profile, limitations and next step.
-2. `TRIAGE_REGISTER.md` — every input and its scores, decision, selected replacement/related base and reason.
-3. `BATCH_INDEX.md` — entries in this batch and links/names for other batches.
-4. `CHECKSUMS.sha256` — SHA-256 for every packaged file other than the checksum file itself.
-5. `parsed/[SourceKey]/...` — canonical Markdown.
-6. `originals/...` only when the user explicitly requests originals and the runtime permits it.
-
-Reject absolute paths, `..`, hidden/secret files, executable content and duplicate ZIP member names. Do not nest ZIPs. Filenames use safe ASCII slugs while indexes preserve original names.
-
-## Triage-only run
-
-If no source is parsed, produce canonical `TRIAGE_REGISTER.md` plus the required indexes and checksum in a triage-only ZIP. State `NO_PARSE_CANDIDATES`; do not create alternate analytical exports or empty placeholder parsed files.
+Write no per-source file, ZIP, index or checksum file: the host's preparation record holds each source's extraction and hashes (P6 and P8 are retired), and P3 and P5 sit inside the one CP-0 handoff.
 
 ## Verification gates
 
-1. All intake files appear exactly once in the triage register.
-2. Scores add correctly and critical overrides/user overrides are disclosed.
+1. Every source the host's preparation record names appears exactly once in P3 and in P5; user overrides are disclosed.
+2. The host's preparation record holds hashes, delivery, packages and the one active representation per source: record no result for them.
 3. Duplicate decisions name the selected copy and document non-overlap inspection.
 4. Every parsed block/table/chart/clause has a valid locator or explicit limitation.
 5. Visible values and text match the source; no invented calculations or interpretation.
 6. Coverage reconciles for every selected source.
-7. Every selected source has valid canonical Markdown; the Markdown handoff validates.
-8. Every declared source output set occurs in exactly one batch and is not split.
-9. Batch indexes, counts and names agree across all ZIPs.
-10. Checksums match extracted bytes; safe paths and unique members pass.
+7. The Markdown handoff validates.
 
-Any unresolved failure in inventory, fidelity, canonical Markdown completeness, ZIP safety, checksum or batch reconciliation blocks package delivery. Lower-severity OCR/table degradation may ship only with per-source and package-level limitations.
+Any unresolved failure in inventory, fidelity or canonical Markdown completeness blocks the handoff. Lower-severity OCR/table degradation may ship only with its per-source limitations in P5.
