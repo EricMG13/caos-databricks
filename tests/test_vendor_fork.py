@@ -907,8 +907,10 @@ def test_cp1_writes_each_interface_register_once_as_one_tagged_table(
     from caos.methodology.tables import handoff_tables
 
     reference = verified_bytes(BUNDLE, "CP-1", "references/REF_CP-1_STEPS.md").decode()
-    assert "never write the register untagged and repeat it as a tagged" in reference
-    assert "An absent value in these tables is `null`." in skill("CP-1").decode()
+    assert "never write the register untagged and repeat it as a tagged copy" in reference
+    assert "write `null`, not\nthe canon's `—`" in reference
+    assert "Every `null` in these tables is also listed in\n`## Gaps & Conflicts`" in reference
+    assert "is also listed in `## Gaps & Conflicts`" in skill("CP-1").decode()
     two_copy = cp1b_markdown(cp1b_identity("CP-1")).decode()
     single = _single_table(two_copy)
     assert single.count("<!-- table-id: ") == two_copy.count("<!-- table-id: ")

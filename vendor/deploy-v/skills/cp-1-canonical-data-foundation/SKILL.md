@@ -209,7 +209,7 @@ Shared presentation rules:
 
 CP-MODEL interface tables are emitted on every run. They are not conditional on CP-MODEL having been named a downstream consumer when the run started: a handoff that omits them cannot be turned into a workbook later, and conversation text cannot supply a missing stable-table value. Publish each tagged table with real values, or with an explicit null and a gap row — never omit it. The readiness row always names CP-MODEL.
 
-Each of T4.14–T4.19 is one table, written once: its register heading, its `<!-- table-id: -->` comment, then the table, which is both the register and the CP-MODEL interface table. Never repeat a register as a second, tagged copy. An absent value in these tables is `null`.
+Each of T4.14–T4.19 is one table, written once: its register heading, its `<!-- table-id: -->` comment, then the table (only blank lines between comment and table), which is both the register and the CP-MODEL interface table. Never repeat a register as a second, tagged copy. An absent value in these tables is `null`, not the canon's `—`, and every such `null` is also listed in `## Gaps & Conflicts` with its table, row, column and reason.
 
 ## Deterministic computation
 

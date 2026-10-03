@@ -279,7 +279,7 @@ Analytical narrative — part of the canonical `.md` `## Analysis`, structured b
    | CP-MODEL | Workbook extension | T4.14–T4.19 complete; stable IDs; source locators; no BLOCK reconciliation |
 3. Per consumer: Readiness Status (Ready / Ready with Limitations / Not Ready), gaps, actions.
 4. After this step → load SCHEMA_REFERENCE.md and author validated canonical `[IssuerID]_CP-1_[YYYYMMDD].md` per `../../../CANON_SHARED.md § CP_AB_EXPORT_SPEC.md` (YAML envelope + canonical H2 headings). `IssuerID` is the exact front-matter `issuer_id`; `YYYYMMDD` is `analysis_date` without hyphens. Do not create alternate analytical exports.
-5. **Audit contents (relocated from ACTIVE_PROMPT 2026-07-11)** — the audit items keep their tables intact, mapped to CP-1's own output tables, but they are never sub-sections of one appendix: `## Evidence Trace`, `## Source Registry`, `## Gaps & Conflicts` and `## QA Validation` (severity-tagged findings) are canonical H2 sections, each written once at H2 in the order `validate_handoff.py` enforces ("H2 headings must be exactly once and in canonical order: Audit Summary -> Analysis -> Evidence Trace -> Source Registry -> Gaps & Conflicts -> QA Validation"); a `###` or `####` Evidence Trace or Source Registry fails validation. The registers they draw on — Source Gate / Readiness, Source Register (T4.1), Gap Ledger (T4.12), Definition Conflict Register (T4.11), Limitation Flags, Downstream Consumers (T4.13) — stay complete in `### Analytical appendix — complete canonical registers`.
+5. **Audit contents (relocated from ACTIVE_PROMPT 2026-07-11)** — the audit items keep their tables intact, mapped to CP-1's own output tables, but they are never sub-sections of one appendix: `## Evidence Trace`, `## Source Registry`, `## Gaps & Conflicts` and `## QA Validation` (severity-tagged findings) are canonical H2 sections, each written once at H2 in the order `validate_handoff.py` enforces ("H2 headings must be exactly once and in canonical order: Audit Summary -> Analysis -> Evidence Trace -> Source Registry -> Gaps & Conflicts -> QA Validation"); a `###` or `####` Evidence Trace or Source Registry in place of the H2 fails validation. The registers they draw on — Source Register (T4.1), Definition Conflict Register (T4.11), Gap Ledger (T4.12), Downstream Readiness Matrix (T4.13) — stay complete in `### Analytical appendix — complete canonical registers`; limitation flags stay in the front matter's `limitation_flags`.
 
 ## Output — T4.12 Gaps & Validation Warnings
 `Gap Description` | `Affected Line Item or Metric` | `Affected Period(s)` | `Downstream Impact` | `Severity` | `Recommended Action`
@@ -318,12 +318,16 @@ Place each comment immediately before its Markdown table:
 Registers T4.14–T4.19 are the period, account, segment, adjusted EBITDA,
 debt and reconciliation registers below, in that order: write each under its
 register heading, then its table-id comment, then the one table with exactly
-the columns below. That one table is both the T4.x register and the CP-MODEL
-interface table: never write the register untagged and repeat it as a tagged
-copy, and never gather tagged copies into a block of their own. A value the
-sources do not supply is `null` in these tables, which the register check and
-CP-MODEL both read as null; an empty cell or `n/a` fails the register check,
-and `—` is not a CP-MODEL null. The readiness table is the separate keyed
+the columns below, with nothing but blank lines between the comment and the
+table. That one table is both the T4.x register and the CP-MODEL interface
+table: never write the register untagged and repeat it as a tagged copy, and
+never gather tagged copies into a block of their own. A value the sources do
+not supply is `null` in these tables: in these CP-1 tables write `null`, not
+the canon's `—`, since the register check and CP-MODEL both read `null` as
+null, an empty cell or `n/a` fails the register check, and `—` is not a
+CP-MODEL null. Every `null` in these tables is also listed in
+`## Gaps & Conflicts` with its table, row, column and the reason the value is
+absent. The readiness table is the separate keyed
 CP-MODEL row; T4.13's Downstream Readiness Matrix (Step 12) covers every
 consumer. The segment allocation, operating KPI schedule and readiness table
 have no T4 register: each is written once, tagged.

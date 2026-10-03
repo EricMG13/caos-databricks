@@ -457,6 +457,8 @@ class ForkR5Tests(unittest.TestCase):
         # the validator requires each once at H2, and a model demoted both to ####.
         steps = (ROOT / 'skills/cp-1-canonical-data-foundation/references/REF_CP-1_STEPS.md').read_text(encoding='utf-8')
         self.assertNotIn('holds ALL audit items as sub-sections', steps)
+        self.assertIn('Source Registry in place of the H2 fails validation', steps)
+        self.assertNotIn('Source Gate / Readiness', steps)
         rule = 'H2 headings must be exactly once and in canonical order: ' + ' -> '.join(handoff.CANONICAL_HEADINGS)
         self.assertIn(f'("{rule}")', steps)
         demoted = markdown().replace('## Evidence Trace', '#### Evidence Trace')
@@ -478,7 +480,8 @@ class ForkR5Tests(unittest.TestCase):
         # copies drifted from the registers. One tagged table serves the register check, the
         # interface parser and CP-MODEL; the two-copy form still reads the same.
         skill = skill_text('cp-1-canonical-data-foundation')
-        self.assertIn('Never repeat a register as a second, tagged copy. An absent value in these tables is `null`.', skill)
+        self.assertIn('Never repeat a register as a second, tagged copy. An absent value in these tables is `null`, '
+                      "not the canon's `—`, and every such `null` is also listed in `## Gaps & Conflicts`", skill)
         columns = complete.load_contract(skill, 'CP-1')['registers']['T4.14']['columns']
         row = ['FY2025', '2025', 'null', 'FY', '2025-01-01', '2025-12-31', '365', 'Audited', 'USD', 'millions',
                'US GAAP', 'Consolidated', 'S1', '10-K p. 53', 'null']
@@ -497,6 +500,14 @@ class ForkR5Tests(unittest.TestCase):
                 self.assertTrue(tables.is_null(parsed.rows[0]['fiscal_quarter']))
                 stable = model_inputs.parse_stable_tables(text)['cp1.model_period_register']
                 self.assertEqual(model_inputs._list(stable[0]['component_period_ids']), [])
+        # A critical `null` passes the critical-cell check, as the canon's `—` did; n/a and blanks do not.
+        blocked = complete.load_contract(skill, 'CP-1')['blocklist']
+        self.assertNotIn('null', blocked)
+        self.assertTrue({'', 'n/a', 'tbd'} <= blocked)
+        # CP-MODEL skips only blank lines after a tag: a comment between tag and table is refused.
+        commented = single.replace(tag, tag + '\n<!-- note -->\n')
+        with self.assertRaises(model_inputs.ContractError):
+            model_inputs.parse_stable_tables(commented)
         # The tag is one of the four lines the register's heading must sit within.
         late = '#### T4.14 — Model Period Register\n\n' + ''.join(f'note {n}\n' for n in range(3)) + tag + table
         self.assertNotIn('T4.14', complete.find_registers(late, ['T4.14']))
