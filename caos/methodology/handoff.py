@@ -1447,12 +1447,18 @@ def _vendor_lines(
     return [line for label, message in found if (line := _bounded(label, message))]
 
 
+# The vendor's two messages for an interface table no tag binds: missing, or
+# (fork r11, D100) written under its register heading without its
+# `<!-- table-id: -->` comment.
+_UNBOUND_INTERFACE = ("interface table missing", "comment not found above the")
+
+
 def _consequence(message: str) -> int:
     """A table that does not parse first, the registers it then voids last:
     one malformed interface table makes every one of them "missing"."""
     if "differs from its header" in message or "separator" in message:
         return 0
-    return 2 if "interface table missing" in message else 1
+    return 2 if any(text in message for text in _UNBOUND_INTERFACE) else 1
 
 
 def _research_messages(

@@ -1070,6 +1070,28 @@ def test_a_table_that_does_not_parse_is_named_before_what_it_voids() -> None:
     assert "interface table missing" in ordered[-1]
 
 
+def test_an_untagged_interface_register_trails_like_a_missing_table() -> None:
+    """Fork r11 (D100): a register written without its table-id comment is
+    the vendor's other unbound-interface message, and sorts with "missing"."""
+    from caos.methodology.handoff import _consequence
+
+    untagged = (
+        "`<!-- table-id: cp1b.model_readiness -->` comment not found above"
+        " the T4.15 table"
+    )
+    messages = [
+        untagged,
+        "cp1b.a: CP-MODEL interface table missing -- emitted on every run",
+        "T4.4: missing column(s) ['Line Item']",
+        "cp1b.b: missing or malformed table separator",
+    ]
+    ordered = sorted(messages, key=_consequence)
+    assert ordered[0].endswith("separator")
+    assert ordered[1].startswith("T4.4")
+    assert ordered[2:] == messages[:2]
+    assert _consequence(untagged) == _consequence(messages[1]) == 2
+
+
 def test_the_readiness_set_line_names_what_t8_lacks_and_adds(
     harness: _Harness,
 ) -> None:

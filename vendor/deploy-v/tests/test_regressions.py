@@ -1242,6 +1242,63 @@ class ForkR9Tests(unittest.TestCase):
                       complete.check(skill, lean.replace('#### P3 — Preparation', '#### Inputs'), 'CP-0')[0])
 
 
+class ForkR11Tests(unittest.TestCase):
+    """Deployment fork r11 (D100): an interface table written without its table-id comment is told so."""
+
+    TITLES = {'T4.12': 'Model Comparator Register', 'T4.13': 'Model Validation Register',
+              'T4.14': 'Add-Back Validation Register', 'T4.15': 'Model Readiness'}
+
+    def handoff(self, tag=lambda reg: '', title=lambda reg, name: name):
+        parts = []
+        for reg, name in self.TITLES.items():
+            parts.append(f'#### {title(reg, name)}\n\n{tag(reg)}| a | b |\n|---|---|\n| x | y |\n\n')
+        return ''.join(parts)
+
+    def interface(self, text):
+        skill = skill_text('cp-1b-earnings-delta')
+        return [v for v in complete.check(skill, text, 'CP-1B')[0] if 'table-id' in v or 'interface' in v]
+
+    def test_a_register_written_without_its_comment_names_the_comment(self):
+        # R1b CP-1B attempt 2 wrote T4.12-T4.15 under their register headings and no table-id comment,
+        # and was told the four tables were missing.
+        found = self.interface(self.handoff(title=lambda reg, name: f'{reg} — {name}'))
+        self.assertEqual(found, [
+            '`<!-- table-id: cp1b.model_comparator_register -->` comment not found above the T4.12 table',
+            '`<!-- table-id: cp1b.model_validation_register -->` comment not found above the T4.13 table',
+            '`<!-- table-id: cp1b.addback_validation_register -->` comment not found above the T4.14 table',
+            'cp1b.cp_model_snapshot_fields: CP-MODEL interface table missing -- it is emitted on every run, '
+            'not only when CP-MODEL was requested',
+            '`<!-- table-id: cp1b.model_readiness -->` comment not found above the T4.15 table',
+        ])
+        # Emphasis and a trailing parenthetical are not part of the title.
+        found = self.interface(self.handoff(title=lambda reg, name: f'**{reg}** {name} (CP-MODEL interface)'))
+        self.assertIn('`<!-- table-id: cp1b.model_readiness -->` comment not found above the T4.15 table', found)
+
+    def test_a_missing_register_or_an_unbound_comment_is_still_a_missing_table(self):
+        # No heading led by the register's ID: the table is missing.
+        found = self.interface(self.handoff(title=lambda reg, name: name))
+        self.assertEqual(len(found), 5)
+        self.assertTrue(all('CP-MODEL interface table missing' in v for v in found), found)
+        # A heading whose title is another register's pairs with nothing.
+        found = self.interface(self.handoff(title=lambda reg, name: f'{reg} — Readiness notes'))
+        self.assertTrue(all('CP-MODEL interface table missing' in v for v in found), found)
+        # The comment written, with prose between it and the table: present but unbound.
+        ids = dict(zip(self.TITLES, ('cp1b.model_comparator_register', 'cp1b.model_validation_register',
+                                     'cp1b.addback_validation_register', 'cp1b.model_readiness')))
+        unbound = self.handoff(tag=lambda reg: f'<!-- table-id: {ids[reg]} -->\nA note.\n\n',
+                               title=lambda reg, name: f'{reg} — {name}')
+        self.assertEqual(tables.read_tables(unbound), ({}, {}))
+        found = self.interface(unbound)
+        self.assertEqual(len(found), 5)
+        self.assertTrue(all('CP-MODEL interface table missing' in v for v in found), found)
+        # Bound, the four are read and only the snapshot table is missing.
+        bound = self.handoff(tag=lambda reg: f'<!-- table-id: {ids[reg]} -->\n', title=lambda reg, name: f'{reg} — {name}')
+        self.assertEqual(sorted(tables.read_tables(bound)[0]), sorted(ids.values()))
+        self.assertEqual(self.interface(bound), [
+            'cp1b.cp_model_snapshot_fields: CP-MODEL interface table missing -- it is emitted on every run, '
+            'not only when CP-MODEL was requested'])
+
+
 @unittest.skipUnless(os.environ.get('DEPLOY_V_INTEGRATION') == '1', 'enable integration for native PDF and DOCX dependencies')
 class IntegrationTests(unittest.TestCase):
     def test_exporter_binds_current_catalyst_owner(self):
