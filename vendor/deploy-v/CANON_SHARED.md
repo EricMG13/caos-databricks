@@ -319,7 +319,7 @@ ORPHAN CLAIM: lineage in (Untraced|Weak Lineage|Insufficient Information) + comm
 
 CP CANONICAL STATE RULES (vNext)
 SEC1 PRINCIPLES: State explicit, monotonic within run.
-SEC2 REQUIRED FIELDS: module_id, module_name, owned_object, schema_family, runtime_output, evidence_trace, confidence(High|Medium|Low|Insufficient Information), limitation_flags, qa_status(Not Reviewed|Passed|Restricted|Blocked), validation_warnings, downstream_consumers. REMOVED: source_basis (U2).
+SEC2 REQUIRED FIELDS: module_id, module_name, owned_object, schema_family, runtime_output, evidence_trace, confidence(High|Medium|Low|Insufficient Information), limitation_flags, qa_status(Passed|Restricted|Blocked; never Not Reviewed), validation_warnings, downstream_consumers. REMOVED: source_basis (U2).
 SEC3 TRANSITIONS: qa_status: Not Reviewed->Passed|Restricted|Blocked. Not Reviewed is the state before the module's own QA step; every run completes that step, so a handoff's front-matter qa_status is always Passed, Restricted or Blocked, never Not Reviewed. committee_status: Draft Only->Committee Ready|Restricted|Blocked|Requires More Work|Insufficient Information.
 SEC4 HARD STOPS: an upstream the pinned route delivers that is missing, stale or refused->Blocked+UPSTREAM_DEPENDENCY_MISSING; an upstream the route does not include is a named limitation, never a stop. CP-2A: stop if CP-1 and CP-2 are both on the route and both unavailable.
 SEC5 UPGRADE (a LITE compatibility block's missing_input_behavior): an input the module's FULL method needs that the LITE route does not deliver is never inferred and never a stop. The module completes on the screening inputs the route delivers, names each missing input as a limitation, sets qa_status Restricted, and recommends a new, user-confirmed, linked FULL_CREDIT_32 run that supplies it; this run's profile never changes.
@@ -840,12 +840,12 @@ completeness and machine use. Moving a table to the appendix never authorizes
 summarisation, deletion, recalculation, or analytical rewriting.
 
 Register binding (what `completeness_check.py` reads): a register table is
-found by the nearest heading above the table, with no other table between,
-when that heading names its ID (`#### T6 — Evidence Trace`), or by a caption
-naming its ID among the four non-blank lines directly above the table's header
-row. A heading binds only the next table below it, and a nearer heading that
-names no register hides a farther one. Write the heading, at most the
-table-id comment, then the table, and put any note below the table.
+found by the nearest of the four non-blank lines directly above its header
+row that names a register ID (`#### T6 — Evidence Trace`), headings before
+captions. Failing that, the nearest heading above the table finds it at any
+distance, when that heading names the ID, no other table lies between them
+and no table is found for the ID the first way. Write the heading, at most
+the table-id comment, then the table, and put any note below the table.
 
 #### Required analytical table fields
 (Inherited from CP_REASONING_STANDARD_v2.0.txt and CP_CORE_SYSTEM_PROMPT_v2.1.txt)
