@@ -6,8 +6,9 @@ JSON record: front matter, H2 headings, the registers its module's contract
 requires and the rows of each found, tagged interface tables, citations and how
 many anchor, which of the set's answer keys it meets, and how many distinct
 figures its tables hold. `compare <baseline> <records>` reports per module what
-moved, LARGE differences under their own heading (the rules are in `docs/rebuild/quality/2026-10-03-baseline.md`). It
-informs; it exits non-zero only on a usage error.
+moved, LARGE differences under their own heading (the rules are in
+`docs/rebuild/quality/2026-10-03-baseline.md`). It informs; it exits non-zero
+only on a usage error.
 
 Read by the host's own readers, never restated: `matrix.module_registers`,
 `tables.handoff_tables`, the vendor's `parse_restricted_frontmatter`, and four
