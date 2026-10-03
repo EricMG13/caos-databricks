@@ -271,6 +271,7 @@ class ForkR3Tests(unittest.TestCase):
             ('cp-1-canonical-data-foundation', 'CP-1', 'T4.1', ['Source File Name', 'Document Type', 'Period Coverage', 'Currency', 'Unit',
                                                               'Perimeter', 'Accounting Basis', 'Evidence Quality Tier', 'Analytical Use', 'Limitations']),
             ('cp-1-canonical-data-foundation', 'CP-1', 'T4.4', ['Line Item', 'FY2025', 'FY2024']),
+            ('cp-1-canonical-data-foundation', 'CP-1', 'T4.10', ['KPI Category', 'Metric Name', 'FY2025', 'FY2024', 'Trend Direction', 'Analyst Note']),
             ('cp-1-canonical-data-foundation', 'CP-1', 'T4.14', pipes('period_id | fiscal_year | fiscal_quarter | period_type | start_date | end_date | day_count | audit_status | currency | unit | accounting_basis | entity_perimeter | source_id | source_locator | component_period_ids')),
             ('cp-1-canonical-data-foundation', 'CP-1', 'T4.18', pipes('facility_id | facility_name | period_id | facility_type | carrying_value | principal | drawn_amount | commitment | secured_status | seniority | currency | margin_or_coupon | maturity_date | lease_classification | source_id | source_locator')),
             ('cp-1b-earnings-delta', 'CP-1B', 'T4.5', ['KPI Category', 'Metric Name', 'FY2025', 'FY2024', 'YoY Change', 'Trend Direction',
@@ -966,28 +967,34 @@ class ForkR7Tests(unittest.TestCase):
     """Deployment fork r7 (D95): one CP-1 register per figure, CP-MODEL reads the canon's dash as null,
     and only a value-bearing null is a gap."""
 
-    def test_cp1_keeps_one_register_per_figure(self):
-        # T4.7 repeated T4.4-T4.6 (its own step said "consolidation only -- no new data") and T4.10
-        # repeated T4.9's values; neither is read by any other module, script or host reader by id.
+    def test_cp1_writes_no_consolidated_copy_of_its_statements(self):
+        # T4.7 consolidated T4.4-T4.6 (its own step said "consolidation only -- no new data"), but 5 of
+        # 20 stored answers put a period in it alone, so T4.4-T4.6 now carry every period. T4.10 stays: in
+        # 10 of 20 it held KPIs found nowhere else (fix round 1, I1). No other reader names CP-1's T4.7.
         skill = skill_text('cp-1-canonical-data-foundation')
         contract = complete.load_contract(skill, 'CP-1')
         self.assertEqual(sorted(contract['registers'], key=lambda r: int(r.split('.')[1])),
-                         [f'T4.{n}' for n in (1, 2, 3, 4, 5, 6, 8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19)])
+                         [f'T4.{n}' for n in (1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19)])
         catalog = json.loads((ROOT / 'skills/cp-os-credit-os/references/CREDIT_OS_V_MODULE_CATALOG_v2.json')
                              .read_text(encoding='utf-8'))
         [cp1] = [m['artifact_contract'] for m in catalog['modules'] if m['module_id'] == 'CP-1']
-        self.assertEqual((set(cp1['required_table_ids']), cp1['required_table_count']), (set(contract['registers']), 17))
-        self.assertIn('T4.9 is the one KPI register, one row per KPI and period', skill)
+        self.assertEqual((set(cp1['required_table_ids']), cp1['required_table_count']), (set(contract['registers']), 18))
+        self.assertIn('give them every line item and every period the answer reports, FY included, so no figure '
+                      'exists only in a consolidated table', skill)
         self.assertIn("T4.15 is the CP-MODEL account interface: keep it complete", skill)
+        steps = (ROOT / 'skills/cp-1-canonical-data-foundation/references/REF_CP-1_STEPS.md').read_text(encoding='utf-8')
+        self.assertIn('Every line item and every period the answer reports, FY included, is in T4.4, T4.5 or T4.6', steps)
+        self.assertIn('## Output — T4.10 KPI Dashboard', steps)
+        self.assertNotIn('repeated', steps)
         for name in ('REF_CP-1_STEPS.md', 'CP-1_RUNBOOK.md', 'CP-1_SCHEMA_REFERENCE.md'):
             text = (ROOT / 'skills/cp-1-canonical-data-foundation/references' / name).read_text(encoding='utf-8')
-            for retired in ('T4.7 Normalized', 'T4.7 Consolidated', 'T4.10 KPI', '| T4.7 |', '| T4.10 |'):
+            for retired in ('T4.7 Normalized', 'T4.7 Consolidated', '| T4.7 |'):
                 with self.subTest(file=name, retired=retired):
                     self.assertNotIn(retired, text)
         # An answer that still writes the retired tables is not refused for them.
         violations = complete.check(skill, '#### T4.7 — Normalized Financials\n\n| Line Item | FY2025 |\n| --- | --- |\n'
                                     '| Revenue | 1 |\n', 'CP-1')[0]
-        self.assertFalse([v for v in violations if v.startswith(('T4.7', 'T4.10'))], violations)
+        self.assertFalse([v for v in violations if v.startswith('T4.7')], violations)
         self.assertIn('T4.4: required register missing from the handoff', violations)
 
     def test_a_retired_register_heading_keeps_its_table(self):
