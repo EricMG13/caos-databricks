@@ -3,6 +3,7 @@
 // Escape returns focus to that opener.
 import { Digest } from "@/ds/Digest";
 import { Overlay } from "./Overlay";
+import { Reanchored } from "./Reanchored";
 import type { BBox, Citation } from "@/wire";
 
 function rect(box: BBox) {
@@ -94,6 +95,7 @@ export function EvidenceDrawer({
             </>
           ) : null}
         </dl>
+        <Reanchored cited={citation.cited_page} found={citation.page} />
         {citation.withdrawn_at ? (
           <div className="note limitation">
             <b>This source has been withdrawn.</b> The citation stays so the conclusion that rests

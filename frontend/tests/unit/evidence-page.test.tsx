@@ -162,6 +162,22 @@ describe("the evidence drawer", () => {
     expect(dialog()!.querySelector("[data-outside-frame]")).toBeNull();
   });
 
+  test("a fact the host re-anchored names the page the module cited (D94)", async () => {
+    expect(dialog()).toBeNull();
+    sectionBody = () => {
+      const body = analysis();
+      for (const handoff of body.body.handoffs) {
+        for (const fact of handoff.source_facts) {
+          if (fact.source_id === SOURCE) fact.cited_page = 4;
+        }
+      }
+      return body;
+    };
+    await mount(`/analysis/?case=${CASE}&tab=rn-cp-0`);
+    await openFirstFact();
+    expect(dialog()!.querySelector("[data-reanchored]")).toHaveTextContent("Cited p.4, found p.1");
+  });
+
   test("test_a_same_section_case_switch_closes_the_open_evidence", async () => {
     // R1, through App: the Workspace stays mounted across a same-section switch.
     sectionBody = (url) =>

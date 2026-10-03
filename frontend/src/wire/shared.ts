@@ -42,6 +42,9 @@ export interface Citation {
   /** When the cited source was withdrawn, if it has been (invariant 1: checked
       live). The citation stays so the conclusion is explicable; the chip says so. */
   withdrawn_at?: string | null;
+  /** The page the module cited when the host anchored the quote at its true
+      page instead (D94); absent or null otherwise. */
+  cited_page?: number | null;
 }
 
 /** A typed refusal and what would clear it. Never an exception. */
