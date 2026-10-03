@@ -699,7 +699,14 @@ def test_the_prompt_repeats_the_closed_contract_after_evidence(
     assert "`matched_text` copies one entire evidence line character for" in compact
     assert "never only a sentence of it" in compact
     assert 'own wording ("we", "our", "us"), never rephrased' in compact
-    assert "Cite only lines that support a claim you wrote" in compact
+    # D102: R3's CP-1 cited 8 lines for 274 figures; one citation read as enough.
+    assert (
+        "Cite the evidence line behind each material figure and each statement"
+        " that a register row or conclusion rests on, at least one citation in"
+        " all, and only lines that support a claim you wrote; the cited lines may"
+        " be quoted together in one evidence section of the body." in compact
+    )
+    assert "Include at least one citation." not in compact
     assert "`page` is the page in the nearest evidence header above that line" in (
         compact
     )

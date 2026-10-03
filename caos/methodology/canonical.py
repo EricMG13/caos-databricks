@@ -77,6 +77,7 @@ from caos.methodology.handoff import (
     validate_markdown,
 )
 from caos.methodology.invocation import (
+    MAX_UPSTREAM_HANDOFF_BYTES,
     build_handoff_prompt,
     call_time_identity,
     host_identity,
@@ -416,6 +417,12 @@ def _answer(  # noqa: PLR0913 -- one recorded answer, keyword-only
     )
     if projections is None:
         raise Refusal(RefusalCode.HANDOFF_BLOCKED)
+    # F494: every consumer measures these bytes against the upstream bound
+    # (`invocation._upstream_section`), so a handoff over it would be accepted
+    # here and refused at every next node, where no retry of this one reaches.
+    # Refused here instead, as a guided retry told the size (`_size_line`).
+    if len(markdown) > MAX_UPSTREAM_HANDOFF_BYTES:
+        raise Refusal(RefusalCode.HANDOFF_MALFORMED)
     _forecast_inputs(bundle, assignment.module_id, markdown, context)
     record = CanonicalRecord(
         artifact_sha256=hashlib.sha256(markdown).hexdigest(),
@@ -636,6 +643,7 @@ def _prompt_context(
             gate_expects(assignment.route, assignment.node),
         ),
         _driver_line(contract, assignment, context, body),
+        _size_line(answer_markdown(body)),
     )
     # Judged under the identity the refused answer was asked under: its
     # ordinal, not this attempt's, fixes the attempt id and invocation digest
@@ -645,6 +653,19 @@ def _prompt_context(
     lines = feedback_lines(contract, pathways, identity, body, skill=skill)
     return replace(
         context, feedback=capped([line for line in host if line] + list(lines))
+    )
+
+
+def _size_line(markdown: bytes | None) -> str | None:
+    """The retry line for a handoff over the upstream bound `_answer` refuses
+    (F494), its size and the bound in figures and never its text; None within
+    the bound or when the answer is not the transport."""
+    if markdown is None or len(markdown) <= MAX_UPSTREAM_HANDOFF_BYTES:
+        return None
+    return (
+        f"host size check: your handoff is {len(markdown):,} bytes; the host's"
+        f" bound is {MAX_UPSTREAM_HANDOFF_BYTES:,}; shorten it (for example quote"
+        " fewer or shorter evidence lines) and keep every register"
     )
 
 
