@@ -58,8 +58,10 @@ LITE_BASE = "../../CP_DEPLOY_V_LITE_MODULE_PAYLOAD_BASE_v1.schema.txt"
 # CP-0's host-preparation section less its six retired registers (+1,354),
 # CP-L10's reworded OVERALL line (+268) and the canon's "P3 and P5" (+4 each);
 # fork r10 (D98, build e8dba1fd) moves CP-L10's twelve per-phase rules into its
-# output profile and deletes the four unparsed output-rule blocks (-16,396).
-MEASURED = {"CP-0": 142_904, "CP-L10": 137_921, "CP-5": 170_748}
+# output profile and deletes the four unparsed output-rule blocks (-16,396);
+# fork r11 (D99, build e7e7192f) drops CP-0's retired triage and package asks
+# (-1,789) and the canon's triage and ZIP gates (-208 each).
+MEASURED = {"CP-0": 140_907, "CP-L10": 137_713, "CP-5": 170_540}
 AUTHORITY_SHARE_OF_REQUEST = 0.25
 FOLDERS = {
     "CP-0": "cp-0-source-readiness",
