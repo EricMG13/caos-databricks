@@ -35,6 +35,7 @@ from caos.evidence.citations import (
     Citation,
     TokenIndex,
     find_line,
+    near_line,
     verify_citations,
 )
 from caos.graph.route import MODEL_MODULE, ResolvedRoute, RouteNode
@@ -814,6 +815,10 @@ def _line_hint(
         )
     except Refusal:
         return LineHint()
+    if found.block_id is None and not found.pages:
+        near = _near_hint(delivered, citation)
+        if near is not None:
+            return near
     line = next(
         (
             d.text.value
@@ -824,6 +829,23 @@ def _line_hint(
     )
     begins = "" if line is None else " ".join(line.split()[:HINT_WORDS])
     return LineHint(begins=begins, pages=found.pages, absent=found.absent)
+
+
+def _near_hint(delivered: Sequence[Delivery], citation: Citation) -> LineHint | None:
+    """The near-miss hint (F493) for a citation `find_line` could neither
+    find part of a line nor whole on another page: the one delivered line of
+    its source it nearly matches (`near_line`), by page and first
+    `HINT_WORDS` words. Only the delivered blocks' own text is compared, so
+    nothing the node was not given is read or shown."""
+    lines = list(
+        {d.block_id: d for d in delivered if d.source_id == citation.source_id}.values()
+    )
+    found = near_line(citation.matched_text, [d.text.value for d in lines])
+    if found is None:
+        return None
+    line = lines[found]
+    begins = " ".join(line.text.value.split()[:HINT_WORDS])
+    return LineHint(begins=begins, near=line.page, moved=line.page != citation.page)
 
 
 def _lineage_moved(

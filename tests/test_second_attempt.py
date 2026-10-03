@@ -567,6 +567,43 @@ def test_the_anchoring_line_names_the_citations_to_keep_and_the_rule() -> None:
     assert anchoring_line([None] * many) is None
 
 
+def test_the_anchoring_line_names_the_line_a_near_miss_should_copy() -> None:
+    """F493: a citation that nearly matches one delivered line is told that
+    line's page and first words and to copy it exactly, and to cite that
+    page when it is not the cited one (fix round 1); it is still counted
+    among the refused, the kept list goes first past `MAX_ANCHORING_CHARS`,
+    and then the near miss is dropped like any placement."""
+    lost = RefusalCode.CITATION_NOT_LOCATED
+    near = LineHint(begins="On March 4, 2026, the Company entered", near=7)
+    line = anchoring_line([None, lost], [None, near])
+    assert line == (
+        "host anchoring check: citation 2 of 2 nearly matches the evidence line"
+        ' of page 7 that begins "On March 4, 2026, the Company entered" but'
+        " differs in wording; copy that line exactly, character for character;"
+        " keep citation 1 exactly as it was; any citation you add or change must"
+        " be one entire evidence line of its cited page"
+        " (numbered from 1 in the order given)"
+    )
+    moved = LineHint(begins="On May 27, 2026, Caesars", near=5, moved=True)
+    elsewhere = anchoring_line([lost], [moved])
+    assert elsewhere == (
+        "host anchoring check: citation 1 of 1 nearly matches the evidence line"
+        ' of page 5, not its cited page, that begins "On May 27, 2026, Caesars"'
+        " but differs in wording; copy that line exactly, character for"
+        " character, and cite page 5; any citation you add or change must be"
+        " one entire evidence line of its cited page"
+        " (numbered from 1 in the order given)"
+    )
+    long = LineHint(begins=" ".join(["w" * 40] * HINT_WORDS), near=3)
+    many = MAX_FEEDBACK_CITATIONS + 2
+    capped_line = anchoring_line(
+        [None] * 400 + [lost] * many, [None] * 400 + [long] * many
+    )
+    assert capped_line is not None and len(capped_line) <= MAX_ANCHORING_CHARS
+    assert "keep citation" not in capped_line
+    assert 0 < capped_line.count("nearly matches") < MAX_FEEDBACK_CITATIONS
+
+
 def test_two_guided_retries_per_node_whichever_codes_refused(
     harness: _Harness,
 ) -> None:

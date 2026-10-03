@@ -1274,11 +1274,16 @@ class LineHint:
     cited page it is part of (`begins`), the other delivered pages it is one
     whole evidence line of (`pages`), or that no delivered line holds it
     (`absent`). Nothing set: found, but not as one line, so nothing is said
-    beyond the rule."""
+    beyond the rule. `near`: the page of the one delivered line of its
+    source the quote nearly matches (F493, `near_line`), `begins` then that
+    line's first words, and `moved` whether that page is not the cited
+    one."""
 
     begins: str = ""
     pages: tuple[int, ...] = ()
     absent: bool = False
+    near: int | None = None
+    moved: bool = False
 
 
 def anchoring_line(
@@ -1292,7 +1297,10 @@ def anchoring_line(
     N52 said "never by text"; the owner amended it on 2 October 2026 (D82):
     a quote that is part of a longer line is shown the first `HINT_WORDS`
     words of that delivered line and told to quote the whole line, and one
-    that is a whole line of another delivered page is told that page. At
+    that is a whole line of another delivered page is told that page; one
+    that nearly matches exactly one delivered line of its source is shown
+    that line's page and first words and told to copy it exactly, and to
+    cite that page when it is not the cited one (F493). At
     most `MAX_FEEDBACK_CITATIONS` citations are placed; the rest, and any the
     search could not place, keep the rule's wording. Past
     `MAX_ANCHORING_CHARS`, placements are dropped from the last back, each
@@ -1383,9 +1391,17 @@ def _counted(failed: Sequence[int], total: int, one: str, many: str) -> str:
 
 
 def _placed(number: int, total: int, hint: LineHint) -> str:
-    """One placed citation's clause (D82): the longer line it is part of, or
-    the other pages it is one whole line of, at most
-    `MAX_FEEDBACK_CITATIONS` of them named."""
+    """One placed citation's clause (D82): the line it nearly matches
+    (F493), the longer line it is part of, or the other pages it is one
+    whole line of, at most `MAX_FEEDBACK_CITATIONS` of them named."""
+    if hint.near is not None:
+        where = f"page {hint.near}" + (", not its cited page," if hint.moved else "")
+        return (
+            f"citation {number} of {total} nearly matches the evidence line of"
+            f' {where} that begins "{hint.begins}" but differs in wording; copy'
+            " that line exactly, character for character"
+            + (f", and cite page {hint.near}" if hint.moved else "")
+        )
     if hint.begins:
         return (
             f"citation {number} of {total} is part of a longer evidence line of"
