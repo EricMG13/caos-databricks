@@ -308,14 +308,14 @@
     {
       "aliases": [],
       "companion_count": 9,
-      "entry_bytes": 21870,
-      "entry_sha256": "5960b6ae4a7463f25f7c80a717c6e26245ef560e632793938e9966cb6a0fa6a5",
+      "entry_bytes": 22040,
+      "entry_sha256": "b8a6c9995152fda692f25fd9ffadb4420efb23a1805901c8603ff89bda7b6357",
       "folder_slug": "cp-1-canonical-data-foundation",
       "module_id": "CP-1",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 21870,
-          "sha256": "5960b6ae4a7463f25f7c80a717c6e26245ef560e632793938e9966cb6a0fa6a5"
+          "bytes": 22040,
+          "sha256": "b8a6c9995152fda692f25fd9ffadb4420efb23a1805901c8603ff89bda7b6357"
         },
         "references/CP-1_RUNBOOK.md": {
           "bytes": 12020,
@@ -330,8 +330,8 @@
           "sha256": "7af64a9047ffa05e996dbb4cb1741b9a815744ecb7eb7bd3b134a4bccf9d2cd0"
         },
         "references/REF_CP-1_STEPS.md": {
-          "bytes": 37685,
-          "sha256": "326a757f42e38273a623225414d116433bd4edced1906e4f5efe6ccdf39aa3ab"
+          "bytes": 37994,
+          "sha256": "45b479627ec6e7d91b1e78a9c4f30e873ce9ddce45d049c8e1e01f1a74c6b9cd"
         },
         "scripts/completeness_check.py": {
           "bytes": 39039,
