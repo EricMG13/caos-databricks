@@ -318,8 +318,15 @@ Place each comment immediately before its Markdown table:
 Registers T4.14–T4.19 are the period, account, segment, adjusted EBITDA,
 debt and reconciliation registers below, in that order: write each under its
 register heading, then its table-id comment, then the one table with exactly
-the columns below. The readiness table is the separate keyed CP-MODEL row;
-T4.13's Downstream Readiness Matrix (Step 12) covers every consumer.
+the columns below. That one table is both the T4.x register and the CP-MODEL
+interface table: never write the register untagged and repeat it as a tagged
+copy, and never gather tagged copies into a block of their own. A value the
+sources do not supply is `null` in these tables, which the register check and
+CP-MODEL both read as null; an empty cell or `n/a` fails the register check,
+and `—` is not a CP-MODEL null. The readiness table is the separate keyed
+CP-MODEL row; T4.13's Downstream Readiness Matrix (Step 12) covers every
+consumer. The segment allocation, operating KPI schedule and readiness table
+have no T4 register: each is written once, tagged.
 
 ## Period register
 

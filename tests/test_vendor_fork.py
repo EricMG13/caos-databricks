@@ -847,3 +847,92 @@ def test_the_cp_dr_fixture_reports_its_status_by_the_canon_map() -> None:
         qa = re.search(r'^qa_status: "([^"]+)"$', front, re.MULTILINE)
         assert research is not None and qa is not None
         assert status[research.group(1)] == qa.group(1)
+
+
+# Fork r5 (D85): CP-1's interface registers and the tagged table each one is.
+_INTERFACE_REGISTERS = {
+    "T4.14": "cp1.model_period_register",
+    "T4.15": "cp1.model_account_register",
+    "T4.16": "cp1.segment_revenue_schedule",
+    "T4.17": "cp1.adjusted_ebitda_bridge",
+    "T4.18": "cp1.debt_facility_register",
+    "T4.19": "cp1.model_reconciliation_register",
+}
+
+
+def _with_nulls(block: str) -> str:
+    """`block`'s empty table cells written `null`, the spelling fork r5 gives."""
+    lines = []
+    for line in block.splitlines():
+        if line.startswith("| "):
+            cells = line[1:-1].split("|")
+            line = "|" + "|".join(c if c.strip() else " null " for c in cells) + "|"
+        lines.append(line + "\n")
+    return "".join(lines)
+
+
+def _single_table(markdown: str) -> str:
+    """A two-copy CP-1 re-rendered in fork r5's form: each tagged copy moved
+    under its T4.x heading in place of the untagged register."""
+    for register, table_id in _INTERFACE_REGISTERS.items():
+        tagged = re.search(
+            rf"<!-- table-id: {re.escape(table_id)} -->\n(?:\|.*\n)+\n", markdown
+        )
+        assert tagged is not None, table_id
+        markdown = markdown[: tagged.start()] + markdown[tagged.end() :]
+        under = re.search(rf"(#### {re.escape(register)}\n\n)(?:\|.*\n)+\n", markdown)
+        assert under is not None, register
+        markdown = (
+            markdown[: under.end(1)]
+            + _with_nulls(tagged.group(0))
+            + "\n"
+            + markdown[under.end() :]
+        )
+    return markdown
+
+
+def test_cp1_writes_each_interface_register_once_as_one_tagged_table(
+    tmp_path: Path,
+) -> None:
+    """D85: a CP-1 that wrote T4.14-T4.19 untagged and again as tagged copies
+    ran to 84 KB on 2 October and its copies drifted from its registers. One
+    tagged table, absent values `null`, passes the validator, the register
+    check, the host's table reader and CP-MODEL's own input validator, as the
+    two-copy form still does."""
+    import subprocess
+    import sys
+
+    from cp1b_route_fixtures import cp1b_identity, cp1b_markdown
+
+    from caos.methodology.tables import handoff_tables
+
+    reference = verified_bytes(BUNDLE, "CP-1", "references/REF_CP-1_STEPS.md").decode()
+    assert "never write the register untagged and repeat it as a tagged" in reference
+    assert "An absent value in these tables is `null`." in skill("CP-1").decode()
+    two_copy = cp1b_markdown(cp1b_identity("CP-1")).decode()
+    single = _single_table(two_copy)
+    assert single.count("<!-- table-id: ") == two_copy.count("<!-- table-id: ")
+    assert len(single.encode()) < 0.7 * len(two_copy.encode())
+    cp1b = tmp_path / "cp1b.md"
+    cp1b.write_bytes(cp1b_markdown(cp1b_identity("CP-1B")))
+    validator = BUNDLE.root / "skills/cp-model/scripts/validate_cp_model_inputs.py"
+    served: dict[str, list[tuple[str, tuple[str, ...], list[list[str | None]]]]] = {}
+    for form, text in (("two-copy", two_copy), ("single", single)):
+        assert CONTRACT.validate_handoff.validate_text(text).exit_code == 0, form
+        assert _violations("CP-1", text) == [], form
+        tables = handoff_tables(CONTRACT, text)
+        assert tables.unavailable_reason is None, form
+        served[form] = [
+            (t.table_id, t.columns, [[cell.value for cell in row] for row in t.rows])
+            for t in tables.tables
+        ]
+        cp1 = tmp_path / f"{form}.md"
+        cp1.write_text(text, encoding="utf-8")
+        checked = subprocess.run(
+            [sys.executable, "-B", str(validator), str(cp1), str(cp1b)],
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+        assert checked.returncode == 0, checked.stdout + checked.stderr
+    assert served["single"] == served["two-copy"]

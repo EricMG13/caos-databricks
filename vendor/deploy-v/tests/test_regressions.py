@@ -473,6 +473,35 @@ class ForkR5Tests(unittest.TestCase):
             with self.subTest(notes=notes):
                 self.assertEqual('T6' in complete.find_registers(text, ['T6']), found)
 
+    def test_a_cp1_interface_register_is_one_tagged_table(self):
+        # A CP-1 that wrote T4.14-T4.19 untagged and again as tagged copies ran to 84 KB, and its
+        # copies drifted from the registers. One tagged table serves the register check, the
+        # interface parser and CP-MODEL; the two-copy form still reads the same.
+        skill = skill_text('cp-1-canonical-data-foundation')
+        self.assertIn('Never repeat a register as a second, tagged copy. An absent value in these tables is `null`.', skill)
+        columns = complete.load_contract(skill, 'CP-1')['registers']['T4.14']['columns']
+        row = ['FY2025', '2025', 'null', 'FY', '2025-01-01', '2025-12-31', '365', 'Audited', 'USD', 'millions',
+               'US GAAP', 'Consolidated', 'S1', '10-K p. 53', 'null']
+        table = register('T4.14', columns, [row]).split('\n', 1)[1]
+        tag = '<!-- table-id: cp1.model_period_register -->\n'
+        single = '#### T4.14 — Model Period Register\n\n' + tag + table
+        two_copy = '#### T4.14 — Model Period Register\n\n' + table + '\n' + tag + table
+        for form, text in (('single', single), ('two-copy', two_copy)):
+            with self.subTest(form=form):
+                violations, _, present = complete.check(skill, text, 'CP-1')
+                self.assertEqual(about(violations, 'T4.14'), [])
+                self.assertEqual(present['T4.14'][1][0]['component_period_ids'], 'null')
+                self.assertNotIn('cp1.model_period_register: CP-MODEL interface table missing -- it is emitted on '
+                                 'every run, not only when CP-MODEL was requested', violations)
+                parsed = tables.parse_tables(text)['cp1.model_period_register']
+                self.assertTrue(tables.is_null(parsed.rows[0]['fiscal_quarter']))
+                stable = model_inputs.parse_stable_tables(text)['cp1.model_period_register']
+                self.assertEqual(model_inputs._list(stable[0]['component_period_ids']), [])
+        # The tag is one of the four lines the register's heading must sit within.
+        late = '#### T4.14 — Model Period Register\n\n' + ''.join(f'note {n}\n' for n in range(3)) + tag + table
+        self.assertNotIn('T4.14', complete.find_registers(late, ['T4.14']))
+        self.assertIn('cp1.model_period_register', tables.parse_tables(late))
+
 
 @unittest.skipUnless(os.environ.get('DEPLOY_V_INTEGRATION') == '1', 'enable integration for native PDF and DOCX dependencies')
 class IntegrationTests(unittest.TestCase):

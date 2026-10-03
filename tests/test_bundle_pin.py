@@ -52,7 +52,7 @@ CATALOG = (
 )
 
 # A run pinned to one build never executes under another.
-BUILD_ID = "3715187ad80dbe26727a589df925d4321918f35689f1ad0fe26efd7e0ce90ffa"
+BUILD_ID = "cc142a286b110ce62f91349117192e28a4a2520798ee66d9ed86871e31dbca41"
 
 
 def _load(path: Path) -> dict[str, object]:
