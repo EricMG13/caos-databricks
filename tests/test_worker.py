@@ -454,8 +454,10 @@ def test_require_seconds_refuses_a_non_whole_or_out_of_range_lease(
 
 
 def test_the_lease_outlives_the_provider_timeout() -> None:
-    """D5: a lease renewed before a call outlives two socket timeouts."""
-    assert LEASE_SECONDS > 2 * provider_module.TIMEOUT_SECONDS
+    """D83 (amending brief D5's two deadlines): a lease renewed by the
+    reservation outlives the call's one deadline with 180 s left to bill,
+    check the answer and accept."""
+    assert LEASE_SECONDS - provider_module.TIMEOUT_SECONDS >= 180.0
     assert WorkerConfig(BoundaryText.of("w")).lease_seconds == LEASE_SECONDS
 
 

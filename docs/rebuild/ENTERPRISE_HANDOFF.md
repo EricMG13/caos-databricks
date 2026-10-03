@@ -28,7 +28,7 @@ Nothing below can be defaulted from this repository.
 |---|---|
 | Which serving endpoints are approved to receive the case's document text, which one is the configured default, and which, if any, are offered as other choices | Every prompt carries document text. An external-model endpoint sends it to that model's provider; a Databricks-hosted one keeps it in the workspace. `databricks serving-endpoints get <name> -p <profile> -o json` shows which (`served_entities[].external_model` versus `foundation_model`). |
 | Each approved endpoint's dated per-token price, input and output, in dollars | Budgets fail closed on it (invariant 8). A pay-per-token Foundation Model API endpoint bills DBUs: its DBUs per token times the contract's price per DBU. An external-model endpoint bills the provider's contract rates. A provisioned-throughput endpoint bills by the hour: no per-token price is exact, so the owner names the figure the budgets reserve on. |
-| What a run may spend (`run_ceiling`, default 100.00) and what the qualification run may spend | Each run's ceiling must cover one worst-case call at its model's price (about 22.61 at 5/25 dollars per million tokens, D29); preflight checks every approved model against it. |
+| What a run may spend (`run_ceiling`, default 120.00) and what the qualification run may spend | Each run's ceiling must cover one worst-case call at its model's price (about 22.61 at 5/25 dollars per million tokens, D29); preflight checks every approved model against it. |
 | What happens if an approved endpoint logs payloads, exports traces, has a fallback or serves more than one model | Preflight refuses each (DP-3). If the workspace's policy requires payload logging, the app cannot run on that endpoint as built: that is a policy conflict for the owner, not a setting for you to change. |
 | The Lakebase kind: an Autoscaling project (the default) or an existing Provisioned instance | An app keeps the kind it was first deployed with. |
 | The two groups, if not `caos-admins` and `caos-analysts` | Members must be direct members: SCIM `Me` does not expand nested groups (B9). |
@@ -42,7 +42,7 @@ Nothing below can be defaulted from this repository.
 | Lakebase Autoscaling project id, or an existing Provisioned instance's name with `--provisioned` | argument 4 | `databricks postgres list-projects -p <profile>`. Branch, read-write endpoint and database id default to `production`, `primary`, `databricks-postgres`; override with `LAKEBASE_BRANCH`, `LAKEBASE_ENDPOINT`, `LAKEBASE_DATABASE_ID` (`databricks postgres list-databases projects/<project>/branches/<branch>`), or `LAKEBASE_DATABASE` for a Provisioned instance. |
 | The configured endpoint's exact name | argument 5, required | `databricks serving-endpoints list -p <profile>`. Custom and external endpoints rarely carry the `databricks-` prefix, and the bundle's default `databricks-claude-opus-5` may not exist in this workspace. |
 | That endpoint's dated contract price | argument 6, required | `<endpoint>,<input_per_token>,<output_per_token>,<YYYY-MM-DD>`, dated no later than today; the first field must be argument 5 exactly. |
-| The run ceiling | argument 7 (default 100.00) | From the owner. |
+| The run ceiling | argument 7 (default 120.00) | From the owner. |
 | The other approved models, if any | argument 8 (default none) | Each one's price in argument 6's form, joined by `;`, quoted: `'<endpoint>,<in>,<out>,<date>;<endpoint>,<in>,<out>,<date>'`. At most 15 beside the configured one. |
 | The groups and the target | environment | `GROUP_ADMIN`, `GROUP_ANALYST`, `TARGET` (`prod` or `dev` only; `--provisioned` deploys its pair). The app is `caos` in both production targets and `caos-dev-<your user id>` in `dev`. |
 
@@ -56,10 +56,10 @@ No grant is run by hand before the first deploy: the bundle's `CAN_CONNECT_AND_C
 uv sync --locked --all-groups
 npm --prefix frontend ci --ignore-scripts && npm --prefix frontend run build
 scripts/enterprise_deploy.sh <profile> <catalog> <schema> <lakebase-project> \
-  <endpoint> <endpoint>,<in>,<out>,<date> 100.00 '<choice>,<in>,<out>,<date>;...'
+  <endpoint> <endpoint>,<in>,<out>,<date> 120.00 '<choice>,<in>,<out>,<date>;...'
 # or, for an existing Provisioned instance only:
 scripts/enterprise_deploy.sh --provisioned <profile> <catalog> <schema> <lakebase-instance> \
-  <endpoint> <endpoint>,<in>,<out>,<date> 100.00 '<choice>,<in>,<out>,<date>;...'
+  <endpoint> <endpoint>,<in>,<out>,<date> 120.00 '<choice>,<in>,<out>,<date>;...'
 ```
 
 Leave argument 8 off when the owner approved one model only. The command stops at the first failing row and writes `docs/rebuild/runs/<today>/enterprise/<time>/evidence.tsv`, one row per step, with each step's output in `E<n>.log` beside it (section 5).

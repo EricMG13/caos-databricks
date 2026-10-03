@@ -129,9 +129,9 @@ MODEL_CALL_SUBJECT = {
     "reporting_period": "FY2025",
     "analysis_date": "2026-09-22",
 }
-# `caos.provider.TIMEOUT_SECONDS` (240) is the model call's own deadline;
+# `caos.provider.TIMEOUT_SECONDS` (420) is the model call's own deadline;
 # E10 waits comfortably past it rather than racing it.
-MODEL_CALL_SECONDS = 260.0
+MODEL_CALL_SECONDS = 440.0
 # What ends a run without an answered call (`caos.store.RunStatus`): an
 # outcome is recorded for a refused call too, and a park is a progress frame
 # like any other (W1), so E10 reads the run itself, never counts frames.

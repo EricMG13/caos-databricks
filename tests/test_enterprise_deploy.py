@@ -104,7 +104,7 @@ def _resolved(
         "CAOS_MODEL_ENDPOINT": ENDPOINT,
         "CAOS_MODEL_PRICE": PRICE,
         "CAOS_MODEL_CHOICES": f"{PRICE};",  # the price, then no other model
-        "CAOS_RUN_CEILING": "100.00",  # the bundle default (D29)
+        "CAOS_RUN_CEILING": "120.00",  # the bundle default (D29, D83)
         "CAOS_GROUP_ADMIN": groups[0],
         "CAOS_GROUP_ANALYST": groups[1],
         **BINDINGS[kind],
@@ -280,7 +280,7 @@ def test_the_one_command_runs_the_cli_and_verifies_the_deployment(
         "bundle deploy",
         "bundle run caos",
     ]
-    assert all("--var run_ceiling=100.00" in line for line in seen)
+    assert all("--var run_ceiling=120.00" in line for line in seen)
     assert not any(" -p " in f" {line} " for line in seen), "no profile flag"
     _only_the_kind_s_own(kind, target, seen, evidence, stub)
     # The price travels whole in the environment (C1), never as a `--var`.
