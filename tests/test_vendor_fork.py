@@ -943,3 +943,96 @@ def test_cp1_writes_each_interface_register_once_as_one_tagged_table(
         )
         assert checked.returncode == 0, checked.stdout + checked.stderr
     assert served["single"] == served["two-copy"]
+
+
+# Fork r6 (D88, D89): the readers tolerate what the 2 and 3 October answers
+# wrote, and still refuse a malformed table or a tag with no table of its own.
+def _cp1_single() -> str:
+    from cp1b_route_fixtures import cp1b_identity, cp1b_markdown
+
+    return _single_table(cp1b_markdown(cp1b_identity("CP-1")).decode())
+
+
+def _cp_model_reads(tmp_path: Path, cp1: str) -> int:
+    """The exit code of CP-MODEL's own input validator over `cp1`."""
+    import subprocess
+    import sys
+
+    from cp1b_route_fixtures import cp1b_identity, cp1b_markdown
+
+    validator = BUNDLE.root / "skills/cp-model/scripts/validate_cp_model_inputs.py"
+    (tmp_path / "cp1.md").write_text(cp1, encoding="utf-8")
+    (tmp_path / "cp1b.md").write_bytes(cp1b_markdown(cp1b_identity("CP-1B")))
+    return subprocess.run(
+        [
+            sys.executable,
+            "-B",
+            str(validator),
+            *(str(tmp_path / n) for n in ("cp1.md", "cp1b.md")),
+        ],
+        capture_output=True,
+        check=False,
+    ).returncode
+
+
+def test_a_tag_above_its_register_heading_binds_for_every_reader(
+    tmp_path: Path,
+) -> None:
+    """P1 CP-1 #3 wrote a tag above its `####` heading, which broke the bind:
+    every reader now crosses the heading to the next table, and reads it as
+    the table written under the tag."""
+    from caos.methodology.tables import handoff_tables
+
+    single = _cp1_single()
+    above = single
+    for register, table_id in _INTERFACE_REGISTERS.items():
+        tag = f"<!-- table-id: {table_id} -->\n"
+        heading = re.search(rf"#### {re.escape(register)}\b[^\n]*\n\n", above)
+        assert heading is not None and tag in above, register
+        above = above.replace(tag, "", 1)
+        above = above[: heading.start()] + tag + "\n" + above[heading.start() :]
+    assert above != single
+    assert _violations("CP-1", above) == []
+    assert handoff_tables(CONTRACT, above) == handoff_tables(CONTRACT, single)
+    assert _cp_model_reads(tmp_path, above) == 0
+    # Prose between a tag and its table still breaks the bind: the table is missing.
+    prose = above.replace(
+        "<!-- table-id: cp1.model_period_register -->\n",
+        "<!-- table-id: cp1.model_period_register -->\nA note.\n",
+    )
+    assert "cp1.model_period_register: CP-MODEL interface table missing" in " ".join(
+        _violations("CP-1", prose)
+    )
+
+
+def test_a_short_interface_row_names_only_its_table(tmp_path: Path) -> None:
+    """P1 CP-1 #1 and N3 CP-1 #2 each lost one cell of one period-register row,
+    and the check reported all seven interface tables missing. The short row
+    is still refused -- by the check, the host's table reader and CP-MODEL --
+    and the check names that table alone."""
+    from caos.methodology.tables import handoff_tables
+
+    single = _cp1_single()
+    period = re.search(
+        r"<!-- table-id: cp1\.model_period_register -->\n\n?(?:\|.*\n){2}(\|.*)\|\n",
+        single,
+    )
+    assert period is not None
+    short = single.replace(
+        period.group(0),
+        period.group(0).replace(
+            period.group(1) + "|", period.group(1).rsplit("|", 1)[0] + "|", 1
+        ),
+        1,
+    )
+    assert short != single
+    violations = _violations("CP-1", short)
+    interface = [v for v in violations if v.startswith("cp1.")]
+    assert len(interface) == 1, violations
+    assert re.fullmatch(
+        r"cp1\.model_period_register: row 1 \(first cell `[^`]*`\) has (\d+) cells, "
+        r"header has (\d+) -- table row width differs from its header",
+        interface[0],
+    ), interface
+    assert handoff_tables(CONTRACT, short).unavailable_reason == "TABLES_MALFORMED"
+    assert _cp_model_reads(tmp_path, short) != 0

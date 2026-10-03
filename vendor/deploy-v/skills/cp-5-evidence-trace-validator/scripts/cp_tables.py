@@ -29,6 +29,11 @@ from validate_handoff import unfenced_markdown
 
 TABLE_ID_RE = re.compile(r"<!--\s*table-id:\s*([A-Za-z0-9_.]+)\s*-->")
 SEPARATOR_RE = re.compile(r"^[\s:\-|]+$")
+# A separator cell is one or more hyphens, optionally colon-aligned (fork r6:
+# it was three or more, which GitHub's own tables do not require).
+SEPARATOR_CELL_RE = re.compile(r":?-+:?")
+# A heading (### to ######) between a tag and its table, fork r6.
+TAG_HEADING_RE = re.compile(r"#{3,6}(?:\s.*)?")
 
 # Cell spellings that mean "no value". Canon's own vocabulary, casefolded.
 NULL_CELLS = {
@@ -41,6 +46,26 @@ NULL_CELLS = {
 
 def _split_row(line):
     return [c.strip() for c in line.strip().removeprefix("|").removesuffix("|").split("|")]
+
+
+def _escaped_row(line):
+    """A row split only at a `|` not escaped as `\\|`, each `\\|` read as `|`,
+    as the handoff validator's `_table_cells` splits it."""
+    stripped = line.strip().removeprefix("|")
+    if stripped.endswith("|") and not stripped.endswith("\\|"):
+        stripped = stripped[:-1]
+    return [c.strip().replace("\\|", "|") for c in re.split(r"(?<!\\)\|", stripped)]
+
+
+def _row_cells(line, width):
+    """A tagged table's body row: split at every `|` as before, or, only when
+    that gives a width other than the header's, at the unescaped ones (fork
+    r6). A row read before is read the same."""
+    cells = _split_row(line)
+    if len(cells) == width:
+        return cells
+    escaped = _escaped_row(line)
+    return escaped if len(escaped) == width else cells
 
 
 def is_null(cell):
@@ -183,56 +208,109 @@ def parse_tables(text):
     """{table_id: Table} for every `<!-- table-id: -->`-tagged pipe table.
 
     A tag binds to the next pipe table that follows it. Untagged tables are
-    ignored -- they are presentation tables, not the machine interface.
+    ignored -- they are presentation tables, not the machine interface. Any
+    malformed tagged table refuses the whole document (ValueError naming the
+    first): a reader of the interface never gets a partial set.
+    """
+    tables, errors = read_tables(text)
+    if errors:
+        raise ValueError(next(iter(errors.values())))
+    return tables
+
+
+def _table_lines(lines, i):
+    """The index past the pipe lines that start at `i`."""
+    while i < len(lines) and lines[i].strip().startswith("|"):
+        i += 1
+    return i
+
+
+def _read_table(table_id, lines, i):
+    """(Table or None, error or None, index past the table) for the table
+    whose header row is `lines[i]`, its separator the next line and its body
+    the pipe lines after that. A malformed table's pipe lines are consumed
+    too, so none is left over for the next tag."""
+    header = _split_row(lines[i])
+    if not all(header) or len(header) != len(set(header)):
+        return None, f"{table_id}: table columns must be nonempty and unique", _table_lines(lines, i)
+    if i + 1 >= len(lines) or len(_split_row(lines[i + 1])) != len(header) or not all(
+        SEPARATOR_CELL_RE.fullmatch(cell) for cell in _split_row(lines[i + 1])
+    ):
+        return None, f"{table_id}: missing or malformed table separator", _table_lines(lines, i)
+    end = _table_lines(lines, i + 2)
+    rows, bad = [], []
+    for n, line in enumerate(lines[i + 2:end], 1):
+        cells = _row_cells(line, len(header))
+        if len(cells) != len(header):
+            bad.append((n, cells))
+            continue
+        rows.append(dict(zip(header, cells)))
+    if bad:
+        n, cells = bad[0]
+        more = f"; {len(bad) - 1} more row(s) differ" if len(bad) > 1 else ""
+        return None, (
+            f"{table_id}: row {n} (first cell `{cells[0][:40]}`) has {len(cells)} cells, "
+            f"header has {len(header)} -- table row width differs from its header{more}"
+        ), end
+    return Table(table_id, header, rows), None, end
+
+
+def read_tables(text):
+    """({table_id: Table}, {table_id: error}) -- `parse_tables`, reporting.
+
+    Each malformed tagged table is named once, with its first fault, and left
+    out; every other tagged table is still read (fork r6: one short row used
+    to void all of them, so a checker reported every interface table missing).
+    The binding is `parse_tables`'s: a tag binds to the next pipe table, across
+    blank and comment lines; a heading line (### to ######) between them is
+    crossed too (fork r6), but only as a tolerance -- a tag bound across a
+    heading binds only a well-formed table, never an id another tag binds or
+    a second tag crosses to, and is otherwise dropped as before, so every
+    document read before reads the same. Any other line between a tag and a table breaks the bind;
+    better to report the table as absent than to attach the tag to an
+    unrelated table further down.
     """
     lines = unfenced_markdown(text).splitlines()
-    out = {}
-    pending_id = None
+    strict, crossed_reads, errors = {}, {}, {}
+    pending_id, crossed = None, False
     i = 0
     while i < len(lines):
-        line = lines[i]
-        m = TABLE_ID_RE.fullmatch(line.strip())
+        stripped = lines[i].strip()
+        m = TABLE_ID_RE.fullmatch(stripped)
         if m:
-            if pending_id is not None:
-                raise ValueError(f"{pending_id}: table-id has no following table")
-            if m.group(1) in out:
-                raise ValueError(f"{m.group(1)}: duplicate table-id")
-            pending_id = m.group(1)
+            if pending_id is not None and not crossed:
+                errors.setdefault(pending_id, f"{pending_id}: table-id has no following table")
+            pending_id, crossed = m.group(1), False
+            if pending_id in strict:
+                errors.setdefault(pending_id, f"{pending_id}: duplicate table-id")
+                pending_id = None
             i += 1
             continue
-        stripped = line.strip()
         if pending_id and stripped.startswith("|") and stripped.count("|") >= 2:
-            header = _split_row(stripped)
-            if not all(header) or len(header) != len(set(header)):
-                raise ValueError(f"{pending_id}: table columns must be nonempty and unique")
-            i += 1
-            if i >= len(lines) or len(_split_row(lines[i])) != len(header) or not all(
-                re.fullmatch(r":?-{3,}:?", cell) for cell in _split_row(lines[i])
-            ):
-                raise ValueError(f"{pending_id}: missing or malformed table separator")
-            i += 1
-            rows = []
-            while i < len(lines):
-                s = lines[i].strip()
-                if not s.startswith("|"):
-                    break
-                cells = _split_row(s)
-                if len(cells) != len(header):
-                    raise ValueError(f"{pending_id}: table row width differs from its header")
-                rows.append(dict(zip(header, cells)))
-                i += 1
-            out[pending_id] = Table(pending_id, header, rows)
+            table, error, i = _read_table(pending_id, lines, i)
+            if not crossed:
+                if error:
+                    errors.setdefault(pending_id, error)
+                else:
+                    strict[pending_id] = (i, table)
+            elif table is not None:
+                # Two tags crossing to two tables of one id bind neither.
+                crossed_reads[pending_id] = None if pending_id in crossed_reads else (i, table)
             pending_id = None
             continue
-        if stripped and not stripped.startswith("<!--"):
-            # Any other content between the tag and its table breaks the bind;
-            # better to report the table as absent than to attach the tag to an
-            # unrelated table further down.
+        if pending_id and TAG_HEADING_RE.fullmatch(stripped):
+            crossed = True
+        elif stripped and not stripped.startswith("<!--"):
             pending_id = pending_id if stripped.startswith("|") else None
         i += 1
-    if pending_id is not None:
-        raise ValueError(f"{pending_id}: table-id has no following table")
-    return out
+    if pending_id is not None and not crossed:
+        errors.setdefault(pending_id, f"{pending_id}: table-id has no following table")
+    found = dict(strict)
+    for table_id, read in crossed_reads.items():
+        if read is not None and table_id not in strict and table_id not in errors:
+            found[table_id] = read
+    in_order = sorted(found.items(), key=lambda item: item[1][0])
+    return {table_id: table for table_id, (_, table) in in_order}, errors
 
 
 def read_frontmatter(text):

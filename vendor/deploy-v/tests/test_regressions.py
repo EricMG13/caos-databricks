@@ -470,10 +470,11 @@ class ForkR5Tests(unittest.TestCase):
         canon = (ROOT / 'CANON_SHARED.md').read_text(encoding='utf-8')
         self.assertIn('is one of the four non-blank lines directly above the table', canon)
         table = '| Evidence | Locator |\n| --- | --- |\n| Cash | p1 |\n'
-        for notes, found in ((3, True), (4, False)):
+        # Fork r6: past the four lines, the nearest heading above the table still binds it.
+        for notes in (3, 4):
             text = '#### T6 — Evidence Trace\n\n' + ''.join(f'> note {n}\n\n' for n in range(notes)) + table
             with self.subTest(notes=notes):
-                self.assertEqual('T6' in complete.find_registers(text, ['T6']), found)
+                self.assertIn('T6', complete.find_registers(text, ['T6']))
 
     def test_a_cp1_interface_register_is_one_tagged_table(self):
         # A CP-1 that wrote T4.14-T4.19 untagged and again as tagged copies ran to 84 KB, and its
@@ -504,14 +505,198 @@ class ForkR5Tests(unittest.TestCase):
         blocked = complete.load_contract(skill, 'CP-1')['blocklist']
         self.assertNotIn('null', blocked)
         self.assertTrue({'', 'n/a', 'tbd'} <= blocked)
-        # CP-MODEL skips only blank lines after a tag: a comment between tag and table is refused.
+        # CP-MODEL skips only blank and heading lines after a tag: a comment between tag and table is refused.
         commented = single.replace(tag, tag + '\n<!-- note -->\n')
         with self.assertRaises(model_inputs.ContractError):
             model_inputs.parse_stable_tables(commented)
-        # The tag is one of the four lines the register's heading must sit within.
+        # Notes and the tag between heading and table: the nearest heading still binds it (fork r6).
         late = '#### T4.14 — Model Period Register\n\n' + ''.join(f'note {n}\n' for n in range(3)) + tag + table
-        self.assertNotIn('T4.14', complete.find_registers(late, ['T4.14']))
+        self.assertIn('T4.14', complete.find_registers(late, ['T4.14']))
         self.assertIn('cp1.model_period_register', tables.parse_tables(late))
+
+
+def _r5_parse_tables(text):
+    """`cp_tables.parse_tables` as fork r5 shipped it: the reference every r6 tolerance is held to."""
+    import re
+    lines = handoff.unfenced_markdown(text).splitlines()
+    out, pending_id, i = {}, None, 0
+    while i < len(lines):
+        line = lines[i]
+        m = tables.TABLE_ID_RE.fullmatch(line.strip())
+        if m:
+            if pending_id is not None:
+                raise ValueError(f'{pending_id}: table-id has no following table')
+            if m.group(1) in out:
+                raise ValueError(f'{m.group(1)}: duplicate table-id')
+            pending_id = m.group(1)
+            i += 1
+            continue
+        stripped = line.strip()
+        if pending_id and stripped.startswith('|') and stripped.count('|') >= 2:
+            header = tables._split_row(stripped)
+            if not all(header) or len(header) != len(set(header)):
+                raise ValueError('columns')
+            i += 1
+            if i >= len(lines) or len(tables._split_row(lines[i])) != len(header) or not all(
+                    re.fullmatch(r':?-{3,}:?', cell) for cell in tables._split_row(lines[i])):
+                raise ValueError('separator')
+            i += 1
+            rows = []
+            while i < len(lines):
+                row = lines[i].strip()
+                if not row.startswith('|'):
+                    break
+                cells = tables._split_row(row)
+                if len(cells) != len(header):
+                    raise ValueError('width')
+                rows.append(dict(zip(header, cells)))
+                i += 1
+            out[pending_id] = (header, rows)
+            pending_id = None
+            continue
+        if stripped and not stripped.startswith('<!--'):
+            pending_id = pending_id if stripped.startswith('|') else None
+        i += 1
+    if pending_id is not None:
+        raise ValueError('dangling')
+    return out
+
+
+def _r5_find_registers(text):
+    """`completeness_check.find_registers(text)` as fork r5 shipped it, with no ID list."""
+    lines = handoff.unfenced_markdown(text).splitlines()
+    out, recent, i = {}, [], 0
+    while i < len(lines):
+        s = lines[i].strip()
+        if s.startswith('|') and s.count('|') >= 2 and not tables.SEPARATOR_RE.match(s):
+            header, j = tables._split_row(s), i + 1
+            if j < len(lines) and tables.SEPARATOR_RE.match(lines[j].strip()) and '|' in lines[j]:
+                j += 1
+            rows = []
+            while j < len(lines) and lines[j].strip().startswith('|'):
+                cells = tables._split_row(lines[j].strip())
+                cells += [''] * (len(header) - len(cells))
+                rows.append(dict(zip(header, cells[:len(header)])))
+                j += 1
+            labels = [x for x in reversed(recent) if x.startswith('#')] + [x for x in reversed(recent) if not x.startswith('#')]
+            for label in labels:
+                match = complete.REGISTER_ID_RE.search(label)
+                if match:
+                    out.setdefault(match.group(1), (header, rows))
+                    break
+            i, recent = j, []
+            continue
+        if s:
+            recent = (recent + [s])[-4:]
+        i += 1
+    return out
+
+
+class ForkR6Tests(unittest.TestCase):
+    """Deployment fork r6: the readers tolerate what well-meaning answers wrote, and refuse what they did before."""
+
+    GOOD = '| a | b |\n| --- | --- |\n| 1 | 2 |\n'
+
+    def test_one_malformed_interface_table_is_named_alone(self):
+        # P1 CP-1 #1: one 14-cell row of a 15-column table voided all seven interface tables.
+        short = '| a | b |\n| --- | --- |\n| 1 | 2 |\n| FY2024 |\n| 3 |\n'
+        text = '<!-- table-id: x.good -->\n' + self.GOOD + '\n<!-- table-id: x.short -->\n' + short
+        found, errors = tables.read_tables(text)
+        self.assertEqual(list(found), ['x.good'])
+        self.assertEqual(errors, {'x.short': 'x.short: row 2 (first cell `FY2024`) has 1 cells, header has 2 -- '
+                                             'table row width differs from its header; 1 more row(s) differ'})
+        # The guarantee: a short row is still refused, and `parse_tables` still refuses the whole document.
+        with self.assertRaisesRegex(ValueError, '^x.short: row 2 '):
+            tables.parse_tables(text)
+        skill = skill_text('cp-1-canonical-data-foundation').replace(
+            'cp1.model_period_register; cp1.model_account_register', 'x.good; x.short; cp1.model_account_register')
+        violations = complete.check(skill, text, 'CP-1')[0]
+        self.assertIn(errors['x.short'], violations)
+        self.assertFalse([v for v in violations if v.startswith(('x.good', 'x.short: CP-MODEL'))], violations)
+        self.assertIn('cp1.model_account_register: CP-MODEL interface table missing -- it is emitted on every run, '
+                      'not only when CP-MODEL was requested', violations)
+        for fault, message in (('| a | a |\n| --- | --- |\n', 'table columns must be nonempty and unique'),
+                               ('| a | b |\n| 1 | 2 |\n', 'missing or malformed table separator')):
+            with self.subTest(fault=message):
+                found, errors = tables.read_tables('<!-- table-id: x.bad -->\n' + fault + '\n<!-- table-id: x.good -->\n' + self.GOOD)
+                self.assertEqual((list(found), errors), (['x.good'], {'x.bad': f'x.bad: {message}'}))
+
+    def test_a_tag_crosses_a_heading_to_the_next_table_only(self):
+        # P1 CP-1 #3 put the readiness tag above `#### CP-MODEL Readiness`; the heading broke the bind.
+        crossed = '<!-- table-id: x.t -->\n\n#### CP-MODEL Readiness\n\n' + self.GOOD
+        self.assertEqual(tables.parse_tables(crossed)['x.t'].rows, [{'a': '1', 'b': '2'}])
+        self.assertEqual(model_inputs.parse_stable_tables(crossed)['x.t'], [{'a': '1', 'b': '2'}])
+        # The guarantees: a tag binds only the next table, across nothing but blank, comment and heading lines.
+        for name, text in (('prose', '<!-- table-id: x.t -->\n#### H\nA note.\n' + self.GOOD),
+                           ('h2', '<!-- table-id: x.t -->\n## Gaps & Conflicts\n' + self.GOOD),
+                           ('next tag', '<!-- table-id: x.t -->\n#### H\n<!-- table-id: x.u -->\n' + self.GOOD),
+                           ('malformed', '<!-- table-id: x.t -->\n#### H\n| a | b |\n| 1 | 2 |\n'),
+                           ('twice', '<!-- table-id: x.t -->\n#### H\n' + self.GOOD + '\n<!-- table-id: x.t -->\n#### H\n' + self.GOOD)):
+            with self.subTest(case=name):
+                self.assertNotIn('x.t', tables.parse_tables(text))
+        # A tag that binds the strict way wins over one that crossed a heading, as before.
+        later = '<!-- table-id: x.t -->\n#### H\n| a | b |\n| --- | --- |\n| 0 | 0 |\n\n<!-- table-id: x.t -->\n' + self.GOOD
+        self.assertEqual(tables.parse_tables(later)['x.t'].rows, [{'a': '1', 'b': '2'}])
+        # Directly under the tag, a malformed table is still refused.
+        with self.assertRaisesRegex(ValueError, 'separator'):
+            tables.parse_tables('<!-- table-id: x.t -->\n| a | b |\n| 1 | 2 |\n')
+
+    def test_one_hyphen_separators_and_escaped_pipes_read_alike(self):
+        # A row that splits to the header's width at every `|` reads as before: `C:\` ends its cell.
+        text = '<!-- table-id: x.t -->\n| a | b |\n|-|:-:|\n| x \\| y | z |\n| w | C:\\|\n'
+        rows = [{'a': 'x | y', 'b': 'z'}, {'a': 'w', 'b': 'C:\\'}]
+        self.assertEqual(tables.parse_tables(text)['x.t'].rows, rows)
+        self.assertEqual(model_inputs.parse_stable_tables(text)['x.t'], rows)
+        with self.assertRaises(ValueError):
+            tables.parse_tables(text.replace('| x \\| y | z |', '| x \\| y \\| z |'))
+
+    def test_every_document_read_before_reads_the_same(self):
+        # Held against fork r5's reader over random documents: a tolerance only reads what it refused.
+        import random
+        vocabulary = ['', '<!-- table-id: x.a -->', '<!-- table-id: x.b -->', '<!-- note -->', '#### H', '## H2',
+                      'prose', '| a | b |', '| --- | --- |', '|-|-|', '| 1 | 2 |', '| 3 |', '| x \\| y | z |',
+                      '| --- | --- | --- |', '| w | C:\\|',
+                      '| 1 | 2 | 3 |', '|', '---|---', '```', '> quote']
+        generator = random.Random(20261003)
+        compared = 0
+        for _ in range(6000):
+            text = '\n'.join(generator.choice(vocabulary) for _ in range(generator.randint(1, 14)))
+            try:
+                before = _r5_parse_tables(text)
+            except ValueError:
+                continue
+            compared += 1
+            now = {k: (t.columns, t.rows) for k, t in tables.parse_tables(text).items()}
+            self.assertEqual({k: now[k] for k in before}, before, text)
+            self.assertEqual([k for k in now if k in before], list(before), text)
+        self.assertGreater(compared, 1000)
+
+    def test_every_register_bound_before_is_bound_the_same(self):
+        import random
+        vocabulary = ['', '#### T6 — Trace', '### T4.5', '## Analysis', '#### Notes', 'see T4.5', '> note', 'prose',
+                      '| a | b |', '| --- | --- |', '| 1 | 2 |', '| c | d |', '```'] + ['> note', 'prose'] * 4
+        generator = random.Random(3102026)
+        added = 0
+        for _ in range(6000):
+            text = '\n'.join(generator.choice(vocabulary) for _ in range(generator.randint(1, 24)))
+            before, now = _r5_find_registers(text), complete.find_registers(text)
+            self.assertEqual({k: now.get(k) for k in before}, before, text)
+            added += len(now) > len(before)
+        self.assertGreater(added, 50)
+
+    def test_the_nearest_heading_binds_its_next_table_at_any_distance(self):
+        # N4 CP-0 #5: five blockquote lines sat between `#### T6 — Evidence Trace` and its table.
+        notes = ''.join(f'> note {n}\n\n' for n in range(5))
+        self.assertIn('T6', complete.find_registers('#### T6 — Evidence Trace\n\n' + notes + self.GOOD, ['T6']))
+        # The guarantees: a heading binds only the next table below it, and only as the nearest heading.
+        other = '| c | d |\n| --- | --- |\n| 3 | 4 |\n\n'
+        between = complete.find_registers('#### T6\n\n' + notes + other + notes + self.GOOD, ['T6'])
+        self.assertEqual(between['T6'][0], ['c', 'd'])
+        shadowed = '#### T6\n\n' + notes + '#### Notes\n\n' + notes + self.GOOD
+        self.assertNotIn('T6', complete.find_registers(shadowed, ['T6']))
+        # A binding made the near way, anywhere, is never displaced by a distant heading.
+        near = '#### T6\n\n' + notes + other + '#### T6 — again\n' + self.GOOD
+        self.assertEqual(complete.find_registers(near, ['T6'])['T6'][0], ['a', 'b'])
 
 
 @unittest.skipUnless(os.environ.get('DEPLOY_V_INTEGRATION') == '1', 'enable integration for native PDF and DOCX dependencies')

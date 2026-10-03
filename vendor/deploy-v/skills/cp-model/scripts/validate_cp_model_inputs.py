@@ -25,7 +25,10 @@ sys.dont_write_bytecode = True
 from validate_handoff import validate_text as validate_common_handoff
 
 TABLE_MARKER = re.compile(r"^\s*<!--\s*table-id:\s*([a-z0-9_.-]+)\s*-->\s*$")
-SEPARATOR_CELL = re.compile(r"^:?-{3,}:?$")
+# One or more hyphens, optionally colon-aligned, as `cp_tables` reads it (fork r6).
+SEPARATOR_CELL = re.compile(r"^:?-+:?$")
+# A heading (### to ######) between a marker and its table, as `cp_tables` crosses it (fork r6).
+MARKER_HEADING = re.compile(r"^\s*#{3,6}(?:\s.*)?$")
 
 CP1_TABLES = {
     "cp1.model_period_register",
@@ -326,12 +329,30 @@ def _split_row(line: str) -> list[str]:
     return [cell.strip() for cell in text.strip("|").split("|")]
 
 
+def _row_values(line: str, width: int) -> list[str]:
+    """A body row split at every `|`, or, only when that gives a width other
+    than the header's, at each `|` not escaped as `\\|` (fork r6, as
+    `cp_tables` reads it). A row read before is read the same."""
+    values = _split_row(line)
+    if len(values) == width:
+        return values
+    text = line.strip().removeprefix("|")
+    if text.endswith("|") and not text.endswith("\\|"):
+        text = text[:-1]
+    escaped = [cell.strip().replace("\\|", "|") for cell in re.split(r"(?<!\\)\|", text)]
+    return escaped if len(escaped) == width else values
+
+
 def _normalise_header(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", value.strip().lower()).strip("_")
 
 
 def parse_stable_tables(markdown: str) -> dict[str, TableRows]:
-    """Parse only Markdown tables immediately following stable table markers."""
+    """Parse only Markdown tables immediately following stable table markers.
+
+    Only blank lines and heading lines (### to ######, fork r6) may sit
+    between a marker and its table; anything else is a ContractError.
+    """
     lines = markdown.splitlines()
     tables: dict[str, TableRows] = {}
     index = 0
@@ -344,7 +365,9 @@ def parse_stable_tables(markdown: str) -> dict[str, TableRows]:
         if table_id in tables:
             raise ContractError(f"duplicate table-id marker: {table_id}")
         index += 1
-        while index < len(lines) and not lines[index].strip():
+        while index < len(lines) and (
+            not lines[index].strip() or MARKER_HEADING.match(lines[index])
+        ):
             index += 1
         if index + 1 >= len(lines):
             raise ContractError(f"{table_id}: missing Markdown table")
@@ -359,7 +382,7 @@ def parse_stable_tables(markdown: str) -> dict[str, TableRows]:
         index += 2
         rows = TableRows(headers)
         while index < len(lines) and lines[index].lstrip().startswith("|"):
-            values = _split_row(lines[index])
+            values = _row_values(lines[index], len(headers))
             if len(values) != len(headers):
                 raise ContractError(
                     f"{table_id}: row has {len(values)} cells; expected {len(headers)}"

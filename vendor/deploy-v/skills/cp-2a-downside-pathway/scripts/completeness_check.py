@@ -38,7 +38,7 @@ import sys
 sys.dont_write_bytecode = True
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from cp_tables import SEPARATOR_RE, _split_row, parse_tables  # noqa: E402
+from cp_tables import SEPARATOR_RE, _split_row, parse_tables, read_tables  # noqa: E402
 from validate_handoff import FrontmatterError, parse_restricted_frontmatter, unfenced_markdown  # noqa: E402
 
 BULLET_RE = re.compile(r"^(?P<indent> *)- (?:\*\*(?P<key>[^*]+)\*\*:\s?)?(?P<value>.*)$")
@@ -291,7 +291,11 @@ def find_registers(handoff_text, register_ids=None):
 
     A register is located by its ID appearing in a heading or caption line
     within the few lines above the table -- which is how these artifacts are
-    actually written ("### T4C.4 — Covenant headroom").
+    actually written ("### T4C.4 — Covenant headroom"). Where none of those
+    four lines names a register, the nearest heading above the table, with no
+    other table between, still does, at any distance (fork r6) -- but only for
+    an ID no table is bound to the near way, so every binding made before is
+    made the same.
     """
     id_re = REGISTER_ID_RE
     titles, title_re = {}, None
@@ -322,8 +326,15 @@ def find_registers(handoff_text, register_ids=None):
                 + r")(?![A-Za-z0-9])",
                 re.IGNORECASE,
             )
+    def label_id(label):
+        match = id_re.search(label)
+        if match:
+            return match.group(1)
+        titled = title_re.search(label) if title_re and label.startswith("#") else None
+        return titles[titled.group(1).casefold()] if titled else None
+
     lines = unfenced_markdown(handoff_text).splitlines()
-    out, recent = {}, []
+    out, recent, heading, distant = {}, [], None, []
     i = 0
     while i < len(lines):
         s = lines[i].strip()
@@ -345,22 +356,21 @@ def find_registers(handoff_text, register_ids=None):
             # ("reconciles to the T4.4 revenue base" under "### T4.5"), fork r2.
             labels = [s for s in reversed(recent) if s.startswith("#")]
             labels += [s for s in reversed(recent) if not s.startswith("#")]
-            for label in labels:
-                match = id_re.search(label)
-                if match:
-                    out.setdefault(match.group(1), (header, rows))
-                    break
-                titled = title_re.search(label) if title_re and label.startswith("#") else None
-                if titled:
-                    out.setdefault(titles[titled.group(1).casefold()], (header, rows))
-                    break
+            reg_id = next((found for found in map(label_id, labels) if found), None)
+            if reg_id:
+                out.setdefault(reg_id, (header, rows))
+            elif heading is not None and heading not in recent and label_id(heading):
+                distant.append((label_id(heading), (header, rows)))
             i = j
-            recent = []
+            recent, heading = [], None
             continue
         if s:
             recent.append(s)
             recent = recent[-4:]
+            heading = s if s.startswith("#") else heading
         i += 1
+    for reg_id, table in distant:
+        out.setdefault(reg_id, table)
     return out
 
 
@@ -470,13 +480,12 @@ def check(skill_text, handoff_text, module_id=None):
     violations.extend(_semantic_violations(contract["semantic_rules"], present, contract["blocklist"]))
     violations.extend(_fixture_violations(contract, handoff_text))
 
-    try:
-        stable_tables = parse_tables(handoff_text)
-    except ValueError as exc:
-        violations.append(str(exc))
-        stable_tables = {}
+    # Each malformed interface table is named alone, and the others are still
+    # read (fork r6): one short row used to report every one of them missing.
+    stable_tables, table_errors = read_tables(handoff_text)
+    violations.extend(table_errors.values())
     for table_id in contract["unconditional_stable_tables"]:
-        if table_id not in stable_tables:
+        if table_id not in stable_tables and table_id not in table_errors:
             violations.append(
                 f"{table_id}: CP-MODEL interface table missing -- it is emitted on "
                 "every run, not only when CP-MODEL was requested"
