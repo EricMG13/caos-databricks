@@ -27,8 +27,10 @@ from validate_handoff import validate_text as validate_common_handoff
 TABLE_MARKER = re.compile(r"^\s*<!--\s*table-id:\s*([a-z0-9_.-]+)\s*-->\s*$")
 # One or more hyphens, optionally colon-aligned, as `cp_tables` reads it (fork r6).
 SEPARATOR_CELL = re.compile(r"^:?-+:?$")
-# A heading (### to ######) between a marker and its table, as `cp_tables` crosses it (fork r6).
+# A heading (### to ######) between a marker and its table, as `cp_tables` crosses it (fork r6):
+# never one naming a register ID, which `cp_tables.REGISTER_ID_RE` reads.
 MARKER_HEADING = re.compile(r"^\s*#{3,6}(?:\s.*)?$")
+REGISTER_ID = re.compile(r"\b([PT][0-9][A-Za-z0-9.]*|TL[0-9]+\.[0-9]+)\b")
 
 CP1_TABLES = {
     "cp1.model_period_register",
@@ -334,9 +336,10 @@ def _row_values(line: str, width: int) -> list[str]:
     than the header's, at each `|` not escaped as `\\|` (fork r6, as
     `cp_tables` reads it). A row read before is read the same."""
     values = _split_row(line)
-    if len(values) == width:
+    text = line.strip()
+    if len(values) == width or text.startswith("||") or text.endswith("||"):
         return values
-    text = line.strip().removeprefix("|")
+    text = text.removeprefix("|")
     if text.endswith("|") and not text.endswith("\\|"):
         text = text[:-1]
     escaped = [cell.strip().replace("\\|", "|") for cell in re.split(r"(?<!\\)\|", text)]
@@ -350,23 +353,41 @@ def _normalise_header(value: str) -> str:
 def parse_stable_tables(markdown: str) -> dict[str, TableRows]:
     """Parse only Markdown tables immediately following stable table markers.
 
-    Only blank lines and heading lines (### to ######, fork r6) may sit
-    between a marker and its table; anything else is a ContractError.
+    Only blank lines may sit between a marker and its table, and heading
+    lines (### to ######) where `cp_tables` crosses them (fork r6): a heading
+    naming no register, after a marker with a heading between it and the
+    table above, or whose table above was bound by a marker that could
+    itself have crossed. Anything else is a ContractError.
     """
     lines = markdown.splitlines()
     tables: dict[str, TableRows] = {}
+    # The last table above: None (none yet), "untagged", "clean" (bound by a
+    # marker that could have crossed) or "suspect"; and whether a heading has
+    # come since it.
+    last_table: str | None = None
+    heading_since = False
     index = 0
     while index < len(lines):
         marker = TABLE_MARKER.match(lines[index])
         if not marker:
+            text = lines[index].strip()
+            if text.startswith("|") and text.count("|") >= 2:
+                last_table, heading_since = "untagged", False
+            heading_since = heading_since or text.startswith("#")
             index += 1
             continue
         table_id = marker.group(1)
         if table_id in tables:
             raise ContractError(f"duplicate table-id marker: {table_id}")
+        may_cross = heading_since or last_table in (None, "clean")
         index += 1
         while index < len(lines) and (
-            not lines[index].strip() or MARKER_HEADING.match(lines[index])
+            not lines[index].strip()
+            or (
+                may_cross
+                and MARKER_HEADING.match(lines[index])
+                and not REGISTER_ID.search(lines[index])
+            )
         ):
             index += 1
         if index + 1 >= len(lines):
@@ -390,6 +411,7 @@ def parse_stable_tables(markdown: str) -> dict[str, TableRows]:
             rows.append(dict(zip(headers, values, strict=True)))
             index += 1
         tables[table_id] = rows
+        last_table, heading_since = ("clean" if may_cross else "suspect"), False
     return tables
 
 

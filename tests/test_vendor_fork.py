@@ -975,34 +975,138 @@ def _cp_model_reads(tmp_path: Path, cp1: str) -> int:
     ).returncode
 
 
-def test_a_tag_above_its_register_heading_binds_for_every_reader(
+def test_a_tag_above_a_heading_naming_no_register_binds_for_every_reader(
     tmp_path: Path,
 ) -> None:
-    """P1 CP-1 #3 wrote a tag above its `####` heading, which broke the bind:
-    every reader now crosses the heading to the next table, and reads it as
-    the table written under the tag."""
+    """P1 CP-1 #3 wrote the readiness tag above `#### CP-MODEL Readiness`,
+    which broke the bind: every reader now crosses a heading naming no
+    register to the next table, and reads it as the table written under the
+    tag. A heading naming a register is never crossed (fix round 1, C1)."""
     from caos.methodology.tables import handoff_tables
 
     single = _cp1_single()
-    above = single
-    for register, table_id in _INTERFACE_REGISTERS.items():
+    crossed = single
+    for table_id in _INTERFACE_REGISTERS.values():
         tag = f"<!-- table-id: {table_id} -->\n"
-        heading = re.search(rf"#### {re.escape(register)}\b[^\n]*\n\n", above)
-        assert heading is not None and tag in above, register
-        above = above.replace(tag, "", 1)
-        above = above[: heading.start()] + tag + "\n" + above[heading.start() :]
-    assert above != single
-    assert _violations("CP-1", above) == []
-    assert handoff_tables(CONTRACT, above) == handoff_tables(CONTRACT, single)
-    assert _cp_model_reads(tmp_path, above) == 0
+        assert crossed.count(tag) == 1, table_id
+        crossed = re.sub(
+            rf"({re.escape(tag)}\n?)",
+            r"\1\n##### CP-MODEL interface table\n\n",
+            crossed,
+        )
+    assert crossed != single
+    assert _violations("CP-1", crossed) == []
+    assert handoff_tables(CONTRACT, crossed) == handoff_tables(CONTRACT, single)
+    assert _cp_model_reads(tmp_path, crossed) == 0
     # Prose between a tag and its table still breaks the bind: the table is missing.
-    prose = above.replace(
-        "<!-- table-id: cp1.model_period_register -->\n",
-        "<!-- table-id: cp1.model_period_register -->\nA note.\n",
+    tag = "<!-- table-id: cp1.model_period_register -->\n"
+    for name, moved in (
+        ("prose", crossed.replace(tag, tag + "A note.\n")),
+        ("above its register heading", _tag_above_heading(single, "T4.14", tag)),
+    ):
+        missing = "cp1.model_period_register: CP-MODEL interface table missing"
+        assert missing in " ".join(_violations("CP-1", moved)), name
+    # Directly below an untagged table, with no heading between, a tag may be
+    # that table's: it crosses nothing.
+    readiness = "<!-- table-id: cp1.downstream_readiness -->\n"
+    below = single.replace(readiness, readiness + "\n##### CP-MODEL Readiness\n\n")
+    assert "cp1.downstream_readiness: CP-MODEL interface table missing" in " ".join(
+        _violations("CP-1", below)
     )
-    assert "cp1.model_period_register: CP-MODEL interface table missing" in " ".join(
-        _violations("CP-1", prose)
+
+
+def _tag_above_heading(markdown: str, register: str, tag: str) -> str:
+    heading = re.search(rf"#### {re.escape(register)}\b[^\n]*\n\n", markdown)
+    assert heading is not None and tag in markdown
+    markdown = markdown.replace(tag, "", 1)
+    return markdown[: heading.start()] + tag + "\n" + markdown[heading.start() :]
+
+
+def test_a_tag_below_its_table_binds_no_other_table(tmp_path: Path) -> None:
+    """Fix round 1 (C1): with each T4.14-T4.19 tag written below its table,
+    each tag crossed the next register's heading and bound that register's
+    table. Each interface table is missing, as before the tolerance, and no
+    reader serves a table under another's id."""
+    from caos.methodology.tables import handoff_tables
+
+    below = _cp1_single()
+    for table_id in _INTERFACE_REGISTERS.values():
+        found = re.search(
+            rf"<!-- table-id: {re.escape(table_id)} -->\n\n?((?:\|.*\n)+)", below
+        )
+        assert found is not None, table_id
+        below = (
+            below[: found.start()]
+            + found.group(1)
+            + f"\n<!-- table-id: {table_id} -->\n"
+            + below[found.end() :]
+        )
+    violations = _violations("CP-1", below)
+    assert sorted(v.split(":")[0] for v in violations) == sorted(
+        _INTERFACE_REGISTERS.values()
+    ), violations
+    assert all("interface table missing" in v for v in violations)
+    served = {t.table_id for t in handoff_tables(CONTRACT, below).tables}
+    assert not served & set(_INTERFACE_REGISTERS.values())
+    assert _cp_model_reads(tmp_path, below) != 0
+
+
+def test_a_second_tag_of_a_crossed_id_unbinds_it(tmp_path: Path) -> None:
+    """Fix round 1 (I1): a crossed tag stayed bound when its id was tagged
+    again before a malformed copy or prose, and CP-MODEL refused the
+    duplicate; a crossed tag now binds only an id tagged once."""
+    single = _cp1_single()
+    tag = "<!-- table-id: cp1.model_period_register -->\n"
+    crossed = single.replace(tag, tag + "\n##### CP-MODEL interface table\n", 1)
+    assert _violations("CP-1", crossed) == []
+    anchor = re.search(r"#### T4\.15\b", crossed)
+    assert anchor is not None
+    for name, again in (
+        ("malformed", "#### Restated\n\n| period_id |\n| --- |\n| a | b |\n\n"),
+        ("prose", "#### Restated\n\nRestated below.\n\n"),
+    ):
+        text = (
+            crossed[: anchor.start()] + tag + "\n" + again + crossed[anchor.start() :]
+        )
+        missing = "cp1.model_period_register: CP-MODEL interface table missing"
+        assert missing in " ".join(_violations("CP-1", text)), name
+        assert _cp_model_reads(tmp_path, text) != 0, name
+
+
+@pytest.mark.parametrize(
+    ("table_id", "register", "column", "value"),
+    [
+        ("cp1.model_account_register", "T4.15", "limitation_refs", ""),
+        ("cp1.model_account_register", "T4.15", "limitation_refs", "n/a"),
+        ("cp1.model_period_register", "T4.14", "component_period_ids", "TBD"),
+    ],
+)
+def test_an_escaped_pipe_never_hides_a_critical_placeholder(
+    table_id: str, register: str, column: str, value: str
+) -> None:
+    """Fix round 1 (C2): the interface reader read `\\|` in a source locator
+    as text while the register check split at it, so a blank, `n/a` or `TBD`
+    in the row's last critical column slid out of the header's width."""
+    from caos.methodology.tables import handoff_tables
+
+    single = _cp1_single()
+    found = re.search(
+        rf"<!-- table-id: {re.escape(table_id)} -->\n\n?(\|.*\n)(?:\|.*\n)(\|.*\n)",
+        single,
     )
+    assert found is not None
+    header = [c.strip() for c in found.group(1).strip().strip("|").split("|")]
+    cells = [c.strip() for c in found.group(2).strip().strip("|").split("|")]
+    cells[header.index("source_locator")] += " \\| note 4"
+    cells[header.index(column)] = value
+    text = single.replace(found.group(2), "| " + " | ".join(cells) + " |\n", 1)
+    assert f"{register} row 1: critical column {column!r} holds a disqualifying" in (
+        " ".join(_violations("CP-1", text))
+    )
+    [served] = [
+        t for t in handoff_tables(CONTRACT, text).tables if t.table_id == table_id
+    ]
+    assert served.rows[0][header.index("source_locator")].text.endswith(" | note 4")
 
 
 def test_a_short_interface_row_names_only_its_table(tmp_path: Path) -> None:

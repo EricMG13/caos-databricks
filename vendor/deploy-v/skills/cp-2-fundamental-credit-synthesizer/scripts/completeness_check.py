@@ -38,7 +38,7 @@ import sys
 sys.dont_write_bytecode = True
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from cp_tables import SEPARATOR_RE, _split_row, parse_tables, read_tables  # noqa: E402
+from cp_tables import REGISTER_ID_RE, SEPARATOR_RE, _row_cells, _split_row, parse_tables, read_tables  # noqa: E402
 from validate_handoff import FrontmatterError, parse_restricted_frontmatter, unfenced_markdown  # noqa: E402
 
 BULLET_RE = re.compile(r"^(?P<indent> *)- (?:\*\*(?P<key>[^*]+)\*\*:\s?)?(?P<value>.*)$")
@@ -283,8 +283,6 @@ def load_contract(skill_text, module_id=None):
 # artifact side: find registers in the drafted handoff
 # --------------------------------------------------------------------------
 
-REGISTER_ID_RE = re.compile(r"\b([PT][0-9][A-Za-z0-9.]*|TL[0-9]+\.[0-9]+)\b")
-
 
 def find_registers(handoff_text, register_ids=None):
     """{register_id: (header, [rows])} for pipe tables labelled with an ID.
@@ -348,7 +346,9 @@ def find_registers(handoff_text, register_ids=None):
                 t = lines[j].strip()
                 if not t.startswith("|"):
                     break
-                cells = _split_row(t)
+                # Split as the interface reader splits it (fork r6): an escaped
+                # `\|` never shifts a cell into or out of a critical column.
+                cells = _row_cells(t, len(header))
                 cells += [""] * (len(header) - len(cells))
                 rows.append(dict(zip(header, cells[:len(header)])))
                 j += 1

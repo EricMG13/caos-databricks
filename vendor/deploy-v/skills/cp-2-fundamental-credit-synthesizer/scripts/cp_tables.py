@@ -34,6 +34,10 @@ SEPARATOR_RE = re.compile(r"^[\s:\-|]+$")
 SEPARATOR_CELL_RE = re.compile(r":?-+:?")
 # A heading (### to ######) between a tag and its table, fork r6.
 TAG_HEADING_RE = re.compile(r"#{3,6}(?:\s.*)?")
+# A register ID as `completeness_check.find_registers` reads one ("T4.14",
+# "P3", "TL20.1"); a heading naming one is that register's, and a tag never
+# crosses it.
+REGISTER_ID_RE = re.compile(r"\b([PT][0-9][A-Za-z0-9.]*|TL[0-9]+\.[0-9]+)\b")
 
 # Cell spellings that mean "no value". Canon's own vocabulary, casefolded.
 NULL_CELLS = {
@@ -58,11 +62,14 @@ def _escaped_row(line):
 
 
 def _row_cells(line, width):
-    """A tagged table's body row: split at every `|` as before, or, only when
-    that gives a width other than the header's, at the unescaped ones (fork
-    r6). A row read before is read the same."""
+    """A table's body row, as every reader splits it: at every `|` as before,
+    or, only when that gives a width other than the header's, at the
+    unescaped ones (fork r6). A row read before is read the same, and a row
+    opening or closing on `||`, which CP-MODEL's reader splits otherwise, is
+    never re-read."""
     cells = _split_row(line)
-    if len(cells) == width:
+    stripped = line.strip()
+    if len(cells) == width or stripped.startswith("||") or stripped.endswith("||"):
         return cells
     escaped = _escaped_row(line)
     return escaped if len(escaped) == width else cells
@@ -262,17 +269,31 @@ def read_tables(text):
     out; every other tagged table is still read (fork r6: one short row used
     to void all of them, so a checker reported every interface table missing).
     The binding is `parse_tables`'s: a tag binds to the next pipe table, across
-    blank and comment lines; a heading line (### to ######) between them is
-    crossed too (fork r6), but only as a tolerance -- a tag bound across a
-    heading binds only a well-formed table, never an id another tag binds or
-    a second tag crosses to, and is otherwise dropped as before, so every
-    document read before reads the same. Any other line between a tag and a table breaks the bind;
-    better to report the table as absent than to attach the tag to an
-    unrelated table further down.
+    blank and comment lines. A heading line (### to ######) between them is
+    crossed too (fork r6) where only blank and heading lines sit between tag
+    and table, as CP-MODEL's reader allows, and only where the tag can be no
+    other table's: the heading names no register (else the table is that
+    register's); a heading sits between the tag and the table above it, or
+    that table was bound by a tag that could itself have crossed (else the
+    tag may be that table's, written below it); and its id is tagged nowhere
+    else in the document. A tag bound across a heading
+    binds only a well-formed table and is otherwise dropped as before, so
+    every document read before reads the same. Any other line between a tag
+    and a table breaks the bind; better to report the table as absent than to
+    attach the tag to an unrelated table further down.
     """
     lines = unfenced_markdown(text).splitlines()
+    tagged = {}
+    for line in lines:
+        m = TABLE_ID_RE.fullmatch(line.strip())
+        if m:
+            tagged[m.group(1)] = tagged.get(m.group(1), 0) + 1
     strict, crossed_reads, errors = {}, {}, {}
-    pending_id, crossed = None, False
+    pending_id, crossed, may_cross, plain = None, False, False, True
+    # The last table above: None (none yet), "untagged", "clean" (bound by a
+    # tag that could have crossed) or "suspect"; and whether a heading has
+    # come since it.
+    last_table, heading_since = None, False
     i = 0
     while i < len(lines):
         stripped = lines[i].strip()
@@ -280,34 +301,47 @@ def read_tables(text):
         if m:
             if pending_id is not None and not crossed:
                 errors.setdefault(pending_id, f"{pending_id}: table-id has no following table")
-            pending_id, crossed = m.group(1), False
+            pending_id, crossed, plain = m.group(1), False, True
+            may_cross = heading_since or last_table in (None, "clean")
             if pending_id in strict:
                 errors.setdefault(pending_id, f"{pending_id}: duplicate table-id")
                 pending_id = None
             i += 1
             continue
-        if pending_id and stripped.startswith("|") and stripped.count("|") >= 2:
+        if stripped.startswith("|") and stripped.count("|") >= 2:
+            heading_since = False
+            last_table = "untagged" if pending_id is None else "clean" if may_cross else "suspect"
+            if pending_id is None:
+                i += 1
+                continue
             table, error, i = _read_table(pending_id, lines, i)
             if not crossed:
                 if error:
                     errors.setdefault(pending_id, error)
                 else:
                     strict[pending_id] = (i, table)
-            elif table is not None:
-                # Two tags crossing to two tables of one id bind neither.
-                crossed_reads[pending_id] = None if pending_id in crossed_reads else (i, table)
+            elif table is not None and tagged[pending_id] == 1:
+                crossed_reads[pending_id] = (i, table)
             pending_id = None
             continue
-        if pending_id and TAG_HEADING_RE.fullmatch(stripped):
-            crossed = True
-        elif stripped and not stripped.startswith("<!--"):
-            pending_id = pending_id if stripped.startswith("|") else None
+        heading_since = heading_since or stripped.startswith("#")
+        if pending_id and stripped:
+            if (may_cross and plain and TAG_HEADING_RE.fullmatch(stripped)
+                    and not REGISTER_ID_RE.search(stripped)):
+                crossed = True
+            elif crossed:
+                # Across a heading, only blank and heading lines, as CP-MODEL reads it.
+                pending_id = None
+            elif stripped.startswith(("<!--", "|")):
+                plain = False
+            else:
+                pending_id = None
         i += 1
     if pending_id is not None and not crossed:
         errors.setdefault(pending_id, f"{pending_id}: table-id has no following table")
     found = dict(strict)
     for table_id, read in crossed_reads.items():
-        if read is not None and table_id not in strict and table_id not in errors:
+        if table_id not in strict and table_id not in errors:
             found[table_id] = read
     in_order = sorted(found.items(), key=lambda item: item[1][0])
     return {table_id: table for table_id, (_, table) in in_order}, errors
