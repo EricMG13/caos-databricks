@@ -12,6 +12,7 @@ rule it was accepted under (`ANY_RUN`), which it names.
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Callable, Mapping
 from pathlib import Path
 from uuid import UUID
@@ -409,8 +410,11 @@ def test_find_line_places_a_quote_the_whole_line_rule_refused(
 
     part = "breach its leverage covenant during FY2025"
     elsewhere = "Net leverage was 3.4x at year end."
-    for quote in (part, elsewhere, "Leverage was unchanged"):
+    for quote in (part, "Leverage was unchanged"):
         assert _code(conn, source_id, quote) is RefusalCode.CITATION_NOT_LOCATED
+    # A whole line of one other delivered page is anchored there (D94); the
+    # search below still names that page when asked directly.
+    assert _code(conn, source_id, elsewhere) == 1
     assert found(1, part) == LineFinding(block_id=covenant)
     assert found(1, elsewhere) == LineFinding(pages=(2,))
     assert found(1, "Leverage was unchanged") == LineFinding(absent=True)
@@ -494,3 +498,85 @@ def test_a_search_that_cannot_read_a_page_leaves_the_citation_unplaced(
     monkeypatch.setattr(citations, "_verdict", unreadable)
     citation = Citation(source_id, 1, "Net leverage was 3.4x at year end.")
     assert _line_hint(conn, delivered, blocks, citation, TokenIndex()) == LineHint()
+
+
+REANCHOR_PAGES = (
+    ("Revenue grew 4% in FY2025.",),
+    ("Net leverage was 3.4x at year end.", "The same line on two pages."),
+    ("The same line on two pages.", "Cover was 2.1x."),
+    ("Only on page four.",),
+)
+
+
+def test_a_whole_line_cited_on_the_wrong_page_is_anchored_at_its_true_page(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> None:
+    """D94: a quote that is no line of its cited page but exactly one whole
+    delivered evidence line of another delivered page of its source is
+    anchored at that page -- the stored page and rectangles are the true
+    page's, and the page the module named is kept as `cited_page`. Two such
+    lines, one the node was not given, a page it was not given, and part of
+    a line all refuse as before; and only `WHOLE_LINE` re-anchors, so a
+    record accepted under another rule is located as it always was."""
+    from test_admission_limits import multi_page_pdf
+    from test_pdf_extraction import LEFT_MARGIN
+
+    from caos.evidence.citations import ANY_RUN, AnchoredCitation, TokenIndex
+
+    conn, case_id = case
+    pdf = multi_page_pdf(
+        [
+            "".join(
+                f"BT\n/F1 12 Tf\n1 0 0 1 {LEFT_MARGIN:.0f} {700 - 40 * n} Tm\n"
+                f"({line}) Tj\nET\n"
+                for n, line in enumerate(lines)
+            ).encode("ascii")
+            for lines in REANCHOR_PAGES
+        ]
+    )
+    source_id = _ingest_pdf(conn, case_id, tmp_path, pdf)
+    by_page = _blocks_by_page(conn, source_id)
+    every = frozenset(block for blocks in by_page.values() for block in blocks)
+    leverage = "Net leverage was 3.4x at year end."
+
+    def anchor(
+        page: int,
+        quote: str,
+        blocks: frozenset[str] = every,
+        rule: CitationRule = WHOLE_LINE,
+        index: TokenIndex | None = None,
+    ) -> object:
+        try:
+            [anchored] = verify_citations(
+                conn,
+                delivered={source_id: blocks},
+                citations=[Citation(source_id, page, quote)],
+                rule=rule,
+                index=index,
+            )
+        except Refusal as refused:
+            assert refused.__cause__ is None and refused.__context__ is None
+            return refused.code
+        return anchored
+
+    true, moved = anchor(2, leverage), anchor(1, leverage)
+    assert isinstance(true, AnchoredCitation) and true.cited_page is None
+    assert moved == dataclasses.replace(true, cited_page=1)
+    assert {box.page for box in true.bboxes} == {2}
+
+    not_located = RefusalCode.CITATION_NOT_LOCATED
+    # On two delivered pages: which one the module read is not known.
+    assert anchor(1, "The same line on two pages.") is not_located
+    # Part of the line: no line at all, wherever it is cited.
+    assert anchor(1, "Net leverage was 3.4x") is not_located
+    # Its one line withheld from the node, its page still delivered.
+    [line_block] = [b for b, t in by_page[2].items() if t.startswith("Net")]
+    assert anchor(1, leverage, every - {line_block}) is not_located
+    # Its page never delivered: never read, so never a place to anchor.
+    index = TokenIndex()
+    unpaged = every - frozenset(by_page[4])
+    assert anchor(1, "Only on page four.", unpaged, index=index) is not_located
+    assert (source_id, 4) not in index.pages
+    # Under the rules older records name, a wrong page is not located.
+    for rule in (WHOLE_LINE_AS_STORED, ANY_RUN):
+        assert anchor(1, leverage, rule=rule) is not_located

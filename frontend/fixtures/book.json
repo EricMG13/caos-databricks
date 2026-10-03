@@ -97,7 +97,8 @@
                           "y1": 348.0
                         }
                       ],
-                      "withdrawn_at": null
+                      "withdrawn_at": null,
+                      "cited_page": null
                     }
                   ],
                   "supporting_research": [
@@ -147,7 +148,8 @@
                           "y1": 360.0
                         }
                       ],
-                      "withdrawn_at": null
+                      "withdrawn_at": null,
+                      "cited_page": null
                     }
                   ],
                   "supporting_research": [
@@ -197,7 +199,8 @@
                           "y1": 372.0
                         }
                       ],
-                      "withdrawn_at": null
+                      "withdrawn_at": null,
+                      "cited_page": null
                     }
                   ],
                   "supporting_research": [
@@ -247,7 +250,8 @@
                           "y1": 384.0
                         }
                       ],
-                      "withdrawn_at": null
+                      "withdrawn_at": null,
+                      "cited_page": null
                     }
                   ],
                   "supporting_research": [
@@ -297,7 +301,8 @@
                           "y1": 396.0
                         }
                       ],
-                      "withdrawn_at": null
+                      "withdrawn_at": null,
+                      "cited_page": null
                     }
                   ],
                   "supporting_research": [
@@ -347,7 +352,8 @@
                           "y1": 360.0
                         }
                       ],
-                      "withdrawn_at": null
+                      "withdrawn_at": null,
+                      "cited_page": null
                     },
                     {
                       "document_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
@@ -363,7 +369,8 @@
                           "y1": 348.0
                         }
                       ],
-                      "withdrawn_at": null
+                      "withdrawn_at": null,
+                      "cited_page": null
                     }
                   ],
                   "supporting_research": [
@@ -442,7 +449,8 @@
                           "y1": 348.0
                         }
                       ],
-                      "withdrawn_at": null
+                      "withdrawn_at": null,
+                      "cited_page": null
                     }
                   ],
                   "supporting_research": [
@@ -492,7 +500,8 @@
                           "y1": 360.0
                         }
                       ],
-                      "withdrawn_at": null
+                      "withdrawn_at": null,
+                      "cited_page": null
                     }
                   ],
                   "supporting_research": [
@@ -542,7 +551,8 @@
                           "y1": 372.0
                         }
                       ],
-                      "withdrawn_at": null
+                      "withdrawn_at": null,
+                      "cited_page": null
                     }
                   ],
                   "supporting_research": [
@@ -592,7 +602,8 @@
                           "y1": 384.0
                         }
                       ],
-                      "withdrawn_at": null
+                      "withdrawn_at": null,
+                      "cited_page": null
                     }
                   ],
                   "supporting_research": [
@@ -642,7 +653,8 @@
                           "y1": 396.0
                         }
                       ],
-                      "withdrawn_at": null
+                      "withdrawn_at": null,
+                      "cited_page": null
                     }
                   ],
                   "supporting_research": [
@@ -692,7 +704,8 @@
                           "y1": 360.0
                         }
                       ],
-                      "withdrawn_at": null
+                      "withdrawn_at": null,
+                      "cited_page": null
                     },
                     {
                       "document_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
@@ -708,7 +721,8 @@
                           "y1": 348.0
                         }
                       ],
-                      "withdrawn_at": null
+                      "withdrawn_at": null,
+                      "cited_page": null
                     }
                   ],
                   "supporting_research": [

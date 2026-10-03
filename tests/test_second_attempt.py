@@ -367,20 +367,29 @@ def _cites_a_wrong_page(body: str) -> str:
     return json.dumps(wire)
 
 
-def test_an_unanchored_citation_gets_the_second_attempt_naming_it(
+def test_a_wrong_page_citation_is_anchored_at_its_true_page(
     harness: _Harness,
 ) -> None:
-    """N52: anchoring's refusal earns the guided retry too, told which
-    citation failed and why -- and, a whole line of another delivered page,
-    which page (D82)."""
+    """D94: a cited whole evidence line that is on one other delivered page
+    of its source, and only there, is accepted at its true page with no
+    retry: the record stores the page the quote is on, the rectangles of that
+    page, and the page the module named beside them."""
+    from caos.methodology.handoff import _decoded_record
+
     answers = CanonicalCompletions(harness.source_id)
     assert _run(harness, _Flawed(answers, flaw=_cites_a_wrong_page)) is None
-    total = len(json.loads(answers.bodies[0])["citations"])
-    assert (
-        f"host anchoring check: citation 1 of {total} is one whole evidence line of"
-        " page 1, not of its cited page (numbered from 1" in answers.prompts[1]
-    )
-    assert _cp0_ledger(harness) == (2, 2, ["CITATION_NOT_LOCATED"], 1)
+    assert _cp0_ledger(harness) == (1, 1, [], 1)
+    node = _node(harness, "CP-0").route_node_id
+    with connect(harness.url) as observer:
+        row = observer.execute(
+            "SELECT a.record_sha256 FROM artifacts a JOIN run_attempts t"
+            " USING (attempt_id) WHERE t.run_id=%s AND t.route_node_id=%s",
+            (harness.run_id, node),
+        ).fetchone()
+    assert row is not None
+    [first, *_rest] = _decoded_record(harness.blobs.get(str(row[0]))).citations
+    assert (first.page, first.cited_page) == (1, 99)
+    assert {box.page for box in first.bboxes} == {1}
 
 
 def _cites_part_of_a_line(body: str) -> str:

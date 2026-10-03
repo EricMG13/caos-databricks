@@ -74,12 +74,18 @@ class Citation:
 
 @dataclass(frozen=True, slots=True)
 class AnchoredCitation:
-    """What reaches the artifact: the module's claim, re-derived by the host."""
+    """What reaches the artifact: the module's claim, re-derived by the host.
+
+    `page` is where the quote is. `cited_page` is the page the module named
+    when that was another one and the host anchored the quote at its true
+    page instead (D94); None when the module named the page it is on.
+    """
 
     document_sha256: str
     page: int
     matched_text: str
     bboxes: tuple[Rect, ...]
+    cited_page: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -760,6 +766,11 @@ class TokenIndex:
     """
 
     pages: dict[tuple[UUID, int], _Page] = field(default_factory=dict)
+    # The pages a source's delivered blocks are on, keyed by the exact
+    # blocks a call was given (D94).
+    delivered_pages: dict[tuple[UUID, frozenset[str]], tuple[int, ...]] = field(
+        default_factory=dict
+    )
     digests: dict[UUID, str] = field(default_factory=dict)
     tracking: dict[UUID, bool] = field(default_factory=dict)
     packing: dict[UUID, int] = field(default_factory=dict)
@@ -841,6 +852,13 @@ def verify_citations(
     avoiding the N+1 shape that runs ~8x slower on exactly this kind of list.
     A caller verifying several lists in one unit
     passes one `TokenIndex` to share those reads across them.
+
+    Under `WHOLE_LINE` a quote that is no line of its cited page but is one
+    whole delivered evidence line of exactly one other delivered page of its
+    source is anchored there, at its true page, and the page the module
+    named is kept beside it as `cited_page` (D94, `_true_page`): the
+    coordinate stored is always where the quote is (invariant 11). Two such
+    lines, or one the node was not given, still refuse `CITATION_NOT_LOCATED`.
     """
     if index is None:
         index = TokenIndex()
@@ -849,13 +867,14 @@ def verify_citations(
         blocks = delivered.get(citation.source_id)
         if blocks is None:
             raise Refusal(RefusalCode.CITATION_NOT_DELIVERED)
-        run, digest = _located(conn, index, citation, blocks, rule=rule)
+        run, page, digest = _located(conn, index, citation, blocks, rule=rule)
         anchored.append(
             AnchoredCitation(
                 document_sha256=digest,
-                page=citation.page,
+                page=page,
                 matched_text=citation.matched_text,
-                bboxes=tuple(_rectangles(run, citation.page)),
+                bboxes=tuple(_rectangles(run, page)),
+                cited_page=None if page == citation.page else citation.page,
             )
         )
     return anchored
@@ -868,9 +887,9 @@ def _located(
     blocks: frozenset[str],
     *,
     rule: CitationRule,
-) -> tuple[list[_Token], str]:
-    """One citation's run under `rule`, already checked delivered, and its
-    source's digest.
+) -> tuple[list[_Token], int, str]:
+    """One citation's run under `rule`, already checked delivered, the page
+    it is on, and its source's digest.
 
     Under either whole-line rule a match is exactly one block (R24-16):
     delivery is judged against the block its match is, not every block its
@@ -882,19 +901,105 @@ def _located(
     digest, tracking = index.facts(conn, citation.source_id)
     searched = index.page(conn, citation.source_id, citation.page)
     lines = index.lines(conn, citation.source_id)
-    if rule in (WHOLE_LINE, WHOLE_LINE_AS_STORED):
+    if rule == WHOLE_LINE:
+        placed = _whole_line(searched, index, lines, citation, tracking=tracking)
+        if placed is RefusalCode.CITATION_NOT_LOCATED:
+            moved = _true_page(conn, index, citation, blocks, tracking=tracking)
+            if moved is not None:
+                return (*moved, digest)
+        if isinstance(placed, RefusalCode):
+            raise Refusal(placed)
+        run, block_id = placed
+    elif rule == WHOLE_LINE_AS_STORED:
         cuts = index.cuts.get(citation.source_id)
-        locate = _shown_line_run if rule == WHOLE_LINE else _line_run
-        run, block_id = locate(
+        run, block_id = _line_run(
             searched, cuts, lines, citation.matched_text, tracking=tracking
         )
-        if block_id not in blocks:
+    else:
+        run = _page_run(searched, citation.matched_text, tracking=tracking)
+        if any(not _delivered(lines.get(token.line_id), blocks) for token in run):
             raise Refusal(RefusalCode.CITATION_NOT_DELIVERED)
-        return run, digest
-    run = _page_run(searched, citation.matched_text, tracking=tracking)
-    if any(not _delivered(lines.get(token.line_id), blocks) for token in run):
+        return run, citation.page, digest
+    if block_id not in blocks:
         raise Refusal(RefusalCode.CITATION_NOT_DELIVERED)
-    return run, digest
+    return run, citation.page, digest
+
+
+def _whole_line(
+    page: _Page,
+    index: TokenIndex,
+    lines: Mapping[int, tuple[str, ...]],
+    citation: Citation,
+    *,
+    tracking: bool,
+) -> tuple[list[_Token], str] | RefusalCode:
+    """`_shown_line_run` on `page`, or the anchoring code it refused with."""
+    cuts = index.cuts.get(citation.source_id)
+    try:
+        return _shown_line_run(
+            page, cuts, lines, citation.matched_text, tracking=tracking
+        )
+    except Refusal as refused:
+        if refused.code not in (
+            RefusalCode.CITATION_NOT_LOCATED,
+            RefusalCode.CITATION_AMBIGUOUS,
+        ):
+            raise
+        return refused.code
+
+
+def _true_page(
+    conn: StoreConnection,
+    index: TokenIndex,
+    citation: Citation,
+    blocks: frozenset[str],
+    *,
+    tracking: bool,
+) -> tuple[list[_Token], int] | None:
+    """Where a quote `WHOLE_LINE` found on no line of its cited page is one
+    whole evidence line (D94): its run and its true page, or None.
+
+    Only the other pages of its source the node was given are read, so an
+    undelivered page is never probed; each is searched as the cited page is
+    (`_shown_line_run`, ambiguity counted over the whole page). The quote
+    must be exactly one line across all of them and that line delivered:
+    a second line anywhere among them, on one page or two, or a match on a
+    line the node was not given, is None -- the citation refuses as it did.
+    """
+    lines = index.lines(conn, citation.source_id)
+    found: tuple[list[_Token], int] | None = None
+    for number in _delivered_pages(conn, index, citation.source_id, blocks):
+        if number == citation.page:
+            continue
+        page = index.page(conn, citation.source_id, number)
+        placed = _whole_line(page, index, lines, citation, tracking=tracking)
+        if placed is RefusalCode.CITATION_NOT_LOCATED:
+            continue
+        if isinstance(placed, RefusalCode) or found is not None:
+            return None
+        if placed[1] not in blocks:
+            return None
+        found = (placed[0], number)
+    return found
+
+
+def _delivered_pages(
+    conn: StoreConnection, index: TokenIndex, source_id: UUID, blocks: frozenset[str]
+) -> tuple[int, ...]:
+    """The pages, ascending, `blocks` of a live source are on, read once per
+    distinct delivery: only where a re-anchoring is asked (D94), so no
+    citation found where it was cited reads them."""
+    key = (source_id, blocks)
+    if key not in index.delivered_pages:
+        rows = conn.execute(
+            "SELECT DISTINCT blocks.page FROM source_blocks AS blocks"
+            " JOIN live_sources USING (source_id)"
+            " WHERE blocks.source_id = %s AND blocks.block_id = ANY(%s)"
+            " ORDER BY blocks.page",
+            (source_id, sorted(blocks)),
+        ).fetchall()
+        index.delivered_pages[key] = tuple(int(row[0]) for row in rows)
+    return index.delivered_pages[key]
 
 
 @dataclass(frozen=True, slots=True)
@@ -982,9 +1087,11 @@ def _verdict(
     rule: CitationRule = WHOLE_LINE,
 ) -> RefusalCode | None:
     """`verify_citations`' anchoring refusal for one citation over `blocks`,
-    or None when it anchors; any other refusal is raised."""
+    or None when it anchors on its own page; any other refusal is raised.
+    One it would anchor at another page (D94) is no line of this page:
+    `CITATION_NOT_LOCATED`."""
     try:
-        verify_citations(
+        [anchored] = verify_citations(
             conn,
             delivered={citation.source_id: blocks},
             citations=(citation,),
@@ -995,7 +1102,7 @@ def _verdict(
         if refused.code not in _NOT_ANCHORED:
             raise
         return refused.code
-    return None
+    return None if anchored.cited_page is None else RefusalCode.CITATION_NOT_LOCATED
 
 
 _NOT_ANCHORED = frozenset(

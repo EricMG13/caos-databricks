@@ -690,7 +690,9 @@ class RectView(BaseModel):
 
 class CitationView(BaseModel):
     """A host-verified citation; withdrawal is read live. `source_id` is the
-    pinned source the document resolves to, which addresses its page (4.4)."""
+    pinned source the document resolves to, which addresses its page (4.4).
+    `page` is where the quote is; `cited_page` is the other page the module
+    named when the host re-anchored the quote there (D94), else null."""
 
     model_config = _CLOSED
 
@@ -701,6 +703,7 @@ class CitationView(BaseModel):
     matched_text: Annotated[str, Field(max_length=QUOTE_CHARS)]
     rects: Annotated[list[RectView], Field(max_length=RECTS_MAX)]
     withdrawn_at: AwareDatetime | None
+    cited_page: Annotated[int, Field(ge=1)] | None
 
 
 # A handoff's tagged tables (`caos.methodology.tables`), whose bounds these are.
