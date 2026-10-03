@@ -6,7 +6,7 @@ This immutable set prepares `FULL_CREDIT_32 / PORTFOLIO_DECISION` for
 Caesars Entertainment, Inc. (CZR) at an analysis date of 2026-10-02, with a
 proposed position in the CZR 6.50% Senior Secured Notes due 2032 held against a
 **SYNTHETIC** test mandate. Its qualification-set digest is
-`e8587d90af968ee265cdddf8b63be01ed97d93ff1f9c8c17914336dfa961c7d0`.
+`1ca41a9655ac9b1f7b3fc43f9492a8c242da6ea53c81d200f996882687262721`.
 
 ## The mandate is synthetic (D80)
 
@@ -29,10 +29,10 @@ digest the keys bind; the raw SHA-256 is the HTML as fetched.
 
 | document | source | accession | text SHA-256 | raw HTML SHA-256 |
 |---|---|---|---|---|
-| `CZR_Q2_2026_10Q.txt` (Form 10-Q, quarter ended 30 June 2026) | https://www.sec.gov/Archives/edgar/data/1590895/000159089526000028/czr-20260630.htm | 0001590895-26-000028 | `9af04315eddd61ee7655445939d21bc91780c57c3689134c7c77d85c3dfb7e01` | `9dd3fca867c49936c65c9729bd7f9478d4c98b7c60569b74864a839bdeed8500` |
-| `CZR_FY2025_10K.txt` (Form 10-K, fiscal year ended 31 December 2025) | https://www.sec.gov/Archives/edgar/data/1590895/000159089526000011/czr-20251231.htm | 0001590895-26-000011 | `4738e21322c565366a5e68be47fbacb894b869611ba9b52a353ed69b648abc48` | `41328bdfa2486cfb53b831c2ddba6009528d8dca3a0d868c98c2cb113142b05f` |
-| `CZR_2020_Credit_Agreement.txt` (Ex. 10.1, Credit Agreement dated 20 July 2020) | https://www.sec.gov/Archives/edgar/data/1590895/000119312520196232/d940333dex101.htm | 0001193125-20-196232 | `4b3013342047cf6928ad18a3518180bb160c2e5251b5414eee71d95e8b95cf97` | `6600ab5bec479091f68dc04b2db65a54ef1013944c94af0ec135335b374c7dba` |
-| `CZR_2024_650_Senior_Secured_Notes_2032_Indenture.txt` (Ex. 10.1, 6.500% Senior Secured Notes due 2032 indenture, 6 February 2024) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex101.htm | 0001193125-24-026847 | `85ca330865d6ed47de838cbd3e45a69d29b57640e91782a71f2639721ac665db` | `a4661727edc48361dd7290772e62412c389b8ad8d215a96aa58facfe9e356c2c` |
+| `CZR_Q2_2026_10Q.txt` (Form 10-Q, quarter ended 30 June 2026) | https://www.sec.gov/Archives/edgar/data/1590895/000159089526000028/czr-20260630.htm | 0001590895-26-000028 | `f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a` | `9dd3fca867c49936c65c9729bd7f9478d4c98b7c60569b74864a839bdeed8500` |
+| `CZR_FY2025_10K.txt` (Form 10-K, fiscal year ended 31 December 2025) | https://www.sec.gov/Archives/edgar/data/1590895/000159089526000011/czr-20251231.htm | 0001590895-26-000011 | `172309048af2a6a2dab515d765f00a7c89bf8c874c6104a5e3a052b66cad4512` | `41328bdfa2486cfb53b831c2ddba6009528d8dca3a0d868c98c2cb113142b05f` |
+| `CZR_2020_Credit_Agreement.txt` (Ex. 10.1, Credit Agreement dated 20 July 2020) | https://www.sec.gov/Archives/edgar/data/1590895/000119312520196232/d940333dex101.htm | 0001193125-20-196232 | `9b57dc8790771968d9a0c74689f6a684c1b71eedf04e7fc5554490bc7d46e9a8` | `6600ab5bec479091f68dc04b2db65a54ef1013944c94af0ec135335b374c7dba` |
+| `CZR_2024_650_Senior_Secured_Notes_2032_Indenture.txt` (Ex. 10.1, 6.500% Senior Secured Notes due 2032 indenture, 6 February 2024) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex101.htm | 0001193125-24-026847 | `2f3530b8034d89d47165530014e0541cbe4778893dac5411207cbaf2b3c82f97` | `a4661727edc48361dd7290772e62412c389b8ad8d215a96aa58facfe9e356c2c` |
 
 The two FINRA TRACE observations are coordinator-authored transcriptions of
 the official public FINRA pages, admitted byte for byte and byte-identical to
@@ -62,9 +62,11 @@ Keys authored from the documents; material figures pending owner confirmation.
   and `$887` million at 31 December 2025.
 - CP-2: operating cash flow, `675` for the six months to 30 June 2026 (10-Q)
   and `1,302` for FY2025 (10-K).
-- CP-4: the 10-Q's statement that the revolver, term loans and both secured
-  note series are guaranteed on a senior secured basis while the CEI Senior
-  Notes due 2029 and 2032 are guaranteed on a senior unsecured basis; the
+- CP-4: the 10-Q's sentence that the revolver, term loans and both secured
+  note series are guaranteed on a senior secured basis and secured by
+  substantially all assets (the next sentence, that the CEI Senior Notes due
+  2029 and 2032 are guaranteed on a senior unsecured basis, is unkeyed since
+  the F492 sentence split); the
   indenture's Section 2.01 issue amount (`$1,500,000,000`) and its Section
   4.08(a) Change of Control repurchase offer at `101%`; the credit agreement's
   "(g) there shall have occurred a Change in Control;" event of default.
@@ -87,7 +89,9 @@ amendments not in this set and are not keyed; the current revolver
 Every key is one whole evidence line of its page, unique in its document: an
 answer is accepted only as a whole line (`WHOLE_LINE`) and scored by exact
 equality, so a fragment could never be met (F235, F475). Where a fact sits
-inside a longer line, the key is that whole line.
+inside a longer line, the key is that whole line. Since F492 a prose line of a
+converted filing is one sentence, so a key is the sentence that carries its
+fact.
 
 The readiness key expects CP-0 to clear the route's seven consumers (CP-1,
 CP-2, CP-4, CP-3D, CP-3, CP-5, CP-6). CP-6, the terminal deliverable, is

@@ -20,12 +20,12 @@
       "expects": [
         {
           "module_id": "CP-L10",
-          "document_sha256": "9af04315eddd61ee7655445939d21bc91780c57c3689134c7c77d85c3dfb7e01",
+          "document_sha256": "f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a",
           "matched_text": "As of June 30, 2026, the Company had $1.9 billion of available borrowing capacity under the CEI Revolving Credit Facility, after consideration of $96 million in outstanding letters of credit, $56 million committed for regulatory purposes, the outstanding amount, and the reserves described above."
         },
         {
           "module_id": "CP-L10",
-          "document_sha256": "98f970cb6b12ade42729b4d926792a5e866a724878d1ce4f76de06cf4aa58d1d",
+          "document_sha256": "b385f76ff631243d1053fa8073ebde4f8886b4a50c9ce34ce3498d6b2ac3e9f8",
           "matched_text": "Adjusted EBITDA | $920 | $955 | $1,807 | $1,839"
         },
         {
