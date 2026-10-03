@@ -242,14 +242,14 @@
         "CP-PARSE"
       ],
       "companion_count": 13,
-      "entry_bytes": 36256,
-      "entry_sha256": "acf9cd9dfa25dae1f091e34527ae603a378e8c7a83833c2f485c9b8728ad8178",
+      "entry_bytes": 36254,
+      "entry_sha256": "1dc81c1ba43f52bab1b0ace6cbe3a7110dda6d2dae7e440d6a64f1b332f3c050",
       "folder_slug": "cp-0-source-readiness",
       "module_id": "CP-0",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 36256,
-          "sha256": "acf9cd9dfa25dae1f091e34527ae603a378e8c7a83833c2f485c9b8728ad8178"
+          "bytes": 36254,
+          "sha256": "1dc81c1ba43f52bab1b0ace6cbe3a7110dda6d2dae7e440d6a64f1b332f3c050"
         },
         "references/CP-0_SCHEMA_REFERENCE.md": {
           "bytes": 3322,
@@ -272,20 +272,20 @@
           "sha256": "6fd06964b8b16a2646495d1ee822bfd10df184f64e7d6a2054e19ff57b65fad5"
         },
         "references/CP0_CAPACITY_RESUME_CONTRACT_v1.md": {
-          "bytes": 6456,
-          "sha256": "bed5d23e11ef87912fe2fdd5cac8682038788dae9fb37816e9156d611a455a7d"
+          "bytes": 6438,
+          "sha256": "716721963c23125b87a5ffe335f3424c671918876a48c105cdc6c36a3494a459"
         },
         "references/CP0_PROFILE_ANCHOR_CONTRACT_v1.md": {
           "bytes": 1391,
           "sha256": "866bea362bb05c80bc4d288b30da41119780ac35ffc7cb098fe3004a42f21f51"
         },
         "references/REF_CP-0_STEPS.md": {
-          "bytes": 24552,
-          "sha256": "67a8fc4985c0d08094b84164490b35521c8c71d85c5e0b7efdc77ee207534dfe"
+          "bytes": 23144,
+          "sha256": "37bf7596c8f75a7123449754bb6c0fe42fc9823cbd89e1866bd1b7d694aea07e"
         },
         "references/REF_CP-PARSE_STEPS.md": {
-          "bytes": 12599,
-          "sha256": "b95a12db583b29b5bd1271f85d1533d25078c950f9732ac3b8666ffac60430f9"
+          "bytes": 9947,
+          "sha256": "0d2772be1ea24590f12f24bf1b156f2792e23f341ea51678008384c2a0336cd5"
         },
         "scripts/completeness_check.py": {
           "bytes": 43131,
