@@ -190,6 +190,30 @@ def test_a_heading_binds_its_table_before_a_prose_mention() -> None:
     assert set(CHECK.find_registers(text, ["T4.4", "T4.5"])) == {"T4.5"}
 
 
+def test_a_register_heading_beats_an_earlier_prose_bound_summary() -> None:
+    """Fork r12 (D103): R4's CP-1 attempt 1 put a summary table under a
+    paragraph naming T4.4, which bound T4.4 before the real `#### T4.4` table
+    ("T4.4: missing column(s) ['Line Item']"). The check and the host's key
+    scorer, which locates registers with the same function, now read the
+    register."""
+    from caos.qualification.matrix import module_registers
+
+    summary = "| Metric | Q2 2026 |\n|---|---|\n| Revenue | 2,912 |\n\n"
+    register = "| Line Item | Q2 2026 |\n|---|---|\n| Revenue | 2,912 |\n"
+    text = (
+        "### Analytical read-through\n\nQ2 figures are in T4.4.\n\n"
+        + summary
+        + "#### T4.4 — Income statement\n\n"
+        + register
+    )
+    assert _about(_violations("CP-1", text), "T4.4") == []
+    found = module_registers(CONTRACT, BUNDLE, "CP-1", text)
+    assert found["T4.4"][0] == ["Line Item", "Q2 2026"]
+    # With no heading for T4.4, the prose line still binds the summary.
+    alone = text.replace("#### T4.4 — Income statement", "#### Statements")
+    assert module_registers(CONTRACT, BUNDLE, "CP-1", alone)["T4.4"][0][0] == "Metric"
+
+
 def test_a_contract_column_inside_one_longer_header_cell_is_found() -> None:
     """Fork r2: the method files spell `Source File Name` where the contract
     says `File Name`; two candidate cells are ambiguous and match nothing."""

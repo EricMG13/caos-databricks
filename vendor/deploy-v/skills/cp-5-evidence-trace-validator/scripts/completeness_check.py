@@ -302,8 +302,16 @@ def find_registers(handoff_text, register_ids=None, retired_ids=()):
     actually written ("### T4C.4 — Covenant headroom"). Where none of those
     four lines names a register, the nearest heading above the table, with no
     other table between, still does, at any distance (fork r6) -- but only for
-    an ID no table is bound to the near way, so every binding made before is
-    made the same.
+    an ID no heading binds the near way.
+
+    The first table bound keeps the ID, a near heading's before a distant
+    one's, with one exception (fork r12): a table under a heading that opens
+    with the ID ("#### T4.4 — Income Statement", or a snake_case register's
+    title) takes it from a table bound by a prose line that only mentions the
+    ID ("The compact table below summarizes T4.4 ..."), whatever their order.
+    A caption that opens with the ID ("**T4.4 — Income Statement**") is never
+    displaced, and a heading that only mentions the ID ("### Notes (see
+    T4.4)") displaces nothing.
     """
     id_re = REGISTER_ID_RE
     titles, title_re = {}, None
@@ -340,6 +348,17 @@ def find_registers(handoff_text, register_ids=None, retired_ids=()):
         led = LEADING_ID_RE.match(head)
         return bool(led) and led.group(1) in retired_ids
 
+    title_of = {reg_id: title for title, reg_id in titles.items()}
+
+    def opens_with(line, reg_id, marks):
+        # The line's first word, past heading marks and `marks`, is the ID or,
+        # on a heading, a snake_case register's title (fork r12).
+        rest = re.sub(r"^#*\s*" + marks + r"*\s*", "", line)
+        if re.match(re.escape(reg_id) + r"\.?(?![A-Za-z0-9_]|\.[A-Za-z0-9])", rest):
+            return True
+        title = title_of.get(reg_id) if line.startswith("#") else None
+        return bool(title) and re.match(re.escape(title) + r"(?![A-Za-z0-9])", rest, re.IGNORECASE) is not None
+
     def label_id(label):
         match = id_re.search(label)
         if match:
@@ -349,6 +368,7 @@ def find_registers(handoff_text, register_ids=None, retired_ids=()):
 
     lines = unfenced_markdown(handoff_text).splitlines()
     out, recent, heading, distant = {}, [], None, []
+    mentioned = set()  # IDs held by a table a prose mention bound (fork r12)
     i = 0
     while i < len(lines):
         s = lines[i].strip()
@@ -371,19 +391,26 @@ def find_registers(handoff_text, register_ids=None, retired_ids=()):
             # A heading binds before a prose line that merely mentions an ID
             # ("reconciles to the T4.4 revenue base" under "### T4.5"), fork r2.
             heads = [s for s in reversed(recent) if s.startswith("#")]
-            reg_id = next((found for found in map(label_id, heads) if found), None)
+            line = next((head for head in heads if label_id(head)), None)
             # A heading led by one of the module's retired IDs (CP-1's
             # "#### T4.7 Normalized Financials") is that register's: a prose
             # mention never claims its table (fork r7). Any other heading,
             # whatever IDs it names ("Inputs (CP-1 T4.6)", "#### T4.18 Debt
             # (from CP-1)" in CP-1B, "### T4 — Statements"), leaves the prose.
-            if reg_id is None and not any(map(retired, heads)):
+            if line is None and not any(map(retired, heads)):
                 prose = [s for s in reversed(recent) if not s.startswith("#")]
-                reg_id = next((found for found in map(label_id, prose) if found), None)
+                line = next((note for note in prose if label_id(note)), None)
+            reg_id = label_id(line) if line else None
             if reg_id:
-                out.setdefault(reg_id, (header, rows))
+                if reg_id not in out:
+                    out[reg_id] = (header, rows)
+                    if not line.startswith("#") and not opens_with(line, reg_id, "[*_`]"):
+                        mentioned.add(reg_id)
+                elif reg_id in mentioned and line.startswith("#") and opens_with(line, reg_id, "[*_]"):
+                    out[reg_id] = (header, rows)
+                    mentioned.discard(reg_id)
             elif heading is not None and heading not in recent and label_id(heading):
-                distant.append((label_id(heading), (header, rows)))
+                distant.append((label_id(heading), heading, (header, rows)))
             i = j
             recent, heading = [], None
             continue
@@ -392,8 +419,10 @@ def find_registers(handoff_text, register_ids=None, retired_ids=()):
             recent = recent[-4:]
             heading = s if s.startswith("#") else heading
         i += 1
-    for reg_id, table in distant:
-        out.setdefault(reg_id, table)
+    for reg_id, line, table in distant:
+        if reg_id not in out or (reg_id in mentioned and opens_with(line, reg_id, "[*_]")):
+            out[reg_id] = table
+            mentioned.discard(reg_id)
     return out
 
 
