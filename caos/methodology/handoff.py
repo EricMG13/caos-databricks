@@ -34,7 +34,8 @@ from caos.digest import canonical_json
 from caos.evidence.citations import (
     ANY_RUN,
     CITATION_RULES,
-    WHOLE_LINE,
+    EXCERPT,
+    REANCHORING_RULES,
     AnchoredCitation,
     Citation,
     CitationRule,
@@ -788,7 +789,9 @@ class CanonicalRecord:
     accepted (N28), and so how a reader re-anchors them: `ANY_RUN` for every
     record written before the whole-line rule, which carries no such field,
     `WHOLE_LINE_AS_STORED` for one accepted under that rule's first reading,
-    and `WHOLE_LINE` for one accepted since (W6, N13).
+    `WHOLE_LINE` for one accepted under its second (W6, N13), and `EXCERPT`
+    for one accepted since D105, whose citations each keep the line they
+    anchored in (`AnchoredCitation.line_text`).
     """
 
     artifact_sha256: str
@@ -1740,7 +1743,9 @@ def record_bytes(record: CanonicalRecord) -> bytes:
     the same way (N28): written only when it is not `ANY_RUN`, the rule every
     record stored before the field existed was anchored by. A citation's
     `cited_page` likewise: written only where the host re-anchored the quote
-    at its true page (D94).
+    at its true page (D94). And its `line_text` (D105): held, and written,
+    for every citation of an `EXCERPT` record and for no other
+    (`_lines_held`), so every record stored before it is the same bytes.
     """
     document: dict[str, Any] = {"format": RECORD_FORMAT, **asdict(record)}
     if not document["projections"]["blockers"]:
@@ -1752,6 +1757,8 @@ def record_bytes(record: CanonicalRecord) -> bytes:
     for citation in document["citations"]:
         if citation["cited_page"] is None:
             del citation["cited_page"]
+        if record.citation_rule != EXCERPT:
+            del citation["line_text"]
         for box in citation["bboxes"]:
             box.update({key: float(box[key]) for key in ("x0", "y0", "x1", "y1")})
     return canonical_json(document).encode("utf-8")
@@ -1836,7 +1843,10 @@ _rect = _each(
 
 def _anchored(item: object) -> AnchoredCitation:
     """A stored citation. An absent `cited_page` is None (every citation found
-    where it was cited, D94); a present one is another page than `page`."""
+    where it was cited, D94); a present one is another page than `page`. An
+    absent `line_text` is None; a present one is the line an excerpt
+    anchored in (D105), which only an `EXCERPT` record holds
+    (`_lines_held`)."""
     if not isinstance(item, dict):
         raise TypeError
     cited = item.get("cited_page")
@@ -1846,13 +1856,27 @@ def _anchored(item: object) -> AnchoredCitation:
         or cited == item.get("page")
     ):
         raise ValueError
+    line = item.get("line_text")
+    if "line_text" in item and (type(line) is not str or not line):
+        raise ValueError
     return _typed(
         AnchoredCitation,
-        {**item, "cited_page": cited},
+        {**item, "cited_page": cited, "line_text": line},
         page=_int,
         bboxes=_rect,
         cited_page=lambda value: value,
+        line_text=lambda value: value,
     )
+
+
+def _lines_held(citations: tuple[AnchoredCitation, ...], rule: CitationRule) -> None:
+    """`ValueError` unless every citation holds its line under `EXCERPT` and
+    none does under any other rule (D105): a line missing from an excerpt,
+    or held beside a quote that is its own line or no line, is not one this
+    host wrote."""
+    held = [citation.line_text is not None for citation in citations]
+    if (rule == EXCERPT and not all(held)) or (rule != EXCERPT and any(held)):
+        raise ValueError
 
 
 def _decoded_record(data: bytes) -> CanonicalRecord:
@@ -1862,11 +1886,13 @@ def _decoded_record(data: bytes) -> CanonicalRecord:
     citations = _each(_anchored)(document.get("citations"))
     if not citations:
         raise ValueError
-    # Only `WHOLE_LINE` re-anchors (D94): a `cited_page` under any other rule
-    # is not one this host wrote.
+    # Only `REANCHORING_RULES` re-anchor (D94): a `cited_page` under any
+    # other rule is not one this host wrote.
+    rule = _citation_rule(_with_rule(document)["citation_rule"])
     reanchored = any(citation.cited_page is not None for citation in citations)
-    if reanchored and _with_rule(document)["citation_rule"] != WHOLE_LINE:
+    if reanchored and rule not in REANCHORING_RULES:
         raise ValueError
+    _lines_held(citations, rule)
     return _typed(
         CanonicalRecord,
         _with_rule(document),
