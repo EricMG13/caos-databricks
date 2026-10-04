@@ -36,6 +36,8 @@ from caos.blobs import BlobStore
 from caos.digest import canonical_json
 from caos.evidence.citations import (
     ANY_RUN,
+    EXCERPT,
+    REANCHORING_RULES,
     WHOLE_LINE,
     WHOLE_LINE_AS_STORED,
     AnchoredCitation,
@@ -292,6 +294,62 @@ def test_a_record_keeps_the_page_a_reanchored_citation_was_cited_on(
     for rule in (ANY_RUN, WHOLE_LINE_AS_STORED):
         other = dataclasses.replace(moved, citation_rule=rule)
         _mismatch(blobs, artifact, blobs.put(record_bytes(other)), CP0)
+
+
+def test_an_excerpt_record_keeps_the_line_of_each_citation(tmp_path: Path) -> None:
+    """D105: a record accepted under `EXCERPT` names `excerpt-of-shown-line`
+    and writes every citation's `line_text`, the whole line it anchored in,
+    and reads back as written; a record under any earlier rule writes none,
+    so every record stored before it is the same bytes, and holds None. A
+    line missing from an excerpt record, empty, not a string, or held under
+    another rule is not one this host wrote; an excerpt record re-anchors at
+    its true page as a whole-line one does (D94)."""
+    [found] = _record().citations
+    line = f"{QUOTE} and the rest of its line"
+    part = " ".join(line.split()[1:])
+    excerpt = _record(
+        citation_rule=EXCERPT,
+        citations=(
+            dataclasses.replace(found, matched_text=part, line_text=line, cited_page=7),
+        ),
+    )
+    document = json.loads(record_bytes(excerpt))
+    assert document["citation_rule"] == "excerpt-of-shown-line"
+    assert document["citations"][0]["line_text"] == line
+    for rule in (ANY_RUN, WHOLE_LINE_AS_STORED, WHOLE_LINE):
+        older = json.loads(record_bytes(_record(citation_rule=rule)))
+        assert "line_text" not in older["citations"][0]
+    assert REANCHORING_RULES == {WHOLE_LINE, EXCERPT}
+    blobs, artifact, sha = _stored(tmp_path, excerpt)
+    read = read_record(blobs, artifact_sha256=artifact, record_sha256=sha, expected=CP0)
+    assert read == excerpt and read.citations[0].line_text == line
+    whole = dataclasses.replace(found, line_text=QUOTE)
+    exact = _record(citation_rule=EXCERPT, citations=(whole,))
+    assert json.loads(record_bytes(exact))["citations"][0]["line_text"] == QUOTE
+    # Never written without its lines, nor with a line its quote cannot be
+    # in (fix round 1): `record_bytes` fails closed.
+    for odd in (
+        _record(citation_rule=WHOLE_LINE, citations=(whole,)),
+        _record(citation_rule=EXCERPT),
+        _record(
+            citation_rule=EXCERPT,
+            citations=(dataclasses.replace(found, line_text="Unrelated text"),),
+        ),
+    ):
+        with pytest.raises(ValueError):
+            record_bytes(odd)
+    for value in (None, "", 5, "Unrelated text"):
+        document = json.loads(record_bytes(excerpt))
+        document["citations"][0]["line_text"] = value
+        _mismatch(blobs, artifact, blobs.put(canonical_json(document).encode()), CP0)
+    document = json.loads(record_bytes(excerpt))
+    del document["citations"][0]["line_text"]
+    _mismatch(blobs, artifact, blobs.put(canonical_json(document).encode()), CP0)
+    for rule in ("whole-line-as-shown", "whole-line"):
+        document = json.loads(record_bytes(excerpt))
+        document["citation_rule"] = rule
+        del document["citations"][0]["cited_page"]
+        _mismatch(blobs, artifact, blobs.put(canonical_json(document).encode()), CP0)
 
 
 def _mismatch(blobs: BlobStore, artifact: str, sha: str, expected: object) -> None:

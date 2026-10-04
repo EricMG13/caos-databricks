@@ -13,16 +13,17 @@ An evidence line is all the text between two blank lines in the EVIDENCE
 section, other than an evidence header (its `source_id:` and `page:` lines);
 it may be a whole paragraph or a whole table row. The section's last line,
 directly above its END EVIDENCE marker with no blank line between, is an
-evidence line too. For every citation,
-`matched_text` copies one entire evidence line character for character,
-including any leading bullet or footnote marker and any trailing `|`, never
-only a sentence of it; that line must appear exactly once on its cited page;
-the same words appear verbatim in the Markdown body after the front matter, in
-the source's own wording ("we", "our", "us"), never rephrased into the third
-person. Cite the evidence line behind each material figure and each
-statement that a register row or conclusion rests on, at least one citation in
-all, and only lines that support a claim you wrote; the cited lines may be
-quoted together in one evidence section of the body. Valid `source_id` values
-are exactly: {source_ids}, and `page` is the page in the nearest evidence
-header above that line.
+evidence line too. For every citation, `matched_text` copies an exact
+excerpt of one evidence line, character for character: at least 8
+consecutive words, or the whole line if it has fewer, including any leading
+bullet or footnote marker and any trailing `|`. The excerpt stays within
+that one line and appears exactly once on its cited page; the same excerpt
+appears verbatim in the Markdown body after the front matter, beside the
+statement it supports (in its Evidence Trace row or the sentence that states
+it), in the source's own wording ("we", "our", "us"), never rephrased into
+the third person. Cite the excerpt behind each material
+figure and each statement that a register row or conclusion rests on, at
+least one citation in all, and only excerpts that support a claim you wrote.
+Valid `source_id` values are exactly: {source_ids}, and `page` is the page in
+the nearest evidence header above that line.
 {host_text}--- END FINAL RESPONSE CHECK {tag} ---

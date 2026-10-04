@@ -17,14 +17,28 @@ cannot be assembled across the gutter between them -- which is what a naive
 scan of page text does, and what it silently produces is a quote that exists
 nowhere on the page.
 
-*One whole line, where an answer is accepted* (N28, `WHOLE_LINE`). The final
-check tells a module that `matched_text` is the complete text of one evidence
-line, and the host now holds it to that: a quote anchors only on a line as the
-module was shown it, word for word (W6, N13). Any unique run anchored before,
-so a fragment that dropped a "not" was shown as a host-verified source fact
-(AI-4). A record names the rule it was accepted under and is re-anchored by
-it (`ANY_RUN` when it names none, `WHOLE_LINE_AS_STORED` for N28's first
-reading), so no stored record starts refusing.
+*One whole line, where an answer was accepted until D105* (N28,
+`WHOLE_LINE`). The final check told a module that `matched_text` is the
+complete text of one evidence line, and the host held it to that: a quote
+anchored only on a line as the module was shown it, word for word (W6, N13).
+Any unique run anchored before, so a fragment that dropped a "not" was shown
+as a host-verified source fact (AI-4). A record names the rule it was
+accepted under and is re-anchored by it (`ANY_RUN` when it names none,
+`WHOLE_LINE_AS_STORED` for N28's first reading), so no stored record starts
+refusing.
+
+*An excerpt of one line, where an answer is accepted since D105* (`EXCERPT`).
+The owner ruled that a citation need not be the entire line, only trace a
+statement to where it came from: `matched_text` is an exact excerpt of one
+evidence line as shown -- at least `MIN_EXCERPT_WORDS` consecutive whole
+words, or the whole line when it is shorter -- found once on its page, and
+anchored to that line, which the record keeps beside it (`line_text`). The
+eight contiguous words stop the AI-4 fragment only where the dropped "not"
+would sit inside the run, which then no longer matches; a qualifier at the
+excerpt's edge ("believe that the Company will be able to refinance ...",
+its "do not" left before it) is still an excerpt. The guard there is the
+full source line shown around every excerpt -- delivered with EX2, which
+this rule merges with. A quote running past its line's end is no excerpt.
 
 The result is one rectangle per line the quote covers, the shape a PDF
 highlight's QuadPoints uses and for the same reason: selected text wraps, and a
@@ -33,11 +47,12 @@ single enclosing rectangle would cover text the quote does not contain.
 
 from __future__ import annotations
 
+import bisect
 import difflib
 import functools
 import json
 import unicodedata
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from itertools import groupby
 from typing import Literal
@@ -80,6 +95,11 @@ class AnchoredCitation:
     `page` is where the quote is. `cited_page` is the page the module named
     when that was another one and the host anchored the quote at its true
     page instead (D94); None when the module named the page it is on.
+
+    `line_text` is the whole evidence line an `EXCERPT` quote anchored in,
+    as the evidence section showed it (D105); None under the rules before
+    it -- under either whole-line rule the quote is its line
+    (`matched_text`), and `ANY_RUN` anchors no line.
     """
 
     document_sha256: str
@@ -87,6 +107,7 @@ class AnchoredCitation:
     matched_text: str
     bboxes: tuple[Rect, ...]
     cited_page: int | None = None
+    line_text: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,8 +149,11 @@ EDGE_PUNCTUATION = "\"'\u201c\u201d\u2018\u2019()[]{}.,;:!?"
 _FIGURE_LEFT = EDGE_PUNCTUATION.replace("(", "").replace(".", "")
 _FIGURE_RIGHT = EDGE_PUNCTUATION.replace(")", "")
 
-# How a citation is located (N28, D39). `WHOLE_LINE` is the rule an answer is
-# accepted under: the quote is one whole evidence line as the evidence section
+# How a citation is located (N28, D39, D105). `EXCERPT` is the rule an answer
+# is accepted under since D105: the quote is an excerpt of one evidence line
+# as shown, at least `MIN_EXCERPT_WORDS` words or that whole line, once on
+# its page (`_excerpt_run`). `WHOLE_LINE` is the rule answers were accepted
+# under before it: the quote is one whole evidence line as the evidence section
 # showed it -- a block of the page, which is its line wherever the line fits
 # and a token-cut piece of it where it did not (`_shown`), read word by word
 # as the module read it, NFC -- and it must be the only such line on the page:
@@ -148,13 +172,25 @@ _FIGURE_RIGHT = EDGE_PUNCTUATION.replace(")", "")
 # changing never refuses or moves a record accepted before it.
 # `anchor_citation`, the extractor suites' probe of where a quote is, stays
 # `ANY_RUN`.
-type CitationRule = Literal["any-run", "whole-line", "whole-line-as-shown"]
+type CitationRule = Literal[
+    "any-run", "whole-line", "whole-line-as-shown", "excerpt-of-shown-line"
+]
 ANY_RUN: CitationRule = "any-run"
 WHOLE_LINE_AS_STORED: CitationRule = "whole-line"
 WHOLE_LINE: CitationRule = "whole-line-as-shown"
+EXCERPT: CitationRule = "excerpt-of-shown-line"
 CITATION_RULES: frozenset[CitationRule] = frozenset(
-    {ANY_RUN, WHOLE_LINE_AS_STORED, WHOLE_LINE}
+    {ANY_RUN, WHOLE_LINE_AS_STORED, WHOLE_LINE, EXCERPT}
 )
+# The rules a quote anchors within one evidence line under.
+_LINE_RULES: frozenset[CitationRule] = frozenset(
+    {WHOLE_LINE_AS_STORED, WHOLE_LINE, EXCERPT}
+)
+# The rules acceptance re-anchors a quote at its true page under (D94).
+REANCHORING_RULES: frozenset[CitationRule] = frozenset({WHOLE_LINE, EXCERPT})
+# The fewest words an excerpt of a longer line may hold (D105): fewer than
+# this, a quote anchors only as its whole line.
+MIN_EXCERPT_WORDS = 8
 
 # Glyphs tracked past pdfminer's `word_margin` come back one token per letter
 # (section 44.5), so a heading tracked for display cannot be quoted as a word.
@@ -241,7 +277,7 @@ def anchor_citation(
     No server path calls this: it judges no delivery, so a run's citations go
     through `verify_citations`. It remains the extractor suites' probe of the
     search rule alone (`tests/test_pdf_extraction.py`), `ANY_RUN`: where a
-    quote is, not whether an answer could cite it (`WHOLE_LINE`). Refuses
+    quote is, not whether an answer could cite it (`EXCERPT`). Refuses
     `CITATION_NOT_LOCATED` when the quote is not there and `CITATION_AMBIGUOUS`
     when it is there more than once. Neither refusal carries the quote.
     """
@@ -274,6 +310,9 @@ class _Page:
     # The same lines as the evidence section shows them, word by word (W6),
     # keyed by how many words each shows.
     shown_as: dict[int, list[_ShownLine]] | None = None
+    # The same lines end to end, for the excerpt search (D105): as shown
+    # (`False`) and with tracked letters joined within each (`True`).
+    flats: dict[bool, _Flat] = field(default_factory=dict)
 
     def keys(self, *, normalised: bool) -> list[str]:
         """The page's words as `_starts` compares them."""
@@ -336,6 +375,151 @@ class _Page:
                     )
             self.shown_as = by_width
         return self.shown_as
+
+    def flat(
+        self,
+        cuts: Mapping[int, tuple[int, ...]] | None,
+        lines: Mapping[int, tuple[str, ...]],
+        *,
+        joined: bool,
+    ) -> _Flat:
+        """The page's evidence lines as the evidence section shows them, end
+        to end (D105), derived once per page: as shown, each line's words as
+        `shown_words` reads them; joined, each line's tokens with its tracked
+        letters joined within it, one key each, as `_one_line` compares them.
+        Either way a line's `text` is the line as shown."""
+        if joined not in self.flats:
+            flat = _Flat([], [], [], {})
+            for span, block_id in _shown(self.tokens, cuts, lines):
+                text = " ".join(_nfc(token.text) for token in span)
+                keys = _flat_keys(_joined_tracking(span) if joined else span, joined)
+                flat.add(keys, block_id, text)
+            self.flats[joined] = flat
+        return self.flats[joined]
+
+
+def _flat_keys(
+    span: list[_Token], joined: bool
+) -> tuple[list[_Token], list[str], list[int]]:
+    """One shown line's tokens, its keys and, per key, the index of the token
+    it is in: each word of each token NFC, or -- joined -- each token NFC."""
+    keys: list[str] = []
+    owners: list[int] = []
+    for at, token in enumerate(span):
+        words = [_nfc(token.text)] if joined else _nfc(token.text).split()
+        keys += words
+        owners += [at] * len(words)
+    return span, keys, owners
+
+
+@dataclass(frozen=True, slots=True)
+class _FlatLine:
+    """One shown line within a `_Flat`: where its keys start and end, the
+    tokens it is, each key's token, the one block id it is, and its text."""
+
+    start: int
+    end: int
+    span: list[_Token]
+    owners: list[int]
+    block_id: str
+    text: str
+
+
+# What joins a `_Flat`'s keys for `str.find`: NUL between two keys of a line,
+# and NUL, SOH, NUL between two lines. No key holds either -- a key is a
+# stored token's text or a word of it, Postgres text holds no NUL and
+# admission holds every token to `BoundaryText`, which refuses a control
+# character -- so a match begins and ends on whole keys of one line.
+_KEY_SEPARATOR = "\x00"
+_LINE_BREAK = "\x01"
+# The most exact needles the edge pass builds for one quote (fix round 1):
+# one per pair of page keys standing for its first and last word. Past it
+# the quote is refused rather than searched, so no page can make the pass
+# cost more than this many scans.
+MAX_EDGE_NEEDLES = 16
+
+
+@dataclass(slots=True)
+class _Flat:
+    """A page's shown lines end to end (`_Page.flat`): every key in order,
+    the index in `lines` of the line each key is in, the lines, and each
+    line's text by the block id it is; and, once asked, the keys joined
+    for `places` with where each begins, and the page's distinct keys by
+    the core `_stripped` leaves of them, for `edge_needles`."""
+
+    keys: list[str]
+    line: list[int]
+    lines: list[_FlatLine]
+    texts: dict[str, str]
+    joined: str | None = None
+    starts: list[int] = field(default_factory=list)
+    cores: dict[str, set[str]] | None = None
+
+    def places(self, words: Sequence[str]) -> Iterator[int]:
+        """Every index, ascending, at which `words` are consecutive keys of
+        one line, overlapping ones too: `str.find` over the joined keys, so
+        every hit is a place and a page is searched at C speed. A word
+        holding a separator is no key, so it begins nowhere."""
+        if any(_KEY_SEPARATOR in word or _LINE_BREAK in word for word in words):
+            return
+        if self.joined is None:
+            self.joined = self._joined()
+        needle = _KEY_SEPARATOR + _KEY_SEPARATOR.join(words) + _KEY_SEPARATOR
+        found = self.joined.find(needle)
+        while found != -1:
+            yield bisect.bisect_left(self.starts, found + 1)
+            found = self.joined.find(needle, found + 1)
+
+    def _joined(self) -> str:
+        """The keys joined by `_KEY_SEPARATOR` within a line and by
+        `_LINE_BREAK` between lines, recording where each key begins."""
+        parts = [_KEY_SEPARATOR]
+        at = 1
+        for number, line in enumerate(self.lines):
+            if number:
+                parts.append(_LINE_BREAK + _KEY_SEPARATOR)
+                at += 2
+            for key in self.keys[line.start : line.end]:
+                self.starts.append(at)
+                parts.append(key + _KEY_SEPARATOR)
+                at += len(key) + 1
+        return "".join(parts)
+
+    def edge_needles(self, words: Sequence[str]) -> list[list[str]] | None:
+        """The quote with its first and last word each replaced by every key
+        of the page that stands for it (`_edge_equal`), as exact needles for
+        `places`; None past `MAX_EDGE_NEEDLES`."""
+        first, last = self._standing_for(words[0]), self._standing_for(words[-1])
+        if len(first) * len(last) > MAX_EDGE_NEEDLES:
+            return None
+        inner = list(words[1:-1])
+        return [[head, *inner, tail] for head in sorted(first) for tail in sorted(last)]
+
+    def _standing_for(self, word: str) -> set[str]:
+        """The page's keys `_edge_equal` holds for `word`: its NFC, and every
+        key whose `_stripped` core is the word's, when that is not empty."""
+        if self.cores is None:
+            self.cores = {}
+            for key in set(self.keys):
+                self.cores.setdefault(_stripped(key), set()).add(key)
+        found = set(self.cores.get(_stripped(word), ())) if _stripped(word) else set()
+        normal = _nfc(word)
+        if normal in self.cores.get(_stripped(normal), ()):
+            found.add(normal)
+        return found
+
+    def add(
+        self, keyed: tuple[list[_Token], list[str], list[int]], block_id: str, text: str
+    ) -> None:
+        """Append one shown line (`_flat_keys`) with its block id and text."""
+        span, keys, owners = keyed
+        start = len(self.keys)
+        self.keys.extend(keys)
+        self.line.extend([len(self.lines)] * len(keys))
+        self.lines.append(
+            _FlatLine(start, len(self.keys), span, owners, block_id, text)
+        )
+        self.texts[block_id] = text
 
 
 @dataclass(frozen=True, slots=True)
@@ -464,6 +648,79 @@ def _shown_line_run(
     if found is None:
         raise Refusal(RefusalCode.CITATION_NOT_LOCATED)
     return found
+
+
+def _excerpt_run(
+    page: _Page,
+    cuts: Mapping[int, tuple[int, ...]] | None,
+    lines: Mapping[int, tuple[str, ...]],
+    matched_text: str,
+    *,
+    tracking: bool,
+) -> tuple[list[_Token], str, str]:
+    """`EXCERPT` (D105): the one place on the page `matched_text` is an
+    excerpt of an evidence line as the evidence section showed it -- the
+    tokens it covers, the one block id that line is, and the line's text.
+
+    An excerpt is a run of one line's whole words, at least
+    `MIN_EXCERPT_WORDS` of them or the whole line when it has fewer. So a
+    shorter quote can only be a whole line, and is located as `WHOLE_LINE`
+    locates it (`_shown_line_run`). A longer one is searched for in every
+    line of the page at once (`_Page.flat`), in `WHOLE_LINE`'s three passes
+    -- as shown, NFC; its edge words forgiven; on a tracking extractor the
+    lines with their tracked letters joined -- each reached only where the
+    one before found no place, and each counting every place on the page,
+    so none can pick between two: two places, in one line or in two, are
+    `CITATION_AMBIGUOUS`. A quote that starts or ends inside a word, or runs
+    from one line onto the next, is no excerpt: `CITATION_NOT_LOCATED`.
+    """
+    words = tuple(map(_nfc, matched_text.split()))
+    if len(words) < MIN_EXCERPT_WORDS:
+        run, block_id = _shown_line_run(
+            page, cuts, lines, matched_text, tracking=tracking
+        )
+        return run, block_id, page.flat(cuts, lines, joined=False).texts[block_id]
+    passes = ((False, False), (False, True), (True, True))
+    for joined, edges in passes if tracking else passes[:2]:
+        found = _one_excerpt(page.flat(cuts, lines, joined=joined), words, edges=edges)
+        if found is not None:
+            return found
+    raise Refusal(RefusalCode.CITATION_NOT_LOCATED)
+
+
+def _one_excerpt(
+    flat: _Flat, words: tuple[str, ...], *, edges: bool
+) -> tuple[list[_Token], str, str] | None:
+    """The single place in `flat` where `words` is a run of one line's keys
+    -- every one equal, or with `edges` the interior equal and the first and
+    last standing for the quote's there (`_edge_equal`) -- as the tokens it
+    covers, the line's block id and its text; None for none, a refusal for
+    two. Every needle is exact (`_Flat.edge_needles` for `edges`) and every
+    hit of one is a place within one line (`_Flat.places`), so the second
+    hit refuses at once: a quote costs one scan per needle, however many
+    near places the page holds -- 64 quotes of a 240,000-token page of one
+    word took 11.5 s when each near place was rejected in Python. A quote
+    standing for more than `MAX_EDGE_NEEDLES` pairs of keys is refused
+    `CITATION_AMBIGUOUS` -- the host cannot tell which of so many forms it
+    is, and D94 never re-anchors such a quote elsewhere (fix round 2) -- and
+    one whose interior is in no line is found nowhere in one scan."""
+    if edges and next(flat.places(words[1:-1]), None) is None:
+        return None
+    needles = flat.edge_needles(words) if edges else [list(words)]
+    if needles is None:
+        raise Refusal(RefusalCode.CITATION_AMBIGUOUS)
+    found: int | None = None
+    for needle in needles:
+        for at in flat.places(needle):
+            if found is not None:
+                raise Refusal(RefusalCode.CITATION_AMBIGUOUS)
+            found = at
+    if found is None:
+        return None
+    line = flat.lines[flat.line[found]]
+    first = line.owners[found - line.start]
+    last = line.owners[found + len(words) - 1 - line.start]
+    return line.span[first : last + 1], line.block_id, line.text
 
 
 def _one_shown(
@@ -848,8 +1105,9 @@ def verify_citations(
     """Re-derive every citation, or refuse the set.
 
     `rule` is how each is located (`CitationRule`): an answer being accepted
-    is held to `WHOLE_LINE`, what its final check told it; a stored record
-    is re-anchored by the rule it names.
+    is held to `EXCERPT`, what its final check told it (D105); a stored
+    record is re-anchored by the rule it names. Each anchored citation
+    carries the line it anchored in (`AnchoredCitation.line_text`).
 
     Called before an artifact is written, never after: an artifact naming a quote
     nobody can find is the thing invariant 11 exists to prevent, and one that has
@@ -860,7 +1118,8 @@ def verify_citations(
     `delivered` maps each source to the exact blocks the node was handed. Under
     `ANY_RUN` the match must lie wholly within delivered lines: a quote on an
     undelivered page, or wrapping onto an undelivered line, refuses
-    `CITATION_NOT_DELIVERED`. Under `WHOLE_LINE` a match is exactly one block,
+    `CITATION_NOT_DELIVERED`. Under `WHOLE_LINE` (and `EXCERPT`, whose match
+    is within one block) a match is exactly one block,
     and delivery is judged against that one block (R24-16): the prompt calls a
     shown block whole citable evidence, and a page map may show a source line's
     first block while withholding its continuation, so requiring the *line's*
@@ -876,14 +1135,14 @@ def verify_citations(
     A caller verifying several lists in one unit
     passes one `TokenIndex` to share those reads across them.
 
-    Under `WHOLE_LINE` a quote that is no line of its cited page but is one
-    whole delivered evidence line of exactly one other delivered page of its
-    source is anchored there, at its true page, and the page the module
-    named is kept beside it as `cited_page` (D94, `_true_page`): the
-    coordinate stored is always where the quote is (invariant 11). Two such
-    lines, or one the node was not given, still refuse `CITATION_NOT_LOCATED`.
-    The retry placement (`find_line`) and a stored record's re-check
-    (`verify_stored_citations`) never re-anchor.
+    Under `WHOLE_LINE` and `EXCERPT` (`REANCHORING_RULES`) a quote that is no
+    line, or no excerpt, of its cited page but is one, delivered, of exactly
+    one other delivered page of its source is anchored there, at its true
+    page, and the page the module named is kept beside it as `cited_page`
+    (D94, `_true_page`): the coordinate stored is always where the quote is
+    (invariant 11). Two such places, or one the node was not given, still
+    refuse `CITATION_NOT_LOCATED`. The retry placement (`find_line`) and a
+    stored record's re-check (`verify_stored_citations`) never re-anchor.
     """
     if index is None:
         index = TokenIndex()
@@ -892,7 +1151,7 @@ def verify_citations(
         blocks = delivered.get(citation.source_id)
         if blocks is None:
             raise Refusal(RefusalCode.CITATION_NOT_DELIVERED)
-        run, page, digest = _placed(conn, index, citation, blocks, rule=rule)
+        run, page, digest, line = _placed(conn, index, citation, blocks, rule=rule)
         anchored.append(
             AnchoredCitation(
                 document_sha256=digest,
@@ -900,6 +1159,7 @@ def verify_citations(
                 matched_text=citation.matched_text,
                 bboxes=tuple(_rectangles(run, page)),
                 cited_page=None if page == citation.page else citation.page,
+                line_text=line,
             )
         )
     return anchored
@@ -920,10 +1180,11 @@ def verify_stored_citations(
     `cited_page`. The stored page is checked, never searched for: the quote
     must be located there by `rule` within `delivered` (the run's captured
     blocks), exactly as `verify_citations` locates a citation found where it
-    was cited. A `cited_page` is kept only when the quote is no line of that
-    page (`CITATION_NOT_LOCATED` there, whatever was delivered), the one case
-    in which acceptance re-anchors; a record claiming any other re-anchoring
-    reads back without it, so it no longer equals the record. Acceptance also
+    was cited. A `cited_page` is kept only when the quote is no line (under
+    `EXCERPT`, no excerpt) of that page (`CITATION_NOT_LOCATED` there,
+    whatever was delivered), the one case in which acceptance re-anchors; a
+    record claiming any other re-anchoring reads back without it, so it no
+    longer equals the record. Acceptance also
     held the true line unique among the pages the node was given; those
     pages are the node's (its selection), not the run's, so that is
     re-judged where the node's delivery is rebuilt (`replay_billed`), not
@@ -934,7 +1195,7 @@ def verify_stored_citations(
         blocks = delivered.get(citation.source_id)
         if blocks is None:
             raise Refusal(RefusalCode.CITATION_NOT_DELIVERED)
-        run, digest = _located(conn, index, citation, blocks, rule=rule)
+        run, digest, line = _located(conn, index, citation, blocks, rule=rule)
         anchored.append(
             AnchoredCitation(
                 document_sha256=digest,
@@ -942,21 +1203,33 @@ def verify_stored_citations(
                 matched_text=citation.matched_text,
                 bboxes=tuple(_rectangles(run, citation.page)),
                 cited_page=cited
-                if _not_a_line_of(conn, index, citation, cited)
+                if _not_a_line_of(conn, index, citation, cited, rule=rule)
                 else None,
+                line_text=line,
             )
         )
     return anchored
 
 
 def _not_a_line_of(
-    conn: StoreConnection, index: TokenIndex, citation: Citation, cited: int | None
+    conn: StoreConnection,
+    index: TokenIndex,
+    citation: Citation,
+    cited: int | None,
+    *,
+    rule: CitationRule,
 ) -> bool:
-    """Whether `WHOLE_LINE` finds the quote on no line of page `cited`."""
+    """Whether page `cited` holds the quote as no line -- under `EXCERPT`, as
+    no excerpt -- the one way acceptance re-anchors (`WHOLE_LINE` for every
+    rule but `EXCERPT`, as it was before there was one)."""
     if cited is None:
         return False
     moved = Citation(citation.source_id, cited, citation.matched_text)
-    return _whole_line(conn, index, moved) is RefusalCode.CITATION_NOT_LOCATED
+    judged = EXCERPT if rule == EXCERPT else WHOLE_LINE
+    return (
+        _line_verdict(conn, index, moved, rule=judged)
+        is RefusalCode.CITATION_NOT_LOCATED
+    )
 
 
 def _placed(
@@ -966,22 +1239,26 @@ def _placed(
     blocks: frozenset[str],
     *,
     rule: CitationRule,
-) -> tuple[list[_Token], int, str]:
-    """`_located`, and under `WHOLE_LINE` a quote it found on no line of its
-    cited page anchored at its true page instead (`_true_page`, D94): the
-    run, the page it is on, and the source's digest."""
+) -> tuple[list[_Token], int, str, str | None]:
+    """`_located`, and under `REANCHORING_RULES` a quote it found on no line
+    of its cited page anchored at its true page instead (`_true_page`, D94):
+    the run, the page it is on, the source's digest and the line it is in."""
     try:
-        run, digest = _located(conn, index, citation, blocks, rule=rule)
+        run, digest, line = _located(conn, index, citation, blocks, rule=rule)
     except Refusal as refused:
-        if rule != WHOLE_LINE or refused.code is not RefusalCode.CITATION_NOT_LOCATED:
+        if (
+            rule not in REANCHORING_RULES
+            or refused.code is not RefusalCode.CITATION_NOT_LOCATED
+        ):
             raise
         lost = refused
     else:
-        return run, citation.page, digest
-    moved = _true_page(conn, index, citation, blocks)
+        return run, citation.page, digest, line
+    moved = _true_page(conn, index, citation, blocks, rule=rule)
     if moved is None:
         raise lost
-    return moved[0], moved[1], index.digests[citation.source_id]
+    run, page, line = moved
+    return run, page, index.digests[citation.source_id], line
 
 
 def _located(
@@ -991,46 +1268,72 @@ def _located(
     blocks: frozenset[str],
     *,
     rule: CitationRule,
-) -> tuple[list[_Token], str]:
+) -> tuple[list[_Token], str, str | None]:
     """One citation's run under `rule` at its cited page, already checked
-    delivered, and its source's digest.
+    delivered, its source's digest, and the line it anchored in
+    (`AnchoredCitation.line_text`).
 
-    Under either whole-line rule a match is exactly one block (R24-16):
-    delivery is judged against the block its match is, not every block its
-    source line was split into -- a page map showing that one block whole
-    withholds nothing this match needs, even when the line continues past
-    it. Under `ANY_RUN` a match is not confined to one block, so delivery is
-    judged against every block of every line its tokens touch.
+    Under a line rule (`_LINE_RULES`) a match is within exactly one block
+    (R24-16): delivery is judged against the block its match is, not every
+    block its source line was split into -- a page map showing that one
+    block whole withholds nothing this match needs, even when the line
+    continues past it. Under `ANY_RUN` a match is not confined to one block,
+    so delivery is judged against every block of every line its tokens
+    touch.
     """
     digest, tracking = index.facts(conn, citation.source_id)
     searched = index.page(conn, citation.source_id, citation.page)
     lines = index.lines(conn, citation.source_id)
-    if rule in (WHOLE_LINE, WHOLE_LINE_AS_STORED):
+    if rule in _LINE_RULES:
         cuts = index.cuts.get(citation.source_id)
-        locate = _shown_line_run if rule == WHOLE_LINE else _line_run
-        run, block_id = locate(
+        run, block_id, line = _locator(rule)(
             searched, cuts, lines, citation.matched_text, tracking=tracking
         )
         if block_id not in blocks:
             raise Refusal(RefusalCode.CITATION_NOT_DELIVERED)
-        return run, digest
+        return run, digest, line
     run = _page_run(searched, citation.matched_text, tracking=tracking)
     if any(not _delivered(lines.get(token.line_id), blocks) for token in run):
         raise Refusal(RefusalCode.CITATION_NOT_DELIVERED)
-    return run, digest
+    return run, digest, None
 
 
-def _whole_line(
-    conn: StoreConnection, index: TokenIndex, citation: Citation
-) -> tuple[list[_Token], str] | RefusalCode:
-    """`_shown_line_run` on the citation's page, or the anchoring code it
+type _LineRun = tuple[list[_Token], str, str | None]
+
+
+def _locator(rule: CitationRule) -> Callable[..., _LineRun]:
+    """How a line rule locates a quote -- `(page, cuts, lines, matched_text,
+    *, tracking)` to its run, block id and `line_text`: the excerpt's line
+    under `EXCERPT` (`_excerpt_run`), None under either whole-line rule."""
+    if rule == EXCERPT:
+        return _excerpt_run
+    locate = _shown_line_run if rule == WHOLE_LINE else _line_run
+
+    def whole(
+        page: _Page,
+        cuts: Mapping[int, tuple[int, ...]] | None,
+        lines: Mapping[int, tuple[str, ...]],
+        matched_text: str,
+        *,
+        tracking: bool,
+    ) -> _LineRun:
+        run, block_id = locate(page, cuts, lines, matched_text, tracking=tracking)
+        return run, block_id, None
+
+    return whole
+
+
+def _line_verdict(
+    conn: StoreConnection, index: TokenIndex, citation: Citation, *, rule: CitationRule
+) -> _LineRun | RefusalCode:
+    """`_locator(rule)` on the citation's page, or the anchoring code it
     refused with."""
     tracking = index.facts(conn, citation.source_id)[1]
     page = index.page(conn, citation.source_id, citation.page)
     lines = index.lines(conn, citation.source_id)
     cuts = index.cuts.get(citation.source_id)
     try:
-        return _shown_line_run(
+        return _locator(rule)(
             page, cuts, lines, citation.matched_text, tracking=tracking
         )
     except Refusal as refused:
@@ -1047,18 +1350,20 @@ def _true_page(
     index: TokenIndex,
     citation: Citation,
     blocks: frozenset[str],
-) -> tuple[list[_Token], int] | None:
-    """Where a quote `WHOLE_LINE` found on no line of its cited page is one
-    whole evidence line (D94): its run and its true page, or None.
+    *,
+    rule: CitationRule,
+) -> tuple[list[_Token], int, str | None] | None:
+    """Where a quote `rule` found on no line of its cited page is one (D94):
+    its run, its true page and its line, or None.
 
     Only the other pages of its source the node was given are read, so an
     undelivered page is never probed; each is searched as the cited page is
-    (`_shown_line_run`, ambiguity counted over the whole page). The quote
-    must be exactly one line across all of them and that line delivered:
-    a second line anywhere among them, on one page or two, or a match on a
-    line the node was not given, is None -- the citation refuses as it did.
+    (`_locator`, ambiguity counted over the whole page). The quote must be
+    found exactly once across all of them and that line delivered: a second
+    place anywhere among them, on one page or two, or a match on a line the
+    node was not given, is None -- the citation refuses as it did.
     """
-    found: tuple[list[_Token], int] | None = None
+    found: tuple[list[_Token], int, str | None] | None = None
     others = [
         number
         for number in _delivered_pages(conn, index, citation.source_id, blocks)
@@ -1067,14 +1372,14 @@ def _true_page(
     index.read_pages(conn, citation.source_id, others)
     for number in others:
         moved = Citation(citation.source_id, number, citation.matched_text)
-        placed = _whole_line(conn, index, moved)
+        placed = _line_verdict(conn, index, moved, rule=rule)
         if placed is RefusalCode.CITATION_NOT_LOCATED:
             continue
         if isinstance(placed, RefusalCode) or found is not None:
             return None
         if placed[1] not in blocks:
             return None
-        found = (placed[0], number)
+        found = (placed[0], number, placed[2])
     return found
 
 
@@ -1099,22 +1404,26 @@ def _delivered_pages(
 
 @dataclass(frozen=True, slots=True)
 class LineFinding:
-    """Where this module's own search finds a quote that `WHOLE_LINE` refused
-    `CITATION_NOT_LOCATED` (D82), among the blocks one node was given. At
-    most one field is set; none is "found, but not in a way that names one
-    line" (a run on two lines, twice on a page, or part of a line of another
-    page), never a guess.
+    """Where this module's own search finds a quote that `EXCERPT` refused
+    `CITATION_NOT_LOCATED` (D82, D105), among the blocks one node was given.
+    At most one field is set; none is "found, but not in a way that names
+    one line" (a run on two lines, twice on a page, or part of a line of
+    another page), never a guess.
 
     `block_id`: the one delivered evidence line of the cited page the quote
-    is part of, longer than the quote. `pages`: the other delivered pages of
-    its source on which the quote is one whole delivered evidence line.
-    `absent`: no page of its source the node was given holds the quote as a
-    run wholly within its delivered lines (`ANY_RUN`).
+    is part of, longer than the quote -- too short a part of it to be an
+    excerpt. `pages`: the other delivered pages of its source on which the
+    quote is an excerpt of one delivered evidence line. `absent`: no page of
+    its source the node was given holds the quote as a run wholly within its
+    delivered lines (`ANY_RUN`). `across`: none of those, and the quote's
+    unique run on its cited page runs from one delivered line onto the next
+    (fix round 1).
     """
 
     block_id: str | None = None
     pages: tuple[int, ...] = ()
     absent: bool = False
+    across: bool = False
 
 
 def find_line(
@@ -1125,24 +1434,26 @@ def find_line(
     citation: Citation,
     index: TokenIndex,
 ) -> LineFinding:
-    """`LineFinding` for a citation `WHOLE_LINE` refused `CITATION_NOT_LOCATED`.
+    """`LineFinding` for a citation `EXCERPT` refused `CITATION_NOT_LOCATED`.
 
     `blocks` are the blocks of the citation's source the node was given and
     `pages` the pages they are on; no other page is read, so a cited page the
     node was not given is never probed. A delivered cited page is searched
     by `ANY_RUN` (`_page_run`): a unique run inside one delivered shown line
     longer than it is that line. Failing that, each other delivered page is
-    asked under `WHOLE_LINE` with the citation moved there, at that page
+    asked under `EXCERPT` with the citation moved there, at that page
     alone (`_verdict`, never re-anchored, D94), and every delivered page
     under `ANY_RUN` whether a run of the quote lies within its delivered
-    lines at all. Reads go through `index`;
+    lines at all; a cited-page run over two delivered lines is `across`.
+    Reads go through `index`;
     a refusal that is not anchoring's is raised, for the caller to leave the
     citation unplaced.
     """
     source_id, text = citation.source_id, citation.matched_text
     given = sorted(set(pages))
+    across = False
     if citation.page in given:
-        block_id = _part_of(conn, index, citation)
+        block_id, across = _part_of(conn, index, citation, blocks)
         if block_id in blocks:
             return LineFinding(block_id=block_id)
     whole: list[int] = []
@@ -1156,22 +1467,27 @@ def find_line(
         seen = seen or found in (None, RefusalCode.CITATION_AMBIGUOUS)
     if whole:
         return LineFinding(pages=tuple(whole))
-    return LineFinding(absent=not seen)
+    return LineFinding(across=True) if across else LineFinding(absent=not seen)
 
 
 def _part_of(
-    conn: StoreConnection, index: TokenIndex, citation: Citation
-) -> str | None:
+    conn: StoreConnection, index: TokenIndex, citation: Citation, blocks: frozenset[str]
+) -> tuple[str | None, bool]:
     """The block id of the one shown line of the cited page holding the
-    quote's unique run (`_page_run`) and more, delivered or not, or None."""
+    quote's unique run (`_page_run`) and more, delivered or not, or None;
+    and whether that run lies on more than one line, each delivered."""
     tracking = index.facts(conn, citation.source_id)[1]
     cited = index.page(conn, citation.source_id, citation.page)
     run = _any_run(cited, citation.matched_text, tracking=tracking)
     if not isinstance(run, list):
-        return None
+        return None, False
     lines = index.lines(conn, citation.source_id)
     cuts = index.cuts.get(citation.source_id)
-    return _longer_line(cited, cuts, lines, run, tracking=tracking)
+    touched = {token.line_id for token in run}
+    across = len(touched) > 1 and all(
+        _delivered(lines.get(line_id), blocks) for line_id in touched
+    )
+    return _longer_line(cited, cuts, lines, run, tracking=tracking), across
 
 
 # A near miss (F493): the words a candidate line must share with the quote
@@ -1190,7 +1506,7 @@ NEAR_MEASURED_WORDS = 300
 
 def near_line(text: str, lines: Sequence[str]) -> int | None:
     """The index in `lines` of the one line `text` nearly matches, else None
-    (F493): a quote `WHOLE_LINE` refused that slipped on a word or a letter
+    (F493): a quote anchoring refused that slipped on a word or a letter
     while copying a long line. Pure over the texts it is handed -- the
     caller hands only lines the node was delivered -- so it reads nothing,
     and it never anchors or accepts: a near miss is still refused.
@@ -1255,40 +1571,92 @@ def _similar(words: list[str], split: list[str]) -> bool:
 
 def overrun_line(text: str, lines: Sequence[str]) -> int | None:
     """The index in `lines` of the one line `text` runs past the end of,
-    else None (F496): a quote that copied a whole line and went on into the
-    text after it -- a sentence a page break split, say -- so the line is a
-    strict prefix of the quote, word for word as anchoring reads them (NFC,
-    the line's first and last word standing for the quote's there less edge
-    punctuation, `_edge_equal`). Pure over the texts it is handed, like
-    `near_line`; it never anchors or accepts. A candidate holds the quote's
-    first `NEAR_WORDS` words, so a short heading is never one; past
-    `NEAR_MEASURED` candidates, or with two lines it overruns, there is no
-    answer, never a guess: one pass over the lines and at most
-    `NEAR_MEASURED` linear prefix checks.
+    else None (F496): a quote that copied a line from its first word, or
+    under `EXCERPT` from any word of it (D105), and went on into the text
+    after it -- a sentence a page break split, say -- so the line from the
+    quote's first word to its end is a strict prefix of the quote, word for
+    word as anchoring reads them (NFC, its first and last word standing for
+    the quote's there less edge punctuation, `_edge_equal`). Pure over the
+    texts it is handed, like `near_line`; it never anchors or accepts. A
+    candidate place in a line holds the quote's first `NEAR_WORDS` words,
+    so a short heading is never one; past `NEAR_MEASURED` candidates, or
+    with two places it overruns, there is no answer, never a guess: one pass
+    over the lines and at most `NEAR_MEASURED` linear prefix checks.
     """
     words = [_nfc(word) for word in text.split()]
     if len(words) <= NEAR_WORDS:
         return None
-    head = words[:NEAR_WORDS]
+    head = words[1:NEAR_WORDS]
     found: list[int] = []
     measured = 0
     for number, line in enumerate(lines):
-        split = line.split(maxsplit=NEAR_WORDS)
-        start = [_nfc(word) for word in split[:NEAR_WORDS]]
-        if len(start) < NEAR_WORDS or not _same_start(start, head):
+        if head[0] not in line:
             continue
-        measured += 1
+        split = [_nfc(word) for word in line.split()]
+        starts = _quote_starts(split, words[0], head)
+        measured += len(starts)
         if measured > NEAR_MEASURED:
             return None
-        if _overruns([_nfc(word) for word in line.split()], words):
-            found.append(number)
+        found += [number for at in starts if _overruns(split[at:], words)]
     return found[0] if len(found) == 1 else None
 
 
-def _same_start(start: list[str], head: list[str]) -> bool:
-    """Whether a line's first words are the quote's, its first word
-    standing for the quote's less edge punctuation (`overrun_line`)."""
-    return start[1:] == head[1:] and _edge_equal(start[0], head[0], normalised=True)
+def _quote_starts(split: list[str], first: str, head: list[str]) -> list[int]:
+    """Where in a line's words a quote could begin (`overrun_line`): `head`,
+    its next words, follows a word standing for its `first` there."""
+    return [
+        at - 1
+        for at in occurrences(split, head)
+        if at and _edge_equal(split[at - 1], first, normalised=True)
+    ]
+
+
+def overrun_kept(text: str, line: str) -> int:
+    """How many of `text`'s words lie within `line` when `text` runs past
+    its end (`overrun_line`, F496), from the first place it does; 0 when it
+    does not. Pure over the two texts, like `overrun_line`."""
+    words = [_nfc(word) for word in text.split()]
+    if len(words) <= NEAR_WORDS:
+        return 0
+    split = [_nfc(word) for word in line.split()]
+    for at in _quote_starts(split, words[0], words[1:NEAR_WORDS]):
+        if _overruns(split[at:], words):
+            return len(split) - at
+    return 0
+
+
+def whole_line_of(text: str, line: str) -> bool:
+    """Whether `text` is all of `line`, word for word as anchoring reads them
+    (NFC, its first and last word standing for the line's there less edge
+    punctuation, `_same_words`): what a retry told of an ambiguous quote is
+    told when the quote is a whole line (fix round 1). Pure over the texts."""
+    words = tuple(_nfc(word) for word in text.split())
+    shown = tuple(_nfc(word) for word in line.split())
+    return (
+        bool(words)
+        and len(words) == len(shown)
+        and _same_words(shown, words, edges=True)
+    )
+
+
+def within_line(matched_text: str, line_text: str) -> bool:
+    """Whether `matched_text` is an excerpt of `line_text` (D105): what a
+    stored `EXCERPT` record's line is held to when it is read or written,
+    by anchoring's own test (`_excerpt_run`) over the line alone, each of its
+    words a token -- the interior a run of its words, the first and last
+    standing for the quote's less edge punctuation with a figure's marks
+    kept, NFC, and the tracked-letter join -- so no line a quote anchored in
+    is refused (fix round 2). Found twice in the line is still within it;
+    that it is the line the quote anchors in is the proof's to re-derive."""
+    words = line_text.split()
+    page = _Page(
+        [_Token(word, 0, 0, at, 0.0, at + 1.0, 1.0) for at, word in enumerate(words)]
+    )
+    try:
+        _excerpt_run(page, {0: (len(words),)}, {0: ("L",)}, matched_text, tracking=True)
+    except Refusal as refused:
+        return refused.code is RefusalCode.CITATION_AMBIGUOUS
+    return True
 
 
 def _overruns(line: list[str], words: list[str]) -> bool:
@@ -1357,7 +1725,7 @@ def _verdict(
     citation: Citation,
     blocks: frozenset[str],
     *,
-    rule: CitationRule = WHOLE_LINE,
+    rule: CitationRule = EXCERPT,
 ) -> RefusalCode | None:
     """`verify_citations`' anchoring refusal for one citation over `blocks`
     at its own page, never re-anchored (D94, so placing a quote is one

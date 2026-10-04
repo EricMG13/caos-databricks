@@ -43,7 +43,7 @@ from test_execution_freshness import _Harness, harness
 from test_loop_charges import ESTIMATE, MODEL, REPORTED
 
 from caos.boundary_text import BoundaryText
-from caos.evidence.citations import AnchoredCitation, Rect
+from caos.evidence.citations import MIN_EXCERPT_WORDS, AnchoredCitation, Rect
 from caos.graph.route import (
     NodeResult,
     NodeState,
@@ -675,7 +675,7 @@ def test_the_prompt_repeats_the_closed_contract_after_evidence(
     )
     assert f"Add only these model-authored front-matter fields: {authored}." in compact
     assert "Do not add any other front-matter fields" in compact
-    assert "that line must appear exactly once on its cited page" in compact
+    assert "appears exactly once on its cited page" in compact
     assert (
         "An evidence line is all the text between two blank lines in the EVIDENCE"
         " section, other than an evidence header (its `source_id:` and `page:`"
@@ -696,15 +696,24 @@ def test_the_prompt_repeats_the_closed_contract_after_evidence(
         in " ".join(prompt.split())
     )
     assert prompt.index('{"citations": [') < prompt.index('"canonical_markdown": "..."')
-    assert "`matched_text` copies one entire evidence line character for" in compact
-    assert "never only a sentence of it" in compact
+    # D105: an exact excerpt of one line, not the whole line (owner, 4 Oct).
+    assert (
+        "For every citation, `matched_text` copies an exact excerpt of one"
+        f" evidence line, character for character: at least {MIN_EXCERPT_WORDS}"
+        " consecutive words, or the whole line if it has fewer, including any"
+        " leading bullet or footnote marker and any trailing `|`. The excerpt"
+        " stays within that one line and appears exactly once on its cited page;"
+        " the same excerpt appears verbatim in the Markdown body after the front"
+        " matter, beside the statement it supports (in its Evidence Trace row or"
+        " the sentence that states it)," in compact
+    )
+    assert "one entire evidence line" not in compact
     assert 'own wording ("we", "our", "us"), never rephrased' in compact
     # D102: R3's CP-1 cited 8 lines for 274 figures; one citation read as enough.
     assert (
-        "Cite the evidence line behind each material figure and each statement"
-        " that a register row or conclusion rests on, at least one citation in"
-        " all, and only lines that support a claim you wrote; the cited lines may"
-        " be quoted together in one evidence section of the body." in compact
+        "Cite the excerpt behind each material figure and each statement that a"
+        " register row or conclusion rests on, at least one citation in all, and"
+        " only excerpts that support a claim you wrote." in compact
     )
     assert "Include at least one citation." not in compact
     assert "`page` is the page in the nearest evidence header above that line" in (
