@@ -45,7 +45,7 @@ from caos.evidence.citations import (
 )
 from caos.evidence.ingest import GROUP_WIDTH
 from caos.graph.route import MODEL_MODULE
-from caos.methodology.citation_markers import MARKER
+from caos.methodology.citation_markers import MARKER, body
 from caos.methodology.vendor import VendorContract
 from caos.provider import MAX_RESPONSE_BYTES
 from caos.refusals import Refusal, RefusalCode
@@ -944,22 +944,6 @@ def _transport(body: str) -> tuple[bytes, str, tuple[Citation, ...]]:
     return text.encode("utf-8"), text, requested
 
 
-# CommonMark's backslash escape: a backslash before ASCII punctuation is how
-# Markdown writes that mark, so `\"` reads `"` (F149).
-# ponytail: code spans keep their backslashes literally; unescaped here too.
-_MARKDOWN_ESCAPE = re.compile(r"\\([!-/:-@\[-`{-~])")
-
-
-def _body(text: str) -> str:
-    """The Markdown after its front matter, with its backslash escapes read
-    as the marks they write: `\\[C3\\]` is `[C3]`, as a reader sees it. The
-    front matter is host identity, not analysis, so no marker stands in it."""
-    lines = text.split("\n")
-    if lines[:1] == ["---"] and "---" in lines[1:]:
-        lines = lines[lines.index("---", 1) + 1 :]
-    return _MARKDOWN_ESCAPE.sub(r"\1", "\n".join(lines))
-
-
 # D107: the body names a citation by its 1-based place in the list, `[C3]`,
 # or several in one bracket, `[C3, C4]` (`citation_markers.MARKER`), read
 # anywhere after the front matter, fenced code included. Anything else is
@@ -978,7 +962,7 @@ def _written(text: str) -> list[str]:
     `03`, `[C3, C4]` is `3` and `4`."""
     return [
         number
-        for found in MARKER.finditer(_body(text))
+        for found in MARKER.finditer(body(text))
         for number in _MARKER_NUMBER.findall(found.group(1))
     ]
 
@@ -1388,7 +1372,7 @@ def _unmarked_line(text: str, count: int) -> str | None:
         return None
     near = sum(
         MARKER.fullmatch(found.group()) is None
-        for found in _NEAR_MARKER.finditer(_body(text))
+        for found in _NEAR_MARKER.finditer(body(text))
     )
     one = len(failed) == 1
     hint = (
