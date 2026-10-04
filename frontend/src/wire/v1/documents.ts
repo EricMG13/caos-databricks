@@ -380,12 +380,21 @@ const RunBody = object({
 const RunSectionDocument = sectionDocument(RunBody);
 
 const RectView = object({ x0: number, y0: number, x1: number, y1: number });
+// The whole evidence line a citation anchored in, split by the server around
+// its excerpt (D105): `before + excerpt + after` is the line, never sliced here.
+// An empty `excerpt` is a line the server could not place the quote in.
+const LineView = object({
+  before: string({ max: 65536 }),
+  excerpt: string({ max: 65536 }),
+  after: string({ max: 65536 }),
+});
 const CitationView = object({
   document_sha256: hash,
   source_id: uuid,
   filename: text,
   page: int(),
   matched_text: string({ max: 65536 }),
+  line: LineView,
   rects: array(RectView, 256),
   withdrawn_at: nullable(datetime),
   cited_page: nullable(int({ min: 1 })),
@@ -561,6 +570,7 @@ const NarrativeFigure = object({
   source_id: uuid,
   page: int({ min: 1 }),
   matched_text: string({ max: 65536 }),
+  line: LineView,
   rects: array(RectView, 256),
   withdrawn_at: nullable(datetime),
 });
@@ -734,6 +744,7 @@ export const V1_SHAPES = {
   CellView,
   Chrome,
   CitationView,
+  LineView,
   DirectoryBody,
   DirectoryDocument,
   EdgeType,
@@ -806,6 +817,7 @@ export type HandoffView = Infer<typeof HandoffView>;
 export type TableView = Infer<typeof TableView>;
 export type CellView = Infer<typeof CellView>;
 export type CitationView = Infer<typeof CitationView>;
+export type LineView = Infer<typeof LineView>;
 export type PendingNode = Infer<typeof PendingNode>;
 export type EventName = Infer<typeof EventName>;
 export type FrameView = Infer<typeof FrameView>;

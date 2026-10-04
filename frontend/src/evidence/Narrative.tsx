@@ -1,8 +1,9 @@
 // A saved narrative as Report and Committee show it (N59): its text is text,
-// and each figure is the quote it rests on plus a chip that opens the source
-// drawer at its page. The figure names its record, citation, source and page
+// and each figure is the whole line its quote rests on, the quote marked
+// (D105), plus a chip that opens the source drawer at its page. The figure names its record, citation, source and page
 // on the wire, so nothing here looks it up elsewhere.
 import { useEvidence } from "./EvidenceContext";
+import { TracedLine } from "./TracedLine";
 import type { ReportDocument } from "@/wire/v1";
 
 /** Report's and Committee's narrative: the same saved shape. */
@@ -22,7 +23,9 @@ export function Narrative({ narrative }: { narrative: ReportDocument["body"]["na
             return (
               <span key={spanIndex} data-figure={figure.route_node_id}>
                 {span.text}
-                <q className="figq">{figure.matched_text}</q>{" "}
+                <q className="figq">
+                  <TracedLine line={figure.line} />
+                </q>{" "}
                 <button
                   type="button"
                   className="chip"

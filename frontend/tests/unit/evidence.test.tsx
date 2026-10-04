@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { CitationChip } from "@/evidence/CitationChip";
 import { EvidenceProvider } from "@/evidence/EvidenceContext";
 import { MetricPassport } from "@/evidence/MetricPassport";
+import { wholeLine } from "@/evidence/TracedLine";
 import { PASSPORT_FIELDS, type Citation, type Passport } from "@/wire";
 
 const CITATION: Citation = {
@@ -71,6 +72,39 @@ describe("the evidence surface", () => {
     // To the chip that was passed, not back to where focus sat before the
     // click; the dialog places it a tick after it closes.
     await waitFor(() => expect(document.activeElement).toBe(chip));
+  });
+
+  test("the drawer shows the whole source line, the cited excerpt marked (D105)", () => {
+    const line = {
+      before: "Commencing with the first full fiscal quarter, ",
+      excerpt: CITATION.matched_text,
+      after: ".",
+    };
+    const { unmount } = render(
+      <EvidenceProvider>
+        <CitationChip citation={{ ...CITATION, line }} />
+      </EvidenceProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Evidence D-04 p.68 ¶2" }));
+    const shown = screen.getByRole("dialog").querySelector("blockquote.matched")!;
+    expect(shown.textContent).toBe(line.before + line.excerpt + line.after);
+    expect(shown.querySelector("mark")!.textContent).toBe(CITATION.matched_text);
+    unmount();
+    // A citation with no line beside it is its own line (`wholeLine`).
+    expect(wholeLine("Coverage 2.1x")).toEqual({
+      before: "",
+      excerpt: "Coverage 2.1x",
+      after: "",
+    });
+    render(
+      <EvidenceProvider>
+        <CitationChip citation={CITATION} />
+      </EvidenceProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Evidence D-04 p.68 ¶2" }));
+    const alone = screen.getByRole("dialog").querySelector("blockquote.matched")!;
+    expect(alone.querySelector("mark")!.textContent).toBe(CITATION.matched_text);
+    expect(alone.textContent).toBe(CITATION.matched_text);
   });
 
   test("a citation of a withdrawn source is marked on the chip and in the drawer", () => {

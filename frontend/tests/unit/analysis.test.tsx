@@ -507,6 +507,12 @@ describe("Analysis", () => {
     expect(fact).toHaveTextContent(withdrawn.filename);
     expect(fact).toHaveTextContent(`p.${withdrawn.page}`);
     expect(fact).toHaveTextContent(withdrawn.matched_text);
+    // D105: the whole source line, its cited excerpt marked inside it, so the
+    // words just before the excerpt are on screen beside it.
+    const { before, excerpt, after } = withdrawn.line;
+    expect(before).not.toBe("");
+    expect(fact.querySelector("blockquote")!.textContent).toBe(before + excerpt + after);
+    expect(fact.querySelector("blockquote mark")!.textContent).toBe(excerpt);
     expect(fact.getAttribute("data-withdrawn")).toBe("true");
     expect(fact).toHaveTextContent(stamp(withdrawn.withdrawn_at!));
 

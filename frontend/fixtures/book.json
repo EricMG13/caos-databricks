@@ -89,6 +89,11 @@
                       "filename": "issuer-pack.txt",
                       "page": 1,
                       "matched_text": "/drivers/0/revenue = \"500\"",
+                      "line": {
+                        "before": "",
+                        "excerpt": "/drivers/0/revenue = \"500\"",
+                        "after": ""
+                      },
                       "rects": [
                         {
                           "x0": 72.0,
@@ -140,6 +145,11 @@
                       "filename": "issuer-pack.txt",
                       "page": 1,
                       "matched_text": "/drivers/0/ebitda = \"100\"",
+                      "line": {
+                        "before": "",
+                        "excerpt": "/drivers/0/ebitda = \"100\"",
+                        "after": ""
+                      },
                       "rects": [
                         {
                           "x0": 72.0,
@@ -191,6 +201,11 @@
                       "filename": "issuer-pack.txt",
                       "page": 1,
                       "matched_text": "/drivers/0/cfo = \"80\"",
+                      "line": {
+                        "before": "",
+                        "excerpt": "/drivers/0/cfo = \"80\"",
+                        "after": ""
+                      },
                       "rects": [
                         {
                           "x0": 72.0,
@@ -242,6 +257,11 @@
                       "filename": "issuer-pack.txt",
                       "page": 1,
                       "matched_text": "/drivers/0/capex = \"20\"",
+                      "line": {
+                        "before": "",
+                        "excerpt": "/drivers/0/capex = \"20\"",
+                        "after": ""
+                      },
                       "rects": [
                         {
                           "x0": 72.0,
@@ -293,6 +313,11 @@
                       "filename": "issuer-pack.txt",
                       "page": 1,
                       "matched_text": "/drivers/0/cash_interest = \"10\"",
+                      "line": {
+                        "before": "",
+                        "excerpt": "/drivers/0/cash_interest = \"10\"",
+                        "after": ""
+                      },
                       "rects": [
                         {
                           "x0": 72.0,
@@ -344,6 +369,11 @@
                       "filename": "issuer-pack.txt",
                       "page": 1,
                       "matched_text": "/drivers/0/ebitda = \"100\"",
+                      "line": {
+                        "before": "",
+                        "excerpt": "/drivers/0/ebitda = \"100\"",
+                        "after": ""
+                      },
                       "rects": [
                         {
                           "x0": 72.0,
@@ -361,6 +391,11 @@
                       "filename": "issuer-pack.txt",
                       "page": 1,
                       "matched_text": "/drivers/0/revenue = \"500\"",
+                      "line": {
+                        "before": "",
+                        "excerpt": "/drivers/0/revenue = \"500\"",
+                        "after": ""
+                      },
                       "rects": [
                         {
                           "x0": 72.0,
@@ -441,6 +476,11 @@
                       "filename": "issuer-pack.txt",
                       "page": 1,
                       "matched_text": "/drivers/0/revenue = \"1000\"",
+                      "line": {
+                        "before": "",
+                        "excerpt": "/drivers/0/revenue = \"1000\"",
+                        "after": ""
+                      },
                       "rects": [
                         {
                           "x0": 72.0,
@@ -492,6 +532,11 @@
                       "filename": "issuer-pack.txt",
                       "page": 1,
                       "matched_text": "/drivers/0/ebitda = \"200\"",
+                      "line": {
+                        "before": "",
+                        "excerpt": "/drivers/0/ebitda = \"200\"",
+                        "after": ""
+                      },
                       "rects": [
                         {
                           "x0": 72.0,
@@ -543,6 +588,11 @@
                       "filename": "issuer-pack.txt",
                       "page": 1,
                       "matched_text": "/drivers/0/cfo = \"160\"",
+                      "line": {
+                        "before": "",
+                        "excerpt": "/drivers/0/cfo = \"160\"",
+                        "after": ""
+                      },
                       "rects": [
                         {
                           "x0": 72.0,
@@ -594,6 +644,11 @@
                       "filename": "issuer-pack.txt",
                       "page": 1,
                       "matched_text": "/drivers/0/capex = \"40\"",
+                      "line": {
+                        "before": "",
+                        "excerpt": "/drivers/0/capex = \"40\"",
+                        "after": ""
+                      },
                       "rects": [
                         {
                           "x0": 72.0,
@@ -645,6 +700,11 @@
                       "filename": "issuer-pack.txt",
                       "page": 1,
                       "matched_text": "/drivers/0/cash_interest = \"20\"",
+                      "line": {
+                        "before": "",
+                        "excerpt": "/drivers/0/cash_interest = \"20\"",
+                        "after": ""
+                      },
                       "rects": [
                         {
                           "x0": 72.0,
@@ -696,6 +756,11 @@
                       "filename": "issuer-pack.txt",
                       "page": 1,
                       "matched_text": "/drivers/0/ebitda = \"200\"",
+                      "line": {
+                        "before": "",
+                        "excerpt": "/drivers/0/ebitda = \"200\"",
+                        "after": ""
+                      },
                       "rects": [
                         {
                           "x0": 72.0,
@@ -713,6 +778,11 @@
                       "filename": "issuer-pack.txt",
                       "page": 1,
                       "matched_text": "/drivers/0/revenue = \"1000\"",
+                      "line": {
+                        "before": "",
+                        "excerpt": "/drivers/0/revenue = \"1000\"",
+                        "after": ""
+                      },
                       "rects": [
                         {
                           "x0": 72.0,

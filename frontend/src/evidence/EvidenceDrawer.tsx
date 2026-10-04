@@ -4,6 +4,7 @@
 import { Digest } from "@/ds/Digest";
 import { Overlay } from "./Overlay";
 import { Reanchored } from "./Reanchored";
+import { TracedLine, wholeLine } from "./TracedLine";
 import type { BBox, Citation } from "@/wire";
 
 function rect(box: BBox) {
@@ -71,9 +72,9 @@ export function EvidenceDrawer({
             </div>
           ))}
         </div>
-        <div className="lbl">Matched text</div>
+        <div className="lbl">Source line · the cited excerpt marked</div>
         <blockquote className="matched" style={{ margin: 0 }}>
-          <mark>{citation.matched_text}</mark>
+          <TracedLine line={citation.line ?? wholeLine(citation.matched_text)} />
         </blockquote>
         <dl className="kv">
           <dt>Document</dt>

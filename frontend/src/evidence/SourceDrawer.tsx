@@ -8,6 +8,7 @@ import { toFraction, type Box } from "./geometry";
 import { Digest } from "@/ds/Digest";
 import { Overlay } from "./Overlay";
 import { Reanchored } from "./Reanchored";
+import { TracedLine } from "./TracedLine";
 import { OFFLINE_WORDING, UNAVAILABLE_WORDING, fetchPage, type PageStatus } from "@/app/transport";
 import type { CitationView, PageDocument, PageLine } from "@/wire/v1";
 
@@ -230,9 +231,9 @@ export function SourceDrawer({
             )}
           </div>
         )}
-        <div className="lbl">Matched text</div>
+        <div className="lbl">Source line · the cited excerpt marked</div>
         <blockquote className="matched" style={{ margin: 0 }}>
-          <mark>{fact.matched_text}</mark>
+          <TracedLine line={fact.line} />
         </blockquote>
         <dl className="kv">
           <dt>Document</dt>
