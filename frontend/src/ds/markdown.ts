@@ -157,7 +157,9 @@ function quote(lines: string[], index: number, out: Block[]): number {
     held.push(lines[at]!.trimStart().slice(1).trim());
     at += 1;
   }
-  out.push({ kind: "quote", text: held.join(" ") });
+  // Joined at the line breaks the model wrote, which the page shows as spaces:
+  // a marker is read within one line, as the host reads it (D107).
+  out.push({ kind: "quote", text: held.join("\n") });
   return at;
 }
 
@@ -255,7 +257,7 @@ function paragraph(lines: string[], index: number, out: Block[]): number {
     held.push(line.trim());
     at += 1;
   }
-  out.push({ kind: "paragraph", text: held.join(" ") });
+  out.push({ kind: "paragraph", text: held.join("\n") });
   return at;
 }
 
@@ -310,11 +312,17 @@ export interface ModuleRef {
   note: string | null;
 }
 
-export type RefPiece = string | { text: string; refs: ModuleRef[] };
+export type RefPiece =
+  string | { text: string; refs: ModuleRef[] } | { text: string; qualified: string };
 
 const REF = /\[(CP-[^[\]\n]{1,100})\]/g;
 const REF_MODULE = /^(CP-(?:\d+[A-Z]?|[A-Z][A-Z0-9]*))(?:\s+(.+))?$/;
-const REF_REGISTER = /^[A-Z]{1,3}\d+[A-Z]?(?:\.[0-9A-Z]+)*(?:[–-][A-Z0-9.]+)?$/;
+// A register id -- never `C3`, which is a citation's marker (D107).
+const REF_REGISTER = /^(?!C\d+$)[A-Z]{1,3}\d+[A-Z]?(?:\.[0-9A-Z]+)*(?:[–-][A-Z0-9.]+)?$/;
+// An upstream citation's marker as a downstream prompt shows it and a module
+// may copy it, `[CP-1 C3]` or `[CP-1 C2, C5]` (`citation_markers.qualified`):
+// a label naming that module's citation, never a way to a register.
+const QUALIFIED = /^(CP-(?:\d+[A-Z]?|[A-Z][A-Z0-9]*)) (C[0-9]+(?:, ?C[0-9]+)*)$/;
 
 /** The references in a bracket's content, or `null` when any part of it is
     not one (a file name, "external: …"), so the bracket stays as written. */
@@ -349,10 +357,52 @@ export function readRefs(text: string): RefPiece[] {
   const out: RefPiece[] = [];
   let at = 0;
   for (const match of text.matchAll(REF)) {
+    const qualified = QUALIFIED.exec(match[1]!);
+    if (qualified) {
+      if (match.index > at) out.push(text.slice(at, match.index));
+      out.push({ text: match[0], qualified: `${qualified[1]} ${qualified[2]}` });
+      at = match.index + match[0].length;
+      continue;
+    }
     const refs = refsIn(match[1]!);
     if (refs === null) continue;
     if (match.index > at) out.push(text.slice(at, match.index));
     out.push({ text: match[0], refs });
+    at = match.index + match[0].length;
+  }
+  if (at < text.length) out.push(text.slice(at));
+  return out;
+}
+
+// ---- citation markers ----
+
+/** A run of model text and the citation markers in it (D107): `[C3]` names
+    the citation at place 3 of the answer's list, `[C2, C5]` two of them. */
+export type MarkerPiece = string | { text: string; numbers: number[] };
+
+// `citation_markers.MARKER` as `handoff.markers` reads it, rule for rule: an
+// upper-case C and ASCII digits, several in one bracket separated by a comma
+// and at most one space (never a line break), each mark possibly a Markdown
+// backslash escape, which the host reads as the mark it writes (F149): so
+// `\[C3\]` and `[C3\, C4]` are markers. A number of more than `MARKER_DIGITS`
+// digits names no citation (0). Anything else -- `[c3]`, `[C 3]`, `[C3-C5]`,
+// `[C1,  C2]` -- is text.
+const MARKER = /\\?\[(C[0-9]+(?:\\?, ?C[0-9]+)*)\\?\]/g;
+/** `handoff.MARKER_DIGITS`. */
+export const MARKER_DIGITS = 9;
+
+/** A line of model text with its citation markers picked out, the rest
+    exactly as written. */
+export function readMarkers(text: string): MarkerPiece[] {
+  const out: MarkerPiece[] = [];
+  let at = 0;
+  for (const match of text.matchAll(MARKER)) {
+    if (match.index > at) out.push(text.slice(at, match.index));
+    const numbers = match[1]!
+      .split(/\\?, ?/)
+      .map((part) => part.slice(1))
+      .map((digits) => (digits.length <= MARKER_DIGITS ? Number(digits) : 0));
+    out.push({ text: match[0], numbers });
     at = match.index + match[0].length;
   }
   if (at < text.length) out.push(text.slice(at));

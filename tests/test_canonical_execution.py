@@ -43,6 +43,7 @@ from caos.graph.runtime import ProviderResult
 from caos.methodology import executor, runner
 from caos.methodology.bundle import Bundle
 from caos.methodology.canonical import HandoffOutcome, execute_handoff
+from caos.methodology.citation_markers import qualified
 from caos.methodology.executor import Assignment, captured_blocks
 from caos.methodology.handoff import (
     CanonicalRecord,
@@ -220,7 +221,7 @@ def test_the_executor_produces_a_validated_handoff_and_its_record(
     _accept(harness, gate_attempt, gate)
 
     screen_attempt, screen = _run(harness, "CP-L10", completions)
-    assert gate_markdown.decode() in completions.prompts[1]
+    assert qualified(gate_markdown.decode(), "CP-0") in completions.prompts[1]
     _verified(harness, "CP-L10", screen_attempt, screen)
     _accept(harness, screen_attempt, screen)
     assert _counts(harness) == (2, [REPORTED, REPORTED], 2, 2, 2)
@@ -350,12 +351,12 @@ def test_an_upstream_statement_is_not_citable_evidence(harness: _Harness) -> Non
     quoting = CanonicalCompletions(harness.source_id, quotes=(UNANCHORED,))
     _attempt, screen = _run(harness, "CP-L10", quoting)
     [prompt] = quoting.prompts
-    assert upstream in prompt
+    assert qualified(upstream, "CP-0") in prompt
     record = _record(harness, screen)
     assert record.citations == ()
     assert record.unverified == (
         UnverifiedCitation(
-            harness.source_id, 1, UNANCHORED, RefusalCode.CITATION_NOT_LOCATED
+            harness.source_id, 1, UNANCHORED, RefusalCode.CITATION_NOT_LOCATED, marker=1
         ),
     )
 
@@ -365,16 +366,18 @@ def test_one_unanchorable_quote_is_kept_unverified_beside_the_anchored_one(
 ) -> None:
     """D106: a citation fault refuses the citation, never the answer. The
     anchored quote is host-verified in `citations`; the other is the
-    module's own locator in `unverified`, never mixed in."""
+    module's own locator in `unverified`, never mixed in. Each keeps its
+    place in the answer's list, which its marker names (D107)."""
     both = CanonicalCompletions(harness.source_id, quotes=(QUOTE, UNANCHORED))
     _attempt, gate = _run(harness, "CP-0", both)
     record = _record(harness, gate)
     [anchored] = record.citations
     assert (anchored.matched_text, anchored.page, anchored.linked) == (QUOTE, 1, True)
+    assert anchored.marker == 1
     assert anchored.document_sha256 == hashlib.sha256(REPORT).hexdigest()
     assert record.unverified == (
         UnverifiedCitation(
-            harness.source_id, 1, UNANCHORED, RefusalCode.CITATION_NOT_LOCATED
+            harness.source_id, 1, UNANCHORED, RefusalCode.CITATION_NOT_LOCATED, marker=2
         ),
     )
     assert _counts(harness) == (1, [REPORTED], 0, 1, 1)
@@ -460,5 +463,7 @@ def test_a_quote_outside_the_captured_blocks_is_kept_unverified(
     record = _record(harness, gate)
     assert record.citations == ()
     assert record.unverified == (
-        UnverifiedCitation(source, 1, QUOTE, RefusalCode.CITATION_NOT_DELIVERED),
+        UnverifiedCitation(
+            source, 1, QUOTE, RefusalCode.CITATION_NOT_DELIVERED, marker=1
+        ),
     )

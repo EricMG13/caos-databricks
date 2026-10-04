@@ -19,8 +19,11 @@ opening balance: debt of the opening debt, cash of the opening cash.
 Each binding is exactly `{module_id, quote}`. CP-1 owns opening, periods,
 units and perimeter; CP-4 owns contractual amortisation; CP-2G owns drivers
 and tolerance. Every quote must be an exact accepted upstream anchored quote
-and must contain the exact line `/<pointer> = <JSON scalar>` (with only one
-leading slash). Include those same quotes in this handoff and its citations.
+that its owner's handoff cites by marker (shown upstream as `[CP-1 C3]`; the
+register lists it as `CP-1 C3`) and must contain the exact line
+`/<pointer> = <JSON scalar>` (with only one leading slash). The bindings carry
+those quotes; cite each again in this handoff's citations, its `[C<n>]` in the
+Evidence Trace, and quote no other source text in the Markdown.
 No unrelated number, missing movement or unstated zero is authority.
 
 CP-2G's accepted forecast_driver_table retains its vendor vocabulary. For the

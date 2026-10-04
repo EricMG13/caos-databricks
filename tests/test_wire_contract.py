@@ -123,22 +123,24 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
         ).split()
     ),
     wire.NarrativeFigure: frozenset(
-        "route_node_id record_sha256 citation_index document_sha256 source_id"
-        " page matched_text line rects withdrawn_at linked".split()
+        "route_node_id module_id record_sha256 citation_index document_sha256 source_id"
+        " page matched_text line rects withdrawn_at linked marker".split()
     ),
     wire.LineView: frozenset({"before", "excerpt", "after", "recorded"}),
     wire.NarrativeSpan: frozenset({"text", "figure", "unverified"}),
     wire.NarrativeUnverified: frozenset(
-        "route_node_id record_sha256 unverified_index source_id page matched_text"
-        " code linked".split()
+        "route_node_id module_id record_sha256 unverified_index source_id page"
+        " matched_text"
+        " code linked marker".split()
     ),
     wire.UnverifiedCitationView: frozenset(
-        {"source_id", "page", "matched_text", "code", "linked"}
+        {"source_id", "page", "matched_text", "code", "linked", "marker"}
     ),
     wire.ReportArtifact: frozenset(
         (
             "route_node_id artifact_sha256 record_sha256 markdown record qa_status "
-            "committee_status decision_scope limitation_flags validation_warnings"
+            "committee_status decision_scope limitation_flags validation_warnings "
+            "figures unverified"
         ).split()
     ),
     wire.ReportBody: frozenset(
@@ -301,6 +303,7 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
             "matched_text",
             "line",
             "linked",
+            "marker",
         }
     ),
     RunView: frozenset(
@@ -347,6 +350,7 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
             "withdrawn_at",
             "cited_page",
             "linked",
+            "marker",
         }
     ),
     HandoffView: frozenset(
@@ -754,6 +758,7 @@ def test_citation_view_names_its_source_for_the_page_endpoint() -> None:
         "withdrawn_at": None,
         "cited_page": None,
         "linked": True,
+        "marker": None,
     }
     with pytest.raises(ValidationError):
         CitationView.model_validate(citation)

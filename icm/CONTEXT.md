@@ -27,7 +27,7 @@ This folder is the agent-definition layer of CAOS (spec section 3.5, ICM paper a
 Every stage's node runs the same six steps (its own `CONTEXT.md` points here rather than repeating them):
 
 1. **Identity.** The host reads every host-owned fact from the store's pins (run input, pinned route, attempt ordinal, accepted upstream artifacts) and builds the front matter the module must copy (invariant 3).
-2. **Context.** The node's evidence blocks are those CP-0's accepted T8 row names for this module, delivered whole; upstream handoffs are delivered as exact bytes labelled with their edge's `allowed_use`, with the host's register of their located citations.
+2. **Context.** The node's evidence blocks are those CP-0's accepted T8 row names for this module, delivered whole; upstream handoffs are delivered as exact bytes, but for their citation markers shown qualified by module (D107), labelled with their edge's `allowed_use`, with the host's register of their citations.
 3. **Prompt.** The blocks `prompt.md` declares, the authority files above each whole in its own tagged section, the upstream sections and the evidence; the whole encoded request is bounded before any attempt, reservation or call (`CONTEXT_OVER_CEILING`).
 4. **Reserve, then call.** One attempt row, one reservation priced on the request that was built, one call through the model factory; the charge and producer identity are recorded with the call, before analysis (invariant 8).
 5. **Validate.** The answer is parsed as the canonical envelope, the Markdown handoff is validated by the bundle's own validators and the host's ten checks, and every citation is re-located in the token index or refused (invariants 9 and 11).

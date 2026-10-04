@@ -22,7 +22,7 @@ import hashlib
 import time
 from collections.abc import Callable, Collection, Mapping, Sequence
 from contextlib import suppress
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from enum import StrEnum
 from uuid import UUID
@@ -85,6 +85,7 @@ from caos.methodology.handoff import (
     capped,
     carried_answer,
     feedback_lines,
+    markers,
     parse_response,
     readiness_set_line,
     record_bytes,
@@ -472,10 +473,10 @@ def _answer(  # noqa: PLR0913 -- one recorded answer, keyword-only
     if _demand_faults(bundle, assignment, context, markdown):
         raise Refusal(RefusalCode.HANDOFF_MALFORMED)
     # D106's one exception, the same producer-guard shape: a citation CP-CF
-    # will bind as a calculation input must anchor and stand in this body as
-    # written, or CP-CF cannot bind it and the run wedges there; refused
-    # here, as a guided retry naming it.
-    if _calculation_inputs(assignment, _unbindable(markdown, anchored, unverified)):
+    # will bind as a calculation input must anchor and be named by a marker
+    # in this body (D107), or CP-CF cannot bind it and the run wedges there;
+    # refused here, as a guided retry naming it.
+    if _calculation_inputs(assignment, _unbindable(anchored, unverified)):
         raise Refusal(RefusalCode.HANDOFF_INCOMPLETE)
     _forecast_inputs(bundle, assignment.module_id, markdown, context)
     record = CanonicalRecord(
@@ -503,21 +504,25 @@ def _partitioned(
     linked: Sequence[bool],
 ) -> tuple[tuple[AnchoredCitation, ...], tuple[UnverifiedCitation, ...]]:
     """An answer's citations, in order, as anchored -- host-verified under
-    `EXCERPT` (D105), flagged not linked to a statement where the body does
-    not carry the quote -- and unverified: the module's own locator and
-    quote with the anchoring refusal that left it so (D106). Each is judged
-    alone (`_judged`), so one citation's verdict never moves another's. A
-    quote that cannot be kept as unverified (`unverified_citation`) refuses
-    `HANDOFF_MALFORMED`, a host text check."""
+    `EXCERPT` (D105), flagged not linked to a statement where no marker in
+    the body names it -- and unverified: the module's own locator and
+    quote with the anchoring refusal that left it so (D106). Each keeps its
+    place in the list, which its markers name (`marker`, D107). Each is
+    judged alone (`_judged`), so one citation's verdict never moves
+    another's. A quote that cannot be kept as unverified
+    (`unverified_citation`) refuses `HANDOFF_MALFORMED`, a host text check."""
     anchored: list[AnchoredCitation] = []
     unverified: list[UnverifiedCitation] = []
-    for citation, held, found in zip(
-        citations, linked, _judged(conn, blocks, citations, TokenIndex()), strict=True
+    judged = _judged(conn, blocks, citations, TokenIndex())
+    for place, (citation, held, found) in enumerate(
+        zip(citations, linked, judged, strict=True), 1
     ):
         if isinstance(found, AnchoredCitation):
-            anchored.append(found if held else replace(found, linked=False))
+            anchored.append(replace(found, linked=held, marker=place))
         else:
-            unverified.append(unverified_citation(citation, found, linked=held))
+            unverified.append(
+                unverified_citation(citation, found, linked=held, marker=place)
+            )
     return tuple(anchored), tuple(unverified)
 
 
@@ -595,6 +600,9 @@ class _Context:
     feedback: tuple[str, ...] = ()
     # The refused answer that retry is asked to correct (D104), or None.
     refused_answer: str | None = None
+    # Each direct upstream's unverified citations (D106), whose markers the
+    # register names as unlocated (D107).
+    unverified: dict[str, tuple[UnverifiedCitation, ...]] = field(default_factory=dict)
 
 
 def _source_preparation(
@@ -713,6 +721,7 @@ def _context(
         citations={node: record.citations for node, record in records.items()},
         source_set=source_set,
         selection=selection,
+        unverified={node: record.unverified for node, record in records.items()},
     )
 
 
@@ -848,18 +857,16 @@ def _calculation_inputs(assignment: Assignment, quotes: Sequence[str]) -> list[i
 
 
 def _unbindable(
-    markdown: bytes,
-    anchored: Sequence[AnchoredCitation],
-    unverified: Sequence[UnverifiedCitation],
+    anchored: Sequence[AnchoredCitation], unverified: Sequence[UnverifiedCitation]
 ) -> list[str]:
-    """The quotes CP-CF could not bind from this answer: every unverified
-    one, and every anchored one this Markdown does not hold as written
-    (`forecast.carries`, the binder's own test)."""
-    from caos.methodology.forecast import carries
-
-    return [entry.matched_text for entry in unverified] + [
-        c.matched_text for c in anchored if not carries(markdown, c.matched_text)
-    ]
+    """The quotes CP-CF could not bind from this answer, judged by quote as
+    the binder judges them (`forecast.validate_forecast_bindings`, D107): a
+    quote binds when some anchored citation of it is one a marker in the
+    body names (`linked`), so an unverified or unmarked citation of a quote
+    another citation binds is no fault."""
+    bound = {c.matched_text for c in anchored if c.linked}
+    quotes = [c.matched_text for c in anchored] + [e.matched_text for e in unverified]
+    return [quote for quote in quotes if quote not in bound]
 
 
 def _calculation_line(
@@ -870,21 +877,23 @@ def _calculation_line(
 ) -> str | None:
     """The owner retry's line for its citations CP-CF binds but could not
     (D106, `_unbindable`), by number: unlike every other citation they
-    refuse the answer until each anchors and stands in the body as written.
-    The anchoring and body-quote lines beside it say what is wrong with
-    each. None for every other module and route."""
-    from caos.methodology.forecast import carries
-
+    refuse the answer until each anchors and a marker names it (D107).
+    The anchoring and marker lines beside it say what is wrong with each.
+    None for every other module and route."""
     citations = answer_citations(body)
     markdown = answer_markdown(body) or b""
     if not _calculation_inputs(assignment, [c.matched_text for c in citations]):
         return None
     verdicts = _anchoring(conn, _by_source(delivered), citations, TokenIndex())
-    # A citation CP-CF can bind stands as "", which binds nothing.
-    lost = [
-        "" if v is None and carries(markdown, c.matched_text) else c.matched_text
-        for c, v in zip(citations, verdicts, strict=True)
-    ]
+    named = frozenset(markers(markdown.decode("utf-8")))
+    # By quote, as `_unbindable` and the binder judge: a quote some anchored,
+    # marked citation carries binds, and stands as "", which binds nothing.
+    bound = {
+        c.matched_text
+        for place, (c, v) in enumerate(zip(citations, verdicts, strict=True), 1)
+        if v is None and place in named
+    }
+    lost = ["" if c.matched_text in bound else c.matched_text for c in citations]
     failed = [n + 1 for n in _calculation_inputs(assignment, lost)]
     if not failed:
         return None
@@ -892,10 +901,10 @@ def _calculation_line(
     return (
         f"host calculation-input check: {_numbered(failed)} of {len(citations)}"
         f" {'feed' if many else 'feeds'} the forecast calculator (CP-CF) and must"
-        " be an exact excerpt of one evidence line that anchors, written in the"
-        " Markdown body exactly as quoted; unlike other citations,"
+        " be an exact excerpt of one evidence line that anchors, named by its"
+        " [C<n>] marker in the Markdown body; unlike other citations,"
         f" {'they refuse' if many else 'it refuses'} this answer until then (the"
-        " host anchoring and citation checks say what is wrong with each;"
+        " host anchoring and marker checks say what is wrong with each;"
         " numbered from 1 in the order given)"
     )
 
@@ -1229,6 +1238,7 @@ def _prompt(
         delivered=context.delivered,
         upstream=context.upstream,
         upstream_citations=context.citations,
+        upstream_unverified=context.unverified,
         route=assignment.route,
         source_set=context.source_set,
         page_maps=context.selection.page_maps,

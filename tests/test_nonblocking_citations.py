@@ -315,7 +315,8 @@ def test_the_partition_keeps_order_codes_and_links(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Each citation is judged alone: the anchored ones in order, each
-    flagged `linked` as the body carries it; the rest unverified in order,
+    flagged `linked` as a marker names it and keeping its place in the list
+    (`marker`, D107); the rest unverified in order, likewise,
     each with its own code -- all three of anchoring's. Any other refusal is
     not a citation fault and is raised."""
     outcomes = {
@@ -329,16 +330,20 @@ def test_the_partition_keeps_order_codes_and_links(
     citations = [Citation(SOURCE, n, text) for n, text in enumerate(outcomes, 1)]
     linked = [True, True, False, False, True]
     anchored, unverified = _partitioned(_NO_STORE, {}, citations, linked)
-    assert [(c.matched_text, c.linked) for c in anchored] == [
-        ("first", True),
-        ("third", False),
+    assert [(c.matched_text, c.linked, c.marker) for c in anchored] == [
+        ("first", True, 1),
+        ("third", False, 3),
     ]
     assert unverified == (
-        UnverifiedCitation(SOURCE, 2, "second", RefusalCode.CITATION_AMBIGUOUS),
         UnverifiedCitation(
-            SOURCE, 4, "fourth", RefusalCode.CITATION_NOT_LOCATED, linked=False
+            SOURCE, 2, "second", RefusalCode.CITATION_AMBIGUOUS, marker=2
         ),
-        UnverifiedCitation(SOURCE, 5, "fifth", RefusalCode.CITATION_NOT_DELIVERED),
+        UnverifiedCitation(
+            SOURCE, 4, "fourth", RefusalCode.CITATION_NOT_LOCATED, False, 4
+        ),
+        UnverifiedCitation(
+            SOURCE, 5, "fifth", RefusalCode.CITATION_NOT_DELIVERED, marker=5
+        ),
     )
     monkeypatch.setattr(
         canonical,
@@ -351,8 +356,8 @@ def test_the_partition_keeps_order_codes_and_links(
 
 @dataclasses.dataclass
 class _Unquoted(CanonicalCompletions):
-    """Cites the report's line, and an undelivered source, without writing
-    the line into the body: one anchored citation not linked to a statement
+    """Cites the report's line, and an undelivered source, with a marker for
+    the second only (D107): one anchored citation not linked to a statement
     and one unverified, in an answer every structural check passes."""
 
     stranger: UUID = dataclasses.field(default_factory=uuid4)
@@ -361,9 +366,7 @@ class _Unquoted(CanonicalCompletions):
         done = super().complete(prompt, json_object=json_object)
         assert done.content is not None
         wire = json.loads(done.content)
-        wire["canonical_markdown"] = wire["canonical_markdown"].replace(
-            QUOTE, "the debt line of the report"
-        )
+        wire["canonical_markdown"] = wire["canonical_markdown"].replace("[C1]", "[C2]")
         wire["citations"].append(
             {"source_id": str(self.stranger), "page": 1, "matched_text": UNANCHORED}
         )
@@ -372,7 +375,7 @@ class _Unquoted(CanonicalCompletions):
 
 
 def test_each_citation_fault_keeps_the_answer(harness: _Harness) -> None:
-    """End to end: the verbatim-in-body check and `CITATION_NOT_DELIVERED`
+    """End to end: a citation no marker names and `CITATION_NOT_DELIVERED`
     (an unknown source) no longer refuse; the answer is accepted on its first
     attempt with the line anchored, not linked, and the stranger unverified.
     `CITATION_NOT_LOCATED` end to end is
@@ -385,17 +388,17 @@ def test_each_citation_fault_keeps_the_answer(harness: _Harness) -> None:
     assert (anchored.matched_text, anchored.linked) == (QUOTE, False)
     assert record.unverified == (
         UnverifiedCitation(
-            answers.stranger, 1, UNANCHORED, RefusalCode.CITATION_NOT_DELIVERED
+            answers.stranger, 1, UNANCHORED, RefusalCode.CITATION_NOT_DELIVERED, True, 2
         ),
     )
     assert json.loads(record_bytes(record))["citations"][0]["linked"] is False
 
 
-def test_a_key_is_met_only_by_an_anchored_citation_the_body_carries() -> None:
+def test_a_key_is_met_only_by_an_anchored_citation_a_marker_names() -> None:
     """D106, owner: "Linked only". `scored_lines` -- what the proof's
     `anchored` set and quality_compare score keys by -- holds an anchored
-    citation the body carries, never one not linked to a statement, never
-    an unverified one."""
+    citation a marker names (D107), never one not linked to a statement,
+    never an unverified one."""
     from caos.qualification.proof import scored_lines
 
     [anchored] = _excerpt_record().citations
@@ -431,7 +434,7 @@ def test_the_snapshot_carries_the_unverified_count_only() -> None:
 
 
 def test_the_retry_lines_on_citations_say_what_they_are() -> None:
-    """The body-quote line is advisory (`ADVISORY`), and a quote the host
+    """The unmarked line is advisory (`ADVISORY`), and a quote the host
     could not keep is named by the structural line, never quoted."""
     from canonical_fixtures import CATALOG, CONTRACT, wire
     from test_handoff_record import CP0_MD, _citation
@@ -441,7 +444,7 @@ def test_the_retry_lines_on_citations_say_what_they_are() -> None:
         [_citation(), _citation(matched_text="not in the body at all \u0007 here")],
     )
     lines = handoff.feedback_lines(CONTRACT, CATALOG, CP0, body)
-    quote_line = next(line for line in lines if "verbatim in the Markdown" in line)
+    quote_line = next(line for line in lines if "named by no [C<n>] marker" in line)
     assert quote_line.endswith(handoff.ADVISORY)
     kept = next(line for line in lines if "control, bidirectional" in line)
     assert kept.startswith("host citation check: citation 2 of 2 carries")

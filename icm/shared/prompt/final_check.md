@@ -17,15 +17,23 @@ evidence line too. For every citation, `matched_text` copies an exact
 excerpt of one evidence line, character for character: at least 8
 consecutive words, or the whole line if it has fewer, including any leading
 bullet or footnote marker and any trailing `|`. The excerpt stays within
-that one line and appears exactly once on its cited page; the same excerpt
-appears verbatim in the Markdown body after the front matter, beside the
-statement it supports (in its Evidence Trace row or the sentence that states
-it), in the source's own wording ("we", "our", "us"), never rephrased into
-the third person. Cite the excerpt behind each material
-figure and each statement that a register row or conclusion rests on, at
-least one citation in all, and only excerpts that support a claim you wrote.
-A citation the host cannot locate is kept as unverified and shown to the
-reader as such; it does not refuse the answer.
+that one line and appears exactly once on its cited page. The excerpt lives
+only in `citations`: the Markdown body quotes no source text and cites by
+marker, `[C1]` for the first citation in the list, `[C2]` for the second,
+`[C2, C5]` for several, beside the statement each supports. Give each
+material figure and each statement that a register row or conclusion rests
+on a marker, at least one citation in all, and cite only excerpts that
+support a claim you wrote. A marker never goes inside a figure, status or
+other value cell: put it in the row's source or evidence column if it has
+one, otherwise in the prose or the Evidence Trace row. Evidence Trace is a
+short locator table, no quotes: each row gives a claim, its marker, the
+document and the page, with any column your authority requires there.
+`[C<n>]` is only ever this answer's citation: label your own conflicts and
+rows otherwise (for example `CF-1`). An upstream handoff's marker is shown
+as `[CP-1 C3]`: keep that form if you carry it over, never `[C3]`, and cite
+the excerpt yourself to rest a claim of yours on it. A marker that names no
+citation refuses the answer. A citation the host cannot locate is kept as
+unverified and shown to the reader as such; it does not refuse the answer.
 Valid `source_id` values are exactly: {source_ids}, and `page` is the page in
 the nearest evidence header above that line.
 {host_text}--- END FINAL RESPONSE CHECK {tag} ---

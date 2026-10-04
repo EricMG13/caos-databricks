@@ -10,6 +10,7 @@ from typing import Any, NamedTuple
 
 from caos.calculators.cash_flow import cash_flow_forecast
 from caos.evidence.citations import AnchoredCitation
+from caos.methodology.citation_markers import unmarked
 from caos.methodology.host import verified_host_bytes
 from caos.methodology.vendor import VendorContract
 from caos.refusals import Refusal, RefusalCode
@@ -47,13 +48,6 @@ def _owner(pointer: str) -> str | None:
 def _assignment(pointer: str, value: object) -> str:
     """The one line a binding's quote must hold for `pointer`'s value."""
     return pointer + _SEPARATOR + json.dumps(value, ensure_ascii=False)
-
-
-def carries(markdown: bytes, quote: str) -> bool:
-    """Whether a handoff's Markdown holds `quote` as written: the binder's
-    own test, raw text and no word matching, for the owner's handoff and
-    CP-CF's alike (`validate_forecast_bindings`)."""
-    return quote in markdown.decode("utf-8")
 
 
 def binds_input(owner: str, quote: str) -> bool:
@@ -162,6 +156,11 @@ def validate_forecast_bindings(
 ) -> None:
     """Every requested value must be an exact assignment anchored by its owner.
 
+    The bound quote is one of the owner's anchored citations that a marker
+    in the owner's body names (`linked`, D107), as its verified record
+    holds it: the owner's body cites it by marker and quotes no source
+    text, so neither handoff is searched for the quote. A record from
+    before D107 keeps its own `linked`, the quote verbatim in that body.
     Empty arrays are also bound: absence of contractual repayments is an
     explicit CP-4 statement, never a missing-input default.
     """
@@ -182,9 +181,8 @@ def validate_forecast_bindings(
             binding["module_id"] != owner
             or not isinstance(quote, str)
             or assignment not in quote.splitlines()
-            or quote not in {c.matched_text for c in citations.get(owner, ())}
-            or not carries(upstream[owner], quote)
-            or not carries(markdown, quote)
+            or quote
+            not in {c.matched_text for c in citations.get(owner, ()) if c.linked}
         ):
             raise Refusal(RefusalCode.HANDOFF_INCOMPLETE)
 
@@ -319,11 +317,19 @@ def _faults_or_none(
         return None
 
 
+def _unmarked_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Each row with every cell read without its citation markers
+    (`unmarked`, D107)."""
+    return [{key: unmarked(cell) for key, cell in row.items()} for row in rows]
+
+
 def _faults(
     contract: VendorContract, request: Mapping[str, Any], rows: list[dict[str, str]]
 ) -> list[tuple[str, str]]:
     """(row, fault) for each CP-2G driver row the request needs and CP-CF cannot
-    map, in request order."""
+    map, in request order. Each cell is read without its citation markers
+    (`_unmarked_rows`, D107): `(45) [C1]` is the figure `(45)`."""
+    rows = _unmarked_rows(rows)
     if request["units"]["scale"] != "millions":
         raise ValueError
     faults: list[tuple[str, str]] = []

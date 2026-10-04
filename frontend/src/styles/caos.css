@@ -1460,15 +1460,46 @@
   }
   /* The cited excerpt inside its whole source line (D105), in the ink of the
      surface it sits on: a narrative figure is also read on Committee's paper. */
-  /* An unverified citation (D106): the model's own quote, never the host's well
-     or its mark -- a dashed edge on no fill, its label read before it. */
-  .unverified-quote {
-    margin: 0;
-    padding: 0.25rem 0 0.25rem 0.875rem;
-    border-left: 2px dashed var(--muted-foreground);
-    font: 400 0.875rem/1.6 var(--font-sans);
+  /* A citation marker in analysis text (D107): a chip beside the statement,
+     sitting on the line it is read in. */
+  .chip.cmark {
+    vertical-align: 1px;
+  }
+  .md-cites {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    vertical-align: 1px;
+  }
+  /* Another module's citation named by its qualified marker (D107): a quiet
+     label in the mono face, nothing to press. */
+  .qmark {
+    font: 500 0.75rem/1 var(--font-mono);
+    color: var(--muted-foreground);
+    white-space: nowrap;
+  }
+  /* An unverified citation's marker (D106): labelled, dashed, inert -- never
+     the host-verified chip's fill, and nothing to press. */
+  .chip.unverified {
+    border-style: dashed;
+    border-color: var(--muted-foreground);
+    background: transparent;
     color: var(--foreground);
-    overflow-wrap: break-word;
+    cursor: default;
+  }
+  .chip.unverified:hover {
+    background: transparent;
+  }
+  .paper .chip.unverified {
+    border-color: var(--paper-rule);
+    color: var(--paper-meta);
+  }
+  /* A compact citation's excerpt (D107): about one line; its whole source line
+     is the drawer's. */
+  .facts .excerpt {
+    display: block;
+    color: var(--foreground);
+    overflow-wrap: anywhere;
   }
   /* Labels on Committee's paper take paper's own ink: the theme's muted ink
      is 2.36:1 on cream in the dark scheme (NB2 review). */
@@ -1938,6 +1969,18 @@
   }
   details.help[open] > summary {
     margin-bottom: 0.25rem;
+  }
+  /* A saved artifact's signed record: one line when closed (D107). */
+  details.record {
+    margin-top: 0.75rem;
+  }
+  details.record > summary {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  details.record[open] > summary {
+    margin-bottom: 0.5rem;
   }
   /* One case's access: a line when closed, its members and forms when open. */
   details.access > summary {
@@ -2878,9 +2921,6 @@
   }
   .analysis ul.facts > li:last-child {
     border-bottom: 0;
-  }
-  .analysis ul.facts blockquote.matched {
-    margin: 0;
   }
   .drawer ul.register > li {
     display: grid;

@@ -98,12 +98,14 @@ test("demo Model, Report, and Committee routes render parsed v1 content", async 
   await expect(page.locator("[data-committee-v1]")).toBeVisible();
   await expect(page.locator("[data-committee-filing]")).toHaveAttribute("data-state", "filed");
   // Read only: no field, and the buttons are a narrative figure's chip, which
-  // opens its source page (N59) with its hidden line marked (N27), an
-  // artifact's view tabs, and a digest's copy chip, which changes nothing.
+  // opens its source page (N59) with its hidden line marked (N27), a saved
+  // artifact's marker chip (D107), which opens its citation's page the same
+  // way, an artifact's view tabs, and a digest's copy chip, which changes
+  // nothing.
   await expect(page.locator("[data-committee-v1] input")).toHaveCount(0);
   await expect(
     page.locator(
-      "[data-committee-v1] button:not([data-figure-chip]):not([data-artifact-view-tab]):not([data-digest-copy])",
+      "[data-committee-v1] button:not([data-figure-chip]):not([data-marker-chip]):not([data-artifact-view-tab]):not([data-digest-copy])",
     ),
   ).toHaveCount(0);
   await page.locator("[data-figure-chip]").click();
@@ -112,6 +114,23 @@ test("demo Model, Report, and Committee routes render parsed v1 content", async 
   await expect(drawer.locator("[data-page-line]")).toHaveCount(3);
   await expect(drawer.locator("[data-page-line][data-hidden='near_background']")).toHaveCount(1);
   await expect(drawer.locator("[data-hidden-lines]")).toContainText("1 line on this page");
+  // D107: the artifact's [C1] is a chip, reached and pressed from the keyboard;
+  // the drawer shows the whole line, the excerpt marked. [C2] is inert.
+  await page.keyboard.press("Escape");
+  await expect(drawer).toHaveCount(0);
+  const marker = page.getByRole("button", { name: "C1, citation 1: CP-1 source, page 7" });
+  await marker.focus();
+  await page.keyboard.press("Enter");
+  await expect(drawer).toContainText("page 7");
+  await expect(drawer.locator("blockquote.matched mark")).toHaveText("Coverage 2.1x");
+  await expect(page.locator("[data-unverified-marker]")).toContainText("unverified – page 9");
+  // The signed record, every line_text in it, is closed until asked for.
+  await page.keyboard.press("Escape");
+  const record = page.locator("[data-committee-artifact-record]").first();
+  await expect(record).toBeHidden();
+  await page.locator("[data-artifact-record-disclosure] > summary").first().focus();
+  await page.keyboard.press("Enter");
+  await expect(record).toBeVisible();
 });
 
 test("saved artifacts preserve canonical tables in contained scroll viewers", async ({ page }) => {
@@ -131,6 +150,8 @@ test("saved artifacts preserve canonical tables in contained scroll viewers", as
     await page.goto(route);
     // The artifact reads formatted first (D60); its exact text is a tab away.
     await page.locator("[data-artifact-view-tab='written']").first().click();
+    // Its signed record is behind a disclosure, closed by default (D107).
+    await page.locator("[data-artifact-record-disclosure] > summary").first().click();
     for (const selector of selectors) {
       const viewer = page.locator(selector).first();
       await viewer.evaluate((element, text) => {

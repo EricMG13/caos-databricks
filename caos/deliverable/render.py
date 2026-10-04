@@ -208,22 +208,14 @@ def _handoff(view: _Handoff) -> str:
         f"<p>Committee status as written: {committee} · "
         f"decision scope {escape(scope)}</p>\n"
         f"{screen}{limitations}"
-        # §45.6: what the host verified, what the model wrote, what the host
-        # computed -- in that order, never mixed.
-        "<h3>Source facts (host-verified citations)</h3>\n"
-        + (
-            "\n".join(
-                _citation(citation, _line_of(citation), view.rule)
-                for citation in view.citations
-            )
-            if view.citations
-            else "<p>None: no citation of this module was located by the host.</p>"
-        )
-        + _unverified_list(view.unverified)
-        + "\n<h3>Analysis (model-authored, not host-verified)</h3>\n"
+        # §45.6: what the model wrote, what the host computed, and what the
+        # host located, never mixed -- the last as a compact appendix (D107),
+        # so no source text sits among the analysis.
+        "<h3>Analysis (model-authored, not host-verified)</h3>\n"
         # The elements of `ELEMENTS`, every authored character escaped inside
         # them: committee layout, with nothing the model wrote reaching the
-        # page as markup this file did not write.
+        # page as markup this file did not write. Its `[C<n>]` markers are
+        # text, which the appendix below resolves.
         f"{_markdown(view.markdown)}"
         "<h3>Deterministic calculations</h3>\n"
         + (
@@ -231,6 +223,7 @@ def _handoff(view: _Handoff) -> str:
             if _text(facts, "module_id") == "CP-CF"
             else "<p>None performed by the host on this route.</p>\n"
         )
+        + _appendix(view)
     )
 
 
@@ -582,55 +575,105 @@ def _delimiter(piece: str, pieces: list[str], position: int, marks: list[str]) -
     return escape(piece)
 
 
-def _citation(citation: object, line: object = None, rule: str = ANY_RUN) -> str:
-    """One host-verified citation: the whole line it anchored in, its excerpt
-    marked (D105).
+def _appendix(view: _Handoff) -> str:
+    """The module's citations appendix (D107; owner: "The deliverable lists
+    citations compactly in an appendix rather than inline full lines"): one
+    line each, anchored and unverified alike, in the answer's list order
+    where the record keeps each citation's marker (an older record: the
+    anchored ones, then the unverified). The analysis above cites them by
+    the same `[C<n>]`."""
+    rows = sorted(
+        [
+            (_marker(entry), 0, index, located(entry, _line_of(entry), view.rule))
+            for index, entry in enumerate(view.citations)
+        ]
+        + [
+            (_marker(entry), 1, index, unverified(entry))
+            for index, entry in enumerate(view.unverified)
+        ],
+        key=lambda row: (row[0] or 0, row[1], row[2]),
+    )
+    return (
+        '<h3>Citations</h3>\n<ul class="cite">\n'
+        + "\n".join(f"<li>{text}</li>" for *_, text in rows)
+        + "\n</ul>\n"
+    )
 
-    `line` is the record's `line_text`, the evidence line an `EXCERPT` quote
-    is part of; a record accepted under an earlier rule keeps none, and its
-    quote is shown alone -- under either whole-line rule the quote is its
-    line, and under `ANY_RUN` it is the run the record holds, its line never
-    recorded, so it is labelled a quote and never taken for a source line
-    (F504). An excerpt is never shown without the line around it: a qualifier
-    just outside eight words ("not", "provided that", a row's label) is the
-    reader's to see (AI-4). The line is shown whole, however long: a shown
-    line is at most one evidence block wide. A citation the answer's body
-    does not carry (`linked` false, D106) is still host-verified, and says
-    it supports no statement in the answer.
-    """
+
+def _marker(entry: object) -> int | None:
+    """A citation's place in its answer's list, the `[C<n>]` its module's
+    body cites it by (D107); none on a record from before markers."""
+    if not isinstance(entry, Mapping):
+        raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
+    value = entry.get("marker")
+    if value is None:
+        return None
+    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+        raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
+    return value
+
+
+def _tag(entry: object) -> str:
+    marker = _marker(entry)
+    return "" if marker is None else f"[C{marker}] · "
+
+
+# The longest excerpt the page shows (D107): about one line, as the workspace
+# clamps it (`frontend/src/evidence/compact.ts`).
+EXCERPT_CHARS = 120
+# What the workspace's `\s` is, so both clamp a quote to the same text.
+_SPACE = re.compile(
+    "[\t\n\x0b\x0c\r \xa0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+"
+)
+
+
+def clamped(quote: str) -> str:
+    """`quote` as the page shows it (D107): its whitespace runs single, and
+    past `EXCERPT_CHARS` code points cut with an ellipsis. The whole line is
+    the source's to show, at the page the citation names."""
+    flat = " ".join(word for word in _SPACE.split(quote) if word)
+    if len(flat) <= EXCERPT_CHARS:
+        return flat
+    return flat[: EXCERPT_CHARS - 1].rstrip(" ") + "\u2026"
+
+
+def _quoted(quote: str) -> str:
+    return f"\u201c{escape(clamped(quote))}\u201d"
+
+
+def _notes(citation: Mapping[str, Any], line: object, rule: str) -> str:
+    """What a host-verified citation's compact line adds after it: that its
+    source line was never recorded (an `ANY_RUN` quote, F504), and that no
+    statement of the answer cites it (`linked` false, D106, D107)."""
+    if line is not None and (not isinstance(line, str) or not line):
+        raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
+    if citation.get("linked", True) not in (True, False):
+        raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
+    recorded = line is not None or rule in _WHOLE_LINE_RULES
+    return ("" if recorded else " · quote (source line not recorded)") + (
+        " · not linked to a statement in the answer"
+        if citation.get("linked", True) is False
+        else ""
+    )
+
+
+def located(citation: object, line: object = None, rule: str = ANY_RUN) -> str:
+    """One host-verified citation, compact (D107): its marker, document,
+    page and excerpt, every character escaped. Its whole line is not on the
+    page: an excerpt is eight words of one line, and a qualifier just
+    outside them ("not", "provided that") is the reader's to see at the
+    source, on the page given (AI-4's guard, one look away). `line` is the
+    record's `line_text`, checked, never shown."""
     if not isinstance(citation, Mapping):
         raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
     quote = _text(citation, "matched_text")
     document = escape(_text(citation, "document_sha256")[:12])  # cut, then escape
     page = _page(citation)
-    if line is not None and (not isinstance(line, str) or not line):
-        raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
-    if citation.get("linked", True) not in (True, False):
-        raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
-    shown = escape(quote)
-    label = "" if rule in _WHOLE_LINE_RULES else _QUOTE_LABEL
-    if line is not None:
-        label = ""
-        before, excerpt, after = traced_line(line, quote)
-        shown = (
-            f"{escape(before)}{_MARK}{escape(excerpt)}</mark>{escape(after)}"
-            if excerpt and (before or after)
-            else escape(line)
-        )
-    unlinked = (
-        " · not linked to a statement in the answer"
-        if citation.get("linked", True) is False
-        else ""
-    )
+    notes = _notes(citation, line, rule)
     return (
-        f"{label}<blockquote>{shown}</blockquote>\n"
-        f'<p class="cite">{document} · page {page}{unlinked}</p>'
+        f"{_tag(citation)}{document} · page {page} · {_quoted(quote)} · verified{notes}"
     )
 
-
-# An `ANY_RUN` quote is any unique run of its page: no line was recorded, so
-# it is shown as a quote, as the workspace shows it (F504).
-_QUOTE_LABEL = '<p class="cite">Quote (source line not recorded)</p>\n'
 
 # Why a citation is unverified (D106), in the reader's words: the anchoring
 # refusal that left it so (`handoff.UNVERIFIED_CODES`).
@@ -641,25 +684,13 @@ UNVERIFIED_REASONS = {
 }
 
 
-def _unverified_list(entries: list[Any]) -> str:
-    """The module's unverified citations (D106), apart from the source facts
-    and after them; nothing at all for a module that has none, so every page
-    rendered before D106 is the same bytes."""
-    if not entries:
-        return ""
-    return (
-        "\n<h3>Unverified citations (the model's own locators and quotes)</h3>\n"
-        + "\n".join(unverified(entry) for entry in entries)
-    )
-
-
-def unverified(entry: object) -> str:
-    """One unverified citation (D106): labelled before its text, as the
-    model's quote, never marked and never placed or worded as a source line.
-    Its claim is Deploy V's lineage class "Untraced". Every character is
+def unverified(entry: object, tag: str | None = None) -> str:
+    """One unverified citation (D106), compact (D107): labelled before its
+    text, as the model's quote, never placed or worded as a located one. Its
+    claim is Deploy V's lineage class "Untraced". Every character is
     escaped: the quote is the model's, which the host could not find. One
-    the answer's body does not carry either (`linked` false) says so beside
-    its reason."""
+    no statement of the answer cites (`linked` false) says so beside its
+    reason. `tag` names it where its marker alone would not (a narrative)."""
     if not isinstance(entry, Mapping):
         raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
     quote = _text(entry, "matched_text")
@@ -671,16 +702,10 @@ def unverified(entry: object) -> str:
     if entry.get("linked", True) is False:
         reason += " · not linked to a statement in the answer"
     return (
-        f'<p class="cite">unverified \u2013 page {page} · the model\'s quote'
-        f" · claim lineage: Untraced · {reason} · source {source}</p>\n"
-        f'<blockquote style="border-left-style:dashed">{escape(quote)}</blockquote>'
+        f"{_tag(entry) if tag is None else tag}unverified \u2013 page {page}"
+        f" · source {source} · the model's quote {_quoted(quote)}"
+        f" · claim lineage: Untraced · {reason}"
     )
-
-
-# An excerpt inside its line: bold as well as highlighted, so it survives a
-# print that drops backgrounds. Styled on the element, so a page with no
-# excerpt carries the stylesheet it always did (the `render` parity group).
-_MARK = '<mark style="font-weight:600">'
 
 
 # The edge punctuation a quote's first and last word may differ from its line
@@ -702,7 +727,9 @@ def traced_line(line: str, quote: str) -> tuple[str, str, str]:
     leading point; then with runs of single letters joined, as a tracked
     heading is. A pass that finds two places marks none, and so does finding
     none: the line is `(line, "", "")`, shown whole and unmarked rather than
-    marked where the host did not anchor.
+    marked where the host did not anchor. The page shows no line since D107;
+    the wire's `LineView` splits one with this for the source drawer, which
+    alone shows it.
     """
     words = [unicodedata.normalize("NFC", word) for word in quote.split()]
     spans = [(found.start(), found.end()) for found in re.finditer(r"\S+", line)]
@@ -813,22 +840,49 @@ def _span(span: object, cited: Mapping[str, _Handoff]) -> str:
                 raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
             view = cited.get(str(entry.get("route_node_id")))
             named = _named(entry, view, "unverified_index", _UNVERIFIED_KEYS)
-            return unverified({**entry, "linked": named.get("linked", True)})
+            text = unverified(
+                {**entry, "linked": named.get("linked", True)},
+                f"[{_reference(entry, view, named)}] · ",
+            )
+            return f'<span class="cite">{text}</span>'
     raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
 
 
 def _figure(figure: object, cited: Mapping[str, _Handoff]) -> str:
-    """A narrative figure as its record citation shows: the line it anchored
-    in and whether the answer's body carries it, both read from the record."""
+    """A narrative figure, compact (D107): its excerpt, then a reference to
+    its module's citation (`[CP-1 C3]`, which that module's appendix lists),
+    its document and page; whether a statement of the answer cites it is
+    read from the record, and its line is checked there, never shown."""
     if not isinstance(figure, Mapping):
         raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
     view = cited.get(str(figure.get("route_node_id")))
     named = _named(figure, view, "citation_index", _FIGURE_KEYS)
-    return _citation(
+    quote = _text(figure, "matched_text")
+    document = escape(_text(figure, "document_sha256")[:12])
+    page = _page(figure)
+    notes = _notes(
         {**figure, "linked": named.get("linked", True)},
         named.get("line_text"),
         ANY_RUN if view is None else view.rule,
     )
+    return (
+        f'{_quoted(quote)} <span class="cite">[{_reference(figure, view, named)}]'
+        f" · {document} · page {page}{notes}</span>"
+    )
+
+
+def _reference(
+    figure: Mapping[str, Any], view: _Handoff | None, named: Mapping[str, Any]
+) -> str:
+    """How a narrative names a module's citation: the module the appendix is
+    headed by, and the citation's marker where its record keeps one."""
+    module = (
+        view.provenance["module_id"]
+        if view is not None
+        else _text(figure, "route_node_id")
+    )
+    marker = _marker(named)
+    return escape(module) + ("" if marker is None else f" C{marker}")
 
 
 # What a narrative figure copies from the record entry it names.

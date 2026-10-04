@@ -47,6 +47,7 @@ def test_the_analysis_read_serves_unverified_citations_apart(
             "matched_text": MODEL_QUOTE,
             "code": "CITATION_NOT_LOCATED",
             "linked": True,
+            "marker": None,
         }
     ]
     for module in ("CP-0", "CP-5"):
@@ -63,6 +64,7 @@ def test_an_unverified_view_carries_no_line_rectangle_or_document() -> None:
         "matched_text",
         "code",
         "linked",
+        "marker",
     }
     view = {
         "source_id": "0b6f1a52-4d8e-4c6e-9a51-2f1d7c3e9b10",
@@ -70,9 +72,15 @@ def test_an_unverified_view_carries_no_line_rectangle_or_document() -> None:
         "matched_text": "q",
         "code": "CITATION_AMBIGUOUS",
         "linked": False,
+        "marker": 3,
     }
     assert UnverifiedCitationView.model_validate(view).page == 2
-    for wrong in ({"code": "HANDOFF_MALFORMED"}, {"page": 0}, {"line": None}):
+    for wrong in (
+        {"code": "HANDOFF_MALFORMED"},
+        {"page": 0},
+        {"line": None},
+        {"marker": 0},
+    ):
         with pytest.raises(ValidationError):
             UnverifiedCitationView.model_validate({**view, **wrong})
 
@@ -92,12 +100,14 @@ def test_a_saved_unverified_figure_is_served_as_the_models_locator(
     assert NarrativeUnverified.model_validate(span["unverified"]).page == 3
     assert span["unverified"] == {
         **reference,
+        "module_id": "CP-L10",
         "record_sha256": record["record_sha256"],
         "source_id": str(lite.source_id),
         "page": 3,
         "matched_text": MODEL_QUOTE,
         "code": "CITATION_NOT_LOCATED",
         "linked": True,
+        "marker": None,
     }
 
 

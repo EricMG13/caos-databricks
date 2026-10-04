@@ -121,6 +121,9 @@ SIGNED: dict[str, tuple[dict[str, str], dict[str, str], str]] = {
         "190",
     ),
     "zero": ({"dividends_paid": "(0)", "acquisitions_disposals": "-0"}, {}, "145"),
+    # MK1 fix round 1: a marker written inside the figure cell, as "a marker
+    # beside each material figure" once invited, is read without it.
+    "marked": ({"dividends_paid": "(45) [C1]"}, {"distributions": "45"}, "100"),
 }
 
 
@@ -675,9 +678,9 @@ def test_cp_cf_second_attempt_names_the_driver_row_it_could_not_map(
 class _SlippedOnce(ForecastCompletions):
     """CP-4's first answer slips its binding quotes, as the NB1 audit's
     probes did: "restated" cites each assignment line with a word added
-    (`cpcf_wedge_probe.py`, unverified); "unlinked" cites them exactly and
-    leaves them out of the body (`fix_probes.py::test_unlinked`, anchored
-    but not in the Markdown CP-CF binds from)."""
+    (`cpcf_wedge_probe.py`, unverified); "unmarked" cites them exactly and
+    names none of them by a marker (D107: anchored, but not linked, so
+    CP-CF cannot bind them)."""
 
     mode = "restated"
 
@@ -693,20 +696,20 @@ class _SlippedOnce(ForecastCompletions):
         for citation in answer["citations"]:
             if self.mode == "restated":
                 citation["matched_text"] += " restated"
-            else:
-                answer["canonical_markdown"] = answer["canonical_markdown"].replace(
-                    citation["matched_text"], ""
-                )
+        if self.mode == "unmarked":
+            answer["canonical_markdown"] = re.sub(
+                r" \[C[0-9]+\]", "", answer["canonical_markdown"]
+            )
         return replace(done, content=json.dumps(answer))
 
 
-@pytest.mark.parametrize("mode", ["restated", "unlinked"])
+@pytest.mark.parametrize("mode", ["restated", "unmarked"])
 def test_a_calculation_input_that_does_not_anchor_gets_a_guided_retry(
     harness: _Harness, mode: str
 ) -> None:
     """D106's one exception (owner: "Calc inputs must anchor"): CP-4's
     binding quotes that CP-CF could not bind -- unverified, or anchored but
-    not in its body as written -- refuse its answer `HANDOFF_INCOMPLETE`, a
+    named by no marker in its body (D107) -- refuse its answer `HANDOFF_INCOMPLETE`, a
     guided retry names them, the repaired answer is accepted, and CP-CF
     binds and completes rather than wedging the run at 9 of 10."""
     from conftest import priced
@@ -749,6 +752,9 @@ def test_a_calculation_input_that_does_not_anchor_gets_a_guided_retry(
     ][1]
     assert "host calculation-input check: citation" in retry
     assert "the forecast calculator (CP-CF) and must be an exact excerpt" in retry
+    assert "named by its [C<n>] marker in the Markdown body" in retry
+    if mode == "unmarked":
+        assert "named by no [C<n>] marker in the Markdown body" in retry
     codes = harness.conn.execute(
         "SELECT r.code FROM attempt_refusals r JOIN run_attempts t USING (attempt_id)"
         " WHERE t.run_id = %s AND t.route_node_id = %s",
@@ -773,17 +779,40 @@ def test_binds_input_reads_the_owner_and_the_assignment_form() -> None:
     assert not binds_input("CP-1", "/unknown/x = 1")
 
 
-def test_carries_is_the_binders_raw_text_test() -> None:
-    """`carries` is what `validate_forecast_bindings` holds a quote to in the
-    owner's and CP-CF's Markdown: the text as written, no word matching, so
-    a quote the body writes in emphasis or with other spacing is not held."""
-    from caos.methodology.forecast import carries
+def test_the_binder_takes_an_owner_citation_a_marker_names() -> None:
+    """D107: CP-CF binds a value to an owner's anchored citation that a
+    marker in the owner's body names (`linked`, as its record holds it),
+    and searches neither handoff for the quote: the owner's body cites by
+    marker and quotes no source text."""
+    from caos.evidence.citations import AnchoredCitation
+    from caos.methodology.forecast import validate_forecast_bindings
 
-    body = b"## Evidence\n\n/opening/cash = 100\n**/units/scale = 1**\n"
-    assert carries(body, "/opening/cash = 100")
-    assert carries(body, "/units/scale = 1")
-    assert not carries(body, "/opening/cash =  100")
-    assert not carries(body, "/opening/cash = 101")
+    request = request_data()
+    rows = assignment_rows(request)
+    bindings = {p: {"module_id": owner_of(p), "quote": q} for p, q in rows.items()}
+    document = {
+        "request": request,
+        "bindings": bindings,
+        "forecast": cash_flow_forecast(request),
+    }
+    markdown = ("```caos-forecast-v1\n" + json.dumps(document) + "\n```\n").encode()
+    owners = {"CP-1", "CP-2G", "CP-4"}
+    bodies = dict.fromkeys(owners, b"## Analysis\n\nNo quote here [C1].\n")
+
+    def cited(linked: bool) -> dict[str, tuple[AnchoredCitation, ...]]:
+        return {
+            m: tuple(
+                AnchoredCitation("c" * 64, 1, q, (), linked=linked, marker=n)
+                for n, (p, q) in enumerate(rows.items(), 1)
+                if owner_of(p) == m
+            )
+            for m in owners
+        }
+
+    validate_forecast_bindings(markdown, bodies, cited(linked=True))
+    with pytest.raises(Refusal) as caught:
+        validate_forecast_bindings(markdown, bodies, cited(linked=False))
+    assert caught.value.code is RefusalCode.HANDOFF_INCOMPLETE
 
 
 def test_an_owner_quote_binds_nothing_on_a_route_without_cp_cf() -> None:
@@ -803,3 +832,22 @@ def test_an_owner_quote_binds_nothing_on_a_route_without_cp_cf() -> None:
     quotes = ["/contractual/0/amount = 5", "Revenue was 900"]
     assert _calculation_inputs(owner("CP-0", "CP-4", "CP-CF"), quotes) == [0]
     assert _calculation_inputs(owner("CP-0", "CP-4", "CP-5"), quotes) == []
+
+
+def test_the_guard_judges_by_quote_as_the_binder_does() -> None:
+    """A quote binds when some anchored citation of it is marker-linked, so
+    the guard does not refuse an unmarked or unverified second citation of a
+    quote another citation binds; a quote no linked citation carries is
+    refused, unverified or not."""
+    from caos.evidence.citations import AnchoredCitation
+    from caos.methodology.canonical import _unbindable
+    from caos.methodology.handoff import UnverifiedCitation
+
+    quote = "/opening/cash = 100"
+    linked = AnchoredCitation("c" * 64, 1, quote, (), linked=True, marker=1)
+    unmarked = AnchoredCitation("c" * 64, 2, quote, (), linked=False, marker=2)
+    lost = UnverifiedCitation(
+        UUID(int=1), 3, quote, RefusalCode.CITATION_NOT_LOCATED, marker=3
+    )
+    assert _unbindable((linked, unmarked), (lost,)) == []
+    assert _unbindable((unmarked,), (lost,)) == [quote, quote]

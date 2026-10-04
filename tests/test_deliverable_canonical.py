@@ -62,6 +62,8 @@ __all__ = ["harness"]
 APPROVER = Standing.APPROVER
 LITE = resolve_route(CATALOG, "LITE_CREDIT_22", "LITE_EARNINGS_UPDATE")
 QUOTE = "Total debt at 31 December 2026"
+# The same line's excerpt as an answer since D105 cites it (eight words).
+EXCERPT_QUOTE = "Total debt at 31 December 2026 was USD"
 REVISION = BoundaryText.of("rev-canonical-001")
 RESTRICTED = {
     "qa_status": "Restricted",
@@ -84,6 +86,7 @@ def _accept(
     module_id: str,
     omit_soft: bool = False,
     unverified: tuple[UnverifiedCitation, ...] = (),
+    marked: bool = False,
     /,
     **authored: object,
 ) -> str:
@@ -92,6 +95,8 @@ def _accept(
     `omit_soft` names only CP-0 upstream, as a call made before CP-L10 would.
     `unverified`, when given, is the record's every citation (D106): an
     `EXCERPT` record whose quotes all failed to anchor, with none anchored.
+    `marked` is a record since D107: one anchored excerpt, then `unverified`,
+    each holding its place in the answer's list (`marker`).
     """
     conn, bundle = harness.conn, harness.bundle
     node = next(n for n in harness.route.nodes if n.module_id == module_id)
@@ -117,8 +122,14 @@ def _accept(
     anchored = verify_citations(
         conn,
         delivered=every_block(conn, harness.source_id),
-        citations=[Citation(harness.source_id, 1, QUOTE)],
+        citations=[Citation(harness.source_id, 1, EXCERPT_QUOTE if marked else QUOTE)],
+        rule=EXCERPT if marked else ANY_RUN,
     )
+    if marked:
+        anchored = [replace(anchored[0], marker=1)]
+        unverified = tuple(
+            replace(entry, marker=place) for place, entry in enumerate(unverified, 2)
+        )
     lineage = accepted_lineage(
         conn, harness.blobs, run_id=harness.run_id, upstream=identity.upstream
     )
@@ -136,8 +147,8 @@ def _accept(
         identity=identity,
         lineage=lineage,
         projections=projections,
-        citations=() if unverified else tuple(anchored),
-        citation_rule=EXCERPT if unverified else ANY_RUN,
+        citations=() if unverified and not marked else tuple(anchored),
+        citation_rule=EXCERPT if unverified or marked else ANY_RUN,
         unverified=unverified,
     )
     reserve(conn, attempt, ESTIMATE)
@@ -449,8 +460,7 @@ def test_the_page_keeps_limitations_labels_screens_and_escapes_model_text(
     assert text.count("SCREENING ONLY: a screen, not committee clearance") == 3
     assert "Committee status as written: Requires More Work" in text
     assert "<b>held</b>" not in text and "&lt;b&gt;held&lt;/b&gt; &amp; noted." in text
-    assert f"<blockquote>{QUOTE}</blockquote>" in text
-    assert "page 1" in text
+    assert f" · page 1 · \u201c{QUOTE}\u201d · verified" in text
     artifacts = payload["artifacts"]
     screened = {
         **artifacts[0],
@@ -468,19 +478,20 @@ def test_the_page_keeps_limitations_labels_screens_and_escapes_model_text(
 def test_the_deliverable_labels_source_fact_analysis_and_no_host_calculation(
     lite: _Harness,
 ) -> None:
-    """§45.6: host-verified citations are source facts, the model's Markdown is
-    analysis the host has not verified, and the host performed no calculation."""
+    """§45.6: the model's Markdown is analysis the host has not verified, the
+    host performed no calculation, and what the host located follows as a
+    compact Citations appendix (D107), never mixed into the analysis."""
     text = render(_payload(lite)).decode()
     section = text.split("<h2>", 2)[1]
-    facts = section.index("<h3>Source facts (host-verified citations)</h3>")
     analysis = section.index("<h3>Analysis (model-authored, not host-verified)</h3>")
     calculation = section.index(
         "<h3>Deterministic calculations</h3>\n"
         "<p>None performed by the host on this route.</p>"
     )
-    assert facts < analysis < calculation
-    assert "<blockquote>" in section[facts:analysis]
-    assert "<blockquote>" not in section[analysis:]
+    facts = section.index('<h3>Citations</h3>\n<ul class="cite">\n<li>')
+    assert analysis < calculation < facts
+    assert "<blockquote>" not in section[facts:]
+    assert section[facts:].count("<li>") == 1
     # The model's Markdown is rendered as the deliverable's closed element set
     # -- headings and registers, with the host-owned front matter shown whole --
     # and none of it appears above the label that says who authored it.

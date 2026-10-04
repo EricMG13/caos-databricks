@@ -3,13 +3,8 @@ import { resolve } from "node:path";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { ReportSection } from "@/sections/report/ReportSection";
-import {
-  choiceText,
-  citationsOf,
-  figureMarker,
-  paragraphs,
-  wordPlace,
-} from "@/sections/report/figures";
+import { choiceText, citationsOf, figureMarker, paragraphs } from "@/sections/report/figures";
+import { EXCERPT_CHARS, clampExcerpt } from "@/evidence/compact";
 import { parseReportDocument, type ReportDocument } from "@/wire/v1";
 
 // A figure span names a citation of a verified record; the host fills the
@@ -70,7 +65,8 @@ describe("Report figure picker", () => {
         unverified: null,
         page: 3,
         matched_text: "Revenue rose to 4.1bn",
-        line: null,
+        recorded: false,
+        marker: null,
       },
       {
         route_node_id: "CP-0",
@@ -78,7 +74,8 @@ describe("Report figure picker", () => {
         unverified: null,
         page: 9,
         matched_text: "Net debt 2.0bn",
-        line: null,
+        recorded: false,
+        marker: null,
       },
       {
         route_node_id: "CP-5",
@@ -86,15 +83,21 @@ describe("Report figure picker", () => {
         unverified: null,
         page: 1,
         matched_text: "Coverage 2.1x",
-        line: null,
+        recorded: false,
+        marker: null,
       },
     ]);
   });
 
-  test("test_the_picker_names_each_citation_by_its_line_or_as_a_bare_quote", () => {
-    // D105: an excerpt record keeps its line, a whole-line record's quote is
-    // its line, and a record from before them holds only a quote.
-    const excerpt = { ...citation(4, "Net debt 2.0bn"), line_text: "We say Net debt 2.0bn today." };
+  test("test_the_picker_names_each_citation_compactly_by_its_marker_and_excerpt", () => {
+    // D107: the marker the module's body cites it by and the excerpt, never
+    // the whole source line (the drawer's); a record from before excerpts
+    // holds only a quote, labelled so.
+    const excerpt = {
+      ...citation(4, "Net debt 2.0bn"),
+      line_text: "We say Net debt 2.0bn today.",
+      marker: 3,
+    };
     const choices = citationsOf(
       withRecords({
         "CP-0": { citation_rule: "excerpt-of-shown-line", citations: [excerpt] },
@@ -103,10 +106,35 @@ describe("Report figure picker", () => {
       }).body.artifacts,
     );
     expect(choices.map(choiceText)).toEqual([
-      "source line: We say «Net debt 2.0bn» today.",
-      "source line: Total debt 9",
+      "C3 · excerpt: Net debt 2.0bn",
+      "excerpt: Total debt 9",
       "quote (source line not recorded): surpassed our investment grade",
     ]);
+    expect(choices.map(choiceText).join(" ")).not.toContain("We say");
+  });
+
+  test("test_a_long_quote_is_clamped_to_about_one_line", () => {
+    const long = `${"word ".repeat(60)}end`;
+    const choice = {
+      route_node_id: "CP-0",
+      citation_index: 0,
+      unverified: null,
+      page: 1,
+      matched_text: long,
+      recorded: true,
+      marker: 1,
+    };
+    // Exactly `EXCERPT_CHARS` code points: 119 kept and the ellipsis.
+    expect(clampExcerpt("x".repeat(EXCERPT_CHARS))).toBe("x".repeat(EXCERPT_CHARS));
+    expect(clampExcerpt("x".repeat(EXCERPT_CHARS + 1))).toBe(`${"x".repeat(119)}\u2026`);
+    const shown = clampExcerpt(long);
+    expect(Array.from(shown)).toHaveLength(EXCERPT_CHARS);
+    expect(shown.endsWith("\u2026")).toBe(true);
+    expect(choiceText(choice)).toBe(`C1 · excerpt: ${shown}`);
+    // Short, it is the quote with its whitespace runs single.
+    expect(clampExcerpt("  Net\n debt  2.0bn ")).toBe("Net debt 2.0bn");
+    // Counted in code points, so an astral character is never split.
+    expect(Array.from(clampExcerpt("\u{1d400}".repeat(200)))).toHaveLength(EXCERPT_CHARS);
   });
 
   test("test_a_figure_marker_composes_the_span_the_save_command_validates", () => {
@@ -264,24 +292,6 @@ describe("Report figure picker", () => {
       [{ text: null, figure: null, unverified: { route_node_id: "CP-0", unverified_index: 0 } }],
     ]);
     vi.unstubAllGlobals();
-  });
-
-  test("test_the_picker_marks_a_quote_by_whole_words_never_by_substring", () => {
-    // EX2's review: "4.1bn" inside "14.1bn" is no place the host anchored.
-    const line = "Revenue of 14.1bn, against 4.1bn a year ago";
-    expect(wordPlace(line, "4.1bn")).toEqual([27, 32]);
-    expect(wordPlace("a b a b", "a b")).toBeNull();
-    expect(wordPlace(line, "evenue of")).toBeNull();
-    const choice = {
-      route_node_id: "CP-0",
-      citation_index: 0,
-      unverified: null,
-      page: 1,
-      matched_text: "4.1bn",
-      line,
-    };
-    expect(choiceText(choice)).toBe("source line: Revenue of 14.1bn, against «4.1bn» a year ago");
-    expect(choiceText({ ...choice, matched_text: "1bn, against" })).toBe(`source line: ${line}`);
   });
 
   test("test_a_report_with_no_readable_citation_offers_no_figure", () => {

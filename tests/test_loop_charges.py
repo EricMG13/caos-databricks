@@ -39,6 +39,7 @@ from caos.evidence.ingest import Document, admit_pack
 from caos.graph.route import NodeState, ResolvedRoute, node_states, resolve_route
 from caos.graph.runtime import Execution, accepted_artifacts, run_route
 from caos.methodology.bundle import Bundle
+from caos.methodology.citation_markers import qualified
 from caos.methodology.handoff import UnverifiedCitation, _decoded_record
 from caos.methodology.runner import ModuleProvider
 from caos.pricing import ModelPrice, priced_request, worst_case
@@ -263,7 +264,9 @@ def test_a_module_whose_citations_cannot_be_anchored_still_completes(
         stored = _decoded_record(blobs.get(str(digest)))
         assert stored.citations == ()
         assert stored.unverified == (
-            UnverifiedCitation(stranger, 1, QUOTE, RefusalCode.CITATION_NOT_DELIVERED),
+            UnverifiedCitation(
+                stranger, 1, QUOTE, RefusalCode.CITATION_NOT_DELIVERED, marker=1
+            ),
         )
 
 
@@ -281,7 +284,7 @@ def test_the_loop_hands_each_node_its_predecessors_results(
     first, second, _third = completions.prompts
     assert "--- UPSTREAM" not in first
     assert "--- UPSTREAM" in second
-    assert completions.answers[0].decode() in second
+    assert qualified(completions.answers[0].decode(), "CP-0") in second
 
 
 def test_a_predecessor_artifact_of_another_shape_is_refused_not_raised(

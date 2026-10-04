@@ -419,13 +419,15 @@ def test_a_source_admitted_after_the_pin_cannot_support_the_proof(
     _attempt, _artifact, record = _stored(ran, "CP-5")
     [cited] = _decoded_record(ran.blobs.get(record)).citations
     moved = replace(cited, document_sha256=sha256(late).hexdigest())
+    # Anchoring sets no marker; the answer's verdict does (D107).
+    found = replace(moved, marker=None)
     request = Citation(late_id, cited.page, cited.matched_text)
     assert verify_citations(
         ran.conn,
         delivered=every_block(ran.conn, late_id),
         citations=[request],
         rule=EXCERPT,
-    ) == [moved]
+    ) == [found]
     ran.conn.rollback()
 
     _rewrite(ran, "CP-5", lambda r: replace(r, citations=(moved,)))

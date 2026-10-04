@@ -40,6 +40,7 @@ from canonical_fixtures import (
     fields_from_prompt,
     skill,
     wire,
+    with_markers,
 )
 from canonical_route_fixtures import QUOTES, HandoffKnobs, canonical_markdown
 from lite_route_fixtures import _table, _yaml, cp_l10_topic_rows
@@ -207,6 +208,7 @@ class LiteRelativeValueCompletions:
                 quote=quote,
             ),
         )
+        markdown = with_markers(markdown, 1)
         self.answers.append(markdown)
         self.bodies.append(
             wire(

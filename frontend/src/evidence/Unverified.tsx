@@ -4,10 +4,12 @@
 // Deploy V's lineage class "Untraced", and why in plain words. Never the
 // host-verified well, never a `<mark>`, never a "Source line", and never
 // opened in a drawer: there is no line, rectangle or located document to show.
+// Compact (D107): the quote clamped to about one line, after its marker.
 // React escapes the quote: it is the model's text, which the host did not find.
 import { Digest } from "@/ds/Digest";
 import type { BlockedByView, UnverifiedCitationView } from "@/wire/v1";
 import { useEvidence } from "./EvidenceContext";
+import { clampExcerpt } from "./compact";
 
 type Code = UnverifiedCitationView["code"];
 
@@ -34,6 +36,12 @@ export function unverifiedLabel(entry: { page: number; code: Code; linked?: bool
   return `unverified \u2013 page ${entry.page} · the model's quote · claim lineage: Untraced · ${reasons.join(" · ")}`;
 }
 
+/** A citation's marker as a compact list prefixes it, `C3 · `; nothing for a
+    citation accepted before markers. */
+export function markerPrefix(marker: number | null): string {
+  return marker === null ? "" : `C${marker} · `;
+}
+
 /** One module's unverified citations, each labelled first. `names` gives a
     source's file name where this run's located citations name the same
     source; the model's id is not otherwise looked up. */
@@ -48,21 +56,15 @@ export function UnverifiedFacts({
     <ul className="plain facts" data-unverified-facts>
       {entries.map((entry, index) => (
         <li key={index} className="ev" data-unverified-citation={entry.code}>
-          <div className="lbl">
+          <span className="lbl">
+            {markerPrefix(entry.marker)}
             {unverifiedLabel(entry)} · {names.get(entry.source_id) ?? `source ${entry.source_id}`}
-          </div>
-          <blockquote className="unverified-quote">{entry.matched_text}</blockquote>
+          </span>{" "}
+          <q className="figq-unverified">{clampExcerpt(entry.matched_text)}</q>
         </li>
       ))}
     </ul>
   );
-}
-
-/** A short excerpt of a quote for a compact display (D107): its first twelve
-    words, elided after. The full line is the source drawer's to show. */
-export function shortExcerpt(quote: string): string {
-  const words = quote.split(/\s+/).filter(Boolean);
-  return words.length > 12 ? `${words.slice(0, 12).join(" ")}\u2026` : words.join(" ");
 }
 
 /** The identity a Blocked answer's located quote opens the source drawer by:
@@ -72,7 +74,8 @@ export function blockedRecord(blocked: BlockedByView): string {
 }
 
 /** A Blocked answer's quotes, as the host judged them (D106; owner: "Show its
-    quotes"), compact (D107): document · page · a short excerpt, each located
+    quotes"), compact (D107): marker · document · page · the excerpt clamped
+    to about one line, each located
     one opening its page in the source drawer, where its line is shown with
     the excerpt marked; each unverified one labelled as the model's own. A
     verdict recorded before the quotes were kept says so, and kept quotes
@@ -104,7 +107,7 @@ export function BlockedQuotes({ blocked }: { blocked: BlockedByView }) {
               type="button"
               className="chip"
               aria-haspopup="dialog"
-              aria-label={`Open the source of verified quote ${index + 1}, page ${quote.page}`}
+              aria-label={`${quote.marker === null ? `p.${quote.page}, verified quote` : `C${quote.marker}, citation ${quote.marker}`}: open its source, page ${quote.page}`}
               data-blocked-chip={quote.source_id}
               onClick={(event) =>
                 openFact(
@@ -118,17 +121,20 @@ export function BlockedQuotes({ blocked }: { blocked: BlockedByView }) {
                 )
               }
             >
-              p.{quote.page}
+              {quote.marker === null ? `p.${quote.page}` : `C${quote.marker}`}
             </button>{" "}
             Verified · <Digest value={quote.document_sha256} prefix="sha256:" /> · page {quote.page}{" "}
-            · <q>{shortExcerpt(quote.matched_text)}</q>
+            · <q>{clampExcerpt(quote.matched_text)}</q>
             {quote.linked ? null : <span className="lbl"> · {NOT_LINKED_SHORT}</span>}
           </li>
         ))}
         {blocked.unverified.map((entry, index) => (
           <li key={`u${index}`} data-blocked-quote="unverified">
-            <span className="lbl">{unverifiedLabel(entry)}</span> ·{" "}
-            <q className="figq-unverified">{shortExcerpt(entry.matched_text)}</q>
+            <span className="lbl">
+              {markerPrefix(entry.marker)}
+              {unverifiedLabel(entry)}
+            </span>{" "}
+            · <q className="figq-unverified">{clampExcerpt(entry.matched_text)}</q>
           </li>
         ))}
       </ul>

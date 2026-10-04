@@ -24,7 +24,7 @@ from decimal import Decimal
 from typing import Any
 
 import pytest
-from canonical_fixtures import QUOTE, fields_from_prompt, identity, wire
+from canonical_fixtures import QUOTE, fields_from_prompt, identity, wire, with_markers
 from conftest import approve_run
 from lite_route_fixtures import (
     LiteHandoffKnobs,
@@ -91,11 +91,12 @@ class _Lite(RealisticLiteCompletions):
                 quotes=quotes,
             ),
         )
-        cited: list[dict[str, object]] = [
+        markdown = with_markers(markdown, len(quotes))
+        cites: list[dict[str, object]] = [
             {"source_id": str(self.source_id), "page": 1, "matched_text": quote}
             for quote in quotes
         ]
-        return markdown, wire(markdown, cited)
+        return markdown, wire(markdown, cites)
 
     def complete(self, prompt: str, *, json_object: bool = False) -> Completion:
         assert json_object
@@ -335,7 +336,11 @@ def test_an_undelivered_citation_never_reaches_the_proof_as_anchored(
         (
             "CP-L10",
             UnverifiedCitation(
-                harness.source_id, 1, QUOTE, RefusalCode.CITATION_NOT_DELIVERED
+                harness.source_id,
+                1,
+                QUOTE,
+                RefusalCode.CITATION_NOT_DELIVERED,
+                marker=1,
             ),
         ),
     )
