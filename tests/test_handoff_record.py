@@ -465,14 +465,6 @@ def test_the_record_carries_no_model_authored_claims() -> None:
     }
 
 
-def test_a_quote_starting_with_its_own_punctuation_survives_outer_quotes() -> None:
-    from caos.methodology.handoff import _openings, _quoted
-
-    words = "“(Unaudited) revenue was 100 million.”".split()
-    assert _quoted(words, _openings(words), "(Unaudited) revenue was 100 million.")
-    assert not _quoted(words, _openings(words), "(Unaudited) revenue was 101 million.")
-
-
 @pytest.mark.parametrize(
     "citations",
     [[_citation(page=2**31)], [_citation(), _citation()]],
@@ -496,71 +488,14 @@ def test_more_citations_than_a_handoff_may_carry_refuse() -> None:
     assert _parse_refused(wire(CP0_MD, quotes)) is RefusalCode.HANDOFF_MALFORMED
 
 
-class _Counted(str):
-    """A body word that counts how often it is compared."""
-
-    compared = 0
-    __hash__ = str.__hash__
-
-    def __eq__(self, other: object) -> bool:
-        _Counted.compared += 1
-        return str.__eq__(self, other)
-
-    def __ne__(self, other: object) -> bool:
-        _Counted.compared += 1
-        return str.__ne__(self, other)
-
-
-@pytest.mark.parametrize("found", [True, False])
-def test_a_near_match_repeated_through_the_body_costs_the_body_not_its_product(
-    found: bool,
-) -> None:
-    """R24-09: every place the quote's first word stands was compared a whole
-    quote's length, so a body of one repeated word and a quote failing only
-    at its last word cost the body times the quote -- per citation, up to
-    `MAX_CITATIONS` of them. The work is now bounded by the two together."""
-    from caos.methodology import handoff
-
-    size, span = 600, 200
-    words = [_Counted("a")] * (size - 1) + [_Counted("b" if found else "c")]
-    openings = handoff._openings(list(words))
-    quote = " ".join(["a"] * (span - 1) + ["b"])
-    _Counted.compared = 0
-    assert handoff._quoted(list(words), openings, quote) is found
-    assert _Counted.compared <= 4 * (size + span), _Counted.compared
-
-
-def test_the_bounded_quote_check_finds_what_every_start_found() -> None:
-    """R24-09: the bounded check against the check it replaced -- every start,
-    a quote's length each -- on bodies built to collide: a two-word vocabulary
-    wearing quotation marks, brackets and full stops, so both the one-by-one
-    and the one-pass branch are taken, over thousands of quotes."""
-    import random
-
+def test_occurrences_finds_every_run_overlapping_or_not() -> None:
+    """`occurrences`, the one-pass search the evidence's own excerpt search
+    uses (D105): every start of the pattern, overlapping runs included."""
     from caos.evidence.citations import occurrences
-    from caos.methodology import handoff
 
     assert list(occurrences(["a", "a", "b", "a", "a"], ["a", "a"])) == [0, 3]
     assert list(occurrences(["a", "a", "a"], ["a", "a"])) == [0, 1]
     assert list(occurrences(["a", "b"], ["c"])) == []
-
-    def every_start(words: list[str], quote: str) -> bool:
-        wanted = quote.split()
-        return bool(wanted) and any(
-            handoff._carried(words[start : start + len(wanted)], wanted)
-            for start in range(len(words) - len(wanted) + 1)
-        )
-
-    rng = random.Random(24_09)
-    spellings = ["a", "b", '"a', 'b"', "(a", "a).", "b,", "\u201ca\u201d"]
-    for _ in range(3_000):
-        words = [rng.choice(spellings) for _ in range(rng.randint(1, 30))]
-        openings = handoff._openings(words)
-        quote = " ".join(rng.choice("ab") for _ in range(rng.randint(1, 8)))
-        assert handoff._quoted(words, openings, quote) is every_start(words, quote), (
-            words,
-            quote,
-        )
 
 
 def test_a_record_contradicting_its_own_identity_refuses(tmp_path: Path) -> None:

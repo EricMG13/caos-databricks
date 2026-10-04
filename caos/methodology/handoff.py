@@ -41,7 +41,6 @@ from caos.evidence.citations import (
     Citation,
     CitationRule,
     Rect,
-    occurrences,
     within_line,
 )
 from caos.evidence.ingest import GROUP_WIDTH
@@ -948,119 +947,6 @@ def _transport(body: str) -> tuple[bytes, str, tuple[Citation, ...]]:
 # Markdown writes that mark, so `\"` reads `"` (F149).
 # ponytail: code spans keep their backslashes literally; unescaped here too.
 _MARKDOWN_ESCAPE = re.compile(r"\\([!-/:-@\[-`{-~])")
-
-
-def _body_words(text: str) -> list[str]:
-    """The Markdown after its front matter, as whitespace tokens, with its
-    backslash escapes read as the marks they write.
-
-    The front matter is host identity, not analysis, so no quote may rest on it;
-    and a quote matches whole tokens, as anchoring in the evidence does.
-    """
-    lines = text.split("\n")
-    has_front = lines[:1] == ["---"] and "---" in lines[1:]
-    closing = lines.index("---", 1) if has_front else 0
-    return _MARKDOWN_ESCAPE.sub(r"\1", "\n".join(lines[closing + 1 :])).split()
-
-
-# Marks a body may put around a quotation without making it a different quote.
-# The backtick is Markdown's code span, which a module uses the same way, and
-# `*` and `_` are its emphasis (`**quote**`, `__quote__`), typography around a
-# quote and never inside it (F476). Like the quote marks, they are not paired.
-_QUOTATION = "\"'`*_\u2018\u2019\u201c\u201d\u201e\u201f\u00ab\u00bb"
-# And what prose puts before and after one: an opening bracket; a closing
-# bracket or the sentence's own punctuation (F148).
-_OPENING = _QUOTATION + "([{"
-_CLOSING = _QUOTATION + ".,;:!?)]}"
-
-
-def _wears(token: str, word: str, before: str, after: str) -> bool:
-    """Whether `token` is `word` with only `before` marks ahead of it and only
-    `after` marks behind it: typography, never another word."""
-    at = token.find(word)
-    while at != -1:
-        ahead, behind = token[:at], token[at + len(word) :]
-        if all(mark in before for mark in ahead) and all(
-            mark in after for mark in behind
-        ):
-            return True
-        at = token.find(word, at + 1)
-    return False
-
-
-def _openings(words: list[str]) -> dict[str, tuple[int, ...]]:
-    """Where in the body a quote's first word could begin.
-
-    Both the body's and the quote's first token drop only their edge
-    typography for the lookup. It is a superset of every match `_carried`
-    permits, including a quote that itself begins with a bracket. `_carried`
-    still judges the exact words; this index only avoids scanning the body
-    once per citation (AI-5).
-    """
-    found: dict[str, list[int]] = {}
-    for position, word in enumerate(words):
-        key = word.lstrip(_OPENING).rstrip(_CLOSING)
-        found.setdefault(key, []).append(position)
-    return {key: tuple(positions) for key, positions in found.items()}
-
-
-def _quoted(words: list[str], openings: dict[str, tuple[int, ...]], quote: str) -> bool:
-    """Whether the body quotes this text as whole tokens, typography aside.
-
-    A module writes its Evidence Trace as prose, and prose puts quotation marks
-    around a quotation: the body's tokens are then `\u201cRecorded` and `p1\u201d`
-    where the quote's are `Recorded` and `p1`. Refusing that is a host defect
-    recorded as the model's answer, which is what the CP-L10 attempt of the
-    second paid Terra run died of.
-
-    Only the two outer tokens may wear anything, and only typography --
-    quotation marks, an opening bracket, a closing bracket or the sentence's
-    punctuation (F148) -- so the quote's own words and its internal
-    punctuation still have to match exactly.
-    Nothing here widens what may be *cited*: `verify_citations` anchors against
-    the document's own tokens and is untouched. This decides only whether the
-    module quoted, in its own narrative, what it says it quoted.
-
-    The work is the body's and the quote's, never their product (R24-09).
-    Each start is compared a quote's length at a time while that costs no
-    more than the body; past that -- a word the body repeats and a quote that
-    near-matches at each -- the inner words' runs are found in one pass
-    instead (`occurrences`), and a start is then judged by its edges alone.
-    """
-    wanted = quote.split()
-    if not wanted:
-        return False
-    span = len(wanted)
-    starts = [
-        start
-        for start in openings.get(wanted[0].lstrip(_OPENING).rstrip(_CLOSING), ())
-        if start + span <= len(words)
-    ]
-    if span <= 2 or len(starts) * span <= len(words):
-        return any(_carried(words[start : start + span], wanted) for start in starts)
-    inner = {at - 1 for at in occurrences(words, wanted[1:-1])}
-    edges = [wanted[0], wanted[-1]]
-    # With the inner words matched, the edge words are the window left.
-    return any(
-        _carried([words[start], words[start + span - 1]], edges)
-        for start in starts
-        if start in inner
-    )
-
-
-def _carried(window: list[str], wanted: list[str]) -> bool:
-    """One run of the body carries the quote: its inner words exactly, and its
-    edge words wearing only typography -- quotation marks, an opening bracket
-    before, a closing bracket or the sentence's punctuation after (F148)."""
-    if window == wanted:
-        return True
-    if window[1:-1] != wanted[1:-1]:
-        return False
-    if len(wanted) == 1:
-        return _wears(window[0], wanted[0], _OPENING, _CLOSING)
-    return _wears(window[0], wanted[0], _OPENING, "") and _wears(
-        window[-1], wanted[-1], "", _CLOSING
-    )
 
 
 def _body(text: str) -> str:
