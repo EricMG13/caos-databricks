@@ -231,7 +231,7 @@ def test_the_matrix_reports_every_case_and_concludes_nothing(ran: Ran) -> None:
     matrix = _matrix(ran, qualification)
 
     assert matrix.qualification_set_sha256 == qualification_set_digest(qualification)
-    assert matrix.build_id.startswith("755205f7")
+    assert matrix.build_id.startswith("9043ba7f")
     [row] = matrix.rows
     assert row.case_label == "acme-2026-refinancing"
     assert row.proven is True
@@ -1085,16 +1085,24 @@ def test_the_register_locator_is_asked_exactly_as_the_bundle_asks_it() -> None:
     # What the bundle reads: the honest table, which says MISSING, so a key
     # expecting PARTIAL is a miss.
     assert _matches_register(unnarrowed, expect) is False
-    # What the narrowed call read: the sibling's table, and the key was met.
-    # (Fork r7 keeps a table under a heading led by an unlisted ID of a listed
-    # ID's family; TL23 is not TL10's family, so the narrowed call still errs.)
-    assert _matches_register(narrowed, expect) is True
     assert unnarrowed["TL10.2"][1][0]["evidence_status"] == "MISSING"
-    assert narrowed["TL10.2"][1][0]["evidence_status"] == "PARTIAL"
+    # Narrowed, the prose binds TL10.2 to the sibling's table first; since fork
+    # r12 (D103) the honest table's own heading takes TL10.2 back, so here the
+    # narrowed call reads the same table.
+    assert narrowed["TL10.2"][1][0]["evidence_status"] == "MISSING"
     bundle = Bundle(VENDORED)
     host = module_registers(load_vendor_contract(bundle), bundle, "CP-L10", handoff)
     assert _matches_register(host, expect) is False
     assert host["TL10.2"][1][0]["evidence_status"] == "MISSING"
+    # Without the honest table no heading binds TL10.2, and the narrowed call
+    # still meets the key from the sibling (fork r7 keeps a table under a
+    # heading led by an unlisted ID of a listed ID's family only; TL23 is not
+    # TL10's), where the bundle's reading finds no TL10.2 at all.
+    sibling = handoff[: handoff.index("### TL10.2")]
+    assert _matches_register(find_registers(sibling, ["TL10.2"]), expect) is True
+    assert "TL10.2" not in find_registers(sibling)
+    host = module_registers(load_vendor_contract(bundle), bundle, "CP-L10", sibling)
+    assert _matches_register(host, expect) is False
 
 
 CPDR_FINDINGS = (
