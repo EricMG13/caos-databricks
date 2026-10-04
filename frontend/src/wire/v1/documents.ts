@@ -419,6 +419,8 @@ const UnverifiedCitationView = object({
   page: int({ min: 1 }),
   matched_text: string({ max: 65536 }),
   code: UnverifiedCode,
+  // False where the answer's body does not carry the quote either.
+  linked: bool,
 });
 // A handoff's tagged tables, read by the server from its Markdown with the
 // bundle's own reader (`caos/methodology/tables.py`); the browser never parses
@@ -595,6 +597,8 @@ const NarrativeFigure = object({
   line: LineView,
   rects: array(RectView, 256),
   withdrawn_at: nullable(datetime),
+  // The record citation's own `linked` (D106).
+  linked: bool,
 });
 // A figure naming an unverified citation (D106): the model's locator as the
 // record holds it, shown labelled and never opened as a host-verified source.
@@ -606,6 +610,7 @@ const NarrativeUnverified = object({
   page: int({ min: 1 }),
   matched_text: string({ max: 65536 }),
   code: UnverifiedCode,
+  linked: bool,
 });
 const NarrativeSpan = object({
   text: nullable(string({ max: 2000 })),

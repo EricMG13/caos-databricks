@@ -46,6 +46,7 @@ def test_the_analysis_read_serves_unverified_citations_apart(
             "page": 3,
             "matched_text": MODEL_QUOTE,
             "code": "CITATION_NOT_LOCATED",
+            "linked": True,
         }
     ]
     for module in ("CP-0", "CP-5"):
@@ -61,12 +62,14 @@ def test_an_unverified_view_carries_no_line_rectangle_or_document() -> None:
         "page",
         "matched_text",
         "code",
+        "linked",
     }
     view = {
         "source_id": "0b6f1a52-4d8e-4c6e-9a51-2f1d7c3e9b10",
         "page": 2,
         "matched_text": "q",
         "code": "CITATION_AMBIGUOUS",
+        "linked": False,
     }
     assert UnverifiedCitationView.model_validate(view).page == 2
     for wrong in ({"code": "HANDOFF_MALFORMED"}, {"page": 0}, {"line": None}):
@@ -94,6 +97,7 @@ def test_a_saved_unverified_figure_is_served_as_the_models_locator(
         "page": 3,
         "matched_text": MODEL_QUOTE,
         "code": "CITATION_NOT_LOCATED",
+        "linked": True,
     }
 
 

@@ -124,16 +124,16 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
     ),
     wire.NarrativeFigure: frozenset(
         "route_node_id record_sha256 citation_index document_sha256 source_id"
-        " page matched_text line rects withdrawn_at".split()
+        " page matched_text line rects withdrawn_at linked".split()
     ),
     wire.LineView: frozenset({"before", "excerpt", "after", "recorded"}),
     wire.NarrativeSpan: frozenset({"text", "figure", "unverified"}),
     wire.NarrativeUnverified: frozenset(
         "route_node_id record_sha256 unverified_index source_id page matched_text"
-        " code".split()
+        " code linked".split()
     ),
     wire.UnverifiedCitationView: frozenset(
-        {"source_id", "page", "matched_text", "code"}
+        {"source_id", "page", "matched_text", "code", "linked"}
     ),
     wire.ReportArtifact: frozenset(
         (

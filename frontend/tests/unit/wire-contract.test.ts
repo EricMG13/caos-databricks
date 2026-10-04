@@ -435,6 +435,7 @@ function analysis(): { [key: string]: Json } {
               page: 4,
               matched_text: "the model's own quote",
               code: "CITATION_NOT_LOCATED",
+              linked: true,
             },
           ],
           model_analysis: "# CP-0",

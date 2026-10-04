@@ -72,7 +72,8 @@
               "recorded": true
             },
             "rects": [],
-            "withdrawn_at": null
+            "withdrawn_at": null,
+            "linked": true
           }
         }
       ]

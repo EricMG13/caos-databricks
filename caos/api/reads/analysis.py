@@ -52,6 +52,7 @@ from caos.api.wire import (
     Subject,
     TableView,
     UnverifiedCitationView,
+    bounded,
 )
 from caos.blobs import BlobStore
 from caos.deliverable.render import SCREENING_ONLY
@@ -461,8 +462,9 @@ def _handoff_view(  # noqa: PLR0913 -- one accepted handoff and its lookups
                 {
                     "source_id": entry.source_id,
                     "page": entry.page,
-                    "matched_text": entry.matched_text,
+                    "matched_text": bounded(entry.matched_text),
                     "code": entry.code.value,
+                    "linked": entry.linked,
                 }
             )
             for entry in record.unverified
@@ -499,7 +501,7 @@ def _citation(
         source_id=source_id,
         filename=filename,
         page=citation.page,
-        matched_text=citation.matched_text,
+        matched_text=bounded(citation.matched_text),
         line=LineView.of(citation.line_text, citation.matched_text, rule),
         rects=[RectView(x0=b.x0, y0=b.y0, x1=b.x1, y1=b.y1) for b in citation.bboxes],
         withdrawn_at=withdrawn_at,  # type: ignore[arg-type]

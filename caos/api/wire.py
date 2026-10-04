@@ -690,6 +690,22 @@ class RectView(BaseModel):
     y1: float
 
 
+# A stored quote past the wire's bound is served cut, and says so, rather than
+# failing the whole read (NB2 review, Important 1): no producer writes one
+# (an unverified quote is capped at `GROUP_WIDTH`, an excerpt's line is one
+# evidence block), but an `ANY_RUN` quote is any run of its page, and a read
+# must not answer INTERNAL_FAULT for the record a store holds.
+TRUNCATED = "\u2026(truncated)"
+
+
+def bounded(text: str) -> str:
+    """`text`, or as much of it as `QUOTE_CHARS` holds with `TRUNCATED` after
+    it, so a reader sees the quote was cut."""
+    if len(text) <= QUOTE_CHARS:
+        return text
+    return text[: QUOTE_CHARS - len(TRUNCATED)] + TRUNCATED
+
+
 class LineView(BaseModel):
     """The evidence line a citation anchored in, split around its excerpt
     (D105), and whether the record holds that line at all (`recorded`).
@@ -720,9 +736,16 @@ class LineView(BaseModel):
         rule; the quote alone, not recorded, under `ANY_RUN`."""
         if line_text is None:
             whole = rule in (WHOLE_LINE, WHOLE_LINE_AS_STORED)
-            return cls(before="", excerpt=matched_text, after="", recorded=whole)
+            return cls(
+                before="", excerpt=bounded(matched_text), after="", recorded=whole
+            )
         before, excerpt, after = traced_line(line_text, matched_text)
-        return cls(before=before, excerpt=excerpt, after=after, recorded=True)
+        return cls(
+            before=bounded(before),
+            excerpt=bounded(excerpt),
+            after=bounded(after),
+            recorded=True,
+        )
 
 
 class CitationView(BaseModel):
@@ -770,6 +793,9 @@ class UnverifiedCitationView(BaseModel):
     page: Annotated[int, Field(ge=1)]
     matched_text: Annotated[str, Field(max_length=QUOTE_CHARS)]
     code: UnverifiedCode
+    # False for a quote the answer's body does not carry either: "not in the
+    # answer body", beside its reason.
+    linked: StrictBool
 
 
 # A handoff's tagged tables (`caos.methodology.tables`), whose bounds these are.
@@ -1079,6 +1105,9 @@ class NarrativeFigure(BaseModel):
     line: LineView
     rects: Annotated[list[RectView], Field(max_length=RECTS_MAX)]
     withdrawn_at: AwareDatetime | None
+    # The record citation's own `linked` (D106): false where the module's
+    # answer does not carry the quote.
+    linked: StrictBool
 
 
 class NarrativeUnverified(BaseModel):
@@ -1096,6 +1125,7 @@ class NarrativeUnverified(BaseModel):
     page: Annotated[int, Field(ge=1)]
     matched_text: Annotated[str, Field(max_length=QUOTE_CHARS)]
     code: UnverifiedCode
+    linked: StrictBool
 
 
 class NarrativeSpan(BaseModel):
