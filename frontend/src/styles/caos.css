@@ -1471,6 +1471,13 @@
     gap: 0.25rem;
     vertical-align: 1px;
   }
+  /* Another module's citation named by its qualified marker (D107): a quiet
+     label in the mono face, nothing to press. */
+  .qmark {
+    font: 500 0.75rem/1 var(--font-mono);
+    color: var(--muted-foreground);
+    white-space: nowrap;
+  }
   /* An unverified citation's marker (D106): labelled, dashed, inert -- never
      the host-verified chip's fill, and nothing to press. */
   .chip.unverified {

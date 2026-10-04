@@ -8,8 +8,8 @@ import { resolve } from "node:path";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { ArtifactTexts } from "@/ds/ArtifactMarkdown";
-import { Markdown } from "@/ds/ModelMarkdown";
-import { readMarkers } from "@/ds/markdown";
+import { Markdown, ModuleRefLink } from "@/ds/ModelMarkdown";
+import { readMarkers, readRefs } from "@/ds/markdown";
 import { ArtifactMarkers, HandoffMarkers, unverifiedMarkerLabel } from "@/evidence/Markers";
 import { Narrative } from "@/evidence/Narrative";
 import { AnalysisSection } from "@/sections/analysis/AnalysisSection";
@@ -144,6 +144,33 @@ describe("citation markers (D107)", () => {
       "unverified – page 9",
     );
     expect(container.querySelector("img")).toBeNull();
+  });
+});
+
+describe("an upstream citation named by its qualified marker (the MK2 audit)", () => {
+  test("test_a_qualified_marker_is_a_label_never_a_register_link", () => {
+    // `[CP-1 C3]` is CP-1's citation 3 as a downstream prompt names it
+    // (`citation_markers.qualified`), never CP-1's register "C3".
+    expect(readRefs("see [CP-1 C3] and [CP-2A C2, C5].")).toEqual([
+      "see ",
+      { text: "[CP-1 C3]", qualified: "CP-1 C3" },
+      " and ",
+      { text: "[CP-2A C2, C5]", qualified: "CP-2A C2, C5" },
+      ".",
+    ]);
+    expect(readRefs("[CP-1B B2]")).toEqual([
+      { text: "[CP-1B B2]", refs: [{ module: "CP-1B", register: "B2", note: null }] },
+    ]);
+    const { container } = render(
+      <ModuleRefLink value={(ref) => <a href={`#${ref.module}`}>{ref.module}</a>}>
+        <Markdown text="Leverage per [CP-1 C3]; walk in [CP-1B B2]." base={2} label="x" />
+      </ModuleRefLink>,
+    );
+    const label = container.querySelector("[data-qualified-marker='[CP-1 C3]']")!;
+    expect(label).toHaveTextContent(/^CP-1 C3$/);
+    expect(label.closest("a, button")).toBeNull();
+    expect(label.querySelector("a, button")).toBeNull();
+    expect(container.querySelectorAll("a")).toHaveLength(1);
   });
 });
 
