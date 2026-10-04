@@ -951,6 +951,20 @@ def retry_feedback(
     return capped(feedback_lines(contract, catalog, identity, body, skill=skill))
 
 
+def carried_answer(body: str) -> str | None:
+    """The refused answer a guided retry carries back to be corrected (D104):
+    the stored body as it crosses `BoundaryText`, or None when it is not the
+    transport (N50), holds text no reader can see, or will not cross -- then
+    the retry asks for the whole answer again, as before. Like the checks'
+    lines it goes into that one request only, never a log, refusal or row."""
+    parsed, _reason = _transport_or_reason(body)
+    if parsed is None or hides_text(body):
+        return None
+    with suppress(Refusal):
+        return BoundaryText.of(body, limit=MAX_TRANSPORT_CHARS).value
+    return None
+
+
 def feedback_lines(
     contract: VendorContract,
     catalog: Mapping[str, Any],
