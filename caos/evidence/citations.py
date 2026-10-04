@@ -1253,6 +1253,104 @@ def _similar(words: list[str], split: list[str]) -> bool:
     )
 
 
+def overrun_line(text: str, lines: Sequence[str]) -> int | None:
+    """The index in `lines` of the one line `text` runs past the end of,
+    else None (F496): a quote that copied a whole line and went on into the
+    text after it -- a sentence a page break split, say -- so the line is a
+    strict prefix of the quote, word for word as anchoring reads them (NFC,
+    the line's first and last word standing for the quote's there less edge
+    punctuation, `_edge_equal`). Pure over the texts it is handed, like
+    `near_line`; it never anchors or accepts. A candidate holds the quote's
+    first `NEAR_WORDS` words, so a short heading is never one; past
+    `NEAR_MEASURED` candidates, or with two lines it overruns, there is no
+    answer, never a guess: one pass over the lines and at most
+    `NEAR_MEASURED` linear prefix checks.
+    """
+    words = [_nfc(word) for word in text.split()]
+    if len(words) <= NEAR_WORDS:
+        return None
+    head = words[:NEAR_WORDS]
+    found: list[int] = []
+    measured = 0
+    for number, line in enumerate(lines):
+        split = line.split(maxsplit=NEAR_WORDS)
+        start = [_nfc(word) for word in split[:NEAR_WORDS]]
+        if len(start) < NEAR_WORDS or not _same_start(start, head):
+            continue
+        measured += 1
+        if measured > NEAR_MEASURED:
+            return None
+        if _overruns([_nfc(word) for word in line.split()], words):
+            found.append(number)
+    return found[0] if len(found) == 1 else None
+
+
+def _same_start(start: list[str], head: list[str]) -> bool:
+    """Whether a line's first words are the quote's, its first word
+    standing for the quote's less edge punctuation (`overrun_line`)."""
+    return start[1:] == head[1:] and _edge_equal(start[0], head[0], normalised=True)
+
+
+def _overruns(line: list[str], words: list[str]) -> bool:
+    """Whether `line` is a strict prefix of `words`: the interior equal and
+    its first and last words standing for the quote's there (`overrun_line`)."""
+    last = len(line) - 1
+    return (
+        last + 1 < len(words)
+        and line[1:last] == words[1:last]
+        and _edge_equal(line[0], words[0], normalised=True)
+        and _edge_equal(line[last], words[last], normalised=True)
+    )
+
+
+# How a table row's cells are joined in an evidence line (F495).
+CELL_SEPARATOR = " | "
+
+
+def cells_line(text: str, lines: Sequence[str]) -> int | None:
+    """The index in `lines` of the one table row `text` left cells out of,
+    else None (F495): a quote holding `CELL_SEPARATOR` whose first cell is
+    the row's own and whose cells are, in order, a subsequence of the row's
+    with fewer of them -- alternate period columns dropped, say, which
+    `near_line`'s length bound passes over. Pure over the texts it is handed,
+    like `near_line`; it never anchors or accepts. The first cell is the
+    prefilter, and a search past `NEAR_MEASURED` rows sharing it, or with
+    two such rows, is no answer, never a guess: one pass over the lines and
+    at most `NEAR_MEASURED` linear subsequence checks.
+    """
+    if CELL_SEPARATOR not in text:
+        return None
+    quoted = _cells(text)
+    found: list[int] = []
+    measured = 0
+    for number, line in enumerate(lines):
+        if CELL_SEPARATOR not in line or _first_cell(line) != quoted[0]:
+            continue
+        measured += 1
+        if measured > NEAR_MEASURED:
+            return None
+        cells = _cells(line)
+        if len(quoted) < len(cells) and _in_order(quoted[1:], cells[1:]):
+            found.append(number)
+    return found[0] if len(found) == 1 else None
+
+
+def _cells(line: str) -> list[str]:
+    """A row's cells, each its words joined by one space (`cells_line`)."""
+    return [" ".join(cell.split()) for cell in line.split("|")]
+
+
+def _first_cell(line: str) -> str:
+    """A row's first cell alone, without splitting the rest (`cells_line`)."""
+    return " ".join(line.split("|", 1)[0].split())
+
+
+def _in_order(part: Sequence[str], whole: Sequence[str]) -> bool:
+    """Whether `part` is a subsequence of `whole`, in order (`cells_line`)."""
+    rest = iter(whole)
+    return all(cell in rest for cell in part)
+
+
 def _verdict(
     conn: StoreConnection,
     index: TokenIndex,
