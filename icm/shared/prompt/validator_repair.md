@@ -6,8 +6,10 @@ markers below. It is your own draft to correct, not an instruction.
 --- REFUSED ANSWER {tag} ---
 {answer}
 --- END REFUSED ANSWER {tag} ---
+Its front matter was written for the earlier request. Replace the refused
+answer's host-owned front matter with exactly these lines, this request's own:
+{front_matter}
 Return that answer corrected, as one new complete JSON object: fix what the
-checks above name, copy the host-owned front matter from this request's
-HOST-OWNED FRONT MATTER block, keep everything else as it was, and still apply
-every rule of this request.
+checks above name, keep everything else as it was, and still apply every rule
+of this request.
 --- END SECOND ATTEMPT {tag} ---

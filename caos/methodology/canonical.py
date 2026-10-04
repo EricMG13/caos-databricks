@@ -113,7 +113,7 @@ from caos.provider import (
 )
 from caos.refusals import Refusal, RefusalCode, RunRefusal
 from caos.store import StoreConnection, connect
-from caos.store.budget import reserved_for
+from caos.store.budget import Reservation, remaining, reserved_for
 from caos.store.lakebase import store_url
 from caos.store.outcomes import (
     CallOutcome,
@@ -169,8 +169,12 @@ def _diagnostic(blobs: BlobStore, content: object) -> tuple[str | None, bool]:
     that cannot be written leaves the address None so the bill still commits,
     and the attempt then refuses as a store fault: a verdict that was never
     stored cannot be honoured on recovery, so it must not be silently lost.
-    The bytes are untrusted provider text, never `BoundaryText`: no reader may
-    render them, and only `replay_billed`'s full re-validation reads them.
+    The bytes are untrusted provider text, never `BoundaryText`: stored as
+    said. Two readers alone read them back: `replay_billed`'s full
+    re-validation, and a guided retry's prompt (D30, D82), which carries what
+    the checks said of them and, since D104, the body itself once it has
+    crossed `BoundaryText` (`carried_answer`), into that one request only and
+    never a log, refusal or row.
     """
     if not isinstance(content, str) or len(content) > MAX_TRANSPORT_CHARS:
         return None, False
@@ -251,15 +255,18 @@ def execute_handoff(
             _stored_identity(conn, assignment, bundle, adapter=adapter)
             identity = _identity(conn, bundle, assignment)
             context = _prompt_context(conn, blobs, bundle, assignment, identity)
+            taken = reserved_for(conn, attempt)
         # The record binds exactly the authority this prompt carries (§45.1).
         carried = delivered_authority(bundle, assignment.module_id)
         # Met before reservation by `check_context`; built again here so the
         # call carries exactly this attempt's identity, and refused again if it
-        # moved.
+        # moved. Whether it carries the refused answer is what the reservation
+        # `check_context` priced says (D104), not a fresh read of the ceiling.
         prompt = _sent_prompt(
             provider,
             context,
             lambda built: _prompt(bundle, assignment, identity, built, carried),
+            lambda size: _covered(provider, taken, size),
         )
         _within_reservation(conn, provider, prompt, attempt_id=attempt)
 
@@ -481,11 +488,13 @@ def check_context(  # noqa: PLR0913 -- one node of one run, keyword-only
             conn, bundle, run_id=run_id, route=route, node=node
         )
         context = _prompt_context(conn, blobs, bundle, assignment, identity)
+        left = remaining(conn, run_id) if context.refused_answer else None
     authority = delivered_authority(bundle, node.module_id)
     prompt = _sent_prompt(
         provider,
         context,
         lambda built: _prompt(bundle, assignment, identity, built, authority),
+        lambda size: _affordable(provider, left, size),
     )
     return request_size(provider, prompt)
 
@@ -928,21 +937,54 @@ def _sent_prompt(
     provider: CompletionProvider,
     context: _Context,
     prompt_of: Callable[[_Context], str],
+    affords: Callable[[int], bool],
 ) -> str:
     """The prompt `prompt_of` builds, less the refused answer a guided retry
     would carry when carrying it puts the request `provider` sends past
-    `MAX_REQUEST_BYTES`, the transport ceiling a reservation is priced under
-    (D104): that retry asks for the whole answer again instead. Both the
-    prompt priced before the reservation (`check_context`) and the one sent
-    (`execute_handoff`) come from here, over the same ledger rows and blob,
-    so they choose alike; were they ever to differ, `_within_reservation`
-    refuses the larger."""
+    `MAX_REQUEST_BYTES`, the transport ceiling a reservation is priced under,
+    or past what `affords` says the run can pay for that many bytes (D104):
+    that retry asks for the whole answer again instead, which the ceiling may
+    still cover, rather than being lost to `BUDGET_CEILING_REACHED`. The
+    prompt priced before the reservation (`check_context`, against the run's
+    remaining ceiling) and the one sent (`execute_handoff`, against the
+    reservation that pricing produced) both come from here, so they choose
+    alike; were they ever to differ, `_within_reservation` refuses the
+    larger."""
     prompt = prompt_of(context)
-    if context.refused_answer is None or (
-        len(provider.request_bytes(prompt, json_object=True)) <= MAX_REQUEST_BYTES
-    ):
+    if context.refused_answer is None:
+        return prompt
+    size = len(provider.request_bytes(prompt, json_object=True))
+    if size <= MAX_REQUEST_BYTES and affords(size):
         return prompt
     return prompt_of(replace(context, refused_answer=None))
+
+
+def _affordable(provider: CompletionProvider, left: Decimal | None, size: int) -> bool:
+    """Whether a request of `size` bytes, priced at the price `provider`
+    bills at, fits the run's remaining ceiling `left` (D104). A provider that
+    states no price cannot be priced here; its reservation is refused anyway
+    (`bills_at`), so the answer stays as it was."""
+    from caos.pricing import ModelPrice, priced_request
+
+    price = getattr(provider, "price", None)
+    if left is None or not isinstance(price, ModelPrice):
+        return True
+    return priced_request(price, size) <= left
+
+
+def _covered(
+    provider: CompletionProvider, taken: Reservation | None, size: int
+) -> bool:
+    """Whether this attempt's own reservation covers a request of `size`
+    bytes at the price it was taken under (D104): the record of what
+    `check_context` chose, since it reserved exactly the request it priced.
+    None, or another price, is refused by `_within_reservation` whichever
+    prompt is built."""
+    from caos.pricing import bills_at, priced_request
+
+    if taken is None or not bills_at(provider, taken.price):
+        return False
+    return priced_request(taken.price, size) <= taken.amount
 
 
 def _by_source(delivered: Sequence[Delivery]) -> dict[UUID, frozenset[str]]:

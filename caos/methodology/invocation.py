@@ -1302,7 +1302,7 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
     if identity.module_id == GATE_MODULE:
         t8_header = "| " + " | ".join(contract.navigation.NEW_HEADERS) + " |"
         prompt += _CP0_FINAL_CHECK.format(tag=tag, t8_header=t8_header)
-    return prompt + _retry_section(tag, feedback, answer)
+    return prompt + _retry_section(tag, feedback, answer, front_matter)
 
 
 def _feedback_lines(lines: Sequence[str]) -> str:
@@ -1316,13 +1316,20 @@ def _carried(feedback: str, refused_answer: str | None) -> str:
     return refused_answer if feedback and refused_answer else ""
 
 
-def _retry_section(tag: str, feedback: str, answer: str = "") -> str:
+def _retry_section(
+    tag: str, feedback: str, answer: str = "", front_matter: str = ""
+) -> str:
     """The last section of a node's guided retry (D30, D82), or nothing: the
-    refused answer to correct with its checks (D104), else the checks alone."""
+    refused answer to correct with its checks (D104), else the checks alone.
+    The refused answer's front matter names the request it answered, so this
+    request's host-owned lines follow it, to replace that front matter: they
+    are already in the tag, and a model need not reach back for them."""
     if not feedback:
         return ""
     if answer:
-        return _REPAIR_FEEDBACK.format(tag=tag, messages=feedback, answer=answer)
+        return _REPAIR_FEEDBACK.format(
+            tag=tag, messages=feedback, answer=answer, front_matter=front_matter
+        )
     return _RETRY_FEEDBACK.format(tag=tag, messages=feedback)
 
 

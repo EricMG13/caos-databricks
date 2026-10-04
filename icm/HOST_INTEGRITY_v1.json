@@ -33,8 +33,8 @@
       "sha256": "26f320929bb8ff4de2d6786cf6e936ffa5add4c33f329189460fe8b01323c16e"
     },
     "validator_repair.md": {
-      "bytes": 656,
-      "sha256": "c9bd08a9f12178f82c01ec71c51048347587d9a141844e1f7684862fdf46b696"
+      "bytes": 740,
+      "sha256": "bb0c97af22c3045f372c4764a3dac0042df9c92f9e90fe51a1c585fcb5f775ed"
     }
   },
   "module_id": "CP-CF",
