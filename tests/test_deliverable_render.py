@@ -630,7 +630,9 @@ def test_the_edge_punctuation_is_the_anchors_own() -> None:
 def test_a_record_without_a_line_renders_byte_for_byte_as_before() -> None:
     """No `line_text`, nothing is marked and the quote is escaped as it always
     was -- a whole-line quote padded with spaces too, which `traced_line`
-    would split into an edge and a mark."""
+    would split into an edge and a mark. Since F504 an `ANY_RUN` quote (this
+    record names no rule) is labelled a quote above it, which is the one
+    byte the legacy page did not carry."""
     padded = " Adjusted EBITDA | $920 | $955 <b> "
     payload = json.loads(json.dumps(PAYLOAD_DATA))
     payload["artifacts"][0] = _artifact(
@@ -640,5 +642,8 @@ def test_a_record_without_a_line_renders_byte_for_byte_as_before() -> None:
     )
 
     page = render(payload).decode()
-    assert "<blockquote> Adjusted EBITDA | $920 | $955 &lt;b&gt; </blockquote>" in page
+    assert (
+        '<p class="cite">Quote (source line not recorded)</p>\n'
+        "<blockquote> Adjusted EBITDA | $920 | $955 &lt;b&gt; </blockquote>"
+    ) in page
     assert "<mark" not in page

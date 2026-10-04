@@ -50,6 +50,25 @@ def _narrative(value: object, artifacts: list[dict[str, Any]]) -> list[Any]:
     return result
 
 
+# A span's kind, the reference it names a citation by, the record list that
+# reference indexes and the fields the host copies from the entry. A figure
+# names an anchored citation; an unverified figure (D106, owner: "Labelled
+# unverified too") names one of the record's unverified citations, and is
+# rendered labelled as one.
+_REFERENCES = {
+    "figure": (
+        "citation_index",
+        "citations",
+        ("document_sha256", "page", "matched_text"),
+    ),
+    "unverified": (
+        "unverified_index",
+        "unverified",
+        ("source_id", "page", "matched_text", "code"),
+    ),
+}
+
+
 def _span(span: object, records: dict[str, Any]) -> dict[str, Any]:
     invalid = Refusal(RefusalCode.NARRATIVE_REFERENCE_INVALID)
     if not isinstance(span, dict):
@@ -59,32 +78,35 @@ def _span(span: object, records: dict[str, Any]) -> dict[str, Any]:
         text = BoundaryText.of(
             text.value if isinstance(text, BoundaryText) else text, limit=2000
         )
+        # A digit in prose that references nothing still refuses (D106 left
+        # this rule as it was): only a figure span may state a quantity.
         if any(_is_figure(character) for character in text.value):
             raise Refusal(RefusalCode.NARRATIVE_FIGURE_UNREFERENCED)
         return {"text": text.value}
-    if set(span) != {"figure"} or not isinstance(span["figure"], dict):
+    kind = next(iter(span)) if len(span) == 1 else None
+    if kind not in _REFERENCES or not isinstance(span[kind], dict):
         raise invalid
-    reference = span["figure"]
-    if set(reference) != {"route_node_id", "citation_index"}:
+    return {kind: _resolved(kind, span[kind], records)}
+
+
+def _resolved(
+    kind: str, reference: dict[str, Any], records: dict[str, Any]
+) -> dict[str, Any]:
+    """The record entry a figure reference names, copied from the accepted
+    record: the reference names which entry, never what it says."""
+    invalid = Refusal(RefusalCode.NARRATIVE_REFERENCE_INVALID)
+    key, listed, fields = _REFERENCES[kind]
+    if set(reference) != {"route_node_id", key}:
         raise invalid
-    node, index = reference["route_node_id"], reference["citation_index"]
+    node, index = reference["route_node_id"], reference[key]
     if not isinstance(node, str) or type(index) is not int or index < 0:
         raise invalid
     node = BoundaryText.of(node).value
-    citations = records.get(node, {}).get("citations", [])
-    if index >= len(citations):
+    entries = records.get(node, {}).get(listed, [])
+    if index >= len(entries):
         raise invalid
-    citation = citations[index]
-    return {
-        "figure": {
-            "route_node_id": node,
-            "citation_index": index,
-            **{
-                key: citation[key]
-                for key in ("document_sha256", "page", "matched_text")
-            },
-        }
-    }
+    entry = entries[index]
+    return {"route_node_id": node, key: index, **{f: entry[f] for f in fields}}
 
 
 def _derive(  # noqa: PLR0913 -- the proof inputs and host-minted identity
@@ -213,6 +235,16 @@ def renderable(data: bytes) -> bytes:
         raise Refusal(RefusalCode(refused.code)) from None
 
 
+def _reference(span: dict[str, Any]) -> dict[str, Any]:
+    """A saved span as the draft that made it: prose as itself, a figure as
+    the reference it was saved from, which `_derive` resolves afresh."""
+    if "text" in span:
+        return span
+    kind = next(iter(span))
+    key = _REFERENCES[kind][0]
+    return {kind: {name: span[kind][name] for name in ("route_node_id", key)}}
+
+
 def prove_revision(
     conn: StoreConnection,
     blobs: BlobStore,
@@ -232,18 +264,7 @@ def prove_revision(
         raise Refusal(RefusalCode.DELIVERABLE_PAYLOAD_INVALID)
 
     narrative = [
-        [
-            span
-            if "text" in span
-            else {
-                "figure": {
-                    key: span["figure"][key]
-                    for key in ("route_node_id", "citation_index")
-                }
-            }
-            for span in paragraph
-        ]
-        for paragraph in payload["narrative"]
+        [_reference(span) for span in paragraph] for paragraph in payload["narrative"]
     ]
     data = _derive(
         conn,

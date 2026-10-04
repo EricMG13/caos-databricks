@@ -34,7 +34,7 @@ from caos.deliverable.filing import sign_opinion
 from caos.deliverable.package import build_package, verify_package
 from caos.deliverable.render import RenderRefused, canonical_bound, render
 from caos.deliverable.revisions import read_revision, save_revision
-from caos.evidence.citations import Citation, verify_citations
+from caos.evidence.citations import ANY_RUN, EXCERPT, Citation, verify_citations
 from caos.graph.route import ResolvedRoute, resolve_route
 from caos.methodology.bundle import (
     assemble_authority,
@@ -43,7 +43,12 @@ from caos.methodology.bundle import (
     delivered_authority_digest,
 )
 from caos.methodology.canonical import accepted_projections
-from caos.methodology.handoff import CanonicalRecord, record_bytes, validate_markdown
+from caos.methodology.handoff import (
+    CanonicalRecord,
+    UnverifiedCitation,
+    record_bytes,
+    validate_markdown,
+)
 from caos.methodology.invocation import accepted_lineage, host_identity
 from caos.methodology.vendor import authority_bundle_sha256
 from caos.methodology.verification import AcceptedRow
@@ -75,11 +80,18 @@ def route() -> ResolvedRoute:
 
 
 def _accept(
-    harness: _Harness, module_id: str, omit_soft: bool = False, /, **authored: object
+    harness: _Harness,
+    module_id: str,
+    omit_soft: bool = False,
+    unverified: tuple[UnverifiedCitation, ...] = (),
+    /,
+    **authored: object,
 ) -> str:
     """Accept one canonical handoff with its host record, as c-5 will.
 
     `omit_soft` names only CP-0 upstream, as a call made before CP-L10 would.
+    `unverified`, when given, is the record's every citation (D106): an
+    `EXCERPT` record whose quotes all failed to anchor, with none anchored.
     """
     conn, bundle = harness.conn, harness.bundle
     node = next(n for n in harness.route.nodes if n.module_id == module_id)
@@ -124,7 +136,9 @@ def _accept(
         identity=identity,
         lineage=lineage,
         projections=projections,
-        citations=tuple(anchored),
+        citations=() if unverified else tuple(anchored),
+        citation_rule=EXCERPT if unverified else ANY_RUN,
+        unverified=unverified,
     )
     reserve(conn, attempt, ESTIMATE)
     record_outcome(
