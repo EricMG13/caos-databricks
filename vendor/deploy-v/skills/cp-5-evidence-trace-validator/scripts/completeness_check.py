@@ -302,8 +302,14 @@ def find_registers(handoff_text, register_ids=None, retired_ids=()):
     actually written ("### T4C.4 — Covenant headroom"). Where none of those
     four lines names a register, the nearest heading above the table, with no
     other table between, still does, at any distance (fork r6) -- but only for
-    an ID no table is bound to the near way, so every binding made before is
-    made the same.
+    an ID no heading binds the near way.
+
+    A table a heading binds, near or distant, wins over one bound to the same
+    ID only by a prose line, whatever their order (fork r12): a summary table
+    under "The compact table below summarizes T4.4 ..." never takes T4.4 from
+    the table under "#### T4.4 — Income Statement". A prose-bound table keeps
+    the ID only where no heading binds one. Otherwise the first table bound
+    keeps it, a near heading's before a distant one's.
     """
     id_re = REGISTER_ID_RE
     titles, title_re = {}, None
@@ -349,6 +355,7 @@ def find_registers(handoff_text, register_ids=None, retired_ids=()):
 
     lines = unfenced_markdown(handoff_text).splitlines()
     out, recent, heading, distant = {}, [], None, []
+    headed = set()  # the IDs a heading has bound (fork r12)
     i = 0
     while i < len(lines):
         s = lines[i].strip()
@@ -372,6 +379,7 @@ def find_registers(handoff_text, register_ids=None, retired_ids=()):
             # ("reconciles to the T4.4 revenue base" under "### T4.5"), fork r2.
             heads = [s for s in reversed(recent) if s.startswith("#")]
             reg_id = next((found for found in map(label_id, heads) if found), None)
+            by_heading = reg_id is not None
             # A heading led by one of the module's retired IDs (CP-1's
             # "#### T4.7 Normalized Financials") is that register's: a prose
             # mention never claims its table (fork r7). Any other heading,
@@ -381,7 +389,12 @@ def find_registers(handoff_text, register_ids=None, retired_ids=()):
                 prose = [s for s in reversed(recent) if not s.startswith("#")]
                 reg_id = next((found for found in map(label_id, prose) if found), None)
             if reg_id:
-                out.setdefault(reg_id, (header, rows))
+                # A heading's table displaces a prose line's, never another
+                # heading's (fork r12).
+                if reg_id not in out or (by_heading and reg_id not in headed):
+                    out[reg_id] = (header, rows)
+                if by_heading:
+                    headed.add(reg_id)
             elif heading is not None and heading not in recent and label_id(heading):
                 distant.append((label_id(heading), (header, rows)))
             i = j
@@ -393,7 +406,9 @@ def find_registers(handoff_text, register_ids=None, retired_ids=()):
             heading = s if s.startswith("#") else heading
         i += 1
     for reg_id, table in distant:
-        out.setdefault(reg_id, table)
+        if reg_id not in headed:
+            out[reg_id] = table
+            headed.add(reg_id)
     return out
 
 

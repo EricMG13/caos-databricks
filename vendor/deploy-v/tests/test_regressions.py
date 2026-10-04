@@ -640,9 +640,9 @@ def _r6_find_registers(text, ids):
     return out
 
 
-def _r7_expected(text, ids, retired_ids=()):
-    """What fork r7 must bind: r6's reading, once the prose in the window of a table whose heading is led by
-    one of the module's retired IDs (CP-1's "#### T4.7 ...") is made a plain note."""
+def _r7_expected(text, ids, retired_ids=(), reader=None):
+    """What fork r7 must bind: r6's reading (or `reader`'s), once the prose in the window of a table whose
+    heading is led by one of the module's retired IDs (CP-1's "#### T4.7 ...") is made a plain note."""
     import re
     led = re.compile(r'#+\s*[*_]*\s*(TL\d+\.\d+|[PT]\d+[A-Z]?(?:\.\d+)?)(?![A-Za-z0-9])')
 
@@ -662,7 +662,59 @@ def _r7_expected(text, ids, retired_ids=()):
             window = []
         elif s:
             window.append(n)
-    return _r6_find_registers('\n'.join(lines), ids)
+    return (reader or _r6_find_registers)('\n'.join(lines), ids)
+
+
+def _r12_candidates(text, ids=None):
+    """Every table's own claim, as fork r12 reads it: (rank, order, ID, table), where rank 0 is a heading in
+    the table's four-line window, 1 its nearest heading at any distance (no table between) and 2 a prose
+    line in the window; `ids` None reads the default ID pattern."""
+    import re
+    if ids is None:
+        id_re = complete.REGISTER_ID_RE
+    else:
+        alternatives = '|'.join(re.escape(i) for i in sorted(set(ids), key=lambda v: (-len(v), v)))
+        id_re = re.compile(rf'(?<![A-Za-z0-9_.])({alternatives})(?![A-Za-z0-9_]|\.[A-Za-z0-9])')
+
+    def label(line):
+        match = id_re.search(line)
+        return match.group(1) if match else None
+    lines = handoff.unfenced_markdown(text).splitlines()
+    claims, recent, heading, i = [], [], None, 0
+    while i < len(lines):
+        s = lines[i].strip()
+        if s.startswith('|') and s.count('|') >= 2 and not tables.SEPARATOR_RE.match(s):
+            header, j = tables._split_row(s), i + 1
+            if j < len(lines) and tables.SEPARATOR_RE.match(lines[j].strip()) and '|' in lines[j]:
+                j += 1
+            rows = []
+            while j < len(lines) and lines[j].strip().startswith('|'):
+                cells = complete._row_cells(lines[j].strip(), len(header))
+                cells += [''] * (len(header) - len(cells))
+                rows.append(dict(zip(header, cells[:len(header)])))
+                j += 1
+            near = [x for x in reversed(recent) if x.startswith('#')], [x for x in reversed(recent) if not x.startswith('#')]
+            claim = next(((rank, reg) for rank, labels in zip((0, 2), near) for reg in map(label, labels) if reg), None)
+            if claim is None and heading is not None and heading not in recent and label(heading):
+                claim = (1, label(heading))
+            if claim:
+                claims.append((claim[0], len(claims), claim[1], (header, rows)))
+            i, recent, heading = j, [], None
+            continue
+        if s:
+            recent = (recent + [s])[-4:]
+            heading = s if s.startswith('#') else heading
+        i += 1
+    return claims
+
+
+def _r12_find_registers(text, ids=None):
+    """What fork r12 must bind: per ID, the first table of the best rank -- a near heading's, then a distant
+    heading's, then a prose line's."""
+    out = {}
+    for _rank, _order, reg, table in sorted(_r12_candidates(text, ids), key=lambda claim: claim[:2]):
+        out.setdefault(reg, table)
+    return out
 
 
 class ForkR6Tests(unittest.TestCase):
@@ -749,13 +801,21 @@ class ForkR6Tests(unittest.TestCase):
         vocabulary = ['', '#### T6 — Trace', '### T4.5', '## Analysis', '#### Notes', 'see T4.5', '> note', 'prose',
                       '| a | b |', '| --- | --- |', '| 1 | 2 |', '| c | d |', '```'] + ['> note', 'prose'] * 4
         generator = random.Random(3102026)
-        added = 0
+        added = rebound = 0
         for _ in range(6000):
             text = '\n'.join(generator.choice(vocabulary) for _ in range(generator.randint(1, 24)))
             before, now = _r5_find_registers(text), complete.find_registers(text)
-            self.assertEqual({k: now.get(k) for k in before}, before, text)
+            self.assertEqual(now, _r12_find_registers(text), text)
+            # Fork r12: the one binding that moves is a prose line's table, displaced by a heading's.
+            claims = _r12_candidates(text)
+            for reg in before:
+                if now.get(reg) != before[reg]:
+                    rebound += 1
+                    self.assertIn((2, reg, before[reg]), [(r, k, t) for r, _o, k, t in claims], text)
+                    self.assertIn(now.get(reg), [t for r, _o, k, t in claims if k == reg and r < 2], text)
             added += len(now) > len(before)
         self.assertGreater(added, 50)
+        self.assertGreater(rebound, 25)
 
     def test_the_cp1_skeleton_reads_as_every_reader_requires(self):
         # No CP-1 answer of 2-3 October had a worked example of heading, tag, table and its nulls' gap lines.
@@ -1024,9 +1084,13 @@ class ForkR7Tests(unittest.TestCase):
         found = complete.find_registers(text, ['T4.6', 'T4.18'], ['T4.7'])
         self.assertEqual(found['T4.18'][0], ['facility_id', 'facility_name'])
         self.assertEqual(complete.find_registers(text)['T4.7'][0], ['Line Item', 'Statement Source', 'FY2025'])
-        # A heading naming no register still lets the prose line bind (fork r2).
+        # A heading naming no register still lets the prose line bind (fork r2), but only while no heading
+        # binds the ID: T4.18's own heading below takes it back (fork r12).
         notes = text.replace('#### T4.7 Normalized Financials', '#### Notes')
         self.assertEqual(complete.find_registers(notes, ['T4.6', 'T4.18'], ['T4.7'])['T4.18'][0],
+                         ['facility_id', 'facility_name'])
+        alone = notes.replace('#### T4.18 Debt Facility Register', '#### Debt facilities')
+        self.assertEqual(complete.find_registers(alone, ['T4.6', 'T4.18'], ['T4.7'])['T4.18'][0],
                          ['Line Item', 'Statement Source', 'FY2025'])
 
     def test_another_modules_id_leading_a_heading_never_stops_the_prose(self):
@@ -1087,8 +1151,8 @@ class ForkR7Tests(unittest.TestCase):
 
     def test_the_locator_binds_as_r6_but_under_a_retired_heading(self):
         # Review fix round 1 (M1): over documents mixing listed, retired, umbrella and cited IDs in headings
-        # and prose, every binding is r6's, but a retired heading's table, which no prose claims; nothing
-        # else unbinds or moves.
+        # and prose, every binding is r6's, but a retired heading's table, which no prose claims, and (fork
+        # r12) a heading's table, which no prose-bound table keeps from its ID; nothing else unbinds or moves.
         import random
         lines_from = ['#### {f}1 — Register', '#### {f}3 Debt', '#### {f}7 Retired', '### **{f}7** Retired',
                       '#### {f}10 Other', '#### T4.18 Debt facilities (from CP-1)', '#### T4.7 Normalized (CP-1)',
@@ -1107,7 +1171,7 @@ class ForkR7Tests(unittest.TestCase):
                 parts += [f'| c{k} | v{k} |', '| --- | --- |', f'| r{k} | 1 |', '']
             text = '\n'.join(parts)
             now, before = complete.find_registers(text, ids, retired), _r6_find_registers(text, ids)
-            self.assertEqual(now, _r7_expected(text, ids, retired), text)
+            self.assertEqual(now, _r7_expected(text, ids, retired, _r12_find_registers), text)
             retired_docs += now != before
             moved += any(now.get(r) not in (None, before.get(r)) for r in ids)
         self.assertGreater(retired_docs, 500)
@@ -1326,6 +1390,54 @@ class ForkR11Tests(unittest.TestCase):
         self.assertEqual(self.interface(bound), [
             'cp1b.cp_model_snapshot_fields: CP-MODEL interface table missing -- it is emitted on every run, '
             'not only when CP-MODEL was requested'])
+
+
+class ForkR12Tests(unittest.TestCase):
+    """Deployment fork r12 (D103): a register's heading-bound table wins over one a prose line bound."""
+
+    SUMMARY = ('| Metric | Q2 2026 | Q2 2025 | Change / read-through |\n|---|---|---|---|\n'
+               '| Revenue | 2,912 | 2,834 | Higher |\n\n')
+    REGISTER = '| Line Item | Q2 2026 | Q2 2025 |\n|---|---|---|\n| Revenue | 2,912 | 2,834 |\n\n'
+    LEAD = ('### Analytical read-through\n\nQ2 figures are in T4.4 and T4.9.\n\n'
+            '**Key financial changes (USD millions):**\n\n')
+
+    def test_a_prose_bound_summary_never_takes_the_register_below_it(self):
+        # R4 CP-1 attempt 1 (b5e0b653): a summary under a paragraph naming T4.4 bound T4.4 first, and the
+        # real `#### T4.4 — Income Statement` table was ignored: "T4.4: missing column(s) ['Line Item']".
+        text = self.LEAD + self.SUMMARY + '#### T4.4 — Income Statement\n\n' + self.REGISTER
+        self.assertEqual(_r6_find_registers(text, ['T4.4', 'T4.9'])['T4.4'][0][0], 'Metric')
+        found = complete.find_registers(text, ['T4.4', 'T4.9'])
+        self.assertEqual(found['T4.4'][0], ['Line Item', 'Q2 2026', 'Q2 2025'])
+        self.assertNotIn('T4.9', found)
+        violations = complete.check(skill_text('cp-1-canonical-data-foundation'), text, 'CP-1')[0]
+        self.assertEqual(about(violations, 'T4.4'), [])
+        # A distant heading too: notes between the register's heading and its table.
+        notes = ''.join(f'> note {n}\n\n' for n in range(5))
+        distant = self.LEAD + self.SUMMARY + '#### T4.4 — Income Statement\n\n' + notes + self.REGISTER
+        self.assertEqual(complete.find_registers(distant, ['T4.4'])['T4.4'][0][0], 'Line Item')
+
+    def test_a_heading_bound_register_keeps_its_table_before_a_later_prose_mention(self):
+        text = '#### T4.4 — Income Statement\n\n' + self.REGISTER + self.LEAD + self.SUMMARY
+        self.assertEqual(complete.find_registers(text, ['T4.4'])['T4.4'][0][0], 'Line Item')
+
+    def test_a_prose_bound_table_still_binds_where_no_heading_does(self):
+        self.assertEqual(complete.find_registers(self.LEAD + self.SUMMARY, ['T4.4'])['T4.4'][0][0], 'Metric')
+        # Two prose-bound tables: the first keeps the ID, as before.
+        two = self.LEAD + self.SUMMARY + 'Restated from T4.4.\n\n' + self.REGISTER
+        self.assertEqual(complete.find_registers(two, ['T4.4'])['T4.4'][0][0], 'Metric')
+        # A heading naming another ID binds its own table only; the prose-bound T4.4 stays.
+        other = self.LEAD + self.SUMMARY + '#### T4.5 — Cash Flow\n\n' + self.REGISTER
+        found = complete.find_registers(other, ['T4.4', 'T4.5'])
+        self.assertEqual((found['T4.4'][0][0], found['T4.5'][0][0]), ('Metric', 'Line Item'))
+
+    def test_two_headings_keep_the_first(self):
+        twice = '#### T4.4 — Income Statement\n\n' + self.SUMMARY + '#### T4.4 — again\n\n' + self.REGISTER
+        self.assertEqual(complete.find_registers(twice, ['T4.4'])['T4.4'][0][0], 'Metric')
+        # A near heading still wins over an earlier distant one (fork r6), and neither yields to prose.
+        notes = ''.join(f'> note {n}\n\n' for n in range(5))
+        near = ('#### T4.4 — Income Statement\n\n' + notes + self.SUMMARY + self.LEAD + self.SUMMARY
+                + '#### T4.4 — again\n\n' + self.REGISTER)
+        self.assertEqual(complete.find_registers(near, ['T4.4'])['T4.4'][0][0], 'Line Item')
 
 
 @unittest.skipUnless(os.environ.get('DEPLOY_V_INTEGRATION') == '1', 'enable integration for native PDF and DOCX dependencies')
