@@ -62,6 +62,8 @@ __all__ = ["harness"]
 APPROVER = Standing.APPROVER
 LITE = resolve_route(CATALOG, "LITE_CREDIT_22", "LITE_EARNINGS_UPDATE")
 QUOTE = "Total debt at 31 December 2026"
+# The same line's excerpt as an answer since D105 cites it (eight words).
+EXCERPT_QUOTE = "Total debt at 31 December 2026 was USD"
 REVISION = BoundaryText.of("rev-canonical-001")
 RESTRICTED = {
     "qa_status": "Restricted",
@@ -84,6 +86,7 @@ def _accept(
     module_id: str,
     omit_soft: bool = False,
     unverified: tuple[UnverifiedCitation, ...] = (),
+    marked: bool = False,
     /,
     **authored: object,
 ) -> str:
@@ -92,6 +95,8 @@ def _accept(
     `omit_soft` names only CP-0 upstream, as a call made before CP-L10 would.
     `unverified`, when given, is the record's every citation (D106): an
     `EXCERPT` record whose quotes all failed to anchor, with none anchored.
+    `marked` is a record since D107: one anchored excerpt, then `unverified`,
+    each holding its place in the answer's list (`marker`).
     """
     conn, bundle = harness.conn, harness.bundle
     node = next(n for n in harness.route.nodes if n.module_id == module_id)
@@ -117,8 +122,14 @@ def _accept(
     anchored = verify_citations(
         conn,
         delivered=every_block(conn, harness.source_id),
-        citations=[Citation(harness.source_id, 1, QUOTE)],
+        citations=[Citation(harness.source_id, 1, EXCERPT_QUOTE if marked else QUOTE)],
+        rule=EXCERPT if marked else ANY_RUN,
     )
+    if marked:
+        anchored = [replace(anchored[0], marker=1)]
+        unverified = tuple(
+            replace(entry, marker=place) for place, entry in enumerate(unverified, 2)
+        )
     lineage = accepted_lineage(
         conn, harness.blobs, run_id=harness.run_id, upstream=identity.upstream
     )
@@ -136,8 +147,8 @@ def _accept(
         identity=identity,
         lineage=lineage,
         projections=projections,
-        citations=() if unverified else tuple(anchored),
-        citation_rule=EXCERPT if unverified else ANY_RUN,
+        citations=() if unverified and not marked else tuple(anchored),
+        citation_rule=EXCERPT if unverified or marked else ANY_RUN,
         unverified=unverified,
     )
     reserve(conn, attempt, ESTIMATE)
