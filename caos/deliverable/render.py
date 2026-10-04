@@ -557,11 +557,13 @@ def _citation(citation: object, line: object = None) -> str:
 
     `line` is the record's `line_text`, the evidence line an `EXCERPT` quote
     is part of; a record accepted under an earlier rule keeps none, and its
-    quote is shown alone, as it always was -- under either whole-line rule the
-    quote is its line. An excerpt is never shown without the line around it:
-    a qualifier just outside eight words ("not", "provided that", a row's
-    label) is the reader's to see (AI-4). The line is shown whole, however
-    long: a shown line is at most one evidence block wide.
+    quote is shown alone, byte for byte as it always was -- under either
+    whole-line rule the quote is its line, and under `ANY_RUN` it is the run
+    the record holds, its line never recorded. An excerpt is never shown
+    without the line around it: a qualifier just outside eight words ("not",
+    "provided that", a row's label) is the reader's to see (AI-4). The line
+    is shown whole, however long: a shown line is at most one evidence block
+    wide.
     """
     if not isinstance(citation, Mapping):
         raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
@@ -570,12 +572,14 @@ def _citation(citation: object, line: object = None) -> str:
     page = _page(citation)
     if line is not None and (not isinstance(line, str) or not line):
         raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
-    before, excerpt, after = traced_line(quote if line is None else line, quote)
-    shown = (
-        f"{escape(before)}{_MARK}{escape(excerpt)}</mark>{escape(after)}"
-        if excerpt and (before or after)
-        else escape(before + excerpt + after)
-    )
+    shown = escape(quote)
+    if line is not None:
+        before, excerpt, after = traced_line(line, quote)
+        shown = (
+            f"{escape(before)}{_MARK}{escape(excerpt)}</mark>{escape(after)}"
+            if excerpt and (before or after)
+            else escape(line)
+        )
     return (
         f"<blockquote>{shown}</blockquote>\n"
         f'<p class="cite">{document} · page {page}</p>'

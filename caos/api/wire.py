@@ -34,6 +34,7 @@ from pydantic.json_schema import models_json_schema
 
 from caos.api.identity import GlobalRole
 from caos.deliverable.render import traced_line
+from caos.evidence.citations import WHOLE_LINE, WHOLE_LINE_AS_STORED, CitationRule
 from caos.graph.route import EdgeType, NodeState
 from caos.methodology.handoff import (
     MAX_BLOCKER_CHARS,
@@ -690,27 +691,38 @@ class RectView(BaseModel):
 
 
 class LineView(BaseModel):
-    """The whole evidence line a citation anchored in, split around its
-    excerpt (D105): `before + excerpt + after` is the line. An excerpt is
-    never shown without its line, so a qualifier just outside it ("not",
-    "provided that", a row's label) is the reader's to see (AI-4). `excerpt`
-    is the line's own text of the quote, empty where the host cannot place it
-    (the line is then shown whole and unmarked). A record accepted before
-    D105 keeps no line: its quote is the line, `before` and `after` empty."""
+    """The evidence line a citation anchored in, split around its excerpt
+    (D105), and whether the record holds that line at all (`recorded`).
+
+    Recorded, `before + excerpt + after` is the line: an `EXCERPT` record's
+    `line_text`, or, under either whole-line rule, the quote, which is its
+    line (`before` and `after` empty). An excerpt is never shown without its
+    line, so a qualifier just outside it ("not", "provided that", a row's
+    label) is the reader's to see (AI-4). `excerpt` is the line's own text of
+    the quote, empty where the host cannot place it (the line is then shown
+    whole and unmarked). Not recorded -- an `ANY_RUN` record, whose quote is
+    any unique run of its page -- `excerpt` is the quote alone, which is no
+    source line and is shown as a quote, never as one."""
 
     model_config = _CLOSED
 
     before: Annotated[str, Field(max_length=QUOTE_CHARS)]
     excerpt: Annotated[str, Field(max_length=QUOTE_CHARS)]
     after: Annotated[str, Field(max_length=QUOTE_CHARS)]
+    recorded: StrictBool
 
     @classmethod
-    def of(cls, line_text: str | None, matched_text: str) -> LineView:
-        """The record's `line_text`, or its quote where it keeps none, split
-        as the deliverable splits it (`render.traced_line`)."""
-        line = matched_text if line_text is None else line_text
-        before, excerpt, after = traced_line(line, matched_text)
-        return cls(before=before, excerpt=excerpt, after=after)
+    def of(
+        cls, line_text: str | None, matched_text: str, rule: CitationRule
+    ) -> LineView:
+        """The record's `line_text`, split as the deliverable splits it
+        (`render.traced_line`); the quote as its line under a whole-line
+        rule; the quote alone, not recorded, under `ANY_RUN`."""
+        if line_text is None:
+            whole = rule in (WHOLE_LINE, WHOLE_LINE_AS_STORED)
+            return cls(before="", excerpt=matched_text, after="", recorded=whole)
+        before, excerpt, after = traced_line(line_text, matched_text)
+        return cls(before=before, excerpt=excerpt, after=after, recorded=True)
 
 
 class CitationView(BaseModel):
@@ -718,7 +730,8 @@ class CitationView(BaseModel):
     pinned source the document resolves to, which addresses its page (4.4).
     `page` is where the quote is; `cited_page` is the other page the module
     named when the host re-anchored the quote there (D94), else null. `line`
-    is the evidence line the quote is an excerpt of (D105)."""
+    is the evidence line the quote is an excerpt of (D105), where the record
+    holds it."""
 
     model_config = _CLOSED
 

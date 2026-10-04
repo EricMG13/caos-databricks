@@ -98,6 +98,12 @@ from caos.api.wire import (
     WorkView,
     wire_schema,
 )
+from caos.evidence.citations import (
+    ANY_RUN,
+    EXCERPT,
+    WHOLE_LINE,
+    WHOLE_LINE_AS_STORED,
+)
 from caos.evidence.extract import HIDDEN_REASONS
 from caos.methodology.handoff import MAX_HANDOFF_BYTES
 
@@ -120,7 +126,7 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
         "route_node_id record_sha256 citation_index document_sha256 source_id"
         " page matched_text line rects withdrawn_at".split()
     ),
-    wire.LineView: frozenset({"before", "excerpt", "after"}),
+    wire.LineView: frozenset({"before", "excerpt", "after", "recorded"}),
     wire.NarrativeSpan: frozenset({"text", "figure"}),
     wire.ReportArtifact: frozenset(
         (
@@ -707,7 +713,12 @@ def test_citation_view_names_its_source_for_the_page_endpoint() -> None:
         "filename": "report.txt",
         "page": 1,
         "matched_text": "net leverage",
-        "line": {"before": "", "excerpt": "net leverage", "after": ""},
+        "line": {
+            "before": "",
+            "excerpt": "net leverage",
+            "after": "",
+            "recorded": True,
+        },
         "rects": [],
         "withdrawn_at": None,
         "cited_page": None,
@@ -723,21 +734,30 @@ def test_citation_view_names_its_source_for_the_page_endpoint() -> None:
 def test_a_citation_carries_the_whole_line_its_excerpt_is_marked_in() -> None:
     """D105, AI-4: an excerpt is never served without its line. `LineView.of`
     splits the record's `line_text` around the quote, so a qualifier just
-    outside it is served too; a record from before D105 keeps no line and its
-    quote is served as the line it is. The line is required on the wire."""
+    outside it is served too. A whole-line record's quote is its line; an
+    `ANY_RUN` record's quote is any run of its page, served as a quote and
+    never as its line (`recorded` false). The line is required on the wire."""
     line = "We do not believe the Borrower will breach the leverage covenant."
     quote = "believe the Borrower will breach the leverage covenant"
 
-    view = LineView.of(line, quote)
+    view = LineView.of(line, quote, EXCERPT)
     assert (view.before, view.excerpt, view.after) == ("We do not ", f"{quote}.", "")
-    assert view.before + view.excerpt + view.after == line
-    old = LineView.of(None, "Total debt | 11,807")
-    assert (old.before, old.excerpt, old.after) == ("", "Total debt | 11,807", "")
-    unplaced = LineView.of(line, "words the line does not hold at all here")
+    assert view.before + view.excerpt + view.after == line and view.recorded
+    for rule in (WHOLE_LINE, WHOLE_LINE_AS_STORED):
+        old = LineView.of(None, "Total debt | 11,807", rule)
+        assert (old.before, old.excerpt, old.after) == ("", "Total debt | 11,807", "")
+        assert old.recorded
+    run = LineView.of(None, "surpassed our investment grade leverage", ANY_RUN)
+    assert (run.excerpt, run.recorded) == (
+        "surpassed our investment grade leverage",
+        False,
+    )
+    unplaced = LineView.of(line, "words the line does not hold at all here", EXCERPT)
     assert (unplaced.before, unplaced.excerpt, unplaced.after) == (line, "", "")
     defs = json.loads(COMMITTED.read_text(encoding="utf-8"))["$defs"]
     assert "line" in defs["CitationView"]["required"]
     assert "line" in defs["NarrativeFigure"]["required"]
+    assert "recorded" in defs["LineView"]["required"]
 
 
 def test_a_table_cell_is_its_text_and_a_plain_decimal_string_or_null() -> None:

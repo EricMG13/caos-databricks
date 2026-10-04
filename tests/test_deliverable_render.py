@@ -625,3 +625,20 @@ def test_the_edge_punctuation_is_the_anchors_own() -> None:
     assert module.EDGE_PUNCTUATION == citations.EDGE_PUNCTUATION
     assert module._FIGURE_LEFT == citations._FIGURE_LEFT
     assert module._FIGURE_RIGHT == citations._FIGURE_RIGHT
+
+
+def test_a_record_without_a_line_renders_byte_for_byte_as_before() -> None:
+    """No `line_text`, nothing is marked and the quote is escaped as it always
+    was -- a whole-line quote padded with spaces too, which `traced_line`
+    would split into an edge and a mark."""
+    padded = " Adjusted EBITDA | $920 | $955 <b> "
+    payload = json.loads(json.dumps(PAYLOAD_DATA))
+    payload["artifacts"][0] = _artifact(
+        citations=[
+            {"document_sha256": DOCUMENT_SHA256, "page": 1, "matched_text": padded}
+        ]
+    )
+
+    page = render(payload).decode()
+    assert "<blockquote> Adjusted EBITDA | $920 | $955 &lt;b&gt; </blockquote>" in page
+    assert "<mark" not in page

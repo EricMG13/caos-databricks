@@ -54,7 +54,7 @@ from caos.api.wire import (
 )
 from caos.blobs import BlobStore
 from caos.deliverable.render import SCREENING_ONLY
-from caos.evidence.citations import AnchoredCitation
+from caos.evidence.citations import AnchoredCitation, CitationRule
 from caos.graph.route import (
     MODEL_MODULE,
     NodeResult,
@@ -450,7 +450,9 @@ def _handoff_view(  # noqa: PLR0913 -- one accepted handoff and its lookups
         validation_warnings=list(projections.validation_warnings),
         decision_scope=projections.decision_scope,
         screening_only=projections.decision_scope == SCREENING_ONLY,
-        source_facts=[_citation(c, documents) for c in record.citations],
+        source_facts=[
+            _citation(c, documents, record.citation_rule) for c in record.citations
+        ],
         # Model-authored and rendered as text, never as markup (§46.3).
         model_analysis=markdown,
         host_calculation=(
@@ -473,7 +475,9 @@ def _table_view(table: HandoffTable) -> TableView:
 
 
 def _citation(
-    citation: AnchoredCitation, documents: dict[str, tuple[UUID, str, object]]
+    citation: AnchoredCitation,
+    documents: dict[str, tuple[UUID, str, object]],
+    rule: CitationRule,
 ) -> CitationView:
     source_id, filename, withdrawn_at = documents[citation.document_sha256]
     return CitationView(
@@ -482,7 +486,7 @@ def _citation(
         filename=filename,
         page=citation.page,
         matched_text=citation.matched_text,
-        line=LineView.of(citation.line_text, citation.matched_text),
+        line=LineView.of(citation.line_text, citation.matched_text, rule),
         rects=[RectView(x0=b.x0, y0=b.y0, x1=b.x1, y1=b.y1) for b in citation.bboxes],
         withdrawn_at=withdrawn_at,  # type: ignore[arg-type]
         cited_page=citation.cited_page,
