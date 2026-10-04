@@ -731,7 +731,9 @@ class CitationView(BaseModel):
     `page` is where the quote is; `cited_page` is the other page the module
     named when the host re-anchored the quote there (D94), else null. `line`
     is the evidence line the quote is an excerpt of (D105), where the record
-    holds it."""
+    holds it. `linked` is false for a quote the answer's body does not carry
+    (D106): still host-verified, but "not linked to a statement in the
+    answer"."""
 
     model_config = _CLOSED
 
@@ -744,6 +746,30 @@ class CitationView(BaseModel):
     rects: Annotated[list[RectView], Field(max_length=RECTS_MAX)]
     withdrawn_at: AwareDatetime | None
     cited_page: Annotated[int, Field(ge=1)] | None
+    linked: StrictBool
+
+
+# Why a citation is unverified (D106): the anchoring refusal that left it so
+# (`handoff.UNVERIFIED_CODES`), which every display words plainly.
+UnverifiedCode = Literal[
+    "CITATION_NOT_LOCATED", "CITATION_AMBIGUOUS", "CITATION_NOT_DELIVERED"
+]
+
+
+class UnverifiedCitationView(BaseModel):
+    """A citation of an accepted answer that did not anchor (D106): the
+    model's own `source_id`, page and quote, as recorded, and the code that
+    left it unverified. Never host-verified and never re-anchored: it has no
+    line, no rectangle and no document the host located, and its claim is
+    Deploy V's lineage class "Untraced". `source_id` is the model's, which
+    may name no source this run was given (`CITATION_NOT_DELIVERED`)."""
+
+    model_config = _CLOSED
+
+    source_id: UUID
+    page: Annotated[int, Field(ge=1)]
+    matched_text: Annotated[str, Field(max_length=QUOTE_CHARS)]
+    code: UnverifiedCode
 
 
 # A handoff's tagged tables (`caos.methodology.tables`), whose bounds these are.
@@ -799,6 +825,11 @@ class HandoffView(BaseModel):
     decision_scope: Id
     screening_only: bool
     source_facts: Annotated[list[CitationView], Field(max_length=CITATIONS_MAX)]
+    # The answer's citations that did not anchor (D106), apart from the source
+    # facts and never shown as one.
+    unverified_facts: Annotated[
+        list[UnverifiedCitationView], Field(max_length=CITATIONS_MAX)
+    ]
     model_analysis: Annotated[str, Field(max_length=MARKDOWN_CHARS)]
     host_calculation: Literal["NONE", "CP_CF_FORECAST"]
     # The tagged tables `model_analysis` carries, derived from it at read time;
@@ -1050,11 +1081,31 @@ class NarrativeFigure(BaseModel):
     withdrawn_at: AwareDatetime | None
 
 
+class NarrativeUnverified(BaseModel):
+    """A narrative figure that names an unverified citation (D106, owner:
+    "Labelled unverified too"): the model's locator, quote and code as the
+    record holds them, shown labelled unverified with the model's page, and
+    never opened as a host-verified source."""
+
+    model_config = _CLOSED
+
+    route_node_id: Id
+    record_sha256: Sha256
+    unverified_index: Annotated[int, Field(ge=0)]
+    source_id: UUID
+    page: Annotated[int, Field(ge=1)]
+    matched_text: Annotated[str, Field(max_length=QUOTE_CHARS)]
+    code: UnverifiedCode
+
+
 class NarrativeSpan(BaseModel):
+    """Exactly one of prose, a figure or an unverified figure."""
+
     model_config = _CLOSED
 
     text: Annotated[str, Field(max_length=NARRATIVE_CHARS)] | None
     figure: NarrativeFigure | None
+    unverified: NarrativeUnverified | None
 
 
 class NarrativeFigureRef(BaseModel):
@@ -1065,6 +1116,16 @@ class NarrativeFigureRef(BaseModel):
 
     route_node_id: Id
     citation_index: Annotated[int, Field(ge=0)]
+
+
+class NarrativeUnverifiedRef(BaseModel):
+    """A draft's figure naming one of a node's unverified citations (D106):
+    which one, by its place in the record's `unverified` list."""
+
+    model_config = _CLOSED
+
+    route_node_id: Id
+    unverified_index: Annotated[int, Field(ge=0)]
 
 
 class ReportArtifact(BaseModel):
@@ -1578,13 +1639,15 @@ class SourceWithdrawn(BaseModel):
 
 class NarrativeDraft(BaseModel):
     """One span a draft offers: prose, or a reference to a citation the host
-    resolves. Exactly one of the two, and a figure names only which citation --
-    the document, page and quote are the host's to fill from the record."""
+    resolves -- an anchored one (`figure`) or an unverified one
+    (`unverified`, D106). Exactly one of the three, and a reference names
+    only which citation: the rest is the host's to fill from the record."""
 
     model_config = _CLOSED
 
     text: Annotated[str, Field(max_length=NARRATIVE_CHARS)] | None
     figure: NarrativeFigureRef | None
+    unverified: NarrativeUnverifiedRef | None
 
 
 class SaveRevision(BaseModel):

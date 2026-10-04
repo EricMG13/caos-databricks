@@ -34,10 +34,12 @@
       [
         {
           "text": "<svg onload=window.pwned=1>",
+          "unverified": null,
           "figure": null
         },
         {
           "text": null,
+          "unverified": null,
           "figure": {
             "route_node_id": "CP-1",
             "record_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
