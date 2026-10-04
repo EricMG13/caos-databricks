@@ -193,6 +193,7 @@ def test_quote_existence_is_host_verified_support_is_left_to_cp5(
         "has not assessed whether any quote supports any statement",
         "CP-5's audit",
         "Never cite these lines",
+        "its marker is the [C<n>] by which that handoff's body cites it",
     ):
         assert label in header
     for module_id in ("CP-0", "CP-L10"):
