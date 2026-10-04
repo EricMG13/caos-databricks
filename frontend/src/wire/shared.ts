@@ -49,6 +49,9 @@ export interface Citation {
   /** The page the module cited when the host anchored the quote at its true
       page instead (D94); absent or null otherwise. */
   cited_page?: number | null;
+  /** False for a quote the answer's body does not carry (D106): still
+      host-verified, but not linked to a statement in the answer. */
+  linked?: boolean;
 }
 
 /** A typed refusal and what would clear it. Never an exception. */
