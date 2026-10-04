@@ -43,6 +43,7 @@ from caos.graph.runtime import ProviderResult
 from caos.methodology import executor, runner
 from caos.methodology.bundle import Bundle
 from caos.methodology.canonical import HandoffOutcome, execute_handoff
+from caos.methodology.citation_markers import qualified
 from caos.methodology.executor import Assignment, captured_blocks
 from caos.methodology.handoff import (
     CanonicalRecord,
@@ -220,7 +221,7 @@ def test_the_executor_produces_a_validated_handoff_and_its_record(
     _accept(harness, gate_attempt, gate)
 
     screen_attempt, screen = _run(harness, "CP-L10", completions)
-    assert gate_markdown.decode() in completions.prompts[1]
+    assert qualified(gate_markdown.decode(), "CP-0") in completions.prompts[1]
     _verified(harness, "CP-L10", screen_attempt, screen)
     _accept(harness, screen_attempt, screen)
     assert _counts(harness) == (2, [REPORTED, REPORTED], 2, 2, 2)
@@ -350,7 +351,7 @@ def test_an_upstream_statement_is_not_citable_evidence(harness: _Harness) -> Non
     quoting = CanonicalCompletions(harness.source_id, quotes=(UNANCHORED,))
     _attempt, screen = _run(harness, "CP-L10", quoting)
     [prompt] = quoting.prompts
-    assert upstream in prompt
+    assert qualified(upstream, "CP-0") in prompt
     record = _record(harness, screen)
     assert record.citations == ()
     assert record.unverified == (

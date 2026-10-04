@@ -58,6 +58,7 @@ from caos.graph.route import (
     node_states,
     resolve_route,
 )
+from caos.methodology.citation_markers import qualified
 from caos.methodology.handoff import (
     HostIdentity,
     invocation_fields,
@@ -281,9 +282,10 @@ def test_cp1c_under_lite_accepts_the_named_object_and_keeps_screening_scope(
     answers = _completed(harness)
     cp1c_prompt = answers.prompts[-1]
     assert _modules(answers) == [n.module_id for n in ROUTE.nodes]
-    # Both upstream handoffs reach CP-1C's prompt byte for byte.
-    assert answers.answers[0].decode() in cp1c_prompt
-    assert answers.answers[1].decode() in cp1c_prompt
+    # Both upstream handoffs reach CP-1C's prompt byte for byte, but for
+    # their markers, shown qualified by module (D107).
+    assert qualified(answers.answers[0].decode(), "CP-0") in cp1c_prompt
+    assert qualified(answers.answers[1].decode(), "CP-L10") in cp1c_prompt
     assert "SCREENING_ONLY" in cp1c_prompt
 
     node = ROUTE.nodes[-1]
