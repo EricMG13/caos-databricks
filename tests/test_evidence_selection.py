@@ -202,6 +202,32 @@ def test_demand_fault_names_the_item_select_sources_refuses() -> None:
         assert fault.item not in str(refused.value)
 
 
+def test_a_page_phrase_the_form_cannot_read_is_told_as_such() -> None:
+    """F497 (review): an item that begins with a member's exact filename,
+    by `_named`'s own matching, then a page phrase Step I rule 5's form does
+    not read -- run a82a07ad's CP-0 attempt 3 wrote two ranges in one item --
+    is `PAGE_FORM`, not `UNKNOWN`. Only the wording moves: beside a readable
+    item the cell is still refused, and alone it is still delivered whole."""
+    c3 = tuple(_member(name) for name in C3_MEMBERS)
+    item = "CZR_FY2025_10K.txt pages 14-15 and 26-27"
+    cell = f"CZR_Q2_2026_10Q.txt; {item}"
+    assert demand_fault(c3, cell) == DemandFault(item, Fault.PAGE_FORM)
+    with pytest.raises(Refusal) as refused:
+        select_sources(c3, cell)
+    assert refused.value.code is RefusalCode.EVIDENCE_DEMAND_UNRESOLVED
+    assert demand_fault(c3, item) is None
+    assert select_sources(c3, item).basis is Basis.WHOLE_UNMAPPED
+    # A name the matching does not accept stays unknown: no looser test.
+    loose = "CZR_FY2025_10K pages 14-15 and 26-27"
+    assert demand_fault(c3, f"CZR_Q2_2026_10Q.txt; {loose}") == DemandFault(
+        loose, Fault.UNKNOWN
+    )
+    paged = "CZR_FY2025_10K.txt (page 3 and 5)"
+    assert demand_fault(c3, f"CZR_Q2_2026_10Q.txt; {paged}") == DemandFault(
+        paged, Fault.PAGE_FORM
+    )
+
+
 def test_selection_is_a_pure_function_of_its_inputs() -> None:
     a, b = _member("a.txt"), _member("b.txt")
     assert select_sources((a, b), "b.txt; a.txt") == select_sources(

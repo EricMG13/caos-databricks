@@ -1455,6 +1455,25 @@ def test_a_misspelt_t8_source_refuses_the_gate_and_its_retry_is_told(
     assert _cp0_ledger(harness) == (2, 2, ["HANDOFF_MALFORMED"], 1)
 
 
+def test_a_t8_page_phrase_the_host_cannot_read_is_told_its_form(
+    harness: _Harness,
+) -> None:
+    """F497 (review): an item naming a pinned file and then two page ranges
+    refuses the gate as before, and the retry is told the page form, not
+    that the file is no source of the run."""
+    answers = CanonicalCompletions(harness.source_id)
+    flaw = _demanding("uncited.txt; report.txt pages 1-2 and 4-5")
+    assert _run(harness, _Flawed(answers, flaw=flaw)) is None
+    line = (
+        'host demand check: T8 row CP-L10 names "report.txt pages 1-2 and 4-5",'
+        " whose page form the host cannot read; write one range per item, as"
+        " `<filename> pages <first>-<last>` or `<filename> page <n>`, separated"
+        ' by ";"'
+    )
+    assert line in _checks(answers.prompts[1])
+    assert _cp0_ledger(harness) == (2, 2, ["HANDOFF_MALFORMED"], 1)
+
+
 def test_a_t8_cell_the_host_reads_whole_or_named_is_accepted_at_the_gate(
     harness: _Harness,
 ) -> None:

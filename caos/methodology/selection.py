@@ -88,6 +88,8 @@ _PAGES = re.compile(
     re.IGNORECASE | re.ASCII,
 )
 _PAGE_DIGITS = 6
+# Where a page phrase may begin after a name (`_unmapped_fault`, F497).
+_PAGE_WORD = re.compile(r"\s++\(?\s*+pages?\b", re.IGNORECASE | re.ASCII)
 _MAX_ITEM_CHARS = 512
 
 
@@ -236,6 +238,9 @@ class Fault(StrEnum):
     AMBIGUOUS = "AMBIGUOUS"
     # The item's page range is one its member cannot carry.
     PAGES = "PAGES"
+    # The item begins with a member's name, then a page phrase Step I rule
+    # 5's form does not read (two ranges, say): unmapped, as UNKNOWN is.
+    PAGE_FORM = "PAGE_FORM"
 
 
 @dataclass(frozen=True, slots=True)
@@ -310,7 +315,7 @@ def _resolved(
         return Selection(Basis.WHOLE_UNMAPPED, None), None
     if unmapped:
         return Selection(Basis.WHOLE_NO_DEMAND, None), DemandFault(
-            unmapped[0], Fault.UNKNOWN
+            unmapped[0], _unmapped_fault(members, unmapped[0])
         )
     pages = {
         source_id: frozenset(named)
@@ -339,6 +344,18 @@ def _placed(
     if not 1 <= first <= last <= (last_pages or {}).get(source_id, 0):
         return None, None, Fault.PAGES
     return source_id, range(first, last + 1), None
+
+
+def _unmapped_fault(members: Sequence[SourceSetMember], item: str) -> Fault:
+    """Why an unmapped item names nothing: `PAGE_FORM` when what precedes one
+    of its page words names a member by `_matching`, `_named`'s own test,
+    else `UNKNOWN`. Only the retry's wording depends on it, never a verdict."""
+    if len(item) <= _MAX_ITEM_CHARS:
+        for word in _PAGE_WORD.finditer(item):
+            name = item[: word.start()].strip().strip(_WRAPPING).strip()
+            if name and _matching(members, name):
+                return Fault.PAGE_FORM
+    return Fault.UNKNOWN
 
 
 def _named(

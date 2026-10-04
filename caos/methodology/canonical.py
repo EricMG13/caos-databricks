@@ -735,6 +735,11 @@ _DEMAND_FIX = {
         "whose pages that source does not carry; name pages from 1 to its last"
         " page, or the source whole"
     ),
+    Fault.PAGE_FORM: (
+        "whose page form the host cannot read; write one range per item, as"
+        " `<filename> pages <first>-<last>` or `<filename> page <n>`, separated"
+        ' by ";"'
+    ),
 }
 
 
