@@ -381,7 +381,7 @@ def test_every_committed_answer_key_names_its_route_and_exact_source() -> None:
     as a shown line is: a citation meets a key by the line it anchored in,
     compared by exact equality (D105), so a fragment or a quote that runs onto
     the next line is a key no run can meet. A whole line whose words also run
-    inside a longer line is still one line (K2, F501): the 10-Q's `Adjusted
+    inside a longer line is still one line (K2, F502): the 10-Q's `Adjusted
     EBITDA` row recurs inside its `Total Adjusted EBITDA` row and is a key."""
     root = Path(__file__).resolve().parents[1] / "qualification"
     extracted: dict[str, dict[int, list[_Token]]] = {}

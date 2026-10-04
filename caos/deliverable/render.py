@@ -83,9 +83,6 @@ def render(payload: Mapping[str, Any]) -> bytes:
         "blockquote{border-left:3px solid #999;margin:.6em 0;\n"
         "padding:.2em 1em;color:#333}\n"
         ".cite{font-size:9pt;color:#555}\n"
-        # An excerpt inside its line: bold as well, so it survives a print
-        # that drops backgrounds.
-        "mark{background:#fff1a8;color:inherit;font-weight:600}\n"
         "pre{white-space:pre-wrap;font:9pt/1.35 Menlo,monospace}\n"
         "table{border-collapse:collapse;width:100%;font-size:9.5pt}\n"
         "th,td{border:1px solid #bbb;padding:.25em .5em;text-align:left;\n"
@@ -575,7 +572,7 @@ def _citation(citation: object, line: object = None) -> str:
         raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
     before, excerpt, after = traced_line(quote if line is None else line, quote)
     shown = (
-        f"{escape(before)}<mark>{escape(excerpt)}</mark>{escape(after)}"
+        f"{escape(before)}{_MARK}{escape(excerpt)}</mark>{escape(after)}"
         if excerpt and (before or after)
         else escape(before + excerpt + after)
     )
@@ -583,6 +580,12 @@ def _citation(citation: object, line: object = None) -> str:
         f"<blockquote>{shown}</blockquote>\n"
         f'<p class="cite">{document} · page {page}</p>'
     )
+
+
+# An excerpt inside its line: bold as well as highlighted, so it survives a
+# print that drops backgrounds. Styled on the element, so a page with no
+# excerpt carries the stylesheet it always did (the `render` parity group).
+_MARK = '<mark style="font-weight:600">'
 
 
 # The edge punctuation a quote's first and last word may differ from its line

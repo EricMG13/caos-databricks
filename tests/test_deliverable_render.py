@@ -560,10 +560,10 @@ def test_an_excerpt_is_shown_marked_inside_its_whole_line() -> None:
     page = render(_excerpted()).decode()
 
     assert (
-        "<blockquote>We do not <mark>believe the Borrower will breach the"
+        '<blockquote>We do not <mark style="font-weight:600">believe the Borrower'
+        " will breach the"
         " &lt;leverage&gt; covenant.</mark></blockquote>"
     ) in page
-    assert "mark{" in page
     old = render(json.loads(json.dumps(PAYLOAD_DATA))).decode()
     assert f"<blockquote>{QUOTE}</blockquote>" in old and "<mark>" not in old
 
@@ -581,7 +581,7 @@ def test_a_narrative_figure_shows_the_line_of_the_citation_it_names() -> None:
     }
     payload["narrative"] = [[{"text": "Headroom: "}, {"figure": figure}]]
     narrative = render(payload).decode().split("<h2>Analyst narrative</h2>")[1]
-    assert "We do not <mark>believe" in narrative
+    assert 'We do not <mark style="font-weight:600">believe' in narrative
 
     payload["narrative"] = [[{"figure": {**figure, "citation_index": 3}}]]
     narrative = render(payload).decode().split("<h2>Analyst narrative</h2>")[1]
