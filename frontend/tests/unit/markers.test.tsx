@@ -7,6 +7,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
+import { ArtifactTexts } from "@/ds/ArtifactMarkdown";
 import { Markdown } from "@/ds/ModelMarkdown";
 import { readMarkers } from "@/ds/markdown";
 import { ArtifactMarkers, HandoffMarkers, unverifiedMarkerLabel } from "@/evidence/Markers";
@@ -203,6 +204,24 @@ describe("no whole source line outside the drawer (D107)", () => {
       expect(container.querySelector("mark")).toBeNull();
       unmount();
     }
+  });
+
+  test("test_a_saved_records_lines_are_behind_a_closed_disclosure", () => {
+    // The signed record carries each citation's `line_text`: it is opt-in, a
+    // native disclosure (keyboard: its summary is a focusable control).
+    const line = "We say Net debt 2.0bn today, before the refinancing closed.";
+    const record = JSON.stringify({ citations: [{ page: 4, line_text: line }] });
+    const { container } = render(
+      <ArtifactTexts markdown="Net debt [C1]." record={record} label="CP-1" section="report" />,
+    );
+    const disclosure = container.querySelector<HTMLDetailsElement>(
+      "details[data-artifact-record-disclosure]",
+    )!;
+    expect(disclosure.open).toBe(false);
+    expect(disclosure.querySelector("summary")).toHaveTextContent("Signed record (JSON)");
+    expect(screen.getByText(new RegExp(line.slice(0, 20)))).not.toBeVisible();
+    disclosure.open = true;
+    expect(screen.getByText(new RegExp(line.slice(0, 20)))).toBeVisible();
   });
 
   test("test_the_narrative_and_picker_show_no_whole_source_line", () => {

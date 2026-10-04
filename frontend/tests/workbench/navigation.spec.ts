@@ -124,6 +124,13 @@ test("demo Model, Report, and Committee routes render parsed v1 content", async 
   await expect(drawer).toContainText("page 7");
   await expect(drawer.locator("blockquote.matched mark")).toHaveText("Coverage 2.1x");
   await expect(page.locator("[data-unverified-marker]")).toContainText("unverified – page 9");
+  // The signed record, every line_text in it, is closed until asked for.
+  await page.keyboard.press("Escape");
+  const record = page.locator("[data-committee-artifact-record]").first();
+  await expect(record).toBeHidden();
+  await page.locator("[data-artifact-record-disclosure] > summary").first().focus();
+  await page.keyboard.press("Enter");
+  await expect(record).toBeVisible();
 });
 
 test("saved artifacts preserve canonical tables in contained scroll viewers", async ({ page }) => {
@@ -143,6 +150,8 @@ test("saved artifacts preserve canonical tables in contained scroll viewers", as
     await page.goto(route);
     // The artifact reads formatted first (D60); its exact text is a tab away.
     await page.locator("[data-artifact-view-tab='written']").first().click();
+    // Its signed record is behind a disclosure, closed by default (D107).
+    await page.locator("[data-artifact-record-disclosure] > summary").first().click();
     for (const selector of selectors) {
       const viewer = page.locator(selector).first();
       await viewer.evaluate((element, text) => {
