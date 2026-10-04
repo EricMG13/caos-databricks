@@ -94,9 +94,11 @@ _LABEL_LIMIT = 128
 #
 # One code, because it is the one a run the host produces can end in. A
 # validated Blocked handoff ends the run BLOCKED and records the verdict that
-# did it (`run_blocking_verdicts`). Every other methodology refusal -- a quote
-# that cannot be anchored, a handoff that will not validate -- is raised by a
-# node, explained against its attempt and leaves the run RUNNING for a retry:
+# did it (`run_blocking_verdicts`). Every other methodology refusal -- a
+# Blocked answer's quote that cannot be anchored, a handoff that will not
+# validate -- is raised by a node, explained against its attempt and leaves the
+# run RUNNING for a retry (since D106 an accepted answer's unanchored quote is
+# no refusal at all, only an unverified citation):
 # nothing in production ends a run on it, so `_refusal_met` could never answer
 # the key, and a set declaring one was prepared and paid for and then stopped
 # with no matrix on every attempt `qualify.py` bought (DQ-2). A node refusal

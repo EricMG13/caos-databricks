@@ -36,6 +36,7 @@ from caos.graph.runtime import Execution, run_route
 from caos.methodology import canonical, invocation
 from caos.methodology.canonical import second_attempt_due
 from caos.methodology.handoff import (
+    ADVISORY,
     HINT_WORDS,
     MAX_ANCHORING_CHARS,
     MAX_FEEDBACK_CHARS,
@@ -256,7 +257,8 @@ def test_the_ledger_makes_the_fourth_attempt_the_last_guided_retry() -> None:
     guided retry when the latest attempt was refused with a
     `SECOND_ATTEMPT_CODES` code and the node holds at most `GUIDED_RETRIES`
     (3) such refusals -- so a 4th attempt is due after three, a 5th never,
-    and an attempt refused otherwise, or unrefused, earns none."""
+    and an attempt refused otherwise, or unrefused, earns none. Since D106
+    anchoring's codes are among the "otherwise": neither counted nor due."""
     from uuid import uuid4
 
     from caos.methodology.canonical import GUIDED_RETRIES, _feedback_source
@@ -266,10 +268,21 @@ def test_the_ledger_makes_the_fourth_attempt_the_last_guided_retry() -> None:
         return NodeAttempt(uuid4(), code, None)
 
     malformed, located = "HANDOFF_MALFORMED", "CITATION_NOT_LOCATED"
-    three = [refused(malformed), refused("HANDOFF_INCOMPLETE"), refused(located)]
+    mismatch = "HANDOFF_IDENTITY_MISMATCH"
+    three = [refused(malformed), refused("HANDOFF_INCOMPLETE"), refused(mismatch)]
     assert GUIDED_RETRIES == 3
     assert _feedback_source(three) == three[-1]
     assert _feedback_source([*three, refused(malformed)]) is None
+    # D106: an anchoring refusal earns no retry, and counts toward none.
+    for code in (
+        "CITATION_NOT_LOCATED",
+        "CITATION_AMBIGUOUS",
+        "CITATION_NOT_DELIVERED",
+    ):
+        assert _feedback_source([refused(code)]) is None
+        assert _feedback_source([*three[:2], refused(code)]) is None
+    spent = [refused(located), *three[:2], refused(malformed)]
+    assert _feedback_source(spent) == spent[-1]
     assert _feedback_source([*three[:2], refused("PROVIDER_REFUSED")]) is None
     assert _feedback_source([*three[:2], refused(None)]) is None
     assert _feedback_source([]) is None
@@ -495,17 +508,31 @@ def test_too_few_words_of_a_line_get_the_second_attempt_naming_it(
     harness: _Harness,
 ) -> None:
     """D105: fewer than `MIN_EXCERPT_WORDS` words of a longer evidence line
-    are no excerpt of it; the guided retry is told to quote at least that
-    many consecutive words, or the whole line if shorter (D82)."""
+    are no excerpt of it; a guided retry is told to quote at least that many
+    consecutive words, or the whole line if shorter (D82). Since D106 that
+    alone earns no retry: the answer refused for another check carries it,
+    marked advisory."""
     answers = CanonicalCompletions(harness.source_id)
-    assert _run(harness, _Flawed(answers, flaw=_cites_part_of_a_line)) is None
+    flawed = _Flawed(answers, flaw=lambda b: _with_material(_cites_part_of_a_line(b)))
+    assert _run(harness, flawed) is None
     total = len(json.loads(answers.bodies[0])["citations"])
     assert (
         f"host anchoring check: citation 1 of {total} quotes fewer than 8 words of"
         " its line; quote at least 8 consecutive words, or the whole line if"
         " shorter" in answers.prompts[1]
     )
-    assert _cp0_ledger(harness) == (2, 2, ["CITATION_NOT_LOCATED"], 1)
+    assert ADVISORY in answers.prompts[1] and VENDOR_LINE in answers.prompts[1]
+    assert _cp0_ledger(harness) == (2, 2, ["HANDOFF_MALFORMED"], 1)
+
+
+def test_a_citation_fault_alone_earns_no_retry(harness: _Harness) -> None:
+    """D106: the same quote of too few words, and nothing else wrong, is
+    accepted on the first attempt with that citation unverified."""
+    answers = CanonicalCompletions(harness.source_id)
+    assert _run(harness, _Flawed(answers, flaw=_cites_part_of_a_line)) is None
+    assert [_module(p) for p in answers.prompts] == ["CP-0", "CP-L10", "CP-5"]
+    assert all(SECOND not in prompt for prompt in answers.prompts)
+    assert _cp0_ledger(harness) == (1, 1, [], 1)
 
 
 def _cites_part_of_a_line_then_the_line(body: str) -> str:
@@ -533,7 +560,9 @@ def test_a_retry_is_told_to_keep_the_citations_that_anchored(
 
     monkeypatch.setattr(canonical, "request_size", measured)
     answers = CanonicalCompletions(harness.source_id)
-    flawed = _Flawed(answers, flaw=_cites_part_of_a_line_then_the_line)
+    flawed = _Flawed(
+        answers, flaw=lambda b: _with_material(_cites_part_of_a_line_then_the_line(b))
+    )
     assert _run(harness, flawed) is None
     assert (
         "host anchoring check: citation 1 of 2 quotes fewer than 8 words of its"
@@ -545,7 +574,7 @@ def test_a_retry_is_told_to_keep_the_citations_that_anchored(
     )
     # Each attempt's prompt measured twice, priced then sent: the same size.
     assert len(sizes) == 4 and sizes[2] == sizes[3]
-    assert _cp0_ledger(harness) == (2, 2, ["CITATION_NOT_LOCATED"], 1)
+    assert _cp0_ledger(harness) == (2, 2, ["HANDOFF_MALFORMED"], 1)
 
 
 def test_the_anchoring_line_names_each_failed_citation_by_number_and_reason() -> None:

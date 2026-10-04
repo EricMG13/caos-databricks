@@ -39,7 +39,7 @@ from caos.evidence.ingest import Document, admit_pack
 from caos.graph.route import NodeState, ResolvedRoute, node_states, resolve_route
 from caos.graph.runtime import Execution, accepted_artifacts, run_route
 from caos.methodology.bundle import Bundle
-from caos.methodology.handoff import _decoded_record
+from caos.methodology.handoff import UnverifiedCitation, _decoded_record
 from caos.methodology.runner import ModuleProvider
 from caos.pricing import ModelPrice, priced_request, worst_case
 from caos.provider import MAX_REQUEST_BYTES
@@ -239,26 +239,32 @@ def test_the_artifact_is_the_handoff_and_the_record_the_host_built(
     assert citation.matched_text == QUOTE and citation.bboxes, "anchored by the host"
 
 
-def test_a_module_that_cannot_be_anchored_stops_the_run(
+def test_a_module_whose_citations_cannot_be_anchored_still_completes(
     ready: tuple[StoreConnection, UUID, UUID, BlobStore], route: ResolvedRoute
 ) -> None:
-    """A refusal inside a node is not a node that quietly produced nothing. The
-    attempt and its reservation stay; the run does not complete."""
-    conn, run_id, _source_id, _blobs = ready
-    completions = _Completions(UUID(int=0))  # cites evidence never delivered
+    """D106: a citation that does not anchor refuses the citation, never the
+    answer. Every module cites evidence never delivered; each is accepted
+    with its one citation unverified and none anchored, each paid for once,
+    and the run completes -- no retry is spent on a citation."""
+    conn, run_id, _source_id, blobs = ready
+    stranger = UUID(int=0)
+    completions = _Completions(stranger)  # cites evidence never delivered
 
-    with pytest.raises(Refusal, match=r"^CITATION_NOT_DELIVERED$"):
-        _run(ready, route, completions)
+    _run(ready, route, completions)
 
     with connect(_url_for(conn.info.dbname)) as observer:
-        # N52, D82: the refusal earns three guided retries, refused the same
-        # way; each keeps its reservation and bill.
-        assert run_status(observer, run_id) is RunStatus.RUNNING
-        assert _reserved(observer, run_id) == [ESTIMATE] * 4
-        assert _charges(observer, run_id) == [REPORTED] * 4
-        assert observer.execute("SELECT count(*) FROM call_outcomes").fetchone() == (4,)
-        assert observer.execute("SELECT count(*) FROM artifacts").fetchone() == (0,)
-    assert len(completions.prompts) == 4
+        assert run_status(observer, run_id) is RunStatus.COMPLETE
+        assert _charges(observer, run_id) == [REPORTED] * 3
+        records = observer.execute(
+            "SELECT record_sha256 FROM artifacts WHERE run_id = %s", (run_id,)
+        ).fetchall()
+    assert len(completions.prompts) == 3 and len(records) == 3
+    for (digest,) in records:
+        stored = _decoded_record(blobs.get(str(digest)))
+        assert stored.citations == ()
+        assert stored.unverified == (
+            UnverifiedCitation(stranger, 1, QUOTE, RefusalCode.CITATION_NOT_DELIVERED),
+        )
 
 
 def test_the_loop_hands_each_node_its_predecessors_results(

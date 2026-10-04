@@ -1003,6 +1003,7 @@ def test_an_unknown_source_id_is_told_so_and_a_delivered_one_keeps_its_wording(
     a page the node was not given keeps D82's wording."""
     from caos.methodology.canonical import _anchoring_line
     from caos.methodology.executor import Delivery
+    from caos.methodology.handoff import ADVISORY
 
     conn, case_id = case
     source_id = _ingest_pdf(conn, case_id, tmp_path, _pages_pdf(CELL_PAGES))
@@ -1031,7 +1032,7 @@ def test_an_unknown_source_id_is_told_so_and_a_delivered_one_keeps_its_wording(
         " keep citation 4 exactly as it was; any citation you add or change must"
         " be an exact excerpt of one evidence line of its cited page, at least 8"
         " consecutive words or the whole line if shorter"
-        " (numbered from 1 in the order given)"
+        " (numbered from 1 in the order given)" + ADVISORY
     )
 
 

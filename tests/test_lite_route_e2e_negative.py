@@ -43,9 +43,11 @@ from caos.graph.route import NodeState, node_states
 from caos.graph.runtime import accepted_artifacts
 from caos.methodology.canonical import GUIDED_RETRIES, SECOND_ATTEMPT_CODES
 from caos.methodology.executor import captured_blocks
-from caos.methodology.handoff import HostIdentity, _decoded_record
+from caos.methodology.handoff import HostIdentity, UnverifiedCitation, _decoded_record
 from caos.methodology.invocation import named_objects
 from caos.provider import Completion, encode_request
+from caos.qualification import matrix
+from caos.qualification.matrix import ExpectedCitation
 from caos.qualification.proof import OrchestrationProof, assert_orchestration_proof
 from caos.refusals import Refusal, RefusalCode
 from caos.store import connect
@@ -292,29 +294,13 @@ def _narrow_to_headline(harness: _Harness) -> None:
     conn.rollback()
 
 
-@pytest.mark.parametrize("wrong", ["upstream", "undelivered"])
-def test_a_wrong_upstream_or_undelivered_citation_never_reaches_the_deliverable(
-    harness: _Harness, wrong: str
-) -> None:
-    """Characterisation (passed first): (a) a CP-L10 handoff naming a CP-0
-    digest the host did not accept refuses `HANDOFF_IDENTITY_MISMATCH`; (b) a
-    CP-L10 citation of a block that was not delivered refuses
-    `CITATION_NOT_DELIVERED` while CP-0's delivered citation is accepted.
-    Either way nothing of CP-L10 is accepted, proven or payloaded."""
-    if wrong == "upstream":
-        answers = _Lite(harness.source_id, screen=_wrong_upstream)
-        expected = RefusalCode.HANDOFF_IDENTITY_MISMATCH
-    else:
-        _narrow_to_headline(harness)
-        answers = _Lite(
-            harness.source_id,
-            quotes=(HEADLINE,),
-            quotes_by_module={"CP-L10": (QUOTE,)},
-        )
-        expected = RefusalCode.CITATION_NOT_DELIVERED
+def test_a_wrong_upstream_never_reaches_the_deliverable(harness: _Harness) -> None:
+    """Characterisation (passed first): a CP-L10 handoff naming a CP-0 digest
+    the host did not accept refuses `HANDOFF_IDENTITY_MISMATCH`, through its
+    guided retries; nothing of CP-L10 is accepted, proven or payloaded."""
+    answers = _Lite(harness.source_id, screen=_wrong_upstream)
+    expected = RefusalCode.HANDOFF_IDENTITY_MISMATCH
     assert _run_route(harness, _module_provider(harness, answers)) is expected
-    # N52, D82: anchoring's refusal earns CP-L10 three guided retries, refused
-    # the same way.
     screens = 1 + GUIDED_RETRIES if expected in SECOND_ATTEMPT_CODES else 1
     assert _modules_called(answers) == ["CP-0"] + ["CP-L10"] * screens
     calls = 1 + screens
@@ -323,9 +309,50 @@ def test_a_wrong_upstream_or_undelivered_citation_never_reaches_the_deliverable(
     _cp5_untouched(harness)
     proof = _prove(harness)
     assert (proof.artifacts, proof.citations) == (1, 1)
-    quoted = HEADLINE if wrong == "undelivered" else QUOTE
-    assert {(m, q) for m, _doc, q in proof.anchored} == {("CP-0", quoted)}
+    assert {(m, q) for m, _doc, q in proof.anchored} == {("CP-0", QUOTE)}
     assert _payload_refusal(harness) is RefusalCode.DELIVERABLE_PAYLOAD_INVALID
+
+
+def test_an_undelivered_citation_never_reaches_the_proof_as_anchored(
+    harness: _Harness,
+) -> None:
+    """D106: a CP-L10 citation of a block that was not delivered no longer
+    refuses its answer. CP-L10 is accepted once, with no retry; the proof
+    re-anchors only the anchored citations, so CP-L10's quote is never among
+    them, and carries it as recorded, unverified with its code."""
+    _narrow_to_headline(harness)
+    answers = _Lite(
+        harness.source_id,
+        quotes=(HEADLINE,),
+        quotes_by_module={"CP-L10": (QUOTE,)},
+    )
+    assert _run_route(harness, _module_provider(harness, answers)) is None
+    assert _modules_called(answers) == ["CP-0", "CP-L10", "CP-5"]
+    proof = _prove(harness)
+    assert proof.artifacts == 3
+    assert ("CP-L10", QUOTE) not in {(m, q) for m, _doc, q in proof.anchored}
+    assert proof.unverified == (
+        (
+            "CP-L10",
+            UnverifiedCitation(
+                harness.source_id, 1, QUOTE, RefusalCode.CITATION_NOT_DELIVERED
+            ),
+        ),
+    )
+    assert proof.citations == len(proof.anchored)
+    # Keys are met by anchored citations only (D106, owner: "Anchored only"):
+    # a key on the unverified quote's own words is unmet, CP-0's is met.
+    cited = matrix._proven(harness.conn, harness.run_id, proof)
+    document = next(d for m, d, _line in proof.anchored if m == "CP-0")
+
+    def key(module_id: str, line: str) -> ExpectedCitation:
+        return ExpectedCitation(
+            module_id=module_id, document_sha256=document, matched_text=line
+        )
+
+    assert matrix._matches(key("CP-0", HEADLINE), cited)
+    assert not matrix._matches(key("CP-L10", QUOTE), cited)
+    harness.conn.rollback()
 
 
 INJECTED = (

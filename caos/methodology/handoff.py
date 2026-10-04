@@ -1044,10 +1044,11 @@ def parse_response(
 
     The transport is `{"canonical_markdown", "citations"}` and nothing else, at
     either level, with duplicate keys refused, and at most `MAX_CITATIONS` of
-    them; a transport that is not this refuses `HANDOFF_MALFORMED`. Nothing
-    else here refuses: whether each citation names evidence the node was
-    given, and the body carries its quote, is the verdict's to weigh
-    (`canonical._answer`).
+    them; a transport that is not this refuses `HANDOFF_MALFORMED`. Since
+    D106 nothing else here refuses: a citation naming evidence the node was
+    not given is kept as unverified, and one the body does not carry is
+    flagged not linked to a statement (`AnchoredCitation.linked`) -- the
+    citation's fault, never the answer's.
     Anchoring in the token index needs the store and is the executor's step.
     """
     markdown, text, citations = _or_refuse(
@@ -1136,6 +1137,7 @@ def feedback_lines(
     checked = _checked(contract, catalog, identity, markdown)
     host = (
         _text_line(markdown),
+        _uncrossed_line(citations),
         _quote_line(text, citations),
         *_front_matter_lines(contract, identity, getattr(checked, "fields", None)),
         _absent_ids_line(contract, identity.module_id, text, skill),
@@ -1370,8 +1372,26 @@ def _transport_or_reason(
     return None, _TRANSPORT_SHAPE
 
 
+def _uncrossed_line(citations: Sequence[Citation]) -> str | None:
+    """Which citations' quotes the host could not keep as unverified
+    (`unverified_citation`), by number and never quoted: a host text check
+    that refuses the answer (D106)."""
+    failed = [n for n, c in enumerate(citations, 1) if _crossed(c.matched_text) is None]
+    if not failed:
+        return None
+    verb = "carries" if len(failed) == 1 else "carry"
+    return (
+        f"host citation check: {_numbered(failed)} of {len(citations)} {verb} a"
+        " control, bidirectional, surrogate or invisible character; copy each"
+        " excerpt as the evidence shows it (numbered from 1 in the order given)"
+    )
+
+
 def _quote_line(text: str, citations: Sequence[Citation]) -> str | None:
-    """Which citations the body does not quote verbatim, by number (N51)."""
+    """Which citations the body does not quote verbatim, by number (N51).
+    Advisory since D106: such a citation is kept, not linked to a
+    statement, and never refuses an answer, so the line rides only along
+    a retry some other check earned (`ADVISORY`)."""
     linked = _linked(text, citations)
     failed = [number for number, held in enumerate(linked, 1) if not held]
     if not failed:
@@ -1380,8 +1400,16 @@ def _quote_line(text: str, citations: Sequence[Citation]) -> str | None:
     return (
         f"host citation check: {_numbered(failed)} of {len(citations)} {verb} text"
         " that does not appear verbatim in the Markdown body (numbered from 1 in"
-        " the order given)"
+        f" the order given){ADVISORY}"
     )
+
+
+# What closes each citation line a retry carries (D106): advisory, never the
+# reason the answer was refused.
+ADVISORY = (
+    "; advisory only: the host keeps such a citation, marked unverified or not"
+    " linked to a statement, and does not refuse an answer for it"
+)
 
 
 def _numbered(failed: Sequence[int]) -> str:
@@ -1501,6 +1529,10 @@ def anchoring_line(
     a new partial one. Past `MAX_ANCHORING_CHARS` the kept list is dropped
     first, before any placement; the rule stays.
 
+    Advisory since D106: a citation that does not anchor is kept as
+    unverified and never refuses an answer, so the retry that carries this
+    line was earned by another check, and says so (`canonical._anchoring_line`
+    adds `ADVISORY`).
     """
     kept = [n for n, found in enumerate(verdicts, 1) if found is None]
     lost = [
