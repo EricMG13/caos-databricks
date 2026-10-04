@@ -1037,29 +1037,31 @@ def _carried(window: list[str], wanted: list[str]) -> bool:
 
 
 def parse_response(
-    body: str, *, delivered: frozenset[UUID]
-) -> tuple[bytes, tuple[Citation, ...]]:
-    """The exact Markdown bytes and the citation requests beside them, or a refusal.
+    body: str,
+) -> tuple[bytes, tuple[Citation, ...], tuple[bool, ...]]:
+    """The exact Markdown bytes, the citation requests beside them, and
+    whether the body carries each quote verbatim, or a refusal.
 
     The transport is `{"canonical_markdown", "citations"}` and nothing else, at
     either level, with duplicate keys refused, and at most `MAX_CITATIONS` of
-    them. A citation must name delivered evidence and quote the Markdown
-    verbatim; one that does not refuses the whole handoff, because the Markdown
-    cannot be edited to drop what rests on it.
+    them; a transport that is not this refuses `HANDOFF_MALFORMED`. Nothing
+    else here refuses: whether each citation names evidence the node was
+    given, and the body carries its quote, is the verdict's to weigh
+    (`canonical._answer`).
     Anchoring in the token index needs the store and is the executor's step.
     """
     markdown, text, citations = _or_refuse(
         RefusalCode.HANDOFF_MALFORMED, lambda: _transport(body)
     )
-    if any(citation.source_id not in delivered for citation in citations):
-        raise Refusal(RefusalCode.CITATION_NOT_DELIVERED)
+    return markdown, citations, _linked(text, citations)
+
+
+def _linked(text: str, citations: Sequence[Citation]) -> tuple[bool, ...]:
+    """Whether the body after the front matter carries each quote verbatim,
+    typography aside (`_quoted`), in order."""
     words = _body_words(text)
     openings = _openings(words)
-    if any(
-        not _quoted(words, openings, citation.matched_text) for citation in citations
-    ):
-        raise Refusal(RefusalCode.HANDOFF_MALFORMED)
-    return markdown, citations
+    return tuple(_quoted(words, openings, c.matched_text) for c in citations)
 
 
 # What a node's guided retry may carry (D30, D82): at most this many checks,
@@ -1370,13 +1372,8 @@ def _transport_or_reason(
 
 def _quote_line(text: str, citations: Sequence[Citation]) -> str | None:
     """Which citations the body does not quote verbatim, by number (N51)."""
-    words = _body_words(text)
-    openings = _openings(words)
-    failed = [
-        number
-        for number, citation in enumerate(citations, 1)
-        if not _quoted(words, openings, citation.matched_text)
-    ]
+    linked = _linked(text, citations)
+    failed = [number for number, held in enumerate(linked, 1) if not held]
     if not failed:
         return None
     verb = "quotes" if len(failed) == 1 else "quote"
