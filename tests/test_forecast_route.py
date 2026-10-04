@@ -670,3 +670,91 @@ def test_cp_cf_second_attempt_names_the_driver_row_it_could_not_map(
         " equal the request's distributions" in cf[1]
     )
     assert _status(harness) == "COMPLETE"
+
+
+class _SlippedOnce(ForecastCompletions):
+    """CP-4's first answer cites each assignment line with a word added: the
+    NB1 audit's wedge (`cpcf_wedge_probe.py`), unverified quotes CP-CF needs."""
+
+    def complete(self, prompt: str, *, json_object: bool = False) -> Completion:
+        done = super().complete(prompt, json_object=json_object)
+        if fields_from_prompt(prompt)["module_id"] != "CP-4" or getattr(
+            self, "slipped", False
+        ):
+            return done
+        self.slipped = True
+        assert done.content is not None
+        answer = json.loads(done.content)
+        for citation in answer["citations"]:
+            citation["matched_text"] += " restated"
+        return replace(done, content=json.dumps(answer))
+
+
+def test_a_calculation_input_that_does_not_anchor_gets_a_guided_retry(
+    harness: _Harness,
+) -> None:
+    """D106's one exception (owner: "Calc inputs must anchor"): CP-4's
+    unverified binding quotes refuse its answer `HANDOFF_INCOMPLETE`, a
+    guided retry names them, the repaired answer is accepted, and CP-CF
+    binds and completes rather than wedging the run at 9 of 10."""
+    from conftest import priced
+    from test_loop_charges import ESTIMATE
+
+    from caos.graph.runtime import Execution, accepted_artifacts, run_route
+
+    # The retry is an eleventh paid attempt; the route's default ceiling
+    # covers ten.
+    tamper(
+        harness.conn,
+        "UPDATE runs SET budget_ceiling = budget_ceiling * 2 WHERE run_id = %s",
+        (harness.run_id,),
+    )
+    harness.conn.commit()
+    answers = _SlippedOnce(harness.source_id)
+    run_route(
+        harness.conn,
+        harness.blobs,
+        run_id=harness.run_id,
+        route=harness.route,
+        execution=Execution(
+            _module_provider(harness, answers), priced(ESTIMATE), harness.bundle
+        ),
+    )
+    assert _status(harness) == "COMPLETE"
+    accepted = accepted_artifacts(
+        harness.conn,
+        harness.blobs,
+        harness.route,
+        harness.run_id,
+        bundle=harness.bundle,
+    )
+    assert len(accepted) == 10
+    called = [fields_from_prompt(p)["module_id"] for p in answers.prompts]
+    assert (called.count("CP-4"), called.count("CP-CF")) == (2, 1)
+    retry = [
+        p for p in answers.prompts if fields_from_prompt(p)["module_id"] == "CP-4"
+    ][1]
+    assert "host calculation-input check: citation" in retry
+    assert "the forecast calculator (CP-CF) and must be an exact excerpt" in retry
+    codes = harness.conn.execute(
+        "SELECT r.code FROM attempt_refusals r JOIN run_attempts t USING (attempt_id)"
+        " WHERE t.run_id = %s AND t.route_node_id = %s",
+        (harness.run_id, _node(harness, "CP-4").route_node_id),
+    ).fetchall()
+    harness.conn.rollback()
+    assert codes == [("HANDOFF_INCOMPLETE",)]
+
+
+def test_binds_input_reads_the_owner_and_the_assignment_form() -> None:
+    """The rule CP-CF binds by, read before CP-CF answers: a line stating a
+    value of a section the citing module owns, slipped value or not."""
+    from caos.methodology.forecast import FORECAST_OWNERS, binds_input
+
+    assert {"CP-1", "CP-2G", "CP-4"} == FORECAST_OWNERS
+    assert binds_input("CP-1", "/opening/cash = 100")
+    assert binds_input("CP-1", "Opening\n/opening/cash = 100 restated")
+    assert binds_input("CP-4", "/contractual/0/amount = 5")
+    assert not binds_input("CP-4", "/opening/cash = 100")
+    assert not binds_input("CP-1", "Opening cash was 100")
+    assert not binds_input("CP-1", "/opening cash = 100")
+    assert not binds_input("CP-1", "/unknown/x = 1")

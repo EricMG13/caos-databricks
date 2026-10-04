@@ -77,6 +77,7 @@ from caos.methodology.handoff import (
     UnverifiedCitation,
     UpstreamRef,
     _bounded,
+    _numbered,
     anchoring_line,
     answer_citations,
     answer_markdown,
@@ -463,6 +464,11 @@ def _answer(  # noqa: PLR0913 -- one recorded answer, keyword-only
     # a guided retry told the item (`_demand_lines`).
     if _demand_faults(bundle, assignment, context, markdown):
         raise Refusal(RefusalCode.HANDOFF_MALFORMED)
+    # D106's one exception, the same producer-guard shape: a citation CP-CF
+    # will bind as a calculation input must anchor, or CP-CF cannot bind it
+    # and the run wedges there; refused here, as a guided retry naming it.
+    if _calculation_inputs(assignment, [entry.matched_text for entry in unverified]):
+        raise Refusal(RefusalCode.HANDOFF_INCOMPLETE)
     _forecast_inputs(bundle, assignment.module_id, markdown, context)
     record = CanonicalRecord(
         artifact_sha256=hashlib.sha256(markdown).hexdigest(),
@@ -730,6 +736,7 @@ def _prompt_context(
         ),
         _driver_line(contract, assignment, context, body),
         _size_line(answer_markdown(body)),
+        _calculation_line(conn, assignment, context.delivered, answer_citations(body)),
     )
     # Judged under the identity the refused answer was asked under: its
     # ordinal, not this attempt's, fixes the attempt id and invocation digest
@@ -815,6 +822,53 @@ def _demand_lines(
             )
         )
     ]
+
+
+def _calculation_inputs(assignment: Assignment, quotes: Sequence[str]) -> list[int]:
+    """Which of `quotes` CP-CF will bind as calculation inputs owned by this
+    node's module (`forecast.binds_input`), by index: none unless the pinned
+    route runs CP-CF and this module owns one of its sections. Pure over the
+    pin and the answer, so the live call and `replay_billed` agree."""
+    from caos.methodology.forecast import FORECAST_OWNERS, binds_input
+
+    module = assignment.module_id
+    if module not in FORECAST_OWNERS or MODEL_MODULE not in {
+        node.module_id for node in assignment.route.nodes
+    }:
+        return []
+    return [n for n, quote in enumerate(quotes) if binds_input(module, quote)]
+
+
+def _calculation_line(
+    conn: StoreConnection,
+    assignment: Assignment,
+    delivered: Sequence[Delivery],
+    citations: Sequence[Citation],
+) -> str | None:
+    """The owner retry's line for its citations CP-CF binds that did not
+    anchor (D106), by number: unlike every other citation they refuse the
+    answer until they anchor. The anchoring line beside it says why each
+    did not. None for every other module and route."""
+    if not _calculation_inputs(assignment, [c.matched_text for c in citations]):
+        return None
+    verdicts = _anchoring(conn, _by_source(delivered), citations, TokenIndex())
+    # An anchored citation stands as "", which binds nothing.
+    lost = [
+        "" if v is None else c.matched_text
+        for c, v in zip(citations, verdicts, strict=True)
+    ]
+    failed = [n + 1 for n in _calculation_inputs(assignment, lost)]
+    if not failed:
+        return None
+    many = len(failed) > 1
+    return (
+        f"host calculation-input check: {_numbered(failed)} of {len(citations)}"
+        f" {'feed' if many else 'feeds'} the forecast calculator (CP-CF) and must be"
+        " an exact excerpt of one evidence line that anchors; unlike other"
+        f" citations, {'they refuse' if many else 'it refuses'} this answer until"
+        f" {'they anchor' if many else 'it anchors'} (the host anchoring check says"
+        " why each did not; numbered from 1 in the order given)"
+    )
 
 
 def _size_line(markdown: bytes | None) -> str | None:

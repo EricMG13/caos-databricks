@@ -486,6 +486,8 @@ def _performed_document(item: Performed) -> dict[str, object]:
             "artifacts": proof.artifacts,
             "citations": proof.citations,
             "anchored": [list(value) for value in sorted(proof.anchored)],
+            # D106: how many citations the run kept unverified, a count only.
+            "unverified": len(proof.unverified),
         },
         "refusal": None if item.refusal is None else item.refusal.value,
         "unrun": [

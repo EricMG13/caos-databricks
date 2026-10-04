@@ -44,6 +44,7 @@ from caos.evidence.citations import (
     occurrences,
     within_line,
 )
+from caos.evidence.ingest import GROUP_WIDTH
 from caos.graph.route import MODEL_MODULE
 from caos.methodology.vendor import VendorContract
 from caos.provider import MAX_RESPONSE_BYTES
@@ -815,12 +816,13 @@ def unverified_citation(citation: Citation, code: RefusalCode) -> UnverifiedCita
 
 
 def _crossed(text: str) -> str | None:
-    """`text` as it crosses `BoundaryText` (NFC), or None when it will not or
-    hides text (AI-2)."""
+    """`text` as it crosses `BoundaryText` (NFC), or None when it will not,
+    hides text (AI-2), or is longer than any evidence line can be
+    (`GROUP_WIDTH`, a shown block's bound), so no excerpt of one."""
     if hides_text(text):
         return None
     with suppress(Refusal):
-        return BoundaryText.of(text, limit=MAX_TRANSPORT_CHARS).value
+        return BoundaryText.of(text, limit=GROUP_WIDTH).value
     return None
 
 
@@ -1382,8 +1384,10 @@ def _uncrossed_line(citations: Sequence[Citation]) -> str | None:
     verb = "carries" if len(failed) == 1 else "carry"
     return (
         f"host citation check: {_numbered(failed)} of {len(citations)} {verb} a"
-        " control, bidirectional, surrogate or invisible character; copy each"
-        " excerpt as the evidence shows it (numbered from 1 in the order given)"
+        " control, bidirectional, surrogate or invisible character, or runs"
+        f" past {GROUP_WIDTH:,} characters, longer than any evidence line; copy"
+        " each excerpt as the evidence shows it (numbered from 1 in the order"
+        " given)"
     )
 
 
