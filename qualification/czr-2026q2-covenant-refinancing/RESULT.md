@@ -5,7 +5,7 @@ Status: **OFFLINE / UNVERIFIED / NOT QUALIFIED**.
 This immutable set prepares `FULL_CREDIT_32 / COVENANT_REFINANCING` for
 Caesars Entertainment, Inc. (CZR) at an analysis date of 2026-10-02. Its
 qualification-set digest is
-`d9b9f7a2b8b437ef254b0d3ec56a74270f501557b75b02dd0436ef1a190cd599`.
+`81642a7c87c88c663c885b7fb0e1d91ae188c925fc95635490cacd282f59b503`.
 
 ## Corpus provenance
 
@@ -20,11 +20,11 @@ is the HTML as fetched.
 |---|---|---|---|---|
 | `CZR_FY2025_10K.txt` (Form 10-K, year ended 31 December 2025) | https://www.sec.gov/Archives/edgar/data/1590895/000159089526000011/czr-20251231.htm | 0001590895-26-000011 | `172309048af2a6a2dab515d765f00a7c89bf8c874c6104a5e3a052b66cad4512` | `41328bdfa2486cfb53b831c2ddba6009528d8dca3a0d868c98c2cb113142b05f` |
 | `CZR_Q2_2026_10Q.txt` (Form 10-Q, quarter ended 30 June 2026) | https://www.sec.gov/Archives/edgar/data/1590895/000159089526000028/czr-20260630.htm | 0001590895-26-000028 | `f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a` | `9dd3fca867c49936c65c9729bd7f9478d4c98b7c60569b74864a839bdeed8500` |
-| `CZR_2020_Credit_Agreement.txt` (Ex. 10.1, Credit Agreement dated 20 July 2020) | https://www.sec.gov/Archives/edgar/data/1590895/000119312520196232/d940333dex101.htm | 0001193125-20-196232 | `47f555d66a20792e3cb727303403d172e0a73f7bcadf513fb77cd055d69b333c` | `6600ab5bec479091f68dc04b2db65a54ef1013944c94af0ec135335b374c7dba` |
-| `CZR_2024_Credit_Agreement_Fourth_Amendment.txt` (Ex. 10.1, Fourth Amendment, 9 May 2024) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524135268/d827488dex101.htm | 0001193125-24-135268 | `201febfc086288265481ff3d0ba0635799acefe923b12e4827959070c018da51` | `b0e9fc14d481410dd2fa3cb6bc28e4f9c3b8751d720777ab2bbf943143f6d0fb` |
-| `CZR_2024_Credit_Agreement_Fifth_Amendment.txt` (Ex. 10.1, Fifth Amendment, 25 November 2024) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524265157/d858083dex101.htm | 0001193125-24-265157 | `a8bd93197f87e2b86375472c0d0d0e8da3bb1f7f852766c8ff746b81a496eaf6` | `0936486e71264a9b752d5977c003bfc9a89ec5eb4ca8e5b09107a7870ebf86e8` |
-| `CZR_2024_650_Senior_Secured_Notes_2032_Indenture.txt` (Ex. 10.1, 6.500% Senior Secured Notes due 2032 indenture, 6 February 2024) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex101.htm | 0001193125-24-026847 | `8b91b49c89df261cb7c49dc85c3693f8d6ccbbfabc4698aa240c8b71750412a5` | `a4661727edc48361dd7290772e62412c389b8ad8d215a96aa58facfe9e356c2c` |
-| `CZR_2026_Merger_Agreement_8K.txt` (Form 8-K, Item 1.01, 27 May 2026) | https://www.sec.gov/Archives/edgar/data/1590895/000119312526242995/d143382d8k.htm | 0001193125-26-242995 | `52bbcf8fbb8bcf29cfba66d358c67a9b1585516d11b1a30922c0cea02b812c8b` | `aabda22b745ac6c2e5d8462be19fbc47b6cafbe58d21f8c2750a1c195cf24f96` |
+| `CZR_2020_Credit_Agreement.txt` (Ex. 10.1, Credit Agreement dated 20 July 2020) | https://www.sec.gov/Archives/edgar/data/1590895/000119312520196232/d940333dex101.htm | 0001193125-20-196232 | `cdfeb87c9b57914f4c2e89dbb2ec80de52564b1817b35fe15e332e67a13039b5` | `6600ab5bec479091f68dc04b2db65a54ef1013944c94af0ec135335b374c7dba` |
+| `CZR_2024_Credit_Agreement_Fourth_Amendment.txt` (Ex. 10.1, Fourth Amendment, 9 May 2024) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524135268/d827488dex101.htm | 0001193125-24-135268 | `32f91de6ef3ff93d9924eb8d4e3dc4734d28b68ed1da0f816a085ffdcb085c95` | `b0e9fc14d481410dd2fa3cb6bc28e4f9c3b8751d720777ab2bbf943143f6d0fb` |
+| `CZR_2024_Credit_Agreement_Fifth_Amendment.txt` (Ex. 10.1, Fifth Amendment, 25 November 2024) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524265157/d858083dex101.htm | 0001193125-24-265157 | `7f2b5c777dc3347938a007eaea63a623b299a1188dbcfbe8980d389a0bcfc5b3` | `0936486e71264a9b752d5977c003bfc9a89ec5eb4ca8e5b09107a7870ebf86e8` |
+| `CZR_2024_650_Senior_Secured_Notes_2032_Indenture.txt` (Ex. 10.1, 6.500% Senior Secured Notes due 2032 indenture, 6 February 2024) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex101.htm | 0001193125-24-026847 | `0809ab3981090bd2c23950da9530adb10e96882ddfa7db4404635e014d4c1119` | `a4661727edc48361dd7290772e62412c389b8ad8d215a96aa58facfe9e356c2c` |
+| `CZR_2026_Merger_Agreement_8K.txt` (Form 8-K, Item 1.01, 27 May 2026) | https://www.sec.gov/Archives/edgar/data/1590895/000119312526242995/d143382d8k.htm | 0001193125-26-242995 | `6808734cfbb19b56c5624e5a69e7209ccaad8a5039de94ad64563efdedf93169` | `aabda22b745ac6c2e5d8462be19fbc47b6cafbe58d21f8c2750a1c195cf24f96` |
 | `CZR_2026_Merger_Press_Release.txt` (Ex. 99.1, press release, 28 May 2026) | https://www.sec.gov/Archives/edgar/data/1590895/000119312526242995/d143382dex991.htm | 0001193125-26-242995 | `4fbecbd5f5a10b15911b5749daee41b3e40090e43ed54bf33aee07a21877e68b` | `2a4ed12c96147f2171451c93524bea31ecad37247448d27039f755a3cf85f51f` |
 
 The credit agreement (935,517 bytes) and the indenture (758,385 bytes) are over
@@ -103,14 +103,20 @@ converted filing is one sentence, so a key is the sentence that carries its
 fact.
 Since F498 a sentence of a legal instrument (the credit agreement, its
 amendments, the indenture, the merger 8-K) over 400 characters is cut further
-at its clause boundaries (`; (b)`, `; and`, `; provided`, `, provided that`,
-`: (a)`), so a key there is the clause that carries its fact. The indenture's
-Section 4.08(a) key is so restated as the clause that grants the `101%`
-repurchase right, ending
+at its clause boundaries (`; (b)`, `, (b)`, `; and`, `, and (c)`, `; provided`,
+`, provided that`, `: (a)`), so a key there is the clause that carries its
+fact. The indenture's Section 4.08(a) key is so restated as the clause that
+grants the `101%` repurchase right, ending
 `in accordance with the terms contemplated in this Section 4.08;`; its
 `provided, however,` proviso (no repurchase of Notes the Company has exercised
 its right to redeem) is now the next line and is not keyed, as it carries none
-of the key's figures.
+of the key's figures. The indenture's Change of Control clause (2) key is so
+restated as its second clause, from
+`(ii) any person or entity acting in its capacity as trustee` to
+`(or equivalent governing body).`, which carries the beneficial ownership of
+`more than 50%` of the voting Equity Interests; the clause's opening, from
+`(2) any “person” or “group”` to its exclusion `(i)` of employee benefit plans,
+is now the line before it and is not keyed.
 
 The readiness key expects CP-0 to clear CP-1, CP-4, CP-2, CP-2D, CP-3C and
 CP-5, and CP-4 and CP-3C to carry `FULL` decision scope. No register key is

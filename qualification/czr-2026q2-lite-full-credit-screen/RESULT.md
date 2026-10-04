@@ -7,7 +7,7 @@ Caesars Entertainment, Inc. (CZR) at an analysis date of 2026-10-02, against
 peers MGM Resorts International (MGM) and PENN Entertainment, Inc. (PENN) from
 the owner's "Public Leveraged Loan Issuers Benchmark". Its qualification-set
 digest is
-`6a7e500d422ab98b0f4462cc92b52abaf952afc00f3b99cce8323b5fd4187649`.
+`9fa55fa9e3bdadb8d85fd47d8aa8c6eb8d42805ecb71d70d8a7abe78b4d7a26b`.
 
 ## Corpus provenance
 
@@ -24,12 +24,12 @@ the keys bind; the raw SHA-256 is the HTML as fetched.
 |---|---|---|---|---|
 | `CZR_Q2_2026_10Q.txt` (Form 10-Q, quarter ended 30 June 2026) | https://www.sec.gov/Archives/edgar/data/1590895/000159089526000028/czr-20260630.htm | 0001590895-26-000028 | `f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a` | `9dd3fca867c49936c65c9729bd7f9478d4c98b7c60569b74864a839bdeed8500` |
 | `CZR_Q2_2026_Earnings_Release.txt` (Ex. 99.1, 28 July 2026) | https://www.sec.gov/Archives/edgar/data/1590895/000159089526000027/ex991-2026q2ceiearningsrel.htm | 0001590895-26-000027 | `b385f76ff631243d1053fa8073ebde4f8886b4a50c9ce34ce3498d6b2ac3e9f8` | `a8982154b99b023b526261f7626022e96ac642834d1d65704629946acecc8a1f` |
-| `CZR_2026_Merger_Agreement_8K.txt` (Form 8-K, Item 1.01, 27 May 2026) | https://www.sec.gov/Archives/edgar/data/1590895/000119312526242995/d143382d8k.htm | 0001193125-26-242995 | `52bbcf8fbb8bcf29cfba66d358c67a9b1585516d11b1a30922c0cea02b812c8b` | `aabda22b745ac6c2e5d8462be19fbc47b6cafbe58d21f8c2750a1c195cf24f96` |
+| `CZR_2026_Merger_Agreement_8K.txt` (Form 8-K, Item 1.01, 27 May 2026) | https://www.sec.gov/Archives/edgar/data/1590895/000119312526242995/d143382d8k.htm | 0001193125-26-242995 | `6808734cfbb19b56c5624e5a69e7209ccaad8a5039de94ad64563efdedf93169` | `aabda22b745ac6c2e5d8462be19fbc47b6cafbe58d21f8c2750a1c195cf24f96` |
 | `CZR_2026_Merger_Press_Release.txt` (Ex. 99.1, 28 May 2026) | https://www.sec.gov/Archives/edgar/data/1590895/000119312526242995/d143382dex991.htm | 0001193125-26-242995 | `4fbecbd5f5a10b15911b5749daee41b3e40090e43ed54bf33aee07a21877e68b` | `2a4ed12c96147f2171451c93524bea31ecad37247448d27039f755a3cf85f51f` |
 | `MGM_Q2_2026_Earnings_Release.txt` (MGM Ex. 99.1, 29 July 2026) | https://www.sec.gov/Archives/edgar/data/789570/000078957026000075/mgmex991q22026earningrelea.htm | 0000789570-26-000075 | `795ac68aa1c51a7e0a6799a6e1ca053ee597dc9a1a9a6550a2438280a6e76cdb` | `d23f2410e475eca7e0dfe2fdcca0210f449e4c1a93fb93a14549592c4554173c` |
 | `PENN_Q2_2026_Earnings_Release.txt` (PENN Ex. 99.1, 6 August 2026) | https://www.sec.gov/Archives/edgar/data/921738/000092173826000019/pennex991-q22026.htm | 0000921738-26-000019 | `4d12fff94b066f73e6eccce84eec937e8fd4fdc38d6061704db66a40511a210c` | `be60f25fec25022c2fd6f48c2cf9bb99912b8f78356cebc4a7719bdcae9120bc` |
-| `CZR_2020_Credit_Agreement.txt` (Ex. 10.1, Credit Agreement dated 20 July 2020) | https://www.sec.gov/Archives/edgar/data/1590895/000119312520196232/d940333dex101.htm | 0001193125-20-196232 | `47f555d66a20792e3cb727303403d172e0a73f7bcadf513fb77cd055d69b333c` | `6600ab5bec479091f68dc04b2db65a54ef1013944c94af0ec135335b374c7dba` |
-| `CZR_2024_650_Senior_Secured_Notes_2032_Indenture.txt` (Ex. 10.1, 6.500% Senior Secured Notes due 2032 indenture, 6 February 2024) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex101.htm | 0001193125-24-026847 | `8b91b49c89df261cb7c49dc85c3693f8d6ccbbfabc4698aa240c8b71750412a5` | `a4661727edc48361dd7290772e62412c389b8ad8d215a96aa58facfe9e356c2c` |
+| `CZR_2020_Credit_Agreement.txt` (Ex. 10.1, Credit Agreement dated 20 July 2020) | https://www.sec.gov/Archives/edgar/data/1590895/000119312520196232/d940333dex101.htm | 0001193125-20-196232 | `cdfeb87c9b57914f4c2e89dbb2ec80de52564b1817b35fe15e332e67a13039b5` | `6600ab5bec479091f68dc04b2db65a54ef1013944c94af0ec135335b374c7dba` |
+| `CZR_2024_650_Senior_Secured_Notes_2032_Indenture.txt` (Ex. 10.1, 6.500% Senior Secured Notes due 2032 indenture, 6 February 2024) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex101.htm | 0001193125-24-026847 | `0809ab3981090bd2c23950da9530adb10e96882ddfa7db4404635e014d4c1119` | `a4661727edc48361dd7290772e62412c389b8ad8d215a96aa58facfe9e356c2c` |
 
 The two FINRA TRACE observations are coordinator-authored transcriptions of
 the official public FINRA pages, admitted byte for byte and byte-identical to
@@ -110,10 +110,10 @@ converted filing is one sentence, so a key is the sentence that carries its
 fact.
 Since F498 a sentence of a legal instrument (the credit agreement, its
 amendments, the indenture, the merger 8-K) over 400 characters is cut further
-at its clause boundaries (`; (b)`, `; and`, `; provided`, `, provided that`,
-`: (a)`), so a key there is the clause that carries its fact. The indenture's
-Section 4.08(a) key is so restated as the clause that grants the `101%`
-repurchase right, ending
+at its clause boundaries (`; (b)`, `, (b)`, `; and`, `, and (c)`, `; provided`,
+`, provided that`, `: (a)`), so a key there is the clause that carries its
+fact. The indenture's Section 4.08(a) key is so restated as the clause that
+grants the `101%` repurchase right, ending
 `in accordance with the terms contemplated in this Section 4.08;`; its
 `provided, however,` proviso (no repurchase of Notes the Company has exercised
 its right to redeem) is now the next line and is not keyed, as it carries none
