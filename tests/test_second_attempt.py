@@ -1003,6 +1003,76 @@ def test_a_host_text_bound_is_named_for_the_second_attempt_never_quoted(
     assert not any(line.startswith("host text check: ") for line in clean)
 
 
+def _text_check(markdown: str) -> str:
+    from canonical_fixtures import CATALOG, CONTRACT, identity
+
+    lines = feedback_lines(
+        CONTRACT, CATALOG, identity("CP-0"), _gate_body(markdown.encode())
+    )
+    bounds = [line for line in lines if line.startswith("host text check: ")]
+    assert len(bounds) == 1, lines
+    assert not any("SECRET" in line for line in lines)
+    assert len(bounds[0]) <= len("host text check: ") + MAX_FEEDBACK_CHARS
+    return bounds[0]
+
+
+def test_a_control_character_is_named_by_line_and_code_point_never_quoted() -> None:
+    """F499 (live run C4, CP-0 attempts 2 and 3): the model wrote U+001C, then
+    U+0002, where its front matter's quotes belong, and was told only that
+    some control character was somewhere. The retry is told the first line,
+    the code point and its name, and how many lines carry one; the answer is
+    refused as before, with the same code."""
+    from caos.methodology.handoff import _text
+
+    lines = _gate_markdown().split("\n")
+    for at in (1, 2):
+        lines[at] = lines[at].replace('"', "\x1c") + " SECRETMARK"
+    damaged = "\n".join(lines)
+    assert _text_check(damaged) == (
+        "host text check: line 2 of the Markdown carries U+001C (INFORMATION"
+        " SEPARATOR FOUR), a control character other than a line feed or tab"
+        " (2 lines in all); remove it"
+    )
+    with pytest.raises(Refusal) as refused:
+        _text(damaged.encode())
+    assert refused.value.code is RefusalCode.HANDOFF_MALFORMED
+
+
+def test_text_not_in_nfc_is_named_by_line_and_the_code_points_nfc_changes() -> None:
+    """F499: text NFC would change is named by its first line and the code
+    points from where it changes, with the composed-form wording."""
+    damaged = _gate_markdown().replace("was recorded.", "SECRETMARKé x", 1)
+    number = damaged.split("\n").index(
+        next(line for line in damaged.split("\n") if "SECRETMARK" in line)
+    )
+    assert _text_check(damaged) == (
+        f"host text check: line {number + 1} of the Markdown is not in Unicode NFC"
+        " form (first at U+0065 U+0301; 1 line in all); write it in composed form"
+    )
+
+
+def test_an_unlocated_or_unbounded_text_check_keeps_the_unlocated_words(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """F499: a control with no `unicodedata` name is named by its code point
+    alone, DEL by its name; text with nothing to locate, or a located line
+    that will not cross `BoundaryText`, keeps the unlocated words."""
+    from caos.methodology import handoff
+
+    unlocated = (
+        "the Markdown carries a control character other than a line feed or"
+        " tab, or text that is not in Unicode NFC form"
+    )
+    assert handoff._unclean_bound("a\n\x85\x7f") == (
+        "line 2 of the Markdown carries U+0085, a control character other than"
+        " a line feed or tab (1 line in all); remove it"
+    )
+    assert "U+007F (DELETE)" in handoff._unclean_bound("\x7f")
+    assert handoff._unclean_bound("clean") == unlocated
+    monkeypatch.setattr(handoff, "MAX_FEEDBACK_CHARS", 10)
+    assert handoff._unclean_bound("\x07") == unlocated
+
+
 def test_a_blocker_cell_past_its_bound_is_named_by_its_row_never_quoted() -> None:
     """G1-16: a CONDITIONAL or BLOCKED row's `Why now / blocker` cell past
     `MAX_BLOCKER_CHARS` refuses the handoff; the second attempt is told which
