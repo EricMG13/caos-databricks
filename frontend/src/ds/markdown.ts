@@ -157,7 +157,9 @@ function quote(lines: string[], index: number, out: Block[]): number {
     held.push(lines[at]!.trimStart().slice(1).trim());
     at += 1;
   }
-  out.push({ kind: "quote", text: held.join(" ") });
+  // Joined at the line breaks the model wrote, which the page shows as spaces:
+  // a marker is read within one line, as the host reads it (D107).
+  out.push({ kind: "quote", text: held.join("\n") });
   return at;
 }
 
@@ -255,7 +257,7 @@ function paragraph(lines: string[], index: number, out: Block[]): number {
     held.push(line.trim());
     at += 1;
   }
-  out.push({ kind: "paragraph", text: held.join(" ") });
+  out.push({ kind: "paragraph", text: held.join("\n") });
   return at;
 }
 
@@ -365,11 +367,16 @@ export function readRefs(text: string): RefPiece[] {
     the citation at place 3 of the answer's list, `[C2, C5]` two of them. */
 export type MarkerPiece = string | { text: string; numbers: number[] };
 
-// `handoff._MARKER`, rule for rule: an upper-case C and 1-9 ASCII digits,
-// several in one bracket separated by a comma and at most one space. A body's
-// backslash escape is read as the mark it writes (F149), so `\[C3\]` is one.
-// Anything else -- `[c3]`, `[C 3]`, `[C3-C5]` -- is text.
-const MARKER = /\\?\[(C[0-9]{1,9}(?:, ?C[0-9]{1,9})*)\\?\]/g;
+// `citation_markers.MARKER` as `handoff.markers` reads it, rule for rule: an
+// upper-case C and ASCII digits, several in one bracket separated by a comma
+// and at most one space (never a line break), each mark possibly a Markdown
+// backslash escape, which the host reads as the mark it writes (F149): so
+// `\[C3\]` and `[C3\, C4]` are markers. A number of more than `MARKER_DIGITS`
+// digits names no citation (0). Anything else -- `[c3]`, `[C 3]`, `[C3-C5]`,
+// `[C1,  C2]` -- is text.
+const MARKER = /\\?\[(C[0-9]+(?:\\?, ?C[0-9]+)*)\\?\]/g;
+/** `handoff.MARKER_DIGITS`. */
+export const MARKER_DIGITS = 9;
 
 /** A line of model text with its citation markers picked out, the rest
     exactly as written. */
@@ -378,7 +385,10 @@ export function readMarkers(text: string): MarkerPiece[] {
   let at = 0;
   for (const match of text.matchAll(MARKER)) {
     if (match.index > at) out.push(text.slice(at, match.index));
-    const numbers = match[1]!.split(",").map((part) => Number(part.trim().slice(1)));
+    const numbers = match[1]!
+      .split(/\\?, ?/)
+      .map((part) => part.slice(1))
+      .map((digits) => (digits.length <= MARKER_DIGITS ? Number(digits) : 0));
     out.push({ text: match[0], numbers });
     at = match.index + match[0].length;
   }
