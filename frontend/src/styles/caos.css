@@ -1470,6 +1470,11 @@
     color: var(--foreground);
     overflow-wrap: break-word;
   }
+  /* Labels on Committee's paper take paper's own ink: the theme's muted ink
+     is 2.36:1 on cream in the dark scheme (NB2 review). */
+  .paper .lbl {
+    color: var(--paper-meta);
+  }
   .figq-unverified {
     text-decoration: underline dashed;
     text-underline-offset: 3px;
