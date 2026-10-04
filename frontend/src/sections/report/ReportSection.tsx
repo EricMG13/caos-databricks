@@ -11,6 +11,7 @@ import { scopeOf, sentence } from "@/chrome/compose";
 import { ArtifactTexts } from "@/ds/ArtifactMarkdown";
 import { NoteRows } from "@/ds/atoms";
 import { shortDigest, stamp } from "@/ds/format";
+import { ArtifactMarkers } from "@/evidence/Markers";
 import { Narrative } from "@/evidence/Narrative";
 import type { Severity } from "@/wire";
 import type { ReportDocument, RevisionSummary } from "@/wire/v1";
@@ -48,12 +49,14 @@ function Artifact({ artifact }: { artifact: ReportDocument["body"]["artifacts"][
             data-report-warnings
           />
         </dl>
-        <ArtifactTexts
-          markdown={artifact.markdown}
-          record={artifact.record}
-          label={`${artifact.route_node_id} saved artifact`}
-          section="report"
-        />
+        <ArtifactMarkers artifact={artifact}>
+          <ArtifactTexts
+            markdown={artifact.markdown}
+            record={artifact.record}
+            label={`${artifact.route_node_id} saved artifact`}
+            section="report"
+          />
+        </ArtifactMarkers>
       </div>
     </section>
   );

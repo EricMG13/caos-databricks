@@ -31,10 +31,16 @@ describe("Committee v1", () => {
       "[data-committee-artifact], [data-committee-narrative]",
     )) {
       expect(saved.querySelector("img, script, a, input, textarea, [contenteditable]")).toBeNull();
-      // Its only other buttons are the host's Formatted / As written tabs (D60).
+      // Its only other buttons are the host's Formatted / As written tabs (D60)
+      // and a marker's chip (D107), whose only text is its `C<n>`.
       expect(
-        saved.querySelector("button:not([data-figure-chip]):not([data-artifact-view-tab])"),
+        saved.querySelector(
+          "button:not([data-figure-chip]):not([data-artifact-view-tab]):not([data-marker-chip])",
+        ),
       ).toBeNull();
+      for (const chip of saved.querySelectorAll("button[data-marker-chip]")) {
+        expect(chip.textContent).toMatch(/^C[1-9][0-9]*$/);
+      }
     }
     expect(root.querySelectorAll("[data-committee-artifact]")).toHaveLength(
       document.body.artifacts.length,

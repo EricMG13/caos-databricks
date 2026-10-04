@@ -27,6 +27,7 @@ import { Overlay } from "@/evidence/Overlay";
 import { QUOTE_LABEL } from "@/evidence/TracedLine";
 import { BlockedQuotes, NOT_LINKED, UnverifiedFacts } from "@/evidence/Unverified";
 import { clampExcerpt } from "@/evidence/compact";
+import { HandoffMarkers } from "@/evidence/Markers";
 import type { AnalysisDocument, CitationView, HandoffView, PendingNode } from "@/wire/v1";
 
 export { PROSE_SHOWN } from "./module";
@@ -532,17 +533,21 @@ export function AnalysisSection({
             <div className="pb note">No handoff has been accepted on this run yet.</div>
           </section>
         ) : (
-          <ModuleView
-            key={handoff.route_node_id}
-            handoff={handoff}
-            handoffs={body.handoffs}
-            subject={
-              body.subject ? `${body.subject.issuer_name} · ${body.subject.reporting_period}` : null
-            }
-            model={model}
-            tab={depth}
-            onTab={setDepth}
-          />
+          <HandoffMarkers key={handoff.route_node_id} handoff={handoff}>
+            <ModuleView
+              key={handoff.route_node_id}
+              handoff={handoff}
+              handoffs={body.handoffs}
+              subject={
+                body.subject
+                  ? `${body.subject.issuer_name} · ${body.subject.reporting_period}`
+                  : null
+              }
+              model={model}
+              tab={depth}
+              onTab={setDepth}
+            />
+          </HandoffMarkers>
         )}
         <PendingList
           pending={body.pending}

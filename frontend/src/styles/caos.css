@@ -1460,6 +1460,33 @@
   }
   /* The cited excerpt inside its whole source line (D105), in the ink of the
      surface it sits on: a narrative figure is also read on Committee's paper. */
+  /* A citation marker in analysis text (D107): a chip beside the statement,
+     sitting on the line it is read in. */
+  .chip.cmark {
+    vertical-align: 1px;
+  }
+  .md-cites {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    vertical-align: 1px;
+  }
+  /* An unverified citation's marker (D106): labelled, dashed, inert -- never
+     the host-verified chip's fill, and nothing to press. */
+  .chip.unverified {
+    border-style: dashed;
+    border-color: var(--muted-foreground);
+    background: transparent;
+    color: var(--foreground);
+    cursor: default;
+  }
+  .chip.unverified:hover {
+    background: transparent;
+  }
+  .paper .chip.unverified {
+    border-color: var(--paper-rule);
+    color: var(--paper-meta);
+  }
   /* A compact citation's excerpt (D107): about one line; its whole source line
      is the drawer's. */
   .facts .excerpt {

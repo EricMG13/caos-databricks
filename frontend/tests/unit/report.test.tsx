@@ -167,15 +167,19 @@ describe("Report v1", () => {
     // and a narrative figure's chip (N59): a button that opens the drawer by
     // the figure's typed identity, its quote only ever text. An artifact's
     // Formatted / As written tabs (D60) are the page's own, and their words
-    // are the host's, never the payload's.
+    // are the host's, never the payload's. A marker's chip (D107) opens the
+    // drawer by the served figure's identity, its only text its `C<n>`.
     for (const node of root.querySelectorAll(
       "img, script, a, button, input, textarea, [contenteditable]",
     )) {
       expect(
         node.closest(
-          "[data-filing-controls], [data-report-revisions], [data-report-identities], [data-figure-chip], [data-artifact-view-tab]",
+          "[data-filing-controls], [data-report-revisions], [data-report-identities], [data-figure-chip], [data-artifact-view-tab], button[data-marker-chip]",
         ),
       ).not.toBeNull();
+    }
+    for (const chip of root.querySelectorAll("button[data-marker-chip]")) {
+      expect(chip.textContent).toMatch(/^C[1-9][0-9]*$/);
     }
     for (const tab of root.querySelectorAll("[data-artifact-view-tab]")) {
       expect(["Formatted", "As written"]).toContain(tab.textContent);
