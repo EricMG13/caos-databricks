@@ -85,6 +85,7 @@ from caos.methodology.handoff import (
     capped,
     carried_answer,
     feedback_lines,
+    markers,
     parse_response,
     readiness_set_line,
     record_bytes,
@@ -472,10 +473,10 @@ def _answer(  # noqa: PLR0913 -- one recorded answer, keyword-only
     if _demand_faults(bundle, assignment, context, markdown):
         raise Refusal(RefusalCode.HANDOFF_MALFORMED)
     # D106's one exception, the same producer-guard shape: a citation CP-CF
-    # will bind as a calculation input must anchor and stand in this body as
-    # written, or CP-CF cannot bind it and the run wedges there; refused
-    # here, as a guided retry naming it.
-    if _calculation_inputs(assignment, _unbindable(markdown, anchored, unverified)):
+    # will bind as a calculation input must anchor and be named by a marker
+    # in this body (D107), or CP-CF cannot bind it and the run wedges there;
+    # refused here, as a guided retry naming it.
+    if _calculation_inputs(assignment, _unbindable(anchored, unverified)):
         raise Refusal(RefusalCode.HANDOFF_INCOMPLETE)
     _forecast_inputs(bundle, assignment.module_id, markdown, context)
     record = CanonicalRecord(
@@ -852,17 +853,13 @@ def _calculation_inputs(assignment: Assignment, quotes: Sequence[str]) -> list[i
 
 
 def _unbindable(
-    markdown: bytes,
-    anchored: Sequence[AnchoredCitation],
-    unverified: Sequence[UnverifiedCitation],
+    anchored: Sequence[AnchoredCitation], unverified: Sequence[UnverifiedCitation]
 ) -> list[str]:
     """The quotes CP-CF could not bind from this answer: every unverified
-    one, and every anchored one this Markdown does not hold as written
-    (`forecast.carries`, the binder's own test)."""
-    from caos.methodology.forecast import carries
-
+    one, and every anchored one no marker in the body names (`linked`, the
+    binder's own test, `forecast.validate_forecast_bindings`, D107)."""
     return [entry.matched_text for entry in unverified] + [
-        c.matched_text for c in anchored if not carries(markdown, c.matched_text)
+        c.matched_text for c in anchored if not c.linked
     ]
 
 
@@ -874,20 +871,19 @@ def _calculation_line(
 ) -> str | None:
     """The owner retry's line for its citations CP-CF binds but could not
     (D106, `_unbindable`), by number: unlike every other citation they
-    refuse the answer until each anchors and stands in the body as written.
-    The anchoring and body-quote lines beside it say what is wrong with
-    each. None for every other module and route."""
-    from caos.methodology.forecast import carries
-
+    refuse the answer until each anchors and a marker names it (D107).
+    The anchoring and marker lines beside it say what is wrong with each.
+    None for every other module and route."""
     citations = answer_citations(body)
     markdown = answer_markdown(body) or b""
     if not _calculation_inputs(assignment, [c.matched_text for c in citations]):
         return None
     verdicts = _anchoring(conn, _by_source(delivered), citations, TokenIndex())
+    named = frozenset(markers(markdown.decode("utf-8")))
     # A citation CP-CF can bind stands as "", which binds nothing.
     lost = [
-        "" if v is None and carries(markdown, c.matched_text) else c.matched_text
-        for c, v in zip(citations, verdicts, strict=True)
+        "" if v is None and place in named else c.matched_text
+        for place, (c, v) in enumerate(zip(citations, verdicts, strict=True), 1)
     ]
     failed = [n + 1 for n in _calculation_inputs(assignment, lost)]
     if not failed:
@@ -896,10 +892,10 @@ def _calculation_line(
     return (
         f"host calculation-input check: {_numbered(failed)} of {len(citations)}"
         f" {'feed' if many else 'feeds'} the forecast calculator (CP-CF) and must"
-        " be an exact excerpt of one evidence line that anchors, written in the"
-        " Markdown body exactly as quoted; unlike other citations,"
+        " be an exact excerpt of one evidence line that anchors, named by its"
+        " [C<n>] marker in the Markdown body; unlike other citations,"
         f" {'they refuse' if many else 'it refuses'} this answer until then (the"
-        " host anchoring and citation checks say what is wrong with each;"
+        " host anchoring and marker checks say what is wrong with each;"
         " numbered from 1 in the order given)"
     )
 
