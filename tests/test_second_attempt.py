@@ -663,6 +663,40 @@ def test_the_anchoring_line_names_the_line_a_near_miss_should_copy() -> None:
     assert 0 < capped_line.count("nearly matches") < MAX_FEEDBACK_CITATIONS
 
 
+def test_the_anchoring_line_tells_a_quote_that_runs_past_its_line() -> None:
+    """F496: a citation running past the end of one delivered line is shown
+    that line's last words and told to quote it only, and to cite its page
+    when moved; a placement like any other past `MAX_ANCHORING_CHARS`."""
+    lost = RefusalCode.CITATION_NOT_LOCATED
+    ends = "and take all actions required by such Security"
+    line = anchoring_line([None, lost], [None, LineHint(near=23, ends=ends)])
+    assert line == (
+        "host anchoring check: citation 2 of 2 runs past the end of the evidence"
+        f' line of page 23, which ends "{ends}"; quote that line only, ending'
+        " where it ends (text after it is a separate evidence line); keep"
+        " citation 1 exactly as it was; any citation you add or change must be"
+        " one entire evidence line of its cited page"
+        " (numbered from 1 in the order given)"
+    )
+    moved = LineHint(near=28, moved=True, ends=ends)
+    assert anchoring_line([lost], [moved]) == (
+        "host anchoring check: citation 1 of 1 runs past the end of the evidence"
+        f' line of page 28, not its cited page, which ends "{ends}"; quote that'
+        " line only, ending where it ends, and cite page 28 (text after it is a"
+        " separate evidence line); any citation you add or change must be one"
+        " entire evidence line of its cited page (numbered from 1 in the order"
+        " given)"
+    )
+    long = LineHint(near=3, ends=" ".join(["w" * 40] * 8))
+    many = MAX_FEEDBACK_CITATIONS + 2
+    capped_line = anchoring_line(
+        [None] * 400 + [lost] * many, [None] * 400 + [long] * many
+    )
+    assert capped_line is not None and len(capped_line) <= MAX_ANCHORING_CHARS
+    assert "keep citation" not in capped_line
+    assert 0 < capped_line.count("runs past the end") < MAX_FEEDBACK_CITATIONS
+
+
 def test_the_anchoring_line_tells_an_unknown_source_and_a_row_missing_cells() -> None:
     """F495: citations naming a source_id the request never offered are
     told so, grouped by that id, with the source holding their lines when
@@ -1383,11 +1417,14 @@ def test_a_handoff_exactly_at_the_upstream_bound_is_accepted(
     assert _cp0_ledger(harness) == (1, 1, [], 1)
 
 
-# D104: a guided retry carries the refused answer back to be corrected.
+# D104: a guided retry carries the refused answer back to be corrected, and
+# (F496) asks for all of it back, every section, register, row and citation.
 REPAIR = (
-    "Return that answer corrected, as one new complete JSON object: fix what the\n"
-    "checks above name, keep everything else as it was, and still apply every rule\n"
-    "of this request.\n"
+    "Return the complete corrected answer, as one new JSON object: every H2\n"
+    "section, every register table and every row and citation of the refused\n"
+    "answer, carried over unchanged except where the checks above name a fault.\n"
+    "Fix what the checks name. Do not shorten, summarise, merge or omit any part,\n"
+    "and still apply every rule of this request.\n"
 )
 REPLACE = (
     "Its front matter was written for the earlier request. Replace the refused\n"

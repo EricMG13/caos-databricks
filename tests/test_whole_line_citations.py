@@ -988,3 +988,103 @@ def test_an_unknown_source_id_is_told_so_and_a_delivered_one_keeps_its_wording(
         " be one entire evidence line of its cited page"
         " (numbered from 1 in the order given)"
     )
+
+
+# C2's CP-4 shape (F496): a page break ends the evidence line mid-sentence,
+# and the quote carries the sentence on past it.
+SPLIT = (
+    "The Company shall execute all documents and take all actions required by"
+    " such Security"
+)
+OVERRUN = SPLIT + " Documents."
+
+
+def test_overrun_line_names_the_one_line_a_quote_runs_past() -> None:
+    """F496: a quote that is one line and then more names that line, word
+    for word as anchoring reads them; the line itself, a line sharing fewer
+    than `NEAR_WORDS` words, two such lines, or more than `NEAR_MEASURED`
+    candidates are no answer."""
+    from caos.evidence.citations import NEAR_MEASURED, NEAR_WORDS, overrun_line
+
+    lines = ["Revenue grew 4% in FY2025.", SPLIT, "Documents to perfect the Liens."]
+    assert overrun_line(OVERRUN, lines) == 1
+    assert overrun_line('"' + OVERRUN.replace("Security", "Security,"), lines) == 1
+    assert overrun_line(SPLIT, lines) is None
+    assert overrun_line(SPLIT.replace("actions", "action") + " More.", lines) is None
+    assert overrun_line(OVERRUN, [*lines, SPLIT + "  "]) is None
+    assert overrun_line("Revenue grew 4% in FY2025. It rose.", lines) is None
+    heading = " ".join(SPLIT.split()[: NEAR_WORDS - 1])
+    assert overrun_line(OVERRUN, [heading]) is None
+    head = " ".join(SPLIT.split()[:NEAR_WORDS])
+    alike = [f"{head} other {n}" for n in range(NEAR_MEASURED)]
+    assert overrun_line(OVERRUN, [*alike, SPLIT]) is None
+    assert overrun_line(OVERRUN, [*alike[1:], SPLIT]) == NEAR_MEASURED - 1
+
+
+OVERRUN_PAGES = (
+    ("Revenue grew 4% in FY2025.",),
+    (SPLIT,),
+    ("Documents to perfect the Liens.",),
+)
+
+
+def test_an_overrun_is_hinted_before_a_near_miss_from_delivered_lines_only(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> None:
+    """F496: a quote running past the end of a delivered line is still
+    refused (invariant 11), and the retry is told that line's page and last
+    words rather than the near miss it also is; with that page not
+    delivered, the quote is absent and the page is never read (D82's M2)."""
+    from caos.evidence.citations import TokenIndex, near_line
+    from caos.methodology.canonical import _line_hint
+    from caos.methodology.executor import Delivery
+    from caos.methodology.handoff import END_WORDS, LineHint
+
+    conn, case_id = case
+    source_id = _ingest_pdf(conn, case_id, tmp_path, _pages_pdf(OVERRUN_PAGES))
+    every = [
+        Delivery(source_id, block_id, page, BoundaryText.of(text))
+        for page, blocks in _blocks_by_page(conn, source_id).items()
+        for block_id, text in blocks.items()
+    ]
+    assert SPLIT in {d.text.value for d in every}
+    assert near_line(OVERRUN, [d.text.value for d in every]) is not None
+    assert _code(conn, source_id, OVERRUN) is RefusalCode.CITATION_NOT_LOCATED
+
+    def hint(delivered: list[Delivery], index: TokenIndex, page: int) -> LineHint:
+        blocks = {source_id: frozenset(d.block_id for d in delivered)}
+        citation = Citation(source_id, page, OVERRUN)
+        return _line_hint(conn, delivered, blocks, citation, index)
+
+    ends = " ".join(SPLIT.split()[-END_WORDS:])
+    assert hint(every, TokenIndex(), 2) == LineHint(near=2, ends=ends)
+    assert hint(every, TokenIndex(), 1) == LineHint(near=2, moved=True, ends=ends)
+    index = TokenIndex()
+    withheld = [d for d in every if d.page != 2]
+    assert hint(withheld, index, 1) == LineHint(absent=True)
+    assert (source_id, 2) not in index.pages
+
+
+def test_placing_an_overrun_stays_linear_in_the_lines_delivered() -> None:
+    """F496, bounded as F493: 360 delivered pages of 30 lines are searched in
+    one pass; lines holding the quote's first words are checked at most
+    `NEAR_MEASURED` times, each check linear in words."""
+    import time
+
+    from caos.evidence.citations import NEAR_MEASURED, NEAR_WORDS, overrun_line
+
+    tail = " ".join(f"w{n}" for n in range(70))
+    lines = [
+        f"Page {page} line {line} {tail}" for page in range(360) for line in range(30)
+    ]
+    lines[5000] = SPLIT
+    started = time.perf_counter()
+    assert overrun_line(OVERRUN, lines) == 5000
+    unrelated = time.perf_counter() - started
+    head = " ".join(SPLIT.split()[:NEAR_WORDS])
+    alike = [f"{head} {tail}" for _ in range(360 * 30)]
+    started = time.perf_counter()
+    assert overrun_line(OVERRUN, [*alike, SPLIT]) is None
+    shared = time.perf_counter() - started
+    assert NEAR_MEASURED == 64
+    assert unrelated < 0.5 and shared < 0.5
