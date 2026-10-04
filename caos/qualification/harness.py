@@ -98,6 +98,7 @@ from caos.qualification.matrix import (
     assert_measurable,
     assert_unambiguous,
     build_matrix,
+    key_lines,
     qualification_set_digest,
     unlocatable_register_keys,
 )
@@ -863,8 +864,10 @@ def _answerable(bundle: Bundle, qualification: QualificationSet) -> None:
             sha256(document.data).hexdigest(): document.data
             for document in case.documents
         }
+        # A key's alternatives (D101) are held to its own line's two checks.
+        lines = [line for expect in case.expects for line in key_lines(expect)]
         if (
-            any(expect.document_sha256 not in by_digest for expect in case.expects)
+            any(document not in by_digest for document, _quote in lines)
             or (case.forecast is not None and not case.model_extension)
             # A refusal outside the methodology's own is a key about the host or
             # its infrastructure, which no run can be measured against (FP-01).
@@ -873,8 +876,7 @@ def _answerable(bundle: Bundle, qualification: QualificationSet) -> None:
                 and case.expected_refusal not in DECLARABLE_REFUSALS
             )
             or any(
-                not _locatable(by_digest[expect.document_sha256], expect.matched_text)
-                for expect in case.expects
+                not _locatable(by_digest[document], quote) for document, quote in lines
             )
         ):
             raise Refusal(RefusalCode.QUALIFICATION_KEY_UNANSWERABLE)
