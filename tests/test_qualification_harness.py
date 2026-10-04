@@ -1528,10 +1528,13 @@ def test_the_last_attempt_is_the_last_by_ordinal_not_by_clock(
             # carries, or `_answerable` refuses before any run starts. The
             # model still cites the module's usual QUOTE regardless of the
             # key, and this document never carries that one -- which is the
-            # real, run-time CITATION_NOT_LOCATED this test is about.
+            # real, run-time CITATION_NOT_LOCATED this test is about. Since
+            # D106 only a Blocked answer is refused for it (c-5b's guard),
+            # so CP-0 answers Blocked.
             QualificationSet(
                 cases=(_case("stale", no_quote, quote="Revenue grew in the year"),)
             ),
+            completions=_Completions(qa_by_module={"CP-0": "Blocked"}),
         )
         [record] = performed.performed
         assert record.stopped is RefusalCode.CITATION_NOT_LOCATED

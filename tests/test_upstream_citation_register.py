@@ -38,7 +38,15 @@ from canonical_fixtures import (
     wire,
 )
 from lite_route_fixtures import CONFLICT_TEXT, RealisticLiteCompletions
-from test_canonical_execution import _accept, _node, _refused, _reserved, _run, route
+from test_canonical_execution import (
+    _accept,
+    _node,
+    _record,
+    _refused,
+    _reserved,
+    _run,
+    route,
+)
 from test_canonical_runtime import _answers, _module_provider, _run_route
 from test_execution_freshness import _Harness, harness
 from test_handoff_invocation import ANCHORED, LITE_ROUTE, _delivered
@@ -145,12 +153,18 @@ def test_upstream_text_and_citation_register_are_never_evidence(
     harness: _Harness, quote: str
 ) -> None:
     """Invariant 11 for the chain: CP-L10 quoting words that reached its prompt
-    only inside CP-0's Markdown or the register is refused; the register never
-    joins the evidence a citation anchors against."""
+    only inside CP-0's Markdown or the register is never anchored; the register
+    never joins the evidence a citation anchors against. Since D106 the
+    answer is accepted with that citation unverified."""
     attempt, gate = _run(harness, "CP-0", CanonicalCompletions(harness.source_id))
     _accept(harness, attempt, gate)
     quoting = _Quoting(harness.source_id, quote)
-    assert _refused(harness, "CP-L10", quoting) is RefusalCode.CITATION_NOT_LOCATED
+    _attempt, screen = _run(harness, "CP-L10", quoting)
+    record = _record(harness, screen)
+    assert record.citations == ()
+    assert [(u.matched_text, u.code) for u in record.unverified] == [
+        (quote, RefusalCode.CITATION_NOT_LOCATED)
+    ]
     [prompt] = quoting.prompts
     assert quote not in prompt[prompt.index("\n--- EVIDENCE ") :]
     assert quote in (prompt if quote == UNANCHORED else _register(prompt))
@@ -283,7 +297,10 @@ def test_a_blocked_or_refused_attempt_never_reaches_a_consumer_prompt(
     screens = [_reserved(harness, "CP-L10") for _ in range(3)]
     probes = [_reserved(harness, "CP-5") for _ in range(2)]
     blocked = CanonicalCompletions(harness.source_id, qa_status="Blocked")
-    unanchored = CanonicalCompletions(harness.source_id, quotes=(UNANCHORED,))
+    # A Blocked answer on an unanchored quote: still refused under D106.
+    unanchored = CanonicalCompletions(
+        harness.source_id, quotes=(UNANCHORED,), qa_status="Blocked"
+    )
     for screen, answers, code in (
         (screens[0], blocked, RefusalCode.HANDOFF_BLOCKED),
         (screens[1], unanchored, RefusalCode.CITATION_NOT_LOCATED),

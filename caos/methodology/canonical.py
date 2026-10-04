@@ -9,9 +9,11 @@ analysis, with the exact response body addressed as the call's diagnostic
 a crash the answer is accepted, blocked or explained from it, never paid for
 again (`replay_billed`, brief 4.3 D7).
 Then the handoff must be the vendor's conforming Markdown for exactly this
-invocation, and every citation must anchor in the delivered evidence: one that
-does not refuses the whole handoff, since the Markdown cannot be edited to drop
-what rests on it (§41.3).
+invocation. Each citation is anchored in the delivered evidence or kept as
+unverified beside it, in a list of its own (D106): a citation's fault refuses
+the citation, never the answer, so invariant 11's "coordinate-anchored or
+refused" holds of every citation and the record's anchored list holds only
+anchored ones.
 """
 
 from __future__ import annotations
@@ -60,16 +62,19 @@ from caos.methodology.executor import (
     _stored_identity,
 )
 from caos.methodology.handoff import (
+    ADVISORY,
     END_WORDS,
     GATE_MODULE,
     HINT_WORDS,
     MAX_FEEDBACK_CITATIONS,
     MAX_TRANSPORT_CHARS,
+    UNVERIFIED_CODES,
     CanonicalRecord,
     HostIdentity,
     LineageRef,
     LineHint,
     Projections,
+    UnverifiedCitation,
     UpstreamRef,
     _bounded,
     anchoring_line,
@@ -82,6 +87,7 @@ from caos.methodology.handoff import (
     readiness_set_line,
     record_bytes,
     stored_lineage,
+    unverified_citation,
     validate_markdown,
 )
 from caos.methodology.invocation import (
@@ -425,10 +431,6 @@ def _answer(  # noqa: PLR0913 -- one recorded answer, keyword-only
     # pre-call reading is this unit's too, without a second query.
     blocks = _by_source(context.delivered)
     markdown, citations, linked = parse_response(content)
-    if any(citation.source_id not in blocks for citation in citations):
-        raise Refusal(RefusalCode.CITATION_NOT_DELIVERED)
-    if not all(linked):
-        raise Refusal(RefusalCode.HANDOFF_MALFORMED)
     authority = assemble_authority(bundle, assignment.module_id)
     projections = _unless_blocked(
         lambda: validate_markdown(
@@ -440,14 +442,17 @@ def _answer(  # noqa: PLR0913 -- one recorded answer, keyword-only
             gate_expects=gate_expects(assignment.route, assignment.node),
         )
     )
+    # Each quote must be an excerpt of one evidence line, as the final check
+    # says (D105); one that is not is kept as unverified, never the answer's
+    # refusal (D106).
+    anchored, unverified = _partitioned(conn, blocks, citations, linked)
     # A Blocked verdict ends the run only once its quotes are verified: an
-    # unanchorable Blocked handoff is an ordinary refusal (c-5b, P3-2). Each
-    # quote must be an excerpt of one evidence line, as the final check says
-    # (D105).
-    anchored = verify_citations(
-        conn, delivered=blocks, citations=citations, rule=EXCERPT
-    )
+    # unanchorable Blocked handoff is an ordinary refusal (c-5b, P3-2), by
+    # its first unverified quote's code. D106 keeps this guard: a run ends
+    # on no unverified quote.
     if projections is None:
+        if unverified:
+            raise Refusal(unverified[0].code)
         raise Refusal(RefusalCode.HANDOFF_BLOCKED)
     # F494: every consumer measures these bytes against the upstream bound
     # (`invocation._upstream_section`), so a handoff over it would be accepted
@@ -472,10 +477,36 @@ def _answer(  # noqa: PLR0913 -- one recorded answer, keyword-only
         identity=identity,
         lineage=context.lineage,
         projections=projections,
-        citations=tuple(anchored),
+        citations=anchored,
         citation_rule=EXCERPT,
+        unverified=unverified,
     )
     return markdown, _written(record)
+
+
+def _partitioned(
+    conn: StoreConnection,
+    blocks: dict[UUID, frozenset[str]],
+    citations: Sequence[Citation],
+    linked: Sequence[bool],
+) -> tuple[tuple[AnchoredCitation, ...], tuple[UnverifiedCitation, ...]]:
+    """An answer's citations, in order, as anchored -- host-verified under
+    `EXCERPT` (D105), flagged not linked to a statement where the body does
+    not carry the quote -- and unverified: the module's own locator and
+    quote with the anchoring refusal that left it so (D106). Each is judged
+    alone (`_judged`), so one citation's verdict never moves another's. A
+    quote that cannot be kept as unverified (`unverified_citation`) refuses
+    `HANDOFF_MALFORMED`, a host text check."""
+    anchored: list[AnchoredCitation] = []
+    unverified: list[UnverifiedCitation] = []
+    for citation, held, found in zip(
+        citations, linked, _judged(conn, blocks, citations, TokenIndex()), strict=True
+    ):
+        if isinstance(found, AnchoredCitation):
+            anchored.append(found if held else replace(found, linked=False))
+        else:
+            unverified.append(unverified_citation(citation, found))
+    return tuple(anchored), tuple(unverified)
 
 
 def _written(record: CanonicalRecord) -> bytes:
@@ -819,30 +850,22 @@ def _driver_line(
     return driver_line(contract, markdown, owner)
 
 
-# Anchoring's own refusals: a quote not on its cited page, on it more than
-# once, or on a line the node was not given.
-_ANCHORING_CODES = frozenset(
-    {
-        RefusalCode.CITATION_NOT_LOCATED,
-        RefusalCode.CITATION_AMBIGUOUS,
-        RefusalCode.CITATION_NOT_DELIVERED,
-    }
-)
 # The refusals whose checks a guided retry can be told of (D30, N52, D82): the
 # validator's and the host's own (`HANDOFF_MALFORMED`), the completeness
-# checker's (`HANDOFF_INCOMPLETE`), anchoring's, and -- owner-approved on
-# 2026-09-23 (G1-16) -- a host-owned field copied wrong or a field no handoff
-# may carry, each told by field name (`handoff._front_matter_lines`).
-SECOND_ATTEMPT_CODES = (
-    frozenset(
-        {
-            RefusalCode.HANDOFF_MALFORMED,
-            RefusalCode.HANDOFF_INCOMPLETE,
-            RefusalCode.HANDOFF_IDENTITY_MISMATCH,
-            RefusalCode.HANDOFF_UNDECLARED_FIELD,
-        }
-    )
-    | _ANCHORING_CODES
+# checker's (`HANDOFF_INCOMPLETE`), and -- owner-approved on 2026-09-23
+# (G1-16) -- a host-owned field copied wrong or a field no handoff may carry,
+# each told by field name (`handoff._front_matter_lines`). Anchoring's own
+# codes left it with D106: a citation that does not anchor no longer refuses
+# an accepted answer, and its lines ride a retry another check earned only as
+# advice (`handoff.ADVISORY`). The one answer that still refuses on one, a
+# Blocked handoff (`_answer`), gets an ordinary attempt, not a guided one.
+SECOND_ATTEMPT_CODES = frozenset(
+    {
+        RefusalCode.HANDOFF_MALFORMED,
+        RefusalCode.HANDOFF_INCOMPLETE,
+        RefusalCode.HANDOFF_IDENTITY_MISMATCH,
+        RefusalCode.HANDOFF_UNDECLARED_FIELD,
+    }
 )
 # How many guided retries one node gets (D82 and its amendment of 4 October
 # 2026; D30 gave one): its 2nd, 3rd and 4th attempts, each told what the
@@ -902,7 +925,8 @@ def _anchoring_line(
 ) -> str | None:
     """The host anchoring line a retry carries (`anchoring_line`): each
     citation's verdict, and where the host's own search places each refused
-    `CITATION_NOT_LOCATED` among what the node was given (D82)."""
+    `CITATION_NOT_LOCATED` among what the node was given (D82), marked
+    advisory (`ADVISORY`, D106)."""
     index = TokenIndex()
     blocks = _by_source(delivered)
     verdicts = _anchoring(conn, blocks, citations, index)
@@ -937,7 +961,9 @@ def _anchoring_line(
                 unknown_source=str(source),
                 held_by=str(next(iter(held))) if len(held) == 1 else "",
             )
-    return anchoring_line(verdicts, hints)
+    line = anchoring_line(verdicts, hints)
+    # Advice beside a retry another check earned, never its reason (D106).
+    return None if line is None else line + ADVISORY
 
 
 def _whole_on_its_page(delivered: Sequence[Delivery], citation: Citation) -> bool:
@@ -972,12 +998,29 @@ def _anchoring(
     citations: Sequence[Citation],
     index: TokenIndex,
 ) -> list[RefusalCode | None]:
-    """Each citation's own anchoring verdict, by the rule the answer was
-    judged by (`verify_citations`), one at a time so every one is named."""
-    verdicts: list[RefusalCode | None] = []
+    """Each citation's own anchoring refusal (`_judged`), None for one that
+    anchored."""
+    return [
+        None if isinstance(found, AnchoredCitation) else found
+        for found in _judged(conn, blocks, citations, index)
+    ]
+
+
+def _judged(
+    conn: StoreConnection,
+    blocks: dict[UUID, frozenset[str]],
+    citations: Sequence[Citation],
+    index: TokenIndex,
+) -> list[AnchoredCitation | RefusalCode]:
+    """Each citation anchored by the rule an answer is judged by
+    (`verify_citations` under `EXCERPT`), or its own anchoring refusal
+    (`UNVERIFIED_CODES`), one at a time so every one is named. Any other
+    refusal -- the store, a source whose blocks no longer read -- is raised:
+    it is not the citation's fault."""
+    verdicts: list[AnchoredCitation | RefusalCode] = []
     for citation in citations:
         try:
-            verify_citations(
+            [found] = verify_citations(
                 conn,
                 delivered=blocks,
                 citations=(citation,),
@@ -985,11 +1028,11 @@ def _anchoring(
                 rule=EXCERPT,
             )
         except Refusal as refused:
-            if refused.code not in _ANCHORING_CODES:
+            if refused.code not in UNVERIFIED_CODES:
                 raise
             verdicts.append(refused.code)
         else:
-            verdicts.append(None)
+            verdicts.append(found)
     return verdicts
 
 

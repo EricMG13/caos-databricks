@@ -133,6 +133,22 @@ def _run_route(harness: _Harness, provider: Provider) -> RefusalCode | None:
     return None
 
 
+def _kept_unverified(harness: _Harness, route_node_id: str, quote: str) -> None:
+    """D106: the node was accepted, `quote` kept in its record as unverified
+    (`CITATION_NOT_LOCATED`) and never among its anchored citations."""
+    with connect(harness.url) as observer:
+        row = observer.execute(
+            "SELECT record_sha256 FROM artifacts WHERE run_id=%s AND route_node_id=%s",
+            (harness.run_id, route_node_id),
+        ).fetchone()
+    assert row is not None, "accepted, not refused, for a citation fault"
+    record = _decoded_record(harness.blobs.get(str(row[0])))
+    assert quote not in {c.matched_text for c in record.citations}
+    assert [(u.matched_text, u.code) for u in record.unverified] == [
+        (quote, RefusalCode.CITATION_NOT_LOCATED)
+    ]
+
+
 def _status(harness: _Harness) -> str:
     with connect(harness.url) as observer:
         row = observer.execute(
@@ -318,14 +334,15 @@ def _attempt_of(harness: _Harness, module_id: str) -> UUID:
 def test_an_unanchorable_blocked_handoff_is_an_ordinary_refusal(
     harness: _Harness,
 ) -> None:
-    """Quotes are anchored before Blocked is honoured (c-5b, P3-2)."""
+    """Quotes are anchored before Blocked is honoured (c-5b, P3-2), and
+    D106 keeps that: a run ends on no unverified quote."""
     answers = CanonicalCompletions(
         harness.source_id, qa_status="Blocked", quotes=(UNANCHORED,)
     )
     code = _run_route(harness, _module_provider(harness, answers))
     assert code is RefusalCode.CITATION_NOT_LOCATED
-    # N52, D82: anchoring's refusal earns three guided retries, refused the same way.
-    assert _counts(harness) == (4, [REPORTED] * 4, 0, 4, 4)
+    # D106: anchoring's codes earn no guided retry any more (D82 amended).
+    assert _counts(harness) == (1, [REPORTED], 0, 1, 1)
     _still_running(harness)
     assert _events(harness, "RUN_BLOCKED") == 0
 
