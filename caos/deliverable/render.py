@@ -35,6 +35,10 @@ from typing import Any
 PENDING = "PENDING APPROVAL"
 # A pathway scope that is a screen, never committee clearance (`handoff.py`).
 SCREENING_ONLY = "SCREENING_ONLY"
+# The rule every record written before one was recorded was accepted under,
+# and the two under which a quote is its own whole line (`citations.py`).
+ANY_RUN = "any-run"
+_WHOLE_LINE_RULES = frozenset({"whole-line", "whole-line-as-shown"})
 
 
 class RenderRefused(ValueError):
@@ -64,7 +68,7 @@ def render(payload: Mapping[str, Any]) -> bytes:
     # A narrative figure is one of these citations (`verify_package` holds it
     # to the record's copy), so the line it anchored in is read from there.
     cited = {
-        str(artifact.get("route_node_id")): view.citations
+        str(artifact.get("route_node_id")): view
         for artifact, view in zip(artifacts, views, strict=True)
     }
     narrative = _narrative(payload.get("narrative"), cited)
@@ -101,18 +105,37 @@ def render(payload: Mapping[str, Any]) -> bytes:
 
 
 class _Handoff:
-    """One canonical artifact as the page shows it, read from its record."""
+    """One canonical artifact as the page shows it, read from its record:
+    its anchored `citations`, its `unverified` ones (D106; absent is none)
+    and the rule its quotes were accepted under (absent is `ANY_RUN`, every
+    record written before the rule was recorded)."""
 
-    __slots__ = ("citations", "markdown", "projections", "provenance")
+    __slots__ = (
+        "citations",
+        "markdown",
+        "projections",
+        "provenance",
+        "rule",
+        "unverified",
+    )
 
     def __init__(self, markdown: str, record: Mapping[str, Any]) -> None:
         self.markdown = markdown
         projections = record.get("projections")
         citations = record.get("citations")
-        if not isinstance(projections, Mapping) or not isinstance(citations, list):
+        unverified = record.get("unverified", [])
+        rule = record.get("citation_rule", ANY_RUN)
+        if (
+            not isinstance(projections, Mapping)
+            or not isinstance(citations, list)
+            or not isinstance(unverified, list)
+            or not isinstance(rule, str)
+        ):
             raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
         self.projections = projections
         self.citations = citations
+        self.unverified = unverified
+        self.rule = rule
         self.provenance = {
             "module_id": _text(projections, "module_id"),
             "build_id": _text(record, "build_id"),
@@ -163,7 +186,9 @@ def _handoff(view: _Handoff) -> str:
     flags = facts.get("limitation_flags")
     if not isinstance(flags, list) or not all(isinstance(f, str) for f in flags):
         raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
-    if not view.citations:
+    # A module whose every citation is unverified still renders, each one
+    # labelled (D106); one that cites nothing at all does not.
+    if not view.citations and not view.unverified:
         raise RenderRefused("DELIVERABLE_UNCITED_FIGURE")
     screen = (
         '<p class="status">SCREENING ONLY: a screen, not committee clearance</p>\n'
@@ -186,9 +211,15 @@ def _handoff(view: _Handoff) -> str:
         # §45.6: what the host verified, what the model wrote, what the host
         # computed -- in that order, never mixed.
         "<h3>Source facts (host-verified citations)</h3>\n"
-        + "\n".join(
-            _citation(citation, _line_of(citation)) for citation in view.citations
+        + (
+            "\n".join(
+                _citation(citation, _line_of(citation), view.rule)
+                for citation in view.citations
+            )
+            if view.citations
+            else "<p>None: no citation of this module was located by the host.</p>"
         )
+        + _unverified_list(view.unverified)
         + "\n<h3>Analysis (model-authored, not host-verified)</h3>\n"
         # The elements of `ELEMENTS`, every authored character escaped inside
         # them: committee layout, with nothing the model wrote reaching the
@@ -551,19 +582,21 @@ def _delimiter(piece: str, pieces: list[str], position: int, marks: list[str]) -
     return escape(piece)
 
 
-def _citation(citation: object, line: object = None) -> str:
+def _citation(citation: object, line: object = None, rule: str = ANY_RUN) -> str:
     """One host-verified citation: the whole line it anchored in, its excerpt
     marked (D105).
 
     `line` is the record's `line_text`, the evidence line an `EXCERPT` quote
     is part of; a record accepted under an earlier rule keeps none, and its
-    quote is shown alone, byte for byte as it always was -- under either
-    whole-line rule the quote is its line, and under `ANY_RUN` it is the run
-    the record holds, its line never recorded. An excerpt is never shown
-    without the line around it: a qualifier just outside eight words ("not",
-    "provided that", a row's label) is the reader's to see (AI-4). The line
-    is shown whole, however long: a shown line is at most one evidence block
-    wide.
+    quote is shown alone -- under either whole-line rule the quote is its
+    line, and under `ANY_RUN` it is the run the record holds, its line never
+    recorded, so it is labelled a quote and never taken for a source line
+    (F504). An excerpt is never shown without the line around it: a qualifier
+    just outside eight words ("not", "provided that", a row's label) is the
+    reader's to see (AI-4). The line is shown whole, however long: a shown
+    line is at most one evidence block wide. A citation the answer's body
+    does not carry (`linked` false, D106) is still host-verified, and says
+    it supports no statement in the answer.
     """
     if not isinstance(citation, Mapping):
         raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
@@ -572,17 +605,75 @@ def _citation(citation: object, line: object = None) -> str:
     page = _page(citation)
     if line is not None and (not isinstance(line, str) or not line):
         raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
+    if citation.get("linked", True) not in (True, False):
+        raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
     shown = escape(quote)
+    label = "" if rule in _WHOLE_LINE_RULES else _QUOTE_LABEL
     if line is not None:
+        label = ""
         before, excerpt, after = traced_line(line, quote)
         shown = (
             f"{escape(before)}{_MARK}{escape(excerpt)}</mark>{escape(after)}"
             if excerpt and (before or after)
             else escape(line)
         )
+    unlinked = (
+        " · not linked to a statement in the answer"
+        if citation.get("linked", True) is False
+        else ""
+    )
     return (
-        f"<blockquote>{shown}</blockquote>\n"
-        f'<p class="cite">{document} · page {page}</p>'
+        f"{label}<blockquote>{shown}</blockquote>\n"
+        f'<p class="cite">{document} · page {page}{unlinked}</p>'
+    )
+
+
+# An `ANY_RUN` quote is any unique run of its page: no line was recorded, so
+# it is shown as a quote, as the workspace shows it (F504).
+_QUOTE_LABEL = '<p class="cite">Quote (source line not recorded)</p>\n'
+
+# Why a citation is unverified (D106), in the reader's words: the anchoring
+# refusal that left it so (`handoff.UNVERIFIED_CODES`).
+UNVERIFIED_REASONS = {
+    "CITATION_NOT_LOCATED": "not located",
+    "CITATION_AMBIGUOUS": "ambiguous",
+    "CITATION_NOT_DELIVERED": "not in the delivered evidence",
+}
+
+
+def _unverified_list(entries: list[Any]) -> str:
+    """The module's unverified citations (D106), apart from the source facts
+    and after them; nothing at all for a module that has none, so every page
+    rendered before D106 is the same bytes."""
+    if not entries:
+        return ""
+    return (
+        "\n<h3>Unverified citations (the model's own locators and quotes)</h3>\n"
+        + "\n".join(unverified(entry) for entry in entries)
+    )
+
+
+def unverified(entry: object) -> str:
+    """One unverified citation (D106): labelled before its text, as the
+    model's quote, never marked and never placed or worded as a source line.
+    Its claim is Deploy V's lineage class "Untraced". Every character is
+    escaped: the quote is the model's, which the host could not find. One
+    the answer's body does not carry either (`linked` false) says so beside
+    its reason."""
+    if not isinstance(entry, Mapping):
+        raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
+    quote = _text(entry, "matched_text")
+    source = escape(_text(entry, "source_id"))
+    page = _page(entry)
+    reason = UNVERIFIED_REASONS.get(_text(entry, "code"))
+    if reason is None or entry.get("linked", True) not in (True, False):
+        raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
+    if entry.get("linked", True) is False:
+        reason += " · not linked to a statement in the answer"
+    return (
+        f'<p class="cite">unverified \u2013 page {page} · the model\'s quote'
+        f" · claim lineage: Untraced · {reason} · source {source}</p>\n"
+        f'<blockquote style="border-left-style:dashed">{escape(quote)}</blockquote>'
     )
 
 
@@ -690,7 +781,7 @@ def _page(citation: Mapping[str, Any]) -> str:
     return str(value)
 
 
-def _narrative(narrative: object, cited: Mapping[str, list[Any]]) -> str:
+def _narrative(narrative: object, cited: Mapping[str, _Handoff]) -> str:
     if narrative is None or narrative == []:
         return ""
     # Historical payloads remain renderable; the save boundary accepts only spans.
@@ -708,32 +799,65 @@ def _narrative(narrative: object, cited: Mapping[str, list[Any]]) -> str:
     return "<h2>Analyst narrative</h2>\n" + "".join(paragraphs)
 
 
-def _span(span: object, cited: Mapping[str, list[Any]]) -> str:
+def _span(span: object, cited: Mapping[str, _Handoff]) -> str:
+    """Prose, a figure (an anchored citation), or an unverified figure (D106,
+    owner: "Labelled unverified too"), which is shown labelled as one."""
     if isinstance(span, Mapping):
         if set(span) == {"text"} and isinstance(span["text"], str):
             return escape(span["text"])
         if set(span) == {"figure"}:
-            return _citation(span["figure"], _figure_line(span["figure"], cited))
+            return _figure(span["figure"], cited)
+        if set(span) == {"unverified"}:
+            entry = span["unverified"]
+            if not isinstance(entry, Mapping):
+                raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
+            view = cited.get(str(entry.get("route_node_id")))
+            named = _named(entry, view, "unverified_index", _UNVERIFIED_KEYS)
+            return unverified({**entry, "linked": named.get("linked", True)})
     raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
 
 
-def _figure_line(figure: object, cited: Mapping[str, list[Any]]) -> object:
-    """The `line_text` of the record citation a narrative figure names, or
-    None where the figure names none this payload carries with its own quote
-    (a payload `verify_package` reports, never a line borrowed from another)."""
+def _figure(figure: object, cited: Mapping[str, _Handoff]) -> str:
+    """A narrative figure as its record citation shows: the line it anchored
+    in and whether the answer's body carries it, both read from the record."""
     if not isinstance(figure, Mapping):
-        return None
-    index = figure.get("citation_index")
-    citations = cited.get(str(figure.get("route_node_id")), [])
-    if type(index) is not int or not 0 <= index < len(citations):
-        return None
-    citation = citations[index]
-    if not isinstance(citation, Mapping) or any(
-        citation.get(key) != figure.get(key)
-        for key in ("document_sha256", "page", "matched_text")
+        raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
+    view = cited.get(str(figure.get("route_node_id")))
+    named = _named(figure, view, "citation_index", _FIGURE_KEYS)
+    return _citation(
+        {**figure, "linked": named.get("linked", True)},
+        named.get("line_text"),
+        ANY_RUN if view is None else view.rule,
+    )
+
+
+# What a narrative figure copies from the record entry it names.
+_FIGURE_KEYS = ("document_sha256", "page", "matched_text")
+_UNVERIFIED_KEYS = ("source_id", "page", "matched_text", "code")
+
+
+def _named(
+    figure: object, view: _Handoff | None, key: str, fields: tuple[str, ...]
+) -> Mapping[str, Any]:
+    """The record entry a narrative figure names -- an anchored citation
+    (`citation_index`) or an unverified one (`unverified_index`) -- or an
+    empty mapping where the figure names none this payload carries with its
+    own copy (a payload `verify_package` reports). What the figure shows of
+    the record beyond its copy -- the line an excerpt anchored in (D105), and
+    whether the answer's body carries the quote (`linked`, D106) -- is read
+    from there, never borrowed from another entry."""
+    if not isinstance(figure, Mapping) or view is None:
+        return {}
+    index = figure.get(key)
+    entries = view.citations if key == "citation_index" else view.unverified
+    if type(index) is not int or not 0 <= index < len(entries):
+        return {}
+    entry = entries[index]
+    if not isinstance(entry, Mapping) or any(
+        entry.get(field) != figure.get(field) for field in fields
     ):
-        return None
-    return citation.get("line_text")
+        return {}
+    return entry
 
 
 def _provenance(artifacts: Sequence[object]) -> str:

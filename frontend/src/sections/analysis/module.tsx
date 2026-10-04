@@ -451,6 +451,15 @@ function caveatsOf(handoff: HandoffView, read: Read | null, screening: string): 
       origin: host,
     });
   }
+  if (handoff.unverified_facts.length) {
+    const count = handoff.unverified_facts.length;
+    out.push({
+      key: "unverified",
+      title: "Unverified citations.",
+      text: `${count} of this module's citations ${count === 1 ? "was" : "were"} not located by the host; Audit lists ${count === 1 ? "it" : "them"} as the model's own quotes, labelled unverified, ${count === 1 ? "its claim" : "their claims"} Untraced.`,
+      origin: host,
+    });
+  }
   for (const [index, fact] of handoff.source_facts.entries()) {
     if (fact.withdrawn_at === null) continue;
     out.push({
@@ -783,6 +792,7 @@ export function Depth({
   tab,
   onTab,
   sourceFacts,
+  unverifiedFacts,
   documents,
 }: {
   handoff: HandoffView;
@@ -791,6 +801,9 @@ export function Depth({
   onTab: (tab: DepthTab) => void;
   /** The host-verified citations, first in the Audit tab. */
   sourceFacts: ReactNode;
+  /** The citations the host could not anchor (D106), apart and after them,
+      shown only where the handoff has any. */
+  unverifiedFacts: ReactNode;
   /** What the run rests on, second. */
   documents: ReactNode;
 }) {
@@ -889,6 +902,14 @@ export function Depth({
             </h3>
             {sourceFacts}
           </section>
+          {handoff.unverified_facts.length ? (
+            <section className="group" data-audit-part="Unverified citations">
+              <h3>
+                Unverified citations <span className="cp">the model's own locators and quotes</span>
+              </h3>
+              {unverifiedFacts}
+            </section>
+          ) : null}
           <section className="group" data-audit-part="Documents">
             <h3>
               What this run rests on <span className="cp">host-verified</span>

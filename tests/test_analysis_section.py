@@ -301,7 +301,13 @@ def test_unaccepted_nodes_make_analysis_partial_with_a_note(
     assert response.status_code == 200
     document = AnalysisDocument.model_validate(response.json())
     # The budget is linear in accepted handoffs: one here.
-    assert counter.executed == analysis_read.FIXED_IO + analysis_read.PER_HANDOFF_IO
+    # The Blocked verdict's located quotes are resolved to their sources in
+    # one query more (D106).
+    assert counter.executed == (
+        analysis_read.FIXED_IO
+        + analysis_read.PER_HANDOFF_IO
+        + analysis_read.BLOCKED_QUOTES_IO
+    )
 
     assert document.status == "partial"
     assert [note.value for note in document.notes] == ["HANDOFFS_PENDING"]
@@ -343,6 +349,11 @@ def test_the_analysis_document_names_the_node_whose_verdict_ended_the_run(
     # The node it names is one of the nodes with no handoff, which is what lets
     # a reader tell the one that answered from the two that never ran.
     assert body.blocked_by.route_node_id in {p.route_node_id for p in body.pending}
+    # D106: its quotes as the host judged them, each with its line.
+    assert body.blocked_by.quotes_recorded
+    for quote in body.blocked_by.verified:
+        line = quote.line
+        assert quote.matched_text in line.before + line.excerpt + line.after
 
 
 def test_a_run_that_is_not_blocked_names_no_blocking_node(
@@ -511,9 +522,14 @@ def test_the_analysis_request_path_declares_its_store_budget(
     )
     assert longest == analysis_read.LONGEST_ROUTE_NODES
     assert analysis_read.IO_BUDGET == (
-        analysis_read.FIXED_IO + longest * per_handoff + analysis_read.MODEL_PROOFS_IO
+        analysis_read.FIXED_IO
+        + longest * per_handoff
+        + analysis_read.MODEL_PROOFS_IO
+        + analysis_read.BLOCKED_QUOTES_IO
     )
-    assert analysis_read.BLOB_BUDGET == longest * analysis_read.PER_HANDOFF_BLOBS
+    assert analysis_read.BLOB_BUDGET == (
+        longest * analysis_read.PER_HANDOFF_BLOBS + analysis_read.BLOCKED_QUOTES_BLOBS
+    )
 
 
 def _downloads(monkeypatch: pytest.MonkeyPatch) -> list[str]:

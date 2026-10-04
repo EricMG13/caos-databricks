@@ -18,7 +18,7 @@ from canonical_route_fixtures import (
     canonical_markdown,
     route_identity,
 )
-from test_canonical_runtime import _module_provider, _run_route
+from test_canonical_runtime import _kept_unverified, _module_provider, _run_route
 from test_execution_freshness import _Harness
 from test_relative_value_route import harness, route, run_completed
 
@@ -136,21 +136,18 @@ def test_cp1_contract_refuses_a_wrong_upstream(module: str) -> None:
 
 
 @pytest.mark.parametrize("module", OWNERS)
-def test_cp1_contract_refuses_an_unanchored_quote(
+def test_cp1_contract_keeps_an_unanchored_quote_unverified(
     harness: _Harness, module: str
 ) -> None:
     answers = RouteCompletions(
         harness.source_id, quotes_by_module={module: QUOTES[module] + " fabricated"}
     )
-    assert (
-        _run_route(harness, _module_provider(harness, answers))
-        is RefusalCode.CITATION_NOT_LOCATED
+    _run_route(harness, _module_provider(harness, answers))
+    _kept_unverified(
+        harness,
+        next(n for n in ROUTE.nodes if n.module_id == module).route_node_id,
+        QUOTES[module] + " fabricated",
     )
-    node = next(n for n in ROUTE.nodes if n.module_id == module)
-    assert harness.conn.execute(
-        "SELECT count(*) FROM artifacts WHERE route_node_id=%s", (node.route_node_id,)
-    ).fetchone() == (0,)
-    harness.conn.rollback()
 
 
 @pytest.mark.parametrize("module", OWNERS)

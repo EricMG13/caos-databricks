@@ -84,7 +84,15 @@ describe("the reasons a node draws", () => {
       gate_verdict: "READY",
       awaiting_gate: false,
     };
-    const blockedBy = { route_node_id: "N5", module_id: "CP-5", attempt_id: "a" };
+    const blockedBy = {
+      route_node_id: "N5",
+      module_id: "CP-5",
+      attempt_id: "a",
+      quotes_recorded: false,
+      quotes_refusal: null,
+      verified: [],
+      unverified: [],
+    };
     expect(blockingOf(cp5, blockedBy)).toBe(true);
     expect(blockingOf({ route_node_id: "N4" }, blockedBy)).toBe(false);
     expect(blockingOf(cp5, null)).toBe(false);

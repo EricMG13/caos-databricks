@@ -177,20 +177,18 @@ def test_worker_stops_a_refused_run_with_its_code_and_releases_the_lease(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     run = queued_run(case, route, bundle, blobs)
-    completions = CanonicalCompletions(
-        run.source_id, quotes=(UNANCHORED,), price=RUN_AT
-    )
+    # An answer that is not the transport: three guided retries (D82),
+    # refused the same way, then the run stops on the code.
+    completions = CanonicalCompletions(run.source_id, content="not json", price=RUN_AT)
 
     assert drive(run, completions) == run.run_id
 
-    # N52, D82: the unanchored answer earns three guided retries, refused the
-    # same way.
     codes = run.conn.execute(
         "SELECT r.code FROM attempt_refusals r JOIN run_attempts a USING (attempt_id)"
         " WHERE a.run_id = %s",
         (run.run_id,),
     ).fetchall()
-    assert codes == [("CITATION_NOT_LOCATED",)] * 4
+    assert codes == [("HANDOFF_MALFORMED",)] * 4
     code = codes[0][0]
     assert work_row(run.conn, run.run_id) == ("STOPPED", code, None, True)
     assert run_status(run.conn, run.run_id) is RunStatus.RUNNING

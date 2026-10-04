@@ -233,6 +233,12 @@ MIGRATIONS = (
         "0043_run_price",
         Path(__file__).with_name("0043_run_price.sql").read_text(encoding="utf-8"),
     ),
+    (
+        "0044_blocking_citations",
+        Path(__file__)
+        .with_name("0044_blocking_citations.sql")
+        .read_text(encoding="utf-8"),
+    ),
 )
 
 # DL-1: the store's own schema, beside LangGraph's `caos_graph`

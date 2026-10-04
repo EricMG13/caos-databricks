@@ -114,29 +114,23 @@ Approver = Annotated[Standing, Depends(require_case_approver)]
 
 
 def _spans(narrative: list[list[NarrativeDraft]]) -> list[list[dict[str, Any]]]:
-    """The draft in the shape `save_revision` validates.
+    """The draft in the shape `save_revision` validates."""
+    return [[_span(span) for span in paragraph] for paragraph in narrative]
 
-    A span is prose or a figure and never both or neither; the wire cannot say
-    that with a closed object, so it is said here, in the request's own code.
-    """
-    drafted = []
-    for paragraph in narrative:
-        spans: list[dict[str, Any]] = []
-        for span in paragraph:
-            if (span.text is None) == (span.figure is None):
-                raise Refusal(RefusalCode.NARRATIVE_REFERENCE_INVALID)
-            spans.append(
-                {"text": span.text}
-                if span.figure is None
-                else {
-                    "figure": {
-                        "route_node_id": span.figure.route_node_id,
-                        "citation_index": span.figure.citation_index,
-                    }
-                }
-            )
-        drafted.append(spans)
-    return drafted
+
+def _span(span: NarrativeDraft) -> dict[str, Any]:
+    """A span is prose, a figure or an unverified figure (D106), exactly one;
+    the wire cannot say that with a closed object, so it is said here, in the
+    request's own code."""
+    given = {
+        "text": span.text,
+        "figure": None if span.figure is None else span.figure.model_dump(),
+        "unverified": None if span.unverified is None else span.unverified.model_dump(),
+    }
+    kept = {kind: value for kind, value in given.items() if value is not None}
+    if len(kept) != 1:
+        raise Refusal(RefusalCode.NARRATIVE_REFERENCE_INVALID)
+    return kept
 
 
 def _latest(conn: StoreConnection, case_id: UUID, run_id: UUID) -> UUID | None:

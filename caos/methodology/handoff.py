@@ -44,6 +44,7 @@ from caos.evidence.citations import (
     occurrences,
     within_line,
 )
+from caos.evidence.ingest import GROUP_WIDTH
 from caos.graph.route import MODEL_MODULE
 from caos.methodology.vendor import VendorContract
 from caos.provider import MAX_RESPONSE_BYTES
@@ -759,6 +760,14 @@ def validate_markdown(  # noqa: PLR0913 -- the brief's pure signature
 WIRE_KEYS = frozenset({"canonical_markdown", "citations"})
 WIRE_CITATION_KEYS = frozenset({"source_id", "page", "matched_text"})
 RECORD_FORMAT = "caos-canonical-record-v2"
+# What the record codec reads and writes (`record_bytes`, `_decoded_record`),
+# raised whenever a record this build writes is one an older build would
+# refuse: 1 since D106 (`unverified`, `linked`). A build with another value,
+# or none, cannot read this build's records, so `scripts/rollback_check.py`
+# refuses a rollback across a change of it.
+RECORD_CODEC_VERSION = 1
+# A validated Blocked answer's citations, judged as any answer's (D106).
+BLOCKED_FORMAT = "caos-blocked-citations-v1"
 # A body may carry the largest Markdown the host accepts plus its citations
 # and the JSON wrapper. Sized from `MAX_RESPONSE_BYTES` (D45's handoff bound)
 # rather than from the vendor's file-read ceiling, `MAX_FILE_BYTES` (nothing
@@ -775,6 +784,60 @@ MAX_PAGE = 2**31 - 1  # the store's integer page
 # spent about a minute of worker time each time, which is what makes health
 # report `WORKERS_STALE` (AI-5). A real handoff's Evidence Trace carries tens.
 MAX_CITATIONS = 512
+# The anchoring refusals that leave a citation unverified rather than refuse
+# its answer (D106): a quote on no line of its cited page, on it more than
+# once, or on evidence the node was not given.
+UNVERIFIED_CODES = frozenset(
+    {
+        RefusalCode.CITATION_NOT_LOCATED,
+        RefusalCode.CITATION_AMBIGUOUS,
+        RefusalCode.CITATION_NOT_DELIVERED,
+    }
+)
+_UNVERIFIED_KEYS = WIRE_CITATION_KEYS | {"code"}
+
+
+@dataclass(frozen=True, slots=True)
+class UnverifiedCitation:
+    """A citation of an accepted answer that did not anchor (D106): the
+    module's own locator and quote, never host-verified and never
+    re-anchored by any reader, and the anchoring refusal that made it
+    unverified (`UNVERIFIED_CODES`). Its quote has crossed `BoundaryText`
+    and hides no text (`unverified_citation`). The claim it supports is
+    Deploy V's lineage class "Untraced". `linked` is whether the body
+    carries the quote verbatim, as for an anchored citation
+    (`AnchoredCitation.linked`): written only when false."""
+
+    source_id: UUID
+    page: int
+    matched_text: str
+    code: RefusalCode
+    linked: bool = True
+
+
+def unverified_citation(
+    citation: Citation, code: RefusalCode, *, linked: bool = True
+) -> UnverifiedCitation:
+    """`citation` kept as unverified for `code` (D106), its quote as it
+    crosses `BoundaryText`, and whether the body carries it (`linked`).
+    `HANDOFF_MALFORMED` for a quote that will not cross or hides text: a
+    host text check, never a citation fault, so the answer is refused
+    rather than the quote stored or dropped."""
+    quote = _crossed(citation.matched_text)
+    if code not in UNVERIFIED_CODES or quote is None:
+        raise Refusal(RefusalCode.HANDOFF_MALFORMED)
+    return UnverifiedCitation(citation.source_id, citation.page, quote, code, linked)
+
+
+def _crossed(text: str) -> str | None:
+    """`text` as it crosses `BoundaryText` (NFC), or None when it will not,
+    hides text (AI-2), or is longer than any evidence line can be
+    (`GROUP_WIDTH`, a shown block's bound), so no excerpt of one."""
+    if hides_text(text):
+        return None
+    with suppress(Refusal):
+        return BoundaryText.of(text, limit=GROUP_WIDTH).value
+    return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -794,6 +857,13 @@ class CanonicalRecord:
     `WHOLE_LINE` for one accepted under its second (W6, N13), and `EXCERPT`
     for one accepted since D105, whose citations each keep the line they
     anchored in (`AnchoredCitation.line_text`).
+
+    `citations` holds anchored citations only, each host-verified, and
+    `unverified` the answer's citations that did not anchor (D106), apart
+    and never mixed in: `_lines_held` holds `citations` alone, and no
+    reader re-anchors `unverified`. Since D106 either list may be empty but
+    not both; only an `EXCERPT` record holds an unverified citation or an
+    anchored one not linked to a statement (`AnchoredCitation.linked`).
     """
 
     artifact_sha256: str
@@ -808,6 +878,7 @@ class CanonicalRecord:
     projections: Projections
     citations: tuple[AnchoredCitation, ...]
     citation_rule: CitationRule = ANY_RUN
+    unverified: tuple[UnverifiedCitation, ...] = ()
 
 
 def _unique(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -982,29 +1053,32 @@ def _carried(window: list[str], wanted: list[str]) -> bool:
 
 
 def parse_response(
-    body: str, *, delivered: frozenset[UUID]
-) -> tuple[bytes, tuple[Citation, ...]]:
-    """The exact Markdown bytes and the citation requests beside them, or a refusal.
+    body: str,
+) -> tuple[bytes, tuple[Citation, ...], tuple[bool, ...]]:
+    """The exact Markdown bytes, the citation requests beside them, and
+    whether the body carries each quote verbatim, or a refusal.
 
     The transport is `{"canonical_markdown", "citations"}` and nothing else, at
     either level, with duplicate keys refused, and at most `MAX_CITATIONS` of
-    them. A citation must name delivered evidence and quote the Markdown
-    verbatim; one that does not refuses the whole handoff, because the Markdown
-    cannot be edited to drop what rests on it.
+    them; a transport that is not this refuses `HANDOFF_MALFORMED`. Since
+    D106 nothing else here refuses: a citation naming evidence the node was
+    not given is kept as unverified, and one the body does not carry is
+    flagged not linked to a statement (`AnchoredCitation.linked`) -- the
+    citation's fault, never the answer's.
     Anchoring in the token index needs the store and is the executor's step.
     """
     markdown, text, citations = _or_refuse(
         RefusalCode.HANDOFF_MALFORMED, lambda: _transport(body)
     )
-    if any(citation.source_id not in delivered for citation in citations):
-        raise Refusal(RefusalCode.CITATION_NOT_DELIVERED)
+    return markdown, citations, _linked(text, citations)
+
+
+def _linked(text: str, citations: Sequence[Citation]) -> tuple[bool, ...]:
+    """Whether the body after the front matter carries each quote verbatim,
+    typography aside (`_quoted`), in order."""
     words = _body_words(text)
     openings = _openings(words)
-    if any(
-        not _quoted(words, openings, citation.matched_text) for citation in citations
-    ):
-        raise Refusal(RefusalCode.HANDOFF_MALFORMED)
-    return markdown, citations
+    return tuple(_quoted(words, openings, c.matched_text) for c in citations)
 
 
 # What a node's guided retry may carry (D30, D82): at most this many checks,
@@ -1079,6 +1153,7 @@ def feedback_lines(
     checked = _checked(contract, catalog, identity, markdown)
     host = (
         _text_line(markdown),
+        _uncrossed_line(citations),
         _quote_line(text, citations),
         *_front_matter_lines(contract, identity, getattr(checked, "fields", None)),
         _absent_ids_line(contract, identity.module_id, text, skill),
@@ -1313,23 +1388,46 @@ def _transport_or_reason(
     return None, _TRANSPORT_SHAPE
 
 
+def _uncrossed_line(citations: Sequence[Citation]) -> str | None:
+    """Which citations' quotes the host could not keep as unverified
+    (`unverified_citation`), by number and never quoted: a host text check
+    that refuses the answer (D106)."""
+    failed = [n for n, c in enumerate(citations, 1) if _crossed(c.matched_text) is None]
+    if not failed:
+        return None
+    verb = "carries" if len(failed) == 1 else "carry"
+    return (
+        f"host citation check: {_numbered(failed)} of {len(citations)} {verb} a"
+        " control, bidirectional, surrogate or invisible character, or runs"
+        f" past {GROUP_WIDTH:,} characters, longer than any evidence line; copy"
+        " each excerpt as the evidence shows it (numbered from 1 in the order"
+        " given)"
+    )
+
+
 def _quote_line(text: str, citations: Sequence[Citation]) -> str | None:
-    """Which citations the body does not quote verbatim, by number (N51)."""
-    words = _body_words(text)
-    openings = _openings(words)
-    failed = [
-        number
-        for number, citation in enumerate(citations, 1)
-        if not _quoted(words, openings, citation.matched_text)
-    ]
+    """Which citations the body does not quote verbatim, by number (N51).
+    Advisory since D106: such a citation is kept, not linked to a
+    statement, and never refuses an answer, so the line rides only along
+    a retry some other check earned (`ADVISORY`)."""
+    linked = _linked(text, citations)
+    failed = [number for number, held in enumerate(linked, 1) if not held]
     if not failed:
         return None
     verb = "quotes" if len(failed) == 1 else "quote"
     return (
         f"host citation check: {_numbered(failed)} of {len(citations)} {verb} text"
         " that does not appear verbatim in the Markdown body (numbered from 1 in"
-        " the order given)"
+        f" the order given){ADVISORY}"
     )
+
+
+# What closes each citation line a retry carries (D106): advisory, never the
+# reason the answer was refused.
+ADVISORY = (
+    "; advisory only: the host keeps such a citation, marked unverified or not"
+    " linked to a statement, and does not refuse an answer for it"
+)
 
 
 def _numbered(failed: Sequence[int]) -> str:
@@ -1448,6 +1546,11 @@ def anchoring_line(
     a retry that rewrote its whole citation list traded each fixed quote for
     a new partial one. Past `MAX_ANCHORING_CHARS` the kept list is dropped
     first, before any placement; the rule stays.
+
+    Advisory since D106: a citation that does not anchor is kept as
+    unverified and never refuses an answer, so the retry that carries this
+    line was earned by another check, and says so (`canonical._anchoring_line`
+    adds `ADVISORY`).
     """
     kept = [n for n, found in enumerate(verdicts, 1) if found is None]
     lost = [
@@ -1804,9 +1907,12 @@ def record_bytes(record: CanonicalRecord) -> bytes:
     for every citation of an `EXCERPT` record and for no other
     (`_lines_held`), so every record stored before it is the same bytes; a
     record `_lines_held` refuses raises `ValueError` rather than being
-    written without its lines.
+    written without its lines. D106's two fields likewise (`_held`): a
+    citation's `linked` is written only when false, and `unverified` only
+    when it has entries, so every record stored before them is the same
+    bytes.
     """
-    _lines_held(record.citations, record.citation_rule)
+    _held(record.citations, record.unverified, record.citation_rule)
     document: dict[str, Any] = {"format": RECORD_FORMAT, **asdict(record)}
     if not document["projections"]["blockers"]:
         del document["projections"]["blockers"]
@@ -1815,13 +1921,83 @@ def record_bytes(record: CanonicalRecord) -> bytes:
     if document["identity"]["research_brief"] is None:
         del document["identity"]["research_brief"]
     for citation in document["citations"]:
-        if citation["cited_page"] is None:
-            del citation["cited_page"]
-        if record.citation_rule != EXCERPT:
-            del citation["line_text"]
-        for box in citation["bboxes"]:
-            box.update({key: float(box[key]) for key in ("x0", "y0", "x1", "y1")})
+        _written_citation(citation, record.citation_rule)
+    document["unverified"] = [_unverified_document(e) for e in record.unverified]
+    if not document["unverified"]:
+        del document["unverified"]
     return canonical_json(document).encode("utf-8")
+
+
+def _unverified_document(entry: UnverifiedCitation) -> dict[str, Any]:
+    """One unverified citation as written: `linked` only when false (D106)."""
+    document: dict[str, Any] = {
+        "source_id": str(entry.source_id),
+        "page": entry.page,
+        "matched_text": entry.matched_text,
+        "code": entry.code.value,
+    }
+    if not entry.linked:
+        document["linked"] = False
+    return document
+
+
+def blocked_citations_bytes(
+    citations: tuple[AnchoredCitation, ...], unverified: tuple[UnverifiedCitation, ...]
+) -> bytes:
+    """A validated Blocked answer's citations as the host judged them (D106):
+    its anchored ones, each with its line and `linked` as a record writes
+    them, and its unverified ones, both lists always written. A Blocked
+    answer writes no record, so this is what the blocked view reads to show
+    each quote verified or unverified (`read_blocked_citations`)."""
+    _held(citations, unverified, EXCERPT)
+    anchored = [asdict(citation) for citation in citations]
+    for citation in anchored:
+        _written_citation(citation, EXCERPT)
+    return canonical_json(
+        {
+            "format": BLOCKED_FORMAT,
+            "citation_rule": EXCERPT,
+            "citations": anchored,
+            "unverified": [_unverified_document(e) for e in unverified],
+        }
+    ).encode("utf-8")
+
+
+def read_blocked_citations(
+    blobs: BlobStore, citations_sha256: str
+) -> tuple[tuple[AnchoredCitation, ...], tuple[UnverifiedCitation, ...]]:
+    """The citations `blocked_citations_bytes` stored, or
+    `ARTIFACT_RECORD_MISMATCH` for bytes that are not its canonical form."""
+
+    def read() -> tuple[tuple[AnchoredCitation, ...], tuple[UnverifiedCitation, ...]]:
+        data = blobs.get(citations_sha256)
+        document = _closed(
+            strict_json(data.decode("utf-8")),
+            frozenset({"format", "citation_rule", "citations", "unverified"}),
+        )
+        if (document["format"], document["citation_rule"]) != (BLOCKED_FORMAT, EXCERPT):
+            raise ValueError
+        citations = _each(_anchored)(document["citations"])
+        unverified = _each(_unverified)(document["unverified"])
+        if blocked_citations_bytes(citations, unverified) != data:
+            raise ValueError
+        return citations, unverified
+
+    return _or_refuse(RefusalCode.ARTIFACT_RECORD_MISMATCH, read)
+
+
+def _written_citation(citation: dict[str, Any], rule: CitationRule) -> None:
+    """One anchored citation as `record_bytes` writes it: `cited_page` only
+    when set (D94), `line_text` only under `EXCERPT` (D105), `linked` only
+    when false (D106), and every coordinate a float."""
+    if citation["cited_page"] is None:
+        del citation["cited_page"]
+    if rule != EXCERPT:
+        del citation["line_text"]
+    if citation["linked"]:
+        del citation["linked"]
+    for box in citation["bboxes"]:
+        box.update({key: float(box[key]) for key in ("x0", "y0", "x1", "y1")})
 
 
 def _exact[T](kind: type[T]) -> Callable[[object], T]:
@@ -1919,14 +2095,64 @@ def _anchored(item: object) -> AnchoredCitation:
     line = item.get("line_text")
     if "line_text" in item and (type(line) is not str or not line):
         raise ValueError
+    # Written only when false (D106): a present `true` is not this host's.
+    if "linked" in item and item["linked"] is not False:
+        raise ValueError
     return _typed(
         AnchoredCitation,
-        {**item, "cited_page": cited, "line_text": line},
+        {
+            **item,
+            "cited_page": cited,
+            "line_text": line,
+            "linked": "linked" not in item,
+        },
         page=_int,
         bboxes=_rect,
         cited_page=lambda value: value,
         line_text=lambda value: value,
+        linked=lambda value: value,
     )
+
+
+def _unverified(item: object) -> UnverifiedCitation:
+    """A stored unverified citation (D106): the wire's own checks on its
+    locator and quote (`_requested`), a quote already as it crosses
+    `BoundaryText`, one of `UNVERIFIED_CODES`, and `linked` only as false
+    (absent, linked)."""
+    if not isinstance(item, dict) or item.get("linked", False) is not False:
+        raise ValueError  # written only when false: a present `true` is not ours
+    entry = _closed({k: v for k, v in item.items() if k != "linked"}, _UNVERIFIED_KEYS)
+    citation = _requested({key: entry[key] for key in WIRE_CITATION_KEYS})
+    code = next((c for c in UNVERIFIED_CODES if entry["code"] == c.value), None)
+    if code is None or type(entry["code"]) is not str:
+        raise ValueError
+    if _crossed(citation.matched_text) != citation.matched_text:
+        raise ValueError
+    return UnverifiedCitation(
+        citation.source_id,
+        citation.page,
+        citation.matched_text,
+        code,
+        "linked" not in item,
+    )
+
+
+def _held(
+    citations: tuple[AnchoredCitation, ...],
+    unverified: tuple[UnverifiedCitation, ...],
+    rule: CitationRule,
+) -> None:
+    """`_lines_held` on the anchored citations alone, and D106's shape:
+    `ValueError` for a record with no citation of either kind or more than
+    `MAX_CITATIONS` of both, or one not under `EXCERPT` that holds an
+    unverified citation or an anchored one not linked to a statement --
+    only an answer accepted since D106 can, and it is under `EXCERPT`."""
+    _lines_held(citations, rule)
+    if not 1 <= len(citations) + len(unverified) <= MAX_CITATIONS:
+        raise ValueError
+    unlinked = any(not citation.linked for citation in citations)
+    if rule != EXCERPT and (unverified or unlinked):
+        raise ValueError
 
 
 def _lines_held(citations: tuple[AnchoredCitation, ...], rule: CitationRule) -> None:
@@ -1952,18 +2178,22 @@ def _decoded_record(data: bytes) -> CanonicalRecord:
     if not isinstance(document, dict) or document.pop("format", None) != RECORD_FORMAT:
         raise ValueError
     citations = _each(_anchored)(document.get("citations"))
-    if not citations:
+    # Written only when it has entries (D106): a present empty list is not
+    # this host's.
+    if document.get("unverified", None) == []:
         raise ValueError
+    unverified = _each(_unverified)(document.setdefault("unverified", []))
     # Only `REANCHORING_RULES` re-anchor (D94): a `cited_page` under any
     # other rule is not one this host wrote.
     rule = _citation_rule(_with_rule(document)["citation_rule"])
     reanchored = any(citation.cited_page is not None for citation in citations)
     if reanchored and rule not in REANCHORING_RULES:
         raise ValueError
-    _lines_held(citations, rule)
+    _held(citations, unverified, rule)
     return _typed(
         CanonicalRecord,
         _with_rule(document),
+        unverified=lambda _: unverified,
         citation_rule=_citation_rule,
         identity=lambda item: _typed(
             HostIdentity,

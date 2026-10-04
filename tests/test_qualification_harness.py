@@ -1527,14 +1527,16 @@ def test_the_last_attempt_is_the_last_by_ordinal_not_by_clock(
             # FP-26: the grading key's own quote must be one `no_quote` really
             # carries, or `_answerable` refuses before any run starts. The
             # model still cites the module's usual QUOTE regardless of the
-            # key, and this document never carries that one -- which is the
-            # real, run-time CITATION_NOT_LOCATED this test is about.
+            # key. The first call is refused PROVIDER_UNAVAILABLE, a refusal
+            # with no guided retry that stops the run (since D106 the module's
+            # QUOTE, which this document never carries, refuses nothing).
             QualificationSet(
                 cases=(_case("stale", no_quote, quote="Revenue grew in the year"),)
             ),
+            completions=_Completions(refuses_call=1),
         )
         [record] = performed.performed
-        assert record.stopped is RefusalCode.CITATION_NOT_LOCATED
+        assert record.stopped is RefusalCode.PROVIDER_UNAVAILABLE
         row = conn.execute(
             "SELECT route_node_id FROM run_attempts WHERE run_id=%s",
             (record.run_id,),
@@ -1549,7 +1551,7 @@ def test_the_last_attempt_is_the_last_by_ordinal_not_by_clock(
         )
         assert fail_run(conn, record.run_id)
         conn.commit()
-        met = _refusal_met(conn, record.run_id, RefusalCode.CITATION_NOT_LOCATED, None)
+        met = _refusal_met(conn, record.run_id, RefusalCode.PROVIDER_UNAVAILABLE, None)
         assert met is False
 
 

@@ -32,6 +32,7 @@ from caos.api.deps import (
     readable,
 )
 from caos.api.identity import Actor
+from caos.api.reads.analysis import blocked_by_view
 from caos.api.wire import (
     ATTEMPTS_MAX,
     RUNS_MAX,
@@ -142,18 +143,23 @@ READINESS_ROWS = 2
 # The attempt whose validated Blocked verdict ended the run, as the transition
 # recorded it (§68): one row, read only on a BLOCKED run with a pinned route.
 BLOCKED_BY_IO = 1
+# Its kept quotes' sources (D106, D107): one query beside that row.
+BLOCKED_QUOTES_IO = 1
 IO_BUDGET = (
     SECTION_READ_IO
     + BEYOND_LIST_IO
     + READINESS_ROWS * CANONICAL_READINESS_IO
     + BLOCKED_BY_IO
+    + BLOCKED_QUOTES_IO
 )
 # N35's remainder: `accepted_artifacts` reads two blobs -- the artifact and
 # its record -- per readiness row (`caos.graph.runtime`), the same shape
 # `PER_HANDOFF_BLOBS` counts for Analysis; `READINESS_ROWS` is the same
 # ceiling `CANONICAL_READINESS_IO` is scaled by above.
 PER_READINESS_BLOBS = 2
-BLOB_BUDGET = READINESS_ROWS * PER_READINESS_BLOBS
+# A Blocked run's answer's quotes (D106): one blob, beside its verdict row.
+BLOCKED_QUOTES_BLOBS = 1
+BLOB_BUDGET = READINESS_ROWS * PER_READINESS_BLOBS + BLOCKED_QUOTES_BLOBS
 
 router = APIRouter()
 
@@ -388,7 +394,7 @@ def _run_view(
     else:
         nodes = _node_views(conn, blobs, bundle, route, summary)
         if summary.status == RunStatus.BLOCKED:
-            blocked_by = _blocked_by(conn, route, run_id)
+            blocked_by = _blocked_by(conn, blobs, route, run_id)
     view = RunView(
         run_id=run_id,
         status=summary.status,
@@ -457,7 +463,7 @@ def _run_view(
 
 
 def _blocked_by(
-    conn: StoreConnection, route: ResolvedRoute, run_id: UUID
+    conn: StoreConnection, blobs: BlobStore, route: ResolvedRoute, run_id: UUID
 ) -> BlockedByView | None:
     """The node whose validated Blocked verdict ended this run, as the
     transition recorded it (§68), or None: a run the frontier emptied (§39) has
@@ -470,20 +476,14 @@ def _blocked_by(
     served under a guessed module.
     """
     row = conn.execute(
-        "SELECT v.attempt_id, a.route_node_id FROM run_blocking_verdicts v"
+        "SELECT v.attempt_id, a.route_node_id, v.citations_sha256"
+        " FROM run_blocking_verdicts v"
         " JOIN run_attempts a USING (attempt_id) WHERE v.run_id = %s",
         (run_id,),
     ).fetchone()
     if row is None:
         return None
-    node = next((n for n in route.nodes if n.route_node_id == str(row[1])), None)
-    if node is None:
-        raise Refusal(RefusalCode.ORCHESTRATION_NODE_NOT_IN_ROUTE)
-    return BlockedByView(
-        route_node_id=node.route_node_id,
-        module_id=node.module_id,
-        attempt_id=UUID(str(row[0])),
-    )
+    return blocked_by_view(route, (row[0], row[1]), row[2], (conn, blobs, run_id))
 
 
 def _successor_link(

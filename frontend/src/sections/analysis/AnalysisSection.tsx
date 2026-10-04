@@ -25,6 +25,7 @@ import type { ModuleRef } from "@/ds/markdown";
 import { useEvidence, type FactIdentity } from "@/evidence/EvidenceContext";
 import { Overlay } from "@/evidence/Overlay";
 import { QUOTE_LABEL, TracedLine } from "@/evidence/TracedLine";
+import { BlockedQuotes, NOT_LINKED, UnverifiedFacts } from "@/evidence/Unverified";
 import type { AnalysisDocument, CitationView, HandoffView, PendingNode } from "@/wire/v1";
 
 export { PROSE_SHOWN } from "./module";
@@ -132,12 +133,32 @@ function SourceRegister({
   );
 }
 
-function SourceFacts({ record, facts }: { record: string; facts: readonly CitationView[] }) {
+/** Each source a located citation of this run names, by its file name: what
+    an unverified citation's model-named source is called where it is known. */
+export function sourceNames(handoffs: Handoffs): Map<string, string> {
+  return new Map(
+    handoffs.flatMap((handoff) =>
+      handoff.source_facts.map((fact) => [fact.source_id, fact.filename] as const),
+    ),
+  );
+}
+
+function SourceFacts({
+  record,
+  facts,
+  unverified,
+}: {
+  record: string;
+  facts: readonly CitationView[];
+  unverified: number;
+}) {
   const { openFact, activeFact } = useEvidence();
   if (facts.length === 0) {
     return (
       <p className="note" data-source-facts>
-        No citation is carried on this handoff.
+        {unverified
+          ? "No citation of this handoff was located by the host; its unverified citations are listed below."
+          : "No citation is carried on this handoff."}
       </p>
     );
   }
@@ -177,6 +198,11 @@ function SourceFacts({ record, facts }: { record: string; facts: readonly Citati
           <blockquote className="matched">
             <TracedLine line={fact.line} />
           </blockquote>
+          {fact.linked ? null : (
+            <div className="note" data-not-linked>
+              {NOT_LINKED}
+            </div>
+          )}
           {fact.withdrawn_at !== null ? (
             <div className="note limitation" data-withdrawn-at={fact.withdrawn_at}>
               <b>This source has been withdrawn</b> at {stamp(fact.withdrawn_at)}. The citation
@@ -308,7 +334,16 @@ function ModuleView({
         read={read}
         tab={tab}
         onTab={onTab}
-        sourceFacts={<SourceFacts record={handoff.record_sha256} facts={handoff.source_facts} />}
+        sourceFacts={
+          <SourceFacts
+            record={handoff.record_sha256}
+            facts={handoff.source_facts}
+            unverified={handoff.unverified_facts.length}
+          />
+        }
+        unverifiedFacts={
+          <UnverifiedFacts entries={handoff.unverified_facts} names={sourceNames(handoffs)} />
+        }
         documents={<SourceRegister register={register} />}
       />
       {opener ? (
@@ -401,6 +436,9 @@ function PendingList({
                 <span className="cp" data-blocking-note>
                   its verdict ended the run · attempt {blockedBy.attempt_id}
                 </span>
+              ) : null}
+              {blockedBy?.route_node_id === node.route_node_id ? (
+                <BlockedQuotes blocked={blockedBy} />
               ) : null}
               <span className={`tag ${nodeTone(node.state)}`}>
                 <SeverityMark severity={NODE_SEVERITY[node.state]} decorative /> {node.state}

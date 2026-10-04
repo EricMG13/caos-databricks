@@ -3,7 +3,13 @@ import { resolve } from "node:path";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { ReportSection } from "@/sections/report/ReportSection";
-import { choiceText, citationsOf, figureMarker, paragraphs } from "@/sections/report/figures";
+import {
+  choiceText,
+  citationsOf,
+  figureMarker,
+  paragraphs,
+  wordPlace,
+} from "@/sections/report/figures";
 import { parseReportDocument, type ReportDocument } from "@/wire/v1";
 
 // A figure span names a citation of a verified record; the host fills the
@@ -61,6 +67,7 @@ describe("Report figure picker", () => {
       {
         route_node_id: "CP-0",
         citation_index: 0,
+        unverified: null,
         page: 3,
         matched_text: "Revenue rose to 4.1bn",
         line: null,
@@ -68,6 +75,7 @@ describe("Report figure picker", () => {
       {
         route_node_id: "CP-0",
         citation_index: 1,
+        unverified: null,
         page: 9,
         matched_text: "Net debt 2.0bn",
         line: null,
@@ -75,6 +83,7 @@ describe("Report figure picker", () => {
       {
         route_node_id: "CP-5",
         citation_index: 1,
+        unverified: null,
         page: 1,
         matched_text: "Coverage 2.1x",
         line: null,
@@ -111,15 +120,22 @@ describe("Report figure picker", () => {
     ].join("\n");
     expect(paragraphs(draft)).toEqual([
       [
-        { text: "Net debt closed at ", figure: null },
-        { text: null, figure: { route_node_id: "CP-0", citation_index: 1 } },
-        { text: " after the refinancing.", figure: null },
+        { text: "Net debt closed at ", figure: null, unverified: null },
+        { text: null, figure: { route_node_id: "CP-0", citation_index: 1 }, unverified: null },
+        { text: " after the refinancing.", figure: null, unverified: null },
       ],
-      [{ text: null, figure: { route_node_id: "RN-LITE-01-CP-0", citation_index: 0 } }],
+      [
+        {
+          text: null,
+          figure: { route_node_id: "RN-LITE-01-CP-0", citation_index: 0 },
+          unverified: null,
+        },
+      ],
       [
         {
           text: "Pasted prose with a footnote [1], a [CP-0 #0] and a digit 4 stays prose, for the server to refuse.",
           figure: null,
+          unverified: null,
         },
       ],
     ]);
@@ -173,12 +189,99 @@ describe("Report figure picker", () => {
       expected_revision_id: document.body.revision_id,
       narrative: [
         [
-          { text: "Net debt closed at ", figure: null },
-          { text: null, figure: { route_node_id: "CP-0", citation_index: 1 } },
+          { text: "Net debt closed at ", figure: null, unverified: null },
+          { text: null, figure: { route_node_id: "CP-0", citation_index: 1 }, unverified: null },
         ],
       ],
     });
     vi.unstubAllGlobals();
+  });
+
+  test("test_the_picker_offers_unverified_citations_labelled_as_the_models_own", async () => {
+    // D106: a record's unverified citations are offered after its anchored
+    // ones, each at its own index in that list, labelled before the quote,
+    // and composed as the unverified span the save command resolves.
+    const unverified = {
+      source_id: "00000000-0000-4000-8000-0000000000a1",
+      page: 12,
+      matched_text: "Leverage <b>fell</b> to 3.1x",
+      code: "CITATION_NOT_DELIVERED",
+    };
+    const document = withRecords({
+      "CP-0": { citations: [citation(3, "Revenue rose to 4.1bn")], unverified: [unverified] },
+      "CP-1": { citations: [], unverified: [{ ...unverified, code: "CITATION_FORGED" }] },
+    });
+    const choices = citationsOf(document.body.artifacts);
+    expect(choices.map((choice) => [choice.citation_index, choice.unverified])).toEqual([
+      [0, null],
+      [0, "CITATION_NOT_DELIVERED"],
+    ]);
+    expect(choiceText(choices[1]!)).toBe(
+      "unverified \u2013 page 12 · the model's quote · claim lineage: Untraced · not in the delivered evidence: Leverage <b>fell</b> to 3.1x",
+    );
+    expect(figureMarker("CP-0", 0, true)).toBe("[CP-0 unverified #1]");
+    expect(paragraphs("At [CP-0 unverified #1].")).toEqual([
+      [
+        { text: "At ", figure: null, unverified: null },
+        {
+          text: null,
+          figure: null,
+          unverified: { route_node_id: "CP-0", unverified_index: 0 },
+        },
+        { text: ".", figure: null, unverified: null },
+      ],
+    ]);
+
+    const fetchSpy = vi.fn().mockResolvedValueOnce(
+      jsonResponse(
+        {
+          case_id: document.body.case_id,
+          run_id: document.body.displayed_run_id,
+          revision_id: "00000000-0000-4000-8000-0000000000c6",
+          payload_sha256: "e".repeat(64),
+        },
+        201,
+      ),
+    );
+    vi.stubGlobal("fetch", fetchSpy);
+    const { container } = render(
+      <MemoryRouter>
+        <ReportSection document={document} tab={null} />
+      </MemoryRouter>,
+    );
+    fireEvent.change(screen.getByLabelText("Citation"), {
+      target: { value: "CP-0 unverified#0" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Insert figure" }));
+    const listed = container.querySelector("[data-draft-figure='[CP-0 unverified #1]']");
+    expect(listed).toHaveTextContent(
+      "CP-0 · unverified \u2013 page 12 · the model's quote · claim lineage: Untraced",
+    );
+    expect(listed).not.toHaveTextContent(/source line/i);
+    fireEvent.click(screen.getByRole("button", { name: "Save revision" }));
+    await settle();
+    expect(JSON.parse(fetchSpy.mock.calls[0]![1].body).narrative).toEqual([
+      [{ text: null, figure: null, unverified: { route_node_id: "CP-0", unverified_index: 0 } }],
+    ]);
+    vi.unstubAllGlobals();
+  });
+
+  test("test_the_picker_marks_a_quote_by_whole_words_never_by_substring", () => {
+    // EX2's review: "4.1bn" inside "14.1bn" is no place the host anchored.
+    const line = "Revenue of 14.1bn, against 4.1bn a year ago";
+    expect(wordPlace(line, "4.1bn")).toEqual([27, 32]);
+    expect(wordPlace("a b a b", "a b")).toBeNull();
+    expect(wordPlace(line, "evenue of")).toBeNull();
+    const choice = {
+      route_node_id: "CP-0",
+      citation_index: 0,
+      unverified: null,
+      page: 1,
+      matched_text: "4.1bn",
+      line,
+    };
+    expect(choiceText(choice)).toBe("source line: Revenue of 14.1bn, against «4.1bn» a year ago");
+    expect(choiceText({ ...choice, matched_text: "1bn, against" })).toBe(`source line: ${line}`);
   });
 
   test("test_a_report_with_no_readable_citation_offers_no_figure", () => {

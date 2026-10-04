@@ -13,10 +13,11 @@ from __future__ import annotations
 from uuid import UUID, uuid4
 
 import pytest
-from canonical_fixtures import CATALOG, CONTRACT, CanonicalCompletions
+from canonical_fixtures import CATALOG, CONTRACT, QUOTE, CanonicalCompletions
 from test_canonical_execution import (
     _accept,
     _node,
+    _record,
     _refused,
     _run,
     harness,
@@ -30,6 +31,7 @@ from caos.boundary_text import BoundaryText
 from caos.methodology import canonical
 from caos.methodology.canonical import check_context
 from caos.methodology.executor import Assignment, Delivery
+from caos.methodology.handoff import UnverifiedCitation
 from caos.methodology.invocation import (
     _evidence_section,
     evidence_sizes,
@@ -292,19 +294,28 @@ def test_an_absent_demand_delivers_the_whole_pin_as_before(harness: _Harness) ->
     _accept(harness, attempt, result)
 
 
-def test_a_quote_on_an_undelivered_member_is_refused_on_a_real_run(
+def test_a_quote_on_an_undelivered_member_is_unverified_on_a_real_run(
     harness: _Harness,
 ) -> None:
     """The first real run shape on which `CITATION_NOT_DELIVERED` fires: the
-    witness is pinned, live, captured and not named for CP-L10."""
+    witness is pinned, live, captured and not named for CP-L10. Since D106
+    that citation is kept unverified and the screen is accepted on the one
+    it anchored."""
     _gate(harness, {"CP-L10": REPORT})
     screen = CanonicalCompletions(
         harness.source_id, cited=((harness.witness_id, WITNESS_QUOTE),)
     )
-    assert _refused(harness, "CP-L10", screen) is RefusalCode.CITATION_NOT_DELIVERED
+    _attempt, result = _run(harness, "CP-L10", screen)
     [prompt] = screen.prompts
     assert WITNESS_QUOTE not in prompt
-    # Billed and recorded, no artifact for the screen: one attempt each.
+    record = _record(harness, result)
+    assert [c.matched_text for c in record.citations] == [QUOTE]
+    assert record.unverified == (
+        UnverifiedCitation(
+            harness.witness_id, 1, WITNESS_QUOTE, RefusalCode.CITATION_NOT_DELIVERED
+        ),
+    )
+    # Billed, one attempt each, no retry spent on the citation.
     assert _counts(harness) == (2, [REPORTED, REPORTED], 1, 2, 2)
 
 

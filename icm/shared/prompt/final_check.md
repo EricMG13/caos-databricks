@@ -24,6 +24,8 @@ it), in the source's own wording ("we", "our", "us"), never rephrased into
 the third person. Cite the excerpt behind each material
 figure and each statement that a register row or conclusion rests on, at
 least one citation in all, and only excerpts that support a claim you wrote.
+A citation the host cannot locate is kept as unverified and shown to the
+reader as such; it does not refuse the answer.
 Valid `source_id` values are exactly: {source_ids}, and `page` is the page in
 the nearest evidence header above that line.
 {host_text}--- END FINAL RESPONSE CHECK {tag} ---

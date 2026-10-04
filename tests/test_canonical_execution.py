@@ -44,7 +44,14 @@ from caos.methodology import executor, runner
 from caos.methodology.bundle import Bundle
 from caos.methodology.canonical import HandoffOutcome, execute_handoff
 from caos.methodology.executor import Assignment, captured_blocks
-from caos.methodology.handoff import read_record, validate_markdown
+from caos.methodology.handoff import (
+    CanonicalRecord,
+    UnverifiedCitation,
+    _decoded_record,
+    read_record,
+    record_bytes,
+    validate_markdown,
+)
 from caos.methodology.invocation import host_identity
 from caos.methodology.runner import ModuleProvider
 from caos.pricing import ModelPrice
@@ -100,6 +107,15 @@ def _refused(
         _run(harness, module_id, completions)
     assert refused.value.__context__ is None and refused.value.__cause__ is None
     return refused.value.code
+
+
+def _record(harness: _Harness, result: ProviderResult) -> CanonicalRecord:
+    """The stored record of an accepted answer, which must round-trip."""
+    assert result.record_sha256 is not None
+    data = harness.blobs.get(result.record_sha256)
+    record = _decoded_record(data)
+    assert record_bytes(record) == data
+    return record
 
 
 def _body(body: str) -> str:
@@ -323,22 +339,44 @@ def test_a_wrong_adapter_cannot_become_authority(harness: _Harness) -> None:
 
 def test_an_upstream_statement_is_not_citable_evidence(harness: _Harness) -> None:
     """Invariant 11 does not soften for the chain (on the canonical adapter
-    since f-1c): CP-L10 quoting a sentence that only
-    CP-0's accepted handoff carries is refused, although that handoff reached
-    its prompt verbatim."""
+    since f-1c): CP-L10 quoting a sentence that only CP-0's accepted handoff
+    carries is never anchored, although that handoff reached its prompt
+    verbatim. Since D106 the answer is accepted with that citation
+    unverified, and no anchored citation at all."""
     attempt, gate = _run(harness, "CP-0", CanonicalCompletions(harness.source_id))
     _accept(harness, attempt, gate)
     upstream = harness.blobs.get(gate.artifact_sha256).decode("utf-8")
     assert UNANCHORED in upstream
     quoting = CanonicalCompletions(harness.source_id, quotes=(UNANCHORED,))
-    assert _refused(harness, "CP-L10", quoting) is RefusalCode.CITATION_NOT_LOCATED
+    _attempt, screen = _run(harness, "CP-L10", quoting)
     [prompt] = quoting.prompts
     assert upstream in prompt
+    record = _record(harness, screen)
+    assert record.citations == ()
+    assert record.unverified == (
+        UnverifiedCitation(
+            harness.source_id, 1, UNANCHORED, RefusalCode.CITATION_NOT_LOCATED
+        ),
+    )
 
 
-def test_one_unanchorable_quote_refuses_the_whole_handoff(harness: _Harness) -> None:
+def test_one_unanchorable_quote_is_kept_unverified_beside_the_anchored_one(
+    harness: _Harness,
+) -> None:
+    """D106: a citation fault refuses the citation, never the answer. The
+    anchored quote is host-verified in `citations`; the other is the
+    module's own locator in `unverified`, never mixed in."""
     both = CanonicalCompletions(harness.source_id, quotes=(QUOTE, UNANCHORED))
-    assert _refused(harness, "CP-0", both) is RefusalCode.CITATION_NOT_LOCATED
+    _attempt, gate = _run(harness, "CP-0", both)
+    record = _record(harness, gate)
+    [anchored] = record.citations
+    assert (anchored.matched_text, anchored.page, anchored.linked) == (QUOTE, 1, True)
+    assert anchored.document_sha256 == hashlib.sha256(REPORT).hexdigest()
+    assert record.unverified == (
+        UnverifiedCitation(
+            harness.source_id, 1, UNANCHORED, RefusalCode.CITATION_NOT_LOCATED
+        ),
+    )
     assert _counts(harness) == (1, [REPORTED], 0, 1, 1)
 
 
@@ -371,7 +409,8 @@ def test_a_late_authority_change_refuses_before_analysis(harness: _Harness) -> N
             "HANDOFF_IDENTITY_MISMATCH",
         ),
         ({"content": "not json"}, "HANDOFF_MALFORMED"),
-        ({"quotes": (UNANCHORED,)}, "CITATION_NOT_LOCATED"),
+        # D106: a Blocked answer stands as Blocked, its quote unverified.
+        ({"quotes": (UNANCHORED,), "qa_status": "Blocked"}, "HANDOFF_BLOCKED"),
         ({"readiness": {"CP-5": "NOT-A-STATUS"}}, "HANDOFF_INCOMPLETE"),
         ({"qa_status": "Blocked"}, "HANDOFF_BLOCKED"),
     ],
@@ -385,7 +424,7 @@ def test_billing_survives_every_analytical_refusal(
     assert _diagnostic(harness) == _body(completions.bodies[0])
 
 
-def test_a_quote_outside_the_captured_blocks_refuses_the_handoff(
+def test_a_quote_outside_the_captured_blocks_is_kept_unverified(
     harness: _Harness,
 ) -> None:
     """Wiring for the page grain: the executor anchors on the blocks it
@@ -413,7 +452,13 @@ def test_a_quote_outside_the_captured_blocks_refuses_the_handoff(
     assert narrowed == {**whole, source: frozenset({"b000000"})}
     conn.rollback()
 
+    # D106: kept as unverified, never anchored on a block it was not given.
     quoting = CanonicalCompletions(source)
-    assert _refused(harness, "CP-0", quoting) is RefusalCode.CITATION_NOT_DELIVERED
+    _attempt, gate = _run(harness, "CP-0", quoting)
     [prompt] = quoting.prompts
     assert QUOTE not in prompt
+    record = _record(harness, gate)
+    assert record.citations == ()
+    assert record.unverified == (
+        UnverifiedCitation(source, 1, QUOTE, RefusalCode.CITATION_NOT_DELIVERED),
+    )

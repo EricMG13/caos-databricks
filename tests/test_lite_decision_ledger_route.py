@@ -41,6 +41,7 @@ from test_canonical_execution import _node
 from test_canonical_runtime import (
     _attempt_of,
     _blocking_verdict,
+    _kept_unverified,
     _module_provider,
     _run_route,
     _status,
@@ -62,7 +63,6 @@ from caos.methodology.handoff import ADAPTER_ROUTES, read_record, validate_markd
 from caos.methodology.invocation import host_identity, named_objects
 from caos.provider import MAX_REQUEST_BYTES
 from caos.qualification.proof import assert_orchestration_proof
-from caos.refusals import RefusalCode
 from caos.store import StoreConnection, connect
 from caos.store.gates import Gate, approve_gate
 from caos.store.members import Standing, grant
@@ -319,24 +319,20 @@ def test_cp8_contract_validates_identifies_projects_and_anchors(
     harness.conn.rollback()
 
 
-def test_cp8_contract_refuses_an_unanchored_quote(harness: _Harness) -> None:
-    """A realised outcome the T1 document does not carry is refused before an
-    artifact exists: CP-8 may not cite an outcome its source does not support."""
+def test_cp8_contract_keeps_an_unanchored_quote_unverified(harness: _Harness) -> None:
+    """A realised outcome the T1 document does not carry is never anchored:
+    CP-8 may not cite an outcome its source does not support as verified.
+    Since D106 the answer is accepted and that citation kept unverified."""
     _document, quote = LEDGER_QUOTES["CP-8"][-1]
     answers = LedgerCompletions(
         harness.source_id,
         harness.witness_id,
         quotes_by_module={"CP-8": quote + " fabricated"},
     )
-    assert (
-        _run_route(harness, _module_provider(harness, answers))
-        is RefusalCode.CITATION_NOT_LOCATED
+    _run_route(harness, _module_provider(harness, answers))
+    _kept_unverified(
+        harness, _node(harness, "CP-8").route_node_id, quote + " fabricated"
     )
-    assert harness.conn.execute(
-        "SELECT count(*) FROM artifacts WHERE route_node_id=%s",
-        (_node(harness, "CP-8").route_node_id,),
-    ).fetchone() == (0,)
-    harness.conn.rollback()
 
 
 def test_lite_decision_ledger_requests_fit_the_request_ceiling(

@@ -100,6 +100,12 @@ class AnchoredCitation:
     as the evidence section showed it (D105); None under the rules before
     it -- under either whole-line rule the quote is its line
     (`matched_text`), and `ANY_RUN` anchors no line.
+
+    `linked` is whether the module's Markdown body carries the quote
+    verbatim, beside the statement it supports (D106): an anchored quote the
+    body does not carry is still anchored, and kept, but is "not linked to a
+    statement". Anchoring never sets it; the answer's verdict does, and a
+    re-anchoring reader carries the recorded value.
     """
 
     document_sha256: str
@@ -108,6 +114,7 @@ class AnchoredCitation:
     bboxes: tuple[Rect, ...]
     cited_page: int | None = None
     line_text: str | None = None
+    linked: bool = True
 
 
 @dataclass(frozen=True, slots=True)

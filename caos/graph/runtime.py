@@ -48,7 +48,6 @@ from caos.methodology.canonical import (
     Replayed,
     Verdict,
     accepted_projections,
-    blocked_verdict,
     replay_billed,
     second_attempt_due,
     unexplained_charge,
@@ -71,6 +70,7 @@ from caos.store.outcomes import (
 from caos.store.outcomes import artifact_digests as artifact_digests
 from caos.store.runs import (
     Accepted,
+    BlockingVerdict,
     accept_attempt,
     block_run,
     complete_run,
@@ -489,7 +489,7 @@ def _settle(
     caller stops and a retry makes one new attempt instead of replaying it.
     """
     if replayed.verdict is Verdict.BLOCKED:
-        block_run(conn, run_id, lease=lease, verdict=replayed.attempt_id)
+        _block_on(conn, blobs, run_id, replayed, lease)
         return False
     outcome = replayed.outcome
     if replayed.verdict is Verdict.REFUSED or outcome is None:
@@ -709,7 +709,7 @@ def _end_blocked(  # noqa: PLR0913 -- one node of one run, keyword-only
     replay once the run is no longer RUNNING.
     """
     with execution_reads(conn):
-        blocked = blocked_verdict(
+        replayed = replay_billed(
             conn,
             blobs,
             execution.bundle,
@@ -717,9 +717,35 @@ def _end_blocked(  # noqa: PLR0913 -- one node of one run, keyword-only
             route=route,
             route_node_ids=(node,),
         )
-    if blocked is None:
+    if replayed is None or replayed.verdict is not Verdict.BLOCKED:
         raise Refusal(RefusalCode.HANDOFF_BLOCKED)
-    block_run(conn, run_id, lease=execution.lease, verdict=blocked)
+    _block_on(conn, blobs, run_id, replayed, execution.lease)
+
+
+def _block_on(
+    conn: StoreConnection,
+    blobs: BlobStore,
+    run_id: UUID,
+    replayed: Replayed,
+    lease: Lease | None,
+) -> None:
+    """End the run BLOCKED on `replayed`'s verdict, its citations as judged
+    stored first and named beside it (D106): a blob that will not write is
+    a store fault and nothing moves, so the next pass re-derives both."""
+    citations: str | None = None
+    if replayed.citations is not None:
+        try:
+            citations = blobs.put(replayed.citations)
+        except (OSError, Refusal):
+            citations = None
+        if citations is None:
+            raise Refusal(RefusalCode.STORE_UNAVAILABLE)
+    block_run(
+        conn,
+        run_id,
+        lease=lease,
+        verdict=BlockingVerdict(replayed.attempt_id, citations),
+    )
 
 
 def _execution_route(

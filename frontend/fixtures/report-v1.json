@@ -22,7 +22,7 @@
         "artifact_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
         "record_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
         "markdown": "<img src=x onerror=\"window.pwned=1\">",
-        "record": "{\"coverage\":\"2.1x\",\"citation_rule\":\"whole-line-as-shown\",\"citations\":[{\"page\":7,\"matched_text\":\"Coverage 2.1x\"}]}",
+        "record": "{\"coverage\":\"2.1x\",\"citation_rule\":\"whole-line-as-shown\",\"citations\":[{\"page\":7,\"matched_text\":\"Coverage 2.1x\"}],\"unverified\":[{\"source_id\":\"00000000-0000-4000-8000-0000000000a1\",\"page\":9,\"matched_text\":\"Interest coverage of <b>2.4x</b> for the twelve months to June 30\",\"code\":\"CITATION_NOT_LOCATED\",\"linked\":false}]}",
         "qa_status": "Passed",
         "committee_status": "Committee Ready",
         "decision_scope": "FULL",
@@ -34,10 +34,12 @@
       [
         {
           "text": "<img src=x onerror=\"window.pwned=1\">",
+          "unverified": null,
           "figure": null
         },
         {
           "text": null,
+          "unverified": null,
           "figure": {
             "route_node_id": "CP-1",
             "record_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
@@ -53,7 +55,27 @@
               "recorded": true
             },
             "rects": [],
-            "withdrawn_at": null
+            "withdrawn_at": null,
+            "linked": false
+          }
+        },
+        {
+          "text": " and ",
+          "figure": null,
+          "unverified": null
+        },
+        {
+          "text": null,
+          "figure": null,
+          "unverified": {
+            "route_node_id": "CP-1",
+            "record_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "unverified_index": 0,
+            "source_id": "00000000-0000-4000-8000-0000000000a1",
+            "page": 9,
+            "matched_text": "Interest coverage of <b>2.4x</b> for the twelve months to June 30",
+            "code": "CITATION_NOT_LOCATED",
+            "linked": false
           }
         }
       ]

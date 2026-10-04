@@ -103,9 +103,14 @@ const StandingRevoked = object({ case_id: uuid, user_id: uuid });
 const WithdrawSource = object({});
 const SourceWithdrawn = object({ case_id: uuid, source_id: uuid });
 const NarrativeFigureRef = object({ route_node_id: short, citation_index: int({ min: 0 }) });
+const NarrativeUnverifiedRef = object({
+  route_node_id: short,
+  unverified_index: int({ min: 0 }),
+});
 const NarrativeDraft = object({
   text: nullable(string({ max: 2000 })),
   figure: nullable(NarrativeFigureRef),
+  unverified: nullable(NarrativeUnverifiedRef),
 });
 const SaveRevision = object({
   expected_revision_id: nullable(uuid),
@@ -151,6 +156,7 @@ export const V1_COMMAND_SHAPES = {
   GrantStanding,
   NarrativeDraft,
   NarrativeFigureRef,
+  NarrativeUnverifiedRef,
   OpinionSigned,
   RevisionSaved,
   RevokeStanding,
@@ -199,6 +205,7 @@ export type StandingRevoked = Infer<typeof StandingRevoked>;
 export type WithdrawSource = Infer<typeof WithdrawSource>;
 export type SourceWithdrawn = Infer<typeof SourceWithdrawn>;
 export type NarrativeFigureRef = Infer<typeof NarrativeFigureRef>;
+export type NarrativeUnverifiedRef = Infer<typeof NarrativeUnverifiedRef>;
 export type NarrativeDraft = Infer<typeof NarrativeDraft>;
 export type SaveRevision = Infer<typeof SaveRevision>;
 export type RevisionSaved = Infer<typeof RevisionSaved>;

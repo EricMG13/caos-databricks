@@ -50,7 +50,7 @@ from caos.qualification.matrix import (
     module_registers,
 )
 from caos.qualification.on_disk import load_qualification_set
-from caos.qualification.proof import cited_line
+from caos.qualification.proof import scored_lines
 from caos.refusals import Refusal
 
 BUNDLE = Path(__file__).resolve().parents[1] / "vendor" / "deploy-v"
@@ -270,6 +270,8 @@ def _citations(stored: CanonicalRecord | None) -> dict[str, int] | None:
     return {
         "count": len(stored.citations),
         "anchored": sum(1 for citation in stored.citations if citation.bboxes),
+        # D106: unverified citations are counted, never compared.
+        "unverified": len(stored.unverified),
     }
 
 
@@ -297,11 +299,7 @@ def _answer_keys(
 def _citation_keys(
     case: QualificationCase, module_id: str, stored: CanonicalRecord | None
 ) -> list[dict[str, Any]]:
-    cited = (
-        None
-        if stored is None
-        else {(module_id, c.document_sha256, cited_line(c)) for c in stored.citations}
-    )
+    cited = None if stored is None else scored_lines(module_id, stored)
     return [
         _key(
             "expects",

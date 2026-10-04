@@ -124,10 +124,17 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
     ),
     wire.NarrativeFigure: frozenset(
         "route_node_id record_sha256 citation_index document_sha256 source_id"
-        " page matched_text line rects withdrawn_at".split()
+        " page matched_text line rects withdrawn_at linked".split()
     ),
     wire.LineView: frozenset({"before", "excerpt", "after", "recorded"}),
-    wire.NarrativeSpan: frozenset({"text", "figure"}),
+    wire.NarrativeSpan: frozenset({"text", "figure", "unverified"}),
+    wire.NarrativeUnverified: frozenset(
+        "route_node_id record_sha256 unverified_index source_id page matched_text"
+        " code linked".split()
+    ),
+    wire.UnverifiedCitationView: frozenset(
+        {"source_id", "page", "matched_text", "code", "linked"}
+    ),
     wire.ReportArtifact: frozenset(
         (
             "route_node_id artifact_sha256 record_sha256 markdown record qa_status "
@@ -274,7 +281,28 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
             "gate_reason",
         }
     ),
-    BlockedByView: frozenset({"route_node_id", "module_id", "attempt_id"}),
+    BlockedByView: frozenset(
+        {
+            "route_node_id",
+            "module_id",
+            "attempt_id",
+            "quotes_recorded",
+            "quotes_refusal",
+            "verified",
+            "unverified",
+        }
+    ),
+    wire.BlockedQuoteView: frozenset(
+        {
+            "document_sha256",
+            "source_id",
+            "withdrawn_at",
+            "page",
+            "matched_text",
+            "line",
+            "linked",
+        }
+    ),
     RunView: frozenset(
         {
             "run_id",
@@ -318,6 +346,7 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
             "source_id",
             "withdrawn_at",
             "cited_page",
+            "linked",
         }
     ),
     HandoffView: frozenset(
@@ -336,6 +365,7 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
             "validation_warnings",
             "decision_scope",
             "screening_only",
+            "unverified_facts",
             "source_facts",
             "model_analysis",
             "host_calculation",
@@ -433,7 +463,8 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
     WithdrawSource: frozenset(),
     SourceWithdrawn: frozenset({"case_id", "source_id"}),
     NarrativeFigureRef: frozenset({"route_node_id", "citation_index"}),
-    NarrativeDraft: frozenset({"text", "figure"}),
+    NarrativeDraft: frozenset({"text", "figure", "unverified"}),
+    wire.NarrativeUnverifiedRef: frozenset({"route_node_id", "unverified_index"}),
     SaveRevision: frozenset({"expected_revision_id", "narrative"}),
     RevisionSaved: frozenset({"case_id", "run_id", "revision_id", "payload_sha256"}),
     SignOpinion: frozenset({"payload_sha256"}),
@@ -722,6 +753,7 @@ def test_citation_view_names_its_source_for_the_page_endpoint() -> None:
         "rects": [],
         "withdrawn_at": None,
         "cited_page": None,
+        "linked": True,
     }
     with pytest.raises(ValidationError):
         CitationView.model_validate(citation)

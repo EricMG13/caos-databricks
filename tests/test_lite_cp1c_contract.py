@@ -41,7 +41,12 @@ from lite_relative_value_fixtures import (
     lite_identity,
     lite_markdown,
 )
-from test_canonical_runtime import _module_provider, _run_route, _status
+from test_canonical_runtime import (
+    _kept_unverified,
+    _module_provider,
+    _run_route,
+    _status,
+)
 from test_execution_freshness import _Harness
 from test_relative_value_route import harness
 
@@ -205,22 +210,19 @@ def test_lite_contract_refuses_a_wrong_upstream(module: str) -> None:
 
 
 @pytest.mark.parametrize("module", CONSUMERS)
-def test_lite_contract_refuses_an_unanchored_quote(
+def test_lite_contract_keeps_an_unanchored_quote_unverified(
     harness: _Harness, module: str
 ) -> None:
     answers = LiteRelativeValueCompletions(
         harness.source_id,
         quotes_by_module={module: LITE_QUOTES[module] + " fabricated"},
     )
-    assert (
-        _run_route(harness, _module_provider(harness, answers))
-        is RefusalCode.CITATION_NOT_LOCATED
+    _run_route(harness, _module_provider(harness, answers))
+    _kept_unverified(
+        harness,
+        next(n for n in ROUTE.nodes if n.module_id == module).route_node_id,
+        LITE_QUOTES[module] + " fabricated",
     )
-    node = next(n for n in ROUTE.nodes if n.module_id == module)
-    assert harness.conn.execute(
-        "SELECT count(*) FROM artifacts WHERE route_node_id=%s", (node.route_node_id,)
-    ).fetchone() == (0,)
-    harness.conn.rollback()
 
 
 @pytest.mark.parametrize("module", CONSUMERS)
@@ -313,16 +315,13 @@ def test_cp1c_under_lite_is_held_until_cp_l10_is_accepted(harness: _Harness) -> 
     """A CP-L10 whose answer is refused leaves CP-1C behind its boundary:
     no attempt, no reservation, no call -- and the edge that would release it
     is the one CP-L10 carries the object on."""
+    # CP-L10 answers Blocked (since D106 a citation fault refuses nothing):
+    # the run ends there, one attempt, and CP-1C is never started.
     answers = LiteRelativeValueCompletions(
-        harness.source_id,
-        quotes_by_module={"CP-L10": LITE_QUOTES["CP-L10"] + " fabricated"},
+        harness.source_id, qa_by_module={"CP-L10": "Blocked"}
     )
-    assert (
-        _run_route(harness, _module_provider(harness, answers))
-        is RefusalCode.CITATION_NOT_LOCATED
-    )
-    # N52, D82: CP-L10's three guided retries, refused the same way.
-    assert _modules(answers) == ["CP-0"] + ["CP-L10"] * 4
+    assert _run_route(harness, _module_provider(harness, answers)) is None
+    assert _modules(answers) == ["CP-0", "CP-L10"]
     assert _attempts_at(harness, "CP-1C") == (0, 0)
 
     named = named_objects(BUNDLE, ROUTE)
