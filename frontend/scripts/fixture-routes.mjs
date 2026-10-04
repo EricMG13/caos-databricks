@@ -107,6 +107,9 @@ export const STATE_ROUTES = [
   ...["rn-cp-1", "rn-cp-1b"].map((tab) => `${sectionRoute("analysis")}&tab=${tab}&open=audit`),
   `${sectionRoute("report", "acts")}&pick=unverified`,
   sectionRoute("run", "blocked"),
+  // D107: a module's text with an anchored citation's marker chip (CP-0); the
+  // unverified one's is CP-1B's above, the artifacts' Report's and Committee's.
+  `${sectionRoute("analysis")}&tab=rn-cp-0`,
   "/analysis/",
   "/nothing/",
 ];
