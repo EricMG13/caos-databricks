@@ -63,8 +63,9 @@ LITE_BASE = "../../CP_DEPLOY_V_LITE_MODULE_PAYLOAD_BASE_v1.schema.txt"
 # (-1,789) and the canon's triage and ZIP gates (-208 each); its fix round 1
 # (build 1eaaa738) drops CP-0's residual triage and package text (-4,080), and
 # its fix round 2 (build 755205f7) the last triage, workspace, hash and package
-# asks (-1,586).
-MEASURED = {"CP-0": 135_241, "CP-L10": 137_713, "CP-5": 170_540}
+# asks (-1,586); fork r12 (D103, build d3b3b109) adds the canon's heading-
+# over-caption binding sentence (+89 each).
+MEASURED = {"CP-0": 135_330, "CP-L10": 137_802, "CP-5": 170_629}
 AUTHORITY_SHARE_OF_REQUEST = 0.25
 FOLDERS = {
     "CP-0": "cp-0-source-readiness",
