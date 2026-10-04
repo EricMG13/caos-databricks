@@ -409,8 +409,8 @@ def test_a_late_authority_change_refuses_before_analysis(harness: _Harness) -> N
             "HANDOFF_IDENTITY_MISMATCH",
         ),
         ({"content": "not json"}, "HANDOFF_MALFORMED"),
-        # A Blocked verdict still ends a run only on anchored quotes (D106).
-        ({"quotes": (UNANCHORED,), "qa_status": "Blocked"}, "CITATION_NOT_LOCATED"),
+        # D106: a Blocked answer stands as Blocked, its quote unverified.
+        ({"quotes": (UNANCHORED,), "qa_status": "Blocked"}, "HANDOFF_BLOCKED"),
         ({"readiness": {"CP-5": "NOT-A-STATUS"}}, "HANDOFF_INCOMPLETE"),
         ({"qa_status": "Blocked"}, "HANDOFF_BLOCKED"),
     ],

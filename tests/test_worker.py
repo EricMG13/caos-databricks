@@ -177,11 +177,9 @@ def test_worker_stops_a_refused_run_with_its_code_and_releases_the_lease(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     run = queued_run(case, route, bundle, blobs)
-    # A Blocked answer on an unanchored quote still refuses (D106 keeps the
-    # c-5b guard), and since D106 earns no guided retry.
-    completions = CanonicalCompletions(
-        run.source_id, quotes=(UNANCHORED,), qa_status="Blocked", price=RUN_AT
-    )
+    # An answer that is not the transport: three guided retries (D82),
+    # refused the same way, then the run stops on the code.
+    completions = CanonicalCompletions(run.source_id, content="not json", price=RUN_AT)
 
     assert drive(run, completions) == run.run_id
 
@@ -190,7 +188,7 @@ def test_worker_stops_a_refused_run_with_its_code_and_releases_the_lease(
         " WHERE a.run_id = %s",
         (run.run_id,),
     ).fetchall()
-    assert codes == [("CITATION_NOT_LOCATED",)]
+    assert codes == [("HANDOFF_MALFORMED",)] * 4
     code = codes[0][0]
     assert work_row(run.conn, run.run_id) == ("STOPPED", code, None, True)
     assert run_status(run.conn, run.run_id) is RunStatus.RUNNING
@@ -199,7 +197,7 @@ def test_worker_stops_a_refused_run_with_its_code_and_releases_the_lease(
     assert capsys.readouterr().err.strip() == code
     run.conn.rollback()
     assert drive(run, completions) is None, "a stopped run waits for a retry"
-    assert len(completions.prompts) == 1
+    assert len(completions.prompts) == 4
 
 
 def test_sigterm_finishes_the_unit_and_requeues(

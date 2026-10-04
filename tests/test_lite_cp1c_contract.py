@@ -315,17 +315,12 @@ def test_cp1c_under_lite_is_held_until_cp_l10_is_accepted(harness: _Harness) -> 
     """A CP-L10 whose answer is refused leaves CP-1C behind its boundary:
     no attempt, no reservation, no call -- and the edge that would release it
     is the one CP-L10 carries the object on."""
-    # A Blocked answer on an unanchored quote is still refused (D106 keeps
-    # c-5b's guard), and since D106 earns no guided retry.
+    # CP-L10 answers Blocked (since D106 a citation fault refuses nothing):
+    # the run ends there, one attempt, and CP-1C is never started.
     answers = LiteRelativeValueCompletions(
-        harness.source_id,
-        qa_by_module={"CP-L10": "Blocked"},
-        quotes_by_module={"CP-L10": LITE_QUOTES["CP-L10"] + " fabricated"},
+        harness.source_id, qa_by_module={"CP-L10": "Blocked"}
     )
-    assert (
-        _run_route(harness, _module_provider(harness, answers))
-        is RefusalCode.CITATION_NOT_LOCATED
-    )
+    assert _run_route(harness, _module_provider(harness, answers)) is None
     assert _modules(answers) == ["CP-0", "CP-L10"]
     assert _attempts_at(harness, "CP-1C") == (0, 0)
 
