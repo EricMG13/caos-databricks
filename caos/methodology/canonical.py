@@ -472,9 +472,10 @@ def _answer(  # noqa: PLR0913 -- one recorded answer, keyword-only
     if _demand_faults(bundle, assignment, context, markdown):
         raise Refusal(RefusalCode.HANDOFF_MALFORMED)
     # D106's one exception, the same producer-guard shape: a citation CP-CF
-    # will bind as a calculation input must anchor, or CP-CF cannot bind it
-    # and the run wedges there; refused here, as a guided retry naming it.
-    if _calculation_inputs(assignment, [entry.matched_text for entry in unverified]):
+    # will bind as a calculation input must anchor and stand in this body as
+    # written, or CP-CF cannot bind it and the run wedges there; refused
+    # here, as a guided retry naming it.
+    if _calculation_inputs(assignment, _unbindable(markdown, anchored, unverified)):
         raise Refusal(RefusalCode.HANDOFF_INCOMPLETE)
     _forecast_inputs(bundle, assignment.module_id, markdown, context)
     record = CanonicalRecord(
@@ -743,7 +744,7 @@ def _prompt_context(
         ),
         _driver_line(contract, assignment, context, body),
         _size_line(answer_markdown(body)),
-        _calculation_line(conn, assignment, context.delivered, answer_citations(body)),
+        _calculation_line(conn, assignment, context.delivered, body),
     )
     # Judged under the identity the refused answer was asked under: its
     # ordinal, not this attempt's, fixes the attempt id and invocation digest
@@ -846,22 +847,42 @@ def _calculation_inputs(assignment: Assignment, quotes: Sequence[str]) -> list[i
     return [n for n, quote in enumerate(quotes) if binds_input(module, quote)]
 
 
+def _unbindable(
+    markdown: bytes,
+    anchored: Sequence[AnchoredCitation],
+    unverified: Sequence[UnverifiedCitation],
+) -> list[str]:
+    """The quotes CP-CF could not bind from this answer: every unverified
+    one, and every anchored one this Markdown does not hold as written
+    (`forecast.carries`, the binder's own test)."""
+    from caos.methodology.forecast import carries
+
+    return [entry.matched_text for entry in unverified] + [
+        c.matched_text for c in anchored if not carries(markdown, c.matched_text)
+    ]
+
+
 def _calculation_line(
     conn: StoreConnection,
     assignment: Assignment,
     delivered: Sequence[Delivery],
-    citations: Sequence[Citation],
+    body: str,
 ) -> str | None:
-    """The owner retry's line for its citations CP-CF binds that did not
-    anchor (D106), by number: unlike every other citation they refuse the
-    answer until they anchor. The anchoring line beside it says why each
-    did not. None for every other module and route."""
+    """The owner retry's line for its citations CP-CF binds but could not
+    (D106, `_unbindable`), by number: unlike every other citation they
+    refuse the answer until each anchors and stands in the body as written.
+    The anchoring and body-quote lines beside it say what is wrong with
+    each. None for every other module and route."""
+    from caos.methodology.forecast import carries
+
+    citations = answer_citations(body)
+    markdown = answer_markdown(body) or b""
     if not _calculation_inputs(assignment, [c.matched_text for c in citations]):
         return None
     verdicts = _anchoring(conn, _by_source(delivered), citations, TokenIndex())
-    # An anchored citation stands as "", which binds nothing.
+    # A citation CP-CF can bind stands as "", which binds nothing.
     lost = [
-        "" if v is None else c.matched_text
+        "" if v is None and carries(markdown, c.matched_text) else c.matched_text
         for c, v in zip(citations, verdicts, strict=True)
     ]
     failed = [n + 1 for n in _calculation_inputs(assignment, lost)]
@@ -870,11 +891,12 @@ def _calculation_line(
     many = len(failed) > 1
     return (
         f"host calculation-input check: {_numbered(failed)} of {len(citations)}"
-        f" {'feed' if many else 'feeds'} the forecast calculator (CP-CF) and must be"
-        " an exact excerpt of one evidence line that anchors; unlike other"
-        f" citations, {'they refuse' if many else 'it refuses'} this answer until"
-        f" {'they anchor' if many else 'it anchors'} (the host anchoring check says"
-        " why each did not; numbered from 1 in the order given)"
+        f" {'feed' if many else 'feeds'} the forecast calculator (CP-CF) and must"
+        " be an exact excerpt of one evidence line that anchors, written in the"
+        " Markdown body exactly as quoted; unlike other citations,"
+        f" {'they refuse' if many else 'it refuses'} this answer until then (the"
+        " host anchoring and citation checks say what is wrong with each;"
+        " numbered from 1 in the order given)"
     )
 
 
