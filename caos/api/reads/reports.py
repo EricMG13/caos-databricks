@@ -31,13 +31,19 @@ from caos.api.deps import (
     readable,
     revision_query,
 )
-from caos.api.wire import REVISIONS_MAX, CommitteeDocument, ReportDocument
+from caos.api.wire import (
+    REVISIONS_MAX,
+    CommitteeDocument,
+    LineView,
+    ReportDocument,
+)
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
 from caos.deliverable.canonical import Revision, canonical_payload, payload_bytes
 from caos.deliverable.filing import revision_signatures
 from caos.deliverable.receipts import read_filed_receipt
 from caos.deliverable.revisions import prove_revision, read_revision, renderable
+from caos.evidence.citations import ANY_RUN
 from caos.methodology.bundle import Bundle
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
@@ -575,6 +581,12 @@ def _figure(
         **figure,
         "record_sha256": digests[node],
         "source_id": source_id,
+        # The line the figure's quote is an excerpt of (D105), from the record.
+        "line": LineView.of(
+            citation.get("line_text"),
+            figure["matched_text"],
+            records[node].get("citation_rule", ANY_RUN),
+        ).model_dump(),
         "rects": [
             {key: box[key] for key in ("x0", "y0", "x1", "y1")}
             for box in citation["bboxes"]

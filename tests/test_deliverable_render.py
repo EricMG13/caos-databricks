@@ -28,7 +28,13 @@ from typing import Any
 import pytest
 
 from caos.boundary_text import BoundaryText
-from caos.deliverable.render import ELEMENTS, PENDING, RenderRefused, render
+from caos.deliverable.render import (
+    ELEMENTS,
+    PENDING,
+    RenderRefused,
+    render,
+    traced_line,
+)
 from caos.refusals import RefusalCode
 from caos.store import apply_schema, connect
 from caos.store.runs import create_case
@@ -522,3 +528,117 @@ def test_provenance_and_citation_digests_are_cut_before_they_are_escaped() -> No
     page = render(payload)
     assert b"aaaaaaaaa&lt;b&gt;" in page and b"ccccccccc&lt;d&gt;" in page
     assert b"&amp;lt" not in page and b"&lt;b>" not in page
+
+
+# D105, AI-4: an excerpt of a line is never shown without the line around it.
+_LINE = "We do not believe the Borrower will breach the <leverage> covenant."
+_EXCERPT = "believe the Borrower will breach the <leverage> covenant"
+
+
+def _excerpted(**citation: object) -> dict[str, Any]:
+    payload: dict[str, Any] = json.loads(json.dumps(PAYLOAD_DATA))
+    payload["artifacts"][0] = _artifact(
+        citations=[
+            {
+                "document_sha256": DOCUMENT_SHA256,
+                "page": 1,
+                "matched_text": _EXCERPT,
+                "line_text": _LINE,
+                **citation,
+            }
+        ]
+    )
+    payload["artifacts"][0]["route_node_id"] = "RN-CP-1"
+    return payload
+
+
+def test_an_excerpt_is_shown_marked_inside_its_whole_line() -> None:
+    """The source facts show the whole line an `EXCERPT` record keeps, so the
+    "not" just outside eight words is on the page; the excerpt is marked and
+    every character of the line is escaped. A record from before D105 keeps
+    no line and shows its quote as it always did."""
+    page = render(_excerpted()).decode()
+
+    assert (
+        '<blockquote>We do not <mark style="font-weight:600">believe the Borrower'
+        " will breach the"
+        " &lt;leverage&gt; covenant.</mark></blockquote>"
+    ) in page
+    old = render(json.loads(json.dumps(PAYLOAD_DATA))).decode()
+    assert f"<blockquote>{QUOTE}</blockquote>" in old and "<mark>" not in old
+
+
+def test_a_narrative_figure_shows_the_line_of_the_citation_it_names() -> None:
+    """A narrative figure is a copy of one record citation's fields, so its
+    line is that citation's; a figure naming none shows its quote alone."""
+    payload = _excerpted()
+    figure = {
+        "route_node_id": "RN-CP-1",
+        "citation_index": 0,
+        "document_sha256": DOCUMENT_SHA256,
+        "page": 1,
+        "matched_text": _EXCERPT,
+    }
+    payload["narrative"] = [[{"text": "Headroom: "}, {"figure": figure}]]
+    narrative = render(payload).decode().split("<h2>Analyst narrative</h2>")[1]
+    assert 'We do not <mark style="font-weight:600">believe' in narrative
+
+    payload["narrative"] = [[{"figure": {**figure, "citation_index": 3}}]]
+    narrative = render(payload).decode().split("<h2>Analyst narrative</h2>")[1]
+    assert "<blockquote>believe the Borrower" in narrative
+
+
+@pytest.mark.parametrize("line", ["", 7, ["a"]])
+def test_a_line_that_is_not_text_is_refused(line: object) -> None:
+    with pytest.raises(RenderRefused) as caught:
+        render(_excerpted(line_text=line))
+    assert caught.value.code == "DELIVERABLE_PAYLOAD_INVALID"
+
+
+def test_traced_line_places_the_excerpt_as_the_host_anchored_it() -> None:
+    """The three passes of `citations._excerpt_run`, within one line: exact
+    NFC words, edge punctuation forgiven (a figure keeping its parentheses),
+    tracked letters joined. Two places, or none, mark nothing."""
+    line = "Revenue was $1.2bn, up 3% on a year ago, said the CFO"
+    assert traced_line(line, '"Revenue was $1.2bn, up 3% on a year ago,') == (
+        "",
+        "Revenue was $1.2bn, up 3% on a year ago,",
+        " said the CFO",
+    )
+    tracked = "C A P I T A L and liquidity of the group in 2026 rose"
+    assert traced_line(tracked, "CAPITAL and liquidity of the group in 2026") == (
+        "",
+        "C A P I T A L and liquidity of the group in 2026",
+        " rose",
+    )
+    figure = "a loss of (5) here and more words to make eight"
+    assert traced_line(figure, "of 5 here and more words to make") == (figure, "", "")
+    assert traced_line("a b c a b c", "a b") == ("a b c a b c", "", "")
+    assert traced_line("xé y", "xé y") == ("", "xé y", "")
+
+
+def test_the_edge_punctuation_is_the_anchors_own() -> None:
+    """Restated here because the renderer is the standard library alone."""
+    from caos.deliverable import render as module
+    from caos.evidence import citations
+
+    assert module.EDGE_PUNCTUATION == citations.EDGE_PUNCTUATION
+    assert module._FIGURE_LEFT == citations._FIGURE_LEFT
+    assert module._FIGURE_RIGHT == citations._FIGURE_RIGHT
+
+
+def test_a_record_without_a_line_renders_byte_for_byte_as_before() -> None:
+    """No `line_text`, nothing is marked and the quote is escaped as it always
+    was -- a whole-line quote padded with spaces too, which `traced_line`
+    would split into an edge and a mark."""
+    padded = " Adjusted EBITDA | $920 | $955 <b> "
+    payload = json.loads(json.dumps(PAYLOAD_DATA))
+    payload["artifacts"][0] = _artifact(
+        citations=[
+            {"document_sha256": DOCUMENT_SHA256, "page": 1, "matched_text": padded}
+        ]
+    )
+
+    page = render(payload).decode()
+    assert "<blockquote> Adjusted EBITDA | $920 | $955 &lt;b&gt; </blockquote>" in page
+    assert "<mark" not in page

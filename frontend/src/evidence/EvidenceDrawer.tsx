@@ -4,6 +4,7 @@
 import { Digest } from "@/ds/Digest";
 import { Overlay } from "./Overlay";
 import { Reanchored } from "./Reanchored";
+import { TracedLine, lineLabel, wholeLine } from "./TracedLine";
 import type { BBox, Citation } from "@/wire";
 
 function rect(box: BBox) {
@@ -41,6 +42,7 @@ export function EvidenceDrawer({
   opener: HTMLElement | null;
   onClose: () => void;
 }) {
+  const line = citation.line ?? wholeLine(citation.matched_text);
   return (
     <Overlay
       look="drawer"
@@ -71,9 +73,9 @@ export function EvidenceDrawer({
             </div>
           ))}
         </div>
-        <div className="lbl">Matched text</div>
+        <div className="lbl">{lineLabel(line)}</div>
         <blockquote className="matched" style={{ margin: 0 }}>
-          <mark>{citation.matched_text}</mark>
+          <TracedLine line={line} />
         </blockquote>
         <dl className="kv">
           <dt>Document</dt>

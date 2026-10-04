@@ -34,7 +34,7 @@ import { ConfirmedControl } from "@/controls/ConfirmedControl";
 import { RefusedControl } from "@/controls/RefusedControl";
 import { CommandOutcome, useCommand } from "@/sections/run/controls";
 import type { DocumentRefetch } from "@/app/useDocumentRefetch";
-import { citationsOf, figureMarker, paragraphs, type CitationChoice } from "./figures";
+import { choiceText, citationsOf, figureMarker, paragraphs, type CitationChoice } from "./figures";
 import { DraftContext } from "./draft";
 import {
   parseReportDocument,
@@ -116,7 +116,7 @@ const choiceKey = (choice: { route_node_id: string; citation_index: number }) =>
   `${choice.route_node_id}#${choice.citation_index}`;
 
 const choiceLabel = (choice: CitationChoice) =>
-  `${choice.route_node_id} · p.${choice.page} · ${choice.matched_text}`;
+  `${choice.route_node_id} · p.${choice.page} · ${choiceText(choice)}`;
 
 /** The draft's figures (N90): each marker the text uses, once, and the
     citation it names -- or that it names none the served records carry,
@@ -168,7 +168,7 @@ function FigurePicker({
   if (choices.length === 0) {
     return (
       <p className="note" data-figure-picker>
-        No verified citation in this report, so no figure can be inserted.
+        No citation in this report's records, so no figure can be inserted.
       </p>
     );
   }

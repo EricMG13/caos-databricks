@@ -417,6 +417,12 @@ function analysis(): { [key: string]: Json } {
               filename: "10-K.pdf",
               page: 3,
               matched_text: "net leverage",
+              line: {
+                before: "We expect ",
+                excerpt: "net leverage",
+                after: " to fall.",
+                recorded: true,
+              },
               rects: [{ x0: 1, y0: 2.5, x1: 3, y1: 4 }],
               withdrawn_at: null,
               cited_page: null,
@@ -637,6 +643,14 @@ describe("the v1 wire contract", () => {
     const fact = JSON.parse(JSON.stringify(deep));
     fact.body.handoffs[0].source_facts[0].rects[0].bbox = [0, 0, 1, 1];
     refuses(() => parseAnalysisDocument(fact), "$.body.handoffs[0].source_facts[0].rects[0]");
+
+    // D105: a citation's line is closed and required, like the citation.
+    const line = JSON.parse(JSON.stringify(deep));
+    line.body.handoffs[0].source_facts[0].line.offset = 10;
+    refuses(() => parseAnalysisDocument(line), "$.body.handoffs[0].source_facts[0].line");
+    const lineless = JSON.parse(JSON.stringify(deep));
+    delete lineless.body.handoffs[0].source_facts[0].line;
+    refuses(() => parseAnalysisDocument(lineless), "$.body.handoffs[0].source_facts[0]");
 
     const chrome = JSON.parse(JSON.stringify(runSection()));
     chrome.chrome.served_role.enables = ["approve"];
