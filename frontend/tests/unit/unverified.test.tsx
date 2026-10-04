@@ -151,6 +151,7 @@ describe("unverified citations (D106)", () => {
           figure: null,
           unverified: {
             route_node_id: "CP-1",
+            module_id: "CP-1",
             record_sha256: "c".repeat(64),
             unverified_index: 0,
             source_id: "00000000-0000-4000-8000-0000000000a1",
@@ -224,7 +225,7 @@ describe("the Blocked answer's quotes (owner: Show its quotes)", () => {
     expect(verified.querySelector("blockquote, mark, script")).toBeNull();
     expect(verified).toHaveTextContent("not linked to a statement in the answer");
     expect(
-      screen.getByRole("button", { name: "Open the source of verified quote 1, page 4" }),
+      screen.getByRole("button", { name: "C1, citation 1: open its source, page 4" }),
     ).toHaveAttribute("aria-haspopup", "dialog");
     const model = container.querySelector('[data-blocked-quote="unverified"]')!;
     expect(model.querySelector(".lbl")).toHaveTextContent(

@@ -12,6 +12,14 @@ import { QUOTE_LABEL } from "./TracedLine";
 import { NOT_LINKED_SHORT, markerPrefix, unverifiedLabel } from "./Unverified";
 import type { ReportDocument } from "@/wire/v1";
 
+type Figure = NonNullable<ReportDocument["body"]["narrative"][number][number]["figure"]>;
+
+/** A figure chip's text: its module and marker, as the deliverable names
+    it (`[CP-1 C3]`), and its page -- "CP-1 C3 · p.7". */
+export function figureChip(figure: Figure): string {
+  return `${figure.module_id}${figure.marker === null ? "" : ` C${figure.marker}`} · p.${figure.page}`;
+}
+
 /** Report's and Committee's narrative: the same saved shape. */
 export function Narrative({ narrative }: { narrative: ReportDocument["body"]["narrative"] }) {
   const { openFact, activeFact } = useEvidence();
@@ -26,7 +34,7 @@ export function Narrative({ narrative }: { narrative: ReportDocument["body"]["na
               return (
                 <span key={spanIndex} data-unverified-figure={unverified.route_node_id}>
                   <span className="lbl">
-                    {unverified.route_node_id} {markerPrefix(unverified.marker)}
+                    {unverified.module_id} {markerPrefix(unverified.marker)}
                     {unverifiedLabel(unverified)}:{" "}
                   </span>
                   <q className="figq-unverified">{clampExcerpt(unverified.matched_text)}</q>{" "}
@@ -55,7 +63,7 @@ export function Narrative({ narrative }: { narrative: ReportDocument["body"]["na
                 <button
                   type="button"
                   className="chip"
-                  aria-label={`${figure.marker === null ? "Evidence" : `citation ${figure.marker}:`} ${figure.route_node_id} p.${figure.page}${figure.line.recorded ? "" : `, ${QUOTE_LABEL.toLowerCase()}`}`}
+                  aria-label={`${figureChip(figure)}, ${figure.marker === null ? "evidence" : `citation ${figure.marker}`} of ${figure.module_id}, page ${figure.page}${figure.line.recorded ? "" : `, ${QUOTE_LABEL.toLowerCase()}`}`}
                   aria-expanded={open}
                   data-figure-chip={figure.source_id}
                   onClick={(event) =>
@@ -70,8 +78,7 @@ export function Narrative({ narrative }: { narrative: ReportDocument["body"]["na
                     )
                   }
                 >
-                  {figure.route_node_id}
-                  {figure.marker === null ? "" : ` C${figure.marker}`} · p.{figure.page}
+                  {figureChip(figure)}
                 </button>
               </span>
             );

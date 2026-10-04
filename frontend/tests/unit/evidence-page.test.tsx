@@ -425,9 +425,11 @@ describe("the evidence drawer", () => {
     };
     await mount(`/analysis/?case=${CASE}&tab=rn-cp-0`);
     const quote = analysis()["body"].handoffs[0].source_facts[0].matched_text;
-    const chip = screen.getByRole("button", {
-      name: "citation 1: CVNA_10K_Annual_Report_FY2025.htm, page 1",
-    });
+    // The text's chip (the Audit tab's fact chip names the same citation).
+    const chip = document.querySelector<HTMLButtonElement>(
+      "[data-analysis] button[data-marker-chip='1']",
+    )!;
+    expect(chip).toHaveAccessibleName("C1, citation 1: CVNA_10K_Annual_Report_FY2025.htm, page 1");
     expect(chip).toHaveTextContent(/^C1$/);
     expect(chip).toHaveAttribute("aria-haspopup", "dialog");
     expect(document.querySelector("[data-analysis]")!.textContent).not.toContain("We do not");
@@ -441,6 +443,36 @@ describe("the evidence drawer", () => {
     const shown = dialog()!.querySelector("blockquote.matched")!;
     expect(shown.textContent).toBe(`We do not ${quote} (unaudited)`);
     expect(shown.querySelector("mark")!.textContent).toBe(quote);
+  });
+
+  test("test_each_marker_chip_opens_its_own_citation", async () => {
+    // The MK2 audit: C2 and C3 open the second and third citations, by their
+    // place in the handoff's source facts, never the first or the next.
+    sectionBody = () => {
+      const doc = analysis();
+      const handoff = doc["body"].handoffs[0];
+      const fact = handoff.source_facts[0];
+      handoff.source_facts = [1, 2, 3].map((n) => ({
+        ...fact,
+        page: n,
+        filename: `doc-${n}.htm`,
+        marker: n,
+      }));
+      handoff.model_analysis += "\n\nThree figures [C1], [C2] and [C3].";
+      return doc;
+    };
+    await mount(`/analysis/?case=${CASE}&tab=rn-cp-0`);
+    for (const n of [2, 3, 1]) {
+      const chip = document.querySelector<HTMLButtonElement>(`button[data-marker-chip='${n}']`)!;
+      expect(chip).toHaveAccessibleName(`C${n}, citation ${n}: doc-${n}.htm, page ${n}`);
+      act(() => fireEvent.click(chip));
+      await settle();
+      expect(dialog()).toHaveTextContent(`doc-${n}.htm · page ${n}`);
+      expect(urls).toContain(`/api/v1/cases/${CASE}/runs/${RUN}/sources/${SOURCE}/pages/${n}`);
+      expect(chip).toHaveAttribute("aria-expanded", "true");
+      act(() => fireEvent.keyDown(dialog()!, { key: "Escape" }));
+      await settle();
+    }
   });
 
   test("test_the_drawer_reads_the_visible_snapshot_not_the_pending_one", async () => {
@@ -485,7 +517,7 @@ describe("a narrative figure (N59)", () => {
       </MemoryRouter>,
     );
     await settle();
-    const chip = screen.getByRole("button", { name: "citation 1: CP-1 p.7" });
+    const chip = screen.getByRole("button", { name: "CP-1 C1 · p.7, citation 1 of CP-1, page 7" });
     // Compact (D107): the narrative shows the excerpt, never its line or mark.
     expect(document.querySelector("q.figq")).toHaveTextContent("Coverage 2.1x");
     expect(document.querySelector("q.figq mark")).toBeNull();
@@ -523,7 +555,7 @@ describe("a narrative figure (N59)", () => {
       </MemoryRouter>,
     );
     await settle();
-    const chip = screen.getByRole("button", { name: "citation 1: CP-1 source, page 7" });
+    const chip = screen.getByRole("button", { name: "C1, citation 1: CP-1 source, page 7" });
     expect(chip).toHaveTextContent(/^C1$/);
     act(() => fireEvent.click(chip));
     await settle();
@@ -536,6 +568,45 @@ describe("a narrative figure (N59)", () => {
     expect(inert.closest("button")).toBeNull();
   });
 
+  test("test_each_artifact_marker_chip_opens_its_own_citation", async () => {
+    // The MK2 audit: an artifact's C2 and C3 open its second and third
+    // record citations (`citation_index` 1 and 2), each at its own page.
+    sectionBody = () => {
+      const doc = JSON.parse(text("../../fixtures/committee-v1.json"));
+      const artifact = doc["body"].artifacts[0];
+      const figure = artifact.figures[0];
+      artifact.figures = [0, 1, 2].map((index) => ({
+        ...figure,
+        citation_index: index,
+        page: 7 + index,
+        marker: index + 1,
+      }));
+      artifact.markdown += " Also [C3].";
+      artifact.unverified = [];
+      return doc;
+    };
+    render(
+      <MemoryRouter initialEntries={[`/committee/?case=${CASE}&run=${RUN_B}&revision=${REVISION}`]}>
+        <Workspace section="committee" />
+      </MemoryRouter>,
+    );
+    await settle();
+    for (const n of [2, 3]) {
+      const page = 6 + n;
+      const chip = screen.getByRole("button", {
+        name: `C${n}, citation ${n}: CP-1 source, page ${page}`,
+      });
+      act(() => fireEvent.click(chip));
+      await settle();
+      expect(dialog()).toHaveTextContent(`page ${page}`);
+      expect(urls).toContain(
+        `/api/v1/cases/${CASE}/runs/${RUN_B}/sources/${FIGURE_SOURCE}/pages/${page}`,
+      );
+      act(() => fireEvent.keyDown(dialog()!, { key: "Escape" }));
+      await settle();
+    }
+  });
+
   const openFigure = async (page: () => { status: number; body: unknown }) => {
     sectionBody = () => JSON.parse(text("../../fixtures/committee-v1.json"));
     pageAnswer = page;
@@ -545,7 +616,11 @@ describe("a narrative figure (N59)", () => {
       </MemoryRouter>,
     );
     await settle();
-    act(() => fireEvent.click(screen.getByRole("button", { name: "citation 1: CP-1 p.7" })));
+    act(() =>
+      fireEvent.click(
+        screen.getByRole("button", { name: "CP-1 C1 · p.7, citation 1 of CP-1, page 7" }),
+      ),
+    );
     await settle();
   };
 

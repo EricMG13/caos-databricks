@@ -11,7 +11,7 @@ import { ArtifactTexts } from "@/ds/ArtifactMarkdown";
 import { Markdown, ModuleRefLink } from "@/ds/ModelMarkdown";
 import { readMarkers, readRefs } from "@/ds/markdown";
 import { ArtifactMarkers, HandoffMarkers, unverifiedMarkerLabel } from "@/evidence/Markers";
-import { Narrative } from "@/evidence/Narrative";
+import { Narrative, figureChip } from "@/evidence/Narrative";
 import { AnalysisSection } from "@/sections/analysis/AnalysisSection";
 import { citationsOf, choiceText } from "@/sections/report/figures";
 import {
@@ -74,7 +74,7 @@ describe("citation markers (D107)", () => {
   test("test_a_marker_is_a_chip_named_citation_n_that_opens_its_source", () => {
     const container = drawn(marked(), "Net leverage fell [C1]; both [C1, C2].");
     const chip = screen.getAllByRole("button", {
-      name: "citation 1: CVNA_10K_Annual_Report_FY2025.htm, page 1",
+      name: "C1, citation 1: CVNA_10K_Annual_Report_FY2025.htm, page 1",
     })[0]!;
     expect(chip).toHaveTextContent(/^C1$/);
     expect(chip).toHaveAttribute("aria-haspopup", "dialog");
@@ -88,7 +88,7 @@ describe("citation markers (D107)", () => {
   test("test_an_unverified_marker_is_labelled_and_inert", () => {
     const container = drawn(marked(), "Covenant headroom [C3].");
     const chip = container.querySelector("[data-unverified-marker]")!;
-    expect(chip).toHaveTextContent("citation 3, C3 · unverified – page 14");
+    expect(chip.textContent).toBe("citation 3, C3 · unverified – page 14");
     expect(chip.tagName).toBe("SPAN");
     expect(chip.closest("button, a")).toBeNull();
     expect(chip.querySelector("button, a, [tabindex]")).toBeNull();
@@ -126,7 +126,7 @@ describe("citation markers (D107)", () => {
     expect(container.querySelector("code [data-unverified-marker]")).not.toBeNull();
     // A hostile file name is an accessible name's text, never markup.
     const chip = screen.getByRole("button", {
-      name: 'citation 2: <img src=x onerror="window.pwned=1">.htm, page 2',
+      name: 'C2, citation 2: <img src=x onerror="window.pwned=1">.htm, page 2',
     });
     expect(chip.children).toHaveLength(0);
   });
@@ -139,7 +139,9 @@ describe("citation markers (D107)", () => {
         <Markdown text={artifact.markdown} base={2} label="CP-1" />
       </ArtifactMarkers>,
     );
-    expect(screen.getByRole("button", { name: "citation 1: CP-1 source, page 7" })).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "C1, citation 1: CP-1 source, page 7" }),
+    ).toBeVisible();
     expect(container.querySelector("[data-unverified-marker]")).toHaveTextContent(
       "unverified – page 9",
     );
@@ -274,6 +276,9 @@ describe("no whole source line outside the drawer (D107)", () => {
       ],
     ];
     const { container } = render(<Narrative narrative={narrative} />);
+    // Named as the deliverable names it, its module and marker (`[CP-1 C1]`).
+    expect(figureChip(narrative[0]![0]!.figure)).toBe("CP-1 C1 · p.7");
+    expect(container.querySelector("[data-figure-chip]")!.textContent).toBe("CP-1 C1 · p.7");
     expect(container.querySelector("q.figq")).toHaveTextContent(/^Net debt 2\.0bn today$/);
     expect(container.textContent).not.toContain(line);
     expect(container.querySelector("mark")).toBeNull();

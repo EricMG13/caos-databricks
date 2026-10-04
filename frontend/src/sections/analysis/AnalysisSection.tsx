@@ -177,7 +177,7 @@ function SourceFacts({
             <button
               type="button"
               className={`chip${fact.withdrawn_at !== null ? " withdrawn" : ""}`}
-              aria-label={`Evidence ${fact.marker === null ? "" : `C${fact.marker} · `}${fact.filename} p.${fact.page}${fact.withdrawn_at !== null ? " · source withdrawn" : ""}`}
+              aria-label={`${fact.marker === null ? `p.${fact.page}, evidence` : `C${fact.marker}, citation ${fact.marker}:`} ${fact.filename}, page ${fact.page}${fact.withdrawn_at !== null ? " · source withdrawn" : ""}`}
               aria-haspopup="dialog"
               aria-expanded={activeFact?.record_sha256 === record && activeFact.index === index}
               data-fact-chip={fact.source_id}

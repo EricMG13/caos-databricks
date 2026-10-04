@@ -616,6 +616,8 @@ const BookDocument = sectionDocument(BookBody);
 // cross-referencing `ReportBody.artifacts` or the run's pinned members.
 const NarrativeFigure = object({
   route_node_id: short,
+  // The record's module: a citation is named "CP-1 C3" (D107).
+  module_id: short,
   record_sha256: hash,
   citation_index: int({ min: 0 }),
   document_sha256: hash,
@@ -633,6 +635,8 @@ const NarrativeFigure = object({
 // record holds it, shown labelled and never opened as a host-verified source.
 const NarrativeUnverified = object({
   route_node_id: short,
+  // The record's module: a citation is named "CP-1 C3" (D107).
+  module_id: short,
   record_sha256: hash,
   unverified_index: int({ min: 0 }),
   source_id: uuid,

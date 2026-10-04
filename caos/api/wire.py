@@ -1138,6 +1138,9 @@ class NarrativeFigure(BaseModel):
     model_config = _CLOSED
 
     route_node_id: Id
+    # The module the record is of, which names its citation beside its
+    # marker, "CP-1 C3", as the deliverable's appendix does (D107).
+    module_id: Id
     record_sha256: Sha256
     citation_index: Annotated[int, Field(ge=0)]
     document_sha256: Sha256
@@ -1162,6 +1165,7 @@ class NarrativeUnverified(BaseModel):
     model_config = _CLOSED
 
     route_node_id: Id
+    module_id: Id
     record_sha256: Sha256
     unverified_index: Annotated[int, Field(ge=0)]
     source_id: UUID

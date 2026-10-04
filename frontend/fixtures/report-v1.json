@@ -31,6 +31,7 @@
         "figures": [
           {
             "route_node_id": "CP-1",
+            "module_id": "CP-1",
             "record_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
             "citation_index": 0,
             "document_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
@@ -52,6 +53,7 @@
         "unverified": [
           {
             "route_node_id": "CP-1",
+            "module_id": "CP-1",
             "record_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
             "unverified_index": 0,
             "source_id": "00000000-0000-4000-8000-0000000000a1",
@@ -76,6 +78,7 @@
           "unverified": null,
           "figure": {
             "route_node_id": "CP-1",
+            "module_id": "CP-1",
             "record_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
             "citation_index": 0,
             "document_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
@@ -104,6 +107,7 @@
           "figure": null,
           "unverified": {
             "route_node_id": "CP-1",
+            "module_id": "CP-1",
             "record_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
             "unverified_index": 0,
             "source_id": "00000000-0000-4000-8000-0000000000a1",

@@ -118,7 +118,7 @@ test("demo Model, Report, and Committee routes render parsed v1 content", async 
   // the drawer shows the whole line, the excerpt marked. [C2] is inert.
   await page.keyboard.press("Escape");
   await expect(drawer).toHaveCount(0);
-  const marker = page.getByRole("button", { name: "citation 1: CP-1 source, page 7" });
+  const marker = page.getByRole("button", { name: "C1, citation 1: CP-1 source, page 7" });
   await marker.focus();
   await page.keyboard.press("Enter");
   await expect(drawer).toContainText("page 7");

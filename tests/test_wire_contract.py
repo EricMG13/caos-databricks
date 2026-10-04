@@ -123,13 +123,14 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
         ).split()
     ),
     wire.NarrativeFigure: frozenset(
-        "route_node_id record_sha256 citation_index document_sha256 source_id"
+        "route_node_id module_id record_sha256 citation_index document_sha256 source_id"
         " page matched_text line rects withdrawn_at linked marker".split()
     ),
     wire.LineView: frozenset({"before", "excerpt", "after", "recorded"}),
     wire.NarrativeSpan: frozenset({"text", "figure", "unverified"}),
     wire.NarrativeUnverified: frozenset(
-        "route_node_id record_sha256 unverified_index source_id page matched_text"
+        "route_node_id module_id record_sha256 unverified_index source_id page"
+        " matched_text"
         " code linked marker".split()
     ),
     wire.UnverifiedCitationView: frozenset(

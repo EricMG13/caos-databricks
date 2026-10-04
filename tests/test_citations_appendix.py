@@ -13,6 +13,7 @@ import hashlib
 import html
 import json
 import re
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -140,6 +141,26 @@ def test_an_excerpt_is_clamped_as_the_workspace_clamps_it() -> None:
         f"6fc4a221c5d5 · page 3 · {OPEN}q{CLOSE} · verified"
         " · quote (source line not recorded)"
     )
+
+
+def test_the_clamp_is_exactly_the_workspaces() -> None:
+    """`EXCERPT_CHARS` code points at most, 119 kept and the ellipsis, the
+    same bound `compact.clampExcerpt` holds (`report-figures.test.tsx`)."""
+    assert clamped("x" * EXCERPT_CHARS) == "x" * EXCERPT_CHARS
+    assert clamped("x" * (EXCERPT_CHARS + 1)) == "x" * 119 + "\N{HORIZONTAL ELLIPSIS}"
+    compact = (
+        Path(__file__).resolve().parents[1] / "frontend/src/evidence/compact.ts"
+    ).read_text(encoding="utf-8")
+    assert f"export const EXCERPT_CHARS = {EXCERPT_CHARS};" in compact
+
+
+def test_an_excerpt_is_cut_before_it_is_escaped() -> None:
+    """The cut falls on the quote's own characters, never inside an entity
+    the escaping wrote (F65's rule, for the clamp): `&<` at the bound reads
+    `&amp;&lt;` then the ellipsis, never `&am…`."""
+    quote = "a" * 117 + "&<>zzz"
+    rows = _rows(render(_payload([_anchored(matched_text=quote, marker=1)])).decode())
+    assert f"{OPEN}{'a' * 117}&amp;&lt;\N{HORIZONTAL ELLIPSIS}{CLOSE}" in rows[0]
 
 
 def test_a_narrative_figure_names_its_modules_citation() -> None:
