@@ -1417,6 +1417,77 @@ def test_a_handoff_exactly_at_the_upstream_bound_is_accepted(
     assert _cp0_ledger(harness) == (1, 1, [], 1)
 
 
+def _demanding(cell: str) -> Callable[[str], str]:
+    """A flaw writing `cell` in every T8 `Source files to attach` cell."""
+
+    def flaw(body: str) -> str:
+        assert "Source p1" in body
+        return body.replace("Source p1", cell)
+
+    return flaw
+
+
+def test_a_misspelt_t8_source_refuses_the_gate_and_its_retry_is_told(
+    harness: _Harness,
+) -> None:
+    """F497: a T8 cell naming one pinned source and one misspelt would be
+    refused `EVIDENCE_DEMAND_UNRESOLVED` by its consumer, after the gate is
+    accepted, where no retry reaches (run C3). It is refused at the gate's
+    acceptance instead, and the guided retry is told the row and the item;
+    the corrected answer is accepted and the route completes."""
+    answers = CanonicalCompletions(harness.source_id)
+    flaw = _demanding("report.txt; repot.txt")
+    assert _run(harness, _Flawed(answers, flaw=flaw)) is None
+    assert [_module(prompt) for prompt in answers.prompts] == [
+        "CP-0",
+        "CP-0",
+        "CP-L10",
+        "CP-5",
+    ]
+    line = (
+        'host demand check: T8 row CP-L10 names "repot.txt", which is no source'
+        " of this run; write each source by its exact filename as listed in the"
+        " host source preparation metadata"
+    )
+    assert line not in answers.prompts[0]
+    assert line in _checks(answers.prompts[1])
+    assert line.replace("CP-L10", "CP-5") in _checks(answers.prompts[1])
+    assert _cp0_ledger(harness) == (2, 2, ["HANDOFF_MALFORMED"], 1)
+
+
+def test_a_t8_page_phrase_the_host_cannot_read_is_told_its_form(
+    harness: _Harness,
+) -> None:
+    """F497 (review): an item naming a pinned file and then two page ranges
+    refuses the gate as before, and the retry is told the page form, not
+    that the file is no source of the run."""
+    answers = CanonicalCompletions(harness.source_id)
+    flaw = _demanding("uncited.txt; report.txt pages 1-2 and 4-5")
+    assert _run(harness, _Flawed(answers, flaw=flaw)) is None
+    line = (
+        'host demand check: T8 row CP-L10 names "report.txt pages 1-2 and 4-5",'
+        " whose page form the host cannot read; write one range per item, as"
+        " `<filename> pages <first>-<last>` or `<filename> page <n>`, separated"
+        ' by ";"'
+    )
+    assert line in _checks(answers.prompts[1])
+    assert _cp0_ledger(harness) == (2, 2, ["HANDOFF_MALFORMED"], 1)
+
+
+def test_a_t8_cell_the_host_reads_whole_or_named_is_accepted_at_the_gate(
+    harness: _Harness,
+) -> None:
+    """F497 keeps §95's other outcomes: a cell naming nothing pinned is
+    delivered whole, and one naming only pinned sources is a selection; the
+    gate is accepted either way, first time."""
+    for cell in ("the prepared artifact; an exhibit", "report.txt; uncited.txt"):
+        sibling = _sibling(harness)
+        answers = CanonicalCompletions(harness.source_id)
+        assert _run(sibling, _Flawed(answers, flaw=_demanding(cell))) is None
+        assert [_module(p) for p in answers.prompts] == ["CP-0", "CP-L10", "CP-5"]
+        assert _cp0_ledger(sibling) == (1, 1, [], 1)
+
+
 # D104: a guided retry carries the refused answer back to be corrected, and
 # (F496) asks for all of it back, every section, register, row and citation.
 REPAIR = (

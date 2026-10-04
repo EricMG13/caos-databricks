@@ -68,6 +68,7 @@ from caos.methodology.handoff import (
     LineHint,
     Projections,
     UpstreamRef,
+    _bounded,
     anchoring_line,
     answer_citations,
     answer_markdown,
@@ -91,8 +92,11 @@ from caos.methodology.invocation import (
 )
 from caos.methodology.selection import (
     Basis,
+    DemandFault,
+    Fault,
     Selection,
     demand_cells,
+    demand_fault,
     demand_items,
     gate_view,
     select_sources,
@@ -443,6 +447,11 @@ def _answer(  # noqa: PLR0913 -- one recorded answer, keyword-only
     # Refused here instead, as a guided retry told the size (`_size_line`).
     if len(markdown) > MAX_UPSTREAM_HANDOFF_BYTES:
         raise Refusal(RefusalCode.HANDOFF_MALFORMED)
+    # F497, the same shape for the gate's T8 demand: a cell a consumer's
+    # selection would refuse `EVIDENCE_DEMAND_UNRESOLVED` is refused here, as
+    # a guided retry told the item (`_demand_lines`).
+    if _demand_faults(bundle, assignment, context, markdown):
+        raise Refusal(RefusalCode.HANDOFF_MALFORMED)
     _forecast_inputs(bundle, assignment.module_id, markdown, context)
     record = CanonicalRecord(
         artifact_sha256=hashlib.sha256(markdown).hexdigest(),
@@ -662,6 +671,7 @@ def _prompt_context(
     skill = assemble_authority(bundle, assignment.module_id).files[SKILL]
     contract, pathways = _contract(bundle), catalog(bundle)
     host = (
+        *_demand_lines(bundle, assignment, context, body),
         _anchoring_line(conn, context.delivered, answer_citations(body)),
         readiness_set_line(
             contract,
@@ -682,6 +692,80 @@ def _prompt_context(
     # The answer rides only beside its checks (D104): with none, no block.
     answer = carried_answer(body) if feedback else None
     return replace(context, feedback=feedback, refused_answer=answer)
+
+
+def _demand_faults(
+    bundle: Bundle, assignment: Assignment, context: _Context, markdown: bytes
+) -> list[tuple[str, DemandFault]]:
+    """Each route consumer's T8 cell in the gate's answer that its selection
+    would refuse (F497), by module and the item at fault: `demand_fault`,
+    `select_sources`' own rule, over the pinned members and the last page of
+    each the consumer will see. Empty for every other module. Pure over the
+    pin and the answer, so the live call and `replay_billed` agree. The
+    gate's view shows every page of every member (`gate_view` keeps at least
+    one line a page), so its last pages are the consumer's."""
+    if assignment.module_id != GATE_MODULE or context.source_set is None:
+        return []
+    consumers = {n.module_id for n in assignment.route.nodes} - {GATE_MODULE}
+    cells = demand_cells(_contract(bundle).navigation, catalog(bundle), markdown)
+    last_pages: dict[UUID, int] = {}
+    for item in context.delivered:
+        last_pages[item.source_id] = max(item.page, last_pages.get(item.source_id, 0))
+    members = context.source_set.members
+    return [
+        (module, fault)
+        for module, cell in cells.items()
+        if module in consumers
+        and (fault := demand_fault(members, cell, last_pages=last_pages)) is not None
+    ]
+
+
+# What a retry is told of each T8 item at fault (F497), after the row and the
+# item the gate wrote.
+_DEMAND_FIX = {
+    Fault.UNKNOWN: (
+        "which is no source of this run; write each source by its exact filename"
+        " as listed in the host source preparation metadata"
+    ),
+    Fault.AMBIGUOUS: (
+        "which names more than one source of this run; write each source by its"
+        " exact filename as listed in the host source preparation metadata"
+    ),
+    Fault.PAGES: (
+        "whose pages that source does not carry; name pages from 1 to its last"
+        " page, or the source whole"
+    ),
+    Fault.PAGE_FORM: (
+        "whose page form the host cannot read; write one range per item, as"
+        " `<filename> pages <first>-<last>` or `<filename> page <n>`, separated"
+        ' by ";"'
+    ),
+}
+
+
+def _demand_lines(
+    bundle: Bundle, assignment: Assignment, context: _Context, body: str
+) -> list[str]:
+    """The gate retry's lines for its refused answer's T8 cells at fault
+    (F497): the row and the item, the model's own text told back (D30),
+    across the boundary and bounded like a vendor message (`_bounded`)."""
+    markdown = answer_markdown(body)
+    if markdown is None:
+        return []
+    try:
+        faults = _demand_faults(bundle, assignment, context, markdown)
+    except Refusal:  # a T8 the vendor cannot read: its own checks say so
+        return []
+    return [
+        line
+        for module, found in faults
+        if (
+            line := _bounded(
+                "host demand check",
+                f'T8 row {module} names "{found.item}", {_DEMAND_FIX[found.fault]}',
+            )
+        )
+    ]
 
 
 def _size_line(markdown: bytes | None) -> str | None:

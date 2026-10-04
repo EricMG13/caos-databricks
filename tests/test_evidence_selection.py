@@ -38,8 +38,11 @@ from caos.methodology.invocation import (
 from caos.methodology.selection import (
     GATE_SOURCE_BYTES,
     Basis,
+    DemandFault,
+    Fault,
     Selection,
     demand_cells,
+    demand_fault,
     demand_items,
     gate_view,
     select_sources,
@@ -147,6 +150,84 @@ def test_a_name_two_members_answer_to_is_refused() -> None:
         select_sources(shared, "34" * 32)
 
 
+# Run C3's pin and its CP-0's accepted CP-3C cell (F497): seven items name
+# members, and the seventh of eight misspells `CZR_2026_Merger_Agreement_8K.txt`.
+C3_MEMBERS = (
+    "CZR_2026_Merger_Agreement_8K.txt",
+    "CZR_2026_Merger_Press_Release.txt",
+    "CZR_2024_Credit_Agreement_Fourth_Amendment.txt",
+    "CZR_Q2_2026_10Q.txt",
+    "CZR_FY2025_10K.txt",
+    "CZR_2024_Credit_Agreement_Fifth_Amendment.txt",
+    "CZR_2024_650_Senior_Secured_Notes_2032_Indenture.txt",
+    "CZR_2020_Credit_Agreement.txt",
+)
+C3_CELL = (
+    "CZR_Q2_2026_10Q.txt; CZR_FY2025_10K.txt; CZR_2020_Credit_Agreement.txt;"
+    " CZR_2024_Credit_Agreement_Fourth_Amendment.txt;"
+    " CZR_2024_Credit_Agreement_Fifth_Amendment.txt;"
+    " CZR_2024_650_Senior_Secured_Notes_2032_Indenture.txt;"
+    " CZR_2026_Merger_8K.txt; CZR_2026_Merger_Press_Release.txt"
+)
+
+
+def test_demand_fault_names_the_item_select_sources_refuses() -> None:
+    """F497: `demand_fault` is `select_sources`' own rule, the refusal
+    returned as the first item at fault and why: a misspelt name beside
+    readable ones (C3's cell), a name two members answer to, a page range the
+    member cannot carry. A cell that selects, or names nothing pinned, or is
+    empty, has none, exactly when `select_sources` does not refuse."""
+    c3 = tuple(_member(name) for name in C3_MEMBERS)
+    a, b = _member("a.txt"), _member("b.txt")
+    twins = (_member("x.txt", "34" * 32), _member("y.txt", "34" * 32))
+    pages = {a.source_id: 5}
+    cases = [
+        (c3, C3_CELL, DemandFault("CZR_2026_Merger_8K.txt", Fault.UNKNOWN)),
+        ((a, b), "a.txt; b.txt", None),
+        ((a, b), "the prepared artifact; an exhibit", None),
+        ((a, b), "", None),
+        ((a, b), None, None),
+        ((a, *twins), "a.txt; " + "34" * 32, DemandFault("34" * 32, Fault.AMBIGUOUS)),
+        ((a, b), "b.txt; a.txt pages 3-9", DemandFault("a.txt pages 3-9", Fault.PAGES)),
+        ((a, b), "a.txt pages 3-5", None),
+    ]
+    for members, cell, fault in cases:
+        assert demand_fault(members, cell, last_pages=pages) == fault
+        if fault is None:
+            select_sources(members, cell, last_pages=pages)
+            continue
+        with pytest.raises(Refusal) as refused:
+            select_sources(members, cell, last_pages=pages)
+        assert refused.value.code is RefusalCode.EVIDENCE_DEMAND_UNRESOLVED
+        assert fault.item not in str(refused.value)
+
+
+def test_a_page_phrase_the_form_cannot_read_is_told_as_such() -> None:
+    """F497 (review): an item that begins with a member's exact filename,
+    by `_named`'s own matching, then a page phrase Step I rule 5's form does
+    not read -- run a82a07ad's CP-0 attempt 3 wrote two ranges in one item --
+    is `PAGE_FORM`, not `UNKNOWN`. Only the wording moves: beside a readable
+    item the cell is still refused, and alone it is still delivered whole."""
+    c3 = tuple(_member(name) for name in C3_MEMBERS)
+    item = "CZR_FY2025_10K.txt pages 14-15 and 26-27"
+    cell = f"CZR_Q2_2026_10Q.txt; {item}"
+    assert demand_fault(c3, cell) == DemandFault(item, Fault.PAGE_FORM)
+    with pytest.raises(Refusal) as refused:
+        select_sources(c3, cell)
+    assert refused.value.code is RefusalCode.EVIDENCE_DEMAND_UNRESOLVED
+    assert demand_fault(c3, item) is None
+    assert select_sources(c3, item).basis is Basis.WHOLE_UNMAPPED
+    # A name the matching does not accept stays unknown: no looser test.
+    loose = "CZR_FY2025_10K pages 14-15 and 26-27"
+    assert demand_fault(c3, f"CZR_Q2_2026_10Q.txt; {loose}") == DemandFault(
+        loose, Fault.UNKNOWN
+    )
+    paged = "CZR_FY2025_10K.txt (page 3 and 5)"
+    assert demand_fault(c3, f"CZR_Q2_2026_10Q.txt; {paged}") == DemandFault(
+        paged, Fault.PAGE_FORM
+    )
+
+
 def test_selection_is_a_pure_function_of_its_inputs() -> None:
     a, b = _member("a.txt"), _member("b.txt")
     assert select_sources((a, b), "b.txt; a.txt") == select_sources(
@@ -228,9 +309,13 @@ def test_a_quote_on_an_undelivered_member_is_refused_on_a_real_run(
 
 
 def test_a_demand_the_host_half_reads_is_refused_before_any_attempt(
-    harness: _Harness,
+    harness: _Harness, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _gate(harness, {"CP-L10": f"{REPORT}; a prepared artifact"})
+    """The backstop (F497): a gate record accepted before its acceptance
+    checked the demand still refuses its consumer before any attempt."""
+    with monkeypatch.context() as before:
+        before.setattr(canonical, "_demand_faults", lambda *_args: [])
+        _gate(harness, {"CP-L10": f"{REPORT}; a prepared artifact"})
     node = _node(harness, "CP-L10")
     with pytest.raises(Refusal) as refused:
         check_context(

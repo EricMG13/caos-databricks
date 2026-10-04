@@ -88,6 +88,8 @@ _PAGES = re.compile(
     re.IGNORECASE | re.ASCII,
 )
 _PAGE_DIGITS = 6
+# Where a page phrase may begin after a name (`_unmapped_fault`, F497).
+_PAGE_WORD = re.compile(r"\s++\(?\s*+pages?\b", re.IGNORECASE | re.ASCII)
 _MAX_ITEM_CHARS = 512
 
 
@@ -227,6 +229,29 @@ def demand_items(cell: str) -> tuple[str, ...]:
     )
 
 
+class Fault(StrEnum):
+    """Why `select_sources` refuses a cell, by its first item at fault."""
+
+    # The item names no pinned member, beside items that do: half-readable.
+    UNKNOWN = "UNKNOWN"
+    # The item names more than one member.
+    AMBIGUOUS = "AMBIGUOUS"
+    # The item's page range is one its member cannot carry.
+    PAGES = "PAGES"
+    # The item begins with a member's name, then a page phrase Step I rule
+    # 5's form does not read (two ranges, say): unmapped, as UNKNOWN is.
+    PAGE_FORM = "PAGE_FORM"
+
+
+@dataclass(frozen=True, slots=True)
+class DemandFault:
+    """The item of a cell `select_sources` refuses, and why (F497). The item
+    is the gate's own text: told back to its retry, never a refusal's."""
+
+    item: str
+    fault: Fault
+
+
 def select_sources(
     members: Sequence[SourceSetMember],
     cell: str | None,
@@ -242,41 +267,95 @@ def select_sources(
     pin captured of it (none known refuses every range); the refusal carries
     no item text. A member named whole and by page is handed whole.
     """
+    selection, fault = _resolved(members, cell, last_pages)
+    if fault is not None:
+        raise Refusal(RefusalCode.EVIDENCE_DEMAND_UNRESOLVED)
+    return selection
+
+
+def demand_fault(
+    members: Sequence[SourceSetMember],
+    cell: str | None,
+    *,
+    last_pages: Mapping[UUID, int] | None = None,
+) -> DemandFault | None:
+    """The item `select_sources` would refuse `cell` for, and why, or None
+    when it selects (F497): the same rule, so the gate's own acceptance can
+    refuse a cell its consumers would, while a retry can still fix it."""
+    return _resolved(members, cell, last_pages)[1]
+
+
+def _resolved(
+    members: Sequence[SourceSetMember],
+    cell: str | None,
+    last_pages: Mapping[UUID, int] | None,
+) -> tuple[Selection, DemandFault | None]:
+    """`select_sources`' rule, its refusal returned as the item at fault."""
     if cell is None:
-        return Selection(Basis.WHOLE_NO_DEMAND, None)
+        return Selection(Basis.WHOLE_NO_DEMAND, None), None
     whole = cell.strip().strip(_WRAPPING).strip()
     items = (whole,) if whole and _matching(members, whole) else demand_items(cell)
     if not items:
-        return Selection(Basis.WHOLE_NO_DEMAND, None)
+        return Selection(Basis.WHOLE_NO_DEMAND, None), None
     whole_members: set[UUID] = set()
     ranged: dict[UUID, set[int]] = {}
-    unmapped = 0
+    unmapped: list[str] = []
     for item in items:
-        found, span = _named(members, item)
-        if len(found) > 1:
-            raise Refusal(RefusalCode.EVIDENCE_DEMAND_UNRESOLVED)
-        if not found:
-            unmapped += 1
-            continue
-        [source_id] = found
-        if span is None:
+        source_id, named, fault = _placed(members, item, last_pages)
+        if fault is not None:
+            return Selection(Basis.WHOLE_NO_DEMAND, None), DemandFault(item, fault)
+        if source_id is None:
+            unmapped.append(item)
+        elif named is None:
             whole_members.add(source_id)
-            continue
-        first, last = span
-        if not 1 <= first <= last <= (last_pages or {}).get(source_id, 0):
-            raise Refusal(RefusalCode.EVIDENCE_DEMAND_UNRESOLVED)
-        ranged.setdefault(source_id, set()).update(range(first, last + 1))
+        else:
+            ranged.setdefault(source_id, set()).update(named)
     mapped = whole_members | set(ranged)
     if not mapped:
-        return Selection(Basis.WHOLE_UNMAPPED, None)
+        return Selection(Basis.WHOLE_UNMAPPED, None), None
     if unmapped:
-        raise Refusal(RefusalCode.EVIDENCE_DEMAND_UNRESOLVED)
+        return Selection(Basis.WHOLE_NO_DEMAND, None), DemandFault(
+            unmapped[0], _unmapped_fault(members, unmapped[0])
+        )
     pages = {
         source_id: frozenset(named)
         for source_id, named in ranged.items()
         if source_id not in whole_members
     }
-    return Selection(Basis.NAMED, frozenset(mapped), pages)
+    return Selection(Basis.NAMED, frozenset(mapped), pages), None
+
+
+def _placed(
+    members: Sequence[SourceSetMember],
+    item: str,
+    last_pages: Mapping[UUID, int] | None,
+) -> tuple[UUID | None, range | None, Fault | None]:
+    """One item's member and the pages it names of it (None: the member
+    whole), or why the cell is refused for it; no member when it names none."""
+    found, span = _named(members, item)
+    if len(found) > 1:
+        return None, None, Fault.AMBIGUOUS
+    if not found:
+        return None, None, None
+    [source_id] = found
+    if span is None:
+        return source_id, None, None
+    first, last = span
+    if not 1 <= first <= last <= (last_pages or {}).get(source_id, 0):
+        return None, None, Fault.PAGES
+    return source_id, range(first, last + 1), None
+
+
+def _unmapped_fault(members: Sequence[SourceSetMember], item: str) -> Fault:
+    """Why an unmapped item names nothing: `PAGE_FORM` when what precedes one
+    of its page words names a member by `_matching`, `_named`'s own test,
+    else `UNKNOWN`. Only the retry's wording depends on it, never a verdict."""
+    if len(item) <= _MAX_ITEM_CHARS:
+        for word in _PAGE_WORD.finditer(item):
+            name = item[: word.start()].strip().strip(_WRAPPING).strip()
+            if name and _matching(members, name):
+                return Fault.PAGE_FORM
+    return Fault.UNKNOWN
 
 
 def _named(
