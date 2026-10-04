@@ -34,6 +34,8 @@ jobs:
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with: {version: "0.12.5", enable-cache: true}
       - run: uv sync --locked --all-groups
+      # The lock is current against pyproject.toml, not merely installable.
+      - run: uv lock --check
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run python scripts/check_vocabulary.py
@@ -124,15 +126,8 @@ jobs:
                  --cover caos scripts icm --unscanned tests
       # The environment `uv sync --locked` built from the hashed lock is what runs.
       - run: uv run pip-audit --strict
-      # The whole history, as gate A12 runs it locally. The action scans only
-      # the push's commit range and failed on the first push over git's own
-      # stderr while finding nothing; the image is digest-pinned like postgres.
-      - run: >-
-          docker run --rm -u "$(id -u):$(id -g)"
-          -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=/repo
-          -v "$PWD:/repo" -w /repo
-          ghcr.io/gitleaks/gitleaks:v8.24.3@sha256:e1b35e12a8c6fa8901f060459cfb6b2fc4c484d3afbe3b029733a3bbfab07055
-          git --no-banner .
+      # The secret scan is its own workflow, .github/workflows/gitleaks.yml
+      # (every branch, PR base..head, weekly full history, a pinned checksummed binary).
 
   bundle:
     # The bundle against the loopback workspace (D28): validate, deploy and

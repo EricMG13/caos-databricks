@@ -32,11 +32,6 @@ def _unpinned(job: str, *lines: str) -> str:
     return f"ci: job {job} runs a script no pin names: {'\n'.join(lines)!r}"
 
 
-def _gitleaks_step(text: str) -> str:
-    step = text[text.index("      - run: >-\n          docker run") :]
-    return step[: step.index("\n\n") + 1]
-
-
 # id -> (the edit, the problems it must raise)
 CI_MUTATIONS: dict[str, tuple[Callable[[str], str], list[str]]] = {
     "job if placed after the job's steps": (
@@ -86,16 +81,6 @@ CI_MUTATIONS: dict[str, tuple[Callable[[str], str], list[str]]] = {
             1,
         ),
         [_unpinned("lint", "trap 'exit 0' EXIT", "uv run ruff check ."), MISSING_RUFF],
-    ),
-    "the gitleaks step deleted, its image kept in a comment": (
-        lambda t: t.replace(
-            _gitleaks_step(t), f"      # {check_gate_config.GITLEAKS_IMAGE}\n", 1
-        ),
-        [f"ci: no step runs {check_gate_config.GITLEAKS_GATE!r}"],
-    ),
-    "the gitleaks step runs version instead of git": (
-        lambda t: t.replace("          git --no-banner .\n", "          version\n", 1),
-        [f"ci: no step runs {check_gate_config.GITLEAKS_GATE!r}"],
     ),
     "the races step loses its database and CAOS_REQUIRE_POSTGRES": (
         lambda t: t.replace(
@@ -187,11 +172,26 @@ def test_a_ci_layout_that_switches_a_gate_off_is_refused(
 HOOK_MUTATIONS: dict[str, tuple[Callable[[str], str], list[str]]] = {
     "a top-level exclude skips every hook": (
         lambda t: "exclude: '.*'\n" + t,
-        ["pre-commit: the config sets 'exclude'; it may set only ['repos']"],
+        [
+            "pre-commit: the config sets 'exclude'; it may set only "
+            f"{sorted(check_gate_config.PRE_COMMIT_KEYS)}"
+        ],
     ),
     "a top-level default_stages moves every hook off the commit": (
         lambda t: "default_stages: [manual]\n" + t,
-        ["pre-commit: the config sets 'default_stages'; it may set only ['repos']"],
+        [
+            "pre-commit: the config sets 'default_stages'; it may set only "
+            f"{sorted(check_gate_config.PRE_COMMIT_KEYS)}"
+        ],
+    ),
+    # W3: pre-push and pre-merge-commit would run every hook without
+    # `stages`, the auto-fixers and the repo-wide checks included.
+    "the hook types to install widened to pushes and merges": (
+        lambda t: "default_install_hook_types: [pre-commit, pre-push]\n" + t,
+        [
+            "pre-commit: default_install_hook_types is set beyond "
+            f"{check_gate_config.HOOK_TYPES}"
+        ],
     ),
     "a hook narrowed to files of another type": (
         lambda t: t.replace(
@@ -260,16 +260,211 @@ def test_a_script_is_read_as_the_shell_runs_it() -> None:
     )
 
 
-def test_both_gitleaks_scans_run_the_one_pinned_version() -> None:
-    """W3: the hook's rev and the CI image's tag are one constant, and the
-    image is pinned by digest as well."""
+def test_both_gitleaks_scans_run_the_one_pinned_version(tmp_path: Path) -> None:
+    """W3: the hook's rev is the version the gitleaks workflow installs."""
     version = check_gate_config.GITLEAKS_VERSION
     hook_rev, _ = check_gate_config.PRE_COMMIT_REPOS[
         "https://github.com/gitleaks/gitleaks"
     ]
     assert hook_rev == version
-    assert f"gitleaks:{version}@sha256:" in check_gate_config.GITLEAKS_GATE
-    assert (check_gate_config.GITLEAKS_GATE,) in check_gate_config.CI_STEPS
+    root = _tree(tmp_path)
+    assert check_gate_config._gitleaks_ci_problems(root) == []
+    scan_file = root / check_gate_config.GITLEAKS_CI_FILE
+    text = scan_file.read_text(encoding="utf-8")
+    scan_file.write_text(
+        text.replace(f"GITLEAKS_VERSION: {version[1:]}", "GITLEAKS_VERSION: 8.24.3"),
+        encoding="utf-8",
+    )
+    problems = check_gate_config._gitleaks_ci_problems(root)
+    assert f"gitleaks: the workflow does not install {version}" in problems
+
+
+def test_a_weakened_or_missing_gitleaks_ci_file_is_refused(tmp_path: Path) -> None:
+    root = _tree(tmp_path)
+    scan_file = root / check_gate_config.GITLEAKS_CI_FILE
+    text = scan_file.read_text(encoding="utf-8")
+    scan_file.write_text(
+        text.replace("--ignore-gitleaks-allow", "--redact", 1).replace(
+            "--redact --ignore-gitleaks-allow", "--redact --first-parent", 1
+        ),
+        encoding="utf-8",
+    )
+    problems = check_gate_config._gitleaks_ci_problems(root)
+    assert (
+        "gitleaks: a scan lacks one of "
+        "['--ignore-gitleaks-allow', '--config .gitleaks.toml']"
+    ) in problems
+    assert "gitleaks: the workflow narrows the scan to first parents" in problems
+    scan_file.unlink()
+    assert check_gate_config._gitleaks_ci_problems(root) == [
+        f"gitleaks: {check_gate_config.GITLEAKS_CI_FILE} is missing or not a mapping"
+    ]
+
+
+SCAN = check_gate_config.GITLEAKS_CI_FILE
+WEEKLY = check_gate_config.SECRETS_WEEKLY_FILE
+SCAN_UNPINNED = f"gitleaks: {SCAN} is not as pinned"
+VERSION = check_gate_config.GITLEAKS_VERSION
+SCAN_FLAGS = (
+    "gitleaks: a scan lacks one of "
+    "['--ignore-gitleaks-allow', '--config .gitleaks.toml']"
+)
+CHECKOUT = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+ASSET = 'asset="gitleaks_${GITLEAKS_VERSION}_${GITLEAKS_PLATFORM}.tar.gz"'
+TARBALL_SHA = "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+
+
+def _between(text: str, start: str, end: str) -> str:
+    return text[text.index(start) : text.index(end)]
+
+
+def _exact(old: str, new: str) -> Callable[[str], str]:
+    return lambda t: t.replace(old, new, 1)
+
+
+# C1 (adv-gates-wave1.md): each edit weakens the secret scan, and each once
+# passed this gate and its tests. id -> (the edit, the problems it must raise
+# besides the whole-file pin).
+SCAN_MUTATIONS: dict[str, tuple[Callable[[str], str], list[str]]] = {
+    "#1 the sha256 check deleted and the hash zeroed": (
+        lambda t: t.replace(
+            '          echo "${GITLEAKS_SHA256}  ${asset}" | sha256sum -c -\n', "", 1
+        ).replace(TARBALL_SHA, "0" * 64, 1),
+        [],
+    ),
+    "#2 job-level continue-on-error": (
+        _exact(
+            "    if: ${{ !cancelled() }}\n",
+            "    if: ${{ !cancelled() }}\n    continue-on-error: true\n",
+        ),
+        [],
+    ),
+    "#3 the job switched off": (
+        _exact("if: ${{ !cancelled() }}", "if: false"),
+        [],
+    ),
+    "#4 push and pull_request triggers removed": (
+        lambda t: t.replace(
+            _between(t, "  push:\n", "  workflow_call:"), "  workflow_dispatch:\n", 1
+        ),
+        [],
+    ),
+    "#5 the scan's exit code swallowed": (
+        _exact('tee "$log" || rc=$?', 'tee "$log" || true'),
+        [],
+    ),
+    "#6 --enable-rule narrows the rules": (
+        _exact(
+            "--config .gitleaks.toml ",
+            "--config .gitleaks.toml --enable-rule bare-token-in-dot-directory ",
+        ),
+        [],
+    ),
+    "#7 another config that satisfies the substring": (
+        _exact("--config .gitleaks.toml ", "--config .gitleaks.toml.off "),
+        [],
+    ),
+    "#8 --gitleaks-ignore-path elsewhere": (
+        _exact(
+            "--config .gitleaks.toml ",
+            "--config .gitleaks.toml --gitleaks-ignore-path docs/ ",
+        ),
+        [],
+    ),
+    "#9 exit 0 ahead of the case": (
+        _exact(
+            '          case "$GITHUB_EVENT_NAME" in\n',
+            '          exit 0\n          case "$GITHUB_EVENT_NAME" in\n',
+        ),
+        [],
+    ),
+    "#10 checkout by tag, shallow, keeping the token": (
+        lambda t: t.replace(CHECKOUT, "actions/checkout@v4", 1)
+        .replace("fetch-depth: 0 ", "fetch-depth: 1 ", 1)
+        .replace("persist-credentials: false", "persist-credentials: true", 1),
+        [],
+    ),
+    "#11 permissions write-all": (
+        _exact("permissions:\n  contents: read\n", "permissions: write-all\n"),
+        [],
+    ),
+    "#12 the PR range narrowed to the head commit": (
+        _exact(
+            'scan "${PR_BASE_SHA}..${PR_HEAD_SHA}"',
+            'scan "${PR_HEAD_SHA}^..${PR_HEAD_SHA}"',
+        ),
+        [],
+    ),
+    "#13 the scan replaced by an echo": (
+        _exact(
+            "            gitleaks git --no-banner",
+            "            echo gitleaks git --no-banner",
+        ),
+        [],
+    ),
+    "#14 the asset hard-coded to another version": (
+        _exact(ASSET, ASSET.replace("${GITLEAKS_VERSION}", "8.18.0")),
+        [],
+    ),
+    "control: the installed version moved": (
+        _exact("GITLEAKS_VERSION: 8.30.1", "GITLEAKS_VERSION: 8.24.3"),
+        [f"gitleaks: the workflow does not install {VERSION}"],
+    ),
+    "control: --first-parent added": (
+        _exact(
+            "--redact --ignore-gitleaks-allow",
+            "--redact --ignore-gitleaks-allow --log-opts=--first-parent",
+        ),
+        ["gitleaks: the workflow narrows the scan to first parents"],
+    ),
+    "control: --ignore-gitleaks-allow dropped": (
+        _exact(" --ignore-gitleaks-allow \\\n", " \\\n"),
+        [SCAN_FLAGS],
+    ),
+}
+
+
+@pytest.mark.parametrize("mutation", list(SCAN_MUTATIONS))
+def test_a_weakened_secret_scan_file_is_refused(tmp_path: Path, mutation: str) -> None:
+    root = _tree(tmp_path)
+    scan = root / SCAN
+    text = scan.read_text(encoding="utf-8")
+    assert check_gate_config._gitleaks_ci_problems(root) == []
+    edit, expected = SCAN_MUTATIONS[mutation]
+    mutated = edit(text)
+    assert mutated != text, "the committed gitleaks.yml no longer has this shape"
+    scan.write_text(mutated, encoding="utf-8")
+    problems = check_gate_config._gitleaks_ci_problems(root)
+    assert any(problem.startswith(SCAN_UNPINNED) for problem in problems), problems
+    for problem in expected:
+        assert problem in problems, problems
+    assert check_gate_config.configuration_problems(root) != []
+
+
+@pytest.mark.parametrize(
+    "edit",
+    [
+        lambda t: t.replace(
+            "  schedule:\n    - cron: '17 3 * * 1'", "  schedule: []", 1
+        ),
+        lambda t: t.replace("./.github/workflows/gitleaks.yml", "./other.yml", 1),
+        lambda t: t.replace("permissions:\n  contents: read\n", "", 1),
+    ],
+    ids=["cron removed", "another workflow called", "top permissions dropped"],
+)
+def test_a_weakened_weekly_scan_is_refused(
+    tmp_path: Path, edit: Callable[[str], str]
+) -> None:
+    root = _tree(tmp_path)
+    weekly = root / WEEKLY
+    text = weekly.read_text(encoding="utf-8")
+    assert edit(text) != text
+    weekly.write_text(edit(text), encoding="utf-8")
+    problems = check_gate_config._gitleaks_ci_problems(root)
+    assert any(
+        problem.startswith(f"gitleaks: {WEEKLY} is not as pinned")
+        for problem in problems
+    ), problems
 
 
 def test_an_unreadable_ci_file_or_hook_config_is_refused(tmp_path: Path) -> None:

@@ -10,6 +10,16 @@ its room (DF-11). `--baseline` rewrites the baseline from the current tree,
 and `--against <revision>` refuses a count that rose above that revision's
 own tree, both measured fresh under this commit's rules (FP-11) and under
 that revision's own checker (W5).
+
+The secret-scan workflows (`gitleaks.yml`, `secrets-weekly.yml`) are pinned
+whole by the sha256 of their parsed YAML (C1). After a deliberate change --
+a gitleaks or action pin upgrade -- regenerate the pins with
+
+    uv run python scripts/check_gate_config.py | grep 'is not as pinned'
+
+which prints each changed file's current sha256 (`actions_file_pin`), review
+the workflow diff, and set `GITLEAKS_CI_SHA256` or `SECRETS_WEEKLY_SHA256`
+below to the digest shown.
 """
 
 from __future__ import annotations
@@ -81,17 +91,28 @@ OVERRIDING = (
     # all overrides the CLI flags the gates invoke.
     "complexipy.toml", ".complexipy.toml", ".bandit",
 )  # fmt: skip
-# The one gitleaks both scans run (W3): the hook's rev and the CI image's
-# tag are this one version, and the image is also pinned by digest.
-GITLEAKS_VERSION = "v8.24.3"
-GITLEAKS_IMAGE = (
-    f"ghcr.io/gitleaks/gitleaks:{GITLEAKS_VERSION}"
-    "@sha256:e1b35e12a8c6fa8901f060459cfb6b2fc4c484d3afbe3b029733a3bbfab07055"
+# The one gitleaks both scans run (W3): the hook's rev and the version the
+# gitleaks.yml workflow installs (by release checksum) are this one version.
+GITLEAKS_VERSION = "v8.30.1"
+GITLEAKS_CI_FILE = ".github/workflows/gitleaks.yml"
+SECRETS_WEEKLY_FILE = ".github/workflows/secrets-weekly.yml"
+# Each secret-scan workflow whole (C1): the sha256 of its parsed YAML, so a
+# trigger, permission, checkout input, `if:`, `continue-on-error`, `|| true`,
+# early `exit 0`, flag or range edit is refused while comments and layout stay
+# free. A deliberate change regenerates the pin; see the module docstring.
+GITLEAKS_CI_SHA256 = "a78e3aae94a3772e62f517bd9db346db783d4652dde65c7e0e736062839d5f62"
+SECRETS_WEEKLY_SHA256 = (
+    "b876b458cee9442310871c9e366a0d9ce43df27369c61a614744b38c1cb1d2a4"
 )
+# The hook scripts `pre-commit install` writes: pre-commit's own default,
+# the commit alone (W3). pre-push and pre-merge-commit would run every hook
+# without `stages` -- the auto-fixers and the repo-wide checks included.
+HOOK_TYPES = ["pre-commit"]
 # The config's own top level (review 4, W2): a top-level `exclude`, `files`
 # or `default_stages` switches every hook off at once while each hook's own
-# body stays exactly as pinned below, so `repos` is the one key it may set.
-PRE_COMMIT_KEYS = frozenset({"repos"})
+# body stays exactly as pinned below, so `repos` is the one key it may set,
+# and `default_install_hook_types` only as its default (`HOOK_TYPES`).
+PRE_COMMIT_KEYS = frozenset({"repos", "default_install_hook_types"})
 REPO_KEYS = frozenset({"repo", "rev", "hooks"})
 # Each repo by its URL, at its pinned rev, running exactly these hook ids in
 # file order: a repo pointed at a fork, a rev moved, or a hook id moved into
@@ -581,6 +602,10 @@ def _hook_problems(root: Path) -> list[str]:
         for key in config
         if key not in PRE_COMMIT_KEYS
     ]
+    if config.get("default_install_hook_types", HOOK_TYPES) != HOOK_TYPES:
+        problems.append(
+            f"pre-commit: default_install_hook_types is set beyond {HOOK_TYPES}"
+        )
     urls = [str(_map(repo).get("repo")) for repo in _seq(config.get("repos"))]
     for repo in _seq(config.get("repos")):
         problems += _repo_problems(str(_map(repo).get("repo")), _map(repo))
@@ -599,6 +624,78 @@ def _hook_problems(root: Path) -> list[str]:
         by_id.setdefault(hook_id, []).append(body)
     for name in sorted(present):
         problems += _named_hook_problems(name, by_id[name])
+    return problems
+
+
+def actions_file_pin(text: str | None) -> str | None:
+    """The sha256 of a workflow as Actions reads it: the parsed YAML (with
+    `on` under its own name) as canonical JSON, so comments and layout do not
+    count and every key, value and `run:` script does. None when the file is
+    missing, does not parse, is not a mapping or holds a non-string key."""
+    parsed = _ci_file(text)
+    if parsed is None:
+        return None
+    try:
+        canonical = json.dumps(
+            parsed, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        )
+    except (TypeError, ValueError):
+        return None
+    return sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _actions_file_pin_problems(root: Path) -> list[str]:
+    """Each secret-scan workflow against its pinned sha256 (C1). The pins
+    are read here, at call time, so a pin moved deliberately is the pin."""
+    pins = (
+        (GITLEAKS_CI_FILE, "GITLEAKS_CI_SHA256", GITLEAKS_CI_SHA256),
+        (SECRETS_WEEKLY_FILE, "SECRETS_WEEKLY_SHA256", SECRETS_WEEKLY_SHA256),
+    )
+    problems: list[str] = []
+    for name, constant, pinned in pins:
+        actual = actions_file_pin(_read(root, name))
+        if actual is None:
+            problems.append(f"gitleaks: {name} is missing or not a mapping")
+        elif actual != pinned:
+            problems.append(
+                f"gitleaks: {name} is not as pinned (sha256 {actual}, pinned "
+                f"{pinned}); if this change is a deliberate pin upgrade, set "
+                f"{constant} in {CHECKER} to the sha256 this message shows "
+                "(the regeneration command is in its docstring)"
+            )
+    return problems
+
+
+def _gitleaks_ci_problems(root: Path) -> list[str]:
+    """The secret scan lives in its own workflow, pinned whole with its
+    weekly caller (`_actions_file_pin_problems`). The three things that make it
+    the scan are also named on their own so a failure reads plainly: the
+    version it installs is the hook's, its one scan command keeps
+    `--ignore-gitleaks-allow` and the committed config, and no
+    `--first-parent`/`--no-merges` narrows it."""
+    text = _read(root, GITLEAKS_CI_FILE)
+    scan_file = _ci_file(text)
+    if text is None or scan_file is None:
+        return _actions_file_pin_problems(root)
+    problems = _actions_file_pin_problems(root)
+    env = _map(scan_file.get("env"))
+    if str(env.get("GITLEAKS_VERSION")) != GITLEAKS_VERSION.removeprefix("v"):
+        problems.append(f"gitleaks: the workflow does not install {GITLEAKS_VERSION}")
+    lines = [
+        line
+        for _, job in _jobs(scan_file)
+        for step in _seq(job.get("steps"))
+        if isinstance(_map(step).get("run"), str)
+        for line in script_lines(str(_map(step).get("run")))
+    ]
+    scans = [line for line in lines if "gitleaks git " in line]
+    required = ("--ignore-gitleaks-allow", "--config .gitleaks.toml")
+    if not scans or any(flag not in line for line in scans for flag in required):
+        problems.append(f"gitleaks: a scan lacks one of {list(required)}")
+    if any(
+        flag in line for line in lines for flag in ("--first-parent", "--no-merges")
+    ):
+        problems.append("gitleaks: the workflow narrows the scan to first parents")
     return problems
 
 
@@ -875,11 +972,6 @@ PYTEST_GATE = (
 RACES_GATE = "uv run pytest --no-cov tests/test_postgres_races.py"
 # The shipped set booted from the stub's copy of it (CF-001), on a store.
 SHIPPED_BOOT = "uv run python tests/shipped_boot.py"
-GITLEAKS_GATE = (
-    'docker run --rm -u "$(id -u):$(id -g)" -e GIT_CONFIG_COUNT=1 '
-    "-e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=/repo "
-    f'-v "$PWD:/repo" -w /repo {GITLEAKS_IMAGE} git --no-banner .'
-)
 CI_GATES = (
     "uv run ruff check .",
     "uv run ruff format --check .",
@@ -897,9 +989,6 @@ CI_GATES = (
     "uv run python scripts/scan_floors.py bandit.json --no-parse-errors "
     "--cover caos scripts icm --unscanned tests",
     "uv run pip-audit --strict",
-    # The whole history, digest-pinned (W3): its text alone in a comment
-    # once satisfied a check that read the file's raw text.
-    GITLEAKS_GATE,
     f"{STAND_IN_PRICE} {STAND_IN} databricks bundle validate -t dev {STAND_IN_VARS}",
     f'{STAND_IN} sh -c "databricks bundle deploy -t dev {STAND_IN_VARS} '
     f'&& databricks bundle run caos -t dev {STAND_IN_VARS}"',
@@ -978,6 +1067,7 @@ CI_STEPS: dict[tuple[str, ...], dict[str, str]] = {
     # FP-40: the base ref crosses an env: variable, never the script.
     (PR_SIZE,): {"BASE_REF": "${{ github.base_ref }}"},
     ("uv sync --locked --all-groups",): {},
+    ("uv lock --check",): {},
     ("npm --prefix frontend ci --ignore-scripts",): {},
     ("frontend/node_modules/.bin/playwright install --with-deps",): {},
     (EXCUSED,): {},
@@ -1209,6 +1299,7 @@ def configuration_problems(root: Path = REPO) -> list[str]:
         + _overriding_problems(root)
         + _python_problems(root, project)
         + _hook_problems(root)
+        + _gitleaks_ci_problems(root)
         + _collection_hook_problems(root)
         + _parity_problems(root)
         + _bundle_problems(root)

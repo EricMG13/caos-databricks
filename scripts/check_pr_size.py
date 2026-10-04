@@ -54,6 +54,16 @@ EXCLUSIONS = (
     ":!qualification/vmo2-fy2025-portfolio/run-2026-09-18b-capture.json",
     ":!qualification/vmo2-fy2025-portfolio/run-2026-09-18c-capture.json",
     ":!*package-lock.json",
+    # The rest of the shared lockfile set (generated, never reviewed).
+    ":!*.lockb",
+    ":!npm-shrinkwrap.json",
+    ":!*/npm-shrinkwrap.json",
+    ":!pnpm-lock.yaml",
+    ":!*/pnpm-lock.yaml",
+    ":!Package.resolved",
+    ":!*/Package.resolved",
+    ":!go.sum",
+    ":!*/go.sum",
     ":!frontend/fixtures/**",
 )
 
