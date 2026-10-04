@@ -666,9 +666,11 @@ def _r7_expected(text, ids, retired_ids=(), reader=None):
 
 
 def _r12_candidates(text, ids=None):
-    """Every table's own claim, as fork r12 reads it: (rank, order, ID, table), where rank 0 is a heading in
-    the table's four-line window, 1 its nearest heading at any distance (no table between) and 2 a prose
-    line in the window; `ids` None reads the default ID pattern."""
+    """Every table's own claim, as fork r12 reads it: (kind, ID, table, led) in document order, where kind is
+    'near' (a heading in the table's four-line window), 'prose' (a prose line in that window) or 'distant' (its
+    nearest heading at any distance, no table between), and led says the claiming line opens with the ID -- a
+    heading past its marks and emphasis, a prose line past emphasis or a backtick; `ids` None reads the default
+    ID pattern."""
     import re
     if ids is None:
         id_re = complete.REGISTER_ID_RE
@@ -679,6 +681,10 @@ def _r12_candidates(text, ids=None):
     def label(line):
         match = id_re.search(line)
         return match.group(1) if match else None
+
+    def led(line, reg):
+        lead = r'#+\s*[*_]*\s*' if line.startswith('#') else r'[*_`]*\s*'
+        return re.match(lead + re.escape(reg) + r'\.?(?![A-Za-z0-9_]|\.[A-Za-z0-9])', line) is not None
     lines = handoff.unfenced_markdown(text).splitlines()
     claims, recent, heading, i = [], [], None, 0
     while i < len(lines):
@@ -693,12 +699,14 @@ def _r12_candidates(text, ids=None):
                 cells += [''] * (len(header) - len(cells))
                 rows.append(dict(zip(header, cells[:len(header)])))
                 j += 1
-            near = [x for x in reversed(recent) if x.startswith('#')], [x for x in reversed(recent) if not x.startswith('#')]
-            claim = next(((rank, reg) for rank, labels in zip((0, 2), near) for reg in map(label, labels) if reg), None)
+            window = [('near', x) for x in reversed(recent) if x.startswith('#')] + \
+                [('prose', x) for x in reversed(recent) if not x.startswith('#')]
+            claim = next(((kind, x) for kind, x in window if label(x)), None)
             if claim is None and heading is not None and heading not in recent and label(heading):
-                claim = (1, label(heading))
+                claim = ('distant', heading)
             if claim:
-                claims.append((claim[0], len(claims), claim[1], (header, rows)))
+                reg = label(claim[1])
+                claims.append((claim[0], reg, (header, rows), led(claim[1], reg)))
             i, recent, heading = j, [], None
             continue
         if s:
@@ -709,11 +717,17 @@ def _r12_candidates(text, ids=None):
 
 
 def _r12_find_registers(text, ids=None):
-    """What fork r12 must bind: per ID, the first table of the best rank -- a near heading's, then a distant
-    heading's, then a prose line's."""
-    out = {}
-    for _rank, _order, reg, table in sorted(_r12_candidates(text, ids), key=lambda claim: claim[:2]):
-        out.setdefault(reg, table)
+    """What fork r12 must bind: r6's reading -- the first table claimed in its window, else the first claimed by
+    a distant heading -- except that a table a prose line claimed without opening with the ID gives way to the
+    first table a heading opening with it claims in its window, else at a distance."""
+    claims, out = _r12_candidates(text, ids), {}
+    for reg in dict.fromkeys(claim[1] for claim in claims):
+        near = [c for c in claims if c[1] == reg and c[0] != 'distant']
+        distant = [c for c in claims if c[1] == reg and c[0] == 'distant']
+        held = near[0] if near else distant[0]
+        if held[0] == 'prose' and not held[3]:
+            held = next((c for c in near + distant if c[0] != 'prose' and c[3]), held)
+        out[reg] = held[2]
     return out
 
 
@@ -800,22 +814,26 @@ class ForkR6Tests(unittest.TestCase):
         import random
         vocabulary = ['', '#### T6 — Trace', '### T4.5', '## Analysis', '#### Notes', 'see T4.5', '> note', 'prose',
                       '| a | b |', '| --- | --- |', '| 1 | 2 |', '| c | d |', '```'] + ['> note', 'prose'] * 4
+        # Fork r12: a caption opening with an ID, and a heading only mentioning one.
+        vocabulary += ['**T4.5 — Register**', '### Notes (see T4.5)']
         generator = random.Random(3102026)
         added = rebound = 0
         for _ in range(6000):
             text = '\n'.join(generator.choice(vocabulary) for _ in range(generator.randint(1, 24)))
             before, now = _r5_find_registers(text), complete.find_registers(text)
             self.assertEqual(now, _r12_find_registers(text), text)
-            # Fork r12: the one binding that moves is a prose line's table, displaced by a heading's.
+            # Fork r12: the one binding that moves is a table a prose line bound without opening with the
+            # ID, displaced by a table under a heading that opens with it.
             claims = _r12_candidates(text)
             for reg in before:
                 if now.get(reg) != before[reg]:
                     rebound += 1
-                    self.assertIn((2, reg, before[reg]), [(r, k, t) for r, _o, k, t in claims], text)
-                    self.assertIn(now.get(reg), [t for r, _o, k, t in claims if k == reg and r < 2], text)
+                    self.assertIn(('prose', reg, before[reg], False), claims, text)
+                    self.assertIn(now.get(reg), [t for kind, k, t, led in claims if k == reg and kind != 'prose' and led],
+                                  text)
             added += len(now) > len(before)
         self.assertGreater(added, 50)
-        self.assertGreater(rebound, 25)
+        self.assertGreater(rebound, 15)
 
     def test_the_cp1_skeleton_reads_as_every_reader_requires(self):
         # No CP-1 answer of 2-3 October had a worked example of heading, tag, table and its nulls' gap lines.
@@ -1438,6 +1456,66 @@ class ForkR12Tests(unittest.TestCase):
         near = ('#### T4.4 — Income Statement\n\n' + notes + self.SUMMARY + self.LEAD + self.SUMMARY
                 + '#### T4.4 — again\n\n' + self.REGISTER)
         self.assertEqual(complete.find_registers(near, ['T4.4'])['T4.4'][0][0], 'Line Item')
+
+
+    # Review fix round 1 (I1, I2): only a heading opening with the ID displaces, and only a prose mention.
+    TBD = '| Line Item | Q2 2026 | Q2 2025 |\n|---|---|---|\n| Revenue | TBD | 2,834 |\n| EBITDA | 920 | N/A |\n\n'
+    CAPTION = '**T4.4 — Income Statement**\n\n'
+
+    def t44(self, text):
+        return about(complete.check(skill_text('cp-1-canonical-data-foundation'), text, 'CP-1')[0], 'T4.4')
+
+    def test_a_caption_opening_with_the_id_is_never_displaced(self):
+        notes = ''.join(f'> note {n}\n\n' for n in range(5))
+        header_only = '| Line Item | Q2 2026 |\n|---|---|\n\n'
+        # A deficient register under its caption stays refused, whatever table a later heading leads.
+        for later in ('### Summary of T4.4\n\n' + self.REGISTER, '#### T4.4 — recap\n\n' + notes + self.REGISTER,
+                      '#### T4.4 — Income Statement\n\n' + header_only):
+            with self.subTest(later=later[:24]):
+                self.assertEqual(len(self.t44(self.CAPTION + self.TBD + later)), 2)
+        # And a compliant one stays accepted under a later heading's junk table.
+        for later in ('#### T4.4 — recap\n\n', '### T4.4 checks\n\n' + notes):
+            with self.subTest(later=later[:24]):
+                text = self.CAPTION + self.REGISTER + later + self.SUMMARY
+                self.assertEqual(complete.find_registers(text, ['T4.4'])['T4.4'][0][0], 'Line Item')
+                self.assertEqual(self.t44(text), [])
+        # A backticked or plain caption opening with the ID is a caption too.
+        for caption in ('`T4.4` — Income Statement\n', 'T4.4 schedule:\n'):
+            with self.subTest(caption=caption):
+                text = caption + self.REGISTER + '#### T4.4 — again\n\n' + self.SUMMARY
+                self.assertEqual(complete.find_registers(text, ['T4.4'])['T4.4'][0][0], 'Line Item')
+
+    def test_a_heading_only_mentioning_the_id_displaces_nothing(self):
+        for heading in ('### Notes (see T4.4)', '### Bridge T4.4 to T4.5', '### Summary of T4.4'):
+            with self.subTest(heading=heading):
+                # Neither a compliant caption-bound register nor a prose-bound table gives way to it.
+                text = self.CAPTION + self.REGISTER + heading + '\n\n' + self.SUMMARY
+                self.assertEqual(self.t44(text), [])
+                mention = self.LEAD + self.SUMMARY + heading + '\n\n' + self.REGISTER
+                self.assertEqual(complete.find_registers(mention, ['T4.4', 'T4.5'])['T4.4'][0][0], 'Metric')
+
+    def test_a_retired_heading_displaces_nothing(self):
+        retired = '#### T4.7 Normalized Financials (from T4.4)\n\n'
+        for first in (self.CAPTION + self.REGISTER, self.LEAD + self.SUMMARY):
+            with self.subTest(first=first[:12]):
+                text = first + retired + '| Line Item | X |\n|---|---|\n| r | 1 |\n\n'
+                kept = complete.find_registers(first, ['T4.4'], ['T4.7'])['T4.4']
+                self.assertEqual(complete.find_registers(text, ['T4.4'], ['T4.7'])['T4.4'], kept)
+
+    def test_a_title_heading_takes_a_register_only_from_a_mention(self):
+        # CP-1A's snake_case registers: `**gaps_ledger**` is a caption opening with the ID; "### Gaps ledger"
+        # opens with its title.
+        skill = skill_text('cp-1a-business-transaction-fact-pack')
+        ids = list(complete.load_contract(skill, 'CP-1A')['registers'])
+        columns = complete.load_contract(skill, 'CP-1A')['registers']['gaps_ledger']['columns']
+        good = '| ' + ' | '.join(columns) + ' |\n|' + '---|' * len(columns) + '\n| ' + ' | '.join(
+            f'v{n}' for n in range(len(columns))) + ' |\n\n'
+        junk = '| Gap | Impact |\n|---|---|\n| no price | high |\n\n'
+        caption = '**gaps_ledger**\n\n' + good + '## Gaps & Conflicts\n\n### Gaps ledger\n\nThe main gaps:\n\n' + junk
+        self.assertEqual(complete.find_registers(caption, ids)['gaps_ledger'][0], columns)
+        self.assertFalse([v for v in complete.check(skill, caption, 'CP-1A')[0] if v.startswith('gaps_ledger')])
+        mention = 'Open items are listed in gaps_ledger.\n\n' + junk + '### Gaps ledger\n\n' + good
+        self.assertEqual(complete.find_registers(mention, ids)['gaps_ledger'][0], columns)
 
 
 @unittest.skipUnless(os.environ.get('DEPLOY_V_INTEGRATION') == '1', 'enable integration for native PDF and DOCX dependencies')
