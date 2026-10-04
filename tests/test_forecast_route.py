@@ -121,6 +121,9 @@ SIGNED: dict[str, tuple[dict[str, str], dict[str, str], str]] = {
         "190",
     ),
     "zero": ({"dividends_paid": "(0)", "acquisitions_disposals": "-0"}, {}, "145"),
+    # MK1 fix round 1: a marker written inside the figure cell, as "a marker
+    # beside each material figure" once invited, is read without it.
+    "marked": ({"dividends_paid": "(45) [C1]"}, {"distributions": "45"}, "100"),
 }
 
 
@@ -829,3 +832,22 @@ def test_an_owner_quote_binds_nothing_on_a_route_without_cp_cf() -> None:
     quotes = ["/contractual/0/amount = 5", "Revenue was 900"]
     assert _calculation_inputs(owner("CP-0", "CP-4", "CP-CF"), quotes) == [0]
     assert _calculation_inputs(owner("CP-0", "CP-4", "CP-5"), quotes) == []
+
+
+def test_the_guard_judges_by_quote_as_the_binder_does() -> None:
+    """A quote binds when some anchored citation of it is marker-linked, so
+    the guard does not refuse an unmarked or unverified second citation of a
+    quote another citation binds; a quote no linked citation carries is
+    refused, unverified or not."""
+    from caos.evidence.citations import AnchoredCitation
+    from caos.methodology.canonical import _unbindable
+    from caos.methodology.handoff import UnverifiedCitation
+
+    quote = "/opening/cash = 100"
+    linked = AnchoredCitation("c" * 64, 1, quote, (), linked=True, marker=1)
+    unmarked = AnchoredCitation("c" * 64, 2, quote, (), linked=False, marker=2)
+    lost = UnverifiedCitation(
+        UUID(int=1), 3, quote, RefusalCode.CITATION_NOT_LOCATED, marker=3
+    )
+    assert _unbindable((linked, unmarked), (lost,)) == []
+    assert _unbindable((unmarked,), (lost,)) == [quote, quote]

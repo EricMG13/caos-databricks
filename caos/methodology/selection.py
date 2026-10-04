@@ -48,6 +48,7 @@ from enum import StrEnum
 from typing import Any
 from uuid import UUID
 
+from caos.methodology.citation_markers import unmarked
 from caos.methodology.executor import Delivery
 from caos.methodology.invocation import _printable, evidence_sizes
 from caos.provider import MAX_REQUEST_BYTES
@@ -221,10 +222,11 @@ def demand_cells(
 
 def demand_items(cell: str) -> tuple[str, ...]:
     """The cell's items in written order, each stripped of whitespace and
-    wrapping quotation; an empty cell has none."""
+    wrapping quotation, and the cell read without its citation markers
+    (`unmarked`, D107); an empty cell has none."""
     return tuple(
         stripped
-        for item in _SEPARATORS.split(cell)
+        for item in _SEPARATORS.split(unmarked(cell))
         if (stripped := item.strip().strip(_WRAPPING).strip())
     )
 
