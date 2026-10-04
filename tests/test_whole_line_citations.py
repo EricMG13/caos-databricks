@@ -26,6 +26,7 @@ from caos.boundary_text import BoundaryText
 from caos.evidence.citations import (
     ANY_RUN,
     CITATION_RULES,
+    EXCERPT,
     WHOLE_LINE,
     WHOLE_LINE_AS_STORED,
     AnchoredCitation,
@@ -85,8 +86,10 @@ def test_part_of_a_line_that_drops_a_word_no_longer_anchors(
     case: tuple[StoreConnection, UUID], tmp_path: Path
 ) -> None:
     """AI-4: the part anchored uniquely and was labelled host-verified,
-    stating the opposite of its line. Accepted answers are held to the whole
-    line; the run rule a stored record was accepted under still finds it."""
+    stating the opposite of its line. Answers accepted under N28 were held
+    to the whole line, and their records still are; the run rule a stored
+    record was accepted under still finds it. (D105's `EXCERPT`, which
+    answers are held to now, is `tests/test_excerpt_citations.py`.)"""
     conn, case_id = case
     source_id = _admit(conn, case_id, tmp_path)
 
@@ -100,7 +103,7 @@ def test_part_of_a_line_that_drops_a_word_no_longer_anchors(
         RefusalCode.CITATION_NOT_LOCATED
     )
     assert _code(conn, source_id, PART_OF_LINE, ANY_RUN) == 1
-    assert CITATION_RULES == {ANY_RUN, WHOLE_LINE_AS_STORED, WHOLE_LINE}
+    assert CITATION_RULES == {ANY_RUN, WHOLE_LINE_AS_STORED, WHOLE_LINE, EXCERPT}
 
 
 def test_a_whole_line_keeps_the_edge_forgiveness_the_matcher_declares(
@@ -439,16 +442,16 @@ def test_find_line_places_a_quote_the_whole_line_rule_refused(
     assert (source_id, 2) not in index.pages
 
 
-def test_a_placed_line_is_shown_by_its_first_words_as_delivered(
+def test_a_placed_citation_is_told_it_is_too_short_or_where_it_is(
     case: tuple[StoreConnection, UUID], tmp_path: Path
 ) -> None:
-    """D82: the longer line's first `HINT_WORDS` words come from the block the
-    node was delivered, its own words one space apart; a page found by
-    `find_line` passes through as it is."""
-    from caos.evidence.citations import TokenIndex
+    """D82, D105: fewer than `MIN_EXCERPT_WORDS` words of a longer delivered
+    line are told they are too few, eight are no fault at all, and a page
+    found by `find_line` passes through as it is."""
+    from caos.evidence.citations import EXCERPT, TokenIndex
     from caos.methodology.canonical import _line_hint
     from caos.methodology.executor import Delivery
-    from caos.methodology.handoff import HINT_WORDS, LineHint
+    from caos.methodology.handoff import LineHint
 
     conn, case_id = case
     source_id = _ingest_pdf(conn, case_id, tmp_path, _pages_pdf())
@@ -464,8 +467,9 @@ def test_a_placed_line_is_shown_by_its_first_words_as_delivered(
         citation = Citation(source_id, 1, quote)
         return _line_hint(conn, delivered, blocks, citation, TokenIndex())
 
-    begins = " ".join(PAGES[0][0].split()[:HINT_WORDS])
-    assert hint("breach its leverage covenant") == LineHint(begins=begins)
+    assert hint("breach its leverage covenant") == LineHint(short=True)
+    eight = "did not breach its leverage covenant during FY2025"
+    assert _code(conn, source_id, eight, EXCERPT) == 1
     assert hint("Net leverage was 3.4x at year end.") == LineHint(pages=(2,))
     assert hint("Leverage was unchanged") == LineHint(absent=True)
 
@@ -985,7 +989,8 @@ def test_an_unknown_source_id_is_told_so_and_a_delivered_one_keeps_its_wording(
         " request's sources; use one of the source_id values listed in the final"
         " check; citation 2 of 5 names a page or line this node was not given;"
         " keep citation 4 exactly as it was; any citation you add or change must"
-        " be one entire evidence line of its cited page"
+        " be an exact excerpt of one evidence line of its cited page, at least 8"
+        " consecutive words or the whole line if shorter"
         " (numbered from 1 in the order given)"
     )
 

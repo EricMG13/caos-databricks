@@ -34,7 +34,9 @@ from caos.digest import canonical_json
 from caos.evidence.citations import (
     ANY_RUN,
     CITATION_RULES,
-    WHOLE_LINE,
+    EXCERPT,
+    MIN_EXCERPT_WORDS,
+    REANCHORING_RULES,
     AnchoredCitation,
     Citation,
     CitationRule,
@@ -788,7 +790,9 @@ class CanonicalRecord:
     accepted (N28), and so how a reader re-anchors them: `ANY_RUN` for every
     record written before the whole-line rule, which carries no such field,
     `WHOLE_LINE_AS_STORED` for one accepted under that rule's first reading,
-    and `WHOLE_LINE` for one accepted since (W6, N13).
+    `WHOLE_LINE` for one accepted under its second (W6, N13), and `EXCERPT`
+    for one accepted since D105, whose citations each keep the line they
+    anchored in (`AnchoredCitation.line_text`).
     """
 
     artifact_sha256: str
@@ -1344,13 +1348,15 @@ def _numbered(failed: Sequence[int]) -> str:
 _ANCHORING = (
     (
         RefusalCode.CITATION_NOT_LOCATED,
-        "is not one evidence line of its cited page",
-        "are not each one evidence line of their cited pages",
+        "is not an exact excerpt of one evidence line of its cited page",
+        "are not each an exact excerpt of one evidence line of their cited pages",
     ),
     (
         RefusalCode.CITATION_AMBIGUOUS,
-        "is on its cited page more than once",
-        "are on their cited pages more than once",
+        "occurs more than once on its cited page; quote a longer excerpt that"
+        " occurs once",
+        "occur more than once on their cited pages; quote longer excerpts that"
+        " each occur once",
     ),
     (
         RefusalCode.CITATION_NOT_DELIVERED,
@@ -1362,7 +1368,8 @@ _ABSENT = (
     "is in no evidence line of its source this node was given",
     "are in no evidence line of their sources this node was given",
 )
-# How many words of the longer line a citation is part of are shown (D82).
+# How many words of the line a near miss or a dropped-cells row begins with
+# are shown (D82, F493, F495).
 HINT_WORDS = 12
 # How many of its last words show the line a quote runs past the end of (F496).
 END_WORDS = 8
@@ -1375,12 +1382,12 @@ MAX_ANCHORING_CHARS = 4 * MAX_FEEDBACK_CHARS
 @dataclass(frozen=True, slots=True)
 class LineHint:
     """Where the host's own search placed a citation refused
-    `CITATION_NOT_LOCATED` (D82, `caos.evidence.citations.find_line`): the
-    first `HINT_WORDS` words of the longer delivered evidence line of its
-    cited page it is part of (`begins`), the other delivered pages it is one
-    whole evidence line of (`pages`), or that no delivered line holds it
-    (`absent`). Nothing set: found, but not as one line, so nothing is said
-    beyond the rule. `near`: the page of the one delivered line of its
+    `CITATION_NOT_LOCATED` (D82, `caos.evidence.citations.find_line`): that
+    it holds fewer than `MIN_EXCERPT_WORDS` words of a longer line (`short`,
+    D105), the other delivered pages it is an excerpt of a line of
+    (`pages`), or that no delivered line holds it (`absent`). Nothing set:
+    found, but not as one excerpt, so nothing is said beyond the rule.
+    `near`: the page of the one delivered line of its
     source the quote nearly matches (F493, `near_line`), `begins` then that
     line's first words, and `moved` whether that page is not the cited
     one; with `cells`, that line is a table row the quote left cells out of
@@ -1394,6 +1401,7 @@ class LineHint:
     begins: str = ""
     pages: tuple[int, ...] = ()
     absent: bool = False
+    short: bool = False
     near: int | None = None
     moved: bool = False
     cells: bool = False
@@ -1411,15 +1419,17 @@ def anchoring_line(
     refused `CITATION_NOT_LOCATED`, in the same order.
 
     N52 said "never by text"; the owner amended it on 2 October 2026 (D82):
-    a quote that is part of a longer line is shown the first `HINT_WORDS`
-    words of that delivered line and told to quote the whole line, and one
-    that is a whole line of another delivered page is told that page; one
+    a quote of fewer than `MIN_EXCERPT_WORDS` words of a longer line is told
+    to quote at least that many, or the whole line if shorter (D105), and
+    one that is an excerpt of a line of another delivered page is told that
+    page; one
     that nearly matches exactly one delivered line of its source is shown
     that line's page and first words and told to copy it exactly, and to
     cite that page when it is not the cited one (F493); one that left cells
     out of exactly one delivered row is shown that row and told to quote
     every cell (F495); one that runs past the end of exactly one delivered
-    line is shown that line's last words and told to quote it only (F496). At
+    line is shown that line's last words and told to stop where it ends
+    (F496). At
     most `MAX_FEEDBACK_CITATIONS` citations are placed; the rest, and any the
     search could not place, keep the rule's wording. A citation refused
     `CITATION_NOT_DELIVERED` whose hint names an `unknown_source` is told
@@ -1445,7 +1455,7 @@ def anchoring_line(
         n: hint
         for n in lost[:MAX_FEEDBACK_CITATIONS]
         if (hint := told.get(n)) is not None
-        and (hint.begins or hint.ends or hint.pages or hint.absent)
+        and (hint.near is not None or hint.pages or hint.absent or hint.short)
     }
     placed |= {
         n: hint
@@ -1512,7 +1522,9 @@ def _anchoring_text(
 # The rule a retry's added or changed citation must meet, ending every
 # anchoring line (F491), and how a kept citation is told to stay.
 _RULE = (
-    "any citation you add or change must be one entire evidence line of its cited page"
+    "any citation you add or change must be an exact excerpt of one evidence"
+    f" line of its cited page, at least {MIN_EXCERPT_WORDS} consecutive words or"
+    " the whole line if shorter"
 )
 _KEEP = ("it was", "they were")
 
@@ -1558,15 +1570,14 @@ def _unknown_sources(placed: Mapping[int, LineHint], total: int) -> list[str]:
 def _placed(number: int, total: int, hint: LineHint) -> str:
     """One placed citation's clause (D82): the line it nearly matches
     (F493), the row it left cells out of (F495) or the line it runs past
-    the end of (F496), the longer line it is
-    part of, or the other pages it is one whole line of, at most
-    `MAX_FEEDBACK_CITATIONS` of them named."""
+    the end of (F496), too few words of its line (D105), or the other pages
+    it is an excerpt of a line of, at most `MAX_FEEDBACK_CITATIONS` of them
+    named."""
     if hint.near is not None and hint.ends:
         where = f"page {hint.near}," + (" not its cited page," if hint.moved else "")
         return (
             f"citation {number} of {total} runs past the end of the evidence line"
-            f' of {where} which ends "{hint.ends}"; quote that line only, ending'
-            " where it ends"
+            f' of {where} which ends "{hint.ends}"; stop where the line ends'
             + (f", and cite page {hint.near}" if hint.moved else "")
             + " (text after it is a separate evidence line)"
         )
@@ -1585,10 +1596,11 @@ def _placed(number: int, total: int, hint: LineHint) -> str:
             " that line exactly, character for character"
             + (f", and cite page {hint.near}" if hint.moved else "")
         )
-    if hint.begins:
+    if hint.short:
         return (
-            f"citation {number} of {total} is part of a longer evidence line of"
-            f' its cited page, which begins "{hint.begins}"; quote the whole line'
+            f"citation {number} of {total} quotes fewer than {MIN_EXCERPT_WORDS}"
+            f" words of its line; quote at least {MIN_EXCERPT_WORDS} consecutive"
+            " words, or the whole line if shorter"
         )
     shown = [str(page) for page in hint.pages[:MAX_FEEDBACK_CITATIONS]]
     rest = len(hint.pages) - len(shown)
@@ -1596,7 +1608,7 @@ def _placed(number: int, total: int, hint: LineHint) -> str:
     if not rest and len(shown) > 1:
         named = ", ".join(shown[:-1]) + f" and {shown[-1]}"
     return (
-        f"citation {number} of {total} is one whole evidence line of"
+        f"citation {number} of {total} is an excerpt of an evidence line of"
         f" {'page' if len(hint.pages) == 1 else 'pages'} {named}, not of its"
         " cited page"
     )
@@ -1740,7 +1752,9 @@ def record_bytes(record: CanonicalRecord) -> bytes:
     the same way (N28): written only when it is not `ANY_RUN`, the rule every
     record stored before the field existed was anchored by. A citation's
     `cited_page` likewise: written only where the host re-anchored the quote
-    at its true page (D94).
+    at its true page (D94). And its `line_text` (D105): held, and written,
+    for every citation of an `EXCERPT` record and for no other
+    (`_lines_held`), so every record stored before it is the same bytes.
     """
     document: dict[str, Any] = {"format": RECORD_FORMAT, **asdict(record)}
     if not document["projections"]["blockers"]:
@@ -1752,6 +1766,8 @@ def record_bytes(record: CanonicalRecord) -> bytes:
     for citation in document["citations"]:
         if citation["cited_page"] is None:
             del citation["cited_page"]
+        if record.citation_rule != EXCERPT:
+            del citation["line_text"]
         for box in citation["bboxes"]:
             box.update({key: float(box[key]) for key in ("x0", "y0", "x1", "y1")})
     return canonical_json(document).encode("utf-8")
@@ -1836,7 +1852,10 @@ _rect = _each(
 
 def _anchored(item: object) -> AnchoredCitation:
     """A stored citation. An absent `cited_page` is None (every citation found
-    where it was cited, D94); a present one is another page than `page`."""
+    where it was cited, D94); a present one is another page than `page`. An
+    absent `line_text` is None; a present one is the line an excerpt
+    anchored in (D105), which only an `EXCERPT` record holds
+    (`_lines_held`)."""
     if not isinstance(item, dict):
         raise TypeError
     cited = item.get("cited_page")
@@ -1846,13 +1865,27 @@ def _anchored(item: object) -> AnchoredCitation:
         or cited == item.get("page")
     ):
         raise ValueError
+    line = item.get("line_text")
+    if "line_text" in item and (type(line) is not str or not line):
+        raise ValueError
     return _typed(
         AnchoredCitation,
-        {**item, "cited_page": cited},
+        {**item, "cited_page": cited, "line_text": line},
         page=_int,
         bboxes=_rect,
         cited_page=lambda value: value,
+        line_text=lambda value: value,
     )
+
+
+def _lines_held(citations: tuple[AnchoredCitation, ...], rule: CitationRule) -> None:
+    """`ValueError` unless every citation holds its line under `EXCERPT` and
+    none does under any other rule (D105): a line missing from an excerpt,
+    or held beside a quote that is its own line or no line, is not one this
+    host wrote."""
+    held = [citation.line_text is not None for citation in citations]
+    if (rule == EXCERPT and not all(held)) or (rule != EXCERPT and any(held)):
+        raise ValueError
 
 
 def _decoded_record(data: bytes) -> CanonicalRecord:
@@ -1862,11 +1895,13 @@ def _decoded_record(data: bytes) -> CanonicalRecord:
     citations = _each(_anchored)(document.get("citations"))
     if not citations:
         raise ValueError
-    # Only `WHOLE_LINE` re-anchors (D94): a `cited_page` under any other rule
-    # is not one this host wrote.
+    # Only `REANCHORING_RULES` re-anchor (D94): a `cited_page` under any
+    # other rule is not one this host wrote.
+    rule = _citation_rule(_with_rule(document)["citation_rule"])
     reanchored = any(citation.cited_page is not None for citation in citations)
-    if reanchored and _with_rule(document)["citation_rule"] != WHOLE_LINE:
+    if reanchored and rule not in REANCHORING_RULES:
         raise ValueError
+    _lines_held(citations, rule)
     return _typed(
         CanonicalRecord,
         _with_rule(document),
