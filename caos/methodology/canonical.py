@@ -22,7 +22,7 @@ import hashlib
 import time
 from collections.abc import Callable, Collection, Mapping, Sequence
 from contextlib import suppress
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from enum import StrEnum
 from uuid import UUID
@@ -600,6 +600,9 @@ class _Context:
     feedback: tuple[str, ...] = ()
     # The refused answer that retry is asked to correct (D104), or None.
     refused_answer: str | None = None
+    # Each direct upstream's unverified citations (D106), whose markers the
+    # register names as unlocated (D107).
+    unverified: dict[str, tuple[UnverifiedCitation, ...]] = field(default_factory=dict)
 
 
 def _source_preparation(
@@ -718,6 +721,7 @@ def _context(
         citations={node: record.citations for node, record in records.items()},
         source_set=source_set,
         selection=selection,
+        unverified={node: record.unverified for node, record in records.items()},
     )
 
 
@@ -1229,6 +1233,7 @@ def _prompt(
         delivered=context.delivered,
         upstream=context.upstream,
         upstream_citations=context.citations,
+        upstream_unverified=context.unverified,
         route=assignment.route,
         source_set=context.source_set,
         page_maps=context.selection.page_maps,
