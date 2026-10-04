@@ -475,7 +475,12 @@ def test_a_record_is_re_anchored_by_the_rule_it_was_accepted_under(
         ran, "CP-5", lambda r: replace(r, citations=(excerpt,), citation_rule=EXCERPT)
     )
     assert _prove(ran).citations == 3
-    other = replace(excerpt, line_text="Acme Holdings plc annual report 2026")
+    # A line the quote cannot come from is not even written (fix round 1);
+    # one that could hold it but is not its line is the proof's to refuse.
+    unrelated = replace(excerpt, line_text="Acme Holdings plc annual report 2026")
+    with pytest.raises(ValueError):
+        record_bytes(replace(stored, citations=(unrelated,), citation_rule=EXCERPT))
+    other = replace(excerpt, line_text=f"{cited.matched_text} and more")
     _rewrite(ran, "CP-5", lambda r: replace(r, citations=(other,)))
     assert _refusal(ran) is RefusalCode.ORCHESTRATION_CITATION_LOST
 

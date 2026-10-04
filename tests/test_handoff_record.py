@@ -323,7 +323,19 @@ def test_an_excerpt_record_keeps_the_line_of_each_citation(tmp_path: Path) -> No
     whole = dataclasses.replace(found, line_text=QUOTE)
     exact = _record(citation_rule=EXCERPT, citations=(whole,))
     assert json.loads(record_bytes(exact))["citations"][0]["line_text"] == QUOTE
-    for value in (None, "", 5):
+    # Never written without its lines, nor with a line its quote cannot be
+    # in (fix round 1): `record_bytes` fails closed.
+    for odd in (
+        _record(citation_rule=WHOLE_LINE, citations=(whole,)),
+        _record(citation_rule=EXCERPT),
+        _record(
+            citation_rule=EXCERPT,
+            citations=(dataclasses.replace(found, line_text="Unrelated text"),),
+        ),
+    ):
+        with pytest.raises(ValueError):
+            record_bytes(odd)
+    for value in (None, "", 5, "Unrelated text"):
         document = json.loads(record_bytes(excerpt))
         document["citations"][0]["line_text"] = value
         _mismatch(blobs, artifact, blobs.put(canonical_json(document).encode()), CP0)

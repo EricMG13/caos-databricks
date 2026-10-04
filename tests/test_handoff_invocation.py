@@ -700,10 +700,12 @@ def test_the_prompt_repeats_the_closed_contract_after_evidence(
     assert (
         "For every citation, `matched_text` copies an exact excerpt of one"
         f" evidence line, character for character: at least {MIN_EXCERPT_WORDS}"
-        " consecutive words, or the whole line if it has fewer. The excerpt"
+        " consecutive words, or the whole line if it has fewer, including any"
+        " leading bullet or footnote marker and any trailing `|`. The excerpt"
         " stays within that one line and appears exactly once on its cited page;"
         " the same excerpt appears verbatim in the Markdown body after the front"
-        " matter, beside the statement it supports," in compact
+        " matter, beside the statement it supports (in its Evidence Trace row or"
+        " the sentence that states it)," in compact
     )
     assert "one entire evidence line" not in compact
     assert 'own wording ("we", "our", "us"), never rephrased' in compact

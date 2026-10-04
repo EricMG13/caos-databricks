@@ -38,8 +38,10 @@ from caos.evidence.citations import (
     cells_line,
     find_line,
     near_line,
+    overrun_kept,
     overrun_line,
     verify_citations,
+    whole_line_of,
 )
 from caos.graph.route import MODEL_MODULE, ResolvedRoute, RouteNode
 from caos.methodology.bundle import (
@@ -897,6 +899,16 @@ def _anchoring_line(
     hints: list[LineHint | None] = [None] * len(verdicts)
     for n in lost:
         hints[n] = _line_hint(conn, delivered, blocks, citations[n], index)
+    # An ambiguous quote that is a whole line cannot be lengthened within it
+    # (fix round 1): told so, read from the delivered text alone.
+    twice = [
+        n
+        for n, verdict in enumerate(verdicts)
+        if verdict is RefusalCode.CITATION_AMBIGUOUS
+    ][:MAX_FEEDBACK_CITATIONS]
+    for n in twice:
+        if _whole_on_its_page(delivered, citations[n]):
+            hints[n] = LineHint(repeated=True)
     # A source_id the request never offered (F495): told so, not "a page or
     # line this node was not given", which names nothing to fix.
     holders: dict[tuple[int, str], set[UUID]] | None = None
@@ -910,6 +922,16 @@ def _anchoring_line(
                 held_by=str(next(iter(held))) if len(held) == 1 else "",
             )
     return anchoring_line(verdicts, hints)
+
+
+def _whole_on_its_page(delivered: Sequence[Delivery], citation: Citation) -> bool:
+    """Whether the quote is all of a delivered line of its cited page
+    (`whole_line_of`), from the delivered blocks' own text only."""
+    return any(
+        whole_line_of(citation.matched_text, d.text.value)
+        for d in delivered
+        if d.source_id == citation.source_id and d.page == citation.page
+    )
 
 
 def _quoted_at(citation: Citation) -> tuple[int, str]:
@@ -966,7 +988,8 @@ def _line_hint(
     (D82): the other delivered pages it is an excerpt of a line of, that no
     delivered line holds it, or -- found nowhere as one excerpt -- the line
     it runs past the end of, nearly matches or left cells out of
-    (`_near_hint`). A quote of fewer than `MIN_EXCERPT_WORDS` words that is
+    (`_near_hint`), or that it runs from one delivered line onto the next
+    (`across`). A quote of fewer than `MIN_EXCERPT_WORDS` words that is
     none of those is told it is too short (D105): it is part of a longer
     line, or no whole line, and only more words make it an excerpt. The
     search is help, not a verdict: a refusal from it (a source whose blocks
@@ -995,7 +1018,8 @@ def _line_hint(
     return LineHint(
         pages=found.pages,
         absent=found.absent,
-        short=short and not (found.pages or found.absent),
+        across=found.across,
+        short=short and not (found.pages or found.absent or found.across),
     )
 
 
@@ -1010,7 +1034,8 @@ def _near_hint(
     """The near-miss hint (F493) for a citation `find_line` could neither
     find part of a line nor whole on another page: the one delivered line of
     its source `search` names -- the line it runs past the end of
-    (`overrun_line`, F496, `overrun`: shown by its last `END_WORDS` words),
+    (`overrun_line`, F496, `overrun`: shown by its last `END_WORDS` words,
+    and `short` when fewer than `MIN_EXCERPT_WORDS` quoted words lie in it),
     the line it nearly matches (`near_line`), or the row it left cells out
     of (`cells_line`, F495, `cells`) -- by page and first `HINT_WORDS`
     words. Only the delivered blocks' own text is compared, so nothing the
@@ -1023,12 +1048,14 @@ def _near_hint(
         return None
     line = lines[found]
     words = line.text.value.split()
+    kept = overrun_kept(citation.matched_text, line.text.value) if overrun else 0
     return LineHint(
         begins="" if overrun else " ".join(words[:HINT_WORDS]),
         near=line.page,
         moved=line.page != citation.page,
         cells=cells,
         ends=" ".join(words[-END_WORDS:]) if overrun else "",
+        short=0 < kept < MIN_EXCERPT_WORDS,
     )
 
 
