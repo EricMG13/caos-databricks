@@ -3,7 +3,7 @@
 // (D105), plus a chip that opens the source drawer at its page. The figure names its record, citation, source and page
 // on the wire, so nothing here looks it up elsewhere.
 import { useEvidence } from "./EvidenceContext";
-import { TracedLine } from "./TracedLine";
+import { QUOTE_LABEL, TracedLine, lineText } from "./TracedLine";
 import type { ReportDocument } from "@/wire/v1";
 
 /** Report's and Committee's narrative: the same saved shape. */
@@ -23,13 +23,18 @@ export function Narrative({ narrative }: { narrative: ReportDocument["body"]["na
             return (
               <span key={spanIndex} data-figure={figure.route_node_id}>
                 {span.text}
+                {figure.line.recorded ? null : (
+                  <span className="lbl" data-line-not-recorded>
+                    {QUOTE_LABEL}:{" "}
+                  </span>
+                )}
                 <q className="figq">
                   <TracedLine line={figure.line} />
                 </q>{" "}
                 <button
                   type="button"
                   className="chip"
-                  aria-label={`Evidence ${figure.route_node_id} p.${figure.page}: ${figure.matched_text}`}
+                  aria-label={`Evidence ${figure.route_node_id} p.${figure.page}${figure.line.recorded ? "" : `, ${QUOTE_LABEL.toLowerCase()}`}: ${lineText(figure.line)}`}
                   aria-expanded={open}
                   data-figure-chip={figure.source_id}
                   onClick={(event) =>

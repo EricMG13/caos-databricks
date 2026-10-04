@@ -49,7 +49,8 @@
             "line": {
               "before": "",
               "excerpt": "Coverage 2.1x",
-              "after": ""
+              "after": "",
+              "recorded": true
             },
             "rects": [],
             "withdrawn_at": null

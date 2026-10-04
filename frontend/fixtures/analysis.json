@@ -48,7 +48,8 @@
             "line": {
               "before": "",
               "excerpt": "Carvana Co. is an e-commerce platform for buying and selling used cars.",
-              "after": ""
+              "after": "",
+              "recorded": true
             },
             "rects": [
               {
@@ -92,7 +93,8 @@
             "line": {
               "before": "",
               "excerpt": "Adjusted EBITDA was $769 million for the three months ended June 30, 2026.",
-              "after": ""
+              "after": "",
+              "recorded": true
             },
             "rects": [
               {
@@ -114,7 +116,8 @@
             "line": {
               "before": "",
               "excerpt": "Retail units sold of 197,325 and GPU of $7,125.",
-              "after": ""
+              "after": "",
+              "recorded": false
             },
             "rects": [
               {
@@ -2121,7 +2124,8 @@
             "line": {
               "before": "As of the last day of any fiscal quarter, ",
               "excerpt": "the Issuer shall not permit the Consolidated Net Leverage Ratio to exceed 3.50 to 1.00",
-              "after": "."
+              "after": ".",
+              "recorded": true
             },
             "rects": [
               {

@@ -380,13 +380,16 @@ const RunBody = object({
 const RunSectionDocument = sectionDocument(RunBody);
 
 const RectView = object({ x0: number, y0: number, x1: number, y1: number });
-// The whole evidence line a citation anchored in, split by the server around
-// its excerpt (D105): `before + excerpt + after` is the line, never sliced here.
-// An empty `excerpt` is a line the server could not place the quote in.
+// The evidence line a citation anchored in, split by the server around its
+// excerpt (D105): recorded, `before + excerpt + after` is the line, never
+// sliced here, and an empty `excerpt` is a line the server could not place the
+// quote in. Not recorded (a record from before whole-line citations), the
+// quote is `excerpt` alone and is no source line.
 const LineView = object({
   before: string({ max: 65536 }),
   excerpt: string({ max: 65536 }),
   after: string({ max: 65536 }),
+  recorded: bool,
 });
 const CitationView = object({
   document_sha256: hash,

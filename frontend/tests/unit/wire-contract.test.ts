@@ -417,7 +417,12 @@ function analysis(): { [key: string]: Json } {
               filename: "10-K.pdf",
               page: 3,
               matched_text: "net leverage",
-              line: { before: "We expect ", excerpt: "net leverage", after: " to fall." },
+              line: {
+                before: "We expect ",
+                excerpt: "net leverage",
+                after: " to fall.",
+                recorded: true,
+              },
               rects: [{ x0: 1, y0: 2.5, x1: 3, y1: 4 }],
               withdrawn_at: null,
               cited_page: null,

@@ -36,9 +36,10 @@ export interface Citation {
   page: number;
   bboxes: BBox[];
   matched_text: string;
-  /** The whole line `matched_text` is an excerpt of, split around it (D105);
-      absent where this shape carries no line, and the quote is then its line. */
-  line?: { before: string; excerpt: string; after: string };
+  /** The line `matched_text` is an excerpt of, split around it (D105), where
+      the record holds one; absent where this shape carries none, and the quote
+      is then shown as a quote, not as a source line. */
+  line?: { before: string; excerpt: string; after: string; recorded: boolean };
   observed_at: string;
   /** The host's render of that page, or null when none is served. */
   render_url: string | null;

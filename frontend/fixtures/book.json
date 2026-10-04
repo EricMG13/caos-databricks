@@ -92,7 +92,8 @@
                       "line": {
                         "before": "",
                         "excerpt": "/drivers/0/revenue = \"500\"",
-                        "after": ""
+                        "after": "",
+                        "recorded": true
                       },
                       "rects": [
                         {
@@ -148,7 +149,8 @@
                       "line": {
                         "before": "",
                         "excerpt": "/drivers/0/ebitda = \"100\"",
-                        "after": ""
+                        "after": "",
+                        "recorded": true
                       },
                       "rects": [
                         {
@@ -204,7 +206,8 @@
                       "line": {
                         "before": "",
                         "excerpt": "/drivers/0/cfo = \"80\"",
-                        "after": ""
+                        "after": "",
+                        "recorded": true
                       },
                       "rects": [
                         {
@@ -260,7 +263,8 @@
                       "line": {
                         "before": "",
                         "excerpt": "/drivers/0/capex = \"20\"",
-                        "after": ""
+                        "after": "",
+                        "recorded": true
                       },
                       "rects": [
                         {
@@ -316,7 +320,8 @@
                       "line": {
                         "before": "",
                         "excerpt": "/drivers/0/cash_interest = \"10\"",
-                        "after": ""
+                        "after": "",
+                        "recorded": true
                       },
                       "rects": [
                         {
@@ -372,7 +377,8 @@
                       "line": {
                         "before": "",
                         "excerpt": "/drivers/0/ebitda = \"100\"",
-                        "after": ""
+                        "after": "",
+                        "recorded": true
                       },
                       "rects": [
                         {
@@ -394,7 +400,8 @@
                       "line": {
                         "before": "",
                         "excerpt": "/drivers/0/revenue = \"500\"",
-                        "after": ""
+                        "after": "",
+                        "recorded": true
                       },
                       "rects": [
                         {
@@ -479,7 +486,8 @@
                       "line": {
                         "before": "",
                         "excerpt": "/drivers/0/revenue = \"1000\"",
-                        "after": ""
+                        "after": "",
+                        "recorded": true
                       },
                       "rects": [
                         {
@@ -535,7 +543,8 @@
                       "line": {
                         "before": "",
                         "excerpt": "/drivers/0/ebitda = \"200\"",
-                        "after": ""
+                        "after": "",
+                        "recorded": true
                       },
                       "rects": [
                         {
@@ -591,7 +600,8 @@
                       "line": {
                         "before": "",
                         "excerpt": "/drivers/0/cfo = \"160\"",
-                        "after": ""
+                        "after": "",
+                        "recorded": true
                       },
                       "rects": [
                         {
@@ -647,7 +657,8 @@
                       "line": {
                         "before": "",
                         "excerpt": "/drivers/0/capex = \"40\"",
-                        "after": ""
+                        "after": "",
+                        "recorded": true
                       },
                       "rects": [
                         {
@@ -703,7 +714,8 @@
                       "line": {
                         "before": "",
                         "excerpt": "/drivers/0/cash_interest = \"20\"",
-                        "after": ""
+                        "after": "",
+                        "recorded": true
                       },
                       "rects": [
                         {
@@ -759,7 +771,8 @@
                       "line": {
                         "before": "",
                         "excerpt": "/drivers/0/ebitda = \"200\"",
-                        "after": ""
+                        "after": "",
+                        "recorded": true
                       },
                       "rects": [
                         {
@@ -781,7 +794,8 @@
                       "line": {
                         "before": "",
                         "excerpt": "/drivers/0/revenue = \"1000\"",
-                        "after": ""
+                        "after": "",
+                        "recorded": true
                       },
                       "rects": [
                         {

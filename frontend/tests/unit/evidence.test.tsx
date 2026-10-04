@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { CitationChip } from "@/evidence/CitationChip";
 import { EvidenceProvider } from "@/evidence/EvidenceContext";
 import { MetricPassport } from "@/evidence/MetricPassport";
-import { wholeLine } from "@/evidence/TracedLine";
+import { LINE_LABEL, QUOTE_LABEL, lineLabel, lineText, wholeLine } from "@/evidence/TracedLine";
 import { PASSPORT_FIELDS, type Citation, type Passport } from "@/wire";
 
 const CITATION: Citation = {
@@ -79,6 +79,7 @@ describe("the evidence surface", () => {
       before: "Commencing with the first full fiscal quarter, ",
       excerpt: CITATION.matched_text,
       after: ".",
+      recorded: true,
     };
     const { unmount } = render(
       <EvidenceProvider>
@@ -89,12 +90,15 @@ describe("the evidence surface", () => {
     const shown = screen.getByRole("dialog").querySelector("blockquote.matched")!;
     expect(shown.textContent).toBe(line.before + line.excerpt + line.after);
     expect(shown.querySelector("mark")!.textContent).toBe(CITATION.matched_text);
+    expect(screen.getByRole("dialog")).toHaveTextContent(LINE_LABEL);
     unmount();
-    // A citation with no line beside it is its own line (`wholeLine`).
+    // A citation with no line beside it is a quote, not a source line: it is
+    // labelled so and nothing is marked (`wholeLine`).
     expect(wholeLine("Coverage 2.1x")).toEqual({
       before: "",
       excerpt: "Coverage 2.1x",
       after: "",
+      recorded: false,
     });
     render(
       <EvidenceProvider>
@@ -103,8 +107,13 @@ describe("the evidence surface", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Evidence D-04 p.68 ¶2" }));
     const alone = screen.getByRole("dialog").querySelector("blockquote.matched")!;
-    expect(alone.querySelector("mark")!.textContent).toBe(CITATION.matched_text);
+    expect(alone.querySelector("mark")).toBeNull();
     expect(alone.textContent).toBe(CITATION.matched_text);
+    expect(screen.getByRole("dialog")).toHaveTextContent(QUOTE_LABEL);
+    expect(screen.getByRole("dialog")).not.toHaveTextContent(LINE_LABEL);
+    expect(lineLabel(line)).toBe(LINE_LABEL);
+    expect(lineText(line)).toBe(line.before + line.excerpt + line.after);
+    expect(lineText(wholeLine("Coverage 2.1x"))).toBe("Coverage 2.1x");
   });
 
   test("a citation of a withdrawn source is marked on the chip and in the drawer", () => {

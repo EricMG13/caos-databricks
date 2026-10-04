@@ -396,6 +396,7 @@ describe("the evidence drawer", () => {
         before: "We do not ",
         excerpt: doc["body"].handoffs[0].source_facts[0].matched_text,
         after: " (unaudited)",
+        recorded: true,
       };
       return doc;
     };

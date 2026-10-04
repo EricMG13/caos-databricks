@@ -24,7 +24,7 @@ import { stamp } from "@/ds/format";
 import type { ModuleRef } from "@/ds/markdown";
 import { useEvidence, type FactIdentity } from "@/evidence/EvidenceContext";
 import { Overlay } from "@/evidence/Overlay";
-import { TracedLine } from "@/evidence/TracedLine";
+import { QUOTE_LABEL, TracedLine } from "@/evidence/TracedLine";
 import type { AnalysisDocument, CitationView, HandoffView, PendingNode } from "@/wire/v1";
 
 export { PROSE_SHOWN } from "./module";
@@ -169,6 +169,11 @@ function SourceFacts({ record, facts }: { record: string; facts: readonly Citati
             </button>{" "}
             {fact.filename} · p.{fact.page}
           </span>
+          {fact.line.recorded ? null : (
+            <div className="lbl" data-line-not-recorded>
+              {QUOTE_LABEL}
+            </div>
+          )}
           <blockquote className="matched">
             <TracedLine line={fact.line} />
           </blockquote>
