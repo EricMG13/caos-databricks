@@ -112,11 +112,26 @@ function StepHead({ at, name, step }: { at: number; name: string; step: FilingSt
   );
 }
 
-const choiceKey = (choice: { route_node_id: string; citation_index: number }) =>
-  `${choice.route_node_id}#${choice.citation_index}`;
+/** A citation's identity: its node, which list it is in, and its place. */
+interface Named {
+  route_node_id: string;
+  citation_index: number;
+  unverified: boolean;
+}
 
+const choiceKey = (choice: Named) =>
+  `${choice.route_node_id}${choice.unverified ? " unverified" : ""}#${choice.citation_index}`;
+
+const named = (choice: CitationChoice): Named => ({
+  ...choice,
+  unverified: choice.unverified !== null,
+});
+
+// An unverified choice's text carries its own page, after its label (D106).
 const choiceLabel = (choice: CitationChoice) =>
-  `${choice.route_node_id} · p.${choice.page} · ${choiceText(choice)}`;
+  choice.unverified === null
+    ? `${choice.route_node_id} · p.${choice.page} · ${choiceText(choice)}`
+    : `${choice.route_node_id} · ${choiceText(choice)}`;
 
 /** The draft's figures (N90): each marker the text uses, once, and the
     citation it names -- or that it names none the served records carry,
@@ -129,18 +144,31 @@ function DraftFigures({
   narrative: NarrativeDraft[][];
   choices: CitationChoice[];
 }) {
-  const used = new Map<string, { route_node_id: string; citation_index: number }>();
+  const used = new Map<string, Named>();
   for (const span of narrative.flat()) {
-    if (span.figure) used.set(choiceKey(span.figure), span.figure);
+    const figure: Named | null = span.figure
+      ? { ...span.figure, unverified: false }
+      : span.unverified
+        ? {
+            route_node_id: span.unverified.route_node_id,
+            citation_index: span.unverified.unverified_index,
+            unverified: true,
+          }
+        : null;
+    if (figure) used.set(choiceKey(figure), figure);
   }
   if (used.size === 0) return null;
-  const byKey = new Map(choices.map((choice) => [choiceKey(choice), choice]));
+  const byKey = new Map(choices.map((choice) => [choiceKey(named(choice)), choice]));
   return (
     <div className="note" data-draft-figures>
       <p>Figures in this draft:</p>
       <ul className="plain">
         {[...used].map(([key, figure]) => {
-          const marker = figureMarker(figure.route_node_id, figure.citation_index);
+          const marker = figureMarker(
+            figure.route_node_id,
+            figure.citation_index,
+            figure.unverified,
+          );
           const choice = byKey.get(key);
           return (
             <li key={key} data-draft-figure={marker}>
@@ -164,7 +192,7 @@ function FigurePicker({
   choices: CitationChoice[];
   onInsert: (choice: CitationChoice) => void;
 }) {
-  const [picked, setPicked] = useState(choices[0] ? choiceKey(choices[0]) : "");
+  const [picked, setPicked] = useState(choices[0] ? choiceKey(named(choices[0])) : "");
   if (choices.length === 0) {
     return (
       <p className="note" data-figure-picker>
@@ -172,17 +200,17 @@ function FigurePicker({
       </p>
     );
   }
-  const chosen = choices.find((choice) => choiceKey(choice) === picked) ?? choices[0]!;
+  const chosen = choices.find((choice) => choiceKey(named(choice)) === picked) ?? choices[0]!;
   return (
     <div className="fld" data-figure-picker>
       <label htmlFor="figure-citation">Citation</label>
       <select
         id="figure-citation"
-        value={choiceKey(chosen)}
+        value={choiceKey(named(chosen))}
         onChange={(event) => setPicked(event.target.value)}
       >
         {choices.map((choice) => (
-          <option key={choiceKey(choice)} value={choiceKey(choice)}>
+          <option key={choiceKey(named(choice))} value={choiceKey(named(choice))}>
             {choiceLabel(choice)}
           </option>
         ))}
@@ -325,7 +353,11 @@ export function FilingControls({
   const choices = useMemo(() => citationsOf(body.artifacts), [body.artifacts]);
 
   function insert(choice: CitationChoice) {
-    const marker = figureMarker(choice.route_node_id, choice.citation_index);
+    const marker = figureMarker(
+      choice.route_node_id,
+      choice.citation_index,
+      choice.unverified !== null,
+    );
     const start = editor.current?.selectionStart ?? draft.length;
     const end = editor.current?.selectionEnd ?? start;
     const next = draft.slice(0, start) + marker + draft.slice(end);
@@ -372,7 +404,7 @@ export function FilingControls({
             onChange={(event) => setDraft(event.target.value)}
           />
           <FigurePicker
-            key={choices.map(choiceKey).join(" ")}
+            key={choices.map((choice) => choiceKey(named(choice))).join(" ")}
             choices={choices}
             onInsert={insert}
           />

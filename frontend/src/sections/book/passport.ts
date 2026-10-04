@@ -29,6 +29,7 @@ export function citationOf(fact: CitationView, observedAt: string): Citation {
     render_url: null,
     withdrawn_at: fact.withdrawn_at,
     cited_page: fact.cited_page,
+    linked: fact.linked,
   };
 }
 
