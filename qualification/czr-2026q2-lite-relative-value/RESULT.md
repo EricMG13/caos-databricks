@@ -7,7 +7,7 @@ Caesars Entertainment, Inc. (CZR) at an analysis date of 2026-10-02, against
 peers MGM Resorts International (MGM) and PENN Entertainment, Inc. (PENN) from
 the owner's "Public Leveraged Loan Issuers Benchmark". Its qualification-set
 digest is
-`6000542dd4a4551ab1388f384d50ed26f02c0518561ec42fbd291748d0be7f8a`.
+`dcc626b575a40996555c4dbde4e0c025ebd012ad7731e4ed6c724760a6c9814b`.
 
 ## Corpus provenance
 
@@ -16,7 +16,9 @@ Each document is an official SEC EDGAR filing or exhibit, fetched on
 and the CZR earnings release are byte-identical to the `czr-2026q2` set's
 copies, the credit agreement to the `czr-2026q2-liquidity` set's copy, and the
 indenture to the `czr-2026q2-covenant-refinancing` set's copy. The MGM and
-PENN releases are admitted here for the first time. The text SHA-256 is the
+PENN releases are admitted here for the first time. The four FINRA TRACE
+observations are byte-identical to the `czr-2026q2-relative-value` set's copies
+(F507). The text SHA-256 is the
 digest the keys bind; the raw SHA-256 is the HTML as fetched.
 
 | document | source | accession | text SHA-256 | raw HTML SHA-256 |
@@ -28,10 +30,36 @@ digest the keys bind; the raw SHA-256 is the HTML as fetched.
 | `MGM_Q2_2026_Earnings_Release.txt` (MGM Ex. 99.1, 29 July 2026) | https://www.sec.gov/Archives/edgar/data/789570/000078957026000075/mgmex991q22026earningrelea.htm | 0000789570-26-000075 | `795ac68aa1c51a7e0a6799a6e1ca053ee597dc9a1a9a6550a2438280a6e76cdb` | `d23f2410e475eca7e0dfe2fdcca0210f449e4c1a93fb93a14549592c4554173c` |
 | `PENN_Q2_2026_Earnings_Release.txt` (PENN Ex. 99.1, 6 August 2026) | https://www.sec.gov/Archives/edgar/data/921738/000092173826000019/pennex991-q22026.htm | 0000921738-26-000019 | `4d12fff94b066f73e6eccce84eec937e8fd4fdc38d6061704db66a40511a210c` | `be60f25fec25022c2fd6f48c2cf9bb99912b8f78356cebc4a7719bdcae9120bc` |
 
+The four FINRA TRACE observations are coordinator-authored transcriptions of
+the official public FINRA pages, captured on 2 October 2026 with the owner's
+permission and admitted byte for byte; each file states its own source URL and
+observation time, and the file is the text.
+
+| document | source | observed at | SHA-256 |
+|---|---|---|---|
+| `CZR_FINRA_TRACE_12769GAC4_2026-10-02.txt` (CZR 6.50% due 2032) | https://www.finra.org/finra-data/fixed-income/bond?symbol=ERI5740550&bondType=CORP | 2026-10-02T09:31:13Z | `4018aaa62309df6cd66a9b5fc766c4a9429e886e649023de2bad8673baf8aa51` |
+| `CZR_FINRA_TRACE_12769GAD2_2026-10-02.txt` (CZR 6.00% due 2032) | https://www.finra.org/finra-data/fixed-income/bond?symbol=ERI5909471&bondType=CORP | 2026-10-02T09:31:27Z | `256c646128b7b670ebeb2e795aaced255373b488261b7f5c9111f933e2226b24` |
+| `MGM_FINRA_TRACE_552953CK5_2026-10-02.txt` (MGM 6.125% due 2029) | https://www.finra.org/finra-data/fixed-income/bond?symbol=MGM5885613&bondType=CORP | 2026-10-02T09:32:08Z | `e17cea1bb90debdeb8c1fea9c352132b57ae9b27ee0d3225fb67c6466d7d0e4a` |
+| `PENN_FINRA_TRACE_707569AV1_2026-10-02.txt` (PENN 4.125% due 2029) | https://www.finra.org/finra-data/fixed-income/bond?symbol=PENN5210723&bondType=CORP | 2026-10-02T09:32:31Z | `666c0f36ace32336dffbcff324eaec5b4657edade407bb0b8a0e8d8fb405de6d` |
+
 The credit agreement (935,517 bytes) and the indenture (758,385 bytes) are over
 500 KiB, so their paths are pinned in the large-file excludes; both are under
-1.5 MiB, so they reach CP-0 whole rather than as a page map. All six are
+1.5 MiB, so they reach CP-0 whole rather than as a page map. All ten are
 inside `MAX_REQUEST_BYTES`.
+
+## Why the pack carries TRACE prices (F507)
+
+The first LITE relative-value run (LRV1) cleared CP-0 and CP-1C but marked
+CP-L10 "DO NOT RUN" because the pack carried no dated prices, yields or spreads
+for Caesars or the selected peer securities; CP-L10 precedes CP-1C on the route,
+so the run stopped after CP-0 with none of its keys met. That was a
+corpus-construction fault, the N54 shape below: the set was built without market
+evidence. It now carries the four FINRA TRACE observations its FULL sibling
+carries: the last trade price, yield and date FINRA displayed for the CZR 6.50%
+and 6.00% 2032 notes, the MGM 6.125% 2029 note and the PENN 4.125% 2029 note.
+FINRA did not label any value bid, mid, ask or evaluated, and no spread, curve
+point or seniority is inferred. No key is added or changed: the readiness key
+expects CP-0 to clear CP-L10 and CP-1C, which the market evidence now allows.
 
 ## Why the pack carries a credit agreement and an indenture
 
@@ -127,12 +155,12 @@ The documents state the following; this set draws no conclusion from them.
   states their seniority, and FINRA displayed none.
 - **The 144A label.** FINRA showed "transactions effected pursuant to SEC Rule
   144A" for both CZR notes and the PENN note, and no offering-status line for
-  the MGM note. Those observations are in the FULL set, not this pack.
+  the MGM note. Those observations are in this pack since F507.
 - **The pending take-private.** The 10-Q states that on 27 May 2026 Caesars
   entered into an Agreement and Plan of Merger under which Merger Sub "will
   merge with and into the Company, with the Company continuing as the
   surviving corporation and direct wholly owned subsidiary of Fertitta Gaming
-  (the “Merger”)". The CZR last trades the FULL set records (1 October 2026)
+  (the “Merger”)". The CZR last trades the TRACE observations record (1 October 2026)
   were printed after that agreement.
 
 The peers' periods match CZR's: each release reports the quarter ended

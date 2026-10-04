@@ -121,6 +121,10 @@ a row typed here is a row that fails. -->
 | `czr-2024-650-notes-2032-indenture-lite-relative-value` | CZR | Caesars Entertainment, Inc. Indenture for the 6.500% Senior Secured Notes due 2032, dated 6 February 2024, U.S. Bank Trust Company, N.A. as trustee (SEC exhibit text extract, LITE relative-value set copy) | in_hand | CP-0 | LITE_RELATIVE_VALUE | 758385 | yes | `0809ab3981090bd2…` |
 | `mgm-q2-2026-earnings` | MGM | MGM Resorts International second quarter 2026 earnings release, Exhibit 99.1, 29 July 2026 (SEC exhibit text extract) | in_hand | CP-1C | LITE_RELATIVE_VALUE | 29214 | yes | `795ac68aa1c51a7e…` |
 | `penn-q2-2026-earnings` | PENN | PENN Entertainment, Inc. second quarter 2026 earnings release, Exhibit 99.1, 6 August 2026 (SEC exhibit text extract) | in_hand | CP-1C | LITE_RELATIVE_VALUE | 33608 | yes | `4d12fff94b066f73…` |
+| `czr-finra-trace-12769gac4-2026-10-02-lite-relative-value` | CZR | FINRA TRACE observation for Caesars Entertainment 6.50% notes due 2032, CUSIP 12769GAC4 (LITE relative-value set copy) | in_hand | CP-L10 | LITE_RELATIVE_VALUE | 1361 | yes | `4018aaa62309df6c…` |
+| `czr-finra-trace-12769gad2-2026-10-02-lite-relative-value` | CZR | FINRA TRACE observation for Caesars Entertainment 6.00% notes due 2032, CUSIP 12769GAD2 (LITE relative-value set copy) | in_hand | CP-L10 | LITE_RELATIVE_VALUE | 1364 | yes | `256c646128b7b670…` |
+| `mgm-finra-trace-552953ck5-2026-10-02-lite-relative-value` | MGM | FINRA TRACE observation for MGM Resorts International 6.125% notes due 2029, CUSIP 552953CK5 (LITE relative-value set copy) | in_hand | CP-L10 | LITE_RELATIVE_VALUE | 1277 | yes | `e17cea1bb90debde…` |
+| `penn-finra-trace-707569av1-2026-10-02-lite-relative-value` | PENN | FINRA TRACE observation for PENN Entertainment 4.125% notes due 2029, CUSIP 707569AV1 (LITE relative-value set copy) | in_hand | CP-L10 | LITE_RELATIVE_VALUE | 1354 | yes | `666c0f36ace32336…` |
 | `czr-q2-2026-10q-relative-value` | CZR | Caesars Entertainment, Inc. Form 10-Q for the quarter ended 30 June 2026 (SEC filing text extract, FULL relative-value set copy) | in_hand | CP-0, CP-1, CP-1C, CP-2, CP-4 | RELATIVE_VALUE | 166976 | yes | `f369ce5f1ebeddd9…` |
 | `czr-fy2025-10k-relative-value` | CZR | Caesars Entertainment, Inc. FY2025 Form 10-K (SEC filing text extract, FULL relative-value set copy) | in_hand | CP-0, CP-2 | RELATIVE_VALUE | 405745 | yes | `172309048af2a6a2…` |
 | `czr-q2-2026-earnings-relative-value` | CZR | Caesars Entertainment, Inc. second quarter 2026 earnings release, Exhibit 99.1, 28 July 2026 (SEC exhibit text extract, FULL relative-value set copy) | in_hand | CP-0, CP-1C | RELATIVE_VALUE | 15590 | yes | `b385f76ff631243d…` |
@@ -173,11 +177,11 @@ a row typed here is a row that fails. -->
 | `answer-key-3issuer` | CCL, BA, F | ANSWER_KEY_3ISSUER.md — human-authored core facts, derived values and 24 traps per issuer | **key source, never admitted** | — | — | — | — | — |
 <!-- /emitted -->
 
-One hundred and twenty-nine documents: one hundred and twenty-four `in_hand`,
-four `to_source`, and one `to_author`; plus one key source. Ninety-three of the
-one hundred and twenty-four in hand are byte-identical route-local copies of
+One hundred and thirty-three documents: one hundred and twenty-eight `in_hand`,
+four `to_source`, and one `to_author`; plus one key source. Ninety-seven of the
+one hundred and twenty-eight in hand are byte-identical route-local copies of
 already admitted evidence: eleven from the earlier sets, nineteen added for the
-Phase 2 route inventory, and sixty-three in the CZR earnings-update, liquidity,
+Phase 2 route inventory, and sixty-seven in the CZR earnings-update, liquidity,
 FULL and LITE covenant-refinancing, FULL and LITE relative-value, LITE
 full-credit-screen, FULL and LITE portfolio, and FULL credit-assessment sets.
 Sixteen more are the documents admitted on 2 October 2026: the three CZR Q2
