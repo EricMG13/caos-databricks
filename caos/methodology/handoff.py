@@ -762,10 +762,10 @@ WIRE_CITATION_KEYS = frozenset({"source_id", "page", "matched_text"})
 RECORD_FORMAT = "caos-canonical-record-v2"
 # What the record codec reads and writes (`record_bytes`, `_decoded_record`),
 # raised whenever a record this build writes is one an older build would
-# refuse: 1 since D106 (`unverified`, `linked`). A build with another value,
-# or none, cannot read this build's records, so `scripts/rollback_check.py`
-# refuses a rollback across a change of it.
-RECORD_CODEC_VERSION = 1
+# refuse: 1 since D106 (`unverified`, `linked`), 2 since D107 (`marker`). A
+# build with another value, or none, cannot read this build's records, so
+# `scripts/rollback_check.py` refuses a rollback across a change of it.
+RECORD_CODEC_VERSION = 2
 # A validated Blocked answer's citations, judged as any answer's (D106).
 BLOCKED_FORMAT = "caos-blocked-citations-v1"
 # A body may carry the largest Markdown the host accepts plus its citations
@@ -804,29 +804,37 @@ class UnverifiedCitation:
     re-anchored by any reader, and the anchoring refusal that made it
     unverified (`UNVERIFIED_CODES`). Its quote has crossed `BoundaryText`
     and hides no text (`unverified_citation`). The claim it supports is
-    Deploy V's lineage class "Untraced". `linked` is whether the body
-    carries the quote verbatim, as for an anchored citation
-    (`AnchoredCitation.linked`): written only when false."""
+    Deploy V's lineage class "Untraced". `linked` and `marker` are as for an
+    anchored citation (`AnchoredCitation`): `linked` written only when
+    false, `marker` on every citation accepted since D107."""
 
     source_id: UUID
     page: int
     matched_text: str
     code: RefusalCode
     linked: bool = True
+    marker: int | None = None
 
 
 def unverified_citation(
-    citation: Citation, code: RefusalCode, *, linked: bool = True
+    citation: Citation,
+    code: RefusalCode,
+    *,
+    linked: bool = True,
+    marker: int | None = None,
 ) -> UnverifiedCitation:
     """`citation` kept as unverified for `code` (D106), its quote as it
-    crosses `BoundaryText`, and whether the body carries it (`linked`).
+    crosses `BoundaryText`, whether a marker names it (`linked`) and its
+    place in the answer's list (`marker`, D107).
     `HANDOFF_MALFORMED` for a quote that will not cross or hides text: a
     host text check, never a citation fault, so the answer is refused
     rather than the quote stored or dropped."""
     quote = _crossed(citation.matched_text)
     if code not in UNVERIFIED_CODES or quote is None:
         raise Refusal(RefusalCode.HANDOFF_MALFORMED)
-    return UnverifiedCitation(citation.source_id, citation.page, quote, code, linked)
+    return UnverifiedCitation(
+        citation.source_id, citation.page, quote, code, linked, marker
+    )
 
 
 def _crossed(text: str) -> str | None:
@@ -864,6 +872,9 @@ class CanonicalRecord:
     reader re-anchors `unverified`. Since D106 either list may be empty but
     not both; only an `EXCERPT` record holds an unverified citation or an
     anchored one not linked to a statement (`AnchoredCitation.linked`).
+    Since D107 every citation of either list holds its `marker`, together
+    the places 1 to n of the answer's list, so a marker in the body names
+    exactly one of them; a record from before holds none (`_markers_held`).
     """
 
     artifact_sha256: str
@@ -1910,7 +1921,8 @@ def record_bytes(record: CanonicalRecord) -> bytes:
     written without its lines. D106's two fields likewise (`_held`): a
     citation's `linked` is written only when false, and `unverified` only
     when it has entries, so every record stored before them is the same
-    bytes.
+    bytes. D107's `marker` is written where it is set, which is on every
+    citation accepted since D107 and on none before (`_markers_held`).
     """
     _held(record.citations, record.unverified, record.citation_rule)
     document: dict[str, Any] = {"format": RECORD_FORMAT, **asdict(record)}
@@ -1929,7 +1941,8 @@ def record_bytes(record: CanonicalRecord) -> bytes:
 
 
 def _unverified_document(entry: UnverifiedCitation) -> dict[str, Any]:
-    """One unverified citation as written: `linked` only when false (D106)."""
+    """One unverified citation as written: `linked` only when false (D106),
+    `marker` only when set (D107)."""
     document: dict[str, Any] = {
         "source_id": str(entry.source_id),
         "page": entry.page,
@@ -1938,6 +1951,8 @@ def _unverified_document(entry: UnverifiedCitation) -> dict[str, Any]:
     }
     if not entry.linked:
         document["linked"] = False
+    if entry.marker is not None:
+        document["marker"] = entry.marker
     return document
 
 
@@ -1989,9 +2004,12 @@ def read_blocked_citations(
 def _written_citation(citation: dict[str, Any], rule: CitationRule) -> None:
     """One anchored citation as `record_bytes` writes it: `cited_page` only
     when set (D94), `line_text` only under `EXCERPT` (D105), `linked` only
-    when false (D106), and every coordinate a float."""
+    when false (D106), `marker` only when set (D107), and every coordinate a
+    float."""
     if citation["cited_page"] is None:
         del citation["cited_page"]
+    if citation["marker"] is None:
+        del citation["marker"]
     if rule != EXCERPT:
         del citation["line_text"]
     if citation["linked"]:
@@ -2105,13 +2123,25 @@ def _anchored(item: object) -> AnchoredCitation:
             "cited_page": cited,
             "line_text": line,
             "linked": "linked" not in item,
+            "marker": _marker(item),
         },
         page=_int,
         bboxes=_rect,
         cited_page=lambda value: value,
         line_text=lambda value: value,
         linked=lambda value: value,
+        marker=lambda value: value,
     )
+
+
+def _marker(item: dict[str, Any]) -> int | None:
+    """A stored citation's `marker` (D107): absent is None, a citation
+    accepted before markers; a present one is a place in a list."""
+    if "marker" not in item:
+        return None
+    if type(item["marker"]) is not int or not 1 <= item["marker"] <= MAX_CITATIONS:
+        raise ValueError
+    return item["marker"]
 
 
 def _unverified(item: object) -> UnverifiedCitation:
@@ -2121,7 +2151,10 @@ def _unverified(item: object) -> UnverifiedCitation:
     (absent, linked)."""
     if not isinstance(item, dict) or item.get("linked", False) is not False:
         raise ValueError  # written only when false: a present `true` is not ours
-    entry = _closed({k: v for k, v in item.items() if k != "linked"}, _UNVERIFIED_KEYS)
+    optional = {"linked", "marker"}
+    entry = _closed(
+        {k: v for k, v in item.items() if k not in optional}, _UNVERIFIED_KEYS
+    )
     citation = _requested({key: entry[key] for key in WIRE_CITATION_KEYS})
     code = next((c for c in UNVERIFIED_CODES if entry["code"] == c.value), None)
     if code is None or type(entry["code"]) is not str:
@@ -2134,6 +2167,7 @@ def _unverified(item: object) -> UnverifiedCitation:
         citation.matched_text,
         code,
         "linked" not in item,
+        _marker(item),
     )
 
 
@@ -2152,6 +2186,31 @@ def _held(
         raise ValueError
     unlinked = any(not citation.linked for citation in citations)
     if rule != EXCERPT and (unverified or unlinked):
+        raise ValueError
+    _markers_held(citations, unverified, rule)
+
+
+def _markers_held(
+    citations: tuple[AnchoredCitation, ...],
+    unverified: tuple[UnverifiedCitation, ...],
+    rule: CitationRule,
+) -> None:
+    """`ValueError` unless no citation holds a `marker` -- a record from
+    before D107 -- or every one does under `EXCERPT`, each list in its
+    answer order and the two together exactly the places 1 to n: so each
+    marker the body writes names one citation, anchored or not (D107)."""
+    places = [c.marker for c in citations] + [e.marker for e in unverified]
+    numbers = [place for place in places if place is not None]
+    if not numbers:
+        return
+    anchored, kept = numbers[: len(citations)], numbers[len(citations) :]
+    if (
+        rule != EXCERPT
+        or len(numbers) != len(places)
+        or sorted(numbers) != list(range(1, len(numbers) + 1))
+        or anchored != sorted(anchored)
+        or kept != sorted(kept)
+    ):
         raise ValueError
 
 
