@@ -50,6 +50,7 @@ from caos.api.wire import (
     GateView,
     GrantStanding,
     HandoffView,
+    LineView,
     NarrativeDraft,
     NarrativeFigureRef,
     NodeView,
@@ -117,8 +118,9 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
     ),
     wire.NarrativeFigure: frozenset(
         "route_node_id record_sha256 citation_index document_sha256 source_id"
-        " page matched_text rects withdrawn_at".split()
+        " page matched_text line rects withdrawn_at".split()
     ),
+    wire.LineView: frozenset({"before", "excerpt", "after"}),
     wire.NarrativeSpan: frozenset({"text", "figure"}),
     wire.ReportArtifact: frozenset(
         (
@@ -305,6 +307,7 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
             "filename",
             "page",
             "matched_text",
+            "line",
             "rects",
             "source_id",
             "withdrawn_at",
@@ -704,6 +707,7 @@ def test_citation_view_names_its_source_for_the_page_endpoint() -> None:
         "filename": "report.txt",
         "page": 1,
         "matched_text": "net leverage",
+        "line": {"before": "", "excerpt": "net leverage", "after": ""},
         "rects": [],
         "withdrawn_at": None,
         "cited_page": None,
@@ -714,6 +718,26 @@ def test_citation_view_names_its_source_for_the_page_endpoint() -> None:
     assert CitationView.model_validate({**citation, "source_id": source}).source_id == (
         source
     )
+
+
+def test_a_citation_carries_the_whole_line_its_excerpt_is_marked_in() -> None:
+    """D105, AI-4: an excerpt is never served without its line. `LineView.of`
+    splits the record's `line_text` around the quote, so a qualifier just
+    outside it is served too; a record from before D105 keeps no line and its
+    quote is served as the line it is. The line is required on the wire."""
+    line = "We do not believe the Borrower will breach the leverage covenant."
+    quote = "believe the Borrower will breach the leverage covenant"
+
+    view = LineView.of(line, quote)
+    assert (view.before, view.excerpt, view.after) == ("We do not ", f"{quote}.", "")
+    assert view.before + view.excerpt + view.after == line
+    old = LineView.of(None, "Total debt | 11,807")
+    assert (old.before, old.excerpt, old.after) == ("", "Total debt | 11,807", "")
+    unplaced = LineView.of(line, "words the line does not hold at all here")
+    assert (unplaced.before, unplaced.excerpt, unplaced.after) == (line, "", "")
+    defs = json.loads(COMMITTED.read_text(encoding="utf-8"))["$defs"]
+    assert "line" in defs["CitationView"]["required"]
+    assert "line" in defs["NarrativeFigure"]["required"]
 
 
 def test_a_table_cell_is_its_text_and_a_plain_decimal_string_or_null() -> None:

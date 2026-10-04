@@ -33,6 +33,7 @@ from pydantic import (
 from pydantic.json_schema import models_json_schema
 
 from caos.api.identity import GlobalRole
+from caos.deliverable.render import traced_line
 from caos.graph.route import EdgeType, NodeState
 from caos.methodology.handoff import (
     MAX_BLOCKER_CHARS,
@@ -688,11 +689,36 @@ class RectView(BaseModel):
     y1: float
 
 
+class LineView(BaseModel):
+    """The whole evidence line a citation anchored in, split around its
+    excerpt (D105): `before + excerpt + after` is the line. An excerpt is
+    never shown without its line, so a qualifier just outside it ("not",
+    "provided that", a row's label) is the reader's to see (AI-4). `excerpt`
+    is the line's own text of the quote, empty where the host cannot place it
+    (the line is then shown whole and unmarked). A record accepted before
+    D105 keeps no line: its quote is the line, `before` and `after` empty."""
+
+    model_config = _CLOSED
+
+    before: Annotated[str, Field(max_length=QUOTE_CHARS)]
+    excerpt: Annotated[str, Field(max_length=QUOTE_CHARS)]
+    after: Annotated[str, Field(max_length=QUOTE_CHARS)]
+
+    @classmethod
+    def of(cls, line_text: str | None, matched_text: str) -> LineView:
+        """The record's `line_text`, or its quote where it keeps none, split
+        as the deliverable splits it (`render.traced_line`)."""
+        line = matched_text if line_text is None else line_text
+        before, excerpt, after = traced_line(line, matched_text)
+        return cls(before=before, excerpt=excerpt, after=after)
+
+
 class CitationView(BaseModel):
     """A host-verified citation; withdrawal is read live. `source_id` is the
     pinned source the document resolves to, which addresses its page (4.4).
     `page` is where the quote is; `cited_page` is the other page the module
-    named when the host re-anchored the quote there (D94), else null."""
+    named when the host re-anchored the quote there (D94), else null. `line`
+    is the evidence line the quote is an excerpt of (D105)."""
 
     model_config = _CLOSED
 
@@ -701,6 +727,7 @@ class CitationView(BaseModel):
     filename: Text
     page: int
     matched_text: Annotated[str, Field(max_length=QUOTE_CHARS)]
+    line: LineView
     rects: Annotated[list[RectView], Field(max_length=RECTS_MAX)]
     withdrawn_at: AwareDatetime | None
     cited_page: Annotated[int, Field(ge=1)] | None
@@ -1005,6 +1032,7 @@ class NarrativeFigure(BaseModel):
     source_id: UUID
     page: Annotated[int, Field(ge=1)]
     matched_text: Annotated[str, Field(max_length=QUOTE_CHARS)]
+    line: LineView
     rects: Annotated[list[RectView], Field(max_length=RECTS_MAX)]
     withdrawn_at: AwareDatetime | None
 

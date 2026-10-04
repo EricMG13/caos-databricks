@@ -31,7 +31,12 @@ from caos.api.deps import (
     readable,
     revision_query,
 )
-from caos.api.wire import REVISIONS_MAX, CommitteeDocument, ReportDocument
+from caos.api.wire import (
+    REVISIONS_MAX,
+    CommitteeDocument,
+    LineView,
+    ReportDocument,
+)
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
 from caos.deliverable.canonical import Revision, canonical_payload, payload_bytes
@@ -575,6 +580,10 @@ def _figure(
         **figure,
         "record_sha256": digests[node],
         "source_id": source_id,
+        # The line the figure's quote is an excerpt of (D105), from the record.
+        "line": LineView.of(
+            citation.get("line_text"), figure["matched_text"]
+        ).model_dump(),
         "rects": [
             {key: box[key] for key in ("x0", "y0", "x1", "y1")}
             for box in citation["bboxes"]

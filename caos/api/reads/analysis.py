@@ -43,6 +43,7 @@ from caos.api.wire import (
     Chrome,
     CitationView,
     HandoffView,
+    LineView,
     PendingNode,
     RectView,
     RunSubjectView,
@@ -481,6 +482,7 @@ def _citation(
         filename=filename,
         page=citation.page,
         matched_text=citation.matched_text,
+        line=LineView.of(citation.line_text, citation.matched_text),
         rects=[RectView(x0=b.x0, y0=b.y0, x1=b.x1, y1=b.y1) for b in citation.bboxes],
         withdrawn_at=withdrawn_at,  # type: ignore[arg-type]
         cited_page=citation.cited_page,

@@ -31,6 +31,7 @@ from caos.api.reads import analysis as analysis_read
 from caos.api.wire import CLEARS, AnalysisDocument
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
+from caos.evidence.citations import AnchoredCitation
 from caos.graph.route import RouteExtensions, resolve_route
 from caos.graph.runtime import Execution, run_route
 from caos.methodology.handoff import _decoded_record, record_bytes
@@ -179,8 +180,33 @@ def test_analysis_labels_source_facts_model_analysis_and_no_host_calculation(
         assert fact.source_id == harness.source_id
         assert fact.page == 1
         assert fact.matched_text == completions.quotes[0]
+        # The whole line the quote anchored in, the quote marked inside (D105).
+        assert fact.line.excerpt == completions.quotes[0]
         assert fact.withdrawn_at is None
         assert fact.rects and all(r.x1 > r.x0 for r in fact.rects)
+
+
+def test_an_excerpt_is_served_inside_the_whole_line_it_anchored_in() -> None:
+    """AI-4's guard on the wire: a source fact carries the record's whole line
+    (`line_text`) split around the excerpt, so the "not" just before it is
+    served beside it; a record from before D105 is served its quote as the
+    line."""
+    source = uuid4()
+    documents: dict[str, tuple[UUID, str, object]] = {
+        "a" * 64: (source, "report.txt", None)
+    }
+    line = "We do not believe the Borrower will breach the leverage covenant."
+    excerpt = "believe the Borrower will breach the leverage covenant."
+    cited = AnchoredCitation("a" * 64, 3, excerpt, (), line_text=line)
+
+    fact = analysis_read._citation(cited, documents)
+    assert (fact.line.before, fact.line.excerpt, fact.line.after) == (
+        "We do not ",
+        excerpt,
+        "",
+    )
+    old = analysis_read._citation(replace(cited, line_text=None), documents)
+    assert (old.line.before, old.line.excerpt, old.line.after) == ("", excerpt, "")
 
 
 def test_restricted_limitations_and_screening_scope_reach_the_wire(

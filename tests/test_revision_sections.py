@@ -85,6 +85,10 @@ def test_report_reads_the_exact_saved_revision(
         for box in record["citations"][0]["bboxes"]
     ]
     assert figure["rects"]
+    # D105: the whole line its record citation anchored in, the quote marked.
+    line = record["citations"][0].get("line_text", QUOTE)
+    assert "".join(figure["line"].values()) == line
+    assert figure["line"]["excerpt"] == QUOTE
     assert figure["withdrawn_at"] is None
     assert figure["record_sha256"] == next(
         a["record_sha256"] for a in saved["artifacts"] if a["route_node_id"] == node
