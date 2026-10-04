@@ -1253,6 +1253,56 @@ def _similar(words: list[str], split: list[str]) -> bool:
     )
 
 
+def overrun_line(text: str, lines: Sequence[str]) -> int | None:
+    """The index in `lines` of the one line `text` runs past the end of,
+    else None (F496): a quote that copied a whole line and went on into the
+    text after it -- a sentence a page break split, say -- so the line is a
+    strict prefix of the quote, word for word as anchoring reads them (NFC,
+    the line's first and last word standing for the quote's there less edge
+    punctuation, `_edge_equal`). Pure over the texts it is handed, like
+    `near_line`; it never anchors or accepts. A candidate holds the quote's
+    first `NEAR_WORDS` words, so a short heading is never one; past
+    `NEAR_MEASURED` candidates, or with two lines it overruns, there is no
+    answer, never a guess: one pass over the lines and at most
+    `NEAR_MEASURED` linear prefix checks.
+    """
+    words = [_nfc(word) for word in text.split()]
+    if len(words) <= NEAR_WORDS:
+        return None
+    head = words[:NEAR_WORDS]
+    found: list[int] = []
+    measured = 0
+    for number, line in enumerate(lines):
+        split = line.split(maxsplit=NEAR_WORDS)
+        start = [_nfc(word) for word in split[:NEAR_WORDS]]
+        if len(start) < NEAR_WORDS or not _same_start(start, head):
+            continue
+        measured += 1
+        if measured > NEAR_MEASURED:
+            return None
+        if _overruns([_nfc(word) for word in line.split()], words):
+            found.append(number)
+    return found[0] if len(found) == 1 else None
+
+
+def _same_start(start: list[str], head: list[str]) -> bool:
+    """Whether a line's first words are the quote's, its first word
+    standing for the quote's less edge punctuation (`overrun_line`)."""
+    return start[1:] == head[1:] and _edge_equal(start[0], head[0], normalised=True)
+
+
+def _overruns(line: list[str], words: list[str]) -> bool:
+    """Whether `line` is a strict prefix of `words`: the interior equal and
+    its first and last words standing for the quote's there (`overrun_line`)."""
+    last = len(line) - 1
+    return (
+        last + 1 < len(words)
+        and line[1:last] == words[1:last]
+        and _edge_equal(line[0], words[0], normalised=True)
+        and _edge_equal(line[last], words[last], normalised=True)
+    )
+
+
 # How a table row's cells are joined in an evidence line (F495).
 CELL_SEPARATOR = " | "
 

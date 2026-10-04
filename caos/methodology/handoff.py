@@ -1274,6 +1274,8 @@ _ABSENT = (
 )
 # How many words of the longer line a citation is part of are shown (D82).
 HINT_WORDS = 12
+# How many of its last words show the line a quote runs past the end of (F496).
+END_WORDS = 8
 # The most the anchoring line may hold once it places citations (D82): the
 # room of four vendor check lines, so a retry's prompt grows by a bounded
 # amount however many or long the placed lines are.
@@ -1292,7 +1294,9 @@ class LineHint:
     source the quote nearly matches (F493, `near_line`), `begins` then that
     line's first words, and `moved` whether that page is not the cited
     one; with `cells`, that line is a table row the quote left cells out of
-    (F495, `cells_line`). `unknown_source`: a citation refused
+    (F495, `cells_line`); with `ends` set, the quote runs past the end of
+    that line, whose last `END_WORDS` words `ends` holds (F496,
+    `overrun_line`). `unknown_source`: a citation refused
     `CITATION_NOT_DELIVERED` names this source_id, not one of the request's
     own (F495), and `held_by` the one delivered source holding its quote as
     a whole line of its cited page, if exactly one does."""
@@ -1303,6 +1307,7 @@ class LineHint:
     near: int | None = None
     moved: bool = False
     cells: bool = False
+    ends: str = ""
     unknown_source: str = ""
     held_by: str = ""
 
@@ -1323,7 +1328,8 @@ def anchoring_line(
     that line's page and first words and told to copy it exactly, and to
     cite that page when it is not the cited one (F493); one that left cells
     out of exactly one delivered row is shown that row and told to quote
-    every cell (F495). At
+    every cell (F495); one that runs past the end of exactly one delivered
+    line is shown that line's last words and told to quote it only (F496). At
     most `MAX_FEEDBACK_CITATIONS` citations are placed; the rest, and any the
     search could not place, keep the rule's wording. A citation refused
     `CITATION_NOT_DELIVERED` whose hint names an `unknown_source` is told
@@ -1349,7 +1355,7 @@ def anchoring_line(
         n: hint
         for n in lost[:MAX_FEEDBACK_CITATIONS]
         if (hint := told.get(n)) is not None
-        and (hint.begins or hint.pages or hint.absent)
+        and (hint.begins or hint.ends or hint.pages or hint.absent)
     }
     placed |= {
         n: hint
@@ -1461,9 +1467,19 @@ def _unknown_sources(placed: Mapping[int, LineHint], total: int) -> list[str]:
 
 def _placed(number: int, total: int, hint: LineHint) -> str:
     """One placed citation's clause (D82): the line it nearly matches
-    (F493) or the row it left cells out of (F495), the longer line it is
+    (F493), the row it left cells out of (F495) or the line it runs past
+    the end of (F496), the longer line it is
     part of, or the other pages it is one whole line of, at most
     `MAX_FEEDBACK_CITATIONS` of them named."""
+    if hint.near is not None and hint.ends:
+        where = f"page {hint.near}," + (" not its cited page," if hint.moved else "")
+        return (
+            f"citation {number} of {total} runs past the end of the evidence line"
+            f' of {where} which ends "{hint.ends}"; quote that line only, ending'
+            " where it ends"
+            + (f", and cite page {hint.near}" if hint.moved else "")
+            + " (text after it is a separate evidence line)"
+        )
     if hint.near is not None and hint.cells:
         where = f"page {hint.near}" + (", not its cited page," if hint.moved else "")
         return (

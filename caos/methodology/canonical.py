@@ -37,6 +37,7 @@ from caos.evidence.citations import (
     cells_line,
     find_line,
     near_line,
+    overrun_line,
     verify_citations,
 )
 from caos.graph.route import MODEL_MODULE, ResolvedRoute, RouteNode
@@ -56,6 +57,7 @@ from caos.methodology.executor import (
     _stored_identity,
 )
 from caos.methodology.handoff import (
+    END_WORDS,
     GATE_MODULE,
     HINT_WORDS,
     MAX_FEEDBACK_CITATIONS,
@@ -892,8 +894,10 @@ def _line_hint(
     except Refusal:
         return LineHint()
     if found.block_id is None and not found.pages:
-        near = _near_hint(delivered, citation, near_line) or _near_hint(
-            delivered, citation, cells_line, cells=True
+        near = (
+            _near_hint(delivered, citation, overrun_line, overrun=True)
+            or _near_hint(delivered, citation, near_line)
+            or _near_hint(delivered, citation, cells_line, cells=True)
         )
         if near is not None:
             return near
@@ -915,13 +919,16 @@ def _near_hint(
     search: Callable[[str, Sequence[str]], int | None],
     *,
     cells: bool = False,
+    overrun: bool = False,
 ) -> LineHint | None:
     """The near-miss hint (F493) for a citation `find_line` could neither
     find part of a line nor whole on another page: the one delivered line of
-    its source `search` names -- the line it nearly matches (`near_line`),
-    or the row it left cells out of (`cells_line`, F495, `cells`) -- by page
-    and first `HINT_WORDS` words. Only the delivered blocks' own text is
-    compared, so nothing the node was not given is read or shown."""
+    its source `search` names -- the line it runs past the end of
+    (`overrun_line`, F496, `overrun`: shown by its last `END_WORDS` words),
+    the line it nearly matches (`near_line`), or the row it left cells out
+    of (`cells_line`, F495, `cells`) -- by page and first `HINT_WORDS`
+    words. Only the delivered blocks' own text is compared, so nothing the
+    node was not given is read or shown."""
     lines = list(
         {d.block_id: d for d in delivered if d.source_id == citation.source_id}.values()
     )
@@ -929,9 +936,13 @@ def _near_hint(
     if found is None:
         return None
     line = lines[found]
-    begins = " ".join(line.text.value.split()[:HINT_WORDS])
+    words = line.text.value.split()
     return LineHint(
-        begins=begins, near=line.page, moved=line.page != citation.page, cells=cells
+        begins="" if overrun else " ".join(words[:HINT_WORDS]),
+        near=line.page,
+        moved=line.page != citation.page,
+        cells=cells,
+        ends=" ".join(words[-END_WORDS:]) if overrun else "",
     )
 
 
