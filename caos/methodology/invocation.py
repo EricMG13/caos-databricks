@@ -521,6 +521,9 @@ _GATE_INSTRUCTION = prompt_block("gate_instruction")
 # A node's guided retry after a refused answer (D30, D82): what the checks
 # reported, as written. The host adds no rule of its own here (invariant 4).
 _RETRY_FEEDBACK = prompt_block("validator_feedback")
+# The same retry carrying the refused answer back to be corrected (D104), in
+# its own sub-section; the block above is kept for a retry that cannot.
+_REPAIR_FEEDBACK = prompt_block("validator_repair")
 
 # An edge whose catalog entry declares no `allowed_use` says so, rather than
 # leaving the label out.
@@ -1154,6 +1157,7 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
     source_set: SourceSet | None = None,
     page_maps: Mapping[UUID, Mapping[str, int]] | None = None,
     retry_feedback: Sequence[str] = (),
+    refused_answer: str | None = None,
 ) -> str:
     """The task, the host-owned front matter, the host's own steps, every
     delivered authority file, upstream, its citation register, evidence.
@@ -1184,7 +1188,10 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
     only on a node's guided retry (D30, D82): the checks its refused answer
     failed, rendered last and folded into the tag, so a first attempt's bytes
     are exactly what they were and the refused answer could not have known the
-    markers around them.
+    markers around them. `refused_answer`, the stored answer those checks ran
+    on (already across `BoundaryText`), rides only with `retry_feedback`, in
+    its own sub-section asking for that answer corrected (D104); it is folded
+    into the tag too, so no marker it holds can close the block around it.
     """
     if identity.module_id not in ADAPTER_MODULES:
         raise Refusal(RefusalCode.HANDOFF_MODULE_UNSUPPORTED)
@@ -1233,7 +1240,8 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
     host_fields = invocation_fields(contract, identity)
     front_matter = _yaml(host_fields)
     feedback = _feedback_lines(retry_feedback)
-    untagged = front_matter + sections + feedback
+    answer = _carried(feedback, refused_answer)
+    untagged = front_matter + sections + feedback + answer
     tag = hashlib.sha256(untagged.encode("utf-8")).hexdigest()[:16]
     prompt = (
         _INSTRUCTION.format(
@@ -1294,7 +1302,7 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
     if identity.module_id == GATE_MODULE:
         t8_header = "| " + " | ".join(contract.navigation.NEW_HEADERS) + " |"
         prompt += _CP0_FINAL_CHECK.format(tag=tag, t8_header=t8_header)
-    return prompt + _retry_section(tag, feedback)
+    return prompt + _retry_section(tag, feedback, answer)
 
 
 def _feedback_lines(lines: Sequence[str]) -> str:
@@ -1302,9 +1310,20 @@ def _feedback_lines(lines: Sequence[str]) -> str:
     return "".join(f"- {line}\n" for line in lines)
 
 
-def _retry_section(tag: str, feedback: str) -> str:
-    """The last section of a node's guided retry (D30, D82), or nothing."""
-    return _RETRY_FEEDBACK.format(tag=tag, messages=feedback) if feedback else ""
+def _carried(feedback: str, refused_answer: str | None) -> str:
+    """The refused answer a retry carries (D104): only beside its checks, so a
+    first attempt, and a retry with nothing to report, carry none."""
+    return refused_answer if feedback and refused_answer else ""
+
+
+def _retry_section(tag: str, feedback: str, answer: str = "") -> str:
+    """The last section of a node's guided retry (D30, D82), or nothing: the
+    refused answer to correct with its checks (D104), else the checks alone."""
+    if not feedback:
+        return ""
+    if answer:
+        return _REPAIR_FEEDBACK.format(tag=tag, messages=feedback, answer=answer)
+    return _RETRY_FEEDBACK.format(tag=tag, messages=feedback)
 
 
 def request_size(provider: CompletionProvider, prompt: str) -> int:

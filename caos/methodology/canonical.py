@@ -69,6 +69,7 @@ from caos.methodology.handoff import (
     answer_citations,
     answer_markdown,
     capped,
+    carried_answer,
     feedback_lines,
     parse_response,
     readiness_set_line,
@@ -104,7 +105,12 @@ from caos.methodology.verification import (
     verify_accepted,
     verify_owner_restrictions,
 )
-from caos.provider import CompletionProvider, reported_charge, resend_checked
+from caos.provider import (
+    MAX_REQUEST_BYTES,
+    CompletionProvider,
+    reported_charge,
+    resend_checked,
+)
 from caos.refusals import Refusal, RefusalCode, RunRefusal
 from caos.store import StoreConnection, connect
 from caos.store.budget import reserved_for
@@ -250,7 +256,11 @@ def execute_handoff(
         # Met before reservation by `check_context`; built again here so the
         # call carries exactly this attempt's identity, and refused again if it
         # moved.
-        prompt = _prompt(bundle, assignment, identity, context, carried)
+        prompt = _sent_prompt(
+            provider,
+            context,
+            lambda built: _prompt(bundle, assignment, identity, built, carried),
+        )
         _within_reservation(conn, provider, prompt, attempt_id=attempt)
 
         bundle.verify_manifest()
@@ -472,9 +482,12 @@ def check_context(  # noqa: PLR0913 -- one node of one run, keyword-only
         )
         context = _prompt_context(conn, blobs, bundle, assignment, identity)
     authority = delivered_authority(bundle, node.module_id)
-    return request_size(
-        provider, _prompt(bundle, assignment, identity, context, authority)
+    prompt = _sent_prompt(
+        provider,
+        context,
+        lambda built: _prompt(bundle, assignment, identity, built, authority),
     )
+    return request_size(provider, prompt)
 
 
 # `check_context` runs before an attempt exists; nothing it reads uses the id.
@@ -496,6 +509,8 @@ class _Context:
     selection: Selection
     # What a node's guided retry carries (D30, D82); empty on every other.
     feedback: tuple[str, ...] = ()
+    # The refused answer that retry is asked to correct (D104), or None.
+    refused_answer: str | None = None
 
 
 def _source_preparation(
@@ -651,9 +666,10 @@ def _prompt_context(
     with suppress(Refusal):  # an attempt from before ordinals: this identity
         identity = replace(identity, ordinal=attempt_ordinal(conn, refused))
     lines = feedback_lines(contract, pathways, identity, body, skill=skill)
-    return replace(
-        context, feedback=capped([line for line in host if line] + list(lines))
-    )
+    feedback = capped([line for line in host if line] + list(lines))
+    # The answer rides only beside its checks (D104): with none, no block.
+    answer = carried_answer(body) if feedback else None
+    return replace(context, feedback=feedback, refused_answer=answer)
 
 
 def _size_line(markdown: bytes | None) -> str | None:
@@ -904,7 +920,29 @@ def _prompt(
         source_set=context.source_set,
         page_maps=context.selection.page_maps,
         retry_feedback=context.feedback,
+        refused_answer=context.refused_answer,
     )
+
+
+def _sent_prompt(
+    provider: CompletionProvider,
+    context: _Context,
+    prompt_of: Callable[[_Context], str],
+) -> str:
+    """The prompt `prompt_of` builds, less the refused answer a guided retry
+    would carry when carrying it puts the request `provider` sends past
+    `MAX_REQUEST_BYTES`, the transport ceiling a reservation is priced under
+    (D104): that retry asks for the whole answer again instead. Both the
+    prompt priced before the reservation (`check_context`) and the one sent
+    (`execute_handoff`) come from here, over the same ledger rows and blob,
+    so they choose alike; were they ever to differ, `_within_reservation`
+    refuses the larger."""
+    prompt = prompt_of(context)
+    if context.refused_answer is None or (
+        len(provider.request_bytes(prompt, json_object=True)) <= MAX_REQUEST_BYTES
+    ):
+        return prompt
+    return prompt_of(replace(context, refused_answer=None))
 
 
 def _by_source(delivered: Sequence[Delivery]) -> dict[UUID, frozenset[str]]:

@@ -31,6 +31,10 @@
     "validator_feedback.md": {
       "bytes": 260,
       "sha256": "26f320929bb8ff4de2d6786cf6e936ffa5add4c33f329189460fe8b01323c16e"
+    },
+    "validator_repair.md": {
+      "bytes": 656,
+      "sha256": "c9bd08a9f12178f82c01ec71c51048347587d9a141844e1f7684862fdf46b696"
     }
   },
   "module_id": "CP-CF",
