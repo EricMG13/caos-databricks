@@ -102,10 +102,11 @@ export const STATE_ROUTES = [
   ),
   // D106: a module's Audit tab with its unverified citations (CP-1B) and a
   // source fact not linked to the answer (CP-1); the report picker with an
-  // unverified citation chosen.
+  // unverified citation chosen; a Blocked run's quotes, verified and not.
   // The gate opens each before it scans (`open`, `pick`).
   ...["rn-cp-1", "rn-cp-1b"].map((tab) => `${sectionRoute("analysis")}&tab=${tab}&open=audit`),
   `${sectionRoute("report", "acts")}&pick=unverified`,
+  sectionRoute("run", "blocked"),
   "/analysis/",
   "/nothing/",
 ];

@@ -21,9 +21,11 @@ import {
 } from "@/evidence/Unverified";
 import { AnalysisSection, sourceNames } from "@/sections/analysis/AnalysisSection";
 import { citationOf } from "@/sections/book/passport";
+import { RunSection } from "@/sections/run/RunSection";
 import {
   parseAnalysisDocument,
   parseCommitteeDocument,
+  parseRunSectionDocument,
   type CitationView,
   type ReportDocument,
 } from "@/wire/v1";
@@ -290,4 +292,21 @@ describe("the Blocked answer's quotes (owner: Show its quotes)", () => {
       "· not located · not linked to a statement in the answer:",
     );
   });
+});
+
+test("test_the_run_panel_lists_a_blocked_answers_quotes", () => {
+  // The demo's blocked state (the a11y gate scans it): one located quote and
+  // one unverified, each compact, the located one a drawer chip.
+  const blocked = parseRunSectionDocument(
+    JSON.parse(readFileSync(resolve(process.cwd(), "fixtures/states/run.blocked.json"), "utf8")),
+  );
+  const { container } = render(
+    <MemoryRouter>
+      <RunSection document={blocked} tab={null} />
+    </MemoryRouter>,
+  );
+  const quotes = container.querySelector('[data-blocked-quotes="recorded"]')!;
+  expect(quotes.querySelectorAll('[data-blocked-quote="verified"] button')).toHaveLength(1);
+  expect(quotes.querySelectorAll('[data-blocked-quote="unverified"]')).toHaveLength(1);
+  expect(quotes.querySelector("blockquote, mark")).toBeNull();
 });
