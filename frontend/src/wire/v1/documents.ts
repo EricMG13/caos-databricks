@@ -401,6 +401,24 @@ const CitationView = object({
   rects: array(RectView, 256),
   withdrawn_at: nullable(datetime),
   cited_page: nullable(int({ min: 1 })),
+  // False for a quote the answer's body does not carry (D106): still
+  // host-verified, but "not linked to a statement in the answer".
+  linked: bool,
+});
+// Why a citation is unverified (D106): the anchoring fault that left it so.
+const UnverifiedCode = enumOf([
+  "CITATION_NOT_LOCATED",
+  "CITATION_AMBIGUOUS",
+  "CITATION_NOT_DELIVERED",
+]);
+// A citation of an accepted answer that did not anchor (D106): the model's own
+// locator and quote. No line, no rectangle, no located document: nothing on it
+// may be shown as host-verified, and its claim is "Untraced".
+const UnverifiedCitationView = object({
+  source_id: uuid,
+  page: int({ min: 1 }),
+  matched_text: string({ max: 65536 }),
+  code: UnverifiedCode,
 });
 // A handoff's tagged tables, read by the server from its Markdown with the
 // bundle's own reader (`caos/methodology/tables.py`); the browser never parses
@@ -431,6 +449,7 @@ const HandoffView = object({
   decision_scope: short,
   screening_only: bool,
   source_facts: array(CitationView, 1024),
+  unverified_facts: array(UnverifiedCitationView, 1024),
   model_analysis: string({ max: 4194304 }),
   host_calculation: enumOf(["NONE", "CP_CF_FORECAST"]),
   tables: array(TableView, 64),
@@ -577,9 +596,21 @@ const NarrativeFigure = object({
   rects: array(RectView, 256),
   withdrawn_at: nullable(datetime),
 });
+// A figure naming an unverified citation (D106): the model's locator as the
+// record holds it, shown labelled and never opened as a host-verified source.
+const NarrativeUnverified = object({
+  route_node_id: short,
+  record_sha256: hash,
+  unverified_index: int({ min: 0 }),
+  source_id: uuid,
+  page: int({ min: 1 }),
+  matched_text: string({ max: 65536 }),
+  code: UnverifiedCode,
+});
 const NarrativeSpan = object({
   text: nullable(string({ max: 2000 })),
   figure: nullable(NarrativeFigure),
+  unverified: nullable(NarrativeUnverified),
 });
 const ReportArtifact = object({
   route_node_id: short,
@@ -713,6 +744,7 @@ const QualificationRead = object({
 /** Every model `schema.json` declares, under its backend name. */
 export const V1_SHAPES = {
   NarrativeFigure,
+  NarrativeUnverified,
   NarrativeSpan,
   ReportArtifact,
   RevisionSummary,
@@ -747,6 +779,7 @@ export const V1_SHAPES = {
   CellView,
   Chrome,
   CitationView,
+  UnverifiedCitationView,
   LineView,
   DirectoryBody,
   DirectoryDocument,
@@ -820,6 +853,8 @@ export type HandoffView = Infer<typeof HandoffView>;
 export type TableView = Infer<typeof TableView>;
 export type CellView = Infer<typeof CellView>;
 export type CitationView = Infer<typeof CitationView>;
+export type UnverifiedCitationView = Infer<typeof UnverifiedCitationView>;
+export type NarrativeUnverified = Infer<typeof NarrativeUnverified>;
 export type LineView = Infer<typeof LineView>;
 export type PendingNode = Infer<typeof PendingNode>;
 export type EventName = Infer<typeof EventName>;

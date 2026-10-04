@@ -66,7 +66,12 @@ def test_report_reads_the_exact_saved_revision(
     body = _get(client, lite, revision, "report")
     assert body["revision_id"] == str(revision)
     assert body["displayed_run_id"] == str(lite.run_id)
-    assert body["narrative"][0][0] == {"text": "Debt: ", "figure": None}
+    assert body["narrative"][0][0] == {
+        "text": "Debt: ",
+        "figure": None,
+        "unverified": None,
+    }
+    assert body["narrative"][0][1]["unverified"] is None
     # N59: the served figure is the saved one plus the two fields the
     # evidence drawer needs to open its source without cross-referencing
     # `artifacts` or the run's pinned members itself.

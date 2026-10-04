@@ -51,7 +51,7 @@ test("Report and Committee bind case/run/revision and exact receipt identity", (
     payload_sha256: SHA,
     case_title: "Issuer",
     artifacts: [],
-    narrative: [[{ text: "<script>plain text</script>", figure: null }]],
+    narrative: [[{ text: "<script>plain text</script>", figure: null, unverified: null }]],
     revisions: [{ revision_id: SOURCE, payload_sha256: SHA, saved_at: AT, state: "filed" }],
   };
   const expected = { caseId: CASE, runId: RUN, revisionId: SOURCE };
@@ -426,6 +426,15 @@ function analysis(): { [key: string]: Json } {
               rects: [{ x0: 1, y0: 2.5, x1: 3, y1: 4 }],
               withdrawn_at: null,
               cited_page: null,
+              linked: true,
+            },
+          ],
+          unverified_facts: [
+            {
+              source_id: SOURCE,
+              page: 4,
+              matched_text: "the model's own quote",
+              code: "CITATION_NOT_LOCATED",
             },
           ],
           model_analysis: "# CP-0",
@@ -548,6 +557,7 @@ describe("the v1 wire contract", () => {
       "WithdrawSource",
       "SourceWithdrawn",
       "NarrativeFigureRef",
+      "NarrativeUnverifiedRef",
       "NarrativeDraft",
       "SaveRevision",
       "RevisionSaved",
