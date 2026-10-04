@@ -19,12 +19,48 @@
         {
           "module_id": "CP-0",
           "document_sha256": "b385f76ff631243d1053fa8073ebde4f8886b4a50c9ce34ce3498d6b2ac3e9f8",
-          "matched_text": "Caesars | $2,993 | $2,907 | 3.0%"
+          "matched_text": "Caesars | $2,993 | $2,907 | 3.0%",
+          "alternatives": [
+            {
+              "document_sha256": "f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a",
+              "matched_text": "Net revenues | 2,993 | 2,907 | 5,863 | 5,701"
+            },
+            {
+              "document_sha256": "f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a",
+              "matched_text": "Total | $2,993 | $2,907 | $5,863 | $5,701"
+            },
+            {
+              "document_sha256": "f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a",
+              "matched_text": "Net revenues | $2,993 | $2,907 | $86 | 3.0% | $5,863 | $5,701 | $162 | 2.8%"
+            },
+            {
+              "document_sha256": "b385f76ff631243d1053fa8073ebde4f8886b4a50c9ce34ce3498d6b2ac3e9f8",
+              "matched_text": "Net revenues | 2,993 | 2,907 | 5,863 | 5,701"
+            }
+          ]
         },
         {
           "module_id": "CP-L10",
           "document_sha256": "b385f76ff631243d1053fa8073ebde4f8886b4a50c9ce34ce3498d6b2ac3e9f8",
-          "matched_text": "Adjusted EBITDA | $920 | $955 | $1,807 | $1,839"
+          "matched_text": "Adjusted EBITDA | $920 | $955 | $1,807 | $1,839",
+          "alternatives": [
+            {
+              "document_sha256": "f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a",
+              "matched_text": "Total | $920 | $955 | $1,807 | $1,839"
+            },
+            {
+              "document_sha256": "f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a",
+              "matched_text": "Total Adjusted EBITDA | $920 | $955 | $1,807 | $1,839"
+            },
+            {
+              "document_sha256": "b385f76ff631243d1053fa8073ebde4f8886b4a50c9ce34ce3498d6b2ac3e9f8",
+              "matched_text": "Consolidated Adjusted EBITDA of $920 million versus $955 million for the comparable prior-year period."
+            },
+            {
+              "document_sha256": "b385f76ff631243d1053fa8073ebde4f8886b4a50c9ce34ce3498d6b2ac3e9f8",
+              "matched_text": "Caesars | $920 | $955 | (3.7)%"
+            }
+          ]
         },
         {
           "module_id": "CP-L10",
@@ -34,7 +70,17 @@
         {
           "module_id": "CP-L10",
           "document_sha256": "172309048af2a6a2dab515d765f00a7c89bf8c874c6104a5e3a052b66cad4512",
-          "matched_text": "Net revenues | 11,486 | 11,245 | 11,528"
+          "matched_text": "Net revenues | 11,486 | 11,245 | 11,528",
+          "alternatives": [
+            {
+              "document_sha256": "172309048af2a6a2dab515d765f00a7c89bf8c874c6104a5e3a052b66cad4512",
+              "matched_text": "Total | $11,486 | $11,245 | $11,528"
+            },
+            {
+              "document_sha256": "172309048af2a6a2dab515d765f00a7c89bf8c874c6104a5e3a052b66cad4512",
+              "matched_text": "Net Revenues | $11,486 | $11,245 | $11,528 | $241 | 2.1% | $(283) | (2.5)%"
+            }
+          ]
         },
         {
           "module_id": "CP-5",

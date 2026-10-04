@@ -5,7 +5,7 @@ Status: **OFFLINE / UNVERIFIED / NOT QUALIFIED**.
 This immutable set prepares `FULL_CREDIT_32 / LIQUIDITY_REVIEW` for Caesars
 Entertainment, Inc. (CZR) at an analysis date of 2026-10-02. Its
 qualification-set digest is
-`07a2448f639da45c386b296fc68c5f321cc8ae7f6f386801546e861451bb6044`.
+`c9e7a2e9c0326f4c44dbbb6fb59322fa2fba75e953d63644b54cd07d3e42b6c5`.
 
 ## Corpus provenance
 
@@ -50,6 +50,47 @@ The credit agreement carries no key. Its revolving commitment is stated as at
 the 2020 signing date, and the Fourth (9 May 2024) and Fifth (25 November 2024)
 Amendments are not in this set, so the current commitment is keyed to the
 10-Q; the agreement is admitted for the facility's controlling terms.
+
+Alternative lines (D101). A figure key is also met by another whole evidence
+line, cited under the same module, that states the key's lead figures -- the
+current figure and the comparative the key line leads with -- for the same
+measure, period and consolidated scope; a % change, a further period or a third
+year on the key line need not be on it. Prose keys have none: a statement is
+its sentence. Each alternative is one whole evidence line, unique in its
+document (F475), and is listed with why it states the key's figures:
+
+- CP-1, the 10-Q's `Cash and cash equivalents | $965 | $887`:
+  - the release's `Cash and cash equivalents | $965 | $887`, its balance sheet
+    row, the same two dates.
+  Not alternatives: the 10-Q's `Cash and cash equivalents | $965 | $982` (its
+    comparative is 30 June 2025) and the one-figure `Cash and cash equivalents
+    | $965` rows of the liquidity tables (no comparative, and not a unique
+    run).
+- CP-2, the 10-Q's `Net cash provided by operating activities | 675 | 680`:
+  - the 10-Q's `During the six months ended June 30, 2026, our operating
+    activities generated operating cash inflows of $675 million, as compared to
+    operating cash inflows of $680 million during the six months ended June 30,
+    2025, primarily due to changes in working capital, coupled with the results
+    of operations described above.`, its liquidity sentence, the six months
+    against the prior six months.
+- CP-2, the 10-Q's `Purchase of property and equipment | (335) | (453)`:
+  - the 10-Q's `Cash used for capital expenditures totaled $335 million and
+    $453 million for the six months ended June 30, 2026 and 2025, respectively,
+    related to our growth, renovation, maintenance, and other capital
+    projects.`, its capital-expenditure sentence: the same cash measure and six
+    months.
+  Not alternatives: the 10-Q's `Total | $167 | $230 | $335 | $453` under
+    `Capital Expenditures, Net - By Segment` (a net segment measure, not the
+    cash-flow line, though the figures agree).
+- CP-2D, the release's `CEI Revolving Credit Facility capacity, net of
+outstanding balance | 2,130`:
+  - the 10-Q's `CEI Revolving Credit Facility capacity, net of outstanding
+    balance | 2,130`, its liquidity table's row at the same date.
+
+The other figure keys (`Total debt`, `CEI Revolving Credit Facility`, `Annual
+maturities of long-term debt`) have none: no other whole line states their
+figures for the same measure, period and basis (rounded prose such as `$11.8
+billion` or `$1.3 billion` is not the figure).
 
 The readiness key expects CP-0 to clear CP-1, CP-2 and CP-2D, and CP-2D to
 carry `FULL` decision scope. No register key is set: the release's liquidity

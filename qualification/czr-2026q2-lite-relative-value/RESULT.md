@@ -7,7 +7,7 @@ Caesars Entertainment, Inc. (CZR) at an analysis date of 2026-10-02, against
 peers MGM Resorts International (MGM) and PENN Entertainment, Inc. (PENN) from
 the owner's "Public Leveraged Loan Issuers Benchmark". Its qualification-set
 digest is
-`b32cc35164d28aba6ce5c8996e02fa5e68c72d369ffcc08124c0ad8e7514d8f3`.
+`cd787ae2fdf720fb5a7c29699b7a58fa43d47dce5d1f68d21fe3437b1cfc736b`.
 
 ## Corpus provenance
 
@@ -60,6 +60,35 @@ Keys authored from the documents; material figures pending owner confirmation.
   the quarter.
 - CP-1C, PENN: traditional net leverage of `2.9x` at 30 June 2026 (`4.5x` at
   31 December 2025).
+
+Alternative lines (D101). A figure key is also met by another whole evidence
+line, cited under the same module, that states the key's lead figures -- the
+current figure and the comparative the key line leads with -- for the same
+measure, period and consolidated scope; a % change, a further period or a third
+year on the key line need not be on it. Prose keys have none: a statement is
+its sentence. Each alternative is one whole evidence line, unique in its
+document (F475), and is listed with why it states the key's figures:
+
+- CP-1C, the release's `Adjusted EBITDA | $920 | $955 | $1,807 | $1,839`:
+  - the 10-Q's `Total | $920 | $955 | $1,807 | $1,839`, the total of its
+    segment table's Adjusted EBITDA, the consolidated figure;
+  - the 10-Q's `Total Adjusted EBITDA | $920 | $955 | $1,807 | $1,839`, its
+    MD&A reconciliation's total;
+  - the release's `Consolidated Adjusted EBITDA of $920 million versus $955
+    million for the comparable prior-year period.`, its highlight sentence:
+    consolidated, the quarter against the prior-year quarter;
+  - the release's `Caesars | $920 | $955 | (3.7)%`, the consolidated row of its
+    quarterly Adjusted EBITDA table.
+  Not alternatives: the 10-Q's `Adjusted EBITDA | $920 | $955 | $1,807 |
+    $1,839` (its words recur inside the 10-Q's `Total Adjusted EBITDA` row, so
+    it is not a unique run, F475) and the release's six-month `Caesars | $1,807
+    | $1,839 | (1.7)%` (the six months alone).
+
+The other figure keys (`Annual maturities of long-term debt`, `Total debt`,
+`CEI Senior Secured Notes due 2032`, `Long-term debt, net`, `Traditional net
+leverage (1)`) have none: no other whole line states their figures for the same
+measure, period and basis (rounded prose such as `$11.8 billion` or `$1.3
+billion` is not the figure).
 
 Every key is one whole evidence line of its page, unique in its document: an
 answer is accepted only as a whole line (`WHOLE_LINE`) and scored by exact

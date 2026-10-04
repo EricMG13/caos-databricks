@@ -8,7 +8,7 @@ peers MGM Resorts International (MGM) and PENN Entertainment, Inc. (PENN) from
 the owner's "Public Leveraged Loan Issuers Benchmark", with a proposed position
 in the CZR 6.50% Senior Secured Notes due 2032 held against a **SYNTHETIC**
 test mandate. Its qualification-set digest is
-`d5524f3bbda225ddee0c47cd28d1c6324ee5b20fc387bc1eb8cb1929605c6b87`.
+`1fb9b61b8e5a4d8466789d707f766aee9496d8714484a85d168b0fcf8cc00e78`.
 
 ## The mandate is synthetic (D80)
 
@@ -118,6 +118,66 @@ Keys authored from the documents; material figures pending owner confirmation.
 CP-1D, CP-2A and CP-2G carry no key: none of their outputs is a single fact a
 document states. The 2020 credit agreement's commitment, margins and covenant
 were changed by amendments; the current revolver is stated in the 10-Q.
+
+Alternative lines (D101). A figure key is also met by another whole evidence
+line, cited under the same module, that states the key's lead figures -- the
+current figure and the comparative the key line leads with -- for the same
+measure, period and consolidated scope; a % change, a further period or a third
+year on the key line need not be on it. Prose keys have none: a statement is
+its sentence. Each alternative is one whole evidence line, unique in its
+document (F475), and is listed with why it states the key's figures:
+
+- CP-1, the 10-Q's `Cash and cash equivalents | $965 | $887`:
+  - the release's `Cash and cash equivalents | $965 | $887`, its balance sheet
+    row, the same two dates.
+  Not alternatives: the 10-Q's `Cash and cash equivalents | $965 | $982` (its
+    comparative is 30 June 2025) and the one-figure `Cash and cash equivalents
+    | $965` rows of the liquidity tables (no comparative, and not a unique
+    run).
+- CP-1B, the release's `Caesars | $2,993 | $2,907 | 3.0%`:
+  - the 10-Q's `Net revenues | 2,993 | 2,907 | 5,863 | 5,701`, its consolidated
+    statement of operations row;
+  - the 10-Q's `Total | $2,993 | $2,907 | $5,863 | $5,701`, the total of its
+    segment table's net revenues, the consolidated figure;
+  - the 10-Q's `Net revenues | $2,993 | $2,907 | $86 | 3.0% | $5,863 | $5,701 |
+    $162 | 2.8%`, its MD&A net revenues row;
+  - the release's `Net revenues | 2,993 | 2,907 | 5,863 | 5,701`, its
+    consolidated statement of operations row.
+  Not alternatives: the release's `GAAP net revenues of $3.0 billion versus
+    $2.9 billion` (rounded, not the figures) and its six-month `Caesars |
+    $5,863 | $5,701 | 2.8%` (another period).
+- CP-1B, the release's `Adjusted EBITDA | $920 | $955 | $1,807 | $1,839`:
+  - the 10-Q's `Total | $920 | $955 | $1,807 | $1,839`, the total of its
+    segment table's Adjusted EBITDA, the consolidated figure;
+  - the 10-Q's `Total Adjusted EBITDA | $920 | $955 | $1,807 | $1,839`, its
+    MD&A reconciliation's total;
+  - the release's `Consolidated Adjusted EBITDA of $920 million versus $955
+    million for the comparable prior-year period.`, its highlight sentence:
+    consolidated, the quarter against the prior-year quarter;
+  - the release's `Caesars | $920 | $955 | (3.7)%`, the consolidated row of its
+    quarterly Adjusted EBITDA table.
+  Not alternatives: the 10-Q's `Adjusted EBITDA | $920 | $955 | $1,807 |
+    $1,839` (its words recur inside the 10-Q's `Total Adjusted EBITDA` row, so
+    it is not a unique run, F475) and the release's six-month `Caesars | $1,807
+    | $1,839 | (1.7)%` (the six months alone).
+- CP-1B, the 10-K's `Net revenues | 11,486 | 11,245 | 11,528`:
+  - the 10-K's `Total | $11,486 | $11,245 | $11,528`, the total of its segment
+    table's net revenues, the consolidated figure;
+  - the 10-K's `Net Revenues | $11,486 | $11,245 | $11,528 | $241 | 2.1% |
+    $(283) | (2.5)%`, its MD&A net revenues row.
+- CP-2, the 10-Q's `Net cash provided by operating activities | 675 | 680`:
+  - the 10-Q's `During the six months ended June 30, 2026, our operating
+    activities generated operating cash inflows of $675 million, as compared to
+    operating cash inflows of $680 million during the six months ended June 30,
+    2025, primarily due to changes in working capital, coupled with the results
+    of operations described above.`, its liquidity sentence, the six months
+    against the prior six months.
+
+The other figure keys (`Long-term debt, net`, `Traditional net leverage (1)`,
+`Net cash provided by operating activities`, `Annual maturities of long-term
+debt`, `Total debt`, `C-01`) have none: no other whole line states their
+figures for the same measure, period and basis (rounded prose such as `$11.8
+billion` or `$1.3 billion` is not the figure).
 
 Every key is one whole evidence line of its page, unique in its document: an
 answer is accepted only as a whole line (`WHOLE_LINE`) and scored by exact

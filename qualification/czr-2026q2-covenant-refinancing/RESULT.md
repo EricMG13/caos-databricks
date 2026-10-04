@@ -5,7 +5,7 @@ Status: **OFFLINE / UNVERIFIED / NOT QUALIFIED**.
 This immutable set prepares `FULL_CREDIT_32 / COVENANT_REFINANCING` for
 Caesars Entertainment, Inc. (CZR) at an analysis date of 2026-10-02. Its
 qualification-set digest is
-`8676446073592db6ee7db407e0f48ece5090620d1955a4be3561da8283f6e6f9`.
+`70f5095cc8e2d1cbef907a3d26c9c98a3cef4248e45a3aad3b2dfb9c31035831`.
 
 ## Corpus provenance
 
@@ -73,6 +73,27 @@ Amendments and the incremental assumption agreements that changed them are
 not in this set. Its Change in Control event of default is keyed as executed;
 Amendments 1–3 are not in this set (the 10-K's exhibit index lists them), and
 neither amendment in the set alters it.
+
+Alternative lines (D101). A figure key is also met by another whole evidence
+line, cited under the same module, that states the key's lead figures -- the
+current figure and the comparative the key line leads with -- for the same
+measure, period and consolidated scope; a % change, a further period or a third
+year on the key line need not be on it. Prose keys have none: a statement is
+its sentence. Each alternative is one whole evidence line, unique in its
+document (F475), and is listed with why it states the key's figures:
+
+- CP-2, the 10-Q's `Net cash provided by operating activities | 675 | 680`:
+  - the 10-Q's `During the six months ended June 30, 2026, our operating
+    activities generated operating cash inflows of $675 million, as compared to
+    operating cash inflows of $680 million during the six months ended June 30,
+    2025, primarily due to changes in working capital, coupled with the results
+    of operations described above.`, its liquidity sentence, the six months
+    against the prior six months.
+
+The other figure keys (`Cash and cash equivalents`, `Total debt`, `Annual
+maturities of long-term debt`, `Total debt`) have none: no other whole line
+states their figures for the same measure, period and basis (rounded prose such
+as `$11.8 billion` or `$1.3 billion` is not the figure).
 
 Every key is one whole evidence line of its page, unique in its document: an
 answer is accepted only as a whole line (`WHOLE_LINE`) and scored by exact
