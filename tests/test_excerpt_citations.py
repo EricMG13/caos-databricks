@@ -372,7 +372,9 @@ def test_near_places_cost_one_scan_each_on_adversarial_pages() -> None:
 def test_edge_forgiveness_stops_at_its_needle_bound() -> None:
     """The edge pass searches one exact needle per pair of page keys that
     stand for the quote's first and last word; a quote with more than
-    `MAX_EDGE_NEEDLES` such pairs is refused rather than searched."""
+    `MAX_EDGE_NEEDLES` such pairs is refused rather than searched --
+    `CITATION_AMBIGUOUS`, which D94 never re-anchors, and before the
+    tracked-letter pass, so the refusal is the cap's (fix round 2)."""
     quote = "a b c d e f g h"
     firsts, lasts = ["a,", "(a", "a.", "a;"], ["h,", "h.", "h;", "h:"]
     page, lines = _words_page("(a b c d e f g h.", " ".join(firsts + lasts))
@@ -381,7 +383,14 @@ def test_edge_forgiveness_stops_at_its_needle_bound() -> None:
     crowded, crowded_lines = _words_page(
         "(a b c d e f g h.", " ".join([*firsts, "'a", *lasts])
     )
-    assert _code_of(crowded, crowded_lines, quote) == "CITATION_NOT_LOCATED"
+    assert _code_of(crowded, crowded_lines, quote) == "CITATION_AMBIGUOUS"
+    with pytest.raises(Refusal, match=r"^CITATION_AMBIGUOUS$"):
+        _excerpt_run(crowded, None, crowded_lines, quote, tracking=False)
+    # A last word of edge punctuation alone has no core: only its own NFC
+    # stands for it, as `_edge_equal` holds.
+    trailing = "Revenue grew in every segment of the business ..."
+    dotted, dotted_lines = _words_page(trailing)
+    assert _code_of(dotted, dotted_lines, f"({trailing}") == "B000000"
 
 
 def test_the_retry_helpers_read_a_line_as_anchoring_does() -> None:
@@ -397,5 +406,103 @@ def test_the_retry_helpers_read_a_line_as_anchoring_does() -> None:
     assert overrun_kept("maintain the Collateral and take all actions to", line) == 7
     assert overrun_kept("maintain the Collateral and take all", line) == 0
     assert within_line(f"\u201c{row}.\u201d", f"Total {row}")
-    assert within_line("Total debt at 31", "T o t a l debt at 31 December")
+    tracked = "T o t a l debt at 31 December 2026 was USD 1,240.0m"
+    assert within_line("Total debt at 31 December 2026 was USD", tracked)
     assert not within_line(row, "Acme Holdings plc annual report 2026")
+    assert not within_line("Total debt at 31", tracked)
+
+
+@pytest.mark.parametrize(
+    ("quote", "line"),
+    [
+        (
+            "2025 revenue rose 4% to $1.2 billion on higher",
+            "In 2025, revenue rose 4% to $1.2 billion on higher volumes",
+        ),
+        (
+            "Company shall maintain a Total Net Leverage Ratio of no more than 5.0x",
+            'Caesars Entertainment, Inc. (the "Company") shall maintain a Total Net'
+            " Leverage Ratio of no more than 5.0x",
+        ),
+        ("...", "..."),
+    ],
+)
+def test_a_stored_line_holds_every_quote_anchoring_accepts(
+    quote: str, line: str
+) -> None:
+    """Fix round 2 of D105: `within_line` trimmed only the ends of the whole
+    quote, where edge forgiveness strips each side of the first and last
+    word, so these three anchored and their records would not write. It is
+    anchoring's own test now, over the line alone."""
+    page, lines = _words_page(line)
+    assert _excerpt_run(page, None, lines, quote, tracking=False)[2] == line
+    assert within_line(quote, line)
+
+
+def test_within_line_accepts_every_excerpt_anchoring_accepts() -> None:
+    """The property behind fix round 2: on a generated page -- words with
+    edge punctuation, a decomposed accent, a tracked heading -- every quote
+    `EXCERPT` anchors, its edges decorated as a module writes them, passes
+    `within_line` against the line it anchored in."""
+    draw = random.Random(105)
+    vocabulary = [f"w{n}" for n in range(400)] + ["cafe\u0301", "(5)", ".5", "$1,2"]
+    marks = ["", ".", ",", ";", ":", "(", ")", '"', "\u201c", "\u201d"]
+    texts = []
+    for n in range(60):
+        words = [draw.choice(vocabulary) for _ in range(draw.randrange(3, 30))]
+        words = [w + draw.choice(marks) if draw.random() < 0.2 else w for w in words]
+        texts.append(" ".join(["T o t a l", *words] if n % 7 == 0 else words))
+    page, lines = _words_page(*texts)
+    anchored = 0
+    for _ in range(600):
+        words = draw.choice(texts).split()
+        most = min(len(words), 14)
+        width = len(words) if most < 8 else draw.randrange(8, most + 1)
+        start = draw.randrange(len(words) - width + 1)
+        quote = words[start : start + width]
+        quote[0] = draw.choice(["", "\u201c", "("]) + quote[0].lstrip('("\u201c')
+        quote[-1] += draw.choice(["", ".", ","])
+        text = " ".join(quote).replace("cafe\u0301", "caf\u00e9")
+        try:
+            line = _excerpt_run(page, None, lines, text, tracking=True)[2]
+        except Refusal:
+            continue
+        anchored += 1
+        assert within_line(text, line), text
+    assert anchored > 300
+
+
+def test_a_capped_quote_is_never_re_anchored_on_another_page(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> None:
+    """Fix round 2, the reviewer's probe: a quote over `MAX_EDGE_NEEDLES` on
+    its cited page was refused `CITATION_NOT_LOCATED`, which D94 read as "no
+    line here" and re-anchored on page 2 with a false `cited_page`. It is
+    refused `CITATION_AMBIGUOUS` now, where it is cited."""
+    from caos.evidence.extract import LINES_PER_PAGE
+
+    conn, case_id = case
+    first = [
+        "the Borrower shall repay all outstanding Term Loans on the Maturity Date",
+        "Variants: the, (the the. the; Loans, Loans. (Loans and more words here",
+    ]
+    first += [f"filler line number {n} of the first page" for n in range(58)]
+    assert len(first) == LINES_PER_PAGE
+    second = (
+        "Section 2.05. the Borrower shall repay all outstanding Term Loans, in full"
+    )
+    [source_id] = admit_pack(
+        conn,
+        BlobStore(tmp_path / "blobs"),
+        case_id=case_id,
+        documents=[
+            Document(
+                filename=BoundaryText.of("m.txt"),
+                data="\n".join([*first, second]).encode(),
+            )
+        ],
+    )
+    quote = "the Borrower shall repay all outstanding Term Loans,"
+    assert _anchored(conn, source_id, quote, 1) is RefusalCode.CITATION_AMBIGUOUS
+    exact = _anchored(conn, source_id, quote.rstrip(",") + " on", 1)
+    assert isinstance(exact, AnchoredCitation) and exact.page == 1
