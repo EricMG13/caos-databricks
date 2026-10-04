@@ -42,7 +42,7 @@
         },
         {
           "module_id": "CP-1A",
-          "document_sha256": "28b3285d74a2521a799bce720e7b3681a3fe7f110d4dab2296ac8fa08fbe022c",
+          "document_sha256": "6808734cfbb19b56c5624e5a69e7209ccaad8a5039de94ad64563efdedf93169",
           "matched_text": "On May 27, 2026, Caesars Entertainment, Inc., a Delaware corporation (the “Company”), Fertitta Gaming Holdco, LLC, a Texas limited liability company (“Parent”), Empire Merger Sub, Inc., a Delaware corporation and direct wholly owned subsidiary of Parent (“Merger Sub”), Landry’s Fertitta, LLC, a Texas limited liability company (“Parent Guarantor”) solely for the purposes of Section 9.14 therein, and Hospitality Headquarters, Inc., a Texas corporation, solely for the purposes of Section 9.14(j) therein, entered into an Agreement and Plan of Merger (the “Merger Agreement”), pursuant to which Merger Sub will merge with and into the Company, with the Company continuing as the surviving corporation and direct wholly owned subsidiary of Parent (the “Merger”)."
         },
         {
@@ -164,17 +164,17 @@
         },
         {
           "module_id": "CP-4",
-          "document_sha256": "2f3530b8034d89d47165530014e0541cbe4778893dac5411207cbaf2b3c82f97",
+          "document_sha256": "0809ab3981090bd2c23950da9530adb10e96882ddfa7db4404635e014d4c1119",
           "matched_text": "The aggregate principal amount of Notes which may be authenticated and delivered under this Indenture on the Issue Date is $1,500,000,000."
         },
         {
           "module_id": "CP-4",
-          "document_sha256": "9b57dc8790771968d9a0c74689f6a684c1b71eedf04e7fc5554490bc7d46e9a8",
+          "document_sha256": "cdfeb87c9b57914f4c2e89dbb2ec80de52564b1817b35fe15e332e67a13039b5",
           "matched_text": "(g) there shall have occurred a Change in Control;"
         },
         {
           "module_id": "CP-4",
-          "document_sha256": "5cbde3d12fd6c09e1f2aae98b80615d8f3474a8006d97a6c3a42cf7576dfce4f",
+          "document_sha256": "7f2b5c777dc3347938a007eaea63a623b299a1188dbcfbe8980d389a0bcfc5b3",
           "matched_text": "“(a) with respect to any Term B Loan, 2.25% per annum in the case of any Term Benchmark Loan and 1.25% per annum in the case of any ABR Loan, (b) with respect to any Term B-1 Loan, 2.25% per annum in the case of any Term Benchmark Loan and 1.25% per annum in the case of any ABR Loan and”"
         },
         {
@@ -214,8 +214,8 @@
         },
         {
           "module_id": "CP-3C",
-          "document_sha256": "2f3530b8034d89d47165530014e0541cbe4778893dac5411207cbaf2b3c82f97",
-          "matched_text": "(a) Upon the occurrence of a Change of Control, each holder shall have the right to require the Company to repurchase all or any part of such holder’s Notes at a purchase price in cash equal to 101% of the principal amount thereof, plus accrued and unpaid interest, if any, to, but excluding, the date of repurchase (subject to the right of the holders of record on the relevant Record Date to receive interest due on the relevant Interest Payment Date), in accordance with the terms contemplated in this Section 4.08; provided, however, that notwithstanding the occurrence of a Change of Control, the Company shall not be obligated to purchase any Notes pursuant to this Section 4.08 in the event that it has exercised its right to redeem such Notes in accordance with Article III of this Indenture."
+          "document_sha256": "0809ab3981090bd2c23950da9530adb10e96882ddfa7db4404635e014d4c1119",
+          "matched_text": "(a) Upon the occurrence of a Change of Control, each holder shall have the right to require the Company to repurchase all or any part of such holder’s Notes at a purchase price in cash equal to 101% of the principal amount thereof, plus accrued and unpaid interest, if any, to, but excluding, the date of repurchase (subject to the right of the holders of record on the relevant Record Date to receive interest due on the relevant Interest Payment Date), in accordance with the terms contemplated in this Section 4.08;"
         },
         {
           "module_id": "CP-3C",
