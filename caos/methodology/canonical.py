@@ -34,6 +34,7 @@ from caos.evidence.citations import (
     AnchoredCitation,
     Citation,
     TokenIndex,
+    cells_line,
     find_line,
     near_line,
     verify_citations,
@@ -807,7 +808,35 @@ def _anchoring_line(
     hints: list[LineHint | None] = [None] * len(verdicts)
     for n in lost:
         hints[n] = _line_hint(conn, delivered, blocks, citations[n], index)
+    # A source_id the request never offered (F495): told so, not "a page or
+    # line this node was not given", which names nothing to fix.
+    holders: dict[tuple[int, str], set[UUID]] | None = None
+    for n, verdict in enumerate(verdicts):
+        source = citations[n].source_id
+        if verdict is RefusalCode.CITATION_NOT_DELIVERED and source not in blocks:
+            holders = _holders(delivered) if holders is None else holders
+            held = holders.get(_quoted_at(citations[n]), set())
+            hints[n] = LineHint(
+                unknown_source=str(source),
+                held_by=str(next(iter(held))) if len(held) == 1 else "",
+            )
     return anchoring_line(verdicts, hints)
+
+
+def _quoted_at(citation: Citation) -> tuple[int, str]:
+    """A citation's cited page and its quote's words joined by one space."""
+    return citation.page, " ".join(citation.matched_text.split())
+
+
+def _holders(delivered: Sequence[Delivery]) -> dict[tuple[int, str], set[UUID]]:
+    """The sources holding each delivered line, by page and the line's words
+    joined by one space (F495): read from the delivered blocks' own text
+    only, so nothing the node was not given is read or shown (D82's M2)."""
+    holders: dict[tuple[int, str], set[UUID]] = {}
+    for d in delivered:
+        key = (d.page, " ".join(d.text.value.split()))
+        holders.setdefault(key, set()).add(d.source_id)
+    return holders
 
 
 def _anchoring(
@@ -862,7 +891,9 @@ def _line_hint(
     except Refusal:
         return LineHint()
     if found.block_id is None and not found.pages:
-        near = _near_hint(delivered, citation)
+        near = _near_hint(delivered, citation, near_line) or _near_hint(
+            delivered, citation, cells_line, cells=True
+        )
         if near is not None:
             return near
     line = next(
@@ -877,21 +908,30 @@ def _line_hint(
     return LineHint(begins=begins, pages=found.pages, absent=found.absent)
 
 
-def _near_hint(delivered: Sequence[Delivery], citation: Citation) -> LineHint | None:
+def _near_hint(
+    delivered: Sequence[Delivery],
+    citation: Citation,
+    search: Callable[[str, Sequence[str]], int | None],
+    *,
+    cells: bool = False,
+) -> LineHint | None:
     """The near-miss hint (F493) for a citation `find_line` could neither
     find part of a line nor whole on another page: the one delivered line of
-    its source it nearly matches (`near_line`), by page and first
-    `HINT_WORDS` words. Only the delivered blocks' own text is compared, so
-    nothing the node was not given is read or shown."""
+    its source `search` names -- the line it nearly matches (`near_line`),
+    or the row it left cells out of (`cells_line`, F495, `cells`) -- by page
+    and first `HINT_WORDS` words. Only the delivered blocks' own text is
+    compared, so nothing the node was not given is read or shown."""
     lines = list(
         {d.block_id: d for d in delivered if d.source_id == citation.source_id}.values()
     )
-    found = near_line(citation.matched_text, [d.text.value for d in lines])
+    found = search(citation.matched_text, [d.text.value for d in lines])
     if found is None:
         return None
     line = lines[found]
     begins = " ".join(line.text.value.split()[:HINT_WORDS])
-    return LineHint(begins=begins, near=line.page, moved=line.page != citation.page)
+    return LineHint(
+        begins=begins, near=line.page, moved=line.page != citation.page, cells=cells
+    )
 
 
 def _lineage_moved(

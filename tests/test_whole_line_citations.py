@@ -840,3 +840,151 @@ def test_a_near_miss_never_measures_a_long_line() -> None:
     _found, capped = timed(" ".join(["Opening", *base[1:]]), lines)
     assert long < 0.5 and capped < 0.5
     assert NEAR_MEASURED_WORDS == 300
+
+
+# C1's CP-1 shape (F495): a table row quoted with alternate period columns
+# left out, which `near_line`'s length bound passes over.
+ROW = "Balance at June 30 | 41 | 39 | 92 | 86 | 545 | 586"
+DROPPED = "Balance at June 30 | 41 | 92 | 545"
+
+
+def test_cells_line_names_the_one_row_a_quote_left_cells_out_of() -> None:
+    """F495: a quote with the row's first cell and some of its cells, in
+    order, names that row; a reordered quote, a quote as wide as the row,
+    two such rows, a quote that is no row, or more than `NEAR_MEASURED`
+    rows sharing the first cell are no answer."""
+    from caos.evidence.citations import (
+        CELL_SEPARATOR,
+        NEAR_MEASURED,
+        cells_line,
+        near_line,
+    )
+
+    lines = [
+        "Balance at December 31 | 40 | 38 | 90 | 85 | 540 | 580",
+        "Revenue grew 4% in FY2025.",
+        ROW,
+    ]
+    assert near_line(DROPPED, lines) is None
+    assert cells_line(DROPPED, lines) == 2
+    assert cells_line("Balance  at June 30 |41| 545 | 586", lines) == 2
+    assert (
+        cells_line("Balance at June 30 | 41 | 92 | 545 | 39 | 86 | 586", lines) is None
+    )
+    assert cells_line(ROW, lines) is None
+    assert cells_line(DROPPED, [*lines, ROW.replace("586", "587")]) is None
+    assert cells_line("Balance at June 30 41 92 545", lines) is None
+    assert cells_line("Balance at March 31 | 41 | 92", lines) is None
+    alike = [f"Balance at June 30 | {n} | {n}" for n in range(NEAR_MEASURED)]
+    assert cells_line(DROPPED, [*alike, ROW]) is None
+    assert cells_line(DROPPED, [*alike[1:], ROW]) == NEAR_MEASURED - 1
+    assert CELL_SEPARATOR == " | "
+
+
+CELL_PAGES = (
+    ("Revenue grew 4% in FY2025.",),
+    (ROW,),
+    ("Cover was 2.1x.",),
+)
+
+
+def test_a_dropped_cells_row_is_hinted_from_delivered_lines_only(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> None:
+    """F495: a row quoted with cells left out is still refused (invariant
+    11), and the retry is told that row's page and first words; with that
+    page not delivered, the quote is absent and the page is never read
+    (D82's M2)."""
+    from caos.evidence.citations import TokenIndex
+    from caos.methodology.canonical import _line_hint
+    from caos.methodology.executor import Delivery
+    from caos.methodology.handoff import HINT_WORDS, LineHint
+
+    conn, case_id = case
+    source_id = _ingest_pdf(conn, case_id, tmp_path, _pages_pdf(CELL_PAGES))
+    every = [
+        Delivery(source_id, block_id, page, BoundaryText.of(text))
+        for page, blocks in _blocks_by_page(conn, source_id).items()
+        for block_id, text in blocks.items()
+    ]
+    assert ROW in {d.text.value for d in every}
+    assert _code(conn, source_id, DROPPED) is RefusalCode.CITATION_NOT_LOCATED
+
+    def hint(delivered: list[Delivery], index: TokenIndex, page: int) -> LineHint:
+        blocks = {source_id: frozenset(d.block_id for d in delivered)}
+        citation = Citation(source_id, page, DROPPED)
+        return _line_hint(conn, delivered, blocks, citation, index)
+
+    begins = " ".join(ROW.split()[:HINT_WORDS])
+    assert hint(every, TokenIndex(), 2) == LineHint(begins=begins, near=2, cells=True)
+    assert hint(every, TokenIndex(), 1) == LineHint(
+        begins=begins, near=2, moved=True, cells=True
+    )
+    index = TokenIndex()
+    withheld = [d for d in every if d.page != 2]
+    assert hint(withheld, index, 1) == LineHint(absent=True)
+    assert (source_id, 2) not in index.pages
+
+
+def test_placing_a_dropped_cells_row_stays_linear_in_the_lines_delivered() -> None:
+    """F495, bounded as F493: 360 delivered pages of 30 rows are searched in
+    one pass; rows sharing the quote's first cell are checked at most
+    `NEAR_MEASURED` times, each check linear in cells."""
+    import time
+
+    from caos.evidence.citations import NEAR_MEASURED, cells_line
+
+    cells = " | ".join(str(n) for n in range(40))
+    lines = [
+        f"Row {page} {line} | {cells}" for page in range(360) for line in range(30)
+    ]
+    lines[5000] = ROW
+    started = time.perf_counter()
+    assert cells_line(DROPPED, lines) == 5000
+    unrelated = time.perf_counter() - started
+    alike = [f"Balance at June 30 | {cells}" for _ in range(360 * 30)]
+    started = time.perf_counter()
+    assert cells_line(DROPPED, [*alike, ROW]) is None
+    shared = time.perf_counter() - started
+    assert NEAR_MEASURED == 64
+    assert unrelated < 0.5 and shared < 0.5
+
+
+def test_an_unknown_source_id_is_told_so_and_a_delivered_one_keeps_its_wording(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> None:
+    """F495 (C1's CP-1 attempt 1): a citation whose source_id splices two
+    real ids is not one of the request's sources and is told so, grouped by
+    that id, with the one delivered source holding its line; a valid id on
+    a page the node was not given keeps D82's wording."""
+    from caos.methodology.canonical import _anchoring_line
+    from caos.methodology.executor import Delivery
+
+    conn, case_id = case
+    source_id = _ingest_pdf(conn, case_id, tmp_path, _pages_pdf(CELL_PAGES))
+    delivered = [
+        Delivery(source_id, block_id, page, BoundaryText.of(text))
+        for page, blocks in _blocks_by_page(conn, source_id).items()
+        for block_id, text in blocks.items()
+        if page != 3
+    ]
+    spliced = UUID(str(source_id)[:24] + "0" * 12)
+    citations = [
+        Citation(spliced, 2, ROW),
+        Citation(source_id, 3, "Cover was 2.1x."),
+        Citation(spliced, 1, "Not a delivered line."),
+        Citation(source_id, 1, "Revenue grew 4% in FY2025."),
+        Citation(spliced, 2, ROW),
+    ]
+    line = _anchoring_line(conn, delivered, citations)
+    assert line == (
+        f"host anchoring check: citations 1 and 5 of 5 name source_id {spliced},"
+        " which is not one of this request's sources; use one of the source_id"
+        f" values listed in the final check, and the lines are in source {source_id};"
+        f" citation 3 of 5 names source_id {spliced}, which is not one of this"
+        " request's sources; use one of the source_id values listed in the final"
+        " check; citation 2 of 5 names a page or line this node was not given;"
+        " keep citation 4 exactly as it was; any citation you add or change must"
+        " be one entire evidence line of its cited page"
+        " (numbered from 1 in the order given)"
+    )

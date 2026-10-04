@@ -636,6 +636,57 @@ def test_the_anchoring_line_names_the_line_a_near_miss_should_copy() -> None:
     assert 0 < capped_line.count("nearly matches") < MAX_FEEDBACK_CITATIONS
 
 
+def test_the_anchoring_line_tells_an_unknown_source_and_a_row_missing_cells() -> None:
+    """F495: citations naming a source_id the request never offered are
+    told so, grouped by that id, with the source holding their lines when
+    one does; a valid id on an undelivered page keeps D82's wording; a row
+    quoted with cells left out is shown the row to quote whole, and its
+    page when moved; both are placements, dropped from the last back past
+    `MAX_ANCHORING_CHARS`, after the kept list."""
+    lost = RefusalCode.CITATION_NOT_LOCATED
+    absent = RefusalCode.CITATION_NOT_DELIVERED
+    bad, real = "a6e3ce6e-a908-4b1b-8e4e-a7cdf2069e23", "a6e3ce6e-a908-4b81"
+    spliced = LineHint(unknown_source=bad, held_by=real)
+    cells = LineHint(begins="Balance at June 30 | 41 | 39", near=11, cells=True)
+    line = anchoring_line(
+        [absent, None, absent, lost, absent],
+        [spliced, None, spliced, cells, None],
+    )
+    assert line == (
+        "host anchoring check: citation 4 of 5 leaves out cells of the evidence"
+        ' line of page 11 that begins "Balance at June 30 | 41 | 39"; quote the'
+        f" whole row, every cell; citations 1 and 3 of 5 name source_id {bad},"
+        " which is not one of this request's sources; use one of the source_id"
+        f" values listed in the final check, and the lines are in source {real};"
+        " citation 5 of 5 names a page or line this node was not given; keep"
+        " citation 2 exactly as it was; any citation you add or change must be"
+        " one entire evidence line of its cited page"
+        " (numbered from 1 in the order given)"
+    )
+    moved = replace(cells, moved=True)
+    alone = LineHint(unknown_source=bad)
+    assert anchoring_line([lost, absent], [moved, alone]) == (
+        "host anchoring check: citation 1 of 2 leaves out cells of the evidence"
+        " line of page 11, not its cited page, that begins"
+        ' "Balance at June 30 | 41 | 39"; quote the whole row, every cell, and'
+        f" cite page 11; citation 2 of 2 names source_id {bad}, which is not one"
+        " of this request's sources; use one of the source_id values listed in"
+        " the final check; any citation you add or change must be one entire"
+        " evidence line of its cited page (numbered from 1 in the order given)"
+    )
+    many = 60
+    strangers: list[LineHint | None] = [
+        LineHint(unknown_source=f"{n:08d}-{bad[9:]}") for n in range(many)
+    ]
+    capped_line = anchoring_line(
+        [None] * 400 + [absent] * many, [None] * 400 + strangers
+    )
+    assert capped_line is not None and len(capped_line) <= MAX_ANCHORING_CHARS
+    assert "keep citation" not in capped_line
+    assert 0 < capped_line.count("which is not one") < many
+    assert "name a page or line this node was not given" in capped_line
+
+
 def test_two_guided_retries_per_node_whichever_codes_refused(
     harness: _Harness,
 ) -> None:

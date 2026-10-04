@@ -1291,13 +1291,20 @@ class LineHint:
     beyond the rule. `near`: the page of the one delivered line of its
     source the quote nearly matches (F493, `near_line`), `begins` then that
     line's first words, and `moved` whether that page is not the cited
-    one."""
+    one; with `cells`, that line is a table row the quote left cells out of
+    (F495, `cells_line`). `unknown_source`: a citation refused
+    `CITATION_NOT_DELIVERED` names this source_id, not one of the request's
+    own (F495), and `held_by` the one delivered source holding its quote as
+    a whole line of its cited page, if exactly one does."""
 
     begins: str = ""
     pages: tuple[int, ...] = ()
     absent: bool = False
     near: int | None = None
     moved: bool = False
+    cells: bool = False
+    unknown_source: str = ""
+    held_by: str = ""
 
 
 def anchoring_line(
@@ -1314,11 +1321,15 @@ def anchoring_line(
     that is a whole line of another delivered page is told that page; one
     that nearly matches exactly one delivered line of its source is shown
     that line's page and first words and told to copy it exactly, and to
-    cite that page when it is not the cited one (F493). At
+    cite that page when it is not the cited one (F493); one that left cells
+    out of exactly one delivered row is shown that row and told to quote
+    every cell (F495). At
     most `MAX_FEEDBACK_CITATIONS` citations are placed; the rest, and any the
-    search could not place, keep the rule's wording. Past
-    `MAX_ANCHORING_CHARS`, placements are dropped from the last back, each
-    citation keeping its number under the rule's wording.
+    search could not place, keep the rule's wording. A citation refused
+    `CITATION_NOT_DELIVERED` whose hint names an `unknown_source` is told
+    that source_id is not one of the request's, grouped by that id (F495).
+    Past `MAX_ANCHORING_CHARS`, placements, these included, are dropped from
+    the last back, each citation keeping its number under the rule's wording.
 
     The line ends by naming every citation that anchored, to be kept exactly
     as it was, and the rule any added or changed citation must meet (F491):
@@ -1340,6 +1351,14 @@ def anchoring_line(
         if (hint := told.get(n)) is not None
         and (hint.begins or hint.pages or hint.absent)
     }
+    placed |= {
+        n: hint
+        for n, found in enumerate(verdicts, 1)
+        if found is RefusalCode.CITATION_NOT_DELIVERED
+        and (hint := told.get(n)) is not None
+        and hint.unknown_source
+    }
+    placed = dict(sorted(placed.items()))
     line = _anchoring_text(verdicts, lost, placed, kept)
     if line is not None and len(line) > MAX_ANCHORING_CHARS:
         line = _anchoring_text(verdicts, lost, placed, ())
@@ -1358,12 +1377,25 @@ def _anchoring_text(
     """`anchoring_line` with exactly the citations in `placed` placed and
     those in `kept` named to keep."""
     total = len(verdicts)
-    parts = [_placed(n, total, hint) for n, hint in placed.items() if not hint.absent]
+    parts = [
+        _placed(n, total, hint)
+        for n, hint in placed.items()
+        if not (hint.absent or hint.unknown_source)
+    ]
     absent = [n for n, hint in placed.items() if hint.absent]
     if absent:
         parts.append(_counted(absent, total, *_ABSENT))
+    parts += _unknown_sources(placed, total)
     groups = [([n for n in lost if n not in placed], *_ANCHORING[0][1:])] + [
-        ([n for n, found in enumerate(verdicts, 1) if found is code], one, many)
+        (
+            [
+                n
+                for n, found in enumerate(verdicts, 1)
+                if found is code and n not in placed
+            ],
+            one,
+            many,
+        )
         for code, one, many in _ANCHORING[1:]
     ]
     parts += [
@@ -1404,10 +1436,41 @@ def _counted(failed: Sequence[int], total: int, one: str, many: str) -> str:
     return f"{_numbered(failed)} of {total} {one if len(failed) == 1 else many}"
 
 
+def _unknown_sources(placed: Mapping[int, LineHint], total: int) -> list[str]:
+    """One clause per source_id the request never offered (F495), its
+    citations grouped, and the one delivered source holding their lines
+    when each names the same one."""
+    named: dict[tuple[str, str], list[int]] = {}
+    for n, hint in placed.items():
+        if hint.unknown_source:
+            named.setdefault((hint.unknown_source, hint.held_by), []).append(n)
+    clauses = []
+    for (source, held_by), numbers in named.items():
+        many = len(numbers) > 1
+        clause = (
+            f"{_numbered(numbers)} of {total} {'name' if many else 'names'}"
+            f" source_id {source}, which is not one of this request's sources;"
+            " use one of the source_id values listed in the final check"
+        )
+        if held_by:
+            lines = "the lines are" if many else "the line is"
+            clause += f", and {lines} in source {held_by}"
+        clauses.append(clause)
+    return clauses
+
+
 def _placed(number: int, total: int, hint: LineHint) -> str:
     """One placed citation's clause (D82): the line it nearly matches
-    (F493), the longer line it is part of, or the other pages it is one
-    whole line of, at most `MAX_FEEDBACK_CITATIONS` of them named."""
+    (F493) or the row it left cells out of (F495), the longer line it is
+    part of, or the other pages it is one whole line of, at most
+    `MAX_FEEDBACK_CITATIONS` of them named."""
+    if hint.near is not None and hint.cells:
+        where = f"page {hint.near}" + (", not its cited page," if hint.moved else "")
+        return (
+            f"citation {number} of {total} leaves out cells of the evidence line"
+            f' of {where} that begins "{hint.begins}"; quote the whole row,'
+            " every cell" + (f", and cite page {hint.near}" if hint.moved else "")
+        )
     if hint.near is not None:
         where = f"page {hint.near}" + (", not its cited page," if hint.moved else "")
         return (
