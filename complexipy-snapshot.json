@@ -42,16 +42,6 @@
     ]
   },
   {
-    "path": "caos/methodology/selection.py",
-    "file_name": "selection.py",
-    "functions": [
-      {
-        "name": "select_sources",
-        "complexity": 17
-      }
-    ]
-  },
-  {
     "path": "caos/methodology/vendor.py",
     "file_name": "vendor.py",
     "functions": [

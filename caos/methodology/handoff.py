@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import suppress
 from dataclasses import asdict, dataclass, fields
@@ -431,10 +432,7 @@ def _broken_bound(text: str) -> str:
             " spaces, tabs or # characters"
         )
     if not _clean(text):
-        return (
-            "the Markdown carries a control character other than a line feed or"
-            " tab, or text that is not in Unicode NFC form"
-        )
+        return _unclean_bound(text)
     lines = text.split("\n")
     if any(len(line.encode()) > MAX_LINE_BYTES for line in lines):
         return f"a line is longer than {MAX_LINE_BYTES} bytes"
@@ -453,6 +451,98 @@ def _clean(text: str) -> bool:
         return BoundaryText.of(text, limit=len(text)).value == text
     except Refusal:
         return False
+
+
+_UNCLEAN = (
+    "the Markdown carries a control character other than a line feed or"
+    " tab, or text that is not in Unicode NFC form"
+)
+
+# The C0 controls and DEL by their ISO 6429 names, which `unicodedata.name`
+# does not give: a retry is told what it wrote, not only where (F499).
+_C0_NAMES = (
+    *"NULL|START OF HEADING|START OF TEXT|END OF TEXT|END OF TRANSMISSION"
+    "|ENQUIRY|ACKNOWLEDGE|BELL|BACKSPACE|CHARACTER TABULATION|LINE FEED"
+    "|LINE TABULATION|FORM FEED|CARRIAGE RETURN|SHIFT OUT|SHIFT IN"
+    "|DATA LINK ESCAPE|DEVICE CONTROL ONE|DEVICE CONTROL TWO"
+    "|DEVICE CONTROL THREE|DEVICE CONTROL FOUR|NEGATIVE ACKNOWLEDGE"
+    "|SYNCHRONOUS IDLE|END OF TRANSMISSION BLOCK|CANCEL|END OF MEDIUM"
+    "|SUBSTITUTE|ESCAPE|INFORMATION SEPARATOR FOUR|INFORMATION SEPARATOR THREE"
+    "|INFORMATION SEPARATOR TWO|INFORMATION SEPARATOR ONE".split("|"),
+)
+
+
+def _unclean_bound(text: str) -> str:
+    """`_clean`'s refusal, located (F499): the first line, 1-based, holding a
+    character `BoundaryText` refuses, that character by code point and name,
+    and how many lines hold one; else the first line NFC changes and the code
+    points it changes there. Code points and line numbers only, never the
+    text; across `BoundaryText` like every feedback line, and the unlocated
+    words when it will not cross or nothing is found."""
+    unclean = [
+        (number, line)
+        for number, line in enumerate(text.split("\n"), 1)
+        if not _clean(line)
+    ]
+    refused = [(number, ch) for number, line in unclean if (ch := _first_refused(line))]
+    if refused:
+        number, ch = refused[0]
+        # `hides_text` has already refused every bidirectional control, and
+        # UTF-8 decodes no lone surrogate: what is left is a control.
+        said = (
+            f"line {number} of the Markdown carries {_code_point_named(ch)}, a"
+            " control character other than a line feed or tab"
+            f" ({_line_count(len(refused))} in all); remove it"
+        )
+    elif unclean:
+        number, line = unclean[0]
+        said = (
+            f"line {number} of the Markdown is not in Unicode NFC form (first at"
+            f" {_decomposed(line)}; {_line_count(len(unclean))} in all); write it"
+            " in composed form"
+        )
+    else:
+        return _UNCLEAN
+    with suppress(Refusal):
+        return BoundaryText.of(said, limit=MAX_FEEDBACK_CHARS).value
+    return _UNCLEAN
+
+
+def _first_refused(line: str) -> str:
+    """The first character of `line` that `BoundaryText` refuses, or `""`."""
+    for ch in line:
+        try:
+            BoundaryText.of(ch, limit=len(ch) * 3)
+        except Refusal:
+            return ch
+    return ""
+
+
+def _code_point_named(ch: str) -> str:
+    """`U+XXXX (NAME)`, or `U+XXXX` alone for a code point with no name."""
+    code = ord(ch)
+    name = unicodedata.name(ch, "") or (
+        _C0_NAMES[code] if code < len(_C0_NAMES) else "DELETE" if code == 0x7F else ""
+    )
+    return f"U+{code:04X} ({name})" if name else f"U+{code:04X}"
+
+
+def _decomposed(line: str) -> str:
+    """The code points from where NFC first changes `line`: the first that
+    differs and the combining marks after it, at most four."""
+    composed = unicodedata.normalize("NFC", line)
+    at = next(
+        (i for i, (a, b) in enumerate(zip(line, composed, strict=False)) if a != b),
+        min(len(line), len(composed)),
+    )
+    end = at + 1
+    while end < len(line) and end - at < 4 and unicodedata.combining(line[end]):
+        end += 1
+    return " ".join(f"U+{ord(ch):04X}" for ch in line[at:end])
+
+
+def _line_count(count: int) -> str:
+    return f"{count} line" if count == 1 else f"{count} lines"
 
 
 def _heading_backtracks(text: str, spaced: str) -> bool:

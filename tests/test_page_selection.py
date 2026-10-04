@@ -26,7 +26,7 @@ from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
 from caos.evidence.ingest import Document, admit_pack
 from caos.graph.route import ResolvedRoute
-from caos.methodology import selection
+from caos.methodology import canonical, selection
 from caos.methodology.canonical import check_context
 from caos.refusals import RefusalCode
 from caos.store import StoreConnection
@@ -123,10 +123,25 @@ def test_a_quote_of_an_unnamed_page_of_a_named_source_is_not_delivered(
     assert _evidence_pages(prompt) == {2}
 
 
-def test_a_page_range_past_the_source_refuses_the_consumer_before_any_attempt(
+def test_a_page_range_past_the_source_refuses_the_gate_as_a_retry(
     paged: _Harness,
 ) -> None:
-    _gate(paged, source_files={"CP-L10": f"{PAGED} pages 2-4"})
+    """F497: the gate's own acceptance refuses a range its consumer would,
+    `HANDOFF_MALFORMED`, so a guided retry can still fix it."""
+    gate = CanonicalCompletions(
+        paged.source_id, source_files={"CP-L10": f"{PAGED} pages 2-4"}
+    )
+    assert _refused(paged, "CP-0", gate) is RefusalCode.HANDOFF_MALFORMED
+
+
+def test_a_page_range_past_the_source_refuses_the_consumer_before_any_attempt(
+    paged: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The backstop (F497): a gate record accepted before its acceptance
+    checked the demand still refuses its consumer before any attempt."""
+    with monkeypatch.context() as before:
+        before.setattr(canonical, "_demand_faults", lambda *_args: [])
+        _gate(paged, source_files={"CP-L10": f"{PAGED} pages 2-4"})
     screen = CanonicalCompletions(paged.source_id)
     assert _refused(paged, "CP-L10", screen) is RefusalCode.EVIDENCE_DEMAND_UNRESOLVED
     assert screen.prompts == []
