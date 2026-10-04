@@ -38,6 +38,7 @@ from caos.evidence.citations import (
     ANY_RUN,
     AnchoredCitation,
     Citation,
+    CitationRule,
     verify_citations,
 )
 from caos.methodology.handoff import UnverifiedCitation
@@ -76,8 +77,9 @@ def long_anchored(
         *,
         delivered: Mapping[UUID, frozenset[str]],
         citations: Sequence[Citation],
+        rule: CitationRule = ANY_RUN,
     ) -> list[AnchoredCitation]:
-        found = real(conn, delivered=delivered, citations=citations)
+        found = real(conn, delivered=delivered, citations=citations, rule=rule)
         return [dataclasses.replace(each, matched_text=PROBE) for each in found]
 
     monkeypatch.setattr(canonical, verify_citations.__name__, lengthened)
