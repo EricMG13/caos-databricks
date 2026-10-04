@@ -1253,6 +1253,54 @@ def _similar(words: list[str], split: list[str]) -> bool:
     )
 
 
+# How a table row's cells are joined in an evidence line (F495).
+CELL_SEPARATOR = " | "
+
+
+def cells_line(text: str, lines: Sequence[str]) -> int | None:
+    """The index in `lines` of the one table row `text` left cells out of,
+    else None (F495): a quote holding `CELL_SEPARATOR` whose first cell is
+    the row's own and whose cells are, in order, a subsequence of the row's
+    with fewer of them -- alternate period columns dropped, say, which
+    `near_line`'s length bound passes over. Pure over the texts it is handed,
+    like `near_line`; it never anchors or accepts. The first cell is the
+    prefilter, and a search past `NEAR_MEASURED` rows sharing it, or with
+    two such rows, is no answer, never a guess: one pass over the lines and
+    at most `NEAR_MEASURED` linear subsequence checks.
+    """
+    if CELL_SEPARATOR not in text:
+        return None
+    quoted = _cells(text)
+    found: list[int] = []
+    measured = 0
+    for number, line in enumerate(lines):
+        if CELL_SEPARATOR not in line or _first_cell(line) != quoted[0]:
+            continue
+        measured += 1
+        if measured > NEAR_MEASURED:
+            return None
+        cells = _cells(line)
+        if len(quoted) < len(cells) and _in_order(quoted[1:], cells[1:]):
+            found.append(number)
+    return found[0] if len(found) == 1 else None
+
+
+def _cells(line: str) -> list[str]:
+    """A row's cells, each its words joined by one space (`cells_line`)."""
+    return [" ".join(cell.split()) for cell in line.split("|")]
+
+
+def _first_cell(line: str) -> str:
+    """A row's first cell alone, without splitting the rest (`cells_line`)."""
+    return " ".join(line.split("|", 1)[0].split())
+
+
+def _in_order(part: Sequence[str], whole: Sequence[str]) -> bool:
+    """Whether `part` is a subsequence of `whole`, in order (`cells_line`)."""
+    rest = iter(whole)
+    return all(cell in rest for cell in part)
+
+
 def _verdict(
     conn: StoreConnection,
     index: TokenIndex,

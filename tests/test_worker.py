@@ -183,14 +183,14 @@ def test_worker_stops_a_refused_run_with_its_code_and_releases_the_lease(
 
     assert drive(run, completions) == run.run_id
 
-    # N52, D82: the unanchored answer earns two guided retries, refused the
+    # N52, D82: the unanchored answer earns three guided retries, refused the
     # same way.
     codes = run.conn.execute(
         "SELECT r.code FROM attempt_refusals r JOIN run_attempts a USING (attempt_id)"
         " WHERE a.run_id = %s",
         (run.run_id,),
     ).fetchall()
-    assert codes == [("CITATION_NOT_LOCATED",)] * 3
+    assert codes == [("CITATION_NOT_LOCATED",)] * 4
     code = codes[0][0]
     assert work_row(run.conn, run.run_id) == ("STOPPED", code, None, True)
     assert run_status(run.conn, run.run_id) is RunStatus.RUNNING
@@ -199,7 +199,7 @@ def test_worker_stops_a_refused_run_with_its_code_and_releases_the_lease(
     assert capsys.readouterr().err.strip() == code
     run.conn.rollback()
     assert drive(run, completions) is None, "a stopped run waits for a retry"
-    assert len(completions.prompts) == 3
+    assert len(completions.prompts) == 4
 
 
 def test_sigterm_finishes_the_unit_and_requeues(

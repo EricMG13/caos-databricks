@@ -226,13 +226,13 @@ def test_a_malformed_cp_l10_is_diagnostic_only_and_nothing_downstream_proves(
     Markdown is refused after its bill, its exact body is the attempt's
     diagnostic, nothing is accepted, CP-5 is never called, and neither the
     proof nor the deliverable carries it. Since D30 the node takes its guided
-    retries first (two since D82); refused again, the run stops exactly as
+    retries first (three since D82's amendment); refused again, the run stops exactly as
     before."""
     answers = _Lite(harness.source_id, screen=screen)
     code = _run_route(harness, _module_provider(harness, answers))
     assert code is RefusalCode.HANDOFF_MALFORMED
-    assert _modules_called(answers) == ["CP-0", "CP-L10", "CP-L10", "CP-L10"]
-    assert _counts(harness) == (4, [REPORTED] * 4, 1, 4, 4)
+    assert _modules_called(answers) == ["CP-0"] + ["CP-L10"] * 4
+    assert _counts(harness) == (5, [REPORTED] * 5, 1, 5, 5)
     assert _screen_outcomes(harness) == [(_sha(body), 0) for body in answers.bodies[1:]]
     assert (_status(harness), _events(harness, "RUN_BLOCKED")) == ("RUNNING", 0)
     _cp5_untouched(harness)
@@ -313,7 +313,7 @@ def test_a_wrong_upstream_or_undelivered_citation_never_reaches_the_deliverable(
         )
         expected = RefusalCode.CITATION_NOT_DELIVERED
     assert _run_route(harness, _module_provider(harness, answers)) is expected
-    # N52, D82: anchoring's refusal earns CP-L10 two guided retries, refused
+    # N52, D82: anchoring's refusal earns CP-L10 three guided retries, refused
     # the same way.
     screens = 1 + GUIDED_RETRIES if expected in SECOND_ATTEMPT_CODES else 1
     assert _modules_called(answers) == ["CP-0"] + ["CP-L10"] * screens
