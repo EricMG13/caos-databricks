@@ -154,7 +154,7 @@ describe("Committee v1", () => {
     expect(narrative).toHaveTextContent("<svg onload=window.pwned=1>");
     // The figure is its quote and a chip naming its module and page (N59).
     expect(narrative.querySelector("q")).toHaveTextContent("Coverage 2.1x");
-    expect(narrative.querySelector("[data-figure-chip]")).toHaveTextContent("CP-1 · p.7");
+    expect(narrative.querySelector("[data-figure-chip]")).toHaveTextContent("CP-1 C1 · p.7");
     expect(narrative.querySelector("svg, img, script")).toBeNull();
   });
 });

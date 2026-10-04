@@ -6,7 +6,8 @@
 // refuses a reference it cannot resolve, so nothing here decides whether a
 // figure is valid. The picker only offers the citations the served Report
 // document's own records carry, at the index the server will read them by.
-import { unverifiedLabel } from "@/evidence/Unverified";
+import { clampExcerpt } from "@/evidence/compact";
+import { markerPrefix, unverifiedLabel } from "@/evidence/Unverified";
 import type { NarrativeDraft, ReportDocument, UnverifiedCitationView } from "@/wire/v1";
 
 /** One citation a figure may name, and what the author is shown for it. */
@@ -20,10 +21,17 @@ export interface CitationChoice {
   unverified: UnverifiedCitationView["code"] | null;
   page: number;
   matched_text: string;
-  /** The evidence line the quote anchored in, where the record holds it
-      (D105): an excerpt record's `line_text`, or the quote under a whole-line
-      rule. Null for a record from before them, whose quote is any run. */
-  line: string | null;
+  /** Whether the record holds the line the quote anchored in (D105): an
+      excerpt record's `line_text`, or the quote under a whole-line rule.
+      False for a record from before them, whose quote is any run. */
+  recorded: boolean;
+  /** The `[C<n>]` the module's body cites it by (D107); null before markers. */
+  marker: number | null;
+}
+
+/** A record entry's marker: a whole number from 1, else none. */
+function markerOf(value: unknown): number | null {
+  return typeof value === "number" && Number.isInteger(value) && value >= 1 ? value : null;
 }
 
 // The rules under which a quote is its own whole line (`citations.py`).
@@ -39,7 +47,7 @@ const UNVERIFIED_CODES = new Set([
 function unverifiedOf(routeNodeId: string, entries: unknown): CitationChoice[] {
   if (!Array.isArray(entries)) return [];
   return entries.flatMap((entry: unknown, index) => {
-    const { page, matched_text, code } = (entry ?? {}) as Record<string, unknown>;
+    const { page, matched_text, code, marker } = (entry ?? {}) as Record<string, unknown>;
     if (typeof page !== "number" || !Number.isInteger(page) || typeof matched_text !== "string")
       return [];
     if (typeof code !== "string" || !UNVERIFIED_CODES.has(code)) return [];
@@ -50,7 +58,8 @@ function unverifiedOf(routeNodeId: string, entries: unknown): CitationChoice[] {
         unverified: code as UnverifiedCitationView["code"],
         page,
         matched_text,
-        line: null,
+        recorded: false,
+        marker: markerOf(marker),
       },
     ];
   });
@@ -74,7 +83,7 @@ export function citationsOf(artifacts: ReportDocument["body"]["artifacts"]): Cit
     if (!Array.isArray(citations)) continue;
     const whole = typeof citation_rule === "string" && WHOLE_LINE_RULES.has(citation_rule);
     citations.forEach((entry: unknown, index) => {
-      const { page, matched_text, line_text } = (entry ?? {}) as Record<string, unknown>;
+      const { page, matched_text, line_text, marker } = (entry ?? {}) as Record<string, unknown>;
       if (typeof page !== "number" || !Number.isInteger(page) || typeof matched_text !== "string")
         return;
       choices.push({
@@ -83,7 +92,8 @@ export function citationsOf(artifacts: ReportDocument["body"]["artifacts"]): Cit
         unverified: null,
         page,
         matched_text,
-        line: typeof line_text === "string" ? line_text : whole ? matched_text : null,
+        recorded: typeof line_text === "string" || whole,
+        marker: markerOf(marker),
       });
     });
     choices.push(...unverifiedOf(artifact.route_node_id, unverified));
@@ -146,40 +156,15 @@ export function paragraphs(draft: string): NarrativeDraft[][] {
     });
 }
 
-/** How a picker or draft list names a citation (D105): its whole source line
-    with the quote set in guillemets where its words run there exactly once,
-    whole words only (F504: a substring search would mark "4.1" inside
-    "14.1"); the quote labelled as one where the record holds no line; and an
-    unverified one labelled so, as the model's quote (D106). */
+/** How a picker or draft list names a citation, compact (D107): its marker
+    and its excerpt clamped to about one line -- the whole source line is the
+    drawer's to show; the quote labelled as one where the record holds no
+    line; and an unverified one labelled so, as the model's quote (D106). */
 export function choiceText(choice: CitationChoice): string {
+  const marker = markerPrefix(choice.marker);
+  const quote = clampExcerpt(choice.matched_text);
   if (choice.unverified !== null)
-    return `${unverifiedLabel({ page: choice.page, code: choice.unverified })}: ${choice.matched_text}`;
-  if (choice.line === null) return `quote (source line not recorded): ${choice.matched_text}`;
-  const place = wordPlace(choice.line, choice.matched_text);
-  if (place === null || choice.line === choice.matched_text) return `source line: ${choice.line}`;
-  const [at, end] = place;
-  return `source line: ${choice.line.slice(0, at)}«${choice.line.slice(at, end)}»${choice.line.slice(end)}`;
-}
-
-/** Where `quote`'s words run as consecutive whole words of `line`, NFC as the
-    host compares them: the one place, as `[start, end)` offsets, or null for
-    none or more than one, which marks nothing. */
-export function wordPlace(line: string, quote: string): [number, number] | null {
-  const words = quote
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((word) => word.normalize("NFC"));
-  const units = [...line.matchAll(/\S+/g)].map((found) => ({
-    start: found.index,
-    end: found.index + found[0].length,
-    word: found[0].normalize("NFC"),
-  }));
-  if (words.length === 0) return null;
-  const places: [number, number][] = [];
-  for (let at = 0; at + words.length <= units.length; at += 1) {
-    if (words.every((word, offset) => units[at + offset]!.word === word)) {
-      places.push([units[at]!.start, units[at + words.length - 1]!.end]);
-    }
-  }
-  return places.length === 1 ? places[0]! : null;
+    return `${marker}${unverifiedLabel({ page: choice.page, code: choice.unverified })}: ${quote}`;
+  if (!choice.recorded) return `${marker}quote (source line not recorded): ${quote}`;
+  return `${marker}excerpt: ${quote}`;
 }
