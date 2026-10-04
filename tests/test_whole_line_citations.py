@@ -26,6 +26,7 @@ from caos.boundary_text import BoundaryText
 from caos.evidence.citations import (
     ANY_RUN,
     CITATION_RULES,
+    EXCERPT,
     WHOLE_LINE,
     WHOLE_LINE_AS_STORED,
     AnchoredCitation,
@@ -85,8 +86,10 @@ def test_part_of_a_line_that_drops_a_word_no_longer_anchors(
     case: tuple[StoreConnection, UUID], tmp_path: Path
 ) -> None:
     """AI-4: the part anchored uniquely and was labelled host-verified,
-    stating the opposite of its line. Accepted answers are held to the whole
-    line; the run rule a stored record was accepted under still finds it."""
+    stating the opposite of its line. Answers accepted under N28 were held
+    to the whole line, and their records still are; the run rule a stored
+    record was accepted under still finds it. (D105's `EXCERPT`, which
+    answers are held to now, is `tests/test_excerpt_citations.py`.)"""
     conn, case_id = case
     source_id = _admit(conn, case_id, tmp_path)
 
@@ -100,7 +103,7 @@ def test_part_of_a_line_that_drops_a_word_no_longer_anchors(
         RefusalCode.CITATION_NOT_LOCATED
     )
     assert _code(conn, source_id, PART_OF_LINE, ANY_RUN) == 1
-    assert CITATION_RULES == {ANY_RUN, WHOLE_LINE_AS_STORED, WHOLE_LINE}
+    assert CITATION_RULES == {ANY_RUN, WHOLE_LINE_AS_STORED, WHOLE_LINE, EXCERPT}
 
 
 def test_a_whole_line_keeps_the_edge_forgiveness_the_matcher_declares(
