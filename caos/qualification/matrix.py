@@ -17,7 +17,8 @@ the first one would hand a reviewer less than the host knows, and what the
 remaining cases did is the next thing they would ask.
 
 **What an answer key can express, and what it cannot.** A key names citations —
-which quote, from which document, under which module. That is the strongest key
+which line, from which document, under which module (a citation anchored in
+the line meets it, D105). That is the strongest key
 the canonical handoff's record can be checked against today, because a record
 carries projections and citations and not typed figures. A key saying "net
 leverage is 4.2x" has nothing to compare against until the record carries the
@@ -495,7 +496,7 @@ def _digested_key(expect: ExpectedCitation) -> list[object]:
 
 
 def key_lines(expect: ExpectedCitation) -> tuple[tuple[str, str], ...]:
-    """Every `(document, quote)` that answers `expect`: its own line first, then
+    """Every `(document, line)` that answers `expect`: its own line first, then
     each alternative the set names (D101)."""
     return (
         (expect.document_sha256, expect.matched_text),
@@ -1306,11 +1307,13 @@ def _readiness(
 
 
 def _matches(expect: ExpectedCitation, cited: set[tuple[str, str, str]]) -> bool:
-    """An expectation is met by the same quote, from the same document, under the
-    same module -- the key's own line or one of the alternatives the set names
-    for it (D101), each compared as the exact string (F475). The right quote
-    under the wrong module answers a different question and is not this key's
-    answer."""
+    """An expectation is met by a citation anchored in the same line, of the same
+    document, under the same module -- the key's own line or one of the
+    alternatives the set names for it (D101), each compared as the exact
+    string (F475) with the line the citation anchored in (`proof.cited_line`):
+    since D105 a citation is any excerpt of its line, and a record from before
+    it is scored by its quote. The right line under the wrong module answers a
+    different question and is not this key's answer."""
     return any(
         (expect.module_id, document_sha256, matched_text) in cited
         for document_sha256, matched_text in key_lines(expect)
@@ -1337,7 +1340,7 @@ ROW_REFUSALS = frozenset(
 def _cited(
     conn: StoreConnection, run_id: UUID, *, proof: OrchestrationProof | None
 ) -> set[tuple[str, str, str]]:
-    """Every (module, document, quote) this run's proof re-anchored.
+    """Every (module, document, line) this run's proof re-anchored.
 
     The module is taken from the route pin, as `proof.py` takes it (invariant
     3: the host owns identity). A run with no pin cites nothing, which is a row
@@ -1353,7 +1356,7 @@ def _cited(
 def _proven(
     conn: StoreConnection, run_id: UUID, proof: OrchestrationProof | None
 ) -> set[tuple[str, str, str]]:
-    """A proven canonical run's anchored quotes, each document still live now.
+    """A proven canonical run's anchored lines, each document still live now.
 
     Scoring is a use, so a source withdrawn since the proof refuses the row
     `ORCHESTRATION_SOURCE_NOT_PINNED`, as the proof itself would (invariant 1).
@@ -1361,7 +1364,7 @@ def _proven(
     if proof is None:
         return set()
     live = pinned_live_sources(conn, run_id)
-    if any(document not in live for _module, document, _quote in proof.anchored):
+    if any(document not in live for _module, document, _line in proof.anchored):
         raise Refusal(RefusalCode.ORCHESTRATION_SOURCE_NOT_PINNED)
     return set(proof.anchored)
 

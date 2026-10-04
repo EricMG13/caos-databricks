@@ -6,7 +6,7 @@ This immutable set prepares `LITE_CREDIT_22 / LITE_PORTFOLIO_DECISION` for
 Caesars Entertainment, Inc. (CZR) at an analysis date of 2026-10-02, with a
 proposed position in the CZR 6.50% Senior Secured Notes due 2032 held against a
 **SYNTHETIC** test mandate. Its qualification-set digest is
-`3a4639808bae31965c933ce038a6f124dfd2fe85611e09cd4773c4be3f06cb03`.
+`2b259fc2deee688087eb5698ff348e912497a2aaf2416161847bdf81309170d1`.
 
 ## The mandate is synthetic (D80)
 
@@ -85,11 +85,13 @@ document (F475), and is listed with why it states the key's figures:
     million for the comparable prior-year period.`, its highlight sentence:
     consolidated, the quarter against the prior-year quarter;
   - the release's `Caesars | $920 | $955 | (3.7)%`, the consolidated row of its
-    quarterly Adjusted EBITDA table.
-  Not alternatives: the 10-Q's `Adjusted EBITDA | $920 | $955 | $1,807 |
-    $1,839` (its words recur inside the 10-Q's `Total Adjusted EBITDA` row, so
-    it is not a unique run, F475) and the release's six-month `Caesars | $1,807
-    | $1,839 | (1.7)%` (the six months alone).
+    quarterly Adjusted EBITDA table;
+  - the 10-Q's `Adjusted EBITDA | $920 | $955 | $1,807 | $1,839`, the
+    consolidated line its segment note reconciles net loss to. Its words also
+    run inside the MD&A's `Total Adjusted EBITDA` row, which no longer bars a
+    whole line (K2, F501).
+  Not alternatives: the release's six-month `Caesars | $1,807 | $1,839 |
+    (1.7)%` (the six months alone).
 
 The other figure keys (`C-01`) have none: no other whole line states their
 figures for the same measure, period and basis (rounded prose such as `$11.8

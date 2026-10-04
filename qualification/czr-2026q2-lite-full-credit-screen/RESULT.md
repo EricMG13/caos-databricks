@@ -7,7 +7,7 @@ Caesars Entertainment, Inc. (CZR) at an analysis date of 2026-10-02, against
 peers MGM Resorts International (MGM) and PENN Entertainment, Inc. (PENN) from
 the owner's "Public Leveraged Loan Issuers Benchmark". Its qualification-set
 digest is
-`9fa55fa9e3bdadb8d85fd47d8aa8c6eb8d42805ecb71d70d8a7abe78b4d7a26b`.
+`725a996507712ee8e5db4ba3584e3cbb0bd62c04a6834d978a696bcd064b171d`.
 
 ## Corpus provenance
 
@@ -92,11 +92,13 @@ document (F475), and is listed with why it states the key's figures:
     million for the comparable prior-year period.`, its highlight sentence:
     consolidated, the quarter against the prior-year quarter;
   - the release's `Caesars | $920 | $955 | (3.7)%`, the consolidated row of its
-    quarterly Adjusted EBITDA table.
-  Not alternatives: the 10-Q's `Adjusted EBITDA | $920 | $955 | $1,807 |
-    $1,839` (its words recur inside the 10-Q's `Total Adjusted EBITDA` row, so
-    it is not a unique run, F475) and the release's six-month `Caesars | $1,807
-    | $1,839 | (1.7)%` (the six months alone).
+    quarterly Adjusted EBITDA table;
+  - the 10-Q's `Adjusted EBITDA | $920 | $955 | $1,807 | $1,839`, the
+    consolidated line its segment note reconciles net loss to. Its words also
+    run inside the MD&A's `Total Adjusted EBITDA` row, which no longer bars a
+    whole line (K2, F501).
+  Not alternatives: the release's six-month `Caesars | $1,807 | $1,839 |
+    (1.7)%` (the six months alone).
 
 The other figure keys (`Traditional net leverage (1)`, `Total debt`) have none:
 no other whole line states their figures for the same measure, period and basis
