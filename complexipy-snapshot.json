@@ -103,7 +103,7 @@
     "functions": [
       {
         "name": "assert_orchestration_proof",
-        "complexity": 18
+        "complexity": 16
       }
     ]
   },

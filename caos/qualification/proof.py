@@ -29,8 +29,10 @@ through its host record and nothing else -- an artifact without one refuses
 the record must bind this Markdown and the identity rebuilt from the store, its
 adapter, build, manifest and authority must be the pin's and the bundle's, the
 Markdown re-validated must project exactly what the record says, and every
-recorded citation must re-anchor in the run's pinned, live sources on exactly
-the recorded rectangles. The
+recorded anchored citation must re-anchor in the run's pinned, live sources on
+exactly the recorded rectangles. A record's unverified citations (D106) are
+the module's own locators: carried as recorded, never re-anchored, never
+counted as re-located, and never meet an answer key. The
 sources (`pinned_live_sources`) and the call-time identity (`call_time_identity`)
 are the ones `caos/deliverable/canonical.py` reads, so both reach the same
 verdict, under the proof's codes.
@@ -47,6 +49,7 @@ from caos.evidence.citations import AnchoredCitation, TokenIndex
 from caos.graph.route import MODEL_MODULE, ResolvedRoute, RouteNode
 from caos.methodology.bundle import Bundle
 from caos.methodology.executor import captured_blocks
+from caos.methodology.handoff import CanonicalRecord, UnverifiedCitation
 from caos.methodology.verification import (
     CREDIT_SCREEN_SELECTION,
     AcceptedRow,
@@ -81,8 +84,13 @@ class OrchestrationProof:
     # A canonical run's re-anchored `(module_id, document_sha256, line)`, the
     # module taken from the pin and the line the citation anchored in
     # (`cited_line`): exactly what this proof proved, so the matrix scores it
-    # without a second read the proof never saw.
+    # without a second read the proof never saw. Anchored citations only:
+    # an answer key is met by nothing else (D106, owner: "Anchored only").
     anchored: frozenset[tuple[str, str, str]] = frozenset()
+    # Each record's unverified citations (D106), by the pinned module, in
+    # route order and as recorded: carried, never re-anchored and never
+    # counted in `citations`, which is what the proof re-located.
+    unverified: tuple[tuple[str, UnverifiedCitation], ...] = ()
 
     @property
     def assurance(self) -> Assurance:
@@ -151,6 +159,7 @@ def assert_orchestration_proof(
     nodes = {node.route_node_id: node for node in route.nodes}
     citations = 0
     anchored: set[tuple[str, str, str]] = set()
+    unverified: list[tuple[str, UnverifiedCitation]] = []
     for row in accepted:
         artifact_sha256, route_node_id, produced, called, recorded = row[:5]
         module_id = module_of[str(route_node_id)]
@@ -162,12 +171,15 @@ def assert_orchestration_proof(
             str(artifact_sha256),
             None if record_sha256 is None else str(record_sha256),
         )
-        citations += len(proven)
-        anchored |= {(module_id, c.document_sha256, cited_line(c)) for c in proven}
+        citations += len(proven.citations)
+        anchored |= _scored(module_id, proven)
+        unverified += _carried(module_id, proven)
 
-    # No second vacuity guard here: a record without citations does not
-    # decode, so by this line the count cannot be zero. A guard that can never
-    # fire reads like a check and is not one.
+    # No second vacuity guard here: a record with no citation of either kind
+    # does not decode, so by this line `citations` and `unverified` cannot
+    # both be empty. Since D106 `citations` alone can be zero: an answer whose
+    # every citation is unverified is accepted, and the proof then re-located
+    # none -- which the counts say rather than hide.
     return OrchestrationProof(
         run_id=run_id,
         route_digest=_pinned_digest(conn, run_id),
@@ -175,7 +187,21 @@ def assert_orchestration_proof(
         artifacts=len(accepted),
         citations=citations,
         anchored=frozenset(anchored),
+        unverified=tuple(unverified),
     )
+
+
+def _scored(module_id: str, record: CanonicalRecord) -> set[tuple[str, str, str]]:
+    """The `(module, document, line)` of each re-anchored citation: what an
+    answer key is met by, the anchored list alone (D106)."""
+    return {(module_id, c.document_sha256, cited_line(c)) for c in record.citations}
+
+
+def _carried(
+    module_id: str, record: CanonicalRecord
+) -> list[tuple[str, UnverifiedCitation]]:
+    """The record's unverified citations by module, as recorded (D106)."""
+    return [(module_id, entry) for entry in record.unverified]
 
 
 def cited_line(citation: AnchoredCitation) -> str:
@@ -243,8 +269,10 @@ class _CanonicalReader:
         attempt_id: UUID,
         artifact_sha256: str,
         record_sha256: str | None,
-    ) -> tuple[AnchoredCitation, ...]:
-        """Prove one accepted canonical artifact; the citations it re-anchored.
+    ) -> CanonicalRecord:
+        """Prove one accepted canonical artifact; its record, whose anchored
+        citations it re-anchored and whose unverified ones it carries as
+        recorded (D106).
 
         `ORCHESTRATION_ARTIFACT_UNREADABLE` for a blob whose bytes no longer
         hash to their address; `ORCHESTRATION_BUILD_MOVED` for a record written
@@ -296,7 +324,7 @@ class _CanonicalReader:
             verified.markdown
         )
         # Re-anchored on the recorded rectangles, so the record's are the proof's.
-        return verified.record.citations
+        return verified.record
 
 
 def _pinned_digest(conn: StoreConnection, run_id: UUID) -> str:
