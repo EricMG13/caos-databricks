@@ -89,6 +89,7 @@ describe("the reasons a node draws", () => {
       module_id: "CP-5",
       attempt_id: "a",
       quotes_recorded: false,
+      quotes_refusal: null,
       verified: [],
       unverified: [],
     };

@@ -360,6 +360,7 @@ function runSection(): { [key: string]: Json } {
           module_id: "CP-5",
           attempt_id: RUN,
           quotes_recorded: false,
+          quotes_refusal: null,
           verified: [],
           unverified: [],
         },

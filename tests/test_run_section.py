@@ -596,6 +596,7 @@ def test_the_run_document_names_the_node_whose_blocked_verdict_ended_it(
         run_read.SECTION_READ_IO
         + run_read.CANONICAL_READINESS_IO
         + run_read.BLOCKED_BY_IO
+        + (run_read.BLOCKED_QUOTES_IO if view.blocked_by.verified else 0)
     )
     assert counter.executed <= run_read.IO_BUDGET
 

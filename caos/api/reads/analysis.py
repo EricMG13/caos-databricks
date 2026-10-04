@@ -19,6 +19,7 @@ A run of another case, an unknown and a malformed run are one `RUN_NOT_FOUND`.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -36,6 +37,7 @@ from caos.api.deps import (
 )
 from caos.api.identity import Actor
 from caos.api.wire import (
+    CLEARS,
     AnalysisBody,
     AnalysisDocument,
     BlockedByView,
@@ -47,6 +49,7 @@ from caos.api.wire import (
     LineView,
     PendingNode,
     RectView,
+    RefusalBody,
     RunSubjectView,
     SectionNote,
     ServedRole,
@@ -80,6 +83,7 @@ from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
 from caos.store.members import Standing
 from caos.store.routes import resolved_route
+from caos.store.source_sets import cited_source_ids
 
 # Fixed: standing; the case title, `now()`, latest run and the displayed run's
 # ownership in one row; the subject; the pinned route (`resolved_route`); the
@@ -101,7 +105,15 @@ FIXED_IO = 7
 PER_HANDOFF_IO = 10
 MODEL_PROOFS_IO = 42
 LONGEST_ROUTE_NODES = 20
-IO_BUDGET = FIXED_IO + LONGEST_ROUTE_NODES * PER_HANDOFF_IO + MODEL_PROOFS_IO
+# A Blocked run's located quotes resolved to their pinned sources (D106,
+# D107): one query, only on a BLOCKED run whose verdict kept its quotes.
+BLOCKED_QUOTES_IO = 1
+IO_BUDGET = (
+    FIXED_IO
+    + LONGEST_ROUTE_NODES * PER_HANDOFF_IO
+    + MODEL_PROOFS_IO
+    + BLOCKED_QUOTES_IO
+)
 # Blob reads, which no store budget counted: the artifact and its record per
 # accepted handoff, each downloaded and hashed once per request however many
 # of the lineage and record readers ask for it (`BlobStore.remembering`).
@@ -231,7 +243,8 @@ def _analysis_document(query: AnalysisQuery, *, with_tables: bool) -> AnalysisDo
         if pending:
             notes.append(SectionNote.HANDOFFS_PENDING)
         if displayed_status == "BLOCKED" and blocking is not None:
-            blocked_by = _blocked_by(route, blocking, query.blobs)
+            handles = _Handles(conn, query.blobs, query.bundle)
+            blocked_by = _blocked_by(route, blocking, handles, displayed)
     return AnalysisDocument(
         chrome=Chrome(
             subject=Subject(case_id=query.case_id, title=title),
@@ -258,44 +271,65 @@ def _analysis_document(query: AnalysisQuery, *, with_tables: bool) -> AnalysisDo
 
 
 def _blocked_by(
-    route: ResolvedRoute, blocking: tuple[object, object, object], blobs: BlobStore
+    route: ResolvedRoute,
+    blocking: tuple[object, object, object],
+    handles: _Handles,
+    run_id: UUID,
 ) -> BlockedByView:
     """The node whose validated Blocked verdict ended this run, as the
     transition recorded it (§68) -- read, never re-derived, exactly as
     `reads/run.py` reads it."""
     attempt, node_id, citations = blocking
-    return blocked_by_view(route, (attempt, node_id), citations, blobs)
+    return blocked_by_view(
+        route, (attempt, node_id), citations, (handles.conn, handles.blobs, run_id)
+    )
 
 
 def blocked_by_view(
     route: ResolvedRoute,
     verdict: tuple[object, object],
     citations_sha256: object,
-    blobs: BlobStore,
+    stores: tuple[StoreConnection, BlobStore, UUID],
 ) -> BlockedByView:
     """The Blocked verdict `verdict` (its attempt and route node) as Run and
     Analysis serve it, with the answer's quotes as the host judged them
     (D106; owner: "Show its quotes (Recommended)"): read from the blob the
-    transition stored (`read_blocked_citations`, one blob read), or none, and
-    `quotes_recorded` false, for a verdict stored before migration 0044. A
+    transition stored (`read_blocked_citations`, one blob read; each located
+    quote's source resolved in one query, `cited_source_ids`), or none, and
+    `quotes_recorded` false, for a verdict stored before migration 0044; a
+    kept blob that is missing or not this host's bytes is that typed refusal,
+    contained in `quotes_refusal`, never the page's. A
     node the pinned route does not carry is a store the pins do not
     describe, refused rather than served under a guessed module."""
     attempt, node_id = verdict
     node = next((n for n in route.nodes if n.route_node_id == str(node_id)), None)
     if node is None:
         raise Refusal(RefusalCode.ORCHESTRATION_NODE_NOT_IN_ROUTE)
+    conn, blobs, run_id = stores
     anchored: tuple[AnchoredCitation, ...] = ()
     unverified: tuple[UnverifiedCitation, ...] = ()
+    sources: dict[str, tuple[UUID, datetime | None]] = {}
+    refused: RefusalBody | None = None
     if citations_sha256 is not None:
-        anchored, unverified = read_blocked_citations(blobs, str(citations_sha256))
+        try:
+            anchored, unverified = read_blocked_citations(blobs, str(citations_sha256))
+            sources = cited_source_ids(
+                conn, run_id, (c.document_sha256 for c in anchored)
+            )
+        except Refusal as refusal:
+            anchored, unverified = (), ()
+            refused = RefusalBody(code=refusal.code, clears=CLEARS[refusal.code])
     return BlockedByView(
         route_node_id=node.route_node_id,
         module_id=node.module_id,
         attempt_id=UUID(str(attempt)),
         quotes_recorded=citations_sha256 is not None,
+        quotes_refusal=refused,
         verified=[
             BlockedQuoteView(
                 document_sha256=c.document_sha256,
+                source_id=sources[c.document_sha256][0],
+                withdrawn_at=sources[c.document_sha256][1],
                 page=c.page,
                 matched_text=bounded(c.matched_text),
                 line=LineView.of(c.line_text, c.matched_text, EXCERPT),

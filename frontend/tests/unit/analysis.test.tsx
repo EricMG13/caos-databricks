@@ -674,6 +674,7 @@ describe("Analysis", () => {
           module_id: answered!.module_id,
           attempt_id: "00000000-0000-4000-8000-0000000000c1",
           quotes_recorded: false,
+          quotes_refusal: null,
           verified: [],
           unverified: [],
         },
