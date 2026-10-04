@@ -622,6 +622,14 @@ class BlockedByView(BaseModel):
     route_node_id: Id
     module_id: Id
     attempt_id: UUID
+    # The Blocked answer's quotes as the host judged them (D106; owner: "Show
+    # its quotes (Recommended)"), so a reader can check the block against the
+    # sources: each located one with its line, each unverified one labelled.
+    # A verdict recorded before they were kept (migration 0044) has none, and
+    # says so (`quotes_recorded` false).
+    quotes_recorded: StrictBool
+    verified: Annotated[list[BlockedQuoteView], Field(max_length=CITATIONS_MAX)]
+    unverified: Annotated[list[UnverifiedCitationView], Field(max_length=CITATIONS_MAX)]
 
 
 class RunView(BaseModel):
@@ -795,6 +803,21 @@ class UnverifiedCitationView(BaseModel):
     code: UnverifiedCode
     # False for a quote the answer's body does not carry either: "not in the
     # answer body", beside its reason.
+    linked: StrictBool
+
+
+class BlockedQuoteView(BaseModel):
+    """One quote of a Blocked answer the host located (D106): the document,
+    page and quote, and the line it is an excerpt of, as a source fact shows
+    it (D105). No rectangle or source is served: a Blocked answer is no
+    accepted record, and its view opens no drawer."""
+
+    model_config = _CLOSED
+
+    document_sha256: Sha256
+    page: Annotated[int, Field(ge=1)]
+    matched_text: Annotated[str, Field(max_length=QUOTE_CHARS)]
+    line: LineView
     linked: StrictBool
 
 

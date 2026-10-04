@@ -673,6 +673,9 @@ describe("Analysis", () => {
           route_node_id: answered!.route_node_id,
           module_id: answered!.module_id,
           attempt_id: "00000000-0000-4000-8000-0000000000c1",
+          quotes_recorded: false,
+          verified: [],
+          unverified: [],
         },
       },
     };

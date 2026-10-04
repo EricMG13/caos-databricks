@@ -281,7 +281,19 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
             "gate_reason",
         }
     ),
-    BlockedByView: frozenset({"route_node_id", "module_id", "attempt_id"}),
+    BlockedByView: frozenset(
+        {
+            "route_node_id",
+            "module_id",
+            "attempt_id",
+            "quotes_recorded",
+            "verified",
+            "unverified",
+        }
+    ),
+    wire.BlockedQuoteView: frozenset(
+        {"document_sha256", "page", "matched_text", "line", "linked"}
+    ),
     RunView: frozenset(
         {
             "run_id",
