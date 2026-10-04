@@ -146,12 +146,6 @@ def rollback_problems(
     problems = [layout.problem for layout in (was, now) if layout.problem]
     if problems:
         return problems
-    codecs = record_codec(older, repo), record_codec(release, repo)
-    if codecs[0] != codecs[1]:
-        problems.append(
-            f"{older} reads host records by codec {codecs[0]}, not {codecs[1]}: "
-            f"it refuses the records {release} wrote (D106)"
-        )
     if was.schema != now.schema:
         problems.append(
             f"{older} reads the {was.schema} schema, not {now.schema}: it would "
@@ -168,6 +162,12 @@ def rollback_problems(
         problems.append(
             f"{older}'s migrations are not {release}'s, in order and byte for "
             "byte: its app refuses the store (STORE_SCHEMA_DRIFT)"
+        )
+    codecs = record_codec(older, repo), record_codec(release, repo)
+    if codecs[0] != codecs[1]:
+        problems.append(
+            f"{older} reads host records by codec {codecs[0]}, not {codecs[1]}: "
+            f"it refuses the records {release} wrote (D106)"
         )
     return problems
 

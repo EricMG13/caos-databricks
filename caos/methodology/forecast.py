@@ -49,6 +49,13 @@ def _assignment(pointer: str, value: object) -> str:
     return pointer + _SEPARATOR + json.dumps(value, ensure_ascii=False)
 
 
+def carries(markdown: bytes, quote: str) -> bool:
+    """Whether a handoff's Markdown holds `quote` as written: the binder's
+    own test, raw text and no word matching, for the owner's handoff and
+    CP-CF's alike (`validate_forecast_bindings`)."""
+    return quote in markdown.decode("utf-8")
+
+
 def binds_input(owner: str, quote: str) -> bool:
     """Whether CP-CF would bind `quote`, cited by `owner`, as a calculation
     input (D106): a line of it states a value (`_assignment`'s form, a
@@ -176,8 +183,8 @@ def validate_forecast_bindings(
             or not isinstance(quote, str)
             or assignment not in quote.splitlines()
             or quote not in {c.matched_text for c in citations.get(owner, ())}
-            or quote not in upstream[owner].decode("utf-8")
-            or quote not in markdown.decode("utf-8")
+            or not carries(upstream[owner], quote)
+            or not carries(markdown, quote)
         ):
             raise Refusal(RefusalCode.HANDOFF_INCOMPLETE)
 

@@ -673,8 +673,13 @@ def test_cp_cf_second_attempt_names_the_driver_row_it_could_not_map(
 
 
 class _SlippedOnce(ForecastCompletions):
-    """CP-4's first answer cites each assignment line with a word added: the
-    NB1 audit's wedge (`cpcf_wedge_probe.py`), unverified quotes CP-CF needs."""
+    """CP-4's first answer slips its binding quotes, as the NB1 audit's
+    probes did: "restated" cites each assignment line with a word added
+    (`cpcf_wedge_probe.py`, unverified); "unlinked" cites them exactly and
+    leaves them out of the body (`fix_probes.py::test_unlinked`, anchored
+    but not in the Markdown CP-CF binds from)."""
+
+    mode = "restated"
 
     def complete(self, prompt: str, *, json_object: bool = False) -> Completion:
         done = super().complete(prompt, json_object=json_object)
@@ -686,15 +691,22 @@ class _SlippedOnce(ForecastCompletions):
         assert done.content is not None
         answer = json.loads(done.content)
         for citation in answer["citations"]:
-            citation["matched_text"] += " restated"
+            if self.mode == "restated":
+                citation["matched_text"] += " restated"
+            else:
+                answer["canonical_markdown"] = answer["canonical_markdown"].replace(
+                    citation["matched_text"], ""
+                )
         return replace(done, content=json.dumps(answer))
 
 
+@pytest.mark.parametrize("mode", ["restated", "unlinked"])
 def test_a_calculation_input_that_does_not_anchor_gets_a_guided_retry(
-    harness: _Harness,
+    harness: _Harness, mode: str
 ) -> None:
     """D106's one exception (owner: "Calc inputs must anchor"): CP-4's
-    unverified binding quotes refuse its answer `HANDOFF_INCOMPLETE`, a
+    binding quotes that CP-CF could not bind -- unverified, or anchored but
+    not in its body as written -- refuse its answer `HANDOFF_INCOMPLETE`, a
     guided retry names them, the repaired answer is accepted, and CP-CF
     binds and completes rather than wedging the run at 9 of 10."""
     from conftest import priced
@@ -711,6 +723,7 @@ def test_a_calculation_input_that_does_not_anchor_gets_a_guided_retry(
     )
     harness.conn.commit()
     answers = _SlippedOnce(harness.source_id)
+    answers.mode = mode
     run_route(
         harness.conn,
         harness.blobs,
@@ -758,3 +771,35 @@ def test_binds_input_reads_the_owner_and_the_assignment_form() -> None:
     assert not binds_input("CP-1", "Opening cash was 100")
     assert not binds_input("CP-1", "/opening cash = 100")
     assert not binds_input("CP-1", "/unknown/x = 1")
+
+
+def test_carries_is_the_binders_raw_text_test() -> None:
+    """`carries` is what `validate_forecast_bindings` holds a quote to in the
+    owner's and CP-CF's Markdown: the text as written, no word matching, so
+    a quote the body writes in emphasis or with other spacing is not held."""
+    from caos.methodology.forecast import carries
+
+    body = b"## Evidence\n\n/opening/cash = 100\n**/units/scale = 1**\n"
+    assert carries(body, "/opening/cash = 100")
+    assert carries(body, "/units/scale = 1")
+    assert not carries(body, "/opening/cash =  100")
+    assert not carries(body, "/opening/cash = 101")
+
+
+def test_an_owner_quote_binds_nothing_on_a_route_without_cp_cf() -> None:
+    """The guard reads the pin: an owner's assignment-form quote that did
+    not anchor is refused only where CP-CF will bind it."""
+    from types import SimpleNamespace
+    from typing import cast
+
+    from caos.methodology.canonical import _calculation_inputs
+    from caos.methodology.executor import Assignment
+
+    def owner(*modules: str) -> Assignment:
+        nodes = [SimpleNamespace(module_id=m) for m in modules]
+        shape = SimpleNamespace(module_id="CP-4", route=SimpleNamespace(nodes=nodes))
+        return cast(Assignment, shape)
+
+    quotes = ["/contractual/0/amount = 5", "Revenue was 900"]
+    assert _calculation_inputs(owner("CP-0", "CP-4", "CP-CF"), quotes) == [0]
+    assert _calculation_inputs(owner("CP-0", "CP-4", "CP-5"), quotes) == []

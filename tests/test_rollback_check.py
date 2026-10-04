@@ -134,8 +134,10 @@ def test_the_reviewed_rollback_targets_are_refused() -> None:
     the commit before 0040 refused the store, and 84eb06d, from before DL-1,
     started on a new store in `public`."""
     assert rollback_check.rollback_problems("HEAD", "HEAD") == []
-    [drift] = rollback_check.rollback_problems("b1c1c83^", "HEAD")
+    # Since D106 that commit also reads host records by no codec (M4).
+    drift, codec = rollback_check.rollback_problems("b1c1c83^", "HEAD")
     assert "0040_hidden_painted_over" in drift and "STORE_SCHEMA_DRIFT" in drift
+    assert codec.startswith("b1c1c83^ reads host records by codec None, not 1")
     moved = rollback_check.rollback_problems("84eb06d", "HEAD")
     assert moved[0].startswith("84eb06d reads the public schema, not caos_store")
     assert rollback_check.main(["HEAD"]) == 0
