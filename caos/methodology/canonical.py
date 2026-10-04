@@ -81,6 +81,7 @@ from caos.methodology.handoff import (
     anchoring_line,
     answer_citations,
     answer_markdown,
+    blocked_citations_bytes,
     capped,
     carried_answer,
     feedback_lines,
@@ -316,7 +317,7 @@ def execute_handoff(
 
     with execution_reads(conn):
         _run_still_holds(conn, assignment, bundle, adapter=adapter)
-        markdown, record = _answer(
+        judged = _answer(
             conn,
             bundle,
             blobs,
@@ -326,6 +327,11 @@ def execute_handoff(
             carried=carried,
             content=content,
         )
+    # The runtime re-derives a Blocked verdict, its citations with it, from
+    # the stored body (`replay_billed`); the live call only says so.
+    if isinstance(judged, BlockedAnswer):
+        raise Refusal(RefusalCode.HANDOFF_BLOCKED)
+    markdown, record = judged
     return HandoffOutcome(
         markdown=markdown,
         record=record,
@@ -411,13 +417,14 @@ def _answer(  # noqa: PLR0913 -- one recorded answer, keyword-only
     context: _Context,
     carried: DeliveredAuthority,
     content: str,
-) -> tuple[bytes, bytes]:
+) -> tuple[bytes, bytes] | BlockedAnswer:
     """The one post-call verdict on a recorded answer: its Markdown and record.
 
     Inside the caller's read unit, after it checked the attempt and the stored
     pin; the live call and `replay_billed` both decide here, so they cannot
-    drift. `identity` is what the call was asked under. Refuses
-    `HANDOFF_BLOCKED` for a validated Blocked handoff, anchored or not (D106).
+    drift. `identity` is what the call was asked under. A validated Blocked
+    handoff, anchored or not (D106), is a `BlockedAnswer` carrying its
+    citations as judged, for the run's blocking verdict to keep.
     """
     # The identity carries every accepted upstream digest, so this one
     # comparison also catches an upstream rewritten during the call.
@@ -452,7 +459,7 @@ def _answer(  # noqa: PLR0913 -- one recorded answer, keyword-only
     # answer, a Blocked one included. Its quotes are judged as any answer's
     # first, so one the host could not keep still refuses it as malformed.
     if projections is None:
-        raise Refusal(RefusalCode.HANDOFF_BLOCKED)
+        return BlockedAnswer(blocked_citations_bytes(anchored, unverified))
     # F494: every consumer measures these bytes against the upstream bound
     # (`invocation._upstream_section`), so a handoff over it would be accepted
     # here and refused at every next node, where no retry of this one reaches.
@@ -509,7 +516,7 @@ def _partitioned(
         if isinstance(found, AnchoredCitation):
             anchored.append(found if held else replace(found, linked=False))
         else:
-            unverified.append(unverified_citation(citation, found))
+            unverified.append(unverified_citation(citation, found, linked=held))
     return tuple(anchored), tuple(unverified)
 
 
@@ -1303,12 +1310,24 @@ class Verdict(StrEnum):
 @dataclass(frozen=True, slots=True)
 class Replayed:
     """One billed, unaccepted, unexplained attempt and its re-derived verdict:
-    the outcome to accept when ANSWERED, the refusal's code when REFUSED."""
+    the outcome to accept when ANSWERED, the refusal's code when REFUSED, the
+    Blocked answer's citations as judged when BLOCKED (D106)."""
 
     attempt_id: UUID
     verdict: Verdict
     outcome: HandoffOutcome | None = None
     code: RefusalCode | None = None
+    citations: bytes | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class BlockedAnswer:
+    """A validated Blocked handoff's verdict (D106): no record is written, so
+    its citations, judged as any answer's, are what it keeps --
+    `handoff.blocked_citations_bytes`, stored beside the run's blocking
+    verdict for the blocked view."""
+
+    citations: bytes
 
 
 def unexplained_charge(
@@ -1400,18 +1419,19 @@ def replay_billed(  # noqa: PLR0913 -- one run's nodes, keyword-only
             conn, assignment, bundle, adapter=methodology.CANONICAL_ADAPTER_VERSION
         )
         try:
-            markdown, record = _replayed_answer(conn, blobs, bundle, assignment, body)
+            judged = _replayed_answer(conn, blobs, bundle, assignment, body)
         except Refusal as refusal:
             if refusal.code in _STORE_FAULTS:
                 raise
             code = refusal.code
         else:
+            if isinstance(judged, BlockedAnswer):
+                return Replayed(attempt_id, Verdict.BLOCKED, citations=judged.citations)
+            markdown, record = judged
             outcome = HandoffOutcome(
                 markdown, record, charge, str(model), str(generation), str(diagnostic)
             )
             return Replayed(attempt_id, Verdict.ANSWERED, outcome=outcome)
-        if code is RefusalCode.HANDOFF_BLOCKED:
-            return Replayed(attempt_id, Verdict.BLOCKED)
         return Replayed(attempt_id, Verdict.REFUSED, code=code)
     return None
 
@@ -1472,7 +1492,7 @@ def _replayed_answer(
     bundle: Bundle,
     assignment: Assignment,
     body: str | None,
-) -> tuple[bytes, bytes]:
+) -> tuple[bytes, bytes] | BlockedAnswer:
     """`_answer` over a stored body, with the context its call was built from."""
     if body is None:
         raise Refusal(RefusalCode.PROVIDER_RESPONSE_INVALID)

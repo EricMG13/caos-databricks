@@ -158,6 +158,8 @@ def _edited(
         lambda d: d["unverified"][0].__setitem__("matched_text", "bell \u0007"),
         lambda d: d["unverified"][0].__setitem__("matched_text", "Cafe\u0301"),
         lambda d: d["unverified"][0].__setitem__("extra", 1),
+        lambda d: d["unverified"][0].__setitem__("linked", True),
+        lambda d: d["unverified"][0].__setitem__("linked", 0),
         lambda d: d["unverified"][0].pop("code"),
         lambda d: d.__setitem__("unverified", [d["unverified"][0]] * MAX_CITATIONS),
     ],
@@ -333,7 +335,9 @@ def test_the_partition_keeps_order_codes_and_links(
     ]
     assert unverified == (
         UnverifiedCitation(SOURCE, 2, "second", RefusalCode.CITATION_AMBIGUOUS),
-        UnverifiedCitation(SOURCE, 4, "fourth", RefusalCode.CITATION_NOT_LOCATED),
+        UnverifiedCitation(
+            SOURCE, 4, "fourth", RefusalCode.CITATION_NOT_LOCATED, linked=False
+        ),
         UnverifiedCitation(SOURCE, 5, "fifth", RefusalCode.CITATION_NOT_DELIVERED),
     )
     monkeypatch.setattr(
@@ -468,3 +472,44 @@ def test_a_blocked_answer_s_quotes_are_judged_before_its_verdict(
 
     answers = _BlockedOnABadQuote(harness.source_id, qa_status="Blocked")
     assert _refused(harness, "CP-0", answers) is RefusalCode.HANDOFF_MALFORMED
+
+
+def test_an_unverified_citation_keeps_whether_the_body_carries_it() -> None:
+    """NB2 review: an unverified quote the body does not carry is written
+    `linked: false`, as an anchored one is, and reads back so; absent is
+    linked, so every record before it keeps its bytes."""
+    unlinked = dataclasses.replace(LOST, linked=False)
+    record = _excerpt_record(unverified=(LOST, unlinked))
+    data = record_bytes(record)
+    written = json.loads(data)["unverified"]
+    assert "linked" not in written[0] and written[1]["linked"] is False
+    decoded = _decoded_record(data)
+    assert decoded == record and record_bytes(decoded) == data
+    assert [u.linked for u in decoded.unverified] == [True, False]
+
+
+def test_a_blocked_answer_s_citations_read_back_only_as_written(
+    tmp_path: Path,
+) -> None:
+    """D106, owner: "Show its quotes". A Blocked answer writes no record;
+    its citations as judged -- anchored with their lines, and unverified --
+    are one canonical blob the blocking verdict names, read back only in
+    that form (`ARTIFACT_RECORD_MISMATCH` otherwise)."""
+    from caos.blobs import BlobStore
+    from caos.methodology.handoff import (
+        blocked_citations_bytes,
+        read_blocked_citations,
+    )
+
+    [anchored] = _excerpt_record().citations
+    blobs = BlobStore(tmp_path / "blobs")
+    data = blocked_citations_bytes((anchored,), (LOST,))
+    assert json.loads(data)["format"] == "caos-blocked-citations-v1"
+    assert read_blocked_citations(blobs, blobs.put(data)) == ((anchored,), (LOST,))
+    document = json.loads(data)
+    document["unverified"] = []
+    odd = json.dumps(document).encode()
+    with pytest.raises(Refusal, match=r"^ARTIFACT_RECORD_MISMATCH$"):
+        read_blocked_citations(blobs, blobs.put(odd))
+    with pytest.raises(ValueError):
+        blocked_citations_bytes((), ())

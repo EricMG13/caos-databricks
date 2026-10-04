@@ -140,3 +140,22 @@ def test_the_reviewed_rollback_targets_are_refused() -> None:
     assert moved[0].startswith("84eb06d reads the public schema, not caos_store")
     assert rollback_check.main(["HEAD"]) == 0
     assert rollback_check.main(["84eb06d"]) == 1
+
+
+def test_a_release_whose_record_codec_moved_cannot_be_rolled_back(
+    repo: Path,
+) -> None:
+    """M4 (D106): the same migrations, but an older record codec, is an app
+    that refuses every record the release wrote, so it is no rollback; the
+    same codec on both sides is."""
+    codec = "caos/methodology/handoff.py"
+    older = _commit(repo, {**_store(), codec: "RECORD_FORMAT = 'v2'\n"}, "older")
+    release = _commit(repo, {codec: "RECORD_CODEC_VERSION = 1\n"}, "release")
+    assert rollback_check.record_codec(older, repo) is None
+    assert rollback_check.record_codec(release, repo) == 1
+    assert rollback_check.rollback_problems(older, release, repo) == [
+        f"{older} reads host records by codec None, not 1: it refuses the "
+        f"records {release} wrote (D106)"
+    ]
+    same = _commit(repo, {"caos/serve.py": "a = 1\n"}, "same codec")
+    assert rollback_check.rollback_problems(release, same, repo) == []
