@@ -700,13 +700,15 @@ def _one_excerpt(
     hit refuses at once: a quote costs one scan per needle, however many
     near places the page holds -- 64 quotes of a 240,000-token page of one
     word took 11.5 s when each near place was rejected in Python. A quote
-    standing for more than `MAX_EDGE_NEEDLES` pairs of keys is refused, and
+    standing for more than `MAX_EDGE_NEEDLES` pairs of keys is refused
+    `CITATION_AMBIGUOUS` -- the host cannot tell which of so many forms it
+    is, and D94 never re-anchors such a quote elsewhere (fix round 2) -- and
     one whose interior is in no line is found nowhere in one scan."""
     if edges and next(flat.places(words[1:-1]), None) is None:
         return None
     needles = flat.edge_needles(words) if edges else [list(words)]
     if needles is None:
-        raise Refusal(RefusalCode.CITATION_NOT_LOCATED)
+        raise Refusal(RefusalCode.CITATION_AMBIGUOUS)
     found: int | None = None
     for needle in needles:
         for at in flat.places(needle):
@@ -1638,15 +1640,23 @@ def whole_line_of(text: str, line: str) -> bool:
 
 
 def within_line(matched_text: str, line_text: str) -> bool:
-    """Whether `matched_text` could be an excerpt of `line_text` (D105): what
-    a stored `EXCERPT` record's line is held to when it is read or written,
-    a necessary condition only -- the proof re-anchors the quote. Both are
-    compared NFC with every space dropped and the quote's edge punctuation
-    stripped, a form no pass of `_excerpt_run` reaches past (edge
-    forgiveness, NFC, the tracked-letter join), so no line a quote anchored
-    in is refused, and a line it cannot come from is."""
-    quote = "".join(_nfc(matched_text).split()).strip(EDGE_PUNCTUATION)
-    return bool(quote) and quote in "".join(_nfc(line_text).split())
+    """Whether `matched_text` is an excerpt of `line_text` (D105): what a
+    stored `EXCERPT` record's line is held to when it is read or written,
+    by anchoring's own test (`_excerpt_run`) over the line alone, each of its
+    words a token -- the interior a run of its words, the first and last
+    standing for the quote's less edge punctuation with a figure's marks
+    kept, NFC, and the tracked-letter join -- so no line a quote anchored in
+    is refused (fix round 2). Found twice in the line is still within it;
+    that it is the line the quote anchors in is the proof's to re-derive."""
+    words = line_text.split()
+    page = _Page(
+        [_Token(word, 0, 0, at, 0.0, at + 1.0, 1.0) for at, word in enumerate(words)]
+    )
+    try:
+        _excerpt_run(page, {0: (len(words),)}, {0: ("L",)}, matched_text, tracking=True)
+    except Refusal as refused:
+        return refused.code is RefusalCode.CITATION_AMBIGUOUS
+    return True
 
 
 def _overruns(line: list[str], words: list[str]) -> bool:

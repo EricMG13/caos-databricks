@@ -501,6 +501,17 @@ def test_a_repeated_line_or_a_straddle_is_told_what_it_is(
     straddle = Citation(source_id, 1, "during FY2025. Liquidity")
     found = _line_hint(conn, delivered, blocks, straddle, TokenIndex())
     assert found == LineHint(across=True)
+    # The next line never delivered: never named, so no straddle is told.
+    first = [d for d in delivered if d.text.value == LINE]
+    alone = {source_id: frozenset(d.block_id for d in first)}
+    unsent = _line_hint(conn, first, alone, straddle, TokenIndex())
+    assert unsent == LineHint(absent=True)
+    # Running past its line keeping six of its words: keep eight, or all.
+    runs_on = "breach its leverage covenant during FY2025. Liquidity"
+    over = Citation(source_id, 1, runs_on)
+    ends = " ".join(LINE.split()[-8:])
+    hinted = _line_hint(conn, delivered, blocks, over, TokenIndex())
+    assert hinted == LineHint(near=1, ends=ends, short=True)
 
 
 def test_a_search_that_cannot_read_a_page_leaves_the_citation_unplaced(
