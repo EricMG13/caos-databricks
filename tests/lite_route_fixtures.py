@@ -41,6 +41,7 @@ from canonical_fixtures import (
     identity,
     skill,
     wire,
+    with_markers,
 )
 
 from caos.methodology.bundle import verified_bytes
@@ -477,6 +478,7 @@ class RealisticLiteCompletions:
                 quotes=self.quotes,
             ),
         )
+        markdown = with_markers(markdown, len(self.quotes))
         self.answers.append(markdown)
         citations = [
             {"source_id": str(self.source_id), "page": 1, "matched_text": quote}

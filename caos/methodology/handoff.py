@@ -1063,33 +1063,68 @@ def _carried(window: list[str], wanted: list[str]) -> bool:
     )
 
 
+def _body(text: str) -> str:
+    """The Markdown after its front matter, with its backslash escapes read
+    as the marks they write: `\\[C3\\]` is `[C3]`, as a reader sees it. The
+    front matter is host identity, not analysis, so no marker stands in it."""
+    lines = text.split("\n")
+    if lines[:1] == ["---"] and "---" in lines[1:]:
+        lines = lines[lines.index("---", 1) + 1 :]
+    return _MARKDOWN_ESCAPE.sub(r"\1", "\n".join(lines))
+
+
+# D107: the body names a citation by its 1-based place in the list, `[C3]`,
+# or several in one bracket, `[C3, C4]`: exactly `C` and ASCII digits, read
+# anywhere after the front matter, fenced code included. Anything else is
+# text -- `[c3]`, `[C 3]`, `[C3-C5]`, `[C3,4]` -- and only told as a hint
+# (`_NEAR_MARKER`, `_unmarked_line`), never refused.
+_MARKER = re.compile(r"\[(C[0-9]{1,9}(?:, ?C[0-9]{1,9})*)\]")
+_MARKER_NUMBER = re.compile(r"[0-9]+")
+# A bracket that reads like a marker and is not one: a `c` of either case and
+# a digit, spaces allowed between them, then anything short up to its close.
+_NEAR_MARKER = re.compile(r"\[ *[Cc] *[0-9][^\[\]\n]{0,24}\]")
+
+
+def markers(text: str) -> tuple[int, ...]:
+    """Every citation number the Markdown body names (D107), in order, a
+    repeat included: `[C3]` is 3, `[C3, C4]` is 3 and 4."""
+    return tuple(
+        int(number)
+        for found in _MARKER.finditer(_body(text))
+        for number in _MARKER_NUMBER.findall(found.group(1))
+    )
+
+
+def _dangling(named: Sequence[int], count: int) -> list[int]:
+    """The marker numbers that name no citation of `count`, each once, in
+    the body's order: structural, refusing the answer (D107)."""
+    return list(dict.fromkeys(n for n in named if not 1 <= n <= count))
+
+
 def parse_response(
     body: str,
 ) -> tuple[bytes, tuple[Citation, ...], tuple[bool, ...]]:
     """The exact Markdown bytes, the citation requests beside them, and
-    whether the body carries each quote verbatim, or a refusal.
+    whether a marker in the body names each (D107), or a refusal.
 
     The transport is `{"canonical_markdown", "citations"}` and nothing else, at
     either level, with duplicate keys refused, and at most `MAX_CITATIONS` of
-    them; a transport that is not this refuses `HANDOFF_MALFORMED`. Since
-    D106 nothing else here refuses: a citation naming evidence the node was
-    not given is kept as unverified, and one the body does not carry is
-    flagged not linked to a statement (`AnchoredCitation.linked`) -- the
-    citation's fault, never the answer's.
+    them; a transport that is not this refuses `HANDOFF_MALFORMED`, and so
+    does a body whose marker names no citation (`[C9]` beside 8): which one
+    it meant is undecidable. A citation naming evidence the node was not
+    given is kept as unverified (D106), and one no marker names is flagged
+    not linked to a statement (`AnchoredCitation.linked`) -- the citation's
+    fault, never the answer's.
     Anchoring in the token index needs the store and is the executor's step.
     """
     markdown, text, citations = _or_refuse(
         RefusalCode.HANDOFF_MALFORMED, lambda: _transport(body)
     )
-    return markdown, citations, _linked(text, citations)
-
-
-def _linked(text: str, citations: Sequence[Citation]) -> tuple[bool, ...]:
-    """Whether the body after the front matter carries each quote verbatim,
-    typography aside (`_quoted`), in order."""
-    words = _body_words(text)
-    openings = _openings(words)
-    return tuple(_quoted(words, openings, c.matched_text) for c in citations)
+    named = markers(text)
+    if _dangling(named, len(citations)):
+        raise Refusal(RefusalCode.HANDOFF_MALFORMED)
+    held = frozenset(named)
+    return markdown, citations, tuple(n in held for n in range(1, len(citations) + 1))
 
 
 # What a node's guided retry may carry (D30, D82): at most this many checks,
@@ -1165,7 +1200,8 @@ def feedback_lines(
     host = (
         _text_line(markdown),
         _uncrossed_line(citations),
-        _quote_line(text, citations),
+        _dangling_line(text, len(citations)),
+        _unmarked_line(text, len(citations)),
         *_front_matter_lines(contract, identity, getattr(checked, "fields", None)),
         _absent_ids_line(contract, identity.module_id, text, skill),
         _blocker_line(contract, catalog, text)
@@ -1416,20 +1452,52 @@ def _uncrossed_line(citations: Sequence[Citation]) -> str | None:
     )
 
 
-def _quote_line(text: str, citations: Sequence[Citation]) -> str | None:
-    """Which citations the body does not quote verbatim, by number (N51).
-    Advisory since D106: such a citation is kept, not linked to a
-    statement, and never refuses an answer, so the line rides only along
-    a retry some other check earned (`ADVISORY`)."""
-    linked = _linked(text, citations)
-    failed = [number for number, held in enumerate(linked, 1) if not held]
+def _dangling_line(text: str, count: int) -> str | None:
+    """The markers that name no citation (D107), each as `[C<n>]` -- the
+    model's own number, never its text -- and the count they must stay
+    within: the check that refused the answer (`parse_response`)."""
+    dangling = _dangling(markers(text), count)
+    if not dangling:
+        return None
+    shown = [f"[C{n}]" for n in dangling[:MAX_FEEDBACK_CITATIONS]]
+    rest = len(dangling) - len(shown)
+    more = f" and {rest} more" if rest else ""
+    names = "it names" if len(dangling) == 1 else "they name"
+    cited = "citation" if count == 1 else "citations"
+    return (
+        f"host marker check: the Markdown body writes {', '.join(shown)}{more},"
+        f" but the answer has {count} {cited}, so"
+        f" {names} none; a marker [C<n>] names the citation at place n of the"
+        f" list, from [C1] to [C{count}]"
+    )
+
+
+def _unmarked_line(text: str, count: int) -> str | None:
+    """Which citations no marker names, by number (D107), and how many
+    bracketed forms the body writes that read like a marker and are not one
+    (`_NEAR_MARKER`). Advisory: such a citation is kept, not linked to a
+    statement, and never refuses an answer, so the line rides only along a
+    retry some other check earned (`ADVISORY`)."""
+    named = frozenset(markers(text))
+    failed = [n for n in range(1, count + 1) if n not in named]
     if not failed:
         return None
-    verb = "quotes" if len(failed) == 1 else "quote"
+    near = sum(
+        _MARKER.fullmatch(found.group()) is None
+        for found in _NEAR_MARKER.finditer(_body(text))
+    )
+    one = len(failed) == 1
+    hint = (
+        f"; the body writes {near} bracketed {'form' if near == 1 else 'forms'}"
+        " the host does not read as a marker: write each exactly as [C3], or"
+        " [C3, C4] for several, an upper-case C and no space or range"
+        if near
+        else ""
+    )
     return (
-        f"host citation check: {_numbered(failed)} of {len(citations)} {verb} text"
-        " that does not appear verbatim in the Markdown body (numbered from 1 in"
-        f" the order given){ADVISORY}"
+        f"host marker check: {_numbered(failed)} of {count} {'is' if one else 'are'}"
+        " named by no [C<n>] marker in the Markdown body (numbered from 1 in the"
+        f" order given){hint}{ADVISORY}"
     )
 
 

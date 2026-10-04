@@ -329,6 +329,13 @@ def upstream_ref(identity: HostIdentity, markdown: bytes) -> UpstreamRef:
     )
 
 
+def with_markers(markdown: bytes, count: int) -> bytes:
+    """`markdown` closed by one line naming each of `count` citations by its
+    marker, `[C1]` for the first (D107), so each is linked to a statement."""
+    named = " ".join(f"[C{n}]" for n in range(1, count + 1))
+    return markdown + f"Cited {named}.\n".encode()
+
+
 def wire(markdown: bytes, citations: list[dict[str, object]]) -> str:
     """The closed provider transport `{canonical_markdown, citations}` (§41)."""
     return json.dumps(
@@ -441,6 +448,8 @@ class CanonicalCompletions:
                 (
                     f"{QUOTE} was recorded. {UNANCHORED} here.",
                     *(c[1] for c in self.cited),
+                    # D107: a marker names each citation, in list order.
+                    *(f"[C{n}]" for n in range(1, len(self.quotes + self.cited) + 1)),
                 )
             ),
         )
