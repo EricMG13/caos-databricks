@@ -114,7 +114,7 @@ def test_extract_record_reads_a_fixture_handoff_and_scores_its_answer_keys(
     assert "Analysis" in record["h2"]
     assert set(record["registers"]) == set(record["required_registers"])
     assert "T8" in record["registers"]
-    assert record["citations"] == {"count": 1, "anchored": 1}
+    assert record["citations"] == {"count": 1, "anchored": 1, "unverified": 0}
     met = {
         (key["kind"], json.dumps(key["key"])): key["met"]
         for key in record["answer_keys"]

@@ -297,13 +297,13 @@ def test_a_blocked_or_refused_attempt_never_reaches_a_consumer_prompt(
     screens = [_reserved(harness, "CP-L10") for _ in range(3)]
     probes = [_reserved(harness, "CP-5") for _ in range(2)]
     blocked = CanonicalCompletions(harness.source_id, qa_status="Blocked")
-    # A Blocked answer on an unanchored quote: still refused under D106.
+    # An answer naming another run: refused, its body still a diagnostic.
     unanchored = CanonicalCompletions(
-        harness.source_id, quotes=(UNANCHORED,), qa_status="Blocked"
+        harness.source_id, mutate=lambda f: {**f, "run_id": "COS-other"}
     )
     for screen, answers, code in (
         (screens[0], blocked, RefusalCode.HANDOFF_BLOCKED),
-        (screens[1], unanchored, RefusalCode.CITATION_NOT_LOCATED),
+        (screens[1], unanchored, RefusalCode.HANDOFF_IDENTITY_MISMATCH),
     ):
         with pytest.raises(Refusal) as refused:
             _screened(harness, screen, answers)

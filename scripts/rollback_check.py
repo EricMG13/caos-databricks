@@ -7,7 +7,10 @@ then refuses code whose migration list is any other (`apply_schema` answers
 does not start). Code from before DL-1 (F219) reads `public` rather than
 `caos_store`, so it starts on an empty store beside the real one. A redeploy
 is therefore a rollback only when the older commit carries exactly the
-release's migrations, byte for byte and in order, and reads the same schema:
+release's migrations, byte for byte and in order, reads the same schema,
+and reads and writes the same host records (`RECORD_CODEC_VERSION` in
+`caos/methodology/handoff.py`, D106: an older codec refuses the release's
+records, and every reader of them then refuses the run):
 
     uv run python scripts/rollback_check.py <older> [--release <commit>]
 
@@ -33,6 +36,7 @@ from tracked import blob_at
 
 REPO = Path(__file__).resolve().parents[1]
 STORE = "caos/store"
+CODEC = "caos/methodology/handoff.py"
 # What code with no `STORE_SCHEMA` reads: Postgres's default search path.
 PUBLIC = "public"
 
@@ -121,6 +125,18 @@ def store_layout(rev: str, repo: Path = REPO) -> StoreLayout:
     return StoreLayout(str(read), tuple(migrations))
 
 
+def record_codec(rev: str, repo: Path = REPO) -> object:
+    """`rev`'s `RECORD_CODEC_VERSION` as git recorded it, or None for a
+    commit whose codec module names none (every one before D106)."""
+    source = blob_at(repo, rev, CODEC)
+    try:
+        tree = ast.parse(source or "")
+    except SyntaxError:
+        return None
+    value = _module_constants(tree).get("RECORD_CODEC_VERSION")
+    return value.value if isinstance(value, ast.Constant) else None
+
+
 def rollback_problems(
     older: str, release: str = "HEAD", repo: Path = REPO
 ) -> list[str]:
@@ -130,6 +146,12 @@ def rollback_problems(
     problems = [layout.problem for layout in (was, now) if layout.problem]
     if problems:
         return problems
+    codecs = record_codec(older, repo), record_codec(release, repo)
+    if codecs[0] != codecs[1]:
+        problems.append(
+            f"{older} reads host records by codec {codecs[0]}, not {codecs[1]}: "
+            f"it refuses the records {release} wrote (D106)"
+        )
     if was.schema != now.schema:
         problems.append(
             f"{older} reads the {was.schema} schema, not {now.schema}: it would "
