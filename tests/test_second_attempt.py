@@ -744,6 +744,43 @@ def test_the_anchoring_line_tells_a_quote_that_runs_past_its_line() -> None:
     assert 0 < capped_line.count("runs past the end") < MAX_FEEDBACK_CITATIONS
 
 
+def test_the_anchoring_line_tells_a_repeated_line_a_straddle_and_a_short_overrun() -> (
+    None
+):
+    """Fix round 1 of D105: an ambiguous quote that is a whole line cannot
+    be lengthened within it, so it is told the line cannot be cited there; a
+    quote running from one line onto the next is told so, not that it is
+    short; and an overrun keeping fewer than eight words of its line is told
+    to keep at least eight or quote the whole line."""
+    lost = RefusalCode.CITATION_NOT_LOCATED
+    ends = "and take all actions required by such Security"
+    line = anchoring_line(
+        [RefusalCode.CITATION_AMBIGUOUS, lost, lost, RefusalCode.CITATION_AMBIGUOUS],
+        [
+            LineHint(repeated=True),
+            LineHint(across=True),
+            LineHint(near=23, ends=ends, short=True),
+        ],
+    )
+    assert line == (
+        "host anchoring check: citation 1 of 4 is a whole evidence line that"
+        " appears more than once on its cited page, so it cannot be cited there;"
+        " cite another line, or a longer excerpt where one exists;"
+        " citation 2 of 4 runs from one evidence line onto the next; quote within"
+        " one line: at least 8 consecutive words of it, or the whole line if"
+        " shorter;"
+        " citation 3 of 4 runs past the end of the evidence line of page 23,"
+        f' which ends "{ends}"; stop where the line ends, keeping at least 8'
+        " words of it, or quote the whole line (text after it is a separate"
+        " evidence line);"
+        " citation 4 of 4 occurs more than once on its cited page; quote a longer"
+        " excerpt that occurs once;"
+        " any citation you add or change must be an exact excerpt of one evidence"
+        " line of its cited page, at least 8 consecutive words or the whole line"
+        " if shorter (numbered from 1 in the order given)"
+    )
+
+
 def test_the_anchoring_line_tells_an_unknown_source_and_a_row_missing_cells() -> None:
     """F495: citations naming a source_id the request never offered are
     told so, grouped by that id, with the source holding their lines when

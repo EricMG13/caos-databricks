@@ -474,6 +474,35 @@ def test_a_placed_citation_is_told_it_is_too_short_or_where_it_is(
     assert hint("Leverage was unchanged") == LineHint(absent=True)
 
 
+def test_a_repeated_line_or_a_straddle_is_told_what_it_is(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> None:
+    """Fix round 1 of D105: a whole line the page holds twice is ambiguous
+    however long an excerpt of it is, so the retry is told it cannot be
+    cited there, from the delivered text alone; and a short quote running
+    from one line onto the next is told that, not that it is short."""
+    from caos.evidence.citations import TokenIndex
+    from caos.methodology.canonical import _anchoring_line, _line_hint
+    from caos.methodology.executor import Delivery
+    from caos.methodology.handoff import LineHint
+
+    conn, case_id = case
+    source_id = _admit(conn, case_id, tmp_path)
+    delivered = [
+        Delivery(source_id, block_id, page, BoundaryText.of(text))
+        for page, blocks in _blocks_by_page(conn, source_id).items()
+        for block_id, text in blocks.items()
+    ]
+    line = _anchoring_line(conn, delivered, [Citation(source_id, 1, "Repeated line")])
+    assert line is not None
+    assert "is a whole evidence line that appears more than once" in line
+    assert "quote a longer excerpt" not in line
+    blocks = {source_id: frozenset(d.block_id for d in delivered)}
+    straddle = Citation(source_id, 1, "during FY2025. Liquidity")
+    found = _line_hint(conn, delivered, blocks, straddle, TokenIndex())
+    assert found == LineHint(across=True)
+
+
 def test_a_search_that_cannot_read_a_page_leaves_the_citation_unplaced(
     case: tuple[StoreConnection, UUID],
     tmp_path: Path,
