@@ -20,6 +20,7 @@ from canonical_fixtures import (
     skill,
     whole_line,
     wire,
+    with_markers,
 )
 from lite_route_fixtures import _table, _yaml
 
@@ -676,6 +677,7 @@ class EarningsCompletions:
         markdown = cp1b_markdown(
             cp1b_identity(module), fields=fields, readiness=self.readiness
         )
+        markdown = with_markers(markdown, 1)
         self.answers.append(markdown)
         return Completion(
             wire(

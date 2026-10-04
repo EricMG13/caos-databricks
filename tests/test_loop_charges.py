@@ -263,7 +263,9 @@ def test_a_module_whose_citations_cannot_be_anchored_still_completes(
         stored = _decoded_record(blobs.get(str(digest)))
         assert stored.citations == ()
         assert stored.unverified == (
-            UnverifiedCitation(stranger, 1, QUOTE, RefusalCode.CITATION_NOT_DELIVERED),
+            UnverifiedCitation(
+                stranger, 1, QUOTE, RefusalCode.CITATION_NOT_DELIVERED, marker=1
+            ),
         )
 
 

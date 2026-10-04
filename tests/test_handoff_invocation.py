@@ -702,18 +702,42 @@ def test_the_prompt_repeats_the_closed_contract_after_evidence(
         f" evidence line, character for character: at least {MIN_EXCERPT_WORDS}"
         " consecutive words, or the whole line if it has fewer, including any"
         " leading bullet or footnote marker and any trailing `|`. The excerpt"
-        " stays within that one line and appears exactly once on its cited page;"
-        " the same excerpt appears verbatim in the Markdown body after the front"
-        " matter, beside the statement it supports (in its Evidence Trace row or"
-        " the sentence that states it)," in compact
+        " stays within that one line and appears exactly once on its cited"
+        " page." in compact
     )
     assert "one entire evidence line" not in compact
-    assert 'own wording ("we", "our", "us"), never rephrased' in compact
-    # D102: R3's CP-1 cited 8 lines for 274 figures; one citation read as enough.
+    # D107 (owner, 4 Oct: "Numbered markers"): the excerpt lives only in
+    # `citations`; the body cites by marker and quotes no source text, and
+    # Evidence Trace is a short locator table.
     assert (
-        "Cite the excerpt behind each material figure and each statement that a"
-        " register row or conclusion rests on, at least one citation in all, and"
-        " only excerpts that support a claim you wrote." in compact
+        "The excerpt lives only in `citations`: the Markdown body quotes no"
+        " source text and cites by marker, `[C1]` for the first citation in the"
+        " list, `[C2]` for the second, `[C2, C5]` for several, beside the"
+        " statement each supports." in compact
+    )
+    assert (
+        "Evidence Trace is a short locator table, no quotes: each row gives a"
+        " claim, its marker, the document and the page, with any column your"
+        " authority requires there. A marker that names no citation refuses the"
+        " answer." in compact
+    )
+    assert "appears verbatim in the Markdown body" not in compact
+    assert 'own wording ("we", "our", "us")' not in compact
+    # D102's coverage, as markers: R3's CP-1 cited 8 lines for 274 figures.
+    assert (
+        "Put a marker beside each material figure and each statement that a"
+        " register row or conclusion rests on, at least one citation in all,"
+        " and cite only excerpts that support a claim you wrote." in compact
+    )
+    # D106's sentence on unverified citations stays.
+    assert (
+        "A citation the host cannot locate is kept as unverified and shown to"
+        " the reader as such; it does not refuse the answer." in compact
+    )
+    assert (
+        "A marker `[C<n>]` in the Markdown names the citation at place n of"
+        " `citations`; one that names no citation is refused."
+        in " ".join(prompt.split())
     )
     assert "Include at least one citation." not in compact
     assert "`page` is the page in the nearest evidence header above that line" in (
@@ -731,6 +755,9 @@ def test_the_prompt_repeats_the_closed_contract_after_evidence(
         module_id == "CP-0"
     )
     assert "matched_text" in reminder and "Markdown body" in reminder
+    # The register tells a downstream model how to resolve a marker (D107).
+    whole = " ".join(prompt.split())
+    assert ("by which that handoff's body cites it" in whole) is bool(upstream)
 
 
 def _missing(of: HostIdentity) -> UpstreamRef:

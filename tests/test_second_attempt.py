@@ -235,6 +235,31 @@ def test_a_second_refusal_gets_a_retry_told_of_the_attempt_before_it(
     assert sorted(codes) == ["HANDOFF_INCOMPLETE", "HANDOFF_MALFORMED"]
 
 
+def _with_a_dangling_marker(body: str) -> str:
+    """The same answer citing `[C9]` beside its one citation (D107)."""
+    wire = json.loads(body)
+    wire["canonical_markdown"] += "\nAs cited [C9].\n"
+    return json.dumps(wire)
+
+
+def test_a_marker_naming_no_citation_gets_a_retry_naming_it(
+    harness: _Harness,
+) -> None:
+    """D107: a marker that names no citation is structural -- which citation
+    it meant is undecidable -- so the answer is refused `HANDOFF_MALFORMED`
+    and its guided retry is told the marker and the count, never the text."""
+    answers = CanonicalCompletions(harness.source_id)
+    assert _run(harness, _Flawed(answers, flaw=_with_a_dangling_marker)) is None
+    assert [_module(prompt) for prompt in answers.prompts[:2]] == ["CP-0", "CP-0"]
+    assert (
+        "host marker check: the Markdown body writes [C9], but the answer has 1"
+        " citation, so it names none; a marker [C<n>] names the citation at"
+        " place n of the list, from [C1] to [C1]"
+        in " ".join(answers.prompts[1].split())
+    )
+    assert _cp0_ledger(harness) == (2, 2, ["HANDOFF_MALFORMED"], 1)
+
+
 def test_a_fourth_refusal_stops_the_run_with_no_fifth_attempt(
     harness: _Harness,
 ) -> None:
@@ -1293,8 +1318,9 @@ def test_retry_feedback_reports_the_vendors_message_and_the_quote_count(
         {"source_id": str(harness.source_id), "page": 1, "matched_text": "never said"}
     )
     lines = _feedback(harness, json.dumps(wire))
-    # N51: which ones, by their place in the list, never by their text.
-    assert lines[0].startswith("host citation check: citation 2 of 2 quotes text")
+    # N51: which ones, by their place in the list, never by their text; since
+    # D107, the one no marker names.
+    assert lines[0].startswith("host marker check: citation 2 of 2 is named by no")
     assert QUOTE not in lines[0] and "never said" not in lines[0]
     assert VENDOR_LINE in [line.split(";")[0] for line in lines[1:]]
     assert all(
@@ -1325,6 +1351,7 @@ def test_retry_feedback_names_at_most_the_first_twenty_failed_citations(
     answers = CanonicalCompletions(harness.source_id)
     assert _run(harness, answers) is None
     wire = json.loads(answers.bodies[0])
+    wire["canonical_markdown"] = wire["canonical_markdown"].replace(" [C1]", "")
     wire["citations"] = [
         {"source_id": str(harness.source_id), "page": 1, "matched_text": f"absent{n}"}
         for n in range(MAX_FEEDBACK_CITATIONS + 10)

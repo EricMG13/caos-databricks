@@ -101,11 +101,14 @@ class AnchoredCitation:
     it -- under either whole-line rule the quote is its line
     (`matched_text`), and `ANY_RUN` anchors no line.
 
-    `linked` is whether the module's Markdown body carries the quote
-    verbatim, beside the statement it supports (D106): an anchored quote the
-    body does not carry is still anchored, and kept, but is "not linked to a
-    statement". Anchoring never sets it; the answer's verdict does, and a
-    re-anchoring reader carries the recorded value.
+    `linked` is whether the module's Markdown body names the citation by
+    its marker, `[C<n>]` (D107; before D107, whether the body carried the
+    quote verbatim, D106): a citation no marker names is still anchored,
+    and kept, but is "not linked to a statement". `marker` is that n, the
+    citation's 1-based place in the answer's list, on every citation
+    accepted since D107 and None on one before it. Anchoring sets neither;
+    the answer's verdict does, and a re-anchoring reader carries the
+    recorded values.
     """
 
     document_sha256: str
@@ -115,6 +118,7 @@ class AnchoredCitation:
     cited_page: int | None = None
     line_text: str | None = None
     linked: bool = True
+    marker: int | None = None
 
 
 @dataclass(frozen=True, slots=True)

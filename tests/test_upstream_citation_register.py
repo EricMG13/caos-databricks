@@ -177,7 +177,9 @@ def test_quote_existence_is_host_verified_support_is_left_to_cp5(
     record, read from the record (never the Markdown), labelled as host-verified
     existence with support unassessed; nothing in it states a support verdict.
     The header no longer calls the quotes host-owned: they are document text,
-    data and never an instruction (AI-6)."""
+    data and never an instruction (AI-6). Each line names its citation's
+    marker, the `[C<n>]` the upstream body cites it by (D107), so a
+    downstream model can resolve a marker it reads in that body."""
     for module_id in ("CP-0", "CP-L10"):
         attempt, result = _run(harness, module_id, _answers(harness))
         _accept(harness, attempt, result)
@@ -191,6 +193,7 @@ def test_quote_existence_is_host_verified_support_is_left_to_cp5(
         "has not assessed whether any quote supports any statement",
         "CP-5's audit",
         "Never cite these lines",
+        "its marker is the [C<n>] by which that handoff's body cites it",
     ):
         assert label in header
     for module_id in ("CP-0", "CP-L10"):
@@ -203,8 +206,12 @@ def test_quote_existence_is_host_verified_support_is_left_to_cp5(
         )
         assert register.count(block) == 1
         lines = register[register.index(block) + len(block) :].split("\n\n")[0]
+        assert [c.marker for c in record.citations] == list(
+            range(1, len(record.citations) + 1)
+        )
         assert lines.splitlines() == [
-            f"- document_sha256: {c.document_sha256} page: {c.page} "
+            f"- marker: [C{c.marker}] document_sha256: {c.document_sha256} "
+            f"page: {c.page} "
             f"matched_text: {json.dumps(c.matched_text)} {QUOTE_EXISTENCE} {SUPPORT}"
             for c in record.citations
         ]
