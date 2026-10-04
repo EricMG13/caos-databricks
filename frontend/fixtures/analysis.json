@@ -45,6 +45,12 @@
             "filename": "CVNA_10K_Annual_Report_FY2025.htm",
             "page": 1,
             "matched_text": "Carvana Co. is an e-commerce platform for buying and selling used cars.",
+            "line": {
+              "before": "",
+              "excerpt": "Carvana Co. is an e-commerce platform for buying and selling used cars.",
+              "after": "",
+              "recorded": true
+            },
             "rects": [
               {
                 "x0": 72.0,
@@ -84,6 +90,12 @@
             "filename": "CVNA_10Q_Quarterly_Report_Q2_2026.htm",
             "page": 4,
             "matched_text": "Adjusted EBITDA was $769 million for the three months ended June 30, 2026.",
+            "line": {
+              "before": "",
+              "excerpt": "Adjusted EBITDA was $769 million for the three months ended June 30, 2026.",
+              "after": "",
+              "recorded": true
+            },
             "rects": [
               {
                 "x0": 72.0,
@@ -101,6 +113,12 @@
             "filename": "CVNA_Q2_2026_Shareholder_Letter_NonGAAP_EBITDA.htm",
             "page": 1,
             "matched_text": "Retail units sold of 197,325 and GPU of $7,125.",
+            "line": {
+              "before": "",
+              "excerpt": "Retail units sold of 197,325 and GPU of $7,125.",
+              "after": "",
+              "recorded": false
+            },
             "rects": [
               {
                 "x0": 72.0,
@@ -2103,6 +2121,12 @@
             "filename": "CVNA_8K_Ally_FloorPlan_Credit_Agreement_Amendment.htm",
             "page": 12,
             "matched_text": "the Issuer shall not permit the Consolidated Net Leverage Ratio to exceed 3.50 to 1.00",
+            "line": {
+              "before": "As of the last day of any fiscal quarter, ",
+              "excerpt": "the Issuer shall not permit the Consolidated Net Leverage Ratio to exceed 3.50 to 1.00",
+              "after": ".",
+              "recorded": true
+            },
             "rects": [
               {
                 "x0": 60.0,

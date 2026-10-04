@@ -5,7 +5,7 @@ Status: **OFFLINE / UNVERIFIED / NOT QUALIFIED**.
 This immutable set prepares `FULL_CREDIT_32 / EARNINGS_UPDATE` for Caesars
 Entertainment, Inc. (CZR) at an analysis date of 2026-10-02. Its
 qualification-set digest is
-`7b0a36f3fb6d5a779d612aebb795695e98d49b6ed9bbd827546a65553b28650d`.
+`03b43aad16b19c0c3ce2d66b3b949a5b21f2708831b1e293ad0efe94c2677d75`.
 
 ## Corpus provenance
 
@@ -87,11 +87,13 @@ document (F475), and is listed with why it states the key's figures:
     million for the comparable prior-year period.`, its highlight sentence:
     consolidated, the quarter against the prior-year quarter;
   - the release's `Caesars | $920 | $955 | (3.7)%`, the consolidated row of its
-    quarterly Adjusted EBITDA table.
-  Not alternatives: the 10-Q's `Adjusted EBITDA | $920 | $955 | $1,807 |
-    $1,839` (its words recur inside the 10-Q's `Total Adjusted EBITDA` row, so
-    it is not a unique run, F475) and the release's six-month `Caesars | $1,807
-    | $1,839 | (1.7)%` (the six months alone).
+    quarterly Adjusted EBITDA table;
+  - the 10-Q's `Adjusted EBITDA | $920 | $955 | $1,807 | $1,839`, the
+    consolidated line its segment note reconciles net loss to. Its words also
+    run inside the MD&A's `Total Adjusted EBITDA` row, which no longer bars a
+    whole line (K2, F502).
+  Not alternatives: the release's six-month `Caesars | $1,807 | $1,839 |
+    (1.7)%` (the six months alone).
 - CP-1B, the 10-K's `Net revenues | 11,486 | 11,245 | 11,528`:
   - the 10-K's `Total | $11,486 | $11,245 | $11,528`, the total of its segment
     table's net revenues, the consolidated figure;

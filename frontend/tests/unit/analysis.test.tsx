@@ -499,6 +499,20 @@ describe("Analysis", () => {
     expect(full.querySelector("[data-screening-only]")).toBeNull();
   });
 
+  test("a fact whose record holds no line is labelled a quote, never marked", () => {
+    const { container } = mountAt(complete, "CP-1");
+    openTab(container, "audit");
+    const facts = container.querySelectorAll("[data-source-facts] [data-citation]");
+    const quoteOnly = complete.body.handoffs.find((h) => h.module_id === "CP-1")!.source_facts[1]!;
+    expect(quoteOnly.line.recorded).toBe(false);
+    const fact = facts[1]!;
+    expect(fact.querySelector("[data-line-not-recorded]")).toHaveTextContent(
+      "Quote (source line not recorded)",
+    );
+    expect(fact.querySelector("blockquote")!.textContent).toBe(quoteOnly.matched_text);
+    expect(fact.querySelector("blockquote mark")).toBeNull();
+  });
+
   test("source facts name the file, page, matched text and withdrawn state", () => {
     const { container } = mountAt(complete, "CP-4");
     openTab(container, "audit");
@@ -507,6 +521,13 @@ describe("Analysis", () => {
     expect(fact).toHaveTextContent(withdrawn.filename);
     expect(fact).toHaveTextContent(`p.${withdrawn.page}`);
     expect(fact).toHaveTextContent(withdrawn.matched_text);
+    // D105: the whole source line, its cited excerpt marked inside it, so the
+    // words just before the excerpt are on screen beside it.
+    const { before, excerpt, after } = withdrawn.line;
+    expect(before).not.toBe("");
+    expect(fact.querySelector("blockquote")!.textContent).toBe(before + excerpt + after);
+    expect(fact.querySelector("blockquote mark")!.textContent).toBe(excerpt);
+    expect(fact.querySelector("[data-line-not-recorded]")).toBeNull();
     expect(fact.getAttribute("data-withdrawn")).toBe("true");
     expect(fact).toHaveTextContent(stamp(withdrawn.withdrawn_at!));
 

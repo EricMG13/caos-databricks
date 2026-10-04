@@ -22,6 +22,7 @@ one refusal that is about safety rather than shape.
 from __future__ import annotations
 
 import json
+import unicodedata
 from dataclasses import replace
 from hashlib import sha256
 from pathlib import Path
@@ -31,7 +32,7 @@ import pytest
 from canonical_fixtures import BUNDLE, CATALOG, research_brief
 
 from caos.boundary_text import BoundaryText
-from caos.evidence.citations import _match_at, _Token
+from caos.evidence.citations import AnchoredCitation, _Token
 from caos.evidence.extract import DEFAULT_LIMITS, dispatch_by_content
 from caos.evidence.ingest import Document, token_groups
 from caos.graph.route import resolve_route
@@ -52,6 +53,7 @@ from caos.qualification.matrix import (
     unlocatable_register_keys,
 )
 from caos.qualification.on_disk import MANIFEST, load_qualification_set
+from caos.qualification.proof import cited_line
 from caos.refusals import Refusal, RefusalCode
 from caos.store.run_inputs import RunSubject, research_text
 
@@ -289,9 +291,9 @@ COMMITTED_SET_DIGESTS = {
     "ccl-fy2025-market-dislocation": (
         "c01b06c9c09b1ced76c297e0d7bf81ad07ace9e03f3e3322da81b3f85840db35"
     ),
-    "czr-2026q2": ("c7709db8b08f411e3b30531da7e57fe08c5f251c2bf75377d71a7899323fb73b"),
+    "czr-2026q2": ("927d45cf483827717ed2f322c7ff7b5a81dd7c8ab9d3e7d06c2f8d2414127c68"),
     "czr-2026q2-earnings-update": (
-        "7b0a36f3fb6d5a779d612aebb795695e98d49b6ed9bbd827546a65553b28650d"
+        "03b43aad16b19c0c3ce2d66b3b949a5b21f2708831b1e293ad0efe94c2677d75"
     ),
     "czr-2026q2-liquidity": (
         "bf108d21f6d55bdfd3c369bbecde59993e9a969d2632d97ecde37671776127f8"
@@ -303,22 +305,22 @@ COMMITTED_SET_DIGESTS = {
         "e717a3b6c4f2847f2d027b6a31ff28806bc6925991b89b4581ab6474f23e346a"
     ),
     "czr-2026q2-lite-relative-value": (
-        "60992326d6ea5dd7cf4356290466d1671223b05420698781fbb6b0a75cd8d457"
+        "6000542dd4a4551ab1388f384d50ed26f02c0518561ec42fbd291748d0be7f8a"
     ),
     "czr-2026q2-relative-value": (
-        "6db4ad00f5dd52cd75006c1e556ade272ea85495b47f77d992e1340ceef082bc"
+        "24cbfea7f0eb1d07d962c9d2bc9d9bbef36055be6d23a737a1b1dedf3e2c8e65"
     ),
     "czr-2026q2-lite-full-credit-screen": (
-        "9fa55fa9e3bdadb8d85fd47d8aa8c6eb8d42805ecb71d70d8a7abe78b4d7a26b"
+        "725a996507712ee8e5db4ba3584e3cbb0bd62c04a6834d978a696bcd064b171d"
     ),
     "czr-2026q2-lite-portfolio": (
-        "3a4639808bae31965c933ce038a6f124dfd2fe85611e09cd4773c4be3f06cb03"
+        "2b259fc2deee688087eb5698ff348e912497a2aaf2416161847bdf81309170d1"
     ),
     "czr-2026q2-portfolio": (
         "ff98f2b783b2d2a78452e7cecd87937e91f035f4ea66e14f3b97d9f20a4b13cf"
     ),
     "czr-2026q2-full-credit-assessment": (
-        "ef1eb26e545adf96fd2d3729b308e3c9d7351712ae3e574fe821f42f61837d26"
+        "5dbeeb709e321dcaeac0066dbe307f6d7a999316d4a9e771f19a7b24186f1577"
     ),
     "save-2024-distressed-restructuring": (
         "5a6fb829e945143cf3b6593231dbb2b6d181b7feaca2b60906f3222faf313f6b"
@@ -375,9 +377,12 @@ def _evidence_lines(tokens: list[_Token]) -> list[str]:
 
 def test_every_committed_answer_key_names_its_route_and_exact_source() -> None:
     """No key can name an off-route module or an unreadable source quote, and
-    every key is one whole evidence line (F475): an answer is accepted under
-    `WHOLE_LINE` and scored by exact equality, so a fragment or a quote that
-    runs onto the next line is a key no run can meet."""
+    every key is exactly one whole evidence line of its document (F475), NFC
+    as a shown line is: a citation meets a key by the line it anchored in,
+    compared by exact equality (D105), so a fragment or a quote that runs onto
+    the next line is a key no run can meet. A whole line whose words also run
+    inside a longer line is still one line (K2, F502): the 10-Q's `Adjusted
+    EBITDA` row recurs inside its `Total Adjusted EBITDA` row and is a key."""
     root = Path(__file__).resolve().parents[1] / "qualification"
     extracted: dict[str, dict[int, list[_Token]]] = {}
 
@@ -411,8 +416,8 @@ def test_every_committed_answer_key_names_its_route_and_exact_source() -> None:
                         extracted[document_sha256] = _pages(
                             documents[document_sha256].data
                         )
-                    hits, whole = _line_counts(extracted[document_sha256], matched_text)
-                    assert hits == 1, (matched_text, expected)
+                    whole = _whole_lines(extracted[document_sha256], matched_text)
+                    assert unicodedata.normalize("NFC", matched_text) == matched_text
                     assert whole == 1, (
                         f"{matched_text!r} is not exactly one evidence line"
                         f" of its document (found {whole}): {expected}"
@@ -437,21 +442,16 @@ def _pages(data: bytes) -> dict[int, list[_Token]]:
     return pages
 
 
-def _line_counts(pages: dict[int, list[_Token]], matched_text: str) -> tuple[int, int]:
-    """How often `matched_text` occurs as a run of words, and how often as one
-    whole evidence line (F475): a key or alternative must be 1 and 1."""
-    words = matched_text.split()
-    hits = sum(
-        bool(_match_at(tokens, start, words, normalised=False))
-        for tokens in pages.values()
-        for start in range(len(tokens))
-    )
-    whole = sum(
+def _whole_lines(pages: dict[int, list[_Token]], matched_text: str) -> int:
+    """How often `matched_text` is one whole evidence line (F475): a key or
+    alternative must be exactly 1. How often its words run inside other lines
+    is no longer asked (K2): a key is met by the line a citation anchored in,
+    never by a run of the page."""
+    return sum(
         block == matched_text
         for tokens in pages.values()
         for block in _evidence_lines(tokens)
     )
-    return hits, whole
 
 
 def test_ccl_liquidity_set_is_a_complete_offline_copy_with_pinned_keys() -> None:
@@ -1253,6 +1253,46 @@ def test_another_modules_citation_of_an_alternative_does_not_meet_the_key() -> N
     assert not _matches(_keyed(_ALTERNATIVE), {("CP-1", document, _ALTERNATIVE)})
 
 
+def _cited(matched_text: str, line_text: str | None) -> AnchoredCitation:
+    return AnchoredCitation(
+        document_sha256=sha256(REPORT).hexdigest(),
+        page=1,
+        matched_text=matched_text,
+        bboxes=(),
+        line_text=line_text,
+    )
+
+
+def test_an_excerpt_meets_the_key_its_line_is_under_the_keys_module() -> None:
+    """D105: a citation is any excerpt of one line, and a key is met by the
+    line it anchored in (`cited_line`), never by the quote -- for the key's own
+    line and for an alternative. The same line under another module does not
+    meet it, and an excerpt of another line does not either."""
+    document = sha256(REPORT).hexdigest()
+    excerpt = _cited("Total debt at 31 December 2026 was USD", _KEY_LINE)
+    other = _cited("annual report 2026 of Acme Holdings plc here", _ALTERNATIVE)
+    elsewhere = _cited("Total debt at 31 December 2026 was USD", "Total debt at 31")
+
+    assert cited_line(excerpt) == _KEY_LINE
+    assert _matches(_keyed(), {("CP-1B", document, cited_line(excerpt))})
+    assert _matches(_keyed(_ALTERNATIVE), {("CP-1B", document, cited_line(other))})
+    assert not _matches(_keyed(), {("CP-1", document, cited_line(excerpt))})
+    assert not _matches(_keyed(), {("CP-1B", document, cited_line(elsewhere))})
+
+
+def test_a_record_from_before_excerpts_is_scored_by_its_quote() -> None:
+    """A record accepted under an earlier rule keeps no line (EX1), and its
+    quote is what it was scored by: its whole line meets the key, and a run
+    inside the line -- which `ANY_RUN` accepted -- still does not."""
+    document = sha256(REPORT).hexdigest()
+    whole = _cited(_KEY_LINE, None)
+    partial = _cited("Total debt at 31 December 2026 was USD", None)
+
+    assert cited_line(whole) == _KEY_LINE
+    assert _matches(_keyed(), {("CP-1B", document, cited_line(whole))})
+    assert not _matches(_keyed(), {("CP-1B", document, cited_line(partial))})
+
+
 def test_a_key_without_alternatives_is_met_only_by_its_own_line() -> None:
     """A statement key carries no alternative and is the exact key it was, and
     a set of such keys binds the digest it bound before D101."""
@@ -1345,8 +1385,8 @@ def test_a_partial_alternative_is_not_one_whole_evidence_line() -> None:
     committed set naming it fails as a set naming a partial key does."""
     pages = _pages(REPORT)
 
-    assert _line_counts(pages, _KEY_LINE) == (1, 1)
-    assert _line_counts(pages, "Total debt at 31 December 2026") == (1, 0)
+    assert _whole_lines(pages, _KEY_LINE) == 1
+    assert _whole_lines(pages, "Total debt at 31 December 2026") == 0
 
 
 def test_an_alternative_answering_another_key_of_its_module_is_ambiguous() -> None:
