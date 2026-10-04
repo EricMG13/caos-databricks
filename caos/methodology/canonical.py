@@ -738,16 +738,17 @@ SECOND_ATTEMPT_CODES = (
     )
     | _ANCHORING_CODES
 )
-# How many guided retries one node gets (D82; D30 gave one): its 2nd and 3rd
-# attempts, each told what the attempt just before it was refused for.
-GUIDED_RETRIES = 2
+# How many guided retries one node gets (D82 and its amendment of 4 October
+# 2026; D30 gave one): its 2nd, 3rd and 4th attempts, each told what the
+# attempt just before it was refused for.
+GUIDED_RETRIES = 3
 
 
 def _feedback_source(attempts: Sequence[NodeAttempt]) -> NodeAttempt | None:
     """The refused attempt a node's next attempt answers, when that next one is
     a guided retry (D30, D82): the latest attempt, refused with one of
     `SECOND_ATTEMPT_CODES`, while the node holds at most `GUIDED_RETRIES` such
-    refusals -- so its 2nd and 3rd attempts are told of the 1st and 2nd, and
+    refusals -- so its 2nd, 3rd and 4th attempts are told of the 1st, 2nd and 3rd, and
     every later attempt is an ordinary one. Read from the ledger, so a crash
     between a refusal and its retry changes nothing."""
     refused = [a for a in attempts if a.refusal in SECOND_ATTEMPT_CODES]
