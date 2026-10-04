@@ -1,0 +1,127 @@
+# Secret scan with the pinned gitleaks CLI (not gitleaks-action: no license
+# key, no unverified download, no 30-commit PR page; adv-repo.md C3, N4, N9).
+# Copy to .github/workflows/gitleaks.yml (secrets-weekly.yml calls it by that
+# path). Values a repo may set: none; the default branch comes from the event.
+# No `schedule` here (W2): GitHub auto-disables a public repo's scheduled
+# workflow after 60 idle days, and that disables every trigger in its file.
+name: secrets
+
+on:
+  push:
+    branches: ['**']            # C3(a): every branch, not only main
+    tags: ['**']                # N3: a tag on an orphan commit is scanned now
+  pull_request:
+    # `edited` re-runs the scan when the PR's base is retargeted (N3).
+    types: [opened, synchronize, reopened, edited]
+  workflow_call:                # secrets-weekly.yml: full-history backstop
+
+permissions:
+  contents: read
+
+env:
+  # Pin-update: see README "Pin-update procedure". Both values come from the
+  # official release checksums file, verified locally before they are edited.
+  GITLEAKS_VERSION: 8.30.1
+  GITLEAKS_PLATFORM: linux_x64
+  GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+
+jobs:
+  secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # N2: a no-op in this single-job file. It only matters if the job is
+    # pasted beside jobs it `needs:`; then a failed dependency cannot skip it.
+    if: ${{ !cancelled() }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0              # all history and all branches: ranges below need both
+          persist-credentials: false  # N4: no token left in .git/config
+
+      - name: Install gitleaks (sha256 from the official checksums file)
+        shell: bash
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/gitleaks-bin"
+          mkdir -p "$dir" && cd "$dir"
+          asset="gitleaks_${GITLEAKS_VERSION}_${GITLEAKS_PLATFORM}.tar.gz"
+          curl -fsSL --retry 3 -o "$asset" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${asset}"
+          echo "${GITLEAKS_SHA256}  ${asset}" | sha256sum -c -
+          tar -xzf "$asset" gitleaks
+          test "$(./gitleaks version)" = "$GITLEAKS_VERSION"
+          echo "$dir" >> "$GITHUB_PATH"
+
+      - name: Scan
+        shell: bash
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        # Expressions travel through env:, never spliced into the script; the
+        # push `before` SHA and the default branch are read from the event file
+        # with jq (CAOS-LangMVP variant). jq absent or a field missing leaves
+        # the value empty, which falls through to a wider range or a full scan.
+        # The scan itself is one fixed command: --config names the committed
+        # file, --ignore-gitleaks-allow (W1) makes inline `gitleaks:allow`
+        # comments inert, --redact keeps the secret out of the log. The range
+        # is a plain `A..B`: no --first-parent, no --no-merges, so every
+        # side-branch commit behind a merge is scanned (C3(b)); the empty
+        # range (schedule, dispatch, unresolvable push) is gitleaks' own
+        # `--full-history --all` over every fetched ref.
+        # Scan floor (W4): gitleaks exits 0 when git fails under it, so the
+        # step also fails on an ` ERR ` log line, or on `0 commits scanned`
+        # when `git rev-list --count` says the range is not empty. A truly
+        # empty range (a tag on a commit already on the default branch) passes.
+        run: |
+          set -euo pipefail
+          zeros=0000000000000000000000000000000000000000
+          EVENT_BEFORE="$(jq -r '.before // empty' "$GITHUB_EVENT_PATH" 2>/dev/null || true)"
+          DEFAULT_BRANCH="$(jq -r '.repository.default_branch // empty' "$GITHUB_EVENT_PATH" 2>/dev/null || true)"
+          log="$(mktemp)"
+          scan() {
+            echo "gitleaks range: ${1:-<full history, all refs>}"
+            rc=0
+            gitleaks git --no-banner --no-color --verbose --redact --ignore-gitleaks-allow \
+              --config .gitleaks.toml ${1:+--log-opts="$1"} . 2>&1 | tee "$log" || rc=$?
+            if grep -q ' ERR ' "$log"; then
+              echo "::error::scan floor: gitleaks logged ERR (git failed under it); result not trusted"
+              exit 1
+            fi
+            if grep -qE '(^| )0 commits scanned' "$log"; then
+              if [ -n "$1" ]; then n="$(git rev-list --count "$1" --)"; else n="$(git rev-list --count --all)"; fi
+              if [ "$n" -ne 0 ]; then
+                echo "::error::scan floor: ${n} commits in range but gitleaks scanned 0"
+                exit 1
+              fi
+              echo "range holds no commits; nothing to scan"
+            fi
+            exit "$rc"
+          }
+          case "$GITHUB_EVENT_NAME" in
+            pull_request)
+              # base.sha..head.sha straight from the event: every PR commit,
+              # 40 or 400 of them, no REST page size involved (C3(c)).
+              git cat-file -e "${PR_BASE_SHA}^{commit}"
+              git cat-file -e "${PR_HEAD_SHA}^{commit}"
+              scan "${PR_BASE_SHA}..${PR_HEAD_SHA}"
+              ;;
+            push)
+              if [ "$GITHUB_SHA" = "$zeros" ]; then
+                echo "ref deleted; nothing to scan"; exit 0
+              fi
+              if [ "$EVENT_BEFORE" != "$zeros" ] && git cat-file -e "${EVENT_BEFORE}^{commit}" 2>/dev/null; then
+                scan "${EVENT_BEFORE}..${GITHUB_SHA}"
+              elif [ "$GITHUB_REF_NAME" = "$DEFAULT_BRANCH" ] || ! git rev-parse -q --verify "refs/remotes/origin/${DEFAULT_BRANCH}^{commit}" >/dev/null; then
+                # New or force-pushed default branch (or no default to compare
+                # with): nothing narrower is provably complete, scan everything.
+                scan ""
+              else
+                # New branch or tag (before is all zeros) or force push whose
+                # `before` is gone: the commits not yet on the default branch.
+                scan "refs/remotes/origin/${DEFAULT_BRANCH}..${GITHUB_SHA}"
+              fi
+              ;;
+            *)
+              # schedule / workflow_dispatch (via secrets-weekly.yml): full history.
+              scan ""
+              ;;
+          esac

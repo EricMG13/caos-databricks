@@ -5,7 +5,7 @@
 # so a pattern exemption would hide the one secret this host mints. The
 # paths below hold content digests and nothing that could be a credential;
 # the one pattern is a closed pair of public enum values. The singular table
-# is the one every pinned gitleaks (the hook's and CI's v8.21.2) reads.
+# is the one every pinned gitleaks (the hook's and CI's v8.30.1) reads.
 [extend]
 useDefault = true
 
@@ -24,3 +24,24 @@ paths = [
   '''^docs/rebuild/gitnexus-review/[0-9a-f]{40}/(?:baseline|evidence/(?:prepublication|final)-integrity)\.json$''',
 ]
 regexes = ['''^finish_reason=(?:stop|length)$''']
+
+# The built-in rules need keyword context, so a file whose whole content is a
+# token (.superpowers/brainstorm/.last-token, a bare 64-hex key) scans clean.
+# This flags any line that is nothing but a long hex/base64 token in a file
+# under a dot-directory (.claude/, .github/, ...). Hex is a subset of the
+# base64 alphabet. Entropy 3.0 drops fillers such as 0000... or abababab....
+# The [allowlist] above applies to it as to every rule.
+[[rules]]
+id = "bare-token-in-dot-directory"
+description = "Bare high-entropy hex/base64 token on its own line in a file under a dot-directory"
+path = '''(?:^|/)\.[^/]+/'''
+regex = '''(?m)^[ \t]*([A-Za-z0-9+/_-]{32,}={0,2})[ \t]*$'''
+secretGroup = 1
+entropy = 3.0
+# N6: kebab-case slugs (lower-case words joined by `-`, e.g. a 32+ char
+# skill or branch name) are not tokens. A hyphen is required, so bare 40-hex
+# commit-id lines stay flagged (ignore those by fingerprint).
+[[rules.allowlists]]
+description = "kebab-case slug, not a token"
+regexTarget = "secret"
+regexes = ['''^[a-z]+(?:-[a-z0-9]+)+$''']
