@@ -8,7 +8,7 @@ peers MGM Resorts International (MGM) and PENN Entertainment, Inc. (PENN) from
 the owner's "Public Leveraged Loan Issuers Benchmark", with a proposed position
 in the CZR 6.50% Senior Secured Notes due 2032 held against a **SYNTHETIC**
 test mandate. Its qualification-set digest is
-`ef1eb26e545adf96fd2d3729b308e3c9d7351712ae3e574fe821f42f61837d26`.
+`5dbeeb709e321dcaeac0066dbe307f6d7a999316d4a9e771f19a7b24186f1577`.
 
 ## The mandate is synthetic (D80)
 
@@ -155,11 +155,13 @@ document (F475), and is listed with why it states the key's figures:
     million for the comparable prior-year period.`, its highlight sentence:
     consolidated, the quarter against the prior-year quarter;
   - the release's `Caesars | $920 | $955 | (3.7)%`, the consolidated row of its
-    quarterly Adjusted EBITDA table.
-  Not alternatives: the 10-Q's `Adjusted EBITDA | $920 | $955 | $1,807 |
-    $1,839` (its words recur inside the 10-Q's `Total Adjusted EBITDA` row, so
-    it is not a unique run, F475) and the release's six-month `Caesars | $1,807
-    | $1,839 | (1.7)%` (the six months alone).
+    quarterly Adjusted EBITDA table;
+  - the 10-Q's `Adjusted EBITDA | $920 | $955 | $1,807 | $1,839`, the
+    consolidated line its segment note reconciles net loss to. Its words also
+    run inside the MD&A's `Total Adjusted EBITDA` row, which no longer bars a
+    whole line (K2, F501).
+  Not alternatives: the release's six-month `Caesars | $1,807 | $1,839 |
+    (1.7)%` (the six months alone).
 - CP-1B, the 10-K's `Net revenues | 11,486 | 11,245 | 11,528`:
   - the 10-K's `Total | $11,486 | $11,245 | $11,528`, the total of its segment
     table's net revenues, the consolidated figure;

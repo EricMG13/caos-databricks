@@ -50,6 +50,7 @@ from caos.qualification.matrix import (
     module_registers,
 )
 from caos.qualification.on_disk import load_qualification_set
+from caos.qualification.proof import cited_line
 from caos.refusals import Refusal
 
 BUNDLE = Path(__file__).resolve().parents[1] / "vendor" / "deploy-v"
@@ -299,7 +300,7 @@ def _citation_keys(
     cited = (
         None
         if stored is None
-        else {(module_id, c.document_sha256, c.matched_text) for c in stored.citations}
+        else {(module_id, c.document_sha256, cited_line(c)) for c in stored.citations}
     )
     return [
         _key(
