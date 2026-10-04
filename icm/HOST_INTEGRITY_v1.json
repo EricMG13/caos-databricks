@@ -5,8 +5,8 @@
       "sha256": "a0fa1a673230e24f29bde743b3bd9ea866aa39a3380878cb91926db929401451"
     },
     "final_check.md": {
-      "bytes": 1970,
-      "sha256": "489011ae8980a1ae94daa66b40b2c861914c236619736535cb3e32c622911a70"
+      "bytes": 2090,
+      "sha256": "0b6bb1c5599acfcedd8e34064eed0094c4248be5676634088c75c18428d28736"
     },
     "forecast_extension.md": {
       "bytes": 1029,
@@ -21,8 +21,8 @@
       "sha256": "bccd22678bc3dba3122637926a3a89c5435e7bb729102e111a6b664cce92729f"
     },
     "instruction.md": {
-      "bytes": 1422,
-      "sha256": "3cb700fb9a3f242bd8e103b524217a2abced6882487cefd49e5030f8a5ef09f0"
+      "bytes": 1488,
+      "sha256": "8394d3b7e93110fa1d670b84c6ab694dbcca2337528e80e48f7a24bb39df85b6"
     },
     "tagged.md": {
       "bytes": 554,

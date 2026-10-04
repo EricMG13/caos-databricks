@@ -331,20 +331,20 @@ def _attempt_of(harness: _Harness, module_id: str) -> UUID:
     return UUID(str(rows[0][0]))
 
 
-def test_an_unanchorable_blocked_handoff_is_an_ordinary_refusal(
+def test_a_blocked_handoff_with_an_unverified_quote_stands_as_blocked(
     harness: _Harness,
 ) -> None:
-    """Quotes are anchored before Blocked is honoured (c-5b, P3-2), and
-    D106 keeps that: a run ends on no unverified quote."""
+    """D106 supersedes c-5b's guard (P3-2): a citation fault never refuses an
+    answer, a Blocked one included. CP-0 answers Blocked on a quote no
+    evidence carries: one attempt, no retry, and the run ends BLOCKED on
+    that attempt's verdict."""
     answers = CanonicalCompletions(
         harness.source_id, qa_status="Blocked", quotes=(UNANCHORED,)
     )
-    code = _run_route(harness, _module_provider(harness, answers))
-    assert code is RefusalCode.CITATION_NOT_LOCATED
-    # D106: anchoring's codes earn no guided retry any more (D82 amended).
+    assert _run_route(harness, _module_provider(harness, answers)) is None
     assert _counts(harness) == (1, [REPORTED], 0, 1, 1)
-    _still_running(harness)
-    assert _events(harness, "RUN_BLOCKED") == 0
+    assert (_status(harness), _events(harness, "RUN_BLOCKED")) == ("BLOCKED", 1)
+    assert _blocking_verdict(harness) == _attempt_of(harness, "CP-0")
 
 
 @dataclass
@@ -584,8 +584,10 @@ class _ClaimsBlocked:
 
 @pytest.mark.parametrize(
     "knobs",
-    [{}, {"qa_status": "Blocked", "quotes": (UNANCHORED,)}],
-    ids=["passed", "unanchorable-blocked"],
+    # Since D106 a Blocked answer on an unanchored quote is a validated
+    # Blocked verdict; one naming another run is not.
+    [{}, {"qa_status": "Blocked", "mutate": lambda f: {**f, "run_id": "COS-other"}}],
+    ids=["passed", "mismatched-blocked"],
 )
 def test_a_blocked_claim_without_a_validated_diagnostic_never_ends_the_run(
     harness: _Harness, knobs: dict[str, Any]
