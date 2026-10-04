@@ -30,7 +30,8 @@ import psycopg
 from caos import methodology
 from caos.blobs import BlobStore
 from caos.evidence.citations import (
-    WHOLE_LINE,
+    EXCERPT,
+    MIN_EXCERPT_WORDS,
     AnchoredCitation,
     Citation,
     TokenIndex,
@@ -435,9 +436,10 @@ def _answer(  # noqa: PLR0913 -- one recorded answer, keyword-only
     )
     # A Blocked verdict ends the run only once its quotes are verified: an
     # unanchorable Blocked handoff is an ordinary refusal (c-5b, P3-2). Each
-    # quote must be one whole evidence line, as the final check says (N28).
+    # quote must be an excerpt of one evidence line, as the final check says
+    # (D105).
     anchored = verify_citations(
-        conn, delivered=blocks, citations=citations, rule=WHOLE_LINE
+        conn, delivered=blocks, citations=citations, rule=EXCERPT
     )
     if projections is None:
         raise Refusal(RefusalCode.HANDOFF_BLOCKED)
@@ -465,7 +467,7 @@ def _answer(  # noqa: PLR0913 -- one recorded answer, keyword-only
         lineage=context.lineage,
         projections=projections,
         citations=tuple(anchored),
-        citation_rule=WHOLE_LINE,
+        citation_rule=EXCERPT,
     )
     return markdown, record_bytes(record)
 
@@ -942,7 +944,7 @@ def _anchoring(
                 delivered=blocks,
                 citations=(citation,),
                 index=index,
-                rule=WHOLE_LINE,
+                rule=EXCERPT,
             )
         except Refusal as refused:
             if refused.code not in _ANCHORING_CODES:
@@ -961,11 +963,15 @@ def _line_hint(
     index: TokenIndex,
 ) -> LineHint:
     """Where `find_line` places a citation refused `CITATION_NOT_LOCATED`
-    (D82). The longer line's first `HINT_WORDS` words are read from the
-    delivered block itself -- its own words, one space between -- so nothing
-    the node was not given is shown. The search is help, not a verdict: a
-    refusal from it (a source whose blocks no longer read as written, say)
-    leaves the citation unplaced rather than costing the retry."""
+    (D82): the other delivered pages it is an excerpt of a line of, that no
+    delivered line holds it, or -- found nowhere as one excerpt -- the line
+    it runs past the end of, nearly matches or left cells out of
+    (`_near_hint`). A quote of fewer than `MIN_EXCERPT_WORDS` words that is
+    none of those is told it is too short (D105): it is part of a longer
+    line, or no whole line, and only more words make it an excerpt. The
+    search is help, not a verdict: a refusal from it (a source whose blocks
+    no longer read as written, say) leaves the citation unplaced rather than
+    costing the retry."""
     source = citation.source_id
     try:
         found = find_line(
@@ -985,16 +991,12 @@ def _line_hint(
         )
         if near is not None:
             return near
-    line = next(
-        (
-            d.text.value
-            for d in delivered
-            if d.source_id == source and d.block_id == found.block_id
-        ),
-        None,
+    short = len(citation.matched_text.split()) < MIN_EXCERPT_WORDS
+    return LineHint(
+        pages=found.pages,
+        absent=found.absent,
+        short=short and not (found.pages or found.absent),
     )
-    begins = "" if line is None else " ".join(line.split()[:HINT_WORDS])
-    return LineHint(begins=begins, pages=found.pages, absent=found.absent)
 
 
 def _near_hint(

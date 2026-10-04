@@ -33,6 +33,7 @@ from caos.evidence.citations import (
     _excerpt_run,
     _Page,
     _Token,
+    overrun_line,
     verify_citations,
     verify_stored_citations,
 )
@@ -266,3 +267,25 @@ def test_an_excerpt_cited_on_the_wrong_page_is_anchored_at_its_true_page(
             citations=[request],
             rule=WHOLE_LINE,
         )
+
+
+def test_an_overrun_is_named_from_any_word_of_its_line() -> None:
+    """F496 under `EXCERPT`: a quote that starts inside a line, copies it to
+    its end and runs on is named by that line, as one that starts at its
+    first word is; a quote within its line, or whose first words are in no
+    line, is not."""
+    lines = [
+        "Revenue was flat.",
+        "The Borrower shall maintain the Collateral and take all actions"
+        " required by such Security",
+    ]
+    mid = (
+        "maintain the Collateral and take all actions required by such Security"
+        " Documents to perfect the Liens"
+    )
+    assert overrun_line(mid, lines) == 1
+    assert overrun_line(f"The Borrower shall {mid}", lines) == 1
+    assert overrun_line("maintain the Collateral and take all actions", lines) is None
+    assert overrun_line("keep the Collateral and take all actions required", lines) is (
+        None
+    )

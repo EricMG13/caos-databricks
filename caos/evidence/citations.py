@@ -1357,17 +1357,18 @@ def _delivered_pages(
 
 @dataclass(frozen=True, slots=True)
 class LineFinding:
-    """Where this module's own search finds a quote that `WHOLE_LINE` refused
-    `CITATION_NOT_LOCATED` (D82), among the blocks one node was given. At
-    most one field is set; none is "found, but not in a way that names one
-    line" (a run on two lines, twice on a page, or part of a line of another
-    page), never a guess.
+    """Where this module's own search finds a quote that `EXCERPT` refused
+    `CITATION_NOT_LOCATED` (D82, D105), among the blocks one node was given.
+    At most one field is set; none is "found, but not in a way that names
+    one line" (a run on two lines, twice on a page, or part of a line of
+    another page), never a guess.
 
     `block_id`: the one delivered evidence line of the cited page the quote
-    is part of, longer than the quote. `pages`: the other delivered pages of
-    its source on which the quote is one whole delivered evidence line.
-    `absent`: no page of its source the node was given holds the quote as a
-    run wholly within its delivered lines (`ANY_RUN`).
+    is part of, longer than the quote -- too short a part of it to be an
+    excerpt. `pages`: the other delivered pages of its source on which the
+    quote is an excerpt of one delivered evidence line. `absent`: no page of
+    its source the node was given holds the quote as a run wholly within its
+    delivered lines (`ANY_RUN`).
     """
 
     block_id: str | None = None
@@ -1383,14 +1384,14 @@ def find_line(
     citation: Citation,
     index: TokenIndex,
 ) -> LineFinding:
-    """`LineFinding` for a citation `WHOLE_LINE` refused `CITATION_NOT_LOCATED`.
+    """`LineFinding` for a citation `EXCERPT` refused `CITATION_NOT_LOCATED`.
 
     `blocks` are the blocks of the citation's source the node was given and
     `pages` the pages they are on; no other page is read, so a cited page the
     node was not given is never probed. A delivered cited page is searched
     by `ANY_RUN` (`_page_run`): a unique run inside one delivered shown line
     longer than it is that line. Failing that, each other delivered page is
-    asked under `WHOLE_LINE` with the citation moved there, at that page
+    asked under `EXCERPT` with the citation moved there, at that page
     alone (`_verdict`, never re-anchored, D94), and every delivered page
     under `ANY_RUN` whether a run of the quote lies within its delivered
     lines at all. Reads go through `index`;
@@ -1448,7 +1449,7 @@ NEAR_MEASURED_WORDS = 300
 
 def near_line(text: str, lines: Sequence[str]) -> int | None:
     """The index in `lines` of the one line `text` nearly matches, else None
-    (F493): a quote `WHOLE_LINE` refused that slipped on a word or a letter
+    (F493): a quote anchoring refused that slipped on a word or a letter
     while copying a long line. Pure over the texts it is handed -- the
     caller hands only lines the node was delivered -- so it reads nothing,
     and it never anchors or accepts: a near miss is still refused.
@@ -1513,40 +1514,44 @@ def _similar(words: list[str], split: list[str]) -> bool:
 
 def overrun_line(text: str, lines: Sequence[str]) -> int | None:
     """The index in `lines` of the one line `text` runs past the end of,
-    else None (F496): a quote that copied a whole line and went on into the
-    text after it -- a sentence a page break split, say -- so the line is a
-    strict prefix of the quote, word for word as anchoring reads them (NFC,
-    the line's first and last word standing for the quote's there less edge
-    punctuation, `_edge_equal`). Pure over the texts it is handed, like
-    `near_line`; it never anchors or accepts. A candidate holds the quote's
-    first `NEAR_WORDS` words, so a short heading is never one; past
-    `NEAR_MEASURED` candidates, or with two lines it overruns, there is no
-    answer, never a guess: one pass over the lines and at most
-    `NEAR_MEASURED` linear prefix checks.
+    else None (F496): a quote that copied a line from its first word, or
+    under `EXCERPT` from any word of it (D105), and went on into the text
+    after it -- a sentence a page break split, say -- so the line from the
+    quote's first word to its end is a strict prefix of the quote, word for
+    word as anchoring reads them (NFC, its first and last word standing for
+    the quote's there less edge punctuation, `_edge_equal`). Pure over the
+    texts it is handed, like `near_line`; it never anchors or accepts. A
+    candidate place in a line holds the quote's first `NEAR_WORDS` words,
+    so a short heading is never one; past `NEAR_MEASURED` candidates, or
+    with two places it overruns, there is no answer, never a guess: one pass
+    over the lines and at most `NEAR_MEASURED` linear prefix checks.
     """
     words = [_nfc(word) for word in text.split()]
     if len(words) <= NEAR_WORDS:
         return None
-    head = words[:NEAR_WORDS]
+    head = words[1:NEAR_WORDS]
     found: list[int] = []
     measured = 0
     for number, line in enumerate(lines):
-        split = line.split(maxsplit=NEAR_WORDS)
-        start = [_nfc(word) for word in split[:NEAR_WORDS]]
-        if len(start) < NEAR_WORDS or not _same_start(start, head):
+        if head[0] not in line:
             continue
-        measured += 1
+        split = [_nfc(word) for word in line.split()]
+        starts = _quote_starts(split, words[0], head)
+        measured += len(starts)
         if measured > NEAR_MEASURED:
             return None
-        if _overruns([_nfc(word) for word in line.split()], words):
-            found.append(number)
+        found += [number for at in starts if _overruns(split[at:], words)]
     return found[0] if len(found) == 1 else None
 
 
-def _same_start(start: list[str], head: list[str]) -> bool:
-    """Whether a line's first words are the quote's, its first word
-    standing for the quote's less edge punctuation (`overrun_line`)."""
-    return start[1:] == head[1:] and _edge_equal(start[0], head[0], normalised=True)
+def _quote_starts(split: list[str], first: str, head: list[str]) -> list[int]:
+    """Where in a line's words a quote could begin (`overrun_line`): `head`,
+    its next words, follows a word standing for its `first` there."""
+    return [
+        at - 1
+        for at in occurrences(split, head)
+        if at and _edge_equal(split[at - 1], first, normalised=True)
+    ]
 
 
 def _overruns(line: list[str], words: list[str]) -> bool:
@@ -1615,7 +1620,7 @@ def _verdict(
     citation: Citation,
     blocks: frozenset[str],
     *,
-    rule: CitationRule = WHOLE_LINE,
+    rule: CitationRule = EXCERPT,
 ) -> RefusalCode | None:
     """`verify_citations`' anchoring refusal for one citation over `blocks`
     at its own page, never re-anchored (D94, so placing a quote is one
