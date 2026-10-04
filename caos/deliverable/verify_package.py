@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 # Updated with render.py; the archived verifier retains its historical pin.
-RENDERER_SHA256 = "7a4c1d69b2fdf422f58bf822f8dee8145058242547f6d04ffdc3026158986eda"
+RENDERER_SHA256 = "9ef4ddf00f8f39de73f4b16663aefb6674ef7f1061910ea604c002e3fa377592"
 MAX_ARCHIVE_BYTES = 64 * 1024 * 1024
 LIMITS = {
     "payload.json": 32 * 1024 * 1024,
@@ -181,7 +181,21 @@ def _receipt_error(receipt: dict[str, Any], payload: bytes) -> str | None:
     return _receipt_role_error(receipt)
 
 
-_FIGURE_FIELDS = ("document_sha256", "page", "matched_text")
+# A narrative span that names a record entry: the key its reference indexes
+# by, the record list it indexes, and the fields it copies from the entry. An
+# unverified figure names one of the record's unverified citations (D106).
+_FIGURES = {
+    "figure": (
+        "citation_index",
+        "citations",
+        ("document_sha256", "page", "matched_text"),
+    ),
+    "unverified": (
+        "unverified_index",
+        "unverified",
+        ("source_id", "page", "matched_text", "code"),
+    ),
+}
 
 
 def _same(left: object, right: object) -> bool:
@@ -190,41 +204,47 @@ def _same(left: object, right: object) -> bool:
     return type(left) is type(right) and left == right
 
 
-def _cited_by_node(artifacts: list[Any]) -> dict[str, list[Any]]:
-    """Each bound handoff's citation list, by the route node the payload names."""
-    found: dict[str, list[Any]] = {}
+def _cited_by_node(artifacts: list[Any]) -> dict[str, dict[str, Any]]:
+    """Each bound handoff's record, by the route node the payload names."""
+    found: dict[str, dict[str, Any]] = {}
     for artifact in artifacts:
         if not isinstance(artifact, dict):
             return {}
-        citations = json.loads(str(artifact.get("record"))).get("citations")
+        record = json.loads(str(artifact.get("record")))
         found[str(artifact.get("route_node_id"))] = (
-            citations if isinstance(citations, list) else []
+            record if isinstance(record, dict) else {}
         )
     return found
 
 
-def _figure_error(figure: object, cited: dict[str, list[Any]]) -> str | None:
-    """One narrative figure against the citation of the record it names."""
+def _figure_error(
+    kind: str, figure: object, cited: dict[str, dict[str, Any]]
+) -> str | None:
+    """One narrative figure against the record entry it names: an anchored
+    citation, or an unverified one (D106)."""
     if not isinstance(figure, dict):
         return "a narrative figure is not an object"
-    index = figure.get("citation_index")
-    citations = cited.get(str(figure.get("route_node_id")), [])
+    key, listed, fields = _FIGURES[kind]
+    index = figure.get(key)
+    entries = cited.get(str(figure.get("route_node_id")), {}).get(listed, [])
+    if not isinstance(entries, list):
+        entries = []
     if (
         not isinstance(index, int)
         or isinstance(index, bool)
-        or not 0 <= index < len(citations)
+        or not 0 <= index < len(entries)
     ):
         return "a narrative figure names no citation of this payload"
-    citation = citations[index]
-    if not isinstance(citation, dict) or not all(
-        _same(figure.get(field), citation.get(field)) for field in _FIGURE_FIELDS
+    entry = entries[index]
+    if not isinstance(entry, dict) or not all(
+        _same(figure.get(field), entry.get(field)) for field in fields
     ):
         return "a narrative figure does not match the citation it names"
     return None
 
 
 def _narrative_error(
-    decoded: dict[str, Any], cited: dict[str, list[Any]]
+    decoded: dict[str, Any], cited: dict[str, dict[str, Any]]
 ) -> str | None:
     """Every narrative figure against the record the payload binds it to.
 
@@ -256,10 +276,11 @@ def _narrative_error(
     return None
 
 
-def _span_error(span: object, cited: dict[str, list[Any]]) -> str | None:
+def _span_error(span: object, cited: dict[str, dict[str, Any]]) -> str | None:
     """One span: a figure resolved against its record, text carrying none."""
-    if isinstance(span, dict) and "figure" in span:
-        return _figure_error(span["figure"], cited)
+    for kind in _FIGURES:
+        if isinstance(span, dict) and kind in span:
+            return _figure_error(kind, span[kind], cited)
     text = span.get("text") if isinstance(span, dict) else None
     if isinstance(text, str) and any(character.isnumeric() for character in text):
         # `revisions._is_figure`, the whole numeric class and not only ASCII.

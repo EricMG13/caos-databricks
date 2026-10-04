@@ -10,16 +10,6 @@
     ]
   },
   {
-    "path": "caos/deliverable/revisions.py",
-    "file_name": "revisions.py",
-    "functions": [
-      {
-        "name": "_span",
-        "complexity": 16
-      }
-    ]
-  },
-  {
     "path": "caos/methodology/invocation.py",
     "file_name": "invocation.py",
     "functions": [
