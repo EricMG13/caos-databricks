@@ -74,7 +74,6 @@ SECRET = "Confidential covenant headroom 7.3x"
 # Fixed, not uuid4(): it reaches parametrize ids, which pytest-xdist workers
 # must collect identically.
 SOURCE = UUID("6da212c6-65a1-46b3-9e5c-7ed56acccd18")
-DELIVERED = frozenset({SOURCE})
 CP0 = _identity("CP-0")
 CP0_MD = _markdown(CP0, body_note="Recorded source p1. " + SECRET)
 QUOTE = "Recorded source p1"
@@ -95,15 +94,20 @@ def _refused(call: Callable[[], object]) -> Refusal:
 
 
 def _parse_refused(body: str) -> RefusalCode:
-    return _refused(lambda: parse_response(body, delivered=DELIVERED)).code
+    return _refused(lambda: parse_response(body)).code
+
+
+def _linked(body: str) -> tuple[bool, ...]:
+    """Whether the body carries each quote (D106: a quote it does not carry
+    is flagged, not linked to a statement, never the answer's refusal)."""
+    return parse_response(body)[2]
 
 
 def test_a_closed_transport_yields_the_exact_markdown_and_its_citations() -> None:
-    markdown, citations = parse_response(
-        wire(CP0_MD, [_citation()]), delivered=DELIVERED
-    )
+    markdown, citations, linked = parse_response(wire(CP0_MD, [_citation()]))
     assert markdown == CP0_MD
     assert citations == (Citation(source_id=SOURCE, page=1, matched_text=QUOTE),)
+    assert linked == (True,)
 
 
 def test_claims_only_json_is_not_a_canonical_handoff() -> None:
@@ -146,14 +150,21 @@ def test_a_malformed_transport_refuses(body: str) -> None:
     assert _parse_refused(body) is RefusalCode.HANDOFF_MALFORMED
 
 
-def test_a_citation_of_undelivered_evidence_refuses() -> None:
-    body = wire(CP0_MD, [_citation(source_id=str(uuid4()))])
-    assert _parse_refused(body) is RefusalCode.CITATION_NOT_DELIVERED
+def test_a_citation_of_undelivered_evidence_is_left_to_anchoring() -> None:
+    """D106: the transport no longer refuses a source the node was not
+    given; anchoring keeps that citation as unverified."""
+    other = uuid4()
+    _markdown, citations, linked = parse_response(
+        wire(CP0_MD, [_citation(source_id=str(other))])
+    )
+    assert citations[0].source_id == other and linked == (True,)
 
 
-def test_a_quote_absent_from_the_markdown_refuses_the_handoff() -> None:
+def test_a_quote_absent_from_the_markdown_is_not_linked() -> None:
+    """D106: the verbatim-in-body check flags the citation, not linked to a
+    statement, and never refuses the handoff."""
     body = wire(CP0_MD, [_citation(), _citation(matched_text="headroom 9.9x")])
-    assert _parse_refused(body) is RefusalCode.HANDOFF_MALFORMED
+    assert _linked(body) == (True, False)
 
 
 def _record(**changes: object) -> CanonicalRecord:
@@ -478,8 +489,8 @@ def test_a_quote_the_body_wraps_in_quotation_marks_is_still_quoted(
         f"{marks.format(QUOTE)}\n".encode(),
         [_citation()],
     )
-    markdown, citations = parse_response(body, delivered=DELIVERED)
-    assert len(citations) == 1
+    markdown, citations, linked = parse_response(body)
+    assert len(citations) == 1 and linked == (True,)
     assert citations[0].matched_text == QUOTE
     assert markdown
 
@@ -500,14 +511,14 @@ def test_a_quote_the_body_wraps_in_markdown_emphasis_is_still_quoted(
         f"{marks.format(QUOTE)}\n".encode(),
         [_citation()],
     )
-    _markdown, citations = parse_response(body, delivered=DELIVERED)
-    assert citations[0].matched_text == QUOTE
+    _markdown, citations, linked = parse_response(body)
+    assert citations[0].matched_text == QUOTE and linked == (True,)
     changed = wire(
         f"---\nmodule_id: CP-0\n---\n\n## Evidence Trace\n\n- "
         f"{marks.format('Recorded other p1')}\n".encode(),
         [_citation()],
     )
-    assert _parse_refused(changed) is RefusalCode.HANDOFF_MALFORMED
+    assert _linked(changed) == (False,)
 
 
 @pytest.mark.parametrize(
@@ -538,8 +549,8 @@ def test_a_quote_the_body_ends_a_sentence_with_is_still_quoted(marks: str) -> No
         f"{marks.format(QUOTE)}\n".encode(),
         [_citation()],
     )
-    _markdown, citations = parse_response(body, delivered=DELIVERED)
-    assert citations[0].matched_text == QUOTE
+    _markdown, citations, linked = parse_response(body)
+    assert citations[0].matched_text == QUOTE and linked == (True,)
 
 
 def test_a_quote_starting_with_its_own_punctuation_survives_outer_quotes() -> None:
@@ -563,8 +574,8 @@ def test_a_quote_the_body_writes_with_markdown_escapes_is_still_quoted(
         f"{marks.format(QUOTE)}\n".encode(),
         [_citation()],
     )
-    _markdown, citations = parse_response(body, delivered=DELIVERED)
-    assert citations[0].matched_text == QUOTE
+    _markdown, citations, linked = parse_response(body)
+    assert citations[0].matched_text == QUOTE and linked == (True,)
 
 
 @pytest.mark.parametrize(
@@ -581,7 +592,7 @@ def test_a_quote_whose_edge_word_is_a_different_word_is_not_quoted(
         f"{marks.format(QUOTE)}\n".encode(),
         [_citation()],
     )
-    assert _parse_refused(body) is RefusalCode.HANDOFF_MALFORMED
+    assert _linked(body) == (False,)
 
 
 def test_a_quotation_mark_inside_the_quote_still_matches_whole_tokens() -> None:
@@ -590,7 +601,7 @@ def test_a_quotation_mark_inside_the_quote_still_matches_whole_tokens() -> None:
         b"---\nmodule_id: CP-0\n---\n\nRecorded elsewhere p1\n",
         [_citation()],
     )
-    assert _parse_refused(body) is RefusalCode.HANDOFF_MALFORMED
+    assert _linked(body) == (False,)
 
 
 @pytest.mark.parametrize(
@@ -600,7 +611,7 @@ def test_a_quotation_mark_inside_the_quote_still_matches_whole_tokens() -> None:
 def test_a_quote_must_be_whole_words_of_the_body(quote: str) -> None:
     # Front matter is host identity, and a quote matches whole tokens.
     body = wire(CP0_MD, [_citation(matched_text=quote)])
-    assert _parse_refused(body) is RefusalCode.HANDOFF_MALFORMED
+    assert _linked(body) == (False,)
 
 
 @pytest.mark.parametrize(
@@ -637,18 +648,13 @@ def test_the_body_is_indexed_once_rather_than_scanned_per_citation() -> None:
         for n in range(MAX_CITATIONS)
     ]
     started = time.perf_counter()
-    markdown, citations = parse_response(
-        wire(body.encode(), quotes), delivered=DELIVERED
-    )
+    markdown, citations, linked = parse_response(wire(body.encode(), quotes))
     spent = time.perf_counter() - started
-    assert len(citations) == MAX_CITATIONS and markdown
+    assert len(citations) == MAX_CITATIONS and markdown and all(linked)
     assert spent < 2.0, spent
-    # A quote the body does not carry is still refused, index or no index.
+    # A quote the body does not carry is still found out, index or no index.
     missing = _citation(matched_text="w1 w0 w2")
-    assert (
-        _parse_refused(wire(body.encode(), [*quotes[:1], missing]))
-        is RefusalCode.HANDOFF_MALFORMED
-    )
+    assert _linked(wire(body.encode(), [*quotes[:1], missing])) == (True, False)
 
 
 class _Counted(str):
@@ -742,15 +748,11 @@ def test_the_public_parser_answers_repeated_near_matches_in_linear_work(
         for n in range(8)
     ]
     _Counted.compared = 0
-    _markdown, citations = parse_response(
-        wire(body.encode(), quotes), delivered=DELIVERED
-    )
-    assert len(citations) == len(quotes)
+    _markdown, citations, linked = parse_response(wire(body.encode(), quotes))
+    assert len(citations) == len(quotes) and all(linked)
     assert _Counted.compared <= 4 * len(quotes) * (size + size // 2 + len(quotes))
     missing = _citation(matched_text=" ".join(["a"] * (size // 2) + ["c"]))
-    assert (
-        _parse_refused(wire(body.encode(), [missing])) is RefusalCode.HANDOFF_MALFORMED
-    )
+    assert _linked(wire(body.encode(), [missing])) == (False,)
 
 
 def test_a_record_contradicting_its_own_identity_refuses(tmp_path: Path) -> None:

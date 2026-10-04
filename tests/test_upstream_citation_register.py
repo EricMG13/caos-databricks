@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from decimal import Decimal
 from uuid import UUID
@@ -199,32 +200,36 @@ def test_quote_existence_is_host_verified_support_is_left_to_cp5(
 
 
 def test_a_register_must_cover_exactly_the_direct_upstream() -> None:
-    """The register is keyed by the identity's refs: a missing, extra or empty
-    entry refuses rather than render a partial register."""
+    """The register is keyed by the identity's refs: a missing or extra entry
+    refuses rather than render a partial register. An empty one is a record
+    whose every citation is unverified (D106): its section lists none."""
     gate = identity("CP-0")
     markdown = handoff_markdown(gate)
     ref = upstream_ref(gate, markdown)
     lite = identity("CP-L10", (ref,))
     box = Rect(page=1, x0=1, y0=2, x1=3, y1=4)
     other = (AnchoredCitation(DOCUMENT, 1, QUOTE, (box,)),)
-    for citations in (
-        {},
-        {ref.route_node_id: ()},
-        {ref.route_node_id: ANCHORED, "RN-99-CP-5": other},
-    ):
+
+    def built(citations: Mapping[str, tuple[AnchoredCitation, ...]]) -> str:
+        return build_handoff_prompt(
+            CONTRACT,
+            identity=lite,
+            authority=delivered_authority(BUNDLE, "CP-L10"),
+            catalog=CATALOG,
+            delivered=_delivered(),
+            upstream=((ref, markdown),),
+            upstream_citations=citations,
+            route=LITE_ROUTE,
+        )
+
+    for citations in ({}, {ref.route_node_id: ANCHORED, "RN-99-CP-5": other}):
         with pytest.raises(Refusal) as refused:
-            build_handoff_prompt(
-                CONTRACT,
-                identity=lite,
-                authority=delivered_authority(BUNDLE, "CP-L10"),
-                catalog=CATALOG,
-                delivered=_delivered(),
-                upstream=((ref, markdown),),
-                upstream_citations=citations,
-                route=LITE_ROUTE,
-            )
+            built(citations)
         assert refused.value.code is RefusalCode.ROUTE_IDENTITY_INVALID
         assert refused.value.__context__ is None
+    register = _register(built({ref.route_node_id: ()}))
+    assert f"handoff_sha256: {ref.sha256}" in register
+    assert "- document_sha256: " not in register
 
 
 @dataclass

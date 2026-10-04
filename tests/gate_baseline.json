@@ -14,7 +14,7 @@
   "complexity:caos/qualification/matrix.py::_registers_met": 20,
   "complexity:caos/qualification/matrix.py::_witnesses_contradict": 18,
   "complexity:caos/qualification/on_disk.py::_registers": 18,
-  "complexity:caos/qualification/proof.py::assert_orchestration_proof": 18,
+  "complexity:caos/qualification/proof.py::assert_orchestration_proof": 16,
   "complexity:caos/store/run_inputs.py::_research": 20,
   "complexity_baselined": 16,
   "file_noqa": 7,
