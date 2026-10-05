@@ -20,7 +20,13 @@
         {
           "module_id": "CP-1",
           "document_sha256": "f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a",
-          "matched_text": "Cash and cash equivalents | $965 | $887"
+          "matched_text": "Cash and cash equivalents | $965 | $887",
+          "alternatives": [
+            {
+              "document_sha256": "b385f76ff631243d1053fa8073ebde4f8886b4a50c9ce34ce3498d6b2ac3e9f8",
+              "matched_text": "Cash and cash equivalents | $965 | $887"
+            }
+          ]
         },
         {
           "module_id": "CP-1",
@@ -30,17 +36,35 @@
         {
           "module_id": "CP-2",
           "document_sha256": "f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a",
-          "matched_text": "Net cash provided by operating activities | 675 | 680"
+          "matched_text": "Net cash provided by operating activities | 675 | 680",
+          "alternatives": [
+            {
+              "document_sha256": "f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a",
+              "matched_text": "During the six months ended June 30, 2026, our operating activities generated operating cash inflows of $675 million, as compared to operating cash inflows of $680 million during the six months ended June 30, 2025, primarily due to changes in working capital, coupled with the results of operations described above."
+            }
+          ]
         },
         {
           "module_id": "CP-2",
           "document_sha256": "f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a",
-          "matched_text": "Purchase of property and equipment | (335) | (453)"
+          "matched_text": "Purchase of property and equipment | (335) | (453)",
+          "alternatives": [
+            {
+              "document_sha256": "f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a",
+              "matched_text": "Cash used for capital expenditures totaled $335 million and $453 million for the six months ended June 30, 2026 and 2025, respectively, related to our growth, renovation, maintenance, and other capital projects."
+            }
+          ]
         },
         {
           "module_id": "CP-2D",
           "document_sha256": "b385f76ff631243d1053fa8073ebde4f8886b4a50c9ce34ce3498d6b2ac3e9f8",
-          "matched_text": "CEI Revolving Credit Facility capacity, net of outstanding balance | 2,130"
+          "matched_text": "CEI Revolving Credit Facility capacity, net of outstanding balance | 2,130",
+          "alternatives": [
+            {
+              "document_sha256": "f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a",
+              "matched_text": "CEI Revolving Credit Facility capacity, net of outstanding balance | 2,130"
+            }
+          ]
         },
         {
           "module_id": "CP-2D",
