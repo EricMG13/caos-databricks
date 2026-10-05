@@ -1075,7 +1075,8 @@ def feedback_lines(
     """`retry_feedback`'s lines before the cap, most telling first: the
     transport, the host's own bounds on the text, the quotes, the front
     matter's host-owned and undeclared fields, the missing IDs, CP-0's blocker
-    cells, then the vendor's own messages."""
+    cells, the register rows a cell short or long, then the vendor's own
+    messages."""
     parsed, reason = _transport_or_reason(body)
     if parsed is None:
         return (reason,)
@@ -1091,6 +1092,7 @@ def feedback_lines(
         _blocker_line(contract, catalog, text)
         if identity.module_id == GATE_MODULE
         else None,
+        *_width_lines(contract, identity.module_id, text, skill),
     )
     lines = [line for line in host if line]
     lines += _vendor_lines(contract, catalog, identity, (text, checked), skill)
@@ -1301,6 +1303,164 @@ def _absent_ids_line(
                 " in the answer"
             )
     return None
+
+
+# How many register rows of another width than their header a retry is told
+# of (F509); the rest are counted on one more line.
+MAX_WIDTH_ROWS = 5
+_WIDTH_FAULT = "differs from its header"  # the vendor's own tagged-table line
+
+
+@dataclass(frozen=True, slots=True)
+class _PipeTable:
+    """One pipe table as `find_registers` walks it: its header line's index,
+    its header, its rows as the vendor binds them, each row's own cell count,
+    and the table-id tag right above it, if any."""
+
+    start: int
+    header: list[str]
+    rows: list[dict[str, str]]
+    widths: tuple[int, ...]
+    tag: str | None
+
+
+def _width_lines(
+    contract: VendorContract, module_id: str, text: str, skill: bytes
+) -> list[str]:
+    """Every register row whose cell count is not its header's (F509), an
+    advisory line: the vendor pads a short row with empty cells and drops a
+    long row's extra ones, so its own message names only the critical cell
+    left empty, and a model that sees that cell's text one column to the
+    left cannot find the fault (LCR4 CP-3C, four times). The registers are
+    the ones `check()` binds, the cells counted by the vendor's `_row_cells`;
+    a tagged table the vendor already reports as of another width keeps its
+    own line alone. At most `MAX_WIDTH_ROWS` rows, the rest counted."""
+    if not skill or module_id == MODEL_MODULE:
+        return []
+    with suppress(Exception):  # a contract it cannot read is nothing to report
+        faults = _width_faults(contract, module_id, text, skill)
+        shown = faults[:MAX_WIDTH_ROWS]
+        lines = [
+            line
+            for fault in shown
+            if (line := _bounded("host table check", _width_message(*fault)))
+        ]
+        if rest := len(faults) - len(shown):
+            rows = "row differs" if rest == 1 else "rows differ"
+            lines.append(
+                f"host table check: {rest} more register {rows} in width from"
+                " the header"
+            )
+        return lines
+    return []
+
+
+def _width_faults(
+    contract: VendorContract, module_id: str, text: str, skill: bytes
+) -> list[tuple[str, int, int, list[str]]]:
+    """(register ID, row number, cell count, header) for each register row of
+    another width than its header, in the answer's order."""
+    checker = contract.completeness_check
+    loaded = checker.load_contract(skill.decode("utf-8"), module_id)
+    found = checker.find_registers(
+        text, loaded["registers"], loaded.get("retired_registers", ())
+    )
+    errors = contract.cp_tables.read_tables(text)[1]
+    tables = _pipe_tables(contract, text)
+    faults = []
+    for reg_id, (header, rows) in found.items():
+        table = next((t for t in tables if (t.header, t.rows) == (header, rows)), None)
+        if table is None or _WIDTH_FAULT in str(errors.get(table.tag, "")):
+            continue
+        faults += [
+            (table.start, n, reg_id, width, header)
+            for n, width in enumerate(table.widths, 1)
+            if width != len(header)
+        ]
+    return [
+        (reg_id, n, width, header) for _, n, reg_id, width, header in sorted(faults)
+    ]
+
+
+def _pipe_tables(contract: VendorContract, text: str) -> list[_PipeTable]:
+    """Every pipe table of the answer, walked as `find_registers` walks them."""
+    tables = contract.cp_tables
+    lines = tables.unfenced_markdown(text).splitlines()
+    found: list[_PipeTable] = []
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        if (
+            not line.startswith("|")
+            or line.count("|") < 2
+            or tables.SEPARATOR_RE.match(line)
+        ):
+            i += 1
+            continue
+        header = tables._split_row(line)
+        j = i + 1
+        if (
+            j < len(lines)
+            and tables.SEPARATOR_RE.match(lines[j].strip())
+            and "|" in lines[j]
+        ):
+            j += 1
+        cells = []
+        while j < len(lines) and lines[j].strip().startswith("|"):
+            cells.append(tables._row_cells(lines[j].strip(), len(header)))
+            j += 1
+        pad = [""] * len(header)
+        rows = [
+            dict(zip(header, [*row, *pad][: len(header)], strict=False))
+            for row in cells
+        ]
+        widths = tuple(map(len, cells))
+        found.append(
+            _PipeTable(
+                i, header, rows, widths, _tag_above(tables.TABLE_ID_RE, lines, i)
+            )
+        )
+        i = j
+    return found
+
+
+def _tag_above(pattern: re.Pattern[str], lines: list[str], start: int) -> str | None:
+    """The table-id a tag binds to the table at `start` with nothing but
+    blank and comment lines between, as the vendor's `read_tables` binds it."""
+    for line in map(str.strip, reversed(lines[:start])):
+        if tag := pattern.fullmatch(line):
+            return tag.group(1)
+        if line and not line.startswith("<!--"):
+            return None
+    return None
+
+
+def _width_message(reg_id: str, n: int, width: int, header: list[str]) -> str:
+    size = len(header)
+    last = _column(header[-1])
+    if width < size:
+        short = size - width
+        shift = (
+            f"the last column, {last}, reads empty"
+            if short == 1
+            else f"the last {short} columns, from {_column(header[-short])}, read empty"
+        )
+    else:
+        extra = width - size
+        shift = (
+            f"the cell past the last column, {last}, is dropped"
+            if extra == 1
+            else f"the {extra} cells past the last column, {last}, are dropped"
+        )
+    return (
+        f"{reg_id} row {n} has {width} cells under a {size}-cell header; a cell is"
+        f" missing or extra, so its later columns shift ({shift})"
+    )
+
+
+def _column(name: str) -> str:
+    """A header cell as a line names it: quoted, at most 64 characters."""
+    return f"'{name[:64]}'"
 
 
 def _transport_or_reason(
