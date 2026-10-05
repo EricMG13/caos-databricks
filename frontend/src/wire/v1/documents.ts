@@ -345,7 +345,52 @@ const ModelChoice = object({
 // The node whose validated Blocked verdict ended the run, as the transition
 // recorded it (§68). Nullable on `RunView`: a run the frontier emptied is
 // BLOCKED with no node to name, and the wire never claims one.
-const BlockedByView = object({ route_node_id: short, module_id: short, attempt_id: uuid });
+// The evidence line a citation anchored in, split by the server around its
+// excerpt (D105): recorded, `before + excerpt + after` is the line, never
+// sliced here, and an empty `excerpt` is a line the server could not place the
+// quote in. Not recorded (a record from before whole-line citations), the
+// quote is `excerpt` alone and is no source line.
+const LineView = object({
+  before: string({ max: 65536 }),
+  excerpt: string({ max: 65536 }),
+  after: string({ max: 65536 }),
+  recorded: bool,
+});
+// Why a citation is unverified (D106): the anchoring fault that left it so.
+const UnverifiedCode = enumOf([
+  "CITATION_NOT_LOCATED",
+  "CITATION_AMBIGUOUS",
+  "CITATION_NOT_DELIVERED",
+]);
+// A citation of an accepted answer that did not anchor (D106): the model's own
+// locator and quote. No line, no rectangle, no located document: nothing on it
+// may be shown as host-verified, and its claim is "Untraced".
+const UnverifiedCitationView = object({
+  source_id: uuid,
+  page: int({ min: 1 }),
+  matched_text: string({ max: 65536 }),
+  code: UnverifiedCode,
+  // False where the answer's body does not carry the quote either.
+  linked: bool,
+});
+// A located quote of a Blocked answer (D106): its line, as a source fact's.
+const BlockedQuoteView = object({
+  document_sha256: hash,
+  page: int({ min: 1 }),
+  matched_text: string({ max: 65536 }),
+  line: LineView,
+  linked: bool,
+});
+// The verdict that ended a run, and the Blocked answer's quotes as the host
+// judged them (owner: "Show its quotes"); none recorded before migration 0044.
+const BlockedByView = object({
+  route_node_id: short,
+  module_id: short,
+  attempt_id: uuid,
+  quotes_recorded: bool,
+  verified: array(BlockedQuoteView, 1024),
+  unverified: array(UnverifiedCitationView, 1024),
+});
 const RunView = object({
   run_id: uuid,
   status: enumOf(RUN_STATUSES),
@@ -380,17 +425,6 @@ const RunBody = object({
 const RunSectionDocument = sectionDocument(RunBody);
 
 const RectView = object({ x0: number, y0: number, x1: number, y1: number });
-// The evidence line a citation anchored in, split by the server around its
-// excerpt (D105): recorded, `before + excerpt + after` is the line, never
-// sliced here, and an empty `excerpt` is a line the server could not place the
-// quote in. Not recorded (a record from before whole-line citations), the
-// quote is `excerpt` alone and is no source line.
-const LineView = object({
-  before: string({ max: 65536 }),
-  excerpt: string({ max: 65536 }),
-  after: string({ max: 65536 }),
-  recorded: bool,
-});
 const CitationView = object({
   document_sha256: hash,
   source_id: uuid,
@@ -404,21 +438,6 @@ const CitationView = object({
   // False for a quote the answer's body does not carry (D106): still
   // host-verified, but "not linked to a statement in the answer".
   linked: bool,
-});
-// Why a citation is unverified (D106): the anchoring fault that left it so.
-const UnverifiedCode = enumOf([
-  "CITATION_NOT_LOCATED",
-  "CITATION_AMBIGUOUS",
-  "CITATION_NOT_DELIVERED",
-]);
-// A citation of an accepted answer that did not anchor (D106): the model's own
-// locator and quote. No line, no rectangle, no located document: nothing on it
-// may be shown as host-verified, and its claim is "Untraced".
-const UnverifiedCitationView = object({
-  source_id: uuid,
-  page: int({ min: 1 }),
-  matched_text: string({ max: 65536 }),
-  code: UnverifiedCode,
 });
 // A handoff's tagged tables, read by the server from its Markdown with the
 // bundle's own reader (`caos/methodology/tables.py`); the browser never parses
@@ -595,6 +614,8 @@ const NarrativeFigure = object({
   line: LineView,
   rects: array(RectView, 256),
   withdrawn_at: nullable(datetime),
+  // The record citation's own `linked` (D106).
+  linked: bool,
 });
 // A figure naming an unverified citation (D106): the model's locator as the
 // record holds it, shown labelled and never opened as a host-verified source.
@@ -606,6 +627,7 @@ const NarrativeUnverified = object({
   page: int({ min: 1 }),
   matched_text: string({ max: 65536 }),
   code: UnverifiedCode,
+  linked: bool,
 });
 const NarrativeSpan = object({
   text: nullable(string({ max: 2000 })),
@@ -780,6 +802,7 @@ export const V1_SHAPES = {
   Chrome,
   CitationView,
   UnverifiedCitationView,
+  BlockedQuoteView,
   LineView,
   DirectoryBody,
   DirectoryDocument,
@@ -854,6 +877,7 @@ export type TableView = Infer<typeof TableView>;
 export type CellView = Infer<typeof CellView>;
 export type CitationView = Infer<typeof CitationView>;
 export type UnverifiedCitationView = Infer<typeof UnverifiedCitationView>;
+export type BlockedByView = Infer<typeof BlockedByView>;
 export type NarrativeUnverified = Infer<typeof NarrativeUnverified>;
 export type LineView = Infer<typeof LineView>;
 export type PendingNode = Infer<typeof PendingNode>;

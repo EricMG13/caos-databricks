@@ -114,7 +114,14 @@ describe("Model v1", () => {
           forecast: null,
           unavailable_reason: "NO_ACCEPTED_FORECAST",
           displayed_run_status: "BLOCKED",
-          blocked_by: { route_node_id: "rn-cp-5", module_id: "CP-5", attempt_id: RUN },
+          blocked_by: {
+            route_node_id: "rn-cp-5",
+            module_id: "CP-5",
+            attempt_id: RUN,
+            quotes_recorded: false,
+            verified: [],
+            unverified: [],
+          },
         })}
         tab={null}
       />,

@@ -39,6 +39,7 @@ from caos.api.wire import (
     AnalysisBody,
     AnalysisDocument,
     BlockedByView,
+    BlockedQuoteView,
     CellView,
     Chrome,
     CitationView,
@@ -52,10 +53,11 @@ from caos.api.wire import (
     Subject,
     TableView,
     UnverifiedCitationView,
+    bounded,
 )
 from caos.blobs import BlobStore
 from caos.deliverable.render import SCREENING_ONLY
-from caos.evidence.citations import AnchoredCitation, CitationRule
+from caos.evidence.citations import EXCERPT, AnchoredCitation, CitationRule
 from caos.graph.route import (
     MODEL_MODULE,
     NodeResult,
@@ -65,7 +67,11 @@ from caos.graph.route import (
 )
 from caos.methodology.bundle import Bundle, module_display_names
 from caos.methodology.canonical import accepted_handoff
-from caos.methodology.handoff import CanonicalRecord
+from caos.methodology.handoff import (
+    CanonicalRecord,
+    UnverifiedCitation,
+    read_blocked_citations,
+)
 from caos.methodology.invocation import named_objects
 from caos.methodology.tables import HandoffTable, handoff_tables
 from caos.methodology.vendor import cached_contract
@@ -100,7 +106,10 @@ IO_BUDGET = FIXED_IO + LONGEST_ROUTE_NODES * PER_HANDOFF_IO + MODEL_PROOFS_IO
 # accepted handoff, each downloaded and hashed once per request however many
 # of the lineage and record readers ask for it (`BlobStore.remembering`).
 PER_HANDOFF_BLOBS = 2
-BLOB_BUDGET = LONGEST_ROUTE_NODES * PER_HANDOFF_BLOBS
+# A Blocked run's answer's quotes, as the transition stored them (D106):
+# one blob, read only on a BLOCKED run whose verdict kept them.
+BLOCKED_QUOTES_BLOBS = 1
+BLOB_BUDGET = LONGEST_ROUTE_NODES * PER_HANDOFF_BLOBS + BLOCKED_QUOTES_BLOBS
 # A handoff's tables cost neither: they are read from the Markdown this request
 # already downloaded and verified, by the contract `accepted_handoff` compiled.
 
@@ -177,7 +186,7 @@ def _case_row(
 
 def _displayed_status(
     conn: StoreConnection, displayed: UUID | None
-) -> tuple[Any, tuple[Any, Any] | None]:
+) -> tuple[Any, tuple[Any, Any, Any] | None]:
     """The displayed run's own status, and its blocking verdict if any --
     read as the stored string, the way `reads/run.py` reads it: the column
     holds exactly the five the wire declares. The blocking verdict rides the
@@ -187,7 +196,8 @@ def _displayed_status(
     if displayed is None:
         return None, None
     found = conn.execute(
-        "SELECT r.status, v.attempt_id, a.route_node_id FROM runs r"
+        "SELECT r.status, v.attempt_id, a.route_node_id, v.citations_sha256"
+        " FROM runs r"
         " LEFT JOIN run_blocking_verdicts v ON v.run_id = r.run_id"
         " LEFT JOIN run_attempts a ON a.attempt_id = v.attempt_id"
         " WHERE r.run_id = %s",
@@ -195,7 +205,7 @@ def _displayed_status(
     ).fetchone()
     if found is None:
         return None, None
-    return found[0], None if found[1] is None else (found[1], found[2])
+    return found[0], None if found[1] is None else (found[1], found[2], found[3])
 
 
 def _analysis_document(query: AnalysisQuery, *, with_tables: bool) -> AnalysisDocument:
@@ -221,7 +231,7 @@ def _analysis_document(query: AnalysisQuery, *, with_tables: bool) -> AnalysisDo
         if pending:
             notes.append(SectionNote.HANDOFFS_PENDING)
         if displayed_status == "BLOCKED" and blocking is not None:
-            blocked_by = _blocked_by(route, blocking)
+            blocked_by = _blocked_by(route, blocking, query.blobs)
     return AnalysisDocument(
         chrome=Chrome(
             subject=Subject(case_id=query.case_id, title=title),
@@ -247,21 +257,67 @@ def _analysis_document(query: AnalysisQuery, *, with_tables: bool) -> AnalysisDo
     )
 
 
-def _blocked_by(route: ResolvedRoute, blocking: tuple[object, object]) -> BlockedByView:
+def _blocked_by(
+    route: ResolvedRoute, blocking: tuple[object, object, object], blobs: BlobStore
+) -> BlockedByView:
     """The node whose validated Blocked verdict ended this run, as the
     transition recorded it (§68) -- read, never re-derived, exactly as
-    `reads/run.py` reads it. A node the pinned route does not carry is a store
-    the pins do not describe, refused rather than served under a guessed
-    module.
-    """
-    attempt, node_id = blocking
+    `reads/run.py` reads it."""
+    attempt, node_id, citations = blocking
+    return blocked_by_view(route, (attempt, node_id), citations, blobs)
+
+
+def blocked_by_view(
+    route: ResolvedRoute,
+    verdict: tuple[object, object],
+    citations_sha256: object,
+    blobs: BlobStore,
+) -> BlockedByView:
+    """The Blocked verdict `verdict` (its attempt and route node) as Run and
+    Analysis serve it, with the answer's quotes as the host judged them
+    (D106; owner: "Show its quotes (Recommended)"): read from the blob the
+    transition stored (`read_blocked_citations`, one blob read), or none, and
+    `quotes_recorded` false, for a verdict stored before migration 0044. A
+    node the pinned route does not carry is a store the pins do not
+    describe, refused rather than served under a guessed module."""
+    attempt, node_id = verdict
     node = next((n for n in route.nodes if n.route_node_id == str(node_id)), None)
     if node is None:
         raise Refusal(RefusalCode.ORCHESTRATION_NODE_NOT_IN_ROUTE)
+    anchored: tuple[AnchoredCitation, ...] = ()
+    unverified: tuple[UnverifiedCitation, ...] = ()
+    if citations_sha256 is not None:
+        anchored, unverified = read_blocked_citations(blobs, str(citations_sha256))
     return BlockedByView(
         route_node_id=node.route_node_id,
         module_id=node.module_id,
         attempt_id=UUID(str(attempt)),
+        quotes_recorded=citations_sha256 is not None,
+        verified=[
+            BlockedQuoteView(
+                document_sha256=c.document_sha256,
+                page=c.page,
+                matched_text=bounded(c.matched_text),
+                line=LineView.of(c.line_text, c.matched_text, EXCERPT),
+                linked=c.linked,
+            )
+            for c in anchored
+        ],
+        unverified=[_unverified_view(entry) for entry in unverified],
+    )
+
+
+def _unverified_view(entry: UnverifiedCitation) -> UnverifiedCitationView:
+    """An unverified citation as recorded (D106), its quote within the
+    wire's bound."""
+    return UnverifiedCitationView.model_validate(
+        {
+            "source_id": entry.source_id,
+            "page": entry.page,
+            "matched_text": bounded(entry.matched_text),
+            "code": entry.code.value,
+            "linked": entry.linked,
+        }
     )
 
 
@@ -456,17 +512,7 @@ def _handoff_view(  # noqa: PLR0913 -- one accepted handoff and its lookups
         ],
         # The model's own locators and quotes, as recorded (D106): no lookup,
         # since a model's `source_id` may name no source the run was given.
-        unverified_facts=[
-            UnverifiedCitationView.model_validate(
-                {
-                    "source_id": entry.source_id,
-                    "page": entry.page,
-                    "matched_text": entry.matched_text,
-                    "code": entry.code.value,
-                }
-            )
-            for entry in record.unverified
-        ],
+        unverified_facts=[_unverified_view(entry) for entry in record.unverified],
         # Model-authored and rendered as text, never as markup (§46.3).
         model_analysis=markdown,
         host_calculation=(
@@ -499,7 +545,7 @@ def _citation(
         source_id=source_id,
         filename=filename,
         page=citation.page,
-        matched_text=citation.matched_text,
+        matched_text=bounded(citation.matched_text),
         line=LineView.of(citation.line_text, citation.matched_text, rule),
         rects=[RectView(x0=b.x0, y0=b.y0, x1=b.x1, y1=b.y1) for b in citation.bboxes],
         withdrawn_at=withdrawn_at,  # type: ignore[arg-type]

@@ -136,6 +136,7 @@ describe("unverified citations (D106)", () => {
             page: 9,
             matched_text: '</q><mark>3.1x</mark><script>alert("x")</script>',
             code: "CITATION_AMBIGUOUS",
+            linked: true,
           },
         },
       ],

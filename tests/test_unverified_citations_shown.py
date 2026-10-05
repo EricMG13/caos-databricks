@@ -417,3 +417,29 @@ def test_a_route_whose_module_has_no_anchored_citation_saves_and_renders(
     page = render(deepcopy(payload)).decode()
     assert page.count("None: no citation of this module was located by the host.") == 1
     assert page.count("unverified \N{EN DASH} page 3") == 1
+
+
+def test_a_committee_figure_shows_the_records_linked() -> None:
+    """NB2 review, Minor 3 and 4: a figure's `linked` is its record entry's
+    (the payload copies only the locator and quote), so a committee figure
+    naming a citation the answer's body does not carry says so -- "not
+    linked to a statement in the answer" for an anchored one, "not in the
+    answer body" beside an unverified one's reason."""
+    payload = _payload([_anchored(linked=False)], [_unverified(linked=False)])
+    payload.update(IDENTITY)
+    figure = {"route_node_id": "RN-CP-1", "citation_index": 0, **_anchored()}
+    del figure["line_text"]
+    payload["narrative"] = [[{"figure": figure}, _unverified_span()]]
+    page = render(payload).decode()
+    narrative = page.split("<h2>Analyst narrative</h2>")[1]
+    assert narrative.count(" · not linked to a statement in the answer</p>") == 1
+    assert "· not located · not in the answer body · source" in narrative
+    _facts, listed = _sections(page)
+    assert "· not located · not in the answer body · source" in listed
+    assert verify_package(_packaged(payload)) == Verification(True, None)
+
+    payload["narrative"] = [[_unverified_span(matched_text="Another quote")]]
+    shown = render(payload).decode().split("<h2>Analyst narrative</h2>")[1]
+    assert "not in the answer body" not in shown
+    with pytest.raises(RenderRefused):
+        unverified(_unverified(linked="no"))

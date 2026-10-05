@@ -85,8 +85,9 @@ function figureFact(figure: NarrativeFigure): CitationView {
     // A figure names the page its record's citation is on; it keeps no
     // page the module named instead (D94).
     cited_page: null,
-    // A figure is the analyst's own statement of its quote (D106).
-    linked: true,
+    // The record citation's own: false where the module's answer does not
+    // carry the quote (D106), which the drawer says.
+    linked: figure.linked,
   };
 }
 
