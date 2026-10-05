@@ -38,7 +38,7 @@ import sys
 sys.dont_write_bytecode = True
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from cp_tables import REGISTER_ID_RE, SEPARATOR_RE, _row_cells, _split_row, parse_tables, read_tables  # noqa: E402
+from cp_tables import REGISTER_ID_RE, SEPARATOR_RE, TABLE_ID_RE, _row_cells, _split_row, parse_tables, read_tables  # noqa: E402
 from validate_handoff import FrontmatterError, parse_restricted_frontmatter, unfenced_markdown  # noqa: E402
 
 BULLET_RE = re.compile(r"^(?P<indent> *)- (?:\*\*(?P<key>[^*]+)\*\*:\s?)?(?P<value>.*)$")
@@ -507,14 +507,53 @@ def check(skill_text, handoff_text, module_id=None):
     # read (fork r6): one short row used to report every one of them missing.
     stable_tables, table_errors = read_tables(handoff_text)
     violations.extend(table_errors.values())
+    titled = _register_titles(handoff_text, present)
+    tagged = {m.group(1) for m in TABLE_ID_RE.finditer(handoff_text)}
     for table_id in contract["unconditional_stable_tables"]:
         if table_id not in stable_tables and table_id not in table_errors:
-            violations.append(
-                f"{table_id}: CP-MODEL interface table missing -- it is emitted on "
-                "every run, not only when CP-MODEL was requested"
-            )
+            violations.append(_missing_interface(table_id, titled, tagged))
 
     return violations, contract, present
+
+
+def _name_key(words):
+    """Letters and digits only, casefolded: `addback_validation_register` and
+    `Add-Back Validation Register` are one key."""
+    return "".join(re.findall(r"[0-9a-z]+", words.casefold()))
+
+
+def _register_titles(handoff_text, present):
+    """{title key: register ID} for each located register whose heading is led
+    by its ID: "#### T4.12 — Model Comparator Register" is
+    `modelcomparatorregister` (fork r11). A trailing parenthetical is not part
+    of the title; the first heading of a key is kept."""
+    out = {}
+    for line in unfenced_markdown(handoff_text).splitlines():
+        led = LEADING_ID_RE.match(line.strip())
+        if not led or led.group(1) not in present:
+            continue
+        key = _name_key(re.sub(r"\([^()]*\)\s*$", "", line.strip()[led.end():]))
+        if key:
+            out.setdefault(key, led.group(1))
+    return out
+
+
+def _missing_interface(table_id, titled, tagged):
+    """The message for an interface table no tag binds (fork r11). Where the
+    handoff writes the register the table-id names -- its name part,
+    `model_comparator_register`, is the title of a heading led by the
+    register's ID, "T4.12 — Model Comparator Register" -- and the
+    `<!-- table-id: -->` comment appears nowhere in it, the comment is what is
+    missing, and the message says so: R1b's CP-1B was told four tables it had
+    written were missing. With no such heading, or with the comment written
+    but bound to no table, the table is missing."""
+    reg_id = titled.get(_name_key(table_id.partition(".")[2]))
+    if reg_id and table_id not in tagged:
+        return f"`<!-- table-id: {table_id} -->` comment not found above the {reg_id} table"
+    return (
+        f"{table_id}: CP-MODEL interface table missing -- it is emitted on "
+        "every run, not only when CP-MODEL was requested"
+    )
 
 
 def _leads_with(cell, value):

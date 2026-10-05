@@ -272,13 +272,12 @@ Word and Microsoft 365 renderers do not handle them consistently.
 
 ##### CP-PARSE prepared evidence
 
-CP-PARSE retains pack inventory, triage, parsing, fidelity, representation,
-safe-path, checksum, batch-reconciliation and ZIP-verification gates. The P3 and P5 preparation registers are retained inside the single
-`[IssuerID]_CP-0_[YYYYMMDD].md` handoff. Parsed per-source
-Markdown and validated CP-PARSE ZIP batches are supporting prepared evidence,
-not additional analytical handoffs. Pass-through originals remain direct active
-representations; a successful parsed artifact replaces its original for content
-consumption. CP-0 consumes this frozen catalog to assess readiness. The user
+CP-PARSE retains the inventory, identity, fidelity and coverage checks its P3
+and P5 preparation registers hold, inside the single
+`[IssuerID]_CP-0_[YYYYMMDD].md` handoff. The host's preparation record holds
+the rest: each source's hashes, extraction and delivery, and its host
+extraction as its one active representation. CP-0 consumes that record to
+assess readiness. The user
 never copies prepared artifacts back into the source folder.
 
 #### Prohibited behavior

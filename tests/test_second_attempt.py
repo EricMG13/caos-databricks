@@ -567,6 +567,43 @@ def test_the_anchoring_line_names_the_citations_to_keep_and_the_rule() -> None:
     assert anchoring_line([None] * many) is None
 
 
+def test_the_anchoring_line_names_the_line_a_near_miss_should_copy() -> None:
+    """F493: a citation that nearly matches one delivered line is told that
+    line's page and first words and to copy it exactly, and to cite that
+    page when it is not the cited one (fix round 1); it is still counted
+    among the refused, the kept list goes first past `MAX_ANCHORING_CHARS`,
+    and then the near miss is dropped like any placement."""
+    lost = RefusalCode.CITATION_NOT_LOCATED
+    near = LineHint(begins="On March 4, 2026, the Company entered", near=7)
+    line = anchoring_line([None, lost], [None, near])
+    assert line == (
+        "host anchoring check: citation 2 of 2 nearly matches the evidence line"
+        ' of page 7 that begins "On March 4, 2026, the Company entered" but'
+        " differs in wording; copy that line exactly, character for character;"
+        " keep citation 1 exactly as it was; any citation you add or change must"
+        " be one entire evidence line of its cited page"
+        " (numbered from 1 in the order given)"
+    )
+    moved = LineHint(begins="On May 27, 2026, Caesars", near=5, moved=True)
+    elsewhere = anchoring_line([lost], [moved])
+    assert elsewhere == (
+        "host anchoring check: citation 1 of 1 nearly matches the evidence line"
+        ' of page 5, not its cited page, that begins "On May 27, 2026, Caesars"'
+        " but differs in wording; copy that line exactly, character for"
+        " character, and cite page 5; any citation you add or change must be"
+        " one entire evidence line of its cited page"
+        " (numbered from 1 in the order given)"
+    )
+    long = LineHint(begins=" ".join(["w" * 40] * HINT_WORDS), near=3)
+    many = MAX_FEEDBACK_CITATIONS + 2
+    capped_line = anchoring_line(
+        [None] * 400 + [lost] * many, [None] * 400 + [long] * many
+    )
+    assert capped_line is not None and len(capped_line) <= MAX_ANCHORING_CHARS
+    assert "keep citation" not in capped_line
+    assert 0 < capped_line.count("nearly matches") < MAX_FEEDBACK_CITATIONS
+
+
 def test_two_guided_retries_per_node_whichever_codes_refused(
     harness: _Harness,
 ) -> None:
@@ -1070,6 +1107,28 @@ def test_a_table_that_does_not_parse_is_named_before_what_it_voids() -> None:
     assert "interface table missing" in ordered[-1]
 
 
+def test_an_untagged_interface_register_trails_like_a_missing_table() -> None:
+    """Fork r11 (D100): a register written without its table-id comment is
+    the vendor's other unbound-interface message, and sorts with "missing"."""
+    from caos.methodology.handoff import _consequence
+
+    untagged = (
+        "`<!-- table-id: cp1b.model_readiness -->` comment not found above"
+        " the T4.15 table"
+    )
+    messages = [
+        untagged,
+        "cp1b.a: CP-MODEL interface table missing -- emitted on every run",
+        "T4.4: missing column(s) ['Line Item']",
+        "cp1b.b: missing or malformed table separator",
+    ]
+    ordered = sorted(messages, key=_consequence)
+    assert ordered[0].endswith("separator")
+    assert ordered[1].startswith("T4.4")
+    assert ordered[2:] == messages[:2]
+    assert _consequence(untagged) == _consequence(messages[1]) == 2
+
+
 def test_the_readiness_set_line_names_what_t8_lacks_and_adds(
     harness: _Harness,
 ) -> None:
@@ -1154,3 +1213,57 @@ def _identity_cp0() -> HostIdentity:
     from canonical_fixtures import identity
 
     return identity("CP-0")
+
+
+def _padded_to(size: int) -> Callable[[str], str]:
+    """The same answer with prose appended until its Markdown is `size` bytes."""
+
+    def pad(body: str) -> str:
+        wire = json.loads(body)
+        markdown = wire["canonical_markdown"].rstrip("\n") + "\n\n"
+        needed = size - len(markdown.encode("utf-8")) - 1
+        assert needed > 200
+        lines, rest = divmod(needed, 100)
+        filler = ("pad " * 24 + "pad\n") * lines + "p" * (rest - 1) + "\n" * (rest > 0)
+        wire["canonical_markdown"] = markdown + filler + "\n"
+        assert len(wire["canonical_markdown"].encode("utf-8")) == size
+        return json.dumps(wire)
+
+    return pad
+
+
+def test_a_handoff_over_the_upstream_bound_is_refused_at_its_producer(
+    harness: _Harness,
+) -> None:
+    """F494: a handoff one byte past `MAX_UPSTREAM_HANDOFF_BYTES` would be
+    refused by every consumer, where no retry of it reaches; it is refused at
+    acceptance instead, and the guided retry is told its size and the bound."""
+    bound = invocation.MAX_UPSTREAM_HANDOFF_BYTES
+    answers = CanonicalCompletions(harness.source_id)
+    assert _run(harness, _Flawed(answers, flaw=_padded_to(bound + 1))) is None
+    assert [_module(prompt) for prompt in answers.prompts[:2]] == ["CP-0", "CP-0"]
+    line = (
+        "host size check: your handoff is 98,305 bytes; the host's bound is"
+        " 98,304; shorten it (for example quote fewer or shorter evidence lines)"
+        " and keep every register"
+    )
+    assert line not in answers.prompts[0]
+    assert line in answers.prompts[1]
+    assert _cp0_ledger(harness) == (2, 2, ["HANDOFF_MALFORMED"], 1)
+
+
+def test_a_handoff_exactly_at_the_upstream_bound_is_accepted(
+    harness: _Harness,
+) -> None:
+    """F494's bound is the consumer's (`len(data) > bound` refuses): a handoff
+    of exactly `MAX_UPSTREAM_HANDOFF_BYTES` is accepted and read downstream."""
+    bound = invocation.MAX_UPSTREAM_HANDOFF_BYTES
+    answers = CanonicalCompletions(harness.source_id)
+    assert _run(harness, _Flawed(answers, flaw=_padded_to(bound))) is None
+    assert [_module(prompt) for prompt in answers.prompts] == [
+        "CP-0",
+        "CP-L10",
+        "CP-5",
+    ]
+    assert "host size check" not in answers.prompts[1]
+    assert _cp0_ledger(harness) == (1, 1, [], 1)

@@ -19,7 +19,10 @@ including any leading bullet or footnote marker and any trailing `|`, never
 only a sentence of it; that line must appear exactly once on its cited page;
 the same words appear verbatim in the Markdown body after the front matter, in
 the source's own wording ("we", "our", "us"), never rephrased into the third
-person. Cite only lines that support a claim you wrote. Valid `source_id`
-values are exactly: {source_ids}, and `page` is the page in the nearest
-evidence header above that line. Include at least one citation.
+person. Cite the evidence line behind each material figure and each
+statement that a register row or conclusion rests on, at least one citation in
+all, and only lines that support a claim you wrote; the cited lines may be
+quoted together in one evidence section of the body. Valid `source_id` values
+are exactly: {source_ids}, and `page` is the page in the nearest evidence
+header above that line.
 {host_text}--- END FINAL RESPONSE CHECK {tag} ---

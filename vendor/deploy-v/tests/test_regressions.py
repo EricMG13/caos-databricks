@@ -3,6 +3,7 @@ import ast
 import importlib
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -1178,14 +1179,73 @@ class ForkR9Tests(unittest.TestCase):
         self.assertIn('**P3 — Input Sources**', skill)
         self.assertIn('**P5 — Parse Jobs**', skill)
         references = ROOT / 'skills/cp-0-source-readiness/references'
+        # Fork r11 (D99): nothing CP-0 is handed asks for work on a retired register -- no triage
+        # scores or register, no ZIP, checksum or batch gate, no column the host's record lacks.
+        stale_r11 = ('once in the triage register', 'inventory and triage register', 'Scores add correctly', '## Scoring rubric', 'score and freeze',
+                     'Freeze one decision per source', 'batch-reconciliation', 'ZIP-verification',
+                     'BATCH-[NNN]-of-[NNN].zip` packages', 'the host\'s record carries them',
+                     'active_content_artifact_id', '`PASS_THROUGH` attaches its original',
+                     'package validation', 'package status', 'same-run preparation validation',
+                     # Fork r11 fix round 1: the residual triage, workspace and package text.
+                     '| Case | Expected decision | Reason |', '## ZIP batching', '## Triage-only run',
+                     'TRIAGE_REGISTER.md', 'CHECKSUMS.sha256', '| State | Original role | Parsed role |',
+                     'sha256_before', 'checksums and packages only in the workspace',
+                     'Keep source roots immutable', 'Package or fidelity validation failure', 'unsafe package',
+                     'frozen triage', 'Evidence ZIPs remain', 'evidence packages use',
+                     # Fork r11 fix round 2: the role, entry contract, export and step text that still asked
+                     # for triage, a managed workspace, original-hash re-checks or supporting packages.
+                     'Inventory and triage the complete pack', 'package one validated', 'Triage the whole pack',
+                     'it still appears in the manifest', 'managed run workspace', 'Parsed evidence ZIPs',
+                     'validated package links', 'link validated supporting packages', 'Validated prepared packages',
+                     'owns triage, extraction, fidelity and packaging', 'changed hashes, failed package',
+                     '## Frozen decision', '## Calibration defaults', 'evidence_value 0-5', 're-triage',
+                     'Verify the original SHA-256 again', 'original-hash verification', 'supporting evidence ZIP',
+                     'selected artifact hash present', 'original hashes', 'derivative paths outside source roots',
+                     'PASS_THROUGH', 'SKIP_DUPLICATE', 'SKIP_LOW_VALUE', 'package-level limitations',
+                     'source hash when available', 'Master Index and managed workspace', 'original paths/hashes',
+                     'their own artifact ID, path, hash', 'Every prepared artifact records')
         for path in (ROOT / 'skills/cp-0-source-readiness/SKILL.md', ROOT / 'CANON_SHARED.md',
                      references / 'REF_CP-0_STEPS.md', references / 'CP-PARSE_SCHEMA_REFERENCE.md',
+                     references / 'CP-0_SYSTEM_REFERENCE.md',
+                     references / 'REF_CP-PARSE_STEPS.md', references / 'CP-0_SCHEMA_REFERENCE.md',
                      references / 'CP0_PROFILE_ANCHOR_CONTRACT_v1.md',
+                     references / 'CP0_CAPACITY_RESUME_CONTRACT_v1.md',
                      ROOT / 'skills/cp-os-credit-os/references/CP-OS_MIRROR_CP0_PROFILE_ANCHOR_CONTRACT_v1.md'):
             text = path.read_text(encoding='utf-8')
-            for stale in ('P1-P8', 'P1–P8', 'Triage it `PARSE_TARGETED`', '| P7 | Representation Catalog |'):
+            for stale in ('P1-P8', 'P1–P8', 'Triage it `PARSE_TARGETED`', '| P7 | Representation Catalog |') + stale_r11:
                 with self.subTest(file=path.name, stale=stale):
                     self.assertNotIn(stale, text)
+        # What CP-0 still owes stays: execution batching and resume (capacity), and the eight T8 rules.
+        capacity = (references / 'CP0_CAPACITY_RESUME_CONTRACT_v1.md').read_text(encoding='utf-8')
+        for kept in ('## Deterministic parse work', '`BATCH-NNN`', '[resume_from: <checkpoint>]',
+                     'CP-0 keeps no workspace', '`READY_FOR_FINALIZATION`'):
+            with self.subTest(kept=kept):
+                self.assertIn(kept, capacity)
+        steps = (references / 'REF_CP-0_STEPS.md').read_text(encoding='utf-8')
+        rules = steps.split('step="I" name="DownstreamReadiness">', 1)[1].split('## CP-MODEL boundary', 1)[0]
+        self.assertEqual(re.findall(r'^(\d+)\. ', rules, re.M), [str(n) for n in range(1, 9)])
+
+    def test_cp0_verifies_only_what_its_own_registers_hold(self):
+        # Fork r11 (D99): the preparation phase's Verification block asked PASS/FAIL/NA of 14 checks, 8 of
+        # them on what P2, P4, P7 and P8 held (frozen triage, ZIP paths, checksums, batches). Each block
+        # now keeps the checks P3, P5 and T1-T8 hold and points at the host's preparation record.
+        skill = skill_text('cp-0-source-readiness')
+        blocks = re.findall(r'#### Verification — fail closed\n(.*?)</verification>', skill, re.S)
+        self.assertEqual(len(blocks), 2)
+        preparation, readiness = blocks
+        for block in blocks:
+            for retired in ('triage', 'ZIP', 'checksum', 'batch', 'original hashes', 'package validation',
+                            'representation uniqueness', 'source-root immutability', 'unique members'):
+                with self.subTest(retired=retired):
+                    self.assertNotIn(retired, block)
+            self.assertIn("the host's preparation record", block.replace('host’s', "host's"))
+        self.assertIn('(P3)', preparation)
+        self.assertIn('(P5)', preparation)
+        self.assertIn('downstream readiness', readiness)
+        parse = (ROOT / 'skills/cp-0-source-readiness/references/REF_CP-PARSE_STEPS.md').read_text(encoding='utf-8')
+        gates = parse.split('## Verification gates\n', 1)[1]
+        self.assertEqual(re.findall(r'^(\d+)\. ', gates, re.M), [str(n) for n in range(1, 8)])
+        self.assertIn("appears exactly once in P3 and in P5", gates)
 
     def test_an_answer_with_the_retired_registers_still_reads_the_same(self):
         # Every stored CP-0 answer writes all sixteen. A retired heading keeps its table, so the prose under
@@ -1209,6 +1269,63 @@ class ForkR9Tests(unittest.TestCase):
         self.assertEqual(complete.check(skill, lean, 'CP-0')[0], [])
         self.assertIn('P3: required register missing from the handoff',
                       complete.check(skill, lean.replace('#### P3 — Preparation', '#### Inputs'), 'CP-0')[0])
+
+
+class ForkR11Tests(unittest.TestCase):
+    """Deployment fork r11 (D100): an interface table written without its table-id comment is told so."""
+
+    TITLES = {'T4.12': 'Model Comparator Register', 'T4.13': 'Model Validation Register',
+              'T4.14': 'Add-Back Validation Register', 'T4.15': 'Model Readiness'}
+
+    def handoff(self, tag=lambda reg: '', title=lambda reg, name: name):
+        parts = []
+        for reg, name in self.TITLES.items():
+            parts.append(f'#### {title(reg, name)}\n\n{tag(reg)}| a | b |\n|---|---|\n| x | y |\n\n')
+        return ''.join(parts)
+
+    def interface(self, text):
+        skill = skill_text('cp-1b-earnings-delta')
+        return [v for v in complete.check(skill, text, 'CP-1B')[0] if 'table-id' in v or 'interface' in v]
+
+    def test_a_register_written_without_its_comment_names_the_comment(self):
+        # R1b CP-1B attempt 2 wrote T4.12-T4.15 under their register headings and no table-id comment,
+        # and was told the four tables were missing.
+        found = self.interface(self.handoff(title=lambda reg, name: f'{reg} — {name}'))
+        self.assertEqual(found, [
+            '`<!-- table-id: cp1b.model_comparator_register -->` comment not found above the T4.12 table',
+            '`<!-- table-id: cp1b.model_validation_register -->` comment not found above the T4.13 table',
+            '`<!-- table-id: cp1b.addback_validation_register -->` comment not found above the T4.14 table',
+            'cp1b.cp_model_snapshot_fields: CP-MODEL interface table missing -- it is emitted on every run, '
+            'not only when CP-MODEL was requested',
+            '`<!-- table-id: cp1b.model_readiness -->` comment not found above the T4.15 table',
+        ])
+        # Emphasis and a trailing parenthetical are not part of the title.
+        found = self.interface(self.handoff(title=lambda reg, name: f'**{reg}** {name} (CP-MODEL interface)'))
+        self.assertIn('`<!-- table-id: cp1b.model_readiness -->` comment not found above the T4.15 table', found)
+
+    def test_a_missing_register_or_an_unbound_comment_is_still_a_missing_table(self):
+        # No heading led by the register's ID: the table is missing.
+        found = self.interface(self.handoff(title=lambda reg, name: name))
+        self.assertEqual(len(found), 5)
+        self.assertTrue(all('CP-MODEL interface table missing' in v for v in found), found)
+        # A heading whose title is another register's pairs with nothing.
+        found = self.interface(self.handoff(title=lambda reg, name: f'{reg} — Readiness notes'))
+        self.assertTrue(all('CP-MODEL interface table missing' in v for v in found), found)
+        # The comment written, with prose between it and the table: present but unbound.
+        ids = dict(zip(self.TITLES, ('cp1b.model_comparator_register', 'cp1b.model_validation_register',
+                                     'cp1b.addback_validation_register', 'cp1b.model_readiness')))
+        unbound = self.handoff(tag=lambda reg: f'<!-- table-id: {ids[reg]} -->\nA note.\n\n',
+                               title=lambda reg, name: f'{reg} — {name}')
+        self.assertEqual(tables.read_tables(unbound), ({}, {}))
+        found = self.interface(unbound)
+        self.assertEqual(len(found), 5)
+        self.assertTrue(all('CP-MODEL interface table missing' in v for v in found), found)
+        # Bound, the four are read and only the snapshot table is missing.
+        bound = self.handoff(tag=lambda reg: f'<!-- table-id: {ids[reg]} -->\n', title=lambda reg, name: f'{reg} — {name}')
+        self.assertEqual(sorted(tables.read_tables(bound)[0]), sorted(ids.values()))
+        self.assertEqual(self.interface(bound), [
+            'cp1b.cp_model_snapshot_fields: CP-MODEL interface table missing -- it is emitted on every run, '
+            'not only when CP-MODEL was requested'])
 
 
 @unittest.skipUnless(os.environ.get('DEPLOY_V_INTEGRATION') == '1', 'enable integration for native PDF and DOCX dependencies')
