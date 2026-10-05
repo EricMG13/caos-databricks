@@ -1,6 +1,6 @@
 # CZR Q2 2026 LITE earnings-update qualification set — prepared offline
 
-Status: **OFFLINE / UNVERIFIED / NOT QUALIFIED**.
+Status: **LIVE-RUN 2026-10-05 / NOT QUALIFIED (citation keys)**. Prepared offline; the live results are in the last section.
 
 This immutable set prepares `LITE_CREDIT_22 / LITE_EARNINGS_UPDATE` for
 Caesars Entertainment, Inc. (CZR) at an analysis date of 2026-10-02. Its
@@ -91,5 +91,18 @@ single register cell is unambiguous.
 The 10-Q discloses the 27 May 2026 merger agreement with Fertitta Gaming
 Holdco, LLC as pending; no fact about it after the 10-Q's filing is in this set.
 
-No provider call, run, snapshot, evidence record, reviewer verdict, or
-qualification claim exists; no run has been performed.
+At preparation no provider call, run, snapshot, evidence record, reviewer
+verdict, or qualification claim existed; the live runs follow.
+
+## Live results (3–5 October 2026)
+
+| run (file) | build / tip | status | modules accepted | attempts | citations | keys met | ready / projection / register | stop cause | key usage Δ / recorded charge |
+|---|---|---|---|---|---|---|---|---|---|
+| E1 (`E1-czr-lite-earnings.json`) | 9043ba7f / 80028e8 | COMPLETE | 3/3 | 7 | 77 (77 anch., 0 unver.) | 2/5 | met / met / — | — | +0.17 / $0.42 |
+| E2 (`E2-czr-lite-earnings.json`) | 9043ba7f / D105-D107 | COMPLETE | 3/3 | 5 | 73 (72 anch., 1 unver.) | 1/5 | met / met / — | — | +0.14 / $0.29 |
+
+Reading the table: "build" is the first eight hex digits of the methodology build id in the run JSON; "tip" is the git tip the ledger names (`—` where the ledger names none; tips marked ~ are the base of the next fix task, so the run ran on that tree or its predecessor). "Attempts" is the run JSON's attempt list (every provider call recorded, including a dropped one). "Citations" is the run proof's total with its anchored and unverified counts (`n/r`: the run stopped before a proof was recorded). "Keys met" is the scored matrix row; a run that stopped before COMPLETE or BLOCKED is not scored (`not scored`). "Key usage Δ" is the OpenRouter key-usage change the ledger recorded for the run (`n/l`: not in the ledger); "recorded charge" is the sum of the run's attempt charges at the pinned price. The two disagree and the usage counter lags (ledger), so the key usage is the budget measure. Run files are git-ignored, under `docs/rebuild/runs/live-2026-10-03/`; the model is `openai/gpt-6-luna`, effort high, provider pinned to `openai`, in every row.
+
+Verdict: The set is **NOT QUALIFIED**. Both LITE earnings-update runs completed and were proven with the ready and projection keys met. E1 met 2 of 5 keys in its run JSON (3 of 5 after the K2 rescoring of the 10-Q Adjusted EBITDA line as an alternative, per the ledger); E2, the later run on the D105 to D107 build, met 1 of 5. E1's misses: Total outstanding indebtedness (the model cited the 10-Q's Total debt, a different comparative: a real miss) and FY revenue (not used). E2's four misses are all "not cited". Compared as a single sample each, E2 lost the Caesars revenue key (CP-0) and the total-debt key (CP-5), both not cited: read as selection variance. Records `q7`.
+
+Owner-decision stops and provider limits: None.

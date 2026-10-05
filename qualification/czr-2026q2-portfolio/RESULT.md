@@ -1,6 +1,6 @@
 # CZR Q2 2026 FULL portfolio-decision qualification set — prepared offline
 
-Status: **OFFLINE / UNVERIFIED / NOT QUALIFIED**.
+Status: **NOT RUN LIVE (synthetic mandate) / NOT QUALIFIED**. Prepared offline; the live results are in the last section.
 
 This immutable set prepares `FULL_CREDIT_32 / PORTFOLIO_DECISION` for
 Caesars Entertainment, Inc. (CZR) at an analysis date of 2026-10-02, with a
@@ -233,3 +233,9 @@ The documents state the following; this set draws no conclusion from them.
 
 No provider call, run, snapshot, evidence record, reviewer verdict, or
 qualification claim exists; no run has been performed.
+
+## Live results (3–5 October 2026)
+
+Verdict: The set was **never run live**. It carries the same self-declared synthetic mandate (D80) that blocks its LITE twin, `czr-2026q2-lite-portfolio`, at CP-0 (LP1), and the owner ruled on 5 October 2026 to leave the portfolio sets and record the stop, so a FULL portfolio run was not spent. No run file exists for it.
+
+Owner-decision stops and provider limits: **Owner decision, 5 October 2026:** "Leave them, record the stop".
