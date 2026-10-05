@@ -27,7 +27,7 @@ import threading
 import time
 import warnings
 from collections.abc import Iterator, Mapping
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
 from decimal import Decimal, DecimalException
 from types import TracebackType
@@ -257,17 +257,24 @@ def _count(value: object, *, most: int) -> int:
 
 @dataclass(frozen=True, slots=True)
 class _Raised:
-    """What the client raised that is no vendor error: the call is
-    indeterminate, and only the failure's class is ever read (F513)."""
+    """A call the client ended by raising something that is no vendor error:
+    indeterminate. Only its facts are kept, never the exception, so the
+    raising frames -- and the prompt they hold -- go with the call (F513)."""
 
-    failed: BaseException
+    kind: str
+    facts: str
 
 
 class _Indeterminate:
-    """Hold back whatever an `Exception` the block raises, keeping it in
-    `failed`: the documented fail-open of ST-8, logged by class (F513)."""
+    """`suppress(Exception)` -- its own `__exit__`, so its exception-group
+    split too -- keeping the facts of what it held back: the documented
+    fail-open of ST-8, named on stderr by class (F513). What it does not hold
+    back propagates as before."""
 
-    failed: BaseException | None = None
+    facts: str | None = None
+
+    def __init__(self) -> None:
+        self._held = suppress(Exception)
 
     def __enter__(self) -> _Indeterminate:
         return self
@@ -278,10 +285,10 @@ class _Indeterminate:
         failed: BaseException | None,
         trace: TracebackType | None,
     ) -> bool:
-        if kind is None or not issubclass(kind, Exception):
-            return False
-        self.failed = failed
-        return True
+        held = bool(self._held.__exit__(kind, failed, trace))
+        if held:
+            self.facts = _facts(failed)
+        return held
 
 
 def _invoked(
@@ -305,18 +312,24 @@ def _invoked(
     context = contextvars.copy_context()
 
     def send() -> None:
-        with _Indeterminate() as held:  # indeterminate, never text (ST-8)
-            try:
-                with _content_parts_contained():
-                    answered.append(
-                        context.run(
-                            chat.invoke, [HumanMessage(content=prompt)], **options
+        try:
+            with _Indeterminate() as held:  # indeterminate, never text (ST-8)
+                try:
+                    with _content_parts_contained():
+                        answered.append(
+                            context.run(
+                                chat.invoke, [HumanMessage(content=prompt)], **options
+                            )
                         )
-                    )
-            except OpenAIError as failed:
-                answered.append(failed)
-        if held.failed is not None:
-            answered.append(_Raised(held.failed))
+                except OpenAIError as failed:
+                    answered.append(failed)
+        except BaseException as escaped:
+            # Not held back, as `suppress(Exception)` held it not: it still
+            # ends this thread, and the call is named `escaped` (F513).
+            answered.append(_Raised("escaped", _facts(escaped)))
+            raise
+        if held.facts is not None:
+            answered.append(_Raised("raised", held.facts))
 
     sender = threading.Thread(target=send, name="caos-model-call", daemon=True)
     sender.start()
@@ -424,19 +437,65 @@ def _status_refusal(failed: OpenAIError) -> RefusalCode:
     return RefusalCode.PROVIDER_UNAVAILABLE
 
 
-# A fact a stderr line may carry: a token, never words (F513). A provider's
-# error code and type are vocabulary (`provider_unavailable`); anything else
-# in their place is shown as `?`.
-_TOKEN = re.compile(r"[A-Za-z0-9_.-]{1,64}")
+# What a stderr line may carry (F513): never words. A class name is an
+# identifier; a provider error's code is an HTTP status; its type one of the
+# `error_type` values OpenRouter documents (errors reference, 5 October 2026).
+# Anything else is shown as `?`, so a provider echoing input cannot put it here.
+_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,63}")
+_ERROR_TYPES = frozenset(
+    {
+        "authentication",
+        "content_policy_violation",
+        "context_length_exceeded",
+        "image_download_failed",
+        "image_not_found",
+        "image_too_large",
+        "image_too_small",
+        "invalid_image",
+        "invalid_prompt",
+        "invalid_request",
+        "max_tokens_exceeded",
+        "not_found",
+        "payload_too_large",
+        "payment_required",
+        "permission_denied",
+        "precondition_failed",
+        "provider_overloaded",
+        "provider_unavailable",
+        "rate_limit_exceeded",
+        "refusal",
+        "server",
+        "string_too_long",
+        "timeout",
+        "token_limit_exceeded",
+        "unmapped",
+        "unprocessable",
+        "unsupported_image_format",
+    }
+)
+_NO_FACTS = "class=- cause=- status=- error_code=- error_type=-"
+_UNKNOWN_FACTS = "class=? cause=? status=? error_code=? error_type=?"
 
 
-def _token(value: object) -> str:
+def _name(value: object) -> str:
+    return value if isinstance(value, str) and _NAME.fullmatch(value) else "?"
+
+
+def _status(value: object) -> str:
+    """An HTTP status, three or four digits, from an int or a digit string."""
     if value is None:
         return "-"
-    if isinstance(value, bool):
-        return "?"
-    shown = str(value) if isinstance(value, int) else value
-    return shown if isinstance(shown, str) and _TOKEN.fullmatch(shown) else "?"
+    if isinstance(value, str) and value.isascii() and value.isdigit():
+        value = int(value) if len(value) <= 4 else None
+    if isinstance(value, int) and not isinstance(value, bool) and 100 <= value <= 9999:
+        return str(value)
+    return "?"
+
+
+def _error_type(value: object) -> str:
+    if value is None:
+        return "-"
+    return value if isinstance(value, str) and value in _ERROR_TYPES else "?"
 
 
 def _error_body(failed: BaseException) -> Mapping[str, Any]:
@@ -453,47 +512,56 @@ def _error_body(failed: BaseException) -> Mapping[str, Any]:
 
 def _failure_facts(failed: BaseException | None) -> str:
     """The class, its causes, the status and the provider's error code and
-    type, as tokens: what tells a 200 carrying an error body from a reset, a
-    5xx or a parse failure (F513). Never the message or the body's words."""
+    type: what tells a 200 carrying an error body from a reset, a 5xx or a
+    parse failure (F513). Never the message or the body's words."""
     if failed is None:
-        return "class=- cause=- status=- error_code=- error_type=-"
+        return _NO_FACTS
     causes: list[str] = []
     link = failed.__cause__ or failed.__context__
     while link is not None and len(causes) < 3:
-        causes.append(type(link).__name__)
+        causes.append(_name(type(link).__name__))
         link = link.__cause__ or link.__context__
     body = _error_body(failed)
     metadata = body.get("metadata")
     kind = metadata.get("error_type") if isinstance(metadata, Mapping) else None
     return " ".join(
         (
-            f"class={type(failed).__name__}",
+            f"class={_name(type(failed).__name__)}",
             f"cause={'<'.join(causes) or '-'}",
-            f"status={_token(getattr(failed, 'status_code', None))}",
-            f"error_code={_token(body.get('code'))}",
-            f"error_type={_token(kind if kind is not None else body.get('type'))}",
+            f"status={_status(getattr(failed, 'status_code', None))}",
+            f"error_code={_status(body.get('code'))}",
+            f"error_type={_error_type(kind)}",
         )
     )
+
+
+def _facts(failed: BaseException | None) -> str:
+    """`_failure_facts`, or `_UNKNOWN_FACTS` when reading the failure raises:
+    a property that raises, an int too long to print. The diagnostic is a
+    fail-open (F513): it never changes the call's outcome."""
+    facts = _UNKNOWN_FACTS
+    with suppress(Exception):  # fail-open, documented above (F513)
+        facts = _failure_facts(failed)
+    return facts
 
 
 def _unanswered(code: RefusalCode, answer: object, started: float) -> Completion:
     """The refusal of a call that got no answer, after one stderr line for it
     (F513): the code, how it ended -- `vendor` (a vendor error), `raised`
-    (anything else the client raised) or `deadline` (nothing by then) --
-    `_failure_facts` and the seconds since it was first sent. The worker
-    prints its codes the same way; nothing here quotes the prompt, an answer
-    or an error's text."""
-    failed: BaseException | None = None
-    kind = "deadline"
+    (anything else the client raised, held back), `escaped` (raised and not
+    held back) or `deadline` (nothing by then) -- the facts and the seconds
+    since it was first sent. One `write`, newline included, so two calls'
+    lines never interleave; a write that fails is dropped (a fail-open: the
+    line never changes the outcome). Nothing here quotes the prompt, an
+    answer or an error's text."""
+    kind, facts = "deadline", _NO_FACTS
     if isinstance(answer, _Raised):
-        failed, kind = answer.failed, "raised"
+        kind, facts = answer.kind, answer.facts
     elif isinstance(answer, BaseException):
-        failed, kind = answer, "vendor"
-    elapsed = _clock() - started
-    print(
-        f"{code.value} call={kind} {_failure_facts(failed)} elapsed={elapsed:.1f}",
-        file=sys.stderr,
-    )
+        kind, facts = "vendor", _facts(answer)
+    with suppress(Exception):  # fail-open, documented above (F513)
+        line = f"{code.value} call={kind} {facts} elapsed={_clock() - started:.1f}\n"
+        sys.stderr.write(line)
     return Completion(None, None, None, code)
 
 

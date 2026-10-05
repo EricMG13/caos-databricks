@@ -5,6 +5,8 @@ On the canonical LITE route through the canonical executor (slice f-1a)."""
 from __future__ import annotations
 
 import hashlib
+import io
+import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from decimal import Decimal
@@ -152,6 +154,52 @@ def test_native_refusal_records_only_independently_known_money(
     assert chat.calls == calls
     assert provider.conn.info.transaction_status is TransactionStatus.IDLE
     _bills(_url_for(provider.conn.info.dbname), provider.run_id, charge, calls)
+
+
+class _UnreadableBody(Exception):
+    """A provider error whose `body` cannot be read without raising."""
+
+    @property
+    def body(self) -> object:
+        raise RuntimeError("private")
+
+
+class _UnwritableStderr(io.StringIO):
+    """A stderr whose reader is gone."""
+
+    def write(self, text: str) -> int:
+        raise BrokenPipeError(32, "private")
+
+
+@pytest.mark.parametrize(
+    ("failure", "unwritable"),
+    [
+        pytest.param(ValueError("private"), True, id="stderr-cannot-be-written"),
+        pytest.param(_UnreadableBody("private"), False, id="a-body-that-raises"),
+        pytest.param(ValueError({"code": 10**5000}), False, id="a-code-str-refuses"),
+    ],
+)
+def test_a_failing_diagnostic_never_changes_the_recorded_outcome(
+    provider: ModuleProvider,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: Exception,
+    unwritable: bool,
+) -> None:
+    """F513's stderr line is a fail-open: whatever its facts or its write
+    raise, the call is refused PROVIDER_UNAVAILABLE and its outcome recorded
+    exactly as before the line existed (ST-8), never an untyped raise ahead
+    of the bill."""
+    chat = ScriptedChat(answer=failure)
+    provider = replace(
+        provider, completions=fake_completions(chat, model=MODEL, price=AT_ESTIMATE)
+    )
+    if unwritable:
+        monkeypatch.setattr(sys, "stderr", _UnwritableStderr())
+    with pytest.raises(Refusal, match=r"^PROVIDER_UNAVAILABLE$"):
+        _invoke(provider, uuid4(), "runtime", provider.route.nodes[0])
+    monkeypatch.undo()
+    assert chat.calls == 1
+    _bills(_url_for(provider.conn.info.dbname), provider.run_id, None, 1)
 
 
 # D106: a citation fault is no analysis failure any more, so "citation" left.

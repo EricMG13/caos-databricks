@@ -715,12 +715,15 @@ _ROUTER_ERROR = {
 
 
 def _cut() -> Exception:
-    """A connection error caused by the transport's reset, as the client wraps
-    one: no status, the reset as its cause."""
-    wrapped = StatusError(0)
-    del wrapped.status_code
-    wrapped.__cause__ = ConnectionResetError("private")
-    return wrapped
+    """The client's connection error for a reset mid-body: an
+    `APIConnectionError` caused by the transport's `RemoteProtocolError`
+    (httpx2, the transport the client builds by default)."""
+    import httpx2
+    from openai import APIConnectionError
+
+    failed = APIConnectionError(request=httpx2.Request("POST", "https://x.invalid"))
+    failed.__cause__ = httpx2.RemoteProtocolError("private")
+    return failed
 
 
 @pytest.mark.parametrize(
@@ -754,7 +757,7 @@ def _cut() -> Exception:
         ),
         pytest.param(
             _cut(),
-            ("call=vendor", "class=StatusError", "cause=ConnectionResetError"),
+            ("call=vendor", "class=APIConnectionError", "cause=RemoteProtocolError"),
             id="a-reset-mid-body",
         ),
         pytest.param(
@@ -811,3 +814,169 @@ def test_a_refused_status_says_its_code_and_an_answer_says_nothing(
     assert capsys.readouterr().err.startswith("PROVIDER_CALL_INVALID call=vendor ")
     fake_completions(ScriptedChat(answer=answer(finish="stop"))).complete(PROMPT)
     assert capsys.readouterr().err == ""
+
+
+def _said(failure: BaseException, capsys: pytest.CaptureFixture[str]) -> str:
+    """The stderr line one unanswered call writes, its refusal checked."""
+    chat = ScriptedChat(answer=_raising(failure))
+    completion = fake_completions(chat).complete(PROMPT)
+    assert completion.refusal is RefusalCode.PROVIDER_UNAVAILABLE
+    return capsys.readouterr().err
+
+
+def _raising(failure: BaseException) -> object:
+    def raised(prompt: str) -> object:
+        raise failure
+
+    return raised
+
+
+@pytest.mark.parametrize(
+    ("code", "kind", "said"),
+    [
+        (502, None, "error_code=502 error_type=-"),
+        ("502", "timeout", "error_code=502 error_type=timeout"),
+        (
+            "Caesars-Entertainment-Senior-Secured-Notes-2031",
+            "Senior_Secured_Notes",
+            "error_code=? error_type=?",
+        ),
+        (10**5000, "server", "error_code=? error_type=server"),
+        (True, "provider_overloaded", "error_code=? error_type=provider_overloaded"),
+        (42, "error_type", "error_code=? error_type=?"),
+    ],
+    ids=["int", "str-and-type", "echoed-words", "huge-int", "bool", "header-word"],
+)
+def test_only_a_status_number_and_a_documented_error_type_are_written(
+    code: object, kind: object, said: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """F513 audit: a provider that echoes input into `code` or `type` put
+    document words on stderr. `error_code` is three or four digits and
+    `error_type` one of OpenRouter's documented types; anything else is `?`."""
+    body: dict[str, object] = {"code": code, "message": "private"}
+    if kind is not None:
+        body["metadata"] = {"error_type": kind}
+    line = _said(ValueError(body), capsys)
+    assert said in line and "Caesars" not in line and "Senior" not in line
+
+
+def test_a_class_name_cannot_forge_or_garble_a_line(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """F513 audit: class and cause names pass the same token rule."""
+    forged = type("Boom\nPROVIDER_RESPONSE_INVALID call=forged", (Exception,), {})
+    escape = type("X\x1b[2Jcleared", (Exception,), {})
+    failure = forged("private")
+    failure.__cause__ = escape("private")
+    line = _said(failure, capsys)
+    assert line.count("\n") == 1 and "\x1b" not in line and "forged" not in line
+    assert "class=? cause=?" in line
+
+
+def test_the_line_is_one_write() -> None:
+    """F513 audit: `print` wrote the text and its newline separately, so two
+    threads' lines could interleave; the line is now one `write`."""
+    import io
+    import sys
+
+    class Writes(io.StringIO):
+        calls: list[str]
+
+        def write(self, text: str) -> int:
+            self.calls.append(text)
+            return len(text)
+
+    sink = Writes()
+    sink.calls = []
+    saved, sys.stderr = sys.stderr, sink
+    try:
+        fake_completions(ScriptedChat(answer=ValueError("private"))).complete(PROMPT)
+    finally:
+        sys.stderr = saved
+    assert len(sink.calls) == 1 and sink.calls[0].endswith("\n")
+    assert sink.calls[0].count("\n") == 1
+
+
+def test_the_held_failure_is_its_facts_not_the_exception() -> None:
+    """F513 audit: holding the exception tied the raising frame -- and the
+    prompt it holds -- into a cycle that outlived `complete` until a
+    collection. Only its facts are kept, so the frame goes with the call."""
+    import gc
+    import weakref
+
+    class Marker:
+        pass
+
+    held: list[weakref.ref[Marker]] = []
+
+    def raised(prompt: str) -> object:
+        marker = Marker()
+        held.append(weakref.ref(marker))
+        raise ValueError("private")
+
+    gc.collect()
+    gc.disable()
+    try:
+        fake_completions(ScriptedChat(answer=raised)).complete(PROMPT)
+        assert held[0]() is None, "the raising frame outlived the call"
+    finally:
+        gc.enable()
+
+
+class _OnlyExceptions(BaseExceptionGroup):
+    """A `BaseExceptionGroup` subclass holding only `Exception`s: not itself
+    an `Exception`, but what `suppress(Exception)` splits and swallows."""
+
+
+@pytest.mark.parametrize(
+    ("make", "kind", "escapes"),
+    [
+        pytest.param(
+            lambda: _OnlyExceptions("g", [ValueError("private")]),
+            "raised",
+            False,
+            id="a-base-group-of-exceptions",
+        ),
+        pytest.param(
+            lambda: ExceptionGroup("g", [ValueError("private")]),
+            "raised",
+            False,
+            id="an-exception-group",
+        ),
+        pytest.param(
+            lambda: BaseExceptionGroup("g", [ValueError("p"), KeyboardInterrupt()]),
+            "escaped",
+            True,
+            id="a-mixed-group",
+        ),
+        pytest.param(
+            lambda: __import__("asyncio").CancelledError("private"),
+            "escaped",
+            True,
+            id="a-cancel",
+        ),
+    ],
+)
+def test_what_is_held_back_is_what_suppress_exception_held_back(
+    make: object,
+    kind: str,
+    escapes: bool,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """F513 audit: the sender holds back exactly what `suppress(Exception)`
+    did on 3.13, an exception group's split included; whatever it does not
+    hold back still ends the sender thread as before, and is named
+    `escaped`, never `deadline`."""
+    import threading
+
+    hooked: list[str] = []
+    monkeypatch.setattr(
+        threading,
+        "excepthook",
+        lambda args: hooked.append(type(args.exc_value).__name__),
+    )
+    assert callable(make)
+    line = _said(make(), capsys)
+    assert f"call={kind} " in line
+    assert bool(hooked) is escapes
