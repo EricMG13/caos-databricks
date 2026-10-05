@@ -409,6 +409,40 @@ describe("the evidence drawer", () => {
     expect(dialog()).toHaveTextContent("Source line · the cited excerpt marked");
   });
 
+  test("test_a_marker_chip_in_the_analysis_opens_the_source_drawer_at_its_line", async () => {
+    // D107: the module's text shows [C1] as a chip, never the line; pressed,
+    // the source drawer opens at the cited page, the whole line shown there
+    // with the excerpt marked -- the one place it is shown.
+    sectionBody = () => {
+      const doc = analysis();
+      doc["body"].handoffs[0].source_facts[0].line = {
+        before: "We do not ",
+        excerpt: doc["body"].handoffs[0].source_facts[0].matched_text,
+        after: " (unaudited)",
+        recorded: true,
+      };
+      return doc;
+    };
+    await mount(`/analysis/?case=${CASE}&tab=rn-cp-0`);
+    const quote = analysis()["body"].handoffs[0].source_facts[0].matched_text;
+    const chip = screen.getByRole("button", {
+      name: "citation 1: CVNA_10K_Annual_Report_FY2025.htm, page 1",
+    });
+    expect(chip).toHaveTextContent(/^C1$/);
+    expect(chip).toHaveAttribute("aria-haspopup", "dialog");
+    expect(document.querySelector("[data-analysis]")!.textContent).not.toContain("We do not");
+    // A button: reached and pressed from the keyboard like any control.
+    chip.focus();
+    expect(document.activeElement).toBe(chip);
+    act(() => fireEvent.click(chip));
+    await settle();
+    expect(urls).toContain(PAGE_PATH);
+    expect(chip).toHaveAttribute("aria-expanded", "true");
+    const shown = dialog()!.querySelector("blockquote.matched")!;
+    expect(shown.textContent).toBe(`We do not ${quote} (unaudited)`);
+    expect(shown.querySelector("mark")!.textContent).toBe(quote);
+  });
+
   test("test_the_drawer_reads_the_visible_snapshot_not_the_pending_one", async () => {
     await mount(`/analysis/?case=${CASE}&tab=rn-cp-0`);
     await openFirstFact();
@@ -467,6 +501,39 @@ describe("a narrative figure (N59)", () => {
     expect(dialog()).toHaveTextContent("Coverage 2.1x");
     // D105: the figure's whole line is served with it, its excerpt marked.
     expect(dialog()!.querySelector("blockquote.matched mark")).toHaveTextContent("Coverage 2.1x");
+  });
+
+  test("test_an_artifacts_marker_chip_opens_its_citations_source_page", async () => {
+    // D107: the saved artifact's [C1] is a chip naming its citation; pressed,
+    // it opens the source drawer at that citation's page and line.
+    sectionBody = () => JSON.parse(text("../../fixtures/committee-v1.json"));
+    pageAnswer = () => {
+      const doc = pageDoc();
+      Object.assign(doc["body"], {
+        run_id: RUN_B,
+        source_id: FIGURE_SOURCE,
+        page: 7,
+        document_sha256: "d".repeat(64),
+      });
+      return { status: 200, body: doc };
+    };
+    render(
+      <MemoryRouter initialEntries={[`/committee/?case=${CASE}&run=${RUN_B}&revision=${REVISION}`]}>
+        <Workspace section="committee" />
+      </MemoryRouter>,
+    );
+    await settle();
+    const chip = screen.getByRole("button", { name: "citation 1: CP-1 source, page 7" });
+    expect(chip).toHaveTextContent(/^C1$/);
+    act(() => fireEvent.click(chip));
+    await settle();
+    expect(urls).toContain(FIGURE_PAGE);
+    expect(chip).toHaveAttribute("aria-expanded", "true");
+    expect(dialog()!.querySelector("blockquote.matched mark")).toHaveTextContent("Coverage 2.1x");
+    // [C2] names an unverified citation: labelled, and nothing to press.
+    const inert = document.querySelector("[data-artifact-formatted] [data-unverified-marker]")!;
+    expect(inert).toHaveTextContent("citation 2, C2 · unverified – page 9");
+    expect(inert.closest("button")).toBeNull();
   });
 
   const openFigure = async (page: () => { status: number; body: unknown }) => {
