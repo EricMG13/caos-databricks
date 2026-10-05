@@ -2,7 +2,8 @@
 anchor is shown as the model's own, labelled "unverified, en dash, page N", never
 styled, placed or worded as host-verified; a committee figure may name one
 and is labelled so; a module whose every citation is unverified still
-renders; an `ANY_RUN` quote is labelled a quote.
+renders; an `ANY_RUN` quote is labelled a quote. Since D107 every one of them
+is a compact line of the module's Citations appendix (F506).
 
 The model's quote is attacker-influenced text, so every probe below that
 carries markup is held to the escaping F502 holds a source line to.
@@ -29,6 +30,7 @@ from caos.deliverable.render import (
     ANY_RUN,
     UNVERIFIED_REASONS,
     RenderRefused,
+    clamped,
     render,
     unverified,
 )
@@ -111,13 +113,13 @@ def _anchored(**citation: object) -> dict[str, Any]:
 
 
 def _sections(page: str) -> tuple[str, str]:
-    """The page's source facts and its unverified list, each alone."""
-    facts = page.split("<h3>Source facts (host-verified citations)</h3>")[1]
-    facts, _, rest = facts.partition(
-        "<h3>Unverified citations (the model's own locators and quotes)</h3>"
-    )
-    listed = rest.split("<h3>Analysis (model-authored, not host-verified)</h3>")[0]
-    return facts, listed
+    """The first module's Citations appendix (D107): its located lines and
+    its unverified lines, each set joined alone."""
+    appendix = page.split('<h3>Citations</h3>\n<ul class="cite">\n')[1]
+    rows = re.findall(r"<li>(.*?)</li>", appendix.split("</ul>")[0])
+    listed = [row for row in rows if "unverified \N{EN DASH} page" in row]
+    facts = [row for row in rows if row not in listed]
+    return "\n".join(facts), "\n".join(listed)
 
 
 def _never_verified(shown: str) -> None:
@@ -131,43 +133,38 @@ def test_an_unverified_citation_is_listed_apart_labelled_and_never_marked() -> N
     page = render(_payload([_anchored()], [_unverified()])).decode()
     facts, listed = _sections(page)
 
-    assert "Net leverage is 3.2x" not in facts and "<mark" in facts
-    assert listed.strip() == (
-        '<p class="cite">unverified \N{EN DASH} page 4 · the model\'s quote'
-        " · claim lineage: Untraced · not located · source "
-        f"{SOURCE}</p>\n"
-        '<blockquote style="border-left-style:dashed">Net leverage is 3.2x'
-        "</blockquote>"
+    assert "Net leverage is 3.2x" not in facts and " · verified" in facts
+    assert listed == (
+        f"unverified \N{EN DASH} page 4 · source {SOURCE} · the model's quote"
+        " \N{LEFT DOUBLE QUOTATION MARK}Net leverage is 3.2x"
+        "\N{RIGHT DOUBLE QUOTATION MARK} · claim lineage: Untraced · not located"
     )
     _never_verified(listed)
+    assert " · verified" not in listed
 
 
 @pytest.mark.parametrize("code", sorted(UNVERIFIED_CODES))
 def test_each_code_reads_in_plain_words(code: RefusalCode) -> None:
     assert set(UNVERIFIED_REASONS) == {c.value for c in UNVERIFIED_CODES}
     shown = unverified(_unverified(code=code.value))
-    assert f" · {UNVERIFIED_REASONS[code.value]} · " in shown
+    assert shown.endswith(f" · {UNVERIFIED_REASONS[code.value]}")
     assert code.value not in shown
 
 
 @pytest.mark.parametrize("quote", PROBES)
 def test_an_unverified_quote_reaches_the_page_as_text(quote: str) -> None:
-    """Every character of the model's quote is escaped: the only tags in an
-    unverified entry are the two this file wrote, and the text reads back
-    exactly."""
+    """Every character of the model's quote is escaped: an unverified line
+    carries no tag at all, its quote reads back exactly as clamped, and the
+    page has its one appendix."""
     page = render(_payload([_anchored()], [_unverified(quote)])).decode()
     _facts, listed = _sections(page)
 
-    tags = re.findall(r"<[^>]*>", listed)
-    assert tags == [
-        '<p class="cite">',
-        "</p>",
-        '<blockquote style="border-left-style:dashed">',
-        "</blockquote>",
-    ]
-    body = listed.split('<blockquote style="border-left-style:dashed">')[1]
-    assert html.unescape(body.split("</blockquote>")[0]) == quote
-    assert page.count("<h3>Source facts (host-verified citations)</h3>") == 1
+    assert re.findall(r"<[^>]*>", listed) == []
+    body = listed.split("\N{LEFT DOUBLE QUOTATION MARK}")[1]
+    body = body.split("\N{RIGHT DOUBLE QUOTATION MARK}")[0]
+    assert html.unescape(body) == clamped(quote)
+    assert page.count("<h3>Citations</h3>") == 1
+    assert "<h3>Source facts" not in page.replace("&lt;h3&gt;Source facts", "")
 
 
 def test_a_module_whose_every_citation_is_unverified_still_renders() -> None:
@@ -176,7 +173,7 @@ def test_a_module_whose_every_citation_is_unverified_still_renders() -> None:
     all is still refused."""
     page = render(_payload([], [_unverified()])).decode()
     facts, listed = _sections(page)
-    assert "None: no citation of this module was located by the host." in facts
+    assert facts == ""
     _never_verified(listed)
 
     with pytest.raises(RenderRefused) as caught:
@@ -205,14 +202,14 @@ def test_an_unverified_entry_this_host_did_not_write_is_refused(entry: object) -
 
 
 def test_an_anchored_citation_the_body_does_not_carry_says_so() -> None:
-    """`linked` false (D106): still host-verified, still marked in its line,
+    """`linked` false (D106; since D107 no marker names it): still located,
     and it says it supports no statement in the answer."""
     page = render(_payload([_anchored(linked=False), _anchored()])).decode()
     facts, listed = _sections(page)
 
     assert listed == ""
-    assert facts.count("<mark") == 2
-    assert facts.count(" · not linked to a statement in the answer</p>") == 1
+    assert facts.count(" · verified") == 2 and "<mark" not in page
+    assert facts.count(" · verified · not linked to a statement in the answer") == 1
     with pytest.raises(RenderRefused):
         render(_payload([_anchored(linked="no")]))
 
@@ -221,16 +218,19 @@ def test_a_quote_whose_line_was_never_recorded_is_labelled_a_quote() -> None:
     """F504 (EX2's review): an `ANY_RUN` quote is any unique run of its page,
     so it is labelled as the workspace labels it; under either whole-line
     rule the quote is its line, and an excerpt is shown in its line."""
-    label = '<p class="cite">Quote (source line not recorded)</p>\n<blockquote>'
+    label = " · verified · quote (source line not recorded)</li>"
     bare = {"document_sha256": DOCUMENT, "page": 1, "matched_text": QUOTE}
     any_run = render(_payload([bare], citation_rule=ANY_RUN)).decode()
-    assert f"{label}{QUOTE}</blockquote>" in any_run
+    assert (
+        f"\N{LEFT DOUBLE QUOTATION MARK}{QUOTE}\N{RIGHT DOUBLE QUOTATION MARK}{label}"
+        in any_run
+    )
     for rule in ("whole-line", "whole-line-as-shown"):
         whole = render(_payload([bare], citation_rule=rule)).decode()
-        assert "Quote (source line not recorded)" not in whole
-        assert f"<blockquote>{QUOTE}</blockquote>" in whole
+        assert "source line not recorded" not in whole
+        assert f"{QUOTE}\N{RIGHT DOUBLE QUOTATION MARK} · verified</li>" in whole
     excerpt = render(_payload([_anchored()])).decode()
-    assert "Quote (source line not recorded)" not in excerpt
+    assert "source line not recorded" not in excerpt
 
     legacy = json.loads(json.dumps(_payload([bare])))
     record = json.loads(legacy["artifacts"][0]["record"])
@@ -369,7 +369,8 @@ def test_a_committee_figure_may_name_an_unverified_citation(
     }
     page = render(payload).decode()
     narrative = page.split("<h2>Analyst narrative</h2>")[1]
-    assert "unverified \N{EN DASH} page 3 · the model's quote" in narrative
+    assert "[CP-L10] · unverified \N{EN DASH} page 3 · source" in narrative
+    assert " · the model's quote \N{LEFT DOUBLE QUOTATION MARK}" in narrative
     assert "&lt;b&gt;USD 9.9bn&lt;/b&gt;" in narrative and "<mark" not in narrative
     proven = revisions.prove_revision(
         lite.conn, lite.blobs, lite.bundle, case_id=lite.case_id, revision_id=revision
@@ -415,7 +416,7 @@ def test_a_route_whose_module_has_no_anchored_citation_saves_and_renders(
     )
     lite.conn.rollback()
     page = render(deepcopy(payload)).decode()
-    assert page.count("None: no citation of this module was located by the host.") == 1
+    assert page.count("<h3>Citations</h3>") == 3
     assert page.count("unverified \N{EN DASH} page 3") == 1
 
 
@@ -433,12 +434,10 @@ def test_a_committee_figure_shows_the_records_linked() -> None:
     payload["narrative"] = [[{"figure": figure}, _unverified_span()]]
     page = render(payload).decode()
     narrative = page.split("<h2>Analyst narrative</h2>")[1]
-    assert narrative.count(" · not linked to a statement in the answer</p>") == 1
-    assert (
-        "· not located · not linked to a statement in the answer · source" in narrative
-    )
+    assert narrative.count(" · not linked to a statement in the answer</span>") == 2
+    assert "· not located · not linked to a statement in the answer</span>" in narrative
     _facts, listed = _sections(page)
-    assert "· not located · not linked to a statement in the answer · source" in listed
+    assert listed.endswith("· not located · not linked to a statement in the answer")
     assert verify_package(_packaged(payload)) == Verification(True, None)
 
     payload["narrative"] = [[_unverified_span(matched_text="Another quote")]]

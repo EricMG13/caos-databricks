@@ -55,8 +55,9 @@ from test_loop_charges import MODEL, REPORT
 from caos.evidence.citations import AnchoredCitation, Rect
 from caos.graph.runtime import ProviderResult
 from caos.methodology.bundle import delivered_authority
-from caos.methodology.handoff import _decoded_record
+from caos.methodology.handoff import UnverifiedCitation, _decoded_record
 from caos.methodology.invocation import (
+    NOT_VERIFIED,
     QUOTE_EXISTENCE,
     SUPPORT,
     build_handoff_prompt,
@@ -251,6 +252,75 @@ def test_a_register_must_cover_exactly_the_direct_upstream() -> None:
     register = _register(built({ref.route_node_id: ()}))
     assert f"handoff_sha256: {ref.sha256}" in register
     assert "- document_sha256: " not in register
+
+
+def test_a_marker_naming_an_unverified_citation_gets_a_line_without_a_quote() -> None:
+    """MK1's note: a marker that names an unverified citation (D106) had no
+    register line, so a downstream model could not resolve it. It has one now,
+    in its place among the markers, saying the host located no quote for it
+    -- and the model's quote is not listed, so nothing reads as located. One
+    no marker names is still not listed."""
+    gate = identity("CP-0")
+    markdown = handoff_markdown(gate)
+    ref = upstream_ref(gate, markdown)
+    box = Rect(page=1, x0=1, y0=2, x1=3, y1=4)
+    located = tuple(
+        AnchoredCitation(DOCUMENT, 1, QUOTE, (box,), marker=n) for n in (1, 3)
+    )
+    lost = UnverifiedCitation(
+        UUID(int=7),
+        9,
+        "the model's <own> quote",
+        RefusalCode.CITATION_AMBIGUOUS,
+        marker=2,
+    )
+    unmarked = UnverifiedCitation(
+        UUID(int=8), 4, "older", RefusalCode.CITATION_NOT_LOCATED
+    )
+    prompt = build_handoff_prompt(
+        CONTRACT,
+        identity=identity("CP-L10", (ref,)),
+        authority=delivered_authority(BUNDLE, "CP-L10"),
+        catalog=CATALOG,
+        delivered=_delivered(),
+        upstream=((ref, markdown),),
+        upstream_citations={ref.route_node_id: located},
+        upstream_unverified={ref.route_node_id: (lost, unmarked)},
+        route=LITE_ROUTE,
+    )
+    register = _register(prompt)
+    lines = register.split(f"handoff_sha256: {ref.sha256}\n")[1].splitlines()
+    anchored = (
+        f"document_sha256: {DOCUMENT} page: 1 matched_text: {json.dumps(QUOTE)}"
+        f" {QUOTE_EXISTENCE} {SUPPORT}"
+    )
+    assert lines == [
+        f"- marker: [C1] {anchored}",
+        "- marker: [C2] unverified \N{EN DASH} page 9: the host did not locate this"
+        " citation's quote (CITATION_AMBIGUOUS), so none is listed here;"
+        f" {NOT_VERIFIED} {SUPPORT}",
+        f"- marker: [C3] {anchored}",
+    ]
+    assert "own> quote" not in register and "older" not in register
+
+
+def test_the_register_reaches_a_consumer_with_its_upstreams_unverified_marker(
+    harness: _Harness,
+) -> None:
+    """Through the runtime: CP-0 accepted with [C1] located and [C2] not, so
+    CP-L10's register lists [C1]'s quote and [C2] as unlocated, no quote."""
+    both = CanonicalCompletions(harness.source_id, quotes=(QUOTE, UNANCHORED))
+    attempt, gate = _run(harness, "CP-0", both)
+    _accept(harness, attempt, gate)
+    consumer = CanonicalCompletions(harness.source_id)
+    _run(harness, "CP-L10", consumer)
+    register = _register(consumer.prompts[0])
+    assert "- marker: [C1] document_sha256: " in register
+    assert (
+        "- marker: [C2] unverified \N{EN DASH} page 1: the host did not locate"
+        " this citation's quote (CITATION_NOT_LOCATED)"
+    ) in register
+    assert UNANCHORED not in register
 
 
 @dataclass
