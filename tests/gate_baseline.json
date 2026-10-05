@@ -1,7 +1,6 @@
 {
   "complexipy_ignore": 0,
   "complexity:caos/api/reads/run.py::node_readiness": 17,
-  "complexity:caos/deliverable/revisions.py::_span": 16,
   "complexity:caos/methodology/invocation.py::_yaml": 17,
   "complexity:caos/methodology/invocation.py::allowed_uses": 19,
   "complexity:caos/methodology/invocation.py::lite_object_requirement": 16,
@@ -16,7 +15,7 @@
   "complexity:caos/qualification/on_disk.py::_registers": 18,
   "complexity:caos/qualification/proof.py::assert_orchestration_proof": 16,
   "complexity:caos/store/run_inputs.py::_research": 20,
-  "complexity_baselined": 16,
+  "complexity_baselined": 15,
   "file_noqa": 7,
   "live_provider": 3,
   "mypy_directive": 0,
