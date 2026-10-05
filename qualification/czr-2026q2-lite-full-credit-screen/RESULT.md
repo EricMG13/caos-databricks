@@ -7,18 +7,17 @@ Caesars Entertainment, Inc. (CZR) at an analysis date of 2026-10-02, against
 peers MGM Resorts International (MGM) and PENN Entertainment, Inc. (PENN) from
 the owner's "Public Leveraged Loan Issuers Benchmark". Its qualification-set
 digest is
-`dd80a087b6e181d3607fc5766865a847f1ba44bb01c1fb0289ac3d64a01fcf0e`.
+`97d4315a3b85e2ea1893b40c68e324b0cb07902949b5db9ba5c974e18080d59b`.
 
 ## Corpus provenance
 
 The EDGAR documents were fetched on 2 October 2026 and converted from HTML to
 plain text the same day. The 10-Q and the CZR earnings release are
-byte-identical to the `czr-2026q2` set's copies, the credit agreement to the
-`czr-2026q2-liquidity` set's copy, the indenture and the merger 8-K and press
-release to the `czr-2026q2-covenant-refinancing` set's copies, and the MGM and
-PENN releases to the `czr-2026q2-lite-relative-value` set's copies. No
-document is admitted here for the first time. The text SHA-256 is the digest
-the keys bind; the raw SHA-256 is the HTML as fetched.
+byte-identical to the `czr-2026q2` set's copies,  the indenture and the merger
+8-K and press release to the `czr-2026q2-covenant-refinancing` set's copies,
+and the MGM and PENN releases to the `czr-2026q2-lite-relative-value` set's
+copies. No document is admitted here for the first time. The text SHA-256 is
+the digest the keys bind; the raw SHA-256 is the HTML as fetched.
 
 | document | source | accession | text SHA-256 | raw HTML SHA-256 |
 |---|---|---|---|---|
@@ -28,7 +27,6 @@ the keys bind; the raw SHA-256 is the HTML as fetched.
 | `CZR_2026_Merger_Press_Release.txt` (Ex. 99.1, 28 May 2026) | https://www.sec.gov/Archives/edgar/data/1590895/000119312526242995/d143382dex991.htm | 0001193125-26-242995 | `4fbecbd5f5a10b15911b5749daee41b3e40090e43ed54bf33aee07a21877e68b` | `2a4ed12c96147f2171451c93524bea31ecad37247448d27039f755a3cf85f51f` |
 | `MGM_Q2_2026_Earnings_Release.txt` (MGM Ex. 99.1, 29 July 2026) | https://www.sec.gov/Archives/edgar/data/789570/000078957026000075/mgmex991q22026earningrelea.htm | 0000789570-26-000075 | `795ac68aa1c51a7e0a6799a6e1ca053ee597dc9a1a9a6550a2438280a6e76cdb` | `d23f2410e475eca7e0dfe2fdcca0210f449e4c1a93fb93a14549592c4554173c` |
 | `PENN_Q2_2026_Earnings_Release.txt` (PENN Ex. 99.1, 6 August 2026) | https://www.sec.gov/Archives/edgar/data/921738/000092173826000019/pennex991-q22026.htm | 0000921738-26-000019 | `4d12fff94b066f73e6eccce84eec937e8fd4fdc38d6061704db66a40511a210c` | `be60f25fec25022c2fd6f48c2cf9bb99912b8f78356cebc4a7719bdcae9120bc` |
-| `CZR_2020_Credit_Agreement.txt` (Ex. 10.1, Credit Agreement dated 20 July 2020) | https://www.sec.gov/Archives/edgar/data/1590895/000119312520196232/d940333dex101.htm | 0001193125-20-196232 | `cdfeb87c9b57914f4c2e89dbb2ec80de52564b1817b35fe15e332e67a13039b5` | `6600ab5bec479091f68dc04b2db65a54ef1013944c94af0ec135335b374c7dba` |
 | `CZR_2024_Credit_Agreement_Incremental_Assumption_No3.txt` (Ex. 10.2, Incremental Assumption Agreement No. 3, 6 February 2024, with Exhibit A, the Credit Agreement conformed through it; Ex. 10.36 in the FY2025 10-K) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex102.htm | 0001193125-24-026847 | `9f95f4a696471fcb1c16e5c6026880544356931806a939ffd999456bd8c4b757` | `aa48bc94b634de6386579791df7de831314785f007398546dd5c5fba415f2cfa` |
 | `CZR_2024_650_Senior_Secured_Notes_2032_Indenture.txt` (Ex. 10.1, 6.500% Senior Secured Notes due 2032 indenture, 6 February 2024) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex101.htm | 0001193125-24-026847 | `0809ab3981090bd2c23950da9530adb10e96882ddfa7db4404635e014d4c1119` | `a4661727edc48361dd7290772e62412c389b8ad8d215a96aa58facfe9e356c2c` |
 | `CZR_2024_650_Notes_First_Supplemental_Indenture.txt` (Ex. 4.2, First Supplemental Indenture to the 6.500% 2032 notes indenture, 1 March 2024; Ex. 4.11 in the FY2025 10-K) | https://www.sec.gov/Archives/edgar/data/1590895/000159089524000088/exhibit42firstsupplemental.htm | 0001590895-24-000088 | `0af4615b9a52e91e2675adacbbc90ecc7b21a61dc8205b4b2459cf4b9db0a219` | `18d810c415aef677f867ac73dee07a04382e71db794f3bfbc91cdd185e4b0dc4` |
@@ -44,17 +42,18 @@ URL and observation time, and the file is the text.
 | `CZR_FINRA_TRACE_12769GAC4_2026-10-02.txt` (CZR 6.50% due 2032) | https://www.finra.org/finra-data/fixed-income/bond?symbol=ERI5740550&bondType=CORP | 2026-10-02T09:31:13Z | `4018aaa62309df6cd66a9b5fc766c4a9429e886e649023de2bad8673baf8aa51` |
 | `CZR_FINRA_TRACE_12769GAD2_2026-10-02.txt` (CZR 6.00% due 2032) | https://www.finra.org/finra-data/fixed-income/bond?symbol=ERI5909471&bondType=CORP | 2026-10-02T09:31:27Z | `256c646128b7b670ebeb2e795aaced255373b488261b7f5c9111f933e2226b24` |
 
-The credit agreement (935,517 bytes) and the indenture (758,385 bytes) are over
-500 KiB, so their paths are pinned in the large-file excludes; both are under
-1.5 MiB, so they reach CP-0 whole rather than as a page map. All thirteen are
-inside `MAX_REQUEST_BYTES`. The exhibits F508 adds were fetched from SEC EDGAR
-on 5 October 2026 and converted the same day, split by sentence (F492) and by
-clause (F498); they are byte-identical to the `czr-2026q2-covenant-refinancing`
-set's copies. Since F508 Incremental Assumption Agreement No. 3 (1,077,810
-bytes) is pinned there too and, under 1.5 MiB, reaches CP-0 whole; the
-supplemental indentures are 11,774 and 15,684 bytes. The set's CP-0 request,
-encoded with CP-0's delivered authority, is 3,426,098 bytes (81.7% of
-`MAX_REQUEST_BYTES`, up from 2,261,674), and no source is shown as a page map.
+The indenture (758,385 bytes) and Incremental Assumption Agreement No. 3
+(1,077,810 bytes) are over 500 KiB, so their paths are pinned in the large-file
+excludes; both are under 1.5 MiB, so they reach CP-0 whole rather than as a
+page map. All twelve are inside `MAX_REQUEST_BYTES`. The exhibits F508 adds
+were fetched from SEC EDGAR on 5 October 2026 and converted the same day, split
+by sentence (F492) and by clause (F498); they are byte-identical to the
+`czr-2026q2-covenant-refinancing` set's copies. Since F508 the conformed copy
+in Agreement No. 3's Exhibit A replaces the 2020 credit agreement (Ex. 10.1,
+accession 0001193125-20-196232, 935,517 bytes); the supplemental indentures are
+11,774 and 15,684 bytes. The set's CP-0 request, encoded with CP-0's delivered
+authority, is 2,444,091 bytes (58.3% of `MAX_REQUEST_BYTES`, up from
+2,261,674), and no source is shown as a page map.
 
 ## Why the pack carries the current legal chain (F508)
 
@@ -87,8 +86,11 @@ The First Supplemental Indenture (1 March 2024) adds two guarantors and amends
 clause (44) of the Permitted Liens definition and Section 8.01(b); the Second
 (23 August 2024) adds the guarantors on its Schedule A.
 
-No key is added or changed: a key binds the digest of the document it was
-authored from.
+No key is added or changed. On the owner's ruling of 5 October 2026 ("Replace
+the 2020 base"), the conformed copy replaces the 2020 credit agreement (Ex.
+10.1, accession 0001193125-20-196232), which this set no longer carries: the
+agreement as amended is the one in force, and the superseded 2020 text cost
+about 0.9 MB of every request. No key here bound it.
 
 ## Keys
 
@@ -115,10 +117,10 @@ Keys authored from the documents; material figures pending owner confirmation.
 - CP-5: the 10-Q's Note 6 total debt (`11,807` face, `11,705` book at
   30 June 2026; `11,792` book at 31 December 2025).
 
-The 2020 credit agreement's commitment, margins and covenant were changed by
-amendments the set carries only as Incremental Assumption Agreement No. 3's
-conformed Exhibit A (F508) and are not keyed; the current revolver is stated in
-the 10-Q.
+The conformed credit agreement's commitment, margins and covenant (Agreement
+No. 3's Exhibit A, F508) are not keyed: the Fourth and Fifth Amendments, which
+this set does not carry, post-date it; the current revolver is stated in the
+10-Q.
 
 Alternative lines (D101). A figure key is also met by another whole evidence
 line, cited under the same module, that states the key's lead figures -- the

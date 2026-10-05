@@ -5,21 +5,19 @@ Status: **OFFLINE / UNVERIFIED / NOT QUALIFIED**.
 This immutable set prepares `LITE_CREDIT_22 / LITE_COVENANT_REFINANCING` for
 Caesars Entertainment, Inc. (CZR) at an analysis date of 2026-10-02. Its
 qualification-set digest is
-`3ff0726b8f9017efd8193fcfba6f41b1b212ff229c0f869858dc80f44da60097`.
+`e7fc177d5da3092276c75cc7b4b384a182679f44429cb70e0b60899556b1a75e`.
 
 ## Corpus provenance
 
-Each document is an official SEC EDGAR filing or exhibit, fetched on
-2 October 2026 and converted from HTML to plain text the same day. The 10-Q is
-byte-identical to the `czr-2026q2` set's copy, the credit agreement to the
-`czr-2026q2-liquidity` set's copy, and the other four to the
+Each document is an official SEC EDGAR filing or exhibit, fetched on 2 October
+2026 and converted from HTML to plain text the same day. The 10-Q is
+byte-identical to the `czr-2026q2` set's copy and the other four to the
 `czr-2026q2-covenant-refinancing` set's copies. The text SHA-256 is the digest
 the keys bind; the raw SHA-256 is the HTML as fetched.
 
 | document | source | accession | text SHA-256 | raw HTML SHA-256 |
 |---|---|---|---|---|
 | `CZR_Q2_2026_10Q.txt` (Form 10-Q, quarter ended 30 June 2026) | https://www.sec.gov/Archives/edgar/data/1590895/000159089526000028/czr-20260630.htm | 0001590895-26-000028 | `f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a` | `9dd3fca867c49936c65c9729bd7f9478d4c98b7c60569b74864a839bdeed8500` |
-| `CZR_2020_Credit_Agreement.txt` (Ex. 10.1, Credit Agreement dated 20 July 2020) | https://www.sec.gov/Archives/edgar/data/1590895/000119312520196232/d940333dex101.htm | 0001193125-20-196232 | `cdfeb87c9b57914f4c2e89dbb2ec80de52564b1817b35fe15e332e67a13039b5` | `6600ab5bec479091f68dc04b2db65a54ef1013944c94af0ec135335b374c7dba` |
 | `CZR_2024_Credit_Agreement_Incremental_Assumption_No3.txt` (Ex. 10.2, Incremental Assumption Agreement No. 3, 6 February 2024, with Exhibit A, the Credit Agreement conformed through it; Ex. 10.36 in the FY2025 10-K) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex102.htm | 0001193125-24-026847 | `9f95f4a696471fcb1c16e5c6026880544356931806a939ffd999456bd8c4b757` | `aa48bc94b634de6386579791df7de831314785f007398546dd5c5fba415f2cfa` |
 | `CZR_2024_Credit_Agreement_Fourth_Amendment.txt` (Ex. 10.1, Fourth Amendment, 9 May 2024) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524135268/d827488dex101.htm | 0001193125-24-135268 | `32f91de6ef3ff93d9924eb8d4e3dc4734d28b68ed1da0f816a085ffdcb085c95` | `b0e9fc14d481410dd2fa3cb6bc28e4f9c3b8751d720777ab2bbf943143f6d0fb` |
 | `CZR_2024_Credit_Agreement_Fifth_Amendment.txt` (Ex. 10.1, Fifth Amendment, 25 November 2024) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524265157/d858083dex101.htm | 0001193125-24-265157 | `7f2b5c777dc3347938a007eaea63a623b299a1188dbcfbe8980d389a0bcfc5b3` | `0936486e71264a9b752d5977c003bfc9a89ec5eb4ca8e5b09107a7870ebf86e8` |
@@ -28,17 +26,18 @@ the keys bind; the raw SHA-256 is the HTML as fetched.
 | `CZR_2024_650_Notes_Second_Supplemental_Indenture.txt` (Ex. 4.17, Second Supplemental Indenture to the 6.500% 2032 notes indenture, 23 August 2024; Ex. 4.12 in the FY2025 10-K) | https://www.sec.gov/Archives/edgar/data/1590895/000159089525000068/exhibit417-6500seniorsecur.htm | 0001590895-25-000068 | `3621f08611f4c6a6faed734993a3f2d9c97041693053ffa97624cbe5b7299aea` | `0eedd7d398ee15f45dabc99df2003249d4dbe232be456767e7b972d355326b3c` |
 | `CZR_2026_Merger_Agreement_8K.txt` (Form 8-K, Item 1.01, 27 May 2026) | https://www.sec.gov/Archives/edgar/data/1590895/000119312526242995/d143382d8k.htm | 0001193125-26-242995 | `6808734cfbb19b56c5624e5a69e7209ccaad8a5039de94ad64563efdedf93169` | `aabda22b745ac6c2e5d8462be19fbc47b6cafbe58d21f8c2750a1c195cf24f96` |
 
-The credit agreement (935,517 bytes) and the indenture (758,385 bytes) are over
-500 KiB, so their paths are pinned in the large-file excludes; both are under
-1.5 MiB, so they reach CP-0 whole rather than as a page map. All nine are
-inside `MAX_REQUEST_BYTES`. The exhibits F508 adds were fetched from SEC EDGAR
-on 5 October 2026 and converted the same day, split by sentence (F492) and by
-clause (F498); they are byte-identical to the `czr-2026q2-covenant-refinancing`
-set's copies. Since F508 Incremental Assumption Agreement No. 3 (1,077,810
-bytes) is pinned there too and, under 1.5 MiB, reaches CP-0 whole; the
-supplemental indentures are 11,774 and 15,684 bytes. The set's CP-0 request,
-encoded with CP-0's delivered authority, is 3,382,064 bytes (80.6% of
-`MAX_REQUEST_BYTES`, up from 2,217,640), and no source is shown as a page map.
+The indenture (758,385 bytes) and Incremental Assumption Agreement No. 3
+(1,077,810 bytes) are over 500 KiB, so their paths are pinned in the large-file
+excludes; both are under 1.5 MiB, so they reach CP-0 whole rather than as a
+page map. All eight are inside `MAX_REQUEST_BYTES`. The exhibits F508 adds were
+fetched from SEC EDGAR on 5 October 2026 and converted the same day, split by
+sentence (F492) and by clause (F498); they are byte-identical to the
+`czr-2026q2-covenant-refinancing` set's copies. Since F508 the conformed copy
+in Agreement No. 3's Exhibit A replaces the 2020 credit agreement (Ex. 10.1,
+accession 0001193125-20-196232, 935,517 bytes); the supplemental indentures are
+11,774 and 15,684 bytes. The set's CP-0 request, encoded with CP-0's delivered
+authority, is 2,400,057 bytes (57.2% of `MAX_REQUEST_BYTES`, up from
+2,217,640), and no source is shown as a page map.
 
 ## Why the pack carries the current legal chain (F508)
 
@@ -71,8 +70,12 @@ The First Supplemental Indenture (1 March 2024) adds two guarantors and amends
 clause (44) of the Permitted Liens definition and Section 8.01(b); the Second
 (23 August 2024) adds the guarantors on its Schedule A.
 
-No key is added or changed: a key binds the digest of the document it was
-authored from.
+No key is added or changed. On the owner's ruling of 5 October 2026 ("Replace
+the 2020 base"), the conformed copy replaces the 2020 credit agreement (Ex.
+10.1, accession 0001193125-20-196232), which this set no longer carries: the
+agreement as amended is the one in force, and the superseded 2020 text cost
+about 0.9 MB of every request. The Fourth and Fifth Amendments post-date
+Agreement No. 3 and stay. No key here bound it.
 
 ## Keys
 
@@ -92,12 +95,11 @@ Keys authored from the documents; material figures pending owner confirmation.
 - CP-5: the 10-Q's Note 6 total debt, `11,807` face and `11,705` book at
   30 June 2026, `11,792` book at 31 December 2025.
 
-The credit agreement and the Fourth Amendment carry no key here. The 2020
-commitment, margins and financial covenant were changed by amendments the set
-carries only as Incremental Assumption Agreement No. 3's conformed Exhibit A
-(F508), from which no key is drawn; the Fourth Amendment's Term B margin is
-superseded by the Fifth's. Both are admitted for the facility's controlling
-terms.
+The conformed credit agreement (Agreement No. 3's Exhibit A, F508) and the
+Fourth Amendment carry no key here: the Fourth and Fifth Amendments post-date
+the conformed copy and amend its pricing, and the Fourth Amendment's Term B
+margin is superseded by the Fifth's. Both are admitted for the facility's
+controlling terms.
 
 Every key is one whole evidence line of its page, unique in its document
 (F475). Since D105 an answer cites an excerpt of a line (at least 8 words, or
@@ -149,11 +151,11 @@ The documents state the following; this set draws no conclusion from them.
   cash equal to 101% of the principal amount thereof, plus accrued and unpaid
   interest".
 - The credit agreement lists "(g) there shall have occurred a Change in
-  Control;" among its events of default, its Change in Control definition (as
-  executed; since F508 the set also carries it conformed through Amendments 1–3
-  and Incremental Assumption Agreement No. 3, in that agreement's Exhibit A)
-  covering any person or group, other than Permitted Holders, acquiring "more
-  than 50% of the Equity Interests of the Borrower entitled to vote".
+  Control;" among its events of default, its Change in Control definition
+  (conformed through Amendments 1–3 and Incremental Assumption Agreements No. 1
+  to No. 3 in Agreement No. 3's Exhibit A, and word for word as executed in
+  2020) covering any person or group, other than Permitted Holders, acquiring
+  "more than 50% of the Equity Interests of the Borrower entitled to vote".
 - The 10-Q's risk factors say: "The Company may incur additional costs or
   suffer loss of business under third-party contracts that are terminated or
   that contain change in control or other provisions that may be triggered by

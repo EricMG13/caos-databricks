@@ -14,7 +14,6 @@
         "documents/CZR_Q2_2026_10Q.txt",
         "documents/CZR_FY2025_10K.txt",
         "documents/CZR_Q2_2026_Earnings_Release.txt",
-        "documents/CZR_2020_Credit_Agreement.txt",
         "documents/CZR_2024_Credit_Agreement_Incremental_Assumption_No3.txt",
         "documents/CZR_2024_Credit_Agreement_Fourth_Amendment.txt",
         "documents/CZR_2024_Credit_Agreement_Fifth_Amendment.txt",
@@ -176,7 +175,7 @@
         },
         {
           "module_id": "CP-4",
-          "document_sha256": "cdfeb87c9b57914f4c2e89dbb2ec80de52564b1817b35fe15e332e67a13039b5",
+          "document_sha256": "9f95f4a696471fcb1c16e5c6026880544356931806a939ffd999456bd8c4b757",
           "matched_text": "(g) there shall have occurred a Change in Control;"
         },
         {

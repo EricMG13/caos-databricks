@@ -867,19 +867,6 @@
       "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,590 bytes."
     },
     {
-      "id": "czr-2020-credit-agreement",
-      "issuer": "CZR",
-      "document": "Caesars Entertainment, Inc. (formerly Eldorado Resorts, Inc.) Credit Agreement dated 20 July 2020, JPMorgan Chase Bank, N.A. as administrative agent (SEC exhibit text extract)",
-      "modules": ["CP-2D"],
-      "pathways": ["LIQUIDITY_REVIEW"],
-      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312520196232/d940333dex101.htm",
-      "status": "in_hand",
-      "local_path": "qualification/czr-2026q2-liquidity/documents/CZR_2020_Credit_Agreement.txt",
-      "external_path": null,
-      "demand_verified": true,
-      "note": "Official EDGAR exhibit converted from HTML to plain text on 2 October 2026; re-converted 3 October 2026 (F478); re-split by sentence 3 October 2026 (F492); re-split by clause 4 October 2026 (F498) (accession 0001193125-20-196232, raw HTML SHA-256 6600ab5bec479091f68dc04b2db65a54ef1013944c94af0ec135335b374c7dba). It supplies the revolving facility's controlling terms as executed; its stated commitment is at the 2020 signing date, and the Fourth (9 May 2024) and Fifth (25 November 2024) Amendments are not in this set, so no current commitment is inferred from it. 935,517 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
-    },
-    {
       "id": "czr-2024-credit-agreement-incremental-assumption-no3-liquidity",
       "issuer": "CZR",
       "document": "Caesars Entertainment, Inc. Incremental Assumption Agreement No. 3 dated 6 February 2024, JPMorgan Chase Bank, N.A. as administrative agent, with Exhibit A, the Credit Agreement dated 20 July 2020 conformed through it (SEC exhibit text extract, FULL liquidity set copy)",
@@ -890,7 +877,7 @@
       "local_path": "qualification/czr-2026q2-liquidity/documents/CZR_2024_Credit_Agreement_Incremental_Assumption_No3.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the $2,900.0 million Incremental Term B-1 Loans, and its Exhibit A is the Credit Agreement conformed through Incremental Assumption Agreement No. 1, the First to Third Amendments and Incremental Assumption Agreements No. 2 and No. 3; with the Fourth and Fifth Amendments it is the current credit-agreement chain (F508). Exhibit A is a changed copy (insertions double-underlined, deletions struck through); on the owner's ruling of 5 October 2026 the text renders the agreement as amended: the struck runs from Exhibit A's cover on are removed (295 runs, 167 with text, 484 characters) and the insertions kept as plain text (F508). 1,077,810 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the $2,900.0 million Incremental Term B-1 Loans, and its Exhibit A is the Credit Agreement conformed through Incremental Assumption Agreement No. 1, the First to Third Amendments and Incremental Assumption Agreements No. 2 and No. 3; with the Fourth and Fifth Amendments it is the current credit-agreement chain (F508). Exhibit A is a changed copy (insertions double-underlined, deletions struck through); on the owner's ruling of 5 October 2026 the text renders the agreement as amended: the struck runs from Exhibit A's cover on are removed (295 runs, 167 with text, 484 characters) and the insertions kept as plain text (F508). 1,077,810 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold. It replaces the 2020 credit agreement (Ex. 10.1, accession 0001193125-20-196232) in this set on the owner's ruling of 5 October 2026 (F508)."
     },
     {
       "id": "czr-fy2025-10k-covenant-refinancing",
@@ -919,19 +906,6 @@
       "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table, maturities, financial covenants and revolver availability, and the pending Fertitta Gaming merger disclosure. 166,976 bytes."
     },
     {
-      "id": "czr-2020-credit-agreement-covenant-refinancing",
-      "issuer": "CZR",
-      "document": "Caesars Entertainment, Inc. (formerly Eldorado Resorts, Inc.) Credit Agreement dated 20 July 2020, JPMorgan Chase Bank, N.A. as administrative agent (SEC exhibit text extract, FULL covenant-refinancing set copy)",
-      "modules": ["CP-4"],
-      "pathways": ["COVENANT_REFINANCING"],
-      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312520196232/d940333dex101.htm",
-      "status": "in_hand",
-      "local_path": "qualification/czr-2026q2-covenant-refinancing/documents/CZR_2020_Credit_Agreement.txt",
-      "external_path": null,
-      "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-liquidity set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the facility's controlling terms as executed, including the Change in Control event of default; the Fourth and Fifth Amendments in this set reprice the term loans, and the First to Third Amendments and the incremental assumption agreements are not in it, so no current commitment, margin or financial covenant is inferred from the 2020 text. 935,517 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
-    },
-    {
       "id": "czr-2024-credit-agreement-incremental-assumption-no3",
       "issuer": "CZR",
       "document": "Caesars Entertainment, Inc. Incremental Assumption Agreement No. 3 dated 6 February 2024, JPMorgan Chase Bank, N.A. as administrative agent, with Exhibit A, the Credit Agreement dated 20 July 2020 conformed through it (SEC exhibit text extract)",
@@ -942,7 +916,7 @@
       "local_path": "qualification/czr-2026q2-covenant-refinancing/documents/CZR_2024_Credit_Agreement_Incremental_Assumption_No3.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Official EDGAR exhibit (Ex. 10.2 to the Form 8-K filed 7 February 2024, Ex. 10.36 in the FY2025 10-K's index), admitted on the owner's ruling of 5 October 2026 after live runs C5 and LCR1 held back the covenant modules (F508); converted from HTML to plain text on 5 October 2026, split by sentence (F492) and by clause (F498) (accession 0001193125-24-026847, raw HTML SHA-256 aa48bc94b634de6386579791df7de831314785f007398546dd5c5fba415f2cfa). It adds the $2,900.0 million Incremental Term B-1 Loans, and its Exhibit A is the Credit Agreement conformed through Incremental Assumption Agreement No. 1, the First to Third Amendments and Incremental Assumption Agreements No. 2 and No. 3; with the Fourth and Fifth Amendments it is the current credit-agreement chain (F508). Exhibit A is a changed copy (insertions double-underlined, deletions struck through); on the owner's ruling of 5 October 2026 the text renders the agreement as amended: the struck runs from Exhibit A's cover on are removed (295 runs, 167 with text, 484 characters) and the insertions kept as plain text (F508). 1,077,810 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Official EDGAR exhibit (Ex. 10.2 to the Form 8-K filed 7 February 2024, Ex. 10.36 in the FY2025 10-K's index), admitted on the owner's ruling of 5 October 2026 after live runs C5 and LCR1 held back the covenant modules (F508); converted from HTML to plain text on 5 October 2026, split by sentence (F492) and by clause (F498) (accession 0001193125-24-026847, raw HTML SHA-256 aa48bc94b634de6386579791df7de831314785f007398546dd5c5fba415f2cfa). It adds the $2,900.0 million Incremental Term B-1 Loans, and its Exhibit A is the Credit Agreement conformed through Incremental Assumption Agreement No. 1, the First to Third Amendments and Incremental Assumption Agreements No. 2 and No. 3; with the Fourth and Fifth Amendments it is the current credit-agreement chain (F508). Exhibit A is a changed copy (insertions double-underlined, deletions struck through); on the owner's ruling of 5 October 2026 the text renders the agreement as amended: the struck runs from Exhibit A's cover on are removed (295 runs, 167 with text, 484 characters) and the insertions kept as plain text (F508). 1,077,810 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold. It replaces the 2020 credit agreement (Ex. 10.1, accession 0001193125-20-196232) in this set on the owner's ruling of 5 October 2026 (F508)."
     },
     {
       "id": "czr-2024-credit-agreement-fourth-amendment",
@@ -1049,19 +1023,6 @@
       "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table, maturities, financial covenants and revolver availability, and the pending Fertitta Gaming merger disclosure. 166,976 bytes."
     },
     {
-      "id": "czr-2020-credit-agreement-lite-covenant-refinancing",
-      "issuer": "CZR",
-      "document": "Caesars Entertainment, Inc. (formerly Eldorado Resorts, Inc.) Credit Agreement dated 20 July 2020, JPMorgan Chase Bank, N.A. as administrative agent (SEC exhibit text extract, LITE covenant-refinancing set copy)",
-      "modules": ["CP-3C"],
-      "pathways": ["LITE_COVENANT_REFINANCING"],
-      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312520196232/d940333dex101.htm",
-      "status": "in_hand",
-      "local_path": "qualification/czr-2026q2-lite-covenant-refinancing/documents/CZR_2020_Credit_Agreement.txt",
-      "external_path": null,
-      "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-liquidity set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the facility's controlling terms as executed, including the Change in Control event of default; the Fourth and Fifth Amendments in this set reprice the term loans, and the First to Third Amendments and the incremental assumption agreements are not in it, so no current commitment, margin or financial covenant is inferred from the 2020 text. 935,517 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
-    },
-    {
       "id": "czr-2024-credit-agreement-incremental-assumption-no3-lite-covenant-refinancing",
       "issuer": "CZR",
       "document": "Caesars Entertainment, Inc. Incremental Assumption Agreement No. 3 dated 6 February 2024, JPMorgan Chase Bank, N.A. as administrative agent, with Exhibit A, the Credit Agreement dated 20 July 2020 conformed through it (SEC exhibit text extract, LITE covenant-refinancing set copy)",
@@ -1072,7 +1033,7 @@
       "local_path": "qualification/czr-2026q2-lite-covenant-refinancing/documents/CZR_2024_Credit_Agreement_Incremental_Assumption_No3.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the $2,900.0 million Incremental Term B-1 Loans, and its Exhibit A is the Credit Agreement conformed through Incremental Assumption Agreement No. 1, the First to Third Amendments and Incremental Assumption Agreements No. 2 and No. 3; with the Fourth and Fifth Amendments it is the current credit-agreement chain (F508). Exhibit A is a changed copy (insertions double-underlined, deletions struck through); on the owner's ruling of 5 October 2026 the text renders the agreement as amended: the struck runs from Exhibit A's cover on are removed (295 runs, 167 with text, 484 characters) and the insertions kept as plain text (F508). 1,077,810 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the $2,900.0 million Incremental Term B-1 Loans, and its Exhibit A is the Credit Agreement conformed through Incremental Assumption Agreement No. 1, the First to Third Amendments and Incremental Assumption Agreements No. 2 and No. 3; with the Fourth and Fifth Amendments it is the current credit-agreement chain (F508). Exhibit A is a changed copy (insertions double-underlined, deletions struck through); on the owner's ruling of 5 October 2026 the text renders the agreement as amended: the struck runs from Exhibit A's cover on are removed (295 runs, 167 with text, 484 characters) and the insertions kept as plain text (F508). 1,077,810 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold. It replaces the 2020 credit agreement (Ex. 10.1, accession 0001193125-20-196232) in this set on the owner's ruling of 5 October 2026 (F508)."
     },
     {
       "id": "czr-2024-credit-agreement-fourth-amendment-lite-covenant-refinancing",
@@ -1179,19 +1140,6 @@
       "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,590 bytes."
     },
     {
-      "id": "czr-2020-credit-agreement-lite-relative-value",
-      "issuer": "CZR",
-      "document": "Caesars Entertainment, Inc. (formerly Eldorado Resorts, Inc.) Credit Agreement dated 20 July 2020, JPMorgan Chase Bank, N.A. as administrative agent (SEC exhibit text extract, LITE relative-value set copy)",
-      "modules": ["CP-0"],
-      "pathways": ["LITE_RELATIVE_VALUE"],
-      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312520196232/d940333dex101.htm",
-      "status": "in_hand",
-      "local_path": "qualification/czr-2026q2-lite-relative-value/documents/CZR_2020_Credit_Agreement.txt",
-      "external_path": null,
-      "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-liquidity set's copy and copied because the on-disk loader refuses a path outside the set root. Admitted so CP-0 has a governing debt document for the issuer (the readiness gap N54 recorded for CCL); it supplies the facility's controlling terms as executed, and the amendments are not in this set, so no current commitment, margin or financial covenant is inferred from the 2020 text. 935,517 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
-    },
-    {
       "id": "czr-2024-credit-agreement-incremental-assumption-no3-lite-relative-value",
       "issuer": "CZR",
       "document": "Caesars Entertainment, Inc. Incremental Assumption Agreement No. 3 dated 6 February 2024, JPMorgan Chase Bank, N.A. as administrative agent, with Exhibit A, the Credit Agreement dated 20 July 2020 conformed through it (SEC exhibit text extract, LITE relative-value set copy)",
@@ -1202,7 +1150,7 @@
       "local_path": "qualification/czr-2026q2-lite-relative-value/documents/CZR_2024_Credit_Agreement_Incremental_Assumption_No3.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the $2,900.0 million Incremental Term B-1 Loans, and its Exhibit A is the Credit Agreement conformed through Incremental Assumption Agreement No. 1, the First to Third Amendments and Incremental Assumption Agreements No. 2 and No. 3; with the Fourth and Fifth Amendments it is the current credit-agreement chain (F508). Exhibit A is a changed copy (insertions double-underlined, deletions struck through); on the owner's ruling of 5 October 2026 the text renders the agreement as amended: the struck runs from Exhibit A's cover on are removed (295 runs, 167 with text, 484 characters) and the insertions kept as plain text (F508). 1,077,810 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the $2,900.0 million Incremental Term B-1 Loans, and its Exhibit A is the Credit Agreement conformed through Incremental Assumption Agreement No. 1, the First to Third Amendments and Incremental Assumption Agreements No. 2 and No. 3; with the Fourth and Fifth Amendments it is the current credit-agreement chain (F508). Exhibit A is a changed copy (insertions double-underlined, deletions struck through); on the owner's ruling of 5 October 2026 the text renders the agreement as amended: the struck runs from Exhibit A's cover on are removed (295 runs, 167 with text, 484 characters) and the insertions kept as plain text (F508). 1,077,810 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold. It replaces the 2020 credit agreement (Ex. 10.1, accession 0001193125-20-196232) in this set on the owner's ruling of 5 October 2026 (F508)."
     },
     {
       "id": "czr-2024-650-notes-2032-indenture-lite-relative-value",
@@ -1361,19 +1309,6 @@
       "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,590 bytes."
     },
     {
-      "id": "czr-2020-credit-agreement-relative-value",
-      "issuer": "CZR",
-      "document": "Caesars Entertainment, Inc. (formerly Eldorado Resorts, Inc.) Credit Agreement dated 20 July 2020, JPMorgan Chase Bank, N.A. as administrative agent (SEC exhibit text extract, FULL relative-value set copy)",
-      "modules": ["CP-4"],
-      "pathways": ["RELATIVE_VALUE"],
-      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312520196232/d940333dex101.htm",
-      "status": "in_hand",
-      "local_path": "qualification/czr-2026q2-relative-value/documents/CZR_2020_Credit_Agreement.txt",
-      "external_path": null,
-      "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-liquidity set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the facility's controlling terms as executed, including the Change in Control event of default; the amendments are not in this set, so no current commitment, margin or financial covenant is inferred from the 2020 text. 935,517 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
-    },
-    {
       "id": "czr-2024-credit-agreement-incremental-assumption-no3-relative-value",
       "issuer": "CZR",
       "document": "Caesars Entertainment, Inc. Incremental Assumption Agreement No. 3 dated 6 February 2024, JPMorgan Chase Bank, N.A. as administrative agent, with Exhibit A, the Credit Agreement dated 20 July 2020 conformed through it (SEC exhibit text extract, FULL relative-value set copy)",
@@ -1384,7 +1319,7 @@
       "local_path": "qualification/czr-2026q2-relative-value/documents/CZR_2024_Credit_Agreement_Incremental_Assumption_No3.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the $2,900.0 million Incremental Term B-1 Loans, and its Exhibit A is the Credit Agreement conformed through Incremental Assumption Agreement No. 1, the First to Third Amendments and Incremental Assumption Agreements No. 2 and No. 3; with the Fourth and Fifth Amendments it is the current credit-agreement chain (F508). Exhibit A is a changed copy (insertions double-underlined, deletions struck through); on the owner's ruling of 5 October 2026 the text renders the agreement as amended: the struck runs from Exhibit A's cover on are removed (295 runs, 167 with text, 484 characters) and the insertions kept as plain text (F508). 1,077,810 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the $2,900.0 million Incremental Term B-1 Loans, and its Exhibit A is the Credit Agreement conformed through Incremental Assumption Agreement No. 1, the First to Third Amendments and Incremental Assumption Agreements No. 2 and No. 3; with the Fourth and Fifth Amendments it is the current credit-agreement chain (F508). Exhibit A is a changed copy (insertions double-underlined, deletions struck through); on the owner's ruling of 5 October 2026 the text renders the agreement as amended: the struck runs from Exhibit A's cover on are removed (295 runs, 167 with text, 484 characters) and the insertions kept as plain text (F508). 1,077,810 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold. It replaces the 2020 credit agreement (Ex. 10.1, accession 0001193125-20-196232) in this set on the owner's ruling of 5 October 2026 (F508)."
     },
     {
       "id": "czr-2024-650-notes-2032-indenture-relative-value",
@@ -1582,19 +1517,6 @@
       "note": "Byte-identical to the czr-2026q2-lite-relative-value set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies revenues, Consolidated Adjusted EBITDA (a non-GAAP measure), the traditional debt table including the 4.125% Notes due 2029, and traditional and lease-adjusted net leverage. CP-1C's SKILL.md names no document form, so the demand is inferred from its Peer Discovery and Peer Data Gates rather than quoted. 33,608 bytes."
     },
     {
-      "id": "czr-2020-credit-agreement-lite-full-credit-screen",
-      "issuer": "CZR",
-      "document": "Caesars Entertainment, Inc. (formerly Eldorado Resorts, Inc.) Credit Agreement dated 20 July 2020, JPMorgan Chase Bank, N.A. as administrative agent (SEC exhibit text extract, LITE full-credit-screen set copy)",
-      "modules": ["CP-0", "CP-3C"],
-      "pathways": ["LITE_FULL_CREDIT_SCREEN"],
-      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312520196232/d940333dex101.htm",
-      "status": "in_hand",
-      "local_path": "qualification/czr-2026q2-lite-full-credit-screen/documents/CZR_2020_Credit_Agreement.txt",
-      "external_path": null,
-      "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-liquidity set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the facility's controlling terms as executed; the amendments are not in this set, so no current commitment, margin or financial covenant is inferred from the 2020 text. 935,517 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
-    },
-    {
       "id": "czr-2024-credit-agreement-incremental-assumption-no3-lite-full-credit-screen",
       "issuer": "CZR",
       "document": "Caesars Entertainment, Inc. Incremental Assumption Agreement No. 3 dated 6 February 2024, JPMorgan Chase Bank, N.A. as administrative agent, with Exhibit A, the Credit Agreement dated 20 July 2020 conformed through it (SEC exhibit text extract, LITE full-credit-screen set copy)",
@@ -1605,7 +1527,7 @@
       "local_path": "qualification/czr-2026q2-lite-full-credit-screen/documents/CZR_2024_Credit_Agreement_Incremental_Assumption_No3.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the $2,900.0 million Incremental Term B-1 Loans, and its Exhibit A is the Credit Agreement conformed through Incremental Assumption Agreement No. 1, the First to Third Amendments and Incremental Assumption Agreements No. 2 and No. 3; with the Fourth and Fifth Amendments it is the current credit-agreement chain (F508). Exhibit A is a changed copy (insertions double-underlined, deletions struck through); on the owner's ruling of 5 October 2026 the text renders the agreement as amended: the struck runs from Exhibit A's cover on are removed (295 runs, 167 with text, 484 characters) and the insertions kept as plain text (F508). 1,077,810 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the $2,900.0 million Incremental Term B-1 Loans, and its Exhibit A is the Credit Agreement conformed through Incremental Assumption Agreement No. 1, the First to Third Amendments and Incremental Assumption Agreements No. 2 and No. 3; with the Fourth and Fifth Amendments it is the current credit-agreement chain (F508). Exhibit A is a changed copy (insertions double-underlined, deletions struck through); on the owner's ruling of 5 October 2026 the text renders the agreement as amended: the struck runs from Exhibit A's cover on are removed (295 runs, 167 with text, 484 characters) and the insertions kept as plain text (F508). 1,077,810 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold. It replaces the 2020 credit agreement (Ex. 10.1, accession 0001193125-20-196232) in this set on the owner's ruling of 5 October 2026 (F508)."
     },
     {
       "id": "czr-2024-650-notes-2032-indenture-lite-full-credit-screen",
@@ -1790,19 +1712,6 @@
       "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. Fiscal year ended 31 December 2025; it supplies the audited annual base (operating cash flow, total debt at 31 December 2025). 405,745 bytes, inside MAX_REQUEST_BYTES."
     },
     {
-      "id": "czr-2020-credit-agreement-portfolio",
-      "issuer": "CZR",
-      "document": "Caesars Entertainment, Inc. (formerly Eldorado Resorts, Inc.) Credit Agreement dated 20 July 2020, JPMorgan Chase Bank, N.A. as administrative agent (SEC exhibit text extract, FULL portfolio set copy)",
-      "modules": ["CP-4"],
-      "pathways": ["PORTFOLIO_DECISION"],
-      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312520196232/d940333dex101.htm",
-      "status": "in_hand",
-      "local_path": "qualification/czr-2026q2-portfolio/documents/CZR_2020_Credit_Agreement.txt",
-      "external_path": null,
-      "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-liquidity set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the facility's controlling terms as executed, including the Change in Control event of default; the amendments are not in this set, so no current commitment, margin or financial covenant is inferred from the 2020 text. 935,517 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
-    },
-    {
       "id": "czr-2024-credit-agreement-incremental-assumption-no3-portfolio",
       "issuer": "CZR",
       "document": "Caesars Entertainment, Inc. Incremental Assumption Agreement No. 3 dated 6 February 2024, JPMorgan Chase Bank, N.A. as administrative agent, with Exhibit A, the Credit Agreement dated 20 July 2020 conformed through it (SEC exhibit text extract, FULL portfolio set copy)",
@@ -1813,7 +1722,7 @@
       "local_path": "qualification/czr-2026q2-portfolio/documents/CZR_2024_Credit_Agreement_Incremental_Assumption_No3.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the $2,900.0 million Incremental Term B-1 Loans, and its Exhibit A is the Credit Agreement conformed through Incremental Assumption Agreement No. 1, the First to Third Amendments and Incremental Assumption Agreements No. 2 and No. 3; with the Fourth and Fifth Amendments it is the current credit-agreement chain (F508). Exhibit A is a changed copy (insertions double-underlined, deletions struck through); on the owner's ruling of 5 October 2026 the text renders the agreement as amended: the struck runs from Exhibit A's cover on are removed (295 runs, 167 with text, 484 characters) and the insertions kept as plain text (F508). 1,077,810 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the $2,900.0 million Incremental Term B-1 Loans, and its Exhibit A is the Credit Agreement conformed through Incremental Assumption Agreement No. 1, the First to Third Amendments and Incremental Assumption Agreements No. 2 and No. 3; with the Fourth and Fifth Amendments it is the current credit-agreement chain (F508). Exhibit A is a changed copy (insertions double-underlined, deletions struck through); on the owner's ruling of 5 October 2026 the text renders the agreement as amended: the struck runs from Exhibit A's cover on are removed (295 runs, 167 with text, 484 characters) and the insertions kept as plain text (F508). 1,077,810 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold. It replaces the 2020 credit agreement (Ex. 10.1, accession 0001193125-20-196232) in this set on the owner's ruling of 5 October 2026 (F508)."
     },
     {
       "id": "czr-2024-650-notes-2032-indenture-portfolio",
@@ -1933,19 +1842,6 @@
       "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,590 bytes."
     },
     {
-      "id": "czr-2020-credit-agreement-full-credit-assessment",
-      "issuer": "CZR",
-      "document": "Caesars Entertainment, Inc. (formerly Eldorado Resorts, Inc.) Credit Agreement dated 20 July 2020, JPMorgan Chase Bank, N.A. as administrative agent (SEC exhibit text extract, FULL credit-assessment set copy)",
-      "modules": ["CP-4"],
-      "pathways": ["FULL_CREDIT_ASSESSMENT"],
-      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312520196232/d940333dex101.htm",
-      "status": "in_hand",
-      "local_path": "qualification/czr-2026q2-full-credit-assessment/documents/CZR_2020_Credit_Agreement.txt",
-      "external_path": null,
-      "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-liquidity set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the facility's controlling terms as executed, including the Change in Control event of default; the current commitment and margins are read from the 10-Q and the amendments, not inferred from the 2020 text. 935,517 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
-    },
-    {
       "id": "czr-2024-credit-agreement-incremental-assumption-no3-full-credit-assessment",
       "issuer": "CZR",
       "document": "Caesars Entertainment, Inc. Incremental Assumption Agreement No. 3 dated 6 February 2024, JPMorgan Chase Bank, N.A. as administrative agent, with Exhibit A, the Credit Agreement dated 20 July 2020 conformed through it (SEC exhibit text extract, FULL credit-assessment set copy)",
@@ -1956,7 +1852,7 @@
       "local_path": "qualification/czr-2026q2-full-credit-assessment/documents/CZR_2024_Credit_Agreement_Incremental_Assumption_No3.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the $2,900.0 million Incremental Term B-1 Loans, and its Exhibit A is the Credit Agreement conformed through Incremental Assumption Agreement No. 1, the First to Third Amendments and Incremental Assumption Agreements No. 2 and No. 3; with the Fourth and Fifth Amendments it is the current credit-agreement chain (F508). Exhibit A is a changed copy (insertions double-underlined, deletions struck through); on the owner's ruling of 5 October 2026 the text renders the agreement as amended: the struck runs from Exhibit A's cover on are removed (295 runs, 167 with text, 484 characters) and the insertions kept as plain text (F508). 1,077,810 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the $2,900.0 million Incremental Term B-1 Loans, and its Exhibit A is the Credit Agreement conformed through Incremental Assumption Agreement No. 1, the First to Third Amendments and Incremental Assumption Agreements No. 2 and No. 3; with the Fourth and Fifth Amendments it is the current credit-agreement chain (F508). Exhibit A is a changed copy (insertions double-underlined, deletions struck through); on the owner's ruling of 5 October 2026 the text renders the agreement as amended: the struck runs from Exhibit A's cover on are removed (295 runs, 167 with text, 484 characters) and the insertions kept as plain text (F508). 1,077,810 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold. It replaces the 2020 credit agreement (Ex. 10.1, accession 0001193125-20-196232) in this set on the owner's ruling of 5 October 2026 (F508)."
     },
     {
       "id": "czr-2024-credit-agreement-fourth-amendment-full-credit-assessment",
