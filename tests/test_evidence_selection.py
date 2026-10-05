@@ -312,7 +312,11 @@ def test_a_quote_on_an_undelivered_member_is_unverified_on_a_real_run(
     assert [c.matched_text for c in record.citations] == [QUOTE]
     assert record.unverified == (
         UnverifiedCitation(
-            harness.witness_id, 1, WITNESS_QUOTE, RefusalCode.CITATION_NOT_DELIVERED
+            harness.witness_id,
+            1,
+            WITNESS_QUOTE,
+            RefusalCode.CITATION_NOT_DELIVERED,
+            marker=2,
         ),
     )
     # Billed, one attempt each, no retry spent on the citation.

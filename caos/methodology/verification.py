@@ -358,10 +358,11 @@ def _reanchored(
     # a record accepted before the whole-line rule re-anchors as it always
     # has; each at the page the record stores, never searched for, and a
     # re-anchoring kept only where its cited page holds no such line (D94).
-    # Whether the body carries a quote is the answer's, not anchoring's
-    # (D106): the recorded `linked` is carried, never re-derived here.
+    # Whether a marker names a citation is the answer's, not anchoring's
+    # (D106, D107): the recorded `linked` and `marker` are carried, never
+    # re-derived here.
     again = tuple(
-        replace(found, linked=stored.linked)
+        replace(found, linked=stored.linked, marker=stored.marker)
         for found, stored in zip(anchored, record.citations, strict=False)
     )
     if len(anchored) != len(record.citations) or again != record.citations:

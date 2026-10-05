@@ -503,21 +503,25 @@ def _partitioned(
     linked: Sequence[bool],
 ) -> tuple[tuple[AnchoredCitation, ...], tuple[UnverifiedCitation, ...]]:
     """An answer's citations, in order, as anchored -- host-verified under
-    `EXCERPT` (D105), flagged not linked to a statement where the body does
-    not carry the quote -- and unverified: the module's own locator and
-    quote with the anchoring refusal that left it so (D106). Each is judged
-    alone (`_judged`), so one citation's verdict never moves another's. A
-    quote that cannot be kept as unverified (`unverified_citation`) refuses
-    `HANDOFF_MALFORMED`, a host text check."""
+    `EXCERPT` (D105), flagged not linked to a statement where no marker in
+    the body names it -- and unverified: the module's own locator and
+    quote with the anchoring refusal that left it so (D106). Each keeps its
+    place in the list, which its markers name (`marker`, D107). Each is
+    judged alone (`_judged`), so one citation's verdict never moves
+    another's. A quote that cannot be kept as unverified
+    (`unverified_citation`) refuses `HANDOFF_MALFORMED`, a host text check."""
     anchored: list[AnchoredCitation] = []
     unverified: list[UnverifiedCitation] = []
-    for citation, held, found in zip(
-        citations, linked, _judged(conn, blocks, citations, TokenIndex()), strict=True
+    judged = _judged(conn, blocks, citations, TokenIndex())
+    for place, (citation, held, found) in enumerate(
+        zip(citations, linked, judged, strict=True), 1
     ):
         if isinstance(found, AnchoredCitation):
-            anchored.append(found if held else replace(found, linked=False))
+            anchored.append(replace(found, linked=held, marker=place))
         else:
-            unverified.append(unverified_citation(citation, found, linked=held))
+            unverified.append(
+                unverified_citation(citation, found, linked=held, marker=place)
+            )
     return tuple(anchored), tuple(unverified)
 
 

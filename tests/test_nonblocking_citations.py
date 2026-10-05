@@ -315,7 +315,8 @@ def test_the_partition_keeps_order_codes_and_links(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Each citation is judged alone: the anchored ones in order, each
-    flagged `linked` as the body carries it; the rest unverified in order,
+    flagged `linked` as a marker names it and keeping its place in the list
+    (`marker`, D107); the rest unverified in order, likewise,
     each with its own code -- all three of anchoring's. Any other refusal is
     not a citation fault and is raised."""
     outcomes = {
@@ -329,16 +330,20 @@ def test_the_partition_keeps_order_codes_and_links(
     citations = [Citation(SOURCE, n, text) for n, text in enumerate(outcomes, 1)]
     linked = [True, True, False, False, True]
     anchored, unverified = _partitioned(_NO_STORE, {}, citations, linked)
-    assert [(c.matched_text, c.linked) for c in anchored] == [
-        ("first", True),
-        ("third", False),
+    assert [(c.matched_text, c.linked, c.marker) for c in anchored] == [
+        ("first", True, 1),
+        ("third", False, 3),
     ]
     assert unverified == (
-        UnverifiedCitation(SOURCE, 2, "second", RefusalCode.CITATION_AMBIGUOUS),
         UnverifiedCitation(
-            SOURCE, 4, "fourth", RefusalCode.CITATION_NOT_LOCATED, linked=False
+            SOURCE, 2, "second", RefusalCode.CITATION_AMBIGUOUS, marker=2
         ),
-        UnverifiedCitation(SOURCE, 5, "fifth", RefusalCode.CITATION_NOT_DELIVERED),
+        UnverifiedCitation(
+            SOURCE, 4, "fourth", RefusalCode.CITATION_NOT_LOCATED, False, 4
+        ),
+        UnverifiedCitation(
+            SOURCE, 5, "fifth", RefusalCode.CITATION_NOT_DELIVERED, marker=5
+        ),
     )
     monkeypatch.setattr(
         canonical,
@@ -385,7 +390,7 @@ def test_each_citation_fault_keeps_the_answer(harness: _Harness) -> None:
     assert (anchored.matched_text, anchored.linked) == (QUOTE, False)
     assert record.unverified == (
         UnverifiedCitation(
-            answers.stranger, 1, UNANCHORED, RefusalCode.CITATION_NOT_DELIVERED
+            answers.stranger, 1, UNANCHORED, RefusalCode.CITATION_NOT_DELIVERED, True, 2
         ),
     )
     assert json.loads(record_bytes(record))["citations"][0]["linked"] is False
