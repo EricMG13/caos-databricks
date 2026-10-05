@@ -977,6 +977,94 @@ def test_what_is_held_back_is_what_suppress_exception_held_back(
         lambda args: hooked.append(type(args.exc_value).__name__),
     )
     assert callable(make)
-    line = _said(make(), capsys)
-    assert f"call={kind} " in line
+    failure = make()
+    line = _said(failure, capsys)
+    assert f"call={kind} class={type(failure).__name__} " in line
     assert bool(hooked) is escapes
+
+
+@pytest.mark.parametrize(
+    ("stated", "shown"),
+    [
+        (None, "-"),
+        (100, "100"),
+        (99, "?"),
+        (9999, "9999"),
+        (10000, "?"),
+        ("502", "502"),
+        ("1000", "1000"),
+        ("01000", "?"),
+        ("00000502", "?"),
+        ("5O2", "?"),
+        ("\u0665\u0660\u0662", "?"),
+    ],
+)
+def test_a_status_is_three_or_four_digits(stated: object, shown: str) -> None:
+    """F513 audit: what `status` and `error_code` may show, at each bound."""
+    assert models._status(stated) == shown
+
+
+def test_the_causes_are_the_first_three_links_of_the_chain(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Explicit causes and implicit contexts are both followed, three deep."""
+    first, second, third, fourth, fifth = (
+        KeyError("private"),
+        OSError("private"),
+        LookupError("private"),
+        EOFError("private"),
+        MemoryError("private"),
+    )
+    first.__cause__ = second
+    second.__context__ = third
+    third.__cause__ = fourth
+    fourth.__cause__ = fifth
+    line = _said(first, capsys)
+    assert "class=KeyError cause=OSError<LookupError<EOFError status=" in line
+    assert "MemoryError" not in line
+    assert "cause=- " in _said(ValueError("private"), capsys)
+
+
+def test_an_unreadable_failure_is_written_as_unknown(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A failure whose facts raise when read is written as all `?`."""
+
+    class Unreadable(Exception):
+        @property
+        def body(self) -> object:
+            raise RuntimeError("private")
+
+    line = _said(Unreadable("private"), capsys)
+    assert "call=raised class=? cause=? status=? error_code=? error_type=? " in line
+
+
+def test_an_unwritable_stderr_drops_the_line_not_the_refusal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The write is a fail-open: the refusal stands whatever stderr does."""
+    import io
+    import sys
+
+    class Unwritable(io.StringIO):
+        def write(self, text: str) -> int:
+            raise BrokenPipeError(32, "private")
+
+    monkeypatch.setattr(sys, "stderr", Unwritable())
+    for failure in (ValueError("private"), StatusError(503)):
+        completion = fake_completions(ScriptedChat(answer=failure)).complete(PROMPT)
+        assert completion.refusal is RefusalCode.PROVIDER_UNAVAILABLE
+
+
+def test_the_seconds_are_those_since_the_first_send(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    clock = {"t": 100.0}
+    monkeypatch.setattr(models, "_clock", lambda: clock["t"])
+
+    def slow(prompt: str) -> object:
+        clock["t"] += 3.5
+        raise ValueError("private")
+
+    fake_completions(ScriptedChat(answer=slow)).complete(PROMPT)
+    assert capsys.readouterr().err.endswith(" elapsed=3.5\n")
