@@ -6,7 +6,7 @@ This immutable set prepares `LITE_CREDIT_22 / LITE_PORTFOLIO_DECISION` for
 Caesars Entertainment, Inc. (CZR) at an analysis date of 2026-10-02, with a
 proposed position in the CZR 6.50% Senior Secured Notes due 2032 held against a
 **SYNTHETIC** test mandate. Its qualification-set digest is
-`5fc86774755b0426171d5b58e58f47e14dc585fbd7b93099c623ff9a0362ea51`.
+`3a4639808bae31965c933ce038a6f124dfd2fe85611e09cd4773c4be3f06cb03`.
 
 ## The mandate is synthetic (D80)
 
@@ -31,7 +31,7 @@ digest the keys bind; the raw SHA-256 is the HTML as fetched.
 |---|---|---|---|---|
 | `CZR_Q2_2026_10Q.txt` (Form 10-Q, quarter ended 30 June 2026) | https://www.sec.gov/Archives/edgar/data/1590895/000159089526000028/czr-20260630.htm | 0001590895-26-000028 | `f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a` | `9dd3fca867c49936c65c9729bd7f9478d4c98b7c60569b74864a839bdeed8500` |
 | `CZR_Q2_2026_Earnings_Release.txt` (Ex. 99.1, 28 July 2026) | https://www.sec.gov/Archives/edgar/data/1590895/000159089526000027/ex991-2026q2ceiearningsrel.htm | 0001590895-26-000027 | `b385f76ff631243d1053fa8073ebde4f8886b4a50c9ce34ce3498d6b2ac3e9f8` | `a8982154b99b023b526261f7626022e96ac642834d1d65704629946acecc8a1f` |
-| `CZR_2024_650_Senior_Secured_Notes_2032_Indenture.txt` (Ex. 10.1, 6.500% Senior Secured Notes due 2032 indenture, 6 February 2024) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex101.htm | 0001193125-24-026847 | `2f3530b8034d89d47165530014e0541cbe4778893dac5411207cbaf2b3c82f97` | `a4661727edc48361dd7290772e62412c389b8ad8d215a96aa58facfe9e356c2c` |
+| `CZR_2024_650_Senior_Secured_Notes_2032_Indenture.txt` (Ex. 10.1, 6.500% Senior Secured Notes due 2032 indenture, 6 February 2024) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex101.htm | 0001193125-24-026847 | `0809ab3981090bd2c23950da9530adb10e96882ddfa7db4404635e014d4c1119` | `a4661727edc48361dd7290772e62412c389b8ad8d215a96aa58facfe9e356c2c` |
 
 The mandate is a text extract of the owner's workbook
 `REF_CP-6A_Portfolio_Debate_Inputs.xlsx`, converted on 2 October 2026, with
@@ -100,6 +100,11 @@ answer is accepted only as a whole line (`WHOLE_LINE`) and scored by exact
 equality, so a fragment could never be met (F235, F475). Where a fact sits
 inside a longer line, the key is that whole line. Since F492 a prose line of a
 converted filing is one sentence, so a key is the sentence that carries its
+fact.
+Since F498 a sentence of a legal instrument (the credit agreement, its
+amendments, the indenture, the merger 8-K) over 400 characters is cut further
+at its clause boundaries (`; (b)`, `, (b)`, `; and`, `, and (c)`, `; provided`,
+`, provided that`, `: (a)`), so a key there is the clause that carries its
 fact.
 
 The readiness key expects CP-0 to clear CP-L10, the route's one pinned

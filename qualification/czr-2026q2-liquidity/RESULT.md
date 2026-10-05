@@ -5,7 +5,7 @@ Status: **OFFLINE / UNVERIFIED / NOT QUALIFIED**.
 This immutable set prepares `FULL_CREDIT_32 / LIQUIDITY_REVIEW` for Caesars
 Entertainment, Inc. (CZR) at an analysis date of 2026-10-02. Its
 qualification-set digest is
-`c9e7a2e9c0326f4c44dbbb6fb59322fa2fba75e953d63644b54cd07d3e42b6c5`.
+`bf108d21f6d55bdfd3c369bbecde59993e9a969d2632d97ecde37671776127f8`.
 
 ## Corpus provenance
 
@@ -19,7 +19,7 @@ the digest the keys bind; the raw SHA-256 is the HTML as fetched.
 | `CZR_FY2025_10K.txt` (Form 10-K, year ended 31 December 2025) | https://www.sec.gov/Archives/edgar/data/1590895/000159089526000011/czr-20251231.htm | 0001590895-26-000011 | `172309048af2a6a2dab515d765f00a7c89bf8c874c6104a5e3a052b66cad4512` | `41328bdfa2486cfb53b831c2ddba6009528d8dca3a0d868c98c2cb113142b05f` |
 | `CZR_Q2_2026_10Q.txt` (Form 10-Q, quarter ended 30 June 2026) | https://www.sec.gov/Archives/edgar/data/1590895/000159089526000028/czr-20260630.htm | 0001590895-26-000028 | `f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a` | `9dd3fca867c49936c65c9729bd7f9478d4c98b7c60569b74864a839bdeed8500` |
 | `CZR_Q2_2026_Earnings_Release.txt` (Ex. 99.1, 28 July 2026) | https://www.sec.gov/Archives/edgar/data/1590895/000159089526000027/ex991-2026q2ceiearningsrel.htm | 0001590895-26-000027 | `b385f76ff631243d1053fa8073ebde4f8886b4a50c9ce34ce3498d6b2ac3e9f8` | `a8982154b99b023b526261f7626022e96ac642834d1d65704629946acecc8a1f` |
-| `CZR_2020_Credit_Agreement.txt` (Ex. 10.1, Credit Agreement dated 20 July 2020) | https://www.sec.gov/Archives/edgar/data/1590895/000119312520196232/d940333dex101.htm | 0001193125-20-196232 | `9b57dc8790771968d9a0c74689f6a684c1b71eedf04e7fc5554490bc7d46e9a8` | `6600ab5bec479091f68dc04b2db65a54ef1013944c94af0ec135335b374c7dba` |
+| `CZR_2020_Credit_Agreement.txt` (Ex. 10.1, Credit Agreement dated 20 July 2020) | https://www.sec.gov/Archives/edgar/data/1590895/000119312520196232/d940333dex101.htm | 0001193125-20-196232 | `cdfeb87c9b57914f4c2e89dbb2ec80de52564b1817b35fe15e332e67a13039b5` | `6600ab5bec479091f68dc04b2db65a54ef1013944c94af0ec135335b374c7dba` |
 
 The credit agreement is 935,517 bytes: over 500 KiB, so its path is pinned in
 the large-file excludes, but under 1.5 MiB, so it reaches CP-0 whole rather
@@ -50,6 +50,9 @@ The credit agreement carries no key. Its revolving commitment is stated as at
 the 2020 signing date, and the Fourth (9 May 2024) and Fifth (25 November 2024)
 Amendments are not in this set, so the current commitment is keyed to the
 10-Q; the agreement is admitted for the facility's controlling terms.
+Since F498 its sentences over 400 characters are cut further at their clause
+boundaries (`; (b)`, `, (b)`, `; and`, `, and (c)`, `; provided`,
+`, provided that`, `: (a)`); no key moves with them.
 
 Alternative lines (D101). A figure key is also met by another whole evidence
 line, cited under the same module, that states the key's lead figures -- the
