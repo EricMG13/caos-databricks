@@ -1290,7 +1290,9 @@ def _absent_ids_line(
         registers = contract.completeness_check.load_contract(
             skill.decode("utf-8"), module_id
         )["registers"]
-        absent = sorted(register for register in registers if register not in text)
+        absent = sorted(
+            register for register in registers if not _writes_id(text, register)
+        )
         if absent:
             shown = absent[:MAX_FEEDBACK_CITATIONS]
             rest = len(absent) - len(shown)
@@ -1303,6 +1305,14 @@ def _absent_ids_line(
                 " in the answer"
             )
     return None
+
+
+def _writes_id(text: str, register: str) -> bool:
+    """Whether `text` writes `register` whole, as the vendor's locator reads an
+    ID (`find_registers`' `id_re`): not inside a longer ID (`T4.1` in `T4.10`),
+    a sentence's full stop after it ending it (F520)."""
+    whole = rf"(?<![A-Za-z0-9_.]){re.escape(register)}(?![A-Za-z0-9_]|\.[A-Za-z0-9])"
+    return re.search(whole, text) is not None
 
 
 # How many register rows of another width than their header a retry is told
