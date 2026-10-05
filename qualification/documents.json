@@ -1140,6 +1140,58 @@
       "note": "Official EDGAR exhibit converted from HTML to plain text on 2 October 2026; re-converted 3 October 2026 (F478); re-split by sentence 3 October 2026 (F492) (accession 0000921738-26-000019, raw HTML SHA-256 be60f25fec25022c2fd6f48c2cf9bb99912b8f78356cebc4a7719bdcae9120bc). Three and six months ended 30 June 2026; it supplies revenues, Consolidated Adjusted EBITDA (a non-GAAP measure), the traditional debt table including the 4.125% Notes due 2029, and traditional and lease-adjusted net leverage. A peer from the owner's Public Leveraged Loan Issuers Benchmark (2 October 2026). CP-1C's SKILL.md names no document form, so the demand is inferred from its Peer Discovery and Peer Data Gates rather than quoted. 33,608 bytes."
     },
     {
+      "id": "czr-finra-trace-12769gac4-2026-10-02-lite-relative-value",
+      "issuer": "CZR",
+      "document": "FINRA TRACE observation for Caesars Entertainment 6.50% notes due 2032, CUSIP 12769GAC4 (LITE relative-value set copy)",
+      "modules": ["CP-L10"],
+      "pathways": ["LITE_RELATIVE_VALUE"],
+      "source": "https://www.finra.org/finra-data/fixed-income/bond?symbol=ERI5740550&bondType=CORP",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-lite-relative-value/documents/CZR_FINRA_TRACE_12769GAC4_2026-10-02.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Byte-identical to the czr-2026q2-relative-value set's copy and copied because the on-disk loader refuses a path outside the set root. It is the dated price evidence CP-0 asked for (F507): the last trade price, yield and date FINRA displayed, which FINRA did not label bid, mid, ask or evaluated; no spread, curve point or seniority is inferred. 1,361 bytes."
+    },
+    {
+      "id": "czr-finra-trace-12769gad2-2026-10-02-lite-relative-value",
+      "issuer": "CZR",
+      "document": "FINRA TRACE observation for Caesars Entertainment 6.00% notes due 2032, CUSIP 12769GAD2 (LITE relative-value set copy)",
+      "modules": ["CP-L10"],
+      "pathways": ["LITE_RELATIVE_VALUE"],
+      "source": "https://www.finra.org/finra-data/fixed-income/bond?symbol=ERI5909471&bondType=CORP",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-lite-relative-value/documents/CZR_FINRA_TRACE_12769GAD2_2026-10-02.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Byte-identical to the czr-2026q2-relative-value set's copy and copied because the on-disk loader refuses a path outside the set root. It is the dated price evidence CP-0 asked for (F507): the last trade price, yield and date FINRA displayed, which FINRA did not label bid, mid, ask or evaluated; no spread, curve point or seniority is inferred. 1,364 bytes."
+    },
+    {
+      "id": "mgm-finra-trace-552953ck5-2026-10-02-lite-relative-value",
+      "issuer": "MGM",
+      "document": "FINRA TRACE observation for MGM Resorts International 6.125% notes due 2029, CUSIP 552953CK5 (LITE relative-value set copy)",
+      "modules": ["CP-L10"],
+      "pathways": ["LITE_RELATIVE_VALUE"],
+      "source": "https://www.finra.org/finra-data/fixed-income/bond?symbol=MGM5885613&bondType=CORP",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-lite-relative-value/documents/MGM_FINRA_TRACE_552953CK5_2026-10-02.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Byte-identical to the czr-2026q2-relative-value set's copy and copied because the on-disk loader refuses a path outside the set root. It is the dated price evidence CP-0 asked for (F507): the last trade price, yield and date FINRA displayed, which FINRA did not label bid, mid, ask or evaluated; no spread, curve point or seniority is inferred. 1,277 bytes."
+    },
+    {
+      "id": "penn-finra-trace-707569av1-2026-10-02-lite-relative-value",
+      "issuer": "PENN",
+      "document": "FINRA TRACE observation for PENN Entertainment 4.125% notes due 2029, CUSIP 707569AV1 (LITE relative-value set copy)",
+      "modules": ["CP-L10"],
+      "pathways": ["LITE_RELATIVE_VALUE"],
+      "source": "https://www.finra.org/finra-data/fixed-income/bond?symbol=PENN5210723&bondType=CORP",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-lite-relative-value/documents/PENN_FINRA_TRACE_707569AV1_2026-10-02.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Byte-identical to the czr-2026q2-relative-value set's copy and copied because the on-disk loader refuses a path outside the set root. It is the dated price evidence CP-0 asked for (F507): the last trade price, yield and date FINRA displayed, which FINRA did not label bid, mid, ask or evaluated; no spread, curve point or seniority is inferred. 1,354 bytes."
+    },
+    {
       "id": "czr-q2-2026-10q-relative-value",
       "issuer": "CZR",
       "document": "Caesars Entertainment, Inc. Form 10-Q for the quarter ended 30 June 2026 (SEC filing text extract, FULL relative-value set copy)",

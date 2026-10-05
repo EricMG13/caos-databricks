@@ -305,7 +305,7 @@ COMMITTED_SET_DIGESTS = {
         "e717a3b6c4f2847f2d027b6a31ff28806bc6925991b89b4581ab6474f23e346a"
     ),
     "czr-2026q2-lite-relative-value": (
-        "6000542dd4a4551ab1388f384d50ed26f02c0518561ec42fbd291748d0be7f8a"
+        "dcc626b575a40996555c4dbde4e0c025ebd012ad7731e4ed6c724760a6c9814b"
     ),
     "czr-2026q2-relative-value": (
         "24cbfea7f0eb1d07d962c9d2bc9d9bbef36055be6d23a737a1b1dedf3e2c8e65"

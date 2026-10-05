@@ -1,0 +1,32 @@
+FINRA Fixed Income Security Lookup — governed observation
+
+Observed at: 2026-10-02T09:32:08Z
+Source: https://www.finra.org/finra-data/fixed-income/bond?symbol=MGM5885613&bondType=CORP
+Publisher: Financial Industry Regulatory Authority (FINRA)
+Access: public web page, reached through FINRA's Corporate and Agency Bonds search, subject to the Fixed Income Data User Agreement
+
+Issuer: MGM RESORTS INTL
+TRACE symbol: MGM5885613
+CUSIP: 552953CK5
+Bond type: CORP
+Coupon rate: 6.1250000000000000000%
+Maturity date: 9/15/2029
+Callable: Y
+Next call date: 10/11/2026
+
+Last trade price: $98.42
+Last trade yield: 6.722997%
+Last trade date: 10/1/2026
+
+Moody's rating shown: B1
+Moody's last-rated date shown: 2024-09-03
+Standard & Poor's rating shown: BB-
+Standard & Poor's last-rated date shown: 2024-09-03
+Industry group shown: GAME
+
+Observation limits
+
+- FINRA labels the price and yield as the last trade, not bid, mid, ask, or an evaluated price.
+- The page displayed a price/yield chart, but this extract does not transcribe chart points.
+- No spread, benchmark curve, seniority, dealer quote, trade size, or intraday timestamp was displayed in the observed summary.
+- This record reports only page content visible at the observation time; it does not infer missing market fields.
