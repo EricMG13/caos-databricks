@@ -25,6 +25,7 @@ from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
 from caos.evidence.citations import (
     EXCERPT,
+    MAX_EDGE_NEEDLES,
     MIN_EXCERPT_WORDS,
     WHOLE_LINE,
     AnchoredCitation,
@@ -33,9 +34,12 @@ from caos.evidence.citations import (
     _excerpt_run,
     _Page,
     _Token,
+    overrun_kept,
     overrun_line,
     verify_citations,
     verify_stored_citations,
+    whole_line_of,
+    within_line,
 )
 from caos.evidence.ingest import Document, admit_pack
 from caos.refusals import Refusal, RefusalCode
@@ -249,6 +253,18 @@ def test_an_excerpt_cited_on_the_wrong_page_is_anchored_at_its_true_page(
     assert moved.line_text == REANCHOR_PAGES[1][0]
     assert {box.page for box in moved.bboxes} == {2}
     assert _anchored(conn, source_id, on_both) is RefusalCode.CITATION_NOT_LOCATED
+    # A stored record claiming it re-anchored a quote from a page that holds
+    # it as an excerpt is judged by `EXCERPT` there, not the whole-line rule,
+    # and reads back without the claim.
+    claimed = Citation(source_id, 2, on_both)
+    [read] = verify_stored_citations(
+        conn,
+        delivered=every_block(conn, source_id),
+        citations=[(claimed, 3)],
+        index=TokenIndex(),
+        rule=EXCERPT,
+    )
+    assert read.cited_page is None
 
     request = Citation(source_id, moved.page, only_two)
     again = verify_stored_citations(
@@ -289,3 +305,97 @@ def test_an_overrun_is_named_from_any_word_of_its_line() -> None:
     assert overrun_line("keep the Collateral and take all actions required", lines) is (
         None
     )
+
+
+def _words_page(*lines: str) -> tuple[_Page, dict[int, tuple[str, ...]]]:
+    """A page of `lines`, one shown line each, with their block ids."""
+    tokens = [tok for n, text in enumerate(lines) for tok in _line(n, *text.split())]
+    return _Page(tokens), {n: (f"B{n:06d}",) for n in range(len(lines))}
+
+
+def _code_of(page: _Page, lines: dict[int, tuple[str, ...]], quote: str) -> str:
+    """The block id `EXCERPT` anchors `quote` in, or the code it refuses."""
+    try:
+        return _excerpt_run(page, None, lines, quote, tracking=True)[1]
+    except Refusal as refused:
+        return refused.code.value
+
+
+def test_an_excerpt_never_borrows_a_word_from_the_line_before() -> None:
+    """A quote whose first word ends the line before -- with or without the
+    full stop the edge pass forgives -- is no excerpt of either line: the
+    joined keys break between lines (`_LINE_BREAK`), so no needle can match
+    across one."""
+    page, lines = _words_page(
+        "The covenant was not breached.",
+        "Leverage stayed below the maximum ratio in every quarter of FY2025",
+    )
+    for quote in (
+        "breached Leverage stayed below the maximum ratio in",
+        "breached. Leverage stayed below the maximum ratio in",
+    ):
+        assert _code_of(page, lines, quote) == "CITATION_NOT_LOCATED"
+
+
+def test_an_exact_excerpt_is_found_before_an_edge_forgiven_one() -> None:
+    """The exact pass comes first and settles a quote it finds once, as
+    `WHOLE_LINE`'s does: the same words with a full stop elsewhere on the
+    page make it ambiguous only when they are found with edges forgiven."""
+    quote = "growth of four percent in the second quarter"
+    page, lines = _words_page(quote, f"{quote}.")
+    assert _code_of(page, lines, quote) == "B000000"
+    assert _code_of(page, lines, f"{quote},") == "CITATION_AMBIGUOUS"
+
+
+def test_near_places_cost_one_scan_each_on_adversarial_pages() -> None:
+    """Fix round 1 of D105: a hit the search had to reject was a Python
+    step, so 64 quotes of a 240,000-token page of one repeated word took
+    11.5 s, and of 120 lines of 2,000 words 15.7 s. Every needle is now
+    exact and every hit a place within one line. Each page's derived keys
+    are built once, before the clock, as a `TokenIndex` keeps them."""
+    one_word = _words_page(*["a a a a a a a"] * (240_000 // 7))
+    wide = _words_page(*[" ".join(["a"] * 2000)] * 120)
+    cases = (
+        (one_word, "a " * 8),
+        (one_word, "x " + "a " * 7),
+        (wide, "x " + "a " * 6 + "y"),
+    )
+    for (page, lines), quote in cases:
+        assert _code_of(page, lines, quote) == "CITATION_NOT_LOCATED"
+    started = time.perf_counter()
+    for (page, lines), quote in cases:
+        for _ in range(64):
+            assert _code_of(page, lines, quote) == "CITATION_NOT_LOCATED"
+    assert time.perf_counter() - started < 3.0
+
+
+def test_edge_forgiveness_stops_at_its_needle_bound() -> None:
+    """The edge pass searches one exact needle per pair of page keys that
+    stand for the quote's first and last word; a quote with more than
+    `MAX_EDGE_NEEDLES` such pairs is refused rather than searched."""
+    quote = "a b c d e f g h"
+    firsts, lasts = ["a,", "(a", "a.", "a;"], ["h,", "h.", "h;", "h:"]
+    page, lines = _words_page("(a b c d e f g h.", " ".join(firsts + lasts))
+    assert len(firsts) * len(lasts) == MAX_EDGE_NEEDLES
+    assert _code_of(page, lines, quote) == "B000000"
+    crowded, crowded_lines = _words_page(
+        "(a b c d e f g h.", " ".join([*firsts, "'a", *lasts])
+    )
+    assert _code_of(crowded, crowded_lines, quote) == "CITATION_NOT_LOCATED"
+
+
+def test_the_retry_helpers_read_a_line_as_anchoring_does() -> None:
+    """Fix round 1: `whole_line_of` says a quote is all of a line (an
+    ambiguous whole line cannot be lengthened); `overrun_kept` counts the
+    quoted words within the line it runs past; `within_line` is what a
+    stored excerpt's line is held to -- the quote, spaces and its edge
+    punctuation aside, inside the line, tracked letters included."""
+    row = "Adjusted EBITDA | $920 | $955 | $1,807 | $1,839"
+    assert whole_line_of(f"{row}.", row)
+    assert not whole_line_of(row, f"Total {row}")
+    line = "The Borrower shall maintain the Collateral and take all actions"
+    assert overrun_kept("maintain the Collateral and take all actions to", line) == 7
+    assert overrun_kept("maintain the Collateral and take all", line) == 0
+    assert within_line(f"\u201c{row}.\u201d", f"Total {row}")
+    assert within_line("Total debt at 31", "T o t a l debt at 31 December")
+    assert not within_line(row, "Acme Holdings plc annual report 2026")

@@ -33,9 +33,12 @@ statement to where it came from: `matched_text` is an exact excerpt of one
 evidence line as shown -- at least `MIN_EXCERPT_WORDS` consecutive whole
 words, or the whole line when it is shorter -- found once on its page, and
 anchored to that line, which the record keeps beside it (`line_text`). The
-AI-4 fragment that drops a "not" is held off by the eight words and by the
-trace view showing the whole line around the excerpt; a quote running past
-its line's end is still no excerpt.
+eight contiguous words stop the AI-4 fragment only where the dropped "not"
+would sit inside the run, which then no longer matches; a qualifier at the
+excerpt's edge ("believe that the Company will be able to refinance ...",
+its "do not" left before it) is still an excerpt. The guard there is the
+full source line shown around every excerpt -- delivered with EX2, which
+this rule merges with. A quote running past its line's end is no excerpt.
 
 The result is one rectangle per line the quote covers, the shape a PDF
 highlight's QuadPoints uses and for the same reason: selected text wraps, and a
@@ -422,18 +425,27 @@ class _FlatLine:
     text: str
 
 
-# What joins a `_Flat`'s keys for `str.find`: NUL, which no key can hold --
-# a key is a stored token's text or a word of it, and Postgres text holds no
-# NUL -- so a match of keys joined by it begins and ends on whole keys.
+# What joins a `_Flat`'s keys for `str.find`: NUL between two keys of a line,
+# and NUL, SOH, NUL between two lines. No key holds either -- a key is a
+# stored token's text or a word of it, Postgres text holds no NUL and
+# admission holds every token to `BoundaryText`, which refuses a control
+# character -- so a match begins and ends on whole keys of one line.
 _KEY_SEPARATOR = "\x00"
+_LINE_BREAK = "\x01"
+# The most exact needles the edge pass builds for one quote (fix round 1):
+# one per pair of page keys standing for its first and last word. Past it
+# the quote is refused rather than searched, so no page can make the pass
+# cost more than this many scans.
+MAX_EDGE_NEEDLES = 16
 
 
 @dataclass(slots=True)
 class _Flat:
     """A page's shown lines end to end (`_Page.flat`): every key in order,
     the index in `lines` of the line each key is in, the lines, and each
-    line's text by the block id it is; and, once asked, the keys joined by
-    `_KEY_SEPARATOR` with where each begins, which `places` searches."""
+    line's text by the block id it is; and, once asked, the keys joined
+    for `places` with where each begins, and the page's distinct keys by
+    the core `_stripped` leaves of them, for `edge_needles`."""
 
     keys: list[str]
     line: list[int]
@@ -441,28 +453,60 @@ class _Flat:
     texts: dict[str, str]
     joined: str | None = None
     starts: list[int] = field(default_factory=list)
+    cores: dict[str, set[str]] | None = None
 
     def places(self, words: Sequence[str]) -> Iterator[int]:
-        """Every index, ascending, at which `words` begin as consecutive keys,
-        overlapping ones too: `str.find` over the joined keys, so a page is
-        searched at C speed rather than a Python step per partial match --
-        512 eight-word excerpts of a 240,000-token page of fourteen distinct
-        words took 3.7 s by `occurrences`. A word holding the separator is
-        no key, so it begins nowhere."""
-        if any(_KEY_SEPARATOR in word for word in words):
+        """Every index, ascending, at which `words` are consecutive keys of
+        one line, overlapping ones too: `str.find` over the joined keys, so
+        every hit is a place and a page is searched at C speed. A word
+        holding a separator is no key, so it begins nowhere."""
+        if any(_KEY_SEPARATOR in word or _LINE_BREAK in word for word in words):
             return
         if self.joined is None:
-            self.joined = _KEY_SEPARATOR + _KEY_SEPARATOR.join(self.keys)
-            self.joined += _KEY_SEPARATOR
-            at = 1
-            for key in self.keys:
-                self.starts.append(at)
-                at += len(key) + 1
+            self.joined = self._joined()
         needle = _KEY_SEPARATOR + _KEY_SEPARATOR.join(words) + _KEY_SEPARATOR
         found = self.joined.find(needle)
         while found != -1:
             yield bisect.bisect_left(self.starts, found + 1)
             found = self.joined.find(needle, found + 1)
+
+    def _joined(self) -> str:
+        """The keys joined by `_KEY_SEPARATOR` within a line and by
+        `_LINE_BREAK` between lines, recording where each key begins."""
+        parts = [_KEY_SEPARATOR]
+        at = 1
+        for number, line in enumerate(self.lines):
+            if number:
+                parts.append(_LINE_BREAK + _KEY_SEPARATOR)
+                at += 2
+            for key in self.keys[line.start : line.end]:
+                self.starts.append(at)
+                parts.append(key + _KEY_SEPARATOR)
+                at += len(key) + 1
+        return "".join(parts)
+
+    def edge_needles(self, words: Sequence[str]) -> list[list[str]] | None:
+        """The quote with its first and last word each replaced by every key
+        of the page that stands for it (`_edge_equal`), as exact needles for
+        `places`; None past `MAX_EDGE_NEEDLES`."""
+        first, last = self._standing_for(words[0]), self._standing_for(words[-1])
+        if len(first) * len(last) > MAX_EDGE_NEEDLES:
+            return None
+        inner = list(words[1:-1])
+        return [[head, *inner, tail] for head in sorted(first) for tail in sorted(last)]
+
+    def _standing_for(self, word: str) -> set[str]:
+        """The page's keys `_edge_equal` holds for `word`: its NFC, and every
+        key whose `_stripped` core is the word's, when that is not empty."""
+        if self.cores is None:
+            self.cores = {}
+            for key in set(self.keys):
+                self.cores.setdefault(_stripped(key), set()).add(key)
+        found = set(self.cores.get(_stripped(word), ())) if _stripped(word) else set()
+        normal = _nfc(word)
+        if normal in self.cores.get(_stripped(normal), ()):
+            found.add(normal)
+        return found
 
     def add(
         self, keyed: tuple[list[_Token], list[str], list[int]], block_id: str, text: str
@@ -651,28 +695,29 @@ def _one_excerpt(
     -- every one equal, or with `edges` the interior equal and the first and
     last standing for the quote's there (`_edge_equal`) -- as the tokens it
     covers, the line's block id and its text; None for none, a refusal for
-    two. One search of the page's keys finds the places (`_Flat.places`)."""
-    width = len(words)
-    inner = 1 if edges else 0
-    found: tuple[_FlatLine, int] | None = None
-    for at in flat.places(words[inner : width - inner]):
-        start = at - inner
-        line = flat.lines[flat.line[at]]
-        if start < line.start or start + width > line.end:
-            continue
-        if edges and not (
-            _edge_equal(flat.keys[start], words[0], normalised=True)
-            and _edge_equal(flat.keys[start + width - 1], words[-1], normalised=True)
-        ):
-            continue
-        if found is not None:
-            raise Refusal(RefusalCode.CITATION_AMBIGUOUS)
-        found = (line, start)
+    two. Every needle is exact (`_Flat.edge_needles` for `edges`) and every
+    hit of one is a place within one line (`_Flat.places`), so the second
+    hit refuses at once: a quote costs one scan per needle, however many
+    near places the page holds -- 64 quotes of a 240,000-token page of one
+    word took 11.5 s when each near place was rejected in Python. A quote
+    standing for more than `MAX_EDGE_NEEDLES` pairs of keys is refused, and
+    one whose interior is in no line is found nowhere in one scan."""
+    if edges and next(flat.places(words[1:-1]), None) is None:
+        return None
+    needles = flat.edge_needles(words) if edges else [list(words)]
+    if needles is None:
+        raise Refusal(RefusalCode.CITATION_NOT_LOCATED)
+    found: int | None = None
+    for needle in needles:
+        for at in flat.places(needle):
+            if found is not None:
+                raise Refusal(RefusalCode.CITATION_AMBIGUOUS)
+            found = at
     if found is None:
         return None
-    line, start = found
-    first = line.owners[start - line.start]
-    last = line.owners[start + width - 1 - line.start]
+    line = flat.lines[flat.line[found]]
+    first = line.owners[found - line.start]
+    last = line.owners[found + len(words) - 1 - line.start]
     return line.span[first : last + 1], line.block_id, line.text
 
 
@@ -1368,12 +1413,15 @@ class LineFinding:
     excerpt. `pages`: the other delivered pages of its source on which the
     quote is an excerpt of one delivered evidence line. `absent`: no page of
     its source the node was given holds the quote as a run wholly within its
-    delivered lines (`ANY_RUN`).
+    delivered lines (`ANY_RUN`). `across`: none of those, and the quote's
+    unique run on its cited page runs from one delivered line onto the next
+    (fix round 1).
     """
 
     block_id: str | None = None
     pages: tuple[int, ...] = ()
     absent: bool = False
+    across: bool = False
 
 
 def find_line(
@@ -1394,14 +1442,16 @@ def find_line(
     asked under `EXCERPT` with the citation moved there, at that page
     alone (`_verdict`, never re-anchored, D94), and every delivered page
     under `ANY_RUN` whether a run of the quote lies within its delivered
-    lines at all. Reads go through `index`;
+    lines at all; a cited-page run over two delivered lines is `across`.
+    Reads go through `index`;
     a refusal that is not anchoring's is raised, for the caller to leave the
     citation unplaced.
     """
     source_id, text = citation.source_id, citation.matched_text
     given = sorted(set(pages))
+    across = False
     if citation.page in given:
-        block_id = _part_of(conn, index, citation)
+        block_id, across = _part_of(conn, index, citation, blocks)
         if block_id in blocks:
             return LineFinding(block_id=block_id)
     whole: list[int] = []
@@ -1415,22 +1465,27 @@ def find_line(
         seen = seen or found in (None, RefusalCode.CITATION_AMBIGUOUS)
     if whole:
         return LineFinding(pages=tuple(whole))
-    return LineFinding(absent=not seen)
+    return LineFinding(across=True) if across else LineFinding(absent=not seen)
 
 
 def _part_of(
-    conn: StoreConnection, index: TokenIndex, citation: Citation
-) -> str | None:
+    conn: StoreConnection, index: TokenIndex, citation: Citation, blocks: frozenset[str]
+) -> tuple[str | None, bool]:
     """The block id of the one shown line of the cited page holding the
-    quote's unique run (`_page_run`) and more, delivered or not, or None."""
+    quote's unique run (`_page_run`) and more, delivered or not, or None;
+    and whether that run lies on more than one line, each delivered."""
     tracking = index.facts(conn, citation.source_id)[1]
     cited = index.page(conn, citation.source_id, citation.page)
     run = _any_run(cited, citation.matched_text, tracking=tracking)
     if not isinstance(run, list):
-        return None
+        return None, False
     lines = index.lines(conn, citation.source_id)
     cuts = index.cuts.get(citation.source_id)
-    return _longer_line(cited, cuts, lines, run, tracking=tracking)
+    touched = {token.line_id for token in run}
+    across = len(touched) > 1 and all(
+        _delivered(lines.get(line_id), blocks) for line_id in touched
+    )
+    return _longer_line(cited, cuts, lines, run, tracking=tracking), across
 
 
 # A near miss (F493): the words a candidate line must share with the quote
@@ -1552,6 +1607,46 @@ def _quote_starts(split: list[str], first: str, head: list[str]) -> list[int]:
         for at in occurrences(split, head)
         if at and _edge_equal(split[at - 1], first, normalised=True)
     ]
+
+
+def overrun_kept(text: str, line: str) -> int:
+    """How many of `text`'s words lie within `line` when `text` runs past
+    its end (`overrun_line`, F496), from the first place it does; 0 when it
+    does not. Pure over the two texts, like `overrun_line`."""
+    words = [_nfc(word) for word in text.split()]
+    if len(words) <= NEAR_WORDS:
+        return 0
+    split = [_nfc(word) for word in line.split()]
+    for at in _quote_starts(split, words[0], words[1:NEAR_WORDS]):
+        if _overruns(split[at:], words):
+            return len(split) - at
+    return 0
+
+
+def whole_line_of(text: str, line: str) -> bool:
+    """Whether `text` is all of `line`, word for word as anchoring reads them
+    (NFC, its first and last word standing for the line's there less edge
+    punctuation, `_same_words`): what a retry told of an ambiguous quote is
+    told when the quote is a whole line (fix round 1). Pure over the texts."""
+    words = tuple(_nfc(word) for word in text.split())
+    shown = tuple(_nfc(word) for word in line.split())
+    return (
+        bool(words)
+        and len(words) == len(shown)
+        and _same_words(shown, words, edges=True)
+    )
+
+
+def within_line(matched_text: str, line_text: str) -> bool:
+    """Whether `matched_text` could be an excerpt of `line_text` (D105): what
+    a stored `EXCERPT` record's line is held to when it is read or written,
+    a necessary condition only -- the proof re-anchors the quote. Both are
+    compared NFC with every space dropped and the quote's edge punctuation
+    stripped, a form no pass of `_excerpt_run` reaches past (edge
+    forgiveness, NFC, the tracked-letter join), so no line a quote anchored
+    in is refused, and a line it cannot come from is."""
+    quote = "".join(_nfc(matched_text).split()).strip(EDGE_PUNCTUATION)
+    return bool(quote) and quote in "".join(_nfc(line_text).split())
 
 
 def _overruns(line: list[str], words: list[str]) -> bool:
