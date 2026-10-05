@@ -502,3 +502,45 @@ raise SystemExit(main(sys.argv[1:]))' \
   --capture "$capture" \
   2>&1 | tee -a "$driver_log"
 ```
+
+## Live loop, 3 to 5 October 2026 (`openai/gpt-6-luna`)
+
+The first live loop on the CZR sets, one set at a time, stopping at the first node that exhausted its guided retries. Every run file is git-ignored under `docs/rebuild/runs/live-2026-10-03/`; each set's own `RESULT.md` carries its table. No set is qualified.
+
+**Model and configuration.** `openai/gpt-6-luna`, reasoning effort `high`, provider pinned to `openai` (identity `openrouter/openai/gpt-6-luna@openai/high/65536`), price `$0.20` in and `$1.00` out per million tokens (`0.0000002,0.000001`, dated 2026-10-02). The test-only OpenRouter adapter sends the effort and pins the provider (F479). Three probes (`P1-luna-high`, `P2-lunapro-flex`, `P3-deepseek-low`) preceded the loop.
+
+**Spend.** Key `caos-qualification`: usage 35.05 of the $50 budget at the end (ledger: 35.053 after FCA2). Every run was started under a ceiling and a stop line on the key's usage.
+
+**Runs, one line each** (modules accepted of the route; keys met of scored; ledger key-usage change):
+
+- R1 earnings-update: complete, keys 2/9 (JSON only; no ledger line).
+- R1b: stopped at CP-1B, CITATION_NOT_LOCATED, +$0.29.
+- R2: stopped at CP-0, CITATION_NOT_LOCATED (character slips in whole-paragraph quotes), +$0.04.
+- R3: complete, keys 2/9, +$0.23.
+- R4: stopped at CP-1 (checker false positive, D103), about +$0.12.
+- R5: complete, keys 6/9, +$0.30.
+- R6: stopped, STORE_UNAVAILABLE (Docker VM disk full).
+- R7: complete, keys 5/9, +$0.24.
+- L1 liquidity: complete, keys 8/9, +$0.56. LIQ1: complete, keys 5/9, +$0.66.
+- C1 covenant-refinancing: stopped at CP-1, +$0.52. C2: stopped at CP-4, HANDOFF_MALFORMED, +$0.84. C3: stopped, EVIDENCE_DEMAND_UNRESOLVED, +$0.83. C4: stopped at CP-4, +$1.28. C5: blocked (CP-0 judged CP-4 DO NOT RUN), keys 7/20, +$1.17. C6: complete, keys 6/20, +$1.49.
+- E1 LITE earnings: complete, keys 2/5 (3/5 after K2), +$0.17. E2: complete, keys 1/5, +$0.14.
+- LRV1 LITE relative-value: blocked after CP-0 (no TRACE prints), +$0.19. LRV2: complete, keys 5/8, +$0.49.
+- LCR1 LITE covenant-refinancing: blocked after CP-0. LCR2: PROVIDER_UNAVAILABLE at ~195 s. LCR3: PROVIDER_UNAVAILABLE at ~299 s, +$0.30. LCR4: stopped at CP-3C, +$1.01. LCR5: complete, keys 2/7, +$0.67.
+- LFCS1 LITE full-credit-screen: stopped at CP-5, +$1.96. LFCS2: PROVIDER_UNAVAILABLE at ~294 s, +$0.46.
+- LP1 LITE portfolio: blocked at CP-0 (synthetic mandate), 0/6 keys. `czr-2026q2-portfolio` was never run.
+- RV1 FULL relative-value: complete, keys 7/16, +$1.38.
+- FCA1 FULL credit assessment: PROVIDER_UNAVAILABLE at CP-1B, +$0.76. FCA2: CP-2G answered Blocked (forecast scope), keys 8/35, +$1.79.
+
+**Host changes that moved results** (decisions in `docs/rebuild/decisions.md`):
+
+- F493 (L2): a near-miss quote is told which line to copy; R3 was the first completed run.
+- D101: a figure key is met by an equivalent line (owner, 4 October: a quarter pair suffices). D102: the final check asks for a citation behind each material figure; CP-0 went from 4 to 25 citations (R4).
+- D103: vendor fork r12, a register's own heading beats a prose mention (R4's CP-1 false positive). D104: a retry repairs the refused answer; R5 completed with 115 citations, keys 6/9.
+- F495 (L3) names a wrong source_id and dropped cells; F496 (L4) asks for the whole answer back and names a quote that runs past its line; F497 (L5) checks CP-0's T8 demand cells at acceptance; F498 splits the legal instruments by clause; F499 (L6) names the line and the code point.
+- D105 (excerpts, F500 to F503), D106 (a citation fault refuses the citation, not the answer, F503, F504) and D107 (body markers `[C<n>]`, F505, F506): run C5 onward, with unverified citations counted instead of refusing.
+- F507: TRACE prints added to the LITE relative-value set (LRV2 cleared CP-0). F508: the conformed credit agreement and supplements (CP-0 cleared CP-4 and CP-L10 from C6 and LCR3 on).
+- F509 (L7) names a register row a cell short or long; F510 (L8) names the owner restrictions CP-5 dropped (LCR5 completed; LFCS was not re-run after F510).
+
+**Provider limit.** PROVIDER_UNAVAILABLE after about 195 to 299 s on large non-streamed calls, in four runs (LCR2, LCR3, LFCS2, FCA1), never billed. This fits a gateway or idle cut near 300 s, not the 420 s call timeout. L9 (F511: stream in the test adapter, `aef7d41`) is unmerged: its first live smoke call was refused PROVIDER_RESPONSE_INVALID (usage missing) and the diagnostic call was not made. Owner, 5 October: "Run without streaming", re-running a dropped module once.
+
+**Open items.** L9 streaming (N145); the portfolio sets' self-declared synthetic mandate labels (owner, 5 October: leave them, record the stop); the CP-2G forecast horizon and base period, an owner input (N144); N129 (a third guided retry: it would likely have accepted C1's CP-1); N133 to N143 (review residue).

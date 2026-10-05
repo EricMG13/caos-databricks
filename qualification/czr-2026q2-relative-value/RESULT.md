@@ -1,6 +1,6 @@
 # CZR Q2 2026 FULL relative-value qualification set — prepared offline
 
-Status: **OFFLINE / UNVERIFIED / NOT QUALIFIED**.
+Status: **LIVE-RUN 2026-10-05 / NOT QUALIFIED (citation keys)**. Prepared offline; the live results are in the last section.
 
 This immutable set prepares `FULL_CREDIT_32 / RELATIVE_VALUE` for Caesars
 Entertainment, Inc. (CZR) at an analysis date of 2026-10-02, against peers
@@ -225,5 +225,17 @@ The documents state the following; this set draws no conclusion from them.
 The peers' periods match CZR's: each release reports the quarter ended
 30 June 2026.
 
-No provider call, run, snapshot, evidence record, reviewer verdict, or
-qualification claim exists; no run has been performed.
+At preparation no provider call, run, snapshot, evidence record, reviewer
+verdict, or qualification claim existed; the live runs follow.
+
+## Live results (3–5 October 2026)
+
+| run (file) | build / tip | status | modules accepted | attempts | citations | keys met | ready / projection / register | stop cause | key usage Δ / recorded charge |
+|---|---|---|---|---|---|---|---|---|---|
+| RV1 (`RV1-czr-relative-value.json`) | 9043ba7f / ~14b9bec | COMPLETE | 9/9 | 17 | 302 (300 anch., 7 unver.) | 7/16 | met / met / — | — | +1.38 / $1.74 |
+
+Reading the table: "build" is the first eight hex digits of the methodology build id in the run JSON; "tip" is the git tip the ledger names (`—` where the ledger names none; tips marked ~ are the base of the next fix task, so the run ran on that tree or its predecessor). "Attempts" is the run JSON's attempt list (every provider call recorded, including a dropped one). "Citations" is the run proof's total with its anchored and unverified counts (`n/r`: the run stopped before a proof was recorded). "Keys met" is the scored matrix row; a run that stopped before COMPLETE or BLOCKED is not scored (`not scored`). "Key usage Δ" is the OpenRouter key-usage change the ledger recorded for the run (`n/l`: not in the ledger); "recorded charge" is the sum of the run's attempt charges at the pinned price. The two disagree and the usage counter lags (ledger), so the key usage is the budget measure. Run files are git-ignored, under `docs/rebuild/runs/live-2026-10-03/`; the model is `openai/gpt-6-luna`, effort high, provider pinned to `openai`, in every row.
+
+Verdict: The set is **NOT QUALIFIED**. RV1 completed all nine modules with the ready and projection keys met, no provider drop, and 7 of 16 citation keys. Both TRACE price keys were met; the two yield keys and the other misses are "not cited". The set has been run once.
+
+Owner-decision stops and provider limits: None.

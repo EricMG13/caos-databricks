@@ -1,6 +1,6 @@
 # CZR Q2 2026 FULL credit-assessment qualification set — prepared offline
 
-Status: **OFFLINE / UNVERIFIED / NOT QUALIFIED**.
+Status: **LIVE-RUN 2026-10-05 / NOT QUALIFIED (stopped at CP-2G; citation keys)**. Prepared offline; the live results are in the last section.
 
 This immutable set prepares `FULL_CREDIT_32 / FULL_CREDIT_ASSESSMENT` for
 Caesars Entertainment, Inc. (CZR) at an analysis date of 2026-10-02, against
@@ -312,5 +312,18 @@ The documents state the following; this set draws no conclusion from them.
   30 June 2026; the workbook is dated 29 May 2026; the FINRA observations are
   dated 2 October 2026 and their last trades 1 October 2026.
 
-No provider call, run, snapshot, evidence record, reviewer verdict, or
-qualification claim exists; no run has been performed.
+At preparation no provider call, run, snapshot, evidence record, reviewer
+verdict, or qualification claim existed; the live runs follow.
+
+## Live results (3–5 October 2026)
+
+| run (file) | build / tip | status | modules accepted | attempts | citations | keys met | ready / projection / register | stop cause | key usage Δ / recorded charge |
+|---|---|---|---|---|---|---|---|---|---|
+| FCA1 (`FCA1-czr-full-credit-assessment.json`) | 9043ba7f / ~14b9bec | STOPPED | 4/19 | 11 | 122 (121 anch., 5 unver.) | not scored | — | CP-1B attempt 3 dropped, PROVIDER_UNAVAILABLE (re-run once per the owner's ruling) | +0.76 / $0.79 |
+| FCA2 (`FCA2-czr-full-credit-assessment.json`) | 9043ba7f / ~14b9bec | BLOCKED | 12/19 per ledger (CP-0 to CP-2D, then CP-2G Blocked) | 22 | 295 (294 anch., 15 unver.) | 8/35 | met / missed / — | CP-2G answered Blocked (forecast scope); 7 modules not run | +1.79 / $2.05 |
+
+Reading the table: "build" is the first eight hex digits of the methodology build id in the run JSON; "tip" is the git tip the ledger names (`—` where the ledger names none; tips marked ~ are the base of the next fix task, so the run ran on that tree or its predecessor). "Attempts" is the run JSON's attempt list (every provider call recorded, including a dropped one). "Citations" is the run proof's total with its anchored and unverified counts (`n/r`: the run stopped before a proof was recorded). "Keys met" is the scored matrix row; a run that stopped before COMPLETE or BLOCKED is not scored (`not scored`). "Key usage Δ" is the OpenRouter key-usage change the ledger recorded for the run (`n/l`: not in the ledger); "recorded charge" is the sum of the run's attempt charges at the pinned price. The two disagree and the usage counter lags (ledger), so the key usage is the budget measure. Run files are git-ignored, under `docs/rebuild/runs/live-2026-10-03/`; the model is `openai/gpt-6-luna`, effort high, provider pinned to `openai`, in every row.
+
+Verdict: The set is **NOT QUALIFIED**. FCA2 reached CP-2G and stopped there with a Blocked answer (QA and committee Blocked, confidence 0): "Forecast horizon and base-period choice are not established by the current command or accepted upstream handoffs". The ready key was met and the projection key missed. Of 35 keys 8 were met; 15 are not run (the modules after CP-2G) and the other 12 are "not cited". The 14 Blocked quotes persisted as anchored (D106); 295 citations, 15 of them unverified. The ledger counts "12 of 19 modules accepted (CP-0 ... CP-2D)" while the run JSON lists twelve route nodes including CP-2G; the table follows the ledger.
+
+Owner-decision stops and provider limits: **CP-2G forecast-scope gate (owner input):** the case supplies no forecast horizon and no base period, so the module cannot establish its scope; this is an owner input, recorded as N144. FCA1's CP-1B drop is the provider limit: Provider drops: PROVIDER_UNAVAILABLE after about 195 to 299 s on large non-streamed calls, never billed; the owner ruled on 5 October to run without streaming and re-run a dropped module once (L9, streaming in the test adapter, stays unmerged: `PROVIDER_RUNBOOK.md` and N145).
