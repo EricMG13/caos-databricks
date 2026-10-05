@@ -5,7 +5,7 @@ Status: **OFFLINE / UNVERIFIED / NOT QUALIFIED**.
 This immutable set prepares `FULL_CREDIT_32 / COVENANT_REFINANCING` for
 Caesars Entertainment, Inc. (CZR) at an analysis date of 2026-10-02. Its
 qualification-set digest is
-`8b58bcd8cf90bdc36109d1a3e37a5a67fbd298326a1b0f0d6fc1954ac6d119d0`.
+`c4bd9867b774d1b23d69d563f9519c98f22cb2d8fcf43de215e65c495be1a0b5`.
 
 ## Corpus provenance
 
@@ -19,7 +19,7 @@ the HTML as fetched.
 |---|---|---|---|---|
 | `CZR_FY2025_10K.txt` (Form 10-K, year ended 31 December 2025) | https://www.sec.gov/Archives/edgar/data/1590895/000159089526000011/czr-20251231.htm | 0001590895-26-000011 | `172309048af2a6a2dab515d765f00a7c89bf8c874c6104a5e3a052b66cad4512` | `41328bdfa2486cfb53b831c2ddba6009528d8dca3a0d868c98c2cb113142b05f` |
 | `CZR_Q2_2026_10Q.txt` (Form 10-Q, quarter ended 30 June 2026) | https://www.sec.gov/Archives/edgar/data/1590895/000159089526000028/czr-20260630.htm | 0001590895-26-000028 | `f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a` | `9dd3fca867c49936c65c9729bd7f9478d4c98b7c60569b74864a839bdeed8500` |
-| `CZR_2024_Credit_Agreement_Incremental_Assumption_No3.txt` (Ex. 10.2, Incremental Assumption Agreement No. 3, 6 February 2024, with Exhibit A, the Credit Agreement conformed through it; Ex. 10.36 in the FY2025 10-K) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex102.htm | 0001193125-24-026847 | `9f95f4a696471fcb1c16e5c6026880544356931806a939ffd999456bd8c4b757` | `aa48bc94b634de6386579791df7de831314785f007398546dd5c5fba415f2cfa` |
+| `CZR_2024_Credit_Agreement_Incremental_Assumption_No3.txt` (Ex. 10.2, Incremental Assumption Agreement No. 3, 6 February 2024, with Exhibit A, the Credit Agreement conformed through it; Ex. 10.36 in the FY2025 10-K) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex102.htm | 0001193125-24-026847 | `25bea1d14fd9bb22838775f6fe056cd00741dc3d50eb1b79cc53498db502941c` | `aa48bc94b634de6386579791df7de831314785f007398546dd5c5fba415f2cfa` |
 | `CZR_2024_Credit_Agreement_Fourth_Amendment.txt` (Ex. 10.1, Fourth Amendment, 9 May 2024) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524135268/d827488dex101.htm | 0001193125-24-135268 | `32f91de6ef3ff93d9924eb8d4e3dc4734d28b68ed1da0f816a085ffdcb085c95` | `b0e9fc14d481410dd2fa3cb6bc28e4f9c3b8751d720777ab2bbf943143f6d0fb` |
 | `CZR_2024_Credit_Agreement_Fifth_Amendment.txt` (Ex. 10.1, Fifth Amendment, 25 November 2024) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524265157/d858083dex101.htm | 0001193125-24-265157 | `7f2b5c777dc3347938a007eaea63a623b299a1188dbcfbe8980d389a0bcfc5b3` | `0936486e71264a9b752d5977c003bfc9a89ec5eb4ca8e5b09107a7870ebf86e8` |
 | `CZR_2024_650_Senior_Secured_Notes_2032_Indenture.txt` (Ex. 10.1, 6.500% Senior Secured Notes due 2032 indenture, 6 February 2024) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex101.htm | 0001193125-24-026847 | `0809ab3981090bd2c23950da9530adb10e96882ddfa7db4404635e014d4c1119` | `a4661727edc48361dd7290772e62412c389b8ad8d215a96aa58facfe9e356c2c` |
@@ -56,13 +56,18 @@ Incremental Assumption Agreement No. 3 (6 February 2024) adds the
 agreement conformed through Incremental Assumption Agreement No. 1, the First
 to Third Amendments and Incremental Assumption Agreements No. 2 and No. 3; with
 the Fourth and Fifth Amendments it is the current chain, and where Exhibit A
-and a later amendment differ, the later amendment governs. Exhibit A is a
-changed copy, Agreement No. 3's insertions double-underlined and its deletions
-struck through. On the owner's ruling of 5 October 2026 the text renders the
-agreement as amended: every struck run from Exhibit A's cover on is removed
-with its content (295 runs, 167 of them with text, 484 characters: superseded
-table-of-contents page numbers and 38 words, labels or punctuation) and the
-insertions are kept as plain text, so `Section 2.01(e)` and
+and a later amendment differ, the later amendment governs. Exhibit A comes
+without the credit agreement's own exhibits and schedules: after its Annex A
+Pricing Grid the file goes straight to Agreement No. 3's own Exhibit B, a form
+of solvency certificate. Exhibit A is a changed copy, Agreement No. 3's
+insertions double-underlined and its deletions struck through. On the owner's
+ruling of 5 October 2026 the text renders the agreement as amended: every
+struck run from Exhibit A's cover on is removed with its content (295 runs, 167
+of them with text, 484 characters: superseded table-of-contents page numbers
+and 38 words, labels or punctuation) and the insertions are kept as plain text,
+with the spacing the filing renders once a run is gone (one space restored
+where a run carried the only space between two words, three places; none left
+before closing punctuation, three places), so `Section 2.01(e)` and
 `Section 2.11(a)(iv)` read as amended. The one struck run before the cover, the
 word `strikethrough` in the Agreement's own Section 3 legend, deletes nothing
 and is kept.
@@ -78,8 +83,12 @@ agreement as amended is the one in force, and the superseded 2020 text cost
 about 0.9 MB of every request. The Fourth and Fifth Amendments post-date
 Agreement No. 3 and stay. The CP-4 key on the event of default
 `(g) there shall have occurred a Change in Control;` is re-keyed to Exhibit A's
-same line, one whole line unique in it: the words are unchanged, and so is the
-Change in Control definition it rests on.
+same line, one whole line unique in it, whose words are unchanged. The Change
+in Control definition it relies on was amended since 2020: clause (a) now names
+the 2027 Senior Unsecured, 2025 Senior Secured and 2029 Senior Unsecured Notes
+Indentures, the 2029 one added as (iii), and a proviso now deems a person or
+group not to beneficially own Equity Interests subject to a merger agreement
+until the acquisition is consummated.
 
 ## Keys
 
@@ -119,8 +128,9 @@ current terms (a `0.10%` adjustment on the revolver and Term Loan A, a `2.25%`
 / `1.25%` margin on Term B and Term B-1). The conformed credit agreement's
 commitment, margins and financial covenant are not keyed: the Fourth and Fifth
 Amendments post-date it and amend its pricing, and the 10-Q states the current
-terms. Its Change in Control event of default is keyed on Exhibit A's line, the
-words the 2020 agreement executed, and neither amendment in the set alters it.
+terms. Its Change in Control event of default is keyed on Exhibit A's line,
+whose words are those the 2020 agreement executed (the definition behind it was
+amended, as below), and neither amendment in the set alters it.
 
 Alternative lines (D101). A figure key is also met by another whole evidence
 line, cited under the same module, that states the key's lead figures -- the
@@ -202,15 +212,20 @@ The documents state the following; this set draws no conclusion from them.
   cash equal to 101% of the principal amount thereof, plus accrued and unpaid
   interest".
 - The credit agreement lists "(g) there shall have occurred a Change in
-  Control;" among its events of default. Its Change in Control definition
-  (conformed through Amendments 1–3 and Incremental Assumption Agreements No. 1
-  to No. 3 in Agreement No. 3's Exhibit A, and word for word as executed in
-  2020) covers a "“change of control” (or similar event)" under the notes
-  indentures it names (those of 6 July 2020, and indentures for Permitted
-  Refinancing Indebtedness or Junior Financing constituting Material
-  Indebtedness) and any person or group, other than Permitted Holders,
-  acquiring "more than 50% of the Equity Interests of the Borrower entitled to
-  vote".
+  Control;" among its events of default. That line is as executed in 2020, but
+  the Change in Control definition it relies on was amended (conformed in
+  Agreement No. 3's Exhibit A): it covers a "“change of control” (or similar
+  event)" under the 2027 Senior Unsecured, 2025 Senior Secured and 2029 Senior
+  Unsecured Notes Indentures (the first two of 6 July 2020, the third of 24
+  September 2021, added as (iii)) and indentures for Permitted Refinancing
+  Indebtedness or Junior Financing constituting Material Indebtedness, and any
+  person or group, other than Permitted Holders, acquiring "more than 50% of
+  the Equity Interests of the Borrower entitled to vote"; and a proviso added
+  since 2020 provides that a person or group "shall be deemed not to
+  beneficially own Equity Interests subject to a stock or asset purchase
+  agreement, merger agreement, ... until the consummation of the acquisition of
+  the Equity Interests in connection with the transactions contemplated by such
+  agreement."
 - The 10-Q's risk factors say: "The Company may incur additional costs or
   suffer loss of business under third-party contracts that are terminated or
   that contain change in control or other provisions that may be triggered by

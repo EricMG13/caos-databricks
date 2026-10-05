@@ -5,7 +5,7 @@ Status: **OFFLINE / UNVERIFIED / NOT QUALIFIED**.
 This immutable set prepares `LITE_CREDIT_22 / LITE_COVENANT_REFINANCING` for
 Caesars Entertainment, Inc. (CZR) at an analysis date of 2026-10-02. Its
 qualification-set digest is
-`e7fc177d5da3092276c75cc7b4b384a182679f44429cb70e0b60899556b1a75e`.
+`309f8ef9531fd9e65d1fb5d777eb9aa9263c930a9f402977b5a27f62623f877e`.
 
 ## Corpus provenance
 
@@ -18,7 +18,7 @@ the keys bind; the raw SHA-256 is the HTML as fetched.
 | document | source | accession | text SHA-256 | raw HTML SHA-256 |
 |---|---|---|---|---|
 | `CZR_Q2_2026_10Q.txt` (Form 10-Q, quarter ended 30 June 2026) | https://www.sec.gov/Archives/edgar/data/1590895/000159089526000028/czr-20260630.htm | 0001590895-26-000028 | `f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a` | `9dd3fca867c49936c65c9729bd7f9478d4c98b7c60569b74864a839bdeed8500` |
-| `CZR_2024_Credit_Agreement_Incremental_Assumption_No3.txt` (Ex. 10.2, Incremental Assumption Agreement No. 3, 6 February 2024, with Exhibit A, the Credit Agreement conformed through it; Ex. 10.36 in the FY2025 10-K) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex102.htm | 0001193125-24-026847 | `9f95f4a696471fcb1c16e5c6026880544356931806a939ffd999456bd8c4b757` | `aa48bc94b634de6386579791df7de831314785f007398546dd5c5fba415f2cfa` |
+| `CZR_2024_Credit_Agreement_Incremental_Assumption_No3.txt` (Ex. 10.2, Incremental Assumption Agreement No. 3, 6 February 2024, with Exhibit A, the Credit Agreement conformed through it; Ex. 10.36 in the FY2025 10-K) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex102.htm | 0001193125-24-026847 | `25bea1d14fd9bb22838775f6fe056cd00741dc3d50eb1b79cc53498db502941c` | `aa48bc94b634de6386579791df7de831314785f007398546dd5c5fba415f2cfa` |
 | `CZR_2024_Credit_Agreement_Fourth_Amendment.txt` (Ex. 10.1, Fourth Amendment, 9 May 2024) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524135268/d827488dex101.htm | 0001193125-24-135268 | `32f91de6ef3ff93d9924eb8d4e3dc4734d28b68ed1da0f816a085ffdcb085c95` | `b0e9fc14d481410dd2fa3cb6bc28e4f9c3b8751d720777ab2bbf943143f6d0fb` |
 | `CZR_2024_Credit_Agreement_Fifth_Amendment.txt` (Ex. 10.1, Fifth Amendment, 25 November 2024) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524265157/d858083dex101.htm | 0001193125-24-265157 | `7f2b5c777dc3347938a007eaea63a623b299a1188dbcfbe8980d389a0bcfc5b3` | `0936486e71264a9b752d5977c003bfc9a89ec5eb4ca8e5b09107a7870ebf86e8` |
 | `CZR_2024_650_Senior_Secured_Notes_2032_Indenture.txt` (Ex. 10.1, 6.500% Senior Secured Notes due 2032 indenture, 6 February 2024) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex101.htm | 0001193125-24-026847 | `0809ab3981090bd2c23950da9530adb10e96882ddfa7db4404635e014d4c1119` | `a4661727edc48361dd7290772e62412c389b8ad8d215a96aa58facfe9e356c2c` |
@@ -55,13 +55,18 @@ Incremental Assumption Agreement No. 3 (6 February 2024) adds the
 agreement conformed through Incremental Assumption Agreement No. 1, the First
 to Third Amendments and Incremental Assumption Agreements No. 2 and No. 3; with
 the Fourth and Fifth Amendments it is the current chain, and where Exhibit A
-and a later amendment differ, the later amendment governs. Exhibit A is a
-changed copy, Agreement No. 3's insertions double-underlined and its deletions
-struck through. On the owner's ruling of 5 October 2026 the text renders the
-agreement as amended: every struck run from Exhibit A's cover on is removed
-with its content (295 runs, 167 of them with text, 484 characters: superseded
-table-of-contents page numbers and 38 words, labels or punctuation) and the
-insertions are kept as plain text, so `Section 2.01(e)` and
+and a later amendment differ, the later amendment governs. Exhibit A comes
+without the credit agreement's own exhibits and schedules: after its Annex A
+Pricing Grid the file goes straight to Agreement No. 3's own Exhibit B, a form
+of solvency certificate. Exhibit A is a changed copy, Agreement No. 3's
+insertions double-underlined and its deletions struck through. On the owner's
+ruling of 5 October 2026 the text renders the agreement as amended: every
+struck run from Exhibit A's cover on is removed with its content (295 runs, 167
+of them with text, 484 characters: superseded table-of-contents page numbers
+and 38 words, labels or punctuation) and the insertions are kept as plain text,
+with the spacing the filing renders once a run is gone (one space restored
+where a run carried the only space between two words, three places; none left
+before closing punctuation, three places), so `Section 2.01(e)` and
 `Section 2.11(a)(iv)` read as amended. The one struck run before the cover, the
 word `strikethrough` in the Agreement's own Section 3 legend, deletes nothing
 and is kept.
@@ -151,11 +156,14 @@ The documents state the following; this set draws no conclusion from them.
   cash equal to 101% of the principal amount thereof, plus accrued and unpaid
   interest".
 - The credit agreement lists "(g) there shall have occurred a Change in
-  Control;" among its events of default, its Change in Control definition
-  (conformed through Amendments 1–3 and Incremental Assumption Agreements No. 1
-  to No. 3 in Agreement No. 3's Exhibit A, and word for word as executed in
-  2020) covering any person or group, other than Permitted Holders, acquiring
-  "more than 50% of the Equity Interests of the Borrower entitled to vote".
+  Control;" among its events of default, the line as executed in 2020; the
+  Change in Control definition it relies on, amended since (conformed in
+  Agreement No. 3's Exhibit A), covers any person or group, other than
+  Permitted Holders, acquiring "more than 50% of the Equity Interests of the
+  Borrower entitled to vote", and a proviso added since 2020 deems a person or
+  group not to beneficially own Equity Interests subject to a merger agreement
+  "until the consummation of the acquisition of the Equity Interests in
+  connection with the transactions contemplated by such agreement."
 - The 10-Q's risk factors say: "The Company may incur additional costs or
   suffer loss of business under third-party contracts that are terminated or
   that contain change in control or other provisions that may be triggered by
