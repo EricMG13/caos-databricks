@@ -1,12 +1,15 @@
 // A saved narrative as Report and Committee show it (N59): its text is text,
-// and each figure is the whole line its quote rests on, the quote marked
-// (D105), plus a chip that opens the source drawer at its page. A figure
+// and each figure is compact (D107): its excerpt clamped to about one line and
+// a chip naming its module and marker that opens the source drawer at its
+// page, where the whole line is shown with the excerpt marked. A figure
 // naming an unverified citation (D106) is labelled so before the model's
-// quote, unmarked and with no chip: there is no located source to open. The figure names its record, citation, source and page
-// on the wire, so nothing here looks it up elsewhere.
+// quote, with no chip: there is no located source to open. The figure names
+// its record, citation, source and page on the wire, so nothing here looks it
+// up elsewhere.
+import { clampExcerpt } from "./compact";
 import { useEvidence } from "./EvidenceContext";
-import { QUOTE_LABEL, TracedLine, lineText } from "./TracedLine";
-import { NOT_LINKED_SHORT, unverifiedLabel } from "./Unverified";
+import { QUOTE_LABEL } from "./TracedLine";
+import { NOT_LINKED_SHORT, markerPrefix, unverifiedLabel } from "./Unverified";
 import type { ReportDocument } from "@/wire/v1";
 
 /** Report's and Committee's narrative: the same saved shape. */
@@ -22,8 +25,11 @@ export function Narrative({ narrative }: { narrative: ReportDocument["body"]["na
             if (unverified) {
               return (
                 <span key={spanIndex} data-unverified-figure={unverified.route_node_id}>
-                  <span className="lbl">{unverifiedLabel(unverified)}: </span>
-                  <q className="figq-unverified">{unverified.matched_text}</q>{" "}
+                  <span className="lbl">
+                    {unverified.route_node_id} {markerPrefix(unverified.marker)}
+                    {unverifiedLabel(unverified)}:{" "}
+                  </span>
+                  <q className="figq-unverified">{clampExcerpt(unverified.matched_text)}</q>{" "}
                 </span>
               );
             }
@@ -40,9 +46,7 @@ export function Narrative({ narrative }: { narrative: ReportDocument["body"]["na
                     {QUOTE_LABEL}:{" "}
                   </span>
                 )}
-                <q className="figq">
-                  <TracedLine line={figure.line} />
-                </q>{" "}
+                <q className="figq">{clampExcerpt(figure.matched_text)}</q>{" "}
                 {figure.linked ? null : (
                   <span className="lbl" data-not-linked>
                     ({NOT_LINKED_SHORT}){" "}
@@ -51,7 +55,7 @@ export function Narrative({ narrative }: { narrative: ReportDocument["body"]["na
                 <button
                   type="button"
                   className="chip"
-                  aria-label={`Evidence ${figure.route_node_id} p.${figure.page}${figure.line.recorded ? "" : `, ${QUOTE_LABEL.toLowerCase()}`}: ${lineText(figure.line)}`}
+                  aria-label={`${figure.marker === null ? "Evidence" : `citation ${figure.marker}:`} ${figure.route_node_id} p.${figure.page}${figure.line.recorded ? "" : `, ${QUOTE_LABEL.toLowerCase()}`}`}
                   aria-expanded={open}
                   data-figure-chip={figure.source_id}
                   onClick={(event) =>
@@ -66,7 +70,8 @@ export function Narrative({ narrative }: { narrative: ReportDocument["body"]["na
                     )
                   }
                 >
-                  {figure.route_node_id} · p.{figure.page}
+                  {figure.route_node_id}
+                  {figure.marker === null ? "" : ` C${figure.marker}`} · p.{figure.page}
                 </button>
               </span>
             );

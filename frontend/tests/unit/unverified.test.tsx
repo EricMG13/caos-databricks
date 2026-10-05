@@ -7,6 +7,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
+import { clampExcerpt } from "@/evidence/compact";
 import { resolveFact } from "@/evidence/EvidenceContext";
 import { EvidenceDrawer } from "@/evidence/EvidenceDrawer";
 import { Narrative } from "@/evidence/Narrative";
@@ -14,9 +15,9 @@ import { SourceDrawer } from "@/evidence/SourceDrawer";
 import {
   BlockedQuotes,
   blockedRecord,
-  shortExcerpt,
   NOT_LINKED,
   UNVERIFIED_REASONS,
+  markerPrefix,
   unverifiedLabel,
 } from "@/evidence/Unverified";
 import { AnalysisSection, sourceNames } from "@/sections/analysis/AnalysisSection";
@@ -67,12 +68,14 @@ describe("unverified citations (D106)", () => {
     );
     const item = part.querySelector("[data-unverified-citation]")!;
     expect(item.querySelector(".lbl")).toHaveTextContent(
-      `unverified – page 14 · the model's quote · claim lineage: Untraced · not located · source ${entry.source_id}`,
+      `C1 · unverified – page 14 · the model's quote · claim lineage: Untraced · not located · source ${entry.source_id}`,
     );
-    // The model's markup is text: one blockquote, no element inside it.
-    const quote = item.querySelector("blockquote.unverified-quote")!;
-    expect(quote.textContent).toBe(entry.matched_text);
+    // Compact (D107), and the model's markup is text: one quote, no element
+    // inside it.
+    const quote = item.querySelector("q.figq-unverified")!;
+    expect(quote.textContent).toBe(clampExcerpt(entry.matched_text));
     expect(quote.children).toHaveLength(0);
+    expect(item.querySelector("blockquote")).toBeNull();
     neverVerified(part);
     expect(item.querySelector("button")).toBeNull();
     // Said up front, in the module's caveats.
@@ -95,6 +98,9 @@ describe("unverified citations (D106)", () => {
     expect(unverifiedLabel({ page: 2, code: "CITATION_AMBIGUOUS" })).toBe(
       "unverified – page 2 · the model's quote · claim lineage: Untraced · ambiguous",
     );
+    // A compact list names each by its marker (D107), an older one by none.
+    expect(markerPrefix(3)).toBe("C3 · ");
+    expect(markerPrefix(null)).toBe("");
   });
 
   test("test_an_anchored_citation_not_linked_to_the_answer_says_so", () => {
@@ -211,9 +217,9 @@ describe("the Blocked answer's quotes (owner: Show its quotes)", () => {
     // D107: document · page · a short excerpt; the line is the drawer's.
     const { container } = render(<BlockedQuotes blocked={blocked} />);
     const verified = container.querySelector('[data-blocked-quote="verified"]')!;
-    expect(verified).toHaveTextContent(/^p\.4 Verified · sha256:dddd.* · page 4 ·/);
+    expect(verified).toHaveTextContent(/^C1 Verified · sha256:dddd.* · page 4 ·/);
     expect(verified.querySelector("q")!.textContent).toBe(
-      shortExcerpt(blocked.verified[0]!.matched_text),
+      clampExcerpt(blocked.verified[0]!.matched_text),
     );
     expect(verified.querySelector("blockquote, mark, script")).toBeNull();
     expect(verified).toHaveTextContent("not linked to a statement in the answer");
@@ -222,13 +228,12 @@ describe("the Blocked answer's quotes (owner: Show its quotes)", () => {
     ).toHaveAttribute("aria-haspopup", "dialog");
     const model = container.querySelector('[data-blocked-quote="unverified"]')!;
     expect(model.querySelector(".lbl")).toHaveTextContent(
-      "unverified \u2013 page 9 · the model's quote · claim lineage: Untraced · not in the delivered evidence · not linked to a statement in the answer",
+      "C2 · unverified \u2013 page 9 · the model's quote · claim lineage: Untraced · not in the delivered evidence · not linked to a statement in the answer",
     );
-    expect(model.querySelector("q")!.textContent).toBe(blocked.unverified[0]!.matched_text);
+    expect(model.querySelector("q")!.textContent).toBe(
+      clampExcerpt(blocked.unverified[0]!.matched_text),
+    );
     neverVerified(model);
-    expect(
-      shortExcerpt("one two three four five six seven eight nine ten eleven twelve thirteen"),
-    ).toBe("one two three four five six seven eight nine ten eleven twelve\u2026");
   });
 
   test("test_a_verified_blocked_quote_resolves_to_the_source_drawer", () => {

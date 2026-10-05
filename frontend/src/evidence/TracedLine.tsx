@@ -1,9 +1,10 @@
 // The whole evidence line a citation anchored in, its excerpt marked (D105).
 // An excerpt is at least eight words of one line, so a qualifier just outside
 // it -- "not", "provided that", a table row's label -- would be lost if the
-// excerpt were shown alone (AI-4). Every surface that shows a host-verified
-// citation shows it through this. The line is shown whole, however long: it is
-// one evidence block, at most 4,096 characters, and it wraps.
+// excerpt were shown alone (AI-4). Since D107 the source drawers alone show it
+// ("Compact, source on click"): every other surface shows the excerpt clamped
+// to about one line, one press from this. The line is shown whole, however
+// long: it is one evidence block, at most 4,096 characters, and it wraps.
 //
 // A record from before whole-line citations (`ANY_RUN`) holds no line: its
 // quote is any run of its page, so it is shown as a quote, labelled so, and
