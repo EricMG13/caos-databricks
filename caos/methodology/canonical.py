@@ -66,6 +66,7 @@ from caos.methodology.handoff import (
     END_WORDS,
     GATE_MODULE,
     HINT_WORDS,
+    MAX_FEEDBACK_CHARS,
     MAX_FEEDBACK_CITATIONS,
     MAX_TRANSPORT_CHARS,
     UNVERIFIED_CODES,
@@ -116,11 +117,14 @@ from caos.methodology.selection import (
 from caos.methodology.vendor import VendorContract, cached_contract, catalog
 from caos.methodology.verification import (
     CREDIT_SCREEN_SELECTION,
+    OWNER_KEYS,
     AcceptedRow,
+    OwnerGap,
     Step,
     VendorAuthority,
     Verified,
     gate_expects,
+    owner_restriction_gaps,
     verify_accepted,
     verify_owner_restrictions,
 )
@@ -744,6 +748,7 @@ def _prompt_context(
     contract, pathways = _contract(bundle), catalog(bundle)
     host = (
         *_demand_lines(bundle, assignment, context, body),
+        *_owner_lines(bundle, assignment, context, body),
         _anchoring_line(conn, context.delivered, answer_citations(body)),
         readiness_set_line(
             contract,
@@ -839,6 +844,83 @@ def _demand_lines(
             )
         )
     ]
+
+
+# How many lines a retry is told the owner restrictions it dropped on (F510);
+# the items past them are counted on one more line.
+MAX_OWNER_LINES = 6
+
+
+def _owner_lines(
+    bundle: Bundle, assignment: Assignment, context: _Context, body: str
+) -> list[str]:
+    """CP-5's and CP-CF's retry lines for the owner restrictions its refused
+    answer dropped (F510): `owner_restriction_gaps`, the comparison
+    `_forecast_inputs` refuses `HANDOFF_INCOMPLETE` on, which told the retry
+    nothing (LFCS1 CP-5, three times). The items are the upstream owners' own
+    front matter, already in this prompt's upstream handoffs (D30)."""
+    module, markdown = assignment.module_id, answer_markdown(body)
+    if module not in {MODEL_MODULE, "CP-5"} or markdown is None:
+        return []
+    with suppress(Exception):  # an answer the validator cannot read says so itself
+        gaps = owner_restriction_gaps(
+            _contract(bundle),
+            markdown,
+            [data for _ref, data in context.upstream],
+            selection=(CREDIT_SCREEN_SELECTION if module == "CP-5" else None),
+        )
+        return owner_messages(module, gaps)
+    return []
+
+
+def owner_messages(module: str, gaps: Sequence[OwnerGap]) -> list[str]:
+    """The lines for `gaps`: the qa_status rule naming the Restricted owners,
+    then each dropped item quoted once with every owner that carries it,
+    packed up to `MAX_FEEDBACK_CHARS` a line, at most `MAX_OWNER_LINES` lines
+    and one more counting the items not shown."""
+    lines: list[str] = []
+    restricted = list(dict.fromkeys(g.owner for g in gaps if g.key == "qa_status"))
+    if restricted:
+        lines.append(
+            f"host owner check: {module}'s qa_status must be Restricted while an"
+            f" upstream owner's is; Restricted: {', '.join(restricted)}"
+        )
+    packed = _packed_items(module, gaps)
+    lines += [
+        line
+        for text, _n in packed[:MAX_OWNER_LINES]
+        if (line := _bounded("host owner check", text))
+    ]
+    if rest := sum(n for _text, n in packed[MAX_OWNER_LINES:]):
+        lines.append(f"host owner check: {rest} more missing items not shown")
+    return lines
+
+
+def _packed_items(module: str, gaps: Sequence[OwnerGap]) -> list[tuple[str, int]]:
+    """(line text, items on it) for the dropped items, by front matter list."""
+    owners: dict[tuple[str, str], list[str]] = {}
+    for gap in gaps:
+        if gap.key != "qa_status":
+            owners.setdefault((gap.key, gap.item), []).append(gap.owner)
+    head = (
+        f"{module}'s front matter must carry each upstream owner's"
+        " limitation_flags and validation_warnings exactly; "
+    )
+    packed: list[tuple[str, int]] = []
+    for key in OWNER_KEYS:
+        text, count = f"{head}missing from {key}: ", 0
+        for (listed, item), named in owners.items():
+            if listed != key:
+                continue
+            entry = f"«{item}» (from {', '.join(dict.fromkeys(named))})"
+            if count and len(text) + 2 + len(entry) > MAX_FEEDBACK_CHARS:
+                packed.append((text, count))
+                text, count = f"also missing from {key}: ", 0
+            text, count = text + (", " if count else "") + entry, count + 1
+        if count:
+            packed.append((text, count))
+            head = ""
+    return packed
 
 
 def _calculation_inputs(assignment: Assignment, quotes: Sequence[str]) -> list[int]:

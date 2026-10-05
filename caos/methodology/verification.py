@@ -129,15 +129,32 @@ class VendorAuthority:
 CREDIT_SCREEN_SELECTION: tuple[str, str] = ("LITE_CREDIT_22", "LITE_FULL_CREDIT_SCREEN")
 
 
-def verify_owner_restrictions(
+# The front matter lists a direct owner's restrictions travel in (F510).
+OWNER_KEYS = ("limitation_flags", "validation_warnings")
+
+
+@dataclass(frozen=True, slots=True)
+class OwnerGap:
+    """One restriction a direct owner carries that the artifact drops: its
+    `qa_status` of Restricted (`key` "qa_status"), or one item of its
+    limitation_flags or validation_warnings, as the owner wrote it."""
+
+    owner: str
+    key: str
+    item: str
+
+
+def owner_restriction_gaps(
     contract: VendorContract,
     markdown: bytes,
     owners: Iterable[bytes],
     *,
-    refuse: RefusalCode,
     selection: tuple[str, str] | None,
-) -> None:
-    """Refuse an artifact that drops a direct owner's restrictions."""
+) -> list[OwnerGap]:
+    """Every direct owner's restriction the artifact drops, in owner order:
+    the one comparison `verify_owner_restrictions` refuses on and a guided
+    retry is told of (F510), so the two cannot drift. Empty for an artifact
+    outside `selection`."""
     parse = contract.validate_handoff.validate_text
     fields = parse(markdown.decode()).fields
     if (
@@ -148,16 +165,36 @@ def verify_owner_restrictions(
         )
         != selection
     ):
-        return
+        return []
+    gaps: list[OwnerGap] = []
     for data in owners:
         owner = parse(data.decode()).fields
-        if (
-            owner["qa_status"] == "Restricted" and fields["qa_status"] != "Restricted"
-        ) or any(
-            not set(owner[key]) <= set(fields[key])
-            for key in ("limitation_flags", "validation_warnings")
-        ):
-            raise Refusal(refuse)
+        name = str(owner.get("module_id"))
+        if owner["qa_status"] == "Restricted" and fields["qa_status"] != "Restricted":
+            gaps.append(OwnerGap(name, "qa_status", "Restricted"))
+        for key in OWNER_KEYS:
+            held = set(fields[key])
+            gaps += [
+                OwnerGap(name, key, str(item))
+                for item in owner[key]
+                if item not in held
+            ]
+    return gaps
+
+
+def verify_owner_restrictions(
+    contract: VendorContract,
+    markdown: bytes,
+    owners: Iterable[bytes],
+    *,
+    refuse: RefusalCode,
+    selection: tuple[str, str] | None,
+) -> None:
+    """Refuse an artifact that drops a direct owner's restrictions: an owner
+    Restricted and it not, or any of an owner's limitation_flags and
+    validation_warnings not among its own (`owner_restriction_gaps`)."""
+    if owner_restriction_gaps(contract, markdown, owners, selection=selection):
+        raise Refusal(refuse)
 
 
 def verify_owner_chain(
