@@ -335,7 +335,11 @@ def test_an_undelivered_citation_never_reaches_the_proof_as_anchored(
         (
             "CP-L10",
             UnverifiedCitation(
-                harness.source_id, 1, QUOTE, RefusalCode.CITATION_NOT_DELIVERED
+                harness.source_id,
+                1,
+                QUOTE,
+                RefusalCode.CITATION_NOT_DELIVERED,
+                marker=1,
             ),
         ),
     )
