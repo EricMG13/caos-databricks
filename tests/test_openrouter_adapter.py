@@ -1,7 +1,13 @@
-"""The test-only OpenRouter adapter's request shape and identity (F479). No network."""
+"""The test-only OpenRouter adapter's request shape, identity (F479) and
+streaming (F511). No network."""
 
 from __future__ import annotations
 
+import json
+from datetime import date
+from decimal import Decimal
+
+import httpx
 import pytest
 from langchain_openai import ChatOpenAI
 from openrouter_adapter import (
@@ -16,6 +22,7 @@ from openrouter_adapter import (
 )
 
 from caos.models import ChatCompletions
+from caos.pricing import ModelPrice
 from caos.provider import MAX_COMPLETION_TOKENS
 
 MODEL = "openai/gpt-6-luna"
@@ -125,3 +132,79 @@ def test_effort_matching_is_case_sensitive(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setenv(EFFORT_ENV, "High")
     with pytest.raises(RuntimeError, match=EFFORT_ENV):
         effort_from_environment()
+
+
+def _streamed(sent: list[dict[str, object]]) -> httpx.Client:
+    """A fake OpenRouter: records each request body and answers it as an SSE
+    stream, a keep-alive comment first, the usage in a last choiceless chunk."""
+    head = {"id": "gen-f511", "object": "chat.completion.chunk", "created": 1}
+    events: list[dict[str, object]] = [
+        {"choices": [{"index": 0, "delta": {"role": "assistant", "content": '{"a"'}}]},
+        {"choices": [{"index": 0, "delta": {"content": ": 1}"}}]},
+        {"choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]},
+        {
+            "choices": [],
+            "usage": {
+                "prompt_tokens": 11,
+                "completion_tokens": 7,
+                "total_tokens": 18,
+                "completion_tokens_details": {"reasoning_tokens": 3},
+            },
+        },
+    ]
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        sent.append(json.loads(request.content))
+        frames = [": OPENROUTER PROCESSING\n\n"]
+        frames += [
+            f"data: {json.dumps({**head, 'model': MODEL, **event})}\n\n"
+            for event in events
+        ]
+        frames.append("data: [DONE]\n\n")
+        return httpx.Response(
+            200, headers={"content-type": "text/event-stream"}, text="".join(frames)
+        )
+
+    return httpx.Client(transport=httpx.MockTransport(answer))
+
+
+def test_a_streamed_json_call_keeps_text_usage_and_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """F511: the call streams, and the seam still gets the whole answer, the
+    charge from the usage and the provider's completion id; JSON mode, the
+    effort, the pin and the ceiling all travel, and the identity is unchanged."""
+    monkeypatch.setenv(EFFORT_ENV, "high")
+    monkeypatch.setenv(PROVIDER_ENV, "openai/flex")
+    sent: list[dict[str, object]] = []
+    chat = openrouter_chat_model(MODEL, http_client=_streamed(sent))
+    price = ModelPrice(MODEL, Decimal("0.001"), Decimal("0.01"), date(2026, 10, 5))
+    completion = ChatCompletions(chat, MODEL, price).complete("hi", json_object=True)
+    assert completion.refusal is None
+    assert completion.content == '{"a": 1}'
+    assert completion.generation_id == "gen-f511"
+    assert completion.charge == Decimal("0.081")
+    body = sent[0]
+    assert body["stream"] is True
+    assert body["stream_options"] == {"include_usage": True}
+    assert body["response_format"] == {"type": "json_object"}
+    assert body["reasoning"] == {"effort": "high"}
+    assert body["provider"] == {"order": ["openai/flex"], "allow_fallbacks": False}
+    assert body["max_completion_tokens"] == MAX_COMPLETION_TOKENS
+    top = str(MAX_COMPLETION_TOKENS)
+    assert qualification_identity(MODEL) == f"openrouter/{MODEL}@openai/flex/high/{top}"
+
+
+def test_a_streamed_answer_carries_reasoning_tokens() -> None:
+    """The usage the stream ends on reaches the message whole, reasoning included."""
+    sent: list[dict[str, object]] = []
+    chat = openrouter_chat_model(MODEL, http_client=_streamed(sent))
+    message = chat.invoke("hi", response_format={"type": "json_object"})
+    assert message.content == '{"a": 1}'
+    assert message.response_metadata["id"] == "gen-f511"
+    assert message.response_metadata["finish_reason"] == "stop"
+    usage = getattr(message, "usage_metadata", None)
+    assert usage is not None
+    assert (usage["input_tokens"], usage["output_tokens"]) == (11, 7)
+    assert usage.get("output_token_details", {}).get("reasoning") == 3
+    assert "reasoning" not in sent[0]

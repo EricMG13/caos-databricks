@@ -23,16 +23,27 @@ tokens>`, with `none` as the effort when none is sent, and `openrouter/<model>@
 <order>/<effort>/<max tokens>` when a provider pin is set, `<order>` the
 pinned names joined by `,`. For example `openrouter/openai/gpt-6-luna/high/65536`
 and `openrouter/openai/gpt-6-luna-pro@openai/flex/none/65536`.
+
+The call streams (F511). A long call sent whole sent no byte until the answer
+was done, and three live runs were cut after about 195 to 299 s with no
+generation and no charge, short of `TIMEOUT_SECONDS`. Streamed, the provider
+sends keep-alives and tokens as it works; `invoke` still returns one message
+with the whole text, the usage (`stream_usage`) and, in JSON mode -- the mode
+every module call uses -- the completion id `caos.models` reads.
 """
 
 from __future__ import annotations
 
 import os
+from typing import TYPE_CHECKING
 
 from langchain_core.language_models import BaseChatModel
 from pydantic import SecretStr
 
 from caos.provider import MAX_COMPLETION_TOKENS, TIMEOUT_SECONDS
+
+if TYPE_CHECKING:
+    import httpx
 
 KEY_ENV = "OPENROUTER_API_KEY"
 EFFORT_ENV = "OPENROUTER_REASONING_EFFORT"
@@ -85,8 +96,11 @@ def qualification_identity(model: str) -> str:
     return "/".join((PLATFORM, named, effort, str(MAX_COMPLETION_TOKENS)))
 
 
-def openrouter_chat_model(model: str = MODEL) -> BaseChatModel:
-    """A chat model over OpenRouter, or a `RuntimeError` naming the missing name."""
+def openrouter_chat_model(
+    model: str = MODEL, *, http_client: httpx.Client | None = None
+) -> BaseChatModel:
+    """A streaming chat model over OpenRouter, or a `RuntimeError` naming the
+    missing name. `http_client` is the test seam: a fake transport, no network."""
     key = os.environ.get(KEY_ENV)
     if not key:
         unset = f"{KEY_ENV} is unset: live tests cannot run"
@@ -106,4 +120,7 @@ def openrouter_chat_model(model: str = MODEL) -> BaseChatModel:
         timeout=TIMEOUT_SECONDS,
         max_retries=0,
         extra_body=extra_body or None,
+        streaming=True,
+        stream_usage=True,
+        http_client=http_client,
     )
