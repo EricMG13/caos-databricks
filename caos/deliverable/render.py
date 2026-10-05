@@ -657,15 +657,19 @@ def unverified(entry: object) -> str:
     """One unverified citation (D106): labelled before its text, as the
     model's quote, never marked and never placed or worded as a source line.
     Its claim is Deploy V's lineage class "Untraced". Every character is
-    escaped: the quote is the model's, which the host could not find."""
+    escaped: the quote is the model's, which the host could not find. One
+    the answer's body does not carry either (`linked` false) says so beside
+    its reason."""
     if not isinstance(entry, Mapping):
         raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
     quote = _text(entry, "matched_text")
     source = escape(_text(entry, "source_id"))
     page = _page(entry)
     reason = UNVERIFIED_REASONS.get(_text(entry, "code"))
-    if reason is None:
+    if reason is None or entry.get("linked", True) not in (True, False):
         raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
+    if entry.get("linked", True) is False:
+        reason += " · not in the answer body"
     return (
         f'<p class="cite">unverified \u2013 page {page} · the model\'s quote'
         f" · claim lineage: Untraced · {reason} · source {source}</p>\n"
@@ -802,36 +806,58 @@ def _span(span: object, cited: Mapping[str, _Handoff]) -> str:
         if set(span) == {"text"} and isinstance(span["text"], str):
             return escape(span["text"])
         if set(span) == {"figure"}:
-            figure = span["figure"]
-            view = (
-                cited.get(str(figure.get("route_node_id")))
-                if isinstance(figure, Mapping)
-                else None
-            )
-            rule = ANY_RUN if view is None else view.rule
-            return _citation(figure, _figure_line(figure, view), rule)
+            return _figure(span["figure"], cited)
         if set(span) == {"unverified"}:
-            return unverified(span["unverified"])
+            entry = span["unverified"]
+            if not isinstance(entry, Mapping):
+                raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
+            view = cited.get(str(entry.get("route_node_id")))
+            named = _named(entry, view, "unverified_index", _UNVERIFIED_KEYS)
+            return unverified({**entry, "linked": named.get("linked", True)})
     raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
 
 
-def _figure_line(figure: object, view: _Handoff | None) -> object:
-    """The `line_text` of the record citation a narrative figure names, or
-    None where the figure names none this payload carries with its own quote
-    (a payload `verify_package` reports, never a line borrowed from another)."""
+def _figure(figure: object, cited: Mapping[str, _Handoff]) -> str:
+    """A narrative figure as its record citation shows: the line it anchored
+    in and whether the answer's body carries it, both read from the record."""
+    if not isinstance(figure, Mapping):
+        raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
+    view = cited.get(str(figure.get("route_node_id")))
+    named = _named(figure, view, "citation_index", _FIGURE_KEYS)
+    return _citation(
+        {**figure, "linked": named.get("linked", True)},
+        named.get("line_text"),
+        ANY_RUN if view is None else view.rule,
+    )
+
+
+# What a narrative figure copies from the record entry it names.
+_FIGURE_KEYS = ("document_sha256", "page", "matched_text")
+_UNVERIFIED_KEYS = ("source_id", "page", "matched_text", "code")
+
+
+def _named(
+    figure: object, view: _Handoff | None, key: str, fields: tuple[str, ...]
+) -> Mapping[str, Any]:
+    """The record entry a narrative figure names -- an anchored citation
+    (`citation_index`) or an unverified one (`unverified_index`) -- or an
+    empty mapping where the figure names none this payload carries with its
+    own copy (a payload `verify_package` reports). What the figure shows of
+    the record beyond its copy -- the line an excerpt anchored in (D105), and
+    whether the answer's body carries the quote (`linked`, D106) -- is read
+    from there, never borrowed from another entry."""
     if not isinstance(figure, Mapping) or view is None:
-        return None
-    index = figure.get("citation_index")
-    citations = view.citations
-    if type(index) is not int or not 0 <= index < len(citations):
-        return None
-    citation = citations[index]
-    if not isinstance(citation, Mapping) or any(
-        citation.get(key) != figure.get(key)
-        for key in ("document_sha256", "page", "matched_text")
+        return {}
+    index = figure.get(key)
+    entries = view.citations if key == "citation_index" else view.unverified
+    if type(index) is not int or not 0 <= index < len(entries):
+        return {}
+    entry = entries[index]
+    if not isinstance(entry, Mapping) or any(
+        entry.get(field) != figure.get(field) for field in fields
     ):
-        return None
-    return citation.get("line_text")
+        return {}
+    return entry
 
 
 def _provenance(artifacts: Sequence[object]) -> str:

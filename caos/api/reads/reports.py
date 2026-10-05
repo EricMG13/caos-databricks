@@ -36,6 +36,7 @@ from caos.api.wire import (
     CommitteeDocument,
     LineView,
     ReportDocument,
+    bounded,
 )
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
@@ -559,7 +560,7 @@ def _narrative_view(
             dict(
                 text=span.get("text"),
                 figure=_figure(span.get("figure"), digests, records, sources),
-                unverified=_unverified(span.get("unverified"), digests),
+                unverified=_unverified(span.get("unverified"), digests, records),
             )
             for span in paragraph
         ]
@@ -568,13 +569,24 @@ def _narrative_view(
 
 
 def _unverified(
-    figure: dict[str, Any] | None, digests: dict[str, str]
+    figure: dict[str, Any] | None,
+    digests: dict[str, str],
+    records: dict[str, dict[str, Any]],
 ) -> dict[str, Any] | None:
     """An unverified figure (D106): the model's locator, quote and code as the
-    record holds them, with the record digest its node already carries."""
+    record holds them, with the record digest its node already carries and
+    the entry's `linked` (written only when false). A quote past the wire's
+    bound is served cut, saying so (`bounded`)."""
     if figure is None:
         return None
-    return {**figure, "record_sha256": digests[figure["route_node_id"]]}
+    node = figure["route_node_id"]
+    entry = records[node]["unverified"][figure["unverified_index"]]
+    return {
+        **figure,
+        "matched_text": bounded(figure["matched_text"]),
+        "record_sha256": digests[node],
+        "linked": entry.get("linked", True),
+    }
 
 
 def _figure(
@@ -590,8 +602,10 @@ def _figure(
     source_id, withdrawn_at = sources[figure["document_sha256"]]
     return {
         **figure,
+        "matched_text": bounded(figure["matched_text"]),
         "record_sha256": digests[node],
         "source_id": source_id,
+        "linked": citation.get("linked", True),
         # The line the figure's quote is an excerpt of (D105), from the record.
         "line": LineView.of(
             citation.get("line_text"),

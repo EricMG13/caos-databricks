@@ -1036,7 +1036,8 @@
             "source_id": "00000000-0000-4000-8000-00000000f00d",
             "page": 14,
             "matched_text": "Net leverage of <b>3.1x</b> at June 30, against a 4.50x covenant",
-            "code": "CITATION_NOT_LOCATED"
+            "code": "CITATION_NOT_LOCATED",
+            "linked": true
           }
         ],
         "source_facts": [],
