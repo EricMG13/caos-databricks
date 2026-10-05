@@ -287,12 +287,21 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
             "module_id",
             "attempt_id",
             "quotes_recorded",
+            "quotes_refusal",
             "verified",
             "unverified",
         }
     ),
     wire.BlockedQuoteView: frozenset(
-        {"document_sha256", "page", "matched_text", "line", "linked"}
+        {
+            "document_sha256",
+            "source_id",
+            "withdrawn_at",
+            "page",
+            "matched_text",
+            "line",
+            "linked",
+        }
     ),
     RunView: frozenset(
         {

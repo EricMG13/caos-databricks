@@ -25,7 +25,7 @@ import type { ModuleRef } from "@/ds/markdown";
 import { useEvidence, type FactIdentity } from "@/evidence/EvidenceContext";
 import { Overlay } from "@/evidence/Overlay";
 import { QUOTE_LABEL, TracedLine } from "@/evidence/TracedLine";
-import { NOT_LINKED, UnverifiedFacts } from "@/evidence/Unverified";
+import { BlockedQuotes, NOT_LINKED, UnverifiedFacts } from "@/evidence/Unverified";
 import type { AnalysisDocument, CitationView, HandoffView, PendingNode } from "@/wire/v1";
 
 export { PROSE_SHOWN } from "./module";
@@ -436,6 +436,9 @@ function PendingList({
                 <span className="cp" data-blocking-note>
                   its verdict ended the run · attempt {blockedBy.attempt_id}
                 </span>
+              ) : null}
+              {blockedBy?.route_node_id === node.route_node_id ? (
+                <BlockedQuotes blocked={blockedBy} />
               ) : null}
               <span className={`tag ${nodeTone(node.state)}`}>
                 <SeverityMark severity={NODE_SEVERITY[node.state]} decorative /> {node.state}

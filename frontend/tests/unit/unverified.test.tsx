@@ -5,15 +5,30 @@
 // and an anchored citation the answer's body does not carry says so.
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { fireEvent, render } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
+import { resolveFact } from "@/evidence/EvidenceContext";
 import { EvidenceDrawer } from "@/evidence/EvidenceDrawer";
 import { Narrative } from "@/evidence/Narrative";
 import { SourceDrawer } from "@/evidence/SourceDrawer";
-import { NOT_LINKED, UNVERIFIED_REASONS, unverifiedLabel } from "@/evidence/Unverified";
+import {
+  BlockedQuotes,
+  blockedRecord,
+  shortExcerpt,
+  NOT_LINKED,
+  UNVERIFIED_REASONS,
+  unverifiedLabel,
+} from "@/evidence/Unverified";
 import { AnalysisSection, sourceNames } from "@/sections/analysis/AnalysisSection";
 import { citationOf } from "@/sections/book/passport";
-import { parseAnalysisDocument, type CitationView, type ReportDocument } from "@/wire/v1";
+import { RunSection } from "@/sections/run/RunSection";
+import {
+  parseAnalysisDocument,
+  parseCommitteeDocument,
+  parseRunSectionDocument,
+  type CitationView,
+  type ReportDocument,
+} from "@/wire/v1";
 
 const complete = parseAnalysisDocument(
   JSON.parse(readFileSync(resolve(process.cwd(), "fixtures/analysis.json"), "utf8")),
@@ -153,4 +168,145 @@ describe("unverified citations (D106)", () => {
     expect(figure.querySelector("button")).toBeNull();
     neverVerified(figure);
   });
+});
+
+describe("the Blocked answer's quotes (owner: Show its quotes)", () => {
+  const blocked = {
+    route_node_id: "rn-cp-5",
+    module_id: "CP-5",
+    attempt_id: "00000000-0000-4000-8000-0000000000d1",
+    quotes_recorded: true,
+    quotes_refusal: null,
+    verified: [
+      {
+        document_sha256: "d".repeat(64),
+        source_id: "00000000-0000-4000-8000-0000000000a2",
+        withdrawn_at: null,
+        page: 4,
+        matched_text: "<script>alert(1)</script> that revenue will grow",
+        line: {
+          before: "We do not believe ",
+          excerpt: "<script>alert(1)</script> that revenue will grow",
+          after: " next year.",
+          recorded: true,
+        },
+        linked: false,
+      },
+    ],
+    unverified: [
+      {
+        source_id: "00000000-0000-4000-8000-0000000000a1",
+        page: 9,
+        matched_text: "</q><mark>INJECT</mark> | **bold**",
+        code: "CITATION_NOT_DELIVERED" as const,
+        linked: false,
+      },
+    ],
+  };
+
+  test("test_each_quote_is_marked_verified_or_unverified_compactly_and_escaped", () => {
+    // D107: document · page · a short excerpt; the line is the drawer's.
+    const { container } = render(<BlockedQuotes blocked={blocked} />);
+    const verified = container.querySelector('[data-blocked-quote="verified"]')!;
+    expect(verified).toHaveTextContent(/^p\.4 Verified · sha256:dddd.* · page 4 ·/);
+    expect(verified.querySelector("q")!.textContent).toBe(
+      shortExcerpt(blocked.verified[0]!.matched_text),
+    );
+    expect(verified.querySelector("blockquote, mark, script")).toBeNull();
+    expect(verified).toHaveTextContent("not linked to a statement in the answer");
+    expect(
+      screen.getByRole("button", { name: "Open the source of verified quote 1, page 4" }),
+    ).toHaveAttribute("aria-haspopup", "dialog");
+    const model = container.querySelector('[data-blocked-quote="unverified"]')!;
+    expect(model.querySelector(".lbl")).toHaveTextContent(
+      "unverified \u2013 page 9 · the model's quote · claim lineage: Untraced · not in the delivered evidence · not linked to a statement in the answer",
+    );
+    expect(model.querySelector("q")!.textContent).toBe(blocked.unverified[0]!.matched_text);
+    neverVerified(model);
+    expect(
+      shortExcerpt("one two three four five six seven eight nine ten eleven twelve thirteen"),
+    ).toBe("one two three four five six seven eight nine ten eleven twelve\u2026");
+  });
+
+  test("test_a_verified_blocked_quote_resolves_to_the_source_drawer", () => {
+    // Its identity is the verdict's attempt; the drawer gets its source,
+    // page and line, with no rectangle.
+    const snapshot = {
+      key: "analysis|c|r",
+      caseId: "c",
+      displayedRunId: "r",
+      document: { ...complete, body: { ...complete.body, blocked_by: blocked } },
+      withdrawals: new Map(),
+    };
+    const identity = {
+      record_sha256: blockedRecord(blocked),
+      source_id: blocked.verified[0]!.source_id,
+      page: 4,
+      index: 0,
+    };
+    const resolved = resolveFact(snapshot, identity)!;
+    expect(resolved.fact).toMatchObject({
+      source_id: blocked.verified[0]!.source_id,
+      page: 4,
+      line: blocked.verified[0]!.line,
+      rects: [],
+      linked: false,
+    });
+    expect(resolveFact(snapshot, { ...identity, index: 1 })).toBeNull();
+    expect(resolveFact(snapshot, { ...identity, record_sha256: "blocked:other" })).toBeNull();
+  });
+
+  test("test_a_block_whose_quotes_were_not_kept_or_cannot_be_read_says_so", () => {
+    const old = render(
+      <BlockedQuotes
+        blocked={{ ...blocked, quotes_recorded: false, verified: [], unverified: [] }}
+      />,
+    );
+    expect(old.container.querySelector('[data-blocked-quotes="not-recorded"]')).toHaveTextContent(
+      "Quotes not recorded for this block.",
+    );
+    const lost = render(
+      <BlockedQuotes
+        blocked={{
+          ...blocked,
+          quotes_refusal: { code: "ARTIFACT_RECORD_MISMATCH", clears: "Re-run the node." },
+          verified: [],
+          unverified: [],
+        }}
+      />,
+    );
+    expect(lost.container.querySelector('[data-blocked-quotes="unreadable"]')).toHaveTextContent(
+      "This block's quotes could not be read (ARTIFACT_RECORD_MISMATCH).",
+    );
+  });
+
+  test("test_a_committee_figure_not_linked_to_the_answer_says_so", () => {
+    const committee = parseCommitteeDocument(
+      JSON.parse(readFileSync(resolve(process.cwd(), "fixtures/committee-v1.json"), "utf8")),
+    );
+    const { container } = render(<Narrative narrative={committee.body.narrative} />);
+    expect(container.querySelector("[data-figure] [data-not-linked]")).toHaveTextContent(
+      "not linked to a statement in the answer",
+    );
+    expect(container.querySelector("[data-unverified-figure] .lbl")).toHaveTextContent(
+      "· not located · not linked to a statement in the answer:",
+    );
+  });
+});
+
+test("test_the_run_panel_lists_a_blocked_answers_quotes", () => {
+  // The demo's blocked state (the a11y gate scans it): one located quote and
+  // one unverified, each compact, the located one a drawer chip.
+  const blocked = parseRunSectionDocument(
+    JSON.parse(readFileSync(resolve(process.cwd(), "fixtures/states/run.blocked.json"), "utf8")),
+  );
+  const { container } = render(
+    <MemoryRouter>
+      <RunSection document={blocked} tab={null} />
+    </MemoryRouter>,
+  );
+  const quotes = container.querySelector('[data-blocked-quotes="recorded"]')!;
+  expect(quotes.querySelectorAll('[data-blocked-quote="verified"] button')).toHaveLength(1);
+  expect(quotes.querySelectorAll('[data-blocked-quote="unverified"]')).toHaveLength(1);
+  expect(quotes.querySelector("blockquote, mark")).toBeNull();
 });

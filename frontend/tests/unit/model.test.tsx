@@ -119,6 +119,7 @@ describe("Model v1", () => {
             module_id: "CP-5",
             attempt_id: RUN,
             quotes_recorded: false,
+            quotes_refusal: null,
             verified: [],
             unverified: [],
           },

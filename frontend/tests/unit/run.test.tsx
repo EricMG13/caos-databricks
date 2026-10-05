@@ -1708,6 +1708,7 @@ describe("Run", () => {
             module_id: "CP-6",
             attempt_id: attempt.attempt_id,
             quotes_recorded: false,
+            quotes_refusal: null,
             verified: [],
             unverified: [],
           },

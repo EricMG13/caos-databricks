@@ -20,7 +20,8 @@ import { SourceDrawer } from "./SourceDrawer";
 import { useVisibleSnapshot, type VisibleSnapshot } from "@/app/snapshot";
 import type { Citation, Passport } from "@/wire";
 import { shortDigest } from "@/ds/format";
-import type { CitationView, ReportDocument } from "@/wire/v1";
+import type { BlockedByView, CitationView, ReportDocument } from "@/wire/v1";
+import { blockedRecord } from "./Unverified";
 
 type NarrativeFigure = NonNullable<ReportDocument["body"]["narrative"][number][number]["figure"]>;
 
@@ -91,13 +92,49 @@ function figureFact(figure: NarrativeFigure): CitationView {
   };
 }
 
+/** A Blocked answer's located quote as the drawer reads a citation (D106):
+    no record and no rectangle, its source and line as the server resolved
+    them. */
+function blockedFact(
+  blocked: BlockedByView,
+  quote: BlockedByView["verified"][number],
+): CitationView {
+  return {
+    document_sha256: quote.document_sha256,
+    source_id: quote.source_id,
+    filename: `${blocked.module_id} Blocked answer · source ${shortDigest(quote.document_sha256)}`,
+    page: quote.page,
+    matched_text: quote.matched_text,
+    line: quote.line,
+    rects: [],
+    withdrawn_at: quote.withdrawn_at,
+    cited_page: null,
+    linked: quote.linked,
+  };
+}
+
+/** The Blocked verdict a document carries: Analysis's, or the Run's run's. */
+function blockedOf(body: VisibleSnapshot["document"]["body"]): BlockedByView | null {
+  if ("blocked_by" in body) return body.blocked_by;
+  if ("run" in body && body.run && "blocked_by" in body.run) return body.run.blocked_by;
+  return null;
+}
+
 /** The citation a fact identity names in the visible snapshot; a saved
-    narrative's figure carries its rectangles and withdrawal as a citation does (N93). */
-function resolveFact(
+    narrative's figure carries its rectangles and withdrawal as a citation does (N93),
+    and a Blocked answer's located quote is keyed by its verdict's attempt. */
+export function resolveFact(
   snapshot: VisibleSnapshot,
   identity: FactIdentity,
 ): { fact: CitationView } | null {
   const body = snapshot.document.body;
+  const blocked = blockedOf(body);
+  if (blocked && identity.record_sha256 === blockedRecord(blocked)) {
+    const quote = blocked.verified[identity.index];
+    return quote && quote.source_id === identity.source_id && quote.page === identity.page
+      ? { fact: blockedFact(blocked, quote) }
+      : null;
+  }
   if ("narrative" in body) {
     const figure = body.narrative
       .flat()
