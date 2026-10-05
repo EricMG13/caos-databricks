@@ -21,13 +21,16 @@ from __future__ import annotations
 import contextvars
 import hashlib
 import math
+import re
+import sys
 import threading
 import time
 import warnings
 from collections.abc import Iterator, Mapping
-from contextlib import contextmanager, suppress
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from decimal import Decimal, DecimalException
+from types import TracebackType
 from typing import Any
 
 from langchain_core.language_models import BaseChatModel
@@ -151,20 +154,21 @@ class ChatCompletions:
         # One deadline for every try and every wait (ST-9, MAX-21), so the
         # worst case the lease and the stale threshold are sized against is
         # `TIMEOUT_SECONDS`, not three of them and two waits.
-        deadline = _clock() + TIMEOUT_SECONDS
+        started = _clock()
+        deadline = started + TIMEOUT_SECONDS
         sent = 0
         while True:
             sent += 1
             answer = _invoked(self.chat, prompt, options, deadline - _clock())
             if isinstance(answer, OpenAIError):
                 if not _sends_again(answer, sent, deadline):
-                    return Completion(None, None, None, _status_refusal(answer))
+                    return _unanswered(_status_refusal(answer), answer, started)
                 continue
-            if answer is None:
+            if answer is None or isinstance(answer, _Raised):
                 # Indeterminate: the request may have been delivered and
                 # billed, so the attempt keeps its reservation. Nothing of
-                # the error travels.
-                return Completion(None, None, None, RefusalCode.PROVIDER_UNAVAILABLE)
+                # the error travels; its class is named on stderr (F513).
+                return _unanswered(RefusalCode.PROVIDER_UNAVAILABLE, answer, started)
             if not isinstance(answer, AIMessage):
                 return Completion(
                     None, None, None, RefusalCode.PROVIDER_RESPONSE_INVALID
@@ -251,11 +255,40 @@ def _count(value: object, *, most: int) -> int:
     return value
 
 
+@dataclass(frozen=True, slots=True)
+class _Raised:
+    """What the client raised that is no vendor error: the call is
+    indeterminate, and only the failure's class is ever read (F513)."""
+
+    failed: BaseException
+
+
+class _Indeterminate:
+    """Hold back whatever an `Exception` the block raises, keeping it in
+    `failed`: the documented fail-open of ST-8, logged by class (F513)."""
+
+    failed: BaseException | None = None
+
+    def __enter__(self) -> _Indeterminate:
+        return self
+
+    def __exit__(
+        self,
+        kind: type[BaseException] | None,
+        failed: BaseException | None,
+        trace: TracebackType | None,
+    ) -> bool:
+        if kind is None or not issubclass(kind, Exception):
+            return False
+        self.failed = failed
+        return True
+
+
 def _invoked(
     chat: BaseChatModel, prompt: str, options: dict[str, Any], seconds: float
 ) -> object:
-    """One `invoke`: its answer, the vendor error it raised, or None when the
-    call is indeterminate.
+    """One `invoke`: its answer, the vendor error it raised, `_Raised` for
+    anything else it raised, or None when the deadline passed first.
 
     Abandoned once `seconds` pass (ST-9): the client's timeout bounds each
     read, not the call, so a server that sends a byte at a time would hold it
@@ -265,14 +298,14 @@ def _invoked(
     never writes to the store.
 
     Once the request may have been sent, whatever else the stack raises is
-    None too (ST-8): an empty `choices` is an `IndexError` from the client,
-    and no failure may escape untyped ahead of `record_outcome`.
+    indeterminate too (ST-8): an empty `choices` is an `IndexError` from the
+    client, and no failure may escape untyped ahead of `record_outcome`.
     """
     answered: list[object] = []
     context = contextvars.copy_context()
 
     def send() -> None:
-        with suppress(Exception):  # indeterminate, never text (ST-8)
+        with _Indeterminate() as held:  # indeterminate, never text (ST-8)
             try:
                 with _content_parts_contained():
                     answered.append(
@@ -282,6 +315,8 @@ def _invoked(
                     )
             except OpenAIError as failed:
                 answered.append(failed)
+        if held.failed is not None:
+            answered.append(_Raised(held.failed))
 
     sender = threading.Thread(target=send, name="caos-model-call", daemon=True)
     sender.start()
@@ -387,6 +422,79 @@ def _status_refusal(failed: OpenAIError) -> RefusalCode:
     if isinstance(status, int) and status in NEVER_RETRIED:
         return RefusalCode.PROVIDER_CALL_INVALID
     return RefusalCode.PROVIDER_UNAVAILABLE
+
+
+# A fact a stderr line may carry: a token, never words (F513). A provider's
+# error code and type are vocabulary (`provider_unavailable`); anything else
+# in their place is shown as `?`.
+_TOKEN = re.compile(r"[A-Za-z0-9_.-]{1,64}")
+
+
+def _token(value: object) -> str:
+    if value is None:
+        return "-"
+    if isinstance(value, bool):
+        return "?"
+    shown = str(value) if isinstance(value, int) else value
+    return shown if isinstance(shown, str) and _TOKEN.fullmatch(shown) else "?"
+
+
+def _error_body(failed: BaseException) -> Mapping[str, Any]:
+    """The provider's error object, from a vendor error's parsed body or the
+    mapping a client raised as its argument; empty when there is none."""
+    body = getattr(failed, "body", None)
+    if not isinstance(body, Mapping) and failed.args:
+        body = failed.args[0]
+    if not isinstance(body, Mapping):
+        return {}
+    inner = body.get("error")
+    return inner if isinstance(inner, Mapping) else body
+
+
+def _failure_facts(failed: BaseException | None) -> str:
+    """The class, its causes, the status and the provider's error code and
+    type, as tokens: what tells a 200 carrying an error body from a reset, a
+    5xx or a parse failure (F513). Never the message or the body's words."""
+    if failed is None:
+        return "class=- cause=- status=- error_code=- error_type=-"
+    causes: list[str] = []
+    link = failed.__cause__ or failed.__context__
+    while link is not None and len(causes) < 3:
+        causes.append(type(link).__name__)
+        link = link.__cause__ or link.__context__
+    body = _error_body(failed)
+    metadata = body.get("metadata")
+    kind = metadata.get("error_type") if isinstance(metadata, Mapping) else None
+    return " ".join(
+        (
+            f"class={type(failed).__name__}",
+            f"cause={'<'.join(causes) or '-'}",
+            f"status={_token(getattr(failed, 'status_code', None))}",
+            f"error_code={_token(body.get('code'))}",
+            f"error_type={_token(kind if kind is not None else body.get('type'))}",
+        )
+    )
+
+
+def _unanswered(code: RefusalCode, answer: object, started: float) -> Completion:
+    """The refusal of a call that got no answer, after one stderr line for it
+    (F513): the code, how it ended -- `vendor` (a vendor error), `raised`
+    (anything else the client raised) or `deadline` (nothing by then) --
+    `_failure_facts` and the seconds since it was first sent. The worker
+    prints its codes the same way; nothing here quotes the prompt, an answer
+    or an error's text."""
+    failed: BaseException | None = None
+    kind = "deadline"
+    if isinstance(answer, _Raised):
+        failed, kind = answer.failed, "raised"
+    elif isinstance(answer, BaseException):
+        failed, kind = answer, "vendor"
+    elapsed = _clock() - started
+    print(
+        f"{code.value} call={kind} {_failure_facts(failed)} elapsed={elapsed:.1f}",
+        file=sys.stderr,
+    )
+    return Completion(None, None, None, code)
 
 
 def _text(content: object) -> str | None:
