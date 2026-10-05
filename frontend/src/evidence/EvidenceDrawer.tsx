@@ -5,6 +5,7 @@ import { Digest } from "@/ds/Digest";
 import { Overlay } from "./Overlay";
 import { Reanchored } from "./Reanchored";
 import { TracedLine, lineLabel, wholeLine } from "./TracedLine";
+import { NOT_LINKED } from "./Unverified";
 import type { BBox, Citation } from "@/wire";
 
 function rect(box: BBox) {
@@ -98,6 +99,11 @@ export function EvidenceDrawer({
           ) : null}
         </dl>
         <Reanchored cited={citation.cited_page} found={citation.page} />
+        {citation.linked === false ? (
+          <div className="note" data-not-linked>
+            {NOT_LINKED}
+          </div>
+        ) : null}
         {citation.withdrawn_at ? (
           <div className="note limitation">
             <b>This source has been withdrawn.</b> The citation stays so the conclusion that rests

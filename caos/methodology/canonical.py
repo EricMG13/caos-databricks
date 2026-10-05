@@ -250,8 +250,8 @@ def execute_handoff(
 
     Refuses `RUN_INPUT_INVALID` for a pin of any other adapter before the call.
     Billing, with the diagnostic address, commits before any analytical
-    refusal. A validated `qa_status: Blocked` refuses `HANDOFF_BLOCKED` only
-    once the host identity has held and every citation has anchored.
+    refusal. A validated `qa_status: Blocked` refuses `HANDOFF_BLOCKED` once
+    the host identity has held and its citations were judged (D106).
 
     From before the call's lease check until its bill commits, the attempt is
     held (`call_hold`), so a worker that claims the run after this one's lease
@@ -416,7 +416,7 @@ def _answer(  # noqa: PLR0913 -- one recorded answer, keyword-only
     Inside the caller's read unit, after it checked the attempt and the stored
     pin; the live call and `replay_billed` both decide here, so they cannot
     drift. `identity` is what the call was asked under. Refuses
-    `HANDOFF_BLOCKED` for a validated Blocked handoff whose quotes anchored.
+    `HANDOFF_BLOCKED` for a validated Blocked handoff, anchored or not (D106).
     """
     # The identity carries every accepted upstream digest, so this one
     # comparison also catches an upstream rewritten during the call.
@@ -446,13 +446,11 @@ def _answer(  # noqa: PLR0913 -- one recorded answer, keyword-only
     # says (D105); one that is not is kept as unverified, never the answer's
     # refusal (D106).
     anchored, unverified = _partitioned(conn, blocks, citations, linked)
-    # A Blocked verdict ends the run only once its quotes are verified: an
-    # unanchorable Blocked handoff is an ordinary refusal (c-5b, P3-2), by
-    # its first unverified quote's code. D106 keeps this guard: a run ends
-    # on no unverified quote.
+    # A validated Blocked handoff ends the run whatever its quotes anchored
+    # (D106, superseding c-5b's guard): a citation fault never refuses an
+    # answer, a Blocked one included. Its quotes are judged as any answer's
+    # first, so one the host could not keep still refuses it as malformed.
     if projections is None:
-        if unverified:
-            raise Refusal(unverified[0].code)
         raise Refusal(RefusalCode.HANDOFF_BLOCKED)
     # F494: every consumer measures these bytes against the upstream bound
     # (`invocation._upstream_section`), so a handoff over it would be accepted
@@ -857,8 +855,7 @@ def _driver_line(
 # each told by field name (`handoff._front_matter_lines`). Anchoring's own
 # codes left it with D106: a citation that does not anchor no longer refuses
 # an accepted answer, and its lines ride a retry another check earned only as
-# advice (`handoff.ADVISORY`). The one answer that still refuses on one, a
-# Blocked handoff (`_answer`), gets an ordinary attempt, not a guided one.
+# advice (`handoff.ADVISORY`).
 SECOND_ATTEMPT_CODES = frozenset(
     {
         RefusalCode.HANDOFF_MALFORMED,

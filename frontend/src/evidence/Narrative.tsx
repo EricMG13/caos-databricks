@@ -1,9 +1,12 @@
 // A saved narrative as Report and Committee show it (N59): its text is text,
 // and each figure is the whole line its quote rests on, the quote marked
-// (D105), plus a chip that opens the source drawer at its page. The figure names its record, citation, source and page
+// (D105), plus a chip that opens the source drawer at its page. A figure
+// naming an unverified citation (D106) is labelled so before the model's
+// quote, unmarked and with no chip: there is no located source to open. The figure names its record, citation, source and page
 // on the wire, so nothing here looks it up elsewhere.
 import { useEvidence } from "./EvidenceContext";
 import { QUOTE_LABEL, TracedLine, lineText } from "./TracedLine";
+import { unverifiedLabel } from "./Unverified";
 import type { ReportDocument } from "@/wire/v1";
 
 /** Report's and Committee's narrative: the same saved shape. */
@@ -15,6 +18,15 @@ export function Narrative({ narrative }: { narrative: ReportDocument["body"]["na
         <p key={index} data-narrative-paragraph={index}>
           {spans.map((span, spanIndex) => {
             const figure = span.figure;
+            const unverified = span.unverified;
+            if (unverified) {
+              return (
+                <span key={spanIndex} data-unverified-figure={unverified.route_node_id}>
+                  <span className="lbl">{unverifiedLabel(unverified)}: </span>
+                  <q className="figq-unverified">{unverified.matched_text}</q>{" "}
+                </span>
+              );
+            }
             if (!figure) return <span key={spanIndex}>{span.text}</span>;
             const open =
               activeFact !== null &&

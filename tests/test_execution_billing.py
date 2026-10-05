@@ -154,7 +154,8 @@ def test_native_refusal_records_only_independently_known_money(
     _bills(_url_for(provider.conn.info.dbname), provider.run_id, charge, calls)
 
 
-@pytest.mark.parametrize("failure", ["envelope", "readiness", "citation", "blob"])
+# D106: a citation fault is no analysis failure any more, so "citation" left.
+@pytest.mark.parametrize("failure", ["envelope", "readiness", "blob"])
 def test_analysis_failure_preserves_bill_and_exact_replay(
     provider: ModuleProvider,
     monkeypatch: pytest.MonkeyPatch,
@@ -166,10 +167,6 @@ def test_analysis_failure_preserves_bill_and_exact_replay(
         completions.content = "private"
     elif failure == "readiness":
         completions.readiness = {"CP-5": "NOT-A-STATUS"}
-    elif failure == "citation":
-        # D106: an unanchored quote refuses only a Blocked answer now.
-        completions.source_id = uuid4()
-        completions.qa_status = "Blocked"
 
     def broken_blob(self: BlobStore, data: bytes) -> str:
         raise OSError("synthetic")
@@ -179,7 +176,6 @@ def test_analysis_failure_preserves_bill_and_exact_replay(
     codes = {
         "envelope": "HANDOFF_MALFORMED",
         "readiness": "HANDOFF_INCOMPLETE",
-        "citation": "CITATION_NOT_DELIVERED",
         # The response body could not be stored as the call's diagnostic.
         "blob": "STORE_UNAVAILABLE",
     }
