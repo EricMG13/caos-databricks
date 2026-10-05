@@ -525,11 +525,11 @@ The first live loop on the CZR sets, one set at a time, stopping at the first no
 - C1 covenant-refinancing: stopped at CP-1, +$0.52. C2: stopped at CP-4, HANDOFF_MALFORMED, +$0.84. C3: stopped, EVIDENCE_DEMAND_UNRESOLVED, +$0.83. C4: stopped at CP-4, +$1.28. C5: blocked (CP-0 judged CP-4 DO NOT RUN), keys 7/20, +$1.17. C6: complete, keys 6/20, +$1.49.
 - E1 LITE earnings: complete, keys 2/5 (3/5 after K2), +$0.17. E2: complete, keys 1/5, +$0.14.
 - LRV1 LITE relative-value: blocked after CP-0 (no TRACE prints), +$0.19. LRV2: complete, keys 5/8, +$0.49.
-- LCR1 LITE covenant-refinancing: blocked after CP-0. LCR2: PROVIDER_UNAVAILABLE at ~195 s. LCR3: PROVIDER_UNAVAILABLE at ~299 s, +$0.30. LCR4: stopped at CP-3C, +$1.01. LCR5: complete, keys 2/7, +$0.67.
+- LCR1 LITE covenant-refinancing: blocked after CP-0 (CP-L10 DO NOT RUN, incomplete legal chain; F508). LCR2: PROVIDER_UNAVAILABLE at ~195 s. LCR3: PROVIDER_UNAVAILABLE at ~299 s, +$0.30. LCR4: stopped at CP-3C, +$1.01. LCR5: complete, keys 2/7, +$0.67.
 - LFCS1 LITE full-credit-screen: stopped at CP-5, +$1.96. LFCS2: PROVIDER_UNAVAILABLE at ~294 s, +$0.46.
 - LP1 LITE portfolio: blocked at CP-0 (synthetic mandate), 0/6 keys. `czr-2026q2-portfolio` was never run.
 - RV1 FULL relative-value: complete, keys 7/16, +$1.38.
-- FCA1 FULL credit assessment: PROVIDER_UNAVAILABLE at CP-1B, +$0.76. FCA2: CP-2G answered Blocked (forecast scope), keys 8/35, +$1.79.
+- FCA1 FULL credit assessment: PROVIDER_UNAVAILABLE at CP-1B, +$0.76. FCA2: 11 of 19 accepted, CP-2G Blocked (forecast scope), 7 not run, keys 8/35, +$1.79.
 
 **Host changes that moved results** (decisions in `docs/rebuild/decisions.md`):
 
