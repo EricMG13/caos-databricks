@@ -16,8 +16,9 @@ export function unverifiedMarkerLabel(page: number): string {
   return `unverified – page ${page}`;
 }
 
-/** The chip for an anchored citation: `C<n>`, named "citation n" with where
-    it opens, pressed to open the source drawer at `identity`. */
+/** The chip for an anchored citation: `C<n>`, named by that visible text
+    first (WCAG 2.5.3), then "citation n" and where it opens; pressed, it
+    opens the source drawer at `identity`. */
 export function MarkerChip({
   n,
   place,
@@ -39,7 +40,7 @@ export function MarkerChip({
     <button
       type="button"
       className={`chip cmark${withdrawn ? " withdrawn" : ""}`}
-      aria-label={`citation ${n}: ${place}${withdrawn ? " · source withdrawn" : ""}`}
+      aria-label={`C${n}, citation ${n}: ${place}${withdrawn ? " · source withdrawn" : ""}`}
       aria-haspopup="dialog"
       aria-expanded={open}
       data-marker-chip={n}
@@ -125,7 +126,7 @@ export function ArtifactMarkers({
           () => (
             <MarkerChip
               n={figure.marker!}
-              place={`${figure.route_node_id} source, page ${figure.page}`}
+              place={`${figure.module_id} source, page ${figure.page}`}
               withdrawn={figure.withdrawn_at !== null}
               identity={{
                 record_sha256: figure.record_sha256,

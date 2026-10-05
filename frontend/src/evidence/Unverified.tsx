@@ -107,7 +107,7 @@ export function BlockedQuotes({ blocked }: { blocked: BlockedByView }) {
               type="button"
               className="chip"
               aria-haspopup="dialog"
-              aria-label={`Open the source of verified quote ${index + 1}, page ${quote.page}`}
+              aria-label={`${quote.marker === null ? `p.${quote.page}, verified quote` : `C${quote.marker}, citation ${quote.marker}`}: open its source, page ${quote.page}`}
               data-blocked-chip={quote.source_id}
               onClick={(event) =>
                 openFact(

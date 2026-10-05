@@ -119,6 +119,7 @@ def test_the_report_and_committee_figures_are_cut_too() -> None:
     builders (`_narrative_view`): each cuts the quote, and the result is the
     wire's."""
     record = {
+        "projections": {"module_id": "CP-1"},
         "citations": [{"bboxes": [], "linked": False, "line_text": None}],
         "unverified": [{"linked": False}],
     }

@@ -312,11 +312,17 @@ export interface ModuleRef {
   note: string | null;
 }
 
-export type RefPiece = string | { text: string; refs: ModuleRef[] };
+export type RefPiece =
+  string | { text: string; refs: ModuleRef[] } | { text: string; qualified: string };
 
 const REF = /\[(CP-[^[\]\n]{1,100})\]/g;
 const REF_MODULE = /^(CP-(?:\d+[A-Z]?|[A-Z][A-Z0-9]*))(?:\s+(.+))?$/;
-const REF_REGISTER = /^[A-Z]{1,3}\d+[A-Z]?(?:\.[0-9A-Z]+)*(?:[–-][A-Z0-9.]+)?$/;
+// A register id -- never `C3`, which is a citation's marker (D107).
+const REF_REGISTER = /^(?!C\d+$)[A-Z]{1,3}\d+[A-Z]?(?:\.[0-9A-Z]+)*(?:[–-][A-Z0-9.]+)?$/;
+// An upstream citation's marker as a downstream prompt shows it and a module
+// may copy it, `[CP-1 C3]` or `[CP-1 C2, C5]` (`citation_markers.qualified`):
+// a label naming that module's citation, never a way to a register.
+const QUALIFIED = /^(CP-(?:\d+[A-Z]?|[A-Z][A-Z0-9]*)) (C[0-9]+(?:, ?C[0-9]+)*)$/;
 
 /** The references in a bracket's content, or `null` when any part of it is
     not one (a file name, "external: …"), so the bracket stays as written. */
@@ -351,6 +357,13 @@ export function readRefs(text: string): RefPiece[] {
   const out: RefPiece[] = [];
   let at = 0;
   for (const match of text.matchAll(REF)) {
+    const qualified = QUALIFIED.exec(match[1]!);
+    if (qualified) {
+      if (match.index > at) out.push(text.slice(at, match.index));
+      out.push({ text: match[0], qualified: `${qualified[1]} ${qualified[2]}` });
+      at = match.index + match[0].length;
+      continue;
+    }
     const refs = refsIn(match[1]!);
     if (refs === null) continue;
     if (match.index > at) out.push(text.slice(at, match.index));

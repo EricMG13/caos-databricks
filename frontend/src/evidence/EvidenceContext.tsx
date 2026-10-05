@@ -77,7 +77,7 @@ function figureFact(figure: NarrativeFigure): CitationView {
   return {
     document_sha256: figure.document_sha256,
     source_id: figure.source_id,
-    filename: `${figure.route_node_id} source ${shortDigest(figure.document_sha256)}`,
+    filename: `${figure.module_id} source ${shortDigest(figure.document_sha256)}`,
     page: figure.page,
     matched_text: figure.matched_text,
     line: figure.line,

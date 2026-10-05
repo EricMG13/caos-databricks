@@ -7,10 +7,11 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
-import { Markdown } from "@/ds/ModelMarkdown";
-import { readMarkers } from "@/ds/markdown";
+import { ArtifactTexts } from "@/ds/ArtifactMarkdown";
+import { Markdown, ModuleRefLink } from "@/ds/ModelMarkdown";
+import { readMarkers, readRefs } from "@/ds/markdown";
 import { ArtifactMarkers, HandoffMarkers, unverifiedMarkerLabel } from "@/evidence/Markers";
-import { Narrative } from "@/evidence/Narrative";
+import { Narrative, figureChip } from "@/evidence/Narrative";
 import { AnalysisSection } from "@/sections/analysis/AnalysisSection";
 import { citationsOf, choiceText } from "@/sections/report/figures";
 import {
@@ -73,7 +74,7 @@ describe("citation markers (D107)", () => {
   test("test_a_marker_is_a_chip_named_citation_n_that_opens_its_source", () => {
     const container = drawn(marked(), "Net leverage fell [C1]; both [C1, C2].");
     const chip = screen.getAllByRole("button", {
-      name: "citation 1: CVNA_10K_Annual_Report_FY2025.htm, page 1",
+      name: "C1, citation 1: CVNA_10K_Annual_Report_FY2025.htm, page 1",
     })[0]!;
     expect(chip).toHaveTextContent(/^C1$/);
     expect(chip).toHaveAttribute("aria-haspopup", "dialog");
@@ -87,7 +88,7 @@ describe("citation markers (D107)", () => {
   test("test_an_unverified_marker_is_labelled_and_inert", () => {
     const container = drawn(marked(), "Covenant headroom [C3].");
     const chip = container.querySelector("[data-unverified-marker]")!;
-    expect(chip).toHaveTextContent("citation 3, C3 · unverified – page 14");
+    expect(chip.textContent).toBe("citation 3, C3 · unverified – page 14");
     expect(chip.tagName).toBe("SPAN");
     expect(chip.closest("button, a")).toBeNull();
     expect(chip.querySelector("button, a, [tabindex]")).toBeNull();
@@ -125,7 +126,7 @@ describe("citation markers (D107)", () => {
     expect(container.querySelector("code [data-unverified-marker]")).not.toBeNull();
     // A hostile file name is an accessible name's text, never markup.
     const chip = screen.getByRole("button", {
-      name: 'citation 2: <img src=x onerror="window.pwned=1">.htm, page 2',
+      name: 'C2, citation 2: <img src=x onerror="window.pwned=1">.htm, page 2',
     });
     expect(chip.children).toHaveLength(0);
   });
@@ -138,11 +139,40 @@ describe("citation markers (D107)", () => {
         <Markdown text={artifact.markdown} base={2} label="CP-1" />
       </ArtifactMarkers>,
     );
-    expect(screen.getByRole("button", { name: "citation 1: CP-1 source, page 7" })).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "C1, citation 1: CP-1 source, page 7" }),
+    ).toBeVisible();
     expect(container.querySelector("[data-unverified-marker]")).toHaveTextContent(
       "unverified – page 9",
     );
     expect(container.querySelector("img")).toBeNull();
+  });
+});
+
+describe("an upstream citation named by its qualified marker (the MK2 audit)", () => {
+  test("test_a_qualified_marker_is_a_label_never_a_register_link", () => {
+    // `[CP-1 C3]` is CP-1's citation 3 as a downstream prompt names it
+    // (`citation_markers.qualified`), never CP-1's register "C3".
+    expect(readRefs("see [CP-1 C3] and [CP-2A C2, C5].")).toEqual([
+      "see ",
+      { text: "[CP-1 C3]", qualified: "CP-1 C3" },
+      " and ",
+      { text: "[CP-2A C2, C5]", qualified: "CP-2A C2, C5" },
+      ".",
+    ]);
+    expect(readRefs("[CP-1B B2]")).toEqual([
+      { text: "[CP-1B B2]", refs: [{ module: "CP-1B", register: "B2", note: null }] },
+    ]);
+    const { container } = render(
+      <ModuleRefLink value={(ref) => <a href={`#${ref.module}`}>{ref.module}</a>}>
+        <Markdown text="Leverage per [CP-1 C3]; walk in [CP-1B B2]." base={2} label="x" />
+      </ModuleRefLink>,
+    );
+    const label = container.querySelector("[data-qualified-marker='[CP-1 C3]']")!;
+    expect(label).toHaveTextContent(/^CP-1 C3$/);
+    expect(label.closest("a, button")).toBeNull();
+    expect(label.querySelector("a, button")).toBeNull();
+    expect(container.querySelectorAll("a")).toHaveLength(1);
   });
 });
 
@@ -205,6 +235,24 @@ describe("no whole source line outside the drawer (D107)", () => {
     }
   });
 
+  test("test_a_saved_records_lines_are_behind_a_closed_disclosure", () => {
+    // The signed record carries each citation's `line_text`: it is opt-in, a
+    // native disclosure (keyboard: its summary is a focusable control).
+    const line = "We say Net debt 2.0bn today, before the refinancing closed.";
+    const record = JSON.stringify({ citations: [{ page: 4, line_text: line }] });
+    const { container } = render(
+      <ArtifactTexts markdown="Net debt [C1]." record={record} label="CP-1" section="report" />,
+    );
+    const disclosure = container.querySelector<HTMLDetailsElement>(
+      "details[data-artifact-record-disclosure]",
+    )!;
+    expect(disclosure.open).toBe(false);
+    expect(disclosure.querySelector("summary")).toHaveTextContent("Signed record (JSON)");
+    expect(screen.getByText(new RegExp(line.slice(0, 20)))).not.toBeVisible();
+    disclosure.open = true;
+    expect(screen.getByText(new RegExp(line.slice(0, 20)))).toBeVisible();
+  });
+
   test("test_the_narrative_and_picker_show_no_whole_source_line", () => {
     const line = "We say Net debt 2.0bn today, before the refinancing closed.";
     const committee = parseCommitteeDocument(fixture("fixtures/committee-v1.json"));
@@ -228,6 +276,9 @@ describe("no whole source line outside the drawer (D107)", () => {
       ],
     ];
     const { container } = render(<Narrative narrative={narrative} />);
+    // Named as the deliverable names it, its module and marker (`[CP-1 C1]`).
+    expect(figureChip(narrative[0]![0]!.figure)).toBe("CP-1 C1 · p.7");
+    expect(container.querySelector("[data-figure-chip]")!.textContent).toBe("CP-1 C1 · p.7");
     expect(container.querySelector("q.figq")).toHaveTextContent(/^Net debt 2\.0bn today$/);
     expect(container.textContent).not.toContain(line);
     expect(container.querySelector("mark")).toBeNull();

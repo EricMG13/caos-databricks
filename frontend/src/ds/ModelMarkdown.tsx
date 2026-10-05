@@ -29,6 +29,12 @@ function WithRefs({ text }: { text: string }) {
   return readRefs(text).map((piece, index) =>
     typeof piece === "string" ? (
       piece
+    ) : "qualified" in piece ? (
+      // Another module's citation, named as the prompt named it (D107): a
+      // label, not a way anywhere.
+      <span key={index} className="qmark" data-qualified-marker={piece.text}>
+        {piece.qualified}
+      </span>
     ) : (
       <span key={index} className="md-refs" data-refs={piece.text}>
         {piece.refs.map((ref, at) => (

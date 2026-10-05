@@ -124,6 +124,9 @@ describe("Report figure picker", () => {
       recorded: true,
       marker: 1,
     };
+    // Exactly `EXCERPT_CHARS` code points: 119 kept and the ellipsis.
+    expect(clampExcerpt("x".repeat(EXCERPT_CHARS))).toBe("x".repeat(EXCERPT_CHARS));
+    expect(clampExcerpt("x".repeat(EXCERPT_CHARS + 1))).toBe(`${"x".repeat(119)}\u2026`);
     const shown = clampExcerpt(long);
     expect(Array.from(shown)).toHaveLength(EXCERPT_CHARS);
     expect(shown.endsWith("\u2026")).toBe(true);
