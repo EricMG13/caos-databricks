@@ -358,3 +358,30 @@ export function readRefs(text: string): RefPiece[] {
   if (at < text.length) out.push(text.slice(at));
   return out;
 }
+
+// ---- citation markers ----
+
+/** A run of model text and the citation markers in it (D107): `[C3]` names
+    the citation at place 3 of the answer's list, `[C2, C5]` two of them. */
+export type MarkerPiece = string | { text: string; numbers: number[] };
+
+// `handoff._MARKER`, rule for rule: an upper-case C and 1-9 ASCII digits,
+// several in one bracket separated by a comma and at most one space. A body's
+// backslash escape is read as the mark it writes (F149), so `\[C3\]` is one.
+// Anything else -- `[c3]`, `[C 3]`, `[C3-C5]` -- is text.
+const MARKER = /\\?\[(C[0-9]{1,9}(?:, ?C[0-9]{1,9})*)\\?\]/g;
+
+/** A line of model text with its citation markers picked out, the rest
+    exactly as written. */
+export function readMarkers(text: string): MarkerPiece[] {
+  const out: MarkerPiece[] = [];
+  let at = 0;
+  for (const match of text.matchAll(MARKER)) {
+    if (match.index > at) out.push(text.slice(at, match.index));
+    const numbers = match[1]!.split(",").map((part) => Number(part.trim().slice(1)));
+    out.push({ text: match[0], numbers });
+    at = match.index + match[0].length;
+  }
+  if (at < text.length) out.push(text.slice(at));
+  return out;
+}

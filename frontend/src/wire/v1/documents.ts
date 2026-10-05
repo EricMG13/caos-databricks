@@ -878,6 +878,7 @@ export type BookPeriod = Infer<typeof BookPeriod>;
 export type ReportDocument = Infer<typeof ReportDocument>;
 export type CommitteeDocument = Infer<typeof CommitteeDocument>;
 export type RevisionSummary = Infer<typeof RevisionSummary>;
+export type ReportArtifact = Infer<typeof ReportArtifact>;
 export type RefusalBody = Infer<typeof RefusalBody>;
 export type RefusalCode = Infer<typeof RefusalCode>;
 export type QualificationRead = Infer<typeof QualificationRead>;
