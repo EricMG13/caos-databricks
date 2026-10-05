@@ -451,9 +451,10 @@ describe("a narrative figure (N59)", () => {
       </MemoryRouter>,
     );
     await settle();
-    const chip = screen.getByRole("button", { name: "Evidence CP-1 p.7: Coverage 2.1x" });
-    // The narrative shows the figure's whole line, its excerpt marked (D105).
-    expect(document.querySelector("q.figq mark")).toHaveTextContent("Coverage 2.1x");
+    const chip = screen.getByRole("button", { name: "citation 1: CP-1 p.7" });
+    // Compact (D107): the narrative shows the excerpt, never its line or mark.
+    expect(document.querySelector("q.figq")).toHaveTextContent("Coverage 2.1x");
+    expect(document.querySelector("q.figq mark")).toBeNull();
     expect(chip).toHaveAttribute("aria-expanded", "false");
     act(() => fireEvent.click(chip));
     await settle();
@@ -477,9 +478,7 @@ describe("a narrative figure (N59)", () => {
       </MemoryRouter>,
     );
     await settle();
-    act(() =>
-      fireEvent.click(screen.getByRole("button", { name: "Evidence CP-1 p.7: Coverage 2.1x" })),
-    );
+    act(() => fireEvent.click(screen.getByRole("button", { name: "citation 1: CP-1 p.7" })));
     await settle();
   };
 

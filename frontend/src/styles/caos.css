@@ -1460,15 +1460,12 @@
   }
   /* The cited excerpt inside its whole source line (D105), in the ink of the
      surface it sits on: a narrative figure is also read on Committee's paper. */
-  /* An unverified citation (D106): the model's own quote, never the host's well
-     or its mark -- a dashed edge on no fill, its label read before it. */
-  .unverified-quote {
-    margin: 0;
-    padding: 0.25rem 0 0.25rem 0.875rem;
-    border-left: 2px dashed var(--muted-foreground);
-    font: 400 0.875rem/1.6 var(--font-sans);
+  /* A compact citation's excerpt (D107): about one line; its whole source line
+     is the drawer's. */
+  .facts .excerpt {
+    display: block;
     color: var(--foreground);
-    overflow-wrap: break-word;
+    overflow-wrap: anywhere;
   }
   /* Labels on Committee's paper take paper's own ink: the theme's muted ink
      is 2.36:1 on cream in the dark scheme (NB2 review). */
@@ -2878,9 +2875,6 @@
   }
   .analysis ul.facts > li:last-child {
     border-bottom: 0;
-  }
-  .analysis ul.facts blockquote.matched {
-    margin: 0;
   }
   .drawer ul.register > li {
     display: grid;

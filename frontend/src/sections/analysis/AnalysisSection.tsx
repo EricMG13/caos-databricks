@@ -24,8 +24,9 @@ import { stamp } from "@/ds/format";
 import type { ModuleRef } from "@/ds/markdown";
 import { useEvidence, type FactIdentity } from "@/evidence/EvidenceContext";
 import { Overlay } from "@/evidence/Overlay";
-import { QUOTE_LABEL, TracedLine } from "@/evidence/TracedLine";
+import { QUOTE_LABEL } from "@/evidence/TracedLine";
 import { BlockedQuotes, NOT_LINKED, UnverifiedFacts } from "@/evidence/Unverified";
+import { clampExcerpt } from "@/evidence/compact";
 import type { AnalysisDocument, CitationView, HandoffView, PendingNode } from "@/wire/v1";
 
 export { PROSE_SHOWN } from "./module";
@@ -175,7 +176,7 @@ function SourceFacts({
             <button
               type="button"
               className={`chip${fact.withdrawn_at !== null ? " withdrawn" : ""}`}
-              aria-label={`Evidence ${fact.filename} p.${fact.page}${fact.withdrawn_at !== null ? " · source withdrawn" : ""}`}
+              aria-label={`Evidence ${fact.marker === null ? "" : `C${fact.marker} · `}${fact.filename} p.${fact.page}${fact.withdrawn_at !== null ? " · source withdrawn" : ""}`}
               aria-haspopup="dialog"
               aria-expanded={activeFact?.record_sha256 === record && activeFact.index === index}
               data-fact-chip={fact.source_id}
@@ -186,18 +187,20 @@ function SourceFacts({
                 )
               }
             >
-              p.{fact.page}
+              {fact.marker === null ? `p.${fact.page}` : `C${fact.marker}`}
             </button>{" "}
             {fact.filename} · p.{fact.page}
           </span>
-          {fact.line.recorded ? null : (
-            <div className="lbl" data-line-not-recorded>
-              {QUOTE_LABEL}
-            </div>
-          )}
-          <blockquote className="matched">
-            <TracedLine line={fact.line} />
-          </blockquote>
+          {/* Compact (D107): the excerpt, about one line; its whole source line
+              is the drawer's to show, one press away. */}
+          <span className="excerpt" data-fact-excerpt>
+            {fact.line.recorded ? null : (
+              <span className="lbl" data-line-not-recorded>
+                {QUOTE_LABEL}:{" "}
+              </span>
+            )}
+            <q>{clampExcerpt(fact.matched_text)}</q>
+          </span>
           {fact.linked ? null : (
             <div className="note" data-not-linked>
               {NOT_LINKED}

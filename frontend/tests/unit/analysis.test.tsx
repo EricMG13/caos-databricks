@@ -9,6 +9,7 @@ import { fireEvent, render } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { composeChrome, words } from "@/chrome/compose";
 import { stamp } from "@/ds/format";
+import { clampExcerpt } from "@/evidence/compact";
 import { readMarkdown } from "@/ds/markdown";
 import { ReaderParts } from "@/sections/analysis/module";
 import { AnalysisSection, PROSE_SHOWN, sourceRegister } from "@/sections/analysis/AnalysisSection";
@@ -499,7 +500,7 @@ describe("Analysis", () => {
     expect(full.querySelector("[data-screening-only]")).toBeNull();
   });
 
-  test("a fact whose record holds no line is labelled a quote, never marked", () => {
+  test("a fact whose record holds no line is labelled a quote, compact and never marked", () => {
     const { container } = mountAt(complete, "CP-1");
     openTab(container, "audit");
     const facts = container.querySelectorAll("[data-source-facts] [data-citation]");
@@ -509,11 +510,13 @@ describe("Analysis", () => {
     expect(fact.querySelector("[data-line-not-recorded]")).toHaveTextContent(
       "Quote (source line not recorded)",
     );
-    expect(fact.querySelector("blockquote")!.textContent).toBe(quoteOnly.matched_text);
-    expect(fact.querySelector("blockquote mark")).toBeNull();
+    expect(fact.querySelector("[data-fact-excerpt] q")!.textContent).toBe(
+      clampExcerpt(quoteOnly.matched_text),
+    );
+    expect(fact.querySelector("blockquote, mark")).toBeNull();
   });
 
-  test("source facts name the file, page, matched text and withdrawn state", () => {
+  test("source facts name the file, page, the excerpt compact and withdrawn state", () => {
     const { container } = mountAt(complete, "CP-4");
     openTab(container, "audit");
     const fact = container.querySelector("[data-source-facts] [data-citation]")!;
@@ -521,12 +524,15 @@ describe("Analysis", () => {
     expect(fact).toHaveTextContent(withdrawn.filename);
     expect(fact).toHaveTextContent(`p.${withdrawn.page}`);
     expect(fact).toHaveTextContent(withdrawn.matched_text);
-    // D105: the whole source line, its cited excerpt marked inside it, so the
-    // words just before the excerpt are on screen beside it.
+    // D107: compact -- the excerpt alone, about one line; the whole source
+    // line, its excerpt marked, is the source drawer's to show.
     const { before, excerpt, after } = withdrawn.line;
     expect(before).not.toBe("");
-    expect(fact.querySelector("blockquote")!.textContent).toBe(before + excerpt + after);
-    expect(fact.querySelector("blockquote mark")!.textContent).toBe(excerpt);
+    expect(fact.querySelector("[data-fact-excerpt] q")!.textContent).toBe(
+      clampExcerpt(withdrawn.matched_text),
+    );
+    expect(fact.textContent).not.toContain(before + excerpt + after);
+    expect(fact.querySelector("blockquote, mark")).toBeNull();
     expect(fact.querySelector("[data-line-not-recorded]")).toBeNull();
     expect(fact.getAttribute("data-withdrawn")).toBe("true");
     expect(fact).toHaveTextContent(stamp(withdrawn.withdrawn_at!));
