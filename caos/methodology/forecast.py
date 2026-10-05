@@ -31,6 +31,43 @@ _OWNERS = {
     "tolerance": "CP-2G",
     "contractual": "CP-4",
 }
+# The modules whose citations CP-CF binds as calculation inputs (D106).
+FORECAST_OWNERS = frozenset(_OWNERS.values())
+# How a binding states one request value: `<pointer> = <JSON value>`.
+_SEPARATOR = " = "
+
+
+def _owner(pointer: str) -> str | None:
+    """The module that owns a request pointer's value (`_OWNERS`), by its
+    first segment; None for a pointer of no owned section."""
+    first = pointer.split("/")[1] if pointer.startswith("/") else ""
+    return _OWNERS.get(first)
+
+
+def _assignment(pointer: str, value: object) -> str:
+    """The one line a binding's quote must hold for `pointer`'s value."""
+    return pointer + _SEPARATOR + json.dumps(value, ensure_ascii=False)
+
+
+def carries(markdown: bytes, quote: str) -> bool:
+    """Whether a handoff's Markdown holds `quote` as written: the binder's
+    own test, raw text and no word matching, for the owner's handoff and
+    CP-CF's alike (`validate_forecast_bindings`)."""
+    return quote in markdown.decode("utf-8")
+
+
+def binds_input(owner: str, quote: str) -> bool:
+    """Whether CP-CF would bind `quote`, cited by `owner`, as a calculation
+    input (D106): a line of it states a value (`_assignment`'s form, a
+    pointer then the separator) of a section `owner` owns. Read from the
+    quote alone, before any CP-CF answer exists, so a quote that slipped
+    after the separator still counts as one the calculator will need."""
+    for line in quote.splitlines():
+        pointer, separator, _value = line.partition(_SEPARATOR)
+        if separator and pointer == pointer.strip() and " " not in pointer:
+            if _owner(pointer) == owner:
+                return True
+    return False
 
 
 def _blocks(text: str) -> list[str]:
@@ -135,19 +172,19 @@ def validate_forecast_bindings(
     if set(bindings) != set(leaves) or not {"CP-1", "CP-2G", "CP-4"} <= set(upstream):
         raise Refusal(RefusalCode.HANDOFF_INCOMPLETE)
     for pointer, value in leaves.items():
-        owner = _OWNERS[pointer.split("/")[1]]
+        owner = _owner(pointer)
         binding = bindings[pointer]
         if not isinstance(binding, dict) or set(binding) != {"module_id", "quote"}:
             raise Refusal(RefusalCode.HANDOFF_INCOMPLETE)
         quote = binding["quote"]
-        assignment = pointer + " = " + json.dumps(value, ensure_ascii=False)
+        assignment = _assignment(pointer, value)
         if (
             binding["module_id"] != owner
             or not isinstance(quote, str)
             or assignment not in quote.splitlines()
             or quote not in {c.matched_text for c in citations.get(owner, ())}
-            or quote not in upstream[owner].decode("utf-8")
-            or quote not in markdown.decode("utf-8")
+            or not carries(upstream[owner], quote)
+            or not carries(markdown, quote)
         ):
             raise Refusal(RefusalCode.HANDOFF_INCOMPLETE)
 
