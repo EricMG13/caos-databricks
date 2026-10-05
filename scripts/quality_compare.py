@@ -4,10 +4,11 @@
 `extract <artifact> --set <set-dir> [--record <record>]` prints one handoff's
 JSON record: front matter, H2 headings, the registers its module's contract
 requires and the rows of each found, tagged interface tables, citations and how
-many anchor, and which of the set's answer keys it meets. `compare <baseline>
-<records>` reports per module what moved, LARGE differences under their own
-heading (the rules are in `docs/rebuild/quality/2026-10-03-baseline.md`). It
-informs; it exits non-zero only on a usage error.
+many anchor, which of the set's answer keys it meets, and how many distinct
+figures its tables hold. `compare <baseline> <records>` reports per module what
+moved, LARGE differences under their own heading (the rules are in
+`docs/rebuild/quality/2026-10-03-baseline.md`). It informs; it exits non-zero
+only on a usage error.
 
 Read by the host's own readers, never restated: `matrix.module_registers`,
 `tables.handoff_tables`, the vendor's `parse_restricted_frontmatter`, and four
@@ -25,6 +26,7 @@ import json
 import re
 import sys
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from decimal import Decimal, InvalidOperation
 from hashlib import sha256
 from pathlib import Path
 from typing import Any
@@ -61,6 +63,16 @@ COMMITTEE_ORDER = (
 )
 CONFIDENCE_DROP = 10
 ANCHORED_FALL = 0.5
+# A later answer whose distinct figures fall below this share of the baseline's
+# lowest, and by at least `FIGURES_FLOOR`, has lost facts, not duplicates (5d-2
+# review, M2). The floor keeps one year or page cell from flagging an answer
+# with few figures (CP-0's baseline holds 4 to 10).
+FIGURES_FALL = 0.8
+FIGURES_FLOOR = 5
+# A table cell that is one figure: `2,993`, `(573)`, `-335`, `$1,240.0`, `30.7%`.
+_FIGURE = re.compile(r"\(?\s*[-\u2212]?\s*\$?\s*\d[\d,]*(?:\.\d+)?\s*%?\s*\)?")
+_CELL_SPLIT = re.compile(r"(?<!\\)\|")
+_SEPARATOR_CELL = re.compile(r":?-+:?")
 
 _H2 = re.compile(r"^## +(.+?)\s*$", re.MULTILINE)
 _FRONT_MATTER = (
@@ -127,9 +139,45 @@ def extract_record(
         },
         "tables": {table.table_id: len(table.rows) for table in tables.tables},
         "tables_unavailable": tables.unavailable_reason,
+        "distinct_figures": distinct_figures(
+            contract.validate_handoff.unfenced_markdown(body)
+        ),
         "citations": _citations(stored),
         "answer_keys": _answer_keys(case, module_id, stored, registers_found=found),
     }
+
+
+def distinct_figures(markdown: str) -> int:
+    """How many different figures the handoff's tables hold.
+
+    Every body cell of every pipe table that is a single figure counts once by
+    its magnitude, so `(335)`, `-335` and `335` are one figure and a table that
+    only repeats figures held elsewhere adds none: removing a duplicate never
+    lowers the count, losing a fact found nowhere else does.
+    """
+    figures: set[str] = set()
+    header = True
+    for line in markdown.splitlines():
+        row = line.strip()
+        if not row.startswith("|"):
+            header = True
+            continue
+        cells = [cell.strip() for cell in _CELL_SPLIT.split(row.strip("|"))]
+        if header or all(_SEPARATOR_CELL.fullmatch(cell) for cell in cells):
+            header = False
+            continue
+        figures.update(filter(None, map(_figure, cells)))
+    return len(figures)
+
+
+def _figure(cell: str) -> str | None:
+    if not _FIGURE.fullmatch(cell):
+        return None
+    digits = re.sub(r"[^\d.]", "", cell)
+    try:
+        return format(Decimal(digits).normalize(), "f")
+    except InvalidOperation:
+        return None
 
 
 def _record(artifact: bytes, record: bytes | None) -> CanonicalRecord | None:
@@ -329,6 +377,7 @@ def _compared(
         _status_moves,
         _citation_moves,
         _key_moves,
+        _figure_moves,
         _byte_moves,
     ):
         part_changes, part_large = part(record, references)
@@ -484,6 +533,27 @@ def _key_moves(
     ]
     changes += [f"answer key gained: {key}" for key in sorted(met_now - ever)]
     return changes, [f"answer key lost: {key}" for key in lost]
+
+
+def _figure_moves(
+    record: Mapping[str, Any], references: Sequence[Mapping[str, Any]]
+) -> Moves:
+    """Always reported; LARGE below `FIGURES_FALL` of the baseline's lowest and
+    at least `FIGURES_FLOOR` under it."""
+    now = record.get("distinct_figures")
+    was = [
+        item["distinct_figures"]
+        for item in references
+        if isinstance(item.get("distinct_figures"), int)
+    ]
+    if not isinstance(now, int):
+        return ["distinct figures unmeasured"], []
+    if not was:
+        return [f"distinct figures {now} (baseline unmeasured)"], []
+    line = f"distinct figures {now} (baseline {_span(was)})"
+    if now < FIGURES_FALL * min(was) and now <= min(was) - FIGURES_FLOOR:
+        return [line], [f"distinct figures {now} below 80% of baseline low {min(was)}"]
+    return [line], []
 
 
 def _byte_moves(

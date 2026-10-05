@@ -14,6 +14,7 @@ import runpy
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+from uuid import UUID
 
 import pytest
 from canonical_fixtures import (
@@ -28,8 +29,11 @@ from canonical_fixtures import (
     skill,
 )
 
+from caos.icm import prompt_block
 from caos.methodology.bundle import verified_bytes, verified_root_bytes
+from caos.methodology.invocation import _source_preparation_section
 from caos.methodology.tables import figure_value
+from caos.store.source_sets import SourceSet
 
 CHECK = CONTRACT.completeness_check
 
@@ -1142,3 +1146,74 @@ def test_a_short_interface_row_names_only_its_table(tmp_path: Path) -> None:
     ), interface
     assert handoff_tables(CONTRACT, short).unavailable_reason == "TABLES_MALFORMED"
     assert _cp_model_reads(tmp_path, short) != 0
+
+
+def test_cp0_writes_only_the_preparation_registers_that_hold_its_findings() -> None:
+    """D97 (V10): on 90 stored CP-0 answers, P3 held each source's identity,
+    period and version (110 dates found nowhere else, in 46) and P5 its
+    fidelity findings (64 cells in 35); P1, P2, P4, P6, P7 and P8 restated
+    the host's preparation record or said NA about a workspace or ZIP this
+    host never makes. Those six are retired, so an older answer's tables keep
+    their headings and no T register reads one; the host says the same."""
+    text = skill("CP-0").decode()
+    contract = CHECK.load_contract(text, "CP-0")
+    assert sorted(contract["registers"]) == ["P3", "P5"] + [
+        f"T{n}" for n in range(1, 9)
+    ]
+    assert contract["retired_registers"] == ["P1", "P2", "P4", "P6", "P7", "P8"]
+    [cp0] = [m for m in CATALOG["modules"] if m["module_id"] == "CP-0"]
+    assert set(cp0["artifact_contract"]["required_table_ids"]) == set(
+        contract["registers"]
+    )
+    assert "P1-P8" not in text
+    final_check = prompt_block("cp0_final_check")
+    assert "include P3, P5 and T1-T8" in final_check
+    assert "P1-P8" not in final_check
+    section = _source_preparation_section(
+        SourceSet(case_id=UUID(int=1), version=1, fingerprint="0" * 64, members=()), ""
+    )
+    assert "P1, P2, P4, P6, P7 and P8 are retired" in section
+    assert "identity, period and version in P3" in section
+    assert "host extraction in P5" in section
+    # An answer written to the old contract reads the same, its T registers
+    # bound as before and its six retired tables no fault.
+    fresh = handoff_markdown(identity("CP-0")).decode()
+    old = fresh
+    for retired in ("P1", "P2", "P4", "P6", "P7", "P8"):
+        old = old.replace(
+            "#### T1",
+            f"#### {retired} — Retired\n\nIt feeds T2.\n\n"
+            + _table(["x_id", "value"], [["x", "y"]])
+            + "\n#### T1",
+            1,
+        )
+    assert old != fresh
+    assert _violations("CP-0", old) == []
+
+
+def test_cp_l10_writes_a_gap_once_and_keeps_every_screen_s_rows() -> None:
+    """D96 (V8): on the six stored CP-L10 answers no absorbed screen's
+    source-and-scope table repeated another's (0 of 60 pairs shared a row) and
+    every evidence-less topic row held a materiality and rank no other register
+    holds, so all twenty registers, each screen's scope rows and its six topic
+    rows stay required; only the restated gap and prohibitions are dropped."""
+    lite = skill("CP-L10").decode()
+    assert lite.count("## Written once — binding on all five screens") == 1
+    assert "not again in the summary" in lite
+    assert "no cell or line repeats that no conclusion" in lite
+    # The 5d-3 review (M3): the one-sentence limit and the safety clause.
+    assert "`summary` names the missing evidence in one sentence" in lite
+    assert "A sourced figure or finding is never dropped to save space" in lite
+    # M1: the OVERALL row holds the posture; status and outcome are the Audit
+    # Summary's; step 7's LITE_COMPLETE gaps row is the one restatement.
+    assert "posture is the `assessment` of its decision-screen `OVERALL` row" in lite
+    assert "except the one row Workflow step 7 requires in a `LITE_COMPLETE`" in lite
+    assert "posture, status and outcome are its decision-screen" not in lite
+    contract = CHECK.load_contract(lite, "CP-L10")
+    assert contract["retired_registers"] == []
+    registers = contract["registers"]
+    for phase in ("10", "20", "23", "30", "40"):
+        assert registers[f"TL{phase}.1"]["minimum_body_rows"] == 1, phase
+        assert registers[f"TL{phase}.2"]["minimum_body_rows"] == 6, phase
+    rules = {rule["rule_id"] for rule in contract["semantic_rules"]}
+    assert "cp_l10.topic_ids_complete" in rules

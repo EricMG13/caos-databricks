@@ -159,7 +159,9 @@ def test_compare_records_holds_a_baseline_answer_against_itself_quiet(
     [compared] = quality_compare.compare_records([baseline], [baseline])
 
     assert compared["large"] == []
-    assert compared["changes"] == []
+    # Distinct figures are reported on every comparison; nothing else moved.
+    figures = baseline["distinct_figures"]
+    assert compared["changes"] == [f"distinct figures {figures} (baseline {figures})"]
     assert "LARGE\n  none" in quality_compare.render_report([compared])
 
 
@@ -218,3 +220,51 @@ def test_main_exits_two_on_a_usage_error_and_zero_on_a_comparison(
     assert (
         quality_compare.main(["compare", str(tmp_path / "absent.json"), str(path)]) == 2
     )
+
+
+def test_distinct_figures_count_facts_not_their_copies() -> None:
+    """5d-2 review, M2: a removed table that only repeats figures held elsewhere
+    leaves the count; a lost fact lowers it. Magnitude, so (335), -335 and 335
+    are one figure; a locator, a date or a word is none."""
+    table = (
+        "| Line Item | Q2 2026 | Note |\n| --- | ---: | --- |\n"
+        "| Revenue | 2,993 | 10-Q p. 2 |\n| Capex | (335) | 2026-06-30 |\n"
+    )
+    copy = "| Metric | Value |\n|---|---|\n| revenue | 2993 |\n| capex | -335 |\n"
+    margin = "| KPI | Q2 2026 |\n|---|---|\n| Margin | 30.7% |\n"
+    assert quality_compare.distinct_figures(table) == 2
+    assert quality_compare.distinct_figures(table + "\n" + copy) == 2
+    assert quality_compare.distinct_figures(table + "\n" + margin) == 3
+    assert quality_compare.distinct_figures("| Revenue | 2,993 |\n") == 0
+
+
+def test_compare_records_flags_a_fall_in_distinct_figures() -> None:
+    baseline = {**_answer("Passed", "Draft Only", 80, 8), "distinct_figures": 100}
+    lost = {**baseline, "distinct_figures": 79}
+    [compared] = quality_compare.compare_records([baseline], [lost])
+    assert compared["large"] == ["distinct figures 79 below 80% of baseline low 100"]
+    kept = {**baseline, "distinct_figures": 96}
+    [quiet] = quality_compare.compare_records([baseline], [kept])
+    assert quiet["large"] == []
+    assert quiet["changes"] == ["distinct figures 96 (baseline 100)"]
+    unmeasured = dict(baseline)
+    del unmeasured["distinct_figures"]
+    [old] = quality_compare.compare_records([unmeasured], [kept])
+    assert old["changes"] == ["distinct figures 96 (baseline unmeasured)"]
+
+
+def test_a_fall_of_fewer_than_five_figures_is_never_large() -> None:
+    """5d-2 review, round 2: CP-0's baselines hold 4 to 10 figures, where one
+    year or page cell is 10-25%; a fall must also be at least five figures."""
+    baseline = {**_answer("Passed", "Draft Only", 80, 8), "distinct_figures": 6}
+    for now, large in ((4, False), (2, False), (1, True), (0, True)):
+        [compared] = quality_compare.compare_records(
+            [baseline], [{**baseline, "distinct_figures": now}]
+        )
+        assert bool(compared["large"]) is large, now
+        assert f"distinct figures {now} (baseline 6)" in compared["changes"]
+    big = {**baseline, "distinct_figures": 20}
+    [compared] = quality_compare.compare_records(
+        [big], [{**big, "distinct_figures": 15}]
+    )
+    assert compared["large"] == ["distinct figures 15 below 80% of baseline low 20"]

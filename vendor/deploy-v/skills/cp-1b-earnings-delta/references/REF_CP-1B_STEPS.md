@@ -96,7 +96,7 @@ T4.4: `Line Item`|`Period 1`…`N`|`YoY Change (Abs)`|`YoY Change (%)`|`Analyst 
 ## REF_CP-1B_06_KPIDashboard.md
 <!-- REF_CP-1B_06 (T2) | 2026-06-02 -->
 <step_reference module="CP-1B" step="06" name="KPI Dashboard">
-<input>T4.4 + CP-1 KPIs (CP-1's T4.9)</input>
+<input>T4.4 + CP-1 KPIs (CP-1's T4.9 and T4.10)</input>
 <gate>Step 5 complete</gate>
 
 ## Instructions

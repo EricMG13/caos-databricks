@@ -231,7 +231,7 @@ def test_the_matrix_reports_every_case_and_concludes_nothing(ran: Ran) -> None:
     matrix = _matrix(ran, qualification)
 
     assert matrix.qualification_set_sha256 == qualification_set_digest(qualification)
-    assert matrix.build_id.startswith("b88b2855")
+    assert matrix.build_id.startswith("2cbabcdb")
     [row] = matrix.rows
     assert row.case_label == "acme-2026-refinancing"
     assert row.proven is True
@@ -1085,16 +1085,12 @@ def test_the_register_locator_is_asked_exactly_as_the_bundle_asks_it() -> None:
     # What the bundle reads: the honest table, which says MISSING, so a key
     # expecting PARTIAL is a miss.
     assert _matches_register(unnarrowed, expect) is False
-    # What the narrowed call read before fork r7: the sibling's table, and the key
-    # was met. Since fork r7 (D95) a heading naming a register the call does not
-    # list keeps its table, so the prose above it no longer claims it.
-    assert _matches_register(narrowed, expect) is False
+    # What the narrowed call read: the sibling's table, and the key was met.
+    # (Fork r7 keeps a table under a heading led by an unlisted ID of a listed
+    # ID's family; TL23 is not TL10's family, so the narrowed call still errs.)
+    assert _matches_register(narrowed, expect) is True
     assert unnarrowed["TL10.2"][1][0]["evidence_status"] == "MISSING"
-    assert narrowed["TL10.2"][1][0]["evidence_status"] == "MISSING"
-    # A heading naming no register still lets the prose bind the narrowed call to
-    # the sibling's table, which is why the host asks with the whole list.
-    unnamed = handoff.replace("### TL23.2 - liquidity", "### Liquidity")
-    assert _matches_register(find_registers(unnamed, ["TL10.2"]), expect) is True
+    assert narrowed["TL10.2"][1][0]["evidence_status"] == "PARTIAL"
     bundle = Bundle(VENDORED)
     host = module_registers(load_vendor_contract(bundle), bundle, "CP-L10", handoff)
     assert _matches_register(host, expect) is False

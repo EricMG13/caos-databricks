@@ -992,10 +992,12 @@ def _source_preparation_section(
         "this call and prepared each source itself: the extractor named in "
         "`extractor_identity` produced the EVIDENCE text, and every delivered line "
         "is anchored to its page coordinates in the original, which is what each "
-        "citation is checked against. Record each source's host extraction in "
-        "P1-P8 as its prepared representation and judge its fidelity from what "
-        "the EVIDENCE shows: a page, table or figure it lost is a limitation you "
-        "name. You cannot re-parse, hash or package the originals; that alone is "
+        "citation is checked against. This section is the preparation record, "
+        "and CP-0 does not restate it: P1, P2, P4, P6, P7 and P8 are retired. "
+        "Record each source's identity, period and version in P3 and its host "
+        "extraction in P5, judging its fidelity from what the EVIDENCE shows: a "
+        "page, table or figure it lost is a limitation you name. You cannot "
+        "re-parse, hash or package the originals; that alone is "
         "never a ground to hold a consumer. Cite only the EVIDENCE section for "
         "source-content claims.\n"
         + (_PAGE_MAP_NOTE if maps else "")
@@ -1166,7 +1168,7 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
     section's own bytes, the host-owned front matter included, so neither a
     section's text nor a host-owned field value can reproduce one. CP-0 also
     receives its host-verified pinned source metadata as context, never as
-    evidence; it must still author and validate its P1-P8 workflow. Nothing is
+    evidence; from it CP-0 authors P3 and P5 and restates nothing. Nothing is
     cut or summarised; the caller bounds it with `within_request_ceiling`.
     Evidence carries one header per `(source_id, page, mark)` run of
     `delivered` (ordered by source then block) and nothing per line: the

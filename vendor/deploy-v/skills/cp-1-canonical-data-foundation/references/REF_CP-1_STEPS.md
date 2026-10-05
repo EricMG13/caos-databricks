@@ -134,7 +134,7 @@ Original files, in this bundle: REF_CP-1_01_FileGateSourceValidation.md, REF_CP-
 <gate>At least one of Steps 4–6 produced data.</gate>
 
 ## Detailed Instructions
-1. T4.4–T4.6, on the Step 3 basis, are the normalized financials. Write no consolidated copy of them (the T4.7 table is retired: it repeated their figures).
+1. T4.4–T4.6, on the Step 3 basis, are the normalized financials. Write no consolidated copy of them (the T4.7 table is retired). Every line item and every period the answer reports, FY included, is in T4.4, T4.5 or T4.6, so no figure exists only in a consolidated table.
 2. Cross-check internal consistency:
    - Net Income (IS) vs. equity movements (BS)
    - Operating + investing + financing → Net Change in Cash (CFS)
@@ -183,10 +183,13 @@ No register of its own: each material reconciliation difference is a T4.12 gap.
    - **Growth:** Revenue %, EBITDA %
 2. Full audit trail per KPI: name, formula, numerator (value+source), denominator (value+source), period, currency, unit, value, calc status, evidence tier, limitations.
 3. Calculation status (8 values): `Verified` | `Calculated` | `Estimated` | `Proxy` | `Not Calculable` | `Partial` | `Conflicted` | `Not Available`
-4. T4.9 is the one KPI register: one row per KPI and period, issuer-reported KPIs included. Write no KPI dashboard (the T4.10 table is retired: it repeated T4.9's values); each KPI's trend direction goes in the Step 11 narrative.
+4. Populate KPI Dashboard with trend direction and analyst notes.
 
 ## Output — T4.9 Calculation Register
 `Metric Name` | `Formula` | `Numerator Value` | `Numerator Source` | `Denominator Value` | `Denominator Source` | `Period` | `Currency` | `Unit` | `Calculated Value` | `Calculation Status` | `Evidence Quality Tier` | `Limitations`
+
+## Output — T4.10 KPI Dashboard
+`KPI Category` | `Metric Name` | `Period 1…N` | `Trend Direction` | `Analyst Note`
 
 ## Warnings
 - Null input → KPI = Not Calculable. Do NOT estimate missing inputs.
@@ -222,13 +225,13 @@ No register of its own: each material reconciliation difference is a T4.12 gap.
 ## REF_CP-1_11_EvidenceRiskCreditAnalysis.md
 <!-- REF_CP-1_11_EvidenceRiskCreditAnalysis (Tier 2) | 2026-06-02 | rev 2026-06-26: narrative = canonical Markdown `## Analysis` → projected Markdown handoff §3 -->
 <step_reference module="CP-1" step="11" name="Evidence-to-Risk-to-Credit Analysis">
-<input>All tables from Steps 1–10. T4.9 Calculation Register as primary reference.</input>
+<input>All tables from Steps 1–10. T4.10 KPI Dashboard as primary reference.</input>
 <gate>At least one KPI from Step 9. No KPIs → data-quality narrative only.</gate>
 
 ## Detailed Instructions
 1. Apply the required analytical chain to every material finding:
    **Evidence** → **Risk Mechanic** → **Credit Implication**
-2. Cover analytical dimensions, with each KPI's trend direction:
+2. Cover analytical dimensions:
    - Leverage trajectory — Debt/EBITDA, Net Debt/EBITDA trends, drivers
    - Coverage trends — Interest coverage evolution, FFO/Debt trajectory
    - Cash-flow quality — FCF conversion, WC dynamics, capex intensity
@@ -598,7 +601,7 @@ Full step table relocated from ACTIVE_PROMPT; the compact step list + REF pointe
 | 6 | Balance Sheet | REF_CP-1_06_BalanceSheetCoverage | Always (gaps logged) | T4.6 BS |
 | 7 | Normalized Financials | REF_CP-1_07_NormalizedFinancialsTable | ≥1 of Steps 4-6 produced data | Cross-check (gaps to T4.12) |
 | 8 | LTM/YTD/Derived Periods | REF_CP-1_08_DerivedPeriodConstruction | Sub-period data; missing → null | T4.8 Constructed Period Reg |
-| 9 | Calculation & KPI Build | REF_CP-1_09_CalculationRegisterKPIBuild | Normalized data available | T4.9 Calc Reg (KPIs) |
+| 9 | Calculation & KPI Build | REF_CP-1_09_CalculationRegisterKPIBuild | Normalized data available | T4.9 Calc Reg + T4.10 KPI |
 | 10 | Definition Conflicts | REF_CP-1_10_DefinitionConflictRegister | Always (confirm or log) | T4.11 Def Conflict Reg |
 | 11 | Evidence→Risk→Credit | REF_CP-1_11_EvidenceRiskCreditAnalysis | ≥1 KPI from Step 9 | Analytical narrative |
 | 12 | Readiness Assessment | REF_CP-1_12_CoverageGateDownstreamReadiness | Always | T4.12 Gaps + T4.13 Readiness |

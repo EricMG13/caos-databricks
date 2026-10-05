@@ -39,6 +39,7 @@
         "anchored": 2,
         "count": 2
       },
+      "distinct_figures": 6,
       "front_matter": {
         "committee_status": "Requires More Work",
         "confidence_band": "Low",
@@ -154,6 +155,7 @@
         "anchored": 1,
         "count": 1
       },
+      "distinct_figures": 6,
       "front_matter": {
         "committee_status": "Requires More Work",
         "confidence_band": "Low",
@@ -283,6 +285,7 @@
         "anchored": 3,
         "count": 3
       },
+      "distinct_figures": 8,
       "front_matter": {
         "committee_status": "Restricted",
         "confidence_band": "Low",
@@ -396,6 +399,7 @@
         "anchored": 3,
         "count": 3
       },
+      "distinct_figures": 8,
       "front_matter": {
         "committee_status": "Requires More Work",
         "confidence_band": "Low",
@@ -502,6 +506,7 @@
         "anchored": 4,
         "count": 4
       },
+      "distinct_figures": 170,
       "front_matter": {
         "committee_status": "Requires More Work",
         "confidence_band": "Low",
@@ -628,6 +633,7 @@
         "anchored": 4,
         "count": 4
       },
+      "distinct_figures": 10,
       "front_matter": {
         "committee_status": "Requires More Work",
         "confidence_band": "Low",
@@ -729,6 +735,7 @@
         "anchored": 6,
         "count": 6
       },
+      "distinct_figures": 4,
       "front_matter": {
         "committee_status": "Restricted",
         "confidence_band": "Low",
@@ -844,6 +851,7 @@
         "anchored": 8,
         "count": 8
       },
+      "distinct_figures": 8,
       "front_matter": {
         "committee_status": "Requires More Work",
         "confidence_band": "Low",
@@ -959,6 +967,7 @@
         "anchored": 7,
         "count": 7
       },
+      "distinct_figures": 6,
       "front_matter": {
         "committee_status": "Requires More Work",
         "confidence_band": "Low",

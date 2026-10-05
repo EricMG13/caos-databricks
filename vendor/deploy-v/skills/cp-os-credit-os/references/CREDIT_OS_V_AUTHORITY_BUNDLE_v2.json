@@ -1,6 +1,6 @@
 {
   "authority": "CREDIT_OS_V_AUTHORITY_BUNDLE_v2",
-  "authority_bundle_sha256": "1c92cb7e52bf8e2d76456e79a26ca84fbf2c9763f7b7c25beeeb3741d1ba13e9",
+  "authority_bundle_sha256": "97106f1959788ff92db59c67f8619aa8b28f55050ac9defeef5b3766abb8a4a0",
   "available_profiles": [
     "FULL_CREDIT_32",
     "LITE_CREDIT_22"
@@ -64,7 +64,7 @@
     "cp0_profile_anchor_contract": {
       "path": "Co-Pilot Agents/CP-OS/references/deploy_v/CP-OS_MIRROR_CP0_PROFILE_ANCHOR_CONTRACT_v1.md",
       "runtime_required": true,
-      "sha256": "45ad6ab2eeeb754ae46a716b7e947e3acac214ea2696ef5e072f10ef7d36451a"
+      "sha256": "866bea362bb05c80bc4d288b30da41119780ac35ffc7cb098fe3004a42f21f51"
     },
     "execution_profiles": {
       "path": "Co-Pilot Agents/KNOWLEDGE SOURCES/03_ORCHESTRATION/CP_DEPLOY_V_EXECUTION_PROFILES_v1.json",
@@ -109,7 +109,7 @@
     "resolved_catalog": {
       "path": "Co-Pilot Agents/CP-OS/references/deploy_v/CREDIT_OS_V_MODULE_CATALOG_v2.json",
       "runtime_required": true,
-      "sha256": "51b1c04a0ca0f3d9e0f0538e7c719aec67b7453f17d8db997f00752d7b2707bb"
+      "sha256": "43331ab157f808330b300f1134ac381bb06bc2bfd42c96177da727e8e9577fb9"
     },
     "runtime_lifecycle_contract": {
       "path": "Co-Pilot Agents/CP-OS/references/deploy_v/CREDIT_OS_V_RUNTIME_AND_LIFECYCLE_v2.md",
@@ -144,7 +144,7 @@
   },
   "local_rebuild": {
     "method": "verify_package.py --rebuild-authorities; unavailable upstream provenance retained",
-    "previous_authority_bundle_sha256": "2480e3696b814d61a7b6735541575bcf1a498479006c41dd77e75aa885b58a2d"
+    "previous_authority_bundle_sha256": "d870a1cd4b97172aee9c90b6e49f65fb9351fb4b47f76f1c0c49a71fa20f39ba"
   },
   "schema_version": "1.0",
   "target_profile": null

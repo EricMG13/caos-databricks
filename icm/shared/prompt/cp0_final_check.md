@@ -1,5 +1,6 @@
 --- CP-0 FINAL CHECK {tag} ---
-For CP-0, include P1-P8 and T1-T8. The T8 header must be exactly:
+For CP-0, include P3, P5 and T1-T8; P1, P2, P4, P6, P7 and P8 are retired, so
+write none of them. The T8 header must be exactly:
 {t8_header}
 T8 appears once, as its table in the analytical appendix and not inside a code
 fence (a fenced table is not read); the Analysis names it without repeating the
