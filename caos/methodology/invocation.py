@@ -825,11 +825,12 @@ def _citation_register(
     """Each direct upstream's anchored citations, as context the host lists.
 
     Exactly the citations the host re-located when that upstream was accepted,
-    in the record's order; never read from its Markdown. Labelled context, not
-    evidence: a quote here is not citable, and its listing says nothing about
-    whether it supports anything the handoff states. Nor is a quote the
-    host's: it is document text, and the header says so (AI-6), where it used
-    to call the register host-owned.
+    in the record's order; never read from its Markdown. An unverified
+    citation (D106) is never listed: nothing here may call it located.
+    Labelled context, not evidence: a quote here is not citable, and its
+    listing says nothing about whether it supports anything the handoff
+    states. Nor is a quote the host's: it is document text, and the header
+    says so (AI-6), where it used to call the register host-owned.
     """
     if not upstream:
         return ""
@@ -1168,9 +1169,11 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
     `AUTHORITY_BYTES_MISMATCH`. `upstream` must be exactly `identity.upstream`
     with bytes that hash to each ref, each labelled with its edge's
     `allowed_use` from `catalog`. `upstream_citations` maps exactly those refs'
-    route nodes to their accepted records' anchored citations, each non-empty
+    route nodes to their accepted records' anchored citations
     (`ROUTE_IDENTITY_INVALID` otherwise), rendered as a register that is
-    context, never evidence. CP-0's T8 modules are the pinned route's,
+    context, never evidence; since D106 a record may hold none, every
+    citation of its answer unverified, and its section then lists none.
+    CP-0's T8 modules are the pinned route's,
     never a caller's list. Section markers carry a tag derived from every
     section's own bytes, the host-owned front matter included, so neither a
     section's text nor a host-owned field value can reproduce one. CP-0 also
@@ -1207,7 +1210,6 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
         tuple(ref for ref, _ in upstream) != identity.upstream
         or identity.route_node_id not in {n.route_node_id for n in route.nodes}
         or set(upstream_citations) != {ref.route_node_id for ref in identity.upstream}
-        or not all(upstream_citations.values())
     ):
         raise Refusal(RefusalCode.ROUTE_IDENTITY_INVALID)
     if (

@@ -107,10 +107,12 @@ operating activities`, `Total debt`, `C-01`) have none: no other whole line
 states their figures for the same measure, period and basis (rounded prose such
 as `$11.8 billion` or `$1.3 billion` is not the figure).
 
-Every key is one whole evidence line of its page, unique in its document: an
-answer is accepted only as a whole line (`WHOLE_LINE`) and scored by exact
-equality, so a fragment could never be met (F235, F475). Where a fact sits
-inside a longer line, the key is that whole line. Since F492 a prose line of a
+Every key is one whole evidence line of its page, unique in its document
+(F475). Since D105 an answer cites an excerpt of a line (at least 8 words, or
+the whole line), and a key is met by any citation anchored in the key's line,
+compared by exact equality with that line (F502); a record from before D105 is
+scored by its quote. Where a fact sits inside a longer line, the key is that
+whole line. Since F492 a prose line of a
 converted filing is one sentence, so a key is the sentence that carries its
 fact.
 Since F498 a sentence of a legal instrument (the credit agreement, its

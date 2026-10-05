@@ -424,7 +424,11 @@ def _answer(  # noqa: PLR0913 -- one recorded answer, keyword-only
     # Exactly what the prompt was built from: pins are immutable, so the
     # pre-call reading is this unit's too, without a second query.
     blocks = _by_source(context.delivered)
-    markdown, citations = parse_response(content, delivered=frozenset(blocks))
+    markdown, citations, linked = parse_response(content)
+    if any(citation.source_id not in blocks for citation in citations):
+        raise Refusal(RefusalCode.CITATION_NOT_DELIVERED)
+    if not all(linked):
+        raise Refusal(RefusalCode.HANDOFF_MALFORMED)
     authority = assemble_authority(bundle, assignment.module_id)
     projections = _unless_blocked(
         lambda: validate_markdown(

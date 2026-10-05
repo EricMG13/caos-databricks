@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable, Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import Any
 from uuid import UUID
@@ -358,8 +358,17 @@ def _reanchored(
     # a record accepted before the whole-line rule re-anchors as it always
     # has; each at the page the record stores, never searched for, and a
     # re-anchoring kept only where its cited page holds no such line (D94).
-    if tuple(anchored) != record.citations:
+    # Whether the body carries a quote is the answer's, not anchoring's
+    # (D106): the recorded `linked` is carried, never re-derived here.
+    again = tuple(
+        replace(found, linked=stored.linked)
+        for found, stored in zip(anchored, record.citations, strict=False)
+    )
+    if len(anchored) != len(record.citations) or again != record.citations:
         raise _refusal(refuse, Step.CITATION_MOVED, _MISMATCH)
+    # Only the anchored list: `record.unverified` is the module's own
+    # locators (D106), carried as recorded and never located, so no reader
+    # turns one into a verified citation.
     return record.citations
 
 
