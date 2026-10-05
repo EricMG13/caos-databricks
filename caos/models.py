@@ -439,7 +439,7 @@ def _status_refusal(failed: OpenAIError) -> RefusalCode:
 
 # What a stderr line may carry (F513): never words. A class name is an
 # identifier; a provider error's code is an HTTP status; its type one of the
-# `error_type` values OpenRouter documents (errors reference, 5 October 2026).
+# documented provider `error_type` values (the source is named in F513).
 # Anything else is shown as `?`, so a provider echoing input cannot put it here.
 _NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,63}")
 _ERROR_TYPES = frozenset(
