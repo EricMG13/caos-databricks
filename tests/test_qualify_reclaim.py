@@ -60,15 +60,12 @@ def test_drop_statement_is_only_for_a_name_the_harness_mints() -> None:
 
 
 @pytest.fixture
-def server() -> Iterator[tuple[str, list[str]]]:
+def server(empty_database: str) -> Iterator[tuple[str, list[str]]]:
     """The test server's admin URL, and the harness databases made on it,
-    dropped after the test."""
-    url = os.environ.get("CAOS_TEST_POSTGRES_URL")
-    if url is None:
-        reason = "CAOS_TEST_POSTGRES_URL is unset"
-        if os.environ.get("CAOS_REQUIRE_POSTGRES") == "1":
-            pytest.fail(reason)
-        pytest.skip(reason)
+    dropped after the test. `empty_database` is asked for its skip-or-fail
+    rule when no server is configured, not for its database."""
+    assert empty_database
+    url = os.environ["CAOS_TEST_POSTGRES_URL"]
     made: list[str] = []
     try:
         yield url, made
