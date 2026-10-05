@@ -44,6 +44,7 @@ from caos.evidence.citations import (
     occurrences,
     within_line,
 )
+from caos.evidence.ingest import GROUP_WIDTH
 from caos.graph.route import MODEL_MODULE
 from caos.methodology.vendor import VendorContract
 from caos.provider import MAX_RESPONSE_BYTES
@@ -759,6 +760,14 @@ def validate_markdown(  # noqa: PLR0913 -- the brief's pure signature
 WIRE_KEYS = frozenset({"canonical_markdown", "citations"})
 WIRE_CITATION_KEYS = frozenset({"source_id", "page", "matched_text"})
 RECORD_FORMAT = "caos-canonical-record-v2"
+# What the record codec reads and writes (`record_bytes`, `_decoded_record`),
+# raised whenever a record this build writes is one an older build would
+# refuse: 1 since D106 (`unverified`, `linked`). A build with another value,
+# or none, cannot read this build's records, so `scripts/rollback_check.py`
+# refuses a rollback across a change of it.
+RECORD_CODEC_VERSION = 1
+# A validated Blocked answer's citations, judged as any answer's (D106).
+BLOCKED_FORMAT = "caos-blocked-citations-v1"
 # A body may carry the largest Markdown the host accepts plus its citations
 # and the JSON wrapper. Sized from `MAX_RESPONSE_BYTES` (D45's handoff bound)
 # rather than from the vendor's file-read ceiling, `MAX_FILE_BYTES` (nothing
@@ -795,32 +804,39 @@ class UnverifiedCitation:
     re-anchored by any reader, and the anchoring refusal that made it
     unverified (`UNVERIFIED_CODES`). Its quote has crossed `BoundaryText`
     and hides no text (`unverified_citation`). The claim it supports is
-    Deploy V's lineage class "Untraced"."""
+    Deploy V's lineage class "Untraced". `linked` is whether the body
+    carries the quote verbatim, as for an anchored citation
+    (`AnchoredCitation.linked`): written only when false."""
 
     source_id: UUID
     page: int
     matched_text: str
     code: RefusalCode
+    linked: bool = True
 
 
-def unverified_citation(citation: Citation, code: RefusalCode) -> UnverifiedCitation:
+def unverified_citation(
+    citation: Citation, code: RefusalCode, *, linked: bool = True
+) -> UnverifiedCitation:
     """`citation` kept as unverified for `code` (D106), its quote as it
-    crosses `BoundaryText`. `HANDOFF_MALFORMED` for a quote that will not
-    cross or hides text: a host text check, never a citation fault, so
-    the answer is refused rather than the quote stored or dropped."""
+    crosses `BoundaryText`, and whether the body carries it (`linked`).
+    `HANDOFF_MALFORMED` for a quote that will not cross or hides text: a
+    host text check, never a citation fault, so the answer is refused
+    rather than the quote stored or dropped."""
     quote = _crossed(citation.matched_text)
     if code not in UNVERIFIED_CODES or quote is None:
         raise Refusal(RefusalCode.HANDOFF_MALFORMED)
-    return UnverifiedCitation(citation.source_id, citation.page, quote, code)
+    return UnverifiedCitation(citation.source_id, citation.page, quote, code, linked)
 
 
 def _crossed(text: str) -> str | None:
-    """`text` as it crosses `BoundaryText` (NFC), or None when it will not or
-    hides text (AI-2)."""
+    """`text` as it crosses `BoundaryText` (NFC), or None when it will not,
+    hides text (AI-2), or is longer than any evidence line can be
+    (`GROUP_WIDTH`, a shown block's bound), so no excerpt of one."""
     if hides_text(text):
         return None
     with suppress(Refusal):
-        return BoundaryText.of(text, limit=MAX_TRANSPORT_CHARS).value
+        return BoundaryText.of(text, limit=GROUP_WIDTH).value
     return None
 
 
@@ -1382,8 +1398,10 @@ def _uncrossed_line(citations: Sequence[Citation]) -> str | None:
     verb = "carries" if len(failed) == 1 else "carry"
     return (
         f"host citation check: {_numbered(failed)} of {len(citations)} {verb} a"
-        " control, bidirectional, surrogate or invisible character; copy each"
-        " excerpt as the evidence shows it (numbered from 1 in the order given)"
+        " control, bidirectional, surrogate or invisible character, or runs"
+        f" past {GROUP_WIDTH:,} characters, longer than any evidence line; copy"
+        " each excerpt as the evidence shows it (numbered from 1 in the order"
+        " given)"
     )
 
 
@@ -1904,18 +1922,68 @@ def record_bytes(record: CanonicalRecord) -> bytes:
         del document["identity"]["research_brief"]
     for citation in document["citations"]:
         _written_citation(citation, record.citation_rule)
-    document["unverified"] = [
-        {
-            "source_id": str(entry.source_id),
-            "page": entry.page,
-            "matched_text": entry.matched_text,
-            "code": entry.code.value,
-        }
-        for entry in record.unverified
-    ]
+    document["unverified"] = [_unverified_document(e) for e in record.unverified]
     if not document["unverified"]:
         del document["unverified"]
     return canonical_json(document).encode("utf-8")
+
+
+def _unverified_document(entry: UnverifiedCitation) -> dict[str, Any]:
+    """One unverified citation as written: `linked` only when false (D106)."""
+    document: dict[str, Any] = {
+        "source_id": str(entry.source_id),
+        "page": entry.page,
+        "matched_text": entry.matched_text,
+        "code": entry.code.value,
+    }
+    if not entry.linked:
+        document["linked"] = False
+    return document
+
+
+def blocked_citations_bytes(
+    citations: tuple[AnchoredCitation, ...], unverified: tuple[UnverifiedCitation, ...]
+) -> bytes:
+    """A validated Blocked answer's citations as the host judged them (D106):
+    its anchored ones, each with its line and `linked` as a record writes
+    them, and its unverified ones, both lists always written. A Blocked
+    answer writes no record, so this is what the blocked view reads to show
+    each quote verified or unverified (`read_blocked_citations`)."""
+    _held(citations, unverified, EXCERPT)
+    anchored = [asdict(citation) for citation in citations]
+    for citation in anchored:
+        _written_citation(citation, EXCERPT)
+    return canonical_json(
+        {
+            "format": BLOCKED_FORMAT,
+            "citation_rule": EXCERPT,
+            "citations": anchored,
+            "unverified": [_unverified_document(e) for e in unverified],
+        }
+    ).encode("utf-8")
+
+
+def read_blocked_citations(
+    blobs: BlobStore, citations_sha256: str
+) -> tuple[tuple[AnchoredCitation, ...], tuple[UnverifiedCitation, ...]]:
+    """The citations `blocked_citations_bytes` stored, or
+    `ARTIFACT_RECORD_MISMATCH` for bytes that are not its canonical form."""
+
+    def read() -> tuple[tuple[AnchoredCitation, ...], tuple[UnverifiedCitation, ...]]:
+        data = blobs.get(citations_sha256)
+        document = _closed(
+            strict_json(data.decode("utf-8")),
+            frozenset({"format", "citation_rule", "citations", "unverified"}),
+        )
+        if (document["format"], document["citation_rule"]) != (BLOCKED_FORMAT, EXCERPT):
+            raise ValueError
+        citations = _each(_anchored)(document["citations"])
+        unverified = _each(_unverified)(document["unverified"])
+        if blocked_citations_bytes(citations, unverified) != data:
+            raise ValueError
+        return citations, unverified
+
+    return _or_refuse(RefusalCode.ARTIFACT_RECORD_MISMATCH, read)
 
 
 def _written_citation(citation: dict[str, Any], rule: CitationRule) -> None:
@@ -2049,8 +2117,11 @@ def _anchored(item: object) -> AnchoredCitation:
 def _unverified(item: object) -> UnverifiedCitation:
     """A stored unverified citation (D106): the wire's own checks on its
     locator and quote (`_requested`), a quote already as it crosses
-    `BoundaryText`, and one of `UNVERIFIED_CODES`."""
-    entry = _closed(item, _UNVERIFIED_KEYS)
+    `BoundaryText`, one of `UNVERIFIED_CODES`, and `linked` only as false
+    (absent, linked)."""
+    if not isinstance(item, dict) or item.get("linked", False) is not False:
+        raise ValueError  # written only when false: a present `true` is not ours
+    entry = _closed({k: v for k, v in item.items() if k != "linked"}, _UNVERIFIED_KEYS)
     citation = _requested({key: entry[key] for key in WIRE_CITATION_KEYS})
     code = next((c for c in UNVERIFIED_CODES if entry["code"] == c.value), None)
     if code is None or type(entry["code"]) is not str:
@@ -2058,7 +2129,11 @@ def _unverified(item: object) -> UnverifiedCitation:
     if _crossed(citation.matched_text) != citation.matched_text:
         raise ValueError
     return UnverifiedCitation(
-        citation.source_id, citation.page, citation.matched_text, code
+        citation.source_id,
+        citation.page,
+        citation.matched_text,
+        code,
+        "linked" not in item,
     )
 
 

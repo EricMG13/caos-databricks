@@ -15,7 +15,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from datetime import date
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 import pytest
@@ -41,10 +41,12 @@ from test_loop_charges import ESTIMATE, MODEL, REPORTED
 
 from caos.blobs import BlobStore
 from caos.evidence import read as evidence_read
+from caos.evidence.citations import AnchoredCitation
 from caos.graph import runtime
 from caos.graph.runtime import Execution, Provider, ProviderResult, run_route
 from caos.methodology import canonical, executor, invocation
 from caos.methodology.canonical import (
+    BlockedAnswer,
     Replayed,
     Verdict,
     accepted_projections,
@@ -54,7 +56,9 @@ from caos.methodology.canonical import (
 )
 from caos.methodology.handoff import (
     Projections,
+    UnverifiedCitation,
     _decoded_record,
+    read_blocked_citations,
     read_record,
     record_bytes,
 )
@@ -68,7 +72,7 @@ from caos.store import StoreConnection, connect, outcomes
 from caos.store.events import lock_run
 from caos.store.outcomes import CallOutcome, accepted_rows
 from caos.store.run_inputs import load_run_input
-from caos.store.runs import block_run
+from caos.store.runs import BlockingVerdict, block_run
 from caos.store.source_sets import load_source_set
 from caos.store.work import Lease
 
@@ -289,6 +293,9 @@ def test_a_validated_blocked_handoff_ends_the_run_blocked_without_retry(
     # through `check_attempt`, which refuses once the run is no longer RUNNING,
     # so the row is the only durable form of the cause (§68).
     assert _blocking_verdict(harness) == _attempt_of(harness, "CP-5")
+    # And the answer's quotes as judged (D106): its one line, anchored.
+    [quote], unverified = _blocked_citations(harness)
+    assert (quote.matched_text, quote.line_text, unverified) == (QUOTE, QUOTE, ())
 
 
 def test_a_blocking_verdict_names_only_an_attempt_of_the_run_it_ends(
@@ -301,6 +308,10 @@ def test_a_blocking_verdict_names_only_an_attempt_of_the_run_it_ends(
     ends BLOCKED (§39's empty frontier) and names no node."""
     with pytest.raises(Refusal, match=r"^ATTEMPT_NOT_FOUND$"):
         block_run(harness.conn, harness.run_id, verdict=uuid4())
+    with pytest.raises(Refusal, match=r"^ATTEMPT_NOT_FOUND$"):
+        block_run(
+            harness.conn, harness.run_id, verdict=BlockingVerdict(uuid4(), "a" * 64)
+        )
     _still_running(harness)
     assert _events(harness, "RUN_BLOCKED") == 0
     assert _blocking_verdict(harness) is None
@@ -332,19 +343,56 @@ def _attempt_of(harness: _Harness, module_id: str) -> UUID:
 
 
 def test_a_blocked_handoff_with_an_unverified_quote_stands_as_blocked(
-    harness: _Harness,
+    harness: _Harness, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """D106 supersedes c-5b's guard (P3-2): a citation fault never refuses an
     answer, a Blocked one included. CP-0 answers Blocked on a quote no
     evidence carries: one attempt, no retry, and the run ends BLOCKED on
     that attempt's verdict."""
+    judged: list[object] = []
+    answer = cast(Any, canonical._answer)
+
+    def kept(*args: object, **kwargs: object) -> object:
+        judged.append(answer(*args, **kwargs))
+        return judged[-1]
+
+    monkeypatch.setattr(canonical, "_answer", kept)
     answers = CanonicalCompletions(
         harness.source_id, qa_status="Blocked", quotes=(UNANCHORED,)
     )
     assert _run_route(harness, _module_provider(harness, answers)) is None
     assert _counts(harness) == (1, [REPORTED], 0, 1, 1)
+    # The live call and the runtime's re-derivation judge alike, and the
+    # verdict's row names exactly the bytes they judged.
+    assert len(judged) == 2 and all(isinstance(j, BlockedAnswer) for j in judged)
+    stored = harness.blobs.get(_verdict_citations(harness))
+    assert {j.citations for j in judged if isinstance(j, BlockedAnswer)} == {stored}
     assert (_status(harness), _events(harness, "RUN_BLOCKED")) == ("BLOCKED", 1)
     assert _blocking_verdict(harness) == _attempt_of(harness, "CP-0")
+    # Its quotes are kept, as judged, beside the verdict (owner: "Show its
+    # quotes"): none anchored, the one unverified.
+    anchored, unverified = _blocked_citations(harness)
+    assert anchored == ()
+    assert [(u.matched_text, u.code) for u in unverified] == [
+        (UNANCHORED, RefusalCode.CITATION_NOT_LOCATED)
+    ]
+
+
+def _blocked_citations(
+    harness: _Harness,
+) -> tuple[tuple[AnchoredCitation, ...], tuple[UnverifiedCitation, ...]]:
+    """The citations the run's blocking verdict names, read back (D106)."""
+    return read_blocked_citations(harness.blobs, _verdict_citations(harness))
+
+
+def _verdict_citations(harness: _Harness) -> str:
+    with connect(harness.url) as observer:
+        row = observer.execute(
+            "SELECT citations_sha256 FROM run_blocking_verdicts WHERE run_id=%s",
+            (harness.run_id,),
+        ).fetchone()
+    assert row is not None and row[0] is not None
+    return str(row[0])
 
 
 @dataclass
@@ -429,8 +477,10 @@ def test_a_crash_before_the_block_commits_resumes_blocked_without_a_second_call(
     assert len(answers.prompts) == 3
     assert _counts(harness) == (3, [REPORTED] * 3, 2, 3, 3)
     assert (_status(harness), _events(harness, "RUN_BLOCKED")) == ("BLOCKED", 1)
-    # The replayed path records the same reason the live path would have.
+    # The replayed path records the same reason the live path would have,
+    # its quotes as judged with it (D106).
     assert _blocking_verdict(harness) == _attempt_of(harness, "CP-5")
+    assert [c.matched_text for c in _blocked_citations(harness)[0]] == [QUOTE]
 
 
 def test_an_unreadable_stored_verdict_is_a_fault_not_a_second_call(
