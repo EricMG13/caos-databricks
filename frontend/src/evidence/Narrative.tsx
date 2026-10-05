@@ -6,7 +6,7 @@
 // on the wire, so nothing here looks it up elsewhere.
 import { useEvidence } from "./EvidenceContext";
 import { QUOTE_LABEL, TracedLine, lineText } from "./TracedLine";
-import { unverifiedLabel } from "./Unverified";
+import { NOT_LINKED_SHORT, unverifiedLabel } from "./Unverified";
 import type { ReportDocument } from "@/wire/v1";
 
 /** Report's and Committee's narrative: the same saved shape. */
@@ -43,6 +43,11 @@ export function Narrative({ narrative }: { narrative: ReportDocument["body"]["na
                 <q className="figq">
                   <TracedLine line={figure.line} />
                 </q>{" "}
+                {figure.linked ? null : (
+                  <span className="lbl" data-not-linked>
+                    ({NOT_LINKED_SHORT}){" "}
+                  </span>
+                )}
                 <button
                   type="button"
                   className="chip"

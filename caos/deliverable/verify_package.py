@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 # Updated with render.py; the archived verifier retains its historical pin.
-RENDERER_SHA256 = "193d6b9c72e8a14f8868468d71928b156bf878d4d00ee84a486f33afea1a599b"
+RENDERER_SHA256 = "510d899e3fa74ddf4e4c4ab0992f719780ef23904bbac0d96add6dc5781abb30"
 MAX_ARCHIVE_BYTES = 64 * 1024 * 1024
 LIMITS = {
     "payload.json": 32 * 1024 * 1024,

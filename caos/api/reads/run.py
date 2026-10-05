@@ -143,11 +143,14 @@ READINESS_ROWS = 2
 # The attempt whose validated Blocked verdict ended the run, as the transition
 # recorded it (§68): one row, read only on a BLOCKED run with a pinned route.
 BLOCKED_BY_IO = 1
+# Its kept quotes' sources (D106, D107): one query beside that row.
+BLOCKED_QUOTES_IO = 1
 IO_BUDGET = (
     SECTION_READ_IO
     + BEYOND_LIST_IO
     + READINESS_ROWS * CANONICAL_READINESS_IO
     + BLOCKED_BY_IO
+    + BLOCKED_QUOTES_IO
 )
 # N35's remainder: `accepted_artifacts` reads two blobs -- the artifact and
 # its record -- per readiness row (`caos.graph.runtime`), the same shape
@@ -480,7 +483,7 @@ def _blocked_by(
     ).fetchone()
     if row is None:
         return None
-    return blocked_by_view(route, (row[0], row[1]), row[2], blobs)
+    return blocked_by_view(route, (row[0], row[1]), row[2], (conn, blobs, run_id))
 
 
 def _successor_link(

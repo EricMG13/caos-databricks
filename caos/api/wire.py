@@ -628,6 +628,10 @@ class BlockedByView(BaseModel):
     # A verdict recorded before they were kept (migration 0044) has none, and
     # says so (`quotes_recorded` false).
     quotes_recorded: StrictBool
+    # Kept but unreadable -- a blob missing, or bytes not this host's
+    # (`ARTIFACT_RECORD_MISMATCH`): the refusal, contained here, so the run
+    # page still serves; the two lists are then empty.
+    quotes_refusal: RefusalBody | None
     verified: Annotated[list[BlockedQuoteView], Field(max_length=CITATIONS_MAX)]
     unverified: Annotated[list[UnverifiedCitationView], Field(max_length=CITATIONS_MAX)]
 
@@ -808,13 +812,17 @@ class UnverifiedCitationView(BaseModel):
 
 class BlockedQuoteView(BaseModel):
     """One quote of a Blocked answer the host located (D106): the document,
-    page and quote, and the line it is an excerpt of, as a source fact shows
-    it (D105). No rectangle or source is served: a Blocked answer is no
-    accepted record, and its view opens no drawer."""
+    page and quote, compact in the view, and the line it is an excerpt of,
+    which the source drawer shows with the excerpt marked (D105, D107). No
+    rectangle is served: a Blocked answer is no accepted record."""
 
     model_config = _CLOSED
 
     document_sha256: Sha256
+    # The run's pinned source the document resolves to, live preferred, and
+    # its withdrawal, so the quote opens its page in the source drawer.
+    source_id: UUID
+    withdrawn_at: AwareDatetime | None
     page: Annotated[int, Field(ge=1)]
     matched_text: Annotated[str, Field(max_length=QUOTE_CHARS)]
     line: LineView

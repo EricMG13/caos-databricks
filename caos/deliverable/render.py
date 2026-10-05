@@ -669,7 +669,7 @@ def unverified(entry: object) -> str:
     if reason is None or entry.get("linked", True) not in (True, False):
         raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
     if entry.get("linked", True) is False:
-        reason += " · not in the answer body"
+        reason += " · not linked to a statement in the answer"
     return (
         f'<p class="cite">unverified \u2013 page {page} · the model\'s quote'
         f" · claim lineage: Untraced · {reason} · source {source}</p>\n"

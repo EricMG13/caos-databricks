@@ -373,9 +373,12 @@ const UnverifiedCitationView = object({
   // False where the answer's body does not carry the quote either.
   linked: bool,
 });
+const RefusalBody = object({ code: RefusalCode, clears: text });
 // A located quote of a Blocked answer (D106): its line, as a source fact's.
 const BlockedQuoteView = object({
   document_sha256: hash,
+  source_id: uuid,
+  withdrawn_at: nullable(datetime),
   page: int({ min: 1 }),
   matched_text: string({ max: 65536 }),
   line: LineView,
@@ -388,6 +391,8 @@ const BlockedByView = object({
   module_id: short,
   attempt_id: uuid,
   quotes_recorded: bool,
+  // Kept but unreadable: the typed refusal, contained here.
+  quotes_refusal: nullable(RefusalBody),
   verified: array(BlockedQuoteView, 1024),
   unverified: array(UnverifiedCitationView, 1024),
 });
@@ -746,7 +751,6 @@ const PageDocument = object({
   notes: array(SectionNote, 3),
 });
 
-const RefusalBody = object({ code: RefusalCode, clears: text });
 const QualificationState = enumOf(["QUALIFIED", "UNQUALIFIED", "RESTRICTED", "UNAVAILABLE"]);
 const QualificationRead = object({
   evidence_sha256: hash,
