@@ -640,6 +640,7 @@ def _unverified(
     return {
         **figure,
         "matched_text": bounded(figure["matched_text"]),
+        "module_id": records[node]["projections"]["module_id"],
         "record_sha256": digests[node],
         "linked": entry.get("linked", True),
         "marker": entry.get("marker"),
@@ -660,6 +661,7 @@ def _figure(
     return {
         **figure,
         "matched_text": bounded(figure["matched_text"]),
+        "module_id": records[node]["projections"]["module_id"],
         "record_sha256": digests[node],
         "source_id": source_id,
         "linked": citation.get("linked", True),

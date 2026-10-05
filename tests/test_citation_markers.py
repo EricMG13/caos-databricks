@@ -249,3 +249,62 @@ def test_markers_belong_only_to_an_excerpt_record() -> None:
                 citations=(dataclasses.replace(one, marker=1),),
             )
         )
+
+
+def test_a_marker_that_splits_a_figure_leaves_no_figure() -> None:
+    """MK1 fix round 2: `4[C1]5` and `1,2[C1]50` were read as 45 and 1,250,
+    figures nobody wrote. A marker with figure marks on both sides stands as
+    ` | `, which no figure reader takes; every other cell reads as before."""
+    from caos.methodology.citation_markers import unmarked
+    from caos.methodology.forecast import driver_value
+    from caos.methodology.tables import figure_value
+
+    for cell in ("4[C1]5", "1,2[C1]50", "(4[C1]5)", "4[C1][C2]5"):
+        assert figure_value(CONTRACT, cell) is None
+        with pytest.raises(ValueError):
+            driver_value(unmarked(cell))
+    assert unmarked("4[C1]5") == "4 | 5" and unmarked("1,2[C1]50") == "1,2 | 50"
+    read = {
+        "(45)[C1]": "-45",
+        "-[C1]45": "-45",
+        "(45[C1])": "-45",
+        "45 [C1] %": "45",
+        "1,250.0 \\[C1\\, C2\\]": "1250.0",
+    }
+    for cell, figure in read.items():
+        assert figure_value(CONTRACT, cell) == figure, cell
+
+
+def test_qualified_rewrites_exactly_the_markers_the_body_reads() -> None:
+    """MK1 fix round 2: the front matter stays as stored, so a host-owned or
+    carried field (`verify_owner_restrictions` compares a carried
+    `validation_warnings` exactly) is never shown changed; and every marker
+    `markers` reads is qualified, escapes included, so none stays live."""
+    import random
+
+    from caos.methodology.citation_markers import qualified
+
+    front = '---\nvalidation_warnings: ["see [C3]"]\nlimitation_flags: [C1]\n---\n'
+    text = front + "Body [C1\\, C2] and \\[C3\\] and \\\\[C4].\n"
+    shown = qualified(text, "CP-0")
+    assert shown.startswith(front) and markers(text) == (1, 2, 3, 4)
+    assert shown == front + ("Body [CP-0 C1, C2] and [CP-0 C3] and \\\\[CP-0 C4].\n")
+    assert markers(shown) == ()
+    rng = random.Random(107)
+    marks = ["[", "]", "C", "1", "2", ",", " ", "\\", "\n", "`", "-"]
+    for _ in range(20_000):
+        drawn = "".join(rng.choice(marks) for _ in range(rng.randint(1, 16)))
+        sample = front + drawn
+        assert markers(qualified(sample, "CP-1")) == (), sample
+        assert qualified(sample, "CP-1").startswith(front)
+
+
+def test_body_reads_after_the_front_matter_with_escapes_read() -> None:
+    """The one reading every marker reader shares: after the line closing the
+    front matter, escapes as the marks they write; a text with no closed
+    front matter is all body."""
+    from caos.methodology.citation_markers import body
+
+    assert body("---\nnote: [C9]\n---\nSee \\[C1\\].") == "See [C1]."
+    assert body("---\nnote: [C9]\n---") == ""
+    assert body("---\nunclosed [C2]") == "---\nunclosed [C2]"

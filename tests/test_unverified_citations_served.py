@@ -100,6 +100,7 @@ def test_a_saved_unverified_figure_is_served_as_the_models_locator(
     assert NarrativeUnverified.model_validate(span["unverified"]).page == 3
     assert span["unverified"] == {
         **reference,
+        "module_id": "CP-L10",
         "record_sha256": record["record_sha256"],
         "source_id": str(lite.source_id),
         "page": 3,
