@@ -4,6 +4,10 @@ Live run LCR4: CP-3C was refused four times on "T3D.2 row 8: critical column
 'Source Trace' holds a disqualifying placeholder ''". The row had 11 cells
 under a 12-cell header; the vendor padded it, so its source text sat in
 Credit Implication and the model, which saw that text in the row, kept it.
+
+Live run LCR6 (F522): told "T3D.2 row 7 has 11 cells", the model rewrote that
+row's text three times and kept it 11 wide. The line now names the row by its
+first cell and quotes how its last columns read, so the shift is visible.
 """
 
 from __future__ import annotations
@@ -16,7 +20,13 @@ from canonical_fixtures import BUNDLE, CONTRACT, identity
 
 from caos.methodology.bundle import assemble_authority
 from caos.methodology.executor import SKILL
-from caos.methodology.handoff import MAX_WIDTH_ROWS, feedback_lines
+from caos.methodology.handoff import (
+    _QUOTE_CHARS,
+    MAX_FEEDBACK_CHARS,
+    MAX_WIDTH_ROWS,
+    _width_message,
+    feedback_lines,
+)
 from caos.methodology.vendor import catalog
 
 HEADER = (
@@ -34,9 +44,11 @@ HEADER = (
     "Source Trace",
 )
 SHORT_LINE = (
-    "host table check: T3D.2 row 2 has 11 cells under a 12-cell header; a cell"
-    " is missing or extra, so its later columns shift (the last column,"
-    " 'Source Trace', reads empty)"
+    "host table check: T3D.2 row 2 («Notes due 2032») has 11 cells under a"
+    " 12-cell header; a cell is missing or extra, so its later columns shift"
+    " (the last column, 'Source Trace', reads empty); as read, 'Refinancing"
+    " Pressure' holds «value 10», 'Credit Implication' holds «value 11» and"
+    " 'Source Trace' holds nothing"
 )
 
 
@@ -86,12 +98,18 @@ def test_a_short_register_row_is_named_before_the_vendors_empty_cell() -> None:
 
 def test_a_register_row_with_an_extra_cell_is_named() -> None:
     assert _table_lines(_lines([_row(13), _row(14)])) == [
-        "host table check: T3D.2 row 1 has 13 cells under a 12-cell header; a cell"
-        " is missing or extra, so its later columns shift (the cell past the last"
-        " column, 'Source Trace', is dropped)",
-        "host table check: T3D.2 row 2 has 14 cells under a 12-cell header; a cell"
-        " is missing or extra, so its later columns shift (the 2 cells past the"
-        " last column, 'Source Trace', are dropped)",
+        "host table check: T3D.2 row 1 («Notes due 2032») has 13 cells under a"
+        " 12-cell header; a cell is missing or extra, so its later columns shift"
+        " (the cell past the last column, 'Source Trace', is dropped); as read,"
+        " 'Refinancing Pressure' holds «value 10», 'Credit Implication' holds"
+        " «value 11», 'Source Trace' holds «value 12» and past it «value 13» is"
+        " dropped",
+        "host table check: T3D.2 row 2 («Notes due 2032») has 14 cells under a"
+        " 12-cell header; a cell is missing or extra, so its later columns shift"
+        " (the 2 cells past the last column, 'Source Trace', are dropped); as"
+        " read, 'Refinancing Pressure' holds «value 10», 'Credit Implication'"
+        " holds «value 11», 'Source Trace' holds «value 12» and past it «value"
+        " 13» is dropped",
     ]
 
 
@@ -108,9 +126,12 @@ def test_an_escaped_pipe_is_one_cell_as_the_vendor_reads_it() -> None:
     assert _table_lines(_lines([_row(11, first="Notes A \\| B")])) == []
     two = _lines([_row(11, first="Notes A \\| B \\| C")])
     assert _table_lines(two) == [
-        "host table check: T3D.2 row 1 has 13 cells under a 12-cell header; a cell"
-        " is missing or extra, so its later columns shift (the cell past the last"
-        " column, 'Source Trace', is dropped)"
+        "host table check: T3D.2 row 1 («Notes A \\») has 13 cells under a"
+        " 12-cell header; a cell is missing or extra, so its later columns shift (the"
+        " cell past the last column, 'Source Trace', is dropped); as read,"
+        " 'Refinancing Pressure' holds «value 8», 'Credit Implication' holds"
+        " «value 9», 'Source Trace' holds «value 10» and past it «value 11» is"
+        " dropped"
     ]
 
 
@@ -133,3 +154,55 @@ def test_at_most_max_width_rows_are_named_and_the_rest_counted() -> None:
     assert lines[-1] == (
         "host table check: 2 more register rows differ in width from the header"
     )
+
+
+def test_lcr6_the_short_row_is_named_by_its_first_cell_and_its_shift_shown() -> None:
+    """LCR6 CP-3C row 7 left out Credit Implication: its source trace read
+    under Credit Implication. The line quotes each of the last three columns'
+    text, cut at a word to at most `_QUOTE_CHARS` characters."""
+    cells = [
+        "CEI Senior Secured Notes due 2032",
+        *(f"value {n}" for n in range(2, 10)),
+        "Long-dated maturity, but collateral release, debt-incurrence and"
+        " amendment paths could affect recovery if used [C7, C30]",
+        "10-Q p. 9; Indenture p. 42.",
+    ]
+    (line,) = _table_lines(_lines(["| " + " | ".join(cells) + " |"]))
+    assert line == (
+        "host table check: T3D.2 row 1 («CEI Senior Secured Notes due 2032»)"
+        " has 11 cells under a 12-cell header; a cell is missing or extra, so"
+        " its later columns shift (the last column, 'Source Trace', reads"
+        " empty); as read, 'Refinancing Pressure' holds «Long-dated maturity,"
+        " but collateral…», 'Credit Implication' holds «10-Q p. 9; Indenture"
+        " p. 42.» and 'Source Trace' holds nothing"
+    )
+    assert len(line) <= MAX_FEEDBACK_CHARS + len("host table check: ")
+
+
+def test_a_cell_that_hides_text_is_never_quoted() -> None:
+    """A bidirectional control in a quoted cell drops the quotes, never the
+    line: the row is still named by number."""
+    (line,) = _table_lines(_lines([_row(11, first="Notes \u202e due")]))
+    assert line == (
+        "host table check: T3D.2 row 1 has 11 cells under a 12-cell header; a"
+        " cell is missing or extra, so its later columns shift (the last"
+        " column, 'Source Trace', reads empty)"
+    )
+
+
+def test_a_cell_with_no_space_is_cut_within_the_quote_limit() -> None:
+    """A long URL or token is still quoted, cut short (F522 review)."""
+    (line,) = _table_lines(_lines([_row(11, first="x" * 60)]))
+    assert f"(«{'x' * _QUOTE_CHARS}…»)" in line, line
+    assert "; as read, " in line
+
+
+def test_a_width_line_with_long_column_names_stays_within_the_bound() -> None:
+    """Column names of 64 characters would carry the readout past
+    `MAX_FEEDBACK_CHARS`; the line keeps its whole sentence and drops the
+    readout instead of being cut mid-quote."""
+    header = [f"{'Column ' * 9}{n}"[:64] for n in range(12)]
+    cells = tuple(f"{'word ' * 8}{n}" for n in range(11))
+    message = _width_message("T3D.2", 1, cells, header)
+    assert len(message) <= MAX_FEEDBACK_CHARS
+    assert message.endswith("reads empty)"), message
