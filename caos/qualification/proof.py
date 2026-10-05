@@ -84,9 +84,10 @@ class OrchestrationProof:
     # A canonical run's re-anchored `(module_id, document_sha256, line)`, the
     # module taken from the pin and the line the citation anchored in
     # (`cited_line`): exactly what this proof proved, so the matrix scores it
-    # without a second read the proof never saw. Anchored citations the body
-    # carries only: an answer key is met by nothing else (D106, owner:
-    # "Anchored only", "Linked only"; `scored_lines`).
+    # without a second read the proof never saw. Anchored citations a marker
+    # in the body names only (D107; the body's verbatim quote before it): an
+    # answer key is met by nothing else (D106, owner: "Anchored only",
+    # "Linked only"; `scored_lines`).
     anchored: frozenset[tuple[str, str, str]] = frozenset()
     # Each record's unverified citations (D106), by the pinned module, in
     # route order and as recorded: carried, never re-anchored and never
@@ -194,9 +195,11 @@ def assert_orchestration_proof(
 
 def scored_lines(module_id: str, record: CanonicalRecord) -> set[tuple[str, str, str]]:
     """The `(module, document, line)` an answer key is met by: each anchored
-    citation whose excerpt the answer's body also carries (D106, owner:
-    "Anchored only", then "Linked only"). An unverified citation, or an
-    anchored one not linked to a statement, meets no key."""
+    citation a marker in the answer's body names (D106, owner: "Anchored
+    only", then "Linked only"; D107, marker-linked). A record from before
+    D107 is scored by its own `linked`, the excerpt verbatim in its body,
+    never re-judged. An unverified citation, or an anchored one not linked
+    to a statement, meets no key."""
     return {
         (module_id, c.document_sha256, cited_line(c))
         for c in record.citations
