@@ -296,6 +296,8 @@ def test_the_committed_table_is_the_one_the_script_emits() -> None:
         133: "One hundred and thirty-three",
         137: "One hundred and thirty-seven",
         142: "One hundred and forty-two",
+        144: "One hundred and forty-four",
+        149: "One hundred and forty-nine",
         152: "One hundred and fifty-two",
         157: "One hundred and fifty-seven",
     }
