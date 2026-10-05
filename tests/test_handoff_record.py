@@ -306,9 +306,12 @@ def test_an_excerpt_record_keeps_the_line_of_each_citation(tmp_path: Path) -> No
     its true page as a whole-line one does (D94)."""
     [found] = _record().citations
     line = f"{QUOTE} and the rest of its line"
+    part = " ".join(line.split()[1:])
     excerpt = _record(
         citation_rule=EXCERPT,
-        citations=(dataclasses.replace(found, line_text=line, cited_page=7),),
+        citations=(
+            dataclasses.replace(found, matched_text=part, line_text=line, cited_page=7),
+        ),
     )
     document = json.loads(record_bytes(excerpt))
     assert document["citation_rule"] == "excerpt-of-shown-line"

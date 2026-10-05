@@ -7,7 +7,7 @@ Entertainment, Inc. (CZR) at an analysis date of 2026-10-02, against peers
 MGM Resorts International (MGM) and PENN Entertainment, Inc. (PENN) from the
 owner's "Public Leveraged Loan Issuers Benchmark". Its qualification-set
 digest is
-`6db4ad00f5dd52cd75006c1e556ade272ea85495b47f77d992e1340ceef082bc`.
+`24cbfea7f0eb1d07d962c9d2bc9d9bbef36055be6d23a737a1b1dedf3e2c8e65`.
 
 ## Corpus provenance
 
@@ -99,11 +99,13 @@ document (F475), and is listed with why it states the key's figures:
     million for the comparable prior-year period.`, its highlight sentence:
     consolidated, the quarter against the prior-year quarter;
   - the release's `Caesars | $920 | $955 | (3.7)%`, the consolidated row of its
-    quarterly Adjusted EBITDA table.
-  Not alternatives: the 10-Q's `Adjusted EBITDA | $920 | $955 | $1,807 |
-    $1,839` (its words recur inside the 10-Q's `Total Adjusted EBITDA` row, so
-    it is not a unique run, F475) and the release's six-month `Caesars | $1,807
-    | $1,839 | (1.7)%` (the six months alone).
+    quarterly Adjusted EBITDA table;
+  - the 10-Q's `Adjusted EBITDA | $920 | $955 | $1,807 | $1,839`, the
+    consolidated line its segment note reconciles net loss to. Its words also
+    run inside the MD&A's `Total Adjusted EBITDA` row, which no longer bars a
+    whole line (K2, F501).
+  Not alternatives: the release's six-month `Caesars | $1,807 | $1,839 |
+    (1.7)%` (the six months alone).
 - CP-2, the 10-Q's `Net cash provided by operating activities | 675 | 680`:
   - the 10-Q's `During the six months ended June 30, 2026, our operating
     activities generated operating cash inflows of $675 million, as compared to

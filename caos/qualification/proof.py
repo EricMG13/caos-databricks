@@ -78,9 +78,10 @@ class OrchestrationProof:
     build_id: str
     artifacts: int
     citations: int
-    # A canonical run's re-anchored `(module_id, document_sha256, matched_text)`,
-    # the module taken from the pin: exactly what this proof proved, so the
-    # matrix scores it without a second read the proof never saw.
+    # A canonical run's re-anchored `(module_id, document_sha256, line)`, the
+    # module taken from the pin and the line the citation anchored in
+    # (`cited_line`): exactly what this proof proved, so the matrix scores it
+    # without a second read the proof never saw.
     anchored: frozenset[tuple[str, str, str]] = frozenset()
 
     @property
@@ -162,7 +163,7 @@ def assert_orchestration_proof(
             None if record_sha256 is None else str(record_sha256),
         )
         citations += len(proven)
-        anchored |= {(module_id, c.document_sha256, c.matched_text) for c in proven}
+        anchored |= {(module_id, c.document_sha256, cited_line(c)) for c in proven}
 
     # No second vacuity guard here: a record without citations does not
     # decode, so by this line the count cannot be zero. A guard that can never
@@ -175,6 +176,19 @@ def assert_orchestration_proof(
         citations=citations,
         anchored=frozenset(anchored),
     )
+
+
+def cited_line(citation: AnchoredCitation) -> str:
+    """The evidence line a citation anchored in, which an answer key names.
+
+    An answer key is one whole evidence line (F475), and since D105 a
+    citation is an excerpt of one: an `EXCERPT` record keeps the whole line
+    beside its quote (`line_text`), and a key is met by any excerpt anchored
+    in its line. A record accepted under an earlier rule keeps none, and is
+    scored by its quote as it always was -- under either whole-line rule the
+    quote is its line; under `ANY_RUN` it is the run the record holds.
+    """
+    return citation.matched_text if citation.line_text is None else citation.line_text
 
 
 def _produced_by_its_call(*, recorded: bool, produced: object, called: object) -> None:

@@ -887,6 +887,23 @@ def test_any_other_refusal_gets_no_second_attempt(harness: _Harness) -> None:
     assert _cp0_ledger(harness) == (1, 1, ["PROVIDER_REFUSED"], 0)
 
 
+def test_a_record_whose_lines_do_not_hold_is_a_typed_refusal(
+    harness: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Fix round 2 of D105: a record `record_bytes` will not write -- a line
+    its quote cannot be in -- refuses the answer `HANDOFF_MALFORMED`, an
+    ordinary guided retry, never a `ValueError` that stops the billed run as
+    a host fault."""
+    from caos.methodology import handoff
+
+    monkeypatch.setattr(handoff, "within_line", lambda *_: False)
+    answers = CanonicalCompletions(harness.source_id)
+    assert _run(harness, answers) is RefusalCode.HANDOFF_MALFORMED
+    attempts, _reserved, codes, accepted = _cp0_ledger(harness)
+    assert (attempts, accepted) == (4, 0)
+    assert codes == ["HANDOFF_MALFORMED"] * 4
+
+
 def _about_someone_else(body: str) -> str:
     """The same answer about another issuer: a host-owned field copied wrong."""
     wire = json.loads(body)

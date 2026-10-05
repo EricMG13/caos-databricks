@@ -471,7 +471,19 @@ def _answer(  # noqa: PLR0913 -- one recorded answer, keyword-only
         citations=tuple(anchored),
         citation_rule=EXCERPT,
     )
-    return markdown, record_bytes(record)
+    return markdown, _written(record)
+
+
+def _written(record: CanonicalRecord) -> bytes:
+    """`record_bytes`, or `HANDOFF_MALFORMED` where it refuses the record's
+    lines (`_lines_held`, D105): a typed refusal the retry and replay read
+    as any other, never a `ValueError` that stops a billed run as a host
+    fault (fix round 2)."""
+    try:
+        return record_bytes(record)
+    except ValueError:
+        pass
+    raise Refusal(RefusalCode.HANDOFF_MALFORMED)
 
 
 def check_context(  # noqa: PLR0913 -- one node of one run, keyword-only
