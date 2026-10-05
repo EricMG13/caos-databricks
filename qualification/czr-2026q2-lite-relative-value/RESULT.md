@@ -1,6 +1,6 @@
 # CZR Q2 2026 LITE relative-value qualification set — prepared offline
 
-Status: **OFFLINE / UNVERIFIED / NOT QUALIFIED**.
+Status: **LIVE-RUN 2026-10-05 / NOT QUALIFIED (citation and register keys)**. Prepared offline; the live results are in the last section.
 
 This immutable set prepares `LITE_CREDIT_22 / LITE_RELATIVE_VALUE` for
 Caesars Entertainment, Inc. (CZR) at an analysis date of 2026-10-02, against
@@ -218,5 +218,18 @@ The documents state the following; this set draws no conclusion from them.
 The peers' periods match CZR's: each release reports the quarter ended
 30 June 2026.
 
-No provider call, run, snapshot, evidence record, reviewer verdict, or
-qualification claim exists; no run has been performed.
+At preparation no provider call, run, snapshot, evidence record, reviewer
+verdict, or qualification claim existed; the live runs follow.
+
+## Live results (3–5 October 2026)
+
+| run (file) | build / tip | status | modules accepted | attempts | citations | keys met | ready / projection / register | stop cause | key usage Δ / recorded charge |
+|---|---|---|---|---|---|---|---|---|---|
+| LRV1 (`LRV1-czr-lite-relative-value.json`) | 9043ba7f / 3c36acc era | BLOCKED | 1/3 | 1 | 20 (20 anch., 2 unver.) | 0/8 | missed / missed / missed | CP-0 marked CP-L10 DO NOT RUN (no dated prices, yields or spreads: the LITE set carried no TRACE prints, a corpus fault; F507) | +0.19 / $0.13 |
+| LRV2 (`LRV2-czr-lite-relative-value.json`) | 9043ba7f / 79c550d era | COMPLETE | 3/3 | 5 | 90 (89 anch., 1 unver.) | 5/8 | met / met / missed | — | +0.49 / $0.51 |
+
+Reading the table: "build" is the first eight hex digits of the methodology build id in the run JSON; "tip" is the git tip the ledger names (`—` where the ledger names none; tips marked ~ are the base of the next fix task, so the run ran on that tree or its predecessor). "Attempts" is the run JSON's attempt list (every provider call recorded, including a dropped one). "Citations" is the run proof's total with its anchored and unverified counts (`n/r`: the run stopped before a proof was recorded). "Keys met" is the scored matrix row; a run that stopped before COMPLETE or BLOCKED is not scored (`not scored`). "Key usage Δ" is the OpenRouter key-usage change the ledger recorded for the run (`n/l`: not in the ledger); "recorded charge" is the sum of the run's attempt charges at the pinned price. The two disagree and the usage counter lags (ledger), so the key usage is the budget measure. Run files are git-ignored, under `docs/rebuild/runs/live-2026-10-03/`; the model is `openai/gpt-6-luna`, effort high, provider pinned to `openai`, in every row.
+
+Verdict: The set is **NOT QUALIFIED**. LRV2, after the F507 TRACE fix, completed with the ready and projection keys met and 5 of 8 citation keys (misses "not cited"). The register key missed by model judgement: CP-L10 rated TL10.2 LIQUIDITY_MATURITIES `PARTIAL` ("directional screen, not a refreshed bridge") where the key expects SUFFICIENT; the rating is defensible.
+
+Owner-decision stops and provider limits: None.

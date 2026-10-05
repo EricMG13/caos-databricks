@@ -1,6 +1,6 @@
 # CZR Q2 2026 FULL liquidity qualification set — prepared offline
 
-Status: **OFFLINE / UNVERIFIED / NOT QUALIFIED**.
+Status: **LIVE-RUN 2026-10-05 / NOT QUALIFIED (citation keys)**. Prepared offline; the live results are in the last section.
 
 This immutable set prepares `FULL_CREDIT_32 / LIQUIDITY_REVIEW` for Caesars
 Entertainment, Inc. (CZR) at an analysis date of 2026-10-02. Its
@@ -152,5 +152,18 @@ defensible reading and no single bridge cell is unambiguous.
 The 10-Q discloses the 27 May 2026 merger agreement with Fertitta Gaming
 Holdco, LLC as pending; no fact about it after the 10-Q's filing is in this set.
 
-No provider call, run, snapshot, evidence record, reviewer verdict, or
-qualification claim exists; no run has been performed.
+At preparation no provider call, run, snapshot, evidence record, reviewer
+verdict, or qualification claim existed; the live runs follow.
+
+## Live results (3–5 October 2026)
+
+| run (file) | build / tip | status | modules accepted | attempts | citations | keys met | ready / projection / register | stop cause | key usage Δ / recorded charge |
+|---|---|---|---|---|---|---|---|---|---|
+| L1 (`L1-czr-liquidity.json`) | 9043ba7f / b1a7bec | COMPLETE | 4/4 | 8 | 139 (139 anch., 0 unver.) | 8/9 | met / met / — | — | +0.56 / $0.79 |
+| LIQ1 (`LIQ1-czr-liquidity.json`) | 9043ba7f / ~14b9bec | COMPLETE | 4/4 | 6 | 102 (100 anch., 4 unver.) | 5/9 | met / met / — | — | +0.66 / $0.70 |
+
+Reading the table: "build" is the first eight hex digits of the methodology build id in the run JSON; "tip" is the git tip the ledger names (`—` where the ledger names none; tips marked ~ are the base of the next fix task, so the run ran on that tree or its predecessor). "Attempts" is the run JSON's attempt list (every provider call recorded, including a dropped one). "Citations" is the run proof's total with its anchored and unverified counts (`n/r`: the run stopped before a proof was recorded). "Keys met" is the scored matrix row; a run that stopped before COMPLETE or BLOCKED is not scored (`not scored`). "Key usage Δ" is the OpenRouter key-usage change the ledger recorded for the run (`n/l`: not in the ledger); "recorded charge" is the sum of the run's attempt charges at the pinned price. The two disagree and the usage counter lags (ledger), so the key usage is the budget measure. Run files are git-ignored, under `docs/rebuild/runs/live-2026-10-03/`; the model is `openai/gpt-6-luna`, effort high, provider pinned to `openai`, in every row.
+
+Verdict: The set is **NOT QUALIFIED**. L1 completed with 8 of 9 keys and every node accepted on its second attempt; its one miss was CP-2D's $388m letter-of-credit sub-facility sentence (no module used the figure). LIQ1, the later run with the conformed credit agreement (requests of about 1.9 MB), completed with the ready and projection keys met and 5 of 9 citation keys; its four misses are all "not cited". Single-sample quality_compare (records `q6`, `q12`): one LARGE, CP-0 committee_status Restricted against the baseline Requires More Work, recurring since L1 and defensible (the corpus has no forward cash forecast or transaction-funding inputs).
+
+Owner-decision stops and provider limits: None.

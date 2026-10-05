@@ -1,6 +1,6 @@
 # CZR Q2 2026 LITE full-credit-screen qualification set — prepared offline
 
-Status: **OFFLINE / UNVERIFIED / NOT QUALIFIED**.
+Status: **LIVE-RUN 2026-10-05 / NOT QUALIFIED (stopped; never completed)**. Prepared offline; the live results are in the last section.
 
 This immutable set prepares `LITE_CREDIT_22 / LITE_FULL_CREDIT_SCREEN` for
 Caesars Entertainment, Inc. (CZR) at an analysis date of 2026-10-02, against
@@ -230,5 +230,18 @@ The documents state the following; this set draws no conclusion from them.
 - **As-of dates.** The 10-Q and the releases report the quarter ended
   30 June 2026; the FINRA observations are dated 2 October 2026.
 
-No provider call, run, snapshot, evidence record, reviewer verdict, or
-qualification claim exists; no run has been performed.
+At preparation no provider call, run, snapshot, evidence record, reviewer
+verdict, or qualification claim existed; the live runs follow.
+
+## Live results (3–5 October 2026)
+
+| run (file) | build / tip | status | modules accepted | attempts | citations | keys met | ready / projection / register | stop cause | key usage Δ / recorded charge |
+|---|---|---|---|---|---|---|---|---|---|
+| LFCS1 (`LFCS1-czr-lite-full-credit-screen.json`) | 9043ba7f / ~79c550d | STOPPED | 8/9 | 16 | 230 (228 anch., 7 unver.) | not scored | — | CP-5 refused 4x: 3x HANDOFF_INCOMPLETE (missing upstream owner restrictions, no feedback line) and 1x a dangling marker [C30] of 28 | +1.96 / $1.92 |
+| LFCS2 (`LFCS2-czr-lite-full-credit-screen.json`) | 9043ba7f / ~14b9bec | STOPPED | 2/9 | 3 | 34 (34 anch., 1 unver.) | not scored | — | PROVIDER_UNAVAILABLE on CP-1A after ~294 s, no charge | +0.46 / $0.24 |
+
+Reading the table: "build" is the first eight hex digits of the methodology build id in the run JSON; "tip" is the git tip the ledger names (`—` where the ledger names none; tips marked ~ are the base of the next fix task, so the run ran on that tree or its predecessor). "Attempts" is the run JSON's attempt list (every provider call recorded, including a dropped one). "Citations" is the run proof's total with its anchored and unverified counts (`n/r`: the run stopped before a proof was recorded). "Keys met" is the scored matrix row; a run that stopped before COMPLETE or BLOCKED is not scored (`not scored`). "Key usage Δ" is the OpenRouter key-usage change the ledger recorded for the run (`n/l`: not in the ledger); "recorded charge" is the sum of the run's attempt charges at the pinned price. The two disagree and the usage counter lags (ledger), so the key usage is the budget measure. Run files are git-ignored, under `docs/rebuild/runs/live-2026-10-03/`; the model is `openai/gpt-6-luna`, effort high, provider pinned to `openai`, in every row.
+
+Verdict: The set is **NOT QUALIFIED**: no run completed. LFCS1 accepted 8 of 9 nodes (CP-0, CP-L10, CP-1A, CP-1C, CP-2A, CP-2H, CP-3C, CP-4C) and stopped at CP-5; 230 citations; keys 6 of 11 on the nodes that ran (one unverified-near; misses "not cited"; the CP-2H rating keys met). CP-5 had missed 39 upstream restrictions (24 distinct), all omissions, with no feedback line; F510 now names them to the retry, but the set was not re-run after it. LFCS2 was a provider drop on CP-1A. The run was not repeated.
+
+Owner-decision stops and provider limits: Provider drops: PROVIDER_UNAVAILABLE after about 195 to 299 s on large non-streamed calls, never billed; the owner ruled on 5 October to run without streaming and re-run a dropped module once (L9, streaming in the test adapter, stays unmerged: `PROVIDER_RUNBOOK.md` and N145).

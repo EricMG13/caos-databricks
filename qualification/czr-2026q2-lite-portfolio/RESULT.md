@@ -1,6 +1,6 @@
 # CZR Q2 2026 LITE portfolio-screen qualification set — prepared offline
 
-Status: **OFFLINE / UNVERIFIED / NOT QUALIFIED**.
+Status: **BLOCKED AT CP-0 (synthetic mandate)**. Prepared offline; the live results are in the last section.
 
 This immutable set prepares `LITE_CREDIT_22 / LITE_PORTFOLIO_DECISION` for
 Caesars Entertainment, Inc. (CZR) at an analysis date of 2026-10-02, with a
@@ -179,5 +179,17 @@ pro forma for the position.
 - **The pending take-private.** The 10-Q discloses the 27 May 2026 Agreement
   and Plan of Merger with Fertitta Gaming; the FINRA last trade postdates it.
 
-No provider call, run, snapshot, evidence record, reviewer verdict, or
-qualification claim exists; no run has been performed.
+At preparation no provider call, run, snapshot, evidence record, reviewer
+verdict, or qualification claim existed; the live runs follow.
+
+## Live results (3–5 October 2026)
+
+| run (file) | build / tip | status | modules accepted | attempts | citations | keys met | ready / projection / register | stop cause | key usage Δ / recorded charge |
+|---|---|---|---|---|---|---|---|---|---|
+| LP1 (`LP1-czr-lite-portfolio.json`) | 9043ba7f / ~14b9bec | BLOCKED | 1/2 (CP-0; CP-L10 not run) | 1 | 24 (23 anch., 0 unver.) | 0/6 | missed / missed / missed | CP-0 blocked on the self-declared synthetic mandate | n/l / $0.08 |
+
+Reading the table: "build" is the first eight hex digits of the methodology build id in the run JSON; "tip" is the git tip the ledger names (`—` where the ledger names none; tips marked ~ are the base of the next fix task, so the run ran on that tree or its predecessor). "Attempts" is the run JSON's attempt list (every provider call recorded, including a dropped one). "Citations" is the run proof's total with its anchored and unverified counts (`n/r`: the run stopped before a proof was recorded). "Keys met" is the scored matrix row; a run that stopped before COMPLETE or BLOCKED is not scored (`not scored`). "Key usage Δ" is the OpenRouter key-usage change the ledger recorded for the run (`n/l`: not in the ledger); "recorded charge" is the sum of the run's attempt charges at the pinned price. The two disagree and the usage counter lags (ledger), so the key usage is the budget measure. Run files are git-ignored, under `docs/rebuild/runs/live-2026-10-03/`; the model is `openai/gpt-6-luna`, effort high, provider pinned to `openai`, in every row.
+
+Verdict: The set is **NOT QUALIFIED**: 0 of 6 keys met, all six on CP-L10, which did not run, and the ready, projection and register keys missed. LP1 sent about 1.2 MB requests; CP-0 stopped the route because the mandate document declares itself synthetic (D80).
+
+Owner-decision stops and provider limits: **Owner decision, 5 October 2026:** "Leave them, record the stop". The portfolio sets stay blocked at CP-0 on the self-declared synthetic mandate; removing the fixture's self-declared labels was not pursued.
