@@ -6,7 +6,7 @@ This immutable set prepares `LITE_CREDIT_22 / LITE_PORTFOLIO_DECISION` for
 Caesars Entertainment, Inc. (CZR) at an analysis date of 2026-10-02, with a
 proposed position in the CZR 6.50% Senior Secured Notes due 2032 held against a
 **SYNTHETIC** test mandate. Its qualification-set digest is
-`2b259fc2deee688087eb5698ff348e912497a2aaf2416161847bdf81309170d1`.
+`60d8bef15b29bfca43cc572741c5f1b6c0b808e0f54e50374eb5de3de96c0285`.
 
 ## The mandate is synthetic (D80)
 
@@ -32,6 +32,8 @@ digest the keys bind; the raw SHA-256 is the HTML as fetched.
 | `CZR_Q2_2026_10Q.txt` (Form 10-Q, quarter ended 30 June 2026) | https://www.sec.gov/Archives/edgar/data/1590895/000159089526000028/czr-20260630.htm | 0001590895-26-000028 | `f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a` | `9dd3fca867c49936c65c9729bd7f9478d4c98b7c60569b74864a839bdeed8500` |
 | `CZR_Q2_2026_Earnings_Release.txt` (Ex. 99.1, 28 July 2026) | https://www.sec.gov/Archives/edgar/data/1590895/000159089526000027/ex991-2026q2ceiearningsrel.htm | 0001590895-26-000027 | `b385f76ff631243d1053fa8073ebde4f8886b4a50c9ce34ce3498d6b2ac3e9f8` | `a8982154b99b023b526261f7626022e96ac642834d1d65704629946acecc8a1f` |
 | `CZR_2024_650_Senior_Secured_Notes_2032_Indenture.txt` (Ex. 10.1, 6.500% Senior Secured Notes due 2032 indenture, 6 February 2024) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex101.htm | 0001193125-24-026847 | `0809ab3981090bd2c23950da9530adb10e96882ddfa7db4404635e014d4c1119` | `a4661727edc48361dd7290772e62412c389b8ad8d215a96aa58facfe9e356c2c` |
+| `CZR_2024_650_Notes_First_Supplemental_Indenture.txt` (Ex. 4.2, First Supplemental Indenture to the 6.500% 2032 notes indenture, 1 March 2024; Ex. 4.11 in the FY2025 10-K) | https://www.sec.gov/Archives/edgar/data/1590895/000159089524000088/exhibit42firstsupplemental.htm | 0001590895-24-000088 | `0af4615b9a52e91e2675adacbbc90ecc7b21a61dc8205b4b2459cf4b9db0a219` | `18d810c415aef677f867ac73dee07a04382e71db794f3bfbc91cdd185e4b0dc4` |
+| `CZR_2024_650_Notes_Second_Supplemental_Indenture.txt` (Ex. 4.17, Second Supplemental Indenture to the 6.500% 2032 notes indenture, 23 August 2024; Ex. 4.12 in the FY2025 10-K) | https://www.sec.gov/Archives/edgar/data/1590895/000159089525000068/exhibit417-6500seniorsecur.htm | 0001590895-25-000068 | `3621f08611f4c6a6faed734993a3f2d9c97041693053ffa97624cbe5b7299aea` | `0eedd7d398ee15f45dabc99df2003249d4dbe232be456767e7b972d355326b3c` |
 
 The mandate is a text extract of the owner's workbook
 `REF_CP-6A_Portfolio_Debate_Inputs.xlsx`, converted on 2 October 2026, with
@@ -47,13 +49,38 @@ byte-identical to the `czr-2026q2-relative-value` set's copy.
 
 The indenture (758,385 bytes) is over 500 KiB, so its path is pinned in the
 large-file excludes; it is under 1.5 MiB, so it reaches CP-0 whole rather than
-as a page map. All five are inside `MAX_REQUEST_BYTES`.
+as a page map. All seven are inside `MAX_REQUEST_BYTES`. The exhibits F508 adds
+were fetched from SEC EDGAR on 5 October 2026 and converted the same day, split
+by sentence (F492) and by clause (F498); they are byte-identical to the
+`czr-2026q2-covenant-refinancing` set's copies. Since F508 the set also carries
+the supplemental indentures, 11,774 and 15,684 bytes. The set's CP-0 request,
+encoded with CP-0's delivered authority, is 1,200,981 bytes (28.6% of
+`MAX_REQUEST_BYTES`, up from 1,167,482), and no source is shown as a page map.
 
 The indenture is the executed governing document of the proposed position,
 admitted because CP-0's recorded refusal on `ccl-fy2025-portfolio` asked for
 "applicable executed governing security documents". It carries no key. The
 mandate's compliance monitor cites "Indenture §7.11": that is the CLO's own
 indenture, not this one, and a SYNTHETIC line in the adaptation says so.
+
+## Why the pack carries the current legal chain (F508)
+
+Live runs C5 (`czr-2026q2-covenant-refinancing`) and LCR1
+(`czr-2026q2-lite-covenant-refinancing`) held back the covenant modules at CP-0
+(CP-4, then CP-L10): the sets carried the 2020 credit agreement with only its
+Fourth and Fifth Amendments, and the 6.50% 2032 notes indenture without its
+supplemental indentures, though the FY2025 10-K's exhibit index lists them. On
+the owner's ruling of 5 October 2026 ("Latest chain only"), every CZR set now
+carries the exhibits beside the instrument each modifies; this set, which holds
+the indenture but not the credit agreement, carries the 2032 notes' First and
+Second Supplemental Indentures.
+
+The First Supplemental Indenture (1 March 2024) adds two guarantors and amends
+clause (44) of the Permitted Liens definition and Section 8.01(b); the Second
+(23 August 2024) adds the guarantors on its Schedule A.
+
+No key is added or changed: a key binds the digest of the document it was
+authored from.
 
 ## Keys
 
