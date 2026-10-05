@@ -21,8 +21,10 @@ from canonical_fixtures import BUNDLE, CONTRACT, identity
 from caos.methodology.bundle import assemble_authority
 from caos.methodology.executor import SKILL
 from caos.methodology.handoff import (
+    _QUOTE_CHARS,
     MAX_FEEDBACK_CHARS,
     MAX_WIDTH_ROWS,
+    _width_message,
     feedback_lines,
 )
 from caos.methodology.vendor import catalog
@@ -186,3 +188,21 @@ def test_a_cell_that_hides_text_is_never_quoted() -> None:
         " cell is missing or extra, so its later columns shift (the last"
         " column, 'Source Trace', reads empty)"
     )
+
+
+def test_a_cell_with_no_space_is_cut_within_the_quote_limit() -> None:
+    """A long URL or token is still quoted, cut short (F522 review)."""
+    (line,) = _table_lines(_lines([_row(11, first="x" * 60)]))
+    assert f"(«{'x' * _QUOTE_CHARS}…»)" in line, line
+    assert "; as read, " in line
+
+
+def test_a_width_line_with_long_column_names_stays_within_the_bound() -> None:
+    """Column names of 64 characters would carry the readout past
+    `MAX_FEEDBACK_CHARS`; the line keeps its whole sentence and drops the
+    readout instead of being cut mid-quote."""
+    header = [f"{'Column ' * 9}{n}"[:64] for n in range(12)]
+    cells = tuple(f"{'word ' * 8}{n}" for n in range(11))
+    message = _width_message("T3D.2", 1, cells, header)
+    assert len(message) <= MAX_FEEDBACK_CHARS
+    assert message.endswith("reads empty)"), message

@@ -1471,11 +1471,18 @@ def _width_message(
             if extra == 1
             else f"the {extra} cells past the last column, {last}, are dropped"
         )
-    return (
-        f"{row} has {width} cells under a {size}-cell header; a cell is"
-        f" missing or extra, so its later columns shift ({shift})"
-        + (f"; as read, {read}" if read else "")
+    plain = (
+        f"{reg_id} row {n} has {width} cells under a {size}-cell header; a cell"
+        f" is missing or extra, so its later columns shift ({shift})"
     )
+    if not read:
+        return plain
+    shown = (
+        f"{row} has {width} cells under a {size}-cell header; a cell is"
+        f" missing or extra, so its later columns shift ({shift}); as read, {read}"
+    )
+    # Past the bound `_bounded` would cut mid-quote: keep the whole sentence.
+    return shown if len(shown) <= MAX_FEEDBACK_CHARS else plain
 
 
 def _column(name: str) -> str:
@@ -1507,7 +1514,9 @@ def _quoted(cell: str) -> str | None:
     will not cross `BoundaryText`."""
     text = " ".join(cell.split())
     if len(text) > _QUOTE_CHARS:
-        text = text[: _QUOTE_CHARS + 1].rsplit(" ", 1)[0].rstrip(" ,;") + "…"
+        head = text[: _QUOTE_CHARS + 1]
+        head = head.rsplit(" ", 1)[0] if " " in head else head
+        text = head[:_QUOTE_CHARS].rstrip(" ,;") + "…"
     if hides_text(text):
         return None
     with suppress(Refusal):
