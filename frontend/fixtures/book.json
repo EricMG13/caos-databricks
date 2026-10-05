@@ -105,7 +105,8 @@
                       ],
                       "withdrawn_at": null,
                       "cited_page": null,
-                      "linked": true
+                      "linked": true,
+                      "marker": null
                     }
                   ],
                   "supporting_research": [
@@ -163,7 +164,8 @@
                       ],
                       "withdrawn_at": null,
                       "cited_page": null,
-                      "linked": true
+                      "linked": true,
+                      "marker": null
                     }
                   ],
                   "supporting_research": [
@@ -221,7 +223,8 @@
                       ],
                       "withdrawn_at": null,
                       "cited_page": null,
-                      "linked": true
+                      "linked": true,
+                      "marker": null
                     }
                   ],
                   "supporting_research": [
@@ -279,7 +282,8 @@
                       ],
                       "withdrawn_at": null,
                       "cited_page": null,
-                      "linked": true
+                      "linked": true,
+                      "marker": null
                     }
                   ],
                   "supporting_research": [
@@ -337,7 +341,8 @@
                       ],
                       "withdrawn_at": null,
                       "cited_page": null,
-                      "linked": true
+                      "linked": true,
+                      "marker": null
                     }
                   ],
                   "supporting_research": [
@@ -395,7 +400,8 @@
                       ],
                       "withdrawn_at": null,
                       "cited_page": null,
-                      "linked": true
+                      "linked": true,
+                      "marker": null
                     },
                     {
                       "document_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
@@ -419,7 +425,8 @@
                       ],
                       "withdrawn_at": null,
                       "cited_page": null,
-                      "linked": true
+                      "linked": true,
+                      "marker": null
                     }
                   ],
                   "supporting_research": [
@@ -506,7 +513,8 @@
                       ],
                       "withdrawn_at": null,
                       "cited_page": null,
-                      "linked": true
+                      "linked": true,
+                      "marker": null
                     }
                   ],
                   "supporting_research": [
@@ -564,7 +572,8 @@
                       ],
                       "withdrawn_at": null,
                       "cited_page": null,
-                      "linked": true
+                      "linked": true,
+                      "marker": null
                     }
                   ],
                   "supporting_research": [
@@ -622,7 +631,8 @@
                       ],
                       "withdrawn_at": null,
                       "cited_page": null,
-                      "linked": true
+                      "linked": true,
+                      "marker": null
                     }
                   ],
                   "supporting_research": [
@@ -680,7 +690,8 @@
                       ],
                       "withdrawn_at": null,
                       "cited_page": null,
-                      "linked": true
+                      "linked": true,
+                      "marker": null
                     }
                   ],
                   "supporting_research": [
@@ -738,7 +749,8 @@
                       ],
                       "withdrawn_at": null,
                       "cited_page": null,
-                      "linked": true
+                      "linked": true,
+                      "marker": null
                     }
                   ],
                   "supporting_research": [
@@ -796,7 +808,8 @@
                       ],
                       "withdrawn_at": null,
                       "cited_page": null,
-                      "linked": true
+                      "linked": true,
+                      "marker": null
                     },
                     {
                       "document_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
@@ -820,7 +833,8 @@
                       ],
                       "withdrawn_at": null,
                       "cited_page": null,
-                      "linked": true
+                      "linked": true,
+                      "marker": null
                     }
                   ],
                   "supporting_research": [

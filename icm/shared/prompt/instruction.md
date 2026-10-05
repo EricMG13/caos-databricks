@@ -21,6 +21,8 @@ Rules that will cause your answer to be refused if broken:
   character for character and quotes included: change, reorder or drop none of
   them. After them, add only the model-authored fields named in the final check.
 - Use no keys other than those shown.
+- A marker `[C<n>]` in the Markdown names the citation at place n of
+  `citations`; one that names no citation is refused.
 
 Every citation follows the one citation rule stated in the final response
 check after the evidence; no other rule is stated. A citation the host cannot

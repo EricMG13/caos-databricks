@@ -21,13 +21,47 @@
         "route_node_id": "CP-1",
         "artifact_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
         "record_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-        "markdown": "<img src=x onerror=\"window.pwned=1\">",
-        "record": "{\"coverage\":\"2.1x\",\"citation_rule\":\"whole-line-as-shown\",\"citations\":[{\"page\":7,\"matched_text\":\"Coverage 2.1x\"}],\"unverified\":[{\"source_id\":\"00000000-0000-4000-8000-0000000000a1\",\"page\":9,\"matched_text\":\"Interest coverage of <b>2.4x</b> for the twelve months to June 30\",\"code\":\"CITATION_NOT_LOCATED\",\"linked\":false}]}",
+        "markdown": "<img src=x onerror=\"window.pwned=1\">\n\nCoverage is 2.1x [C1]; interest coverage is not located [C2].",
+        "record": "{\"coverage\":\"2.1x\",\"citation_rule\":\"whole-line-as-shown\",\"citations\":[{\"page\":7,\"matched_text\":\"Coverage 2.1x\",\"marker\":1}],\"unverified\":[{\"source_id\":\"00000000-0000-4000-8000-0000000000a1\",\"page\":9,\"matched_text\":\"Interest coverage of <b>2.4x</b> for the twelve months to June 30\",\"code\":\"CITATION_NOT_LOCATED\",\"linked\":false,\"marker\":2}]}",
         "qa_status": "Passed",
         "committee_status": "Committee Ready",
         "decision_scope": "FULL",
         "limitation_flags": ["<script>limit</script>"],
-        "validation_warnings": ["<img src=x onerror=\"window.warned=1\">"]
+        "validation_warnings": ["<img src=x onerror=\"window.warned=1\">"],
+        "figures": [
+          {
+            "route_node_id": "CP-1",
+            "record_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "citation_index": 0,
+            "document_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            "source_id": "00000000-0000-4000-8000-0000000000a1",
+            "page": 7,
+            "matched_text": "Coverage 2.1x",
+            "line": {
+              "before": "",
+              "excerpt": "Coverage 2.1x",
+              "after": "",
+              "recorded": true
+            },
+            "rects": [],
+            "withdrawn_at": null,
+            "linked": false,
+            "marker": 1
+          }
+        ],
+        "unverified": [
+          {
+            "route_node_id": "CP-1",
+            "record_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "unverified_index": 0,
+            "source_id": "00000000-0000-4000-8000-0000000000a1",
+            "page": 9,
+            "matched_text": "Interest coverage of <b>2.4x</b> for the twelve months to June 30",
+            "code": "CITATION_NOT_LOCATED",
+            "linked": false,
+            "marker": 2
+          }
+        ]
       }
     ],
     "narrative": [
@@ -56,7 +90,8 @@
             },
             "rects": [],
             "withdrawn_at": null,
-            "linked": false
+            "linked": false,
+            "marker": 1
           }
         },
         {
@@ -75,7 +110,8 @@
             "page": 9,
             "matched_text": "Interest coverage of <b>2.4x</b> for the twelve months to June 30",
             "code": "CITATION_NOT_LOCATED",
-            "linked": false
+            "linked": false,
+            "marker": 2
           }
         }
       ]

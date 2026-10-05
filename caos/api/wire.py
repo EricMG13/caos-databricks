@@ -718,6 +718,12 @@ def bounded(text: str) -> str:
     return text[: QUOTE_CHARS - len(TRUNCATED)] + TRUNCATED
 
 
+# A citation's place in its answer's list, the `[C<n>]` the module's body
+# cites it by (D107); null on a citation accepted before markers, which no
+# marker names.
+Marker = Annotated[int, Field(ge=1)] | None
+
+
 class LineView(BaseModel):
     """The evidence line a citation anchored in, split around its excerpt
     (D105), and whether the record holds that line at all (`recorded`).
@@ -768,7 +774,8 @@ class CitationView(BaseModel):
     is the evidence line the quote is an excerpt of (D105), where the record
     holds it. `linked` is false for a quote the answer's body does not carry
     (D106): still host-verified, but "not linked to a statement in the
-    answer"."""
+    answer". `marker` is the `[C<n>]` the body cites it by (D107), which the
+    workspace draws as a chip opening this citation."""
 
     model_config = _CLOSED
 
@@ -782,6 +789,7 @@ class CitationView(BaseModel):
     withdrawn_at: AwareDatetime | None
     cited_page: Annotated[int, Field(ge=1)] | None
     linked: StrictBool
+    marker: Marker
 
 
 # Why a citation is unverified (D106): the anchoring refusal that left it so
@@ -808,6 +816,8 @@ class UnverifiedCitationView(BaseModel):
     # False for a quote the answer's body does not carry either: "not in the
     # answer body", beside its reason.
     linked: StrictBool
+    # The `[C<n>]` the body cites it by (D107): its chip opens nothing.
+    marker: Marker
 
 
 class BlockedQuoteView(BaseModel):
@@ -827,6 +837,7 @@ class BlockedQuoteView(BaseModel):
     matched_text: Annotated[str, Field(max_length=QUOTE_CHARS)]
     line: LineView
     linked: StrictBool
+    marker: Marker
 
 
 # A handoff's tagged tables (`caos.methodology.tables`), whose bounds these are.
@@ -1136,9 +1147,10 @@ class NarrativeFigure(BaseModel):
     line: LineView
     rects: Annotated[list[RectView], Field(max_length=RECTS_MAX)]
     withdrawn_at: AwareDatetime | None
-    # The record citation's own `linked` (D106): false where the module's
-    # answer does not carry the quote.
+    # The record citation's own `linked` (D106): false where no marker in the
+    # module's answer names it; and its `marker` (D107).
     linked: StrictBool
+    marker: Marker
 
 
 class NarrativeUnverified(BaseModel):
@@ -1157,6 +1169,7 @@ class NarrativeUnverified(BaseModel):
     matched_text: Annotated[str, Field(max_length=QUOTE_CHARS)]
     code: UnverifiedCode
     linked: StrictBool
+    marker: Marker
 
 
 class NarrativeSpan(BaseModel):
@@ -1202,6 +1215,12 @@ class ReportArtifact(BaseModel):
     decision_scope: Id
     limitation_flags: Annotated[list[Text], Field(max_length=FLAGS_MAX)]
     validation_warnings: Annotated[list[Text], Field(max_length=FLAGS_MAX)]
+    # What the markdown's markers name (D107): each record citation a marker
+    # can name, as a narrative figure carries it, so a chip opens its source
+    # drawer, and each unverified one, whose chip opens nothing. A record
+    # from before markers has none.
+    figures: Annotated[list[NarrativeFigure], Field(max_length=CITATIONS_MAX)]
+    unverified: Annotated[list[NarrativeUnverified], Field(max_length=CITATIONS_MAX)]
 
 
 class RevisionSummary(BaseModel):

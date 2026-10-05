@@ -86,9 +86,10 @@ function figureFact(figure: NarrativeFigure): CitationView {
     // A figure names the page its record's citation is on; it keeps no
     // page the module named instead (D94).
     cited_page: null,
-    // The record citation's own: false where the module's answer does not
-    // carry the quote (D106), which the drawer says.
+    // The record citation's own: false where no marker of the module's answer
+    // names it (D106, D107), which the drawer says.
     linked: figure.linked,
+    marker: figure.marker,
   };
 }
 
@@ -110,6 +111,7 @@ function blockedFact(
     withdrawn_at: quote.withdrawn_at,
     cited_page: null,
     linked: quote.linked,
+    marker: quote.marker,
   };
 }
 
@@ -136,15 +138,18 @@ export function resolveFact(
       : null;
   }
   if ("narrative" in body) {
-    const figure = body.narrative
-      .flat()
-      .find(
-        ({ figure }) =>
-          figure?.record_sha256 === identity.record_sha256 &&
-          figure.citation_index === identity.index &&
-          figure.source_id === identity.source_id &&
-          figure.page === identity.page,
-      )?.figure;
+    // A narrative figure, or a saved artifact's marked citation (D107): both
+    // carry what the drawer needs, keyed by record and citation index.
+    const figure = [
+      ...body.narrative.flat().flatMap(({ figure }) => (figure ? [figure] : [])),
+      ...body.artifacts.flatMap((artifact) => artifact.figures),
+    ].find(
+      (figure) =>
+        figure.record_sha256 === identity.record_sha256 &&
+        figure.citation_index === identity.index &&
+        figure.source_id === identity.source_id &&
+        figure.page === identity.page,
+    );
     return figure ? { fact: figureFact(figure) } : null;
   }
   if (!("handoffs" in body)) return null;
