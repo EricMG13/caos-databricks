@@ -18,47 +18,47 @@
       "expects": [
         {
           "module_id": "CP-1",
-          "document_sha256": "9af04315eddd61ee7655445939d21bc91780c57c3689134c7c77d85c3dfb7e01",
+          "document_sha256": "f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a",
           "matched_text": "Net revenues | 2,993 | 2,907 | 5,863 | 5,701"
         },
         {
           "module_id": "CP-1",
-          "document_sha256": "9af04315eddd61ee7655445939d21bc91780c57c3689134c7c77d85c3dfb7e01",
+          "document_sha256": "f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a",
           "matched_text": "Operating income | 513 | 526 | 1,013 | 1,014"
         },
         {
           "module_id": "CP-1B",
-          "document_sha256": "98f970cb6b12ade42729b4d926792a5e866a724878d1ce4f76de06cf4aa58d1d",
+          "document_sha256": "b385f76ff631243d1053fa8073ebde4f8886b4a50c9ce34ce3498d6b2ac3e9f8",
           "matched_text": "Caesars | $2,993 | $2,907 | 3.0%"
         },
         {
           "module_id": "CP-1B",
-          "document_sha256": "98f970cb6b12ade42729b4d926792a5e866a724878d1ce4f76de06cf4aa58d1d",
+          "document_sha256": "b385f76ff631243d1053fa8073ebde4f8886b4a50c9ce34ce3498d6b2ac3e9f8",
           "matched_text": "Adjusted EBITDA | $920 | $955 | $1,807 | $1,839"
         },
         {
           "module_id": "CP-1B",
-          "document_sha256": "4738e21322c565366a5e68be47fbacb894b869611ba9b52a353ed69b648abc48",
+          "document_sha256": "172309048af2a6a2dab515d765f00a7c89bf8c874c6104a5e3a052b66cad4512",
           "matched_text": "Net revenues | 11,486 | 11,245 | 11,528"
         },
         {
           "module_id": "CP-2",
-          "document_sha256": "9af04315eddd61ee7655445939d21bc91780c57c3689134c7c77d85c3dfb7e01",
+          "document_sha256": "f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a",
           "matched_text": "Net cash provided by operating activities | 675 | 680"
         },
         {
           "module_id": "CP-2",
-          "document_sha256": "9af04315eddd61ee7655445939d21bc91780c57c3689134c7c77d85c3dfb7e01",
+          "document_sha256": "f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a",
           "matched_text": "Purchase of property and equipment | (335) | (453)"
         },
         {
           "module_id": "CP-2",
-          "document_sha256": "9af04315eddd61ee7655445939d21bc91780c57c3689134c7c77d85c3dfb7e01",
-          "matched_text": "The pending Merger may have significant effects on us, including, among others, the significant diversion of management and employee attention from ordinary course matters. For a more extensive discussion of those and other possible effects, please refer to “Risk Factors” in Part II, Item 1A of this report."
+          "document_sha256": "f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a",
+          "matched_text": "The pending Merger may have significant effects on us, including, among others, the significant diversion of management and employee attention from ordinary course matters."
         },
         {
           "module_id": "CP-5",
-          "document_sha256": "9af04315eddd61ee7655445939d21bc91780c57c3689134c7c77d85c3dfb7e01",
+          "document_sha256": "f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a",
           "matched_text": "Total debt | 11,807 | 11,705 | 11,792"
         }
       ],

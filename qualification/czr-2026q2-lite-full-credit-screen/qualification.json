@@ -25,32 +25,32 @@
       "expects": [
         {
           "module_id": "CP-L10",
-          "document_sha256": "9af04315eddd61ee7655445939d21bc91780c57c3689134c7c77d85c3dfb7e01",
+          "document_sha256": "f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a",
           "matched_text": "As of June 30, 2026, the Company had $1.9 billion of available borrowing capacity under the CEI Revolving Credit Facility, after consideration of $96 million in outstanding letters of credit, $56 million committed for regulatory purposes, the outstanding amount, and the reserves described above."
         },
         {
           "module_id": "CP-L10",
-          "document_sha256": "98f970cb6b12ade42729b4d926792a5e866a724878d1ce4f76de06cf4aa58d1d",
+          "document_sha256": "b385f76ff631243d1053fa8073ebde4f8886b4a50c9ce34ce3498d6b2ac3e9f8",
           "matched_text": "Adjusted EBITDA | $920 | $955 | $1,807 | $1,839"
         },
         {
           "module_id": "CP-1A",
-          "document_sha256": "d3eb5081cd288bbf43894e0de441c23d6d44f176c2e538bd75e1561a0e4dfb74",
+          "document_sha256": "28b3285d74a2521a799bce720e7b3681a3fe7f110d4dab2296ac8fa08fbe022c",
           "matched_text": "On May 27, 2026, Caesars Entertainment, Inc., a Delaware corporation (the “Company”), Fertitta Gaming Holdco, LLC, a Texas limited liability company (“Parent”), Empire Merger Sub, Inc., a Delaware corporation and direct wholly owned subsidiary of Parent (“Merger Sub”), Landry’s Fertitta, LLC, a Texas limited liability company (“Parent Guarantor”) solely for the purposes of Section 9.14 therein, and Hospitality Headquarters, Inc., a Texas corporation, solely for the purposes of Section 9.14(j) therein, entered into an Agreement and Plan of Merger (the “Merger Agreement”), pursuant to which Merger Sub will merge with and into the Company, with the Company continuing as the surviving corporation and direct wholly owned subsidiary of Parent (the “Merger”)."
         },
         {
           "module_id": "CP-1A",
-          "document_sha256": "65c7f6cc7008f2ff4895bd5209d8db92d6a93c0245941f9cc14209f1601f33a5",
+          "document_sha256": "4fbecbd5f5a10b15911b5749daee41b3e40090e43ed54bf33aee07a21877e68b",
           "matched_text": "LAS VEGAS and RENO, Nev. (May 28, 2026) – Caesars Entertainment, Inc. (NASDAQ: CZR) (“Caesars”) announced today that it entered into a definitive agreement to be acquired by Fertitta Entertainment, Inc. (“Fertitta Entertainment”) in an all-cash transaction valued at approximately $17.6 billion, including the assumption of approximately $11.9 billion of Caesars’ outstanding debt."
         },
         {
           "module_id": "CP-1C",
-          "document_sha256": "e1b78fe31d332f0aa176cb34bc7e534d8653af5655f556add085bb4b24414902",
+          "document_sha256": "795ac68aa1c51a7e0a6799a6e1ca053ee597dc9a1a9a6550a2438280a6e76cdb",
           "matched_text": "Consolidated Adjusted EBITDA of $610 million in the current quarter compared to $648 million in the prior year quarter"
         },
         {
           "module_id": "CP-1C",
-          "document_sha256": "8b28aee4b06aee46e9f99486ca71608149c1fb5544d7f915c3b287bb0f31a5d1",
+          "document_sha256": "4d12fff94b066f73e6eccce84eec937e8fd4fdc38d6061704db66a40511a210c",
           "matched_text": "Traditional net leverage (1) | 2.9x | 4.5x"
         },
         {
@@ -65,22 +65,22 @@
         },
         {
           "module_id": "CP-3C",
-          "document_sha256": "9af04315eddd61ee7655445939d21bc91780c57c3689134c7c77d85c3dfb7e01",
-          "matched_text": "CEI is party to a credit agreement, dated as of July 20, 2020, with JPMorgan Chase Bank, N.A., as administrative agent, U.S. Bank National Association, as collateral agent, and certain banks and other financial institutions and lenders party thereto (the “CEI Credit Agreement”), which, as amended, provides for the CEI Revolving Credit Facility in an aggregate principal amount of $2.25 billion (the “CEI Revolving Credit Facility”) and will mature on January 31, 2028. The CEI Revolving Credit Facility includes a letter of credit sub-facility of $388 million and contains reserves of $40 million which are available only for certain permitted uses."
+          "document_sha256": "f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a",
+          "matched_text": "CEI is party to a credit agreement, dated as of July 20, 2020, with JPMorgan Chase Bank, N.A., as administrative agent, U.S. Bank National Association, as collateral agent, and certain banks and other financial institutions and lenders party thereto (the “CEI Credit Agreement”), which, as amended, provides for the CEI Revolving Credit Facility in an aggregate principal amount of $2.25 billion (the “CEI Revolving Credit Facility”) and will mature on January 31, 2028."
         },
         {
           "module_id": "CP-3C",
-          "document_sha256": "85ca330865d6ed47de838cbd3e45a69d29b57640e91782a71f2639721ac665db",
+          "document_sha256": "2f3530b8034d89d47165530014e0541cbe4778893dac5411207cbaf2b3c82f97",
           "matched_text": "(a) Upon the occurrence of a Change of Control, each holder shall have the right to require the Company to repurchase all or any part of such holder’s Notes at a purchase price in cash equal to 101% of the principal amount thereof, plus accrued and unpaid interest, if any, to, but excluding, the date of repurchase (subject to the right of the holders of record on the relevant Record Date to receive interest due on the relevant Interest Payment Date), in accordance with the terms contemplated in this Section 4.08; provided, however, that notwithstanding the occurrence of a Change of Control, the Company shall not be obligated to purchase any Notes pursuant to this Section 4.08 in the event that it has exercised its right to redeem such Notes in accordance with Article III of this Indenture."
         },
         {
           "module_id": "CP-4C",
-          "document_sha256": "9af04315eddd61ee7655445939d21bc91780c57c3689134c7c77d85c3dfb7e01",
+          "document_sha256": "f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a",
           "matched_text": "As of June 30, 2026, the Company was in compliance with all of the applicable financial covenants described above."
         },
         {
           "module_id": "CP-5",
-          "document_sha256": "9af04315eddd61ee7655445939d21bc91780c57c3689134c7c77d85c3dfb7e01",
+          "document_sha256": "f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a",
           "matched_text": "Total debt | 11,807 | 11,705 | 11,792"
         }
       ],
