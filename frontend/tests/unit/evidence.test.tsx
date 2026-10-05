@@ -91,6 +91,23 @@ describe("the evidence surface", () => {
     expect(dialog.querySelector("[data-withdrawn]")).toHaveTextContent("2026-09-09T09:41:00Z");
   });
 
+  test("a citation the host re-anchored says which page the module cited (D94)", () => {
+    const moved: Citation = { ...CITATION, chip: "D-04 p.68 ¶3", cited_page: 67 };
+    render(
+      <EvidenceProvider>
+        <CitationChip citation={CITATION} />
+        <CitationChip citation={moved} />
+      </EvidenceProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Evidence D-04 p.68 ¶2" }));
+    expect(screen.getByRole("dialog").querySelector("[data-reanchored]")).toBeNull();
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+    fireEvent.click(screen.getByRole("button", { name: "Evidence D-04 p.68 ¶3" }));
+    expect(screen.getByRole("dialog").querySelector("[data-reanchored]")).toHaveTextContent(
+      "Cited p.67, found p.68",
+    );
+  });
+
   test("test_passport_contract", () => {
     for (const passport of [ACTUAL, PROJECTED]) {
       const { unmount } = render(

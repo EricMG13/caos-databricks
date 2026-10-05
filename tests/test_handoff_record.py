@@ -287,6 +287,11 @@ def test_a_record_keeps_the_page_a_reanchored_citation_was_cited_on(
         document["citations"][0]["cited_page"] = value
         sha = blobs.put(canonical_json(document).encode("utf-8"))
         _mismatch(blobs, artifact, sha, CP0)
+    # Only the whole-line rule re-anchors: under any other a `cited_page` is
+    # not this host's (M2).
+    for rule in (ANY_RUN, WHOLE_LINE_AS_STORED):
+        other = dataclasses.replace(moved, citation_rule=rule)
+        _mismatch(blobs, artifact, blobs.put(record_bytes(other)), CP0)
 
 
 def _mismatch(blobs: BlobStore, artifact: str, sha: str, expected: object) -> None:

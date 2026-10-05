@@ -395,12 +395,13 @@ WITHHELD_AUTHORITY: dict[str, frozenset[str]] = {
     "CP-6": frozenset({"references/REF_CP-6A_Portfolio_Debate_Inputs.xlsx"}),
 }
 
-# The JSON payload schemas a manifest lists or a `SKILL.md` names (D93). The
-# canonical adapter takes a Markdown handoff and never a payload -- nothing
-# calls the vendor's `check_payload` (`handoff.validate_markdown`) -- so no
-# module is handed one: they were 54,133 bytes of every CP-L10 prompt and
-# 11,628 of CP-0's. Every Markdown register, column and value set a module
-# writes is stated in its `SKILL.md` and delivered references. Withheld as
+# The payload schemas a manifest lists or a `SKILL.md` names (D93), JSON
+# Schema or the vendor's compact text form. The canonical adapter takes a
+# Markdown handoff and never a payload -- nothing calls the vendor's
+# `check_payload` (`handoff.validate_markdown`) -- so no module is handed one:
+# they were 54,133 bytes of every CP-L10 prompt and 11,628 of CP-0's. A few
+# value sets are spelled out only there (D93 names them); no reader the host
+# runs checks those columns, so no verdict depends on them. Withheld as
 # `WITHHELD_AUTHORITY` is, and named in the prompt by its own host note.
 PAYLOAD_SCHEMA_SUFFIX = ".schema.txt"
 

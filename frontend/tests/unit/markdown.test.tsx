@@ -327,14 +327,18 @@ describe("a module's text in the places every module shares", () => {
   });
 
   test("every table the bundle tags is placed by its id, under its schema reference's name", () => {
-    // Every `<!-- table-id: -->` the methodology's Markdown declares.
+    // Every `<!-- table-id: -->` the methodology's Markdown declares, read as
+    // the bundle's own reader does (cp_tables.TABLE_ID_RE), so prose that
+    // names the comment is no table.
     const declared = new Set<string>();
     const walk = (dir: string) => {
       for (const entry of readdirSync(dir, { withFileTypes: true })) {
         const path = resolve(dir, entry.name);
         if (entry.isDirectory()) walk(path);
         else if (entry.name.endsWith(".md")) {
-          for (const match of readFileSync(path, "utf8").matchAll(/table-id:\s*([a-z0-9_.-]+)/g)) {
+          for (const match of readFileSync(path, "utf8").matchAll(
+            /<!--\s*table-id:\s*([A-Za-z0-9_.]+)\s*-->/g,
+          )) {
             declared.add(match[1]!);
           }
         }

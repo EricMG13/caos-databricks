@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { toFraction, type Box } from "./geometry";
 import { Digest } from "@/ds/Digest";
 import { Overlay } from "./Overlay";
+import { Reanchored } from "./Reanchored";
 import { OFFLINE_WORDING, UNAVAILABLE_WORDING, fetchPage, type PageStatus } from "@/app/transport";
 import type { CitationView, PageDocument, PageLine } from "@/wire/v1";
 
@@ -241,6 +242,7 @@ export function SourceDrawer({
           <dt>Rectangles</dt>
           <dd>{fact.rects.length}</dd>
         </dl>
+        <Reanchored cited={fact.cited_page} found={fact.page} />
         <div className="focusnote">
           <b>Escape</b> returns focus to the chip that opened this.
         </div>

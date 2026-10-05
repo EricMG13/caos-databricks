@@ -28,6 +28,7 @@ from caos.evidence.citations import (
     CITATION_RULES,
     WHOLE_LINE,
     WHOLE_LINE_AS_STORED,
+    AnchoredCitation,
     Citation,
     CitationRule,
     _line_run,
@@ -348,8 +349,8 @@ PAGES = (
 )
 
 
-def _pages_pdf() -> bytes:
-    """`PAGES` as a PDF, one page each, each line drawn apart from the next."""
+def _pages_pdf(pages: tuple[tuple[str, ...], ...] = PAGES) -> bytes:
+    """`pages` as a PDF, one page each, each line drawn apart from the next."""
     from test_admission_limits import multi_page_pdf
     from test_pdf_extraction import LEFT_MARGIN
 
@@ -360,7 +361,7 @@ def _pages_pdf() -> bytes:
                 f"({line}) Tj\nET\n"
                 for n, line in enumerate(lines)
             ).encode("ascii")
-            for lines in PAGES
+            for lines in pages
         ]
     )
 
@@ -518,23 +519,11 @@ def test_a_whole_line_cited_on_the_wrong_page_is_anchored_at_its_true_page(
     lines, one the node was not given, a page it was not given, and part of
     a line all refuse as before; and only `WHOLE_LINE` re-anchors, so a
     record accepted under another rule is located as it always was."""
-    from test_admission_limits import multi_page_pdf
-    from test_pdf_extraction import LEFT_MARGIN
 
-    from caos.evidence.citations import ANY_RUN, AnchoredCitation, TokenIndex
+    from caos.evidence.citations import ANY_RUN, TokenIndex
 
     conn, case_id = case
-    pdf = multi_page_pdf(
-        [
-            "".join(
-                f"BT\n/F1 12 Tf\n1 0 0 1 {LEFT_MARGIN:.0f} {700 - 40 * n} Tm\n"
-                f"({line}) Tj\nET\n"
-                for n, line in enumerate(lines)
-            ).encode("ascii")
-            for lines in REANCHOR_PAGES
-        ]
-    )
-    source_id = _ingest_pdf(conn, case_id, tmp_path, pdf)
+    source_id = _ingest_pdf(conn, case_id, tmp_path, _pages_pdf(REANCHOR_PAGES))
     by_page = _blocks_by_page(conn, source_id)
     every = frozenset(block for blocks in by_page.values() for block in blocks)
     leverage = "Net leverage was 3.4x at year end."
@@ -580,3 +569,89 @@ def test_a_whole_line_cited_on_the_wrong_page_is_anchored_at_its_true_page(
     # Under the rules older records name, a wrong page is not located.
     for rule in (WHOLE_LINE_AS_STORED, ANY_RUN):
         assert anchor(1, leverage, rule=rule) is not_located
+
+
+def test_a_stored_citation_is_checked_where_it_is_stored(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> None:
+    """D94: a reader re-checks a stored citation at the page it stores, never
+    searching the run's capture for it, and keeps its `cited_page` only when
+    that page holds no such line -- the one case acceptance re-anchors."""
+    from caos.evidence.citations import TokenIndex, verify_stored_citations
+
+    conn, case_id = case
+    source_id = _ingest_pdf(conn, case_id, tmp_path, _pages_pdf(REANCHOR_PAGES))
+    every = every_block(conn, source_id)
+    leverage = "Net leverage was 3.4x at year end."
+
+    def stored(page: int, cited: int | None, quote: str = leverage) -> object:
+        try:
+            [found] = verify_stored_citations(
+                conn,
+                delivered=every,
+                citations=[(Citation(source_id, page, quote), cited)],
+                index=TokenIndex(),
+                rule=WHOLE_LINE,
+            )
+        except Refusal as refused:
+            return refused.code
+        return found
+
+    [live] = verify_citations(
+        conn,
+        delivered=every,
+        citations=[Citation(source_id, 1, leverage)],
+        rule=WHOLE_LINE,
+    )
+    assert stored(2, 1) == live
+    # A cited page that does hold the line: no re-anchoring was due.
+    shared = "The same line on two pages."
+    found = stored(2, 3, shared)
+    assert isinstance(found, AnchoredCitation) and found.cited_page is None
+    # A stored page the quote is not on is never searched for elsewhere.
+    assert stored(1, None) is RefusalCode.CITATION_NOT_LOCATED
+
+
+def test_placing_a_quote_reads_each_page_once_and_never_re_anchors(
+    case: tuple[StoreConnection, UUID],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """D94 (I1): the retry placement asks each delivered page once, at that
+    page; it never runs the re-anchoring search, which would make it
+    quadratic in the pages delivered."""
+    from caos.evidence import citations
+    from caos.evidence.citations import TokenIndex, find_line
+
+    conn, case_id = case
+    source_id = _ingest_pdf(conn, case_id, tmp_path, _pages_pdf(REANCHOR_PAGES))
+    by_page = _blocks_by_page(conn, source_id)
+    every = frozenset(block for blocks in by_page.values() for block in blocks)
+    searched: list[int] = []
+    shown = citations._shown_line_run
+
+    def counted(
+        page: _Page,
+        cuts: Mapping[int, tuple[int, ...]] | None,
+        lines: Mapping[int, tuple[str, ...]],
+        matched_text: str,
+        *,
+        tracking: bool,
+    ) -> tuple[list[_Token], str]:
+        searched.append(1)
+        return shown(page, cuts, lines, matched_text, tracking=tracking)
+
+    def never(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError
+
+    monkeypatch.setattr(citations, "_shown_line_run", counted)
+    monkeypatch.setattr(citations, "_true_page", never)
+    found = find_line(
+        conn,
+        blocks=every,
+        pages=set(by_page),
+        citation=Citation(source_id, 1, "A paraphrase on no page at all."),
+        index=TokenIndex(),
+    )
+    assert found.absent
+    assert len(searched) <= len(by_page)

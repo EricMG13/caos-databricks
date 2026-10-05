@@ -129,31 +129,28 @@ Original files, in this bundle: REF_CP-1_01_FileGateSourceValidation.md, REF_CP-
 </step_reference>
 ## REF_CP-1_07_NormalizedFinancialsTable.md
 <!-- REF_CP-1_07_NormalizedFinancialsTable (Tier 2) | 2026-06-02 -->
-<step_reference module="CP-1" step="7" name="Normalized Financials Table">
+<step_reference module="CP-1" step="7" name="Normalized Financials Cross-Check">
 <input>T4.4 IS + T4.5 CFS + T4.6 BS.</input>
 <gate>At least one of Steps 4–6 produced data.</gate>
 
 ## Detailed Instructions
-1. Produce consolidated cross-statement table — IS, CFS, BS across all periods.
-2. All figures on Step 3 normalization basis. No re-extraction from sources.
-3. Consolidation only — no new data, no modifications.
-4. Cross-check internal consistency:
+1. T4.4–T4.6, on the Step 3 basis, are the normalized financials. Write no consolidated copy of them (the T4.7 table is retired: it repeated their figures).
+2. Cross-check internal consistency:
    - Net Income (IS) vs. equity movements (BS)
    - Operating + investing + financing → Net Change in Cash (CFS)
    - Opening vs. closing BS positions vs. period flows
    - Flag material reconciliation differences as gaps
 
-## Output — T4.7 Normalized Financials
-`Line Item` | `Statement Source` (IS/CFS/BS) | `Period 1` … `Period N`
+## Output
+No register of its own: each material reconciliation difference is a T4.12 gap.
 
 ## Warnings
-- Figures must match Steps 4–6 exactly. Discrepancy = normalization error.
 - Cross-statement reconciliation failures → log with materiality assessment.
 </step_reference>
 ## REF_CP-1_08_DerivedPeriodConstruction.md
 <!-- REF_CP-1_08_DerivedPeriodConstruction (Tier 2) | 2026-06-02 -->
 <step_reference module="CP-1" step="8" name="LTM/YTD/Derived Period Construction">
-<input>T4.7 Normalized Financials.</input>
+<input>T4.4–T4.6 normalized financials.</input>
 <gate priority="critical">Sub-period data must exist. Missing component → null. Do NOT estimate.</gate>
 
 ## Detailed Instructions
@@ -173,7 +170,7 @@ Original files, in this bundle: REF_CP-1_01_FileGateSourceValidation.md, REF_CP-
 ## REF_CP-1_09_CalculationRegisterKPIBuild.md
 <!-- REF_CP-1_09_CalculationRegisterKPIBuild (Tier 2) | 2026-06-02 -->
 <step_reference module="CP-1" step="9" name="Calculation Register & KPI Build">
-<input>T4.7 Normalized Financials + T4.8 Constructed Period Register.</input>
+<input>T4.4–T4.6 normalized financials + T4.8 Constructed Period Register.</input>
 <gate>Normalized data available for at least some periods.</gate>
 
 ## Detailed Instructions
@@ -186,13 +183,10 @@ Original files, in this bundle: REF_CP-1_01_FileGateSourceValidation.md, REF_CP-
    - **Growth:** Revenue %, EBITDA %
 2. Full audit trail per KPI: name, formula, numerator (value+source), denominator (value+source), period, currency, unit, value, calc status, evidence tier, limitations.
 3. Calculation status (8 values): `Verified` | `Calculated` | `Estimated` | `Proxy` | `Not Calculable` | `Partial` | `Conflicted` | `Not Available`
-4. Populate KPI Dashboard with trend direction and analyst notes.
+4. T4.9 is the one KPI register: one row per KPI and period, issuer-reported KPIs included. Write no KPI dashboard (the T4.10 table is retired: it repeated T4.9's values); each KPI's trend direction goes in the Step 11 narrative.
 
 ## Output — T4.9 Calculation Register
 `Metric Name` | `Formula` | `Numerator Value` | `Numerator Source` | `Denominator Value` | `Denominator Source` | `Period` | `Currency` | `Unit` | `Calculated Value` | `Calculation Status` | `Evidence Quality Tier` | `Limitations`
-
-## Output — T4.10 KPI Dashboard
-`KPI Category` | `Metric Name` | `Period 1…N` | `Trend Direction` | `Analyst Note`
 
 ## Warnings
 - Null input → KPI = Not Calculable. Do NOT estimate missing inputs.
@@ -228,13 +222,13 @@ Original files, in this bundle: REF_CP-1_01_FileGateSourceValidation.md, REF_CP-
 ## REF_CP-1_11_EvidenceRiskCreditAnalysis.md
 <!-- REF_CP-1_11_EvidenceRiskCreditAnalysis (Tier 2) | 2026-06-02 | rev 2026-06-26: narrative = canonical Markdown `## Analysis` → projected Markdown handoff §3 -->
 <step_reference module="CP-1" step="11" name="Evidence-to-Risk-to-Credit Analysis">
-<input>All tables from Steps 1–10. T4.10 KPI Dashboard as primary reference.</input>
+<input>All tables from Steps 1–10. T4.9 Calculation Register as primary reference.</input>
 <gate>At least one KPI from Step 9. No KPIs → data-quality narrative only.</gate>
 
 ## Detailed Instructions
 1. Apply the required analytical chain to every material finding:
    **Evidence** → **Risk Mechanic** → **Credit Implication**
-2. Cover analytical dimensions:
+2. Cover analytical dimensions, with each KPI's trend direction:
    - Leverage trajectory — Debt/EBITDA, Net Debt/EBITDA trends, drivers
    - Coverage trends — Interest coverage evolution, FFO/Debt trajectory
    - Cash-flow quality — FCF conversion, WC dynamics, capex intensity
@@ -322,12 +316,16 @@ the columns below, with nothing but blank lines between the comment and the
 table. That one table is both the T4.x register and the CP-MODEL interface
 table: never write the register untagged and repeat it as a tagged copy, and
 never gather tagged copies into a block of their own. A value the sources do
-not supply is `null` in these tables: in these CP-1 tables write `null`, not
-the canon's `—`, since the register check and CP-MODEL both read `null` as
-null, an empty cell or `n/a` fails the register check, and `—` is not a
-CP-MODEL null. Every `null` in these tables is also listed in
-`## Gaps & Conflicts` with its table, row, column and the reason the value is
-absent. The readiness table is the separate keyed
+not supply is `null` in these tables: in these CP-1 tables write `null`, which
+the register check, `cp_tables` and CP-MODEL all read as null, while an empty
+cell or `n/a` fails the register check (CP-MODEL also reads the canon's `—`
+and `–` as null, so a stray dash does not void a table, but write `null`).
+Every `null` in a value-bearing column is also listed in `## Gaps & Conflicts`
+with its table, row, column and the reason the value is absent. A `null` in a
+reference column means none applies: it is not a gap and is not listed. The
+reference columns are `conflict_refs` and `limitation_refs` (T4.15),
+`component_period_ids` on a directly reported period and `fiscal_quarter` on a
+row that is not a QUARTER (T4.14). The readiness table is the separate keyed
 CP-MODEL row; T4.13's Downstream Readiness Matrix (Step 12) covers every
 consumer. The segment allocation, operating KPI schedule and readiness table
 have no T4 register: each is written once, tagged.
@@ -347,11 +345,13 @@ there; T4.15–T4.19 take the same shape with their own columns):
 
 ## Gaps & Conflicts
 
-- T4.14, FY2025, `fiscal_quarter`: null — a fiscal year has no quarter.
-- T4.14, FY2025 and Q2_2026, `component_period_ids`: null — both are reported directly, not built from other periods.
+- T4.15, cash_taxes_paid / Q2_2026, `value`: null — the 10-Q states cash taxes for the half-year only.
 ```
 
-T4.4–T4.7 hold line-item rows only: never a note row inside them (its empty
+The skeleton's own nulls are reference columns (`fiscal_quarter` on the FY row,
+`component_period_ids` on two reported periods), so none has a gap line; the
+line shown is the form for a value-bearing null, here a T4.15 `value`.
+T4.4–T4.6 hold line-item rows only: never a note row inside them (its empty
 cells fail the register check); a note goes to T4.12.
 
 ## Period register
@@ -596,9 +596,9 @@ Full step table relocated from ACTIVE_PROMPT; the compact step list + REF pointe
 | 4 | Income Statement | REF_CP-1_04_IncomeStatementCoverage | Always (gaps logged) | T4.4 IS + FS Coverage |
 | 5 | Cash Flow Statement | REF_CP-1_05_CashFlowStatementCoverage | Always (gaps logged) | T4.5 CFS |
 | 6 | Balance Sheet | REF_CP-1_06_BalanceSheetCoverage | Always (gaps logged) | T4.6 BS |
-| 7 | Normalized Financials | REF_CP-1_07_NormalizedFinancialsTable | ≥1 of Steps 4-6 produced data | T4.7 Consolidated |
+| 7 | Normalized Financials | REF_CP-1_07_NormalizedFinancialsTable | ≥1 of Steps 4-6 produced data | Cross-check (gaps to T4.12) |
 | 8 | LTM/YTD/Derived Periods | REF_CP-1_08_DerivedPeriodConstruction | Sub-period data; missing → null | T4.8 Constructed Period Reg |
-| 9 | Calculation & KPI Build | REF_CP-1_09_CalculationRegisterKPIBuild | Normalized data available | T4.9 Calc Reg + T4.10 KPI |
+| 9 | Calculation & KPI Build | REF_CP-1_09_CalculationRegisterKPIBuild | Normalized data available | T4.9 Calc Reg (KPIs) |
 | 10 | Definition Conflicts | REF_CP-1_10_DefinitionConflictRegister | Always (confirm or log) | T4.11 Def Conflict Reg |
 | 11 | Evidence→Risk→Credit | REF_CP-1_11_EvidenceRiskCreditAnalysis | ≥1 KPI from Step 9 | Analytical narrative |
 | 12 | Readiness Assessment | REF_CP-1_12_CoverageGateDownstreamReadiness | Always | T4.12 Gaps + T4.13 Readiness |

@@ -910,11 +910,13 @@ def test_cp1_writes_each_interface_register_once_as_one_tagged_table(
     assert (
         "never write the register untagged and repeat it as a tagged copy" in reference
     )
-    assert "write `null`, not\nthe canon's `—`" in reference
+    assert "in these CP-1 tables write `null`, which\nthe register check" in reference
+    # D95: only a value-bearing null is a gap; a reference column's null is not.
     assert (
-        "Every `null` in these tables is also listed in\n`## Gaps & Conflicts`"
+        "Every `null` in a value-bearing column is also listed in `## Gaps & Conflicts`"
         in reference
     )
+    assert "reference column means none applies: it is not a gap" in reference
     assert "is also listed in `## Gaps & Conflicts`" in skill("CP-1").decode()
     two_copy = cp1b_markdown(cp1b_identity("CP-1")).decode()
     single = _single_table(two_copy)

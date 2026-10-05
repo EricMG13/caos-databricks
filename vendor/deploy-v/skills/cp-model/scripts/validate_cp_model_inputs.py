@@ -290,7 +290,11 @@ SENIORITY_STATUSES = SENIOR_DEBT_CLASSES | frozenset(
     {"SENIOR_SUBORDINATED", "SUBORDINATED", "JUNIOR", "NOT_STATED"}
 )
 PERIOD_ID = re.compile(r"^[A-Z0-9_-]+$")
-NULL_TEXT = {"", "null", "n/a", "not available", "not calculable", "-"}
+# The canon renders an absent value `—` (CANON_SHARED.md); CP-1 is told to write
+# `null` in its tagged tables, but a stray em or en dash is the same null and
+# must not void the table (deployment fork r7, D95).
+NULL_TEXT = {"", "null", "n/a", "not available", "not calculable", "-", "\u2014", "\u2013"}
+DASHES = frozenset({"-", "\u2014", "\u2013"})
 REQUIRED_CP1B_VALIDATION_METRICS = {
     "revenue",
     "ebitda",
@@ -427,7 +431,7 @@ def _number(value: str, *, field: str, errors: list[str]) -> float | None:
     an underflow to 0.0 (deployment fork r3).
     """
     text = value.strip()
-    if text.lower() in {"", "null", "n/a", "not available", "not calculable", "-"}:
+    if text.lower() in NULL_TEXT:
         return None
     negative = text.startswith("(") and text.endswith(")")
     cleaned = text.strip("()").replace(",", "").replace("$", "")
@@ -451,7 +455,7 @@ def _number(value: str, *, field: str, errors: list[str]) -> float | None:
 
 
 def _list(value: str) -> list[str]:
-    if value.strip().lower() in {"", "null", "-", "[]"}:
+    if value.strip().lower() in {"", "null", "[]"} | DASHES:
         return []
     return [part.strip() for part in re.split(r"[;,]", value) if part.strip()]
 
@@ -738,7 +742,7 @@ def validate_cp_model_inputs(cp1_markdown: str, cp1b_markdown: str) -> Validatio
         fiscal_quarter = row.get("fiscal_quarter", "").strip().lower()
         if period_type == "QUARTER" and fiscal_quarter not in {"1", "2", "3", "4"}:
             errors.append(f"{period_id}: QUARTER requires fiscal_quarter 1-4")
-        if period_type != "QUARTER" and fiscal_quarter not in {"", "null", "-", "n/a"}:
+        if period_type != "QUARTER" and fiscal_quarter not in {"", "null", "n/a"} | DASHES:
             errors.append(f"{period_id}: {period_type} must not set fiscal_quarter")
         if row.get("audit_status") not in AUDIT_STATUSES:
             errors.append(f"{period_id}: invalid audit_status")

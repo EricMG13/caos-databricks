@@ -73,7 +73,7 @@ conclusions, never shorter reasoning or invented filler.
   - **conditional_register_ids**: none
   - **heading**: ### Analytical appendix — complete canonical registers
   - **lossless**: True
-  - **required_register_ids**: T4.1; T4.2; T4.3; T4.4; T4.5; T4.6; T4.7; T4.8; T4.9; T4.10; T4.11; T4.12; T4.13; T4.14; T4.15; T4.16; T4.17; T4.18; T4.19
+  - **required_register_ids**: T4.1; T4.2; T4.3; T4.4; T4.5; T4.6; T4.8; T4.9; T4.11; T4.12; T4.13; T4.14; T4.15; T4.16; T4.17; T4.18; T4.19
   - **schema_path**: ./references/CP-1_SCHEMA_REFERENCE.md
 - **completeness_contract**: structured below
   - **unconditional_stable_tables_cp_model**: cp1.model_period_register; cp1.model_account_register; cp1.segment_revenue_schedule; cp1.adjusted_ebitda_bridge; cp1.debt_facility_register; cp1.model_reconciliation_register; cp1.downstream_readiness
@@ -93,11 +93,6 @@ conclusions, never shorter reasoning or invented filler.
   - **required_registers**: structured below
     - **T4.1**: structured below
       - **columns**: Source File Name; Document Type; Period Coverage; Currency; Unit; Perimeter; Accounting Basis; Evidence Quality Tier; Analytical Use; Limitations
-      - **critical_columns**: identical to columns
-      - **disqualifier_exempt_columns**: none
-      - **minimum_body_rows**: 1
-    - **T4.10**: structured below
-      - **columns**: KPI Category; Metric Name; Period 1…N; Trend Direction; Analyst Note
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
@@ -171,11 +166,6 @@ conclusions, never shorter reasoning or invented filler.
       - **critical_columns**: identical to columns
       - **disqualifier_exempt_columns**: none
       - **minimum_body_rows**: 1
-    - **T4.7**: structured below
-      - **columns**: Line Item; Statement Source; Period 1…N
-      - **critical_columns**: identical to columns
-      - **disqualifier_exempt_columns**: none
-      - **minimum_body_rows**: 1
     - **T4.8**: structured below
       - **columns**: Metric Name; Derived Period Type; Full-Year Component; Current Stub; Prior-Year Stub; Derived Value; Calculation Status; Source Files; Limitations
       - **critical_columns**: identical to columns
@@ -209,7 +199,9 @@ Shared presentation rules:
 
 CP-MODEL interface tables are emitted on every run. They are not conditional on CP-MODEL having been named a downstream consumer when the run started: a handoff that omits them cannot be turned into a workbook later, and conversation text cannot supply a missing stable-table value. Publish each tagged table with real values, or with an explicit null and a gap row — never omit it. The readiness row always names CP-MODEL.
 
-Each of T4.14–T4.19 is one table, written once: its register heading, its `<!-- table-id: -->` comment, then the table (only blank lines between comment and table), which is both the register and the CP-MODEL interface table. Never repeat a register as a second, tagged copy. An absent value in these tables is `null`, not the canon's `—`, and every such `null` is also listed in `## Gaps & Conflicts` with its table, row, column and reason. A worked skeleton is in `references/REF_CP-1_STEPS.md` § REF_CP-1_13. T4.4–T4.7 hold line-item rows only: never a note row inside them (its empty cells fail the register check); a note goes to T4.12.
+Each of T4.14–T4.19 is one table, written once: its register heading, its `<!-- table-id: -->` comment, then the table (only blank lines between comment and table), which is both the register and the CP-MODEL interface table. Never repeat a register as a second, tagged copy. An absent value in these tables is `null` (every reader also accepts the canon's `—` as null, but write `null`). Every `null` in a value-bearing column is also listed in `## Gaps & Conflicts` with its table, row, column and reason; a `null` in a reference column means none applies, is not a gap and is not listed: `conflict_refs`, `limitation_refs`, `component_period_ids` on a directly reported period, `fiscal_quarter` on a row that is not a QUARTER. A worked skeleton is in `references/REF_CP-1_STEPS.md` § REF_CP-1_13. T4.4–T4.6 hold line-item rows only: never a note row inside them (its empty cells fail the register check); a note goes to T4.12.
+
+One register per figure. T4.4–T4.6, on the Step 3 basis, are CP-1's normalized financials: write no consolidated copy of them. T4.9 is the one KPI register, one row per KPI and period, issuer-reported KPIs included: write no KPI dashboard, and state each KPI's trend in `## Analysis`. T4.15 is the CP-MODEL account interface: keep it complete although T4.4–T4.6 show the same figures, since it is their only machine-readable form.
 
 ## Deterministic computation
 
