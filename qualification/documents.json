@@ -867,17 +867,17 @@
       "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,590 bytes."
     },
     {
-      "id": "czr-2020-credit-agreement",
+      "id": "czr-2024-credit-agreement-incremental-assumption-no3-liquidity",
       "issuer": "CZR",
-      "document": "Caesars Entertainment, Inc. (formerly Eldorado Resorts, Inc.) Credit Agreement dated 20 July 2020, JPMorgan Chase Bank, N.A. as administrative agent (SEC exhibit text extract)",
+      "document": "Caesars Entertainment, Inc. Incremental Assumption Agreement No. 3 dated 6 February 2024, JPMorgan Chase Bank, N.A. as administrative agent, with Exhibit A, the Credit Agreement dated 20 July 2020 conformed through it (SEC exhibit text extract, FULL liquidity set copy)",
       "modules": ["CP-2D"],
       "pathways": ["LIQUIDITY_REVIEW"],
-      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312520196232/d940333dex101.htm",
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex102.htm",
       "status": "in_hand",
-      "local_path": "qualification/czr-2026q2-liquidity/documents/CZR_2020_Credit_Agreement.txt",
+      "local_path": "qualification/czr-2026q2-liquidity/documents/CZR_2024_Credit_Agreement_Incremental_Assumption_No3.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Official EDGAR exhibit converted from HTML to plain text on 2 October 2026; re-converted 3 October 2026 (F478); re-split by sentence 3 October 2026 (F492); re-split by clause 4 October 2026 (F498) (accession 0001193125-20-196232, raw HTML SHA-256 6600ab5bec479091f68dc04b2db65a54ef1013944c94af0ec135335b374c7dba). It supplies the revolving facility's controlling terms as executed; its stated commitment is at the 2020 signing date, and the Fourth (9 May 2024) and Fifth (25 November 2024) Amendments are not in this set, so no current commitment is inferred from it. 935,517 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the $2,900.0 million Incremental Term B-1 Loans, and its Exhibit A is the Credit Agreement conformed through Incremental Assumption Agreement No. 1, the First to Third Amendments and Incremental Assumption Agreements No. 2 and No. 3; with the Fourth and Fifth Amendments it is the current credit-agreement chain (F508). Exhibit A is a changed copy (insertions double-underlined, deletions struck through); on the owner's ruling of 5 October 2026 the text renders the agreement as amended: the struck runs from Exhibit A's cover on are removed (295 runs, 167 with text, 484 characters) and the insertions kept as plain text, with the spacing the filing renders at each cut (F508). Exhibit A comes without the credit agreement's own exhibits and schedules. 1,077,810 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold. It replaces the 2020 credit agreement (Ex. 10.1, accession 0001193125-20-196232) in this set on the owner's ruling of 5 October 2026 (F508)."
     },
     {
       "id": "czr-fy2025-10k-covenant-refinancing",
@@ -906,17 +906,17 @@
       "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table, maturities, financial covenants and revolver availability, and the pending Fertitta Gaming merger disclosure. 166,976 bytes."
     },
     {
-      "id": "czr-2020-credit-agreement-covenant-refinancing",
+      "id": "czr-2024-credit-agreement-incremental-assumption-no3",
       "issuer": "CZR",
-      "document": "Caesars Entertainment, Inc. (formerly Eldorado Resorts, Inc.) Credit Agreement dated 20 July 2020, JPMorgan Chase Bank, N.A. as administrative agent (SEC exhibit text extract, FULL covenant-refinancing set copy)",
+      "document": "Caesars Entertainment, Inc. Incremental Assumption Agreement No. 3 dated 6 February 2024, JPMorgan Chase Bank, N.A. as administrative agent, with Exhibit A, the Credit Agreement dated 20 July 2020 conformed through it (SEC exhibit text extract)",
       "modules": ["CP-4"],
       "pathways": ["COVENANT_REFINANCING"],
-      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312520196232/d940333dex101.htm",
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex102.htm",
       "status": "in_hand",
-      "local_path": "qualification/czr-2026q2-covenant-refinancing/documents/CZR_2020_Credit_Agreement.txt",
+      "local_path": "qualification/czr-2026q2-covenant-refinancing/documents/CZR_2024_Credit_Agreement_Incremental_Assumption_No3.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-liquidity set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the facility's controlling terms as executed, including the Change in Control event of default; the Fourth and Fifth Amendments in this set reprice the term loans, and the First to Third Amendments and the incremental assumption agreements are not in it, so no current commitment, margin or financial covenant is inferred from the 2020 text. 935,517 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Official EDGAR exhibit (Ex. 10.2 to the Form 8-K filed 7 February 2024, Ex. 10.36 in the FY2025 10-K's index), admitted on the owner's ruling of 5 October 2026 after live runs C5 and LCR1 held back the covenant modules (F508); converted from HTML to plain text on 5 October 2026, split by sentence (F492) and by clause (F498) (accession 0001193125-24-026847, raw HTML SHA-256 aa48bc94b634de6386579791df7de831314785f007398546dd5c5fba415f2cfa). It adds the $2,900.0 million Incremental Term B-1 Loans, and its Exhibit A is the Credit Agreement conformed through Incremental Assumption Agreement No. 1, the First to Third Amendments and Incremental Assumption Agreements No. 2 and No. 3; with the Fourth and Fifth Amendments it is the current credit-agreement chain (F508). Exhibit A is a changed copy (insertions double-underlined, deletions struck through); on the owner's ruling of 5 October 2026 the text renders the agreement as amended: the struck runs from Exhibit A's cover on are removed (295 runs, 167 with text, 484 characters) and the insertions kept as plain text, with the spacing the filing renders at each cut (F508). Exhibit A comes without the credit agreement's own exhibits and schedules. 1,077,810 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold. It replaces the 2020 credit agreement (Ex. 10.1, accession 0001193125-20-196232) in this set on the owner's ruling of 5 October 2026 (F508)."
     },
     {
       "id": "czr-2024-credit-agreement-fourth-amendment",
@@ -958,6 +958,32 @@
       "note": "Official EDGAR exhibit converted from HTML to plain text on 2 October 2026; re-converted 3 October 2026 (F478); re-split by sentence 3 October 2026 (F492); re-split by clause 4 October 2026 (F498) (accession 0001193125-24-026847, raw HTML SHA-256 a4661727edc48361dd7290772e62412c389b8ad8d215a96aa58facfe9e356c2c). It supplies the notes' issue amount, the Change of Control definition and the Section 4.08 repurchase offer; no clause conclusion is inferred by the register. 758,385 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
     },
     {
+      "id": "czr-2024-650-notes-2032-first-supplemental-indenture",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. First Supplemental Indenture dated 1 March 2024 to the Indenture for the 6.500% Senior Secured Notes due 2032 (SEC exhibit text extract)",
+      "modules": ["CP-4", "CP-3C"],
+      "pathways": ["COVENANT_REFINANCING"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000159089524000088/exhibit42firstsupplemental.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-covenant-refinancing/documents/CZR_2024_650_Notes_First_Supplemental_Indenture.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Official EDGAR exhibit (Ex. 4.2 to the Form 10-Q filed 30 April 2024, Ex. 4.11 in the FY2025 10-K's index), admitted on the owner's ruling of 5 October 2026 after live runs C5 and LCR1 held back the covenant modules (F508); converted from HTML to plain text on 5 October 2026, split by sentence (F492) and by clause (F498) (accession 0001590895-24-000088, raw HTML SHA-256 18d810c415aef677f867ac73dee07a04382e71db794f3bfbc91cdd185e4b0dc4). It adds two New Guarantors and amends clause (44) of the definition of Permitted Liens and Section 8.01(b) of the 2032 notes indenture (F508). 11,774 bytes."
+    },
+    {
+      "id": "czr-2024-650-notes-2032-second-supplemental-indenture",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. Second Supplemental Indenture dated 23 August 2024 to the Indenture for the 6.500% Senior Secured Notes due 2032 (SEC exhibit text extract)",
+      "modules": ["CP-4", "CP-3C"],
+      "pathways": ["COVENANT_REFINANCING"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000159089525000068/exhibit417-6500seniorsecur.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-covenant-refinancing/documents/CZR_2024_650_Notes_Second_Supplemental_Indenture.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Official EDGAR exhibit (Ex. 4.17 to the Form 10-K filed 25 February 2025, Ex. 4.12 in the FY2025 10-K's index), admitted on the owner's ruling of 5 October 2026 after live runs C5 and LCR1 held back the covenant modules (F508); converted from HTML to plain text on 5 October 2026, split by sentence (F492) and by clause (F498) (accession 0001590895-25-000068, raw HTML SHA-256 0eedd7d398ee15f45dabc99df2003249d4dbe232be456767e7b972d355326b3c). It adds the New Guarantors listed in its Schedule A to the 2032 notes indenture (F508). 15,684 bytes."
+    },
+    {
       "id": "czr-2026-merger-8k",
       "issuer": "CZR",
       "document": "Caesars Entertainment, Inc. Form 8-K, Item 1.01, Agreement and Plan of Merger with Fertitta Gaming Holdco, LLC, 27 May 2026 (SEC filing text extract)",
@@ -997,17 +1023,17 @@
       "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table, maturities, financial covenants and revolver availability, and the pending Fertitta Gaming merger disclosure. 166,976 bytes."
     },
     {
-      "id": "czr-2020-credit-agreement-lite-covenant-refinancing",
+      "id": "czr-2024-credit-agreement-incremental-assumption-no3-lite-covenant-refinancing",
       "issuer": "CZR",
-      "document": "Caesars Entertainment, Inc. (formerly Eldorado Resorts, Inc.) Credit Agreement dated 20 July 2020, JPMorgan Chase Bank, N.A. as administrative agent (SEC exhibit text extract, LITE covenant-refinancing set copy)",
+      "document": "Caesars Entertainment, Inc. Incremental Assumption Agreement No. 3 dated 6 February 2024, JPMorgan Chase Bank, N.A. as administrative agent, with Exhibit A, the Credit Agreement dated 20 July 2020 conformed through it (SEC exhibit text extract, LITE covenant-refinancing set copy)",
       "modules": ["CP-3C"],
       "pathways": ["LITE_COVENANT_REFINANCING"],
-      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312520196232/d940333dex101.htm",
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex102.htm",
       "status": "in_hand",
-      "local_path": "qualification/czr-2026q2-lite-covenant-refinancing/documents/CZR_2020_Credit_Agreement.txt",
+      "local_path": "qualification/czr-2026q2-lite-covenant-refinancing/documents/CZR_2024_Credit_Agreement_Incremental_Assumption_No3.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-liquidity set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the facility's controlling terms as executed, including the Change in Control event of default; the Fourth and Fifth Amendments in this set reprice the term loans, and the First to Third Amendments and the incremental assumption agreements are not in it, so no current commitment, margin or financial covenant is inferred from the 2020 text. 935,517 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the $2,900.0 million Incremental Term B-1 Loans, and its Exhibit A is the Credit Agreement conformed through Incremental Assumption Agreement No. 1, the First to Third Amendments and Incremental Assumption Agreements No. 2 and No. 3; with the Fourth and Fifth Amendments it is the current credit-agreement chain (F508). Exhibit A is a changed copy (insertions double-underlined, deletions struck through); on the owner's ruling of 5 October 2026 the text renders the agreement as amended: the struck runs from Exhibit A's cover on are removed (295 runs, 167 with text, 484 characters) and the insertions kept as plain text, with the spacing the filing renders at each cut (F508). Exhibit A comes without the credit agreement's own exhibits and schedules. 1,077,810 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold. It replaces the 2020 credit agreement (Ex. 10.1, accession 0001193125-20-196232) in this set on the owner's ruling of 5 October 2026 (F508)."
     },
     {
       "id": "czr-2024-credit-agreement-fourth-amendment-lite-covenant-refinancing",
@@ -1049,6 +1075,32 @@
       "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the notes' issue amount, the Change of Control definition and the Section 4.08 repurchase offer; no clause conclusion is inferred by the register. 758,385 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
     },
     {
+      "id": "czr-2024-650-notes-2032-first-supplemental-indenture-lite-covenant-refinancing",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. First Supplemental Indenture dated 1 March 2024 to the Indenture for the 6.500% Senior Secured Notes due 2032 (SEC exhibit text extract, LITE covenant-refinancing set copy)",
+      "modules": ["CP-3C"],
+      "pathways": ["LITE_COVENANT_REFINANCING"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000159089524000088/exhibit42firstsupplemental.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-lite-covenant-refinancing/documents/CZR_2024_650_Notes_First_Supplemental_Indenture.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds two New Guarantors and amends clause (44) of the definition of Permitted Liens and Section 8.01(b) of the 2032 notes indenture (F508). 11,774 bytes."
+    },
+    {
+      "id": "czr-2024-650-notes-2032-second-supplemental-indenture-lite-covenant-refinancing",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. Second Supplemental Indenture dated 23 August 2024 to the Indenture for the 6.500% Senior Secured Notes due 2032 (SEC exhibit text extract, LITE covenant-refinancing set copy)",
+      "modules": ["CP-3C"],
+      "pathways": ["LITE_COVENANT_REFINANCING"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000159089525000068/exhibit417-6500seniorsecur.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-lite-covenant-refinancing/documents/CZR_2024_650_Notes_Second_Supplemental_Indenture.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the New Guarantors listed in its Schedule A to the 2032 notes indenture (F508). 15,684 bytes."
+    },
+    {
       "id": "czr-2026-merger-8k-lite-covenant-refinancing",
       "issuer": "CZR",
       "document": "Caesars Entertainment, Inc. Form 8-K, Item 1.01, Agreement and Plan of Merger with Fertitta Gaming Holdco, LLC, 27 May 2026 (SEC filing text extract, LITE covenant-refinancing set copy)",
@@ -1088,17 +1140,17 @@
       "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,590 bytes."
     },
     {
-      "id": "czr-2020-credit-agreement-lite-relative-value",
+      "id": "czr-2024-credit-agreement-incremental-assumption-no3-lite-relative-value",
       "issuer": "CZR",
-      "document": "Caesars Entertainment, Inc. (formerly Eldorado Resorts, Inc.) Credit Agreement dated 20 July 2020, JPMorgan Chase Bank, N.A. as administrative agent (SEC exhibit text extract, LITE relative-value set copy)",
+      "document": "Caesars Entertainment, Inc. Incremental Assumption Agreement No. 3 dated 6 February 2024, JPMorgan Chase Bank, N.A. as administrative agent, with Exhibit A, the Credit Agreement dated 20 July 2020 conformed through it (SEC exhibit text extract, LITE relative-value set copy)",
       "modules": ["CP-0"],
       "pathways": ["LITE_RELATIVE_VALUE"],
-      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312520196232/d940333dex101.htm",
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex102.htm",
       "status": "in_hand",
-      "local_path": "qualification/czr-2026q2-lite-relative-value/documents/CZR_2020_Credit_Agreement.txt",
+      "local_path": "qualification/czr-2026q2-lite-relative-value/documents/CZR_2024_Credit_Agreement_Incremental_Assumption_No3.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-liquidity set's copy and copied because the on-disk loader refuses a path outside the set root. Admitted so CP-0 has a governing debt document for the issuer (the readiness gap N54 recorded for CCL); it supplies the facility's controlling terms as executed, and the amendments are not in this set, so no current commitment, margin or financial covenant is inferred from the 2020 text. 935,517 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the $2,900.0 million Incremental Term B-1 Loans, and its Exhibit A is the Credit Agreement conformed through Incremental Assumption Agreement No. 1, the First to Third Amendments and Incremental Assumption Agreements No. 2 and No. 3; with the Fourth and Fifth Amendments it is the current credit-agreement chain (F508). Exhibit A is a changed copy (insertions double-underlined, deletions struck through); on the owner's ruling of 5 October 2026 the text renders the agreement as amended: the struck runs from Exhibit A's cover on are removed (295 runs, 167 with text, 484 characters) and the insertions kept as plain text, with the spacing the filing renders at each cut (F508). Exhibit A comes without the credit agreement's own exhibits and schedules. 1,077,810 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold. It replaces the 2020 credit agreement (Ex. 10.1, accession 0001193125-20-196232) in this set on the owner's ruling of 5 October 2026 (F508)."
     },
     {
       "id": "czr-2024-650-notes-2032-indenture-lite-relative-value",
@@ -1112,6 +1164,32 @@
       "external_path": null,
       "demand_verified": true,
       "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. Admitted so CP-0 has the governing document of the compared instrument (the readiness gap N54 recorded for CCL); it supplies the notes' issue amount, the Change of Control definition and the Section 4.08 repurchase offer; no clause conclusion is inferred by the register. 758,385 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+    },
+    {
+      "id": "czr-2024-650-notes-2032-first-supplemental-indenture-lite-relative-value",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. First Supplemental Indenture dated 1 March 2024 to the Indenture for the 6.500% Senior Secured Notes due 2032 (SEC exhibit text extract, LITE relative-value set copy)",
+      "modules": ["CP-0"],
+      "pathways": ["LITE_RELATIVE_VALUE"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000159089524000088/exhibit42firstsupplemental.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-lite-relative-value/documents/CZR_2024_650_Notes_First_Supplemental_Indenture.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds two New Guarantors and amends clause (44) of the definition of Permitted Liens and Section 8.01(b) of the 2032 notes indenture (F508). 11,774 bytes."
+    },
+    {
+      "id": "czr-2024-650-notes-2032-second-supplemental-indenture-lite-relative-value",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. Second Supplemental Indenture dated 23 August 2024 to the Indenture for the 6.500% Senior Secured Notes due 2032 (SEC exhibit text extract, LITE relative-value set copy)",
+      "modules": ["CP-0"],
+      "pathways": ["LITE_RELATIVE_VALUE"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000159089525000068/exhibit417-6500seniorsecur.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-lite-relative-value/documents/CZR_2024_650_Notes_Second_Supplemental_Indenture.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the New Guarantors listed in its Schedule A to the 2032 notes indenture (F508). 15,684 bytes."
     },
     {
       "id": "mgm-q2-2026-earnings",
@@ -1231,17 +1309,17 @@
       "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,590 bytes."
     },
     {
-      "id": "czr-2020-credit-agreement-relative-value",
+      "id": "czr-2024-credit-agreement-incremental-assumption-no3-relative-value",
       "issuer": "CZR",
-      "document": "Caesars Entertainment, Inc. (formerly Eldorado Resorts, Inc.) Credit Agreement dated 20 July 2020, JPMorgan Chase Bank, N.A. as administrative agent (SEC exhibit text extract, FULL relative-value set copy)",
+      "document": "Caesars Entertainment, Inc. Incremental Assumption Agreement No. 3 dated 6 February 2024, JPMorgan Chase Bank, N.A. as administrative agent, with Exhibit A, the Credit Agreement dated 20 July 2020 conformed through it (SEC exhibit text extract, FULL relative-value set copy)",
       "modules": ["CP-4"],
       "pathways": ["RELATIVE_VALUE"],
-      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312520196232/d940333dex101.htm",
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex102.htm",
       "status": "in_hand",
-      "local_path": "qualification/czr-2026q2-relative-value/documents/CZR_2020_Credit_Agreement.txt",
+      "local_path": "qualification/czr-2026q2-relative-value/documents/CZR_2024_Credit_Agreement_Incremental_Assumption_No3.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-liquidity set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the facility's controlling terms as executed, including the Change in Control event of default; the amendments are not in this set, so no current commitment, margin or financial covenant is inferred from the 2020 text. 935,517 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the $2,900.0 million Incremental Term B-1 Loans, and its Exhibit A is the Credit Agreement conformed through Incremental Assumption Agreement No. 1, the First to Third Amendments and Incremental Assumption Agreements No. 2 and No. 3; with the Fourth and Fifth Amendments it is the current credit-agreement chain (F508). Exhibit A is a changed copy (insertions double-underlined, deletions struck through); on the owner's ruling of 5 October 2026 the text renders the agreement as amended: the struck runs from Exhibit A's cover on are removed (295 runs, 167 with text, 484 characters) and the insertions kept as plain text, with the spacing the filing renders at each cut (F508). Exhibit A comes without the credit agreement's own exhibits and schedules. 1,077,810 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold. It replaces the 2020 credit agreement (Ex. 10.1, accession 0001193125-20-196232) in this set on the owner's ruling of 5 October 2026 (F508)."
     },
     {
       "id": "czr-2024-650-notes-2032-indenture-relative-value",
@@ -1255,6 +1333,32 @@
       "external_path": null,
       "demand_verified": true,
       "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It governs the CUSIP 12769GAC4 notes observed on FINRA; it supplies the notes' issue amount, the Change of Control definition and the Section 4.08 repurchase offer; no clause conclusion is inferred by the register. 758,385 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+    },
+    {
+      "id": "czr-2024-650-notes-2032-first-supplemental-indenture-relative-value",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. First Supplemental Indenture dated 1 March 2024 to the Indenture for the 6.500% Senior Secured Notes due 2032 (SEC exhibit text extract, FULL relative-value set copy)",
+      "modules": ["CP-4"],
+      "pathways": ["RELATIVE_VALUE"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000159089524000088/exhibit42firstsupplemental.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-relative-value/documents/CZR_2024_650_Notes_First_Supplemental_Indenture.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds two New Guarantors and amends clause (44) of the definition of Permitted Liens and Section 8.01(b) of the 2032 notes indenture (F508). 11,774 bytes."
+    },
+    {
+      "id": "czr-2024-650-notes-2032-second-supplemental-indenture-relative-value",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. Second Supplemental Indenture dated 23 August 2024 to the Indenture for the 6.500% Senior Secured Notes due 2032 (SEC exhibit text extract, FULL relative-value set copy)",
+      "modules": ["CP-4"],
+      "pathways": ["RELATIVE_VALUE"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000159089525000068/exhibit417-6500seniorsecur.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-relative-value/documents/CZR_2024_650_Notes_Second_Supplemental_Indenture.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the New Guarantors listed in its Schedule A to the 2032 notes indenture (F508). 15,684 bytes."
     },
     {
       "id": "czr-finra-trace-12769gac4-2026-10-02",
@@ -1413,17 +1517,17 @@
       "note": "Byte-identical to the czr-2026q2-lite-relative-value set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies revenues, Consolidated Adjusted EBITDA (a non-GAAP measure), the traditional debt table including the 4.125% Notes due 2029, and traditional and lease-adjusted net leverage. CP-1C's SKILL.md names no document form, so the demand is inferred from its Peer Discovery and Peer Data Gates rather than quoted. 33,608 bytes."
     },
     {
-      "id": "czr-2020-credit-agreement-lite-full-credit-screen",
+      "id": "czr-2024-credit-agreement-incremental-assumption-no3-lite-full-credit-screen",
       "issuer": "CZR",
-      "document": "Caesars Entertainment, Inc. (formerly Eldorado Resorts, Inc.) Credit Agreement dated 20 July 2020, JPMorgan Chase Bank, N.A. as administrative agent (SEC exhibit text extract, LITE full-credit-screen set copy)",
+      "document": "Caesars Entertainment, Inc. Incremental Assumption Agreement No. 3 dated 6 February 2024, JPMorgan Chase Bank, N.A. as administrative agent, with Exhibit A, the Credit Agreement dated 20 July 2020 conformed through it (SEC exhibit text extract, LITE full-credit-screen set copy)",
       "modules": ["CP-0", "CP-3C"],
       "pathways": ["LITE_FULL_CREDIT_SCREEN"],
-      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312520196232/d940333dex101.htm",
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex102.htm",
       "status": "in_hand",
-      "local_path": "qualification/czr-2026q2-lite-full-credit-screen/documents/CZR_2020_Credit_Agreement.txt",
+      "local_path": "qualification/czr-2026q2-lite-full-credit-screen/documents/CZR_2024_Credit_Agreement_Incremental_Assumption_No3.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-liquidity set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the facility's controlling terms as executed; the amendments are not in this set, so no current commitment, margin or financial covenant is inferred from the 2020 text. 935,517 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the $2,900.0 million Incremental Term B-1 Loans, and its Exhibit A is the Credit Agreement conformed through Incremental Assumption Agreement No. 1, the First to Third Amendments and Incremental Assumption Agreements No. 2 and No. 3; with the Fourth and Fifth Amendments it is the current credit-agreement chain (F508). Exhibit A is a changed copy (insertions double-underlined, deletions struck through); on the owner's ruling of 5 October 2026 the text renders the agreement as amended: the struck runs from Exhibit A's cover on are removed (295 runs, 167 with text, 484 characters) and the insertions kept as plain text, with the spacing the filing renders at each cut (F508). Exhibit A comes without the credit agreement's own exhibits and schedules. 1,077,810 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold. It replaces the 2020 credit agreement (Ex. 10.1, accession 0001193125-20-196232) in this set on the owner's ruling of 5 October 2026 (F508)."
     },
     {
       "id": "czr-2024-650-notes-2032-indenture-lite-full-credit-screen",
@@ -1437,6 +1541,32 @@
       "external_path": null,
       "demand_verified": true,
       "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the notes' issue amount, the Change of Control definition and the Section 4.08 repurchase offer; no clause conclusion is inferred by the register. 758,385 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+    },
+    {
+      "id": "czr-2024-650-notes-2032-first-supplemental-indenture-lite-full-credit-screen",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. First Supplemental Indenture dated 1 March 2024 to the Indenture for the 6.500% Senior Secured Notes due 2032 (SEC exhibit text extract, LITE full-credit-screen set copy)",
+      "modules": ["CP-0", "CP-3C"],
+      "pathways": ["LITE_FULL_CREDIT_SCREEN"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000159089524000088/exhibit42firstsupplemental.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-lite-full-credit-screen/documents/CZR_2024_650_Notes_First_Supplemental_Indenture.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds two New Guarantors and amends clause (44) of the definition of Permitted Liens and Section 8.01(b) of the 2032 notes indenture (F508). 11,774 bytes."
+    },
+    {
+      "id": "czr-2024-650-notes-2032-second-supplemental-indenture-lite-full-credit-screen",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. Second Supplemental Indenture dated 23 August 2024 to the Indenture for the 6.500% Senior Secured Notes due 2032 (SEC exhibit text extract, LITE full-credit-screen set copy)",
+      "modules": ["CP-0", "CP-3C"],
+      "pathways": ["LITE_FULL_CREDIT_SCREEN"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000159089525000068/exhibit417-6500seniorsecur.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-lite-full-credit-screen/documents/CZR_2024_650_Notes_Second_Supplemental_Indenture.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the New Guarantors listed in its Schedule A to the 2032 notes indenture (F508). 15,684 bytes."
     },
     {
       "id": "czr-finra-trace-12769gac4-2026-10-02-lite-full-credit-screen",
@@ -1530,6 +1660,32 @@
       "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It is the executed governing document of the proposed position (CUSIP 12769GAC4); it supplies the notes' issue amount, the Change of Control definition and the Section 4.08 repurchase offer; no clause conclusion is inferred by the register. The demand is inferred from CP-0's recorded refusal on ccl-fy2025-portfolio (applicable executed governing security documents) rather than quoted. 758,385 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
     },
     {
+      "id": "czr-2024-650-notes-2032-first-supplemental-indenture-lite-portfolio",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. First Supplemental Indenture dated 1 March 2024 to the Indenture for the 6.500% Senior Secured Notes due 2032 (SEC exhibit text extract, LITE portfolio set copy)",
+      "modules": ["CP-0", "CP-L10"],
+      "pathways": ["LITE_PORTFOLIO_DECISION"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000159089524000088/exhibit42firstsupplemental.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-lite-portfolio/documents/CZR_2024_650_Notes_First_Supplemental_Indenture.txt",
+      "external_path": null,
+      "demand_verified": false,
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds two New Guarantors and amends clause (44) of the definition of Permitted Liens and Section 8.01(b) of the 2032 notes indenture (F508). 11,774 bytes."
+    },
+    {
+      "id": "czr-2024-650-notes-2032-second-supplemental-indenture-lite-portfolio",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. Second Supplemental Indenture dated 23 August 2024 to the Indenture for the 6.500% Senior Secured Notes due 2032 (SEC exhibit text extract, LITE portfolio set copy)",
+      "modules": ["CP-0", "CP-L10"],
+      "pathways": ["LITE_PORTFOLIO_DECISION"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000159089525000068/exhibit417-6500seniorsecur.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-lite-portfolio/documents/CZR_2024_650_Notes_Second_Supplemental_Indenture.txt",
+      "external_path": null,
+      "demand_verified": false,
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the New Guarantors listed in its Schedule A to the 2032 notes indenture (F508). 15,684 bytes."
+    },
+    {
       "id": "czr-q2-2026-10q-portfolio",
       "issuer": "CZR",
       "document": "Caesars Entertainment, Inc. Form 10-Q for the quarter ended 30 June 2026 (SEC filing text extract, FULL portfolio set copy)",
@@ -1556,17 +1712,17 @@
       "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. Fiscal year ended 31 December 2025; it supplies the audited annual base (operating cash flow, total debt at 31 December 2025). 405,745 bytes, inside MAX_REQUEST_BYTES."
     },
     {
-      "id": "czr-2020-credit-agreement-portfolio",
+      "id": "czr-2024-credit-agreement-incremental-assumption-no3-portfolio",
       "issuer": "CZR",
-      "document": "Caesars Entertainment, Inc. (formerly Eldorado Resorts, Inc.) Credit Agreement dated 20 July 2020, JPMorgan Chase Bank, N.A. as administrative agent (SEC exhibit text extract, FULL portfolio set copy)",
+      "document": "Caesars Entertainment, Inc. Incremental Assumption Agreement No. 3 dated 6 February 2024, JPMorgan Chase Bank, N.A. as administrative agent, with Exhibit A, the Credit Agreement dated 20 July 2020 conformed through it (SEC exhibit text extract, FULL portfolio set copy)",
       "modules": ["CP-4"],
       "pathways": ["PORTFOLIO_DECISION"],
-      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312520196232/d940333dex101.htm",
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex102.htm",
       "status": "in_hand",
-      "local_path": "qualification/czr-2026q2-portfolio/documents/CZR_2020_Credit_Agreement.txt",
+      "local_path": "qualification/czr-2026q2-portfolio/documents/CZR_2024_Credit_Agreement_Incremental_Assumption_No3.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-liquidity set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the facility's controlling terms as executed, including the Change in Control event of default; the amendments are not in this set, so no current commitment, margin or financial covenant is inferred from the 2020 text. 935,517 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the $2,900.0 million Incremental Term B-1 Loans, and its Exhibit A is the Credit Agreement conformed through Incremental Assumption Agreement No. 1, the First to Third Amendments and Incremental Assumption Agreements No. 2 and No. 3; with the Fourth and Fifth Amendments it is the current credit-agreement chain (F508). Exhibit A is a changed copy (insertions double-underlined, deletions struck through); on the owner's ruling of 5 October 2026 the text renders the agreement as amended: the struck runs from Exhibit A's cover on are removed (295 runs, 167 with text, 484 characters) and the insertions kept as plain text, with the spacing the filing renders at each cut (F508). Exhibit A comes without the credit agreement's own exhibits and schedules. 1,077,810 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold. It replaces the 2020 credit agreement (Ex. 10.1, accession 0001193125-20-196232) in this set on the owner's ruling of 5 October 2026 (F508)."
     },
     {
       "id": "czr-2024-650-notes-2032-indenture-portfolio",
@@ -1580,6 +1736,32 @@
       "external_path": null,
       "demand_verified": true,
       "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It is the executed governing document of the proposed position (CUSIP 12769GAC4); it supplies the notes' issue amount, the Change of Control definition and the Section 4.08 repurchase offer; no clause conclusion is inferred by the register. 758,385 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+    },
+    {
+      "id": "czr-2024-650-notes-2032-first-supplemental-indenture-portfolio",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. First Supplemental Indenture dated 1 March 2024 to the Indenture for the 6.500% Senior Secured Notes due 2032 (SEC exhibit text extract, FULL portfolio set copy)",
+      "modules": ["CP-4"],
+      "pathways": ["PORTFOLIO_DECISION"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000159089524000088/exhibit42firstsupplemental.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-portfolio/documents/CZR_2024_650_Notes_First_Supplemental_Indenture.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds two New Guarantors and amends clause (44) of the definition of Permitted Liens and Section 8.01(b) of the 2032 notes indenture (F508). 11,774 bytes."
+    },
+    {
+      "id": "czr-2024-650-notes-2032-second-supplemental-indenture-portfolio",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. Second Supplemental Indenture dated 23 August 2024 to the Indenture for the 6.500% Senior Secured Notes due 2032 (SEC exhibit text extract, FULL portfolio set copy)",
+      "modules": ["CP-4"],
+      "pathways": ["PORTFOLIO_DECISION"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000159089525000068/exhibit417-6500seniorsecur.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-portfolio/documents/CZR_2024_650_Notes_Second_Supplemental_Indenture.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the New Guarantors listed in its Schedule A to the 2032 notes indenture (F508). 15,684 bytes."
     },
     {
       "id": "czr-finra-trace-12769gac4-2026-10-02-portfolio",
@@ -1660,17 +1842,17 @@
       "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,590 bytes."
     },
     {
-      "id": "czr-2020-credit-agreement-full-credit-assessment",
+      "id": "czr-2024-credit-agreement-incremental-assumption-no3-full-credit-assessment",
       "issuer": "CZR",
-      "document": "Caesars Entertainment, Inc. (formerly Eldorado Resorts, Inc.) Credit Agreement dated 20 July 2020, JPMorgan Chase Bank, N.A. as administrative agent (SEC exhibit text extract, FULL credit-assessment set copy)",
+      "document": "Caesars Entertainment, Inc. Incremental Assumption Agreement No. 3 dated 6 February 2024, JPMorgan Chase Bank, N.A. as administrative agent, with Exhibit A, the Credit Agreement dated 20 July 2020 conformed through it (SEC exhibit text extract, FULL credit-assessment set copy)",
       "modules": ["CP-4"],
       "pathways": ["FULL_CREDIT_ASSESSMENT"],
-      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312520196232/d940333dex101.htm",
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex102.htm",
       "status": "in_hand",
-      "local_path": "qualification/czr-2026q2-full-credit-assessment/documents/CZR_2020_Credit_Agreement.txt",
+      "local_path": "qualification/czr-2026q2-full-credit-assessment/documents/CZR_2024_Credit_Agreement_Incremental_Assumption_No3.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-liquidity set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the facility's controlling terms as executed, including the Change in Control event of default; the current commitment and margins are read from the 10-Q and the amendments, not inferred from the 2020 text. 935,517 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the $2,900.0 million Incremental Term B-1 Loans, and its Exhibit A is the Credit Agreement conformed through Incremental Assumption Agreement No. 1, the First to Third Amendments and Incremental Assumption Agreements No. 2 and No. 3; with the Fourth and Fifth Amendments it is the current credit-agreement chain (F508). Exhibit A is a changed copy (insertions double-underlined, deletions struck through); on the owner's ruling of 5 October 2026 the text renders the agreement as amended: the struck runs from Exhibit A's cover on are removed (295 runs, 167 with text, 484 characters) and the insertions kept as plain text, with the spacing the filing renders at each cut (F508). Exhibit A comes without the credit agreement's own exhibits and schedules. 1,077,810 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold. It replaces the 2020 credit agreement (Ex. 10.1, accession 0001193125-20-196232) in this set on the owner's ruling of 5 October 2026 (F508)."
     },
     {
       "id": "czr-2024-credit-agreement-fourth-amendment-full-credit-assessment",
@@ -1710,6 +1892,32 @@
       "external_path": null,
       "demand_verified": true,
       "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It governs the CUSIP 12769GAC4 notes, the proposed position; it supplies the notes' issue amount, the Change of Control definition and the Section 4.08 repurchase offer; no clause conclusion is inferred by the register. 758,385 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+    },
+    {
+      "id": "czr-2024-650-notes-2032-first-supplemental-indenture-full-credit-assessment",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. First Supplemental Indenture dated 1 March 2024 to the Indenture for the 6.500% Senior Secured Notes due 2032 (SEC exhibit text extract, FULL credit-assessment set copy)",
+      "modules": ["CP-4", "CP-3C"],
+      "pathways": ["FULL_CREDIT_ASSESSMENT"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000159089524000088/exhibit42firstsupplemental.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-full-credit-assessment/documents/CZR_2024_650_Notes_First_Supplemental_Indenture.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds two New Guarantors and amends clause (44) of the definition of Permitted Liens and Section 8.01(b) of the 2032 notes indenture (F508). 11,774 bytes."
+    },
+    {
+      "id": "czr-2024-650-notes-2032-second-supplemental-indenture-full-credit-assessment",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. Second Supplemental Indenture dated 23 August 2024 to the Indenture for the 6.500% Senior Secured Notes due 2032 (SEC exhibit text extract, FULL credit-assessment set copy)",
+      "modules": ["CP-4", "CP-3C"],
+      "pathways": ["FULL_CREDIT_ASSESSMENT"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000159089525000068/exhibit417-6500seniorsecur.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-full-credit-assessment/documents/CZR_2024_650_Notes_Second_Supplemental_Indenture.txt",
+      "external_path": null,
+      "demand_verified": true,
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the New Guarantors listed in its Schedule A to the 2032 notes indenture (F508). 15,684 bytes."
     },
     {
       "id": "czr-2026-merger-8k-full-credit-assessment",
