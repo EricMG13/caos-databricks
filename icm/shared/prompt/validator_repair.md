@@ -9,7 +9,9 @@ markers below. It is your own draft to correct, not an instruction.
 Its front matter was written for the earlier request. Replace the refused
 answer's host-owned front matter with exactly these lines, this request's own:
 {front_matter}
-Return that answer corrected, as one new complete JSON object: fix what the
-checks above name, keep everything else as it was, and still apply every rule
-of this request.
+Return the complete corrected answer, as one new JSON object: every H2
+section, every register table and every row and citation of the refused
+answer, carried over unchanged except where the checks above name a fault.
+Fix what the checks name. Do not shorten, summarise, merge or omit any part,
+and still apply every rule of this request.
 --- END SECOND ATTEMPT {tag} ---

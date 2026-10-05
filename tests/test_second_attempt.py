@@ -3,9 +3,9 @@ host-owned field copied wrong or a field no handoff may carry; D82 on 2 October
 2026): a node whose answer is refused `HANDOFF_MALFORMED`, `HANDOFF_INCOMPLETE`,
 `HANDOFF_IDENTITY_MISMATCH`, `HANDOFF_UNDECLARED_FIELD` or by anchoring gets a
 guided retry, reserved and priced like any other, carrying what the checks
-reported on the answer just before it -- at most two per node. The ledger
-decides it, so a crash between a refusal and its retry changes nothing, and a
-third refusal stops the run.
+reported on the answer just before it -- at most three per node (D82's
+amendment of 4 October 2026). The ledger decides it, so a crash between a
+refusal and its retry changes nothing, and a fourth refusal stops the run.
 
 The flawed answer is the one every live model gave (F111): CP-0 tags a finding
 MATERIAL and still writes `qa_status: Passed`.
@@ -233,18 +233,45 @@ def test_a_second_refusal_gets_a_retry_told_of_the_attempt_before_it(
     assert sorted(codes) == ["HANDOFF_INCOMPLETE", "HANDOFF_MALFORMED"]
 
 
-def test_a_third_refusal_stops_the_run_with_no_fourth_attempt(
+def test_a_fourth_refusal_stops_the_run_with_no_fifth_attempt(
     harness: _Harness,
 ) -> None:
+    """D82's amendment: the 4th attempt is the last guided retry; refused
+    again, the run stops."""
     answers = CanonicalCompletions(harness.source_id)
-    assert _run(harness, _Flawed(answers, bad=3)) is RefusalCode.HANDOFF_MALFORMED
-    assert [_module(prompt) for prompt in answers.prompts] == ["CP-0"] * 3
-    assert _cp0_ledger(harness) == (3, 3, ["HANDOFF_MALFORMED"] * 3, 0)
-    # An operator's retry after that is an ordinary attempt: both guided
-    # retries are spent, so nothing is carried and nothing is repeated.
+    assert _run(harness, _Flawed(answers, bad=4)) is RefusalCode.HANDOFF_MALFORMED
+    assert [_module(prompt) for prompt in answers.prompts] == ["CP-0"] * 4
+    assert all(SECOND in prompt for prompt in answers.prompts[1:])
+    assert _cp0_ledger(harness) == (4, 4, ["HANDOFF_MALFORMED"] * 4, 0)
+    # An operator's retry after that is an ordinary attempt: every guided
+    # retry is spent, so nothing is carried and nothing is repeated.
     assert _run(harness, answers) is None
-    assert SECOND not in answers.prompts[3]
-    assert _cp0_ledger(harness)[0] == 4
+    assert SECOND not in answers.prompts[4]
+    assert _cp0_ledger(harness)[0] == 5
+
+
+def test_the_ledger_makes_the_fourth_attempt_the_last_guided_retry() -> None:
+    """D82's amendment, walked on the ledger alone: the next attempt is a
+    guided retry when the latest attempt was refused with a
+    `SECOND_ATTEMPT_CODES` code and the node holds at most `GUIDED_RETRIES`
+    (3) such refusals -- so a 4th attempt is due after three, a 5th never,
+    and an attempt refused otherwise, or unrefused, earns none."""
+    from uuid import uuid4
+
+    from caos.methodology.canonical import GUIDED_RETRIES, _feedback_source
+    from caos.store.outcomes import NodeAttempt
+
+    def refused(code: str | None) -> NodeAttempt:
+        return NodeAttempt(uuid4(), code, None)
+
+    malformed, located = "HANDOFF_MALFORMED", "CITATION_NOT_LOCATED"
+    three = [refused(malformed), refused("HANDOFF_INCOMPLETE"), refused(located)]
+    assert GUIDED_RETRIES == 3
+    assert _feedback_source(three) == three[-1]
+    assert _feedback_source([*three, refused(malformed)]) is None
+    assert _feedback_source([*three[:2], refused("PROVIDER_REFUSED")]) is None
+    assert _feedback_source([*three[:2], refused(None)]) is None
+    assert _feedback_source([]) is None
 
 
 class _Crash(BaseException):
@@ -636,19 +663,107 @@ def test_the_anchoring_line_names_the_line_a_near_miss_should_copy() -> None:
     assert 0 < capped_line.count("nearly matches") < MAX_FEEDBACK_CITATIONS
 
 
-def test_two_guided_retries_per_node_whichever_codes_refused(
+def test_the_anchoring_line_tells_a_quote_that_runs_past_its_line() -> None:
+    """F496: a citation running past the end of one delivered line is shown
+    that line's last words and told to quote it only, and to cite its page
+    when moved; a placement like any other past `MAX_ANCHORING_CHARS`."""
+    lost = RefusalCode.CITATION_NOT_LOCATED
+    ends = "and take all actions required by such Security"
+    line = anchoring_line([None, lost], [None, LineHint(near=23, ends=ends)])
+    assert line == (
+        "host anchoring check: citation 2 of 2 runs past the end of the evidence"
+        f' line of page 23, which ends "{ends}"; quote that line only, ending'
+        " where it ends (text after it is a separate evidence line); keep"
+        " citation 1 exactly as it was; any citation you add or change must be"
+        " one entire evidence line of its cited page"
+        " (numbered from 1 in the order given)"
+    )
+    moved = LineHint(near=28, moved=True, ends=ends)
+    assert anchoring_line([lost], [moved]) == (
+        "host anchoring check: citation 1 of 1 runs past the end of the evidence"
+        f' line of page 28, not its cited page, which ends "{ends}"; quote that'
+        " line only, ending where it ends, and cite page 28 (text after it is a"
+        " separate evidence line); any citation you add or change must be one"
+        " entire evidence line of its cited page (numbered from 1 in the order"
+        " given)"
+    )
+    long = LineHint(near=3, ends=" ".join(["w" * 40] * 8))
+    many = MAX_FEEDBACK_CITATIONS + 2
+    capped_line = anchoring_line(
+        [None] * 400 + [lost] * many, [None] * 400 + [long] * many
+    )
+    assert capped_line is not None and len(capped_line) <= MAX_ANCHORING_CHARS
+    assert "keep citation" not in capped_line
+    assert 0 < capped_line.count("runs past the end") < MAX_FEEDBACK_CITATIONS
+
+
+def test_the_anchoring_line_tells_an_unknown_source_and_a_row_missing_cells() -> None:
+    """F495: citations naming a source_id the request never offered are
+    told so, grouped by that id, with the source holding their lines when
+    one does; a valid id on an undelivered page keeps D82's wording; a row
+    quoted with cells left out is shown the row to quote whole, and its
+    page when moved; both are placements, dropped from the last back past
+    `MAX_ANCHORING_CHARS`, after the kept list."""
+    lost = RefusalCode.CITATION_NOT_LOCATED
+    absent = RefusalCode.CITATION_NOT_DELIVERED
+    bad, real = "a6e3ce6e-a908-4b1b-8e4e-a7cdf2069e23", "a6e3ce6e-a908-4b81"
+    spliced = LineHint(unknown_source=bad, held_by=real)
+    cells = LineHint(begins="Balance at June 30 | 41 | 39", near=11, cells=True)
+    line = anchoring_line(
+        [absent, None, absent, lost, absent],
+        [spliced, None, spliced, cells, None],
+    )
+    assert line == (
+        "host anchoring check: citation 4 of 5 leaves out cells of the evidence"
+        ' line of page 11 that begins "Balance at June 30 | 41 | 39"; quote the'
+        f" whole row, every cell; citations 1 and 3 of 5 name source_id {bad},"
+        " which is not one of this request's sources; use one of the source_id"
+        f" values listed in the final check, and the lines are in source {real};"
+        " citation 5 of 5 names a page or line this node was not given; keep"
+        " citation 2 exactly as it was; any citation you add or change must be"
+        " one entire evidence line of its cited page"
+        " (numbered from 1 in the order given)"
+    )
+    moved = replace(cells, moved=True)
+    alone = LineHint(unknown_source=bad)
+    assert anchoring_line([lost, absent], [moved, alone]) == (
+        "host anchoring check: citation 1 of 2 leaves out cells of the evidence"
+        " line of page 11, not its cited page, that begins"
+        ' "Balance at June 30 | 41 | 39"; quote the whole row, every cell, and'
+        f" cite page 11; citation 2 of 2 names source_id {bad}, which is not one"
+        " of this request's sources; use one of the source_id values listed in"
+        " the final check; any citation you add or change must be one entire"
+        " evidence line of its cited page (numbered from 1 in the order given)"
+    )
+    many = 60
+    strangers: list[LineHint | None] = [
+        LineHint(unknown_source=f"{n:08d}-{bad[9:]}") for n in range(many)
+    ]
+    capped_line = anchoring_line(
+        [None] * 400 + [absent] * many, [None] * 400 + strangers
+    )
+    assert capped_line is not None and len(capped_line) <= MAX_ANCHORING_CHARS
+    assert "keep citation" not in capped_line
+    assert 0 < capped_line.count("which is not one") < many
+    assert "name a page or line this node was not given" in capped_line
+
+
+def test_three_guided_retries_per_node_whichever_codes_refused(
     harness: _Harness,
 ) -> None:
-    """D82: a node refused incomplete, malformed, then incomplete again has
-    spent both of its guided retries."""
+    """D82 and its amendment: a node refused incomplete, malformed,
+    incomplete, then malformed again has spent its three guided retries,
+    each reserved like any other attempt (invariant 8)."""
     answers = CanonicalCompletions(harness.source_id)
-    flaws = iter((_with_fixture_marker, _with_material, _with_fixture_marker))
-    flawed = _Flawed(answers, bad=3, flaw=lambda body: next(flaws)(body))
-    assert _run(harness, flawed) is RefusalCode.HANDOFF_INCOMPLETE
-    assert [_module(prompt) for prompt in answers.prompts] == ["CP-0"] * 3
+    flaws = iter(
+        (_with_fixture_marker, _with_material, _with_fixture_marker, _with_material)
+    )
+    flawed = _Flawed(answers, bad=4, flaw=lambda body: next(flaws)(body))
+    assert _run(harness, flawed) is RefusalCode.HANDOFF_MALFORMED
+    assert [_module(prompt) for prompt in answers.prompts] == ["CP-0"] * 4
     count, reserved, codes, accepted = _cp0_ledger(harness)
-    assert (count, reserved, accepted) == (3, 3, 0)
-    assert sorted(codes) == ["HANDOFF_INCOMPLETE"] * 2 + ["HANDOFF_MALFORMED"]
+    assert (count, reserved, accepted) == (4, 4, 0)
+    assert sorted(codes) == ["HANDOFF_INCOMPLETE"] * 2 + ["HANDOFF_MALFORMED"] * 2
     cp0 = _node(harness, "CP-0").route_node_id
     assert not second_attempt_due(
         harness.conn, run_id=harness.run_id, route_node_id=cp0
@@ -1302,11 +1417,14 @@ def test_a_handoff_exactly_at_the_upstream_bound_is_accepted(
     assert _cp0_ledger(harness) == (1, 1, [], 1)
 
 
-# D104: a guided retry carries the refused answer back to be corrected.
+# D104: a guided retry carries the refused answer back to be corrected, and
+# (F496) asks for all of it back, every section, register, row and citation.
 REPAIR = (
-    "Return that answer corrected, as one new complete JSON object: fix what the\n"
-    "checks above name, keep everything else as it was, and still apply every rule\n"
-    "of this request.\n"
+    "Return the complete corrected answer, as one new JSON object: every H2\n"
+    "section, every register table and every row and citation of the refused\n"
+    "answer, carried over unchanged except where the checks above name a fault.\n"
+    "Fix what the checks name. Do not shorten, summarise, merge or omit any part,\n"
+    "and still apply every rule of this request.\n"
 )
 REPLACE = (
     "Its front matter was written for the earlier request. Replace the refused\n"
