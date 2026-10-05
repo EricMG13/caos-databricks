@@ -10,6 +10,7 @@ from typing import Any, NamedTuple
 
 from caos.calculators.cash_flow import cash_flow_forecast
 from caos.evidence.citations import AnchoredCitation
+from caos.methodology.citation_markers import unmarked
 from caos.methodology.host import verified_host_bytes
 from caos.methodology.vendor import VendorContract
 from caos.refusals import Refusal, RefusalCode
@@ -316,11 +317,19 @@ def _faults_or_none(
         return None
 
 
+def _unmarked_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Each row with every cell read without its citation markers
+    (`unmarked`, D107)."""
+    return [{key: unmarked(cell) for key, cell in row.items()} for row in rows]
+
+
 def _faults(
     contract: VendorContract, request: Mapping[str, Any], rows: list[dict[str, str]]
 ) -> list[tuple[str, str]]:
     """(row, fault) for each CP-2G driver row the request needs and CP-CF cannot
-    map, in request order."""
+    map, in request order. Each cell is read without its citation markers
+    (`_unmarked_rows`, D107): `(45) [C1]` is the figure `(45)`."""
+    rows = _unmarked_rows(rows)
     if request["units"]["scale"] != "millions":
         raise ValueError
     faults: list[tuple[str, str]] = []

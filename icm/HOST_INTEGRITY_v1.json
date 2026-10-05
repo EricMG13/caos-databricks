@@ -5,12 +5,12 @@
       "sha256": "a0fa1a673230e24f29bde743b3bd9ea866aa39a3380878cb91926db929401451"
     },
     "final_check.md": {
-      "bytes": 2271,
-      "sha256": "66d12908d27534ab418d1cfd0bac358535d126c0252d39b011db854e378dc6e6"
+      "bytes": 2720,
+      "sha256": "dfd5f9b5ab971963479fc75b050061d8f11b9fdf5dcb77377c81cc1a84a8ba1d"
     },
     "forecast_extension.md": {
-      "bytes": 1054,
-      "sha256": "94220470f167d8aa1b9aa4a910e009405555ba424a5606bc00c7359039e94dcc"
+      "bytes": 1089,
+      "sha256": "9791a212a9833bcc7beb4ba63e83063a422437e71553dbed358beb6f826378b7"
     },
     "gate_instruction.md": {
       "bytes": 122,
@@ -21,8 +21,8 @@
       "sha256": "bccd22678bc3dba3122637926a3a89c5435e7bb729102e111a6b664cce92729f"
     },
     "instruction.md": {
-      "bytes": 1611,
-      "sha256": "5ab36b67bd84375b618f0bb54b69edaf98f0fc2c135e08bc4bc4b6204df9c447"
+      "bytes": 1578,
+      "sha256": "163423ac7845e82fa7c055f6b7d52b9f4b95d9ad53cac6a843abfcc45e094783"
     },
     "tagged.md": {
       "bytes": 554,
@@ -40,8 +40,8 @@
   "module_id": "CP-CF",
   "relative_file_hashes": {
     "SKILL.md": {
-      "bytes": 3109,
-      "sha256": "6955060d87418ebbfcc3ea88431c94ade97d2555e1c53c505a3a0125dd355545"
+      "bytes": 3319,
+      "sha256": "ec83216d4a7abe16569bf65e6e40a4d3ed8a3ff4734f1cb60fbf4741e48bbbe8"
     },
     "scripts/cash_flow.py": {
       "bytes": 16704,

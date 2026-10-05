@@ -45,6 +45,7 @@ from caos.evidence.citations import (
 )
 from caos.evidence.ingest import GROUP_WIDTH
 from caos.graph.route import MODEL_MODULE
+from caos.methodology.citation_markers import MARKER
 from caos.methodology.vendor import VendorContract
 from caos.provider import MAX_RESPONSE_BYTES
 from caos.refusals import Refusal, RefusalCode
@@ -960,31 +961,45 @@ def _body(text: str) -> str:
 
 
 # D107: the body names a citation by its 1-based place in the list, `[C3]`,
-# or several in one bracket, `[C3, C4]`: exactly `C` and ASCII digits, read
+# or several in one bracket, `[C3, C4]` (`citation_markers.MARKER`), read
 # anywhere after the front matter, fenced code included. Anything else is
-# text -- `[c3]`, `[C 3]`, `[C3-C5]`, `[C3,4]` -- and only told as a hint
-# (`_NEAR_MARKER`, `_unmarked_line`), never refused.
-_MARKER = re.compile(r"\[(C[0-9]{1,9}(?:, ?C[0-9]{1,9})*)\]")
+# text -- `[c3]`, `[C 3]`, `[C3-C5]`, `[C3,4]`, `[C1,  C2]` -- and only told
+# as a hint (`_NEAR_MARKER`, `_unmarked_line`), never refused.
 _MARKER_NUMBER = re.compile(r"[0-9]+")
+# The most digits a marker that names a citation can have: more names none.
+MARKER_DIGITS = 9
 # A bracket that reads like a marker and is not one: a `c` of either case and
 # a digit, spaces allowed between them, then anything short up to its close.
 _NEAR_MARKER = re.compile(r"\[ *[Cc] *[0-9][^\[\]\n]{0,24}\]")
 
 
+def _written(text: str) -> list[str]:
+    """Every marker's number as the body writes it, in order: `[C03]` is
+    `03`, `[C3, C4]` is `3` and `4`."""
+    return [
+        number
+        for found in MARKER.finditer(_body(text))
+        for number in _MARKER_NUMBER.findall(found.group(1))
+    ]
+
+
+def _place(written: str) -> int:
+    """The citation a marker's number names: its value (`[C03]` is 3), or 0,
+    which names none, past `MARKER_DIGITS` digits."""
+    return int(written) if len(written) <= MARKER_DIGITS else 0
+
+
 def markers(text: str) -> tuple[int, ...]:
     """Every citation number the Markdown body names (D107), in order, a
-    repeat included: `[C3]` is 3, `[C3, C4]` is 3 and 4."""
-    return tuple(
-        int(number)
-        for found in _MARKER.finditer(_body(text))
-        for number in _MARKER_NUMBER.findall(found.group(1))
-    )
+    repeat included: `[C3]` is 3, `[C3, C4]` is 3 and 4; a number of more
+    than `MARKER_DIGITS` digits is 0, a marker that names no citation."""
+    return tuple(_place(number) for number in _written(text))
 
 
-def _dangling(named: Sequence[int], count: int) -> list[int]:
-    """The marker numbers that name no citation of `count`, each once, in
-    the body's order: structural, refusing the answer (D107)."""
-    return list(dict.fromkeys(n for n in named if not 1 <= n <= count))
+def _dangling(text: str, count: int) -> list[str]:
+    """The markers that name no citation of `count`, as written, each once,
+    in the body's order: structural, refusing the answer (D107)."""
+    return list(dict.fromkeys(n for n in _written(text) if not 1 <= _place(n) <= count))
 
 
 def parse_response(
@@ -1006,10 +1021,9 @@ def parse_response(
     markdown, text, citations = _or_refuse(
         RefusalCode.HANDOFF_MALFORMED, lambda: _transport(body)
     )
-    named = markers(text)
-    if _dangling(named, len(citations)):
+    if _dangling(text, len(citations)):
         raise Refusal(RefusalCode.HANDOFF_MALFORMED)
-    held = frozenset(named)
+    held = frozenset(markers(text))
     return markdown, citations, tuple(n in held for n in range(1, len(citations) + 1))
 
 
@@ -1339,13 +1353,17 @@ def _uncrossed_line(citations: Sequence[Citation]) -> str | None:
 
 
 def _dangling_line(text: str, count: int) -> str | None:
-    """The markers that name no citation (D107), each as `[C<n>]` -- the
-    model's own number, never its text -- and the count they must stay
-    within: the check that refused the answer (`parse_response`)."""
-    dangling = _dangling(markers(text), count)
+    """The markers that name no citation (D107), each as `[C<n>]` as written
+    -- the model's own number, cut past 12 digits, never its text -- and the
+    count they must stay within: the check that refused the answer
+    (`parse_response`)."""
+    dangling = _dangling(text, count)
     if not dangling:
         return None
-    shown = [f"[C{n}]" for n in dangling[:MAX_FEEDBACK_CITATIONS]]
+    shown = [
+        f"[C{n if len(n) <= 12 else n[:12] + '...'}]"
+        for n in dangling[:MAX_FEEDBACK_CITATIONS]
+    ]
     rest = len(dangling) - len(shown)
     more = f" and {rest} more" if rest else ""
     names = "it names" if len(dangling) == 1 else "they name"
@@ -1369,7 +1387,7 @@ def _unmarked_line(text: str, count: int) -> str | None:
     if not failed:
         return None
     near = sum(
-        _MARKER.fullmatch(found.group()) is None
+        MARKER.fullmatch(found.group()) is None
         for found in _NEAR_MARKER.finditer(_body(text))
     )
     one = len(failed) == 1

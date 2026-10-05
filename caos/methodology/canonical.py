@@ -859,12 +859,14 @@ def _calculation_inputs(assignment: Assignment, quotes: Sequence[str]) -> list[i
 def _unbindable(
     anchored: Sequence[AnchoredCitation], unverified: Sequence[UnverifiedCitation]
 ) -> list[str]:
-    """The quotes CP-CF could not bind from this answer: every unverified
-    one, and every anchored one no marker in the body names (`linked`, the
-    binder's own test, `forecast.validate_forecast_bindings`, D107)."""
-    return [entry.matched_text for entry in unverified] + [
-        c.matched_text for c in anchored if not c.linked
-    ]
+    """The quotes CP-CF could not bind from this answer, judged by quote as
+    the binder judges them (`forecast.validate_forecast_bindings`, D107): a
+    quote binds when some anchored citation of it is one a marker in the
+    body names (`linked`), so an unverified or unmarked citation of a quote
+    another citation binds is no fault."""
+    bound = {c.matched_text for c in anchored if c.linked}
+    quotes = [c.matched_text for c in anchored] + [e.matched_text for e in unverified]
+    return [quote for quote in quotes if quote not in bound]
 
 
 def _calculation_line(
@@ -884,11 +886,14 @@ def _calculation_line(
         return None
     verdicts = _anchoring(conn, _by_source(delivered), citations, TokenIndex())
     named = frozenset(markers(markdown.decode("utf-8")))
-    # A citation CP-CF can bind stands as "", which binds nothing.
-    lost = [
-        "" if v is None and place in named else c.matched_text
+    # By quote, as `_unbindable` and the binder judge: a quote some anchored,
+    # marked citation carries binds, and stands as "", which binds nothing.
+    bound = {
+        c.matched_text
         for place, (c, v) in enumerate(zip(citations, verdicts, strict=True), 1)
-    ]
+        if v is None and place in named
+    }
+    lost = ["" if c.matched_text in bound else c.matched_text for c in citations]
     failed = [n + 1 for n in _calculation_inputs(assignment, lost)]
     if not failed:
         return None

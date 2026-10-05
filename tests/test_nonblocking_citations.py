@@ -394,7 +394,7 @@ def test_each_citation_fault_keeps_the_answer(harness: _Harness) -> None:
     assert json.loads(record_bytes(record))["citations"][0]["linked"] is False
 
 
-def test_a_key_is_met_only_by_an_anchored_citation_the_body_carries() -> None:
+def test_a_key_is_met_only_by_an_anchored_citation_a_marker_names() -> None:
     """D106, owner: "Linked only". `scored_lines` -- what the proof's
     `anchored` set and quality_compare score keys by -- holds an anchored
     citation a marker names (D107), never one not linked to a statement,

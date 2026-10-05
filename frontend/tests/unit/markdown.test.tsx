@@ -60,8 +60,9 @@ describe("readMarkdown holds render.py's grammar", () => {
       "code",
     ]);
     expect(blocks[0]).toEqual({ kind: "heading", level: 3, text: "Credit view" });
-    expect(blocks[1]).toEqual({ kind: "paragraph", text: "One line and its continuation." });
-    expect(blocks[2]).toEqual({ kind: "quote", text: "quoted twice" });
+    // Joined at the written line break, which the page shows as a space (D107).
+    expect(blocks[1]).toEqual({ kind: "paragraph", text: "One line\nand its continuation." });
+    expect(blocks[2]).toEqual({ kind: "quote", text: "quoted\ntwice" });
     expect(blocks[4]).toEqual({
       kind: "code",
       info: "caos-forecast-v1",
@@ -101,7 +102,7 @@ describe("readMarkdown holds render.py's grammar", () => {
     });
     // A pipe in prose above a bare rule is not a one-column table (render.py's
     // DELIMITER note): the rule joins the paragraph, as the host's does.
-    expect(readMarkdown(md("a | b", "---"))).toEqual([{ kind: "paragraph", text: "a | b ---" }]);
+    expect(readMarkdown(md("a | b", "---"))).toEqual([{ kind: "paragraph", text: "a | b\n---" }]);
   });
 
   test("refuses whatever the host refuses: no faithful drawing exists", () => {

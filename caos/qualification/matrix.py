@@ -59,6 +59,7 @@ from caos.graph.route import MODEL_MODULE, READY, ResolvedRoute, readiness_from
 from caos.graph.runtime import accepted_artifacts
 from caos.methodology.bundle import Bundle, verified_bytes
 from caos.methodology.canonical import accepted_handoff, accepted_projections
+from caos.methodology.citation_markers import unmarked
 from caos.methodology.forecast import forecast_projection
 from caos.methodology.handoff import UNCLEARED_READINESS, Projections
 from caos.methodology.vendor import VendorContract, load_vendor_contract
@@ -884,11 +885,14 @@ def _normalised_cell(value: str) -> str:
     stripped: a Markdown table's cells are padded for alignment and a line may
     be wrapped, neither of which is the module saying anything different.
 
+    A citation marker is not the cell's value (`unmarked`, D107): `(45) [C1]`
+    meets a key expecting `(45)`.
+
     **Case is preserved.** `MATERIAL` and `Material` are different values in
     every vendor vocabulary that has one, and a comparison that folded case
     would let a key pass over a cell the bundle's own validators would refuse.
     """
-    return " ".join(unicodedata.normalize("NFC", value).split())
+    return " ".join(unicodedata.normalize("NFC", unmarked(value)).split())
 
 
 def _cell(

@@ -1,7 +1,7 @@
 You are executing methodology module {module_id} ({module_name}) at route node
 {route_node_id}. The steps the host performs itself follow, then every authority
 file for this module, each whole in its own section, then the accepted upstream
-handoffs and the host's register of their located citations, then the evidence
+handoffs and the host's register of their citations, then the evidence
 you have been delivered. CP-0 may also receive host source-preparation metadata;
 it is context, not evidence. Use no other knowledge.
 
@@ -25,6 +25,6 @@ Rules that will cause your answer to be refused if broken:
   `citations`; one that names no citation is refused.
 
 Every citation follows the one citation rule stated in the final response
-check after the evidence; no other rule is stated. A citation the host cannot
+check after the evidence. A citation the host cannot
 locate does not refuse your answer: it is kept as unverified and shown to the
 reader as such.
