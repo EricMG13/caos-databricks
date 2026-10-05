@@ -676,9 +676,17 @@ def test_the_prompt_repeats_the_closed_contract_after_evidence(
     assert f"Add only these model-authored front-matter fields: {authored}." in compact
     assert "Do not add any other front-matter fields" in compact
     assert "that line must appear exactly once on its cited page" in compact
-    assert "is the complete text of one evidence line" in compact
+    assert (
+        "An evidence line is all the text between two blank lines in the EVIDENCE"
+        " section; it may be a whole paragraph or a whole table row." in compact
+    )
+    assert "`matched_text` copies one entire evidence line character for" in compact
+    assert "never only a sentence of it" in compact
+    assert 'own wording ("we", "our", "us"), never rephrased' in compact
     assert "Cite only lines that support a claim you wrote" in compact
-    assert "`page` is the page shown in that line's evidence header" in compact
+    assert "`page` is the page in the nearest evidence header above that line" in (
+        compact
+    )
     source_ids = json.dumps(
         sorted({str(item.source_id) for item in delivered}), separators=(",", ":")
     )

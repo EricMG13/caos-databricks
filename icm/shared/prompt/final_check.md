@@ -8,10 +8,14 @@ and `canonical_filename` belong outside canonical front matter.
 Include every register required by the authority. `committee_status` must be
 one of {committee_statuses}: what this pathway's decision scope
 ({decision_scope}) permits.
-For every citation, `matched_text` is the complete text of one evidence line,
-copied character for character; that line must appear exactly once on its
-cited page; the same words appear verbatim in the Markdown body after the
-front matter. Cite only lines that support a claim you wrote. Valid
-`source_id` values are exactly: {source_ids}, and `page` is the page shown in
-that line's evidence header. Include at least one citation.
+An evidence line is all the text between two blank lines in the EVIDENCE
+section; it may be a whole paragraph or a whole table row. For every citation,
+`matched_text` copies one entire evidence line character for character,
+including any leading bullet or footnote marker and any trailing `|`, never
+only a sentence of it; that line must appear exactly once on its cited page;
+the same words appear verbatim in the Markdown body after the front matter, in
+the source's own wording ("we", "our", "us"), never rephrased into the third
+person. Cite only lines that support a claim you wrote. Valid `source_id`
+values are exactly: {source_ids}, and `page` is the page in the nearest
+evidence header above that line. Include at least one citation.
 {host_text}--- END FINAL RESPONSE CHECK {tag} ---

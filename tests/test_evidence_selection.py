@@ -478,10 +478,10 @@ def test_the_gate_bound_counts_every_host_byte_of_the_evidence_section(
 
 
 def test_each_lines_size_is_its_share_of_the_evidence_section() -> None:
-    """`evidence_sizes` is the section, and 2 bytes a run and 3 more: never
-    fewer bytes than the host renders. A line's size depends only on the one
-    before it, so the sizes of a pin are the sizes of any leading lines of its
-    pages, which is what the gate's page map is cut by."""
+    """`evidence_sizes` is the section, and 2 bytes a header and 3 more: never
+    fewer bytes than the host renders. A line's size depends only on its
+    position in its run, so the sizes of a pin are the sizes of any leading
+    lines of its pages, which is what the gate's page map is cut by."""
     source = uuid4()
     lines = [
         Delivery(source, "b000000", 1, BoundaryText.of("Seen")),
@@ -500,6 +500,53 @@ def test_each_lines_size_is_its_share_of_the_evidence_section() -> None:
     assert sum(evidence_sizes(leading)) == len(_evidence_section(leading).encode()) + (
         2 * runs + 3
     )
+
+
+def test_the_header_is_repeated_every_eight_lines_of_a_run() -> None:
+    """D81: a 60-line page printed its header once, kilobytes above most of
+    its lines, and the model cited the page before. The run's header is
+    printed again, unchanged, before every eighth line counted from the run's
+    first; the sizes still count every host byte, and the sizes of any leading
+    lines of each page are the pin's own, so `gate_view` cuts by exact sizes."""
+    source = uuid4()
+    lines = [
+        Delivery(source, f"b{n:06d}", 1 + n // 20, BoundaryText.of(f"Line {n}."))
+        for n in range(40)
+    ] + [
+        Delivery(source, f"b{n:06d}", 2, BoundaryText.of(f"Unseen {n}."), "ocr")
+        for n in range(40, 50)
+    ]
+    header = f"source_id: {source}\npage: 1\n\n"
+    marked = (
+        f"source_id: {source}\npage: 2\nhidden: the lines under this header are"
+        " not visible on the rendered page (ocr)\n\n"
+    )
+
+    section = _evidence_section(lines)
+    sizes = evidence_sizes(lines)
+
+    blocks = section.split("\n\n\n")
+    # Page 1's 20 lines, page 2's 20 seen and its 10 marked, each from its start.
+    counts = [8, 8, 4, 8, 8, 4, 8, 2]
+    assert [len(block.split("\n\n")) - 1 for block in blocks] == counts
+    assert blocks[0] == header + "\n\n".join(f"Line {n}." for n in range(8))
+    assert blocks[1] == header + "\n\n".join(f"Line {n}." for n in range(8, 16))
+    assert blocks[2].startswith(header + "Line 16.")
+    assert blocks[6].startswith(marked + "Unseen 40.")
+    assert blocks[7] == marked + "Unseen 48.\n\nUnseen 49."
+    assert sum(sizes) == len(section.encode()) + 2 * len(blocks) + 3
+    for k in (1, 7, 8, 9, 17, 25):
+        position: dict[int, int] = {}
+        kept = []
+        for item, size in zip(lines, sizes, strict=True):
+            position[item.page] = position.get(item.page, 0) + 1
+            if position[item.page] <= k:
+                kept.append((item, size))
+        assert evidence_sizes([item for item, _ in kept]) == [s for _, s in kept]
+    shown, maps = gate_view(lines, budget=sum(sizes) // 2)
+    assert maps[source]["leading_lines_per_page"] > 8
+    assert sum(evidence_sizes(shown)) <= sum(sizes) // 2
+    assert len(_evidence_section(shown).encode()) < sum(evidence_sizes(shown))
 
 
 def test_the_gate_bound_leaves_two_mapped_sources_and_the_authority_room() -> None:

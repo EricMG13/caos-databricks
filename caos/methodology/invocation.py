@@ -1036,60 +1036,85 @@ _HOST_TEXT = (
 def _evidence_header(source_id: UUID, page: int, hidden: str) -> str:
     """The host's header over one run of a page's delivered lines, blank line
     included: its source and page and, when the run's lines carry a mark,
-    why a reader of the rendered page may not see them (`_HIDDEN_NOTE`)."""
+    why a reader of the rendered page may not see them (`_HIDDEN_NOTE`).
+    `_evidence_section` repeats it every `_HEADER_EVERY` lines of a run."""
     if not hidden:
         return f"source_id: {source_id}\npage: {page}\n\n"
     note = _HIDDEN_NOTE.format(reasons=", ".join(hidden.split(",")))
     return f"source_id: {source_id}\npage: {page}\n{note}\n\n"
 
 
+# D81: the run's header is printed again before every this-many lines of a
+# run, counted from the run's first line. A `.txt` page is a run of up to 60
+# lines, and a header printed once over it stood kilobytes above most of them:
+# of 41 citations refused on 2 October, 17 named the wrong page, 14 of them off
+# by exactly one. Repeated, a line's page is never more than seven lines up.
+_HEADER_EVERY = 8
+
+
+def _evidence_blocks(
+    delivered: Sequence[Delivery],
+) -> list[tuple[tuple[UUID, int, str], list[Delivery]]]:
+    """The delivered lines cut where `_evidence_section` prints a header: at
+    the start of each run of a page's lines that share one mark (N27), and
+    again every `_HEADER_EVERY` lines into a run, counted from its first."""
+    blocks: list[tuple[tuple[UUID, int, str], list[Delivery]]] = []
+    previous: tuple[UUID, int, str] | None = None
+    position = 0
+    for item in delivered:
+        key = (item.source_id, item.page, item.hidden)
+        position = position + 1 if key == previous else 0
+        if position % _HEADER_EVERY == 0:
+            blocks.append((key, []))
+        blocks[-1][1].append(item)
+        previous = key
+    return blocks
+
+
 def evidence_sizes(delivered: Sequence[Delivery]) -> list[int]:
     """What each delivered line adds to the evidence section, in UTF-8 bytes
-    (W3): its text and the blank line after it and, where it begins a run
-    (`_evidence_section`), the run's header -- its note included -- and the
+    (W3): its text and the blank line after it and, where a header is printed
+    above it (`_evidence_blocks`), the header -- its note included -- and the
     blank lines before it.
 
     Summed over any delivery they are the section `_evidence_section` renders
-    for it and 2 bytes a run and 3 more: every host byte the section adds is
-    counted, never fewer. A line's size depends only on the line before it, so
-    the sizes of a delivery are the sizes of any leading lines of each of its
-    pages (`selection.gate_view`): a page's first line begins a run either way.
+    for it and 2 bytes a header and 3 more: every host byte the section adds
+    is counted, never fewer. A line's size depends only on its position in its
+    run, counted from the run's first line, so the sizes of a delivery are the
+    sizes of any leading lines of each of its pages (`selection.gate_view`): a
+    page's first line begins a run either way, and a leading part of a page
+    keeps every line's position.
     """
     sizes: list[int] = []
-    previous: tuple[UUID, int, str] | None = None
-    for item in delivered:
-        key = (item.source_id, item.page, item.hidden)
-        size = len(one_line(item.text.value).encode("utf-8")) + 2
-        if key != previous:
-            size += len(_evidence_header(*key).encode("utf-8")) + 3
-        sizes.append(size)
-        previous = key
+    for key, lines in _evidence_blocks(delivered):
+        header = len(_evidence_header(*key).encode("utf-8")) + 3
+        for item in lines:
+            sizes.append(header + len(one_line(item.text.value).encode("utf-8")) + 2)
+            header = 0
     return sizes
 
 
 def _evidence_section(delivered: Sequence[Delivery]) -> str:
-    """Every delivered line under one header per run of a page's lines.
+    """Every delivered line under its run's header, repeated every
+    `_HEADER_EVERY` lines of the run (D81).
 
-    Blocks are separated by one blank line and runs by two, so a line is
-    never cut or merged and a header is paid once per run rather than once
-    per line. A run is the delivered lines of one page that carry one mark
-    (N27): a page's lines all seen, or a scan's all marked, are one run, and
-    its header names the mark (`_evidence_header`). Grouping follows the
-    delivered order (source, then block), so a page's lines stay together as
-    the store ordered them. `evidence_sizes` counts what this adds.
+    Lines are separated by one blank line and headed blocks by two, so a line
+    is never cut or merged. A run is the delivered lines of one page that
+    carry one mark (N27): a page's lines all seen, or a scan's all marked, are
+    one run, and its header names the mark (`_evidence_header`). The header is
+    repeated unchanged so a line's page is always close above it. Grouping
+    follows the delivered order (source, then block), so a page's lines stay
+    together as the store ordered them. `evidence_sizes` counts what this
+    adds.
 
     A line is shown as one line (`one_line`, W4): a block stored before the
     PDF extractor's v7 can carry a glyph's line feed, and past it the rest of
     the block would read as a line of its own -- or as a header.
     """
-    groups: list[tuple[tuple[UUID, int, str], list[str]]] = []
-    for item in delivered:
-        key = (item.source_id, item.page, item.hidden)
-        if not groups or groups[-1][0] != key:
-            groups.append((key, []))
-        groups[-1][1].append(one_line(item.text.value))
     return "\n\n\n".join(
-        _evidence_header(*key) + "\n\n".join(lines) for key, lines in groups
+        _evidence_header(*key)
+        + "\n\n".join(one_line(item.text.value) for item in lines)
+        for key, lines in _evidence_blocks(delivered)
     )
 
 
