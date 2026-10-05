@@ -13,7 +13,8 @@
       "documents": [
         "documents/CZR_Q2_2026_10Q.txt",
         "documents/CZR_Q2_2026_Earnings_Release.txt",
-        "documents/TEST_CLO_I_Mandate_and_Exposures_2026-10-02.txt",
+        "documents/FHSUHY_NPORT_Schedule_of_Investments_2026-06-30.txt",
+        "documents/FHSUHY_Prospectus_and_SAI_2026-05-26.txt",
         "documents/CZR_FINRA_TRACE_12769GAC4_2026-10-02.txt",
         "documents/CZR_2024_650_Senior_Secured_Notes_2032_Indenture.txt",
         "documents/CZR_2024_650_Notes_First_Supplemental_Indenture.txt",
@@ -54,18 +55,18 @@
         },
         {
           "module_id": "CP-L10",
-          "document_sha256": "864ee90ab21372bcf89c8b27e02cd5d691d9095a64d507c7f656d5963cfe3207",
-          "matched_text": "Proposed position: Caesars Entertainment, Inc. 6.50% Senior Secured Notes due 2032, CUSIP 12769GAC4, par USD 5,000,000."
+          "document_sha256": "e2490912d9cc688135e15732e0fcf4aafd715e91e4d580edd577483535507bab",
+          "matched_text": "550,000 | Caesars Entertainment, Inc., Sr. Secd. Note, 144A, 6.500%, 2/15/2032 | 536,927"
         },
         {
           "module_id": "CP-L10",
-          "document_sha256": "864ee90ab21372bcf89c8b27e02cd5d691d9095a64d507c7f656d5963cfe3207",
-          "matched_text": "Position weight on par: 5,000,000 / 630,928,502 = 0.7925% of NAV."
+          "document_sha256": "e2490912d9cc688135e15732e0fcf4aafd715e91e4d580edd577483535507bab",
+          "matched_text": "TOTAL SECURITIES | $7,733,211 | $475,026,863 | $41,584 | $482,801,658"
         },
         {
           "module_id": "CP-L10",
-          "document_sha256": "864ee90ab21372bcf89c8b27e02cd5d691d9095a64d507c7f656d5963cfe3207",
-          "matched_text": "C-01 | Single Name | Max single issuer exposure (largest: Asurion) | ≤ 2.5% NAV | Hard | Indenture §7.11 | 2.37% | 0.13% | Watch | 29-May-2026 | E. Guei |"
+          "document_sha256": "10455d54958421c56b4902f2fa41bfc08873bb9d16ee9fb22ab31ded215846ea",
+          "matched_text": "The Fund will invest at least 80% of its net assets (plus the amount of any borrowings for investment purposes) in sustainable lower-rated fixed-income investments."
         },
         {
           "module_id": "CP-L10",

@@ -789,6 +789,19 @@
       "note": "Official EDGAR exhibit converted from HTML to plain text on 2 October 2026; re-converted 3 October 2026 (F478); re-split by sentence 3 October 2026 (F492) (accession 0001590895-26-000027, raw HTML SHA-256 a8982154b99b023b526261f7626022e96ac642834d1d65704629946acecc8a1f). It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,590 bytes."
     },
     {
+      "id": "czr-2026-merger-agreement-lite-earnings-update",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. Agreement and Plan of Merger with Fertitta Gaming Holdco, LLC, Exhibit 2.1 to the Form 8-K of 28 May 2026 (SEC exhibit text extract)",
+      "modules": ["CP-0", "CP-L10"],
+      "pathways": ["LITE_EARNINGS_UPDATE"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312526242995/d143382dex21.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2/documents/CZR_2026_Merger_Agreement.txt",
+      "external_path": null,
+      "demand_verified": false,
+      "note": "Official EDGAR exhibit (Ex. 2.1 to the Form 8-K filed 28 May 2026), the full Agreement and Plan of Merger dated 27 May 2026, downloaded on the owner's approval of 6 October 2026 (D115); converted from HTML to plain text on 6 October 2026 (D115, F541), split by sentence (F492) and by clause (F498) (accession 0001193125-26-242995, raw HTML SHA-256 fcc680b30487f2abd9d753125e09a0844b05285ddb718f1c43428b2ab60fff1b, 611,257 bytes after SEC's 111-byte script tag is removed). Schedules are omitted under Item 601(b)(2) and the debt commitment letters are not in this exhibit. It supplies the pending merger's terms in full beside the 10-K, the 10-Q and the earnings release. Byte-identical to the czr-2026q2-covenant-refinancing set's copy. Demand inferred from the route's covenant, liquidity and transaction modules, not quoted from a SKILL.md. 411,229 bytes."
+    },
+    {
       "id": "czr-fy2025-10k-earnings-update",
       "issuer": "CZR",
       "document": "Caesars Entertainment, Inc. FY2025 Form 10-K (SEC filing text extract, FULL earnings-update set copy)",
@@ -878,6 +891,19 @@
       "external_path": null,
       "demand_verified": true,
       "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It adds the $2,900.0 million Incremental Term B-1 Loans, and its Exhibit A is the Credit Agreement conformed through Incremental Assumption Agreement No. 1, the First to Third Amendments and Incremental Assumption Agreements No. 2 and No. 3; with the Fourth and Fifth Amendments it is the current credit-agreement chain (F508). Exhibit A is a changed copy (insertions double-underlined, deletions struck through); on the owner's ruling of 5 October 2026 the text renders the agreement as amended: the struck runs from Exhibit A's cover on are removed (295 runs, 167 with text, 484 characters) and the insertions kept as plain text, with the spacing the filing renders at each cut (F508). Exhibit A comes without the credit agreement's own exhibits and schedules. 1,077,810 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold. It replaces the 2020 credit agreement (Ex. 10.1, accession 0001193125-20-196232) in this set on the owner's ruling of 5 October 2026 (F508)."
+    },
+    {
+      "id": "czr-2026-merger-agreement-liquidity",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. Agreement and Plan of Merger with Fertitta Gaming Holdco, LLC, Exhibit 2.1 to the Form 8-K of 28 May 2026 (SEC exhibit text extract)",
+      "modules": ["CP-2D"],
+      "pathways": ["LIQUIDITY_REVIEW"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312526242995/d143382dex21.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-liquidity/documents/CZR_2026_Merger_Agreement.txt",
+      "external_path": null,
+      "demand_verified": false,
+      "note": "Official EDGAR exhibit (Ex. 2.1 to the Form 8-K filed 28 May 2026), the full Agreement and Plan of Merger dated 27 May 2026, downloaded on the owner's approval of 6 October 2026 (D115); converted from HTML to plain text on 6 October 2026 (D115, F541), split by sentence (F492) and by clause (F498) (accession 0001193125-26-242995, raw HTML SHA-256 fcc680b30487f2abd9d753125e09a0844b05285ddb718f1c43428b2ab60fff1b, 611,257 bytes after SEC's 111-byte script tag is removed). Schedules are omitted under Item 601(b)(2) and the debt commitment letters are not in this exhibit. It supplies the merger's financing and interim operating covenants for the liquidity review (CP-2D). Byte-identical to the czr-2026q2-covenant-refinancing set's copy. Demand inferred from the route's covenant, liquidity and transaction modules, not quoted from a SKILL.md. 411,229 bytes."
     },
     {
       "id": "czr-fy2025-10k-covenant-refinancing",
@@ -1010,6 +1036,19 @@
       "note": "Official EDGAR exhibit converted from HTML to plain text on 2 October 2026; re-converted 3 October 2026 (F478); re-split by sentence 3 October 2026 (F492) (accession 0001193125-26-242995, raw HTML SHA-256 2a4ed12c96147f2171451c93524bea31ecad37247448d27039f755a3cf85f51f). It supplies the transaction value, the approximately $11.9 billion of debt to be assumed and the stated financing sources. 19,048 bytes."
     },
     {
+      "id": "czr-2026-merger-agreement",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. Agreement and Plan of Merger with Fertitta Gaming Holdco, LLC, Exhibit 2.1 to the Form 8-K of 28 May 2026 (SEC exhibit text extract)",
+      "modules": ["CP-3C", "CP-4"],
+      "pathways": ["COVENANT_REFINANCING"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312526242995/d143382dex21.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-covenant-refinancing/documents/CZR_2026_Merger_Agreement.txt",
+      "external_path": null,
+      "demand_verified": false,
+      "note": "Official EDGAR exhibit (Ex. 2.1 to the Form 8-K filed 28 May 2026), the full Agreement and Plan of Merger dated 27 May 2026, downloaded on the owner's approval of 6 October 2026 (D115); converted from HTML to plain text on 6 October 2026 (D115, F541), split by sentence (F492) and by clause (F498) (accession 0001193125-26-242995, raw HTML SHA-256 fcc680b30487f2abd9d753125e09a0844b05285ddb718f1c43428b2ab60fff1b, 611,257 bytes after SEC's 111-byte script tag is removed). Schedules are omitted under Item 601(b)(2) and the debt commitment letters are not in this exhibit. It supplies the merger's financing covenants, conditions, change-of-control and end-date terms in full, beside the 8-K summary. Demand inferred from the route's covenant modules, not quoted from a SKILL.md. 411,229 bytes."
+    },
+    {
       "id": "czr-q2-2026-10q-lite-covenant-refinancing",
       "issuer": "CZR",
       "document": "Caesars Entertainment, Inc. Form 10-Q for the quarter ended 30 June 2026 (SEC filing text extract, LITE covenant-refinancing set copy)",
@@ -1112,6 +1151,19 @@
       "external_path": null,
       "demand_verified": true,
       "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the merger's structure, consideration, conditions, end dates and termination fees as the filing states them. 30,809 bytes."
+    },
+    {
+      "id": "czr-2026-merger-agreement-lite-covenant-refinancing",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. Agreement and Plan of Merger with Fertitta Gaming Holdco, LLC, Exhibit 2.1 to the Form 8-K of 28 May 2026 (SEC exhibit text extract)",
+      "modules": ["CP-3C"],
+      "pathways": ["LITE_COVENANT_REFINANCING"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312526242995/d143382dex21.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-lite-covenant-refinancing/documents/CZR_2026_Merger_Agreement.txt",
+      "external_path": null,
+      "demand_verified": false,
+      "note": "Official EDGAR exhibit (Ex. 2.1 to the Form 8-K filed 28 May 2026), the full Agreement and Plan of Merger dated 27 May 2026, downloaded on the owner's approval of 6 October 2026 (D115); converted from HTML to plain text on 6 October 2026 (D115, F541), split by sentence (F492) and by clause (F498) (accession 0001193125-26-242995, raw HTML SHA-256 fcc680b30487f2abd9d753125e09a0844b05285ddb718f1c43428b2ab60fff1b, 611,257 bytes after SEC's 111-byte script tag is removed). Schedules are omitted under Item 601(b)(2) and the debt commitment letters are not in this exhibit. It supplies the merger's financing covenants, conditions, change-of-control and end-date terms in full, beside the 8-K summary. Byte-identical to the czr-2026q2-covenant-refinancing set's copy. Demand inferred from the route's covenant, liquidity and transaction modules, not quoted from a SKILL.md. 411,229 bytes."
     },
     {
       "id": "czr-q2-2026-10q-lite-relative-value",
@@ -1621,6 +1673,32 @@
       "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,590 bytes."
     },
     {
+      "id": "fhsuhy-nport-2026-06-30",
+      "issuer": "Federated Hermes Sustainable High Yield Bond Fund, Inc.",
+      "document": "Federated Hermes Sustainable High Yield Bond Fund, Inc. N-PORT schedule of investments at 30 June 2026 (SEC exhibit text extract)",
+      "modules": ["CP-0", "CP-L10"],
+      "pathways": ["LITE_PORTFOLIO_DECISION"],
+      "source": "https://www.sec.gov/Archives/edgar/data/225318/000022531826000020/poi_fhsushybondfund.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-lite-portfolio/documents/FHSUHY_NPORT_Schedule_of_Investments_2026-06-30.txt",
+      "external_path": null,
+      "demand_verified": false,
+      "note": "Official EDGAR exhibit (NPORT-EX, Federated Hermes Sustainable High Yield Bond Fund, Inc., schedule of investments as of 30 June 2026, filed 25 August 2026), downloaded on the owner's approval of 6 October 2026 (D115); converted from HTML to plain text on 6 October 2026 (D115, F541), split by sentence (F492) (accession 0000225318-26-000020, raw HTML SHA-256 45dbee32a946cf9b582e22e97461735def3b5b8447f77d193ca0b08d92437df5, 1,513,979 bytes after SEC's 111-byte script tag is removed). It is the real holdings input that replaces the synthetic mandate (D80) in this set: it lists four Caesars Entertainment positions, among them the 6.500% 2/15/2032 secured notes (principal 550,000, value 536,927) and the 6.000% 10/15/2032 notes. It is a bare schedule: it carries no net-assets line (the total of securities, 482,801,658, is its summary table's). The demand is inferred from CP-0's recorded refusal of CP-L10 over a 10-K alone on ccl-fy2025-portfolio (holdings, mandate and limits), not quoted. 49,398 bytes."
+    },
+    {
+      "id": "fhsuhy-prospectus-sai-2026-05-26",
+      "issuer": "Federated Hermes Sustainable High Yield Bond Fund, Inc.",
+      "document": "Federated Hermes Sustainable High Yield Bond Fund, Inc. prospectus and statement of additional information, Form 485BPOS of 26 May 2026 (SEC filing text extract)",
+      "modules": ["CP-0", "CP-L10"],
+      "pathways": ["LITE_PORTFOLIO_DECISION"],
+      "source": "https://www.sec.gov/Archives/edgar/data/225318/000162363226000742/fhsuhy2481-form.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-lite-portfolio/documents/FHSUHY_Prospectus_and_SAI_2026-05-26.txt",
+      "external_path": null,
+      "demand_verified": false,
+      "note": "Official EDGAR filing (485BPOS, combined prospectus and statement of additional information of the same fund, filed 26 May 2026), downloaded on the owner's approval of 6 October 2026 (D115); converted from HTML to plain text on 6 October 2026 (D115, F541), split by sentence (F492) (accession 0001623632-26-000742, raw HTML SHA-256 ace0ea46f895f93d9fa863dc43a7d5f402e689cf0b6fdb3c8c71f6893821f9cc, 2,009,358 bytes after SEC's 111-byte script tag is removed). It is the fund's mandate in place of the synthetic one (D80): the 80% policy, the investment limitations and the concentration restriction. It does not mention Caesars. It is under 500 KiB as text, so it carries no large-file pin and reaches CP-0 whole. The demand is inferred as for the schedule. 501,405 bytes."
+    },
+    {
       "id": "test-clo-i-mandate-2026-10-02",
       "issuer": "Test CLO I (synthetic)",
       "document": "SYNTHETIC test mandate: Test CLO I Ltd mandate, exposure report and compliance monitor, with the owner-adopted CZR position adaptation of 2 October 2026 (text extract)",
@@ -1631,7 +1709,7 @@
       "local_path": "qualification/czr-2026q2-lite-portfolio/documents/TEST_CLO_I_Mandate_and_Exposures_2026-10-02.txt",
       "external_path": null,
       "demand_verified": false,
-      "note": "SYNTHETIC. Owner-adopted test input (D80, 2 October 2026), not a real portfolio: the workbook describes itself as packaged sample data only, and the document says no figure in it is a real holding. It may never ground a real decision. It supplies the mandate, the 29 May 2026 exposure report (NAV USD 630,928,502), the compliance monitor including C-01 (single name, at most 2.5% of NAV, hard), and an owner-adopted adaptation proposing USD 5,000,000 par of the CZR 6.50% 2032 notes (CUSIP 12769GAC4), 0.7925% of NAV. CP-L10's SKILL.md names no portfolio input, so the demand is inferred from CP-0's recorded refusal of CP-L10 over a 10-K alone on ccl-fy2025-portfolio (holdings, mandate and limits) rather than quoted. Its compliance monitor's \"Indenture §7.11\" is the CLO's own indenture, not the Caesars notes indenture, and a SYNTHETIC line in the adaptation says so. 10,979 bytes."
+      "note": "SYNTHETIC. Owner-adopted test input (D80, 2 October 2026), not a real portfolio: the workbook describes itself as packaged sample data only, and the document says no figure in it is a real holding. It may never ground a real decision. It supplies the mandate, the 29 May 2026 exposure report (NAV USD 630,928,502), the compliance monitor including C-01 (single name, at most 2.5% of NAV, hard), and an owner-adopted adaptation proposing USD 5,000,000 par of the CZR 6.50% 2032 notes (CUSIP 12769GAC4), 0.7925% of NAV. CP-L10's SKILL.md names no portfolio input, so the demand is inferred from CP-0's recorded refusal of CP-L10 over a 10-K alone on ccl-fy2025-portfolio (holdings, mandate and limits) rather than quoted. Its compliance monitor's \"Indenture §7.11\" is the CLO's own indenture, not the Caesars notes indenture, and a SYNTHETIC line in the adaptation says so. 10,979 bytes. UNUSED since 6 October 2026 (D115): the owner approved the real fund's N-PORT schedule and prospectus in its place, so no set names this file; it stays registered and on disk because D80 adopted it."
     },
     {
       "id": "czr-finra-trace-12769gac4-2026-10-02-lite-portfolio",
@@ -1710,6 +1788,32 @@
       "external_path": null,
       "demand_verified": true,
       "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. Fiscal year ended 31 December 2025; it supplies the audited annual base (operating cash flow, total debt at 31 December 2025). 405,745 bytes, inside MAX_REQUEST_BYTES."
+    },
+    {
+      "id": "fhsuhy-nport-2026-06-30-portfolio",
+      "issuer": "Federated Hermes Sustainable High Yield Bond Fund, Inc.",
+      "document": "Federated Hermes Sustainable High Yield Bond Fund, Inc. N-PORT schedule of investments at 30 June 2026 (SEC exhibit text extract)",
+      "modules": ["CP-0", "CP-6"],
+      "pathways": ["PORTFOLIO_DECISION"],
+      "source": "https://www.sec.gov/Archives/edgar/data/225318/000022531826000020/poi_fhsushybondfund.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-portfolio/documents/FHSUHY_NPORT_Schedule_of_Investments_2026-06-30.txt",
+      "external_path": null,
+      "demand_verified": false,
+      "note": "Official EDGAR exhibit (NPORT-EX, Federated Hermes Sustainable High Yield Bond Fund, Inc., schedule of investments as of 30 June 2026, filed 25 August 2026), downloaded on the owner's approval of 6 October 2026 (D115); converted from HTML to plain text on 6 October 2026 (D115, F541), split by sentence (F492) (accession 0000225318-26-000020, raw HTML SHA-256 45dbee32a946cf9b582e22e97461735def3b5b8447f77d193ca0b08d92437df5, 1,513,979 bytes after SEC's 111-byte script tag is removed). Byte-identical to the czr-2026q2-lite-portfolio set's copy. It is the real holdings input that replaces the synthetic mandate (D80) in this set: it lists four Caesars Entertainment positions, among them the 6.500% 2/15/2032 secured notes (principal 550,000, value 536,927) and the 6.000% 10/15/2032 notes. It is a bare schedule: it carries no net-assets line (the total of securities, 482,801,658, is its summary table's). The demand is inferred from CP-0's recorded refusal of CP-L10 over a 10-K alone on ccl-fy2025-portfolio (holdings, mandate and limits), not quoted. 49,398 bytes."
+    },
+    {
+      "id": "fhsuhy-prospectus-sai-2026-05-26-portfolio",
+      "issuer": "Federated Hermes Sustainable High Yield Bond Fund, Inc.",
+      "document": "Federated Hermes Sustainable High Yield Bond Fund, Inc. prospectus and statement of additional information, Form 485BPOS of 26 May 2026 (SEC filing text extract)",
+      "modules": ["CP-0", "CP-6"],
+      "pathways": ["PORTFOLIO_DECISION"],
+      "source": "https://www.sec.gov/Archives/edgar/data/225318/000162363226000742/fhsuhy2481-form.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-portfolio/documents/FHSUHY_Prospectus_and_SAI_2026-05-26.txt",
+      "external_path": null,
+      "demand_verified": false,
+      "note": "Official EDGAR filing (485BPOS, combined prospectus and statement of additional information of the same fund, filed 26 May 2026), downloaded on the owner's approval of 6 October 2026 (D115); converted from HTML to plain text on 6 October 2026 (D115, F541), split by sentence (F492) (accession 0001623632-26-000742, raw HTML SHA-256 ace0ea46f895f93d9fa863dc43a7d5f402e689cf0b6fdb3c8c71f6893821f9cc, 2,009,358 bytes after SEC's 111-byte script tag is removed). Byte-identical to the czr-2026q2-lite-portfolio set's copy. It is the fund's mandate in place of the synthetic one (D80): the 80% policy, the investment limitations and the concentration restriction. It does not mention Caesars. It is under 500 KiB as text, so it carries no large-file pin and reaches CP-0 whole. The demand is inferred as for the schedule. 501,405 bytes."
     },
     {
       "id": "czr-2024-credit-agreement-incremental-assumption-no3-portfolio",
@@ -1800,7 +1904,7 @@
       "local_path": "qualification/czr-2026q2-portfolio/documents/TEST_CLO_I_Mandate_and_Exposures_2026-10-02.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "SYNTHETIC. Owner-adopted test input (D80, 2 October 2026), not a real portfolio: the workbook describes itself as packaged sample data only, and the document says no figure in it is a real holding. It may never ground a real decision. Byte-identical to the czr-2026q2-lite-portfolio set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the mandate, the 29 May 2026 exposure report (NAV USD 630,928,502), the compliance monitor including C-01 (single name, at most 2.5% of NAV, hard), and an owner-adopted adaptation proposing USD 5,000,000 par of the CZR 6.50% 2032 notes (CUSIP 12769GAC4), 0.7925% of NAV. CP-6's SKILL.md ranks \"current portfolio/mandate data\" in its highest evidence tier and debates \"Portfolio fit, sizing, and mandate constraints\", so the demand is quoted. Its compliance monitor's \"Indenture §7.11\" is the CLO's own indenture, not the Caesars notes indenture, and a SYNTHETIC line in the adaptation says so. 10,979 bytes."
+      "note": "SYNTHETIC. Owner-adopted test input (D80, 2 October 2026), not a real portfolio: the workbook describes itself as packaged sample data only, and the document says no figure in it is a real holding. It may never ground a real decision. Byte-identical to the czr-2026q2-lite-portfolio set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the mandate, the 29 May 2026 exposure report (NAV USD 630,928,502), the compliance monitor including C-01 (single name, at most 2.5% of NAV, hard), and an owner-adopted adaptation proposing USD 5,000,000 par of the CZR 6.50% 2032 notes (CUSIP 12769GAC4), 0.7925% of NAV. CP-6's SKILL.md ranks \"current portfolio/mandate data\" in its highest evidence tier and debates \"Portfolio fit, sizing, and mandate constraints\", so the demand is quoted. Its compliance monitor's \"Indenture §7.11\" is the CLO's own indenture, not the Caesars notes indenture, and a SYNTHETIC line in the adaptation says so. 10,979 bytes. UNUSED since 6 October 2026 (D115): the owner approved the real fund's N-PORT schedule and prospectus in its place, so no set names this file; it stays registered and on disk because D80 adopted it."
     },
     {
       "id": "czr-q2-2026-10q-full-credit-assessment",
@@ -1840,6 +1944,32 @@
       "external_path": null,
       "demand_verified": true,
       "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,590 bytes."
+    },
+    {
+      "id": "fhsuhy-nport-2026-06-30-full-credit-assessment",
+      "issuer": "Federated Hermes Sustainable High Yield Bond Fund, Inc.",
+      "document": "Federated Hermes Sustainable High Yield Bond Fund, Inc. N-PORT schedule of investments at 30 June 2026 (SEC exhibit text extract)",
+      "modules": ["CP-6"],
+      "pathways": ["FULL_CREDIT_ASSESSMENT"],
+      "source": "https://www.sec.gov/Archives/edgar/data/225318/000022531826000020/poi_fhsushybondfund.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-full-credit-assessment/documents/FHSUHY_NPORT_Schedule_of_Investments_2026-06-30.txt",
+      "external_path": null,
+      "demand_verified": false,
+      "note": "Official EDGAR exhibit (NPORT-EX, Federated Hermes Sustainable High Yield Bond Fund, Inc., schedule of investments as of 30 June 2026, filed 25 August 2026), downloaded on the owner's approval of 6 October 2026 (D115); converted from HTML to plain text on 6 October 2026 (D115, F541), split by sentence (F492) (accession 0000225318-26-000020, raw HTML SHA-256 45dbee32a946cf9b582e22e97461735def3b5b8447f77d193ca0b08d92437df5, 1,513,979 bytes after SEC's 111-byte script tag is removed). Byte-identical to the czr-2026q2-lite-portfolio set's copy. It is the real holdings input that replaces the synthetic mandate (D80) in this set: it lists four Caesars Entertainment positions, among them the 6.500% 2/15/2032 secured notes (principal 550,000, value 536,927) and the 6.000% 10/15/2032 notes. It is a bare schedule: it carries no net-assets line (the total of securities, 482,801,658, is its summary table's). The demand is inferred from CP-0's recorded refusal of CP-L10 over a 10-K alone on ccl-fy2025-portfolio (holdings, mandate and limits), not quoted. 49,398 bytes."
+    },
+    {
+      "id": "fhsuhy-prospectus-sai-2026-05-26-full-credit-assessment",
+      "issuer": "Federated Hermes Sustainable High Yield Bond Fund, Inc.",
+      "document": "Federated Hermes Sustainable High Yield Bond Fund, Inc. prospectus and statement of additional information, Form 485BPOS of 26 May 2026 (SEC filing text extract)",
+      "modules": ["CP-6"],
+      "pathways": ["FULL_CREDIT_ASSESSMENT"],
+      "source": "https://www.sec.gov/Archives/edgar/data/225318/000162363226000742/fhsuhy2481-form.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-full-credit-assessment/documents/FHSUHY_Prospectus_and_SAI_2026-05-26.txt",
+      "external_path": null,
+      "demand_verified": false,
+      "note": "Official EDGAR filing (485BPOS, combined prospectus and statement of additional information of the same fund, filed 26 May 2026), downloaded on the owner's approval of 6 October 2026 (D115); converted from HTML to plain text on 6 October 2026 (D115, F541), split by sentence (F492) (accession 0001623632-26-000742, raw HTML SHA-256 ace0ea46f895f93d9fa863dc43a7d5f402e689cf0b6fdb3c8c71f6893821f9cc, 2,009,358 bytes after SEC's 111-byte script tag is removed). Byte-identical to the czr-2026q2-lite-portfolio set's copy. It is the fund's mandate in place of the synthetic one (D80): the 80% policy, the investment limitations and the concentration restriction. It does not mention Caesars. It is under 500 KiB as text, so it carries no large-file pin and reaches CP-0 whole. The demand is inferred as for the schedule. 501,405 bytes."
     },
     {
       "id": "czr-2024-credit-agreement-incremental-assumption-no3-full-credit-assessment",
@@ -1946,6 +2076,19 @@
       "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the transaction value, the approximately $11.9 billion of debt to be assumed and the stated financing sources; the financing commitments are not admitted. 19,048 bytes."
     },
     {
+      "id": "czr-2026-merger-agreement-full-credit-assessment",
+      "issuer": "CZR",
+      "document": "Caesars Entertainment, Inc. Agreement and Plan of Merger with Fertitta Gaming Holdco, LLC, Exhibit 2.1 to the Form 8-K of 28 May 2026 (SEC exhibit text extract)",
+      "modules": ["CP-1A", "CP-3C", "CP-4"],
+      "pathways": ["FULL_CREDIT_ASSESSMENT"],
+      "source": "https://www.sec.gov/Archives/edgar/data/1590895/000119312526242995/d143382dex21.htm",
+      "status": "in_hand",
+      "local_path": "qualification/czr-2026q2-full-credit-assessment/documents/CZR_2026_Merger_Agreement.txt",
+      "external_path": null,
+      "demand_verified": false,
+      "note": "Official EDGAR exhibit (Ex. 2.1 to the Form 8-K filed 28 May 2026), the full Agreement and Plan of Merger dated 27 May 2026, downloaded on the owner's approval of 6 October 2026 (D115); converted from HTML to plain text on 6 October 2026 (D115, F541), split by sentence (F492) and by clause (F498) (accession 0001193125-26-242995, raw HTML SHA-256 fcc680b30487f2abd9d753125e09a0844b05285ddb718f1c43428b2ab60fff1b, 611,257 bytes after SEC's 111-byte script tag is removed). Schedules are omitted under Item 601(b)(2) and the debt commitment letters are not in this exhibit. It supplies the merger's terms, conditions, financing covenants and termination fees in full for CP-1A, CP-3C and CP-4, beside the 8-K summary. Byte-identical to the czr-2026q2-covenant-refinancing set's copy. Demand inferred from the route's covenant, liquidity and transaction modules, not quoted from a SKILL.md. 411,229 bytes."
+    },
+    {
       "id": "mgm-q2-2026-earnings-full-credit-assessment",
       "issuer": "MGM",
       "document": "MGM Resorts International second quarter 2026 earnings release, Exhibit 99.1, 29 July 2026 (SEC exhibit text extract, FULL credit-assessment set copy)",
@@ -2034,7 +2177,7 @@
       "local_path": "qualification/czr-2026q2-full-credit-assessment/documents/TEST_CLO_I_Mandate_and_Exposures_2026-10-02.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "SYNTHETIC. Owner-adopted test input (D80, 2 October 2026), not a real portfolio: the workbook describes itself as packaged sample data only, and the document says no figure in it is a real holding. It may never ground a real decision. Byte-identical to the czr-2026q2-lite-portfolio set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the mandate, the 29 May 2026 exposure report (NAV USD 630,928,502), the compliance monitor including C-01 (single name, at most 2.5% of NAV, hard), and an owner-adopted adaptation proposing USD 5,000,000 par of the CZR 6.50% 2032 notes (CUSIP 12769GAC4), 0.7925% of NAV. CP-6's SKILL.md ranks \"current portfolio/mandate data\" in its highest evidence tier and debates \"Portfolio fit, sizing, and mandate constraints\", so the demand is quoted. Its compliance monitor's \"Indenture §7.11\" is the CLO's own indenture, not the Caesars notes indenture, and a SYNTHETIC line in the adaptation says so. 10,979 bytes."
+      "note": "SYNTHETIC. Owner-adopted test input (D80, 2 October 2026), not a real portfolio: the workbook describes itself as packaged sample data only, and the document says no figure in it is a real holding. It may never ground a real decision. Byte-identical to the czr-2026q2-lite-portfolio set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the mandate, the 29 May 2026 exposure report (NAV USD 630,928,502), the compliance monitor including C-01 (single name, at most 2.5% of NAV, hard), and an owner-adopted adaptation proposing USD 5,000,000 par of the CZR 6.50% 2032 notes (CUSIP 12769GAC4), 0.7925% of NAV. CP-6's SKILL.md ranks \"current portfolio/mandate data\" in its highest evidence tier and debates \"Portfolio fit, sizing, and mandate constraints\", so the demand is quoted. Its compliance monitor's \"Indenture §7.11\" is the CLO's own indenture, not the Caesars notes indenture, and a SYNTHETIC line in the adaptation says so. 10,979 bytes. UNUSED since 6 October 2026 (D115): the owner approved the real fund's N-PORT schedule and prospectus in its place, so no set names this file; it stays registered and on disk because D80 adopted it."
     }
   ],
   "key_sources": [
