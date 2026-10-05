@@ -11,7 +11,6 @@ Bundle folder `vendor/deploy-v/skills/cp-2-fundamental-credit-synthesizer/`, rea
 | bundle | vendor/deploy-v/skills/cp-2-fundamental-credit-synthesizer/SKILL.md | whole | the module's authority, delivered first |
 | bundle | vendor/deploy-v/skills/cp-2-fundamental-credit-synthesizer/references/CP-2_SCHEMA_REFERENCE.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-2-fundamental-credit-synthesizer/references/CP-2_SYSTEM_REFERENCE.md | whole | delivered authority file |
-| bundle | vendor/deploy-v/skills/cp-2-fundamental-credit-synthesizer/references/CP-2__FundamentalCreditSynthesizer__payload.schema.txt | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-2-fundamental-credit-synthesizer/references/REF_CP-2_STEPS.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/CANON_SHARED.md | whole | delivered authority file |
 | prompt | icm/shared/prompt/instruction.md | whole | prompt block |

@@ -388,6 +388,7 @@ const CitationView = object({
   matched_text: string({ max: 65536 }),
   rects: array(RectView, 256),
   withdrawn_at: nullable(datetime),
+  cited_page: nullable(int({ min: 1 })),
 });
 // A handoff's tagged tables, read by the server from its Markdown with the
 // bundle's own reader (`caos/methodology/tables.py`); the browser never parses

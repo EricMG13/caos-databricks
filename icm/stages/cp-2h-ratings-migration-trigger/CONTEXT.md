@@ -10,7 +10,6 @@ Bundle folder `vendor/deploy-v/skills/cp-2h-ratings-migration-trigger/`, read th
 |---|---|---|---|
 | bundle | vendor/deploy-v/skills/cp-2h-ratings-migration-trigger/SKILL.md | whole | the module's authority, delivered first |
 | bundle | vendor/deploy-v/skills/cp-2h-ratings-migration-trigger/references/CP-2H_RatingTransition.schema.md | whole | delivered authority file |
-| bundle | vendor/deploy-v/skills/cp-2h-ratings-migration-trigger/references/CP-2H__RatingTransitionCase__payload.schema.txt | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-2h-ratings-migration-trigger/references/REF_CP-2H_STEPS.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/CANON_SHARED.md | whole | delivered authority file |
 | prompt | icm/shared/prompt/instruction.md | whole | prompt block |

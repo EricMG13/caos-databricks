@@ -395,6 +395,21 @@ WITHHELD_AUTHORITY: dict[str, frozenset[str]] = {
     "CP-6": frozenset({"references/REF_CP-6A_Portfolio_Debate_Inputs.xlsx"}),
 }
 
+# The JSON payload schemas a manifest lists or a `SKILL.md` names (D93). The
+# canonical adapter takes a Markdown handoff and never a payload -- nothing
+# calls the vendor's `check_payload` (`handoff.validate_markdown`) -- so no
+# module is handed one: they were 54,133 bytes of every CP-L10 prompt and
+# 11,628 of CP-0's. Every Markdown register, column and value set a module
+# writes is stated in its `SKILL.md` and delivered references. Withheld as
+# `WITHHELD_AUTHORITY` is, and named in the prompt by its own host note.
+PAYLOAD_SCHEMA_SUFFIX = ".schema.txt"
+
+
+def _kept_back(module_id: str, name: str) -> bool:
+    return name in WITHHELD_AUTHORITY.get(module_id, frozenset()) or name.endswith(
+        PAYLOAD_SCHEMA_SUFFIX
+    )
+
 
 @dataclass(frozen=True, slots=True)
 class DeliveredAuthority:
@@ -403,8 +418,8 @@ class DeliveredAuthority:
     `SKILL.md` first, then the module's non-script manifest files by name, then
     any declared file of another skill its `SKILL.md` names (§101), then the
     root files `SKILL.md` names, each under its `../../` literal. `withheld`
-    names the manifest files the host keeps back (`WITHHELD_AUTHORITY`), for
-    the prompt to say so.
+    names the manifest and root files the host keeps back (`WITHHELD_AUTHORITY`
+    and every payload schema, D93), for the prompt to say so.
     """
 
     module_id: str
@@ -453,21 +468,27 @@ def delivered_authority(bundle: Bundle, module_id: str) -> DeliveredAuthority:
         if name != "SKILL.md"
         and (module_id == MODEL_MODULE or not name.startswith("scripts/"))
     )
-    kept_back = WITHHELD_AUTHORITY.get(module_id, frozenset())
-    references = [name for name in listed if name not in kept_back]
+    roots = [ROOT_PREFIX + name for name in _named_root_files(bundle, skill)]
     files = [("SKILL.md", skill)]
-    files += [(name, verified_bytes(bundle, module_id, name)) for name in references]
+    files += [
+        (name, verified_bytes(bundle, module_id, name))
+        for name in listed
+        if not _kept_back(module_id, name)
+    ]
     files += _cross_skill_files(bundle, module_id, skill)
     files += [
-        (ROOT_PREFIX + name, verified_root_bytes(bundle, name))
-        for name in _named_root_files(bundle, skill)
+        (name, verified_root_bytes(bundle, name.removeprefix(ROOT_PREFIX)))
+        for name in roots
+        if not _kept_back(module_id, name)
     ]
     # Every read above re-verified the manifest bound when `build_id` was read.
     return DeliveredAuthority(
         module_id=module_id,
         build_id=build_id,
         files=tuple(files),
-        withheld=tuple(name for name in listed if name in kept_back),
+        withheld=tuple(
+            name for name in [*listed, *roots] if _kept_back(module_id, name)
+        ),
     )
 
 

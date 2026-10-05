@@ -11,7 +11,6 @@ Bundle folder `vendor/deploy-v/skills/cp-8-decision-ledger-post-mortem/`, read t
 | bundle | vendor/deploy-v/skills/cp-8-decision-ledger-post-mortem/SKILL.md | whole | the module's authority, delivered first |
 | bundle | vendor/deploy-v/skills/cp-8-decision-ledger-post-mortem/references/CP-8_SCHEMA_REFERENCE.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-8-decision-ledger-post-mortem/references/CP-8_SYSTEM_REFERENCE.md | whole | delivered authority file |
-| bundle | vendor/deploy-v/skills/cp-8-decision-ledger-post-mortem/references/CP-8__DecisionLedgerPostMortem__payload.schema.txt | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-8-decision-ledger-post-mortem/references/REF_CP-8_STEPS.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/CANON_SHARED.md | whole | delivered authority file |
 | prompt | icm/shared/prompt/instruction.md | whole | prompt block |

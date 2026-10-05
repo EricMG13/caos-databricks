@@ -1500,7 +1500,9 @@ def record_bytes(record: CanonicalRecord) -> bytes:
     `_decoded_record` reads it back as the empty tuple, so `record_bytes` of a
     decoded record is the bytes it was decoded from. `citation_rule` is kept
     the same way (N28): written only when it is not `ANY_RUN`, the rule every
-    record stored before the field existed was anchored by.
+    record stored before the field existed was anchored by. A citation's
+    `cited_page` likewise: written only where the host re-anchored the quote
+    at its true page (D94).
     """
     document: dict[str, Any] = {"format": RECORD_FORMAT, **asdict(record)}
     if not document["projections"]["blockers"]:
@@ -1510,6 +1512,8 @@ def record_bytes(record: CanonicalRecord) -> bytes:
     if document["identity"]["research_brief"] is None:
         del document["identity"]["research_brief"]
     for citation in document["citations"]:
+        if citation["cited_page"] is None:
+            del citation["cited_page"]
         for box in citation["bboxes"]:
             box.update({key: float(box[key]) for key in ("x0", "y0", "x1", "y1")})
     return canonical_json(document).encode("utf-8")
@@ -1592,13 +1596,32 @@ _rect = _each(
 )
 
 
+def _anchored(item: object) -> AnchoredCitation:
+    """A stored citation. An absent `cited_page` is None (every citation found
+    where it was cited, D94); a present one is another page than `page`."""
+    if not isinstance(item, dict):
+        raise TypeError
+    cited = item.get("cited_page")
+    if "cited_page" in item and (
+        type(cited) is not int
+        or not 1 <= cited <= MAX_PAGE
+        or cited == item.get("page")
+    ):
+        raise ValueError
+    return _typed(
+        AnchoredCitation,
+        {**item, "cited_page": cited},
+        page=_int,
+        bboxes=_rect,
+        cited_page=lambda value: value,
+    )
+
+
 def _decoded_record(data: bytes) -> CanonicalRecord:
     document = strict_json(data.decode("utf-8"))
     if not isinstance(document, dict) or document.pop("format", None) != RECORD_FORMAT:
         raise ValueError
-    citations = _each(
-        lambda item: _typed(AnchoredCitation, item, page=_int, bboxes=_rect)
-    )(document.get("citations"))
+    citations = _each(_anchored)(document.get("citations"))
     if not citations:
         raise ValueError
     return _typed(

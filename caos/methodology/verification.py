@@ -336,7 +336,10 @@ def _reanchored(
                 Step.SOURCE_NOT_PINNED,
                 RefusalCode.ORCHESTRATION_SOURCE_NOT_PINNED,
             )
-        requests.append(Citation(source_id, citation.page, citation.matched_text))
+        # The page the module named, so a quote the host re-anchored at its
+        # true page (D94) is located again exactly as it was accepted.
+        cited = citation.page if citation.cited_page is None else citation.cited_page
+        requests.append(Citation(source_id, cited, citation.matched_text))
     anchored = _step(
         refuse,
         Step.CITATION_ANCHOR,

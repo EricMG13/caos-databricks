@@ -11,11 +11,9 @@ Bundle folder `vendor/deploy-v/skills/cp-model/`, read through the verified `Bun
 | bundle | vendor/deploy-v/skills/cp-model/SKILL.md | whole | the module's authority, delivered first |
 | bundle | vendor/deploy-v/skills/cp-model/agents/openai.yaml | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-model/references/CP-MODEL_CP_WORKBOOK_EXPORT_HARD_GATE.md | whole | delivered authority file |
-| bundle | vendor/deploy-v/skills/cp-model/references/CP-MODEL_CP_WORKBOOK_EXPORT_PAYLOAD_BASE.schema.txt | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-model/references/CP-MODEL_CP_WORKBOOK_EXPORT_SPEC.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-model/references/CP-MODEL_SCHEMA_REFERENCE.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-model/references/CP-MODEL_SYSTEM_REFERENCE.md | whole | delivered authority file |
-| bundle | vendor/deploy-v/skills/cp-model/references/CP-MODEL__CreditSnapshotModelWorkbook__payload.schema.txt | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-model/references/REF_CP-MODEL_STEPS.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/CANON_SHARED.md | whole | delivered authority file |
 | prompt | icm/shared/prompt/instruction.md | whole | prompt block |

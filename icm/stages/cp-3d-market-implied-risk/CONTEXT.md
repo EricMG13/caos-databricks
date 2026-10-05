@@ -10,7 +10,6 @@ Bundle folder `vendor/deploy-v/skills/cp-3d-market-implied-risk/`, read through 
 |---|---|---|---|
 | bundle | vendor/deploy-v/skills/cp-3d-market-implied-risk/SKILL.md | whole | the module's authority, delivered first |
 | bundle | vendor/deploy-v/skills/cp-3d-market-implied-risk/references/CP-3D_MarketImpliedRisk.schema.md | whole | delivered authority file |
-| bundle | vendor/deploy-v/skills/cp-3d-market-implied-risk/references/CP-3D__MarketImpliedRiskMap__payload.schema.txt | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-3d-market-implied-risk/references/REF_CP-3D_STEPS.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/CANON_SHARED.md | whole | delivered authority file |
 | prompt | icm/shared/prompt/instruction.md | whole | prompt block |

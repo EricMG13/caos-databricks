@@ -11,9 +11,7 @@ Bundle folder `vendor/deploy-v/skills/cp-0-source-readiness/`, read through the 
 | bundle | vendor/deploy-v/skills/cp-0-source-readiness/SKILL.md | whole | the module's authority, delivered first |
 | bundle | vendor/deploy-v/skills/cp-0-source-readiness/references/CP-0_SCHEMA_REFERENCE.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-0-source-readiness/references/CP-0_SYSTEM_REFERENCE.md | whole | delivered authority file |
-| bundle | vendor/deploy-v/skills/cp-0-source-readiness/references/CP-0__SourceReadiness__payload.schema.txt | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-0-source-readiness/references/CP-PARSE_SCHEMA_REFERENCE.md | whole | delivered authority file |
-| bundle | vendor/deploy-v/skills/cp-0-source-readiness/references/CP-PARSE__DataPreparation__payload.schema.txt | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-0-source-readiness/references/CP0_CAPACITY_RESUME_CONTRACT_v1.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-0-source-readiness/references/CP0_PROFILE_ANCHOR_CONTRACT_v1.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-0-source-readiness/references/REF_CP-0_STEPS.md | whole | delivered authority file |

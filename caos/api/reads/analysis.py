@@ -483,4 +483,5 @@ def _citation(
         matched_text=citation.matched_text,
         rects=[RectView(x0=b.x0, y0=b.y0, x1=b.x1, y1=b.y1) for b in citation.bboxes],
         withdrawn_at=withdrawn_at,  # type: ignore[arg-type]
+        cited_page=citation.cited_page,
     )

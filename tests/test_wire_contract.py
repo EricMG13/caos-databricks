@@ -308,6 +308,7 @@ PINNED: dict[type[BaseModel], frozenset[str]] = {
             "rects",
             "source_id",
             "withdrawn_at",
+            "cited_page",
         }
     ),
     HandoffView: frozenset(
@@ -705,6 +706,7 @@ def test_citation_view_names_its_source_for_the_page_endpoint() -> None:
         "matched_text": "net leverage",
         "rects": [],
         "withdrawn_at": None,
+        "cited_page": None,
     }
     with pytest.raises(ValidationError):
         CitationView.model_validate(citation)

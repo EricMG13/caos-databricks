@@ -419,6 +419,7 @@ function analysis(): { [key: string]: Json } {
               matched_text: "net leverage",
               rects: [{ x0: 1, y0: 2.5, x1: 3, y1: 4 }],
               withdrawn_at: null,
+              cited_page: null,
             },
           ],
           model_analysis: "# CP-0",

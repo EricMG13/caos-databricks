@@ -11,7 +11,6 @@ Bundle folder `vendor/deploy-v/skills/cp-1c-peer-benchmark/`, read through the v
 | bundle | vendor/deploy-v/skills/cp-1c-peer-benchmark/SKILL.md | whole | the module's authority, delivered first |
 | bundle | vendor/deploy-v/skills/cp-1c-peer-benchmark/references/CP-1C_SCHEMA_REFERENCE.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-1c-peer-benchmark/references/CP-1C_SYSTEM_REFERENCE.md | whole | delivered authority file |
-| bundle | vendor/deploy-v/skills/cp-1c-peer-benchmark/references/CP-1C__PeerBenchmark__payload.schema.txt | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-1c-peer-benchmark/references/REF_CP-1C_STEPS.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/CANON_SHARED.md | whole | delivered authority file |
 | prompt | icm/shared/prompt/instruction.md | whole | prompt block |

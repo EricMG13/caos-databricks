@@ -529,3 +529,23 @@ def test_the_analysis_route_is_read_analysis() -> None:
     ]
     assert served.path == "/api/v1/cases/{case_id}/analysis"
     assert served.endpoint is analysis_read.read_analysis
+
+
+def test_a_reanchored_citation_is_served_with_the_page_it_was_cited_on() -> None:
+    """D94: the evidence view serves the true page and rectangles, and the
+    page the module named beside them; null for a citation found where it
+    was cited."""
+    from caos.evidence.citations import AnchoredCitation, Rect
+
+    found = AnchoredCitation(
+        "a" * 64, 2, "Net leverage was 3.4x.", (Rect(2, 1, 2, 3, 4),)
+    )
+    source = uuid4()
+    documents: dict[str, tuple[UUID, str, object]] = {
+        "a" * 64: (source, "memo.pdf", None)
+    }
+    view = analysis_read._citation(found, documents)
+    assert (view.page, view.cited_page, view.source_id) == (2, None, source)
+    moved = analysis_read._citation(replace(found, cited_page=1), documents)
+    assert (moved.page, moved.cited_page) == (2, 1)
+    assert moved.rects == view.rects

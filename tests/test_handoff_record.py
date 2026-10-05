@@ -263,6 +263,32 @@ def test_a_record_names_the_rule_its_citations_were_accepted_under(
         _mismatch(blobs, artifact, sha, CP0)
 
 
+def test_a_record_keeps_the_page_a_reanchored_citation_was_cited_on(
+    tmp_path: Path,
+) -> None:
+    """D94: a citation the host re-anchored at its true page carries the page
+    the module named as `cited_page`; one found where it was cited carries
+    none, so every record written before reads back byte for byte. A stored
+    `cited_page` that is null, not a page, or the page itself is not one this
+    host wrote."""
+    [found] = _record().citations
+    assert "cited_page" not in json.loads(record_bytes(_record()))["citations"][0]
+    moved = _record(
+        citation_rule=WHOLE_LINE,
+        citations=(dataclasses.replace(found, page=2, cited_page=7),),
+    )
+    [stored] = json.loads(record_bytes(moved))["citations"]
+    assert (stored["page"], stored["cited_page"]) == (2, 7)
+    blobs, artifact, sha = _stored(tmp_path, moved)
+    read = read_record(blobs, artifact_sha256=artifact, record_sha256=sha, expected=CP0)
+    assert read == moved and read.citations[0].cited_page == 7
+    for value in (None, 2, 0, "7", 7.0, True):
+        document = json.loads(record_bytes(moved))
+        document["citations"][0]["cited_page"] = value
+        sha = blobs.put(canonical_json(document).encode("utf-8"))
+        _mismatch(blobs, artifact, sha, CP0)
+
+
 def _mismatch(blobs: BlobStore, artifact: str, sha: str, expected: object) -> None:
     refusal = _refused(
         lambda: read_record(

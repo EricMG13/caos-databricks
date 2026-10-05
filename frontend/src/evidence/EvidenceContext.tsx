@@ -81,6 +81,9 @@ function figureFact(figure: NarrativeFigure): CitationView {
     matched_text: figure.matched_text,
     rects: figure.rects,
     withdrawn_at: figure.withdrawn_at,
+    // A figure names the page its record's citation is on; it keeps no
+    // page the module named instead (D94).
+    cited_page: null,
   };
 }
 

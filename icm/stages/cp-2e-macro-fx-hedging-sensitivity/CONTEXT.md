@@ -11,10 +11,8 @@ Bundle folder `vendor/deploy-v/skills/cp-2e-macro-fx-hedging-sensitivity/`, read
 | bundle | vendor/deploy-v/skills/cp-2e-macro-fx-hedging-sensitivity/SKILL.md | whole | the module's authority, delivered first |
 | bundle | vendor/deploy-v/skills/cp-2e-macro-fx-hedging-sensitivity/references/CP-2E_SCHEMA_REFERENCE.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-2e-macro-fx-hedging-sensitivity/references/CP-2E_SYSTEM_REFERENCE.md | whole | delivered authority file |
-| bundle | vendor/deploy-v/skills/cp-2e-macro-fx-hedging-sensitivity/references/CP-2E__MacroFXHedgingSensitivity__payload.schema.txt | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-2e-macro-fx-hedging-sensitivity/references/CP-2F_SCHEMA_REFERENCE.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-2e-macro-fx-hedging-sensitivity/references/CP-2F_SYSTEM_REFERENCE.md | whole | delivered authority file |
-| bundle | vendor/deploy-v/skills/cp-2e-macro-fx-hedging-sensitivity/references/CP-2F__ESGSustainabilityCreditRisk__payload.schema.txt | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-2e-macro-fx-hedging-sensitivity/references/REF_CP-2E_STEPS.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/skills/cp-2e-macro-fx-hedging-sensitivity/references/REF_CP-2F_STEPS.md | whole | delivered authority file |
 | bundle | vendor/deploy-v/CANON_SHARED.md | whole | delivered authority file |
