@@ -43,6 +43,7 @@ from caos.graph.route import (
 )
 from caos.methodology.bundle import Bundle
 from caos.methodology.canonical import (
+    GUIDED_RETRIES,
     SECOND_ATTEMPT_CODES,
     Replayed,
     Verdict,
@@ -377,34 +378,36 @@ def _with_second_attempt(
     run_id: UUID,
     route_node_id: str,
 ) -> str:
-    """One node's pass, and its one second attempt when the ledger gives it.
+    """One node's pass, and its guided retries while the ledger gives them.
 
-    An answer refused with one of `SECOND_ATTEMPT_CODES` earns the node one
-    second attempt (D30, the owner's choice under N32; N52): the node's pass
-    runs once more, and the ledger, not this frame, says the attempt it makes
-    is that one -- reserved and priced like any other, carrying what the checks
-    reported. A second refusal, or any other code, is raised; a second attempt
-    the ceiling cannot pay for leaves the first refusal standing, since that is
-    what the answer was.
+    An answer refused with one of `SECOND_ATTEMPT_CODES` earns the node a
+    guided retry (D30, the owner's choice under N32; N52), at most
+    `GUIDED_RETRIES` of them (D82): the node's pass runs once more, and the
+    ledger, not this frame, says the attempt it makes is one -- reserved and
+    priced like any other, carrying what the checks reported on the attempt
+    before it. A refusal the ledger gives no retry, or any other code, is
+    raised; a retry the ceiling cannot pay for leaves the refusal before it
+    standing, since that is what the answer was. The passes are bounded here
+    too, so a refusal that wrote no attempt cannot loop.
     """
-    try:
-        return one_pass(route_node_id)
-    except Refusal as refused:
-        if refused.code not in SECOND_ATTEMPT_CODES or not _second_due(
-            conn, run_id, route_node_id
-        ):
-            raise
-        first = refused.code
-    try:
-        return one_pass(route_node_id)
-    except Refusal as again:
-        if again.code is not RefusalCode.BUDGET_CEILING_REACHED:
-            raise
-    raise Refusal(first)
+    standing: list[RefusalCode] = []
+    for _pass in range(1 + GUIDED_RETRIES):
+        try:
+            return one_pass(route_node_id)
+        except Refusal as refused:
+            unpaid = refused.code is RefusalCode.BUDGET_CEILING_REACHED
+            if standing and unpaid:
+                break
+            if refused.code not in SECOND_ATTEMPT_CODES or not _second_due(
+                conn, run_id, route_node_id
+            ):
+                raise
+            standing.append(refused.code)
+    raise Refusal(standing[-1])
 
 
 def _second_due(conn: StoreConnection, run_id: UUID, route_node_id: str) -> bool:
-    """Whether the ledger gives this node its one second attempt now (D30). A
+    """Whether the ledger gives this node a guided retry now (D30, D82). A
     store that cannot say leaves the original refusal standing."""
     try:
         return second_attempt_due(conn, run_id=run_id, route_node_id=route_node_id)

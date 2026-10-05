@@ -34,6 +34,7 @@ from caos.evidence.citations import (
     AnchoredCitation,
     Citation,
     TokenIndex,
+    find_line,
     verify_citations,
 )
 from caos.graph.route import MODEL_MODULE, ResolvedRoute, RouteNode
@@ -54,10 +55,12 @@ from caos.methodology.executor import (
 )
 from caos.methodology.handoff import (
     GATE_MODULE,
+    HINT_WORDS,
     MAX_TRANSPORT_CHARS,
     CanonicalRecord,
     HostIdentity,
     LineageRef,
+    LineHint,
     Projections,
     UpstreamRef,
     anchoring_line,
@@ -482,7 +485,7 @@ class _Context:
     source_set: SourceSet | None
     # Why `delivered` is what it is (§95); the gate's own is always the whole pin.
     selection: Selection
-    # What a node's one second attempt carries (D30); empty on every other.
+    # What a node's guided retry carries (D30, D82); empty on every other.
     feedback: tuple[str, ...] = ()
 
 
@@ -584,7 +587,7 @@ def _context(
     """The delivered evidence, the verified upstream, its whole accepted lineage
     and its citation register, read inside the caller's unit after it checked
     the stored pin. Only accepted rows reach any part: a Blocked or refused
-    attempt's diagnostic body is never read here (a second attempt's lines are
+    attempt's diagnostic body is never read here (a guided retry's lines are
     read beside it, by the two prompt builders alone: `_prompt_context`)."""
     delivered = _delivered(conn, assignment.run_id)
     source_set = _source_preparation(conn, blobs, assignment, delivered)
@@ -613,7 +616,7 @@ def _prompt_context(
     identity: HostIdentity,
 ) -> _Context:
     """`_context` for a prompt about to be priced or sent: with the lines a
-    node's one second attempt carries (D30). Replay and the readers never
+    node's guided retry carries (D30, D82). Replay and the readers never
     build a prompt, so they never pay for the ledger read this adds."""
     context = _context(conn, blobs, bundle, assignment, identity)
     fed = _feedback_body(conn, blobs, assignment)
@@ -623,9 +626,7 @@ def _prompt_context(
     skill = assemble_authority(bundle, assignment.module_id).files[SKILL]
     contract, pathways = _contract(bundle), catalog(bundle)
     host = (
-        anchoring_line(
-            _anchoring(conn, _by_source(context.delivered), answer_citations(body))
-        ),
+        _anchoring_line(conn, context.delivered, answer_citations(body)),
         readiness_set_line(
             contract,
             pathways,
@@ -672,7 +673,7 @@ _ANCHORING_CODES = frozenset(
         RefusalCode.CITATION_NOT_DELIVERED,
     }
 )
-# The refusals whose checks a second attempt can be told of (D30, N52): the
+# The refusals whose checks a guided retry can be told of (D30, N52, D82): the
 # validator's and the host's own (`HANDOFF_MALFORMED`), the completeness
 # checker's (`HANDOFF_INCOMPLETE`), anchoring's, and -- owner-approved on
 # 2026-09-23 (G1-16) -- a host-owned field copied wrong or a field no handoff
@@ -688,24 +689,28 @@ SECOND_ATTEMPT_CODES = (
     )
     | _ANCHORING_CODES
 )
+# How many guided retries one node gets (D82; D30 gave one): its 2nd and 3rd
+# attempts, each told what the attempt just before it was refused for.
+GUIDED_RETRIES = 2
 
 
 def _feedback_source(attempts: Sequence[NodeAttempt]) -> NodeAttempt | None:
     """The refused attempt a node's next attempt answers, when that next one is
-    its one second attempt (D30): the latest attempt, refused with one of
-    `SECOND_ATTEMPT_CODES`, and the node's only such refusal. Read from the
-    ledger, so a crash between the refusal and the second attempt changes
-    nothing."""
+    a guided retry (D30, D82): the latest attempt, refused with one of
+    `SECOND_ATTEMPT_CODES`, while the node holds at most `GUIDED_RETRIES` such
+    refusals -- so its 2nd and 3rd attempts are told of the 1st and 2nd, and
+    every later attempt is an ordinary one. Read from the ledger, so a crash
+    between a refusal and its retry changes nothing."""
     refused = [a for a in attempts if a.refusal in SECOND_ATTEMPT_CODES]
-    if len(refused) != 1 or attempts[-1] != refused[0]:
+    if not refused or len(refused) > GUIDED_RETRIES or attempts[-1] != refused[-1]:
         return None
-    return refused[0]
+    return refused[-1]
 
 
 def second_attempt_due(
     conn: StoreConnection, *, run_id: UUID, route_node_id: str
 ) -> bool:
-    """Whether this node's next attempt is its one second attempt (D30)."""
+    """Whether this node's next attempt is a guided retry (D30, D82)."""
     with execution_reads(conn):
         return _feedback_source(node_attempts(conn, run_id, route_node_id)) is not None
 
@@ -714,11 +719,11 @@ def _feedback_body(
     conn: StoreConnection, blobs: BlobStore, assignment: Assignment
 ) -> tuple[str, UUID] | None:
     """The refused answer this attempt answers and the attempt that gave it,
-    when this is the node's one second attempt (D30), else None.
+    when this is a guided retry (D30, D82), else None.
 
     Counted from the attempts before this one, so the prospective prompt that
     is priced and the attempt's own rebuilt prompt carry the same lines. A body
-    that is lost or corrupt leaves the second attempt a plain one: the lines are
+    that is lost or corrupt leaves the retry a plain one: the lines are
     help, not a verdict, and parking the run over them would cost the attempt.
     """
     attempts = node_attempts(conn, assignment.run_id, assignment.node.route_node_id)
@@ -736,14 +741,32 @@ def _feedback_body(
     return None if body is None else (body, source.attempt_id)
 
 
+def _anchoring_line(
+    conn: StoreConnection, delivered: Sequence[Delivery], citations: Sequence[Citation]
+) -> str | None:
+    """The host anchoring line a retry carries (`anchoring_line`): each
+    citation's verdict, and where the host's own search places each refused
+    `CITATION_NOT_LOCATED` among what the node was given (D82)."""
+    index = TokenIndex()
+    blocks = _by_source(delivered)
+    verdicts = _anchoring(conn, blocks, citations, index)
+    hints = [
+        _line_hint(conn, delivered, blocks, citation, index)
+        if verdict is RefusalCode.CITATION_NOT_LOCATED
+        else None
+        for citation, verdict in zip(citations, verdicts, strict=True)
+    ]
+    return anchoring_line(verdicts, hints)
+
+
 def _anchoring(
     conn: StoreConnection,
     blocks: dict[UUID, frozenset[str]],
     citations: Sequence[Citation],
+    index: TokenIndex,
 ) -> list[RefusalCode | None]:
     """Each citation's own anchoring verdict, by the rule the answer was
     judged by (`verify_citations`), one at a time so every one is named."""
-    index = TokenIndex()
     verdicts: list[RefusalCode | None] = []
     for citation in citations:
         try:
@@ -761,6 +784,37 @@ def _anchoring(
         else:
             verdicts.append(None)
     return verdicts
+
+
+def _line_hint(
+    conn: StoreConnection,
+    delivered: Sequence[Delivery],
+    blocks: dict[UUID, frozenset[str]],
+    citation: Citation,
+    index: TokenIndex,
+) -> LineHint:
+    """Where `find_line` places a citation refused `CITATION_NOT_LOCATED`
+    (D82). The longer line's first `HINT_WORDS` words are read from the
+    delivered block itself -- its own words, one space between -- so nothing
+    the node was not given is shown."""
+    source = citation.source_id
+    found = find_line(
+        conn,
+        blocks=blocks.get(source, frozenset()),
+        pages={d.page for d in delivered if d.source_id == source},
+        citation=citation,
+        index=index,
+    )
+    line = next(
+        (
+            d.text.value
+            for d in delivered
+            if d.source_id == source and d.block_id == found.block_id
+        ),
+        None,
+    )
+    begins = "" if line is None else " ".join(line.split()[:HINT_WORDS])
+    return LineHint(begins=begins, pages=found.pages, absent=found.absent)
 
 
 def _lineage_moved(

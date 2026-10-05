@@ -1,11 +1,11 @@
 """D30 (N32, the owner's choice; widened by N52 and, on 23 September 2026, to a
-host-owned field copied wrong or a field no handoff may carry): a node whose
-answer is refused `HANDOFF_MALFORMED`, `HANDOFF_INCOMPLETE`,
-`HANDOFF_IDENTITY_MISMATCH`, `HANDOFF_UNDECLARED_FIELD` or by anchoring gets
-exactly one second attempt, reserved and priced like
-any other, carrying what the checks reported on the refused answer. The ledger
-decides it, so a crash between the refusal and the second attempt changes
-nothing, and a second refusal stops the run as before.
+host-owned field copied wrong or a field no handoff may carry; D82 on 2 October
+2026): a node whose answer is refused `HANDOFF_MALFORMED`, `HANDOFF_INCOMPLETE`,
+`HANDOFF_IDENTITY_MISMATCH`, `HANDOFF_UNDECLARED_FIELD` or by anchoring gets a
+guided retry, reserved and priced like any other, carrying what the checks
+reported on the answer just before it -- at most two per node. The ledger
+decides it, so a crash between a refusal and its retry changes nothing, and a
+third refusal stops the run.
 
 The flawed answer is the one every live model gave (F111): CP-0 tags a finding
 MATERIAL and still writes `qa_status: Passed`.
@@ -18,6 +18,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from typing import Any
+from uuid import UUID
 
 import pytest
 from canonical_fixtures import QUOTE, CanonicalCompletions
@@ -28,12 +29,15 @@ from test_loop_charges import ESTIMATE
 
 from caos.graph import runtime
 from caos.graph.runtime import Execution, run_route
+from caos.methodology import canonical, invocation
 from caos.methodology.canonical import second_attempt_due
 from caos.methodology.handoff import (
+    HINT_WORDS,
     MAX_FEEDBACK_CHARS,
     MAX_FEEDBACK_CITATIONS,
     MAX_FEEDBACK_MESSAGES,
     HostIdentity,
+    LineHint,
     anchoring_line,
     answer_citations,
     capped,
@@ -46,7 +50,7 @@ from caos.methodology.vendor import cached_contract, catalog
 from caos.pricing import ModelPrice
 from caos.provider import Completion, CompletionProvider
 from caos.refusals import Refusal, RefusalCode
-from caos.store import connect
+from caos.store import StoreConnection, connect
 from caos.store.outcomes import NodeAttempt, node_attempts
 
 __all__ = ["harness", "route"]
@@ -188,23 +192,37 @@ def test_a_refused_answer_gets_one_second_attempt_that_carries_what_failed(
     assert _cp0_ledger(harness) == (2, 2, ["HANDOFF_MALFORMED"], 1)
 
 
-def test_a_second_refusal_stops_the_run_with_no_third_attempt(
+def test_a_second_refusal_gets_a_retry_told_of_the_attempt_before_it(
+    harness: _Harness,
+) -> None:
+    """D82: the 3rd attempt is told what the 2nd was refused for, never the
+    1st's checks again."""
+    answers = CanonicalCompletions(harness.source_id)
+    flaws = iter((_with_material, _with_fixture_marker))
+    flawed = _Flawed(answers, bad=2, flaw=lambda body: next(flaws)(body))
+    assert _run(harness, flawed) is None
+    assert [_module(prompt) for prompt in answers.prompts[:3]] == ["CP-0"] * 3
+    marker = "completeness_check: validation_warnings declares the fixture marker"
+    second, third = answers.prompts[1], answers.prompts[2]
+    assert VENDOR_LINE in second and marker not in second
+    assert marker in third and VENDOR_LINE not in third
+    count, reserved, codes, _accepted = _cp0_ledger(harness)
+    assert (count, reserved) == (3, 3)
+    assert sorted(codes) == ["HANDOFF_INCOMPLETE", "HANDOFF_MALFORMED"]
+
+
+def test_a_third_refusal_stops_the_run_with_no_fourth_attempt(
     harness: _Harness,
 ) -> None:
     answers = CanonicalCompletions(harness.source_id)
-    assert _run(harness, _Flawed(answers, bad=2)) is RefusalCode.HANDOFF_MALFORMED
-    assert [_module(prompt) for prompt in answers.prompts] == ["CP-0", "CP-0"]
-    assert _cp0_ledger(harness) == (
-        2,
-        2,
-        ["HANDOFF_MALFORMED", "HANDOFF_MALFORMED"],
-        0,
-    )
-    # An operator's retry after that is an ordinary attempt: the one second
-    # attempt is spent, so nothing is carried and nothing is repeated.
+    assert _run(harness, _Flawed(answers, bad=3)) is RefusalCode.HANDOFF_MALFORMED
+    assert [_module(prompt) for prompt in answers.prompts] == ["CP-0"] * 3
+    assert _cp0_ledger(harness) == (3, 3, ["HANDOFF_MALFORMED"] * 3, 0)
+    # An operator's retry after that is an ordinary attempt: both guided
+    # retries are spent, so nothing is carried and nothing is repeated.
     assert _run(harness, answers) is None
-    assert SECOND not in answers.prompts[2]
-    assert _cp0_ledger(harness)[0] == 3
+    assert SECOND not in answers.prompts[3]
+    assert _cp0_ledger(harness)[0] == 4
 
 
 class _Crash(BaseException):
@@ -234,6 +252,61 @@ def test_the_second_attempt_survives_a_crash_after_the_refusal(
     assert _cp0_ledger(harness) == (2, 2, ["HANDOFF_MALFORMED"], 1)
 
 
+def _retry_section(prompt: str) -> str:
+    """A guided retry's section, less the tag folded into its markers."""
+    return re.sub(r"[0-9a-f]{16}", "TAG", prompt[prompt.index(SECOND) :])
+
+
+def test_the_third_attempt_survives_a_crash_after_the_second_refusal(
+    harness: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """D82: a crash between the 2nd refusal and the 3rd attempt changes
+    nothing -- the resumed 3rd attempt carries the same lines, told of the
+    2nd attempt, as one that never crashed (the test above this one)."""
+    answers = CanonicalCompletions(harness.source_id)
+    flaws = iter((_with_material, _with_fixture_marker))
+    flawed = _Flawed(answers, bad=2, flaw=lambda body: next(flaws)(body))
+    calls: list[str] = []
+    due = runtime._second_due
+
+    def crash_on_the_second(
+        conn: StoreConnection, run_id: UUID, route_node_id: str
+    ) -> bool:
+        calls.append(route_node_id)
+        if len(calls) == 2:
+            raise _Crash
+        return due(conn, run_id, route_node_id)
+
+    monkeypatch.setattr(runtime, "_second_due", crash_on_the_second)
+    with pytest.raises(_Crash):
+        _run(harness, flawed)
+    monkeypatch.undo()
+    count, reserved, codes, _accepted = _cp0_ledger(harness)
+    assert (count, reserved) == (2, 2)
+    assert sorted(codes) == ["HANDOFF_INCOMPLETE", "HANDOFF_MALFORMED"]
+    cp0 = _node(harness, "CP-0").route_node_id
+    assert second_attempt_due(harness.conn, run_id=harness.run_id, route_node_id=cp0)
+    sizes: list[int] = []
+    measure = invocation.request_size
+
+    def measured(provider: CompletionProvider, prompt: str) -> int:
+        size = measure(provider, prompt)
+        if _module(prompt) == "CP-0":
+            sizes.append(size)
+        return size
+
+    monkeypatch.setattr(canonical, "request_size", measured)
+    assert _run(harness, flawed) is None
+    third = _retry_section(answers.prompts[2])
+    assert "fixture marker" in third and VENDOR_LINE not in third
+    # The prompt priced before the reservation and the one rebuilt for the
+    # call carry the same lines: the same request size, measured twice.
+    assert len(sizes) == 2 and sizes[0] == sizes[1]
+    count, reserved, codes, _accepted = _cp0_ledger(harness)
+    assert (count, reserved) == (3, 3)
+    assert sorted(codes) == ["HANDOFF_INCOMPLETE", "HANDOFF_MALFORMED"]
+
+
 def test_an_incomplete_answer_gets_the_second_attempt_too(harness: _Harness) -> None:
     """N52: the completeness checker's refusal earns the same one second
     attempt, carrying the checker's own message (its register or marker)."""
@@ -258,14 +331,15 @@ def _cites_a_wrong_page(body: str) -> str:
 def test_an_unanchored_citation_gets_the_second_attempt_naming_it(
     harness: _Harness,
 ) -> None:
-    """N52: anchoring's refusal earns the one second attempt too, told which
-    citation failed and why, by number only."""
+    """N52: anchoring's refusal earns the guided retry too, told which
+    citation failed and why -- and, a whole line of another delivered page,
+    which page (D82)."""
     answers = CanonicalCompletions(harness.source_id)
     assert _run(harness, _Flawed(answers, flaw=_cites_a_wrong_page)) is None
     total = len(json.loads(answers.bodies[0])["citations"])
     assert (
-        f"host anchoring check: citation 1 of {total} is not one evidence line of its"
-        in answers.prompts[1]
+        f"host anchoring check: citation 1 of {total} is one whole evidence line of"
+        " page 1, not of its cited page (numbered from 1" in answers.prompts[1]
     )
     assert _cp0_ledger(harness) == (2, 2, ["CITATION_NOT_LOCATED"], 1)
 
@@ -282,14 +356,15 @@ def _cites_part_of_a_line(body: str) -> str:
 def test_part_of_a_line_gets_the_second_attempt_naming_it(
     harness: _Harness,
 ) -> None:
-    """N28: part of an evidence line is no longer accepted as a quote of it,
-    and the refusal is the anchoring one the second attempt already reads
-    back as the rule the final check stated."""
+    """N28: part of an evidence line is no longer accepted as a quote of it;
+    the guided retry is shown how the delivered line it is part of begins and
+    told to quote the whole line (D82)."""
     answers = CanonicalCompletions(harness.source_id)
     assert _run(harness, _Flawed(answers, flaw=_cites_part_of_a_line)) is None
     total = len(json.loads(answers.bodies[0])["citations"])
     assert (
-        f"host anchoring check: citation 1 of {total} is not one evidence line of its"
+        f"host anchoring check: citation 1 of {total} is part of a longer evidence"
+        f' line of its cited page, which begins "{QUOTE}"; quote the whole line'
         in answers.prompts[1]
     )
     assert _cp0_ledger(harness) == (2, 2, ["CITATION_NOT_LOCATED"], 1)
@@ -317,18 +392,68 @@ def test_the_anchoring_line_names_each_failed_citation_by_number_and_reason() ->
     assert answer_citations("not json") == ()
 
 
-def test_one_second_attempt_per_node_whichever_code_refused_first(
+def test_the_anchoring_line_places_each_unlocated_citation_it_can() -> None:
+    """D82: part of a longer line is shown how that line begins and told to
+    quote it whole; a whole line of another delivered page is told the page;
+    one no delivered line holds is told so; one the search found but could
+    not place as one line keeps the rule's wording, as do the other codes."""
+    lost = RefusalCode.CITATION_NOT_LOCATED
+    line = anchoring_line(
+        [lost, lost, lost, lost, lost, RefusalCode.CITATION_AMBIGUOUS, None],
+        [
+            LineHint(begins="Total debt at 31 December"),
+            LineHint(pages=(4,)),
+            LineHint(absent=True),
+            LineHint(),
+            LineHint(pages=(2, 5, 9)),
+        ],
+    )
+    assert line == (
+        "host anchoring check: citation 1 of 7 is part of a longer evidence line"
+        ' of its cited page, which begins "Total debt at 31 December"; quote the'
+        " whole line;"
+        " citation 2 of 7 is one whole evidence line of page 4, not of its cited"
+        " page;"
+        " citation 5 of 7 is one whole evidence line of pages 2, 5 and 9, not of"
+        " its cited page;"
+        " citation 3 of 7 is in no evidence line of its source this node was given;"
+        " citation 4 of 7 is not one evidence line of its cited page;"
+        " citation 6 of 7 is on its cited page more than once"
+        " (numbered from 1 in the order given)"
+    )
+    # Past `MAX_FEEDBACK_CITATIONS` citations, the rest are counted by rule.
+    many = MAX_FEEDBACK_CITATIONS + 2
+    counted = anchoring_line([lost] * many, [LineHint(absent=True)] * many)
+    assert counted is not None
+    assert counted.count("is in no evidence line") == 0
+    assert f"and {MAX_FEEDBACK_CITATIONS} of {many} are in no evidence line" in (
+        counted
+    )
+    assert f"citations {MAX_FEEDBACK_CITATIONS + 1} and {many} of {many} are not" in (
+        counted
+    )
+    pages = anchoring_line([lost], [LineHint(pages=tuple(range(1, 25)))])
+    assert pages is not None and "pages 1, 2, 3" in pages and "and 4 more" in pages
+    assert HINT_WORDS == 12
+
+
+def test_two_guided_retries_per_node_whichever_codes_refused(
     harness: _Harness,
 ) -> None:
-    """A node refused incomplete, then malformed, has spent its one."""
+    """D82: a node refused incomplete, malformed, then incomplete again has
+    spent both of its guided retries."""
     answers = CanonicalCompletions(harness.source_id)
-    flaws = iter((_with_fixture_marker, _with_material))
-    flawed = _Flawed(answers, bad=2, flaw=lambda body: next(flaws)(body))
-    assert _run(harness, flawed) is RefusalCode.HANDOFF_MALFORMED
-    assert [_module(prompt) for prompt in answers.prompts] == ["CP-0", "CP-0"]
+    flaws = iter((_with_fixture_marker, _with_material, _with_fixture_marker))
+    flawed = _Flawed(answers, bad=3, flaw=lambda body: next(flaws)(body))
+    assert _run(harness, flawed) is RefusalCode.HANDOFF_INCOMPLETE
+    assert [_module(prompt) for prompt in answers.prompts] == ["CP-0"] * 3
     count, reserved, codes, accepted = _cp0_ledger(harness)
-    assert (count, reserved, accepted) == (2, 2, 0)
-    assert sorted(codes) == ["HANDOFF_INCOMPLETE", "HANDOFF_MALFORMED"]
+    assert (count, reserved, accepted) == (3, 3, 0)
+    assert sorted(codes) == ["HANDOFF_INCOMPLETE"] * 2 + ["HANDOFF_MALFORMED"]
+    cp0 = _node(harness, "CP-0").route_node_id
+    assert not second_attempt_due(
+        harness.conn, run_id=harness.run_id, route_node_id=cp0
+    )
 
 
 @dataclass

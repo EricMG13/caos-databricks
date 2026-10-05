@@ -251,7 +251,7 @@ def validate_driver_mapping(
 
 def driver_line(contract: VendorContract, markdown: bytes, owner: bytes) -> str | None:
     """Which CP-2G driver rows a refused CP-CF answer's request cannot map, for
-    its one second attempt (D30): each by driver ID, case and period, never a
+    its guided retry (D30, D82): each by driver ID, case and period, never a
     value (G3-9). None when the answer carries no readable request or every
     row maps."""
     try:

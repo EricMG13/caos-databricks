@@ -66,8 +66,8 @@ def _bills(
     status: str = "RUNNING",
 ) -> list[UUID]:
     """`calls` billed attempts, oldest first, each exactly `charge` against its
-    own reservation, and nothing accepted. More than one is a node's one second
-    attempt (D30) after a `HANDOFF_MALFORMED` refusal."""
+    own reservation, and nothing accepted. More than one is a node's guided
+    retries (D30, D82) after a refusal the checks can explain."""
     with connect(dsn) as observer:
         rows = observer.execute(
             "SELECT o.attempt_id,o.run_id,l.amount,r.amount FROM call_outcomes o"
@@ -144,8 +144,11 @@ def test_native_refusal_records_only_independently_known_money(
         _invoke(provider, uuid4(), "runtime", provider.route.nodes[0])
     assert "private" not in str(caught.value) + repr(caught.value)
     assert caught.value.__cause__ is None
-    # D30, N52: a refusal the checks can explain earns its node one second attempt.
-    calls = 2 if code in canonical.SECOND_ATTEMPT_CODES else 1
+    # D30, N52, D82: a refusal the checks can explain earns its node guided
+    # retries, each refused the same way here.
+    calls = (
+        1 + canonical.GUIDED_RETRIES if code in canonical.SECOND_ATTEMPT_CODES else 1
+    )
     assert chat.calls == calls
     assert provider.conn.info.transaction_status is TransactionStatus.IDLE
     _bills(_url_for(provider.conn.info.dbname), provider.run_id, charge, calls)
@@ -183,9 +186,10 @@ def test_analysis_failure_preserves_bill_and_exact_replay(
     assert str(caught.value) == codes[failure]
     assert provider.conn.info.transaction_status is TransactionStatus.IDLE
     dsn = _url_for(provider.conn.info.dbname)
-    # D30, N52: a refusal the checks can explain earns one second attempt,
-    # refused the same way.
-    calls = 2 if codes[failure] in canonical.SECOND_ATTEMPT_CODES else 1
+    # D30, N52, D82: a refusal the checks can explain earns guided retries,
+    # each refused the same way.
+    explained = codes[failure] in canonical.SECOND_ATTEMPT_CODES
+    calls = 1 + canonical.GUIDED_RETRIES if explained else 1
     attempts = _bills(dsn, provider.run_id, REPORTED, calls)
     attempt = attempts[-1]
     assert len(completions.bodies) == calls
@@ -287,8 +291,9 @@ def test_postbilling_citation_cleanup_preserves_money_and_original_refusal(
         or provider.conn.info.transaction_status is TransactionStatus.IDLE
     )
     assert isinstance(provider.completions, _Completions)
-    # N52: anchoring's refusal earns one second attempt when the store is sound.
-    calls = 2 if failure == "refusal" and not broken_cleanup else 1
+    # N52, D82: anchoring's refusal earns guided retries when the store is sound.
+    sound = failure == "refusal" and not broken_cleanup
+    calls = 1 + canonical.GUIDED_RETRIES if sound else 1
     assert len(provider.completions.prompts) == calls
     monkeypatch.undo()
     _bills(dsn, provider.run_id, REPORTED, calls)

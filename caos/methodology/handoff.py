@@ -373,7 +373,7 @@ def _text(markdown: bytes) -> str:
     lines, the invisible separators, text no reader can see, and the whitespace
     run the vendor's own expressions cannot read in linear time. It runs before
     any vendor call and on stored bytes as well as model output. Which bound
-    refused is named to a node's one second attempt (`_text_bound`), never the
+    refused is named to a node's guided retry (`_text_bound`), never the
     text.
     """
     text, _bound = _text_bound(markdown)
@@ -911,7 +911,7 @@ def parse_response(
     return markdown, citations
 
 
-# What a node's one second attempt may carry (D30): at most this many checks,
+# What a node's guided retry may carry (D30, D82): at most this many checks,
 # each cut to this many characters before it crosses the boundary, naming at
 # most this many failed citations by their place in the list (N51).
 MAX_FEEDBACK_MESSAGES = 16
@@ -933,7 +933,7 @@ def retry_feedback(
     *,
     skill: bytes = b"",
 ) -> tuple[str, ...]:
-    """The checks a refused answer failed, for the node's one second attempt (D30).
+    """The checks a refused answer failed, for the node's guided retry (D30, D82).
 
     Three sources, none of them the host restating a vendor rule (invariant
     4): why the answer is not the transport, in the JSON parser's fixed words
@@ -1233,7 +1233,9 @@ def _numbered(failed: Sequence[int]) -> str:
     return f"citation {named}" if len(failed) == 1 else f"citations {named}"
 
 
-# What anchoring found for a citation, singular and plural (N52).
+# What anchoring found for a citation, singular and plural (N52). A citation
+# refused `CITATION_NOT_LOCATED` that the host's search places (`LineHint`)
+# is told where instead (D82); this wording is for the rest.
 _ANCHORING = (
     (
         RefusalCode.CITATION_NOT_LOCATED,
@@ -1251,16 +1253,67 @@ _ANCHORING = (
         "name a page or line this node was not given",
     ),
 )
+_ABSENT = (
+    "is in no evidence line of its source this node was given",
+    "are in no evidence line of their sources this node was given",
+)
+# How many words of the longer line a citation is part of are shown (D82).
+HINT_WORDS = 12
 
 
-def anchoring_line(verdicts: Sequence[RefusalCode | None]) -> str | None:
+@dataclass(frozen=True, slots=True)
+class LineHint:
+    """Where the host's own search placed a citation refused
+    `CITATION_NOT_LOCATED` (D82, `caos.evidence.citations.find_line`): the
+    first `HINT_WORDS` words of the longer delivered evidence line of its
+    cited page it is part of (`begins`), the other delivered pages it is one
+    whole evidence line of (`pages`), or that no delivered line holds it
+    (`absent`). Nothing set: found, but not as one line, so nothing is said
+    beyond the rule."""
+
+    begins: str = ""
+    pages: tuple[int, ...] = ()
+    absent: bool = False
+
+
+def anchoring_line(
+    verdicts: Sequence[RefusalCode | None], hints: Sequence[LineHint | None] = ()
+) -> str | None:
     """Which citations did not anchor in the delivered evidence, by number and
-    reason, never by text (N52): `verdicts` holds each citation's own
-    anchoring refusal, `None` for one that anchored."""
-    parts = [
-        f"{_numbered(failed)} of {len(verdicts)} {one if len(failed) == 1 else many}"
-        for code, one, many in _ANCHORING
-        if (failed := [n for n, found in enumerate(verdicts, 1) if found is code])
+    reason: `verdicts` holds each citation's own anchoring refusal, `None`
+    for one that anchored, and `hints` what the host's search found of each
+    refused `CITATION_NOT_LOCATED`, in the same order.
+
+    N52 said "never by text"; the owner amended it on 2 October 2026 (D82):
+    a quote that is part of a longer line is shown the first `HINT_WORDS`
+    words of that delivered line and told to quote the whole line, and one
+    that is a whole line of another delivered page is told that page. At
+    most `MAX_FEEDBACK_CITATIONS` citations are placed; the rest, and any the
+    search could not place, keep the rule's wording.
+    """
+    total = len(verdicts)
+    lost = [
+        n
+        for n, found in enumerate(verdicts, 1)
+        if found is RefusalCode.CITATION_NOT_LOCATED
+    ]
+    told = dict(zip(range(1, total + 1), hints, strict=False))
+    placed = {
+        n: hint
+        for n in lost[:MAX_FEEDBACK_CITATIONS]
+        if (hint := told.get(n)) is not None
+        and (hint.begins or hint.pages or hint.absent)
+    }
+    parts = [_placed(n, total, hint) for n, hint in placed.items() if not hint.absent]
+    absent = [n for n, hint in placed.items() if hint.absent]
+    if absent:
+        parts.append(_counted(absent, total, *_ABSENT))
+    groups = [([n for n in lost if n not in placed], *_ANCHORING[0][1:])] + [
+        ([n for n, found in enumerate(verdicts, 1) if found is code], one, many)
+        for code, one, many in _ANCHORING[1:]
+    ]
+    parts += [
+        _counted(failed, total, one, many) for failed, one, many in groups if failed
     ]
     if not parts:
         return None
@@ -1268,6 +1321,32 @@ def anchoring_line(verdicts: Sequence[RefusalCode | None]) -> str | None:
         "host anchoring check: "
         + "; ".join(parts)
         + " (numbered from 1 in the order given)"
+    )
+
+
+def _counted(failed: Sequence[int], total: int, one: str, many: str) -> str:
+    """`citation 2 of 5 is ...` or `citations 2 and 3 of 5 are ...`."""
+    return f"{_numbered(failed)} of {total} {one if len(failed) == 1 else many}"
+
+
+def _placed(number: int, total: int, hint: LineHint) -> str:
+    """One placed citation's clause (D82): the longer line it is part of, or
+    the other pages it is one whole line of, at most
+    `MAX_FEEDBACK_CITATIONS` of them named."""
+    if hint.begins:
+        return (
+            f"citation {number} of {total} is part of a longer evidence line of"
+            f' its cited page, which begins "{hint.begins}"; quote the whole line'
+        )
+    shown = [str(page) for page in hint.pages[:MAX_FEEDBACK_CITATIONS]]
+    rest = len(hint.pages) - len(shown)
+    named = ", ".join(shown) + (f" and {rest} more" if rest else "")
+    if not rest and len(shown) > 1:
+        named = ", ".join(shown[:-1]) + f" and {shown[-1]}"
+    return (
+        f"citation {number} of {total} is one whole evidence line of"
+        f" {'page' if len(hint.pages) == 1 else 'pages'} {named}, not of its"
+        " cited page"
     )
 
 

@@ -334,3 +334,121 @@ def test_two_lines_shown_alike_are_ambiguous_however_each_is_stored(
     for quote in (f"Revenue caf{E_ACUTE}", f"Revenue caf{DECOMPOSED_E_ACUTE}"):
         assert _code(conn, source_id, quote) is RefusalCode.CITATION_AMBIGUOUS
     assert _code(conn, source_id, f"Revenue caf{E_ACUTE}", WHOLE_LINE_AS_STORED) == 1
+
+
+PAGES = (
+    (
+        "The Company did not breach its leverage covenant during FY2025 or in"
+        " any later quarter of the year",
+        "Liquidity was USD 310.5m at year end.",
+    ),
+    ("Net leverage was 3.4x at year end.",),
+    ("Cash interest cover was 2.1x.", "Cash interest cover was 2.1x in FY2024."),
+)
+
+
+def _pages_pdf() -> bytes:
+    """`PAGES` as a PDF, one page each, each line drawn apart from the next."""
+    from test_admission_limits import multi_page_pdf
+    from test_pdf_extraction import LEFT_MARGIN
+
+    return multi_page_pdf(
+        [
+            "".join(
+                f"BT\n/F1 12 Tf\n1 0 0 1 {LEFT_MARGIN:.0f} {700 - 40 * n} Tm\n"
+                f"({line}) Tj\nET\n"
+                for n, line in enumerate(lines)
+            ).encode("ascii")
+            for lines in PAGES
+        ]
+    )
+
+
+def _blocks_by_page(
+    conn: StoreConnection, source_id: UUID
+) -> dict[int, dict[str, str]]:
+    by_page: dict[int, dict[str, str]] = {}
+    for page, block_id, text in conn.execute(
+        "SELECT page, block_id, text FROM source_blocks WHERE source_id = %s",
+        (source_id,),
+    ).fetchall():
+        by_page.setdefault(int(page), {})[str(block_id)] = str(text)
+    return by_page
+
+
+def test_find_line_places_a_quote_the_whole_line_rule_refused(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> None:
+    """D82: with the host's own search -- `ANY_RUN` on the cited page, then
+    `WHOLE_LINE` on each other delivered page -- a quote that is part of a
+    longer delivered line names that line; one that is a whole line of
+    another delivered page names the page; one on no delivered page is
+    absent; and one found but not as one line (twice on its page) or only
+    on an undelivered line is placed nowhere."""
+    from caos.evidence.citations import LineFinding, TokenIndex, find_line
+
+    conn, case_id = case
+    source_id = _ingest_pdf(conn, case_id, tmp_path, _pages_pdf())
+    by_page = _blocks_by_page(conn, source_id)
+    every = frozenset(block for blocks in by_page.values() for block in blocks)
+    [covenant] = [b for b, text in by_page[1].items() if text.startswith("The")]
+
+    def found(
+        page: int,
+        quote: str,
+        blocks: frozenset[str] = every,
+        pages: set[int] | None = None,
+    ) -> LineFinding:
+        return find_line(
+            conn,
+            blocks=blocks,
+            pages=set(by_page) if pages is None else pages,
+            citation=Citation(source_id, page, quote),
+            index=TokenIndex(),
+        )
+
+    part = "breach its leverage covenant during FY2025"
+    elsewhere = "Net leverage was 3.4x at year end."
+    for quote in (part, elsewhere, "Leverage was unchanged"):
+        assert _code(conn, source_id, quote) is RefusalCode.CITATION_NOT_LOCATED
+    assert found(1, part) == LineFinding(block_id=covenant)
+    assert found(1, elsewhere) == LineFinding(pages=(2,))
+    assert found(1, "Leverage was unchanged") == LineFinding(absent=True)
+    # Twice on its page as a run: found, but not one line.
+    assert found(3, "Cash interest cover was") == LineFinding()
+    # The longer line withheld: never shown, so never named.
+    assert found(1, part, every - {covenant}) == LineFinding()
+    # Page 2 not given: no delivered line holds the quote.
+    unpaged = every - frozenset(by_page[2])
+    assert found(1, elsewhere, unpaged, {1, 3}) == LineFinding(absent=True)
+
+
+def test_a_placed_line_is_shown_by_its_first_words_as_delivered(
+    case: tuple[StoreConnection, UUID], tmp_path: Path
+) -> None:
+    """D82: the longer line's first `HINT_WORDS` words come from the block the
+    node was delivered, its own words one space apart; a page found by
+    `find_line` passes through as it is."""
+    from caos.evidence.citations import TokenIndex
+    from caos.methodology.canonical import _line_hint
+    from caos.methodology.executor import Delivery
+    from caos.methodology.handoff import HINT_WORDS, LineHint
+
+    conn, case_id = case
+    source_id = _ingest_pdf(conn, case_id, tmp_path, _pages_pdf())
+    by_page = _blocks_by_page(conn, source_id)
+    delivered = [
+        Delivery(source_id, block_id, page, BoundaryText.of(text))
+        for page, blocks in by_page.items()
+        for block_id, text in blocks.items()
+    ]
+    blocks = {source_id: frozenset(d.block_id for d in delivered)}
+
+    def hint(quote: str) -> LineHint:
+        citation = Citation(source_id, 1, quote)
+        return _line_hint(conn, delivered, blocks, citation, TokenIndex())
+
+    begins = " ".join(PAGES[0][0].split()[:HINT_WORDS])
+    assert hint("breach its leverage covenant") == LineHint(begins=begins)
+    assert hint("Net leverage was 3.4x at year end.") == LineHint(pages=(2,))
+    assert hint("Leverage was unchanged") == LineHint(absent=True)
