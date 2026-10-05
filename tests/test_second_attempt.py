@@ -20,6 +20,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from datetime import date
 from decimal import Decimal
+from functools import partial
 from typing import Any, cast
 from uuid import UUID
 
@@ -451,28 +452,58 @@ def test_a_wrong_page_citation_is_anchored_at_its_true_page(
     assert {box.page for box in first.bboxes} == {1}
 
 
-def _cites_part_of_a_line(body: str) -> str:
-    """The same answer with its first citation cut to part of its line: every
-    word still verbatim in the body and in the evidence (N28)."""
+def _cites_part_of_a_line(body: str, *, dropped: int = 2) -> str:
+    """The same answer with its first citation cut by its first `dropped`
+    words: every word still verbatim in the body and in the evidence. Its
+    nine-word line cut by two is seven words, too few to be an excerpt; cut
+    by one, eight, an excerpt (D105)."""
     wire = json.loads(body)
     words = wire["citations"][0]["matched_text"].split()
-    wire["citations"][0]["matched_text"] = " ".join(words[1:])
+    wire["citations"][0]["matched_text"] = " ".join(words[dropped:])
     return json.dumps(wire)
 
 
-def test_part_of_a_line_gets_the_second_attempt_naming_it(
+def test_an_excerpt_of_eight_words_is_accepted_and_keeps_its_line(
     harness: _Harness,
 ) -> None:
-    """N28: part of an evidence line is no longer accepted as a quote of it;
-    the guided retry is shown how the delivered line it is part of begins and
-    told to quote the whole line (D82)."""
+    """D105: eight consecutive words of a longer evidence line are an
+    excerpt of it, accepted with no retry; the record names `EXCERPT` and
+    keeps the whole line beside the quote, at the excerpt's rectangle."""
+    from caos.evidence.citations import EXCERPT, MIN_EXCERPT_WORDS
+    from caos.methodology.handoff import _decoded_record
+
+    answers = CanonicalCompletions(harness.source_id)
+    cut = partial(_cites_part_of_a_line, dropped=1)
+    assert _run(harness, _Flawed(answers, flaw=cut)) is None
+    assert _cp0_ledger(harness) == (1, 1, [], 1)
+    node = _node(harness, "CP-0").route_node_id
+    with connect(harness.url) as observer:
+        row = observer.execute(
+            "SELECT a.record_sha256 FROM artifacts a JOIN run_attempts t"
+            " USING (attempt_id) WHERE t.run_id=%s AND t.route_node_id=%s",
+            (harness.run_id, node),
+        ).fetchone()
+    assert row is not None
+    record = _decoded_record(harness.blobs.get(str(row[0])))
+    [first, *_rest] = record.citations
+    assert record.citation_rule == EXCERPT
+    assert len(first.matched_text.split()) == MIN_EXCERPT_WORDS
+    assert (first.matched_text, first.line_text) == (" ".join(QUOTE.split()[1:]), QUOTE)
+
+
+def test_too_few_words_of_a_line_get_the_second_attempt_naming_it(
+    harness: _Harness,
+) -> None:
+    """D105: fewer than `MIN_EXCERPT_WORDS` words of a longer evidence line
+    are no excerpt of it; the guided retry is told to quote at least that
+    many consecutive words, or the whole line if shorter (D82)."""
     answers = CanonicalCompletions(harness.source_id)
     assert _run(harness, _Flawed(answers, flaw=_cites_part_of_a_line)) is None
     total = len(json.loads(answers.bodies[0])["citations"])
     assert (
-        f"host anchoring check: citation 1 of {total} is part of a longer evidence"
-        f' line of its cited page, which begins "{QUOTE}"; quote the whole line'
-        in answers.prompts[1]
+        f"host anchoring check: citation 1 of {total} quotes fewer than 8 words of"
+        " its line; quote at least 8 consecutive words, or the whole line if"
+        " shorter" in answers.prompts[1]
     )
     assert _cp0_ledger(harness) == (2, 2, ["CITATION_NOT_LOCATED"], 1)
 
@@ -505,10 +536,11 @@ def test_a_retry_is_told_to_keep_the_citations_that_anchored(
     flawed = _Flawed(answers, flaw=_cites_part_of_a_line_then_the_line)
     assert _run(harness, flawed) is None
     assert (
-        "host anchoring check: citation 1 of 2 is part of a longer evidence line"
-        f' of its cited page, which begins "{QUOTE}"; quote the whole line;'
+        "host anchoring check: citation 1 of 2 quotes fewer than 8 words of its"
+        " line; quote at least 8 consecutive words, or the whole line if shorter;"
         " keep citation 2 exactly as it was; any citation you add or change must"
-        " be one entire evidence line of its cited page"
+        " be an exact excerpt of one evidence line of its cited page, at least 8"
+        " consecutive words or the whole line if shorter"
         " (numbered from 1 in the order given)" in answers.prompts[1]
     )
     # Each attempt's prompt measured twice, priced then sent: the same size.
@@ -527,12 +559,14 @@ def test_the_anchoring_line_names_each_failed_citation_by_number_and_reason() ->
         ]
     )
     assert line == (
-        "host anchoring check: citation 2 of 5 is not one evidence line of its"
-        " cited page;"
-        " citations 3 and 4 of 5 are on their cited pages more than once;"
+        "host anchoring check: citation 2 of 5 is not an exact excerpt of one"
+        " evidence line of its cited page;"
+        " citations 3 and 4 of 5 occur more than once on their cited pages;"
+        " quote longer excerpts that each occur once;"
         " citation 5 of 5 names a page or line this node was not given;"
         " keep citation 1 exactly as it was; any citation you add or change must"
-        " be one entire evidence line of its cited page"
+        " be an exact excerpt of one evidence line of its cited page, at least 8"
+        " consecutive words or the whole line if shorter"
         " (numbered from 1 in the order given)"
     )
     assert anchoring_line([None, None]) is None
@@ -541,15 +575,16 @@ def test_the_anchoring_line_names_each_failed_citation_by_number_and_reason() ->
 
 
 def test_the_anchoring_line_places_each_unlocated_citation_it_can() -> None:
-    """D82: part of a longer line is shown how that line begins and told to
-    quote it whole; a whole line of another delivered page is told the page;
-    one no delivered line holds is told so; one the search found but could
-    not place as one line keeps the rule's wording, as do the other codes."""
+    """D82, D105: too few words of a longer line are told to quote at least
+    `MIN_EXCERPT_WORDS`; an excerpt of a line of another delivered page is
+    told the page; one no delivered line holds is told so; one the search
+    found but could not place as one excerpt keeps the rule's wording, as do
+    the other codes."""
     lost = RefusalCode.CITATION_NOT_LOCATED
     line = anchoring_line(
         [lost, lost, lost, lost, lost, RefusalCode.CITATION_AMBIGUOUS, None],
         [
-            LineHint(begins="Total debt at 31 December"),
+            LineHint(short=True),
             LineHint(pages=(4,)),
             LineHint(absent=True),
             LineHint(),
@@ -557,19 +592,26 @@ def test_the_anchoring_line_places_each_unlocated_citation_it_can() -> None:
         ],
     )
     assert line == (
-        "host anchoring check: citation 1 of 7 is part of a longer evidence line"
-        ' of its cited page, which begins "Total debt at 31 December"; quote the'
-        " whole line;"
-        " citation 2 of 7 is one whole evidence line of page 4, not of its cited"
-        " page;"
-        " citation 5 of 7 is one whole evidence line of pages 2, 5 and 9, not of"
-        " its cited page;"
+        "host anchoring check: citation 1 of 7 quotes fewer than 8 words of its"
+        " line; quote at least 8 consecutive words, or the whole line if shorter;"
+        " citation 2 of 7 is an excerpt of an evidence line of page 4, not of its"
+        " cited page;"
+        " citation 5 of 7 is an excerpt of an evidence line of pages 2, 5 and 9,"
+        " not of its cited page;"
         " citation 3 of 7 is in no evidence line of its source this node was given;"
-        " citation 4 of 7 is not one evidence line of its cited page;"
-        " citation 6 of 7 is on its cited page more than once;"
+        " citation 4 of 7 is not an exact excerpt of one evidence line of its"
+        " cited page;"
+        " citation 6 of 7 occurs more than once on its cited page; quote a longer"
+        " excerpt that occurs once;"
         " keep citation 7 exactly as it was; any citation you add or change must"
-        " be one entire evidence line of its cited page"
+        " be an exact excerpt of one evidence line of its cited page, at least 8"
+        " consecutive words or the whole line if shorter"
         " (numbered from 1 in the order given)"
+    )
+    # A hint that names nothing to fix -- `begins` alone, which no search
+    # gives since D105 -- is no placement.
+    assert anchoring_line([lost], [LineHint(begins="Total debt")]) == (
+        anchoring_line([lost], [LineHint()])
     )
     # Past `MAX_FEEDBACK_CITATIONS` citations, the rest are counted by rule.
     many = MAX_FEEDBACK_CITATIONS + 2
@@ -585,13 +627,13 @@ def test_the_anchoring_line_places_each_unlocated_citation_it_can() -> None:
     # However many and long the placed lines, the line stays within
     # `MAX_ANCHORING_CHARS`, dropping placements from the last back, and every
     # citation keeps its number (M4).
-    long = LineHint(begins=" ".join(["w" * 40] * HINT_WORDS))
+    long = LineHint(begins=" ".join(["w" * 40] * HINT_WORDS), near=3)
     capped_line = anchoring_line([lost] * many, [long] * many)
     assert capped_line is not None and len(capped_line) <= MAX_ANCHORING_CHARS
-    assert 0 < capped_line.count("quote the whole line") < MAX_FEEDBACK_CITATIONS
-    shown = capped_line.count("is part of a longer evidence line")
+    assert 0 < capped_line.count("copy that line exactly") < MAX_FEEDBACK_CITATIONS
+    shown = capped_line.count("nearly matches the evidence line")
     assert f"citations {shown + 1}, {shown + 2}" in capped_line
-    assert f"and {many} of {many} are not each one evidence line" in capped_line
+    assert f"and {many} of {many} are not each an exact excerpt" in capped_line
     pages = anchoring_line([lost], [LineHint(pages=tuple(range(1, 25)))])
     assert pages is not None and "pages 1, 2, 3" in pages and "and 4 more" in pages
     assert HINT_WORDS == 12
@@ -604,24 +646,25 @@ def test_the_anchoring_line_names_the_citations_to_keep_and_the_rule() -> None:
     goes before any placement does, and the rule stays."""
     lost = RefusalCode.CITATION_NOT_LOCATED
     rule = (
-        "any citation you add or change must be one entire evidence line of its"
-        " cited page (numbered from 1 in the order given)"
+        "any citation you add or change must be an exact excerpt of one evidence"
+        " line of its cited page, at least 8 consecutive words or the whole line"
+        " if shorter (numbered from 1 in the order given)"
     )
-    hint = LineHint(begins="Cash used for capital expenditures totaled")
+    hint = LineHint(begins="Cash used for capital expenditures totaled", near=4)
     line = anchoring_line([None, None, lost, None, lost], [None, None, hint])
     assert line is not None
     assert line.endswith(f"keep citations 1, 2 and 4 exactly as they were; {rule}")
-    assert 'which begins "Cash used for capital expenditures totaled"' in line
+    assert 'that begins "Cash used for capital expenditures totaled"' in line
     alone = anchoring_line([lost], [hint])
     assert alone is not None and "keep citation" not in alone
-    assert alone.endswith(f"quote the whole line; {rule}")
+    assert alone.endswith(f"character for character; {rule}")
     # A kept list that would pass the bound is dropped whole, and every
     # placement stays while the line without it fits.
     many = 600
     verdicts = [None] * many + [lost]
     bounded = anchoring_line(verdicts, [None] * many + [hint])
     assert bounded is not None and len(bounded) <= MAX_ANCHORING_CHARS
-    assert "keep citation" not in bounded and "quote the whole line" in bounded
+    assert "keep citation" not in bounded and "nearly matches" in bounded
     assert bounded.endswith(rule)
     assert anchoring_line([None] * many) is None
 
@@ -640,7 +683,8 @@ def test_the_anchoring_line_names_the_line_a_near_miss_should_copy() -> None:
         ' of page 7 that begins "On March 4, 2026, the Company entered" but'
         " differs in wording; copy that line exactly, character for character;"
         " keep citation 1 exactly as it was; any citation you add or change must"
-        " be one entire evidence line of its cited page"
+        " be an exact excerpt of one evidence line of its cited page, at least 8"
+        " consecutive words or the whole line if shorter"
         " (numbered from 1 in the order given)"
     )
     moved = LineHint(begins="On May 27, 2026, Caesars", near=5, moved=True)
@@ -650,7 +694,8 @@ def test_the_anchoring_line_names_the_line_a_near_miss_should_copy() -> None:
         ' of page 5, not its cited page, that begins "On May 27, 2026, Caesars"'
         " but differs in wording; copy that line exactly, character for"
         " character, and cite page 5; any citation you add or change must be"
-        " one entire evidence line of its cited page"
+        " an exact excerpt of one evidence line of its cited page, at least 8"
+        " consecutive words or the whole line if shorter"
         " (numbered from 1 in the order given)"
     )
     long = LineHint(begins=" ".join(["w" * 40] * HINT_WORDS), near=3)
@@ -664,28 +709,30 @@ def test_the_anchoring_line_names_the_line_a_near_miss_should_copy() -> None:
 
 
 def test_the_anchoring_line_tells_a_quote_that_runs_past_its_line() -> None:
-    """F496: a citation running past the end of one delivered line is shown
-    that line's last words and told to quote it only, and to cite its page
-    when moved; a placement like any other past `MAX_ANCHORING_CHARS`."""
+    """F496, D105: a citation running past the end of one delivered line is
+    shown that line's last words and told to stop where it ends, and to cite
+    its page when moved; a placement like any other past
+    `MAX_ANCHORING_CHARS`."""
     lost = RefusalCode.CITATION_NOT_LOCATED
     ends = "and take all actions required by such Security"
     line = anchoring_line([None, lost], [None, LineHint(near=23, ends=ends)])
     assert line == (
         "host anchoring check: citation 2 of 2 runs past the end of the evidence"
-        f' line of page 23, which ends "{ends}"; quote that line only, ending'
-        " where it ends (text after it is a separate evidence line); keep"
+        f' line of page 23, which ends "{ends}"; stop where the line ends'
+        " (text after it is a separate evidence line); keep"
         " citation 1 exactly as it was; any citation you add or change must be"
-        " one entire evidence line of its cited page"
+        " an exact excerpt of one evidence line of its cited page, at least 8"
+        " consecutive words or the whole line if shorter"
         " (numbered from 1 in the order given)"
     )
     moved = LineHint(near=28, moved=True, ends=ends)
     assert anchoring_line([lost], [moved]) == (
         "host anchoring check: citation 1 of 1 runs past the end of the evidence"
-        f' line of page 28, not its cited page, which ends "{ends}"; quote that'
-        " line only, ending where it ends, and cite page 28 (text after it is a"
-        " separate evidence line); any citation you add or change must be one"
-        " entire evidence line of its cited page (numbered from 1 in the order"
-        " given)"
+        f' line of page 28, not its cited page, which ends "{ends}"; stop where'
+        " the line ends, and cite page 28 (text after it is a separate evidence"
+        " line); any citation you add or change must be an exact excerpt of one"
+        " evidence line of its cited page, at least 8 consecutive words or the"
+        " whole line if shorter (numbered from 1 in the order given)"
     )
     long = LineHint(near=3, ends=" ".join(["w" * 40] * 8))
     many = MAX_FEEDBACK_CITATIONS + 2
@@ -721,7 +768,8 @@ def test_the_anchoring_line_tells_an_unknown_source_and_a_row_missing_cells() ->
         f" values listed in the final check, and the lines are in source {real};"
         " citation 5 of 5 names a page or line this node was not given; keep"
         " citation 2 exactly as it was; any citation you add or change must be"
-        " one entire evidence line of its cited page"
+        " an exact excerpt of one evidence line of its cited page, at least 8"
+        " consecutive words or the whole line if shorter"
         " (numbered from 1 in the order given)"
     )
     moved = replace(cells, moved=True)
@@ -732,8 +780,10 @@ def test_the_anchoring_line_tells_an_unknown_source_and_a_row_missing_cells() ->
         ' "Balance at June 30 | 41 | 39"; quote the whole row, every cell, and'
         f" cite page 11; citation 2 of 2 names source_id {bad}, which is not one"
         " of this request's sources; use one of the source_id values listed in"
-        " the final check; any citation you add or change must be one entire"
-        " evidence line of its cited page (numbered from 1 in the order given)"
+        " the final check; any citation you add or change must be an exact"
+        " excerpt of one evidence line of its cited page, at least 8"
+        " consecutive words or the whole line if shorter"
+        " (numbered from 1 in the order given)"
     )
     many = 60
     strangers: list[LineHint | None] = [

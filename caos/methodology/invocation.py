@@ -1179,11 +1179,13 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
     cut or summarised; the caller bounds it with `within_request_ceiling`.
     Evidence carries one header per `(source_id, page, mark)` run of
     `delivered` (ordered by source then block) and nothing per line: the
-    citation rule is stated once, in the final check -- each quote one whole
-    evidence line, once on its page, and never host text, which the check
-    says when a header carries a mark -- and it is the rule `verify_citations`
-    holds the answer to when it is accepted (`WHOLE_LINE`, N28); before N28 the
-    host accepted any unique run of the page, and a record accepted then is
+    citation rule is stated once, in the final check -- each quote an exact
+    excerpt of one evidence line, at least eight words or the whole line,
+    once on its page, and never host text, which the check says when a
+    header carries a mark -- and it is the rule `verify_citations` holds the
+    answer to when it is accepted (`EXCERPT`, D105); before it the host held
+    answers to the whole line (`WHOLE_LINE`, N28) and before N28 accepted any
+    unique run of the page, and a record accepted under either is
     re-anchored by that rule, which it names. `retry_feedback` is non-empty
     only on a node's guided retry (D30, D82): the checks its refused answer
     failed, rendered last and folded into the tag, so a first attempt's bytes

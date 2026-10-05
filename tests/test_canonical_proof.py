@@ -38,7 +38,13 @@ from tracked import tracked_python
 from caos import methodology
 from caos.boundary_text import BoundaryText
 from caos.deliverable.canonical import Revision, canonical_payload
-from caos.evidence.citations import ANY_RUN, WHOLE_LINE, Citation, verify_citations
+from caos.evidence.citations import (
+    ANY_RUN,
+    EXCERPT,
+    WHOLE_LINE,
+    Citation,
+    verify_citations,
+)
 from caos.evidence.ingest import Document, admit_pack
 from caos.graph.route import route_digest
 from caos.graph.runtime import Execution, run_route
@@ -415,7 +421,10 @@ def test_a_source_admitted_after_the_pin_cannot_support_the_proof(
     moved = replace(cited, document_sha256=sha256(late).hexdigest())
     request = Citation(late_id, cited.page, cited.matched_text)
     assert verify_citations(
-        ran.conn, delivered=every_block(ran.conn, late_id), citations=[request]
+        ran.conn,
+        delivered=every_block(ran.conn, late_id),
+        citations=[request],
+        rule=EXCERPT,
     ) == [moved]
     ran.conn.rollback()
 
@@ -427,14 +436,18 @@ def test_a_source_admitted_after_the_pin_cannot_support_the_proof(
 def test_a_record_is_re_anchored_by_the_rule_it_was_accepted_under(
     ran: _Harness,
 ) -> None:
-    """N28: the run's records were accepted whole-line and say so. One
-    rewritten as accepted before the rule, citing part of a line the run rule
-    located, still proves -- a stored record never starts refusing because the
-    rule tightened -- and the same part under the whole-line rule does not."""
+    """N28, D105: the run's records were accepted as excerpts and say so,
+    each keeping the line it anchored in. One rewritten as accepted before
+    the whole-line rule, citing part of a line the run rule located, still
+    proves -- a stored record never starts refusing because the rule
+    tightened -- and the same part under the whole-line rule does not; under
+    `EXCERPT` it is an eight-word excerpt and proves with its line, and with
+    another line beside it does not."""
     _attempt, _artifact, record = _stored(ran, "CP-5")
     stored = _decoded_record(ran.blobs.get(record))
-    assert stored.citation_rule == WHOLE_LINE
+    assert stored.citation_rule == EXCERPT
     [cited] = stored.citations
+    assert cited.line_text == cited.matched_text
     part = " ".join(cited.matched_text.split()[1:])
     request = Citation(ran.source_id, cited.page, part)
     [located] = verify_citations(
@@ -443,13 +456,27 @@ def test_a_record_is_re_anchored_by_the_rule_it_was_accepted_under(
         citations=[request],
         rule=ANY_RUN,
     )
+    [excerpt] = verify_citations(
+        ran.conn,
+        delivered=every_block(ran.conn, ran.source_id),
+        citations=[request],
+        rule=EXCERPT,
+    )
     ran.conn.rollback()
+    assert (located.line_text, excerpt.line_text) == (None, cited.matched_text)
 
     _rewrite(
         ran, "CP-5", lambda r: replace(r, citations=(located,), citation_rule=ANY_RUN)
     )
     assert _prove(ran).citations == 3
     _rewrite(ran, "CP-5", lambda r: replace(r, citation_rule=WHOLE_LINE))
+    assert _refusal(ran) is RefusalCode.ORCHESTRATION_CITATION_LOST
+    _rewrite(
+        ran, "CP-5", lambda r: replace(r, citations=(excerpt,), citation_rule=EXCERPT)
+    )
+    assert _prove(ran).citations == 3
+    other = replace(excerpt, line_text="Acme Holdings plc annual report 2026")
+    _rewrite(ran, "CP-5", lambda r: replace(r, citations=(other,)))
     assert _refusal(ran) is RefusalCode.ORCHESTRATION_CITATION_LOST
 
 
