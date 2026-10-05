@@ -211,16 +211,16 @@ Phelps Dunbar, L.L.P., special Louisiana and Mississippi counsel to the Loan Par
 Exhibit A
 CREDIT AGREEMENT
 [See Attached]
-Conformed version incorporating the Incremental Assumption Agreement No. 1,
+Conformed version incorporating Incremental Assumption Agreement No. 1,
 the First Amendment, the Second Amendment, the Third Amendment,
-and Incremental Assumption Agreement No. 2 and Incremental Assumption Agreement No. 3
+Incremental Assumption Agreement No. 2 and Incremental Assumption Agreement No. 3
 CREDIT AGREEMENT
 Dated as of July 20, 2020,
 as amended and modified by Incremental Assumption Agreement No. 1, dated as of July 20, 2020,
 First Amendment to Credit Agreement, dated as of November 10, 2021,
 Second Amendment to Credit Agreement, dated as of January 26, 2022,
-and Third Amendment to Credit Agreement, dated as of October 5, 2022,
-and Incremental Assumption Agreement No. 2, dated as of February 6, 2023
+Third Amendment to Credit Agreement, dated as of October 5, 2022,
+Incremental Assumption Agreement No. 2, dated as of February 6, 2023
 and Incremental Assumption Agreement No. 3, dated as of February 6, 2024
 among
 CAESARS ENTERTAINMENT, INC.
@@ -234,7 +234,7 @@ CITIZENS BANK, NATIONAL ASSOCIATION, DEUTSCHE BANK SECURITIES INC.,
 TRUIST SECURITIES, INC., U.S. BANK NATIONAL ASSOCIATION,
 WELLS FARGO SECURITIES, LLC, SUMITOMO MITSUI BANKING CORPORATION,
 BNP PARIBAS SECURITIES CORP., GOLDMAN SACHS BANK USA, CITIBANK, N.A.
-ANDand MACQUARIE CAPITAL (USA) INC.,
+and MACQUARIE CAPITAL (USA) INC.,
 as Joint Lead Arrangers and Joint Bookrunners with respect to
 the Term A Facility and the Revolving Facility,
 KEYBANC CAPITAL MARKETS INC. and FIFTH THIRD BANK, NATIONAL ASSOCIATION,
@@ -246,7 +246,7 @@ CITIZENS BANK, NATIONAL ASSOCIATION, DEUTSCHE BANK SECURITIES INC.,
 TRUIST SECURITIES, INC., U.S. BANK NATIONAL ASSOCIATION,
 WELLS FARGO SECURITIES, LLC, SUMITOMO MITSUI BANKING CORPORATION,
 BNP PARIBAS SECURITIES CORP., GOLDMAN SACHS BANK USA,
-CITIGROUP GLOBAL MARKETS INC. ANDand MACQUARIE CAPITAL (USA) INC.,
+CITIGROUP GLOBAL MARKETS INC.and MACQUARIE CAPITAL (USA) INC.,
 as Joint Lead Arrangers and Joint Bookrunners with respect to the Term B Facility,
 KEYBANC CAPITAL MARKETS INC. and FIFTH THIRD BANK, NATIONAL ASSOCIATION,
 as Co-Managers with respect to the Term B Facility
@@ -267,153 +267,153 @@ Page
 ARTICLE I
 Definitions
 SECTION 1.01. | Defined Terms | 2
-SECTION 1.02. | Terms Generally | 9899
-SECTION 1.03. | Effectuation of Third Amendment Transactions | 98100
-SECTION 1.04. | Exchange Rates; Currency Equivalents | 98100
-SECTION 1.05. | Times of Day | 99100
-SECTION 1.06. | Timing of Payment or Performance | 99100
-SECTION 1.07. | Limited Condition Transactions | 99101
-SECTION 1.08. | Additional Alternate Currencies for Loans and Letters of Credit | 100102
-SECTION 1.09. | Change of Currency | 101102
-SECTION 1.10. | Letter of Credit Amounts | 101103
-SECTION 1.11. | Basket and Ratio Calculations | 102103
-SECTION 1.12. | Divisions | 102103
+SECTION 1.02. | Terms Generally | 99
+SECTION 1.03. | Effectuation of Third Amendment Transactions | 100
+SECTION 1.04. | Exchange Rates; Currency Equivalents | 100
+SECTION 1.05. | Times of Day | 100
+SECTION 1.06. | Timing of Payment or Performance | 100
+SECTION 1.07. | Limited Condition Transactions | 101
+SECTION 1.08. | Additional Alternate Currencies for Loans and Letters of Credit | 102
+SECTION 1.09. | Change of Currency | 102
+SECTION 1.10. | Letter of Credit Amounts | 103
+SECTION 1.11. | Basket and Ratio Calculations | 103
+SECTION 1.12. | Divisions | 103
 ARTICLE II
 The Credits
-SECTION 2.01. | Commitments | 102104
-SECTION 2.02. | Loans and Borrowings | 103104
-SECTION 2.03. | Requests for Borrowings | 104105
-SECTION 2.04. | [Reserved] | 105106
-SECTION 2.05. | The Letter of Credit Commitment | 105106
-SECTION 2.06. | Funding of Borrowings | 113115
-SECTION 2.07. | Interest Elections | 114115
-SECTION 2.08. | Termination and Reduction of Commitments | 115117
-SECTION 2.09. | Repayment of Loans; Evidence of Debt | 116118
-SECTION 2.10. | Repayment of Term Loans and Revolving Facility Loans | 117118
-SECTION 2.11. | Prepayment of Loans | 118120
-SECTION 2.12. | Fees | 124126
-SECTION 2.13. | Interest | 125128
-SECTION 2.14. | Alternate Rate of Interest | 126129
-SECTION 2.15. | Increased Costs | 128131
-SECTION 2.16. | Break Funding Payments | 130132
-SECTION 2.17. | Taxes | 130133
-SECTION 2.18. | Payments Generally; Pro Rata Treatment; Sharing of Set-offs | 133136
-SECTION 2.19. | Mitigation Obligations; Replacement of Lenders | 135137
-SECTION 2.20. | Illegality | 136138
-SECTION 2.21. | Incremental Commitments | 136139
-SECTION 2.22. | Defaulting Lenders | 146149
+SECTION 2.01. | Commitments | 104
+SECTION 2.02. | Loans and Borrowings | 104
+SECTION 2.03. | Requests for Borrowings | 105
+SECTION 2.04. | [Reserved] | 106
+SECTION 2.05. | The Letter of Credit Commitment | 106
+SECTION 2.06. | Funding of Borrowings | 115
+SECTION 2.07. | Interest Elections | 115
+SECTION 2.08. | Termination and Reduction of Commitments | 117
+SECTION 2.09. | Repayment of Loans; Evidence of Debt | 118
+SECTION 2.10. | Repayment of Term Loans and Revolving Facility Loans | 118
+SECTION 2.11. | Prepayment of Loans | 120
+SECTION 2.12. | Fees | 126
+SECTION 2.13. | Interest | 128
+SECTION 2.14. | Alternate Rate of Interest | 129
+SECTION 2.15. | Increased Costs | 131
+SECTION 2.16. | Break Funding Payments | 132
+SECTION 2.17. | Taxes | 133
+SECTION 2.18. | Payments Generally; Pro Rata Treatment; Sharing of Set-offs | 136
+SECTION 2.19. | Mitigation Obligations; Replacement of Lenders | 137
+SECTION 2.20. | Illegality | 138
+SECTION 2.21. | Incremental Commitments | 139
+SECTION 2.22. | Defaulting Lenders | 149
 iii
 ARTICLE III
 Representations and Warranties
-SECTION 3.01. | Organization; Powers | 148151
-SECTION 3.02. | Authorization | 149151
-SECTION 3.03. | Enforceability | 149152
-SECTION 3.04. | Governmental Approvals | 149152
-SECTION 3.05. | Financial Statements | 150152
-SECTION 3.06. | No Material Adverse Effect | 150152
-SECTION 3.07. | Title to Properties; Possession Under Leases | 150153
-SECTION 3.08. | Subsidiaries | 151153
-SECTION 3.09. | Litigation; Compliance with Laws | 151154
-SECTION 3.10. | Federal Reserve Regulations | 151154
-SECTION 3.11. | Investment Company Act | 152154
-SECTION 3.12. | Use of Proceeds | 152154
-SECTION 3.13. | Tax Returns | 152155
-SECTION 3.14. | No Material Misstatements | 152155
-SECTION 3.15. | Employee Benefit Plans | 153156
-SECTION 3.16. | Environmental Matters | 153156
-SECTION 3.17. | Security Documents | 154156
-SECTION 3.18. | Location of Real Property and Leased Premises | 155157
-SECTION 3.19. | Solvency | 155158
-SECTION 3.20. | Labor Matters | 155158
-SECTION 3.21. | Intellectual Property; Licenses, Etc. | 156158
-SECTION 3.22. | Anti-Money Laundering; Anti-Corruption and Sanctions Laws | 156159
-SECTION 3.23. | Insurance | 156159
-SECTION 3.24. | Affected Financial Institution | 157159
+SECTION 3.01. | Organization; Powers | 151
+SECTION 3.02. | Authorization | 151
+SECTION 3.03. | Enforceability | 152
+SECTION 3.04. | Governmental Approvals | 152
+SECTION 3.05. | Financial Statements | 152
+SECTION 3.06. | No Material Adverse Effect | 152
+SECTION 3.07. | Title to Properties; Possession Under Leases | 153
+SECTION 3.08. | Subsidiaries | 153
+SECTION 3.09. | Litigation; Compliance with Laws | 154
+SECTION 3.10. | Federal Reserve Regulations | 154
+SECTION 3.11. | Investment Company Act | 154
+SECTION 3.12. | Use of Proceeds | 154
+SECTION 3.13. | Tax Returns | 155
+SECTION 3.14. | No Material Misstatements | 155
+SECTION 3.15. | Employee Benefit Plans | 156
+SECTION 3.16. | Environmental Matters | 156
+SECTION 3.17. | Security Documents | 156
+SECTION 3.18. | Location of Real Property and Leased Premises | 157
+SECTION 3.19. | Solvency | 158
+SECTION 3.20. | Labor Matters | 158
+SECTION 3.21. | Intellectual Property; Licenses, Etc. | 158
+SECTION 3.22. | Anti-Money Laundering; Anti-Corruption and Sanctions Laws | 159
+SECTION 3.23. | Insurance | 159
+SECTION 3.24. | Affected Financial Institution | 159
 ARTICLE IV
 Conditions of Lending
-SECTION 4.01. | Conditions to All Credit Events After the Third Amendment Effective Date | 157159
-SECTION 4.02. | Conditions to Initial Credit Events | 157160
+SECTION 4.01. | Conditions to All Credit Events After the Third Amendment Effective Date | 159
+SECTION 4.02. | Conditions to Initial Credit Events | 160
 ARTICLE V
 Affirmative Covenants
-SECTION 5.01. | Existence; Businesses and Properties | 162164
-SECTION 5.02. | Insurance | 162165
-SECTION 5.03. | Taxes | 163166
-SECTION 5.04. | Financial Statements, Reports, etc. | 163166
-SECTION 5.05. | Litigation and Other Notices | 165168
-SECTION 5.06. | Compliance with Laws | 166168
-SECTION 5.07. | Maintaining Records; Access to Properties and Inspections | 166169
-SECTION 5.08. | Use of Proceeds | 166169
-SECTION 5.09. | Compliance with Environmental Laws | 166169
+SECTION 5.01. | Existence; Businesses and Properties | 164
+SECTION 5.02. | Insurance | 165
+SECTION 5.03. | Taxes | 166
+SECTION 5.04. | Financial Statements, Reports, etc. | 166
+SECTION 5.05. | Litigation and Other Notices | 168
+SECTION 5.06. | Compliance with Laws | 168
+SECTION 5.07. | Maintaining Records; Access to Properties and Inspections | 169
+SECTION 5.08. | Use of Proceeds | 169
+SECTION 5.09. | Compliance with Environmental Laws | 169
 iv
-SECTION 5.10. | Further Assurances; Additional Security | 167169
-SECTION 5.11. | Real Property Development Matters | 170172
-SECTION 5.12. | Rating | 172174
+SECTION 5.10. | Further Assurances; Additional Security | 169
+SECTION 5.11. | Real Property Development Matters | 172
+SECTION 5.12. | Rating | 174
 ARTICLE VI
 Negative Covenants
-SECTION 6.01. | Indebtedness | 172175
-SECTION 6.02. | Liens | 181184
-SECTION 6.03. | Sale and Lease-Back Transactions | 188191
-SECTION 6.04. | Investments, Loans and Advances | 189192
-SECTION 6.05. | Mergers, Consolidations, Sales of Assets and Acquisitions | 194197
-SECTION 6.06. | Restricted Payments | 199201
-SECTION 6.07. | Transactions with Affiliates | 201203
-SECTION 6.08. | Business of the Borrower and the Subsidiaries | 204206
-SECTION 6.09. | Limitation on Payments and Modifications of Indebtedness; Modifications of Governing Documents and Lease Arrangements; etc. | 204206
-SECTION 6.10. | Fiscal Year | 207210
-SECTION 6.11. | Financial Performance Covenants | 207210
+SECTION 6.01. | Indebtedness | 175
+SECTION 6.02. | Liens | 184
+SECTION 6.03. | Sale and Lease-Back Transactions | 191
+SECTION 6.04. | Investments, Loans and Advances | 192
+SECTION 6.05. | Mergers, Consolidations, Sales of Assets and Acquisitions | 197
+SECTION 6.06. | Restricted Payments | 201
+SECTION 6.07. | Transactions with Affiliates | 203
+SECTION 6.08. | Business of the Borrower and the Subsidiaries | 206
+SECTION 6.09. | Limitation on Payments and Modifications of Indebtedness; Modifications of Governing Documents and Lease Arrangements; etc. | 206
+SECTION 6.10. | Fiscal Year | 210
+SECTION 6.11. | Financial Performance Covenants | 210
 ARTICLE VII
 Events of Default
-SECTION 7.01. | Events of Default | 208211
-SECTION 7.02. | Right to Cure | 211214
-SECTION 7.03. | Treatment of Certain Payments | 212215
+SECTION 7.01. | Events of Default | 211
+SECTION 7.02. | Right to Cure | 214
+SECTION 7.03. | Treatment of Certain Payments | 215
 ARTICLE VIII
 The Agents
-SECTION 8.01. | Appointment | 212215
-SECTION 8.02. | Delegation of Duties | 213216
-SECTION 8.03. | Exculpatory Provisions | 213216
-SECTION 8.04. | Reliance by Agents | 214217
-SECTION 8.05. | Notice of Default | 214217
-SECTION 8.06. | Non-Reliance on Administrative Agent, Joint Lead Arrangers, Collateral Agent and Other Lenders | 214217
-SECTION 8.07. | Indemnification | 216219
-SECTION 8.08. | Agents in their Individual Capacity | 216219
-SECTION 8.09. | Successor Agents | 217219
-SECTION 8.10. | Payments Set Aside | 217220
-SECTION 8.11. | Administrative Agent May File Proofs of Claim | 218221
-SECTION 8.12. | Collateral and Guaranty Matters | 219221
-SECTION 8.13. | Agents and Arrangers | 219222
-SECTION 8.14. | Intercreditor Agreements and Collateral Matters | 219222
-SECTION 8.15. | Withholding Tax | 219222
-SECTION 8.16. | Interest Rates; Benchmark Notification | 220222
+SECTION 8.01. | Appointment | 215
+SECTION 8.02. | Delegation of Duties | 216
+SECTION 8.03. | Exculpatory Provisions | 216
+SECTION 8.04. | Reliance by Agents | 217
+SECTION 8.05. | Notice of Default | 217
+SECTION 8.06. | Non-Reliance on Administrative Agent, Joint Lead Arrangers, Collateral Agent and Other Lenders | 217
+SECTION 8.07. | Indemnification | 219
+SECTION 8.08. | Agents in their Individual Capacity | 219
+SECTION 8.09. | Successor Agents | 219
+SECTION 8.10. | Payments Set Aside | 220
+SECTION 8.11. | Administrative Agent May File Proofs of Claim | 221
+SECTION 8.12. | Collateral and Guaranty Matters | 221
+SECTION 8.13. | Agents and Arrangers | 222
+SECTION 8.14. | Intercreditor Agreements and Collateral Matters | 222
+SECTION 8.15. | Withholding Tax | 222
+SECTION 8.16. | Interest Rates; Benchmark Notification | 222
 v
 ARTICLE IX
 Miscellaneous
-SECTION 9.01. | Notices; Communications | 220223
-SECTION 9.02. | Survival of Agreement | 221224
-SECTION 9.03. | Binding Effect | 221224
-SECTION 9.04. | Successors and Assigns | 222224
-SECTION 9.05. | Expenses; Indemnity | 227230
-SECTION 9.06. | Right of Set-off | 229232
-SECTION 9.07. | Governing Law | 229232
-SECTION 9.08. | Waivers; Amendments | 229232
-SECTION 9.09. | Interest Rate Limitation | 234237
-SECTION 9.10. | Entire Agreement | 234237
-SECTION 9.11. | WAIVER OF JURY TRIAL | 235238
-SECTION 9.12. | Severability | 235238
-SECTION 9.13. | Counterparts; Electronic Execution of Documents | 235238
-SECTION 9.14. | Headings | 236239
-SECTION 9.15. | Jurisdiction; Consent to Service of Process | 236239
-SECTION 9.16. | Confidentiality | 236239
-SECTION 9.17. | Platform; Borrower Materials | 237240
-SECTION 9.18. | Release of Liens, Guarantees and Pledges | 238241
-SECTION 9.19. | Judgment Currency | 240243
-SECTION 9.20. | USA PATRIOT Act Notice | 241244
-SECTION 9.21. | No Advisory or Fiduciary Responsibility | 241244
-SECTION 9.22. | Application of Gaming Laws | 242245
-SECTION 9.23. | Affiliate Lenders | 243246
-SECTION 9.24. | Acknowledgement and Consent to Bail-In of Affected Financial Institutions | 244247
-SECTION 9.25. | MIRE Events | 244247
-SECTION 9.26. | Certain ERISA Matters. | 244247
-SECTION 9.27. | Acknowledgement Regarding Any Supported QFCs | 245248
+SECTION 9.01. | Notices; Communications | 223
+SECTION 9.02. | Survival of Agreement | 224
+SECTION 9.03. | Binding Effect | 224
+SECTION 9.04. | Successors and Assigns | 224
+SECTION 9.05. | Expenses; Indemnity | 230
+SECTION 9.06. | Right of Set-off | 232
+SECTION 9.07. | Governing Law | 232
+SECTION 9.08. | Waivers; Amendments | 232
+SECTION 9.09. | Interest Rate Limitation | 237
+SECTION 9.10. | Entire Agreement | 237
+SECTION 9.11. | WAIVER OF JURY TRIAL | 238
+SECTION 9.12. | Severability | 238
+SECTION 9.13. | Counterparts; Electronic Execution of Documents | 238
+SECTION 9.14. | Headings | 239
+SECTION 9.15. | Jurisdiction; Consent to Service of Process | 239
+SECTION 9.16. | Confidentiality | 239
+SECTION 9.17. | Platform; Borrower Materials | 240
+SECTION 9.18. | Release of Liens, Guarantees and Pledges | 241
+SECTION 9.19. | Judgment Currency | 243
+SECTION 9.20. | USA PATRIOT Act Notice | 244
+SECTION 9.21. | No Advisory or Fiduciary Responsibility | 244
+SECTION 9.22. | Application of Gaming Laws | 245
+SECTION 9.23. | Affiliate Lenders | 246
+SECTION 9.24. | Acknowledgement and Consent to Bail-In of Affected Financial Institutions | 247
+SECTION 9.25. | MIRE Events | 247
+SECTION 9.26. | Certain ERISA Matters. | 247
+SECTION 9.27. | Acknowledgement Regarding Any Supported QFCs | 248
 Annexes, Exhibits and Schedules
 Annex A | Pricing Grid
 Exhibit A | Form of Assignment and Acceptance
@@ -464,7 +464,7 @@ Schedule 6.06 | Restricted Payments
 Schedule 6.07 | Transactions with Affiliates
 Schedule 9.01 | Notice Information
 vii
-CREDIT AGREEMENT, dated as of July 20, 2020 (as amended and modified by the Incremental Assumption Agreement No. 1, the First Amendment, the Second Amendment, the Third Amendment and, Incremental Assumption Agreement No. 2 and Incremental Assumption Agreement No. 3, and as it may be further amended, restated, amended and restated, supplemented or otherwise modified from time to time, this “Agreement”), among CAESARS ENTERTAINMENT, INC., a Delaware corporation (f/k/a ELDORADO RESORTS, INC., a Nevada corporation) (the “Borrower”), the LENDERS party hereto from time to time, JPMORGAN CHASE BANK, N.A., as administrative agent for the Lenders (in such capacity, together with its successors and assigns in such capacity, the “Administrative Agent”), and U.S. BANK NATIONAL ASSOCIATION, as collateral agent for the Secured Parties (in such capacity, together with its successors and assigns in such capacity, the “Collateral Agent”).
+CREDIT AGREEMENT, dated as of July 20, 2020 (as amended and modified by Incremental Assumption Agreement No. 1, the First Amendment, the Second Amendment, the Third Amendment, Incremental Assumption Agreement No. 2 and Incremental Assumption Agreement No. 3, and as it may be further amended, restated, amended and restated, supplemented or otherwise modified from time to time, this “Agreement”), among CAESARS ENTERTAINMENT, INC., a Delaware corporation (f/k/a ELDORADO RESORTS, INC., a Nevada corporation) (the “Borrower”), the LENDERS party hereto from time to time, JPMORGAN CHASE BANK, N.A., as administrative agent for the Lenders (in such capacity, together with its successors and assigns in such capacity, the “Administrative Agent”), and U.S. BANK NATIONAL ASSOCIATION, as collateral agent for the Secured Parties (in such capacity, together with its successors and assigns in such capacity, the “Collateral Agent”).
 WHEREAS, the Borrower entered into that certain Agreement and Plan of Merger, dated as of June 24, 2019 (as amended by Amendment No. 1 to Agreement and Plan of Merger, dated as of August 15, 2019, and as otherwise amended, restated, amended and restated or otherwise modified prior to the Closing Date, the “CEC Acquisition Agreement”), by and among the Borrower, Colt Merger Sub, Inc., a Delaware corporation and wholly-owned subsidiary of the Borrower (“Merger Sub”), and Caesars Entertainment Corporation, a Delaware corporation (“CEC”), pursuant to which Merger Sub merged with and into CEC on the Closing Date with CEC as the surviving entity of such merger and renamed Caesars Holdings, Inc. (the “CEC Acquisition”).
 WHEREAS, on the Closing Date, after the effectiveness of this Agreement, the Borrower (a) changed its name from Eldorado Resorts, Inc. to Caesars Entertainment, Inc. and (b) converted from a Nevada corporation into a Delaware corporation.
 WHEREAS, on the Closing Date, substantially simultaneously with the consummation of the CEC Acquisition, CEC contributed all of its Equity Interests in CEOC, LLC, a Delaware limited liability company and subsidiary of CEC (“CEOC”), to Caesars Resort Collection, LLC, a Delaware limited liability company and subsidiary of CEC (“CRC”), resulting in CEOC being a wholly-owned subsidiary of CRC (the “CEOC Event”).
@@ -562,7 +562,7 @@ provided, that on and after each Adjustment Date occurring from and after delive
 “Applicable Date” shall have the meaning assigned to such term in Section 9.08(f).
 “Applicable Discount” shall have the meaning assigned to such term in Section 2.11(h)(iii).
 “Applicable Margin” shall mean for any day (a) with respect to any Term B Loan, 3.25% per annum in the case of any Term Benchmark Loan and 2.25% per annum in the case of any ABR Loan;
-provided, however, that on and after each Adjustment Date occurring from and after delivery of the financial statements and certificates required by Section 5.04 for the first fiscal quarter of the Borrower ending after the Term B Facility Funding Date, the “Applicable Margin” with respect to any Term B Loan will be determined pursuant to the Pricing Grid and,
+provided, however, that on and after each Adjustment Date occurring from and after delivery of the financial statements and certificates required by Section 5.04 for the first fiscal quarter of the Borrower ending after the Term B Facility Funding Date, the “Applicable Margin” with respect to any Term B Loan will be determined pursuant to the Pricing Grid ,
 (b) with respect to any Term B-1 Loan, 2.75% per annum in the case of any Term Benchmark Loan and 1.75% per annum in the case of any ABR Loan and (c) with respect to any Initial Revolving Loan and any Term A Loan, 2.25% per annum in the case of any RFR Loan and any Term Benchmark Loan and 1.25% per annum in the case of any ABR Loan;
 provided,
 7
@@ -707,7 +707,7 @@ Other Term Loans or Other Revolving Loans that have different terms and conditio
 “Closing Date Documentation Agents” shall mean, collectively, KeyBanc Capital Markets Inc. and Fifth Third Bank, National Association, as documentation agents for the Initial Revolving Facility as of the Closing Date.
 “Closing Date Joint Lead Arrangers” shall mean, collectively, JPMorgan, Credit Suisse Loan Funding LLC, Macquarie Capital (USA) Inc., BofA Securities, Inc., Deutsche Bank Securities Inc., Goldman Sachs Bank USA, SunTrust Robinson Humphrey, Inc., U.S. Bank National Association and Citizens Bank, National Association, as joint lead arrangers and joint bookrunners for the Initial Revolving Facility as of the Closing Date.
 “Closing Date Syndication Agents” shall mean, collectively, KeyBanc Capital Markets Inc. and Fifth Third Bank, National Association, as syndication agents for the Initial Revolving Facility as of the Closing Date.
-“Co-Managers” shall mean, collectively, (a) the Term B Facility Co-Managers and, (b) the Term B-1 Facility Co-Managers and (c) with respect to any Incremental Revolving Facility or any Incremental Term Facility, each of the Persons appointed by Borrower as a co-manager for such Incremental Revolving Facility or Incremental Term Facility.
+“Co-Managers” shall mean, collectively, (a) the Term B Facility Co-Managers, (b) the Term B-1 Facility Co-Managers and (c) with respect to any Incremental Revolving Facility or any Incremental Term Facility, each of the Persons appointed by Borrower as a co-manager for such Incremental Revolving Facility or Incremental Term Facility.
 “Code” shall mean the Internal Revenue Code of 1986, as amended.
 17
 “Collateral” shall mean all the “Collateral” (or equivalent term) as defined in any Security Document and shall also include the Mortgaged Properties and all other property that is subject to any Lien in favor of the Collateral Agent for the benefit of the Secured Parties pursuant to any Security Documents.
@@ -1068,7 +1068,7 @@ If a Swap Obligation arises under a master agreement governing more than one swa
 “Facility” shall mean the respective facility and commitments utilized in making Loans and credit extensions hereunder, it being understood that (a) as of the Third Amendment Effective Date there are two Facilities, i.e.,
 (i) the Term A Facility established on the Third Amendment Effective Date and (ii) the Initial Revolving Facility established on the Closing Date (as amended and modified by Incremental Assumption Agreement No. 1, the First Amendment, the Second Amendment and the Third
 43
-Amendment) and,
+Amendment) ,
 (b) as of the Term B Facility Funding Date there are three Facilities, i.e.,
 (i) the Term A Facility established on the Third Amendment Effective Date,
 (ii) the Initial Revolving Facility established on the Closing Date (as amended and modified by Incremental Assumption Agreement No. 1, the First Amendment, the Second Amendment and the Third Amendment) and (iii) the Term B Facility established on the Term B Facility Funding Date and (c) as of the Term B-1 Facility Funding Date there are four Facilities, i.e.,
@@ -1162,8 +1162,8 @@ provided, that, for the avoidance of doubt,
 “Incremental Term Facility” shall mean any Class of Incremental Term Loan Commitments and the Incremental Term Loans made thereunder.
 “Incremental Term Lender” shall mean a Lender with an Incremental Term Loan Commitment or an outstanding Incremental Term Loan.
 “Incremental Term Loan Commitment” shall mean the commitment of any Lender, established pursuant to Section 2.21, to make Incremental Term Loans to the Borrower.
-“Incremental Term Loan Installment Date” shall have, with respect to any Class of Incremental Term Loans established pursuant to an Incremental Assumption Agreement, the meaning assigned to such term in Section 2.10(a)(iiiiv).
-“Incremental Term Loans” shall mean term loans made by one or more Lenders to the Borrower pursuant to Section 2.01(de).
+“Incremental Term Loan Installment Date” shall have, with respect to any Class of Incremental Term Loans established pursuant to an Incremental Assumption Agreement, the meaning assigned to such term in Section 2.10(a)(iv).
+“Incremental Term Loans” shall mean term loans made by one or more Lenders to the Borrower pursuant to Section 2.01(e).
 Incremental Term Loans may be made in the form of additional Term A Loans, additional Term B Loans, additional Term B-1 Loans or, to the extent permitted by Section 2.21 and provided for in the relevant Incremental Assumption Agreement, Other Term Loans (including in the form of Extended Term Loans or Refinancing Term Loans, as applicable).
 “Indebtedness” of any person shall mean, if and to the extent (other than with respect to clause (h) below) the same would constitute indebtedness or a liability in accordance with GAAP, without duplication,
 (a) all obligations of such person for borrowed money,
@@ -1248,7 +1248,7 @@ Interest shall accrue from and including the first day of an Interest Period to 
 “Joint Lead Arrangers” shall mean, collectively,
 (a) the Closing Date Joint Lead Arrangers,
 (b) the Third Amendment Joint Lead Arrangers,
-(c) the Term B Facility Joint Lead Arrangers and,
+(c) the Term B Facility Joint Lead Arrangers ,
 (d) the Term B-1 Facility Joint Lead Arrangers and (e) with respect to any Incremental Revolving Facility or any Incremental Term Facility, each of the Persons appointed by Borrower as arranger, bookrunner or similar titles for such Incremental Revolving Facility or Incremental Term Facility.
 “Joliet Lease” shall have the meaning assigned to such term in the definition of the term “Master Lease.”
 “JPMorgan” shall mean JPMorgan Chase Bank, N.A.
@@ -1298,7 +1298,7 @@ provided that in no event shall an operating lease, a Master Lease, a Gaming Lea
 “Loan Documents” shall mean (i) this Agreement,
 (ii) the Guarantee Agreement,
 (iii) the Security Documents,
-(iv) each Incremental Assumption Agreement (including Incremental Assumption Agreement No. 1 and, Incremental Assumption Agreement No. 2 and Incremental Assumption Agreement No. 3),
+(iv) each Incremental Assumption Agreement (including Incremental Assumption Agreement No. 1, Incremental Assumption Agreement No. 2 and Incremental Assumption Agreement No. 3),
 (v) any Intercreditor Agreement,
 (vi) any Note issued under Section 2.09(e),
 (vii) the First Amendment,
@@ -1522,8 +1522,7 @@ in each case in the preceding clauses (a) through (f), for amounts which are not
 “Pompano Park Real Property” shall mean all of the real property interests owned by PPI, Inc. and Pompano Park Holdings, L.L.C. that are commonly known as “Pompano Park”, including, without limitation, all the real property interests which are particularly described on Schedule 1.01(F).
 “Pre-Opening Expenses” shall mean, with respect to any fiscal period, the amount of expenses (other than interest expense) incurred with respect to capital projects which are classified as “pre- opening expenses” or “project opening costs” (or any similar or equivalent caption) on the applicable financial statements of the Borrower and the Subsidiaries for such period, prepared in accordance with GAAP.
 “Pricing Grid” shall mean, with respect to the Loans or Commitments of any Facility, the applicable table set forth on Annex A.
-For the purposes of the Pricing Grid, changes in the Applicable Margin for the applicable Facility and the Applicable Commitment Fee resulting from changes in the Total Leverage Ratio shall become effective on the date (the “Adjustment Date”) of delivery of the relevant financial statements pursuant to Section 5.04 for each fiscal quarter beginning with the first fiscal quarter of the Borrower ending after (a) in the case of the Term B Facility, the Term B Facility Funding Date, and
-(b) in the case of the Term A Facility and the Initial Revolving Facility, the Third Amendment Effective Date, as applicable, and, in either case, shall remain in effect until the next change to be effected pursuant to this paragraph.
+For the purposes of the Pricing Grid, changes in the Applicable Margin for the applicable Facility and the Applicable Commitment Fee resulting from changes in the Total Leverage Ratio shall become effective on the date (the “Adjustment Date”) of delivery of the relevant financial statements pursuant to Section 5.04 for each fiscal quarter beginning with the first fiscal quarter of the Borrower ending after (a) in the case of the Term B Facility, the Term B Facility Funding Date and (b) in the case of the Term A Facility and the Initial Revolving Facility, the Third Amendment Effective Date, as applicable, and, in either case, shall remain in effect until the next change to be effected pursuant to this paragraph.
 If any financial statements referred to above are not delivered within the time periods specified in Section 5.04, then, at the option of the Administrative Agent or the Majority Lenders for the applicable Facility, until the date that is three Business Days after the date on which such financial statements are delivered, the pricing level that is one pricing level higher than the pricing level theretofore in effect for such Facility shall apply to such Facility as of the first Business Day after the date on which such financial statements were to have been delivered but were not delivered.
 Each determination of the Total Leverage Ratio pursuant to the Pricing Grid shall be made in a manner consistent with the determination thereof pursuant to Section 6.11.
 Notwithstanding anything to the contrary contained above in this definition or elsewhere in this Agreement, if it is subsequently determined that the Total Leverage Ratio set forth in any compliance certificate delivered to the Administrative Agent pursuant to Section 5.04(c) is inaccurate as a result of any fraud, intentional misrepresentation or willful misconduct of the Borrower or any officer thereof and the result is that the Lenders under any Facility received interest or fees for any period based on an Applicable Margin and/or the Applicable Commitment Fee for such Facility that is less than that which would have been applicable had the Total Leverage Ratio been accurately determined, then, for all purposes of this Agreement, the “Applicable Margin” and the “Applicable Commitment Fee” for any day occurring within
@@ -1682,7 +1681,7 @@ The amount of any Restricted Payment made other than in the form of cash or cash
 (iii) the last Business Day of March, June, September and December and (iv) such additional dates as the Administrative Agent shall determine or the Majority Lenders under the Revolving Facility shall require.
 “Revolving Facility” shall mean the Revolving Facility Commitments of any Class and the extensions of credit made hereunder by the Revolving Facility Lenders of such Class and, for purposes of Section 9.08(b) and the definition of “Required Revolving Facility Lenders”, shall refer to all such Revolving Facility Commitments as a single Class.
 “Revolving Facility Borrowing” shall mean a Borrowing comprised of Revolving Facility Loans of the same Class.
-“Revolving Facility Commitment” shall mean, with respect to each Revolving Facility Lender, the commitment of such Revolving Facility Lender to make Revolving Facility Loans of a Class pursuant to Section 2.01(cd), as such commitment may be (a) reduced from time to time pursuant to Section 2.08,
+“Revolving Facility Commitment” shall mean, with respect to each Revolving Facility Lender, the commitment of such Revolving Facility Lender to make Revolving Facility Loans of a Class pursuant to Section 2.01(d), as such commitment may be (a) reduced from time to time pursuant to Section 2.08,
 (b) reduced or increased from time to time pursuant to assignments by or to such Lender under Section 9.04, and
 (c) increased (or replaced) as provided under Section 2.21.
 The amount of each Lender’s Revolving Facility Commitment as of the Third Amendment Effective Date is set forth on Schedule 2.01, or in the Assignment and Acceptance or Incremental Assumption Agreement pursuant to which such Lender shall have assumed its Revolving Facility Commitment (or Incremental Revolving Facility Commitment), as applicable.
@@ -1693,7 +1692,7 @@ After the Third Amendment Effective Date, additional Classes of Revolving Facili
 “Revolving Facility Credit Exposure” shall mean, with respect to any Class of Revolving Facility Commitments, at any time, the sum of (a) the aggregate Outstanding Amount of the Revolving Facility Loans of such Class at such time (calculated, in the case of Alternate Currency Loans, based on the Dollar Equivalent thereof) and (b) the Outstanding Amount of the L/C Obligations of such Class at such time (calculated, in the case of Alternate Currency Letters of Credit, based on the Dollar Equivalent thereof).
 The Revolving Facility Credit Exposure of any Revolving Facility Lender under any Revolving Facility at any time shall be the product of (x) such Revolving Facility Lender’s Revolving Facility Percentage under such Revolving Facility and (y) the aggregate Revolving Facility Credit Exposure under such Revolving Facility of all Revolving Facility Lenders, collectively, at such time.
 “Revolving Facility Lender” shall mean a Lender (including an Incremental Revolving Facility Lender) with a Revolving Facility Commitment or with outstanding Revolving Facility Loans.
-“Revolving Facility Loan” shall mean a Loan made by a Revolving Facility Lender pursuant to Section 2.01(cd) or Section 2.21.
+“Revolving Facility Loan” shall mean a Loan made by a Revolving Facility Lender pursuant to Section 2.01(d) or Section 2.21.
 “Revolving Facility Maturity Date” shall mean, as the context may require, (a) the Initial Revolving Facility Maturity Date and (b) with respect to any other Classes of Revolving Facility Commitments, the maturity dates specified therefor in the applicable Incremental Assumption Agreement.
 “Revolving Facility Percentage” shall mean, with respect to any Revolving Facility Lender of any Class, the percentage of the total Revolving Facility Commitments of such Class represented by such Lender’s Revolving Facility Commitment of such Class.
 If the Revolving Facility Commitments of such Class have terminated or expired, the Revolving Facility Percentages of such Class shall be determined based upon the Revolving Facility Commitments of such Class most recently in effect, giving effect to any assignments pursuant to Section 9.04.
@@ -1779,7 +1778,7 @@ provided, that no phantom stock or similar plan providing for payments only on a
 The amount of each Lender’s Term A Loan Commitment as of the Third Amendment Effective Date is set forth on Schedule 2.01.
 The aggregate amount of the Term A Loan Commitments as of the Third Amendment Effective Date is $750.0 million.
 “Term A Loan Installment Date” shall have the meaning assigned to such term in Section 2.10(a)(i).
-“Term A Loans” shall mean (a) the term loans made by the Lenders to the Borrower pursuant to Section 2.01(a) and Section 2(a) of the Third Amendment, and (b) any Incremental Term Loans in the form of Term A Loans made by the Incremental Term Lenders to the Borrower pursuant to Section 2.01(de).
+“Term A Loans” shall mean (a) the term loans made by the Lenders to the Borrower pursuant to Section 2.01(a) and Section 2(a) of the Third Amendment, and (b) any Incremental Term Loans in the form of Term A Loans made by the Incremental Term Lenders to the Borrower pursuant to Section 2.01(e).
 “Term B Borrowing” shall mean any Borrowing comprised of Term B Loans.
 “Term B Facility” shall mean the Term B Loan Commitment and the Term B Loans made hereunder and under the Incremental Assumption Agreement No. 2.
 “Term B Facility Closing Fee” shall have the meaning assigned to such term in Section 2.12(d).
@@ -1815,7 +1814,7 @@ The aggregate amount of the Term B Loan Commitments as of the Term B Facility Fu
 The amount of each Lender’s Term B-1 Loan Commitment as of the Term B-1 Facility Funding Date is set forth in the Incremental Assumption Agreement No. 3.
 The aggregate amount of the Term B-1 Loan Commitments as of the Term B-1 Facility Funding Date is $2,900.0 million.
 “Term B-1 Loan Installment Date” shall have the meaning assigned to such term in Section 2.10(a)(iii).
-“Term B-1 Loans” shall mean (a) the term loans made by the Lenders to the Borrower pursuant to Section 2.01(bc) and Section 2(a) of the Incremental Assumption Agreement No. 23, and (b) any Incremental Term Loans in the form of Term B-1 Loans made by the Incremental Term Lenders to the Borrower pursuant to Section 2.01(de).
+“Term B-1 Loans” shall mean (a) the term loans made by the Lenders to the Borrower pursuant to Section 2.01(c) and Section 2(a) of the Incremental Assumption Agreement No.3, and (b) any Incremental Term Loans in the form of Term B-1 Loans made by the Incremental Term Lenders to the Borrower pursuant to Section 2.01(e).
 “Term Benchmark” when used in reference to any Loan or Borrowing, refers to whether such Loan, or the Loans comprising such Borrowing, are bearing interest at a rate determined by reference to Adjusted Term SOFR, the Adjusted EURIBOR Rate, the Adjusted TIBOR Rate or the Adjusted CDOR Rate.
 “Term Benchmark Borrowing” shall mean a Borrowing comprised of Term Benchmark Loans.
 91
@@ -1826,14 +1825,14 @@ The aggregate amount of the Term B-1 Loan Commitments as of the Term B-1 Facilit
 “Term Facility” shall mean the Term A Facility, the Term B Facility, the Term B-1 Facility and/or any or all of the Incremental Term Facilities.
 “Term Facility Maturity Date” shall mean, as the context may require,
 (a) with respect to the Term A Facility, the Term A Facility Maturity Date,
-(b) with respect to the Term B Facility, the Term B Facility Maturity Date and,
+(b) with respect to the Term B Facility, the Term B Facility Maturity Date,
 (c) with respect to the Term B-1 Facility, the Term B-1 Facility Maturity Date and (d) with respect to any other Class of Term Loans, the maturity dates specified therefor in the applicable Incremental Assumption Agreement.
 “Term Loan Commitment” shall mean any Term A Loan Commitment, any Term B Loan Commitment, any Term B-1 Loan Commitment or any Incremental Term Loan Commitment.
 “Term Loan Installment Date” shall mean any Term A Loan Installment Date, any Term B Loan Installment Date, any Term B-1 Loan Installment Date or any Incremental Term Loan Installment Date.
 “Term Loans” shall mean the Term A Loans, the Term B Loans, the Term B-1 Loans and/or any or all of the Incremental Term Loans made pursuant to Section 2.21.
 “Term SOFR” shall mean, for any calculation with respect to a SOFR Loan, the Term SOFR Reference Rate for a tenor comparable to the applicable Interest Period on the day (such day, the “Periodic Term SOFR Determination Day”) that is two (2) U.S. Government Securities Business Days prior to the first day of such Interest Period, as such rate is published by the Term SOFR Administrator;
 provided, however, that if as of 5:00 p.m. (New York City time) on any Periodic Term SOFR Determination Day the Term SOFR Reference Rate for the applicable tenor has not been published by the Term SOFR Administrator and a Benchmark Replacement Date with respect to the Term SOFR Reference Rate has not occurred, then Term SOFR will be the Term SOFR Reference Rate for such tenor as published by the Term SOFR Administrator on the first preceding U.S. Government Securities Business Day for which such Term SOFR Reference Rate for such tenor was published by the Term SOFR Administrator so long as such first preceding U.S. Government Securities Business Day is not more than three (3) U.S. Government Securities Business Days prior to such Periodic Term SOFR Determination Day.
-“Term SOFR Adjustment” shall mean, (a) with respect to the Term B Facility, the Term A Facility and the Initial Revolving Facility, a percentage equal to 0.10% per annum and (b) with respect to the Term B-1 Facility, a percentage equal to 0.00% per annum.
+“Term SOFR Adjustment” shall mean (a) with respect to the Term B Facility, the Term A Facility and the Initial Revolving Facility, a percentage equal to 0.10% per annum and (b) with respect to the Term B-1 Facility, a percentage equal to 0.00% per annum.
 92
 “Term SOFR Administrator” shall mean CME Group Benchmark Administration Limited (CBA) (or a successor administrator of the Term SOFR Reference Rate selected by the Administrative Agent in its reasonable discretion).
 “Term SOFR Reference Rate” shall mean the forward-looking term rate based on SOFR administered by the Term SOFR Administrator and published on the applicable Reuters screen page (or such other commercially available source providing such quotations as may be designated by Administrative Agent from time to time).
@@ -1868,7 +1867,7 @@ provided, further, however, that for purposes of calculating the Total Leverage 
 (i) EBITDA for the fiscal quarter in which the relevant Qualifying Act of Terrorism shall have occurred,
 (ii) EBITDA for any fiscal quarter following such quarter referred to in clause (i) in which a Material Disruption existed and (iii) EBITDA for the next succeeding fiscal quarter after the latest quarter to occur of any quarter referred to in clause (i) or (ii) shall, in each case, be the greater of (1) Substituted EBITDA and (2) actual EBITDA for such quarter.
 For the purposes of the foregoing, “Substituted EBITDA” shall mean the EBITDA for the fiscal quarter immediately preceding the fiscal quarter referred to in clause (i) of the previous sentence, in each case subject to customary seasonal adjustments (as determined in good faith by the Borrower and set forth in a certificate of a Responsible Officer of the Borrower delivered to the Administrative Agent);
-provided, further, however, that for purposes of Section 2.11(a)(iiiiv), 6.04(dd), 6.06(e), 6.06(h), 6.09(b)(i)(E) and 6.09(b)(i)(F), Total Net Debt as used in clause (a) above shall be calculated without excluding Development Expenses.
+provided, further, however, that for purposes of Section 2.11(a)(iv), 6.04(dd), 6.06(e), 6.06(h), 6.09(b)(i)(E) and 6.09(b)(i)(F), Total Net Debt as used in clause (a) above shall be calculated without excluding Development Expenses.
 “Total Net Debt” at any date shall mean (i) the aggregate principal amount of Consolidated Debt (other than (A) Qualified Non-Recourse Debt,
 (B) Development Expenses (whether or not included in Consolidated Debt),
 (C) Discharged Indebtedness and (D) Escrowed Indebtedness) of the Borrower and the Subsidiaries outstanding at such date, less (ii) without duplication, the aggregate amount of all Unrestricted Cash and Permitted Investments of the Borrower and the Subsidiaries on such date.
@@ -2016,10 +2015,10 @@ Subject to the terms and conditions set forth herein:
 (a) each Lender with a Term A Loan Commitment agrees to make Term A Loans in Dollars to the Borrower on the Third Amendment Effective Date in an aggregate principal amount not to exceed its Term A Loan Commitment;
 (b) each Lender with a Term B Loan Commitment agrees to make Term B Loans in Dollars to the Borrower on the Term B Facility Funding Date in an aggregate principal amount not to exceed its Term B Loan Commitment;
 (c) each Lender with a Term B-1 Loan Commitment agrees to make Term B-1 Loans in Dollars to the Borrower on the Term B-1 Facility Funding Date in an aggregate principal amount not to exceed its Term B-1 Loan Commitment;
-(d) (c) each Lender with a Revolving Facility Commitment of a Class agrees to make Revolving Facility Loans of such Class to the Borrower from time to time during the Availability Period for such Class of Revolving Facility in Dollars and each Alternate Currency in an aggregate principal amount that will not result in (i) such Lender’s Revolving Facility Credit Exposure of such Class exceeding such Lender’s Revolving Facility Commitment of such Class and (ii) the Revolving Facility Credit Exposure of such Class exceeding the total Revolving Facility Commitments under such Class of Revolving Facility.
+(d) each Lender with a Revolving Facility Commitment of a Class agrees to make Revolving Facility Loans of such Class to the Borrower from time to time during the Availability Period for such Class of Revolving Facility in Dollars and each Alternate Currency in an aggregate principal amount that will not result in (i) such Lender’s Revolving Facility Credit Exposure of such Class exceeding such Lender’s Revolving Facility Commitment of such Class and (ii) the Revolving Facility Credit Exposure of such Class exceeding the total Revolving Facility Commitments under such Class of Revolving Facility.
 Within the foregoing limits and subject to the terms and conditions set forth herein, the Borrower may borrow, prepay and reborrow Revolving Facility Loans;
-(e) (d) each Lender having an Incremental Term Loan Commitment agrees, subject to the terms and conditions set forth in the applicable Incremental Assumption Agreement, to make Incremental Term Loans to the Borrower, in an aggregate principal amount not to exceed its Incremental Term Loan Commitment; and
-(f) (e) amounts borrowed under Section 2.01(a), Section 2.01(b), Section 2.01(c) and (except as otherwise provided in the applicable Incremental Assumption Agreement) Section 2.01(de) and repaid or prepaid may not be reborrowed.
+(e) each Lender having an Incremental Term Loan Commitment agrees, subject to the terms and conditions set forth in the applicable Incremental Assumption Agreement, to make Incremental Term Loans to the Borrower, in an aggregate principal amount not to exceed its Incremental Term Loan Commitment; and
+(f) amounts borrowed under Section 2.01(a), Section 2.01(b), Section 2.01(c) and (except as otherwise provided in the applicable Incremental Assumption Agreement) Section 2.01(e) and repaid or prepaid may not be reborrowed.
 SECTION 2.02. Loans and Borrowings.
 (a) Each Revolving Facility Loan and Term Loan shall be made as part of a Borrowing consisting of Loans under the same Facility and of the same Class and Type made by the Lenders ratably in accordance with their respective Commitments under the applicable Facility;
 provided, however, that Revolving Facility Loans of any Class shall be made by the Revolving Facility Lenders of such Class ratably in accordance with their respective Revolving Facility Percentages of such Class on the date such Loans are made hereunder.
@@ -2252,8 +2251,8 @@ SECTION 2.10. Repayment of Term Loans and Revolving Facility Loans.
 (B) in the case of such payment due on the Term B Facility Maturity Date, an amount equal to the then unpaid principal amount of the Term B Loans outstanding;
 (iii) the Borrower shall repay Term B-1 Borrowings on the last day of each March, June, September and December of each year (commencing on the last day of the first full fiscal quarter of the Borrower after the Term B-1 Facility Funding Date) and on the Term B-1 Facility Maturity Date, or, if such date is not a Business Day, the next preceding Business Day (each such date being referred to as a “Term B-1 Loan Installment Date”), in an aggregate principal amount of the Term B-1 Loans equal to (A) in the case of quarterly payments due prior to the Term B-1 Facility Maturity Date, an amount equal to 0.25% of the aggregate principal amount of Term B-1 Loans outstanding on the Term B-1 Facility Funding Date, and
 (B) in the case of such payment due on the Term B-1 Facility Maturity Date, an amount equal to the then unpaid principal amount of the Term B-1 Loans outstanding;
-(iv) (iii) in the event that any Incremental Term Loans are made on an Increased Amount Date (other than the Term B Loans and the Term B-1 Loans), the Borrower shall repay such Incremental Term Loans on the dates and in the amounts set forth in the related Incremental Assumption Agreement (each such date being referred to as an “Incremental Term Loan Installment Date”); and
-(v) (iv) to the extent not previously paid, outstanding Term Loans shall be due and payable on the applicable Term Facility Maturity Date.
+(iv) in the event that any Incremental Term Loans are made on an Increased Amount Date (other than the Term B Loans and the Term B-1 Loans), the Borrower shall repay such Incremental Term Loans on the dates and in the amounts set forth in the related Incremental Assumption Agreement (each such date being referred to as an “Incremental Term Loan Installment Date”); and
+(v) to the extent not previously paid, outstanding Term Loans shall be due and payable on the applicable Term Facility Maturity Date.
 (b) To the extent not previously paid, outstanding Revolving Facility Loans of any Class shall be due and payable on the Revolving Facility Maturity Date with respect to such Class.
 (c) Prepayment of the Term Loans from:
 (i) all Net Proceeds pursuant to Section 2.11(b), Excess Cash Flow pursuant to Section 2.11(c) and prepayments of Term Loans required by Section 2.11(d) shall be applied to the Term Loans pro rata among each Term Facility (excluding, in the case of Excess Cash Flow pursuant to Section 2.11(c), the Term A Loans and the Term A Facility), with the application thereof being applied to the remaining installments thereof in direct order of maturity;
@@ -2282,7 +2281,7 @@ For purposes of this Section 2.11(a)(ii), a “transformative” acquisition, in
 (A) in the case of clause (x), a prepayment premium of 1.00% of the aggregate principal amount of the Term B-1 Loans so prepaid and (B) in the case of clause (y), a fee equal to 1.00% of the aggregate principal amount of the applicable Term B-1 Loans for which the All-in Yield has been reduced pursuant to such amendment.
 Such amounts shall be due and payable on the date of such prepayment or the effective date of such amendment, as the case may be.
 For purposes of this Section 2.11(a)(iii), a “transformative” acquisition, investment or disposition is any acquisition, investment or disposition by the Borrower or any Subsidiary that (i) is not permitted by the terms of the Loan Documents immediately prior to the consummation of such acquisition, investment or disposition or (ii) if permitted by the terms of the Loan Documents immediately prior to the consummation of such acquisition, investment or disposition, would not provide the Borrower and its Subsidiaries with adequate flexibility under the Loan Documents for the continuation and/or expansion of its operations following such consummation, as determined by the Borrower in good faith.
-(iiiiv) In addition to the foregoing, and provided that immediately before and after giving effect thereto no Event of Default has occurred and is continuing and after giving effect thereto the Borrower is in Pro Forma Compliance (calculated without excluding Development Expenses), the Borrower shall have the right to elect to offer to prepay the Term Loans at a price equal to 100% of the principal amount thereof on a pro rata basis and apply any amounts rejected for such prepayment to repurchase, prepay, redeem, retire, acquire, defease or cancel Indebtedness or make Restricted Payments notwithstanding any then applicable limitations set forth in Section 6.09(b)(i) or Section 6.06, respectively.
+(iv) In addition to the foregoing, and provided that immediately before and after giving effect thereto no Event of Default has occurred and is continuing and after giving effect thereto the Borrower is in Pro Forma Compliance (calculated without excluding Development Expenses), the Borrower shall have the right to elect to offer to prepay the Term Loans at a price equal to 100% of the principal amount thereof on a pro rata basis and apply any amounts rejected for such prepayment to repurchase, prepay, redeem, retire, acquire, defease or cancel Indebtedness or make Restricted Payments notwithstanding any then applicable limitations set forth in Section 6.09(b)(i) or Section 6.06, respectively.
 121
 If the Borrower makes such an election, it shall provide notice thereof to Administrative Agent, who shall promptly, and in any event within one Business Day of receipt, provide such notice to the holders of the Term Loans.
 Any such notice shall specify the aggregate amount offered to prepay the Term Loans.
@@ -2355,7 +2354,7 @@ The Term B Facility Closing Fee will be in all respects fully earned, due and pa
 (e) The Borrower agrees to pay, on the Term B-1 Facility Funding Date, to each Lender holding Term B-1 Loans on the Term B-1 Facility Funding Date, as fee compensation for the funding of such Lender’s Term B-1 Loans, a closing fee in an amount equal to 0.25% of the stated principal amount of such Lender’s Term B-1 Loan, payable to such Lender from the proceeds of its Term B-1 Loan as and when funded on the Term B-1 Facility Funding Date (the “Term B-1 Facility Closing Fee”).
 The Term B-1 Facility Closing Fee will be in all respects fully earned, due and payable on the Term B-1 Facility Funding Date and nonrefundable and non-creditable thereafter.
 127
-(f) (e) All Fees shall be paid on the dates due, in immediately available funds, to the Administrative Agent for distribution, if and as appropriate, among the Lenders, except that L/C Issuer Fees shall be paid directly to the applicable L/C Issuers.
+(f) All Fees shall be paid on the dates due, in immediately available funds, to the Administrative Agent for distribution, if and as appropriate, among the Lenders, except that L/C Issuer Fees shall be paid directly to the applicable L/C Issuers.
 Once paid, none of the Fees shall be refundable under any circumstances.
 SECTION 2.13. Interest.
 (a) The Loans comprising each ABR Borrowing shall bear interest at the ABR plus the Applicable Margin.
@@ -2633,8 +2632,8 @@ Notwithstanding anything to the contrary set forth in this Agreement or any othe
 (iv) unless the Borrower and the applicable Lenders agree otherwise, all Refinancing Term Loans, Replacement Revolving Facility Commitments and all obligations in respect thereof shall be Obligations under this Agreement and the other Loan Documents that are secured by the Collateral on a pari passu basis with all other Obligations under this Agreement and the other Loan Documents.
 148
 (p) Notwithstanding anything in the foregoing to the contrary,
-(i) for the purpose of determining the number of outstanding Term Benchmark Borrowings upon the incurrence of any Incremental Revolving Facility Commitments or Incremental Term Loan Commitments, (x) to the extent the last date of Interest Periods for multiple Term Benchmark Borrowings under the Term Facilities fall on the same day, such Term Benchmark Borrowings shall be considered a single Term Benchmark Borrowing and (y) to the extent the last date of Interest Periods for multiple Term Benchmark Borrowings under the Revolving Facilities fall on the same day, such Term Benchmark Borrowings shall be considered a single Term Benchmark Borrowing and,
-(ii) the initial Interest Period with respect to any Term Benchmark Borrowing of Incremental Revolving Facility Commitments or Incremental Term Loan Commitments may, at the Borrower’s option, be of a duration of a number of Business Days that is less than one month, and the Relevant Rate with respect to such initial Interest Period shall be the same as the Relevant Rate applicable to any then-outstanding Term Benchmark Borrowing as the Borrower may direct, so long as the last day of such initial Interest Period is the same as the last day of the Interest Period with respect to such outstanding Term Benchmark Borrowing. and (iii) the initial Interest Period with respect to Term B-1 Loans may, at the election of the Borrower, be of a duration other than the durations referred to in the definition of “Interest Period” (it being understood that the Adjusted Term SOFR applicable to any such Interest Period will be calculated based on the next longest Interest Period referred to in the definition of “Interest Period”).
+(i) for the purpose of determining the number of outstanding Term Benchmark Borrowings upon the incurrence of any Incremental Revolving Facility Commitments or Incremental Term Loan Commitments, (x) to the extent the last date of Interest Periods for multiple Term Benchmark Borrowings under the Term Facilities fall on the same day, such Term Benchmark Borrowings shall be considered a single Term Benchmark Borrowing and (y) to the extent the last date of Interest Periods for multiple Term Benchmark Borrowings under the Revolving Facilities fall on the same day, such Term Benchmark Borrowings shall be considered a single Term Benchmark Borrowing,
+(ii) the initial Interest Period with respect to any Term Benchmark Borrowing of Incremental Revolving Facility Commitments or Incremental Term Loan Commitments may, at the Borrower’s option, be of a duration of a number of Business Days that is less than one month, and the Relevant Rate with respect to such initial Interest Period shall be the same as the Relevant Rate applicable to any then-outstanding Term Benchmark Borrowing as the Borrower may direct, so long as the last day of such initial Interest Period is the same as the last day of the Interest Period with respect to such outstanding Term Benchmark Borrowing and (iii) the initial Interest Period with respect to Term B-1 Loans may, at the election of the Borrower, be of a duration other than the durations referred to in the definition of “Interest Period” (it being understood that the Adjusted Term SOFR applicable to any such Interest Period will be calculated based on the next longest Interest Period referred to in the definition of “Interest Period”).
 SECTION 2.22. Defaulting Lenders.
 (i) Adjustments.
 Notwithstanding anything to the contrary contained in this Agreement, if any Lender under any Revolving Facility becomes a Defaulting Lender, then, until such time as that Lender is no longer a Defaulting Lender, to the extent permitted by applicable laws, rules and regulations of any Governmental Authority, during any period in which there is a Defaulting Lender, for purposes of computing the amount of the obligation of each Non-Defaulting Lender under any such Revolving Facility to acquire, refinance or fund participations in Letters of Credit pursuant to Section 2.05, the “Revolving Facility Percentage” of each Non-Defaulting Lender under such Revolving Facility shall be computed without giving effect to the Revolving Facility Commitment of that Defaulting Lender;
@@ -2725,8 +2724,8 @@ No part of the proceeds of any Loan or any Letter of Credit will be used for any
 SECTION 3.11. Investment Company Act.
 None of the Loan Parties is required to be registered as an “investment company” within the meaning of the Investment Company Act of 1940, as amended.
 SECTION 3.12. Use of Proceeds. (a) The Borrower will use the proceeds of the Revolving Facility Loans, and may request the issuance of Letters of Credit, solely for working capital and general corporate purposes (including, without limitation, for Restricted Payments, Permitted Business Acquisitions and other permitted investments and project development and, in the case of Letters of Credit, for the back-up or replacement of existing letters of credit and for the avoidance of doubt, the Borrower may request the issuance of Letters of Credit for the account of any subsidiary or any other Person designated by the Borrower, in each case for general corporate purposes of such subsidiary or other Person),
-(b) the Borrower will use the proceeds of the initial Term A Loans made on the Third Amendment Effective Date to finance a portion of the Third Amendment Transactions, for the payment of Transaction Expenses and for working capital and general corporate purposes (including, without limitation, for Restricted Payments, Permitted Business Acquisitions and other permitted investments and project development) and,
-(c) the Borrower will use the proceeds of the initial Term B Loans made on the Term B Facility Funding Date to finance a portion of the Term B Facility Transactions, for the payment of Transaction Expenses and for working capital and general corporate purposes (including, without limitation, for Restricted Payments, Permitted Business Acquisitions and other permitted investments and project development). and (d) the
+(b) the Borrower will use the proceeds of the initial Term A Loans made on the Third Amendment Effective Date to finance a portion of the Third Amendment Transactions, for the payment of Transaction Expenses and for working capital and general corporate purposes (including, without limitation, for Restricted Payments, Permitted Business Acquisitions and other permitted investments and project development),
+(c) the Borrower will use the proceeds of the initial Term B Loans made on the Term B Facility Funding Date to finance a portion of the Term B Facility Transactions, for the payment of Transaction Expenses and for working capital and general corporate purposes (including, without limitation, for Restricted Payments, Permitted Business Acquisitions and other permitted investments and project development)and (d) the
 154
 Borrower will use the proceeds of the initial Term B-1 Loans made on the Term B-1 Facility Funding Date to finance a portion of the Term B-1 Facility Transactions, for the payment of Transaction Expenses and for working capital and general corporate purposes (including, without limitation, for Restricted Payments, Permitted Business Acquisitions and other permitted investments and project development).
 SECTION 3.13. Tax Returns.
@@ -3334,7 +3333,7 @@ provided, that (i) no Event of Default shall have occurred and be continuing,
 (l) Restricted Payments may be made in an aggregate amount, together with any payments and distributions made in respect of Junior Financings pursuant to Section 6.09(b)(i)(G), equal to the greater of $300.0 million and 0.10 times the EBITDA calculated on a Pro Forma Basis for the Test Period; provided, that no Event of Default shall have occurred and be continuing;
 (m) Restricted Payments may be made in an amount, when taken together with the amount of Investments made in reliance on Section 6.04(q)(ii) and payments or distributions in respect of Junior Financings made in reliance on Section 6.09(b)(i)(C), equal to Excluded RP Contributions;
 (n) Restricted Payments described on Schedule 6.06 may be made;
-(o) Restricted Payments permitted by Section 2.11(a)(iiiiv) may be made;
+(o) Restricted Payments permitted by Section 2.11(a)(iv) may be made;
 (p) the distribution, as a dividend or otherwise, of shares of Equity Interests of, or Indebtedness owed to the Borrower or a Subsidiary by, Unrestricted Subsidiaries; and
 (q) the payment of any dividend or distribution or the consummation of any irrevocable redemption within 60 days after the date of declaration thereof, if at the date of declaration or the consummation of any irrevocable redemption, as applicable, such payment would have complied with this Section 6.06.
 For purposes of determining compliance with this covenant,
@@ -3391,7 +3390,7 @@ SECTION 6.09. Limitation on Payments and Modifications of Indebtedness; Modifica
 (F) other payments or distributions in respect of Junior Financings prior to their scheduled maturity date;
 provided that, no Event of Default has occurred and is continuing or would result therefrom and after giving effect to such Restricted Payment, the Total Leverage Ratio on a Pro Forma Basis would not exceed 4.75 to 1.00,
 (G) so long as no Event of Default has occurred and is continuing, payments and distributions in respect of Junior Financings prior to their scheduled maturity date may be made in an aggregate amount, together with any Restricted Payments made pursuant to Section 6.06(l), equal to the greater of $300.0 million and 0.10 times the EBITDA calculated on a Pro Forma Basis for the Test Period,
-(H) payments or distributions in respect of Junior Financings permitted by Section 2.11(a)(iiiiv) may be made and (I) payments in respect of intercompany Indebtedness not in violation of any subordination terms applicable thereto;
+(H) payments or distributions in respect of Junior Financings permitted by Section 2.11(a)(iv) may be made and (I) payments in respect of intercompany Indebtedness not in violation of any subordination terms applicable thereto;
 provided, that, for purposes of determining compliance with this Section 6.09(b)(i),
 (A) a payment or other distribution need not be permitted solely by reference to one category of permitted payments or other distributions (or any portion thereof) described in the above clauses but may be permitted in part under any combination thereof and (B) in the event that a payment or other distribution (or any portion thereof) meets the criteria of one or more of the categories of permitted payments or other distributions (or any portion thereof) described in the above clauses, the Borrower may, in its sole discretion, classify or reclassify, or later divide, classify or reclassify (as if incurred on such later date), such permitted payment or other distribution (or any portion thereof) in any manner that complies with this Section 6.09(b)(i) and at the time of classification or reclassification will be entitled to only include the amount and type of such payment or other distribution (or any portion thereof) in any of the categories of permitted payments or other distributions (or any portion thereof) described in the above clauses; or
 (ii) Amend or modify, or permit the amendment or modification of, any provision of Junior Financing that constitutes Material Indebtedness or any agreement, document or instrument evidencing or relating thereto, other than amendments or modifications that (A) would not have a Material Adverse Effect (as determined in good faith by the Borrower) and that do not affect the subordination or

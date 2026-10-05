@@ -5,7 +5,7 @@ Status: **OFFLINE / UNVERIFIED / NOT QUALIFIED**.
 This immutable set prepares `FULL_CREDIT_32 / COVENANT_REFINANCING` for
 Caesars Entertainment, Inc. (CZR) at an analysis date of 2026-10-02. Its
 qualification-set digest is
-`ee194e33488a978cf9a0acfc18341fe9507e6223e9a99d4971de0dfca86afe83`.
+`98677fa05e061c9fa55f098707f2aed4db0a2f0f3b86729c363bb7a2304a964b`.
 
 ## Corpus provenance
 
@@ -21,7 +21,7 @@ is the HTML as fetched.
 | `CZR_FY2025_10K.txt` (Form 10-K, year ended 31 December 2025) | https://www.sec.gov/Archives/edgar/data/1590895/000159089526000011/czr-20251231.htm | 0001590895-26-000011 | `172309048af2a6a2dab515d765f00a7c89bf8c874c6104a5e3a052b66cad4512` | `41328bdfa2486cfb53b831c2ddba6009528d8dca3a0d868c98c2cb113142b05f` |
 | `CZR_Q2_2026_10Q.txt` (Form 10-Q, quarter ended 30 June 2026) | https://www.sec.gov/Archives/edgar/data/1590895/000159089526000028/czr-20260630.htm | 0001590895-26-000028 | `f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a` | `9dd3fca867c49936c65c9729bd7f9478d4c98b7c60569b74864a839bdeed8500` |
 | `CZR_2020_Credit_Agreement.txt` (Ex. 10.1, Credit Agreement dated 20 July 2020) | https://www.sec.gov/Archives/edgar/data/1590895/000119312520196232/d940333dex101.htm | 0001193125-20-196232 | `cdfeb87c9b57914f4c2e89dbb2ec80de52564b1817b35fe15e332e67a13039b5` | `6600ab5bec479091f68dc04b2db65a54ef1013944c94af0ec135335b374c7dba` |
-| `CZR_2024_Credit_Agreement_Incremental_Assumption_No3.txt` (Ex. 10.2, Incremental Assumption Agreement No. 3, 6 February 2024, with Exhibit A, the Credit Agreement conformed through it; Ex. 10.36 in the FY2025 10-K) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex102.htm | 0001193125-24-026847 | `3a2237111bfd551602bb9f3277148ba08bbf1748d2936fe0dcf5c84e1751106b` | `aa48bc94b634de6386579791df7de831314785f007398546dd5c5fba415f2cfa` |
+| `CZR_2024_Credit_Agreement_Incremental_Assumption_No3.txt` (Ex. 10.2, Incremental Assumption Agreement No. 3, 6 February 2024, with Exhibit A, the Credit Agreement conformed through it; Ex. 10.36 in the FY2025 10-K) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex102.htm | 0001193125-24-026847 | `9f95f4a696471fcb1c16e5c6026880544356931806a939ffd999456bd8c4b757` | `aa48bc94b634de6386579791df7de831314785f007398546dd5c5fba415f2cfa` |
 | `CZR_2024_Credit_Agreement_Fourth_Amendment.txt` (Ex. 10.1, Fourth Amendment, 9 May 2024) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524135268/d827488dex101.htm | 0001193125-24-135268 | `32f91de6ef3ff93d9924eb8d4e3dc4734d28b68ed1da0f816a085ffdcb085c95` | `b0e9fc14d481410dd2fa3cb6bc28e4f9c3b8751d720777ab2bbf943143f6d0fb` |
 | `CZR_2024_Credit_Agreement_Fifth_Amendment.txt` (Ex. 10.1, Fifth Amendment, 25 November 2024) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524265157/d858083dex101.htm | 0001193125-24-265157 | `7f2b5c777dc3347938a007eaea63a623b299a1188dbcfbe8980d389a0bcfc5b3` | `0936486e71264a9b752d5977c003bfc9a89ec5eb4ca8e5b09107a7870ebf86e8` |
 | `CZR_2024_650_Senior_Secured_Notes_2032_Indenture.txt` (Ex. 10.1, 6.500% Senior Secured Notes due 2032 indenture, 6 February 2024) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex101.htm | 0001193125-24-026847 | `0809ab3981090bd2c23950da9530adb10e96882ddfa7db4404635e014d4c1119` | `a4661727edc48361dd7290772e62412c389b8ad8d215a96aa58facfe9e356c2c` |
@@ -36,9 +36,9 @@ The credit agreement (935,517 bytes) and the indenture (758,385 bytes) are over
 inside `MAX_REQUEST_BYTES`. The exhibits F508 adds were fetched from SEC EDGAR
 on 5 October 2026 and converted the same day, split by sentence (F492) and by
 clause (F498); they are first admitted here. Since F508 Incremental Assumption
-Agreement No. 3 (1,078,304 bytes) is pinned there too and, under 1.5 MiB,
+Agreement No. 3 (1,077,810 bytes) is pinned there too and, under 1.5 MiB,
 reaches CP-0 whole; the supplemental indentures are 11,774 and 15,684 bytes.
-The set's CP-0 request, encoded with CP-0's delivered authority, is 3,850,760
+The set's CP-0 request, encoded with CP-0's delivered authority, is 3,850,263
 bytes (91.8% of `MAX_REQUEST_BYTES`, up from 2,685,839), and no source is shown
 as a page map.
 
@@ -59,10 +59,15 @@ agreement conformed through Incremental Assumption Agreement No. 1, the First
 to Third Amendments and Incremental Assumption Agreements No. 2 and No. 3; with
 the Fourth and Fifth Amendments it is the current chain, and where Exhibit A
 and a later amendment differ, the later amendment governs. Exhibit A is a
-changed copy: the filing marks Agreement No. 3's insertions by double underline
-and its deletions by strikethrough, and the plain text keeps both without the
-marks, so a superseded page number, clause label or conjunction can sit beside
-its replacement (`Section 2.01(de)` is `(d)` struck and `(e)` inserted).
+changed copy, Agreement No. 3's insertions double-underlined and its deletions
+struck through. On the owner's ruling of 5 October 2026 the text renders the
+agreement as amended: every struck run from Exhibit A's cover on is removed
+with its content (295 runs, 167 of them with text, 484 characters: superseded
+table-of-contents page numbers and 38 words, labels or punctuation) and the
+insertions are kept as plain text, so `Section 2.01(e)` and
+`Section 2.11(a)(iv)` read as amended. The one struck run before the cover, the
+word `strikethrough` in the Agreement's own Section 3 legend, deletes nothing
+and is kept.
 
 The First Supplemental Indenture (1 March 2024) adds two guarantors and amends
 clause (44) of the Permitted Liens definition and Section 8.01(b); the Second
@@ -112,10 +117,9 @@ current terms (a `0.10%` adjustment on the revolver and Term Loan A, a `2.25%`
 commitment, margins and financial covenant are not keyed: the First to Third
 Amendments and Incremental Assumption Agreements No. 1 to No. 3 changed them,
 and since F508 the set carries those only as the conformed copy in Incremental
-Assumption Agreement No. 3's Exhibit A, which keeps its struck text (F508); no
-key is drawn from it. Its Change in Control event of default is keyed as
-executed; Exhibit A states the same line, and neither amendment in the set
-alters it.
+Assumption Agreement No. 3's Exhibit A (F508); no key is drawn from it. Its
+Change in Control event of default is keyed as executed; Exhibit A states the
+same line, and neither amendment in the set alters it.
 
 Alternative lines (D101). A figure key is also met by another whole evidence
 line, cited under the same module, that states the key's lead figures -- the

@@ -6,7 +6,7 @@ This immutable set prepares `FULL_CREDIT_32 / PORTFOLIO_DECISION` for
 Caesars Entertainment, Inc. (CZR) at an analysis date of 2026-10-02, with a
 proposed position in the CZR 6.50% Senior Secured Notes due 2032 held against a
 **SYNTHETIC** test mandate. Its qualification-set digest is
-`a6031df330074ddc50105a3955e23ee86dc5a4722c0d01db1cd3afeffae6f1ae`.
+`4efe51e74a3ccda9f4a51b92c0e470723763e3e00decee916ec615234006157a`.
 
 ## The mandate is synthetic (D80)
 
@@ -32,7 +32,7 @@ digest the keys bind; the raw SHA-256 is the HTML as fetched.
 | `CZR_Q2_2026_10Q.txt` (Form 10-Q, quarter ended 30 June 2026) | https://www.sec.gov/Archives/edgar/data/1590895/000159089526000028/czr-20260630.htm | 0001590895-26-000028 | `f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a` | `9dd3fca867c49936c65c9729bd7f9478d4c98b7c60569b74864a839bdeed8500` |
 | `CZR_FY2025_10K.txt` (Form 10-K, fiscal year ended 31 December 2025) | https://www.sec.gov/Archives/edgar/data/1590895/000159089526000011/czr-20251231.htm | 0001590895-26-000011 | `172309048af2a6a2dab515d765f00a7c89bf8c874c6104a5e3a052b66cad4512` | `41328bdfa2486cfb53b831c2ddba6009528d8dca3a0d868c98c2cb113142b05f` |
 | `CZR_2020_Credit_Agreement.txt` (Ex. 10.1, Credit Agreement dated 20 July 2020) | https://www.sec.gov/Archives/edgar/data/1590895/000119312520196232/d940333dex101.htm | 0001193125-20-196232 | `cdfeb87c9b57914f4c2e89dbb2ec80de52564b1817b35fe15e332e67a13039b5` | `6600ab5bec479091f68dc04b2db65a54ef1013944c94af0ec135335b374c7dba` |
-| `CZR_2024_Credit_Agreement_Incremental_Assumption_No3.txt` (Ex. 10.2, Incremental Assumption Agreement No. 3, 6 February 2024, with Exhibit A, the Credit Agreement conformed through it; Ex. 10.36 in the FY2025 10-K) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex102.htm | 0001193125-24-026847 | `3a2237111bfd551602bb9f3277148ba08bbf1748d2936fe0dcf5c84e1751106b` | `aa48bc94b634de6386579791df7de831314785f007398546dd5c5fba415f2cfa` |
+| `CZR_2024_Credit_Agreement_Incremental_Assumption_No3.txt` (Ex. 10.2, Incremental Assumption Agreement No. 3, 6 February 2024, with Exhibit A, the Credit Agreement conformed through it; Ex. 10.36 in the FY2025 10-K) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex102.htm | 0001193125-24-026847 | `9f95f4a696471fcb1c16e5c6026880544356931806a939ffd999456bd8c4b757` | `aa48bc94b634de6386579791df7de831314785f007398546dd5c5fba415f2cfa` |
 | `CZR_2024_650_Senior_Secured_Notes_2032_Indenture.txt` (Ex. 10.1, 6.500% Senior Secured Notes due 2032 indenture, 6 February 2024) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex101.htm | 0001193125-24-026847 | `0809ab3981090bd2c23950da9530adb10e96882ddfa7db4404635e014d4c1119` | `a4661727edc48361dd7290772e62412c389b8ad8d215a96aa58facfe9e356c2c` |
 | `CZR_2024_650_Notes_First_Supplemental_Indenture.txt` (Ex. 4.2, First Supplemental Indenture to the 6.500% 2032 notes indenture, 1 March 2024; Ex. 4.11 in the FY2025 10-K) | https://www.sec.gov/Archives/edgar/data/1590895/000159089524000088/exhibit42firstsupplemental.htm | 0001590895-24-000088 | `0af4615b9a52e91e2675adacbbc90ecc7b21a61dc8205b4b2459cf4b9db0a219` | `18d810c415aef677f867ac73dee07a04382e71db794f3bfbc91cdd185e4b0dc4` |
 | `CZR_2024_650_Notes_Second_Supplemental_Indenture.txt` (Ex. 4.17, Second Supplemental Indenture to the 6.500% 2032 notes indenture, 23 August 2024; Ex. 4.12 in the FY2025 10-K) | https://www.sec.gov/Archives/edgar/data/1590895/000159089525000068/exhibit417-6500seniorsecur.htm | 0001590895-25-000068 | `3621f08611f4c6a6faed734993a3f2d9c97041693053ffa97624cbe5b7299aea` | `0eedd7d398ee15f45dabc99df2003249d4dbe232be456767e7b972d355326b3c` |
@@ -59,10 +59,10 @@ SYNTHETIC line in the adaptation says so. The exhibits F508 adds were fetched
 from SEC EDGAR on 5 October 2026 and converted the same day, split by sentence
 (F492) and by clause (F498); they are byte-identical to the
 `czr-2026q2-covenant-refinancing` set's copies. Since F508 Incremental
-Assumption Agreement No. 3 (1,078,304 bytes) is pinned there too and, under 1.5
+Assumption Agreement No. 3 (1,077,810 bytes) is pinned there too and, under 1.5
 MiB, reaches CP-0 whole; the supplemental indentures are 11,774 and 15,684
 bytes. The set's CP-0 request, encoded with CP-0's delivered authority, is
-3,746,013 bytes (89.3% of `MAX_REQUEST_BYTES`, up from 2,581,092), and no
+3,745,516 bytes (89.3% of `MAX_REQUEST_BYTES`, up from 2,581,092), and no
 source is shown as a page map.
 
 ## Why the pack carries the current legal chain (F508)
@@ -82,11 +82,15 @@ agreement conformed through Incremental Assumption Agreement No. 1, the First
 to Third Amendments and Incremental Assumption Agreements No. 2 and No. 3; with
 the Fourth and Fifth Amendments, which this set does not carry, it is the
 current chain, and where Exhibit A and a later amendment differ, the later
-amendment governs. Exhibit A is a changed copy: the filing marks Agreement No.
-3's insertions by double underline and its deletions by strikethrough, and the
-plain text keeps both without the marks, so a superseded page number, clause
-label or conjunction can sit beside its replacement (`Section 2.01(de)` is
-`(d)` struck and `(e)` inserted).
+amendment governs. Exhibit A is a changed copy, Agreement No. 3's insertions
+double-underlined and its deletions struck through. On the owner's ruling of 5
+October 2026 the text renders the agreement as amended: every struck run from
+Exhibit A's cover on is removed with its content (295 runs, 167 of them with
+text, 484 characters: superseded table-of-contents page numbers and 38 words,
+labels or punctuation) and the insertions are kept as plain text, so
+`Section 2.01(e)` and `Section 2.11(a)(iv)` read as amended. The one struck run
+before the cover, the word `strikethrough` in the Agreement's own Section 3
+legend, deletes nothing and is kept.
 
 The First Supplemental Indenture (1 March 2024) adds two guarantors and amends
 clause (44) of the Permitted Liens definition and Section 8.01(b); the Second
