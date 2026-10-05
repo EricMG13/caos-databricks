@@ -334,6 +334,7 @@ def blocked_by_view(
                 matched_text=bounded(c.matched_text),
                 line=LineView.of(c.line_text, c.matched_text, EXCERPT),
                 linked=c.linked,
+                marker=c.marker,
             )
             for c in anchored
         ],
@@ -351,6 +352,7 @@ def _unverified_view(entry: UnverifiedCitation) -> UnverifiedCitationView:
             "matched_text": bounded(entry.matched_text),
             "code": entry.code.value,
             "linked": entry.linked,
+            "marker": entry.marker,
         }
     )
 
@@ -585,4 +587,5 @@ def _citation(
         withdrawn_at=withdrawn_at,  # type: ignore[arg-type]
         cited_page=citation.cited_page,
         linked=citation.linked,
+        marker=citation.marker,
     )

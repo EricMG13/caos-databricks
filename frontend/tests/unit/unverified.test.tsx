@@ -152,6 +152,7 @@ describe("unverified citations (D106)", () => {
             matched_text: '</q><mark>3.1x</mark><script>alert("x")</script>',
             code: "CITATION_AMBIGUOUS",
             linked: true,
+            marker: 3,
           },
         },
       ],
@@ -191,6 +192,7 @@ describe("the Blocked answer's quotes (owner: Show its quotes)", () => {
           recorded: true,
         },
         linked: false,
+        marker: 1,
       },
     ],
     unverified: [
@@ -200,6 +202,7 @@ describe("the Blocked answer's quotes (owner: Show its quotes)", () => {
         matched_text: "</q><mark>INJECT</mark> | **bold**",
         code: "CITATION_NOT_DELIVERED" as const,
         linked: false,
+        marker: 2,
       },
     ],
   };

@@ -435,6 +435,7 @@ function analysis(): { [key: string]: Json } {
               withdrawn_at: null,
               cited_page: null,
               linked: true,
+              marker: 1,
             },
           ],
           unverified_facts: [
@@ -444,6 +445,7 @@ function analysis(): { [key: string]: Json } {
               matched_text: "the model's own quote",
               code: "CITATION_NOT_LOCATED",
               linked: true,
+              marker: 2,
             },
           ],
           model_analysis: "# CP-0",

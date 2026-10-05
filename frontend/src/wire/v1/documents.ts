@@ -357,6 +357,9 @@ const LineView = object({
   recorded: bool,
 });
 // Why a citation is unverified (D106): the anchoring fault that left it so.
+// A citation's place in its answer's list: the `[C<n>]` its module's body cites
+// it by (D107). Null on a citation accepted before markers.
+const Marker = nullable(int({ min: 1 }));
 const UnverifiedCode = enumOf([
   "CITATION_NOT_LOCATED",
   "CITATION_AMBIGUOUS",
@@ -372,6 +375,7 @@ const UnverifiedCitationView = object({
   code: UnverifiedCode,
   // False where the answer's body does not carry the quote either.
   linked: bool,
+  marker: Marker,
 });
 const RefusalBody = object({ code: RefusalCode, clears: text });
 // A located quote of a Blocked answer (D106): its line, as a source fact's.
@@ -383,6 +387,7 @@ const BlockedQuoteView = object({
   matched_text: string({ max: 65536 }),
   line: LineView,
   linked: bool,
+  marker: Marker,
 });
 // The verdict that ended a run, and the Blocked answer's quotes as the host
 // judged them (owner: "Show its quotes"); none recorded before migration 0044.
@@ -440,9 +445,10 @@ const CitationView = object({
   rects: array(RectView, 256),
   withdrawn_at: nullable(datetime),
   cited_page: nullable(int({ min: 1 })),
-  // False for a quote the answer's body does not carry (D106): still
-  // host-verified, but "not linked to a statement in the answer".
+  // False for a quote no marker in the answer's body names (D106, D107):
+  // still host-verified, but "not linked to a statement in the answer".
   linked: bool,
+  marker: Marker,
 });
 // A handoff's tagged tables, read by the server from its Markdown with the
 // bundle's own reader (`caos/methodology/tables.py`); the browser never parses
@@ -619,8 +625,9 @@ const NarrativeFigure = object({
   line: LineView,
   rects: array(RectView, 256),
   withdrawn_at: nullable(datetime),
-  // The record citation's own `linked` (D106).
+  // The record citation's own `linked` (D106) and `marker` (D107).
   linked: bool,
+  marker: Marker,
 });
 // A figure naming an unverified citation (D106): the model's locator as the
 // record holds it, shown labelled and never opened as a host-verified source.
@@ -633,6 +640,7 @@ const NarrativeUnverified = object({
   matched_text: string({ max: 65536 }),
   code: UnverifiedCode,
   linked: bool,
+  marker: Marker,
 });
 const NarrativeSpan = object({
   text: nullable(string({ max: 2000 })),
@@ -650,6 +658,10 @@ const ReportArtifact = object({
   decision_scope: short,
   limitation_flags: array(text, 256),
   validation_warnings: array(text, 256),
+  // What the markdown's markers name (D107): each marked record citation as a
+  // figure the source drawer opens, and each marked unverified one.
+  figures: array(NarrativeFigure, 1024),
+  unverified: array(NarrativeUnverified, 1024),
 });
 // One revision of the displayed run and how far it has gone: what Report lists
 // and Committee's front door links to. It proves nothing; opening one does.

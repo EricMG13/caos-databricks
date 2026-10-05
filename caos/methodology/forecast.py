@@ -49,13 +49,6 @@ def _assignment(pointer: str, value: object) -> str:
     return pointer + _SEPARATOR + json.dumps(value, ensure_ascii=False)
 
 
-def carries(markdown: bytes, quote: str) -> bool:
-    """Whether a handoff's Markdown holds `quote` as written: the binder's
-    own test, raw text and no word matching, for the owner's handoff and
-    CP-CF's alike (`validate_forecast_bindings`)."""
-    return quote in markdown.decode("utf-8")
-
-
 def binds_input(owner: str, quote: str) -> bool:
     """Whether CP-CF would bind `quote`, cited by `owner`, as a calculation
     input (D106): a line of it states a value (`_assignment`'s form, a
@@ -162,6 +155,11 @@ def validate_forecast_bindings(
 ) -> None:
     """Every requested value must be an exact assignment anchored by its owner.
 
+    The bound quote is one of the owner's anchored citations that a marker
+    in the owner's body names (`linked`, D107), as its verified record
+    holds it: the owner's body cites it by marker and quotes no source
+    text, so neither handoff is searched for the quote. A record from
+    before D107 keeps its own `linked`, the quote verbatim in that body.
     Empty arrays are also bound: absence of contractual repayments is an
     explicit CP-4 statement, never a missing-input default.
     """
@@ -182,9 +180,8 @@ def validate_forecast_bindings(
             binding["module_id"] != owner
             or not isinstance(quote, str)
             or assignment not in quote.splitlines()
-            or quote not in {c.matched_text for c in citations.get(owner, ())}
-            or not carries(upstream[owner], quote)
-            or not carries(markdown, quote)
+            or quote
+            not in {c.matched_text for c in citations.get(owner, ()) if c.linked}
         ):
             raise Refusal(RefusalCode.HANDOFF_INCOMPLETE)
 
