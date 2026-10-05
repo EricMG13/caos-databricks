@@ -530,7 +530,8 @@ def test_provenance_and_citation_digests_are_cut_before_they_are_escaped() -> No
     assert b"&amp;lt" not in page and b"&lt;b>" not in page
 
 
-# D105, AI-4: an excerpt of a line is never shown without the line around it.
+# D105, AI-4: an excerpt of a line; since D107 the page lists the excerpt
+# compactly and the line is the source's to show.
 _LINE = "We do not believe the Borrower will breach the <leverage> covenant."
 _EXCERPT = "believe the Borrower will breach the <leverage> covenant"
 
@@ -552,25 +553,30 @@ def _excerpted(**citation: object) -> dict[str, Any]:
     return payload
 
 
-def test_an_excerpt_is_shown_marked_inside_its_whole_line() -> None:
-    """The source facts show the whole line an `EXCERPT` record keeps, so the
-    "not" just outside eight words is on the page; the excerpt is marked and
-    every character of the line is escaped. A record from before D105 keeps
-    no line and shows its quote as it always did."""
+def test_an_excerpt_is_listed_compactly_never_inside_its_whole_line() -> None:
+    """D107 (owner: "The deliverable lists citations compactly in an appendix
+    rather than inline full lines"): the module's Citations appendix gives
+    the document, page and excerpt, every character escaped; the line an
+    `EXCERPT` record keeps is not on the page, and nothing is marked. A
+    record from before D105 keeps no line and lists its quote labelled."""
     page = render(_excerpted()).decode()
 
     assert (
-        '<blockquote>We do not <mark style="font-weight:600">believe the Borrower'
-        " will breach the"
-        " &lt;leverage&gt; covenant.</mark></blockquote>"
+        "<li>6fc4a221c5d5 · page 1 · \u201cbelieve the Borrower will breach the"
+        " &lt;leverage&gt; covenant\u201d · verified</li>"
     ) in page
+    assert "We do not" not in page and "<mark" not in page
     old = render(json.loads(json.dumps(PAYLOAD_DATA))).decode()
-    assert f"<blockquote>{QUOTE}</blockquote>" in old and "<mark>" not in old
+    assert (
+        f"<li>6fc4a221c5d5 · page 1 · \u201c{QUOTE}\u201d · verified"
+        " · quote (source line not recorded)</li>"
+    ) in old
 
 
-def test_a_narrative_figure_shows_the_line_of_the_citation_it_names() -> None:
-    """A narrative figure is a copy of one record citation's fields, so its
-    line is that citation's; a figure naming none shows its quote alone."""
+def test_a_narrative_figure_is_its_excerpt_and_a_reference_never_its_line() -> None:
+    """A narrative figure is a copy of one record citation's fields: shown as
+    its excerpt and a reference its module's appendix resolves (D107), never
+    the line; a figure naming none says its line was not recorded."""
     payload = _excerpted()
     figure = {
         "route_node_id": "RN-CP-1",
@@ -581,11 +587,18 @@ def test_a_narrative_figure_shows_the_line_of_the_citation_it_names() -> None:
     }
     payload["narrative"] = [[{"text": "Headroom: "}, {"figure": figure}]]
     narrative = render(payload).decode().split("<h2>Analyst narrative</h2>")[1]
-    assert 'We do not <mark style="font-weight:600">believe' in narrative
+    assert (
+        "<div>Headroom: \u201cbelieve the Borrower will breach the &lt;leverage&gt;"
+        ' covenant\u201d <span class="cite">[CP-1] · 6fc4a221c5d5 · page 1</span></div>'
+    ) in narrative
+    assert "We do not" not in narrative and "<mark" not in narrative
 
     payload["narrative"] = [[{"figure": {**figure, "citation_index": 3}}]]
     narrative = render(payload).decode().split("<h2>Analyst narrative</h2>")[1]
-    assert "<blockquote>believe the Borrower" in narrative
+    assert (
+        '<span class="cite">[CP-1] · 6fc4a221c5d5 · page 1'
+        " · quote (source line not recorded)</span>"
+    ) in narrative
 
 
 @pytest.mark.parametrize("line", ["", 7, ["a"]])
@@ -627,12 +640,11 @@ def test_the_edge_punctuation_is_the_anchors_own() -> None:
     assert module._FIGURE_RIGHT == citations._FIGURE_RIGHT
 
 
-def test_a_record_without_a_line_renders_byte_for_byte_as_before() -> None:
-    """No `line_text`, nothing is marked and the quote is escaped as it always
-    was -- a whole-line quote padded with spaces too, which `traced_line`
-    would split into an edge and a mark. Since F504 an `ANY_RUN` quote (this
-    record names no rule) is labelled a quote above it, which is the one
-    byte the legacy page did not carry."""
+def test_a_record_without_a_line_lists_its_quote_labelled() -> None:
+    """No `line_text`, nothing is marked and the quote is escaped, its
+    whitespace runs single (D107's compact form) -- a whole-line quote padded
+    with spaces too. An `ANY_RUN` quote (this record names no rule) says its
+    source line was never recorded (F504)."""
     padded = " Adjusted EBITDA | $920 | $955 <b> "
     payload = json.loads(json.dumps(PAYLOAD_DATA))
     payload["artifacts"][0] = _artifact(
@@ -643,7 +655,7 @@ def test_a_record_without_a_line_renders_byte_for_byte_as_before() -> None:
 
     page = render(payload).decode()
     assert (
-        '<p class="cite">Quote (source line not recorded)</p>\n'
-        "<blockquote> Adjusted EBITDA | $920 | $955 &lt;b&gt; </blockquote>"
+        "<li>6fc4a221c5d5 · page 1 · \u201cAdjusted EBITDA | $920 | $955"
+        " &lt;b&gt;\u201d · verified · quote (source line not recorded)</li>"
     ) in page
-    assert "<mark" not in page
+    assert "<mark" not in page and "<blockquote>" not in page

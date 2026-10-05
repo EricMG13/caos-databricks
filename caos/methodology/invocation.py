@@ -60,6 +60,7 @@ from caos.methodology.handoff import (
     CanonicalRecord,
     HostIdentity,
     LineageRef,
+    UnverifiedCitation,
     UpstreamRef,
     _decision_scope,
     expected_filename,
@@ -823,10 +824,26 @@ def _marker(place: int | None) -> str:
     return "" if place is None else f"marker: [C{place}] "
 
 
+# What a register line for an unverified citation says in place of a quote.
+NOT_VERIFIED = "quote_existence: NOT_VERIFIED_BY_HOST"
+
+
+def _unverified_line(entry: UnverifiedCitation) -> str:
+    """A register line for a marker that names an unverified citation (D106,
+    D107): its marker and the model's page, and that the host located no
+    quote for it -- so no quote is listed, and none could read as located."""
+    return (
+        f"- {_marker(entry.marker)}unverified \u2013 page {entry.page}: the host did"
+        f" not locate this citation's quote ({entry.code.value}), so none is"
+        f" listed here; {NOT_VERIFIED} {SUPPORT}"
+    )
+
+
 def _citation_register(
     upstream: Sequence[tuple[UpstreamRef, bytes]],
     citations: Mapping[str, tuple[AnchoredCitation, ...]],
     tag: str = "",
+    unverified: Mapping[str, tuple[UnverifiedCitation, ...]] | None = None,
 ) -> str:
     """Each direct upstream's anchored citations, as context the host lists.
 
@@ -834,8 +851,10 @@ def _citation_register(
     in the record's order; never read from its Markdown. Each line names
     the citation's marker, the `[C<n>]` the upstream body cites it by (D107),
     so a downstream model can resolve a marker it reads there; a record from
-    before D107 holds none, and its lines name none. An unverified
-    citation (D106) is never listed: nothing here may call it located.
+    before D107 holds none, and its lines name none. A marker that names an
+    unverified citation (D106) has its own line, in its place among the
+    markers, that says so and lists no quote (`_unverified_line`): nothing
+    here may call it located. One with no marker is not listed.
     Labelled context, not evidence: a quote here is not citable, and its
     listing says nothing about whether it supports anything the handoff
     states. Nor is a quote the host's: it is document text, and the header
@@ -849,12 +868,21 @@ def _citation_register(
             f"module_id: {ref.module_id}\nroute_node_id: {ref.route_node_id}\n"
             f"handoff_sha256: {ref.sha256}"
         ]
-        lines += [
-            f"- {_marker(c.marker)}document_sha256: {c.document_sha256} page: {c.page} "
-            f"matched_text: {json.dumps(c.matched_text, ensure_ascii=False)} "
-            f"{QUOTE_EXISTENCE} {SUPPORT}"
+        rows = [
+            (
+                c.marker or 0,
+                f"- {_marker(c.marker)}document_sha256: {c.document_sha256} "
+                f"page: {c.page} "
+                f"matched_text: {json.dumps(c.matched_text, ensure_ascii=False)} "
+                f"{QUOTE_EXISTENCE} {SUPPORT}",
+            )
             for c in citations[ref.route_node_id]
+        ] + [
+            (entry.marker, _unverified_line(entry))
+            for entry in (unverified or {}).get(ref.route_node_id, ())
+            if entry.marker is not None
         ]
+        lines += [line for _, line in sorted(rows, key=lambda row: row[0])]
         sections.append("\n".join(lines))
     return (
         f"\n--- UPSTREAM CITATION REGISTER {tag} (context, not evidence: each line is "
@@ -1165,6 +1193,7 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
     upstream: Sequence[tuple[UpstreamRef, bytes]],
     upstream_citations: Mapping[str, tuple[AnchoredCitation, ...]],
     route: ResolvedRoute,
+    upstream_unverified: Mapping[str, tuple[UnverifiedCitation, ...]] | None = None,
     source_set: SourceSet | None = None,
     page_maps: Mapping[UUID, Mapping[str, int]] | None = None,
     retry_feedback: Sequence[str] = (),
@@ -1182,7 +1211,10 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
     route nodes to their accepted records' anchored citations
     (`ROUTE_IDENTITY_INVALID` otherwise), rendered as a register that is
     context, never evidence; since D106 a record may hold none, every
-    citation of its answer unverified, and its section then lists none.
+    citation of its answer unverified, and its section then lists none of
+    them as a quote. `upstream_unverified` maps route nodes to their records'
+    unverified citations: each a marker names gets a register line saying
+    the host located no quote for it (D107).
     CP-0's T8 modules are the pinned route's,
     never a caller's list. Section markers carry a tag derived from every
     section's own bytes, the host-owned front matter included, so neither a
@@ -1245,7 +1277,7 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
         _HOST_STEPS
         + _authority_sections(authority, "")
         + _upstream_section(upstream, uses, owned)
-        + _citation_register(upstream, upstream_citations)
+        + _citation_register(upstream, upstream_citations, "", upstream_unverified)
         + _research_section(identity)
         + _source_preparation_section(source_set, "", page_maps)
         + evidence
@@ -1274,7 +1306,7 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
         + f"--- END HOST-PERFORMED STEPS {tag} ---\n"
         + _authority_sections(authority, tag)
         + _upstream_section(upstream, uses, owned, tag)
-        + _citation_register(upstream, upstream_citations, tag)
+        + _citation_register(upstream, upstream_citations, tag, upstream_unverified)
         + _research_section(identity, tag)
         + _source_preparation_section(source_set, tag, page_maps)
         + f"\n--- EVIDENCE {tag} ---\n"
