@@ -25,6 +25,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import unicodedata
 from collections.abc import Mapping, Sequence
 from html import escape
 from typing import Any
@@ -60,7 +61,13 @@ def render(payload: Mapping[str, Any]) -> bytes:
     # A canonical artifact's page facts come from its record (§41).
     views = [_canonical(artifact) for artifact in artifacts]
     body = "\n".join(_handoff(view) for view in views)
-    narrative = _narrative(payload.get("narrative"))
+    # A narrative figure is one of these citations (`verify_package` holds it
+    # to the record's copy), so the line it anchored in is read from there.
+    cited = {
+        str(artifact.get("route_node_id")): view.citations
+        for artifact, view in zip(artifacts, views, strict=True)
+    }
+    narrative = _narrative(payload.get("narrative"), cited)
     provenance = _provenance([view.provenance for view in views])
 
     return (
@@ -179,7 +186,9 @@ def _handoff(view: _Handoff) -> str:
         # §45.6: what the host verified, what the model wrote, what the host
         # computed -- in that order, never mixed.
         "<h3>Source facts (host-verified citations)</h3>\n"
-        + "\n".join(_citation(citation) for citation in view.citations)
+        + "\n".join(
+            _citation(citation, _line_of(citation)) for citation in view.citations
+        )
         + "\n<h3>Analysis (model-authored, not host-verified)</h3>\n"
         # The elements of `ELEMENTS`, every authored character escaped inside
         # them: committee layout, with nothing the model wrote reaching the
@@ -542,16 +551,133 @@ def _delimiter(piece: str, pieces: list[str], position: int, marks: list[str]) -
     return escape(piece)
 
 
-def _citation(citation: object) -> str:
+def _citation(citation: object, line: object = None) -> str:
+    """One host-verified citation: the whole line it anchored in, its excerpt
+    marked (D105).
+
+    `line` is the record's `line_text`, the evidence line an `EXCERPT` quote
+    is part of; a record accepted under an earlier rule keeps none, and its
+    quote is shown alone, byte for byte as it always was -- under either
+    whole-line rule the quote is its line, and under `ANY_RUN` it is the run
+    the record holds, its line never recorded. An excerpt is never shown
+    without the line around it: a qualifier just outside eight words ("not",
+    "provided that", a row's label) is the reader's to see (AI-4). The line
+    is shown whole, however long: a shown line is at most one evidence block
+    wide.
+    """
     if not isinstance(citation, Mapping):
         raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
-    quote = escape(_text(citation, "matched_text"))
+    quote = _text(citation, "matched_text")
     document = escape(_text(citation, "document_sha256")[:12])  # cut, then escape
     page = _page(citation)
+    if line is not None and (not isinstance(line, str) or not line):
+        raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
+    shown = escape(quote)
+    if line is not None:
+        before, excerpt, after = traced_line(line, quote)
+        shown = (
+            f"{escape(before)}{_MARK}{escape(excerpt)}</mark>{escape(after)}"
+            if excerpt and (before or after)
+            else escape(line)
+        )
     return (
-        f"<blockquote>{quote}</blockquote>\n"
+        f"<blockquote>{shown}</blockquote>\n"
         f'<p class="cite">{document} · page {page}</p>'
     )
+
+
+# An excerpt inside its line: bold as well as highlighted, so it survives a
+# print that drops backgrounds. Styled on the element, so a page with no
+# excerpt carries the stylesheet it always did (the `render` parity group).
+_MARK = '<mark style="font-weight:600">'
+
+
+# The edge punctuation a quote's first and last word may differ from its line
+# by, and what a word with a figure keeps (`caos.evidence.citations`'
+# `EDGE_PUNCTUATION`, `_FIGURE_LEFT`, `_FIGURE_RIGHT`; restated, because this
+# file is the standard library alone, and held equal by a test).
+EDGE_PUNCTUATION = "\"'\u201c\u201d\u2018\u2019()[]{}.,;:!?"
+_FIGURE_LEFT = EDGE_PUNCTUATION.replace("(", "").replace(".", "")
+_FIGURE_RIGHT = EDGE_PUNCTUATION.replace(")", "")
+
+
+def traced_line(line: str, quote: str) -> tuple[str, str, str]:
+    """`line` split around the one place `quote` is in it: the text before,
+    the line's own text of the excerpt, and the text after.
+
+    Found as the host anchored it (D105), within this one line: the quote's
+    words NFC against the line's, every one equal; then the first and last
+    forgiven their edge punctuation, a figure keeping its parentheses and
+    leading point; then with runs of single letters joined, as a tracked
+    heading is. A pass that finds two places marks none, and so does finding
+    none: the line is `(line, "", "")`, shown whole and unmarked rather than
+    marked where the host did not anchor.
+    """
+    words = [unicodedata.normalize("NFC", word) for word in quote.split()]
+    spans = [(found.start(), found.end()) for found in re.finditer(r"\S+", line)]
+    for joined, edges in ((False, False), (False, True), (True, True)):
+        units = _units(line, spans, joined=joined)
+        places = _places([key for _, _, key in units], words, edges=edges)
+        if len(places) > 1:
+            break
+        if places:
+            first, last = units[places[0]][0], units[places[0] + len(words) - 1][1]
+            return line[:first], line[first:last], line[last:]
+    return line, "", ""
+
+
+def _units(
+    line: str, spans: list[tuple[int, int]], *, joined: bool
+) -> list[tuple[int, int, str]]:
+    """The line's words as `(start, end, NFC text)`; joined, each run of
+    single-character words that are not digits made one, as
+    `citations._joined_tracking` joins a tracked heading's letters."""
+    units: list[tuple[int, int, str, bool]] = []
+    for start, end in spans:
+        word = unicodedata.normalize("NFC", line[start:end])
+        single = len(word) == 1 and not word.isdigit()
+        last = units[-1] if units else None
+        if joined and single and last is not None and last[3]:
+            units[-1] = (last[0], end, last[2] + word, True)
+        else:
+            units.append((start, end, word, single))
+    return [(start, end, key) for start, end, key, _single in units]
+
+
+def _places(keys: list[str], words: list[str], *, edges: bool) -> list[int]:
+    """Every index at which `words` run as consecutive `keys`: all equal, or
+    with `edges` the interior equal and the first and last edge-forgiven."""
+    width = len(words)
+    if not width:
+        return []
+    inner = slice(1, width - 1) if edges else slice(0, width)
+    return [
+        at
+        for at in range(len(keys) - width + 1)
+        if keys[at : at + width][inner] == words[inner]
+        and (
+            not edges
+            or (_edge(keys[at], words[0]) and _edge(keys[at + width - 1], words[-1]))
+        )
+    ]
+
+
+def _edge(key: str, word: str) -> bool:
+    stripped = _stripped(word)
+    return key == word or (bool(stripped) and _stripped(key) == stripped)
+
+
+def _stripped(word: str) -> str:
+    """A word less the punctuation a sentence puts around it; a word with a
+    digit in it keeps what would change its figure (EV-4)."""
+    core = word.strip(EDGE_PUNCTUATION)
+    if not any(character.isdigit() for character in core):
+        return core
+    return word.lstrip(_FIGURE_LEFT).rstrip(_FIGURE_RIGHT)
+
+
+def _line_of(citation: object) -> object:
+    return citation.get("line_text") if isinstance(citation, Mapping) else None
 
 
 def _page(citation: Mapping[str, Any]) -> str:
@@ -564,7 +690,7 @@ def _page(citation: Mapping[str, Any]) -> str:
     return str(value)
 
 
-def _narrative(narrative: object) -> str:
+def _narrative(narrative: object, cited: Mapping[str, list[Any]]) -> str:
     if narrative is None or narrative == []:
         return ""
     # Historical payloads remain renderable; the save boundary accepts only spans.
@@ -577,18 +703,37 @@ def _narrative(narrative: object) -> str:
         if not isinstance(paragraph, list) or not 1 <= len(paragraph) <= 64:
             raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
         paragraphs.append(
-            "<div>" + "".join(_span(span) for span in paragraph) + "</div>\n"
+            "<div>" + "".join(_span(span, cited) for span in paragraph) + "</div>\n"
         )
     return "<h2>Analyst narrative</h2>\n" + "".join(paragraphs)
 
 
-def _span(span: object) -> str:
+def _span(span: object, cited: Mapping[str, list[Any]]) -> str:
     if isinstance(span, Mapping):
         if set(span) == {"text"} and isinstance(span["text"], str):
             return escape(span["text"])
         if set(span) == {"figure"}:
-            return _citation(span["figure"])
+            return _citation(span["figure"], _figure_line(span["figure"], cited))
     raise RenderRefused("DELIVERABLE_PAYLOAD_INVALID")
+
+
+def _figure_line(figure: object, cited: Mapping[str, list[Any]]) -> object:
+    """The `line_text` of the record citation a narrative figure names, or
+    None where the figure names none this payload carries with its own quote
+    (a payload `verify_package` reports, never a line borrowed from another)."""
+    if not isinstance(figure, Mapping):
+        return None
+    index = figure.get("citation_index")
+    citations = cited.get(str(figure.get("route_node_id")), [])
+    if type(index) is not int or not 0 <= index < len(citations):
+        return None
+    citation = citations[index]
+    if not isinstance(citation, Mapping) or any(
+        citation.get(key) != figure.get(key)
+        for key in ("document_sha256", "page", "matched_text")
+    ):
+        return None
+    return citation.get("line_text")
 
 
 def _provenance(artifacts: Sequence[object]) -> str:

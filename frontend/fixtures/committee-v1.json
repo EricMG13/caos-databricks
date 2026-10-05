@@ -46,6 +46,12 @@
             "source_id": "00000000-0000-4000-8000-0000000000a1",
             "page": 7,
             "matched_text": "Coverage 2.1x",
+            "line": {
+              "before": "",
+              "excerpt": "Coverage 2.1x",
+              "after": "",
+              "recorded": true
+            },
             "rects": [],
             "withdrawn_at": null
           }

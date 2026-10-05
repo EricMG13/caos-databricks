@@ -1458,11 +1458,14 @@
     color: var(--foreground);
     overflow-wrap: break-word;
   }
-  .matched mark {
+  /* The cited excerpt inside its whole source line (D105), in the ink of the
+     surface it sits on: a narrative figure is also read on Committee's paper. */
+  .matched mark,
+  .figq mark {
     padding: 0 0.125rem;
     border-radius: 2px;
     background: color-mix(in oklab, var(--info) 22%, transparent);
-    color: var(--foreground);
+    color: inherit;
   }
   .focusnote {
     display: flex;

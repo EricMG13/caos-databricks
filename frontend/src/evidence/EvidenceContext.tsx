@@ -79,6 +79,7 @@ function figureFact(figure: NarrativeFigure): CitationView {
     filename: `${figure.route_node_id} source ${shortDigest(figure.document_sha256)}`,
     page: figure.page,
     matched_text: figure.matched_text,
+    line: figure.line,
     rects: figure.rects,
     withdrawn_at: figure.withdrawn_at,
     // A figure names the page its record's citation is on; it keeps no

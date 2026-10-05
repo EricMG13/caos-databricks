@@ -14,7 +14,14 @@ export interface CitationChoice {
   citation_index: number;
   page: number;
   matched_text: string;
+  /** The evidence line the quote anchored in, where the record holds it
+      (D105): an excerpt record's `line_text`, or the quote under a whole-line
+      rule. Null for a record from before them, whose quote is any run. */
+  line: string | null;
 }
+
+// The rules under which a quote is its own whole line (`citations.py`).
+const WHOLE_LINE_RULES = new Set(["whole-line", "whole-line-as-shown"]);
 
 /** Every well-formed citation of every served record, in record order. A
     record the client cannot read offers nothing, and a malformed entry is
@@ -30,10 +37,11 @@ export function citationsOf(artifacts: ReportDocument["body"]["artifacts"]): Cit
     } catch {
       continue;
     }
-    const citations = (record as { citations?: unknown } | null)?.citations;
+    const { citations, citation_rule } = (record ?? {}) as Record<string, unknown>;
     if (!Array.isArray(citations)) continue;
+    const whole = typeof citation_rule === "string" && WHOLE_LINE_RULES.has(citation_rule);
     citations.forEach((entry: unknown, index) => {
-      const { page, matched_text } = (entry ?? {}) as Record<string, unknown>;
+      const { page, matched_text, line_text } = (entry ?? {}) as Record<string, unknown>;
       if (typeof page !== "number" || !Number.isInteger(page) || typeof matched_text !== "string")
         return;
       choices.push({
@@ -41,6 +49,7 @@ export function citationsOf(artifacts: ReportDocument["body"]["artifacts"]): Cit
         citation_index: index,
         page,
         matched_text,
+        line: typeof line_text === "string" ? line_text : whole ? matched_text : null,
       });
     });
   }
@@ -84,4 +93,15 @@ export function paragraphs(draft: string): NarrativeDraft[][] {
       if (at < line.length) spans.push({ text: line.slice(at), figure: null });
       return spans;
     });
+}
+
+/** How a picker or draft list names a citation (D105): its whole source line
+    with the quote set in guillemets where it is found there, or the quote
+    labelled as one where the record holds no line. */
+export function choiceText(choice: CitationChoice): string {
+  if (choice.line === null) return `quote (source line not recorded): ${choice.matched_text}`;
+  const at = choice.line.indexOf(choice.matched_text);
+  if (at < 0 || choice.line === choice.matched_text) return `source line: ${choice.line}`;
+  const end = at + choice.matched_text.length;
+  return `source line: ${choice.line.slice(0, at)}«${choice.matched_text}»${choice.line.slice(end)}`;
 }

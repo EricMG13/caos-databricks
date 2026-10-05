@@ -389,6 +389,26 @@ describe("the evidence drawer", () => {
     expect(dialog()!.querySelector("[data-no-rects]")).toBeNull();
   });
 
+  test("the drawer shows the whole source line with the cited excerpt marked", async () => {
+    sectionBody = () => {
+      const doc = analysis();
+      doc["body"].handoffs[0].source_facts[0].line = {
+        before: "We do not ",
+        excerpt: doc["body"].handoffs[0].source_facts[0].matched_text,
+        after: " (unaudited)",
+        recorded: true,
+      };
+      return doc;
+    };
+    await mount(`/analysis/?case=${CASE}&tab=rn-cp-0`);
+    await openFirstFact();
+    const quote = analysis()["body"].handoffs[0].source_facts[0].matched_text;
+    const shown = dialog()!.querySelector("blockquote.matched")!;
+    expect(shown.textContent).toBe(`We do not ${quote} (unaudited)`);
+    expect(shown.querySelector("mark")!.textContent).toBe(quote);
+    expect(dialog()).toHaveTextContent("Source line · the cited excerpt marked");
+  });
+
   test("test_the_drawer_reads_the_visible_snapshot_not_the_pending_one", async () => {
     await mount(`/analysis/?case=${CASE}&tab=rn-cp-0`);
     await openFirstFact();
@@ -432,6 +452,8 @@ describe("a narrative figure (N59)", () => {
     );
     await settle();
     const chip = screen.getByRole("button", { name: "Evidence CP-1 p.7: Coverage 2.1x" });
+    // The narrative shows the figure's whole line, its excerpt marked (D105).
+    expect(document.querySelector("q.figq mark")).toHaveTextContent("Coverage 2.1x");
     expect(chip).toHaveAttribute("aria-expanded", "false");
     act(() => fireEvent.click(chip));
     await settle();
@@ -442,6 +464,8 @@ describe("a narrative figure (N59)", () => {
     expect(dialog()!.querySelectorAll("[data-highlight]")).toHaveLength(0);
     expect(dialog()!.querySelector("[data-no-rects]")).not.toBeNull();
     expect(dialog()).toHaveTextContent("Coverage 2.1x");
+    // D105: the figure's whole line is served with it, its excerpt marked.
+    expect(dialog()!.querySelector("blockquote.matched mark")).toHaveTextContent("Coverage 2.1x");
   });
 
   const openFigure = async (page: () => { status: number; body: unknown }) => {

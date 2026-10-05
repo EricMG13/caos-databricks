@@ -159,7 +159,7 @@ document (F475), and is listed with why it states the key's figures:
   - the 10-Q's `Adjusted EBITDA | $920 | $955 | $1,807 | $1,839`, the
     consolidated line its segment note reconciles net loss to. Its words also
     run inside the MD&A's `Total Adjusted EBITDA` row, which no longer bars a
-    whole line (K2, F501).
+    whole line (K2, F502).
   Not alternatives: the release's six-month `Caesars | $1,807 | $1,839 |
     (1.7)%` (the six months alone).
 - CP-1B, the 10-K's `Net revenues | 11,486 | 11,245 | 11,528`:

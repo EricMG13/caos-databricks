@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { ReportSection } from "@/sections/report/ReportSection";
-import { citationsOf, figureMarker, paragraphs } from "@/sections/report/figures";
+import { choiceText, citationsOf, figureMarker, paragraphs } from "@/sections/report/figures";
 import { parseReportDocument, type ReportDocument } from "@/wire/v1";
 
 // A figure span names a citation of a verified record; the host fills the
@@ -58,9 +58,45 @@ describe("Report figure picker", () => {
       "CP-5": { citations: [{ page: "x" }, citation(1, "Coverage 2.1x")] },
     });
     expect(citationsOf(document.body.artifacts)).toEqual([
-      { route_node_id: "CP-0", citation_index: 0, page: 3, matched_text: "Revenue rose to 4.1bn" },
-      { route_node_id: "CP-0", citation_index: 1, page: 9, matched_text: "Net debt 2.0bn" },
-      { route_node_id: "CP-5", citation_index: 1, page: 1, matched_text: "Coverage 2.1x" },
+      {
+        route_node_id: "CP-0",
+        citation_index: 0,
+        page: 3,
+        matched_text: "Revenue rose to 4.1bn",
+        line: null,
+      },
+      {
+        route_node_id: "CP-0",
+        citation_index: 1,
+        page: 9,
+        matched_text: "Net debt 2.0bn",
+        line: null,
+      },
+      {
+        route_node_id: "CP-5",
+        citation_index: 1,
+        page: 1,
+        matched_text: "Coverage 2.1x",
+        line: null,
+      },
+    ]);
+  });
+
+  test("test_the_picker_names_each_citation_by_its_line_or_as_a_bare_quote", () => {
+    // D105: an excerpt record keeps its line, a whole-line record's quote is
+    // its line, and a record from before them holds only a quote.
+    const excerpt = { ...citation(4, "Net debt 2.0bn"), line_text: "We say Net debt 2.0bn today." };
+    const choices = citationsOf(
+      withRecords({
+        "CP-0": { citation_rule: "excerpt-of-shown-line", citations: [excerpt] },
+        "CP-1": { citation_rule: "whole-line-as-shown", citations: [citation(5, "Total debt 9")] },
+        "CP-2": { citations: [citation(6, "surpassed our investment grade")] },
+      }).body.artifacts,
+    );
+    expect(choices.map(choiceText)).toEqual([
+      "source line: We say «Net debt 2.0bn» today.",
+      "source line: Total debt 9",
+      "quote (source line not recorded): surpassed our investment grade",
     ]);
   });
 
@@ -128,7 +164,7 @@ describe("Report figure picker", () => {
     expect((draft as HTMLTextAreaElement).value).toBe("Net debt closed at [CP-0 #2]");
     // Listed under the draft with the quote the chosen citation names.
     expect(container.querySelector("[data-draft-figure='[CP-0 #2]']")).toHaveTextContent(
-      "[CP-0 #2] CP-0 · p.9 · Net debt 2.0bn",
+      "[CP-0 #2] CP-0 · p.9 · quote (source line not recorded): Net debt 2.0bn",
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Save revision" }));
@@ -154,6 +190,6 @@ describe("Report figure picker", () => {
     );
     expect(screen.queryByLabelText("Citation")).toBeNull();
     expect(screen.queryByRole("button", { name: "Insert figure" })).toBeNull();
-    expect(screen.getByText(/no verified citation/i)).toBeInTheDocument();
+    expect(screen.getByText(/no citation in this report's records/i)).toBeInTheDocument();
   });
 });

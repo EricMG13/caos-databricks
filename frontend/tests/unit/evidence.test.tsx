@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { CitationChip } from "@/evidence/CitationChip";
 import { EvidenceProvider } from "@/evidence/EvidenceContext";
 import { MetricPassport } from "@/evidence/MetricPassport";
+import { LINE_LABEL, QUOTE_LABEL, lineLabel, lineText, wholeLine } from "@/evidence/TracedLine";
 import { PASSPORT_FIELDS, type Citation, type Passport } from "@/wire";
 
 const CITATION: Citation = {
@@ -71,6 +72,48 @@ describe("the evidence surface", () => {
     // To the chip that was passed, not back to where focus sat before the
     // click; the dialog places it a tick after it closes.
     await waitFor(() => expect(document.activeElement).toBe(chip));
+  });
+
+  test("the drawer shows the whole source line, the cited excerpt marked (D105)", () => {
+    const line = {
+      before: "Commencing with the first full fiscal quarter, ",
+      excerpt: CITATION.matched_text,
+      after: ".",
+      recorded: true,
+    };
+    const { unmount } = render(
+      <EvidenceProvider>
+        <CitationChip citation={{ ...CITATION, line }} />
+      </EvidenceProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Evidence D-04 p.68 ¶2" }));
+    const shown = screen.getByRole("dialog").querySelector("blockquote.matched")!;
+    expect(shown.textContent).toBe(line.before + line.excerpt + line.after);
+    expect(shown.querySelector("mark")!.textContent).toBe(CITATION.matched_text);
+    expect(screen.getByRole("dialog")).toHaveTextContent(LINE_LABEL);
+    unmount();
+    // A citation with no line beside it is a quote, not a source line: it is
+    // labelled so and nothing is marked (`wholeLine`).
+    expect(wholeLine("Coverage 2.1x")).toEqual({
+      before: "",
+      excerpt: "Coverage 2.1x",
+      after: "",
+      recorded: false,
+    });
+    render(
+      <EvidenceProvider>
+        <CitationChip citation={CITATION} />
+      </EvidenceProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Evidence D-04 p.68 ¶2" }));
+    const alone = screen.getByRole("dialog").querySelector("blockquote.matched")!;
+    expect(alone.querySelector("mark")).toBeNull();
+    expect(alone.textContent).toBe(CITATION.matched_text);
+    expect(screen.getByRole("dialog")).toHaveTextContent(QUOTE_LABEL);
+    expect(screen.getByRole("dialog")).not.toHaveTextContent(LINE_LABEL);
+    expect(lineLabel(line)).toBe(LINE_LABEL);
+    expect(lineText(line)).toBe(line.before + line.excerpt + line.after);
+    expect(lineText(wholeLine("Coverage 2.1x"))).toBe("Coverage 2.1x");
   });
 
   test("a citation of a withdrawn source is marked on the chip and in the drawer", () => {
