@@ -1,6 +1,6 @@
 # CZR Q2 2026 FULL covenant-refinancing qualification set — prepared offline
 
-Status: **OFFLINE / UNVERIFIED / NOT QUALIFIED**.
+Status: **LIVE-RUN 2026-10-05 / NOT QUALIFIED (citation keys)**. Prepared offline; the live results are in the last section.
 
 This immutable set prepares `FULL_CREDIT_32 / COVENANT_REFINANCING` for
 Caesars Entertainment, Inc. (CZR) at an analysis date of 2026-10-02. Its
@@ -236,5 +236,22 @@ or a Change in Control under the credit agreement is not determined here, and
 no key asserts either. The 10-Q discloses the merger as pending; no fact about
 it after the 10-Q's filing is in this set.
 
-No provider call, run, snapshot, evidence record, reviewer verdict, or
-qualification claim exists; no run has been performed.
+At preparation no provider call, run, snapshot, evidence record, reviewer
+verdict, or qualification claim existed; the live runs follow.
+
+## Live results (3–5 October 2026)
+
+| run (file) | build / tip | status | modules accepted | attempts | citations | keys met | ready / projection / register | stop cause | key usage Δ / recorded charge |
+|---|---|---|---|---|---|---|---|---|---|
+| C1 (`C1-czr-covenant-refinancing.json`) | 9043ba7f / ~b1a7bec | STOPPED | 1/7 | 4 | 24 (24 anch., 0 unver.) | not scored | — | CP-1 refused 3x -> CITATION_NOT_LOCATED (spliced source_id; F495) | +0.52 / $0.39 |
+| C2 (`C2-czr-covenant-refinancing.json`) | 9043ba7f / 338555a | STOPPED | 2/7 | 7 | 51 (51 anch., 0 unver.) | not scored | — | CP-4 refused 4x -> HANDOFF_MALFORMED (repair shrank the answer; F496) | +0.84 / $0.90 |
+| C3 (`C3-czr-covenant-refinancing.json`) | 9043ba7f / after L4 | STOPPED | 5/7 | 11 | 139 (139 anch., 0 unver.) | not scored | — | EVIDENCE_DEMAND_UNRESOLVED before CP-3C (CP-0 T8 cells misspelled a file name; F497) | +0.83 / $1.04 |
+| C4 (`C4-czr-covenant-refinancing.json`) | 9043ba7f / after L5 | STOPPED | 2/7 | 10 | 54 (54 anch., 0 unver.) | not scored | — | CP-4 refused 4x -> CITATION_NOT_LOCATED (clause split over 1,826- and 957-char lines; F498) | +1.28 / $1.32 |
+| C5 (`C5-czr-covenant-refinancing.json`) | 9043ba7f / 3c36acc | BLOCKED | 6/7 ran; CP-4 not run | 10 | 176 (171 anch., 8 unver.) | 7/20 | missed / missed / — | CP-0 judged CP-4 DO NOT RUN / CONDITIONAL (corpus lacked the credit agreement's amendments and the indenture supplements; F508) | +1.17 / $1.23 |
+| C6 (`C6-czr-covenant-refinancing.json`) | 9043ba7f / 79c550d | COMPLETE | 7/7 | 12 | 221 (221 anch., 6 unver.) | 6/20 | met / met / — | — | +1.49 / $1.57 |
+
+Reading the table: "build" is the first eight hex digits of the methodology build id in the run JSON; "tip" is the git tip the ledger names (`—` where the ledger names none; tips marked ~ are the base of the next fix task, so the run ran on that tree or its predecessor). "Attempts" is the run JSON's attempt list (every provider call recorded, including a dropped one). "Citations" is the run proof's total with its anchored and unverified counts (`n/r`: the run stopped before a proof was recorded). "Keys met" is the scored matrix row; a run that stopped before COMPLETE or BLOCKED is not scored (`not scored`). "Key usage Δ" is the OpenRouter key-usage change the ledger recorded for the run (`n/l`: not in the ledger); "recorded charge" is the sum of the run's attempt charges at the pinned price. The two disagree and the usage counter lags (ledger), so the key usage is the budget measure. Run files are git-ignored, under `docs/rebuild/runs/live-2026-10-03/`; the model is `openai/gpt-6-luna`, effort high, provider pinned to `openai`, in every row.
+
+Verdict: The set is **NOT QUALIFIED**. C6, the latest run, completed and was proven, with the ready and projection keys met and CP-4 cleared and accepted on attempt 1 (the F508 legal-chain fix), but met 6 of 20 citation keys. All 14 misses are "not cited" (evidence selection), CP-3C 0 of 9 among them. C5 met 7 of 20 with CP-4's 6 keys not run (the model judgement that the corpus lacked the amendments); C1 to C4 stopped on host faults since patched (F495 to F499). quality_compare of C6 against C5 (single sample): one LARGE group, CP-1 confidence 44 against 55 with the total-debt key lost, CP-2D lost the revolver-availability key, CP-3C lost two keys, and CP-5 came out Restricted at confidence 16 (the methodology formula: S=0.7 partial gate, P=36 from two MATERIAL and two MINOR CP-5A findings). Records `q8`, `q11`.
+
+Owner-decision stops and provider limits: None for this set. The owner's 5 October ruling sourced the missing legal chain (conformed credit agreement and supplements; F508); C5 is the run it fixed.

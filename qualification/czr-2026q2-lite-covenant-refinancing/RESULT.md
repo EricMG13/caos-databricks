@@ -1,6 +1,6 @@
 # CZR Q2 2026 LITE covenant-refinancing qualification set — prepared offline
 
-Status: **OFFLINE / UNVERIFIED / NOT QUALIFIED**.
+Status: **LIVE-RUN 2026-10-05 / NOT QUALIFIED (citation and register keys)**. Prepared offline; the live results are in the last section.
 
 This immutable set prepares `LITE_CREDIT_22 / LITE_COVENANT_REFINANCING` for
 Caesars Entertainment, Inc. (CZR) at an analysis date of 2026-10-02. Its
@@ -174,5 +174,21 @@ or a Change in Control under the credit agreement is not determined here, and
 no key asserts either. The 10-Q discloses the merger as pending; no fact about
 it after the 10-Q's filing is in this set.
 
-No provider call, run, snapshot, evidence record, reviewer verdict, or
-qualification claim exists; no run has been performed.
+At preparation no provider call, run, snapshot, evidence record, reviewer
+verdict, or qualification claim existed; the live runs follow.
+
+## Live results (3–5 October 2026)
+
+| run (file) | build / tip | status | modules accepted | attempts | citations | keys met | ready / projection / register | stop cause | key usage Δ / recorded charge |
+|---|---|---|---|---|---|---|---|---|---|
+| LCR1 (`LCR1-czr-lite-covenant-refinancing.json`) | 9043ba7f / 3c36acc era | BLOCKED | 1/4 | 1 | 16 (16 anch., 1 unver.) | 0/7 | missed / missed / missed | CP-0 marked CP-L10 CONDITIONAL / DO NOT RUN: the legal chain was incomplete (the 2020 credit agreement with only its 4th and 5th amendments, no conformed copy, no compliance certificate); CP-L10 precedes CP-3C, so the run ended BLOCKED after CP-0; the gap F508 closed | n/l / $0.12 |
+| LCR2 (`LCR2-czr-lite-covenant-refinancing.json`) | 9043ba7f / 79c550d era | STOPPED | 1/4 | 3 | 18 (18 anch., 0 unver.) | not scored | — | PROVIDER_UNAVAILABLE on CP-L10 after ~195 s, no charge | n/l / $0.26 |
+| LCR3 (`LCR3-czr-lite-covenant-refinancing.json`) | 9043ba7f / 79c550d era | STOPPED | 2/4 | 3 | 46 (44 anch., 1 unver.) | not scored | — | PROVIDER_UNAVAILABLE on CP-3C after ~299 s, no charge | +0.30 / $0.26 |
+| LCR4 (`LCR4-czr-lite-covenant-refinancing.json`) | 9043ba7f / ~79c550d | STOPPED | 2/4 | 7 | 54 (54 anch., 0 unver.) | not scored | — | CP-3C refused 4x HANDOFF_INCOMPLETE (a register row one cell short; F509) | +1.01 / $0.93 |
+| LCR5 (`LCR5-czr-lite-covenant-refinancing.json`) | 9043ba7f / 14b9bec | COMPLETE | 4/4 | 6 | 98 (98 anch., 8 unver.) | 2/7 | met / met / missed | — | +0.67 / $0.73 |
+
+Reading the table: "build" is the first eight hex digits of the methodology build id in the run JSON; "tip" is the git tip the ledger names (`—` where the ledger names none; tips marked ~ are the base of the next fix task, so the run ran on that tree or its predecessor). "Attempts" is the run JSON's attempt list (every provider call recorded, including a dropped one). "Citations" is the run proof's total with its anchored and unverified counts (`n/r`: the run stopped before a proof was recorded). "Keys met" is the scored matrix row; a run that stopped before COMPLETE or BLOCKED is not scored (`not scored`). "Key usage Δ" is the OpenRouter key-usage change the ledger recorded for the run (`n/l`: not in the ledger); "recorded charge" is the sum of the run's attempt charges at the pinned price. The two disagree and the usage counter lags (ledger), so the key usage is the budget measure. Run files are git-ignored, under `docs/rebuild/runs/live-2026-10-03/`; the model is `openai/gpt-6-luna`, effort high, provider pinned to `openai`, in every row.
+
+Verdict: The set is **NOT QUALIFIED**. LCR5, the latest run, completed and was proven on the L7/L8 build with the ready and projection keys met, but met 2 of 7 citation keys (CP-3C 0 of 4; the misses are "not cited") and missed the register key. The register-key miss: cause not analysed. LCR1 to LCR4 stopped on a CP-0 judgement now fixed (F508), two provider drops, and the short register row that F509 now names to the retry.
+
+Owner-decision stops and provider limits: Provider drops: PROVIDER_UNAVAILABLE after about 195 to 299 s on large non-streamed calls, never billed; the owner ruled on 5 October to run without streaming and re-run a dropped module once (L9, streaming in the test adapter, stays unmerged: `PROVIDER_RUNBOOK.md` and N145).
