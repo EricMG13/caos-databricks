@@ -246,7 +246,7 @@ CITIZENS BANK, NATIONAL ASSOCIATION, DEUTSCHE BANK SECURITIES INC.,
 TRUIST SECURITIES, INC., U.S. BANK NATIONAL ASSOCIATION,
 WELLS FARGO SECURITIES, LLC, SUMITOMO MITSUI BANKING CORPORATION,
 BNP PARIBAS SECURITIES CORP., GOLDMAN SACHS BANK USA,
-CITIGROUP GLOBAL MARKETS INC.and MACQUARIE CAPITAL (USA) INC.,
+CITIGROUP GLOBAL MARKETS INC. and MACQUARIE CAPITAL (USA) INC.,
 as Joint Lead Arrangers and Joint Bookrunners with respect to the Term B Facility,
 KEYBANC CAPITAL MARKETS INC. and FIFTH THIRD BANK, NATIONAL ASSOCIATION,
 as Co-Managers with respect to the Term B Facility
@@ -562,7 +562,7 @@ provided, that on and after each Adjustment Date occurring from and after delive
 “Applicable Date” shall have the meaning assigned to such term in Section 9.08(f).
 “Applicable Discount” shall have the meaning assigned to such term in Section 2.11(h)(iii).
 “Applicable Margin” shall mean for any day (a) with respect to any Term B Loan, 3.25% per annum in the case of any Term Benchmark Loan and 2.25% per annum in the case of any ABR Loan;
-provided, however, that on and after each Adjustment Date occurring from and after delivery of the financial statements and certificates required by Section 5.04 for the first fiscal quarter of the Borrower ending after the Term B Facility Funding Date, the “Applicable Margin” with respect to any Term B Loan will be determined pursuant to the Pricing Grid ,
+provided, however, that on and after each Adjustment Date occurring from and after delivery of the financial statements and certificates required by Section 5.04 for the first fiscal quarter of the Borrower ending after the Term B Facility Funding Date, the “Applicable Margin” with respect to any Term B Loan will be determined pursuant to the Pricing Grid,
 (b) with respect to any Term B-1 Loan, 2.75% per annum in the case of any Term Benchmark Loan and 1.75% per annum in the case of any ABR Loan and (c) with respect to any Initial Revolving Loan and any Term A Loan, 2.25% per annum in the case of any RFR Loan and any Term Benchmark Loan and 1.25% per annum in the case of any ABR Loan;
 provided,
 7
@@ -1068,7 +1068,7 @@ If a Swap Obligation arises under a master agreement governing more than one swa
 “Facility” shall mean the respective facility and commitments utilized in making Loans and credit extensions hereunder, it being understood that (a) as of the Third Amendment Effective Date there are two Facilities, i.e.,
 (i) the Term A Facility established on the Third Amendment Effective Date and (ii) the Initial Revolving Facility established on the Closing Date (as amended and modified by Incremental Assumption Agreement No. 1, the First Amendment, the Second Amendment and the Third
 43
-Amendment) ,
+Amendment),
 (b) as of the Term B Facility Funding Date there are three Facilities, i.e.,
 (i) the Term A Facility established on the Third Amendment Effective Date,
 (ii) the Initial Revolving Facility established on the Closing Date (as amended and modified by Incremental Assumption Agreement No. 1, the First Amendment, the Second Amendment and the Third Amendment) and (iii) the Term B Facility established on the Term B Facility Funding Date and (c) as of the Term B-1 Facility Funding Date there are four Facilities, i.e.,
@@ -1248,7 +1248,7 @@ Interest shall accrue from and including the first day of an Interest Period to 
 “Joint Lead Arrangers” shall mean, collectively,
 (a) the Closing Date Joint Lead Arrangers,
 (b) the Third Amendment Joint Lead Arrangers,
-(c) the Term B Facility Joint Lead Arrangers ,
+(c) the Term B Facility Joint Lead Arrangers,
 (d) the Term B-1 Facility Joint Lead Arrangers and (e) with respect to any Incremental Revolving Facility or any Incremental Term Facility, each of the Persons appointed by Borrower as arranger, bookrunner or similar titles for such Incremental Revolving Facility or Incremental Term Facility.
 “Joliet Lease” shall have the meaning assigned to such term in the definition of the term “Master Lease.”
 “JPMorgan” shall mean JPMorgan Chase Bank, N.A.
@@ -1814,7 +1814,7 @@ The aggregate amount of the Term B Loan Commitments as of the Term B Facility Fu
 The amount of each Lender’s Term B-1 Loan Commitment as of the Term B-1 Facility Funding Date is set forth in the Incremental Assumption Agreement No. 3.
 The aggregate amount of the Term B-1 Loan Commitments as of the Term B-1 Facility Funding Date is $2,900.0 million.
 “Term B-1 Loan Installment Date” shall have the meaning assigned to such term in Section 2.10(a)(iii).
-“Term B-1 Loans” shall mean (a) the term loans made by the Lenders to the Borrower pursuant to Section 2.01(c) and Section 2(a) of the Incremental Assumption Agreement No.3, and (b) any Incremental Term Loans in the form of Term B-1 Loans made by the Incremental Term Lenders to the Borrower pursuant to Section 2.01(e).
+“Term B-1 Loans” shall mean (a) the term loans made by the Lenders to the Borrower pursuant to Section 2.01(c) and Section 2(a) of the Incremental Assumption Agreement No. 3, and (b) any Incremental Term Loans in the form of Term B-1 Loans made by the Incremental Term Lenders to the Borrower pursuant to Section 2.01(e).
 “Term Benchmark” when used in reference to any Loan or Borrowing, refers to whether such Loan, or the Loans comprising such Borrowing, are bearing interest at a rate determined by reference to Adjusted Term SOFR, the Adjusted EURIBOR Rate, the Adjusted TIBOR Rate or the Adjusted CDOR Rate.
 “Term Benchmark Borrowing” shall mean a Borrowing comprised of Term Benchmark Loans.
 91
@@ -2725,7 +2725,7 @@ SECTION 3.11. Investment Company Act.
 None of the Loan Parties is required to be registered as an “investment company” within the meaning of the Investment Company Act of 1940, as amended.
 SECTION 3.12. Use of Proceeds. (a) The Borrower will use the proceeds of the Revolving Facility Loans, and may request the issuance of Letters of Credit, solely for working capital and general corporate purposes (including, without limitation, for Restricted Payments, Permitted Business Acquisitions and other permitted investments and project development and, in the case of Letters of Credit, for the back-up or replacement of existing letters of credit and for the avoidance of doubt, the Borrower may request the issuance of Letters of Credit for the account of any subsidiary or any other Person designated by the Borrower, in each case for general corporate purposes of such subsidiary or other Person),
 (b) the Borrower will use the proceeds of the initial Term A Loans made on the Third Amendment Effective Date to finance a portion of the Third Amendment Transactions, for the payment of Transaction Expenses and for working capital and general corporate purposes (including, without limitation, for Restricted Payments, Permitted Business Acquisitions and other permitted investments and project development),
-(c) the Borrower will use the proceeds of the initial Term B Loans made on the Term B Facility Funding Date to finance a portion of the Term B Facility Transactions, for the payment of Transaction Expenses and for working capital and general corporate purposes (including, without limitation, for Restricted Payments, Permitted Business Acquisitions and other permitted investments and project development)and (d) the
+(c) the Borrower will use the proceeds of the initial Term B Loans made on the Term B Facility Funding Date to finance a portion of the Term B Facility Transactions, for the payment of Transaction Expenses and for working capital and general corporate purposes (including, without limitation, for Restricted Payments, Permitted Business Acquisitions and other permitted investments and project development) and (d) the
 154
 Borrower will use the proceeds of the initial Term B-1 Loans made on the Term B-1 Facility Funding Date to finance a portion of the Term B-1 Facility Transactions, for the payment of Transaction Expenses and for working capital and general corporate purposes (including, without limitation, for Restricted Payments, Permitted Business Acquisitions and other permitted investments and project development).
 SECTION 3.13. Tax Returns.
