@@ -760,7 +760,7 @@
       "local_path": "qualification/czr-2026q2/documents/CZR_FY2025_10K.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Official EDGAR filing (Form 10-K primary document) converted from HTML to plain text on 2 October 2026 (accession 0001590895-26-000011, raw HTML SHA-256 41328bdfa2486cfb53b831c2ddba6009528d8dca3a0d868c98c2cb113142b05f). Fiscal year ended 31 December 2025; it supplies the annual base (net revenues, total debt). 408,146 bytes, inside MAX_REQUEST_BYTES."
+      "note": "Official EDGAR filing (Form 10-K primary document) converted from HTML to plain text on 2 October 2026 (accession 0001590895-26-000011, raw HTML SHA-256 41328bdfa2486cfb53b831c2ddba6009528d8dca3a0d868c98c2cb113142b05f). Fiscal year ended 31 December 2025; it supplies the annual base (net revenues, total debt). 405,745 bytes, inside MAX_REQUEST_BYTES."
     },
     {
       "id": "czr-q2-2026-10q",
@@ -773,7 +773,7 @@
       "local_path": "qualification/czr-2026q2/documents/CZR_Q2_2026_10Q.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Official EDGAR filing (Form 10-Q primary document) converted from HTML to plain text on 2 October 2026 (accession 0001590895-26-000028, raw HTML SHA-256 9dd3fca867c49936c65c9729bd7f9478d4c98b7c60569b74864a839bdeed8500). It supplies the interim statements, the Note 6 debt table and maturities, and the pending Fertitta Gaming merger disclosure. 168,366 bytes."
+      "note": "Official EDGAR filing (Form 10-Q primary document) converted from HTML to plain text on 2 October 2026 (accession 0001590895-26-000028, raw HTML SHA-256 9dd3fca867c49936c65c9729bd7f9478d4c98b7c60569b74864a839bdeed8500). It supplies the interim statements, the Note 6 debt table and maturities, and the pending Fertitta Gaming merger disclosure. 166,976 bytes."
     },
     {
       "id": "czr-q2-2026-earnings",
@@ -786,7 +786,7 @@
       "local_path": "qualification/czr-2026q2/documents/CZR_Q2_2026_Earnings_Release.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Official EDGAR exhibit converted from HTML to plain text on 2 October 2026 (accession 0001590895-26-000027, raw HTML SHA-256 a8982154b99b023b526261f7626022e96ac642834d1d65704629946acecc8a1f). It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,825 bytes."
+      "note": "Official EDGAR exhibit converted from HTML to plain text on 2 October 2026 (accession 0001590895-26-000027, raw HTML SHA-256 a8982154b99b023b526261f7626022e96ac642834d1d65704629946acecc8a1f). It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,590 bytes."
     },
     {
       "id": "czr-fy2025-10k-earnings-update",
@@ -799,7 +799,7 @@
       "local_path": "qualification/czr-2026q2-earnings-update/documents/CZR_FY2025_10K.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. Fiscal year ended 31 December 2025; it supplies the annual base (net revenues, total debt). 408,146 bytes, inside MAX_REQUEST_BYTES."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. Fiscal year ended 31 December 2025; it supplies the annual base (net revenues, total debt). 405,745 bytes, inside MAX_REQUEST_BYTES."
     },
     {
       "id": "czr-q2-2026-10q-earnings-update",
@@ -812,7 +812,7 @@
       "local_path": "qualification/czr-2026q2-earnings-update/documents/CZR_Q2_2026_10Q.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table and maturities, and the pending Fertitta Gaming merger disclosure. 168,366 bytes."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table and maturities, and the pending Fertitta Gaming merger disclosure. 166,976 bytes."
     },
     {
       "id": "czr-q2-2026-earnings-earnings-update",
@@ -825,7 +825,7 @@
       "local_path": "qualification/czr-2026q2-earnings-update/documents/CZR_Q2_2026_Earnings_Release.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,825 bytes."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,590 bytes."
     },
     {
       "id": "czr-fy2025-10k-liquidity",
@@ -838,7 +838,7 @@
       "local_path": "qualification/czr-2026q2-liquidity/documents/CZR_FY2025_10K.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. Fiscal year ended 31 December 2025; it supplies the annual base (net revenues, total debt). 408,146 bytes, inside MAX_REQUEST_BYTES."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. Fiscal year ended 31 December 2025; it supplies the annual base (net revenues, total debt). 405,745 bytes, inside MAX_REQUEST_BYTES."
     },
     {
       "id": "czr-q2-2026-10q-liquidity",
@@ -851,7 +851,7 @@
       "local_path": "qualification/czr-2026q2-liquidity/documents/CZR_Q2_2026_10Q.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table and maturities, and the pending Fertitta Gaming merger disclosure. 168,366 bytes."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table and maturities, and the pending Fertitta Gaming merger disclosure. 166,976 bytes."
     },
     {
       "id": "czr-q2-2026-earnings-liquidity",
@@ -864,7 +864,7 @@
       "local_path": "qualification/czr-2026q2-liquidity/documents/CZR_Q2_2026_Earnings_Release.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,825 bytes."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,590 bytes."
     },
     {
       "id": "czr-2020-credit-agreement",
@@ -877,7 +877,7 @@
       "local_path": "qualification/czr-2026q2-liquidity/documents/CZR_2020_Credit_Agreement.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Official EDGAR exhibit converted from HTML to plain text on 2 October 2026 (accession 0001193125-20-196232, raw HTML SHA-256 6600ab5bec479091f68dc04b2db65a54ef1013944c94af0ec135335b374c7dba). It supplies the revolving facility's controlling terms as executed; its stated commitment is at the 2020 signing date, and the Fourth (9 May 2024) and Fifth (25 November 2024) Amendments are not in this set, so no current commitment is inferred from it. 936,079 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Official EDGAR exhibit converted from HTML to plain text on 2 October 2026 (accession 0001193125-20-196232, raw HTML SHA-256 6600ab5bec479091f68dc04b2db65a54ef1013944c94af0ec135335b374c7dba). It supplies the revolving facility's controlling terms as executed; its stated commitment is at the 2020 signing date, and the Fourth (9 May 2024) and Fifth (25 November 2024) Amendments are not in this set, so no current commitment is inferred from it. 935,517 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
     },
     {
       "id": "czr-fy2025-10k-covenant-refinancing",
@@ -890,7 +890,7 @@
       "local_path": "qualification/czr-2026q2-covenant-refinancing/documents/CZR_FY2025_10K.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. Fiscal year ended 31 December 2025; it supplies the annual base (total debt at 31 December 2025). 408,146 bytes, inside MAX_REQUEST_BYTES."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. Fiscal year ended 31 December 2025; it supplies the annual base (total debt at 31 December 2025). 405,745 bytes, inside MAX_REQUEST_BYTES."
     },
     {
       "id": "czr-q2-2026-10q-covenant-refinancing",
@@ -903,7 +903,7 @@
       "local_path": "qualification/czr-2026q2-covenant-refinancing/documents/CZR_Q2_2026_10Q.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table, maturities, financial covenants and revolver availability, and the pending Fertitta Gaming merger disclosure. 168,366 bytes."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table, maturities, financial covenants and revolver availability, and the pending Fertitta Gaming merger disclosure. 166,976 bytes."
     },
     {
       "id": "czr-2020-credit-agreement-covenant-refinancing",
@@ -916,7 +916,7 @@
       "local_path": "qualification/czr-2026q2-covenant-refinancing/documents/CZR_2020_Credit_Agreement.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-liquidity set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the facility's controlling terms as executed, including the Change in Control event of default; the Fourth and Fifth Amendments in this set reprice the term loans, and the First to Third Amendments and the incremental assumption agreements are not in it, so no current commitment, margin or financial covenant is inferred from the 2020 text. 936,079 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-liquidity set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the facility's controlling terms as executed, including the Change in Control event of default; the Fourth and Fifth Amendments in this set reprice the term loans, and the First to Third Amendments and the incremental assumption agreements are not in it, so no current commitment, margin or financial covenant is inferred from the 2020 text. 935,517 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
     },
     {
       "id": "czr-2024-credit-agreement-fourth-amendment",
@@ -929,7 +929,7 @@
       "local_path": "qualification/czr-2026q2-covenant-refinancing/documents/CZR_2024_Credit_Agreement_Fourth_Amendment.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Official EDGAR exhibit converted from HTML to plain text on 2 October 2026 (accession 0001193125-24-135268, raw HTML SHA-256 b0e9fc14d481410dd2fa3cb6bc28e4f9c3b8751d720777ab2bbf943143f6d0fb). It reduces the Term B Loan Applicable Margin (later superseded by the Fifth Amendment) and restates the Term SOFR Adjustment definition. 25,473 bytes."
+      "note": "Official EDGAR exhibit converted from HTML to plain text on 2 October 2026 (accession 0001193125-24-135268, raw HTML SHA-256 b0e9fc14d481410dd2fa3cb6bc28e4f9c3b8751d720777ab2bbf943143f6d0fb). It reduces the Term B Loan Applicable Margin (later superseded by the Fifth Amendment) and restates the Term SOFR Adjustment definition. 25,431 bytes."
     },
     {
       "id": "czr-2024-credit-agreement-fifth-amendment",
@@ -942,7 +942,7 @@
       "local_path": "qualification/czr-2026q2-covenant-refinancing/documents/CZR_2024_Credit_Agreement_Fifth_Amendment.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Official EDGAR exhibit converted from HTML to plain text on 2 October 2026 (accession 0001193125-24-265157, raw HTML SHA-256 0936486e71264a9b752d5977c003bfc9a89ec5eb4ca8e5b09107a7870ebf86e8). It restates the Term B and Term B-1 Loan Applicable Margins (2.25% Term Benchmark, 1.25% ABR) and the six-month repricing premium. 38,841 bytes."
+      "note": "Official EDGAR exhibit converted from HTML to plain text on 2 October 2026 (accession 0001193125-24-265157, raw HTML SHA-256 0936486e71264a9b752d5977c003bfc9a89ec5eb4ca8e5b09107a7870ebf86e8). It restates the Term B and Term B-1 Loan Applicable Margins (2.25% Term Benchmark, 1.25% ABR) and the six-month repricing premium. 38,797 bytes."
     },
     {
       "id": "czr-2024-650-notes-2032-indenture",
@@ -955,7 +955,7 @@
       "local_path": "qualification/czr-2026q2-covenant-refinancing/documents/CZR_2024_650_Senior_Secured_Notes_2032_Indenture.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Official EDGAR exhibit converted from HTML to plain text on 2 October 2026 (accession 0001193125-24-026847, raw HTML SHA-256 a4661727edc48361dd7290772e62412c389b8ad8d215a96aa58facfe9e356c2c). It supplies the notes' issue amount, the Change of Control definition and the Section 4.08 repurchase offer; no clause conclusion is inferred by the register. 759,535 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Official EDGAR exhibit converted from HTML to plain text on 2 October 2026 (accession 0001193125-24-026847, raw HTML SHA-256 a4661727edc48361dd7290772e62412c389b8ad8d215a96aa58facfe9e356c2c). It supplies the notes' issue amount, the Change of Control definition and the Section 4.08 repurchase offer; no clause conclusion is inferred by the register. 758,385 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
     },
     {
       "id": "czr-2026-merger-8k",
@@ -968,7 +968,7 @@
       "local_path": "qualification/czr-2026q2-covenant-refinancing/documents/CZR_2026_Merger_Agreement_8K.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Official EDGAR filing (Form 8-K primary document) converted from HTML to plain text on 2 October 2026 (accession 0001193125-26-242995, raw HTML SHA-256 aabda22b745ac6c2e5d8462be19fbc47b6cafbe58d21f8c2750a1c195cf24f96). It supplies the merger's structure, consideration, conditions, end dates and termination fees as the filing states them. 30,845 bytes."
+      "note": "Official EDGAR filing (Form 8-K primary document) converted from HTML to plain text on 2 October 2026 (accession 0001193125-26-242995, raw HTML SHA-256 aabda22b745ac6c2e5d8462be19fbc47b6cafbe58d21f8c2750a1c195cf24f96). It supplies the merger's structure, consideration, conditions, end dates and termination fees as the filing states them. 30,809 bytes."
     },
     {
       "id": "czr-2026-merger-press-release",
@@ -981,7 +981,7 @@
       "local_path": "qualification/czr-2026q2-covenant-refinancing/documents/CZR_2026_Merger_Press_Release.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Official EDGAR exhibit converted from HTML to plain text on 2 October 2026 (accession 0001193125-26-242995, raw HTML SHA-256 2a4ed12c96147f2171451c93524bea31ecad37247448d27039f755a3cf85f51f). It supplies the transaction value, the approximately $11.9 billion of debt to be assumed and the stated financing sources. 19,050 bytes."
+      "note": "Official EDGAR exhibit converted from HTML to plain text on 2 October 2026 (accession 0001193125-26-242995, raw HTML SHA-256 2a4ed12c96147f2171451c93524bea31ecad37247448d27039f755a3cf85f51f). It supplies the transaction value, the approximately $11.9 billion of debt to be assumed and the stated financing sources. 19,048 bytes."
     },
     {
       "id": "czr-q2-2026-10q-lite-covenant-refinancing",
@@ -994,7 +994,7 @@
       "local_path": "qualification/czr-2026q2-lite-covenant-refinancing/documents/CZR_Q2_2026_10Q.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table, maturities, financial covenants and revolver availability, and the pending Fertitta Gaming merger disclosure. 168,366 bytes."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table, maturities, financial covenants and revolver availability, and the pending Fertitta Gaming merger disclosure. 166,976 bytes."
     },
     {
       "id": "czr-2020-credit-agreement-lite-covenant-refinancing",
@@ -1007,7 +1007,7 @@
       "local_path": "qualification/czr-2026q2-lite-covenant-refinancing/documents/CZR_2020_Credit_Agreement.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-liquidity set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the facility's controlling terms as executed, including the Change in Control event of default; the Fourth and Fifth Amendments in this set reprice the term loans, and the First to Third Amendments and the incremental assumption agreements are not in it, so no current commitment, margin or financial covenant is inferred from the 2020 text. 936,079 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-liquidity set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the facility's controlling terms as executed, including the Change in Control event of default; the Fourth and Fifth Amendments in this set reprice the term loans, and the First to Third Amendments and the incremental assumption agreements are not in it, so no current commitment, margin or financial covenant is inferred from the 2020 text. 935,517 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
     },
     {
       "id": "czr-2024-credit-agreement-fourth-amendment-lite-covenant-refinancing",
@@ -1020,7 +1020,7 @@
       "local_path": "qualification/czr-2026q2-lite-covenant-refinancing/documents/CZR_2024_Credit_Agreement_Fourth_Amendment.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It reduces the Term B Loan Applicable Margin (later superseded by the Fifth Amendment) and restates the Term SOFR Adjustment definition. 25,473 bytes."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It reduces the Term B Loan Applicable Margin (later superseded by the Fifth Amendment) and restates the Term SOFR Adjustment definition. 25,431 bytes."
     },
     {
       "id": "czr-2024-credit-agreement-fifth-amendment-lite-covenant-refinancing",
@@ -1033,7 +1033,7 @@
       "local_path": "qualification/czr-2026q2-lite-covenant-refinancing/documents/CZR_2024_Credit_Agreement_Fifth_Amendment.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It restates the Term B and Term B-1 Loan Applicable Margins (2.25% Term Benchmark, 1.25% ABR) and the six-month repricing premium. 38,841 bytes."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It restates the Term B and Term B-1 Loan Applicable Margins (2.25% Term Benchmark, 1.25% ABR) and the six-month repricing premium. 38,797 bytes."
     },
     {
       "id": "czr-2024-650-notes-2032-indenture-lite-covenant-refinancing",
@@ -1046,7 +1046,7 @@
       "local_path": "qualification/czr-2026q2-lite-covenant-refinancing/documents/CZR_2024_650_Senior_Secured_Notes_2032_Indenture.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the notes' issue amount, the Change of Control definition and the Section 4.08 repurchase offer; no clause conclusion is inferred by the register. 759,535 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the notes' issue amount, the Change of Control definition and the Section 4.08 repurchase offer; no clause conclusion is inferred by the register. 758,385 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
     },
     {
       "id": "czr-2026-merger-8k-lite-covenant-refinancing",
@@ -1059,7 +1059,7 @@
       "local_path": "qualification/czr-2026q2-lite-covenant-refinancing/documents/CZR_2026_Merger_Agreement_8K.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the merger's structure, consideration, conditions, end dates and termination fees as the filing states them. 30,845 bytes."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the merger's structure, consideration, conditions, end dates and termination fees as the filing states them. 30,809 bytes."
     },
     {
       "id": "czr-q2-2026-10q-lite-relative-value",
@@ -1072,7 +1072,7 @@
       "local_path": "qualification/czr-2026q2-lite-relative-value/documents/CZR_Q2_2026_10Q.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table with each note's seniority, maturities, revolver availability, and the pending Fertitta Gaming merger disclosure. 168,366 bytes."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table with each note's seniority, maturities, revolver availability, and the pending Fertitta Gaming merger disclosure. 166,976 bytes."
     },
     {
       "id": "czr-q2-2026-earnings-lite-relative-value",
@@ -1085,7 +1085,7 @@
       "local_path": "qualification/czr-2026q2-lite-relative-value/documents/CZR_Q2_2026_Earnings_Release.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,825 bytes."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,590 bytes."
     },
     {
       "id": "czr-2020-credit-agreement-lite-relative-value",
@@ -1098,7 +1098,7 @@
       "local_path": "qualification/czr-2026q2-lite-relative-value/documents/CZR_2020_Credit_Agreement.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-liquidity set's copy and copied because the on-disk loader refuses a path outside the set root. Admitted so CP-0 has a governing debt document for the issuer (the readiness gap N54 recorded for CCL); it supplies the facility's controlling terms as executed, and the amendments are not in this set, so no current commitment, margin or financial covenant is inferred from the 2020 text. 936,079 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-liquidity set's copy and copied because the on-disk loader refuses a path outside the set root. Admitted so CP-0 has a governing debt document for the issuer (the readiness gap N54 recorded for CCL); it supplies the facility's controlling terms as executed, and the amendments are not in this set, so no current commitment, margin or financial covenant is inferred from the 2020 text. 935,517 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
     },
     {
       "id": "czr-2024-650-notes-2032-indenture-lite-relative-value",
@@ -1111,7 +1111,7 @@
       "local_path": "qualification/czr-2026q2-lite-relative-value/documents/CZR_2024_650_Senior_Secured_Notes_2032_Indenture.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. Admitted so CP-0 has the governing document of the compared instrument (the readiness gap N54 recorded for CCL); it supplies the notes' issue amount, the Change of Control definition and the Section 4.08 repurchase offer; no clause conclusion is inferred by the register. 759,535 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. Admitted so CP-0 has the governing document of the compared instrument (the readiness gap N54 recorded for CCL); it supplies the notes' issue amount, the Change of Control definition and the Section 4.08 repurchase offer; no clause conclusion is inferred by the register. 758,385 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
     },
     {
       "id": "mgm-q2-2026-earnings",
@@ -1124,7 +1124,7 @@
       "local_path": "qualification/czr-2026q2-lite-relative-value/documents/MGM_Q2_2026_Earnings_Release.txt",
       "external_path": null,
       "demand_verified": false,
-      "note": "Official EDGAR exhibit converted from HTML to plain text on 2 October 2026 (accession 0000789570-26-000075, raw HTML SHA-256 d23f2410e475eca7e0dfe2fdcca0210f449e4c1a93fb93a14549592c4554173c). Quarter ended 30 June 2026; it supplies consolidated revenue, Consolidated Adjusted EBITDA (a non-GAAP measure) and the balance sheet, including long-term debt, net. A peer from the owner's Public Leveraged Loan Issuers Benchmark (2 October 2026). CP-1C's SKILL.md names no document form, so the demand is inferred from its Peer Discovery and Peer Data Gates rather than quoted. 29,623 bytes."
+      "note": "Official EDGAR exhibit converted from HTML to plain text on 2 October 2026 (accession 0000789570-26-000075, raw HTML SHA-256 d23f2410e475eca7e0dfe2fdcca0210f449e4c1a93fb93a14549592c4554173c). Quarter ended 30 June 2026; it supplies consolidated revenue, Consolidated Adjusted EBITDA (a non-GAAP measure) and the balance sheet, including long-term debt, net. A peer from the owner's Public Leveraged Loan Issuers Benchmark (2 October 2026). CP-1C's SKILL.md names no document form, so the demand is inferred from its Peer Discovery and Peer Data Gates rather than quoted. 29,214 bytes."
     },
     {
       "id": "penn-q2-2026-earnings",
@@ -1137,7 +1137,7 @@
       "local_path": "qualification/czr-2026q2-lite-relative-value/documents/PENN_Q2_2026_Earnings_Release.txt",
       "external_path": null,
       "demand_verified": false,
-      "note": "Official EDGAR exhibit converted from HTML to plain text on 2 October 2026 (accession 0000921738-26-000019, raw HTML SHA-256 be60f25fec25022c2fd6f48c2cf9bb99912b8f78356cebc4a7719bdcae9120bc). Three and six months ended 30 June 2026; it supplies revenues, Consolidated Adjusted EBITDA (a non-GAAP measure), the traditional debt table including the 4.125% Notes due 2029, and traditional and lease-adjusted net leverage. A peer from the owner's Public Leveraged Loan Issuers Benchmark (2 October 2026). CP-1C's SKILL.md names no document form, so the demand is inferred from its Peer Discovery and Peer Data Gates rather than quoted. 33,859 bytes."
+      "note": "Official EDGAR exhibit converted from HTML to plain text on 2 October 2026 (accession 0000921738-26-000019, raw HTML SHA-256 be60f25fec25022c2fd6f48c2cf9bb99912b8f78356cebc4a7719bdcae9120bc). Three and six months ended 30 June 2026; it supplies revenues, Consolidated Adjusted EBITDA (a non-GAAP measure), the traditional debt table including the 4.125% Notes due 2029, and traditional and lease-adjusted net leverage. A peer from the owner's Public Leveraged Loan Issuers Benchmark (2 October 2026). CP-1C's SKILL.md names no document form, so the demand is inferred from its Peer Discovery and Peer Data Gates rather than quoted. 33,608 bytes."
     },
     {
       "id": "czr-q2-2026-10q-relative-value",
@@ -1150,7 +1150,7 @@
       "local_path": "qualification/czr-2026q2-relative-value/documents/CZR_Q2_2026_10Q.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table with each note's seniority, maturities, revolver availability, and the pending Fertitta Gaming merger disclosure. 168,366 bytes."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table with each note's seniority, maturities, revolver availability, and the pending Fertitta Gaming merger disclosure. 166,976 bytes."
     },
     {
       "id": "czr-fy2025-10k-relative-value",
@@ -1163,7 +1163,7 @@
       "local_path": "qualification/czr-2026q2-relative-value/documents/CZR_FY2025_10K.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. Fiscal year ended 31 December 2025; it supplies the annual base (operating cash flow, total debt at 31 December 2025). 408,146 bytes, inside MAX_REQUEST_BYTES."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. Fiscal year ended 31 December 2025; it supplies the annual base (operating cash flow, total debt at 31 December 2025). 405,745 bytes, inside MAX_REQUEST_BYTES."
     },
     {
       "id": "czr-q2-2026-earnings-relative-value",
@@ -1176,7 +1176,7 @@
       "local_path": "qualification/czr-2026q2-relative-value/documents/CZR_Q2_2026_Earnings_Release.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,825 bytes."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,590 bytes."
     },
     {
       "id": "czr-2020-credit-agreement-relative-value",
@@ -1189,7 +1189,7 @@
       "local_path": "qualification/czr-2026q2-relative-value/documents/CZR_2020_Credit_Agreement.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-liquidity set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the facility's controlling terms as executed, including the Change in Control event of default; the amendments are not in this set, so no current commitment, margin or financial covenant is inferred from the 2020 text. 936,079 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-liquidity set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the facility's controlling terms as executed, including the Change in Control event of default; the amendments are not in this set, so no current commitment, margin or financial covenant is inferred from the 2020 text. 935,517 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
     },
     {
       "id": "czr-2024-650-notes-2032-indenture-relative-value",
@@ -1202,7 +1202,7 @@
       "local_path": "qualification/czr-2026q2-relative-value/documents/CZR_2024_650_Senior_Secured_Notes_2032_Indenture.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It governs the CUSIP 12769GAC4 notes observed on FINRA; it supplies the notes' issue amount, the Change of Control definition and the Section 4.08 repurchase offer; no clause conclusion is inferred by the register. 759,535 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It governs the CUSIP 12769GAC4 notes observed on FINRA; it supplies the notes' issue amount, the Change of Control definition and the Section 4.08 repurchase offer; no clause conclusion is inferred by the register. 758,385 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
     },
     {
       "id": "czr-finra-trace-12769gac4-2026-10-02",
@@ -1241,7 +1241,7 @@
       "local_path": "qualification/czr-2026q2-relative-value/documents/MGM_Q2_2026_Earnings_Release.txt",
       "external_path": null,
       "demand_verified": false,
-      "note": "Byte-identical to the czr-2026q2-lite-relative-value set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies consolidated revenue, Consolidated Adjusted EBITDA (a non-GAAP measure) and the balance sheet, including long-term debt, net. CP-1C's SKILL.md names no document form, so the demand is inferred from its Peer Discovery and Peer Data Gates rather than quoted. 29,623 bytes."
+      "note": "Byte-identical to the czr-2026q2-lite-relative-value set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies consolidated revenue, Consolidated Adjusted EBITDA (a non-GAAP measure) and the balance sheet, including long-term debt, net. CP-1C's SKILL.md names no document form, so the demand is inferred from its Peer Discovery and Peer Data Gates rather than quoted. 29,214 bytes."
     },
     {
       "id": "penn-q2-2026-earnings-relative-value",
@@ -1254,7 +1254,7 @@
       "local_path": "qualification/czr-2026q2-relative-value/documents/PENN_Q2_2026_Earnings_Release.txt",
       "external_path": null,
       "demand_verified": false,
-      "note": "Byte-identical to the czr-2026q2-lite-relative-value set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies revenues, Consolidated Adjusted EBITDA (a non-GAAP measure), the traditional debt table including the 4.125% Notes due 2029, and traditional and lease-adjusted net leverage. CP-1C's SKILL.md names no document form, so the demand is inferred from its Peer Discovery and Peer Data Gates rather than quoted. 33,859 bytes."
+      "note": "Byte-identical to the czr-2026q2-lite-relative-value set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies revenues, Consolidated Adjusted EBITDA (a non-GAAP measure), the traditional debt table including the 4.125% Notes due 2029, and traditional and lease-adjusted net leverage. CP-1C's SKILL.md names no document form, so the demand is inferred from its Peer Discovery and Peer Data Gates rather than quoted. 33,608 bytes."
     },
     {
       "id": "mgm-finra-trace-552953ck5-2026-10-02",
@@ -1293,7 +1293,7 @@
       "local_path": "qualification/czr-2026q2-lite-full-credit-screen/documents/CZR_Q2_2026_10Q.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table, maturities, financial covenant compliance and revolver availability, and the pending Fertitta Gaming merger disclosure. 168,366 bytes."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table, maturities, financial covenant compliance and revolver availability, and the pending Fertitta Gaming merger disclosure. 166,976 bytes."
     },
     {
       "id": "czr-q2-2026-earnings-lite-full-credit-screen",
@@ -1306,7 +1306,7 @@
       "local_path": "qualification/czr-2026q2-lite-full-credit-screen/documents/CZR_Q2_2026_Earnings_Release.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,825 bytes."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,590 bytes."
     },
     {
       "id": "czr-2026-merger-8k-lite-full-credit-screen",
@@ -1319,7 +1319,7 @@
       "local_path": "qualification/czr-2026q2-lite-full-credit-screen/documents/CZR_2026_Merger_Agreement_8K.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It names CP-1A's transaction and supplies the merger's structure, consideration, conditions, end dates and termination fees as the filing states them; the Merger Agreement itself (its Exhibit 2.1) is not admitted. 30,845 bytes."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It names CP-1A's transaction and supplies the merger's structure, consideration, conditions, end dates and termination fees as the filing states them; the Merger Agreement itself (its Exhibit 2.1) is not admitted. 30,809 bytes."
     },
     {
       "id": "czr-2026-merger-press-release-lite-full-credit-screen",
@@ -1332,7 +1332,7 @@
       "local_path": "qualification/czr-2026q2-lite-full-credit-screen/documents/CZR_2026_Merger_Press_Release.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the transaction value, the approximately $11.9 billion of debt to be assumed and the stated financing sources. 19,050 bytes."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the transaction value, the approximately $11.9 billion of debt to be assumed and the stated financing sources. 19,048 bytes."
     },
     {
       "id": "mgm-q2-2026-earnings-lite-full-credit-screen",
@@ -1345,7 +1345,7 @@
       "local_path": "qualification/czr-2026q2-lite-full-credit-screen/documents/MGM_Q2_2026_Earnings_Release.txt",
       "external_path": null,
       "demand_verified": false,
-      "note": "Byte-identical to the czr-2026q2-lite-relative-value set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies consolidated revenue, Consolidated Adjusted EBITDA (a non-GAAP measure) and the balance sheet, including long-term debt, net. CP-1C's SKILL.md names no document form, so the demand is inferred from its Peer Discovery and Peer Data Gates rather than quoted. 29,623 bytes."
+      "note": "Byte-identical to the czr-2026q2-lite-relative-value set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies consolidated revenue, Consolidated Adjusted EBITDA (a non-GAAP measure) and the balance sheet, including long-term debt, net. CP-1C's SKILL.md names no document form, so the demand is inferred from its Peer Discovery and Peer Data Gates rather than quoted. 29,214 bytes."
     },
     {
       "id": "penn-q2-2026-earnings-lite-full-credit-screen",
@@ -1358,7 +1358,7 @@
       "local_path": "qualification/czr-2026q2-lite-full-credit-screen/documents/PENN_Q2_2026_Earnings_Release.txt",
       "external_path": null,
       "demand_verified": false,
-      "note": "Byte-identical to the czr-2026q2-lite-relative-value set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies revenues, Consolidated Adjusted EBITDA (a non-GAAP measure), the traditional debt table including the 4.125% Notes due 2029, and traditional and lease-adjusted net leverage. CP-1C's SKILL.md names no document form, so the demand is inferred from its Peer Discovery and Peer Data Gates rather than quoted. 33,859 bytes."
+      "note": "Byte-identical to the czr-2026q2-lite-relative-value set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies revenues, Consolidated Adjusted EBITDA (a non-GAAP measure), the traditional debt table including the 4.125% Notes due 2029, and traditional and lease-adjusted net leverage. CP-1C's SKILL.md names no document form, so the demand is inferred from its Peer Discovery and Peer Data Gates rather than quoted. 33,608 bytes."
     },
     {
       "id": "czr-2020-credit-agreement-lite-full-credit-screen",
@@ -1371,7 +1371,7 @@
       "local_path": "qualification/czr-2026q2-lite-full-credit-screen/documents/CZR_2020_Credit_Agreement.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-liquidity set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the facility's controlling terms as executed; the amendments are not in this set, so no current commitment, margin or financial covenant is inferred from the 2020 text. 936,079 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-liquidity set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the facility's controlling terms as executed; the amendments are not in this set, so no current commitment, margin or financial covenant is inferred from the 2020 text. 935,517 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
     },
     {
       "id": "czr-2024-650-notes-2032-indenture-lite-full-credit-screen",
@@ -1384,7 +1384,7 @@
       "local_path": "qualification/czr-2026q2-lite-full-credit-screen/documents/CZR_2024_650_Senior_Secured_Notes_2032_Indenture.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the notes' issue amount, the Change of Control definition and the Section 4.08 repurchase offer; no clause conclusion is inferred by the register. 759,535 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the notes' issue amount, the Change of Control definition and the Section 4.08 repurchase offer; no clause conclusion is inferred by the register. 758,385 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
     },
     {
       "id": "czr-finra-trace-12769gac4-2026-10-02-lite-full-credit-screen",
@@ -1423,7 +1423,7 @@
       "local_path": "qualification/czr-2026q2-lite-portfolio/documents/CZR_Q2_2026_10Q.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table with the 6.50% 2032 notes' row, maturities and revolver availability, and the pending Fertitta Gaming merger disclosure. 168,366 bytes."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table with the 6.50% 2032 notes' row, maturities and revolver availability, and the pending Fertitta Gaming merger disclosure. 166,976 bytes."
     },
     {
       "id": "czr-q2-2026-earnings-lite-portfolio",
@@ -1436,7 +1436,7 @@
       "local_path": "qualification/czr-2026q2-lite-portfolio/documents/CZR_Q2_2026_Earnings_Release.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,825 bytes."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,590 bytes."
     },
     {
       "id": "test-clo-i-mandate-2026-10-02",
@@ -1475,7 +1475,7 @@
       "local_path": "qualification/czr-2026q2-lite-portfolio/documents/CZR_2024_650_Senior_Secured_Notes_2032_Indenture.txt",
       "external_path": null,
       "demand_verified": false,
-      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It is the executed governing document of the proposed position (CUSIP 12769GAC4); it supplies the notes' issue amount, the Change of Control definition and the Section 4.08 repurchase offer; no clause conclusion is inferred by the register. The demand is inferred from CP-0's recorded refusal on ccl-fy2025-portfolio (applicable executed governing security documents) rather than quoted. 759,535 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It is the executed governing document of the proposed position (CUSIP 12769GAC4); it supplies the notes' issue amount, the Change of Control definition and the Section 4.08 repurchase offer; no clause conclusion is inferred by the register. The demand is inferred from CP-0's recorded refusal on ccl-fy2025-portfolio (applicable executed governing security documents) rather than quoted. 758,385 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
     },
     {
       "id": "czr-q2-2026-10q-portfolio",
@@ -1488,7 +1488,7 @@
       "local_path": "qualification/czr-2026q2-portfolio/documents/CZR_Q2_2026_10Q.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table with each note's seniority, maturities, revolver availability, and the pending Fertitta Gaming merger disclosure. 168,366 bytes."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table with each note's seniority, maturities, revolver availability, and the pending Fertitta Gaming merger disclosure. 166,976 bytes."
     },
     {
       "id": "czr-fy2025-10k-portfolio",
@@ -1501,7 +1501,7 @@
       "local_path": "qualification/czr-2026q2-portfolio/documents/CZR_FY2025_10K.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. Fiscal year ended 31 December 2025; it supplies the audited annual base (operating cash flow, total debt at 31 December 2025). 408,146 bytes, inside MAX_REQUEST_BYTES."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. Fiscal year ended 31 December 2025; it supplies the audited annual base (operating cash flow, total debt at 31 December 2025). 405,745 bytes, inside MAX_REQUEST_BYTES."
     },
     {
       "id": "czr-2020-credit-agreement-portfolio",
@@ -1514,7 +1514,7 @@
       "local_path": "qualification/czr-2026q2-portfolio/documents/CZR_2020_Credit_Agreement.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-liquidity set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the facility's controlling terms as executed, including the Change in Control event of default; the amendments are not in this set, so no current commitment, margin or financial covenant is inferred from the 2020 text. 936,079 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-liquidity set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the facility's controlling terms as executed, including the Change in Control event of default; the amendments are not in this set, so no current commitment, margin or financial covenant is inferred from the 2020 text. 935,517 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
     },
     {
       "id": "czr-2024-650-notes-2032-indenture-portfolio",
@@ -1527,7 +1527,7 @@
       "local_path": "qualification/czr-2026q2-portfolio/documents/CZR_2024_650_Senior_Secured_Notes_2032_Indenture.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It is the executed governing document of the proposed position (CUSIP 12769GAC4); it supplies the notes' issue amount, the Change of Control definition and the Section 4.08 repurchase offer; no clause conclusion is inferred by the register. 759,535 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It is the executed governing document of the proposed position (CUSIP 12769GAC4); it supplies the notes' issue amount, the Change of Control definition and the Section 4.08 repurchase offer; no clause conclusion is inferred by the register. 758,385 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
     },
     {
       "id": "czr-finra-trace-12769gac4-2026-10-02-portfolio",
@@ -1579,7 +1579,7 @@
       "local_path": "qualification/czr-2026q2-full-credit-assessment/documents/CZR_Q2_2026_10Q.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table with each note's seniority, maturities, revolver availability, the Item 3 interest-rate exposure, covenant compliance, and the pending Fertitta Gaming merger disclosure. 168,366 bytes."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the interim statements, the Note 6 debt table with each note's seniority, maturities, revolver availability, the Item 3 interest-rate exposure, covenant compliance, and the pending Fertitta Gaming merger disclosure. 166,976 bytes."
     },
     {
       "id": "czr-fy2025-10k-full-credit-assessment",
@@ -1592,7 +1592,7 @@
       "local_path": "qualification/czr-2026q2-full-credit-assessment/documents/CZR_FY2025_10K.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. Fiscal year ended 31 December 2025; it supplies the audited annual base (net revenues, operating cash flow, total debt at 31 December 2025). 408,146 bytes, inside MAX_REQUEST_BYTES."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. Fiscal year ended 31 December 2025; it supplies the audited annual base (net revenues, operating cash flow, total debt at 31 December 2025). 405,745 bytes, inside MAX_REQUEST_BYTES."
     },
     {
       "id": "czr-q2-2026-earnings-full-credit-assessment",
@@ -1605,7 +1605,7 @@
       "local_path": "qualification/czr-2026q2-full-credit-assessment/documents/CZR_Q2_2026_Earnings_Release.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,825 bytes."
+      "note": "Byte-identical to the czr-2026q2 set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies segment net revenues, Adjusted EBITDA (a non-GAAP measure), total outstanding indebtedness and the cash-and-revolver capacity table. 15,590 bytes."
     },
     {
       "id": "czr-2020-credit-agreement-full-credit-assessment",
@@ -1618,7 +1618,7 @@
       "local_path": "qualification/czr-2026q2-full-credit-assessment/documents/CZR_2020_Credit_Agreement.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-liquidity set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the facility's controlling terms as executed, including the Change in Control event of default; the current commitment and margins are read from the 10-Q and the amendments, not inferred from the 2020 text. 936,079 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-liquidity set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the facility's controlling terms as executed, including the Change in Control event of default; the current commitment and margins are read from the 10-Q and the amendments, not inferred from the 2020 text. 935,517 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
     },
     {
       "id": "czr-2024-credit-agreement-fourth-amendment-full-credit-assessment",
@@ -1631,7 +1631,7 @@
       "local_path": "qualification/czr-2026q2-full-credit-assessment/documents/CZR_2024_Credit_Agreement_Fourth_Amendment.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It reduces the Term B Loan Applicable Margin (later superseded by the Fifth Amendment) and restates the Term SOFR Adjustment definition. 25,473 bytes."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It reduces the Term B Loan Applicable Margin (later superseded by the Fifth Amendment) and restates the Term SOFR Adjustment definition. 25,431 bytes."
     },
     {
       "id": "czr-2024-credit-agreement-fifth-amendment-full-credit-assessment",
@@ -1644,7 +1644,7 @@
       "local_path": "qualification/czr-2026q2-full-credit-assessment/documents/CZR_2024_Credit_Agreement_Fifth_Amendment.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It restates the Term B and Term B-1 Loan Applicable Margins (2.25% Term Benchmark, 1.25% ABR) and the six-month repricing premium. 38,841 bytes."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It restates the Term B and Term B-1 Loan Applicable Margins (2.25% Term Benchmark, 1.25% ABR) and the six-month repricing premium. 38,797 bytes."
     },
     {
       "id": "czr-2024-650-notes-2032-indenture-full-credit-assessment",
@@ -1657,7 +1657,7 @@
       "local_path": "qualification/czr-2026q2-full-credit-assessment/documents/CZR_2024_650_Senior_Secured_Notes_2032_Indenture.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It governs the CUSIP 12769GAC4 notes, the proposed position; it supplies the notes' issue amount, the Change of Control definition and the Section 4.08 repurchase offer; no clause conclusion is inferred by the register. 759,535 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It governs the CUSIP 12769GAC4 notes, the proposed position; it supplies the notes' issue amount, the Change of Control definition and the Section 4.08 repurchase offer; no clause conclusion is inferred by the register. 758,385 bytes, inside MAX_REQUEST_BYTES and under the 1.5 MiB page-map threshold."
     },
     {
       "id": "czr-2026-merger-8k-full-credit-assessment",
@@ -1670,7 +1670,7 @@
       "local_path": "qualification/czr-2026q2-full-credit-assessment/documents/CZR_2026_Merger_Agreement_8K.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It names CP-1A's transaction and supplies the merger's structure, consideration, conditions, end dates and termination fees as the filing states them; the Merger Agreement itself (its Exhibit 2.1) is not admitted. 30,845 bytes."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It names CP-1A's transaction and supplies the merger's structure, consideration, conditions, end dates and termination fees as the filing states them; the Merger Agreement itself (its Exhibit 2.1) is not admitted. 30,809 bytes."
     },
     {
       "id": "czr-2026-merger-press-release-full-credit-assessment",
@@ -1683,7 +1683,7 @@
       "local_path": "qualification/czr-2026q2-full-credit-assessment/documents/CZR_2026_Merger_Press_Release.txt",
       "external_path": null,
       "demand_verified": true,
-      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the transaction value, the approximately $11.9 billion of debt to be assumed and the stated financing sources; the financing commitments are not admitted. 19,050 bytes."
+      "note": "Byte-identical to the czr-2026q2-covenant-refinancing set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies the transaction value, the approximately $11.9 billion of debt to be assumed and the stated financing sources; the financing commitments are not admitted. 19,048 bytes."
     },
     {
       "id": "mgm-q2-2026-earnings-full-credit-assessment",
@@ -1696,7 +1696,7 @@
       "local_path": "qualification/czr-2026q2-full-credit-assessment/documents/MGM_Q2_2026_Earnings_Release.txt",
       "external_path": null,
       "demand_verified": false,
-      "note": "Byte-identical to the czr-2026q2-lite-relative-value set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies consolidated revenue, Consolidated Adjusted EBITDA (a non-GAAP measure) and the balance sheet, including long-term debt, net. CP-1C's SKILL.md names no document form, so the demand is inferred from its Peer Discovery and Peer Data Gates rather than quoted. 29,623 bytes."
+      "note": "Byte-identical to the czr-2026q2-lite-relative-value set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies consolidated revenue, Consolidated Adjusted EBITDA (a non-GAAP measure) and the balance sheet, including long-term debt, net. CP-1C's SKILL.md names no document form, so the demand is inferred from its Peer Discovery and Peer Data Gates rather than quoted. 29,214 bytes."
     },
     {
       "id": "penn-q2-2026-earnings-full-credit-assessment",
@@ -1709,7 +1709,7 @@
       "local_path": "qualification/czr-2026q2-full-credit-assessment/documents/PENN_Q2_2026_Earnings_Release.txt",
       "external_path": null,
       "demand_verified": false,
-      "note": "Byte-identical to the czr-2026q2-lite-relative-value set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies revenues, Consolidated Adjusted EBITDA (a non-GAAP measure), the traditional debt table including the 4.125% Notes due 2029, and traditional and lease-adjusted net leverage. CP-1C's SKILL.md names no document form, so the demand is inferred from its Peer Discovery and Peer Data Gates rather than quoted. 33,859 bytes."
+      "note": "Byte-identical to the czr-2026q2-lite-relative-value set's copy and copied because the on-disk loader refuses a path outside the set root. It supplies revenues, Consolidated Adjusted EBITDA (a non-GAAP measure), the traditional debt table including the 4.125% Notes due 2029, and traditional and lease-adjusted net leverage. CP-1C's SKILL.md names no document form, so the demand is inferred from its Peer Discovery and Peer Data Gates rather than quoted. 33,608 bytes."
     },
     {
       "id": "czr-finra-trace-12769gac4-2026-10-02-full-credit-assessment",

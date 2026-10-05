@@ -3,16 +3,16 @@ SECURITIES AND EXCHANGE COMMISSION
 Washington, D.C. 20549
 FORM 10-Q
 (Mark One)
-☒ | QUARTERLY REPORT PURSUANT TO SECTION 13 OR 15(d) OF THE SECURITIES EXCHANGE ACT OF 1934 |
+☒ | QUARTERLY REPORT PURSUANT TO SECTION 13 OR 15(d) OF THE SECURITIES EXCHANGE ACT OF 1934
 For the quarterly period ended June 30, 2026
 OR
-☐ | TRANSITION REPORT PURSUANT TO SECTION 13 OR 15(d) OF THE SECURITIES EXCHANGE ACT OF 1934 |
+☐ | TRANSITION REPORT PURSUANT TO SECTION 13 OR 15(d) OF THE SECURITIES EXCHANGE ACT OF 1934
 For the transition period from to
 Commission File No. 001-36629
 CAESARS ENTERTAINMENT, INC.
 (Exact name of registrant as specified in its charter)
-Delaware | 46-3657681 |
-(State or other jurisdiction of incorporation or organization) | (I.R.S. Employer Identification No.) |
+Delaware | 46-3657681
+(State or other jurisdiction of incorporation or organization) | (I.R.S. Employer Identification No.)
 100 West Liberty Street, 12th Floor, Reno, Nevada 89501
 (Address and zip code of principal executive offices)
 (775) 328-0100
@@ -20,236 +20,236 @@ Delaware | 46-3657681 |
 N/A
 (Former name, former address and former fiscal year, if changed since last report)
 Securities registered pursuant to Section 12(b) of the Act:
-Title of each class | Trading Symbol(s) | Name of each exchange on which registered |
-Common Stock, $0.00001 par value | CZR | NASDAQ Stock Market |
+Title of each class | Trading Symbol(s) | Name of each exchange on which registered
+Common Stock, $0.00001 par value | CZR | NASDAQ Stock Market
 Indicate by check mark whether the registrant (1) has filed all reports required to be filed by Section 13 or 15(d) of the Securities Exchange Act of 1934 during the preceding 12 months (or for such shorter period that the registrant was required to file such reports), and (2) has been subject to such filing requirements for the past 90 days. Yes ☒ No ☐
 Indicate by check mark whether the registrant has submitted electronically every Interactive Data File required to be submitted pursuant to Rule 405 of Regulation S-T (§232.405 of this chapter) during the preceding 12 months (or for such shorter period that the registrant was required to submit such files). Yes ☒ No ☐
 Indicate by check mark whether the registrant is a large accelerated filer, an accelerated filer, a non-accelerated filer, smaller reporting company or an emerging growth company. See the definitions of “large accelerated filer,” “accelerated filer,” “smaller reporting company,” and “emerging growth company” in Rule 12b-2 of the Exchange Act.
-Large accelerated filer | ☒ | Accelerated filer | ☐ |
-Non-accelerated filer | ☐ | Smaller reporting company | ☐ |
-Emerging growth company | ☐ |
+Large accelerated filer | ☒ | Accelerated filer | ☐
+Non-accelerated filer | ☐ | Smaller reporting company | ☐
+Emerging growth company | ☐
 If an emerging growth company, indicate by check mark if the registrant has elected not to use the extended transition period for complying with any new or revised financial accounting standards provided pursuant to Section 13(a) of the Exchange Act. ☐
 Indicate by check mark whether the registrant is a shell company (as defined in Rule 12b-2 of the Exchange Act). Yes ☐ No ☒
 The number of shares of the Registrant’s Common Stock, $0.00001 par value per share, outstanding as of July 23, 2026 was 203,720,372.
 CAESARS ENTERTAINMENT, INC.
 TABLE OF CONTENTS
-Page |
-PART I. FINANCIAL INFORMATION | 2 |
-Item 1. | Unaudited Financial Statements | 2 |
-Consolidated Condensed Balance Sheets | 2 |
-Consolidated Condensed Statements of Operations | 3 |
-Consolidated Condensed Statements of Comprehensive Income (Loss) | 4 |
-Consolidated Condensed Statements of Stockholders’ Equity | 5 |
-Consolidated Condensed Statements of Cash Flows | 7 |
-Notes to Consolidated Condensed Financial Statements | 9 |
-Item 2. | Management’s Discussion and Analysis of Financial Condition and Results of Operations | 29 |
-Item 3. | Quantitative and Qualitative Disclosures About Market Risk | 41 |
-Item 4. | Controls and Procedures | 42 |
-PART II. OTHER INFORMATION | 43 |
-Item 1. | Legal Proceedings | 43 |
-Item 1A. | Risk Factors | 45 |
-Item 2. | Unregistered Sales of Equity Securities and Use of Proceeds | 48 |
-Item 3. | Defaults Upon Senior Securities | 48 |
-Item 4. | Mine Safety Disclosures | 48 |
-Item 5. | Other Information | 48 |
-Item 6. | Exhibits | 49 |
-Signatures | 50 |
+Page
+PART I. FINANCIAL INFORMATION | 2
+Item 1. | Unaudited Financial Statements | 2
+Consolidated Condensed Balance Sheets | 2
+Consolidated Condensed Statements of Operations | 3
+Consolidated Condensed Statements of Comprehensive Income (Loss) | 4
+Consolidated Condensed Statements of Stockholders’ Equity | 5
+Consolidated Condensed Statements of Cash Flows | 7
+Notes to Consolidated Condensed Financial Statements | 9
+Item 2. | Management’s Discussion and Analysis of Financial Condition and Results of Operations | 29
+Item 3. | Quantitative and Qualitative Disclosures About Market Risk | 41
+Item 4. | Controls and Procedures | 42
+PART II. OTHER INFORMATION | 43
+Item 1. | Legal Proceedings | 43
+Item 1A. | Risk Factors | 45
+Item 2. | Unregistered Sales of Equity Securities and Use of Proceeds | 48
+Item 3. | Defaults Upon Senior Securities | 48
+Item 4. | Mine Safety Disclosures | 48
+Item 5. | Other Information | 48
+Item 6. | Exhibits | 49
+Signatures | 50
 PART I - FINANCIAL INFORMATION
 Item 1. Unaudited Financial Statements
 CAESARS ENTERTAINMENT, INC.
 CONSOLIDATED CONDENSED BALANCE SHEETS
 (UNAUDITED)
-(In millions) | June 30, 2026 | December 31, 2025 |
-ASSETS |
-CURRENT ASSETS: |
-Cash and cash equivalents | $965 | $887 |
-Restricted cash | 96 | 85 |
-Accounts receivable, net | 485 | 476 |
-Inventories | 49 | 43 |
-Prepayments and other current assets | 382 | 312 |
-Total current assets | 1,977 | 1,803 |
-Investments in and advances to unconsolidated affiliates | 124 | 133 |
-Property and equipment, net | 14,125 | 14,358 |
-Goodwill | 10,441 | 10,441 |
-Intangible assets other than goodwill | 3,959 | 3,985 |
-Deferred tax asset | 68 | 67 |
-Other long-term assets, net | 1,048 | 852 |
-Total assets | $31,742 | $31,639 |
-LIABILITIES AND STOCKHOLDERS’ EQUITY |
-CURRENT LIABILITIES: |
-Accounts payable | $290 | $297 |
-Accrued interest | 222 | 224 |
-Accrued other liabilities | 1,696 | 1,618 |
-Current portion of long-term debt | 114 | 114 |
-Total current liabilities | 2,322 | 2,253 |
-Long-term financing obligations | 13,157 | 13,096 |
-Long-term debt | 11,585 | 11,670 |
-Deferred tax liability | 57 | 58 |
-Other long-term liabilities | 1,069 | 876 |
-Total liabilities | 28,190 | 27,953 |
-Commitments and contingencies (Note 5) |
-STOCKHOLDERS’ EQUITY: |
-Caesars stockholders’ equity | 3,375 | 3,504 |
-Noncontrolling interests | 177 | 182 |
-Total stockholders’ equity | 3,552 | 3,686 |
-Total liabilities and stockholders’ equity | $31,742 | $31,639 |
+(In millions) | June 30, 2026 | December 31, 2025
+ASSETS
+CURRENT ASSETS:
+Cash and cash equivalents | $965 | $887
+Restricted cash | 96 | 85
+Accounts receivable, net | 485 | 476
+Inventories | 49 | 43
+Prepayments and other current assets | 382 | 312
+Total current assets | 1,977 | 1,803
+Investments in and advances to unconsolidated affiliates | 124 | 133
+Property and equipment, net | 14,125 | 14,358
+Goodwill | 10,441 | 10,441
+Intangible assets other than goodwill | 3,959 | 3,985
+Deferred tax asset | 68 | 67
+Other long-term assets, net | 1,048 | 852
+Total assets | $31,742 | $31,639
+LIABILITIES AND STOCKHOLDERS’ EQUITY
+CURRENT LIABILITIES:
+Accounts payable | $290 | $297
+Accrued interest | 222 | 224
+Accrued other liabilities | 1,696 | 1,618
+Current portion of long-term debt | 114 | 114
+Total current liabilities | 2,322 | 2,253
+Long-term financing obligations | 13,157 | 13,096
+Long-term debt | 11,585 | 11,670
+Deferred tax liability | 57 | 58
+Other long-term liabilities | 1,069 | 876
+Total liabilities | 28,190 | 27,953
+Commitments and contingencies (Note 5)
+STOCKHOLDERS’ EQUITY:
+Caesars stockholders’ equity | 3,375 | 3,504
+Noncontrolling interests | 177 | 182
+Total stockholders’ equity | 3,552 | 3,686
+Total liabilities and stockholders’ equity | $31,742 | $31,639
 The accompanying notes are an integral part of these consolidated condensed financial statements.
 Table of Contents
 2
 CAESARS ENTERTAINMENT, INC.
 CONSOLIDATED CONDENSED STATEMENTS OF OPERATIONS
 (UNAUDITED)
-Three Months Ended June 30, | Six Months Ended June 30, |
-(In millions, except per share data) | 2026 | 2025 | 2026 | 2025 |
-NET REVENUES: |
-Casino | $1,759 | $1,668 | $3,425 | $3,262 |
-Food and beverage | 426 | 428 | 850 | 863 |
-Hotel | 495 | 509 | 982 | 991 |
-Other | 313 | 302 | 606 | 585 |
-Net revenues | 2,993 | 2,907 | 5,863 | 5,701 |
-OPERATING EXPENSES: |
-Casino | 955 | 887 | 1,857 | 1,748 |
-Food and beverage | 281 | 275 | 555 | 550 |
-Hotel | 163 | 155 | 319 | 306 |
-Other | 95 | 105 | 190 | 200 |
-General and administrative | 521 | 477 | 1,025 | 960 |
-Corporate | 94 | 84 | 182 | 166 |
-Depreciation and amortization | 355 | 364 | 702 | 721 |
-Transaction and other costs, net | 16 | 34 | 20 | 36 |
-Total operating expenses | 2,480 | 2,381 | 4,850 | 4,687 |
-Operating income | 513 | 526 | 1,013 | 1,014 |
-OTHER EXPENSE: |
-Interest expense, net | (573) | (579) | (1,142) | (1,153) |
-Other income | 7 | 1 | 5 | — |
-Total other expense | (566) | (578) | (1,137) | (1,153) |
-Loss before income taxes | (53) | (52) | (124) | (139) |
-Benefit (provision) for income taxes | 12 | (13) | — | (24) |
-Net loss | (41) | (65) | (124) | (163) |
-Net income attributable to noncontrolling interests | (21) | (17) | (36) | (34) |
-Net loss attributable to Caesars | $(62) | $(82) | $(160) | $(197) |
-Net loss attributable to Caesars per share - basic and diluted: |
-Basic loss per share | $(0.30) | $(0.39) | $(0.78) | $(0.93) |
-Diluted loss per share | $(0.30) | $(0.39) | $(0.78) | $(0.93) |
-Weighted average basic shares outstanding | 204 | 209 | 204 | 210 |
-Weighted average diluted shares outstanding | 204 | 209 | 204 | 210 |
+Three Months Ended June 30, | Six Months Ended June 30,
+(In millions, except per share data) | 2026 | 2025 | 2026 | 2025
+NET REVENUES:
+Casino | $1,759 | $1,668 | $3,425 | $3,262
+Food and beverage | 426 | 428 | 850 | 863
+Hotel | 495 | 509 | 982 | 991
+Other | 313 | 302 | 606 | 585
+Net revenues | 2,993 | 2,907 | 5,863 | 5,701
+OPERATING EXPENSES:
+Casino | 955 | 887 | 1,857 | 1,748
+Food and beverage | 281 | 275 | 555 | 550
+Hotel | 163 | 155 | 319 | 306
+Other | 95 | 105 | 190 | 200
+General and administrative | 521 | 477 | 1,025 | 960
+Corporate | 94 | 84 | 182 | 166
+Depreciation and amortization | 355 | 364 | 702 | 721
+Transaction and other costs, net | 16 | 34 | 20 | 36
+Total operating expenses | 2,480 | 2,381 | 4,850 | 4,687
+Operating income | 513 | 526 | 1,013 | 1,014
+OTHER EXPENSE:
+Interest expense, net | (573) | (579) | (1,142) | (1,153)
+Other income | 7 | 1 | 5 | —
+Total other expense | (566) | (578) | (1,137) | (1,153)
+Loss before income taxes | (53) | (52) | (124) | (139)
+Benefit (provision) for income taxes | 12 | (13) | — | (24)
+Net loss | (41) | (65) | (124) | (163)
+Net income attributable to noncontrolling interests | (21) | (17) | (36) | (34)
+Net loss attributable to Caesars | $(62) | $(82) | $(160) | $(197)
+Net loss attributable to Caesars per share - basic and diluted:
+Basic loss per share | $(0.30) | $(0.39) | $(0.78) | $(0.93)
+Diluted loss per share | $(0.30) | $(0.39) | $(0.78) | $(0.93)
+Weighted average basic shares outstanding | 204 | 209 | 204 | 210
+Weighted average diluted shares outstanding | 204 | 209 | 204 | 210
 The accompanying notes are an integral part of these consolidated condensed financial statements.
 Table of Contents
 3
 CAESARS ENTERTAINMENT, INC.
 CONSOLIDATED CONDENSED STATEMENTS OF COMPREHENSIVE INCOME (LOSS)
 (UNAUDITED)
-Three Months Ended June 30, | Six Months Ended June 30, |
-(In millions) | 2026 | 2025 | 2026 | 2025 |
-Net loss | $(41) | $(65) | $(124) | $(163) |
-Foreign currency and other | (1) | 2 | (3) | 2 |
-Other comprehensive income (loss), net of tax | (1) | 2 | (3) | 2 |
-Comprehensive loss | (42) | (63) | (127) | (161) |
-Comprehensive income attributable to noncontrolling interests | (21) | (17) | (36) | (34) |
-Comprehensive loss attributable to Caesars | $(63) | $(80) | $(163) | $(195) |
+Three Months Ended June 30, | Six Months Ended June 30,
+(In millions) | 2026 | 2025 | 2026 | 2025
+Net loss | $(41) | $(65) | $(124) | $(163)
+Foreign currency and other | (1) | 2 | (3) | 2
+Other comprehensive income (loss), net of tax | (1) | 2 | (3) | 2
+Comprehensive loss | (42) | (63) | (127) | (161)
+Comprehensive income attributable to noncontrolling interests | (21) | (17) | (36) | (34)
+Comprehensive loss attributable to Caesars | $(63) | $(80) | $(163) | $(195)
 The accompanying notes are an integral part of these consolidated condensed financial statements.
 Table of Contents
 4
 CAESARS ENTERTAINMENT, INC.
 CONSOLIDATED CONDENSED STATEMENTS OF STOCKHOLDERS’ EQUITY
 (UNAUDITED)
-Caesars Stockholders’ Equity |
-Preferred Stock | Common Stock | Treasury Stock |
-(In millions) | Shares | Amount | Shares | Amount | Additional Paid-in Capital | Accumulated Deficit | Accumulated Other Comprehensive Income (Loss) | Amount | Noncontrolling Interests | Total Stockholders’ Equity |
-Balance, December 31, 2025 | — | $— | 203 | $— | $6,709 | $(3,303) | $98 | $— | $182 | $3,686 |
-Stock-based compensation | — | — | 1 | — | 24 | — | — | — | — | 24 |
-Net income (loss) | — | — | — | — | — | (98) | — | — | 15 | (83) |
-Other comprehensive loss, net of tax | — | — | — | — | — | — | (2) | — | — | (2) |
-Shares withheld related to net share settlement of stock awards | — | — | — | — | (12) | — | — | — | — | (12) |
-Transactions with noncontrolling interests | — | — | — | — | — | — | — | — | (16) | (16) |
-Balance, March 31, 2026 | — | — | 204 | — | 6,721 | (3,401) | 96 | — | 181 | 3,597 |
-Stock-based compensation | — | — | — | — | 23 | — | — | — | — | 23 |
-Net income (loss) | — | — | — | — | — | (62) | — | — | 21 | (41) |
-Other comprehensive loss, net of tax | — | — | — | — | — | — | (1) | — | — | (1) |
-Shares withheld related to net share settlement of stock awards | — | — | — | — | (1) | — | — | — | — | (1) |
-Transactions with noncontrolling interests | — | — | — | — | — | — | — | — | (25) | (25) |
-Balance, June 30, 2026 | — | $— | 204 | $— | $6,743 | $(3,463) | $95 | $— | $177 | $3,552 |
+Caesars Stockholders’ Equity
+Preferred Stock | Common Stock | Treasury Stock
+(In millions) | Shares | Amount | Shares | Amount | Additional Paid-in Capital | Accumulated Deficit | Accumulated Other Comprehensive Income (Loss) | Amount | Noncontrolling Interests | Total Stockholders’ Equity
+Balance, December 31, 2025 | — | $— | 203 | $— | $6,709 | $(3,303) | $98 | $— | $182 | $3,686
+Stock-based compensation | — | — | 1 | — | 24 | — | — | — | — | 24
+Net income (loss) | — | — | — | — | — | (98) | — | — | 15 | (83)
+Other comprehensive loss, net of tax | — | — | — | — | — | — | (2) | — | — | (2)
+Shares withheld related to net share settlement of stock awards | — | — | — | — | (12) | — | — | — | — | (12)
+Transactions with noncontrolling interests | — | — | — | — | — | — | — | — | (16) | (16)
+Balance, March 31, 2026 | — | — | 204 | — | 6,721 | (3,401) | 96 | — | 181 | 3,597
+Stock-based compensation | — | — | — | — | 23 | — | — | — | — | 23
+Net income (loss) | — | — | — | — | — | (62) | — | — | 21 | (41)
+Other comprehensive loss, net of tax | — | — | — | — | — | — | (1) | — | — | (1)
+Shares withheld related to net share settlement of stock awards | — | — | — | — | (1) | — | — | — | — | (1)
+Transactions with noncontrolling interests | — | — | — | — | — | — | — | — | (25) | (25)
+Balance, June 30, 2026 | — | $— | 204 | $— | $6,743 | $(3,463) | $95 | $— | $177 | $3,552
 Table of Contents
 5
-Caesars Stockholders’ Equity |
-Preferred Stock | Common Stock | Treasury Stock |
-(In millions) | Shares | Amount | Shares | Amount | Additional Paid-in Capital | Accumulated Deficit | Accumulated Other Comprehensive Income (Loss) | Amount | Noncontrolling Interests | Total Stockholders’ Equity |
-Balance, December 31, 2024 | — | $— | 211 | $— | $6,862 | $(2,801) | $96 | $— | $219 | $4,376 |
-Stock-based compensation | — | — | 1 | — | 26 | — | — | — | — | 26 |
-Net income (loss) | — | — | — | — | — | (115) | — | — | 17 | (98) |
-Shares withheld related to net share settlement of stock awards | — | — | — | — | (15) | — | — | — | — | (15) |
-Transactions with noncontrolling interests | — | — | — | — | — | — | — | — | (10) | (10) |
-Balance, March 31, 2025 | — | — | 212 | — | 6,873 | (2,916) | 96 | — | 226 | 4,279 |
-Stock-based compensation | — | — | — | — | 24 | — | — | — | — | 24 |
-Net income (loss) | — | — | — | — | — | (82) | — | — | 17 | (65) |
-Other comprehensive income, net of tax | — | — | — | — | — | — | 2 | — | — | 2 |
-Shares withheld related to net share settlement of stock awards | — | — | — | — | (1) | — | — | — | — | (1) |
-Repurchase of common stock | — | — | (4) | — | (100) | — | — | — | — | (100) |
-Transactions with noncontrolling interests | — | — | — | — | — | — | — | — | (20) | (20) |
-Balance, June 30, 2025 | — | $— | 208 | $— | $6,796 | $(2,998) | $98 | $— | $223 | $4,119 |
+Caesars Stockholders’ Equity
+Preferred Stock | Common Stock | Treasury Stock
+(In millions) | Shares | Amount | Shares | Amount | Additional Paid-in Capital | Accumulated Deficit | Accumulated Other Comprehensive Income (Loss) | Amount | Noncontrolling Interests | Total Stockholders’ Equity
+Balance, December 31, 2024 | — | $— | 211 | $— | $6,862 | $(2,801) | $96 | $— | $219 | $4,376
+Stock-based compensation | — | — | 1 | — | 26 | — | — | — | — | 26
+Net income (loss) | — | — | — | — | — | (115) | — | — | 17 | (98)
+Shares withheld related to net share settlement of stock awards | — | — | — | — | (15) | — | — | — | — | (15)
+Transactions with noncontrolling interests | — | — | — | — | — | — | — | — | (10) | (10)
+Balance, March 31, 2025 | — | — | 212 | — | 6,873 | (2,916) | 96 | — | 226 | 4,279
+Stock-based compensation | — | — | — | — | 24 | — | — | — | — | 24
+Net income (loss) | — | — | — | — | — | (82) | — | — | 17 | (65)
+Other comprehensive income, net of tax | — | — | — | — | — | — | 2 | — | — | 2
+Shares withheld related to net share settlement of stock awards | — | — | — | — | (1) | — | — | — | — | (1)
+Repurchase of common stock | — | — | (4) | — | (100) | — | — | — | — | (100)
+Transactions with noncontrolling interests | — | — | — | — | — | — | — | — | (20) | (20)
+Balance, June 30, 2025 | — | $— | 208 | $— | $6,796 | $(2,998) | $98 | $— | $223 | $4,119
 The accompanying notes are an integral part of these consolidated condensed financial statements.
 Table of Contents
 6
 CAESARS ENTERTAINMENT, INC.
 CONSOLIDATED CONDENSED STATEMENTS OF CASH FLOWS
 (UNAUDITED)
-Six Months Ended June 30, |
-(In millions) | 2026 | 2025 |
-CASH FLOWS FROM OPERATING ACTIVITIES: |
-Net loss | $(124) | $(163) |
-Adjustments to reconcile net loss to net cash provided by operating activities: |
-Depreciation and amortization | 702 | 721 |
-Amortization of deferred financing costs and discounts | 88 | 89 |
-Provision for credit losses | 24 | 23 |
-Non-cash lease amortization | 14 | 12 |
-(Gain) loss on investments | (4) | 1 |
-Stock-based compensation expense | 47 | 50 |
-(Gain) loss on sale or disposal of property and equipment | (8) | 3 |
-Deferred income taxes | — | 24 |
-Other non-cash adjustments to net loss | 7 | 1 |
-Change in operating assets and liabilities: |
-Accounts receivable | (24) | (37) |
-Prepaid expenses and other assets | (88) | (47) |
-Income taxes receivable and payable, net | (11) | (58) |
-Accounts payable, accrued expenses and other liabilities | 52 | 61 |
-Net cash provided by operating activities | 675 | 680 |
-CASH FLOWS FROM INVESTING ACTIVITIES: |
-Purchase of property and equipment | (335) | (453) |
-Cash paid for asset acquisitions | (98) | — |
-Proceeds from sale of property and equipment | 20 | 3 |
-Proceeds from sale of investments | 2 | 1 |
-Investments in unconsolidated affiliate | (2) | (3) |
-Distributions from unconsolidated affiliate | — | 23 |
-Other | 2 | (5) |
-Net cash used in investing activities | (411) | (434) |
-CASH FLOWS FROM FINANCING ACTIVITIES: |
-Proceeds from long-term debt and revolving credit facilities | 885 | 590 |
-Repayments of long-term debt and revolving credit facilities | (983) | (612) |
-Repurchase of common stock | — | (100) |
-Financing obligation payments | (19) | (8) |
-Distributions to noncontrolling interest owners | (41) | (30) |
-Taxes paid related to net share settlement of equity awards | (13) | (16) |
-Net cash used in financing activities | (171) | (176) |
-Increase in cash, cash equivalents and restricted cash | 93 | 70 |
-Cash, cash equivalents and restricted cash, beginning of period | 984 | 1,016 |
-Cash, cash equivalents and restricted cash, end of period | $1,077 | $1,086 |
+Six Months Ended June 30,
+(In millions) | 2026 | 2025
+CASH FLOWS FROM OPERATING ACTIVITIES:
+Net loss | $(124) | $(163)
+Adjustments to reconcile net loss to net cash provided by operating activities:
+Depreciation and amortization | 702 | 721
+Amortization of deferred financing costs and discounts | 88 | 89
+Provision for credit losses | 24 | 23
+Non-cash lease amortization | 14 | 12
+(Gain) loss on investments | (4) | 1
+Stock-based compensation expense | 47 | 50
+(Gain) loss on sale or disposal of property and equipment | (8) | 3
+Deferred income taxes | — | 24
+Other non-cash adjustments to net loss | 7 | 1
+Change in operating assets and liabilities:
+Accounts receivable | (24) | (37)
+Prepaid expenses and other assets | (88) | (47)
+Income taxes receivable and payable, net | (11) | (58)
+Accounts payable, accrued expenses and other liabilities | 52 | 61
+Net cash provided by operating activities | 675 | 680
+CASH FLOWS FROM INVESTING ACTIVITIES:
+Purchase of property and equipment | (335) | (453)
+Cash paid for asset acquisitions | (98) | —
+Proceeds from sale of property and equipment | 20 | 3
+Proceeds from sale of investments | 2 | 1
+Investments in unconsolidated affiliate | (2) | (3)
+Distributions from unconsolidated affiliate | — | 23
+Other | 2 | (5)
+Net cash used in investing activities | (411) | (434)
+CASH FLOWS FROM FINANCING ACTIVITIES:
+Proceeds from long-term debt and revolving credit facilities | 885 | 590
+Repayments of long-term debt and revolving credit facilities | (983) | (612)
+Repurchase of common stock | — | (100)
+Financing obligation payments | (19) | (8)
+Distributions to noncontrolling interest owners | (41) | (30)
+Taxes paid related to net share settlement of equity awards | (13) | (16)
+Net cash used in financing activities | (171) | (176)
+Increase in cash, cash equivalents and restricted cash | 93 | 70
+Cash, cash equivalents and restricted cash, beginning of period | 984 | 1,016
+Cash, cash equivalents and restricted cash, end of period | $1,077 | $1,086
 Table of Contents
 7
-Six Months Ended June 30, |
-(In millions) | 2026 | 2025 |
-RECONCILIATION OF CASH, CASH EQUIVALENTS AND RESTRICTED CASH TO AMOUNTS REPORTED WITHIN THE CONSOLIDATED CONDENSED BALANCE SHEETS: |
-Cash and cash equivalents | $965 | $982 |
-Restricted cash | 96 | 85 |
-Restricted and escrow cash included in other long-term assets, net | 16 | 19 |
-Total cash, cash equivalents and restricted cash | $1,077 | $1,086 |
-SUPPLEMENTAL DISCLOSURE OF CASH FLOW INFORMATION: |
-Cash interest paid for debt | $368 | $405 |
-Cash interest paid for rent related to GLPI and VICI Leases | 686 | 672 |
-Cash interest paid for other financing obligations | 5 | — |
-Income taxes paid, net | 11 | 58 |
-NON-CASH INVESTING AND FINANCING ACTIVITIES: |
-Payables for capital expenditures | 103 | 126 |
-Deferred consideration | 10 | — |
-Right-of-use asset obtained in exchange for lease liability | 203 | — |
+Six Months Ended June 30,
+(In millions) | 2026 | 2025
+RECONCILIATION OF CASH, CASH EQUIVALENTS AND RESTRICTED CASH TO AMOUNTS REPORTED WITHIN THE CONSOLIDATED CONDENSED BALANCE SHEETS:
+Cash and cash equivalents | $965 | $982
+Restricted cash | 96 | 85
+Restricted and escrow cash included in other long-term assets, net | 16 | 19
+Total cash, cash equivalents and restricted cash | $1,077 | $1,086
+SUPPLEMENTAL DISCLOSURE OF CASH FLOW INFORMATION:
+Cash interest paid for debt | $368 | $405
+Cash interest paid for rent related to GLPI and VICI Leases | 686 | 672
+Cash interest paid for other financing obligations | 5 | —
+Income taxes paid, net | 11 | 58
+NON-CASH INVESTING AND FINANCING ACTIVITIES:
+Payables for capital expenditures | 103 | 126
+Deferred consideration | 10 | —
+Right-of-use asset obtained in exchange for lease liability | 203 | —
 The accompanying notes are an integral part of these consolidated condensed financial statements.
 Table of Contents
 8
@@ -318,9 +318,9 @@ We consolidate all subsidiaries in which we have a controlling financial interes
 We consider ourselves the primary beneficiary of a VIE when we have both the power to direct the activities that most significantly impact the economic performance of the VIE and the right to receive benefits or the obligation to absorb losses that could be potentially significant to the VIE. We review investments, if a reconsideration event occurs, to determine if the investment qualifies, or continues to qualify, as a VIE. If we determine an investment qualifies, or no longer qualifies, as a VIE, there may be a material effect to our Financial Statements.
 Fair Value Measurements
 The Company measures certain of its financial assets and liabilities at fair value, on a recurring basis, which is the price that would be received to sell an asset or paid to transfer a liability in an orderly transaction between market participants. Levels of the hierarchy prioritize the inputs used to measure fair value and include:
-•Level 1: Observable inputs such as quoted prices in active markets.
-•Level 2: Inputs other than quoted prices in active markets that are either directly or indirectly observable.
-•Level 3: Unobservable inputs that reflect the Company’s own assumptions, as there is little, if any, related market activity.
+Level 1: Observable inputs such as quoted prices in active markets.
+Level 2: Inputs other than quoted prices in active markets that are either directly or indirectly observable.
+Level 3: Unobservable inputs that reflect the Company’s own assumptions, as there is little, if any, related market activity.
 Cash and Cash Equivalents
 Cash equivalents include investments in money market funds that can be redeemed immediately at the current net asset value per share. A money market fund is a mutual fund whose investments are primarily in short-term debt securities designed to maximize current income with liquidity and capital preservation, usually maintaining per share net asset value at a constant amount, such as one dollar. The carrying amounts approximate the fair value because of the short maturity of those instruments (Level 1). Cash and cash equivalents also include cash maintained for gaming operations.
 Restricted Cash
@@ -339,67 +339,67 @@ The preparation of consolidated financial statements in conformity with GAAP req
 Advertising
 Advertising costs are expensed in the period the advertising first occurs. Advertising costs were $51 million and $49 million for the three months ended June 30, 2026 and 2025, respectively, and $105 million and $109 million for the six months ended June 30, 2026 and 2025, respectively, and are primarily included within Casino expense where directly attributable to gaming activities or General and administrative expense for other indirect advertising.
 Interest Expense, Net
-Three Months Ended June 30, | Six Months Ended June 30, |
-(In millions) | 2026 | 2025 | 2026 | 2025 |
-Interest expense | $577 | $587 | $1,149 | $1,169 |
-Capitalized interest | (1) | (1) | (2) | (3) |
-Interest income | (3) | (7) | (5) | (13) |
-Total interest expense, net | $573 | $579 | $1,142 | $1,153 |
+Three Months Ended June 30, | Six Months Ended June 30,
+(In millions) | 2026 | 2025 | 2026 | 2025
+Interest expense | $577 | $587 | $1,149 | $1,169
+Capitalized interest | (1) | (1) | (2) | (3)
+Interest income | (3) | (7) | (5) | (13)
+Total interest expense, net | $573 | $579 | $1,142 | $1,153
 Recently Issued Accounting Pronouncements
 Pronouncements to Be Implemented in Future Periods
 In September 2025, the Financial Accounting Standards Board (“FASB”) issued Accounting Standards Update (“ASU”) 2025-06, “Intangibles-Goodwill and Other-Internal-Use Software: Targeted Improvements to the Accounting for Internal-Use Software.” Currently, entities are required to capitalize development costs incurred for internal-use software depending on the nature of the costs and project stage. The amendments in this update improve the operability of the guidance by removing all references to software development project stages so that guidance is neutral to different software development methods. Amendments in this update are effective for all entities for annual periods beginning after December 15, 2027. An entity may apply the new guidance: i) prospectively, ii) using a modified transition approach based on the status of a project, or iii) retrospectively. We do not expect the amendments in this update to have a material impact on our Financial Statements.
 In November 2024 (as clarified in January 2025 by ASU 2025-01), FASB issued ASU 2024-03, “Income Statement-Reporting Comprehensive Income-Expense Disaggregation Disclosures,” which requires additional disclosure about specific expense categories in the notes to financial statements which is generally not presented in financial statements today. This update applies to all public business entities and will be effective for annual reporting periods beginning after December 15, 2026, and interim reporting periods within annual reporting periods beginning after December 15, 2027. Early adoption is permitted. We do not expect the amendments in this update to have a material impact on our Financial Statements.
 Note 3. Property and Equipment, net
-(In millions) | June 30, 2026 | December 31, 2025 |
-Land | $2,049 | $2,057 |
-Buildings, riverboats, and leasehold and land improvements | 15,373 | 15,295 |
-Furniture, fixtures, and equipment | 3,417 | 3,174 |
-Construction in progress | 125 | 153 |
-Total property and equipment | 20,964 | 20,679 |
-Less: accumulated depreciation | (6,839) | (6,321) |
-Total property and equipment, net | $14,125 | $14,358 |
+(In millions) | June 30, 2026 | December 31, 2025
+Land | $2,049 | $2,057
+Buildings, riverboats, and leasehold and land improvements | 15,373 | 15,295
+Furniture, fixtures, and equipment | 3,417 | 3,174
+Construction in progress | 125 | 153
+Total property and equipment | 20,964 | 20,679
+Less: accumulated depreciation | (6,839) | (6,321)
+Total property and equipment, net | $14,125 | $14,358
 A portion of our property and equipment is subject to various operating leases for which we are the lessor. Leased property includes our hotel rooms, convention space and retail space through various short-term and long-term operating leases.
 Table of Contents
 13
 CAESARS ENTERTAINMENT, INC.
 NOTES TO CONSOLIDATED CONDENSED FINANCIAL STATEMENTS (CONTINUED)
 (UNAUDITED)
-Depreciation Expense |
-Three Months Ended June 30, | Six Months Ended June 30, |
-(In millions) | 2026 | 2025 | 2026 | 2025 |
-Depreciation expense | $322 | $331 | $635 | $655 |
+Depreciation Expense
+Three Months Ended June 30, | Six Months Ended June 30,
+(In millions) | 2026 | 2025 | 2026 | 2025
+Depreciation expense | $322 | $331 | $635 | $655
 Depreciation is calculated using the straight-line method over the shorter of the estimated useful life of the asset or the related lease.
 Note 4. Goodwill and Intangible Assets, net
-Changes in Carrying Value of Goodwill and Other Intangible Assets |
-Non-Amortizing Intangible Assets |
-(In millions) | Amortizing Intangible Assets | Goodwill | Other |
-Balances as of December 31, 2025 | $730 | $10,441 | $3,255 |
-Amortization expense | (67) | — | — |
-In-place leases | 51 | — | — |
-Other | (10) | — | — |
-Balances as of June 30, 2026 | $704 | $10,441 | $3,255 |
-Gross Carrying Value and Accumulated Amortization of Intangible Assets Other Than Goodwill |
-June 30, 2026 | December 31, 2025 |
-(Dollars in millions) | Useful Life | Gross Carrying Amount | Accumulated Amortization | Net Carrying Amount | Gross Carrying Amount | Accumulated Amortization | Net Carrying Amount |
-Amortizing intangible assets |
-Customer relationships | 1 - 7 years | $595 | $(529) | $66 | $595 | $(495) | $100 |
-Gaming rights and other | 10 - 34 years | 248 | (60) | 188 | 262 | (57) | 205 |
-Trademarks | 15 years | 313 | (136) | 177 | 313 | (127) | 186 |
-Reacquired rights | 24 years | 250 | (54) | 196 | 250 | (49) | 201 |
-Technology | 3 - 6 years | 134 | (108) | 26 | 134 | (96) | 38 |
-In-place leases | 3 - 15 years | 51 | — | 51 | — | — | — |
-$1,591 | $(887) | 704 | $1,554 | $(824) | 730 |
-Non-amortizing intangible assets other than Goodwill |
-Trademarks | 1,749 | 1,749 |
-Gaming rights | 983 | 983 |
-Caesars Rewards | 523 | 523 |
-3,255 | 3,255 |
-Total amortizing and non-amortizing intangible assets other than Goodwill, net | $3,959 | $3,985 |
+Changes in Carrying Value of Goodwill and Other Intangible Assets
+Non-Amortizing Intangible Assets
+(In millions) | Amortizing Intangible Assets | Goodwill | Other
+Balances as of December 31, 2025 | $730 | $10,441 | $3,255
+Amortization expense | (67) | — | —
+In-place leases | 51 | — | —
+Other | (10) | — | —
+Balances as of June 30, 2026 | $704 | $10,441 | $3,255
+Gross Carrying Value and Accumulated Amortization of Intangible Assets Other Than Goodwill
+June 30, 2026 | December 31, 2025
+(Dollars in millions) | Useful Life | Gross Carrying Amount | Accumulated Amortization | Net Carrying Amount | Gross Carrying Amount | Accumulated Amortization | Net Carrying Amount
+Amortizing intangible assets
+Customer relationships | 1 - 7 years | $595 | $(529) | $66 | $595 | $(495) | $100
+Gaming rights and other | 10 - 34 years | 248 | (60) | 188 | 262 | (57) | 205
+Trademarks | 15 years | 313 | (136) | 177 | 313 | (127) | 186
+Reacquired rights | 24 years | 250 | (54) | 196 | 250 | (49) | 201
+Technology | 3 - 6 years | 134 | (108) | 26 | 134 | (96) | 38
+In-place leases | 3 - 15 years | 51 | — | 51 | — | — | —
+$1,591 | $(887) | 704 | $1,554 | $(824) | 730
+Non-amortizing intangible assets other than Goodwill
+Trademarks | 1,749 | 1,749
+Gaming rights | 983 | 983
+Caesars Rewards | 523 | 523
+3,255 | 3,255
+Total amortizing and non-amortizing intangible assets other than Goodwill, net | $3,959 | $3,985
 Amortization expense with respect to intangible assets for both the three months ended June 30, 2026 and 2025 totaled $33 million, and for the six months ended June 30, 2026 and 2025 totaled $67 million and $66 million, respectively, which is included in Depreciation and amortization in the Statements of Operations.
-Estimated Five-Year Amortization |
-Remaining 2026 | Years Ended December 31, |
-(In millions) | 2027 | 2028 | 2029 | 2030 | 2031 |
-Estimated amortization expense | $70 | $92 | $51 | $48 | $48 | $46 |
+Estimated Five-Year Amortization
+Remaining 2026 | Years Ended December 31,
+(In millions) | 2027 | 2028 | 2029 | 2030 | 2031
+Estimated amortization expense | $70 | $92 | $51 | $48 | $48 | $46
 Table of Contents
 14
 CAESARS ENTERTAINMENT, INC.
@@ -412,15 +412,15 @@ We are party to various legal proceedings, which have arisen in the normal cours
 Contractual Commitments
 Sports Sponsorship/Partnership Obligations
 The Company has agreements with certain sporting event facilities and professional sports teams primarily for tickets, suites, advertising, marketing, promotional and sponsorship opportunities. The agreements include leasing of event suites that are generally considered short-term leases for which the Company does not record a right-of-use asset or lease liability and recognizes expenses in the period services are received. As of June 30, 2026 and December 31, 2025, obligations related to these agreements were $309 million and $318 million, respectively, with contracts extending through 2040.
-Maturities of Sports Sponsorship/Partnership Obligations as of June 30, 2026 |
-(In millions) |
-Remaining 2026 | $22 |
-2027 | 34 |
-2028 | 33 |
-2029 | 30 |
-2030 | 26 |
-Thereafter | 164 |
-Total | $309 |
+Maturities of Sports Sponsorship/Partnership Obligations as of June 30, 2026
+(In millions)
+Remaining 2026 | $22
+2027 | 34
+2028 | 33
+2029 | 30
+2030 | 26
+Thereafter | 164
+Total | $309
 Self-Insurance
 The Company is self-insured for workers compensation and other risk insurance, as well as health insurance and general liability. The Company’s total estimated self-insurance liability was $235 million and $212 million as of June 30, 2026 and December 31, 2025, respectively, which is included in Accrued other liabilities in our Balance Sheets.
 The assumptions utilized by our actuaries are subject to significant uncertainty and if outcomes differ from these assumptions or events develop or progress in a negative manner, the Company could experience a material adverse effect and additional liabilities may be recorded in the future.
@@ -430,36 +430,36 @@ CAESARS ENTERTAINMENT, INC.
 NOTES TO CONSOLIDATED CONDENSED FINANCIAL STATEMENTS (CONTINUED)
 (UNAUDITED)
 Note 6. Long-Term Debt
-June 30, 2026 | December 31, 2025 |
-(Dollars in millions) | Final Maturity | Rates | Face Value | Book Value | Book Value |
-Secured Debt |
-CEI Revolving Credit Facility | 2028 | variable | $120 | $120 | $160 |
-CEI Term Loan A | 2028 | variable | 619 | 618 | 636 |
-CVA Revolving Credit Facility | 2029 | variable | — | — | — |
-CVA Delayed Draw Term Loan | 2029 | variable | 376 | 372 | 381 |
-CEI Term Loan B | 2030 | variable | 2,018 | 1,993 | 2,002 |
-CEI Term Loan B-1 | 2031 | variable | 2,835 | 2,808 | 2,820 |
-CEI Senior Secured Notes due 2030 | 2030 | 7.00% | 2,000 | 1,987 | 1,986 |
-CEI Senior Secured Notes due 2032 | 2032 | 6.50% | 1,500 | 1,487 | 1,486 |
-Unsecured Debt |
-CEI Senior Notes due 2029 | 2029 | 4.625% | 1,200 | 1,193 | 1,192 |
-CEI Senior Notes due 2032 | 2032 | 6.00% | 1,100 | 1,088 | 1,087 |
-Special Improvement District Bonds | 2037 | 4.30% | 38 | 38 | 40 |
-Long-term notes and other payables | 1 | 1 | 2 |
-Total debt | 11,807 | 11,705 | 11,792 |
-Current portion of long-term debt | (114) | (114) | (114) |
-Deferred finance charges associated with the CEI Revolving Credit Facility | — | (6) | (8) |
-Long-term debt | $11,693 | $11,585 | $11,670 |
-Unamortized discounts and deferred finance charges | $108 | $121 |
-Fair value | $11,465 |
-Annual Estimated Debt Service Requirements as of June 30, 2026 |
-Remaining | Years Ended December 31, |
-(In millions) | 2026 | 2027 | 2028 | 2029 | 2030 | Thereafter | Total |
-Annual maturities of long-term debt | $55 | $114 | $767 | $1,574 | $3,962 | $5,335 | $11,807 |
-Estimated interest payments | 370 | 750 | 680 | 650 | 420 | 300 | 3,170 |
-Total debt service obligation (a) | $425 | $864 | $1,447 | $2,224 | $4,382 | $5,635 | $14,977 |
+June 30, 2026 | December 31, 2025
+(Dollars in millions) | Final Maturity | Rates | Face Value | Book Value | Book Value
+Secured Debt
+CEI Revolving Credit Facility | 2028 | variable | $120 | $120 | $160
+CEI Term Loan A | 2028 | variable | 619 | 618 | 636
+CVA Revolving Credit Facility | 2029 | variable | — | — | —
+CVA Delayed Draw Term Loan | 2029 | variable | 376 | 372 | 381
+CEI Term Loan B | 2030 | variable | 2,018 | 1,993 | 2,002
+CEI Term Loan B-1 | 2031 | variable | 2,835 | 2,808 | 2,820
+CEI Senior Secured Notes due 2030 | 2030 | 7.00% | 2,000 | 1,987 | 1,986
+CEI Senior Secured Notes due 2032 | 2032 | 6.50% | 1,500 | 1,487 | 1,486
+Unsecured Debt
+CEI Senior Notes due 2029 | 2029 | 4.625% | 1,200 | 1,193 | 1,192
+CEI Senior Notes due 2032 | 2032 | 6.00% | 1,100 | 1,088 | 1,087
+Special Improvement District Bonds | 2037 | 4.30% | 38 | 38 | 40
+Long-term notes and other payables | 1 | 1 | 2
+Total debt | 11,807 | 11,705 | 11,792
+Current portion of long-term debt | (114) | (114) | (114)
+Deferred finance charges associated with the CEI Revolving Credit Facility | — | (6) | (8)
+Long-term debt | $11,693 | $11,585 | $11,670
+Unamortized discounts and deferred finance charges | $108 | $121
+Fair value | $11,465
+Annual Estimated Debt Service Requirements as of June 30, 2026
+Remaining | Years Ended December 31,
+(In millions) | 2026 | 2027 | 2028 | 2029 | 2030 | Thereafter | Total
+Annual maturities of long-term debt | $55 | $114 | $767 | $1,574 | $3,962 | $5,335 | $11,807
+Estimated interest payments | 370 | 750 | 680 | 650 | 420 | 300 | 3,170
+Total debt service obligation (a) | $425 | $864 | $1,447 | $2,224 | $4,382 | $5,635 | $14,977
 ____________________
-(a)Debt principal payments are estimated amounts based on contractual maturity and scheduled repayment dates. Interest payments are estimated based on forward-looking interest rate curves, where applicable. Actual payments may differ from these estimates.
+(a) Debt principal payments are estimated amounts based on contractual maturity and scheduled repayment dates. Interest payments are estimated based on forward-looking interest rate curves, where applicable. Actual payments may differ from these estimates.
 Current Portion of Long-Term Debt
 The current portion of long-term debt as of June 30, 2026 includes the principal payments on the term loans, special improvement district bonds, and other unsecured borrowings that are contractually due within 12 months. The Company may, from time to time, seek to repurchase or prepay its outstanding indebtedness. Any such purchases or repayments may be funded by existing cash balances or the incurrence of debt. The amount and timing of any repurchase will be based on business and market conditions, capital availability, compliance with debt covenants and other considerations.
 Debt Discounts or Premiums and Deferred Finance Charges
@@ -511,53 +511,53 @@ The CEI Revolving Credit Facility, the CEI Term Loan A, the CEI Term Loan B, the
 The CVA Revolving Credit Facility and the CVA Delayed Draw Term Loan are secured by substantially all material assets of Caesars Virginia, LLC and any newly formed wholly-owned subsidiary of Caesars Virginia, LLC. CEI does not provide a guarantee of these facilities.
 Note 7. Revenue Recognition
 The Company’s Statements of Operations present net revenue disaggregated by type or nature of the good or service. A summary of net revenues disaggregated by type of revenue and reportable segment is presented below. Refer to Note 12 for additional information on the Company’s reportable segments.
-Three Months Ended June 30, 2026 |
-(In millions) | Las Vegas | Regional | Caesars Digital | Managed and Branded | Corporate and Other | Total |
-Casino | $277 | $1,144 | $340 | $— | $(2) | $1,759 |
-Food and beverage | 267 | 160 | — | — | (1) | 426 |
-Hotel | 315 | 180 | — | — | — | 495 |
-Other | 158 | 86 | 11 | 57 | 1 | 313 |
-Net revenues | $1,017 | $1,570 | $351 | $57 | $(2) | $2,993 |
-Three Months Ended June 30, 2025 |
-(In millions) | Las Vegas | Regional | Caesars Digital | Managed and Branded | Corporate and Other | Total |
-Casino | $292 | $1,045 | $331 | $— | $— | $1,668 |
-Food and beverage | 278 | 150 | — | — | — | 428 |
-Hotel | 346 | 163 | — | — | — | 509 |
-Other | 138 | 77 | 12 | 74 | 1 | 302 |
-Net revenues | $1,054 | $1,435 | $343 | $74 | $1 | $2,907 |
-Six Months Ended June 30, 2026 |
-(In millions) | Las Vegas | Regional | Caesars Digital | Managed and Branded | Corporate and Other | Total |
-Casino | $521 | $2,202 | $705 | $— | $(3) | $3,425 |
-Food and beverage | 540 | 311 | — | — | (1) | 850 |
-Hotel | 661 | 321 | — | — | — | 982 |
-Other | 298 | 166 | 20 | 123 | (1) | 606 |
-Net revenues | $2,020 | $3,000 | $725 | $123 | $(5) | $5,863 |
+Three Months Ended June 30, 2026
+(In millions) | Las Vegas | Regional | Caesars Digital | Managed and Branded | Corporate and Other | Total
+Casino | $277 | $1,144 | $340 | $— | $(2) | $1,759
+Food and beverage | 267 | 160 | — | — | (1) | 426
+Hotel | 315 | 180 | — | — | — | 495
+Other | 158 | 86 | 11 | 57 | 1 | 313
+Net revenues | $1,017 | $1,570 | $351 | $57 | $(2) | $2,993
+Three Months Ended June 30, 2025
+(In millions) | Las Vegas | Regional | Caesars Digital | Managed and Branded | Corporate and Other | Total
+Casino | $292 | $1,045 | $331 | $— | $— | $1,668
+Food and beverage | 278 | 150 | — | — | — | 428
+Hotel | 346 | 163 | — | — | — | 509
+Other | 138 | 77 | 12 | 74 | 1 | 302
+Net revenues | $1,054 | $1,435 | $343 | $74 | $1 | $2,907
+Six Months Ended June 30, 2026
+(In millions) | Las Vegas | Regional | Caesars Digital | Managed and Branded | Corporate and Other | Total
+Casino | $521 | $2,202 | $705 | $— | $(3) | $3,425
+Food and beverage | 540 | 311 | — | — | (1) | 850
+Hotel | 661 | 321 | — | — | — | 982
+Other | 298 | 166 | 20 | 123 | (1) | 606
+Net revenues | $2,020 | $3,000 | $725 | $123 | $(5) | $5,863
 Table of Contents
 19
 CAESARS ENTERTAINMENT, INC.
 NOTES TO CONSOLIDATED CONDENSED FINANCIAL STATEMENTS (CONTINUED)
 (UNAUDITED)
-Six Months Ended June 30, 2025 |
-(In millions) | Las Vegas | Regional | Caesars Digital | Managed and Branded | Corporate and Other | Total |
-Casino | $535 | $2,075 | $655 | $— | $(3) | $3,262 |
-Food and beverage | 564 | 299 | — | — | — | 863 |
-Hotel | 689 | 302 | — | — | — | 991 |
-Other | 269 | 147 | 23 | 141 | 5 | 585 |
-Net revenues | $2,057 | $2,823 | $678 | $141 | $2 | $5,701 |
-Accounts Receivable, net |
-(In millions) | June 30, 2026 | December 31, 2025 |
-Casino | $178 | $221 |
-Food and beverage and hotel | 126 | 100 |
-Other | 181 | 155 |
-Accounts receivable, net | $485 | $476 |
+Six Months Ended June 30, 2025
+(In millions) | Las Vegas | Regional | Caesars Digital | Managed and Branded | Corporate and Other | Total
+Casino | $535 | $2,075 | $655 | $— | $(3) | $3,262
+Food and beverage | 564 | 299 | — | — | — | 863
+Hotel | 689 | 302 | — | — | — | 991
+Other | 269 | 147 | 23 | 141 | 5 | 585
+Net revenues | $2,057 | $2,823 | $678 | $141 | $2 | $5,701
+Accounts Receivable, net
+(In millions) | June 30, 2026 | December 31, 2025
+Casino | $178 | $221
+Food and beverage and hotel | 126 | 100
+Other | 181 | 155
+Accounts receivable, net | $485 | $476
 Contract and Contract Related Liabilities
 The Company records contract or contract related liabilities related to differences between the timing of cash receipts from the customer and the recognition of revenue. The Company generally has three types of liabilities related to contracts with customers: (1) outstanding chip liability, which represents the amounts owed in exchange for gaming chips held by customers, (2) Caesars Rewards player loyalty program obligations, which represent the deferred allocation of revenue relating to reward credits granted to Caesars Rewards members based on certain types of customer spend, including online and retail gaming, hotel, dining, retail shopping, and player loyalty program incentives earned, and (3) customer deposits and other deferred revenue, which primarily represents funds deposited by customers related to gaming play or advance payments received for goods and services yet to be provided (such as advance ticket sales, deposits on rooms and convention space, unpaid wagers, iGaming deposits, or future sports bets). These liabilities are generally expected to be recognized as revenue within one year of being purchased, earned, or deposited and are recorded within Accrued other liabilities on the Company’s Balance Sheets. Liabilities expected to be recognized as revenue beyond one year of being purchased, earned, or deposited are recorded within Other long-term liabilities on the Company’s Balance Sheets.
 The following table summarizes the activity related to contract and contract related liabilities:
-Outstanding Chip Liability | Caesars Rewards | Customer Deposits and Other Deferred Revenue |
-(In millions) | 2026 | 2025 | 2026 | 2025 | 2026 | 2025 |
-Balance at January 1 | $39 | $47 | $89 | $79 | $492 | $549 |
-Balance at June 30 | 41 | 39 | 92 | 86 | 545 | 586 |
-Increase / (decrease) | $2 | $(8) | $3 | $7 | $53 | $37 |
+Outstanding Chip Liability | Caesars Rewards | Customer Deposits and Other Deferred Revenue
+(In millions) | 2026 | 2025 | 2026 | 2025 | 2026 | 2025
+Balance at January 1 | $39 | $47 | $89 | $79 | $492 | $549
+Balance at June 30 | 41 | 39 | 92 | 86 | 545 | 586
+Increase / (decrease) | $2 | $(8) | $3 | $7 | $53 | $37
 Lease Revenue
 Lodging Arrangements
 Lodging arrangements are considered short-term and generally consist of lease and nonlease components. The lease component is the predominant component of the arrangement and consists of the fees charged for lodging. The nonlease components primarily consist of resort fees and other miscellaneous items. As the timing and pattern of transfer of both the lease and nonlease components are over the course of the lease term, we have elected to combine the revenue generated from lease and nonlease components into a single lease component based on the predominant component in the arrangement. During the three months ended June 30, 2026 and 2025, we recognized lease revenue of approximately $495 million and $509 million, respectively, and during the six months ended June 30, 2026 and 2025, we recognized approximately $982 million and $991 million, respectively, which is included in Hotel revenues in the Statements of Operations.
@@ -573,20 +573,20 @@ Real estate lease revenue is included in Other revenue in the Statements of Oper
 Real estate lease revenue includes $16 million and $15 million of variable rental income for the three months ended June 30, 2026 and 2025, respectively, and $31 million and $29 million for the six months ended June 30, 2026 and 2025, respectively.
 Note 8. Earnings per Share
 The following table illustrates the reconciliation of the numerators and denominators of the basic and diluted net income (loss) per share computations for the three and six months ended June 30, 2026 and 2025:
-Three Months Ended June 30, | Six Months Ended June 30, |
-(In millions, except per share data) | 2026 | 2025 | 2026 | 2025 |
-Net loss attributable to Caesars | $(62) | $(82) | $(160) | $(197) |
-Shares outstanding: |
-Weighted average shares outstanding – basic | 204 | 209 | 204 | 210 |
-Weighted average shares outstanding – diluted | 204 | 209 | 204 | 210 |
-Net loss per common share attributable to common stockholders – basic: | $(0.30) | $(0.39) | $(0.78) | $(0.93) |
-Net loss per common share attributable to common stockholders – diluted: | $(0.30) | $(0.39) | $(0.78) | $(0.93) |
+Three Months Ended June 30, | Six Months Ended June 30,
+(In millions, except per share data) | 2026 | 2025 | 2026 | 2025
+Net loss attributable to Caesars | $(62) | $(82) | $(160) | $(197)
+Shares outstanding:
+Weighted average shares outstanding – basic | 204 | 209 | 204 | 210
+Weighted average shares outstanding – diluted | 204 | 209 | 204 | 210
+Net loss per common share attributable to common stockholders – basic: | $(0.30) | $(0.39) | $(0.78) | $(0.93)
+Net loss per common share attributable to common stockholders – diluted: | $(0.30) | $(0.39) | $(0.78) | $(0.93)
 For a period in which the Company generated a net loss attributable to Caesars, the weighted average shares outstanding - basic was used in calculating diluted loss per share because using diluted shares would have been anti-dilutive to loss per share.
-Weighted-Average Number of Anti-Dilutive Shares Excluded from Calculation of Earnings per Share |
-Three Months Ended June 30, | Six Months Ended June 30, |
-(In millions) | 2026 | 2025 | 2026 | 2025 |
-Stock-based compensation awards | 7 | 5 | 6 | 5 |
-Total anti-dilutive common stock | 7 | 5 | 6 | 5 |
+Weighted-Average Number of Anti-Dilutive Shares Excluded from Calculation of Earnings per Share
+Three Months Ended June 30, | Six Months Ended June 30,
+(In millions) | 2026 | 2025 | 2026 | 2025
+Stock-based compensation awards | 7 | 5 | 6 | 5
+Total anti-dilutive common stock | 7 | 5 | 6 | 5
 Note 9. Stock-Based Compensation and Stockholders’ Equity
 Stock-Based Awards
 The Company maintains long-term incentive plans, adopted by the Board of Directors (“Board”) and approved by the Company’s stockholders, which allows for granting stock-based compensation awards of Company Common Stock to directors, employees, officers, and consultants or advisers who render services to the Company or its subsidiaries, including stock options, restricted stock, restricted stock units (“RSUs”), performance stock units (“PSUs”), market-based performance stock units (“MSUs”), stock appreciation rights, and other stock-based awards or dividend equivalents. Forfeitures are recognized in the period in which they occur.
@@ -602,13 +602,13 @@ During the six months ended June 30, 2026, the Company also granted 291 thousand
 In addition, during the six months ended June 30, 2026, the Company granted 436 thousand MSUs to eligible participants with an aggregate fair value of $14 million that are primarily scheduled to cliff vest after three years from the grant date. On the vesting date, recipients will receive between 0% and 200% of the target number of MSUs granted, in the form of Company Common Stock, based on the achievement of specified market and service conditions and terms of the underlying award granted. The grant date fair value of the MSUs was determined using a Monte-Carlo simulation model. Key assumptions for the Monte-Carlo simulation model are the risk-free interest rate, expected volatility, expected dividends and correlation coefficient. The effect of market conditions is considered in determining the grant date fair value, which is not subsequently revised based on actual performance.
 During the six months ended June 30, 2026, 1.6 million, 118 thousand and 5 thousand of RSUs, PSUs and MSUs, respectively, vested under the 2015 Plan.
 Outstanding at End of Period
-June 30, 2026 | December 31, 2025 |
-Quantity | Wtd-Avg (a) | Quantity | Wtd-Avg (a) |
-Restricted stock units | 4,776,747 | $28.77 | 3,568,478 | $38.58 |
-Performance stock units | 635,218 | 30.18 | 518,034 | 23.39 |
-Market-based stock units | 1,162,392 | 44.98 | 1,049,454 | 61.04 |
+June 30, 2026 | December 31, 2025
+Quantity | Wtd-Avg (a) | Quantity | Wtd-Avg (a)
+Restricted stock units | 4,776,747 | $28.77 | 3,568,478 | $38.58
+Performance stock units | 635,218 | 30.18 | 518,034 | 23.39
+Market-based stock units | 1,162,392 | 44.98 | 1,049,454 | 61.04
 ____________________
-(a)Represents the weighted-average grant date fair value for RSUs, weighted-average grant date fair value for PSUs where the grant date has been achieved, the price of CEI common stock as of the balance sheet date for PSUs where a grant date has not been achieved, and the grant date fair value of the MSUs determined using the Monte-Carlo simulation model.
+(a) Represents the weighted-average grant date fair value for RSUs, weighted-average grant date fair value for PSUs where the grant date has been achieved, the price of CEI common stock as of the balance sheet date for PSUs where a grant date has not been achieved, and the grant date fair value of the MSUs determined using the Monte-Carlo simulation model.
 Table of Contents
 22
 CAESARS ENTERTAINMENT, INC.
@@ -616,28 +616,28 @@ NOTES TO CONSOLIDATED CONDENSED FINANCIAL STATEMENTS (CONTINUED)
 (UNAUDITED)
 Accumulated Other Comprehensive Income (Loss)
 The changes in Accumulated other comprehensive income (loss) by component, net of tax, for the periods through June 30, 2026 and 2025 are shown below.
-(In millions) | Accumulated Other Comprehensive Income (Loss) |
-Balance as of December 31, 2024 | $96 |
-Foreign currency and other | — |
-Balance as of March 31, 2025 | 96 |
-Foreign currency and other | 2 |
-Balance as of June 30, 2025 | $98 |
-Balance as of December 31, 2025 | $98 |
-Foreign currency and other | (2) |
-Balance as of March 31, 2026 | 96 |
-Foreign currency and other | (1) |
-Balance as of June 30, 2026 | $95 |
+(In millions) | Accumulated Other Comprehensive Income (Loss)
+Balance as of December 31, 2024 | $96
+Foreign currency and other | —
+Balance as of March 31, 2025 | 96
+Foreign currency and other | 2
+Balance as of June 30, 2025 | $98
+Balance as of December 31, 2025 | $98
+Foreign currency and other | (2)
+Balance as of March 31, 2026 | 96
+Foreign currency and other | (1)
+Balance as of June 30, 2026 | $95
 Share Repurchase Program
 On October 2, 2024, the Company announced that its Board authorized a $500 million common stock repurchase program (the “2024 Share Repurchase Program”). Under the 2024 Share Repurchase Program, the Company may, from time to time, repurchase shares of common stock on the open market (either with or without a 10b5-1 plan) or through privately negotiated transactions. The 2024 Share Repurchase Program has no time limit and may be suspended or discontinued at any time without notice. There is no minimum number of shares of common stock that the Company is required to repurchase under the 2024 Share Repurchase Program. There were no share repurchases made during the three and six months ended June 30, 2026. During the second quarter of 2025, the Company repurchased 4,188,466 shares of common stock at an aggregate value of $100 million, at an average of $23.84 per share, excluding commissions or applicable excise tax. Under the 2024 Share Repurchase Program, as of June 30, 2026, the Company has authorization to repurchase up to $221 million more of our outstanding common stock. All share repurchases under the 2024 Share Repurchase Program are retired upon repurchase.
 As a result of the proposed Merger, described above, no share repurchases are expected at this time.
 Note 10. Income Taxes
 The Company utilized a discrete effective tax rate method, as allowed by ASC 740-270 “Income Taxes, Interim Reporting,” to calculate taxes for the three and six months ended June 30, 2026 and 2025. The Company determined that small changes in estimated “ordinary” income would result in significant changes in the estimated annual effective tax rate (“AETR”), and therefore, the AETR method would not provide a reliable estimate.
-Income Tax Allocation |
-Three Months Ended June 30, | Six Months Ended June 30, |
-(In millions) | 2026 | 2025 | 2026 | 2025 |
-Loss before income taxes | $(53) | $(52) | $(124) | $(139) |
-Benefit (provision) for income taxes | 12 | (13) | — | (24) |
-Effective tax rate | 22.6% | (25.0)% | —% | (17.3)% |
+Income Tax Allocation
+Three Months Ended June 30, | Six Months Ended June 30,
+(In millions) | 2026 | 2025 | 2026 | 2025
+Loss before income taxes | $(53) | $(52) | $(124) | $(139)
+Benefit (provision) for income taxes | 12 | (13) | — | (24)
+Effective tax rate | 22.6% | (25.0)% | —% | (17.3)%
 The Company classifies accruals for uncertain tax positions within Other long-term liabilities on the Balance Sheets, separate from any related income tax payable or deferred income taxes. Reserve amounts relate to any potential income tax liabilities resulting from uncertain tax positions as well as potential interest or penalties associated with those liabilities.
 Management assesses the available positive and negative evidence to estimate if sufficient future taxable income will be generated to use existing deferred tax assets. The Company is carrying a valuation allowance on certain federal and state deferred tax assets that are not more likely than not to be realized in the future. The Company has assessed the changes to the valuation allowance, including realization of the disallowed interest expense deferred tax asset, using the integrated approach.
 Table of Contents
@@ -655,11 +655,11 @@ CVA Holdco, LLC
 In May 2023, the Company entered into a joint venture, CVA Holdco, LLC, with the Eastern Band of Cherokee Indians to construct, own and operate a gaming facility in Danville, Virginia (“Caesars Virginia”). As the managing member, the Company operates the business and managed the development, construction, and financing of the property. The Company holds a 50.0% variable interest in the joint venture and is the primary beneficiary; as such, the joint venture’s operations are included in the Financial Statements, with a minority interest recorded reflecting the operations attributed to the other partner. The Company participates ratably, based on ownership percentage, in the profits and losses of the joint venture. During the six months ended June 30, 2026 and 2025, the Company made distributions totaling $40 million and $30 million, respectively, to the partner.
 Pompano Joint Venture
 In April 2018, the Company entered into a joint venture with Cordish Companies (“Cordish”) to plan and develop a mixed-use entertainment and hospitality destination expected to be located on unused land adjacent to the casino at the Company’s Pompano property. As the managing member, Cordish will operate the business and manage the development, construction, financing, marketing, leasing, maintenance and day-to-day operation of the various phases of the project. Additionally, Cordish is responsible for the development of the master plan for the project with the Company’s input and will submit it for the Company’s review and approval. While the Company holds a 50% variable interest in the joint venture, it is not the primary beneficiary; as such, the investment in the joint venture is accounted for using the equity method and is recorded in Investments in and advances to unconsolidated affiliates on the Balance Sheets. The Company participates evenly with Cordish in the profits and losses of the joint venture, which are included in Transaction and other costs, net on the Statements of Operations.
-Investment in Pompano Joint Venture |
-(In millions) |
-Balance as of December 31, 2025 | $115 |
-Equity in earnings | (7) |
-Balance as of June 30, 2026 | $108 |
+Investment in Pompano Joint Venture
+(In millions)
+Balance as of December 31, 2025 | $115
+Equity in earnings | (7)
+Balance as of June 30, 2026 | $108
 Table of Contents
 24
 CAESARS ENTERTAINMENT, INC.
@@ -668,27 +668,27 @@ NOTES TO CONSOLIDATED CONDENSED FINANCIAL STATEMENTS (CONTINUED)
 Note 12. Segment Information
 The executive decision maker of the Company reviews operating results, assesses performance and makes decisions on a “significant market” basis. Management views each of the Company’s casinos as an operating segment. Operating segments are aggregated based on their similar economic characteristics, types of customers, types of services and products provided, and their management and reporting structure. The Company’s principal operating activities occur in four reportable segments. The reportable segments are based on the similar characteristics of the operating segments with the way management assesses these results and allocates resources, which is a consolidated view that adjusts for the effect of certain transactions between these reportable segments within Caesars: (1) Las Vegas, (2) Regional, (3) Caesars Digital, and (4) Managed and Branded, in addition to Corporate and Other. See the table below for a summary of these segments.
 The following table sets forth certain information regarding our properties (listed by segment in which each property is reported) as of June 30, 2026:
-Las Vegas | Regional | Managed and Branded |
-Caesars Palace Las Vegas | Caesars Atlantic City | Harrah’s Pompano Beach | Managed |
-Flamingo Las Vegas | Caesars New Orleans | Horseshoe Baltimore | Harrah’s Ak-Chin |
-Harrah’s Las Vegas | Caesars Republic Lake Tahoe | Horseshoe Black Hawk | Harrah’s Cherokee |
-Horseshoe Las Vegas | Caesars Virginia | Horseshoe Bossier City | Harrah’s Cherokee Valley River |
-The LINQ Hotel & Casino | Caesars Windsor | Horseshoe Council Bluffs | Harrah’s Oklahoma |
-Paris Las Vegas | Circus Circus Reno | Horseshoe Hammond | Harrah’s Resort Southern California |
-Planet Hollywood Resort & Casino | Eldorado Gaming Scioto Downs | Horseshoe Indianapolis | Branded |
-The Vanderpump Hotel | Eldorado Resort Casino Reno | Horseshoe Lake Charles | Caesars Southern Indiana |
-Grand Victoria Casino | Horseshoe St. Louis | Harrah’s Northern California |
-Caesars Digital | Harrah’s Atlantic City | Horseshoe Tunica |
-Caesars Digital | Harrah’s Columbus Nebraska | Isle Casino Bettendorf |
-Harrah’s Council Bluffs | Isle of Capri Casino Boonville |
-Harrah’s Gulf Coast | Isle of Capri Casino Lula |
-Harrah’s Hoosier Park Racing & Casino | Isle Casino Waterloo |
-Harrah’s Joliet | Lady Luck Casino - Black Hawk |
-Harrah’s Lake Tahoe | Silver Legacy Resort Casino |
-Harrah’s Laughlin | Trop Casino Greenville |
-Harrah’s Metropolis | Tropicana Atlantic City |
-Harrah’s North Kansas City | Tropicana Laughlin Hotel & Casino |
-Harrah’s Philadelphia |
+Las Vegas | Regional | Managed and Branded
+Caesars Palace Las Vegas | Caesars Atlantic City | Harrah’s Pompano Beach | Managed
+Flamingo Las Vegas | Caesars New Orleans | Horseshoe Baltimore | Harrah’s Ak-Chin
+Harrah’s Las Vegas | Caesars Republic Lake Tahoe | Horseshoe Black Hawk | Harrah’s Cherokee
+Horseshoe Las Vegas | Caesars Virginia | Horseshoe Bossier City | Harrah’s Cherokee Valley River
+The LINQ Hotel & Casino | Caesars Windsor | Horseshoe Council Bluffs | Harrah’s Oklahoma
+Paris Las Vegas | Circus Circus Reno | Horseshoe Hammond | Harrah’s Resort Southern California
+Planet Hollywood Resort & Casino | Eldorado Gaming Scioto Downs | Horseshoe Indianapolis | Branded
+The Vanderpump Hotel | Eldorado Resort Casino Reno | Horseshoe Lake Charles | Caesars Southern Indiana
+Grand Victoria Casino | Horseshoe St. Louis | Harrah’s Northern California
+Caesars Digital | Harrah’s Atlantic City | Horseshoe Tunica
+Caesars Digital | Harrah’s Columbus Nebraska | Isle Casino Bettendorf
+Harrah’s Council Bluffs | Isle of Capri Casino Boonville
+Harrah’s Gulf Coast | Isle of Capri Casino Lula
+Harrah’s Hoosier Park Racing & Casino | Isle Casino Waterloo
+Harrah’s Joliet | Lady Luck Casino - Black Hawk
+Harrah’s Lake Tahoe | Silver Legacy Resort Casino
+Harrah’s Laughlin | Trop Casino Greenville
+Harrah’s Metropolis | Tropicana Atlantic City
+Harrah’s North Kansas City | Tropicana Laughlin Hotel & Casino
+Harrah’s Philadelphia
 Certain of our properties operate off-track betting locations, including Harrah’s Hoosier Park Racing & Casino, which operates Winner’s Circle Indianapolis and Winner’s Circle New Haven, and Horseshoe Indianapolis, which operates Winner’s Circle Clarksville. We operate the High Roller, a 550-foot observation wheel, and the Fly LINQ Zipline attraction, located on the east side of the Las Vegas Strip next to The LINQ Hotel & Casino (the “LINQ”). The CAESARS FORUM is a 550,000 square feet conference center with 300,000 square feet of flexible meeting space, two of the largest pillarless ballrooms in the world and direct access to the LINQ.
 Corporate and Other includes certain unallocated corporate overhead costs and other adjustments, including eliminations of transactions among segments, to reconcile to the Company’s consolidated results.
 The Company’s Chief Operating Decision Maker (“CODM”) is the Chief Executive Officer. The CODM assesses segment performance by using Adjusted EBITDA, which is defined and reconciled to net income (loss) below.
@@ -699,63 +699,63 @@ CAESARS ENTERTAINMENT, INC.
 NOTES TO CONSOLIDATED CONDENSED FINANCIAL STATEMENTS (CONTINUED)
 (UNAUDITED)
 The following table sets forth, for the periods indicated, certain operating data for the Company’s four reportable segments, in addition to Corporate and Other:
-Three Months Ended June 30, | Six Months Ended June 30, |
-(In millions) | 2026 | 2025 | 2026 | 2025 |
-Las Vegas: |
-Net revenues | $1,017 | $1,054 | $2,020 | $2,057 |
-Adjusted EBITDA | 410 | 469 | 836 | 902 |
-Regional: |
-Net revenues | 1,570 | 1,435 | 3,000 | 2,823 |
-Adjusted EBITDA | 488 | 439 | 923 | 879 |
-Caesars Digital: |
-Net revenues | 351 | 343 | 725 | 678 |
-Adjusted EBITDA | 68 | 80 | 137 | 123 |
-Managed and Branded: |
-Net revenues | 57 | 74 | 123 | 141 |
-Adjusted EBITDA | 16 | 17 | 29 | 33 |
-Corporate and Other: |
-Net revenues | (2) | 1 | (5) | 2 |
-Adjusted EBITDA | (62) | (50) | (118) | (98) |
+Three Months Ended June 30, | Six Months Ended June 30,
+(In millions) | 2026 | 2025 | 2026 | 2025
+Las Vegas:
+Net revenues | $1,017 | $1,054 | $2,020 | $2,057
+Adjusted EBITDA | 410 | 469 | 836 | 902
+Regional:
+Net revenues | 1,570 | 1,435 | 3,000 | 2,823
+Adjusted EBITDA | 488 | 439 | 923 | 879
+Caesars Digital:
+Net revenues | 351 | 343 | 725 | 678
+Adjusted EBITDA | 68 | 80 | 137 | 123
+Managed and Branded:
+Net revenues | 57 | 74 | 123 | 141
+Adjusted EBITDA | 16 | 17 | 29 | 33
+Corporate and Other:
+Net revenues | (2) | 1 | (5) | 2
+Adjusted EBITDA | (62) | (50) | (118) | (98)
 Disaggregation of Certain Significant Expenses by Segment
-Three Months Ended June 30, 2026 |
-(In millions) | Las Vegas | Regional | Caesars Digital | Managed and Branded | Corporate and Other | Total |
-Net revenues | $1,017 | $1,570 | $351 | $57 | $(2) | $2,993 |
-Gaming taxes | (30) | (338) | (99) | — | — |
-Labor expense | (318) | (341) | — | — | — |
-Other segment expenses (a) | (259) | (403) | (184) | (41) | (60) |
-Adjusted EBITDA | $410 | $488 | $68 | $16 | $(62) | $920 |
-Three Months Ended June 30, 2025 |
-(In millions) | Las Vegas | Regional | Caesars Digital | Managed and Branded | Corporate and Other | Total |
-Net revenues | $1,054 | $1,435 | $343 | $74 | $1 | $2,907 |
-Gaming taxes | (32) | (320) | (80) | — | — |
-Labor expense | (313) | (309) | — | — | — |
-Other segment expenses (a) | (240) | (367) | (183) | (57) | (51) |
-Adjusted EBITDA | $469 | $439 | $80 | $17 | $(50) | $955 |
+Three Months Ended June 30, 2026
+(In millions) | Las Vegas | Regional | Caesars Digital | Managed and Branded | Corporate and Other | Total
+Net revenues | $1,017 | $1,570 | $351 | $57 | $(2) | $2,993
+Gaming taxes | (30) | (338) | (99) | — | —
+Labor expense | (318) | (341) | — | — | —
+Other segment expenses (a) | (259) | (403) | (184) | (41) | (60)
+Adjusted EBITDA | $410 | $488 | $68 | $16 | $(62) | $920
+Three Months Ended June 30, 2025
+(In millions) | Las Vegas | Regional | Caesars Digital | Managed and Branded | Corporate and Other | Total
+Net revenues | $1,054 | $1,435 | $343 | $74 | $1 | $2,907
+Gaming taxes | (32) | (320) | (80) | — | —
+Labor expense | (313) | (309) | — | — | —
+Other segment expenses (a) | (240) | (367) | (183) | (57) | (51)
+Adjusted EBITDA | $469 | $439 | $80 | $17 | $(50) | $955
 Table of Contents
 26
 CAESARS ENTERTAINMENT, INC.
 NOTES TO CONSOLIDATED CONDENSED FINANCIAL STATEMENTS (CONTINUED)
 (UNAUDITED)
-Six Months Ended June 30, 2026 |
-(In millions) | Las Vegas | Regional | Caesars Digital | Managed and Branded | Corporate and Other | Total |
-Net revenues | $2,020 | $3,000 | $725 | $123 | $(5) | $5,863 |
-Gaming taxes | (59) | (658) | (204) | — | — |
-Labor expense | (617) | (659) | — | — | — |
-Other segment expenses (a) | (508) | (760) | (384) | (94) | (113) |
-Adjusted EBITDA | $836 | $923 | $137 | $29 | $(118) | $1,807 |
-Six Months Ended June 30, 2025 |
-(In millions) | Las Vegas | Regional | Caesars Digital | Managed and Branded | Corporate and Other | Total |
-Net revenues | $2,057 | $2,823 | $678 | $141 | $2 | $5,701 |
-Gaming taxes | (62) | (621) | (166) | — | — |
-Labor expense | (614) | (609) | — | — | — |
-Other segment expenses (a) | (479) | (714) | (389) | (108) | (100) |
-Adjusted EBITDA | $902 | $879 | $123 | $33 | $(98) | $1,839 |
+Six Months Ended June 30, 2026
+(In millions) | Las Vegas | Regional | Caesars Digital | Managed and Branded | Corporate and Other | Total
+Net revenues | $2,020 | $3,000 | $725 | $123 | $(5) | $5,863
+Gaming taxes | (59) | (658) | (204) | — | —
+Labor expense | (617) | (659) | — | — | —
+Other segment expenses (a) | (508) | (760) | (384) | (94) | (113)
+Adjusted EBITDA | $836 | $923 | $137 | $29 | $(118) | $1,807
+Six Months Ended June 30, 2025
+(In millions) | Las Vegas | Regional | Caesars Digital | Managed and Branded | Corporate and Other | Total
+Net revenues | $2,057 | $2,823 | $678 | $141 | $2 | $5,701
+Gaming taxes | (62) | (621) | (166) | — | —
+Labor expense | (614) | (609) | — | — | —
+Other segment expenses (a) | (479) | (714) | (389) | (108) | (100)
+Adjusted EBITDA | $902 | $879 | $123 | $33 | $(98) | $1,839
 ____________________
-(a)The ‘Other segment expenses’ category for each of our reportable segments primarily includes:
-•Las Vegas and Regional Segments - Cost of sales associated with food, beverage and retail offerings; commission fees, talent fees and ticketing expenses associated with entertainment offerings; utility costs; costs of supplies; repairs and maintenance charges; professional fees; marketing and advertising expenses; software and licensing expenses; rental costs; and insurance expense.
-•Caesars Digital - Labor costs directly associated with the operation and maintenance of the digital platforms; professional fees; marketing and advertising expenses; and software and license expenses.
-•Managed and Branded - Reimbursable expenses which are primarily payroll costs associated with our managed properties.
-•Corporate and Other - Unallocated corporate payroll and overhead costs.
+(a) The ‘Other segment expenses’ category for each of our reportable segments primarily includes:
+Las Vegas and Regional Segments - Cost of sales associated with food, beverage and retail offerings; commission fees, talent fees and ticketing expenses associated with entertainment offerings; utility costs; costs of supplies; repairs and maintenance charges; professional fees; marketing and advertising expenses; software and licensing expenses; rental costs; and insurance expense.
+Caesars Digital - Labor costs directly associated with the operation and maintenance of the digital platforms; professional fees; marketing and advertising expenses; and software and license expenses.
+Managed and Branded - Reimbursable expenses which are primarily payroll costs associated with our managed properties.
+Corporate and Other - Unallocated corporate payroll and overhead costs.
 Reconciliation of Net Income (Loss) Attributable to Caesars to Adjusted EBITDA by Segment
 Adjusted EBITDA is presented as a measure of the Company’s performance. Adjusted EBITDA is defined as revenues less certain operating expenses and is comprised of net income (loss) before (i) interest income and interest expense, net of interest capitalized, (ii) income tax (benefit) provision, (iii) depreciation and amortization, and (iv) certain items that we do not consider indicative of our ongoing operating performance at an operating property level.
 In evaluating Adjusted EBITDA you should be aware that, in the future, we may incur expenses that are the same or similar to some of the adjustments in this presentation. The presentation of Adjusted EBITDA should not be construed as an inference that future results will be unaffected by unusual or unexpected items.
@@ -765,43 +765,43 @@ Table of Contents
 CAESARS ENTERTAINMENT, INC.
 NOTES TO CONSOLIDATED CONDENSED FINANCIAL STATEMENTS (CONTINUED)
 (UNAUDITED)
-Three Months Ended June 30, | Six Months Ended June 30, |
-(In millions) | 2026 | 2025 | 2026 | 2025 |
-Net loss attributable to Caesars | $(62) | $(82) | $(160) | $(197) |
-Net income attributable to noncontrolling interests | 21 | 17 | 36 | 34 |
-(Benefit) provision for income taxes | (12) | 13 | — | 24 |
-Other income | (7) | (1) | (5) | — |
-Interest expense, net | 573 | 579 | 1,142 | 1,153 |
-Depreciation and amortization | 355 | 364 | 702 | 721 |
-Transaction costs and other, net (a) | 29 | 41 | 45 | 54 |
-Stock-based compensation expense | 23 | 24 | 47 | 50 |
-Adjusted EBITDA | $920 | $955 | $1,807 | $1,839 |
-Adjusted EBITDA by Segment: |
-Las Vegas | $410 | $469 | $836 | $902 |
-Regional | 488 | 439 | 923 | 879 |
-Caesars Digital | 68 | 80 | 137 | 123 |
-Managed and Branded | 16 | 17 | 29 | 33 |
-Corporate and Other | (62) | (50) | (118) | (98) |
+Three Months Ended June 30, | Six Months Ended June 30,
+(In millions) | 2026 | 2025 | 2026 | 2025
+Net loss attributable to Caesars | $(62) | $(82) | $(160) | $(197)
+Net income attributable to noncontrolling interests | 21 | 17 | 36 | 34
+(Benefit) provision for income taxes | (12) | 13 | — | 24
+Other income | (7) | (1) | (5) | —
+Interest expense, net | 573 | 579 | 1,142 | 1,153
+Depreciation and amortization | 355 | 364 | 702 | 721
+Transaction costs and other, net (a) | 29 | 41 | 45 | 54
+Stock-based compensation expense | 23 | 24 | 47 | 50
+Adjusted EBITDA | $920 | $955 | $1,807 | $1,839
+Adjusted EBITDA by Segment:
+Las Vegas | $410 | $469 | $836 | $902
+Regional | 488 | 439 | 923 | 879
+Caesars Digital | 68 | 80 | 137 | 123
+Managed and Branded | 16 | 17 | 29 | 33
+Corporate and Other | (62) | (50) | (118) | (98)
 ____________________
-(a)Transaction costs and other, net primarily includes costs related to non-cash losses on the write down and disposal of assets, certain non-recurring litigation reserves, professional services for transaction and integration costs, various contract exit or termination costs, pre-opening costs in connection with new property openings and non-cash changes in equity method investments.
-Capital Expenditures, Net - By Segment |
-Three Months Ended June 30, | Six Months Ended June 30, |
-(In millions) | 2026 | 2025 | 2026 | 2025 |
-Las Vegas | $37 | $56 | $93 | $93 |
-Regional | 102 | 140 | 196 | 299 |
-Caesars Digital | 20 | 21 | 37 | 43 |
-Corporate and Other | 8 | 13 | 9 | 18 |
-Total | $167 | $230 | $335 | $453 |
-Total Assets - By Segment |
-(In millions) | June 30, 2026 | December 31, 2025 |
-Las Vegas | $26,319 | $25,808 |
-Regional | 15,800 | 14,435 |
-Caesars Digital | 1,241 | 1,254 |
-Managed and Branded | 377 | 343 |
-Corporate and Other (a) | (11,995) | (10,201) |
-Total | $31,742 | $31,639 |
+(a) Transaction costs and other, net primarily includes costs related to non-cash losses on the write down and disposal of assets, certain non-recurring litigation reserves, professional services for transaction and integration costs, various contract exit or termination costs, pre-opening costs in connection with new property openings and non-cash changes in equity method investments.
+Capital Expenditures, Net - By Segment
+Three Months Ended June 30, | Six Months Ended June 30,
+(In millions) | 2026 | 2025 | 2026 | 2025
+Las Vegas | $37 | $56 | $93 | $93
+Regional | 102 | 140 | 196 | 299
+Caesars Digital | 20 | 21 | 37 | 43
+Corporate and Other | 8 | 13 | 9 | 18
+Total | $167 | $230 | $335 | $453
+Total Assets - By Segment
+(In millions) | June 30, 2026 | December 31, 2025
+Las Vegas | $26,319 | $25,808
+Regional | 15,800 | 14,435
+Caesars Digital | 1,241 | 1,254
+Managed and Branded | 377 | 343
+Corporate and Other (a) | (11,995) | (10,201)
+Total | $31,742 | $31,639
 ____________________
-(a)Includes eliminations of transactions among segments, to reconcile to the Company’s consolidated results.
+(a) Includes eliminations of transactions among segments, to reconcile to the Company’s consolidated results.
 Table of Contents
 28
 Item 2. Management’s Discussion and Analysis of Financial Condition and Results of Operations
@@ -850,54 +850,54 @@ Table of Contents
 32
 Results of Operations
 The following table highlights the results of our operations:
-Three Months Ended June 30, | Six Months Ended June 30, |
-(Dollars in millions) | 2026 | 2025 | 2026 | 2025 |
-Net revenues: |
-Las Vegas | $1,017 | $1,054 | $2,020 | $2,057 |
-Regional | 1,570 | 1,435 | 3,000 | 2,823 |
-Caesars Digital | 351 | 343 | 725 | 678 |
-Managed and Branded | 57 | 74 | 123 | 141 |
-Corporate and Other (a) | (2) | 1 | (5) | 2 |
-Total | $2,993 | $2,907 | $5,863 | $5,701 |
-Net loss | $(41) | $(65) | $(124) | $(163) |
-Adjusted EBITDA (b): |
-Las Vegas | $410 | $469 | $836 | $902 |
-Regional | 488 | 439 | 923 | 879 |
-Caesars Digital | 68 | 80 | 137 | 123 |
-Managed and Branded | 16 | 17 | 29 | 33 |
-Corporate and Other (a) | (62) | (50) | (118) | (98) |
-Total | $920 | $955 | $1,807 | $1,839 |
-Net loss margin | (1.4)% | (2.2)% | (2.1)% | (2.9)% |
-Adjusted EBITDA margin | 30.7% | 32.9% | 30.8% | 32.3% |
+Three Months Ended June 30, | Six Months Ended June 30,
+(Dollars in millions) | 2026 | 2025 | 2026 | 2025
+Net revenues:
+Las Vegas | $1,017 | $1,054 | $2,020 | $2,057
+Regional | 1,570 | 1,435 | 3,000 | 2,823
+Caesars Digital | 351 | 343 | 725 | 678
+Managed and Branded | 57 | 74 | 123 | 141
+Corporate and Other (a) | (2) | 1 | (5) | 2
+Total | $2,993 | $2,907 | $5,863 | $5,701
+Net loss | $(41) | $(65) | $(124) | $(163)
+Adjusted EBITDA (b):
+Las Vegas | $410 | $469 | $836 | $902
+Regional | 488 | 439 | 923 | 879
+Caesars Digital | 68 | 80 | 137 | 123
+Managed and Branded | 16 | 17 | 29 | 33
+Corporate and Other (a) | (62) | (50) | (118) | (98)
+Total | $920 | $955 | $1,807 | $1,839
+Net loss margin | (1.4)% | (2.2)% | (2.1)% | (2.9)%
+Adjusted EBITDA margin | 30.7% | 32.9% | 30.8% | 32.3%
 ____________________
-(a)Corporate and Other includes revenues related to certain licensing arrangements and various revenue sharing agreements and includes eliminations of transactions among segments to reconcile to the Company’s consolidated results. Corporate and Other Adjusted EBITDA includes corporate overhead costs, which consist of certain expenses, such as: payroll, professional fees, cybersecurity and other general and administrative expenses.
-(b)See the “Supplemental Unaudited Presentation of Consolidated Adjusted Earnings Before Interest, Taxes, Depreciation and Amortization (“Adjusted EBITDA”) for the Three and Six Months Ended June 30, 2026 and 2025” discussion later in this MD&A for a description of Adjusted EBITDA and a reconciliation of net income (loss) attributable to Caesars to Adjusted EBITDA.
+(a) Corporate and Other includes revenues related to certain licensing arrangements and various revenue sharing agreements and includes eliminations of transactions among segments to reconcile to the Company’s consolidated results. Corporate and Other Adjusted EBITDA includes corporate overhead costs, which consist of certain expenses, such as: payroll, professional fees, cybersecurity and other general and administrative expenses.
+(b) See the “Supplemental Unaudited Presentation of Consolidated Adjusted Earnings Before Interest, Taxes, Depreciation and Amortization (“Adjusted EBITDA”) for the Three and Six Months Ended June 30, 2026 and 2025” discussion later in this MD&A for a description of Adjusted EBITDA and a reconciliation of net income (loss) attributable to Caesars to Adjusted EBITDA.
 Consolidated comparison of the three and six months ended June 30, 2026 and 2025
 Net Revenues
 Net revenues were as follows:
-Three Months Ended June 30, | Percent Change | Six Months Ended June 30, | Percent Change |
-(Dollars in millions) | 2026 | 2025 | Variance | 2026 | 2025 | Variance |
-Casino | $1,759 | $1,668 | $91 | 5.5% | $3,425 | $3,262 | $163 | 5.0% |
-Food and beverage | 426 | 428 | (2) | (0.5)% | 850 | 863 | (13) | (1.5)% |
-Hotel | 495 | 509 | (14) | (2.8)% | 982 | 991 | (9) | (0.9)% |
-Other | 313 | 302 | 11 | 3.6% | 606 | 585 | 21 | 3.6% |
-Net revenues | $2,993 | $2,907 | $86 | 3.0% | $5,863 | $5,701 | $162 | 2.8% |
+Three Months Ended June 30, | Percent Change | Six Months Ended June 30, | Percent Change
+(Dollars in millions) | 2026 | 2025 | Variance | 2026 | 2025 | Variance
+Casino | $1,759 | $1,668 | $91 | 5.5% | $3,425 | $3,262 | $163 | 5.0%
+Food and beverage | 426 | 428 | (2) | (0.5)% | 850 | 863 | (13) | (1.5)%
+Hotel | 495 | 509 | (14) | (2.8)% | 982 | 991 | (9) | (0.9)%
+Other | 313 | 302 | 11 | 3.6% | 606 | 585 | 21 | 3.6%
+Net revenues | $2,993 | $2,907 | $86 | 3.0% | $5,863 | $5,701 | $162 | 2.8%
 Consolidated net revenues increased for the three and six months ended June 30, 2026, as compared to the same prior year periods, mainly due to higher casino revenues. This increase in casino revenues was primarily driven by significant growth in iGaming handle coupled with improved sports betting hold in our Caesars Digital segment. In addition, incremental revenues attributable to the consolidation of Caesars Windsor beginning March 3, 2026, increased visitation in northern Nevada due to a national tournament throughout the second quarter of 2026, and positive results from our capital investments in Lake Tahoe and New Orleans contributed to the increase. These increases were partially offset by declines in net revenues in our Las Vegas segment, attributable to lower table games volume and hold as well as lower city-wide leisure customer visitation.
 Table of Contents
 33
 Operating Expenses
 Operating expenses were as follows:
-Three Months Ended June 30, | Percent Change | Six Months Ended June 30, | Percent Change |
-(Dollars in millions) | 2026 | 2025 | Variance | 2026 | 2025 | Variance |
-Casino | $955 | $887 | $68 | 7.7% | $1,857 | $1,748 | $109 | 6.2% |
-Food and beverage | 281 | 275 | 6 | 2.2% | 555 | 550 | 5 | 0.9% |
-Hotel | 163 | 155 | 8 | 5.2% | 319 | 306 | 13 | 4.2% |
-Other | 95 | 105 | (10) | (9.5)% | 190 | 200 | (10) | (5.0)% |
-General and administrative | 521 | 477 | 44 | 9.2% | 1,025 | 960 | 65 | 6.8% |
-Corporate | 94 | 84 | 10 | 11.9% | 182 | 166 | 16 | 9.6% |
-Depreciation and amortization | 355 | 364 | (9) | (2.5)% | 702 | 721 | (19) | (2.6)% |
-Transaction and other costs, net | 16 | 34 | (18) | (52.9)% | 20 | 36 | (16) | (44.4)% |
-Total operating expenses | $2,480 | $2,381 | $99 | 4.2% | $4,850 | $4,687 | $163 | 3.5% |
+Three Months Ended June 30, | Percent Change | Six Months Ended June 30, | Percent Change
+(Dollars in millions) | 2026 | 2025 | Variance | 2026 | 2025 | Variance
+Casino | $955 | $887 | $68 | 7.7% | $1,857 | $1,748 | $109 | 6.2%
+Food and beverage | 281 | 275 | 6 | 2.2% | 555 | 550 | 5 | 0.9%
+Hotel | 163 | 155 | 8 | 5.2% | 319 | 306 | 13 | 4.2%
+Other | 95 | 105 | (10) | (9.5)% | 190 | 200 | (10) | (5.0)%
+General and administrative | 521 | 477 | 44 | 9.2% | 1,025 | 960 | 65 | 6.8%
+Corporate | 94 | 84 | 10 | 11.9% | 182 | 166 | 16 | 9.6%
+Depreciation and amortization | 355 | 364 | (9) | (2.5)% | 702 | 721 | (19) | (2.6)%
+Transaction and other costs, net | 16 | 34 | (18) | (52.9)% | 20 | 36 | (16) | (44.4)%
+Total operating expenses | $2,480 | $2,381 | $99 | 4.2% | $4,850 | $4,687 | $163 | 3.5%
 Casino expenses consist principally of salaries and wages, gaming taxes and marketing and advertising costs attributable to our gaming operations. Food and beverage expenses consist principally of salaries and wages and costs of goods sold associated with our food and beverage operations. Hotel expenses consist principally of salaries and wages and supplies associated with our hotel operations. Other expenses consist principally of salaries and wages, costs of goods sold associated with our retail operations, entertainment costs, including professional talent fees, reimbursable management costs (described below) and other operations.
 Casino expenses increased for the three and six months ended June 30, 2026, as compared to the same prior year periods, in connection with increased revenues in our Caesars Digital and Regional segments. Gaming taxes increased due to higher casino revenues, as well as the impact of increased gaming tax rates on sports betting wagers and iGaming in certain states. We continue to focus on efficiencies across the enterprise to manage increased labor and other costs.
 General and administrative expenses include items such as information technology, facility maintenance, utilities, property and liability insurance, property taxes, marketing expenses indirectly related to our gaming and non-gaming operations, and expenses of administrative departments such as accounting, compliance, purchasing, human resources, legal and internal audit. General and administrative expenses increased for the three and six months ended June 30, 2026, as compared to the same prior year periods, primarily due to the consolidation of Caesars Windsor as well as higher property taxes resulting from the expiration of certain property tax credits.
@@ -908,11 +908,11 @@ Table of Contents
 34
 Other income (expenses)
 Other income (expenses) were as follows:
-Three Months Ended June 30, | Percent Change | Six Months Ended June 30, | Percent Change |
-(Dollars in millions) | 2026 | 2025 | Variance | 2026 | 2025 | Variance |
-Interest expense, net | $(573) | $(579) | $6 | 1.0% | $(1,142) | $(1,153) | $11 | 1.0% |
-Other income | 7 | 1 | 6 | * | 5 | — | 5 | * |
-Benefit (provision) for income taxes | 12 | (13) | 25 | * | — | (24) | 24 | 100.0% |
+Three Months Ended June 30, | Percent Change | Six Months Ended June 30, | Percent Change
+(Dollars in millions) | 2026 | 2025 | Variance | 2026 | 2025 | Variance
+Interest expense, net | $(573) | $(579) | $6 | 1.0% | $(1,142) | $(1,153) | $11 | 1.0%
+Other income | 7 | 1 | 6 | * | 5 | — | 5 | *
+Benefit (provision) for income taxes | 12 | (13) | 25 | * | — | (24) | 24 | 100.0%
 ____________________
 * Not meaningful.
 Interest expense, net decreased for the three and six months ended June 30, 2026, as compared to the same prior year periods, primarily due to a reduction in outstanding debt and lower variable rate interest expense. The decrease was slightly offset by an increase in interest expense related to our leases.
@@ -920,40 +920,40 @@ The income tax provision for the three months ended June 30, 2026 is not signifi
 The income tax provision for the three and six months ended June 30, 2025 differed from the expected income tax provision based on the federal tax rate of 21% primarily due to an increase in federal and state valuation allowances against the deferred tax assets for excess business interest expense.
 Segment comparison of the three and six months ended June 30, 2026 and 2025
 Las Vegas Segment
-Three Months Ended June 30, | Percent Change | Six Months Ended June 30, | Percent Change |
-(Dollars in millions) | 2026 | 2025 | Variance | 2026 | 2025 | Variance |
-Net revenues: |
-Casino | $277 | $292 | $(15) | (5.1)% | $521 | $535 | $(14) | (2.6)% |
-Food and beverage | 267 | 278 | (11) | (4.0)% | 540 | 564 | (24) | (4.3)% |
-Hotel | 315 | 346 | (31) | (9.0)% | 661 | 689 | (28) | (4.1)% |
-Other | 158 | 138 | 20 | 14.5% | 298 | 269 | 29 | 10.8% |
-Net revenues | $1,017 | $1,054 | $(37) | (3.5)% | $2,020 | $2,057 | $(37) | (1.8)% |
-Table games drop | $706 | $740 | $(34) | (4.6)% | $1,425 | $1,484 | $(59) | (4.0)% |
-Table games hold % | 16.6% | 21.1% | (4.5) pts | 17.5% | 20.1% | (2.6) pts |
-Slot handle | $2,674 | $2,538 | $136 | 5.4% | $5,275 | $5,110 | $165 | 3.2% |
-Hotel occupancy | 95.5% | 96.8% | (1.3) pts | 95.4% | 96.5% | (1.1) pts |
-Adjusted EBITDA | $410 | $469 | $(59) | (12.6)% | $836 | $902 | $(66) | (7.3)% |
-Adjusted EBITDA margin | 40.3% | 44.5% | (4.2) pts | 41.4% | 43.9% | (2.5) pts |
-Net income attributable to Caesars | $156 | $212 | $(56) | (26.4)% | $332 | $389 | $(57) | (14.7)% |
+Three Months Ended June 30, | Percent Change | Six Months Ended June 30, | Percent Change
+(Dollars in millions) | 2026 | 2025 | Variance | 2026 | 2025 | Variance
+Net revenues:
+Casino | $277 | $292 | $(15) | (5.1)% | $521 | $535 | $(14) | (2.6)%
+Food and beverage | 267 | 278 | (11) | (4.0)% | 540 | 564 | (24) | (4.3)%
+Hotel | 315 | 346 | (31) | (9.0)% | 661 | 689 | (28) | (4.1)%
+Other | 158 | 138 | 20 | 14.5% | 298 | 269 | 29 | 10.8%
+Net revenues | $1,017 | $1,054 | $(37) | (3.5)% | $2,020 | $2,057 | $(37) | (1.8)%
+Table games drop | $706 | $740 | $(34) | (4.6)% | $1,425 | $1,484 | $(59) | (4.0)%
+Table games hold % | 16.6% | 21.1% | (4.5) pts | 17.5% | 20.1% | (2.6) pts
+Slot handle | $2,674 | $2,538 | $136 | 5.4% | $5,275 | $5,110 | $165 | 3.2%
+Hotel occupancy | 95.5% | 96.8% | (1.3) pts | 95.4% | 96.5% | (1.1) pts
+Adjusted EBITDA | $410 | $469 | $(59) | (12.6)% | $836 | $902 | $(66) | (7.3)%
+Adjusted EBITDA margin | 40.3% | 44.5% | (4.2) pts | 41.4% | 43.9% | (2.5) pts
+Net income attributable to Caesars | $156 | $212 | $(56) | (26.4)% | $332 | $389 | $(57) | (14.7)%
 Our Las Vegas segment’s net revenues, net income, Adjusted EBITDA and Adjusted EBITDA margin declined for the three and six months ended June 30, 2026, as compared to the same prior year periods, primarily due to lower city-wide leisure customer visitation resulting in decreased non-gaming revenues, lower hotel occupancy and compressed hotel rates. Declines in table games drop and table games hold also contributed to the decreases in net revenues. These decreases were partially offset by increases in slot handle.
 Slot win percentage in the Las Vegas segment for the three and six months ended June 30, 2026 was within our typical range.
 Table of Contents
 35
 Regional Segment
-Three Months Ended June 30, | Percent Change | Six Months Ended June 30, | Percent Change |
-(Dollars in millions) | 2026 | 2025 | Variance | 2026 | 2025 | Variance |
-Net revenues: |
-Casino | $1,144 | $1,045 | $99 | 9.5% | $2,202 | $2,075 | $127 | 6.1% |
-Food and beverage | 160 | 150 | 10 | 6.7% | 311 | 299 | 12 | 4.0% |
-Hotel | 180 | 163 | 17 | 10.4% | 321 | 302 | 19 | 6.3% |
-Other | 86 | 77 | 9 | 11.7% | 166 | 147 | 19 | 12.9% |
-Net revenues | $1,570 | $1,435 | $135 | 9.4% | $3,000 | $2,823 | $177 | 6.3% |
-Table games drop | $1,100 | $1,063 | $37 | 3.5% | $2,153 | $2,156 | $(3) | (0.1)% |
-Table games hold % | 22.3% | 20.8% | 1.5 pts | 21.7% | 20.8% | 0.9 pts |
-Slot handle | $11,644 | $10,917 | $727 | 6.7% | $22,418 | $21,361 | $1,057 | 4.9% |
-Adjusted EBITDA | $488 | $439 | $49 | 11.2% | $923 | $879 | $44 | 5.0% |
-Adjusted EBITDA margin | 31.1% | 30.6% | 0.5 pts | 30.8% | 31.1% | (0.3) pts |
-Net income (loss) attributable to Caesars | $23 | $(11) | $34 | * | $3 | $9 | $(6) | (66.7)% |
+Three Months Ended June 30, | Percent Change | Six Months Ended June 30, | Percent Change
+(Dollars in millions) | 2026 | 2025 | Variance | 2026 | 2025 | Variance
+Net revenues:
+Casino | $1,144 | $1,045 | $99 | 9.5% | $2,202 | $2,075 | $127 | 6.1%
+Food and beverage | 160 | 150 | 10 | 6.7% | 311 | 299 | 12 | 4.0%
+Hotel | 180 | 163 | 17 | 10.4% | 321 | 302 | 19 | 6.3%
+Other | 86 | 77 | 9 | 11.7% | 166 | 147 | 19 | 12.9%
+Net revenues | $1,570 | $1,435 | $135 | 9.4% | $3,000 | $2,823 | $177 | 6.3%
+Table games drop | $1,100 | $1,063 | $37 | 3.5% | $2,153 | $2,156 | $(3) | (0.1)%
+Table games hold % | 22.3% | 20.8% | 1.5 pts | 21.7% | 20.8% | 0.9 pts
+Slot handle | $11,644 | $10,917 | $727 | 6.7% | $22,418 | $21,361 | $1,057 | 4.9%
+Adjusted EBITDA | $488 | $439 | $49 | 11.2% | $923 | $879 | $44 | 5.0%
+Adjusted EBITDA margin | 31.1% | 30.6% | 0.5 pts | 30.8% | 31.1% | (0.3) pts
+Net income (loss) attributable to Caesars | $23 | $(11) | $34 | * | $3 | $9 | $(6) | (66.7)%
 ____________________
 * Not meaningful.
 Our Regional segment’s net revenues, net income (loss), and Adjusted EBITDA increased for the three months ended June 30, 2026, as compared to the same prior year period, primarily due to the consolidation of Caesars Windsor beginning March 3, 2026, increased visitation in northern Nevada due to a national tournament throughout the second quarter of 2026 and positive results driven by our recent capital investments in Lake Tahoe and New Orleans. Similarly, for the six months ended June 30, 2026, as compared to the same prior year period, net revenues and Adjusted EBITDA increased while net income decreased slightly. Adjusted EBITDA margin remained relatively flat for the three and six months ended June 30, 2026, despite the increased net revenues primarily due to increased labor costs and gaming taxes.
@@ -961,50 +961,50 @@ Slot win percentage in the Regional segment for the three and six months ended J
 Table of Contents
 36
 Caesars Digital Segment
-Three Months Ended June 30, | Percent Change | Six Months Ended June 30, | Percent Change |
-(Dollars in millions) | 2026 | 2025 | Variance | 2026 | 2025 | Variance |
-Net revenues: |
-Casino (a) | $340 | $331 | $9 | 2.7% | $705 | $655 | $50 | 7.6% |
-Other | 11 | 12 | (1) | (8.3)% | 20 | 23 | (3) | (13.0)% |
-Net revenues | $351 | $343 | $8 | 2.3% | $725 | $678 | $47 | 6.9% |
-Sports betting handle (b) | $2,565 | $2,493 | $72 | 2.9% | $5,598 | $5,621 | $(23) | (0.4)% |
-Sports betting hold % | 8.4% | 8.9% | (0.5) pts | 8.4% | 8.0% | 0.4 pts |
-iGaming handle | $4,831 | $4,705 | $126 | 2.7% | $10,205 | $9,193 | $1,012 | 11.0% |
-iGaming hold % | 3.9% | 3.6% | 0.3 pts | 3.7% | 3.6% | 0.1 pts |
-Adjusted EBITDA | $68 | $80 | $(12) | (15.0)% | $137 | $123 | $14 | 11.4% |
-Adjusted EBITDA margin | 19.4% | 23.3% | (3.9) pts | 18.9% | 18.1% | 0.8 pts |
-Net income attributable to Caesars | $27 | $39 | $(12) | (30.8)% | $49 | $39 | $10 | 25.6% |
+Three Months Ended June 30, | Percent Change | Six Months Ended June 30, | Percent Change
+(Dollars in millions) | 2026 | 2025 | Variance | 2026 | 2025 | Variance
+Net revenues:
+Casino (a) | $340 | $331 | $9 | 2.7% | $705 | $655 | $50 | 7.6%
+Other | 11 | 12 | (1) | (8.3)% | 20 | 23 | (3) | (13.0)%
+Net revenues | $351 | $343 | $8 | 2.3% | $725 | $678 | $47 | 6.9%
+Sports betting handle (b) | $2,565 | $2,493 | $72 | 2.9% | $5,598 | $5,621 | $(23) | (0.4)%
+Sports betting hold % | 8.4% | 8.9% | (0.5) pts | 8.4% | 8.0% | 0.4 pts
+iGaming handle | $4,831 | $4,705 | $126 | 2.7% | $10,205 | $9,193 | $1,012 | 11.0%
+iGaming hold % | 3.9% | 3.6% | 0.3 pts | 3.7% | 3.6% | 0.1 pts
+Adjusted EBITDA | $68 | $80 | $(12) | (15.0)% | $137 | $123 | $14 | 11.4%
+Adjusted EBITDA margin | 19.4% | 23.3% | (3.9) pts | 18.9% | 18.1% | 0.8 pts
+Net income attributable to Caesars | $27 | $39 | $(12) | (30.8)% | $49 | $39 | $10 | 25.6%
 ____________________
-(a)Includes total promotional and complimentary incentives related to sports betting, iGaming, and online poker of $78 million and $72 million for the three months ended June 30, 2026 and 2025, respectively, and $164 million and $145 million for the six months ended June 30, 2026 and 2025, respectively. Promotional and complimentary incentives for online poker were $4 million and $5 million for the three months ended June 30, 2026 and 2025, respectively, and $7 million and $8 million for the six months ended June 30, 2026 and 2025, respectively.
-(b)Caesars Digital generated an additional $187 million and $199 million of sports betting handle for the three months ended June 30, 2026 and 2025, respectively, and $419 million and $468 million for the six months ended June 30, 2026 and 2025, respectively, which is not included in this table, for select wholly-owned and third-party operations for which Caesars Digital provides services and we receive all, or a share of, the net profits. Hold related to these operations was 10.9% and 11.2%, for the three months ended June 30, 2026 and 2025, respectively, and 10.0% and 11.1% for the six months ended June 30, 2026 and 2025, respectively. Sports betting handle includes $12 million for both the three months ended June 30, 2026 and 2025, and $22 million for both the six months ended June 30, 2026 and 2025, related to horse racing and pari-mutuel wagers.
+(a) Includes total promotional and complimentary incentives related to sports betting, iGaming, and online poker of $78 million and $72 million for the three months ended June 30, 2026 and 2025, respectively, and $164 million and $145 million for the six months ended June 30, 2026 and 2025, respectively. Promotional and complimentary incentives for online poker were $4 million and $5 million for the three months ended June 30, 2026 and 2025, respectively, and $7 million and $8 million for the six months ended June 30, 2026 and 2025, respectively.
+(b) Caesars Digital generated an additional $187 million and $199 million of sports betting handle for the three months ended June 30, 2026 and 2025, respectively, and $419 million and $468 million for the six months ended June 30, 2026 and 2025, respectively, which is not included in this table, for select wholly-owned and third-party operations for which Caesars Digital provides services and we receive all, or a share of, the net profits. Hold related to these operations was 10.9% and 11.2%, for the three months ended June 30, 2026 and 2025, respectively, and 10.0% and 11.1% for the six months ended June 30, 2026 and 2025, respectively. Sports betting handle includes $12 million for both the three months ended June 30, 2026 and 2025, and $22 million for both the six months ended June 30, 2026 and 2025, related to horse racing and pari-mutuel wagers.
 Caesars Digital’s net revenues increased for the three months ended June 30, 2026, as compared to the same prior year period, primarily due to increased sports betting and iGaming handle, coupled with an increase in iGaming hold. Net income, Adjusted EBITDA, and Adjusted EBITDA margin declined for the three months ended June 30, 2026, as compared to the same prior year period, primarily due to increased gaming tax rates on sports betting wagers and iGaming in certain states, combined with lower sports betting hold.
 Caesars Digital’s net revenues, net income, Adjusted EBITDA, and Adjusted EBITDA margin increased for the six months ended June 30, 2026, as compared to the same prior year period, primarily due to increased iGaming handle coupled with an increase in sports betting and iGaming hold.
 As sports betting and online casinos expand through increased state or jurisdictional legalization, new product launches, and customer adoption, variations in hold percentages and increases in promotional and marketing expenses in highly competitive markets may negatively impact Caesars Digital’s net revenues, net income, Adjusted EBITDA and Adjusted EBITDA margin in comparison to current or prior periods.
 Table of Contents
 37
 Managed and Branded Segment
-Three Months Ended June 30, | Percent Change | Six Months Ended June 30, | Percent Change |
-(Dollars in millions) | 2026 | 2025 | Variance | 2026 | 2025 | Variance |
-Net revenues: |
-Other | $57 | $74 | $(17) | (23.0)% | $123 | $141 | $(18) | (12.8)% |
-Net revenues | $57 | $74 | $(17) | (23.0)% | $123 | $141 | $(18) | (12.8)% |
-Adjusted EBITDA | $16 | $17 | $(1) | (5.9)% | $29 | $33 | $(4) | (12.1)% |
-Adjusted EBITDA margin | 28.1% | 23.0% | 5.1 pts | 23.6% | 23.4% | 0.2 pts |
-Net income attributable to Caesars | $17 | $18 | $(1) | (5.6)% | $41 | $34 | $7 | 20.6% |
+Three Months Ended June 30, | Percent Change | Six Months Ended June 30, | Percent Change
+(Dollars in millions) | 2026 | 2025 | Variance | 2026 | 2025 | Variance
+Net revenues:
+Other | $57 | $74 | $(17) | (23.0)% | $123 | $141 | $(18) | (12.8)%
+Net revenues | $57 | $74 | $(17) | (23.0)% | $123 | $141 | $(18) | (12.8)%
+Adjusted EBITDA | $16 | $17 | $(1) | (5.9)% | $29 | $33 | $(4) | (12.1)%
+Adjusted EBITDA margin | 28.1% | 23.0% | 5.1 pts | 23.6% | 23.4% | 0.2 pts
+Net income attributable to Caesars | $17 | $18 | $(1) | (5.6)% | $41 | $34 | $7 | 20.6%
 We manage several properties and license rights to the use of certain of our brands. These revenue agreements typically include reimbursement of certain costs that we incur directly. Such costs are primarily related to payroll costs incurred on behalf of the properties under management. The revenue related to these reimbursable management costs has a direct impact on our evaluation of Adjusted EBITDA margin which, when excluded, reflects margins typically realized from such agreements. The table below presents the amount included in net revenues and total operating expenses related to these reimbursable costs. Beginning March 3, 2026, Caesars Windsor is consolidated and included in the Regional segment.
-Three Months Ended June 30, | Percent Change | Six Months Ended June 30, | Percent Change |
-(Dollars in millions) | 2026 | 2025 | Variance | 2026 | 2025 | Variance |
-Reimbursable management revenue | $37 | $55 | $(18) | (32.7)% | $85 | $106 | $(21) | (19.8)% |
-Reimbursable management costs | 37 | 55 | (18) | (32.7)% | 85 | 106 | (21) | (19.8)% |
+Three Months Ended June 30, | Percent Change | Six Months Ended June 30, | Percent Change
+(Dollars in millions) | 2026 | 2025 | Variance | 2026 | 2025 | Variance
+Reimbursable management revenue | $37 | $55 | $(18) | (32.7)% | $85 | $106 | $(21) | (19.8)%
+Reimbursable management costs | 37 | 55 | (18) | (32.7)% | 85 | 106 | (21) | (19.8)%
 Corporate & Other
-Three Months Ended June 30, | Percent Change | Six Months Ended June 30, | Percent Change |
-(Dollars in millions) | 2026 | 2025 | Variance | 2026 | 2025 | Variance |
-Net revenues: |
-Casino | $(2) | $— | $(2) | * | $(3) | $(3) | $— | —% |
-Food and beverage | (1) | — | (1) | * | (1) | — | (1) | * |
-Other | 1 | 1 | — | —% | (1) | 5 | (6) | * |
-Net revenues | $(2) | $1 | $(3) | * | $(5) | $2 | $(7) | * |
-Adjusted EBITDA | $(62) | $(50) | $(12) | (24.0)% | $(118) | $(98) | $(20) | (20.4)% |
+Three Months Ended June 30, | Percent Change | Six Months Ended June 30, | Percent Change
+(Dollars in millions) | 2026 | 2025 | Variance | 2026 | 2025 | Variance
+Net revenues:
+Casino | $(2) | $— | $(2) | * | $(3) | $(3) | $— | —%
+Food and beverage | (1) | — | (1) | * | (1) | — | (1) | *
+Other | 1 | 1 | — | —% | (1) | 5 | (6) | *
+Net revenues | $(2) | $1 | $(3) | * | $(5) | $2 | $(7) | *
+Adjusted EBITDA | $(62) | $(50) | $(12) | (24.0)% | $(118) | $(98) | $(20) | (20.4)%
 ____________________
 * Not meaningful.
 Supplemental Unaudited Presentation of Consolidated Adjusted Earnings Before Interest, Taxes, Depreciation and Amortization (“Adjusted EBITDA”) for the Three and Six Months Ended June 30, 2026 and 2025
@@ -1013,30 +1013,30 @@ Table of Contents
 38
 generally accepted in the United States (“GAAP”). Adjusted EBITDA is unaudited and should not be considered an alternative to, or more meaningful than, net income (loss) as an indicator of our operating performance. Uses of cash flows that are not reflected in Adjusted EBITDA include capital expenditures, interest payments, income taxes, debt principal repayments, distributions to our noncontrolling interest owners and payments under our leases with affiliates of VICI and GLPI, which can be significant. As a result, Adjusted EBITDA should not be considered as a measure of our liquidity. Other companies that provide Adjusted EBITDA information may calculate Adjusted EBITDA differently than we do. The definition of Adjusted EBITDA may not be the same as the definitions used in any of our debt or lease agreements.
 The following table summarizes our Adjusted EBITDA for the three and six months ended June 30, 2026 and 2025, respectively, in addition to reconciling net income (loss) attributable to Caesars to Adjusted EBITDA in accordance with GAAP (unaudited):
-Three Months Ended June 30, | Six Months Ended June 30, |
-(In millions) | 2026 | 2025 | 2026 | 2025 |
-Net loss attributable to Caesars | $(62) | $(82) | $(160) | $(197) |
-Net income attributable to noncontrolling interests | 21 | 17 | 36 | 34 |
-(Benefit) provision for income taxes | (12) | 13 | — | 24 |
-Other income | (7) | (1) | (5) | — |
-Interest expense, net | 573 | 579 | 1,142 | 1,153 |
-Depreciation and amortization | 355 | 364 | 702 | 721 |
-Transaction costs and other, net (a) | 29 | 41 | 45 | 54 |
-Stock-based compensation expense | 23 | 24 | 47 | 50 |
-Total Adjusted EBITDA | $920 | $955 | $1,807 | $1,839 |
+Three Months Ended June 30, | Six Months Ended June 30,
+(In millions) | 2026 | 2025 | 2026 | 2025
+Net loss attributable to Caesars | $(62) | $(82) | $(160) | $(197)
+Net income attributable to noncontrolling interests | 21 | 17 | 36 | 34
+(Benefit) provision for income taxes | (12) | 13 | — | 24
+Other income | (7) | (1) | (5) | —
+Interest expense, net | 573 | 579 | 1,142 | 1,153
+Depreciation and amortization | 355 | 364 | 702 | 721
+Transaction costs and other, net (a) | 29 | 41 | 45 | 54
+Stock-based compensation expense | 23 | 24 | 47 | 50
+Total Adjusted EBITDA | $920 | $955 | $1,807 | $1,839
 ____________________
-(a)Transaction costs and other, net primarily includes costs related to non-cash losses on the write down and disposal of assets, certain non-recurring litigation reserves, professional services for transaction and integration costs, various contract exit or termination costs, pre-opening costs in connection with our new property openings, and non-cash changes in equity method investments.
+(a) Transaction costs and other, net primarily includes costs related to non-cash losses on the write down and disposal of assets, certain non-recurring litigation reserves, professional services for transaction and integration costs, various contract exit or termination costs, pre-opening costs in connection with our new property openings, and non-cash changes in equity method investments.
 Liquidity and Capital Resources
 We are a holding company, and our only significant assets are ownership interests in our subsidiaries. Our ability to fund our obligations depends on existing cash on hand, cash flows from our subsidiaries and our ability to raise capital. Our primary sources of liquidity and capital resources are existing cash on hand, cash flows from operations, availability of borrowings under our CEI Revolving Credit Facility and proceeds from the issuance of debt and equity securities. We may, from time to time, seek to repurchase our common stock or prepay our outstanding indebtedness. Any such purchases or prepayments may be funded by existing cash balances or the incurrence of debt. The amount and timing of any repurchase of debt or common stock will be based on business and market conditions, capital availability, compliance with debt covenants and other considerations. Our cash requirements may fluctuate significantly depending on our decisions with respect to business acquisitions or divestitures and strategic capital and marketing investments.
 As of June 30, 2026, our cash on hand and borrowing capacity was as follows:
-(In millions) | June 30, 2026 |
-Cash and cash equivalents | $965 |
-CEI Revolving Credit Facility capacity, net of outstanding balance | 2,130 |
-CVA Revolving Credit Facility capacity | 25 |
-Revolver capacity committed to letters of credit | (96) |
-Revolver capacity committed to specific reserves | (40) |
-Revolver capacity committed as regulatory requirement | (56) |
-Total | $2,928 |
+(In millions) | June 30, 2026
+Cash and cash equivalents | $965
+CEI Revolving Credit Facility capacity, net of outstanding balance | 2,130
+CVA Revolving Credit Facility capacity | 25
+Revolver capacity committed to letters of credit | (96)
+Revolver capacity committed to specific reserves | (40)
+Revolver capacity committed as regulatory requirement | (56)
+Total | $2,928
 During the six months ended June 30, 2026, our operating activities generated operating cash inflows of $675 million, as compared to operating cash inflows of $680 million during the six months ended June 30, 2025, primarily due to changes in working capital, coupled with the results of operations described above.
 We expect that our primary capital requirements going forward will relate to servicing our outstanding indebtedness, rent payments under our GLPI Leases and VICI Leases, and the renovation and maintenance of our properties. We expect to continue having additional cash uses for federal and certain state income taxes in operating activities.
 Table of Contents
@@ -1044,12 +1044,12 @@ Table of Contents
 A significant portion of our liquidity needs are for debt service and payments associated with our leases. Our estimated debt service (including principal and interest) is approximately $425 million for the remainder of 2026. We also lease certain real property assets from third parties, including VICI and GLPI. The VICI Leases are subject to annual escalations, that take effect in November of each year, based on the Consumer Price Index (“CPI”). In addition to the CPI escalator, our VICI Leases are also subject to a variable rent adjustment based on certain historical net revenues of our leased properties, in which, the next such lease year with a variable rent adjustment begins November 2027. We estimate our lease payments to VICI and GLPI to be approximately $687 million for the remainder of 2026.
 We make capital expenditures and perform continuing refurbishment and maintenance at our properties to maintain our quality standards. Our capital expenditure requirements for the remainder of 2026 include various growth and renovation projects. In addition, we anticipate continued investment in our Caesars Sportsbook and iGaming applications.
 Cash used for capital expenditures totaled $335 million and $453 million for the six months ended June 30, 2026 and 2025, respectively, related to our growth, renovation, maintenance, and other capital projects. The following table summarizes our capital expenditures for the six months ended June 30, 2026, and an estimated range of capital expenditures for the remainder of 2026.
-Six Months Ended June 30, 2026 | Estimate of Remaining Capital Expenditures for 2026 |
-(In millions) | Actual | Low | High |
-Growth and renovation projects | $117 | $130 | $170 |
-Caesars Digital | 37 | 25 | 35 |
-Maintenance projects | 181 | 155 | 185 |
-Total estimated capital expenditures from unrestricted cash | $335 | $310 | $390 |
+Six Months Ended June 30, 2026 | Estimate of Remaining Capital Expenditures for 2026
+(In millions) | Actual | Low | High
+Growth and renovation projects | $117 | $130 | $170
+Caesars Digital | 37 | 25 | 35
+Maintenance projects | 181 | 155 | 185
+Total estimated capital expenditures from unrestricted cash | $335 | $310 | $390
 We have agreements with certain sporting event facilities and professional sports teams primarily for tickets, suites, advertising, marketing, promotional and sponsorship opportunities. The agreements include leasing of event suites that are generally considered short-term leases for which we do not record a right-of-use asset or lease liability and recognizes expenses in the period services are received. As of June 30, 2026 and December 31, 2025, obligations related to these agreements were $309 million and $318 million, respectively, with contracts extending through 2040.
 We have periodically divested assets to raise capital or, in previous cases, to comply with conditions, terms, obligations or restrictions imposed by antitrust, gaming and other regulatory entities. If an agreed upon selling price for future divestitures does not exceed the carrying value of the assets, we may be required to record additional impairment charges in future periods which may be material.
 We expect that our current liquidity, including availability of borrowings under our committed credit facility and cash flows from operations will be sufficient to fund our operations, capital requirements and service our outstanding indebtedness for the next twelve months and beyond.
@@ -1081,10 +1081,10 @@ Table of Contents
 41
 There have been no other material quantitative changes in our market risk exposure, or how such risks are managed from the information previously reported under Part II, Item 7A of the 2025 Annual Report.
 Item 4. Controls and Procedures
-(a)Evaluation of Disclosure Controls and Procedures
+(a) Evaluation of Disclosure Controls and Procedures
 We have established and maintain disclosure controls and procedures that are designed to ensure that information required to be disclosed in our reports that we file under the Securities Exchange Act of 1934, as amended (the “Exchange Act”), is recorded, processed, summarized, evaluated and reported within the time periods specified in the rules and forms of the SEC, and that such information is accumulated and communicated to our management, including our principal executive officer and principal financial officer, as appropriate, to allow timely decisions regarding required disclosure.
 We carried out an evaluation, under the supervision and with the participation of our Chief Executive Officer (principal executive officer) and Chief Financial Officer (principal financial officer), of the effectiveness of our disclosure controls and procedures (as defined in Exchange Act Rules 13a-15(e) and 15d-15(e)) as of the end of the period covered by this Quarterly Report on Form 10-Q. Based on this evaluation, our Chief Executive Officer and Chief Financial Officer have concluded that our disclosure controls and procedures as of the end of the period covered by this Quarterly Report on Form 10-Q are effective to ensure that the information required to be disclosed by us in the reports that we file under the Exchange Act is recorded, processed, summarized, evaluated and reported within the time periods specified in SEC rules and forms and that such information is accumulated and communicated to management, including our Chief Executive Officer and Chief Financial Officer, to allow timely decisions regarding required disclosure.
-(b)Changes in Internal Controls
+(b) Changes in Internal Controls
 There were no significant changes in our internal control over financial reporting during the period covered by this Quarterly Report on Form 10‑Q that have materially affected, or are reasonably likely to materially affect, our internal control over financial reporting.
 Table of Contents
 42
@@ -1094,53 +1094,53 @@ For a discussion of our “Legal Proceedings,” refer to Note 5 to our Consolid
 Cautionary Statements Regarding Forward-Looking Information
 This report includes “forward-looking statements” within the meaning of Section 27A of the Securities Act of 1933, as amended, and Section 21E of the Securities Exchange Act of 1934, as amended. Forward-looking statements include statements regarding our strategies, objectives and plans for future development or acquisitions of properties or operations, as well as expectations, future operating results, trends and other information that is not historical information. When used in this report, the terms or phrases such as “anticipates,” “believes,” “projects,” “plans,” “intends,” “expects,” “might,” “may,” “estimates,” “could,” “should,” “would,” “will likely continue,” and variations of such words or similar expressions and their negative forms are intended to identify forward-looking statements. These statements are made on the basis of management’s current views and assumptions regarding future events.
 Forward-looking statements are based upon certain underlying assumptions, including any assumptions mentioned with the specific statements, as of the date such statements were made. Such assumptions are in turn based upon internal estimates and analyses of market conditions and trends, management plans and strategies, economic conditions and other factors. Such forward-looking statements are only predictions and involve known and unknown risks and uncertainties, many of which are beyond our control, and are subject to change. By their nature, forward-looking statements involve risks and uncertainties because they relate to events and depend upon future circumstances that may not occur. Actual results and trends may differ materially from any future results, trends, performance or achievements expressed or implied by such statements. Forward-looking statements speak only as of the date they are made, and we assume no duty to update forward-looking statements. Forward-looking statements should not be regarded as a representation by us or any other person that the forward-looking statements will be achieved. Undue reliance should not be placed on any forward-looking statements. Some of the contingencies and uncertainties to which any forward-looking statement contained herein are subject include, but are not limited to, the following:
-•risks related to the Merger, including, but not limited to: (a) risks related to the combination of the Company and Fertitta Gaming and the integration of their respective businesses and assets; (b) the inability to consummate the proposed transaction within the anticipated time period, or at all, due to any reason, including the failure to obtain stockholder approval to adopt the Merger Agreement, the failure to obtain required regulatory approvals for the proposed transaction or the failure to satisfy the other conditions to the consummation of the proposed transaction; (c) the risk that the financing required to fund the proposed transaction is not obtained on the terms anticipated or at all; (d) potential adverse reactions or changes to business or employee relationships, including those resulting from the announcement or completion of the proposed transaction, such as the ability of the Company to maintain relationships with its customers, suppliers and others with whom it does business; (e) the nature, cost and outcome of any litigation and other legal proceedings, including any such proceedings related to the proposed transaction and instituted against the Company and/or its directors, executive officers or other related persons; (f) the possibility that the anticipated benefits of the proposed transaction, including cost savings and expected synergies, are not realized when expected or at all, including as a result of the impact of, or issues arising from, the integration of the two companies; (g) conditions imposed on the companies in order to obtain required regulatory approvals; (h) uncertainties in the global economy and credit markets and its potential impact on Fertitta Gaming’s ability to finance the proposed transaction; (i) the possibility that the proposed transaction may be more expensive to complete than anticipated, including as a result of unexpected factors or events; (j) disruption of the Company’s current plans and operations or diversion of management’s attention from ongoing business operations and opportunities; (k) the ability to retain and hire certain key employees of the Company; (l) risks associated with increased leverage from the proposed transaction; (m) changes in the value of the Company’s common stock between the date of the Merger Agreement and the closing of the proposed transaction or that the Company’s stock price may decline significantly if the proposed transaction is not consummated; (n) competitive responses to the proposed transaction; (o) legislative, regulatory and economic developments; (p) uncertainties as to the timing of the consummation of the proposed transaction and the ability of each party to consummate the proposed transaction; (q) the risk that the Merger Agreement may be terminated in circumstances requiring the Company to pay a termination fee; (r) the effect of the announcement of the proposed transaction on the Company’s operating results and business generally; (s) other factors that could affect the Company’s business such as, without limitation, changes in national, regional and local economic and market
+risks related to the Merger, including, but not limited to: (a) risks related to the combination of the Company and Fertitta Gaming and the integration of their respective businesses and assets; (b) the inability to consummate the proposed transaction within the anticipated time period, or at all, due to any reason, including the failure to obtain stockholder approval to adopt the Merger Agreement, the failure to obtain required regulatory approvals for the proposed transaction or the failure to satisfy the other conditions to the consummation of the proposed transaction; (c) the risk that the financing required to fund the proposed transaction is not obtained on the terms anticipated or at all; (d) potential adverse reactions or changes to business or employee relationships, including those resulting from the announcement or completion of the proposed transaction, such as the ability of the Company to maintain relationships with its customers, suppliers and others with whom it does business; (e) the nature, cost and outcome of any litigation and other legal proceedings, including any such proceedings related to the proposed transaction and instituted against the Company and/or its directors, executive officers or other related persons; (f) the possibility that the anticipated benefits of the proposed transaction, including cost savings and expected synergies, are not realized when expected or at all, including as a result of the impact of, or issues arising from, the integration of the two companies; (g) conditions imposed on the companies in order to obtain required regulatory approvals; (h) uncertainties in the global economy and credit markets and its potential impact on Fertitta Gaming’s ability to finance the proposed transaction; (i) the possibility that the proposed transaction may be more expensive to complete than anticipated, including as a result of unexpected factors or events; (j) disruption of the Company’s current plans and operations or diversion of management’s attention from ongoing business operations and opportunities; (k) the ability to retain and hire certain key employees of the Company; (l) risks associated with increased leverage from the proposed transaction; (m) changes in the value of the Company’s common stock between the date of the Merger Agreement and the closing of the proposed transaction or that the Company’s stock price may decline significantly if the proposed transaction is not consummated; (n) competitive responses to the proposed transaction; (o) legislative, regulatory and economic developments; (p) uncertainties as to the timing of the consummation of the proposed transaction and the ability of each party to consummate the proposed transaction; (q) the risk that the Merger Agreement may be terminated in circumstances requiring the Company to pay a termination fee; (r) the effect of the announcement of the proposed transaction on the Company’s operating results and business generally; (s) other factors that could affect the Company’s business such as, without limitation, changes in national, regional and local economic and market
 Table of Contents
 43
 conditions, legislative and regulatory matters, increases in gaming taxes and fees in the jurisdictions in which we operate, litigation, increased competition, reliance on key personnel, our ability to comply with covenants in our debt instruments, terrorist incidents, natural disasters, severe weather conditions (including weather or road conditions that limit access to our properties), the effects of environmental and structural building conditions, the effects of disruptions to our information technology and other systems and infrastructure and factors affecting the gaming, entertainment and hospitality industries generally; (t) other risks to consummation of the proposed transaction, including the risk that the proposed transaction will not be consummated within the expected time or at all;
-•our sensitivity to reductions in discretionary consumer spending as a result of downturns in the economy and other factors outside our control;
-•projections of future results of operations or financial condition;
-•expectations regarding our business and results of operations of our existing casino properties and prospects for future development;
-•the impact of economic trends, inflation, and public health emergencies on our business and financial condition;
-•expectations regarding trends that will affect our market and the gaming industry generally, including expansion of internet betting and gaming, and the impact of those trends on our business and results of operations;
-•our ability to comply with the covenants in the agreements governing our outstanding indebtedness and leases;
-•our ability to meet our projected debt service obligations, operating expenses, and maintenance capital expenditures;
-•expectations regarding availability of capital resources;
-•our intention to pursue development opportunities and additional acquisitions and divestitures;
-•our ability to complete dispositions and divestitures and effectively reinvest the proceeds thereof;
-•the ability to identify suitable acquisition opportunities and realize growth and cost synergies from any future acquisitions;
-•the impact of regulation on our business and our ability to receive and maintain necessary approvals for our existing properties, future projects and the operation of our online sportsbook, poker and iGaming applications;
-•the effect of disruptions or corruption to our information technology and other systems and infrastructure;
-•potential compromises of our information systems or unauthorized access to confidential information and customer data;
-•the impact of the Data Incident (as defined in the 2025 Annual Report) and any other future cybersecurity breaches on our business, financial conditions and results of operations;
-•factors impacting our ability to successfully operate our digital betting and iGaming platform and expand its user base;
-•our ability to adapt to the very competitive environments in which we operate, including the online market;
-•the impact of win rates and liability management risks on our results of operations;
-•our reliance on third parties for strategic relationships and essential services;
-•costs associated with investments in our online offerings and technological and strategic initiatives;
-•risk relating to fraud, theft and cheating;
-•our ability to collect gaming receivables from our credit customers;
-•the impact of our substantial indebtedness and significant financial commitments, including our obligations under our lease arrangements;
-•restrictions and limitations in agreements governing our debt and leased properties could significantly affect our ability to operate our business and our liquidity;
-•financial, operational, regulatory or other potential challenges that may arise as a result of leasing of a number of our properties;
-•the impact of governmental regulation on our business and the cost of complying or the impact of failing to comply with such regulations;
-•changes in gaming taxes and fees in jurisdictions in which we operate;
-•risks relating to pending claims or future claims that may be brought against us;
-•changes in interest rates and capital and credit markets;
-•the effect of seasonal fluctuations;
-•our particular sensitivity to energy and water prices;
-•deterioration in our reputation or the reputation of our brands;
+our sensitivity to reductions in discretionary consumer spending as a result of downturns in the economy and other factors outside our control;
+projections of future results of operations or financial condition;
+expectations regarding our business and results of operations of our existing casino properties and prospects for future development;
+the impact of economic trends, inflation, and public health emergencies on our business and financial condition;
+expectations regarding trends that will affect our market and the gaming industry generally, including expansion of internet betting and gaming, and the impact of those trends on our business and results of operations;
+our ability to comply with the covenants in the agreements governing our outstanding indebtedness and leases;
+our ability to meet our projected debt service obligations, operating expenses, and maintenance capital expenditures;
+expectations regarding availability of capital resources;
+our intention to pursue development opportunities and additional acquisitions and divestitures;
+our ability to complete dispositions and divestitures and effectively reinvest the proceeds thereof;
+the ability to identify suitable acquisition opportunities and realize growth and cost synergies from any future acquisitions;
+the impact of regulation on our business and our ability to receive and maintain necessary approvals for our existing properties, future projects and the operation of our online sportsbook, poker and iGaming applications;
+the effect of disruptions or corruption to our information technology and other systems and infrastructure;
+potential compromises of our information systems or unauthorized access to confidential information and customer data;
+the impact of the Data Incident (as defined in the 2025 Annual Report) and any other future cybersecurity breaches on our business, financial conditions and results of operations;
+factors impacting our ability to successfully operate our digital betting and iGaming platform and expand its user base;
+our ability to adapt to the very competitive environments in which we operate, including the online market;
+the impact of win rates and liability management risks on our results of operations;
+our reliance on third parties for strategic relationships and essential services;
+costs associated with investments in our online offerings and technological and strategic initiatives;
+risk relating to fraud, theft and cheating;
+our ability to collect gaming receivables from our credit customers;
+the impact of our substantial indebtedness and significant financial commitments, including our obligations under our lease arrangements;
+restrictions and limitations in agreements governing our debt and leased properties could significantly affect our ability to operate our business and our liquidity;
+financial, operational, regulatory or other potential challenges that may arise as a result of leasing of a number of our properties;
+the impact of governmental regulation on our business and the cost of complying or the impact of failing to comply with such regulations;
+changes in gaming taxes and fees in jurisdictions in which we operate;
+risks relating to pending claims or future claims that may be brought against us;
+changes in interest rates and capital and credit markets;
+the effect of seasonal fluctuations;
+our particular sensitivity to energy and water prices;
+deterioration in our reputation or the reputation of our brands;
 Table of Contents
 44
-•our reliance on information technology, particularly for our digital business;
-•our ability to protect our intellectual property rights;
-•our reliance on licenses to use the intellectual property of third parties and our ability to renew or extend our existing licenses;
-•the effects of war, terrorist activity, acts of violence, natural disasters and other catastrophic events;
-•increased scrutiny and changing expectations regarding our environmental, social and governance practices and reporting;
-•our reliance on key personnel and the intense competition to attract and retain management and key employees in the gaming industry;
-•work stoppages and other labor problems;
-•our ability to secure and retain performers and other entertainment offerings on acceptable terms; and
-•other factors described in “Risk Factors” and “Management’s Discussion and Analysis of Financial Condition and Results of Operations” contained in this Quarterly Report on Form 10-Q, our most recent Annual Report on Form 10-K and any subsequent Quarterly Reports on Form 10-Q filed with the SEC.
+our reliance on information technology, particularly for our digital business;
+our ability to protect our intellectual property rights;
+our reliance on licenses to use the intellectual property of third parties and our ability to renew or extend our existing licenses;
+the effects of war, terrorist activity, acts of violence, natural disasters and other catastrophic events;
+increased scrutiny and changing expectations regarding our environmental, social and governance practices and reporting;
+our reliance on key personnel and the intense competition to attract and retain management and key employees in the gaming industry;
+work stoppages and other labor problems;
+our ability to secure and retain performers and other entertainment offerings on acceptable terms; and
+other factors described in “Risk Factors” and “Management’s Discussion and Analysis of Financial Condition and Results of Operations” contained in this Quarterly Report on Form 10-Q, our most recent Annual Report on Form 10-K and any subsequent Quarterly Reports on Form 10-Q filed with the SEC.
 In light of these and other risks, uncertainties and assumptions, the forward-looking events discussed in this report might not occur. These forward-looking statements speak only as of the date on which this statement is made, even if subsequently made available on our website or otherwise, and we do not intend to update publicly any forward-looking statement to reflect events or circumstances that occur after the date on which the statement is made, except as may be required by law.
 You should also be aware that while we, from time to time, communicate with securities analysts, we do not disclose to them any material non-public information, internal forecasts or other confidential business information. Therefore, you should not assume that we agree with any statement or report issued by any analyst, irrespective of the content of the statement or report.
 To the extent that reports issued by securities analysts contain projections, forecasts or opinions, those reports are not our responsibility and are not endorsed by us.
@@ -1148,13 +1148,13 @@ Item 1A. Risk Factors
 The following risk factors update and supplement the risk factors contained in the Company’s Annual Report on Form 10-K for the year ended December 31, 2025. We may disclose changes to such factors or disclose additional factors from time to time in our filings with the SEC.
 The announcement and pendency of our agreement to be acquired by Merger Sub may have an adverse effect on our business, operating results and our stock price, and may result in the loss of employees, customers, suppliers, and other business partners.
 We are subject to risks in connection with the announcement and pendency of the Merger, including, but not limited to, the following:
-•market reaction to the announcement of the Merger;
-•changes in our business, operations, financial position, and prospects;
-•market assessments of the likelihood that the Merger will be consummated;
-•the merger consideration offered per share will not be increased to account for any positive changes in our business, assets, liabilities, prospects, outlook, financial condition, or results of operations during the pendency of the Merger, including any successful execution of our current strategy as an independent company or in the event of any change in the market price of, analyst estimates of, or projections relating to, our common stock;
-•potential adverse effects on our relationships with our current customers, suppliers and other business partners, or those with which we are seeking to establish business relationships, due to uncertainties about the Merger;
-•the pendency and outcome of the legal proceedings that have been or may be instituted against us, our directors, executive officers and others relating to the transactions contemplated by the Merger Agreement; and
-•the possibility of disruption to our business, including increased costs and diversion of management time and resources that could otherwise have been devoted to other opportunities that may have been beneficial to us.
+market reaction to the announcement of the Merger;
+changes in our business, operations, financial position, and prospects;
+market assessments of the likelihood that the Merger will be consummated;
+the merger consideration offered per share will not be increased to account for any positive changes in our business, assets, liabilities, prospects, outlook, financial condition, or results of operations during the pendency of the Merger, including any successful execution of our current strategy as an independent company or in the event of any change in the market price of, analyst estimates of, or projections relating to, our common stock;
+potential adverse effects on our relationships with our current customers, suppliers and other business partners, or those with which we are seeking to establish business relationships, due to uncertainties about the Merger;
+the pendency and outcome of the legal proceedings that have been or may be instituted against us, our directors, executive officers and others relating to the transactions contemplated by the Merger Agreement; and
+the possibility of disruption to our business, including increased costs and diversion of management time and resources that could otherwise have been devoted to other opportunities that may have been beneficial to us.
 Table of Contents
 45
 The Merger is subject to certain conditions, some or all of which may not be satisfied, and the Merger may not be completed on a timely basis, if at all.
@@ -1163,14 +1163,14 @@ Although Fertitta Gaming and the Company have agreed in the Merger Agreement to 
 If the parties determine to waive any of the conditions to the closing of the Merger, such decision may have an adverse effect on the Company and our stockholders.
 Failure to complete the Merger could negatively affect our stock price and our future business and financial results.
 If the Merger is not completed, our ongoing business, financial condition, financial results and stock price may be materially adversely affected. Without realizing any of the benefits of having completed the Merger, we will be subject to a number of risks, including the following:
-•the market price of our common stock could decline to the extent that the current market price reflects a market assumption that the Merger will be completed;
-•we may experience negative reactions from our employees and may not be able to retain key management personnel and other key employees;
-•we will have incurred, and will continue to incur, significant non-recurring costs in connection with the Merger that we may be unable to recover;
-•we may experience negative reactions from the financial markets or from suppliers, customers and regulators;
-•time and resources committed by our management to matters relating to the Merger could otherwise have been devoted to pursuing other beneficial opportunities for the Company;
-•we could owe a termination fee of up to $200 million to Fertitta Gaming under certain circumstances;
-•if the Merger Agreement is terminated and our Board seeks another business combination, there can be no assurance that we will be able to find a party willing to enter into a transaction on terms equivalent to or more attractive than the terms to which Fertitta Gaming has agreed in the Merger Agreement; and
-•litigation related to any failure to complete the Merger or related to any enforcement proceeding commenced against us or Fertitta Gaming to perform their respective obligations pursuant to the Merger Agreement.
+the market price of our common stock could decline to the extent that the current market price reflects a market assumption that the Merger will be completed;
+we may experience negative reactions from our employees and may not be able to retain key management personnel and other key employees;
+we will have incurred, and will continue to incur, significant non-recurring costs in connection with the Merger that we may be unable to recover;
+we may experience negative reactions from the financial markets or from suppliers, customers and regulators;
+time and resources committed by our management to matters relating to the Merger could otherwise have been devoted to pursuing other beneficial opportunities for the Company;
+we could owe a termination fee of up to $200 million to Fertitta Gaming under certain circumstances;
+if the Merger Agreement is terminated and our Board seeks another business combination, there can be no assurance that we will be able to find a party willing to enter into a transaction on terms equivalent to or more attractive than the terms to which Fertitta Gaming has agreed in the Merger Agreement; and
+litigation related to any failure to complete the Merger or related to any enforcement proceeding commenced against us or Fertitta Gaming to perform their respective obligations pursuant to the Merger Agreement.
 If any of these risks materialize it could materially adversely impact our ongoing business, financial condition, financial results and stock price. Similarly, delays in the completion of the Merger could, among other things, result in additional transaction costs, loss of revenue or other negative effects associated with uncertainty about completion of the Merger.
 We will incur direct and indirect costs as a result of the Merger, which may be more expensive to complete than anticipated.
 We have incurred, and will continue to incur, substantial costs, expenses and fees for professional services and other transaction costs in connection with the Merger. The Merger may be more expensive to complete than anticipated as a result of unexpected factors or events, including, but not limited to, delays in consents or approvals or developments in the political environment. The Company may incur additional costs or suffer loss of business under third-party contracts that are terminated or that contain change in control or other provisions that may be triggered by the completion of the Merger, and/or losses of, or decreases in orders by, customers, and may also incur costs to maintain employee morale and to retain certain key management personnel and employees. The Company will also incur transaction fees and costs related to formulating operational plans, and the execution of these plans may lead to additional unanticipated costs and time delays. Factors beyond our control could
@@ -1204,30 +1204,30 @@ For the three months ended June 30, 2026, none of our directors or officers (as 
 Table of Contents
 48
 Item 6. Exhibits
-Exhibit Number | Description of Exhibit | Method of Filing |
-2.1* | Agreement and Plan of Merger, dated as of May 27, 2026, by and among Caesars Entertainment, Inc., Fertitta Gaming Holdco, LLC, Empire Merger Sub, Inc., Landry’s Fertitta, LLC, solely for the purposes of Section 9.14 therein and Hospitality Headquarters, Inc., solely for the purposes of Section 9.14(j) therein. | Previously filed on Form 8-K filed on May 28, 2026. |
-3.1 | Amended and Restated Certificate of Incorporation of Caesars Entertainment, Inc. | Previously filed on Form 8-K filed on June 16, 2023. |
-3.2 | Amended and Restated Bylaws of Caesars Entertainment, Inc. | Previously filed on Form 8-K filed on July 28, 2025. |
-31.1 | Certification of Thomas R. Reeg pursuant to Rule 13a-14a and Rule 15d-14(a) | Filed herewith. |
-31.2 | Certification of Bret Yunker pursuant to Rule 13a-14a and Rule 15d-14(a) | Filed herewith. |
-32.1 | Certification of Thomas R. Reeg in accordance with 18 U.S.C. Section 1350 | Filed herewith. |
-32.2 | Certification of Bret Yunker in accordance with 18 U.S.C. Section 1350 | Filed herewith. |
-101.1 | Inline XBRL Instance Document | Filed herewith. |
-101.2 | Inline XBRL Taxonomy Extension Schema Document | Filed herewith. |
-101.3 | Inline XBRL Taxonomy Extension Calculation Linkbase Document | Filed herewith. |
-101.4 | Inline XBRL Taxonomy Extension Definition Linkbase Document | Filed herewith. |
-101.5 | Inline XBRL Taxonomy Extension Label Linkbase Document | Filed herewith. |
-101.6 | Inline XBRL Taxonomy Extension Presentation Linkbase Document | Filed herewith. |
-104 | Cover Page Interactive Data File (embedded within the Inline XBRL document) | Filed herewith. |
-* | Schedules have been omitted pursuant to Item 601(b)(2) of Regulation S-K. The Company hereby undertakes to furnish supplementally copies of any of the omitted schedules upon request by the SEC. |
+Exhibit Number | Description of Exhibit | Method of Filing
+2.1* | Agreement and Plan of Merger, dated as of May 27, 2026, by and among Caesars Entertainment, Inc., Fertitta Gaming Holdco, LLC, Empire Merger Sub, Inc., Landry’s Fertitta, LLC, solely for the purposes of Section 9.14 therein and Hospitality Headquarters, Inc., solely for the purposes of Section 9.14(j) therein. | Previously filed on Form 8-K filed on May 28, 2026.
+3.1 | Amended and Restated Certificate of Incorporation of Caesars Entertainment, Inc. | Previously filed on Form 8-K filed on June 16, 2023.
+3.2 | Amended and Restated Bylaws of Caesars Entertainment, Inc. | Previously filed on Form 8-K filed on July 28, 2025.
+31.1 | Certification of Thomas R. Reeg pursuant to Rule 13a-14a and Rule 15d-14(a) | Filed herewith.
+31.2 | Certification of Bret Yunker pursuant to Rule 13a-14a and Rule 15d-14(a) | Filed herewith.
+32.1 | Certification of Thomas R. Reeg in accordance with 18 U.S.C. Section 1350 | Filed herewith.
+32.2 | Certification of Bret Yunker in accordance with 18 U.S.C. Section 1350 | Filed herewith.
+101.1 | Inline XBRL Instance Document | Filed herewith.
+101.2 | Inline XBRL Taxonomy Extension Schema Document | Filed herewith.
+101.3 | Inline XBRL Taxonomy Extension Calculation Linkbase Document | Filed herewith.
+101.4 | Inline XBRL Taxonomy Extension Definition Linkbase Document | Filed herewith.
+101.5 | Inline XBRL Taxonomy Extension Label Linkbase Document | Filed herewith.
+101.6 | Inline XBRL Taxonomy Extension Presentation Linkbase Document | Filed herewith.
+104 | Cover Page Interactive Data File (embedded within the Inline XBRL document) | Filed herewith.
+* | Schedules have been omitted pursuant to Item 601(b)(2) of Regulation S-K. The Company hereby undertakes to furnish supplementally copies of any of the omitted schedules upon request by the SEC.
 Table of Contents
 49
 SIGNATURES
 Pursuant to the requirements of the Securities Exchange Act of 1934, the registrant has duly caused this report to be signed on its behalf by the undersigned thereunto duly authorized.
-CAESARS ENTERTAINMENT, INC. |
-Date: July 28, 2026 | /s/ Thomas R. Reeg |
-Thomas R. Reeg Chief Executive Officer (Principal Executive Officer) |
-Date: July 28, 2026 | /s/ Bret Yunker |
-Bret Yunker Chief Financial Officer (Principal Financial Officer) |
+CAESARS ENTERTAINMENT, INC.
+Date: July 28, 2026 | /s/ Thomas R. Reeg
+Thomas R. Reeg Chief Executive Officer (Principal Executive Officer)
+Date: July 28, 2026 | /s/ Bret Yunker
+Bret Yunker Chief Financial Officer (Principal Financial Officer)
 Table of Contents
 50

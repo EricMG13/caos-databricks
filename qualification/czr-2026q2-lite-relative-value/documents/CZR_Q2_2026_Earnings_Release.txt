@@ -2,90 +2,90 @@ Exhibit 99.1
 Caesars Entertainment, Inc. Reports Second Quarter 2026 Results
 LAS VEGAS and RENO, Nev. (July 28, 2026) – Caesars Entertainment, Inc., (NASDAQ: CZR) (“Caesars,” “CZR,” “CEI” or the “Company”) today reported operating results for the second quarter ended June 30, 2026.
 Second Quarter 2026 and Recent Highlights:
-•GAAP net revenues of $3.0 billion versus $2.9 billion for the comparable prior-year period.
-•GAAP net loss of $62 million compared to a net loss of $82 million for the comparable prior-year period.
-•Consolidated Adjusted EBITDA of $920 million versus $955 million for the comparable prior-year period.
-•Caesars Digital Adjusted EBITDA of $68 million versus $80 million for the comparable prior-year period.
+GAAP net revenues of $3.0 billion versus $2.9 billion for the comparable prior-year period.
+GAAP net loss of $62 million compared to a net loss of $82 million for the comparable prior-year period.
+Consolidated Adjusted EBITDA of $920 million versus $955 million for the comparable prior-year period.
+Caesars Digital Adjusted EBITDA of $68 million versus $80 million for the comparable prior-year period.
 Second Quarter 2026 Financial Results Summary and Segment Information
-Net Revenues |
-Three Months Ended June 30, |
-(In millions) | 2026 | 2025 | % Change |
-Las Vegas | $1,017 | $1,054 | (3.5)% |
-Regional | 1,570 | 1,435 | 9.4% |
-Caesars Digital | 351 | 343 | 2.3% |
-Managed and Branded | 57 | 74 | (23.0)% |
-Corporate and Other | (2) | 1 | * |
-Caesars | $2,993 | $2,907 | 3.0% |
-Net Revenues |
-Six Months Ended June 30, |
-(In millions) | 2026 | 2025 | % Change |
-Las Vegas | $2,020 | $2,057 | (1.8)% |
-Regional | 3,000 | 2,823 | 6.3% |
-Caesars Digital | 725 | 678 | 6.9% |
-Managed and Branded | 123 | 141 | (12.8)% |
-Corporate and Other | (5) | 2 | * |
-Caesars | $5,863 | $5,701 | 2.8% |
-Net Income (Loss) Attributable to Caesars |
-Three Months Ended June 30, |
-(In millions) | 2026 | 2025 | % Change |
-Las Vegas | $156 | $212 | (26.4)% |
-Regional | 23 | (11) | * |
-Caesars Digital | 27 | 39 | (30.8)% |
-Managed and Branded | 17 | 18 | (5.6)% |
-Corporate and Other | (285) | (340) | 16.2% |
-Caesars | $(62) | $(82) | 24.4% |
+Net Revenues
+Three Months Ended June 30,
+(In millions) | 2026 | 2025 | % Change
+Las Vegas | $1,017 | $1,054 | (3.5)%
+Regional | 1,570 | 1,435 | 9.4%
+Caesars Digital | 351 | 343 | 2.3%
+Managed and Branded | 57 | 74 | (23.0)%
+Corporate and Other | (2) | 1 | *
+Caesars | $2,993 | $2,907 | 3.0%
+Net Revenues
+Six Months Ended June 30,
+(In millions) | 2026 | 2025 | % Change
+Las Vegas | $2,020 | $2,057 | (1.8)%
+Regional | 3,000 | 2,823 | 6.3%
+Caesars Digital | 725 | 678 | 6.9%
+Managed and Branded | 123 | 141 | (12.8)%
+Corporate and Other | (5) | 2 | *
+Caesars | $5,863 | $5,701 | 2.8%
+Net Income (Loss) Attributable to Caesars
+Three Months Ended June 30,
+(In millions) | 2026 | 2025 | % Change
+Las Vegas | $156 | $212 | (26.4)%
+Regional | 23 | (11) | *
+Caesars Digital | 27 | 39 | (30.8)%
+Managed and Branded | 17 | 18 | (5.6)%
+Corporate and Other | (285) | (340) | 16.2%
+Caesars | $(62) | $(82) | 24.4%
 1
-Net Income (Loss) Attributable to Caesars |
-Six Months Ended June 30, |
-(In millions) | 2026 | 2025 | % Change |
-Las Vegas | $332 | $389 | (14.7)% |
-Regional | 3 | 9 | (66.7)% |
-Caesars Digital | 49 | 39 | 25.6% |
-Managed and Branded | 41 | 34 | 20.6% |
-Corporate and Other | (585) | (668) | 12.4% |
-Caesars | $(160) | $(197) | 18.8% |
-Adjusted EBITDA (a) |
-Three Months Ended June 30, |
-(In millions) | 2026 | 2025 | % Change |
-Las Vegas | $410 | $469 | (12.6)% |
-Regional | 488 | 439 | 11.2% |
-Caesars Digital | 68 | 80 | (15.0)% |
-Managed and Branded | 16 | 17 | (5.9)% |
-Corporate and Other | (62) | (50) | (24.0)% |
-Caesars | $920 | $955 | (3.7)% |
-Adjusted EBITDA (a) |
-Six Months Ended June 30, |
-(In millions) | 2026 | 2025 | % Change |
-Las Vegas | $836 | $902 | (7.3)% |
-Regional | 923 | 879 | 5.0% |
-Caesars Digital | 137 | 123 | 11.4% |
-Managed and Branded | 29 | 33 | (12.1)% |
-Corporate and Other | (118) | (98) | (20.4)% |
-Caesars | $1,807 | $1,839 | (1.7)% |
+Net Income (Loss) Attributable to Caesars
+Six Months Ended June 30,
+(In millions) | 2026 | 2025 | % Change
+Las Vegas | $332 | $389 | (14.7)%
+Regional | 3 | 9 | (66.7)%
+Caesars Digital | 49 | 39 | 25.6%
+Managed and Branded | 41 | 34 | 20.6%
+Corporate and Other | (585) | (668) | 12.4%
+Caesars | $(160) | $(197) | 18.8%
+Adjusted EBITDA (a)
+Three Months Ended June 30,
+(In millions) | 2026 | 2025 | % Change
+Las Vegas | $410 | $469 | (12.6)%
+Regional | 488 | 439 | 11.2%
+Caesars Digital | 68 | 80 | (15.0)%
+Managed and Branded | 16 | 17 | (5.9)%
+Corporate and Other | (62) | (50) | (24.0)%
+Caesars | $920 | $955 | (3.7)%
+Adjusted EBITDA (a)
+Six Months Ended June 30,
+(In millions) | 2026 | 2025 | % Change
+Las Vegas | $836 | $902 | (7.3)%
+Regional | 923 | 879 | 5.0%
+Caesars Digital | 137 | 123 | 11.4%
+Managed and Branded | 29 | 33 | (12.1)%
+Corporate and Other | (118) | (98) | (20.4)%
+Caesars | $1,807 | $1,839 | (1.7)%
 ____________________
 *Not meaningful
-(a)Adjusted EBITDA is not a GAAP measurement and is presented solely as a supplemental disclosure because the Company believes it is a widely used measure of operating performance in the gaming industry. See “Reconciliation of GAAP Measures to Non-GAAP Measures” below for a definition of Adjusted EBITDA and a quantitative reconciliation of Adjusted EBITDA to net income (loss) attributable to Caesars, which the Company believes is the most comparable financial measure calculated in accordance with GAAP.
+(a) Adjusted EBITDA is not a GAAP measurement and is presented solely as a supplemental disclosure because the Company believes it is a widely used measure of operating performance in the gaming industry. See “Reconciliation of GAAP Measures to Non-GAAP Measures” below for a definition of Adjusted EBITDA and a quantitative reconciliation of Adjusted EBITDA to net income (loss) attributable to Caesars, which the Company believes is the most comparable financial measure calculated in accordance with GAAP.
 Balance Sheet and Liquidity
 As of June 30, 2026, Caesars had $11.8 billion in aggregate principal amount of debt outstanding. Total cash and cash equivalents were $965 million, excluding restricted cash of $112 million.
-(In millions) | June 30, 2026 | December 31, 2025 |
-Cash and cash equivalents | $965 | $887 |
-Bank debt and loans | $5,968 | $6,063 |
-Notes | 5,800 | 5,800 |
-Other long-term debt | 39 | 42 |
-Total outstanding indebtedness | $11,807 | $11,905 |
-Net debt (a) | $10,842 | $11,018 |
+(In millions) | June 30, 2026 | December 31, 2025
+Cash and cash equivalents | $965 | $887
+Bank debt and loans | $5,968 | $6,063
+Notes | 5,800 | 5,800
+Other long-term debt | 39 | 42
+Total outstanding indebtedness | $11,807 | $11,905
+Net debt (a) | $10,842 | $11,018
 ___________________
-(a)Net debt is a non-GAAP measurement and is presented solely as a supplemental disclosure because the Company believes it is helpful in understanding our financial position. Net debt is equal to total outstanding indebtedness less cash and cash equivalents.
+(a) Net debt is a non-GAAP measurement and is presented solely as a supplemental disclosure because the Company believes it is helpful in understanding our financial position. Net debt is equal to total outstanding indebtedness less cash and cash equivalents.
 2
 As of June 30, 2026, cash on hand and borrowing capacity was as follows:
-(In millions) | June 30, 2026 |
-Cash and cash equivalents | $965 |
-CEI Revolving Credit Facility capacity, net of outstanding balance | 2,130 |
-CVA Revolving Credit Facility capacity | 25 |
-Revolver capacity committed to letters of credit | (96) |
-Revolver capacity committed to specific reserves | (40) |
-Available revolver capacity committed as regulatory requirement | (56) |
-Total | $2,928 |
+(In millions) | June 30, 2026
+Cash and cash equivalents | $965
+CEI Revolving Credit Facility capacity, net of outstanding balance | 2,130
+CVA Revolving Credit Facility capacity | 25
+Revolver capacity committed to letters of credit | (96)
+Revolver capacity committed to specific reserves | (40)
+Available revolver capacity committed as regulatory requirement | (56)
+Total | $2,928
 Non-GAAP Measures
 Adjusted EBITDA (described below), a non-GAAP financial measure, has been presented as a supplemental disclosure because it is a widely used measure of performance and basis for valuation of companies in our industry and we believe that this non-GAAP supplemental information will be helpful in understanding our ongoing operating results. Management has historically used Adjusted EBITDA when evaluating operating performance because we believe that the inclusion or exclusion of certain recurring and non-recurring items is necessary to provide a full understanding of our core operating results and as a means to evaluate period-to-period results. Adjusted EBITDA represents, as applicable, net income (loss) before interest income and interest expense, net of interest capitalized, (benefit) provision for income taxes, depreciation and amortization, stock-based compensation expense, (gain) loss on extinguishment of debt, impairment charges, other (income) loss, net income (loss) attributable to noncontrolling interests, transaction costs associated with our acquisitions, developments and divestitures, and non-cash changes in equity method investments. Adjusted EBITDA also excludes the expense associated with certain of our leases as these transactions were accounted for as financing obligations and the associated expense is included in interest expense. Adjusted EBITDA is not a measure of performance or liquidity calculated in accordance with accounting principles generally accepted in the United States (“GAAP”). Adjusted EBITDA is unaudited and should not be considered an alternative to, or more meaningful than, net income (loss) as an indicator of our operating performance. Uses of cash flows that are not reflected in Adjusted EBITDA include capital expenditures, interest payments, income taxes, debt principal repayments, distributions to our noncontrolling interest owners and payments under our leases with affiliates of VICI and GLPI, which can be significant. As a result, Adjusted EBITDA should not be considered as a measure of our liquidity. The reconciliation of net income (loss) attributable to Caesars to Adjusted EBITDA is attached at the end of this press release.
 Net debt (defined above), a non-GAAP measure, has been presented as a supplemental disclosure because we believe it is helpful in understanding our financial condition. The reconciliation of net debt to total outstanding indebtedness is set forth above.
@@ -107,54 +107,54 @@ Media Relations: Kate Whiteley, kwhiteley@caesars.com
 CAESARS ENTERTAINMENT, INC.
 CONSOLIDATED CONDENSED STATEMENTS OF OPERATIONS
 (UNAUDITED)
-Three Months Ended June 30, | Six Months Ended June 30, |
-(In millions, except per share data) | 2026 | 2025 | 2026 | 2025 |
-NET REVENUES: |
-Casino | $1,759 | $1,668 | $3,425 | $3,262 |
-Food and beverage | 426 | 428 | 850 | 863 |
-Hotel | 495 | 509 | 982 | 991 |
-Other | 313 | 302 | 606 | 585 |
-Net revenues | 2,993 | 2,907 | 5,863 | 5,701 |
-OPERATING EXPENSES: |
-Casino | 955 | 887 | 1,857 | 1,748 |
-Food and beverage | 281 | 275 | 555 | 550 |
-Hotel | 163 | 155 | 319 | 306 |
-Other | 95 | 105 | 190 | 200 |
-General and administrative | 521 | 477 | 1,025 | 960 |
-Corporate | 94 | 84 | 182 | 166 |
-Depreciation and amortization | 355 | 364 | 702 | 721 |
-Transaction and other costs, net | 16 | 34 | 20 | 36 |
-Total operating expenses | 2,480 | 2,381 | 4,850 | 4,687 |
-Operating income | 513 | 526 | 1,013 | 1,014 |
-OTHER EXPENSE: |
-Interest expense, net | (573) | (579) | (1,142) | (1,153) |
-Other income | 7 | 1 | 5 | — |
-Total other expense | (566) | (578) | (1,137) | (1,153) |
-Loss before income taxes | (53) | (52) | (124) | (139) |
-Benefit (provision) for income taxes | 12 | (13) | — | (24) |
-Net loss | (41) | (65) | (124) | (163) |
-Net income attributable to noncontrolling interests | (21) | (17) | (36) | (34) |
-Net loss attributable to Caesars | $(62) | $(82) | $(160) | $(197) |
-Net loss attributable to Caesars per share - basic and diluted: |
-Basic loss per share | $(0.30) | $(0.39) | $(0.78) | $(0.93) |
-Diluted loss per share | $(0.30) | $(0.39) | $(0.78) | $(0.93) |
-Weighted average basic shares outstanding | 204 | 209 | 204 | 210 |
-Weighted average diluted shares outstanding | 204 | 209 | 204 | 210 |
+Three Months Ended June 30, | Six Months Ended June 30,
+(In millions, except per share data) | 2026 | 2025 | 2026 | 2025
+NET REVENUES:
+Casino | $1,759 | $1,668 | $3,425 | $3,262
+Food and beverage | 426 | 428 | 850 | 863
+Hotel | 495 | 509 | 982 | 991
+Other | 313 | 302 | 606 | 585
+Net revenues | 2,993 | 2,907 | 5,863 | 5,701
+OPERATING EXPENSES:
+Casino | 955 | 887 | 1,857 | 1,748
+Food and beverage | 281 | 275 | 555 | 550
+Hotel | 163 | 155 | 319 | 306
+Other | 95 | 105 | 190 | 200
+General and administrative | 521 | 477 | 1,025 | 960
+Corporate | 94 | 84 | 182 | 166
+Depreciation and amortization | 355 | 364 | 702 | 721
+Transaction and other costs, net | 16 | 34 | 20 | 36
+Total operating expenses | 2,480 | 2,381 | 4,850 | 4,687
+Operating income | 513 | 526 | 1,013 | 1,014
+OTHER EXPENSE:
+Interest expense, net | (573) | (579) | (1,142) | (1,153)
+Other income | 7 | 1 | 5 | —
+Total other expense | (566) | (578) | (1,137) | (1,153)
+Loss before income taxes | (53) | (52) | (124) | (139)
+Benefit (provision) for income taxes | 12 | (13) | — | (24)
+Net loss | (41) | (65) | (124) | (163)
+Net income attributable to noncontrolling interests | (21) | (17) | (36) | (34)
+Net loss attributable to Caesars | $(62) | $(82) | $(160) | $(197)
+Net loss attributable to Caesars per share - basic and diluted:
+Basic loss per share | $(0.30) | $(0.39) | $(0.78) | $(0.93)
+Diluted loss per share | $(0.30) | $(0.39) | $(0.78) | $(0.93)
+Weighted average basic shares outstanding | 204 | 209 | 204 | 210
+Weighted average diluted shares outstanding | 204 | 209 | 204 | 210
 5
 CAESARS ENTERTAINMENT, INC.
 RECONCILIATION OF NET INCOME (LOSS) ATTRIBUTABLE TO CAESARS TO ADJUSTED EBITDA
 (UNAUDITED)
-Three Months Ended June 30, | Six Months Ended June 30, |
-(In millions) | 2026 | 2025 | 2026 | 2025 |
-Net loss attributable to Caesars | $(62) | $(82) | $(160) | $(197) |
-Net income attributable to noncontrolling interests | 21 | 17 | 36 | 34 |
-(Benefit) provision for income taxes | (12) | 13 | — | 24 |
-Other income | (7) | (1) | (5) | — |
-Interest expense, net | 573 | 579 | 1,142 | 1,153 |
-Depreciation and amortization | 355 | 364 | 702 | 721 |
-Transaction costs and other, net (a) | 29 | 41 | 45 | 54 |
-Stock-based compensation expense | 23 | 24 | 47 | 50 |
-Adjusted EBITDA | $920 | $955 | $1,807 | $1,839 |
+Three Months Ended June 30, | Six Months Ended June 30,
+(In millions) | 2026 | 2025 | 2026 | 2025
+Net loss attributable to Caesars | $(62) | $(82) | $(160) | $(197)
+Net income attributable to noncontrolling interests | 21 | 17 | 36 | 34
+(Benefit) provision for income taxes | (12) | 13 | — | 24
+Other income | (7) | (1) | (5) | —
+Interest expense, net | 573 | 579 | 1,142 | 1,153
+Depreciation and amortization | 355 | 364 | 702 | 721
+Transaction costs and other, net (a) | 29 | 41 | 45 | 54
+Stock-based compensation expense | 23 | 24 | 47 | 50
+Adjusted EBITDA | $920 | $955 | $1,807 | $1,839
 ____________________
-(a)Transaction costs and other, net primarily includes costs related to non-cash losses on the write down and disposal of assets, certain non-recurring litigation reserves, professional services for transaction and integration costs, various contract exit or termination costs, pre-opening costs in connection with our new property openings, and non-cash changes in equity method investments.
+(a) Transaction costs and other, net primarily includes costs related to non-cash losses on the write down and disposal of assets, certain non-recurring litigation reserves, professional services for transaction and integration costs, various contract exit or termination costs, pre-opening costs in connection with our new property openings, and non-cash changes in equity method investments.
 6

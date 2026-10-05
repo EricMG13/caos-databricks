@@ -3,13 +3,13 @@ PENN Entertainment, Inc. Reports Second Quarter Results
 WYOMISSING, PA (August 6, 2026) - PENN Entertainment, Inc. (“PENN” or the “Company”) (Nasdaq: PENN) today reported financial results for the three and six months ended June 30, 2026.
 Jay Snowden, Chief Executive Officer and President, said: “We continued to execute against our 2026 strategic priorities this quarter: delivering Segment Adjusted EBITDAR growth, optimizing corporate overhead, growing cash flow, and deleveraging the balance sheet. PENN achieved record quarterly Retail segment revenues, supported by strong performance across our portfolio including our four recently completed development projects. Our Interactive segment remains on track to deliver upon our previously stated goals, supported by growth in U.S. iCasino and Canada. Adjusted EBITDA improved by $52.5 million year-over-year, reflecting disciplined execution of our strategy to drive profitability. The encouraging trends in our Retail and Interactive operating segments have continued through July.”
 Second Quarter Retail Segment Highlights1:
-•Revenues of $1.5 billion;
-•Segment Adjusted EBITDAR of $517.2 million; and
-•Segment Adjusted EBITDAR margins of 34.4%.
+Revenues of $1.5 billion;
+Segment Adjusted EBITDAR of $517.2 million; and
+Segment Adjusted EBITDAR margins of 34.4%.
 “PENN’s geographically diverse Retail segment delivered portfolio-wide strength, with nine properties setting second-quarter records for revenues and Adjusted EBITDAR,” said Mr. Snowden. “We experienced another quarter of year-over-year growth in theoretical revenue, supported by meaningful contributions from mid- and high-worth customer segments, as well as growth in unrated revenue, underscoring broad-based consumer demand. Second-quarter Segment Adjusted EBITDAR margins improved quarter-over-quarter and year-over-year, reflecting our property teams’ focus on converting solid demand into favorable operating results. In June 2026, we opened both the new hotel tower at Hollywood Columbus and the new Hollywood Casino Aurora, and early trends at both properties are encouraging, including strong visitation from VIP players.”
 Second Quarter Interactive Segment Highlights:
-•Revenues of $349.4 million (including tax gross up of $185.5 million); and
-•Adjusted EBITDA loss of $9.5 million.
+Revenues of $349.4 million (including tax gross up of $185.5 million); and
+Adjusted EBITDA loss of $9.5 million.
 “Our Interactive segment delivered another quarter of meaningful year-over-year Adjusted EBITDA improvement. In the U.S., standalone Hollywood iCasino experienced quarter-over-quarter as well as year-over-year growth, achieving record quarterly revenues. In Ontario, gaming operations continued to gain momentum, supported by strong growth in online sports betting (“OSB”) revenues aided by solid World Cup engagement and cross-sell of the reactivated World Cup OSB user base into iCasino. We also successfully launched theScore Bet, as well as theScore Casino and Hollywood iCasino standalone apps, in Alberta on July 13,” concluded Mr. Snowden.
 1 Retail Segment consists of retail operating segments which are composed of our Northeast, South, West, and Midwest reportable segments.
 Liquidity and Financial Position
@@ -19,172 +19,172 @@ On May 15, 2026, the Company repaid the remaining $106.7 million principal balan
 On May 28, 2026, the Company amended its Second Amended and Restated Credit Agreement in order to reprice and extend the term of its $962.5 million Amended Term Loan B Facility. The Amended Term Loan B Facility matures in May 2033.
 2
 Summary of Second Quarter Results
-For the three months ended June 30, |
-(in millions, except per share data, unaudited) | 2026 | 2025 |
-Revenues | $1,857.4 | $1,765.0 |
-Net income (loss) | $32.6 | $(18.3) |
-Consolidated Adjusted EBITDA (1) | $312.6 | $236.1 |
-Rent expense associated with triple net operating leases (2) | $163.3 | $156.0 |
-Cash payments to our REIT Landlords under Triple Net Leases (3) | $247.1 | $240.0 |
-Diluted earnings (loss) per common share | $0.24 | $(0.12) |
-(1)For more information, definitions, and reconciliations see the “Non-GAAP Financial Measures” section below.
-(2)Consists of the operating lease components of (i) our triple net master lease dated November 1, 2013 with Gaming and Leisure Properties, Inc. (Nasdaq: GLPI) (“GLPI”), as amended and restated effective January 1, 2023 (the “AR PENN Master Lease”), (ii) our triple net master lease entered into in conjunction with, and coterminous with, the AR PENN Master Lease (the “2023 Master Lease”), and (iii) our triple net master lease dated December 4, 2025 with VICI Properties Inc. (NYSE: VICI) (“VICI”) for the real estate assets used in the operations of Margaritaville Resort Casino and Hollywood Casino at Greektown (the “VICI Master Lease”), which replaced the Company’s prior separate triple net leases with VICI for such properties. Collectively these arrangements are referred to as our “triple net operating leases.” The expense related to operating lease components contained within our triple net operating leases are recorded as “General and administrative” within the unaudited Consolidated Statements of Operations.
-(3)Consists of total cash payments made to GLPI and VICI (referred to collectively as our “REIT Landlords”) under our triple net operating leases (as defined above), the Pinnacle Master Lease, and the Morgantown Lease and collectively referred to as our “Triple Net Leases.”
+For the three months ended June 30,
+(in millions, except per share data, unaudited) | 2026 | 2025
+Revenues | $1,857.4 | $1,765.0
+Net income (loss) | $32.6 | $(18.3)
+Consolidated Adjusted EBITDA (1) | $312.6 | $236.1
+Rent expense associated with triple net operating leases (2) | $163.3 | $156.0
+Cash payments to our REIT Landlords under Triple Net Leases (3) | $247.1 | $240.0
+Diluted earnings (loss) per common share | $0.24 | $(0.12)
+(1) For more information, definitions, and reconciliations see the “Non-GAAP Financial Measures” section below.
+(2) Consists of the operating lease components of (i) our triple net master lease dated November 1, 2013 with Gaming and Leisure Properties, Inc. (Nasdaq: GLPI) (“GLPI”), as amended and restated effective January 1, 2023 (the “AR PENN Master Lease”), (ii) our triple net master lease entered into in conjunction with, and coterminous with, the AR PENN Master Lease (the “2023 Master Lease”), and (iii) our triple net master lease dated December 4, 2025 with VICI Properties Inc. (NYSE: VICI) (“VICI”) for the real estate assets used in the operations of Margaritaville Resort Casino and Hollywood Casino at Greektown (the “VICI Master Lease”), which replaced the Company’s prior separate triple net leases with VICI for such properties. Collectively these arrangements are referred to as our “triple net operating leases.” The expense related to operating lease components contained within our triple net operating leases are recorded as “General and administrative” within the unaudited Consolidated Statements of Operations.
+(3) Consists of total cash payments made to GLPI and VICI (referred to collectively as our “REIT Landlords”) under our triple net operating leases (as defined above), the Pinnacle Master Lease, and the Morgantown Lease and collectively referred to as our “Triple Net Leases.”
 Adjusted EPS
 The following table reconciles diluted earnings (loss) per share (“EPS”) to Adjusted EPS (approximate EPS impact shown, per share; positive adjustments represent charges to income):
-For the three months ended June 30, |
-2026 | 2025 |
-Diluted earnings (loss) per share | $0.24 | $(0.12) |
-Impairment loss | — | 0.10 |
-Gain on disposal of assets | (0.03) | — |
-Pre-opening expenses | 0.17 | 0.03 |
-Legal matters inclusive of litigation settlements | (0.02) | 0.06 |
-Transaction costs and other | 0.14 | 0.01 |
-Non-operating items: |
-Loss on early extinguishment of debt | 0.01 | 0.08 |
-Gain related to debt and equity investments | — | (0.01) |
-Other income | — | (0.02) |
-Foreign currency transaction loss | — | 0.01 |
-Income tax impact on net income adjustments (1) | (0.07) | (0.04) |
-Adjusted EPS | $0.44 | $0.10 |
-(1)The income tax impact reflects current and deferred tax effects based on the nature of each adjustment and the applicable tax jurisdiction.
+For the three months ended June 30,
+2026 | 2025
+Diluted earnings (loss) per share | $0.24 | $(0.12)
+Impairment loss | — | 0.10
+Gain on disposal of assets | (0.03) | —
+Pre-opening expenses | 0.17 | 0.03
+Legal matters inclusive of litigation settlements | (0.02) | 0.06
+Transaction costs and other | 0.14 | 0.01
+Non-operating items:
+Loss on early extinguishment of debt | 0.01 | 0.08
+Gain related to debt and equity investments | — | (0.01)
+Other income | — | (0.02)
+Foreign currency transaction loss | — | 0.01
+Income tax impact on net income adjustments (1) | (0.07) | (0.04)
+Adjusted EPS | $0.44 | $0.10
+(1) The income tax impact reflects current and deferred tax effects based on the nature of each adjustment and the applicable tax jurisdiction.
 3
 PENN ENTERTAINMENT, INC. AND SUBSIDIARIES
 Supplemental Information
 The Company aggregates its operations into five reportable segments: Northeast, South, West, Midwest, and Interactive.
-For the three months ended June 30, | For the six months ended June 30, |
-(in millions, unaudited) | 2026 | 2025 | 2026 | 2025 |
-Revenues: |
-Northeast segment (1) | $731.6 | $711.6 | $1,418.7 | $1,392.5 |
-South segment (2) | 301.9 | 302.2 | 583.1 | 590.5 |
-West segment (3) | 151.5 | 137.7 | 297.2 | 267.4 |
-Midwest segment (4) | 320.6 | 297.0 | 626.5 | 579.9 |
-Interactive (5) | 349.4 | 316.1 | 707.7 | 606.2 |
-Other (6) | 5.6 | 5.7 | 10.9 | 11.0 |
-Intersegment eliminations (7) | (3.2) | (5.3) | (7.7) | (10.0) |
-Total revenues | $1,857.4 | $1,765.0 | $3,636.4 | $3,437.5 |
-Segment Adjusted EBITDAR (8): |
-Northeast segment (1) | $220.2 | $209.5 | $414.7 | $403.7 |
-South segment (2) | 109.0 | 104.8 | 213.2 | 208.1 |
-West segment (3) | 55.0 | 53.5 | 109.0 | 99.2 |
-Midwest segment (4) | 133.0 | 121.8 | 251.7 | 235.6 |
-Interactive (5) | (9.5) | (62.0) | (20.4) | (151.0) |
-Other (6) | (31.8) | (35.5) | (63.2) | (74.3) |
-Rent expense associated with triple net operating leases | (163.3) | (156.0) | (326.6) | (311.9) |
-Consolidated Adjusted EBITDA (9) | $312.6 | $236.1 | $578.4 | $409.4 |
-(1)The Northeast segment consists of the following properties: Ameristar East Chicago, Hollywood Casino at Greektown, Hollywood Casino Bangor, Hollywood Casino at Charles Town Races, Hollywood Casino Columbus, Hollywood Casino Lawrenceburg, Hollywood Casino Morgantown, Hollywood Casino at PENN National Race Course, Hollywood Casino Perryville, Hollywood Casino Toledo, Hollywood Casino York, Hollywood Gaming at Dayton Raceway, Hollywood Gaming at Mahoning Valley Race Course, Marquee by PENN, Hollywood Casino at The Meadows, and Plainridge Park Casino.
-(2)The South segment consists of the following properties: 1st Jackpot Casino, Ameristar Vicksburg, Boomtown Biloxi, Boomtown Bossier City, Boomtown New Orleans, Hollywood Casino Gulf Coast, Hollywood Casino Tunica, L’Auberge Baton Rouge, L’Auberge Lake Charles, and Margaritaville Resort Casino.
-(3)The West segment consists of the following properties: Ameristar Black Hawk, Cactus Petes and Horseshu, M Resort Spa Casino, and Zia Park Casino.
-(4)The Midwest segment consists of the following properties: Ameristar Council Bluffs, Argosy Casino Alton, Argosy Casino Riverside, Hollywood Casino Aurora, Hollywood Casino Joliet, our 50% investment in Kansas Entertainment, LLC, which owns Hollywood Casino at Kansas Speedway, Hollywood Casino St. Louis, Prairie State Gaming, and River City Casino.
-(5)The Interactive segment includes all of our online sports betting, online casino/iCasino and social gaming operations, management of retail sports betting, and media. Interactive revenues are inclusive of a tax gross-up of $185.5 million and $137.9 million for the three months ended June 30, 2026 and 2025, respectively, and $371.3 million and $266.1 million for the six months ended June 30, 2026 and 2025, respectively.
-(6)The Other category, included in the tables to reconcile the segment information to the consolidated information, consists of the Company’s stand-alone racing operations, namely Sanford-Orlando Kennel Club, Sam Houston and Valley Race Park, and our management contract for Retama Park Racetrack. The Other category also includes corporate overhead, which consists of certain expenses, such as payroll, professional fees, travel expenses, and other general and administrative expenses that do not directly relate to or have not otherwise been allocated. Corporate overhead was $29.5 million and $38.7 million for the three months ended June 30, 2026 and 2025, respectively, and $57.7 million and $74.7 million for the six months ended June 30, 2026 and 2025, respectively. Corporate overhead for the three and six months ended June 30, 2025 included $9.4 million and $17.1 million, respectively, of legal and advisory costs related to activist activity in connection with our 2025 annual meeting of shareholders.
-(7)Primarily represents the elimination of intersegment revenues associated with our retail sportsbooks, which are operated by PENN Interactive.
-(8)See definition of Segment Adjusted EBITDAR within the “Reportable Segment Measures” section below.
-(9)See definition of Consolidated Adjusted EBITDA within the “Non-GAAP Financial Measures” section below.
+For the three months ended June 30, | For the six months ended June 30,
+(in millions, unaudited) | 2026 | 2025 | 2026 | 2025
+Revenues:
+Northeast segment (1) | $731.6 | $711.6 | $1,418.7 | $1,392.5
+South segment (2) | 301.9 | 302.2 | 583.1 | 590.5
+West segment (3) | 151.5 | 137.7 | 297.2 | 267.4
+Midwest segment (4) | 320.6 | 297.0 | 626.5 | 579.9
+Interactive (5) | 349.4 | 316.1 | 707.7 | 606.2
+Other (6) | 5.6 | 5.7 | 10.9 | 11.0
+Intersegment eliminations (7) | (3.2) | (5.3) | (7.7) | (10.0)
+Total revenues | $1,857.4 | $1,765.0 | $3,636.4 | $3,437.5
+Segment Adjusted EBITDAR (8):
+Northeast segment (1) | $220.2 | $209.5 | $414.7 | $403.7
+South segment (2) | 109.0 | 104.8 | 213.2 | 208.1
+West segment (3) | 55.0 | 53.5 | 109.0 | 99.2
+Midwest segment (4) | 133.0 | 121.8 | 251.7 | 235.6
+Interactive (5) | (9.5) | (62.0) | (20.4) | (151.0)
+Other (6) | (31.8) | (35.5) | (63.2) | (74.3)
+Rent expense associated with triple net operating leases | (163.3) | (156.0) | (326.6) | (311.9)
+Consolidated Adjusted EBITDA (9) | $312.6 | $236.1 | $578.4 | $409.4
+(1) The Northeast segment consists of the following properties: Ameristar East Chicago, Hollywood Casino at Greektown, Hollywood Casino Bangor, Hollywood Casino at Charles Town Races, Hollywood Casino Columbus, Hollywood Casino Lawrenceburg, Hollywood Casino Morgantown, Hollywood Casino at PENN National Race Course, Hollywood Casino Perryville, Hollywood Casino Toledo, Hollywood Casino York, Hollywood Gaming at Dayton Raceway, Hollywood Gaming at Mahoning Valley Race Course, Marquee by PENN, Hollywood Casino at The Meadows, and Plainridge Park Casino.
+(2) The South segment consists of the following properties: 1st Jackpot Casino, Ameristar Vicksburg, Boomtown Biloxi, Boomtown Bossier City, Boomtown New Orleans, Hollywood Casino Gulf Coast, Hollywood Casino Tunica, L’Auberge Baton Rouge, L’Auberge Lake Charles, and Margaritaville Resort Casino.
+(3) The West segment consists of the following properties: Ameristar Black Hawk, Cactus Petes and Horseshu, M Resort Spa Casino, and Zia Park Casino.
+(4) The Midwest segment consists of the following properties: Ameristar Council Bluffs, Argosy Casino Alton, Argosy Casino Riverside, Hollywood Casino Aurora, Hollywood Casino Joliet, our 50% investment in Kansas Entertainment, LLC, which owns Hollywood Casino at Kansas Speedway, Hollywood Casino St. Louis, Prairie State Gaming, and River City Casino.
+(5) The Interactive segment includes all of our online sports betting, online casino/iCasino and social gaming operations, management of retail sports betting, and media. Interactive revenues are inclusive of a tax gross-up of $185.5 million and $137.9 million for the three months ended June 30, 2026 and 2025, respectively, and $371.3 million and $266.1 million for the six months ended June 30, 2026 and 2025, respectively.
+(6) The Other category, included in the tables to reconcile the segment information to the consolidated information, consists of the Company’s stand-alone racing operations, namely Sanford-Orlando Kennel Club, Sam Houston and Valley Race Park, and our management contract for Retama Park Racetrack. The Other category also includes corporate overhead, which consists of certain expenses, such as payroll, professional fees, travel expenses, and other general and administrative expenses that do not directly relate to or have not otherwise been allocated. Corporate overhead was $29.5 million and $38.7 million for the three months ended June 30, 2026 and 2025, respectively, and $57.7 million and $74.7 million for the six months ended June 30, 2026 and 2025, respectively. Corporate overhead for the three and six months ended June 30, 2025 included $9.4 million and $17.1 million, respectively, of legal and advisory costs related to activist activity in connection with our 2025 annual meeting of shareholders.
+(7) Primarily represents the elimination of intersegment revenues associated with our retail sportsbooks, which are operated by PENN Interactive.
+(8) See definition of Segment Adjusted EBITDAR within the “Reportable Segment Measures” section below.
+(9) See definition of Consolidated Adjusted EBITDA within the “Non-GAAP Financial Measures” section below.
 4
 PENN ENTERTAINMENT, INC. AND SUBSIDIARIES
 Reconciliation of Net Income (Loss) to Consolidated Adjusted EBITDA
-For the three months ended June 30, | For the six months ended June 30, |
-(in millions, unaudited) | 2026 | 2025 | 2026 | 2025 |
-Net income (loss) | $32.6 | $(18.3) | $29.8 | $93.2 |
-Income tax expense | 7.1 | 6.4 | 15.8 | 54.1 |
-Interest expense, net | 100.9 | 95.9 | 201.8 | 206.7 |
-Interest income | (2.0) | (2.1) | (3.8) | (5.3) |
-Income from unconsolidated affiliates | (8.6) | (13.3) | (16.9) | (20.9) |
-Gain on financing arrangement | — | — | — | (215.1) |
-Loss on early extinguishment of debt | 1.8 | 11.8 | 1.8 | 11.8 |
-Other (income) expenses | (0.1) | (2.9) | 0.2 | (4.2) |
-Operating income | 131.7 | 77.5 | 228.7 | 120.3 |
-Stock-based compensation | 17.4 | 16.1 | 31.5 | 31.7 |
-Cash-settled stock-based awards variance (1) | (2.6) | (3.1) | (6.0) | (6.3) |
-Pre-opening expenses | 23.0 | 4.4 | 27.2 | 4.9 |
-Depreciation and amortization | 117.8 | 110.5 | 234.8 | 218.5 |
-Impairment loss (2) | — | 15.0 | — | 15.0 |
-Income from unconsolidated affiliates | 8.6 | 13.3 | 16.9 | 20.9 |
-Non-operating items of equity method investments (3) | 1.1 | 1.1 | 2.3 | 2.2 |
-Other expenses (4) | 15.6 | 1.3 | 43.0 | 2.2 |
-Consolidated Adjusted EBITDA | $312.6 | $236.1 | $578.4 | $409.4 |
-(1)Our cash-settled stock-based awards are adjusted to fair value each reporting period based primarily on the price of the Company’s common stock. As such, significant fluctuations in the price of the Company’s common stock during any reporting period could cause significant variances to budget on cash-settled stock-based awards.
-(2)Related to an impairment charge in our Midwest segment.
-(3)Consists primarily of depreciation expense associated with our Kansas Entertainment joint venture.
-(4)For the three and six months ended June 30, 2026, other expenses primarily consisted of transaction costs and non-recurring restructuring charges, primarily severance, related to the Company’s new corporate organizational structure. For the six months ended June 30, 2026, other expenses also included settlement costs and related legal and advisory fees associated with the Cooperation Agreement with HG Vora Capital Management, LLC and related parties.
+For the three months ended June 30, | For the six months ended June 30,
+(in millions, unaudited) | 2026 | 2025 | 2026 | 2025
+Net income (loss) | $32.6 | $(18.3) | $29.8 | $93.2
+Income tax expense | 7.1 | 6.4 | 15.8 | 54.1
+Interest expense, net | 100.9 | 95.9 | 201.8 | 206.7
+Interest income | (2.0) | (2.1) | (3.8) | (5.3)
+Income from unconsolidated affiliates | (8.6) | (13.3) | (16.9) | (20.9)
+Gain on financing arrangement | — | — | — | (215.1)
+Loss on early extinguishment of debt | 1.8 | 11.8 | 1.8 | 11.8
+Other (income) expenses | (0.1) | (2.9) | 0.2 | (4.2)
+Operating income | 131.7 | 77.5 | 228.7 | 120.3
+Stock-based compensation | 17.4 | 16.1 | 31.5 | 31.7
+Cash-settled stock-based awards variance (1) | (2.6) | (3.1) | (6.0) | (6.3)
+Pre-opening expenses | 23.0 | 4.4 | 27.2 | 4.9
+Depreciation and amortization | 117.8 | 110.5 | 234.8 | 218.5
+Impairment loss (2) | — | 15.0 | — | 15.0
+Income from unconsolidated affiliates | 8.6 | 13.3 | 16.9 | 20.9
+Non-operating items of equity method investments (3) | 1.1 | 1.1 | 2.3 | 2.2
+Other expenses (4) | 15.6 | 1.3 | 43.0 | 2.2
+Consolidated Adjusted EBITDA | $312.6 | $236.1 | $578.4 | $409.4
+(1) Our cash-settled stock-based awards are adjusted to fair value each reporting period based primarily on the price of the Company’s common stock. As such, significant fluctuations in the price of the Company’s common stock during any reporting period could cause significant variances to budget on cash-settled stock-based awards.
+(2) Related to an impairment charge in our Midwest segment.
+(3) Consists primarily of depreciation expense associated with our Kansas Entertainment joint venture.
+(4) For the three and six months ended June 30, 2026, other expenses primarily consisted of transaction costs and non-recurring restructuring charges, primarily severance, related to the Company’s new corporate organizational structure. For the six months ended June 30, 2026, other expenses also included settlement costs and related legal and advisory fees associated with the Cooperation Agreement with HG Vora Capital Management, LLC and related parties.
 5
 PENN ENTERTAINMENT, INC. AND SUBSIDIARIES
 Consolidated Statements of Operations
 (Unaudited)
-For the three months ended June 30, | For the six months ended June 30, |
-(in millions, except per share data, unaudited) | 2026 | 2025 | 2026 | 2025 |
-Revenues |
-Gaming | $1,396.6 | $1,367.7 | $2,730.9 | $2,666.0 |
-Food, beverage, hotel, and other | 460.8 | 397.3 | 905.5 | 771.5 |
-Total revenues | 1,857.4 | 1,765.0 | 3,636.4 | 3,437.5 |
-Operating expenses |
-Gaming | 833.2 | 869.7 | 1,641.1 | 1,723.5 |
-Food, beverage, hotel, and other | 333.7 | 282.0 | 663.1 | 546.9 |
-General and administrative | 441.0 | 410.3 | 868.7 | 813.3 |
-Depreciation and amortization | 117.8 | 110.5 | 234.8 | 218.5 |
-Impairment loss | — | 15.0 | — | 15.0 |
-Total operating expenses | 1,725.7 | 1,687.5 | 3,407.7 | 3,317.2 |
-Operating income | 131.7 | 77.5 | 228.7 | 120.3 |
-Other income (expenses) |
-Interest expense, net | (100.9) | (95.9) | (201.8) | (206.7) |
-Interest income | 2.0 | 2.1 | 3.8 | 5.3 |
-Income from unconsolidated affiliates | 8.6 | 13.3 | 16.9 | 20.9 |
-Gain on financing arrangement | — | — | — | 215.1 |
-Loss on early extinguishment of debt | (1.8) | (11.8) | (1.8) | (11.8) |
-Other | 0.1 | 2.9 | (0.2) | 4.2 |
-Total other income (expenses) | (92.0) | (89.4) | (183.1) | 27.0 |
-Income (loss) before income taxes | 39.7 | (11.9) | 45.6 | 147.3 |
-Income tax expense | (7.1) | (6.4) | (15.8) | (54.1) |
-Net income (loss) | 32.6 | (18.3) | 29.8 | 93.2 |
-Net loss attributable to non-controlling interest | 0.5 | 0.9 | 1.0 | 1.2 |
-Net income (loss) attributable to PENN Entertainment, Inc. | $33.1 | $(17.4) | $30.8 | $94.4 |
-Earnings (loss) per share: |
-Basic earnings (loss) per share | $0.25 | $(0.12) | $0.23 | $0.63 |
-Diluted earnings (loss) per share | $0.24 | $(0.12) | $0.23 | $0.59 |
-Weighted-average common shares outstanding—basic | 133.7 | 149.0 | 133.6 | 150.6 |
-Weighted-average common shares outstanding—diluted | 137.1 | 149.0 | 134.4 | 164.7 |
+For the three months ended June 30, | For the six months ended June 30,
+(in millions, except per share data, unaudited) | 2026 | 2025 | 2026 | 2025
+Revenues
+Gaming | $1,396.6 | $1,367.7 | $2,730.9 | $2,666.0
+Food, beverage, hotel, and other | 460.8 | 397.3 | 905.5 | 771.5
+Total revenues | 1,857.4 | 1,765.0 | 3,636.4 | 3,437.5
+Operating expenses
+Gaming | 833.2 | 869.7 | 1,641.1 | 1,723.5
+Food, beverage, hotel, and other | 333.7 | 282.0 | 663.1 | 546.9
+General and administrative | 441.0 | 410.3 | 868.7 | 813.3
+Depreciation and amortization | 117.8 | 110.5 | 234.8 | 218.5
+Impairment loss | — | 15.0 | — | 15.0
+Total operating expenses | 1,725.7 | 1,687.5 | 3,407.7 | 3,317.2
+Operating income | 131.7 | 77.5 | 228.7 | 120.3
+Other income (expenses)
+Interest expense, net | (100.9) | (95.9) | (201.8) | (206.7)
+Interest income | 2.0 | 2.1 | 3.8 | 5.3
+Income from unconsolidated affiliates | 8.6 | 13.3 | 16.9 | 20.9
+Gain on financing arrangement | — | — | — | 215.1
+Loss on early extinguishment of debt | (1.8) | (11.8) | (1.8) | (11.8)
+Other | 0.1 | 2.9 | (0.2) | 4.2
+Total other income (expenses) | (92.0) | (89.4) | (183.1) | 27.0
+Income (loss) before income taxes | 39.7 | (11.9) | 45.6 | 147.3
+Income tax expense | (7.1) | (6.4) | (15.8) | (54.1)
+Net income (loss) | 32.6 | (18.3) | 29.8 | 93.2
+Net loss attributable to non-controlling interest | 0.5 | 0.9 | 1.0 | 1.2
+Net income (loss) attributable to PENN Entertainment, Inc. | $33.1 | $(17.4) | $30.8 | $94.4
+Earnings (loss) per share:
+Basic earnings (loss) per share | $0.25 | $(0.12) | $0.23 | $0.63
+Diluted earnings (loss) per share | $0.24 | $(0.12) | $0.23 | $0.59
+Weighted-average common shares outstanding—basic | 133.7 | 149.0 | 133.6 | 150.6
+Weighted-average common shares outstanding—diluted | 137.1 | 149.0 | 134.4 | 164.7
 6
 Selected Financial Information and GAAP to Non-GAAP Reconciliations
-(in millions, unaudited) | June 30, 2026 | December 31, 2025 |
-Cash and cash equivalents | $887.2 | $686.6 |
-Total traditional debt | $2,814.7 | $2,904.1 |
-Cash and cash equivalents | (887.2) | (686.6) |
-Traditional net debt (1) | $1,927.5 | $2,217.5 |
-Amended Revolving Credit Facility due 2031 | $— | $— |
-Amended Term Loan A Facility due 2031 | 446.9 | — |
-Amended Term Loan B Facility due 2033 | 960.0 | — |
-Amended Revolving Credit Facility due 2027 | — | 570.0 |
-Amended Term Loan A Facility due 2027 | — | 453.8 |
-Amended Term Loan B Facility due 2029 | — | 965.0 |
-5.625% Notes due 2027 | 400.0 | 400.0 |
-4.125% Notes due 2029 | 400.0 | 400.0 |
-6.75% Notes due 2031 | 600.0 | — |
-2.75% Convertible Notes due 2026 | — | 106.7 |
-Other long-term obligations | 7.8 | 8.6 |
-Total traditional debt | 2,814.7 | 2,904.1 |
-Debt discounts and debt issuance costs | (40.1) | (17.0) |
-$2,774.6 | $2,887.1 |
-Total traditional debt | $2,814.7 | $2,904.1 |
-Cash and cash equivalents | (887.2) | (686.6) |
-Cash rent payments to REIT landlords (2) | 7,860.8 | 7,742.4 |
-$9,788.3 | $9,959.9 |
-Consolidated Adjusted EBITDA (3) | $999.1 | $830.1 |
-Rent expense associated with triple net operating leases (3) | $646.5 | $631.7 |
-Lease-adjusted net leverage ratio (1) | 5.9x | 6.8x |
-Traditional net leverage (1) | 2.9x | 4.5x |
-(1)See “Non-GAAP Financial Measures” section below for more information as well as the definitions of Traditional net debt, Lease-adjusted net leverage ratio, and Traditional net leverage.
-(2)Amount equals 8 times the total cash rent payments to REIT landlords for the trailing twelve months.
-(3)Balance is presented on a trailing twelve months basis.
+(in millions, unaudited) | June 30, 2026 | December 31, 2025
+Cash and cash equivalents | $887.2 | $686.6
+Total traditional debt | $2,814.7 | $2,904.1
+Cash and cash equivalents | (887.2) | (686.6)
+Traditional net debt (1) | $1,927.5 | $2,217.5
+Amended Revolving Credit Facility due 2031 | $— | $—
+Amended Term Loan A Facility due 2031 | 446.9 | —
+Amended Term Loan B Facility due 2033 | 960.0 | —
+Amended Revolving Credit Facility due 2027 | — | 570.0
+Amended Term Loan A Facility due 2027 | — | 453.8
+Amended Term Loan B Facility due 2029 | — | 965.0
+5.625% Notes due 2027 | 400.0 | 400.0
+4.125% Notes due 2029 | 400.0 | 400.0
+6.75% Notes due 2031 | 600.0 | —
+2.75% Convertible Notes due 2026 | — | 106.7
+Other long-term obligations | 7.8 | 8.6
+Total traditional debt | 2,814.7 | 2,904.1
+Debt discounts and debt issuance costs | (40.1) | (17.0)
+$2,774.6 | $2,887.1
+Total traditional debt | $2,814.7 | $2,904.1
+Cash and cash equivalents | (887.2) | (686.6)
+Cash rent payments to REIT landlords (2) | 7,860.8 | 7,742.4
+$9,788.3 | $9,959.9
+Consolidated Adjusted EBITDA (3) | $999.1 | $830.1
+Rent expense associated with triple net operating leases (3) | $646.5 | $631.7
+Lease-adjusted net leverage ratio (1) | 5.9x | 6.8x
+Traditional net leverage (1) | 2.9x | 4.5x
+(1) See “Non-GAAP Financial Measures” section below for more information as well as the definitions of Traditional net debt, Lease-adjusted net leverage ratio, and Traditional net leverage.
+(2) Amount equals 8 times the total cash rent payments to REIT landlords for the trailing twelve months.
+(3) Balance is presented on a trailing twelve months basis.
 7
 Cash Flow Data
 The table below summarizes certain cash expenditures incurred by the Company.
-For the three months ended June 30, | For the six months ended June 30, |
-(in millions, unaudited) | 2026 | 2025 | 2026 | 2025 |
-Cash payments to our REIT Landlords under Triple Net Leases | $247.1 | $240.0 | $494.8 | $480.0 |
-Cash payments (refunds) related to income taxes, net | $1.9 | $25.7 | $(14.9) | $6.0 |
-Cash paid for interest on traditional debt | $16.7 | $21.1 | $60.5 | $57.8 |
-Capital expenditures | $97.5 | $159.4 | $192.0 | $284.6 |
+For the three months ended June 30, | For the six months ended June 30,
+(in millions, unaudited) | 2026 | 2025 | 2026 | 2025
+Cash payments to our REIT Landlords under Triple Net Leases | $247.1 | $240.0 | $494.8 | $480.0
+Cash payments (refunds) related to income taxes, net | $1.9 | $25.7 | $(14.9) | $6.0
+Cash paid for interest on traditional debt | $16.7 | $21.1 | $60.5 | $57.8
+Capital expenditures | $97.5 | $159.4 | $192.0 | $284.6
 Reportable Segment Measures
 Segment Adjusted EBITDAR is our measure of profit or loss for our reportable segments and underlying operating segments. We define Segment Adjusted EBITDAR as earnings before interest expense, net, interest income, income taxes, depreciation and amortization, stock-based compensation, debt extinguishment charges, impairment losses, insurance recoveries, net of deductible charges, changes in the estimated fair value of our contingent purchase price obligations, gain or loss on disposal of assets, the difference between budget and actual expense for cash-settled stock-based awards, pre-opening expenses, loss on disposal of a business, non-cash gains/losses associated with REIT transactions, and other. Segment Adjusted EBITDAR excludes rent expense associated with triple net operating leases (which is a normal, recurring cash operating expense necessary to operate our business). Segment Adjusted EBITDAR is inclusive of income or loss from unconsolidated affiliates, with our share of non-operating items (such as interest expense, net, and depreciation and amortization) added back for our Kansas Entertainment, LLC joint venture. Segment Adjusted EBITDAR margin is Segment Adjusted EBITDAR divided by related segment revenues.
 Non-GAAP Financial Measures
