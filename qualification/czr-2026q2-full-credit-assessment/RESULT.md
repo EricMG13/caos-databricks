@@ -8,7 +8,7 @@ peers MGM Resorts International (MGM) and PENN Entertainment, Inc. (PENN) from
 the owner's "Public Leveraged Loan Issuers Benchmark", with a proposed position
 in the CZR 6.50% Senior Secured Notes due 2032 held against a **SYNTHETIC**
 test mandate. Its qualification-set digest is
-`98c4f740d4978cb7c0d395f733b50b1e04dd1ce27473fdfd0160b1a22d914738`.
+`631e4af0a7928ab0dbaacfb0d6ab7147bdb7b0499038aa9a2d073439f6d746b3`.
 
 ## The mandate is synthetic (D80)
 
@@ -25,19 +25,17 @@ The set carries every admitted CZR document, both peer releases, all four FINRA
 TRACE observations and the synthetic mandate. The EDGAR documents were fetched
 on 2 October 2026 and converted from HTML to plain text the same day. The 10-Q,
 the 10-K and the CZR earnings release are byte-identical to the `czr-2026q2`
-set's copies, the credit agreement to the `czr-2026q2-liquidity` set's copy,
-the Fourth and Fifth Amendments, the indenture and the merger 8-K and press
-release to the `czr-2026q2-covenant-refinancing` set's copies, and the MGM and
-PENN releases to the `czr-2026q2-lite-relative-value` set's copies. No document
-is admitted here for the first time. The text SHA-256 is the digest the keys
-bind; the raw SHA-256 is the HTML as fetched.
+set's copies,  the Fourth and Fifth Amendments, the indenture and the merger
+8-K and press release to the `czr-2026q2-covenant-refinancing` set's copies,
+and the MGM and PENN releases to the `czr-2026q2-lite-relative-value` set's
+copies. No document is admitted here for the first time. The text SHA-256 is
+the digest the keys bind; the raw SHA-256 is the HTML as fetched.
 
 | document | source | accession | text SHA-256 | raw HTML SHA-256 |
 |---|---|---|---|---|
 | `CZR_Q2_2026_10Q.txt` (Form 10-Q, quarter ended 30 June 2026) | https://www.sec.gov/Archives/edgar/data/1590895/000159089526000028/czr-20260630.htm | 0001590895-26-000028 | `f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a` | `9dd3fca867c49936c65c9729bd7f9478d4c98b7c60569b74864a839bdeed8500` |
 | `CZR_FY2025_10K.txt` (Form 10-K, fiscal year ended 31 December 2025) | https://www.sec.gov/Archives/edgar/data/1590895/000159089526000011/czr-20251231.htm | 0001590895-26-000011 | `172309048af2a6a2dab515d765f00a7c89bf8c874c6104a5e3a052b66cad4512` | `41328bdfa2486cfb53b831c2ddba6009528d8dca3a0d868c98c2cb113142b05f` |
 | `CZR_Q2_2026_Earnings_Release.txt` (Ex. 99.1, 28 July 2026) | https://www.sec.gov/Archives/edgar/data/1590895/000159089526000027/ex991-2026q2ceiearningsrel.htm | 0001590895-26-000027 | `b385f76ff631243d1053fa8073ebde4f8886b4a50c9ce34ce3498d6b2ac3e9f8` | `a8982154b99b023b526261f7626022e96ac642834d1d65704629946acecc8a1f` |
-| `CZR_2020_Credit_Agreement.txt` (Ex. 10.1, Credit Agreement dated 20 July 2020) | https://www.sec.gov/Archives/edgar/data/1590895/000119312520196232/d940333dex101.htm | 0001193125-20-196232 | `cdfeb87c9b57914f4c2e89dbb2ec80de52564b1817b35fe15e332e67a13039b5` | `6600ab5bec479091f68dc04b2db65a54ef1013944c94af0ec135335b374c7dba` |
 | `CZR_2024_Credit_Agreement_Incremental_Assumption_No3.txt` (Ex. 10.2, Incremental Assumption Agreement No. 3, 6 February 2024, with Exhibit A, the Credit Agreement conformed through it; Ex. 10.36 in the FY2025 10-K) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex102.htm | 0001193125-24-026847 | `9f95f4a696471fcb1c16e5c6026880544356931806a939ffd999456bd8c4b757` | `aa48bc94b634de6386579791df7de831314785f007398546dd5c5fba415f2cfa` |
 | `CZR_2024_Credit_Agreement_Fourth_Amendment.txt` (Ex. 10.1, Fourth Amendment, 9 May 2024) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524135268/d827488dex101.htm | 0001193125-24-135268 | `32f91de6ef3ff93d9924eb8d4e3dc4734d28b68ed1da0f816a085ffdcb085c95` | `b0e9fc14d481410dd2fa3cb6bc28e4f9c3b8751d720777ab2bbf943143f6d0fb` |
 | `CZR_2024_Credit_Agreement_Fifth_Amendment.txt` (Ex. 10.1, Fifth Amendment, 25 November 2024) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524265157/d858083dex101.htm | 0001193125-24-265157 | `7f2b5c777dc3347938a007eaea63a623b299a1188dbcfbe8980d389a0bcfc5b3` | `0936486e71264a9b752d5977c003bfc9a89ec5eb4ca8e5b09107a7870ebf86e8` |
@@ -65,20 +63,20 @@ its own heading, byte-identical to the `czr-2026q2-lite-portfolio` set's copy.
 | `PENN_FINRA_TRACE_707569AV1_2026-10-02.txt` (PENN 4.125% due 2029) | https://www.finra.org/finra-data/fixed-income/bond?symbol=PENN5210723&bondType=CORP | observed 2026-10-02T09:32:31Z | `666c0f36ace32336dffbcff324eaec5b4657edade407bb0b8a0e8d8fb405de6d` | — |
 | `TEST_CLO_I_Mandate_and_Exposures_2026-10-02.txt` (SYNTHETIC) | owner-adopted synthetic test mandate (workbook, not a URL) | exposure report 29 May 2026; adaptation 2 October 2026 | `864ee90ab21372bcf89c8b27e02cd5d691d9095a64d507c7f656d5963cfe3207` | `05a32699b39cedce58dd9475ea938c3dd592bd8a327426b1c2150f57579cfe22` (workbook) |
 
-The credit agreement (935,517 bytes) and the indenture (758,385 bytes) are over
-500 KiB, so their paths are pinned in the large-file excludes; both are under
-1.5 MiB, so they reach CP-0 whole rather than as a page map. All nineteen are
-inside `MAX_REQUEST_BYTES`. The mandate's compliance monitor cites "Indenture
-§7.11": that is the CLO's own indenture, not the Caesars notes indenture, and a
-SYNTHETIC line in the adaptation says so. The exhibits F508 adds were fetched
-from SEC EDGAR on 5 October 2026 and converted the same day, split by sentence
-(F492) and by clause (F498); they are byte-identical to the
-`czr-2026q2-covenant-refinancing` set's copies. Since F508 Incremental
-Assumption Agreement No. 3 (1,077,810 bytes) is pinned there too and, under 1.5
-MiB, reaches CP-0 whole; the supplemental indentures are 11,774 and 15,684
-bytes. The set's CP-0 request, encoded with CP-0's delivered authority, is
-3,957,939 bytes (94.4% of `MAX_REQUEST_BYTES`, up from 2,793,515), and no
-source is shown as a page map.
+The indenture (758,385 bytes) and Incremental Assumption Agreement No. 3
+(1,077,810 bytes) are over 500 KiB, so their paths are pinned in the large-file
+excludes; both are under 1.5 MiB, so they reach CP-0 whole rather than as a
+page map. All eighteen are inside `MAX_REQUEST_BYTES`. The mandate's compliance
+monitor cites "Indenture §7.11": that is the CLO's own indenture, not the
+Caesars notes indenture, and a SYNTHETIC line in the adaptation says so. The
+exhibits F508 adds were fetched from SEC EDGAR on 5 October 2026 and converted
+the same day, split by sentence (F492) and by clause (F498); they are
+byte-identical to the `czr-2026q2-covenant-refinancing` set's copies. Since
+F508 the conformed copy in Agreement No. 3's Exhibit A replaces the 2020 credit
+agreement (Ex. 10.1, accession 0001193125-20-196232, 935,517 bytes); the
+supplemental indentures are 11,774 and 15,684 bytes. The set's CP-0 request,
+encoded with CP-0's delivered authority, is 2,975,932 bytes (71.0% of
+`MAX_REQUEST_BYTES`, up from 2,793,515), and no source is shown as a page map.
 
 ## Why the pack carries the current legal chain (F508)
 
@@ -111,10 +109,15 @@ The First Supplemental Indenture (1 March 2024) adds two guarantors and amends
 clause (44) of the Permitted Liens definition and Section 8.01(b); the Second
 (23 August 2024) adds the guarantors on its Schedule A.
 
-No key is added or changed: a key binds the digest of the document it was
-authored from. Exhibit A repeats the 2020 agreement's
-`(g) there shall have occurred a Change in Control;`, so a citation of that
-line in Exhibit A does not meet the CP-4 key, which binds the 2020 agreement.
+No key is added. On the owner's ruling of 5 October 2026 ("Replace the 2020
+base"), the conformed copy replaces the 2020 credit agreement (Ex. 10.1,
+accession 0001193125-20-196232), which this set no longer carries: the
+agreement as amended is the one in force, and the superseded 2020 text cost
+about 0.9 MB of every request. The Fourth and Fifth Amendments post-date
+Agreement No. 3 and stay. The CP-4 key on the event of default
+`(g) there shall have occurred a Change in Control;` is re-keyed to Exhibit A's
+same line, one whole line unique in it: the words are unchanged, and so is the
+Change in Control definition it rests on.
 
 ## Keys
 
@@ -163,8 +166,9 @@ Keys authored from the documents; material figures pending owner confirmation.
   C-01 row (`≤ 2.5% NAV`, hard, `2.37%`, `Watch` at 29 May 2026).
 
 CP-1D, CP-2A and CP-2G carry no key: none of their outputs is a single fact a
-document states. The 2020 credit agreement's commitment, margins and covenant
-were changed by amendments; the current revolver is stated in the 10-Q.
+document states. The conformed credit agreement's commitment, margins and
+covenant are not keyed: the Fourth and Fifth Amendments post-date it, and the
+current revolver is stated in the 10-Q.
 
 Alternative lines (D101). A figure key is also met by another whole evidence
 line, cited under the same module, that states the key's lead figures -- the
