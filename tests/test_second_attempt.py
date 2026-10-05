@@ -1003,6 +1003,76 @@ def test_a_host_text_bound_is_named_for_the_second_attempt_never_quoted(
     assert not any(line.startswith("host text check: ") for line in clean)
 
 
+def _text_check(markdown: str) -> str:
+    from canonical_fixtures import CATALOG, CONTRACT, identity
+
+    lines = feedback_lines(
+        CONTRACT, CATALOG, identity("CP-0"), _gate_body(markdown.encode())
+    )
+    bounds = [line for line in lines if line.startswith("host text check: ")]
+    assert len(bounds) == 1, lines
+    assert not any("SECRET" in line for line in lines)
+    assert len(bounds[0]) <= len("host text check: ") + MAX_FEEDBACK_CHARS
+    return bounds[0]
+
+
+def test_a_control_character_is_named_by_line_and_code_point_never_quoted() -> None:
+    """F499 (live run C4, CP-0 attempts 2 and 3): the model wrote U+001C, then
+    U+0002, where its front matter's quotes belong, and was told only that
+    some control character was somewhere. The retry is told the first line,
+    the code point and its name, and how many lines carry one; the answer is
+    refused as before, with the same code."""
+    from caos.methodology.handoff import _text
+
+    lines = _gate_markdown().split("\n")
+    for at in (1, 2):
+        lines[at] = lines[at].replace('"', "\x1c") + " SECRETMARK"
+    damaged = "\n".join(lines)
+    assert _text_check(damaged) == (
+        "host text check: line 2 of the Markdown carries U+001C (INFORMATION"
+        " SEPARATOR FOUR), a control character other than a line feed or tab"
+        " (2 lines in all); remove it"
+    )
+    with pytest.raises(Refusal) as refused:
+        _text(damaged.encode())
+    assert refused.value.code is RefusalCode.HANDOFF_MALFORMED
+
+
+def test_text_not_in_nfc_is_named_by_line_and_the_code_points_nfc_changes() -> None:
+    """F499: text NFC would change is named by its first line and the code
+    points from where it changes, with the composed-form wording."""
+    damaged = _gate_markdown().replace("was recorded.", "SECRETMARKé x", 1)
+    number = damaged.split("\n").index(
+        next(line for line in damaged.split("\n") if "SECRETMARK" in line)
+    )
+    assert _text_check(damaged) == (
+        f"host text check: line {number + 1} of the Markdown is not in Unicode NFC"
+        " form (first at U+0065 U+0301; 1 line in all); write it in composed form"
+    )
+
+
+def test_an_unlocated_or_unbounded_text_check_keeps_the_unlocated_words(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """F499: a control with no `unicodedata` name is named by its code point
+    alone, DEL by its name; text with nothing to locate, or a located line
+    that will not cross `BoundaryText`, keeps the unlocated words."""
+    from caos.methodology import handoff
+
+    unlocated = (
+        "the Markdown carries a control character other than a line feed or"
+        " tab, or text that is not in Unicode NFC form"
+    )
+    assert handoff._unclean_bound("a\n\x85\x7f") == (
+        "line 2 of the Markdown carries U+0085, a control character other than"
+        " a line feed or tab (1 line in all); remove it"
+    )
+    assert "U+007F (DELETE)" in handoff._unclean_bound("\x7f")
+    assert handoff._unclean_bound("clean") == unlocated
+    monkeypatch.setattr(handoff, "MAX_FEEDBACK_CHARS", 10)
+    assert handoff._unclean_bound("\x07") == unlocated
+
+
 def test_a_blocker_cell_past_its_bound_is_named_by_its_row_never_quoted() -> None:
     """G1-16: a CONDITIONAL or BLOCKED row's `Why now / blocker` cell past
     `MAX_BLOCKER_CHARS` refuses the handoff; the second attempt is told which
@@ -1415,6 +1485,77 @@ def test_a_handoff_exactly_at_the_upstream_bound_is_accepted(
     ]
     assert "host size check" not in answers.prompts[1]
     assert _cp0_ledger(harness) == (1, 1, [], 1)
+
+
+def _demanding(cell: str) -> Callable[[str], str]:
+    """A flaw writing `cell` in every T8 `Source files to attach` cell."""
+
+    def flaw(body: str) -> str:
+        assert "Source p1" in body
+        return body.replace("Source p1", cell)
+
+    return flaw
+
+
+def test_a_misspelt_t8_source_refuses_the_gate_and_its_retry_is_told(
+    harness: _Harness,
+) -> None:
+    """F497: a T8 cell naming one pinned source and one misspelt would be
+    refused `EVIDENCE_DEMAND_UNRESOLVED` by its consumer, after the gate is
+    accepted, where no retry reaches (run C3). It is refused at the gate's
+    acceptance instead, and the guided retry is told the row and the item;
+    the corrected answer is accepted and the route completes."""
+    answers = CanonicalCompletions(harness.source_id)
+    flaw = _demanding("report.txt; repot.txt")
+    assert _run(harness, _Flawed(answers, flaw=flaw)) is None
+    assert [_module(prompt) for prompt in answers.prompts] == [
+        "CP-0",
+        "CP-0",
+        "CP-L10",
+        "CP-5",
+    ]
+    line = (
+        'host demand check: T8 row CP-L10 names "repot.txt", which is no source'
+        " of this run; write each source by its exact filename as listed in the"
+        " host source preparation metadata"
+    )
+    assert line not in answers.prompts[0]
+    assert line in _checks(answers.prompts[1])
+    assert line.replace("CP-L10", "CP-5") in _checks(answers.prompts[1])
+    assert _cp0_ledger(harness) == (2, 2, ["HANDOFF_MALFORMED"], 1)
+
+
+def test_a_t8_page_phrase_the_host_cannot_read_is_told_its_form(
+    harness: _Harness,
+) -> None:
+    """F497 (review): an item naming a pinned file and then two page ranges
+    refuses the gate as before, and the retry is told the page form, not
+    that the file is no source of the run."""
+    answers = CanonicalCompletions(harness.source_id)
+    flaw = _demanding("uncited.txt; report.txt pages 1-2 and 4-5")
+    assert _run(harness, _Flawed(answers, flaw=flaw)) is None
+    line = (
+        'host demand check: T8 row CP-L10 names "report.txt pages 1-2 and 4-5",'
+        " whose page form the host cannot read; write one range per item, as"
+        " `<filename> pages <first>-<last>` or `<filename> page <n>`, separated"
+        ' by ";"'
+    )
+    assert line in _checks(answers.prompts[1])
+    assert _cp0_ledger(harness) == (2, 2, ["HANDOFF_MALFORMED"], 1)
+
+
+def test_a_t8_cell_the_host_reads_whole_or_named_is_accepted_at_the_gate(
+    harness: _Harness,
+) -> None:
+    """F497 keeps §95's other outcomes: a cell naming nothing pinned is
+    delivered whole, and one naming only pinned sources is a selection; the
+    gate is accepted either way, first time."""
+    for cell in ("the prepared artifact; an exhibit", "report.txt; uncited.txt"):
+        sibling = _sibling(harness)
+        answers = CanonicalCompletions(harness.source_id)
+        assert _run(sibling, _Flawed(answers, flaw=_demanding(cell))) is None
+        assert [_module(p) for p in answers.prompts] == ["CP-0", "CP-L10", "CP-5"]
+        assert _cp0_ledger(sibling) == (1, 1, [], 1)
 
 
 # D104: a guided retry carries the refused answer back to be corrected, and
