@@ -8,6 +8,7 @@ import subprocess
 from pathlib import Path
 
 import check_gate_config
+import pytest
 from tracked import tracked_files
 
 REPO = Path(__file__).resolve().parents[1]
@@ -38,6 +39,8 @@ def _tree(tmp_path: Path) -> Path:
         "databricks.yml",
         "app.yaml",
         ".github/workflows/ci.yml",
+        ".github/workflows/gitleaks.yml",
+        ".github/workflows/secrets-weekly.yml",
         "tests/conftest.py",
     ):
         (root / name).parent.mkdir(parents=True, exist_ok=True)
@@ -908,3 +911,58 @@ def test_the_deployment_must_carry_every_file_the_app_reads(tmp_path: Path) -> N
         assert check_gate_config.shipped_problems(record, root) == [
             f"shipped: {dropped} was not synced"
         ]
+
+
+def test_an_unchanged_secret_scan_holds_and_comments_stay_free(
+    tmp_path: Path,
+) -> None:
+    """C1: each secret-scan workflow is pinned by the sha256 of its parsed
+    YAML (`actions_file_pin`), so the committed files hold and a comment or a
+    blank line changes nothing."""
+    root = _tree(tmp_path)
+    assert check_gate_config._gitleaks_ci_problems(root) == []
+    for name, pinned in (
+        (check_gate_config.GITLEAKS_CI_FILE, check_gate_config.GITLEAKS_CI_SHA256),
+        (
+            check_gate_config.SECRETS_WEEKLY_FILE,
+            check_gate_config.SECRETS_WEEKLY_SHA256,
+        ),
+    ):
+        path = root / name
+        text = path.read_text(encoding="utf-8")
+        assert check_gate_config.actions_file_pin(text) == pinned
+        path.write_text("# a note\n\n" + text + "\n# another\n", encoding="utf-8")
+    assert check_gate_config._gitleaks_ci_problems(root) == []
+    assert check_gate_config.actions_file_pin(None) is None
+    assert check_gate_config.actions_file_pin("- a list\n") is None
+    assert check_gate_config.actions_file_pin("on: {1: a, b: c}\n") is None
+
+
+def test_a_deliberate_scan_change_passes_once_its_pin_moves(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A pin upgrade edits the workflow and the one constant together; the
+    refusal names the constant and the digest to set it to."""
+    root = _tree(tmp_path)
+    scan = root / check_gate_config.GITLEAKS_CI_FILE
+    changed = scan.read_text(encoding="utf-8").replace(
+        "timeout-minutes: 15", "timeout-minutes: 20", 1
+    )
+    scan.write_text(changed, encoding="utf-8")
+    digest = check_gate_config.actions_file_pin(changed)
+    assert digest is not None
+    [problem] = check_gate_config._gitleaks_ci_problems(root)
+    assert digest in problem
+    assert "GITLEAKS_CI_SHA256" in problem
+    monkeypatch.setattr(check_gate_config, "GITLEAKS_CI_SHA256", digest)
+    assert check_gate_config._gitleaks_ci_problems(root) == []
+
+
+def test_the_hook_types_to_install_may_only_be_the_default(tmp_path: Path) -> None:
+    """W3: the key absent, or set to pre-commit's own default, holds."""
+    root = _tree(tmp_path)
+    config = root / ".pre-commit-config.yaml"
+    text = config.read_text(encoding="utf-8")
+    assert "default_install_hook_types" not in text
+    config.write_text("default_install_hook_types: [pre-commit]\n" + text)
+    assert check_gate_config._hook_problems(root) == []
