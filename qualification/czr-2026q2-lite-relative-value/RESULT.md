@@ -7,7 +7,7 @@ Caesars Entertainment, Inc. (CZR) at an analysis date of 2026-10-02, against
 peers MGM Resorts International (MGM) and PENN Entertainment, Inc. (PENN) from
 the owner's "Public Leveraged Loan Issuers Benchmark". Its qualification-set
 digest is
-`a62f2e6b4188d1b3ed582e50cf6565a7f9effb9e8e00c84f5d17a3d4042cafe5`.
+`99a498e0085d5cd725547129b2d30bbd808f7c43fec6fb44c1d7ac295b37db78`.
 
 ## Corpus provenance
 
@@ -24,7 +24,7 @@ HTML as fetched.
 |---|---|---|---|---|
 | `CZR_Q2_2026_10Q.txt` (Form 10-Q, quarter ended 30 June 2026) | https://www.sec.gov/Archives/edgar/data/1590895/000159089526000028/czr-20260630.htm | 0001590895-26-000028 | `f369ce5f1ebeddd9a0d4ce02ce3958112267d8701d1a348dfd6dc82d2034793a` | `9dd3fca867c49936c65c9729bd7f9478d4c98b7c60569b74864a839bdeed8500` |
 | `CZR_Q2_2026_Earnings_Release.txt` (Ex. 99.1, 28 July 2026) | https://www.sec.gov/Archives/edgar/data/1590895/000159089526000027/ex991-2026q2ceiearningsrel.htm | 0001590895-26-000027 | `b385f76ff631243d1053fa8073ebde4f8886b4a50c9ce34ce3498d6b2ac3e9f8` | `a8982154b99b023b526261f7626022e96ac642834d1d65704629946acecc8a1f` |
-| `CZR_2024_Credit_Agreement_Incremental_Assumption_No3.txt` (Ex. 10.2, Incremental Assumption Agreement No. 3, 6 February 2024, with Exhibit A, the Credit Agreement conformed through it; Ex. 10.36 in the FY2025 10-K) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex102.htm | 0001193125-24-026847 | `9f95f4a696471fcb1c16e5c6026880544356931806a939ffd999456bd8c4b757` | `aa48bc94b634de6386579791df7de831314785f007398546dd5c5fba415f2cfa` |
+| `CZR_2024_Credit_Agreement_Incremental_Assumption_No3.txt` (Ex. 10.2, Incremental Assumption Agreement No. 3, 6 February 2024, with Exhibit A, the Credit Agreement conformed through it; Ex. 10.36 in the FY2025 10-K) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex102.htm | 0001193125-24-026847 | `25bea1d14fd9bb22838775f6fe056cd00741dc3d50eb1b79cc53498db502941c` | `aa48bc94b634de6386579791df7de831314785f007398546dd5c5fba415f2cfa` |
 | `CZR_2024_650_Senior_Secured_Notes_2032_Indenture.txt` (Ex. 10.1, 6.500% Senior Secured Notes due 2032 indenture, 6 February 2024) | https://www.sec.gov/Archives/edgar/data/1590895/000119312524026847/d739529dex101.htm | 0001193125-24-026847 | `0809ab3981090bd2c23950da9530adb10e96882ddfa7db4404635e014d4c1119` | `a4661727edc48361dd7290772e62412c389b8ad8d215a96aa58facfe9e356c2c` |
 | `CZR_2024_650_Notes_First_Supplemental_Indenture.txt` (Ex. 4.2, First Supplemental Indenture to the 6.500% 2032 notes indenture, 1 March 2024; Ex. 4.11 in the FY2025 10-K) | https://www.sec.gov/Archives/edgar/data/1590895/000159089524000088/exhibit42firstsupplemental.htm | 0001590895-24-000088 | `0af4615b9a52e91e2675adacbbc90ecc7b21a61dc8205b4b2459cf4b9db0a219` | `18d810c415aef677f867ac73dee07a04382e71db794f3bfbc91cdd185e4b0dc4` |
 | `CZR_2024_650_Notes_Second_Supplemental_Indenture.txt` (Ex. 4.17, Second Supplemental Indenture to the 6.500% 2032 notes indenture, 23 August 2024; Ex. 4.12 in the FY2025 10-K) | https://www.sec.gov/Archives/edgar/data/1590895/000159089525000068/exhibit417-6500seniorsecur.htm | 0001590895-25-000068 | `3621f08611f4c6a6faed734993a3f2d9c97041693053ffa97624cbe5b7299aea` | `0eedd7d398ee15f45dabc99df2003249d4dbe232be456767e7b972d355326b3c` |
@@ -98,12 +98,17 @@ agreement conformed through Incremental Assumption Agreement No. 1, the First
 to Third Amendments and Incremental Assumption Agreements No. 2 and No. 3; with
 the Fourth and Fifth Amendments, which this set does not carry, it is the
 current chain, and where Exhibit A and a later amendment differ, the later
-amendment governs. Exhibit A is a changed copy, Agreement No. 3's insertions
-double-underlined and its deletions struck through. On the owner's ruling of 5
-October 2026 the text renders the agreement as amended: every struck run from
-Exhibit A's cover on is removed with its content (295 runs, 167 of them with
-text, 484 characters: superseded table-of-contents page numbers and 38 words,
-labels or punctuation) and the insertions are kept as plain text, so
+amendment governs. Exhibit A comes without the credit agreement's own exhibits
+and schedules: after its Annex A Pricing Grid the file goes straight to
+Agreement No. 3's own Exhibit B, a form of solvency certificate. Exhibit A is a
+changed copy, Agreement No. 3's insertions double-underlined and its deletions
+struck through. On the owner's ruling of 5 October 2026 the text renders the
+agreement as amended: every struck run from Exhibit A's cover on is removed
+with its content (295 runs, 167 of them with text, 484 characters: superseded
+table-of-contents page numbers and 38 words, labels or punctuation) and the
+insertions are kept as plain text, with the spacing the filing renders once a
+run is gone (one space restored where a run carried the only space between two
+words, three places; none left before closing punctuation, three places), so
 `Section 2.01(e)` and `Section 2.11(a)(iv)` read as amended. The one struck run
 before the cover, the word `strikethrough` in the Agreement's own Section 3
 legend, deletes nothing and is kept.
