@@ -54,6 +54,12 @@ from caos.methodology.bundle import (
     delivered_authority,
     delivered_authority_digest,
 )
+from caos.methodology.coverage import (
+    CoverageFault,
+    coverage_faults,
+    coverage_message,
+    last_heading,
+)
 from caos.methodology.executor import (
     SKILL,
     Assignment,
@@ -96,6 +102,7 @@ from caos.methodology.handoff import (
 )
 from caos.methodology.invocation import (
     MAX_UPSTREAM_HANDOFF_BYTES,
+    _printable,
     build_handoff_prompt,
     call_time_identity,
     host_identity,
@@ -476,6 +483,11 @@ def _answer(  # noqa: PLR0913 -- one recorded answer, keyword-only
     # a guided retry told the item (`_demand_lines`).
     if _demand_faults(bundle, assignment, context, markdown):
         raise Refusal(RefusalCode.HANDOFF_MALFORMED)
+    # D112, the same shape for P5: a wholly delivered source the gate says it
+    # was shown fewer pages of than it was (LCR7, N156), refused here as a
+    # guided retry told the pages delivered (`_coverage_lines`).
+    if _coverage_faults(assignment, context, markdown):
+        raise Refusal(RefusalCode.HANDOFF_MALFORMED)
     # D106's one exception, the same producer-guard shape: a citation CP-CF
     # will bind as a calculation input must anchor and be named by a marker
     # in this body (D107), or CP-CF cannot bind it and the run wedges there;
@@ -748,6 +760,7 @@ def _prompt_context(
     contract, pathways = _contract(bundle), catalog(bundle)
     host = (
         *_demand_lines(bundle, assignment, context, body),
+        *_coverage_lines(assignment, context, body),
         *_owner_lines(bundle, assignment, context, body),
         _anchoring_line(conn, context.delivered, answer_citations(body)),
         readiness_set_line(
@@ -796,6 +809,51 @@ def _demand_faults(
         if module in consumers
         and (fault := demand_fault(members, cell, last_pages=last_pages)) is not None
     ]
+
+
+def _coverage_faults(
+    assignment: Assignment, context: _Context, markdown: bytes
+) -> list[CoverageFault]:
+    """The gate's P5 claims that give a wholly delivered source fewer pages
+    than the host delivered of it (D112): `coverage_faults` over each source
+    not shown as a page map, by its last delivered page. Empty for every
+    other module. Pure over the pin and the answer, so the live call and
+    `replay_billed` agree."""
+    if assignment.module_id != GATE_MODULE or context.source_set is None:
+        return []
+    maps = context.selection.page_maps
+    last_pages: dict[UUID, int] = {}
+    for item in context.delivered:
+        if item.source_id not in maps:
+            last_pages[item.source_id] = max(
+                item.page, last_pages.get(item.source_id, 0)
+            )
+    return coverage_faults(markdown.decode("utf-8", "replace"), last_pages)
+
+
+def _coverage_lines(assignment: Assignment, context: _Context, body: str) -> list[str]:
+    """The gate retry's lines for its refused answer's short P5 claims (D112):
+    the source by id and filename, the pages delivered and the last heading
+    line delivered, bounded like a vendor message; without the heading when
+    that line cannot cross the boundary."""
+    markdown = answer_markdown(body)
+    if markdown is None or context.source_set is None:
+        return []
+    names = {m.source_id: _printable(m.filename) for m in context.source_set.members}
+    lines: list[str] = []
+    for fault in _coverage_faults(assignment, context, markdown):
+        heading = last_heading(
+            (d.page, d.text.value)
+            for d in context.delivered
+            if d.source_id == fault.source_id
+        )
+        name = names.get(fault.source_id, "")
+        line = _bounded(
+            "host coverage check", coverage_message(fault, name, heading)
+        ) or _bounded("host coverage check", coverage_message(fault, name, None))
+        if line:
+            lines.append(line)
+    return lines
 
 
 # What a retry is told of each T8 item at fault (F497), after the row and the
