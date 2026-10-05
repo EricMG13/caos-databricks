@@ -1,6 +1,6 @@
 {
   "authority": "DEPLOY_V_BASELINE",
-  "baseline_digest": "bd77f4d77723c3fca0a1a9bf674eb9cd33c6bdef503e8c8cc4cbfd6109171b53",
+  "baseline_digest": "16d5b474521ced94fb486be855ad38bb3a96c58818ca8e0d7c0bce665d9f3305",
   "packages": {
     "cp-0-source-readiness": {
       "files": {
@@ -1033,8 +1033,8 @@
     "cp-l10-financial-change-screen": {
       "files": {
         "SKILL.md": {
-          "bytes": 70418,
-          "sha256": "f053c6c20e7e84e2aba4c087a40fded572d3d38bb4b792fa7f480c1303c581de"
+          "bytes": 54022,
+          "sha256": "0a799e3bcbbdf8e2d5e751ab36f468dfa3de436344219b2ed390fa7ec85b268e"
         },
         "references/CP-L10_CP_LITE_ANALYSIS_POLICY_v1.md": {
           "bytes": 3992,

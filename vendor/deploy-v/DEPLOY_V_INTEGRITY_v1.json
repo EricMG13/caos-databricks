@@ -1,6 +1,6 @@
 {
   "authority": "DEPLOY_V_INTEGRITY_v1",
-  "build_id": "2cbabcdbed77220146ad618fe073eec74bb04ca494ea5a93b15e1203038bda6f",
+  "build_id": "e8dba1fd0a842e6285e6d38d8f99b131c5b6e4fce338195c66eac93605671a7a",
   "root_file_hashes": {
     ".gitignore": {
       "bytes": 83,
@@ -24,7 +24,7 @@
     },
     "CP_DEPLOY_V_RETRIEVAL_INDEX_v1.json": {
       "bytes": 5437,
-      "sha256": "22c8ed44ffdf5395525ad8a912dd7edccd3a214dd99f6b751ee324ddb2b3ecf0"
+      "sha256": "d8f6ceffd8637488c1209d6977fe449a055f99013dc3d601250058faf220f168"
     },
     "CP_MODULE_PAYLOAD_BASE.schema.txt": {
       "bytes": 1930,
@@ -32,19 +32,19 @@
     },
     "DEPLOY_V_BASELINE.json": {
       "bytes": 58204,
-      "sha256": "5fd39756cfe8de365712bf5ec2e213ffb0a7658a57c8f2f86f9bedfd6518985d"
+      "sha256": "5db1942447b6628d11d0832cc8c75adfe3c5bb221cb25937cf5ecf0141927ec6"
     },
     "DEPLOY_V_COPILOT_MEMORY_PROMPT.md": {
       "bytes": 11934,
-      "sha256": "db20a20869afdc434ab98eb458a5bc3bbaa19302e800cd94401dbc7d3c55bafb"
+      "sha256": "6b65806e5830a8d932573ee84c784c1442574a31a4c29758bfde97f6e8a261e0"
     },
     "DEPLOY_V_COPILOT_MEMORY_PROMPT_URL_BOUND.md": {
       "bytes": 12653,
-      "sha256": "3892037bdcbd170cfb237b1a79c056fa63a04d0903b11bfc6a7857eff558d2dd"
+      "sha256": "1500803eb7a2156b3c61e6f2ef5a7d409c70bd1dfb09589812b26bd489d8fd2f"
     },
     "DEPLOY_V_MANIFEST.json": {
       "bytes": 70399,
-      "sha256": "b6d94f64fa8199d4a8f316ad26faf705ee2642571f9952224809fb014693ab7c"
+      "sha256": "96d3afe081357e4ee924eb55ffef2017695d0cad39d8e08485a07f8081dd17eb"
     },
     "README.md": {
       "bytes": 7233,
@@ -1145,14 +1145,14 @@
       "companion_count": 20,
       "companion_limit": 20,
       "companion_limit_exception": false,
-      "entry_bytes": 70418,
-      "entry_sha256": "f053c6c20e7e84e2aba4c087a40fded572d3d38bb4b792fa7f480c1303c581de",
+      "entry_bytes": 54022,
+      "entry_sha256": "0a799e3bcbbdf8e2d5e751ab36f468dfa3de436344219b2ed390fa7ec85b268e",
       "folder_slug": "cp-l10-financial-change-screen",
       "module_id": "CP-L10",
       "relative_file_hashes": {
         "SKILL.md": {
-          "bytes": 70418,
-          "sha256": "f053c6c20e7e84e2aba4c087a40fded572d3d38bb4b792fa7f480c1303c581de"
+          "bytes": 54022,
+          "sha256": "0a799e3bcbbdf8e2d5e751ab36f468dfa3de436344219b2ed390fa7ec85b268e"
         },
         "references/CP-L10_CP_LITE_ANALYSIS_POLICY_v1.md": {
           "bytes": 3992,
@@ -1720,8 +1720,8 @@
     }
   ],
   "source_hashes": {
-    "deployed_baseline": "5fd39756cfe8de365712bf5ec2e213ffb0a7658a57c8f2f86f9bedfd6518985d",
+    "deployed_baseline": "5db1942447b6628d11d0832cc8c75adfe3c5bb221cb25937cf5ecf0141927ec6",
     "deployed_child_schema_registry": "6b1766e5698632e277ede71037bee2fcd3e02b726c43b76fc4fe0f8b47c5ef48",
-    "deployed_manifest": "b6d94f64fa8199d4a8f316ad26faf705ee2642571f9952224809fb014693ab7c"
+    "deployed_manifest": "96d3afe081357e4ee924eb55ffef2017695d0cad39d8e08485a07f8081dd17eb"
   }
 }

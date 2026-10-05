@@ -1297,8 +1297,15 @@ def anchoring_line(
     search could not place, keep the rule's wording. Past
     `MAX_ANCHORING_CHARS`, placements are dropped from the last back, each
     citation keeping its number under the rule's wording.
+
+    The line ends by naming every citation that anchored, to be kept exactly
+    as it was, and the rule any added or changed citation must meet (F491):
+    a retry that rewrote its whole citation list traded each fixed quote for
+    a new partial one. Past `MAX_ANCHORING_CHARS` the kept list is dropped
+    first, before any placement; the rule stays.
     """
     total = len(verdicts)
+    kept = [n for n, found in enumerate(verdicts, 1) if found is None]
     lost = [
         n
         for n, found in enumerate(verdicts, 1)
@@ -1311,10 +1318,12 @@ def anchoring_line(
         if (hint := told.get(n)) is not None
         and (hint.begins or hint.pages or hint.absent)
     }
-    line = _anchoring_text(verdicts, lost, placed)
+    line = _anchoring_text(verdicts, lost, placed, kept)
+    if line is not None and len(line) > MAX_ANCHORING_CHARS:
+        line = _anchoring_text(verdicts, lost, placed, ())
     while placed and line is not None and len(line) > MAX_ANCHORING_CHARS:
         del placed[next(reversed(placed))]
-        line = _anchoring_text(verdicts, lost, placed)
+        line = _anchoring_text(verdicts, lost, placed, ())
     return line
 
 
@@ -1322,8 +1331,10 @@ def _anchoring_text(
     verdicts: Sequence[RefusalCode | None],
     lost: Sequence[int],
     placed: Mapping[int, LineHint],
+    kept: Sequence[int],
 ) -> str | None:
-    """`anchoring_line` with exactly the citations in `placed` placed."""
+    """`anchoring_line` with exactly the citations in `placed` placed and
+    those in `kept` named to keep."""
     total = len(verdicts)
     parts = [_placed(n, total, hint) for n, hint in placed.items() if not hint.absent]
     absent = [n for n, hint in placed.items() if hint.absent]
@@ -1338,11 +1349,32 @@ def _anchoring_text(
     ]
     if not parts:
         return None
+    if kept:
+        parts.append(f"keep {_listed(kept)} exactly as {_KEEP[len(kept) > 1]}")
+    parts.append(_RULE)
     return (
         "host anchoring check: "
         + "; ".join(parts)
         + " (numbered from 1 in the order given)"
     )
+
+
+# The rule a retry's added or changed citation must meet, ending every
+# anchoring line (F491), and how a kept citation is told to stay.
+_RULE = (
+    "any citation you add or change must be one entire evidence line of its cited page"
+)
+_KEEP = ("it was", "they were")
+
+
+def _listed(numbers: Sequence[int]) -> str:
+    """`citation 2`, `citations 2 and 5`, `citations 1, 2 and 3`: every
+    number, none counted, since a kept citation must be named to be kept;
+    `MAX_ANCHORING_CHARS` bounds the list instead (F491)."""
+    shown = [str(number) for number in numbers]
+    if len(shown) == 1:
+        return f"citation {shown[0]}"
+    return f"citations {', '.join(shown[:-1])} and {shown[-1]}"
 
 
 def _counted(failed: Sequence[int], total: int, one: str, many: str) -> str:

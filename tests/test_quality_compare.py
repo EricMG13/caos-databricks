@@ -159,9 +159,12 @@ def test_compare_records_holds_a_baseline_answer_against_itself_quiet(
     [compared] = quality_compare.compare_records([baseline], [baseline])
 
     assert compared["large"] == []
-    # Distinct figures are reported on every comparison; nothing else moved.
+    # Distinct figures are reported on every comparison, the total and the
+    # count in the registers the module still requires (F482); nothing else moved.
+    [line] = compared["changes"]
     figures = baseline["distinct_figures"]
-    assert compared["changes"] == [f"distinct figures {figures} (baseline {figures})"]
+    assert line.startswith(f"distinct figures {figures} (baseline {figures}); ")
+    assert "in required registers" in line
     assert "LARGE\n  none" in quality_compare.render_report([compared])
 
 
@@ -268,3 +271,119 @@ def test_a_fall_of_fewer_than_five_figures_is_never_large() -> None:
         [big], [{**big, "distinct_figures": 15}]
     )
     assert compared["large"] == ["distinct figures 15 below 80% of baseline low 20"]
+
+
+def _by_table(
+    total: int,
+    by_table: dict[str, list[str]],
+    required: tuple[str, ...] = ("T1",),
+    located: tuple[str, ...] = ("T1",),
+) -> dict[str, Any]:
+    return {
+        **_answer("Passed", "Draft Only", 80, 8),
+        "distinct_figures": total,
+        "required_registers": list(required),
+        "registers": dict.fromkeys(located, 1),
+        "figures_by_table": by_table,
+    }
+
+
+def test_figures_leave_out_only_what_a_retired_register_alone_held() -> None:
+    """F482: 5d-4 retired CP-0's P4, whose triage scores were most of a
+    baseline answer's figures, so the whole-table count flagged each later
+    answer LARGE. A figure found only in a register the new answer's module no
+    longer requires leaves both sides; one also held elsewhere stays."""
+    kept = [f"t{n}" for n in range(6)]
+    scores = [f"p{n}" for n in range(10)]
+    baseline = _by_table(
+        17,
+        {"P4": [*scores, "t0"], "T1": kept, "": ["front"]},
+        required=("P4", "T1"),
+        located=("P4", "T1"),
+    )
+    later = _by_table(7, {"T1": kept, "": ["front"]})
+    [compared] = quality_compare.compare_records([baseline], [later])
+    assert compared["large"] == []
+    assert compared["changes"] == [
+        "register P4 dropped",
+        "distinct figures 7 (baseline 7); in required registers 6 (baseline 6)",
+    ]
+    # The whole-table count would have flagged it: 7 is below 80% of 17.
+    whole = {k: v for k, v in later.items() if k != "figures_by_table"}
+    [before] = quality_compare.compare_records([baseline], [whole])
+    assert before["large"] == ["distinct figures 7 below 80% of baseline low 17"]
+    # An ID no record's contract names (CP-1B's "#### T4.18 Debt (from CP-1)")
+    # is not a retired register: its figures count.
+    foreign = _by_table(7, {"T1": kept, "T4.18": ["front"]})
+    [quiet] = quality_compare.compare_records([foreign], [later])
+    assert quiet["changes"] == [
+        "distinct figures 7 (baseline 7); in required registers 6 (baseline 6)"
+    ]
+
+
+def test_figures_outside_any_register_still_count() -> None:
+    """F482 fix round (5d-5 review): counting only required registers was blind
+    to a front table and a tagged interface table under no register heading;
+    in N2's CP-1, dropping the "Reported Q2 changes" table and the operating
+    KPI schedule's body took the total from 170 to 152. The total keeps every
+    table, so the loss shows; it is LARGE once it passes the existing margin."""
+    registers = [f"r{n}" for n in range(152)]
+    front = [f"f{n}" for n in range(18)]
+    baseline = _by_table(170, {"T1": registers, "": front})
+    dropped = _by_table(152, {"T1": registers})
+    [compared] = quality_compare.compare_records([baseline], [dropped])
+    assert compared["changes"] == [
+        "distinct figures 152 (baseline 170); in required registers 152 (baseline 152)"
+    ]
+    assert compared["large"] == []  # 152 is 89% of 170: reported, not LARGE
+    small = _by_table(20, {"T1": registers[:4], "": front[:16]})
+    [flagged] = quality_compare.compare_records(
+        [small], [_by_table(4, {"T1": registers[:4]})]
+    )
+    assert flagged["large"] == ["distinct figures 4 below 80% of baseline low 20"]
+
+
+def test_extract_record_keeps_each_table_s_figures_by_its_heading(
+    tmp_path: Path,
+) -> None:
+    """F482: each table's figures under the register ID its heading leads with,
+    read from the headings and not the contract, so a retired register keeps
+    its label; "" for a table under no such heading. Truncated hashes, not
+    printed (a small number is recoverable by trying every candidate)."""
+    record = _extracted(_set(tmp_path), quotes=(CITED,))
+    assert set(record["figures_by_table"]) >= set(record["registers"])
+    markdown = (
+        "**Reported** (USD m):\n\n| Measure | Q2 |\n|---|---|\n| Revenue | 2,993 |\n\n"
+        "#### P4 — Triage register\n\n| Source | Score |\n|---|---|\n| 10-Q | 11 |\n\n"
+        "### **T4.7** Normalized\n\n| Item | Value |\n|---|---|\n| Debt | (1,240) |"
+        "\n| Cash | 1240 |\n"
+    )
+    digest = {n: sha256(n.encode()).hexdigest()[:16] for n in ("2993", "11", "1240")}
+    assert quality_compare.table_figures(markdown) == {
+        "": [digest["2993"]],
+        "P4": [digest["11"]],
+        "T4.7": [digest["1240"]],
+    }
+    assert "1240" not in json.dumps(quality_compare.table_figures(markdown))
+    assert quality_compare.distinct_figures(markdown) == 3
+
+
+def test_compare_says_answer_keys_unmeasured_without_a_record(
+    tmp_path: Path,
+) -> None:
+    """F482 (5d-0 review): without the host record the citation, readiness and
+    projection keys are unchecked, and the report says so by kind, not only
+    "citations unmeasured"."""
+    root = _set(tmp_path)
+    baseline = _extracted(root, quotes=(CITED,))
+    markdown = handoff_markdown(identity("CP-0"), readiness={"CP-5": "READY"})
+    alone = quality_compare.extract_record(markdown, root, bundle=BUNDLE)
+    [compared] = quality_compare.compare_records([baseline], [alone])
+    assert "citations unmeasured (no record given)" in compared["changes"]
+    assert (
+        "answer keys unmeasured: 3 (no record given): expects 2, expects_ready 1"
+        in compared["changes"]
+    )
+    assert compared["large"] == []
+    [measured] = quality_compare.compare_records([baseline], [baseline])
+    assert not any("unmeasured" in line for line in measured["changes"])

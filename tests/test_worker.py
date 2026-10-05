@@ -455,8 +455,9 @@ def test_require_seconds_refuses_a_non_whole_or_out_of_range_lease(
 
 def test_the_lease_outlives_the_provider_timeout() -> None:
     """D83 (amending brief D5's two deadlines): a lease renewed by the
-    reservation outlives the call's one deadline with 180 s left to bill,
-    check the answer and accept."""
+    reservation outlives the call's one deadline by a 180 s liveness budget
+    shared with the work before the call and after it (bill, checks, accept);
+    exactly-once does not rest on it (`call_hold`, `replay_billed`)."""
     assert LEASE_SECONDS - provider_module.TIMEOUT_SECONDS >= 180.0
     assert WorkerConfig(BoundaryText.of("w")).lease_seconds == LEASE_SECONDS
 

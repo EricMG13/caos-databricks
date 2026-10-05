@@ -418,6 +418,45 @@ def test_part_of_a_line_gets_the_second_attempt_naming_it(
     assert _cp0_ledger(harness) == (2, 2, ["CITATION_NOT_LOCATED"], 1)
 
 
+def _cites_part_of_a_line_then_the_line(body: str) -> str:
+    """The same answer citing part of its first line, then the whole line."""
+    whole = json.loads(body)["citations"][0]
+    wire = json.loads(_cites_part_of_a_line(body))
+    wire["citations"].insert(1, whole)
+    return json.dumps(wire)
+
+
+def test_a_retry_is_told_to_keep_the_citations_that_anchored(
+    harness: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F491: the guided retry names each citation that anchored, to keep
+    exactly as it was, and the rule an added or changed one must meet -- in
+    the prompt priced and the prompt sent alike."""
+    sizes: list[int] = []
+    measure = invocation.request_size
+
+    def measured(provider: CompletionProvider, prompt: str) -> int:
+        size = measure(provider, prompt)
+        if _module(prompt) == "CP-0":
+            sizes.append(size)
+        return size
+
+    monkeypatch.setattr(canonical, "request_size", measured)
+    answers = CanonicalCompletions(harness.source_id)
+    flawed = _Flawed(answers, flaw=_cites_part_of_a_line_then_the_line)
+    assert _run(harness, flawed) is None
+    assert (
+        "host anchoring check: citation 1 of 2 is part of a longer evidence line"
+        f' of its cited page, which begins "{QUOTE}"; quote the whole line;'
+        " keep citation 2 exactly as it was; any citation you add or change must"
+        " be one entire evidence line of its cited page"
+        " (numbered from 1 in the order given)" in answers.prompts[1]
+    )
+    # Each attempt's prompt measured twice, priced then sent: the same size.
+    assert len(sizes) == 4 and sizes[2] == sizes[3]
+    assert _cp0_ledger(harness) == (2, 2, ["CITATION_NOT_LOCATED"], 1)
+
+
 def test_the_anchoring_line_names_each_failed_citation_by_number_and_reason() -> None:
     line = anchoring_line(
         [
@@ -432,7 +471,9 @@ def test_the_anchoring_line_names_each_failed_citation_by_number_and_reason() ->
         "host anchoring check: citation 2 of 5 is not one evidence line of its"
         " cited page;"
         " citations 3 and 4 of 5 are on their cited pages more than once;"
-        " citation 5 of 5 names a page or line this node was not given"
+        " citation 5 of 5 names a page or line this node was not given;"
+        " keep citation 1 exactly as it was; any citation you add or change must"
+        " be one entire evidence line of its cited page"
         " (numbered from 1 in the order given)"
     )
     assert anchoring_line([None, None]) is None
@@ -466,7 +507,9 @@ def test_the_anchoring_line_places_each_unlocated_citation_it_can() -> None:
         " its cited page;"
         " citation 3 of 7 is in no evidence line of its source this node was given;"
         " citation 4 of 7 is not one evidence line of its cited page;"
-        " citation 6 of 7 is on its cited page more than once"
+        " citation 6 of 7 is on its cited page more than once;"
+        " keep citation 7 exactly as it was; any citation you add or change must"
+        " be one entire evidence line of its cited page"
         " (numbered from 1 in the order given)"
     )
     # Past `MAX_FEEDBACK_CITATIONS` citations, the rest are counted by rule.
@@ -493,6 +536,35 @@ def test_the_anchoring_line_places_each_unlocated_citation_it_can() -> None:
     pages = anchoring_line([lost], [LineHint(pages=tuple(range(1, 25)))])
     assert pages is not None and "pages 1, 2, 3" in pages and "and 4 more" in pages
     assert HINT_WORDS == 12
+
+
+def test_the_anchoring_line_names_the_citations_to_keep_and_the_rule() -> None:
+    """F491: the line names every citation that anchored, to be kept exactly
+    as it was, and the rule any added or changed citation must meet; with
+    none anchored, the rule alone. Past `MAX_ANCHORING_CHARS` the kept list
+    goes before any placement does, and the rule stays."""
+    lost = RefusalCode.CITATION_NOT_LOCATED
+    rule = (
+        "any citation you add or change must be one entire evidence line of its"
+        " cited page (numbered from 1 in the order given)"
+    )
+    hint = LineHint(begins="Cash used for capital expenditures totaled")
+    line = anchoring_line([None, None, lost, None, lost], [None, None, hint])
+    assert line is not None
+    assert line.endswith(f"keep citations 1, 2 and 4 exactly as they were; {rule}")
+    assert 'which begins "Cash used for capital expenditures totaled"' in line
+    alone = anchoring_line([lost], [hint])
+    assert alone is not None and "keep citation" not in alone
+    assert alone.endswith(f"quote the whole line; {rule}")
+    # A kept list that would pass the bound is dropped whole, and every
+    # placement stays while the line without it fits.
+    many = 600
+    verdicts = [None] * many + [lost]
+    bounded = anchoring_line(verdicts, [None] * many + [hint])
+    assert bounded is not None and len(bounded) <= MAX_ANCHORING_CHARS
+    assert "keep citation" not in bounded and "quote the whole line" in bounded
+    assert bounded.endswith(rule)
+    assert anchoring_line([None] * many) is None
 
 
 def test_two_guided_retries_per_node_whichever_codes_refused(
