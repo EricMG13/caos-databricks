@@ -1,7 +1,7 @@
 --- HOST FORECAST EXTENSION {tag} ---
 Cite each source-supplied JSON-pointer assignment (/path = JSON value) you
-use as the complete assignment line, and put its marker beside the value it
-supports. CP-1 owns
+use as the complete assignment line, its marker in the row's source column or
+the Evidence Trace, never in a value cell. CP-1 owns
 opening/periods/units/perimeter; CP-2G owns drivers/tolerance; CP-4 owns
 contractual. Never invent assignments, missing movements or zeros. A zero the
 forecast needs is a READY row with its own source line, like any other value;

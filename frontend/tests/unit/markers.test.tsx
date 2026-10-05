@@ -66,7 +66,8 @@ describe("citation markers (D107)", () => {
     for (const text of ["[c3]", "[C 3]", "[C3-C5]", "[C3–C5]", "[C3,4]", "[C]", "[C٣]"]) {
       expect(readMarkers(text)).toEqual([text]);
     }
-    expect(readMarkers("[C1234567890]")).toEqual(["[C1234567890]"]);
+    // Past `MARKER_DIGITS` digits a marker names no citation, as on the host.
+    expect(readMarkers("[C1234567890]")).toEqual([{ text: "[C1234567890]", numbers: [0] }]);
   });
 
   test("test_a_marker_is_a_chip_named_citation_n_that_opens_its_source", () => {
@@ -143,6 +144,39 @@ describe("citation markers (D107)", () => {
     );
     expect(container.querySelector("img")).toBeNull();
   });
+});
+
+describe("the page reads markers as the host does (the MK2 audit)", () => {
+  // The shared cases, held to `handoff.markers` in
+  // `tests/test_citation_marker_cases.py`: the chips drawn are the host's
+  // markers, in order, except where a case says the page shows its block as
+  // written. A number naming no citation (0) is never a chip.
+  const cases = fixture("tests/unit/marker-cases.json") as {
+    text: string;
+    host: number[];
+    page?: number[];
+    why?: string;
+  }[];
+  // A handoff whose citations are [C1] to [C9].
+  const nine = (): HandoffView => {
+    const fact = handoffOf("CP-0").source_facts[0]!;
+    return {
+      ...handoffOf("CP-0"),
+      source_facts: Array.from({ length: 9 }, (_, at) => ({ ...fact, marker: at + 1 })),
+      unverified_facts: [],
+    };
+  };
+
+  test.each(cases.map((entry) => [JSON.stringify(entry.text), entry] as const))(
+    "test_the_page_draws_the_hosts_markers %s",
+    (_name, entry) => {
+      const container = drawn(nine(), entry.text);
+      const chips = [...container.querySelectorAll("[data-marker-chip]")].map((chip) =>
+        Number(chip.getAttribute("data-marker-chip")),
+      );
+      expect(chips).toEqual((entry.page ?? entry.host).filter((n) => n >= 1));
+    },
+  );
 });
 
 describe("no whole source line outside the drawer (D107)", () => {

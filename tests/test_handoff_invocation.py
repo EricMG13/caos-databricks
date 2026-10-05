@@ -718,16 +718,29 @@ def test_the_prompt_repeats_the_closed_contract_after_evidence(
     assert (
         "Evidence Trace is a short locator table, no quotes: each row gives a"
         " claim, its marker, the document and the page, with any column your"
-        " authority requires there. A marker that names no citation refuses the"
-        " answer." in compact
+        " authority requires there." in compact
+    )
+    # MK1 fix round 1: a marker in a figure cell wedged CP-CF; `[C<n>]` is
+    # this answer's alone, and an upstream's is shown qualified.
+    assert (
+        "A marker never goes inside a figure, status or other value cell: put"
+        " it in the row's source or evidence column if it has one, otherwise in"
+        " the prose or the Evidence Trace row." in compact
+    )
+    assert (
+        "`[C<n>]` is only ever this answer's citation: label your own conflicts"
+        " and rows otherwise (for example `CF-1`). An upstream handoff's marker"
+        " is shown as `[CP-1 C3]`: keep that form if you carry it over, never"
+        " `[C3]`, and cite the excerpt yourself to rest a claim of yours on it."
+        " A marker that names no citation refuses the answer." in compact
     )
     assert "appears verbatim in the Markdown body" not in compact
     assert 'own wording ("we", "our", "us")' not in compact
     # D102's coverage, as markers: R3's CP-1 cited 8 lines for 274 figures.
     assert (
-        "Put a marker beside each material figure and each statement that a"
-        " register row or conclusion rests on, at least one citation in all,"
-        " and cite only excerpts that support a claim you wrote." in compact
+        "Give each material figure and each statement that a register row or"
+        " conclusion rests on a marker, at least one citation in all, and cite"
+        " only excerpts that support a claim you wrote." in compact
     )
     # D106's sentence on unverified citations stays.
     assert (
@@ -757,7 +770,9 @@ def test_the_prompt_repeats_the_closed_contract_after_evidence(
     assert "matched_text" in reminder and "Markdown body" in reminder
     # The register tells a downstream model how to resolve a marker (D107).
     whole = " ".join(prompt.split())
-    assert ("by which that handoff's body cites it" in whole) is bool(upstream)
+    assert ("CP-1 C3 for the [CP-1 C3] by which" in whole) is bool(upstream)
+    assert ("shown as [CP-1 C3] for CP-1's [C3]" in whole) is bool(upstream)
+    assert "no other rule is stated" not in whole
 
 
 def _missing(of: HostIdentity) -> UpstreamRef:

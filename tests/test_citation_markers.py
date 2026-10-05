@@ -44,10 +44,12 @@ def test_markers_reads_the_exact_form_and_its_list_form_only() -> None:
         + "A [C1] b [C2, C3] c [C4,C5] d \\[C6\\] and [C0001].\n"
         + "```\n[C7]\n```\n"
         + "Near: [c3] [C 3] [C3-C5] [C3\u2013C5] [C3,4] [C] [Cx] [C\u0663]"
-        + " [C1234567890] [ C3] C3.\n"
+        + " [C1,  C2] [C1 , C2] [ C3] C3.\n"
     )
     assert markers(body) == (1, 2, 3, 4, 5, 6, 1, 7)
     assert markers("No front matter [C2], again [C2].") == (2, 2)
+    # Past nine digits a marker names no citation, whatever its value.
+    assert markers("[C123456789] [C1234567890] [C0000000001]") == (123456789, 0, 0)
 
 
 def test_linked_means_a_marker_names_the_citation_not_its_quotation() -> None:
@@ -61,7 +63,9 @@ def test_linked_means_a_marker_names_the_citation_not_its_quotation() -> None:
     assert _linked(wire(f"{FRONT}Both [C2, C1].\n".encode(), both)) == (True, True)
 
 
-@pytest.mark.parametrize("written", ["[C0]", "[C2]", "[C1, C9]", "\\[C2\\]"])
+@pytest.mark.parametrize(
+    "written", ["[C0]", "[C2]", "[C02]", "[C1, C9]", "\\[C2\\]", "[C0000000001]"]
+)
 def test_a_marker_that_names_no_citation_refuses_the_answer(written: str) -> None:
     """Which citation `[C9]` beside 8 meant is undecidable: structural,
     `HANDOFF_MALFORMED`, with nothing of the answer in the refusal."""
@@ -167,3 +171,81 @@ def test_a_marker_this_host_did_not_write_does_not_read(
 ) -> None:
     with pytest.raises((ValueError, TypeError)):
         _decoded_record(_edited(edit, _placed((1,), (2,))))
+
+
+def test_the_dangling_line_shows_each_marker_as_written() -> None:
+    """`[C02]` is told as `[C02]`, a ten-digit `[C0000000001]` (which names
+    nothing, value aside) as written, and a longer one cut to 12 digits."""
+    long = "9" * 40
+    body = wire(CP0_MD + f"\n[C02] [C0000000001] [C{long}]\n".encode(), [_citation()])
+    [line] = [
+        line
+        for line in handoff.feedback_lines(CONTRACT, CATALOG, CP0, body)
+        if line.startswith("host marker check")
+    ]
+    assert line.startswith(
+        "host marker check: the Markdown body writes [C02], [C0000000001],"
+        " [C999999999999...], but the answer has 1 citation"
+    )
+
+
+def test_unmarked_reads_a_cell_without_its_markers_and_moves_nothing_else() -> None:
+    """MK1 fix round 1: CP-2G wrote `(45) [C1]` in a driver cell and CP-CF
+    could never map it. A host reader parses a cell `unmarked`."""
+    from decimal import Decimal
+
+    from caos.methodology.citation_markers import unmarked
+    from caos.methodology.forecast import driver_value
+    from caos.methodology.selection import demand_items
+    from caos.methodology.tables import figure_value
+    from caos.qualification.matrix import _normalised_cell
+
+    assert unmarked("(45) [C1]") == "(45)"
+    assert driver_value(unmarked("(45) [C1]")) == Decimal(-45)
+    assert unmarked("1,250.0 \\[C2, C3\\]") == "1,250.0"
+    assert unmarked("(45[C1])") == "(45)"
+    for cell in ("(45)", "1,250.0", " 0 ", "READY", "[c1]", "[C1,  C2]", "CF-1"):
+        assert unmarked(cell) == cell
+    assert figure_value(CONTRACT, "(45) [C1]") == figure_value(CONTRACT, "(45)")
+    assert figure_value(CONTRACT, "2993 [C3]") == "2993"
+    assert _normalised_cell("READY [C1]") == "READY"
+    assert demand_items("a.txt [C1]; b.txt pages 2-3 [C2, C3]") == (
+        "a.txt",
+        "b.txt pages 2-3",
+    )
+
+
+def test_an_upstream_body_is_shown_with_its_markers_qualified() -> None:
+    """`[C3]` in CP-1's body reads `[CP-1 C3]` downstream: not a marker, so
+    a model that copies it neither links nor dangles a citation of its own,
+    and its unmarked line gives no near-miss hint. Pure over the text."""
+    from caos.methodology.citation_markers import qualified
+
+    text = "A [C3] and \\[C2, C5\\]; [c1] [C1,  C2] stay."
+    shown = qualified(text, "CP-1")
+    assert shown == "A [CP-1 C3] and [CP-1 C2, C5]; [c1] [C1,  C2] stay."
+    assert qualified(text, "CP-1") == shown and markers(shown) == ()
+    copied = wire(f"{FRONT}As CP-1 found [CP-1 C3].\n".encode(), [_citation()])
+    assert _linked(copied) == (False,)
+    [line] = [
+        line
+        for line in handoff.feedback_lines(CONTRACT, CATALOG, CP0, copied)
+        if line.startswith("host marker check")
+    ]
+    assert "bracketed" not in line
+
+
+def test_markers_belong_only_to_an_excerpt_record() -> None:
+    """A record under an earlier rule holding a marker is not this host's."""
+    from test_handoff_record import _record
+
+    from caos.evidence.citations import WHOLE_LINE
+
+    [one] = _record(citation_rule=WHOLE_LINE).citations
+    with pytest.raises(ValueError):
+        record_bytes(
+            _record(
+                citation_rule=WHOLE_LINE,
+                citations=(dataclasses.replace(one, marker=1),),
+            )
+        )

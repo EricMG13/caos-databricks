@@ -1,0 +1,114 @@
+[
+  {
+    "text": "Leverage [C1] holds.",
+    "host": [1]
+  },
+  {
+    "text": "Leverage [C3,\nC4] holds.",
+    "host": []
+  },
+  {
+    "text": "Leverage [C3, \nC4] holds.",
+    "host": []
+  },
+  {
+    "text": "> Quote [C3,\n> C4]",
+    "host": []
+  },
+  {
+    "text": "Escaped [C3\\, C4] here.",
+    "host": [3, 4]
+  },
+  {
+    "text": "Escaped \\[C3\\] here.",
+    "host": [3]
+  },
+  {
+    "text": "Double \\\\[C3] here.",
+    "host": [3]
+  },
+  {
+    "text": "```\n[C1]\n```\nafter",
+    "host": [1],
+    "why": "code: a fenced block is shown as written",
+    "page": []
+  },
+  {
+    "text": "<!-- [C2] -->\ntext",
+    "host": [2],
+    "why": "comment: shown as written",
+    "page": []
+  },
+  {
+    "text": "`[C1]` inline code",
+    "host": [1]
+  },
+  {
+    "text": "| a | b |\n|---|---|\n| [C1] | [C2, C5] |",
+    "host": [1, 2, 5]
+  },
+  {
+    "text": "[C1](javascript:alert(1))",
+    "host": [1]
+  },
+  {
+    "text": "[C1]<script>alert(1)</script>",
+    "host": [1]
+  },
+  {
+    "text": "[[C1]](http://x)",
+    "host": [1]
+  },
+  {
+    "text": "*[C1]* and **[C2]**",
+    "host": [1, 2]
+  },
+  {
+    "text": "[C01] and [C000000001]",
+    "host": [1, 1]
+  },
+  {
+    "text": "[C1234567890] names none",
+    "host": [0]
+  },
+  {
+    "text": "[C1,C2] [C1,  C2] [C1 ,C2]",
+    "host": [1, 2]
+  },
+  {
+    "text": "[c3] [C 3] [C3-C5] [C3,4] [C]",
+    "host": []
+  },
+  {
+    "text": "[C１] fullwidth",
+    "host": []
+  },
+  {
+    "text": "- item [C1]\n  - nested [C2]",
+    "host": [1, 2]
+  },
+  {
+    "text": "# Heading [C4]",
+    "host": [4]
+  },
+  {
+    "text": "---\nid: [C9]\n---\nbody [C1]",
+    "host": [1]
+  },
+  {
+    "text": "--- \nid: [C9]\n--- \nbody [C1]",
+    "host": [9, 1],
+    "why": "front matter: the page shows a '--- ' block as front matter, as written",
+    "page": [1]
+  },
+  {
+    "text": "Unclosed ```\n[C1]",
+    "host": [1]
+  },
+  {
+    "text": "| a | b |\n|---|---|\n| [C1] |",
+    "host": [1],
+    "why": "as written: a row that does not fit its header is shown unformatted",
+    "page": []
+  }
+]

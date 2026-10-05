@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Literal, Protocol
 
+from caos.methodology.citation_markers import unmarked
 from caos.methodology.vendor import VendorContract
 
 # Bounds, restated on the wire (`caos.api.wire.TableView`). The bundle's widest
@@ -115,8 +116,10 @@ def figure_value(contract: VendorContract, cell: str) -> str | None:
     the figure is worth is `Decimal`'s reading; the vendor's number is a float
     and is discarded unread. None too for a figure whose plain notation is
     longer than `FIGURE_CHARS`. The cheap reading goes first, so the bundle is
-    asked only about a cell that reads as a figure at all.
+    asked only about a cell that reads as a figure at all. Both read the cell
+    without its citation markers (`unmarked`, D107): `(45) [C1]` is `(45)`.
     """
+    cell = unmarked(cell)
     value = _exact(cell)
     if value is None:
         return None
