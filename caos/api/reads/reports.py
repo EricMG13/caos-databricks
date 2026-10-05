@@ -559,11 +559,22 @@ def _narrative_view(
             dict(
                 text=span.get("text"),
                 figure=_figure(span.get("figure"), digests, records, sources),
+                unverified=_unverified(span.get("unverified"), digests),
             )
             for span in paragraph
         ]
         for paragraph in narrative
     ]
+
+
+def _unverified(
+    figure: dict[str, Any] | None, digests: dict[str, str]
+) -> dict[str, Any] | None:
+    """An unverified figure (D106): the model's locator, quote and code as the
+    record holds them, with the record digest its node already carries."""
+    if figure is None:
+        return None
+    return {**figure, "record_sha256": digests[figure["route_node_id"]]}
 
 
 def _figure(

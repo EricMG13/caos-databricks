@@ -83,14 +83,16 @@ export function paragraphs(draft: string): NarrativeDraft[][] {
       const spans: NarrativeDraft[] = [];
       let at = 0;
       for (const match of line.matchAll(MARKER)) {
-        if (match.index > at) spans.push({ text: line.slice(at, match.index), figure: null });
+        if (match.index > at)
+          spans.push({ text: line.slice(at, match.index), figure: null, unverified: null });
         spans.push({
           text: null,
           figure: { route_node_id: match[1]!, citation_index: Number(match[2]) - 1 },
+          unverified: null,
         });
         at = match.index + match[0].length;
       }
-      if (at < line.length) spans.push({ text: line.slice(at), figure: null });
+      if (at < line.length) spans.push({ text: line.slice(at), figure: null, unverified: null });
       return spans;
     });
 }

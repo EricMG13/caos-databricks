@@ -337,8 +337,8 @@ describe("Report v1", () => {
     expect(JSON.parse(init.body)).toEqual({
       expected_revision_id: document.body.revision_id,
       narrative: [
-        [{ text: "Leverage held at 4.2x.", figure: null }],
-        [{ text: "Coverage improved.", figure: null }],
+        [{ text: "Leverage held at 4.2x.", figure: null, unverified: null }],
+        [{ text: "Coverage improved.", figure: null, unverified: null }],
       ],
     });
     expect(await screen.findByText(/00000000-0000-4000-8000-0000000000c4/)).toBeInTheDocument();

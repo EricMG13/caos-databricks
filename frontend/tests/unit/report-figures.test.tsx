@@ -111,15 +111,22 @@ describe("Report figure picker", () => {
     ].join("\n");
     expect(paragraphs(draft)).toEqual([
       [
-        { text: "Net debt closed at ", figure: null },
-        { text: null, figure: { route_node_id: "CP-0", citation_index: 1 } },
-        { text: " after the refinancing.", figure: null },
+        { text: "Net debt closed at ", figure: null, unverified: null },
+        { text: null, figure: { route_node_id: "CP-0", citation_index: 1 }, unverified: null },
+        { text: " after the refinancing.", figure: null, unverified: null },
       ],
-      [{ text: null, figure: { route_node_id: "RN-LITE-01-CP-0", citation_index: 0 } }],
+      [
+        {
+          text: null,
+          figure: { route_node_id: "RN-LITE-01-CP-0", citation_index: 0 },
+          unverified: null,
+        },
+      ],
       [
         {
           text: "Pasted prose with a footnote [1], a [CP-0 #0] and a digit 4 stays prose, for the server to refuse.",
           figure: null,
+          unverified: null,
         },
       ],
     ]);
@@ -173,8 +180,8 @@ describe("Report figure picker", () => {
       expected_revision_id: document.body.revision_id,
       narrative: [
         [
-          { text: "Net debt closed at ", figure: null },
-          { text: null, figure: { route_node_id: "CP-0", citation_index: 1 } },
+          { text: "Net debt closed at ", figure: null, unverified: null },
+          { text: null, figure: { route_node_id: "CP-0", citation_index: 1 }, unverified: null },
         ],
       ],
     });
