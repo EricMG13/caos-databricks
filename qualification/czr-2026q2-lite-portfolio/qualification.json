@@ -15,7 +15,9 @@
         "documents/CZR_Q2_2026_Earnings_Release.txt",
         "documents/TEST_CLO_I_Mandate_and_Exposures_2026-10-02.txt",
         "documents/CZR_FINRA_TRACE_12769GAC4_2026-10-02.txt",
-        "documents/CZR_2024_650_Senior_Secured_Notes_2032_Indenture.txt"
+        "documents/CZR_2024_650_Senior_Secured_Notes_2032_Indenture.txt",
+        "documents/CZR_2024_650_Notes_First_Supplemental_Indenture.txt",
+        "documents/CZR_2024_650_Notes_Second_Supplemental_Indenture.txt"
       ],
       "expects": [
         {
