@@ -95,16 +95,20 @@ _CATALOG = "references/CREDIT_OS_V_MODULE_CATALOG_v2.json"
 # reader sees the number. The legacy 32 KiB was sized for another model's
 # handoffs: the first live Claude Opus 5 answer, CP-0 over a six-line
 # document, ran to 36,544 bytes and the next node refused
-# UPSTREAM_SECTION_OVER_CEILING before any call (F110). 52 KiB is the most the
-# catalog's widest node can carry: CP-5 takes 16 direct upstreams, and 16
-# sections at this bound beside its 165,548 bytes of delivered authority fit
-# the request (the widest-node test in `tests/test_handoff_invocation.py`),
-# with the 4 MiB ceiling (D29) leaving most of it for evidence; a node that
-# still reaches the ceiling fails closed there, typed. Nothing is ever truncated:
-# per-node evidence selection (§95, `caos/methodology/selection.py`) narrows a
-# node's evidence to the members its gate row names, but a named member is
-# delivered whole and the upstream sections are bounded here, not selected.
-MAX_UPSTREAM_HANDOFF_BYTES = 53_248
+# UPSTREAM_SECTION_OVER_CEILING before any call (F110). 96 KiB since D83: the
+# 52 KiB that followed refused CP-1's real answers, 9 of 11 CZR sets and 6 of 6
+# CCL at 50,489-85,559 bytes, so the next node stopped on the section rather
+# than the work. The catalog's widest node is CP-5, 16 direct upstreams: 16
+# sections at this bound beside its 169,493 bytes of delivered authority encode
+# to 1,750,342 bytes, leaving 2,443,962 of the 4 MiB request (D29) for evidence
+# (the widest-node test in `tests/test_handoff_invocation.py`). The bound is on
+# raw bytes and the ceiling on the JSON encoding, so a node whose real sections
+# escape heavier and still reaches the ceiling fails closed there, typed.
+# Nothing is ever truncated: per-node evidence selection (§95,
+# `caos/methodology/selection.py`) narrows a node's evidence to the members its
+# gate row names, but a named member is delivered whole and the upstream
+# sections are bounded here, not selected.
+MAX_UPSTREAM_HANDOFF_BYTES = 98_304
 
 
 def host_identity(  # noqa: PLR0913 -- the brief's keyword-only identity inputs

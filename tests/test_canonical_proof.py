@@ -195,7 +195,7 @@ def test_a_host_control_reads_orchestration_proof_never_qualified(
     """
     proof = _prove(ran)
     assert proof.assurance is Assurance.ORCHESTRATION_PROOF
-    assert proof.build_id.startswith("994a1b3f")
+    assert proof.build_id.startswith("3715187a")
     assert proof.route_digest == route_digest(ran.route)
     assert proof.artifacts == len(ran.route.nodes)
     assert names_qualified() == {

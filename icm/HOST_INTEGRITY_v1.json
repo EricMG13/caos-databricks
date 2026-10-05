@@ -29,8 +29,8 @@
       "sha256": "dc43f730c947a4887a1be250ff30adc04402325df2b11da0e0f8afdd1bd48f43"
     },
     "validator_feedback.md": {
-      "bytes": 272,
-      "sha256": "8c15841836a49185037cdcf3eb9c064aa96ec99d041401b361cb54357ea0653a"
+      "bytes": 260,
+      "sha256": "26f320929bb8ff4de2d6786cf6e936ffa5add4c33f329189460fe8b01323c16e"
     }
   },
   "module_id": "CP-CF",

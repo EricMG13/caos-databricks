@@ -41,12 +41,12 @@ HOST_SLUGS = {PARSE_MODULE: "cp-parse", MODEL_MODULE: "cp-cf"}
 # route carries CP-CF (`caos/methodology/invocation.py`).
 FORECAST_OWNERS = frozenset({"CP-1", "CP-2G", "CP-4"})
 BASE_BLOCKS = ("instruction", "tagged", "host_steps", "final_check")
-# The block a node's one second attempt adds (D30), and when each conditional
+# The block a node's guided retry adds (D30, D82), and when each conditional
 # block is rendered, as the stage contracts state it.
 RETRY_BLOCK = "validator_feedback"
 CONDITIONS = {
     "forecast_extension": "when the route carries CP-CF",
-    RETRY_BLOCK: "on a node's one second attempt after a refused answer (D30)",
+    RETRY_BLOCK: "on a node's guided retry after a refused answer (D30, D82)",
 }
 
 _NAME = re.compile(r"^[a-z0-9_]+$")
@@ -113,7 +113,7 @@ def expected_blocks(module_id: str) -> tuple[tuple[str, ...], tuple[str, ...]]:
     if module_id == GATE_MODULE:
         always.append("cp0_final_check")
     forecast = ("forecast_extension",) if module_id in FORECAST_OWNERS else ()
-    # Every node's one second attempt after a refused answer (D30).
+    # Every node's guided retries after a refused answer (D30, D82).
     return tuple(always), (*forecast, RETRY_BLOCK)
 
 

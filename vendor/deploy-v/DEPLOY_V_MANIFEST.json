@@ -330,8 +330,8 @@
           "sha256": "7af64a9047ffa05e996dbb4cb1741b9a815744ecb7eb7bd3b134a4bccf9d2cd0"
         },
         "references/REF_CP-1_STEPS.md": {
-          "bytes": 36693,
-          "sha256": "780dae58bf8573dac19784c973b50b0114a6a9b808a434ef1b2ea28819d314a8"
+          "bytes": 37167,
+          "sha256": "206d217eb48d89cf092ae730cae832d3142e75976cce0b9f2b18c9464a89f60f"
         },
         "scripts/completeness_check.py": {
           "bytes": 39039,

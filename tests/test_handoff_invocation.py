@@ -1101,13 +1101,13 @@ def test_the_declared_section_bound_leaves_the_widest_node_its_authority() -> No
 
     Maximised over every node of every profile, not over one pair. The review
     that asked for this found the single-pair form would pass a bundle whose
-    third profile carried a wider node, or whose CP-3 authority grew past the
-    quarter, while the arithmetic the declared number rests on no longer held.
-    **CP-3** is the true maximum on this bundle at 711,482 encoded bytes
-    against a 1,048,576 ceiling, 32% of it left -- and the assertion does not
-    depend on that staying true. The raw-byte version of this test named CP-5,
-    which was an artefact of its unit: CP-5 carries the most upstreams, CP-3
-    the heavier authority once JSON escaping is paid.
+    third profile carried a wider node, or whose authority grew, while the
+    arithmetic the declared number rests on no longer held. **CP-5** of
+    FULL_CREDIT_32 is the maximum on this bundle (D83): 16 direct upstreams at
+    96 KiB beside 169,493 bytes of authority encode to 1,750,342 bytes against
+    the 4,194,304 ceiling, 2,443,962 left for evidence. CP-3 follows on the
+    heavier authority and fewer upstreams; the assertions hold for whichever
+    node is widest, not for CP-5 by name.
 
     **Measured through `encode_request`, not by summing raw lengths.** The
     Completion Phase 12 adversarial audit found this test's arithmetic was in
@@ -1126,10 +1126,12 @@ def test_the_declared_section_bound_leaves_the_widest_node_its_authority() -> No
     filler = "x" * MAX_UPSTREAM_HANDOFF_BYTES
     worst = 0
     worst_node = ""
+    most_upstreams = 0
     for profile in CATALOG["profiles"].values():
         edges = profile["edges"]
         for node in {edge["target"] for edge in edges}:
             upstreams = sum(1 for edge in edges if edge["target"] == node)
+            most_upstreams = max(most_upstreams, upstreams)
             files = delivered_authority(BUNDLE, node).files
             prompt = "\n".join(
                 [
@@ -1143,13 +1145,14 @@ def test_the_declared_section_bound_leaves_the_widest_node_its_authority() -> No
             cost = len(encode_request("a-model/for-the-test", prompt))
             if cost > worst:
                 worst, worst_node = cost, node
+    # The 16-upstream node was measured, every section at the bound, and fits
+    # beside its authority with at least half the request left for evidence.
+    assert most_upstreams == 16, most_upstreams
     assert worst < MAX_REQUEST_BYTES, (worst_node, worst)
-    # A real Claude Opus 5 handoff over a six-line document ran to 36,544
-    # bytes (F110); the bound has to hold one of those with room, so the
-    # widest node's quarter for evidence is no longer promised: it fits, and
-    # a node whose sixteen upstreams all reach the bound fails closed at the
-    # request ceiling, typed (N31 lifts that ceiling).
-    assert MAX_UPSTREAM_HANDOFF_BYTES >= 36_544 + 8_192, MAX_UPSTREAM_HANDOFF_BYTES
+    assert MAX_REQUEST_BYTES - worst >= MAX_REQUEST_BYTES // 2, (worst_node, worst)
+    # The largest CP-1 answer the 2 October runs produced, 85,559 bytes (D83),
+    # is carried whole with room.
+    assert MAX_UPSTREAM_HANDOFF_BYTES >= 85_559 + 8_192, MAX_UPSTREAM_HANDOFF_BYTES
 
 
 def test_section_markers_cannot_be_forged_by_evidence() -> None:

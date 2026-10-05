@@ -111,7 +111,56 @@ The owner authorises this edit to the deployment fork `vendor/deploy-v` (D31/D34
    - the `prompt` goldens regenerated from the legacy snapshot's code over the fork (D31's command)
 
    If the legacy snapshot is not available, report it as BLOCKED. Do not improvise.
-4. Record D84.
+4. **Cut CP-1's duplicated tables.** Owner decision of 3 October 2026, under the owner's authorisation of the same day to edit vendor files for performance and reliability.
+   - **Today:** CP-1's handoff carries each interface register twice: the T4.x register table, and a tagged copy (`<!-- table-id: cp1.… -->`) that the CP-MODEL interface parser reads. That makes CP-1 50–86 KB, and the model drops tags, cells or H2 levels across attempts.
+   - **Change:** one tagged T4.x table serves as both the register and the interface table. That is, the table-id tag sits directly above the T4.x register table (within the binding window) and no second copy is emitted.
+   - **Update every reader:**
+     - the vendor completeness checker and validator (`find_registers`, the 4-line window);
+     - the interface-table parser (`cp_tables.py`, wherever it lives);
+     - the CP-1 SKILL and REF text;
+     - the host's CP-1 handling, if any;
+     - every downstream consumer of the cp1.* interface tables (CP-MODEL and the nodes that read CP-1 upstream).
+   - **Required:** the tests and fixtures still pass, a single-table CP-1 answer validates, and the old two-copy form keeps working so stored answers still replay. If the old form cannot stay valid, record that in the Dn.
+   - **Report:** measure the size reduction on N2's stored accepted CP-1 artifact, re-rendered in the single-table form.
+5. Record D84 (the clarity fixes) and D85 (the single-table CP-1).
+
+### Task 5b: Review the vendor bundle for performance and reliability (review only)
+
+Owner request of 3 October 2026: review the vendor files for more performance and reliability improvements before testing resumes.
+
+This is a read-only review of `vendor/deploy-v` as forked after Task 5, by a reviewer agent; it makes no edits.
+
+**Inputs**
+- The 2 October root-cause evidence: the scratchpad `rca/` outputs, the failure inventory and the replay results.
+- The bundle's module contracts: SKILL.md, references, schemas, validators and completeness checks.
+- The host prompt blocks.
+
+**What to hunt**
+- **Contract rules a model cannot see.** Rules the validator or completeness checker enforces that the SKILL and REF text never states, like the 4-line binding window.
+- **Instructions that contradict a check.** Like the CP-1 "sub-sections" line.
+- **Contract features that inflate the handoff with little value.** Duplicated tables, redundant registers, verbose required prose. This covers both size (performance) and the chance a model drops a part (reliability).
+- **Brittle validator rules** that refuse well-meaning answers: exact literal headers, ordering that is not needed, whitespace or case sensitivity.
+- **Missing worked examples** where models repeatedly failed.
+- **Anything that drives timeouts or token cost:** required output volume, per-period repetition.
+
+**Rank each finding by:**
+- expected reliability gain (cite which observed failures it would have prevented);
+- size or latency gain;
+- methodology risk, i.e. whether it changes what the module concludes or only how it is written.
+
+**Output:** a findings list.
+
+**Then the controller rules on each finding:**
+- **Implement now:** clear gain, presentation-only, no change to methodology substance.
+- **Owner:** anything that changes what a module concludes or measures.
+- **Skip.**
+
+### Task 5c: Implement the accepted vendor improvements (D86 …)
+
+- Implement the findings the controller accepted, as SDD tasks with review. Batch the small same-shape edits.
+- Re-pin once at the end by D31's procedure.
+- Record one D per substantive change.
+- Stored answers must still replay. Where a change makes an old answer invalid, record it.
 
 ### Task 6: Converter cleanup and re-admission of the 11 CZR sets (F478)
 

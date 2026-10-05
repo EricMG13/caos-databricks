@@ -63,7 +63,7 @@ variables:
       must cover at least one worst-case call (scripts/preflight.py checks).
       The default is the widest profile at its section bounds plus one
       worst-case call at the default price (D29); evidence is on top of it.
-    default: "100.00"
+    default: "120.00"
   group_admin:
     description: The workspace group whose members are ADMIN.
     default: caos-admins

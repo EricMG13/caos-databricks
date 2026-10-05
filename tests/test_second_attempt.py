@@ -22,7 +22,7 @@ from uuid import UUID
 
 import pytest
 from canonical_fixtures import QUOTE, CanonicalCompletions
-from conftest import priced
+from conftest import approve_run, priced
 from test_canonical_execution import _node, harness, route
 from test_execution_freshness import _Harness
 from test_loop_charges import ESTIMATE
@@ -33,6 +33,7 @@ from caos.methodology import canonical, invocation
 from caos.methodology.canonical import second_attempt_due
 from caos.methodology.handoff import (
     HINT_WORDS,
+    MAX_ANCHORING_CHARS,
     MAX_FEEDBACK_CHARS,
     MAX_FEEDBACK_CITATIONS,
     MAX_FEEDBACK_MESSAGES,
@@ -52,6 +53,7 @@ from caos.provider import Completion, CompletionProvider
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection, connect
 from caos.store.outcomes import NodeAttempt, node_attempts
+from caos.store.runs import start_run
 
 __all__ = ["harness", "route"]
 
@@ -257,12 +259,47 @@ def _retry_section(prompt: str) -> str:
     return re.sub(r"[0-9a-f]{16}", "TAG", prompt[prompt.index(SECOND) :])
 
 
+def _sibling(harness: _Harness) -> _Harness:
+    """A second approved run of the harness's case, over the same evidence."""
+    run_id = start_run(harness.conn, harness.case_id)
+    harness.conn.commit()
+    approver = approve_run(
+        harness.conn,
+        case_id=harness.case_id,
+        run_id=run_id,
+        route=harness.route,
+        bundle=harness.bundle,
+    )
+    return replace(harness, run_id=run_id, approver=approver)
+
+
+def _own(prompt: str) -> str:
+    """`prompt` less what names its own run and attempt: the host run id, the
+    attempt id, the invocation digest over them, and the section tag folded
+    from the prompt that carries them."""
+    found = re.search(r"--- HOST-OWNED FRONT MATTER ([0-9a-f]{16}) ", prompt)
+    assert found is not None
+    prompt = prompt.replace(found.group(1), "TAG")
+    prompt = re.sub(r"COS-\d{8}T\d{6}Z-[0-9a-f]{32}", "COS-RUN", prompt)
+    prompt = re.sub(r"ATT-CP-0-[0-9a-f]{16}", "ATT-CP-0", prompt)
+    return re.sub(
+        r'(credit_os_invocation_sha256: )"[0-9a-f]{64}"', r'\1"DIGEST"', prompt
+    )
+
+
 def test_the_third_attempt_survives_a_crash_after_the_second_refusal(
     harness: _Harness, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """D82: a crash between the 2nd refusal and the 3rd attempt changes
-    nothing -- the resumed 3rd attempt carries the same lines, told of the
-    2nd attempt, as one that never crashed (the test above this one)."""
+    nothing -- the resumed 3rd attempt's prompt is byte for byte the one a
+    sibling run of the same case, refused the same two ways and never
+    crashed, sent, once each run's own identity is set aside."""
+    sibling = _sibling(harness)
+    unbroken = CanonicalCompletions(harness.source_id)
+    twice = iter((_with_material, _with_fixture_marker))
+    assert (
+        _run(sibling, _Flawed(unbroken, bad=2, flaw=lambda b: next(twice)(b))) is None
+    )
     answers = CanonicalCompletions(harness.source_id)
     flaws = iter((_with_material, _with_fixture_marker))
     flawed = _Flawed(answers, bad=2, flaw=lambda body: next(flaws)(body))
@@ -299,6 +336,8 @@ def test_the_third_attempt_survives_a_crash_after_the_second_refusal(
     assert _run(harness, flawed) is None
     third = _retry_section(answers.prompts[2])
     assert "fixture marker" in third and VENDOR_LINE not in third
+    assert _own(answers.prompts[2]) == _own(unbroken.prompts[2])
+    assert answers.prompts[2] != unbroken.prompts[2]  # two runs, two identities
     # The prompt priced before the reservation and the one rebuilt for the
     # call carry the same lines: the same request size, measured twice.
     assert len(sizes) == 2 and sizes[0] == sizes[1]
@@ -432,6 +471,16 @@ def test_the_anchoring_line_places_each_unlocated_citation_it_can() -> None:
     assert f"citations {MAX_FEEDBACK_CITATIONS + 1} and {many} of {many} are not" in (
         counted
     )
+    # However many and long the placed lines, the line stays within
+    # `MAX_ANCHORING_CHARS`, dropping placements from the last back, and every
+    # citation keeps its number (M4).
+    long = LineHint(begins=" ".join(["w" * 40] * HINT_WORDS))
+    capped_line = anchoring_line([lost] * many, [long] * many)
+    assert capped_line is not None and len(capped_line) <= MAX_ANCHORING_CHARS
+    assert 0 < capped_line.count("quote the whole line") < MAX_FEEDBACK_CITATIONS
+    shown = capped_line.count("is part of a longer evidence line")
+    assert f"citations {shown + 1}, {shown + 2}" in capped_line
+    assert f"and {many} of {many} are not each one evidence line" in capped_line
     pages = anchoring_line([lost], [LineHint(pages=tuple(range(1, 25)))])
     assert pages is not None and "pages 1, 2, 3" in pages and "and 4 more" in pages
     assert HINT_WORDS == 12
