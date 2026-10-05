@@ -55,6 +55,7 @@ from conftest import _url_for, priced
 from test_canonical_execution import _node
 from test_canonical_runtime import (
     _blocking_verdict,
+    _kept_unverified,
     _module_provider,
     _run_route,
     _status,
@@ -441,24 +442,20 @@ def test_a_blocked_cp0_verdict_holds_cp_dr_and_calls_nothing_after(
     assert _blocking_verdict(harness) is None
 
 
-def test_cp_dr_refuses_an_unanchored_quote(harness: _Harness) -> None:
-    """A research answer the pack does not carry is refused before an artifact
-    exists: CP-DR answers from supplied evidence alone (invariant 1)."""
+def test_cp_dr_keeps_an_unanchored_quote_unverified(harness: _Harness) -> None:
+    """A research answer the pack does not carry is never anchored: CP-DR
+    answers from supplied evidence alone (invariant 1). Since D106 the
+    answer is accepted and that citation kept unverified."""
     _document, quote = RESEARCH_QUOTES["CP-DR"][-1]
     answers = ResearchCompletions(
         harness.source_id,
         harness.witness_id,
         quotes_by_module={"CP-DR": quote + " fabricated"},
     )
-    assert (
-        _run_route(harness, _module_provider(harness, answers))
-        is RefusalCode.CITATION_NOT_LOCATED
+    _run_route(harness, _module_provider(harness, answers))
+    _kept_unverified(
+        harness, _node(harness, "CP-DR").route_node_id, quote + " fabricated"
     )
-    assert harness.conn.execute(
-        "SELECT count(*) FROM artifacts WHERE route_node_id=%s",
-        (_node(harness, "CP-DR").route_node_id,),
-    ).fetchone() == (0,)
-    harness.conn.rollback()
 
 
 def test_lite_deep_research_is_the_only_newly_enabled_route() -> None:

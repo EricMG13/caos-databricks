@@ -18,7 +18,7 @@ from uuid import UUID
 import pytest
 from canonical_fixtures import QUOTE, CanonicalCompletions
 from conftest import _url_for, approve_run
-from test_canonical_execution import _accept, _node, _refused, _run, route
+from test_canonical_execution import _accept, _node, _record, _refused, _run, route
 from test_execution_freshness import _Harness
 from test_loop_charges import VENDORED
 
@@ -113,14 +113,20 @@ def test_a_quote_of_an_unnamed_page_of_a_named_source_is_not_delivered(
     paged: _Harness,
 ) -> None:
     """The source is delivered; the page is not. Before §98 only a test that
-    deleted a block with the seal disabled could reach this refusal."""
+    deleted a block with the seal disabled could reach this verdict; since
+    D106 it leaves the citation unverified, never anchored."""
     _gate(paged, source_files={"CP-L10": f"{PAGED} page 2"})
     screen = CanonicalCompletions(
         paged.source_id, quotes=(), cited=((paged.source_id, _line(10), 1),)
     )
-    assert _refused(paged, "CP-L10", screen) is RefusalCode.CITATION_NOT_DELIVERED
+    _attempt, result = _run(paged, "CP-L10", screen)
     [prompt] = screen.prompts
     assert _evidence_pages(prompt) == {2}
+    record = _record(paged, result)
+    assert record.citations == ()
+    assert [(u.page, u.code) for u in record.unverified] == [
+        (1, RefusalCode.CITATION_NOT_DELIVERED)
+    ]
 
 
 def test_a_page_range_past_the_source_refuses_the_gate_as_a_retry(
@@ -180,7 +186,12 @@ def test_the_gate_cannot_cite_a_line_its_page_map_withheld(
     withheld = CanonicalCompletions(
         paged.source_id, cited=((paged.source_id, _line(59), 1),)
     )
-    assert _refused(paged, "CP-0", withheld) is RefusalCode.CITATION_NOT_DELIVERED
+    _attempt, result = _run(paged, "CP-0", withheld)
+    record = _record(paged, result)
+    assert _line(59) not in {c.matched_text for c in record.citations}
+    assert [(u.matched_text, u.code) for u in record.unverified] == [
+        (_line(59), RefusalCode.CITATION_NOT_DELIVERED)
+    ]
 
 
 def test_a_source_within_the_gate_bound_reaches_cp0_whole_and_says_so(

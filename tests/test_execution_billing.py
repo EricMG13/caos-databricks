@@ -167,7 +167,9 @@ def test_analysis_failure_preserves_bill_and_exact_replay(
     elif failure == "readiness":
         completions.readiness = {"CP-5": "NOT-A-STATUS"}
     elif failure == "citation":
+        # D106: an unanchored quote refuses only a Blocked answer now.
         completions.source_id = uuid4()
+        completions.qa_status = "Blocked"
 
     def broken_blob(self: BlobStore, data: bytes) -> str:
         raise OSError("synthetic")
@@ -246,8 +248,10 @@ def test_a_blob_write_failing_after_analysis_keeps_the_bill_and_accepts_nothing(
     [
         ("sql", False, "STORE_UNAVAILABLE"),
         ("sql", True, "STORE_UNAVAILABLE"),
-        ("refusal", False, "CITATION_NOT_DELIVERED"),
-        ("refusal", True, "CITATION_NOT_DELIVERED"),
+        # Evidence that will not read, not a citation fault, which since
+        # D106 leaves a citation unverified rather than refusing.
+        ("refusal", False, "EVIDENCE_NOT_AVAILABLE"),
+        ("refusal", True, "EVIDENCE_NOT_AVAILABLE"),
         ("success", True, "STORE_UNAVAILABLE"),
     ],
 )
@@ -279,7 +283,7 @@ def test_postbilling_citation_cleanup_preserves_money_and_original_refusal(
         if failure == "sql":
             conn.execute("SELECT missing_private_column")
         elif failure == "refusal":
-            raise Refusal(RefusalCode.CITATION_NOT_DELIVERED)
+            raise Refusal(RefusalCode.EVIDENCE_NOT_AVAILABLE)
         return anchored
 
     monkeypatch.setattr(canonical, "verify_citations", fault)
@@ -291,9 +295,8 @@ def test_postbilling_citation_cleanup_preserves_money_and_original_refusal(
         or provider.conn.info.transaction_status is TransactionStatus.IDLE
     )
     assert isinstance(provider.completions, _Completions)
-    # N52, D82: anchoring's refusal earns guided retries when the store is sound.
-    sound = failure == "refusal" and not broken_cleanup
-    calls = 1 + canonical.GUIDED_RETRIES if sound else 1
+    # No refusal here earns a guided retry (D106 took anchoring's out).
+    calls = 1
     assert len(provider.completions.prompts) == calls
     monkeypatch.undo()
     _bills(dsn, provider.run_id, REPORTED, calls)

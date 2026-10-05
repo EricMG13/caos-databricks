@@ -15,10 +15,12 @@ import unicodedata
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, cast
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
-from canonical_fixtures import QUOTE
+from canonical_fixtures import QUOTE, UNANCHORED, CanonicalCompletions
+from test_canonical_execution import _record, _run, harness, route
+from test_execution_freshness import _Harness
 from test_handoff_record import CP0, _stored
 from test_handoff_record import _record as _built
 
@@ -31,7 +33,8 @@ from caos.evidence.citations import (
     TokenIndex,
     within_line,
 )
-from caos.methodology import verification
+from caos.methodology import canonical, handoff, verification
+from caos.methodology.canonical import SECOND_ATTEMPT_CODES, _partitioned
 from caos.methodology.handoff import (
     MAX_CITATIONS,
     UNVERIFIED_CODES,
@@ -43,8 +46,11 @@ from caos.methodology.handoff import (
     record_bytes,
     unverified_citation,
 )
+from caos.provider import Completion
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection
+
+__all__ = ["harness", "route"]
 
 SOURCE = UUID("6da212c6-65a1-46b3-9e5c-7ed56acccd18")
 LINE = f"{QUOTE} and the rest of its line"
@@ -241,3 +247,133 @@ def test_a_re_anchoring_reader_carries_linked_and_never_locates_unverified(
     kept = verification._reanchored(_NO_STORE, record, evidence, lambda _step: None)
     assert kept == record.citations and not kept[0].linked
     assert [c.matched_text for c in asked] == [EXCERPTED]
+
+
+def test_a_quote_the_host_cannot_keep_is_told_by_number() -> None:
+    """The structural refusal's retry line names the citation, never quotes
+    it."""
+    citations = [
+        Citation(SOURCE, 1, "a fine quote"),
+        Citation(SOURCE, 1, "bell \u0007 here"),
+    ]
+    line = handoff._uncrossed_line(citations)
+    assert line is not None and "citation 2 of 2" in line and "bell" not in line
+    assert handoff._uncrossed_line(citations[:1]) is None
+
+
+def test_no_citation_fault_earns_a_guided_retry() -> None:
+    """D106 amends D82/D30: anchoring's codes left `SECOND_ATTEMPT_CODES`,
+    and the structural ones keep their retries."""
+    assert UNVERIFIED_CODES == {
+        RefusalCode.CITATION_NOT_LOCATED,
+        RefusalCode.CITATION_AMBIGUOUS,
+        RefusalCode.CITATION_NOT_DELIVERED,
+    }
+    assert SECOND_ATTEMPT_CODES == {
+        RefusalCode.HANDOFF_MALFORMED,
+        RefusalCode.HANDOFF_INCOMPLETE,
+        RefusalCode.HANDOFF_IDENTITY_MISMATCH,
+        RefusalCode.HANDOFF_UNDECLARED_FIELD,
+    }
+    assert UNVERIFIED_CODES.isdisjoint(SECOND_ATTEMPT_CODES)
+
+
+def _scripted(
+    outcomes: Mapping[str, RefusalCode | None],
+) -> Callable[..., list[AnchoredCitation]]:
+    """`verify_citations` that anchors or refuses each quote as scripted."""
+
+    def verify(
+        _conn: StoreConnection,
+        *,
+        delivered: Mapping[UUID, frozenset[str]],
+        citations: Sequence[Citation],
+        index: TokenIndex | None = None,
+        rule: CitationRule = EXCERPT,
+    ) -> list[AnchoredCitation]:
+        assert rule == EXCERPT and delivered is not None and index is not None
+        [citation] = citations
+        code = outcomes[citation.matched_text]
+        if code is not None:
+            raise Refusal(code)
+        return [AnchoredCitation("d" * 64, citation.page, citation.matched_text, ())]
+
+    return verify
+
+
+def test_the_partition_keeps_order_codes_and_links(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Each citation is judged alone: the anchored ones in order, each
+    flagged `linked` as the body carries it; the rest unverified in order,
+    each with its own code -- all three of anchoring's. Any other refusal is
+    not a citation fault and is raised."""
+    outcomes = {
+        "first": None,
+        "second": RefusalCode.CITATION_AMBIGUOUS,
+        "third": None,
+        "fourth": RefusalCode.CITATION_NOT_LOCATED,
+        "fifth": RefusalCode.CITATION_NOT_DELIVERED,
+    }
+    monkeypatch.setattr(canonical, "verify_citations", _scripted(outcomes))
+    citations = [Citation(SOURCE, n, text) for n, text in enumerate(outcomes, 1)]
+    linked = [True, True, False, False, True]
+    anchored, unverified = _partitioned(_NO_STORE, {}, citations, linked)
+    assert [(c.matched_text, c.linked) for c in anchored] == [
+        ("first", True),
+        ("third", False),
+    ]
+    assert unverified == (
+        UnverifiedCitation(SOURCE, 2, "second", RefusalCode.CITATION_AMBIGUOUS),
+        UnverifiedCitation(SOURCE, 4, "fourth", RefusalCode.CITATION_NOT_LOCATED),
+        UnverifiedCitation(SOURCE, 5, "fifth", RefusalCode.CITATION_NOT_DELIVERED),
+    )
+    monkeypatch.setattr(
+        canonical,
+        "verify_citations",
+        _scripted({"first": RefusalCode.EVIDENCE_NOT_AVAILABLE}),
+    )
+    with pytest.raises(Refusal, match=r"^EVIDENCE_NOT_AVAILABLE$"):
+        _partitioned(_NO_STORE, {}, citations[:1], [True])
+
+
+@dataclasses.dataclass
+class _Unquoted(CanonicalCompletions):
+    """Cites the report's line, and an undelivered source, without writing
+    the line into the body: one anchored citation not linked to a statement
+    and one unverified, in an answer every structural check passes."""
+
+    stranger: UUID = dataclasses.field(default_factory=uuid4)
+
+    def complete(self, prompt: str, *, json_object: bool = False) -> Completion:
+        done = super().complete(prompt, json_object=json_object)
+        assert done.content is not None
+        wire = json.loads(done.content)
+        wire["canonical_markdown"] = wire["canonical_markdown"].replace(
+            QUOTE, "the debt line of the report"
+        )
+        wire["citations"].append(
+            {"source_id": str(self.stranger), "page": 1, "matched_text": UNANCHORED}
+        )
+        self.bodies[-1] = json.dumps(wire)
+        return dataclasses.replace(done, content=self.bodies[-1])
+
+
+def test_each_citation_fault_keeps_the_answer(harness: _Harness) -> None:
+    """End to end: the verbatim-in-body check and `CITATION_NOT_DELIVERED`
+    (an unknown source) no longer refuse; the answer is accepted on its first
+    attempt with the line anchored, not linked, and the stranger unverified.
+    `CITATION_NOT_LOCATED` end to end is
+    `test_canonical_execution.py::test_one_unanchorable_quote_is_kept_unverified_beside_the_anchored_one`,
+    and `CITATION_AMBIGUOUS` is the partition's own test above."""
+    answers = _Unquoted(harness.source_id)
+    _attempt, result = _run(harness, "CP-0", answers)
+    record = _record(harness, result)
+    [anchored] = record.citations
+    assert (anchored.matched_text, anchored.linked) == (QUOTE, False)
+    assert record.unverified == (
+        UnverifiedCitation(
+            answers.stranger, 1, UNANCHORED, RefusalCode.CITATION_NOT_DELIVERED
+        ),
+    )
+    assert json.loads(record_bytes(record))["citations"][0]["linked"] is False
