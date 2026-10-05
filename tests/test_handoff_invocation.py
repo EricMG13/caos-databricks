@@ -678,8 +678,24 @@ def test_the_prompt_repeats_the_closed_contract_after_evidence(
     assert "that line must appear exactly once on its cited page" in compact
     assert (
         "An evidence line is all the text between two blank lines in the EVIDENCE"
-        " section; it may be a whole paragraph or a whole table row." in compact
+        " section, other than an evidence header (its `source_id:` and `page:`"
+        " lines); it may be a whole paragraph or a whole table row." in compact
     )
+    assert (
+        "The section's last line, directly above its END EVIDENCE marker with no"
+        " blank line between, is an evidence line too." in compact
+    )
+    # V1: a 30-60 KB `canonical_markdown` first left `citations` out three
+    # times in 36; the key order is presentation, `strict_json` is order-blind.
+    assert (
+        "only `citations` and `canonical_markdown`, `citations` first, then"
+        " `canonical_markdown`." in compact
+    )
+    assert (
+        "with exactly this shape, `citations` first, then `canonical_markdown`:"
+        in " ".join(prompt.split())
+    )
+    assert prompt.index('{"citations": [') < prompt.index('"canonical_markdown": "..."')
     assert "`matched_text` copies one entire evidence line character for" in compact
     assert "never only a sentence of it" in compact
     assert 'own wording ("we", "our", "us"), never rephrased' in compact
@@ -695,6 +711,9 @@ def test_the_prompt_repeats_the_closed_contract_after_evidence(
     assert ("P1-P8 and T1-T8" in reminder) is (module_id == "CP-0")
     t8_header = "| " + " | ".join(CONTRACT.navigation.NEW_HEADERS) + " |"
     assert (t8_header in reminder) is (module_id == "CP-0")
+    assert ("not inside a code fence (a fenced table is not read)" in compact) is (
+        module_id == "CP-0"
+    )
     assert "matched_text" in reminder and "Markdown body" in reminder
 
 

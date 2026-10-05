@@ -1,12 +1,12 @@
 {
   "host_prompt_hashes": {
     "cp0_final_check.md": {
-      "bytes": 983,
-      "sha256": "825c576bdaae19f2558111699da0a143092fb156f1b282d993dd6838eccbe88e"
+      "bytes": 1040,
+      "sha256": "384772dd247f5355463b5a1e80dc4d9506f758528a20cf763cddd51b5c0fc8b9"
     },
     "final_check.md": {
-      "bytes": 1455,
-      "sha256": "b26ac91eee16ac23a095a4caea945b223136697c8c8efd056755dcd5229db88a"
+      "bytes": 1686,
+      "sha256": "bfc25cd71e0c09b812e2876f64a4ccfcd1a22e87ffb4dbb978b2e797f8a60c14"
     },
     "forecast_extension.md": {
       "bytes": 1029,
@@ -21,8 +21,8 @@
       "sha256": "bccd22678bc3dba3122637926a3a89c5435e7bb729102e111a6b664cce92729f"
     },
     "instruction.md": {
-      "bytes": 1375,
-      "sha256": "b15755aab983ec2b03feb32fcf5ba819e271033d736f11086b14c545d08b1913"
+      "bytes": 1422,
+      "sha256": "3cb700fb9a3f242bd8e103b524217a2abced6882487cefd49e5030f8a5ef09f0"
     },
     "tagged.md": {
       "bytes": 554,
