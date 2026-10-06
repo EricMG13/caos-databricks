@@ -1,7 +1,7 @@
 ---
 module: CP-0
 blocks: [instruction, gate_instruction, tagged, host_steps, final_check, cp0_final_check]
-conditional: [validator_feedback, validator_repair]
+conditional: [current_command, validator_feedback, validator_repair]
 ---
 
 # Prompt for CP-0

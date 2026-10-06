@@ -597,10 +597,10 @@ def test_a_canonical_case_pins_its_declared_subject(ready: Fixture) -> None:
 
     disabled, canonical = subject.prepare(conn, blobs, harness, qualification=mixed)
 
-    assert disabled.input.format_version == 2
+    assert disabled.input.format_version == 3
     assert disabled.input.subject == first.subject
     assert disabled.input.adapter_version == methodology.CANONICAL_ADAPTER_VERSION
-    assert canonical.input.format_version == 2
+    assert canonical.input.format_version == 3
     assert canonical.input.subject == LITE_SUBJECT
     assert canonical.input.adapter_version == methodology.CANONICAL_ADAPTER_VERSION
     assert canonical.input == load_run_input(conn, canonical.input.run_id)
@@ -608,7 +608,7 @@ def test_a_canonical_case_pins_its_declared_subject(ready: Fixture) -> None:
         "SELECT issuer_id, issuer_name, reporting_period, analysis_date,"
         " format_version FROM run_inputs WHERE run_id=%s",
         (canonical.input.run_id,),
-    ).fetchone() == (*asdict(LITE_SUBJECT).values(), 2)
+    ).fetchone() == (*asdict(LITE_SUBJECT).values(), 3)
     _unapproved_and_unspent(conn, harness)
 
 
