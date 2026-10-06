@@ -104,6 +104,10 @@ BRIEF_QUESTIONS_MAX = 32  # `CP_DR_RESEARCH_BRIEF_V1.md`'s bounded batch
 # the brief (`RESEARCH_BRIEF_INVALID`), and the pin's body is sized to carry
 # any brief under it (`caos.api.commands.runs.PIN_INPUT_BODY_BYTES`, N1).
 BRIEF_BYTES = 65_536
+# D109: a pin's command. CP-2G takes three qualifiers and CP-0 one objective,
+# each one line the store bounds at 1 KiB (`caos.methodology.qualifiers`).
+QUALIFIERS_MAX = 4
+QUALIFIER_CHARS = 1024
 
 Id = Annotated[str, Field(max_length=ID_CHARS)]
 Text = Annotated[str, Field(max_length=TEXT_CHARS)]
@@ -1569,6 +1573,18 @@ class ResearchBrief(BaseModel):
     ]
 
 
+class RunQualifier(BaseModel):
+    """One command qualifier a pin states for one module (D109): CP-2G's
+    `forecast_horizon`, `base_period` or `cases`, as its `SKILL.md` card
+    spells them. Any other module or name refuses `RUN_QUALIFIER_INVALID`."""
+
+    model_config = _CLOSED
+
+    module_id: Id
+    name: Id
+    value: Annotated[str, Field(max_length=QUALIFIER_CHARS)]
+
+
 class PinRunInput(BaseModel):
     model_config = _CLOSED
 
@@ -1577,6 +1593,13 @@ class PinRunInput(BaseModel):
     # `LITE_DEEP_RESEARCH`); null elsewhere. Stated on every request, as every
     # request field is: an absent key is a malformed body, not a default.
     research: ResearchBrief | None
+    # D109: the run's command qualifiers, each module's names once; empty for
+    # none. CP-2G's forecast horizon and base period the pin does not state
+    # are derived from the subject's reporting period by the owner's rule.
+    qualifiers: Annotated[list[RunQualifier], Field(max_length=QUALIFIERS_MAX)]
+    # D109: the objective CP-0 assesses readiness against (its hard rule 6),
+    # or null for the pathway's own use case.
+    objective: Annotated[str, Field(max_length=QUALIFIER_CHARS)] | None
 
 
 class RunInputPinned(BaseModel):

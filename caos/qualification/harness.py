@@ -85,6 +85,7 @@ from caos.graph.route import (
 from caos.graph.runtime import Execution, accepted_artifacts, run_route
 from caos.methodology.bundle import Bundle
 from caos.methodology.invocation import named_objects
+from caos.methodology.qualifiers import PINNED, stated_command
 from caos.methodology.runner import ModuleProvider
 from caos.pricing import ModelPrice, worst_case
 from caos.provider import CompletionProvider
@@ -278,6 +279,8 @@ def prepare(
                             else json.loads(case.research_brief)
                         ),
                         subject=case.subject,
+                        qualifiers=case_command(case),
+                        objective=case.objective,
                     ),
                     set_digest,
                     provider,
@@ -472,6 +475,26 @@ def _model_identity(provider: CompletionProvider) -> str:
     return model
 
 
+def case_command(case: QualificationCase) -> dict[str, dict[str, str]]:
+    """A case's qualifiers as the pin takes them: module id to name to value."""
+    stated: dict[str, dict[str, str]] = {}
+    for module_id, name, value in case.qualifiers:
+        stated.setdefault(module_id, {})[name] = value
+    return stated
+
+
+def stated_in(pin: RunInput) -> dict[str, dict[str, str]]:
+    """The values a pin's command marks `pinned` -- what its caller stated,
+    without what the host derived (D109)."""
+    text = None if pin.command is None else pin.command.text
+    stated: dict[str, dict[str, str]] = {}
+    for module_id, names in (json.loads(text) if text else {}).items():
+        for name, entry in names.items():
+            if entry["basis"] == PINNED:
+                stated.setdefault(module_id, {})[name] = entry["value"]
+    return stated
+
+
 def _eligible(
     conn: StoreConnection,
     harness: Harness,
@@ -514,6 +537,8 @@ def _eligible(
             != case.model_extension
         )
         or pin.research_json != case.research_brief
+        # D109: what the case stated, and nothing the pin did not derive.
+        or stated_in(pin) != stated_command(case_command(case), case.objective)
         # Who and when the run is about. Every other input was compared and this
         # one was not, so a real approved input pinned for another issuer and
         # another reporting period executed under this case and bound this set's

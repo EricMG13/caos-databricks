@@ -36,6 +36,8 @@ from caos.api.deps import (
 )
 from caos.api.wire import (
     BRIEF_BYTES,
+    QUALIFIER_CHARS,
+    QUALIFIERS_MAX,
     ApproveGate,
     CreateRun,
     GateApproved,
@@ -43,6 +45,7 @@ from caos.api.wire import (
     PinRunInput,
     RunCreated,
     RunInputPinned,
+    RunQualifier,
 )
 from caos.boundary_text import BoundaryText
 from caos.graph.route import RouteExtensions, resolve_route, route_digest
@@ -111,7 +114,11 @@ IO_BUDGET = max(SUCCESSOR_RUN_IO, PIN_INPUT_IO, PREVIEW_IO, APPROVE_IO)
 # escapes its non-ASCII text as `\uXXXX` doubles the three-byte characters
 # most scripts need -- and the usual bound besides for the subject and the
 # rest. Past the store's own bound the brief is `RESEARCH_BRIEF_INVALID`.
-PIN_INPUT_BODY_BYTES = 2 * BRIEF_BYTES + MAX_BODY_BYTES
+# D109 adds the command: each qualifier and the objective at its wire bound,
+# every character escaped as `\uXXXX` (six bytes).
+PIN_INPUT_BODY_BYTES = (
+    2 * BRIEF_BYTES + MAX_BODY_BYTES + 6 * (QUALIFIERS_MAX + 1) * QUALIFIER_CHARS
+)
 
 _GATES = {"source-set": Gate.SOURCE_SET, "research-plan": Gate.RESEARCH_PLAN}
 
@@ -134,6 +141,19 @@ PathGate = Annotated[Gate, Depends(path_gate)]
 
 # `run_id: RunPath` is declared after `_standing` on every route that takes
 # one: the run id is read after visibility, so a stranger learns nothing.
+
+
+def qualifier_map(qualifiers: list[RunQualifier]) -> dict[str, dict[str, str]]:
+    """The wire's qualifier list as the pin's map, module id to name to value;
+    one name stated twice for one module refuses `RUN_QUALIFIER_INVALID`
+    rather than keep either."""
+    stated: dict[str, dict[str, str]] = {}
+    for item in qualifiers:
+        names = stated.setdefault(item.module_id, {})
+        if item.name in names:
+            raise Refusal(RefusalCode.RUN_QUALIFIER_INVALID)
+        names[item.name] = item.value
+    return stated
 
 
 def _owned_run(conn: StoreConnection, case_id: UUID, run_id: UUID) -> tuple[bool, Any]:
@@ -270,13 +290,22 @@ def pin_input(  # noqa: PLR0913 -- identity, key, floor, body, path, store, bund
         )
     )
 
+    stated = qualifier_map(body.qualifiers)
+
     def write(unit: StoreConnection) -> tuple[int, RunInputPinned]:
         if _owned_run(unit, case_id, run)[0]:
             raise Refusal(RefusalCode.RUN_INPUT_ALREADY_PINNED)
         source = snapshot_in(unit, case_id)
         try:
             pin = pin_run_input_in(
-                unit, run, source.version, bundle, research, subject=subject
+                unit,
+                run,
+                source.version,
+                bundle,
+                research,
+                subject=subject,
+                qualifiers=stated,
+                objective=body.objective,
             )
         except Refusal as refused:
             brief = Brief(bundle, run, research, subject)

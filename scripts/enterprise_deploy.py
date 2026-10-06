@@ -891,7 +891,13 @@ def _prepared_run(url: str, case_id: str, headers: dict[str, str]) -> _Prepared:
         "POST",
         f"{base}/input",
         headers,
-        {"subject": MODEL_CALL_SUBJECT, "research": None},
+        # D109: every request field is stated; E10 states no command.
+        {
+            "subject": MODEL_CALL_SUBJECT,
+            "research": None,
+            "qualifiers": [],
+            "objective": None,
+        },
     )
     if status not in (200, 201):
         return _Prepared(False, "POST .../input", status, run_id)
