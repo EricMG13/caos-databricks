@@ -584,14 +584,18 @@ def test_the_pin_takes_a_command_and_answers_its_mistakes_as_the_callers(
         "period": pin(
             full, {**PIN, "subject": {**SUBJECT, "reporting_period": "H1 2026"}}
         ),
+        "hidden": pin(full, {**PIN, "objective": "Relative value\u200b decision"}),
     }
     assert {name: _outcome(answer) for name, answer in refused.items()} == {
         "unknown": "400 RUN_QUALIFIER_INVALID",
         "repeated": "400 RUN_QUALIFIER_INVALID",
         "off_route": "400 RUN_QUALIFIER_INVALID",
         "period": "400 REPORTING_PERIOD_UNREADABLE",
+        "hidden": "400 RUN_QUALIFIER_INVALID",
     }
-    body = {**PIN, "qualifiers": [cases], "objective": "Relative value decision"}
+    # F524: decomposed text is composed at the edge, as a brief is (W4).
+    decomposed = unicodedata.normalize("NFD", "Relative value décision")
+    body = {**PIN, "qualifiers": [cases], "objective": decomposed}
     created = _send(client, _path(case_id), writer, full)
     run_id = UUID(created.json()["run_id"])
     pinned = _send(client, _path(case_id, run_id, "input"), writer, body)
@@ -600,7 +604,7 @@ def test_the_pin_takes_a_command_and_answers_its_mistakes_as_the_callers(
     content = json.loads(preview.json()["content"])
     assert content["format_version"] == 3
     assert json.loads(content["input"]["command_json"]) == {
-        "CP-0": {"objective": {"basis": "pinned", "value": "Relative value decision"}},
+        "CP-0": {"objective": {"basis": "pinned", "value": "Relative value décision"}},
         "CP-2G": {
             "base_period": {"basis": "derived", "value": "FY2025"},
             "cases": {"basis": "pinned", "value": "base/upside/downside"},

@@ -10,6 +10,7 @@ re-derives the preview under the case and run locks (`release_gate_in`).
 from __future__ import annotations
 
 import os
+import unicodedata
 from dataclasses import dataclass
 from typing import Annotated, Any
 from uuid import UUID
@@ -146,13 +147,14 @@ PathGate = Annotated[Gate, Depends(path_gate)]
 def qualifier_map(qualifiers: list[RunQualifier]) -> dict[str, dict[str, str]]:
     """The wire's qualifier list as the pin's map, module id to name to value;
     one name stated twice for one module refuses `RUN_QUALIFIER_INVALID`
-    rather than keep either."""
+    rather than keep either. Each value is composed (NFC) here, at the edge,
+    as a brief is (W4, F524); the store judges what remains."""
     stated: dict[str, dict[str, str]] = {}
     for item in qualifiers:
         names = stated.setdefault(item.module_id, {})
         if item.name in names:
             raise Refusal(RefusalCode.RUN_QUALIFIER_INVALID)
-        names[item.name] = item.value
+        names[item.name] = unicodedata.normalize("NFC", item.value)
     return stated
 
 
@@ -291,6 +293,10 @@ def pin_input(  # noqa: PLR0913 -- identity, key, floor, body, path, store, bund
     )
 
     stated = qualifier_map(body.qualifiers)
+    # F524: composed at the edge, as a brief is (W4); the store judges the rest.
+    objective = (
+        None if body.objective is None else unicodedata.normalize("NFC", body.objective)
+    )
 
     def write(unit: StoreConnection) -> tuple[int, RunInputPinned]:
         if _owned_run(unit, case_id, run)[0]:
@@ -305,7 +311,7 @@ def pin_input(  # noqa: PLR0913 -- identity, key, floor, body, path, store, bund
                 research,
                 subject=subject,
                 qualifiers=stated,
-                objective=body.objective,
+                objective=objective,
             )
         except Refusal as refused:
             brief = Brief(bundle, run, research, subject)

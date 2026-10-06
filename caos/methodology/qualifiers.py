@@ -27,10 +27,11 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from collections.abc import Mapping
 from typing import Any
 
-from caos.boundary_text import BoundaryText
+from caos.boundary_text import BoundaryText, hides_text
 from caos.digest import canonical_json
 from caos.refusals import Refusal, RefusalCode
 
@@ -39,12 +40,13 @@ OBJECTIVE_MODULE = "CP-0"
 OBJECTIVE = "objective"
 FORECAST_HORIZON = "forecast_horizon"
 BASE_PERIOD = "base_period"
+CASES = "cases"
 # Every module this host takes a command for, and the names it takes. CP-2G's
 # are its UX contract's stage fields (`SKILL.md`: "Stages: forecast_scope
 # (forecast_horizon) -> base (base_period) -> cases (cases)").
 QUALIFIER_FIELDS: Mapping[str, tuple[str, ...]] = {
     OBJECTIVE_MODULE: (OBJECTIVE,),
-    FORECAST_MODULE: (FORECAST_HORIZON, BASE_PERIOD, "cases"),
+    FORECAST_MODULE: (FORECAST_HORIZON, BASE_PERIOD, CASES),
 }
 # The modules whose names must also be stage fields of their verified SKILL.md.
 STAGE_FIELD_MODULES = frozenset({FORECAST_MODULE})
@@ -54,6 +56,16 @@ PINNED = "pinned"
 DERIVED = "derived"
 _BASES = frozenset({PINNED, DERIVED})
 _TEXT_BYTES = 1024
+# F524: each CP-2G value's own grammar. The scope takes the forms the owner's
+# rule writes and an explicit FY range (the card's `FY26-FY28`); `cases` is a
+# short list of words. Nothing else is a value the card can carry unaltered.
+_FY_RANGE = re.compile(r"^FY(?P<start>[0-9]{4})-FY(?P<end>[0-9]{4})$")
+_FY_SHORT_RANGE = re.compile(r"^FY(?P<start>[0-9]{2})-FY(?P<end>[0-9]{2})$")
+_BASE = re.compile(r"^(?:Q[1-4] [0-9]{4} LTM|FY[0-9]{4})$")
+_CASES = re.compile(r"^[A-Za-z/ -]{1,64}$")
+# Open and close punctuation the card could read as its own `[` or `]`:
+# every one but the parentheses an objective may carry.
+_KEPT_PUNCTUATION = frozenset("()")
 _UX_BLOCK = re.compile(
     r"<!-- UX_CONTRACT:BEGIN -->(.*?)<!-- UX_CONTRACT:END -->", re.DOTALL
 )
@@ -114,8 +126,11 @@ def derived_scope(reporting_period: str) -> dict[str, str]:
 
 
 def _text(value: object) -> bool:
-    """One line of caller text the card can carry: no bracket, which would
-    end its `[name: value]` early."""
+    """One line of caller text the card can carry: NFC, nothing a reader
+    cannot see (`hides_text`, the rule evidence, handoffs and filenames are
+    held to, AI-2; the one-line rule already refuses U+2028 and U+2029, so
+    with it this is `handoff.INVISIBLE` too), and no bracket or bracket
+    lookalike, which would end or fake a `[name: value]` (F524)."""
     try:
         return (
             type(value) is str
@@ -123,12 +138,38 @@ def _text(value: object) -> bool:
             and value == value.strip()
             and "\t" not in value
             and len(value.splitlines()) == 1
-            and not {"[", "]"} & set(value)
             and len(value.encode("utf-8")) <= _TEXT_BYTES
             and BoundaryText.of(value, limit=_TEXT_BYTES).value == value
+            and not hides_text(value)
+            and not any(
+                unicodedata.category(character) in {"Ps", "Pe"}
+                and character not in _KEPT_PUNCTUATION
+                for character in value
+            )
         )
     except Refusal:
         return False
+
+
+def _horizon(value: str) -> bool:
+    """An FY range in one width whose end is not before its start."""
+    matched = _FY_RANGE.fullmatch(value) or _FY_SHORT_RANGE.fullmatch(value)
+    return matched is not None and matched["start"] <= matched["end"]
+
+
+def _value(name: str, value: object) -> bool:
+    """`value` as `name` takes it: one line of `_text`, and for CP-2G's
+    three names their own grammar (F524)."""
+    if not _text(value):
+        return False
+    text = str(value)
+    if name == FORECAST_HORIZON:
+        return _horizon(text)
+    if name == BASE_PERIOD:
+        return _BASE.fullmatch(text) is not None
+    if name == CASES:
+        return _CASES.fullmatch(text) is not None
+    return True
 
 
 def stated_command(
@@ -149,7 +190,7 @@ def stated_command(
     for module_id, names in stated.items():
         allowed = QUALIFIER_FIELDS.get(module_id, ())
         if not all(
-            type(name) is str and name in allowed and _text(value)
+            type(name) is str and name in allowed and _value(name, value)
             for name, value in names.items()
         ):
             raise Refusal(RefusalCode.RUN_QUALIFIER_INVALID)
@@ -231,7 +272,7 @@ def _stored_entry(
         or type(entry) is not dict
         or set(entry) != {"basis", "value"}
         or entry["basis"] not in _BASES
-        or not _text(entry["value"])
+        or not _value(name, entry["value"])
     ):
         return False
     return entry["basis"] != DERIVED or (

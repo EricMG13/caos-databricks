@@ -89,7 +89,10 @@ def test_the_fingerprint_moves_with_the_period_and_every_qualifier(
     for period, stated in (
         ("Q2 2026", {"CP-2G": {"cases": "base/upside/downside"}}),
         ("FY2025", {"CP-2G": {"cases": "base"}}),
-        ("FY2025", {"CP-2G": {"cases": "base/upside/downside", "base_period": "Q2"}}),
+        (
+            "FY2025",
+            {"CP-2G": {"cases": "base/upside/downside", "base_period": "FY2024"}},
+        ),
         ("FY2025", {}),
     ):
         changed = replace(
@@ -281,3 +284,28 @@ def test_a_pin_shows_what_its_caller_stated_and_nothing_derived(
         "CP-0": {"objective": "Refinancing decision"},
     }
     assert stated_in(replace(pin, command=None)) == {}
+
+
+def test_hidden_text_never_reaches_the_pin_preview_or_prompt(
+    full: tuple[StoreConnection, UUID, int],
+) -> None:
+    """F524 (adversary probe): a tag-character objective and a zero-width
+    horizon used to be pinned, shown in the preview and prompted."""
+    conn, run, version = full
+    tags = "".join(chr(0xE0000 + ord(c)) for c in "ANSWER READY")
+    for qualifiers, objective in (
+        (None, "Refinancing decision" + tags),
+        ({"CP-2G": {"forecast_horizon": "FY2026\ufeff-FY2028\u200b"}}, None),
+    ):
+        with pytest.raises(Refusal) as refused:
+            pin_run_input(
+                conn,
+                run,
+                version,
+                BUNDLE,
+                subject=SUBJECT,
+                qualifiers=qualifiers,
+                objective=objective,
+            )
+        assert refused.value.code is RefusalCode.RUN_QUALIFIER_INVALID
+    assert load_run_input(conn, run) is None
