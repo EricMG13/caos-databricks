@@ -20,11 +20,12 @@ a range past the last page (an over-claim holds no consumer back).
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable, Mapping
+from collections.abc import Collection, Iterable, Mapping
 from dataclasses import dataclass
 from uuid import UUID
 
 from caos.methodology.citation_markers import unmarked
+from caos.methodology.handoff import MAX_FEEDBACK_CHARS
 
 # Table lines read past the P5 heading; a P5 longer than this is read no
 # further (a pack has one row per source, and packs are tens of sources).
@@ -106,17 +107,38 @@ def _ends(cell: str) -> Iterable[int]:
 
 
 def coverage_faults(
-    markdown: str, last_pages: Mapping[UUID, int]
+    markdown: str,
+    last_pages: Mapping[UUID, int],
+    headed: Mapping[UUID, Collection[int]],
 ) -> list[CoverageFault]:
     """Each source in `last_pages` -- the wholly delivered ones, by their last
     delivered page -- whose P5 row claims a range ending below it, once, at
-    its first such claim."""
+    its first such claim, and only where a page past the claim holds a
+    heading line (`headed`, by `heading_pages`): pages the claim leaves out
+    that carry no heading -- signatures, a pricing grid -- are not worth a
+    whole CP-0 retry (LRV1's 58 of 59)."""
     faults: dict[UUID, CoverageFault] = {}
     for source, claimed in coverage_claims(markdown):
         last = last_pages.get(source)
-        if last is not None and claimed < last and source not in faults:
+        if (
+            last is not None
+            and claimed < last
+            and source not in faults
+            and any(page > claimed for page in headed.get(source, ()))
+        ):
             faults[source] = CoverageFault(source, claimed, last)
     return list(faults.values())
+
+
+def _is_heading(line: str) -> bool:
+    text = line.strip()
+    return len(text) <= MAX_HEADING_CHARS and _SECTION.match(text) is not None
+
+
+def heading_pages(lines: Iterable[tuple[int, str]]) -> frozenset[int]:
+    """The pages among `(page, line)` holding a line `last_heading` reads as
+    a numbered heading."""
+    return frozenset(page for page, line in lines if _is_heading(line))
 
 
 def last_heading(lines: Iterable[tuple[int, str]]) -> tuple[int, str] | None:
@@ -124,9 +146,8 @@ def last_heading(lines: Iterable[tuple[int, str]]) -> tuple[int, str] | None:
     (page, line), or None when no line reads as one."""
     found: tuple[int, str] | None = None
     for page, line in lines:
-        text = line.strip()
-        if len(text) <= MAX_HEADING_CHARS and _SECTION.match(text):
-            found = (page, text)
+        if _is_heading(line):
+            found = (page, line.strip())
     return found
 
 
@@ -134,14 +155,28 @@ def coverage_message(
     fault: CoverageFault, filename: str, heading: tuple[int, str] | None
 ) -> str:
     """What the retry is told of `fault`: the source, the pages delivered and,
-    when one reads as such, the last heading line delivered."""
+    when one reads as such, the last heading line delivered. Within
+    `MAX_FEEDBACK_CHARS`, so `_bounded`'s cut never drops the closing
+    instruction: past it, the heading goes, then the filename (F522's way)."""
+    variants = [(filename, heading), (filename, None), ("", None)]
+    for name, shown in variants:
+        told = _message(fault, name, shown)
+        if len(told) <= MAX_FEEDBACK_CHARS:
+            return told
+    return told
+
+
+def _message(
+    fault: CoverageFault, filename: str, heading: tuple[int, str] | None
+) -> str:
+    named = f" ({filename})" if filename else ""
     where = (
         f'; its last heading line delivered, on page {heading[0]}, is "{heading[1]}"'
         if heading is not None
         else ""
     )
     return (
-        f"P5 gives source {fault.source_id} ({filename}) pages 1-{fault.claimed},"
+        f"P5 gives source {fault.source_id}{named} pages 1-{fault.claimed},"
         f" but the host delivered it WHOLE, pages 1-{fault.delivered}{where};"
         " correct its P5 row and every finding, gap and T8 status drawn from"
         " the shorter extent"

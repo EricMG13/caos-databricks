@@ -11,14 +11,17 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Callable
+from pathlib import Path
 from uuid import UUID, uuid4
 
+import pytest
 from canonical_fixtures import CanonicalCompletions
 from test_canonical_execution import route
 from test_execution_freshness import _Harness
-from test_page_selection import DOCUMENT, PAGED, paged
+from test_page_selection import DOCUMENT, PAGED, _line, paged, paged_harness
 from test_second_attempt import _checks, _cp0_ledger, _Flawed, _module, _run
 
+from caos.graph.route import ResolvedRoute
 from caos.methodology.coverage import (
     MAX_CLAIM_CHARS,
     MAX_P5_LINES,
@@ -26,8 +29,11 @@ from caos.methodology.coverage import (
     coverage_claims,
     coverage_faults,
     coverage_message,
+    heading_pages,
     last_heading,
 )
+from caos.methodology.handoff import MAX_FEEDBACK_CHARS
+from caos.store import StoreConnection
 
 __all__ = ["paged", "route"]
 
@@ -237,27 +243,58 @@ LCR7_PAGES = {
 }
 
 C27 = UUID("c27bddbf-7ca1-4a83-82ec-dc47f5b2ff49")
+# The pages past 59 of `c27bddbf` holding a numbered heading in LCR7's run db
+# (`source_blocks`): SECTION 8.07 to 8.15 on page 60, ARTICLE IX and 8.16 to
+# 9.04 on 61, ... 9.23 to 9.27 on 66; page 67 is Exhibit B.
+LCR7_HEADED = {C27: frozenset(range(60, 67))}
+
+
+def _every_page(pages: dict[UUID, int]) -> dict[UUID, frozenset[int]]:
+    """Every page headed: the strictest reading of the claims alone."""
+    return {s: frozenset(range(1, n + 1)) for s, n in pages.items()}
 
 
 def test_lcr7s_stored_answer_is_held_to_the_credit_agreements_67_pages() -> None:
     """The replay: one fault, the conformed credit agreement, 59 of 67. The
     2032 indenture's "1-67" for its 60 pages is an over-claim, no fault."""
-    assert coverage_faults(LCR7_P5, LCR7_PAGES) == [CoverageFault(C27, 59, 67)]
+    assert coverage_faults(LCR7_P5, LCR7_PAGES, LCR7_HEADED) == [
+        CoverageFault(C27, 59, 67)
+    ]
+    assert coverage_faults(LCR7_P5, LCR7_PAGES, _every_page(LCR7_PAGES)) == [
+        CoverageFault(C27, 59, 67)
+    ]
     assert (UUID("da3fdc2f-605a-4948-a40a-857d06366a3e"), 67) in coverage_claims(
         LCR7_P5
     )
 
 
 def test_lcr5s_and_lcr6s_accepted_answers_raise_no_fault() -> None:
-    """Every row of both is read (8 claims each), and none falls short."""
+    """Every row of both is read (8 claims each), and none falls short, even
+    with every page headed."""
     for p5, pages in ((LCR5_P5, LCR5_PAGES), (LCR6_P5, LCR6_PAGES)):
         assert len(coverage_claims(p5)) == len(pages) == 8
-        assert coverage_faults(p5, pages) == []
+        assert coverage_faults(p5, pages, _every_page(pages)) == []
 
 
 def _p5(*cells: str, source: UUID = C27) -> str:
     row = " | ".join((str(source), *cells))
     return f"#### P5 \u2014 Parse Jobs\n\n| Source ID | Pages |\n|---|---|\n| {row} |\n"
+
+
+def test_only_unclaimed_pages_holding_a_heading_make_a_fault() -> None:
+    """Fix round 1: LRV1 claimed 1-58 of 59, and page 59 holds lender
+    signatures, no heading: not worth a whole CP-0 retry. C6 claimed 1-34 of
+    67, leaving Sections 2.04 to 9.27 out: a fault."""
+    lrv1 = _p5("Evidence pages 1\u201358")
+    assert coverage_faults(lrv1, {C27: 59}, {C27: frozenset(range(1, 59))}) == []
+    assert coverage_faults(lrv1, {C27: 59}, {C27: frozenset({59})}) == [
+        CoverageFault(C27, 58, 59)
+    ]
+    c6 = _p5("Evidence pages 1\u201334")
+    assert coverage_faults(c6, {C27: 67}, {C27: frozenset({3, 35, 66})}) == [
+        CoverageFault(C27, 34, 67)
+    ]
+    assert coverage_faults(c6, {C27: 67}, {}) == []
 
 
 def test_a_claim_the_parser_cannot_read_is_not_a_fault() -> None:
@@ -271,7 +308,7 @@ def test_a_claim_the_parser_cannot_read_is_not_a_fault() -> None:
         "1\u2013" + "9" * 6,
         "Pages " + " " * MAX_CLAIM_CHARS + "1\u201359",
     ):
-        assert coverage_faults(_p5(cell), pages) == [], cell
+        assert coverage_faults(_p5(cell), pages, _every_page(pages)) == [], cell
 
 
 def test_each_claim_form_the_live_answers_wrote_is_read() -> None:
@@ -287,23 +324,25 @@ def test_each_claim_form_the_live_answers_wrote_is_read() -> None:
 
 def test_only_a_wholly_delivered_source_short_of_its_last_page_is_a_fault() -> None:
     other = uuid4()
-    claims = (
-        _p5("1\u201359 shown") + _p5("1\u20133", source=other).split("|---|---|\n")[1]
-    )
+    second = _p5("1\u20133", source=other).split("|---|---|\n")[1]
+    claims = _p5("1\u201359 shown") + second
     # Its last page, an over-claim, and a source the caller did not pass as
     # whole (a page-mapped one): no fault.
-    assert coverage_faults(claims, {C27: 59, other: 4}) == [CoverageFault(other, 3, 4)]
-    assert coverage_faults(claims, {C27: 58}) == []
-    assert coverage_faults(claims, {}) == []
+    headed = _every_page({C27: 67, other: 4})
+    assert coverage_faults(claims, {C27: 59, other: 4}, headed) == [
+        CoverageFault(other, 3, 4)
+    ]
+    assert coverage_faults(claims, {C27: 58}, headed) == []
+    assert coverage_faults(claims, {}, headed) == []
 
 
 def test_only_the_p5_register_is_read_and_only_so_far() -> None:
-    """A row of P3 or T8 naming pages is not a P5 claim, nor a row past the
+    """A row of P3 or T1 naming pages is not a P5 claim, nor a row past the
     next heading or past `MAX_P5_LINES`."""
     row = f"| {C27} | 1\u201359 |\n"
     p3 = f"#### P3 \u2014 Inventory\n\n{row}\n"
     after = f"{_p5('1\u201367')}\n#### T1 \u2014 Input Gate\n\n{row}"
-    assert coverage_faults(p3 + after, {C27: 67}) == []
+    assert coverage_faults(p3 + after, {C27: 67}, _every_page({C27: 67})) == []
     padded = "#### P5\n" + "| x | y |\n" * MAX_P5_LINES + row
     assert coverage_claims(padded) == []
     assert coverage_claims(padded.replace("| x | y |\n", "", 1)) == [(C27, 59)]
@@ -312,21 +351,28 @@ def test_only_the_p5_register_is_read_and_only_so_far() -> None:
     assert coverage_claims(f"#### P5\n\n| `{C27}` | 1\u201359 [C3] |\n") == [(C27, 59)]
 
 
+HEADINGS = [
+    (61, "SECTION 8.16. Judgment Currency."),
+    (66, "SECTION 9.27. Acknowledgement Regarding Any Supported QFCs."),
+    (66, "Section 2.01 hereof shall apply."),
+    (66, "Annex A Pricing Grid"),
+    (67, "Exhibit B - 2"),
+]
+
+
 def test_the_last_heading_is_the_last_numbered_section_delivered() -> None:
-    lines = [
-        (61, "SECTION 8.16. Judgment Currency."),
-        (66, "SECTION 9.27. Acknowledgement Regarding Any Supported QFCs."),
-        (66, "Section 2.01 hereof shall apply."),
-        (66, "Annex A Pricing Grid"),
-        (67, "Exhibit B - 2"),
-    ]
-    assert last_heading(lines) == (
+    assert last_heading(HEADINGS) == (
         66,
         "SECTION 9.27. Acknowledgement Regarding Any Supported QFCs.",
     )
     assert last_heading([(1, "ARTICLE IX"), (2, "Item 7. MD&A")]) == (2, "Item 7. MD&A")
     assert last_heading([(1, "Line 0001 of the paged report")]) is None
     assert last_heading([(1, "SECTION 1. " + "x" * 200)]) is None
+
+
+def test_heading_pages_are_the_pages_last_heading_reads_a_heading_on() -> None:
+    assert heading_pages(HEADINGS) == frozenset({61, 66})
+    assert heading_pages([(59, "Lender signature block"), (59, "By:")]) == frozenset()
 
 
 def test_the_message_names_the_source_the_pages_and_the_last_heading() -> None:
@@ -340,6 +386,25 @@ def test_the_message_names_the_source_the_pages_and_the_last_heading() -> None:
         " finding, gap and T8 status drawn from the shorter extent"
     )
     assert "last heading" not in coverage_message(fault, name, None)
+
+
+def test_a_message_past_the_cut_drops_the_heading_then_the_name() -> None:
+    """Fix round 1: `_bounded` cuts at `MAX_FEEDBACK_CHARS`, so a long name
+    and a 160-character heading would cut the closing instruction."""
+    fault = CoverageFault(C27, 59, 67)
+    heading = (66, "SECTION 9.27. " + "A" * 146)
+    end = "drawn from the shorter extent"
+    long_name = "n" * 200 + ".txt"
+    told = coverage_message(fault, long_name, heading)
+    assert len(told) <= MAX_FEEDBACK_CHARS and told.endswith(end)
+    assert long_name in told and "last heading" not in told
+    # The same pair within the cut keeps both.
+    short = coverage_message(fault, "a.txt", heading)
+    assert heading[1] in short and short.endswith(end)
+    huge = "n" * 600 + ".txt"
+    told = coverage_message(fault, huge, heading)
+    assert len(told) <= MAX_FEEDBACK_CHARS and told.endswith(end)
+    assert huge not in told and str(C27) in told
 
 
 def _short_of(source: UUID, claim: str) -> Callable[[str], str]:
@@ -361,17 +426,32 @@ def _short_of(source: UUID, claim: str) -> Callable[[str], str]:
     return flaw
 
 
+# The paged report with a numbered heading on page 3, in place of line 150.
+HEADING = "SECTION 3.01. Final Provisions."
+SECTIONED = DOCUMENT.replace(f"{_line(150)}\n".encode(), f"{HEADING}\n".encode())
+
+
+@pytest.fixture
+def sectioned(
+    case: tuple[StoreConnection, UUID], tmp_path: Path, route: ResolvedRoute
+) -> _Harness:
+    return paged_harness(case, tmp_path, route, SECTIONED)
+
+
 def test_a_short_coverage_claim_refuses_the_gate_and_its_retry_is_told(
-    paged: _Harness,
+    sectioned: _Harness,
 ) -> None:
     """D112: the gate answer giving its whole three-page source pages 1-2 is
     refused `HANDOFF_MALFORMED` at acceptance; the guided retry is told the
-    source, the pages delivered (no line of it reads as a heading), and the
-    corrected answer is accepted and the route completes."""
-    assert DOCUMENT.count(b"\n") == 180
-    answers = CanonicalCompletions(paged.source_id)
+    source, the pages delivered and the heading on page 3, and the corrected
+    answer is accepted and the route completes."""
+    assert SECTIONED.count(b"\n") == 180 and HEADING.encode() in SECTIONED
+    answers = CanonicalCompletions(sectioned.source_id)
     assert (
-        _run(paged, _Flawed(answers, flaw=_short_of(paged.source_id, "1\u20132 shown")))
+        _run(
+            sectioned,
+            _Flawed(answers, flaw=_short_of(sectioned.source_id, "1\u20132 shown")),
+        )
         is None
     )
     assert [_module(prompt) for prompt in answers.prompts] == [
@@ -381,19 +461,31 @@ def test_a_short_coverage_claim_refuses_the_gate_and_its_retry_is_told(
         "CP-5",
     ]
     line = (
-        f"host coverage check: P5 gives source {paged.source_id} ({PAGED})"
-        " pages 1-2, but the host delivered it WHOLE, pages 1-3; correct its"
-        " P5 row and every finding, gap and T8 status drawn from the shorter"
+        f"host coverage check: P5 gives source {sectioned.source_id} ({PAGED})"
+        " pages 1-2, but the host delivered it WHOLE, pages 1-3; its last"
+        f' heading line delivered, on page 3, is "{HEADING}"; correct its P5'
+        " row and every finding, gap and T8 status drawn from the shorter"
         " extent"
     )
     assert line not in answers.prompts[0]
     assert line in _checks(answers.prompts[1])
-    assert _cp0_ledger(paged) == (2, 2, ["HANDOFF_MALFORMED"], 1)
+    assert _cp0_ledger(sectioned) == (2, 2, ["HANDOFF_MALFORMED"], 1)
 
 
-def test_a_full_coverage_claim_is_accepted_first_time(paged: _Harness) -> None:
+def test_a_full_coverage_claim_is_accepted_first_time(sectioned: _Harness) -> None:
+    answers = CanonicalCompletions(sectioned.source_id)
+    flawed = _Flawed(answers, flaw=_short_of(sectioned.source_id, "Pages 1\u20133"))
+    assert _run(sectioned, flawed) is None
+    assert [_module(prompt) for prompt in answers.prompts] == ["CP-0", "CP-L10", "CP-5"]
+    assert _cp0_ledger(sectioned) == (1, 1, [], 1)
+
+
+def test_a_short_claim_leaving_out_no_heading_is_accepted(paged: _Harness) -> None:
+    """Fix round 1, end to end: the paged report has no heading line, so its
+    page 3 left out of "1-2 shown" costs no retry."""
+    assert last_heading((1, line) for line in DOCUMENT.decode().splitlines()) is None
     answers = CanonicalCompletions(paged.source_id)
-    flawed = _Flawed(answers, flaw=_short_of(paged.source_id, "Pages 1\u20133"))
+    flawed = _Flawed(answers, flaw=_short_of(paged.source_id, "1\u20132 shown"))
     assert _run(paged, flawed) is None
     assert [_module(prompt) for prompt in answers.prompts] == ["CP-0", "CP-L10", "CP-5"]
     assert _cp0_ledger(paged) == (1, 1, [], 1)

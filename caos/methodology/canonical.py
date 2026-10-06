@@ -58,6 +58,7 @@ from caos.methodology.coverage import (
     CoverageFault,
     coverage_faults,
     coverage_message,
+    heading_pages,
     last_heading,
 )
 from caos.methodology.executor import (
@@ -822,20 +823,20 @@ def _coverage_faults(
     if assignment.module_id != GATE_MODULE or context.source_set is None:
         return []
     maps = context.selection.page_maps
-    last_pages: dict[UUID, int] = {}
+    lines_of: dict[UUID, list[tuple[int, str]]] = {}
     for item in context.delivered:
         if item.source_id not in maps:
-            last_pages[item.source_id] = max(
-                item.page, last_pages.get(item.source_id, 0)
-            )
-    return coverage_faults(markdown.decode("utf-8", "replace"), last_pages)
+            lines_of.setdefault(item.source_id, []).append((item.page, item.text.value))
+    last_pages = {s: max(page for page, _ in lines) for s, lines in lines_of.items()}
+    headed = {s: heading_pages(lines) for s, lines in lines_of.items()}
+    return coverage_faults(markdown.decode("utf-8", "replace"), last_pages, headed)
 
 
 def _coverage_lines(assignment: Assignment, context: _Context, body: str) -> list[str]:
     """The gate retry's lines for its refused answer's short P5 claims (D112):
     the source by id and filename, the pages delivered and the last heading
-    line delivered, bounded like a vendor message; without the heading when
-    that line cannot cross the boundary."""
+    line delivered, bounded like a vendor message (`coverage_message` keeps
+    it within the cut); without the heading where the boundary refuses it."""
     markdown = answer_markdown(body)
     if markdown is None or context.source_set is None:
         return []
@@ -848,6 +849,7 @@ def _coverage_lines(assignment: Assignment, context: _Context, body: str) -> lis
             if d.source_id == fault.source_id
         )
         name = names.get(fault.source_id, "")
+        # A heading the boundary refuses (`hides_text`) costs only itself.
         line = _bounded(
             "host coverage check", coverage_message(fault, name, heading)
         ) or _bounded("host coverage check", coverage_message(fault, name, None))
