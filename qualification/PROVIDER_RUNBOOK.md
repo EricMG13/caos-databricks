@@ -614,7 +614,7 @@ The 6 October pass: the owner approved the controller's recommendation on every 
 | LCR8-dec | lite-covenant-refinancing | BUDGET_CEILING_REACHED at CP-3C (a $3 ceiling, controller error) | 0/7 | $0.5060 |
 | LCR9-dec | lite-covenant-refinancing | PROVIDER_UNAVAILABLE at CP-3C, `deadline elapsed=420.0` | 2/7 | $0.5320 |
 | LCR10-dec | lite-covenant-refinancing | PROVIDER_UNAVAILABLE at CP-L10, 502 after content | 0/7 | $0.1777 |
-| FCA4-dec | full-credit-assessment | 18 of 19 modules, 34 attempts, 454 citations (8 unverified); stopped at CP-5 | 19/35 | $3.7485 |
+| FCA4-dec | full-credit-assessment | 17 of 19 modules, 34 attempts, 454 citations (8 unverified); stopped at CP-5 | 19/35 | $3.7485 |
 
 The set tables are in each set's `RESULT.md`. No set is qualified. FCA4 is the first FULL_CREDIT_ASSESSMENT run past CP-2G.
 
