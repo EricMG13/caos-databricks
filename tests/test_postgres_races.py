@@ -36,6 +36,7 @@ from caos.boundary_text import BoundaryText
 from caos.graph import runtime
 from caos.graph.route import NodeState, ResolvedRoute, resolve_route
 from caos.graph.runtime import Execution, Provider, ProviderResult, run_route
+from caos.methodology import invocation
 from caos.methodology.bundle import Bundle
 from caos.pricing import ModelPrice
 from caos.provider import Completion, DropKind
@@ -1678,8 +1679,23 @@ def test_a_crash_between_a_declared_drop_and_its_re_attempt_accepts_once(
     ).fetchone() == ("STOPPED", "PROVIDER_UNAVAILABLE")
 
 
+def _executing(module_id: str) -> str:
+    """The host's own module-identity opening (`invocation._INSTRUCTION`), for
+    `module_id`; the evidence comes first in the prompt (D113), so no token
+    position names the module."""
+    return invocation._INSTRUCTION.split("{module_name}")[0].format(module_id=module_id)
+
+
 def _cp0_calls(prompts: list[str]) -> int:
-    return sum(1 for prompt in prompts if prompt.split(maxsplit=6)[5] == "CP-0")
+    return sum(1 for prompt in prompts if _executing("CP-0") in prompt)
+
+
+def test_cp0_calls_reads_the_hosts_module_identity_under_evidence_first() -> None:
+    evidence = "--- EVIDENCE 0123 ---\nx\n--- END EVIDENCE 0123 ---\n\n"
+    cp0 = evidence + _executing("CP-0") + "Credit Intake) at route node\nCP-0."
+    other = evidence + _executing("CP-1A") + "Business) at route node\nCP-1A."
+    assert _cp0_calls([cp0, other, cp0]) == 2
+    assert _cp0_calls([other]) == 0
 
 
 def _dies_at_the_second(
