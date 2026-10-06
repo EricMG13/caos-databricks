@@ -35,7 +35,7 @@ from typing import Any
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage
-from openai import OpenAIError
+from openai import APIConnectionError, OpenAIError
 
 # The configuration names live beside the price they configure, so the API,
 # which may not import this module (D4), reads them too.
@@ -52,6 +52,7 @@ from caos.provider import (
     NEVER_RETRIED,
     TIMEOUT_SECONDS,
     Completion,
+    DropKind,
     check_resend,
     encode_request,
     finish_refusal,
@@ -261,7 +262,7 @@ class _Raised:
     indeterminate. Only its facts are kept, never the exception, so the
     raising frames -- and the prompt they hold -- go with the call (F513)."""
 
-    kind: str
+    kind: DropKind
     facts: str
 
 
@@ -326,10 +327,10 @@ def _invoked(
         except BaseException as escaped:
             # Not held back, as `suppress(Exception)` held it not: it still
             # ends this thread, and the call is named `escaped` (F513).
-            answered.append(_Raised("escaped", _facts(escaped)))
+            answered.append(_Raised(DropKind.ESCAPED, _facts(escaped)))
             raise
         if held.facts is not None:
-            answered.append(_Raised("raised", held.facts))
+            answered.append(_Raised(DropKind.RAISED, held.facts))
 
     sender = threading.Thread(target=send, name="caos-model-call", daemon=True)
     sender.start()
@@ -553,16 +554,34 @@ def _unanswered(code: RefusalCode, answer: object, started: float) -> Completion
     since it was first sent. One `write`, newline included, so two calls'
     lines never interleave; a write that fails is dropped (a fail-open: the
     line never changes the outcome). Nothing here quotes the prompt, an
-    answer or an error's text."""
-    kind, facts = "deadline", _NO_FACTS
+    answer or an error's text. The refusal carries the same kind, typed, a
+    vendor error split by whether the provider declared it (D110)."""
+    drop, facts = DropKind.DEADLINE, _NO_FACTS
     if isinstance(answer, _Raised):
-        kind, facts = answer.kind, answer.facts
+        drop, facts = answer.kind, answer.facts
     elif isinstance(answer, BaseException):
-        kind, facts = "vendor", _facts(answer)
+        drop = DropKind.DECLARED if _declared(answer) else DropKind.VENDOR
+        facts = _facts(answer)
+    kind = "vendor" if drop is DropKind.DECLARED else drop.value
     with suppress(Exception):  # fail-open, documented above (F513)
         line = f"{code.value} call={kind} {facts} elapsed={_clock() - started:.1f}\n"
         sys.stderr.write(line)
-    return Completion(None, None, None, code)
+    return Completion(None, None, None, code, drop)
+
+
+def _declared(failed: BaseException) -> bool:
+    """Whether the provider itself stated this vendor error (D110): a status,
+    or its own error object, as a response body or an SSE `error` event --
+    never a connection's failure (a reset, a client timeout), after which
+    what was received is unknown. An error that raises while it is read is
+    not declared: the re-attempt fails closed."""
+    declared = False
+    with suppress(Exception):  # fail closed, documented above (D110)
+        stated = _status(getattr(failed, "status_code", None)) not in ("-", "?")
+        declared = not isinstance(failed, APIConnectionError) and (
+            stated or bool(_error_body(failed))
+        )
+    return declared
 
 
 def _text(content: object) -> str | None:
