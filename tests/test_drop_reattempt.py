@@ -424,6 +424,17 @@ def test_a_cut_after_content_is_declared_only_by_a_transient_provider_error(
             None,
             id="malformed-id",
         ),
+        # The store's own bound on a generation id (0007): 512 bytes.
+        pytest.param(
+            CutAfterContentError(_ROUTER_ERROR, generation_id="g" * 512),
+            "g" * 512,
+            id="longest-id",
+        ),
+        pytest.param(
+            CutAfterContentError(_ROUTER_ERROR, generation_id="g" * 513),
+            None,
+            id="id-past-the-bound",
+        ),
         pytest.param(
             CutAfterContentError({"code": 400}, generation_id="gen-cut-2"),
             None,
@@ -836,8 +847,47 @@ def test_a_billed_cut_is_visible_where_a_run_is_reconciled(harness: _Harness) ->
         (None, rows[1]["charge"]),
     ]
     assert rows[0]["generation_id"] == "gen-cut-9"
-    assert rows[1]["charge"] is not None and rows[1]["generation_id"] is not None
+    assert rows[1]["generation_id"] is not None
     assert [Decimal(str(row["reserved"])) for row in rows] == [ESTIMATE, ESTIMATE]
+    with connect(harness.url) as observer:
+        billed = observer.execute(
+            "SELECT l.amount, o.model, o.diagnostic_sha256 FROM budget_ledger l"
+            " JOIN call_outcomes o USING (attempt_id) JOIN run_attempts t"
+            " USING (attempt_id) WHERE t.run_id = %s AND t.route_node_id = %s",
+            (harness.run_id, node),
+        ).fetchone()
+    assert billed is not None
+    assert Decimal(str(rows[1]["charge"])) == billed[0]
+    assert [row["model"] for row in rows] == [answers.model, billed[1]]
+    assert [row["diagnostic_sha256"] for row in rows] == [None, billed[2]]
+
+
+def test_an_attempt_with_nothing_recorded_is_captured_as_nothing(
+    harness: _Harness,
+) -> None:
+    """An attempt started and never reserved or called is in the capture,
+    every fact unknown -- never a stand-in value."""
+    import sys
+    from pathlib import Path
+
+    from caos.store.runs import start_attempt
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    import qualify
+
+    start_attempt(harness.conn, harness.run_id, _node(harness, "CP-0").route_node_id)
+    harness.conn.commit()
+    [row] = qualify._attempts(harness.conn, [harness.run_id])
+    harness.conn.rollback()
+    assert {key: row[key] for key in row if key not in ("run_id", "route_node_id")} == {
+        "ordinal": row["ordinal"],
+        "charge": None,
+        "model": None,
+        "generation_id": None,
+        "diagnostic_sha256": None,
+        "drop_kind": None,
+        "reserved": None,
+    }
 
 
 def test_a_ceiling_that_cannot_cover_the_re_attempt_leaves_the_drop_standing(

@@ -421,6 +421,16 @@ def test_an_error_frame_is_read_whole_and_by_its_own_code(
     assert said in line and "private" not in line
 
 
+def test_a_cut_keeps_the_id_its_content_was_generated_under() -> None:
+    """The first id the stream named is the generation that streamed the
+    content; an error frame that names another does not replace it."""
+    choice = {"index": 0, "delta": {"content": ""}, "finish_reason": "error"}
+    later = _frame({"id": "gen-later", "error": _ERROR, "choices": [choice]})
+    completion = _complete([*_ANSWER[:5], later])
+    assert completion.drop_kind is DropKind.DECLARED_AFTER_CONTENT
+    assert completion.generation_id == "gen-f512"
+
+
 def _reset_after_content(sent: list[dict[str, object]]) -> httpx.Client:
     """A fake OpenRouter whose stream carries content, then the connection
     fails with no error frame. No network."""
