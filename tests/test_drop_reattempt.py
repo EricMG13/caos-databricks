@@ -285,6 +285,9 @@ class _RaisingBody(Mapping[str, object]):
             _after(None, "provider_overloaded"), DropKind.DECLARED, id="overloaded"
         ),
         pytest.param(_after(None, "server"), DropKind.DECLARED, id="server-type"),
+        pytest.param(
+            _after(None, "rate_limit_exceeded"), DropKind.DECLARED, id="rate-limit-type"
+        ),
         # A 4xx is the provider's word against the request: never a drop, the
         # type beside it notwithstanding (fail closed).
         pytest.param(_after(400, "invalid_request"), DropKind.RAISED, id="400"),
@@ -324,7 +327,11 @@ def test_a_cut_after_content_is_declared_only_by_a_transient_provider_error(
     )
     assert chat.calls == 1
     line = capsys.readouterr().err
-    assert line.startswith("PROVIDER_UNAVAILABLE call=raised class=")
+    # The facts are the cut's own -- unknown when its body cannot be read --
+    # never those of a failure in reading it.
+    unreadable = isinstance(cut.body, _RaisingBody)
+    named = "class=?" if unreadable else "class=CutAfterContentError"
+    assert line.startswith(f"PROVIDER_UNAVAILABLE call=raised {named} ")
     assert "private" not in line and "private" not in repr(completion)
 
 
