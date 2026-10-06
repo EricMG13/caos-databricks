@@ -49,6 +49,16 @@ DOCUMENT = (f"{QUOTE}\n" + "".join(f"{_line(n)}\n" for n in range(1, 180))).enco
 def paged(
     case: tuple[StoreConnection, UUID], tmp_path: Path, route: ResolvedRoute
 ) -> _Harness:
+    return paged_harness(case, tmp_path, route, DOCUMENT)
+
+
+def paged_harness(
+    case: tuple[StoreConnection, UUID],
+    tmp_path: Path,
+    route: ResolvedRoute,
+    document: bytes,
+) -> _Harness:
+    """An approved run over one pinned source, `document`, named `PAGED`."""
     conn, case_id = case
     root = tmp_path / "bundle"
     shutil.copytree(VENDORED, root)
@@ -60,7 +70,7 @@ def paged(
         conn,
         blobs,
         case_id=case_id,
-        documents=[Document(filename=BoundaryText.of(PAGED), data=DOCUMENT)],
+        documents=[Document(filename=BoundaryText.of(PAGED), data=document)],
     )
     run_id = start_run(conn, case_id)
     conn.commit()
