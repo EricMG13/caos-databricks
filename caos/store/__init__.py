@@ -260,6 +260,19 @@ MIGRATIONS = (
 # session, not written into the SQL.
 STORE_SCHEMA = "caos_store"
 SEARCH_PATH_OPTION = f"-c search_path={STORE_SCHEMA}"
+# D117: no store session -- `connect`'s, or the checkpointer pool's
+# (`caos.graph.checkpoint`) -- is ended by the server for sitting idle. `call_hold`
+# is a session-level lock on a connection that waits, outside any
+# transaction, for the whole model call (up to `caos.provider.TIMEOUT_SECONDS`);
+# an `idle_session_timeout` set on the database or the role would end that
+# session mid-call and let the hold go with nothing said, and once the lease
+# lapsed too a second worker could pay for the node again. Sent at connect
+# like the search path, after the operator's own options, so it wins. A server
+# that refuses it refuses the connection, which every caller already answers
+# `STORE_UNAVAILABLE`: fail closed, never a session without it. A cut this
+# cannot stop (a failover, a scale-to-zero suspend, a lost socket) still ends
+# the hold; then the lease's 180 s past the call deadline is the margin.
+IDLE_SESSION_OPTION = "-c idle_session_timeout=0"
 # LangGraph's own schema (`caos.graph.checkpoint.SCHEMA`), named here rather
 # than imported: the store does not depend on the graph package. The store
 # writes to it too, forgetting a cancelled run's thread (`work._forget_threads`).
@@ -409,7 +422,7 @@ def connect(
     kwargs: dict[str, Any] = dict(SOCKET_BOUNDS)
     if connect_timeout is not None:
         kwargs["connect_timeout"] = connect_timeout
-    options = [SEARCH_PATH_OPTION]
+    options = [SEARCH_PATH_OPTION, IDLE_SESSION_OPTION]
     if statement_timeout_ms is not None:
         options.append(f"-c statement_timeout={statement_timeout_ms}")
     kwargs["options"] = startup_options(url, options)

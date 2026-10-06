@@ -14,6 +14,7 @@ happened to create.
 
 from __future__ import annotations
 
+import time
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
@@ -28,6 +29,8 @@ from uuid import UUID, uuid4
 import psycopg
 import pytest
 from conftest import _checked_values, login_role, tamper
+from psycopg import sql
+from psycopg.conninfo import conninfo_to_dict
 from psycopg_pool import ConnectionPool
 from test_case_ordering import _blocked, _wait_for_blocking
 from test_extraction_provenance import Reader
@@ -143,14 +146,46 @@ def test_connect_asks_for_keepalives_and_an_optional_statement_timeout(
     assert captured["keepalives_interval"] == store.KEEPALIVES_INTERVAL_SECONDS
     assert captured["keepalives_count"] == store.KEEPALIVES_COUNT
     assert captured["tcp_user_timeout"] == store.TCP_USER_TIMEOUT_MS
-    assert captured["options"] == "-c search_path=caos_store", "DL-1, and no bound"
+    assert captured["options"] == (
+        "-c search_path=caos_store -c idle_session_timeout=0"
+    ), "DL-1, D117, and no bound"
+    assert store.IDLE_SESSION_OPTION == "-c idle_session_timeout=0"
 
     captured.clear()
     with pytest.raises(psycopg.OperationalError):
         store.connect("postgresql://unused.invalid/none", statement_timeout_ms=5000)
     assert captured["options"] == (
-        "-c search_path=caos_store -c statement_timeout=5000"
+        "-c search_path=caos_store -c idle_session_timeout=0 -c statement_timeout=5000"
     )
+
+
+def test_a_store_session_is_never_ended_by_the_server_for_being_idle(
+    empty_database: str,
+) -> None:
+    """D117: `call_hold` is a session-level lock held on a connection that
+    sits idle, outside any transaction, for the whole model call -- up to
+    `TIMEOUT_SECONDS`. A server that ends idle sessions (`idle_session_timeout`,
+    set on the database or the role) let the hold go mid-call, silently, and
+    with the lease lapsed a second worker paid for the node again. Every store
+    session turns the bound off for itself (`IDLE_SESSION_OPTION`), over the
+    database's own setting; a plain session on the same database is still
+    ended, which is what the setting would have done to ours."""
+    db = conninfo_to_dict(empty_database)["dbname"]
+    with psycopg.connect(empty_database, autocommit=True) as admin:
+        admin.execute(
+            sql.SQL("ALTER DATABASE {} SET idle_session_timeout = 300").format(
+                sql.Identifier(str(db))
+            )
+        )
+    with connect(empty_database) as ours, psycopg.connect(empty_database) as plain:
+        assert ours.execute("SHOW idle_session_timeout").fetchone() == ("0",)
+        assert plain.execute("SHOW idle_session_timeout").fetchone() == ("300ms",)
+        plain.rollback()
+        ours.rollback()
+        time.sleep(1.0)
+        assert ours.execute("SELECT 1").fetchone() == (1,)
+        with pytest.raises(psycopg.OperationalError):
+            plain.execute("SELECT 1")
 
 
 def test_startup_options_put_the_operator_s_first_as_libpq_reads_them(

@@ -70,12 +70,12 @@ RATE_LIMIT_TRIES = 3
 RETRY_AFTER_SECONDS = 2.0
 RETRY_AFTER_CAP_SECONDS = 20.0
 # A re-send starts only with at least this long left of the call's one
-# deadline (N11): half of it, 210 s since D83 (the 120 s whole-call deadline
+# deadline (N11): half of it, 360 s since D117 (the 120 s whole-call deadline
 # F89 measured as too short to deliver a few thousand tokens at real
 # throughput was half of the 240 before it). A re-send started with less is
 # expected to be abandoned mid-generation at the deadline while the provider
 # may still bill it, so the 429 is the answer instead. Two capped waits spend
-# at most 40 s of the 420, so a rate limit answered promptly is still re-sent;
+# at most 40 s of the 720, so a rate limit answered promptly is still re-sent;
 # only 429s that were themselves slow to arrive leave less.
 MIN_RESEND_SECONDS = TIMEOUT_SECONDS / 2
 _sleep = time.sleep
