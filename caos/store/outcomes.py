@@ -346,10 +346,13 @@ def _record(conn: StoreConnection, attempt: UUID, outcome: CallOutcome) -> bool:
             "INSERT INTO budget_ledger (attempt_id,run_id,amount) VALUES (%s,%s,%s)",
             (attempt, run, outcome.charge),
         )
+    # The event first, so the row names its position in the run's stream
+    # (F530): a resume pass reads a park after it as the operator's requeue.
+    seq = append(conn, run, RunEvent.CALL_OUTCOME_RECORDED)
     conn.execute(
         "INSERT INTO call_outcomes (attempt_id,run_id,charged_attempt_id,model,"
-        " generation_id,diagnostic_sha256,drop_kind)"
-        " VALUES (%s,%s,%s,%s,%s,%s,%s)",
+        " generation_id,diagnostic_sha256,drop_kind,recorded_seq)"
+        " VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
         (
             attempt,
             run,
@@ -358,9 +361,9 @@ def _record(conn: StoreConnection, attempt: UUID, outcome: CallOutcome) -> bool:
             outcome.generation_id,
             outcome.diagnostic_sha256,
             None if outcome.drop_kind is None else outcome.drop_kind.value,
+            seq,
         ),
     )
-    append(conn, run, RunEvent.CALL_OUTCOME_RECORDED)
     return True
 
 

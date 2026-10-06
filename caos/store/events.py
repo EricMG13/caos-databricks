@@ -82,7 +82,7 @@ def lock_run(conn: StoreConnection, run_id: UUID) -> RunStatus:
     return RunStatus(row[0])
 
 
-def append(conn: StoreConnection, run_id: UUID, event: RunEvent) -> None:
+def append(conn: StoreConnection, run_id: UUID, event: RunEvent) -> int:
     """Append `event` to the run's stream.
 
     Never call this except beside the transition it records, in that
@@ -94,12 +94,16 @@ def append(conn: StoreConnection, run_id: UUID, event: RunEvent) -> None:
     lock above to mean anything.
     """
     lock_run(conn, run_id)
-    conn.execute(
+    row = conn.execute(
         "INSERT INTO run_events (run_id, seq, name)"
         " SELECT %s::uuid, coalesce(max(seq), 0) + 1, %s::text"
-        " FROM run_events WHERE run_id = %s",
+        " FROM run_events WHERE run_id = %s RETURNING seq",
         (run_id, event.value, run_id),
-    )
+    ).fetchone()
+    if row is None:
+        raise Refusal(RefusalCode.STORE_UNAVAILABLE)
+    # The position taken, for a row that must name the event beside it (F530).
+    return int(row[0])
 
 
 def events_of(conn: StoreConnection, run_id: UUID) -> list[Event]:

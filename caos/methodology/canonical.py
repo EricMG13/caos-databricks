@@ -138,6 +138,7 @@ from caos.provider import (
 from caos.refusals import Refusal, RefusalCode, RunRefusal
 from caos.store import StoreConnection, connect
 from caos.store.budget import Reservation, remaining, reserved_for
+from caos.store.events import RunEvent
 from caos.store.lakebase import store_url
 from caos.store.outcomes import (
     CallOutcome,
@@ -1119,6 +1120,28 @@ def reattempts_a_drop(attempts: Sequence[NodeAttempt]) -> bool:
         return False
     drops = sum(1 for a in attempts if declared_drop(a))
     return declared_drop(attempts[-1]) and drops <= DROP_REATTEMPTS
+
+
+def drop_stop_owed(conn: StoreConnection, *, run_id: UUID, route_node_id: str) -> bool:
+    """Whether this node's one re-attempt was itself a declared drop and the
+    stop that follows it was never written (F530): a worker died between the
+    two, and the next pass must stop the run, not call a third time. A park
+    later in the run's stream than that drop's own outcome is a stop that
+    was written, so the operator's requeue after it calls again; a run with
+    no work row is a direct caller's, whose rerun is its own decision.
+    Caller owns the read."""
+    attempts = node_attempts(conn, run_id, route_node_id)
+    drops = sum(1 for a in attempts if declared_drop(a))
+    if not attempts or not declared_drop(attempts[-1]) or drops <= DROP_REATTEMPTS:
+        return False
+    row = conn.execute(
+        "SELECT EXISTS (SELECT 1 FROM run_work w WHERE w.run_id = o.run_id)"
+        " AND NOT EXISTS (SELECT 1 FROM run_events e WHERE e.run_id = o.run_id"
+        " AND e.name = %s AND e.seq > o.recorded_seq)"
+        " FROM call_outcomes o WHERE o.attempt_id = %s",
+        (RunEvent.RUN_PARKED.value, attempts[-1].attempt_id),
+    ).fetchone()
+    return row is not None and row[0] is True
 
 
 def drop_reattempt_due(
