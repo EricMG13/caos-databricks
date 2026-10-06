@@ -995,3 +995,43 @@ def test_open_forwards_the_query_string() -> None:
         server.server_close()
     assert status == 200
     assert seen == ["/api/v1/cases/x/events?run=abc"]
+
+
+def test_a_reopened_tail_resumes_after_the_last_event_id() -> None:
+    """D117: E10's reconnect sends `Last-Event-ID`, so the app's tail resumes
+    after the last event E10 saw rather than replaying the run from its start;
+    the first open sends none, and an answer that is not an event stream is
+    named, never read as one."""
+    seen: list[str | None] = []
+
+    class _Handler(http.server.BaseHTTPRequestHandler):
+        def log_message(self, format: str, *args: object) -> None:
+            del format, args
+
+        def do_GET(self) -> None:
+            seen.append(self.headers.get("last-event-id"))
+            stream = len(seen) < 3
+            self.send_response(200 if stream else 302)
+            kind = "text/event-stream" if stream else "text/html"
+            self.send_header("Content-Type", kind)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+    server = http.server.HTTPServer(("127.0.0.1", 0), _Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        url, events = f"http://127.0.0.1:{server.server_port}", "/e?run=r"
+        first = enterprise_deploy._tail(url, events, {}, None)
+        again = enterprise_deploy._tail(url, events, {}, "5")
+        refused = enterprise_deploy._tail(url, events, {}, "6")
+    finally:
+        server.shutdown()
+        server.server_close()
+    assert seen == [None, "5", "6"]
+    assert first[0] is not None and again[0] is not None
+    assert first[0].get(timeout=5) == b"", "an empty tail is a closed one"
+    assert refused == (
+        None,
+        "status 302, content-type 'text/html': not an event stream",
+    )
