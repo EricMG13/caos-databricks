@@ -1,28 +1,32 @@
-"""D120 (amends D117): a server that refuses `caos.store.IDLE_SESSION_OPTION`.
+"""D120 (amends D117): the idle bound turned off by a session `SET`, not a
+startup option, and a server that refuses that `SET`.
 
 Every store session -- `caos.store.connect`'s and the checkpointer pool's --
-asks the server not to end it for sitting idle. Whether Lakebase accepts the
-option is unmeasured (N172), and a server that refused it refused every store
-connection, `STORE_UNAVAILABLE`: the whole app down for a safety margin it has
-a fallback for. libpq reports a refused startup option as any refused startup,
-an `OperationalError` with no SQLSTATE, so the refusal is found by asking
-again without the option and once more with it: only a server that lets the
-session in without it, and still not with it, is taken to refuse it. Then the
-process prints `IDLE_SESSION_OPTION_REFUSED` once and opens every later
-session without it. Any other failure is answered as it always was.
+runs `SET idle_session_timeout = 0` as its first statement, so the server never
+ends it for sitting idle while `call_hold` waits out a model call. A startup
+option the server refuses arrives with no SQLSTATE, and finding the refusal by
+asking again let a process's own connects at a connection limit drop the
+option for good (the review's HIGH). A `SET` the server refuses says why: an
+unknown parameter (42704), a value it will not take (22023), a feature it does
+not support (0A000) or a right the role lacks (42501). On those the session
+carries on without it, the process prints `IDLE_SESSION_OPTION_REFUSED` once
+and skips the `SET` from then on; any other error closes the session and
+refuses `STORE_UNAVAILABLE`. No connect is ever repeated for it.
 """
 
 from __future__ import annotations
 
 import threading
+import time
 from collections.abc import Callable, Iterator
 from contextlib import ExitStack
 from typing import Any, cast
-from urllib.parse import urlsplit, urlunsplit
 
 import psycopg
 import pytest
-from conftest import refuse_idle_session_option
+from conftest import login_role
+from psycopg import sql
+from psycopg.pq import TransactionStatus
 from psycopg_pool import ConnectionPool
 
 import caos.store as store
@@ -32,6 +36,9 @@ from caos.refusals import Refusal, RefusalCode
 from caos.store import lakebase
 
 NOTICE = "IDLE_SESSION_OPTION_REFUSED\n"
+# A statement that fails with an error that is no refusal of the `SET`: once
+# the process skips the `SET`, putting this in its place shows it is skipped.
+_WOULD_FAIL = "SELECT 1/0"
 
 
 @pytest.fixture(autouse=True)
@@ -42,225 +49,284 @@ def _fresh_process(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     yield
 
 
-def _sent(monkeypatch: pytest.MonkeyPatch) -> list[bool]:
-    """Whether each `caos.store.connect` attempt carried the option, in order."""
-    sent: list[bool] = []
+def _connects(monkeypatch: pytest.MonkeyPatch) -> list[psycopg.Connection[Any]]:
+    """Every connection `caos.store.connect` opened, in order."""
+    opened: list[psycopg.Connection[Any]] = []
     real = cast("Callable[..., psycopg.Connection[Any]]", psycopg.connect)
 
     def spy(url: str, **kwargs: object) -> psycopg.Connection[Any]:
-        sent.append(store.IDLE_SESSION_OPTION in str(kwargs.get("options", "")))
-        return real(url, **kwargs)
+        opened.append(real(url, **kwargs))
+        return opened[-1]
 
     monkeypatch.setattr(psycopg, "connect", spy)
-    return sent
+    return opened
 
 
-def _shown(conn: store.StoreConnection, *names: str) -> list[object]:
+def _shown(conn: psycopg.Connection[Any], *names: str) -> list[object]:
     return [conn.execute(f"SHOW {name}").fetchone() for name in names]
 
 
-def test_a_server_that_refuses_the_idle_option_is_reached_without_it_once(
+def test_a_store_session_turns_its_idle_bound_off_with_its_first_statement(
     empty_database: str,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """A server that accepts the option gets it on the first attempt. One that
-    refuses it (a login trigger here, SQLSTATE 22023) lets the session in
-    without it, the search path and the statement bound kept; the process
-    says so once, and every later session goes without it at the first try."""
-    sent = _sent(monkeypatch)
+    """One connect, no idle startup option, and the `SET` committed: the
+    session is idle, outside any transaction, as `call_hold` requires, and a
+    caller's rollback does not undo it."""
+    monkeypatch.setenv("PGOPTIONS", "-c idle_session_timeout=5min")
+    opened = _connects(monkeypatch)
     with store.connect(empty_database) as conn:
+        assert conn.info.transaction_status is TransactionStatus.IDLE
+        assert _shown(conn, "idle_session_timeout") == [("0",)], "over PGOPTIONS"
+        conn.rollback()
         assert _shown(conn, "idle_session_timeout") == [("0",)]
-    assert sent == [True], "a server that accepts it gets it, first time"
+        assert "idle_session_timeout=0" not in conn.info.dsn, "no startup option"
+    assert len(opened) == 1
     assert capsys.readouterr().err == ""
-
-    refuse_idle_session_option(empty_database)
-    sent.clear()
-    with store.connect(empty_database, statement_timeout_ms=5000) as conn:
-        shown = _shown(conn, "idle_session_timeout", "search_path", "statement_timeout")
-    assert shown == [("10min",), ("caos_store",), ("5s",)]
-    assert sent == [True, False, True, False], "refused, let in, refused, opened"
-    assert capsys.readouterr().err == NOTICE
-
-    sent.clear()
-    for _ in range(2):
-        with store.connect(empty_database) as conn:
-            assert _shown(conn, "idle_session_timeout") == [("10min",)]
-    assert sent == [False, False], "remembered for the process"
-    assert capsys.readouterr().err == "", "said once"
 
 
 @pytest.mark.parametrize(
-    "refused",
-    ["-c caos_no_such_parameter=0", "-c idle_session_timeout=never"],
-    ids=["42704-unrecognized-parameter", "22023-invalid-value"],
+    ("statement", "own_role"),
+    [
+        ("SET caos_no_such_parameter = 0", False),
+        ("SET idle_session_timeout = 'never'", False),
+        ("SET log_min_duration_statement = 0", True),
+    ],
+    ids=["42704-unrecognized", "22023-invalid-value", "42501-insufficient-privilege"],
 )
-def test_a_server_refusing_the_option_by_name_or_value_is_reached_without_it(
+def test_a_server_that_refuses_the_set_degrades_with_one_notice(
     empty_database: str,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
-    refused: str,
+    statement: str,
+    own_role: bool,
 ) -> None:
-    """The server's own refusals of a startup option -- a parameter it does not
-    know, a value it will not take -- found the same way, by no message."""
-    monkeypatch.setattr(store, "IDLE_SESSION_OPTION", refused)
-    sent = _sent(monkeypatch)
-    with store.connect(empty_database) as conn:
-        assert _shown(conn, "search_path") == [("caos_store",)]
-    assert sent == [True, False, True, False]
-    assert capsys.readouterr().err == NOTICE
-
-
-def test_a_connect_failure_that_is_not_the_option_still_refuses_unavailable(
-    empty_database: str,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    """A refusal the option did not cause -- a wrong password here -- fails
-    without it too, and is answered `STORE_UNAVAILABLE` as before; nothing is
-    remembered, so the next session still asks for it."""
-    parts = urlsplit(empty_database)
-    wrong = urlunsplit(
-        parts._replace(
-            netloc=f"{parts.username}:not-the-password@{parts.hostname}:{parts.port}"
+    """The server's own refusals of a `SET` (the last one a parameter only a
+    superuser may set, asked by a plain role): the session carries on, idle and
+    usable, its search path and statement bound kept; the line is printed once,
+    and later sessions skip the `SET` -- one in its place that would fail is
+    never run -- each on one connect."""
+    with ExitStack() as held:
+        url = (
+            held.enter_context(login_role(empty_database))
+            if own_role
+            else (empty_database)
         )
-    )
-    sent = _sent(monkeypatch)
-    monkeypatch.setattr(deps, "_database_url", lambda: wrong)
-    with pytest.raises(Refusal) as refused:
-        next(deps.store_connection())
-    assert refused.value.code is RefusalCode.STORE_UNAVAILABLE
-    assert sent == [True, False], "asked once without it, then refused as before"
-    assert not store._IDLE_SESSION_REFUSED.is_set()
-    assert capsys.readouterr().err == ""
+        monkeypatch.setattr(store, "IDLE_SESSION_SET", statement)
+        opened = _connects(monkeypatch)
+        with store.connect(url, statement_timeout_ms=5000) as conn:
+            assert conn.info.transaction_status is TransactionStatus.IDLE
+            assert _shown(conn, "search_path", "statement_timeout") == [
+                ("caos_store",),
+                ("5s",),
+            ]
+        assert store._IDLE_SESSION_REFUSED.is_set()
+        assert capsys.readouterr().err == NOTICE
 
-    sent.clear()
-    with store.connect(empty_database) as conn:
-        assert _shown(conn, "idle_session_timeout") == [("0",)]
-    assert sent == [True]
+        monkeypatch.setattr(store, "IDLE_SESSION_SET", _WOULD_FAIL)
+        for _ in range(2):
+            with store.connect(url) as conn:
+                assert conn.execute("SELECT 1").fetchone() == (1,)
+        assert len(opened) == 3, "one connect each, none repeated"
+        assert capsys.readouterr().err == "", "said once"
 
 
-class _Opened:
-    """A session a scripted attempt opened, and whether it was closed."""
+class _Session:
+    """A session whose first statement fails with `fault`."""
 
-    def __init__(self) -> None:
+    def __init__(self, fault: psycopg.Error) -> None:
+        self.fault = fault
+        self.autocommit = False
         self.closed = False
+        self.rolled_back = False
+
+    def execute(self, _statement: str) -> None:
+        raise self.fault
+
+    def rollback(self) -> None:
+        self.rolled_back = True
+
+    def commit(self) -> None:
+        raise AssertionError
 
     def close(self) -> None:
         self.closed = True
 
 
-_FAILED = psycopg.OperationalError
-_TIMED_OUT = psycopg.errors.ConnectionTimeout
-
-
 @pytest.mark.parametrize(
-    ("script", "sent", "opens", "refused"),
+    ("fault", "refused"),
     [
-        ([_TIMED_OUT], [True], False, False),
-        ([_FAILED, None, None], [True, False, True], True, False),
-        ([_FAILED, None, _TIMED_OUT], [True, False, True], False, False),
-        ([_FAILED, None, _FAILED, None], [True, False, True, False], True, True),
-        ([_FAILED, None, _FAILED, _FAILED], [True, False, True, False], False, True),
+        (psycopg.errors.FeatureNotSupported("scripted"), True),
+        (psycopg.errors.InsufficientPrivilege("scripted"), True),
+        (psycopg.errors.AdminShutdown("scripted"), False),
+        (psycopg.OperationalError("scripted, no SQLSTATE"), False),
     ],
-    ids=[
-        "a-timeout-is-never-asked-again",
-        "a-failure-that-passed-keeps-the-option",
-        "a-timeout-on-the-second-ask-fails-closed",
-        "refused-twice-let-in-twice",
-        "refused-then-down-fails-closed-and-the-refusal-stands",
-    ],
+    ids=["0A000", "42501", "57P01-another-error", "no-sqlstate"],
 )
-def test_only_a_refusal_the_option_alone_explains_drops_it(
-    capsys: pytest.CaptureFixture[str],
-    script: list[type[psycopg.OperationalError] | None],
-    sent: list[bool],
-    opens: bool,
-    refused: bool,
+def test_only_the_four_refusals_of_the_set_degrade(
+    capsys: pytest.CaptureFixture[str], fault: psycopg.Error, refused: bool
 ) -> None:
-    """A transient failure between two attempts must not cost the process the
-    option for good: after a session is let in without it, the option is
-    asked for once more, and only a second refusal drops it. A connect that
-    timed out is no refusal of anything and is never asked again; the session
-    opened without the option is closed before the second ask, so a server at
-    its connection limit is not refused by our own spare session."""
-    asked: list[bool] = []
-    opened: list[_Opened] = []
-
-    def scripted(idle: tuple[str, ...]) -> _Opened:
-        asked.append(idle == (store.IDLE_SESSION_OPTION,))
-        failure = script[len(asked) - 1]
-        if failure is not None:
-            raise failure("scripted")
-        opened.append(_Opened())
-        return opened[-1]
-
-    open_session = cast(
-        "Callable[[Callable[..., _Opened]], _Opened]", store.open_session
-    )
-    if not opens:
-        with pytest.raises(psycopg.OperationalError):
-            open_session(scripted)
-        assert all(spare.closed for spare in opened)
+    """0A000 and 42501 as the server would send them; a session ended under
+    the `SET`, or a fault with no SQLSTATE at all, is the store not answering:
+    the session is closed and `STORE_UNAVAILABLE` refused, nothing remembered."""
+    session = _Session(fault)
+    turn_off = store.idle_session_off
+    if refused:
+        turn_off(cast("psycopg.Connection[Any]", session))
+        assert session.rolled_back and not session.closed
     else:
-        assert open_session(scripted) is opened[-1]
-        assert not opened[-1].closed
-        assert all(spare.closed for spare in opened[:-1])
-    assert asked == sent
+        with pytest.raises(Refusal) as raised:
+            turn_off(cast("psycopg.Connection[Any]", session))
+        assert raised.value.code is RefusalCode.STORE_UNAVAILABLE
+        assert session.closed
     assert store._IDLE_SESSION_REFUSED.is_set() is refused
     assert capsys.readouterr().err == (NOTICE if refused else "")
 
 
+@pytest.mark.parametrize(
+    ("statement", "operator_options"),
+    [(_WOULD_FAIL, None), ("SELECT pg_sleep(1)", "-c statement_timeout=50")],
+    ids=["22012-another-error", "57014-statement-timeout"],
+)
+def test_another_set_error_closes_the_session_and_refuses_unavailable(
+    empty_database: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    statement: str,
+    operator_options: str | None,
+) -> None:
+    """A first statement the server fails for any other reason closes the
+    session and refuses `STORE_UNAVAILABLE`, through the request edge too, on
+    one connect each; nothing is remembered and nothing printed."""
+    monkeypatch.setattr(store, "IDLE_SESSION_SET", statement)
+    if operator_options is not None:
+        monkeypatch.setenv("PGOPTIONS", operator_options)
+    opened = _connects(monkeypatch)
+    with pytest.raises(Refusal) as refused:
+        store.connect(empty_database)
+    assert refused.value.code is RefusalCode.STORE_UNAVAILABLE
+    monkeypatch.setattr(deps, "_database_url", lambda: empty_database)
+    with pytest.raises(Refusal) as at_the_edge:
+        next(deps.store_connection())
+    assert at_the_edge.value.code is RefusalCode.STORE_UNAVAILABLE
+    assert len(opened) == 2 and all(conn.closed for conn in opened)
+    assert not store._IDLE_SESSION_REFUSED.is_set()
+    assert capsys.readouterr().err == ""
+
+
+def test_a_connect_failure_is_never_repeated(
+    empty_database: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A refused connect (a wrong password here) is one attempt, answered
+    `STORE_UNAVAILABLE` at the edge as before D117."""
+    attempts: list[str] = []
+    real = cast("Callable[..., psycopg.Connection[Any]]", psycopg.connect)
+
+    def counted(url: str, **kwargs: object) -> psycopg.Connection[Any]:
+        attempts.append(url)
+        return real(url, **kwargs)
+
+    wrong = empty_database.replace("local-test-admin-only", "not-the-password")
+    assert wrong != empty_database
+    monkeypatch.setattr(psycopg, "connect", counted)
+    monkeypatch.setattr(deps, "_database_url", lambda: wrong)
+    with pytest.raises(Refusal) as refused:
+        next(deps.store_connection())
+    assert refused.value.code is RefusalCode.STORE_UNAVAILABLE
+    assert attempts == [wrong]
+
+
+def test_concurrent_connects_at_a_connection_limit_never_drop_the_set(
+    empty_database: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The review's HIGH: four threads of one process opening and closing
+    sessions under a role limited to two connections. Connects are refused at
+    the limit, as they always were; a refused connect says nothing about the
+    `SET`, so every session that opens has its bound off and the process never
+    takes the `SET` for refused (it did in 5 of 5 trials under the probe)."""
+    shown: list[object] = []
+    refused = [0]
+    lock = threading.Lock()
+    with login_role(empty_database) as url:
+        role = str(psycopg.conninfo.conninfo_to_dict(url)["user"])
+        with psycopg.connect(empty_database, autocommit=True) as admin:
+            admin.execute(
+                sql.SQL("ALTER ROLE {} CONNECTION LIMIT 2").format(sql.Identifier(role))
+            )
+        stop = time.monotonic() + 2.0
+
+        def churn() -> None:
+            while time.monotonic() < stop:
+                try:
+                    with store.connect(url) as conn:
+                        seen = conn.execute("SHOW idle_session_timeout").fetchone()
+                except psycopg.OperationalError:
+                    with lock:
+                        refused[0] += 1
+                    continue
+                with lock:
+                    shown.append(seen)
+
+        threads = [threading.Thread(target=churn) for _ in range(4)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+    assert refused[0] > 0, "the limit was reached"
+    assert shown and set(shown) == {("0",)}
+    assert not store._IDLE_SESSION_REFUSED.is_set()
+    assert capsys.readouterr().err == ""
+
+
 @pytest.mark.parametrize("platform", [False, True], ids=["local", "platform"])
-def test_a_checkpoint_pool_reaches_a_server_that_refuses_the_option_without_it(
+def test_a_checkpoint_pool_whose_set_is_refused_degrades_with_one_notice(
     empty_database: str,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     platform: bool,
 ) -> None:
-    """The pool opens its own sessions (D117 round 2) and follows the same
-    rule: its first session is let in without the option, the statement bound
-    kept, the process says so once, and the next pooled session goes without
-    it at the first try. A server that accepts it is covered by
+    """The pool's sessions run the same `SET` from its configure hook: refused
+    (22023 here), each pooled session still works, with the graph's search path
+    and its statement bound, and the process says so once. A pool whose `SET`
+    is accepted is covered by
     `tests/test_checkpoint.py::test_a_pooled_checkpoint_session_is_never_ended_for_being_idle`."""
-    refuse_idle_session_option(empty_database)
     if platform:
         monkeypatch.setenv(lakebase.LAKEBASE_INSTANCE, "caos-lb")
         monkeypatch.setattr(checkpoint, "store_url", lambda: empty_database)
-    sent: list[bool] = []
-    real = vars(psycopg.Connection)["connect"].__func__
-
-    def spy(cls: type[Any], /, conninfo: str = "", **kwargs: object) -> object:
-        sent.append(store.IDLE_SESSION_OPTION in str(kwargs.get("options", "")))
-        return real(cls, conninfo, **kwargs)
-
-    monkeypatch.setattr(psycopg.Connection, "connect", classmethod(spy))
+    monkeypatch.setattr(store, "IDLE_SESSION_SET", "SET idle_session_timeout = 'x'")
     saver = checkpoint.checkpointer(None if platform else empty_database)
     try:
         pool = getattr(saver, "conn", None)
         assert isinstance(pool, ConnectionPool)
         assert pool.connection_class is (
-            checkpoint.MintedConnection if platform else checkpoint.PooledConnection
+            checkpoint.MintedConnection if platform else psycopg.Connection
         )
-        assert sent[0] and not all(sent), "asked with it, let in without it"
-        assert capsys.readouterr().err == NOTICE
-        sent.clear()
-        with ExitStack() as held:
-            # One more session than the pool holds, so it opens a new one.
-            pooled = [
-                held.enter_context(pool.connection())
-                for _ in range(pool.get_stats().get("pool_size", 0) + 1)
-            ]
+        with pool.connection() as first, pool.connection() as second:
             shown = [
                 conn.execute(f"SHOW {name}").fetchone()
-                for conn in pooled
-                for name in ("idle_session_timeout", "statement_timeout")
+                for conn in (first, second)
+                for name in ("search_path", "statement_timeout")
             ]
     finally:
         checkpoint.close_checkpointer(saver)
-    assert shown == [
-        {"idle_session_timeout": "10min"},
-        {"statement_timeout": "30s"},
-    ] * len(pooled)
-    assert sent and not any(sent), "a later session skips it at the first try"
-    assert capsys.readouterr().err == "", "said once"
+    assert shown == [{"search_path": "caos_graph"}, {"statement_timeout": "30s"}] * 2
+    assert capsys.readouterr().err == NOTICE
+
+
+def test_a_pooled_session_whose_set_fails_otherwise_is_closed_and_refused(
+    empty_database: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The pool's configure hook on a session whose `SET` fails for another
+    reason: the session is closed and `STORE_UNAVAILABLE` refused, which the
+    pool takes as a failed connection (and opens another), never a session
+    handed out without its bound."""
+    monkeypatch.setattr(store, "IDLE_SESSION_SET", _WOULD_FAIL)
+    conn = psycopg.connect(empty_database, autocommit=True)
+    with pytest.raises(Refusal) as refused:
+        checkpoint.configure_session(cast("psycopg.Connection[Any]", conn))
+    assert refused.value.code is RefusalCode.STORE_UNAVAILABLE
+    assert conn.closed
+    assert capsys.readouterr().err == ""

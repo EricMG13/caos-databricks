@@ -45,8 +45,8 @@ if TYPE_CHECKING:
 # checks, the fenced acceptance). While the call's session lives, a lease lost
 # anyway pays nothing twice: exactly-once rests on `call_hold`, `_UNSETTLED`
 # and `replay_billed` (D83). A session the server cut mid-call (a failover, a
-# suspend; never idleness, `caos.store.IDLE_SESSION_OPTION`, unless the server
-# refuses that option, D120) took `call_hold` with it, and then only the live
+# suspend; never idleness, `caos.store.IDLE_SESSION_SET`, unless the server
+# refuses that `SET`, D120) took `call_hold` with it, and then only the live
 # lease keeps a second worker off the node until the bill lands (D117).
 # 420 s since D83: 5 of 19 default-tier calls ran past 240 s on 2 October.
 # 720 s since D117 (owner, 6 October), the lease raised with it: CP-3C at

@@ -129,44 +129,34 @@ def test_connect_asks_for_keepalives_and_an_optional_statement_timeout(
     connection asks for both keepalives and `tcp_user_timeout`. A caller that
     names no `statement_timeout_ms` gets none forced on it (`apply_schema`'s
     migration path may legitimately run long); one that does gets it as
-    `options` at connect time, which holds for the whole session. A store
-    that refuses the first attempt is asked once more without the idle option
-    (D120), the rest unchanged, and the first refusal is raised."""
-    captured: dict[str, object] = {}
-    retried: list[object] = []
+    `options` at connect time, which holds for the whole session. The idle
+    bound is no startup option (D120: a session `SET`, `idle_session_off`),
+    and a refused connect is one attempt, never repeated."""
+    captured: list[dict[str, object]] = []
     monkeypatch.delenv("PGOPTIONS", raising=False)
-    monkeypatch.setattr(store, "_IDLE_SESSION_REFUSED", Event())
 
     def fake_connect(_url: str, **kwargs: object) -> None:
-        if captured:
-            retried.append(kwargs["options"])
-        else:
-            captured.update(kwargs)
+        captured.append(kwargs)
         raise psycopg.OperationalError("down")
 
     monkeypatch.setattr(psycopg, "connect", fake_connect)
 
     with pytest.raises(psycopg.OperationalError):
         store.connect("postgresql://unused.invalid/none")
-    assert captured["keepalives"] == 1
-    assert captured["keepalives_idle"] == store.KEEPALIVES_IDLE_SECONDS
-    assert captured["keepalives_interval"] == store.KEEPALIVES_INTERVAL_SECONDS
-    assert captured["keepalives_count"] == store.KEEPALIVES_COUNT
-    assert captured["tcp_user_timeout"] == store.TCP_USER_TIMEOUT_MS
-    assert captured["options"] == (
-        "-c search_path=caos_store -c idle_session_timeout=0"
-    ), "DL-1, D117, and no bound"
-    assert store.IDLE_SESSION_OPTION == "-c idle_session_timeout=0"
-    assert retried == ["-c search_path=caos_store"]
+    [sent] = captured
+    assert sent["keepalives"] == 1
+    assert sent["keepalives_idle"] == store.KEEPALIVES_IDLE_SECONDS
+    assert sent["keepalives_interval"] == store.KEEPALIVES_INTERVAL_SECONDS
+    assert sent["keepalives_count"] == store.KEEPALIVES_COUNT
+    assert sent["tcp_user_timeout"] == store.TCP_USER_TIMEOUT_MS
+    assert sent["options"] == "-c search_path=caos_store", "DL-1, and no bound"
+    assert store.IDLE_SESSION_SET == "SET idle_session_timeout = 0"
 
     captured.clear()
-    retried.clear()
     with pytest.raises(psycopg.OperationalError):
         store.connect("postgresql://unused.invalid/none", statement_timeout_ms=5000)
-    assert captured["options"] == (
-        "-c search_path=caos_store -c idle_session_timeout=0 -c statement_timeout=5000"
-    )
-    assert retried == ["-c search_path=caos_store -c statement_timeout=5000"]
+    [sent] = captured
+    assert sent["options"] == "-c search_path=caos_store -c statement_timeout=5000"
 
 
 def test_a_store_session_is_never_ended_by_the_server_for_being_idle(
@@ -177,7 +167,7 @@ def test_a_store_session_is_never_ended_by_the_server_for_being_idle(
     `TIMEOUT_SECONDS`. A server that ends idle sessions (`idle_session_timeout`,
     set on the database or the role) let the hold go mid-call, silently, and
     with the lease lapsed a second worker paid for the node again. Every store
-    session turns the bound off for itself (`IDLE_SESSION_OPTION`), over the
+    session turns the bound off for itself (`IDLE_SESSION_SET`), over the
     database's own setting; a plain session on the same database is still
     ended, which is what the setting would have done to ours."""
     db = conninfo_to_dict(empty_database)["dbname"]

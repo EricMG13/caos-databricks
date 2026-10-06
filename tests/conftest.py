@@ -420,40 +420,6 @@ def login_role(database_url: str, *, database_create: bool = True) -> Iterator[s
             admin.execute(f'DROP ROLE "{role}"')
 
 
-def refuse_idle_session_option(database_url: str) -> None:
-    """Make `database_url`'s database refuse every session that starts with
-    `idle_session_timeout` turned off, as a server that rejects
-    `caos.store.IDLE_SESSION_OPTION` would (D120).
-
-    A login event trigger (PostgreSQL 17, the pinned image's) raises SQLSTATE
-    22023 in any session whose bound is `0`; the database's own bound is ten
-    minutes, so a session that does not send the option is let in. The
-    refusal reaches the client as libpq reports any startup refusal: a
-    `FATAL`, an `OperationalError` with no SQLSTATE. Dropped with the database.
-    """
-    import psycopg
-    from psycopg import sql
-    from psycopg.conninfo import conninfo_to_dict
-
-    database = str(conninfo_to_dict(database_url)["dbname"])
-    with psycopg.connect(database_url, autocommit=True) as admin:
-        admin.execute(
-            sql.SQL("ALTER DATABASE {} SET idle_session_timeout = '10min'").format(
-                sql.Identifier(database)
-            )
-        )
-        admin.execute(
-            "CREATE FUNCTION refuse_idle_off() RETURNS event_trigger"
-            " LANGUAGE plpgsql AS $$ BEGIN"
-            " IF current_setting('idle_session_timeout') = '0' THEN"
-            " RAISE EXCEPTION USING ERRCODE = '22023'; END IF; END $$"
-        )
-        admin.execute(
-            "CREATE EVENT TRIGGER refuse_idle_off ON login"
-            " EXECUTE FUNCTION refuse_idle_off()"
-        )
-
-
 def priced(estimate: Decimal, model: str = "a-model/for-the-test") -> ModelPrice:
     """A dated price whose worst case (F06) is exactly `estimate`, for `model`.
 

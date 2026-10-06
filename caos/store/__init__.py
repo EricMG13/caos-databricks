@@ -6,7 +6,7 @@ import json
 import os
 import sys
 import threading
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from enum import StrEnum
 from hashlib import sha256
@@ -267,18 +267,22 @@ SEARCH_PATH_OPTION = f"-c search_path={STORE_SCHEMA}"
 # transaction, for the whole model call (up to `caos.provider.TIMEOUT_SECONDS`);
 # an `idle_session_timeout` set on the database or the role would end that
 # session mid-call and let the hold go with nothing said, and once the lease
-# lapsed too a second worker could pay for the node again. Sent at connect
-# like the search path, after the operator's own options, so it wins. A cut
-# this cannot stop (a failover, a scale-to-zero suspend, a lost socket) still
-# ends the hold; then the lease's 180 s past the call deadline is the margin.
-# D120 (amends D117): a server that refuses the option is reached without it
-# (`open_session`), once the refusal is shown to be the option's alone, and
-# the process says so once (`IDLE_SESSION_REFUSED`) and sends it no more. In
-# that mode an idle-session bound on the database or the role can end a
-# session mid-call too, and the 180 s margin covers that as well (pre-D117).
-IDLE_SESSION_OPTION = "-c idle_session_timeout=0"
-# The stderr line a process prints, once, when it finds the server refusing
-# `IDLE_SESSION_OPTION`: the code alone, never the server's message.
+# lapsed too a second worker could pay for the node again. A cut this cannot
+# stop (a failover, a scale-to-zero suspend, a lost socket) still ends the
+# hold; then the lease's 180 s past the call deadline is the margin.
+# D120 (amends D117): the bound is turned off by the session's first statement
+# (`idle_session_off`), a session-level `SET` that wins over the database's and
+# the role's settings as the startup option did, rather than as a startup
+# option: a refused option arrives with no SQLSTATE, and a `SET` refused says
+# why. Like `call_hold`, it needs a session-mode connection: a transaction
+# pooler would run it on one server session and the call on another.
+IDLE_SESSION_SET = "SET idle_session_timeout = 0"
+# The SQLSTATEs with which a server refuses that `SET` itself: a parameter it
+# does not know, a value it will not take, a feature it does not support, a
+# right the role lacks. On these the session carries on without it (D120).
+IDLE_SESSION_SET_REFUSALS = frozenset({"42704", "22023", "0A000", "42501"})
+# The stderr line a process prints, once, when its server refuses the `SET`:
+# the code alone, never the server's message.
 IDLE_SESSION_REFUSED = "IDLE_SESSION_OPTION_REFUSED"
 # Whether this process has found that refusal; set once, never cleared.
 _IDLE_SESSION_REFUSED = threading.Event()
@@ -427,73 +431,63 @@ def connect(
     one mints (ST-2): the API, the health probes and the lifespan open theirs
     here, and a token revoked early would otherwise be sent until it aged out.
 
-    Every session asks not to be ended for sitting idle (`IDLE_SESSION_OPTION`,
-    D117), unless the server refuses that alone (`open_session`, D120).
+    Every session's first statement turns the server's idle bound off for it
+    (`idle_session_off`, D117, D120); a fault there closes it and refuses
+    `STORE_UNAVAILABLE`.
     """
     from caos.store.lakebase import note_connect_failure
 
     kwargs: dict[str, Any] = dict(SOCKET_BOUNDS)
     if connect_timeout is not None:
         kwargs["connect_timeout"] = connect_timeout
+    options = [SEARCH_PATH_OPTION]
+    if statement_timeout_ms is not None:
+        options.append(f"-c statement_timeout={statement_timeout_ms}")
+    kwargs["options"] = startup_options(url, options)
+    try:
+        conn = psycopg.connect(url, autocommit=False, **kwargs)
+    except psycopg.OperationalError as failed:
+        note_connect_failure(failed)
+        raise
+    try:
+        idle_session_off(conn)
+    except BaseException:
+        conn.close()
+        raise
+    return conn
 
-    def opened(idle: tuple[str, ...]) -> StoreConnection:
-        options = [SEARCH_PATH_OPTION, *idle]
-        if statement_timeout_ms is not None:
-            options.append(f"-c statement_timeout={statement_timeout_ms}")
-        kwargs["options"] = startup_options(url, options)
-        try:
-            return psycopg.connect(url, autocommit=False, **kwargs)
-        except psycopg.OperationalError as failed:
-            note_connect_failure(failed)
-            raise
 
-    return open_session(opened)
+def idle_session_off(conn: psycopg.Connection[Any]) -> None:
+    """Turn the server's idle-session bound off for this session, as its first
+    statement (D117, D120), committed so no rollback of the caller's undoes it.
 
-
-def open_session[C: psycopg.Connection[Any]](
-    opened: Callable[[tuple[str, ...]], C],
-) -> C:
-    """A store session `opened` with `IDLE_SESSION_OPTION`, or without it when
-    the server refuses it (D120): `opened` is handed the idle options to send.
-
-    libpq reports a startup option the server refused -- a parameter it does
-    not know (42704), a value it will not take (22023), a login check -- as any
-    refused startup: an `OperationalError` with no SQLSTATE and only the
-    server's text, which is never read. So the refusal is found by asking
-    again, the option the only difference: a failure without it as well is
-    not the option's, and the first failure is raised as before. A session
-    let in without it is closed and the option asked for once more, so a
-    failure that passed (a restart, a connection slot) does not cost the
-    process the option; only a second refusal drops it. Then the process
-    prints `IDLE_SESSION_REFUSED` once and every later session goes without
-    it at the first try. A connect that timed out answers nothing about the
-    option and is raised at once, so a store that does not answer costs one
-    attempt, as before, and one that refuses every session costs two.
+    A server that refuses the `SET` itself (`IDLE_SESSION_SET_REFUSALS`, read
+    from the SQLSTATE, never the text) leaves the session usable without it:
+    the process prints `IDLE_SESSION_REFUSED` once and skips the `SET` from
+    then on, and the lease's 180 s margin alone covers an idle cut. Any other
+    fault is the store not answering: the session is closed and refused
+    `STORE_UNAVAILABLE`. Nothing here connects again.
     """
     if _IDLE_SESSION_REFUSED.is_set():
-        return opened(())
-    idle = (IDLE_SESSION_OPTION,)
+        return
     try:
-        return opened(idle)
-    except psycopg.errors.ConnectionTimeout:
-        raise
-    except psycopg.OperationalError as failed:
-        first = failed
-    try:
-        opened(()).close()
-    except psycopg.OperationalError:
-        raise first from None
-    try:
-        return opened(idle)
-    except psycopg.errors.ConnectionTimeout:
-        raise
-    except psycopg.OperationalError:
+        conn.execute(IDLE_SESSION_SET)
+        if not conn.autocommit:
+            conn.commit()
+    except psycopg.Error as fault:
+        if fault.sqlstate not in IDLE_SESSION_SET_REFUSALS:
+            conn.close()
+            raise Refusal(RefusalCode.STORE_UNAVAILABLE) from None
+        try:
+            conn.rollback()
+        except psycopg.Error:
+            conn.close()
+            raise Refusal(RefusalCode.STORE_UNAVAILABLE) from None
         _idle_session_refused()
-    return opened(())
 
 
 def _idle_session_refused() -> None:
-    """Remember, for the process, that the server refuses the idle option, and
+    """Remember, for the process, that the server refuses the idle `SET`, and
     say so once on stderr, the code alone (D120)."""
     with _IDLE_SESSION_NOTICE:
         if _IDLE_SESSION_REFUSED.is_set():

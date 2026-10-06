@@ -43,7 +43,7 @@ from caos.graph.build import RunState
 from caos.refusals import Refusal, RefusalCode
 from caos.store import (
     SOCKET_BOUNDS,
-    open_session,
+    idle_session_off,
     owned_schema,
     startup_options,
 )
@@ -79,38 +79,14 @@ STATEMENT_TIMEOUT_MS = 30_000
 _LOADABLE = frozenset({"null", "bytes", "bytearray", "msgpack"})
 
 
-class PooledConnection(psycopg.Connection[DictRow]):
-    """A pooled checkpoint session with the store's startup options (D117,
-    D120): its idle bound turned off, unless the server refuses that alone
-    (`caos.store.open_session`), and `STATEMENT_TIMEOUT_MS`, both after the
-    operator's own. Built per attempt, since a refusal changes what is sent."""
-
-    @classmethod
-    def connect(cls, conninfo: str = "", **kwargs: object) -> Self:
-        named = cast("dict[str, Any]", kwargs)
-        bound = f"-c statement_timeout={STATEMENT_TIMEOUT_MS}"
-        return open_session(
-            lambda idle: cls._attempt(
-                conninfo, startup_options(conninfo, [*idle, bound]), named
-            )
-        )
-
-    @classmethod
-    def _attempt(cls, conninfo: str, options: str, kwargs: dict[str, Any]) -> Self:
-        """One attempt, with these startup `options`."""
-        return super().connect(conninfo, **kwargs, options=options)
-
-
-class MintedConnection(PooledConnection):
+class MintedConnection(psycopg.Connection[DictRow]):
     """A connection whose URL is built when it opens, so a pool that reconnects
     after the hour-long Lakebase token aged out gets a fresh one (D17)."""
 
     @classmethod
-    def _attempt(cls, conninfo: str, options: str, kwargs: dict[str, Any]) -> Self:
-        """One attempt to the URL minted now; a failure drops the credential."""
-        del conninfo
+    def connect(cls, conninfo: str = "", **kwargs: object) -> Self:
         try:
-            return super()._attempt(store_url(), options, kwargs)
+            return super().connect(store_url(), **cast("dict[str, Any]", kwargs))
         except psycopg.OperationalError as failed:
             note_connect_failure(failed)  # the pool re-mints on its retry (AR-02)
             raise
@@ -159,6 +135,16 @@ def serializer() -> JsonPlusSerializer:
 
 def _search_path(conn: psycopg.Connection[DictRow]) -> None:
     conn.execute(f"SET search_path TO {SCHEMA}")
+
+
+def configure_session(conn: psycopg.Connection[DictRow]) -> None:
+    """The pool's hook on every new session: its idle bound off first, as the
+    store's own sessions (`caos.store.idle_session_off`, D117, D120), then the
+    graph's search path. A fault closes it and refuses `STORE_UNAVAILABLE`,
+    which the pool takes as a failed connection: no session is handed out
+    whose `SET` failed for any reason but the server's refusal of it."""
+    idle_session_off(conn)
+    _search_path(conn)
 
 
 def _set_up(conn: psycopg.Connection[DictRow]) -> None:
@@ -243,24 +229,29 @@ def checkpointer(url: str | None = None) -> BaseCheckpointSaver[str]:
     """
     if lakebase_database() is not None:
         return _pooled(MintedConnection, "")
-    return _pooled(PooledConnection, url or store_url())
+    return _pooled(psycopg.Connection, url or store_url())
 
 
 def _pooled(
-    connection_class: type[PooledConnection], conninfo: str
+    connection_class: type[psycopg.Connection[DictRow]], conninfo: str
 ) -> BaseCheckpointSaver[str]:
     pool: ConnectionPool[psycopg.Connection[DictRow]] = ConnectionPool(
         conninfo=conninfo,
         connection_class=connection_class,
         # `connect`'s socket bounds (W4): a half-open socket otherwise stalls a
         # checkpoint write, or the pool's own check, for the kernel's timeout.
-        # Its startup options -- the idle bound turned off (D117, D120), since
-        # a database that ends idle sessions otherwise ends every pooled one
-        # between writes, and the statement bound -- are the connection
-        # class's, per attempt. The search path is the graph's own, set by
-        # `_search_path`.
-        kwargs={"autocommit": True, "row_factory": dict_row, **SOCKET_BOUNDS},
-        configure=_search_path,
+        # The idle bound is turned off by `configure_session` (D117, D120): a
+        # database that ends idle sessions otherwise ends every pooled one
+        # between writes. The search path is the graph's own, set there too.
+        kwargs={
+            "autocommit": True,
+            "row_factory": dict_row,
+            **SOCKET_BOUNDS,
+            "options": startup_options(
+                conninfo, [f"-c statement_timeout={STATEMENT_TIMEOUT_MS}"]
+            ),
+        },
+        configure=configure_session,
         min_size=POOL_MIN,
         max_size=POOL_MAX,
         # A connection is retired within the credential's life, so the
