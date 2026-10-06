@@ -9,20 +9,25 @@ fails the fake and not the adapter.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable, Mapping, Sequence
 from datetime import date
 from decimal import Decimal
+from fractions import Fraction
 from typing import Any, cast
 from uuid import uuid4
 
 import pytest
 from copilot import SessionEvent
 from copilot.generated.session_events import SessionEventType
+from hypothesis import assume, given, settings
+from hypothesis import strategies as st
 from langchain_core.messages import AIMessage, HumanMessage
 
 from caos import copilot as copilot_module
 from caos import models
 from caos.copilot import (
+    NANO_PER_CREDIT,
     ChatCopilot,
     CopilotModel,
     CopilotStatusError,
@@ -58,18 +63,44 @@ SECRET = "private text the runtime wrote"
 
 def wire(kind: str, /, **data: object) -> Event:
     """One session event exactly as the pinned SDK writes it."""
-    written: dict[str, object] = SessionEvent.from_dict(
+    return enveloped(
         {
             "type": kind,
             "data": {key: value for key, value in data.items() if value is not None},
             "id": str(uuid4()),
             "timestamp": "2026-10-06T00:00:00Z",
         }
-    ).to_dict()
+    )
+
+
+def enveloped(event: Mapping[str, object], **envelope: object) -> Event:
+    """`event` with these envelope fields (`agentId`, `parentId`), through the
+    SDK. `from_dict` drops a key it does not know without a word, so every key
+    sent must come back from `to_dict`: a fake can only say what the SDK says."""
+    sent = {**event, **envelope}
+    written: dict[str, object] = SessionEvent.from_dict(sent).to_dict()
+    _survived(sent, written, "event")
     return written
 
 
-def started(model: str = PIN, version: str = "1.0.90") -> Event:
+def _survived(sent: object, written: object, where: str) -> None:
+    """Every non-None key of `sent` is in `written`, at every depth."""
+    if isinstance(sent, Mapping):
+        assert isinstance(written, Mapping), where
+        for key, value in sent.items():
+            if value is None:
+                continue
+            assert key in written, f"{where}.{key} was dropped by the SDK"
+            _survived(value, written[key], f"{where}.{key}")
+    elif isinstance(sent, list):
+        assert isinstance(written, list) and len(written) == len(sent), where
+        for index, (item, kept) in enumerate(zip(sent, written, strict=True)):
+            _survived(item, kept, f"{where}[{index}]")
+
+
+def started(
+    model: str = PIN, version: str = "1.0.90", effort: str | None = "high"
+) -> Event:
     return wire(
         "session.start",
         copilotVersion=version,
@@ -78,7 +109,7 @@ def started(model: str = PIN, version: str = "1.0.90") -> Event:
         startTime="2026-10-06T00:00:00Z",
         version=1,
         selectedModel=model,
-        reasoningEffort="high",
+        reasoningEffort=effort,
         contextTier="long_context",
     )
 
@@ -227,8 +258,13 @@ def turn_retry(reason: str = "provider_error") -> Event:
     return wire("assistant.turn_retry", turnId="turn-1", model=PIN, reason=reason)
 
 
-def model_change(new: str, previous: str = PIN) -> Event:
-    return wire("session.model_change", newModel=new, previousModel=previous)
+def model_change(new: str, previous: str = PIN, effort: str | None = "high") -> Event:
+    return wire(
+        "session.model_change",
+        newModel=new,
+        previousModel=previous,
+        reasoningEffort=effort,
+    )
 
 
 def server_tool_progress() -> Event:
@@ -608,8 +644,6 @@ REFUSED: dict[str, list[Event]] = {
     "truncated": sdk_call(extra=truncation()),
     "compacted": sdk_call(extra=compaction_start()),
     "limits-exhausted": sdk_call(extra=limits_exhausted()),
-    "idle-aborted": sdk_call(idle=idle(aborted=True)),
-    "no-idle": sdk_call(idle=None),
     "no-turn-end": sdk_call(turn_end=None),
     "no-answer": sdk_call(answer=None),
     "two-answers": sdk_call(answer=[answer(), answer()]),
@@ -777,8 +811,8 @@ def test_a_stated_zero_settles_at_zero() -> None:
     assert settled_charge(message, CREDIT) == Decimal(0)
 
 
-def test_zero_ai_units_on_an_unanswered_call_is_a_stated_zero() -> None:
-    seen = sdk_call(answer=None, usage=None, checkpoint=checkpoint(0))
+def test_zero_ai_units_on_a_call_that_did_no_work_is_a_stated_zero() -> None:
+    seen = [*UNSPENT, failure("api", 500), checkpoint(0), error(500)]
     assert reply_message(seen, TARGET).response_metadata["nano_aiu"] == 0
 
 
@@ -1162,7 +1196,8 @@ NO_EFFORT = CopilotModel("copilot", PIN, None)
 def test_a_model_pinned_at_no_effort_takes_a_usage_stating_none(
     effort: str | None,
 ) -> None:
-    message = reply_message(sdk_call(usage=usage(reasoningEffort=effort)), NO_EFFORT)
+    seen = sdk_call(started=started(effort=effort), usage=usage(reasoningEffort=effort))
+    message = reply_message(seen, NO_EFFORT)
     assert message.response_metadata["finish_reason"] == "stop"
 
 
@@ -1270,3 +1305,617 @@ def test_a_checkpoint_stating_a_boolean_is_spend_and_an_unknown_charge() -> None
     message = reply_message(sdk_call(checkpoint=stated), TARGET)
     assert "nano_aiu" not in message.response_metadata
     assert "nano_aiu" not in invoked([*UNSPENT, stated, error(500)]).response_metadata
+
+
+# -- Fix round 1: the adversarial audit's probes, as tests. ------------------
+
+
+def shutdown(shutdown_type: str = "routine", **changed: object) -> Event:
+    """`session.shutdown` naming only the pin, its totals equal to the bill."""
+    data: dict[str, object] = {
+        "codeChanges": {"filesModified": [], "linesAdded": 0, "linesRemoved": 0},
+        "modelMetrics": {PIN: metric(251_164_000)},
+        "sessionStartTime": 0,
+        "shutdownType": shutdown_type,
+        "totalApiDurationMs": 10,
+        "totalNanoAiu": 251_164_000,
+        "currentModel": PIN,
+    }
+    data.update(changed)
+    return wire("session.shutdown", **data)
+
+
+def metric(nano_aiu: int | None) -> dict[str, object]:
+    return {
+        "requests": {"count": 1, "cost": 1.0},
+        "usage": {
+            "cacheReadTokens": 0,
+            "cacheWriteTokens": 0,
+            "inputTokens": 10,
+            "outputTokens": 10,
+        },
+        "totalNanoAiu": nano_aiu,
+    }
+
+
+def reasoning() -> Event:
+    return wire("assistant.reasoning", content="r", reasoningId="reasoning-1")
+
+
+def test_a_fake_carrying_a_key_the_sdk_does_not_know_fails() -> None:
+    with pytest.raises(AssertionError, match="dropped by the SDK"):
+        wire("session.idle", notAField=1)
+    with pytest.raises(AssertionError, match="dropped by the SDK"):
+        usage(copilotUsage={"totalNanoAiu": 1, "model": PIN, "notAField": 1})
+
+
+# Item 1 (R2.10): a call showing any work or any spend is never a drop.
+WORKED: dict[str, list[Event]] = {
+    "per-request-units-no-checkpoint": [
+        *UNSPENT,
+        usage(copilotUsage={"totalNanoAiu": 500_000_000, "model": PIN}),
+        failure("api", 500),
+        error(500),
+        idle(),
+    ],
+    "zero-checkpoint-before-the-spend": [
+        *UNSPENT,
+        checkpoint(0, 0),
+        usage(copilotUsage={"totalNanoAiu": 500_000_000, "model": PIN}),
+        failure("api", 500),
+        error(500),
+        idle(),
+    ],
+    "settled-success-zero-checkpoint": [
+        *UNSPENT,
+        call_finished("success"),
+        final_result(),
+        checkpoint(0, 0),
+        error(503),
+        idle(),
+    ],
+    "finished-dispatch-only": [*UNSPENT, call_finished("success"), error(503), idle()],
+    "reasoning-only": [*UNSPENT, reasoning(), error(503), idle()],
+    "shutdown-states-spend": [
+        *UNSPENT,
+        failure("api", 500),
+        error(500),
+        idle(),
+        shutdown(modelMetrics={}, totalNanoAiu=1),
+    ],
+    "shutdown-metric-states-spend": [
+        *UNSPENT,
+        failure("api", 500),
+        error(500),
+        idle(),
+        shutdown(totalNanoAiu=None, modelMetrics={PIN: metric(5)}),
+    ],
+    "model-worked-no-message-zero-checkpoint": sdk_call(
+        answer=None, usage=usage(copilotUsage=None), checkpoint=checkpoint(0, 0)
+    ),
+}
+
+
+@pytest.mark.parametrize("seen", list(WORKED.values()), ids=list(WORKED))
+def test_a_call_showing_work_or_spend_is_never_a_drop_and_never_billed_zero(
+    seen: list[Event],
+) -> None:
+    message = invoked(seen)
+    assert "finish_reason" not in message.response_metadata
+    assert "nano_aiu" not in message.response_metadata
+    asked: list[str] = []
+
+    def ask(prompt: str, target: CopilotModel, seconds: float) -> list[Event]:
+        asked.append(prompt)
+        return seen
+
+    completion = provider(ask).complete(PROMPT)
+    assert completion.drop_kind is None
+    assert completion.refusal is RefusalCode.PROVIDER_RESPONSE_INVALID
+    assert asked == [PROMPT]
+
+
+# Items 2, 3 and 5: the bill is final only once the session settled after it.
+UNSETTLED: dict[str, list[Event]] = {
+    "idle-aborted": sdk_call(idle=idle(aborted=True)),
+    "no-idle": sdk_call(idle=None),
+    "dispatch-after-the-checkpoint": [
+        *UNSPENT,
+        failure("api", 503),
+        checkpoint(100_000_000, 1),
+        turn_retry("provider_error"),
+        call_start(),
+    ],
+    "reasoning-after-the-checkpoint": sdk_call(usage=None, idle=[reasoning(), idle()]),
+    "answer-after-idle": [
+        *sdk_call(answer=None, idle=[idle(), answer()], checkpoint=None),
+        checkpoint(251_164_000, 1),
+    ],
+}
+
+
+@pytest.mark.parametrize("seen", list(UNSETTLED.values()), ids=list(UNSETTLED))
+def test_a_session_that_did_not_settle_after_its_checkpoint_has_an_unknown_charge(
+    seen: list[Event],
+) -> None:
+    message = reply_message(seen, TARGET)
+    assert "finish_reason" not in message.response_metadata
+    assert "nano_aiu" not in message.response_metadata
+
+
+# F561: a shutdown states the session's figures too; any that disagrees with
+# the checkpoint leaves the charge unknown.
+DISAGREEING: dict[str, list[Event]] = {
+    "shutdown-total-above-the-checkpoint": sdk_call(
+        idle=[
+            idle(),
+            shutdown(
+                totalNanoAiu=900_000_000,
+                modelMetrics={PIN: metric(251_164_000), OTHER: metric(648_836_000)},
+                currentModel=OTHER,
+            ),
+        ]
+    ),
+    "shutdown-total-below-the-checkpoint": sdk_call(
+        idle=[idle(), shutdown(totalNanoAiu=1)]
+    ),
+    "shutdown-metrics-above-the-checkpoint": sdk_call(
+        idle=[idle(), shutdown(modelMetrics={PIN: metric(251_164_001)})]
+    ),
+    "shutdown-metric-with-no-figure-then-one-above": sdk_call(
+        idle=[
+            idle(),
+            shutdown(modelMetrics={OTHER: metric(None), PIN: metric(251_164_001)}),
+        ]
+    ),
+    "shutdown-metrics-unreadable": sdk_call(
+        idle=[idle(), _malformed(shutdown(), modelMetrics={PIN: "x"})]
+    ),
+    "shutdown-metrics-not-an-object": sdk_call(
+        idle=[idle(), _malformed(shutdown(), modelMetrics="x")]
+    ),
+}
+
+
+@pytest.mark.parametrize("seen", list(DISAGREEING.values()), ids=list(DISAGREEING))
+def test_a_shutdown_figure_that_disagrees_with_the_checkpoint_is_an_unknown_charge(
+    seen: list[Event],
+) -> None:
+    assert "nano_aiu" not in reply_message(seen, TARGET).response_metadata
+
+
+@pytest.mark.parametrize(
+    "shutdown_event",
+    [
+        _malformed(shutdown(modelMetrics={}, totalNanoAiu=None), modelMetrics="x"),
+        _malformed(shutdown(modelMetrics={}, totalNanoAiu=None), modelMetrics={PIN: 7}),
+    ],
+    ids=["metrics-not-an-object", "metric-not-an-object"],
+)
+def test_an_unreadable_shutdown_figure_is_spend(shutdown_event: Event) -> None:
+    seen = [*UNSPENT, failure("api", 500), error(500), idle(), shutdown_event]
+    assert "finish_reason" not in invoked(seen).response_metadata
+
+
+def test_a_shutdown_stating_zero_is_no_spend() -> None:
+    zero = shutdown(modelMetrics={PIN: metric(0)}, totalNanoAiu=0)
+    with pytest.raises(CopilotStatusError):
+        invoked([*UNSPENT, failure("api", 500), error(500), idle(), zero])
+
+
+def test_a_dispatch_after_the_checkpoint_is_spend_never_a_drop() -> None:
+    completion = provider(
+        replying(*UNSETTLED["dispatch-after-the-checkpoint"])
+    ).complete(PROMPT)
+    assert (completion.charge, completion.drop_kind) == (None, None)
+
+
+NO_USAGE_START = {
+    "copilotVersion": "1.0.90",
+    "producer": "copilot-agent",
+    "sessionId": "session-1",
+    "startTime": "2026-10-06T00:00:00Z",
+    "version": 1,
+    "selectedModel": PIN,
+    "reasoningEffort": "high",
+}
+OTHER_DISPATCH = [started(), turn_start(), call_start(OTHER), call_finished("success")]
+
+# Items 3 to 5: the model proof, each billed and refused (the bill kept).
+REFUSED_ROUND_1: dict[str, list[Event]] = {
+    "dispatch-to-another-model": sdk_call(started=OTHER_DISPATCH),
+    "start-selects-another-model": sdk_call(started=started(model=OTHER)),
+    "start-effort-other-no-usage": sdk_call(
+        usage=None,
+        started=wire("session.start", **{**NO_USAGE_START, "reasoningEffort": "low"}),
+    ),
+    "start-auto-tier-no-usage": sdk_call(
+        usage=None,
+        started=wire("session.start", **{**NO_USAGE_START, "autoTier": "balance"}),
+    ),
+    "start-effort-other-with-usage": sdk_call(
+        started=wire("session.start", **{**NO_USAGE_START, "reasoningEffort": "low"})
+    ),
+    "no-start-no-usage": sdk_call(usage=None, started=None),
+    "model-change-other-effort": sdk_call(
+        usage=None,
+        extra=wire(
+            "session.model_change",
+            newModel=PIN,
+            previousModel=OTHER,
+            reasoningEffort="low",
+        ),
+    ),
+    "model-change-auto-tier": sdk_call(
+        extra=wire(
+            "session.model_change",
+            newModel=PIN,
+            previousModel=OTHER,
+            reasoningEffort="high",
+            autoTier="intelligence",
+        ),
+    ),
+    "usage-num-tool-calls": sdk_call(usage=usage(numToolCalls=2)),
+    "usage-tool-counts": sdk_call(usage=usage(toolCounts={"bash": 2})),
+    "usage-parent-tool-call": sdk_call(usage=usage(parentToolCallId="tool-1")),
+    "usage-initiator-sub-agent": sdk_call(usage=usage(initiator="sub-agent")),
+    "turn-retry-another-model": sdk_call(
+        extra=wire("assistant.turn_retry", turnId="t", model=OTHER, reason="fallback")
+    ),
+    "turn-start-another-model": sdk_call(
+        turn_start=wire("assistant.turn_start", turnId="turn-1", model=OTHER)
+    ),
+    "turn-end-another-model": sdk_call(
+        turn_end=wire("assistant.turn_end", turnId="turn-1", model=OTHER)
+    ),
+    "failure-on-another-model": sdk_call(
+        call_start=[
+            call_start(),
+            wire(
+                "model.call_failure",
+                source="top_level",
+                failureKind="api",
+                statusCode=503,
+                model=OTHER,
+            ),
+            call_start(),
+        ]
+    ),
+    "message-chunk-0-of-2": sdk_call(answer=answer(chunkCount=2, chunkIndex=0)),
+    "message-chunk-1-of-1": sdk_call(answer=answer(chunkCount=1, chunkIndex=1)),
+    "message-parent-tool-call": sdk_call(answer=answer(parentToolCallId="tool-1")),
+    "message-from-a-sub-agent": sdk_call(answer=enveloped(answer(), agentId="agent-1")),
+    "usage-from-a-sub-agent": sdk_call(usage=enveloped(usage(), agentId="agent-1")),
+    "result-from-a-sub-agent": sdk_call(
+        final_result=enveloped(final_result(), agentId="agent-1")
+    ),
+    "autopilot-continuation": sdk_call(
+        started=[
+            started(),
+            wire("user.message", content=PROMPT),
+            wire("user.message", content="other", isAutopilotContinuation=True),
+        ]
+    ),
+    "lone-autopilot-continuation": sdk_call(
+        started=[
+            started(),
+            wire("user.message", content=PROMPT, isAutopilotContinuation=True),
+        ]
+    ),
+    "reasoning-right-after-the-turn-end": sdk_call(turn_end=[turn_end(), reasoning()]),
+    "two-user-messages": sdk_call(
+        started=[
+            started(),
+            wire("user.message", content=PROMPT),
+            wire("user.message", content=PROMPT),
+        ]
+    ),
+    "shutdown-error": sdk_call(idle=[idle(), shutdown("error")]),
+    "shutdown-names-another-model": sdk_call(
+        idle=[
+            idle(),
+            shutdown(
+                modelMetrics={PIN: metric(251_164_000 - 1), OTHER: metric(1)},
+            ),
+        ]
+    ),
+    "shutdown-current-model-other": sdk_call(
+        idle=[idle(), shutdown(currentModel=OTHER)]
+    ),
+}
+
+
+@pytest.mark.parametrize(
+    "seen", list(REFUSED_ROUND_1.values()), ids=list(REFUSED_ROUND_1)
+)
+def test_a_dispatch_turn_effort_or_tool_signal_off_the_pin_is_billed_and_refused(
+    seen: list[Event],
+) -> None:
+    message = reply_message(seen, TARGET)
+    assert "finish_reason" not in message.response_metadata
+    assert message.response_metadata["nano_aiu"] == 251_164_000
+
+
+ADMITTED_ROUND_1: dict[str, list[Event]] = {
+    "usage-witnesses-the-effort-with-no-start": sdk_call(started=None),
+    "usage-initiator-user": sdk_call(usage=usage(initiator="user")),
+    "message-chunk-0-of-1": sdk_call(answer=answer(chunkCount=1, chunkIndex=0)),
+    "shutdown-routine-on-the-pin": sdk_call(idle=[idle(), shutdown()]),
+    "shutdown-stating-no-total": sdk_call(
+        idle=[idle(), shutdown(totalNanoAiu=None, modelMetrics={})]
+    ),
+    "model-change-to-the-pin-at-its-effort": sdk_call(
+        usage=None,
+        extra=wire(
+            "session.model_change",
+            newModel=PIN,
+            previousModel=OTHER,
+            reasoningEffort="high",
+        ),
+    ),
+    "dispatch-and-turns-naming-no-model": sdk_call(
+        turn_start=wire("assistant.turn_start", turnId="turn-1"),
+        call_start=wire("model.call_start", turnId="turn-1"),
+        turn_end=wire("assistant.turn_end", turnId="turn-1"),
+    ),
+}
+
+
+@pytest.mark.parametrize(
+    "seen", list(ADMITTED_ROUND_1.values()), ids=list(ADMITTED_ROUND_1)
+)
+def test_a_call_that_names_only_the_pin_states_its_finish_and_bill(
+    seen: list[Event],
+) -> None:
+    message = reply_message(seen, TARGET)
+    assert message.response_metadata["finish_reason"] == "stop"
+    assert message.response_metadata["nano_aiu"] == 251_164_000
+
+
+# -- Properties (D121): the money arithmetic and the mapping's rules. --------
+
+UNITS = st.integers(min_value=0, max_value=2**53 - 1)
+CREDITS = st.decimals(
+    min_value=Decimal("0.00000001"),
+    max_value=Decimal(1000),
+    places=8,
+    allow_nan=False,
+    allow_infinity=False,
+)
+INVALID_UNITS = st.one_of(
+    st.integers(max_value=-1),
+    st.integers(min_value=2**53),
+    st.floats(),
+    st.booleans(),
+    st.none(),
+    st.text(max_size=4),
+)
+INVALID_CREDITS = st.one_of(
+    st.decimals(max_value=Decimal(0)),
+    st.decimals(allow_nan=True).filter(lambda value: not value.is_finite()),
+    st.just(Decimal("0." + "1" * 1200)),
+    st.floats(),
+    st.integers(),
+    st.booleans(),
+    st.none(),
+)
+EXAMPLES = settings(deadline=None, max_examples=200)
+
+
+def charged(units: object, credit: object) -> Decimal | None:
+    message = AIMessage(content="", response_metadata={"nano_aiu": units})
+    return settled_charge(message, cast(Decimal, credit))
+
+
+@EXAMPLES
+@given(UNITS, CREDITS)
+def test_property_the_charge_is_exactly_the_units_at_the_credit_price(
+    units: int, credit: Decimal
+) -> None:
+    charge = charged(units, credit)
+    assert isinstance(charge, Decimal)
+    assert Fraction(charge) * NANO_PER_CREDIT == units * Fraction(credit)
+
+
+@EXAMPLES
+@given(UNITS, UNITS, CREDITS)
+def test_property_the_charge_is_additive_in_the_units(
+    first: int, second: int, credit: Decimal
+) -> None:
+    assume(first + second < 2**53)
+    whole, part, rest = (
+        charged(first + second, credit),
+        charged(first, credit),
+        charged(second, credit),
+    )
+    assert whole is not None and part is not None and rest is not None
+    assert Fraction(whole) == Fraction(part) + Fraction(rest)
+
+
+@EXAMPLES
+@given(UNITS, UNITS, CREDITS, CREDITS)
+def test_property_the_charge_never_falls_as_units_or_the_credit_price_rise(
+    first: int, second: int, low: Decimal, high: Decimal
+) -> None:
+    less, more = sorted((first, second))
+    cheap, dear = sorted((low, high))
+    assert cast(Decimal, charged(less, cheap)) <= cast(Decimal, charged(more, cheap))
+    assert cast(Decimal, charged(less, cheap)) <= cast(Decimal, charged(less, dear))
+
+
+@EXAMPLES
+@given(INVALID_UNITS, CREDITS)
+def test_property_a_count_that_is_no_whole_figure_charges_nothing(
+    units: object, credit: Decimal
+) -> None:
+    assert charged(units, credit) is None
+
+
+@EXAMPLES
+@given(UNITS, INVALID_CREDITS)
+def test_property_a_credit_price_that_is_no_positive_decimal_charges_nothing(
+    units: int, credit: object
+) -> None:
+    assert charged(units, credit) is None
+
+
+@EXAMPLES
+@given(
+    st.one_of(
+        st.floats(),
+        st.integers(min_value=-(2**60), max_value=2**60).map(float),
+    )
+)
+def test_property_a_checkpoint_bills_its_value_only_as_a_whole_count(
+    value: float,
+) -> None:
+    seen = [*UNSPENT, failure("api", 500), checkpoint(value), error(500)]
+    nano = reply_message(seen, TARGET).response_metadata.get("nano_aiu")
+    if math.isfinite(value) and value.is_integer() and 0 <= value < 2**53:
+        assert nano == int(value)
+    else:
+        assert nano is None
+        assert copilot_module._spent(seen)
+
+
+# One fake of every type that is, or starts, model work.
+WORK_STARTED: dict[str, Event] = {
+    "user.message": wire("user.message", content=PROMPT),
+    "assistant.turn_start": turn_start(),
+    "assistant.turn_retry": turn_retry(),
+    "assistant.reasoning": reasoning(),
+    "assistant.message": answer(),
+    "assistant.usage": usage(),
+    "model.call_start": call_start(),
+    "model.call_final_result": final_result(),
+    "model.call_failure": failure("api", 503),
+    "model.call_finished": call_finished(),
+}
+
+
+def test_every_kind_of_work_has_a_fake() -> None:
+    assert set(WORK_STARTED) == copilot_module._BILLED
+
+
+@EXAMPLES
+@given(st.sampled_from(sorted(WORK_STARTED)), st.booleans())
+def test_property_work_after_the_last_checkpoint_leaves_the_charge_unknown(
+    kind: str, after_idle: bool
+) -> None:
+    work = WORK_STARTED[kind]
+    seen = sdk_call(idle=[idle(), work] if after_idle else [work, idle()])
+    message = reply_message(seen, TARGET)
+    assert "nano_aiu" not in message.response_metadata
+    assert "finish_reason" not in message.response_metadata
+
+
+@EXAMPLES
+@given(UNITS.filter(bool), UNITS.filter(bool))
+def test_property_checkpoints_bill_their_last_only_when_none_falls(
+    first: int, second: int
+) -> None:
+    seen = sdk_call(usage=None, checkpoint=[checkpoint(first), checkpoint(second)])
+    nano = reply_message(seen, TARGET).response_metadata.get("nano_aiu")
+    assert nano == (second if second >= first else None)
+
+
+@EXAMPLES
+@given(
+    st.lists(st.integers(min_value=0, max_value=10**9), min_size=1, max_size=3),
+    st.integers(min_value=1, max_value=3 * 10**9),
+)
+def test_property_per_request_figures_bill_only_within_the_checkpoint(
+    figures: list[int], total: int
+) -> None:
+    usages = [
+        usage(copilotUsage={"totalNanoAiu": figure, "model": PIN}) for figure in figures
+    ]
+    seen = sdk_call(usage=usages, checkpoint=checkpoint(total))
+    nano = reply_message(seen, TARGET).response_metadata.get("nano_aiu")
+    assert nano == (total if sum(figures) <= total else None)
+
+
+OUTSIDE = sorted(
+    kind.value for kind in SessionEventType if kind.value not in copilot_module._ALLOWED
+)
+
+
+@EXAMPLES
+@given(st.sampled_from(OUTSIDE), st.integers(min_value=0, max_value=len(SDK_HAPPY)))
+def test_property_any_event_type_off_the_allow_list_refuses_and_keeps_the_bill(
+    kind: str, at: int
+) -> None:
+    # Raw wire, not a fake: every type has its own required fields, and the
+    # property is about the type alone.
+    outside: Event = {"type": kind, "data": {}}
+    seen = [*SDK_HAPPY[:at], outside, *SDK_HAPPY[at:]]
+    message = reply_message(seen, TARGET)
+    assert "finish_reason" not in message.response_metadata
+    assert message.response_metadata["nano_aiu"] == 251_164_000
+
+
+POOL = [
+    started(),
+    started(model=OTHER),
+    turn_start(),
+    call_start(),
+    call_start(OTHER),
+    answer(),
+    call_finished("success"),
+    call_finished("error"),
+    usage(),
+    final_result(),
+    final_result(result="http_5xx"),
+    final_result(result="http_429"),
+    turn_end(),
+    turn_retry(),
+    reasoning(),
+    checkpoint(0),
+    checkpoint(5, 1),
+    idle(),
+    idle(aborted=True),
+    error(500),
+    error(429),
+    error(None),
+    failure("api", 500),
+    failure("api", 400, "bodyless"),
+    failure("transport"),
+    truncation(),
+    auto_resolved(),
+    tools_updated(),
+    shutdown(),
+    shutdown("error"),
+    unknown_event(),
+]
+SPEND = [
+    answer(),
+    checkpoint(251_164_000, 1),
+    checkpoint(1.5),
+    checkpoint(float("nan")),
+]
+
+
+@EXAMPLES
+@given(
+    st.lists(st.sampled_from(POOL), max_size=12),
+    st.sampled_from(SPEND),
+    st.integers(min_value=0, max_value=12),
+)
+def test_property_a_call_holding_an_answer_or_spend_is_never_raised(
+    events: list[Event], spend: Event, at: int
+) -> None:
+    seen = [*events[:at], spend, *events[at:]]
+    assert isinstance(invoked(seen), AIMessage)
+
+
+def test_a_credit_price_too_precise_for_any_count_charges_not_even_zero() -> None:
+    """F563, found by the property above: a price that cannot charge the
+    largest count exactly prices no count, zero included."""
+    precise = Decimal("0." + "1" * 1200)
+    assert charged(0, precise) is None
+    # The most digits a price may carry still charges the largest count.
+    widest = Decimal("0." + "1" * (1000 - len(str(2**53))))
+    assert charged(2**53 - 1, widest) is not None
+    too_wide = Decimal("0." + "1" * (1001 - len(str(2**53))))
+    assert charged(2**53 - 1, too_wide) is None
+    assert charged(0, too_wide) is None

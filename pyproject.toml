@@ -47,6 +47,8 @@ dev = [
   "pyyaml==6.0.3",
   # Test-only OpenRouter adapter (spec section 3.4); never imported outside tests/.
   "langchain-openai>=1.0",
+  # Property tests on the money arithmetic (D121); pre-approved test tool.
+  "hypothesis==6.167.1",
 ]
 
 # Virtual project: nothing here is built or installed, so every distribution
