@@ -69,6 +69,7 @@ from caos.methodology.handoff import (
     research_brief_of,
     stored_lineage,
 )
+from caos.methodology.qualifiers import command_card, module_command
 from caos.methodology.vendor import (
     VENDOR_MODULE,
     VendorContract,
@@ -237,6 +238,11 @@ def _identity(  # noqa: PLR0913 -- one identity, keyword-only
             )
             if node.module_id == RESEARCH_MODULE
             else None
+        ),
+        current_command=(
+            None
+            if pin.command is None
+            else module_command(pin.command.text, node.module_id)
         ),
     )
 
@@ -519,6 +525,10 @@ MODULE_AUTHORED_SCRIPTS = frozenset({"confidence_score.py"})
 _HOST_STEPS = prompt_block("host_steps")
 
 _GATE_INSTRUCTION = prompt_block("gate_instruction")
+
+# D109: a module's pinned command qualifiers, only for a module the run's
+# command names.
+_CURRENT_COMMAND = prompt_block("current_command")
 
 # A node's guided retry after a refused answer (D30, D82): what the checks
 # reported, as written. The host adds no rule of its own here (invariant 4).
@@ -1082,6 +1092,21 @@ def _research_section(identity: HostIdentity, tag: str = "") -> str:
     )
 
 
+def _command_section(identity: HostIdentity, tag: str = "") -> str:
+    """The module's pinned command as a host-owned section (D109), and nothing
+    for a module the run's command does not name -- so every such prompt is
+    byte for byte what it was. The vendor's command card, then who stated
+    each value: the run's input, or the host by the owner's rule."""
+    if identity.current_command is None:
+        return ""
+    try:
+        names = json.loads(identity.current_command)
+        card = command_card(identity.module_id, names)
+    except (ValueError, KeyError, TypeError):
+        raise Refusal(RefusalCode.HANDOFF_IDENTITY_MISMATCH) from None
+    return "\n" + _CURRENT_COMMAND.format(tag=tag, command=card)
+
+
 # N27: what the host says of delivered lines the extractor kept though a reader
 # of the rendered page may not see them -- a scan's OCR layer (render mode 3),
 # text painted near the colour behind it, glyphs under 2 pt, optional content
@@ -1288,6 +1313,7 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
         + _upstream_section(upstream, uses, owned)
         + _citation_register(upstream, upstream_citations, "", upstream_unverified)
         + _research_section(identity)
+        + _command_section(identity)
         + _source_preparation_section(source_set, "", page_maps)
         + evidence
     )
@@ -1317,6 +1343,7 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
         + _upstream_section(upstream, uses, owned, tag)
         + _citation_register(upstream, upstream_citations, tag, upstream_unverified)
         + _research_section(identity, tag)
+        + _command_section(identity, tag)
         + _source_preparation_section(source_set, tag, page_maps)
         + f"\n--- EVIDENCE {tag} ---\n"
         + evidence

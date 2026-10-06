@@ -88,9 +88,10 @@ def test_a_subject_is_pinned_with_a_utc_cos_run_id(prepared: Prepared) -> None:
     stored = conn.execute(
         "SELECT format_version FROM run_inputs WHERE run_id = %s", (run,)
     ).fetchone()
-    assert stored == (2,)
+    # Every new pin is version 3 (D109): the subject and the run's command.
+    assert stored == (3,)
     content = json.loads(gate_preview(conn, run, Gate.SOURCE_SET).content)
-    assert content["format_version"] == 2
+    assert content["format_version"] == 3
     assert content["input"]["subject"]["issuer_id"] == "EXAMPLE"
     # A replay with another subject is another input.
     other = replace(SUBJECT, reporting_period="FY2024")
