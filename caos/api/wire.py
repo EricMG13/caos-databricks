@@ -1576,7 +1576,9 @@ class ResearchBrief(BaseModel):
 class RunQualifier(BaseModel):
     """One command qualifier a pin states for one module (D109): CP-2G's
     `forecast_horizon`, `base_period` or `cases`, as its `SKILL.md` card
-    spells them. Any other module or name refuses `RUN_QUALIFIER_INVALID`."""
+    spells them, or CP-0's `objective` (which `PinRunInput.objective` also
+    carries; stated both ways it is refused). Any other module or name
+    refuses `RUN_QUALIFIER_INVALID`."""
 
     model_config = _CLOSED
 

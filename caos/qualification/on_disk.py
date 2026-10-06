@@ -244,8 +244,7 @@ def _case(root: Path, entry: object, held: _Materialised) -> QualificationCase:
         expects_register=_registers(fields.get("expects_register")),
         model_extension=_extension(fields.get("model_extension")),
         research_brief=_brief(fields.get("research_brief")),
-        qualifiers=_qualifiers(fields.get("qualifiers")),
-        objective=_objective(fields.get("objective")),
+        **_command(fields),
     )
 
 
@@ -562,6 +561,22 @@ def _brief(item: object) -> str | None:
         return research_text(item)
     except Refusal:
         raise Refusal(RefusalCode.QUALIFICATION_SET_FILE_INVALID) from None
+
+
+def _command(fields: Mapping[str, Any]) -> dict[str, Any]:
+    """A case's `qualifiers` and `objective`, each read on its own and then
+    together by the pin's rule, which refuses the objective stated both ways
+    (F526)."""
+    qualifiers = _qualifiers(fields.get("qualifiers"))
+    objective = _objective(fields.get("objective"))
+    stated: dict[str, dict[str, str]] = {}
+    for module_id, name, value in qualifiers:
+        stated.setdefault(module_id, {})[name] = value
+    try:
+        stated_command(stated, objective)
+    except Refusal:
+        raise Refusal(RefusalCode.QUALIFICATION_SET_FILE_INVALID) from None
+    return {"qualifiers": qualifiers, "objective": objective}
 
 
 def _qualifiers(item: object) -> tuple[tuple[str, str, str], ...]:

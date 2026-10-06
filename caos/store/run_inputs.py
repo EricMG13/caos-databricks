@@ -502,7 +502,7 @@ def _command_fits(command: RunCommand | None, route: ResolvedRoute) -> bool:
     )
 
 
-def _command(
+def run_command(
     bundle: Bundle,
     route: ResolvedRoute,
     stated: Mapping[str, Mapping[str, str]],
@@ -510,7 +510,9 @@ def _command(
 ) -> RunCommand:
     """A new pin's command (D109): `stated` judged against the pinned route,
     with CP-2G's unstated scope derived by the owner's rule; each name checked
-    against the stage fields of the verified `SKILL.md` it belongs to."""
+    against the stage fields of the verified `SKILL.md` it belongs to. Public
+    so a qualification set is judged by it before anything is written
+    (`harness.assert_admissible`, F526)."""
     modules = frozenset(node.module_id for node in route.nodes)
     stage_fields = {
         module_id: ux_stage_fields(verified_bytes(bundle, module_id, "SKILL.md"))
@@ -634,7 +636,7 @@ def pin_run_input_in(  # noqa: PLR0913 -- pin_run_input's arguments
     pinned = route_pin(conn, run_id)
     if source is None or pinned is None:
         raise Refusal(RefusalCode.RUN_INPUT_INVALID)
-    command = _command(bundle, pinned[0], stated, subject)
+    command = run_command(bundle, pinned[0], stated, subject)
     candidate = RunInput(
         run_id,
         owner[0],

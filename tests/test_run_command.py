@@ -11,7 +11,7 @@ from uuid import UUID
 
 import psycopg
 import pytest
-from canonical_fixtures import BUNDLE, identity
+from canonical_fixtures import BUNDLE, CATALOG, identity
 from full_assessment_route_fixtures import MODULES, FullAssessmentCompletions
 from test_canonical_digest import _record as _digest_record
 from test_execution_freshness import _Harness
@@ -23,13 +23,19 @@ from test_run_inputs import SUBJECT, _prepare
 from caos.api.commands.runs import qualifier_map
 from caos.api.wire import RunQualifier
 from caos.digest import canonical_json
+from caos.graph.route import resolve_route
 from caos.methodology.handoff import _decoded_record, record_bytes
 from caos.methodology.qualifiers import DERIVED, PINNED, stated_command
 from caos.qualification.harness import case_command, stated_in
 from caos.qualification.matrix import QualificationCase
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection, run_inputs
-from caos.store.run_inputs import RunCommand, load_run_input, pin_run_input
+from caos.store.run_inputs import (
+    RunCommand,
+    load_run_input,
+    pin_run_input,
+    run_command,
+)
 
 __all__ = ["harness", "route"]
 
@@ -309,3 +315,15 @@ def test_hidden_text_never_reaches_the_pin_preview_or_prompt(
             )
         assert refused.value.code is RefusalCode.RUN_QUALIFIER_INVALID
     assert load_run_input(conn, run) is None
+
+
+def test_run_command_is_the_pins_own_command_for_a_route_and_subject(
+    full: tuple[StoreConnection, UUID, int],
+) -> None:
+    """F526: the judgement `assert_admissible` asks before any write is the
+    one the pin stores."""
+    conn, run, version = full
+    stated = {"CP-2G": {"cases": "base/upside/downside"}}
+    pin = pin_run_input(conn, run, version, BUNDLE, subject=SUBJECT, qualifiers=stated)
+    route = resolve_route(CATALOG, *FULL)
+    assert run_command(BUNDLE, route, stated, SUBJECT) == pin.command

@@ -110,7 +110,12 @@ from caos.store.budget import CEILING, validate_spend
 from caos.store.gates import execution_input
 from caos.store.outcomes import execution_reads, producer_identifier, require_idle
 from caos.store.routes import pin_route, resolved_route
-from caos.store.run_inputs import RunInput, pin_run_input, valid_subject
+from caos.store.run_inputs import (
+    RunInput,
+    pin_run_input,
+    run_command,
+    valid_subject,
+)
 from caos.store.runs import create_case, run_status, start_run
 from caos.store.source_sets import snapshot_source_set
 
@@ -327,6 +332,7 @@ def assert_admissible(
     _consumers(qualification, routes)
     _affordable(qualification, harness, routes)
     _subjects(qualification)
+    _commands(harness.bundle, qualification, routes)
     _provider_identity(harness.completions)
     _model_identity(harness.completions)
     return routes
@@ -641,6 +647,25 @@ def _subjects(qualification: QualificationSet) -> None:
     for case in qualification.cases:
         if not valid_subject(case.subject):
             raise Refusal(RefusalCode.RUN_INPUT_INVALID)
+
+
+def _commands(
+    bundle: Bundle, qualification: QualificationSet, routes: Sequence[ResolvedRoute]
+) -> None:
+    """Every case's command is one its pin would take, judged by the pin's own
+    rule against its route and subject before any write (F526): a module off
+    the route or an objective stated both ways (`RUN_QUALIFIER_INVALID`), a
+    period CP-2G's scope cannot be derived from
+    (`REPORTING_PERIOD_UNREADABLE`). Asked after `_subjects`, so every case
+    has a subject here."""
+    for case, route in zip(qualification.cases, routes, strict=True):
+        if case.subject is not None:
+            run_command(
+                bundle,
+                route,
+                stated_command(case_command(case), case.objective),
+                case.subject,
+            )
 
 
 def _perform_one(

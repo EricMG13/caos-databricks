@@ -1086,6 +1086,13 @@ def test_a_case_states_its_command_and_an_unknown_qualifier_refuses_the_file(
         with pytest.raises(Refusal) as refused:
             load_qualification_set(_write(tmp_path, amended))
         assert refused.value.code is RefusalCode.QUALIFICATION_SET_FILE_INVALID
+    # F526: the objective stated both ways, which no pin takes.
+    both = _manifest()
+    _first(both)["qualifiers"] = {"CP-0": {"objective": "Another decision"}}
+    _first(both)["objective"] = "Refinancing decision"
+    with pytest.raises(Refusal) as refused:
+        load_qualification_set(_write(tmp_path, both))
+    assert refused.value.code is RefusalCode.QUALIFICATION_SET_FILE_INVALID
 
 
 def _first(manifest: dict[str, object]) -> dict[str, Any]:
