@@ -162,9 +162,13 @@ class ChatCompletions:
             sent += 1
             answer = _invoked(self.chat, prompt, options, deadline - _clock())
             if isinstance(answer, OpenAIError):
-                if not _sends_again(answer, sent, deadline):
-                    return _unanswered(_status_refusal(answer), answer, started)
-                continue
+                refused = _vendor_refusal(answer, sent, deadline)
+                if refused is None:
+                    continue
+                if isinstance(refused, _Raised):
+                    unread = RefusalCode.PROVIDER_UNAVAILABLE
+                    return _unanswered(unread, refused, started)
+                return _unanswered(refused, answer, started)
             if answer is None or isinstance(answer, _Raised):
                 # Indeterminate: the request may have been delivered and
                 # billed, so the attempt keeps its reservation. Nothing of
@@ -366,6 +370,39 @@ def _content_parts_contained() -> Iterator[None]:
         yield
 
 
+def _vendor_refusal(
+    failed: OpenAIError, sent: int, deadline: float
+) -> RefusalCode | _Raised | None:
+    """None when the call is sent again, else the code a vendor error is
+    refused with. Reading the error is guarded (F530, N162): a status or a
+    response that raises when read is no vendor error the host can read, so
+    the call is `raised`, refused PROVIDER_UNAVAILABLE and recorded, never an
+    untyped escape ahead of the bill -- the documented fail-open of ST-8,
+    named on stderr by class. A refusal a resend check raises still stops."""
+    try:
+        if _sends_again(failed, sent, deadline):
+            return None
+        return _status_refusal(failed)
+    except _UnreadableError:
+        return _Raised(DropKind.RAISED, _facts(failed))
+
+
+class _UnreadableError(Exception):
+    """A vendor error's fact that raised when it was read (N162)."""
+
+
+def _read(owner: object, name: str) -> object:
+    """`getattr(owner, name, None)`, or `_UnreadableError` when the read raises:
+    a property of a vendor error is the client's code, not the host's, and
+    what it raises must not escape `complete` untyped (F530, ST-8)."""
+    read: list[object] = []
+    with suppress(Exception):  # re-raised typed below (N162)
+        read.append(getattr(owner, name, None))
+    if not read:
+        raise _UnreadableError
+    return read[0]
+
+
 def _sends_again(failed: OpenAIError, sent: int, deadline: float) -> bool:
     """Whether the call is sent again after `failed`: a rate limit waited out
     (`_waited_out`), every installed check asked, and `MIN_RESEND_SECONDS`
@@ -396,13 +433,15 @@ def _waited_out(failed: OpenAIError, sent: int, deadline: float) -> bool:
 
 
 def _rate_limited(failed: OpenAIError) -> bool:
-    return getattr(failed, "status_code", None) == RATE_LIMITED
+    return _read(failed, "status_code") == RATE_LIMITED
 
 
 def _retry_after(failed: OpenAIError) -> float:
     """The gateway's `Retry-After` in seconds, capped; the default otherwise."""
-    headers = getattr(getattr(failed, "response", None), "headers", None)
-    stated = headers.get("retry-after") if headers is not None else None
+    get = _read(_read(_read(failed, "response"), "headers"), "get")
+    stated: object = None
+    with suppress(Exception):  # the default wait, documented above (N162)
+        stated = get("retry-after") if callable(get) else None
     try:
         seconds = float(stated) if isinstance(stated, str) else RETRY_AFTER_SECONDS
     except ValueError:
@@ -432,7 +471,7 @@ def _claimed_id(message: AIMessage) -> object:
 
 def _status_refusal(failed: OpenAIError) -> RefusalCode:
     """A vendor error by its status class alone; its message never travels."""
-    status = getattr(failed, "status_code", None)
+    status = _read(failed, "status_code")
     if isinstance(status, int) and status in NEVER_RETRIED:
         return RefusalCode.PROVIDER_CALL_INVALID
     return RefusalCode.PROVIDER_UNAVAILABLE

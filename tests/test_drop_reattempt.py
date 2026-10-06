@@ -88,6 +88,24 @@ def _validation_200() -> Exception:
     return APIResponseValidationError(response=response, body=_ROUTER_ERROR)
 
 
+class _RaisingStatus(OpenAIError):
+    """A vendor error whose status cannot be read without raising (N162)."""
+
+    @property
+    def status_code(self) -> int:
+        raise RuntimeError("private")
+
+
+class _RaisingResponse(OpenAIError):
+    """A rate limit whose response cannot be read without raising (N162)."""
+
+    status_code = 429
+
+    @property
+    def response(self) -> object:
+        raise RuntimeError("private")
+
+
 class _Unreadable(OpenAIError):
     """A vendor error whose body cannot be read without raising."""
 
@@ -659,6 +677,37 @@ def test_a_4xx_does_not_spend_the_nodes_re_attempt(harness: _Harness) -> None:
     assert _run(harness, scripted) is None
     assert [_module(p) for p in answers.prompts][:3] == ["CP-0"] * 3
     assert _drop_kinds(harness) == ["vendor", "declared", None]
+
+
+@pytest.mark.parametrize(
+    "failure",
+    [
+        pytest.param(_RaisingStatus("private"), id="status-raises"),
+        pytest.param(_RaisingResponse("private"), id="rate-limit-response-raises"),
+    ],
+)
+def test_a_vendor_error_that_cannot_be_read_is_unavailable_and_recorded(
+    harness: _Harness,
+    failure: Exception,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """F530 (N162): a `RuntimeError` from reading the error escaped
+    `complete` untyped before the bill -- no outcome, no F513 line, the run
+    parked INTERNAL_FAULT. It is now `PROVIDER_UNAVAILABLE`, `raised`, and
+    its outcome is recorded; nothing of its text travels."""
+    monkeypatch.setattr(models, "_sleep", lambda _seconds: None)
+    done = fake_completions(ScriptedChat(answer=failure)).complete(PROMPT)
+    assert done.refusal is RefusalCode.PROVIDER_UNAVAILABLE
+    assert done.drop_kind is DropKind.RAISED
+    line = capsys.readouterr().err
+    assert line.startswith("PROVIDER_UNAVAILABLE call=raised class=")
+    assert "private" not in line
+    answers = CanonicalCompletions(harness.source_id)
+    stopped = _run(harness, _dropping(answers, failure))
+    assert stopped is RefusalCode.PROVIDER_UNAVAILABLE
+    assert _cp0_ledger(harness) == (1, 1, ["PROVIDER_UNAVAILABLE"], 0)
+    assert _drop_kinds(harness) == ["raised"]
 
 
 def test_node_attempts_reads_each_attempt_as_the_ledger_holds_it(
