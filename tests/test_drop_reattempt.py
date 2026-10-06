@@ -852,5 +852,22 @@ def test_drop_stop_owed_reads_the_park_against_the_latest_drop(
     enqueue_run(conn, harness.run_id)
     conn.commit()
     assert owed()
+    # The pass that owes the stop says so with no call -- after the lease
+    # answer, as `_refuse_unexplained` does.
+    from caos.boundary_text import BoundaryText
+    from caos.graph.runtime import _refuse_spent_drop
+    from caos.store.work import claim_run
+
+    with pytest.raises(Refusal, match=r"^LEASE_NOT_HELD$"):
+        _refuse_spent_drop(conn, harness.run_id, node, None)
+    conn.rollback()
+    lease = claim_run(conn, worker=BoundaryText.of("worker-a"), lease_seconds=60)
+    conn.commit()
+    assert lease is not None
+    with pytest.raises(Refusal, match=r"^PROVIDER_UNAVAILABLE$"):
+        _refuse_spent_drop(conn, harness.run_id, node, lease)
+    conn.rollback()
     park()
     assert not owed()
+    _refuse_spent_drop(conn, harness.run_id, node, lease)
+    conn.rollback()
