@@ -449,10 +449,11 @@ def test_a_crash_before_the_block_commits_resumes_blocked_without_a_second_call(
     screen = _node(harness, "CP-5").route_node_id
     # The verdict and the replay build no prompt, so they never render the
     # pin's evidence for its tag (D113's review, Q3).
-    rendered = canonical.evidence_tag
+    rendered = invocation.evidence_tag
 
     def unwanted(*_args: object) -> str:
-        raise AssertionError("a reader rendered the evidence for its tag")
+        message = "a reader rendered the evidence for its tag"
+        raise AssertionError(message)
 
     monkeypatch.setattr(canonical, "evidence_tag", unwanted)
     with recorded_statements(harness.conn) as statements:
