@@ -260,7 +260,8 @@ MIGRATIONS = (
 # session, not written into the SQL.
 STORE_SCHEMA = "caos_store"
 SEARCH_PATH_OPTION = f"-c search_path={STORE_SCHEMA}"
-# D117: no store session is ended by the server for sitting idle. `call_hold`
+# D117: no store session -- `connect`'s, or the checkpointer pool's
+# (`caos.graph.checkpoint`) -- is ended by the server for sitting idle. `call_hold`
 # is a session-level lock on a connection that waits, outside any
 # transaction, for the whole model call (up to `caos.provider.TIMEOUT_SECONDS`);
 # an `idle_session_timeout` set on the database or the role would end that
