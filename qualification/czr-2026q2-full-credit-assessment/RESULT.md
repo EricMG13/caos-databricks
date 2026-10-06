@@ -8,9 +8,9 @@ This immutable set prepares `FULL_CREDIT_32 / FULL_CREDIT_ASSESSMENT` for
 Caesars Entertainment, Inc. (CZR) at an analysis date of 2026-10-02, against
 peers MGM Resorts International (MGM) and PENN Entertainment, Inc. (PENN) from
 the owner's "Public Leveraged Loan Issuers Benchmark", with a proposed position
-in the CZR 6.50% Senior Secured Notes due 2032 held against a **SYNTHETIC**
-test mandate. Its qualification-set digest is
-`51d82b145c709bb0fdc3dc8c430c33e611829fd78996b283ec2b1c32f3b4e0ed`.
+in the CZR 6.50% Senior Secured Notes due 2032 held against a real fund's
+holdings and policies (D115; the synthetic test mandate of D80 is unused). Its qualification-set digest is
+`dd7e23561abb23e220ba1948428b28acd74a9a14a4f0b6bc498c2b694389fecc`.
 
 ## Corpus changed 2026-10-06 (D115)
 
@@ -26,7 +26,7 @@ Text bytes: `CZR_2026_Merger_Agreement.txt` 411,229; `FHSUHY_NPORT_Schedule_of_I
 
 The Merger Agreement is the full agreement beside the 8-K's summary where the set carries it. Schedules are omitted under Item 601(b)(2) and the debt commitment letters are not in this exhibit, so a claim about commitment-letter terms stays unsupported. No key is added: every existing key binds its own document and is unchanged.
 
-The Federated Hermes Sustainable High Yield Bond Fund's N-PORT schedule and its prospectus and SAI replace the SYNTHETIC Test CLO I mandate (D80) in this set. The synthetic file stays on disk and in the register, unused. The schedule lists four Caesars positions (6.500% 2/15/2032 secured notes, `550,000` principal, `536,927` value; 6.000% 10/15/2032 notes, `1,650,000`, `1,496,434`; 7.000% 2/15/2030; 4.625% 10/15/2029); the prospectus carries the fund's 80% policy, investment limitations and concentration restriction. What the real documents do not carry: a proposed position, a CLO's compliance monitor, a single-name limit or a net-assets line. The three keys that bound the synthetic mandate (position, weight on NAV, C-01) are re-keyed to one whole unique line each of the new documents (below); the set's other expectations (readiness, projections, register) do not depend on the mandate's text and are unchanged, but no run has measured them over the new corpus.
+The Federated Hermes Sustainable High Yield Bond Fund's N-PORT schedule and its prospectus and SAI replace the SYNTHETIC Test CLO I mandate (D80) in this set. The synthetic file stays on disk and in the register, unused. The schedule lists four Caesars positions (6.500% 2/15/2032 secured notes, `550,000` principal, `536,927` value; 6.000% 10/15/2032 notes, `1,650,000`, `1,496,434`; 7.000% 2/15/2030; 4.625% 10/15/2029); the prospectus carries the fund's 80% policy, investment limitations and concentration restriction. What the real documents do not carry: a proposed position, a CLO's compliance monitor, or a single-name limit. The three keys that bound the synthetic mandate (position, weight on NAV, C-01) are re-keyed to one whole unique line each of the new documents (below); the set's other expectations (readiness, projections, register) do not depend on the mandate's text and are unchanged, but no run has measured them over the new corpus.
 
 ## The synthetic mandate (D80), unused since D115 (historical)
 
@@ -188,7 +188,7 @@ Keys authored from the documents; material figures pending owner confirmation.
   the peer notes, `6.722997%` (MGM 6.125% 2029) and `6.644415%` (PENN 4.125%
   2029).
 - CP-5: the 10-Q's Note 6 total debt (`11,807` face, `11,705` book).
-- CP-6, position: the fund's schedule line for the CZR 6.50% 2032 notes (`550,000` principal, `536,927` value at 30 June 2026), its total of securities (`$482,801,658`, the schedule's summary table) and the prospectus's 80% policy line (`at least 80% of its net assets … in sustainable lower-rated fixed-income investments`), which replace the synthetic mandate's three keys (D115). The schedule and the prospectus are the real fund's, not a CLO mandate: there is no position size, no net-assets line for a weight and no single-name limit to key, and no key claims one.
+- CP-6, position: the fund's schedule line for the CZR 6.50% 2032 notes (`550,000` principal, `536,927` value at 30 June 2026), its net-assets line (`NET ASSETS—100% | $491,554,960`, the weight denominator) and the prospectus's 80% policy line (`at least 80% of its net assets … in sustainable lower-rated fixed-income investments`), which replace the synthetic mandate's three keys (D115). The schedule and the prospectus are the real fund's, not a CLO mandate: there is no proposed position size and no single-name limit to key, and no key claims one. The prospectus line is fragile: the summary prospectus words the policy `sustainable, lower-rated` (twice, not unique), so an answer citing that wording misses the key, and that wording cannot be a D101 alternative.
 
 CP-1D, CP-2A and CP-2G carry no key: none of their outputs is a single fact a
 document states. The conformed credit agreement's commitment, margins and
