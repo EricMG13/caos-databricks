@@ -794,16 +794,11 @@ def _context(
     return _fitted(bundle, assignment, identity, context, assignment.model)
 
 
-# D116: room kept under a model's request ceiling when a node's evidence is
-# fitted, for what a guided retry adds to the first attempt's prompt -- its
-# check lines, at most `MAX_FEEDBACK_MESSAGES` of about `MAX_FEEDBACK_CHARS`
-# each, and their block -- so a retry of a fitted node still fits. The refused
-# answer a retry may carry is not counted: `_sent_prompt` drops it when it does
-# not fit (D104).
+# D116: room kept under the ceiling for a guided retry's check lines, so a
+# fitted node's retry still fits; its refused answer is dropped instead (D104).
 RETRY_RESERVE_BYTES = 65_536
-# The evidence tag a measured prompt carries: as long as every tag
-# (`evidence_tag`), so the size is the sent prompt's, without rendering the
-# run's whole pin for its digest, which no reader of a verdict does (D113).
+# A measured prompt's evidence tag: as long as any, so the pin is never
+# rendered for its digest by a reader of a verdict (D113).
 _MEASURED = "0" * 16
 
 
@@ -818,15 +813,11 @@ def _fitted(
     (D116, N157), less `RETRY_RESERVE_BYTES`: `selection.pack_view` over the
     node's first-attempt prompt, measured as the request `model` is sent.
 
-    The gate starts from its whole pin under `GATE_SOURCE_BYTES` (§98); a
-    consumer from what its T8 row selected. A pack past the ceiling shows its
-    largest sources as page maps, each declared to the model (`page_maps`);
-    one that cannot fit refuses `CONTEXT_OVER_CEILING` here, before any
-    attempt or reservation. Measured at ordinal 1, so every attempt of a node,
-    its pre-call check and its replay fit alike whatever their ordinal; a
-    pack that already fits is unchanged. A reader that judges a quote (the
-    verdict, `replay_billed`) builds this one prompt to fit the node as its
-    call did, but never renders the pin for its tag (`_MEASURED`)."""
+    The gate starts from its pin under `GATE_SOURCE_BYTES` (§98), a consumer
+    from its T8 selection; a pack that cannot fit refuses
+    `CONTEXT_OVER_CEILING` before any attempt or reservation. Measured at
+    ordinal 1, so every attempt, its pre-call check and its replay fit alike;
+    a pack that already fits is unchanged."""
     gate = assignment.module_id == GATE_MODULE
     authority = delivered_authority(bundle, assignment.module_id)
     measured_as = replace(identity, ordinal=1)

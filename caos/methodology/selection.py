@@ -174,18 +174,12 @@ def pack_view(
     bytes, and the view starts as `gate_view` at `source_bound` (the gate's
     per-source bound; None for a consumer, which has none).
 
-    When the request is past `limit`, the largest sources are shown as page
-    maps first, by one bound on every source's share of the evidence section:
-    the largest share `B` such that every source past it, cut to the largest
-    uniform number of leading lines a page within `B` (at least one, so every
-    page still appears), frees the bytes the request is over. Every source
-    under `B` stays whole. Each request byte saved is at least an evidence
-    byte cut, since the request only escapes them, so the view is measured
-    again and `B` lowered until it fits; when every source past the bound is
-    down to one line a page and the request is still over, the node refuses
-    `CONTEXT_OVER_CEILING` before any attempt or reservation. Pure over the
-    delivery, the measure and the limit, so every reader that passes them
-    alike shows the node the same lines.
+    Past `limit`, the largest sources become page maps first: one bound `B`
+    on every source's evidence share, each source past it cut to its largest
+    uniform leading lines a page within `B` (at least one, so every page
+    appears), re-measured and lowered until the request fits. At one line a
+    page and still over, it refuses `CONTEXT_OVER_CEILING`. Pure over its
+    inputs, so every reader shows the node the same lines.
     """
     by_page = _pages(delivered)
     shares = {s: sum(map(sum, pages.values())) for s, pages in by_page.items()}

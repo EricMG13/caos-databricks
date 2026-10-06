@@ -26,7 +26,7 @@ from uuid import UUID
 
 import pytest
 from canonical_fixtures import QUOTE, CanonicalCompletions, fields_from_prompt
-from conftest import SUITE_ENDPOINT, approve_run, priced
+from conftest import approve_run, priced
 from test_canonical_execution import _node, harness, route
 from test_execution_freshness import _Harness
 from test_loop_charges import ESTIMATE
@@ -1843,7 +1843,7 @@ def test_the_answer_is_dropped_only_past_the_transport_ceiling() -> None:
     ceiling = MAX_REQUEST_BYTES
 
     class Measured:
-        model = SUITE_ENDPOINT
+        model = "a-model/for-the-test"
 
         def __init__(self, size: int) -> None:
             self.size = size

@@ -8,7 +8,6 @@ changes the configured model no longer moves a running run onto another.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import replace
 from datetime import date
 from decimal import Decimal
@@ -18,7 +17,7 @@ from uuid import UUID
 import psycopg
 import pytest
 from command_fixtures import command_client
-from conftest import SUITE_CONTEXT_TOKENS, tamper
+from conftest import tamper
 from lite_route_fixtures import RealisticLiteCompletions
 from test_runtime import RUN_AT, blobs, bundle, route
 from test_worker import CONFIG, count, queued_run, work_row
@@ -175,10 +174,7 @@ def test_the_worker_executes_a_run_on_its_pinned_model_at_its_pinned_price(
     route: ResolvedRoute,
     bundle: Bundle,
     blobs: BlobStore,
-    declare_context: Callable[[str, int | None], None],
 ) -> None:
-    # The pinned model's context, declared for this endpoint name (D116).
-    declare_context("gpt-6-luna", SUITE_CONTEXT_TOKENS)
     run = queued_run(case, route, bundle, blobs)
     luna = replace(RUN_AT, model="gpt-6-luna", as_of=date(2026, 9, 1))
     _pin(run.conn, run.run_id, luna)

@@ -130,12 +130,14 @@ def test_preflight_names_each_resource_and_the_fix_for_a_missing_one(
     )
     flags = ["--endpoint", ENDPOINT, "--catalog", "main", "--schema", "caos"]
     assert preflight.main([*flags, "--lakebase-project", LAKEBASE_PROJECT]) == 0
-    lines = capsys.readouterr().out.splitlines()
+    warning, *lines = capsys.readouterr().out.splitlines()
+    # The default endpoint declares no context: a warning, not a failure (D116).
+    assert warning.startswith(f"WARNING {ENDPOINT}: no declared context")
     assert len(lines) == 8 and all(line.startswith("ok") for line in lines)
     assert f"ok      lakebase endpoint {LAKEBASE_ENDPOINT}" in lines
     assert f"ok      lakebase database {LAKEBASE_DATABASE}" in lines
     assert preflight.main([*flags, "--lakebase-instance", LAKEBASE_INSTANCE]) == 0
-    lines = capsys.readouterr().out.splitlines()
+    _, *lines = capsys.readouterr().out.splitlines()
     assert len(lines) == 6 and f"ok      lakebase instance {LAKEBASE_INSTANCE}" in lines
     assert not any("lakebase project" in line for line in lines)
 
@@ -205,7 +207,8 @@ def test_preflight_names_a_profile_nobody_logged_in_as(
     monkeypatch.setenv("DATABRICKS_CONFIG_PROFILE", "no-such-profile")
     flags = ["--endpoint", ENDPOINT, "--catalog", "c", "--schema", "s"]
     assert preflight.main([*flags, "--lakebase-instance", "i"]) == 1
-    out = capsys.readouterr().out
+    warning, out = capsys.readouterr().out.split("\n", 1)
+    assert warning.startswith(f"WARNING {ENDPOINT}: no declared context")
     assert out.startswith("MISSING workspace credentials for profile no-such-profile")
     assert "databricks auth login" in out and "no-such-profile" in out
 
