@@ -1256,3 +1256,17 @@ def test_every_usages_tokens_are_counted_and_an_absent_cache_count_is_zero() -> 
         "output_tokens": 40,
         "total_tokens": 940,
     }
+
+
+def test_a_credit_price_too_precise_to_multiply_exactly_is_an_unknown_charge() -> None:
+    """Within the ledger's envelope, but past the exact context's precision:
+    refused rather than rounded (invariant 7)."""
+    message = AIMessage(content="answer", response_metadata={"nano_aiu": 251_164_000})
+    assert settled_charge(message, Decimal("0." + "1" * 1200)) is None
+
+
+def test_a_checkpoint_stating_a_boolean_is_spend_and_an_unknown_charge() -> None:
+    stated = _malformed(checkpoint(251_164_000, 1), totalNanoAiu=True)
+    message = reply_message(sdk_call(checkpoint=stated), TARGET)
+    assert "nano_aiu" not in message.response_metadata
+    assert "nano_aiu" not in invoked([*UNSPENT, stated, error(500)]).response_metadata
