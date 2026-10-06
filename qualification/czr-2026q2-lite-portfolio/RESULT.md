@@ -182,7 +182,7 @@ pro forma for the position.
 
 ## Stated facts the screen must not misread
 
-- **Synthetic, not a holding.** The document says "Existing Caesars
+- **Synthetic, not a holding (historical; superseded by D115, which replaced the mandate: the fund now holds four Caesars positions).** The document says "Existing Caesars
   Entertainment exposure: none." and that the position is synthetic.
 - **As-of mismatch.** The workbook's NAV and compliance check are dated
   29 May 2026; the price is dated 1 October 2026; the 10-Q reports the

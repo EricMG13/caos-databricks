@@ -628,8 +628,8 @@ def _declared(failed: BaseException) -> bool:
         status = getattr(failed, "status_code", None)
         body = getattr(failed, "body", None)
         if isinstance(failed, APIConnectionError):
-            declared = False
-        elif status is not None:
+            return False
+        if status is not None:
             declared = (
                 type(status) is int
                 and FAILURE_STATUSES[0] <= status <= (FAILURE_STATUSES[1])
