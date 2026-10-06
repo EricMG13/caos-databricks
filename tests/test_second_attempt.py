@@ -1843,6 +1843,8 @@ def test_the_answer_is_dropped_only_past_the_transport_ceiling() -> None:
     ceiling = MAX_REQUEST_BYTES
 
     class Measured:
+        model = "a-model/for-the-test"
+
         def __init__(self, size: int) -> None:
             self.size = size
 

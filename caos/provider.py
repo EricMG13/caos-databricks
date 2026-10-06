@@ -16,11 +16,13 @@ to prevent.
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Iterator
+import re
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from decimal import Decimal
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Protocol
 
 from caos.refusals import Refusal, RefusalCode
@@ -57,6 +59,26 @@ MAX_REQUEST_BYTES = 4_194_304
 MAX_RESPONSE_BYTES = 4_194_304
 MAX_COMPLETION_TOKENS = 65_536
 
+# D116 (N157): the transport ceiling is not the model's. Each endpoint's
+# context window in tokens, declared here and pinned with the host, keyed by
+# the endpoint name a run is priced and called under (its model identity).
+# Source of all three: `context_length` in the keyless model listing of the
+# router the qualification adapter calls (`GET /api/v1/models`, read
+# 2026-10-05). Luna answered FCA3-dec's 4,033,648-byte CP-0 request with a
+# 400, which this bound now prevents. An endpoint missing here keeps the
+# transport ceiling, and its run says so (`context_notice`, N170).
+CONTEXT_TOKENS: Mapping[str, int] = MappingProxyType(
+    {
+        "openai/gpt-6-luna": 1_050_000,
+        "openai/gpt-6-luna-pro": 1_050_000,
+        "openai/gpt-6-sol": 1_050_000,
+    }
+)
+# The fewest request bytes one prompt token is assumed to take. Measured
+# (D116) at 3.82 to 4.64 per native token over 195 live calls, 4.02 per the
+# router's count; a numeric-table pack can be denser (2.54, N170).
+BYTES_PER_TOKEN_FLOOR = 3
+
 # A call that cannot succeed by being repeated. Retrying one of these spends a
 # second reservation on the same certain failure.
 NEVER_RETRIED = frozenset({400, 401, 402, 403, 404, 413, 422})
@@ -65,6 +87,41 @@ _FINISH_REFUSALS = {
     "length": RefusalCode.PROVIDER_OUTPUT_TRUNCATED,
     "content_filter": RefusalCode.PROVIDER_REFUSED,
 }
+
+
+def request_ceiling(model: str) -> int:
+    """The most request bytes one call to `model` may carry (D116): its
+    declared context less the completion it may return, at
+    `BYTES_PER_TOKEN_FLOOR` bytes a token, and never past the transport's
+    `MAX_REQUEST_BYTES`. An endpoint with no declared context keeps
+    `MAX_REQUEST_BYTES`, the bound every run had before D116 (review round
+    1: refusing it stopped every approved workspace endpoint). A declared
+    context no wider than the completion leaves the prompt no room, and
+    refuses `PROVIDER_NOT_CONFIGURED`."""
+    tokens = CONTEXT_TOKENS.get(model)
+    if tokens is None:
+        return MAX_REQUEST_BYTES
+    if tokens <= MAX_COMPLETION_TOKENS:
+        raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
+    return min(
+        MAX_REQUEST_BYTES, (tokens - MAX_COMPLETION_TOKENS) * BYTES_PER_TOKEN_FLOOR
+    )
+
+
+# What a run driven on an endpoint with no declared context says on stderr,
+# once (D116): the code and the endpoint's name, nothing else.
+CONTEXT_NOT_DECLARED = "CONTEXT_NOT_DECLARED"
+# A name the notice prints as it is; any other is printed as `-`.
+_PLAIN_NAME = re.compile(r"[A-Za-z0-9._:/@+-]{1,256}")
+
+
+def context_notice(model: str) -> str | None:
+    """The line a run on `model` prints when no context is declared for it,
+    or None when one is (D116, N170)."""
+    if model in CONTEXT_TOKENS:
+        return None
+    name = model if _PLAIN_NAME.fullmatch(model) else "-"
+    return f"{CONTEXT_NOT_DECLARED} endpoint={name}"
 
 
 def finish_refusal(finish_reason: str) -> RefusalCode | None:
