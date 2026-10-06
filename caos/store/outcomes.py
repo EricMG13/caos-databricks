@@ -7,6 +7,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from decimal import Decimal
+from enum import StrEnum
 from typing import TYPE_CHECKING
 from uuid import UUID
 
@@ -145,14 +146,36 @@ def accepted_rows(
     ]
 
 
+class DropKind(StrEnum):
+    """How a call that got no answer ended (F513's kind), carried to the
+    ledger (D110). Only `DECLARED` earns a node its one automatic
+    re-attempt: the provider itself said the call failed, by a status or by
+    its own error object, before anything was generated."""
+
+    # A vendor error with a status or a provider error object (a body, an
+    # SSE `error` event) and no content received.
+    DECLARED = "declared"
+    # A vendor error with neither: a connection reset or a client timeout,
+    # after which the bytes received are unknown.
+    VENDOR = "vendor"
+    # Anything else the client raised, held back (ST-8).
+    RAISED = "raised"
+    # Raised and not held back.
+    ESCAPED = "escaped"
+    # Nothing by the call's one deadline.
+    DEADLINE = "deadline"
+
+
 @dataclass(frozen=True, slots=True)
 class NodeAttempt:
     """One attempt at a run node: the refusal that explained it, if one did,
-    and the address of the answer it stored, if it stored one."""
+    the address of the answer it stored, if it stored one, and how its call
+    ended when it got no answer (D110)."""
 
     attempt_id: UUID
     refusal: str | None
     diagnostic_sha256: str | None
+    drop_kind: str | None = None
 
 
 def node_attempts(
@@ -160,7 +183,8 @@ def node_attempts(
 ) -> tuple[NodeAttempt, ...]:
     """Every attempt at this run node, oldest first. Caller owns the read."""
     rows = conn.execute(
-        "SELECT t.attempt_id, r.code, o.diagnostic_sha256 FROM run_attempts t"
+        "SELECT t.attempt_id, r.code, o.diagnostic_sha256, o.drop_kind"
+        " FROM run_attempts t"
         " LEFT JOIN attempt_refusals r USING (attempt_id)"
         " LEFT JOIN call_outcomes o USING (attempt_id)"
         " WHERE t.run_id = %s AND t.route_node_id = %s"
@@ -172,8 +196,9 @@ def node_attempts(
             UUID(str(attempt)),
             None if code is None else str(code),
             None if diagnostic is None else str(diagnostic),
+            None if drop is None else str(drop),
         )
-        for attempt, code, diagnostic in rows
+        for attempt, code, diagnostic, drop in rows
     )
 
 
@@ -249,12 +274,15 @@ class CallOutcome:
     """None is unknown, including spend. Diagnostic bytes, when available,
     belong in a bounded blob; only its address belongs here. Model is the
     host's configured identifier; generation_id is the provider's handle.
+    `drop_kind` is how a call that got no answer ended (D110), and only
+    such a call -- no charge, generation or body -- may carry one.
     """
 
     charge: Decimal | None
     model: str | None
     generation_id: str | None
     diagnostic_sha256: str | None = None
+    drop_kind: DropKind | None = None
 
 
 # W1: the bill's own unit waits for as long as its locks take. The worker's
@@ -289,8 +317,8 @@ def record_outcome(
 def _record(conn: StoreConnection, attempt: UUID, outcome: CallOutcome) -> bool:
     run, _case, _status = _locked_attempt(conn, attempt)
     row = conn.execute(
-        "SELECT l.amount, o.model, o.generation_id, o.diagnostic_sha256"
-        " FROM call_outcomes o LEFT JOIN budget_ledger l"
+        "SELECT l.amount, o.model, o.generation_id, o.diagnostic_sha256,"
+        " o.drop_kind FROM call_outcomes o LEFT JOIN budget_ledger l"
         " ON (l.run_id,l.attempt_id) = (o.run_id,o.charged_attempt_id)"
         " WHERE o.attempt_id = %s",
         (attempt,),
@@ -309,6 +337,7 @@ def _record(conn: StoreConnection, attempt: UUID, outcome: CallOutcome) -> bool:
             outcome.model,
             outcome.generation_id,
             outcome.diagnostic_sha256,
+            outcome.drop_kind,
         ):
             raise Refusal(RefusalCode.CALL_OUTCOME_CONFLICT)
         return False
@@ -319,7 +348,8 @@ def _record(conn: StoreConnection, attempt: UUID, outcome: CallOutcome) -> bool:
         )
     conn.execute(
         "INSERT INTO call_outcomes (attempt_id,run_id,charged_attempt_id,model,"
-        " generation_id,diagnostic_sha256) VALUES (%s,%s,%s,%s,%s,%s)",
+        " generation_id,diagnostic_sha256,drop_kind)"
+        " VALUES (%s,%s,%s,%s,%s,%s,%s)",
         (
             attempt,
             run,
@@ -327,6 +357,7 @@ def _record(conn: StoreConnection, attempt: UUID, outcome: CallOutcome) -> bool:
             outcome.model,
             outcome.generation_id,
             outcome.diagnostic_sha256,
+            None if outcome.drop_kind is None else outcome.drop_kind.value,
         ),
     )
     append(conn, run, RunEvent.CALL_OUTCOME_RECORDED)
@@ -411,6 +442,21 @@ def _validate(outcome: CallOutcome) -> None:
     digest = outcome.diagnostic_sha256
     if digest is not None and (
         not isinstance(digest, str) or re.fullmatch(r"[0-9a-f]{64}", digest) is None
+    ):
+        raise Refusal(RefusalCode.CALL_OUTCOME_INVALID)
+    _validate_drop(outcome)
+
+
+def _validate_drop(outcome: CallOutcome) -> None:
+    """A drop kind is typed, and only a call with no answer has one (D110):
+    a re-attempt never follows a call that was billed or said anything."""
+    drop = outcome.drop_kind
+    if drop is None:
+        return
+    if not isinstance(drop, DropKind) or (
+        outcome.charge is not None
+        or outcome.generation_id is not None
+        or outcome.diagnostic_sha256 is not None
     ):
         raise Refusal(RefusalCode.CALL_OUTCOME_INVALID)
 

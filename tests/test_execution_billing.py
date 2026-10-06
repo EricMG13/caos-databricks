@@ -151,6 +151,9 @@ def test_native_refusal_records_only_independently_known_money(
     calls = (
         1 + canonical.GUIDED_RETRIES if code in canonical.SECOND_ATTEMPT_CODES else 1
     )
+    # D110: a drop the provider declared by its status earns one re-attempt.
+    if isinstance(response, StatusError) and code == "PROVIDER_UNAVAILABLE":
+        calls = 1 + canonical.DROP_REATTEMPTS
     assert chat.calls == calls
     assert provider.conn.info.transaction_status is TransactionStatus.IDLE
     _bills(_url_for(provider.conn.info.dbname), provider.run_id, charge, calls)

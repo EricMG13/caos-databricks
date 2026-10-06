@@ -44,13 +44,16 @@ documents them: the content deltas alone (reasoning deltas never join the
 answer), the first stated finish, the usage frame's counts and the stream's
 id. An SSE `error` event raises the client's `APIError`, which the seam types
 as PROVIDER_UNAVAILABLE; a stream that ends without a finish or a usage is
-an answer the seam refuses.
+an answer the seam refuses. An error event after the stream carried anything
+generated is raised as `CutAfterContentError` instead (D110): the provider
+did not fail before it began to answer, so the seam names it `raised` and
+the node gets no automatic re-attempt.
 """
 
 from __future__ import annotations
 
 import os
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Iterator, Mapping
 from typing import TYPE_CHECKING, Any
 
 from langchain_core.language_models import BaseChatModel
@@ -58,6 +61,7 @@ from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.messages.ai import UsageMetadata
 from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_openai import ChatOpenAI
+from openai import APIError
 from pydantic import SecretStr
 
 from caos.provider import MAX_COMPLETION_TOKENS, TIMEOUT_SECONDS
@@ -188,6 +192,28 @@ def streamed_message(frames: Iterable[Mapping[str, Any]]) -> AIMessage:
     )
 
 
+class CutAfterContentError(Exception):
+    """A stream the provider failed after it had begun to answer (D110): not
+    a drop declared before any content, so the seam names it `raised` and
+    the node is not re-attempted. It keeps the provider's error object as
+    its body, so F513's line still says the error's code and type."""
+
+    def __init__(self, body: object) -> None:
+        super().__init__()
+        self.body = body
+
+
+def generating(frame: Mapping[str, Any]) -> bool:
+    """Whether a frame carries anything generated: a delta holding a value
+    under any key but its `role` -- content, reasoning or a tool call. A
+    reasoning delta counts: the provider had begun, and may bill it."""
+    for choice in frame.get("choices") or ():
+        delta = choice.get("delta") or {}
+        if any(value for key, value in delta.items() if key != "role"):
+            return True
+    return False
+
+
 class OpenRouterChat(ChatOpenAI):
     """`ChatOpenAI` whose every call streams on the wire and is read by
     `streamed_message` (F512): the request is the one `ChatOpenAI` builds,
@@ -203,8 +229,22 @@ class OpenRouterChat(ChatOpenAI):
         payload = self._get_request_payload(messages, stop=stop, **kwargs)
         payload["stream"] = True
         payload["stream_options"] = {"include_usage": True}
+        began: list[bool] = []
+
+        def frames(stream: Iterable[Any]) -> Iterator[dict[str, Any]]:
+            for frame in stream:
+                dumped: dict[str, Any] = frame.model_dump()
+                if not began and generating(dumped):
+                    began.append(True)
+                yield dumped
+
         with self.client.create(**payload) as stream:
-            message = streamed_message(frame.model_dump() for frame in stream)
+            try:
+                message = streamed_message(frames(stream))
+            except APIError as failed:
+                if not began:
+                    raise
+                raise CutAfterContentError(failed.body) from failed
         return ChatResult(generations=[ChatGeneration(message=message)])
 
 
