@@ -502,7 +502,7 @@ def _command_fits(command: RunCommand | None, route: ResolvedRoute) -> bool:
     )
 
 
-def run_command(
+def pinned_run_command(
     bundle: Bundle,
     route: ResolvedRoute,
     stated: Mapping[str, Mapping[str, str]],
@@ -636,7 +636,7 @@ def pin_run_input_in(  # noqa: PLR0913 -- pin_run_input's arguments
     pinned = route_pin(conn, run_id)
     if source is None or pinned is None:
         raise Refusal(RefusalCode.RUN_INPUT_INVALID)
-    command = run_command(bundle, pinned[0], stated, subject)
+    command = pinned_run_command(bundle, pinned[0], stated, subject)
     candidate = RunInput(
         run_id,
         owner[0],

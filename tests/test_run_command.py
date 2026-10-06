@@ -34,7 +34,7 @@ from caos.store.run_inputs import (
     RunCommand,
     load_run_input,
     pin_run_input,
-    run_command,
+    pinned_run_command,
 )
 
 __all__ = ["harness", "route"]
@@ -317,7 +317,7 @@ def test_hidden_text_never_reaches_the_pin_preview_or_prompt(
     assert load_run_input(conn, run) is None
 
 
-def test_run_command_is_the_pins_own_command_for_a_route_and_subject(
+def test_pinned_run_command_is_the_pins_own_command_for_a_route_and_subject(
     full: tuple[StoreConnection, UUID, int],
 ) -> None:
     """F526: the judgement `assert_admissible` asks before any write is the
@@ -326,4 +326,4 @@ def test_run_command_is_the_pins_own_command_for_a_route_and_subject(
     stated = {"CP-2G": {"cases": "base/upside/downside"}}
     pin = pin_run_input(conn, run, version, BUNDLE, subject=SUBJECT, qualifiers=stated)
     route = resolve_route(CATALOG, *FULL)
-    assert run_command(BUNDLE, route, stated, SUBJECT) == pin.command
+    assert pinned_run_command(BUNDLE, route, stated, SUBJECT) == pin.command

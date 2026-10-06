@@ -113,7 +113,7 @@ from caos.store.routes import pin_route, resolved_route
 from caos.store.run_inputs import (
     RunInput,
     pin_run_input,
-    run_command,
+    pinned_run_command,
     valid_subject,
 )
 from caos.store.runs import create_case, run_status, start_run
@@ -660,7 +660,7 @@ def _commands(
     has a subject here."""
     for case, route in zip(qualification.cases, routes, strict=True):
         if case.subject is not None:
-            run_command(
+            pinned_run_command(
                 bundle,
                 route,
                 stated_command(case_command(case), case.objective),

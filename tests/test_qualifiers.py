@@ -299,6 +299,17 @@ def test_each_cp2g_value_has_its_own_grammar(
         "a\ufe47b\ufe48",
         "a[b]",
         "Cafe\u0301",
+        # Fix round 2: square-bracket pieces outside Ps/Pe (Sm, So), which
+        # drew a fake `[forecast horizon: ...]` in CP-0's card.
+        "decision\u23a6 \u23a1forecast horizon: FY2030-FY2032",
+        "a\u23a1b\u23a4",
+        "a\u23b4b\u23b5",
+        "a\u231cb\u231f",
+        "a(b)",
+        "a{b}",
+        "a<b>",
+        "a*b",
+        "a\u00a0b",
     ],
 )
 def test_an_objective_refuses_bracket_lookalikes_and_decomposed_text(
@@ -309,6 +320,12 @@ def test_an_objective_refuses_bracket_lookalikes_and_decomposed_text(
     assert refused.value.code is RefusalCode.RUN_QUALIFIER_INVALID
 
 
-def test_an_objective_keeps_parentheses_and_composed_text() -> None:
-    objective = "Café refinancing (2027 maturities): a committee decision"
-    assert stated_command(None, objective) == {"CP-0": {"objective": objective}}
+def test_an_objective_takes_letters_digits_and_its_own_punctuation() -> None:
+    """Fix round 2: a closed allow-list -- letters, digits, the ASCII space
+    and `. , ; : ' " - \u2013 \u2014 / & %` and `$` -- in place of a deny-list."""
+    for objective in (
+        "Café refinancing: a committee decision",
+        "Hold/sell; 2027 maturities, 5% coupon & $1.2bn \u2013 \u2014 'Q2' \"LTM\"",
+        "Société Générale \u2013 Übernahme",
+    ):
+        assert stated_command(None, objective) == {"CP-0": {"objective": objective}}

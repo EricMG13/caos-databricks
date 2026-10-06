@@ -63,9 +63,11 @@ _FY_RANGE = re.compile(r"^FY(?P<start>[0-9]{4})-FY(?P<end>[0-9]{4})$")
 _FY_SHORT_RANGE = re.compile(r"^FY(?P<start>[0-9]{2})-FY(?P<end>[0-9]{2})$")
 _BASE = re.compile(r"^(?:Q[1-4] [0-9]{4} LTM|FY[0-9]{4})$")
 _CASES = re.compile(r"^[A-Za-z/ -]{1,64}$")
-# Open and close punctuation the card could read as its own `[` or `]`:
-# every one but the parentheses an objective may carry.
-_KEPT_PUNCTUATION = frozenset("()")
+# The one free-text value, CP-0's objective, is a closed allow-list (fix
+# round 2): letters, digits, the ASCII space and this punctuation. A deny-list
+# of bracket categories let square-bracket pieces in Sm and So (U+23A1-U+23A6,
+# U+23B4, U+23B5, U+231C-U+231F) draw a fake `[name: value]` in CP-0's card.
+_OBJECTIVE_PUNCTUATION = frozenset(".,;:'\"-\u2013\u2014/&%$ ")
 _UX_BLOCK = re.compile(
     r"<!-- UX_CONTRACT:BEGIN -->(.*?)<!-- UX_CONTRACT:END -->", re.DOTALL
 )
@@ -126,11 +128,11 @@ def derived_scope(reporting_period: str) -> dict[str, str]:
 
 
 def _text(value: object) -> bool:
-    """One line of caller text the card can carry: NFC, nothing a reader
-    cannot see (`hides_text`, the rule evidence, handoffs and filenames are
-    held to, AI-2; the one-line rule already refuses U+2028 and U+2029, so
-    with it this is `handoff.INVISIBLE` too), and no bracket or bracket
-    lookalike, which would end or fake a `[name: value]` (F524)."""
+    """One line of caller text: NFC, and nothing a reader cannot see
+    (`hides_text`, the rule evidence, handoffs and filenames are held to,
+    AI-2; the one-line rule already refuses U+2028 and U+2029, so with it
+    this is `handoff.INVISIBLE` too, F524). What the card may carry beyond
+    that is each name's own closed grammar (`_value`)."""
     try:
         return (
             type(value) is str
@@ -141,11 +143,6 @@ def _text(value: object) -> bool:
             and len(value.encode("utf-8")) <= _TEXT_BYTES
             and BoundaryText.of(value, limit=_TEXT_BYTES).value == value
             and not hides_text(value)
-            and not any(
-                unicodedata.category(character) in {"Ps", "Pe"}
-                and character not in _KEPT_PUNCTUATION
-                for character in value
-            )
         )
     except Refusal:
         return False
@@ -157,12 +154,24 @@ def _horizon(value: str) -> bool:
     return matched is not None and matched["start"] <= matched["end"]
 
 
+def _objective(text: str) -> bool:
+    """Only letters, digits and `_OBJECTIVE_PUNCTUATION`: nothing that can
+    end or fake a card's `[name: value]`, whatever block it comes from."""
+    return all(
+        unicodedata.category(character)[0] in {"L", "N"}
+        or character in _OBJECTIVE_PUNCTUATION
+        for character in text
+    )
+
+
 def _value(name: str, value: object) -> bool:
-    """`value` as `name` takes it: one line of `_text`, and for CP-2G's
-    three names their own grammar (F524)."""
+    """`value` as `name` takes it: one line of `_text`, then its own closed
+    grammar -- CP-2G's three (F524) and CP-0's objective (fix round 2)."""
     if not _text(value):
         return False
     text = str(value)
+    if name == OBJECTIVE:
+        return _objective(text)
     if name == FORECAST_HORIZON:
         return _horizon(text)
     if name == BASE_PERIOD:
