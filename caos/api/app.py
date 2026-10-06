@@ -301,6 +301,9 @@ _STATUS = {
     # W4: the caller's own brief, judged at the pin exactly as CP-DR will read
     # it. `RUN_INPUT_INVALID` stays 500 for the stored input it names.
     RefusalCode.RESEARCH_BRIEF_INVALID: 400,
+    # D109: the caller's own command, judged at the pin.
+    RefusalCode.RUN_QUALIFIER_INVALID: 400,
+    RefusalCode.REPORTING_PERIOD_UNREADABLE: 400,
     RefusalCode.FORECAST_DRIVER_NOT_READY: 400,
     RefusalCode.DELIVERABLE_PAYLOAD_INVALID: 400,
     RefusalCode.NARRATIVE_FIGURE_UNREFERENCED: 400,

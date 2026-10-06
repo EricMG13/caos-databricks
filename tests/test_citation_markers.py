@@ -132,7 +132,8 @@ def test_every_citation_keeps_its_place_in_the_record() -> None:
     """Since D107 each citation holds its `marker`, together the places 1 to
     n, so a marker names one citation, anchored or not; a record from before
     holds none and is the bytes it was. The codec moved (rollback check)."""
-    assert RECORD_CODEC_VERSION == 2
+    # 2 since D107; 3 since D109's `current_command`.
+    assert RECORD_CODEC_VERSION == 3
     record = _placed((1, 3), (2,))
     data = record_bytes(record)
     document = json.loads(data)

@@ -154,6 +154,12 @@ class RefusalCode(StrEnum):
     # W4: a caller's own research brief -- or its absence, on a route that
     # reads one -- is what a new pin refused, not the stored input.
     RESEARCH_BRIEF_INVALID = "RESEARCH_BRIEF_INVALID"
+    # D109: a caller's command qualifier or objective names a module, a name
+    # or a value the pin does not take, or a module the route does not carry.
+    RUN_QUALIFIER_INVALID = "RUN_QUALIFIER_INVALID"
+    # D109: CP-2G's scope must be derived from a reporting period the owner's
+    # rule cannot read; the pin refuses rather than guess.
+    REPORTING_PERIOD_UNREADABLE = "REPORTING_PERIOD_UNREADABLE"
     RUN_INPUT_ALREADY_PINNED = "RUN_INPUT_ALREADY_PINNED"
     RUN_INPUT_TOO_LATE = "RUN_INPUT_TOO_LATE"
     GATE_APPROVAL_MISMATCH = "GATE_APPROVAL_MISMATCH"

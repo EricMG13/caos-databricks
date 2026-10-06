@@ -112,7 +112,15 @@ class _Journey:
         if action is A.CREATE_RUN:
             path, body = runs, dict(ROUTE)
         elif action is A.PIN_RUN_INPUT:
-            path, body = f"{run}/input", {"subject": SUBJECT, "research": None}
+            path, body = (
+                f"{run}/input",
+                {
+                    "subject": SUBJECT,
+                    "research": None,
+                    "qualifiers": [],
+                    "objective": None,
+                },
+            )
         elif action in GATE_SLUG:
             slug = GATE_SLUG[action]
             path, body = f"{run}/gates/{slug}/approval", dict(self._digests(slug))

@@ -24,6 +24,7 @@ from hashlib import sha256
 from pathlib import Path, PurePosixPath
 
 from caos.methodology.bundle import Bundle, delivered_authority
+from caos.methodology.qualifiers import QUALIFIER_FIELDS
 from caos.refusals import Refusal, RefusalCode
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -46,8 +47,11 @@ BASE_BLOCKS = ("instruction", "tagged", "host_steps", "final_check")
 # conditional block is rendered, as the stage contracts state it.
 RETRY_BLOCK = "validator_feedback"
 REPAIR_BLOCK = "validator_repair"
+# D109: the run's pinned command, for a module the host takes one for.
+COMMAND_BLOCK = "current_command"
 CONDITIONS = {
     "forecast_extension": "when the route carries CP-CF",
+    COMMAND_BLOCK: "when the run's pinned command names this module (D109)",
     RETRY_BLOCK: (
         "on a node's guided retry after a refused answer (D30, D82), when that"
         " answer is not carried (D104)"
@@ -122,8 +126,9 @@ def expected_blocks(module_id: str) -> tuple[tuple[str, ...], tuple[str, ...]]:
     if module_id == GATE_MODULE:
         always.append("cp0_final_check")
     forecast = ("forecast_extension",) if module_id in FORECAST_OWNERS else ()
+    command = (COMMAND_BLOCK,) if module_id in QUALIFIER_FIELDS else ()
     # Every node's guided retries after a refused answer (D30, D82, D104).
-    return tuple(always), (*forecast, RETRY_BLOCK, REPAIR_BLOCK)
+    return tuple(always), (*command, *forecast, RETRY_BLOCK, REPAIR_BLOCK)
 
 
 def expected_inputs(

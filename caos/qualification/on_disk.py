@@ -51,6 +51,7 @@ from typing import Any
 from caos.boundary_text import DEFAULT_LIMIT, BoundaryText
 from caos.evidence.extract import DEFAULT_LIMITS
 from caos.evidence.ingest import Document
+from caos.methodology.qualifiers import stated_command
 from caos.qualification.matrix import (
     _LABEL_LIMIT,
     DECLARABLE_REFUSALS,
@@ -107,6 +108,8 @@ _OPTIONAL_CASE_KEYS = frozenset(
         "expects_register",
         "model_extension",
         "research_brief",
+        "qualifiers",
+        "objective",
     }
 )
 _EXPECT_KEYS = frozenset({"module_id", "document_sha256", "matched_text"})
@@ -241,6 +244,7 @@ def _case(root: Path, entry: object, held: _Materialised) -> QualificationCase:
         expects_register=_registers(fields.get("expects_register")),
         model_extension=_extension(fields.get("model_extension")),
         research_brief=_brief(fields.get("research_brief")),
+        **_command(fields),
     )
 
 
@@ -557,6 +561,55 @@ def _brief(item: object) -> str | None:
         return research_text(item)
     except Refusal:
         raise Refusal(RefusalCode.QUALIFICATION_SET_FILE_INVALID) from None
+
+
+def _command(fields: Mapping[str, Any]) -> dict[str, Any]:
+    """A case's `qualifiers` and `objective`, each read on its own and then
+    together by the pin's rule, which refuses the objective stated both ways
+    (F526)."""
+    qualifiers = _qualifiers(fields.get("qualifiers"))
+    objective = _objective(fields.get("objective"))
+    stated: dict[str, dict[str, str]] = {}
+    for module_id, name, value in qualifiers:
+        stated.setdefault(module_id, {})[name] = value
+    try:
+        stated_command(stated, objective)
+    except Refusal:
+        raise Refusal(RefusalCode.QUALIFICATION_SET_FILE_INVALID) from None
+    return {"qualifiers": qualifiers, "objective": objective}
+
+
+def _qualifiers(item: object) -> tuple[tuple[str, str, str], ...]:
+    """A case's command qualifiers (D109): module id to name to value, judged
+    by the pin's own closed rule (`stated_command`) so a manifest cannot
+    digest a qualifier no pin takes. Whether the route carries the module is
+    the pin's question, asked by `prepare` before anything is spent."""
+    if item is None:
+        return ()
+    if not isinstance(item, dict):
+        raise Refusal(RefusalCode.QUALIFICATION_SET_FILE_INVALID)
+    try:
+        stated = stated_command(item, None)
+    except Refusal:
+        raise Refusal(RefusalCode.QUALIFICATION_SET_FILE_INVALID) from None
+    return tuple(
+        sorted(
+            (module_id, name, value)
+            for module_id, names in stated.items()
+            for name, value in names.items()
+        )
+    )
+
+
+def _objective(item: object) -> str | None:
+    """A case's CP-0 objective (D109), judged as the pin judges one."""
+    if item is None:
+        return None
+    try:
+        stated_command(None, item if isinstance(item, str) else "")
+    except Refusal:
+        raise Refusal(RefusalCode.QUALIFICATION_SET_FILE_INVALID) from None
+    return str(item)
 
 
 def _closed(entry: object, keys: frozenset[str]) -> Mapping[str, Any]:
