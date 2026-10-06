@@ -293,6 +293,13 @@ const ResearchBrief = object({
   exclusions: text,
   questions: array(ResearchBriefQuestion, 32),
 });
+// One command qualifier a pin states for one module (D109,
+// `PinRunInput.qualifiers`).
+const RunQualifier = object({
+  module_id: short,
+  name: short,
+  value: string({ max: 1024 }),
+});
 const GateView = object({ gate: Gate, state: GateState });
 const EdgeView = object({ source: short, type: EdgeType });
 // One edge of the pinned route, both ends by module, met or not (D73): the
@@ -850,6 +857,7 @@ export const V1_SHAPES = {
   QualificationState,
   ResearchBrief,
   ResearchBriefQuestion,
+  RunQualifier,
   RouteChoice,
   ModelChoice,
   RouteEdgeView,

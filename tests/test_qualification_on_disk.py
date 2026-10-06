@@ -1056,6 +1056,45 @@ def test_a_case_carries_its_research_brief_as_the_pins_canonical_text(
         assert refused.value.code is RefusalCode.QUALIFICATION_SET_FILE_INVALID
 
 
+def test_a_case_states_its_command_and_an_unknown_qualifier_refuses_the_file(
+    tmp_path: Path,
+) -> None:
+    """D109: a case's `qualifiers` and `objective` are read by the pin's own
+    closed rule, carried as the pin takes them, and covered by the digest."""
+    manifest = _manifest()
+    first = _first(manifest)
+    first["qualifiers"] = {"CP-2G": {"cases": "base/upside/downside"}}
+    first["objective"] = "Refinancing decision"
+    loaded = load_qualification_set(_write(tmp_path, manifest))
+    assert loaded.cases[0].qualifiers == (("CP-2G", "cases", "base/upside/downside"),)
+    assert loaded.cases[0].objective == "Refinancing decision"
+    assert (loaded.cases[1].qualifiers, loaded.cases[1].objective) == ((), None)
+    assert qualification_set_digest(loaded) != qualification_set_digest(_in_memory())
+    first["objective"] = "Another decision"
+    assert qualification_set_digest(
+        load_qualification_set(_write(tmp_path, manifest))
+    ) != qualification_set_digest(loaded)
+    for key, bad in (
+        ("qualifiers", {"CP-2G": {"horizon": "FY27"}}),
+        ("qualifiers", {"CP-9": {"cases": "base"}}),
+        ("qualifiers", ["CP-2G"]),
+        ("objective", 7),
+        ("objective", "two\nlines"),
+    ):
+        amended = _manifest()
+        _first(amended)[key] = bad
+        with pytest.raises(Refusal) as refused:
+            load_qualification_set(_write(tmp_path, amended))
+        assert refused.value.code is RefusalCode.QUALIFICATION_SET_FILE_INVALID
+    # F526: the objective stated both ways, which no pin takes.
+    both = _manifest()
+    _first(both)["qualifiers"] = {"CP-0": {"objective": "Another decision"}}
+    _first(both)["objective"] = "Refinancing decision"
+    with pytest.raises(Refusal) as refused:
+        load_qualification_set(_write(tmp_path, both))
+    assert refused.value.code is RefusalCode.QUALIFICATION_SET_FILE_INVALID
+
+
 def _first(manifest: dict[str, object]) -> dict[str, Any]:
     """The manifest's first case, typed, so a test can amend one field of it."""
     cases = manifest["cases"]

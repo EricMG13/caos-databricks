@@ -42,6 +42,8 @@ const RunCreated = object({ case_id: uuid, run_id: uuid, route_digest: hash });
 const PinRunInput = object({
   subject: V1_SHAPES.RunSubjectView,
   research: nullable(V1_SHAPES.ResearchBrief),
+  qualifiers: array(V1_SHAPES.RunQualifier, 4),
+  objective: nullable(string({ max: 1024 })),
 });
 const RunInputPinned = object({ run_id: uuid, source_set_version: int(), input_fingerprint: hash });
 const GatePreviewDocument = object({

@@ -24,6 +24,7 @@ from caos.store.run_inputs import (
     _fingerprint,
     load_run_input,
     pin_run_input,
+    valid_subject,
 )
 from caos.store.runs import attempt_ordinal, create_case, start_attempt
 
@@ -126,6 +127,12 @@ def test_every_subject_field_is_in_the_fingerprint(field: str) -> None:
         replace(SUBJECT, reporting_period="FY\u202e2025"),
         replace(SUBJECT, analysis_date="2026-02-30"),
         replace(SUBJECT, analysis_date="20260908"),
+        # F525: text no reader of the preview or the front matter can see.
+        replace(SUBJECT, issuer_name="Example" + chr(0xE0041) + " plc"),
+        replace(SUBJECT, issuer_name="Example\ufeff plc"),
+        replace(SUBJECT, issuer_name="Example\u200b plc"),
+        replace(SUBJECT, reporting_period="FY\u20602025"),
+        replace(SUBJECT, reporting_period="Q2\u200b 2026"),
     ],
 )
 def test_an_invalid_subject_refuses_before_anything_is_pinned(
@@ -221,3 +228,12 @@ def test_version_one_pins_and_early_attempts_survive_the_upgrade(
             attempt_ordinal(conn, early)
         assert refused.value.code is RefusalCode.ATTEMPT_NOT_FOUND
         assert attempt_ordinal(conn, start_attempt(conn, run, NODE)) == 2
+
+
+def test_a_subject_with_hidden_text_is_not_valid_but_a_visible_one_is() -> None:
+    """F525: `valid_subject`, which the API and the qualification loader ask
+    first, refuses what `hides_text` finds in a name or a period."""
+    assert valid_subject(replace(SUBJECT, issuer_name="Société Générale"))
+    for hidden in (chr(0xE0041), "\ufeff", "\u200b", "\u2060"):
+        assert not valid_subject(replace(SUBJECT, issuer_name=f"Example{hidden}"))
+        assert not valid_subject(replace(SUBJECT, reporting_period=f"FY2025{hidden}"))
