@@ -94,6 +94,7 @@ a row typed here is a row that fails. -->
 | `czr-fy2025-10k` | CZR | Caesars Entertainment, Inc. FY2025 Form 10-K (SEC filing text extract) | in_hand | CP-0, CP-L10 | LITE_EARNINGS_UPDATE | 405745 | yes | `172309048af2a6a2…` |
 | `czr-q2-2026-10q` | CZR | Caesars Entertainment, Inc. Form 10-Q for the quarter ended 30 June 2026 (SEC filing text extract) | in_hand | CP-0, CP-5 | LITE_EARNINGS_UPDATE | 166976 | yes | `f369ce5f1ebeddd9…` |
 | `czr-q2-2026-earnings` | CZR | Caesars Entertainment, Inc. second quarter 2026 earnings release, Exhibit 99.1, 28 July 2026 (SEC exhibit text extract) | in_hand | CP-0, CP-L10 | LITE_EARNINGS_UPDATE | 15590 | yes | `b385f76ff631243d…` |
+| `czr-2026-merger-agreement-lite-earnings-update` | CZR | Caesars Entertainment, Inc. Agreement and Plan of Merger with Fertitta Gaming Holdco, LLC, Exhibit 2.1 to the Form 8-K of 28 May 2026 (SEC exhibit text extract) | in_hand | CP-0, CP-L10 | LITE_EARNINGS_UPDATE | 411229 | yes | `e01077c1ed37c5b0…` |
 | `czr-fy2025-10k-earnings-update` | CZR | Caesars Entertainment, Inc. FY2025 Form 10-K (SEC filing text extract, FULL earnings-update set copy) | in_hand | CP-0, CP-1B | EARNINGS_UPDATE | 405745 | yes | `172309048af2a6a2…` |
 | `czr-q2-2026-10q-earnings-update` | CZR | Caesars Entertainment, Inc. Form 10-Q for the quarter ended 30 June 2026 (SEC filing text extract, FULL earnings-update set copy) | in_hand | CP-0, CP-1, CP-2, CP-5 | EARNINGS_UPDATE | 166976 | yes | `f369ce5f1ebeddd9…` |
 | `czr-q2-2026-earnings-earnings-update` | CZR | Caesars Entertainment, Inc. second quarter 2026 earnings release, Exhibit 99.1, 28 July 2026 (SEC exhibit text extract, FULL earnings-update set copy) | in_hand | CP-0, CP-1B | EARNINGS_UPDATE | 15590 | yes | `b385f76ff631243d…` |
@@ -101,6 +102,7 @@ a row typed here is a row that fails. -->
 | `czr-q2-2026-10q-liquidity` | CZR | Caesars Entertainment, Inc. Form 10-Q for the quarter ended 30 June 2026 (SEC filing text extract, FULL liquidity set copy) | in_hand | CP-0, CP-1, CP-2, CP-2D | LIQUIDITY_REVIEW | 166976 | yes | `f369ce5f1ebeddd9…` |
 | `czr-q2-2026-earnings-liquidity` | CZR | Caesars Entertainment, Inc. second quarter 2026 earnings release, Exhibit 99.1, 28 July 2026 (SEC exhibit text extract, FULL liquidity set copy) | in_hand | CP-0, CP-2D | LIQUIDITY_REVIEW | 15590 | yes | `b385f76ff631243d…` |
 | `czr-2024-credit-agreement-incremental-assumption-no3-liquidity` | CZR | Caesars Entertainment, Inc. Incremental Assumption Agreement No. 3 dated 6 February 2024, JPMorgan Chase Bank, N.A. as administrative agent, with Exhibit A, the Credit Agreement dated 20 July 2020 conformed through it (SEC exhibit text extract, FULL liquidity set copy) | in_hand | CP-2D | LIQUIDITY_REVIEW | 1077810 | yes | `25bea1d14fd9bb22…` |
+| `czr-2026-merger-agreement-liquidity` | CZR | Caesars Entertainment, Inc. Agreement and Plan of Merger with Fertitta Gaming Holdco, LLC, Exhibit 2.1 to the Form 8-K of 28 May 2026 (SEC exhibit text extract) | in_hand | CP-2D | LIQUIDITY_REVIEW | 411229 | yes | `e01077c1ed37c5b0…` |
 | `czr-fy2025-10k-covenant-refinancing` | CZR | Caesars Entertainment, Inc. FY2025 Form 10-K (SEC filing text extract, FULL covenant-refinancing set copy) | in_hand | CP-0, CP-1 | COVENANT_REFINANCING | 405745 | yes | `172309048af2a6a2…` |
 | `czr-q2-2026-10q-covenant-refinancing` | CZR | Caesars Entertainment, Inc. Form 10-Q for the quarter ended 30 June 2026 (SEC filing text extract, FULL covenant-refinancing set copy) | in_hand | CP-0, CP-1, CP-2, CP-2D, CP-4, CP-3C, CP-5 | COVENANT_REFINANCING | 166976 | yes | `f369ce5f1ebeddd9…` |
 | `czr-2024-credit-agreement-incremental-assumption-no3` | CZR | Caesars Entertainment, Inc. Incremental Assumption Agreement No. 3 dated 6 February 2024, JPMorgan Chase Bank, N.A. as administrative agent, with Exhibit A, the Credit Agreement dated 20 July 2020 conformed through it (SEC exhibit text extract) | in_hand | CP-4 | COVENANT_REFINANCING | 1077810 | yes | `25bea1d14fd9bb22…` |
@@ -111,6 +113,7 @@ a row typed here is a row that fails. -->
 | `czr-2024-650-notes-2032-second-supplemental-indenture` | CZR | Caesars Entertainment, Inc. Second Supplemental Indenture dated 23 August 2024 to the Indenture for the 6.500% Senior Secured Notes due 2032 (SEC exhibit text extract) | in_hand | CP-4, CP-3C | COVENANT_REFINANCING | 15684 | yes | `3621f08611f4c6a6…` |
 | `czr-2026-merger-8k` | CZR | Caesars Entertainment, Inc. Form 8-K, Item 1.01, Agreement and Plan of Merger with Fertitta Gaming Holdco, LLC, 27 May 2026 (SEC filing text extract) | in_hand | CP-3C | COVENANT_REFINANCING | 30809 | yes | `6808734cfbb19b56…` |
 | `czr-2026-merger-press-release` | CZR | Caesars Entertainment, Inc. press release announcing the Fertitta Entertainment merger agreement, Exhibit 99.1, 28 May 2026 (SEC exhibit text extract) | in_hand | CP-3C | COVENANT_REFINANCING | 19048 | yes | `4fbecbd5f5a10b15…` |
+| `czr-2026-merger-agreement` | CZR | Caesars Entertainment, Inc. Agreement and Plan of Merger with Fertitta Gaming Holdco, LLC, Exhibit 2.1 to the Form 8-K of 28 May 2026 (SEC exhibit text extract) | in_hand | CP-3C, CP-4 | COVENANT_REFINANCING | 411229 | yes | `e01077c1ed37c5b0…` |
 | `czr-q2-2026-10q-lite-covenant-refinancing` | CZR | Caesars Entertainment, Inc. Form 10-Q for the quarter ended 30 June 2026 (SEC filing text extract, LITE covenant-refinancing set copy) | in_hand | CP-0, CP-L10, CP-3C, CP-5 | LITE_COVENANT_REFINANCING | 166976 | yes | `f369ce5f1ebeddd9…` |
 | `czr-2024-credit-agreement-incremental-assumption-no3-lite-covenant-refinancing` | CZR | Caesars Entertainment, Inc. Incremental Assumption Agreement No. 3 dated 6 February 2024, JPMorgan Chase Bank, N.A. as administrative agent, with Exhibit A, the Credit Agreement dated 20 July 2020 conformed through it (SEC exhibit text extract, LITE covenant-refinancing set copy) | in_hand | CP-3C | LITE_COVENANT_REFINANCING | 1077810 | yes | `25bea1d14fd9bb22…` |
 | `czr-2024-credit-agreement-fourth-amendment-lite-covenant-refinancing` | CZR | Caesars Entertainment, Inc. Fourth Amendment to Credit Agreement dated 9 May 2024 (SEC exhibit text extract, LITE covenant-refinancing set copy) | in_hand | CP-3C | LITE_COVENANT_REFINANCING | 25431 | yes | `32f91de6ef3ff93d…` |
@@ -119,6 +122,7 @@ a row typed here is a row that fails. -->
 | `czr-2024-650-notes-2032-first-supplemental-indenture-lite-covenant-refinancing` | CZR | Caesars Entertainment, Inc. First Supplemental Indenture dated 1 March 2024 to the Indenture for the 6.500% Senior Secured Notes due 2032 (SEC exhibit text extract, LITE covenant-refinancing set copy) | in_hand | CP-3C | LITE_COVENANT_REFINANCING | 11774 | yes | `0af4615b9a52e91e…` |
 | `czr-2024-650-notes-2032-second-supplemental-indenture-lite-covenant-refinancing` | CZR | Caesars Entertainment, Inc. Second Supplemental Indenture dated 23 August 2024 to the Indenture for the 6.500% Senior Secured Notes due 2032 (SEC exhibit text extract, LITE covenant-refinancing set copy) | in_hand | CP-3C | LITE_COVENANT_REFINANCING | 15684 | yes | `3621f08611f4c6a6…` |
 | `czr-2026-merger-8k-lite-covenant-refinancing` | CZR | Caesars Entertainment, Inc. Form 8-K, Item 1.01, Agreement and Plan of Merger with Fertitta Gaming Holdco, LLC, 27 May 2026 (SEC filing text extract, LITE covenant-refinancing set copy) | in_hand | CP-3C | LITE_COVENANT_REFINANCING | 30809 | yes | `6808734cfbb19b56…` |
+| `czr-2026-merger-agreement-lite-covenant-refinancing` | CZR | Caesars Entertainment, Inc. Agreement and Plan of Merger with Fertitta Gaming Holdco, LLC, Exhibit 2.1 to the Form 8-K of 28 May 2026 (SEC exhibit text extract) | in_hand | CP-3C | LITE_COVENANT_REFINANCING | 411229 | yes | `e01077c1ed37c5b0…` |
 | `czr-q2-2026-10q-lite-relative-value` | CZR | Caesars Entertainment, Inc. Form 10-Q for the quarter ended 30 June 2026 (SEC filing text extract, LITE relative-value set copy) | in_hand | CP-0, CP-L10, CP-1C | LITE_RELATIVE_VALUE | 166976 | yes | `f369ce5f1ebeddd9…` |
 | `czr-q2-2026-earnings-lite-relative-value` | CZR | Caesars Entertainment, Inc. second quarter 2026 earnings release, Exhibit 99.1, 28 July 2026 (SEC exhibit text extract, LITE relative-value set copy) | in_hand | CP-0, CP-1C | LITE_RELATIVE_VALUE | 15590 | yes | `b385f76ff631243d…` |
 | `czr-2024-credit-agreement-incremental-assumption-no3-lite-relative-value` | CZR | Caesars Entertainment, Inc. Incremental Assumption Agreement No. 3 dated 6 February 2024, JPMorgan Chase Bank, N.A. as administrative agent, with Exhibit A, the Credit Agreement dated 20 July 2020 conformed through it (SEC exhibit text extract, LITE relative-value set copy) | in_hand | CP-0 | LITE_RELATIVE_VALUE | 1077810 | yes | `25bea1d14fd9bb22…` |
@@ -158,6 +162,8 @@ a row typed here is a row that fails. -->
 | `czr-finra-trace-12769gad2-2026-10-02-lite-full-credit-screen` | CZR | FINRA TRACE observation for Caesars Entertainment 6.00% notes due 2032, CUSIP 12769GAD2 (LITE full-credit-screen set copy) | in_hand | CP-2H | LITE_FULL_CREDIT_SCREEN | 1364 | yes | `256c646128b7b670…` |
 | `czr-q2-2026-10q-lite-portfolio` | CZR | Caesars Entertainment, Inc. Form 10-Q for the quarter ended 30 June 2026 (SEC filing text extract, LITE portfolio set copy) | in_hand | CP-0, CP-L10 | LITE_PORTFOLIO_DECISION | 166976 | yes | `f369ce5f1ebeddd9…` |
 | `czr-q2-2026-earnings-lite-portfolio` | CZR | Caesars Entertainment, Inc. second quarter 2026 earnings release, Exhibit 99.1, 28 July 2026 (SEC exhibit text extract, LITE portfolio set copy) | in_hand | CP-0, CP-L10 | LITE_PORTFOLIO_DECISION | 15590 | yes | `b385f76ff631243d…` |
+| `fhsuhy-nport-2026-06-30` | Federated Hermes Sustainable High Yield Bond Fund, Inc. | Federated Hermes Sustainable High Yield Bond Fund, Inc. N-PORT schedule of investments at 30 June 2026 (SEC exhibit text extract) | in_hand | CP-0, CP-L10 | LITE_PORTFOLIO_DECISION | 49398 | yes | `e2490912d9cc6881…` |
+| `fhsuhy-prospectus-sai-2026-05-26` | Federated Hermes Sustainable High Yield Bond Fund, Inc. | Federated Hermes Sustainable High Yield Bond Fund, Inc. prospectus and statement of additional information, Form 485BPOS of 26 May 2026 (SEC filing text extract) | in_hand | CP-0, CP-L10 | LITE_PORTFOLIO_DECISION | 501405 | yes | `10455d54958421c5…` |
 | `test-clo-i-mandate-2026-10-02` | Test CLO I (synthetic) | SYNTHETIC test mandate: Test CLO I Ltd mandate, exposure report and compliance monitor, with the owner-adopted CZR position adaptation of 2 October 2026 (text extract) | in_hand | CP-0, CP-L10 | LITE_PORTFOLIO_DECISION | 10979 | yes | `864ee90ab21372bc…` |
 | `czr-finra-trace-12769gac4-2026-10-02-lite-portfolio` | CZR | FINRA TRACE observation for Caesars Entertainment 6.50% notes due 2032, CUSIP 12769GAC4 (LITE portfolio set copy) | in_hand | CP-0, CP-L10 | LITE_PORTFOLIO_DECISION | 1361 | yes | `4018aaa62309df6c…` |
 | `czr-2024-650-notes-2032-indenture-lite-portfolio` | CZR | Caesars Entertainment, Inc. Indenture for the 6.500% Senior Secured Notes due 2032, dated 6 February 2024, U.S. Bank Trust Company, N.A. as trustee (SEC exhibit text extract, LITE portfolio set copy) | in_hand | CP-0, CP-L10 | LITE_PORTFOLIO_DECISION | 758385 | yes | `0809ab3981090bd2…` |
@@ -165,6 +171,8 @@ a row typed here is a row that fails. -->
 | `czr-2024-650-notes-2032-second-supplemental-indenture-lite-portfolio` | CZR | Caesars Entertainment, Inc. Second Supplemental Indenture dated 23 August 2024 to the Indenture for the 6.500% Senior Secured Notes due 2032 (SEC exhibit text extract, LITE portfolio set copy) | in_hand | CP-0, CP-L10 | LITE_PORTFOLIO_DECISION | 15684 | yes | `3621f08611f4c6a6…` |
 | `czr-q2-2026-10q-portfolio` | CZR | Caesars Entertainment, Inc. Form 10-Q for the quarter ended 30 June 2026 (SEC filing text extract, FULL portfolio set copy) | in_hand | CP-0, CP-1, CP-2, CP-4, CP-5 | PORTFOLIO_DECISION | 166976 | yes | `f369ce5f1ebeddd9…` |
 | `czr-fy2025-10k-portfolio` | CZR | Caesars Entertainment, Inc. FY2025 Form 10-K (SEC filing text extract, FULL portfolio set copy) | in_hand | CP-0, CP-2 | PORTFOLIO_DECISION | 405745 | yes | `172309048af2a6a2…` |
+| `fhsuhy-nport-2026-06-30-portfolio` | Federated Hermes Sustainable High Yield Bond Fund, Inc. | Federated Hermes Sustainable High Yield Bond Fund, Inc. N-PORT schedule of investments at 30 June 2026 (SEC exhibit text extract) | in_hand | CP-0, CP-6 | PORTFOLIO_DECISION | 49398 | yes | `e2490912d9cc6881…` |
+| `fhsuhy-prospectus-sai-2026-05-26-portfolio` | Federated Hermes Sustainable High Yield Bond Fund, Inc. | Federated Hermes Sustainable High Yield Bond Fund, Inc. prospectus and statement of additional information, Form 485BPOS of 26 May 2026 (SEC filing text extract) | in_hand | CP-0, CP-6 | PORTFOLIO_DECISION | 501405 | yes | `10455d54958421c5…` |
 | `czr-2024-credit-agreement-incremental-assumption-no3-portfolio` | CZR | Caesars Entertainment, Inc. Incremental Assumption Agreement No. 3 dated 6 February 2024, JPMorgan Chase Bank, N.A. as administrative agent, with Exhibit A, the Credit Agreement dated 20 July 2020 conformed through it (SEC exhibit text extract, FULL portfolio set copy) | in_hand | CP-4 | PORTFOLIO_DECISION | 1077810 | yes | `25bea1d14fd9bb22…` |
 | `czr-2024-650-notes-2032-indenture-portfolio` | CZR | Caesars Entertainment, Inc. Indenture for the 6.500% Senior Secured Notes due 2032, dated 6 February 2024, U.S. Bank Trust Company, N.A. as trustee (SEC exhibit text extract, FULL portfolio set copy) | in_hand | CP-4 | PORTFOLIO_DECISION | 758385 | yes | `0809ab3981090bd2…` |
 | `czr-2024-650-notes-2032-first-supplemental-indenture-portfolio` | CZR | Caesars Entertainment, Inc. First Supplemental Indenture dated 1 March 2024 to the Indenture for the 6.500% Senior Secured Notes due 2032 (SEC exhibit text extract, FULL portfolio set copy) | in_hand | CP-4 | PORTFOLIO_DECISION | 11774 | yes | `0af4615b9a52e91e…` |
@@ -175,6 +183,8 @@ a row typed here is a row that fails. -->
 | `czr-q2-2026-10q-full-credit-assessment` | CZR | Caesars Entertainment, Inc. Form 10-Q for the quarter ended 30 June 2026 (SEC filing text extract, FULL credit-assessment set copy) | in_hand | CP-0, CP-1, CP-2, CP-2E, CP-4, CP-2D, CP-3C, CP-4C, CP-5 | FULL_CREDIT_ASSESSMENT | 166976 | yes | `f369ce5f1ebeddd9…` |
 | `czr-fy2025-10k-full-credit-assessment` | CZR | Caesars Entertainment, Inc. FY2025 Form 10-K (SEC filing text extract, FULL credit-assessment set copy) | in_hand | CP-0, CP-1B, CP-2 | FULL_CREDIT_ASSESSMENT | 405745 | yes | `172309048af2a6a2…` |
 | `czr-q2-2026-earnings-full-credit-assessment` | CZR | Caesars Entertainment, Inc. second quarter 2026 earnings release, Exhibit 99.1, 28 July 2026 (SEC exhibit text extract, FULL credit-assessment set copy) | in_hand | CP-0, CP-1B | FULL_CREDIT_ASSESSMENT | 15590 | yes | `b385f76ff631243d…` |
+| `fhsuhy-nport-2026-06-30-full-credit-assessment` | Federated Hermes Sustainable High Yield Bond Fund, Inc. | Federated Hermes Sustainable High Yield Bond Fund, Inc. N-PORT schedule of investments at 30 June 2026 (SEC exhibit text extract) | in_hand | CP-6 | FULL_CREDIT_ASSESSMENT | 49398 | yes | `e2490912d9cc6881…` |
+| `fhsuhy-prospectus-sai-2026-05-26-full-credit-assessment` | Federated Hermes Sustainable High Yield Bond Fund, Inc. | Federated Hermes Sustainable High Yield Bond Fund, Inc. prospectus and statement of additional information, Form 485BPOS of 26 May 2026 (SEC filing text extract) | in_hand | CP-6 | FULL_CREDIT_ASSESSMENT | 501405 | yes | `10455d54958421c5…` |
 | `czr-2024-credit-agreement-incremental-assumption-no3-full-credit-assessment` | CZR | Caesars Entertainment, Inc. Incremental Assumption Agreement No. 3 dated 6 February 2024, JPMorgan Chase Bank, N.A. as administrative agent, with Exhibit A, the Credit Agreement dated 20 July 2020 conformed through it (SEC exhibit text extract, FULL credit-assessment set copy) | in_hand | CP-4 | FULL_CREDIT_ASSESSMENT | 1077810 | yes | `25bea1d14fd9bb22…` |
 | `czr-2024-credit-agreement-fourth-amendment-full-credit-assessment` | CZR | Caesars Entertainment, Inc. Fourth Amendment to Credit Agreement dated 9 May 2024 (SEC exhibit text extract, FULL credit-assessment set copy) | in_hand | CP-4 | FULL_CREDIT_ASSESSMENT | 25431 | yes | `32f91de6ef3ff93d…` |
 | `czr-2024-credit-agreement-fifth-amendment-full-credit-assessment` | CZR | Caesars Entertainment, Inc. Fifth Amendment to Credit Agreement dated 25 November 2024 (SEC exhibit text extract, FULL credit-assessment set copy) | in_hand | CP-4 | FULL_CREDIT_ASSESSMENT | 38797 | yes | `7f2b5c777dc33479…` |
@@ -183,6 +193,7 @@ a row typed here is a row that fails. -->
 | `czr-2024-650-notes-2032-second-supplemental-indenture-full-credit-assessment` | CZR | Caesars Entertainment, Inc. Second Supplemental Indenture dated 23 August 2024 to the Indenture for the 6.500% Senior Secured Notes due 2032 (SEC exhibit text extract, FULL credit-assessment set copy) | in_hand | CP-4, CP-3C | FULL_CREDIT_ASSESSMENT | 15684 | yes | `3621f08611f4c6a6…` |
 | `czr-2026-merger-8k-full-credit-assessment` | CZR | Caesars Entertainment, Inc. Form 8-K, Item 1.01, Agreement and Plan of Merger with Fertitta Gaming Holdco, LLC, 27 May 2026 (SEC filing text extract, FULL credit-assessment set copy) | in_hand | CP-1A | FULL_CREDIT_ASSESSMENT | 30809 | yes | `6808734cfbb19b56…` |
 | `czr-2026-merger-press-release-full-credit-assessment` | CZR | Caesars Entertainment, Inc. press release announcing the Fertitta Entertainment merger agreement, Exhibit 99.1, 28 May 2026 (SEC exhibit text extract, FULL credit-assessment set copy) | in_hand | CP-1A, CP-3C | FULL_CREDIT_ASSESSMENT | 19048 | yes | `4fbecbd5f5a10b15…` |
+| `czr-2026-merger-agreement-full-credit-assessment` | CZR | Caesars Entertainment, Inc. Agreement and Plan of Merger with Fertitta Gaming Holdco, LLC, Exhibit 2.1 to the Form 8-K of 28 May 2026 (SEC exhibit text extract) | in_hand | CP-1A, CP-3C, CP-4 | FULL_CREDIT_ASSESSMENT | 411229 | yes | `e01077c1ed37c5b0…` |
 | `mgm-q2-2026-earnings-full-credit-assessment` | MGM | MGM Resorts International second quarter 2026 earnings release, Exhibit 99.1, 29 July 2026 (SEC exhibit text extract, FULL credit-assessment set copy) | in_hand | CP-1C | FULL_CREDIT_ASSESSMENT | 29214 | yes | `795ac68aa1c51a7e…` |
 | `penn-q2-2026-earnings-full-credit-assessment` | PENN | PENN Entertainment, Inc. second quarter 2026 earnings release, Exhibit 99.1, 6 August 2026 (SEC exhibit text extract, FULL credit-assessment set copy) | in_hand | CP-1C | FULL_CREDIT_ASSESSMENT | 33608 | yes | `4d12fff94b066f73…` |
 | `czr-finra-trace-12769gac4-2026-10-02-full-credit-assessment` | CZR | FINRA TRACE observation for Caesars Entertainment 6.50% notes due 2032, CUSIP 12769GAC4 (FULL credit-assessment set copy) | in_hand | CP-2H, CP-3D, CP-3, CP-6 | FULL_CREDIT_ASSESSMENT | 1361 | yes | `4018aaa62309df6c…` |
@@ -193,9 +204,9 @@ a row typed here is a row that fails. -->
 | `answer-key-3issuer` | CCL, BA, F | ANSWER_KEY_3ISSUER.md — human-authored core facts, derived values and 24 traps per issuer | **key source, never admitted** | — | — | — | — | — |
 <!-- /emitted -->
 
-One hundred and forty-nine documents: one hundred and forty-four `in_hand`,
+One hundred and sixty documents: one hundred and fifty-five `in_hand`,
 four `to_source`, and one `to_author`; plus one key source. One hundred and
-eleven of the one hundred and forty-four in hand are byte-identical route-local
+eleven of the one hundred and fifty-five in hand are byte-identical route-local
 copies of already admitted evidence: eleven from the earlier sets, nineteen added
 for the Phase 2 route inventory, and eighty-one in the CZR earnings-update, liquidity,
 FULL and LITE covenant-refinancing, FULL and LITE relative-value, LITE
@@ -208,7 +219,14 @@ releases (`czr-2026q2-lite-relative-value`), the four FINRA TRACE
 observations of the CZR, MGM and PENN notes (`czr-2026q2-relative-value`), and
 the SYNTHETIC Test CLO I mandate (`test-clo-i-mandate-2026-10-02`,
 `czr-2026q2-lite-portfolio`), owner-adopted test input that may never ground a
-real decision (D80). Three more are the legal exhibits admitted on 5 October
+real decision (D80); since 6 October 2026 (D115) it is registered but unused:
+the real fund's N-PORT schedule and prospectus replace it in all three
+portfolio sets, and no set names it. Eleven more are the files the owner
+approved on 6 October 2026 (D115, F541, F542): the full Merger Agreement
+(`czr-2026-merger-agreement` and its copies in five sets) and the Federated
+Hermes Sustainable High Yield Bond Fund's N-PORT schedule and its prospectus
+and SAI (`fhsuhy-nport-2026-06-30`, `fhsuhy-prospectus-sai-2026-05-26` and
+their copies in three sets). Three more are the legal exhibits admitted on 5 October
 2026 on the owner's ruling (F508), first in `czr-2026q2-covenant-refinancing`:
 Incremental Assumption Agreement No. 3, whose Exhibit A is the credit agreement
 conformed through it, and the 2032 notes' First and Second Supplemental
@@ -342,7 +360,14 @@ issuer pack. What remains needs private owner data or a real prior decision.
    a distressed issuer, so the two distressed pathways keep only the Spirit
    sets (item 8); a distressed issuer's pack beyond Spirit remains to source. The real
    portfolio mandate (`ccl-portfolio-mandate-exposures`) also remains to
-   source; the synthetic mandate stands in for tests only.
+   source; the synthetic mandate stands in for tests only. **Owner approval of
+   6 October 2026 (D115):** the full Merger Agreement (Ex. 2.1 to the 8-K of
+   28 May 2026) joins five CZR sets, and Federated Hermes Sustainable High
+   Yield Bond Fund, Inc.'s N-PORT schedule at 30 June 2026 and its 485BPOS
+   prospectus and SAI replace the synthetic mandate in the three portfolio
+   sets: real holdings (it holds four Caesars positions) and real policies, but
+   no CLO mandate and no limits on a single name. The synthetic file stays in
+   the sets' directories and the register, unused.
    `DEEP_RESEARCH` still waits on the owner's confirmation of its FULL brief
    (item 7), and the CZR portfolio sets' eligible-security universe is owner
    content (N127).
@@ -362,10 +387,10 @@ not qualified.
 | `FULL_CREDIT_32` | `DEEP_RESEARCH` | `vmo2-fy2025-full-deep-research`; FULL brief confirmation outstanding | offline / owner confirmation |
 | `FULL_CREDIT_32` | `DISTRESSED_RESTRUCTURING` | `save-2024-distressed-restructuring` | blocked set |
 | `FULL_CREDIT_32` | `EARNINGS_UPDATE` | `ccl-fy2025-earnings-update`, `czr-2026q2-earnings-update` | offline |
-| `FULL_CREDIT_32` | `FULL_CREDIT_ASSESSMENT` | `czr-2026q2-full-credit-assessment`, over the SYNTHETIC Test CLO I mandate (D80); no eligible-security universe (N127) | offline, restricted / synthetic mandate |
+| `FULL_CREDIT_32` | `FULL_CREDIT_ASSESSMENT` | `czr-2026q2-full-credit-assessment`, over a real fund's N-PORT schedule and prospectus (D115; the synthetic mandate of D80 is unused); no eligible-security universe (N127) | offline, restricted |
 | `FULL_CREDIT_32` | `LIQUIDITY_REVIEW` | `ccl-fy2025-liquidity`, `czr-2026q2-liquidity` | offline |
 | `FULL_CREDIT_32` | `MARKET_DISLOCATION` | `ccl-fy2025-market-dislocation` | offline, market-restricted |
-| `FULL_CREDIT_32` | `PORTFOLIO_DECISION` | `czr-2026q2-portfolio`, over the SYNTHETIC Test CLO I mandate (D80); no eligible-security universe (N127) | offline, market-restricted / synthetic mandate |
+| `FULL_CREDIT_32` | `PORTFOLIO_DECISION` | `czr-2026q2-portfolio`, over a real fund's N-PORT schedule and prospectus (D115; the synthetic mandate of D80 is unused); no eligible-security universe (N127) | offline, market-restricted |
 | `FULL_CREDIT_32` | `RELATIVE_VALUE` | `ccl-fy2025-full-relative-value`, `czr-2026q2-relative-value` | offline, market-restricted |
 | `LITE_CREDIT_22` | `LITE_COVENANT_REFINANCING` | `ccl-fy2025-lite-covenant-refinancing`, `czr-2026q2-lite-covenant-refinancing` | offline |
 | `LITE_CREDIT_22` | `LITE_DECISION_LEDGER` | No genuine dated T0 decision record; retrospective reconstruction is prohibited | no set / owner input |
@@ -373,7 +398,7 @@ not qualified.
 | `LITE_CREDIT_22` | `LITE_DISTRESSED_RESTRUCTURING` | `save-2024-lite-distressed-restructuring` | blocked set |
 | `LITE_CREDIT_22` | `LITE_EARNINGS_UPDATE` | `vmo2-fy2025`, `ccl-fy2025`, `ba-fy2025`, `f-fy2025`, `czr-2026q2` | current VMO2 and CZR sets offline; historical runs retained |
 | `LITE_CREDIT_22` | `LITE_FULL_CREDIT_SCREEN` | `ccl-fy2025-lite-full-credit-screen`, `czr-2026q2-lite-full-credit-screen` | offline, restricted |
-| `LITE_CREDIT_22` | `LITE_PORTFOLIO_DECISION` | `ccl-fy2025-portfolio`, `vmo2-fy2025-portfolio`, `czr-2026q2-lite-portfolio` (SYNTHETIC mandate, D80) | blocked and historical-run cases retained; CZR set offline / synthetic mandate |
+| `LITE_CREDIT_22` | `LITE_PORTFOLIO_DECISION` | `ccl-fy2025-portfolio`, `vmo2-fy2025-portfolio`, `czr-2026q2-lite-portfolio` (a real fund's N-PORT schedule and prospectus, D115) | blocked and historical-run cases retained; CZR set offline |
 | `LITE_CREDIT_22` | `LITE_RELATIVE_VALUE` | `ccl-fy2025-relative-value`, `czr-2026q2-lite-relative-value` | historical runs retained; CZR set offline; no signed verdict |
 
 ## Size
