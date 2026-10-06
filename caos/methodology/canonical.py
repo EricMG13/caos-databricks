@@ -621,9 +621,10 @@ class _Context:
     # Each direct upstream's unverified citations (D106), whose markers the
     # register names as unlocated (D107).
     unverified: dict[str, tuple[UnverifiedCitation, ...]] = field(default_factory=dict)
-    # The evidence's tag, over the run's whole pin (D113), whatever part of
-    # it `delivered` is; None is the tag of `delivered` itself.
-    pack_tag: str | None = None
+    # The run's whole pin, whatever part of it `delivered` is: the evidence's
+    # tag is derived from it (D113), by `_prompt` alone, so a reader that
+    # builds no prompt never renders it. Empty is the tag of `delivered`.
+    pin: Sequence[Delivery] = ()
 
 
 def _source_preparation(
@@ -727,7 +728,6 @@ def _context(
     attempt's diagnostic body is never read here (a guided retry's lines are
     read beside it, by the two prompt builders alone: `_prompt_context`)."""
     delivered = _delivered(conn, assignment.run_id)
-    pack_tag = evidence_tag(delivered)
     source_set = _source_preparation(conn, blobs, assignment, delivered)
     # Records first: what binds and re-validates is then read as context.
     records, lineage = _upstream_records(
@@ -735,7 +735,8 @@ def _context(
     )
     upstream = upstream_markdown(blobs, identity.upstream)
     # The gate's verified record is what the selection is read from (§95).
-    delivered, selection = _selected(conn, bundle, assignment, upstream, delivered)
+    pin = delivered
+    delivered, selection = _selected(conn, bundle, assignment, upstream, pin)
     return _Context(
         delivered=delivered,
         upstream=upstream,
@@ -744,7 +745,7 @@ def _context(
         source_set=source_set,
         selection=selection,
         unverified={node: record.unverified for node, record in records.items()},
-        pack_tag=pack_tag,
+        pin=pin,
     )
 
 
@@ -1392,7 +1393,7 @@ def _prompt(
         page_maps=context.selection.page_maps,
         retry_feedback=context.feedback,
         refused_answer=context.refused_answer,
-        pack_tag=context.pack_tag,
+        pack_tag=evidence_tag(context.pin or context.delivered),
     )
 
 
