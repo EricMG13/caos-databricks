@@ -371,17 +371,15 @@ def _record(conn: StoreConnection, attempt: UUID, outcome: CallOutcome) -> bool:
         ).fetchone():
             raise Refusal(RefusalCode.CALL_OUTCOME_LEGACY)
     _validate(outcome)
-    outcome = _counted(conn, attempt, outcome)
     if row is not None:
-        if row != (
-            outcome.charge,
-            outcome.model,
-            outcome.generation_id,
-            outcome.diagnostic_sha256,
-            outcome.drop_kind,
-        ):
+        # An exact replay is a no-op: the outcome as given, or as `_counted`
+        # wrote it -- the same bill with its drop kind withheld (F530 round
+        # 3). Counting is decided once, on insert; a replay after a later
+        # start must not judge the row again.
+        if row not in (_facts(outcome), _facts(replace(outcome, drop_kind=None))):
             raise Refusal(RefusalCode.CALL_OUTCOME_CONFLICT)
         return False
+    outcome = _counted(conn, attempt, outcome)
     if outcome.charge is not None:
         conn.execute(
             "INSERT INTO budget_ledger (attempt_id,run_id,amount) VALUES (%s,%s,%s)",
@@ -406,6 +404,17 @@ def _record(conn: StoreConnection, attempt: UUID, outcome: CallOutcome) -> bool:
         ),
     )
     return True
+
+
+def _facts(outcome: CallOutcome) -> tuple[object, ...]:
+    """The stored facts of an outcome, in `_record`'s replay read order."""
+    return (
+        outcome.charge,
+        outcome.model,
+        outcome.generation_id,
+        outcome.diagnostic_sha256,
+        outcome.drop_kind,
+    )
 
 
 def _counted(conn: StoreConnection, attempt: UUID, outcome: CallOutcome) -> CallOutcome:
