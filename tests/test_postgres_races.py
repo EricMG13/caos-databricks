@@ -36,7 +36,9 @@ from caos.boundary_text import BoundaryText
 from caos.graph import runtime
 from caos.graph.route import NodeState, ResolvedRoute, resolve_route
 from caos.graph.runtime import Execution, Provider, ProviderResult, run_route
+from caos.methodology import invocation
 from caos.methodology.bundle import Bundle
+from caos.methodology.canonical import drop_stop_owed
 from caos.pricing import ModelPrice
 from caos.provider import Completion, DropKind
 from caos.refusals import Refusal, RefusalCode
@@ -1675,3 +1677,125 @@ def test_a_crash_between_a_declared_drop_and_its_re_attempt_accepts_once(
     assert run.conn.execute(
         "SELECT state, stop_code FROM run_work WHERE run_id = %s", (run.run_id,)
     ).fetchone() == ("STOPPED", "PROVIDER_UNAVAILABLE")
+
+
+def _executing(module_id: str) -> str:
+    """The host's own module-identity opening (`invocation._INSTRUCTION`), for
+    `module_id`; the evidence comes first in the prompt (D113), so no token
+    position names the module."""
+    return invocation._INSTRUCTION.split("{module_name}")[0].format(module_id=module_id)
+
+
+def _cp0_calls(prompts: list[str]) -> int:
+    return sum(1 for prompt in prompts if _executing("CP-0") in prompt)
+
+
+def test_cp0_calls_reads_the_hosts_module_identity_under_evidence_first() -> None:
+    evidence = "--- EVIDENCE 0123 ---\nx\n--- END EVIDENCE 0123 ---\n\n"
+    cp0 = evidence + _executing("CP-0") + "Credit Intake) at route node\nCP-0."
+    other = evidence + _executing("CP-1A") + "Business) at route node\nCP-1A."
+    assert _cp0_calls([cp0, other, cp0]) == 2
+    assert _cp0_calls([other]) == 0
+
+
+def _dies_at_the_second(
+    monkeypatch: pytest.MonkeyPatch, owner: object, name: str
+) -> None:
+    """`owner.name` runs once, then the worker's process ends the second time."""
+    original = getattr(owner, name)
+    seen: list[int] = []
+
+    def maybe_die(*args: object, **kwargs: object) -> object:
+        seen.append(1)
+        if len(seen) == 2:
+            raise _Died
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(owner, name, maybe_die)
+
+
+@pytest.mark.parametrize("dies_in", ["_explain_live", "drop_reattempt_due"])
+def test_a_crash_after_the_re_attempts_drop_makes_no_third_call(
+    case: tuple[StoreConnection, UUID],
+    empty_database: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    dies_in: str,
+) -> None:
+    """F530 (audit finding 1): A's first call and its re-attempt are both
+    declared drops, and A dies before the stop is written. B's resume pass
+    asks the ledger before it calls: the node's one re-attempt is spent and
+    no park has followed its drop, so B makes no call and parks the run
+    PROVIDER_UNAVAILABLE. The operator's requeue is then a park later in
+    the run's stream than the drop, and its pass calls again."""
+    from test_worker import count, queued_run
+
+    from caos.store.work import requeue_run
+
+    run = queued_run(case, _lite(), Bundle(VENDORED), BlobStore(tmp_path / "blobs"))
+    completions = _Dropping(run.source_id, drops=2)
+    _dies_at_the_second(monkeypatch, runtime, dies_in)
+    with pytest.raises(_Died):
+        _drive(empty_database, run, completions)
+    monkeypatch.undo()
+    assert _cp0_calls(completions.prompts) == 2
+    _lapsed(empty_database, run.run_id)
+    cp0 = _lite().nodes[0].route_node_id
+
+    def owed() -> bool:
+        said = drop_stop_owed(run.conn, run_id=run.run_id, route_node_id=cp0)
+        run.conn.rollback()
+        return said
+
+    assert owed()
+    assert _outcome(lambda: _drive(empty_database, run, completions)) == str(run.run_id)
+    assert _cp0_calls(completions.prompts) == 2, "no third call"
+    assert not owed(), "the park is later in the stream than the drop"
+    assert count(run.conn, "run_attempts", run.run_id) == 2
+    assert run.conn.execute(
+        "SELECT state, stop_code FROM run_work WHERE run_id = %s", (run.run_id,)
+    ).fetchone() == ("STOPPED", "PROVIDER_UNAVAILABLE")
+    run.conn.rollback()
+
+    assert requeue_run(run.conn, run.run_id)
+    run.conn.commit()
+    assert _drive(empty_database, run, completions) == run.run_id
+    assert _cp0_calls(completions.prompts) == 3
+    assert run_status(run.conn, run.run_id) is RunStatus.COMPLETE
+    run.conn.rollback()
+
+
+def test_a_crash_after_the_re_attempts_call_before_its_bill_keeps_every_reservation(
+    case: tuple[StoreConnection, UUID],
+    empty_database: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """F530 (audit finding 1): A's re-attempt is sent and A dies before its
+    bill. Nothing says how that call ended -- it is no declared drop, it is
+    indeterminate -- so B's pass makes an ordinary third call, as after any
+    crash mid-call, and invariant 8 holds: every call had its reservation
+    and none was released (three at CP-0, five in the run)."""
+    from test_worker import count, queued_run
+
+    from caos.methodology import canonical
+
+    run = queued_run(case, _lite(), Bundle(VENDORED), BlobStore(tmp_path / "blobs"))
+    completions = _Dropping(run.source_id, drops=1)
+    _dies_at_the_second(monkeypatch, canonical, "bill")
+    with pytest.raises(_Died):
+        _drive(empty_database, run, completions)
+    monkeypatch.undo()
+    assert _cp0_calls(completions.prompts) == 2
+    _lapsed(empty_database, run.run_id)
+
+    assert _drive(empty_database, run, completions) == run.run_id
+    assert run_status(run.conn, run.run_id) is RunStatus.COMPLETE
+    run.conn.rollback()
+    nodes = len(_lite().nodes)
+    assert _cp0_calls(completions.prompts) == 3
+    assert len(completions.prompts) == nodes + 2
+    assert count(run.conn, "budget_reservations", run.run_id) == nodes + 2
+    assert count(run.conn, "run_attempts", run.run_id) == nodes + 2
+    assert count(run.conn, "call_outcomes", run.run_id) == nodes + 1
+    assert count(run.conn, "artifacts", run.run_id) == nodes

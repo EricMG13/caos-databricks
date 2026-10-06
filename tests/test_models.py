@@ -72,7 +72,7 @@ def test_a_finish_reason_other_than_stop_is_a_refusal_with_its_bill(
 @pytest.mark.parametrize(
     "failure,code,drop",
     [
-        (StatusError(402), RefusalCode.PROVIDER_CALL_INVALID, DropKind.DECLARED),
+        (StatusError(402), RefusalCode.PROVIDER_CALL_INVALID, DropKind.VENDOR),
         (StatusError(429), RefusalCode.PROVIDER_UNAVAILABLE, DropKind.DECLARED),
         (StatusError(503), RefusalCode.PROVIDER_UNAVAILABLE, DropKind.DECLARED),
         (TimeoutError("private"), RefusalCode.PROVIDER_UNAVAILABLE, DropKind.RAISED),
