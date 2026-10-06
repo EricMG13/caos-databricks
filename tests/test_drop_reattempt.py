@@ -68,6 +68,26 @@ class _Body(OpenAIError):
         self.body = body
 
 
+class _Status200(_Body):
+    """A provider error object beside a status that says the call succeeded."""
+
+    status_code = 200
+
+
+class _Argued(OpenAIError):
+    """A vendor error whose only argument is a mapping: no status, no body."""
+
+
+def _validation_200() -> Exception:
+    """The client's error for a `200` whose body it could not validate."""
+    import httpx2
+    from openai import APIResponseValidationError
+
+    request = httpx2.Request("POST", "https://x.invalid/v1/chat/completions")
+    response = httpx2.Response(200, request=request, json={"choices": "private"})
+    return APIResponseValidationError(response=response, body=_ROUTER_ERROR)
+
+
 class _Unreadable(OpenAIError):
     """A vendor error whose body cannot be read without raising."""
 
@@ -113,6 +133,20 @@ def _never(released: threading.Event) -> Callable[[str], object]:
         # refused PROVIDER_UNAVAILABLE is ever declared.
         pytest.param(StatusError(402), DropKind.VENDOR, "PROVIDER_CALL_INVALID"),
         pytest.param(StatusError(400), DropKind.VENDOR, "PROVIDER_CALL_INVALID"),
+        # F530: a status below 400 or above 599 says no failure, body or not.
+        pytest.param(StatusError(200), DropKind.VENDOR, "PROVIDER_UNAVAILABLE"),
+        pytest.param(StatusError(600), DropKind.VENDOR, "PROVIDER_UNAVAILABLE"),
+        pytest.param(StatusError(599), DropKind.DECLARED, "PROVIDER_UNAVAILABLE"),
+        pytest.param(StatusError(408), DropKind.DECLARED, "PROVIDER_UNAVAILABLE"),
+        pytest.param(
+            _Status200(_ROUTER_ERROR), DropKind.VENDOR, "PROVIDER_UNAVAILABLE"
+        ),
+        pytest.param(_validation_200(), DropKind.VENDOR, "PROVIDER_UNAVAILABLE"),
+        # F530: an argument is not a body.
+        pytest.param(_Argued({"anything": 1}), DropKind.VENDOR, "PROVIDER_UNAVAILABLE"),
+        pytest.param(
+            _Body(["not", "a", "mapping"]), DropKind.VENDOR, "PROVIDER_UNAVAILABLE"
+        ),
         pytest.param(_Body(_ROUTER_ERROR), DropKind.DECLARED, "PROVIDER_UNAVAILABLE"),
         pytest.param(
             _Body({"error": _ROUTER_ERROR}), DropKind.DECLARED, "PROVIDER_UNAVAILABLE"

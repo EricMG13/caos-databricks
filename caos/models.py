@@ -474,6 +474,8 @@ _ERROR_TYPES = frozenset(
         "unsupported_image_format",
     }
 )
+# The statuses a provider fails a call with (D110, F530): 4xx and 5xx.
+FAILURE_STATUSES = (400, 599)
 _NO_FACTS = "class=- cause=- status=- error_code=- error_type=-"
 _UNKNOWN_FACTS = "class=? cause=? status=? error_code=? error_type=?"
 
@@ -573,17 +575,26 @@ def _unanswered(code: RefusalCode, answer: object, started: float) -> Completion
 
 
 def _declared(failed: BaseException) -> bool:
-    """Whether the provider itself stated this vendor error (D110): a status,
-    or its own error object, as a response body or an SSE `error` event --
-    never a connection's failure (a reset, a client timeout), after which
-    what was received is unknown. An error that raises while it is read is
-    not declared: the re-attempt fails closed."""
+    """Whether the provider itself stated this vendor error a failure (D110):
+    a failure status, 400 to 599, or, with no status at all, its own error
+    object as the error's body (an SSE `error` event) -- never a status that
+    says the call succeeded (a `200` the client could not read, F530), an
+    argument that is no body, or a connection's failure (a reset, a client
+    timeout), after which what was received is unknown. An error that raises
+    while it is read is not declared: the re-attempt fails closed."""
     declared = False
     with suppress(Exception):  # fail closed, documented above (D110)
-        stated = _status(getattr(failed, "status_code", None)) not in ("-", "?")
-        declared = not isinstance(failed, APIConnectionError) and (
-            stated or bool(_error_body(failed))
-        )
+        status = getattr(failed, "status_code", None)
+        body = getattr(failed, "body", None)
+        if isinstance(failed, APIConnectionError):
+            declared = False
+        elif status is not None:
+            declared = (
+                type(status) is int
+                and FAILURE_STATUSES[0] <= status <= (FAILURE_STATUSES[1])
+            )
+        else:
+            declared = isinstance(body, Mapping) and bool(body)
     return declared
 
 
