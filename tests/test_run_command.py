@@ -225,7 +225,7 @@ def test_cp0_is_prompted_with_a_stated_objective_inside_the_tag() -> None:
     plain = _prompt(identity("CP-0"))
     assert "--- CURRENT COMMAND" not in plain
     assert "Run CP-0 [objective: Refinancing decision]\n" in prompt
-    tag = prompt.split("--- EVIDENCE ")[1][:16]
+    tag = prompt.split("--- HOST-OWNED FRONT MATTER ")[1][:16]
     assert f"--- CURRENT COMMAND {tag} (host-owned run control" in prompt
     assert f"--- END CURRENT COMMAND {tag} ---" in prompt
     for forged in ("[]", "{}", '{"cases":{"basis":"pinned","value":"x"}}', "{"):

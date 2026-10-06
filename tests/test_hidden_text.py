@@ -35,7 +35,7 @@ from pdfminer.pdftypes import PDFObjRef, PDFStream
 from pdfminer.psparser import LIT
 from test_evidence_page_read import Pinned, page_of, pin
 from test_extraction_provenance import Reader
-from test_handoff_invocation import _prompt, _tag
+from test_handoff_invocation import _evidence_tag, _prompt, _tag
 from test_pdf_extraction import _assemble, _ingest_pdf, _objects, raw_pdf
 
 from caos.blobs import BlobStore
@@ -346,13 +346,17 @@ def test_the_model_is_told_in_the_header_and_nothing_else_changes() -> None:
     )
     assert _HOST_TEXT in marked and "never includes host text" not in plain
     assert "hidden:" not in plain and "not visible on the rendered page" not in plain
-    # The section tag is derived from every byte, so it moves with the note.
+    # The section tag is derived from every byte, and the evidence's own tag
+    # from the evidence (D113), so both move with the note.
     untagged = (
         marked.replace(_tag(marked), "TAG")
+        .replace(_evidence_tag(marked), "ETAG")
         .replace(f"\n\n\n{header}", "\n\n")
         .replace(_HOST_TEXT, "")
     )
-    assert untagged == plain.replace(_tag(plain), "TAG")
+    assert untagged == plain.replace(_tag(plain), "TAG").replace(
+        _evidence_tag(plain), "ETAG"
+    )
 
 
 def _shown_lines(section: str) -> list[tuple[str, list[str]]]:

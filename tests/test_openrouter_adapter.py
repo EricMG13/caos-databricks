@@ -13,6 +13,7 @@ import pytest
 from langchain_core.messages import AIMessage
 from langchain_openai import ChatOpenAI
 from openrouter_adapter import (
+    CACHE_OFF,
     EFFORT_ENV,
     KEY_ENV,
     PROVIDER_ENV,
@@ -44,11 +45,23 @@ def _clean(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(KEY_ENV, "test-key-not-real")
 
 
-def test_unset_sends_no_extra_body() -> None:
+def test_unset_sends_only_the_cache_switch() -> None:
     assert extra_body_from_environment() == {}
     assert effort_from_environment() is None
     assert provider_order_from_environment() == ()
-    assert _chat(MODEL).extra_body is None
+    assert _chat(MODEL).extra_body == CACHE_OFF
+
+
+def test_every_request_turns_prompt_caching_off() -> None:
+    """D113 live probes: on openai/gpt-6-luna through OpenRouter, automatic
+    caching wrote the whole prompt (billed at 1.25x) on every call and read
+    nothing, even an identical prompt resent within minutes; explicit mode
+    with no breakpoint wrote nothing and cost 20% less. Every request turns
+    it off, whatever the two names say."""
+    assert CACHE_OFF == {"prompt_cache_options": {"mode": "explicit"}}
+    sent: list[dict[str, object]] = []
+    _complete(OPENROUTER_STREAM, sent)
+    assert sent[0]["prompt_cache_options"] == {"mode": "explicit"}
 
 
 def test_effort_alone_is_the_reasoning_field(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -70,6 +83,7 @@ def test_both_reach_the_chat_model(monkeypatch: pytest.MonkeyPatch) -> None:
     assert chat.extra_body == {
         "reasoning": {"effort": "high"},
         "provider": {"order": ["openai/flex"], "allow_fallbacks": False},
+        **CACHE_OFF,
     }
 
 
@@ -261,6 +275,7 @@ def test_a_streamed_json_call_keeps_text_usage_and_id(
     assert body["reasoning"] == {"effort": "high"}
     assert body["provider"] == {"order": ["openai/flex"], "allow_fallbacks": False}
     assert body["max_completion_tokens"] == MAX_COMPLETION_TOKENS
+    assert body["prompt_cache_options"] == {"mode": "explicit"}
     top = str(MAX_COMPLETION_TOKENS)
     assert qualification_identity(MODEL) == f"openrouter/{MODEL}@openai/flex/high/{top}"
 
