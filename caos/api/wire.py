@@ -298,6 +298,10 @@ CLEARS: Mapping[RefusalCode, str] = {
     _C.ROUTE_PIN_TOO_LATE: "Start a new run.",
     _C.RUN_INPUT_INVALID: "An operator must verify the run input.",
     _C.RESEARCH_BRIEF_INVALID: "Correct the research brief for the run's route.",
+    _C.RUN_QUALIFIER_INVALID: "Name only qualifiers the route's modules take.",
+    _C.REPORTING_PERIOD_UNREADABLE: (
+        "State the reporting period as FY2025 or Q2 2026, or pin the forecast scope."
+    ),
     _C.RUN_INPUT_ALREADY_PINNED: "Nothing; the input is already pinned.",
     _C.RUN_INPUT_TOO_LATE: "Start a new run.",
     _C.GATE_APPROVAL_MISMATCH: "Approve the content currently shown.",
