@@ -731,6 +731,70 @@ def _r12_find_registers(text, ids=None):
     return out
 
 
+def _r13_candidates(text, ids=None):
+    """Every table's own claim, as fork r13 reads it: r12's, except that in the four-line window a line opening
+    with its ID (a heading or a prose line, past heading marks, emphasis and a backtick) wins before one only
+    mentioning one, and only then the nearest heading before the nearest prose line."""
+    import re
+    if ids is None:
+        id_re = complete.REGISTER_ID_RE
+    else:
+        alternatives = '|'.join(re.escape(i) for i in sorted(set(ids), key=lambda v: (-len(v), v)))
+        id_re = re.compile(rf'(?<![A-Za-z0-9_.])({alternatives})(?![A-Za-z0-9_]|\.[A-Za-z0-9])')
+
+    def label(line):
+        match = id_re.search(line)
+        return match.group(1) if match else None
+
+    def led(line, reg):
+        return re.match(r'#*\s*[*_`]*\s*' + re.escape(reg) + r'\.?(?![A-Za-z0-9_]|\.[A-Za-z0-9])', line) is not None
+    lines = handoff.unfenced_markdown(text).splitlines()
+    claims, recent, heading, i = [], [], None, 0
+    while i < len(lines):
+        s = lines[i].strip()
+        if s.startswith('|') and s.count('|') >= 2 and not tables.SEPARATOR_RE.match(s):
+            header, j = tables._split_row(s), i + 1
+            if j < len(lines) and tables.SEPARATOR_RE.match(lines[j].strip()) and '|' in lines[j]:
+                j += 1
+            rows = []
+            while j < len(lines) and lines[j].strip().startswith('|'):
+                cells = complete._row_cells(lines[j].strip(), len(header))
+                cells += [''] * (len(header) - len(cells))
+                rows.append(dict(zip(header, cells[:len(header)])))
+                j += 1
+            window = [('near', x) for x in reversed(recent) if x.startswith('#')] + \
+                [('prose', x) for x in reversed(recent) if not x.startswith('#')]
+            named = [(kind, x) for kind, x in window if label(x)]
+            claim = next(((kind, x) for kind, x in named if led(x, label(x))), named[0] if named else None)
+            if claim is None and heading is not None and heading not in recent and label(heading):
+                claim = ('distant', heading)
+            if claim:
+                reg = label(claim[1])
+                claims.append((claim[0], reg, (header, rows), led(claim[1], reg)))
+            i, recent, heading = j, [], None
+            continue
+        if s:
+            recent = (recent + [s])[-4:]
+            heading = s if s.startswith('#') else heading
+        i += 1
+    return claims
+
+
+def _r13_find_registers(text, ids=None):
+    """What fork r13 must bind: the first table claimed in its window, else the first claimed by a distant
+    heading -- except that a table any line claimed without opening with the ID gives way to the first table a
+    line opening with it claims in its window, else at a distance."""
+    claims, out = _r13_candidates(text, ids), {}
+    for reg in dict.fromkeys(claim[1] for claim in claims):
+        near = [c for c in claims if c[1] == reg and c[0] != 'distant']
+        distant = [c for c in claims if c[1] == reg and c[0] == 'distant']
+        held = near[0] if near else distant[0]
+        if not held[3]:
+            held = next((c for c in near + distant if c[3]), held)
+        out[reg] = held[2]
+    return out
+
+
 class ForkR6Tests(unittest.TestCase):
     """Deployment fork r6: the readers tolerate what well-meaning answers wrote, and refuse what they did before."""
 
@@ -816,21 +880,23 @@ class ForkR6Tests(unittest.TestCase):
                       '| a | b |', '| --- | --- |', '| 1 | 2 |', '| c | d |', '```'] + ['> note', 'prose'] * 4
         # Fork r12: a caption opening with an ID, and a heading only mentioning one.
         vocabulary += ['**T4.5 — Register**', '### Notes (see T4.5)']
+        # Fork r13: a mention and an ID-led line in one window, a backticked caption, a heading naming two IDs.
+        vocabulary += ['**T6 — Trace**', 'see T6', '### Bridge T4.5 to T6', '`T4.5` schedule:']
         generator = random.Random(3102026)
         added = rebound = 0
         for _ in range(6000):
             text = '\n'.join(generator.choice(vocabulary) for _ in range(generator.randint(1, 24)))
-            before, now = _r5_find_registers(text), complete.find_registers(text)
-            self.assertEqual(now, _r12_find_registers(text), text)
-            # Fork r12: the one binding that moves is a table a prose line bound without opening with the
-            # ID, displaced by a table under a heading that opens with it.
-            claims = _r12_candidates(text)
-            for reg in before:
-                if now.get(reg) != before[reg]:
+            before, r12, now = _r5_find_registers(text), _r12_find_registers(text), complete.find_registers(text)
+            self.assertEqual(now, _r13_find_registers(text), text)
+            # Fork r13: a binding fork r12 made by a line opening with the ID moves only to another table a
+            # line opening with the ID claims -- an earlier one whose window r12 gave to a mention of another
+            # ID; every other binding that moves was a mention's (r12's own moves from r5 were too).
+            claims12, claims13 = _r12_candidates(text), _r13_candidates(text)
+            for reg in r12:
+                if now.get(reg) != r12[reg]:
                     rebound += 1
-                    self.assertIn(('prose', reg, before[reg], False), claims, text)
-                    self.assertIn(now.get(reg), [t for kind, k, t, led in claims if k == reg and kind != 'prose' and led],
-                                  text)
+                    if (any(c[1:] == (reg, r12[reg], True) for c in claims12)):
+                        self.assertIn(now.get(reg), [t for kind, k, t, led in claims13 if k == reg and led], text)
             added += len(now) > len(before)
         self.assertGreater(added, 50)
         self.assertGreater(rebound, 15)
@@ -1169,8 +1235,9 @@ class ForkR7Tests(unittest.TestCase):
 
     def test_the_locator_binds_as_r6_but_under_a_retired_heading(self):
         # Review fix round 1 (M1): over documents mixing listed, retired, umbrella and cited IDs in headings
-        # and prose, every binding is r6's, but a retired heading's table, which no prose claims, and (fork
-        # r12) a heading's table, which no prose-bound table keeps from its ID; nothing else unbinds or moves.
+        # and prose, every binding is r6's, but a retired heading's table, which no prose claims, and (forks
+        # r12, r13) a table a line opening with the ID claims, which no table a mention bound keeps from its ID,
+        # and which wins its window from a mention; nothing else unbinds or moves.
         import random
         lines_from = ['#### {f}1 — Register', '#### {f}3 Debt', '#### {f}7 Retired', '### **{f}7** Retired',
                       '#### {f}10 Other', '#### T4.18 Debt facilities (from CP-1)', '#### T4.7 Normalized (CP-1)',
@@ -1189,7 +1256,7 @@ class ForkR7Tests(unittest.TestCase):
                 parts += [f'| c{k} | v{k} |', '| --- | --- |', f'| r{k} | 1 |', '']
             text = '\n'.join(parts)
             now, before = complete.find_registers(text, ids, retired), _r6_find_registers(text, ids)
-            self.assertEqual(now, _r7_expected(text, ids, retired, _r12_find_registers), text)
+            self.assertEqual(now, _r7_expected(text, ids, retired, _r13_find_registers), text)
             retired_docs += now != before
             moved += any(now.get(r) not in (None, before.get(r)) for r in ids)
         self.assertGreater(retired_docs, 500)
@@ -1516,6 +1583,119 @@ class ForkR12Tests(unittest.TestCase):
         self.assertFalse([v for v in complete.check(skill, caption, 'CP-1A')[0] if v.startswith('gaps_ledger')])
         mention = 'Open items are listed in gaps_ledger.\n\n' + junk + '### Gaps ledger\n\n' + good
         self.assertEqual(complete.find_registers(mention, ids)['gaps_ledger'][0], columns)
+
+
+class ForkR13Tests(unittest.TestCase):
+    """Deployment fork r13 (D111): a line opening with a register's ID beats one only mentioning it, a fixture
+    marker is a front-matter value or a line of its own, and a short row's message names its width."""
+
+    @staticmethod
+    def table(*columns):
+        return ('| ' + ' | '.join(columns) + ' |\n|' + '---|' * len(columns) + '\n| '
+                + ' | '.join('x' for _ in columns) + ' |\n\n')
+
+    def heads(self, text, ids):
+        return {reg: found[0] for reg, found in complete.find_registers(text, ids).items()}
+
+    def test_v1_a_heading_only_mentioning_the_id_gives_way_to_one_opening_with_it(self):
+        # N151 V1: the bridge's heading names T4.4 first, bound T4.4 by heading and kept it, so the register
+        # below it read "missing column".
+        text = ('### Bridge T4.4 to T4.5\n\n' + self.table('From', 'To')
+                + '#### T4.4 — Income Statement\n\n' + self.table('Line Item', 'FY2025'))
+        self.assertEqual(_r12_find_registers(text, ['T4.4', 'T4.5'])['T4.4'][0], ['From', 'To'])
+        self.assertEqual(self.heads(text, ['T4.4', 'T4.5']), {'T4.4': ['Line Item', 'FY2025']})
+        violations = complete.check(skill_text('cp-1-canonical-data-foundation'), text, 'CP-1')[0]
+        self.assertEqual(about(violations, 'T4.4'), [])
+        # A caption opening with the ID takes it too, and at a distance a heading does.
+        caption = text.replace('#### T4.4 — Income Statement', '**T4.4 — Income Statement**')
+        self.assertEqual(self.heads(caption, ['T4.4'])['T4.4'], ['Line Item', 'FY2025'])
+        notes = ''.join(f'> note {n}\n\n' for n in range(5))
+        distant = text.replace('#### T4.4 — Income Statement\n\n', '#### T4.4 — Income Statement\n\n' + notes)
+        self.assertEqual(self.heads(distant, ['T4.4'])['T4.4'], ['Line Item', 'FY2025'])
+        # Another mention, heading or prose, does not.
+        for later in ('### Notes (see T4.4)\n\n', 'Restated from T4.4.\n\n'):
+            with self.subTest(later=later):
+                again = text.replace('#### T4.4 — Income Statement\n\n', later)
+                self.assertEqual(self.heads(again, ['T4.4'])['T4.4'], ['From', 'To'])
+
+    def test_v2_a_caption_opening_with_the_id_takes_it_from_a_mention(self):
+        # N151 V2, and the one stored answer that moves (d2688647, CP-0 T8 under "Analytical read-through").
+        text = ('The summary below draws on TL10.2.\n\n' + self.table('Metric', 'Value')
+                + '**TL10.2 — Covenant register**\n\n' + self.table('topic_id', 'status'))
+        self.assertEqual(_r12_find_registers(text, ['TL10.2'])['TL10.2'][0], ['Metric', 'Value'])
+        self.assertEqual(self.heads(text, ['TL10.2']), {'TL10.2': ['topic_id', 'status']})
+        for caption in ('`TL10.2` — Covenant register', 'TL10.2 schedule:', '*TL10.2* Covenant register'):
+            with self.subTest(caption=caption):
+                led = text.replace('**TL10.2 — Covenant register**', caption)
+                self.assertEqual(self.heads(led, ['TL10.2'])['TL10.2'], ['topic_id', 'status'])
+        # A caption bound first is never displaced, by a heading or another caption opening with the ID.
+        first = '**TL10.2 — Covenant register**\n\n' + self.table('topic_id', 'status')
+        for later in ('**TL10.2 — recap**', '#### TL10.2 — recap'):
+            with self.subTest(later=later):
+                twice = first + later + '\n\n' + self.table('Metric', 'Value')
+                self.assertEqual(self.heads(twice, ['TL10.2'])['TL10.2'], ['topic_id', 'status'])
+
+    def test_v3_a_line_opening_with_an_id_beats_a_nearer_mention_in_the_window(self):
+        # N151 V3: the nearest prose line named T4.5, so the T4.4 register bound T4.5 and T4.4 was "missing".
+        text = '**T4.4 — Income Statement**\n\nFigures reconcile to T4.5.\n\n' + self.table('Line Item', 'FY2025')
+        self.assertEqual(sorted(_r12_find_registers(text, ['T4.4', 'T4.5'])), ['T4.5'])
+        self.assertEqual(self.heads(text, ['T4.4', 'T4.5']), {'T4.4': ['Line Item', 'FY2025']})
+        # A heading only mentioning IDs is a mention: the caption opening with one wins the window.
+        bridge = '### Bridge T4.4 to T4.5\n**T4.5 — Cash Flow**\n' + self.table('Line Item', 'FY2025')
+        self.assertEqual(sorted(self.heads(bridge, ['T4.4', 'T4.5'])), ['T4.5'])
+        # Unchanged: of two lines opening with IDs the heading wins, of two mentions the heading wins, and a
+        # heading opening with its ID beats a prose mention (fork r2).
+        for lead, reg in (('#### T4.4 — Income\n**T4.5 — Cash Flow**\n', 'T4.4'),
+                          ('### Notes (see T4.4)\nFigures reconcile to T4.5.\n', 'T4.4'),
+                          ('### T4.5 — Cash flow statement\nThis reconciles to the T4.4 revenue base.\n', 'T4.5')):
+            with self.subTest(lead=lead):
+                self.assertEqual(sorted(self.heads(lead + self.table('Line Item', 'FY2025'), ['T4.4', 'T4.5'])), [reg])
+        # Under a retired heading prose still claims nothing (fork r7), an ID-led caption included.
+        retired = '#### T4.7 Normalized Financials\n**T4.4 — Income Statement**\n' + self.table('Line Item', 'FY2025')
+        self.assertEqual(complete.find_registers(retired, ['T4.4'], ['T4.7']), {})
+
+    def test_v4_a_fixture_marker_is_a_front_matter_value_or_a_line_of_its_own(self):
+        # N151 V4: an honest pack that denied being a fixture carried two fixture markers.
+        skill = skill_text('cp-0-source-readiness')
+        base = ('---\nmodule_id: CP-0\nlimitation_flags: []\nvalidation_warnings: []\n---\n'
+                '## Summary\n\n{body}\n')
+
+        def markers(text):
+            return [v for v in complete.check(skill, text, 'CP-0')[0] if 'fixture marker' in v]
+        denial = 'The pack is issuer filings, not an integration fixture or synthetic test input.'
+        self.assertEqual(markers(base.format(body=denial)), [])
+        integration = "document contains the fixture marker text 'integration fixture'"
+        for body in ('Integration fixture', '**Synthetic test input.**', '> integration fixture', '1. Integration fixture'):
+            with self.subTest(body=body):
+                self.assertEqual(len(markers(base.format(body=body))), 1)
+        declared = base.replace('validation_warnings: []', 'validation_warnings: []\nsource_note: "An integration fixture pack."')
+        self.assertEqual(markers(declared.format(body=denial)), [integration])
+        listed = base.replace('limitation_flags: []', 'limitation_flags:\n  - "integration fixture"')
+        self.assertIn(integration, markers(listed.format(body='Issuer filings.')))
+        # Fenced lines stay out, as before.
+        self.assertEqual(markers(base.format(body='```\nintegration fixture\n```')), [])
+
+    def test_n154_a_short_register_row_names_its_width_against_the_header(self):
+        # LCR4 and LCR6 CP-3C merged two cells of T3D.2 row 7 and were told only that 'Source Trace' held ''.
+        skill = skill_text('cp-3c-refinancing-lme-risk')
+        columns = complete.load_contract(skill, 'CP-3C')['registers']['T3D.2']['columns']
+        self.assertEqual((len(columns), columns[-1]), (12, 'Source Trace'))
+        head = '### T3D.2 — Maturity wall\n\n| ' + ' | '.join(columns) + ' |\n|' + '---|' * 12 + '\n'
+
+        def t3d2(*widths):
+            rows = ''.join('| ' + ' | '.join(f'v{n}' for n in range(width)) + ' |\n' for width in widths)
+            return [v for v in complete.check(skill, head + rows, 'CP-3C')[0] if v.startswith('T3D.2')]
+        self.assertEqual(t3d2(12, 11), ["T3D.2 row 2: critical column 'Source Trace' is empty because the row "
+                                        "has 11 cells under a 12-cell header"])
+        self.assertEqual(t3d2(10), [
+            "T3D.2 row 1: critical column 'Credit Implication' is empty because the row has 10 cells under a "
+            "12-cell header",
+            "T3D.2 row 1: critical column 'Source Trace' is empty because the row has 10 cells under a 12-cell header"])
+        # A cell written empty keeps the placeholder message; a full or long row is judged as before.
+        empty = head + '| ' + ' | '.join(f'v{n}' for n in range(11)) + ' |  |\n'
+        self.assertEqual([v for v in complete.check(skill, empty, 'CP-3C')[0] if v.startswith('T3D.2')],
+                         ["T3D.2 row 1: critical column 'Source Trace' holds a disqualifying placeholder ''"])
+        self.assertEqual(t3d2(12, 13), [])
 
 
 @unittest.skipUnless(os.environ.get('DEPLOY_V_INTEGRATION') == '1', 'enable integration for native PDF and DOCX dependencies')
