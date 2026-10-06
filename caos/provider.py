@@ -68,13 +68,30 @@ MAX_COMPLETION_TOKENS = 65_536
 # D116 (N157): the transport ceiling is not the model's. Each endpoint's
 # context window in tokens, declared here and pinned with the host, keyed by
 # the endpoint name a run is priced and called under (its model identity).
-# Source of all three: `context_length` in the keyless model listing of the
+# Source of the three `openai/` names: `context_length` in the keyless listing of the
 # router the qualification adapter calls (`GET /api/v1/models`, read
 # 2026-10-05). Luna answered FCA3-dec's 4,033,648-byte CP-0 request with a
-# 400, which this bound now prevents. An endpoint missing here keeps the
-# transport ceiling, and its run says so (`context_notice`, N170).
+# 400, which this bound now prevents. The workspace endpoints are declared at
+# 1,000,000 tokens on the owner's word of 2026-10-06 (D119, closing N170).
+# An endpoint missing here (a `copilot:` name, D77) keeps the transport
+# ceiling, and its run says so (`context_notice`).
+OWNER_DECLARED_CONTEXT = 1_000_000
+WORKSPACE_ENDPOINTS: tuple[str, ...] = (
+    "grok-4-7",
+    "claude-sonnet-5-5",
+    "gpt-6-luna",
+    "claude-opus-5-5",
+    "gpt-6-sol",
+    "deepseek-v4-1-flash",
+    "gpt-6-astra",
+    "gemini-3-8-flash",
+    "glm-5-3",
+    "glm-5-3-flash",
+    "databricks-claude-opus-5",
+)
 CONTEXT_TOKENS: Mapping[str, int] = MappingProxyType(
     {
+        **dict.fromkeys(WORKSPACE_ENDPOINTS, OWNER_DECLARED_CONTEXT),
         "openai/gpt-6-luna": 1_050_000,
         "openai/gpt-6-luna-pro": 1_050_000,
         "openai/gpt-6-sol": 1_050_000,
