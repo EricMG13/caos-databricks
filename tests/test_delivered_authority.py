@@ -64,8 +64,10 @@ LITE_BASE = "../../CP_DEPLOY_V_LITE_MODULE_PAYLOAD_BASE_v1.schema.txt"
 # (build 1eaaa738) drops CP-0's residual triage and package text (-4,080), and
 # its fix round 2 (build 755205f7) the last triage, workspace, hash and package
 # asks (-1,586); fork r12 (D103, build 9043ba7f) adds the canon's sentence
-# on which heading takes an ID from a mentioning caption (+180 each).
-MEASURED = {"CP-0": 135_421, "CP-L10": 137_893, "CP-5": 170_720}
+# on which heading takes an ID from a mentioning caption (+180 each); fork
+# r13 (D111, build d8a307a9) rewrites the canon's binding paragraph: a line
+# opening with the ID before a mention, a caption too (+83 each).
+MEASURED = {"CP-0": 135_504, "CP-L10": 137_976, "CP-5": 170_803}
 AUTHORITY_SHARE_OF_REQUEST = 0.25
 FOLDERS = {
     "CP-0": "cp-0-source-readiness",

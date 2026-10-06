@@ -8,6 +8,10 @@ Credit Implication and the model, which saw that text in the row, kept it.
 Live run LCR6 (F522): told "T3D.2 row 7 has 11 cells", the model rewrote that
 row's text three times and kept it 11 wide. The line now names the row by its
 first cell and quotes how its last columns read, so the shift is visible.
+
+Fork r13 (D111, N154): the vendor's own line for the padded cell now names the
+row's cell count against the header's too; the host line still leads, and
+alone covers a short row that empties no critical cell and a long row.
 """
 
 from __future__ import annotations
@@ -88,8 +92,8 @@ def _table_lines(lines: tuple[str, ...]) -> list[str]:
 def test_a_short_register_row_is_named_before_the_vendors_empty_cell() -> None:
     lines = _lines([_row(12), _row(11)])
     vendor = (
-        "completeness_check: T3D.2 row 2: critical column 'Source Trace'"
-        " holds a disqualifying placeholder ''"
+        "completeness_check: T3D.2 row 2: critical column 'Source Trace' is"
+        " empty because the row has 11 cells under a 12-cell header"
     )
     assert SHORT_LINE in lines and vendor in lines, lines
     assert lines.index(SHORT_LINE) < lines.index(vendor)

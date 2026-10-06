@@ -2,10 +2,24 @@
 
 Status: **LIVE-RUN 2026-10-05 / NOT QUALIFIED (citation keys)**. Prepared offline; the live results are in the last section.
 
+Corpus changed 2026-10-06, D115; earlier runs were on the old corpus. See "Corpus changed 2026-10-06 (D115)" below.
+
 This immutable set prepares `FULL_CREDIT_32 / LIQUIDITY_REVIEW` for Caesars
 Entertainment, Inc. (CZR) at an analysis date of 2026-10-02. Its
 qualification-set digest is
-`e85741cb049525fb7d16ed4ea00166eb9f730b0f7575c1dadae174e17fe5f2a0`.
+`2f274851157840d674ec1308bb9337e1444379175be10bf9564d3a3edb362af0`.
+
+## Corpus changed 2026-10-06 (D115)
+
+On the owner's approval of 6 October 2026 (D115) exactly three files were downloaded from sec.gov (User-Agent declared on every request; the SEC's 111-byte script tag removed, so each size equals the filing index's) and admitted. They were converted with the F498 converter (sentence per line, F492; clause split for the Merger Agreement, F498). **Every live run, verdict and snapshot recorded below was made on the old corpus and is not comparable with a run of this set as it now stands**; the set digest above is the new one.
+
+| document | source | accession | text SHA-256 | raw HTML SHA-256 |
+|---|---|---|---|---|
+| `CZR_2026_Merger_Agreement.txt` (Ex. 2.1 to the 8-K of 28 May 2026, Agreement and Plan of Merger, 27 May 2026) | https://www.sec.gov/Archives/edgar/data/1590895/000119312526242995/d143382dex21.htm | 0001193125-26-242995 | `e01077c1ed37c5b08c4d2dbfc15da19b78d50b4b38a42e3da22c3cf0e4c3038c` | `fcc680b30487f2abd9d753125e09a0844b05285ddb718f1c43428b2ab60fff1b` |
+
+Text bytes: `CZR_2026_Merger_Agreement.txt` 411,229. None is over 500 KiB as text, so no large-file pin moves; none is near the 1.5 MiB page-map threshold. The set's CP-0 request, encoded with CP-0's delivered authority, is 2,360,708 bytes (56.3% of `MAX_REQUEST_BYTES`); no source is shown as a page map.
+
+The Merger Agreement is the full agreement beside the 8-K's summary where the set carries it. Schedules are omitted under Item 601(b)(2) and the debt commitment letters are not in this exhibit, so a claim about commitment-letter terms stays unsupported. No key is added: every existing key binds its own document and is unchanged.
 
 ## Corpus provenance
 
