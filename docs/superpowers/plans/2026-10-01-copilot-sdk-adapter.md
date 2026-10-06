@@ -2198,7 +2198,7 @@ uv run --no-sync python -m caos.graph.worker
 
 - **Smoke:** one paid call of a few tokens. It must print `model=ChatCopilot ... json_mode=accepted`.
 - **Start:** the worker prints `copilot <model> max_prompt_tokens=<n>` for each SDK model. It exits 2 with `PROVIDER_NOT_CONFIGURED` when Copilot is not ready (not signed in, model not enabled, effort not taken, CLI missing for a `copilot-cli:` model, SDK missing for a `copilot:` model), or with `STORE_UNAVAILABLE` when Lakebase is unreachable or the role is missing.
-- **Stop:** Ctrl+C stops it after the module in flight. Closing the window kills it; the run's lease then expires after 600 s and the next worker resumes it, with no attempt run twice.
+- **Stop:** Ctrl+C stops it after the module in flight. Closing the window kills it; the run's lease then expires after 900 s (D117) and the next worker resumes it, with no attempt run twice.
 
 ## 5. What this does not do
 

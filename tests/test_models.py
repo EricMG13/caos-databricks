@@ -195,7 +195,7 @@ def test_the_production_model_is_chat_databricks_on_the_endpoint(
     assert seen == {
         "endpoint": "databricks-claude-opus-5",
         "max_tokens": 65536,
-        "timeout": 420.0,
+        "timeout": 720.0,
         "max_retries": 0,
         # The process's bounded client (CR-6), not the library's default one
         # with the SDK's five-minute discovery budget.
@@ -276,7 +276,7 @@ def test_the_chat_model_carries_the_socket_deadline_and_never_retries(
     from caos.models import chat_model
     from caos.provider import TIMEOUT_SECONDS
 
-    assert TIMEOUT_SECONDS == 420.0, "a generation budget inside the lease (D83)"
+    assert TIMEOUT_SECONDS == 720.0, "a generation budget inside the lease (D117)"
     client = WorkspaceClient(config=Config(host="http://127.0.0.1:9", token="t"))
     monkeypatch.setattr("caos.workspace.workspace_client", lambda: client)
     chat = chat_model(endpoint="databricks-x")
@@ -415,9 +415,16 @@ def test_one_deadline_bounds_the_whole_call_and_the_lease_outlives_it(
         clock["t"] += seconds
 
     monkeypatch.setattr(models, "_sleep", waited)
+    # Each 429 arrives a quarter of the deadline late (100 s of 420 before
+    # D117): one capped wait leaves the re-send floor, two do not, so the
+    # deadline rather than `RATE_LIMIT_TRIES` is what stops the third try.
+    late = TIMEOUT_SECONDS / 4
+    cap = models.RETRY_AFTER_CAP_SECONDS
+    assert late + cap <= TIMEOUT_SECONDS - models.MIN_RESEND_SECONDS
+    assert 2 * (late + cap) > TIMEOUT_SECONDS - models.MIN_RESEND_SECONDS
 
     def slow_limit(prompt: str) -> object:
-        clock["t"] += 100.0  # each 429 arrives late
+        clock["t"] += late
         return _Limited(str(models.RETRY_AFTER_CAP_SECONDS))
 
     chat = ScriptedChat(answer=slow_limit)
@@ -426,7 +433,7 @@ def test_one_deadline_bounds_the_whole_call_and_the_lease_outlives_it(
     assert chat.calls == 2, "the third try would have outlived the deadline"
     worst = clock["t"]
     assert worst <= TIMEOUT_SECONDS
-    assert LEASE_SECONDS - TIMEOUT_SECONDS >= 180.0, "the liveness budget (D83)"
+    assert LEASE_SECONDS - TIMEOUT_SECONDS >= 180.0, "the liveness budget (D83, D117)"
     assert WORKER_STALE_AFTER >= TIMEOUT_SECONDS + 60.0
 
 
@@ -480,10 +487,10 @@ def test_no_re_send_starts_once_the_wait_and_the_fence_spent_the_deadline(
 @pytest.mark.parametrize(
     ("limited_at", "wait", "sent"),
     [
-        pytest.param(330.0, "2", 1, id="ninety-seconds-left"),
-        pytest.param(417.0, "2", 1, id="three-seconds-left"),
-        pytest.param(208.0, "2", 2, id="exactly-the-floor-left-after-the-wait"),
-        pytest.param(208.5, "2", 1, id="just-short-of-the-floor"),
+        pytest.param(630.0, "2", 1, id="ninety-seconds-left"),
+        pytest.param(717.0, "2", 1, id="three-seconds-left"),
+        pytest.param(358.0, "2", 2, id="exactly-the-floor-left-after-the-wait"),
+        pytest.param(358.5, "2", 1, id="just-short-of-the-floor"),
         pytest.param(1.0, "20", 2, id="a-prompt-429-and-a-capped-wait"),
     ],
 )
@@ -494,13 +501,13 @@ def test_a_re_send_starts_only_with_the_time_a_generation_needs(
     deadline -- a 429 at second 150 and a two-second wait sent the request
     again with 88 s left, to be abandoned mid-generation at the deadline while
     the provider may still bill it. A re-send now needs `MIN_RESEND_SECONDS`
-    left after the wait, half the deadline (210 s of 420 since D83); the 120 s
+    left after the wait, half the deadline (360 s of 720 since D117); the 120 s
     whole-call deadline F89 measured as too short to deliver a few thousand
     tokens was half of the 240 before it. A wait that could
     not be followed by a re-send is not waited at all."""
     from caos.provider import TIMEOUT_SECONDS
 
-    assert models.MIN_RESEND_SECONDS == TIMEOUT_SECONDS / 2 == 210.0
+    assert models.MIN_RESEND_SECONDS == TIMEOUT_SECONDS / 2 == 360.0
     # Two capped waits leave more than the floor: a rate limit answered
     # promptly is still asked again every time it is allowed to be.
     waits = (models.RATE_LIMIT_TRIES - 1) * models.RETRY_AFTER_CAP_SECONDS
@@ -556,7 +563,7 @@ def test_an_answer_that_never_finishes_arriving_is_abandoned_at_the_deadline(
     assert completion.refusal is RefusalCode.PROVIDER_UNAVAILABLE
     assert completion.charge is None, "possibly billed: the reservation is kept"
     assert elapsed < 5
-    assert seam.TIMEOUT_SECONDS == 420.0
+    assert seam.TIMEOUT_SECONDS == 720.0
 
 
 def test_a_re_send_asks_every_installed_check_first() -> None:
