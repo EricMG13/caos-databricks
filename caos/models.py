@@ -560,7 +560,10 @@ def _unanswered(code: RefusalCode, answer: object, started: float) -> Completion
     if isinstance(answer, _Raised):
         drop, facts = answer.kind, answer.facts
     elif isinstance(answer, BaseException):
-        drop = DropKind.DECLARED if _declared(answer) else DropKind.VENDOR
+        unavailable = code is RefusalCode.PROVIDER_UNAVAILABLE
+        drop = (
+            DropKind.DECLARED if unavailable and _declared(answer) else DropKind.VENDOR
+        )
         facts = _facts(answer)
     kind = "vendor" if drop is DropKind.DECLARED else drop.value
     with suppress(Exception):  # fail-open, documented above (F513)

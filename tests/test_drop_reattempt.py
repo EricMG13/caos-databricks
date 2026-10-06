@@ -109,7 +109,10 @@ def _never(released: threading.Event) -> Callable[[str], object]:
     [
         pytest.param(StatusError(503), DropKind.DECLARED, "PROVIDER_UNAVAILABLE"),
         pytest.param(StatusError(429), DropKind.DECLARED, "PROVIDER_UNAVAILABLE"),
-        pytest.param(StatusError(402), DropKind.DECLARED, "PROVIDER_CALL_INVALID"),
+        # F530: a 4xx is the provider's own word, but no drop: only a call
+        # refused PROVIDER_UNAVAILABLE is ever declared.
+        pytest.param(StatusError(402), DropKind.VENDOR, "PROVIDER_CALL_INVALID"),
+        pytest.param(StatusError(400), DropKind.VENDOR, "PROVIDER_CALL_INVALID"),
         pytest.param(_Body(_ROUTER_ERROR), DropKind.DECLARED, "PROVIDER_UNAVAILABLE"),
         pytest.param(
             _Body({"error": _ROUTER_ERROR}), DropKind.DECLARED, "PROVIDER_UNAVAILABLE"
@@ -186,6 +189,10 @@ def test_the_ledger_gives_one_re_attempt_after_one_declared_drop() -> None:
     # Only the latest attempt earns it, and only a declared drop of this code.
     assert not reattempts_a_drop([declared, _attempt(malformed)])
     assert not reattempts_a_drop([_attempt("PROVIDER_CALL_INVALID", DropKind.DECLARED)])
+    # F530: a declared kind beside another code is no drop and spends nothing.
+    invalid = _attempt("PROVIDER_CALL_INVALID", DropKind.DECLARED)
+    assert reattempts_a_drop([invalid, declared])
+    assert reattempts_a_drop([invalid, _attempt(None), declared])
     for kind in (DropKind.VENDOR, DropKind.RAISED, DropKind.ESCAPED, DropKind.DEADLINE):
         assert not reattempts_a_drop([_attempt(unavailable, kind)])
     assert not reattempts_a_drop([_attempt(unavailable)])
@@ -200,6 +207,11 @@ def test_a_declared_drop_is_invisible_to_the_guided_retry_count() -> None:
     # Any other drop is an ordinary attempt, as before D110.
     timed_out = _attempt("PROVIDER_UNAVAILABLE", DropKind.DEADLINE)
     assert _feedback_source([first, timed_out]) is None
+    # F530: so is a declared kind beside another code, and an unexplained
+    # declared drop is passed over as an explained one is.
+    invalid = _attempt("PROVIDER_CALL_INVALID", DropKind.DECLARED)
+    assert _feedback_source([first, invalid]) is None
+    assert _feedback_source([first, _attempt(None, DropKind.DECLARED)]) == first
 
 
 # -- The store keeps the kind, and only beside no answer ----------------------
@@ -583,7 +595,36 @@ def test_a_declared_refusal_of_another_code_earns_nothing(harness: _Harness) -> 
     stopped = _run(harness, _dropping(answers, StatusError(402), 2))
     assert stopped is RefusalCode.PROVIDER_CALL_INVALID
     assert [_module(prompt) for prompt in answers.prompts] == ["CP-0"]
-    assert _drop_kinds(harness) == ["declared"]
+    assert _drop_kinds(harness) == ["vendor"]
+
+
+def test_a_4xx_on_a_guided_retry_is_not_repeated_as_that_guided_retry(
+    harness: _Harness,
+) -> None:
+    """F530 (audit finding 2): a guided retry refused 400 is an ordinary
+    refusal; the operator's requeue after it makes an ordinary attempt, not
+    the same guided retry again on every requeue."""
+    answers = CanonicalCompletions(harness.source_id)
+    steps: list[_Step] = [_with_material, _Drop(StatusError(400))]
+    steps.append(_Drop(StatusError(400)))
+    scripted = _Scripted(answers, steps)
+    assert _run(harness, scripted) is RefusalCode.PROVIDER_CALL_INVALID
+    assert _run(harness, scripted) is RefusalCode.PROVIDER_CALL_INVALID
+    assert _run(harness, scripted) is None
+    cp0 = [p for p in answers.prompts if _module(p) == "CP-0"]
+    assert [SECOND in prompt for prompt in cp0] == [False, True, False, False]
+
+
+def test_a_4xx_does_not_spend_the_nodes_re_attempt(harness: _Harness) -> None:
+    """F530 (audit finding 2): after a 400 and a requeue, a declared 503 is
+    still the node's first drop and is re-attempted."""
+    answers = CanonicalCompletions(harness.source_id)
+    steps: list[_Step] = [_Drop(StatusError(400)), _Drop(StatusError(503))]
+    scripted = _Scripted(answers, steps)
+    assert _run(harness, scripted) is RefusalCode.PROVIDER_CALL_INVALID
+    assert _run(harness, scripted) is None
+    assert [_module(p) for p in answers.prompts][:3] == ["CP-0"] * 3
+    assert _drop_kinds(harness) == ["vendor", "declared", None]
 
 
 def test_node_attempts_reads_each_attempt_as_the_ledger_holds_it(

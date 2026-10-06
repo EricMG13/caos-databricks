@@ -362,6 +362,11 @@ def _drop_kind(completion: Completion, said: tuple[object, ...]) -> DropKind | N
         or any(fact is not None for fact in said)
     ):
         return None
+    # F530: a drop is declared only beside the code a drop is refused with.
+    if stated is DropKind.DECLARED and (
+        completion.refusal is not RefusalCode.PROVIDER_UNAVAILABLE
+    ):
+        return None
     return stated
 
 
@@ -1071,7 +1076,7 @@ def _feedback_source(attempts: Sequence[NodeAttempt]) -> NodeAttempt | None:
     between a refusal and its retry changes nothing. A drop the provider
     declared is passed over (D110): it answered nothing, so the attempt
     after it repeats the guided retry it replaced and spends none."""
-    attempts = [a for a in attempts if a.drop_kind != DropKind.DECLARED]
+    attempts = [a for a in attempts if not declared_drop(a)]
     refused = [a for a in attempts if a.refusal in SECOND_ATTEMPT_CODES]
     if not refused or len(refused) > GUIDED_RETRIES or attempts[-1] != refused[-1]:
         return None
@@ -1091,6 +1096,18 @@ def second_attempt_due(
 DROP_REATTEMPTS = 1
 
 
+def declared_drop(attempt: NodeAttempt) -> bool:
+    """Whether this attempt is a drop the provider declared (D110): its kind
+    says so beside `PROVIDER_UNAVAILABLE` or no explanation yet (a crash
+    between the bill and its refusal row). A declared kind beside any other
+    code is no drop (F530): a 4xx neither spends the re-attempt nor is
+    passed over by a guided retry."""
+    return attempt.drop_kind == DropKind.DECLARED and attempt.refusal in (
+        None,
+        RefusalCode.PROVIDER_UNAVAILABLE,
+    )
+
+
 def reattempts_a_drop(attempts: Sequence[NodeAttempt]) -> bool:
     """Whether a node with these attempts, oldest first, is owed its
     automatic re-attempt of a drop (D110): its latest attempt is a drop the
@@ -1100,13 +1117,8 @@ def reattempts_a_drop(attempts: Sequence[NodeAttempt]) -> bool:
     changes nothing; a guided retry neither spends one nor is spent."""
     if not attempts:
         return False
-    latest = attempts[-1]
-    drops = sum(1 for a in attempts if a.drop_kind == DropKind.DECLARED)
-    return (
-        latest.drop_kind == DropKind.DECLARED
-        and latest.refusal in (None, RefusalCode.PROVIDER_UNAVAILABLE)
-        and drops <= DROP_REATTEMPTS
-    )
+    drops = sum(1 for a in attempts if declared_drop(a))
+    return declared_drop(attempts[-1]) and drops <= DROP_REATTEMPTS
 
 
 def drop_reattempt_due(
