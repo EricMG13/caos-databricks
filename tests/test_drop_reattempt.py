@@ -176,6 +176,47 @@ def _never(released: threading.Event) -> Callable[[str], object]:
             _Body({"error": _ROUTER_ERROR}), DropKind.DECLARED, "PROVIDER_UNAVAILABLE"
         ),
         pytest.param(_Body({}), DropKind.VENDOR, "PROVIDER_UNAVAILABLE"),
+        # L1 (fix round 1): an error object's own 4xx code is never declared;
+        # its outer code is read before any inner one.
+        pytest.param(
+            _Body({"code": 400, "metadata": {"error_type": "invalid_request"}}),
+            DropKind.VENDOR,
+            "PROVIDER_UNAVAILABLE",
+            id="body-400",
+        ),
+        pytest.param(
+            _Body({"code": "402"}),
+            DropKind.VENDOR,
+            "PROVIDER_UNAVAILABLE",
+            id="body-402",
+        ),
+        pytest.param(
+            _Body({"error": {"code": 404}}),
+            DropKind.VENDOR,
+            "PROVIDER_UNAVAILABLE",
+            id="body-wrapped-404",
+        ),
+        pytest.param(
+            _Body({"code": 400, "error": {"code": 502}}),
+            DropKind.VENDOR,
+            "PROVIDER_UNAVAILABLE",
+            id="body-outer-400",
+        ),
+        pytest.param(
+            _Body({"code": 499}), DropKind.VENDOR, "PROVIDER_UNAVAILABLE", id="body-499"
+        ),
+        pytest.param(
+            _Body({"code": 429}),
+            DropKind.DECLARED,
+            "PROVIDER_UNAVAILABLE",
+            id="body-429",
+        ),
+        pytest.param(
+            _Body({"code": 500}),
+            DropKind.DECLARED,
+            "PROVIDER_UNAVAILABLE",
+            id="body-500",
+        ),
         pytest.param(_Body("private"), DropKind.VENDOR, "PROVIDER_UNAVAILABLE"),
         pytest.param(_cut(), DropKind.VENDOR, "PROVIDER_UNAVAILABLE"),
         pytest.param(_cut(_ROUTER_ERROR), DropKind.VENDOR, "PROVIDER_UNAVAILABLE"),
@@ -271,22 +312,42 @@ class _RaisingBody(Mapping[str, object]):
 @pytest.mark.parametrize(
     ("cut", "kind"),
     [
-        pytest.param(_after(), DropKind.DECLARED, id="502-event"),
-        pytest.param(_after(nested=True), DropKind.DECLARED, id="502-nested"),
-        pytest.param(_after("503"), DropKind.DECLARED, id="503-as-digits"),
-        pytest.param(_after(500, None), DropKind.DECLARED, id="500-no-type"),
-        pytest.param(_after(599, None), DropKind.DECLARED, id="599"),
-        pytest.param(_after(429, "rate_limit_exceeded"), DropKind.DECLARED, id="429"),
+        pytest.param(_after(), DropKind.DECLARED_AFTER_CONTENT, id="502-event"),
         pytest.param(
-            _after(None, "provider_unavailable"), DropKind.DECLARED, id="type-only"
+            _after(nested=True), DropKind.DECLARED_AFTER_CONTENT, id="502-nested"
         ),
-        pytest.param(_after(None, "timeout"), DropKind.DECLARED, id="timeout-type"),
         pytest.param(
-            _after(None, "provider_overloaded"), DropKind.DECLARED, id="overloaded"
+            _after("503"), DropKind.DECLARED_AFTER_CONTENT, id="503-as-digits"
         ),
-        pytest.param(_after(None, "server"), DropKind.DECLARED, id="server-type"),
         pytest.param(
-            _after(None, "rate_limit_exceeded"), DropKind.DECLARED, id="rate-limit-type"
+            _after(500, None), DropKind.DECLARED_AFTER_CONTENT, id="500-no-type"
+        ),
+        pytest.param(_after(599, None), DropKind.DECLARED_AFTER_CONTENT, id="599"),
+        pytest.param(
+            _after(429, "rate_limit_exceeded"),
+            DropKind.DECLARED_AFTER_CONTENT,
+            id="429",
+        ),
+        pytest.param(
+            _after(None, "provider_unavailable"),
+            DropKind.DECLARED_AFTER_CONTENT,
+            id="type-only",
+        ),
+        pytest.param(
+            _after(None, "timeout"), DropKind.DECLARED_AFTER_CONTENT, id="timeout-type"
+        ),
+        pytest.param(
+            _after(None, "provider_overloaded"),
+            DropKind.DECLARED_AFTER_CONTENT,
+            id="overloaded",
+        ),
+        pytest.param(
+            _after(None, "server"), DropKind.DECLARED_AFTER_CONTENT, id="server-type"
+        ),
+        pytest.param(
+            _after(None, "rate_limit_exceeded"),
+            DropKind.DECLARED_AFTER_CONTENT,
+            id="rate-limit-type",
         ),
         # A 4xx is the provider's word against the request: never a drop, the
         # type beside it notwithstanding (fail closed).
@@ -301,6 +362,18 @@ class _RaisingBody(Mapping[str, object]):
         pytest.param(_after(None, "invalid_request"), DropKind.RAISED, id="4xx-type"),
         pytest.param(_after(None, "private words"), DropKind.RAISED, id="odd-type"),
         pytest.param(_after(None, None), DropKind.RAISED, id="no-code-no-type"),
+        # L2 (fix round 1): the outer object's own code is read; an inner
+        # object is read only when the outer one states no code.
+        pytest.param(
+            CutAfterContentError({"code": 400, "error": {"code": 502}}),
+            DropKind.RAISED,
+            id="outer-400-inner-502",
+        ),
+        pytest.param(
+            CutAfterContentError({"code": None, "error": {"code": 502}}),
+            DropKind.DECLARED_AFTER_CONTENT,
+            id="outer-null-inner-502",
+        ),
         # No provider error frame: a plain cut.
         pytest.param(CutAfterContentError({}), DropKind.RAISED, id="empty-body"),
         pytest.param(CutAfterContentError(None), DropKind.RAISED, id="no-body"),
@@ -319,7 +392,9 @@ def test_a_cut_after_content_is_declared_only_by_a_transient_provider_error(
     """D118: the provider's error object after content earns the re-attempt
     when it states a 5xx, a 429 or a transient `error_type`; anything else
     stays `raised`. F513's line is unchanged -- the client raised -- and the
-    call is never sent again inside the seam."""
+    call is never sent again inside the seam. Its own kind since fix round 1:
+    the ledger tells a cut that may have been billed from a drop before
+    anything was generated."""
     chat = ScriptedChat(answer=cut)
     completion = fake_completions(chat).complete(PROMPT)
     assert completion == Completion(
@@ -333,6 +408,39 @@ def test_a_cut_after_content_is_declared_only_by_a_transient_provider_error(
     named = "class=?" if unreadable else "class=CutAfterContentError"
     assert line.startswith(f"PROVIDER_UNAVAILABLE call=raised {named} ")
     assert "private" not in line and "private" not in repr(completion)
+
+
+@pytest.mark.parametrize(
+    ("cut", "generation"),
+    [
+        pytest.param(_after(), None, id="no-id"),
+        pytest.param(
+            CutAfterContentError(_ROUTER_ERROR, generation_id="gen-cut-1"),
+            "gen-cut-1",
+            id="declared-with-id",
+        ),
+        pytest.param(
+            CutAfterContentError(_ROUTER_ERROR, generation_id="not an id"),
+            None,
+            id="malformed-id",
+        ),
+        pytest.param(
+            CutAfterContentError({"code": 400}, generation_id="gen-cut-2"),
+            None,
+            id="raised-keeps-none",
+        ),
+    ],
+)
+def test_a_declared_cut_keeps_the_streams_generation_id(
+    cut: CutAfterContentError, generation: str | None
+) -> None:
+    """L3 (fix round 1): a cut the provider declared after content may have
+    been billed, so the id its stream gave is kept for reconciliation; an
+    id that is no producer identifier is unknown, and an undeclared cut's
+    row stays as a drop row (no id)."""
+    completion = fake_completions(ScriptedChat(answer=cut)).complete(PROMPT)
+    assert completion.generation_id == generation
+    assert completion.content is None and completion.charge is None
 
 
 def test_a_declared_cut_past_the_deadline_is_the_deadline(
@@ -401,6 +509,24 @@ def test_a_declared_drop_is_invisible_to_the_guided_retry_count() -> None:
     assert _feedback_source([first, _attempt(None, DropKind.DECLARED)]) == first
 
 
+def test_a_declared_cut_shares_the_nodes_one_re_attempt() -> None:
+    """D118 fix round 1: a cut declared after content is its own kind in the
+    ledger, but the same drop to the count: one re-attempt per node, either
+    kind, and a guided retry passes over it as over any declared drop."""
+    unavailable = "PROVIDER_UNAVAILABLE"
+    cut = _attempt(unavailable, DropKind.DECLARED_AFTER_CONTENT)
+    declared = _attempt(unavailable, DropKind.DECLARED)
+    after = DropKind.DECLARED_AFTER_CONTENT
+    assert declared_drop(cut) and declared_drop(_attempt(None, after))
+    assert reattempts_a_drop([cut])
+    assert not reattempts_a_drop([cut, cut])
+    assert not reattempts_a_drop([declared, cut])
+    assert not reattempts_a_drop([cut, declared])
+    assert not declared_drop(_attempt("PROVIDER_CALL_INVALID", after))
+    first = _attempt("HANDOFF_MALFORMED")
+    assert _feedback_source([first, cut]) == first
+
+
 # -- The store keeps the kind, and only beside no answer ----------------------
 
 
@@ -441,6 +567,59 @@ def test_the_outcome_keeps_its_drop_kind_and_refuses_one_beside_an_answer(
                 " generation_id, drop_kind) VALUES (%s, %s, 'm', 'g', 'declared')",
                 (start_attempt(observer, harness.run_id, node), harness.run_id),
             )
+
+
+def test_a_declared_cut_may_keep_its_generation_id_and_nothing_else(
+    harness: _Harness,
+) -> None:
+    """D118 fix round 1 (0048): a cut declared after content may name the
+    generation its stream gave, so its partial bill can be reconciled, but
+    never a charge or a stored body; every other drop kind names nothing.
+    The table holds the same rule whoever writes the row."""
+    from caos.store.runs import start_attempt
+
+    node = _node(harness, "CP-0").route_node_id
+    attempt = start_attempt(harness.conn, harness.run_id, node)
+    harness.conn.commit()
+    after = DropKind.DECLARED_AFTER_CONTENT
+    for invalid in (
+        CallOutcome(Decimal("0.01"), "m", "gen-1", drop_kind=after),
+        CallOutcome(None, "m", "gen-1", "a" * 64, drop_kind=after),
+        CallOutcome(None, "m", "gen-1", drop_kind=DropKind.DECLARED),
+        CallOutcome(None, "m", "gen-1", drop_kind=DropKind.RAISED),
+    ):
+        with pytest.raises(Refusal, match=r"^CALL_OUTCOME_INVALID$"):
+            record_outcome(harness.conn, attempt_id=attempt, outcome=invalid)
+    cut = CallOutcome(None, "m", "gen-1", drop_kind=after)
+    assert record_outcome(harness.conn, attempt_id=attempt, outcome=cut)
+    assert not record_outcome(harness.conn, attempt_id=attempt, outcome=cut)
+    insert = (
+        "INSERT INTO call_outcomes (attempt_id, run_id, model, generation_id,"
+        " diagnostic_sha256, drop_kind, recorded_seq)"
+        " VALUES (%s, %s, 'm', %s, %s, %s, 1)"
+    )
+    with connect(harness.url) as observer:
+        assert observer.execute(
+            "SELECT drop_kind, generation_id FROM call_outcomes WHERE attempt_id = %s",
+            (attempt,),
+        ).fetchone() == ("declared_after_content", "gen-1")
+        for generation, digest, kind, refused in (
+            ("g", None, "declared", "call_outcomes_drop_unanswered"),
+            ("g", "a" * 64, "declared_after_content", "call_outcomes_drop_unanswered"),
+            (None, None, "declared_late", "call_outcomes_drop_kind_check"),
+        ):
+            fresh = start_attempt(observer, harness.run_id, node)
+            observer.commit()
+            with pytest.raises(Exception, match=refused):
+                observer.execute(
+                    insert, (fresh, harness.run_id, generation, digest, kind)
+                )
+            observer.rollback()
+        fresh = start_attempt(observer, harness.run_id, node)
+        observer.execute(
+            insert, (fresh, harness.run_id, "g", None, "declared_after_content")
+        )
+        observer.rollback()
 
 
 # -- The run: one re-attempt, ledger-gated, priced beside the held one --------
@@ -549,7 +728,11 @@ def test_a_declared_drop_is_re_attempted_once_and_accepted_once(
     # -- the drop explained once, one accepted artifact.
     assert _cp0_ledger(harness) == (2, 2, ["PROVIDER_UNAVAILABLE"], 1)
     assert _reserved(harness) == [ESTIMATE, ESTIMATE]
-    assert _drop_kinds(harness) == ["declared", None]
+    after = isinstance(failure, CutAfterContentError)
+    assert _drop_kinds(harness) == [
+        "declared_after_content" if after else "declared",
+        None,
+    ]
     # Not a guided retry: nothing about the drop is carried.
     assert SECOND not in answers.prompts[1]
 
@@ -597,16 +780,23 @@ def test_a_second_declared_drop_stops_the_run(harness: _Harness) -> None:
     assert _cp0_ledger(harness)[3] == 1
 
 
+_CUT = "declared_after_content"
+
+
 @pytest.mark.parametrize(
-    ("first", "second"),
+    ("first", "second", "kinds"),
     [
-        pytest.param(_after(), _after(), id="cut-then-cut"),
-        pytest.param(StatusError(503), _after(), id="status-then-cut"),
-        pytest.param(_after(), _Body(_ROUTER_ERROR), id="cut-then-event"),
+        pytest.param(_after(), _after(), [_CUT, _CUT], id="cut-then-cut"),
+        pytest.param(
+            StatusError(503), _after(), ["declared", _CUT], id="status-then-cut"
+        ),
+        pytest.param(
+            _after(), _Body(_ROUTER_ERROR), [_CUT, "declared"], id="cut-then-event"
+        ),
     ],
 )
 def test_a_second_drop_on_the_re_attempt_stops_the_run(
-    harness: _Harness, first: Exception, second: Exception
+    harness: _Harness, first: Exception, second: Exception, kinds: list[str]
 ) -> None:
     """D118: a declared cut spends the node's one re-attempt as a drop before
     content does: whichever comes second stops the run, with two calls, two
@@ -617,7 +807,37 @@ def test_a_second_drop_on_the_re_attempt_stops_the_run(
     assert [_module(prompt) for prompt in answers.prompts] == ["CP-0", "CP-0"]
     assert _cp0_ledger(harness) == (2, 2, ["PROVIDER_UNAVAILABLE"] * 2, 0)
     assert _reserved(harness) == [ESTIMATE, ESTIMATE]
-    assert _drop_kinds(harness) == ["declared", "declared"]
+    assert _drop_kinds(harness) == kinds
+
+
+def test_a_billed_cut_is_visible_where_a_run_is_reconciled(harness: _Harness) -> None:
+    """L3 (fix round 1): the qualification capture names a declared cut by
+    its kind, the generation id its stream gave and the reservation that
+    bounds its unknown bill, beside the re-attempt's charged row, so the
+    run's spend is never read from charges alone."""
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    import qualify
+
+    answers = CanonicalCompletions(harness.source_id)
+    cut = CutAfterContentError(_ROUTER_ERROR, generation_id="gen-cut-9")
+    assert _run(harness, _dropping(answers, cut)) is None
+    node = _node(harness, "CP-0").route_node_id
+    rows = [
+        row
+        for row in qualify._attempts(harness.conn, [harness.run_id])
+        if row["route_node_id"] == node
+    ]
+    harness.conn.rollback()
+    assert [(row["drop_kind"], row["charge"]) for row in rows] == [
+        (_CUT, None),
+        (None, rows[1]["charge"]),
+    ]
+    assert rows[0]["generation_id"] == "gen-cut-9"
+    assert rows[1]["charge"] is not None and rows[1]["generation_id"] is not None
+    assert [Decimal(str(row["reserved"])) for row in rows] == [ESTIMATE, ESTIMATE]
 
 
 def test_a_ceiling_that_cannot_cover_the_re_attempt_leaves_the_drop_standing(

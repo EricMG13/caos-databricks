@@ -1608,7 +1608,7 @@ class _Dropping(_PricedCompletions):
         self.prompts.append(prompt)
         failure: Exception = StatusError(503)
         if self.after_content:
-            failure = CutAfterContentError(_CUT_502)
+            failure = CutAfterContentError(_CUT_502, generation_id="gen-cut")
         dropped = fake_completions(ScriptedChat(answer=failure))
         return dropped.complete(prompt)
 
@@ -1668,10 +1668,10 @@ def test_a_crash_between_a_declared_drop_and_its_re_attempt_accepts_once(
     assert _outcome(lambda: _drive(empty_database, run, completions)) == str(run.run_id)
 
     nodes = len(_lite().nodes)
+    kind = "declared_after_content" if after_content else "declared"
     drop_rows = run.conn.execute(
-        "SELECT count(*) FROM call_outcomes WHERE run_id = %s"
-        " AND drop_kind = 'declared'",
-        (run.run_id,),
+        "SELECT count(*) FROM call_outcomes WHERE run_id = %s AND drop_kind = %s",
+        (run.run_id, kind),
     ).fetchone()
     run.conn.rollback()
     assert drop_rows == (drops,)

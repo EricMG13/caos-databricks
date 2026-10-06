@@ -266,6 +266,9 @@ class _Raised:
 
     kind: DropKind
     facts: str
+    # The stream's generation id, kept for a cut declared after content
+    # alone: its bill is unknown and reconciled by it (D118 fix round 1).
+    generation_id: str | None = None
 
 
 class _Indeterminate:
@@ -328,7 +331,7 @@ def _invoked(
                     answered.append(failed)
                 except CutAfterContentError as cut:
                     # Never sent again here: the node's ledger decides (D118).
-                    answered.append(_Raised(_cut_kind(cut), _facts(cut)))
+                    answered.append(_cut(cut))
         except BaseException as escaped:
             # Not held back, as `suppress(Exception)` held it not: it still
             # ends this thread, and the call is named `escaped` (F513).
@@ -548,14 +551,19 @@ def _error_type(value: object) -> str:
 
 def _error_body(failed: BaseException) -> Mapping[str, Any]:
     """The provider's error object, from a vendor error's parsed body or the
-    mapping a client raised as its argument; empty when there is none."""
+    mapping a client raised as its argument; empty when there is none. A
+    body that wraps it (`{"error": {...}}`) is unwrapped once, and only when
+    the outer object states no code of its own: an outer code is the one
+    read (D118 fix round 1), never an inner one beside it."""
     body = getattr(failed, "body", None)
     if not isinstance(body, Mapping) and failed.args:
         body = failed.args[0]
     if not isinstance(body, Mapping):
         return {}
     inner = body.get("error")
-    return inner if isinstance(inner, Mapping) else body
+    if body.get("code") is None and isinstance(inner, Mapping):
+        return inner
+    return body
 
 
 def _failure_facts(failed: BaseException | None) -> str:
@@ -604,9 +612,9 @@ def _unanswered(code: RefusalCode, answer: object, started: float) -> Completion
     answer or an error's text. The refusal carries the same kind, typed, a
     vendor error split by whether the provider declared it (D110), and a cut
     after content too (D118), whose line still says `raised`."""
-    drop, facts = DropKind.DEADLINE, _NO_FACTS
+    drop, facts, generation = DropKind.DEADLINE, _NO_FACTS, None
     if isinstance(answer, _Raised):
-        drop, facts = answer.kind, answer.facts
+        drop, facts, generation = answer.kind, answer.facts, answer.generation_id
     elif isinstance(answer, BaseException):
         unavailable = code is RefusalCode.PROVIDER_UNAVAILABLE
         drop = (
@@ -614,16 +622,16 @@ def _unanswered(code: RefusalCode, answer: object, started: float) -> Completion
         )
         facts = _facts(answer)
     kind = drop.value
-    if isinstance(answer, _Raised):
+    if drop is DropKind.DECLARED_AFTER_CONTENT:
         # A cut the provider declared after content is still one the client
         # ended by raising (D118): the line says so, unchanged.
-        kind = DropKind.RAISED.value if drop is DropKind.DECLARED else kind
+        kind = DropKind.RAISED.value
     elif drop is DropKind.DECLARED:
         kind = "vendor"
     with suppress(Exception):  # fail-open, documented above (F513)
         line = f"{code.value} call={kind} {facts} elapsed={_clock() - started:.1f}\n"
         sys.stderr.write(line)
-    return Completion(None, None, None, code, drop)
+    return Completion(None, None, generation, code, drop)
 
 
 def _declared(failed: BaseException) -> bool:
@@ -646,8 +654,22 @@ def _declared(failed: BaseException) -> bool:
                 and FAILURE_STATUSES[0] <= status <= (FAILURE_STATUSES[1])
             )
         else:
-            declared = isinstance(body, Mapping) and bool(body)
+            declared = (
+                isinstance(body, Mapping)
+                and bool(body)
+                and not _against_the_request(_error_body(failed).get("code"))
+            )
     return declared
+
+
+def _against_the_request(code: object) -> bool:
+    """Whether a provider error object's own `code` is a 4xx other than a
+    rate limit: the provider's word against the request, never a drop it
+    declared, before content or after (D118 fix round 1)."""
+    status = _status(code)
+    return (
+        status.isdigit() and 400 <= int(status) <= 499 and int(status) != RATE_LIMITED
+    )
 
 
 # The provider error types that say the provider, not the request, failed
@@ -665,14 +687,14 @@ _TRANSIENT_ERROR_TYPES = frozenset(
 
 
 def _cut_kind(cut: CutAfterContentError) -> DropKind:
-    """How a call the provider failed after content ended (D118): `declared`
-    when the provider's own error object states a 5xx or a 429 as its code,
-    or, with no code, a transient `error_type`; `raised` otherwise -- a cut
-    with no error object, a 4xx, a code that is no status, a connection's
-    failure beneath it, or an error object that raises while it is read
-    (fail closed: no re-attempt). The cut attempt keeps its reservation and
-    none of its output is ever accepted, so its re-attempt is an ordinary
-    pass under D110's every gate."""
+    """How a call the provider failed after content ended (D118):
+    `declared_after_content` when the provider's own error object states a
+    5xx or a 429 as its code, or, with no code, a transient `error_type`;
+    `raised` otherwise -- a cut with no error object, a 4xx, a code that is
+    no status, a connection's failure beneath it, or an error object that
+    raises while it is read (fail closed: no re-attempt). The cut attempt
+    keeps its reservation and none of its output is ever accepted, so its
+    re-attempt is an ordinary pass under D110's every gate."""
     declared = False
     with suppress(Exception):  # fail closed, documented above (D118)
         if isinstance(cut.__cause__, APIConnectionError):
@@ -688,7 +710,19 @@ def _cut_kind(cut: CutAfterContentError) -> DropKind:
             metadata = body.get("metadata")
             kind = metadata.get("error_type") if isinstance(metadata, Mapping) else None
             declared = isinstance(kind, str) and kind in _TRANSIENT_ERROR_TYPES
-    return DropKind.DECLARED if declared else DropKind.RAISED
+    return DropKind.DECLARED_AFTER_CONTENT if declared else DropKind.RAISED
+
+
+def _cut(cut: CutAfterContentError) -> _Raised:
+    """A cut after content as the seam keeps it: its kind, its facts, and,
+    when the provider declared it, the generation id its stream gave, if
+    that is a producer identifier (D118 fix round 1); an undeclared cut's
+    row names none, as every other drop's."""
+    kind = _cut_kind(cut)
+    generation = None
+    if kind is DropKind.DECLARED_AFTER_CONTENT:
+        generation = producer_identifier(cut.generation_id, limit=512)
+    return _Raised(kind, _facts(cut), generation)
 
 
 def _text(content: object) -> str | None:
