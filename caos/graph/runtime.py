@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import sys
 from collections.abc import Callable, Iterator, Sequence
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import StrEnum
@@ -185,9 +185,11 @@ def run_route(
         raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
     _affordable(conn, run_id, execution.price)
     # D116: a model with no declared context runs under the transport
-    # ceiling alone, and the run says so once, by the endpoint's name.
+    # ceiling alone, and the run says so once, by the endpoint's name. One
+    # write; a stderr that cannot take it is passed over (F513's fail-open).
     if (notice := context_notice(execution.provider.model)) is not None:
-        print(notice, file=sys.stderr)
+        with suppress(OSError, ValueError):
+            sys.stderr.write(notice + "\n")
     route = _execution_route(conn, run_id, route, execution.bundle)
     # Read once from verified bundle bytes, handed to the pure engine (§46.1).
     named = named_objects(execution.bundle, route)

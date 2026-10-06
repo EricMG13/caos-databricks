@@ -1,13 +1,7 @@
-"""A node's request is bounded by its model's context (D116, N157).
-
-FCA3-dec's CP-0 sent 4,033,648 request bytes to `openai/gpt-6-luna`, inside
-the 4 MiB transport ceiling, and the provider refused it with a 400 after two
-seconds: the pack was past the model's 1,050,000-token context. The bound is
-now the model's declared context less the completion it may return, at
-`BYTES_PER_TOKEN_FLOOR` bytes a token; a pack past it shows its largest
-sources as declared page maps, and one that cannot fit is refused before any
-attempt or reservation.
-"""
+"""A node's request is bounded by its model's declared context (D116, N157):
+FCA3-dec's 4,033,648-byte CP-0 request, inside the transport ceiling, was past
+Luna's context and refused 400. Past the bound the largest sources become
+declared page maps; a pack that cannot fit is refused before any attempt."""
 
 from __future__ import annotations
 
@@ -72,8 +66,7 @@ def _declare(monkeypatch: pytest.MonkeyPatch, model: str, tokens: int) -> None:
 
 
 def test_the_bound_is_the_declared_context_at_three_bytes_a_token() -> None:
-    """Pinned and declared (D116), each from the router's model listing of
-    2026-10-05: the contexts, the floor, and the bound they give."""
+    """Pinned (D116), from the router's model listing of 2026-10-05."""
     assert BYTES_PER_TOKEN_FLOOR == 3
     assert CONTEXT_TOKENS == {
         "openai/gpt-6-luna": 1_050_000,
@@ -86,7 +79,7 @@ def test_the_bound_is_the_declared_context_at_three_bytes_a_token() -> None:
 
 # Approved workspace endpoints, a Copilot model (D77), a routed variant: each
 # ran under the transport ceiling before D116, and still does.
-UNDECLARED = ("claude-sonnet-5-5", "gpt-6-luna", "copilot:gpt-6-luna")
+UNDECLARED: tuple[str, ...] = ("claude-sonnet-5-5", "gpt-6-luna", "copilot:gpt-6-luna")
 UNDECLARED += ("openai/gpt-6-luna:nitro", "databricks-claude-opus-5", SUITE_ENDPOINT)
 
 
@@ -94,8 +87,7 @@ UNDECLARED += ("openai/gpt-6-luna:nitro", "databricks-claude-opus-5", SUITE_ENDP
 def test_an_endpoint_without_a_declared_context_keeps_the_transport_ceiling(
     model: str,
 ) -> None:
-    """Review round 1: the first version refused these; the bound they had
-    before D116 stands, and the run says so once (`context_notice`)."""
+    """Review round 1: kept on the pre-D116 bound, said once per run."""
     assert request_ceiling(model) == MAX_REQUEST_BYTES
     assert context_notice(model) == f"{CONTEXT_NOT_DECLARED} endpoint={model}"
     assert context_notice(LUNA) is None
@@ -114,8 +106,7 @@ def test_a_context_no_wider_than_the_completion_is_refused(
 
 
 def test_preflight_warns_of_each_endpoint_without_a_declared_context() -> None:
-    """Before any run (E1): a warning per configured or selectable endpoint
-    the host has no context for, never a failure."""
+    """E1 warns, never fails, per endpoint without a declared context."""
     assert context_warnings(("claude-opus-5-5", LUNA, "copilot:gpt-6-sol")) == [
         f"WARNING {name}: no declared context; its requests are bounded by the"
         " transport ceiling alone (D116)"
@@ -155,8 +146,7 @@ def test_a_pack_within_the_limit_is_measured_once_and_shown_unchanged() -> None:
 
 
 def test_the_largest_source_is_shown_as_its_page_map_first() -> None:
-    """Only the source past the one share bound is mapped, by its leading
-    lines a page, every page kept; the smaller sources stay whole."""
+    """Only the source past the share bound is mapped; every page kept."""
     big, middle, small = uuid4(), uuid4(), uuid4()
     pin = _paged(big, 4, 30, 60) + _paged(middle, 4, 10, 60) + _paged(small, 1, 5, 60)
     whole = _section(pin)
@@ -189,8 +179,7 @@ def test_the_next_largest_is_mapped_once_the_largest_cannot_free_enough() -> Non
 
 
 def test_what_the_view_adds_is_measured_again_until_it_fits() -> None:
-    """A map's own declaration costs bytes too: the view is measured again
-    and cut further, never sent past the limit."""
+    """A map's own declaration costs bytes: measured again until it fits."""
     big = uuid4()
     pin = _paged(big, 5, 20, 50)
     limit = _section(pin) // 2
@@ -207,8 +196,7 @@ def test_what_the_view_adds_is_measured_again_until_it_fits() -> None:
 
 
 def test_a_pack_that_cannot_fit_at_one_line_a_page_is_refused() -> None:
-    """Nothing is cut past the map: when every source is down to one line a
-    page and the request is still over, the node refuses."""
+    """At one line a page and still over, the node refuses."""
     pin = _paged(uuid4(), 3, 10, 40) + _paged(uuid4(), 3, 10, 40)
     views: list[int] = []
 
@@ -298,9 +286,8 @@ def _request(harness: _Harness, model: str) -> int:
 def test_fcas_cp0_pack_now_fits_luna_by_mapping_its_largest_sources(
     fca: _Harness,
 ) -> None:
-    """N157 on the committed FCA set: the request the transport ceiling let
-    through, past Luna's context, now fits it with the largest sources shown
-    as declared page maps, and every page of every source still shown."""
+    """N157: past Luna's bound whole, it fits with its largest sources as
+    declared page maps, every page of every source still shown."""
     assert fca.route.nodes[0].module_id == "CP-0"
     whole = _request(fca, SUITE_ENDPOINT)
     assert request_ceiling(LUNA) < whole <= MAX_REQUEST_BYTES
@@ -341,9 +328,7 @@ def test_fcas_cp0_pack_now_fits_luna_by_mapping_its_largest_sources(
 
 
 def test_a_small_pack_is_handed_exactly_as_before(harness: _Harness) -> None:
-    """A pack well inside Luna's bound is not touched: same lines, no map.
-    (Every module's prompt over a small pack is held byte for byte by the
-    `prompt` goldens, which D116 did not move.)"""
+    """Untouched: same lines, no map (the `prompt` goldens did not move)."""
     fitted = _gate(harness, LUNA)
     assert fitted == _gate(harness, None)
     assert fitted.selection.page_maps == {} and fitted.delivered == list(fitted.pin)
@@ -352,9 +337,7 @@ def test_a_small_pack_is_handed_exactly_as_before(harness: _Harness) -> None:
 def test_a_pack_that_cannot_fit_is_refused_with_no_attempt_or_reservation(
     harness: _Harness, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Through the runtime: a model whose context cannot carry even the
-    gate's authority beside one line a page refuses before `start_attempt`,
-    so nothing is reserved, called or charged."""
+    """Through the runtime: refused before `start_attempt`, nothing reserved."""
     _declare(monkeypatch, SUITE_ENDPOINT, MAX_COMPLETION_TOKENS + 10_000)
     answers = _answers(harness)
     assert _run_route(harness, _module_provider(harness, answers)) is (
@@ -369,8 +352,7 @@ def test_a_pack_that_cannot_fit_is_refused_with_no_attempt_or_reservation(
 def test_an_undeclared_endpoint_runs_under_the_fallback_with_one_notice(
     harness: _Harness, model: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """An approved workspace endpoint and a Copilot model run to the end, as
-    before D116, and the run says once on stderr that no context applies."""
+    """They run to the end, as before D116, with one stderr notice."""
     price = priced(ESTIMATE, model=model)
     answers = replace(_answers(harness), model=model, price=price)
     run_route(
