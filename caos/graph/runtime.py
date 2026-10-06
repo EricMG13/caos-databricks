@@ -188,7 +188,7 @@ def run_route(
     # ceiling alone, and the run says so once, by the endpoint's name. One
     # write; a stderr that cannot take it is passed over (F513's fail-open).
     if (notice := context_notice(execution.provider.model)) is not None:
-        with suppress(OSError, ValueError):
+        with suppress(Exception):  # fail-open, as F513's line (D116)
             sys.stderr.write(notice + "\n")
     route = _execution_route(conn, run_id, route, execution.bundle)
     # Read once from verified bundle bytes, handed to the pure engine (§46.1).

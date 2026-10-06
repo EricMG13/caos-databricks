@@ -365,3 +365,27 @@ def test_an_undeclared_endpoint_runs_under_the_fallback_with_one_notice(
     assert answers.calls == len(harness.route.nodes)
     notice = f"{CONTEXT_NOT_DECLARED} endpoint={model}"
     assert capsys.readouterr().err.splitlines().count(notice) == 1
+
+
+class _BrokenStderr:
+    def write(self, text: str) -> int:
+        raise OSError(text)
+
+
+@pytest.mark.parametrize("broken", [_BrokenStderr(), None], ids=["oserror", "none"])
+def test_the_notice_never_fails_a_run(
+    harness: _Harness, monkeypatch: pytest.MonkeyPatch, broken: object
+) -> None:
+    """A stderr that cannot take the notice is passed over (F513's fail-open)."""
+    model = "claude-opus-5-5"
+    price = priced(ESTIMATE, model=model)
+    answers = replace(_answers(harness), model=model, price=price)
+    monkeypatch.setattr("sys.stderr", broken)
+    run_route(
+        harness.conn,
+        harness.blobs,
+        run_id=harness.run_id,
+        route=harness.route,
+        execution=Execution(_module_provider(harness, answers), price, harness.bundle),
+    )
+    assert answers.calls == len(harness.route.nodes)
