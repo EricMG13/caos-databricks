@@ -1217,13 +1217,16 @@ def _evidence_section(delivered: Sequence[Delivery]) -> str:
     )
 
 
-def evidence_tag(delivered: Sequence[Delivery]) -> str:
+def evidence_tag(delivered: Sequence[Delivery], pack_tag: str | None = None) -> str:
     """The tag the EVIDENCE section's two markers carry (D113): derived from
     the section `delivered` renders, and from nothing else, so no evidence
     line can carry it. The canonical executor derives it from the run's whole
     pin, so every node of a run opens alike whatever part of the pin its gate
     row hands it; any part's lines are lines of the pin, so none of them can
-    carry it either."""
+    carry it either. `pack_tag`, when given, is that pin's tag, returned as
+    it is."""
+    if pack_tag is not None:
+        return pack_tag
     return hashlib.sha256(_evidence_section(delivered).encode("utf-8")).hexdigest()[:16]
 
 
@@ -1264,8 +1267,9 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
     never a caller's list. Section markers carry a tag derived from every
     section's own bytes, the host-owned front matter included, so neither a
     section's text nor a host-owned field value can reproduce one; the
-    evidence, which opens the prompt, carries its own tag, derived from its
-    bytes alone, so it is one prefix for every call handed it (D113). CP-0 also
+    evidence, which opens the prompt, carries its own tag, derived from the
+    evidence alone (`pack_tag`), so it is one prefix for every call handed
+    it (D113). CP-0 also
     receives its host-verified pinned source metadata as context, never as
     evidence; from it CP-0 authors P3 and P5 and restates nothing. Nothing is
     cut or summarised; the caller bounds it with `within_request_ceiling`.
@@ -1345,7 +1349,7 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
     # node handed the same leading part of the pin -- repeats the same bytes
     # for as long as its evidence does, which a provider's prompt cache reads
     # back. Every other section keeps `tag`, which also covers the evidence.
-    opened = pack_tag or evidence_tag(delivered)
+    opened = evidence_tag(delivered, pack_tag)
     prompt = (
         f"--- EVIDENCE {opened} ---\n"
         + evidence
