@@ -112,22 +112,22 @@ def coverage_faults(
     headed: Mapping[UUID, Collection[int]],
 ) -> list[CoverageFault]:
     """Each source in `last_pages` -- the wholly delivered ones, by their last
-    delivered page -- whose P5 row claims a range ending below it, once, at
-    its first such claim, and only where a page past the claim holds a
-    heading line (`headed`, by `heading_pages`): pages the claim leaves out
-    that carry no heading -- signatures, a pricing grid -- are not worth a
-    whole CP-0 retry (LRV1's 58 of 59)."""
-    faults: dict[UUID, CoverageFault] = {}
+    delivered page -- whose P5 row's largest claim ends below it, once, and
+    only where a page past the claim holds a heading line (`headed`, by
+    `heading_pages`): pages the claim leaves out that carry no heading --
+    signatures, a pricing grid -- are not worth a
+    whole CP-0 retry (LRV1's 58 of 59). A source's claim is its largest
+    (F536): a bare `1-3` in another cell does not outvote `Pages 1-67`."""
+    largest: dict[UUID, int] = {}
     for source, claimed in coverage_claims(markdown):
-        last = last_pages.get(source)
-        if (
-            last is not None
-            and claimed < last
-            and source not in faults
-            and any(page > claimed for page in headed.get(source, ()))
-        ):
-            faults[source] = CoverageFault(source, claimed, last)
-    return list(faults.values())
+        largest[source] = max(claimed, largest.get(source, claimed))
+    return [
+        CoverageFault(source, claimed, last)
+        for source, claimed in largest.items()
+        if (last := last_pages.get(source)) is not None
+        and claimed < last
+        and any(page > claimed for page in headed.get(source, ()))
+    ]
 
 
 def _is_heading(line: str) -> bool:

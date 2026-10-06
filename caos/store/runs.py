@@ -37,6 +37,7 @@ from caos.store.outcomes import (
     _locked_attempt,
     accepted_owner,
     artifact_digests,
+    drop_stop_owed,
     record_outcome,
 )
 from caos.store.work import (
@@ -247,6 +248,12 @@ def _start(
         is not None
     ):
         raise Refusal(RefusalCode.ATTEMPT_UNSETTLED)
+    # F530 round 2: a node whose one re-attempt was itself a declared drop,
+    # with no park after it, is stopped here -- under the lock, in the unit
+    # that would start the attempt -- so a drop billed after a pass read the
+    # ledger still stops it; nothing is written and nothing is called.
+    if drop_stop_owed(conn, run_id=run_id, route_node_id=route_node_id):
+        raise Refusal(RefusalCode.PROVIDER_UNAVAILABLE)
     # Under the run lock, so two starts cannot take one ordinal. Counting rows
     # rather than reading the maximum keeps attempts that predate ordinals.
     counted = conn.execute(

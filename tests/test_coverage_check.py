@@ -489,3 +489,15 @@ def test_a_short_claim_leaving_out_no_heading_is_accepted(paged: _Harness) -> No
     assert _run(paged, flawed) is None
     assert [_module(prompt) for prompt in answers.prompts] == ["CP-0", "CP-L10", "CP-5"]
     assert _cp0_ledger(paged) == (1, 1, [], 1)
+
+
+def test_an_unrelated_early_range_does_not_hide_the_fullest_claim() -> None:
+    """F536: a bare `1-3` cell ahead of `Pages 1-67` is a claim of 3 pages
+    to the reader, but the row's claim is its largest, 67: no fault."""
+    row = _p5("1-3", "Pages 1-67")
+    assert coverage_claims(row) == [(C27, 3), (C27, 67)]
+    assert coverage_faults(row, {C27: 67}, _every_page({C27: 67})) == []
+    short = _p5("1-3", "Pages 1-58")
+    assert coverage_faults(short, {C27: 67}, _every_page({C27: 67})) == [
+        CoverageFault(C27, 58, 67)
+    ]

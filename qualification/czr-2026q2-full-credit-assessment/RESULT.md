@@ -317,7 +317,7 @@ The case states no forecast scope, and needs none. Since D109 (6 October 2026) t
 
 The documents state the following; this set draws no conclusion from them.
 
-- **Synthetic, not a holding.** The mandate says "Existing Caesars
+- **Synthetic, not a holding (historical; superseded by D115, which replaced the mandate: the fund now holds four Caesars positions).** The mandate says "Existing Caesars
   Entertainment exposure: none." and that the position is synthetic.
 - **The pending take-private.** The merger would make Caesars a direct wholly
   owned subsidiary of Fertitta Gaming Holdco, LLC; the press release states

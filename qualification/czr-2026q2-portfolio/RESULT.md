@@ -232,7 +232,7 @@ the last trade price, `5,000,000 × 93.28 / 100 = 4,664,000.00`, and
 
 The documents state the following; this set draws no conclusion from them.
 
-- **Synthetic, not a holding.** The mandate says "Existing Caesars
+- **Synthetic, not a holding (historical; superseded by D115, which replaced the mandate: the fund now holds four Caesars positions).** The mandate says "Existing Caesars
   Entertainment exposure: none." and that the position is synthetic.
 - **Seniority.** The 10-Q lists the 6.50% 2032 notes under "Secured Debt" and
   the 6.00% 2032 notes under "Unsecured Debt"; FINRA displayed no seniority.
