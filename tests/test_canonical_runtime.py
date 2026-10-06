@@ -45,6 +45,7 @@ from test_execution_freshness import (
 )
 from test_loop_charges import ESTIMATE, MODEL, REPORTED
 
+import caos.provider
 from caos.blobs import BlobStore
 from caos.evidence import read as evidence_read
 from caos.evidence.citations import AnchoredCitation
@@ -865,7 +866,9 @@ def test_an_over_ceiling_context_refuses_without_truncation_or_call(
     first = harness.route.nodes[0]
     provider.check_context(first.route_node_id, first.module_id)
     harness.conn.rollback()
-    monkeypatch.setattr(invocation, "MAX_REQUEST_BYTES", len(json.dumps(sized.seen[0])))
+    monkeypatch.setattr(
+        caos.provider, "MAX_REQUEST_BYTES", len(json.dumps(sized.seen[0]))
+    )
     assert _run_route(harness, provider) is RefusalCode.CONTEXT_OVER_CEILING
     assert sized.inner.calls == 0
     assert _counts(harness) == (0, [], 0, 0, 0)
@@ -949,7 +952,7 @@ def test_the_executor_rechecks_the_context_after_reservation(
 
     def change() -> None:
         if moved == "ceiling":
-            monkeypatch.setattr(invocation, "MAX_REQUEST_BYTES", 4096)
+            monkeypatch.setattr(caos.provider, "MAX_REQUEST_BYTES", 4096)
         else:
             canon.write_bytes(canon.read_bytes().replace(b"CP", b"CQ", 1))
 
