@@ -583,7 +583,7 @@ def test_the_outcome_keeps_its_drop_kind_and_refuses_one_beside_an_answer(
 def test_a_declared_cut_may_keep_its_generation_id_and_nothing_else(
     harness: _Harness,
 ) -> None:
-    """D118 fix round 1 (0048): a cut declared after content may name the
+    """D118 fix round 1 (0047): a cut declared after content may name the
     generation its stream gave, so its partial bill can be reconciled, but
     never a charge or a stored body; every other drop kind names nothing.
     The table holds the same rule whoever writes the row."""

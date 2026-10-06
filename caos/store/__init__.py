@@ -247,11 +247,10 @@ MIGRATIONS = (
         "0046_call_drop_kind",
         Path(__file__).with_name("0046_call_drop_kind.sql").read_text(encoding="utf-8"),
     ),
-    # 0047 is reserved for the Copilot transport (D77); it lands before this.
     (
-        "0048_call_cut_after_content",
+        "0047_call_cut_after_content",
         Path(__file__)
-        .with_name("0048_call_cut_after_content.sql")
+        .with_name("0047_call_cut_after_content.sql")
         .read_text(encoding="utf-8"),
     ),
 )

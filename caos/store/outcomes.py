@@ -161,7 +161,7 @@ class DropKind(StrEnum):
     # (D118 fix round 1) The provider's own error object after content began,
     # stating a 5xx, a 429 or a transient `error_type`: the same one
     # re-attempt, but the call may have been billed for what it streamed, so
-    # its row may name the stream's generation id (0048).
+    # its row may name the stream's generation id (0047).
     DECLARED_AFTER_CONTENT = "declared_after_content"
     # A vendor error with neither: a connection reset or a client timeout,
     # after which the bytes received are unknown.
@@ -534,7 +534,7 @@ def _validate_drop(outcome: CallOutcome) -> None:
     """A drop kind is typed, and only a call with no answer has one (D110):
     a re-attempt never follows a call that was billed or said anything. A
     cut declared after content alone may name its stream's generation, the
-    handle its unknown bill is reconciled by (D118 fix round 1, 0048)."""
+    handle its unknown bill is reconciled by (D118 fix round 1, 0047)."""
     drop = outcome.drop_kind
     if drop is None:
         return

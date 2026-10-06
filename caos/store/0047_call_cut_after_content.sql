@@ -3,9 +3,8 @@
 -- automatic re-attempt with `declared`, but the call may have been billed
 -- for what it streamed, so its row may name the stream's generation id: the
 -- handle its unknown bill is reconciled by. Never a charge or a stored body.
--- Every other drop kind still names nothing. 0047 is reserved for the
--- Copilot transport (D77). The rows stay immutable (0007's triggers); both
--- checks are validated against every existing row.
+-- Every other drop kind still names nothing. The rows stay immutable
+-- (0007's triggers); both checks are validated against every existing row.
 ALTER TABLE call_outcomes
     DROP CONSTRAINT call_outcomes_drop_kind_check,
     ADD CONSTRAINT call_outcomes_drop_kind_check CHECK (
