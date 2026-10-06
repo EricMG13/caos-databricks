@@ -983,8 +983,10 @@ from uuid import UUID
 sys.dont_write_bytecode = True
 sys.path[:0] = [os.environ["REPO"], os.environ["REPO"] + "/tests"]
 from canonical_fixtures import VENDORED, CanonicalCompletions
-from conftest import priced
+from conftest import priced, with_contexts
 from decimal import Decimal
+import caos.provider
+caos.provider.CONTEXT_TOKENS = with_contexts(caos.provider.CONTEXT_TOKENS)
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
 from caos.graph import runtime

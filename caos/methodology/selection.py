@@ -42,7 +42,7 @@ the plain-text extractor's declared sixty-line fixed-pitch page.
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
@@ -155,19 +155,116 @@ def gate_view(
     its map shows, for the prompt to say.
     """
     bound = GATE_SOURCE_BYTES if budget is None else budget
+    by_page = _pages(delivered)
+    caps = _caps(by_page, bound)
+    if 0 in caps.values():
+        raise Refusal(RefusalCode.CONTEXT_OVER_CEILING)
+    return _view(delivered, by_page, caps)
+
+
+def pack_view(
+    delivered: Sequence[Delivery],
+    measure: Callable[[list[Delivery], dict[UUID, dict[str, int]]], int],
+    limit: int,
+    *,
+    source_bound: int | None = None,
+) -> tuple[list[Delivery], dict[UUID, dict[str, int]]]:
+    """What a node is shown of its delivery so its whole request fits
+    `limit` (D116, N157): `measure` is the request a view would send, in
+    bytes, and the view starts as `gate_view` at `source_bound` (the gate's
+    per-source bound; None for a consumer, which has none).
+
+    When the request is past `limit`, the largest sources are shown as page
+    maps first, by one bound on every source's share of the evidence section:
+    the largest share `B` such that every source past it, cut to the largest
+    uniform number of leading lines a page within `B` (at least one, so every
+    page still appears), frees the bytes the request is over. Every source
+    under `B` stays whole. Each request byte saved is at least an evidence
+    byte cut, since the request only escapes them, so the view is measured
+    again and `B` lowered until it fits; when every source past the bound is
+    down to one line a page and the request is still over, the node refuses
+    `CONTEXT_OVER_CEILING` before any attempt or reservation. Pure over the
+    delivery, the measure and the limit, so every reader that passes them
+    alike shows the node the same lines.
+    """
+    by_page = _pages(delivered)
+    shares = {s: sum(map(sum, pages.values())) for s, pages in by_page.items()}
+    bound = max(shares.values(), default=0) if source_bound is None else source_bound
+    caps = _caps(by_page, bound)
+    if 0 in caps.values():
+        raise Refusal(RefusalCode.CONTEXT_OVER_CEILING)
+    while True:
+        shown, maps = _view(delivered, by_page, caps)
+        over = measure(shown, maps) - limit
+        if over <= 0:
+            return shown, maps
+        if bound == 0:
+            raise Refusal(RefusalCode.CONTEXT_OVER_CEILING)
+        target = _shown_bytes(by_page, caps) - over
+        bound = _largest_bound(by_page, target, bound - 1)
+        caps = {s: max(1, k) for s, k in _caps(by_page, bound).items()}
+
+
+def _pages(delivered: Sequence[Delivery]) -> dict[UUID, dict[int, list[int]]]:
+    """Each source's evidence bytes, line by line, by page, in delivered order."""
     by_page: dict[UUID, dict[int, list[int]]] = {}
     for item, size in zip(delivered, evidence_sizes(delivered), strict=True):
-        pages = by_page.setdefault(item.source_id, {})
-        pages.setdefault(item.page, []).append(size)
-    leading: dict[UUID, int] = {}
+        by_page.setdefault(item.source_id, {}).setdefault(item.page, []).append(size)
+    return by_page
+
+
+def _caps(
+    by_page: Mapping[UUID, Mapping[int, list[int]]], bound: int
+) -> dict[UUID, int]:
+    """The leading lines a page of each source past `bound` that fit it."""
+    return {
+        source_id: _leading(pages.values(), bound)
+        for source_id, pages in by_page.items()
+        if sum(map(sum, pages.values())) > bound
+    }
+
+
+def _shown_bytes(
+    by_page: Mapping[UUID, Mapping[int, list[int]]], caps: Mapping[UUID, int]
+) -> int:
+    """The evidence bytes a view under `caps` spends on its sources."""
+    return sum(
+        sum(sum(sizes[: caps.get(source_id, len(sizes))]) for sizes in pages.values())
+        for source_id, pages in by_page.items()
+    )
+
+
+def _largest_bound(
+    by_page: Mapping[UUID, Mapping[int, list[int]]], target: int, most: int
+) -> int:
+    """The largest share bound in `[0, most]` whose view spends at most
+    `target` evidence bytes (every source past it at one line a page or
+    more), or 0 when none does. The view's bytes never fall as the bound
+    rises, so the bound is found by bisection."""
+    low, high = 0, max(most, 0)
+    while low < high:
+        middle = (low + high + 1) // 2
+        caps = {s: max(1, k) for s, k in _caps(by_page, middle).items()}
+        if _shown_bytes(by_page, caps) <= target:
+            low = middle
+        else:
+            high = middle - 1
+    return low
+
+
+def _view(
+    delivered: Sequence[Delivery],
+    by_page: Mapping[UUID, Mapping[int, list[int]]],
+    caps: Mapping[UUID, int],
+) -> tuple[list[Delivery], dict[UUID, dict[str, int]]]:
+    """The delivery with each capped source cut to its leading lines a page,
+    in delivered order, and what each map shows; a cap that keeps every line
+    of every page is no map."""
     maps: dict[UUID, dict[str, int]] = {}
-    for source_id, pages in by_page.items():
-        if sum(map(sum, pages.values())) <= bound:
+    for source_id, k in caps.items():
+        pages = by_page[source_id]
+        if all(len(sizes) <= k for sizes in pages.values()):
             continue
-        k = _leading(pages.values(), bound)
-        if k == 0:
-            raise Refusal(RefusalCode.CONTEXT_OVER_CEILING)
-        leading[source_id] = k
         maps[source_id] = {
             "leading_lines_per_page": k,
             "pages": len(pages),
@@ -177,10 +274,10 @@ def gate_view(
     shown: list[Delivery] = []
     seen: dict[tuple[UUID, int], int] = {}
     for item in delivered:
-        cap = leading.get(item.source_id)
         key = (item.source_id, item.page)
         seen[key] = seen.get(key, 0) + 1
-        if cap is None or seen[key] <= cap:
+        mapped = maps.get(item.source_id)
+        if mapped is None or seen[key] <= mapped["leading_lines_per_page"]:
             shown.append(item)
     return shown, maps
 

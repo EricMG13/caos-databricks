@@ -63,6 +63,10 @@ class Assignment:
     attempt_id: UUID
     # The worker's claim the pre-transport check reads; None is a direct caller.
     lease: Lease | None = None
+    # The endpoint the node's call is made to, whose request ceiling its
+    # evidence is fitted to (D116); None for a reader that builds no prompt
+    # and judges no quote.
+    model: str | None = None
 
 
 # Every block of the run's pinned source-set version, never the case's live set.

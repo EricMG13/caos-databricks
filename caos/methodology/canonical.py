@@ -46,6 +46,7 @@ from caos.evidence.citations import (
     whole_line_of,
 )
 from caos.graph.route import MODEL_MODULE, ResolvedRoute, RouteNode
+from caos.methodology import selection as evidence_selection
 from caos.methodology.bundle import (
     Bundle,
     DeliveredAuthority,
@@ -121,6 +122,7 @@ from caos.methodology.selection import (
     demand_fault,
     demand_items,
     gate_view,
+    pack_view,
     select_sources,
 )
 from caos.methodology.vendor import VendorContract, cached_contract, catalog
@@ -138,10 +140,11 @@ from caos.methodology.verification import (
     verify_owner_restrictions,
 )
 from caos.provider import (
-    MAX_REQUEST_BYTES,
     Completion,
     CompletionProvider,
+    encode_request,
     reported_charge,
+    request_ceiling,
     resend_checked,
 )
 from caos.refusals import Refusal, RefusalCode, RunRefusal
@@ -279,6 +282,8 @@ def execute_handoff(
     """
     adapter = methodology.CANONICAL_ADAPTER_VERSION
     attempt, route_node_id = assignment.attempt_id, assignment.node.route_node_id
+    # The node's evidence is fitted to the model this call goes to (D116).
+    assignment = replace(assignment, model=provider.model)
     with call_hold(conn, attempt):
         with execution_reads(conn):
             check_call(
@@ -602,7 +607,9 @@ def check_context(  # noqa: PLR0913 -- one node of one run, keyword-only
     read unit, and the reservation this measurement produced is what that
     rebuild is then checked against (Task 8.2).
     """
-    assignment = Assignment(node.module_id, run_id, node, route, _NO_ATTEMPT)
+    assignment = Assignment(
+        node.module_id, run_id, node, route, _NO_ATTEMPT, model=provider.model
+    )
     with execution_reads(conn):
         _stored_identity(
             conn, assignment, bundle, adapter=methodology.CANONICAL_ADAPTER_VERSION
@@ -650,6 +657,9 @@ class _Context:
     # tag is derived from it (D113), by `_prompt` alone, so a reader that
     # builds no prompt never renders it. Empty is the tag of `delivered`.
     pin: Sequence[Delivery] = ()
+    # The tag a prompt built only to be measured carries in its place (D116):
+    # `_MEASURED`, as long as any; None on every prompt that is sent.
+    measured_tag: str | None = None
 
 
 def _source_preparation(
@@ -751,7 +761,14 @@ def _context(
     and its citation register, read inside the caller's unit after it checked
     the stored pin. Only accepted rows reach any part: a Blocked or refused
     attempt's diagnostic body is never read here (a guided retry's lines are
-    read beside it, by the two prompt builders alone: `_prompt_context`)."""
+    read beside it, by the two prompt builders alone: `_prompt_context`).
+
+    `assignment.model` is the endpoint the node's call is (or was) made to:
+    its delivery is fitted to that model's request ceiling (`_fitted`, D116),
+    so the pre-call check, the call, its verdict and a replay show the node
+    the same lines. None only for a reader of the upstream alone, which
+    neither builds a prompt nor judges a quote (`_forecast_inputs` on an
+    accepted read)."""
     delivered = _delivered(conn, assignment.run_id)
     source_set = _source_preparation(conn, blobs, assignment, delivered)
     # Records first: what binds and re-validates is then read as context.
@@ -762,7 +779,7 @@ def _context(
     # The gate's verified record is what the selection is read from (§95).
     pin = delivered
     delivered, selection = _selected(conn, bundle, assignment, upstream, pin)
-    return _Context(
+    context = _Context(
         delivered=delivered,
         upstream=upstream,
         lineage=lineage,
@@ -772,6 +789,72 @@ def _context(
         unverified={node: record.unverified for node, record in records.items()},
         pin=pin,
     )
+    if assignment.model is None:
+        return context
+    return _fitted(bundle, assignment, identity, context, assignment.model)
+
+
+# D116: room kept under a model's request ceiling when a node's evidence is
+# fitted, for what a guided retry adds to the first attempt's prompt -- its
+# check lines, at most `MAX_FEEDBACK_MESSAGES` of about `MAX_FEEDBACK_CHARS`
+# each, and their block -- so a retry of a fitted node still fits. The refused
+# answer a retry may carry is not counted: `_sent_prompt` drops it when it does
+# not fit (D104).
+RETRY_RESERVE_BYTES = 65_536
+# The evidence tag a measured prompt carries: as long as every tag
+# (`evidence_tag`), so the size is the sent prompt's, without rendering the
+# run's whole pin for its digest, which no reader of a verdict does (D113).
+_MEASURED = "0" * 16
+
+
+def _fitted(
+    bundle: Bundle,
+    assignment: Assignment,
+    identity: HostIdentity,
+    context: _Context,
+    model: str,
+) -> _Context:
+    """`context` with its delivery fitted to `model`'s request ceiling
+    (D116, N157), less `RETRY_RESERVE_BYTES`: `selection.pack_view` over the
+    node's first-attempt prompt, measured as the request `model` is sent.
+
+    The gate starts from its whole pin under `GATE_SOURCE_BYTES` (§98); a
+    consumer from what its T8 row selected. A pack past the ceiling shows its
+    largest sources as page maps, each declared to the model (`page_maps`);
+    one that cannot fit refuses `CONTEXT_OVER_CEILING` here, before any
+    attempt or reservation. Measured at ordinal 1, so every attempt of a node,
+    its pre-call check and its replay fit alike whatever their ordinal; a
+    pack that already fits is unchanged. A reader that judges a quote (the
+    verdict, `replay_billed`) builds this one prompt to fit the node as its
+    call did, but never renders the pin for its tag (`_MEASURED`)."""
+    gate = assignment.module_id == GATE_MODULE
+    authority = delivered_authority(bundle, assignment.module_id)
+    measured_as = replace(identity, ordinal=1)
+
+    def measure(shown: list[Delivery], maps: dict[UUID, dict[str, int]]) -> int:
+        view = replace(
+            context,
+            delivered=shown,
+            selection=replace(context.selection, page_maps=maps),
+            measured_tag=_MEASURED,
+        )
+        prompt = _prompt(bundle, assignment, measured_as, view, authority)
+        return len(encode_request(model, prompt, json_object=True))
+
+    shown, maps = pack_view(
+        context.pin if gate else context.delivered,
+        measure,
+        request_ceiling(model) - RETRY_RESERVE_BYTES,
+        # Read at the call, as `gate_view` reads it.
+        source_bound=evidence_selection.GATE_SOURCE_BYTES if gate else None,
+    )
+    basis = (Basis.PAGE_MAP if maps else Basis.WHOLE_NO_DEMAND) if gate else None
+    selection = replace(
+        context.selection,
+        basis=basis or context.selection.basis,
+        page_maps=maps,
+    )
+    return replace(context, delivered=shown, selection=selection)
 
 
 def _prompt_context(
@@ -784,6 +867,9 @@ def _prompt_context(
     """`_context` for a prompt about to be priced or sent: with the lines a
     node's guided retry carries (D30, D82). Replay and the readers never
     build a prompt, so they never pay for the ledger read this adds."""
+    if assignment.model is None:
+        # A prompt is built for a call, and a call has a model (D116).
+        raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
     context = _context(conn, blobs, bundle, assignment, identity)
     fed = _feedback_body(conn, blobs, assignment)
     if fed is None:
@@ -1442,7 +1528,7 @@ def _prompt(
         page_maps=context.selection.page_maps,
         retry_feedback=context.feedback,
         refused_answer=context.refused_answer,
-        pack_tag=evidence_tag(context.pin or context.delivered),
+        pack_tag=context.measured_tag or evidence_tag(context.pin or context.delivered),
     )
 
 
@@ -1454,7 +1540,8 @@ def _sent_prompt(
 ) -> str:
     """The prompt `prompt_of` builds, less the refused answer a guided retry
     would carry when carrying it puts the request `provider` sends past
-    `MAX_REQUEST_BYTES`, the transport ceiling a reservation is priced under,
+    its model's `request_ceiling` (D116; at most `MAX_REQUEST_BYTES`, the
+    transport ceiling a reservation is priced under),
     or past what `affords` says the run can pay for that many bytes (D104):
     that retry asks for the whole answer again instead, which the ceiling may
     still cover, rather than being lost to `BUDGET_CEILING_REACHED`. The
@@ -1467,7 +1554,7 @@ def _sent_prompt(
     if context.refused_answer is None:
         return prompt
     size = len(provider.request_bytes(prompt, json_object=True))
-    if size <= MAX_REQUEST_BYTES and affords(size):
+    if size <= request_ceiling(provider.model) and affords(size):
         return prompt
     return prompt_of(replace(context, refused_answer=None))
 
@@ -1639,7 +1726,10 @@ def replay_billed(  # noqa: PLR0913 -- one run's nodes, keyword-only
             continue
         attempt_id = UUID(str(attempt))
         body = _stored_body(blobs, str(diagnostic))
-        assignment = Assignment(node.module_id, run_id, node, route, attempt_id)
+        # Fitted to the model the call went to, as its call was (D116).
+        assignment = Assignment(
+            node.module_id, run_id, node, route, attempt_id, model=str(model)
+        )
         check_attempt(
             conn,
             attempt_id=attempt_id,
@@ -1724,7 +1814,8 @@ def _replayed_answer(
     assignment: Assignment,
     body: str | None,
 ) -> tuple[bytes, bytes] | BlockedAnswer:
-    """`_answer` over a stored body, with the context its call was built from."""
+    """`_answer` over a stored body, with the context its call was built from:
+    fitted to the model the call outcome names, the one it was sent to."""
     if body is None:
         raise Refusal(RefusalCode.PROVIDER_RESPONSE_INVALID)
     # An unaccepted attempt has no record, so its call named its blocking

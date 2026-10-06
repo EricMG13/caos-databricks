@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import re
 import sys
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -167,6 +167,62 @@ def _model_environment_stays_the_tests_own() -> Iterator[None]:
         os.environ.pop(name, None)
         if value is not None:
             os.environ[name] = value
+
+
+# The suite's own endpoint, which every fake provider and test price names,
+# and the context the suite declares for it (D116): wide enough that the
+# transport's `MAX_REQUEST_BYTES` stays the binding ceiling, as it was before
+# models declared one, so a suite that does not test the context bound is
+# measured as it always was. The bound's own suites declare real contexts.
+SUITE_ENDPOINT = "a-model/for-the-test"
+SUITE_CONTEXT_TOKENS = 2_000_000
+
+
+def with_contexts(pinned: Mapping[str, int], **declared: int) -> Mapping[str, int]:
+    """`pinned` with the suite's endpoint declared, and `declared` beside it:
+    what a test process, or a worker it spawns, installs as
+    `caos.provider.CONTEXT_TOKENS`."""
+    from types import MappingProxyType
+
+    return MappingProxyType(
+        {**pinned, SUITE_ENDPOINT: SUITE_CONTEXT_TOKENS, **declared}
+    )
+
+
+@pytest.fixture(autouse=True)
+def _suite_endpoint_context() -> Iterator[None]:
+    """The suite's endpoint carries a declared context, beside the pinned ones.
+
+    Not through `monkeypatch`, for `_development_edge`'s reason; restored
+    after, so a test that declares another context leaves nothing behind.
+    """
+    import caos.provider
+
+    pinned = caos.provider.CONTEXT_TOKENS
+    caos.provider.CONTEXT_TOKENS = with_contexts(pinned)
+    yield
+    caos.provider.CONTEXT_TOKENS = pinned
+
+
+@pytest.fixture
+def declare_context() -> Iterator[Callable[[str, int | None], None]]:
+    """Declare one endpoint's context for this test, or withdraw it with None
+    (D116); whatever was installed before is back after."""
+    from types import MappingProxyType
+
+    import caos.provider
+
+    installed = caos.provider.CONTEXT_TOKENS
+
+    def declare(model: str, tokens: int | None) -> None:
+        current = dict(caos.provider.CONTEXT_TOKENS)
+        current.pop(model, None)
+        if tokens is not None:
+            current[model] = tokens
+        caos.provider.CONTEXT_TOKENS = MappingProxyType(current)
+
+    yield declare
+    caos.provider.CONTEXT_TOKENS = installed
 
 
 @pytest.fixture(autouse=True)
