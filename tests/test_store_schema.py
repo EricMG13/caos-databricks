@@ -129,12 +129,19 @@ def test_connect_asks_for_keepalives_and_an_optional_statement_timeout(
     connection asks for both keepalives and `tcp_user_timeout`. A caller that
     names no `statement_timeout_ms` gets none forced on it (`apply_schema`'s
     migration path may legitimately run long); one that does gets it as
-    `options` at connect time, which holds for the whole session."""
+    `options` at connect time, which holds for the whole session. A store
+    that refuses the first attempt is asked once more without the idle option
+    (D120), the rest unchanged, and the first refusal is raised."""
     captured: dict[str, object] = {}
+    retried: list[object] = []
     monkeypatch.delenv("PGOPTIONS", raising=False)
+    monkeypatch.setattr(store, "_IDLE_SESSION_REFUSED", Event())
 
     def fake_connect(_url: str, **kwargs: object) -> None:
-        captured.update(kwargs)
+        if captured:
+            retried.append(kwargs["options"])
+        else:
+            captured.update(kwargs)
         raise psycopg.OperationalError("down")
 
     monkeypatch.setattr(psycopg, "connect", fake_connect)
@@ -150,13 +157,16 @@ def test_connect_asks_for_keepalives_and_an_optional_statement_timeout(
         "-c search_path=caos_store -c idle_session_timeout=0"
     ), "DL-1, D117, and no bound"
     assert store.IDLE_SESSION_OPTION == "-c idle_session_timeout=0"
+    assert retried == ["-c search_path=caos_store"]
 
     captured.clear()
+    retried.clear()
     with pytest.raises(psycopg.OperationalError):
         store.connect("postgresql://unused.invalid/none", statement_timeout_ms=5000)
     assert captured["options"] == (
         "-c search_path=caos_store -c idle_session_timeout=0 -c statement_timeout=5000"
     )
+    assert retried == ["-c search_path=caos_store -c statement_timeout=5000"]
 
 
 def test_a_store_session_is_never_ended_by_the_server_for_being_idle(
