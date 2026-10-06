@@ -154,10 +154,14 @@ class _Completions:
         self.prompts.append(prompt)
         if len(self.prompts) == self.refuses_call:
             return Completion(None, None, None, RefusalCode.PROVIDER_UNAVAILABLE)
-        # The evidence section is last, so its source is the last one named,
-        # and the debt line it shows is the whole line the answer cites (N28).
-        source_id = re.findall(r"^source_id: (\S+)$", prompt, re.MULTILINE)[-1]
-        line = re.findall(r"^Total debt at 31 December 2026 .*$", prompt, re.MULTILINE)
+        # The evidence section opens the prompt (D113): its source is the one
+        # named there, and the debt line it shows is the whole line the answer
+        # cites (N28).
+        evidence = prompt[: prompt.index("\n--- END EVIDENCE ")]
+        source_id = re.findall(r"^source_id: (\S+)$", evidence, re.MULTILINE)[-1]
+        line = re.findall(
+            r"^Total debt at 31 December 2026 .*$", evidence, re.MULTILINE
+        )
         return CanonicalCompletions(
             UUID(source_id),
             generation_id="gen-harness-test",

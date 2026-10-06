@@ -75,7 +75,7 @@ VENDOR_LINE = "validate_handoff: a MATERIAL finding requires qa_status Restricte
 
 
 def _module(prompt: str) -> str:
-    return prompt.split(maxsplit=6)[5]
+    return str(fields_from_prompt(prompt)["module_id"])
 
 
 def _with_material(body: str) -> str:

@@ -99,7 +99,7 @@ def _gate(harness: _Harness, **knobs: object) -> CanonicalCompletions:
 
 
 def _evidence_pages(prompt: str) -> set[int]:
-    evidence = prompt[prompt.index("\n--- EVIDENCE ") :]
+    evidence = prompt[: prompt.index("\n--- END EVIDENCE ")]  # it opens (D113)
     return {
         int(line.removeprefix("page: "))
         for line in evidence.splitlines()
@@ -116,6 +116,26 @@ def test_a_consumer_named_by_page_is_handed_only_those_pages(paged: _Harness) ->
     [prompt] = screen.prompts
     assert _evidence_pages(prompt) == {2, 3}
     assert _line(70) in prompt and _line(10) not in prompt
+    _accept(paged, attempt, result)
+
+
+def test_a_consumer_handed_part_of_the_pin_shares_the_gate_prompts_opening(
+    paged: _Harness,
+) -> None:
+    """D113 (N153): every node of a run opens its evidence under one tag, the
+    tag of the run's whole pin, so a consumer handed a leading part of it
+    repeats the gate's bytes through that part, which a provider's prompt
+    cache reads back; a tag of its own selection would part them at once."""
+    gate = _gate(paged, source_files={"CP-L10": f"{PAGED} pages 1-2"})
+    screen = CanonicalCompletions(
+        paged.source_id, quotes=(), cited=((paged.source_id, _line(10), 1),)
+    )
+    attempt, result = _run(paged, "CP-L10", screen)
+    [whole], [part] = gate.prompts, screen.prompts
+    assert _evidence_pages(whole) == {1, 2, 3} and _evidence_pages(part) == {1, 2}
+    assert whole.split("\n", 1)[0] == part.split("\n", 1)[0]
+    shown = part[: part.index("\n--- END EVIDENCE ")]
+    assert whole.startswith(shown) and _line(70) in shown
     _accept(paged, attempt, result)
 
 
