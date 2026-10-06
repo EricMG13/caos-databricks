@@ -17,7 +17,7 @@ import threading
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from decimal import Decimal
-from typing import cast
+from typing import ClassVar, cast
 from uuid import uuid4
 
 import pytest
@@ -708,6 +708,9 @@ def test_a_vendor_error_that_cannot_be_read_is_unavailable_and_recorded(
     line = capsys.readouterr().err
     assert line.startswith("PROVIDER_UNAVAILABLE call=raised class=")
     assert "private" not in line
+    if isinstance(failure, _RaisingStatus):
+        # Its facts are unknown, as F513 says of a failure that raises when read.
+        assert "class=? cause=? status=?" in line
     answers = CanonicalCompletions(harness.source_id)
     stopped = _run(harness, _dropping(answers, failure))
     assert stopped is RefusalCode.PROVIDER_UNAVAILABLE
@@ -752,3 +755,102 @@ def test_node_attempts_reads_each_attempt_as_the_ledger_holds_it(
     assert accepted.refusal is None and accepted.drop_kind is None
     assert accepted.diagnostic_sha256 is not None
     assert len(accepted.diagnostic_sha256) == 64
+
+
+class _GetRaises:
+    def get(self, _name: str) -> object:
+        raise RuntimeError("private")
+
+
+class _Headed:
+    headers = _GetRaises()
+
+
+class _LimitedUnreadably(OpenAIError):
+    status_code = 429
+    response = _Headed()
+
+
+def test_a_rate_limits_facts_that_raise_read_as_unreadable_or_the_default_wait(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """F530 (N162), below the client: a `Retry-After` whose read raises waits
+    the default; a status or a response that raises is `_UnreadableError`,
+    and the call it ends is `raised`, PROVIDER_UNAVAILABLE, never untyped."""
+    from caos.provider import TIMEOUT_SECONDS
+
+    assert models._retry_after(_LimitedUnreadably("private")) == (
+        models.RETRY_AFTER_SECONDS
+    )
+    with pytest.raises(models._UnreadableError):
+        models._retry_after(_RaisingResponse("private"))
+    with pytest.raises(models._UnreadableError):
+        models._rate_limited(_RaisingStatus("private"))
+    with pytest.raises(models._UnreadableError):
+        models._status_refusal(_RaisingStatus("private"))
+    ended = models._vendor_ended(
+        _RaisingResponse("private"), 1, models._clock() + TIMEOUT_SECONDS, 0.0
+    )
+    assert ended == Completion(
+        None, None, None, RefusalCode.PROVIDER_UNAVAILABLE, DropKind.RAISED
+    )
+    assert capsys.readouterr().err.startswith(
+        "PROVIDER_UNAVAILABLE call=raised class=_RaisingResponse "
+    )
+
+
+class _Retry:
+    headers: ClassVar[dict[str, str]] = {"retry-after": "0.5"}
+
+
+class _LimitedBriefly(OpenAIError):
+    status_code = 429
+    response = _Retry()
+
+
+def test_the_declared_bounds_and_a_brief_retry_after() -> None:
+    """`_declared`'s failure statuses are 400 to 599 inclusive, and a stated
+    wait under a second is waited as stated."""
+    assert models._declared(StatusError(400)) and models._declared(StatusError(599))
+    assert not models._declared(StatusError(399))
+    assert not models._declared(StatusError(600))
+    assert models._retry_after(_LimitedBriefly("private")) == 0.5
+
+
+def test_drop_stop_owed_reads_the_park_against_the_latest_drop(
+    harness: _Harness,
+) -> None:
+    """F530: two declared drops, a park, a third declared drop with no park
+    after it: the stop is owed for the third, whatever the park said of the
+    two before it; a park after the third settles it."""
+    from caos.store.events import RunEvent, append
+    from caos.store.runs import start_attempt
+    from caos.store.work import enqueue_run
+
+    node = _node(harness, "CP-0").route_node_id
+    conn = harness.conn
+    dropped = CallOutcome(None, "m", None, drop_kind=DropKind.DECLARED)
+
+    def drop() -> None:
+        attempt = start_attempt(conn, harness.run_id, node)
+        assert record_outcome(conn, attempt_id=attempt, outcome=dropped)
+
+    def park() -> None:
+        append(conn, harness.run_id, RunEvent.RUN_PARKED)
+        conn.commit()
+
+    def owed() -> bool:
+        said = drop_stop_owed(conn, run_id=harness.run_id, route_node_id=node)
+        conn.rollback()
+        return said
+
+    drop()
+    drop()
+    park()
+    drop()
+    assert not owed(), "no work row: a direct caller's"
+    enqueue_run(conn, harness.run_id)
+    conn.commit()
+    assert owed()
+    park()
+    assert not owed()
