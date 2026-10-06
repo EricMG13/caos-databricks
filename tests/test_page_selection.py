@@ -99,7 +99,7 @@ def _gate(harness: _Harness, **knobs: object) -> CanonicalCompletions:
 
 
 def _evidence_pages(prompt: str) -> set[int]:
-    evidence = prompt[prompt.index("\n--- EVIDENCE ") :]
+    evidence = prompt[: prompt.index("\n--- END EVIDENCE ")]  # it opens (D113)
     return {
         int(line.removeprefix("page: "))
         for line in evidence.splitlines()

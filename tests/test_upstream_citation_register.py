@@ -168,7 +168,7 @@ def test_upstream_text_and_citation_register_are_never_evidence(
         (quote, RefusalCode.CITATION_NOT_LOCATED)
     ]
     [prompt] = quoting.prompts
-    assert quote not in prompt[prompt.index("\n--- EVIDENCE ") :]
+    assert quote not in prompt[: prompt.index("\n--- END EVIDENCE ")]
     assert quote in (prompt if quote == UNANCHORED else _register(prompt))
 
 

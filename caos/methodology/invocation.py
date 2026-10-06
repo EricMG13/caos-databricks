@@ -1233,8 +1233,8 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
     retry_feedback: Sequence[str] = (),
     refused_answer: str | None = None,
 ) -> str:
-    """The task, the host-owned front matter, the host's own steps, every
-    delivered authority file, upstream, its citation register, evidence.
+    """The evidence, then the task, the host-owned front matter, the host's
+    own steps, every delivered authority file, upstream, its citation register.
 
     `authority` is this module's delivered set (§45.1): each file whole, UTF-8,
     in its own section named with its digest, `SKILL.md` first; any other
@@ -1252,7 +1252,9 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
     CP-0's T8 modules are the pinned route's,
     never a caller's list. Section markers carry a tag derived from every
     section's own bytes, the host-owned front matter included, so neither a
-    section's text nor a host-owned field value can reproduce one. CP-0 also
+    section's text nor a host-owned field value can reproduce one; the
+    evidence, which opens the prompt, carries its own tag, derived from its
+    bytes alone, so it is one prefix for every call handed it (D113). CP-0 also
     receives its host-verified pinned source metadata as context, never as
     evidence; from it CP-0 authors P3 and P5 and restates nothing. Nothing is
     cut or summarised; the caller bounds it with `within_request_ceiling`.
@@ -1324,15 +1326,27 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
     answer = _carried(feedback, refused_answer)
     untagged = front_matter + sections + feedback + answer
     tag = hashlib.sha256(untagged.encode("utf-8")).hexdigest()[:16]
+    # D113 (N153): the evidence opens the prompt, before every module- and
+    # attempt-specific block, under a tag derived from the evidence alone, so
+    # every call of a run handed the same evidence -- a node's retries, and
+    # nodes its gate row hands the same members -- opens with the same bytes,
+    # which a provider's prompt cache reads back. No evidence line can carry
+    # its own section's digest; every other section keeps `tag`, which also
+    # covers the evidence.
+    evidence_tag = hashlib.sha256(evidence.encode("utf-8")).hexdigest()[:16]
     prompt = (
-        _INSTRUCTION.format(
+        f"--- EVIDENCE {evidence_tag} ---\n"
+        + evidence
+        + f"\n--- END EVIDENCE {evidence_tag} ---\n"
+        + "\n"
+        + _INSTRUCTION.format(
             module_id=identity.module_id,
             module_name=identity.module_name,
             route_node_id=identity.route_node_id,
             filename=expected_filename(identity),
         )
         + gate
-        + _TAGGED.format(tag=tag)
+        + _TAGGED.format(tag=tag, evidence_tag=evidence_tag)
         + f"\n--- HOST-OWNED FRONT MATTER {tag} (copy exactly) ---\n"
         + front_matter
         + f"\n--- END HOST-OWNED FRONT MATTER {tag} ---\n"
@@ -1345,9 +1359,6 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
         + _research_section(identity, tag)
         + _command_section(identity, tag)
         + _source_preparation_section(source_set, tag, page_maps)
-        + f"\n--- EVIDENCE {tag} ---\n"
-        + evidence
-        + f"\n--- END EVIDENCE {tag} ---\n"
     )
     if identity.module_id in {"CP-1", "CP-2G", "CP-4"} and any(
         n.module_id == MODEL_MODULE for n in route.nodes

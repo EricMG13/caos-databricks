@@ -24,6 +24,12 @@ prompt group covers every other adapter module and names CP-CF as the one it
 cannot. Citation anchoring is exercised at the pure level below the store
 (`_unique_run` and `_rectangles` over `_Token`), because both public entry
 points read the token index from a connection.
+
+One divergence is mirrored rather than masked (D113): the host's prompt opens
+with the evidence, under a tag of its own, where the legacy prompt carried it
+last. The `prompt` goldens come from a legacy copy that makes the same move
+(`tests/parity/test_prompt.py`), so the rest of the assembly is still the
+legacy host's.
 """
 
 from __future__ import annotations
