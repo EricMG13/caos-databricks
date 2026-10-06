@@ -52,6 +52,7 @@ from caos.provider import (
     NEVER_RETRIED,
     TIMEOUT_SECONDS,
     Completion,
+    CutAfterContentError,
     DropKind,
     check_resend,
     encode_request,
@@ -325,6 +326,9 @@ def _invoked(
                         )
                 except OpenAIError as failed:
                     answered.append(failed)
+                except CutAfterContentError as cut:
+                    # Never sent again here: the node's ledger decides (D118).
+                    answered.append(_Raised(_cut_kind(cut), _facts(cut)))
         except BaseException as escaped:
             # Not held back, as `suppress(Exception)` held it not: it still
             # ends this thread, and the call is named `escaped` (F513).
@@ -598,7 +602,8 @@ def _unanswered(code: RefusalCode, answer: object, started: float) -> Completion
     lines never interleave; a write that fails is dropped (a fail-open: the
     line never changes the outcome). Nothing here quotes the prompt, an
     answer or an error's text. The refusal carries the same kind, typed, a
-    vendor error split by whether the provider declared it (D110)."""
+    vendor error split by whether the provider declared it (D110), and a cut
+    after content too (D118), whose line still says `raised`."""
     drop, facts = DropKind.DEADLINE, _NO_FACTS
     if isinstance(answer, _Raised):
         drop, facts = answer.kind, answer.facts
@@ -608,7 +613,13 @@ def _unanswered(code: RefusalCode, answer: object, started: float) -> Completion
             DropKind.DECLARED if unavailable and _declared(answer) else DropKind.VENDOR
         )
         facts = _facts(answer)
-    kind = "vendor" if drop is DropKind.DECLARED else drop.value
+    kind = drop.value
+    if isinstance(answer, _Raised):
+        # A cut the provider declared after content is still one the client
+        # ended by raising (D118): the line says so, unchanged.
+        kind = DropKind.RAISED.value if drop is DropKind.DECLARED else kind
+    elif drop is DropKind.DECLARED:
+        kind = "vendor"
     with suppress(Exception):  # fail-open, documented above (F513)
         line = f"{code.value} call={kind} {facts} elapsed={_clock() - started:.1f}\n"
         sys.stderr.write(line)
@@ -637,6 +648,47 @@ def _declared(failed: BaseException) -> bool:
         else:
             declared = isinstance(body, Mapping) and bool(body)
     return declared
+
+
+# The provider error types that say the provider, not the request, failed
+# (D118): its upstream unavailable or overloaded, a server fault, a timeout,
+# a rate limit. Every other type -- and any type beside a 4xx -- is no drop.
+_TRANSIENT_ERROR_TYPES = frozenset(
+    {
+        "provider_overloaded",
+        "provider_unavailable",
+        "rate_limit_exceeded",
+        "server",
+        "timeout",
+    }
+)
+
+
+def _cut_kind(cut: CutAfterContentError) -> DropKind:
+    """How a call the provider failed after content ended (D118): `declared`
+    when the provider's own error object states a 5xx or a 429 as its code,
+    or, with no code, a transient `error_type`; `raised` otherwise -- a cut
+    with no error object, a 4xx, a code that is no status, a connection's
+    failure beneath it, or an error object that raises while it is read
+    (fail closed: no re-attempt). The cut attempt keeps its reservation and
+    none of its output is ever accepted, so its re-attempt is an ordinary
+    pass under D110's every gate."""
+    declared = False
+    with suppress(Exception):  # fail closed, documented above (D118)
+        if isinstance(cut.__cause__, APIConnectionError):
+            return DropKind.RAISED
+        body = _error_body(cut)
+        code = body.get("code")
+        if code is not None:
+            status = _status(code)
+            declared = status.isdigit() and (
+                int(status) == RATE_LIMITED or 500 <= int(status) <= 599
+            )
+        else:
+            metadata = body.get("metadata")
+            kind = metadata.get("error_type") if isinstance(metadata, Mapping) else None
+            declared = isinstance(kind, str) and kind in _TRANSIENT_ERROR_TYPES
+    return DropKind.DECLARED if declared else DropKind.RAISED
 
 
 def _text(content: object) -> str | None:

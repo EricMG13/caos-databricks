@@ -14,7 +14,7 @@ and a ceiling that cannot cover both leaves the drop's refusal standing.
 from __future__ import annotations
 
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, replace
 from decimal import Decimal
 from typing import ClassVar, cast
@@ -43,7 +43,7 @@ from caos.methodology.canonical import (
     reattempts_a_drop,
 )
 from caos.pricing import ModelPrice
-from caos.provider import Completion, DropKind
+from caos.provider import Completion, CutAfterContentError, DropKind
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection, connect
 from caos.store.outcomes import (
@@ -224,6 +224,125 @@ def test_an_answered_call_states_no_drop() -> None:
     truncated = fake_completions(ScriptedChat(answer=answer())).complete(PROMPT)
     assert truncated.refusal is RefusalCode.PROVIDER_OUTPUT_TRUNCATED
     assert truncated.drop_kind is None
+
+
+# -- D118: a cut after content, declared by the provider's own error object --
+
+
+def _after(
+    code: object = 502, kind: object = "provider_unavailable", *, nested: bool = False
+) -> CutAfterContentError:
+    """The cut an adapter raises when the provider's error event follows
+    content (F529), its error object holding `code` and `error_type`."""
+    error: dict[str, object] = {"message": "private upstream words"}
+    if code is not None:
+        error["code"] = code
+    if kind is not None:
+        error["metadata"] = {"error_type": kind}
+    return CutAfterContentError({"error": error} if nested else error)
+
+
+def _reset_after() -> CutAfterContentError:
+    """A cut whose cause is a connection's failure: what was received is
+    unknown, whatever body it carries."""
+    import httpx2
+    from openai import APIConnectionError
+
+    cut = _after()
+    cut.__cause__ = APIConnectionError(
+        request=httpx2.Request("POST", "https://x.invalid")
+    )
+    return cut
+
+
+class _RaisingBody(Mapping[str, object]):
+    """An error object whose every read raises."""
+
+    def __getitem__(self, _key: str) -> object:
+        raise RuntimeError("private")
+
+    def __iter__(self) -> Iterator[str]:
+        raise RuntimeError("private")
+
+    def __len__(self) -> int:
+        return 1
+
+
+@pytest.mark.parametrize(
+    ("cut", "kind"),
+    [
+        pytest.param(_after(), DropKind.DECLARED, id="502-event"),
+        pytest.param(_after(nested=True), DropKind.DECLARED, id="502-nested"),
+        pytest.param(_after("503"), DropKind.DECLARED, id="503-as-digits"),
+        pytest.param(_after(500, None), DropKind.DECLARED, id="500-no-type"),
+        pytest.param(_after(599, None), DropKind.DECLARED, id="599"),
+        pytest.param(_after(429, "rate_limit_exceeded"), DropKind.DECLARED, id="429"),
+        pytest.param(
+            _after(None, "provider_unavailable"), DropKind.DECLARED, id="type-only"
+        ),
+        pytest.param(_after(None, "timeout"), DropKind.DECLARED, id="timeout-type"),
+        pytest.param(
+            _after(None, "provider_overloaded"), DropKind.DECLARED, id="overloaded"
+        ),
+        pytest.param(_after(None, "server"), DropKind.DECLARED, id="server-type"),
+        # A 4xx is the provider's word against the request: never a drop, the
+        # type beside it notwithstanding (fail closed).
+        pytest.param(_after(400, "invalid_request"), DropKind.RAISED, id="400"),
+        pytest.param(_after(408, "timeout"), DropKind.RAISED, id="408-timeout"),
+        pytest.param(_after(402, "provider_unavailable"), DropKind.RAISED, id="402"),
+        pytest.param(_after(499, None), DropKind.RAISED, id="499"),
+        pytest.param(_after(600, None), DropKind.RAISED, id="600"),
+        pytest.param(_after(200, "provider_unavailable"), DropKind.RAISED, id="200"),
+        pytest.param(_after(True, "provider_unavailable"), DropKind.RAISED, id="bool"),
+        pytest.param(_after("5xx", "server"), DropKind.RAISED, id="code-not-status"),
+        pytest.param(_after(None, "invalid_request"), DropKind.RAISED, id="4xx-type"),
+        pytest.param(_after(None, "private words"), DropKind.RAISED, id="odd-type"),
+        pytest.param(_after(None, None), DropKind.RAISED, id="no-code-no-type"),
+        # No provider error frame: a plain cut.
+        pytest.param(CutAfterContentError({}), DropKind.RAISED, id="empty-body"),
+        pytest.param(CutAfterContentError(None), DropKind.RAISED, id="no-body"),
+        pytest.param(CutAfterContentError("private"), DropKind.RAISED, id="text"),
+        pytest.param(_reset_after(), DropKind.RAISED, id="reset-cause"),
+        pytest.param(
+            CutAfterContentError(_RaisingBody()),
+            DropKind.RAISED,
+            id="unreadable",
+        ),
+    ],
+)
+def test_a_cut_after_content_is_declared_only_by_a_transient_provider_error(
+    cut: CutAfterContentError, kind: DropKind, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """D118: the provider's error object after content earns the re-attempt
+    when it states a 5xx, a 429 or a transient `error_type`; anything else
+    stays `raised`. F513's line is unchanged -- the client raised -- and the
+    call is never sent again inside the seam."""
+    chat = ScriptedChat(answer=cut)
+    completion = fake_completions(chat).complete(PROMPT)
+    assert completion == Completion(
+        None, None, None, RefusalCode.PROVIDER_UNAVAILABLE, kind
+    )
+    assert chat.calls == 1
+    line = capsys.readouterr().err
+    assert line.startswith("PROVIDER_UNAVAILABLE call=raised class=")
+    assert "private" not in line and "private" not in repr(completion)
+
+
+def test_a_declared_cut_past_the_deadline_is_the_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A provider's 502 that arrives after the call's one deadline is never
+    re-attempted: the host abandoned the call first."""
+    monkeypatch.setattr(models, "TIMEOUT_SECONDS", 0.2)
+    released = threading.Event()
+
+    def late(_prompt: str) -> object:
+        released.wait(10)
+        return _after()
+
+    completion = fake_completions(ScriptedChat(answer=late)).complete(PROMPT)
+    released.set()
+    assert completion.drop_kind is DropKind.DEADLINE
 
 
 # -- The ledger rule, walked on attempts alone --------------------------------
@@ -408,6 +527,8 @@ def _reserved(harness: _Harness, module: str = "CP-0") -> list[Decimal]:
     [
         pytest.param(StatusError(503), id="a-5xx-status"),
         pytest.param(_Body(_ROUTER_ERROR), id="an-error-event"),
+        # D118: LCR10-dec's stop, an upstream 502 after content had begun.
+        pytest.param(_after(), id="a-502-event-after-content"),
     ],
 )
 def test_a_declared_drop_is_re_attempted_once_and_accepted_once(
@@ -432,6 +553,10 @@ def test_a_declared_drop_is_re_attempted_once_and_accepted_once(
         pytest.param(_cut(), "vendor", id="a-reset"),
         pytest.param(TypeError(_ROUTER_ERROR), "raised", id="a-200-error-body"),
         pytest.param("deadline", "deadline", id="the-deadline"),
+        # D118: a cut after content with no provider error frame, or one
+        # that states a 4xx, is still never re-attempted.
+        pytest.param(CutAfterContentError({}), "raised", id="a-plain-cut"),
+        pytest.param(_after(400, "invalid_request"), "raised", id="a-4xx-cut"),
     ],
 )
 def test_an_undeclared_drop_stops_the_run_with_no_re_attempt(
@@ -463,6 +588,29 @@ def test_a_second_declared_drop_stops_the_run(harness: _Harness) -> None:
     assert _cp0_ledger(harness)[0] == 3
     assert _run(harness, dropping) is None
     assert _cp0_ledger(harness)[3] == 1
+
+
+@pytest.mark.parametrize(
+    ("first", "second"),
+    [
+        pytest.param(_after(), _after(), id="cut-then-cut"),
+        pytest.param(StatusError(503), _after(), id="status-then-cut"),
+        pytest.param(_after(), _Body(_ROUTER_ERROR), id="cut-then-event"),
+    ],
+)
+def test_a_second_drop_on_the_re_attempt_stops_the_run(
+    harness: _Harness, first: Exception, second: Exception
+) -> None:
+    """D118: a declared cut spends the node's one re-attempt as a drop before
+    content does: whichever comes second stops the run, with two calls, two
+    held reservations and nothing accepted."""
+    answers = CanonicalCompletions(harness.source_id)
+    dropping = _Scripted(answers, [_Drop(first), _Drop(second)])
+    assert _run(harness, dropping) is RefusalCode.PROVIDER_UNAVAILABLE
+    assert [_module(prompt) for prompt in answers.prompts] == ["CP-0", "CP-0"]
+    assert _cp0_ledger(harness) == (2, 2, ["PROVIDER_UNAVAILABLE"] * 2, 0)
+    assert _reserved(harness) == [ESTIMATE, ESTIMATE]
+    assert _drop_kinds(harness) == ["declared", "declared"]
 
 
 def test_a_ceiling_that_cannot_cover_the_re_attempt_leaves_the_drop_standing(
