@@ -26,6 +26,10 @@ from typing import TYPE_CHECKING, Any, Protocol
 from caos.refusals import Refusal, RefusalCode
 from caos.store.budget import validate_spend
 
+# How an unanswered call ended (D110): the ledger's vocabulary, so it lives
+# with the store that records it and is named here for the seam that says it.
+from caos.store.outcomes import DropKind as DropKind
+
 if TYPE_CHECKING:
     from caos.pricing import ModelPrice
 
@@ -80,12 +84,15 @@ class Completion:
 
     None is unknown, never zero. Failed analytical content is discarded.
     A returned refusal describes a call; pre-send rejection raises Refusal.
+    `drop_kind` says how a call that got no answer ended (D110); None for
+    an answered call, and for any refusal whose ending was not stated.
     """
 
     content: str | None = field(repr=False)
     charge: Decimal | None
     generation_id: str | None = field(repr=False)
     refusal: RefusalCode | None = None
+    drop_kind: DropKind | None = None
 
 
 class CompletionProvider(Protocol):

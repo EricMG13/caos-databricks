@@ -35,7 +35,7 @@ from typing import Any
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage
-from openai import OpenAIError
+from openai import APIConnectionError, OpenAIError
 
 # The configuration names live beside the price they configure, so the API,
 # which may not import this module (D4), reads them too.
@@ -52,6 +52,7 @@ from caos.provider import (
     NEVER_RETRIED,
     TIMEOUT_SECONDS,
     Completion,
+    DropKind,
     check_resend,
     encode_request,
     finish_refusal,
@@ -161,9 +162,10 @@ class ChatCompletions:
             sent += 1
             answer = _invoked(self.chat, prompt, options, deadline - _clock())
             if isinstance(answer, OpenAIError):
-                if not _sends_again(answer, sent, deadline):
-                    return _unanswered(_status_refusal(answer), answer, started)
-                continue
+                ended = _vendor_ended(answer, sent, deadline, started)
+                if ended is None:
+                    continue
+                return ended
             if answer is None or isinstance(answer, _Raised):
                 # Indeterminate: the request may have been delivered and
                 # billed, so the attempt keeps its reservation. Nothing of
@@ -261,7 +263,7 @@ class _Raised:
     indeterminate. Only its facts are kept, never the exception, so the
     raising frames -- and the prompt they hold -- go with the call (F513)."""
 
-    kind: str
+    kind: DropKind
     facts: str
 
 
@@ -326,10 +328,10 @@ def _invoked(
         except BaseException as escaped:
             # Not held back, as `suppress(Exception)` held it not: it still
             # ends this thread, and the call is named `escaped` (F513).
-            answered.append(_Raised("escaped", _facts(escaped)))
+            answered.append(_Raised(DropKind.ESCAPED, _facts(escaped)))
             raise
         if held.facts is not None:
-            answered.append(_Raised("raised", held.facts))
+            answered.append(_Raised(DropKind.RAISED, held.facts))
 
     sender = threading.Thread(target=send, name="caos-model-call", daemon=True)
     sender.start()
@@ -365,6 +367,41 @@ def _content_parts_contained() -> Iterator[None]:
         yield
 
 
+def _vendor_ended(
+    failed: OpenAIError, sent: int, deadline: float, started: float
+) -> Completion | None:
+    """None when the call is sent again, else the refusal a vendor error
+    ends it with. Reading the error is guarded (F530, N162): a status or a
+    response that raises when read is no vendor error the host can read, so
+    the call is `raised`, refused PROVIDER_UNAVAILABLE and recorded, never an
+    untyped escape ahead of the bill -- the documented fail-open of ST-8,
+    named on stderr by class. A refusal a resend check raises still stops."""
+    try:
+        if _sends_again(failed, sent, deadline):
+            return None
+        code = _status_refusal(failed)
+    except _UnreadableError:
+        unread = _Raised(DropKind.RAISED, _facts(failed))
+        return _unanswered(RefusalCode.PROVIDER_UNAVAILABLE, unread, started)
+    return _unanswered(code, failed, started)
+
+
+class _UnreadableError(Exception):
+    """A vendor error's fact that raised when it was read (N162)."""
+
+
+def _read(owner: object, name: str) -> object:
+    """`getattr(owner, name, None)`, or `_UnreadableError` when the read raises:
+    a property of a vendor error is the client's code, not the host's, and
+    what it raises must not escape `complete` untyped (F530, ST-8)."""
+    read: list[object] = []
+    with suppress(Exception):  # re-raised typed below (N162)
+        read.append(getattr(owner, name, None))
+    if not read:
+        raise _UnreadableError
+    return read[0]
+
+
 def _sends_again(failed: OpenAIError, sent: int, deadline: float) -> bool:
     """Whether the call is sent again after `failed`: a rate limit waited out
     (`_waited_out`), every installed check asked, and `MIN_RESEND_SECONDS`
@@ -395,13 +432,18 @@ def _waited_out(failed: OpenAIError, sent: int, deadline: float) -> bool:
 
 
 def _rate_limited(failed: OpenAIError) -> bool:
-    return getattr(failed, "status_code", None) == RATE_LIMITED
+    # Compared only once it is an `int` itself: no comparison runs the
+    # client's code (F530 round 2).
+    status = _read(failed, "status_code")
+    return type(status) is int and status == RATE_LIMITED
 
 
 def _retry_after(failed: OpenAIError) -> float:
     """The gateway's `Retry-After` in seconds, capped; the default otherwise."""
-    headers = getattr(getattr(failed, "response", None), "headers", None)
-    stated = headers.get("retry-after") if headers is not None else None
+    get = _read(_read(_read(failed, "response"), "headers"), "get")
+    stated: object = None
+    with suppress(Exception):  # the default wait, documented above (N162)
+        stated = get("retry-after") if callable(get) else None
     try:
         seconds = float(stated) if isinstance(stated, str) else RETRY_AFTER_SECONDS
     except ValueError:
@@ -431,8 +473,8 @@ def _claimed_id(message: AIMessage) -> object:
 
 def _status_refusal(failed: OpenAIError) -> RefusalCode:
     """A vendor error by its status class alone; its message never travels."""
-    status = getattr(failed, "status_code", None)
-    if isinstance(status, int) and status in NEVER_RETRIED:
+    status = _read(failed, "status_code")
+    if type(status) is int and status in NEVER_RETRIED:
         return RefusalCode.PROVIDER_CALL_INVALID
     return RefusalCode.PROVIDER_UNAVAILABLE
 
@@ -473,6 +515,8 @@ _ERROR_TYPES = frozenset(
         "unsupported_image_format",
     }
 )
+# The statuses a provider fails a call with (D110, F530): 4xx and 5xx.
+FAILURE_STATUSES = (400, 599)
 _NO_FACTS = "class=- cause=- status=- error_code=- error_type=-"
 _UNKNOWN_FACTS = "class=? cause=? status=? error_code=? error_type=?"
 
@@ -553,16 +597,46 @@ def _unanswered(code: RefusalCode, answer: object, started: float) -> Completion
     since it was first sent. One `write`, newline included, so two calls'
     lines never interleave; a write that fails is dropped (a fail-open: the
     line never changes the outcome). Nothing here quotes the prompt, an
-    answer or an error's text."""
-    kind, facts = "deadline", _NO_FACTS
+    answer or an error's text. The refusal carries the same kind, typed, a
+    vendor error split by whether the provider declared it (D110)."""
+    drop, facts = DropKind.DEADLINE, _NO_FACTS
     if isinstance(answer, _Raised):
-        kind, facts = answer.kind, answer.facts
+        drop, facts = answer.kind, answer.facts
     elif isinstance(answer, BaseException):
-        kind, facts = "vendor", _facts(answer)
+        unavailable = code is RefusalCode.PROVIDER_UNAVAILABLE
+        drop = (
+            DropKind.DECLARED if unavailable and _declared(answer) else DropKind.VENDOR
+        )
+        facts = _facts(answer)
+    kind = "vendor" if drop is DropKind.DECLARED else drop.value
     with suppress(Exception):  # fail-open, documented above (F513)
         line = f"{code.value} call={kind} {facts} elapsed={_clock() - started:.1f}\n"
         sys.stderr.write(line)
-    return Completion(None, None, None, code)
+    return Completion(None, None, None, code, drop)
+
+
+def _declared(failed: BaseException) -> bool:
+    """Whether the provider itself stated this vendor error a failure (D110):
+    a failure status, 400 to 599, or, with no status at all, its own error
+    object as the error's body (an SSE `error` event) -- never a status that
+    says the call succeeded (a `200` the client could not read, F530), an
+    argument that is no body, or a connection's failure (a reset, a client
+    timeout), after which what was received is unknown. An error that raises
+    while it is read is not declared: the re-attempt fails closed."""
+    declared = False
+    with suppress(Exception):  # fail closed, documented above (D110)
+        status = getattr(failed, "status_code", None)
+        body = getattr(failed, "body", None)
+        if isinstance(failed, APIConnectionError):
+            declared = False
+        elif status is not None:
+            declared = (
+                type(status) is int
+                and FAILURE_STATUSES[0] <= status <= (FAILURE_STATUSES[1])
+            )
+        else:
+            declared = isinstance(body, Mapping) and bool(body)
+    return declared
 
 
 def _text(content: object) -> str | None:

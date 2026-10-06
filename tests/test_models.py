@@ -23,6 +23,7 @@ from caos.pricing import ModelPrice, price_from_environment
 from caos.provider import (
     MAX_COMPLETION_TOKENS,
     MAX_REQUEST_BYTES,
+    DropKind,
     finish_refusal,
     reported_charge,
 )
@@ -69,21 +70,22 @@ def test_a_finish_reason_other_than_stop_is_a_refusal_with_its_bill(
 
 
 @pytest.mark.parametrize(
-    "failure,code",
+    "failure,code,drop",
     [
-        (StatusError(402), RefusalCode.PROVIDER_CALL_INVALID),
-        (StatusError(429), RefusalCode.PROVIDER_UNAVAILABLE),
-        (StatusError(503), RefusalCode.PROVIDER_UNAVAILABLE),
-        (TimeoutError("private"), RefusalCode.PROVIDER_UNAVAILABLE),
-        (ValueError("private"), RefusalCode.PROVIDER_UNAVAILABLE),
+        (StatusError(402), RefusalCode.PROVIDER_CALL_INVALID, DropKind.VENDOR),
+        (StatusError(429), RefusalCode.PROVIDER_UNAVAILABLE, DropKind.DECLARED),
+        (StatusError(503), RefusalCode.PROVIDER_UNAVAILABLE, DropKind.DECLARED),
+        (TimeoutError("private"), RefusalCode.PROVIDER_UNAVAILABLE, DropKind.RAISED),
+        (ValueError("private"), RefusalCode.PROVIDER_UNAVAILABLE, DropKind.RAISED),
     ],
 )
 def test_a_vendor_failure_maps_to_its_status_class_and_carries_no_text(
-    failure: Exception, code: RefusalCode
+    failure: Exception, code: RefusalCode, drop: DropKind
 ) -> None:
+    """...and says how it ended (D110): a status is the provider's own word."""
     provider = fake_completions(ScriptedChat(answer=failure))
     completion = provider.complete(PROMPT)
-    assert completion == completion.__class__(None, None, None, code)
+    assert completion == completion.__class__(None, None, None, code, drop)
     assert "private" not in repr(completion)
 
 
@@ -391,7 +393,7 @@ def test_whatever_the_client_raises_once_sent_is_indeterminate_not_untyped() -> 
     ):
         completion = fake_completions(ScriptedChat(answer=raised)).complete(PROMPT)
         assert completion == completion.__class__(
-            None, None, None, RefusalCode.PROVIDER_UNAVAILABLE
+            None, None, None, RefusalCode.PROVIDER_UNAVAILABLE, DropKind.RAISED
         )
         assert "private" not in repr(completion)
 

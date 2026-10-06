@@ -37,7 +37,7 @@ from caos.methodology.runner import ModuleProvider
 from caos.provider import Completion
 from caos.refusals import Refusal, RefusalCode
 from caos.store import StoreConnection, connect
-from caos.store.outcomes import CallOutcome, record_outcome
+from caos.store.outcomes import DROP_REATTEMPTS, CallOutcome, record_outcome
 
 __all__ = ["provider", "ready", "route"]
 
@@ -151,6 +151,9 @@ def test_native_refusal_records_only_independently_known_money(
     calls = (
         1 + canonical.GUIDED_RETRIES if code in canonical.SECOND_ATTEMPT_CODES else 1
     )
+    # D110: a drop the provider declared by its status earns one re-attempt.
+    if isinstance(response, StatusError) and code == "PROVIDER_UNAVAILABLE":
+        calls = 1 + DROP_REATTEMPTS
     assert chat.calls == calls
     assert provider.conn.info.transaction_status is TransactionStatus.IDLE
     _bills(_url_for(provider.conn.info.dbname), provider.run_id, charge, calls)
