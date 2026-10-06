@@ -13,22 +13,27 @@ from __future__ import annotations
 
 import json
 import shutil
-from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
+from types import MappingProxyType
 from uuid import UUID, uuid4
 
 import pytest
 from canonical_fixtures import CanonicalCompletions
-from conftest import SUITE_ENDPOINT, approve_run
+from conftest import approve_run, priced
 from full_assessment_route_fixtures import ROUTE as FULL_ROUTE
+from preflight import context_warnings
 from test_canonical_execution import route
 from test_canonical_runtime import _answers, _module_provider, _run_route
 from test_execution_freshness import _counts, _Harness, _still_running, harness
-from test_loop_charges import VENDORED
+from test_loop_charges import ESTIMATE, VENDORED
+from test_loop_charges import MODEL as SUITE_ENDPOINT
 
+import caos.provider
 from caos.blobs import BlobStore
 from caos.boundary_text import BoundaryText
 from caos.evidence.ingest import Document, admit_pack
+from caos.graph.runtime import Execution, run_route
 from caos.methodology import canonical
 from caos.methodology.bundle import Bundle, delivered_authority
 from caos.methodology.canonical import RETRY_RESERVE_BYTES, check_context
@@ -37,9 +42,11 @@ from caos.methodology.invocation import evidence_sizes, prospective_identity
 from caos.methodology.selection import GATE_SOURCE_BYTES, gate_view, pack_view
 from caos.provider import (
     BYTES_PER_TOKEN_FLOOR,
+    CONTEXT_NOT_DECLARED,
     CONTEXT_TOKENS,
     MAX_COMPLETION_TOKENS,
     MAX_REQUEST_BYTES,
+    context_notice,
     request_ceiling,
 )
 from caos.refusals import Refusal, RefusalCode
@@ -58,30 +65,62 @@ FCA3_REQUEST = 4_033_648
 # --- the bound --------------------------------------------------------------
 
 
+def _declare(monkeypatch: pytest.MonkeyPatch, model: str, tokens: int) -> None:
+    """Declare `model`'s context for this test, beside the pinned ones."""
+    declared = MappingProxyType({**CONTEXT_TOKENS, model: tokens})
+    monkeypatch.setattr(caos.provider, "CONTEXT_TOKENS", declared)
+
+
 def test_the_bound_is_the_declared_context_at_three_bytes_a_token() -> None:
-    """Pinned and declared (D116): the two contexts, the floor, and the bound
-    they give; the transport ceiling still caps any wider model."""
+    """Pinned and declared (D116), each from the router's model listing of
+    2026-10-05: the contexts, the floor, and the bound they give."""
     assert BYTES_PER_TOKEN_FLOOR == 3
     assert CONTEXT_TOKENS == {
         "openai/gpt-6-luna": 1_050_000,
-        "databricks-claude-opus-5": 1_000_000,
+        "openai/gpt-6-luna-pro": 1_050_000,
+        "openai/gpt-6-sol": 1_050_000,
     }
     assert request_ceiling(LUNA) == (1_050_000 - MAX_COMPLETION_TOKENS) * 3
     assert request_ceiling(LUNA) == 2_953_392 < FCA3_REQUEST
-    assert request_ceiling("databricks-claude-opus-5") == 2_803_392
-    assert request_ceiling(SUITE_ENDPOINT) == MAX_REQUEST_BYTES
 
 
-@pytest.mark.parametrize("tokens", [None, MAX_COMPLETION_TOKENS, 0])
-def test_an_endpoint_without_a_declared_context_is_refused(
-    declare_context: Callable[[str, int | None], None], tokens: int | None
+# Approved workspace endpoints, a Copilot model (D77), a routed variant: each
+# ran under the transport ceiling before D116, and still does.
+UNDECLARED = ("claude-sonnet-5-5", "gpt-6-luna", "copilot:gpt-6-luna")
+UNDECLARED += ("openai/gpt-6-luna:nitro", "databricks-claude-opus-5", SUITE_ENDPOINT)
+
+
+@pytest.mark.parametrize("model", UNDECLARED)
+def test_an_endpoint_without_a_declared_context_keeps_the_transport_ceiling(
+    model: str,
 ) -> None:
-    """Fail closed: no declared context, or one no wider than the completion
-    it must leave room for, is no bound, and no request is sized against it."""
-    declare_context("some/endpoint", tokens)
+    """Review round 1: the first version refused these; the bound they had
+    before D116 stands, and the run says so once (`context_notice`)."""
+    assert request_ceiling(model) == MAX_REQUEST_BYTES
+    assert context_notice(model) == f"{CONTEXT_NOT_DECLARED} endpoint={model}"
+    assert context_notice(LUNA) is None
+    assert context_notice("a\nb") == f"{CONTEXT_NOT_DECLARED} endpoint=-"
+
+
+@pytest.mark.parametrize("tokens", [MAX_COMPLETION_TOKENS, 0])
+def test_a_context_no_wider_than_the_completion_is_refused(
+    monkeypatch: pytest.MonkeyPatch, tokens: int
+) -> None:
+    """A declared context that leaves no room for the prompt is no bound."""
+    _declare(monkeypatch, "some/endpoint", tokens)
     with pytest.raises(Refusal) as refused:
         request_ceiling("some/endpoint")
     assert refused.value.code is RefusalCode.PROVIDER_NOT_CONFIGURED
+
+
+def test_preflight_warns_of_each_endpoint_without_a_declared_context() -> None:
+    """Before any run (E1): a warning per configured or selectable endpoint
+    the host has no context for, never a failure."""
+    assert context_warnings(("claude-opus-5-5", LUNA, "copilot:gpt-6-sol")) == [
+        f"WARNING {name}: no declared context; its requests are bounded by the"
+        " transport ceiling alone (D116)"
+        for name in ("claude-opus-5-5", "copilot:gpt-6-sol")
+    ]
 
 
 # --- the fit, pure ------------------------------------------------------------
@@ -311,12 +350,12 @@ def test_a_small_pack_is_handed_exactly_as_before(harness: _Harness) -> None:
 
 
 def test_a_pack_that_cannot_fit_is_refused_with_no_attempt_or_reservation(
-    harness: _Harness, declare_context: Callable[[str, int | None], None]
+    harness: _Harness, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Through the runtime: a model whose context cannot carry even the
     gate's authority beside one line a page refuses before `start_attempt`,
     so nothing is reserved, called or charged."""
-    declare_context(SUITE_ENDPOINT, MAX_COMPLETION_TOKENS + 10_000)
+    _declare(monkeypatch, SUITE_ENDPOINT, MAX_COMPLETION_TOKENS + 10_000)
     answers = _answers(harness)
     assert _run_route(harness, _module_provider(harness, answers)) is (
         RefusalCode.CONTEXT_OVER_CEILING
@@ -326,14 +365,21 @@ def test_a_pack_that_cannot_fit_is_refused_with_no_attempt_or_reservation(
     _still_running(harness)
 
 
-def test_an_endpoint_with_no_declared_context_runs_nothing(
-    harness: _Harness, declare_context: Callable[[str, int | None], None]
+@pytest.mark.parametrize("model", ["claude-opus-5-5", "copilot:gpt-6-luna"])
+def test_an_undeclared_endpoint_runs_under_the_fallback_with_one_notice(
+    harness: _Harness, model: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """The suite's endpoint withdrawn: refused before any attempt (D116)."""
-    declare_context(SUITE_ENDPOINT, None)
-    answers = _answers(harness)
-    assert _run_route(harness, _module_provider(harness, answers)) is (
-        RefusalCode.PROVIDER_NOT_CONFIGURED
+    """An approved workspace endpoint and a Copilot model run to the end, as
+    before D116, and the run says once on stderr that no context applies."""
+    price = priced(ESTIMATE, model=model)
+    answers = replace(_answers(harness), model=model, price=price)
+    run_route(
+        harness.conn,
+        harness.blobs,
+        run_id=harness.run_id,
+        route=harness.route,
+        execution=Execution(_module_provider(harness, answers), price, harness.bundle),
     )
-    assert answers.calls == 0
-    assert _counts(harness) == (0, [], 0, 0, 0)
+    assert answers.calls == len(harness.route.nodes)
+    notice = f"{CONTEXT_NOT_DECLARED} endpoint={model}"
+    assert capsys.readouterr().err.splitlines().count(notice) == 1

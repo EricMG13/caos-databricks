@@ -1018,7 +1018,8 @@ _CONSUMER_PAGE_MAP = (
     "sit in a withheld line is a limitation you name, never a value you "
     "supply. This module cannot ask for pages itself: CP-0's T8 attaches a "
     "module the pages it needs (`<filename> pages <first>-<last>`, Step I "
-    "rule 5), and a run whose CP-0 names them delivers those pages whole.\n"
+    "rule 5); a run whose CP-0 names them hands this module those pages in "
+    "place of the whole source, within this same request bound.\n"
     "{body}\n--- END HOST EVIDENCE DELIVERY {tag} ---\n"
 )
 
