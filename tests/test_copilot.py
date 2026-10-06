@@ -1443,7 +1443,7 @@ def test_a_session_that_did_not_settle_after_its_checkpoint_has_an_unknown_charg
     assert "nano_aiu" not in message.response_metadata
 
 
-# F561: a shutdown states the session's figures too; any that disagrees with
+# F562: a shutdown states the session's figures too; any that disagrees with
 # the checkpoint leaves the charge unknown.
 DISAGREEING: dict[str, list[Event]] = {
     "shutdown-total-above-the-checkpoint": sdk_call(
@@ -1909,7 +1909,7 @@ def test_property_a_call_holding_an_answer_or_spend_is_never_raised(
 
 
 def test_a_credit_price_too_precise_for_any_count_charges_not_even_zero() -> None:
-    """F563, found by the property above: a price that cannot charge the
+    """F564, found by the property above: a price that cannot charge the
     largest count exactly prices no count, zero included."""
     precise = Decimal("0." + "1" * 1200)
     assert charged(0, precise) is None
