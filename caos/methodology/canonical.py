@@ -106,6 +106,7 @@ from caos.methodology.invocation import (
     _printable,
     build_handoff_prompt,
     call_time_identity,
+    evidence_tag,
     host_identity,
     prospective_identity,
     request_size,
@@ -620,6 +621,9 @@ class _Context:
     # Each direct upstream's unverified citations (D106), whose markers the
     # register names as unlocated (D107).
     unverified: dict[str, tuple[UnverifiedCitation, ...]] = field(default_factory=dict)
+    # The evidence's tag, over the run's whole pin (D113), whatever part of
+    # it `delivered` is; None is the tag of `delivered` itself.
+    pack_tag: str | None = None
 
 
 def _source_preparation(
@@ -723,6 +727,7 @@ def _context(
     attempt's diagnostic body is never read here (a guided retry's lines are
     read beside it, by the two prompt builders alone: `_prompt_context`)."""
     delivered = _delivered(conn, assignment.run_id)
+    pack_tag = evidence_tag(delivered)
     source_set = _source_preparation(conn, blobs, assignment, delivered)
     # Records first: what binds and re-validates is then read as context.
     records, lineage = _upstream_records(
@@ -739,6 +744,7 @@ def _context(
         source_set=source_set,
         selection=selection,
         unverified={node: record.unverified for node, record in records.items()},
+        pack_tag=pack_tag,
     )
 
 
@@ -1386,6 +1392,7 @@ def _prompt(
         page_maps=context.selection.page_maps,
         retry_feedback=context.feedback,
         refused_answer=context.refused_answer,
+        pack_tag=context.pack_tag,
     )
 
 

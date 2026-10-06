@@ -83,6 +83,7 @@ from caos.methodology.invocation import (
     _carried_objects,
     allowed_uses,
     build_handoff_prompt,
+    evidence_tag,
     host_identity,
     lite_object_requirement,
     named_objects,
@@ -1422,6 +1423,7 @@ def test_the_evidence_opens_the_prompt_under_a_tag_of_its_own() -> None:
         f"\n--- END EVIDENCE {etag} ---\n"
     )[0]
     assert etag == hashlib.sha256(body.encode("utf-8")).hexdigest()[:16]
+    assert etag == evidence_tag(delivered)
     assert etag != tag
     assert prompt.count(f"--- EVIDENCE {etag} ---") == 1
     assert prompt.count(f"--- END EVIDENCE {etag} ---") == 1
@@ -1471,6 +1473,31 @@ def test_calls_over_the_same_evidence_share_it_as_their_prefix() -> None:
     # Other evidence is another prefix: nothing is shared past what differs.
     moved = [*delivered[:-1], replace(delivered[-1], page=3)]
     assert not _prompt(identity("CP-L10", (ref,)), moved, upstream).startswith(block)
+
+
+def test_a_pack_tag_opens_and_closes_the_evidence_in_place_of_its_own() -> None:
+    """D113: the executor tags a node's evidence with the tag of the run's
+    whole pin, so a node handed part of it opens like every other node."""
+    delivered = _two_pages_three_lines()
+    pack = evidence_tag([*delivered, replace(delivered[-1], block_id="000004")])
+    prompt = build_handoff_prompt(
+        CONTRACT,
+        identity=identity("CP-0"),
+        authority=delivered_authority(BUNDLE, "CP-0"),
+        catalog=CATALOG,
+        delivered=delivered,
+        upstream=(),
+        upstream_citations={},
+        route=LITE_ROUTE,
+        source_set=_source_set(*(item.source_id for item in delivered)),
+        pack_tag=pack,
+    )
+    assert pack != evidence_tag(delivered)
+    assert _evidence_tag(prompt) == pack
+    assert prompt.count(pack) == 3  # both markers and the tag rule
+    assert _evidence_block(prompt) == _evidence_block(
+        prompt_for(delivered=delivered)
+    ).replace(evidence_tag(delivered), pack)
 
 
 def _paired_markers(prompt: str) -> tuple[list[str], list[str]]:

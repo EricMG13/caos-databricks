@@ -1217,6 +1217,16 @@ def _evidence_section(delivered: Sequence[Delivery]) -> str:
     )
 
 
+def evidence_tag(delivered: Sequence[Delivery]) -> str:
+    """The tag the EVIDENCE section's two markers carry (D113): derived from
+    the section `delivered` renders, and from nothing else, so no evidence
+    line can carry it. The canonical executor derives it from the run's whole
+    pin, so every node of a run opens alike whatever part of the pin its gate
+    row hands it; any part's lines are lines of the pin, so none of them can
+    carry it either."""
+    return hashlib.sha256(_evidence_section(delivered).encode("utf-8")).hexdigest()[:16]
+
+
 def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-only
     contract: VendorContract,
     *,
@@ -1232,6 +1242,7 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
     page_maps: Mapping[UUID, Mapping[str, int]] | None = None,
     retry_feedback: Sequence[str] = (),
     refused_answer: str | None = None,
+    pack_tag: str | None = None,
 ) -> str:
     """The evidence, then the task, the host-owned front matter, the host's
     own steps, every delivered authority file, upstream, its citation register.
@@ -1275,6 +1286,8 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
     on (already across `BoundaryText`), rides only with `retry_feedback`, in
     its own sub-section asking for that answer corrected (D104); it is folded
     into the tag too, so no marker it holds can close the block around it.
+    `pack_tag` is the evidence's tag, `evidence_tag` over the run's whole pin
+    (D113); without it, the tag of `delivered` itself.
     """
     if identity.module_id not in ADAPTER_MODULES:
         raise Refusal(RefusalCode.HANDOFF_MODULE_UNSUPPORTED)
@@ -1327,17 +1340,16 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
     untagged = front_matter + sections + feedback + answer
     tag = hashlib.sha256(untagged.encode("utf-8")).hexdigest()[:16]
     # D113 (N153): the evidence opens the prompt, before every module- and
-    # attempt-specific block, under a tag derived from the evidence alone, so
-    # every call of a run handed the same evidence -- a node's retries, and
-    # nodes its gate row hands the same members -- opens with the same bytes,
-    # which a provider's prompt cache reads back. No evidence line can carry
-    # its own section's digest; every other section keeps `tag`, which also
-    # covers the evidence.
-    evidence_tag = hashlib.sha256(evidence.encode("utf-8")).hexdigest()[:16]
+    # attempt-specific block, under a tag derived from the evidence alone
+    # (`evidence_tag`), so every call of a run -- a node's retries, and every
+    # node handed the same leading part of the pin -- repeats the same bytes
+    # for as long as its evidence does, which a provider's prompt cache reads
+    # back. Every other section keeps `tag`, which also covers the evidence.
+    opened = pack_tag or evidence_tag(delivered)
     prompt = (
-        f"--- EVIDENCE {evidence_tag} ---\n"
+        f"--- EVIDENCE {opened} ---\n"
         + evidence
-        + f"\n--- END EVIDENCE {evidence_tag} ---\n"
+        + f"\n--- END EVIDENCE {opened} ---\n"
         + "\n"
         + _INSTRUCTION.format(
             module_id=identity.module_id,
@@ -1346,7 +1358,7 @@ def build_handoff_prompt(  # noqa: PLR0913 -- one prompt, each input keyword-onl
             filename=expected_filename(identity),
         )
         + gate
-        + _TAGGED.format(tag=tag, evidence_tag=evidence_tag)
+        + _TAGGED.format(tag=tag, evidence_tag=opened)
         + f"\n--- HOST-OWNED FRONT MATTER {tag} (copy exactly) ---\n"
         + front_matter
         + f"\n--- END HOST-OWNED FRONT MATTER {tag} ---\n"
