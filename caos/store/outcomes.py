@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal
 from enum import StrEnum
 from typing import TYPE_CHECKING
@@ -202,6 +202,46 @@ def node_attempts(
     )
 
 
+# How many automatic re-attempts of a provider-declared drop one node gets in
+# all (D110, the owner's decision of 6 October 2026 on N148).
+DROP_REATTEMPTS = 1
+
+
+def declared_drop(attempt: NodeAttempt) -> bool:
+    """Whether this attempt is a drop the provider declared (D110): its kind
+    says so beside `PROVIDER_UNAVAILABLE` or no explanation yet (a crash
+    between the bill and its refusal row). A declared kind beside any other
+    code is no drop (F530): a 4xx neither spends the re-attempt nor is
+    passed over by a guided retry."""
+    return attempt.drop_kind == DropKind.DECLARED and attempt.refusal in (
+        None,
+        RefusalCode.PROVIDER_UNAVAILABLE,
+    )
+
+
+def drop_stop_owed(conn: StoreConnection, *, run_id: UUID, route_node_id: str) -> bool:
+    """Whether this node's one re-attempt was itself a declared drop and the
+    stop that follows it was never written (F530): a worker died between the
+    two, and the next pass must stop the run, not call a third time. A park
+    later in the run's stream than that drop's own outcome is a stop that
+    was written, so the operator's requeue after it calls again; a run with
+    no work row is a direct caller's, whose rerun is its own decision.
+    Caller owns the read; `runs._start` asks it under the run lock, in the
+    unit that would start the attempt (F530 round 2)."""
+    attempts = node_attempts(conn, run_id, route_node_id)
+    drops = sum(1 for a in attempts if declared_drop(a))
+    if not attempts or not declared_drop(attempts[-1]) or drops <= DROP_REATTEMPTS:
+        return False
+    row = conn.execute(
+        "SELECT EXISTS (SELECT 1 FROM run_work w WHERE w.run_id = o.run_id)"
+        " AND NOT EXISTS (SELECT 1 FROM run_events e WHERE e.run_id = o.run_id"
+        " AND e.name = %s AND e.seq > o.recorded_seq)"
+        " FROM call_outcomes o WHERE o.attempt_id = %s",
+        (RunEvent.RUN_PARKED.value, attempts[-1].attempt_id),
+    ).fetchone()
+    return row is not None and row[0] is True
+
+
 def check_attempt(
     conn: StoreConnection, *, attempt_id: UUID, run_id: UUID, route_node_id: str
 ) -> None:
@@ -331,6 +371,7 @@ def _record(conn: StoreConnection, attempt: UUID, outcome: CallOutcome) -> bool:
         ).fetchone():
             raise Refusal(RefusalCode.CALL_OUTCOME_LEGACY)
     _validate(outcome)
+    outcome = _counted(conn, attempt, outcome)
     if row is not None:
         if row != (
             outcome.charge,
@@ -365,6 +406,23 @@ def _record(conn: StoreConnection, attempt: UUID, outcome: CallOutcome) -> bool:
         ),
     )
     return True
+
+
+def _counted(conn: StoreConnection, attempt: UUID, outcome: CallOutcome) -> CallOutcome:
+    """The outcome as the ledger counts it (F530 round 2). A bill is never
+    fenced -- the call happened and its row is kept -- but a drop billed
+    after a later attempt at its node was started (a holder wedged past its
+    call hold) keeps no drop kind: the ledger decided that attempt without
+    it, so it can spend no re-attempt and owe no stop. Under the run lock."""
+    if outcome.drop_kind is None:
+        return outcome
+    later = conn.execute(
+        "SELECT 1 FROM run_attempts t JOIN run_attempts n"
+        " ON (n.run_id, n.route_node_id) = (t.run_id, t.route_node_id)"
+        " AND n.ordinal > t.ordinal WHERE t.attempt_id = %s",
+        (attempt,),
+    ).fetchone()
+    return outcome if later is None else replace(outcome, drop_kind=None)
 
 
 # What the store, the run or its fence said, never what the answer was: a later

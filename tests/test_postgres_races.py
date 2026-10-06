@@ -37,7 +37,6 @@ from caos.graph import runtime
 from caos.graph.route import NodeState, ResolvedRoute, resolve_route
 from caos.graph.runtime import Execution, Provider, ProviderResult, run_route
 from caos.methodology.bundle import Bundle
-from caos.methodology.canonical import drop_stop_owed
 from caos.pricing import ModelPrice
 from caos.provider import Completion, DropKind
 from caos.refusals import Refusal, RefusalCode
@@ -47,6 +46,7 @@ from caos.store.outcomes import (
     CallOutcome,
     call_hold,
     check_call,
+    drop_stop_owed,
     execution_reads,
     record_outcome,
     record_refusal,
@@ -1783,3 +1783,63 @@ def test_a_crash_after_the_re_attempts_call_before_its_bill_keeps_every_reservat
     assert count(run.conn, "run_attempts", run.run_id) == nodes + 2
     assert count(run.conn, "call_outcomes", run.run_id) == nodes + 1
     assert count(run.conn, "artifacts", run.run_id) == nodes
+
+
+def test_a_re_attempts_drop_billed_after_another_workers_read_makes_no_third_call(
+    case: tuple[StoreConnection, UUID],
+    empty_database: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """F530 round 2 (the re-audit's TOCTOU), two workers on two connections
+    in two threads: A's re-attempt call outlives A's lease; B claims the run
+    and its pass reads the ledger while A's re-attempt has no outcome yet;
+    A's drop is then billed and A lets go before B starts its attempt. The
+    spent re-attempt is judged under the run lock, in the unit that would
+    start the attempt, so B starts nothing, makes no third call, and parks
+    the run PROVIDER_UNAVAILABLE -- the stop A never wrote."""
+    from test_worker import count, queued_run
+
+    run = queued_run(case, _lite(), Bundle(VENDORED), BlobStore(tmp_path / "blobs"))
+    a_calling, b_starting = Event(), Event()
+    workers: list[Future[UUID | None]] = []
+    starts: list[str] = []
+
+    def start_once_a_has_billed(
+        conn: StoreConnection, run_id: UUID, route_node_id: str, *, lease: Lease
+    ) -> UUID:
+        starts.append(route_node_id)
+        if len(starts) == 3:  # A's first, A's re-attempt, then B's
+            b_starting.set()
+            _outcome(lambda: workers[0].result(60))  # A billed and let go
+        return start_attempt(conn, run_id, route_node_id, lease=lease)
+
+    def during(prompt: str) -> None:
+        if _cp0_calls([prompt]) and len(starts) == 2 and not a_calling.is_set():
+            _lapsed(empty_database, run.run_id)
+            a_calling.set()
+            assert b_starting.wait(60)
+
+    monkeypatch.setattr(runtime, "start_attempt", start_once_a_has_billed)
+    completions = _Dropping(run.source_id, drops=2)
+    original = completions.complete
+
+    def complete(prompt: str, *, json_object: bool = False) -> Completion:
+        during(prompt)
+        return original(prompt, json_object=json_object)
+
+    monkeypatch.setattr(completions, "complete", complete)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        workers.append(pool.submit(_drive, empty_database, run, completions))
+        assert a_calling.wait(60)
+        b = pool.submit(_outcome, lambda: _drive(empty_database, run, completions))
+        assert b.result(120) == str(run.run_id)
+    monkeypatch.undo()
+
+    assert _cp0_calls(completions.prompts) == 2, "no third call"
+    assert count(run.conn, "run_attempts", run.run_id) == 2
+    assert count(run.conn, "budget_reservations", run.run_id) == 2
+    assert run.conn.execute(
+        "SELECT state, stop_code FROM run_work WHERE run_id = %s", (run.run_id,)
+    ).fetchone() == ("STOPPED", "PROVIDER_UNAVAILABLE")
+    assert _events(run.conn, run.run_id, RunEvent.RUN_PARKED) == 1

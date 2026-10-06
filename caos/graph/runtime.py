@@ -43,14 +43,12 @@ from caos.graph.route import (
 )
 from caos.methodology.bundle import Bundle
 from caos.methodology.canonical import (
-    DROP_REATTEMPTS,
     GUIDED_RETRIES,
     SECOND_ATTEMPT_CODES,
     Replayed,
     Verdict,
     accepted_projections,
     drop_reattempt_due,
-    drop_stop_owed,
     replay_billed,
     second_attempt_due,
     unexplained_charge,
@@ -65,6 +63,7 @@ from caos.store.gates import execution_input
 
 # `artifact_digests` is re-exported: it now lives in the store (no import cycle).
 from caos.store.outcomes import (
+    DROP_REATTEMPTS,
     accepted_rows,
     execution_reads,
     record_refusal,
@@ -319,21 +318,6 @@ def _refuse_unexplained(
     raise Refusal(RefusalCode.CALL_OUTCOME_UNEXPLAINED)
 
 
-def _refuse_spent_drop(
-    conn: StoreConnection, run_id: UUID, route_node_id: str, lease: Lease | None
-) -> None:
-    """Stop, with no call, a node whose one re-attempt was itself a declared
-    drop when the stop after it was never written (F530, `drop_stop_owed`):
-    the run is parked PROVIDER_UNAVAILABLE as the worker that died would
-    have parked it, and only the operator's requeue calls again. The lease
-    answer comes first, as in `_refuse_unexplained`."""
-    if not drop_stop_owed(conn, run_id=run_id, route_node_id=route_node_id):
-        return
-    if not holds_lease(conn, run_id, lease):
-        raise Refusal(RefusalCode.LEASE_NOT_HELD)
-    raise Refusal(RefusalCode.PROVIDER_UNAVAILABLE)
-
-
 class Pass(StrEnum):
     """What one node's pass did, reported to the graph; the store holds the state."""
 
@@ -376,7 +360,6 @@ def node_pass(  # noqa: PLR0913 -- one node of one run, keyword-only
         )
         if replayed is None:
             _refuse_unexplained(conn, run_id, (route_node_id,), execution.lease)
-            _refuse_spent_drop(conn, run_id, route_node_id, execution.lease)
     if replayed is not None:
         settled = _settle(conn, blobs, replayed, run_id=run_id, lease=execution.lease)
         return Pass.ACCEPTED if settled else Pass.ENDED
