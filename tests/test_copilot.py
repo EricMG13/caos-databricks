@@ -1919,3 +1919,19 @@ def test_a_credit_price_too_precise_for_any_count_charges_not_even_zero() -> Non
     too_wide = Decimal("0." + "1" * (1001 - len(str(2**53))))
     assert charged(2**53 - 1, too_wide) is None
     assert charged(0, too_wide) is None
+
+
+@pytest.mark.parametrize("figure", [float("inf"), float("nan"), -1.0])
+def test_a_per_request_or_per_model_figure_that_is_no_count_is_an_unknown_charge(
+    figure: float,
+) -> None:
+    capi = usage(copilotUsage={"totalNanoAiu": figure, "model": PIN})
+    assert (
+        "nano_aiu" not in reply_message(sdk_call(usage=capi), TARGET).response_metadata
+    )
+    metered = shutdown(totalNanoAiu=None, modelMetrics={PIN: metric(None)})
+    odd = _malformed(
+        metered, modelMetrics={PIN: {**metric(None), "totalNanoAiu": figure}}
+    )
+    seen = sdk_call(idle=[idle(), odd])
+    assert "nano_aiu" not in reply_message(seen, TARGET).response_metadata

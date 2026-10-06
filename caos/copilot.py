@@ -33,7 +33,7 @@ import math
 import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from decimal import Decimal, DecimalException
+from decimal import Decimal
 from typing import Any, TypeIs
 
 from langchain_core.callbacks import CallbackManagerForLLMRun
@@ -320,15 +320,15 @@ def settled_charge(message: AIMessage, credit: Decimal | None) -> Decimal | None
     exact = exact_context()
     # A price must charge every count exactly, or it prices none: one too
     # precise to multiply the largest count in the exact context would settle
-    # a zero count and refuse every other (F563).
+    # a zero count and refuse every other (F563). Past this check the product
+    # has at most `exact.prec` digits, and dividing by a power of ten only
+    # moves its exponent, which `validate_spend` keeps far inside the
+    # context's: neither operation can trap.
     if not credit or len(credit.as_tuple().digits) + _COUNT_DIGITS > exact.prec:
         return None
-    try:
-        amount = exact.divide(
-            exact.multiply(Decimal(units), credit), Decimal(NANO_PER_CREDIT)
-        )
-    except DecimalException:
-        return None
+    amount = exact.divide(
+        exact.multiply(Decimal(units), credit), Decimal(NANO_PER_CREDIT)
+    )
     return reported_charge(amount)
 
 
