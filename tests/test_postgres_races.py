@@ -27,6 +27,7 @@ from canonical_fixtures import (
 )
 from conftest import priced
 from conftest import reserve_at as reserve
+from fake_chat import ScriptedChat, StatusError, fake_completions
 from run_terminals import fail_run
 from test_run_events import RECORD, accept_nodes, approved_nodes
 
@@ -37,6 +38,7 @@ from caos.graph.route import NodeState, ResolvedRoute, resolve_route
 from caos.graph.runtime import Execution, Provider, ProviderResult, run_route
 from caos.methodology.bundle import Bundle
 from caos.pricing import ModelPrice
+from caos.provider import Completion, DropKind
 from caos.refusals import Refusal, RefusalCode
 from caos.store import RunStatus, StoreConnection, apply_schema, connect, runs
 from caos.store.events import RunEvent, events_of
@@ -1525,8 +1527,12 @@ def test_a_charged_answer_holds_its_node_exactly_when_the_next_pass_settles_it(
     _case_id, run_id = prepared_run
     diagnostic = "d" * 64
     (tmp_path / "empty").mkdir()
+    # D110: a drop the provider declared is recorded, unbilled and owed
+    # nothing, so it never holds its node from the re-attempt.
+    dropped = CallOutcome(None, MODEL, None, None, drop_kind=DropKind.DECLARED)
     shapes = (
         ("unknown charge", CallOutcome(None, MODEL, GENERATION, diagnostic), False),
+        ("a declared drop", dropped, False),
         ("no generation", CallOutcome(CHARGE, MODEL, None, diagnostic), False),
         ("explained", CallOutcome(CHARGE, MODEL, GENERATION, diagnostic), False),
         ("no body", CallOutcome(CHARGE, MODEL, GENERATION, None), True),
@@ -1572,3 +1578,100 @@ def test_a_charged_answer_holds_its_node_exactly_when_the_next_pass_settles_it(
                 )
             else:
                 start_attempt(conn, run_id, node)
+
+
+# -- D110: one re-attempt of a declared drop, across a crash -------------------
+
+
+@dataclass
+class _Dropping(_PricedCompletions):
+    """The canonical fake whose first `drops` calls end as the production seam
+    ends a provider's 503 (`caos.models.ChatCompletions` over a scripted
+    chat): refused PROVIDER_UNAVAILABLE, a declared drop, nothing billed."""
+
+    drops: int = 1
+
+    def complete(self, prompt: str, *, json_object: bool = False) -> Completion:
+        if self.drops <= 0:
+            return super().complete(prompt, json_object=json_object)
+        self.drops -= 1
+        self.prompts.append(prompt)
+        dropped = fake_completions(ScriptedChat(answer=StatusError(503)))
+        return dropped.complete(prompt)
+
+
+class _Died(BaseException):
+    """The worker's process ending where the test says."""
+
+
+@pytest.mark.parametrize(
+    "crash",
+    [
+        (dies_in, drops)
+        for dies_in in ("_explain_live", "drop_reattempt_due")
+        for drops in (1, 2)
+    ],
+)
+def test_a_crash_between_a_declared_drop_and_its_re_attempt_accepts_once(
+    case: tuple[StoreConnection, UUID],
+    empty_database: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    crash: tuple[str, int],
+) -> None:
+    """Invariants 6 and 8 across a crash. Worker A's CP-0 call is dropped by
+    the provider and A dies after the drop was recorded -- before it was
+    explained (`_explain_live`) or after, before the re-attempt was decided
+    (`drop_reattempt_due`). B claims the run once A's lease lapses. The
+    ledger, not A's dead frame, says what is owed: B's fresh attempt is the
+    one re-attempt, beside A's held reservation, and B accepts CP-0 once; if
+    B's call is dropped too, that is the node's second declared drop and the
+    run stops with no third call."""
+    from test_worker import count, queued_run
+
+    dies_in, drops = crash
+    run = queued_run(case, _lite(), Bundle(VENDORED), BlobStore(tmp_path / "blobs"))
+    completions = _Dropping(run.source_id, drops=drops)
+
+    def died(*_args: object, **_kwargs: object) -> None:
+        raise _Died
+
+    monkeypatch.setattr(runtime, dies_in, died)
+    with pytest.raises(_Died):
+        _drive(empty_database, run, completions)
+    monkeypatch.undo()
+    assert len(completions.prompts) == 1
+    for table, rows in (
+        ("run_attempts", 1),
+        ("budget_reservations", 1),
+        ("call_outcomes", 1),
+        ("budget_ledger", 0),
+    ):
+        assert count(run.conn, table, run.run_id) == rows, table
+
+    _lapsed(empty_database, run.run_id)
+    assert _outcome(lambda: _drive(empty_database, run, completions)) == str(run.run_id)
+
+    nodes = len(_lite().nodes)
+    drop_rows = run.conn.execute(
+        "SELECT count(*) FROM call_outcomes WHERE run_id = %s"
+        " AND drop_kind = 'declared'",
+        (run.run_id,),
+    ).fetchone()
+    run.conn.rollback()
+    assert drop_rows == (drops,)
+    if drops == 1:
+        assert run_status(run.conn, run.run_id) is RunStatus.COMPLETE
+        run.conn.rollback()
+        assert len(completions.prompts) == nodes + 1
+        assert count(run.conn, "artifacts", run.run_id) == nodes
+        assert count(run.conn, "budget_ledger", run.run_id) == nodes
+        # The dropped attempt's reservation is still there, beside B's.
+        assert count(run.conn, "budget_reservations", run.run_id) == nodes + 1
+        return
+    assert len(completions.prompts) == 2, "no third call"
+    assert count(run.conn, "artifacts", run.run_id) == 0
+    assert count(run.conn, "budget_reservations", run.run_id) == 2
+    assert run.conn.execute(
+        "SELECT state, stop_code FROM run_work WHERE run_id = %s", (run.run_id,)
+    ).fetchone() == ("STOPPED", "PROVIDER_UNAVAILABLE")
