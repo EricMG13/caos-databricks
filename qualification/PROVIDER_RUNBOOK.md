@@ -586,3 +586,46 @@ The 5 October pass on the stops of the live loop above. Branches `claude/rca-pro
 - N156, N157, N158: CP-0 source extent, a pack-level bound, and a stable evidence order.
 - The reclaim approval (the list in (d)).
 - Whether streaming (F511, F512, validated in LCR6) replaces the 5 October "run without streaming" ruling.
+
+## Owner decisions, 6 October 2026
+
+The 6 October pass: the owner approved the controller's recommendation on every outstanding decision, with the two rulings quoted below. Branch `claude/dec` (decisions D109 to D117, findings F523 to F550 in `docs/rebuild/decisions.md`, residue N159 to N172 in `docs/rebuild/next.md`). Spend figures are the runs' recorded charges at the pinned price (Luna, $0.25 input and $1 output per million tokens); the key's usage after these runs read 43.45. The owner raised the budget cap to $75 on 6 October; the key's own limit stays $50.
+
+**(a) The decisions and what each changed.**
+
+| decision | what it changed | live evidence |
+|---|---|---|
+| D109 (F523 to F526; N144, N146) | A run pins a command: an optional closed per-module `qualifiers` map and a CP-0 `objective`, in run-input format 3 and its fingerprint. Owner ruling: CP-2G's horizon is derived from the latest reporting period (Q1 to Q3 of year Y: FY(Y) to FY(Y+2); Q4 or FY of Y: FY(Y+1) to FY(Y+3)); the base period is the LTM to the latest quarter (the controller's reading of the vendor card's example). A stated value wins; wire break: `PinRunInput` now requires `qualifiers` and `objective` | FCA4 CP-2G accepted on attempt 3, Restricted: FY2026 to FY2028 and a Q2 2026 LTM base. FCA2's Blocked stop is resolved (N144) |
+| D110 (F527 to F530; N148) | A drop the provider declared (a status or an error object, nothing generated) is re-attempted once, a fresh attempt and reservation, gated on the ledger. Never a `deadline`, a client-raised failure, a reset, or a stream failed after content began | not exercised by a declared drop. LCR10's cut after content is the excluded kind (see c) |
+| D111 (F531 to F533; N151, N154) | Vendor fork r13, owner-authorised for these changes: a line opening with a register's ID beats one that only mentions it (V1 to V3), a fixture marker counts only in front matter or alone on a line (V4), and a critical cell a short row left empty is named with the row's width. Build `d8a307a9`, manifest `812ba297` | every run below ran on `d8a307a9`; FCA4's CP-5 retries carried the width message ("the row has 8 cells under a 9-cell header") |
+| D112 (F535, F536; N156) | CP-0's P5 page-coverage claims are held to the pages the host delivered: a WHOLE source claimed shorter than delivered is refused `HANDOFF_MALFORMED` with a `host coverage check:` line | no run has stopped on it; not exercised |
+| D113 (F538 to F540, F545; N153, N158) | Evidence is ordered by filename then digest and opens every prompt under a run-wide tag, so a run's calls share a prefix | probes, 9 calls: automatic caching wrote the whole prompt each call and read 0; explicit mode with a breakpoint read 0; explicit mode with no breakpoint was 20% cheaper on input ($0.0202 against $0.0251). No saving measured on this provider; the test adapter sends caching off (F545) |
+| D115 (F541 to F543; N167, N168) | Three sec.gov files downloaded (the Merger Agreement, the fund's N-PORT schedule, its prospectus and SAI); the fund's files replace the synthetic mandate in the portfolio sets | LP2 COMPLETE on the real fund (c); FCA3's request was 4,033,648 bytes before D116 |
+| D116 (F546 to F548; N157, N167, N170, N171) | Every node's request is bounded by its model's context (`CONTEXT_TOKENS`, 1,050,000 for Luna, Luna Pro and Sol; 3 request bytes a token floor), and a node past it shows its largest sources as page maps | FCA3: HTTP 400 on CP-0, nothing billed. N157's fitted CP-0 request (2,866,967 bytes) returned 200 live; FCA4 ran 34 attempts on it |
+| D117 (F549, F550; N172) | The model-call deadline 420 to 720 s, the lease 600 to 900 s; store sessions stop idling out; E10 reopens a closed event tail | LCR9 stopped at `call=deadline elapsed=420.0` on CP-3C. Not yet rerun under 720 s |
+| D114 | never allocated | none |
+
+**(b) The runs** (scored by `q9/classify.py` against each run's database; run files under `docs/rebuild/runs/live-2026-10-03/`; all on `openai/gpt-6-luna`, effort high, provider pinned to `openai`; recorded charges total $5.3334 over six runs).
+
+| run | set | result | keys | recorded charge |
+|---|---|---|---|---|
+| FCA3-dec | full-credit-assessment | refused HTTP 400 at CP-0 (context), nothing billed | not scored | $0.00 |
+| LP2-dec | lite-portfolio | COMPLETE, 3 attempts, 44 citations | 3/6 | $0.3693 |
+| LCR8-dec | lite-covenant-refinancing | BUDGET_CEILING_REACHED at CP-3C (a $3 ceiling, controller error) | 0/7 | $0.5060 |
+| LCR9-dec | lite-covenant-refinancing | PROVIDER_UNAVAILABLE at CP-3C, `deadline elapsed=420.0` | 2/7 | $0.5320 |
+| LCR10-dec | lite-covenant-refinancing | PROVIDER_UNAVAILABLE at CP-L10, 502 after content | 0/7 | $0.1777 |
+| FCA4-dec | full-credit-assessment | 18 of 19 modules, 34 attempts, 454 citations (8 unverified); stopped at CP-5 | 19/35 | $3.7485 |
+
+The set tables are in each set's `RESULT.md`. No set is qualified. FCA4 is the first FULL_CREDIT_ASSESSMENT run past CP-2G.
+
+**(c) What the runs showed.**
+- LP2: the portfolio set clears CP-0 over the real fund documents (before D115 the synthetic mandate blocked it). Met keys: Adjusted EBITDA, the N-PORT `6.500%, 2/15/2032` line and the TRACE last trade; missed: the revolver availability line, net assets and the 80% policy sentence (N168).
+- LCR10 is the first captured cause of a provider drop: F513's line read `PROVIDER_UNAVAILABLE call=raised class=CutAfterContentError cause=APIError status=- error_code=502 error_type=provider_unavailable elapsed=96.0`, an upstream 502 after content began, 96 s into CP-L10. This is the kind D110 excludes by design (the provider had begun to answer), so the run stopped; the earlier candidate of an error-only `200` (5 October, b) is not what this drop was.
+- LCR9: CP-3C ran to the 420 s host deadline; D117 followed. LCR6's CP-3C had taken 327 s.
+- CP-5 in FCA4 (4 attempts, HANDOFF_INCOMPLETE x3, HANDOFF_MALFORMED x1), replayed offline through the host's own checks on the four stored answers (`caos_qualify_8b79e0c9…`, read-only; the refusal text is not stored, so the retry lines are the host's current output for each stored answer). **Cause: the model.** Attempt 1 left one cell out of three T5B.3 rows (8 cells under a 9-cell header, rows 3 to 5; the last column read empty). Attempt 2 answered something other than the single JSON object (`HANDOFF_MALFORMED`, the host's transport check). Attempt 3 fixed T5B.3 and shifted two T5B.5 rows (rows 2 and 3, 8 cells under 9) and left citation 17 outside the evidence. Attempt 4 dropped the T5.2 register, wrote a T5B.6 row one cell long and changed citation 17's `source_id` to one that is not a source of the request. Each hint named the row by its first cell, its width against the header's and the columns as read, and the vendor line named the empty critical column with the same widths (F522, F533); no owner-restriction gap was reported (F510 not involved); the host's lines were accurate and actionable, so this is neither a host hint nor a contract defect, and no Nn is added for it. Each retry repaired the tables it was told about and broke another (the F522 pattern, LCR6 CP-3C).
+
+**(d) Open items.**
+- N148's cut-after-content exclusion, now seen live (LCR10): a stream the provider fails after it has begun is not re-attempted, so such a drop stops the run. Whether to re-attempt it is the owner's call; the evidence is one drop.
+- N167: covered by D116 (a node past its model's bound shows page maps); the effect on CP-0's judgement over withheld lines is unmeasured (N171). N170: declare the contexts of the workspace's ten approved endpoints, the repo default and each `copilot:<model>`; until then each runs with a `CONTEXT_NOT_DECLARED` line, and the 3-bytes-a-token floor is measured, not guaranteed (the N-PORT schedule is 2.54). N172: the 720 s deadline is measured only through the streaming test adapter; production does not stream, so whether the workspace endpoint, the AI Gateway or Copilot cuts an idle request before 720 s is unmeasured, and E10 cannot measure it; `idle_session_timeout=0` on Lakebase is unmeasured too.
+- FCA CP-5: the model's register widths; the three guided retries did not repair them. Options for the owner: a further guided retry (N129's class), or a first-attempt instruction to count each register row's cells against its header (N154).
+- Key limit: usage read 43.45 after these runs; the owner's cap is $75 as of 6 October, but the key's own limit stays $50, so about $6.55 of key headroom remains until the key is raised.
