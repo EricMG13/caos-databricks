@@ -30,8 +30,10 @@ from caos.store.outcomes import require_idle
 # Renewed by every fenced write, the reservation included, so it outlives one
 # provider call deadline (`caos.provider.TIMEOUT_SECONDS`, 720 s since D117).
 # The 180 s left are a liveness budget shared with the work before the call
-# and after it (bill, checks, accept), not a safety invariant: exactly-once
-# rests on `call_hold`, `_UNSETTLED` and `replay_billed`. Brief D5's two
+# and after it (bill, checks, accept). While the call's session lives,
+# exactly-once rests on `call_hold`, `_UNSETTLED` and `replay_billed`; after a
+# session cut released `call_hold` (D117), they are the safety margin in which
+# the live lease alone keeps a second worker off the node. Brief D5's two
 # deadlines held until D83. 900 s since D117, raised with the deadline so the
 # 180 s stay (`CALL_HOLD_SECONDS`, two leases, follows it).
 LEASE_SECONDS = 900

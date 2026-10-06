@@ -9,6 +9,7 @@ from __future__ import annotations
 import http.server
 import json
 import os
+import queue
 import re
 import subprocess
 import threading
@@ -380,6 +381,94 @@ def test_e10_passes_only_on_a_call_the_gateway_answered() -> None:
     assert enterprise_deploy.call_verdict(run(work={"state": "CLAIMED"})) is None
     assert enterprise_deploy.call_verdict({"body": {"run": None}}) is None
     assert enterprise_deploy.call_verdict("not a document") is None
+
+
+_RUNNING = {"body": {"run": {"status": "RUNNING", "work": {"state": "CLAIMED"}}}}
+_ACCEPTED = {"body": {"run": {"status": "RUNNING", "attempts": [{"accepted": True}]}}}
+
+
+def _lines_of(*lines: bytes) -> queue.Queue[bytes]:
+    """A tail's lines as `_lines` hands them over, `b""` where it closed."""
+    tail: queue.Queue[bytes] = queue.Queue()
+    for line in lines:
+        tail.put(line)
+    return tail
+
+
+def test_e10_reopens_a_tail_the_server_closed_from_its_last_event_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """D117: the app closes every event-stream tail at `TAIL_DEADLINE` (300 s)
+    and a call may run `TIMEOUT_SECONDS` (720 s), so E10 took the first
+    tail's close as its answer and failed at about 300 s naming a 740 s wait.
+    A closed tail is reopened with `Last-Event-ID`, as a browser does, and the
+    run is read again on the next tail's event."""
+    from caos.api.app import TAIL_DEADLINE
+
+    assert TAIL_DEADLINE < enterprise_deploy.MODEL_CALL_SECONDS, "E10 spans tails"
+    reads = iter([_RUNNING, _RUNNING, _ACCEPTED])
+    monkeypatch.setattr(
+        enterprise_deploy, "_json_call", lambda *_a, **_k: (200, next(reads))
+    )
+    monkeypatch.setattr(enterprise_deploy, "RECONNECT_PAUSE_SECONDS", 0.0)
+    first = _lines_of(
+        b"retry: 500\n", b"id: 4\n", b"\n", b":\n", b"\n",
+        b"id: 5\n", b"event: progress\n", b"data: {}\n", b"\n", b"",
+    )  # fmt: skip
+    second = _lines_of(b"id: 6\n", b"event: progress\n", b"data: {}\n", b"\n")
+    reopened: list[str | None] = []
+
+    def reopen(after: str | None) -> tuple[queue.Queue[bytes] | None, str]:
+        reopened.append(after)
+        return second, ""
+
+    verdict = enterprise_deploy._answered("http://x", "/r", {}, first, reopen)
+    assert verdict[0] == 0, verdict
+    assert reopened == ["5"]
+
+
+def test_e10_waits_its_own_budget_across_tails_and_no_longer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Tails that keep closing are reopened until `MODEL_CALL_SECONDS` runs
+    out, not answered at the first close; then the row fails naming it."""
+    monkeypatch.setattr(
+        enterprise_deploy, "_json_call", lambda *_a, **_k: (200, _RUNNING)
+    )
+    monkeypatch.setattr(enterprise_deploy, "MODEL_CALL_SECONDS", 0.4)
+    monkeypatch.setattr(enterprise_deploy, "RECONNECT_PAUSE_SECONDS", 0.05)
+    reopened: list[str | None] = []
+
+    def reopen(after: str | None) -> tuple[queue.Queue[bytes] | None, str]:
+        reopened.append(after)
+        return _lines_of(b""), ""
+
+    started = time.monotonic()
+    verdict = enterprise_deploy._answered("http://x", "/r", {}, _lines_of(b""), reopen)
+    took = time.monotonic() - started
+    assert verdict == (
+        1,
+        "no model call answered within 0.4s (the run read answered 200)",
+    )
+    assert took >= 0.4 - enterprise_deploy.RECONNECT_PAUSE_SECONDS
+    assert len(reopened) >= 2 and set(reopened) == {None}
+    assert took < 2.0
+
+
+def test_e10_fails_when_a_reopened_tail_is_not_an_event_stream(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A reconnect the proxy answers with a sign-in redirect is a failed row
+    naming what came back, never a silent wait."""
+    monkeypatch.setattr(
+        enterprise_deploy, "_json_call", lambda *_a, **_k: (200, _RUNNING)
+    )
+    monkeypatch.setattr(enterprise_deploy, "RECONNECT_PAUSE_SECONDS", 0.0)
+    note = "status 302, content-type 'text/html': not an event stream"
+    verdict = enterprise_deploy._answered(
+        "http://x", "/r", {}, _lines_of(b""), lambda _after: (None, note)
+    )
+    assert verdict == (1, f"the event stream reopened as {note}")
 
 
 def _only_the_kind_s_own(

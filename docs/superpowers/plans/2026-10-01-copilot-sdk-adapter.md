@@ -600,7 +600,7 @@ def test_chat_copilot_asks_once_with_the_prompt_its_pinned_model_and_deadline() 
 
     message = ChatCopilot(model=MODEL, ask=ask).invoke([HumanMessage(content=PROMPT)])
     assert message.content == "answer"
-    assert asked == [(PROMPT, TARGET, 240.0)]
+    assert asked == [(PROMPT, TARGET, models.TIMEOUT_SECONDS)]
 
 
 def test_a_session_error_raises_its_status_and_never_its_text() -> None:
@@ -1124,7 +1124,7 @@ def test_a_copilot_model_is_answered_by_chat_copilot_never_the_gateway(
     monkeypatch.setattr(databricks_langchain, "ChatDatabricks", gateway)
     chat = models.chat_model(endpoint=MODEL)
     assert isinstance(chat, ChatCopilot)
-    assert (chat.model, chat.ask, chat.timeout) == (MODEL, None, 240.0)
+    assert (chat.model, chat.ask, chat.timeout) == (MODEL, None, models.TIMEOUT_SECONDS)
     monkeypatch.setenv(models.ENDPOINT_ENV, "copilot:gpt-6-luna")
     assert isinstance(models.chat_model(), ChatCopilot)
 

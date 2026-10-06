@@ -38,12 +38,16 @@ if TYPE_CHECKING:
 # The most one `complete` may take, every rate-limit re-send and wait included
 # (ST-9): nothing arrives until generation ends, so this is the generation
 # budget (MX-4), sized inside the 900 s lease (`caos.store.work.LEASE_SECONDS`).
-# The 180 s that remain are a liveness budget, not a safety invariant: the
-# reservation renews the lease just before the call, but the same 180 s also
-# cover the work before it (the call check, reading upstreams and evidence,
-# the re-encode) and after it (the bill, the answer's checks, the fenced
-# acceptance). A lease lost anyway pays nothing twice: exactly-once rests on
-# `call_hold`, `_UNSETTLED` and `replay_billed` (D83).
+# The 180 s that remain are a liveness budget and, after a session cut, the
+# safety margin: the reservation renews the lease just before the call, but
+# the same 180 s also cover the work before it (the call check, reading
+# upstreams and evidence, the re-encode) and after it (the bill, the answer's
+# checks, the fenced acceptance). While the call's session lives, a lease lost
+# anyway pays nothing twice: exactly-once rests on `call_hold`, `_UNSETTLED`
+# and `replay_billed` (D83). A session the server cut mid-call (a failover, a
+# suspend; never idleness, `caos.store.IDLE_SESSION_OPTION`) took `call_hold`
+# with it, and then only the live lease keeps a second worker off the node
+# until the bill lands (D117).
 # 420 s since D83: 5 of 19 default-tier calls ran past 240 s on 2 October.
 # 720 s since D117 (owner, 6 October), the lease raised with it: CP-3C at
 # effort high took 327 s in LCR6 and ran past 420 s in LCR9-dec.

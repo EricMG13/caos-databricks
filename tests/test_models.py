@@ -430,20 +430,27 @@ def test_one_deadline_bounds_the_whole_call_and_the_lease_outlives_it(
     chat = ScriptedChat(answer=slow_limit)
     completion = fake_completions(chat).complete(PROMPT)
     assert completion.refusal is RefusalCode.PROVIDER_UNAVAILABLE
-    assert chat.calls == 2, "the third try would have outlived the deadline"
+    assert chat.calls == 2, "the re-send floor stops the third try"
     worst = clock["t"]
     assert worst <= TIMEOUT_SECONDS
-    assert LEASE_SECONDS - TIMEOUT_SECONDS >= 180.0, "the liveness budget (D83, D117)"
+    assert LEASE_SECONDS - TIMEOUT_SECONDS >= 180.0, "the margin (D83, F485, D117)"
     assert WORKER_STALE_AFTER >= TIMEOUT_SECONDS + 60.0
 
 
 def test_the_deploy_waits_longer_than_the_provider_call() -> None:
-    """D83: E10's wait for a model call outlasts the call's own deadline."""
+    """D83: E10's wait for a model call outlasts the call's own deadline.
+    D117: it also outlasts the app's event-stream tail, which closes at
+    `TAIL_DEADLINE`, so E10 reopens a closed tail until its own wait ends
+    (`tests/test_enterprise_deploy.py`
+    `::test_e10_reopens_a_tail_the_server_closed_from_its_last_event_id`)."""
     import enterprise_deploy
 
+    from caos.api.app import TAIL_DEADLINE
     from caos.provider import TIMEOUT_SECONDS
 
     assert enterprise_deploy.MODEL_CALL_SECONDS > TIMEOUT_SECONDS
+    assert enterprise_deploy.MODEL_CALL_SECONDS > TAIL_DEADLINE, "spans tails"
+    assert enterprise_deploy.RECONNECT_PAUSE_SECONDS < TAIL_DEADLINE
 
 
 def test_no_re_send_starts_once_the_wait_and_the_fence_spent_the_deadline(

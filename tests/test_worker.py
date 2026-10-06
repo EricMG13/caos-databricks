@@ -457,8 +457,10 @@ def test_the_lease_outlives_the_provider_timeout() -> None:
     """D83 (amending brief D5's two deadlines): a lease renewed by the
     reservation outlives the call's one deadline by a 180 s liveness budget
     shared with the work before the call and after it (bill, checks, accept);
-    exactly-once does not rest on it (`call_hold`, `replay_billed`). D117
-    raised both by 300 s (720 s and 900 s), keeping the 180 s."""
+    while the call's session lives, exactly-once rests on `call_hold` and
+    `replay_billed`, and after a session cut released the hold the 180 s are
+    the safety margin. D117 raised both by 300 s (720 s and 900 s), keeping
+    the 180 s."""
     assert LEASE_SECONDS == 900, "the owner's lease (D117)"
     assert LEASE_SECONDS - provider_module.TIMEOUT_SECONDS >= 180.0
     assert WorkerConfig(BoundaryText.of("w")).lease_seconds == LEASE_SECONDS
