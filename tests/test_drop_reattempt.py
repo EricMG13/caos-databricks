@@ -40,7 +40,9 @@ from caos import models
 from caos.methodology.canonical import (
     DROP_REATTEMPTS,
     _feedback_source,
+    declared_drop,
     drop_reattempt_due,
+    drop_stop_owed,
     reattempts_a_drop,
 )
 from caos.pricing import ModelPrice
@@ -243,6 +245,9 @@ def test_the_ledger_gives_one_re_attempt_after_one_declared_drop() -> None:
     assert not reattempts_a_drop([_attempt("PROVIDER_CALL_INVALID", DropKind.DECLARED)])
     # F530: a declared kind beside another code is no drop and spends nothing.
     invalid = _attempt("PROVIDER_CALL_INVALID", DropKind.DECLARED)
+    assert declared_drop(declared) and declared_drop(_attempt(None, DropKind.DECLARED))
+    assert not declared_drop(invalid)
+    assert not declared_drop(_attempt(unavailable, DropKind.VENDOR))
     assert reattempts_a_drop([invalid, declared])
     assert reattempts_a_drop([invalid, _attempt(None), declared])
     for kind in (DropKind.VENDOR, DropKind.RAISED, DropKind.ESCAPED, DropKind.DEADLINE):
@@ -708,6 +713,22 @@ def test_a_vendor_error_that_cannot_be_read_is_unavailable_and_recorded(
     assert stopped is RefusalCode.PROVIDER_UNAVAILABLE
     assert _cp0_ledger(harness) == (1, 1, ["PROVIDER_UNAVAILABLE"], 0)
     assert _drop_kinds(harness) == ["raised"]
+
+
+def test_a_direct_callers_rerun_after_a_spent_re_attempt_is_its_own_decision(
+    harness: _Harness,
+) -> None:
+    """F530: with no work row there is no park to wait for -- a direct
+    caller (the harness, the suite) reruns only by deciding to -- so no stop
+    is owed and the rerun calls."""
+    answers = CanonicalCompletions(harness.source_id)
+    dropping = _dropping(answers, StatusError(503), 2)
+    assert _run(harness, dropping) is RefusalCode.PROVIDER_UNAVAILABLE
+    node = _node(harness, "CP-0").route_node_id
+    with connect(harness.url) as observer:
+        assert not drop_stop_owed(observer, run_id=harness.run_id, route_node_id=node)
+    assert _run(harness, dropping) is None
+    assert _drop_kinds(harness) == ["declared", "declared", None]
 
 
 def test_node_attempts_reads_each_attempt_as_the_ledger_holds_it(

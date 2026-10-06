@@ -37,6 +37,7 @@ from caos.graph import runtime
 from caos.graph.route import NodeState, ResolvedRoute, resolve_route
 from caos.graph.runtime import Execution, Provider, ProviderResult, run_route
 from caos.methodology.bundle import Bundle
+from caos.methodology.canonical import drop_stop_owed
 from caos.pricing import ModelPrice
 from caos.provider import Completion, DropKind
 from caos.refusals import Refusal, RefusalCode
@@ -1723,9 +1724,17 @@ def test_a_crash_after_the_re_attempts_drop_makes_no_third_call(
     monkeypatch.undo()
     assert _cp0_calls(completions.prompts) == 2
     _lapsed(empty_database, run.run_id)
+    cp0 = _lite().nodes[0].route_node_id
 
+    def owed() -> bool:
+        said = drop_stop_owed(run.conn, run_id=run.run_id, route_node_id=cp0)
+        run.conn.rollback()
+        return said
+
+    assert owed()
     assert _outcome(lambda: _drive(empty_database, run, completions)) == str(run.run_id)
     assert _cp0_calls(completions.prompts) == 2, "no third call"
+    assert not owed(), "the park is later in the stream than the drop"
     assert count(run.conn, "run_attempts", run.run_id) == 2
     assert run.conn.execute(
         "SELECT state, stop_code FROM run_work WHERE run_id = %s", (run.run_id,)

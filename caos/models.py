@@ -162,13 +162,10 @@ class ChatCompletions:
             sent += 1
             answer = _invoked(self.chat, prompt, options, deadline - _clock())
             if isinstance(answer, OpenAIError):
-                refused = _vendor_refusal(answer, sent, deadline)
-                if refused is None:
+                ended = _vendor_ended(answer, sent, deadline, started)
+                if ended is None:
                     continue
-                if isinstance(refused, _Raised):
-                    unread = RefusalCode.PROVIDER_UNAVAILABLE
-                    return _unanswered(unread, refused, started)
-                return _unanswered(refused, answer, started)
+                return ended
             if answer is None or isinstance(answer, _Raised):
                 # Indeterminate: the request may have been delivered and
                 # billed, so the attempt keeps its reservation. Nothing of
@@ -370,11 +367,11 @@ def _content_parts_contained() -> Iterator[None]:
         yield
 
 
-def _vendor_refusal(
-    failed: OpenAIError, sent: int, deadline: float
-) -> RefusalCode | _Raised | None:
-    """None when the call is sent again, else the code a vendor error is
-    refused with. Reading the error is guarded (F530, N162): a status or a
+def _vendor_ended(
+    failed: OpenAIError, sent: int, deadline: float, started: float
+) -> Completion | None:
+    """None when the call is sent again, else the refusal a vendor error
+    ends it with. Reading the error is guarded (F530, N162): a status or a
     response that raises when read is no vendor error the host can read, so
     the call is `raised`, refused PROVIDER_UNAVAILABLE and recorded, never an
     untyped escape ahead of the bill -- the documented fail-open of ST-8,
@@ -382,9 +379,11 @@ def _vendor_refusal(
     try:
         if _sends_again(failed, sent, deadline):
             return None
-        return _status_refusal(failed)
+        code = _status_refusal(failed)
     except _UnreadableError:
-        return _Raised(DropKind.RAISED, _facts(failed))
+        unread = _Raised(DropKind.RAISED, _facts(failed))
+        return _unanswered(RefusalCode.PROVIDER_UNAVAILABLE, unread, started)
+    return _unanswered(code, failed, started)
 
 
 class _UnreadableError(Exception):
