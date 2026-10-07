@@ -35,11 +35,13 @@ from caos.provider import (
 from caos.refusals import Refusal, RefusalCode
 
 PIN = "claude-opus-5.5"
+OTHER = "claude-sonnet-5.5"
 MODEL = f"copilot:{PIN}@high"
 TARGET = CopilotModel("copilot", PIN, "high")
 PROMPT = "q" * 1000
 # GitHub's published rate, one AI credit in US dollars (D77).
 CREDIT = Decimal("0.01")
+SECRET = "private text the runtime wrote"
 
 
 # -- The fakes (R5): every one through the SDK's own types. ----------------
@@ -145,6 +147,73 @@ def idle(aborted: bool | None = None) -> Event:
     return wire("session.idle", aborted=aborted)
 
 
+def auto_resolved(
+    chosen: str = PIN,
+    available: Sequence[str] = (PIN, OTHER),
+    routing: str = "classifier",
+    fallback: bool = False,
+) -> Event:
+    return wire(
+        "session.auto_mode_resolved",
+        chosenModel=chosen,
+        availableModels=list(available),
+        routingMethod=routing,
+        fallback=fallback,
+    )
+
+
+def error(status: int | None, error_type: str = "provider") -> Event:
+    return wire(
+        "session.error",
+        errorType=error_type,
+        message=SECRET,
+        statusCode=status,
+        stack=SECRET,
+        url="https://example.invalid/" + SECRET.replace(" ", "-"),
+    )
+
+
+def failure(
+    kind: str, status: int | None = None, bad_request_kind: str | None = None
+) -> Event:
+    return wire(
+        "model.call_failure",
+        source="top_level",
+        failureKind=kind,
+        statusCode=status,
+        badRequestKind=bad_request_kind,
+        errorMessage=SECRET,
+        model=PIN,
+    )
+
+
+def truncation() -> Event:
+    return wire(
+        "session.truncation",
+        messagesRemovedDuringTruncation=1,
+        performedBy="runtime",
+        postTruncationMessagesLength=1,
+        postTruncationTokensInMessages=10,
+        preTruncationMessagesLength=2,
+        preTruncationTokensInMessages=20,
+        tokenLimit=10,
+        tokensRemovedDuringTruncation=10,
+    )
+
+
+def compaction_start() -> Event:
+    return wire("session.compaction_start", model=PIN)
+
+
+def limits_exhausted(used: float = 31.0, maximum: float = 30.0) -> Event:
+    return wire(
+        "session_limits_exhausted.requested",
+        requestId="limits-1",
+        usedAiCredits=used,
+        maxAiCredits=maximum,
+    )
+
+
 def turn_retry(reason: str = "provider_error") -> Event:
     return wire("assistant.turn_retry", turnId="turn-1", model=PIN, reason=reason)
 
@@ -153,8 +222,44 @@ def model_change(new: str, previous: str = PIN) -> Event:
     return wire("session.model_change", newModel=new, previousModel=previous)
 
 
+def server_tool_progress() -> Event:
+    return wire(
+        "assistant.server_tool_progress", kind="web_search", outputIndex=0, status="x"
+    )
+
+
+def tools_updated(model: str = PIN) -> Event:
+    """`session.tools_updated` as 1.0.16 types it: the model, and no tool list."""
+    return wire("session.tools_updated", model=model)
+
+
 def mcp_loaded(servers: Sequence[Mapping[str, object]]) -> Event:
     return wire("session.mcp_servers_loaded", servers=list(servers))
+
+
+def mcp_status(server: str) -> Event:
+    return wire(
+        "session.mcp_server_status_changed", serverName=server, status="connected"
+    )
+
+
+SKILL = {
+    "description": "d",
+    "enabled": True,
+    "name": "skill",
+    "source": "project",
+    "userInvocable": True,
+}
+EXTENSION = {"id": "e", "name": "e", "source": "project", "status": "running"}
+AGENT = {
+    "description": "d",
+    "displayName": "a",
+    "id": "a",
+    "name": "a",
+    "source": "project",
+    "tools": [],
+    "userInvocable": True,
+}
 
 
 def skills_loaded(skills: Sequence[Mapping[str, object]]) -> Event:
@@ -169,6 +274,66 @@ def agents_updated(agents: Sequence[Mapping[str, object]]) -> Event:
     return wire(
         "session.custom_agents_updated", agents=list(agents), errors=[], warnings=[]
     )
+
+
+def permission_requested() -> Event:
+    return wire(
+        "permission.requested",
+        requestId="permission-1",
+        permissionRequest={
+            "kind": "url",
+            "intention": "read",
+            "url": "https://example.invalid",
+        },
+    )
+
+
+def fusion(event: Event, **attribution: object) -> Event:
+    """`event` with a fusion block: a synthetic multi-model turn."""
+    block: dict[str, object] = {
+        "fusionId": "fusion-1",
+        "pattern": "advisor",
+        "policy": "default",
+        "syntheticModel": "fusion-model",
+        **attribution,
+    }
+    return wire(event["type"], **{**event["data"], "fusion": block})
+
+
+def unknown_event(kind: str = "session.future_thing") -> Event:
+    return wire(kind, anything=1)
+
+
+def sampling_requested() -> Event:
+    return wire(
+        "sampling.requested", mcpRequestId=1, requestId="sampling-1", serverName="s"
+    )
+
+
+def hook_start() -> Event:
+    return wire("hook.start", hookInvocationId="hook-1", hookType="preToolUse")
+
+
+def skill_invoked() -> Event:
+    return wire("skill.invoked", content="x", name="skill", path="/skill")
+
+
+def tool_search_activated() -> Event:
+    return wire("tool_search.activated", strategy="bm25", toolNames=["bash"])
+
+
+def external_tool_requested() -> Event:
+    return wire(
+        "external_tool.requested",
+        requestId="external-1",
+        sessionId="session-1",
+        toolCallId="tool-1",
+        toolName="bash",
+    )
+
+
+def run_started() -> Event:
+    return wire("workflow.run_started", attempt=1, runId="run-1", workflowName="w")
 
 
 Part = Event | Sequence[Event] | None
@@ -201,7 +366,24 @@ def sdk_call(**parts: Part) -> list[Event]:
     return seen
 
 
+# R5's sequences. HAPPY is either transport's (no `assistant.usage`, the CLI's
+# shape); SDK_HAPPY adds the usage the SDK may deliver.
+HAPPY = sdk_call(usage=None)
 SDK_HAPPY = sdk_call()
+RECOVERED = [
+    started(),
+    turn_start(),
+    call_start(),
+    failure("api", 503),
+    turn_retry("provider_error"),
+    call_start(),
+    answer(),
+    call_finished("success"),
+    final_result(),
+    turn_end(),
+    checkpoint(300_000_000, 1),
+    idle(),
+]
 
 
 # -- Names (Design 1). -------------------------------------------------------
@@ -260,6 +442,34 @@ def test_the_longest_model_id_parses() -> None:
 # -- The witnesses (R1). -----------------------------------------------------
 
 
+def test_one_exact_call_is_witnessed_by_message_final_result_and_capi_usage() -> None:
+    message = reply_message(SDK_HAPPY, TARGET)
+    assert message.content == "answer"
+    assert message.response_metadata == {
+        "id": "provider-call-1",
+        "finish_reason": "stop",
+        "nano_aiu": 251_164_000,
+        "premium_requests": "1.0",
+    }
+    assert message.usage_metadata == {
+        "input_tokens": 1000,
+        "output_tokens": 40,
+        "total_tokens": 1040,
+    }
+
+
+def test_a_finish_reason_is_derived_without_a_usage_event() -> None:
+    message = reply_message(HAPPY, TARGET)
+    assert message.content == "answer"
+    assert message.response_metadata == {
+        "id": "api-call-1",
+        "finish_reason": "stop",
+        "nano_aiu": 251_164_000,
+        "premium_requests": "1.0",
+    }
+    assert message.usage_metadata is None
+
+
 @pytest.mark.parametrize(
     ("output_tokens", "finish"),
     [(MAX_COMPLETION_TOKENS - 1, "stop"), (MAX_COMPLETION_TOKENS, "length")],
@@ -304,6 +514,85 @@ def test_without_a_usage_the_call_id_is_the_messages_first_stated_id(
 
 # Half the session's AI units, so two of them are no more than its checkpoint.
 half = usage(copilotUsage={"totalNanoAiu": 125_582_000, "model": PIN})
+REFUSED: dict[str, list[Event]] = {
+    "other-model-in-message": sdk_call(answer=answer(model=OTHER)),
+    "message-names-no-model": sdk_call(answer=answer(model=None)),
+    "other-model-in-final-result": sdk_call(final_result=final_result(model=OTHER)),
+    "other-model-in-usage": sdk_call(usage=usage(model=OTHER)),
+    "other-model-in-copilot-usage": sdk_call(
+        usage=usage(copilotUsage={"totalNanoAiu": 251_164_000, "model": OTHER})
+    ),
+    "two-final-results": sdk_call(final_result=[final_result(), final_result()]),
+    "no-final-result": sdk_call(final_result=None),
+    "final-result-not-success": sdk_call(final_result=final_result(result="http_5xx")),
+    "byok-unknown": sdk_call(final_result=final_result(isByok=None)),
+    "byok-true": sdk_call(final_result=final_result(isByok=True)),
+    "usage-byok-unknown": sdk_call(usage=usage(isByok=None)),
+    "usage-byok-true": sdk_call(usage=usage(isByok=True)),
+    "usage-auto": sdk_call(usage=usage(isAuto=True)),
+    "fusion-on-message": sdk_call(answer=fusion(answer())),
+    "fusion-on-usage": sdk_call(usage=fusion(usage())),
+    "fusion-on-call-start": sdk_call(call_start=fusion(call_start())),
+    "fusion-on-failure": sdk_call(
+        call_start=[call_start(), fusion(failure("api", 503)), call_start()]
+    ),
+    "auto-resolved-even-naming-the-pin": sdk_call(extra=auto_resolved(PIN)),
+    "model-change-other": sdk_call(extra=model_change(OTHER)),
+    "server-tools-bare-provider": sdk_call(
+        answer=answer(serverTools={"provider": "openai-responses"})
+    ),
+    "server-tools-advisor": sdk_call(
+        answer=answer(serverTools={"provider": "anthropic", "advisorModel": OTHER})
+    ),
+    "tool-request": sdk_call(
+        answer=answer(toolRequests=[{"name": "bash", "toolCallId": "tool-1"}])
+    ),
+    "tools-updated": sdk_call(extra=tools_updated()),
+    "mcp-server-loaded": sdk_call(
+        extra=mcp_loaded([{"name": "github-mcp-server", "status": "connected"}])
+    ),
+    "mcp-server-status": sdk_call(extra=mcp_status("github-mcp-server")),
+    "skill-loaded": sdk_call(extra=skills_loaded([SKILL])),
+    "extension-loaded": sdk_call(extra=extensions_loaded([EXTENSION])),
+    "custom-agent-loaded": sdk_call(extra=agents_updated([AGENT])),
+    "permission-requested": sdk_call(extra=permission_requested()),
+    "unknown-event-type": sdk_call(extra=unknown_event()),
+    "sampling-requested": sdk_call(extra=sampling_requested()),
+    "hook-start": sdk_call(extra=hook_start()),
+    "skill-invoked": sdk_call(extra=skill_invoked()),
+    "tool-search-activated": sdk_call(extra=tool_search_activated()),
+    "external-tool-requested": sdk_call(extra=external_tool_requested()),
+    "workflow-run-started": sdk_call(extra=run_started()),
+    "server-tool-progress": sdk_call(extra=server_tool_progress()),
+    "truncated": sdk_call(extra=truncation()),
+    "compacted": sdk_call(extra=compaction_start()),
+    "limits-exhausted": sdk_call(extra=limits_exhausted()),
+    "idle-aborted": sdk_call(idle=idle(aborted=True)),
+    "no-idle": sdk_call(idle=None),
+    "no-turn-end": sdk_call(turn_end=None),
+    "no-answer": sdk_call(answer=None),
+    "two-answers": sdk_call(answer=[answer(), answer()]),
+    "usage-other-effort": sdk_call(usage=usage(reasoningEffort="low")),
+    "usage-no-effort": sdk_call(usage=usage(reasoningEffort=None)),
+    "usage-effort-none": sdk_call(usage=usage(reasoningEffort="none")),
+    "usage-empty-finish-reason": sdk_call(usage=usage(finishReason="")),
+    "usage-tools-offered": sdk_call(usage=usage(availableToolCount=3)),
+    "usage-content-filter": sdk_call(usage=usage(contentFilterTriggered=True)),
+    "usage-no-finish-reason": sdk_call(usage=usage(finishReason=None)),
+    "two-usages": sdk_call(usage=[half, half]),
+    "call-finished-error": sdk_call(call_finished=call_finished("error")),
+    "failure-after-the-result": sdk_call(extra=failure("api", 503)),
+    "session-error-beside-the-answer": sdk_call(extra=error(500)),
+}
+
+
+@pytest.mark.parametrize("seen", list(REFUSED.values()), ids=list(REFUSED))
+def test_anything_but_the_call_asked_for_states_no_finish_reason_and_keeps_its_bill(
+    seen: list[Event],
+) -> None:
+    message = reply_message(seen, TARGET)
+    assert "finish_reason" not in message.response_metadata
+    assert message.response_metadata["nano_aiu"] == 251_164_000
 
 
 ADMITTED: dict[str, Event] = {
@@ -323,6 +612,12 @@ ADMITTED: dict[str, Event] = {
 def test_an_allow_listed_event_leaves_the_finish_reason_stated(extra: Event) -> None:
     message = reply_message(sdk_call(extra=extra), TARGET)
     assert message.response_metadata["finish_reason"] == "stop"
+
+
+def test_a_failure_before_the_one_settled_result_is_the_runtimes_own_recovery() -> None:
+    message = reply_message(RECOVERED, TARGET)
+    assert message.response_metadata["finish_reason"] == "stop"
+    assert message.response_metadata["nano_aiu"] == 300_000_000
 
 
 def test_the_allow_list_and_the_refusing_names_are_disjoint_and_in_the_schema() -> None:
@@ -386,6 +681,16 @@ def test_a_count_not_stated_as_a_whole_number_is_no_usage(
 # -- The charge (R2.3, R2.4, R2.9). ------------------------------------------
 
 
+def test_the_charge_is_the_checkpoints_ai_units_at_the_reservations_credit_price() -> (
+    None
+):
+    message = reply_message(SDK_HAPPY, TARGET)
+    charge = settled_charge(message, CREDIT)
+    # 251,164,000 nano-AIU is 0.251164 credits; at $0.01 a credit, exactly.
+    assert charge == Decimal("0.00251164")
+    assert isinstance(charge, Decimal)
+
+
 def test_the_largest_whole_ai_unit_count_is_charged_exactly() -> None:
     largest = 2**53 - 1
     message = AIMessage(content="answer", response_metadata={"nano_aiu": largest})
@@ -416,9 +721,93 @@ def test_a_charge_with_no_whole_ai_units_or_no_credit_price_is_unknown(
     assert settled_charge(message, cast(Decimal, credit)) is None
 
 
+def test_zero_ai_units_on_an_answered_call_is_an_unknown_charge() -> None:
+    seen = sdk_call(usage=None, checkpoint=checkpoint(0, 1))
+    message = reply_message(seen, TARGET)
+    assert "nano_aiu" not in message.response_metadata
+    assert settled_charge(message, CREDIT) is None
+    # One nano-AIU is a stated spend, and is billed.
+    seen = sdk_call(usage=None, checkpoint=checkpoint(1, 1))
+    assert reply_message(seen, TARGET).response_metadata["nano_aiu"] == 1
+
+
 def test_a_stated_zero_settles_at_zero() -> None:
     message = AIMessage(content="", response_metadata={"nano_aiu": 0})
     assert settled_charge(message, CREDIT) == Decimal(0)
+
+
+def test_zero_ai_units_on_an_unanswered_call_is_a_stated_zero() -> None:
+    seen = sdk_call(answer=None, usage=None, checkpoint=checkpoint(0))
+    assert reply_message(seen, TARGET).response_metadata["nano_aiu"] == 0
+
+
+@pytest.mark.parametrize("nano_aiu", [251_164_000.5, 2.0**53, -1.0, float("inf")])
+def test_a_checkpoint_that_is_not_a_whole_number_is_an_unknown_charge(
+    nano_aiu: float,
+) -> None:
+    message = reply_message(sdk_call(checkpoint=checkpoint(nano_aiu, 1)), TARGET)
+    assert "nano_aiu" not in message.response_metadata
+    assert settled_charge(message, CREDIT) is None
+
+
+def test_no_checkpoint_is_an_unknown_charge_even_with_token_counts() -> None:
+    message = reply_message(sdk_call(checkpoint=None), TARGET)
+    assert message.usage_metadata is not None
+    assert "nano_aiu" not in message.response_metadata
+    assert settled_charge(message, CREDIT) is None
+
+
+def test_the_last_checkpoint_is_the_sessions_total() -> None:
+    seen = sdk_call(
+        call_start=[checkpoint(1_000), call_start()],
+        checkpoint=[checkpoint(200_000_000), checkpoint(251_164_000)],
+    )
+    assert reply_message(seen, TARGET).response_metadata["nano_aiu"] == 251_164_000
+
+
+def test_a_checkpoint_that_falls_is_no_running_total_and_an_unknown_charge() -> None:
+    seen = sdk_call(checkpoint=[checkpoint(300_000_000), checkpoint(251_164_000)])
+    assert "nano_aiu" not in reply_message(seen, TARGET).response_metadata
+
+
+def test_a_checkpoint_before_the_answer_does_not_bill_it() -> None:
+    seen = sdk_call(
+        call_start=[call_start(), checkpoint(251_164_000)],
+        checkpoint=None,
+    )
+    assert "nano_aiu" not in reply_message(seen, TARGET).response_metadata
+
+
+def test_per_request_ai_units_above_the_checkpoint_are_unknown() -> None:
+    over = usage(copilotUsage={"totalNanoAiu": 251_164_001, "model": PIN})
+    message = reply_message(sdk_call(usage=over), TARGET)
+    assert "nano_aiu" not in message.response_metadata
+    at = usage(copilotUsage={"totalNanoAiu": 251_164_000, "model": PIN})
+    assert reply_message(sdk_call(usage=at), TARGET).response_metadata["nano_aiu"] == (
+        251_164_000
+    )
+
+
+@pytest.mark.parametrize(
+    ("premium", "read"),
+    [
+        (1, "1.0"),
+        (0.5, "0.5"),
+        (0, "0.0"),
+        (None, None),
+        (-1.0, None),
+        (float("nan"), None),
+    ],
+)
+def test_premium_requests_are_read_as_a_decimal(
+    premium: float | None, read: str | None
+) -> None:
+    message = reply_message(
+        sdk_call(checkpoint=checkpoint(251_164_000, premium)), TARGET
+    )
+    assert message.response_metadata["premium_requests"] == read
+    if read is not None:
+        assert Decimal(read) == Decimal(str(premium))
 
 
 # -- Spend on a failed call (R2.10) and the errors (R1). ---------------------
@@ -471,6 +860,64 @@ def test_a_model_pinned_at_no_effort_takes_a_usage_stating_none(
 ) -> None:
     message = reply_message(sdk_call(usage=usage(reasoningEffort=effort)), NO_EFFORT)
     assert message.response_metadata["finish_reason"] == "stop"
+
+
+def test_equal_checkpoints_are_a_running_total() -> None:
+    seen = sdk_call(checkpoint=[checkpoint(251_164_000), checkpoint(251_164_000)])
+    assert reply_message(seen, TARGET).response_metadata["nano_aiu"] == 251_164_000
+
+
+def test_a_settled_result_right_after_the_checkpoint_is_not_billed_by_it() -> None:
+    seen = sdk_call(
+        usage=None,
+        final_result=[checkpoint(251_164_000), final_result()],
+        checkpoint=None,
+    )
+    assert "nano_aiu" not in reply_message(seen, TARGET).response_metadata
+
+
+@pytest.mark.parametrize(
+    "usages",
+    [
+        # Each below the checkpoint, together above it.
+        [
+            usage(copilotUsage={"totalNanoAiu": 200_000_000, "model": PIN}),
+            usage(copilotUsage={"totalNanoAiu": 200_000_000, "model": PIN}),
+        ],
+        # A usage with no per-request figure does not end the sum.
+        [
+            usage(copilotUsage=None),
+            usage(copilotUsage={"totalNanoAiu": 251_164_001, "model": PIN}),
+        ],
+    ],
+    ids=["summed", "after-a-usage-with-none"],
+)
+def test_every_per_request_figure_counts_against_the_checkpoint(
+    usages: list[Event],
+) -> None:
+    assert (
+        "nano_aiu"
+        not in reply_message(sdk_call(usage=usages), TARGET).response_metadata
+    )
+
+
+def test_a_zero_per_request_figure_is_a_stated_count() -> None:
+    zero = usage(copilotUsage={"totalNanoAiu": 0, "model": PIN})
+    message = reply_message(sdk_call(usage=zero), TARGET)
+    assert message.response_metadata["nano_aiu"] == 251_164_000
+
+
+def _malformed(event: Event, **data: object) -> Event:
+    """`event` with fields the SDK would never write: wire the host must read
+    and refuse without raising, because a transport delivers dicts."""
+    return {**event, "data": {**event["data"], **data}}
+
+
+def test_a_per_request_figure_that_is_not_an_object_is_an_unknown_charge() -> None:
+    seen = sdk_call(usage=_malformed(usage(), copilotUsage="x"))
+    message = reply_message(seen, TARGET)
+    assert "nano_aiu" not in message.response_metadata
+    assert "finish_reason" not in message.response_metadata
 
 
 def test_every_usages_tokens_are_counted_and_an_absent_cache_count_is_zero() -> None:
