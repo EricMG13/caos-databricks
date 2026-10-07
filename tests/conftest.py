@@ -393,7 +393,11 @@ def empty_database(request: pytest.FixtureRequest) -> Iterator[str]:
     try:
         yield _url_for(name)
     finally:
-        with psycopg.connect(POSTGRES_URL, autocommit=True) as admin:
+        # A test may leave PGOPTIONS holding a statement timeout; a connection
+        # option outranks it, so the teardown is not cut short and leaked.
+        with psycopg.connect(
+            POSTGRES_URL, autocommit=True, options="-c statement_timeout=0"
+        ) as admin:
             admin.execute(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
 
 
