@@ -74,8 +74,9 @@ MAX_COMPLETION_TOKENS = 65_536
 # 2026-10-05). Luna answered FCA3-dec's 4,033,648-byte CP-0 request with a
 # 400, which this bound now prevents. The workspace endpoints are declared at
 # 1,000,000 tokens on the owner's word of 2026-10-06 (D119, closing N170).
-# An endpoint missing here (a `copilot:` name, D77) keeps the transport
-# ceiling, and its run says so (`context_notice`).
+# An endpoint missing here keeps the transport ceiling, and its run says so
+# (`context_notice`); a `copilot:` name missing here is declared at
+# `COPILOT_CONTEXT_TOKENS`.
 OWNER_DECLARED_CONTEXT = 1_000_000
 WORKSPACE_ENDPOINTS: tuple[str, ...] = (
     "grok-4-7",
@@ -98,6 +99,12 @@ CONTEXT_TOKENS: Mapping[str, int] = MappingProxyType(
         "openai/gpt-6-sol": 1_050_000,
     }
 )
+# Every approved `copilot:` model's context, at the long-context tier each
+# session requests (D77, R4): source "owner, 2026-10-06, 1M". A host constant,
+# so a run's request ceiling is the same in every worker process and on every
+# replay (MEDIUM-1); readiness holds the seat's listing to it as a floor and
+# never reads the ceiling from it (`caos.copilot.require_ready`).
+COPILOT_CONTEXT_TOKENS = OWNER_DECLARED_CONTEXT
 # The fewest request bytes one prompt token is assumed to take. Measured
 # (D116) at 3.82 to 4.64 per native token over 195 live calls, 4.02 per the
 # router's count; a numeric-table pack can be denser (2.54, N170).
@@ -122,8 +129,8 @@ def request_ceiling(model: str) -> int:
     1: refusing it stopped every approved workspace endpoint). A declared
     context no wider than the completion leaves the prompt no room, and
     refuses `PROVIDER_NOT_CONFIGURED`. A Copilot model's context is its
-    listing's, else its pinned entry (`caos.copilot.context_tokens`, R4), and
-    its completion is its own output cap (`caos.copilot.output_cap`, R2.5).
+    pinned entry, else `COPILOT_CONTEXT_TOKENS` (`caos.copilot.context_tokens`),
+    and its completion is its own output cap (`caos.copilot.output_cap`, R2.5).
     Imported here: `caos.copilot` imports this module at its top."""
     from caos import copilot
 
@@ -145,7 +152,7 @@ _PLAIN_NAME = re.compile(r"[A-Za-z0-9._:/@+-]{1,256}")
 
 def context_notice(model: str) -> str | None:
     """The line a run on `model` prints when no context is declared for it,
-    or None when one is (D116, N170; a Copilot model's listing, R4)."""
+    or None when one is (D116, N170; every `copilot:` model is declared)."""
     from caos import copilot
 
     if copilot.context_tokens(model) is not None:
@@ -311,6 +318,14 @@ reserved_amount: ContextVar[Decimal | None] = ContextVar(
 reserved_credit: ContextVar[Decimal | None] = ContextVar(
     "caos_reserved_credit", default=None
 )
+
+
+# The seconds left of the one call deadline (ST-9) when `models._invoked`
+# hands a try to its chat model: a transport that runs its own timer
+# (`caos.copilot.ChatCopilot`) asks for no more than this, so a session sent
+# again after a 429 cannot outlive the deadline the worker records. Set in the
+# context the call's own thread runs in; None outside a call.
+call_seconds: ContextVar[float | None] = ContextVar("caos_call_seconds", default=None)
 
 
 @contextmanager

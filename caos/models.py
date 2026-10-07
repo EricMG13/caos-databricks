@@ -57,6 +57,7 @@ from caos.provider import (
     Completion,
     CutAfterContentError,
     DropKind,
+    call_seconds,
     check_resend,
     encode_request,
     finish_refusal,
@@ -355,6 +356,8 @@ def _invoked(
     """
     answered: list[object] = []
     context = contextvars.copy_context()
+    # What is left of the deadline, for a transport that times itself.
+    context.run(call_seconds.set, max(seconds, 0.0))
 
     def send() -> None:
         try:
