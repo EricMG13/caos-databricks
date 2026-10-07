@@ -74,14 +74,20 @@ class ModelPrice:
     as_of: date
 
 
-def priced_request(price: ModelPrice, request_bytes: int) -> Decimal:
+def priced_request(
+    price: ModelPrice,
+    request_bytes: int,
+    *,
+    output_tokens: int = MAX_COMPLETION_TOKENS,
+) -> Decimal:
     """The most a call sending `request_bytes` can cost at this price, exactly.
 
     Input is priced per request byte rather than per token, which over-counts:
     a token is at least one byte, so the bound holds without a tokenizer.
-    Output is priced at the completion cap, which is what the provider is
-    permitted to return. Over the transport ceiling is refused rather than
-    priced -- that request cannot be sent, so there is nothing to reserve for.
+    Output is priced at `output_tokens`, the most the transport lets the model
+    return: the completion cap unless a transport caps it elsewhere (R2.5,
+    D77). Over the transport ceiling is refused rather than priced -- that
+    request cannot be sent, so there is nothing to reserve for.
     """
     if not isinstance(price.model, str) or not price.model:
         raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
@@ -93,11 +99,16 @@ def priced_request(price: ModelPrice, request_bytes: int) -> Decimal:
         raise Refusal(RefusalCode.MONEY_INVALID)
     if request_bytes > MAX_REQUEST_BYTES:
         raise Refusal(RefusalCode.CONTEXT_OVER_CEILING)
+    # A cap of nothing reserves nothing for an answer the model may still give.
+    if isinstance(output_tokens, bool) or not isinstance(output_tokens, int):
+        raise Refusal(RefusalCode.MONEY_NOT_DECIMAL)
+    if output_tokens < 1:
+        raise Refusal(RefusalCode.MONEY_INVALID)
     exact = exact_context()
     try:
         amount = exact.add(
             exact.multiply(price.input_per_token, request_bytes),
-            exact.multiply(price.output_per_token, MAX_COMPLETION_TOKENS),
+            exact.multiply(price.output_per_token, output_tokens),
         )
     except DecimalException:
         raise Refusal(RefusalCode.MONEY_INVALID) from None

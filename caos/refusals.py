@@ -56,6 +56,10 @@ class RefusalCode(StrEnum):
     # The request an attempt is about to send prices above what that attempt
     # reserved: the context is unchanged, the reservation no longer covers it.
     RESERVATION_BELOW_REQUEST = "RESERVATION_BELOW_REQUEST"
+    # R2.6 (D77, addendum 2): a settled charge above what its attempt reserved.
+    # Recorded in full, the answer not accepted, and the run parked for good on
+    # its pin: the same price would reserve, and overshoot, the same way.
+    BUDGET_CHARGE_OVER_RESERVATION = "BUDGET_CHARGE_OVER_RESERVATION"
     PROVIDER_UNAVAILABLE = "PROVIDER_UNAVAILABLE"
     PROVIDER_OUTPUT_TRUNCATED = "PROVIDER_OUTPUT_TRUNCATED"
     PROVIDER_REFUSED = "PROVIDER_REFUSED"
