@@ -102,7 +102,7 @@ def _survived(sent: object, written: object, where: str) -> None:
 
 
 def started(
-    model: str = PIN, version: str = "1.0.90", effort: str | None = "high"
+    model: str | None = PIN, version: str = "1.0.90", effort: str | None = "high"
 ) -> Event:
     return wire(
         "session.start",
@@ -696,7 +696,7 @@ def _bill_kept(seen: list[Event]) -> int | None:
 
 
 ADMITTED: dict[str, Event] = {
-    "model-change-to-the-pin": model_change(PIN, previous="auto"),
+    "model-change-to-the-pin": model_change(PIN),
     "no-mcp-server": mcp_loaded([]),
     "no-skill": skills_loaded([]),
     "no-extension": extensions_loaded([]),
@@ -1676,13 +1676,12 @@ ADMITTED_ROUND_1: dict[str, list[Event]] = {
         extra=wire(
             "session.model_change",
             newModel=PIN,
-            previousModel=OTHER,
+            previousModel=PIN,
             reasoningEffort="high",
         ),
     ),
-    "dispatch-and-turns-naming-no-model": sdk_call(
+    "turns-naming-no-model": sdk_call(
         turn_start=wire("assistant.turn_start", turnId="turn-1"),
-        call_start=wire("model.call_start", turnId="turn-1"),
         turn_end=wire("assistant.turn_end", turnId="turn-1"),
     ),
 }
@@ -1985,8 +1984,8 @@ QUIET_FAKES: list[list[Event]] = [
     [turn_start()],
     [turn_end()],
     FAILED_DISPATCH,
-    [call_start(), failure("transport"), call_finished("cancelled")],
-    [call_start(), call_finished("rejected")],
+    [call_start(), failure("transport"), call_finished("error")],
+    [call_start(), call_finished("error")],
     [failure("api", 500)],
     [final_result(result="http_5xx")],
     [checkpoint(0)],
@@ -2317,14 +2316,17 @@ def test_one_prompt_is_one_turn(seen: list[Event]) -> None:
 
 
 FIELDS_ADMITTED: dict[str, list[Event]] = {
-    "cache-break-from-another-model-to-the-pin": sdk_call(
-        extra=cache_break(modelFrom=OTHER, modelTo=PIN)
+    "cache-break-from-the-pin-to-the-pin": sdk_call(
+        extra=cache_break(modelFrom=PIN, modelTo=PIN)
     ),
     "prompt-in-interactive-mode": sdk_call(
         extra=wire("user.message", content=PROMPT, agentMode="interactive")
     ),
-    "model-change-from-another-model": sdk_call(
-        extra=model_change(PIN, previous=OTHER)
+    "model-change-from-the-pin": sdk_call(extra=model_change(PIN, previous=PIN)),
+    "model-change-by-this-host": sdk_call(
+        extra=wire(
+            "session.model_change", newModel=PIN, reasoningEffort="high", source="sdk"
+        )
     ),
 }
 
@@ -2332,7 +2334,7 @@ FIELDS_ADMITTED: dict[str, list[Event]] = {
 @pytest.mark.parametrize(
     "seen", list(FIELDS_ADMITTED.values()), ids=list(FIELDS_ADMITTED)
 )
-def test_a_field_naming_only_the_pin_or_the_past_is_admitted(
+def test_a_field_naming_only_the_pin_is_admitted(
     seen: list[Event],
 ) -> None:
     assert reply_message(seen, TARGET).response_metadata["finish_reason"] == "stop"
@@ -2347,19 +2349,22 @@ NAMED_FIELDS = [
     ("behaviorModelId", OTHER, False),
     ("chosenModel", OTHER, False),
     ("chosenModel", PIN, True),
-    ("previousModel", OTHER, True),
-    ("modelFrom", OTHER, True),
+    ("previousModel", OTHER, False),
+    ("previousModel", PIN, True),
+    ("modelFrom", OTHER, False),
+    ("modelFrom", PIN, True),
     ("models", [PIN, OTHER], False),
     ("models", [PIN], True),
     ("candidateModels", [OTHER], False),
     ("effort", "low", False),
     ("effort", "high", True),
     ("initialEffort", "low", False),
-    ("previousReasoningEffort", "low", True),
+    ("previousReasoningEffort", "low", False),
+    ("previousReasoningEffort", "high", True),
     ("isAuto", True, False),
     ("autoTier", "balance", False),
     ("effectiveAutoTier", "fast", False),
-    ("previousAutoTier", "fast", True),
+    ("previousAutoTier", "fast", False),
     ("agentId", "a", False),
     ("interruptedAgentCount", 1, False),
     ("consumedSubagents", 1, False),
@@ -2498,7 +2503,6 @@ def test_a_spend_figure_above_the_checkpoint_anywhere_leaves_the_charge_unknown(
 
 WITHIN: dict[str, Event] = {
     "fusion-completed": fusion_completed(100_000_000),
-    "compaction-copilot-usage": compaction_complete_at(251_164_000),
     "limits-exhausted-credits": limits_exhausted(0.1, 30.0),
 }
 
@@ -2789,3 +2793,276 @@ def test_an_event_whose_type_is_not_text_is_spend_and_never_raises() -> None:
     assert isinstance(invoked([*UNSPENT, odd, error(500)]), AIMessage)
     late = sdk_call(idle=[odd, idle()])
     assert "nano_aiu" not in reply_message(late, TARGET).response_metadata
+
+
+# -- Fix round 4: the re-audit of 581d2e2, as tests. -------------------------
+
+FINISH_OUTCOMES = sorted(
+    outcome.value for outcome in session_events.ModelCallFinishedOutcome
+)
+
+
+# Item 1 (F578): `rejected` follows a provider response ("rejected during
+# post-response acceptance processing") and `cancelled` may follow a streamed
+# one, so only `error` closes a dispatch quietly.
+RE_PAY_ROUND_4: dict[str, list[Event]] = {
+    f"{outcome}-{shape}": [
+        *UNSPENT,
+        call_start(),
+        *middle,
+        call_finished(outcome),
+        *end,
+    ]
+    for outcome in ("rejected", "cancelled")
+    for shape, middle, end in (
+        ("after-a-500", [failure("api", 500)], [error(500), idle()]),
+        ("settled-http-5xx", [], [final_result(result="http_5xx"), idle()]),
+        ("settled-other-error", [], [final_result(result="other_error"), idle()]),
+    )
+}
+
+
+@pytest.mark.parametrize(
+    "seen", list(RE_PAY_ROUND_4.values()), ids=list(RE_PAY_ROUND_4)
+)
+def test_a_dispatch_rejected_or_cancelled_is_spend_never_a_declared_drop(
+    seen: list[Event],
+) -> None:
+    assert isinstance(invoked(seen), AIMessage)
+    completion = provider(replying(*seen)).complete(PROMPT)
+    assert completion.drop_kind is None
+
+
+@EXAMPLES
+@given(
+    st.sampled_from(FINISH_OUTCOMES),
+    st.sampled_from(
+        [
+            [failure("api", 500), error(500), idle()],
+            [final_result(result="http_5xx"), idle()],
+            [failure("api", 429), error(429)],
+        ]
+    ),
+)
+def test_property_only_a_dispatch_that_finished_in_error_can_be_a_drop(
+    outcome: str, ending: list[Event]
+) -> None:
+    seen = [*UNSPENT, call_start(), call_finished(outcome), *ending]
+    assert copilot_module._spent(seen) is (outcome != "error")
+    if outcome == "error":
+        with pytest.raises(CopilotStatusError):
+            invoked(seen)
+    else:
+        assert isinstance(invoked(seen), AIMessage)
+
+
+# Item 2 (F579): per-request spend is summed across every event that states it.
+def phase_failed(nano_aiu: int) -> Event:
+    return wire(
+        "assistant.fusion_phase_failed",
+        conversationScope="root",
+        durationMs=1.0,
+        fusionId="f",
+        model=PIN,
+        phaseId="q",
+        phaseKind="primary",
+        reason="r",
+        role="r",
+        status="failed",
+        usage={
+            "cachedTokens": 0,
+            "inputTokens": 1,
+            "outputTokens": 1,
+            "requestCount": 1,
+            "totalNanoAiu": nano_aiu,
+        },
+    )
+
+
+SUMMED_ABOVE: dict[str, list[Event]] = {
+    "compaction-and-request": sdk_call(
+        started=[started(), compaction_complete_at(250_000_000)]
+    ),
+    "two-fusion-phases": sdk_call(
+        usage=usage(copilotUsage=None),
+        extra=[phase_completed(200_000_000), phase_failed(200_000_000)],
+    ),
+    "fusion-phase-and-request": sdk_call(extra=phase_completed(1)),
+}
+
+
+@pytest.mark.parametrize("seen", list(SUMMED_ABOVE.values()), ids=list(SUMMED_ABOVE))
+def test_per_request_spend_summed_across_event_types_above_the_bill_voids_it(
+    seen: list[Event],
+) -> None:
+    assert "nano_aiu" not in reply_message(seen, TARGET).response_metadata
+
+
+def test_per_request_spend_summed_to_exactly_the_bill_is_billed() -> None:
+    seen = sdk_call(
+        started=[started(), compaction_complete_at(1_164_000)],
+        usage=usage(copilotUsage={"totalNanoAiu": 200_000_000, "model": PIN}),
+        extra=phase_completed(50_000_000),
+    )
+    assert reply_message(seen, TARGET).response_metadata["nano_aiu"] == 251_164_000
+
+
+HOLDERS: dict[str, Callable[[int], Event]] = {
+    "usage": lambda n: usage(copilotUsage={"totalNanoAiu": n, "model": PIN}),
+    "compaction": compaction_complete_at,
+    "fusion-phase-completed": phase_completed,
+    "fusion-phase-failed": phase_failed,
+}
+
+
+@EXAMPLES
+@given(
+    st.lists(
+        st.tuples(
+            st.sampled_from(sorted(HOLDERS)),
+            st.integers(min_value=0, max_value=3 * 10**8),
+        ),
+        min_size=1,
+        max_size=4,
+    ),
+    st.integers(min_value=1, max_value=10**9),
+)
+def test_property_per_request_spend_bills_only_when_its_sum_is_within_the_bill(
+    stated: list[tuple[str, int]], total: int
+) -> None:
+    held = [HOLDERS[holder](figure) for holder, figure in stated]
+    seen = sdk_call(usage=None, extra=held, checkpoint=checkpoint(total))
+    nano = reply_message(seen, TARGET).response_metadata.get("nano_aiu")
+    assert nano == (total if sum(figure for _h, figure in stated) <= total else None)
+
+
+# The SDK classes that state nano-AIU, by how the bill holds each: summed as
+# per-request spend, the cumulative bill itself, an aggregate held alone (a
+# fusion turn's total of its phases; a shutdown's per-model sum), or a
+# sub-agent's, which voids.
+PER_REQUEST_CLASSES = {
+    "AssistantUsageCopilotUsage",
+    "_CompactionCompleteCompactionTokensUsedCopilotUsage",
+    "FusionPhaseUsage",
+}
+HELD_OTHERWISE = {
+    "SessionUsageCheckpointData",
+    "SessionShutdownData",
+    "ShutdownModelMetric",
+    "SessionFusionCompletedData",
+    "ShutdownAgentMetric",
+}
+
+
+def test_every_sdk_class_stating_nano_ai_units_is_summed_or_held_otherwise() -> None:
+    stating = {
+        name
+        for name, cls in inspect.getmembers(session_events, inspect.isclass)
+        if "total_nano_aiu" in getattr(cls, "__annotations__", {})
+    }
+    assert stating == PER_REQUEST_CLASSES | HELD_OTHERWISE
+    for holder in HOLDERS.values():
+        blocks = copilot_module._requests([holder(7)])
+        assert [
+            cast(Mapping[str, object], block)["totalNanoAiu"] for block in blocks
+        ] == [7]
+
+
+# Item 3 (F580): the model proof reads the past too, and a dispatch must name.
+MODEL_PROOF_ROUND_4: dict[str, list[Event]] = {
+    "cache-break-from-another-model": sdk_call(
+        extra=cache_break(modelFrom=OTHER, modelTo=PIN)
+    ),
+    "model-change-from-another-model": sdk_call(
+        extra=model_change(PIN, previous=OTHER)
+    ),
+    "model-change-automatic": sdk_call(
+        extra=wire(
+            "session.model_change",
+            newModel=PIN,
+            reasoningEffort="high",
+            source="automatic",
+        )
+    ),
+    "model-change-by-an-agent": sdk_call(
+        extra=wire(
+            "session.model_change", newModel=PIN, reasoningEffort="high", source="agent"
+        )
+    ),
+    "model-change-by-plan-mode": sdk_call(
+        extra=wire(
+            "session.model_change",
+            newModel=PIN,
+            reasoningEffort="high",
+            source="plan_mode",
+        )
+    ),
+    "dispatch-naming-no-model": sdk_call(
+        call_start=wire("model.call_start", turnId="turn-1")
+    ),
+    "an-unnamed-dispatch-before-the-pins": sdk_call(
+        turn_start=[
+            turn_start(),
+            wire("model.call_start", turnId="turn-1"),
+            reasoning(),
+            call_finished(),
+        ]
+    ),
+    "start-selecting-no-model": sdk_call(usage=None, started=started(model=None)),
+}
+
+
+@pytest.mark.parametrize(
+    "seen", list(MODEL_PROOF_ROUND_4.values()), ids=list(MODEL_PROOF_ROUND_4)
+)
+def test_another_model_named_in_the_past_or_no_model_named_refuses(
+    seen: list[Event],
+) -> None:
+    message = reply_message(seen, TARGET)
+    assert "finish_reason" not in message.response_metadata
+    assert message.response_metadata["nano_aiu"] == 251_164_000
+
+
+CHANGE_SOURCES = sorted(source.value for source in session_events.ModelChangeSource)
+REFUSED_SOURCES = {"automatic", "agent", "plan_mode", "auto_tier_recommendation"}
+
+
+@EXAMPLES
+@given(
+    st.sampled_from([None, *CHANGE_SOURCES]),
+    st.sampled_from([None, PIN, OTHER]),
+    st.sampled_from([None, PIN, OTHER]),
+    st.booleans(),
+    st.booleans(),
+)
+def test_property_the_finish_stands_only_when_every_dispatch_names_only_the_pin(
+    source: str | None,
+    previous: str | None,
+    moved_from: str | None,
+    dispatch_named: bool,
+    start_named: bool,
+) -> None:
+    change = wire(
+        "session.model_change",
+        newModel=PIN,
+        previousModel=previous,
+        reasoningEffort="high",
+        source=source,
+    )
+    seen = sdk_call(
+        started=started(model=PIN if start_named else None),
+        call_start=call_start()
+        if dispatch_named
+        else wire("model.call_start", turnId="turn-1"),
+        extra=[change, cache_break(modelFrom=moved_from, modelTo=PIN)],
+    )
+    stands = (
+        source not in REFUSED_SOURCES
+        and previous in (None, PIN)
+        and moved_from in (None, PIN)
+        and dispatch_named
+        and start_named
+    )
+    message = reply_message(seen, TARGET)
+    assert ("finish_reason" in message.response_metadata) is stands
+    assert message.response_metadata["nano_aiu"] == 251_164_000
