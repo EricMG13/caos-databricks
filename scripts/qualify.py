@@ -174,7 +174,12 @@ def _capture(
 def _attempts(conn: StoreConnection, runs: list[UUID]) -> list[dict[str, Plain]]:
     """Every attempt of every prepared run, as the store recorded it, in case
     order: the charge, model and generation id a vendor bill is reconciled
-    against, each row naming its run (DQ-6)."""
+    against, each row naming its run (DQ-6). Each row also names how a call
+    with no answer ended and the reservation it held: a cut the provider
+    declared after content (`declared_after_content`) has no charge but may
+    have been billed for what it streamed, so its generation id and its
+    reservation -- the most it can have cost -- stand beside the charges
+    (D118 fix round 1); the run's spend is never read from charges alone."""
     return [
         {
             "run_id": str(row[0]),
@@ -184,12 +189,16 @@ def _attempts(conn: StoreConnection, runs: list[UUID]) -> list[dict[str, Plain]]
             "model": row[4],
             "generation_id": row[5],
             "diagnostic_sha256": row[6],
+            "drop_kind": row[7],
+            "reserved": None if row[8] is None else str(row[8]),
         }
         for row in conn.execute(
             "SELECT t.run_id,t.route_node_id,t.ordinal,l.amount,o.model,"
-            " o.generation_id,o.diagnostic_sha256 FROM run_attempts t"
+            " o.generation_id,o.diagnostic_sha256,o.drop_kind,b.amount"
+            " FROM run_attempts t"
             " LEFT JOIN budget_ledger l USING(attempt_id)"
             " LEFT JOIN call_outcomes o USING(attempt_id)"
+            " LEFT JOIN budget_reservations b USING(attempt_id)"
             " WHERE t.run_id = ANY(%s)"
             " ORDER BY array_position(%s::uuid[], t.run_id),t.started_at,t.attempt_id",
             (runs, runs),

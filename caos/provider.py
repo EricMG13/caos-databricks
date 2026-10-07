@@ -166,9 +166,10 @@ class CutAfterContentError(Exception):
     from the body alone whether the provider declared the failure, and so
     whether the node earns its one re-attempt (D118)."""
 
-    def __init__(self, body: object) -> None:
+    def __init__(self, body: object, *, generation_id: object = None) -> None:
         super().__init__()
         self.body = body
+        self.generation_id = generation_id
 
 
 @dataclass(frozen=True, slots=True)

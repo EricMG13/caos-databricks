@@ -193,9 +193,13 @@ _RESULT_STATUS: Mapping[str | None, int] = {
     "http_413": 413,
     "http_429": 429,
 }
-# The values that declare a failure with no status (D110): a provider-stated
-# 4xx or 5xx class. `transport_error` and `other_error` declare nothing.
-_DECLARED_RESULTS = frozenset({"http_4xx", "http_5xx"})
+# The one settled result the runtime declares a provider's failure with no
+# status: a 5xx. A 4xx however stated is never declared (D118, F566), so
+# `http_4xx` is an undeclared vendor drop.
+_DECLARED_RESULT = "http_5xx"
+# D118's vocabulary for "the provider, not the request, failed"
+# (`models._RETRYABLE_ERROR_TYPES`), which `models._declares` reads.
+_DECLARED_ERROR_TYPE = "provider_unavailable"
 
 # One session event as the runtime writes it: `{"type": ..., "data": {...}}`.
 Event = Mapping[str, Any]
@@ -228,16 +232,22 @@ class CopilotStatusError(OpenAIError):
     """A failed call with no spend and no answer, by its status alone, so
     `ChatCompletions` maps it as it maps a gateway status (`NEVER_RETRIED`, the
     429 re-send under the same reservation, D110's `DropKind`). A failure the
-    runtime declared with no status carries `{"error": {"result": <value>}}`
-    as its body, which `models._declared` reads as declared; no other failure
+    runtime declared a 5xx with no status carries `{"error": {"result":
+    "http_5xx", "metadata": {"error_type": "provider_unavailable"}}}` as its
+    body, which `models._declared` reads as declared (D118); no other failure
     carries a body. Its message is the platform's name and nothing else."""
 
     def __init__(self, status_code: int | None, *, declared: str | None = None) -> None:
         super().__init__(PLATFORM)
         self.status_code = status_code
         self.body: Mapping[str, Any] | None = (
-            {"error": {"result": declared}}
-            if status_code is None and declared in _DECLARED_RESULTS
+            {
+                "error": {
+                    "result": declared,
+                    "metadata": {"error_type": _DECLARED_ERROR_TYPE},
+                }
+            }
+            if status_code is None and declared == _DECLARED_RESULT
             else None
         )
 
