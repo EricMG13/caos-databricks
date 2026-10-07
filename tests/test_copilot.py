@@ -52,6 +52,7 @@ from caos.copilot import (
     ChatCopilot,
     CopilotModel,
     CopilotStatusError,
+    CopilotUnsettledError,
     Event,
     ask_copilot,
     child_environment,
@@ -3839,7 +3840,7 @@ def test_an_abort_that_never_returns_is_waited_for_only_so_long(
 def test_a_session_error_ends_the_wait_and_is_returned_as_data(
     runtime: type[FakeRuntime],
 ) -> None:
-    failed = [*UNSPENT, error(402)]
+    failed = [*UNSPENT, error(402), idle()]
     runtime.session = FakeSession(failed)
     assert ask_copilot(PROMPT, TARGET, 5.0) == failed
     assert not runtime.session.aborted
@@ -3899,17 +3900,39 @@ def test_an_error_the_runtime_may_recover_from_does_not_end_the_call(
     assert runtime.session.aborted
 
 
-def test_after_an_error_the_wait_is_bounded_by_its_grace_not_the_deadline(
-    runtime: type[FakeRuntime], monkeypatch: pytest.MonkeyPatch
+def test_an_error_with_no_idle_in_its_grace_is_indeterminate_never_a_drop(
+    runtime: type[FakeRuntime],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
+    """The re-audit's probe (`r2_m2_grace.py`): a checkpoint later than the
+    grace, with no idle, is spend nobody read. The grace running out is no
+    settlement: the call is indeterminate, its reservation kept, never a
+    declared drop D110 re-attempts (F593)."""
     monkeypatch.setattr(copilot_module, "_AFTER_ERROR_SECONDS", 0.05)
-    failed = [*UNSPENT, error(500)]
-    late = [checkpoint(100, 1), idle()]
+    failed = [*UNSPENT, error(503)]
+    late = [checkpoint(900_000_000_000, 1), idle()]
     runtime.session = FakeSession(failed, later=late, delay=1.0)
     started_at = time.monotonic()
-    assert ask_copilot(PROMPT, TARGET, 30.0) == failed
+    with pytest.raises(CopilotUnsettledError) as raised:
+        ask_copilot(PROMPT, TARGET, 30.0)
     assert time.monotonic() - started_at < 1.0
-    assert not runtime.session.aborted
+    assert str(raised.value) == "copilot"
+    assert runtime.session.aborted
+    runtime.session = FakeSession(failed, later=late, delay=1.0)
+    with reserving(Decimal("1.00"), credit=CREDIT):
+        completion = provider(ask_copilot).complete(PROMPT, json_object=True)
+    assert (completion.content, completion.charge, completion.refusal) == (
+        None,
+        None,
+        RefusalCode.PROVIDER_UNAVAILABLE,
+    )
+    assert completion.drop_kind is DropKind.RAISED
+    _out, err = capsys.readouterr()
+    assert err.splitlines()[-1].startswith(
+        "PROVIDER_UNAVAILABLE call=raised class=CopilotUnsettledError "
+    )
+    assert SECRET not in err
 
 
 def test_only_the_main_agents_idle_or_error_ends_the_wait(
@@ -3938,7 +3961,7 @@ def test_a_permission_request_during_a_call_is_denied_and_refuses_the_call(
     assert answered.refusal is RefusalCode.PROVIDER_RESPONSE_INVALID
     assert (answered.content, answered.drop_kind) == (None, None)
     # Asked with nothing else spent: still never a drop, so never re-sent.
-    runtime.session = FakeSession([*UNSPENT, error(500)], asks_at=1)
+    runtime.session = FakeSession([*UNSPENT, error(500), idle()], asks_at=1)
     quiet = ask_copilot(PROMPT, TARGET, 5.0)
     unanswered = provider(lambda *_args: quiet).complete(PROMPT)
     assert unanswered.refusal is RefusalCode.PROVIDER_RESPONSE_INVALID

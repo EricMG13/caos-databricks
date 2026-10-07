@@ -41,7 +41,7 @@ import sys
 import tempfile
 import threading
 from collections.abc import AsyncIterator, Callable, Iterator, Mapping, Sequence
-from contextlib import asynccontextmanager, suppress
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
@@ -471,6 +471,18 @@ class CopilotStatusError(OpenAIError):
         )
 
 
+class CopilotUnsettledError(Exception):
+    """A session that failed and did not go idle within the grace after its
+    error (F593): the runtime may have spent after the error, and no event
+    said so, so the call is indeterminate -- `ChatCompletions` reads anything
+    but a vendor error as `raised`, keeps the reservation as the bill and
+    names the class on stderr (F513) -- never a declared drop D110 would
+    re-attempt. Its message is the platform's name and nothing else."""
+
+    def __init__(self) -> None:
+        super().__init__(PLATFORM)
+
+
 Ask = Callable[[str, CopilotModel, float], Sequence[Event]]
 
 
@@ -725,29 +737,35 @@ async def _asked(
         async with session:
             await session.send(prompt)
             try:
-                await _settled(idle, failed)
+                settled = await _settled(idle, failed)
             except asyncio.CancelledError:
                 await _aborted(session)
                 raise
+            if not settled:
+                await _aborted(session)
+                raise CopilotUnsettledError
     return list(seen)
 
 
-async def _settled(idle: asyncio.Event, failed: asyncio.Event) -> None:
-    """Until the main agent is idle; after an error it will not recover
-    from, at most `_AFTER_ERROR_SECONDS` more for the events after it. The
-    call's own deadline bounds both."""
+async def _settled(idle: asyncio.Event, failed: asyncio.Event) -> bool:
+    """Whether the main agent went idle: waited for until it does, and after
+    an error it will not recover from, at most `_AFTER_ERROR_SECONDS` more.
+    False when that grace ran out with no idle: the session never settled,
+    so what it spent after its error is unknown (F593). The call's own
+    deadline bounds both waits."""
     waits = [asyncio.ensure_future(idle.wait()), asyncio.ensure_future(failed.wait())]
     try:
         await asyncio.wait(waits, return_when=asyncio.FIRST_COMPLETED)
     finally:
         for waiting in waits:
             waiting.cancel()
-    if idle.is_set():
-        return
-    # The grace running out is the expected end of an error with no idle
-    # after it: what arrived in it is read, and nothing else is held back.
-    with suppress(TimeoutError):
-        await asyncio.wait_for(idle.wait(), _AFTER_ERROR_SECONDS)
+    if not idle.is_set():
+        grace = asyncio.ensure_future(idle.wait())
+        try:
+            await asyncio.wait([grace], timeout=_AFTER_ERROR_SECONDS)
+        finally:
+            grace.cancel()
+    return idle.is_set()
 
 
 async def _aborted(session: CopilotSession) -> None:
