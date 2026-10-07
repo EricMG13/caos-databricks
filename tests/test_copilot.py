@@ -33,7 +33,10 @@ from uuid import uuid4
 
 import pytest
 from copilot import (
+    GetAuthStatusResponse,
+    GetStatusResponse,
     ModelCapabilitiesOverride,
+    ModelInfo,
     ModelLimitsOverride,
     SessionEvent,
     StdioRuntimeConnection,
@@ -49,6 +52,7 @@ from caos import copilot as copilot_module
 from caos import models
 from caos.copilot import (
     CREDIT_PRICE_ENV,
+    HOST_ENV,
     NANO_PER_CREDIT,
     PERMISSION_ASKED,
     RUNTIME_DIGEST_ENV,
@@ -64,9 +68,11 @@ from caos.copilot import (
     output_cap,
     parsed,
     reply_message,
+    require_ready,
     runtime_digest,
     session_options,
     settled_charge,
+    usable,
 )
 from caos.methodology import canonical
 from caos.models import ChatCompletions, completions
@@ -3557,6 +3563,14 @@ class FakeRuntime:
     entry: ClassVar[str] = ""
     # What the "runtime" does as it starts, after CAOS staged it.
     on_start: ClassVar[Callable[[], None] | None] = None
+    # The seat it answers readiness for (Task 5), each through the SDK's type.
+    signed_in: ClassVar[bool] = True
+    auth_type: ClassVar[str | None] = "env"
+    host: ClassVar[str | None] = "https://github.com"
+    login: ClassVar[str | None] = "octo-analyst"
+    version: ClassVar[str] = "1.0.90"
+    offered: ClassVar[list[ModelInfo]] = []
+    listings: ClassVar[int] = 0
 
     def __init__(self, **options: object) -> None:
         self.options: dict[str, Any] = dict(options)
@@ -3586,6 +3600,28 @@ class FakeRuntime:
         session = type(self).session
         session.options = self.created
         return session
+
+    async def get_auth_status(self) -> GetAuthStatusResponse:
+        seat = type(self)
+        status: dict[str, object] = {"isAuthenticated": seat.signed_in}
+        for key, value in (
+            ("authType", seat.auth_type),
+            ("host", seat.host),
+            ("login", seat.login),
+            ("statusMessage", SECRET),
+        ):
+            if value is not None:
+                status[key] = value
+        return GetAuthStatusResponse.from_dict(status)
+
+    async def get_status(self) -> GetStatusResponse:
+        return GetStatusResponse.from_dict(
+            {"version": type(self).version, "protocolVersion": 3}
+        )
+
+    async def list_models(self) -> list[ModelInfo]:
+        type(self).listings += 1
+        return list(type(self).offered)
 
 
 @pytest.fixture
@@ -4626,3 +4662,410 @@ def test_property_a_copilot_charge_is_its_reservations_credit_never_another(
     with reserving(amount, credit=credit):
         completion = provider(replying(*seen)).complete(PROMPT)
     assert completion.charge == charged(units, credit)
+
+
+# --- readiness at worker start (Task 5; R3, R2.1, R4) -----------------------
+
+GATEWAY = "databricks-claude-opus-5"
+GATEWAY_PRICE = ModelPrice(
+    GATEWAY, Decimal("0.000005"), Decimal("0.00002"), date(2026, 10, 1)
+)
+READY_CREDIT = "0.01,2026-10-01"
+# AI credits per batch of 1,000 tokens. At $0.01 a credit PRICE's pin is 0.5
+# credits per batch in and 2.0 out: the long-context tier sits exactly on it.
+BASE_TIER: dict[str, object] = {
+    "batchSize": 1000,
+    "inputPrice": 0.3,
+    "cachePrice": 0.03,
+    "cacheReadPrice": 0.03,
+    "cacheWritePrice": 0.375,
+    "cacheWrite1hPrice": 0.4,
+    "outputPrice": 1.5,
+    "maxPromptTokens": 200_000,
+}
+LONG_TIER: dict[str, object] = {
+    "inputPrice": 0.45,
+    "cachePrice": 0.045,
+    "cacheReadPrice": 0.045,
+    "cacheWritePrice": 0.48,
+    "cacheWrite1hPrice": 0.5,
+    "outputPrice": 2.0,
+    "maxPromptTokens": 1_000_000,
+}
+
+
+def billed(
+    base: Mapping[str, object] = BASE_TIER,
+    long_context: Mapping[str, object] = LONG_TIER,
+    multiplier: float | None = 1,
+) -> dict[str, object]:
+    """A listing's `billing`, in its wire keys: both tiers, and the multiplier
+    unless None. An empty long-context tier is left out."""
+    tier: dict[str, object] = dict(base)
+    if long_context:
+        tier["longContext"] = dict(long_context)
+    billing: dict[str, object] = {"tokenPrices": tier}
+    if multiplier is not None:
+        billing["multiplier"] = multiplier
+    return billing
+
+
+def listed(
+    model_id: str = PIN,
+    *,
+    state: str | None = "enabled",
+    efforts: list[str] | None = None,
+    billing: Mapping[str, object] | None = None,
+    limits: Mapping[str, object] | None = None,
+) -> ModelInfo:
+    """A model as `list_models` describes it, built by the SDK's own
+    `ModelInfo.from_dict`; a billing key the SDK does not read fails here.
+    `billing` defaults to `billed()`; an empty mapping lists none."""
+    taken = ["low", "medium", "high"] if efforts is None else efforts
+    info: dict[str, object] = {
+        "id": model_id,
+        "name": model_id,
+        "capabilities": {
+            "supports": {"reasoningEffort": bool(taken)},
+            "limits": dict(
+                {"max_prompt_tokens": 128_000, "max_context_window_tokens": 200_000}
+                if limits is None
+                else limits
+            ),
+        },
+        "supportedReasoningEfforts": taken,
+    }
+    priced = billed() if billing is None else dict(billing)
+    if priced:
+        info["billing"] = priced
+    if state is not None:
+        info["policy"] = {"state": state, "terms": ""}
+    made = ModelInfo.from_dict(info)
+    if priced:
+        assert _keys(made.to_dict()["billing"]) == _keys(priced)
+    return made
+
+
+def _keys(value: object) -> object:
+    """Every key of a mapping, at every depth: what `from_dict` kept."""
+    if isinstance(value, Mapping):
+        return {key: _keys(inner) for key, inner in value.items()}
+    return None
+
+
+@pytest.fixture
+def ready(
+    runtime: type[FakeRuntime], monkeypatch: pytest.MonkeyPatch
+) -> type[FakeRuntime]:
+    """A seat that offers `PIN` through the env token on github.com, a dated
+    credit price, and a process whose readiness has declared nothing."""
+    monkeypatch.setenv(CREDIT_PRICE_ENV, READY_CREDIT)
+    monkeypatch.delenv(HOST_ENV, raising=False)
+    monkeypatch.setattr(copilot_module, "CONTEXT_LISTED", copilot_module._Listed())
+    runtime.offered = [listed()]
+    return runtime
+
+
+def ready_line(name: str = MODEL, **changed: str) -> str:
+    fields = {
+        "offered": "y",
+        "policy": "enabled",
+        "usable": "y",
+        "efforts": "low,medium,high",
+        "max_prompt_tokens": "128000",
+        "max_context_window_tokens": "200000",
+        "context": "1000000",
+        "price_check": "ok",
+        "price_floor": "0.000005,0.00002",
+        "credit_price": "0.01@2026-10-01",
+    }
+    fields.update(changed)
+    return f"copilot {name} " + " ".join(f"{k}={v}" for k, v in fields.items())
+
+
+ABSENT = {
+    "offered": "n",
+    "policy": "-",
+    "usable": "-",
+    "efforts": "-",
+    "max_prompt_tokens": "-",
+    "max_context_window_tokens": "-",
+    "context": "-",
+    "price_check": "-",
+    "price_floor": "-",
+}
+RUNTIME_LINE = "copilot runtime=1.0.90 host=github.com login=octo-analyst"
+
+
+def refused_not_configured(choices: Mapping[str, ModelPrice]) -> None:
+    with pytest.raises(Refusal) as refused:
+        require_ready(choices)
+    assert refused.value.code is RefusalCode.PROVIDER_NOT_CONFIGURED
+
+
+def test_no_copilot_model_starts_no_runtime(
+    runtime: type[FakeRuntime],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.delenv(CREDIT_PRICE_ENV, raising=False)
+    monkeypatch.setattr(copilot_module, "CONTEXT_LISTED", copilot_module._Listed())
+    require_ready({GATEWAY: GATEWAY_PRICE})
+    assert runtime.made == []
+    assert capsys.readouterr().err == ""
+    assert copilot_module.CONTEXT_LISTED == {}
+
+
+def test_a_ready_copilot_model_prints_its_lines_and_declares_its_context(
+    ready: type[FakeRuntime], capsys: pytest.CaptureFixture[str]
+) -> None:
+    require_ready({MODEL: PRICE, GATEWAY: GATEWAY_PRICE})
+    err = capsys.readouterr().err
+    assert err == f"{RUNTIME_LINE}\n{ready_line()}\n"
+    assert SECRET not in err
+    assert copilot_module.CONTEXT_LISTED == {PIN: 1_000_000}
+    [made] = ready.made
+    assert not made.home.exists()
+    assert ready.listings == 1
+
+
+@pytest.mark.parametrize(
+    ("signed_in", "auth_type"),
+    [
+        (False, "env"),
+        (True, "gh-cli"),
+        (True, "token"),
+        (True, "api-key"),
+        (True, "hmac"),
+        (True, "copilot-api-token"),
+        (True, "token-provider"),
+        (True, "user"),
+        (True, None),
+    ],
+)
+def test_readiness_requires_the_env_token_and_refuses_the_github_cli_token(
+    ready: type[FakeRuntime],
+    capsys: pytest.CaptureFixture[str],
+    signed_in: bool,
+    auth_type: str | None,
+) -> None:
+    ready.signed_in = signed_in
+    ready.auth_type = auth_type
+    refused_not_configured({MODEL: PRICE})
+    # Nothing is listed for a seat that is not this one, and nothing the
+    # runtime said about it is printed.
+    assert ready.listings == 0
+    assert capsys.readouterr().err == ""
+    assert copilot_module.CONTEXT_LISTED == {}
+
+
+@pytest.mark.parametrize(
+    ("pinned", "reported", "ready_now"),
+    [
+        (None, "https://github.com", True),
+        (None, "github.com", True),
+        ("", "https://github.com", True),
+        ("ghe.example.com", "https://ghe.example.com", True),
+        (None, "https://ghe.example.com", False),
+        ("ghe.example.com", "https://github.com", False),
+        (None, "https://github.com/", False),
+        (None, "http://github.com", False),
+        (None, "https://github.com.evil.example", False),
+        (None, None, False),
+    ],
+)
+def test_readiness_refuses_a_host_other_than_the_pinned_one(
+    ready: type[FakeRuntime],
+    monkeypatch: pytest.MonkeyPatch,
+    pinned: str | None,
+    reported: str | None,
+    ready_now: bool,
+) -> None:
+    if pinned is not None:
+        monkeypatch.setenv(HOST_ENV, pinned)
+    ready.host = reported
+    if ready_now:
+        require_ready({MODEL: PRICE})
+    else:
+        refused_not_configured({MODEL: PRICE})
+        assert ready.listings == 0
+
+
+@pytest.mark.parametrize(
+    "pinned",
+    ["GitHub.com", "https://github.com", "github.com/x", "-github.com", " ", "a" * 254],
+)
+def test_a_host_pin_that_is_no_host_name_refuses_before_any_runtime(
+    ready: type[FakeRuntime], monkeypatch: pytest.MonkeyPatch, pinned: str
+) -> None:
+    monkeypatch.setenv(HOST_ENV, pinned)
+    refused_not_configured({MODEL: PRICE})
+    assert ready.made == []
+
+
+def test_readiness_refuses_when_the_seat_offers_none_of_the_approved_models(
+    ready: type[FakeRuntime], capsys: pytest.CaptureFixture[str]
+) -> None:
+    ready.offered = [listed(OTHER)]
+    refused_not_configured({MODEL: PRICE})
+    assert capsys.readouterr().err == (f"{RUNTIME_LINE}\n{ready_line(**ABSENT)}\n")
+    assert copilot_module.CONTEXT_LISTED == {}
+
+
+def test_an_approved_model_the_seat_lacks_is_printed_not_offered_and_refuses(
+    ready: type[FakeRuntime], capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Every approved model must answer here (the brief's rule, stricter than
+    R3's park): one the seat lacks is printed `offered=n` beside the ready
+    one, and the worker refuses, declaring nothing."""
+    lacking = "copilot:gpt-6-luna"
+    luna = ModelPrice(lacking, Decimal("1"), Decimal("1"), date(2026, 10, 1))
+    refused_not_configured({MODEL: PRICE, lacking: luna})
+    assert capsys.readouterr().err == (
+        f"{RUNTIME_LINE}\n{ready_line()}\n{ready_line(lacking, **ABSENT)}\n"
+    )
+    assert copilot_module.CONTEXT_LISTED == {}
+
+
+@pytest.mark.parametrize(
+    ("offered", "name", "shown"),
+    [
+        (listed(state="disabled"), MODEL, ("disabled", "low,medium,high")),
+        (listed(state="unconfigured"), MODEL, ("unconfigured", "low,medium,high")),
+        (listed(efforts=["low"]), MODEL, ("enabled", "low")),
+        (listed(), f"copilot:{PIN}", ("enabled", "low,medium,high")),
+        (listed(efforts=[]), MODEL, ("enabled", "-")),
+    ],
+    ids=[
+        "policy-disabled",
+        "policy-unconfigured",
+        "effort-not-taken",
+        "effort-taken-none-pinned",
+        "effort-pinned-none-taken",
+    ],
+)
+def test_a_model_this_machine_cannot_answer_on_refuses_the_worker(
+    ready: type[FakeRuntime],
+    capsys: pytest.CaptureFixture[str],
+    offered: ModelInfo,
+    name: str,
+    shown: tuple[str, str],
+) -> None:
+    policy, efforts = shown
+    ready.offered = [offered]
+    price = ModelPrice(name, PRICE.input_per_token, PRICE.output_per_token, PRICE.as_of)
+    refused_not_configured({name: price})
+    line = ready_line(name, policy=policy, usable="n", efforts=efforts)
+    assert capsys.readouterr().err == f"{RUNTIME_LINE}\n{line}\n"
+    assert copilot_module.CONTEXT_LISTED == {}
+
+
+def test_usable_reads_the_policy_and_the_effort() -> None:
+    assert usable(listed(), TARGET)
+    assert usable(listed(state=None), TARGET)
+    assert not usable(listed(state="disabled"), TARGET)
+    assert not usable(listed(state="Enabled"), TARGET)
+    assert usable(listed(efforts=[]), CopilotModel("copilot", PIN, None))
+    assert not usable(listed(), CopilotModel("copilot", PIN, None))
+    assert not usable(listed(efforts=["low"]), TARGET)
+    assert not usable(
+        listed(state="disabled", efforts=[]), CopilotModel("copilot", PIN, None)
+    )
+    unlisted = ModelInfo.from_dict({"id": PIN, "name": PIN, "capabilities": {}})
+    assert unlisted.supported_reasoning_efforts is None
+    assert usable(unlisted, CopilotModel("copilot", PIN, None))
+    assert not usable(unlisted, TARGET)
+
+
+@pytest.mark.parametrize("credit", [None, "", "0.01", "0,2026-10-01", "x,2026-10-01"])
+def test_readiness_needs_a_credit_price_for_any_copilot_model(
+    ready: type[FakeRuntime], monkeypatch: pytest.MonkeyPatch, credit: str | None
+) -> None:
+    if credit is None:
+        monkeypatch.delenv(CREDIT_PRICE_ENV)
+    else:
+        monkeypatch.setenv(CREDIT_PRICE_ENV, credit)
+    refused_not_configured({MODEL: PRICE})
+    assert ready.made == []
+
+
+@pytest.mark.parametrize(
+    "name", ["copilot-cli:gpt-6-luna", "copilot-cli:gpt-6-luna@high"]
+)
+def test_a_copilot_cli_name_is_refused_at_readiness_in_the_sdk_only_scope(
+    ready: type[FakeRuntime], name: str
+) -> None:
+    price = ModelPrice(name, Decimal("1"), Decimal("1"), date(2026, 10, 1))
+    refused_not_configured({MODEL: PRICE, name: price})
+    assert ready.made == []
+
+
+def test_a_copilot_name_that_does_not_parse_is_refused_at_readiness(
+    ready: type[FakeRuntime],
+) -> None:
+    name = "copilot:Not A Model"
+    price = ModelPrice(name, Decimal("1"), Decimal("1"), date(2026, 10, 1))
+    refused_not_configured({name: price})
+    assert ready.made == []
+
+
+def test_an_sdk_model_without_the_sdk_installed_refuses_the_worker(
+    ready: type[FakeRuntime],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setitem(sys.modules, "copilot", None)
+    refused_not_configured({MODEL: PRICE})
+    assert (
+        capsys.readouterr().err == "PROVIDER_NOT_CONFIGURED reason=sdk_not_installed\n"
+    )
+
+
+def test_the_runtime_pin_is_verified_at_readiness(
+    ready: type[FakeRuntime], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(RUNTIME_DIGEST_ENV, "0" * 64)
+    refused_not_configured({MODEL: PRICE})
+    assert ready.listings == 0
+    assert copilot_module.CONTEXT_LISTED == {}
+
+
+@pytest.mark.parametrize(
+    ("said", "shown"),
+    [
+        (("octo-analyst", "1.0.90"), ("octo-analyst", "1.0.90")),
+        ((None, "1.0.90-beta.1+abc"), ("-", "1.0.90-beta.1+abc")),
+        (("a" * 40, "1.0 90"), ("-", "-")),
+        (("octo analyst", ""), ("-", "-")),
+        (("ghp_" + "x" * 36, "v" * 65), ("-", "-")),
+        (("octo_analyst", "1.0.90\n"), ("-", "-")),
+    ],
+)
+def test_the_login_and_version_are_printed_only_as_identifiers(
+    ready: type[FakeRuntime],
+    capsys: pytest.CaptureFixture[str],
+    said: tuple[str | None, str],
+    shown: tuple[str, str],
+) -> None:
+    ready.login, ready.version = said
+    shown_login, shown_version = shown
+    require_ready({MODEL: PRICE})
+    first = capsys.readouterr().err.splitlines()[0]
+    assert first == (
+        f"copilot runtime={shown_version} host=github.com login={shown_login}"
+    )
+
+
+def test_a_listed_field_that_is_no_identifier_is_printed_as_a_dash(
+    ready: type[FakeRuntime], capsys: pytest.CaptureFixture[str]
+) -> None:
+    ready.offered = [
+        listed(
+            state="enabled\nx",
+            efforts=["high", "x y"],
+            limits={"max_prompt_tokens": 1.5},
+        )
+    ]
+    refused_not_configured({MODEL: PRICE})
+    line = capsys.readouterr().err.splitlines()[-1]
+    assert " policy=- usable=n efforts=high,- max_prompt_tokens=- " in line

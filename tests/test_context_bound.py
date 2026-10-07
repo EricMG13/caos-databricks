@@ -512,6 +512,9 @@ def test_the_listing_is_declared_once_per_process() -> None:
             declare_listed(again)
         assert refused.value.code is RefusalCode.PROVIDER_NOT_CONFIGURED
     assert copilot.CONTEXT_LISTED == {"gpt-6-luna": 400_000}
+    # The same listing again is no second pin (F598).
+    declare_listed({"gpt-6-luna": 400_000})
+    assert copilot.CONTEXT_LISTED == {"gpt-6-luna": 400_000}
 
 
 @pytest.mark.usefixtures("unlisted")
