@@ -11,12 +11,14 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
 import inspect
 import io
 import logging
 import math
 import os
 import re
+import time
 from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, date, datetime, tzinfo
 from decimal import Decimal
@@ -45,6 +47,7 @@ from caos.copilot import (
     CREDIT_PRICE_ENV,
     NANO_PER_CREDIT,
     PERMISSION_ASKED,
+    RUNTIME_DIGEST_ENV,
     RUNTIME_ENV,
     ChatCopilot,
     CopilotModel,
@@ -56,6 +59,7 @@ from caos.copilot import (
     output_cap,
     parsed,
     reply_message,
+    runtime_digest,
     session_options,
     settled_charge,
 )
@@ -3309,6 +3313,7 @@ def test_the_child_environment_is_exactly_the_allow_list(
         "COPILOT_HOME": "private-home",
         "COPILOT_GITHUB_TOKEN": "parent-COPILOT_GITHUB_TOKEN",
         "COPILOT_DISABLE_KEYTAR": "1",
+        "COPILOT_DISABLE_LOGIN_SHELL_ENV": "1",
         "COPILOT_AUTO_UPDATE": "false",
         "NO_COLOR": "1",
         "PATH": os.path.join("opt", "copilot", "bin"),
@@ -3324,6 +3329,7 @@ def test_the_child_environment_copies_only_what_is_set(
     assert child_environment("home", "/runtime/copilot") == {
         "COPILOT_HOME": "home",
         "COPILOT_DISABLE_KEYTAR": "1",
+        "COPILOT_DISABLE_LOGIN_SHELL_ENV": "1",
         "COPILOT_AUTO_UPDATE": "false",
         "NO_COLOR": "1",
         "PATH": "/runtime",
@@ -3413,8 +3419,26 @@ def test_the_sdk_logger_reaches_no_handler(
 
 # -- The SDK transport (Task 3; R3, R7, R2.7) ---------------------------------
 
-# The runtime the SDK downloads, as `ensure_runtime_wrapper` names it.
-DOWNLOADED = os.path.join(os.sep, "cache", "copilot", "1.0.90", "copilot-runtime")
+
+def provisioned(root: Path) -> str:
+    """A runtime directory as the SDK materialises one: the entry, its native
+    library and an asset; the entry's path."""
+    (root / "assets").mkdir(parents=True)
+    (root / "copilot-runtime").write_bytes(b"#!/bin/sh\nexit 0\n")
+    (root / "runtime.node").write_bytes(b"\x7fELF native")
+    (root / "assets" / "index.js").write_bytes(b"// asset")
+    return str(root / "copilot-runtime")
+
+
+def expected_digest(root: Path) -> str:
+    """R3 (F591): SHA-256 over `<relative path>\\0<file SHA-256>\\n`, sorted."""
+    lines = sorted(
+        f"{path.relative_to(root).as_posix()}\0"
+        f"{hashlib.sha256(path.read_bytes()).hexdigest()}\n"
+        for path in root.rglob("*")
+        if path.is_file()
+    )
+    return hashlib.sha256("".join(lines).encode()).hexdigest()
 
 
 class Wire:
@@ -3437,14 +3461,24 @@ def url_request() -> object:
 class FakeSession:
     """Stands in for `copilot.CopilotSession`: delivers its events to the
     `on_event` handler it was created with when the prompt is sent, asking the
-    permission handler first at `asks_at` when set."""
+    permission handler first at `asks_at` when set, and `later` on a frame
+    `delay` seconds after, as the runtime's reader thread would."""
 
     def __init__(
-        self, seen: Sequence[Event], *, ends: bool = True, asks_at: int | None = None
+        self,
+        seen: Sequence[Event],
+        *,
+        ends: bool = True,
+        asks_at: int | None = None,
+        later: Sequence[Event] = (),
+        delay: float = 0.0,
     ) -> None:
         self.seen = seen
         self.ends = ends
         self.asks_at = asks_at
+        self.later = later
+        self.delay = delay
+        self.frames: list[asyncio.Task[None]] = []
         self.options: dict[str, Any] = {}
         self.sent: list[str] = []
         self.decisions: list[object] = []
@@ -3462,7 +3496,14 @@ class FakeSession:
                 )
                 self.decisions.append(decided)
             self.options["on_event"](Wire(event))
+        if self.later:
+            self.frames.append(asyncio.get_running_loop().create_task(self._next()))
         return "message-1"
+
+    async def _next(self) -> None:
+        await asyncio.sleep(self.delay)
+        for event in self.later:
+            self.options["on_event"](Wire(event))
 
     async def abort(self) -> None:
         self.aborted = True
@@ -3480,6 +3521,8 @@ class FakeRuntime:
 
     made: ClassVar[list[FakeRuntime]] = []
     session: ClassVar[FakeSession] = FakeSession([])
+    # The pinned runtime's entry, set by the `runtime` fixture.
+    entry: ClassVar[str] = ""
 
     def __init__(self, **options: object) -> None:
         self.options: dict[str, Any] = dict(options)
@@ -3506,16 +3549,22 @@ class FakeRuntime:
 
 
 @pytest.fixture
-def runtime(monkeypatch: pytest.MonkeyPatch) -> type[FakeRuntime]:
+def runtime(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> type[FakeRuntime]:
     class Runtime(FakeRuntime):
         made: ClassVar[list[FakeRuntime]] = []
         session: ClassVar[FakeSession] = FakeSession(SDK_HAPPY)
+        entry: ClassVar[str] = provisioned(tmp_path / "runtime")
 
     monkeypatch.setattr("copilot.CopilotClient", Runtime)
+    # A short grace after an error, so a test of one never waits 2 s.
+    monkeypatch.setattr(copilot_module, "_AFTER_ERROR_SECONDS", 0.2)
+    # Never the SDK's own resolution: only the pinned runtime runs (F591).
     monkeypatch.setattr(
-        "copilot._cli_download.ensure_runtime_wrapper", lambda: DOWNLOADED
+        "copilot._cli_download.ensure_runtime_wrapper",
+        lambda *_: pytest.fail("the SDK chose the runtime"),
     )
-    monkeypatch.delenv(RUNTIME_ENV, raising=False)
+    monkeypatch.setenv(RUNTIME_ENV, Runtime.entry)
+    monkeypatch.setenv(RUNTIME_DIGEST_ENV, expected_digest(tmp_path / "runtime"))
     return Runtime
 
 
@@ -3626,7 +3675,7 @@ def test_the_runtime_never_auto_logs_in_and_sees_only_the_allow_listed_environme
     connection = made.options.pop("connection")
     assert isinstance(connection, StdioRuntimeConnection)
     assert (connection.path, tuple(connection.args), connection.env) == (
-        DOWNLOADED,
+        runtime.entry,
         (),
         None,
     )
@@ -3638,34 +3687,121 @@ def test_the_runtime_never_auto_logs_in_and_sees_only_the_allow_listed_environme
         "log_level": "none",
         "use_logged_in_user": False,
     }
-    assert environment == child_environment(str(made.home), DOWNLOADED)
-    assert environment["PATH"] == os.path.dirname(DOWNLOADED)
+    assert environment == child_environment(str(made.home), runtime.entry)
+    assert environment["PATH"] == os.path.dirname(runtime.entry)
     assert environment["COPILOT_GITHUB_TOKEN"] == "parent-token"
     for name in ("GH_TOKEN", "GITHUB_TOKEN", "COPILOT_PROVIDER_API_KEY", "GH_HOST"):
         assert name not in environment
     assert "COPILOT_CLI_PATH" not in environment
 
 
-def test_a_runtime_the_operator_names_is_started_when_its_path_is_absolute(
+def test_the_runtime_digest_names_every_file_of_its_directory(tmp_path: Path) -> None:
+    entry = provisioned(tmp_path / "runtime")
+    pinned = runtime_digest(entry)
+    assert pinned == expected_digest(tmp_path / "runtime")
+    assert re.fullmatch(r"[0-9a-f]{64}", pinned)
+    for changed in ("runtime.node", "assets/index.js", "copilot-runtime"):
+        target = tmp_path / "runtime" / changed
+        kept = target.read_bytes()
+        target.write_bytes(kept + b"!")
+        assert runtime_digest(entry) != pinned, changed
+        target.write_bytes(kept)
+    assert runtime_digest(entry) == pinned
+    (tmp_path / "runtime" / "assets" / "added.js").write_bytes(b"")
+    assert runtime_digest(entry) != pinned
+    # A link could name anything: no tree holding one has a digest.
+    (tmp_path / "runtime" / "assets" / "added.js").unlink()
+    (tmp_path / "runtime" / "linked").symlink_to(tmp_path)
+    with pytest.raises(Refusal) as refused:
+        runtime_digest(entry)
+    assert refused.value.code is RefusalCode.PROVIDER_NOT_CONFIGURED
+
+
+def _refused_before_any_client(runtime: type[FakeRuntime]) -> None:
+    made = len(runtime.made)
+    with pytest.raises(Refusal) as refused:
+        ask_copilot(PROMPT, TARGET, 5.0)
+    assert refused.value.code is RefusalCode.PROVIDER_NOT_CONFIGURED
+    assert len(runtime.made) == made
+
+
+def test_only_the_pinned_runtime_runs_and_the_environment_cannot_choose_it(
+    runtime: type[FakeRuntime], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    # The audit's probe (p3_extract_dir.py): a runtime planted where the
+    # SDK's cache would look is never consulted.
+    planted = tmp_path / "planted" / "prebuilds" / "any"
+    provisioned(planted)
+    (planted / "runtime.node").write_bytes(b"not the verified runtime")
+    monkeypatch.setenv("COPILOT_CLI_EXTRACT_DIR", str(tmp_path / "planted"))
+    monkeypatch.setenv("COPILOT_CLI_PATH", str(planted / "copilot-runtime"))
+    ask_copilot(PROMPT, TARGET, 5.0)
+    assert runtime.made[-1].options["connection"].path == runtime.entry
+    pinned = os.environ[RUNTIME_DIGEST_ENV]
+    for name, value in (
+        (RUNTIME_ENV, ""),
+        (RUNTIME_ENV, "copilot-runtime"),
+        (RUNTIME_ENV, os.path.join("runtime", "copilot-runtime")),
+        (RUNTIME_ENV, str(planted / "copilot-runtime")),
+        (RUNTIME_ENV, str(tmp_path / "runtime" / "missing")),
+        (RUNTIME_ENV, str(tmp_path / "runtime")),
+        (RUNTIME_DIGEST_ENV, ""),
+        (RUNTIME_DIGEST_ENV, pinned.upper()),
+        (RUNTIME_DIGEST_ENV, pinned[:-1]),
+        (RUNTIME_DIGEST_ENV, expected_digest(planted)),
+    ):
+        with monkeypatch.context() as scoped:
+            scoped.setenv(name, value)
+            _refused_before_any_client(runtime)
+    with monkeypatch.context() as scoped:
+        scoped.delenv(RUNTIME_ENV)
+        _refused_before_any_client(runtime)
+    with monkeypatch.context() as scoped:
+        scoped.delenv(RUNTIME_DIGEST_ENV)
+        _refused_before_any_client(runtime)
+    # The entry itself a link: refused, even to the pinned file.
+    linked = tmp_path / "linked-runtime"
+    linked.symlink_to(runtime.entry)
+    with monkeypatch.context() as scoped:
+        scoped.setenv(RUNTIME_ENV, str(linked))
+        _refused_before_any_client(runtime)
+
+
+def test_a_relative_runtime_path_is_refused_even_where_it_resolves(
+    runtime: type[FakeRuntime], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    assert os.path.isfile(os.path.join("runtime", "copilot-runtime"))
+    monkeypatch.setenv(RUNTIME_ENV, os.path.join("runtime", "copilot-runtime"))
+    _refused_before_any_client(runtime)
+
+
+def test_an_unchanged_runtime_is_read_once_per_process(
     runtime: type[FakeRuntime], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    named = os.path.join(os.sep, "opt", "it", "copilot")
-    monkeypatch.setenv(RUNTIME_ENV, named)
+    read: list[str] = []
+    digest = copilot_module._file_digest
+
+    def counted(path: str) -> str:
+        read.append(path)
+        return digest(path)
+
+    monkeypatch.setattr(copilot_module, "_file_digest", counted)
+    monkeypatch.setattr(copilot_module, "_VERIFIED", {})
     ask_copilot(PROMPT, TARGET, 5.0)
-    [made] = runtime.made
-    assert made.options["connection"].path == named
-    assert made.options["env"]["PATH"] == os.path.dirname(named)
-    for relative in ("copilot", os.path.join("bin", "copilot"), ""):
-        monkeypatch.setenv(RUNTIME_ENV, relative)
-        if not relative:
-            # Empty is unset: the downloaded runtime.
-            ask_copilot(PROMPT, TARGET, 5.0)
-            assert runtime.made[-1].options["connection"].path == DOWNLOADED
-            continue
-        with pytest.raises(Refusal) as refused:
-            ask_copilot(PROMPT, TARGET, 5.0)
-        assert refused.value.code is RefusalCode.PROVIDER_NOT_CONFIGURED
-    assert len(runtime.made) == 2
+    assert len(read) == 3
+    ask_copilot(PROMPT, TARGET, 5.0)
+    ask_copilot(PROMPT, TARGET, 5.0)
+    assert len(read) == 3, "an unchanged runtime was read again"
+
+
+def test_a_runtime_changed_after_it_was_verified_is_refused(
+    runtime: type[FakeRuntime], tmp_path: Path
+) -> None:
+    ask_copilot(PROMPT, TARGET, 5.0)
+    library = tmp_path / "runtime" / "runtime.node"
+    library.write_bytes(library.read_bytes() + b"swapped")
+    _refused_before_any_client(runtime)
 
 
 def test_a_call_that_does_not_end_in_time_is_aborted_and_raises(
@@ -3706,6 +3842,73 @@ def test_a_session_error_ends_the_wait_and_is_returned_as_data(
     failed = [*UNSPENT, error(402)]
     runtime.session = FakeSession(failed)
     assert ask_copilot(PROMPT, TARGET, 5.0) == failed
+    assert not runtime.session.aborted
+
+
+# The audit's probe (p1_trailing_checkpoint.py): a failed dispatch, its
+# session.error, and the checkpoint stating its spend on the next frame.
+ERRED = [
+    started(),
+    turn_start(),
+    call_start(),
+    failure("api", 503),
+    call_finished("error"),
+    final_result(result="http_5xx"),
+    error(None),
+]
+
+
+def switching(status: int | None) -> Event:
+    """A `session.error` after which the runtime may switch models and go on."""
+    return wire(
+        "session.error",
+        errorType="provider",
+        message=SECRET,
+        statusCode=status,
+        eligibleForAutoSwitch=True,
+    )
+
+
+def test_spend_stated_after_a_session_error_is_read_and_never_a_drop(
+    runtime: type[FakeRuntime],
+) -> None:
+    trailing = [checkpoint(900_000_000_000, 1), idle()]
+    runtime.session = FakeSession(ERRED, later=trailing, delay=0.02)
+    seen = ask_copilot(PROMPT, TARGET, 5.0)
+    assert seen == [*ERRED, *trailing]
+    runtime.session = FakeSession(ERRED, later=trailing, delay=0.02)
+    with reserving(Decimal("1.00"), credit=CREDIT):
+        completion = provider(ask_copilot).complete(PROMPT, json_object=True)
+    # Spent, so billed and refused, never a declared drop D110 re-attempts.
+    assert completion.drop_kind is None
+    assert completion.refusal is RefusalCode.PROVIDER_RESPONSE_INVALID
+
+
+def test_an_error_the_runtime_may_recover_from_does_not_end_the_call(
+    runtime: type[FakeRuntime], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(copilot_module, "_AFTER_ERROR_SECONDS", 0.01)
+    recovered = [*UNSPENT, switching(503)]
+    rest = SDK_HAPPY[2:]
+    runtime.session = FakeSession(recovered, later=rest, delay=0.1)
+    assert ask_copilot(PROMPT, TARGET, 5.0) == [*recovered, *rest]
+    # With no idle, it waits out the deadline: indeterminate, never a drop.
+    runtime.session = FakeSession(recovered, ends=True)
+    with pytest.raises(TimeoutError):
+        ask_copilot(PROMPT, TARGET, 0.2)
+    assert runtime.session.aborted
+
+
+def test_after_an_error_the_wait_is_bounded_by_its_grace_not_the_deadline(
+    runtime: type[FakeRuntime], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(copilot_module, "_AFTER_ERROR_SECONDS", 0.05)
+    failed = [*UNSPENT, error(500)]
+    late = [checkpoint(100, 1), idle()]
+    runtime.session = FakeSession(failed, later=late, delay=1.0)
+    started_at = time.monotonic()
+    assert ask_copilot(PROMPT, TARGET, 30.0) == failed
+    assert time.monotonic() - started_at < 1.0
     assert not runtime.session.aborted
 
 

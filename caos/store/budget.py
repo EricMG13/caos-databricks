@@ -17,8 +17,10 @@ that later spends reads the price back to check that the request it is about to
 send still fits what was set aside.
 
 *A Copilot reservation names its credit price* (0048, D77 addendum 2): the
-dated price of one AI credit pinned when it was taken, which settles the call's
-AI units. The process's pin is read at the reservation and nowhere after it.
+dated price of one AI credit that settles the call's AI units. The run's first
+Copilot reservation takes the process's pin, and every later reservation of
+that run takes the same price, so a redeploy cannot change a live run's charge
+(F592); nothing after the reservation reads the environment's.
 
 *Nothing is released.* An indeterminate call may have reached the provider and
 may be billed (`PROVIDER_UNAVAILABLE` leaves the attempt indeterminate with its
@@ -144,12 +146,12 @@ def _reserve(
 
     validate_spend(amount)
     _validate_price(price)
-    credit = _credit_for(price)
     if conn.autocommit:
         raise Refusal(RefusalCode.STORE_NOT_TRANSACTIONAL)
     run_id = _run_of(conn, attempt_id)
     require_running(conn, run_id, lease)
     _require_attempt(conn, attempt_id, run_id)
+    credit = _credit_for(conn, run_id, price)
     if (
         reserved_for(conn, attempt_id) is not None
         or conn.execute(
@@ -178,14 +180,29 @@ def _reserve(
     )
 
 
-def _credit_for(price: ModelPrice) -> CreditPrice | None:
-    """The process's pinned credit price for a Copilot model, or refused
-    `PROVIDER_NOT_CONFIGURED`; None for any other model. Imported here:
-    `caos.copilot` imports this module at its top."""
+def _credit_for(
+    conn: StoreConnection, run_id: UUID, price: ModelPrice
+) -> CreditPrice | None:
+    """The credit price a Copilot model's reservation is taken under: the
+    run's, which its first Copilot reservation pinned, else the process's
+    pin (`caos.copilot.credit_price`, `PROVIDER_NOT_CONFIGURED` without one);
+    None for any other model. F468's rule for the per-token price, applied
+    to the credit (R2.2, F592): a redeploy that moves the pin mid-run changes
+    no later reservation of that run. Under the caller's run lock, so two
+    reservations cannot pin two prices. Imported here: `caos.copilot`
+    imports this module at its top."""
     from caos import copilot
+    from caos.pricing import CreditPrice
 
     if copilot.parsed(price.model) is None:
         return None
+    pinned = conn.execute(
+        "SELECT credit_price, credit_as_of FROM budget_reservations"
+        " WHERE run_id = %s AND credit_price IS NOT NULL LIMIT 1",
+        (run_id,),
+    ).fetchone()
+    if pinned is not None:
+        return CreditPrice(*pinned)
     return copilot.credit_price()
 
 
