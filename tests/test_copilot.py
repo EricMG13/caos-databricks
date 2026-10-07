@@ -5385,9 +5385,12 @@ def test_the_worker_checks_readiness_on_every_approved_model_before_the_store(
 
 
 def _smoke_ask(prompt: str, target: CopilotModel, seconds: float) -> list[Event]:
-    text = '{"ok": true}' if "JSON" in prompt else "OK"
-    # No usage event: its counts would exceed the smoke's few request bytes.
-    return sdk_call(answer=answer(text), usage=None)
+    json_call = "JSON" in prompt
+    text = '{"ok": true}' if json_call else "OK"
+    # Each call its own bill, so a line mixing the two is seen. No usage
+    # event: its counts would exceed the smoke's few request bytes.
+    units = 300_000_000 if json_call else 100_000_000
+    return sdk_call(answer=answer(text), usage=None, checkpoint=checkpoint(units, 1))
 
 
 def test_the_production_smoke_takes_copilot_only_on_a_real_transport(
@@ -5413,8 +5416,9 @@ def test_the_production_smoke_takes_copilot_only_on_a_real_transport(
     assert gateway_smoke.main() == 0
     out = capsys.readouterr().out
     assert f"endpoint={MODEL} model=ChatCopilot " in out
-    # 251,164,000 nano-AIU at $0.01 a credit, under the smoke's reservation.
-    assert " charge=0.00251164 nano_aiu=251164000 json_mode=accepted" in out
+    # The plain call's charge beside its own AI units (F604): 100,000,000
+    # nano-AIU at $0.01 a credit, under the smoke's reservation.
+    assert " charge=0.001 nano_aiu=100000000 json_mode=accepted" in out
 
 
 def test_the_production_smoke_needs_a_credit_price_for_copilot(

@@ -7,9 +7,9 @@ configured endpoint under the SDK's unified auth -- sends one short prompt,
 and prints the endpoint, the chat model class, the response id and the token
 usage. For a Copilot model the chat model is `ChatCopilot` on its real
 transport (D77), never a scripted one; both calls run under a reservation at
-the pinned credit price, so the charge is the call's AI units, printed
-beside them. Exits nonzero unless the class is one of those two and the call
-answered: an injected or scripted model can never make this pass. No secret
+the pinned credit price, and the charge printed is the plain call's AI
+units, printed beside them, at that price. Exits nonzero unless the class
+is one of those two and the call answered: an injected or scripted model can never make this pass. No secret
 is read by this script and none is printed.
 """
 
@@ -23,6 +23,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from langchain_core.messages import AIMessage
+
     from caos.models import ChatCompletions
 
 REPO = Path(__file__).resolve().parents[1]
@@ -55,8 +57,8 @@ def main() -> int:
     with _reserved(provider):
         message = chat.invoke([HumanMessage(content=PROMPT)])
         completion = provider.complete(JSON_PROMPT, json_object=True)
+        charge = _charged(provider, message, completion.charge)
     usage: dict[str, object] = dict(message.usage_metadata or {})
-    charge = completion.charge
     # The answer is parsed here, not only accepted (AR-17): JSON mode that
     # the endpoint takes and ignores would otherwise pass the smoke and fail
     # the first module call.
@@ -100,6 +102,20 @@ def _reserved(provider: ChatCompletions) -> AbstractContextManager[None]:
         priced_request(provider.price, len(sent)),
         credit=copilot.credit_price().per_credit,
     )
+
+
+def _charged(
+    provider: ChatCompletions, message: AIMessage, json_charge: Decimal | None
+) -> Decimal | None:
+    """The charge printed, of one call (F604): for a Copilot model the plain
+    call's AI units, printed beside it, at the reservation's credit price; for
+    a gateway endpoint, which states no AI units, the JSON call's, as before."""
+    from caos import copilot
+    from caos.provider import reserved_credit
+
+    if copilot.parsed(provider.model) is None:
+        return json_charge
+    return copilot.settled_charge(message, reserved_credit.get())
 
 
 def _json_object(text: str | None) -> bool:
