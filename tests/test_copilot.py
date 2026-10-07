@@ -20,6 +20,7 @@ import os
 import platform
 import re
 import shutil
+import stat
 import sys
 import time
 from collections.abc import Callable, Mapping, Sequence
@@ -3381,19 +3382,22 @@ ARM64, X86_64 = 0x0100000C, 0x01000007  # Mach-O CPU types
 MH_EXECUTE, MH_DYLIB = 2, 6
 
 
-def mach_o(cpu: int = ARM64, filetype: int = MH_EXECUTE, magic: bytes = b"") -> bytes:
+def mach_o(
+    cpu: int = ARM64, filetype: int = MH_EXECUTE, magic: bytes = b"", subtype: int = 0
+) -> bytes:
     """A thin 64-bit Mach-O header, little-endian, as the 1.0.90 runtime's."""
     return (
         (magic or b"\xcf\xfa\xed\xfe")
         + cpu.to_bytes(4, "little")
-        + bytes(4)
+        + subtype.to_bytes(4, "little")
         + filetype.to_bytes(4, "little")
         + bytes(16)
     )
 
 
-def fat(*slices: tuple[int, bytes]) -> bytes:
-    """A universal binary: its big-endian arch table, then each slice."""
+def fat(*slices: tuple[int, bytes], count: int | None = None) -> bytes:
+    """A universal binary: its big-endian arch table, then each slice;
+    `count` states another slice count than the table holds."""
     offset = 8 + 20 * len(slices)
     table, body = b"", b""
     for cpu, image in slices:
@@ -3405,7 +3409,8 @@ def fat(*slices: tuple[int, bytes]) -> bytes:
             + bytes(4)
         )
         body += image
-    return b"\xca\xfe\xba\xbe" + len(slices).to_bytes(4, "big") + table + body
+    stated = len(slices) if count is None else count
+    return b"\xca\xfe\xba\xbe" + stated.to_bytes(4, "big") + table + body
 
 
 def elf(machine: int = 62, kind: int = 2, width: int = 2, order: int = 1) -> bytes:
@@ -3421,15 +3426,23 @@ def elf(machine: int = 62, kind: int = 2, width: int = 2, order: int = 1) -> byt
     )
 
 
-def pe(machine: int = 0x8664, traits: int = 0x0022, at: int = 0x80) -> bytes:
-    """A DOS stub whose `e_lfanew` points at a PE signature and COFF header."""
-    stub = b"MZ" + bytes(58) + at.to_bytes(4, "little")
+def pe(
+    machine: int = 0x8664,
+    traits: int = 0x0022,
+    at: int = 0x80,
+    stub: bytes = b"MZ",
+    signature: bytes = b"PE\0\0",
+) -> bytes:
+    """A DOS stub whose `e_lfanew` points at a PE signature and COFF header,
+    with the three sections a small image has."""
+    head = stub + bytes(58) + at.to_bytes(4, "little")
     return (
-        stub
-        + bytes(at - len(stub))
-        + b"PE\0\0"
+        head
+        + bytes(at - len(head))
+        + signature
         + machine.to_bytes(2, "little")
-        + bytes(16)
+        + (3).to_bytes(2, "little")
+        + bytes(14)
         + traits.to_bytes(2, "little")
     )
 
@@ -3921,6 +3934,25 @@ FORMATS = {
         True,
     ),
     "mac-fat-without-host": (MAC_ARM, "copilot", fat((X86_64, mach_o(X86_64))), False),
+    "mac-arm64e-subtype": (MAC_ARM, "copilot", mach_o(subtype=0x80000002), True),
+    "mac-fat-eight-slices": (
+        MAC_ARM,
+        "copilot",
+        fat(*[(X86_64, mach_o(X86_64))] * 7, (ARM64, mach_o(ARM64))),
+        True,
+    ),
+    "mac-fat-absurd-count": (
+        MAC_ARM,
+        "copilot",
+        fat((ARM64, mach_o(ARM64)), count=0x01000001),
+        False,
+    ),
+    "mac-fat-nine-slices": (
+        MAC_ARM,
+        "copilot",
+        fat(*[(ARM64, mach_o(ARM64))] * 9),
+        False,
+    ),
     "mac-fat-host-dylib": (
         MAC_ARM,
         "copilot",
@@ -3948,6 +3980,13 @@ FORMATS = {
     "win-dll": (("win32", "AMD64"), "copilot.exe", pe(traits=0x2022), False),
     "win-not-executable": (("win32", "AMD64"), "copilot.exe", pe(traits=0x0020), False),
     "win-mz-script": (("win32", "AMD64"), "copilot.exe", MZ_SCRIPT, False),
+    "win-pe-without-mz": (("win32", "AMD64"), "copilot.exe", pe(stub=b"ZM"), False),
+    "win-no-pe-signature": (
+        ("win32", "AMD64"),
+        "copilot.exe",
+        pe(signature=b"XE\0\0"),
+        False,
+    ),
     "win-header-past-end": (
         ("win32", "AMD64"),
         "copilot.exe",
@@ -3977,6 +4016,28 @@ def test_only_the_hosts_own_executable_format_is_native(
     entry = tmp_path / name
     entry.write_bytes(content)
     assert copilot_module._native(str(entry)) is native
+
+
+def test_a_host_slice_past_sixteen_mebibytes_is_read_where_it_is(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A universal binary's slice offsets are whole 32-bit fields."""
+    monkeypatch.setattr(copilot_module, "_host", lambda: MAC_ARM)
+    far = (1 << 24) + 0x1000
+    entry = tmp_path / "copilot"
+    with entry.open("wb") as written:
+        written.write(
+            b"\xca\xfe\xba\xbe"
+            + (1).to_bytes(4, "big")
+            + ARM64.to_bytes(4, "big")
+            + bytes(4)
+            + far.to_bytes(4, "big")
+            + (32).to_bytes(4, "big")
+            + bytes(4)
+        )
+        written.seek(far)
+        written.write(mach_o())
+    assert copilot_module._native(str(entry))
 
 
 def test_an_mz_prefixed_script_on_a_mac_is_refused_with_its_reason(
@@ -4015,6 +4076,48 @@ def test_the_runtime_started_is_a_verified_copy_in_the_calls_own_directory(
     assert made.options["connection"].path == staged(made)
     assert made.started_digest == os.environ[RUNTIME_DIGEST_ENV]
     assert not made.home.exists()
+
+
+def test_the_staged_copy_is_the_owners_alone(
+    runtime: type[FakeRuntime], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The copy carries the prompt's runtime: no group or other bits on any
+    directory or file of it, and the entry executable by its owner."""
+    (tmp_path / "runtime" / "copilot-runtime").chmod(0o755)
+    (tmp_path / "runtime" / "runtime.node").chmod(0o644)
+    modes: dict[str, int] = {}
+
+    def recorded() -> None:
+        root = runtime.made[-1].home / "caos-runtime"
+        for path in (root, root / "assets", *root.rglob("*")):
+            modes[str(path.relative_to(root))] = stat.S_IMODE(path.stat().st_mode)
+
+    monkeypatch.setattr(runtime, "on_start", recorded)
+    ask_copilot(PROMPT, TARGET, 5.0)
+    assert modes and all(not mode & 0o077 for mode in modes.values()), modes
+    assert modes["copilot-runtime"] == 0o700
+    assert modes["runtime.node"] == 0o600
+
+
+def test_a_runtime_that_changes_while_it_is_copied_is_refused(
+    runtime: type[FakeRuntime], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A source file gone between the listing and the copy, or an entry
+    the copy does not hold, refuses -- never a raise of another kind."""
+    listed = copilot_module._runtime_files
+
+    def vanished(root: str) -> list[tuple[str, str]]:
+        return [*listed(root), ("gone", str(tmp_path / "runtime" / "gone"))]
+
+    def without_entry(root: str) -> list[tuple[str, str]]:
+        return [
+            (name, path) for name, path in listed(root) if name != "copilot-runtime"
+        ]
+
+    for listing in (vanished, without_entry):
+        with monkeypatch.context() as scoped:
+            scoped.setattr(copilot_module, "_runtime_files", listing)
+            _refused_before_any_client(runtime)
 
 
 def test_a_runtime_swapped_once_it_was_staged_changes_nothing(

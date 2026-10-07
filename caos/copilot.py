@@ -647,10 +647,11 @@ def _staged(source: str, pinned: str, home: str) -> str:
     it was read, `PROVIDER_NOT_CONFIGURED`. The copy goes with `home`.
     """
     root = os.path.join(home, _STAGED)
+    origin = os.path.dirname(source)
     lines: list[str] = []
     try:
-        for relative, path in _runtime_files(os.path.dirname(source)):
-            target = os.path.join(root, *relative.split("/"))
+        for relative, path in _runtime_files(origin):
+            target = os.path.join(root, os.path.relpath(path, origin))
             os.makedirs(os.path.dirname(target), mode=0o700, exist_ok=True)
             lines.append(f"{relative}\0{_copied(path, target)}\n")
     except FileNotFoundError:
