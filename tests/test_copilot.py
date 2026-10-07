@@ -19,12 +19,18 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from fractions import Fraction
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, ClassVar, cast
 from uuid import uuid4
 
 import pytest
-from copilot import SessionEvent
+from copilot import (
+    ModelCapabilitiesOverride,
+    ModelLimitsOverride,
+    SessionEvent,
+    StdioRuntimeConnection,
+)
 from copilot.generated import session_events
+from copilot.generated.rpc import PermissionDecisionReject
 from copilot.generated.session_events import SessionEventType
 from hypothesis import assume, given, settings
 from hypothesis import strategies as st
@@ -35,15 +41,19 @@ from caos import models
 from caos.copilot import (
     CREDIT_PRICE_ENV,
     NANO_PER_CREDIT,
+    PERMISSION_ASKED,
+    RUNTIME_ENV,
     ChatCopilot,
     CopilotModel,
     CopilotStatusError,
     Event,
+    ask_copilot,
     child_environment,
     credit_price,
     output_cap,
     parsed,
     reply_message,
+    session_options,
     settled_charge,
 )
 from caos.models import ChatCompletions, completions
@@ -3349,3 +3359,347 @@ def test_the_sdk_logger_reaches_no_handler(
     assert caught == []
     out, err = capsys.readouterr()
     assert SECRET not in out + err
+
+
+# -- The SDK transport (Task 3; R3, R7, R2.7) ---------------------------------
+
+# The runtime the SDK downloads, as `ensure_runtime_wrapper` names it.
+DOWNLOADED = os.path.join(os.sep, "cache", "copilot", "1.0.90", "copilot-runtime")
+
+
+class Wire:
+    """A session event as the SDK hands it to a handler."""
+
+    def __init__(self, wire: Event) -> None:
+        self.wire = wire
+
+    def to_dict(self) -> Event:
+        return self.wire
+
+
+def url_request() -> object:
+    """A permission request the runtime could raise, through the SDK's type."""
+    return session_events.PermissionRequestUrl.from_dict(
+        {"kind": "url", "intention": "read", "url": "https://example.invalid"}
+    )
+
+
+class FakeSession:
+    """Stands in for `copilot.CopilotSession`: delivers its events to the
+    `on_event` handler it was created with when the prompt is sent, asking the
+    permission handler first at `asks_at` when set."""
+
+    def __init__(
+        self, seen: Sequence[Event], *, ends: bool = True, asks_at: int | None = None
+    ) -> None:
+        self.seen = seen
+        self.ends = ends
+        self.asks_at = asks_at
+        self.options: dict[str, Any] = {}
+        self.sent: list[str] = []
+        self.decisions: list[object] = []
+        self.aborted = False
+        self.closed = False
+
+    async def send(self, prompt: str) -> str:
+        self.sent.append(prompt)
+        delivered = list(self.seen) if self.ends else []
+        for index, event in enumerate(delivered):
+            if index == self.asks_at:
+                decided = self.options["on_permission_request"](
+                    url_request(),
+                    {"session_id": "s", "managed_settings_enabled": False},
+                )
+                self.decisions.append(decided)
+            self.options["on_event"](Wire(event))
+        return "message-1"
+
+    async def abort(self) -> None:
+        self.aborted = True
+
+    async def __aenter__(self) -> FakeSession:
+        return self
+
+    async def __aexit__(self, *_exc: object) -> None:
+        self.closed = True
+
+
+class FakeRuntime:
+    """Stands in for `copilot.CopilotClient`: one per call, each recorded. It
+    writes to the SDK's logger as the runtime's stderr reader does."""
+
+    made: ClassVar[list[FakeRuntime]] = []
+    session: ClassVar[FakeSession] = FakeSession([])
+
+    def __init__(self, **options: object) -> None:
+        self.options: dict[str, Any] = dict(options)
+        self.home = Path(str(options["base_directory"]))
+        self.home_existed = self.home.is_dir()
+        self.created: dict[str, Any] = {}
+        self.entered = False
+        self.exited = False
+        type(self).made.append(self)
+
+    async def __aenter__(self) -> FakeRuntime:
+        self.entered = True
+        logging.getLogger("copilot._jsonrpc").warning("[CLI] %s", SECRET)
+        return self
+
+    async def __aexit__(self, *_exc: object) -> None:
+        self.exited = True
+
+    async def create_session(self, **options: object) -> FakeSession:
+        self.created = dict(options)
+        session = type(self).session
+        session.options = self.created
+        return session
+
+
+@pytest.fixture
+def runtime(monkeypatch: pytest.MonkeyPatch) -> type[FakeRuntime]:
+    class Runtime(FakeRuntime):
+        made: ClassVar[list[FakeRuntime]] = []
+        session: ClassVar[FakeSession] = FakeSession(SDK_HAPPY)
+
+    monkeypatch.setattr("copilot.CopilotClient", Runtime)
+    monkeypatch.setattr(
+        "copilot._cli_download.ensure_runtime_wrapper", lambda: DOWNLOADED
+    )
+    monkeypatch.delenv(RUNTIME_ENV, raising=False)
+    return Runtime
+
+
+def sent_options(made: FakeRuntime) -> dict[str, Any]:
+    """What the session was created with, less the two per-call handlers."""
+    return {
+        key: value
+        for key, value in made.created.items()
+        if key not in ("on_event", "on_permission_request")
+    }
+
+
+def test_a_session_has_no_tool_no_compaction_no_system_text_and_the_cap() -> None:
+    posture = {
+        "model": "claude-opus-5.5",
+        "reasoning_effort": "high",
+        "available_tools": [],
+        "tools": [],
+        "system_message": {"mode": "replace", "content": ""},
+        "infinite_sessions": {"enabled": False},
+        "context_tier": "long_context",
+        "model_capabilities": ModelCapabilitiesOverride(
+            limits=ModelLimitsOverride(max_output_tokens=65536)
+        ),
+        "working_directory": "home",
+        "streaming": False,
+        "disabled_mcp_servers": ["github-mcp-server", "githubiq"],
+        "mcp_servers": {},
+        "enable_skills": False,
+        "skip_custom_instructions": True,
+        "enable_file_hooks": False,
+        "plugin_directories": [],
+        "skill_directories": [],
+        "custom_agents": [],
+        "enable_session_telemetry": False,
+    }
+    assert session_options(TARGET, "home") == posture
+    assert session_options(TARGET, "home", 42) == {
+        **posture,
+        "session_limits": {"max_ai_credits": 42},
+    }
+    unpinned = session_options(CopilotModel("copilot", PIN, None), "home")
+    assert unpinned["reasoning_effort"] is None
+
+
+def test_one_call_is_one_fresh_runtime_and_session_and_leaves_nothing_on_disk(
+    runtime: type[FakeRuntime], capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert ask_copilot(PROMPT, TARGET, 5.0) == SDK_HAPPY
+    [made] = runtime.made
+    assert made.home_existed
+    assert made.home.name.startswith("caos-copilot-")
+    assert not made.home.exists()
+    assert made.entered and made.exited
+    assert sent_options(made) == session_options(TARGET, str(made.home))
+    assert runtime.session.sent == [PROMPT]
+    assert runtime.session.closed
+    assert not runtime.session.aborted
+    # The runtime's stderr, as the SDK logs it, reaches no handler (R7).
+    out, err = capsys.readouterr()
+    assert (out, err) == ("", "")
+    assert ask_copilot(PROMPT, TARGET, 5.0) == SDK_HAPPY
+    first, second = runtime.made
+    assert first.home != second.home
+
+
+def test_the_runtime_never_auto_logs_in_and_sees_only_the_allow_listed_environment(
+    runtime: type[FakeRuntime], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for name in ("GH_TOKEN", "GITHUB_TOKEN", "COPILOT_PROVIDER_API_KEY", "GH_HOST"):
+        monkeypatch.setenv(name, f"parent-{name}")
+    # Neither may redirect the runtime: the connection is always an explicit
+    # child process of the runtime CAOS resolved.
+    monkeypatch.setenv("COPILOT_CLI_PATH", "/elsewhere/copilot")
+    monkeypatch.setenv("COPILOT_SDK_DEFAULT_CONNECTION", "inprocess")
+    monkeypatch.setenv("COPILOT_GITHUB_TOKEN", "parent-token")
+    ask_copilot(PROMPT, TARGET, 5.0)
+    [made] = runtime.made
+    connection = made.options.pop("connection")
+    assert isinstance(connection, StdioRuntimeConnection)
+    assert (connection.path, tuple(connection.args), connection.env) == (
+        DOWNLOADED,
+        (),
+        None,
+    )
+    environment = made.options.pop("env")
+    assert made.options == {
+        "mode": "empty",
+        "base_directory": str(made.home),
+        "working_directory": str(made.home),
+        "log_level": "none",
+        "use_logged_in_user": False,
+    }
+    assert environment == child_environment(str(made.home), DOWNLOADED)
+    assert environment["PATH"] == os.path.dirname(DOWNLOADED)
+    assert environment["COPILOT_GITHUB_TOKEN"] == "parent-token"
+    for name in ("GH_TOKEN", "GITHUB_TOKEN", "COPILOT_PROVIDER_API_KEY", "GH_HOST"):
+        assert name not in environment
+    assert "COPILOT_CLI_PATH" not in environment
+
+
+def test_a_runtime_the_operator_names_is_started_when_its_path_is_absolute(
+    runtime: type[FakeRuntime], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    named = os.path.join(os.sep, "opt", "it", "copilot")
+    monkeypatch.setenv(RUNTIME_ENV, named)
+    ask_copilot(PROMPT, TARGET, 5.0)
+    [made] = runtime.made
+    assert made.options["connection"].path == named
+    assert made.options["env"]["PATH"] == os.path.dirname(named)
+    for relative in ("copilot", os.path.join("bin", "copilot"), ""):
+        monkeypatch.setenv(RUNTIME_ENV, relative)
+        if not relative:
+            # Empty is unset: the downloaded runtime.
+            ask_copilot(PROMPT, TARGET, 5.0)
+            assert runtime.made[-1].options["connection"].path == DOWNLOADED
+            continue
+        with pytest.raises(Refusal) as refused:
+            ask_copilot(PROMPT, TARGET, 5.0)
+        assert refused.value.code is RefusalCode.PROVIDER_NOT_CONFIGURED
+    assert len(runtime.made) == 2
+
+
+def test_a_call_that_does_not_end_in_time_is_aborted_and_raises(
+    runtime: type[FakeRuntime],
+) -> None:
+    runtime.session = FakeSession([], ends=False)
+    with pytest.raises(TimeoutError):
+        ask_copilot(PROMPT, TARGET, 0.01)
+    assert runtime.session.aborted
+    assert runtime.session.closed
+    [made] = runtime.made
+    assert made.exited
+    assert not made.home.exists()
+
+
+def test_a_session_error_ends_the_wait_and_is_returned_as_data(
+    runtime: type[FakeRuntime],
+) -> None:
+    failed = [*UNSPENT, error(402)]
+    runtime.session = FakeSession(failed)
+    assert ask_copilot(PROMPT, TARGET, 5.0) == failed
+    assert not runtime.session.aborted
+
+
+def test_only_the_main_agents_idle_or_error_ends_the_wait(
+    runtime: type[FakeRuntime],
+) -> None:
+    for ending in (idle(), error(500)):
+        runtime.session = FakeSession(
+            [*UNSPENT, enveloped(ending, agentId="sub-agent")], ends=True
+        )
+        with pytest.raises(TimeoutError):
+            ask_copilot(PROMPT, TARGET, 0.05)
+        assert runtime.session.aborted
+
+
+def test_a_permission_request_during_a_call_is_denied_and_refuses_the_call(
+    runtime: type[FakeRuntime],
+) -> None:
+    runtime.session = FakeSession(SDK_HAPPY, asks_at=4)
+    seen = ask_copilot(PROMPT, TARGET, 5.0)
+    [decided] = runtime.session.decisions
+    assert isinstance(decided, PermissionDecisionReject)
+    assert decided.feedback is None
+    assert [event["type"] for event in seen].count(PERMISSION_ASKED) == 1
+    assert seen.index({"type": PERMISSION_ASKED, "data": {}}) == 4
+    answered = provider(lambda *_args: seen).complete(PROMPT)
+    assert answered.refusal is RefusalCode.PROVIDER_RESPONSE_INVALID
+    assert (answered.content, answered.drop_kind) == (None, None)
+    # Asked with nothing else spent: still never a drop, so never re-sent.
+    runtime.session = FakeSession([*UNSPENT, error(500)], asks_at=1)
+    quiet = ask_copilot(PROMPT, TARGET, 5.0)
+    unanswered = provider(lambda *_args: quiet).complete(PROMPT)
+    assert unanswered.refusal is RefusalCode.PROVIDER_RESPONSE_INVALID
+    assert unanswered.drop_kind is None
+
+
+@pytest.mark.parametrize(
+    ("amount", "credit", "cap"),
+    [
+        (Decimal("0.05"), CREDIT, 30),
+        (Decimal("0.30"), CREDIT, 30),
+        (Decimal("0.31"), CREDIT, 31),
+        (Decimal("1.00"), CREDIT, 100),
+        (Decimal("1.001"), CREDIT, 101),
+        (Decimal("2.5"), Decimal("0.0125"), 200),
+        (Decimal("0"), CREDIT, 30),
+        (Decimal("1.00"), None, None),
+    ],
+)
+def test_a_session_is_capped_at_its_reservation_in_credits_never_below_thirty(
+    runtime: type[FakeRuntime], amount: Decimal, credit: Decimal | None, cap: int | None
+) -> None:
+    with reserving(amount, credit=credit):
+        ask_copilot(PROMPT, TARGET, 5.0)
+    [made] = runtime.made
+    assert made.created.get("session_limits") == (
+        None if cap is None else {"max_ai_credits": cap}
+    )
+
+
+def test_a_call_with_no_reservation_in_scope_sends_no_cap(
+    runtime: type[FakeRuntime],
+) -> None:
+    ask_copilot(PROMPT, TARGET, 5.0)
+    assert "session_limits" not in runtime.made[-1].created
+
+
+def test_the_cap_reaches_a_call_made_through_the_provider(
+    runtime: type[FakeRuntime],
+) -> None:
+    chat = completions(PRICE, chat=ChatCopilot(model=MODEL), endpoint=MODEL)
+    with reserving(Decimal("0.75"), credit=CREDIT):
+        chat.complete(PROMPT)
+    assert runtime.made[-1].created["session_limits"] == {"max_ai_credits": 75}
+
+
+def test_chat_copilot_answers_through_the_sdk_unless_told_otherwise() -> None:
+    assert ChatCopilot(model=MODEL).ask is ask_copilot
+
+
+def test_a_home_the_runtime_left_behind_is_named_on_stderr_without_its_path(
+    runtime: type[FakeRuntime],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def kept(path: object, *_args: object, **_kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr("shutil.rmtree", kept)
+    ask_copilot(PROMPT, TARGET, 5.0)
+    [made] = runtime.made
+    assert made.home.exists()
+    made.home.rmdir()
+    _out, err = capsys.readouterr()
+    assert err == "COPILOT_HOME_NOT_REMOVED\n"
