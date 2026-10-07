@@ -3582,6 +3582,35 @@ def test_one_call_is_one_fresh_runtime_and_session_and_leaves_nothing_on_disk(
     assert first.home != second.home
 
 
+def test_every_call_silences_the_sdk_logger_before_its_runtime_starts(
+    runtime: type[FakeRuntime],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Whatever state an earlier call or a host's logging setup left the SDK's
+    logger in, the call puts it back before the runtime can write (R7)."""
+    sdk = logging.getLogger("copilot")
+    monkeypatch.setattr(sdk, "handlers", [logging.StreamHandler()])
+    monkeypatch.setattr(sdk, "propagate", True)
+    monkeypatch.setattr(sdk, "level", logging.NOTSET)
+    caught: list[logging.LogRecord] = []
+
+    class Caught(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            caught.append(record)
+
+    root = logging.getLogger()
+    held = Caught()
+    root.addHandler(held)
+    try:
+        ask_copilot(PROMPT, TARGET, 5.0)
+    finally:
+        root.removeHandler(held)
+    assert caught == []
+    assert capsys.readouterr() == ("", "")
+    assert [type(handler) for handler in sdk.handlers] == [logging.NullHandler]
+
+
 def test_the_runtime_never_auto_logs_in_and_sees_only_the_allow_listed_environment(
     runtime: type[FakeRuntime], monkeypatch: pytest.MonkeyPatch
 ) -> None:
