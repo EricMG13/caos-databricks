@@ -41,14 +41,12 @@ import shutil
 import stat
 import sys
 import tempfile
-import threading
-from collections.abc import AsyncIterator, Callable, Iterator, Mapping, Sequence
+from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
 from fractions import Fraction
-from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, BinaryIO, NoReturn, TypeIs
 
 from langchain_core.callbacks import CallbackManagerForLLMRun
@@ -366,85 +364,15 @@ def output_cap(model: str) -> int:
     return MAX_COMPLETION_TOKENS
 
 
-_MODEL_ID = re.compile(r"[a-z0-9][a-z0-9.-]{0,127}")
-
-
-class _Listed(Mapping[str, int]):
-    """Each offered approved model's context window in tokens, by the
-    runtime's model id, as readiness read it from the listing (R4). Read-only
-    to every reader; filled once per process by `declare_listed`, then fixed
-    (invariant 10). Empty until then."""
-
-    def __init__(self) -> None:
-        self._values: Mapping[str, int] = MappingProxyType({})
-        self._declared = False
-        self._lock = threading.Lock()
-
-    def __getitem__(self, name: str) -> int:
-        return self._values[name]
-
-    def __iter__(self) -> Iterator[str]:
-        return iter(self._values)
-
-    def __len__(self) -> int:
-        return len(self._values)
-
-    def _declare(self, values: Mapping[str, int]) -> None:
-        with self._lock:
-            if self._declared:
-                # The same listing again (the in-process worker configures
-                # again after a store fault) changes nothing; any other is
-                # a second pin (F598).
-                if dict(values) == dict(self._values):
-                    return
-                raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
-            self._values = MappingProxyType(dict(values))
-            self._declared = True
-
-
-CONTEXT_LISTED = _Listed()
-
-
-def declare_listed(listed: Mapping[str, int]) -> None:
-    """Pin each listed model's context window for this process (R4).
-
-    Once per process: a second declaration that differs from the first (the
-    same one again changes nothing), a key that is no runtime model
-    id, a value that is no positive whole count, or a pinned
-    `caos.provider.CONTEXT_TOKENS` entry for a `copilot:` name of that model
-    above its listed value refuses `PROVIDER_NOT_CONFIGURED`, and nothing is
-    declared.
-    """
-    declared = dict(listed)
-    for name, tokens in declared.items():
-        if not (
-            isinstance(name, str)
-            and _MODEL_ID.fullmatch(name)
-            and type(tokens) is int
-            and tokens > 0
-        ):
-            raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
-    for pinned, tokens in provider.CONTEXT_TOKENS.items():
-        target = parsed(pinned)
-        if (
-            target is not None
-            and target.platform == PLATFORM
-            and tokens > declared.get(target.name, tokens)
-        ):
-            raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
-    CONTEXT_LISTED._declare(declared)
-
-
 def context_tokens(model: str) -> int | None:
-    """`model`'s context window in tokens (R4, D116): for an SDK model the
-    listing's, by its runtime model id, else the pinned
-    `caos.provider.CONTEXT_TOKENS` entry under the full name, the only source
-    for any other name; None when neither declares one."""
+    """`model`'s context window in tokens (R4, D116): the pinned
+    `caos.provider.CONTEXT_TOKENS` entry under the full name, else, for an SDK
+    model, `caos.provider.COPILOT_CONTEXT_TOKENS`; None when neither declares
+    one. Host constants alone, never a listing: every worker process and every
+    replay fit a run's evidence to the same ceiling (MEDIUM-1)."""
     target = parsed(model)
     if target is not None and target.platform == PLATFORM:
-        listed = CONTEXT_LISTED.get(target.name)
-        if listed is not None:
-            return listed
+        return provider.CONTEXT_TOKENS.get(model, provider.COPILOT_CONTEXT_TOKENS)
     return provider.CONTEXT_TOKENS.get(model)
 
 
@@ -990,8 +918,9 @@ def require_ready(choices: Mapping[str, ModelPrice]) -> None:
     offered to it, enabled by policy, pinned at an effort it takes (`usable`)
     and priced at no less than its listing (`_floors`). One line is printed
     for the runtime and one per approved model, each listed fact an
-    identifier or a count, else `-`, never the token. Only when all hold is each
-    offered model's context declared, once per process (`declare_listed`).
+    identifier or a count, else `-`, never the token. Each approved model's
+    listed long-context `maxPromptTokens` must reach its declared context
+    (`context_tokens`): the listing is a floor, never the ceiling (MEDIUM-1).
     """
     targets = {name: target for name in choices if (target := parsed(name))}
     if not targets:
@@ -1016,14 +945,6 @@ def require_ready(choices: Mapping[str, ModelPrice]) -> None:
     ]
     if not all(ready):
         raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
-    declare_listed(
-        {
-            target.name: tokens
-            for target in targets.values()
-            if target.name in by_id
-            and (tokens := _listed_context(by_id[target.name])) is not None
-        }
-    )
 
 
 def usable(info: ModelInfo, target: CopilotModel) -> bool:
@@ -1128,7 +1049,7 @@ def _model_ready(
         print(
             f"copilot {name} offered=n policy=- usable=- efforts=- "
             "max_prompt_tokens=- max_context_window_tokens=- context=- "
-            f"price_check=- price_floor=- {shown_credit}",
+            f"context_check=- price_check=- price_floor=- {shown_credit}",
             file=sys.stderr,
         )
         return False
@@ -1138,6 +1059,14 @@ def _model_ready(
         Fraction(price.input_per_token) >= floors[0]
         and Fraction(price.output_per_token) >= floors[1]
     )
+    listed_context = _listed_context(info)
+    declared = context_tokens(name)
+    if type(listed_context) is not int:
+        context_check = "unlisted"
+    elif declared is not None and listed_context >= declared:
+        context_check = "ok"
+    else:
+        context_check = "low"
     limits = info.capabilities.limits
     policy = "-" if info.policy is None else _shown(info.policy.state, _WORD)
     efforts = ",".join(_shown(effort, _WORD) for effort in _efforts(info) or [])
@@ -1146,12 +1075,12 @@ def _model_ready(
         f"efforts={efforts or '-'} "
         f"max_prompt_tokens={_shown_count(limits.max_prompt_tokens)} "
         f"max_context_window_tokens={_shown_count(limits.max_context_window_tokens)} "
-        f"context={_shown_count(_listed_context(info))} "
+        f"context={_shown_count(listed_context)} context_check={context_check} "
         f"price_check={_price_check(floors, covered)} "
         f"price_floor={_shown_floors(floors)} {shown_credit}",
         file=sys.stderr,
     )
-    return answers and covered
+    return answers and covered and context_check == "ok"
 
 
 def _floors(info: ModelInfo, credit: CreditPrice) -> tuple[Fraction, Fraction] | None:
@@ -1204,22 +1133,14 @@ def _rate(value: object) -> Fraction | None:
     return Fraction(repr(value))
 
 
-def _listed_context(info: ModelInfo) -> int | None:
-    """The model's context window as listed (R4): the long-context tier's
-    prompt budget, else the default tier's, else the capability limits'
-    prompt budget, else their context window; None when none is listed."""
+def _listed_context(info: ModelInfo) -> object:
+    """The long-context tier's prompt budget as listed (R4), the tier every
+    session asks for (F601): what readiness holds to the declared context.
+    None when the listing states no such tier or budget; no other listed
+    figure stands in for it. Whatever `from_dict` kept, unchecked."""
     prices = None if info.billing is None else info.billing.token_prices
     long = None if prices is None else prices.long_context
-    limits = info.capabilities.limits
-    for tokens in (
-        None if long is None else long.max_prompt_tokens,
-        None if prices is None else prices.max_prompt_tokens,
-        limits.max_prompt_tokens,
-        limits.max_context_window_tokens,
-    ):
-        if tokens is not None:
-            return tokens
-    return None
+    return None if long is None else long.max_prompt_tokens
 
 
 def _price_check(floors: tuple[Fraction, Fraction] | None, covered: bool) -> str:

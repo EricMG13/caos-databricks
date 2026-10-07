@@ -92,7 +92,7 @@ Name each model `copilot:<model id>[@<effort>]`, the effort one of `low`, `mediu
 
 - `CAOS_MODEL_ENDPOINT` is the model a run gets when it names none; `CAOS_MODEL_PRICE` prices it (section 4).
 - `CAOS_MODEL_CHOICES` is the approved list a run may be pinned to, each entry a dated price in `CAOS_MODEL_PRICE`'s form, joined by `;` (D75, at most 16). Approve only models the firm's policy enables and Compliance cleared. The API must approve the same list.
-- Choose by prompt limit: the worker prints each model's `max_prompt_tokens` and `context=` from the listing. CP-0 sends whole filings, so a large 10-K needs a long-context model. A prompt past the limit is refused after the call (what it bills is unmeasured: N185).
+- Every `copilot:` model is declared at 1,000,000 tokens of context (owner, 2026-10-06; `COPILOT_CONTEXT_TOKENS`), at the long-context tier each session asks for, and its requests are fitted to that, the same in every worker process. The worker prints the seat's long-context `maxPromptTokens` as `context=` and refuses to start when it is below the declared figure or not listed (`context_check=low|unlisted`). A prompt past the seat's real limit is refused after the call (what it bills is unmeasured: N185).
 - Every approved model must be offered to the seat, enabled by policy, usable at its pinned effort and priced at or above its listing, or the whole worker refuses (including any gateway model in the same list).
 - Never mix: CAOS does not switch a run between transports or models. A run stays on the model it was pinned to.
 
@@ -131,7 +131,7 @@ uv run --no-sync python -m caos.graph.worker
 
 The smoke must print `model=ChatCopilot` and `json_mode=accepted` with the plain call's AI units and charge. Run it once per approved model you rely on.
 
-At start the worker prints on stderr one runtime line, `copilot runtime=<version> host=<host> login=<login>`, then one line per approved model: `copilot <name> offered=y|n policy=<state> usable=y|n efforts=<list> max_prompt_tokens=<n> max_context_window_tokens=<n> context=<n> price_check=ok|low|unpriced price_floor=<in>,<out> credit_price=<usd>@<date>`. A field it cannot state safely prints `-`. It exits 2 with `PROVIDER_NOT_CONFIGURED` before claiming any run when readiness fails; the stderr line before it says why:
+At start the worker prints on stderr one runtime line, `copilot runtime=<version> host=<host> login=<login>`, then one line per approved model: `copilot <name> offered=y|n policy=<state> usable=y|n efforts=<list> max_prompt_tokens=<n> max_context_window_tokens=<n> context=<n> context_check=ok|low|unlisted price_check=ok|low|unpriced price_floor=<in>,<out> credit_price=<usd>@<date>`. A field it cannot state safely prints `-`. It exits 2 with `PROVIDER_NOT_CONFIGURED` before claiming any run when readiness fails; the stderr line before it says why:
 
 | What you see | What it means and what to do |
 |---|---|
@@ -141,6 +141,7 @@ At start the worker prints on stderr one runtime line, `copilot runtime=<version
 | `reason=runtime_unready class=<Name>` | The runtime would not start, timed out (60 s) or answered something the SDK could not parse. The class names what failed; the runtime's own text is never printed. Check the token, the network to GitHub and the policy enabling Copilot CLI |
 | model line `offered=n` | The seat does not offer that model id: correct the name or have the organisation enable it. An unoffered approved model refuses the whole worker (N184 asks the owner whether that stays) |
 | `usable=n` | The model is disabled by policy, or the effort in its name is not one it takes (`efforts=` lists what it takes; `-` takes none, so name it without `@effort`) |
+| `context_check=low` or `unlisted` | The seat lists a long-context prompt budget below the declared 1,000,000 tokens, or none: that model cannot carry the requests CAOS fits to it. Remove it from the approved list or report it (N185) |
 | `price_check=low` | The pin is below the listing's floor: raise `CAOS_MODEL_PRICE` to at least `price_floor` (and re-check the run ceiling) |
 | `price_check=unpriced` | The listing lacks a batch size, a tier or a rate, so no pin can be checked: report it (N185); do not guess a pin |
 | `STORE_UNAVAILABLE` | Lakebase unreachable or the role lacks the grants (section 6) |

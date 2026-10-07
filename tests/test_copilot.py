@@ -84,6 +84,7 @@ from caos.provider import (
     MAX_COMPLETION_TOKENS,
     TIMEOUT_SECONDS,
     DropKind,
+    request_ceiling,
     reserved_amount,
     reserved_credit,
     reserving,
@@ -4768,11 +4769,10 @@ def _keys(value: object) -> object:
 def ready(
     runtime: type[FakeRuntime], monkeypatch: pytest.MonkeyPatch
 ) -> type[FakeRuntime]:
-    """A seat that offers `PIN` through the env token on github.com, a dated
-    credit price, and a process whose readiness has declared nothing."""
+    """A seat that offers `PIN` through the env token on github.com, and a
+    dated credit price."""
     monkeypatch.setenv(CREDIT_PRICE_ENV, READY_CREDIT)
     monkeypatch.delenv(HOST_ENV, raising=False)
-    monkeypatch.setattr(copilot_module, "CONTEXT_LISTED", copilot_module._Listed())
     runtime.offered = [listed()]
     return runtime
 
@@ -4786,6 +4786,7 @@ def ready_line(name: str = MODEL, **changed: str) -> str:
         "max_prompt_tokens": "128000",
         "max_context_window_tokens": "200000",
         "context": "1000000",
+        "context_check": "ok",
         "price_check": "ok",
         "price_floor": "0.000005,0.00002",
         "credit_price": "0.01@2026-10-01",
@@ -4802,6 +4803,7 @@ ABSENT = {
     "max_prompt_tokens": "-",
     "max_context_window_tokens": "-",
     "context": "-",
+    "context_check": "-",
     "price_check": "-",
     "price_floor": "-",
 }
@@ -4820,21 +4822,18 @@ def test_no_copilot_model_starts_no_runtime(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.delenv(CREDIT_PRICE_ENV, raising=False)
-    monkeypatch.setattr(copilot_module, "CONTEXT_LISTED", copilot_module._Listed())
     require_ready({GATEWAY: GATEWAY_PRICE})
     assert runtime.made == []
     assert capsys.readouterr().err == ""
-    assert copilot_module.CONTEXT_LISTED == {}
 
 
-def test_a_ready_copilot_model_prints_its_lines_and_declares_its_context(
+def test_a_ready_copilot_model_prints_its_lines(
     ready: type[FakeRuntime], capsys: pytest.CaptureFixture[str]
 ) -> None:
     require_ready({MODEL: PRICE, GATEWAY: GATEWAY_PRICE})
     err = capsys.readouterr().err
     assert err == f"{RUNTIME_LINE}\n{ready_line()}\n"
     assert SECRET not in err
-    assert copilot_module.CONTEXT_LISTED == {PIN: 1_000_000}
     [made] = ready.made
     assert not made.home.exists()
     assert ready.listings == 1
@@ -4867,7 +4866,6 @@ def test_readiness_requires_the_env_token_and_refuses_the_github_cli_token(
     # runtime said about it is printed.
     assert ready.listings == 0
     assert capsys.readouterr().err == ""
-    assert copilot_module.CONTEXT_LISTED == {}
 
 
 @pytest.mark.parametrize(
@@ -4920,7 +4918,6 @@ def test_readiness_refuses_when_the_seat_offers_none_of_the_approved_models(
     ready.offered = [listed(OTHER)]
     refused_not_configured({MODEL: PRICE})
     assert capsys.readouterr().err == (f"{RUNTIME_LINE}\n{ready_line(**ABSENT)}\n")
-    assert copilot_module.CONTEXT_LISTED == {}
 
 
 def test_an_approved_model_the_seat_lacks_is_printed_not_offered_and_refuses(
@@ -4935,7 +4932,6 @@ def test_an_approved_model_the_seat_lacks_is_printed_not_offered_and_refuses(
     assert capsys.readouterr().err == (
         f"{RUNTIME_LINE}\n{ready_line()}\n{ready_line(lacking, **ABSENT)}\n"
     )
-    assert copilot_module.CONTEXT_LISTED == {}
 
 
 @pytest.mark.parametrize(
@@ -4968,7 +4964,6 @@ def test_a_model_this_machine_cannot_answer_on_refuses_the_worker(
     refused_not_configured({name: price})
     line = ready_line(name, policy=policy, usable="n", efforts=efforts)
     assert capsys.readouterr().err == f"{RUNTIME_LINE}\n{line}\n"
-    assert copilot_module.CONTEXT_LISTED == {}
 
 
 def test_usable_reads_the_policy_and_the_effort() -> None:
@@ -5016,7 +5011,6 @@ def test_readiness_refuses_a_pinned_price_below_the_listed_price_times_the_multi
     refused_not_configured({MODEL: PRICE})
     line = capsys.readouterr().err.splitlines()[-1]
     assert " price_check=low " in line
-    assert copilot_module.CONTEXT_LISTED == {}
     # On the figure exactly, the pin covers it.
     (base if tier == "base" else long)[rate] = round(value, 1)
     ready.offered = [listed(billing=billed(base, long))]
@@ -5041,13 +5035,13 @@ def test_a_price_floor_is_shown_rounded_up_never_down(
     ready: type[FakeRuntime], capsys: pytest.CaptureFixture[str]
 ) -> None:
     base = {"batchSize": 3, "inputPrice": 0.001, "outputPrice": 0.002}
-    long = {"inputPrice": 0.0005, "outputPrice": 0.001}
+    long = {"inputPrice": 0.0005, "outputPrice": 0.001, "maxPromptTokens": 1_000_000}
     ready.offered = [listed(billing=billed(base, long))]
     require_ready({MODEL: PRICE})
     # 0.001 / 3 x 0.01 = 3.33...e-6, shown as 0.000003333334.
     line = capsys.readouterr().err.splitlines()[-1]
     assert " price_floor=0.000003333334,0.000006666667 " in line
-    assert " context=128000 " in line
+    assert " context=1000000 context_check=ok " in line
 
 
 @pytest.mark.parametrize(
@@ -5128,51 +5122,51 @@ def test_a_listing_with_no_token_prices_cannot_be_priced(
 
 
 @pytest.mark.parametrize(
-    ("long", "base_prompt", "limits", "context"),
+    ("long_prompt", "ready_"),
     [
-        (True, True, {"max_prompt_tokens": 128_000}, 1_000_000),
-        (False, True, {"max_prompt_tokens": 128_000}, 200_000),
-        (False, False, {"max_prompt_tokens": 128_000}, 128_000),
-        (False, False, {"max_context_window_tokens": 150_000}, 150_000),
-        (False, False, {}, None),
+        (1_000_000, True),
+        (2_000_000, True),
+        (999_999, False),
+        (None, False),
     ],
-    ids=["long-context", "base-tier", "prompt-limit", "context-window", "none"],
+    ids=["at-floor", "above", "below", "unlisted"],
 )
-def test_readiness_declares_each_listed_models_context_once(
+def test_readiness_holds_the_long_context_listing_to_the_declared_floor(
     ready: type[FakeRuntime],
-    long: bool,
-    base_prompt: bool,
-    limits: Mapping[str, object],
-    context: int | None,
+    capsys: pytest.CaptureFixture[str],
+    long_prompt: object,
+    ready_: bool,
 ) -> None:
-    base = dict(BASE_TIER)
-    if not base_prompt:
-        del base["maxPromptTokens"]
-    tier = dict(LONG_TIER) if long else {"inputPrice": 0.5, "outputPrice": 2.0}
-    if not long:
-        base["outputPrice"] = 1.5
+    """MEDIUM-1: the ceiling is the declared 1,000,000 tokens; the seat's
+    long-context `maxPromptTokens`, the tier every session asks for, must
+    reach it. No other listed figure stands in for it: the default tier and
+    the capability limits list 2,000,000 here."""
+    base = dict(BASE_TIER, maxPromptTokens=2_000_000)
+    tier = dict(LONG_TIER, maxPromptTokens=long_prompt)
+    limits = {"max_prompt_tokens": 2_000_000, "max_context_window_tokens": 2_000_000}
     ready.offered = [listed(billing=billed(base, tier), limits=limits)]
-    require_ready({MODEL: PRICE})
-    expected = {} if context is None else {PIN: context}
-    assert copilot_module.CONTEXT_LISTED == expected
-    # A second start in this process (the in-process worker's retry after a
-    # store fault) reads the same listing: declared again, unchanged.
-    require_ready({MODEL: PRICE})
-    assert copilot_module.CONTEXT_LISTED == expected
+    if ready_:
+        require_ready({MODEL: PRICE})
+    else:
+        refused_not_configured({MODEL: PRICE})
+    shown = str(long_prompt) if type(long_prompt) is int else "-"
+    check = "ok" if ready_ else ("low" if shown != "-" else "unlisted")
+    line = capsys.readouterr().err.splitlines()[-1]
+    assert f" context={shown} context_check={check} " in line
 
 
-def test_a_listing_that_changed_since_it_was_declared_refuses(
-    ready: type[FakeRuntime],
-) -> None:
-    require_ready({MODEL: PRICE})
-    ready.offered = [
-        listed(billing=billed(long_context=dict(LONG_TIER, maxPromptTokens=900_000)))
-    ]
-    refused_not_configured({MODEL: PRICE})
-    assert copilot_module.CONTEXT_LISTED == {PIN: 1_000_000}
+def test_a_listing_that_moved_changes_no_ceiling(ready: type[FakeRuntime]) -> None:
+    """Two starts, two listings at or above the floor: both ready, and the
+    request ceiling is the declared one throughout (MEDIUM-1, F598)."""
+    bound = request_ceiling(MODEL)
+    for tokens in (1_000_000, 1_500_000, 1_000_000):
+        tier = dict(LONG_TIER, maxPromptTokens=tokens)
+        ready.offered = [listed(billing=billed(long_context=tier))]
+        require_ready({MODEL: PRICE})
+        assert request_ceiling(MODEL) == bound
 
 
-def test_two_efforts_of_one_model_declare_its_context_once(
+def test_two_efforts_of_one_model_are_each_checked(
     ready: type[FakeRuntime], capsys: pytest.CaptureFixture[str]
 ) -> None:
     low = f"copilot:{PIN}@low"
@@ -5180,7 +5174,6 @@ def test_two_efforts_of_one_model_declare_its_context_once(
         low, PRICE.input_per_token, PRICE.output_per_token, PRICE.as_of
     )
     require_ready({MODEL: PRICE, low: low_price})
-    assert copilot_module.CONTEXT_LISTED == {PIN: 1_000_000}
     assert capsys.readouterr().err == (
         f"{RUNTIME_LINE}\n{ready_line()}\n{ready_line(low)}\n"
     )
@@ -5236,7 +5229,6 @@ def test_the_runtime_pin_is_verified_at_readiness(
     monkeypatch.setenv(RUNTIME_DIGEST_ENV, "0" * 64)
     refused_not_configured({MODEL: PRICE})
     assert ready.listings == 0
-    assert copilot_module.CONTEXT_LISTED == {}
 
 
 def _raising(error: BaseException) -> Callable[..., Any]:
@@ -5278,7 +5270,6 @@ def test_a_runtime_that_cannot_answer_readiness_refuses_by_class_alone(
     assert err == (
         f"PROVIDER_NOT_CONFIGURED reason=runtime_unready class={type(error).__name__}\n"
     )
-    assert copilot_module.CONTEXT_LISTED == {}
     [made] = ready.made
     assert not made.home.exists()
 
@@ -5441,7 +5432,7 @@ def test_a_batch_of_one_token_prices_each_token_at_its_rate(
     ready: type[FakeRuntime], capsys: pytest.CaptureFixture[str]
 ) -> None:
     base = {"batchSize": 1, "inputPrice": 0.0005, "outputPrice": 0.002}
-    long = {"inputPrice": 0.0005, "outputPrice": 0.002}
+    long = {"inputPrice": 0.0005, "outputPrice": 0.002, "maxPromptTokens": 1_000_000}
     ready.offered = [listed(billing=billed(base, long), state=None)]
     require_ready({MODEL: PRICE})
     line = capsys.readouterr().err.splitlines()[-1]
@@ -5481,12 +5472,10 @@ def test_a_copilot_qualification_run_needs_a_ready_seat_before_any_call(
     )
     # Readiness lists models; it never opens a session.
     assert all(not made.created for made in ready.made)
-    assert copilot_module.CONTEXT_LISTED == {}
     monkeypatch.setenv(models.MODEL_PRICE_ENV, f"{MODEL},0.000005,0.00002,2026-10-01")
     provider = qualify._configured_provider(identity)
     assert provider is not None
     assert provider.model == MODEL
-    assert copilot_module.CONTEXT_LISTED == {PIN: 1_000_000}
     # A profile the caller did not expect starts no runtime at all.
     started = len(ready.made)
     assert qualify._configured_provider("copilot/other/none/65536") is None

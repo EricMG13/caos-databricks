@@ -182,14 +182,15 @@ def main(argv: list[str] | None = None) -> int:
 def context_warnings(endpoints: Sequence[str]) -> list[str]:
     """A warning per endpoint a run may be started on that has no declared
     context (D116, N170): its requests are bounded by the transport ceiling
-    alone, as before D116. Said before any run; never a failure."""
-    from caos.provider import CONTEXT_TOKENS
+    alone, as before D116. Said before any run; never a failure. A
+    `copilot:` name is declared (`caos.copilot.context_tokens`)."""
+    from caos.copilot import context_tokens
 
     return [
         f"WARNING {name}: no declared context; its requests are bounded by the"
         " transport ceiling alone (D116)"
         for name in dict.fromkeys(endpoints)
-        if name not in CONTEXT_TOKENS
+        if context_tokens(name) is None
     ]
 
 
