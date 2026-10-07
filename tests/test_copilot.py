@@ -2795,6 +2795,21 @@ def test_an_event_whose_type_is_not_text_is_spend_and_never_raises() -> None:
     assert "nano_aiu" not in reply_message(late, TARGET).response_metadata
 
 
+@pytest.mark.parametrize("source", [["sdk"], {"k": "sdk"}])
+def test_a_model_change_whose_source_is_not_text_is_spend_and_never_raises(
+    source: object,
+) -> None:
+    """F581: a malformed source is no chosen source -- refused, billed, never a
+    TypeError from a hash of a list or dict."""
+    mc = wire(
+        "session.model_change", newModel=PIN, reasoningEffort="high", source="sdk"
+    )
+    odd = {**mc, "data": {**mc["data"], "source": source}}
+    seq = sdk_call(extra=[odd])
+    assert copilot_module._spent(seq)
+    assert isinstance(invoked(seq), AIMessage)
+
+
 # -- Fix round 4: the re-audit of 581d2e2, as tests. -------------------------
 
 FINISH_OUTCOMES = sorted(

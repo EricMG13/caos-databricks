@@ -425,7 +425,8 @@ def _condition_holds(kind: str, data: Mapping[str, Any]) -> bool:
     if kind == "model.call_failure":
         return data.get("source") == "top_level"
     if kind == "session.model_change":
-        return data.get("source") in _CHOSEN
+        source = data.get("source")
+        return (source is None or isinstance(source, str)) and source in _CHOSEN
     named = _NAMING.get(kind)
     if named is not None:
         return data.get(named) is not None
