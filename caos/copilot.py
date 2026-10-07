@@ -1030,10 +1030,24 @@ def usable(info: ModelInfo, target: CopilotModel) -> bool:
     """Enabled by policy, and sent at an effort it takes -- or at none only
     when it takes none, because the runtime would apply its default (AR-15)."""
     enabled = info.policy is None or info.policy.state == "enabled"
-    efforts = info.supported_reasoning_efforts or []
+    efforts = _efforts(info)
+    if efforts is None:
+        return False
     if target.reasoning_effort is None:
         return enabled and not efforts
     return enabled and target.reasoning_effort in efforts
+
+
+def _efforts(info: ModelInfo) -> list[str] | None:
+    """The efforts the model takes, as listed: none listed is none taken; a
+    value that is no list of names (`from_dict` keeps whatever was sent) is
+    None, and takes no effort at all (F605)."""
+    listed: object = info.supported_reasoning_efforts
+    if listed is None:
+        return []
+    if not isinstance(listed, list) or not all(isinstance(e, str) for e in listed):
+        return None
+    return listed
 
 
 def _pinned_host() -> str:
@@ -1126,9 +1140,7 @@ def _model_ready(
     )
     limits = info.capabilities.limits
     policy = "-" if info.policy is None else _shown(info.policy.state, _WORD)
-    efforts = ",".join(
-        _shown(effort, _WORD) for effort in info.supported_reasoning_efforts or []
-    )
+    efforts = ",".join(_shown(effort, _WORD) for effort in _efforts(info) or [])
     print(
         f"copilot {name} offered=y policy={policy} usable={'y' if answers else 'n'} "
         f"efforts={efforts or '-'} "

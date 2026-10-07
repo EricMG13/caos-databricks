@@ -5544,3 +5544,31 @@ def test_a_worker_whose_runtime_fails_its_parsing_or_its_stop_exits_two_typed(
         f"PROVIDER_NOT_CONFIGURED reason=runtime_unready class={named}\n"
         "PROVIDER_NOT_CONFIGURED\n"
     )
+
+
+@pytest.mark.parametrize(
+    "efforts",
+    ["xhigh", "high", ["high", 1], [["high"]], {"high": True}, 3],
+    ids=["text-containing", "text-equal", "a-non-text", "nested", "mapping", "number"],
+)
+def test_efforts_that_are_no_list_of_names_take_no_effort(
+    ready: type[FakeRuntime], capsys: pytest.CaptureFixture[str], efforts: object
+) -> None:
+    """`ModelInfo.from_dict` keeps `supportedReasoningEfforts` as sent (F605):
+    only a list of names, matched exactly, can take the pinned effort."""
+    info = ModelInfo.from_dict(
+        {
+            "id": PIN,
+            "name": PIN,
+            "capabilities": {},
+            "supportedReasoningEfforts": efforts,
+            "billing": billed(),
+        }
+    )
+    assert info.supported_reasoning_efforts == efforts
+    assert not usable(info, TARGET)
+    assert not usable(info, CopilotModel("copilot", PIN, None))
+    ready.offered = [info]
+    refused_not_configured({MODEL: PRICE})
+    line = capsys.readouterr().err.splitlines()[-1]
+    assert " usable=n efforts=- " in line
