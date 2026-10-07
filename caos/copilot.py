@@ -609,52 +609,36 @@ def _file_digest(path: str) -> str:
         return hashlib.file_digest(read, "sha256").hexdigest()
 
 
-def _signature(root: str) -> tuple[tuple[str, int, int], ...]:
-    """What the runtime directory looks like without reading it: each file's
-    relative path, size and modification time."""
-    files = []
-    for relative, path in _runtime_files(root):
-        stat = os.lstat(path)
-        files.append((relative, stat.st_size, stat.st_mtime_ns))
-    return tuple(sorted(files))
-
-
-# The runtime directories this process verified, by entry and pinned digest,
-# with their signature then: re-read in full whenever any file moves.
-_VERIFIED: dict[tuple[str, str], tuple[tuple[str, int, int], ...]] = {}
-_VERIFIED_LOCK = threading.Lock()
-
-
 def _runtime_entry() -> str:
-    """The runtime to start: exactly the operator's (R3, F591).
+    """The runtime to start, resolved: exactly the operator's (R3, F591,
+    F594).
 
-    `RUNTIME_ENV` names its entry, an absolute path to a file -- never a
-    link, since `_runtime_files` refuses any link in the entry's directory,
-    the entry included -- and `RUNTIME_DIGEST_ENV` pins `runtime_digest` of
-    its directory,
-    checked before the first call and again whenever a file in it changes.
-    Anything else refuses `PROVIDER_NOT_CONFIGURED` before a client starts.
-    The SDK's own resolution -- a downloaded bundle, whose cached files it
-    never re-checks, under a cache root the worker's `COPILOT_CLI_EXTRACT_DIR`,
-    `XDG_CACHE_HOME` or `LOCALAPPDATA` can move -- is never consulted.
+    `RUNTIME_ENV` names its entry, an absolute path to a file that is no
+    link, and `RUNTIME_DIGEST_ENV` pins `runtime_digest` of its directory.
+    The path is resolved once (`os.path.realpath`); the resolved directory
+    is hashed whole on every call and is what is started, so a symlinked
+    parent retargeted later changes nothing, and a file swapped back to its
+    old size and mtime is still read. No stat-keyed trust is kept: the real
+    1.0.90 bundle (103 MB, 42 files) hashes in under 0.1 s, beside a call of
+    seconds. Anything else refuses `PROVIDER_NOT_CONFIGURED` before a client
+    starts. The SDK's own resolution -- a downloaded bundle, whose cached
+    files it never re-checks, under a cache root the worker's
+    `COPILOT_CLI_EXTRACT_DIR`, `XDG_CACHE_HOME` or `LOCALAPPDATA` can move --
+    is never consulted.
     """
     named = os.environ.get(RUNTIME_ENV, "")
     pinned = os.environ.get(RUNTIME_DIGEST_ENV, "")
     if (
         not os.path.isabs(named)
         or not _DIGEST.fullmatch(pinned)
+        or os.path.islink(named)
         or not os.path.isfile(named)
     ):
         raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
-    signature = _signature(os.path.dirname(named))
-    with _VERIFIED_LOCK:
-        if _VERIFIED.get((named, pinned)) == signature:
-            return named
-    if not hmac.compare_digest(runtime_digest(named), pinned):
+    resolved = os.path.realpath(named)
+    if not hmac.compare_digest(runtime_digest(resolved), pinned):
         raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
-    with _VERIFIED_LOCK:
-        _VERIFIED[(named, pinned)] = signature
-    return named
+    return resolved
 
 
 @asynccontextmanager

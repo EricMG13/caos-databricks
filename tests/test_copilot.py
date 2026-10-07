@@ -3777,9 +3777,12 @@ def test_a_relative_runtime_path_is_refused_even_where_it_resolves(
     _refused_before_any_client(runtime)
 
 
-def test_an_unchanged_runtime_is_read_once_per_process(
+def test_every_call_reads_the_whole_runtime_again(
     runtime: type[FakeRuntime], monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """No stat-keyed trust (F594): size, mtime and inode are the owner's to
+    set back, so each call hashes the runtime it is about to start. The real
+    1.0.90 bundle (103 MB, 42 files) hashes in 57-87 ms here."""
     read: list[str] = []
     digest = copilot_module._file_digest
 
@@ -3788,12 +3791,50 @@ def test_an_unchanged_runtime_is_read_once_per_process(
         return digest(path)
 
     monkeypatch.setattr(copilot_module, "_file_digest", counted)
-    monkeypatch.setattr(copilot_module, "_VERIFIED", {})
+    for calls in (1, 2, 3):
+        ask_copilot(PROMPT, TARGET, 5.0)
+        assert len(read) == 3 * calls
+
+
+def test_a_runtime_swapped_with_its_mtime_put_back_is_refused(
+    runtime: type[FakeRuntime], tmp_path: Path
+) -> None:
+    """The re-audit's probe (`r2_l1_digest_cache.py`, case 1)."""
     ask_copilot(PROMPT, TARGET, 5.0)
-    assert len(read) == 3
+    library = tmp_path / "runtime" / "runtime.node"
+    kept = library.stat()
+    swapped = bytes(reversed(library.read_bytes()))
+    library.write_bytes(swapped)
+    os.utime(library, ns=(kept.st_atime_ns, kept.st_mtime_ns))
+    assert library.stat().st_size == kept.st_size
+    _refused_before_any_client(runtime)
+
+
+def test_a_runtime_reached_through_a_retargeted_link_is_never_started(
+    runtime: type[FakeRuntime], monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The probe's case 2: the entry's directory through a symlinked parent,
+    retargeted to a twin with the same names, sizes and mtimes. What is
+    hashed is what is started: the resolved path, read on every call."""
+    good = Path(provisioned(tmp_path / "v1")).parent
+    twin = Path(provisioned(tmp_path / "v2")).parent
+    (twin / "runtime.node").write_bytes(
+        bytes(reversed((good / "runtime.node").read_bytes()))
+    )
+    for name in ("copilot-runtime", "runtime.node", "assets/index.js"):
+        moment = (good / name).stat().st_mtime_ns
+        os.utime(twin / name, ns=(moment, moment))
+    current = tmp_path / "current"
+    current.symlink_to(good)
+    monkeypatch.setenv(RUNTIME_ENV, str(current / "copilot-runtime"))
+    monkeypatch.setenv(RUNTIME_DIGEST_ENV, expected_digest(good))
     ask_copilot(PROMPT, TARGET, 5.0)
-    ask_copilot(PROMPT, TARGET, 5.0)
-    assert len(read) == 3, "an unchanged runtime was read again"
+    started = runtime.made[-1].options["connection"].path
+    assert started == os.path.realpath(good / "copilot-runtime")
+    assert runtime.made[-1].options["env"]["PATH"] == os.path.dirname(started)
+    current.unlink()
+    current.symlink_to(twin)
+    _refused_before_any_client(runtime)
 
 
 def test_a_runtime_changed_after_it_was_verified_is_refused(
