@@ -210,5 +210,5 @@ A new feature or requirement beyond the ledgers is written here, not built. One 
   - **The spike.** It must record:
     - the exact `host` that `auth.getStatus` reports on the firm's seat (readiness accepts only `<pin>` or `https://<pin>`);
     - whether `models.list` states `billing.tokenPrices` with a `batchSize` for each candidate (without one, readiness refuses `unpriced`);
-    - whether `capabilities.limits.max_output_tokens` is listed at all, since the SDK 1.0.16 client type drops it.
+    - whether `capabilities.limits.max_output_tokens` is listed. `CopilotClient.list_models()`'s `ModelInfo` drops it, but the typed, experimental `client.rpc.models.list` returns it (`ModelCapabilitiesLimits.max_output_tokens`), so it can be printed from there if the owner wants the second call (F599, corrected).
   - **The owner.** An approved model the seat does not offer refuses the worker (the Task 5 brief's rule). R3 instead printed it `offered=n` and let its runs park. Which rule stands is the owner's call.
