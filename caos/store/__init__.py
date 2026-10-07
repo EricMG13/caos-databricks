@@ -254,6 +254,12 @@ MIGRATIONS = (
         .with_name("0047_call_cut_after_content.sql")
         .read_text(encoding="utf-8"),
     ),
+    (
+        "0048_reservation_credit_price",
+        Path(__file__)
+        .with_name("0048_reservation_credit_price.sql")
+        .read_text(encoding="utf-8"),
+    ),
 )
 
 # DL-1: the store's own schema, beside LangGraph's `caos_graph`
