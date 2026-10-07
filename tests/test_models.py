@@ -277,6 +277,10 @@ def test_the_chat_model_carries_the_socket_deadline_and_never_retries(
     from caos.provider import TIMEOUT_SECONDS
 
     assert TIMEOUT_SECONDS == 720.0, "a generation budget inside the lease (D117)"
+    # databricks-sdk 0.140 probes `/.well-known/databricks-config` in
+    # `Config.__init__` and retries for its default budget (about 300 s) against
+    # a host nobody serves; this test is about the chat model, not discovery.
+    monkeypatch.setattr(Config, "_resolve_host_metadata", lambda _self: None)
     client = WorkspaceClient(config=Config(host="http://127.0.0.1:9", token="t"))
     monkeypatch.setattr("caos.workspace.workspace_client", lambda: client)
     chat = chat_model(endpoint="databricks-x")
