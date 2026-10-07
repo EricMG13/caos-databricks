@@ -5448,3 +5448,38 @@ def test_a_figure_that_is_no_number_is_no_rate(value: object) -> None:
     assert copilot_module._rate(value) is None
     assert copilot_module._rate(0) == 0
     assert copilot_module._rate(0.3) == Fraction(3, 10)
+
+
+def test_a_copilot_qualification_run_needs_a_ready_seat_before_any_call(
+    ready: type[FakeRuntime],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """`scripts/qualify.py` is a paid path outside the worker (F602): the seat
+    and the pin are checked as the worker checks them, or nothing is built."""
+    import qualify
+
+    monkeypatch.setenv(models.ENDPOINT_ENV, MODEL)
+    monkeypatch.delenv("CAOS_MODEL_CHOICES", raising=False)
+    identity = models.identity_of(MODEL)
+    low = "0.000000001"
+    monkeypatch.setenv(models.MODEL_PRICE_ENV, f"{MODEL},{low},{low},2026-10-01")
+    ready.auth_type = "gh-cli"
+    assert qualify._configured_provider(identity) is None
+    ready.auth_type = "env"
+    assert qualify._configured_provider(identity) is None
+    assert "PROVIDER_NOT_CONFIGURED: no provider; nothing was spent" in (
+        capsys.readouterr().err
+    )
+    # Readiness lists models; it never opens a session.
+    assert all(not made.created for made in ready.made)
+    assert copilot_module.CONTEXT_LISTED == {}
+    monkeypatch.setenv(models.MODEL_PRICE_ENV, f"{MODEL},0.000005,0.00002,2026-10-01")
+    provider = qualify._configured_provider(identity)
+    assert provider is not None
+    assert provider.model == MODEL
+    assert copilot_module.CONTEXT_LISTED == {PIN: 1_000_000}
+    # A profile the caller did not expect starts no runtime at all.
+    started = len(ready.made)
+    assert qualify._configured_provider("copilot/other/none/65536") is None
+    assert len(ready.made) == started
