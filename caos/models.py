@@ -52,6 +52,7 @@ from caos.provider import (
     NEVER_RETRIED,
     TIMEOUT_SECONDS,
     Completion,
+    CutAfterContentError,
     DropKind,
     check_resend,
     encode_request,
@@ -265,6 +266,9 @@ class _Raised:
 
     kind: DropKind
     facts: str
+    # The stream's generation id, kept for a cut declared after content
+    # alone: its bill is unknown and reconciled by it (D118 fix round 1).
+    generation_id: str | None = None
 
 
 class _Indeterminate:
@@ -325,6 +329,9 @@ def _invoked(
                         )
                 except OpenAIError as failed:
                     answered.append(failed)
+                except CutAfterContentError as cut:
+                    # Never sent again here: the node's ledger decides (D118).
+                    answered.append(_cut(cut))
         except BaseException as escaped:
             # Not held back, as `suppress(Exception)` held it not: it still
             # ends this thread, and the call is named `escaped` (F513).
@@ -544,14 +551,19 @@ def _error_type(value: object) -> str:
 
 def _error_body(failed: BaseException) -> Mapping[str, Any]:
     """The provider's error object, from a vendor error's parsed body or the
-    mapping a client raised as its argument; empty when there is none."""
+    mapping a client raised as its argument; empty when there is none. A
+    body that wraps it (`{"error": {...}}`) is unwrapped once, and only when
+    the outer object states no code of its own: an outer code is the one
+    read (D118 fix round 1), never an inner one beside it."""
     body = getattr(failed, "body", None)
     if not isinstance(body, Mapping) and failed.args:
         body = failed.args[0]
     if not isinstance(body, Mapping):
         return {}
     inner = body.get("error")
-    return inner if isinstance(inner, Mapping) else body
+    if body.get("code") is None and isinstance(inner, Mapping):
+        return inner
+    return body
 
 
 def _failure_facts(failed: BaseException | None) -> str:
@@ -598,27 +610,35 @@ def _unanswered(code: RefusalCode, answer: object, started: float) -> Completion
     lines never interleave; a write that fails is dropped (a fail-open: the
     line never changes the outcome). Nothing here quotes the prompt, an
     answer or an error's text. The refusal carries the same kind, typed, a
-    vendor error split by whether the provider declared it (D110)."""
-    drop, facts = DropKind.DEADLINE, _NO_FACTS
+    vendor error split by whether the provider declared it (D110), and a cut
+    after content too (D118), whose line still says `raised`."""
+    drop, facts, generation = DropKind.DEADLINE, _NO_FACTS, None
     if isinstance(answer, _Raised):
-        drop, facts = answer.kind, answer.facts
+        drop, facts, generation = answer.kind, answer.facts, answer.generation_id
     elif isinstance(answer, BaseException):
         unavailable = code is RefusalCode.PROVIDER_UNAVAILABLE
         drop = (
             DropKind.DECLARED if unavailable and _declared(answer) else DropKind.VENDOR
         )
         facts = _facts(answer)
-    kind = "vendor" if drop is DropKind.DECLARED else drop.value
+    kind = drop.value
+    if drop is DropKind.DECLARED_AFTER_CONTENT:
+        # A cut the provider declared after content is still one the client
+        # ended by raising (D118): the line says so, unchanged.
+        kind = DropKind.RAISED.value
+    elif drop is DropKind.DECLARED:
+        kind = "vendor"
     with suppress(Exception):  # fail-open, documented above (F513)
         line = f"{code.value} call={kind} {facts} elapsed={_clock() - started:.1f}\n"
         sys.stderr.write(line)
-    return Completion(None, None, None, code, drop)
+    return Completion(None, None, generation, code, drop)
 
 
 def _declared(failed: BaseException) -> bool:
     """Whether the provider itself stated this vendor error a failure (D110):
     a failure status, 400 to 599, or, with no status at all, its own error
-    object as the error's body (an SSE `error` event) -- never a status that
+    object as the error's body (an SSE `error` event) when that object is
+    positive evidence (`_declares`, F566) -- never a status that
     says the call succeeded (a `200` the client could not read, F530), an
     argument that is no body, or a connection's failure (a reset, a client
     timeout), after which what was received is unknown. An error that raises
@@ -635,8 +655,69 @@ def _declared(failed: BaseException) -> bool:
                 and FAILURE_STATUSES[0] <= status <= (FAILURE_STATUSES[1])
             )
         else:
-            declared = isinstance(body, Mapping) and bool(body)
+            declared = isinstance(body, Mapping) and _declares(_error_body(failed))
     return declared
+
+
+def _declares(error: Mapping[str, Any]) -> bool:
+    """Whether a provider's error object is positive evidence that the
+    provider, not the request, failed (F566), before content or after: its
+    `code` a 5xx or a 429 status -- an integer, or one written in digits --
+    or, with no code, an `error_type` in `_RETRYABLE_ERROR_TYPES`. Anything
+    else is not declared: a 4xx however stated, a code that is no status
+    (`400.0`, `-400`, a word), a type of any other class, or neither."""
+    code = error.get("code")
+    if code is not None:
+        status = _status(code)
+        return status.isdigit() and (
+            int(status) == RATE_LIMITED or 500 <= int(status) <= 599
+        )
+    metadata = error.get("metadata")
+    kind = metadata.get("error_type") if isinstance(metadata, Mapping) else None
+    return isinstance(kind, str) and kind in _RETRYABLE_ERROR_TYPES
+
+
+# The provider error types that say the provider, not the request, failed
+# and may answer if asked again (D118, F566), from `_ERROR_TYPES`: its
+# upstream unavailable or overloaded, a timeout, a rate limit. Every other
+# type -- `server` among them, which names no class -- is no drop.
+_RETRYABLE_ERROR_TYPES = frozenset(
+    {
+        "provider_overloaded",
+        "provider_unavailable",
+        "rate_limit_exceeded",
+        "timeout",
+    }
+)
+
+
+def _cut_kind(cut: CutAfterContentError) -> DropKind:
+    """How a call the provider failed after content ended (D118):
+    `declared_after_content` when the provider's own error object declares
+    it (`_declares`: a 5xx or a 429 code, or with no code a retryable type);
+    `raised` otherwise -- a cut with no error object, a 4xx, a code that is
+    no status, a connection's failure beneath it, or an error object that
+    raises while it is read (fail closed: no re-attempt). The cut attempt
+    keeps its reservation and none of its output is ever accepted, so its
+    re-attempt is an ordinary pass under D110's every gate."""
+    declared = False
+    with suppress(Exception):  # fail closed, documented above (D118)
+        if isinstance(cut.__cause__, APIConnectionError):
+            return DropKind.RAISED
+        declared = _declares(_error_body(cut))
+    return DropKind.DECLARED_AFTER_CONTENT if declared else DropKind.RAISED
+
+
+def _cut(cut: CutAfterContentError) -> _Raised:
+    """A cut after content as the seam keeps it: its kind, its facts, and,
+    when the provider declared it, the generation id its stream gave, if
+    that is a producer identifier (D118 fix round 1); an undeclared cut's
+    row names none, as every other drop's."""
+    kind = _cut_kind(cut)
+    generation = None
+    if kind is DropKind.DECLARED_AFTER_CONTENT:
+        generation = producer_identifier(cut.generation_id, limit=512)
+    return _Raised(kind, _facts(cut), generation)
 
 
 def _text(content: object) -> str | None:
