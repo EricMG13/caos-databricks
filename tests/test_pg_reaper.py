@@ -16,8 +16,6 @@ from pg_reaper import (
     refused_server,
 )
 
-pytestmark = pytest.mark.skipif(POSTGRES_URL is None, reason="needs a server")
-
 _NOW = 1_800_000_000
 
 
@@ -70,7 +68,7 @@ def _exists(admin: psycopg.Connection, name: str) -> bool:
     return row is not None
 
 
-def test_reap_drops_only_idle_old_matching_databases() -> None:
+def test_reap_drops_only_idle_old_matching_databases(empty_database: str) -> None:
     assert POSTGRES_URL is not None
     now = int(time.time())
     hexid = uuid4().hex
