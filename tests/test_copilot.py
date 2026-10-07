@@ -3704,6 +3704,8 @@ def test_a_permission_request_during_a_call_is_denied_and_refuses_the_call(
         (Decimal("2.5"), Decimal("0.0125"), 200),
         (Decimal("0"), CREDIT, 30),
         (Decimal("1.00"), None, None),
+        # A free credit prices no cap: there is no division by it.
+        (Decimal("1.00"), Decimal(0), None),
     ],
 )
 def test_a_session_is_capped_at_its_reservation_in_credits_never_below_thirty(
@@ -3721,6 +3723,13 @@ def test_a_call_with_no_reservation_in_scope_sends_no_cap(
     runtime: type[FakeRuntime],
 ) -> None:
     ask_copilot(PROMPT, TARGET, 5.0)
+    assert "session_limits" not in runtime.made[-1].created
+    # A credit price with no amount in scope is no reservation either.
+    named = reserved_credit.set(CREDIT)
+    try:
+        ask_copilot(PROMPT, TARGET, 5.0)
+    finally:
+        reserved_credit.reset(named)
     assert "session_limits" not in runtime.made[-1].created
 
 
