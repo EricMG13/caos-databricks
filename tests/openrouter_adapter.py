@@ -52,9 +52,10 @@ answer), the first stated finish, the usage frame's counts and the stream's
 id. An SSE `error` event raises the client's `APIError`, which the seam types
 as PROVIDER_UNAVAILABLE; a stream that ends without a finish or a usage is
 an answer the seam refuses. An error event after the stream carried anything
-generated is raised as `CutAfterContentError` instead (D110): the provider
-did not fail before it began to answer, so the seam names it `raised` and
-the node gets no automatic re-attempt.
+generated is raised as the seam's `CutAfterContentError` instead (D110): the
+provider failed after it began to answer, so the seam names it `raised` on
+stderr, and the node gets its one re-attempt only when the error object
+declares a 5xx, a 429 or a transient `error_type` (D118).
 """
 
 from __future__ import annotations
@@ -72,6 +73,10 @@ from openai import APIError
 from pydantic import SecretStr
 
 from caos.provider import MAX_COMPLETION_TOKENS, TIMEOUT_SECONDS
+
+# The seam's own class since D118: the host, not this adapter, decides
+# whether the provider declared the cut.
+from caos.provider import CutAfterContentError as CutAfterContentError
 
 if TYPE_CHECKING:
     import httpx
@@ -201,17 +206,6 @@ def streamed_message(frames: Iterable[Mapping[str, Any]]) -> AIMessage:
     return AIMessage(
         content="".join(text), response_metadata=metadata, usage_metadata=usage
     )
-
-
-class CutAfterContentError(Exception):
-    """A stream the provider failed after it had begun to answer (D110): not
-    a drop declared before any content, so the seam names it `raised` and
-    the node is not re-attempted. It keeps the provider's error object as
-    its body, so F513's line still says the error's code and type."""
-
-    def __init__(self, body: object) -> None:
-        super().__init__()
-        self.body = body
 
 
 def generating(frame: Mapping[str, Any]) -> bool:

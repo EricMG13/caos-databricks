@@ -158,6 +158,19 @@ def finish_refusal(finish_reason: str) -> RefusalCode | None:
     return _FINISH_REFUSALS.get(finish_reason, RefusalCode.PROVIDER_RESPONSE_INVALID)
 
 
+class CutAfterContentError(Exception):
+    """A call the provider failed after it had begun to answer (D110, D118):
+    what a transport adapter raises when a stream it was reading ends in the
+    provider's own error object after something was generated. It keeps that
+    object as its body and none of the error's words; `caos.models` decides
+    from the body alone whether the provider declared the failure, and so
+    whether the node earns its one re-attempt (D118)."""
+
+    def __init__(self, body: object) -> None:
+        super().__init__()
+        self.body = body
+
+
 @dataclass(frozen=True, slots=True)
 class Completion:
     """Independent call facts beside usable content or an analytical refusal.
