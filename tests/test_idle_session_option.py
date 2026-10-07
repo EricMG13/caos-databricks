@@ -16,6 +16,7 @@ refuses `STORE_UNAVAILABLE`. No connect is ever repeated for it.
 
 from __future__ import annotations
 
+import os
 import threading
 import time
 from collections.abc import Callable, Iterator
@@ -43,10 +44,23 @@ _WOULD_FAIL = "SELECT 1/0"
 
 @pytest.fixture(autouse=True)
 def _fresh_process(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    """Each test is a process that has not yet found a refusal."""
+    """Each test is a process that has not yet found a refusal, and leaves
+    `PGOPTIONS` as it found it."""
+    before = os.environ.get("PGOPTIONS")
     monkeypatch.setattr(store, "_IDLE_SESSION_REFUSED", threading.Event())
     monkeypatch.delenv("PGOPTIONS", raising=False)
     yield
+    monkeypatch.undo()
+    assert os.environ.get("PGOPTIONS") == before
+
+
+def _operator_options(request: pytest.FixtureRequest, value: str) -> None:
+    """Set `PGOPTIONS` for the test body only. The finalizer is registered
+    after `empty_database` is set up, so it runs before that fixture's
+    teardown: the admin connection that drops the database never sees it."""
+    scoped = pytest.MonkeyPatch()
+    scoped.setenv("PGOPTIONS", value)
+    request.addfinalizer(scoped.undo)
 
 
 def _connects(monkeypatch: pytest.MonkeyPatch) -> list[psycopg.Connection[Any]]:
@@ -70,11 +84,12 @@ def test_a_store_session_turns_its_idle_bound_off_with_its_first_statement(
     empty_database: str,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
+    request: pytest.FixtureRequest,
 ) -> None:
     """One connect, no idle startup option, and the `SET` committed: the
     session is idle, outside any transaction, as `call_hold` requires, and a
     caller's rollback does not undo it."""
-    monkeypatch.setenv("PGOPTIONS", "-c idle_session_timeout=5min")
+    _operator_options(request, "-c idle_session_timeout=5min")
     opened = _connects(monkeypatch)
     with store.connect(empty_database) as conn:
         assert conn.info.transaction_status is TransactionStatus.IDLE
@@ -192,16 +207,17 @@ def test_only_the_four_refusals_of_the_set_degrade(
 def test_another_set_error_closes_the_session_and_refuses_unavailable(
     empty_database: str,
     monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
+    request: pytest.FixtureRequest,
     statement: str,
     operator_options: str | None,
 ) -> None:
     """A first statement the server fails for any other reason closes the
     session and refuses `STORE_UNAVAILABLE`, through the request edge too, on
     one connect each; nothing is remembered and nothing printed."""
+    capsys: pytest.CaptureFixture[str] = request.getfixturevalue("capsys")
     monkeypatch.setattr(store, "IDLE_SESSION_SET", statement)
     if operator_options is not None:
-        monkeypatch.setenv("PGOPTIONS", operator_options)
+        _operator_options(request, operator_options)
     opened = _connects(monkeypatch)
     with pytest.raises(Refusal) as refused:
         store.connect(empty_database)
