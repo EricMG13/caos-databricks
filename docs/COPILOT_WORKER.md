@@ -161,7 +161,7 @@ If a call's charge exceeds what the run reserved, the run parks `BUDGET_CHARGE_O
 
 - No run advances while no worker runs, and one worker spends one Copilot seat. Two analysts' workers may run at once (leases); each spends its own seat.
 - No in-app chat (Query) until RAI is onboarded.
-- Hosting the API and UI with Copilot models is a separate step (N124).
+- Hosting the API and UI with Copilot models is a separate step (N124). Copilot answers on this PC worker only: the App's in-process worker (`CAOS_WORKER_IN_PROCESS=1`) runs readiness at start and refuses `PROVIDER_NOT_CONFIGURED` whenever `CAOS_MODEL_CHOICES` names a `copilot:` model, since the App has no seat or runtime, and its worker thread ends while the API keeps serving. With the same approved list on both sides, `/api/health` `workers` then rests on the PC worker alone.
 - No `copilot-cli:` models (D78, N188).
 
 ## 9. Measure on the firm's seat first (N177, N184, N185)

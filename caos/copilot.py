@@ -61,6 +61,7 @@ from caos.pricing import CreditPrice, ModelPrice, exact_context
 from caos.provider import (
     MAX_COMPLETION_TOKENS,
     TIMEOUT_SECONDS,
+    call_seconds,
     reported_charge,
     reserved_amount,
     reserved_credit,
@@ -841,7 +842,9 @@ async def _aborted(session: CopilotSession) -> None:
 class ChatCopilot(BaseChatModel):
     """The chat model a Copilot name is answered by: one prompt, one call, one
     reply. `ask` is the transport: it sends the prompt to the pinned model
-    within the deadline and returns the session's events."""
+    within the deadline -- `timeout`, or the seconds left of the call's one
+    deadline when `ChatCompletions` names fewer (`call_seconds`) -- and
+    returns the session's events."""
 
     model: str
     timeout: float = TIMEOUT_SECONDS
@@ -868,7 +871,9 @@ class ChatCopilot(BaseChatModel):
         prompt = messages[-1].content if len(messages) == 1 else None
         if stop or not isinstance(prompt, str):
             raise Refusal(RefusalCode.PROVIDER_CALL_INVALID)
-        seen = self.ask(prompt, target, self.timeout)
+        left = call_seconds.get()
+        seconds = self.timeout if left is None else min(self.timeout, left)
+        seen = self.ask(prompt, target, seconds)
         if not _spent(seen):
             failed = _failure(seen)
             if failed is not None:

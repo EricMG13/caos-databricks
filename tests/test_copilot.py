@@ -84,6 +84,7 @@ from caos.provider import (
     MAX_COMPLETION_TOKENS,
     TIMEOUT_SECONDS,
     DropKind,
+    call_seconds,
     request_ceiling,
     reserved_amount,
     reserved_credit,
@@ -1169,6 +1170,38 @@ def test_chat_copilot_asks_once_with_the_prompt_its_pinned_model_and_deadline() 
     message = ChatCopilot(model=MODEL, ask=ask).invoke([HumanMessage(content=PROMPT)])
     assert message.content == "answer"
     assert asked == [(PROMPT, TARGET, TIMEOUT_SECONDS)]
+
+
+def test_a_resent_call_asks_for_no_more_than_the_deadline_left(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Info (whole-branch review): `ask` is handed the seconds left of the one
+    call deadline (ST-9), not the full `TIMEOUT_SECONDS` again after a 429, so
+    an abandoned session cannot run on past the worker's `call=deadline`."""
+    now = [0.0]
+
+    def slept(seconds: float) -> None:
+        now[0] += seconds
+
+    monkeypatch.setattr(models, "_clock", lambda: now[0])
+    monkeypatch.setattr(models, "_sleep", slept)
+    answers = iter([[*UNSPENT, error(429)], SDK_HAPPY])
+    asked: list[tuple[float, float]] = []
+
+    def ask(prompt: str, target: CopilotModel, seconds: float) -> Sequence[Event]:
+        asked.append((now[0], seconds))
+        now[0] += 100.0
+        return next(answers)
+
+    with reserving(Decimal("2.00"), credit=CREDIT):
+        completion = provider(ask).complete(PROMPT)
+    assert completion.refusal is None
+    [(first_at, first), (second_at, second)] = asked
+    assert (first_at, first) == (0.0, TIMEOUT_SECONDS)
+    assert second_at > 100.0
+    assert second == TIMEOUT_SECONDS - second_at
+    # Outside a call, the model's own timeout stands.
+    assert call_seconds.get() is None
 
 
 def test_through_the_factory_the_exact_call_completes_with_its_call_id() -> None:

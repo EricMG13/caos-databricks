@@ -320,6 +320,14 @@ reserved_credit: ContextVar[Decimal | None] = ContextVar(
 )
 
 
+# The seconds left of the one call deadline (ST-9) when `models._invoked`
+# hands a try to its chat model: a transport that runs its own timer
+# (`caos.copilot.ChatCopilot`) asks for no more than this, so a session sent
+# again after a 429 cannot outlive the deadline the worker records. Set in the
+# context the call's own thread runs in; None outside a call.
+call_seconds: ContextVar[float | None] = ContextVar("caos_call_seconds", default=None)
+
+
 @contextmanager
 def reserving(amount: Decimal, *, credit: Decimal | None = None) -> Iterator[None]:
     """Name `amount`, and the credit price it was taken under, as the
