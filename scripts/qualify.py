@@ -25,6 +25,14 @@ them, and `$TMPDIR` is purged (FP-16).
     scripts/qualify.py qualification/ccl-fy2025-market-dislocation \
         --expect-identity databricks/claude-opus-5-5/none/65536 --ceiling 60.00
 
+    # The same set through GitHub Copilot on this machine (D77): the identity
+    # names the platform, the model, the effort and the output cap.
+    CAOS_MODEL_ENDPOINT=copilot:gpt-6-luna@high \
+    CAOS_MODEL_PRICE=copilot:gpt-6-luna@high,<in>,<out>,<YYYY-MM-DD> \
+    CAOS_COPILOT_CREDIT_PRICE=<usd per AI credit>,<YYYY-MM-DD> \
+    scripts/qualify.py qualification/ccl-fy2025-market-dislocation \
+        --expect-identity copilot/gpt-6-luna/high/65536 --ceiling 5.00
+
 `--expect-identity` is not a convenience. A verdict binds the execution profile
 it was measured under, so the run refuses before spending anything if the
 environment resolves to a different one than the caller believes.
