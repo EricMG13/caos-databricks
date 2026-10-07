@@ -10,6 +10,8 @@ format before F588). It never forces a drop, and never touches another name.
 
 from __future__ import annotations
 
+import contextlib
+import os
 import re
 import sys
 import time
@@ -20,12 +22,20 @@ import psycopg
 
 MAX_AGE_SECONDS = 2 * 60 * 60
 _PATTERN = re.compile(r"^caos_test_(?:template_)?(?:(\d{10})_)?[0-9a-f]{32}$")
+TEST_PORT = 55437
+QUALIFICATION_PORT = 55436
+ALLOW_ENV = "CAOS_TEST_REAPER_ALLOW"
 _SUGGESTS_LIVE = ("dev", "prod", "databricks", "lakebase")
 
 
 def database_name(prefix: str, now: int | None = None) -> str:
     """`<prefix><unix second>_<uuid hex>`: 52 or 62 bytes, under Postgres's 63."""
     return f"{prefix}{int(time.time() if now is None else now)}_{uuid4().hex}"
+
+
+def _timestamped(name: str) -> bool:
+    match = _PATTERN.match(name)
+    return match is not None and match.group(1) is not None
 
 
 def is_reapable(name: str, now: int) -> bool:
@@ -38,17 +48,52 @@ def is_reapable(name: str, now: int) -> bool:
 
 
 def refused_server(url: str) -> str | None:
-    """A typed code when the URL's host or database suggests a real store."""
+    """A typed code unless the URL is positively the shared test server.
+
+    Always refused: a host or database naming dev, prod, databricks or lakebase,
+    port 55436 (the qualification server), and any database other than
+    `postgres` or a `caos_test` one. Then it must be the test server's port,
+    55437, or be allowed by `CAOS_TEST_REAPER_ALLOW=1` in the environment (for
+    a test server on another port; it never overrides the refusals above).
+    """
     parts = urlsplit(url)
-    named = f"{parts.hostname or ''} {parts.path.lstrip('/')}".lower()
+    database = parts.path.lstrip("/")
+    named = f"{parts.hostname or ''} {database}".lower()
     if any(word in named for word in _SUGGESTS_LIVE):
         return "server_suggests_live_store"
+    try:
+        port = parts.port
+    except ValueError:
+        return "port_unreadable"
+    if port == QUALIFICATION_PORT:
+        return "qualification_server"
+    if database != "postgres" and not database.startswith("caos_test"):
+        return "database_not_a_test_database"
+    if port != TEST_PORT and os.environ.get(ALLOW_ENV) != "1":
+        return "server_not_the_test_server"
     return None
 
 
-def reap(admin: psycopg.Connection, now: int | None = None) -> list[str]:
-    """Drop the reapable databases with no connection; return those dropped."""
+def reap(
+    admin: psycopg.Connection,
+    now: int | None = None,
+    other_sessions: int | None = None,
+) -> list[str]:
+    """Drop the reapable databases with no connection; return those dropped.
+
+    A timestamped name is dropped when over two hours old. An old-format name
+    (no timestamp) could be a connection-free template or a concurrent
+    session's fresh database, so it is dropped only when no session at all is
+    running any `caos_test_*` database. All new names carry a timestamp, so
+    this rule is transitional: it goes with the last old-format leak.
+    `other_sessions` overrides the server's count, for a test.
+    """
     moment = int(time.time() if now is None else now)
+    if other_sessions is None:
+        row = admin.execute(
+            "SELECT count(*) FROM pg_stat_activity WHERE datname LIKE 'caos\\_test\\_%'"
+        ).fetchone()
+        other_sessions = 0 if row is None else int(row[0])
     rows = admin.execute(
         "SELECT datname FROM pg_database d WHERE datname LIKE 'caos\\_test\\_%'"
         " AND NOT EXISTS (SELECT 1 FROM pg_stat_activity a"
@@ -57,6 +102,8 @@ def reap(admin: psycopg.Connection, now: int | None = None) -> list[str]:
     dropped: list[str] = []
     for (name,) in rows:
         if not is_reapable(name, moment):
+            continue
+        if other_sessions and not _timestamped(name):
             continue
         try:
             # The name matched `_PATTERN`: lowercase hex and digits only.
@@ -68,16 +115,17 @@ def reap(admin: psycopg.Connection, now: int | None = None) -> list[str]:
 
 
 def reap_session(url: str) -> None:
-    """Once per session; its own failure is one typed line, never the session's."""
+    """Once per session. Fail-open by design: whatever the reaper raises, the
+    session goes on and one typed line says it did not run to the end."""
     code = refused_server(url)
     if code is not None:
         print(f"pg_reaper: refused code={code}", file=sys.stderr)
         return
-    try:
+    dropped: list[str] | None = None
+    with contextlib.suppress(Exception):  # the documented fail-open
         with psycopg.connect(url, autocommit=True) as admin:
             dropped = reap(admin)
-    except (psycopg.Error, OSError) as exc:  # fail-open, logged (F588)
-        print(f"pg_reaper: failed code={type(exc).__name__}", file=sys.stderr)
-        return
-    if dropped:
+    if dropped is None:
+        print("pg_reaper: failed code=reaper_failed", file=sys.stderr)
+    elif dropped:
         print(f"pg_reaper: reaped count={len(dropped)}", file=sys.stderr)

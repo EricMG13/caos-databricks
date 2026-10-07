@@ -49,12 +49,28 @@ def test_which_names_are_reapable() -> None:
 def test_a_dev_or_production_server_is_refused() -> None:
     assert refused_server("postgresql://u:p@127.0.0.1:55437/postgres") is None
     for url in (
+        "postgresql://u:p@127.0.0.1:55436/postgres",
+        "postgresql://u:p@127.0.0.1:55438/postgres",
+        "postgresql://u:p@127.0.0.1:55437/caos_qualify_abc",
+        "postgresql://u:p@127.0.0.1:55437/appdb",
         "postgresql://u:p@127.0.0.1/caos_dev",
         "postgresql://u:p@prod-db.example.com/postgres",
         "postgresql://u:p@x.cloud.databricks.com/postgres",
         "postgresql://u:p@127.0.0.1/production",
     ):
         assert refused_server(url) is not None
+
+
+def test_the_allow_variable_admits_another_port_but_never_overrides(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    other = "postgresql://u:p@127.0.0.1:5999/postgres"
+    monkeypatch.delenv("CAOS_TEST_REAPER_ALLOW", raising=False)
+    assert refused_server(other) == "server_not_the_test_server"
+    monkeypatch.setenv("CAOS_TEST_REAPER_ALLOW", "1")
+    assert refused_server(other) is None
+    assert refused_server("postgresql://u:p@127.0.0.1:55436/postgres") is not None
+    assert refused_server("postgresql://u:p@prod-host:5999/postgres") is not None
 
 
 def _make(admin: psycopg.Connection, name: str) -> None:
@@ -78,19 +94,24 @@ def test_reap_drops_only_idle_old_matching_databases(empty_database: str) -> Non
     young = f"caos_test_{now - 60}_{uuid4().hex}"
     busy = f"caos_test_{now - MAX_AGE_SECONDS - 5}_{uuid4().hex}"
     stranger = f"other_{uuid4().hex}"
-    names = [old, legacy, legacy_template, young, busy, stranger]
+    qualify = f"caos_qualify_{uuid4().hex}"
+    names = [old, legacy, legacy_template, young, busy, stranger, qualify]
     with psycopg.connect(POSTGRES_URL, autocommit=True) as admin:
         try:
             for name in names:
                 _make(admin, name)
             with psycopg.connect(_url_for(busy)):
-                reaped = reap(admin, now=now)
-            assert {old, legacy, legacy_template} <= set(reaped)
-            assert not {young, busy, stranger} & set(reaped)
+                # A session is running a caos_test database: old format stays.
+                reaped = reap(admin, now=now, other_sessions=1)
+                assert old in reaped and not {legacy, legacy_template} & set(reaped)
+                reaped = reap(admin, now=now, other_sessions=0)
+            assert {legacy, legacy_template} <= set(reaped)
+            assert not {young, busy, stranger, qualify} & set(reaped)
             assert [_exists(admin, n) for n in names] == [
                 False,
                 False,
                 False,
+                True,
                 True,
                 True,
                 True,
@@ -106,9 +127,9 @@ def test_the_session_hook_never_fails_the_session(
     import pg_reaper
 
     monkeypatch.setattr(
-        pg_reaper, "reap", lambda *a, **k: (_ for _ in ()).throw(OSError("x"))
+        pg_reaper, "reap", lambda *a, **k: (_ for _ in ()).throw(KeyError("x"))
     )
-    pg_reaper.reap_session("postgresql://postgres:x@127.0.0.1:1/postgres")
+    pg_reaper.reap_session("postgresql://postgres:x@127.0.0.1:55437/postgres")
     err = capsys.readouterr().err
     assert err.count("\n") == 1 and "pg_reaper: failed code=" in err
     pg_reaper.reap_session("postgresql://u:p@127.0.0.1/caos_dev")
