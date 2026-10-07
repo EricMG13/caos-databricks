@@ -30,10 +30,12 @@ The SDK itself is imported only by the transport (Task 3), never here.
 from __future__ import annotations
 
 import math
+import os
 import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from decimal import Decimal
+from datetime import UTC, date, datetime
+from decimal import Decimal, InvalidOperation
 from typing import Any, TypeIs
 
 from langchain_core.callbacks import CallbackManagerForLLMRun
@@ -43,7 +45,7 @@ from langchain_core.messages.ai import UsageMetadata
 from langchain_core.outputs import ChatGeneration, ChatResult
 from openai import OpenAIError
 
-from caos.pricing import exact_context
+from caos.pricing import CreditPrice, exact_context
 from caos.provider import MAX_COMPLETION_TOKENS, TIMEOUT_SECONDS, reported_charge
 from caos.refusals import Refusal, RefusalCode
 from caos.store.budget import validate_spend
@@ -61,6 +63,13 @@ _NAME = re.compile(
     r"(copilot|copilot-cli):([a-z0-9][a-z0-9.-]{0,127})"
     r"(?:@(low|medium|high|xhigh|max))?"
 )
+# The operator's dated price of one AI credit, `<usd>,<YYYY-MM-DD>` (R2.2):
+# GitHub publishes $0.01, which the operator pins with the date it was read.
+CREDIT_PRICE_ENV = "CAOS_COPILOT_CREDIT_PRICE"
+# As a per-token rate is written (`caos.pricing`, DF-10): ASCII digits, an
+# optional fraction, no sign, exponent or other script's digits; an ISO day.
+_RATE = re.compile(r"[0-9]+(?:\.[0-9]+)?")
+_DAY = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
 # One AI credit in nano-AIU: `creditsUsedNanoAiu` is "exact window
 # consumption in non-negative integer nano-AIU" beside fractional credits.
 # An assumption until the firm-seat spike measures it (R2, N177).
@@ -226,6 +235,42 @@ def parsed(model: str) -> CopilotModel | None:
     if matched is None:
         raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
     return CopilotModel(matched.group(1), matched.group(2), matched.group(3))
+
+
+def credit_price(value: str | None = None) -> CreditPrice:
+    """The operator's dated price of one AI credit (R2.2), from `value` or
+    `CREDIT_PRICE_ENV`, or `PROVIDER_NOT_CONFIGURED`.
+
+    Read for a Copilot model only. The rate is written as a per-token rate is
+    (DF-10), above zero and exact spend (`validate_spend`); the date is ISO and
+    no later than today in UTC, since a price dated ahead is not in force. The
+    value is never printed; the refusal names only the code.
+    """
+    raw = os.environ.get(CREDIT_PRICE_ENV, "") if value is None else value
+    rate, comma, day = raw.partition(",")
+    if not (comma and _RATE.fullmatch(rate) and _DAY.fullmatch(day)):
+        raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
+    try:
+        price = CreditPrice(Decimal(rate), date.fromisoformat(day))
+        validate_spend(price.per_credit)
+    except (ValueError, InvalidOperation, Refusal):
+        raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED) from None
+    if not price.per_credit or price.as_of > datetime.now(UTC).date():
+        raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
+    return price
+
+
+def output_cap(model: str) -> int:
+    """The most output tokens a call to `model` can return, which its
+    reservation is priced on (R2.5): the session's own cap,
+    `MAX_COMPLETION_TOKENS`, for an SDK model and a gateway endpoint alike.
+    A `copilot-cli:` model, which the CLI caps at the model's own limit, has
+    no cap until the CLI transport is built (owner decision (a), 2026-10-06),
+    so it is refused `PROVIDER_NOT_CONFIGURED`."""
+    target = parsed(model)
+    if target is not None and target.platform == CLI_PLATFORM:
+        raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
+    return MAX_COMPLETION_TOKENS
 
 
 class CopilotStatusError(OpenAIError):

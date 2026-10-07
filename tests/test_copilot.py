@@ -13,7 +13,7 @@ import inspect
 import math
 import re
 from collections.abc import Callable, Mapping, Sequence
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from fractions import Fraction
 from typing import Any, cast
@@ -30,17 +30,20 @@ from langchain_core.messages import AIMessage, HumanMessage
 from caos import copilot as copilot_module
 from caos import models
 from caos.copilot import (
+    CREDIT_PRICE_ENV,
     NANO_PER_CREDIT,
     ChatCopilot,
     CopilotModel,
     CopilotStatusError,
     Event,
+    credit_price,
+    output_cap,
     parsed,
     reply_message,
     settled_charge,
 )
 from caos.models import ChatCompletions, completions
-from caos.pricing import ModelPrice
+from caos.pricing import CreditPrice, ModelPrice
 from caos.provider import (
     MAX_COMPLETION_TOKENS,
     TIMEOUT_SECONDS,
@@ -3096,3 +3099,60 @@ def test_property_the_finish_stands_only_when_every_dispatch_names_only_the_pin(
     message = reply_message(seen, TARGET)
     assert ("finish_reason" in message.response_metadata) is stands
     assert message.response_metadata["nano_aiu"] == 251_164_000
+
+
+# Task 3 (R8 row 2): the credit price, the output cap, the SDK transport and
+# the factory dispatch.
+
+
+def test_the_credit_price_is_a_dated_decimal_or_not_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert credit_price("0.01,2026-10-01") == CreditPrice(
+        Decimal("0.01"), date(2026, 10, 1)
+    )
+    monkeypatch.setenv(CREDIT_PRICE_ENV, "0.0125,2026-09-30")
+    assert credit_price() == CreditPrice(Decimal("0.0125"), date(2026, 9, 30))
+    monkeypatch.delenv(CREDIT_PRICE_ENV)
+    for written in (
+        None,
+        "",
+        "0.01",
+        "0.01,",
+        ",2026-10-01",
+        "0.01,2026-10-01,x",
+        "0,2026-10-01",
+        "0.00,2026-10-01",
+        "-0.01,2026-10-01",
+        "+0.01,2026-10-01",
+        "1e-2,2026-10-01",
+        ".01,2026-10-01",
+        " 0.01,2026-10-01",
+        "0.01 ,2026-10-01",
+        "NaN,2026-10-01",
+        "\u0660.\u0660\u0661,2026-10-01",
+        "0.01,2026-13-01",
+        "0.01,20261001",
+        "0.01,2026-10-1",
+        "0.01,2999-01-01",
+        "1" + "0" * 131072 + ",2026-10-01",
+    ):
+        with pytest.raises(Refusal) as refused:
+            credit_price(written)
+        assert refused.value.code is RefusalCode.PROVIDER_NOT_CONFIGURED
+        assert refused.value.args == (RefusalCode.PROVIDER_NOT_CONFIGURED,)
+
+
+def test_the_credit_price_is_never_later_than_today_in_utc() -> None:
+    today = datetime.now(UTC).date()
+    assert credit_price(f"0.01,{today.isoformat()}").as_of == today
+
+
+def test_the_output_cap_is_the_sessions_cap_and_the_cli_is_deferred() -> None:
+    assert output_cap(MODEL) == MAX_COMPLETION_TOKENS == 65536
+    assert output_cap("copilot:gpt-6-luna") == 65536
+    assert output_cap("claude-opus-5-5") == 65536
+    for deferred in ("copilot-cli:gpt-6-luna", "copilot-cli:claude-opus-5.5@high"):
+        with pytest.raises(Refusal) as refused:
+            output_cap(deferred)
+        assert refused.value.code is RefusalCode.PROVIDER_NOT_CONFIGURED
