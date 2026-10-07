@@ -58,6 +58,7 @@ from caos.store.outcomes import (
 __all__ = ["harness", "route"]
 
 PROMPT = "q" * 1000
+_TYPE_INVALID = {"error_type": "invalid_request"}
 _ROUTER_ERROR = {
     "code": 502,
     "message": "private upstream words",
@@ -217,6 +218,42 @@ def _never(released: threading.Event) -> Callable[[str], object]:
             "PROVIDER_UNAVAILABLE",
             id="body-500",
         ),
+        # F566: an error object is declared only on positive evidence -- a 5xx
+        # or 429 status code, or a retryable type with no code. A 4xx stated
+        # any other way, an odd code, or no code and no type is not.
+        *(
+            pytest.param(_Body(body), DropKind.VENDOR, "PROVIDER_UNAVAILABLE", id=name)
+            for name, body in (
+                ("body-400-float", {"code": 400.0, "metadata": _TYPE_INVALID}),
+                ("body-code-word", {"code": "invalid_request_error"}),
+                ("body-negative-400", {"code": -400}),
+                (
+                    "body-type-context",
+                    {"metadata": {"error_type": "context_length_exceeded"}},
+                ),
+                ("body-type-payment", {"metadata": {"error_type": "payment_required"}}),
+                ("body-type-server", {"metadata": {"error_type": "server"}}),
+                ("body-message-only", {"message": "private"}),
+                ("body-503-float", {"code": 503.0}),
+            )
+        ),
+        *(
+            pytest.param(
+                _Body(body), DropKind.DECLARED, "PROVIDER_UNAVAILABLE", id=name
+            )
+            for name, body in (
+                ("body-type-timeout", {"metadata": {"error_type": "timeout"}}),
+                (
+                    "body-type-overloaded",
+                    {"metadata": {"error_type": "provider_overloaded"}},
+                ),
+                (
+                    "body-type-rate-limit",
+                    {"metadata": {"error_type": "rate_limit_exceeded"}},
+                ),
+                ("body-503-digits", {"code": "503"}),
+            )
+        ),
         pytest.param(_Body("private"), DropKind.VENDOR, "PROVIDER_UNAVAILABLE"),
         pytest.param(_cut(), DropKind.VENDOR, "PROVIDER_UNAVAILABLE"),
         pytest.param(_cut(_ROUTER_ERROR), DropKind.VENDOR, "PROVIDER_UNAVAILABLE"),
@@ -341,9 +378,12 @@ class _RaisingBody(Mapping[str, object]):
             DropKind.DECLARED_AFTER_CONTENT,
             id="overloaded",
         ),
+        # F566: `server` names no retryable class; its 5xx code would.
+        pytest.param(_after(None, "server"), DropKind.RAISED, id="server-type"),
         pytest.param(
-            _after(None, "server"), DropKind.DECLARED_AFTER_CONTENT, id="server-type"
+            _after(None, "context_length_exceeded"), DropKind.RAISED, id="context-type"
         ),
+        pytest.param(_after(400.0, None), DropKind.RAISED, id="400-float"),
         pytest.param(
             _after(None, "rate_limit_exceeded"),
             DropKind.DECLARED_AFTER_CONTENT,

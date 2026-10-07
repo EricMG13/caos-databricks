@@ -359,6 +359,7 @@ def _error_frame(error: object, content: str = "") -> str:
     )
 
 
+_INVALID_TYPE = {"error_type": "invalid_request"}
 _INVALID = {
     "code": 400,
     "message": "private",
@@ -384,6 +385,34 @@ _INVALID = {
             DropKind.DECLARED,
             "",
             id="429-before",
+        ),
+        # F566: positive evidence only, before content as after.
+        pytest.param(
+            [_KEEP_ALIVE, _error_frame({"code": 400.0, "metadata": _INVALID_TYPE})],
+            DropKind.VENDOR,
+            "",
+            id="400-float-before",
+        ),
+        pytest.param(
+            [_KEEP_ALIVE, _error_frame({"code": "invalid_request_error"})],
+            DropKind.VENDOR,
+            "",
+            id="code-word-before",
+        ),
+        pytest.param(
+            [
+                _KEEP_ALIVE,
+                _error_frame({"metadata": {"error_type": "payment_required"}}),
+            ],
+            DropKind.VENDOR,
+            "",
+            id="payment-type-before",
+        ),
+        pytest.param(
+            [_KEEP_ALIVE, _error_frame({"metadata": {"error_type": "timeout"}})],
+            DropKind.DECLARED,
+            "",
+            id="timeout-type-before",
         ),
         # L1: content in the error frame itself is content: the 400 is a cut
         # after content, and a 502 there is declared after content.

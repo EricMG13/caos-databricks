@@ -637,7 +637,8 @@ def _unanswered(code: RefusalCode, answer: object, started: float) -> Completion
 def _declared(failed: BaseException) -> bool:
     """Whether the provider itself stated this vendor error a failure (D110):
     a failure status, 400 to 599, or, with no status at all, its own error
-    object as the error's body (an SSE `error` event) -- never a status that
+    object as the error's body (an SSE `error` event) when that object is
+    positive evidence (`_declares`, F566) -- never a status that
     says the call succeeded (a `200` the client could not read, F530), an
     argument that is no body, or a connection's failure (a reset, a client
     timeout), after which what was received is unknown. An error that raises
@@ -654,33 +655,37 @@ def _declared(failed: BaseException) -> bool:
                 and FAILURE_STATUSES[0] <= status <= (FAILURE_STATUSES[1])
             )
         else:
-            declared = (
-                isinstance(body, Mapping)
-                and bool(body)
-                and not _against_the_request(_error_body(failed).get("code"))
-            )
+            declared = isinstance(body, Mapping) and _declares(_error_body(failed))
     return declared
 
 
-def _against_the_request(code: object) -> bool:
-    """Whether a provider error object's own `code` is a 4xx other than a
-    rate limit: the provider's word against the request, never a drop it
-    declared, before content or after (D118 fix round 1)."""
-    status = _status(code)
-    return (
-        status.isdigit() and 400 <= int(status) <= 499 and int(status) != RATE_LIMITED
-    )
+def _declares(error: Mapping[str, Any]) -> bool:
+    """Whether a provider's error object is positive evidence that the
+    provider, not the request, failed (F566), before content or after: its
+    `code` a 5xx or a 429 status -- an integer, or one written in digits --
+    or, with no code, an `error_type` in `_RETRYABLE_ERROR_TYPES`. Anything
+    else is not declared: a 4xx however stated, a code that is no status
+    (`400.0`, `-400`, a word), a type of any other class, or neither."""
+    code = error.get("code")
+    if code is not None:
+        status = _status(code)
+        return status.isdigit() and (
+            int(status) == RATE_LIMITED or 500 <= int(status) <= 599
+        )
+    metadata = error.get("metadata")
+    kind = metadata.get("error_type") if isinstance(metadata, Mapping) else None
+    return isinstance(kind, str) and kind in _RETRYABLE_ERROR_TYPES
 
 
 # The provider error types that say the provider, not the request, failed
-# (D118): its upstream unavailable or overloaded, a server fault, a timeout,
-# a rate limit. Every other type -- and any type beside a 4xx -- is no drop.
-_TRANSIENT_ERROR_TYPES = frozenset(
+# and may answer if asked again (D118, F566), from `_ERROR_TYPES`: its
+# upstream unavailable or overloaded, a timeout, a rate limit. Every other
+# type -- `server` among them, which names no class -- is no drop.
+_RETRYABLE_ERROR_TYPES = frozenset(
     {
         "provider_overloaded",
         "provider_unavailable",
         "rate_limit_exceeded",
-        "server",
         "timeout",
     }
 )
@@ -688,8 +693,8 @@ _TRANSIENT_ERROR_TYPES = frozenset(
 
 def _cut_kind(cut: CutAfterContentError) -> DropKind:
     """How a call the provider failed after content ended (D118):
-    `declared_after_content` when the provider's own error object states a
-    5xx or a 429 as its code, or, with no code, a transient `error_type`;
+    `declared_after_content` when the provider's own error object declares
+    it (`_declares`: a 5xx or a 429 code, or with no code a retryable type);
     `raised` otherwise -- a cut with no error object, a 4xx, a code that is
     no status, a connection's failure beneath it, or an error object that
     raises while it is read (fail closed: no re-attempt). The cut attempt
@@ -699,17 +704,7 @@ def _cut_kind(cut: CutAfterContentError) -> DropKind:
     with suppress(Exception):  # fail closed, documented above (D118)
         if isinstance(cut.__cause__, APIConnectionError):
             return DropKind.RAISED
-        body = _error_body(cut)
-        code = body.get("code")
-        if code is not None:
-            status = _status(code)
-            declared = status.isdigit() and (
-                int(status) == RATE_LIMITED or 500 <= int(status) <= 599
-            )
-        else:
-            metadata = body.get("metadata")
-            kind = metadata.get("error_type") if isinstance(metadata, Mapping) else None
-            declared = isinstance(kind, str) and kind in _TRANSIENT_ERROR_TYPES
+        declared = _declares(_error_body(cut))
     return DropKind.DECLARED_AFTER_CONTENT if declared else DropKind.RAISED
 
 
