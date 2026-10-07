@@ -312,10 +312,20 @@ def requeue_run(
     call requeued it.
 
     The place is then `actor_id`'s, under the same cap and lock as
-    `enqueue_run` (N15); a run that is not stopped answers False first.
+    `enqueue_run` (N15); a run that is not stopped answers False first. A run
+    parked `BUDGET_CHARGE_OVER_RESERVATION` is refused with that code: the
+    park is terminal for its pin, since a requeue would reserve at the same
+    pinned price and overshoot the same way (R2.6). Its operator re-prices
+    the model and starts a successor run (`supersedes_run_id`).
     """
     if lock_run(conn, run_id) is not RunStatus.RUNNING:
         raise Refusal(RefusalCode.RUN_NOT_RUNNING)
+    if conn.execute(
+        "SELECT 1 FROM run_work WHERE run_id = %s AND state = 'STOPPED'"
+        " AND stop_code = %s",
+        (run_id, RefusalCode.BUDGET_CHARGE_OVER_RESERVATION.value),
+    ).fetchone():
+        raise Refusal(RefusalCode.BUDGET_CHARGE_OVER_RESERVATION)
     _lock_queue_of(conn, actor_id)
     requeued = conn.execute(
         "UPDATE run_work SET state = 'QUEUED', stop_code = NULL,"

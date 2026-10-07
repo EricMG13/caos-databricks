@@ -664,3 +664,29 @@ def test_the_holder_ends_a_cancel_requested_run_with_cancel_run_once(
     assert [e.name for e in events_of(conn, run_id)] == [RunEvent.RUN_CANCELLED.value]
     work = _work(conn, run_id)
     assert work is not None and work[0] == "DONE"
+
+
+def test_a_run_parked_over_its_reservation_cannot_be_requeued_on_its_pin(
+    work_run: tuple[StoreConnection, UUID, UUID],
+) -> None:
+    """R2.6: the park is terminal for the pin. A requeue would reserve at the
+    same pinned price and overshoot the same way; the operator re-prices the
+    model and starts a successor run (`supersedes_run_id`) instead."""
+    conn, run_id, _case = work_run
+    enqueue_run(conn, run_id)
+    conn.commit()
+    lease = claim_run(conn, worker=WORKER, lease_seconds=60)
+    assert lease is not None
+    assert stop(conn, lease, RefusalCode.BUDGET_CHARGE_OVER_RESERVATION) is True
+    conn.commit()
+    with pytest.raises(Refusal) as refused:
+        requeue_run(conn, run_id)
+    assert refused.value.code is RefusalCode.BUDGET_CHARGE_OVER_RESERVATION
+    conn.rollback()
+    assert _work(conn, run_id) == (
+        "STOPPED",
+        1,
+        None,
+        "BUDGET_CHARGE_OVER_RESERVATION",
+        False,
+    )

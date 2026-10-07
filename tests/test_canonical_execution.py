@@ -45,7 +45,13 @@ from caos.graph.route import ResolvedRoute, RouteNode, resolve_route
 from caos.graph.runtime import ProviderResult
 from caos.methodology import executor, runner
 from caos.methodology.bundle import Bundle
-from caos.methodology.canonical import HandoffOutcome, execute_handoff
+from caos.methodology.canonical import (
+    HandoffOutcome,
+    Replayed,
+    Verdict,
+    execute_handoff,
+    replay_billed,
+)
 from caos.methodology.citation_markers import qualified
 from caos.methodology.executor import Assignment, captured_blocks
 from caos.methodology.handoff import (
@@ -531,3 +537,111 @@ def test_a_copilot_call_runs_at_its_reservations_credit_price(
     provider.execute(node.route_node_id, "CP-0", attempt_id=attempt)
     assert scopes == [(worst_case(COPILOT_PRICE), Decimal("0.01"))]
     assert _scope() == (None, None)
+
+
+# -- A charge above the reservation (R2.6) -------------------------------------
+
+
+def _ledger(harness: _Harness) -> list[tuple[object, ...]]:
+    rows = harness.conn.execute(
+        "SELECT l.amount, o.charged_attempt_id IS NOT NULL, o.drop_kind"
+        " FROM budget_ledger l JOIN call_outcomes o USING (attempt_id)"
+    ).fetchall()
+    harness.conn.rollback()
+    return [tuple(row) for row in rows]
+
+
+def test_a_charge_above_the_reservation_is_recorded_in_full_and_refused_typed(
+    harness: _Harness, capsys: pytest.CaptureFixture[str]
+) -> None:
+    over = Decimal("0.75")
+    completions = CanonicalCompletions(harness.source_id, charge=over)
+    assert _refused(harness, "CP-0", completions) is (
+        RefusalCode.BUDGET_CHARGE_OVER_RESERVATION
+    )
+    # The money was spent: the ledger holds all of it, never the reservation.
+    assert _ledger(harness) == [(over, True, None)]
+    _out, err = capsys.readouterr()
+    assert err.splitlines()[-1] == (
+        "BUDGET_CHARGE_OVER_RESERVATION reserved=0.50 charged=0.75 nano_aiu=-"
+    )
+    accepted = harness.conn.execute("SELECT count(*) FROM artifacts").fetchone()
+    harness.conn.rollback()
+    assert accepted == (0,)
+
+
+def test_a_charge_equal_to_the_reservation_is_accepted(harness: _Harness) -> None:
+    completions = CanonicalCompletions(harness.source_id, charge=ESTIMATE)
+    _attempt, result = _run(harness, "CP-0", completions)
+    assert result.charge == ESTIMATE
+
+
+def test_a_copilot_charge_above_its_reservation_names_its_ai_units(
+    harness: _Harness,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    reserved = worst_case(COPILOT_PRICE)
+    # 502,328,000 nano-AIU at $0.01 a credit.
+    charged = Decimal("0.00502328")
+    assert charged > reserved
+    completions = CanonicalCompletions(
+        harness.source_id, model=COPILOT, price=COPILOT_PRICE, charge=charged
+    )
+    node = _node(harness, "CP-0")
+    attempt = start_attempt(harness.conn, harness.run_id, node.route_node_id)
+    monkeypatch.setenv(CREDIT_PRICE_ENV, "0.01,2026-10-01")
+    budget.reserve(harness.conn, attempt, reserved, price=COPILOT_PRICE)
+    provider = ModuleProvider(
+        harness.conn,
+        harness.bundle,
+        harness.blobs,
+        completions,
+        harness.route,
+        harness.run_id,
+    )
+    with pytest.raises(Refusal) as refused:
+        provider.execute(node.route_node_id, "CP-0", attempt_id=attempt)
+    assert refused.value.code is RefusalCode.BUDGET_CHARGE_OVER_RESERVATION
+    assert _ledger(harness) == [(charged, True, None)]
+    _out, err = capsys.readouterr()
+    assert err.splitlines()[-1] == (
+        f"BUDGET_CHARGE_OVER_RESERVATION reserved={reserved} charged={charged}"
+        " nano_aiu=502328000"
+    )
+
+
+def test_a_billed_answer_above_its_reservation_is_never_accepted_on_replay(
+    harness: _Harness, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A crash after the bill and before the refusal was explained leaves the
+    answer owed a verdict: the replay refuses it as the live call did, never
+    accepts it (R2.6)."""
+    completions = CanonicalCompletions(harness.source_id, charge=Decimal("0.75"))
+    attempt = _reserved(harness, "CP-0")
+    node = _node(harness, "CP-0")
+    provider = ModuleProvider(
+        harness.conn,
+        harness.bundle,
+        harness.blobs,
+        completions,
+        harness.route,
+        harness.run_id,
+    )
+    with pytest.raises(Refusal):
+        provider.execute(node.route_node_id, "CP-0", attempt_id=attempt)
+    capsys.readouterr()
+    replayed = replay_billed(
+        harness.conn,
+        harness.blobs,
+        harness.bundle,
+        run_id=harness.run_id,
+        route=harness.route,
+        route_node_ids=(node.route_node_id,),
+    )
+    harness.conn.rollback()
+    assert replayed == Replayed(
+        attempt, Verdict.REFUSED, code=RefusalCode.BUDGET_CHARGE_OVER_RESERVATION
+    )
+    _out, err = capsys.readouterr()
+    assert err.splitlines()[-1].startswith("BUDGET_CHARGE_OVER_RESERVATION ")
