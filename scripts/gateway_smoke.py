@@ -9,8 +9,9 @@ usage. For a Copilot model the chat model is `ChatCopilot` on its real
 transport (D77), never a scripted one; both calls run under a reservation at
 the pinned credit price, and the charge printed is the plain call's AI
 units, printed beside them, at that price. Exits nonzero unless the class
-is one of those two and the call answered: an injected or scripted model can never make this pass. No secret
-is read by this script and none is printed.
+is one of those two and the call answered: an injected or scripted model
+can never make this pass. No secret is read by this script and none is
+printed.
 """
 
 from __future__ import annotations
