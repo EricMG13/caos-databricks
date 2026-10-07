@@ -3352,6 +3352,31 @@ def test_a_script_runtime_finds_node_and_nothing_else_on_its_path(
     assert refused.value.code is RefusalCode.PROVIDER_NOT_CONFIGURED
 
 
+def test_node_is_searched_on_the_workers_path_alone(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Exactly `node`, on the worker's `PATH` and nowhere else: with none
+    set, nowhere -- never the platform's default search path."""
+    searched: list[tuple[str, str | None]] = []
+
+    def which(
+        command: str, mode: int = os.F_OK | os.X_OK, path: str | None = None
+    ) -> str:
+        searched.append((command, path))
+        return os.path.join(os.sep, "opt", "node", "bin", "node")
+
+    parent_environment(monkeypatch)
+    monkeypatch.setattr("shutil.which", which)
+    monkeypatch.setattr("sys.platform", "linux")
+    child_environment("home", "/runtime/index.js")
+    monkeypatch.setenv("PATH", os.pathsep.join(("/a", "/b")))
+    child = child_environment("home", "/runtime/index.js")
+    assert searched == [("node", ""), ("node", os.pathsep.join(("/a", "/b")))]
+    assert child["PATH"] == os.pathsep.join(
+        ("/runtime", os.path.join(os.sep, "opt", "node", "bin"))
+    )
+
+
 def test_the_sdk_logger_reaches_no_handler(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
