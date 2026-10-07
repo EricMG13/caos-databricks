@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import contextlib
 import inspect
+import io
 import logging
 import math
 import os
@@ -57,6 +58,7 @@ from caos.copilot import (
     session_options,
     settled_charge,
 )
+from caos.methodology import canonical
 from caos.models import ChatCompletions, completions
 from caos.pricing import CreditPrice, ModelPrice
 from caos.provider import (
@@ -68,6 +70,7 @@ from caos.provider import (
     reserving,
 )
 from caos.refusals import Refusal, RefusalCode
+from caos.store.budget import Reservation
 
 PIN = "claude-opus-5.5"
 OTHER = "claude-sonnet-5.5"
@@ -3853,3 +3856,66 @@ def test_token_counts_past_their_bound_leave_a_copilot_charge_unknown(
         completion = provider(replying(*seen)).complete(PROMPT)
     assert completion.charge is None
     assert completion.refusal is RefusalCode.PROVIDER_RESPONSE_INVALID
+
+
+# -- Properties (D121): settlement against the reservation (R2.6, R2.7) -------
+
+AMOUNTS = st.decimals(
+    min_value=Decimal(0),
+    max_value=Decimal(10_000),
+    places=10,
+    allow_nan=False,
+    allow_infinity=False,
+)
+
+
+@EXAMPLES
+@given(UNITS.filter(bool), CREDITS, AMOUNTS)
+def test_property_a_settled_charge_is_within_its_reservation_or_named_exactly(
+    units: int, credit: Decimal, amount: Decimal
+) -> None:
+    charge = charged(units, credit)
+    assert charge is not None
+    taken = Reservation(amount, PRICE, CreditPrice(credit, date(2026, 10, 1)))
+    said = io.StringIO()
+    with contextlib.redirect_stderr(said):
+        within = canonical._settled_within(taken, charge)
+    assert within is (charge <= amount)
+    if within:
+        assert said.getvalue() == ""
+    else:
+        # The line names the reservation, the charge and the very AI units
+        # that settled it: the arithmetic round-trips exactly.
+        assert said.getvalue() == (
+            f"BUDGET_CHARGE_OVER_RESERVATION reserved={amount} charged={charge}"
+            f" nano_aiu={units}\n"
+        )
+
+
+@EXAMPLES
+@given(AMOUNTS, CREDITS)
+def test_property_the_session_cap_covers_its_reservation_tightly(
+    amount: Decimal, credit: Decimal
+) -> None:
+    with reserving(amount, credit=credit):
+        cap = copilot_module._credit_cap()
+    assert cap is not None
+    assert cap >= copilot_module.MIN_CREDIT_CAP
+    # Never below the reservation in credits, and never a whole credit above
+    # it unless the floor holds it up.
+    assert cap * Fraction(credit) >= Fraction(amount)
+    assert cap == copilot_module.MIN_CREDIT_CAP or (cap - 1) * Fraction(
+        credit
+    ) < Fraction(amount)
+
+
+@EXAMPLES
+@given(UNITS.filter(bool), CREDITS, AMOUNTS)
+def test_property_a_copilot_charge_is_its_reservations_credit_never_another(
+    units: int, credit: Decimal, amount: Decimal
+) -> None:
+    # No per-request figure to hold against the checkpoint (F579).
+    seen = sdk_call(usage=None, checkpoint=checkpoint(units, 1))
+    with reserving(amount, credit=credit):
+        completion = provider(replying(*seen)).complete(PROMPT)
+    assert completion.charge == charged(units, credit)
