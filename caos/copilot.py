@@ -30,6 +30,8 @@ The SDK itself is imported only by the transport (Task 3), never here.
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import hmac
 import logging
 import math
 import os
@@ -287,6 +289,9 @@ def credit_price(value: str | None = None) -> CreditPrice:
 _SEAT_CREDENTIAL = "COPILOT_GITHUB_TOKEN"
 _FIXED = {
     "COPILOT_DISABLE_KEYTAR": "1",
+    # No login-shell environment captured (runtime 1.0.90's own switch):
+    # an analyst's profile could export a GitHub token or a provider (F591).
+    "COPILOT_DISABLE_LOGIN_SHELL_ENV": "1",
     "COPILOT_AUTO_UPDATE": "false",
     "NO_COLOR": "1",
 }
@@ -470,8 +475,11 @@ Ask = Callable[[str, CopilotModel, float], Sequence[Event]]
 
 
 # The runtime an operator provisioned (R3): an absolute path CAOS passes as
-# the explicit entry. `COPILOT_CLI_PATH` is never consulted or passed on.
+# the explicit entry, and the digest of its directory (`runtime_digest`),
+# both required (F591). `COPILOT_CLI_PATH` is never consulted or passed on.
 RUNTIME_ENV = "CAOS_COPILOT_RUNTIME"
+RUNTIME_DIGEST_ENV = "CAOS_COPILOT_RUNTIME_SHA256"
+_DIGEST = re.compile(r"[0-9a-f]{64}")
 # What the deny-all permission handler adds to a call's events, where it was
 # asked, whenever the runtime asks it anything: a host fact, not a runtime
 # event type, so the mapping's allow-list states no finish reason and its
@@ -554,18 +562,86 @@ def _credit_cap() -> int | None:
     return max(MIN_CREDIT_CAP, math.ceil(Fraction(amount) / Fraction(credit)))
 
 
-def _runtime_entry() -> str:
-    """The runtime to start: the operator's (`RUNTIME_ENV`, an absolute path,
-    else `PROVIDER_NOT_CONFIGURED`), or the one the SDK downloaded and
-    verified against its release's checksums."""
-    named = os.environ.get(RUNTIME_ENV, "")
-    if named:
-        if not os.path.isabs(named):
-            raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
-        return named
-    from copilot._cli_download import ensure_runtime_wrapper
+def runtime_digest(entry: str) -> str:
+    """The digest an operator pins a runtime by (R3, F591): SHA-256 over one
+    line per regular file under the entry's directory, `<relative POSIX
+    path>\\0<the file's SHA-256>\\n`, sorted. The whole directory, since the
+    entry loads the native library and assets beside it. A link or any file
+    that is not regular, anywhere in it, refuses `PROVIDER_NOT_CONFIGURED`:
+    it could name content the digest never read."""
+    lines = sorted(
+        f"{relative}\0{_file_digest(path)}\n"
+        for relative, path in _runtime_files(os.path.dirname(entry))
+    )
+    return hashlib.sha256("".join(lines).encode()).hexdigest()
 
-    return ensure_runtime_wrapper()
+
+def _runtime_files(root: str) -> list[tuple[str, str]]:
+    """Every regular file under `root`: its relative POSIX path and its path."""
+    found: list[tuple[str, str]] = []
+    for directory, folders, names in os.walk(root):
+        for name in (*folders, *names):
+            path = os.path.join(directory, name)
+            if os.path.islink(path) or not (
+                os.path.isdir(path) or os.path.isfile(path)
+            ):
+                raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
+        for name in names:
+            path = os.path.join(directory, name)
+            found.append((os.path.relpath(path, root).replace(os.sep, "/"), path))
+    return found
+
+
+def _file_digest(path: str) -> str:
+    with open(path, "rb") as read:
+        return hashlib.file_digest(read, "sha256").hexdigest()
+
+
+def _signature(root: str) -> tuple[tuple[str, int, int], ...]:
+    """What the runtime directory looks like without reading it: each file's
+    relative path, size and modification time."""
+    files = []
+    for relative, path in _runtime_files(root):
+        stat = os.lstat(path)
+        files.append((relative, stat.st_size, stat.st_mtime_ns))
+    return tuple(sorted(files))
+
+
+# The runtime directories this process verified, by entry and pinned digest,
+# with their signature then: re-read in full whenever any file moves.
+_VERIFIED: dict[tuple[str, str], tuple[tuple[str, int, int], ...]] = {}
+_VERIFIED_LOCK = threading.Lock()
+
+
+def _runtime_entry() -> str:
+    """The runtime to start: exactly the operator's (R3, F591).
+
+    `RUNTIME_ENV` names its entry, an absolute path to a regular file that is
+    no link, and `RUNTIME_DIGEST_ENV` pins `runtime_digest` of its directory,
+    checked before the first call and again whenever a file in it changes.
+    Anything else refuses `PROVIDER_NOT_CONFIGURED` before a client starts.
+    The SDK's own resolution -- a downloaded bundle, whose cached files it
+    never re-checks, under a cache root the worker's `COPILOT_CLI_EXTRACT_DIR`,
+    `XDG_CACHE_HOME` or `LOCALAPPDATA` can move -- is never consulted.
+    """
+    named = os.environ.get(RUNTIME_ENV, "")
+    pinned = os.environ.get(RUNTIME_DIGEST_ENV, "")
+    if (
+        not os.path.isabs(named)
+        or not _DIGEST.fullmatch(pinned)
+        or os.path.islink(named)
+        or not os.path.isfile(named)
+    ):
+        raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
+    signature = _signature(os.path.dirname(named))
+    with _VERIFIED_LOCK:
+        if _VERIFIED.get((named, pinned)) == signature:
+            return named
+    if not hmac.compare_digest(runtime_digest(named), pinned):
+        raise Refusal(RefusalCode.PROVIDER_NOT_CONFIGURED)
+    with _VERIFIED_LOCK:
+        _VERIFIED[(named, pinned)] = signature
+    return named
 
 
 @asynccontextmanager
