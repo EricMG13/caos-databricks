@@ -22,6 +22,7 @@ import re
 import shutil
 import stat
 import sys
+import threading
 import time
 from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, date, datetime, tzinfo
@@ -1202,6 +1203,28 @@ def test_a_resent_call_asks_for_no_more_than_the_deadline_left(
     assert second == TIMEOUT_SECONDS - second_at
     # Outside a call, the model's own timeout stands.
     assert call_seconds.get() is None
+
+
+def test_an_overrun_deadline_hands_ask_zero_seconds_and_is_a_deadline() -> None:
+    """The seconds left never go below 0: a used-up (or negative) deadline is
+    asked for 0, not a floor of 1, and the call ends as a deadline (None)."""
+    asked: list[float] = []
+    seen = threading.Event()
+    release = threading.Event()
+
+    def ask(prompt: str, target: CopilotModel, seconds: float) -> Sequence[Event]:
+        asked.append(seconds)
+        seen.set()
+        release.wait(5.0)
+        return SDK_HAPPY
+
+    chat = ChatCopilot(model=MODEL, ask=ask)
+    try:
+        assert models._invoked(chat, PROMPT, {}, -5.0) is None
+        assert seen.wait(5.0)
+        assert asked == [0.0]
+    finally:
+        release.set()
 
 
 def test_through_the_factory_the_exact_call_completes_with_its_call_id() -> None:
