@@ -1054,6 +1054,9 @@ def _seat(host: str) -> tuple[str | None, str, list[ModelInfo]] | None:
         from copilot._jsonrpc import JsonRpcError, ProcessExitedError
     except ImportError:
         _no_sdk()
+    # The SDK's own parsing asserts, or fails on a type it did not expect,
+    # and its client's stop raises a group of what failed: each refuses, by
+    # class (F603).
     unready = (
         JsonRpcError,
         ProcessExitedError,
@@ -1061,6 +1064,10 @@ def _seat(host: str) -> tuple[str | None, str, list[ModelInfo]] | None:
         RuntimeError,
         ValueError,
         TimeoutError,
+        AssertionError,
+        TypeError,
+        KeyError,
+        ExceptionGroup,
     )
     try:
         return asyncio.run(_listing(host))

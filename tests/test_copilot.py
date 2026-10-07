@@ -5255,6 +5255,10 @@ def _raising(error: BaseException) -> Callable[..., Any]:
         RuntimeError(SECRET),
         ValueError(SECRET),
         TimeoutError(SECRET),
+        AssertionError(SECRET),
+        TypeError(SECRET),
+        KeyError(SECRET),
+        ExceptionGroup(SECRET, [RuntimeError(SECRET)]),
     ],
     ids=lambda error: type(error).__name__,
 )
@@ -5483,3 +5487,56 @@ def test_a_copilot_qualification_run_needs_a_ready_seat_before_any_call(
     started = len(ready.made)
     assert qualify._configured_provider("copilot/other/none/65536") is None
     assert len(ready.made) == started
+
+
+def _unparsable_listing(_self: object) -> list[ModelInfo]:
+    """What the SDK's own parsing raises on a listing it cannot read."""
+    return [
+        ModelInfo.from_dict(
+            {
+                "id": PIN,
+                "name": PIN,
+                "capabilities": {},
+                "billing": {"tokenPrices": {"batchSize": "1000"}},
+            }
+        )
+    ]
+
+
+async def _listing_unparsable(self: object) -> list[ModelInfo]:
+    return _unparsable_listing(self)
+
+
+async def _stop_failed(_self: object, *_exc: object) -> None:
+    raise ExceptionGroup(SECRET, [OSError(SECRET), RuntimeError(SECRET)])
+
+
+@pytest.mark.parametrize(
+    ("method", "failing"),
+    [
+        ("list_models", (_listing_unparsable, "AssertionError")),
+        ("__aexit__", (_stop_failed, "ExceptionGroup")),
+    ],
+    ids=["sdk-parse", "stop-group"],
+)
+def test_a_worker_whose_runtime_fails_its_parsing_or_its_stop_exits_two_typed(
+    ready: type[FakeRuntime],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    method: str,
+    failing: tuple[Callable[..., Any], str],
+) -> None:
+    replacement, named = failing
+    monkeypatch.setattr(ready, method, replacement)
+    monkeypatch.setenv(models.ENDPOINT_ENV, MODEL)
+    monkeypatch.setenv(models.MODEL_PRICE_ENV, f"{MODEL},0.000005,0.00002,2026-10-01")
+    monkeypatch.delenv("CAOS_MODEL_CHOICES", raising=False)
+    monkeypatch.setattr(
+        worker, "_store_configuration", lambda: pytest.fail("the store was read")
+    )
+    assert worker.main() == 2
+    err = capsys.readouterr().err
+    assert err == (
+        f"PROVIDER_NOT_CONFIGURED reason=runtime_unready class={named}\n"
+        "PROVIDER_NOT_CONFIGURED\n"
+    )
